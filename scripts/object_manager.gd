@@ -109,9 +109,10 @@ func _log_dice_states() -> void:
 					is_jittering = true
 					jitter_reason = "OSCILLATING"
 
-				# Aggressive auto-stabilize: force sleep if nearly settled
-				# Higher thresholds to catch micro-oscillations earlier
-				if lin_speed < 0.15 and ang_speed < 15.0:
+				# Auto-stabilize: force sleep if nearly settled
+				# lin_v threshold high to catch micro-oscillations
+				# ang_v threshold LOW to ensure dice is flat before freezing
+				if lin_speed < 0.15 and ang_speed < 1.0:
 					dice.linear_velocity = Vector3.ZERO
 					dice.angular_velocity = Vector3.ZERO
 					dice.sleeping = true
