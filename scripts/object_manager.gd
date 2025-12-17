@@ -16,9 +16,9 @@ var _dice_list: Array[RigidBody3D] = []
 var _object_counter: int = 0
 
 # Preload resources (will be scenes in full version)
-# Using larger scale for visibility (1 unit ≈ 10cm for good visuals)
-const MINIATURE_HEIGHT: float = 0.4  # ~4cm visual height
-const MINIATURE_RADIUS: float = 0.12  # ~25mm base scaled up for visibility
+# Standard wargaming miniature sizes
+const MINIATURE_HEIGHT: float = 0.032  # 32mm height
+const MINIATURE_RADIUS: float = 0.016  # 32mm diameter base (16mm radius)
 
 
 func _ready() -> void:
@@ -150,15 +150,17 @@ func spawn_miniature(pos: Vector3) -> Node3D:
 	mini.add_to_group("selectable")
 	mini.add_to_group("miniature")
 
+	var base_height = 0.003  # 3mm base thickness
+
 	# Create base (circular)
 	var base_mesh = CylinderMesh.new()
 	base_mesh.top_radius = MINIATURE_RADIUS
 	base_mesh.bottom_radius = MINIATURE_RADIUS
-	base_mesh.height = 0.03  # Thicker base
+	base_mesh.height = base_height
 
 	var base_instance = MeshInstance3D.new()
 	base_instance.mesh = base_mesh
-	base_instance.position.y = 0.015
+	base_instance.position.y = base_height / 2
 
 	var base_material = StandardMaterial3D.new()
 	base_material.albedo_color = Color(0.1, 0.1, 0.1)
@@ -167,13 +169,13 @@ func spawn_miniature(pos: Vector3) -> Node3D:
 
 	# Create simple model (cylinder as placeholder)
 	var model_mesh = CylinderMesh.new()
-	model_mesh.top_radius = MINIATURE_RADIUS * 0.5
-	model_mesh.bottom_radius = MINIATURE_RADIUS * 0.7
+	model_mesh.top_radius = MINIATURE_RADIUS * 0.4
+	model_mesh.bottom_radius = MINIATURE_RADIUS * 0.6
 	model_mesh.height = MINIATURE_HEIGHT
 
 	var model_instance = MeshInstance3D.new()
 	model_instance.mesh = model_mesh
-	model_instance.position.y = MINIATURE_HEIGHT / 2 + 0.03  # Above base
+	model_instance.position.y = MINIATURE_HEIGHT / 2 + base_height  # Above base
 
 	var model_material = StandardMaterial3D.new()
 	model_material.albedo_color = Color(randf(), randf(), randf())  # Random color
@@ -188,9 +190,9 @@ func spawn_miniature(pos: Vector3) -> Node3D:
 	var collision = CollisionShape3D.new()
 	var shape = CylinderShape3D.new()
 	shape.radius = MINIATURE_RADIUS
-	shape.height = MINIATURE_HEIGHT + 0.03  # Include base
+	shape.height = MINIATURE_HEIGHT + base_height
 	collision.shape = shape
-	collision.position.y = (MINIATURE_HEIGHT + 0.03) / 2
+	collision.position.y = (MINIATURE_HEIGHT + base_height) / 2
 	mini.add_child(collision)
 
 	# Set collision layers
@@ -219,9 +221,9 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	dice.collision_mask = 1
 	dice.physics_material_override = _create_dice_physics_material()
 
-	# Add damping to prevent wild bouncing
-	dice.linear_damp = 0.5
-	dice.angular_damp = 1.0
+	# Add damping to prevent wild bouncing (balanced values)
+	dice.linear_damp = 0.3
+	dice.angular_damp = 0.5
 
 	# Continuous collision detection for small fast objects
 	dice.continuous_cd = true
@@ -278,8 +280,8 @@ func _create_rounded_box_mesh(size: float, _radius: float) -> MeshInstance3D:
 
 func _create_dice_physics_material() -> PhysicsMaterial:
 	var mat = PhysicsMaterial.new()
-	mat.bounce = 0.15  # Reduced bounce - dice shouldn't bounce too much
-	mat.friction = 0.8  # Higher friction to stop rolling faster
+	mat.bounce = 0.25  # Balanced bounce
+	mat.friction = 0.7  # Balanced friction
 	return mat
 
 
@@ -457,17 +459,17 @@ func roll_all_dice() -> void:
 
 	for dice in _dice_list:
 		if is_instance_valid(dice):
-			# Apply random force and torque - reduced for small 16mm dice
+			# Apply random force and torque - balanced for 16mm dice
 			dice.freeze = false
 			dice.linear_velocity = Vector3(
-				randf_range(-0.3, 0.3),
-				randf_range(0.2, 0.5),  # Small hop
-				randf_range(-0.3, 0.3)
+				randf_range(-0.5, 0.5),
+				randf_range(0.3, 0.8),  # Moderate hop
+				randf_range(-0.5, 0.5)
 			)
 			dice.angular_velocity = Vector3(
-				randf_range(-8, 8),
-				randf_range(-8, 8),
-				randf_range(-8, 8)
+				randf_range(-12, 12),
+				randf_range(-12, 12),
+				randf_range(-12, 12)
 			)
 
 	# Wait for dice to settle, then read results
