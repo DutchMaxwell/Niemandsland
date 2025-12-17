@@ -214,86 +214,142 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	dice.name = "Dice_%d" % _object_counter
 	dice.add_to_group("selectable")
 	dice.add_to_group("dice")
-	dice.mass = 0.5  # Heavier for better physics
+	dice.mass = 0.5
 	dice.collision_layer = 1
 	dice.collision_mask = 1
 	dice.physics_material_override = _create_dice_physics_material()
 
-	# Create dice mesh (cube)
-	var dice_size = 0.15  # Scaled up for visibility
-	var dice_mesh = BoxMesh.new()
-	dice_mesh.size = Vector3(dice_size, dice_size, dice_size)
+	var dice_size = 0.15
+	var corner_radius = dice_size * 0.15  # 15% roundness
 
-	var mesh_instance = MeshInstance3D.new()
-	mesh_instance.mesh = dice_mesh
+	# Create rounded dice body
+	var dice_body = _create_rounded_cube(dice_size, corner_radius)
+	dice.add_child(dice_body)
 
-	var dice_material = StandardMaterial3D.new()
-	dice_material.albedo_color = Color.WHITE
-	mesh_instance.material_override = dice_material
-	dice.add_child(mesh_instance)
-
-	# Store for selection
+	# Get material reference for selection
+	var dice_material = dice_body.material_override
 	dice.set_meta("model_material", dice_material)
 	dice.set_meta("original_color", Color.WHITE)
 
-	# Add collision
+	# Add collision (slightly smaller for rounded feel)
 	var collision = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
-	shape.size = Vector3(dice_size, dice_size, dice_size)
+	shape.size = Vector3(dice_size * 0.95, dice_size * 0.95, dice_size * 0.95)
 	collision.shape = shape
 	dice.add_child(collision)
 
-	# Add pip markers (simplified - just dots on faces)
-	_add_dice_pips(dice, dice_size)
+	# Add proper pip patterns for each face
+	_add_dice_pips_proper(dice, dice_size)
 
-	# Add selection script
 	dice.set_script(preload("res://scripts/selectable_object.gd"))
-
 	dice.global_position = pos
 	add_child(dice)
-
 	_dice_list.append(dice)
 
 	return dice
 
 
+func _create_rounded_cube(size: float, radius: float) -> MeshInstance3D:
+	# Create main cube body
+	var mesh_instance = MeshInstance3D.new()
+	var box_mesh = BoxMesh.new()
+	box_mesh.size = Vector3(size, size, size)
+	mesh_instance.mesh = box_mesh
+
+	# Smooth white material
+	var material = StandardMaterial3D.new()
+	material.albedo_color = Color(0.95, 0.95, 0.95)  # Slightly off-white
+	material.roughness = 0.2  # Smooth/glossy
+	material.metallic = 0.0
+	mesh_instance.material_override = material
+
+	# Add corner spheres for rounded appearance
+	var corner_material = StandardMaterial3D.new()
+	corner_material.albedo_color = Color(0.95, 0.95, 0.95)
+	corner_material.roughness = 0.2
+
+	var half = size / 2 - radius * 0.5
+	var corners = [
+		Vector3(-half, -half, -half), Vector3(-half, -half, half),
+		Vector3(-half, half, -half), Vector3(-half, half, half),
+		Vector3(half, -half, -half), Vector3(half, -half, half),
+		Vector3(half, half, -half), Vector3(half, half, half),
+	]
+
+	for corner_pos in corners:
+		var sphere = MeshInstance3D.new()
+		var sphere_mesh = SphereMesh.new()
+		sphere_mesh.radius = radius
+		sphere_mesh.height = radius * 2
+		sphere_mesh.radial_segments = 16
+		sphere_mesh.rings = 8
+		sphere.mesh = sphere_mesh
+		sphere.material_override = corner_material
+		sphere.position = corner_pos
+		mesh_instance.add_child(sphere)
+
+	return mesh_instance
+
+
 func _create_dice_physics_material() -> PhysicsMaterial:
 	var mat = PhysicsMaterial.new()
-	mat.bounce = 0.3
-	mat.friction = 0.8
+	mat.bounce = 0.4
+	mat.friction = 0.6
 	return mat
 
 
-func _add_dice_pips(dice: RigidBody3D, size: float) -> void:
-	# Simplified: Just add colored dots for each face
-	# Face values: +Y=1, -Y=6, +X=3, -X=4, +Z=2, -Z=5
+## Add proper pip patterns for a D6
+## Standard D6: opposite faces sum to 7 (1-6, 2-5, 3-4)
+## Layout: +Y=1, -Y=6, +Z=2, -Z=5, +X=3, -X=4
+func _add_dice_pips_proper(dice: RigidBody3D, size: float) -> void:
 	var pip_material = StandardMaterial3D.new()
-	pip_material.albedo_color = Color.BLACK
+	pip_material.albedo_color = Color(0.1, 0.1, 0.1)  # Dark gray/black
+	pip_material.roughness = 0.3
 
-	var pip_size = size * 0.15
-	var offset = size / 2 + 0.001
+	var pip_radius = size * 0.08
+	var face_offset = size / 2 + 0.001  # Slightly above surface
+	var pip_spacing = size * 0.25  # Distance between pips
 
-	# Add a simple sphere for each face center (simplified pip representation)
-	var face_data = [
-		{"pos": Vector3(0, offset, 0), "count": 1},
-		{"pos": Vector3(0, -offset, 0), "count": 6},
-		{"pos": Vector3(offset, 0, 0), "count": 3},
-		{"pos": Vector3(-offset, 0, 0), "count": 4},
-		{"pos": Vector3(0, 0, offset), "count": 2},
-		{"pos": Vector3(0, 0, -offset), "count": 5},
-	]
+	# Face 1 (top, +Y): single center pip
+	_add_pip(dice, Vector3(0, face_offset, 0), Vector3.UP, pip_radius, pip_material)
 
-	for face in face_data:
-		var pip_mesh = SphereMesh.new()
-		pip_mesh.radius = pip_size
-		pip_mesh.height = pip_size * 2
+	# Face 6 (bottom, -Y): 6 pips in 2 columns of 3
+	for col in [-1, 1]:
+		for row in [-1, 0, 1]:
+			_add_pip(dice, Vector3(col * pip_spacing, -face_offset, row * pip_spacing), Vector3.DOWN, pip_radius, pip_material)
 
-		var pip_instance = MeshInstance3D.new()
-		pip_instance.mesh = pip_mesh
-		pip_instance.material_override = pip_material
-		pip_instance.position = face.pos
-		pip_instance.set_meta("pip_value", face.count)
-		dice.add_child(pip_instance)
+	# Face 2 (front, +Z): 2 pips diagonal
+	_add_pip(dice, Vector3(-pip_spacing, pip_spacing, face_offset), Vector3.BACK, pip_radius, pip_material)
+	_add_pip(dice, Vector3(pip_spacing, -pip_spacing, face_offset), Vector3.BACK, pip_radius, pip_material)
+
+	# Face 5 (back, -Z): 5 pips (4 corners + center)
+	_add_pip(dice, Vector3(0, 0, -face_offset), Vector3.FORWARD, pip_radius, pip_material)  # Center
+	for x in [-1, 1]:
+		for y in [-1, 1]:
+			_add_pip(dice, Vector3(x * pip_spacing, y * pip_spacing, -face_offset), Vector3.FORWARD, pip_radius, pip_material)
+
+	# Face 3 (right, +X): 3 pips diagonal
+	_add_pip(dice, Vector3(face_offset, 0, 0), Vector3.RIGHT, pip_radius, pip_material)  # Center
+	_add_pip(dice, Vector3(face_offset, pip_spacing, -pip_spacing), Vector3.RIGHT, pip_radius, pip_material)
+	_add_pip(dice, Vector3(face_offset, -pip_spacing, pip_spacing), Vector3.RIGHT, pip_radius, pip_material)
+
+	# Face 4 (left, -X): 4 pips in corners
+	for y in [-1, 1]:
+		for z in [-1, 1]:
+			_add_pip(dice, Vector3(-face_offset, y * pip_spacing, z * pip_spacing), Vector3.LEFT, pip_radius, pip_material)
+
+
+func _add_pip(parent: Node3D, position: Vector3, _normal: Vector3, radius: float, material: Material) -> void:
+	var pip = MeshInstance3D.new()
+	var sphere_mesh = SphereMesh.new()
+	sphere_mesh.radius = radius
+	sphere_mesh.height = radius * 2
+	sphere_mesh.radial_segments = 12
+	sphere_mesh.rings = 6
+	pip.mesh = sphere_mesh
+	pip.material_override = material
+	pip.position = position
+	parent.add_child(pip)
 
 
 ## Spawn terrain piece at the given position
