@@ -44,7 +44,7 @@ func _init_debug_log() -> void:
 		_debug_log_file.store_line("Time: %s" % Time.get_datetime_string_from_system())
 		_debug_log_file.store_line("Table collision: extended surface at y=0.01")
 		_debug_log_file.store_line("Dice: 16mm, 5g, expected rest y≈0.016-0.018")
-		_debug_log_file.store_line("Auto-stabilization: lin_v<0.15, ang_v<15.0 (aggressive)")
+		_debug_log_file.store_line("Auto-stabilization: lin_v<0.15, ang_v<1.0 (flat before freeze)")
 		_debug_log_file.store_line("Rescue threshold: y < -0.5m")
 		_debug_log_file.store_line("-------------------------------")
 		print("Debug log created at: %s" % ProjectSettings.globalize_path(log_path))
@@ -365,9 +365,9 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	dice.collision_mask = 1
 	dice.physics_material_override = _create_dice_physics_material()
 
-	# Physics settings - moderate damping to avoid jitter
-	dice.linear_damp = 1.0
-	dice.angular_damp = 1.5
+	# Physics settings - higher damping for faster settling
+	dice.linear_damp = 2.0    # Increased for faster settling
+	dice.angular_damp = 4.0   # Increased to stop rotation faster
 	dice.can_sleep = true  # Allow physics to sleep when at rest
 	dice.continuous_cd = false
 
