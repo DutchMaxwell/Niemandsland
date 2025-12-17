@@ -20,7 +20,59 @@ Ein Open-Source Tabletop-Simulator mit starkem Fokus auf Wargaming-Spiele (OnePa
 | **UI Framework** | Godot Control Nodes | Native Integration |
 | **Build System** | Godot Export + GitHub Actions | Cross-Platform Builds (Win, Linux, Mac, **Web**) |
 
-### 1.2 Engine-Entscheidung: Warum Godot?
+### 1.2 Distributions-Strategie: Maximaler Nutzerkomfort
+
+**Ziel: Spielbar in < 30 Sekunden, ohne Installation wenn möglich**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    DISTRIBUTIONS-OPTIONEN                        │
+├─────────────────┬─────────────────┬─────────────────────────────┤
+│   🌐 BROWSER    │   💻 DESKTOP    │   📦 PORTABLE               │
+│   (Primär)      │   (Vollversion) │   (Offline)                 │
+├─────────────────┼─────────────────┼─────────────────────────────┤
+│ Godot WASM      │ Godot Native    │ Tauri Wrapper               │
+│ ~15-25MB Load   │ ~50MB Install   │ ~3MB Single EXE             │
+│ Sofort spielbar │ Beste Perfor-   │ Kein Install nötig          │
+│ im Browser      │ mance           │ USB-Stick-fähig             │
+├─────────────────┼─────────────────┼─────────────────────────────┤
+│ ✅ Kein Download │ ✅ Volle Features│ ✅ Offline-fähig            │
+│ ✅ Kein Install  │ ✅ Multi-Thread  │ ✅ LAN-Partys               │
+│ ⚠️ Single-Thread │ ✅ Lokale Mods   │ ⚠️ WebView-abhängig         │
+│ ⚠️ Kein lokaler  │                 │                             │
+│    Mod-Support  │                 │                             │
+└─────────────────┴─────────────────┴─────────────────────────────┘
+```
+
+**Warum Browser-First?**
+- 70%+ der Casual-Spieler wollen nichts installieren
+- Godot 4.3+ hat Single-Thread Web-Export stark verbessert
+- ~15-25MB WebAssembly-Bundle (vs. TTS: nicht browser-fähig)
+- Instant-Play: Link teilen → Sofort spielen
+
+**Technische Umsetzung Web-Export:**
+```
+Browser-Version Architektur:
+├── Single-Thread Modus (Godot 4.3+)
+├── WebGL 2.0 Rendering (Compatibility Mode)
+├── WebRTC für Multiplayer (statt ENet)
+├── IndexedDB für lokale Speicherung
+└── Progressive Web App (PWA) für "Add to Desktop"
+```
+
+**Alternative evaluiert: Babylon.js**
+
+| Aspekt | Godot Web | Babylon.js Neubau |
+|--------|-----------|-------------------|
+| Browser-Performance | 85-90% | 100% (Web-native) |
+| Entwicklungsaufwand | Niedrig (1 Codebase) | Hoch (Neuentwicklung) |
+| Physik | Jolt (portiert) | Havok/Cannon.js |
+| Multiplayer | WebRTC | WebSockets + Custom |
+| Desktop-Version | Native Export | Tauri Wrapper nötig |
+
+**Entscheidung:** Godot mit Web-Export, da eine Codebase für alle Plattformen.
+
+### 1.3 Engine-Entscheidung: Warum Godot?
 
 **Bewertete Alternativen:**
 
@@ -570,5 +622,5 @@ openTTS/
 
 *Dokument erstellt: 2025-12-17*
 *Letzte Überarbeitung: 2025-12-17*
-*Version: 1.1*
-*Status: Überarbeitet - Engine-Entscheidung validiert, Risiko-Analyse hinzugefügt*
+*Version: 1.2*
+*Status: Browser-First Strategie hinzugefügt, Distributions-Optionen definiert*
