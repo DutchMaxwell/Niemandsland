@@ -29,6 +29,11 @@ func setup_table(size_feet: Vector2) -> void:
 	table_size = size_feet
 	var size_meters = size_feet * FEET_TO_METERS
 
+	# Remove old borders if any
+	for child in get_children():
+		if child != mesh_instance and child != collision_shape:
+			child.queue_free()
+
 	# Create table mesh
 	var plane_mesh = PlaneMesh.new()
 	plane_mesh.size = size_meters
