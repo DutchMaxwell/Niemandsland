@@ -88,7 +88,7 @@ func _get_random_table_position() -> Vector3:
 	var margin = 0.15  # Stay away from edges
 	var x = randf_range(-size_meters.x / 2 + margin, size_meters.x / 2 - margin)
 	var z = randf_range(-size_meters.y / 2 + margin, size_meters.y / 2 - margin)
-	return Vector3(x, 0.02, z)  # Just above table surface (top at y=0.01)
+	return Vector3(x, 0.03, z)  # Just above table surface (top at y=0.018)
 
 
 ## Handle table size preset selection
