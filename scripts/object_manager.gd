@@ -44,7 +44,7 @@ func _init_debug_log() -> void:
 		_debug_log_file.store_line("Time: %s" % Time.get_datetime_string_from_system())
 		_debug_log_file.store_line("Table collision: extended surface at y=0.01")
 		_debug_log_file.store_line("Dice: 16mm, 5g, expected rest y≈0.016-0.018")
-		_debug_log_file.store_line("Auto-stabilization: lin_v<0.05, ang_v<3.0")
+		_debug_log_file.store_line("Auto-stabilization: lin_v<0.15, ang_v<15.0 (aggressive)")
 		_debug_log_file.store_line("Rescue threshold: y < -0.5m")
 		_debug_log_file.store_line("-------------------------------")
 		print("Debug log created at: %s" % ProjectSettings.globalize_path(log_path))
@@ -103,14 +103,15 @@ func _log_dice_states() -> void:
 		# Only check dice near table surface (y between 0.005 and 0.05)
 		elif pos.y > 0.005 and pos.y < 0.05:
 			# Don't flag sleeping dice as jittering
-			if not is_sleeping:
+			if not is_sleeping and not is_frozen:
 				# Detect actual jittering: oscillating velocity
-				if lin_speed > 0.05 and lin_speed < 0.15:
+				if lin_speed > 0.15 and lin_speed < 0.3:
 					is_jittering = true
 					jitter_reason = "OSCILLATING"
 
-				# Auto-stabilize: force sleep if nearly settled
-				if lin_speed < 0.05 and ang_speed < 3.0:
+				# Aggressive auto-stabilize: force sleep if nearly settled
+				# Higher thresholds to catch micro-oscillations earlier
+				if lin_speed < 0.15 and ang_speed < 15.0:
 					dice.linear_velocity = Vector3.ZERO
 					dice.angular_velocity = Vector3.ZERO
 					dice.sleeping = true
