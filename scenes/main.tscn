@@ -110,6 +110,74 @@ text = "Add Terrain"
 layout_mode = 2
 text = "Clear Table"
 
+[node name="TableSizePanel" type="VBoxContainer" parent="UI/HUD"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 10.0
+offset_top = 180.0
+offset_right = 200.0
+offset_bottom = 400.0
+
+[node name="TableSizeLabel" type="Label" parent="UI/HUD/TableSizePanel"]
+layout_mode = 2
+text = "Table Size:"
+
+[node name="TableSizeOption" type="OptionButton" parent="UI/HUD/TableSizePanel"]
+layout_mode = 2
+selected = 0
+item_count = 3
+popup/item_0/text = "48\" x 48\" (4x4 ft)"
+popup/item_0/id = 0
+popup/item_1/text = "48\" x 72\" (4x6 ft)"
+popup/item_1/id = 1
+popup/item_2/text = "Custom..."
+popup/item_2/id = 2
+
+[node name="CustomSizeContainer" type="VBoxContainer" parent="UI/HUD/TableSizePanel"]
+visible = false
+layout_mode = 2
+
+[node name="UnitOption" type="OptionButton" parent="UI/HUD/TableSizePanel/CustomSizeContainer"]
+layout_mode = 2
+selected = 0
+item_count = 2
+popup/item_0/text = "Inches"
+popup/item_0/id = 0
+popup/item_1/text = "Centimeters"
+popup/item_1/id = 1
+
+[node name="WidthContainer" type="HBoxContainer" parent="UI/HUD/TableSizePanel/CustomSizeContainer"]
+layout_mode = 2
+
+[node name="WidthLabel" type="Label" parent="UI/HUD/TableSizePanel/CustomSizeContainer/WidthContainer"]
+layout_mode = 2
+text = "Width:"
+
+[node name="WidthInput" type="SpinBox" parent="UI/HUD/TableSizePanel/CustomSizeContainer/WidthContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 12.0
+max_value = 240.0
+value = 48.0
+
+[node name="LengthContainer" type="HBoxContainer" parent="UI/HUD/TableSizePanel/CustomSizeContainer"]
+layout_mode = 2
+
+[node name="LengthLabel" type="Label" parent="UI/HUD/TableSizePanel/CustomSizeContainer/LengthContainer"]
+layout_mode = 2
+text = "Length:"
+
+[node name="LengthInput" type="SpinBox" parent="UI/HUD/TableSizePanel/CustomSizeContainer/LengthContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 12.0
+max_value = 240.0
+value = 48.0
+
+[node name="ApplyCustomBtn" type="Button" parent="UI/HUD/TableSizePanel/CustomSizeContainer"]
+layout_mode = 2
+text = "Apply Custom Size"
+
 [node name="DiceResult" type="Label" parent="UI/HUD"]
 layout_mode = 1
 anchors_preset = 7
