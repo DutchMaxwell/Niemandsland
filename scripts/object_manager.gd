@@ -487,21 +487,27 @@ func roll_all_dice() -> void:
 
 	for dice in _dice_list:
 		if is_instance_valid(dice):
-			# Apply random force and torque - stable roll
+			# Lift dice above table to prevent collision issues
+			dice.global_position.y = 0.05  # 5cm above table
+
+			# Unfreeze and apply velocities
 			dice.freeze = false
+			dice.sleeping = false  # Wake up physics
+
+			# Apply random velocity - realistic dice throw
 			dice.linear_velocity = Vector3(
-				randf_range(-0.3, 0.3),
-				randf_range(0.2, 0.4),  # Small hop
-				randf_range(-0.3, 0.3)
+				randf_range(-0.5, 0.5),   # Horizontal spread
+				randf_range(1.0, 2.0),    # Upward throw (1-2 m/s)
+				randf_range(-0.5, 0.5)    # Horizontal spread
 			)
 			dice.angular_velocity = Vector3(
-				randf_range(-10, 10),
-				randf_range(-10, 10),
-				randf_range(-10, 10)
+				randf_range(-15, 15),
+				randf_range(-15, 15),
+				randf_range(-15, 15)
 			)
 
 	# Wait for dice to settle, then read results
-	await get_tree().create_timer(2.0).timeout
+	await get_tree().create_timer(2.5).timeout
 	_read_dice_results()
 
 
