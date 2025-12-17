@@ -221,9 +221,9 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	dice.collision_mask = 1
 	dice.physics_material_override = _create_dice_physics_material()
 
-	# Physics settings for stability
-	dice.linear_damp = 2.0  # Stop linear movement quickly
-	dice.angular_damp = 3.0  # Stop rotation quickly
+	# Physics settings - moderate damping to avoid jitter
+	dice.linear_damp = 1.0
+	dice.angular_damp = 1.5
 	dice.can_sleep = true  # Allow physics to sleep when at rest
 	dice.continuous_cd = false
 
@@ -487,23 +487,23 @@ func roll_all_dice() -> void:
 
 	for dice in _dice_list:
 		if is_instance_valid(dice):
-			# Lift dice above table to prevent collision issues
-			dice.global_position.y = 0.05  # 5cm above table
+			# Lift dice above table (table top is at y=0.01)
+			dice.global_position.y = 0.08  # 8cm above table surface
 
 			# Unfreeze and apply velocities
 			dice.freeze = false
 			dice.sleeping = false  # Wake up physics
 
-			# Apply random velocity - realistic dice throw
+			# Apply random velocity - good dice roll feel
 			dice.linear_velocity = Vector3(
-				randf_range(-0.5, 0.5),   # Horizontal spread
-				randf_range(1.0, 2.0),    # Upward throw (1-2 m/s)
-				randf_range(-0.5, 0.5)    # Horizontal spread
+				randf_range(-0.4, 0.4),   # Horizontal spread
+				randf_range(0.8, 1.5),    # Upward throw
+				randf_range(-0.4, 0.4)    # Horizontal spread
 			)
 			dice.angular_velocity = Vector3(
-				randf_range(-15, 15),
-				randf_range(-15, 15),
-				randf_range(-15, 15)
+				randf_range(-25, 25),     # More rotation
+				randf_range(-25, 25),
+				randf_range(-25, 25)
 			)
 
 	# Wait for dice to settle, then read results
