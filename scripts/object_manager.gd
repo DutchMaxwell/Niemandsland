@@ -216,17 +216,17 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	dice.name = "Dice_%d" % _object_counter
 	dice.add_to_group("selectable")
 	dice.add_to_group("dice")
-	dice.mass = 0.004  # ~4 grams for 16mm dice
+	dice.mass = 0.05  # 50 grams - heavier for stable physics
 	dice.collision_layer = 1
 	dice.collision_mask = 1
 	dice.physics_material_override = _create_dice_physics_material()
 
-	# Add damping to prevent wild bouncing (balanced values)
-	dice.linear_damp = 0.3
-	dice.angular_damp = 0.5
+	# Damping for stable physics
+	dice.linear_damp = 1.0
+	dice.angular_damp = 2.0
 
-	# Continuous collision detection for small fast objects
-	dice.continuous_cd = true
+	# Disable continuous CD - can cause jittering
+	dice.continuous_cd = false
 
 	var dice_size = 0.016  # 16mm standard dice
 	var corner_radius = dice_size * 0.12  # Roundness factor
@@ -280,8 +280,8 @@ func _create_rounded_box_mesh(size: float, _radius: float) -> MeshInstance3D:
 
 func _create_dice_physics_material() -> PhysicsMaterial:
 	var mat = PhysicsMaterial.new()
-	mat.bounce = 0.25  # Balanced bounce
-	mat.friction = 0.7  # Balanced friction
+	mat.bounce = 0.2  # Low bounce for stability
+	mat.friction = 0.8  # High friction to stop quickly
 	return mat
 
 
@@ -459,17 +459,17 @@ func roll_all_dice() -> void:
 
 	for dice in _dice_list:
 		if is_instance_valid(dice):
-			# Apply random force and torque - balanced for 16mm dice
+			# Apply random force and torque - stable roll
 			dice.freeze = false
 			dice.linear_velocity = Vector3(
-				randf_range(-0.5, 0.5),
-				randf_range(0.3, 0.8),  # Moderate hop
-				randf_range(-0.5, 0.5)
+				randf_range(-0.3, 0.3),
+				randf_range(0.2, 0.4),  # Small hop
+				randf_range(-0.3, 0.3)
 			)
 			dice.angular_velocity = Vector3(
-				randf_range(-12, 12),
-				randf_range(-12, 12),
-				randf_range(-12, 12)
+				randf_range(-10, 10),
+				randf_range(-10, 10),
+				randf_range(-10, 10)
 			)
 
 	# Wait for dice to settle, then read results
