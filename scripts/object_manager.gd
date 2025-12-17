@@ -214,12 +214,12 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	dice.name = "Dice_%d" % _object_counter
 	dice.add_to_group("selectable")
 	dice.add_to_group("dice")
-	dice.mass = 0.5
+	dice.mass = 0.004  # ~4 grams for 16mm dice
 	dice.collision_layer = 1
 	dice.collision_mask = 1
 	dice.physics_material_override = _create_dice_physics_material()
 
-	var dice_size = 0.15
+	var dice_size = 0.016  # 16mm standard dice
 	var corner_radius = dice_size * 0.12  # Roundness factor
 
 	# Create dice body with rounded edges
@@ -284,10 +284,10 @@ func _add_flat_pips(dice: RigidBody3D, size: float) -> void:
 	pip_material.roughness = 0.4
 	pip_material.metallic = 0.0
 
-	var pip_radius = size * 0.07  # Pip circle radius
-	var pip_depth = 0.002  # Very thin (flat circle)
-	var face_offset = size / 2 + 0.001  # Just above surface
-	var pip_spacing = size * 0.24  # Distance between pips
+	var pip_radius = size * 0.10  # Pip circle radius (~1.6mm for 16mm dice)
+	var pip_depth = size * 0.01  # Very thin, proportional to dice
+	var face_offset = size / 2 + size * 0.005  # Just above surface
+	var pip_spacing = size * 0.28  # Distance between pips
 
 	# Face 1 (top, +Y): single center pip
 	_add_flat_pip(dice, Vector3(0, face_offset, 0), Vector3.UP, pip_radius, pip_depth, pip_material)
