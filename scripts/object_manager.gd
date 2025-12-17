@@ -9,6 +9,13 @@ signal object_deselected()
 @export var drag_height: float = 0.5
 @export var rotation_snap_degrees: float = 45.0
 
+# Debug logging
+@export var debug_dice_physics: bool = true  # Set to false to disable logging
+var _debug_log_file: FileAccess = null
+var _debug_log_timer: float = 0.0
+const DEBUG_LOG_INTERVAL: float = 0.5  # Log every 0.5 seconds
+var _is_rolling: bool = false
+
 var _selected_object: Node3D = null
 var _is_dragging: bool = false
 var _drag_plane: Plane
@@ -23,6 +30,120 @@ const MINIATURE_RADIUS: float = 0.016  # 32mm diameter base (16mm radius)
 
 func _ready() -> void:
 	_drag_plane = Plane(Vector3.UP, 0)
+	_init_debug_log()
+
+
+func _init_debug_log() -> void:
+	if not debug_dice_physics:
+		return
+	# Open log file
+	var log_path = "user://dice_debug.log"
+	_debug_log_file = FileAccess.open(log_path, FileAccess.WRITE)
+	if _debug_log_file:
+		_debug_log_file.store_line("=== DICE PHYSICS DEBUG LOG ===")
+		_debug_log_file.store_line("Time: %s" % Time.get_datetime_string_from_system())
+		_debug_log_file.store_line("Table collision top: y=0.01 (10mm)")
+		_debug_log_file.store_line("Dice size: 16mm, mass: 5g")
+		_debug_log_file.store_line("-------------------------------")
+		print("Debug log created at: %s" % ProjectSettings.globalize_path(log_path))
+	else:
+		print("ERROR: Could not create debug log file")
+
+
+func _physics_process(delta: float) -> void:
+	if not debug_dice_physics or _dice_list.is_empty():
+		return
+
+	_debug_log_timer += delta
+	if _debug_log_timer < DEBUG_LOG_INTERVAL:
+		return
+	_debug_log_timer = 0.0
+
+	# Log state of all dice
+	_log_dice_states()
+
+
+func _log_dice_states() -> void:
+	var any_jittering = false
+	var log_lines: Array[String] = []
+	var timestamp = "%.2f" % Time.get_ticks_msec() / 1000.0
+
+	log_lines.append("\n[%s] Dice States:" % timestamp)
+
+	for i in range(_dice_list.size()):
+		var dice = _dice_list[i]
+		if not is_instance_valid(dice):
+			continue
+
+		var pos = dice.global_position
+		var lin_vel = dice.linear_velocity
+		var ang_vel = dice.angular_velocity
+		var is_sleeping = dice.sleeping
+		var is_frozen = dice.freeze
+
+		var lin_speed = lin_vel.length()
+		var ang_speed = ang_vel.length()
+
+		# Detect jittering: low but non-zero velocity with dice near table
+		var is_jittering = false
+		var jitter_reason = ""
+
+		if pos.y < 0.02 and pos.y > 0.005:  # Near table surface
+			if lin_speed > 0.001 and lin_speed < 0.1 and not is_sleeping:
+				is_jittering = true
+				jitter_reason = "LOW_LINEAR_VEL"
+			elif ang_speed > 0.1 and ang_speed < 5.0 and not is_sleeping:
+				is_jittering = true
+				jitter_reason = "LOW_ANGULAR_VEL"
+
+		if pos.y < 0.008:  # Below expected rest height (8mm)
+			is_jittering = true
+			jitter_reason = "BELOW_TABLE_Y<8mm"
+
+		if is_jittering:
+			any_jittering = true
+
+		var status = "OK"
+		if is_sleeping:
+			status = "SLEEP"
+		elif is_frozen:
+			status = "FROZEN"
+		elif is_jittering:
+			status = "JITTER(%s)" % jitter_reason
+		elif _is_rolling:
+			status = "ROLLING"
+
+		var line = "  Dice_%d: pos=(%.4f,%.4f,%.4f) lin_v=%.4f ang_v=%.2f [%s]" % [
+			i + 1, pos.x, pos.y, pos.z, lin_speed, ang_speed, status
+		]
+		log_lines.append(line)
+
+		# Console output for jittering dice
+		if is_jittering:
+			print("[JITTER] Dice_%d y=%.4f lin_v=%.4f ang_v=%.2f reason=%s" % [
+				i + 1, pos.y, lin_speed, ang_speed, jitter_reason
+			])
+
+	# Write to file
+	if _debug_log_file:
+		for line in log_lines:
+			_debug_log_file.store_line(line)
+		_debug_log_file.flush()
+
+	# Also print summary if any dice are jittering
+	if any_jittering:
+		print("[DEBUG] Some dice are jittering - check dice_debug.log for details")
+
+
+func _log_event(message: String) -> void:
+	if not debug_dice_physics:
+		return
+	var timestamp = "%.2f" % (Time.get_ticks_msec() / 1000.0)
+	var log_line = "[%s] %s" % [timestamp, message]
+	print(log_line)
+	if _debug_log_file:
+		_debug_log_file.store_line(log_line)
+		_debug_log_file.flush()
 
 
 func _input(event: InputEvent) -> void:
@@ -261,6 +382,10 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	add_child(dice)
 	_dice_list.append(dice)
 
+	_log_event("SPAWN %s at pos=(%.4f,%.4f,%.4f) mass=%.4f lin_damp=%.1f ang_damp=%.1f" % [
+		dice.name, pos.x, pos.y, pos.z, dice.mass, dice.linear_damp, dice.angular_damp
+	])
+
 	return dice
 
 
@@ -483,10 +608,12 @@ func roll_all_dice() -> void:
 	if _dice_list.is_empty():
 		return
 
-	var results: Array[int] = []
+	_is_rolling = true
+	_log_event("=== ROLL STARTED ===")
 
 	for dice in _dice_list:
 		if is_instance_valid(dice):
+			var old_pos = dice.global_position
 			# Lift dice above table (table top is at y=0.01)
 			dice.global_position.y = 0.08  # 8cm above table surface
 
@@ -495,19 +622,27 @@ func roll_all_dice() -> void:
 			dice.sleeping = false  # Wake up physics
 
 			# Apply random velocity - good dice roll feel
-			dice.linear_velocity = Vector3(
+			var lin_v = Vector3(
 				randf_range(-0.4, 0.4),   # Horizontal spread
 				randf_range(0.8, 1.5),    # Upward throw
 				randf_range(-0.4, 0.4)    # Horizontal spread
 			)
-			dice.angular_velocity = Vector3(
+			var ang_v = Vector3(
 				randf_range(-25, 25),     # More rotation
 				randf_range(-25, 25),
 				randf_range(-25, 25)
 			)
+			dice.linear_velocity = lin_v
+			dice.angular_velocity = ang_v
+
+			_log_event("  %s: lifted from y=%.4f to y=0.08, lin_v=(%.2f,%.2f,%.2f) ang_v=(%.1f,%.1f,%.1f)" % [
+				dice.name, old_pos.y, lin_v.x, lin_v.y, lin_v.z, ang_v.x, ang_v.y, ang_v.z
+			])
 
 	# Wait for dice to settle, then read results
 	await get_tree().create_timer(2.5).timeout
+	_is_rolling = false
+	_log_event("=== ROLL ENDED (2.5s elapsed) ===")
 	_read_dice_results()
 
 
@@ -515,13 +650,23 @@ func _read_dice_results() -> void:
 	var results: Array[int] = []
 	var total: int = 0
 
+	_log_event("--- READING DICE RESULTS ---")
+
 	for dice in _dice_list:
 		if is_instance_valid(dice):
 			var result = _get_dice_top_face(dice)
 			results.append(result)
 			total += result
 
+			var pos = dice.global_position
+			var lin_speed = dice.linear_velocity.length()
+			var ang_speed = dice.angular_velocity.length()
+			_log_event("  %s: result=%d pos.y=%.4f lin_v=%.4f ang_v=%.2f sleeping=%s" % [
+				dice.name, result, pos.y, lin_speed, ang_speed, str(dice.sleeping)
+			])
+
 	if not results.is_empty():
+		_log_event("TOTAL: %d (results: %s)" % [total, str(results)])
 		dice_rolled.emit(total, results)
 
 
