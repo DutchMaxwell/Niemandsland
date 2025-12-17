@@ -36,7 +36,7 @@ func _on_spawn_miniature() -> void:
 
 func _on_spawn_dice() -> void:
 	var spawn_pos = _get_random_table_position()
-	spawn_pos.y = 2.0  # Drop from height
+	spawn_pos.y = 0.5  # Drop from reasonable height above table
 	object_manager.spawn_dice(spawn_pos)
 
 
@@ -65,7 +65,9 @@ func _on_dice_rolled(total: int, results: Array) -> void:
 
 
 func _get_random_table_position() -> Vector3:
-	var table_size = table.table_size
-	var x = randf_range(-table_size.x / 2 + 0.3, table_size.x / 2 - 0.3)
-	var z = randf_range(-table_size.y / 2 + 0.3, table_size.y / 2 - 0.3)
-	return Vector3(x, 0.1, z)
+	# Table size is in feet, convert to meters for positioning
+	var size_meters = table.table_size * 0.3048  # FEET_TO_METERS
+	var margin = 0.15  # Stay away from edges
+	var x = randf_range(-size_meters.x / 2 + margin, size_meters.x / 2 - margin)
+	var z = randf_range(-size_meters.y / 2 + margin, size_meters.y / 2 - margin)
+	return Vector3(x, 0.05, z)  # Slightly above table surface
