@@ -17,8 +17,11 @@ const INCHES_TO_METERS: float = 0.0254
 
 
 func _ready() -> void:
-	# Table will be setup from main.gd
-	pass
+	# Add to table group for raycasting
+	add_to_group("table")
+	# Ensure collision layer is set
+	collision_layer = 1
+	collision_mask = 1
 
 
 ## Setup table with given size in feet
