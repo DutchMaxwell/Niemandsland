@@ -23,6 +23,12 @@ func _ready() -> void:
 	collision_layer = 1
 	collision_mask = 1
 
+	# Physics material for table surface
+	var table_physics = PhysicsMaterial.new()
+	table_physics.friction = 0.9  # High friction to slow dice
+	table_physics.bounce = 0.1  # Low bounce
+	physics_material_override = table_physics
+
 
 ## Setup table with given size in feet
 func setup_table(size_feet: Vector2) -> void:
@@ -64,6 +70,7 @@ func setup_table(size_feet: Vector2) -> void:
 func _create_table_border(size_meters: Vector2) -> void:
 	var border_height = 0.05
 	var border_width = 0.03
+	var wall_height = 0.15  # Invisible wall height to catch dice
 	var border_material = StandardMaterial3D.new()
 	border_material.albedo_color = Color(0.3, 0.2, 0.1)  # Wood color
 	border_material.roughness = 0.7
@@ -82,7 +89,23 @@ func _create_table_border(size_meters: Vector2) -> void:
 		Vector3(border_width, border_height, size_meters.y),
 	]
 
+	# Wall collision positions (taller invisible walls)
+	var wall_positions = [
+		Vector3(0, wall_height / 2, -size_meters.y / 2 - border_width / 2),
+		Vector3(0, wall_height / 2, size_meters.y / 2 + border_width / 2),
+		Vector3(-size_meters.x / 2 - border_width / 2, wall_height / 2, 0),
+		Vector3(size_meters.x / 2 + border_width / 2, wall_height / 2, 0),
+	]
+
+	var wall_sizes = [
+		Vector3(size_meters.x + border_width * 2, wall_height, border_width),
+		Vector3(size_meters.x + border_width * 2, wall_height, border_width),
+		Vector3(border_width, wall_height, size_meters.y),
+		Vector3(border_width, wall_height, size_meters.y),
+	]
+
 	for i in range(4):
+		# Visual border
 		var border_mesh = BoxMesh.new()
 		border_mesh.size = sizes[i]
 
@@ -91,6 +114,21 @@ func _create_table_border(size_meters: Vector2) -> void:
 		border_instance.material_override = border_material
 		border_instance.position = positions[i]
 		add_child(border_instance)
+
+		# Invisible collision wall
+		var wall = StaticBody3D.new()
+		wall.name = "Wall_%d" % i
+		wall.collision_layer = 1
+		wall.collision_mask = 1
+
+		var wall_collision = CollisionShape3D.new()
+		var wall_shape = BoxShape3D.new()
+		wall_shape.size = wall_sizes[i]
+		wall_collision.shape = wall_shape
+		wall.add_child(wall_collision)
+
+		wall.position = wall_positions[i]
+		add_child(wall)
 
 
 ## Convert inches to table coordinates
