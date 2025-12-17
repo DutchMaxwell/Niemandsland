@@ -249,37 +249,17 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	return dice
 
 
-## Create a rounded cube mesh using ArrayMesh for proper beveled edges
-func _create_rounded_box_mesh(size: float, radius: float) -> MeshInstance3D:
+## Create a clean dice mesh - simple box with glossy material
+## For true rounded corners, import a 3D model (glTF) from Blender
+func _create_rounded_box_mesh(size: float, _radius: float) -> MeshInstance3D:
 	var mesh_instance = MeshInstance3D.new()
 
-	# Use ArrayMesh for procedural rounded cube
-	var array_mesh = ArrayMesh.new()
-	var surface_tool = SurfaceTool.new()
-	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# Simple clean box
+	var box_mesh = BoxMesh.new()
+	box_mesh.size = Vector3(size, size, size)
+	mesh_instance.mesh = box_mesh
 
-	# Parameters
-	var half_size = size / 2.0
-	var inner_size = half_size - radius
-	var segments = 4  # Smoothness of bevels
-
-	# Generate the 6 faces (flat parts)
-	_add_rounded_cube_faces(surface_tool, inner_size, half_size)
-
-	# Generate the 12 edges (cylindrical bevels)
-	_add_rounded_cube_edges(surface_tool, inner_size, radius, segments)
-
-	# Generate the 8 corners (spherical caps)
-	_add_rounded_cube_corners(surface_tool, inner_size, radius, segments)
-
-	# Generate normals for smooth shading
-	surface_tool.generate_normals()
-
-	# Create mesh
-	array_mesh = surface_tool.commit()
-	mesh_instance.mesh = array_mesh
-
-	# Smooth white material with slight glossiness
+	# Smooth white material with glossiness
 	var material = StandardMaterial3D.new()
 	material.albedo_color = Color(0.95, 0.95, 0.95)
 	material.roughness = 0.15  # Glossy surface
@@ -287,171 +267,6 @@ func _create_rounded_box_mesh(size: float, radius: float) -> MeshInstance3D:
 
 	mesh_instance.material_override = material
 	return mesh_instance
-
-
-## Add the 6 flat faces of the rounded cube
-func _add_rounded_cube_faces(st: SurfaceTool, inner: float, outer: float) -> void:
-	# Top face (+Y)
-	_add_quad(st,
-		Vector3(-inner, outer, -inner),
-		Vector3(-inner, outer, inner),
-		Vector3(inner, outer, inner),
-		Vector3(inner, outer, -inner))
-
-	# Bottom face (-Y)
-	_add_quad(st,
-		Vector3(-inner, -outer, inner),
-		Vector3(-inner, -outer, -inner),
-		Vector3(inner, -outer, -inner),
-		Vector3(inner, -outer, inner))
-
-	# Front face (+Z)
-	_add_quad(st,
-		Vector3(-inner, -inner, outer),
-		Vector3(-inner, inner, outer),
-		Vector3(inner, inner, outer),
-		Vector3(inner, -inner, outer))
-
-	# Back face (-Z)
-	_add_quad(st,
-		Vector3(inner, -inner, -outer),
-		Vector3(inner, inner, -outer),
-		Vector3(-inner, inner, -outer),
-		Vector3(-inner, -inner, -outer))
-
-	# Right face (+X)
-	_add_quad(st,
-		Vector3(outer, -inner, inner),
-		Vector3(outer, inner, inner),
-		Vector3(outer, inner, -inner),
-		Vector3(outer, -inner, -inner))
-
-	# Left face (-X)
-	_add_quad(st,
-		Vector3(-outer, -inner, -inner),
-		Vector3(-outer, inner, -inner),
-		Vector3(-outer, inner, inner),
-		Vector3(-outer, -inner, inner))
-
-
-## Add a quad (two triangles) to the surface tool
-func _add_quad(st: SurfaceTool, v0: Vector3, v1: Vector3, v2: Vector3, v3: Vector3) -> void:
-	# Triangle 1
-	st.add_vertex(v0)
-	st.add_vertex(v1)
-	st.add_vertex(v2)
-	# Triangle 2
-	st.add_vertex(v0)
-	st.add_vertex(v2)
-	st.add_vertex(v3)
-
-
-## Add the 12 cylindrical edge bevels
-func _add_rounded_cube_edges(st: SurfaceTool, inner: float, radius: float, segments: int) -> void:
-	# Edges along X axis (4)
-	for y_sign in [-1.0, 1.0]:
-		for z_sign in [-1.0, 1.0]:
-			_add_edge_bevel(st,
-				Vector3(-inner, y_sign * inner, z_sign * inner),
-				Vector3(inner, y_sign * inner, z_sign * inner),
-				Vector3(0, y_sign, z_sign).normalized(), radius, segments)
-
-	# Edges along Y axis (4)
-	for x_sign in [-1.0, 1.0]:
-		for z_sign in [-1.0, 1.0]:
-			_add_edge_bevel(st,
-				Vector3(x_sign * inner, -inner, z_sign * inner),
-				Vector3(x_sign * inner, inner, z_sign * inner),
-				Vector3(x_sign, 0, z_sign).normalized(), radius, segments)
-
-	# Edges along Z axis (4)
-	for x_sign in [-1.0, 1.0]:
-		for y_sign in [-1.0, 1.0]:
-			_add_edge_bevel(st,
-				Vector3(x_sign * inner, y_sign * inner, -inner),
-				Vector3(x_sign * inner, y_sign * inner, inner),
-				Vector3(x_sign, y_sign, 0).normalized(), radius, segments)
-
-
-## Add a single edge bevel (quarter cylinder)
-func _add_edge_bevel(st: SurfaceTool, start: Vector3, end: Vector3, corner_dir: Vector3, radius: float, segments: int) -> void:
-	var edge_dir = (end - start).normalized()
-
-	# Find the two perpendicular directions for the bevel
-	var perp1: Vector3
-	var perp2: Vector3
-
-	if abs(edge_dir.x) > 0.5:
-		perp1 = Vector3(0, corner_dir.y, 0).normalized() if corner_dir.y != 0 else Vector3(0, 1, 0)
-		perp2 = Vector3(0, 0, corner_dir.z).normalized() if corner_dir.z != 0 else Vector3(0, 0, 1)
-	elif abs(edge_dir.y) > 0.5:
-		perp1 = Vector3(corner_dir.x, 0, 0).normalized() if corner_dir.x != 0 else Vector3(1, 0, 0)
-		perp2 = Vector3(0, 0, corner_dir.z).normalized() if corner_dir.z != 0 else Vector3(0, 0, 1)
-	else:
-		perp1 = Vector3(corner_dir.x, 0, 0).normalized() if corner_dir.x != 0 else Vector3(1, 0, 0)
-		perp2 = Vector3(0, corner_dir.y, 0).normalized() if corner_dir.y != 0 else Vector3(0, 1, 0)
-
-	# Create bevel strip
-	for i in range(segments):
-		var angle1 = (float(i) / segments) * PI / 2
-		var angle2 = (float(i + 1) / segments) * PI / 2
-
-		var offset1 = perp1 * cos(angle1) * radius + perp2 * sin(angle1) * radius
-		var offset2 = perp1 * cos(angle2) * radius + perp2 * sin(angle2) * radius
-
-		var v0 = start + offset1
-		var v1 = end + offset1
-		var v2 = end + offset2
-		var v3 = start + offset2
-
-		_add_quad(st, v0, v3, v2, v1)
-
-
-## Add the 8 spherical corner caps
-func _add_rounded_cube_corners(st: SurfaceTool, inner: float, radius: float, segments: int) -> void:
-	for x_sign in [-1.0, 1.0]:
-		for y_sign in [-1.0, 1.0]:
-			for z_sign in [-1.0, 1.0]:
-				var corner = Vector3(x_sign * inner, y_sign * inner, z_sign * inner)
-				var dir = Vector3(x_sign, y_sign, z_sign).normalized()
-				_add_corner_cap(st, corner, dir, radius, segments)
-
-
-## Add a single spherical corner cap (1/8 sphere)
-func _add_corner_cap(st: SurfaceTool, center: Vector3, corner_dir: Vector3, radius: float, segments: int) -> void:
-	# Determine the three axes for this octant
-	var axis_x = Vector3(sign(corner_dir.x), 0, 0)
-	var axis_y = Vector3(0, sign(corner_dir.y), 0)
-	var axis_z = Vector3(0, 0, sign(corner_dir.z))
-
-	# Create triangular patches for the corner
-	for i in range(segments):
-		for j in range(segments - i):
-			var k = segments - i - j - 1
-
-			# Barycentric-like coordinates for spherical interpolation
-			var coords = [
-				[i, j, k + 1],
-				[i, j + 1, k],
-				[i + 1, j, k],
-				[i + 1, j + 1, k - 1] if k > 0 else null
-			]
-
-			var verts: Array[Vector3] = []
-			for coord in coords:
-				if coord != null:
-					var dir = (axis_x * coord[0] + axis_y * coord[1] + axis_z * coord[2]).normalized()
-					verts.append(center + dir * radius)
-
-			if verts.size() >= 3:
-				st.add_vertex(verts[0])
-				st.add_vertex(verts[1])
-				st.add_vertex(verts[2])
-
-				if verts.size() == 4:
-					st.add_vertex(verts[1])
-					st.add_vertex(verts[3])
-					st.add_vertex(verts[2])
 
 
 func _create_dice_physics_material() -> PhysicsMaterial:
