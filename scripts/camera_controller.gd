@@ -5,8 +5,8 @@ extends Node3D
 @export var rotation_speed: float = 0.005
 @export var pan_speed: float = 0.02
 @export var zoom_speed: float = 0.5
-@export var min_zoom: float = 3.0
-@export var max_zoom: float = 20.0
+@export var min_zoom: float = 0.5  # Allow very close zoom
+@export var max_zoom: float = 25.0  # Extended max for larger tables
 @export var min_pitch: float = -80.0  # degrees
 @export var max_pitch: float = -10.0  # degrees
 
