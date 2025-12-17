@@ -66,7 +66,7 @@ func _physics_process(delta: float) -> void:
 func _log_dice_states() -> void:
 	var any_jittering = false
 	var log_lines: Array[String] = []
-	var timestamp = "%.2f" % Time.get_ticks_msec() / 1000.0
+	var timestamp = "%.2f" % (Time.get_ticks_msec() / 1000.0)
 
 	log_lines.append("\n[%s] Dice States:" % timestamp)
 
