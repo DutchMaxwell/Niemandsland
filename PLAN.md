@@ -12,15 +12,40 @@ Ein Open-Source Tabletop-Simulator mit starkem Fokus auf Wargaming-Spiele (OnePa
 
 | Komponente | Empfehlung | Begründung |
 |------------|------------|------------|
-| **Game Engine** | Godot 4.x | Open-Source, 3D-fähig, gute Performance, C#/GDScript |
-| **Programmiersprache** | C# + GDScript | C# für komplexe Logik, GDScript für schnelles Prototyping |
-| **Netzwerk** | Godot High-Level Multiplayer + WebRTC | P2P für geringe Latenz, optional dedizierte Server |
+| **Game Engine** | Godot 4.3+ | Open-Source (MIT), 3D ausreichend für Tabletop, aktive Community |
+| **Programmiersprache** | GDScript (primär) | Einfacher Einstieg, keine C#-Dependencies, besser für Modding |
+| **Netzwerk** | Godot ENet + WebRTC (Fallback) | ENet für Desktop, WebRTC für Web-Export |
 | **Datenformat** | JSON + SQLite | Portabel, leicht editierbar, gut für Modding |
 | **3D-Modelle** | glTF 2.0 | Offener Standard, breite Tool-Unterstützung |
 | **UI Framework** | Godot Control Nodes | Native Integration |
-| **Build System** | Godot Export + GitHub Actions | Cross-Platform Builds |
+| **Build System** | Godot Export + GitHub Actions | Cross-Platform Builds (Win, Linux, Mac, **Web**) |
 
-### 1.2 Ordnerstruktur
+### 1.2 Engine-Entscheidung: Warum Godot?
+
+**Bewertete Alternativen:**
+
+| Engine | Bewertung | Grund für Ablehnung/Wahl |
+|--------|-----------|--------------------------|
+| **Unity** | ❌ | Closed-Source, instabile Lizenzpolitik, nicht für Open-Source geeignet |
+| **Unreal Engine 5** | ❌ | Overkill für Tabletop, C++ erforderlich, 5% Revenue-Share, 40GB+ Download |
+| **Bevy (Rust)** | ❌ | Noch Alpha (v0.17), Breaking Changes alle 3 Monate, kein visueller Editor |
+| **Three.js/Web** | 🤔 | Als Backup für Web-Only Version, aber Physik-Limitierungen |
+| **Godot 4.3+** | ✅ | Open-Source, ~100MB, ausreichend für Tabletop, HTML5-Export |
+
+**Godot-Stärken für dieses Projekt:**
+- Vollständig Open-Source (MIT-Lizenz) - keine Lizenzüberraschungen
+- Leichtgewichtig: ~100MB vs Unity (20GB+) / Unreal (40GB+)
+- Schnelle Iteration: Prototyp in Wochen, nicht Monaten
+- HTML5-Export ermöglicht Browser-Version ohne Installation
+- GDScript ist Python-ähnlich → niedrige Einstiegshürde für Contributors
+- Integrierter Jolt Physics Engine (seit Godot 4.x) - gut für Würfelphysik
+
+**Bekannte Risiken:**
+- Multiplayer weniger ausgereift als Unity/Unreal → früh testen!
+- Kleinere Asset-Community → mehr Eigenentwicklung nötig
+- 3D-Performance bei sehr vielen Objekten → Performance-Tests in Phase 1
+
+### 1.3 Ordnerstruktur
 
 ```
 openTTS/
@@ -380,17 +405,48 @@ openTTS/
 
 ---
 
-## Phase 10: Entwicklungs-Roadmap
+## Phase 10: Risiko-Analyse & Mitigationsstrategien
 
-### Milestone 1: MVP (Minimum Viable Product)
-**Ziel: Spielbarer Prototyp**
+### 10.1 Technische Risiken
 
-1. [ ] Godot-Projekt Setup
-2. [ ] Basis-Spieltisch mit Kamera
+| Risiko | Wahrscheinlichkeit | Impact | Mitigation |
+|--------|-------------------|--------|------------|
+| **Multiplayer-Sync Probleme** | Hoch | Kritisch | Früher Prototyp (Milestone 1), ENet vor WebRTC, Authoritative Server als Option |
+| **3D Performance bei 200+ Objekten** | Mittel | Hoch | LOD-System, Instancing, Performance-Budget früh definieren |
+| **Godot Breaking Changes** | Niedrig | Mittel | LTS-Version nutzen (4.3 LTS), nicht bleeding-edge |
+| **Modding-API Komplexität** | Mittel | Mittel | Sandbox für Mods, vordefinierte Hooks statt freiem Scripting |
+| **Web-Export Limitierungen** | Mittel | Niedrig | Desktop als Primär-Plattform, Web als "Lite"-Version |
+
+### 10.2 Projekt-Risiken
+
+| Risiko | Mitigation |
+|--------|------------|
+| **Feature Creep** | Strenge MVP-Definition, "Nice-to-have" Liste separat |
+| **Contributor-Mangel** | Gute Dokumentation, einfache "Good First Issues" |
+| **OPR-Lizenzfragen** | Früh Kontakt aufnehmen, nur öffentliche Daten nutzen |
+| **Konkurrenz durch TTS-Updates** | Differenzierung durch Wargaming-Fokus |
+
+### 10.3 Go/No-Go Entscheidungspunkte
+
+1. **Nach Milestone 1**: Funktioniert Multiplayer mit 2 Spielern stabil?
+2. **Nach Milestone 2**: Läuft Performant mit 100 Miniaturen?
+3. **Nach Milestone 3**: Ist OPR-Integration rechtlich geklärt?
+
+---
+
+## Phase 11: Entwicklungs-Roadmap
+
+### Milestone 1: Technischer Proof-of-Concept (PoC)
+**Ziel: Validierung der kritischen Technologie**
+
+1. [ ] Godot 4.3+ Projekt Setup mit CI/CD
+2. [ ] Basis-Spieltisch mit Kamera-System
 3. [ ] Einfaches Objekt-System (Spawn, Move, Rotate)
-4. [ ] Würfel-System (D6 Pool)
-5. [ ] Basis-Messwerkzeug
-6. [ ] Lokaler 2-Spieler Hotseat-Modus
+4. [ ] **Performance-Test: 200 Objekte gleichzeitig** ← KRITISCH
+5. [ ] Würfel-System (D6 Pool mit Physik)
+6. [ ] **Multiplayer PoC: 2 Spieler über Netzwerk** ← KRITISCH
+7. [ ] Basis-Messwerkzeug
+8. [ ] Web-Export Test
 
 ### Milestone 2: Alpha
 **Ziel: Vollständiges Einzelspieler-Erlebnis**
@@ -513,5 +569,6 @@ openTTS/
 ---
 
 *Dokument erstellt: 2025-12-17*
-*Version: 1.0*
-*Status: Initialer Entwurf - Bereit für Review*
+*Letzte Überarbeitung: 2025-12-17*
+*Version: 1.1*
+*Status: Überarbeitet - Engine-Entscheidung validiert, Risiko-Analyse hinzugefügt*
