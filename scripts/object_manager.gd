@@ -216,16 +216,15 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	dice.name = "Dice_%d" % _object_counter
 	dice.add_to_group("selectable")
 	dice.add_to_group("dice")
-	dice.mass = 0.05  # 50 grams - heavier for stable physics
+	dice.mass = 0.005  # 5 grams - realistic for 16mm plastic dice
 	dice.collision_layer = 1
 	dice.collision_mask = 1
 	dice.physics_material_override = _create_dice_physics_material()
 
-	# Damping for stable physics
-	dice.linear_damp = 1.0
-	dice.angular_damp = 2.0
-
-	# Disable continuous CD - can cause jittering
+	# Physics settings for stability
+	dice.linear_damp = 2.0  # Stop linear movement quickly
+	dice.angular_damp = 3.0  # Stop rotation quickly
+	dice.can_sleep = true  # Allow physics to sleep when at rest
 	dice.continuous_cd = false
 
 	var dice_size = 0.016  # 16mm standard dice
@@ -308,8 +307,9 @@ func _create_rounded_box_mesh(size: float, _radius: float) -> MeshInstance3D:
 
 func _create_dice_physics_material() -> PhysicsMaterial:
 	var mat = PhysicsMaterial.new()
-	mat.bounce = 0.2  # Low bounce for stability
-	mat.friction = 0.8  # High friction to stop quickly
+	mat.bounce = 0.1  # Very low bounce to prevent jittering
+	mat.friction = 0.6  # Moderate friction
+	mat.rough = true  # Use rougher physics calculations
 	return mat
 
 
