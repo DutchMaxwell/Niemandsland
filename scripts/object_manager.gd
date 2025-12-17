@@ -42,8 +42,10 @@ func _init_debug_log() -> void:
 	if _debug_log_file:
 		_debug_log_file.store_line("=== DICE PHYSICS DEBUG LOG ===")
 		_debug_log_file.store_line("Time: %s" % Time.get_datetime_string_from_system())
-		_debug_log_file.store_line("Table collision top: y=0.01 (10mm)")
-		_debug_log_file.store_line("Dice size: 16mm, mass: 5g")
+		_debug_log_file.store_line("Table collision: extended surface at y=0.01")
+		_debug_log_file.store_line("Dice: 16mm, 5g, expected rest y≈0.016-0.018")
+		_debug_log_file.store_line("Auto-stabilization: lin_v<0.05, ang_v<3.0")
+		_debug_log_file.store_line("Rescue threshold: y < -0.5m")
 		_debug_log_file.store_line("-------------------------------")
 		print("Debug log created at: %s" % ProjectSettings.globalize_path(log_path))
 	else:
@@ -84,37 +86,44 @@ func _log_dice_states() -> void:
 		var lin_speed = lin_vel.length()
 		var ang_speed = ang_vel.length()
 
-		# Detect jittering: low but non-zero velocity with dice near table
 		var is_jittering = false
 		var jitter_reason = ""
 		var was_stabilized = false
+		var was_rescued = false
 
-		# Expected rest height: table top (0.018) + dice half (0.008) = ~0.026
-		if pos.y < 0.035 and pos.y > 0.015:  # Near table surface
-			if lin_speed > 0.001 and lin_speed < 0.1 and not is_sleeping:
-				is_jittering = true
-				jitter_reason = "LOW_LINEAR_VEL"
-			elif ang_speed > 0.1 and ang_speed < 5.0 and not is_sleeping:
-				is_jittering = true
-				jitter_reason = "LOW_ANGULAR_VEL"
+		# RESCUE: If dice fell below -0.5m, teleport back to table
+		if pos.y < -0.5:
+			dice.global_position = Vector3(pos.x, 0.05, pos.z)
+			dice.linear_velocity = Vector3.ZERO
+			dice.angular_velocity = Vector3.ZERO
+			dice.sleeping = true
+			was_rescued = true
+			_log_event("RESCUED %s from y=%.1f" % [dice.name, pos.y])
 
-			# Auto-stabilize: force sleep if nearly settled
-			if lin_speed < 0.05 and ang_speed < 3.0 and not is_sleeping:
-				dice.linear_velocity = Vector3.ZERO
-				dice.angular_velocity = Vector3.ZERO
-				dice.sleeping = true
-				is_jittering = false
-				was_stabilized = true
+		# Only check dice near table surface (y between 0.005 and 0.05)
+		elif pos.y > 0.005 and pos.y < 0.05:
+			# Don't flag sleeping dice as jittering
+			if not is_sleeping:
+				# Detect actual jittering: oscillating velocity
+				if lin_speed > 0.05 and lin_speed < 0.15:
+					is_jittering = true
+					jitter_reason = "OSCILLATING"
 
-		if pos.y < 0.018:  # Below expected rest height (18mm table top)
-			is_jittering = true
-			jitter_reason = "BELOW_TABLE_Y<18mm"
+				# Auto-stabilize: force sleep if nearly settled
+				if lin_speed < 0.05 and ang_speed < 3.0:
+					dice.linear_velocity = Vector3.ZERO
+					dice.angular_velocity = Vector3.ZERO
+					dice.sleeping = true
+					is_jittering = false
+					was_stabilized = true
 
 		if is_jittering:
 			any_jittering = true
 
 		var status = "OK"
-		if was_stabilized:
+		if was_rescued:
+			status = "RESCUED"
+		elif was_stabilized:
 			status = "STABILIZED"
 		elif is_sleeping:
 			status = "SLEEP"
@@ -130,10 +139,10 @@ func _log_dice_states() -> void:
 		]
 		log_lines.append(line)
 
-		# Console output for jittering dice
+		# Console output only for actual jittering (not false positives)
 		if is_jittering:
-			print("[JITTER] Dice_%d y=%.4f lin_v=%.4f ang_v=%.2f reason=%s" % [
-				i + 1, pos.y, lin_speed, ang_speed, jitter_reason
+			print("[JITTER] Dice_%d y=%.4f lin_v=%.4f ang_v=%.2f" % [
+				i + 1, pos.y, lin_speed, ang_speed
 			])
 
 	# Write to file
