@@ -55,11 +55,12 @@ func setup_table(size_feet: Vector2) -> void:
 	material.metallic = 0.0
 	mesh_instance.material_override = material
 
-	# Create collision shape
+	# Create collision shape - top at y=0.001 (1mm above visual surface)
+	# This small offset prevents objects from sinking into the table
 	var box_shape = BoxShape3D.new()
 	box_shape.size = Vector3(size_meters.x, 0.1, size_meters.y)
 	collision_shape.shape = box_shape
-	collision_shape.position = Vector3(0, -0.05, 0)
+	collision_shape.position = Vector3(0, -0.049, 0)  # Top at y=0.001
 
 	# Add table edge/border
 	_create_table_border(size_meters)
