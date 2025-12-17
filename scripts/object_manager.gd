@@ -229,26 +229,33 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	dice.continuous_cd = false
 
 	var dice_size = 0.016  # 16mm standard dice
-	var corner_radius = dice_size * 0.12  # Roundness factor
 
-	# Create dice body with rounded edges
-	var dice_body = _create_rounded_box_mesh(dice_size, corner_radius)
-	dice.add_child(dice_body)
+	# Try to load 3D model, fallback to procedural
+	var dice_body: Node3D = _load_dice_model()
+	if dice_body:
+		# Model is ~20mm, scale to 16mm
+		dice_body.scale = Vector3(0.8, 0.8, 0.8)
+		dice.add_child(dice_body)
+		# Find mesh for material reference
+		var mesh_instance = _find_mesh_instance(dice_body)
+		if mesh_instance:
+			dice.set_meta("model_material", mesh_instance.get_surface_override_material(0))
+			dice.set_meta("original_color", Color.WHITE)
+	else:
+		# Fallback to procedural mesh
+		var proc_mesh = _create_rounded_box_mesh(dice_size, dice_size * 0.12)
+		dice.add_child(proc_mesh)
+		dice.set_meta("model_material", proc_mesh.material_override)
+		dice.set_meta("original_color", Color.WHITE)
+		# Add pips only for procedural mesh
+		_add_flat_pips(dice, dice_size)
 
-	# Get material reference for selection
-	var dice_material = dice_body.material_override
-	dice.set_meta("model_material", dice_material)
-	dice.set_meta("original_color", Color.WHITE)
-
-	# Add collision
+	# Add collision (always needed)
 	var collision = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
 	shape.size = Vector3(dice_size, dice_size, dice_size)
 	collision.shape = shape
 	dice.add_child(collision)
-
-	# Add flat pip circles on each face
-	_add_flat_pips(dice, dice_size)
 
 	dice.set_script(preload("res://scripts/selectable_object.gd"))
 	dice.global_position = pos
@@ -256,6 +263,27 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	_dice_list.append(dice)
 
 	return dice
+
+
+## Load the 3D dice model from assets
+func _load_dice_model() -> Node3D:
+	var model_path = "res://assets/models/dice/d6_dice.glb"
+	if ResourceLoader.exists(model_path):
+		var scene = load(model_path)
+		if scene:
+			return scene.instantiate()
+	return null
+
+
+## Find MeshInstance3D in a node tree
+func _find_mesh_instance(node: Node) -> MeshInstance3D:
+	if node is MeshInstance3D:
+		return node
+	for child in node.get_children():
+		var result = _find_mesh_instance(child)
+		if result:
+			return result
+	return null
 
 
 ## Create a clean dice mesh - simple box with glossy material
