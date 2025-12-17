@@ -220,10 +220,10 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	dice.physics_material_override = _create_dice_physics_material()
 
 	var dice_size = 0.15
-	var corner_radius = dice_size * 0.15  # 15% roundness
+	var corner_radius = dice_size * 0.12  # Roundness factor
 
-	# Create rounded dice body
-	var dice_body = _create_rounded_cube(dice_size, corner_radius)
+	# Create dice body with rounded edges
+	var dice_body = _create_rounded_box_mesh(dice_size, corner_radius)
 	dice.add_child(dice_body)
 
 	# Get material reference for selection
@@ -231,15 +231,15 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	dice.set_meta("model_material", dice_material)
 	dice.set_meta("original_color", Color.WHITE)
 
-	# Add collision (slightly smaller for rounded feel)
+	# Add collision
 	var collision = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
-	shape.size = Vector3(dice_size * 0.95, dice_size * 0.95, dice_size * 0.95)
+	shape.size = Vector3(dice_size, dice_size, dice_size)
 	collision.shape = shape
 	dice.add_child(collision)
 
-	# Add proper pip patterns for each face
-	_add_dice_pips_proper(dice, dice_size)
+	# Add flat pip circles on each face
+	_add_flat_pips(dice, dice_size)
 
 	dice.set_script(preload("res://scripts/selectable_object.gd"))
 	dice.global_position = pos
@@ -249,45 +249,22 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	return dice
 
 
-func _create_rounded_cube(size: float, radius: float) -> MeshInstance3D:
-	# Create main cube body
+## Create a clean dice mesh (for true rounded corners, import a 3D model later)
+func _create_rounded_box_mesh(size: float, _radius: float) -> MeshInstance3D:
 	var mesh_instance = MeshInstance3D.new()
+
+	# Clean box mesh
 	var box_mesh = BoxMesh.new()
 	box_mesh.size = Vector3(size, size, size)
 	mesh_instance.mesh = box_mesh
 
-	# Smooth white material
+	# Smooth white material with slight glossiness
 	var material = StandardMaterial3D.new()
-	material.albedo_color = Color(0.95, 0.95, 0.95)  # Slightly off-white
-	material.roughness = 0.2  # Smooth/glossy
+	material.albedo_color = Color(0.95, 0.95, 0.95)
+	material.roughness = 0.15  # Glossy surface
 	material.metallic = 0.0
+
 	mesh_instance.material_override = material
-
-	# Add corner spheres for rounded appearance
-	var corner_material = StandardMaterial3D.new()
-	corner_material.albedo_color = Color(0.95, 0.95, 0.95)
-	corner_material.roughness = 0.2
-
-	var half = size / 2 - radius * 0.5
-	var corners = [
-		Vector3(-half, -half, -half), Vector3(-half, -half, half),
-		Vector3(-half, half, -half), Vector3(-half, half, half),
-		Vector3(half, -half, -half), Vector3(half, -half, half),
-		Vector3(half, half, -half), Vector3(half, half, half),
-	]
-
-	for corner_pos in corners:
-		var sphere = MeshInstance3D.new()
-		var sphere_mesh = SphereMesh.new()
-		sphere_mesh.radius = radius
-		sphere_mesh.height = radius * 2
-		sphere_mesh.radial_segments = 16
-		sphere_mesh.rings = 8
-		sphere.mesh = sphere_mesh
-		sphere.material_override = corner_material
-		sphere.position = corner_pos
-		mesh_instance.add_child(sphere)
-
 	return mesh_instance
 
 
@@ -298,57 +275,75 @@ func _create_dice_physics_material() -> PhysicsMaterial:
 	return mat
 
 
-## Add proper pip patterns for a D6
+## Add flat circular pips to each face of the dice
 ## Standard D6: opposite faces sum to 7 (1-6, 2-5, 3-4)
-## Layout: +Y=1, -Y=6, +Z=2, -Z=5, +X=3, -X=4
-func _add_dice_pips_proper(dice: RigidBody3D, size: float) -> void:
+func _add_flat_pips(dice: RigidBody3D, size: float) -> void:
 	var pip_material = StandardMaterial3D.new()
-	pip_material.albedo_color = Color(0.1, 0.1, 0.1)  # Dark gray/black
-	pip_material.roughness = 0.3
+	pip_material.albedo_color = Color(0.08, 0.08, 0.08)  # Near black
+	pip_material.roughness = 0.4
+	pip_material.metallic = 0.0
 
-	var pip_radius = size * 0.08
-	var face_offset = size / 2 + 0.001  # Slightly above surface
-	var pip_spacing = size * 0.25  # Distance between pips
+	var pip_radius = size * 0.07  # Pip circle radius
+	var pip_depth = 0.002  # Very thin (flat circle)
+	var face_offset = size / 2 + 0.001  # Just above surface
+	var pip_spacing = size * 0.24  # Distance between pips
 
 	# Face 1 (top, +Y): single center pip
-	_add_pip(dice, Vector3(0, face_offset, 0), Vector3.UP, pip_radius, pip_material)
+	_add_flat_pip(dice, Vector3(0, face_offset, 0), Vector3.UP, pip_radius, pip_depth, pip_material)
 
 	# Face 6 (bottom, -Y): 6 pips in 2 columns of 3
 	for col in [-1, 1]:
 		for row in [-1, 0, 1]:
-			_add_pip(dice, Vector3(col * pip_spacing, -face_offset, row * pip_spacing), Vector3.DOWN, pip_radius, pip_material)
+			_add_flat_pip(dice, Vector3(col * pip_spacing, -face_offset, row * pip_spacing), Vector3.DOWN, pip_radius, pip_depth, pip_material)
 
 	# Face 2 (front, +Z): 2 pips diagonal
-	_add_pip(dice, Vector3(-pip_spacing, pip_spacing, face_offset), Vector3.BACK, pip_radius, pip_material)
-	_add_pip(dice, Vector3(pip_spacing, -pip_spacing, face_offset), Vector3.BACK, pip_radius, pip_material)
+	_add_flat_pip(dice, Vector3(-pip_spacing, pip_spacing, face_offset), Vector3.BACK, pip_radius, pip_depth, pip_material)
+	_add_flat_pip(dice, Vector3(pip_spacing, -pip_spacing, face_offset), Vector3.BACK, pip_radius, pip_depth, pip_material)
 
 	# Face 5 (back, -Z): 5 pips (4 corners + center)
-	_add_pip(dice, Vector3(0, 0, -face_offset), Vector3.FORWARD, pip_radius, pip_material)  # Center
+	_add_flat_pip(dice, Vector3(0, 0, -face_offset), Vector3.FORWARD, pip_radius, pip_depth, pip_material)
 	for x in [-1, 1]:
 		for y in [-1, 1]:
-			_add_pip(dice, Vector3(x * pip_spacing, y * pip_spacing, -face_offset), Vector3.FORWARD, pip_radius, pip_material)
+			_add_flat_pip(dice, Vector3(x * pip_spacing, y * pip_spacing, -face_offset), Vector3.FORWARD, pip_radius, pip_depth, pip_material)
 
 	# Face 3 (right, +X): 3 pips diagonal
-	_add_pip(dice, Vector3(face_offset, 0, 0), Vector3.RIGHT, pip_radius, pip_material)  # Center
-	_add_pip(dice, Vector3(face_offset, pip_spacing, -pip_spacing), Vector3.RIGHT, pip_radius, pip_material)
-	_add_pip(dice, Vector3(face_offset, -pip_spacing, pip_spacing), Vector3.RIGHT, pip_radius, pip_material)
+	_add_flat_pip(dice, Vector3(face_offset, 0, 0), Vector3.RIGHT, pip_radius, pip_depth, pip_material)
+	_add_flat_pip(dice, Vector3(face_offset, pip_spacing, -pip_spacing), Vector3.RIGHT, pip_radius, pip_depth, pip_material)
+	_add_flat_pip(dice, Vector3(face_offset, -pip_spacing, pip_spacing), Vector3.RIGHT, pip_radius, pip_depth, pip_material)
 
 	# Face 4 (left, -X): 4 pips in corners
 	for y in [-1, 1]:
 		for z in [-1, 1]:
-			_add_pip(dice, Vector3(-face_offset, y * pip_spacing, z * pip_spacing), Vector3.LEFT, pip_radius, pip_material)
+			_add_flat_pip(dice, Vector3(-face_offset, y * pip_spacing, z * pip_spacing), Vector3.LEFT, pip_radius, pip_depth, pip_material)
 
 
-func _add_pip(parent: Node3D, position: Vector3, _normal: Vector3, radius: float, material: Material) -> void:
+## Add a single flat circular pip (thin cylinder oriented to face normal)
+func _add_flat_pip(parent: Node3D, position: Vector3, normal: Vector3, radius: float, depth: float, material: Material) -> void:
 	var pip = MeshInstance3D.new()
-	var sphere_mesh = SphereMesh.new()
-	sphere_mesh.radius = radius
-	sphere_mesh.height = radius * 2
-	sphere_mesh.radial_segments = 12
-	sphere_mesh.rings = 6
-	pip.mesh = sphere_mesh
+	var cyl_mesh = CylinderMesh.new()
+	cyl_mesh.top_radius = radius
+	cyl_mesh.bottom_radius = radius
+	cyl_mesh.height = depth
+	cyl_mesh.radial_segments = 16  # Smooth circle
+	cyl_mesh.rings = 1
+	pip.mesh = cyl_mesh
 	pip.material_override = material
 	pip.position = position
+
+	# Orient the flat cylinder to face outward from the dice face
+	if normal == Vector3.UP:
+		pass  # Default orientation is correct
+	elif normal == Vector3.DOWN:
+		pip.rotation_degrees.x = 180
+	elif normal == Vector3.RIGHT:
+		pip.rotation_degrees.z = -90
+	elif normal == Vector3.LEFT:
+		pip.rotation_degrees.z = 90
+	elif normal == Vector3.BACK:
+		pip.rotation_degrees.x = 90
+	elif normal == Vector3.FORWARD:
+		pip.rotation_degrees.x = -90
+
 	parent.add_child(pip)
 
 
