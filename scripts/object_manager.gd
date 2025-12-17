@@ -16,8 +16,9 @@ var _dice_list: Array[RigidBody3D] = []
 var _object_counter: int = 0
 
 # Preload resources (will be scenes in full version)
-const MINIATURE_HEIGHT: float = 0.05
-const MINIATURE_RADIUS: float = 0.015  # 25mm base = ~0.0125m radius, slightly larger for visibility
+# Using larger scale for visibility (1 unit ≈ 10cm for good visuals)
+const MINIATURE_HEIGHT: float = 0.4  # ~4cm visual height
+const MINIATURE_RADIUS: float = 0.12  # ~25mm base scaled up for visibility
 
 
 func _ready() -> void:
@@ -153,11 +154,11 @@ func spawn_miniature(pos: Vector3) -> Node3D:
 	var base_mesh = CylinderMesh.new()
 	base_mesh.top_radius = MINIATURE_RADIUS
 	base_mesh.bottom_radius = MINIATURE_RADIUS
-	base_mesh.height = 0.005
+	base_mesh.height = 0.03  # Thicker base
 
 	var base_instance = MeshInstance3D.new()
 	base_instance.mesh = base_mesh
-	base_instance.position.y = 0.0025
+	base_instance.position.y = 0.015
 
 	var base_material = StandardMaterial3D.new()
 	base_material.albedo_color = Color(0.1, 0.1, 0.1)
@@ -166,13 +167,13 @@ func spawn_miniature(pos: Vector3) -> Node3D:
 
 	# Create simple model (cylinder as placeholder)
 	var model_mesh = CylinderMesh.new()
-	model_mesh.top_radius = MINIATURE_RADIUS * 0.6
-	model_mesh.bottom_radius = MINIATURE_RADIUS * 0.8
+	model_mesh.top_radius = MINIATURE_RADIUS * 0.5
+	model_mesh.bottom_radius = MINIATURE_RADIUS * 0.7
 	model_mesh.height = MINIATURE_HEIGHT
 
 	var model_instance = MeshInstance3D.new()
 	model_instance.mesh = model_mesh
-	model_instance.position.y = MINIATURE_HEIGHT / 2 + 0.005
+	model_instance.position.y = MINIATURE_HEIGHT / 2 + 0.03  # Above base
 
 	var model_material = StandardMaterial3D.new()
 	model_material.albedo_color = Color(randf(), randf(), randf())  # Random color
@@ -187,10 +188,14 @@ func spawn_miniature(pos: Vector3) -> Node3D:
 	var collision = CollisionShape3D.new()
 	var shape = CylinderShape3D.new()
 	shape.radius = MINIATURE_RADIUS
-	shape.height = MINIATURE_HEIGHT + 0.005
+	shape.height = MINIATURE_HEIGHT + 0.03  # Include base
 	collision.shape = shape
-	collision.position.y = (MINIATURE_HEIGHT + 0.005) / 2
+	collision.position.y = (MINIATURE_HEIGHT + 0.03) / 2
 	mini.add_child(collision)
+
+	# Set collision layers
+	mini.collision_layer = 1
+	mini.collision_mask = 1
 
 	# Add selection methods
 	mini.set_script(preload("res://scripts/selectable_object.gd"))
@@ -209,11 +214,13 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	dice.name = "Dice_%d" % _object_counter
 	dice.add_to_group("selectable")
 	dice.add_to_group("dice")
-	dice.mass = 0.05
+	dice.mass = 0.5  # Heavier for better physics
+	dice.collision_layer = 1
+	dice.collision_mask = 1
 	dice.physics_material_override = _create_dice_physics_material()
 
 	# Create dice mesh (cube)
-	var dice_size = 0.016  # ~16mm dice
+	var dice_size = 0.15  # Scaled up for visibility
 	var dice_mesh = BoxMesh.new()
 	dice_mesh.size = Vector3(dice_size, dice_size, dice_size)
 
@@ -308,16 +315,16 @@ func spawn_terrain(pos: Vector3) -> StaticBody3D:
 	match terrain_type:
 		"rock":
 			mesh = _create_rock_mesh()
-			height = randf_range(0.03, 0.08)
+			height = 0.25
 		"building":
 			mesh = _create_building_mesh()
-			height = randf_range(0.05, 0.15)
+			height = 0.6
 		"tree":
 			mesh = _create_tree_mesh()
-			height = randf_range(0.08, 0.15)
+			height = 0.6
 		_:
 			mesh = BoxMesh.new()
-			height = 0.05
+			height = 0.3
 
 	var mesh_instance = MeshInstance3D.new()
 	mesh_instance.mesh = mesh
@@ -338,10 +345,18 @@ func spawn_terrain(pos: Vector3) -> StaticBody3D:
 	terrain.set_meta("model_material", material)
 	terrain.set_meta("original_color", material.albedo_color)
 
-	# Add collision
+	# Add collision based on terrain type
 	var collision = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
-	shape.size = Vector3(0.05, height, 0.05)
+	match terrain_type:
+		"rock":
+			shape.size = Vector3(0.4, height, 0.35)
+		"building":
+			shape.size = Vector3(0.5, height, 0.5)
+		"tree":
+			shape.size = Vector3(0.3, height, 0.3)
+		_:
+			shape.size = Vector3(0.3, height, 0.3)
 	collision.shape = shape
 	collision.position.y = height / 2
 	terrain.add_child(collision)
@@ -356,21 +371,21 @@ func spawn_terrain(pos: Vector3) -> StaticBody3D:
 
 func _create_rock_mesh() -> Mesh:
 	var mesh = BoxMesh.new()
-	mesh.size = Vector3(0.06, 0.04, 0.05)
+	mesh.size = Vector3(0.4, 0.25, 0.35)  # Scaled up
 	return mesh
 
 
 func _create_building_mesh() -> Mesh:
 	var mesh = BoxMesh.new()
-	mesh.size = Vector3(0.08, 0.1, 0.08)
+	mesh.size = Vector3(0.5, 0.6, 0.5)  # Scaled up
 	return mesh
 
 
 func _create_tree_mesh() -> Mesh:
 	var mesh = CylinderMesh.new()
-	mesh.top_radius = 0.03
-	mesh.bottom_radius = 0.01
-	mesh.height = 0.1
+	mesh.top_radius = 0.2
+	mesh.bottom_radius = 0.08
+	mesh.height = 0.6  # Scaled up
 	return mesh
 
 
