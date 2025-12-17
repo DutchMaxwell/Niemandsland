@@ -23,10 +23,10 @@ func _ready() -> void:
 	collision_layer = 1
 	collision_mask = 1
 
-	# Physics material for table surface (balanced values)
+	# Physics material for table surface (stable values)
 	var table_physics = PhysicsMaterial.new()
-	table_physics.friction = 0.7  # Balanced friction
-	table_physics.bounce = 0.2  # Slight bounce
+	table_physics.friction = 0.9  # High friction for stability
+	table_physics.bounce = 0.1  # Very low bounce
 	physics_material_override = table_physics
 
 
