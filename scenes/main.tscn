@@ -96,18 +96,22 @@ text = "Spawn Objects:"
 
 [node name="SpawnMiniature" type="Button" parent="UI/HUD/SpawnPanel"]
 layout_mode = 2
+focus_mode = 0
 text = "Add Miniature"
 
 [node name="SpawnDice" type="Button" parent="UI/HUD/SpawnPanel"]
 layout_mode = 2
+focus_mode = 0
 text = "Add D6 Dice"
 
 [node name="SpawnTerrain" type="Button" parent="UI/HUD/SpawnPanel"]
 layout_mode = 2
+focus_mode = 0
 text = "Add Terrain"
 
 [node name="ClearAll" type="Button" parent="UI/HUD/SpawnPanel"]
 layout_mode = 2
+focus_mode = 0
 text = "Clear Table"
 
 [node name="TableSizePanel" type="VBoxContainer" parent="UI/HUD"]
@@ -124,6 +128,7 @@ text = "Table Size:"
 
 [node name="TableSizeOption" type="OptionButton" parent="UI/HUD/TableSizePanel"]
 layout_mode = 2
+focus_mode = 0
 selected = 0
 item_count = 3
 popup/item_0/text = "48\" x 48\" (4x4 ft)"
@@ -139,6 +144,7 @@ layout_mode = 2
 
 [node name="UnitOption" type="OptionButton" parent="UI/HUD/TableSizePanel/CustomSizeContainer"]
 layout_mode = 2
+focus_mode = 0
 selected = 0
 item_count = 2
 popup/item_0/text = "Inches"
@@ -176,6 +182,7 @@ value = 48.0
 
 [node name="ApplyCustomBtn" type="Button" parent="UI/HUD/TableSizePanel/CustomSizeContainer"]
 layout_mode = 2
+focus_mode = 0
 text = "Apply Custom Size"
 
 [node name="DiceResult" type="Label" parent="UI/HUD"]
