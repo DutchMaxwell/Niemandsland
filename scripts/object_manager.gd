@@ -2301,13 +2301,15 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 	if not tts_obj.diffuse_url.is_empty():
 		texture_path = dm.find_cached_file(tts_obj.diffuse_url, false)
 
-	# Load the model (no base for TTS imports)
+	# Load the model WITH base (true) for child models (real miniatures)
+	# Skip base for non-child models (could be terrain, tokens, etc.)
+	var add_base = tts_obj.is_child_model
 	var extension = mesh_path.get_extension().to_lower()
 	var model_scene: Node3D = null
 
 	match extension:
 		"obj":
-			model_scene = _load_obj_model(mesh_path, texture_path, false)
+			model_scene = _load_obj_model(mesh_path, texture_path, add_base)
 		_:
 			push_warning("Unsupported TTS mesh format: %s" % extension)
 			return null
@@ -2319,14 +2321,25 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 	# Calculate model bounds to determine appropriate scale
 	var mesh_aabb = _calculate_aabb(model_scene)
 	var max_dim = max(mesh_aabb.size.x, max(mesh_aabb.size.y, mesh_aabb.size.z))
+	var height = mesh_aabb.size.y
 
-	# TTS OBJ files seem to be in a unit where models are ~100-1000x too large
-	var model_scale = 0.001  # Default: assume OBJ is in mm
-	if max_dim > 1.0:
-		model_scale = 0.1 / max_dim  # Target 10cm max dimension
+	# Better scaling for TTS models:
+	# Target height: ~40mm (0.04m) for standard infantry, adjust based on model
+	# TTS OBJ files vary wildly in scale
+	var target_height = 0.04  # 40mm default for infantry
+	var model_scale: float
+
+	if height > 0.001:  # Has meaningful height
+		model_scale = target_height / height
+		# Clamp scale to reasonable range
+		model_scale = clamp(model_scale, 0.0001, 1.0)
+	else:
+		model_scale = 0.001  # Fallback
+
 	model_scene.scale = Vector3(model_scale, model_scale, model_scale)
 
-	print("    Scale: %.6f (raw max dim: %.2f)" % [model_scale, max_dim])
+	var base_info = " + base" if add_base else ""
+	print("    Scale: %.6f (height: %.2f -> %.2fmm)%s" % [model_scale, height, height * model_scale * 1000, base_info])
 
 	# Wrap in StaticBody3D for selection
 	_object_counter += 1
