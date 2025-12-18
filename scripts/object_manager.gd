@@ -5,9 +5,13 @@ extends Node3D
 signal dice_rolled(total: int, results: Array)
 signal object_selected(obj: Node3D)
 signal object_deselected()
+signal distance_changed(distance_inches: float, from_pos: Vector3, to_pos: Vector3)
+signal measurement_finished(distance_inches: float)
+signal drag_ended()
 
 @export var drag_height: float = 0.5
-@export var rotation_snap_degrees: float = 45.0
+@export var rotation_speed_degrees: float = 2.0  # Degrees per second while R held
+@export var min_drag_height: float = 0.01  # Minimum height above table when dragging
 
 # Debug logging
 @export var debug_dice_physics: bool = true  # Set to false to disable logging
@@ -21,6 +25,19 @@ var _is_dragging: bool = false
 var _drag_plane: Plane
 var _dice_list: Array[RigidBody3D] = []
 var _object_counter: int = 0
+
+# Rotation tracking
+var _is_rotating: bool = false
+
+# Drag distance tracking
+var _drag_start_position: Vector3 = Vector3.ZERO
+
+# Measurement mode (right-click to measure)
+var _is_measuring: bool = false
+var _measure_start_position: Vector3 = Vector3.ZERO
+var _measure_line: MeshInstance3D = null
+
+const METERS_TO_INCHES: float = 39.3701
 
 # Preload resources (will be scenes in full version)
 # Standard wargaming miniature sizes
@@ -209,6 +226,13 @@ func _nudge_dice_off_edge(dice: RigidBody3D) -> void:
 	dice.apply_torque_impulse(nudge_axis.normalized() * nudge_strength)
 
 
+func _process(delta: float) -> void:
+	# Continuous rotation while R is held
+	if _is_rotating and _selected_object:
+		var rotation_amount = deg_to_rad(rotation_speed_degrees) * delta * 60  # 60fps base
+		_selected_object.rotate_y(rotation_amount)
+
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mouse_event = event as InputEventMouseButton
@@ -219,11 +243,24 @@ func _input(event: InputEvent) -> void:
 			else:
 				_stop_dragging()
 
-	elif event is InputEventMouseMotion and _is_dragging:
-		_update_drag(event.position)
+		# Shift + Right-click for measurement tool (without Shift = camera rotate)
+		elif mouse_event.button_index == MOUSE_BUTTON_RIGHT:
+			if mouse_event.pressed and mouse_event.shift_pressed:
+				_start_measuring(mouse_event.position)
+			elif not mouse_event.pressed and _is_measuring:
+				_stop_measuring()
 
+	elif event is InputEventMouseMotion:
+		if _is_dragging:
+			_update_drag(event.position)
+		elif _is_measuring:
+			_update_measurement(event.position)
+
+	# Rotation: hold R key for continuous rotation
 	elif event.is_action_pressed("rotate_object") and _selected_object:
-		_rotate_selected_object()
+		_is_rotating = true
+	elif event.is_action_released("rotate_object"):
+		_is_rotating = false
 
 	elif event.is_action_pressed("roll_dice"):
 		roll_all_dice()
@@ -282,6 +319,7 @@ func _start_dragging(screen_pos: Vector2) -> void:
 		return
 
 	_is_dragging = true
+	_drag_start_position = _selected_object.global_position
 
 	# For rigid bodies, make them kinematic while dragging
 	if _selected_object is RigidBody3D:
@@ -294,7 +332,17 @@ func _stop_dragging() -> void:
 		if _selected_object is RigidBody3D:
 			_selected_object.freeze = false
 
+		# Emit final distance
+		var final_pos = _selected_object.global_position
+		var distance_m = _drag_start_position.distance_to(final_pos)
+		var distance_inches = distance_m * METERS_TO_INCHES
+		if distance_inches > 0.1:  # Only emit if actually moved
+			distance_changed.emit(distance_inches, _drag_start_position, final_pos)
+
+		drag_ended.emit()
+
 	_is_dragging = false
+	_drag_start_position = Vector3.ZERO
 
 
 func _update_drag(screen_pos: Vector2) -> void:
@@ -308,21 +356,133 @@ func _update_drag(screen_pos: Vector2) -> void:
 	var from = camera.project_ray_origin(screen_pos)
 	var dir = camera.project_ray_normal(screen_pos)
 
-	# Intersect with drag plane at object height
-	var plane_height = _selected_object.global_position.y
+	# Intersect with drag plane at a safe height above table
+	var plane_height = max(_selected_object.global_position.y, min_drag_height)
 	var drag_plane_at_height = Plane(Vector3.UP, -plane_height)
 	var intersection = drag_plane_at_height.intersects_ray(from, dir)
 
 	if intersection:
+		# Keep minimum height above table
+		intersection.y = max(intersection.y, min_drag_height)
 		_selected_object.global_position = intersection
 
+		# Calculate and emit distance while dragging
+		var distance_m = _drag_start_position.distance_to(intersection)
+		var distance_inches = distance_m * METERS_TO_INCHES
+		distance_changed.emit(distance_inches, _drag_start_position, intersection)
 
-func _rotate_selected_object() -> void:
-	if not _selected_object:
+
+## Start measuring distance from a point on the table
+func _start_measuring(screen_pos: Vector2) -> void:
+	var camera = get_viewport().get_camera_3d()
+	if not camera:
 		return
 
-	# Rotate by snap amount
-	_selected_object.rotate_y(deg_to_rad(rotation_snap_degrees))
+	var from = camera.project_ray_origin(screen_pos)
+	var to = from + camera.project_ray_normal(screen_pos) * 100
+
+	var space_state = get_world_3d().direct_space_state
+	var query = PhysicsRayQueryParameters3D.create(from, to)
+	query.collision_mask = 0xFFFFFFFF
+	query.collide_with_bodies = true
+
+	var result = space_state.intersect_ray(query)
+
+	if result:
+		_is_measuring = true
+		# If hit an object, use object position; otherwise use hit point
+		if result.collider.is_in_group("selectable"):
+			_measure_start_position = result.collider.global_position
+			_measure_start_position.y = 0.02  # Slightly above table for visibility
+		else:
+			_measure_start_position = result.position
+			_measure_start_position.y = 0.02
+
+		# Create measurement line
+		_create_measure_line()
+
+
+## Update measurement line while dragging
+func _update_measurement(screen_pos: Vector2) -> void:
+	if not _is_measuring:
+		return
+
+	var camera = get_viewport().get_camera_3d()
+	if not camera:
+		return
+
+	var from = camera.project_ray_origin(screen_pos)
+	var dir = camera.project_ray_normal(screen_pos)
+
+	# Intersect with table plane (y=0)
+	var table_plane = Plane(Vector3.UP, 0)
+	var intersection = table_plane.intersects_ray(from, dir)
+
+	if intersection:
+		intersection.y = 0.02  # Slightly above table
+		_update_measure_line(_measure_start_position, intersection)
+
+		# Calculate and emit distance
+		var distance_m = _measure_start_position.distance_to(intersection)
+		var distance_inches = distance_m * METERS_TO_INCHES
+		distance_changed.emit(distance_inches, _measure_start_position, intersection)
+
+
+## Stop measuring and emit final result
+func _stop_measuring() -> void:
+	if _is_measuring and _measure_line:
+		# Get final measurement
+		var end_pos = _measure_line.get_meta("end_position", _measure_start_position)
+		var distance_m = _measure_start_position.distance_to(end_pos)
+		var distance_inches = distance_m * METERS_TO_INCHES
+		measurement_finished.emit(distance_inches)
+
+		# Clean up line
+		_measure_line.queue_free()
+		_measure_line = null
+
+	_is_measuring = false
+	_measure_start_position = Vector3.ZERO
+
+
+## Create a visual line for measurement
+func _create_measure_line() -> void:
+	if _measure_line:
+		_measure_line.queue_free()
+
+	_measure_line = MeshInstance3D.new()
+	var material = StandardMaterial3D.new()
+	material.albedo_color = Color.YELLOW
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.no_depth_test = true  # Always visible
+	_measure_line.material_override = material
+	add_child(_measure_line)
+
+
+## Update the measurement line mesh
+func _update_measure_line(from_pos: Vector3, to_pos: Vector3) -> void:
+	if not _measure_line:
+		return
+
+	_measure_line.set_meta("end_position", to_pos)
+
+	# Create a thin box as line
+	var direction = to_pos - from_pos
+	var length = direction.length()
+
+	if length < 0.001:
+		return
+
+	var immediate_mesh = BoxMesh.new()
+	immediate_mesh.size = Vector3(0.005, 0.005, length)  # 5mm thick line
+
+	_measure_line.mesh = immediate_mesh
+	_measure_line.global_position = from_pos + direction / 2
+
+	# Rotate to point at target
+	if direction.length() > 0.001:
+		_measure_line.look_at(to_pos, Vector3.UP)
+		_measure_line.rotate_object_local(Vector3.RIGHT, PI / 2)
 
 
 ## Spawn a miniature at the given position
