@@ -1425,7 +1425,7 @@ func _load_gltf_model(file_path: String) -> Node3D:
 	return scene
 
 
-## Load an STL model (binary or ASCII)
+## Load an STL model (binary or ASCII) with automatic base
 func _load_stl_model(file_path: String) -> Node3D:
 	var file = FileAccess.open(file_path, FileAccess.READ)
 	if not file:
@@ -1465,9 +1465,48 @@ func _load_stl_model(file_path: String) -> Node3D:
 	# Wrap in Node3D
 	var root = Node3D.new()
 	root.name = "STL_Model"
+
+	# Add standard wargaming base (32mm diameter, 3mm height, black)
+	var base = _create_miniature_base()
+	root.add_child(base)
+
+	# Calculate mesh bounds to position it on top of base
+	var mesh_aabb = mesh.get_aabb()
+	var base_top = 0.003  # 3mm base height
+
+	# Position mesh so its bottom sits on top of base
+	mesh_instance.position.y = base_top - mesh_aabb.position.y
+
+	# Add the model above the base
 	root.add_child(mesh_instance)
 
 	return root
+
+
+## Create a standard wargaming base (32mm diameter, 3mm height)
+func _create_miniature_base() -> MeshInstance3D:
+	var base_radius = 0.016  # 16mm radius = 32mm diameter
+	var base_height = 0.003  # 3mm height
+
+	var base_mesh = CylinderMesh.new()
+	base_mesh.top_radius = base_radius
+	base_mesh.bottom_radius = base_radius
+	base_mesh.height = base_height
+
+	var base_instance = MeshInstance3D.new()
+	base_instance.mesh = base_mesh
+	base_instance.name = "Base"
+
+	# Position base so top is at y=0 (model sits on top)
+	base_instance.position.y = base_height / 2
+
+	# Black material for base
+	var base_material = StandardMaterial3D.new()
+	base_material.albedo_color = Color(0.1, 0.1, 0.1)  # Dark black
+	base_material.roughness = 0.8
+	base_instance.material_override = base_material
+
+	return base_instance
 
 
 ## Check if STL is binary (some ASCII files start with "solid" but are binary)
