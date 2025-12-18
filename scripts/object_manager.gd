@@ -589,15 +589,17 @@ func _create_measure_line() -> void:
 	add_child(_measure_line)
 
 	# Create 3D label for distance display (~2cm text height)
+	# Not billboard - will be rotated to align with measurement line
 	_measure_label = Label3D.new()
 	_measure_label.name = "MeasureLabel"
-	_measure_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_measure_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED  # Align with line direction
 	_measure_label.no_depth_test = true
 	_measure_label.pixel_size = 0.001  # 1mm per pixel
 	_measure_label.font_size = 24      # ~2.4cm text height
 	_measure_label.outline_size = 4
 	_measure_label.modulate = Color.YELLOW
 	_measure_label.outline_modulate = Color.BLACK
+	_measure_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(_measure_label)
 
 
@@ -633,9 +635,14 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 	var angle = atan2(direction.x, direction.z)
 	_measure_line.rotation = Vector3(0, angle + PI/2, 0)
 
-	# Update label position (at midpoint, higher for visibility)
-	_measure_label.global_position = midpoint + Vector3(0, 0.03, 0)  # 3cm above line
+	# Update label position (at midpoint, above line)
+	_measure_label.global_position = midpoint + Vector3(0, 0.025, 0)  # 2.5cm above line
 	_measure_label.text = "%.1f\"" % distance_inches
+
+	# Rotate label to align with measurement line direction
+	# Face along the line, tilted to be readable from above
+	var label_angle = atan2(direction.x, direction.z)
+	_measure_label.rotation = Vector3(-PI/2, label_angle, 0)  # Flat, facing up, aligned with line
 
 	# Set color based on snap status
 	var line_color: Color
