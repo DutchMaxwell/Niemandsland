@@ -41,6 +41,10 @@ extends Node3D
 @onready var disconnect_button: Button = %DisconnectButton
 @onready var address_input: LineEdit = %AddressInput
 
+# Model loader UI
+@onready var load_model_btn: Button = %LoadModel
+@onready var model_file_dialog: FileDialog = %ModelFileDialog
+
 const INCHES_TO_FEET: float = 1.0 / 12.0
 const CM_TO_FEET: float = 1.0 / 30.48
 
@@ -53,6 +57,8 @@ func _ready() -> void:
 	# Tabletop dice disabled - use Dice Roller Plugin instead
 	spawn_dice_btn.visible = false
 	spawn_terrain_btn.pressed.connect(_on_spawn_terrain)
+	load_model_btn.pressed.connect(_on_load_model)
+	model_file_dialog.file_selected.connect(_on_model_file_selected)
 	clear_all_btn.pressed.connect(_on_clear_all)
 	spawn_200_btn.pressed.connect(_on_spawn_200)
 	spawn_500_btn.pressed.connect(_on_spawn_500)
@@ -136,6 +142,22 @@ func _on_spawn_dice() -> void:
 func _on_spawn_terrain() -> void:
 	var spawn_pos = _get_random_table_position()
 	object_manager.spawn_terrain(spawn_pos)
+
+
+## Open file dialog to load a 3D model
+func _on_load_model() -> void:
+	model_file_dialog.popup_centered()
+
+
+## Handle selected model file
+func _on_model_file_selected(path: String) -> void:
+	print("Loading model: %s" % path)
+	var spawn_pos = _get_random_table_position()
+	var model = object_manager.spawn_custom_model(path, spawn_pos)
+	if model:
+		print("Model loaded successfully!")
+	else:
+		push_error("Failed to load model: %s" % path)
 
 
 ## Performance test: Spawn 200 miniatures in a grid
