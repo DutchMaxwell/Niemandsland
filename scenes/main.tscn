@@ -1,10 +1,11 @@
-[gd_scene load_steps=8 format=3 uid="uid://main001"]
+[gd_scene load_steps=9 format=3 uid="uid://main001"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/camera_controller.gd" id="2_camera"]
 [ext_resource type="Script" path="res://scripts/table.gd" id="3_table"]
 [ext_resource type="Script" path="res://scripts/object_manager.gd" id="4_objmgr"]
 [ext_resource type="Script" path="res://addons/dice_roller/dice_roller_control/dice_roller_control.gd" id="5_diceroller"]
+[ext_resource type="Script" path="res://scripts/network_manager.gd" id="6_network"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.4, 0.6, 0.8, 1)
@@ -57,6 +58,10 @@ mesh = null
 
 [node name="ObjectManager" type="Node3D" parent="."]
 script = ExtResource("4_objmgr")
+
+[node name="NetworkManager" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("6_network")
 
 [node name="UI" type="CanvasLayer" parent="."]
 
@@ -231,6 +236,53 @@ value = 48.0
 layout_mode = 2
 focus_mode = 0
 text = "Apply Custom Size"
+
+[node name="NetworkPanel" type="VBoxContainer" parent="UI/HUD"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 10.0
+offset_top = 550.0
+offset_right = 200.0
+offset_bottom = 700.0
+
+[node name="NetworkLabel" type="Label" parent="UI/HUD/NetworkPanel"]
+layout_mode = 2
+text = "Multiplayer:"
+
+[node name="StatusLabel" type="Label" parent="UI/HUD/NetworkPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+text = "Offline"
+
+[node name="HostButton" type="Button" parent="UI/HUD/NetworkPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+text = "Host Game"
+
+[node name="JoinContainer" type="HBoxContainer" parent="UI/HUD/NetworkPanel"]
+layout_mode = 2
+
+[node name="AddressInput" type="LineEdit" parent="UI/HUD/NetworkPanel/JoinContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "localhost"
+text = "localhost"
+
+[node name="JoinButton" type="Button" parent="UI/HUD/NetworkPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+text = "Join Game"
+
+[node name="DisconnectButton" type="Button" parent="UI/HUD/NetworkPanel"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+focus_mode = 0
+text = "Disconnect"
 
 [node name="DiceResult" type="Label" parent="UI/HUD"]
 layout_mode = 1

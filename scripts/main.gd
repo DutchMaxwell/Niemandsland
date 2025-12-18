@@ -33,6 +33,14 @@ extends Node3D
 @onready var dice_count_spinner: SpinBox = %DiceCountSpinner
 @onready var current_dice_label: Label = %CurrentDiceLabel
 
+# Network UI elements
+@onready var network_manager = %NetworkManager
+@onready var network_status_label: Label = %StatusLabel
+@onready var host_button: Button = %HostButton
+@onready var join_button: Button = %JoinButton
+@onready var disconnect_button: Button = %DisconnectButton
+@onready var address_input: LineEdit = %AddressInput
+
 const INCHES_TO_FEET: float = 1.0 / 12.0
 const CM_TO_FEET: float = 1.0 / 30.48
 
@@ -74,6 +82,18 @@ func _ready() -> void:
 
 	# Initialize dice roller with default count
 	_update_dice_set(int(dice_count_spinner.value))
+
+	# Connect network UI
+	host_button.pressed.connect(_on_host_pressed)
+	join_button.pressed.connect(_on_join_pressed)
+	disconnect_button.pressed.connect(_on_disconnect_pressed)
+
+	# Connect network manager signals
+	network_manager.connected_to_server.connect(_on_network_connected)
+	network_manager.connection_failed.connect(_on_network_failed)
+	network_manager.server_disconnected.connect(_on_network_disconnected)
+	network_manager.player_connected.connect(_on_player_joined)
+	network_manager.player_disconnected.connect(_on_player_left)
 
 	# Initialize table with default size (6x4 feet = 72x48 inches, landscape)
 	# Long side (72") faces the viewer (X-axis), short side (48") is depth (Z-axis)
@@ -435,3 +455,74 @@ func _adjust_camera_for_table_size(size_feet: Vector2) -> void:
 		camera_pivot.reset_view()
 	camera_pivot._current_zoom = clamp(target_zoom, camera_pivot.min_zoom, camera_pivot.max_zoom)
 	camera_pivot._update_camera_transform()
+
+
+## Network UI handlers
+func _on_host_pressed() -> void:
+	var error = network_manager.host_game()
+	if error == OK:
+		_update_network_ui(true, true)
+		network_status_label.text = "Hosting on port 7777"
+		network_status_label.add_theme_color_override("font_color", Color.GREEN)
+
+
+func _on_join_pressed() -> void:
+	var address = address_input.text.strip_edges()
+	if address.is_empty():
+		address = "localhost"
+
+	var error = network_manager.join_game(address)
+	if error == OK:
+		network_status_label.text = "Connecting..."
+		network_status_label.add_theme_color_override("font_color", Color.YELLOW)
+		host_button.disabled = true
+		join_button.disabled = true
+
+
+func _on_disconnect_pressed() -> void:
+	network_manager.disconnect_game()
+	_update_network_ui(false, false)
+	network_status_label.text = "Offline"
+	network_status_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+
+
+func _on_network_connected() -> void:
+	_update_network_ui(true, false)
+	network_status_label.text = "Connected (Peer %d)" % network_manager.get_my_peer_id()
+	network_status_label.add_theme_color_override("font_color", Color.GREEN)
+
+
+func _on_network_failed() -> void:
+	_update_network_ui(false, false)
+	network_status_label.text = "Connection failed!"
+	network_status_label.add_theme_color_override("font_color", Color.RED)
+
+
+func _on_network_disconnected() -> void:
+	_update_network_ui(false, false)
+	network_status_label.text = "Server disconnected"
+	network_status_label.add_theme_color_override("font_color", Color.RED)
+
+
+func _on_player_joined(peer_id: int) -> void:
+	var player_count = network_manager.connected_peers.size()
+	if network_manager.is_host:
+		network_status_label.text = "Hosting (%d players)" % player_count
+	print("Player %d joined! Total: %d" % [peer_id, player_count])
+
+
+func _on_player_left(peer_id: int) -> void:
+	var player_count = network_manager.connected_peers.size()
+	if network_manager.is_host:
+		network_status_label.text = "Hosting (%d players)" % player_count
+	print("Player %d left! Total: %d" % [peer_id, player_count])
+
+
+## Update network UI visibility based on connection state
+func _update_network_ui(connected: bool, is_host: bool) -> void:
+	host_button.visible = !connected
+	host_button.disabled = false
+	join_button.visible = !connected
+	join_button.disabled = false
+	address_input.visible = !connected
+	disconnect_button.visible = connected
