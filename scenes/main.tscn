@@ -407,4 +407,4 @@ size = Vector2i(800, 500)
 ok_button_text = "Load"
 file_mode = 0
 access = 2
-filters = PackedStringArray("*.glb ; GLB Models", "*.gltf ; GLTF Models")
+filters = PackedStringArray("*.glb ; GLB Models", "*.gltf ; GLTF Models", "*.stl ; STL Models")

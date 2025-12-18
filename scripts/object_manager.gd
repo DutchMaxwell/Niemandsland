@@ -1346,23 +1346,25 @@ func spawn_terrain(pos: Vector3, broadcast: bool = true, network_id: int = -1) -
 	return terrain
 
 
-## Load and spawn a custom 3D model from a GLB/GLTF file
+## Load and spawn a custom 3D model from GLB/GLTF/STL file
 func spawn_custom_model(file_path: String, pos: Vector3, broadcast: bool = true) -> Node3D:
 	_object_counter += 1
 	var obj_network_id = _object_counter + 20000  # Offset for custom models
 
-	# Load GLB/GLTF at runtime
-	var gltf_doc = GLTFDocument.new()
-	var gltf_state = GLTFState.new()
+	var model_scene: Node3D = null
+	var extension = file_path.get_extension().to_lower()
 
-	var error = gltf_doc.append_from_file(file_path, gltf_state)
-	if error != OK:
-		push_error("Failed to load model: %s (error %d)" % [file_path, error])
-		return null
+	# Load based on file type
+	match extension:
+		"glb", "gltf":
+			model_scene = _load_gltf_model(file_path)
+		"stl":
+			model_scene = _load_stl_model(file_path)
+		_:
+			push_error("Unsupported model format: %s" % extension)
+			return null
 
-	var model_scene = gltf_doc.generate_scene(gltf_state)
 	if not model_scene:
-		push_error("Failed to generate scene from: %s" % file_path)
 		return null
 
 	# Wrap in StaticBody3D for selection/collision
@@ -1403,6 +1405,178 @@ func spawn_custom_model(file_path: String, pos: Vector3, broadcast: bool = true)
 
 	print("Loaded custom model: %s" % file_path.get_file())
 	return wrapper
+
+
+## Load a GLB/GLTF model
+func _load_gltf_model(file_path: String) -> Node3D:
+	var gltf_doc = GLTFDocument.new()
+	var gltf_state = GLTFState.new()
+
+	var error = gltf_doc.append_from_file(file_path, gltf_state)
+	if error != OK:
+		push_error("Failed to load GLTF: %s (error %d)" % [file_path, error])
+		return null
+
+	var scene = gltf_doc.generate_scene(gltf_state)
+	if not scene:
+		push_error("Failed to generate scene from GLTF: %s" % file_path)
+		return null
+
+	return scene
+
+
+## Load an STL model (binary or ASCII)
+func _load_stl_model(file_path: String) -> Node3D:
+	var file = FileAccess.open(file_path, FileAccess.READ)
+	if not file:
+		push_error("Failed to open STL file: %s" % file_path)
+		return null
+
+	var mesh: ArrayMesh = null
+
+	# Check if binary or ASCII STL
+	var header = file.get_buffer(80)
+	var header_str = header.get_string_from_ascii()
+
+	# Reset to start
+	file.seek(0)
+
+	if header_str.begins_with("solid") and not _is_binary_stl(file):
+		mesh = _parse_ascii_stl(file)
+	else:
+		mesh = _parse_binary_stl(file)
+
+	file.close()
+
+	if not mesh:
+		push_error("Failed to parse STL: %s" % file_path)
+		return null
+
+	# Create mesh instance with default material
+	var mesh_instance = MeshInstance3D.new()
+	mesh_instance.mesh = mesh
+
+	var material = StandardMaterial3D.new()
+	material.albedo_color = Color(0.7, 0.7, 0.7)  # Default gray
+	material.roughness = 0.5
+	material.metallic = 0.0
+	mesh_instance.material_override = material
+
+	# Wrap in Node3D
+	var root = Node3D.new()
+	root.name = "STL_Model"
+	root.add_child(mesh_instance)
+
+	return root
+
+
+## Check if STL is binary (some ASCII files start with "solid" but are binary)
+func _is_binary_stl(file: FileAccess) -> bool:
+	# Binary STL: 80 byte header + 4 byte triangle count
+	# Check if file size matches expected binary size
+	var file_size = file.get_length()
+	file.seek(80)
+	var tri_count = file.get_32()
+	file.seek(0)
+
+	# Binary: 80 + 4 + (50 * tri_count)
+	var expected_size = 84 + (50 * tri_count)
+	return abs(file_size - expected_size) < 10  # Allow small tolerance
+
+
+## Parse binary STL file
+func _parse_binary_stl(file: FileAccess) -> ArrayMesh:
+	# Skip 80 byte header
+	file.seek(80)
+
+	var tri_count = file.get_32()
+	if tri_count == 0 or tri_count > 10000000:  # Sanity check
+		push_error("Invalid triangle count in STL: %d" % tri_count)
+		return null
+
+	var vertices = PackedVector3Array()
+	var normals = PackedVector3Array()
+
+	vertices.resize(tri_count * 3)
+	normals.resize(tri_count * 3)
+
+	for i in range(tri_count):
+		# Read normal (3 floats)
+		var nx = file.get_float()
+		var ny = file.get_float()
+		var nz = file.get_float()
+		var normal = Vector3(nx, ny, nz)
+
+		# Read 3 vertices
+		for v in range(3):
+			var x = file.get_float()
+			var y = file.get_float()
+			var z = file.get_float()
+			vertices[i * 3 + v] = Vector3(x, y, z)
+			normals[i * 3 + v] = normal
+
+		# Skip attribute byte count (2 bytes)
+		file.get_16()
+
+	# Create mesh
+	var arrays = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+
+	var mesh = ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+
+	print("Loaded binary STL: %d triangles" % tri_count)
+	return mesh
+
+
+## Parse ASCII STL file
+func _parse_ascii_stl(file: FileAccess) -> ArrayMesh:
+	var vertices = PackedVector3Array()
+	var normals = PackedVector3Array()
+	var current_normal = Vector3.UP
+
+	var content = file.get_as_text()
+	var lines = content.split("\n")
+
+	for line in lines:
+		line = line.strip_edges().to_lower()
+
+		if line.begins_with("facet normal"):
+			var parts = line.split(" ")
+			if parts.size() >= 5:
+				current_normal = Vector3(
+					float(parts[2]),
+					float(parts[3]),
+					float(parts[4])
+				)
+
+		elif line.begins_with("vertex"):
+			var parts = line.split(" ")
+			if parts.size() >= 4:
+				var vertex = Vector3(
+					float(parts[1]),
+					float(parts[2]),
+					float(parts[3])
+				)
+				vertices.append(vertex)
+				normals.append(current_normal)
+
+	if vertices.size() == 0:
+		return null
+
+	# Create mesh
+	var arrays = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+
+	var mesh = ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+
+	print("Loaded ASCII STL: %d triangles" % (vertices.size() / 3))
+	return mesh
 
 
 ## Calculate AABB for a node and all its children
