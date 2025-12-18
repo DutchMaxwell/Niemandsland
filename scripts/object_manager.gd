@@ -596,8 +596,8 @@ func _create_measure_line() -> void:
 	_measure_label.no_depth_test = true
 	_measure_label.pixel_size = 0.001  # 1mm per pixel
 	_measure_label.font_size = 24      # ~2.4cm text height
-	_measure_label.outline_size = 4
-	_measure_label.modulate = Color.YELLOW
+	_measure_label.outline_size = 8  # Thicker outline for better contrast
+	_measure_label.modulate = Color.WHITE
 	_measure_label.outline_modulate = Color.BLACK
 	_measure_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(_measure_label)
@@ -644,23 +644,16 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 	var label_angle = atan2(direction.x, direction.z)
 	_measure_label.rotation = Vector3(-PI/2, label_angle, 0)  # Flat, facing up, aligned with line
 
-	# Set color based on snap status
-	var line_color: Color
-	var label_color: Color
-	if both_snapped:
-		line_color = Color.GREEN
-		label_color = Color.GREEN
-	else:
-		line_color = Color.YELLOW
-		label_color = Color.YELLOW
+	# Set line color based on snap status (label stays white)
+	var line_color = Color.GREEN if both_snapped else Color.YELLOW
 
 	# Update line material color
 	var mat = _measure_line.material_override as StandardMaterial3D
 	if mat:
 		mat.albedo_color = line_color
 
-	# Update label color
-	_measure_label.modulate = label_color
+	# Label stays white with black outline for best readability
+	_measure_label.modulate = Color.WHITE
 
 
 ## Spawn a miniature at the given position
