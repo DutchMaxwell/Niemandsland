@@ -47,6 +47,7 @@ extends Node3D
 
 # TTS Import UI
 @onready var import_tts_btn: Button = %ImportTTS
+@onready var import_tts_online_btn: Button = %ImportTTSOnline
 @onready var tts_json_dialog: FileDialog = %TTSJsonDialog
 @onready var tts_models_dialog: FileDialog = %TTSModelsDialog
 @onready var tts_images_dialog: FileDialog = %TTSImagesDialog
@@ -54,6 +55,7 @@ extends Node3D
 # TTS Import state
 var _tts_json_path: String = ""
 var _tts_models_dir: String = ""
+var _tts_import_mode: String = "local"  # "local" or "online"
 
 const INCHES_TO_FEET: float = 1.0 / 12.0
 const CM_TO_FEET: float = 1.0 / 30.48
@@ -73,9 +75,12 @@ func _ready() -> void:
 
 	# Connect TTS Import UI
 	import_tts_btn.pressed.connect(_on_import_tts)
+	import_tts_online_btn.pressed.connect(_on_import_tts_online)
 	tts_json_dialog.file_selected.connect(_on_tts_json_selected)
 	tts_models_dialog.dir_selected.connect(_on_tts_models_dir_selected)
 	tts_images_dialog.dir_selected.connect(_on_tts_images_dir_selected)
+	object_manager.tts_online_import_completed.connect(_on_tts_online_import_completed)
+	object_manager.tts_download_progress.connect(_on_tts_download_progress)
 	spawn_200_btn.pressed.connect(_on_spawn_200)
 	spawn_500_btn.pressed.connect(_on_spawn_500)
 	spawn_1000_btn.pressed.connect(_on_spawn_1000)
@@ -570,28 +575,56 @@ func _update_network_ui(connected: bool, _is_host: bool) -> void:
 ## TTS (Tabletop Simulator) Import Functions
 ## ============================================================================
 
-## Start TTS import workflow - first select JSON file
+## Start TTS import workflow (local cache) - first select JSON file
 func _on_import_tts() -> void:
 	_tts_json_path = ""
 	_tts_models_dir = ""
+	_tts_import_mode = "local"
 	tts_json_dialog.popup_centered()
 
 
-## JSON file selected - next select Models directory
+## Start TTS online import - only need JSON file
+func _on_import_tts_online() -> void:
+	_tts_json_path = ""
+	_tts_models_dir = ""
+	_tts_import_mode = "online"
+	tts_json_dialog.popup_centered()
+
+
+## JSON file selected - branch based on import mode
 func _on_tts_json_selected(path: String) -> void:
 	_tts_json_path = path
 	print("TTS Save selected: %s" % path.get_file())
 
-	# Hide previous dialog before opening next
+	# Hide dialog
 	tts_json_dialog.hide()
 
-	# Try to auto-detect TTS cache directories
-	var tts_cache_base = _detect_tts_cache_dir()
-	if not tts_cache_base.is_empty():
-		tts_models_dialog.current_dir = tts_cache_base.path_join("Models")
-		tts_images_dialog.current_dir = tts_cache_base.path_join("Images")
+	if _tts_import_mode == "online":
+		# Online mode: Start download and import immediately
+		print("=== Starting TTS Online Import ===")
+		print("JSON: %s" % _tts_json_path)
+		import_tts_online_btn.disabled = true
+		import_tts_online_btn.text = "Downloading..."
+		object_manager.import_tts_save_online(_tts_json_path)
+	else:
+		# Local mode: Continue with directory selection
+		var tts_cache_base = _detect_tts_cache_dir()
+		if not tts_cache_base.is_empty():
+			tts_models_dialog.current_dir = tts_cache_base.path_join("Models")
+			tts_images_dialog.current_dir = tts_cache_base.path_join("Images")
+		tts_models_dialog.popup_centered()
 
-	tts_models_dialog.popup_centered()
+
+## Handle online import completion
+func _on_tts_online_import_completed(success_count: int, fail_count: int) -> void:
+	import_tts_online_btn.disabled = false
+	import_tts_online_btn.text = "Import TTS (Online)..."
+	print("TTS Online Import finished: %d imported, %d failed" % [success_count, fail_count])
+
+
+## Handle download progress updates
+func _on_tts_download_progress(current: int, total: int, _url: String) -> void:
+	import_tts_online_btn.text = "Downloading %d/%d..." % [current, total]
 
 
 ## Models directory selected - next select Images directory
