@@ -2155,3 +2155,223 @@ func spawn_tts_models_grid(tts_objects: Array[TTSImporter.TTSObject], models_dir
 		idx += 1
 
 	return imported
+
+
+## ============================================================================
+## TTS Online Import Functions (Downloads from URLs)
+## ============================================================================
+
+## Download manager reference
+var _download_manager: TTSDownloadManager = null
+var _pending_tts_import: TTSImporter.TTSParseResult = null
+
+## Signal for online import completion
+signal tts_online_import_completed(imported_count: int, failed_count: int)
+signal tts_download_progress(current: int, total: int, url: String)
+
+
+## Get or create the download manager
+func _get_download_manager() -> TTSDownloadManager:
+	if _download_manager == null:
+		_download_manager = TTSDownloadManager.new()
+		add_child(_download_manager)
+		_download_manager.all_downloads_completed.connect(_on_downloads_completed)
+		_download_manager.progress_updated.connect(_on_download_progress)
+	return _download_manager
+
+
+## Import TTS save from online URLs (downloads models and textures automatically)
+## json_path: Path to the TTS save JSON file
+## Returns immediately, emits tts_online_import_completed when done
+func import_tts_save_online(json_path: String) -> void:
+	print("=== TTS Online Import Starting ===")
+	print("JSON: %s" % json_path)
+
+	# Parse the TTS save file
+	var parse_result = TTSImporter.parse_tts_save(json_path)
+	if not parse_result.error.is_empty():
+		push_error("TTS Import failed: %s" % parse_result.error)
+		tts_online_import_completed.emit(0, 0)
+		return
+
+	# Get unique models (avoid downloading duplicates)
+	var unique_models = TTSImporter.get_unique_models(parse_result)
+	print("Save: %s" % parse_result.save_name)
+	print("Unique models to download: %d" % unique_models.size())
+
+	# Store for later use after downloads complete
+	_pending_tts_import = parse_result
+	_pending_tts_import.objects = unique_models  # Use unique models only
+
+	# Queue all downloads
+	var dm = _get_download_manager()
+	dm.reset()
+	dm.queue_tts_objects(unique_models)
+
+	# Start downloads
+	dm.start_downloads()
+
+
+## Import TTS save from online URLs (synchronous version - blocks until complete)
+## For use when you need the result immediately
+func import_tts_save_online_sync(json_path: String) -> Array[Node3D]:
+	var imported_objects: Array[Node3D] = []
+
+	# Parse the TTS save file
+	var parse_result = TTSImporter.parse_tts_save(json_path)
+	if not parse_result.error.is_empty():
+		push_error("TTS Import failed: %s" % parse_result.error)
+		return imported_objects
+
+	# Get unique models
+	var unique_models = TTSImporter.get_unique_models(parse_result)
+
+	print("=== TTS Online Import (Sync) ===")
+	print("Save: %s" % parse_result.save_name)
+	print("Unique models: %d" % unique_models.size())
+
+	# Queue and start downloads
+	var dm = _get_download_manager()
+	dm.reset()
+	dm.queue_tts_objects(unique_models)
+
+	# Wait for downloads to complete
+	if dm._pending_downloads.size() > 0:
+		dm.start_downloads()
+		await dm.all_downloads_completed
+
+	# Now import all models from cache
+	var success_count = 0
+	var fail_count = 0
+
+	for tts_obj in unique_models:
+		var imported = _import_tts_object_from_cache(tts_obj, dm)
+		if imported:
+			imported_objects.append(imported)
+			success_count += 1
+		else:
+			fail_count += 1
+
+	print("=== TTS Online Import Complete ===")
+	print("Success: %d | Failed: %d" % [success_count, fail_count])
+
+	return imported_objects
+
+
+## Handle download completion - import all models
+func _on_downloads_completed(_completed: Dictionary) -> void:
+	if _pending_tts_import == null:
+		return
+
+	print("=== Downloads Complete - Importing Models ===")
+
+	var dm = _get_download_manager()
+	var success_count = 0
+	var fail_count = 0
+
+	for tts_obj in _pending_tts_import.objects:
+		var imported = _import_tts_object_from_cache(tts_obj, dm)
+		if imported:
+			success_count += 1
+		else:
+			fail_count += 1
+
+	print("=== TTS Import Complete ===")
+	print("Success: %d | Failed: %d" % [success_count, fail_count])
+
+	_pending_tts_import = null
+	tts_online_import_completed.emit(success_count, fail_count)
+
+
+## Forward download progress
+func _on_download_progress(current: int, total: int, url: String) -> void:
+	tts_download_progress.emit(current, total, url)
+
+
+## Import a single TTS object from download cache
+func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownloadManager) -> Node3D:
+	# Find the mesh file in download cache
+	var mesh_path = dm.find_cached_file(tts_obj.mesh_url, true)
+	if mesh_path.is_empty():
+		print("  [SKIP] %s - mesh not downloaded" % tts_obj.name)
+		return null
+
+	# Find texture file if URL is specified
+	var texture_path = ""
+	if not tts_obj.diffuse_url.is_empty():
+		texture_path = dm.find_cached_file(tts_obj.diffuse_url, false)
+
+	# Load the model (no base for TTS imports)
+	var extension = mesh_path.get_extension().to_lower()
+	var model_scene: Node3D = null
+
+	match extension:
+		"obj":
+			model_scene = _load_obj_model(mesh_path, texture_path, false)
+		_:
+			push_warning("Unsupported TTS mesh format: %s" % extension)
+			return null
+
+	if not model_scene:
+		print("  [FAIL] %s - could not load mesh" % tts_obj.name)
+		return null
+
+	# Calculate model bounds to determine appropriate scale
+	var mesh_aabb = _calculate_aabb(model_scene)
+	var max_dim = max(mesh_aabb.size.x, max(mesh_aabb.size.y, mesh_aabb.size.z))
+
+	# TTS OBJ files seem to be in a unit where models are ~100-1000x too large
+	var model_scale = 0.001  # Default: assume OBJ is in mm
+	if max_dim > 1.0:
+		model_scale = 0.1 / max_dim  # Target 10cm max dimension
+	model_scene.scale = Vector3(model_scale, model_scale, model_scale)
+
+	print("    Scale: %.6f (raw max dim: %.2f)" % [model_scale, max_dim])
+
+	# Wrap in StaticBody3D for selection
+	_object_counter += 1
+	var wrapper = StaticBody3D.new()
+	wrapper.name = "TTS_%s_%d" % [tts_obj.name.replace(" ", "_"), _object_counter]
+	wrapper.set_meta("network_id", _object_counter + 30000)
+	wrapper.set_meta("tts_mesh_url", tts_obj.mesh_url)
+	wrapper.set_meta("tts_diffuse_url", tts_obj.diffuse_url)
+	wrapper.add_to_group("selectable")
+	wrapper.add_to_group("tts_import")
+
+	# Add loaded model
+	wrapper.add_child(model_scene)
+
+	# Calculate collision from model bounds (use scaled AABB)
+	var scaled_aabb = AABB(mesh_aabb.position * model_scale, mesh_aabb.size * model_scale)
+	var collision = CollisionShape3D.new()
+	var shape = BoxShape3D.new()
+	shape.size = scaled_aabb.size
+	collision.shape = shape
+	collision.position = scaled_aabb.position + scaled_aabb.size / 2
+	wrapper.add_child(collision)
+
+	# Apply TTS color tint if not white
+	if tts_obj.color != Color.WHITE:
+		_apply_color_tint(model_scene, tts_obj.color)
+
+	# Add script for selection
+	wrapper.set_script(preload("res://scripts/selectable_object.gd"))
+
+	# Add to scene at TTS position (converted to meters)
+	add_child(wrapper)
+
+	# TTS position: 1 unit ≈ 1 inch = 0.0254m
+	var pos_scale = 0.0254
+	wrapper.global_position = Vector3(
+		tts_obj.position.x * pos_scale,
+		0,  # Place on table surface
+		tts_obj.position.z * pos_scale
+	)
+
+	# Apply rotation (TTS uses degrees, only Y rotation for table objects)
+	wrapper.rotation_degrees = Vector3(0, tts_obj.rotation.y, 0)
+
+	var tex_info = " + texture" if not texture_path.is_empty() else ""
+	print("  [OK] %s%s" % [tts_obj.name, tex_info])
+
+	return wrapper
