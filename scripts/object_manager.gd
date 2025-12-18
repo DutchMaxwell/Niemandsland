@@ -42,8 +42,8 @@ func _init_debug_log() -> void:
 	if _debug_log_file:
 		_debug_log_file.store_line("=== DICE PHYSICS DEBUG LOG ===")
 		_debug_log_file.store_line("Time: %s" % Time.get_datetime_string_from_system())
-		_debug_log_file.store_line("Table collision: extended surface at y=0.01")
-		_debug_log_file.store_line("Dice: 16mm, 5g, expected rest y≈0.016-0.018")
+		_debug_log_file.store_line("Table collision: surface at y=0 (aligned with visual)")
+		_debug_log_file.store_line("Dice: 16mm, 5g, expected rest y≈0.008")
 		_debug_log_file.store_line("Physics: PURE JOLT - all interventions disabled for testing")
 		_debug_log_file.store_line("Rescue threshold: y < -0.5m")
 		_debug_log_file.store_line("-------------------------------")
@@ -497,8 +497,8 @@ func _create_rounded_box_mesh(size: float, _radius: float) -> MeshInstance3D:
 
 func _create_dice_physics_material() -> PhysicsMaterial:
 	var mat = PhysicsMaterial.new()
-	mat.bounce = 0.1  # Very low bounce to prevent jittering
-	mat.friction = 0.6  # Moderate friction
+	mat.bounce = 0.2  # Slight bounce for realistic feel
+	mat.friction = 0.9  # High friction to stop rolling
 	mat.rough = true  # Use rougher physics calculations
 	return mat
 
