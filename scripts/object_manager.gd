@@ -58,6 +58,9 @@ var _measure_label: Label3D = null
 
 const METERS_TO_INCHES: float = 39.3701
 
+# Network manager reference
+var _network_manager: Node = null
+
 # Preload resources (will be scenes in full version)
 # Standard wargaming miniature sizes
 const MINIATURE_HEIGHT: float = 0.032  # 32mm height
@@ -67,6 +70,13 @@ const MINIATURE_RADIUS: float = 0.016  # 32mm diameter base (16mm radius)
 func _ready() -> void:
 	_drag_plane = Plane(Vector3.UP, 0)
 	_init_debug_log()
+
+	# Get network manager reference (deferred to ensure scene is ready)
+	call_deferred("_get_network_manager")
+
+
+func _get_network_manager() -> void:
+	_network_manager = get_node_or_null("/root/Main/NetworkManager")
 
 
 func _init_debug_log() -> void:
@@ -696,6 +706,12 @@ func _update_drag(screen_pos: Vector2) -> void:
 				var new_pos = Vector3(obj_start.x + delta_xz.x, obj_start.y, obj_start.z + delta_xz.z)
 				obj.global_position = new_pos
 
+				# Broadcast position to other clients
+				if _network_manager and _network_manager.is_multiplayer_active():
+					if obj.has_meta("network_id"):
+						var net_id = obj.get_meta("network_id")
+						_network_manager.broadcast_move(net_id, new_pos)
+
 		# Calculate horizontal distance for display
 		var current_anchor_pos = anchor.global_position
 		var horizontal_distance = _horizontal_distance(_drag_anchor_position, current_anchor_pos)
@@ -988,11 +1004,16 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 
 
 ## Spawn a miniature at the given position
-func spawn_miniature(pos: Vector3) -> Node3D:
+## If broadcast is true and multiplayer is active, syncs to other clients
+func spawn_miniature(pos: Vector3, broadcast: bool = true, network_id: int = -1) -> Node3D:
 	_object_counter += 1
+
+	# Generate network ID if not provided
+	var obj_network_id = network_id if network_id >= 0 else _object_counter
 
 	var miniature = StaticBody3D.new()
 	miniature.name = "Miniature_%d" % _object_counter
+	miniature.set_meta("network_id", obj_network_id)
 	miniature.add_to_group("selectable")
 	miniature.add_to_group("miniature")
 
@@ -1051,6 +1072,10 @@ func spawn_miniature(pos: Vector3) -> Node3D:
 	# IMPORTANT: Add to tree BEFORE setting global_position
 	add_child(miniature)
 	miniature.global_position = pos
+
+	# Broadcast to other clients if in multiplayer
+	if broadcast and _network_manager and _network_manager.is_multiplayer_active():
+		_network_manager.broadcast_spawn("miniature", pos, obj_network_id)
 
 	return miniature
 
@@ -1239,11 +1264,16 @@ func _add_flat_pip(parent: Node3D, pip_pos: Vector3, normal: Vector3, radius: fl
 
 
 ## Spawn terrain piece at the given position
-func spawn_terrain(pos: Vector3) -> StaticBody3D:
+## If broadcast is true and multiplayer is active, syncs to other clients
+func spawn_terrain(pos: Vector3, broadcast: bool = true, network_id: int = -1) -> StaticBody3D:
 	_object_counter += 1
+
+	# Generate network ID if not provided
+	var obj_network_id = network_id if network_id >= 0 else _object_counter + 10000  # Offset to avoid conflicts
 
 	var terrain = StaticBody3D.new()
 	terrain.name = "Terrain_%d" % _object_counter
+	terrain.set_meta("network_id", obj_network_id)
 	terrain.add_to_group("selectable")
 	terrain.add_to_group("terrain")
 
@@ -1308,6 +1338,10 @@ func spawn_terrain(pos: Vector3) -> StaticBody3D:
 	# IMPORTANT: Add to tree BEFORE setting global_position
 	add_child(terrain)
 	terrain.global_position = pos
+
+	# Broadcast to other clients if in multiplayer
+	if broadcast and _network_manager and _network_manager.is_multiplayer_active():
+		_network_manager.broadcast_spawn("terrain", pos, obj_network_id)
 
 	return terrain
 
@@ -1427,7 +1461,12 @@ func _get_dice_top_face(dice: RigidBody3D) -> int:
 
 
 ## Clear all objects from the table
-func clear_all_objects() -> void:
+## If broadcast is true and multiplayer is active, syncs to other clients
+func clear_all_objects(broadcast: bool = true) -> void:
+	# Broadcast to other clients if in multiplayer (before clearing locally)
+	if broadcast and _network_manager and _network_manager.is_multiplayer_active():
+		_network_manager.broadcast_clear()
+
 	for child in get_children():
 		child.queue_free()
 
