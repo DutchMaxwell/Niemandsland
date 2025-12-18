@@ -239,16 +239,16 @@ func _input(event: InputEvent) -> void:
 
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
 			if mouse_event.pressed:
-				_try_select_at_mouse(mouse_event.position)
+				if mouse_event.shift_pressed:
+					# Shift + Left-click starts measurement
+					_start_measuring(mouse_event.position)
+				else:
+					_try_select_at_mouse(mouse_event.position)
 			else:
-				_stop_dragging()
-
-		# Shift + Right-click for measurement tool (without Shift = camera rotate)
-		elif mouse_event.button_index == MOUSE_BUTTON_RIGHT:
-			if mouse_event.pressed and mouse_event.shift_pressed:
-				_start_measuring(mouse_event.position)
-			elif not mouse_event.pressed and _is_measuring:
-				_stop_measuring()
+				if _is_measuring:
+					_stop_measuring(mouse_event.position)
+				else:
+					_stop_dragging()
 
 	elif event is InputEventMouseMotion:
 		if _is_dragging:
@@ -407,42 +407,76 @@ func _update_measurement(screen_pos: Vector2) -> void:
 	if not _is_measuring:
 		return
 
-	var camera = get_viewport().get_camera_3d()
-	if not camera:
-		return
+	var end_pos = _get_measure_end_position(screen_pos)
+	if end_pos:
+		_update_measure_line(_measure_start_position, end_pos)
 
-	var from = camera.project_ray_origin(screen_pos)
-	var dir = camera.project_ray_normal(screen_pos)
-
-	# Intersect with table plane (y=0)
-	var table_plane = Plane(Vector3.UP, 0)
-	var intersection = table_plane.intersects_ray(from, dir)
-
-	if intersection:
-		intersection.y = 0.02  # Slightly above table
-		_update_measure_line(_measure_start_position, intersection)
-
-		# Calculate and emit distance
-		var distance_m = _measure_start_position.distance_to(intersection)
+		# Calculate HORIZONTAL distance only (XZ plane)
+		var distance_m = _horizontal_distance(_measure_start_position, end_pos)
 		var distance_inches = distance_m * METERS_TO_INCHES
-		distance_changed.emit(distance_inches, _measure_start_position, intersection)
+		distance_changed.emit(distance_inches, _measure_start_position, end_pos)
 
 
 ## Stop measuring and emit final result
-func _stop_measuring() -> void:
-	if _is_measuring and _measure_line:
-		# Get final measurement
-		var end_pos = _measure_line.get_meta("end_position", _measure_start_position)
-		var distance_m = _measure_start_position.distance_to(end_pos)
-		var distance_inches = distance_m * METERS_TO_INCHES
-		measurement_finished.emit(distance_inches)
+func _stop_measuring(screen_pos: Vector2) -> void:
+	if _is_measuring:
+		var end_pos = _get_measure_end_position(screen_pos)
+		if end_pos:
+			# Calculate HORIZONTAL distance only
+			var distance_m = _horizontal_distance(_measure_start_position, end_pos)
+			var distance_inches = distance_m * METERS_TO_INCHES
+			measurement_finished.emit(distance_inches)
 
 		# Clean up line
-		_measure_line.queue_free()
-		_measure_line = null
+		if _measure_line:
+			_measure_line.queue_free()
+			_measure_line = null
 
 	_is_measuring = false
 	_measure_start_position = Vector3.ZERO
+
+
+## Get measurement end position - snaps to objects if hit
+func _get_measure_end_position(screen_pos: Vector2) -> Variant:
+	var camera = get_viewport().get_camera_3d()
+	if not camera:
+		return null
+
+	var from = camera.project_ray_origin(screen_pos)
+	var to = from + camera.project_ray_normal(screen_pos) * 100
+
+	# First check if we hit an object
+	var space_state = get_world_3d().direct_space_state
+	var query = PhysicsRayQueryParameters3D.create(from, to)
+	query.collision_mask = 0xFFFFFFFF
+	query.collide_with_bodies = true
+
+	var result = space_state.intersect_ray(query)
+
+	if result:
+		# If hit a selectable object, snap to its base position
+		if result.collider.is_in_group("selectable"):
+			var obj_pos = result.collider.global_position
+			return Vector3(obj_pos.x, 0.02, obj_pos.z)
+		else:
+			# Hit table or other surface - use that point
+			return Vector3(result.position.x, 0.02, result.position.z)
+
+	# Fallback: intersect with table plane
+	var dir = camera.project_ray_normal(screen_pos)
+	var table_plane = Plane(Vector3.UP, 0)
+	var intersection = table_plane.intersects_ray(from, dir)
+	if intersection:
+		return Vector3(intersection.x, 0.02, intersection.z)
+
+	return null
+
+
+## Calculate horizontal distance (XZ plane only, ignoring Y)
+func _horizontal_distance(from_pos: Vector3, to_pos: Vector3) -> float:
+	var dx = to_pos.x - from_pos.x
+	var dz = to_pos.z - from_pos.z
+	return sqrt(dx * dx + dz * dz)
 
 
 ## Create a visual line for measurement
