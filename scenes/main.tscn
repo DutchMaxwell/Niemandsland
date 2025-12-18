@@ -81,7 +81,7 @@ Controls:
 - Scroll: Zoom
 - Left Click: Select/Drag Object
 - R (hold): Rotate Selected Object
-- Shift + Right Drag: Measure Distance"
+- Shift + Left Click: Measure Distance"
 
 [node name="SpawnPanel" type="VBoxContainer" parent="UI/HUD"]
 layout_mode = 1
