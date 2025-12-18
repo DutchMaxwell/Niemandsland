@@ -557,7 +557,7 @@ func _on_player_left(peer_id: int) -> void:
 
 
 ## Update network UI visibility based on connection state
-func _update_network_ui(connected: bool, is_host: bool) -> void:
+func _update_network_ui(connected: bool, _is_host: bool) -> void:
 	host_button.visible = !connected
 	host_button.disabled = false
 	join_button.visible = !connected
@@ -582,6 +582,9 @@ func _on_tts_json_selected(path: String) -> void:
 	_tts_json_path = path
 	print("TTS Save selected: %s" % path.get_file())
 
+	# Hide previous dialog before opening next
+	tts_json_dialog.hide()
+
 	# Try to auto-detect TTS cache directories
 	var tts_cache_base = _detect_tts_cache_dir()
 	if not tts_cache_base.is_empty():
@@ -595,6 +598,10 @@ func _on_tts_json_selected(path: String) -> void:
 func _on_tts_models_dir_selected(path: String) -> void:
 	_tts_models_dir = path
 	print("TTS Models dir selected: %s" % path)
+
+	# Hide previous dialog before opening next
+	tts_models_dialog.hide()
+
 	tts_images_dialog.popup_centered()
 
 
