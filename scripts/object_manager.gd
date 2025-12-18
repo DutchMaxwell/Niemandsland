@@ -44,7 +44,7 @@ func _init_debug_log() -> void:
 		_debug_log_file.store_line("Time: %s" % Time.get_datetime_string_from_system())
 		_debug_log_file.store_line("Table collision: extended surface at y=0.01")
 		_debug_log_file.store_line("Dice: 16mm, 5g, expected rest y≈0.016-0.018")
-		_debug_log_file.store_line("Physics: Jolt (natural sleep, no manual stabilization)")
+		_debug_log_file.store_line("Physics: PURE JOLT - all interventions disabled for testing")
 		_debug_log_file.store_line("Rescue threshold: y < -0.5m")
 		_debug_log_file.store_line("-------------------------------")
 		print("Debug log created at: %s" % ProjectSettings.globalize_path(log_path))
@@ -101,19 +101,9 @@ func _log_dice_states() -> void:
 			_log_event("RESCUED %s from y=%.1f" % [dice.name, pos.y])
 
 		# Only check dice near table surface (y between 0.005 and 0.05)
+		# ALL INTERVENTIONS DISABLED - Testing pure Jolt physics
 		elif pos.y > 0.005 and pos.y < 0.05:
-			# Don't flag sleeping dice as jittering
-			if not is_sleeping and not is_frozen:
-				# Detect actual jittering: oscillating velocity
-				if lin_speed > 0.15 and lin_speed < 0.3:
-					is_jittering = true
-					jitter_reason = "OSCILLATING"
-
-				# Edge detection and nudge - push dice off edges onto flat faces
-				if lin_speed < 0.1 and ang_speed < 0.5:
-					if _is_dice_on_edge(dice):
-						_nudge_dice_off_edge(dice)
-						_log_event("NUDGE %s off edge" % dice.name)
+			pass  # Just observe, don't intervene
 
 		if is_jittering:
 			any_jittering = true
@@ -415,9 +405,10 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	dice.collision_mask = 1
 	dice.physics_material_override = _create_dice_physics_material()
 
-	# Physics settings - let Jolt handle settling naturally
-	dice.linear_damp = 0.5    # Light damping, Jolt handles rest
-	dice.angular_damp = 0.5   # Low damping so dice can rotate to flat position
+	# Physics settings - PURE JOLT, no custom damping
+	# Default values: linear_damp=0, angular_damp=0 (Jolt handles everything)
+	dice.linear_damp = 0.0
+	dice.angular_damp = 0.0
 	dice.can_sleep = true  # Allow physics to sleep when at rest
 	dice.continuous_cd = false
 
@@ -447,8 +438,7 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	var collision = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
 	shape.size = Vector3(dice_size, dice_size, dice_size)
-	# Margin rounds off edges in Jolt - prevents dice balancing on corners
-	shape.margin = 0.002  # 2mm margin for rounded edges
+	# No margin - testing pure Jolt defaults
 	collision.shape = shape
 	dice.add_child(collision)
 
