@@ -40,3 +40,10 @@ dist/
 # Logs
 *.log
 logs/
+
+# Tabletop Simulator imports (large files)
+tts_imports/
+*.tts.json
+# TTS cache files
+Images/
+Models/
