@@ -59,9 +59,11 @@ func _ready() -> void:
 	# Initialize dice roller with default count
 	_update_dice_set(int(dice_count_spinner.value))
 
-	# Initialize table with default size (4x4 feet = 48x48 inches)
-	table.setup_table(Vector2(4, 4))
-	_adjust_camera_for_table_size(Vector2(4, 4))
+	# Initialize table with default size (6x4 feet = 72x48 inches, landscape)
+	# Long side (72") faces the viewer (X-axis), short side (48") is depth (Z-axis)
+	table.setup_table(Vector2(6, 4))
+	_adjust_camera_for_table_size(Vector2(6, 4))
+	table_size_option.selected = 1  # Select 72x48 option
 
 	print("OpenTTS ready!")
 
@@ -175,12 +177,12 @@ func _get_random_table_position() -> Vector3:
 ## Handle table size preset selection
 func _on_table_size_selected(index: int) -> void:
 	match index:
-		0:  # 48x48 inches (4x4 feet)
+		0:  # 48x48 inches (4x4 feet) - square
 			custom_size_container.visible = false
 			_set_table_size(Vector2(4, 4))
-		1:  # 48x72 inches (4x6 feet)
+		1:  # 72x48 inches (6x4 feet) - landscape, standard wargaming
 			custom_size_container.visible = false
-			_set_table_size(Vector2(4, 6))
+			_set_table_size(Vector2(6, 4))
 		2:  # Custom
 			custom_size_container.visible = true
 
