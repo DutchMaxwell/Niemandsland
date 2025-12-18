@@ -37,6 +37,8 @@ var _is_rotating: bool = false
 # Drag distance tracking
 var _drag_start_positions: Dictionary = {}  # Object -> start position mapping
 var _drag_anchor_position: Vector3 = Vector3.ZERO  # Primary drag anchor point
+var _drag_line: MeshInstance3D = null  # Visual line during drag
+var _drag_label: Label3D = null  # Distance label during drag
 
 # Box selection (drag rectangle to select multiple objects)
 var _is_box_selecting: bool = false
@@ -286,6 +288,11 @@ func _input(event: InputEvent) -> void:
 	elif event.is_action_released("rotate_object"):
 		_is_rotating = false
 
+	# ESC cancels current drag and restores original positions
+	elif event.is_action_pressed("ui_cancel"):
+		if _is_dragging:
+			_cancel_drag()
+
 	elif event.is_action_pressed("roll_dice"):
 		roll_all_dice()
 
@@ -310,14 +317,22 @@ func _try_select_at_mouse(screen_pos: Vector2, ctrl_pressed: bool = false) -> vo
 
 		# Check if it's a selectable object (not the table)
 		if collider.is_in_group("selectable"):
+			var already_selected = collider in _selected_objects
+
 			if ctrl_pressed:
 				# Ctrl+click: toggle selection (add/remove from selection)
 				_toggle_object_selection(collider)
+				# Only start dragging if object is now selected
+				if collider in _selected_objects:
+					_start_dragging(screen_pos)
+			elif already_selected:
+				# Clicking on already-selected object: just start dragging (keep multi-selection)
+				_start_dragging(screen_pos)
 			else:
-				# Normal click: replace selection with this object
+				# Normal click on unselected object: replace selection
 				_deselect_all()
 				_add_to_selection(collider)
-			_start_dragging(screen_pos)
+				_start_dragging(screen_pos)
 		elif collider.is_in_group("table"):
 			# Clicking on table starts box selection
 			_start_box_selection(screen_pos, ctrl_pressed)
@@ -522,6 +537,9 @@ func _start_dragging(_screen_pos: Vector2) -> void:
 	if _selected_objects.size() > 0:
 		_drag_anchor_position = _selected_objects[0].global_position
 
+	# Create drag visualization line
+	_create_drag_line()
+
 
 func _stop_dragging() -> void:
 	if _is_dragging and not _selected_objects.is_empty():
@@ -545,6 +563,105 @@ func _stop_dragging() -> void:
 	_is_dragging = false
 	_drag_start_positions.clear()
 	_drag_anchor_position = Vector3.ZERO
+	_destroy_drag_line()
+
+
+## Cancel drag and restore all objects to their original positions
+func _cancel_drag() -> void:
+	if not _is_dragging:
+		return
+
+	# Restore all objects to their original positions
+	for obj in _selected_objects:
+		if is_instance_valid(obj) and _drag_start_positions.has(obj):
+			obj.global_position = _drag_start_positions[obj]
+			# Re-enable physics for rigid bodies
+			if obj is RigidBody3D:
+				obj.freeze = false
+
+	_is_dragging = false
+	_drag_start_positions.clear()
+	_drag_anchor_position = Vector3.ZERO
+	_destroy_drag_line()
+
+
+## Create drag visualization line and label
+func _create_drag_line() -> void:
+	if _drag_line:
+		_drag_line.queue_free()
+	if _drag_label:
+		_drag_label.queue_free()
+
+	# Create line mesh
+	_drag_line = MeshInstance3D.new()
+	_drag_line.name = "DragLine"
+	var material = StandardMaterial3D.new()
+	material.albedo_color = Color.ORANGE
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.no_depth_test = true
+	_drag_line.material_override = material
+	_drag_line.visible = false
+	add_child(_drag_line)
+
+	# Create 3D label
+	_drag_label = Label3D.new()
+	_drag_label.name = "DragLabel"
+	_drag_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	_drag_label.no_depth_test = true
+	_drag_label.pixel_size = 0.001
+	_drag_label.font_size = 24
+	_drag_label.outline_size = 8
+	_drag_label.modulate = Color.WHITE
+	_drag_label.outline_modulate = Color.BLACK
+	_drag_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_drag_label.visible = false
+	add_child(_drag_label)
+
+
+## Update drag line visualization
+func _update_drag_line(from_pos: Vector3, to_pos: Vector3, distance_inches: float) -> void:
+	if not _drag_line or not _drag_label:
+		return
+
+	# Calculate horizontal direction
+	var direction = Vector3(to_pos.x - from_pos.x, 0, to_pos.z - from_pos.z)
+	var length = direction.length()
+
+	if length < 0.001:
+		_drag_line.visible = false
+		_drag_label.visible = false
+		return
+
+	_drag_line.visible = true
+	_drag_label.visible = true
+
+	# Create line mesh
+	var line_mesh = BoxMesh.new()
+	line_mesh.size = Vector3(length, 0.001, 0.002)
+	_drag_line.mesh = line_mesh
+
+	# Position at midpoint, slightly above table
+	var midpoint = Vector3((from_pos.x + to_pos.x) / 2, 0.005, (from_pos.z + to_pos.z) / 2)
+	_drag_line.global_position = midpoint
+
+	# Rotate to align with direction
+	var angle = atan2(direction.x, direction.z)
+	_drag_line.rotation = Vector3(0, angle + PI/2, 0)
+
+	# Update label
+	_drag_label.global_position = Vector3(midpoint.x, 0.02, midpoint.z)
+	_drag_label.text = "%.1f\"" % distance_inches
+	_drag_label.rotation = Vector3(-PI/2, angle, 0)
+
+
+## Destroy drag visualization
+func _destroy_drag_line() -> void:
+	if _drag_line:
+		_drag_line.queue_free()
+		_drag_line = null
+	if _drag_label:
+		_drag_label.queue_free()
+		_drag_label = null
 
 
 func _update_drag(screen_pos: Vector2) -> void:
@@ -563,31 +680,32 @@ func _update_drag(screen_pos: Vector2) -> void:
 	if not is_instance_valid(anchor):
 		return
 
-	# Intersect with drag plane at a safe height above table
-	var plane_height = max(anchor.global_position.y, min_drag_height)
-	var drag_plane_at_height = Plane(Vector3.UP, -plane_height)
-	var intersection = drag_plane_at_height.intersects_ray(from, dir)
+	# Intersect with drag plane at table level (y=0) for XZ movement
+	var drag_plane_at_table = Plane(Vector3.UP, 0)
+	var intersection = drag_plane_at_table.intersects_ray(from, dir)
 
 	if intersection:
-		# Keep minimum height above table
-		intersection.y = max(intersection.y, min_drag_height)
-
-		# Calculate movement delta from anchor's original position
+		# Calculate movement delta in XZ only (from anchor's original XZ position)
 		var anchor_start = _drag_start_positions.get(anchor, anchor.global_position)
-		var delta = intersection - anchor_start
+		var delta_xz = Vector3(intersection.x - anchor_start.x, 0, intersection.z - anchor_start.z)
 
-		# Move all selected objects by the same delta
+		# Move all selected objects by the same XZ delta, preserving their original Y
 		for obj in _selected_objects:
 			if is_instance_valid(obj):
 				var obj_start = _drag_start_positions.get(obj, obj.global_position)
-				var new_pos = obj_start + delta
-				new_pos.y = max(new_pos.y, min_drag_height)
+				var new_pos = Vector3(obj_start.x + delta_xz.x, obj_start.y, obj_start.z + delta_xz.z)
 				obj.global_position = new_pos
 
-		# Calculate and emit distance while dragging
-		var distance_m = _drag_anchor_position.distance_to(intersection)
-		var distance_inches = distance_m * METERS_TO_INCHES
-		distance_changed.emit(distance_inches, _drag_anchor_position, intersection)
+		# Calculate horizontal distance for display
+		var current_anchor_pos = anchor.global_position
+		var horizontal_distance = _horizontal_distance(_drag_anchor_position, current_anchor_pos)
+		var distance_inches = horizontal_distance * METERS_TO_INCHES
+
+		# Update drag line visualization
+		_update_drag_line(_drag_anchor_position, current_anchor_pos, distance_inches)
+
+		# Emit distance
+		distance_changed.emit(distance_inches, _drag_anchor_position, current_anchor_pos)
 
 
 ## Start measuring distance from a point on the table
