@@ -1360,6 +1360,15 @@ func spawn_custom_model(file_path: String, pos: Vector3, broadcast: bool = true)
 			model_scene = _load_gltf_model(file_path)
 		"stl":
 			model_scene = _load_stl_model(file_path)
+		"obj":
+			model_scene = _load_obj_model(file_path)
+		"fbx":
+			# FBX cannot be loaded at runtime - Godot converts it during import
+			push_warning("FBX files must be converted to GLB first. Use Blender or import into Godot project.")
+			print("FBX Runtime-Import nicht möglich. Bitte zuerst zu GLB konvertieren:")
+			print("  - Blender: File > Import FBX, dann File > Export > glTF 2.0 (.glb)")
+			print("  - Oder die FBX-Datei ins Godot-Projekt ziehen (wird automatisch konvertiert)")
+			return null
 		_:
 			push_error("Unsupported model format: %s" % extension)
 			return null
@@ -1616,6 +1625,119 @@ func _parse_ascii_stl(file: FileAccess) -> ArrayMesh:
 
 	print("Loaded ASCII STL: %d triangles" % (vertices.size() / 3))
 	return mesh
+
+
+## Load an OBJ model (Wavefront format)
+func _load_obj_model(file_path: String) -> Node3D:
+	var file = FileAccess.open(file_path, FileAccess.READ)
+	if not file:
+		push_error("Failed to open OBJ file: %s" % file_path)
+		return null
+
+	var vertices: Array[Vector3] = []
+	var normals: Array[Vector3] = []
+	var mesh_vertices = PackedVector3Array()
+	var mesh_normals = PackedVector3Array()
+
+	var content = file.get_as_text()
+	file.close()
+
+	var lines = content.split("\n")
+
+	for line in lines:
+		line = line.strip_edges()
+		if line.is_empty() or line.begins_with("#"):
+			continue
+
+		var parts = line.split(" ", false)  # Split by space, skip empty
+		if parts.size() < 2:
+			continue
+
+		match parts[0]:
+			"v":  # Vertex position
+				if parts.size() >= 4:
+					vertices.append(Vector3(
+						float(parts[1]),
+						float(parts[2]),
+						float(parts[3])
+					))
+			"vn":  # Vertex normal
+				if parts.size() >= 4:
+					normals.append(Vector3(
+						float(parts[1]),
+						float(parts[2]),
+						float(parts[3])
+					))
+			"f":  # Face
+				var face_verts: Array[int] = []
+				var face_normals: Array[int] = []
+
+				for i in range(1, parts.size()):
+					var indices = parts[i].split("/")
+					# OBJ indices are 1-based
+					var v_idx = int(indices[0]) - 1
+					face_verts.append(v_idx)
+
+					# Normal index (v/vt/vn format)
+					if indices.size() >= 3 and not indices[2].is_empty():
+						var n_idx = int(indices[2]) - 1
+						face_normals.append(n_idx)
+					else:
+						face_normals.append(-1)
+
+				# Triangulate face (fan triangulation)
+				for i in range(1, face_verts.size() - 1):
+					var tri_indices = [0, i, i + 1]
+					for ti in tri_indices:
+						var v_idx = face_verts[ti]
+						if v_idx >= 0 and v_idx < vertices.size():
+							mesh_vertices.append(vertices[v_idx])
+
+							# Use normal if available
+							var n_idx = face_normals[ti] if ti < face_normals.size() else -1
+							if n_idx >= 0 and n_idx < normals.size():
+								mesh_normals.append(normals[n_idx])
+							else:
+								mesh_normals.append(Vector3.UP)
+
+	if mesh_vertices.size() == 0:
+		push_error("No geometry found in OBJ: %s" % file_path)
+		return null
+
+	# Create mesh
+	var arrays = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = mesh_vertices
+	arrays[Mesh.ARRAY_NORMAL] = mesh_normals
+
+	var mesh = ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+
+	# Create mesh instance
+	var mesh_instance = MeshInstance3D.new()
+	mesh_instance.mesh = mesh
+
+	var material = StandardMaterial3D.new()
+	material.albedo_color = Color(0.7, 0.7, 0.7)
+	material.roughness = 0.5
+	mesh_instance.material_override = material
+
+	# Wrap in Node3D with base
+	var root = Node3D.new()
+	root.name = "OBJ_Model"
+
+	# Add wargaming base
+	var base = _create_miniature_base()
+	root.add_child(base)
+
+	# Position mesh on top of base
+	var mesh_aabb = mesh.get_aabb()
+	var base_top = 0.003
+	mesh_instance.position.y = base_top - mesh_aabb.position.y
+	root.add_child(mesh_instance)
+
+	print("Loaded OBJ: %d triangles" % (mesh_vertices.size() / 3))
+	return root
 
 
 ## Calculate AABB for a node and all its children
