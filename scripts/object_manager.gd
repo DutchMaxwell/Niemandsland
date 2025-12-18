@@ -1347,7 +1347,7 @@ func spawn_terrain(pos: Vector3, broadcast: bool = true, network_id: int = -1) -
 
 
 ## Load and spawn a custom 3D model from GLB/GLTF/STL file
-func spawn_custom_model(file_path: String, pos: Vector3, broadcast: bool = true) -> Node3D:
+func spawn_custom_model(file_path: String, pos: Vector3, _broadcast: bool = true) -> Node3D:
 	_object_counter += 1
 	var obj_network_id = _object_counter + 20000  # Offset for custom models
 
@@ -1623,6 +1623,7 @@ func _parse_ascii_stl(file: FileAccess) -> ArrayMesh:
 	var mesh = ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 
+	@warning_ignore("integer_division")
 	print("Loaded ASCII STL: %d triangles" % (vertices.size() / 3))
 	return mesh
 
@@ -1779,6 +1780,7 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 	root.add_child(mesh_instance)
 
 	var uv_info = " with UVs" if mesh_uvs.size() > 0 else ""
+	@warning_ignore("integer_division")
 	print("Loaded OBJ: %d triangles%s" % [mesh_vertices.size() / 3, uv_info])
 	return root
 
@@ -2137,6 +2139,7 @@ func spawn_tts_models_grid(tts_objects: Array[TTSImporter.TTSObject], models_dir
 	var idx = 0
 	for tts_obj in tts_objects:
 		var grid_x = idx % grid_size
+		@warning_ignore("integer_division")
 		var grid_z = idx / grid_size
 
 		var model = _import_tts_object(tts_obj, models_dir, images_dir)
