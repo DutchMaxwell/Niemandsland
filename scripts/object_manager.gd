@@ -181,10 +181,10 @@ func _is_dice_on_edge(dice: RigidBody3D) -> bool:
 	var dominated_threshold = 0.9  # cos(~25°) - how vertical an axis must be to count as "flat"
 
 	# Get the local axes in world space
-	var basis = dice.global_transform.basis
-	var local_x = basis.x.normalized()
-	var local_y = basis.y.normalized()
-	var local_z = basis.z.normalized()
+	var dice_basis = dice.global_transform.basis
+	var local_x = dice_basis.x.normalized()
+	var local_y = dice_basis.y.normalized()
+	var local_z = dice_basis.z.normalized()
 
 	# Check if any local axis is pointing mostly up or down (flat face)
 	var up = Vector3.UP
@@ -205,24 +205,24 @@ func _nudge_dice_off_edge(dice: RigidBody3D) -> void:
 	dice.sleeping = false
 
 	# Find which way to nudge - towards the most aligned axis
-	var basis = dice.global_transform.basis
+	var dice_basis = dice.global_transform.basis
 	var up = Vector3.UP
 
-	var x_align = absf(basis.x.dot(up))
-	var y_align = absf(basis.y.dot(up))
-	var z_align = absf(basis.z.dot(up))
+	var x_align = absf(dice_basis.x.dot(up))
+	var y_align = absf(dice_basis.y.dot(up))
+	var z_align = absf(dice_basis.z.dot(up))
 
 	# Determine the best axis to rotate towards
 	var nudge_axis: Vector3
 	if x_align >= y_align and x_align >= z_align:
 		# Rotate around Z or Y to make X point up/down
-		nudge_axis = basis.z if randf() > 0.5 else basis.y
+		nudge_axis = dice_basis.z if randf() > 0.5 else dice_basis.y
 	elif y_align >= x_align and y_align >= z_align:
 		# Rotate around X or Z to make Y point up/down
-		nudge_axis = basis.x if randf() > 0.5 else basis.z
+		nudge_axis = dice_basis.x if randf() > 0.5 else dice_basis.z
 	else:
 		# Rotate around X or Y to make Z point up/down
-		nudge_axis = basis.x if randf() > 0.5 else basis.y
+		nudge_axis = dice_basis.x if randf() > 0.5 else dice_basis.y
 
 	# Apply a small torque impulse
 	var nudge_strength = 0.00005  # Very gentle nudge
@@ -317,7 +317,7 @@ func _deselect_current() -> void:
 		object_deselected.emit()
 
 
-func _start_dragging(screen_pos: Vector2) -> void:
+func _start_dragging(_screen_pos: Vector2) -> void:
 	if not _selected_object:
 		return
 
@@ -585,10 +585,10 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 func spawn_miniature(pos: Vector3) -> Node3D:
 	_object_counter += 1
 
-	var mini = StaticBody3D.new()
-	mini.name = "Miniature_%d" % _object_counter
-	mini.add_to_group("selectable")
-	mini.add_to_group("miniature")
+	var miniature = StaticBody3D.new()
+	miniature.name = "Miniature_%d" % _object_counter
+	miniature.add_to_group("selectable")
+	miniature.add_to_group("miniature")
 
 	var base_height = 0.003  # 3mm base thickness
 
@@ -605,7 +605,7 @@ func spawn_miniature(pos: Vector3) -> Node3D:
 	var base_material = StandardMaterial3D.new()
 	base_material.albedo_color = Color(0.1, 0.1, 0.1)
 	base_instance.material_override = base_material
-	mini.add_child(base_instance)
+	miniature.add_child(base_instance)
 
 	# Create simple model (cylinder as placeholder)
 	var model_mesh = CylinderMesh.new()
@@ -620,11 +620,11 @@ func spawn_miniature(pos: Vector3) -> Node3D:
 	var model_material = StandardMaterial3D.new()
 	model_material.albedo_color = Color(randf(), randf(), randf())  # Random color
 	model_instance.material_override = model_material
-	mini.add_child(model_instance)
+	miniature.add_child(model_instance)
 
 	# Store material reference for selection highlight
-	mini.set_meta("model_material", model_material)
-	mini.set_meta("original_color", model_material.albedo_color)
+	miniature.set_meta("model_material", model_material)
+	miniature.set_meta("original_color", model_material.albedo_color)
 
 	# Add collision
 	var collision = CollisionShape3D.new()
@@ -633,19 +633,20 @@ func spawn_miniature(pos: Vector3) -> Node3D:
 	shape.height = MINIATURE_HEIGHT + base_height
 	collision.shape = shape
 	collision.position.y = (MINIATURE_HEIGHT + base_height) / 2
-	mini.add_child(collision)
+	miniature.add_child(collision)
 
 	# Set collision layers
-	mini.collision_layer = 1
-	mini.collision_mask = 1
+	miniature.collision_layer = 1
+	miniature.collision_mask = 1
 
 	# Add selection methods
-	mini.set_script(preload("res://scripts/selectable_object.gd"))
+	miniature.set_script(preload("res://scripts/selectable_object.gd"))
 
-	mini.global_position = pos
-	add_child(mini)
+	# IMPORTANT: Add to tree BEFORE setting global_position
+	add_child(miniature)
+	miniature.global_position = pos
 
-	return mini
+	return miniature
 
 
 ## Spawn a D6 dice at the given position
@@ -802,7 +803,7 @@ func _add_flat_pips(dice: RigidBody3D, size: float) -> void:
 
 
 ## Add a single flat circular pip (thin cylinder oriented to face normal)
-func _add_flat_pip(parent: Node3D, position: Vector3, normal: Vector3, radius: float, depth: float, material: Material) -> void:
+func _add_flat_pip(parent: Node3D, pip_pos: Vector3, normal: Vector3, radius: float, depth: float, material: Material) -> void:
 	var pip = MeshInstance3D.new()
 	var cyl_mesh = CylinderMesh.new()
 	cyl_mesh.top_radius = radius
@@ -812,7 +813,7 @@ func _add_flat_pip(parent: Node3D, position: Vector3, normal: Vector3, radius: f
 	cyl_mesh.rings = 1
 	pip.mesh = cyl_mesh
 	pip.material_override = material
-	pip.position = position
+	pip.position = pip_pos
 
 	# Orient the flat cylinder to face outward from the dice face
 	if normal == Vector3.UP:
