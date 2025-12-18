@@ -1629,7 +1629,8 @@ func _parse_ascii_stl(file: FileAccess) -> ArrayMesh:
 
 ## Load an OBJ model (Wavefront format) with optional texture support
 ## texture_path: Optional path to a texture file (PNG, JPG, etc.)
-func _load_obj_model(file_path: String, texture_path: String = "") -> Node3D:
+## add_base: If true, adds a 32mm wargaming base under the model
+func _load_obj_model(file_path: String, texture_path: String = "", add_base: bool = true) -> Node3D:
 	var file = FileAccess.open(file_path, FileAccess.READ)
 	if not file:
 		push_error("Failed to open OBJ file: %s" % file_path)
@@ -1758,18 +1759,23 @@ func _load_obj_model(file_path: String, texture_path: String = "") -> Node3D:
 
 	mesh_instance.material_override = material
 
-	# Wrap in Node3D with base
+	# Wrap in Node3D
 	var root = Node3D.new()
 	root.name = "OBJ_Model"
 
-	# Add wargaming base
-	var base = _create_miniature_base()
-	root.add_child(base)
+	if add_base:
+		# Add wargaming base
+		var base = _create_miniature_base()
+		root.add_child(base)
 
-	# Position mesh on top of base
-	var mesh_aabb = mesh.get_aabb()
-	var base_top = 0.003
-	mesh_instance.position.y = base_top - mesh_aabb.position.y
+		# Position mesh on top of base
+		var mesh_aabb = mesh.get_aabb()
+		var base_top = 0.003
+		mesh_instance.position.y = base_top - mesh_aabb.position.y
+	else:
+		# No base - just use mesh as-is
+		mesh_instance.position.y = 0
+
 	root.add_child(mesh_instance)
 
 	var uv_info = " with UVs" if mesh_uvs.size() > 0 else ""
@@ -2024,13 +2030,13 @@ func _import_tts_object(tts_obj: TTSImporter.TTSObject, models_dir: String, imag
 	if not tts_obj.diffuse_url.is_empty():
 		texture_path = TTSImporter.find_cache_file(tts_obj.diffuse_url, images_dir, [".png", ".jpg", ".jpeg", ".PNG", ".JPG", ".JPEG"])
 
-	# Load the model
+	# Load the model (no base for TTS imports - they're often bases themselves)
 	var extension = mesh_path.get_extension().to_lower()
 	var model_scene: Node3D = null
 
 	match extension:
 		"obj":
-			model_scene = _load_obj_model(mesh_path, texture_path)
+			model_scene = _load_obj_model(mesh_path, texture_path, false)  # No auto-base
 		_:
 			push_warning("Unsupported TTS mesh format: %s" % extension)
 			return null
@@ -2038,6 +2044,21 @@ func _import_tts_object(tts_obj: TTSImporter.TTSObject, models_dir: String, imag
 	if not model_scene:
 		print("  [FAIL] %s - could not load mesh" % tts_obj.name)
 		return null
+
+	# Calculate model bounds to determine appropriate scale
+	var mesh_aabb = _calculate_aabb(model_scene)
+	var max_dim = max(mesh_aabb.size.x, max(mesh_aabb.size.y, mesh_aabb.size.z))
+
+	# TTS OBJ files seem to be in a unit where models are ~100-1000x too large
+	# We'll scale based on max dimension to get reasonable table-sized objects
+	# Target: largest dimension should be ~0.1m (10cm) for most bases
+	var model_scale = 0.001  # Default: assume OBJ is in mm
+	if max_dim > 1.0:
+		# Model is in larger units - scale it down to table size
+		model_scale = 0.1 / max_dim  # Target 10cm max dimension
+	model_scene.scale = Vector3(model_scale, model_scale, model_scale)
+
+	print("    Scale: %.6f (raw max dim: %.2f)" % [model_scale, max_dim])
 
 	# Wrap in StaticBody3D for selection
 	_object_counter += 1
@@ -2052,13 +2073,13 @@ func _import_tts_object(tts_obj: TTSImporter.TTSObject, models_dir: String, imag
 	# Add loaded model
 	wrapper.add_child(model_scene)
 
-	# Calculate collision from model bounds
-	var aabb = _calculate_aabb(model_scene)
+	# Calculate collision from model bounds (use scaled AABB)
+	var scaled_aabb = AABB(mesh_aabb.position * model_scale, mesh_aabb.size * model_scale)
 	var collision = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
-	shape.size = aabb.size
+	shape.size = scaled_aabb.size
 	collision.shape = shape
-	collision.position = aabb.position + aabb.size / 2
+	collision.position = scaled_aabb.position + scaled_aabb.size / 2
 	wrapper.add_child(collision)
 
 	# Apply TTS color tint if not white
@@ -2071,18 +2092,16 @@ func _import_tts_object(tts_obj: TTSImporter.TTSObject, models_dir: String, imag
 	# Add to scene at TTS position (converted to meters)
 	add_child(wrapper)
 
-	# TTS uses different coordinate system - convert position
-	# TTS: Y is up, 1 unit ≈ 1 inch
-	# Godot: Y is up, we use meters (1 unit = 1 meter)
-	var pos_scale = 0.0254  # inches to meters
+	# TTS position: 1 unit ≈ 1 inch = 0.0254m
+	var pos_scale = 0.0254
 	wrapper.global_position = Vector3(
 		tts_obj.position.x * pos_scale,
-		tts_obj.position.y * pos_scale,
+		0,  # Place on table surface
 		tts_obj.position.z * pos_scale
 	)
 
-	# Apply rotation (TTS uses degrees)
-	wrapper.rotation_degrees = tts_obj.rotation
+	# Apply rotation (TTS uses degrees, only Y rotation for table objects)
+	wrapper.rotation_degrees = Vector3(0, tts_obj.rotation.y, 0)
 
 	var tex_info = " + texture" if not texture_path.is_empty() else ""
 	print("  [OK] %s%s" % [tts_obj.name, tex_info])
