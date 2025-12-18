@@ -622,7 +622,7 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 
 	# Create a thin flat box as line (horizontal on XZ plane)
 	var line_mesh = BoxMesh.new()
-	line_mesh.size = Vector3(length, 0.005, 0.01)  # Length along X, thin height, 1cm depth
+	line_mesh.size = Vector3(length, 0.001, 0.002)  # Length along X, 1mm height, 2mm depth
 
 	_measure_line.mesh = line_mesh
 
