@@ -22,7 +22,7 @@ ambient_light_source = 2
 ambient_light_color = Color(0.8, 0.8, 0.8, 1)
 ambient_light_energy = 0.5
 tonemap_mode = 2
-ssao_enabled = true
+ssao_enabled = false
 glow_enabled = true
 
 [node name="Main" type="Node3D"]
@@ -145,6 +145,21 @@ text = "Performance Test:"
 layout_mode = 2
 focus_mode = 0
 text = "Spawn 200 Minis"
+
+[node name="Spawn500" type="Button" parent="UI/HUD/SpawnPanel"]
+layout_mode = 2
+focus_mode = 0
+text = "Spawn 500 Minis"
+
+[node name="Spawn1000" type="Button" parent="UI/HUD/SpawnPanel"]
+layout_mode = 2
+focus_mode = 0
+text = "Spawn 1000 Minis"
+
+[node name="SpawnComplex" type="Button" parent="UI/HUD/SpawnPanel"]
+layout_mode = 2
+focus_mode = 0
+text = "Spawn 100 Complex"
 
 [node name="TableSizePanel" type="VBoxContainer" parent="UI/HUD"]
 layout_mode = 1
