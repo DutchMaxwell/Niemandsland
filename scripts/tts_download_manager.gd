@@ -1,6 +1,7 @@
 extends Node
 class_name TTSDownloadManager
 ## Downloads and caches TTS models and textures from online URLs
+## v1.0 - Initial implementation
 
 signal download_completed(url: String, local_path: String, success: bool)
 signal all_downloads_completed(results: Dictionary)
