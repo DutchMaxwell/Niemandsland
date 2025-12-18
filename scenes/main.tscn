@@ -130,11 +130,11 @@ text = "Table Size:"
 [node name="TableSizeOption" type="OptionButton" parent="UI/HUD/TableSizePanel"]
 layout_mode = 2
 focus_mode = 0
-selected = 0
+selected = 1
 item_count = 3
 popup/item_0/text = "48\" x 48\" (4x4 ft)"
 popup/item_0/id = 0
-popup/item_1/text = "48\" x 72\" (4x6 ft)"
+popup/item_1/text = "72\" x 48\" (6x4 ft)"
 popup/item_1/id = 1
 popup/item_2/text = "Custom..."
 popup/item_2/id = 2
