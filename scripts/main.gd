@@ -585,9 +585,11 @@ func _on_import_tts() -> void:
 
 ## Start TTS online import - only need JSON file
 func _on_import_tts_online() -> void:
+	print("=== TTS Online Import Button Pressed ===")
 	_tts_json_path = ""
 	_tts_models_dir = ""
 	_tts_import_mode = "online"
+	print("Set import mode to: %s" % _tts_import_mode)
 	tts_json_dialog.popup_centered()
 
 
@@ -595,6 +597,7 @@ func _on_import_tts_online() -> void:
 func _on_tts_json_selected(path: String) -> void:
 	_tts_json_path = path
 	print("TTS Save selected: %s" % path.get_file())
+	print("Import mode: %s" % _tts_import_mode)
 
 	# Hide dialog
 	tts_json_dialog.hide()
