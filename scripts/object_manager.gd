@@ -626,9 +626,9 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 
 	_measure_line.mesh = line_mesh
 
-	# Position at midpoint, slightly above table
+	# Position at midpoint, just above table surface
 	var midpoint = (from_pos + to_pos) / 2
-	midpoint.y = 0.02
+	midpoint.y = 0.005  # 0.5cm above table
 	_measure_line.global_position = midpoint
 
 	# Rotate to align with direction (rotation around Y axis)
@@ -636,7 +636,7 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 	_measure_line.rotation = Vector3(0, angle + PI/2, 0)
 
 	# Update label position (at midpoint, above line)
-	_measure_label.global_position = midpoint + Vector3(0, 0.045, 0)  # 4.5cm above table
+	_measure_label.global_position = Vector3(midpoint.x, 0.02, midpoint.z)  # 2cm above table
 	_measure_label.text = "%.1f\"" % distance_inches
 
 	# Rotate label to align with measurement line direction
