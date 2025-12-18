@@ -100,10 +100,15 @@ static func _parse_objects_recursive(objects: Array, output: Array[TTSObject]) -
 			if not tts_obj.mesh_url.is_empty():
 				output.append(tts_obj)
 
-		# Recursively check contained objects
+		# Recursively check contained objects (bags/containers)
 		var contained = obj.get("ContainedObjects", [])
 		if contained is Array and contained.size() > 0:
 			_parse_objects_recursive(contained, output)
+
+		# Check ChildObjects (attached models like model+base combinations)
+		var children = obj.get("ChildObjects", [])
+		if children is Array and children.size() > 0:
+			_parse_objects_recursive(children, output)
 
 		# Also check States (for multi-state objects)
 		var states = obj.get("States", {})
