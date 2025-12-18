@@ -59,16 +59,19 @@ func _ready():
 	add_child(viewport)
 	roller = dice_roller_scene.instantiate()
 	viewport.add_child(roller)
-	roller.roll_finnished.connect(
-		func(value): roll_finnished.emit(value)
-	)
-	roller.roll_started.connect(
-		func(): roll_started.emit()
-	)
+	# Defer signal connections to ensure roller is fully initialized
+	_connect_roller_signals.call_deferred()
 	roller.dice_set = dice_set
 	roller.roller_color = roller_color
 	roller.roller_size = roller_size
 	roller.interactive = interactive
+
+
+func _connect_roller_signals():
+	if roller.has_signal("roll_finnished"):
+		roller.roll_finnished.connect(func(value): roll_finnished.emit(value))
+	if roller.has_signal("roll_started"):
+		roller.roll_started.connect(func(): roll_started.emit())
 
 ## Start a physics simulated roll
 func roll():
