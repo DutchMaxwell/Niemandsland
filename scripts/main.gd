@@ -146,7 +146,7 @@ func _update_dice_set(count: int) -> void:
 
 
 ## Format dice results as "x times 6, x times 5, ..." stacked vertically
-func _format_dice_results(per_dice: Dictionary, total: int) -> String:
+func _format_dice_results(per_dice: Dictionary, _total: int) -> String:
 	# Count occurrences of each face value
 	var counts = {6: 0, 5: 0, 4: 0, 3: 0, 2: 0, 1: 0}
 	for dice_name in per_dice:
@@ -154,10 +154,8 @@ func _format_dice_results(per_dice: Dictionary, total: int) -> String:
 		if value in counts:
 			counts[value] += 1
 
-	# Build result string
+	# Build result string (no total, just face counts)
 	var lines: Array[String] = []
-	lines.append("Total: %d" % total)
-	lines.append("─────────")
 	for face in [6, 5, 4, 3, 2, 1]:
 		if counts[face] > 0:
 			lines.append("%d× %d" % [counts[face], face])
