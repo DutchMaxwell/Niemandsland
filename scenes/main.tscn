@@ -1,9 +1,10 @@
-[gd_scene load_steps=7 format=3 uid="uid://main001"]
+[gd_scene load_steps=8 format=3 uid="uid://main001"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/camera_controller.gd" id="2_camera"]
 [ext_resource type="Script" path="res://scripts/table.gd" id="3_table"]
 [ext_resource type="Script" path="res://scripts/object_manager.gd" id="4_objmgr"]
+[ext_resource type="Script" path="res://addons/dice_roller/dice_roller_control/dice_roller_control.gd" id="5_diceroller"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.4, 0.6, 0.8, 1)
@@ -198,4 +199,58 @@ offset_right = 100.0
 grow_horizontal = 2
 grow_vertical = 0
 theme_override_font_sizes/font_size = 24
+horizontal_alignment = 1
+
+[node name="DiceRollerPanel" type="PanelContainer" parent="UI/HUD"]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -320.0
+offset_top = -300.0
+offset_right = -10.0
+offset_bottom = -10.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="VBox" type="VBoxContainer" parent="UI/HUD/DiceRollerPanel"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="UI/HUD/DiceRollerPanel/VBox"]
+layout_mode = 2
+text = "Dice Roller"
+horizontal_alignment = 1
+
+[node name="DiceRollerControl" type="SubViewportContainer" parent="UI/HUD/DiceRollerPanel/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 200)
+layout_mode = 2
+size_flags_vertical = 3
+stretch = true
+script = ExtResource("5_diceroller")
+
+[node name="ButtonRow" type="HBoxContainer" parent="UI/HUD/DiceRollerPanel/VBox"]
+layout_mode = 2
+
+[node name="RollButton" type="Button" parent="UI/HUD/DiceRollerPanel/VBox/ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+text = "Roll"
+
+[node name="QuickRollButton" type="Button" parent="UI/HUD/DiceRollerPanel/VBox/ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+text = "Quick"
+
+[node name="RollerResultLabel" type="Label" parent="UI/HUD/DiceRollerPanel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Click Roll to start"
 horizontal_alignment = 1
