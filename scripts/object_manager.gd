@@ -37,6 +37,8 @@ var _is_measuring: bool = false
 var _measure_start_position: Vector3 = Vector3.ZERO
 var _measure_start_snapped: bool = false  # True if start point snapped to object
 var _measure_end_snapped: bool = false    # True if end point snapped to object
+var _measure_start_object: Node3D = null  # Reference to start object for edge calculation
+var _measure_end_object: Node3D = null    # Reference to end object for edge calculation
 var _measure_line: MeshInstance3D = null
 var _measure_label: Label3D = null
 
@@ -393,12 +395,14 @@ func _start_measuring(screen_pos: Vector2) -> void:
 
 	if result:
 		_is_measuring = true
-		# If hit an object, use object position and mark as snapped
+		# If hit an object, store reference and mark as snapped
 		if result.collider.is_in_group("selectable"):
+			_measure_start_object = result.collider
 			_measure_start_position = result.collider.global_position
 			_measure_start_position.y = 0.02  # Slightly above table for visibility
 			_measure_start_snapped = true
 		else:
+			_measure_start_object = null
 			_measure_start_position = result.position
 			_measure_start_position.y = 0.02
 			_measure_start_snapped = false
@@ -414,18 +418,31 @@ func _update_measurement(screen_pos: Vector2) -> void:
 
 	var end_data = _get_measure_end_position(screen_pos)
 	if end_data:
-		var end_pos: Vector3 = end_data["position"]
+		var end_center: Vector3 = end_data["position"]
 		_measure_end_snapped = end_data["snapped"]
+		_measure_end_object = end_data["object"]
 
-		# Calculate HORIZONTAL distance only (XZ plane)
-		var distance_m = _horizontal_distance(_measure_start_position, end_pos)
+		# Calculate edge positions for snapped objects
+		var start_pos = _measure_start_position
+		var end_pos = end_center
+
+		# If start snapped to object, calculate edge closest to end
+		if _measure_start_snapped and _measure_start_object:
+			start_pos = _get_edge_position(_measure_start_object, _measure_start_position, end_center)
+
+		# If end snapped to object, calculate edge closest to start
+		if _measure_end_snapped and _measure_end_object:
+			end_pos = _get_edge_position(_measure_end_object, end_center, _measure_start_position)
+
+		# Calculate HORIZONTAL distance only (XZ plane) - edge to edge
+		var distance_m = _horizontal_distance(start_pos, end_pos)
 		var distance_inches = distance_m * METERS_TO_INCHES
 
 		# Update line and label
 		var both_snapped = _measure_start_snapped and _measure_end_snapped
-		_update_measure_line(_measure_start_position, end_pos, distance_inches, both_snapped)
+		_update_measure_line(start_pos, end_pos, distance_inches, both_snapped)
 
-		distance_changed.emit(distance_inches, _measure_start_position, end_pos)
+		distance_changed.emit(distance_inches, start_pos, end_pos)
 
 
 ## Stop measuring and emit final result
@@ -433,9 +450,21 @@ func _stop_measuring(screen_pos: Vector2) -> void:
 	if _is_measuring:
 		var end_data = _get_measure_end_position(screen_pos)
 		if end_data:
-			var end_pos: Vector3 = end_data["position"]
-			# Calculate HORIZONTAL distance only
-			var distance_m = _horizontal_distance(_measure_start_position, end_pos)
+			var end_center: Vector3 = end_data["position"]
+			var end_obj = end_data["object"]
+
+			# Calculate edge positions
+			var start_pos = _measure_start_position
+			var end_pos = end_center
+
+			if _measure_start_snapped and _measure_start_object:
+				start_pos = _get_edge_position(_measure_start_object, _measure_start_position, end_center)
+
+			if end_data["snapped"] and end_obj:
+				end_pos = _get_edge_position(end_obj, end_center, _measure_start_position)
+
+			# Calculate HORIZONTAL distance only - edge to edge
+			var distance_m = _horizontal_distance(start_pos, end_pos)
 			var distance_inches = distance_m * METERS_TO_INCHES
 			measurement_finished.emit(distance_inches)
 
@@ -451,10 +480,12 @@ func _stop_measuring(screen_pos: Vector2) -> void:
 	_measure_start_position = Vector3.ZERO
 	_measure_start_snapped = false
 	_measure_end_snapped = false
+	_measure_start_object = null
+	_measure_end_object = null
 
 
 ## Get measurement end position - snaps to objects if hit
-## Returns Dictionary with "position" and "snapped" keys, or null
+## Returns Dictionary with "position", "snapped", and "object" keys, or null
 func _get_measure_end_position(screen_pos: Vector2) -> Variant:
 	var camera = get_viewport().get_camera_3d()
 	if not camera:
@@ -475,19 +506,62 @@ func _get_measure_end_position(screen_pos: Vector2) -> Variant:
 		# If hit a selectable object, snap to its base position
 		if result.collider.is_in_group("selectable"):
 			var obj_pos = result.collider.global_position
-			return {"position": Vector3(obj_pos.x, 0.02, obj_pos.z), "snapped": true}
+			return {
+				"position": Vector3(obj_pos.x, 0.02, obj_pos.z),
+				"snapped": true,
+				"object": result.collider
+			}
 		else:
 			# Hit table or other surface - use that point
-			return {"position": Vector3(result.position.x, 0.02, result.position.z), "snapped": false}
+			return {
+				"position": Vector3(result.position.x, 0.02, result.position.z),
+				"snapped": false,
+				"object": null
+			}
 
 	# Fallback: intersect with table plane
 	var dir = camera.project_ray_normal(screen_pos)
 	var table_plane = Plane(Vector3.UP, 0)
 	var intersection = table_plane.intersects_ray(from, dir)
 	if intersection:
-		return {"position": Vector3(intersection.x, 0.02, intersection.z), "snapped": false}
+		return {
+			"position": Vector3(intersection.x, 0.02, intersection.z),
+			"snapped": false,
+			"object": null
+		}
 
 	return null
+
+
+## Get the radius/size of an object for edge calculation
+func _get_object_radius(obj: Node3D) -> float:
+	if obj.is_in_group("miniature"):
+		return MINIATURE_RADIUS  # 16mm = 0.016m
+	elif obj.is_in_group("dice"):
+		return 0.008  # Half of 16mm dice = 8mm diagonal approximation
+	elif obj.is_in_group("terrain"):
+		# Terrain is larger, estimate from typical sizes
+		return 0.15  # 15cm average
+	return 0.016  # Default to miniature size
+
+
+## Calculate edge position on object closest to target point
+func _get_edge_position(obj: Node3D, obj_center: Vector3, target_pos: Vector3) -> Vector3:
+	var radius = _get_object_radius(obj)
+
+	# Direction from object center to target (horizontal only)
+	var dir = Vector3(target_pos.x - obj_center.x, 0, target_pos.z - obj_center.z)
+	var dist = dir.length()
+
+	if dist < 0.001:
+		# Target is at center, pick arbitrary direction
+		dir = Vector3(1, 0, 0)
+	else:
+		dir = dir.normalized()
+
+	# Edge point is center + direction * radius
+	var edge_pos = Vector3(obj_center.x + dir.x * radius, 0.02, obj_center.z + dir.z * radius)
+	return edge_pos
 
 
 ## Calculate horizontal distance (XZ plane only, ignoring Y)
@@ -514,13 +588,14 @@ func _create_measure_line() -> void:
 	_measure_line.material_override = material
 	add_child(_measure_line)
 
-	# Create 3D label for distance display
+	# Create 3D label for distance display (~2cm text height)
 	_measure_label = Label3D.new()
 	_measure_label.name = "MeasureLabel"
 	_measure_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_measure_label.no_depth_test = true
-	_measure_label.font_size = 72
-	_measure_label.outline_size = 8
+	_measure_label.pixel_size = 0.001  # 1mm per pixel
+	_measure_label.font_size = 24      # ~2.4cm text height
+	_measure_label.outline_size = 4
 	_measure_label.modulate = Color.YELLOW
 	_measure_label.outline_modulate = Color.BLACK
 	add_child(_measure_label)
@@ -559,7 +634,7 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 	_measure_line.rotation = Vector3(0, angle + PI/2, 0)
 
 	# Update label position (at midpoint, higher for visibility)
-	_measure_label.global_position = midpoint + Vector3(0, 0.08, 0)
+	_measure_label.global_position = midpoint + Vector3(0, 0.03, 0)  # 3cm above line
 	_measure_label.text = "%.1f\"" % distance_inches
 
 	# Set color based on snap status
