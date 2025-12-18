@@ -1,10 +1,14 @@
 extends Node3D
 ## Manages all game objects: miniatures, dice, terrain
 ## Handles spawning, selection, dragging, and rotation
+##
+## TODO: Fix measurement line visually overlapping label text despite different Z heights.
+##       This appears to be a depth rendering issue with no_depth_test enabled on both elements.
 
 signal dice_rolled(total: int, results: Array)
 signal object_selected(obj: Node3D)
 signal object_deselected()
+signal selection_changed(selected_objects: Array[Node3D])
 signal distance_changed(distance_inches: float, from_pos: Vector3, to_pos: Vector3)
 signal measurement_finished(distance_inches: float)
 signal drag_ended()
@@ -20,7 +24,8 @@ var _debug_log_timer: float = 0.0
 const DEBUG_LOG_INTERVAL: float = 0.5  # Log every 0.5 seconds
 var _is_rolling: bool = false
 
-var _selected_object: Node3D = null
+# Multi-selection support
+var _selected_objects: Array[Node3D] = []
 var _is_dragging: bool = false
 var _drag_plane: Plane
 var _dice_list: Array[RigidBody3D] = []
@@ -30,7 +35,14 @@ var _object_counter: int = 0
 var _is_rotating: bool = false
 
 # Drag distance tracking
-var _drag_start_position: Vector3 = Vector3.ZERO
+var _drag_start_positions: Dictionary = {}  # Object -> start position mapping
+var _drag_anchor_position: Vector3 = Vector3.ZERO  # Primary drag anchor point
+
+# Box selection (drag rectangle to select multiple objects)
+var _is_box_selecting: bool = false
+var _box_select_start: Vector2 = Vector2.ZERO
+var _box_select_end: Vector2 = Vector2.ZERO
+var _box_select_rect: ColorRect = null
 
 # Measurement mode (Shift+Left-click to measure)
 var _is_measuring: bool = false
@@ -232,10 +244,12 @@ func _nudge_dice_off_edge(dice: RigidBody3D) -> void:
 
 
 func _process(delta: float) -> void:
-	# Continuous rotation while R is held
-	if _is_rotating and _selected_object:
+	# Continuous rotation while R is held - rotate all selected objects
+	if _is_rotating and _selected_objects.size() > 0:
 		var rotation_amount = deg_to_rad(rotation_speed_degrees) * delta * 60  # 60fps base
-		_selected_object.rotate_y(rotation_amount)
+		for obj in _selected_objects:
+			if is_instance_valid(obj):
+				obj.rotate_y(rotation_amount)
 
 
 func _input(event: InputEvent) -> void:
@@ -248,21 +262,26 @@ func _input(event: InputEvent) -> void:
 					# Shift + Left-click starts measurement
 					_start_measuring(mouse_event.position)
 				else:
-					_try_select_at_mouse(mouse_event.position)
+					# Pass Ctrl state for multi-select
+					_try_select_at_mouse(mouse_event.position, mouse_event.ctrl_pressed)
 			else:
 				if _is_measuring:
 					_stop_measuring(mouse_event.position)
+				elif _is_box_selecting:
+					_finish_box_selection(mouse_event.ctrl_pressed)
 				else:
 					_stop_dragging()
 
 	elif event is InputEventMouseMotion:
 		if _is_dragging:
 			_update_drag(event.position)
+		elif _is_box_selecting:
+			_update_box_selection(event.position)
 		elif _is_measuring:
 			_update_measurement(event.position)
 
-	# Rotation: hold R key for continuous rotation
-	elif event.is_action_pressed("rotate_object") and _selected_object:
+	# Rotation: hold R key for continuous rotation - requires selection
+	elif event.is_action_pressed("rotate_object") and _selected_objects.size() > 0:
 		_is_rotating = true
 	elif event.is_action_released("rotate_object"):
 		_is_rotating = false
@@ -271,7 +290,7 @@ func _input(event: InputEvent) -> void:
 		roll_all_dice()
 
 
-func _try_select_at_mouse(screen_pos: Vector2) -> void:
+func _try_select_at_mouse(screen_pos: Vector2, ctrl_pressed: bool = false) -> void:
 	var camera = get_viewport().get_camera_3d()
 	if not camera:
 		return
@@ -291,67 +310,245 @@ func _try_select_at_mouse(screen_pos: Vector2) -> void:
 
 		# Check if it's a selectable object (not the table)
 		if collider.is_in_group("selectable"):
-			_select_object(collider)
+			if ctrl_pressed:
+				# Ctrl+click: toggle selection (add/remove from selection)
+				_toggle_object_selection(collider)
+			else:
+				# Normal click: replace selection with this object
+				_deselect_all()
+				_add_to_selection(collider)
 			_start_dragging(screen_pos)
 		elif collider.is_in_group("table"):
-			_deselect_current()
+			# Clicking on table starts box selection
+			_start_box_selection(screen_pos, ctrl_pressed)
 
 
-func _select_object(obj: Node3D) -> void:
-	if _selected_object == obj:
+## Add an object to the current selection
+func _add_to_selection(obj: Node3D) -> void:
+	if obj in _selected_objects:
 		return
 
-	_deselect_current()
-	_selected_object = obj
-
-	# Visual feedback - highlight selected object
-	if obj.has_method("set_selected"):
-		obj.set_selected(true)
-
+	_selected_objects.append(obj)
+	_highlight_object(obj)
 	object_selected.emit(obj)
+	selection_changed.emit(_selected_objects)
 
 
-func _deselect_current() -> void:
-	if _selected_object:
-		if _selected_object.has_method("set_selected"):
-			_selected_object.set_selected(false)
-		_selected_object = null
+## Remove an object from the current selection
+func _remove_from_selection(obj: Node3D) -> void:
+	if obj not in _selected_objects:
+		return
+
+	_selected_objects.erase(obj)
+	_unhighlight_object(obj)
+
+	if _selected_objects.is_empty():
 		object_deselected.emit()
+	selection_changed.emit(_selected_objects)
+
+
+## Toggle an object's selection state (Ctrl+click behavior)
+func _toggle_object_selection(obj: Node3D) -> void:
+	if obj in _selected_objects:
+		_remove_from_selection(obj)
+	else:
+		_add_to_selection(obj)
+
+
+## Deselect all objects
+func _deselect_all() -> void:
+	for obj in _selected_objects:
+		if is_instance_valid(obj):
+			_unhighlight_object(obj)
+	_selected_objects.clear()
+	object_deselected.emit()
+	selection_changed.emit(_selected_objects)
+
+
+## Apply highlight to an object to show it's selected
+func _highlight_object(obj: Node3D) -> void:
+	# Find all MeshInstance3D children and apply highlight
+	for child in obj.get_children():
+		if child is MeshInstance3D:
+			var mat = child.material_override
+			if mat is StandardMaterial3D:
+				# Store original color and apply highlight
+				child.set_meta("original_emission", mat.emission)
+				child.set_meta("original_emission_enabled", mat.emission_enabled)
+				mat.emission_enabled = true
+				mat.emission = Color(0.3, 0.5, 1.0)  # Blue glow
+				mat.emission_energy_multiplier = 0.5
+
+
+## Remove highlight from an object
+func _unhighlight_object(obj: Node3D) -> void:
+	for child in obj.get_children():
+		if child is MeshInstance3D:
+			var mat = child.material_override
+			if mat is StandardMaterial3D:
+				# Restore original emission settings
+				if child.has_meta("original_emission_enabled"):
+					mat.emission_enabled = child.get_meta("original_emission_enabled")
+					mat.emission = child.get_meta("original_emission")
+				else:
+					mat.emission_enabled = false
+
+
+## Start box selection (drag rectangle to select multiple objects)
+func _start_box_selection(screen_pos: Vector2, ctrl_pressed: bool) -> void:
+	# If not holding Ctrl, clear current selection
+	if not ctrl_pressed:
+		_deselect_all()
+
+	_is_box_selecting = true
+	_box_select_start = screen_pos
+	_box_select_end = screen_pos
+
+	# Create selection rectangle UI
+	_create_box_select_rect()
+
+
+## Update box selection rectangle while dragging
+func _update_box_selection(screen_pos: Vector2) -> void:
+	if not _is_box_selecting:
+		return
+
+	_box_select_end = screen_pos
+	_update_box_select_rect()
+
+
+## Finish box selection and select all objects within the rectangle
+func _finish_box_selection(ctrl_pressed: bool) -> void:
+	if not _is_box_selecting:
+		return
+
+	# Find all selectable objects within the rectangle
+	var rect = _get_box_select_rect()
+	var camera = get_viewport().get_camera_3d()
+
+	if camera:
+		# Check all selectable objects
+		for child in get_children():
+			if child.is_in_group("selectable"):
+				# Project object position to screen space
+				var screen_pos = camera.unproject_position(child.global_position)
+
+				# Check if within selection rectangle
+				if rect.has_point(screen_pos):
+					if ctrl_pressed and child in _selected_objects:
+						# Ctrl + box select: toggle off if already selected
+						_remove_from_selection(child)
+					elif child not in _selected_objects:
+						_add_to_selection(child)
+
+	# Clean up
+	_is_box_selecting = false
+	_destroy_box_select_rect()
+
+
+## Create the visual selection rectangle
+func _create_box_select_rect() -> void:
+	if _box_select_rect:
+		_box_select_rect.queue_free()
+
+	_box_select_rect = ColorRect.new()
+	_box_select_rect.color = Color(0.3, 0.5, 1.0, 0.2)  # Semi-transparent blue
+
+	# Add border using a StyleBoxFlat
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.3, 0.5, 1.0, 0.2)
+	style.border_color = Color(0.3, 0.5, 1.0, 0.8)
+	style.set_border_width_all(2)
+	_box_select_rect.add_theme_stylebox_override("panel", style)
+
+	# Add to UI layer
+	var canvas_layer = CanvasLayer.new()
+	canvas_layer.name = "BoxSelectLayer"
+	canvas_layer.layer = 100  # Above other UI
+	add_child(canvas_layer)
+	canvas_layer.add_child(_box_select_rect)
+
+	_update_box_select_rect()
+
+
+## Update the visual selection rectangle position and size
+func _update_box_select_rect() -> void:
+	if not _box_select_rect:
+		return
+
+	var rect = _get_box_select_rect()
+	_box_select_rect.position = rect.position
+	_box_select_rect.size = rect.size
+
+
+## Get the normalized selection rectangle (handles negative sizes)
+func _get_box_select_rect() -> Rect2:
+	var min_pos = Vector2(
+		min(_box_select_start.x, _box_select_end.x),
+		min(_box_select_start.y, _box_select_end.y)
+	)
+	var max_pos = Vector2(
+		max(_box_select_start.x, _box_select_end.x),
+		max(_box_select_start.y, _box_select_end.y)
+	)
+	return Rect2(min_pos, max_pos - min_pos)
+
+
+## Destroy the visual selection rectangle
+func _destroy_box_select_rect() -> void:
+	if _box_select_rect:
+		var parent = _box_select_rect.get_parent()
+		if parent:
+			parent.queue_free()  # Also removes the CanvasLayer
+		_box_select_rect = null
 
 
 func _start_dragging(_screen_pos: Vector2) -> void:
-	if not _selected_object:
+	if _selected_objects.is_empty():
 		return
 
 	_is_dragging = true
-	_drag_start_position = _selected_object.global_position
+	_drag_start_positions.clear()
 
-	# For rigid bodies, make them kinematic while dragging
-	if _selected_object is RigidBody3D:
-		_selected_object.freeze = true
+	# Store start positions for all selected objects
+	for obj in _selected_objects:
+		if is_instance_valid(obj):
+			_drag_start_positions[obj] = obj.global_position
+			# For rigid bodies, make them kinematic while dragging
+			if obj is RigidBody3D:
+				obj.freeze = true
+
+	# Use first selected object as anchor for distance calculation
+	if _selected_objects.size() > 0:
+		_drag_anchor_position = _selected_objects[0].global_position
 
 
 func _stop_dragging() -> void:
-	if _is_dragging and _selected_object:
+	if _is_dragging and not _selected_objects.is_empty():
 		# Re-enable physics for rigid bodies
-		if _selected_object is RigidBody3D:
-			_selected_object.freeze = false
+		for obj in _selected_objects:
+			if is_instance_valid(obj) and obj is RigidBody3D:
+				obj.freeze = false
 
-		# Emit final distance
-		var final_pos = _selected_object.global_position
-		var distance_m = _drag_start_position.distance_to(final_pos)
-		var distance_inches = distance_m * METERS_TO_INCHES
-		if distance_inches > 0.1:  # Only emit if actually moved
-			distance_changed.emit(distance_inches, _drag_start_position, final_pos)
+		# Emit final distance for anchor object
+		if _selected_objects.size() > 0:
+			var anchor = _selected_objects[0]
+			if is_instance_valid(anchor):
+				var final_pos = anchor.global_position
+				var distance_m = _drag_anchor_position.distance_to(final_pos)
+				var distance_inches = distance_m * METERS_TO_INCHES
+				if distance_inches > 0.1:  # Only emit if actually moved
+					distance_changed.emit(distance_inches, _drag_anchor_position, final_pos)
 
 		drag_ended.emit()
 
 	_is_dragging = false
-	_drag_start_position = Vector3.ZERO
+	_drag_start_positions.clear()
+	_drag_anchor_position = Vector3.ZERO
 
 
 func _update_drag(screen_pos: Vector2) -> void:
-	if not _selected_object or not _is_dragging:
+	if _selected_objects.is_empty() or not _is_dragging:
 		return
 
 	var camera = get_viewport().get_camera_3d()
@@ -361,20 +558,36 @@ func _update_drag(screen_pos: Vector2) -> void:
 	var from = camera.project_ray_origin(screen_pos)
 	var dir = camera.project_ray_normal(screen_pos)
 
+	# Use first selected object as reference for drag plane
+	var anchor = _selected_objects[0]
+	if not is_instance_valid(anchor):
+		return
+
 	# Intersect with drag plane at a safe height above table
-	var plane_height = max(_selected_object.global_position.y, min_drag_height)
+	var plane_height = max(anchor.global_position.y, min_drag_height)
 	var drag_plane_at_height = Plane(Vector3.UP, -plane_height)
 	var intersection = drag_plane_at_height.intersects_ray(from, dir)
 
 	if intersection:
 		# Keep minimum height above table
 		intersection.y = max(intersection.y, min_drag_height)
-		_selected_object.global_position = intersection
+
+		# Calculate movement delta from anchor's original position
+		var anchor_start = _drag_start_positions.get(anchor, anchor.global_position)
+		var delta = intersection - anchor_start
+
+		# Move all selected objects by the same delta
+		for obj in _selected_objects:
+			if is_instance_valid(obj):
+				var obj_start = _drag_start_positions.get(obj, obj.global_position)
+				var new_pos = obj_start + delta
+				new_pos.y = max(new_pos.y, min_drag_height)
+				obj.global_position = new_pos
 
 		# Calculate and emit distance while dragging
-		var distance_m = _drag_start_position.distance_to(intersection)
+		var distance_m = _drag_anchor_position.distance_to(intersection)
 		var distance_inches = distance_m * METERS_TO_INCHES
-		distance_changed.emit(distance_inches, _drag_start_position, intersection)
+		distance_changed.emit(distance_inches, _drag_anchor_position, intersection)
 
 
 ## Start measuring distance from a point on the table
@@ -1100,5 +1313,5 @@ func clear_all_objects() -> void:
 		child.queue_free()
 
 	_dice_list.clear()
-	_selected_object = null
+	_selected_objects.clear()
 	_object_counter = 0
