@@ -56,12 +56,12 @@ func setup_table(size_feet: Vector2) -> void:
 	mesh_instance.material_override = material
 
 	# Create collision shape - MUCH larger to catch falling dice
-	# Top surface at y=0.01, but extends far below and beyond table edges
+	# Top surface at y=0 (same as visual mesh)
 	var box_shape = BoxShape3D.new()
 	# Extend collision 1 meter beyond table edges on all sides
 	box_shape.size = Vector3(size_meters.x + 2.0, 0.5, size_meters.y + 2.0)  # 50cm thick, extended
 	collision_shape.shape = box_shape
-	collision_shape.position = Vector3(0, -0.24, 0)  # Top at y=0.01 (10mm above visual)
+	collision_shape.position = Vector3(0, -0.25, 0)  # Top at y=0 (aligned with visual)
 
 	# Add table edge/border
 	_create_table_border(size_meters)
