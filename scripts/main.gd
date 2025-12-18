@@ -12,6 +12,9 @@ extends Node3D
 @onready var spawn_terrain_btn: Button = $UI/HUD/SpawnPanel/SpawnTerrain
 @onready var clear_all_btn: Button = $UI/HUD/SpawnPanel/ClearAll
 @onready var spawn_200_btn: Button = $UI/HUD/SpawnPanel/Spawn200
+@onready var spawn_500_btn: Button = $UI/HUD/SpawnPanel/Spawn500
+@onready var spawn_1000_btn: Button = $UI/HUD/SpawnPanel/Spawn1000
+@onready var spawn_complex_btn: Button = $UI/HUD/SpawnPanel/SpawnComplex
 @onready var performance_label: Label = %PerformanceLabel
 
 # Table size UI elements
@@ -44,6 +47,9 @@ func _ready() -> void:
 	spawn_terrain_btn.pressed.connect(_on_spawn_terrain)
 	clear_all_btn.pressed.connect(_on_clear_all)
 	spawn_200_btn.pressed.connect(_on_spawn_200)
+	spawn_500_btn.pressed.connect(_on_spawn_500)
+	spawn_1000_btn.pressed.connect(_on_spawn_1000)
+	spawn_complex_btn.pressed.connect(_on_spawn_complex)
 
 	# Connect table size UI
 	table_size_option.item_selected.connect(_on_table_size_selected)
@@ -155,6 +161,89 @@ func _on_spawn_200() -> void:
 
 	print("Spawned %d miniatures in %d ms" % [count, spawn_duration])
 	print("Grid: %dx%d, Spacing: %.3fm x %.3fm" % [cols, rows, spacing_x, spacing_z])
+	print("=== Monitor FPS for performance test ===")
+
+
+## Performance test: Spawn 500 miniatures
+func _on_spawn_500() -> void:
+	_spawn_grid(500, 25, 20)
+
+
+## Performance test: Spawn 1000 miniatures
+func _on_spawn_1000() -> void:
+	_spawn_grid(1000, 40, 25)
+
+
+## Performance test: Spawn 100 complex terrain objects
+func _on_spawn_complex() -> void:
+	print("=== PERFORMANCE TEST: Spawning 100 complex terrain objects ===")
+	var start_time = Time.get_ticks_msec()
+
+	object_manager.clear_all_objects()
+
+	var cols = 10
+	var rows = 10
+	var size_meters = table.table_size * 0.3048
+	var margin = 0.1
+
+	var usable_width = size_meters.x - (margin * 2)
+	var usable_depth = size_meters.y - (margin * 2)
+	var spacing_x = usable_width / (cols - 1)
+	var spacing_z = usable_depth / (rows - 1)
+
+	var start_x = -size_meters.x / 2 + margin
+	var start_z = -size_meters.y / 2 + margin
+
+	var count = 0
+	for row in range(rows):
+		for col in range(cols):
+			var pos = Vector3(
+				start_x + col * spacing_x,
+				0,
+				start_z + row * spacing_z
+			)
+			object_manager.spawn_terrain(pos)
+			count += 1
+
+	var end_time = Time.get_ticks_msec()
+	print("Spawned %d terrain objects in %d ms" % [count, end_time - start_time])
+
+
+## Helper function to spawn miniatures in a grid
+func _spawn_grid(total: int, cols: int, rows: int) -> void:
+	print("=== PERFORMANCE TEST: Spawning %d miniatures ===" % total)
+	var start_time = Time.get_ticks_msec()
+
+	object_manager.clear_all_objects()
+
+	var size_meters = table.table_size * 0.3048
+	var margin = 0.03  # Smaller margin for more objects
+
+	var usable_width = size_meters.x - (margin * 2)
+	var usable_depth = size_meters.y - (margin * 2)
+	var spacing_x = usable_width / (cols - 1)
+	var spacing_z = usable_depth / (rows - 1)
+
+	var start_x = -size_meters.x / 2 + margin
+	var start_z = -size_meters.y / 2 + margin
+
+	var count = 0
+	for row in range(rows):
+		for col in range(cols):
+			if count >= total:
+				break
+			var pos = Vector3(
+				start_x + col * spacing_x,
+				0,
+				start_z + row * spacing_z
+			)
+			object_manager.spawn_miniature(pos)
+			count += 1
+		if count >= total:
+			break
+
+	var end_time = Time.get_ticks_msec()
+	print("Spawned %d miniatures in %d ms" % [count, end_time - start_time])
 	print("=== Monitor FPS for performance test ===")
 
 
