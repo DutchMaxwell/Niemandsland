@@ -1627,8 +1627,9 @@ func _parse_ascii_stl(file: FileAccess) -> ArrayMesh:
 	return mesh
 
 
-## Load an OBJ model (Wavefront format)
-func _load_obj_model(file_path: String) -> Node3D:
+## Load an OBJ model (Wavefront format) with optional texture support
+## texture_path: Optional path to a texture file (PNG, JPG, etc.)
+func _load_obj_model(file_path: String, texture_path: String = "") -> Node3D:
 	var file = FileAccess.open(file_path, FileAccess.READ)
 	if not file:
 		push_error("Failed to open OBJ file: %s" % file_path)
@@ -1636,8 +1637,10 @@ func _load_obj_model(file_path: String) -> Node3D:
 
 	var vertices: Array[Vector3] = []
 	var normals: Array[Vector3] = []
+	var uvs: Array[Vector2] = []  # Texture coordinates
 	var mesh_vertices = PackedVector3Array()
 	var mesh_normals = PackedVector3Array()
+	var mesh_uvs = PackedVector2Array()  # UV array for mesh
 
 	var content = file.get_as_text()
 	file.close()
@@ -1661,6 +1664,12 @@ func _load_obj_model(file_path: String) -> Node3D:
 						float(parts[2]),
 						float(parts[3])
 					))
+			"vt":  # Texture coordinate (UV)
+				if parts.size() >= 3:
+					uvs.append(Vector2(
+						float(parts[1]),
+						float(parts[2])  # OBJ V is often flipped, but we'll handle that with material
+					))
 			"vn":  # Vertex normal
 				if parts.size() >= 4:
 					normals.append(Vector3(
@@ -1670,6 +1679,7 @@ func _load_obj_model(file_path: String) -> Node3D:
 					))
 			"f":  # Face
 				var face_verts: Array[int] = []
+				var face_uvs: Array[int] = []
 				var face_normals: Array[int] = []
 
 				for i in range(1, parts.size()):
@@ -1677,6 +1687,13 @@ func _load_obj_model(file_path: String) -> Node3D:
 					# OBJ indices are 1-based
 					var v_idx = int(indices[0]) - 1
 					face_verts.append(v_idx)
+
+					# UV index (v/vt/vn format)
+					if indices.size() >= 2 and not indices[1].is_empty():
+						var uv_idx = int(indices[1]) - 1
+						face_uvs.append(uv_idx)
+					else:
+						face_uvs.append(-1)
 
 					# Normal index (v/vt/vn format)
 					if indices.size() >= 3 and not indices[2].is_empty():
@@ -1692,6 +1709,13 @@ func _load_obj_model(file_path: String) -> Node3D:
 						var v_idx = face_verts[ti]
 						if v_idx >= 0 and v_idx < vertices.size():
 							mesh_vertices.append(vertices[v_idx])
+
+							# Use UV if available
+							var uv_idx = face_uvs[ti] if ti < face_uvs.size() else -1
+							if uv_idx >= 0 and uv_idx < uvs.size():
+								mesh_uvs.append(uvs[uv_idx])
+							else:
+								mesh_uvs.append(Vector2.ZERO)
 
 							# Use normal if available
 							var n_idx = face_normals[ti] if ti < face_normals.size() else -1
@@ -1709,6 +1733,8 @@ func _load_obj_model(file_path: String) -> Node3D:
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = mesh_vertices
 	arrays[Mesh.ARRAY_NORMAL] = mesh_normals
+	if mesh_uvs.size() == mesh_vertices.size():
+		arrays[Mesh.ARRAY_TEX_UV] = mesh_uvs
 
 	var mesh = ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
@@ -1717,9 +1743,19 @@ func _load_obj_model(file_path: String) -> Node3D:
 	var mesh_instance = MeshInstance3D.new()
 	mesh_instance.mesh = mesh
 
+	# Create material with optional texture
 	var material = StandardMaterial3D.new()
 	material.albedo_color = Color(0.7, 0.7, 0.7)
 	material.roughness = 0.5
+
+	# Load texture if provided
+	if not texture_path.is_empty():
+		var texture = _load_texture(texture_path)
+		if texture:
+			material.albedo_texture = texture
+			material.albedo_color = Color.WHITE  # Use full texture color
+			print("Applied texture: %s" % texture_path.get_file())
+
 	mesh_instance.material_override = material
 
 	# Wrap in Node3D with base
@@ -1736,8 +1772,41 @@ func _load_obj_model(file_path: String) -> Node3D:
 	mesh_instance.position.y = base_top - mesh_aabb.position.y
 	root.add_child(mesh_instance)
 
-	print("Loaded OBJ: %d triangles" % (mesh_vertices.size() / 3))
+	var uv_info = " with UVs" if mesh_uvs.size() > 0 else ""
+	print("Loaded OBJ: %d triangles%s" % [mesh_vertices.size() / 3, uv_info])
 	return root
+
+
+## Load a texture from file path (supports PNG, JPG, WEBP)
+func _load_texture(texture_path: String) -> ImageTexture:
+	if not FileAccess.file_exists(texture_path):
+		push_warning("Texture file not found: %s" % texture_path)
+		return null
+
+	var image = Image.new()
+	var extension = texture_path.get_extension().to_lower()
+
+	var error: Error
+	match extension:
+		"png":
+			error = image.load(texture_path)
+		"jpg", "jpeg":
+			error = image.load(texture_path)
+		"webp":
+			error = image.load(texture_path)
+		_:
+			# Try generic load
+			error = image.load(texture_path)
+
+	if error != OK:
+		push_warning("Failed to load texture: %s (error %d)" % [texture_path, error])
+		return null
+
+	# Generate mipmaps for better rendering at distance
+	image.generate_mipmaps()
+
+	var texture = ImageTexture.create_from_image(image)
+	return texture
 
 
 ## Calculate AABB for a node and all its children
@@ -1897,3 +1966,170 @@ func clear_all_objects(broadcast: bool = true) -> void:
 	_dice_list.clear()
 	_selected_objects.clear()
 	_object_counter = 0
+
+
+## ============================================================================
+## TTS (Tabletop Simulator) Import Functions
+## ============================================================================
+
+## Import models from a TTS save file with textures from cache directories
+## json_path: Path to the TTS save JSON file
+## models_cache_dir: Path to TTS Models/ cache directory
+## images_cache_dir: Path to TTS Images/ cache directory
+## Returns: Array of imported objects
+func import_tts_save(json_path: String, models_cache_dir: String, images_cache_dir: String) -> Array[Node3D]:
+	var imported_objects: Array[Node3D] = []
+
+	# Parse the TTS save file
+	var parse_result = TTSImporter.parse_tts_save(json_path)
+	if not parse_result.error.is_empty():
+		push_error("TTS Import failed: %s" % parse_result.error)
+		return imported_objects
+
+	# Get unique models (avoid importing duplicates)
+	var unique_models = TTSImporter.get_unique_models(parse_result)
+
+	print("=== TTS Import Starting ===")
+	print("Save: %s" % parse_result.save_name)
+	print("Unique models to import: %d" % unique_models.size())
+
+	# Import each unique model
+	var success_count = 0
+	var fail_count = 0
+
+	for tts_obj in unique_models:
+		var imported = _import_tts_object(tts_obj, models_cache_dir, images_cache_dir)
+		if imported:
+			imported_objects.append(imported)
+			success_count += 1
+		else:
+			fail_count += 1
+
+	print("=== TTS Import Complete ===")
+	print("Success: %d | Failed: %d" % [success_count, fail_count])
+
+	return imported_objects
+
+
+## Import a single TTS object
+func _import_tts_object(tts_obj: TTSImporter.TTSObject, models_dir: String, images_dir: String) -> Node3D:
+	# Find the mesh file in cache
+	var mesh_path = TTSImporter.find_cache_file(tts_obj.mesh_url, models_dir, [".obj", ".OBJ"])
+	if mesh_path.is_empty():
+		print("  [SKIP] %s - mesh not found in cache" % tts_obj.name)
+		return null
+
+	# Find texture file if URL is specified
+	var texture_path = ""
+	if not tts_obj.diffuse_url.is_empty():
+		texture_path = TTSImporter.find_cache_file(tts_obj.diffuse_url, images_dir, [".png", ".jpg", ".jpeg", ".PNG", ".JPG", ".JPEG"])
+
+	# Load the model
+	var extension = mesh_path.get_extension().to_lower()
+	var model_scene: Node3D = null
+
+	match extension:
+		"obj":
+			model_scene = _load_obj_model(mesh_path, texture_path)
+		_:
+			push_warning("Unsupported TTS mesh format: %s" % extension)
+			return null
+
+	if not model_scene:
+		print("  [FAIL] %s - could not load mesh" % tts_obj.name)
+		return null
+
+	# Wrap in StaticBody3D for selection
+	_object_counter += 1
+	var wrapper = StaticBody3D.new()
+	wrapper.name = "TTS_%s_%d" % [tts_obj.name.replace(" ", "_"), _object_counter]
+	wrapper.set_meta("network_id", _object_counter + 30000)
+	wrapper.set_meta("tts_mesh_url", tts_obj.mesh_url)
+	wrapper.set_meta("tts_diffuse_url", tts_obj.diffuse_url)
+	wrapper.add_to_group("selectable")
+	wrapper.add_to_group("tts_import")
+
+	# Add loaded model
+	wrapper.add_child(model_scene)
+
+	# Calculate collision from model bounds
+	var aabb = _calculate_aabb(model_scene)
+	var collision = CollisionShape3D.new()
+	var shape = BoxShape3D.new()
+	shape.size = aabb.size
+	collision.shape = shape
+	collision.position = aabb.position + aabb.size / 2
+	wrapper.add_child(collision)
+
+	# Apply TTS color tint if not white
+	if tts_obj.color != Color.WHITE:
+		_apply_color_tint(model_scene, tts_obj.color)
+
+	# Add script for selection
+	wrapper.set_script(preload("res://scripts/selectable_object.gd"))
+
+	# Add to scene at TTS position (converted to meters)
+	add_child(wrapper)
+
+	# TTS uses different coordinate system - convert position
+	# TTS: Y is up, 1 unit ≈ 1 inch
+	# Godot: Y is up, we use meters (1 unit = 1 meter)
+	var pos_scale = 0.0254  # inches to meters
+	wrapper.global_position = Vector3(
+		tts_obj.position.x * pos_scale,
+		tts_obj.position.y * pos_scale,
+		tts_obj.position.z * pos_scale
+	)
+
+	# Apply rotation (TTS uses degrees)
+	wrapper.rotation_degrees = tts_obj.rotation
+
+	var tex_info = " + texture" if not texture_path.is_empty() else ""
+	print("  [OK] %s%s" % [tts_obj.name, tex_info])
+
+	return wrapper
+
+
+## Apply a color tint to all materials in a model
+func _apply_color_tint(node: Node3D, color: Color) -> void:
+	for child in node.get_children():
+		if child is MeshInstance3D:
+			var mat = child.material_override
+			if mat is StandardMaterial3D:
+				# Multiply with existing albedo or set if texture present
+				if mat.albedo_texture:
+					mat.albedo_color = color
+				else:
+					mat.albedo_color = mat.albedo_color * color
+
+		if child is Node3D:
+			_apply_color_tint(child, color)
+
+
+## Spawn TTS models at grid positions (for preview/selection)
+## Arranges models in a grid layout on the table
+func spawn_tts_models_grid(tts_objects: Array[TTSImporter.TTSObject], models_dir: String, images_dir: String, spacing: float = 0.1) -> Array[Node3D]:
+	var imported: Array[Node3D] = []
+
+	var grid_size = int(ceil(sqrt(tts_objects.size())))
+	var start_x = -float(grid_size) / 2.0 * spacing
+	var start_z = -float(grid_size) / 2.0 * spacing
+
+	var idx = 0
+	for tts_obj in tts_objects:
+		var grid_x = idx % grid_size
+		var grid_z = idx / grid_size
+
+		var model = _import_tts_object(tts_obj, models_dir, images_dir)
+		if model:
+			# Override position to grid layout
+			model.global_position = Vector3(
+				start_x + grid_x * spacing,
+				0,
+				start_z + grid_z * spacing
+			)
+			imported.append(model)
+
+		idx += 1
+
+	return imported
