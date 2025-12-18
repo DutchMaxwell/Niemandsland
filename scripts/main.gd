@@ -24,6 +24,8 @@ extends Node3D
 @onready var roll_button: Button = %RollButton
 @onready var quick_roll_button: Button = %QuickRollButton
 @onready var roller_result_label: Label = %RollerResultLabel
+@onready var dice_count_spinner: SpinBox = %DiceCountSpinner
+@onready var current_dice_label: Label = %CurrentDiceLabel
 
 const INCHES_TO_FEET: float = 1.0 / 12.0
 const CM_TO_FEET: float = 1.0 / 30.48
@@ -34,7 +36,8 @@ func _ready() -> void:
 
 	# Connect UI buttons
 	spawn_miniature_btn.pressed.connect(_on_spawn_miniature)
-	spawn_dice_btn.pressed.connect(_on_spawn_dice)
+	# Tabletop dice disabled - use Dice Roller Plugin instead
+	spawn_dice_btn.visible = false
 	spawn_terrain_btn.pressed.connect(_on_spawn_terrain)
 	clear_all_btn.pressed.connect(_on_clear_all)
 
@@ -51,6 +54,10 @@ func _ready() -> void:
 	quick_roll_button.pressed.connect(_on_quick_roll_button_pressed)
 	dice_roller_control.roll_finnished.connect(_on_roller_finished)
 	dice_roller_control.roll_started.connect(_on_roller_started)
+	dice_count_spinner.value_changed.connect(_on_dice_count_changed)
+
+	# Initialize dice roller with default count
+	_update_dice_set(int(dice_count_spinner.value))
 
 	# Initialize table with default size (4x4 feet = 48x48 inches)
 	table.setup_table(Vector2(4, 4))
@@ -109,7 +116,53 @@ func _on_roller_started() -> void:
 
 func _on_roller_finished(result: int) -> void:
 	var per_dice = dice_roller_control.per_dice_result()
-	roller_result_label.text = "Result: %d %s" % [result, str(per_dice.values())]
+	roller_result_label.text = _format_dice_results(per_dice, result)
+
+
+func _on_dice_count_changed(new_value: float) -> void:
+	_update_dice_set(int(new_value))
+
+
+## Update the dice set with the specified number of D6 dice
+func _update_dice_set(count: int) -> void:
+	var dice_set: Array[DiceDef] = []
+	for i in range(count):
+		var dice_def = DiceDef.new()
+		dice_def.name = "D6_%d" % (i + 1)
+		dice_def.color = Color.WHITE
+		dice_def.shape = DiceShape.new("D6")
+		dice_set.append(dice_def)
+
+	dice_roller_control.dice_set = dice_set
+	current_dice_label.text = "In box: %d D6" % count
+
+	# Adjust roller size based on dice count
+	var size_factor = sqrt(count / 6.0)
+	dice_roller_control.roller_size = Vector3(
+		max(12, 18 * size_factor),
+		15,
+		max(8, 12 * size_factor)
+	)
+
+
+## Format dice results as "x times 6, x times 5, ..." stacked vertically
+func _format_dice_results(per_dice: Dictionary, total: int) -> String:
+	# Count occurrences of each face value
+	var counts = {6: 0, 5: 0, 4: 0, 3: 0, 2: 0, 1: 0}
+	for dice_name in per_dice:
+		var value = per_dice[dice_name]
+		if value in counts:
+			counts[value] += 1
+
+	# Build result string
+	var lines: Array[String] = []
+	lines.append("Total: %d" % total)
+	lines.append("─────────")
+	for face in [6, 5, 4, 3, 2, 1]:
+		if counts[face] > 0:
+			lines.append("%d× %d" % [counts[face], face])
+
+	return "\n".join(lines)
 
 
 func _get_random_table_position() -> Vector3:

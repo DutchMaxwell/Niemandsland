@@ -208,8 +208,8 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -320.0
-offset_top = -300.0
+offset_left = -350.0
+offset_top = -450.0
 offset_right = -10.0
 offset_bottom = -10.0
 grow_horizontal = 0
@@ -223,13 +223,35 @@ layout_mode = 2
 text = "Dice Roller"
 horizontal_alignment = 1
 
+[node name="DiceCountRow" type="HBoxContainer" parent="UI/HUD/DiceRollerPanel/VBox"]
+layout_mode = 2
+
+[node name="DiceCountLabel" type="Label" parent="UI/HUD/DiceRollerPanel/VBox/DiceCountRow"]
+layout_mode = 2
+text = "Dice:"
+
+[node name="DiceCountSpinner" type="SpinBox" parent="UI/HUD/DiceRollerPanel/VBox/DiceCountRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 1.0
+max_value = 30.0
+value = 6.0
+
+[node name="CurrentDiceLabel" type="Label" parent="UI/HUD/DiceRollerPanel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "In box: 6 D6"
+horizontal_alignment = 1
+
 [node name="DiceRollerControl" type="SubViewportContainer" parent="UI/HUD/DiceRollerPanel/VBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(300, 200)
+custom_minimum_size = Vector2(330, 220)
 layout_mode = 2
 size_flags_vertical = 3
 stretch = true
 script = ExtResource("5_diceroller")
+roller_size = Vector3(18, 15, 12)
 
 [node name="ButtonRow" type="HBoxContainer" parent="UI/HUD/DiceRollerPanel/VBox"]
 layout_mode = 2
@@ -251,6 +273,8 @@ text = "Quick"
 [node name="RollerResultLabel" type="Label" parent="UI/HUD/DiceRollerPanel/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
+custom_minimum_size = Vector2(0, 120)
+theme_override_font_sizes/font_size = 14
 text = "Click Roll to start"
 horizontal_alignment = 1
+vertical_alignment = 1
