@@ -11,6 +11,8 @@ extends Node3D
 @onready var spawn_dice_btn: Button = $UI/HUD/SpawnPanel/SpawnDice
 @onready var spawn_terrain_btn: Button = $UI/HUD/SpawnPanel/SpawnTerrain
 @onready var clear_all_btn: Button = $UI/HUD/SpawnPanel/ClearAll
+@onready var spawn_200_btn: Button = $UI/HUD/SpawnPanel/Spawn200
+@onready var performance_label: Label = %PerformanceLabel
 
 # Table size UI elements
 @onready var table_size_option: OptionButton = $UI/HUD/TableSizePanel/TableSizeOption
@@ -41,6 +43,7 @@ func _ready() -> void:
 	spawn_dice_btn.visible = false
 	spawn_terrain_btn.pressed.connect(_on_spawn_terrain)
 	clear_all_btn.pressed.connect(_on_clear_all)
+	spawn_200_btn.pressed.connect(_on_spawn_200)
 
 	# Connect table size UI
 	table_size_option.item_selected.connect(_on_table_size_selected)
@@ -75,6 +78,24 @@ func _ready() -> void:
 	print("OpenTTS ready!")
 
 
+func _process(_delta: float) -> void:
+	# Update performance label
+	var fps = Engine.get_frames_per_second()
+	var object_count = object_manager.get_child_count()
+
+	# Color FPS based on performance
+	var fps_color: Color
+	if fps >= 55:
+		fps_color = Color.GREEN
+	elif fps >= 30:
+		fps_color = Color.YELLOW
+	else:
+		fps_color = Color.RED
+
+	performance_label.add_theme_color_override("font_color", fps_color)
+	performance_label.text = "FPS: %d | Objects: %d" % [fps, object_count]
+
+
 func _on_spawn_miniature() -> void:
 	var spawn_pos = _get_random_table_position()
 	object_manager.spawn_miniature(spawn_pos)
@@ -89,6 +110,52 @@ func _on_spawn_dice() -> void:
 func _on_spawn_terrain() -> void:
 	var spawn_pos = _get_random_table_position()
 	object_manager.spawn_terrain(spawn_pos)
+
+
+## Performance test: Spawn 200 miniatures in a grid
+func _on_spawn_200() -> void:
+	print("=== PERFORMANCE TEST: Spawning 200 miniatures ===")
+	var start_time = Time.get_ticks_msec()
+
+	# Clear existing objects first
+	object_manager.clear_all_objects()
+
+	# Calculate grid layout (20 columns x 10 rows = 200)
+	var cols = 20
+	var rows = 10
+
+	# Table size in meters
+	var size_meters = table.table_size * 0.3048  # FEET_TO_METERS
+	var margin = 0.05  # 5cm margin from edges
+
+	# Calculate spacing
+	var usable_width = size_meters.x - (margin * 2)
+	var usable_depth = size_meters.y - (margin * 2)
+	var spacing_x = usable_width / (cols - 1)
+	var spacing_z = usable_depth / (rows - 1)
+
+	# Start position (top-left corner)
+	var start_x = -size_meters.x / 2 + margin
+	var start_z = -size_meters.y / 2 + margin
+
+	# Spawn miniatures in grid
+	var count = 0
+	for row in range(rows):
+		for col in range(cols):
+			var pos = Vector3(
+				start_x + col * spacing_x,
+				0,
+				start_z + row * spacing_z
+			)
+			object_manager.spawn_miniature(pos)
+			count += 1
+
+	var end_time = Time.get_ticks_msec()
+	var spawn_duration = end_time - start_time
+
+	print("Spawned %d miniatures in %d ms" % [count, spawn_duration])
+	print("Grid: %dx%d, Spacing: %.3fm x %.3fm" % [cols, rows, spacing_x, spacing_z])
+	print("=== Monitor FPS for performance test ===")
 
 
 func _on_clear_all() -> void:
