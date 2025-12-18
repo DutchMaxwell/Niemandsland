@@ -32,10 +32,13 @@ var _is_rotating: bool = false
 # Drag distance tracking
 var _drag_start_position: Vector3 = Vector3.ZERO
 
-# Measurement mode (right-click to measure)
+# Measurement mode (Shift+Left-click to measure)
 var _is_measuring: bool = false
 var _measure_start_position: Vector3 = Vector3.ZERO
+var _measure_start_snapped: bool = false  # True if start point snapped to object
+var _measure_end_snapped: bool = false    # True if end point snapped to object
 var _measure_line: MeshInstance3D = null
+var _measure_label: Label3D = null
 
 const METERS_TO_INCHES: float = 39.3701
 
@@ -390,15 +393,17 @@ func _start_measuring(screen_pos: Vector2) -> void:
 
 	if result:
 		_is_measuring = true
-		# If hit an object, use object position; otherwise use hit point
+		# If hit an object, use object position and mark as snapped
 		if result.collider.is_in_group("selectable"):
 			_measure_start_position = result.collider.global_position
 			_measure_start_position.y = 0.02  # Slightly above table for visibility
+			_measure_start_snapped = true
 		else:
 			_measure_start_position = result.position
 			_measure_start_position.y = 0.02
+			_measure_start_snapped = false
 
-		# Create measurement line
+		# Create measurement line and label
 		_create_measure_line()
 
 
@@ -407,36 +412,49 @@ func _update_measurement(screen_pos: Vector2) -> void:
 	if not _is_measuring:
 		return
 
-	var end_pos = _get_measure_end_position(screen_pos)
-	if end_pos:
-		_update_measure_line(_measure_start_position, end_pos)
+	var end_data = _get_measure_end_position(screen_pos)
+	if end_data:
+		var end_pos: Vector3 = end_data["position"]
+		_measure_end_snapped = end_data["snapped"]
 
 		# Calculate HORIZONTAL distance only (XZ plane)
 		var distance_m = _horizontal_distance(_measure_start_position, end_pos)
 		var distance_inches = distance_m * METERS_TO_INCHES
+
+		# Update line and label
+		var both_snapped = _measure_start_snapped and _measure_end_snapped
+		_update_measure_line(_measure_start_position, end_pos, distance_inches, both_snapped)
+
 		distance_changed.emit(distance_inches, _measure_start_position, end_pos)
 
 
 ## Stop measuring and emit final result
 func _stop_measuring(screen_pos: Vector2) -> void:
 	if _is_measuring:
-		var end_pos = _get_measure_end_position(screen_pos)
-		if end_pos:
+		var end_data = _get_measure_end_position(screen_pos)
+		if end_data:
+			var end_pos: Vector3 = end_data["position"]
 			# Calculate HORIZONTAL distance only
 			var distance_m = _horizontal_distance(_measure_start_position, end_pos)
 			var distance_inches = distance_m * METERS_TO_INCHES
 			measurement_finished.emit(distance_inches)
 
-		# Clean up line
+		# Clean up line and label
 		if _measure_line:
 			_measure_line.queue_free()
 			_measure_line = null
+		if _measure_label:
+			_measure_label.queue_free()
+			_measure_label = null
 
 	_is_measuring = false
 	_measure_start_position = Vector3.ZERO
+	_measure_start_snapped = false
+	_measure_end_snapped = false
 
 
 ## Get measurement end position - snaps to objects if hit
+## Returns Dictionary with "position" and "snapped" keys, or null
 func _get_measure_end_position(screen_pos: Vector2) -> Variant:
 	var camera = get_viewport().get_camera_3d()
 	if not camera:
@@ -457,17 +475,17 @@ func _get_measure_end_position(screen_pos: Vector2) -> Variant:
 		# If hit a selectable object, snap to its base position
 		if result.collider.is_in_group("selectable"):
 			var obj_pos = result.collider.global_position
-			return Vector3(obj_pos.x, 0.02, obj_pos.z)
+			return {"position": Vector3(obj_pos.x, 0.02, obj_pos.z), "snapped": true}
 		else:
 			# Hit table or other surface - use that point
-			return Vector3(result.position.x, 0.02, result.position.z)
+			return {"position": Vector3(result.position.x, 0.02, result.position.z), "snapped": false}
 
 	# Fallback: intersect with table plane
 	var dir = camera.project_ray_normal(screen_pos)
 	var table_plane = Plane(Vector3.UP, 0)
 	var intersection = table_plane.intersects_ray(from, dir)
 	if intersection:
-		return Vector3(intersection.x, 0.02, intersection.z)
+		return {"position": Vector3(intersection.x, 0.02, intersection.z), "snapped": false}
 
 	return null
 
@@ -479,12 +497,16 @@ func _horizontal_distance(from_pos: Vector3, to_pos: Vector3) -> float:
 	return sqrt(dx * dx + dz * dz)
 
 
-## Create a visual line for measurement
+## Create a visual line and label for measurement
 func _create_measure_line() -> void:
 	if _measure_line:
 		_measure_line.queue_free()
+	if _measure_label:
+		_measure_label.queue_free()
 
+	# Create line mesh
 	_measure_line = MeshInstance3D.new()
+	_measure_line.name = "MeasureLine"
 	var material = StandardMaterial3D.new()
 	material.albedo_color = Color.YELLOW
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -492,31 +514,71 @@ func _create_measure_line() -> void:
 	_measure_line.material_override = material
 	add_child(_measure_line)
 
+	# Create 3D label for distance display
+	_measure_label = Label3D.new()
+	_measure_label.name = "MeasureLabel"
+	_measure_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_measure_label.no_depth_test = true
+	_measure_label.font_size = 72
+	_measure_label.outline_size = 8
+	_measure_label.modulate = Color.YELLOW
+	_measure_label.outline_modulate = Color.BLACK
+	add_child(_measure_label)
 
-## Update the measurement line mesh
-func _update_measure_line(from_pos: Vector3, to_pos: Vector3) -> void:
-	if not _measure_line:
+
+## Update the measurement line mesh and label
+func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: float, both_snapped: bool) -> void:
+	if not _measure_line or not _measure_label:
 		return
 
-	_measure_line.set_meta("end_position", to_pos)
-
-	# Create a thin box as line
-	var direction = to_pos - from_pos
+	# Calculate horizontal direction (XZ plane only)
+	var direction = Vector3(to_pos.x - from_pos.x, 0, to_pos.z - from_pos.z)
 	var length = direction.length()
 
 	if length < 0.001:
+		_measure_line.visible = false
+		_measure_label.visible = false
 		return
 
-	var immediate_mesh = BoxMesh.new()
-	immediate_mesh.size = Vector3(0.005, 0.005, length)  # 5mm thick line
+	_measure_line.visible = true
+	_measure_label.visible = true
 
-	_measure_line.mesh = immediate_mesh
-	_measure_line.global_position = from_pos + direction / 2
+	# Create a thin flat box as line (horizontal on XZ plane)
+	var line_mesh = BoxMesh.new()
+	line_mesh.size = Vector3(length, 0.005, 0.01)  # Length along X, thin height, 1cm depth
 
-	# Rotate to point at target
-	if direction.length() > 0.001:
-		_measure_line.look_at(to_pos, Vector3.UP)
-		_measure_line.rotate_object_local(Vector3.RIGHT, PI / 2)
+	_measure_line.mesh = line_mesh
+
+	# Position at midpoint, slightly above table
+	var midpoint = (from_pos + to_pos) / 2
+	midpoint.y = 0.02
+	_measure_line.global_position = midpoint
+
+	# Rotate to align with direction (rotation around Y axis)
+	var angle = atan2(direction.x, direction.z)
+	_measure_line.rotation = Vector3(0, angle + PI/2, 0)
+
+	# Update label position (at midpoint, higher for visibility)
+	_measure_label.global_position = midpoint + Vector3(0, 0.08, 0)
+	_measure_label.text = "%.1f\"" % distance_inches
+
+	# Set color based on snap status
+	var line_color: Color
+	var label_color: Color
+	if both_snapped:
+		line_color = Color.GREEN
+		label_color = Color.GREEN
+	else:
+		line_color = Color.YELLOW
+		label_color = Color.YELLOW
+
+	# Update line material color
+	var mat = _measure_line.material_override as StandardMaterial3D
+	if mat:
+		mat.albedo_color = line_color
+
+	# Update label color
+	_measure_label.modulate = label_color
 
 
 ## Spawn a miniature at the given position
