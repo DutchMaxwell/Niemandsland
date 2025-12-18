@@ -45,6 +45,16 @@ extends Node3D
 @onready var load_model_btn: Button = %LoadModel
 @onready var model_file_dialog: FileDialog = %ModelFileDialog
 
+# TTS Import UI
+@onready var import_tts_btn: Button = %ImportTTS
+@onready var tts_json_dialog: FileDialog = %TTSJsonDialog
+@onready var tts_models_dialog: FileDialog = %TTSModelsDialog
+@onready var tts_images_dialog: FileDialog = %TTSImagesDialog
+
+# TTS Import state
+var _tts_json_path: String = ""
+var _tts_models_dir: String = ""
+
 const INCHES_TO_FEET: float = 1.0 / 12.0
 const CM_TO_FEET: float = 1.0 / 30.48
 
@@ -60,6 +70,12 @@ func _ready() -> void:
 	load_model_btn.pressed.connect(_on_load_model)
 	model_file_dialog.file_selected.connect(_on_model_file_selected)
 	clear_all_btn.pressed.connect(_on_clear_all)
+
+	# Connect TTS Import UI
+	import_tts_btn.pressed.connect(_on_import_tts)
+	tts_json_dialog.file_selected.connect(_on_tts_json_selected)
+	tts_models_dialog.dir_selected.connect(_on_tts_models_dir_selected)
+	tts_images_dialog.dir_selected.connect(_on_tts_images_dir_selected)
 	spawn_200_btn.pressed.connect(_on_spawn_200)
 	spawn_500_btn.pressed.connect(_on_spawn_500)
 	spawn_1000_btn.pressed.connect(_on_spawn_1000)
@@ -548,3 +564,81 @@ func _update_network_ui(connected: bool, is_host: bool) -> void:
 	join_button.disabled = false
 	address_input.visible = !connected
 	disconnect_button.visible = connected
+
+
+## ============================================================================
+## TTS (Tabletop Simulator) Import Functions
+## ============================================================================
+
+## Start TTS import workflow - first select JSON file
+func _on_import_tts() -> void:
+	_tts_json_path = ""
+	_tts_models_dir = ""
+	tts_json_dialog.popup_centered()
+
+
+## JSON file selected - next select Models directory
+func _on_tts_json_selected(path: String) -> void:
+	_tts_json_path = path
+	print("TTS Save selected: %s" % path.get_file())
+
+	# Try to auto-detect TTS cache directories
+	var tts_cache_base = _detect_tts_cache_dir()
+	if not tts_cache_base.is_empty():
+		tts_models_dialog.current_dir = tts_cache_base.path_join("Models")
+		tts_images_dialog.current_dir = tts_cache_base.path_join("Images")
+
+	tts_models_dialog.popup_centered()
+
+
+## Models directory selected - next select Images directory
+func _on_tts_models_dir_selected(path: String) -> void:
+	_tts_models_dir = path
+	print("TTS Models dir selected: %s" % path)
+	tts_images_dialog.popup_centered()
+
+
+## Images directory selected - now perform the import
+func _on_tts_images_dir_selected(path: String) -> void:
+	var images_dir = path
+	print("TTS Images dir selected: %s" % path)
+
+	# Validate paths
+	if _tts_json_path.is_empty() or _tts_models_dir.is_empty():
+		push_error("TTS Import: Missing required paths")
+		return
+
+	# Perform import
+	print("=== Starting TTS Import ===")
+	print("JSON: %s" % _tts_json_path)
+	print("Models: %s" % _tts_models_dir)
+	print("Images: %s" % images_dir)
+
+	var imported = object_manager.import_tts_save(_tts_json_path, _tts_models_dir, images_dir)
+	print("Imported %d models from TTS save" % imported.size())
+
+
+## Try to detect TTS cache directory based on OS
+func _detect_tts_cache_dir() -> String:
+	var os_name = OS.get_name()
+
+	# Common TTS mod cache locations
+	var possible_paths: Array[String] = []
+
+	match os_name:
+		"macOS":
+			var home = OS.get_environment("HOME")
+			possible_paths.append(home + "/Library/Tabletop Simulator/Mods")
+		"Windows":
+			var docs = OS.get_environment("USERPROFILE") + "/Documents"
+			possible_paths.append(docs + "/My Games/Tabletop Simulator/Mods")
+		"Linux":
+			var home = OS.get_environment("HOME")
+			possible_paths.append(home + "/.local/share/Tabletop Simulator/Mods")
+
+	for path in possible_paths:
+		if DirAccess.dir_exists_absolute(path):
+			print("Auto-detected TTS cache: %s" % path)
+			return path
+
+	return ""
