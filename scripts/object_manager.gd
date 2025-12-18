@@ -1305,8 +1305,9 @@ func spawn_terrain(pos: Vector3) -> StaticBody3D:
 
 	terrain.set_script(preload("res://scripts/selectable_object.gd"))
 
-	terrain.global_position = pos
+	# IMPORTANT: Add to tree BEFORE setting global_position
 	add_child(terrain)
+	terrain.global_position = pos
 
 	return terrain
 
