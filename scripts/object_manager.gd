@@ -1346,6 +1346,95 @@ func spawn_terrain(pos: Vector3, broadcast: bool = true, network_id: int = -1) -
 	return terrain
 
 
+## Load and spawn a custom 3D model from a GLB/GLTF file
+func spawn_custom_model(file_path: String, pos: Vector3, broadcast: bool = true) -> Node3D:
+	_object_counter += 1
+	var obj_network_id = _object_counter + 20000  # Offset for custom models
+
+	# Load GLB/GLTF at runtime
+	var gltf_doc = GLTFDocument.new()
+	var gltf_state = GLTFState.new()
+
+	var error = gltf_doc.append_from_file(file_path, gltf_state)
+	if error != OK:
+		push_error("Failed to load model: %s (error %d)" % [file_path, error])
+		return null
+
+	var model_scene = gltf_doc.generate_scene(gltf_state)
+	if not model_scene:
+		push_error("Failed to generate scene from: %s" % file_path)
+		return null
+
+	# Wrap in StaticBody3D for selection/collision
+	var wrapper = StaticBody3D.new()
+	wrapper.name = "CustomModel_%d" % _object_counter
+	wrapper.set_meta("network_id", obj_network_id)
+	wrapper.set_meta("model_path", file_path)
+	wrapper.add_to_group("selectable")
+	wrapper.add_to_group("custom_model")
+
+	# Add the loaded model as child
+	wrapper.add_child(model_scene)
+
+	# Calculate bounding box for collision
+	var aabb = _calculate_aabb(model_scene)
+	var collision = CollisionShape3D.new()
+	var shape = BoxShape3D.new()
+	shape.size = aabb.size
+	collision.shape = shape
+	collision.position = aabb.position + aabb.size / 2
+	wrapper.add_child(collision)
+
+	# Scale to reasonable size (target ~5cm height for miniatures)
+	var max_dim = max(aabb.size.x, max(aabb.size.y, aabb.size.z))
+	if max_dim > 0.001:
+		var target_size = 0.05  # 5cm default
+		var scale_factor = target_size / max_dim
+		model_scene.scale = Vector3(scale_factor, scale_factor, scale_factor)
+		# Update collision to match
+		shape.size = aabb.size * scale_factor
+		collision.position = (aabb.position + aabb.size / 2) * scale_factor
+
+	wrapper.set_script(preload("res://scripts/selectable_object.gd"))
+
+	# Add to scene
+	add_child(wrapper)
+	wrapper.global_position = pos
+
+	print("Loaded custom model: %s" % file_path.get_file())
+	return wrapper
+
+
+## Calculate AABB for a node and all its children
+func _calculate_aabb(node: Node3D) -> AABB:
+	var aabb = AABB()
+	var found_mesh = false
+
+	for child in node.get_children():
+		if child is MeshInstance3D:
+			var mesh_aabb = child.get_aabb()
+			if not found_mesh:
+				aabb = mesh_aabb
+				found_mesh = true
+			else:
+				aabb = aabb.merge(mesh_aabb)
+
+		if child is Node3D:
+			var child_aabb = _calculate_aabb(child)
+			if child_aabb.size.length() > 0:
+				if not found_mesh:
+					aabb = child_aabb
+					found_mesh = true
+				else:
+					aabb = aabb.merge(child_aabb)
+
+	# Default if nothing found
+	if not found_mesh:
+		aabb = AABB(Vector3(-0.025, 0, -0.025), Vector3(0.05, 0.05, 0.05))
+
+	return aabb
+
+
 func _create_rock_mesh() -> Mesh:
 	var mesh = BoxMesh.new()
 	mesh.size = Vector3(0.4, 0.25, 0.35)  # Scaled up
