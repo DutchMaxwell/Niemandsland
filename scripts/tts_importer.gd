@@ -19,6 +19,7 @@ class TTSObject:
 	var rotation: Vector3 = Vector3.ZERO
 	var scale: Vector3 = Vector3.ONE
 	var color: Color = Color.WHITE
+	var is_child_model: bool = false  # True if this came from ChildObjects (real model, not base)
 
 
 ## Parse a TTS save file and extract all CustomMesh objects
@@ -48,17 +49,21 @@ static func parse_tts_save(json_path: String) -> TTSParseResult:
 
 	# Parse ObjectStates array
 	var object_states = data.get("ObjectStates", [])
-	_parse_objects_recursive(object_states, result.objects)
+	_parse_objects_recursive(object_states, result.objects, false)
 
 	print("TTS Import: Found %d custom mesh objects in '%s'" % [result.objects.size(), result.save_name])
 	return result
 
 
 ## Recursively parse objects (TTS saves can have nested objects in bags/containers)
-static func _parse_objects_recursive(objects: Array, output: Array[TTSObject]) -> void:
+## is_child_model: true if parsing ChildObjects (these are real models, not bases)
+static func _parse_objects_recursive(objects: Array, output: Array[TTSObject], is_child_model: bool = false) -> void:
 	for obj in objects:
 		if not obj is Dictionary:
 			continue
+
+		# Check if this object has ChildObjects (meaning THIS object is likely a base)
+		var has_children = obj.has("ChildObjects") and obj.get("ChildObjects") is Array and obj.get("ChildObjects").size() > 0
 
 		# Check if this object has a CustomMesh
 		var custom_mesh = obj.get("CustomMesh", null)
@@ -68,6 +73,7 @@ static func _parse_objects_recursive(objects: Array, output: Array[TTSObject]) -
 			tts_obj.mesh_url = custom_mesh.get("MeshURL", "")
 			tts_obj.diffuse_url = custom_mesh.get("DiffuseURL", "")
 			tts_obj.normal_url = custom_mesh.get("NormalURL", "")
+			tts_obj.is_child_model = is_child_model  # True if this came from ChildObjects
 
 			# Parse transform
 			var transform = obj.get("Transform", {})
@@ -97,18 +103,21 @@ static func _parse_objects_recursive(objects: Array, output: Array[TTSObject]) -
 					color_diffuse.get("b", 1.0)
 				)
 
-			if not tts_obj.mesh_url.is_empty():
+			# Only add if mesh URL is not empty
+			# Skip parent objects that have children (these are bases)
+			if not tts_obj.mesh_url.is_empty() and (is_child_model or not has_children):
 				output.append(tts_obj)
 
 		# Recursively check contained objects (bags/containers)
 		var contained = obj.get("ContainedObjects", [])
 		if contained is Array and contained.size() > 0:
-			_parse_objects_recursive(contained, output)
+			_parse_objects_recursive(contained, output, false)
 
 		# Check ChildObjects (attached models like model+base combinations)
+		# These ARE the real models, mark them as child models
 		var children = obj.get("ChildObjects", [])
 		if children is Array and children.size() > 0:
-			_parse_objects_recursive(children, output)
+			_parse_objects_recursive(children, output, true)
 
 		# Also check States (for multi-state objects)
 		var states = obj.get("States", {})
@@ -116,7 +125,7 @@ static func _parse_objects_recursive(objects: Array, output: Array[TTSObject]) -
 			for state_key in states:
 				var state = states[state_key]
 				if state is Dictionary:
-					_parse_objects_recursive([state], output)
+					_parse_objects_recursive([state], output, is_child_model)
 
 
 ## Convert a URL to TTS cache filename
