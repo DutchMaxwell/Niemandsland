@@ -109,10 +109,11 @@ func _log_dice_states() -> void:
 					is_jittering = true
 					jitter_reason = "OSCILLATING"
 
-				# Manual stabilization DISABLED - Jolt Physics handles sleep naturally
-				# Jolt's sleep threshold ensures dice settle flat before sleeping
-				# See: Project Settings → Physics → Jolt Physics 3D → Sleep settings
-				pass
+				# Edge detection and nudge - push dice off edges onto flat faces
+				if lin_speed < 0.1 and ang_speed < 0.5:
+					if _is_dice_on_edge(dice):
+						_nudge_dice_off_edge(dice)
+						_log_event("NUDGE %s off edge" % dice.name)
 
 		if is_jittering:
 			any_jittering = true
@@ -162,6 +163,60 @@ func _log_event(message: String) -> void:
 	if _debug_log_file:
 		_debug_log_file.store_line(log_line)
 		_debug_log_file.flush()
+
+
+## Check if a D6 die is resting on an edge/corner instead of a flat face
+## A face is flat when one local axis is nearly vertical (dot product with UP close to 1)
+func _is_dice_on_edge(dice: RigidBody3D) -> bool:
+	var dominated_threshold = 0.9  # cos(~25°) - how vertical an axis must be to count as "flat"
+
+	# Get the local axes in world space
+	var basis = dice.global_transform.basis
+	var local_x = basis.x.normalized()
+	var local_y = basis.y.normalized()
+	var local_z = basis.z.normalized()
+
+	# Check if any local axis is pointing mostly up or down (flat face)
+	var up = Vector3.UP
+	var x_alignment = absf(local_x.dot(up))
+	var y_alignment = absf(local_y.dot(up))
+	var z_alignment = absf(local_z.dot(up))
+
+	# If any axis is well-aligned with vertical, dice is on a face
+	if x_alignment > dominated_threshold or y_alignment > dominated_threshold or z_alignment > dominated_threshold:
+		return false  # On a face, not an edge
+
+	return true  # On an edge or corner
+
+
+## Apply a small nudge torque to push the die off its edge onto a flat face
+func _nudge_dice_off_edge(dice: RigidBody3D) -> void:
+	# Wake up the dice if sleeping
+	dice.sleeping = false
+
+	# Find which way to nudge - towards the most aligned axis
+	var basis = dice.global_transform.basis
+	var up = Vector3.UP
+
+	var x_align = absf(basis.x.dot(up))
+	var y_align = absf(basis.y.dot(up))
+	var z_align = absf(basis.z.dot(up))
+
+	# Determine the best axis to rotate towards
+	var nudge_axis: Vector3
+	if x_align >= y_align and x_align >= z_align:
+		# Rotate around Z or Y to make X point up/down
+		nudge_axis = basis.z if randf() > 0.5 else basis.y
+	elif y_align >= x_align and y_align >= z_align:
+		# Rotate around X or Z to make Y point up/down
+		nudge_axis = basis.x if randf() > 0.5 else basis.z
+	else:
+		# Rotate around X or Y to make Z point up/down
+		nudge_axis = basis.x if randf() > 0.5 else basis.y
+
+	# Apply a small torque impulse
+	var nudge_strength = 0.00005  # Very gentle nudge
+	dice.apply_torque_impulse(nudge_axis.normalized() * nudge_strength)
 
 
 func _input(event: InputEvent) -> void:
