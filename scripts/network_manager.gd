@@ -131,8 +131,8 @@ func _sync_state_to_peer() -> void:
 	print("Receiving game state sync...")
 
 
-## RPC: Spawn object on all clients
-@rpc("any_peer", "call_local", "reliable")
+## RPC: Spawn object on remote clients only (local already spawned)
+@rpc("any_peer", "call_remote", "reliable")
 func spawn_object_networked(object_type: String, pos_x: float, pos_y: float, pos_z: float, object_id: int) -> void:
 	var pos = Vector3(pos_x, pos_y, pos_z)
 	var object_manager = get_node_or_null("/root/Main/ObjectManager")
@@ -150,8 +150,8 @@ func spawn_object_networked(object_type: String, pos_x: float, pos_y: float, pos
 					obj.set_meta("network_id", object_id)
 
 
-## RPC: Move object on all clients
-@rpc("any_peer", "call_local", "unreliable_ordered")
+## RPC: Move object on remote clients only (local already moved)
+@rpc("any_peer", "call_remote", "unreliable_ordered")
 func move_object_networked(object_id: int, pos_x: float, pos_y: float, pos_z: float) -> void:
 	var object_manager = get_node_or_null("/root/Main/ObjectManager")
 	if object_manager:
@@ -161,8 +161,8 @@ func move_object_networked(object_id: int, pos_x: float, pos_y: float, pos_z: fl
 				break
 
 
-## RPC: Clear all objects on all clients
-@rpc("any_peer", "call_local", "reliable")
+## RPC: Clear all objects on remote clients only (local already cleared)
+@rpc("any_peer", "call_remote", "reliable")
 func clear_objects_networked() -> void:
 	var object_manager = get_node_or_null("/root/Main/ObjectManager")
 	if object_manager:
@@ -170,13 +170,11 @@ func clear_objects_networked() -> void:
 		object_manager.clear_all_objects(false)
 
 
-## Helper to broadcast spawn to all peers
+## Helper to broadcast spawn to all peers (local spawn already happened)
 func broadcast_spawn(object_type: String, pos: Vector3, object_id: int) -> void:
 	if is_multiplayer_active():
 		spawn_object_networked.rpc(object_type, pos.x, pos.y, pos.z, object_id)
-	else:
-		# Local only - spawn directly
-		spawn_object_networked(object_type, pos.x, pos.y, pos.z, object_id)
+	# No else needed - local spawn already happened before this is called
 
 
 ## Helper to broadcast movement to all peers
