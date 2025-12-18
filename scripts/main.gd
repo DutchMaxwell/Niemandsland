@@ -6,6 +6,7 @@ extends Node3D
 @onready var table: StaticBody3D = $Table
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var dice_result_label: Label = $UI/HUD/DiceResult
+@onready var distance_label: Label = $UI/HUD/DistanceLabel
 @onready var spawn_miniature_btn: Button = $UI/HUD/SpawnPanel/SpawnMiniature
 @onready var spawn_dice_btn: Button = $UI/HUD/SpawnPanel/SpawnDice
 @onready var spawn_terrain_btn: Button = $UI/HUD/SpawnPanel/SpawnTerrain
@@ -48,6 +49,12 @@ func _ready() -> void:
 
 	# Connect to object manager signals
 	object_manager.dice_rolled.connect(_on_dice_rolled)
+	object_manager.distance_changed.connect(_on_distance_changed)
+	object_manager.measurement_finished.connect(_on_measurement_finished)
+	object_manager.drag_ended.connect(_on_drag_ended)
+
+	# Hide distance label initially
+	distance_label.text = ""
 
 	# Connect Dice Roller Plugin
 	roll_button.pressed.connect(_on_roll_button_pressed)
@@ -100,6 +107,36 @@ func _on_dice_rolled(total: int, results: Array) -> void:
 	tween.tween_callback(func():
 		dice_result_label.text = ""
 		dice_result_label.modulate.a = 1.0
+	)
+
+
+## Display distance while dragging or measuring
+func _on_distance_changed(distance_inches: float, _from_pos: Vector3, _to_pos: Vector3) -> void:
+	distance_label.text = "%.1f\"" % distance_inches
+
+
+## Clear distance display after measurement finishes
+func _on_measurement_finished(distance_inches: float) -> void:
+	distance_label.text = "%.1f\"" % distance_inches
+	# Fade out after 2 seconds
+	var tween = create_tween()
+	tween.tween_interval(2.0)
+	tween.tween_property(distance_label, "modulate:a", 0.0, 0.5)
+	tween.tween_callback(func():
+		distance_label.text = ""
+		distance_label.modulate.a = 1.0
+	)
+
+
+## Clear distance display after drag ends
+func _on_drag_ended() -> void:
+	# Fade out after 1 second
+	var tween = create_tween()
+	tween.tween_interval(1.0)
+	tween.tween_property(distance_label, "modulate:a", 0.0, 0.3)
+	tween.tween_callback(func():
+		distance_label.text = ""
+		distance_label.modulate.a = 1.0
 	)
 
 
@@ -171,7 +208,7 @@ func _get_random_table_position() -> Vector3:
 	var margin = 0.15  # Stay away from edges
 	var x = randf_range(-size_meters.x / 2 + margin, size_meters.x / 2 - margin)
 	var z = randf_range(-size_meters.y / 2 + margin, size_meters.y / 2 - margin)
-	return Vector3(x, 0.03, z)  # Just above table surface (top at y=0.018)
+	return Vector3(x, 0, z)  # Spawn at table surface (y=0)
 
 
 ## Handle table size preset selection
