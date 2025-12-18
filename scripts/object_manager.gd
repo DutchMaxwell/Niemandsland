@@ -44,7 +44,7 @@ func _init_debug_log() -> void:
 		_debug_log_file.store_line("Time: %s" % Time.get_datetime_string_from_system())
 		_debug_log_file.store_line("Table collision: extended surface at y=0.01")
 		_debug_log_file.store_line("Dice: 16mm, 5g, expected rest y≈0.016-0.018")
-		_debug_log_file.store_line("Auto-stabilization: lin_v<0.15, ang_v<1.0 (flat before freeze)")
+		_debug_log_file.store_line("Physics: Jolt (natural sleep, no manual stabilization)")
 		_debug_log_file.store_line("Rescue threshold: y < -0.5m")
 		_debug_log_file.store_line("-------------------------------")
 		print("Debug log created at: %s" % ProjectSettings.globalize_path(log_path))
@@ -109,15 +109,10 @@ func _log_dice_states() -> void:
 					is_jittering = true
 					jitter_reason = "OSCILLATING"
 
-				# Auto-stabilize: force sleep if nearly settled
-				# lin_v threshold high to catch micro-oscillations
-				# ang_v threshold LOW to ensure dice is flat before freezing
-				if lin_speed < 0.15 and ang_speed < 1.0:
-					dice.linear_velocity = Vector3.ZERO
-					dice.angular_velocity = Vector3.ZERO
-					dice.sleeping = true
-					is_jittering = false
-					was_stabilized = true
+				# Manual stabilization DISABLED - Jolt Physics handles sleep naturally
+				# Jolt's sleep threshold ensures dice settle flat before sleeping
+				# See: Project Settings → Physics → Jolt Physics 3D → Sleep settings
+				pass
 
 		if is_jittering:
 			any_jittering = true
