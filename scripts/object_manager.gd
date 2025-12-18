@@ -360,9 +360,9 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	dice.collision_mask = 1
 	dice.physics_material_override = _create_dice_physics_material()
 
-	# Physics settings - higher damping for faster settling
-	dice.linear_damp = 2.0    # Increased for faster settling
-	dice.angular_damp = 4.0   # Increased to stop rotation faster
+	# Physics settings - let Jolt handle settling naturally
+	dice.linear_damp = 0.5    # Light damping, Jolt handles rest
+	dice.angular_damp = 0.5   # Low damping so dice can rotate to flat position
 	dice.can_sleep = true  # Allow physics to sleep when at rest
 	dice.continuous_cd = false
 
@@ -392,6 +392,8 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	var collision = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
 	shape.size = Vector3(dice_size, dice_size, dice_size)
+	# Margin rounds off edges in Jolt - prevents dice balancing on corners
+	shape.margin = 0.002  # 2mm margin for rounded edges
 	collision.shape = shape
 	dice.add_child(collision)
 
