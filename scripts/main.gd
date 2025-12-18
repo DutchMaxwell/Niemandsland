@@ -19,6 +19,12 @@ extends Node3D
 @onready var length_input: SpinBox = $UI/HUD/TableSizePanel/CustomSizeContainer/LengthContainer/LengthInput
 @onready var apply_custom_btn: Button = $UI/HUD/TableSizePanel/CustomSizeContainer/ApplyCustomBtn
 
+# Dice Roller Plugin UI
+@onready var dice_roller_control = %DiceRollerControl
+@onready var roll_button: Button = %RollButton
+@onready var quick_roll_button: Button = %QuickRollButton
+@onready var roller_result_label: Label = %RollerResultLabel
+
 const INCHES_TO_FEET: float = 1.0 / 12.0
 const CM_TO_FEET: float = 1.0 / 30.48
 
@@ -39,6 +45,12 @@ func _ready() -> void:
 
 	# Connect to object manager signals
 	object_manager.dice_rolled.connect(_on_dice_rolled)
+
+	# Connect Dice Roller Plugin
+	roll_button.pressed.connect(_on_roll_button_pressed)
+	quick_roll_button.pressed.connect(_on_quick_roll_button_pressed)
+	dice_roller_control.roll_finnished.connect(_on_roller_finished)
+	dice_roller_control.roll_started.connect(_on_roller_started)
 
 	# Initialize table with default size (4x4 feet = 48x48 inches)
 	table.setup_table(Vector2(4, 4))
@@ -80,6 +92,24 @@ func _on_dice_rolled(total: int, results: Array) -> void:
 		dice_result_label.text = ""
 		dice_result_label.modulate.a = 1.0
 	)
+
+
+## Dice Roller Plugin handlers
+func _on_roll_button_pressed() -> void:
+	dice_roller_control.roll()
+
+
+func _on_quick_roll_button_pressed() -> void:
+	dice_roller_control.quick_roll()
+
+
+func _on_roller_started() -> void:
+	roller_result_label.text = "Rolling..."
+
+
+func _on_roller_finished(result: int) -> void:
+	var per_dice = dice_roller_control.per_dice_result()
+	roller_result_label.text = "Result: %d %s" % [result, str(per_dice.values())]
 
 
 func _get_random_table_position() -> Vector3:
