@@ -264,13 +264,13 @@ func _input(event: InputEvent) -> void:
 					# Shift + Left-click starts measurement
 					_start_measuring(mouse_event.position)
 				else:
-					# Pass Ctrl state for multi-select
-					_try_select_at_mouse(mouse_event.position, mouse_event.ctrl_pressed)
+					# Pass Alt state for multi-select
+					_try_select_at_mouse(mouse_event.position, mouse_event.alt_pressed)
 			else:
 				if _is_measuring:
 					_stop_measuring(mouse_event.position)
 				elif _is_box_selecting:
-					_finish_box_selection(mouse_event.ctrl_pressed)
+					_finish_box_selection(mouse_event.alt_pressed)
 				else:
 					_stop_dragging()
 
@@ -297,7 +297,7 @@ func _input(event: InputEvent) -> void:
 		roll_all_dice()
 
 
-func _try_select_at_mouse(screen_pos: Vector2, ctrl_pressed: bool = false) -> void:
+func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> void:
 	var camera = get_viewport().get_camera_3d()
 	if not camera:
 		return
@@ -319,8 +319,8 @@ func _try_select_at_mouse(screen_pos: Vector2, ctrl_pressed: bool = false) -> vo
 		if collider.is_in_group("selectable"):
 			var already_selected = collider in _selected_objects
 
-			if ctrl_pressed:
-				# Ctrl+click: toggle selection (add/remove from selection)
+			if alt_pressed:
+				# Alt+click: toggle selection (add/remove from selection)
 				_toggle_object_selection(collider)
 				# Only start dragging if object is now selected
 				if collider in _selected_objects:
@@ -335,7 +335,7 @@ func _try_select_at_mouse(screen_pos: Vector2, ctrl_pressed: bool = false) -> vo
 				_start_dragging(screen_pos)
 		elif collider.is_in_group("table"):
 			# Clicking on table starts box selection
-			_start_box_selection(screen_pos, ctrl_pressed)
+			_start_box_selection(screen_pos, alt_pressed)
 
 
 ## Add an object to the current selection
@@ -410,9 +410,9 @@ func _unhighlight_object(obj: Node3D) -> void:
 
 
 ## Start box selection (drag rectangle to select multiple objects)
-func _start_box_selection(screen_pos: Vector2, ctrl_pressed: bool) -> void:
-	# If not holding Ctrl, clear current selection
-	if not ctrl_pressed:
+func _start_box_selection(screen_pos: Vector2, alt_pressed: bool) -> void:
+	# If not holding Alt, clear current selection
+	if not alt_pressed:
 		_deselect_all()
 
 	_is_box_selecting = true
@@ -433,7 +433,7 @@ func _update_box_selection(screen_pos: Vector2) -> void:
 
 
 ## Finish box selection and select all objects within the rectangle
-func _finish_box_selection(ctrl_pressed: bool) -> void:
+func _finish_box_selection(alt_pressed: bool) -> void:
 	if not _is_box_selecting:
 		return
 
@@ -450,8 +450,8 @@ func _finish_box_selection(ctrl_pressed: bool) -> void:
 
 				# Check if within selection rectangle
 				if rect.has_point(screen_pos):
-					if ctrl_pressed and child in _selected_objects:
-						# Ctrl + box select: toggle off if already selected
+					if alt_pressed and child in _selected_objects:
+						# Alt + box select: toggle off if already selected
 						_remove_from_selection(child)
 					elif child not in _selected_objects:
 						_add_to_selection(child)
