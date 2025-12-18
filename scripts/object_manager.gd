@@ -443,8 +443,8 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	dice.add_child(collision)
 
 	dice.set_script(preload("res://scripts/selectable_object.gd"))
-	dice.global_position = pos
 	add_child(dice)
+	dice.global_position = pos  # Set position AFTER adding to tree
 	_dice_list.append(dice)
 
 	_log_event("SPAWN %s at pos=(%.4f,%.4f,%.4f) mass=%.4f lin_damp=%.1f ang_damp=%.1f" % [
