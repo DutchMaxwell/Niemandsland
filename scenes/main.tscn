@@ -165,9 +165,9 @@ text = "Spawn 100 Complex"
 layout_mode = 1
 anchors_preset = 0
 offset_left = 10.0
-offset_top = 180.0
+offset_top = 380.0
 offset_right = 200.0
-offset_bottom = 400.0
+offset_bottom = 600.0
 
 [node name="TableSizeLabel" type="Label" parent="UI/HUD/TableSizePanel"]
 layout_mode = 2
