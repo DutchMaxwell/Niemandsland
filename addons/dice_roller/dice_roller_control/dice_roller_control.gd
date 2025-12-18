@@ -55,6 +55,7 @@ func _init():
 
 func _ready():
 	viewport = SubViewport.new()
+	viewport.own_world_3d = true  # IMPORTANT: Isolate from main 3D scene
 	add_child(viewport)
 	roller = dice_roller_scene.instantiate()
 	viewport.add_child(roller)

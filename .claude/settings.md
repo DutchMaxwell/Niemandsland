@@ -14,15 +14,31 @@
 - **Physics**: Jolt Physics (aktiviert in Project Settings)
 - **Plattform**: macOS (Apple M1)
 
+## WICHTIG: Skalierung
+
+Das Projekt verwendet **Realwelt-Maßstab**:
+- 1 Godot-Einheit = 1 Meter
+- Tisch: 4x4 feet = 1.22m x 1.22m
+- Würfel: 16mm = 0.016m
+
+**PROBLEM**: Jolt Physics empfiehlt Objekte zwischen 0.1m - 10m.
+Unsere 16mm Würfel (0.016m) sind **6x zu klein** für stabile Physik!
+
+**LÖSUNG**:
+- Für Würfeln: Dice Roller Plugin verwenden (eigene Skalierung in SubViewport)
+- Tabletop-Würfel nur für Display, nicht für Physics-Würfeln
+
 ## Bekannte Lösungen
 
 | Problem | Lösung |
 |---------|--------|
-| Würfel-Jitter | Jolt Physics verwenden statt Standard-Physik |
-| Kleine RigidBody instabil | Jolt Physics oder Objekte skalieren (0.1-10m) |
+| Würfel-Jitter | Jolt Physics + Dice Roller Plugin |
+| Kleine RigidBody instabil | Plugin mit eigener Skalierung verwenden |
+| SubViewport zeigt in Hauptszene | `viewport.own_world_3d = true` setzen |
 
 ## Wichtige Dateien
 
 - `scripts/object_manager.gd` - Würfel-Logik, Physics
 - `scripts/table.gd` - Tisch-Kollision
+- `addons/dice_roller/` - Dice Roller Plugin
 - `DICE_PHYSICS_WIP.md` - Dokumentation der Physics-Arbeit
