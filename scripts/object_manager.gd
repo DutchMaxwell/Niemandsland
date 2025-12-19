@@ -2117,11 +2117,11 @@ func _apply_color_tint(node: Node3D, color: Color) -> void:
 		if child is MeshInstance3D:
 			var mat = child.material_override
 			if mat is StandardMaterial3D:
-				# Multiply with existing albedo or set if texture present
-				if mat.albedo_texture:
+				# Only apply color tint to NON-textured models
+				# Textured models (like painted miniatures) already have correct colors baked in
+				# Applying ColorDiffuse would incorrectly darken/tint them
+				if not mat.albedo_texture:
 					mat.albedo_color = color
-				else:
-					mat.albedo_color = mat.albedo_color * color
 
 		if child is Node3D:
 			_apply_color_tint(child, color)
@@ -2318,10 +2318,14 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 		print("  [FAIL] %s - could not load mesh" % tts_obj.name)
 		return null
 
-	# Calculate model bounds for collision
+	# TTS uses 1 unit = 1 inch, Godot uses meters
+	# Scale model to convert inches to meters: 1 inch = 0.0254 meters
+	var tts_scale = 0.0254
+	model_scene.scale = Vector3(tts_scale, tts_scale, tts_scale)
+
+	# Calculate model bounds for collision (after scaling)
 	var mesh_aabb = _calculate_aabb(model_scene)
 
-	# Keep original scale - TTS models are already in correct tabletop scale
 	var base_info = " + base" if add_base else ""
 	print("    Size: %.1fmm x %.1fmm x %.1fmm%s" % [mesh_aabb.size.x * 1000, mesh_aabb.size.y * 1000, mesh_aabb.size.z * 1000, base_info])
 
