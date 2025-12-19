@@ -79,15 +79,17 @@ anchor_right = 1.0
 offset_left = -300.0
 offset_bottom = 100.0
 grow_horizontal = 0
-text = "OpenTTS Prototype v0.1
+text = "OpenTTS v0.1
 Controls:
 - Right Click + Drag: Rotate Camera
 - Middle Click + Drag: Pan Camera
 - Scroll: Zoom
 - Left Click: Select/Drag Object
-- R (hold): Rotate Selected Object
-- Shift + Left Click: Measure Distance
-- Alt + Click: Multi-Select"
+- Alt + Click: Multi-Select
+- R (hold): Rotate Selected
+- 1-9: Arrange in N rows
+- A: Arrow formation
+- Ctrl+C/D: Copy selected"
 
 [node name="PerformanceLabel" type="Label" parent="UI/HUD"]
 unique_name_in_owner = true
@@ -107,96 +109,108 @@ theme_override_font_sizes/font_size = 16
 text = "FPS: 60 | Objects: 0"
 horizontal_alignment = 1
 
-[node name="SpawnPanel" type="VBoxContainer" parent="UI/HUD"]
+[node name="LeftPanelScroll" type="ScrollContainer" parent="UI/HUD"]
 layout_mode = 1
 anchors_preset = 0
 offset_left = 10.0
 offset_top = 10.0
-offset_right = 160.0
-offset_bottom = 200.0
+offset_right = 210.0
+offset_bottom = 700.0
+horizontal_scroll_mode = 0
 
-[node name="SpawnLabel" type="Label" parent="UI/HUD/SpawnPanel"]
+[node name="LeftPanelVBox" type="VBoxContainer" parent="UI/HUD/LeftPanelScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SpawnPanel" type="VBoxContainer" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox"]
+layout_mode = 2
+
+[node name="SpawnLabel" type="Label" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
 layout_mode = 2
 text = "Spawn Objects:"
 
-[node name="SpawnMiniature" type="Button" parent="UI/HUD/SpawnPanel"]
+[node name="SpawnMiniature" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
+unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Add Miniature"
 
-[node name="SpawnDice" type="Button" parent="UI/HUD/SpawnPanel"]
+[node name="SpawnDice" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
+unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Add D6 Dice"
 
-[node name="SpawnTerrain" type="Button" parent="UI/HUD/SpawnPanel"]
+[node name="SpawnTerrain" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
+unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Add Terrain"
 
-[node name="LoadModel" type="Button" parent="UI/HUD/SpawnPanel"]
+[node name="LoadModel" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Load 3D Model..."
 
-[node name="ImportTTS" type="Button" parent="UI/HUD/SpawnPanel"]
+[node name="ImportTTS" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Import TTS (Local Cache)..."
 
-[node name="ImportTTSOnline" type="Button" parent="UI/HUD/SpawnPanel"]
+[node name="ImportTTSOnline" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Import TTS (Online)..."
 
-[node name="ClearAll" type="Button" parent="UI/HUD/SpawnPanel"]
+[node name="ClearAll" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
+unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Clear Table"
 
-[node name="Separator" type="HSeparator" parent="UI/HUD/SpawnPanel"]
+[node name="Separator" type="HSeparator" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
 layout_mode = 2
 
-[node name="PerfTestLabel" type="Label" parent="UI/HUD/SpawnPanel"]
+[node name="PerfTestLabel" type="Label" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
 layout_mode = 2
 text = "Performance Test:"
 
-[node name="Spawn200" type="Button" parent="UI/HUD/SpawnPanel"]
+[node name="Spawn200" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
+unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Spawn 200 Minis"
 
-[node name="Spawn500" type="Button" parent="UI/HUD/SpawnPanel"]
+[node name="Spawn500" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
+unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Spawn 500 Minis"
 
-[node name="Spawn1000" type="Button" parent="UI/HUD/SpawnPanel"]
+[node name="Spawn1000" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
+unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Spawn 1000 Minis"
 
-[node name="SpawnComplex" type="Button" parent="UI/HUD/SpawnPanel"]
+[node name="SpawnComplex" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
+unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Spawn 100 Complex"
 
-[node name="TableSizePanel" type="VBoxContainer" parent="UI/HUD"]
-layout_mode = 1
-anchors_preset = 0
-offset_left = 10.0
-offset_top = 380.0
-offset_right = 200.0
-offset_bottom = 600.0
+[node name="TableSizePanel" type="VBoxContainer" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox"]
+layout_mode = 2
 
-[node name="TableSizeLabel" type="Label" parent="UI/HUD/TableSizePanel"]
+[node name="TableSizeLabel" type="Label" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/TableSizePanel"]
 layout_mode = 2
 text = "Table Size:"
 
-[node name="TableSizeOption" type="OptionButton" parent="UI/HUD/TableSizePanel"]
+[node name="TableSizeOption" type="OptionButton" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/TableSizePanel"]
+unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 selected = 1
@@ -208,11 +222,13 @@ popup/item_1/id = 1
 popup/item_2/text = "Custom..."
 popup/item_2/id = 2
 
-[node name="CustomSizeContainer" type="VBoxContainer" parent="UI/HUD/TableSizePanel"]
+[node name="CustomSizeContainer" type="VBoxContainer" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/TableSizePanel"]
+unique_name_in_owner = true
 visible = false
 layout_mode = 2
 
-[node name="UnitOption" type="OptionButton" parent="UI/HUD/TableSizePanel/CustomSizeContainer"]
+[node name="UnitOption" type="OptionButton" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/TableSizePanel/CustomSizeContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 selected = 0
@@ -222,80 +238,78 @@ popup/item_0/id = 0
 popup/item_1/text = "Centimeters"
 popup/item_1/id = 1
 
-[node name="WidthContainer" type="HBoxContainer" parent="UI/HUD/TableSizePanel/CustomSizeContainer"]
+[node name="WidthContainer" type="HBoxContainer" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/TableSizePanel/CustomSizeContainer"]
 layout_mode = 2
 
-[node name="WidthLabel" type="Label" parent="UI/HUD/TableSizePanel/CustomSizeContainer/WidthContainer"]
+[node name="WidthLabel" type="Label" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/TableSizePanel/CustomSizeContainer/WidthContainer"]
 layout_mode = 2
 text = "Width:"
 
-[node name="WidthInput" type="SpinBox" parent="UI/HUD/TableSizePanel/CustomSizeContainer/WidthContainer"]
+[node name="WidthInput" type="SpinBox" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/TableSizePanel/CustomSizeContainer/WidthContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = 12.0
 max_value = 240.0
 value = 48.0
 
-[node name="LengthContainer" type="HBoxContainer" parent="UI/HUD/TableSizePanel/CustomSizeContainer"]
+[node name="LengthContainer" type="HBoxContainer" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/TableSizePanel/CustomSizeContainer"]
 layout_mode = 2
 
-[node name="LengthLabel" type="Label" parent="UI/HUD/TableSizePanel/CustomSizeContainer/LengthContainer"]
+[node name="LengthLabel" type="Label" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/TableSizePanel/CustomSizeContainer/LengthContainer"]
 layout_mode = 2
 text = "Length:"
 
-[node name="LengthInput" type="SpinBox" parent="UI/HUD/TableSizePanel/CustomSizeContainer/LengthContainer"]
+[node name="LengthInput" type="SpinBox" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/TableSizePanel/CustomSizeContainer/LengthContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = 12.0
 max_value = 240.0
 value = 48.0
 
-[node name="ApplyCustomBtn" type="Button" parent="UI/HUD/TableSizePanel/CustomSizeContainer"]
+[node name="ApplyCustomBtn" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/TableSizePanel/CustomSizeContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Apply Custom Size"
 
-[node name="NetworkPanel" type="VBoxContainer" parent="UI/HUD"]
-layout_mode = 1
-anchors_preset = 0
-offset_left = 10.0
-offset_top = 550.0
-offset_right = 200.0
-offset_bottom = 700.0
+[node name="NetworkPanel" type="VBoxContainer" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox"]
+layout_mode = 2
 
-[node name="NetworkLabel" type="Label" parent="UI/HUD/NetworkPanel"]
+[node name="NetworkLabel" type="Label" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/NetworkPanel"]
 layout_mode = 2
 text = "Multiplayer:"
 
-[node name="StatusLabel" type="Label" parent="UI/HUD/NetworkPanel"]
+[node name="StatusLabel" type="Label" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/NetworkPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
 text = "Offline"
 
-[node name="HostButton" type="Button" parent="UI/HUD/NetworkPanel"]
+[node name="HostButton" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/NetworkPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Host Game"
 
-[node name="JoinContainer" type="HBoxContainer" parent="UI/HUD/NetworkPanel"]
+[node name="JoinContainer" type="HBoxContainer" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/NetworkPanel"]
 layout_mode = 2
 
-[node name="AddressInput" type="LineEdit" parent="UI/HUD/NetworkPanel/JoinContainer"]
+[node name="AddressInput" type="LineEdit" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/NetworkPanel/JoinContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "localhost"
 text = "localhost"
 
-[node name="JoinButton" type="Button" parent="UI/HUD/NetworkPanel"]
+[node name="JoinButton" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/NetworkPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Join Game"
 
-[node name="DisconnectButton" type="Button" parent="UI/HUD/NetworkPanel"]
+[node name="DisconnectButton" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/NetworkPanel"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
