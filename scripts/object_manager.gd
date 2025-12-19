@@ -1670,7 +1670,7 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 				if parts.size() >= 3:
 					uvs.append(Vector2(
 						float(parts[1]),
-						float(parts[2])  # OBJ V is often flipped, but we'll handle that with material
+						1.0 - float(parts[2])  # Flip V coordinate (OBJ uses bottom-left origin)
 					))
 			"vn":  # Vertex normal
 				if parts.size() >= 4:
@@ -1749,6 +1749,7 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 	var material = StandardMaterial3D.new()
 	material.albedo_color = Color(0.7, 0.7, 0.7)
 	material.roughness = 0.5
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED  # Show both sides of polygons
 
 	# Load texture if provided
 	if not texture_path.is_empty():
@@ -1824,21 +1825,32 @@ func _calculate_aabb(node: Node3D) -> AABB:
 
 	for child in node.get_children():
 		if child is MeshInstance3D:
+			# Get local AABB and transform by child's position/scale
 			var mesh_aabb = child.get_aabb()
+			# Apply child's transform to the AABB
+			var transformed_aabb = AABB(
+				mesh_aabb.position * child.scale + child.position,
+				mesh_aabb.size * child.scale
+			)
 			if not found_mesh:
-				aabb = mesh_aabb
+				aabb = transformed_aabb
 				found_mesh = true
 			else:
-				aabb = aabb.merge(mesh_aabb)
+				aabb = aabb.merge(transformed_aabb)
 
 		if child is Node3D:
 			var child_aabb = _calculate_aabb(child)
 			if child_aabb.size.length() > 0:
+				# Transform child AABB by child's position/scale
+				var transformed_aabb = AABB(
+					child_aabb.position * child.scale + child.position,
+					child_aabb.size * child.scale
+				)
 				if not found_mesh:
-					aabb = child_aabb
+					aabb = transformed_aabb
 					found_mesh = true
 				else:
-					aabb = aabb.merge(child_aabb)
+					aabb = aabb.merge(transformed_aabb)
 
 	# Default if nothing found
 	if not found_mesh:
