@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://main001"]
+[gd_scene load_steps=10 format=3 uid="uid://main001"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/camera_controller.gd" id="2_camera"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://addons/dice_roller/dice_roller_control/dice_roller_control.gd" id="5_diceroller"]
 [ext_resource type="Script" path="res://scripts/network_manager.gd" id="6_network"]
 [ext_resource type="Script" path="res://scripts/save_manager.gd" id="7_savemgr"]
+[ext_resource type="Script" path="res://scripts/terrain_library.gd" id="8_terrain"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.4, 0.6, 0.8, 1)
@@ -68,6 +69,10 @@ script = ExtResource("6_network")
 unique_name_in_owner = true
 script = ExtResource("7_savemgr")
 
+[node name="TerrainLibrary" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("8_terrain")
+
 [node name="UI" type="CanvasLayer" parent="."]
 
 [node name="HUD" type="Control" parent="UI"]
@@ -95,7 +100,8 @@ Controls:
 - 1-9: Arrange at cursor
 - A: Arrow at cursor
 - Ctrl+C: Copy | Ctrl+V: Paste
-- Ctrl+D: Duplicate at cursor"
+- Ctrl+D: Duplicate at cursor
+- L: Lock/Unlock selected"
 
 [node name="PerformanceLabel" type="Label" parent="UI/HUD"]
 unique_name_in_owner = true
@@ -170,6 +176,12 @@ unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Import TTS (Online)..."
+
+[node name="TerrainBrowser" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+text = "Terrain Browser..."
 
 [node name="ClearAll" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
 unique_name_in_owner = true
@@ -507,3 +519,59 @@ ok_button_text = "Load"
 file_mode = 0
 access = 2
 filters = PackedStringArray("*.otts ; OpenTTS Save")
+
+[node name="TerrainBrowserPopup" type="Window" parent="UI"]
+unique_name_in_owner = true
+title = "Terrain Browser"
+initial_position = 2
+size = Vector2i(500, 600)
+visible = false
+transient = true
+
+[node name="MarginContainer" type="MarginContainer" parent="UI/TerrainBrowserPopup"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = -10.0
+
+[node name="VBox" type="VBoxContainer" parent="UI/TerrainBrowserPopup/MarginContainer"]
+layout_mode = 2
+
+[node name="CategoryLabel" type="Label" parent="UI/TerrainBrowserPopup/MarginContainer/VBox"]
+layout_mode = 2
+text = "Category:"
+
+[node name="CategoryOption" type="OptionButton" parent="UI/TerrainBrowserPopup/MarginContainer/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+
+[node name="TerrainListLabel" type="Label" parent="UI/TerrainBrowserPopup/MarginContainer/VBox"]
+layout_mode = 2
+text = "Terrain Pieces:"
+
+[node name="TerrainList" type="ItemList" parent="UI/TerrainBrowserPopup/MarginContainer/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+custom_minimum_size = Vector2(0, 400)
+allow_reselect = true
+
+[node name="ButtonRow" type="HBoxContainer" parent="UI/TerrainBrowserPopup/MarginContainer/VBox"]
+layout_mode = 2
+
+[node name="SpawnTerrainBtn" type="Button" parent="UI/TerrainBrowserPopup/MarginContainer/VBox/ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+text = "Place at Cursor"
+
+[node name="CloseTerrainBtn" type="Button" parent="UI/TerrainBrowserPopup/MarginContainer/VBox/ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+text = "Close"
