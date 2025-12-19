@@ -12,9 +12,10 @@ Ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wie OnePageRul
 - Multi-Selection (Alt+Click, Box-Select)
 - Arrangement-Funktionen (1-9 für Reihen, A für Pfeil-Formation)
 - Copy/Paste (Ctrl+C/V/D) mit Cursor-Positionierung
+- Speichern/Laden von Spielständen (.otts Format)
 - Würfel-System mit Physik-Simulation (Dice Roller Plugin)
 - Distanzmessung in Zoll
-- Multiplayer (getestet mit localhost)
+- Multiplayer (getestet mit localhost, inkl. State-Sync beim Laden)
 - Performance: 1000+ Objekte flüssig
 
 ## Schnellstart
@@ -73,8 +74,9 @@ Siehe [PLAN.md](./PLAN.md) für den vollständigen Entwicklungsplan.
 ### Nächste Schritte (Milestone 2: Alpha)
 - [ ] Gelände-System mit Eigenschaften (Deckung, Schwieriges Gelände)
 - [ ] Einheiten-Karten und Stats
-- [ ] Speichern/Laden von Tisch-Setups
+- [x] ~~Speichern/Laden von Tisch-Setups~~
 - [ ] Erweiterte Würfel-Optionen (Modifikatoren, mehr Typen)
+- [ ] UI-Überarbeitung
 
 ## Technologie-Stack
 
