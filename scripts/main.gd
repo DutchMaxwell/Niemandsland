@@ -52,6 +52,13 @@ extends Node3D
 @onready var tts_models_dialog: FileDialog = %TTSModelsDialog
 @onready var tts_images_dialog: FileDialog = %TTSImagesDialog
 
+# Save/Load UI
+@onready var save_manager = %SaveManager
+@onready var save_game_btn: Button = %SaveGameBtn
+@onready var load_game_btn: Button = %LoadGameBtn
+@onready var save_game_dialog: FileDialog = %SaveGameDialog
+@onready var load_game_dialog: FileDialog = %LoadGameDialog
+
 # TTS Import state
 var _tts_json_path: String = ""
 var _tts_models_dir: String = ""
@@ -121,6 +128,19 @@ func _ready() -> void:
 	network_manager.server_disconnected.connect(_on_network_disconnected)
 	network_manager.player_connected.connect(_on_player_joined)
 	network_manager.player_disconnected.connect(_on_player_left)
+
+	# Connect Save/Load UI
+	save_game_btn.pressed.connect(_on_save_game)
+	load_game_btn.pressed.connect(_on_load_game)
+	save_game_dialog.file_selected.connect(_on_save_file_selected)
+	load_game_dialog.file_selected.connect(_on_load_file_selected)
+	save_manager.save_completed.connect(_on_save_completed)
+	save_manager.load_completed.connect(_on_load_completed)
+	save_manager.load_failed.connect(_on_load_failed)
+
+	# Initialize SaveManager references
+	save_manager.object_manager = object_manager
+	save_manager.table = table
 
 	# Initialize table with default size (6x4 feet = 72x48 inches, landscape)
 	# Long side (72") faces the viewer (X-axis), short side (48") is depth (Z-axis)
@@ -714,3 +734,93 @@ func _detect_tts_cache_dir() -> String:
 			return path
 
 	return ""
+
+
+## ============================================================================
+## Save / Load Functions
+## ============================================================================
+
+## Open save dialog
+func _on_save_game() -> void:
+	# Set default directory
+	save_game_dialog.current_dir = SaveManager.get_default_save_dir()
+	save_game_dialog.current_file = "game_%s.otts" % Time.get_datetime_string_from_system().replace(":", "-")
+	save_game_dialog.popup_centered()
+
+
+## Open load dialog
+func _on_load_game() -> void:
+	load_game_dialog.current_dir = SaveManager.get_default_save_dir()
+	load_game_dialog.popup_centered()
+
+
+## Save file selected
+func _on_save_file_selected(path: String) -> void:
+	# Ensure .otts extension
+	if not path.ends_with(".otts"):
+		path += ".otts"
+
+	var error = save_manager.save_game(path)
+	if error != OK:
+		push_error("Failed to save game: %d" % error)
+
+
+## Load file selected
+func _on_load_file_selected(path: String) -> void:
+	var error = save_manager.load_game(path)
+	if error != OK:
+		push_error("Failed to load game: %d" % error)
+
+
+## Save completed callback
+func _on_save_completed(path: String) -> void:
+	print("Game saved successfully: %s" % path.get_file())
+	# Could show a toast notification here
+
+
+## Load completed callback
+func _on_load_completed(object_count: int) -> void:
+	print("Game loaded: %d objects" % object_count)
+
+	# Sync to multiplayer clients if hosting
+	if network_manager.is_host and network_manager.connected_peers.size() > 0:
+		_sync_loaded_state_to_clients()
+
+
+## Load failed callback
+func _on_load_failed(error: String) -> void:
+	push_error("Load failed: %s" % error)
+
+
+## Sync loaded state to all connected clients
+func _sync_loaded_state_to_clients() -> void:
+	if not network_manager.is_host:
+		return
+
+	print("Syncing loaded state to %d clients..." % network_manager.connected_peers.size())
+
+	# Get current state and broadcast to all clients
+	var state = save_manager.serialize_game_state()
+	_rpc_sync_game_state.rpc(state)
+
+
+## RPC to sync game state to clients
+@rpc("authority", "call_remote", "reliable")
+func _rpc_sync_game_state(state: Dictionary) -> void:
+	print("Received game state from host, loading...")
+
+	# Clear current objects
+	object_manager.clear_all_objects()
+
+	# Deserialize table
+	var table_data = state.get("table", {})
+	var size = table_data.get("size_feet", [6, 4])
+	if size is Array and size.size() >= 2:
+		table.setup_table(Vector2(size[0], size[1]))
+		_adjust_camera_for_table_size(Vector2(size[0], size[1]))
+
+	# Deserialize objects (using save_manager helper)
+	var objects_data = state.get("objects", [])
+	var loaded_count = save_manager._deserialize_objects(objects_data)
+
+	print("Synced %d objects from host" % loaded_count)

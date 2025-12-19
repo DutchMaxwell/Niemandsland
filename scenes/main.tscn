@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://scripts/object_manager.gd" id="4_objmgr"]
 [ext_resource type="Script" path="res://addons/dice_roller/dice_roller_control/dice_roller_control.gd" id="5_diceroller"]
 [ext_resource type="Script" path="res://scripts/network_manager.gd" id="6_network"]
+[ext_resource type="Script" path="res://scripts/save_manager.gd" id="7_savemgr"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.4, 0.6, 0.8, 1)
@@ -62,6 +63,10 @@ script = ExtResource("4_objmgr")
 [node name="NetworkManager" type="Node" parent="."]
 unique_name_in_owner = true
 script = ExtResource("6_network")
+
+[node name="SaveManager" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("7_savemgr")
 
 [node name="UI" type="CanvasLayer" parent="."]
 
@@ -317,6 +322,25 @@ layout_mode = 2
 focus_mode = 0
 text = "Disconnect"
 
+[node name="SaveLoadPanel" type="VBoxContainer" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox"]
+layout_mode = 2
+
+[node name="SaveLoadLabel" type="Label" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SaveLoadPanel"]
+layout_mode = 2
+text = "Save / Load:"
+
+[node name="SaveGameBtn" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SaveLoadPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+text = "Save Game..."
+
+[node name="LoadGameBtn" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SaveLoadPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+text = "Load Game..."
+
 [node name="DiceResult" type="Label" parent="UI/HUD"]
 layout_mode = 1
 anchors_preset = 7
@@ -463,3 +487,23 @@ size = Vector2i(800, 500)
 ok_button_text = "Select"
 file_mode = 2
 access = 2
+
+[node name="SaveGameDialog" type="FileDialog" parent="UI"]
+unique_name_in_owner = true
+title = "Save Game"
+initial_position = 2
+size = Vector2i(800, 500)
+ok_button_text = "Save"
+file_mode = 4
+access = 2
+filters = PackedStringArray("*.otts ; OpenTTS Save")
+
+[node name="LoadGameDialog" type="FileDialog" parent="UI"]
+unique_name_in_owner = true
+title = "Load Game"
+initial_position = 2
+size = Vector2i(800, 500)
+ok_button_text = "Load"
+file_mode = 0
+access = 2
+filters = PackedStringArray("*.otts ; OpenTTS Save")

@@ -519,7 +519,7 @@ openTTS/
 8. [ ] Gelände-System (Eigenschaften: Deckung, Schwieriges Gelände)
 9. [ ] Einheiten-Karten und Stats
 10. [ ] Vollständiges Würfel-System (mehr Würfeltypen, Modifikatoren)
-11. [ ] Speichern/Laden von Tisch-Setups
+11. [x] Speichern/Laden von Tisch-Setups (inkl. Multiplayer-Sync an Clients)
 12. [ ] Basic UI-Overhaul
 
 ### Milestone 3: Beta
@@ -633,6 +633,6 @@ openTTS/
 ---
 
 *Dokument erstellt: 2025-12-17*
-*Letzte Überarbeitung: 2025-12-17*
-*Version: 1.2*
-*Status: Browser-First Strategie hinzugefügt, Distributions-Optionen definiert*
+*Letzte Überarbeitung: 2025-12-19*
+*Version: 1.3*
+*Status: Speichern/Laden implementiert, Milestone 2 in Arbeit*
