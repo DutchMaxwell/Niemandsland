@@ -330,6 +330,10 @@ func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> voi
 
 		# Check if it's a selectable object (not the table)
 		if collider.is_in_group("selectable"):
+			# Skip locked objects
+			if is_object_locked(collider):
+				return
+
 			var already_selected = collider in _selected_objects
 
 			if alt_pressed:
@@ -2587,3 +2591,157 @@ func _duplicate_tts_object(original: Node3D) -> Node3D:
 		copy.add_to_group("tts_import")
 
 	return copy
+
+
+## ============================================================================
+## Terrain System
+## ============================================================================
+
+## Spawn terrain from TTS URLs at given position
+## Returns the spawned terrain object
+func spawn_tts_terrain(mesh_url: String, diffuse_url: String, tts_scale: Vector3, position: Vector3, terrain_name: String = "Terrain") -> Node3D:
+	if mesh_url.is_empty():
+		push_error("spawn_tts_terrain: No mesh URL provided")
+		return null
+
+	# Get or create download manager
+	var dm = _get_download_manager()
+
+	# Check if already cached
+	var mesh_path = dm.find_cached_file(mesh_url, true)
+	var texture_path = ""
+
+	if mesh_path.is_empty():
+		# Need to download
+		print("  [DOWNLOAD] Terrain mesh: %s" % mesh_url.get_file())
+		dm.queue_download(mesh_url, true)
+		if not diffuse_url.is_empty():
+			dm.queue_download(diffuse_url, false)
+
+		# Wait for downloads
+		dm.start_downloads()
+		await dm.all_downloads_completed
+
+		mesh_path = dm.find_cached_file(mesh_url, true)
+
+	if not diffuse_url.is_empty():
+		texture_path = dm.find_cached_file(diffuse_url, false)
+
+	if mesh_path.is_empty():
+		push_error("spawn_tts_terrain: Failed to download mesh")
+		return null
+
+	# Load the model (no base for terrain)
+	var model_scene = _load_obj_model(mesh_path, texture_path, false)
+	if not model_scene:
+		push_error("spawn_tts_terrain: Failed to load mesh")
+		return null
+
+	# Apply TTS scale (inches to meters, plus terrain's own scale)
+	var scale_factor = 0.0254  # TTS units to meters
+	model_scene.scale = tts_scale * scale_factor
+
+	# Calculate bounds for collision
+	var mesh_aabb = _calculate_aabb(model_scene)
+
+	# Create wrapper
+	_object_counter += 1
+	var wrapper = StaticBody3D.new()
+	wrapper.name = "Terrain_%s_%d" % [terrain_name.replace(" ", "_"), _object_counter]
+	wrapper.set_meta("network_id", _object_counter + 40000)  # Terrain IDs start at 40000
+	wrapper.set_meta("tts_mesh_url", mesh_url)
+	wrapper.set_meta("tts_diffuse_url", diffuse_url)
+	wrapper.set_meta("terrain_name", terrain_name)
+	wrapper.add_to_group("selectable")
+	wrapper.add_to_group("tts_import")
+	wrapper.add_to_group("terrain_piece")
+
+	# Add model
+	wrapper.add_child(model_scene)
+
+	# Add collision
+	var collision = CollisionShape3D.new()
+	var shape = BoxShape3D.new()
+	shape.size = mesh_aabb.size
+	collision.shape = shape
+	collision.position = mesh_aabb.position + mesh_aabb.size / 2
+	wrapper.add_child(collision)
+
+	# Add script for selection
+	wrapper.set_script(preload("res://scripts/selectable_object.gd"))
+
+	# Add to scene
+	add_child(wrapper)
+	wrapper.global_position = position
+
+	print("  [OK] Terrain: %s" % terrain_name)
+	return wrapper
+
+
+## ============================================================================
+## Lock/Unlock System
+## ============================================================================
+
+## Toggle lock state of selected objects
+func toggle_lock_selected() -> void:
+	if _selected_objects.is_empty():
+		return
+
+	# Check if any are unlocked - if so, lock all. Otherwise unlock all.
+	var any_unlocked = false
+	for obj in _selected_objects:
+		if is_instance_valid(obj) and not obj.get_meta("locked", false):
+			any_unlocked = true
+			break
+
+	var new_state = any_unlocked  # Lock if any unlocked, unlock if all locked
+	var count = 0
+
+	for obj in _selected_objects:
+		if is_instance_valid(obj):
+			_set_object_locked(obj, new_state)
+			count += 1
+
+	var state_text = "Locked" if new_state else "Unlocked"
+	print("%s %d objects" % [state_text, count])
+
+	# Deselect if locking
+	if new_state:
+		clear_selection()
+
+
+## Set lock state of a single object
+func _set_object_locked(obj: Node3D, locked: bool) -> void:
+	obj.set_meta("locked", locked)
+
+	# Visual feedback - change material or add indicator
+	if locked:
+		obj.add_to_group("locked")
+		# Dim the object slightly to indicate locked state
+		_set_object_dimmed(obj, true)
+	else:
+		obj.remove_from_group("locked")
+		_set_object_dimmed(obj, false)
+
+
+## Check if object is locked
+func is_object_locked(obj: Node3D) -> bool:
+	return obj.get_meta("locked", false)
+
+
+## Apply dimming effect to show locked state
+func _set_object_dimmed(obj: Node3D, dimmed: bool) -> void:
+	# Find all MeshInstance3D children and adjust their material
+	for child in obj.get_children():
+		if child is MeshInstance3D:
+			var mesh_inst = child as MeshInstance3D
+			if mesh_inst.material_override:
+				var mat = mesh_inst.material_override as StandardMaterial3D
+				if mat:
+					if dimmed:
+						mat.albedo_color = mat.albedo_color.darkened(0.3)
+					else:
+						mat.albedo_color = mat.albedo_color.lightened(0.3)
+		# Recurse into children
+		if child.get_child_count() > 0:
+			_set_object_dimmed(child, dimmed)

@@ -1,0 +1,1400 @@
+{
+  "SaveName": "",
+  "Date": "",
+  "VersionNumber": "",
+  "GameMode": "",
+  "GameType": "",
+  "GameComplexity": "",
+  "Tags": [],
+  "Gravity": 0.5,
+  "PlayArea": 0.5,
+  "Table": "",
+  "Sky": "",
+  "Note": "",
+  "TabStates": {},
+  "LuaScript": "",
+  "LuaScriptState": "",
+  "XmlUI": "",
+  "ObjectStates": [
+    {
+      "GUID": "32316e",
+      "Name": "Custom_Assetbundle",
+      "Transform": {
+        "posX": -0.9644109,
+        "posY": 0.981498361,
+        "posZ": 33.48857,
+        "rotX": 1.34945509E-07,
+        "rotY": 180.000031,
+        "rotZ": -1.63043137E-06,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "#1",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": false,
+      "Snap": false,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "CustomAssetbundle": {
+        "AssetbundleURL": "https://steamusercontent-a.akamaihd.net/ugc/1655598612929180246/4F1CE2ABBB19A98E164ACF11BCC73DA1D04E6296/",
+        "AssetbundleSecondaryURL": "https://steamusercontent-a.akamaihd.net/ugc/1655598612929180673/8683C55D806E6186C38889E701EB33593287BE54/",
+        "MaterialIndex": 0,
+        "TypeIndex": 0,
+        "LoopingEffectIndex": 0
+      },
+      "LuaScript": "function onLoad()\r\n\tcircle = {\r\n\t\tcolor             = {250, 235, 215}, --RGB color of the circle\r\n\t\tradius            = 3,           --radius of the circle around the object\r\n\t\tsteps             = 32,          --number of segments that make up the circle\r\n\t\tthickness         = 0.25,         --thickness of the circle line\r\n\t\tvertical_position = 0.1,           --vertical height of the circle relative to the object\r\n\t}\r\n\r\n  self.setVectorLines({\r\n  \t\t{\r\n  \t\t\tpoints    = getCircleVectorPoints(circle.radius, circle.steps, circle.vertical_position),\r\n  \t\t\tcolor     = circle.color,\r\n  \t\t\tthickness = circle.thickness,\r\n  \t\t\trotation  = {0,0,0},\r\n  \t\t}\r\n  \t})\r\n\r\nend\r\n\r\nfunction getCircleVectorPoints(radius, steps, y)\r\n\tlocal t = {}\r\n\tlocal d,s,c,r = 360/steps, math.sin, math.cos, math.rad\r\n\tfor i = 0,steps do\r\n\t\ttable.insert(t, {\r\n\t\t\tc(r(d*i))*radius,\r\n\t\t\ty,\r\n\t\t\ts(r(d*i))*radius\r\n\t\t})\r\n\tend\r\n\treturn t\r\nend\r\n",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "AttachedVectorLines": [
+        {
+          "OwnerSteamID": 0,
+          "points3": [
+            {
+              "x": 3.0,
+              "y": 0.1,
+              "z": 0.0
+            },
+            {
+              "x": 2.94235587,
+              "y": 0.1,
+              "z": 0.585270941
+            },
+            {
+              "x": 2.77163863,
+              "y": 0.1,
+              "z": 1.14805031
+            },
+            {
+              "x": 2.49440885,
+              "y": 0.1,
+              "z": 1.66671073
+            },
+            {
+              "x": 2.12132025,
+              "y": 0.1,
+              "z": 2.12132025
+            },
+            {
+              "x": 1.66671073,
+              "y": 0.1,
+              "z": 2.49440885
+            },
+            {
+              "x": 1.14805031,
+              "y": 0.1,
+              "z": 2.77163863
+            },
+            {
+              "x": 0.585270941,
+              "y": 0.1,
+              "z": 2.94235587
+            },
+            {
+              "x": 1.83697015E-16,
+              "y": 0.1,
+              "z": 3.0
+            },
+            {
+              "x": -0.585270941,
+              "y": 0.1,
+              "z": 2.94235587
+            },
+            {
+              "x": -1.14805031,
+              "y": 0.1,
+              "z": 2.77163863
+            },
+            {
+              "x": -1.66671073,
+              "y": 0.1,
+              "z": 2.49440885
+            },
+            {
+              "x": -2.12132025,
+              "y": 0.1,
+              "z": 2.12132025
+            },
+            {
+              "x": -2.49440885,
+              "y": 0.1,
+              "z": 1.66671073
+            },
+            {
+              "x": -2.77163863,
+              "y": 0.1,
+              "z": 1.14805031
+            },
+            {
+              "x": -2.94235587,
+              "y": 0.1,
+              "z": 0.585270941
+            },
+            {
+              "x": -3.0,
+              "y": 0.1,
+              "z": 3.67394029E-16
+            },
+            {
+              "x": -2.94235587,
+              "y": 0.1,
+              "z": -0.585270941
+            },
+            {
+              "x": -2.77163863,
+              "y": 0.1,
+              "z": -1.14805031
+            },
+            {
+              "x": -2.49440885,
+              "y": 0.1,
+              "z": -1.66671073
+            },
+            {
+              "x": -2.12132025,
+              "y": 0.1,
+              "z": -2.12132025
+            },
+            {
+              "x": -1.66671073,
+              "y": 0.1,
+              "z": -2.49440885
+            },
+            {
+              "x": -1.14805031,
+              "y": 0.1,
+              "z": -2.77163863
+            },
+            {
+              "x": -0.585270941,
+              "y": 0.1,
+              "z": -2.94235587
+            },
+            {
+              "x": -5.5109107E-16,
+              "y": 0.1,
+              "z": -3.0
+            },
+            {
+              "x": 0.585270941,
+              "y": 0.1,
+              "z": -2.94235587
+            },
+            {
+              "x": 1.14805031,
+              "y": 0.1,
+              "z": -2.77163863
+            },
+            {
+              "x": 1.66671073,
+              "y": 0.1,
+              "z": -2.49440885
+            },
+            {
+              "x": 2.12132025,
+              "y": 0.1,
+              "z": -2.12132025
+            },
+            {
+              "x": 2.49440885,
+              "y": 0.1,
+              "z": -1.66671073
+            },
+            {
+              "x": 2.77163863,
+              "y": 0.1,
+              "z": -1.14805031
+            },
+            {
+              "x": 2.94235587,
+              "y": 0.1,
+              "z": -0.585270941
+            },
+            {
+              "x": 3.0,
+              "y": 0.1,
+              "z": -7.34788059E-16
+            }
+          ],
+          "color": {
+            "r": 250.0,
+            "g": 235.0,
+            "b": 215.0
+          },
+          "thickness": 0.25
+        }
+      ]
+    },
+    {
+      "GUID": "755c3d",
+      "Name": "Custom_Assetbundle",
+      "Transform": {
+        "posX": 3.042336,
+        "posY": 3.57627869E-07,
+        "posZ": 0.0287513733,
+        "rotX": 9.524539E-07,
+        "rotY": 179.984558,
+        "rotZ": -6.33935E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "#2",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": false,
+      "Snap": false,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "CustomAssetbundle": {
+        "AssetbundleURL": "https://steamusercontent-a.akamaihd.net/ugc/1655598612929182218/80D0EFD42A3FB521968E733D53C18A7706A2FEF7/",
+        "AssetbundleSecondaryURL": "https://steamusercontent-a.akamaihd.net/ugc/1655598612929180673/8683C55D806E6186C38889E701EB33593287BE54/",
+        "MaterialIndex": 0,
+        "TypeIndex": 0,
+        "LoopingEffectIndex": 0
+      },
+      "LuaScript": "function onLoad()\r\n\tcircle = {\r\n\t\tcolor             = {250, 235, 215}, --RGB color of the circle\r\n\t\tradius            = 3,           --radius of the circle around the object\r\n\t\tsteps             = 32,          --number of segments that make up the circle\r\n\t\tthickness         = 0.25,         --thickness of the circle line\r\n\t\tvertical_position = 0.1,           --vertical height of the circle relative to the object\r\n\t}\r\n\r\n  self.setVectorLines({\r\n  \t\t{\r\n  \t\t\tpoints    = getCircleVectorPoints(circle.radius, circle.steps, circle.vertical_position),\r\n  \t\t\tcolor     = circle.color,\r\n  \t\t\tthickness = circle.thickness,\r\n  \t\t\trotation  = {0,0,0},\r\n  \t\t}\r\n  \t})\r\n\r\nend\r\n\r\nfunction getCircleVectorPoints(radius, steps, y)\r\n\tlocal t = {}\r\n\tlocal d,s,c,r = 360/steps, math.sin, math.cos, math.rad\r\n\tfor i = 0,steps do\r\n\t\ttable.insert(t, {\r\n\t\t\tc(r(d*i))*radius,\r\n\t\t\ty,\r\n\t\t\ts(r(d*i))*radius\r\n\t\t})\r\n\tend\r\n\treturn t\r\nend\r\n",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "AttachedVectorLines": [
+        {
+          "OwnerSteamID": 0,
+          "points3": [
+            {
+              "x": 3.0,
+              "y": 0.1,
+              "z": 0.0
+            },
+            {
+              "x": 2.94235587,
+              "y": 0.1,
+              "z": 0.585270941
+            },
+            {
+              "x": 2.77163863,
+              "y": 0.1,
+              "z": 1.14805031
+            },
+            {
+              "x": 2.49440885,
+              "y": 0.1,
+              "z": 1.66671073
+            },
+            {
+              "x": 2.12132025,
+              "y": 0.1,
+              "z": 2.12132025
+            },
+            {
+              "x": 1.66671073,
+              "y": 0.1,
+              "z": 2.49440885
+            },
+            {
+              "x": 1.14805031,
+              "y": 0.1,
+              "z": 2.77163863
+            },
+            {
+              "x": 0.585270941,
+              "y": 0.1,
+              "z": 2.94235587
+            },
+            {
+              "x": 1.83697015E-16,
+              "y": 0.1,
+              "z": 3.0
+            },
+            {
+              "x": -0.585270941,
+              "y": 0.1,
+              "z": 2.94235587
+            },
+            {
+              "x": -1.14805031,
+              "y": 0.1,
+              "z": 2.77163863
+            },
+            {
+              "x": -1.66671073,
+              "y": 0.1,
+              "z": 2.49440885
+            },
+            {
+              "x": -2.12132025,
+              "y": 0.1,
+              "z": 2.12132025
+            },
+            {
+              "x": -2.49440885,
+              "y": 0.1,
+              "z": 1.66671073
+            },
+            {
+              "x": -2.77163863,
+              "y": 0.1,
+              "z": 1.14805031
+            },
+            {
+              "x": -2.94235587,
+              "y": 0.1,
+              "z": 0.585270941
+            },
+            {
+              "x": -3.0,
+              "y": 0.1,
+              "z": 3.67394029E-16
+            },
+            {
+              "x": -2.94235587,
+              "y": 0.1,
+              "z": -0.585270941
+            },
+            {
+              "x": -2.77163863,
+              "y": 0.1,
+              "z": -1.14805031
+            },
+            {
+              "x": -2.49440885,
+              "y": 0.1,
+              "z": -1.66671073
+            },
+            {
+              "x": -2.12132025,
+              "y": 0.1,
+              "z": -2.12132025
+            },
+            {
+              "x": -1.66671073,
+              "y": 0.1,
+              "z": -2.49440885
+            },
+            {
+              "x": -1.14805031,
+              "y": 0.1,
+              "z": -2.77163863
+            },
+            {
+              "x": -0.585270941,
+              "y": 0.1,
+              "z": -2.94235587
+            },
+            {
+              "x": -5.5109107E-16,
+              "y": 0.1,
+              "z": -3.0
+            },
+            {
+              "x": 0.585270941,
+              "y": 0.1,
+              "z": -2.94235587
+            },
+            {
+              "x": 1.14805031,
+              "y": 0.1,
+              "z": -2.77163863
+            },
+            {
+              "x": 1.66671073,
+              "y": 0.1,
+              "z": -2.49440885
+            },
+            {
+              "x": 2.12132025,
+              "y": 0.1,
+              "z": -2.12132025
+            },
+            {
+              "x": 2.49440885,
+              "y": 0.1,
+              "z": -1.66671073
+            },
+            {
+              "x": 2.77163863,
+              "y": 0.1,
+              "z": -1.14805031
+            },
+            {
+              "x": 2.94235587,
+              "y": 0.1,
+              "z": -0.585270941
+            },
+            {
+              "x": 3.0,
+              "y": 0.1,
+              "z": -7.34788059E-16
+            }
+          ],
+          "color": {
+            "r": 250.0,
+            "g": 235.0,
+            "b": 215.0
+          },
+          "thickness": 0.25
+        }
+      ]
+    },
+    {
+      "GUID": "bc1caa",
+      "Name": "Custom_Assetbundle",
+      "Transform": {
+        "posX": 2.75107455,
+        "posY": 5.96046448E-07,
+        "posZ": -3.17583275,
+        "rotX": -9.36755455E-08,
+        "rotY": 179.9846,
+        "rotZ": -2.61976567E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "#5",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": false,
+      "Snap": false,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "CustomAssetbundle": {
+        "AssetbundleURL": "https://steamusercontent-a.akamaihd.net/ugc/1655598612929185745/F1FCDC7F73A75A788844CB201116D460B380A19D/",
+        "AssetbundleSecondaryURL": "https://steamusercontent-a.akamaihd.net/ugc/1655598612929180673/8683C55D806E6186C38889E701EB33593287BE54/",
+        "MaterialIndex": 0,
+        "TypeIndex": 0,
+        "LoopingEffectIndex": 0
+      },
+      "LuaScript": "function onLoad()\r\n\tcircle = {\r\n\t\tcolor             = {250, 235, 215}, --RGB color of the circle\r\n\t\tradius            = 3,           --radius of the circle around the object\r\n\t\tsteps             = 32,          --number of segments that make up the circle\r\n\t\tthickness         = 0.25,         --thickness of the circle line\r\n\t\tvertical_position = 0.1,           --vertical height of the circle relative to the object\r\n\t}\r\n\r\n  self.setVectorLines({\r\n  \t\t{\r\n  \t\t\tpoints    = getCircleVectorPoints(circle.radius, circle.steps, circle.vertical_position),\r\n  \t\t\tcolor     = circle.color,\r\n  \t\t\tthickness = circle.thickness,\r\n  \t\t\trotation  = {0,0,0},\r\n  \t\t}\r\n  \t})\r\n\r\nend\r\n\r\nfunction getCircleVectorPoints(radius, steps, y)\r\n\tlocal t = {}\r\n\tlocal d,s,c,r = 360/steps, math.sin, math.cos, math.rad\r\n\tfor i = 0,steps do\r\n\t\ttable.insert(t, {\r\n\t\t\tc(r(d*i))*radius,\r\n\t\t\ty,\r\n\t\t\ts(r(d*i))*radius\r\n\t\t})\r\n\tend\r\n\treturn t\r\nend\r\n",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "AttachedVectorLines": [
+        {
+          "OwnerSteamID": 0,
+          "points3": [
+            {
+              "x": 3.0,
+              "y": 0.1,
+              "z": 0.0
+            },
+            {
+              "x": 2.94235587,
+              "y": 0.1,
+              "z": 0.585270941
+            },
+            {
+              "x": 2.77163863,
+              "y": 0.1,
+              "z": 1.14805031
+            },
+            {
+              "x": 2.49440885,
+              "y": 0.1,
+              "z": 1.66671073
+            },
+            {
+              "x": 2.12132025,
+              "y": 0.1,
+              "z": 2.12132025
+            },
+            {
+              "x": 1.66671073,
+              "y": 0.1,
+              "z": 2.49440885
+            },
+            {
+              "x": 1.14805031,
+              "y": 0.1,
+              "z": 2.77163863
+            },
+            {
+              "x": 0.585270941,
+              "y": 0.1,
+              "z": 2.94235587
+            },
+            {
+              "x": 1.83697015E-16,
+              "y": 0.1,
+              "z": 3.0
+            },
+            {
+              "x": -0.585270941,
+              "y": 0.1,
+              "z": 2.94235587
+            },
+            {
+              "x": -1.14805031,
+              "y": 0.1,
+              "z": 2.77163863
+            },
+            {
+              "x": -1.66671073,
+              "y": 0.1,
+              "z": 2.49440885
+            },
+            {
+              "x": -2.12132025,
+              "y": 0.1,
+              "z": 2.12132025
+            },
+            {
+              "x": -2.49440885,
+              "y": 0.1,
+              "z": 1.66671073
+            },
+            {
+              "x": -2.77163863,
+              "y": 0.1,
+              "z": 1.14805031
+            },
+            {
+              "x": -2.94235587,
+              "y": 0.1,
+              "z": 0.585270941
+            },
+            {
+              "x": -3.0,
+              "y": 0.1,
+              "z": 3.67394029E-16
+            },
+            {
+              "x": -2.94235587,
+              "y": 0.1,
+              "z": -0.585270941
+            },
+            {
+              "x": -2.77163863,
+              "y": 0.1,
+              "z": -1.14805031
+            },
+            {
+              "x": -2.49440885,
+              "y": 0.1,
+              "z": -1.66671073
+            },
+            {
+              "x": -2.12132025,
+              "y": 0.1,
+              "z": -2.12132025
+            },
+            {
+              "x": -1.66671073,
+              "y": 0.1,
+              "z": -2.49440885
+            },
+            {
+              "x": -1.14805031,
+              "y": 0.1,
+              "z": -2.77163863
+            },
+            {
+              "x": -0.585270941,
+              "y": 0.1,
+              "z": -2.94235587
+            },
+            {
+              "x": -5.5109107E-16,
+              "y": 0.1,
+              "z": -3.0
+            },
+            {
+              "x": 0.585270941,
+              "y": 0.1,
+              "z": -2.94235587
+            },
+            {
+              "x": 1.14805031,
+              "y": 0.1,
+              "z": -2.77163863
+            },
+            {
+              "x": 1.66671073,
+              "y": 0.1,
+              "z": -2.49440885
+            },
+            {
+              "x": 2.12132025,
+              "y": 0.1,
+              "z": -2.12132025
+            },
+            {
+              "x": 2.49440885,
+              "y": 0.1,
+              "z": -1.66671073
+            },
+            {
+              "x": 2.77163863,
+              "y": 0.1,
+              "z": -1.14805031
+            },
+            {
+              "x": 2.94235587,
+              "y": 0.1,
+              "z": -0.585270941
+            },
+            {
+              "x": 3.0,
+              "y": 0.1,
+              "z": -7.34788059E-16
+            }
+          ],
+          "color": {
+            "r": 250.0,
+            "g": 235.0,
+            "b": 215.0
+          },
+          "thickness": 0.25
+        }
+      ]
+    },
+    {
+      "GUID": "922bf6",
+      "Name": "Custom_Assetbundle",
+      "Transform": {
+        "posX": -0.139205456,
+        "posY": 5.96046448E-07,
+        "posZ": -3.380394,
+        "rotX": -3.44639979E-08,
+        "rotY": 179.999985,
+        "rotZ": -9.448234E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "#4",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": false,
+      "Snap": false,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "CustomAssetbundle": {
+        "AssetbundleURL": "https://steamusercontent-a.akamaihd.net/ugc/1655598612929184962/BB972E228E3D917726E8222B59EACCCA7AB366C7/",
+        "AssetbundleSecondaryURL": "https://steamusercontent-a.akamaihd.net/ugc/1655598612929180673/8683C55D806E6186C38889E701EB33593287BE54/",
+        "MaterialIndex": 0,
+        "TypeIndex": 0,
+        "LoopingEffectIndex": 0
+      },
+      "LuaScript": "function onLoad()\r\n\tcircle = {\r\n\t\tcolor             = {250, 235, 215}, --RGB color of the circle\r\n\t\tradius            = 3,           --radius of the circle around the object\r\n\t\tsteps             = 32,          --number of segments that make up the circle\r\n\t\tthickness         = 0.25,         --thickness of the circle line\r\n\t\tvertical_position = 0.1,           --vertical height of the circle relative to the object\r\n\t}\r\n\r\n  self.setVectorLines({\r\n  \t\t{\r\n  \t\t\tpoints    = getCircleVectorPoints(circle.radius, circle.steps, circle.vertical_position),\r\n  \t\t\tcolor     = circle.color,\r\n  \t\t\tthickness = circle.thickness,\r\n  \t\t\trotation  = {0,0,0},\r\n  \t\t}\r\n  \t})\r\n\r\nend\r\n\r\nfunction getCircleVectorPoints(radius, steps, y)\r\n\tlocal t = {}\r\n\tlocal d,s,c,r = 360/steps, math.sin, math.cos, math.rad\r\n\tfor i = 0,steps do\r\n\t\ttable.insert(t, {\r\n\t\t\tc(r(d*i))*radius,\r\n\t\t\ty,\r\n\t\t\ts(r(d*i))*radius\r\n\t\t})\r\n\tend\r\n\treturn t\r\nend\r\n",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "AttachedVectorLines": [
+        {
+          "OwnerSteamID": 0,
+          "points3": [
+            {
+              "x": 3.0,
+              "y": 0.1,
+              "z": 0.0
+            },
+            {
+              "x": 2.94235587,
+              "y": 0.1,
+              "z": 0.585270941
+            },
+            {
+              "x": 2.77163863,
+              "y": 0.1,
+              "z": 1.14805031
+            },
+            {
+              "x": 2.49440885,
+              "y": 0.1,
+              "z": 1.66671073
+            },
+            {
+              "x": 2.12132025,
+              "y": 0.1,
+              "z": 2.12132025
+            },
+            {
+              "x": 1.66671073,
+              "y": 0.1,
+              "z": 2.49440885
+            },
+            {
+              "x": 1.14805031,
+              "y": 0.1,
+              "z": 2.77163863
+            },
+            {
+              "x": 0.585270941,
+              "y": 0.1,
+              "z": 2.94235587
+            },
+            {
+              "x": 1.83697015E-16,
+              "y": 0.1,
+              "z": 3.0
+            },
+            {
+              "x": -0.585270941,
+              "y": 0.1,
+              "z": 2.94235587
+            },
+            {
+              "x": -1.14805031,
+              "y": 0.1,
+              "z": 2.77163863
+            },
+            {
+              "x": -1.66671073,
+              "y": 0.1,
+              "z": 2.49440885
+            },
+            {
+              "x": -2.12132025,
+              "y": 0.1,
+              "z": 2.12132025
+            },
+            {
+              "x": -2.49440885,
+              "y": 0.1,
+              "z": 1.66671073
+            },
+            {
+              "x": -2.77163863,
+              "y": 0.1,
+              "z": 1.14805031
+            },
+            {
+              "x": -2.94235587,
+              "y": 0.1,
+              "z": 0.585270941
+            },
+            {
+              "x": -3.0,
+              "y": 0.1,
+              "z": 3.67394029E-16
+            },
+            {
+              "x": -2.94235587,
+              "y": 0.1,
+              "z": -0.585270941
+            },
+            {
+              "x": -2.77163863,
+              "y": 0.1,
+              "z": -1.14805031
+            },
+            {
+              "x": -2.49440885,
+              "y": 0.1,
+              "z": -1.66671073
+            },
+            {
+              "x": -2.12132025,
+              "y": 0.1,
+              "z": -2.12132025
+            },
+            {
+              "x": -1.66671073,
+              "y": 0.1,
+              "z": -2.49440885
+            },
+            {
+              "x": -1.14805031,
+              "y": 0.1,
+              "z": -2.77163863
+            },
+            {
+              "x": -0.585270941,
+              "y": 0.1,
+              "z": -2.94235587
+            },
+            {
+              "x": -5.5109107E-16,
+              "y": 0.1,
+              "z": -3.0
+            },
+            {
+              "x": 0.585270941,
+              "y": 0.1,
+              "z": -2.94235587
+            },
+            {
+              "x": 1.14805031,
+              "y": 0.1,
+              "z": -2.77163863
+            },
+            {
+              "x": 1.66671073,
+              "y": 0.1,
+              "z": -2.49440885
+            },
+            {
+              "x": 2.12132025,
+              "y": 0.1,
+              "z": -2.12132025
+            },
+            {
+              "x": 2.49440885,
+              "y": 0.1,
+              "z": -1.66671073
+            },
+            {
+              "x": 2.77163863,
+              "y": 0.1,
+              "z": -1.14805031
+            },
+            {
+              "x": 2.94235587,
+              "y": 0.1,
+              "z": -0.585270941
+            },
+            {
+              "x": 3.0,
+              "y": 0.1,
+              "z": -7.34788059E-16
+            }
+          ],
+          "color": {
+            "r": 250.0,
+            "g": 235.0,
+            "b": 215.0
+          },
+          "thickness": 0.25
+        }
+      ]
+    },
+    {
+      "GUID": "b76726",
+      "Name": "Custom_Assetbundle",
+      "Transform": {
+        "posX": 5.60296059,
+        "posY": 7.15255737E-07,
+        "posZ": -3.329996,
+        "rotX": -4.65909238E-07,
+        "rotY": 180.000031,
+        "rotZ": 1.22600852E-06,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "#6",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": false,
+      "Snap": false,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "CustomAssetbundle": {
+        "AssetbundleURL": "https://steamusercontent-a.akamaihd.net/ugc/1655598612929186461/F3DE173690B974971ED59AF9F81762387C07DA5E/",
+        "AssetbundleSecondaryURL": "https://steamusercontent-a.akamaihd.net/ugc/1655598612929180673/8683C55D806E6186C38889E701EB33593287BE54/",
+        "MaterialIndex": 0,
+        "TypeIndex": 0,
+        "LoopingEffectIndex": 0
+      },
+      "LuaScript": "function onLoad()\r\n\tcircle = {\r\n\t\tcolor             = {250, 235, 215}, --RGB color of the circle\r\n\t\tradius            = 3,           --radius of the circle around the object\r\n\t\tsteps             = 32,          --number of segments that make up the circle\r\n\t\tthickness         = 0.25,         --thickness of the circle line\r\n\t\tvertical_position = 0.1,           --vertical height of the circle relative to the object\r\n\t}\r\n\r\n  self.setVectorLines({\r\n  \t\t{\r\n  \t\t\tpoints    = getCircleVectorPoints(circle.radius, circle.steps, circle.vertical_position),\r\n  \t\t\tcolor     = circle.color,\r\n  \t\t\tthickness = circle.thickness,\r\n  \t\t\trotation  = {0,0,0},\r\n  \t\t}\r\n  \t})\r\n\r\nend\r\n\r\nfunction getCircleVectorPoints(radius, steps, y)\r\n\tlocal t = {}\r\n\tlocal d,s,c,r = 360/steps, math.sin, math.cos, math.rad\r\n\tfor i = 0,steps do\r\n\t\ttable.insert(t, {\r\n\t\t\tc(r(d*i))*radius,\r\n\t\t\ty,\r\n\t\t\ts(r(d*i))*radius\r\n\t\t})\r\n\tend\r\n\treturn t\r\nend\r\n",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "AttachedVectorLines": [
+        {
+          "OwnerSteamID": 0,
+          "points3": [
+            {
+              "x": 3.0,
+              "y": 0.1,
+              "z": 0.0
+            },
+            {
+              "x": 2.94235587,
+              "y": 0.1,
+              "z": 0.585270941
+            },
+            {
+              "x": 2.77163863,
+              "y": 0.1,
+              "z": 1.14805031
+            },
+            {
+              "x": 2.49440885,
+              "y": 0.1,
+              "z": 1.66671073
+            },
+            {
+              "x": 2.12132025,
+              "y": 0.1,
+              "z": 2.12132025
+            },
+            {
+              "x": 1.66671073,
+              "y": 0.1,
+              "z": 2.49440885
+            },
+            {
+              "x": 1.14805031,
+              "y": 0.1,
+              "z": 2.77163863
+            },
+            {
+              "x": 0.585270941,
+              "y": 0.1,
+              "z": 2.94235587
+            },
+            {
+              "x": 1.83697015E-16,
+              "y": 0.1,
+              "z": 3.0
+            },
+            {
+              "x": -0.585270941,
+              "y": 0.1,
+              "z": 2.94235587
+            },
+            {
+              "x": -1.14805031,
+              "y": 0.1,
+              "z": 2.77163863
+            },
+            {
+              "x": -1.66671073,
+              "y": 0.1,
+              "z": 2.49440885
+            },
+            {
+              "x": -2.12132025,
+              "y": 0.1,
+              "z": 2.12132025
+            },
+            {
+              "x": -2.49440885,
+              "y": 0.1,
+              "z": 1.66671073
+            },
+            {
+              "x": -2.77163863,
+              "y": 0.1,
+              "z": 1.14805031
+            },
+            {
+              "x": -2.94235587,
+              "y": 0.1,
+              "z": 0.585270941
+            },
+            {
+              "x": -3.0,
+              "y": 0.1,
+              "z": 3.67394029E-16
+            },
+            {
+              "x": -2.94235587,
+              "y": 0.1,
+              "z": -0.585270941
+            },
+            {
+              "x": -2.77163863,
+              "y": 0.1,
+              "z": -1.14805031
+            },
+            {
+              "x": -2.49440885,
+              "y": 0.1,
+              "z": -1.66671073
+            },
+            {
+              "x": -2.12132025,
+              "y": 0.1,
+              "z": -2.12132025
+            },
+            {
+              "x": -1.66671073,
+              "y": 0.1,
+              "z": -2.49440885
+            },
+            {
+              "x": -1.14805031,
+              "y": 0.1,
+              "z": -2.77163863
+            },
+            {
+              "x": -0.585270941,
+              "y": 0.1,
+              "z": -2.94235587
+            },
+            {
+              "x": -5.5109107E-16,
+              "y": 0.1,
+              "z": -3.0
+            },
+            {
+              "x": 0.585270941,
+              "y": 0.1,
+              "z": -2.94235587
+            },
+            {
+              "x": 1.14805031,
+              "y": 0.1,
+              "z": -2.77163863
+            },
+            {
+              "x": 1.66671073,
+              "y": 0.1,
+              "z": -2.49440885
+            },
+            {
+              "x": 2.12132025,
+              "y": 0.1,
+              "z": -2.12132025
+            },
+            {
+              "x": 2.49440885,
+              "y": 0.1,
+              "z": -1.66671073
+            },
+            {
+              "x": 2.77163863,
+              "y": 0.1,
+              "z": -1.14805031
+            },
+            {
+              "x": 2.94235587,
+              "y": 0.1,
+              "z": -0.585270941
+            },
+            {
+              "x": 3.0,
+              "y": 0.1,
+              "z": -7.34788059E-16
+            }
+          ],
+          "color": {
+            "r": 250.0,
+            "g": 235.0,
+            "b": 215.0
+          },
+          "thickness": 0.25
+        }
+      ]
+    },
+    {
+      "GUID": "cc9538",
+      "Name": "Custom_Assetbundle",
+      "Transform": {
+        "posX": 5.61119938,
+        "posY": 2.38418579E-07,
+        "posZ": -0.0263633728,
+        "rotX": 5.958446E-07,
+        "rotY": 179.96698,
+        "rotZ": -5.075617E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "#3",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": false,
+      "Snap": false,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "CustomAssetbundle": {
+        "AssetbundleURL": "https://steamusercontent-a.akamaihd.net/ugc/1655598612929183932/FB6CC9B6268E791EB28632FC76D153E0FEC02990/",
+        "AssetbundleSecondaryURL": "https://steamusercontent-a.akamaihd.net/ugc/1655598612929180673/8683C55D806E6186C38889E701EB33593287BE54/",
+        "MaterialIndex": 0,
+        "TypeIndex": 0,
+        "LoopingEffectIndex": 0
+      },
+      "LuaScript": "function onLoad()\r\n\tcircle = {\r\n\t\tcolor             = {250, 235, 215}, --RGB color of the circle\r\n\t\tradius            = 3,           --radius of the circle around the object\r\n\t\tsteps             = 32,          --number of segments that make up the circle\r\n\t\tthickness         = 0.25,         --thickness of the circle line\r\n\t\tvertical_position = 0.1,           --vertical height of the circle relative to the object\r\n\t}\r\n\r\n  self.setVectorLines({\r\n  \t\t{\r\n  \t\t\tpoints    = getCircleVectorPoints(circle.radius, circle.steps, circle.vertical_position),\r\n  \t\t\tcolor     = circle.color,\r\n  \t\t\tthickness = circle.thickness,\r\n  \t\t\trotation  = {0,0,0},\r\n  \t\t}\r\n  \t})\r\n\r\nend\r\n\r\nfunction getCircleVectorPoints(radius, steps, y)\r\n\tlocal t = {}\r\n\tlocal d,s,c,r = 360/steps, math.sin, math.cos, math.rad\r\n\tfor i = 0,steps do\r\n\t\ttable.insert(t, {\r\n\t\t\tc(r(d*i))*radius,\r\n\t\t\ty,\r\n\t\t\ts(r(d*i))*radius\r\n\t\t})\r\n\tend\r\n\treturn t\r\nend\r\n",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "AttachedVectorLines": [
+        {
+          "OwnerSteamID": 0,
+          "points3": [
+            {
+              "x": 3.0,
+              "y": 0.1,
+              "z": 0.0
+            },
+            {
+              "x": 2.94235587,
+              "y": 0.1,
+              "z": 0.585270941
+            },
+            {
+              "x": 2.77163863,
+              "y": 0.1,
+              "z": 1.14805031
+            },
+            {
+              "x": 2.49440885,
+              "y": 0.1,
+              "z": 1.66671073
+            },
+            {
+              "x": 2.12132025,
+              "y": 0.1,
+              "z": 2.12132025
+            },
+            {
+              "x": 1.66671073,
+              "y": 0.1,
+              "z": 2.49440885
+            },
+            {
+              "x": 1.14805031,
+              "y": 0.1,
+              "z": 2.77163863
+            },
+            {
+              "x": 0.585270941,
+              "y": 0.1,
+              "z": 2.94235587
+            },
+            {
+              "x": 1.83697015E-16,
+              "y": 0.1,
+              "z": 3.0
+            },
+            {
+              "x": -0.585270941,
+              "y": 0.1,
+              "z": 2.94235587
+            },
+            {
+              "x": -1.14805031,
+              "y": 0.1,
+              "z": 2.77163863
+            },
+            {
+              "x": -1.66671073,
+              "y": 0.1,
+              "z": 2.49440885
+            },
+            {
+              "x": -2.12132025,
+              "y": 0.1,
+              "z": 2.12132025
+            },
+            {
+              "x": -2.49440885,
+              "y": 0.1,
+              "z": 1.66671073
+            },
+            {
+              "x": -2.77163863,
+              "y": 0.1,
+              "z": 1.14805031
+            },
+            {
+              "x": -2.94235587,
+              "y": 0.1,
+              "z": 0.585270941
+            },
+            {
+              "x": -3.0,
+              "y": 0.1,
+              "z": 3.67394029E-16
+            },
+            {
+              "x": -2.94235587,
+              "y": 0.1,
+              "z": -0.585270941
+            },
+            {
+              "x": -2.77163863,
+              "y": 0.1,
+              "z": -1.14805031
+            },
+            {
+              "x": -2.49440885,
+              "y": 0.1,
+              "z": -1.66671073
+            },
+            {
+              "x": -2.12132025,
+              "y": 0.1,
+              "z": -2.12132025
+            },
+            {
+              "x": -1.66671073,
+              "y": 0.1,
+              "z": -2.49440885
+            },
+            {
+              "x": -1.14805031,
+              "y": 0.1,
+              "z": -2.77163863
+            },
+            {
+              "x": -0.585270941,
+              "y": 0.1,
+              "z": -2.94235587
+            },
+            {
+              "x": -5.5109107E-16,
+              "y": 0.1,
+              "z": -3.0
+            },
+            {
+              "x": 0.585270941,
+              "y": 0.1,
+              "z": -2.94235587
+            },
+            {
+              "x": 1.14805031,
+              "y": 0.1,
+              "z": -2.77163863
+            },
+            {
+              "x": 1.66671073,
+              "y": 0.1,
+              "z": -2.49440885
+            },
+            {
+              "x": 2.12132025,
+              "y": 0.1,
+              "z": -2.12132025
+            },
+            {
+              "x": 2.49440885,
+              "y": 0.1,
+              "z": -1.66671073
+            },
+            {
+              "x": 2.77163863,
+              "y": 0.1,
+              "z": -1.14805031
+            },
+            {
+              "x": 2.94235587,
+              "y": 0.1,
+              "z": -0.585270941
+            },
+            {
+              "x": 3.0,
+              "y": 0.1,
+              "z": -7.34788059E-16
+            }
+          ],
+          "color": {
+            "r": 250.0,
+            "g": 235.0,
+            "b": 215.0
+          },
+          "thickness": 0.25
+        }
+      ]
+    }
+  ]
+}

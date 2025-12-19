@@ -1,0 +1,248 @@
+{
+  "SaveName": "",
+  "Date": "",
+  "VersionNumber": "",
+  "GameMode": "",
+  "GameType": "",
+  "GameComplexity": "",
+  "Tags": [],
+  "Gravity": 0.5,
+  "PlayArea": 0.5,
+  "Table": "",
+  "Sky": "",
+  "Note": "",
+  "TabStates": {},
+  "LuaScript": "",
+  "LuaScriptState": "",
+  "XmlUI": "",
+  "ObjectStates": [
+    {
+      "GUID": "1d888e",
+      "Name": "Custom_Token",
+      "Transform": {
+        "posX": -34.9323273,
+        "posY": 1.03149891,
+        "posZ": 16.4532814,
+        "rotX": -5.31525359E-07,
+        "rotY": 179.985046,
+        "rotZ": -3.65358119E-07,
+        "scaleX": 3.18583179,
+        "scaleY": 1.0,
+        "scaleZ": 3.18583179
+      },
+      "Nickname": "Road Bend",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "CustomImage": {
+        "ImageURL": "https://steamusercontent-a.akamaihd.net/ugc/2035112805807225848/C3A3C518911B57C4FBC8A17FBA69E759D2414B4B/",
+        "ImageSecondaryURL": "",
+        "ImageScalar": 1.0,
+        "WidthScale": 0.0,
+        "CustomToken": {
+          "Thickness": 0.1,
+          "MergeDistancePixels": 15.0,
+          "StandUp": false,
+          "Stackable": false
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "566b2e",
+      "Name": "Custom_Token",
+      "Transform": {
+        "posX": 7.975378,
+        "posY": 1.1920929E-07,
+        "posZ": -0.369092941,
+        "rotX": 7.84642339E-07,
+        "rotY": 359.985718,
+        "rotZ": 8.376153E-08,
+        "scaleX": 2.99246836,
+        "scaleY": 1.0,
+        "scaleZ": 2.99246836
+      },
+      "Nickname": "Road Straight",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "CustomImage": {
+        "ImageURL": "https://steamusercontent-a.akamaihd.net/ugc/2035112805807231027/A879A9A50EA403A8B8BDCCFBC356D79DD937E5C6/",
+        "ImageSecondaryURL": "",
+        "ImageScalar": 1.0,
+        "WidthScale": 0.0,
+        "CustomToken": {
+          "Thickness": 0.1,
+          "MergeDistancePixels": 15.0,
+          "StandUp": false,
+          "Stackable": false
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "9c5d95",
+      "Name": "Custom_Token",
+      "Transform": {
+        "posX": 15.53813,
+        "posY": 0.0,
+        "posZ": 2.69771576,
+        "rotX": -1.44086073E-07,
+        "rotY": 179.992676,
+        "rotZ": 6.504606E-07,
+        "scaleX": 2.99246836,
+        "scaleY": 1.0,
+        "scaleZ": 4.755058
+      },
+      "Nickname": "Road Long",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "CustomImage": {
+        "ImageURL": "https://steamusercontent-a.akamaihd.net/ugc/2035112805807231027/A879A9A50EA403A8B8BDCCFBC356D79DD937E5C6/",
+        "ImageSecondaryURL": "",
+        "ImageScalar": 1.0,
+        "WidthScale": 0.0,
+        "CustomToken": {
+          "Thickness": 0.1,
+          "MergeDistancePixels": 15.0,
+          "StandUp": false,
+          "Stackable": false
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "12f7fb",
+      "Name": "Custom_Token",
+      "Transform": {
+        "posX": 7.92054749,
+        "posY": 0.0,
+        "posZ": 8.944504,
+        "rotX": -7.08333971E-07,
+        "rotY": 179.981323,
+        "rotZ": -9.309234E-07,
+        "scaleX": 2.991402,
+        "scaleY": 1.0,
+        "scaleZ": 2.991402
+      },
+      "Nickname": "Road Intersection",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "CustomImage": {
+        "ImageURL": "https://steamusercontent-a.akamaihd.net/ugc/2035112805807225267/04C09A7E7B30A262AE0549BE8FD3AC581034338F/",
+        "ImageSecondaryURL": "",
+        "ImageScalar": 1.0,
+        "WidthScale": 0.0,
+        "CustomToken": {
+          "Thickness": 0.1,
+          "MergeDistancePixels": 15.0,
+          "StandUp": false,
+          "Stackable": false
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    }
+  ]
+}
