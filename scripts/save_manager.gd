@@ -147,8 +147,8 @@ func load_game(path: String) -> Error:
 	# Load table
 	_deserialize_table(state.get("table", {}))
 
-	# Load objects
-	var loaded_count = _deserialize_objects(state.get("objects", []))
+	# Load objects (async for TTS downloads)
+	var loaded_count = await _deserialize_objects(state.get("objects", []))
 
 	print("Game loaded from: %s (%d objects)" % [path, loaded_count])
 	load_completed.emit(loaded_count)
@@ -165,7 +165,7 @@ func _deserialize_table(table_data: Dictionary) -> void:
 		table.setup_table(Vector2(size[0], size[1]))
 
 
-## Deserialize all objects
+## Deserialize all objects (async for TTS downloads)
 func _deserialize_objects(objects_data: Array) -> int:
 	if not object_manager:
 		return 0
@@ -176,14 +176,14 @@ func _deserialize_objects(objects_data: Array) -> int:
 		if not obj_data is Dictionary:
 			continue
 
-		var success = _deserialize_object(obj_data)
+		var success = await _deserialize_object(obj_data)
 		if success:
 			loaded_count += 1
 
 	return loaded_count
 
 
-## Deserialize and spawn a single object
+## Deserialize and spawn a single object (async for TTS downloads)
 func _deserialize_object(data: Dictionary) -> bool:
 	var obj_type = data.get("type", "")
 	var position = _array_to_vector3(data.get("position", [0, 0, 0]))
@@ -193,7 +193,7 @@ func _deserialize_object(data: Dictionary) -> bool:
 
 	match obj_type:
 		"tts_import":
-			spawned_obj = _spawn_tts_object(data, position)
+			spawned_obj = await _spawn_tts_object(data, position)
 		"custom_model":
 			var model_path = data.get("model_path", "")
 			if not model_path.is_empty():
