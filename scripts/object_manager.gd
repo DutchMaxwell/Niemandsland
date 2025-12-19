@@ -2313,15 +2313,13 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 	if not tts_obj.diffuse_url.is_empty():
 		texture_path = dm.find_cached_file(tts_obj.diffuse_url, false)
 
-	# Load the model WITH base (true) for child models (real miniatures)
-	# Skip base for non-child models (could be terrain, tokens, etc.)
-	var add_base = tts_obj.is_child_model
+	# Load the model WITHOUT base - base will be added separately after scaling
 	var extension = mesh_path.get_extension().to_lower()
 	var model_scene: Node3D = null
 
 	match extension:
 		"obj":
-			model_scene = _load_obj_model(mesh_path, texture_path, add_base)
+			model_scene = _load_obj_model(mesh_path, texture_path, false)  # Never add base here
 		_:
 			push_warning("Unsupported TTS mesh format: %s" % extension)
 			return null
@@ -2337,6 +2335,14 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 
 	# Calculate model bounds for collision (after scaling)
 	var mesh_aabb = _calculate_aabb(model_scene)
+
+	# Add base for child models (real miniatures) - created OUTSIDE the scaled model
+	var add_base = tts_obj.is_child_model
+	var base_height = 0.003  # 3mm base height
+
+	if add_base:
+		# Position model on top of base
+		model_scene.position.y = base_height
 
 	var base_info = " + base" if add_base else ""
 	print("    Size: %.1fmm x %.1fmm x %.1fmm%s" % [mesh_aabb.size.x * 1000, mesh_aabb.size.y * 1000, mesh_aabb.size.z * 1000, base_info])
@@ -2354,12 +2360,24 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 	# Add loaded model
 	wrapper.add_child(model_scene)
 
-	# Calculate collision from model bounds
+	# Add base AFTER model (not inside scaled model_scene)
+	if add_base:
+		var base = _create_miniature_base()
+		wrapper.add_child(base)
+
+	# Calculate collision from model + base bounds
 	var collision = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
-	shape.size = mesh_aabb.size
+	if add_base:
+		# Include base in collision - expand AABB to include base
+		var base_radius = 0.016  # 32mm diameter = 16mm radius
+		var total_height = mesh_aabb.size.y + base_height
+		shape.size = Vector3(base_radius * 2, total_height, base_radius * 2)
+		collision.position = Vector3(0, total_height / 2, 0)
+	else:
+		shape.size = mesh_aabb.size
+		collision.position = mesh_aabb.position + mesh_aabb.size / 2
 	collision.shape = shape
-	collision.position = mesh_aabb.position + mesh_aabb.size / 2
 	wrapper.add_child(collision)
 
 	# Apply TTS color tint if not white
