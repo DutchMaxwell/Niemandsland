@@ -488,26 +488,38 @@ openTTS/
 
 ## Phase 11: Entwicklungs-Roadmap
 
-### Milestone 1: Technischer Proof-of-Concept (PoC)
+### Milestone 1: Technischer Proof-of-Concept (PoC) ✅ ABGESCHLOSSEN
 **Ziel: Validierung der kritischen Technologie**
 
-1. [ ] Godot 4.3+ Projekt Setup mit CI/CD
-2. [ ] Basis-Spieltisch mit Kamera-System
-3. [ ] Einfaches Objekt-System (Spawn, Move, Rotate)
-4. [ ] **Performance-Test: 200 Objekte gleichzeitig** ← KRITISCH
-5. [ ] Würfel-System (D6 Pool mit Physik)
-6. [ ] **Multiplayer PoC: 2 Spieler über Netzwerk** ← KRITISCH
-7. [ ] Basis-Messwerkzeug
-8. [ ] Web-Export Test
+1. [x] Godot 4.3+ Projekt Setup mit CI/CD
+2. [x] Basis-Spieltisch mit Kamera-System (variable Größen: 4x4, 6x4, custom)
+3. [x] Einfaches Objekt-System (Spawn, Move, Rotate)
+4. [x] **Performance-Test: 200 Objekte gleichzeitig** ← Getestet mit 1000+ Objekten, läuft flüssig!
+5. [x] Würfel-System (D6 Pool mit Physik) - Dice Roller Plugin integriert
+6. [x] **Multiplayer PoC: 2 Spieler über Netzwerk** ← Getestet mit localhost, funktioniert
+7. [x] Basis-Messwerkzeug (Distanzmessung in Zoll)
+8. [x] Web-Export Test ← Getestet, Performance nicht ausreichend → Desktop-First Strategie
+
+**Zusätzlich implementiert (über Milestone 1 hinaus):**
+- [x] TTS Import (Online von Steam CDN + Local Cache)
+- [x] Multi-Selection (Alt+Click, Box-Select)
+- [x] Arrangement-Funktionen (1-9 Reihen, A für Pfeil-Formation)
+- [x] Copy/Paste System (Ctrl+C/V/D) mit Cursor-Positionierung
+- [x] Variable Tischgrößen mit Custom-Option
+
+**Erkenntnisse:**
+- Web-Export hat Performance-Probleme → Fokus auf Desktop-Version
+- TTS-Import ermöglicht sofortigen Zugang zu tausenden Miniaturen
+- Performance ist hervorragend auch bei 1000+ Objekten
 
 ### Milestone 2: Alpha
 **Ziel: Vollständiges Einzelspieler-Erlebnis**
 
-7. [ ] Erweitertes Objekt-Management
-8. [ ] Gelände-System
+7. [x] Erweitertes Objekt-Management (Multi-Select, Arrangements, Copy/Paste)
+8. [ ] Gelände-System (Eigenschaften: Deckung, Schwieriges Gelände)
 9. [ ] Einheiten-Karten und Stats
-10. [ ] Vollständiges Würfel-System
-11. [ ] Speichern/Laden
+10. [ ] Vollständiges Würfel-System (mehr Würfeltypen, Modifikatoren)
+11. [ ] Speichern/Laden von Tisch-Setups
 12. [ ] Basic UI-Overhaul
 
 ### Milestone 3: Beta
