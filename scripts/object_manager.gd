@@ -2639,10 +2639,25 @@ func spawn_tts_terrain(mesh_url: String, diffuse_url: String, tts_scale: Vector3
 
 	# Apply TTS scale (inches to meters, plus terrain's own scale)
 	var scale_factor = 0.0254  # TTS units to meters
-	model_scene.scale = tts_scale * scale_factor
+	var final_scale = tts_scale * scale_factor
+	model_scene.scale = final_scale
 
-	# Calculate bounds for collision
-	var mesh_aabb = _calculate_aabb(model_scene)
+	# Calculate bounds for collision BEFORE scaling was applied (raw mesh bounds)
+	# Then apply scale to the AABB
+	var raw_aabb = _calculate_aabb(model_scene)
+	# The AABB from _calculate_aabb doesn't include parent scale, so we need to apply it
+	var mesh_aabb = AABB(
+		raw_aabb.position * final_scale,
+		raw_aabb.size * final_scale
+	)
+
+	# Ensure minimum collision size for clickability
+	var min_size = 0.05  # 5cm minimum
+	mesh_aabb.size.x = max(mesh_aabb.size.x, min_size)
+	mesh_aabb.size.y = max(mesh_aabb.size.y, min_size)
+	mesh_aabb.size.z = max(mesh_aabb.size.z, min_size)
+
+	print("  Terrain AABB: %.3f x %.3f x %.3f" % [mesh_aabb.size.x, mesh_aabb.size.y, mesh_aabb.size.z])
 
 	# Create wrapper
 	_object_counter += 1
