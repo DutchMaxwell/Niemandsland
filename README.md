@@ -2,16 +2,20 @@
 
 Ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wie OnePageRules, historische Wargames und andere Miniaturenspiele.
 
-## Status: Prototyp v0.1
+## Status: Milestone 1 ✅ abgeschlossen, Milestone 2 (Alpha) in Arbeit
 
-Der erste spielbare Prototyp ist verfügbar! Features:
+**Aktuelle Features:**
 
-- 3D Spieltisch (4x4 Fuß)
+- 3D Spieltisch (variable Größen: 4x4, 6x4, custom)
 - Kamera-Steuerung (Orbit, Pan, Zoom)
-- Spawn von Miniaturen, Würfeln und Gelände
-- Drag & Drop für alle Objekte
-- Würfel-System mit Physik-Simulation
-- Objekt-Rotation
+- TTS Import (Online von Steam CDN + Local Cache)
+- Multi-Selection (Alt+Click, Box-Select)
+- Arrangement-Funktionen (1-9 für Reihen, A für Pfeil-Formation)
+- Copy/Paste (Ctrl+C/V/D) mit Cursor-Positionierung
+- Würfel-System mit Physik-Simulation (Dice Roller Plugin)
+- Distanzmessung in Zoll
+- Multiplayer (getestet mit localhost)
+- Performance: 1000+ Objekte flüssig
 
 ## Schnellstart
 
@@ -66,11 +70,11 @@ OpenTTS soll eine freie Alternative zum kommerziellen Tabletop Simulator bieten,
 
 Siehe [PLAN.md](./PLAN.md) für den vollständigen Entwicklungsplan.
 
-### Nächste Schritte (Milestone 1)
-- [ ] Multiplayer PoC (2 Spieler)
-- [ ] Performance-Test mit 200 Objekten
-- [ ] Web-Export validieren
-- [ ] Basis-Messwerkzeug
+### Nächste Schritte (Milestone 2: Alpha)
+- [ ] Gelände-System mit Eigenschaften (Deckung, Schwieriges Gelände)
+- [ ] Einheiten-Karten und Stats
+- [ ] Speichern/Laden von Tisch-Setups
+- [ ] Erweiterte Würfel-Optionen (Modifikatoren, mehr Typen)
 
 ## Technologie-Stack
 
