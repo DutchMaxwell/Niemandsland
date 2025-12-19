@@ -2707,7 +2707,7 @@ func toggle_lock_selected() -> void:
 
 	# Deselect if locking
 	if new_state:
-		clear_selection()
+		_deselect_all()
 
 
 ## Set lock state of a single object
