@@ -133,21 +133,30 @@ func _ready() -> void:
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		# Arrangement keys (1-9) - arrange selected in N rows
+		# Get cursor position on table for all operations
+		var cursor_pos = object_manager.get_cursor_table_position()
+
+		# Arrangement keys (1-9) - arrange selected in N rows at cursor
 		if event.keycode >= KEY_1 and event.keycode <= KEY_9:
 			var rows = event.keycode - KEY_0
-			object_manager.arrange_selected_in_rows(rows)
+			object_manager.arrange_selected_in_rows(rows, cursor_pos)
 			get_viewport().set_input_as_handled()
-		# Arrow formation (A key)
+		# Arrow formation (A key) at cursor
 		elif event.keycode == KEY_A and not event.ctrl_pressed:
-			object_manager.arrange_selected_arrow()
+			object_manager.arrange_selected_arrow(cursor_pos)
 			get_viewport().set_input_as_handled()
-		# Copy selected (Ctrl+C or Ctrl+D for duplicate)
+		# Copy to clipboard (Ctrl+C)
 		elif event.keycode == KEY_C and event.ctrl_pressed:
-			object_manager.copy_selected()
+			object_manager.copy_to_clipboard()
 			get_viewport().set_input_as_handled()
+		# Paste from clipboard at cursor (Ctrl+V)
+		elif event.keycode == KEY_V and event.ctrl_pressed:
+			object_manager.paste_from_clipboard(cursor_pos)
+			get_viewport().set_input_as_handled()
+		# Duplicate (Ctrl+D) - copy + paste immediately
 		elif event.keycode == KEY_D and event.ctrl_pressed:
-			object_manager.copy_selected()
+			object_manager.copy_to_clipboard()
+			object_manager.paste_from_clipboard(cursor_pos)
 			get_viewport().set_input_as_handled()
 
 

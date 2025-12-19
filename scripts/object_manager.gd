@@ -31,6 +31,9 @@ var _drag_plane: Plane
 var _dice_list: Array[RigidBody3D] = []
 var _object_counter: int = 0
 
+# Clipboard for copy/paste
+var _clipboard: Array[Node3D] = []  # Stores references to copied objects for duplication
+
 # Rotation tracking
 var _is_rotating: bool = false
 
@@ -2411,8 +2414,27 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 ## Arrangement Functions (TTS-style formations)
 ## ============================================================================
 
-## Arrange selected objects in N rows (keys 1-9)
-func arrange_selected_in_rows(num_rows: int) -> void:
+## Get cursor position on the table from current mouse position
+func get_cursor_table_position() -> Vector3:
+	var camera = get_viewport().get_camera_3d()
+	if not camera:
+		return Vector3.ZERO
+
+	var mouse_pos = get_viewport().get_mouse_position()
+	var from = camera.project_ray_origin(mouse_pos)
+	var dir = camera.project_ray_normal(mouse_pos)
+
+	# Intersect with table plane (y=0)
+	var table_plane = Plane(Vector3.UP, 0)
+	var intersection = table_plane.intersects_ray(from, dir)
+
+	if intersection:
+		return Vector3(intersection.x, 0, intersection.z)
+
+	return Vector3.ZERO
+
+## Arrange selected objects in N rows at cursor position (keys 1-9)
+func arrange_selected_in_rows(num_rows: int, cursor_pos: Vector3) -> void:
 	if _selected_objects.size() < 2:
 		return
 
@@ -2420,19 +2442,12 @@ func arrange_selected_in_rows(num_rows: int) -> void:
 	var count = objects.size()
 	var cols = ceili(float(count) / num_rows)
 
-	# Calculate center of selected objects
-	var center = Vector3.ZERO
-	for obj in objects:
-		if is_instance_valid(obj):
-			center += obj.global_position
-	center /= objects.size()
-
 	# Spacing between objects (40mm default)
 	var spacing = 0.04
 
-	# Calculate grid positions
-	var start_x = center.x - (cols - 1) * spacing / 2
-	var start_z = center.z - (num_rows - 1) * spacing / 2
+	# Start from cursor position (first object at cursor)
+	var start_x = cursor_pos.x
+	var start_z = cursor_pos.z
 
 	var idx = 0
 	for row in range(num_rows):
@@ -2448,37 +2463,29 @@ func arrange_selected_in_rows(num_rows: int) -> void:
 				)
 			idx += 1
 
-	print("Arranged %d objects in %d rows" % [count, num_rows])
+	print("Arranged %d objects in %d rows at cursor" % [count, num_rows])
 
 
-## Arrange selected objects in arrow/wedge formation (A key)
-func arrange_selected_arrow() -> void:
+## Arrange selected objects in arrow/wedge formation at cursor (A key)
+func arrange_selected_arrow(cursor_pos: Vector3) -> void:
 	if _selected_objects.size() < 2:
 		return
 
 	var objects = _selected_objects.duplicate()
 	var count = objects.size()
 
-	# Calculate center of selected objects
-	var center = Vector3.ZERO
-	for obj in objects:
-		if is_instance_valid(obj):
-			center += obj.global_position
-	center /= objects.size()
-
 	# Spacing between objects
 	var spacing = 0.04
 	var row_spacing = 0.035  # Slightly tighter rows for arrow
 
-	# Arrow formation: 1 in front, then 2, then 3, etc.
-	# Each row offset to the sides
+	# Arrow formation: 1 in front (at cursor), then 2, then 3, etc.
 	var row = 0
 	var idx = 0
 	var row_count = 1
 
 	while idx < count:
-		# Position objects in this row
-		var row_start_x = center.x - (row_count - 1) * spacing / 2
+		# Position objects in this row, centered on cursor X
+		var row_start_x = cursor_pos.x - (row_count - 1) * spacing / 2
 
 		for col in range(row_count):
 			if idx >= count:
@@ -2488,25 +2495,54 @@ func arrange_selected_arrow() -> void:
 				obj.global_position = Vector3(
 					row_start_x + col * spacing,
 					obj.global_position.y,
-					center.z + row * row_spacing
+					cursor_pos.z + row * row_spacing
 				)
 			idx += 1
 
 		row += 1
 		row_count += 1
 
-	print("Arranged %d objects in arrow formation" % count)
+	print("Arranged %d objects in arrow formation at cursor" % count)
 
 
-## Copy/duplicate selected objects
-func copy_selected() -> void:
+## Copy selected objects to clipboard (Ctrl+C)
+func copy_to_clipboard() -> void:
 	if _selected_objects.is_empty():
 		return
 
-	var copied_count = 0
-	var offset = Vector3(0.05, 0, 0.05)  # Offset for copied objects
+	_clipboard.clear()
+	for obj in _selected_objects:
+		if is_instance_valid(obj):
+			_clipboard.append(obj)
 
-	for obj in _selected_objects.duplicate():  # Duplicate array to avoid modification during iteration
+	print("Copied %d objects to clipboard" % _clipboard.size())
+
+
+## Paste objects from clipboard at cursor position (Ctrl+V)
+func paste_from_clipboard(cursor_pos: Vector3) -> void:
+	if _clipboard.is_empty():
+		print("Clipboard is empty")
+		return
+
+	# Calculate center of clipboard objects
+	var clipboard_center = Vector3.ZERO
+	var valid_count = 0
+	for obj in _clipboard:
+		if is_instance_valid(obj):
+			clipboard_center += obj.global_position
+			valid_count += 1
+
+	if valid_count == 0:
+		_clipboard.clear()
+		return
+
+	clipboard_center /= valid_count
+
+	# Paste at cursor position, maintaining relative positions
+	var pasted_count = 0
+	_deselect_all()  # Deselect current selection
+
+	for obj in _clipboard:
 		if not is_instance_valid(obj):
 			continue
 
@@ -2518,13 +2554,20 @@ func copy_selected() -> void:
 		else:
 			# Generic duplication for other objects
 			copy = obj.duplicate()
+			_object_counter += 1
+			copy.name = obj.name.split("_")[0] + "_%d" % _object_counter
 
 		if copy:
 			add_child(copy)
-			copy.global_position = obj.global_position + offset
-			copied_count += 1
+			# Position relative to cursor (maintaining formation)
+			var offset = obj.global_position - clipboard_center
+			copy.global_position = cursor_pos + offset
+			copy.global_position.y = obj.global_position.y  # Keep original height
+			# Select the pasted object
+			_add_to_selection(copy)
+			pasted_count += 1
 
-	print("Copied %d objects" % copied_count)
+	print("Pasted %d objects at cursor" % pasted_count)
 
 
 ## Duplicate a TTS-imported object
