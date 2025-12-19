@@ -7,23 +7,23 @@ extends Node3D
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var dice_result_label: Label = $UI/HUD/DiceResult
 @onready var distance_label: Label = $UI/HUD/DistanceLabel
-@onready var spawn_miniature_btn: Button = $UI/HUD/SpawnPanel/SpawnMiniature
-@onready var spawn_dice_btn: Button = $UI/HUD/SpawnPanel/SpawnDice
-@onready var spawn_terrain_btn: Button = $UI/HUD/SpawnPanel/SpawnTerrain
-@onready var clear_all_btn: Button = $UI/HUD/SpawnPanel/ClearAll
-@onready var spawn_200_btn: Button = $UI/HUD/SpawnPanel/Spawn200
-@onready var spawn_500_btn: Button = $UI/HUD/SpawnPanel/Spawn500
-@onready var spawn_1000_btn: Button = $UI/HUD/SpawnPanel/Spawn1000
-@onready var spawn_complex_btn: Button = $UI/HUD/SpawnPanel/SpawnComplex
+@onready var spawn_miniature_btn: Button = %SpawnMiniature
+@onready var spawn_dice_btn: Button = %SpawnDice
+@onready var spawn_terrain_btn: Button = %SpawnTerrain
+@onready var clear_all_btn: Button = %ClearAll
+@onready var spawn_200_btn: Button = %Spawn200
+@onready var spawn_500_btn: Button = %Spawn500
+@onready var spawn_1000_btn: Button = %Spawn1000
+@onready var spawn_complex_btn: Button = %SpawnComplex
 @onready var performance_label: Label = %PerformanceLabel
 
 # Table size UI elements
-@onready var table_size_option: OptionButton = $UI/HUD/TableSizePanel/TableSizeOption
-@onready var custom_size_container: VBoxContainer = $UI/HUD/TableSizePanel/CustomSizeContainer
-@onready var unit_option: OptionButton = $UI/HUD/TableSizePanel/CustomSizeContainer/UnitOption
-@onready var width_input: SpinBox = $UI/HUD/TableSizePanel/CustomSizeContainer/WidthContainer/WidthInput
-@onready var length_input: SpinBox = $UI/HUD/TableSizePanel/CustomSizeContainer/LengthContainer/LengthInput
-@onready var apply_custom_btn: Button = $UI/HUD/TableSizePanel/CustomSizeContainer/ApplyCustomBtn
+@onready var table_size_option: OptionButton = %TableSizeOption
+@onready var custom_size_container: VBoxContainer = %CustomSizeContainer
+@onready var unit_option: OptionButton = %UnitOption
+@onready var width_input: SpinBox = %WidthInput
+@onready var length_input: SpinBox = %LengthInput
+@onready var apply_custom_btn: Button = %ApplyCustomBtn
 
 # Dice Roller Plugin UI
 @onready var dice_roller_control = %DiceRollerControl
@@ -129,6 +129,26 @@ func _ready() -> void:
 	table_size_option.selected = 1  # Select 72x48 option
 
 	print("OpenTTS ready!")
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		# Arrangement keys (1-9) - arrange selected in N rows
+		if event.keycode >= KEY_1 and event.keycode <= KEY_9:
+			var rows = event.keycode - KEY_0
+			object_manager.arrange_selected_in_rows(rows)
+			get_viewport().set_input_as_handled()
+		# Arrow formation (A key)
+		elif event.keycode == KEY_A and not event.ctrl_pressed:
+			object_manager.arrange_selected_arrow()
+			get_viewport().set_input_as_handled()
+		# Copy selected (Ctrl+C or Ctrl+D for duplicate)
+		elif event.keycode == KEY_C and event.ctrl_pressed:
+			object_manager.copy_selected()
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_D and event.ctrl_pressed:
+			object_manager.copy_selected()
+			get_viewport().set_input_as_handled()
 
 
 func _process(_delta: float) -> void:

@@ -1748,7 +1748,7 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 	# Create material with optional texture
 	var material = StandardMaterial3D.new()
 	material.albedo_color = Color(0.7, 0.7, 0.7)
-	material.roughness = 0.5
+	material.roughness = 0.9  # Matte finish like painted miniatures
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED  # Show both sides of polygons
 
 	# Load texture if provided
@@ -2405,3 +2405,142 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 	print("  [OK] %s%s" % [tts_obj.name, tex_info])
 
 	return wrapper
+
+
+## ============================================================================
+## Arrangement Functions (TTS-style formations)
+## ============================================================================
+
+## Arrange selected objects in N rows (keys 1-9)
+func arrange_selected_in_rows(num_rows: int) -> void:
+	if _selected_objects.size() < 2:
+		return
+
+	var objects = _selected_objects.duplicate()
+	var count = objects.size()
+	var cols = ceili(float(count) / num_rows)
+
+	# Calculate center of selected objects
+	var center = Vector3.ZERO
+	for obj in objects:
+		if is_instance_valid(obj):
+			center += obj.global_position
+	center /= objects.size()
+
+	# Spacing between objects (40mm default)
+	var spacing = 0.04
+
+	# Calculate grid positions
+	var start_x = center.x - (cols - 1) * spacing / 2
+	var start_z = center.z - (num_rows - 1) * spacing / 2
+
+	var idx = 0
+	for row in range(num_rows):
+		for col in range(cols):
+			if idx >= count:
+				break
+			var obj = objects[idx]
+			if is_instance_valid(obj):
+				obj.global_position = Vector3(
+					start_x + col * spacing,
+					obj.global_position.y,
+					start_z + row * spacing
+				)
+			idx += 1
+
+	print("Arranged %d objects in %d rows" % [count, num_rows])
+
+
+## Arrange selected objects in arrow/wedge formation (A key)
+func arrange_selected_arrow() -> void:
+	if _selected_objects.size() < 2:
+		return
+
+	var objects = _selected_objects.duplicate()
+	var count = objects.size()
+
+	# Calculate center of selected objects
+	var center = Vector3.ZERO
+	for obj in objects:
+		if is_instance_valid(obj):
+			center += obj.global_position
+	center /= objects.size()
+
+	# Spacing between objects
+	var spacing = 0.04
+	var row_spacing = 0.035  # Slightly tighter rows for arrow
+
+	# Arrow formation: 1 in front, then 2, then 3, etc.
+	# Each row offset to the sides
+	var row = 0
+	var idx = 0
+	var row_count = 1
+
+	while idx < count:
+		# Position objects in this row
+		var row_start_x = center.x - (row_count - 1) * spacing / 2
+
+		for col in range(row_count):
+			if idx >= count:
+				break
+			var obj = objects[idx]
+			if is_instance_valid(obj):
+				obj.global_position = Vector3(
+					row_start_x + col * spacing,
+					obj.global_position.y,
+					center.z + row * row_spacing
+				)
+			idx += 1
+
+		row += 1
+		row_count += 1
+
+	print("Arranged %d objects in arrow formation" % count)
+
+
+## Copy/duplicate selected objects
+func copy_selected() -> void:
+	if _selected_objects.is_empty():
+		return
+
+	var copied_count = 0
+	var offset = Vector3(0.05, 0, 0.05)  # Offset for copied objects
+
+	for obj in _selected_objects.duplicate():  # Duplicate array to avoid modification during iteration
+		if not is_instance_valid(obj):
+			continue
+
+		var copy: Node3D = null
+
+		# Check if it's a TTS import (has mesh URL meta)
+		if obj.has_meta("tts_mesh_url"):
+			copy = _duplicate_tts_object(obj)
+		else:
+			# Generic duplication for other objects
+			copy = obj.duplicate()
+
+		if copy:
+			add_child(copy)
+			copy.global_position = obj.global_position + offset
+			copied_count += 1
+
+	print("Copied %d objects" % copied_count)
+
+
+## Duplicate a TTS-imported object
+func _duplicate_tts_object(original: Node3D) -> Node3D:
+	# Deep duplicate the object
+	var copy = original.duplicate()
+
+	# Assign new unique ID
+	_object_counter += 1
+	copy.name = original.name.split("_")[0] + "_%d" % _object_counter
+	copy.set_meta("network_id", _object_counter + 30000)
+
+	# Make sure it's in the right groups
+	if not copy.is_in_group("selectable"):
+		copy.add_to_group("selectable")
+	if not copy.is_in_group("tts_import"):
+		copy.add_to_group("tts_import")
+
+	return copy
