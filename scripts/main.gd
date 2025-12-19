@@ -819,8 +819,8 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 		table.setup_table(Vector2(size[0], size[1]))
 		_adjust_camera_for_table_size(Vector2(size[0], size[1]))
 
-	# Deserialize objects (using save_manager helper)
+	# Deserialize objects (using save_manager helper, async for TTS downloads)
 	var objects_data = state.get("objects", [])
-	var loaded_count = save_manager._deserialize_objects(objects_data)
+	var loaded_count = await save_manager._deserialize_objects(objects_data)
 
 	print("Synced %d objects from host" % loaded_count)
