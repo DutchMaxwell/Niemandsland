@@ -59,6 +59,15 @@ extends Node3D
 @onready var save_game_dialog: FileDialog = %SaveGameDialog
 @onready var load_game_dialog: FileDialog = %LoadGameDialog
 
+# Terrain Browser UI
+@onready var terrain_library = %TerrainLibrary
+@onready var terrain_browser_btn: Button = %TerrainBrowser
+@onready var terrain_browser_popup: Window = %TerrainBrowserPopup
+@onready var terrain_category_option: OptionButton = %CategoryOption
+@onready var terrain_list: ItemList = %TerrainList
+@onready var spawn_terrain_btn: Button = %SpawnTerrainBtn
+@onready var close_terrain_btn: Button = %CloseTerrainBtn
+
 # TTS Import state
 var _tts_json_path: String = ""
 var _tts_models_dir: String = ""
@@ -142,6 +151,16 @@ func _ready() -> void:
 	save_manager.object_manager = object_manager
 	save_manager.table = table
 
+	# Connect Terrain Browser UI
+	terrain_library.object_manager = object_manager
+	terrain_browser_btn.pressed.connect(_on_terrain_browser_pressed)
+	terrain_category_option.item_selected.connect(_on_terrain_category_selected)
+	terrain_list.item_activated.connect(_on_terrain_item_activated)
+	spawn_terrain_btn.pressed.connect(_on_spawn_terrain_pressed)
+	close_terrain_btn.pressed.connect(_on_close_terrain_browser)
+	terrain_browser_popup.close_requested.connect(_on_close_terrain_browser)
+	terrain_library.library_loaded.connect(_on_terrain_library_loaded)
+
 	# Initialize table with default size (6x4 feet = 72x48 inches, landscape)
 	# Long side (72") faces the viewer (X-axis), short side (48") is depth (Z-axis)
 	table.setup_table(Vector2(6, 4))
@@ -177,6 +196,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_D and event.ctrl_pressed:
 			object_manager.copy_to_clipboard()
 			object_manager.paste_from_clipboard(cursor_pos)
+			get_viewport().set_input_as_handled()
+		# Lock/Unlock selected objects (L key)
+		elif event.keycode == KEY_L and not event.ctrl_pressed:
+			object_manager.toggle_lock_selected()
 			get_viewport().set_input_as_handled()
 
 
@@ -824,3 +847,78 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	var loaded_count = await save_manager._deserialize_objects(objects_data)
 
 	print("Synced %d objects from host" % loaded_count)
+
+
+## ============================================================================
+## Terrain Browser Functions
+## ============================================================================
+
+## Open terrain browser popup
+func _on_terrain_browser_pressed() -> void:
+	terrain_browser_popup.popup_centered()
+
+
+## Close terrain browser popup
+func _on_close_terrain_browser() -> void:
+	terrain_browser_popup.hide()
+
+
+## Called when terrain library finishes loading
+func _on_terrain_library_loaded(categories: Array) -> void:
+	terrain_category_option.clear()
+
+	if categories.is_empty():
+		terrain_category_option.add_item("No terrain found")
+		return
+
+	for category in categories:
+		terrain_category_option.add_item(category)
+
+	# Select first category and populate list
+	terrain_category_option.select(0)
+	_on_terrain_category_selected(0)
+
+
+## Category selection changed
+func _on_terrain_category_selected(index: int) -> void:
+	terrain_list.clear()
+
+	var category_name = terrain_category_option.get_item_text(index)
+	var pieces = terrain_library.get_pieces_in_category(category_name)
+
+	for piece in pieces:
+		var display_name = piece.name
+		if not piece.description.is_empty():
+			display_name += " - " + piece.description.left(50)
+		terrain_list.add_item(display_name)
+		# Store piece ID in metadata
+		terrain_list.set_item_metadata(terrain_list.item_count - 1, piece.id)
+
+
+## Double-click on terrain item to spawn immediately
+func _on_terrain_item_activated(index: int) -> void:
+	_spawn_selected_terrain(index)
+
+
+## Spawn button pressed
+func _on_spawn_terrain_pressed() -> void:
+	var selected = terrain_list.get_selected_items()
+	if selected.is_empty():
+		return
+	_spawn_selected_terrain(selected[0])
+
+
+## Spawn the selected terrain piece at cursor position
+func _spawn_selected_terrain(index: int) -> void:
+	var piece_id = terrain_list.get_item_metadata(index)
+	var piece = terrain_library.get_piece_by_id(piece_id)
+
+	if not piece:
+		push_error("Terrain piece not found: %s" % piece_id)
+		return
+
+	var cursor_pos = object_manager.get_cursor_table_position()
+	terrain_library.spawn_terrain_piece(piece, cursor_pos)
+
+	# Keep browser open for placing multiple pieces
+	print("Spawning terrain: %s at cursor" % piece.name)
