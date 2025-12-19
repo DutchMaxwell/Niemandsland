@@ -2318,28 +2318,12 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 		print("  [FAIL] %s - could not load mesh" % tts_obj.name)
 		return null
 
-	# Calculate model bounds to determine appropriate scale
+	# Calculate model bounds for collision
 	var mesh_aabb = _calculate_aabb(model_scene)
-	var max_dim = max(mesh_aabb.size.x, max(mesh_aabb.size.y, mesh_aabb.size.z))
-	var height = mesh_aabb.size.y
 
-	# Better scaling for TTS models:
-	# Target height: ~40mm (0.04m) for standard infantry, adjust based on model
-	# TTS OBJ files vary wildly in scale
-	var target_height = 0.04  # 40mm default for infantry
-	var model_scale: float
-
-	if height > 0.001:  # Has meaningful height
-		model_scale = target_height / height
-		# Clamp scale to reasonable range
-		model_scale = clamp(model_scale, 0.0001, 1.0)
-	else:
-		model_scale = 0.001  # Fallback
-
-	model_scene.scale = Vector3(model_scale, model_scale, model_scale)
-
+	# Keep original scale - TTS models are already in correct tabletop scale
 	var base_info = " + base" if add_base else ""
-	print("    Scale: %.6f (height: %.2f -> %.2fmm)%s" % [model_scale, height, height * model_scale * 1000, base_info])
+	print("    Size: %.1fmm x %.1fmm x %.1fmm%s" % [mesh_aabb.size.x * 1000, mesh_aabb.size.y * 1000, mesh_aabb.size.z * 1000, base_info])
 
 	# Wrap in StaticBody3D for selection
 	_object_counter += 1
@@ -2354,13 +2338,12 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 	# Add loaded model
 	wrapper.add_child(model_scene)
 
-	# Calculate collision from model bounds (use scaled AABB)
-	var scaled_aabb = AABB(mesh_aabb.position * model_scale, mesh_aabb.size * model_scale)
+	# Calculate collision from model bounds
 	var collision = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
-	shape.size = scaled_aabb.size
+	shape.size = mesh_aabb.size
 	collision.shape = shape
-	collision.position = scaled_aabb.position + scaled_aabb.size / 2
+	collision.position = mesh_aabb.position + mesh_aabb.size / 2
 	wrapper.add_child(collision)
 
 	# Apply TTS color tint if not white
