@@ -84,12 +84,13 @@ Controls:
 - Right Click + Drag: Rotate Camera
 - Middle Click + Drag: Pan Camera
 - Scroll: Zoom
-- Left Click: Select/Drag Object
+- Left Click: Select/Drag
 - Alt + Click: Multi-Select
 - R (hold): Rotate Selected
-- 1-9: Arrange in N rows
-- A: Arrow formation
-- Ctrl+C/D: Copy selected"
+- 1-9: Arrange at cursor
+- A: Arrow at cursor
+- Ctrl+C: Copy | Ctrl+V: Paste
+- Ctrl+D: Duplicate at cursor"
 
 [node name="PerformanceLabel" type="Label" parent="UI/HUD"]
 unique_name_in_owner = true
