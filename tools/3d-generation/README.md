@@ -1,64 +1,59 @@
-# 3D Model Generation for OpenTTS
+# 3D-Modell-Generierung für OpenTTS
 
-Generate 3D models from images using AI for your tabletop games.
+Erstelle texturierte 3D-Modelle aus Bildern für deine Tabletop-Spiele.
 
-## TripoSG (Recommended)
+## TRELLIS.2 (Empfohlen)
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DutchMaxwell/openTTS/blob/main/tools/3d-generation/triposg_colab.ipynb)
+**Microsoft's Open-Source Image-to-3D mit vollen Texturen**
 
-**TripoSG** by VAST-AI-Research generates high-quality 3D models from single images.
+| Feature | Details |
+|---------|---------|
+| Lizenz | MIT (frei für kommerzielle Nutzung) |
+| Output | Mesh + PBR-Texturen (Farbe, Roughness, Metallic) |
+| Qualität | 4 Milliarden Parameter, bis 1536³ Auflösung |
 
-### Quick Start
+### Option 1: HuggingFace Space (Einfachste Methode)
 
-1. Click the "Open in Colab" badge above
-2. Go to `Runtime > Change runtime type > GPU` (T4 recommended)
-3. Run all cells in order
-4. Upload your images to Google Drive (`MyDrive/OpenTTS_3D/input`)
-5. Download generated `.glb` models from `MyDrive/OpenTTS_3D/output`
+Keine Installation nötig - läuft direkt im Browser:
 
-### Requirements
+**[TRELLIS.2 Demo öffnen](https://huggingface.co/spaces/microsoft/TRELLIS.2)**
 
-- Google account (for Colab)
-- GPU runtime (free T4 works well)
-- ~3-5 minutes per model
+**Workflow:**
+1. Link öffnen
+2. Bild hochladen
+3. "Generate" klicken
+4. GLB herunterladen
+5. In OpenTTS importieren: `Spawn > Import GLB`
 
-### Output Settings
+### Option 2: Google Colab (Colab Pro mit A100)
 
-| Quality | Faces | Use Case |
-|---------|-------|----------|
-| Low | 5,000 | Best for game performance |
-| Medium | 10,000 | Good balance (default) |
-| High | 20,000 | Detailed close-ups |
+Für Batch-Verarbeitung oder mehr Kontrolle:
 
-### Tips for Best Results
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DutchMaxwell/openTTS/blob/main/tools/3d-generation/trellis2_colab.ipynb)
 
-- **Clean background**: White or transparent works best
-- **Single object**: One item per image
-- **Good lighting**: Even, no harsh shadows
-- **Clear silhouette**: Distinct edges help the AI
+**Voraussetzung:** Colab Pro mit A100 GPU (24GB+ VRAM erforderlich)
 
-### Import to OpenTTS
+## Tipps für beste Ergebnisse
 
-1. Copy `.glb` files to your local machine
+- **Sauberer Hintergrund**: Weiß oder transparent
+- **Ein Objekt pro Bild**: Klare Silhouette
+- **Gute Beleuchtung**: Gleichmäßig, keine harten Schatten
+- **Hohe Auflösung**: Mindestens 512x512 Pixel
+
+## Import in OpenTTS
+
+1. GLB-Datei herunterladen
 2. In OpenTTS: `Spawn > Import GLB`
-3. Position and scale as needed
-4. Use `L` key to lock terrain pieces
+3. Positionieren und skalieren
+4. `L` drücken zum Fixieren (für Terrain)
 
-## License
+## Lizenz
 
-- **TripoSG**: MIT License ([VAST-AI-Research/TripoSG](https://github.com/VAST-AI-Research/TripoSG))
-- **This notebook**: MIT License (same as OpenTTS)
+- **TRELLIS.2**: MIT License ([Microsoft/TRELLIS.2](https://github.com/microsoft/TRELLIS.2))
+- **Generierte Modelle**: Gehören dir, frei nutzbar
 
-## Troubleshooting
+## Links
 
-**"No GPU detected"**
-- Go to `Runtime > Change runtime type > GPU`
-
-**Out of memory**
-- Restart runtime: `Runtime > Restart runtime`
-- Use lower face count (5000)
-
-**Model looks wrong**
-- Try a cleaner input image
-- Ensure object is centered
-- Remove complex backgrounds
+- [TRELLIS.2 GitHub](https://github.com/microsoft/TRELLIS.2)
+- [TRELLIS.2 Paper](https://arxiv.org/abs/2512.14692)
+- [HuggingFace Model](https://huggingface.co/microsoft/TRELLIS.2-4B)
