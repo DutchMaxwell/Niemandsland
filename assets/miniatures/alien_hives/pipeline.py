@@ -3,30 +3,24 @@
 Automated Image-to-3D Pipeline for OpenTTS
 ==========================================
 
-Vollautomatische Pipeline:
-1. Gemini API → Bildgenerierung
-2. Trellis.2 → 3D-Modell (GLB)
+100% KOSTENLOSE Pipeline via Hugging Face:
+1. FLUX.1-schnell → Bildgenerierung (Hugging Face Space)
+2. Trellis.2 → 3D-Modell GLB (Hugging Face Space)
 
-Unterstützte Trellis Backends:
-- huggingface (KOSTENLOS via Gradio Space) ← EMPFOHLEN
-- replicate (firtoz/trellis, ~$0.25/Modell)
-- fal (fal-ai/trellis-2, ~$0.25/Modell)
+KEIN API KEY ERFORDERLICH! Funktioniert weltweit.
 
 Usage:
-    # Mit Hugging Face Space (KOSTENLOS!)
-    python pipeline.py --gemini-key KEY --unit hive_lord
-    python pipeline.py --gemini-key KEY --all
+    # Einzelne Einheit (100% kostenlos!)
+    python pipeline.py --unit hive_lord
 
-    # Mit Replicate (kostenpflichtig)
-    python pipeline.py --gemini-key KEY --replicate-key KEY --backend replicate --unit hive_lord
+    # Alle Einheiten generieren
+    python pipeline.py --all
 
-    # Mit fal.ai (kostenpflichtig)
-    python pipeline.py --gemini-key KEY --fal-key KEY --backend fal --unit hive_lord
+    # Mit kostenpflichtigem Backend (schneller)
+    python pipeline.py --replicate-key KEY --backend replicate --unit hive_lord
 
-Environment Variables:
-    GEMINI_API_KEY
-    REPLICATE_API_TOKEN
-    FAL_KEY
+Requirements:
+    pip install gradio_client requests
 """
 
 import os
@@ -42,13 +36,6 @@ from typing import Optional, Literal
 # ============================================================================
 # DEPENDENCIES
 # ============================================================================
-
-try:
-    from google import genai
-    from google.genai import types
-except ImportError:
-    print("❌ pip install google-genai")
-    sys.exit(1)
 
 try:
     import requests
@@ -194,11 +181,17 @@ UNITS = {
 # GEMINI IMAGE GENERATOR
 # ============================================================================
 
-class GeminiGenerator:
-    """Generates images using Google Gemini API (new google.genai package)."""
+class HuggingFaceImageGenerator:
+    """Generates images using Hugging Face Spaces (FLUX) - works worldwide!"""
 
-    def __init__(self, api_key: str):
-        self.client = genai.Client(api_key=api_key)
+    def __init__(self):
+        if not HAS_GRADIO:
+            raise ImportError("❌ pip install gradio_client")
+
+        print("🔗 Connecting to FLUX image generator...")
+        # Using black-forest-labs FLUX.1-schnell - free and fast
+        self.client = GradioClient("black-forest-labs/FLUX.1-schnell")
+        print("   ✅ Connected!")
 
     def generate(self, unit_key: str, output_dir: Path) -> Optional[Path]:
         """Generate image for a unit."""
@@ -217,31 +210,33 @@ class GeminiGenerator:
             unit_details=unit["details"]
         )
 
-        # Add instruction to generate image
-        prompt = f"Generate an image of: {prompt}"
-
         print(f"🎨 Generating image: {unit['name']}...")
 
         try:
-            response = self.client.models.generate_content(
-                model="gemini-2.0-flash-exp",
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_modalities=["Image", "Text"]
-                )
+            # FLUX.1-schnell API
+            result = self.client.predict(
+                prompt=prompt,
+                seed=0,
+                randomize_seed=True,
+                width=1024,
+                height=1024,
+                num_inference_steps=4,
+                api_name="/infer"
             )
 
-            if response.candidates and response.candidates[0].content.parts:
-                for part in response.candidates[0].content.parts:
-                    if part.inline_data is not None:
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        filename = f"{unit_key}_{timestamp}.png"
-                        filepath = output_dir / "images" / filename
-                        filepath.parent.mkdir(parents=True, exist_ok=True)
+            # Result is (image_path, seed)
+            if result and len(result) > 0:
+                image_path = result[0]
+                if image_path and os.path.exists(image_path):
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"{unit_key}_{timestamp}.png"
+                    filepath = output_dir / "images" / filename
+                    filepath.parent.mkdir(parents=True, exist_ok=True)
 
-                        filepath.write_bytes(part.inline_data.data)
-                        print(f"   ✅ Saved: {filepath}")
-                        return filepath
+                    import shutil
+                    shutil.copy(image_path, filepath)
+                    print(f"   ✅ Saved: {filepath}")
+                    return filepath
 
             print(f"   ⚠️ No image data in response")
             return None
@@ -472,18 +467,20 @@ class HuggingFaceTrellis:
 # ============================================================================
 
 class Pipeline:
-    """Complete Image → 3D Pipeline."""
+    """Complete Image → 3D Pipeline (100% FREE via Hugging Face!)."""
 
     def __init__(
         self,
-        gemini_key: str,
         trellis_key: str = None,
         backend: Literal["huggingface", "replicate", "fal"] = "huggingface",
         output_dir: str = None
     ):
         self.output_dir = Path(output_dir) if output_dir else Path(__file__).parent
-        self.gemini = GeminiGenerator(gemini_key)
 
+        # Image generation via Hugging Face FLUX (free, works worldwide)
+        self.image_generator = HuggingFaceImageGenerator()
+
+        # 3D generation backend
         if backend == "huggingface":
             self.trellis = HuggingFaceTrellis()
         elif backend == "replicate":
@@ -511,7 +508,7 @@ class Pipeline:
         }
 
         # Step 1: Generate image
-        image_path = self.gemini.generate(unit_key, self.output_dir)
+        image_path = self.image_generator.generate(unit_key, self.output_dir)
         if not image_path:
             return result
         result["image"] = str(image_path)
@@ -565,10 +562,9 @@ class Pipeline:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Automated Image-to-3D Pipeline for OpenTTS"
+        description="Automated Image-to-3D Pipeline for OpenTTS (100% FREE!)"
     )
 
-    parser.add_argument("--gemini-key", help="Gemini API Key")
     parser.add_argument("--replicate-key", help="Replicate API Token (nur für --backend replicate)")
     parser.add_argument("--fal-key", help="fal.ai API Key (nur für --backend fal)")
     parser.add_argument("--backend", choices=["huggingface", "replicate", "fal"], default="huggingface",
@@ -585,18 +581,16 @@ def main():
         print("\n📋 Available Units:\n")
         for key, unit in UNITS.items():
             print(f"  {key:20} - {unit['name']} ({unit['army']})")
-        print(f"\n💡 Default backend: huggingface (FREE)")
+        print(f"\n💡 100% FREE - No API keys needed with default backend!")
         return
 
-    # Get API keys
-    gemini_key = args.gemini_key or os.environ.get("GEMINI_API_KEY")
-
-    if not gemini_key:
-        print("❌ Gemini API key required (--gemini-key or GEMINI_API_KEY)")
-        print("   Get one free at: https://aistudio.google.com/apikey")
+    # Check gradio_client is installed
+    if not HAS_GRADIO:
+        print("❌ gradio_client required")
+        print("   pip install gradio_client")
         return
 
-    # Get trellis key only if needed
+    # Get trellis key only if needed for paid backends
     trellis_key = None
     if args.backend == "replicate":
         trellis_key = args.replicate_key or os.environ.get("REPLICATE_API_TOKEN")
@@ -608,15 +602,9 @@ def main():
         if not trellis_key:
             print("❌ fal.ai API key required for --backend fal")
             return
-    elif args.backend == "huggingface":
-        if not HAS_GRADIO:
-            print("❌ gradio_client required for Hugging Face backend")
-            print("   pip install gradio_client")
-            return
 
     # Run pipeline
     pipeline = Pipeline(
-        gemini_key=gemini_key,
         trellis_key=trellis_key,
         backend=args.backend,
         output_dir=args.output
