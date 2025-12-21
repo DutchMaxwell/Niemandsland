@@ -44,10 +44,10 @@ from typing import Optional, Literal
 # ============================================================================
 
 try:
-    import google.generativeai as genai
-    from google.generativeai import types
+    from google import genai
+    from google.genai import types
 except ImportError:
-    print("❌ pip install google-generativeai")
+    print("❌ pip install google-genai")
     sys.exit(1)
 
 try:
@@ -195,11 +195,10 @@ UNITS = {
 # ============================================================================
 
 class GeminiGenerator:
-    """Generates images using Google Gemini API."""
+    """Generates images using Google Gemini API (new google.genai package)."""
 
     def __init__(self, api_key: str):
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel("gemini-2.0-flash-exp")
+        self.client = genai.Client(api_key=api_key)
 
     def generate(self, unit_key: str, output_dir: Path) -> Optional[Path]:
         """Generate image for a unit."""
@@ -218,19 +217,23 @@ class GeminiGenerator:
             unit_details=unit["details"]
         )
 
+        # Add instruction to generate image
+        prompt = f"Generate an image of: {prompt}"
+
         print(f"🎨 Generating image: {unit['name']}...")
 
         try:
-            response = self.model.generate_content(
-                prompt,
-                generation_config=types.GenerationConfig(
-                    response_mime_type="image/png",
+            response = self.client.models.generate_content(
+                model="gemini-2.0-flash-exp",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_modalities=["Image", "Text"]
                 )
             )
 
             if response.candidates and response.candidates[0].content.parts:
                 for part in response.candidates[0].content.parts:
-                    if hasattr(part, 'inline_data') and part.inline_data:
+                    if part.inline_data is not None:
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                         filename = f"{unit_key}_{timestamp}.png"
                         filepath = output_dir / "images" / filename
