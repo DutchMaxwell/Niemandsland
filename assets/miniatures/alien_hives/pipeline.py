@@ -5,22 +5,23 @@ Automated Image-to-3D Pipeline for OpenTTS
 
 Vollautomatische Pipeline:
 1. Gemini API → Bildgenerierung
-2. Trellis.2 API → 3D-Modell (GLB)
+2. Trellis.2 → 3D-Modell (GLB)
 
 Unterstützte Trellis Backends:
-- Replicate (firtoz/trellis)
-- fal.ai (fal-ai/trellis-2)
-- Lokal (benötigt 24GB VRAM)
+- huggingface (KOSTENLOS via Gradio Space) ← EMPFOHLEN
+- replicate (firtoz/trellis, ~$0.25/Modell)
+- fal (fal-ai/trellis-2, ~$0.25/Modell)
 
 Usage:
-    # Mit Replicate
-    python pipeline.py --gemini-key KEY --replicate-key KEY --unit hive_lord
+    # Mit Hugging Face Space (KOSTENLOS!)
+    python pipeline.py --gemini-key KEY --unit hive_lord
+    python pipeline.py --gemini-key KEY --all
 
-    # Mit fal.ai
+    # Mit Replicate (kostenpflichtig)
+    python pipeline.py --gemini-key KEY --replicate-key KEY --backend replicate --unit hive_lord
+
+    # Mit fal.ai (kostenpflichtig)
     python pipeline.py --gemini-key KEY --fal-key KEY --backend fal --unit hive_lord
-
-    # Alle Einheiten
-    python pipeline.py --gemini-key KEY --replicate-key KEY --all
 
 Environment Variables:
     GEMINI_API_KEY
@@ -54,6 +55,14 @@ try:
 except ImportError:
     print("❌ pip install requests")
     sys.exit(1)
+
+# Optional: Gradio Client für Hugging Face Spaces
+try:
+    from gradio_client import Client as GradioClient
+    from gradio_client import handle_file
+    HAS_GRADIO = True
+except ImportError:
+    HAS_GRADIO = False
 
 
 # ============================================================================
@@ -387,6 +396,74 @@ class FalTrellis:
         return None
 
 
+class HuggingFaceTrellis:
+    """Generate 3D models using Hugging Face Space (KOSTENLOS!)."""
+
+    def __init__(self):
+        if not HAS_GRADIO:
+            raise ImportError("❌ pip install gradio_client")
+
+        print("🔗 Connecting to Hugging Face Space...")
+        self.client = GradioClient("microsoft/TRELLIS.2")
+        print("   ✅ Connected!")
+
+    def generate(self, image_path: Path, output_dir: Path) -> Optional[Path]:
+        """Convert image to 3D model via Hugging Face Space."""
+        print(f"🔮 Converting to 3D (Hugging Face Space - FREE)...")
+
+        try:
+            # Step 1: Upload image and preprocess
+            print("   📤 Uploading image...")
+            preprocess_result = self.client.predict(
+                image=handle_file(str(image_path)),
+                api_name="/preprocess_image"
+            )
+
+            # Step 2: Generate 3D (returns multiple outputs)
+            print("   ⏳ Generating 3D model (this may take 1-2 minutes)...")
+            result = self.client.predict(
+                seed=42,
+                randomize_seed=True,
+                ss_guidance_strength=7.5,
+                ss_sampling_steps=12,
+                slat_guidance_strength=3,
+                slat_sampling_steps=12,
+                api_name="/image_to_3d"
+            )
+
+            # Result contains: (seed, video_path, 3d_model_state)
+            # We need to extract the GLB
+
+            # Step 3: Extract GLB
+            print("   📦 Extracting GLB...")
+            glb_result = self.client.predict(
+                mesh_simplify=0.95,
+                texture_size=1024,
+                api_name="/extract_glb"
+            )
+
+            # glb_result should be the path to the GLB file
+            if glb_result and os.path.exists(glb_result):
+                output_name = image_path.stem + ".glb"
+                output_path = output_dir / "models" / output_name
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+
+                # Copy GLB to output directory
+                import shutil
+                shutil.copy(glb_result, output_path)
+                print(f"   ✅ 3D Model saved: {output_path}")
+                return output_path
+            else:
+                print(f"   ❌ GLB extraction failed")
+                return None
+
+        except Exception as e:
+            print(f"   ❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+
 # ============================================================================
 # MAIN PIPELINE
 # ============================================================================
@@ -397,16 +474,22 @@ class Pipeline:
     def __init__(
         self,
         gemini_key: str,
-        trellis_key: str,
-        backend: Literal["replicate", "fal"] = "replicate",
+        trellis_key: str = None,
+        backend: Literal["huggingface", "replicate", "fal"] = "huggingface",
         output_dir: str = None
     ):
         self.output_dir = Path(output_dir) if output_dir else Path(__file__).parent
         self.gemini = GeminiGenerator(gemini_key)
 
-        if backend == "replicate":
+        if backend == "huggingface":
+            self.trellis = HuggingFaceTrellis()
+        elif backend == "replicate":
+            if not trellis_key:
+                raise ValueError("Replicate backend requires --replicate-key")
             self.trellis = ReplicateTrellis(trellis_key)
         elif backend == "fal":
+            if not trellis_key:
+                raise ValueError("fal.ai backend requires --fal-key")
             self.trellis = FalTrellis(trellis_key)
         else:
             raise ValueError(f"Unknown backend: {backend}")
@@ -483,14 +566,15 @@ def main():
     )
 
     parser.add_argument("--gemini-key", help="Gemini API Key")
-    parser.add_argument("--replicate-key", help="Replicate API Token")
-    parser.add_argument("--fal-key", help="fal.ai API Key")
-    parser.add_argument("--backend", choices=["replicate", "fal"], default="replicate")
+    parser.add_argument("--replicate-key", help="Replicate API Token (nur für --backend replicate)")
+    parser.add_argument("--fal-key", help="fal.ai API Key (nur für --backend fal)")
+    parser.add_argument("--backend", choices=["huggingface", "replicate", "fal"], default="huggingface",
+                        help="Trellis backend: huggingface (FREE), replicate, fal")
     parser.add_argument("--unit", help="Process single unit")
     parser.add_argument("--all", action="store_true", help="Process all units")
     parser.add_argument("--output", help="Output directory")
     parser.add_argument("--list", action="store_true", help="List available units")
-    parser.add_argument("--delay", type=float, default=5.0, help="Delay between units")
+    parser.add_argument("--delay", type=float, default=10.0, help="Delay between units (default: 10s for HF rate limits)")
 
     args = parser.parse_args()
 
@@ -498,23 +582,34 @@ def main():
         print("\n📋 Available Units:\n")
         for key, unit in UNITS.items():
             print(f"  {key:20} - {unit['name']} ({unit['army']})")
+        print(f"\n💡 Default backend: huggingface (FREE)")
         return
 
     # Get API keys
     gemini_key = args.gemini_key or os.environ.get("GEMINI_API_KEY")
 
-    if args.backend == "replicate":
-        trellis_key = args.replicate_key or os.environ.get("REPLICATE_API_TOKEN")
-    else:
-        trellis_key = args.fal_key or os.environ.get("FAL_KEY")
-
     if not gemini_key:
         print("❌ Gemini API key required (--gemini-key or GEMINI_API_KEY)")
+        print("   Get one free at: https://aistudio.google.com/apikey")
         return
 
-    if not trellis_key:
-        print(f"❌ {args.backend} API key required")
-        return
+    # Get trellis key only if needed
+    trellis_key = None
+    if args.backend == "replicate":
+        trellis_key = args.replicate_key or os.environ.get("REPLICATE_API_TOKEN")
+        if not trellis_key:
+            print("❌ Replicate API key required for --backend replicate")
+            return
+    elif args.backend == "fal":
+        trellis_key = args.fal_key or os.environ.get("FAL_KEY")
+        if not trellis_key:
+            print("❌ fal.ai API key required for --backend fal")
+            return
+    elif args.backend == "huggingface":
+        if not HAS_GRADIO:
+            print("❌ gradio_client required for Hugging Face backend")
+            print("   pip install gradio_client")
+            return
 
     # Run pipeline
     pipeline = Pipeline(
