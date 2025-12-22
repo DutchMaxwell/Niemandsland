@@ -410,38 +410,46 @@ class HuggingFaceTrellis:
         print(f"🔮 Converting to 3D (Hugging Face Space - FREE)...")
 
         try:
-            # Step 1: Generate 3D directly with image
+            # Step 1: Generate 3D with correct API parameters
             print("   ⏳ Generating 3D model (this may take 1-2 minutes)...")
             result = self.client.predict(
-                handle_file(str(image_path)),  # image as positional arg
-                [],  # multiimages (empty for single image)
-                0,   # seed
-                True,  # randomize_seed
-                7.5,   # ss_guidance_strength
-                12,    # ss_sampling_steps
-                3,     # slat_guidance_strength
-                12,    # slat_sampling_steps
-                "stochastic",  # multiimage_algo
+                image=handle_file(str(image_path)),
+                seed=0,
+                resolution="1024",
+                ss_guidance_strength=7.5,
+                ss_guidance_rescale=0.7,
+                ss_sampling_steps=12,
+                ss_rescale_t=5.0,
+                shape_slat_guidance_strength=7.5,
+                shape_slat_guidance_rescale=0.5,
+                shape_slat_sampling_steps=12,
+                shape_slat_rescale_t=3.0,
+                tex_slat_guidance_strength=1.0,
+                tex_slat_guidance_rescale=0.0,
+                tex_slat_sampling_steps=12,
+                tex_slat_rescale_t=3.0,
                 api_name="/image_to_3d"
             )
+            print(f"   ✅ 3D generation complete")
 
             # Step 2: Extract GLB
             print("   📦 Extracting GLB...")
             glb_result = self.client.predict(
-                0.95,  # mesh_simplify
-                1024,  # texture_size
+                decimation_target=300000,
+                texture_size=2048,
                 api_name="/extract_glb"
             )
 
-            # glb_result should be the path to the GLB file
-            if glb_result and os.path.exists(glb_result):
+            # glb_result is (extracted_glb, download_glb) - both are filepaths
+            glb_path = glb_result[0] if isinstance(glb_result, tuple) else glb_result
+
+            if glb_path and os.path.exists(glb_path):
                 output_name = image_path.stem + ".glb"
                 output_path = output_dir / "models" / output_name
                 output_path.parent.mkdir(parents=True, exist_ok=True)
 
-                # Copy GLB to output directory
                 import shutil
-                shutil.copy(glb_result, output_path)
+                shutil.copy(glb_path, output_path)
                 print(f"   ✅ 3D Model saved: {output_path}")
                 return output_path
             else:
