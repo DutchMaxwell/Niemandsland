@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
 """
-Automated Image-to-3D Pipeline for OpenTTS
-==========================================
+Image-to-3D Pipeline for OpenTTS
+================================
 
-100% KOSTENLOSE Pipeline via Hugging Face:
-1. FLUX.1-schnell → Bildgenerierung (Hugging Face Space)
-2. Trellis.2 → 3D-Modell GLB (Hugging Face Space)
+Zwei Modi:
 
-KEIN API KEY ERFORDERLICH! Funktioniert weltweit.
+1. EMPFOHLEN: Gemini-Bilder zu 3D konvertieren
+   - Generiere Bilder manuell auf aistudio.google.com (beste Qualität!)
+   - Konvertiere sie automatisch zu 3D mit Trellis.2
 
-Usage:
-    # Einzelne Einheit (100% kostenlos!)
-    python pipeline.py --unit hive_lord
+   python pipeline.py --image hive_lord.png
+   python pipeline.py --image bild1.png --image bild2.png
 
-    # Alle Einheiten generieren
-    python pipeline.py --all
+2. Vollautomatisch: FLUX + Trellis (100% kostenlos)
+   - Bildgenerierung via FLUX.1-schnell
+   - 3D-Konvertierung via Trellis.2
 
-    # Mit kostenpflichtigem Backend (schneller)
-    python pipeline.py --replicate-key KEY --backend replicate --unit hive_lord
+   python pipeline.py --unit hive_lord
+   python pipeline.py --all
 
 Requirements:
     pip install gradio_client requests
@@ -473,12 +473,17 @@ class Pipeline:
         self,
         trellis_key: str = None,
         backend: Literal["huggingface", "replicate", "fal"] = "huggingface",
-        output_dir: str = None
+        output_dir: str = None,
+        image_only: bool = False  # Skip image generation, only do 3D
     ):
         self.output_dir = Path(output_dir) if output_dir else Path(__file__).parent
+        self.image_only = image_only
 
-        # Image generation via Hugging Face FLUX (free, works worldwide)
-        self.image_generator = HuggingFaceImageGenerator()
+        # Only init image generator if needed
+        if not image_only:
+            self.image_generator = HuggingFaceImageGenerator()
+        else:
+            self.image_generator = None
 
         # 3D generation backend
         if backend == "huggingface":
@@ -493,6 +498,22 @@ class Pipeline:
             self.trellis = FalTrellis(trellis_key)
         else:
             raise ValueError(f"Unknown backend: {backend}")
+
+    def process_image(self, image_path: str) -> Optional[Path]:
+        """Convert an existing image to 3D model."""
+        image_path = Path(image_path)
+        if not image_path.exists():
+            print(f"❌ Image not found: {image_path}")
+            return None
+
+        print(f"\n{'='*50}")
+        print(f"Converting to 3D: {image_path.name}")
+        print(f"{'='*50}")
+
+        model_path = self.trellis.generate(image_path, self.output_dir)
+        if model_path:
+            print(f"\n✅ Done! Model saved: {model_path}")
+        return model_path
 
     def process_unit(self, unit_key: str) -> dict:
         """Process a single unit through the full pipeline."""
@@ -562,18 +583,37 @@ class Pipeline:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Automated Image-to-3D Pipeline for OpenTTS (100% FREE!)"
+        description="Image-to-3D Pipeline for OpenTTS",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Beispiele:
+  # Bild direkt zu 3D konvertieren (empfohlen!)
+  python pipeline.py --image hive_lord.png
+
+  # Mehrere Bilder konvertieren
+  python pipeline.py --image bild1.png --image bild2.png
+
+  # Automatische Pipeline (FLUX + Trellis)
+  python pipeline.py --unit hive_lord
+        """
     )
 
-    parser.add_argument("--replicate-key", help="Replicate API Token (nur für --backend replicate)")
-    parser.add_argument("--fal-key", help="fal.ai API Key (nur für --backend fal)")
-    parser.add_argument("--backend", choices=["huggingface", "replicate", "fal"], default="huggingface",
-                        help="Trellis backend: huggingface (FREE), replicate, fal")
-    parser.add_argument("--unit", help="Process single unit")
-    parser.add_argument("--all", action="store_true", help="Process all units")
+    # Image-to-3D Modus (empfohlen für Gemini-Bilder)
+    parser.add_argument("--image", action="append", help="Bild zu 3D konvertieren (kann mehrfach verwendet werden)")
+
+    # Automatische Pipeline
+    parser.add_argument("--unit", help="Einheit automatisch generieren")
+    parser.add_argument("--all", action="store_true", help="Alle Einheiten generieren")
+
+    # Backend Optionen
+    parser.add_argument("--replicate-key", help="Replicate API Token")
+    parser.add_argument("--fal-key", help="fal.ai API Key")
+    parser.add_argument("--backend", choices=["huggingface", "replicate", "fal"], default="huggingface")
+
+    # Andere Optionen
     parser.add_argument("--output", help="Output directory")
-    parser.add_argument("--list", action="store_true", help="List available units")
-    parser.add_argument("--delay", type=float, default=10.0, help="Delay between units (default: 10s for HF rate limits)")
+    parser.add_argument("--list", action="store_true", help="Einheiten anzeigen")
+    parser.add_argument("--delay", type=float, default=10.0, help="Delay zwischen Einheiten")
 
     args = parser.parse_args()
 
@@ -581,7 +621,6 @@ def main():
         print("\n📋 Available Units:\n")
         for key, unit in UNITS.items():
             print(f"  {key:20} - {unit['name']} ({unit['army']})")
-        print(f"\n💡 100% FREE - No API keys needed with default backend!")
         return
 
     # Check gradio_client is installed
@@ -603,7 +642,19 @@ def main():
             print("❌ fal.ai API key required for --backend fal")
             return
 
-    # Run pipeline
+    # Image-to-3D Modus
+    if args.image:
+        pipeline = Pipeline(
+            trellis_key=trellis_key,
+            backend=args.backend,
+            output_dir=args.output,
+            image_only=True  # Skip FLUX, only Trellis
+        )
+        for img in args.image:
+            pipeline.process_image(img)
+        return
+
+    # Automatische Pipeline
     pipeline = Pipeline(
         trellis_key=trellis_key,
         backend=args.backend,
