@@ -69,8 +69,8 @@ def remove_gemini_watermark(img: "Image.Image") -> "Image.Image":
     pixels = img.load()
 
     # Gemini watermark is a small star in bottom-right corner
-    # Paint a 150x150 pixel area in the corner black/transparent
-    watermark_size = 150
+    # Paint a 200x200 pixel area in the corner black/transparent
+    watermark_size = 200
     for y in range(height - watermark_size, height):
         for x in range(width - watermark_size, width):
             if img.mode == "RGBA":
