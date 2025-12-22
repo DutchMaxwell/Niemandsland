@@ -63,19 +63,56 @@ except ImportError:
 # IMAGE PREPROCESSING (like TRELLIS web interface)
 # ============================================================================
 
+def remove_gemini_watermark(img: "Image.Image") -> "Image.Image":
+    """Remove Gemini watermark from bottom-right corner."""
+    width, height = img.size
+    pixels = img.load()
+
+    # Gemini watermark is a small star in bottom-right corner
+    # Paint a 80x80 pixel area in the corner black/transparent
+    watermark_size = 80
+    for y in range(height - watermark_size, height):
+        for x in range(width - watermark_size, width):
+            if img.mode == "RGBA":
+                pixels[x, y] = (0, 0, 0, 0)  # Transparent
+            else:
+                pixels[x, y] = (0, 0, 0)  # Black
+
+    return img
+
+
+def remove_watermark_from_file(image_path: Path) -> Path:
+    """Remove Gemini watermark and save to new file."""
+    if not HAS_PIL:
+        return image_path
+
+    img = Image.open(image_path).convert("RGBA")
+    img = remove_gemini_watermark(img)
+
+    output_path = image_path.parent / f"{image_path.stem}_clean.png"
+    img.save(output_path, "PNG")
+    print(f"   ✅ Watermark removed: {output_path.name}")
+    return output_path
+
+
 def preprocess_image_for_trellis(image_path: Path, output_path: Path = None) -> Path:
     """
     Preprocess image like TRELLIS web interface does:
-    1. Replace white/light background with transparency
-    2. Find subject bounding box
-    3. Crop to square with subject centered
-    4. Add padding around subject
+    1. Remove Gemini watermark
+    2. Replace white/light background with transparency
+    3. Find subject bounding box
+    4. Crop to square with subject centered
+    5. Add padding around subject
     """
     if not HAS_PIL:
         print("   ⚠️ PIL not installed, skipping preprocessing")
         return image_path
 
     img = Image.open(image_path).convert("RGBA")
+
+    # Remove Gemini watermark first
+    img = remove_gemini_watermark(img)
+
     pixels = img.load()
     width, height = img.size
 
@@ -529,11 +566,12 @@ class HuggingFaceTrellis:
         try:
             # Step 0: Preprocess image (optional)
             if self.preprocess:
-                print("   🖼️ Preprocessing image...")
+                print("   🖼️ Preprocessing image (includes watermark removal)...")
                 processed_path = preprocess_image_for_trellis(image_path)
             else:
-                print("   ⏭️ Skipping preprocessing (using image as-is)")
-                processed_path = image_path
+                # Always remove Gemini watermark even without full preprocessing
+                print("   🔧 Removing Gemini watermark...")
+                processed_path = remove_watermark_from_file(image_path)
 
             # Step 1: Generate 3D with correct API parameters
             print("   ⏳ Generating 3D model (this may take 1-2 minutes)...")
