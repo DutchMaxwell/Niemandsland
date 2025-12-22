@@ -409,9 +409,9 @@ class HuggingFaceTrellis:
         print("🔗 Connecting to Hugging Face Space...")
         if hf_token:
             print("   🔑 Using HF Pro authentication")
-            self.client = GradioClient("microsoft/TRELLIS.2", hf_token=hf_token)
-        else:
-            self.client = GradioClient("microsoft/TRELLIS.2")
+            # Set HF_TOKEN env var for gradio_client authentication
+            os.environ["HF_TOKEN"] = hf_token
+        self.client = GradioClient("microsoft/TRELLIS.2")
         print("   ✅ Connected!")
         print(f"   📐 Resolution: {resolution}, Decimation: {decimation}, Texture: {texture_size}")
 
