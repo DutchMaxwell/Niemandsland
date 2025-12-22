@@ -422,9 +422,15 @@ class HuggingFaceTrellis:
         try:
             # Step 1: Generate 3D with correct API parameters
             print("   ⏳ Generating 3D model (this may take 1-2 minutes)...")
+
+            # Use random seed like web interface
+            import random
+            seed = random.randint(0, 2147483647)
+            print(f"   🎲 Seed: {seed}")
+
             result = self.client.predict(
                 image=handle_file(str(image_path)),
-                seed=0,
+                seed=seed,
                 resolution=self.resolution,
                 ss_guidance_strength=7.5,
                 ss_guidance_rescale=0.7,
