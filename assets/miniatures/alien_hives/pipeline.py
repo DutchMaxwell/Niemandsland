@@ -397,9 +397,14 @@ class FalTrellis:
 class HuggingFaceTrellis:
     """Generate 3D models using Hugging Face Space."""
 
-    def __init__(self, hf_token: str = None):
+    def __init__(self, hf_token: str = None, resolution: str = "1024",
+                 decimation: int = 300000, texture_size: int = 2048):
         if not HAS_GRADIO:
             raise ImportError("❌ pip install gradio_client")
+
+        self.resolution = resolution
+        self.decimation = decimation
+        self.texture_size = texture_size
 
         print("🔗 Connecting to Hugging Face Space...")
         if hf_token:
@@ -408,10 +413,11 @@ class HuggingFaceTrellis:
         else:
             self.client = GradioClient("microsoft/TRELLIS.2")
         print("   ✅ Connected!")
+        print(f"   📐 Resolution: {resolution}, Decimation: {decimation}, Texture: {texture_size}")
 
     def generate(self, image_path: Path, output_dir: Path) -> Optional[Path]:
         """Convert image to 3D model via Hugging Face Space."""
-        print(f"🔮 Converting to 3D (Hugging Face Space - FREE)...")
+        print(f"🔮 Converting to 3D (Hugging Face Space)...")
 
         try:
             # Step 1: Generate 3D with correct API parameters
@@ -419,7 +425,7 @@ class HuggingFaceTrellis:
             result = self.client.predict(
                 image=handle_file(str(image_path)),
                 seed=0,
-                resolution="1024",
+                resolution=self.resolution,
                 ss_guidance_strength=7.5,
                 ss_guidance_rescale=0.7,
                 ss_sampling_steps=12,
@@ -439,8 +445,8 @@ class HuggingFaceTrellis:
             # Step 2: Extract GLB
             print("   📦 Extracting GLB...")
             glb_result = self.client.predict(
-                decimation_target=300000,
-                texture_size=2048,
+                decimation_target=self.decimation,
+                texture_size=self.texture_size,
                 api_name="/extract_glb"
             )
 
@@ -480,7 +486,10 @@ class Pipeline:
         hf_token: str = None,
         backend: Literal["huggingface", "replicate", "fal"] = "huggingface",
         output_dir: str = None,
-        image_only: bool = False  # Skip image generation, only do 3D
+        image_only: bool = False,  # Skip image generation, only do 3D
+        resolution: str = "1024",
+        decimation: int = 300000,
+        texture_size: int = 2048
     ):
         self.output_dir = Path(output_dir) if output_dir else Path(__file__).parent
         self.image_only = image_only
@@ -493,7 +502,12 @@ class Pipeline:
 
         # 3D generation backend
         if backend == "huggingface":
-            self.trellis = HuggingFaceTrellis(hf_token=hf_token)
+            self.trellis = HuggingFaceTrellis(
+                hf_token=hf_token,
+                resolution=resolution,
+                decimation=decimation,
+                texture_size=texture_size
+            )
         elif backend == "replicate":
             if not trellis_key:
                 raise ValueError("Replicate backend requires --replicate-key")
@@ -599,6 +613,9 @@ Beispiele:
   # Mehrere Bilder konvertieren
   python pipeline.py --image bild1.png --image bild2.png --hf-token YOUR_TOKEN
 
+  # Mit Qualitätseinstellungen (höhere Auflösung, mehr Detail)
+  python pipeline.py --image hive_lord.png --resolution 1536 --decimation 400000 --texture-size 4096
+
   # Automatische Pipeline (FLUX + Trellis)
   python pipeline.py --unit hive_lord
         """
@@ -618,6 +635,14 @@ Beispiele:
     parser.add_argument("--replicate-key", help="Replicate API Token")
     parser.add_argument("--fal-key", help="fal.ai API Key")
     parser.add_argument("--backend", choices=["huggingface", "replicate", "fal"], default="huggingface")
+
+    # TRELLIS.2 Quality Settings
+    parser.add_argument("--resolution", choices=["512", "1024", "1536"], default="1024",
+                        help="3D model resolution (default: 1024)")
+    parser.add_argument("--decimation", type=int, default=300000,
+                        help="Mesh decimation target 100000-500000 (default: 300000)")
+    parser.add_argument("--texture-size", type=int, default=2048,
+                        help="Texture size 1024-4096 (default: 2048)")
 
     # Andere Optionen
     parser.add_argument("--output", help="Output directory")
@@ -661,7 +686,10 @@ Beispiele:
             hf_token=hf_token,
             backend=args.backend,
             output_dir=args.output,
-            image_only=True  # Skip FLUX, only Trellis
+            image_only=True,  # Skip FLUX, only Trellis
+            resolution=args.resolution,
+            decimation=args.decimation,
+            texture_size=args.texture_size
         )
         for img in args.image:
             pipeline.process_image(img)
@@ -672,7 +700,10 @@ Beispiele:
         trellis_key=trellis_key,
         hf_token=hf_token,
         backend=args.backend,
-        output_dir=args.output
+        output_dir=args.output,
+        resolution=args.resolution,
+        decimation=args.decimation,
+        texture_size=args.texture_size
     )
 
     if args.unit:
