@@ -51,6 +51,109 @@ try:
 except ImportError:
     HAS_GRADIO = False
 
+# Optional: PIL for image preprocessing
+try:
+    from PIL import Image
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
+
+
+# ============================================================================
+# IMAGE PREPROCESSING (like TRELLIS web interface)
+# ============================================================================
+
+def preprocess_image_for_trellis(image_path: Path, output_path: Path = None) -> Path:
+    """
+    Preprocess image like TRELLIS web interface does:
+    1. Replace white/light background with black
+    2. Find subject bounding box
+    3. Crop to square with subject centered
+    4. Add padding around subject
+    """
+    if not HAS_PIL:
+        print("   ⚠️ PIL not installed, skipping preprocessing")
+        return image_path
+
+    img = Image.open(image_path).convert("RGBA")
+    pixels = img.load()
+    width, height = img.size
+
+    # Step 1: Find non-white pixels (the subject) and replace white with black
+    min_x, min_y = width, height
+    max_x, max_y = 0, 0
+
+    # Create new image with black background
+    new_img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
+    new_pixels = new_img.load()
+
+    # Threshold for "white" (light background)
+    WHITE_THRESHOLD = 240
+
+    for y in range(height):
+        for x in range(width):
+            r, g, b, a = pixels[x, y]
+
+            # Check if pixel is "white" (background)
+            if r > WHITE_THRESHOLD and g > WHITE_THRESHOLD and b > WHITE_THRESHOLD:
+                # Keep as black (already black in new_img)
+                pass
+            else:
+                # Copy subject pixel
+                new_pixels[x, y] = (r, g, b, a)
+                # Track bounding box
+                min_x = min(min_x, x)
+                min_y = min(min_y, y)
+                max_x = max(max_x, x)
+                max_y = max(max_y, y)
+
+    # Step 2: Calculate square crop with padding
+    if max_x <= min_x or max_y <= min_y:
+        print("   ⚠️ Could not find subject, using original image")
+        return image_path
+
+    subject_width = max_x - min_x
+    subject_height = max_y - min_y
+    subject_center_x = min_x + subject_width // 2
+    subject_center_y = min_y + subject_height // 2
+
+    # Make square based on larger dimension, add 10% padding
+    square_size = int(max(subject_width, subject_height) * 1.1)
+
+    # Calculate crop box (centered on subject)
+    left = max(0, subject_center_x - square_size // 2)
+    top = max(0, subject_center_y - square_size // 2)
+    right = min(width, left + square_size)
+    bottom = min(height, top + square_size)
+
+    # Adjust if we hit edges
+    if right - left < square_size:
+        left = max(0, right - square_size)
+    if bottom - top < square_size:
+        top = max(0, bottom - square_size)
+
+    # Step 3: Crop and create final square image
+    cropped = new_img.crop((left, top, right, bottom))
+
+    # Ensure perfectly square by padding if needed
+    crop_w, crop_h = cropped.size
+    final_size = max(crop_w, crop_h)
+    final_img = Image.new("RGBA", (final_size, final_size), (0, 0, 0, 255))
+
+    # Center the cropped image
+    paste_x = (final_size - crop_w) // 2
+    paste_y = (final_size - crop_h) // 2
+    final_img.paste(cropped, (paste_x, paste_y))
+
+    # Save preprocessed image
+    if output_path is None:
+        output_path = image_path.parent / f"{image_path.stem}_preprocessed.png"
+
+    final_img.convert("RGB").save(output_path, "PNG")
+    print(f"   ✅ Preprocessed: {output_path.name} ({final_size}x{final_size})")
+
+    return output_path
+
 
 # ============================================================================
 # PROMPT TEMPLATES
@@ -420,6 +523,10 @@ class HuggingFaceTrellis:
         print(f"🔮 Converting to 3D (Hugging Face Space)...")
 
         try:
+            # Step 0: Preprocess image like web interface does
+            print("   🖼️ Preprocessing image...")
+            processed_path = preprocess_image_for_trellis(image_path)
+
             # Step 1: Generate 3D with correct API parameters
             print("   ⏳ Generating 3D model (this may take 1-2 minutes)...")
 
@@ -429,7 +536,7 @@ class HuggingFaceTrellis:
             print(f"   🎲 Seed: {seed}")
 
             result = self.client.predict(
-                image=handle_file(str(image_path)),
+                image=handle_file(str(processed_path)),
                 seed=seed,
                 resolution=self.resolution,
                 ss_guidance_strength=7.5,
