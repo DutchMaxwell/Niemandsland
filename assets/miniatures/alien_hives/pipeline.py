@@ -501,13 +501,15 @@ class HuggingFaceTrellis:
     """Generate 3D models using Hugging Face Space."""
 
     def __init__(self, hf_token: str = None, resolution: str = "1024",
-                 decimation: int = 300000, texture_size: int = 2048):
+                 decimation: int = 300000, texture_size: int = 2048,
+                 preprocess: bool = True):
         if not HAS_GRADIO:
             raise ImportError("❌ pip install gradio_client")
 
         self.resolution = resolution
         self.decimation = decimation
         self.texture_size = texture_size
+        self.preprocess = preprocess
 
         print("🔗 Connecting to Hugging Face Space...")
         if hf_token:
@@ -517,15 +519,21 @@ class HuggingFaceTrellis:
         self.client = GradioClient("microsoft/TRELLIS.2")
         print("   ✅ Connected!")
         print(f"   📐 Resolution: {resolution}, Decimation: {decimation}, Texture: {texture_size}")
+        if not preprocess:
+            print("   ⏭️ Preprocessing disabled")
 
     def generate(self, image_path: Path, output_dir: Path) -> Optional[Path]:
         """Convert image to 3D model via Hugging Face Space."""
         print(f"🔮 Converting to 3D (Hugging Face Space)...")
 
         try:
-            # Step 0: Preprocess image like web interface does
-            print("   🖼️ Preprocessing image...")
-            processed_path = preprocess_image_for_trellis(image_path)
+            # Step 0: Preprocess image (optional)
+            if self.preprocess:
+                print("   🖼️ Preprocessing image...")
+                processed_path = preprocess_image_for_trellis(image_path)
+            else:
+                print("   ⏭️ Skipping preprocessing (using image as-is)")
+                processed_path = image_path
 
             # Step 1: Generate 3D with correct API parameters
             print("   ⏳ Generating 3D model (this may take 1-2 minutes)...")
@@ -602,7 +610,8 @@ class Pipeline:
         image_only: bool = False,  # Skip image generation, only do 3D
         resolution: str = "1024",
         decimation: int = 300000,
-        texture_size: int = 2048
+        texture_size: int = 2048,
+        preprocess: bool = True
     ):
         self.output_dir = Path(output_dir) if output_dir else Path(__file__).parent
         self.image_only = image_only
@@ -619,7 +628,8 @@ class Pipeline:
                 hf_token=hf_token,
                 resolution=resolution,
                 decimation=decimation,
-                texture_size=texture_size
+                texture_size=texture_size,
+                preprocess=preprocess
             )
         elif backend == "replicate":
             if not trellis_key:
@@ -757,6 +767,10 @@ Beispiele:
     parser.add_argument("--texture-size", type=int, default=2048,
                         help="Texture size 1024-4096 (default: 2048)")
 
+    # Preprocessing
+    parser.add_argument("--no-preprocess", action="store_true",
+                        help="Skip image preprocessing (use if image already has black bg + square format)")
+
     # Andere Optionen
     parser.add_argument("--output", help="Output directory")
     parser.add_argument("--list", action="store_true", help="Einheiten anzeigen")
@@ -802,7 +816,8 @@ Beispiele:
             image_only=True,  # Skip FLUX, only Trellis
             resolution=args.resolution,
             decimation=args.decimation,
-            texture_size=args.texture_size
+            texture_size=args.texture_size,
+            preprocess=not args.no_preprocess
         )
         for img in args.image:
             pipeline.process_image(img)
@@ -816,7 +831,8 @@ Beispiele:
         output_dir=args.output,
         resolution=args.resolution,
         decimation=args.decimation,
-        texture_size=args.texture_size
+        texture_size=args.texture_size,
+        preprocess=not args.no_preprocess
     )
 
     if args.unit:
