@@ -66,7 +66,7 @@ except ImportError:
 def preprocess_image_for_trellis(image_path: Path, output_path: Path = None) -> Path:
     """
     Preprocess image like TRELLIS web interface does:
-    1. Replace white/light background with black
+    1. Replace white/light background with transparency
     2. Find subject bounding box
     3. Crop to square with subject centered
     4. Add padding around subject
@@ -79,12 +79,12 @@ def preprocess_image_for_trellis(image_path: Path, output_path: Path = None) -> 
     pixels = img.load()
     width, height = img.size
 
-    # Step 1: Find non-white pixels (the subject) and replace white with black
+    # Step 1: Find non-white pixels (the subject) and make white transparent
     min_x, min_y = width, height
     max_x, max_y = 0, 0
 
-    # Create new image with black background
-    new_img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
+    # Create new image with transparent background
+    new_img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     new_pixels = new_img.load()
 
     # Threshold for "white" (light background)
@@ -96,11 +96,11 @@ def preprocess_image_for_trellis(image_path: Path, output_path: Path = None) -> 
 
             # Check if pixel is "white" (background)
             if r > WHITE_THRESHOLD and g > WHITE_THRESHOLD and b > WHITE_THRESHOLD:
-                # Keep as black (already black in new_img)
+                # Make transparent (already transparent in new_img)
                 pass
             else:
                 # Copy subject pixel
-                new_pixels[x, y] = (r, g, b, a)
+                new_pixels[x, y] = (r, g, b, 255)
                 # Track bounding box
                 min_x = min(min_x, x)
                 min_y = min(min_y, y)
@@ -138,19 +138,19 @@ def preprocess_image_for_trellis(image_path: Path, output_path: Path = None) -> 
     # Ensure perfectly square by padding if needed
     crop_w, crop_h = cropped.size
     final_size = max(crop_w, crop_h)
-    final_img = Image.new("RGBA", (final_size, final_size), (0, 0, 0, 255))
+    final_img = Image.new("RGBA", (final_size, final_size), (0, 0, 0, 0))
 
     # Center the cropped image
     paste_x = (final_size - crop_w) // 2
     paste_y = (final_size - crop_h) // 2
     final_img.paste(cropped, (paste_x, paste_y))
 
-    # Save preprocessed image
+    # Save preprocessed image as PNG with transparency
     if output_path is None:
         output_path = image_path.parent / f"{image_path.stem}_preprocessed.png"
 
-    final_img.convert("RGB").save(output_path, "PNG")
-    print(f"   ✅ Preprocessed: {output_path.name} ({final_size}x{final_size})")
+    final_img.save(output_path, "PNG")
+    print(f"   ✅ Preprocessed: {output_path.name} ({final_size}x{final_size}, transparent bg)")
 
     return output_path
 
