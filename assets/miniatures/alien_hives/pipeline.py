@@ -395,14 +395,18 @@ class FalTrellis:
 
 
 class HuggingFaceTrellis:
-    """Generate 3D models using Hugging Face Space (KOSTENLOS!)."""
+    """Generate 3D models using Hugging Face Space."""
 
-    def __init__(self):
+    def __init__(self, hf_token: str = None):
         if not HAS_GRADIO:
             raise ImportError("❌ pip install gradio_client")
 
         print("🔗 Connecting to Hugging Face Space...")
-        self.client = GradioClient("microsoft/TRELLIS.2")
+        if hf_token:
+            print("   🔑 Using HF Pro authentication")
+            self.client = GradioClient("microsoft/TRELLIS.2", hf_token=hf_token)
+        else:
+            self.client = GradioClient("microsoft/TRELLIS.2")
         print("   ✅ Connected!")
 
     def generate(self, image_path: Path, output_dir: Path) -> Optional[Path]:
@@ -468,11 +472,12 @@ class HuggingFaceTrellis:
 # ============================================================================
 
 class Pipeline:
-    """Complete Image → 3D Pipeline (100% FREE via Hugging Face!)."""
+    """Complete Image → 3D Pipeline."""
 
     def __init__(
         self,
         trellis_key: str = None,
+        hf_token: str = None,
         backend: Literal["huggingface", "replicate", "fal"] = "huggingface",
         output_dir: str = None,
         image_only: bool = False  # Skip image generation, only do 3D
@@ -488,7 +493,7 @@ class Pipeline:
 
         # 3D generation backend
         if backend == "huggingface":
-            self.trellis = HuggingFaceTrellis()
+            self.trellis = HuggingFaceTrellis(hf_token=hf_token)
         elif backend == "replicate":
             if not trellis_key:
                 raise ValueError("Replicate backend requires --replicate-key")
@@ -588,11 +593,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Beispiele:
-  # Bild direkt zu 3D konvertieren (empfohlen!)
-  python pipeline.py --image hive_lord.png
+  # Bild zu 3D konvertieren (mit HF Pro für mehr Quota)
+  python pipeline.py --image hive_lord.png --hf-token YOUR_TOKEN
 
   # Mehrere Bilder konvertieren
-  python pipeline.py --image bild1.png --image bild2.png
+  python pipeline.py --image bild1.png --image bild2.png --hf-token YOUR_TOKEN
 
   # Automatische Pipeline (FLUX + Trellis)
   python pipeline.py --unit hive_lord
@@ -605,6 +610,9 @@ Beispiele:
     # Automatische Pipeline
     parser.add_argument("--unit", help="Einheit automatisch generieren")
     parser.add_argument("--all", action="store_true", help="Alle Einheiten generieren")
+
+    # Hugging Face Pro (mehr GPU Quota)
+    parser.add_argument("--hf-token", help="Hugging Face Token für Pro-Quota (https://huggingface.co/settings/tokens)")
 
     # Backend Optionen
     parser.add_argument("--replicate-key", help="Replicate API Token")
@@ -643,10 +651,14 @@ Beispiele:
             print("❌ fal.ai API key required for --backend fal")
             return
 
+    # Get Hugging Face token
+    hf_token = args.hf_token or os.environ.get("HF_TOKEN")
+
     # Image-to-3D Modus
     if args.image:
         pipeline = Pipeline(
             trellis_key=trellis_key,
+            hf_token=hf_token,
             backend=args.backend,
             output_dir=args.output,
             image_only=True  # Skip FLUX, only Trellis
@@ -658,6 +670,7 @@ Beispiele:
     # Automatische Pipeline
     pipeline = Pipeline(
         trellis_key=trellis_key,
+        hf_token=hf_token,
         backend=args.backend,
         output_dir=args.output
     )
