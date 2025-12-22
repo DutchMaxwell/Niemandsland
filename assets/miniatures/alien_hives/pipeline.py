@@ -410,33 +410,26 @@ class HuggingFaceTrellis:
         print(f"🔮 Converting to 3D (Hugging Face Space - FREE)...")
 
         try:
-            # Step 1: Upload image and preprocess
-            print("   📤 Uploading image...")
-            preprocess_result = self.client.predict(
-                image=handle_file(str(image_path)),
-                api_name="/preprocess_image"
-            )
-
-            # Step 2: Generate 3D (returns multiple outputs)
+            # Step 1: Generate 3D directly with image
             print("   ⏳ Generating 3D model (this may take 1-2 minutes)...")
             result = self.client.predict(
-                seed=42,
-                randomize_seed=True,
-                ss_guidance_strength=7.5,
-                ss_sampling_steps=12,
-                slat_guidance_strength=3,
-                slat_sampling_steps=12,
+                handle_file(str(image_path)),  # image as positional arg
+                [],  # multiimages (empty for single image)
+                0,   # seed
+                True,  # randomize_seed
+                7.5,   # ss_guidance_strength
+                12,    # ss_sampling_steps
+                3,     # slat_guidance_strength
+                12,    # slat_sampling_steps
+                "stochastic",  # multiimage_algo
                 api_name="/image_to_3d"
             )
 
-            # Result contains: (seed, video_path, 3d_model_state)
-            # We need to extract the GLB
-
-            # Step 3: Extract GLB
+            # Step 2: Extract GLB
             print("   📦 Extracting GLB...")
             glb_result = self.client.predict(
-                mesh_simplify=0.95,
-                texture_size=1024,
+                0.95,  # mesh_simplify
+                1024,  # texture_size
                 api_name="/extract_glb"
             )
 
@@ -452,7 +445,7 @@ class HuggingFaceTrellis:
                 print(f"   ✅ 3D Model saved: {output_path}")
                 return output_path
             else:
-                print(f"   ❌ GLB extraction failed")
+                print(f"   ❌ GLB extraction failed: {glb_result}")
                 return None
 
         except Exception as e:
