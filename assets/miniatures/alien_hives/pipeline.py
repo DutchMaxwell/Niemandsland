@@ -67,41 +67,29 @@ def remove_gemini_watermark(img: "Image.Image") -> "Image.Image":
     """
     Remove Gemini watermark from bottom-right corner.
 
-    INTELLIGENT REMOVAL: Only removes bright pixels (the star watermark)
-    while preserving the dark background. This prevents TRELLIS from
-    interpreting a black square as floor geometry.
+    CROP METHOD: Instead of trying to detect and remove individual pixels,
+    we crop the image to remove the watermark area entirely. This is more
+    reliable and prevents any watermark artifacts in the 3D model.
     """
     width, height = img.size
-    pixels = img.load()
 
-    # Gemini watermark is a small bright star in bottom-right corner
-    # We scan a 200x200 area but only modify bright pixels
-    watermark_size = 200
+    # Gemini watermark is in bottom-right corner
+    # Crop 80 pixels from right and bottom to remove it completely
+    crop_size = 80
 
-    # Threshold: pixels brighter than this are considered part of the watermark
-    # The Gemini star has varying brightness - use lower threshold to catch all pixels
-    BRIGHTNESS_THRESHOLD = 40  # 0-255 scale (lowered from 100 to catch dimmer star pixels)
+    # Crop the image (left, top, right, bottom)
+    cropped = img.crop((0, 0, width - crop_size, height - crop_size))
 
-    for y in range(height - watermark_size, height):
-        for x in range(width - watermark_size, width):
-            if img.mode == "RGBA":
-                r, g, b, a = pixels[x, y]
-            else:
-                r, g, b = pixels[x, y]
-                a = 255
+    # Create new square image with the cropped content centered
+    new_size = max(cropped.size)
+    new_img = Image.new("RGBA", (new_size, new_size), (0, 0, 0, 0))
 
-            # Calculate pixel brightness (simple average)
-            brightness = (r + g + b) / 3
+    # Center the cropped image
+    paste_x = (new_size - cropped.size[0]) // 2
+    paste_y = (new_size - cropped.size[1]) // 2
+    new_img.paste(cropped, (paste_x, paste_y))
 
-            # Only remove bright pixels (the watermark star)
-            # Leave dark pixels (background) untouched
-            if brightness > BRIGHTNESS_THRESHOLD:
-                if img.mode == "RGBA":
-                    pixels[x, y] = (0, 0, 0, 0)  # Transparent
-                else:
-                    pixels[x, y] = (0, 0, 0)  # Black
-
-    return img
+    return new_img
 
 
 def remove_watermark_from_file(image_path: Path) -> Path:
