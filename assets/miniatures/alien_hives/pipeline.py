@@ -79,8 +79,8 @@ def remove_gemini_watermark(img: "Image.Image") -> "Image.Image":
     watermark_size = 200
 
     # Threshold: pixels brighter than this are considered part of the watermark
-    # The Gemini star is typically white/bright, background is dark
-    BRIGHTNESS_THRESHOLD = 100  # 0-255 scale
+    # The Gemini star has varying brightness - use lower threshold to catch all pixels
+    BRIGHTNESS_THRESHOLD = 40  # 0-255 scale (lowered from 100 to catch dimmer star pixels)
 
     for y in range(height - watermark_size, height):
         for x in range(width - watermark_size, width):
