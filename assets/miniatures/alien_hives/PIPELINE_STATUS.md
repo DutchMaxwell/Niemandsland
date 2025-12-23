@@ -8,28 +8,49 @@ Automatisierte Generierung von 3D-Modellen (.glb) für das OpenTTS Tabletop-Simu
 ## Aktueller Stand
 
 ### Was funktioniert
-- Pipeline-Script: `pipeline.py`
+- ✅ **GUI-Pipeline:** `Start Pipeline.command` (Mac) / `Start Pipeline.bat` (Windows)
+- ✅ Pipeline-Script: `pipeline.py` (CLI)
+- ✅ Gemini Wasserzeichen-Entfernung (sampelt echte Hintergrundfarbe)
+- ✅ TRELLIS.2 über HuggingFace Space API
+- ✅ HuggingFace Pro Token für mehr GPU-Quota
+- ✅ Batch-Verarbeitung mehrerer Bilder
 - Gemini API ist in Deutschland blockiert → **Manuelle Bildgenerierung im Browser** (aistudio.google.com)
-- TRELLIS.2 über HuggingFace Space API funktioniert
-- HuggingFace Pro Token für mehr GPU-Quota
-- Qualitätseinstellungen (Resolution, Decimation, Texture Size) konfigurierbar
 
-### Pipeline Nutzung
+## Schnellstart (GUI)
+
+### Mac
+1. Doppelklick auf `Start Pipeline.command`
+2. Beim ersten Start wird automatisch die virtuelle Umgebung erstellt
+3. HuggingFace Token eingeben (einmalig, wird gespeichert)
+4. Bilder auswählen → "Pipeline starten"
+
+### Windows
+1. Doppelklick auf `Start Pipeline.bat`
+2. Beim ersten Start wird automatisch die virtuelle Umgebung erstellt
+3. HuggingFace Token eingeben (einmalig, wird gespeichert)
+4. Bilder auswählen → "Pipeline starten"
+
+## CLI Nutzung (Fortgeschritten)
 ```bash
-cd /home/user/openTTS/assets/miniatures/alien_hives
+cd assets/miniatures/alien_hives
+source venv/bin/activate  # Mac/Linux
+# oder: venv\Scripts\activate  # Windows
 
-# Mit vorformatiertem Bild (schwarzer Hintergrund, quadratisch)
+# Einzelnes Bild (schwarzer Hintergrund)
+python pipeline.py --image unit.png --no-preprocess --hf-token YOUR_TOKEN
+
+# Mehrere Bilder
+python pipeline.py --image bild1.png --image bild2.png --no-preprocess --hf-token YOUR_TOKEN
+
+# Hohe Qualität
 python pipeline.py --image unit.png --no-preprocess --resolution 1536 --decimation 500000 --texture-size 4096 --hf-token YOUR_TOKEN
-
-# Mit weißem Hintergrund (automatisches Preprocessing)
-python pipeline.py --image unit.png --resolution 1536 --decimation 500000 --texture-size 4096 --hf-token YOUR_TOKEN
 ```
 
 ### CLI Optionen
 | Option | Beschreibung |
 |--------|--------------|
 | `--image` | Bild zu 3D konvertieren (mehrfach verwendbar) |
-| `--no-preprocess` | Preprocessing überspringen (für vorformatierte Bilder) |
+| `--no-preprocess` | Für Bilder mit schwarzem Hintergrund |
 | `--resolution` | 512, 1024, 1536 (default: 1024) |
 | `--decimation` | Mesh-Reduktion 100000-500000 (default: 300000) |
 | `--texture-size` | Texturgröße 1024-4096 (default: 2048) |
@@ -92,18 +113,26 @@ TECHNICAL:
 ### 4. Gemini Wasserzeichen wird zu 3D-Artefakt
 **Ursache:** Kleiner Stern unten rechts im Gemini-Bild
 **Status:** ✅ GELÖST
-**Lösung:** Intelligente Erkennung - nur helle Pixel (brightness > 100) werden entfernt, dunkle Hintergrund-Pixel bleiben erhalten. TRELLIS sieht keinen schwarzen Block mehr.
+**Lösung:**
+- Sampelt echte Hintergrundfarbe aus dem Bild (nicht festes Schwarz)
+- Übermalt Wasserzeichen mit der tatsächlichen Hintergrundfarbe
+- Dynamischer Threshold basierend auf Hintergrund-Helligkeit
+- Kein sichtbarer Unterschied mehr → kein 3D-Artefakt
 
 ## Dateien
 
 ```
-/home/user/openTTS/assets/miniatures/alien_hives/
-├── pipeline.py           # Haupt-Pipeline Script
-├── units.json            # Einheiten-Definitionen (35 Units)
-├── GENERATION_WORKFLOW.md # Workflow-Dokumentation
-├── PIPELINE_STATUS.md    # Diese Datei
-├── images/               # Generierte Bilder
-└── models/               # Generierte GLB-Dateien
+assets/miniatures/alien_hives/
+├── Start Pipeline.command  # 🖱️ Mac: Doppelklick zum Starten
+├── Start Pipeline.bat      # 🖱️ Windows: Doppelklick zum Starten
+├── pipeline_gui.py         # GUI-Version mit Batch-Verarbeitung
+├── pipeline.py             # CLI-Version (Kommandozeile)
+├── units.json              # Einheiten-Definitionen (35 Units)
+├── GENERATION_WORKFLOW.md  # Workflow-Dokumentation
+├── PIPELINE_STATUS.md      # Diese Datei
+├── venv/                   # Virtuelle Python-Umgebung (automatisch erstellt)
+├── images/                 # Generierte Bilder
+└── models/                 # Generierte GLB-Dateien
 ```
 
 ## Git Branch
@@ -113,8 +142,9 @@ main
 
 ## Nächste Schritte
 1. ~~**Wasserzeichen-Problem lösen:**~~ ✅ Intelligente Entfernung implementiert
-2. **Batch-Generierung:** Alle 35 Einheiten durchgehen
-3. **GLB-Nachbearbeitung:** Evtl. Blender-Script für automatisches Cleanup
+2. ~~**GUI mit Batch-Verarbeitung:**~~ ✅ `Start Pipeline.command` / `.bat` erstellt
+3. **Batch-Generierung:** Alle 35 Einheiten durchgehen
+4. **GLB-Nachbearbeitung:** Evtl. Blender-Script für automatisches Cleanup
 
 ## Dependencies
 ```bash
