@@ -592,21 +592,25 @@ openTTS/
 
 ## Nächste Schritte
 
-1. **Repository einrichten**
-   - README.md erstellen
-   - Contributing Guidelines
-   - Code of Conduct
-   - Issue Templates
+### ✅ Erledigt
+1. **Repository einrichten** ✅
+2. **Godot-Projekt initialisieren** ✅
+3. **Prototyp Phase (Milestone 1)** ✅
+4. **3D-Modell Pipeline** ✅
+   - Gemini → TRELLIS.2 Workflow funktioniert
+   - Intelligente Wasserzeichen-Entfernung implementiert
+   - 35 Alien Hives Einheiten definiert
 
-2. **Godot-Projekt initialisieren**
-   - Projektstruktur anlegen
-   - Basis-Szenen erstellen
-   - CI/CD Pipeline
+### 🔄 Aktuell in Arbeit (Milestone 2)
+1. **Gelände-System** - Eigenschaften wie Deckung, Schwieriges Gelände
+2. **Einheiten-Karten** - Stats-Anzeige für Miniaturen
+3. **Erweitertes Würfel-System** - D4, D8, D10, D12, D20 + Modifikatoren
+4. **UI-Verbesserungen** - Übersichtlichere Oberfläche
 
-3. **Prototyp Phase starten**
-   - Spieltisch implementieren
-   - Erste Objekte
-   - Kamera-System
+### 📋 Geplant
+- **3D-Batch-Generierung** - Alle 35 Alien Hives Einheiten durchgehen
+- **GLB-Nachbearbeitung** - Blender-Script für Cleanup
+- **OPR Army Forge Integration** - Armeelisten importieren
 
 ---
 
@@ -633,6 +637,6 @@ openTTS/
 ---
 
 *Dokument erstellt: 2025-12-17*
-*Letzte Überarbeitung: 2025-12-19*
-*Version: 1.3*
-*Status: Speichern/Laden implementiert, Milestone 2 in Arbeit*
+*Letzte Überarbeitung: 2025-12-23*
+*Version: 1.4*
+*Status: Milestone 1 abgeschlossen, 3D-Pipeline funktioniert, Milestone 2 in Arbeit*
