@@ -67,8 +67,8 @@ def remove_gemini_watermark(img: "Image.Image") -> "Image.Image":
     """
     Remove Gemini watermark from bottom-right corner.
 
-    PAINT-OVER METHOD: Detects pixels brighter than threshold and paints
-    them black/transparent. Does not crop the image.
+    PAINT-OVER METHOD: Samples the actual background color and paints
+    over watermark pixels with that color to blend seamlessly.
     """
     width, height = img.size
     pixels = img.load()
@@ -77,9 +77,21 @@ def remove_gemini_watermark(img: "Image.Image") -> "Image.Image":
     # Scan a 200x200 area and paint over any non-black pixels
     watermark_size = 200
 
-    # Very low threshold - anything brighter than near-black gets removed
-    # Gemini star has gray pixels that need to be caught
-    BRIGHTNESS_THRESHOLD = 15  # 0-255 scale
+    # Sample background color from a safe area (top-left of watermark zone)
+    # This should be pure background without watermark
+    sample_x = width - watermark_size - 50
+    sample_y = height - watermark_size - 50
+
+    if img.mode == "RGBA":
+        bg_r, bg_g, bg_b, bg_a = pixels[sample_x, sample_y]
+        bg_color = (bg_r, bg_g, bg_b, 255)
+    else:
+        bg_r, bg_g, bg_b = pixels[sample_x, sample_y]
+        bg_color = (bg_r, bg_g, bg_b)
+
+    # Threshold slightly above background brightness to catch watermark
+    bg_brightness = (bg_r + bg_g + bg_b) / 3
+    BRIGHTNESS_THRESHOLD = bg_brightness + 10  # Anything brighter than background + margin
 
     for y in range(height - watermark_size, height):
         for x in range(width - watermark_size, width):
@@ -87,17 +99,13 @@ def remove_gemini_watermark(img: "Image.Image") -> "Image.Image":
                 r, g, b, a = pixels[x, y]
             else:
                 r, g, b = pixels[x, y]
-                a = 255
 
             # Calculate pixel brightness
             brightness = (r + g + b) / 3
 
-            # Paint over anything brighter than near-black
+            # Paint over anything brighter than background
             if brightness > BRIGHTNESS_THRESHOLD:
-                if img.mode == "RGBA":
-                    pixels[x, y] = (0, 0, 0, 255)  # Solid black (not transparent)
-                else:
-                    pixels[x, y] = (0, 0, 0)  # Black
+                pixels[x, y] = bg_color
 
     return img
 
