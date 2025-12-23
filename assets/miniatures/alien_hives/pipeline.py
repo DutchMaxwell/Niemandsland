@@ -64,19 +64,42 @@ except ImportError:
 # ============================================================================
 
 def remove_gemini_watermark(img: "Image.Image") -> "Image.Image":
-    """Remove Gemini watermark from bottom-right corner."""
+    """
+    Remove Gemini watermark from bottom-right corner.
+
+    INTELLIGENT REMOVAL: Only removes bright pixels (the star watermark)
+    while preserving the dark background. This prevents TRELLIS from
+    interpreting a black square as floor geometry.
+    """
     width, height = img.size
     pixels = img.load()
 
-    # Gemini watermark is a small star in bottom-right corner
-    # Paint a 200x200 pixel area in the corner black/transparent
+    # Gemini watermark is a small bright star in bottom-right corner
+    # We scan a 200x200 area but only modify bright pixels
     watermark_size = 200
+
+    # Threshold: pixels brighter than this are considered part of the watermark
+    # The Gemini star is typically white/bright, background is dark
+    BRIGHTNESS_THRESHOLD = 100  # 0-255 scale
+
     for y in range(height - watermark_size, height):
         for x in range(width - watermark_size, width):
             if img.mode == "RGBA":
-                pixels[x, y] = (0, 0, 0, 0)  # Transparent
+                r, g, b, a = pixels[x, y]
             else:
-                pixels[x, y] = (0, 0, 0)  # Black
+                r, g, b = pixels[x, y]
+                a = 255
+
+            # Calculate pixel brightness (simple average)
+            brightness = (r + g + b) / 3
+
+            # Only remove bright pixels (the watermark star)
+            # Leave dark pixels (background) untouched
+            if brightness > BRIGHTNESS_THRESHOLD:
+                if img.mode == "RGBA":
+                    pixels[x, y] = (0, 0, 0, 0)  # Transparent
+                else:
+                    pixels[x, y] = (0, 0, 0)  # Black
 
     return img
 
