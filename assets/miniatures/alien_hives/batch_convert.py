@@ -83,7 +83,7 @@ def main():
 
     # Import pipeline
     try:
-        from pipeline import HuggingFaceTrellis, remove_watermark_from_file
+        from pipeline import HuggingFaceTrellis
     except ImportError as e:
         print(f"❌ Import-Fehler: {e}")
         print("   Stelle sicher, dass alle Dependencies installiert sind:")
@@ -113,23 +113,20 @@ def main():
         print("-" * 40)
 
         try:
-            # Remove watermark
-            print("   🔧 Entferne Wasserzeichen...")
-            clean_path = remove_watermark_from_file(filepath)
-
-            # Generate 3D
-            print("   🔮 Generiere 3D-Modell (1-2 Minuten)...")
-            result = trellis.generate(clean_path, script_dir)
+            # Generate 3D (includes watermark removal)
+            result = trellis.generate(filepath, script_dir)
 
             if result:
                 print(f"   ✅ Fertig: {result.name}")
                 success += 1
             else:
-                print("   ❌ Fehlgeschlagen")
+                print("   ❌ Fehlgeschlagen (kein Output)")
                 failed += 1
 
         except Exception as e:
             print(f"   ❌ Fehler: {e}")
+            import traceback
+            traceback.print_exc()
             failed += 1
 
     # Summary
