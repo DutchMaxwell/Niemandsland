@@ -74,8 +74,8 @@ def remove_gemini_watermark(img: "Image.Image") -> "Image.Image":
     pixels = img.load()
 
     # Gemini watermark is a small star in bottom-right corner
-    # Scan a 150x150 area and paint over any non-black pixels
-    watermark_size = 150
+    # Scan a 200x200 area and paint over any non-black pixels
+    watermark_size = 200
 
     # Very low threshold - anything brighter than near-black gets removed
     # Gemini star has gray pixels that need to be caught
