@@ -595,6 +595,7 @@ class HuggingFaceTrellis:
                 processed_path = remove_watermark_from_file(image_path)
 
             # Step 1: Generate 3D with correct API parameters
+            print(f"   📤 Uploading: {processed_path}")
             print("   ⏳ Generating 3D model (this may take 1-2 minutes)...")
 
             # Use random seed like web interface
