@@ -14,5 +14,14 @@ else
     source venv/bin/activate
 fi
 
-# Starte GUI
-python3 pipeline_gui.py
+# Versuche GUI zu starten, bei Fehler nutze Terminal-Version
+python3 -c "import tkinter" 2>/dev/null
+if [ $? -eq 0 ]; then
+    python3 pipeline_gui.py
+else
+    echo "=============================================="
+    echo "Tkinter nicht verfügbar - nutze Terminal-Modus"
+    echo "=============================================="
+    echo ""
+    python3 batch_convert.py
+fi
