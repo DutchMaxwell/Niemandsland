@@ -67,29 +67,39 @@ def remove_gemini_watermark(img: "Image.Image") -> "Image.Image":
     """
     Remove Gemini watermark from bottom-right corner.
 
-    CROP METHOD: Instead of trying to detect and remove individual pixels,
-    we crop the image to remove the watermark area entirely. This is more
-    reliable and prevents any watermark artifacts in the 3D model.
+    PAINT-OVER METHOD: Detects pixels brighter than threshold and paints
+    them black/transparent. Does not crop the image.
     """
     width, height = img.size
+    pixels = img.load()
 
-    # Gemini watermark is in bottom-right corner
-    # Crop 120 pixels from right and bottom to remove it completely
-    crop_size = 120
+    # Gemini watermark is a small star in bottom-right corner
+    # Scan a 150x150 area and paint over any non-black pixels
+    watermark_size = 150
 
-    # Crop the image (left, top, right, bottom)
-    cropped = img.crop((0, 0, width - crop_size, height - crop_size))
+    # Very low threshold - anything brighter than near-black gets removed
+    # Gemini star has gray pixels that need to be caught
+    BRIGHTNESS_THRESHOLD = 15  # 0-255 scale
 
-    # Create new square image with the cropped content centered
-    new_size = max(cropped.size)
-    new_img = Image.new("RGBA", (new_size, new_size), (0, 0, 0, 0))
+    for y in range(height - watermark_size, height):
+        for x in range(width - watermark_size, width):
+            if img.mode == "RGBA":
+                r, g, b, a = pixels[x, y]
+            else:
+                r, g, b = pixels[x, y]
+                a = 255
 
-    # Center the cropped image
-    paste_x = (new_size - cropped.size[0]) // 2
-    paste_y = (new_size - cropped.size[1]) // 2
-    new_img.paste(cropped, (paste_x, paste_y))
+            # Calculate pixel brightness
+            brightness = (r + g + b) / 3
 
-    return new_img
+            # Paint over anything brighter than near-black
+            if brightness > BRIGHTNESS_THRESHOLD:
+                if img.mode == "RGBA":
+                    pixels[x, y] = (0, 0, 0, 255)  # Solid black (not transparent)
+                else:
+                    pixels[x, y] = (0, 0, 0)  # Black
+
+    return img
 
 
 def remove_watermark_from_file(image_path: Path) -> Path:
