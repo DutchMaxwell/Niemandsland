@@ -31,6 +31,9 @@ var _drag_plane: Plane
 var _dice_list: Array[RigidBody3D] = []
 var _object_counter: int = 0
 
+# Clipboard for copy/paste
+var _clipboard: Array[Node3D] = []  # Stores references to copied objects for duplication
+
 # Rotation tracking
 var _is_rotating: bool = false
 
@@ -327,6 +330,10 @@ func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> voi
 
 		# Check if it's a selectable object (not the table)
 		if collider.is_in_group("selectable"):
+			# Skip locked objects
+			if is_object_locked(collider):
+				return
+
 			var already_selected = collider in _selected_objects
 
 			if alt_pressed:
@@ -1670,7 +1677,7 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 				if parts.size() >= 3:
 					uvs.append(Vector2(
 						float(parts[1]),
-						float(parts[2])  # OBJ V is often flipped, but we'll handle that with material
+						1.0 - float(parts[2])  # Flip V coordinate (OBJ uses bottom-left origin)
 					))
 			"vn":  # Vertex normal
 				if parts.size() >= 4:
@@ -1748,7 +1755,8 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 	# Create material with optional texture
 	var material = StandardMaterial3D.new()
 	material.albedo_color = Color(0.7, 0.7, 0.7)
-	material.roughness = 0.5
+	material.roughness = 0.9  # Matte finish like painted miniatures
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED  # Show both sides of polygons
 
 	# Load texture if provided
 	if not texture_path.is_empty():
@@ -1824,21 +1832,32 @@ func _calculate_aabb(node: Node3D) -> AABB:
 
 	for child in node.get_children():
 		if child is MeshInstance3D:
+			# Get local AABB and transform by child's position/scale
 			var mesh_aabb = child.get_aabb()
+			# Apply child's transform to the AABB
+			var transformed_aabb = AABB(
+				mesh_aabb.position * child.scale + child.position,
+				mesh_aabb.size * child.scale
+			)
 			if not found_mesh:
-				aabb = mesh_aabb
+				aabb = transformed_aabb
 				found_mesh = true
 			else:
-				aabb = aabb.merge(mesh_aabb)
+				aabb = aabb.merge(transformed_aabb)
 
 		if child is Node3D:
 			var child_aabb = _calculate_aabb(child)
 			if child_aabb.size.length() > 0:
+				# Transform child AABB by child's position/scale
+				var transformed_aabb = AABB(
+					child_aabb.position * child.scale + child.position,
+					child_aabb.size * child.scale
+				)
 				if not found_mesh:
-					aabb = child_aabb
+					aabb = transformed_aabb
 					found_mesh = true
 				else:
-					aabb = aabb.merge(child_aabb)
+					aabb = aabb.merge(transformed_aabb)
 
 	# Default if nothing found
 	if not found_mesh:
@@ -2117,11 +2136,11 @@ func _apply_color_tint(node: Node3D, color: Color) -> void:
 		if child is MeshInstance3D:
 			var mat = child.material_override
 			if mat is StandardMaterial3D:
-				# Multiply with existing albedo or set if texture present
-				if mat.albedo_texture:
+				# Only apply color tint to NON-textured models
+				# Textured models (like painted miniatures) already have correct colors baked in
+				# Applying ColorDiffuse would incorrectly darken/tint them
+				if not mat.albedo_texture:
 					mat.albedo_color = color
-				else:
-					mat.albedo_color = mat.albedo_color * color
 
 		if child is Node3D:
 			_apply_color_tint(child, color)
@@ -2155,3 +2174,589 @@ func spawn_tts_models_grid(tts_objects: Array[TTSImporter.TTSObject], models_dir
 		idx += 1
 
 	return imported
+
+
+## ============================================================================
+## TTS Online Import Functions (Downloads from URLs)
+## ============================================================================
+
+## Download manager reference
+var _download_manager: TTSDownloadManager = null
+var _pending_tts_import: TTSImporter.TTSParseResult = null
+
+## Signal for online import completion
+signal tts_online_import_completed(imported_count: int, failed_count: int)
+signal tts_download_progress(current: int, total: int, url: String)
+
+
+## Get or create the download manager
+func _get_download_manager() -> TTSDownloadManager:
+	if _download_manager == null:
+		_download_manager = TTSDownloadManager.new()
+		add_child(_download_manager)
+		_download_manager.all_downloads_completed.connect(_on_downloads_completed)
+		_download_manager.progress_updated.connect(_on_download_progress)
+	return _download_manager
+
+
+## Import TTS save from online URLs (downloads models and textures automatically)
+## json_path: Path to the TTS save JSON file
+## Returns immediately, emits tts_online_import_completed when done
+func import_tts_save_online(json_path: String) -> void:
+	print("=== TTS Online Import Starting ===")
+	print("JSON: %s" % json_path)
+
+	# Parse the TTS save file
+	var parse_result = TTSImporter.parse_tts_save(json_path)
+	if not parse_result.error.is_empty():
+		push_error("TTS Import failed: %s" % parse_result.error)
+		tts_online_import_completed.emit(0, 0)
+		return
+
+	# Get unique models (avoid downloading duplicates)
+	var unique_models = TTSImporter.get_unique_models(parse_result)
+	print("Save: %s" % parse_result.save_name)
+	print("Unique models to download: %d" % unique_models.size())
+
+	# Store for later use after downloads complete
+	_pending_tts_import = parse_result
+	_pending_tts_import.objects = unique_models  # Use unique models only
+
+	# Queue all downloads
+	var dm = _get_download_manager()
+	dm.reset()
+	dm.queue_tts_objects(unique_models)
+
+	# Start downloads
+	dm.start_downloads()
+
+
+## Import TTS save from online URLs (synchronous version - blocks until complete)
+## For use when you need the result immediately
+func import_tts_save_online_sync(json_path: String) -> Array[Node3D]:
+	var imported_objects: Array[Node3D] = []
+
+	# Parse the TTS save file
+	var parse_result = TTSImporter.parse_tts_save(json_path)
+	if not parse_result.error.is_empty():
+		push_error("TTS Import failed: %s" % parse_result.error)
+		return imported_objects
+
+	# Get unique models
+	var unique_models = TTSImporter.get_unique_models(parse_result)
+
+	print("=== TTS Online Import (Sync) ===")
+	print("Save: %s" % parse_result.save_name)
+	print("Unique models: %d" % unique_models.size())
+
+	# Queue and start downloads
+	var dm = _get_download_manager()
+	dm.reset()
+	dm.queue_tts_objects(unique_models)
+
+	# Wait for downloads to complete
+	if dm._pending_downloads.size() > 0:
+		dm.start_downloads()
+		await dm.all_downloads_completed
+
+	# Now import all models from cache
+	var success_count = 0
+	var fail_count = 0
+
+	for tts_obj in unique_models:
+		var imported = _import_tts_object_from_cache(tts_obj, dm)
+		if imported:
+			imported_objects.append(imported)
+			success_count += 1
+		else:
+			fail_count += 1
+
+	print("=== TTS Online Import Complete ===")
+	print("Success: %d | Failed: %d" % [success_count, fail_count])
+
+	return imported_objects
+
+
+## Handle download completion - import all models
+func _on_downloads_completed(_completed: Dictionary) -> void:
+	if _pending_tts_import == null:
+		return
+
+	print("=== Downloads Complete - Importing Models ===")
+
+	var dm = _get_download_manager()
+	var success_count = 0
+	var fail_count = 0
+
+	for tts_obj in _pending_tts_import.objects:
+		var imported = _import_tts_object_from_cache(tts_obj, dm)
+		if imported:
+			success_count += 1
+		else:
+			fail_count += 1
+
+	print("=== TTS Import Complete ===")
+	print("Success: %d | Failed: %d" % [success_count, fail_count])
+
+	_pending_tts_import = null
+	tts_online_import_completed.emit(success_count, fail_count)
+
+
+## Forward download progress
+func _on_download_progress(current: int, total: int, url: String) -> void:
+	tts_download_progress.emit(current, total, url)
+
+
+## Import a single TTS object from download cache
+func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownloadManager) -> Node3D:
+	# Find the mesh file in download cache
+	var mesh_path = dm.find_cached_file(tts_obj.mesh_url, true)
+	if mesh_path.is_empty():
+		print("  [SKIP] %s - mesh not downloaded" % tts_obj.name)
+		return null
+
+	# Find texture file if URL is specified
+	var texture_path = ""
+	if not tts_obj.diffuse_url.is_empty():
+		texture_path = dm.find_cached_file(tts_obj.diffuse_url, false)
+
+	# Load the model WITHOUT base - base will be added separately after scaling
+	var extension = mesh_path.get_extension().to_lower()
+	var model_scene: Node3D = null
+
+	match extension:
+		"obj":
+			model_scene = _load_obj_model(mesh_path, texture_path, false)  # Never add base here
+		_:
+			push_warning("Unsupported TTS mesh format: %s" % extension)
+			return null
+
+	if not model_scene:
+		print("  [FAIL] %s - could not load mesh" % tts_obj.name)
+		return null
+
+	# TTS uses 1 unit = 1 inch, Godot uses meters
+	# Scale model to convert inches to meters: 1 inch = 0.0254 meters
+	var tts_scale = 0.0254
+	model_scene.scale = Vector3(tts_scale, tts_scale, tts_scale)
+
+	# Calculate model bounds for collision (after scaling)
+	var mesh_aabb = _calculate_aabb(model_scene)
+
+	# Add base for child models (real miniatures) - created OUTSIDE the scaled model
+	var add_base = tts_obj.is_child_model
+	var base_height = 0.003  # 3mm base height
+
+	if add_base:
+		# Position model on top of base
+		model_scene.position.y = base_height
+
+	var base_info = " + base" if add_base else ""
+	print("    Size: %.1fmm x %.1fmm x %.1fmm%s" % [mesh_aabb.size.x * 1000, mesh_aabb.size.y * 1000, mesh_aabb.size.z * 1000, base_info])
+
+	# Wrap in StaticBody3D for selection
+	_object_counter += 1
+	var wrapper = StaticBody3D.new()
+	wrapper.name = "TTS_%s_%d" % [tts_obj.name.replace(" ", "_"), _object_counter]
+	wrapper.set_meta("network_id", _object_counter + 30000)
+	wrapper.set_meta("tts_mesh_url", tts_obj.mesh_url)
+	wrapper.set_meta("tts_diffuse_url", tts_obj.diffuse_url)
+	wrapper.add_to_group("selectable")
+	wrapper.add_to_group("tts_import")
+
+	# Add loaded model
+	wrapper.add_child(model_scene)
+
+	# Add base AFTER model (not inside scaled model_scene)
+	if add_base:
+		var base = _create_miniature_base()
+		wrapper.add_child(base)
+
+	# Calculate collision from model + base bounds
+	var collision = CollisionShape3D.new()
+	var shape = BoxShape3D.new()
+	if add_base:
+		# Include base in collision - expand AABB to include base
+		var base_radius = 0.016  # 32mm diameter = 16mm radius
+		var total_height = mesh_aabb.size.y + base_height
+		shape.size = Vector3(base_radius * 2, total_height, base_radius * 2)
+		collision.position = Vector3(0, total_height / 2, 0)
+	else:
+		shape.size = mesh_aabb.size
+		collision.position = mesh_aabb.position + mesh_aabb.size / 2
+	collision.shape = shape
+	wrapper.add_child(collision)
+
+	# Apply TTS color tint if not white
+	if tts_obj.color != Color.WHITE:
+		_apply_color_tint(model_scene, tts_obj.color)
+
+	# Add script for selection
+	wrapper.set_script(preload("res://scripts/selectable_object.gd"))
+
+	# Add to scene at TTS position (converted to meters)
+	add_child(wrapper)
+
+	# TTS position: 1 unit ≈ 1 inch = 0.0254m
+	var pos_scale = 0.0254
+	wrapper.global_position = Vector3(
+		tts_obj.position.x * pos_scale,
+		0,  # Place on table surface
+		tts_obj.position.z * pos_scale
+	)
+
+	# Apply rotation (TTS uses degrees, only Y rotation for table objects)
+	wrapper.rotation_degrees = Vector3(0, tts_obj.rotation.y, 0)
+
+	var tex_info = " + texture" if not texture_path.is_empty() else ""
+	print("  [OK] %s%s" % [tts_obj.name, tex_info])
+
+	return wrapper
+
+
+## ============================================================================
+## Arrangement Functions (TTS-style formations)
+## ============================================================================
+
+## Get cursor position on the table from current mouse position
+func get_cursor_table_position() -> Vector3:
+	var camera = get_viewport().get_camera_3d()
+	if not camera:
+		return Vector3.ZERO
+
+	var mouse_pos = get_viewport().get_mouse_position()
+	var from = camera.project_ray_origin(mouse_pos)
+	var dir = camera.project_ray_normal(mouse_pos)
+
+	# Intersect with table plane (y=0)
+	var table_plane = Plane(Vector3.UP, 0)
+	var intersection = table_plane.intersects_ray(from, dir)
+
+	if intersection:
+		return Vector3(intersection.x, 0, intersection.z)
+
+	return Vector3.ZERO
+
+## Arrange selected objects in N rows at cursor position (keys 1-9)
+func arrange_selected_in_rows(num_rows: int, cursor_pos: Vector3) -> void:
+	if _selected_objects.size() < 2:
+		return
+
+	var objects = _selected_objects.duplicate()
+	var count = objects.size()
+	var cols = ceili(float(count) / num_rows)
+
+	# Spacing between objects (40mm default)
+	var spacing = 0.04
+
+	# Start from cursor position (first object at cursor)
+	var start_x = cursor_pos.x
+	var start_z = cursor_pos.z
+
+	var idx = 0
+	for row in range(num_rows):
+		for col in range(cols):
+			if idx >= count:
+				break
+			var obj = objects[idx]
+			if is_instance_valid(obj):
+				obj.global_position = Vector3(
+					start_x + col * spacing,
+					obj.global_position.y,
+					start_z + row * spacing
+				)
+			idx += 1
+
+	print("Arranged %d objects in %d rows at cursor" % [count, num_rows])
+
+
+## Arrange selected objects in arrow/wedge formation at cursor (A key)
+func arrange_selected_arrow(cursor_pos: Vector3) -> void:
+	if _selected_objects.size() < 2:
+		return
+
+	var objects = _selected_objects.duplicate()
+	var count = objects.size()
+
+	# Spacing between objects
+	var spacing = 0.04
+	var row_spacing = 0.035  # Slightly tighter rows for arrow
+
+	# Arrow formation: 1 in front (at cursor), then 2, then 3, etc.
+	var row = 0
+	var idx = 0
+	var row_count = 1
+
+	while idx < count:
+		# Position objects in this row, centered on cursor X
+		var row_start_x = cursor_pos.x - (row_count - 1) * spacing / 2
+
+		for col in range(row_count):
+			if idx >= count:
+				break
+			var obj = objects[idx]
+			if is_instance_valid(obj):
+				obj.global_position = Vector3(
+					row_start_x + col * spacing,
+					obj.global_position.y,
+					cursor_pos.z + row * row_spacing
+				)
+			idx += 1
+
+		row += 1
+		row_count += 1
+
+	print("Arranged %d objects in arrow formation at cursor" % count)
+
+
+## Copy selected objects to clipboard (Ctrl+C)
+func copy_to_clipboard() -> void:
+	if _selected_objects.is_empty():
+		return
+
+	_clipboard.clear()
+	for obj in _selected_objects:
+		if is_instance_valid(obj):
+			_clipboard.append(obj)
+
+	print("Copied %d objects to clipboard" % _clipboard.size())
+
+
+## Paste objects from clipboard at cursor position (Ctrl+V)
+func paste_from_clipboard(cursor_pos: Vector3) -> void:
+	if _clipboard.is_empty():
+		print("Clipboard is empty")
+		return
+
+	# Calculate center of clipboard objects
+	var clipboard_center = Vector3.ZERO
+	var valid_count = 0
+	for obj in _clipboard:
+		if is_instance_valid(obj):
+			clipboard_center += obj.global_position
+			valid_count += 1
+
+	if valid_count == 0:
+		_clipboard.clear()
+		return
+
+	clipboard_center /= valid_count
+
+	# Paste at cursor position, maintaining relative positions
+	var pasted_count = 0
+	_deselect_all()  # Deselect current selection
+
+	for obj in _clipboard:
+		if not is_instance_valid(obj):
+			continue
+
+		var copy: Node3D = null
+
+		# Check if it's a TTS import (has mesh URL meta)
+		if obj.has_meta("tts_mesh_url"):
+			copy = _duplicate_tts_object(obj)
+		else:
+			# Generic duplication for other objects
+			copy = obj.duplicate()
+			_object_counter += 1
+			copy.name = obj.name.split("_")[0] + "_%d" % _object_counter
+
+		if copy:
+			add_child(copy)
+			# Position relative to cursor (maintaining formation)
+			var offset = obj.global_position - clipboard_center
+			copy.global_position = cursor_pos + offset
+			copy.global_position.y = obj.global_position.y  # Keep original height
+			# Select the pasted object
+			_add_to_selection(copy)
+			pasted_count += 1
+
+	print("Pasted %d objects at cursor" % pasted_count)
+
+
+## Duplicate a TTS-imported object
+func _duplicate_tts_object(original: Node3D) -> Node3D:
+	# Deep duplicate the object
+	var copy = original.duplicate()
+
+	# Assign new unique ID
+	_object_counter += 1
+	copy.name = original.name.split("_")[0] + "_%d" % _object_counter
+	copy.set_meta("network_id", _object_counter + 30000)
+
+	# Make sure it's in the right groups
+	if not copy.is_in_group("selectable"):
+		copy.add_to_group("selectable")
+	if not copy.is_in_group("tts_import"):
+		copy.add_to_group("tts_import")
+
+	return copy
+
+
+## ============================================================================
+## Terrain System
+## ============================================================================
+
+## Spawn terrain from TTS URLs at given position
+## Returns the spawned terrain object
+func spawn_tts_terrain(mesh_url: String, diffuse_url: String, tts_scale: Vector3, position: Vector3, terrain_name: String = "Terrain") -> Node3D:
+	if mesh_url.is_empty():
+		push_error("spawn_tts_terrain: No mesh URL provided")
+		return null
+
+	# Get or create download manager
+	var dm = _get_download_manager()
+
+	# Check if already cached
+	var mesh_path = dm.find_cached_file(mesh_url, true)
+	var texture_path = ""
+
+	if mesh_path.is_empty():
+		# Need to download
+		print("  [DOWNLOAD] Terrain mesh: %s" % mesh_url.get_file())
+		dm.queue_download(mesh_url, true)
+		if not diffuse_url.is_empty():
+			dm.queue_download(diffuse_url, false)
+
+		# Wait for downloads
+		dm.start_downloads()
+		await dm.all_downloads_completed
+
+		mesh_path = dm.find_cached_file(mesh_url, true)
+
+	if not diffuse_url.is_empty():
+		texture_path = dm.find_cached_file(diffuse_url, false)
+
+	if mesh_path.is_empty():
+		push_error("spawn_tts_terrain: Failed to download mesh")
+		return null
+
+	# Load the model (no base for terrain)
+	var model_scene = _load_obj_model(mesh_path, texture_path, false)
+	if not model_scene:
+		push_error("spawn_tts_terrain: Failed to load mesh")
+		return null
+
+	# Apply TTS scale (inches to meters, plus terrain's own scale)
+	var scale_factor = 0.0254  # TTS units to meters
+	var final_scale = tts_scale * scale_factor
+	model_scene.scale = final_scale
+
+	# Calculate bounds for collision BEFORE scaling was applied (raw mesh bounds)
+	# Then apply scale to the AABB
+	var raw_aabb = _calculate_aabb(model_scene)
+	# The AABB from _calculate_aabb doesn't include parent scale, so we need to apply it
+	var mesh_aabb = AABB(
+		raw_aabb.position * final_scale,
+		raw_aabb.size * final_scale
+	)
+
+	# Ensure minimum collision size for clickability
+	var min_size = 0.05  # 5cm minimum
+	mesh_aabb.size.x = max(mesh_aabb.size.x, min_size)
+	mesh_aabb.size.y = max(mesh_aabb.size.y, min_size)
+	mesh_aabb.size.z = max(mesh_aabb.size.z, min_size)
+
+	print("  Terrain AABB: %.3f x %.3f x %.3f" % [mesh_aabb.size.x, mesh_aabb.size.y, mesh_aabb.size.z])
+
+	# Create wrapper
+	_object_counter += 1
+	var wrapper = StaticBody3D.new()
+	wrapper.name = "Terrain_%s_%d" % [terrain_name.replace(" ", "_"), _object_counter]
+	wrapper.set_meta("network_id", _object_counter + 40000)  # Terrain IDs start at 40000
+	wrapper.set_meta("tts_mesh_url", mesh_url)
+	wrapper.set_meta("tts_diffuse_url", diffuse_url)
+	wrapper.set_meta("terrain_name", terrain_name)
+	wrapper.add_to_group("selectable")
+	wrapper.add_to_group("tts_import")
+	wrapper.add_to_group("terrain_piece")
+
+	# Add model
+	wrapper.add_child(model_scene)
+
+	# Add collision
+	var collision = CollisionShape3D.new()
+	var shape = BoxShape3D.new()
+	shape.size = mesh_aabb.size
+	collision.shape = shape
+	collision.position = mesh_aabb.position + mesh_aabb.size / 2
+	wrapper.add_child(collision)
+
+	# Add script for selection
+	wrapper.set_script(preload("res://scripts/selectable_object.gd"))
+
+	# Add to scene
+	add_child(wrapper)
+	wrapper.global_position = position
+
+	print("  [OK] Terrain: %s" % terrain_name)
+	return wrapper
+
+
+## ============================================================================
+## Lock/Unlock System
+## ============================================================================
+
+## Toggle lock state of selected objects
+func toggle_lock_selected() -> void:
+	if _selected_objects.is_empty():
+		return
+
+	# Check if any are unlocked - if so, lock all. Otherwise unlock all.
+	var any_unlocked = false
+	for obj in _selected_objects:
+		if is_instance_valid(obj) and not obj.get_meta("locked", false):
+			any_unlocked = true
+			break
+
+	var new_state = any_unlocked  # Lock if any unlocked, unlock if all locked
+	var count = 0
+
+	for obj in _selected_objects:
+		if is_instance_valid(obj):
+			_set_object_locked(obj, new_state)
+			count += 1
+
+	var state_text = "Locked" if new_state else "Unlocked"
+	print("%s %d objects" % [state_text, count])
+
+	# Deselect if locking
+	if new_state:
+		_deselect_all()
+
+
+## Set lock state of a single object
+func _set_object_locked(obj: Node3D, locked: bool) -> void:
+	obj.set_meta("locked", locked)
+
+	# Visual feedback - change material or add indicator
+	if locked:
+		obj.add_to_group("locked")
+		# Dim the object slightly to indicate locked state
+		_set_object_dimmed(obj, true)
+	else:
+		obj.remove_from_group("locked")
+		_set_object_dimmed(obj, false)
+
+
+## Check if object is locked
+func is_object_locked(obj: Node3D) -> bool:
+	return obj.get_meta("locked", false)
+
+
+## Apply dimming effect to show locked state
+func _set_object_dimmed(obj: Node3D, dimmed: bool) -> void:
+	# Find all MeshInstance3D children and adjust their material
+	for child in obj.get_children():
+		if child is MeshInstance3D:
+			var mesh_inst = child as MeshInstance3D
+			if mesh_inst.material_override:
+				var mat = mesh_inst.material_override as StandardMaterial3D
+				if mat:
+					if dimmed:
+						mat.albedo_color = mat.albedo_color.darkened(0.3)
+					else:
+						mat.albedo_color = mat.albedo_color.lightened(0.3)
+		# Recurse into children
+		if child.get_child_count() > 0:
+			_set_object_dimmed(child, dimmed)
