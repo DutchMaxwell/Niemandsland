@@ -7,23 +7,23 @@ extends Node3D
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var dice_result_label: Label = $UI/HUD/DiceResult
 @onready var distance_label: Label = $UI/HUD/DistanceLabel
-@onready var spawn_miniature_btn: Button = $UI/HUD/SpawnPanel/SpawnMiniature
-@onready var spawn_dice_btn: Button = $UI/HUD/SpawnPanel/SpawnDice
-@onready var spawn_terrain_btn: Button = $UI/HUD/SpawnPanel/SpawnTerrain
-@onready var clear_all_btn: Button = $UI/HUD/SpawnPanel/ClearAll
-@onready var spawn_200_btn: Button = $UI/HUD/SpawnPanel/Spawn200
-@onready var spawn_500_btn: Button = $UI/HUD/SpawnPanel/Spawn500
-@onready var spawn_1000_btn: Button = $UI/HUD/SpawnPanel/Spawn1000
-@onready var spawn_complex_btn: Button = $UI/HUD/SpawnPanel/SpawnComplex
+@onready var spawn_miniature_btn: Button = %SpawnMiniature
+@onready var spawn_dice_btn: Button = %SpawnDice
+@onready var spawn_terrain_btn: Button = %SpawnTerrain
+@onready var clear_all_btn: Button = %ClearAll
+@onready var spawn_200_btn: Button = %Spawn200
+@onready var spawn_500_btn: Button = %Spawn500
+@onready var spawn_1000_btn: Button = %Spawn1000
+@onready var spawn_complex_btn: Button = %SpawnComplex
 @onready var performance_label: Label = %PerformanceLabel
 
 # Table size UI elements
-@onready var table_size_option: OptionButton = $UI/HUD/TableSizePanel/TableSizeOption
-@onready var custom_size_container: VBoxContainer = $UI/HUD/TableSizePanel/CustomSizeContainer
-@onready var unit_option: OptionButton = $UI/HUD/TableSizePanel/CustomSizeContainer/UnitOption
-@onready var width_input: SpinBox = $UI/HUD/TableSizePanel/CustomSizeContainer/WidthContainer/WidthInput
-@onready var length_input: SpinBox = $UI/HUD/TableSizePanel/CustomSizeContainer/LengthContainer/LengthInput
-@onready var apply_custom_btn: Button = $UI/HUD/TableSizePanel/CustomSizeContainer/ApplyCustomBtn
+@onready var table_size_option: OptionButton = %TableSizeOption
+@onready var custom_size_container: VBoxContainer = %CustomSizeContainer
+@onready var unit_option: OptionButton = %UnitOption
+@onready var width_input: SpinBox = %WidthInput
+@onready var length_input: SpinBox = %LengthInput
+@onready var apply_custom_btn: Button = %ApplyCustomBtn
 
 # Dice Roller Plugin UI
 @onready var dice_roller_control = %DiceRollerControl
@@ -47,13 +47,31 @@ extends Node3D
 
 # TTS Import UI
 @onready var import_tts_btn: Button = %ImportTTS
+@onready var import_tts_online_btn: Button = %ImportTTSOnline
 @onready var tts_json_dialog: FileDialog = %TTSJsonDialog
 @onready var tts_models_dialog: FileDialog = %TTSModelsDialog
 @onready var tts_images_dialog: FileDialog = %TTSImagesDialog
 
+# Save/Load UI
+@onready var save_manager = %SaveManager
+@onready var save_game_btn: Button = %SaveGameBtn
+@onready var load_game_btn: Button = %LoadGameBtn
+@onready var save_game_dialog: FileDialog = %SaveGameDialog
+@onready var load_game_dialog: FileDialog = %LoadGameDialog
+
+# Terrain Browser UI
+@onready var terrain_library = %TerrainLibrary
+@onready var terrain_browser_btn: Button = %TerrainBrowser
+@onready var terrain_browser_popup: Window = %TerrainBrowserPopup
+@onready var terrain_category_option: OptionButton = %CategoryOption
+@onready var terrain_list: ItemList = %TerrainList
+@onready var terrain_place_btn: Button = %SpawnTerrainBtn
+@onready var close_terrain_btn: Button = %CloseTerrainBtn
+
 # TTS Import state
 var _tts_json_path: String = ""
 var _tts_models_dir: String = ""
+var _tts_import_mode: String = "local"  # "local" or "online"
 
 const INCHES_TO_FEET: float = 1.0 / 12.0
 const CM_TO_FEET: float = 1.0 / 30.48
@@ -73,9 +91,12 @@ func _ready() -> void:
 
 	# Connect TTS Import UI
 	import_tts_btn.pressed.connect(_on_import_tts)
+	import_tts_online_btn.pressed.connect(_on_import_tts_online)
 	tts_json_dialog.file_selected.connect(_on_tts_json_selected)
 	tts_models_dialog.dir_selected.connect(_on_tts_models_dir_selected)
 	tts_images_dialog.dir_selected.connect(_on_tts_images_dir_selected)
+	object_manager.tts_online_import_completed.connect(_on_tts_online_import_completed)
+	object_manager.tts_download_progress.connect(_on_tts_download_progress)
 	spawn_200_btn.pressed.connect(_on_spawn_200)
 	spawn_500_btn.pressed.connect(_on_spawn_500)
 	spawn_1000_btn.pressed.connect(_on_spawn_1000)
@@ -117,6 +138,29 @@ func _ready() -> void:
 	network_manager.player_connected.connect(_on_player_joined)
 	network_manager.player_disconnected.connect(_on_player_left)
 
+	# Connect Save/Load UI
+	save_game_btn.pressed.connect(_on_save_game)
+	load_game_btn.pressed.connect(_on_load_game)
+	save_game_dialog.file_selected.connect(_on_save_file_selected)
+	load_game_dialog.file_selected.connect(_on_load_file_selected)
+	save_manager.save_completed.connect(_on_save_completed)
+	save_manager.load_completed.connect(_on_load_completed)
+	save_manager.load_failed.connect(_on_load_failed)
+
+	# Initialize SaveManager references
+	save_manager.object_manager = object_manager
+	save_manager.table = table
+
+	# Connect Terrain Browser UI
+	terrain_library.object_manager = object_manager
+	terrain_browser_btn.pressed.connect(_on_terrain_browser_pressed)
+	terrain_category_option.item_selected.connect(_on_terrain_category_selected)
+	terrain_list.item_activated.connect(_on_terrain_item_activated)
+	terrain_place_btn.pressed.connect(_on_spawn_terrain_pressed)
+	close_terrain_btn.pressed.connect(_on_close_terrain_browser)
+	terrain_browser_popup.close_requested.connect(_on_close_terrain_browser)
+	terrain_library.library_loaded.connect(_on_terrain_library_loaded)
+
 	# Initialize table with default size (6x4 feet = 72x48 inches, landscape)
 	# Long side (72") faces the viewer (X-axis), short side (48") is depth (Z-axis)
 	table.setup_table(Vector2(6, 4))
@@ -124,6 +168,39 @@ func _ready() -> void:
 	table_size_option.selected = 1  # Select 72x48 option
 
 	print("OpenTTS ready!")
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		# Get cursor position on table for all operations
+		var cursor_pos = object_manager.get_cursor_table_position()
+
+		# Arrangement keys (1-9) - arrange selected in N rows at cursor
+		if event.keycode >= KEY_1 and event.keycode <= KEY_9:
+			var rows = event.keycode - KEY_0
+			object_manager.arrange_selected_in_rows(rows, cursor_pos)
+			get_viewport().set_input_as_handled()
+		# Arrow formation (A key) at cursor
+		elif event.keycode == KEY_A and not event.ctrl_pressed:
+			object_manager.arrange_selected_arrow(cursor_pos)
+			get_viewport().set_input_as_handled()
+		# Copy to clipboard (Ctrl+C)
+		elif event.keycode == KEY_C and event.ctrl_pressed:
+			object_manager.copy_to_clipboard()
+			get_viewport().set_input_as_handled()
+		# Paste from clipboard at cursor (Ctrl+V)
+		elif event.keycode == KEY_V and event.ctrl_pressed:
+			object_manager.paste_from_clipboard(cursor_pos)
+			get_viewport().set_input_as_handled()
+		# Duplicate (Ctrl+D) - copy + paste immediately
+		elif event.keycode == KEY_D and event.ctrl_pressed:
+			object_manager.copy_to_clipboard()
+			object_manager.paste_from_clipboard(cursor_pos)
+			get_viewport().set_input_as_handled()
+		# Lock/Unlock selected objects (L key)
+		elif event.keycode == KEY_L and not event.ctrl_pressed:
+			object_manager.toggle_lock_selected()
+			get_viewport().set_input_as_handled()
 
 
 func _process(_delta: float) -> void:
@@ -570,28 +647,59 @@ func _update_network_ui(connected: bool, _is_host: bool) -> void:
 ## TTS (Tabletop Simulator) Import Functions
 ## ============================================================================
 
-## Start TTS import workflow - first select JSON file
+## Start TTS import workflow (local cache) - first select JSON file
 func _on_import_tts() -> void:
 	_tts_json_path = ""
 	_tts_models_dir = ""
+	_tts_import_mode = "local"
 	tts_json_dialog.popup_centered()
 
 
-## JSON file selected - next select Models directory
+## Start TTS online import - only need JSON file
+func _on_import_tts_online() -> void:
+	print("=== TTS Online Import Button Pressed ===")
+	_tts_json_path = ""
+	_tts_models_dir = ""
+	_tts_import_mode = "online"
+	print("Set import mode to: %s" % _tts_import_mode)
+	tts_json_dialog.popup_centered()
+
+
+## JSON file selected - branch based on import mode
 func _on_tts_json_selected(path: String) -> void:
 	_tts_json_path = path
 	print("TTS Save selected: %s" % path.get_file())
+	print("Import mode: %s" % _tts_import_mode)
 
-	# Hide previous dialog before opening next
+	# Hide dialog
 	tts_json_dialog.hide()
 
-	# Try to auto-detect TTS cache directories
-	var tts_cache_base = _detect_tts_cache_dir()
-	if not tts_cache_base.is_empty():
-		tts_models_dialog.current_dir = tts_cache_base.path_join("Models")
-		tts_images_dialog.current_dir = tts_cache_base.path_join("Images")
+	if _tts_import_mode == "online":
+		# Online mode: Start download and import immediately
+		print("=== Starting TTS Online Import ===")
+		print("JSON: %s" % _tts_json_path)
+		import_tts_online_btn.disabled = true
+		import_tts_online_btn.text = "Downloading..."
+		object_manager.import_tts_save_online(_tts_json_path)
+	else:
+		# Local mode: Continue with directory selection
+		var tts_cache_base = _detect_tts_cache_dir()
+		if not tts_cache_base.is_empty():
+			tts_models_dialog.current_dir = tts_cache_base.path_join("Models")
+			tts_images_dialog.current_dir = tts_cache_base.path_join("Images")
+		tts_models_dialog.popup_centered()
 
-	tts_models_dialog.popup_centered()
+
+## Handle online import completion
+func _on_tts_online_import_completed(success_count: int, fail_count: int) -> void:
+	import_tts_online_btn.disabled = false
+	import_tts_online_btn.text = "Import TTS (Online)..."
+	print("TTS Online Import finished: %d imported, %d failed" % [success_count, fail_count])
+
+
+## Handle download progress updates
+func _on_tts_download_progress(current: int, total: int, _url: String) -> void:
+	import_tts_online_btn.text = "Downloading %d/%d..." % [current, total]
 
 
 ## Models directory selected - next select Images directory
@@ -649,3 +757,168 @@ func _detect_tts_cache_dir() -> String:
 			return path
 
 	return ""
+
+
+## ============================================================================
+## Save / Load Functions
+## ============================================================================
+
+## Open save dialog
+func _on_save_game() -> void:
+	# Set default directory
+	save_game_dialog.current_dir = SaveManager.get_default_save_dir()
+	save_game_dialog.current_file = "game_%s.otts" % Time.get_datetime_string_from_system().replace(":", "-")
+	save_game_dialog.popup_centered()
+
+
+## Open load dialog
+func _on_load_game() -> void:
+	load_game_dialog.current_dir = SaveManager.get_default_save_dir()
+	load_game_dialog.popup_centered()
+
+
+## Save file selected
+func _on_save_file_selected(path: String) -> void:
+	# Ensure .otts extension
+	if not path.ends_with(".otts"):
+		path += ".otts"
+
+	var error = save_manager.save_game(path)
+	if error != OK:
+		push_error("Failed to save game: %d" % error)
+
+
+## Load file selected
+func _on_load_file_selected(path: String) -> void:
+	var error = save_manager.load_game(path)
+	if error != OK:
+		push_error("Failed to load game: %d" % error)
+
+
+## Save completed callback
+func _on_save_completed(path: String) -> void:
+	print("Game saved successfully: %s" % path.get_file())
+	# Could show a toast notification here
+
+
+## Load completed callback
+func _on_load_completed(object_count: int) -> void:
+	print("Game loaded: %d objects" % object_count)
+
+	# Sync to multiplayer clients if hosting
+	if network_manager.is_host and network_manager.connected_peers.size() > 0:
+		_sync_loaded_state_to_clients()
+
+
+## Load failed callback
+func _on_load_failed(error: String) -> void:
+	push_error("Load failed: %s" % error)
+
+
+## Sync loaded state to all connected clients
+func _sync_loaded_state_to_clients() -> void:
+	if not network_manager.is_host:
+		return
+
+	print("Syncing loaded state to %d clients..." % network_manager.connected_peers.size())
+
+	# Get current state and broadcast to all clients
+	var state = save_manager.serialize_game_state()
+	_rpc_sync_game_state.rpc(state)
+
+
+## RPC to sync game state to clients
+@rpc("authority", "call_remote", "reliable")
+func _rpc_sync_game_state(state: Dictionary) -> void:
+	print("Received game state from host, loading...")
+
+	# Clear current objects
+	object_manager.clear_all_objects()
+
+	# Deserialize table
+	var table_data = state.get("table", {})
+	var size = table_data.get("size_feet", [6, 4])
+	if size is Array and size.size() >= 2:
+		table.setup_table(Vector2(size[0], size[1]))
+		_adjust_camera_for_table_size(Vector2(size[0], size[1]))
+
+	# Deserialize objects (using save_manager helper, async for TTS downloads)
+	var objects_data = state.get("objects", [])
+	var loaded_count = await save_manager._deserialize_objects(objects_data)
+
+	print("Synced %d objects from host" % loaded_count)
+
+
+## ============================================================================
+## Terrain Browser Functions
+## ============================================================================
+
+## Open terrain browser popup
+func _on_terrain_browser_pressed() -> void:
+	terrain_browser_popup.popup_centered()
+
+
+## Close terrain browser popup
+func _on_close_terrain_browser() -> void:
+	terrain_browser_popup.hide()
+
+
+## Called when terrain library finishes loading
+func _on_terrain_library_loaded(categories: Array) -> void:
+	terrain_category_option.clear()
+
+	if categories.is_empty():
+		terrain_category_option.add_item("No terrain found")
+		return
+
+	for category in categories:
+		terrain_category_option.add_item(category)
+
+	# Select first category and populate list
+	terrain_category_option.select(0)
+	_on_terrain_category_selected(0)
+
+
+## Category selection changed
+func _on_terrain_category_selected(index: int) -> void:
+	terrain_list.clear()
+
+	var category_name = terrain_category_option.get_item_text(index)
+	var pieces = terrain_library.get_pieces_in_category(category_name)
+
+	for piece in pieces:
+		var display_name = piece.name
+		if not piece.description.is_empty():
+			display_name += " - " + piece.description.left(50)
+		terrain_list.add_item(display_name)
+		# Store piece ID in metadata
+		terrain_list.set_item_metadata(terrain_list.item_count - 1, piece.id)
+
+
+## Double-click on terrain item to spawn immediately
+func _on_terrain_item_activated(index: int) -> void:
+	_spawn_selected_terrain(index)
+
+
+## Spawn button pressed
+func _on_spawn_terrain_pressed() -> void:
+	var selected = terrain_list.get_selected_items()
+	if selected.is_empty():
+		return
+	_spawn_selected_terrain(selected[0])
+
+
+## Spawn the selected terrain piece at cursor position
+func _spawn_selected_terrain(index: int) -> void:
+	var piece_id = terrain_list.get_item_metadata(index)
+	var piece = terrain_library.get_piece_by_id(piece_id)
+
+	if not piece:
+		push_error("Terrain piece not found: %s" % piece_id)
+		return
+
+	var cursor_pos = object_manager.get_cursor_table_position()
+	terrain_library.spawn_terrain_piece(piece, cursor_pos)
+
+	# Keep browser open for placing multiple pieces
+	print("Spawning terrain: %s at cursor" % piece.name)
