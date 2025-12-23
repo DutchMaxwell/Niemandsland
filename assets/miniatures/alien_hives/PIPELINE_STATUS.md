@@ -86,16 +86,13 @@ TECHNICAL:
 **Lösung:** Schwarzen Hintergrund in Gemini anfordern, `--no-preprocess` verwenden
 
 ### 3. Boden-Artefakt unter dem Modell
-**Ursache:** Wasserzeichen-Entfernung malt schwarzes Quadrat das als Boden interpretiert wird
-**Status:** OFFEN - Nächster Schritt: Intelligentere Wasserzeichen-Entfernung oder manuelles Cropping
+**Ursache:** Alte Wasserzeichen-Entfernung malte schwarzes Quadrat das als Boden interpretiert wurde
+**Status:** ✅ GELÖST - Intelligente Wasserzeichen-Entfernung implementiert
 
 ### 4. Gemini Wasserzeichen wird zu 3D-Artefakt
 **Ursache:** Kleiner Stern unten rechts im Gemini-Bild
-**Aktueller Fix:** 200x200px Bereich wird schwarz/transparent gemacht
-**Problem:** Dieser schwarze Bereich wird manchmal als Boden interpretiert
-**Nächster Schritt:**
-- Option A: Manuell Wasserzeichen in Preview/Photoshop entfernen vor Pipeline
-- Option B: Intelligentere Erkennung (nur helle Pixel des Sterns entfernen, nicht ganzes Quadrat)
+**Status:** ✅ GELÖST
+**Lösung:** Intelligente Erkennung - nur helle Pixel (brightness > 100) werden entfernt, dunkle Hintergrund-Pixel bleiben erhalten. TRELLIS sieht keinen schwarzen Block mehr.
 
 ## Dateien
 
@@ -115,7 +112,7 @@ claude/openttts-unit-assets-sXFUW
 ```
 
 ## Nächste Schritte
-1. **Wasserzeichen-Problem lösen:** Entweder intelligentere Entfernung oder manueller Workflow
+1. ~~**Wasserzeichen-Problem lösen:**~~ ✅ Intelligente Entfernung implementiert
 2. **Batch-Generierung:** Alle 35 Einheiten durchgehen
 3. **GLB-Nachbearbeitung:** Evtl. Blender-Script für automatisches Cleanup
 
