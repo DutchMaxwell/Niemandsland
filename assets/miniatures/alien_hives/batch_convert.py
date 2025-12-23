@@ -98,7 +98,7 @@ def main():
             resolution=resolution,
             decimation=decimation,
             texture_size=texture,
-            preprocess=False
+            preprocess=True  # Wichtig: Entfernt weißen Hintergrund
         )
     except Exception as e:
         print(f"❌ Verbindungsfehler: {e}")
