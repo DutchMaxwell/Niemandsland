@@ -108,7 +108,7 @@ TECHNICAL:
 
 ## Git Branch
 ```
-claude/openttts-unit-assets-sXFUW
+main
 ```
 
 ## Nächste Schritte
