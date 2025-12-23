@@ -74,8 +74,8 @@ def remove_gemini_watermark(img: "Image.Image") -> "Image.Image":
     width, height = img.size
 
     # Gemini watermark is in bottom-right corner
-    # Crop 80 pixels from right and bottom to remove it completely
-    crop_size = 80
+    # Crop 120 pixels from right and bottom to remove it completely
+    crop_size = 120
 
     # Crop the image (left, top, right, bottom)
     cropped = img.crop((0, 0, width - crop_size, height - crop_size))
