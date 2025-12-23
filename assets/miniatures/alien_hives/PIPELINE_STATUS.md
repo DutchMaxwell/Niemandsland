@@ -151,6 +151,16 @@ main
 pip install gradio_client requests Pillow
 ```
 
+## GPU Quota (HuggingFace)
+
+Die TRELLIS.2-Pipeline nutzt HuggingFace ZeroGPU. Bei PRO-Subscription:
+- **25 Minuten** ZeroGPU-Zeit pro Tag
+- Jede 3D-Generierung benötigt ~2 Minuten GPU-Zeit
+- **Quota-Error?** Warte 30-60 Minuten - die Quota nutzt ein gleitendes Zeitfenster
+- Die Billing-Seite (huggingface.co/pricing) zeigt verzögerte Daten
+
+**Tipp:** Mit 25 Min. kannst du ca. 10-12 Modelle pro Tag generieren.
+
 ## Wichtige Erkenntnisse
 - TRELLIS Web-Interface macht Preprocessing (schwarzer BG, quadratisch, zentriert)
 - Unsere API-Parameter stimmen mit Web-Defaults überein
