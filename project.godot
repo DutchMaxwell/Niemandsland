@@ -13,7 +13,7 @@ config_version=5
 config/name="OpenTTS"
 config/description="Open-Source Wargaming Tabletop Simulator"
 config/version="0.2.0-alpha"
-run/main_scene="res://scenes/main.tscn"
+run/main_scene="res://scenes/startup_menu.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")
 config/icon="res://icon.svg"
 
