@@ -1,0 +1,210 @@
+[gd_scene load_steps=3 format=3 uid="uid://startup_menu_001"]
+
+[ext_resource type="Script" path="res://scripts/startup_menu.gd" id="1_startup"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.078, 0.098, 0.137, 0.85)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 0.1)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+shadow_size = 8
+shadow_color = Color(0, 0, 0, 0.4)
+
+[node name="StartupMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_startup")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.0392157, 0.054902, 0.0901961, 1)
+
+[node name="LogoContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -300.0
+offset_right = 300.0
+offset_bottom = 300.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Spacer1" type="Control" parent="LogoContainer"]
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+
+[node name="LogoLabel" type="Label" parent="LogoContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0.85098, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0.85098, 1, 0.5)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 0
+theme_override_constants/shadow_outline_size = 20
+theme_override_constants/outline_size = 2
+theme_override_font_sizes/font_size = 64
+text = "OPENTTS"
+horizontal_alignment = 1
+
+[node name="SubtitleLabel" type="Label" parent="LogoContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.545098, 0.572549, 0.658824, 1)
+theme_override_font_sizes/font_size = 20
+text = "TACTICAL TABLETOP SIMULATOR"
+horizontal_alignment = 1
+
+[node name="VersionLabel" type="Label" parent="LogoContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.545098, 0.572549, 0.658824, 0.6)
+theme_override_font_sizes/font_size = 14
+text = "v0.2.0-alpha"
+horizontal_alignment = 1
+
+[node name="Spacer2" type="Control" parent="LogoContainer"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+
+[node name="MenuPanel" type="PanelContainer" parent="LogoContainer"]
+unique_name_in_owner = true
+modulate = Color(1, 1, 1, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="MarginContainer" type="MarginContainer" parent="LogoContainer/MenuPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="MenuButtons" type="VBoxContainer" parent="LogoContainer/MenuPanel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="QuickBattleBtn" type="Button" parent="LogoContainer/MenuPanel/MarginContainer/MenuButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 56)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(0, 0.85098, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "▶  QUICK BATTLE"
+flat = true
+alignment = 0
+
+[node name="MultiplayerBtn" type="Button" parent="LogoContainer/MenuPanel/MarginContainer/MenuButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 56)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(0, 0.85098, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "⚔  MULTIPLAYER"
+flat = true
+alignment = 0
+
+[node name="LoadGameBtn" type="Button" parent="LogoContainer/MenuPanel/MarginContainer/MenuButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 56)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(0, 0.85098, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "💾  LOAD GAME"
+flat = true
+alignment = 0
+
+[node name="SettingsBtn" type="Button" parent="LogoContainer/MenuPanel/MarginContainer/MenuButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 56)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(0, 0.85098, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "⚙  SETTINGS"
+flat = true
+alignment = 0
+
+[node name="ExitBtn" type="Button" parent="LogoContainer/MenuPanel/MarginContainer/MenuButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 56)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 0.203922, 0.4, 1)
+theme_override_colors/font_hover_color = Color(1, 0.419608, 0.615686, 1)
+theme_override_font_sizes/font_size = 16
+text = "❌  EXIT"
+flat = true
+alignment = 0
+
+[node name="BottomBar" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -60.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/separation = 16
+
+[node name="LeftSpacer" type="Control" parent="BottomBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SocialButtons" type="HBoxContainer" parent="BottomBar"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CommunityBtn" type="Button" parent="BottomBar/SocialButtons"]
+custom_minimum_size = Vector2(36, 36)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.545098, 0.572549, 0.658824, 1)
+theme_override_colors/font_hover_color = Color(0, 0.85098, 1, 1)
+text = "🌐"
+flat = true
+
+[node name="DiscordBtn" type="Button" parent="BottomBar/SocialButtons"]
+custom_minimum_size = Vector2(36, 36)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.545098, 0.572549, 0.658824, 1)
+theme_override_colors/font_hover_color = Color(0, 0.85098, 1, 1)
+text = "💬"
+flat = true
+
+[node name="HelpBtn" type="Button" parent="BottomBar/SocialButtons"]
+custom_minimum_size = Vector2(36, 36)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.545098, 0.572549, 0.658824, 1)
+theme_override_colors/font_hover_color = Color(0, 0.85098, 1, 1)
+text = "❓"
+flat = true
+
+[node name="RightMargin" type="Control" parent="BottomBar"]
+custom_minimum_size = Vector2(24, 0)
+layout_mode = 2
