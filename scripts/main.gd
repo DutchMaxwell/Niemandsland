@@ -65,8 +65,6 @@ extends Node3D
 @onready var terrain_browser_popup: Window = %TerrainBrowserPopup
 @onready var terrain_category_option: OptionButton = %CategoryOption
 @onready var terrain_list: ItemList = %TerrainList
-@onready var terrain_place_btn: Button = %SpawnTerrainBtn
-@onready var close_terrain_btn: Button = %CloseTerrainBtn
 
 # TTS Import state
 var _tts_json_path: String = ""
@@ -154,10 +152,15 @@ func _ready() -> void:
 	# Connect Terrain Browser UI
 	terrain_library.object_manager = object_manager
 	terrain_browser_btn.pressed.connect(_on_terrain_browser_pressed)
+
+	# Terrain browser buttons are in a Window, so we need to get them differently
+	var spawn_btn = terrain_browser_popup.get_node("MarginContainer/VBox/ButtonRow/SpawnTerrainBtn")
+	var close_btn = terrain_browser_popup.get_node("MarginContainer/VBox/ButtonRow/CloseTerrainBtn")
+
 	terrain_category_option.item_selected.connect(_on_terrain_category_selected)
 	terrain_list.item_activated.connect(_on_terrain_item_activated)
-	terrain_place_btn.pressed.connect(_on_spawn_terrain_pressed)
-	close_terrain_btn.pressed.connect(_on_close_terrain_browser)
+	spawn_btn.pressed.connect(_on_spawn_terrain_pressed)
+	close_btn.pressed.connect(_on_close_terrain_browser)
 	terrain_browser_popup.close_requested.connect(_on_close_terrain_browser)
 	terrain_library.library_loaded.connect(_on_terrain_library_loaded)
 
