@@ -18,6 +18,7 @@ var _target_position: Vector3 = Vector3.ZERO
 var _is_rotating: bool = false
 var _is_panning: bool = false
 var _last_mouse_pos: Vector2 = Vector2.ZERO
+var _collision_margin: float = 0.2  # Safety margin to prevent clipping
 
 
 func _ready() -> void:
@@ -92,8 +93,28 @@ func _update_camera_transform() -> void:
 	# Update camera position and rotation (pitch and distance)
 	if _camera:
 		var pitch_rad = deg_to_rad(_pitch)
-		var offset = Vector3(0, -sin(pitch_rad), cos(pitch_rad)) * _current_zoom
-		_camera.position = offset
+		var desired_offset = Vector3(0, -sin(pitch_rad), cos(pitch_rad)) * _current_zoom
+		var desired_camera_pos = _target_position + (global_transform.basis * desired_offset)
+
+		# Raycast from target to desired camera position to check for collisions
+		var space_state = get_world_3d().direct_space_state
+		var query = PhysicsRayQueryParameters3D.create(_target_position, desired_camera_pos)
+		query.exclude = []  # Could exclude specific objects if needed
+
+		var result = space_state.intersect_ray(query)
+
+		# If we hit something, position camera just before the collision point
+		var final_offset = desired_offset
+		if result:
+			var collision_point = result.position
+			var safe_distance = _target_position.distance_to(collision_point) - _collision_margin
+			safe_distance = max(safe_distance, min_zoom)  # Don't go closer than min_zoom
+
+			# Calculate shortened offset to stop before collision
+			var direction = desired_offset.normalized()
+			final_offset = direction * safe_distance
+
+		_camera.position = final_offset
 		_camera.look_at(_target_position, Vector3.UP)
 
 
