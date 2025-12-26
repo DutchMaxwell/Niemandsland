@@ -21,7 +21,7 @@ const PRESETS = {
 		"name": "Ultra",
 		"description": "4K, All Effects",
 		"msaa_3d": 3,  # 8x
-		"use_taa": true,
+		"use_taa": false,  # Disabled to prevent ghosting
 		"shadow_size": 4096,
 		"shadow_filter": 3,
 		"ssao": true,
@@ -36,8 +36,8 @@ const PRESETS = {
 	QualityPreset.HIGH: {
 		"name": "High",
 		"description": "1440p, Most Effects",
-		"msaa_3d": 2,  # 4x
-		"use_taa": true,
+		"msaa_3d": 3,  # 8x
+		"use_taa": false,  # Disabled to prevent ghosting
 		"shadow_size": 2048,
 		"shadow_filter": 2,
 		"ssao": true,
@@ -51,8 +51,8 @@ const PRESETS = {
 	QualityPreset.MEDIUM: {
 		"name": "Medium",
 		"description": "1080p, Balanced",
-		"msaa_3d": 1,  # 2x
-		"use_taa": true,
+		"msaa_3d": 2,  # 4x (increased from 2x)
+		"use_taa": false,  # Disabled to prevent ghosting
 		"shadow_size": 2048,
 		"shadow_filter": 1,
 		"ssao": true,
