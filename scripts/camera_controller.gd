@@ -5,7 +5,7 @@ extends Node3D
 @export var rotation_speed: float = 0.005
 @export var pan_speed: float = 0.005
 @export var zoom_speed: float = 0.15  # Fine zoom increments for smooth control
-@export var min_zoom: float = 0.5  # Close zoom without clipping into terrain
+@export var min_zoom: float = 1.0  # Close zoom without clipping into terrain
 @export var max_zoom: float = 25.0  # Extended max for larger tables
 @export var min_pitch: float = -80.0  # degrees
 @export var max_pitch: float = -10.0  # degrees
@@ -18,7 +18,7 @@ var _target_position: Vector3 = Vector3.ZERO
 var _is_rotating: bool = false
 var _is_panning: bool = false
 var _last_mouse_pos: Vector2 = Vector2.ZERO
-var _collision_margin: float = 0.2  # Safety margin to prevent clipping
+var _collision_margin: float = 0.5  # Safety margin to prevent clipping
 
 
 func _ready() -> void:
