@@ -68,10 +68,11 @@ func _ready():
 
 
 func _connect_roller_signals():
+	# Use string-based connect for better Godot 4.5+ compatibility
 	if roller.has_signal("roll_finnished"):
-		roller.roll_finnished.connect(func(value): roll_finnished.emit(value))
+		roller.connect("roll_finnished", func(value): roll_finnished.emit(value))
 	if roller.has_signal("roll_started"):
-		roller.roll_started.connect(func(): roll_started.emit())
+		roller.connect("roll_started", func(): roll_started.emit())
 
 ## Start a physics simulated roll
 func roll():
