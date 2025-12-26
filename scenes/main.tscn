@@ -82,7 +82,7 @@ script = ExtResource("2_camera")
 [node name="Camera3D" type="Camera3D" parent="CameraPivot"]
 transform = Transform3D(1, 0, 0, 0, 0.707, 0.707, 0, -0.707, 0.707, 0, 8, 8)
 fov = 60.0
-near = 0.2
+near = 0.25
 far = 100.0
 
 [node name="Table" type="StaticBody3D" parent="." groups=["table"]]
