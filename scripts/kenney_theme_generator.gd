@@ -250,7 +250,7 @@ static func _create_scifi_theme(theme: Theme, config: ThemeConfig) -> void:
 	# === BUTTONS ===
 	# SciFi buttons use the square header variants
 	var button_normal_tex = load(base_path + "button_square_header_large_rectangle.png")
-	var button_hover_tex = load(base_path + "button_square_header_large_rectangle.png")
+	var _button_hover_tex = load(base_path + "button_square_header_large_rectangle.png")  # For future use
 
 	var button_style_normal = StyleBoxTexture.new()
 	button_style_normal.texture = button_normal_tex
@@ -283,7 +283,7 @@ static func _create_scifi_theme(theme: Theme, config: ThemeConfig) -> void:
 
 	# === PANELS ===
 	# Use glass panels from Extra folder
-	var panel_tex = load(extra_path + "panel_glass.png")
+	var _panel_tex = load(extra_path + "panel_glass.png")  # Alternative panel texture
 	var panel_screws_tex = load(extra_path + "panel_glass_screws.png")
 
 	var panel_style = StyleBoxTexture.new()
@@ -375,8 +375,8 @@ static func get_theme_names() -> Array[String]:
 
 
 ## Get theme style from name
-static func get_style_from_name(name: String) -> ThemeStyle:
+static func get_style_from_name(theme_name: String) -> ThemeStyle:
 	for style in THEME_CONFIGS:
-		if THEME_CONFIGS[style].name == name:
+		if THEME_CONFIGS[style].name == theme_name:
 			return style
 	return ThemeStyle.FANTASY_BLUE  # Default fallback

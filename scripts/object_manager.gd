@@ -2438,6 +2438,9 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 	if tts_obj.color != Color.WHITE:
 		_apply_color_tint(model_scene, tts_obj.color)
 
+	# IMPORTANT: Enable shadow casting for all meshes (model + base)
+	_enable_shadows_recursive(wrapper)
+
 	# Add script for selection
 	wrapper.set_script(preload("res://scripts/selectable_object.gd"))
 
@@ -2728,6 +2731,9 @@ func spawn_tts_terrain(mesh_url: String, diffuse_url: String, tts_scale: Vector3
 	collision.shape = shape
 	collision.position = mesh_aabb.position + mesh_aabb.size / 2
 	wrapper.add_child(collision)
+
+	# Enable shadow casting for terrain
+	_enable_shadows_recursive(wrapper)
 
 	# Add script for selection
 	wrapper.set_script(preload("res://scripts/selectable_object.gd"))
