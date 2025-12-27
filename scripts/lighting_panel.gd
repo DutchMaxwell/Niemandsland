@@ -13,7 +13,7 @@ var preset_buttons: Array = []
 const PARAMS = {
 	"sun_energy": {"label": "Sun Energy", "min": 0.0, "max": 3.0, "step": 0.1},
 	"sun_angle_h": {"label": "Sun Horizontal Angle", "min": -180.0, "max": 180.0, "step": 1.0},
-	"sun_angle_v": {"label": "Sun Vertical Angle", "min": 0.0, "max": 90.0, "step": 1.0},
+	"sun_angle_v": {"label": "Sun Vertical Angle", "min": -90.0, "max": 90.0, "step": 1.0},
 	"ambient_energy": {"label": "Ambient Energy", "min": 0.0, "max": 2.0, "step": 0.1},
 	"exposure": {"label": "Exposure", "min": 0.5, "max": 2.0, "step": 0.1},
 	"shadow_opacity": {"label": "Shadow Opacity", "min": 0.0, "max": 1.0, "step": 0.05},
@@ -30,6 +30,9 @@ func initialize(light_ctrl: Node) -> void:
 	lighting_controller = light_ctrl
 	_build_ui()
 	_sync_ui_from_controller()
+
+	# Connect close button signal
+	close_requested.connect(func(): hide())
 
 
 func _build_ui() -> void:
