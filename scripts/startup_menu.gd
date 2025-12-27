@@ -23,6 +23,9 @@ func _ready() -> void:
 	# Listen for theme changes
 	ThemeManager.theme_changed.connect(_on_theme_changed)
 
+	# Remove hardcoded theme overrides to allow Kenney theme to apply
+	_remove_theme_overrides()
+
 	# Hide menu initially for animation
 	logo_label.modulate.a = 0.0
 	menu_panel.modulate.a = 0.0
@@ -169,7 +172,21 @@ func _input(event: InputEvent) -> void:
 				_on_settings_pressed()
 
 
+func _remove_theme_overrides() -> void:
+	"""Remove hardcoded theme overrides to allow Kenney theme to show"""
+	# Remove panel style override
+	menu_panel.remove_theme_stylebox_override("panel")
+
+	# Remove button overrides and make them use theme
+	for button in [quick_battle_btn, multiplayer_btn, load_game_btn, settings_btn, exit_btn]:
+		button.flat = false  # Enable theme styling
+		button.remove_theme_color_override("font_color")
+		button.remove_theme_color_override("font_hover_color")
+		button.remove_theme_font_size_override("font_size")
+
+
 func _on_theme_changed(new_theme: Theme) -> void:
 	"""Handle theme changes from ThemeManager"""
 	theme = new_theme
+	_remove_theme_overrides()
 	print("Startup menu theme updated to: %s" % ThemeManager.get_current_theme_name())
