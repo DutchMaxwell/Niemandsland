@@ -5,6 +5,12 @@ extends Node3D
 @onready var object_manager: Node3D = $ObjectManager
 @onready var table: StaticBody3D = $Table
 @onready var camera_pivot: Node3D = $CameraPivot
+@onready var directional_light: DirectionalLight3D = $DirectionalLight3D
+@onready var world_environment: WorldEnvironment = $WorldEnvironment
+
+# Lighting Controller
+var lighting_controller: Node
+var lighting_panel: Window
 @onready var dice_result_label: Label = $UI/HUD/DiceResult
 @onready var distance_label: Label = $UI/HUD/DistanceLabel
 @onready var spawn_miniature_btn: Button = %SpawnMiniature
@@ -65,8 +71,6 @@ extends Node3D
 @onready var terrain_browser_popup: Window = %TerrainBrowserPopup
 @onready var terrain_category_option: OptionButton = %CategoryOption
 @onready var terrain_list: ItemList = %TerrainList
-@onready var terrain_place_btn: Button = %SpawnTerrainBtn
-@onready var close_terrain_btn: Button = %CloseTerrainBtn
 
 # TTS Import state
 var _tts_json_path: String = ""
@@ -154,10 +158,15 @@ func _ready() -> void:
 	# Connect Terrain Browser UI
 	terrain_library.object_manager = object_manager
 	terrain_browser_btn.pressed.connect(_on_terrain_browser_pressed)
+
+	# Terrain browser buttons are in a Window, so we need to get them differently
+	var spawn_btn = terrain_browser_popup.get_node("MarginContainer/VBox/ButtonRow/SpawnTerrainBtn")
+	var close_btn = terrain_browser_popup.get_node("MarginContainer/VBox/ButtonRow/CloseTerrainBtn")
+
 	terrain_category_option.item_selected.connect(_on_terrain_category_selected)
 	terrain_list.item_activated.connect(_on_terrain_item_activated)
-	terrain_place_btn.pressed.connect(_on_spawn_terrain_pressed)
-	close_terrain_btn.pressed.connect(_on_close_terrain_browser)
+	spawn_btn.pressed.connect(_on_spawn_terrain_pressed)
+	close_btn.pressed.connect(_on_close_terrain_browser)
 	terrain_browser_popup.close_requested.connect(_on_close_terrain_browser)
 	terrain_library.library_loaded.connect(_on_terrain_library_loaded)
 
@@ -166,6 +175,19 @@ func _ready() -> void:
 	table.setup_table(Vector2(6, 4))
 	_adjust_camera_for_table_size(Vector2(6, 4))
 	table_size_option.selected = 1  # Select 72x48 option
+
+	# Initialize Lighting Controller
+	lighting_controller = Node.new()
+	lighting_controller.set_script(load("res://scripts/lighting_controller.gd"))
+	add_child(lighting_controller)
+	lighting_controller.initialize(directional_light, world_environment)
+
+	# Initialize Lighting Panel UI
+	lighting_panel = Window.new()
+	lighting_panel.set_script(load("res://scripts/lighting_panel.gd"))
+	get_tree().root.add_child(lighting_panel)
+	lighting_panel.initialize(lighting_controller)
+	lighting_panel.hide()  # Start hidden
 
 	print("OpenTTS ready!")
 
@@ -200,6 +222,33 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		# Lock/Unlock selected objects (L key)
 		elif event.keycode == KEY_L and not event.ctrl_pressed:
 			object_manager.toggle_lock_selected()
+			get_viewport().set_input_as_handled()
+		# Lighting Presets (F1-F5)
+		elif event.keycode == KEY_F1:
+			lighting_controller.apply_preset("Default")
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_F2:
+			lighting_controller.apply_preset("Warm Sunset")
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_F3:
+			lighting_controller.apply_preset("Bright Studio")
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_F4:
+			lighting_controller.apply_preset("Dramatic")
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_F5:
+			lighting_controller.apply_preset("Cool Overcast")
+			get_viewport().set_input_as_handled()
+		# Print current lighting settings (F6)
+		elif event.keycode == KEY_F6:
+			lighting_controller.print_current_settings()
+			get_viewport().set_input_as_handled()
+		# Toggle Lighting Panel (F7)
+		elif event.keycode == KEY_F7:
+			if lighting_panel.visible:
+				lighting_panel.hide()
+			else:
+				lighting_panel.show()
 			get_viewport().set_input_as_handled()
 
 

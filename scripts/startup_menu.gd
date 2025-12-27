@@ -14,6 +14,10 @@ var animation_played: bool = false
 
 
 func _ready() -> void:
+	# Apply AAA theme
+	var ThemeGen = load("res://scripts/theme_generator.gd")
+	theme = ThemeGen.create_theme()
+
 	# Hide menu initially for animation
 	logo_label.modulate.a = 0.0
 	menu_panel.modulate.a = 0.0
