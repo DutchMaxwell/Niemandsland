@@ -67,7 +67,7 @@ var _network_manager: Node = null
 # Preload resources (will be scenes in full version)
 # Standard wargaming miniature sizes
 const MINIATURE_HEIGHT: float = 0.032  # 32mm height
-const MINIATURE_RADIUS: float = 0.020  # 40mm diameter base (20mm radius) - easier to grab!
+const MINIATURE_RADIUS: float = 0.025  # 50mm diameter base (25mm radius) - better for large models!
 
 
 func _ready() -> void:
@@ -1024,7 +1024,7 @@ func spawn_miniature(pos: Vector3, broadcast: bool = true, network_id: int = -1)
 	miniature.add_to_group("selectable")
 	miniature.add_to_group("miniature")
 
-	var base_height = 0.004  # 4mm base thickness (more visible and easier to grab)
+	var base_height = 0.005  # 5mm base thickness (very visible and easier to grab)
 
 	# Create base (circular)
 	var base_mesh = CylinderMesh.new()
@@ -1531,10 +1531,10 @@ func _load_stl_model(file_path: String) -> Node3D:
 	return root
 
 
-## Create a standard wargaming base (40mm diameter, 4mm height for better visibility)
+## Create a standard wargaming base (50mm diameter, 5mm height for better visibility)
 func _create_miniature_base() -> MeshInstance3D:
-	var base_radius = 0.020  # 20mm radius = 40mm diameter (easier to grab)
-	var base_height = 0.004  # 4mm height (more visible)
+	var base_radius = 0.025  # 25mm radius = 50mm diameter (good for large models)
+	var base_height = 0.005  # 5mm height (very visible)
 
 	var base_mesh = CylinderMesh.new()
 	base_mesh.top_radius = base_radius
@@ -2392,7 +2392,7 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 
 	# Add base for child models (real miniatures) - created OUTSIDE the scaled model
 	var add_base = tts_obj.is_child_model
-	var base_height = 0.004  # 4mm base height (more visible and easier to grab)
+	var base_height = 0.005  # 5mm base height (very visible and easier to grab)
 
 	if add_base:
 		# Position model on top of base
@@ -2424,7 +2424,7 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 	var shape = BoxShape3D.new()
 	if add_base:
 		# Include base in collision - expand AABB to include base
-		var base_radius = 0.020  # 40mm diameter = 20mm radius
+		var base_radius = 0.025  # 50mm diameter = 25mm radius
 		var total_height = mesh_aabb.size.y + base_height
 		shape.size = Vector3(base_radius * 2, total_height, base_radius * 2)
 		collision.position = Vector3(0, total_height / 2, 0)
