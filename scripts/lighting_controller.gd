@@ -21,8 +21,10 @@ const PRESETS = {
 		"ambient_energy": 0.6,
 		"ambient_color": Color(0.9, 0.7, 0.5),
 		"exposure": 1.3,
-		"shadow_opacity": 0.7,
-		"shadow_blur": 1.0,
+		"shadow_opacity": 0.85,  # Higher for more visible shadows
+		"shadow_blur": 1.5,  # Soft shadows for realism
+		"shadow_bias": 0.03,  # Balanced to prevent acne and detachment
+		"shadow_normal_bias": 1.0,  # Higher prevents shadow detachment on slopes
 		"ssao_intensity": 0.9,
 		"ssr_intensity": 0.2,
 		"glow_intensity": 1.2,
@@ -134,6 +136,13 @@ func apply_preset(preset_name: String) -> void:
 	set_exposure(preset.exposure)
 	set_shadow_opacity(preset.shadow_opacity)
 	set_shadow_blur(preset.shadow_blur)
+
+	# Apply shadow bias settings if present (for realistic shadows)
+	if preset.has("shadow_bias"):
+		set_shadow_bias(preset.shadow_bias)
+	if preset.has("shadow_normal_bias"):
+		set_shadow_normal_bias(preset.shadow_normal_bias)
+
 	set_ssao_intensity(preset.ssao_intensity)
 	set_ssr_intensity(preset.ssr_intensity)
 	set_glow_intensity(preset.glow_intensity)
@@ -208,6 +217,18 @@ func set_shadow_blur(value: float) -> void:
 	if _directional_light:
 		_directional_light.shadow_blur = value
 		current_preset.shadow_blur = value
+
+
+func set_shadow_bias(value: float) -> void:
+	if _directional_light:
+		_directional_light.shadow_bias = value  # Correct property name in Godot 4
+		current_preset.shadow_bias = value
+
+
+func set_shadow_normal_bias(value: float) -> void:
+	if _directional_light:
+		_directional_light.shadow_normal_bias = value  # Correct property name in Godot 4
+		current_preset.shadow_normal_bias = value
 
 
 func set_ssao_intensity(value: float) -> void:

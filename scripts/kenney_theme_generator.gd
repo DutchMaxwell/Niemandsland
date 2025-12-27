@@ -83,6 +83,7 @@ static func _create_fantasy_theme(theme: Theme, config: ThemeConfig) -> void:
 	# Load button textures
 	var button_normal_tex = load(base_path + "buttonLong_%s.png" % color)
 	var button_pressed_tex = load(base_path + "buttonLong_%s_pressed.png" % color)
+	var _button_hover_tex = button_normal_tex  # For future use
 
 	# Button normal state
 	var button_style_normal = StyleBoxTexture.new()
@@ -131,7 +132,7 @@ static func _create_fantasy_theme(theme: Theme, config: ThemeConfig) -> void:
 
 	# Panel style
 	var panel_style = StyleBoxTexture.new()
-	panel_style.texture = panel_tex
+	panel_style.texture = panel_tex  # Using panel_tex here
 	panel_style.texture_margin_left = 16
 	panel_style.texture_margin_right = 16
 	panel_style.texture_margin_top = 16
@@ -164,9 +165,9 @@ static func _create_fantasy_theme(theme: Theme, config: ThemeConfig) -> void:
 
 	# === SLIDERS ===
 	# Use bar backgrounds and colored bars
-	var bar_bg_h_left = load(base_path + "barBack_horizontalLeft.png")
+	var _bar_bg_h_left = load(base_path + "barBack_horizontalLeft.png")
 	var bar_bg_h_mid = load(base_path + "barBack_horizontalMid.png")
-	var bar_bg_h_right = load(base_path + "barBack_horizontalRight.png")
+	var _bar_bg_h_right = load(base_path + "barBack_horizontalRight.png")
 
 	var slider_bg = StyleBoxTexture.new()
 	slider_bg.texture = bar_bg_h_mid
@@ -249,7 +250,7 @@ static func _create_scifi_theme(theme: Theme, config: ThemeConfig) -> void:
 	# === BUTTONS ===
 	# SciFi buttons use the square header variants
 	var button_normal_tex = load(base_path + "button_square_header_large_rectangle.png")
-	var button_hover_tex = load(base_path + "button_square_header_large_rectangle.png")
+	var _button_hover_tex = load(base_path + "button_square_header_large_rectangle.png")  # For future use
 
 	var button_style_normal = StyleBoxTexture.new()
 	button_style_normal.texture = button_normal_tex
@@ -282,7 +283,7 @@ static func _create_scifi_theme(theme: Theme, config: ThemeConfig) -> void:
 
 	# === PANELS ===
 	# Use glass panels from Extra folder
-	var panel_tex = load(extra_path + "panel_glass.png")
+	var _panel_tex = load(extra_path + "panel_glass.png")  # Alternative panel texture
 	var panel_screws_tex = load(extra_path + "panel_glass_screws.png")
 
 	var panel_style = StyleBoxTexture.new()
@@ -374,8 +375,8 @@ static func get_theme_names() -> Array[String]:
 
 
 ## Get theme style from name
-static func get_style_from_name(name: String) -> ThemeStyle:
+static func get_style_from_name(theme_name: String) -> ThemeStyle:
 	for style in THEME_CONFIGS:
-		if THEME_CONFIGS[style].name == name:
+		if THEME_CONFIGS[style].name == theme_name:
 			return style
 	return ThemeStyle.FANTASY_BLUE  # Default fallback
