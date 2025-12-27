@@ -10,6 +10,7 @@ extends Node3D
 
 # Lighting Controller
 var lighting_controller: Node
+var lighting_panel: Window
 @onready var dice_result_label: Label = $UI/HUD/DiceResult
 @onready var distance_label: Label = $UI/HUD/DistanceLabel
 @onready var spawn_miniature_btn: Button = %SpawnMiniature
@@ -181,6 +182,13 @@ func _ready() -> void:
 	add_child(lighting_controller)
 	lighting_controller.initialize(directional_light, world_environment)
 
+	# Initialize Lighting Panel UI
+	lighting_panel = Window.new()
+	lighting_panel.set_script(load("res://scripts/lighting_panel.gd"))
+	get_tree().root.add_child(lighting_panel)
+	lighting_panel.initialize(lighting_controller)
+	lighting_panel.hide()  # Start hidden
+
 	print("OpenTTS ready!")
 
 
@@ -234,6 +242,13 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		# Print current lighting settings (F6)
 		elif event.keycode == KEY_F6:
 			lighting_controller.print_current_settings()
+			get_viewport().set_input_as_handled()
+		# Toggle Lighting Panel (F7)
+		elif event.keycode == KEY_F7:
+			if lighting_panel.visible:
+				lighting_panel.hide()
+			else:
+				lighting_panel.show()
 			get_viewport().set_input_as_handled()
 
 
