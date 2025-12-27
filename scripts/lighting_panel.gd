@@ -240,7 +240,7 @@ func _sync_ui_from_controller() -> void:
 		color_pickers["ambient_color"].color = preset.ambient_color
 
 
-func _on_theme_changed(new_theme: Theme) -> void:
+func _on_theme_changed(_new_theme: Theme) -> void:
 	"""Handle theme changes from ThemeManager"""
 	# Note: Since UI is built dynamically, we'd need to rebuild it to apply new theme
 	# For now, this will apply on next window open
