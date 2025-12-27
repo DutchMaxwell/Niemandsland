@@ -13,21 +13,21 @@ var current_preset: Dictionary = {}
 # Preset definitions
 const PRESETS = {
 	"Default": {
-		"name": "Default (Balanced)",
-		"sun_energy": 1.2,
-		"sun_color": Color(1.0, 0.98, 0.95),
-		"sun_angle_h": -30.0,  # Horizontal angle (degrees)
-		"sun_angle_v": 45.0,   # Vertical angle (degrees)
-		"ambient_energy": 0.5,
-		"ambient_color": Color(0.8, 0.8, 0.8),
-		"exposure": 1.2,
-		"shadow_opacity": 0.85,
-		"shadow_blur": 2.0,
-		"ssao_intensity": 1.5,
-		"ssr_intensity": 1.0,
-		"glow_intensity": 0.8,
-		"contrast": 1.1,
-		"saturation": 1.05,
+		"name": "Default (Warm & Cozy)",
+		"sun_energy": 1.8,
+		"sun_color": Color(1.0, 0.8, 0.6),
+		"sun_angle_h": 84.0,  # Horizontal angle (degrees)
+		"sun_angle_v": 43.0,   # Vertical angle (degrees)
+		"ambient_energy": 0.6,
+		"ambient_color": Color(0.9, 0.7, 0.5),
+		"exposure": 1.3,
+		"shadow_opacity": 0.7,
+		"shadow_blur": 1.0,
+		"ssao_intensity": 0.9,
+		"ssr_intensity": 0.2,
+		"glow_intensity": 1.2,
+		"contrast": 1.15,
+		"saturation": 1.15,
 	},
 	"Warm Sunset": {
 		"name": "Warm Sunset (Cozy)",
