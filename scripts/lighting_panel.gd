@@ -36,18 +36,20 @@ func initialize(light_ctrl: Node) -> void:
 
 
 func _build_ui() -> void:
-	# Apply AAA theme
-	var ThemeGen = load("res://scripts/theme_generator.gd")
-	var aaa_theme = ThemeGen.create_theme()
+	# Apply Kenney UI theme from global ThemeManager
+	var kenney_theme = ThemeManager.get_current_theme()
 
 	title = "Lighting Settings"
 	size = Vector2i(500, 800)
 	position = Vector2i(50, 50)
 
+	# Listen for theme changes
+	ThemeManager.theme_changed.connect(_on_theme_changed)
+
 	# Main container
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.theme = aaa_theme
+	margin.theme = kenney_theme
 	add_child(margin)
 
 	margin.add_theme_constant_override("margin_left", 15)
@@ -58,13 +60,13 @@ func _build_ui() -> void:
 	# Scroll container for all controls
 	var scroll = ScrollContainer.new()
 	scroll.set_v_size_flags(Control.SIZE_EXPAND_FILL)
-	scroll.theme = aaa_theme
+	scroll.theme = kenney_theme
 	margin.add_child(scroll)
 
 	# Main VBox
 	var vbox = VBoxContainer.new()
 	vbox.set_h_size_flags(Control.SIZE_EXPAND_FILL)
-	vbox.theme = aaa_theme
+	vbox.theme = kenney_theme
 	scroll.add_child(vbox)
 
 	# Presets Section
@@ -236,3 +238,10 @@ func _sync_ui_from_controller() -> void:
 		color_pickers["sun_color"].color = preset.sun_color
 	if color_pickers.has("ambient_color") and preset.has("ambient_color"):
 		color_pickers["ambient_color"].color = preset.ambient_color
+
+
+func _on_theme_changed(new_theme: Theme) -> void:
+	"""Handle theme changes from ThemeManager"""
+	# Note: Since UI is built dynamically, we'd need to rebuild it to apply new theme
+	# For now, this will apply on next window open
+	print("Lighting panel will use new theme on next open: %s" % ThemeManager.get_current_theme_name())
