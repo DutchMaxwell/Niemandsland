@@ -1398,7 +1398,7 @@ func spawn_custom_model(file_path: String, pos: Vector3, _broadcast: bool = true
 	# Add the loaded model as child
 	wrapper.add_child(model_scene)
 
-	# Calculate bounding box for collision
+	# Calculate bounding box for collision BEFORE adding base
 	var aabb = _calculate_aabb(model_scene)
 	var collision = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
@@ -1409,13 +1409,29 @@ func spawn_custom_model(file_path: String, pos: Vector3, _broadcast: bool = true
 
 	# Scale to reasonable size (target ~5cm height for miniatures)
 	var max_dim = max(aabb.size.x, max(aabb.size.y, aabb.size.z))
+	var scale_factor = 1.0
 	if max_dim > 0.001:
 		var target_size = 0.05  # 5cm default
-		var scale_factor = target_size / max_dim
+		scale_factor = target_size / max_dim
 		model_scene.scale = Vector3(scale_factor, scale_factor, scale_factor)
-		# Update collision to match
-		shape.size = aabb.size * scale_factor
-		collision.position = (aabb.position + aabb.size / 2) * scale_factor
+
+	# Add 70mm base for custom models
+	var base = _create_miniature_base()
+	wrapper.add_child(base)
+
+	# Position model on top of base
+	var base_height = 0.006  # 6mm base height
+	model_scene.position.y = base_height
+
+	# Update collision to include base + model
+	var base_radius = 0.035  # 70mm diameter
+	var scaled_model_height = aabb.size.y * scale_factor
+	var total_height = scaled_model_height + base_height
+	shape.size = Vector3(base_radius * 2, total_height, base_radius * 2)
+	collision.position = Vector3(0, total_height / 2, 0)
+
+	# Enable shadows for model
+	_enable_shadows_recursive(wrapper)
 
 	wrapper.set_script(preload("res://scripts/selectable_object.gd"))
 
