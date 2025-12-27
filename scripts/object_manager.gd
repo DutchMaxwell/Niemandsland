@@ -67,7 +67,7 @@ var _network_manager: Node = null
 # Preload resources (will be scenes in full version)
 # Standard wargaming miniature sizes
 const MINIATURE_HEIGHT: float = 0.032  # 32mm height
-const MINIATURE_RADIUS: float = 0.025  # 50mm diameter base (25mm radius) - better for large models!
+const MINIATURE_RADIUS: float = 0.035  # 70mm diameter base (35mm radius) - for monster-sized models!
 
 
 func _ready() -> void:
@@ -1531,10 +1531,10 @@ func _load_stl_model(file_path: String) -> Node3D:
 	return root
 
 
-## Create a standard wargaming base (50mm diameter, 5mm height for better visibility)
+## Create a standard wargaming base (70mm diameter, 6mm height for monster-sized models)
 func _create_miniature_base() -> MeshInstance3D:
-	var base_radius = 0.025  # 25mm radius = 50mm diameter (good for large models)
-	var base_height = 0.005  # 5mm height (very visible)
+	var base_radius = 0.035  # 35mm radius = 70mm diameter (monster-sized models)
+	var base_height = 0.006  # 6mm height (proportional to larger base)
 
 	var base_mesh = CylinderMesh.new()
 	base_mesh.top_radius = base_radius

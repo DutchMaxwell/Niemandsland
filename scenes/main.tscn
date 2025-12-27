@@ -68,11 +68,12 @@ shadow_enabled = true
 shadow_opacity = 0.85
 shadow_blur = 2.0
 directional_shadow_mode = 2
-directional_shadow_split_1 = 0.1
-directional_shadow_split_2 = 0.2
-directional_shadow_split_3 = 0.5
+directional_shadow_split_1 = 0.15
+directional_shadow_split_2 = 0.35
+directional_shadow_split_3 = 0.65
 directional_shadow_blend_splits = true
-directional_shadow_max_distance = 50.0
+directional_shadow_max_distance = 15.0
+directional_shadow_pancake_size = 10.0
 directional_shadow_fade_start = 0.8
 
 [node name="CameraPivot" type="Node3D" parent="."]
