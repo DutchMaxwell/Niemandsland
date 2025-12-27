@@ -17,6 +17,10 @@ run/main_scene="res://scenes/startup_menu.tscn"
 config/features=PackedStringArray("4.3", "Forward Plus")
 config/icon="res://icon.svg"
 
+[autoload]
+
+ThemeManager="*res://scripts/theme_manager.gd"
+
 [display]
 
 window/size/viewport_width=1920

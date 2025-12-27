@@ -12,11 +12,16 @@ extends Control
 
 var animation_played: bool = false
 
+# Theme selector window
+var theme_selector_window: Window = null
+
 
 func _ready() -> void:
-	# Apply AAA theme
-	var ThemeGen = load("res://scripts/theme_generator.gd")
-	theme = ThemeGen.create_theme()
+	# Apply Kenney UI theme from global ThemeManager
+	theme = ThemeManager.get_current_theme()
+
+	# Listen for theme changes
+	ThemeManager.theme_changed.connect(_on_theme_changed)
 
 	# Hide menu initially for animation
 	logo_label.modulate.a = 0.0
@@ -113,10 +118,18 @@ func _on_load_game_pressed() -> void:
 
 
 func _on_settings_pressed() -> void:
-	"""Open settings menu"""
-	print("Settings pressed")
-	# TODO: Open settings menu
-	push_warning("Settings menu not yet implemented")
+	"""Open settings menu (Theme Selector)"""
+	print("Settings pressed - Opening theme selector")
+
+	# Create theme selector window if it doesn't exist
+	if not theme_selector_window:
+		var ThemeSelector = load("res://scripts/theme_selector.gd")
+		theme_selector_window = ThemeSelector.new()
+		add_child(theme_selector_window)
+
+	# Show the window
+	theme_selector_window.show()
+	theme_selector_window.popup_centered()
 
 
 func _on_exit_pressed() -> void:
@@ -154,3 +167,9 @@ func _input(event: InputEvent) -> void:
 				_on_load_game_pressed()
 			KEY_4:
 				_on_settings_pressed()
+
+
+func _on_theme_changed(new_theme: Theme) -> void:
+	"""Handle theme changes from ThemeManager"""
+	theme = new_theme
+	print("Startup menu theme updated to: %s" % ThemeManager.get_current_theme_name())
