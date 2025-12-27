@@ -1459,6 +1459,9 @@ func _load_gltf_model(file_path: String, add_base: bool = true) -> Node3D:
 
 	root.add_child(model_scene)
 
+	# Enable shadow casting for all meshes
+	_enable_shadows_recursive(root)
+
 	print("Loaded GLTF with 32mm base: %s" % file_path.get_file())
 	return root
 
@@ -1517,6 +1520,9 @@ func _load_stl_model(file_path: String) -> Node3D:
 
 	# Add the model above the base
 	root.add_child(mesh_instance)
+
+	# Enable shadow casting for all meshes
+	_enable_shadows_recursive(root)
 
 	return root
 
@@ -1809,6 +1815,9 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 
 	root.add_child(mesh_instance)
 
+	# Enable shadow casting for all meshes
+	_enable_shadows_recursive(root)
+
 	var uv_info = " with UVs" if mesh_uvs.size() > 0 else ""
 	@warning_ignore("integer_division")
 	print("Loaded OBJ: %d triangles%s" % [mesh_vertices.size() / 3, uv_info])
@@ -1845,6 +1854,15 @@ func _load_texture(texture_path: String) -> ImageTexture:
 
 	var texture = ImageTexture.create_from_image(image)
 	return texture
+
+
+## Enable shadow casting for all MeshInstance3D nodes recursively
+func _enable_shadows_recursive(node: Node) -> void:
+	if node is MeshInstance3D:
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
+	for child in node.get_children():
+		_enable_shadows_recursive(child)
 
 
 ## Calculate AABB for a node and all its children
