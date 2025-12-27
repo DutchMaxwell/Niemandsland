@@ -36,6 +36,10 @@ func initialize(light_ctrl: Node) -> void:
 
 
 func _build_ui() -> void:
+	# Apply AAA theme
+	var ThemeGen = load("res://scripts/theme_generator.gd")
+	var aaa_theme = ThemeGen.create_theme()
+
 	title = "Lighting Settings"
 	size = Vector2i(500, 800)
 	position = Vector2i(50, 50)
@@ -43,6 +47,7 @@ func _build_ui() -> void:
 	# Main container
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.theme = aaa_theme
 	add_child(margin)
 
 	margin.add_theme_constant_override("margin_left", 15)
@@ -53,11 +58,13 @@ func _build_ui() -> void:
 	# Scroll container for all controls
 	var scroll = ScrollContainer.new()
 	scroll.set_v_size_flags(Control.SIZE_EXPAND_FILL)
+	scroll.theme = aaa_theme
 	margin.add_child(scroll)
 
 	# Main VBox
 	var vbox = VBoxContainer.new()
 	vbox.set_h_size_flags(Control.SIZE_EXPAND_FILL)
+	vbox.theme = aaa_theme
 	scroll.add_child(vbox)
 
 	# Presets Section
