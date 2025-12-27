@@ -67,7 +67,7 @@ var _network_manager: Node = null
 # Preload resources (will be scenes in full version)
 # Standard wargaming miniature sizes
 const MINIATURE_HEIGHT: float = 0.032  # 32mm height
-const MINIATURE_RADIUS: float = 0.016  # 32mm diameter base (16mm radius)
+const MINIATURE_RADIUS: float = 0.020  # 40mm diameter base (20mm radius) - easier to grab!
 
 
 func _ready() -> void:
@@ -1024,7 +1024,7 @@ func spawn_miniature(pos: Vector3, broadcast: bool = true, network_id: int = -1)
 	miniature.add_to_group("selectable")
 	miniature.add_to_group("miniature")
 
-	var base_height = 0.003  # 3mm base thickness
+	var base_height = 0.004  # 4mm base thickness (more visible and easier to grab)
 
 	# Create base (circular)
 	var base_mesh = CylinderMesh.new()
@@ -1039,6 +1039,10 @@ func spawn_miniature(pos: Vector3, broadcast: bool = true, network_id: int = -1)
 	var base_material = StandardMaterial3D.new()
 	base_material.albedo_color = Color(0.1, 0.1, 0.1)
 	base_instance.material_override = base_material
+
+	# Enable shadow casting for base
+	base_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
 	miniature.add_child(base_instance)
 
 	# Create simple model (cylinder as placeholder)
@@ -1527,10 +1531,10 @@ func _load_stl_model(file_path: String) -> Node3D:
 	return root
 
 
-## Create a standard wargaming base (32mm diameter, 3mm height)
+## Create a standard wargaming base (40mm diameter, 4mm height for better visibility)
 func _create_miniature_base() -> MeshInstance3D:
-	var base_radius = 0.016  # 16mm radius = 32mm diameter
-	var base_height = 0.003  # 3mm height
+	var base_radius = 0.020  # 20mm radius = 40mm diameter (easier to grab)
+	var base_height = 0.004  # 4mm height (more visible)
 
 	var base_mesh = CylinderMesh.new()
 	base_mesh.top_radius = base_radius
@@ -1549,6 +1553,9 @@ func _create_miniature_base() -> MeshInstance3D:
 	base_material.albedo_color = Color(0.1, 0.1, 0.1)  # Dark black
 	base_material.roughness = 0.8
 	base_instance.material_override = base_material
+
+	# IMPORTANT: Enable shadow casting for the base!
+	base_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
 	return base_instance
 
@@ -2385,7 +2392,7 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 
 	# Add base for child models (real miniatures) - created OUTSIDE the scaled model
 	var add_base = tts_obj.is_child_model
-	var base_height = 0.003  # 3mm base height
+	var base_height = 0.004  # 4mm base height (more visible and easier to grab)
 
 	if add_base:
 		# Position model on top of base
@@ -2417,7 +2424,7 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 	var shape = BoxShape3D.new()
 	if add_base:
 		# Include base in collision - expand AABB to include base
-		var base_radius = 0.016  # 32mm diameter = 16mm radius
+		var base_radius = 0.020  # 40mm diameter = 20mm radius
 		var total_height = mesh_aabb.size.y + base_height
 		shape.size = Vector3(base_radius * 2, total_height, base_radius * 2)
 		collision.position = Vector3(0, total_height / 2, 0)
