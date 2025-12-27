@@ -17,9 +17,15 @@ static func create_theme() -> Theme:
 	# === BUTTONS ===
 	var button_style_normal = StyleBoxFlat.new()
 	button_style_normal.bg_color = bg_dark
-	button_style_normal.set_border_width_all(1)
+	button_style_normal.border_width_left = 1
+	button_style_normal.border_width_right = 1
+	button_style_normal.border_width_top = 1
+	button_style_normal.border_width_bottom = 1
 	button_style_normal.border_color = border_subtle
-	button_style_normal.set_corner_radius_all(8)
+	button_style_normal.corner_radius_top_left = 8
+	button_style_normal.corner_radius_top_right = 8
+	button_style_normal.corner_radius_bottom_left = 8
+	button_style_normal.corner_radius_bottom_right = 8
 	button_style_normal.content_margin_left = 16
 	button_style_normal.content_margin_right = 16
 	button_style_normal.content_margin_top = 8
@@ -30,7 +36,10 @@ static func create_theme() -> Theme:
 	var button_style_hover = button_style_normal.duplicate()
 	button_style_hover.bg_color = bg_medium
 	button_style_hover.border_color = accent_cyan
-	button_style_hover.set_border_width_all(2)
+	button_style_hover.border_width_left = 2
+	button_style_hover.border_width_right = 2
+	button_style_hover.border_width_top = 2
+	button_style_hover.border_width_bottom = 2
 	button_style_hover.shadow_size = 6
 	button_style_hover.shadow_color = Color(0, 0.85, 1, 0.2)
 
@@ -62,12 +71,21 @@ static func create_theme() -> Theme:
 	# === PANELS ===
 	var panel_style = StyleBoxFlat.new()
 	panel_style.bg_color = bg_dark
-	panel_style.set_border_width_all(1)
+	panel_style.border_width_left = 1
+	panel_style.border_width_right = 1
+	panel_style.border_width_top = 1
+	panel_style.border_width_bottom = 1
 	panel_style.border_color = border_subtle
-	panel_style.set_corner_radius_all(12)
+	panel_style.corner_radius_top_left = 12
+	panel_style.corner_radius_top_right = 12
+	panel_style.corner_radius_bottom_left = 12
+	panel_style.corner_radius_bottom_right = 12
 	panel_style.shadow_size = 8
 	panel_style.shadow_color = Color(0, 0, 0, 0.4)
-	panel_style.set_content_margin_all(12)
+	panel_style.content_margin_left = 12
+	panel_style.content_margin_right = 12
+	panel_style.content_margin_top = 12
+	panel_style.content_margin_bottom = 12
 
 	theme.set_stylebox("panel", "PanelContainer", panel_style)
 	theme.set_stylebox("panel", "Panel", panel_style)
@@ -75,12 +93,21 @@ static func create_theme() -> Theme:
 	# === SLIDERS ===
 	var slider_style = StyleBoxFlat.new()
 	slider_style.bg_color = bg_medium
-	slider_style.set_corner_radius_all(4)
-	slider_style.set_content_margin_all(2)
+	slider_style.corner_radius_top_left = 4
+	slider_style.corner_radius_top_right = 4
+	slider_style.corner_radius_bottom_left = 4
+	slider_style.corner_radius_bottom_right = 4
+	slider_style.content_margin_left = 2
+	slider_style.content_margin_right = 2
+	slider_style.content_margin_top = 2
+	slider_style.content_margin_bottom = 2
 
 	var slider_grabber = StyleBoxFlat.new()
 	slider_grabber.bg_color = accent_cyan
-	slider_grabber.set_corner_radius_all(6)
+	slider_grabber.corner_radius_top_left = 6
+	slider_grabber.corner_radius_top_right = 6
+	slider_grabber.corner_radius_bottom_left = 6
+	slider_grabber.corner_radius_bottom_right = 6
 	slider_grabber.shadow_size = 4
 	slider_grabber.shadow_color = Color(0, 0.85, 1, 0.4)
 
@@ -95,9 +122,15 @@ static func create_theme() -> Theme:
 	# === WINDOWS ===
 	var window_style = StyleBoxFlat.new()
 	window_style.bg_color = Color(0.06, 0.08, 0.11, 0.95)
-	window_style.set_border_width_all(2)
+	window_style.border_width_left = 2
+	window_style.border_width_right = 2
+	window_style.border_width_top = 2
+	window_style.border_width_bottom = 2
 	window_style.border_color = Color(0, 0.85, 1, 0.3)
-	window_style.set_corner_radius_all(16)
+	window_style.corner_radius_top_left = 16
+	window_style.corner_radius_top_right = 16
+	window_style.corner_radius_bottom_left = 16
+	window_style.corner_radius_bottom_right = 16
 	window_style.shadow_size = 16
 	window_style.shadow_color = Color(0, 0, 0, 0.6)
 
@@ -107,14 +140,26 @@ static func create_theme() -> Theme:
 	# === LINE EDIT ===
 	var line_edit_normal = StyleBoxFlat.new()
 	line_edit_normal.bg_color = bg_medium
-	line_edit_normal.set_border_width_all(1)
+	line_edit_normal.border_width_left = 1
+	line_edit_normal.border_width_right = 1
+	line_edit_normal.border_width_top = 1
+	line_edit_normal.border_width_bottom = 1
 	line_edit_normal.border_color = border_subtle
-	line_edit_normal.set_corner_radius_all(6)
-	line_edit_normal.set_content_margin_all(8)
+	line_edit_normal.corner_radius_top_left = 6
+	line_edit_normal.corner_radius_top_right = 6
+	line_edit_normal.corner_radius_bottom_left = 6
+	line_edit_normal.corner_radius_bottom_right = 6
+	line_edit_normal.content_margin_left = 8
+	line_edit_normal.content_margin_right = 8
+	line_edit_normal.content_margin_top = 8
+	line_edit_normal.content_margin_bottom = 8
 
 	var line_edit_focus = line_edit_normal.duplicate()
 	line_edit_focus.border_color = accent_cyan
-	line_edit_focus.set_border_width_all(2)
+	line_edit_focus.border_width_left = 2
+	line_edit_focus.border_width_right = 2
+	line_edit_focus.border_width_top = 2
+	line_edit_focus.border_width_bottom = 2
 
 	theme.set_stylebox("normal", "LineEdit", line_edit_normal)
 	theme.set_stylebox("focus", "LineEdit", line_edit_focus)
@@ -133,11 +178,17 @@ static func create_theme() -> Theme:
 	# === SCROLL CONTAINER ===
 	var scroll_style = StyleBoxFlat.new()
 	scroll_style.bg_color = Color(0.1, 0.1, 0.1, 0.3)
-	scroll_style.set_corner_radius_all(4)
+	scroll_style.corner_radius_top_left = 4
+	scroll_style.corner_radius_top_right = 4
+	scroll_style.corner_radius_bottom_left = 4
+	scroll_style.corner_radius_bottom_right = 4
 
 	var scrollbar_style = StyleBoxFlat.new()
 	scrollbar_style.bg_color = Color(0, 0.85, 1, 0.4)
-	scrollbar_style.set_corner_radius_all(4)
+	scrollbar_style.corner_radius_top_left = 4
+	scrollbar_style.corner_radius_top_right = 4
+	scrollbar_style.corner_radius_bottom_left = 4
+	scrollbar_style.corner_radius_bottom_right = 4
 
 	theme.set_stylebox("scroll", "VScrollBar", scroll_style)
 	theme.set_stylebox("scroll_focus", "VScrollBar", scroll_style)
