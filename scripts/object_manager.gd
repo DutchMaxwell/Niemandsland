@@ -1024,7 +1024,7 @@ func spawn_miniature(pos: Vector3, broadcast: bool = true, network_id: int = -1)
 	miniature.add_to_group("selectable")
 	miniature.add_to_group("miniature")
 
-	var base_height = 0.005  # 5mm base thickness (very visible and easier to grab)
+	var base_height = 0.006  # 6mm base thickness (proportional to 70mm diameter)
 
 	# Create base (circular)
 	var base_mesh = CylinderMesh.new()
@@ -2392,7 +2392,7 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 
 	# Add base for child models (real miniatures) - created OUTSIDE the scaled model
 	var add_base = tts_obj.is_child_model
-	var base_height = 0.005  # 5mm base height (very visible and easier to grab)
+	var base_height = 0.006  # 6mm base height (proportional to 70mm diameter)
 
 	if add_base:
 		# Position model on top of base
@@ -2424,7 +2424,7 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 	var shape = BoxShape3D.new()
 	if add_base:
 		# Include base in collision - expand AABB to include base
-		var base_radius = 0.025  # 50mm diameter = 25mm radius
+		var base_radius = 0.035  # 70mm diameter = 35mm radius
 		var total_height = mesh_aabb.size.y + base_height
 		shape.size = Vector3(base_radius * 2, total_height, base_radius * 2)
 		collision.position = Vector3(0, total_height / 2, 0)
