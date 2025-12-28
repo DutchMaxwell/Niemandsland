@@ -67,7 +67,7 @@ var _network_manager: Node = null
 # Preload resources (will be scenes in full version)
 # Standard wargaming miniature sizes (10x scale for better shadows/physics)
 const MINIATURE_HEIGHT: float = 0.32  # 320mm height (10x scale)
-const MINIATURE_RADIUS: float = 0.35  # 700mm diameter base (10x scale)
+const MINIATURE_RADIUS: float = 0.16  # 320mm diameter base (32mm at 10x scale)
 
 
 func _ready() -> void:
@@ -1024,7 +1024,7 @@ func spawn_miniature(pos: Vector3, broadcast: bool = true, network_id: int = -1)
 	miniature.add_to_group("selectable")
 	miniature.add_to_group("miniature")
 
-	var base_height = 0.06  # 60mm (10x scale) base thickness (proportional to 70mm diameter)
+	var base_height = 0.03  # 30mm (3mm at 10x scale) base thickness (proportional to 70mm diameter)
 
 	# Create base (circular)
 	var base_mesh = CylinderMesh.new()
@@ -1420,11 +1420,11 @@ func spawn_custom_model(file_path: String, pos: Vector3, _broadcast: bool = true
 	wrapper.add_child(base)
 
 	# Position model on top of base
-	var base_height = 0.06  # 60mm (10x scale) base height
+	var base_height = 0.03  # 30mm (3mm at 10x scale) base height
 	model_scene.position.y = base_height
 
 	# Update collision to include base + model
-	var base_radius = 0.35  # 700mm diameter (10x scale)
+	var base_radius = 0.16  # 320mm diameter (32mm at 10x scale)
 	var scaled_model_height = aabb.size.y * scale_factor
 	var total_height = scaled_model_height + base_height
 	shape.size = Vector3(base_radius * 2, total_height, base_radius * 2)
@@ -1547,10 +1547,10 @@ func _load_stl_model(file_path: String) -> Node3D:
 	return root
 
 
-## Create a standard wargaming base (70mm diameter, 6mm height for monster-sized models)
+## Create a standard wargaming base (32mm diameter at 10x scale = 320mm)
 func _create_miniature_base() -> MeshInstance3D:
-	var base_radius = 0.35  # 350mm radius = 700mm diameter (10x scale) (monster-sized models)
-	var base_height = 0.06  # 60mm (10x scale) height (proportional to larger base)
+	var base_radius = 0.16  # 160mm radius = 320mm diameter (32mm base at 10x scale)
+	var base_height = 0.03  # 30mm height (3mm at 10x scale)
 
 	var base_mesh = CylinderMesh.new()
 	base_mesh.top_radius = base_radius
@@ -2408,7 +2408,7 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 
 	# Add base for child models (real miniatures) - created OUTSIDE the scaled model
 	var add_base = tts_obj.is_child_model
-	var base_height = 0.06  # 60mm (10x scale) base height (proportional to 70mm diameter)
+	var base_height = 0.03  # 30mm (3mm at 10x scale) base height (proportional to 70mm diameter)
 
 	if add_base:
 		# Position model on top of base
@@ -2440,7 +2440,7 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 	var shape = BoxShape3D.new()
 	if add_base:
 		# Include base in collision - expand AABB to include base
-		var base_radius = 0.35  # 700mm diameter (10x scale)
+		var base_radius = 0.16  # 320mm diameter (32mm at 10x scale)
 		var total_height = mesh_aabb.size.y + base_height
 		shape.size = Vector3(base_radius * 2, total_height, base_radius * 2)
 		collision.position = Vector3(0, total_height / 2, 0)
