@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3 uid="uid://main001"]
+[gd_scene load_steps=13 format=3 uid="uid://main001"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/camera_controller.gd" id="2_camera"]
@@ -9,19 +9,20 @@
 [ext_resource type="Script" path="res://scripts/save_manager.gd" id="7_savemgr"]
 [ext_resource type="Script" path="res://scripts/terrain_library.gd" id="8_terrain"]
 [ext_resource type="Script" path="res://scripts/graphics_settings.gd" id="9_graphics"]
-[ext_resource type="Material" path="res://materials/space_background.tres" id="10_space_bg"]
+[ext_resource type="Shader" path="res://shaders/space_skybox.gdshader" id="10_skybox_shader"]
 
-[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
-sky_top_color = Color(0.02, 0.02, 0.08, 1)
-sky_horizon_color = Color(0.05, 0.05, 0.15, 1)
-ground_bottom_color = Color(0.02, 0.02, 0.08, 1)
-ground_horizon_color = Color(0.03, 0.03, 0.1, 1)
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_Skybox"]
+shader = ExtResource("10_skybox_shader")
+shader_parameter/deep_space_color = Vector3(0.01, 0.01, 0.04)
+shader_parameter/nebula_color_1 = Vector3(0.08, 0.02, 0.15)
+shader_parameter/nebula_color_2 = Vector3(0.02, 0.08, 0.12)
+shader_parameter/star_density = 0.5
+shader_parameter/star_brightness = 1.5
+shader_parameter/twinkle_speed = 1.2
+shader_parameter/nebula_intensity = 0.25
 
 [sub_resource type="Sky" id="Sky_1"]
-sky_material = SubResource("ProceduralSkyMaterial_1")
-
-[sub_resource type="PlaneMesh" id="PlaneMesh_SpaceBG"]
-size = Vector2(200, 200)
+sky_material = SubResource("ShaderMaterial_Skybox")
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 2
@@ -99,11 +100,6 @@ script = ExtResource("3_table")
 mesh = null
 
 [node name="TableCollision" type="CollisionShape3D" parent="Table"]
-
-[node name="SpaceBackground" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
-mesh = SubResource("PlaneMesh_SpaceBG")
-surface_material_override/0 = ExtResource("10_space_bg")
 
 [node name="ObjectManager" type="Node3D" parent="."]
 script = ExtResource("4_objmgr")
