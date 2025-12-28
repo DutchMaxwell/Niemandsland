@@ -1415,13 +1415,15 @@ func spawn_custom_model(file_path: String, pos: Vector3, _broadcast: bool = true
 		scale_factor = target_size / max_dim
 		model_scene.scale = Vector3(scale_factor, scale_factor, scale_factor)
 
-	# Add 70mm base for custom models
+	# Add 32mm base for custom models
 	var base = _create_miniature_base()
 	wrapper.add_child(base)
 
-	# Position model on top of base
+	# Position model so its bottom sits on top of base
+	# The scaled AABB's lowest point (position.y) must be at base_height
 	var base_height = 0.003  # 3mm base height
-	model_scene.position.y = base_height
+	var scaled_aabb_min_y = aabb.position.y * scale_factor
+	model_scene.position.y = base_height - scaled_aabb_min_y
 
 	# Update collision to include base + model
 	var base_radius = 0.016  # 32mm diameter (16mm radius)
@@ -2127,6 +2129,12 @@ func _import_tts_object(tts_obj: TTSImporter.TTSObject, models_dir: String, imag
 
 	print("    Scale: %.6f (raw max dim: %.2f)" % [model_scale, max_dim])
 
+	# Calculate scaled AABB for collision and positioning
+	var scaled_aabb = AABB(mesh_aabb.position * model_scale, mesh_aabb.size * model_scale)
+
+	# Position model so its bottom sits on table surface (y=0)
+	model_scene.position.y = -scaled_aabb.position.y
+
 	# Wrap in StaticBody3D for selection
 	_object_counter += 1
 	var wrapper = StaticBody3D.new()
@@ -2140,13 +2148,12 @@ func _import_tts_object(tts_obj: TTSImporter.TTSObject, models_dir: String, imag
 	# Add loaded model
 	wrapper.add_child(model_scene)
 
-	# Calculate collision from model bounds (use scaled AABB)
-	var scaled_aabb = AABB(mesh_aabb.position * model_scale, mesh_aabb.size * model_scale)
+	# Calculate collision from model bounds (model bottom is at y=0 now)
 	var collision = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
 	shape.size = scaled_aabb.size
 	collision.shape = shape
-	collision.position = scaled_aabb.position + scaled_aabb.size / 2
+	collision.position = Vector3(0, scaled_aabb.size.y / 2, 0)  # Center of model, starting from y=0
 	wrapper.add_child(collision)
 
 	# Apply TTS color tint if not white
@@ -2393,9 +2400,14 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 	var add_base = tts_obj.is_child_model
 	var base_height = 0.003  # 3mm base height
 
+	# Position model so its bottom sits on table/base surface
+	# mesh_aabb.position.y is the lowest point of the model (already scaled)
 	if add_base:
-		# Position model on top of base
-		model_scene.position.y = base_height
+		# Place model's bottom on top of base
+		model_scene.position.y = base_height - mesh_aabb.position.y
+	else:
+		# Place model's bottom on table surface (y=0)
+		model_scene.position.y = -mesh_aabb.position.y
 
 	var base_info = " + base" if add_base else ""
 	print("    Size: %.1fmm x %.1fmm x %.1fmm%s" % [mesh_aabb.size.x * 1000, mesh_aabb.size.y * 1000, mesh_aabb.size.z * 1000, base_info])
@@ -2418,18 +2430,19 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 		var base = _create_miniature_base()
 		wrapper.add_child(base)
 
-	# Calculate collision from model + base bounds
+	# Calculate collision from model + base bounds (model bottom is now at y=0 or base_height)
 	var collision = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
 	if add_base:
-		# Include base in collision - expand AABB to include base
+		# Include base in collision - model sits on base
 		var base_radius = 0.016  # 32mm diameter (16mm radius)
 		var total_height = mesh_aabb.size.y + base_height
 		shape.size = Vector3(base_radius * 2, total_height, base_radius * 2)
 		collision.position = Vector3(0, total_height / 2, 0)
 	else:
+		# Model bottom is at y=0
 		shape.size = mesh_aabb.size
-		collision.position = mesh_aabb.position + mesh_aabb.size / 2
+		collision.position = Vector3(0, mesh_aabb.size.y / 2, 0)
 	collision.shape = shape
 	wrapper.add_child(collision)
 
