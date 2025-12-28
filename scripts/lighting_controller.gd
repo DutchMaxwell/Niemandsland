@@ -21,12 +21,12 @@ const PRESETS = {
 		"ambient_energy": 0.6,
 		"ambient_color": Color(0.9, 0.7, 0.5),
 		"exposure": 1.3,
-		"shadow_opacity": 0.85,  # Higher for more visible shadows
-		"shadow_blur": 1.5,  # Soft shadows for realism
+		"shadow_opacity": 0.40,  # User-optimized for 10x scale
+		"shadow_blur": 0.50,  # User-optimized for cleaner shadows
 		"shadow_bias": 0.03,  # Balanced to prevent acne and detachment
 		"shadow_normal_bias": 1.0,  # Higher prevents shadow detachment on slopes
-		"ssao_intensity": 0.9,
-		"ssr_intensity": 0.2,
+		"ssao_intensity": 0.40,  # User-optimized SSAO
+		"ssr_intensity": 0.60,  # User-optimized SSR
 		"glow_intensity": 1.2,
 		"contrast": 1.15,
 		"saturation": 1.15,
