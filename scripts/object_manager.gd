@@ -13,9 +13,9 @@ signal distance_changed(distance_inches: float, from_pos: Vector3, to_pos: Vecto
 signal measurement_finished(distance_inches: float)
 signal drag_ended()
 
-@export var drag_height: float = 5.0  # 10x scale
+@export var drag_height: float = 0.5  # Drag height in meters
 @export var rotation_speed_degrees: float = 2.0  # Degrees per second while R held
-@export var min_drag_height: float = 0.1  # Minimum height above table when dragging (10x scale)
+@export var min_drag_height: float = 0.01  # Minimum height above table when dragging
 
 # Debug logging
 @export var debug_dice_physics: bool = true  # Set to false to disable logging
@@ -65,9 +65,9 @@ const METERS_TO_INCHES: float = 39.3701
 var _network_manager: Node = null
 
 # Preload resources (will be scenes in full version)
-# Standard wargaming miniature sizes (10x scale for better shadows/physics)
-const MINIATURE_HEIGHT: float = 0.32  # 320mm height (10x scale)
-const MINIATURE_RADIUS: float = 0.16  # 320mm diameter base (32mm at 10x scale)
+# Standard wargaming miniature sizes
+const MINIATURE_HEIGHT: float = 0.032  # 32mm height
+const MINIATURE_RADIUS: float = 0.016  # 32mm diameter base (16mm radius)
 
 
 func _ready() -> void:
@@ -92,7 +92,7 @@ func _init_debug_log() -> void:
 		_debug_log_file.store_line("=== DICE PHYSICS DEBUG LOG ===")
 		_debug_log_file.store_line("Time: %s" % Time.get_datetime_string_from_system())
 		_debug_log_file.store_line("Table collision: surface at y=0 (aligned with visual)")
-		_debug_log_file.store_line("Dice: 16mm, 5g, expected rest y≈0.08 (10x scale)")
+		_debug_log_file.store_line("Dice: 16mm, 5g, expected rest y≈0.008")
 		_debug_log_file.store_line("Physics: PURE JOLT - all interventions disabled for testing")
 		_debug_log_file.store_line("Rescue threshold: y < -0.5m")
 		_debug_log_file.store_line("-------------------------------")
@@ -892,11 +892,11 @@ func _get_object_radius(obj: Node3D) -> float:
 	if obj.is_in_group("miniature"):
 		return MINIATURE_RADIUS  # 16mm = 0.016m
 	elif obj.is_in_group("dice"):
-		return 0.08  # Half of 160mm dice (10x scale) = 8mm diagonal approximation
+		return 0.008  # Half of 16mm dice = 8mm diagonal approximation
 	elif obj.is_in_group("terrain"):
 		# Terrain is larger, estimate from typical sizes
-		return 0.15  # 15cm average
-	return 0.16  # Default to miniature size (10x scale)
+		return 0.015  # 15mm average
+	return 0.016  # Default to miniature size
 
 
 ## Calculate edge position on object closest to target point
@@ -1024,7 +1024,7 @@ func spawn_miniature(pos: Vector3, broadcast: bool = true, network_id: int = -1)
 	miniature.add_to_group("selectable")
 	miniature.add_to_group("miniature")
 
-	var base_height = 0.03  # 30mm (3mm at 10x scale) base thickness (proportional to 70mm diameter)
+	var base_height = 0.003  # 3mm base thickness
 
 	# Create base (circular)
 	var base_mesh = CylinderMesh.new()
@@ -1111,7 +1111,7 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	dice.can_sleep = true  # Allow physics to sleep when at rest
 	dice.continuous_cd = false
 
-	var dice_size = 0.16  # 160mm standard dice (10x scale)
+	var dice_size = 0.016  # 16mm standard dice
 
 	# Try to load 3D model, fallback to procedural
 	var dice_body: Node3D = _load_dice_model()
@@ -1298,16 +1298,16 @@ func spawn_terrain(pos: Vector3, broadcast: bool = true, network_id: int = -1) -
 	match terrain_type:
 		"rock":
 			mesh = _create_rock_mesh()
-			height = 2.5  # 10x scale
+			height = 0.25  # 25cm
 		"building":
 			mesh = _create_building_mesh()
-			height = 6.0  # 10x scale
+			height = 0.6  # 60cm
 		"tree":
 			mesh = _create_tree_mesh()
-			height = 6.0  # 10x scale
+			height = 0.6  # 60cm
 		_:
 			mesh = BoxMesh.new()
-			height = 3.0  # 10x scale
+			height = 0.3  # 30cm
 
 	var mesh_instance = MeshInstance3D.new()
 	mesh_instance.mesh = mesh
@@ -1365,14 +1365,14 @@ func spawn_custom_model(file_path: String, pos: Vector3, _broadcast: bool = true
 	var model_scene: Node3D = null
 	var extension = file_path.get_extension().to_lower()
 
-	# Load based on file type
+	# Load based on file type (no base - we add our own below)
 	match extension:
 		"glb", "gltf":
-			model_scene = _load_gltf_model(file_path)
+			model_scene = _load_gltf_model(file_path, false)
 		"stl":
 			model_scene = _load_stl_model(file_path)
 		"obj":
-			model_scene = _load_obj_model(file_path)
+			model_scene = _load_obj_model(file_path, "", false)
 		"fbx":
 			# FBX cannot be loaded at runtime - Godot converts it during import
 			push_warning("FBX files must be converted to GLB first. Use Blender or import into Godot project.")
@@ -1411,7 +1411,7 @@ func spawn_custom_model(file_path: String, pos: Vector3, _broadcast: bool = true
 	var max_dim = max(aabb.size.x, max(aabb.size.y, aabb.size.z))
 	var scale_factor = 1.0
 	if max_dim > 0.001:
-		var target_size = 0.5  # 50cm default (10x scale)
+		var target_size = 0.05  # 5cm default target size
 		scale_factor = target_size / max_dim
 		model_scene.scale = Vector3(scale_factor, scale_factor, scale_factor)
 
@@ -1420,11 +1420,11 @@ func spawn_custom_model(file_path: String, pos: Vector3, _broadcast: bool = true
 	wrapper.add_child(base)
 
 	# Position model on top of base
-	var base_height = 0.03  # 30mm (3mm at 10x scale) base height
+	var base_height = 0.003  # 3mm base height
 	model_scene.position.y = base_height
 
 	# Update collision to include base + model
-	var base_radius = 0.16  # 320mm diameter (32mm at 10x scale)
+	var base_radius = 0.016  # 32mm diameter (16mm radius)
 	var scaled_model_height = aabb.size.y * scale_factor
 	var total_height = scaled_model_height + base_height
 	shape.size = Vector3(base_radius * 2, total_height, base_radius * 2)
@@ -1523,34 +1523,17 @@ func _load_stl_model(file_path: String) -> Node3D:
 	material.metallic = 0.0
 	mesh_instance.material_override = material
 
-	# Wrap in Node3D
-	var root = Node3D.new()
-	root.name = "STL_Model"
+	# Return mesh instance directly (base will be added by spawn_custom_model)
+	# Enable shadow casting
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
-	# Add standard wargaming base (32mm diameter, 3mm height, black)
-	var base = _create_miniature_base()
-	root.add_child(base)
-
-	# Calculate mesh bounds to position it on top of base
-	var mesh_aabb = mesh.get_aabb()
-	var base_top = 0.003  # 3mm base height
-
-	# Position mesh so its bottom sits on top of base
-	mesh_instance.position.y = base_top - mesh_aabb.position.y
-
-	# Add the model above the base
-	root.add_child(mesh_instance)
-
-	# Enable shadow casting for all meshes
-	_enable_shadows_recursive(root)
-
-	return root
+	return mesh_instance
 
 
-## Create a standard wargaming base (32mm diameter at 10x scale = 320mm)
+## Create a standard wargaming base (32mm diameter)
 func _create_miniature_base() -> MeshInstance3D:
-	var base_radius = 0.16  # 160mm radius = 320mm diameter (32mm base at 10x scale)
-	var base_height = 0.03  # 30mm height (3mm at 10x scale)
+	var base_radius = 0.016  # 16mm radius = 32mm diameter base
+	var base_height = 0.003  # 3mm height
 
 	var base_mesh = CylinderMesh.new()
 	base_mesh.top_radius = base_radius
@@ -1931,21 +1914,21 @@ func _calculate_aabb(node: Node3D) -> AABB:
 
 func _create_rock_mesh() -> Mesh:
 	var mesh = BoxMesh.new()
-	mesh.size = Vector3(4.0, 2.5, 3.5)  # 10x scale  # Scaled up
+	mesh.size = Vector3(0.4, 0.25, 0.35)  # Rock dimensions
 	return mesh
 
 
 func _create_building_mesh() -> Mesh:
 	var mesh = BoxMesh.new()
-	mesh.size = Vector3(5.0, 6.0, 5.0)  # 10x scale  # Scaled up
+	mesh.size = Vector3(0.5, 0.6, 0.5)  # Building dimensions
 	return mesh
 
 
 func _create_tree_mesh() -> Mesh:
 	var mesh = CylinderMesh.new()
-	mesh.top_radius = 2.0  # 10x scale
-	mesh.bottom_radius = 0.8  # 10x scale
-	mesh.height = 6.0  # 10x scale
+	mesh.top_radius = 0.2  # Tree crown radius
+	mesh.bottom_radius = 0.08  # Tree trunk radius
+	mesh.height = 0.6  # Tree height
 	return mesh
 
 
@@ -2177,7 +2160,7 @@ func _import_tts_object(tts_obj: TTSImporter.TTSObject, models_dir: String, imag
 	add_child(wrapper)
 
 	# TTS position: 1 unit ≈ 1 inch = 0.0254m
-	var pos_scale = 0.254  # 10x scale: 1 inch = 0.254m
+	var pos_scale = 0.0254  # 1 inch = 0.0254m
 	wrapper.global_position = Vector3(
 		tts_obj.position.x * pos_scale,
 		0,  # Place on table surface
@@ -2400,7 +2383,7 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 
 	# TTS uses 1 unit = 1 inch, Godot uses meters
 	# Scale model to convert inches to meters: 1 inch = 0.0254 meters
-	var tts_scale = 0.254  # 10x scale: 1 inch = 0.254m
+	var tts_scale = 0.0254  # 1 inch = 0.0254m
 	model_scene.scale = Vector3(tts_scale, tts_scale, tts_scale)
 
 	# Calculate model bounds for collision (after scaling)
@@ -2408,7 +2391,7 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 
 	# Add base for child models (real miniatures) - created OUTSIDE the scaled model
 	var add_base = tts_obj.is_child_model
-	var base_height = 0.03  # 30mm (3mm at 10x scale) base height (proportional to 70mm diameter)
+	var base_height = 0.003  # 3mm base height
 
 	if add_base:
 		# Position model on top of base
@@ -2440,7 +2423,7 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 	var shape = BoxShape3D.new()
 	if add_base:
 		# Include base in collision - expand AABB to include base
-		var base_radius = 0.16  # 320mm diameter (32mm at 10x scale)
+		var base_radius = 0.016  # 32mm diameter (16mm radius)
 		var total_height = mesh_aabb.size.y + base_height
 		shape.size = Vector3(base_radius * 2, total_height, base_radius * 2)
 		collision.position = Vector3(0, total_height / 2, 0)
@@ -2464,7 +2447,7 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 	add_child(wrapper)
 
 	# TTS position: 1 unit ≈ 1 inch = 0.0254m
-	var pos_scale = 0.254  # 10x scale: 1 inch = 0.254m
+	var pos_scale = 0.0254  # 1 inch = 0.0254m
 	wrapper.global_position = Vector3(
 		tts_obj.position.x * pos_scale,
 		0,  # Place on table surface

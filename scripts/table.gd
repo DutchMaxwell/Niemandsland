@@ -9,8 +9,8 @@ extends StaticBody3D
 
 var table_size: Vector2 = Vector2(4, 4)  # In feet, will be converted to meters
 
-const FEET_TO_METERS: float = 3.048  # 10x scale
-const INCHES_TO_METERS: float = 0.254  # 10x scale
+const FEET_TO_METERS: float = 0.3048  # 1 foot = 0.3048 meters
+const INCHES_TO_METERS: float = 0.0254  # 1 inch = 0.0254 meters
 
 @onready var mesh_instance: MeshInstance3D = $TableMesh
 @onready var collision_shape: CollisionShape3D = $TableCollision
