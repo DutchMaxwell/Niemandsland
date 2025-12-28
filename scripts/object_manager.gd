@@ -92,7 +92,7 @@ func _init_debug_log() -> void:
 		_debug_log_file.store_line("=== DICE PHYSICS DEBUG LOG ===")
 		_debug_log_file.store_line("Time: %s" % Time.get_datetime_string_from_system())
 		_debug_log_file.store_line("Table collision: surface at y=0 (aligned with visual)")
-		_debug_log_file.store_line("Dice: 16mm, 5g, expected rest y≈0.008")
+		_debug_log_file.store_line("Dice: 16mm, 5g, expected rest y≈0.08 (10x scale)")
 		_debug_log_file.store_line("Physics: PURE JOLT - all interventions disabled for testing")
 		_debug_log_file.store_line("Rescue threshold: y < -0.5m")
 		_debug_log_file.store_line("-------------------------------")
@@ -892,11 +892,11 @@ func _get_object_radius(obj: Node3D) -> float:
 	if obj.is_in_group("miniature"):
 		return MINIATURE_RADIUS  # 16mm = 0.016m
 	elif obj.is_in_group("dice"):
-		return 0.008  # Half of 16mm dice = 8mm diagonal approximation
+		return 0.08  # Half of 160mm dice (10x scale) = 8mm diagonal approximation
 	elif obj.is_in_group("terrain"):
 		# Terrain is larger, estimate from typical sizes
 		return 0.15  # 15cm average
-	return 0.016  # Default to miniature size
+	return 0.16  # Default to miniature size (10x scale)
 
 
 ## Calculate edge position on object closest to target point
@@ -1111,7 +1111,7 @@ func spawn_dice(pos: Vector3) -> RigidBody3D:
 	dice.can_sleep = true  # Allow physics to sleep when at rest
 	dice.continuous_cd = false
 
-	var dice_size = 0.016  # 16mm standard dice
+	var dice_size = 0.16  # 160mm standard dice (10x scale)
 
 	# Try to load 3D model, fallback to procedural
 	var dice_body: Node3D = _load_dice_model()
@@ -1298,16 +1298,16 @@ func spawn_terrain(pos: Vector3, broadcast: bool = true, network_id: int = -1) -
 	match terrain_type:
 		"rock":
 			mesh = _create_rock_mesh()
-			height = 0.25
+			height = 2.5  # 10x scale
 		"building":
 			mesh = _create_building_mesh()
-			height = 0.6
+			height = 6.0  # 10x scale
 		"tree":
 			mesh = _create_tree_mesh()
-			height = 0.6
+			height = 6.0  # 10x scale
 		_:
 			mesh = BoxMesh.new()
-			height = 0.3
+			height = 3.0  # 10x scale
 
 	var mesh_instance = MeshInstance3D.new()
 	mesh_instance.mesh = mesh
@@ -1411,7 +1411,7 @@ func spawn_custom_model(file_path: String, pos: Vector3, _broadcast: bool = true
 	var max_dim = max(aabb.size.x, max(aabb.size.y, aabb.size.z))
 	var scale_factor = 1.0
 	if max_dim > 0.001:
-		var target_size = 0.05  # 5cm default
+		var target_size = 0.5  # 50cm default (10x scale)
 		scale_factor = target_size / max_dim
 		model_scene.scale = Vector3(scale_factor, scale_factor, scale_factor)
 
@@ -1931,21 +1931,21 @@ func _calculate_aabb(node: Node3D) -> AABB:
 
 func _create_rock_mesh() -> Mesh:
 	var mesh = BoxMesh.new()
-	mesh.size = Vector3(0.4, 0.25, 0.35)  # Scaled up
+	mesh.size = Vector3(4.0, 2.5, 3.5)  # 10x scale  # Scaled up
 	return mesh
 
 
 func _create_building_mesh() -> Mesh:
 	var mesh = BoxMesh.new()
-	mesh.size = Vector3(0.5, 0.6, 0.5)  # Scaled up
+	mesh.size = Vector3(5.0, 6.0, 5.0)  # 10x scale  # Scaled up
 	return mesh
 
 
 func _create_tree_mesh() -> Mesh:
 	var mesh = CylinderMesh.new()
-	mesh.top_radius = 0.2
-	mesh.bottom_radius = 0.08
-	mesh.height = 0.6  # Scaled up
+	mesh.top_radius = 2.0  # 10x scale
+	mesh.bottom_radius = 0.8  # 10x scale
+	mesh.height = 6.0  # 10x scale
 	return mesh
 
 
