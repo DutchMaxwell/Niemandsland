@@ -115,10 +115,17 @@ func _pan_camera(delta: Vector2) -> void:
 
 
 func _keyboard_pan(direction: Vector2, delta: float) -> void:
-	# Calculate pan direction based on camera yaw for WASD movement
-	var yaw_rad = deg_to_rad(_yaw)
-	var right = Vector3(cos(yaw_rad), 0, sin(yaw_rad))
-	var forward = Vector3(-sin(yaw_rad), 0, cos(yaw_rad))
+	# Calculate pan direction based on camera view direction (not world coordinates)
+	# Use the pivot's rotation (yaw) to determine forward/right in world space
+	var basis = global_transform.basis
+	var right = basis.x  # Local X is right
+	var forward = -basis.z  # Local -Z is forward
+
+	# Flatten to horizontal plane
+	right.y = 0
+	forward.y = 0
+	right = right.normalized()
+	forward = forward.normalized()
 
 	var pan_delta = (right * direction.x + forward * direction.y) * keyboard_pan_speed * delta
 	_target_position += pan_delta
