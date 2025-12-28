@@ -113,9 +113,16 @@ func initialize(directional_light: DirectionalLight3D, world_env: WorldEnvironme
 	_world_environment = world_env
 	_environment = world_env.environment
 
-	# Load default preset
-	apply_preset("Default")
-	print("Lighting Controller initialized")
+	print("=== LIGHTING DEBUG ===")
+	print("DirectionalLight ref: ", _directional_light)
+	print("Environment ref: ", _environment)
+	print("BEFORE apply_preset - light_energy: ", _directional_light.light_energy if _directional_light else "NULL")
+	print("BEFORE apply_preset - shadow_blur: ", _directional_light.shadow_blur if _directional_light else "NULL")
+
+	# Load default preset - use call_deferred to ensure it happens after scene is fully loaded
+	call_deferred("apply_preset", "Default")
+
+	print("Lighting Controller initialized (preset will be applied deferred)")
 
 
 ## Apply a preset by name
@@ -126,6 +133,10 @@ func apply_preset(preset_name: String) -> void:
 
 	var preset = PRESETS[preset_name]
 	current_preset = preset.duplicate()
+
+	print("Applying preset: ", preset_name)
+	print("  Preset sun_energy: ", preset.sun_energy)
+	print("  Preset shadow_blur: ", preset.shadow_blur)
 
 	# Apply all settings
 	set_sun_energy(preset.sun_energy)
