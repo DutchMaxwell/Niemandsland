@@ -1773,6 +1773,17 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 		push_error("No geometry found in OBJ: %s" % file_path)
 		return null
 
+	# Recalculate normals if they were missing or all UP
+	var needs_normal_recalc = true
+	for normal in mesh_normals:
+		if normal != Vector3.UP:
+			needs_normal_recalc = false
+			break
+
+	if needs_normal_recalc and mesh_vertices.size() >= 3:
+		mesh_normals = _calculate_smooth_normals(mesh_vertices)
+		print("  Recalculated normals for OBJ model")
+
 	# Create mesh
 	var arrays = []
 	arrays.resize(Mesh.ARRAY_MAX)
@@ -1791,8 +1802,8 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 	# Create material with optional texture
 	var material = StandardMaterial3D.new()
 	material.albedo_color = Color(0.7, 0.7, 0.7)
-	material.roughness = 0.9  # Matte finish like painted miniatures
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED  # Show both sides of polygons
+	material.roughness = 0.8  # Slightly less matte for better lighting
+	material.cull_mode = BaseMaterial3D.CULL_BACK  # Normal back-face culling for proper shading
 
 	# Load texture if provided
 	if not texture_path.is_empty():
@@ -1800,6 +1811,7 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 		if texture:
 			material.albedo_texture = texture
 			material.albedo_color = Color.WHITE  # Use full texture color
+			material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 			print("Applied texture: %s" % texture_path.get_file())
 
 	mesh_instance.material_override = material
@@ -1871,6 +1883,48 @@ func _enable_shadows_recursive(node: Node) -> void:
 
 	for child in node.get_children():
 		_enable_shadows_recursive(child)
+
+
+## Calculate smooth normals for a mesh (vertex normals averaged from face normals)
+func _calculate_smooth_normals(vertices: PackedVector3Array) -> PackedVector3Array:
+	var normals = PackedVector3Array()
+	normals.resize(vertices.size())
+
+	# Initialize all normals to zero
+	for i in range(normals.size()):
+		normals[i] = Vector3.ZERO
+
+	# Calculate face normals and accumulate to vertex normals
+	@warning_ignore("integer_division")
+	var tri_count = vertices.size() / 3
+
+	for i in range(tri_count):
+		var idx0 = i * 3
+		var idx1 = i * 3 + 1
+		var idx2 = i * 3 + 2
+
+		var v0 = vertices[idx0]
+		var v1 = vertices[idx1]
+		var v2 = vertices[idx2]
+
+		# Calculate face normal using cross product
+		var edge1 = v1 - v0
+		var edge2 = v2 - v0
+		var face_normal = edge1.cross(edge2).normalized()
+
+		# Add face normal to all three vertices of this triangle
+		normals[idx0] += face_normal
+		normals[idx1] += face_normal
+		normals[idx2] += face_normal
+
+	# Normalize all vertex normals
+	for i in range(normals.size()):
+		if normals[i].length_squared() > 0.0001:
+			normals[i] = normals[i].normalized()
+		else:
+			normals[i] = Vector3.UP  # Fallback for degenerate cases
+
+	return normals
 
 
 ## Calculate AABB for a node and all its children
@@ -2825,3 +2879,62 @@ func _set_object_dimmed(obj: Node3D, dimmed: bool) -> void:
 		# Recurse into children
 		if child.get_child_count() > 0:
 			_set_object_dimmed(child, dimmed)
+
+
+## ============================================================================
+## Group Rotation System (Shift+R)
+## ============================================================================
+
+## Rotate selected objects as a group around the first object (Shift+R)
+func rotate_selected_group(angle_degrees: float) -> void:
+	if _selected_objects.size() < 2:
+		# Single object or no selection - just rotate the object itself
+		if _selected_objects.size() == 1:
+			var obj = _selected_objects[0]
+			if is_instance_valid(obj):
+				obj.rotate_y(deg_to_rad(angle_degrees))
+				print("Rotated single object by %.0f degrees" % angle_degrees)
+		return
+
+	# Find the first valid object as pivot point
+	var pivot_obj: Node3D = null
+	for obj in _selected_objects:
+		if is_instance_valid(obj):
+			pivot_obj = obj
+			break
+
+	if not pivot_obj:
+		return
+
+	var pivot_pos = pivot_obj.global_position
+	var angle_rad = deg_to_rad(angle_degrees)
+
+	# Rotate all selected objects around the pivot
+	var rotated_count = 0
+	for obj in _selected_objects:
+		if not is_instance_valid(obj):
+			continue
+
+		if obj == pivot_obj:
+			# Pivot object just rotates in place
+			obj.rotate_y(angle_rad)
+		else:
+			# Calculate offset from pivot
+			var offset = obj.global_position - pivot_pos
+
+			# Rotate offset around Y axis
+			var new_offset = Vector3(
+				offset.x * cos(angle_rad) - offset.z * sin(angle_rad),
+				offset.y,
+				offset.x * sin(angle_rad) + offset.z * cos(angle_rad)
+			)
+
+			# Apply new position
+			obj.global_position = pivot_pos + new_offset
+
+			# Also rotate the object itself to face the same relative direction
+			obj.rotate_y(angle_rad)
+
+		rotated_count += 1
+
+	print("Rotated %d objects by %.0f degrees around pivot" % [rotated_count, angle_degrees])

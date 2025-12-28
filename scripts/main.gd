@@ -13,14 +13,7 @@ var lighting_controller: Node
 var lighting_panel: Window
 @onready var dice_result_label: Label = $UI/HUD/DiceResult
 @onready var distance_label: Label = $UI/HUD/DistanceLabel
-@onready var spawn_miniature_btn: Button = %SpawnMiniature
-@onready var spawn_dice_btn: Button = %SpawnDice
-@onready var spawn_terrain_btn: Button = %SpawnTerrain
 @onready var clear_all_btn: Button = %ClearAll
-@onready var spawn_200_btn: Button = %Spawn200
-@onready var spawn_500_btn: Button = %Spawn500
-@onready var spawn_1000_btn: Button = %Spawn1000
-@onready var spawn_complex_btn: Button = %SpawnComplex
 @onready var performance_label: Label = %PerformanceLabel
 
 # Table size UI elements
@@ -82,13 +75,9 @@ const CM_TO_FEET: float = 1.0 / 30.48
 
 
 func _ready() -> void:
-	print("OpenTTS Prototype v0.1 - Initializing...")
+	print("OpenTTS Prototype v0.2 - Initializing...")
 
 	# Connect UI buttons
-	spawn_miniature_btn.pressed.connect(_on_spawn_miniature)
-	# Tabletop dice disabled - use Dice Roller Plugin instead
-	spawn_dice_btn.visible = false
-	spawn_terrain_btn.pressed.connect(_on_spawn_terrain)
 	load_model_btn.pressed.connect(_on_load_model)
 	model_file_dialog.file_selected.connect(_on_model_file_selected)
 	clear_all_btn.pressed.connect(_on_clear_all)
@@ -101,10 +90,6 @@ func _ready() -> void:
 	tts_images_dialog.dir_selected.connect(_on_tts_images_dir_selected)
 	object_manager.tts_online_import_completed.connect(_on_tts_online_import_completed)
 	object_manager.tts_download_progress.connect(_on_tts_download_progress)
-	spawn_200_btn.pressed.connect(_on_spawn_200)
-	spawn_500_btn.pressed.connect(_on_spawn_500)
-	spawn_1000_btn.pressed.connect(_on_spawn_1000)
-	spawn_complex_btn.pressed.connect(_on_spawn_complex)
 
 	# Connect table size UI
 	table_size_option.item_selected.connect(_on_table_size_selected)
@@ -222,6 +207,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		# Lock/Unlock selected objects (L key)
 		elif event.keycode == KEY_L and not event.ctrl_pressed:
 			object_manager.toggle_lock_selected()
+			get_viewport().set_input_as_handled()
+		# Rotate selected group around first object (Shift+R)
+		elif event.keycode == KEY_R and event.shift_pressed:
+			object_manager.rotate_selected_group(15.0)  # 15 degrees per press
 			get_viewport().set_input_as_handled()
 		# Lighting Presets (F1-F5)
 		elif event.keycode == KEY_F1:
