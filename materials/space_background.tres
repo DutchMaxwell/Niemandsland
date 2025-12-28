@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://shaders/space_background.gdshader" id="1_shader"]
+
+[resource]
+shader = ExtResource("1_shader")
+shader_parameter/deep_space_color = Vector3(0.02, 0.02, 0.08)
+shader_parameter/nebula_color_1 = Vector3(0.1, 0.05, 0.2)
+shader_parameter/nebula_color_2 = Vector3(0.05, 0.1, 0.15)
+shader_parameter/star_density = 0.4
+shader_parameter/star_brightness = 1.0
+shader_parameter/twinkle_speed = 1.5
+shader_parameter/nebula_intensity = 0.3
+shader_parameter/scale = 3.0
