@@ -20,35 +20,33 @@ Ein Open-Source Tabletop-Simulator mit starkem Fokus auf Wargaming-Spiele (OnePa
 | **UI Framework** | Godot Control Nodes | Native Integration |
 | **Build System** | Godot Export + GitHub Actions | Cross-Platform Builds (Win, Linux, Mac, **Web**) |
 
-### 1.2 Distributions-Strategie: Maximaler Nutzerkomfort
+### 1.2 Distributions-Strategie: Desktop-First
 
-**Ziel: Spielbar in < 30 Sekunden, ohne Installation wenn möglich**
+**Ziel: Beste Performance und volle Features**
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    DISTRIBUTIONS-OPTIONEN                        │
 ├─────────────────┬─────────────────┬─────────────────────────────┤
-│   🌐 BROWSER    │   💻 DESKTOP    │   📦 PORTABLE               │
-│   (Primär)      │   (Vollversion) │   (Offline)                 │
+│   💻 DESKTOP    │   📦 PORTABLE   │   🌐 BROWSER                │
+│   (Primär)      │   (Offline)     │   (Zurückgestellt)          │
 ├─────────────────┼─────────────────┼─────────────────────────────┤
-│ Godot WASM      │ Godot Native    │ Tauri Wrapper               │
-│ ~15-25MB Load   │ ~50MB Install   │ ~3MB Single EXE             │
-│ Sofort spielbar │ Beste Perfor-   │ Kein Install nötig          │
-│ im Browser      │ mance           │ USB-Stick-fähig             │
+│ Godot Native    │ Tauri Wrapper   │ Godot WASM                  │
+│ ~50MB Install   │ ~3MB Single EXE │ ~15-25MB Load               │
+│ Beste Perfor-   │ Kein Install    │ Performance-                │
+│ mance           │ nötig           │ Einschränkungen             │
 ├─────────────────┼─────────────────┼─────────────────────────────┤
-│ ✅ Kein Download │ ✅ Volle Features│ ✅ Offline-fähig            │
-│ ✅ Kein Install  │ ✅ Multi-Thread  │ ✅ LAN-Partys               │
-│ ⚠️ Single-Thread │ ✅ Lokale Mods   │ ⚠️ WebView-abhängig         │
-│ ⚠️ Kein lokaler  │                 │                             │
-│    Mod-Support  │                 │                             │
+│ ✅ Volle Features│ ✅ Offline-fähig │ ⚠️ Single-Thread            │
+│ ✅ Multi-Thread  │ ✅ LAN-Partys    │ ⚠️ Kein lokaler Mod-Support │
+│ ✅ Lokale Mods   │ ⚠️ WebView-abhg. │ ⚠️ Zurückgestellt           │
 └─────────────────┴─────────────────┴─────────────────────────────┘
 ```
 
-**Warum Browser-First?**
-- 70%+ der Casual-Spieler wollen nichts installieren
-- Godot 4.3+ hat Single-Thread Web-Export stark verbessert
-- ~15-25MB WebAssembly-Bundle (vs. TTS: nicht browser-fähig)
-- Instant-Play: Link teilen → Sofort spielen
+**Warum Desktop-First?**
+- Beste Performance und Grafik-Qualität
+- Volle Multi-Threading Unterstützung
+- Keine Browser-Limitierungen
+- Web-Export hat Performance-Probleme (aus Milestone 1 Tests)
 
 **Technische Umsetzung Web-Export:**
 ```
