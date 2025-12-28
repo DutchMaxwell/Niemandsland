@@ -20,10 +20,8 @@ Ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wie OnePageRul
 
 ## Schnellstart
 
-### Option 1: Im Browser spielen (coming soon)
-Sobald CI/CD eingerichtet ist, wird eine Web-Version unter GitHub Pages verfügbar sein.
-
-### Option 2: Lokal mit Godot
+### Desktop-Version (Empfohlen)
+**Hinweis:** Browser-Version ist zurückgestellt. Desktop-First ist die aktuelle Entwicklungsstrategie.
 1. [Godot 4.3+](https://godotengine.org/download) herunterladen
 2. Repository klonen: `git clone https://github.com/DutchMaxwell/openTTS.git`
 3. Projekt in Godot öffnen
