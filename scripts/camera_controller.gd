@@ -1,9 +1,12 @@
 extends Node3D
 ## Camera controller with orbit, pan, and zoom functionality
 ## Optimized for tabletop gaming view
+## Supports WASD movement and Q/E rotation
 
 @export var rotation_speed: float = 0.005
-@export var pan_speed: float = 0.005  # Pan speed for camera movement
+@export var pan_speed: float = 0.005  # Pan speed for mouse camera movement
+@export var keyboard_pan_speed: float = 5.0  # Pan speed for WASD movement
+@export var keyboard_rotation_speed: float = 90.0  # Rotation speed for Q/E (degrees per second)
 @export var zoom_speed: float = 0.15  # Zoom speed for smooth control
 @export var min_zoom: float = 0.5  # Minimum zoom distance
 @export var max_zoom: float = 25.0  # Maximum zoom for larger tables
@@ -19,10 +22,44 @@ var _is_rotating: bool = false
 var _is_panning: bool = false
 var _last_mouse_pos: Vector2 = Vector2.ZERO
 
+# WASD movement state
+var _move_direction: Vector2 = Vector2.ZERO
+var _rotation_direction: float = 0.0
+
 
 func _ready() -> void:
 	_camera = $Camera3D
 	_update_camera_transform()
+
+
+func _process(delta: float) -> void:
+	# Handle WASD keyboard movement
+	_move_direction = Vector2.ZERO
+	_rotation_direction = 0.0
+
+	if Input.is_key_pressed(KEY_W):
+		_move_direction.y -= 1.0
+	if Input.is_key_pressed(KEY_S):
+		_move_direction.y += 1.0
+	if Input.is_key_pressed(KEY_A):
+		_move_direction.x -= 1.0
+	if Input.is_key_pressed(KEY_D):
+		_move_direction.x += 1.0
+
+	# Q/E for rotation
+	if Input.is_key_pressed(KEY_Q):
+		_rotation_direction = 1.0
+	if Input.is_key_pressed(KEY_E):
+		_rotation_direction = -1.0
+
+	# Apply movement if any direction is pressed
+	if _move_direction != Vector2.ZERO:
+		_keyboard_pan(_move_direction.normalized(), delta)
+
+	# Apply rotation if Q or E is pressed
+	if _rotation_direction != 0.0:
+		_yaw += _rotation_direction * keyboard_rotation_speed * delta
+		_update_camera_transform()
 
 
 func _input(event: InputEvent) -> void:
@@ -66,13 +103,24 @@ func _rotate_camera(delta: Vector2) -> void:
 
 
 func _pan_camera(delta: Vector2) -> void:
-	# Calculate pan direction based on camera orientation
+	# Calculate pan direction based on camera orientation (mouse pan)
 	var right = _camera.global_transform.basis.x
 	var forward = -_camera.global_transform.basis.z
 	forward.y = 0
 	forward = forward.normalized()
 
 	var pan_delta = (-right * delta.x + forward * delta.y) * pan_speed
+	_target_position += pan_delta
+	_update_camera_transform()
+
+
+func _keyboard_pan(direction: Vector2, delta: float) -> void:
+	# Calculate pan direction based on camera yaw for WASD movement
+	var yaw_rad = deg_to_rad(_yaw)
+	var right = Vector3(cos(yaw_rad), 0, sin(yaw_rad))
+	var forward = Vector3(-sin(yaw_rad), 0, cos(yaw_rad))
+
+	var pan_delta = (right * direction.x + forward * direction.y) * keyboard_pan_speed * delta
 	_target_position += pan_delta
 	_update_camera_transform()
 
