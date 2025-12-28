@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://main001"]
+[gd_scene load_steps=14 format=3 uid="uid://main001"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/camera_controller.gd" id="2_camera"]
@@ -9,15 +9,19 @@
 [ext_resource type="Script" path="res://scripts/save_manager.gd" id="7_savemgr"]
 [ext_resource type="Script" path="res://scripts/terrain_library.gd" id="8_terrain"]
 [ext_resource type="Script" path="res://scripts/graphics_settings.gd" id="9_graphics"]
+[ext_resource type="Material" path="res://materials/space_background.tres" id="10_space_bg"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
-sky_top_color = Color(0.4, 0.6, 0.8, 1)
-sky_horizon_color = Color(0.7, 0.8, 0.9, 1)
-ground_bottom_color = Color(0.2, 0.2, 0.2, 1)
-ground_horizon_color = Color(0.5, 0.5, 0.5, 1)
+sky_top_color = Color(0.02, 0.02, 0.08, 1)
+sky_horizon_color = Color(0.05, 0.05, 0.15, 1)
+ground_bottom_color = Color(0.02, 0.02, 0.08, 1)
+ground_horizon_color = Color(0.03, 0.03, 0.1, 1)
 
 [sub_resource type="Sky" id="Sky_1"]
 sky_material = SubResource("ProceduralSkyMaterial_1")
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_SpaceBG"]
+size = Vector2(200, 200)
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 2
@@ -96,6 +100,11 @@ mesh = null
 
 [node name="TableCollision" type="CollisionShape3D" parent="Table"]
 
+[node name="SpaceBackground" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+mesh = SubResource("PlaneMesh_SpaceBG")
+surface_material_override/0 = ExtResource("10_space_bg")
+
 [node name="ObjectManager" type="Node3D" parent="."]
 script = ExtResource("4_objmgr")
 
@@ -133,17 +142,17 @@ offset_bottom = 100.0
 grow_horizontal = 0
 text = "OpenTTS v0.2-alpha
 Controls:
-- Right Click + Drag: Rotate Camera
-- Middle Click + Drag: Pan Camera
+- WASD: Move Camera
+- Q/E: Rotate Camera
 - Scroll: Zoom
 - Left Click: Select/Drag
 - Alt + Click: Multi-Select
 - R (hold): Rotate Selected
+- Shift+R: Rotate Group
 - 1-9: Arrange at cursor
 - A: Arrow at cursor
-- Ctrl+C: Copy | Ctrl+V: Paste
-- Ctrl+D: Duplicate at cursor
-- L: Lock/Unlock selected"
+- Ctrl+C/V/D: Copy/Paste/Dup
+- L: Lock/Unlock"
 
 [node name="PerformanceLabel" type="Label" parent="UI/HUD"]
 unique_name_in_owner = true
@@ -181,25 +190,7 @@ layout_mode = 2
 
 [node name="SpawnLabel" type="Label" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
 layout_mode = 2
-text = "Spawn Objects:"
-
-[node name="SpawnMiniature" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-text = "Add Miniature"
-
-[node name="SpawnDice" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-text = "Add D6 Dice"
-
-[node name="SpawnTerrain" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-text = "Add Terrain"
+text = "Import / Load:"
 
 [node name="LoadModel" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
 unique_name_in_owner = true
@@ -230,37 +221,6 @@ unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Clear Table"
-
-[node name="Separator" type="HSeparator" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
-layout_mode = 2
-
-[node name="PerfTestLabel" type="Label" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
-layout_mode = 2
-text = "Performance Test:"
-
-[node name="Spawn200" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-text = "Spawn 200 Minis"
-
-[node name="Spawn500" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-text = "Spawn 500 Minis"
-
-[node name="Spawn1000" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-text = "Spawn 1000 Minis"
-
-[node name="SpawnComplex" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-text = "Spawn 100 Complex"
 
 [node name="TableSizePanel" type="VBoxContainer" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox"]
 layout_mode = 2
