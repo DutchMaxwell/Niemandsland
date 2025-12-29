@@ -17,9 +17,9 @@ shadow_size = 4
 shadow_color = Color(0, 0, 0, 0.5)
 
 [node name="OPRStatsTooltip" type="PanelContainer"]
-custom_minimum_size = Vector2(280, 0)
-offset_right = 280.0
-offset_bottom = 120.0
+custom_minimum_size = Vector2(250, 0)
+offset_right = 250.0
+offset_bottom = 0.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 script = ExtResource("1_tooltip")
 
