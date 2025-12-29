@@ -11,6 +11,10 @@ extends Node3D
 # Lighting Controller
 var lighting_controller: Node
 var lighting_panel: Window
+
+# Group rotation state
+var _is_group_rotating: bool = false
+const GROUP_ROTATION_SPEED: float = 90.0  # degrees per second
 @onready var dice_result_label: Label = $UI/HUD/DiceResult
 @onready var distance_label: Label = $UI/HUD/DistanceLabel
 @onready var clear_all_btn: Button = %ClearAll
@@ -64,6 +68,13 @@ var lighting_panel: Window
 @onready var terrain_browser_popup: Window = %TerrainBrowserPopup
 @onready var terrain_category_option: OptionButton = %CategoryOption
 @onready var terrain_list: ItemList = %TerrainList
+
+# OPR Army Integration
+@onready var import_opr_btn: Button = %ImportOPRArmy
+var opr_army_manager: OPRArmyManager
+var opr_import_dialog: OPRImportDialog
+var opr_stats_tooltip: OPRStatsTooltip
+var _hovered_model: Node3D = null
 
 # TTS Import state
 var _tts_json_path: String = ""
@@ -174,6 +185,30 @@ func _ready() -> void:
 	lighting_panel.initialize(lighting_controller)
 	lighting_panel.hide()  # Start hidden
 
+	# Apply Kenney UI theme to HUD
+	_apply_kenney_theme()
+	ThemeManager.theme_changed.connect(_on_theme_changed)
+
+	# Initialize OPR Army Manager
+	opr_army_manager = OPRArmyManager.new()
+	opr_army_manager.object_manager = object_manager
+	add_child(opr_army_manager)
+
+	# Initialize OPR Import Dialog
+	opr_import_dialog = OPRImportDialog.new()
+	get_tree().root.add_child(opr_import_dialog)
+	opr_import_dialog.army_imported.connect(_on_opr_army_imported)
+	opr_import_dialog.hide()
+
+	# Initialize OPR Stats Tooltip
+	var tooltip_scene = load("res://scenes/opr_stats_tooltip.tscn")
+	opr_stats_tooltip = tooltip_scene.instantiate()
+	opr_stats_tooltip.army_manager = opr_army_manager
+	$UI.add_child(opr_stats_tooltip)
+
+	# Connect OPR import button
+	import_opr_btn.pressed.connect(_on_import_opr_army)
+
 	print("OpenTTS ready!")
 
 
@@ -208,9 +243,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_L and not event.ctrl_pressed:
 			object_manager.toggle_lock_selected()
 			get_viewport().set_input_as_handled()
-		# Rotate selected group around first object (Shift+R)
+		# Rotate selected group around first object (Shift+R) - continuous rotation
 		elif event.keycode == KEY_R and event.shift_pressed:
-			object_manager.rotate_selected_group(15.0)  # 15 degrees per press
+			_is_group_rotating = event.pressed
 			get_viewport().set_input_as_handled()
 		# Lighting Presets (F1-F5)
 		elif event.keycode == KEY_F1:
@@ -241,7 +276,12 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	# Handle continuous group rotation (Shift+R held)
+	if _is_group_rotating:
+		var rotation_amount = GROUP_ROTATION_SPEED * delta
+		object_manager.rotate_selected_group(rotation_amount)
+
 	# Update performance label
 	var fps = Engine.get_frames_per_second()
 	var object_count = object_manager.get_child_count()
@@ -257,6 +297,9 @@ func _process(_delta: float) -> void:
 
 	performance_label.add_theme_color_override("font_color", fps_color)
 	performance_label.text = "FPS: %d | Objects: %d" % [fps, object_count]
+
+	# Handle OPR unit hover detection
+	_update_opr_hover()
 
 
 func _on_spawn_miniature() -> void:
@@ -960,3 +1003,123 @@ func _spawn_selected_terrain(index: int) -> void:
 
 	# Keep browser open for placing multiple pieces
 	print("Spawning terrain: %s at cursor" % piece.name)
+
+
+## ============================================================================
+## Kenney UI Theme System
+## ============================================================================
+
+## Apply Kenney UI theme to the HUD and dialogs
+func _apply_kenney_theme() -> void:
+	var current_theme = ThemeManager.get_current_theme()
+
+	# Apply to HUD
+	var hud = $UI/HUD
+	hud.theme = current_theme
+
+	# Apply to all file dialogs
+	model_file_dialog.theme = current_theme
+	tts_json_dialog.theme = current_theme
+	tts_models_dialog.theme = current_theme
+	tts_images_dialog.theme = current_theme
+	save_game_dialog.theme = current_theme
+	load_game_dialog.theme = current_theme
+	terrain_browser_popup.theme = current_theme
+
+	print("Applied Kenney UI theme: %s" % ThemeManager.get_current_theme_name())
+
+
+## Handle theme changes from ThemeManager
+func _on_theme_changed(new_theme: Theme) -> void:
+	# Re-apply theme to all UI elements
+	var hud = $UI/HUD
+	hud.theme = new_theme
+
+	# Update all dialogs
+	model_file_dialog.theme = new_theme
+	tts_json_dialog.theme = new_theme
+	tts_models_dialog.theme = new_theme
+	tts_images_dialog.theme = new_theme
+	save_game_dialog.theme = new_theme
+	load_game_dialog.theme = new_theme
+	terrain_browser_popup.theme = new_theme
+
+	print("Main scene theme updated to: %s" % ThemeManager.get_current_theme_name())
+
+
+## ============================================================================
+## OPR Army Forge Integration
+## ============================================================================
+
+## Open OPR import dialog
+func _on_import_opr_army() -> void:
+	opr_import_dialog.popup_centered()
+
+
+## Handle army imported from dialog
+func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
+	print("Importing army '%s' for Player %d" % [army.name, player_id])
+
+	# Store army
+	opr_army_manager.armies[player_id] = army
+
+	# Calculate spawn position based on player
+	var table_size = table.table_size * 0.3048  # FEET_TO_METERS
+	var spawn_pos: Vector3
+
+	match player_id:
+		1:  # Player 1: Bottom of table (near camera)
+			spawn_pos = Vector3(-table_size.x / 2 + 0.1, 0, table_size.y / 2 - 0.15)
+		2:  # Player 2: Top of table (far side)
+			spawn_pos = Vector3(-table_size.x / 2 + 0.1, 0, -table_size.y / 2 + 0.15)
+		3:  # Player 3: Left side
+			spawn_pos = Vector3(-table_size.x / 2 + 0.1, 0, 0)
+		4:  # Player 4: Right side
+			spawn_pos = Vector3(table_size.x / 2 - 0.3, 0, 0)
+		_:
+			spawn_pos = Vector3.ZERO
+
+	# Spawn the army
+	var spawned = opr_army_manager.spawn_army(army, spawn_pos)
+	print("Spawned %d models for army '%s'" % [spawned.size(), army.name])
+
+
+## Update OPR unit hover detection
+func _update_opr_hover() -> void:
+	if not opr_stats_tooltip:
+		return
+
+	var camera = camera_pivot.get_node("Camera3D") as Camera3D
+	if not camera:
+		return
+
+	var mouse_pos = get_viewport().get_mouse_position()
+	var from = camera.project_ray_origin(mouse_pos)
+	var to = from + camera.project_ray_normal(mouse_pos) * 100.0
+
+	var space_state = get_world_3d().direct_space_state
+	var query = PhysicsRayQueryParameters3D.create(from, to)
+	query.collision_mask = 1  # Default layer
+	var result = space_state.intersect_ray(query)
+
+	if result and result.collider:
+		var collider = result.collider
+		# Check if this is an OPR unit
+		if collider.is_in_group("opr_unit"):
+			if _hovered_model != collider:
+				_hovered_model = collider
+				var unit = opr_army_manager.get_unit_for_model(collider)
+				if unit:
+					opr_stats_tooltip.show_unit(unit)
+		else:
+			_clear_opr_hover()
+	else:
+		_clear_opr_hover()
+
+
+## Clear OPR hover state
+func _clear_opr_hover() -> void:
+	if _hovered_model != null:
+		_hovered_model = null
+		if opr_stats_tooltip:
+			opr_stats_tooltip.hide_tooltip()

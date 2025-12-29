@@ -296,8 +296,10 @@ func _input(event: InputEvent) -> void:
 			_update_measurement(event.position)
 
 	# Rotation: hold R key for continuous rotation - requires selection
+	# Only activate if Shift is NOT pressed (Shift+R is for group rotation in main.gd)
 	elif event.is_action_pressed("rotate_object") and _selected_objects.size() > 0:
-		_is_rotating = true
+		if not Input.is_key_pressed(KEY_SHIFT):
+			_is_rotating = true
 	elif event.is_action_released("rotate_object"):
 		_is_rotating = false
 
@@ -1773,17 +1775,6 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 		push_error("No geometry found in OBJ: %s" % file_path)
 		return null
 
-	# Recalculate normals if they were missing or all UP
-	var needs_normal_recalc = true
-	for normal in mesh_normals:
-		if normal != Vector3.UP:
-			needs_normal_recalc = false
-			break
-
-	if needs_normal_recalc and mesh_vertices.size() >= 3:
-		mesh_normals = _calculate_smooth_normals(mesh_vertices)
-		print("  Recalculated normals for OBJ model")
-
 	# Create mesh
 	var arrays = []
 	arrays.resize(Mesh.ARRAY_MAX)
@@ -1802,8 +1793,8 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 	# Create material with optional texture
 	var material = StandardMaterial3D.new()
 	material.albedo_color = Color(0.7, 0.7, 0.7)
-	material.roughness = 0.8  # Slightly less matte for better lighting
-	material.cull_mode = BaseMaterial3D.CULL_BACK  # Normal back-face culling for proper shading
+	material.roughness = 0.9  # Matte finish like painted miniatures
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED  # Show both sides of polygons (TTS models often have flipped normals)
 
 	# Load texture if provided
 	if not texture_path.is_empty():
@@ -2886,6 +2877,7 @@ func _set_object_dimmed(obj: Node3D, dimmed: bool) -> void:
 ## ============================================================================
 
 ## Rotate selected objects as a group around the first object (Shift+R)
+## Called continuously while Shift+R is held, so no print statements
 func rotate_selected_group(angle_degrees: float) -> void:
 	if _selected_objects.size() < 2:
 		# Single object or no selection - just rotate the object itself
@@ -2893,7 +2885,6 @@ func rotate_selected_group(angle_degrees: float) -> void:
 			var obj = _selected_objects[0]
 			if is_instance_valid(obj):
 				obj.rotate_y(deg_to_rad(angle_degrees))
-				print("Rotated single object by %.0f degrees" % angle_degrees)
 		return
 
 	# Find the first valid object as pivot point
@@ -2936,5 +2927,3 @@ func rotate_selected_group(angle_degrees: float) -> void:
 			obj.rotate_y(angle_rad)
 
 		rotated_count += 1
-
-	print("Rotated %d objects by %.0f degrees around pivot" % [rotated_count, angle_degrees])
