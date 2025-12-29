@@ -119,9 +119,9 @@ func _pan_camera(delta: Vector2) -> void:
 func _keyboard_pan(direction: Vector2, delta: float) -> void:
 	# Calculate pan direction based on camera view direction (not world coordinates)
 	# Use the pivot's rotation (yaw) to determine forward/right in world space
-	var basis = global_transform.basis
-	var right = basis.x  # Local X is right
-	var forward = -basis.z  # Local -Z is forward
+	var camera_basis = global_transform.basis
+	var right = camera_basis.x  # Local X is right
+	var forward = -camera_basis.z  # Local -Z is forward
 
 	# Flatten to horizontal plane
 	right.y = 0
