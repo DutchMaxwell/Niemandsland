@@ -1,0 +1,64 @@
+[gd_scene load_steps=3 format=3 uid="uid://opr_stats_tooltip"]
+
+[ext_resource type="Script" path="res://scripts/opr_stats_tooltip.gd" id="1_tooltip"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.08, 0.09, 0.11, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.5, 0.7, 0.8)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+shadow_size = 4
+shadow_color = Color(0, 0, 0, 0.5)
+
+[node name="OPRStatsTooltip" type="PanelContainer"]
+custom_minimum_size = Vector2(280, 0)
+offset_right = 280.0
+offset_bottom = 120.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+script = ExtResource("1_tooltip")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="VBox" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="UnitNameLabel" type="RichTextLabel" parent="MarginContainer/VBox"]
+layout_mode = 2
+bbcode_enabled = true
+text = "[b]Unit Name[/b]"
+fit_content = true
+scroll_active = false
+
+[node name="StatsLabel" type="RichTextLabel" parent="MarginContainer/VBox"]
+layout_mode = 2
+bbcode_enabled = true
+text = "Quality: 4+ | Defense: 4+"
+fit_content = true
+scroll_active = false
+
+[node name="WeaponsLabel" type="RichTextLabel" parent="MarginContainer/VBox"]
+layout_mode = 2
+bbcode_enabled = true
+text = "[b]Weapons:[/b]
+  Assault Rifle 24\" A1"
+fit_content = true
+scroll_active = false
+
+[node name="RulesLabel" type="RichTextLabel" parent="MarginContainer/VBox"]
+layout_mode = 2
+bbcode_enabled = true
+text = "[b]Rules:[/b] [color=#aaaaaa]Hero, Tough(3)[/color]"
+fit_content = true
+scroll_active = false
