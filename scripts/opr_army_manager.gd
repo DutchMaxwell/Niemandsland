@@ -61,14 +61,35 @@ func spawn_army(army: OPRApiClient.OPRArmy, start_position: Vector3 = Vector3.ZE
 
 	var player_color = PLAYER_COLORS.get(army.player_id, Color.GRAY)
 
+	# Track unit counts for naming duplicates (e.g., "Saurian Warriors (1)", "Saurian Warriors (2)")
+	var unit_name_counts: Dictionary = {}  # unit_name -> count
+	var unit_name_indices: Dictionary = {}  # unit_name -> current_index
+
+	# First pass: count units by name
 	for unit in army.units:
-		var unit_models = _spawn_unit(unit, current_pos, player_color)
+		var base_name = unit.name
+		unit_name_counts[base_name] = unit_name_counts.get(base_name, 0) + 1
+
+	# Second pass: spawn with indices
+	for unit in army.units:
+		var base_name = unit.name
+		var unit_index = unit_name_indices.get(base_name, 0) + 1
+		unit_name_indices[base_name] = unit_index
+
+		# Only add index suffix if there are multiple units with same name
+		var display_suffix = ""
+		if unit_name_counts[base_name] > 1:
+			display_suffix = " (%d)" % unit_index
+
+		var unit_models = _spawn_unit(unit, current_pos, player_color, display_suffix)
 		all_models.append_array(unit_models)
 
 		# Store mappings
 		unit_to_models[unit] = unit_models
 		for model in unit_models:
 			model_to_unit[model] = unit
+			# Store the display suffix for tooltip
+			model.set_meta("unit_suffix", display_suffix)
 
 		# Calculate next position
 		var unit_width = unit.size * model_spacing
@@ -89,7 +110,7 @@ func spawn_army(army: OPRApiClient.OPRArmy, start_position: Vector3 = Vector3.ZE
 
 
 ## Spawn a single unit with all its models
-func _spawn_unit(unit: OPRApiClient.OPRUnit, position: Vector3, player_color: Color) -> Array[Node3D]:
+func _spawn_unit(unit: OPRApiClient.OPRUnit, position: Vector3, player_color: Color, name_suffix: String = "") -> Array[Node3D]:
 	var models: Array[Node3D] = []
 	var spacing = 0.04  # 40mm spacing
 
@@ -100,7 +121,7 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, position: Vector3, player_color: Co
 			position.z
 		)
 
-		var model = _create_unit_model(unit, player_color)
+		var model = _create_unit_model(unit, player_color, name_suffix)
 		if model:
 			object_manager.add_child(model)
 			model.global_position = model_pos
@@ -119,9 +140,10 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, position: Vector3, player_color: Co
 
 
 ## Create a visual model for a unit (placeholder miniature with base)
-func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color) -> StaticBody3D:
+func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_suffix: String = "") -> StaticBody3D:
 	var wrapper = StaticBody3D.new()
-	wrapper.name = "OPR_%s" % unit.name.replace(" ", "_")
+	var display_name = unit.name + name_suffix
+	wrapper.name = "OPR_%s" % display_name.replace(" ", "_")
 
 	# Create 32mm base
 	var base_mesh = CylinderMesh.new()
