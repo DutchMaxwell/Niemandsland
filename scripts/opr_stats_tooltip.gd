@@ -14,14 +14,29 @@ var army_manager: OPRArmyManager
 ## Currently displayed unit
 var _current_unit: OPRApiClient.OPRUnit = null
 
+## Pending unit (waiting for delay)
+var _pending_unit: OPRApiClient.OPRUnit = null
+
+## Delay timer for showing tooltip
+var _show_timer: Timer
+
 ## Offset from cursor
 const TOOLTIP_OFFSET = Vector2(15, 15)
+
+## Delay before showing tooltip (seconds)
+const SHOW_DELAY: float = 0.4
 
 
 func _ready() -> void:
 	# Start hidden
 	visible = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Create delay timer
+	_show_timer = Timer.new()
+	_show_timer.one_shot = true
+	_show_timer.timeout.connect(_on_show_timer_timeout)
+	add_child(_show_timer)
 
 	# Make sure all children ignore mouse
 	_set_mouse_ignore_recursive(self)
@@ -66,7 +81,7 @@ func _update_position() -> void:
 	global_position = new_pos
 
 
-## Show tooltip for a specific unit
+## Show tooltip for a specific unit (with delay)
 func show_unit(unit: OPRApiClient.OPRUnit) -> void:
 	if not unit:
 		hide_tooltip()
@@ -75,14 +90,29 @@ func show_unit(unit: OPRApiClient.OPRUnit) -> void:
 	if _current_unit == unit and visible:
 		return  # Already showing this unit
 
-	_current_unit = unit
-	_update_content()
-	visible = true
-	_update_position()
+	# If we're already waiting for this unit, don't restart timer
+	if _pending_unit == unit:
+		return
+
+	# Store pending unit and start delay timer
+	_pending_unit = unit
+	_show_timer.start(SHOW_DELAY)
+
+
+## Called when the show delay timer expires
+func _on_show_timer_timeout() -> void:
+	if _pending_unit:
+		_current_unit = _pending_unit
+		_pending_unit = null
+		_update_content()
+		visible = true
+		_update_position()
 
 
 ## Hide the tooltip
 func hide_tooltip() -> void:
+	_show_timer.stop()
+	_pending_unit = null
 	visible = false
 	_current_unit = null
 
