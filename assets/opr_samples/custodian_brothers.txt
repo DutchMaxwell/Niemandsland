@@ -1,0 +1,19 @@
+++ Custodian Brothers - AGF-V - Custodian Brothers (v3.5.1) [GF 3000pts] [8 Units] ++
+
+Master Destroyer [1] Q3+ D2+ | 365pts | Fearless, Hero, Tough(9), Guardian, Ambush, Unstoppable in Melee, Teleport
+Stomp (A3, AP(1)), Custodian Spear (A6, AP(3)), Destructor-Mount (24", A2, Tear)
+
+2x Custodian Brothers [3] Q3+ D2+ | 410pts | 3x Fearless, Tough(3), 3x Guardian, Teleport Aura
+3x Custodian Sword (A3, AP(1), Rending), 3x Destructor-Mount (24", A2, Tear)
+
+Great Sister [1] Q4+ D4+ | 70pts | Hero, Tough(3), Guardian, Shred when Shooting Aura, Relentless
+Prosecution Rifle (24", A2), CCW (A4)
+| Joined to:
+Prosecution Sisters [10] Q4+ D4+ | 300pts | 10x Relentless, 10x Guardian
+10x Prosecution Rifle (24", A2), 10x CCW (A1)
+
+3x Destroyer [1] Q3+ D2+ | 230pts | Ambush, Fearless, Tough(6), Guardian, Teleport
+Rapid Shot-Mount (12", A2, AP(1)), Custodian Spear (A6, AP(3))
+
+Custodian Heavy Walker [1] Q3+ D2+ | 755pts | Fear(3), Fearless, Tough(15), Guardian
+Bolt Launcher (24", A6, AP(1)), Stomp (A6, AP(2)), 2x Accelerator Gun (36", A6, Tear)
