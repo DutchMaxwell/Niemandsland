@@ -110,6 +110,7 @@ class OPRWeapon:
 
 
 ## Safely convert a value to int (handles string, int, float, null)
+## Also handles oval base format like "60x35" - returns the larger dimension
 static func _safe_int(value, default: int = 0) -> int:
 	if value == null:
 		return default
@@ -118,6 +119,14 @@ static func _safe_int(value, default: int = 0) -> int:
 	if value is float:
 		return int(value)
 	if value is String:
+		# Handle oval base format like "60x35" or "120x92"
+		if "x" in value:
+			var parts = value.split("x")
+			if parts.size() >= 2:
+				var width = parts[0].to_int() if parts[0].is_valid_int() else 0
+				var depth = parts[1].to_int() if parts[1].is_valid_int() else 0
+				# Return the larger dimension for sizing
+				return max(width, depth)
 		if value.is_valid_int():
 			return value.to_int()
 		elif value.is_valid_float():
