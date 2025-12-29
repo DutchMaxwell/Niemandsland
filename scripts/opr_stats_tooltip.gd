@@ -105,6 +105,8 @@ func _on_show_timer_timeout() -> void:
 		_current_unit = _pending_unit
 		_pending_unit = null
 		_update_content()
+		# Force resize to fit content
+		reset_size()
 		visible = true
 		_update_position()
 
