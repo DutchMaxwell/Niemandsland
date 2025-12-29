@@ -237,8 +237,8 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 			unit.special_rules.append(rule)
 		elif rule is Dictionary:
 			var rule_name = rule.get("name", "")
-			var rule_rating = rule.get("rating", "")
-			if rule_rating != "" and rule_rating != null:
+			var rule_rating = rule.get("rating", null)
+			if rule_rating != null and str(rule_rating) != "":
 				unit.special_rules.append("%s(%s)" % [rule_name, str(rule_rating)])
 			elif not rule_name.is_empty():
 				unit.special_rules.append(rule_name)
@@ -275,8 +275,8 @@ func _parse_tts_weapon(data) -> OPRWeapon:
 			weapon.special_rules.append(rule)
 		elif rule is Dictionary:
 			var rule_name = rule.get("name", "")
-			var rule_rating = rule.get("rating", "")
-			if rule_rating != "" and rule_rating != null:
+			var rule_rating = rule.get("rating", null)
+			if rule_rating != null and str(rule_rating) != "":
 				weapon.special_rules.append("%s(%s)" % [rule_name, str(rule_rating)])
 			elif not rule_name.is_empty():
 				weapon.special_rules.append(rule_name)
