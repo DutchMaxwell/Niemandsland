@@ -40,7 +40,7 @@ func _ready() -> void:
 
 ## Import army from file for a specific player
 func import_army_for_player(file_path: String, player_id: int) -> void:
-	var army = api_client.import_from_file(file_path)
+	var army = await api_client.import_from_file(file_path)
 	if army:
 		army.player_id = player_id
 		armies[player_id] = army
