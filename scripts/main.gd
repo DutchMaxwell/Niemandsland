@@ -192,6 +192,7 @@ func _ready() -> void:
 	# Initialize OPR Army Manager
 	opr_army_manager = OPRArmyManager.new()
 	opr_army_manager.object_manager = object_manager
+	opr_army_manager.table = table
 	add_child(opr_army_manager)
 
 	# Initialize OPR Import Dialog
@@ -1070,25 +1071,9 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
 	# Store army
 	opr_army_manager.armies[player_id] = army
 
-	# Calculate spawn position based on player
-	var table_size = table.table_size * 0.3048  # FEET_TO_METERS
-	var spawn_pos: Vector3
-
-	match player_id:
-		1:  # Player 1: Bottom of table (near camera)
-			spawn_pos = Vector3(-table_size.x / 2 + 0.1, 0, table_size.y / 2 - 0.15)
-		2:  # Player 2: Top of table (far side)
-			spawn_pos = Vector3(-table_size.x / 2 + 0.1, 0, -table_size.y / 2 + 0.15)
-		3:  # Player 3: Left side
-			spawn_pos = Vector3(-table_size.x / 2 + 0.1, 0, 0)
-		4:  # Player 4: Right side
-			spawn_pos = Vector3(table_size.x / 2 - 0.3, 0, 0)
-		_:
-			spawn_pos = Vector3.ZERO
-
-	# Spawn the army
-	var spawned = opr_army_manager.spawn_army(army, spawn_pos)
-	print("Spawned %d models for army '%s'" % [spawned.size(), army.name])
+	# Spawn the army on tray (position determined by player ID)
+	var spawned = opr_army_manager.spawn_army(army)
+	print("Spawned %d models for army '%s' on Player %d's tray" % [spawned.size(), army.name, player_id])
 
 
 ## Update OPR unit hover detection

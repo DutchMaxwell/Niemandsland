@@ -15,8 +15,24 @@ const PLAYER_COLORS = {
 	4: Color(0.7, 0.5, 0.1),   # Orange/Gold
 }
 
+## Tray positions relative to table (player_id -> side)
+## Player 1: left, Player 2: right, Player 3: front, Player 4: back
+const TRAY_SIDES = {
+	1: "left",
+	2: "right",
+	3: "front",
+	4: "back",
+}
+
+const FEET_TO_METERS: float = 0.3048
+const TRAY_WIDTH: float = 0.4  # 40cm wide trays
+const TRAY_MARGIN: float = 0.05  # 5cm gap from table edge
+
 ## Reference to the object manager for spawning
 var object_manager: Node3D
+
+## Reference to the table for positioning
+var table: Node3D
 
 ## Loaded armies by player
 var armies: Dictionary = {}  # player_id -> OPRArmy
@@ -26,6 +42,9 @@ var model_to_unit: Dictionary = {}  # Node3D -> OPRUnit
 
 ## Mapping from unit to spawned models
 var unit_to_models: Dictionary = {}  # OPRUnit -> Array[Node3D]
+
+## Army trays by player
+var army_trays: Dictionary = {}  # player_id -> Node3D
 
 ## OPR API Client
 var api_client: OPRApiClient
@@ -46,24 +65,32 @@ func import_army_for_player(file_path: String, player_id: int) -> void:
 		armies[player_id] = army
 
 
-## Spawn all units of an army on the table
-func spawn_army(army: OPRApiClient.OPRArmy, start_position: Vector3 = Vector3.ZERO) -> Array[Node3D]:
+## Spawn all units of an army on an army tray beside the table
+func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.ZERO) -> Array[Node3D]:
 	if not object_manager:
 		push_error("OPRArmyManager: No object_manager set")
 		return []
 
 	var all_models: Array[Node3D] = []
-	var current_pos = start_position
-	var row_start_x = start_position.x
-	var max_row_depth = 0.0
-	var unit_spacing = 0.15  # Space between units
-	var model_spacing = 0.04  # Space between models in a unit
-
 	var player_color = PLAYER_COLORS.get(army.player_id, Color.GRAY)
 
-	# Track unit counts for naming duplicates (e.g., "Saurian Warriors (1)", "Saurian Warriors (2)")
-	var unit_name_counts: Dictionary = {}  # unit_name -> count
-	var unit_name_indices: Dictionary = {}  # unit_name -> current_index
+	# Create army tray and get spawn position
+	var tray = _create_army_tray(army.player_id, army.name, player_color)
+	var tray_info = _get_tray_position_and_bounds(army.player_id)
+	var tray_pos = tray_info.position
+	var tray_bounds = tray_info.bounds  # Vector2 (width, depth)
+
+	var unit_spacing = 0.08  # Space between units
+	var model_spacing = 0.04  # Space between models in a unit
+
+	# Start position on tray
+	var current_pos = Vector3(tray_pos.x - tray_bounds.x / 2 + 0.03, 0, tray_pos.z - tray_bounds.y / 2 + 0.03)
+	var row_start_x = current_pos.x
+	var row_max_z = tray_pos.z + tray_bounds.y / 2 - 0.03
+
+	# Track unit counts for naming duplicates
+	var unit_name_counts: Dictionary = {}
+	var unit_name_indices: Dictionary = {}
 
 	# First pass: count units by name
 	for unit in army.units:
@@ -88,25 +115,142 @@ func spawn_army(army: OPRApiClient.OPRArmy, start_position: Vector3 = Vector3.ZE
 		unit_to_models[unit] = unit_models
 		for model in unit_models:
 			model_to_unit[model] = unit
-			# Store the display suffix for tooltip
 			model.set_meta("unit_suffix", display_suffix)
 
-		# Calculate next position
+		# Calculate next position - move along Z axis (depth of tray)
 		var unit_width = unit.size * model_spacing
-		current_pos.x += unit_width + unit_spacing
+		current_pos.z += unit_width + unit_spacing
 
-		# Track row depth for next row
-		max_row_depth = max(max_row_depth, model_spacing)
+		# Start new row if too deep
+		if current_pos.z > row_max_z:
+			current_pos.z = tray_pos.z - tray_bounds.y / 2 + 0.03
+			current_pos.x += 0.1  # Next column
 
-		# Start new row if too wide (more than 1 meter)
-		if current_pos.x - row_start_x > 1.0:
-			current_pos.x = row_start_x
-			current_pos.z += max_row_depth + unit_spacing
-			max_row_depth = 0.0
-
-	print("OPRArmyManager: Spawned %d models for army '%s'" % [all_models.size(), army.name])
+	print("OPRArmyManager: Spawned %d models for army '%s' on tray" % [all_models.size(), army.name])
 	army_spawned.emit(army, all_models)
 	return all_models
+
+
+## Create an army tray beside the table for a player
+func _create_army_tray(player_id: int, army_name: String, player_color: Color) -> Node3D:
+	# Remove existing tray for this player
+	if army_trays.has(player_id) and is_instance_valid(army_trays[player_id]):
+		army_trays[player_id].queue_free()
+
+	var tray_info = _get_tray_position_and_bounds(player_id)
+	var tray_pos = tray_info.position
+	var tray_size = tray_info.bounds
+
+	# Create tray container
+	var tray = StaticBody3D.new()
+	tray.name = "ArmyTray_Player%d" % player_id
+
+	# Tray surface (slightly raised platform)
+	var tray_mesh = BoxMesh.new()
+	tray_mesh.size = Vector3(tray_size.x, 0.01, tray_size.y)
+
+	var tray_instance = MeshInstance3D.new()
+	tray_instance.mesh = tray_mesh
+	tray_instance.position.y = -0.005
+
+	var tray_material = StandardMaterial3D.new()
+	tray_material.albedo_color = player_color.darkened(0.6)
+	tray_material.roughness = 0.8
+	tray_instance.material_override = tray_material
+
+	tray.add_child(tray_instance)
+
+	# Tray border
+	var border_color = player_color.darkened(0.3)
+	_add_tray_border(tray, tray_size, border_color)
+
+	# Army name label (as 3D text or just metadata for now)
+	tray.set_meta("army_name", army_name)
+	tray.set_meta("player_id", player_id)
+
+	# Collision for tray surface
+	var collision = CollisionShape3D.new()
+	var shape = BoxShape3D.new()
+	shape.size = Vector3(tray_size.x, 0.02, tray_size.y)
+	collision.shape = shape
+	collision.position.y = -0.01
+	tray.add_child(collision)
+
+	tray.global_position = tray_pos
+	object_manager.get_parent().add_child(tray)
+
+	army_trays[player_id] = tray
+	return tray
+
+
+## Add border around tray
+func _add_tray_border(tray: Node3D, tray_size: Vector2, border_color: Color) -> void:
+	var border_height = 0.02
+	var border_width = 0.01
+
+	var border_material = StandardMaterial3D.new()
+	border_material.albedo_color = border_color
+	border_material.roughness = 0.7
+
+	# Four sides
+	var positions = [
+		Vector3(0, border_height / 2, -tray_size.y / 2),  # Front
+		Vector3(0, border_height / 2, tray_size.y / 2),   # Back
+		Vector3(-tray_size.x / 2, border_height / 2, 0),  # Left
+		Vector3(tray_size.x / 2, border_height / 2, 0),   # Right
+	]
+
+	var sizes = [
+		Vector3(tray_size.x, border_height, border_width),
+		Vector3(tray_size.x, border_height, border_width),
+		Vector3(border_width, border_height, tray_size.y),
+		Vector3(border_width, border_height, tray_size.y),
+	]
+
+	for i in range(4):
+		var border_mesh = BoxMesh.new()
+		border_mesh.size = sizes[i]
+
+		var border_instance = MeshInstance3D.new()
+		border_instance.mesh = border_mesh
+		border_instance.material_override = border_material
+		border_instance.position = positions[i]
+		tray.add_child(border_instance)
+
+
+## Get tray position and bounds based on player ID and table size
+func _get_tray_position_and_bounds(player_id: int) -> Dictionary:
+	# Get table size (default 4x4 feet)
+	var table_size_feet = Vector2(4, 4)
+	if table and table.has_method("get") and table.get("table_size"):
+		table_size_feet = table.table_size
+
+	var table_size_m = table_size_feet * FEET_TO_METERS
+	var tray_depth = table_size_m.y  # Tray as long as table
+	var tray_width = TRAY_WIDTH
+
+	var pos = Vector3.ZERO
+	var bounds = Vector2(tray_width, tray_depth)
+
+	var side = TRAY_SIDES.get(player_id, "left")
+
+	match side:
+		"left":
+			pos.x = -table_size_m.x / 2 - TRAY_MARGIN - tray_width / 2
+			pos.z = 0
+		"right":
+			pos.x = table_size_m.x / 2 + TRAY_MARGIN + tray_width / 2
+			pos.z = 0
+		"front":
+			pos.x = 0
+			pos.z = -table_size_m.y / 2 - TRAY_MARGIN - tray_width / 2
+			bounds = Vector2(table_size_m.x, tray_width)  # Swap for horizontal tray
+		"back":
+			pos.x = 0
+			pos.z = table_size_m.y / 2 + TRAY_MARGIN + tray_width / 2
+			bounds = Vector2(table_size_m.x, tray_width)
+
+	return {"position": pos, "bounds": bounds}
 
 
 ## Spawn a single unit with all its models
@@ -238,9 +382,15 @@ func clear_all() -> void:
 			if is_instance_valid(model):
 				model.queue_free()
 
+	# Remove all army trays
+	for player_id in army_trays:
+		if is_instance_valid(army_trays[player_id]):
+			army_trays[player_id].queue_free()
+
 	armies.clear()
 	model_to_unit.clear()
 	unit_to_models.clear()
+	army_trays.clear()
 
 
 ## Clear army for a specific player
@@ -257,6 +407,11 @@ func clear_army(player_id: int) -> void:
 					model.queue_free()
 				model_to_unit.erase(model)
 			unit_to_models.erase(unit)
+
+	# Remove army tray for this player
+	if army_trays.has(player_id) and is_instance_valid(army_trays[player_id]):
+		army_trays[player_id].queue_free()
+		army_trays.erase(player_id)
 
 	armies.erase(player_id)
 
