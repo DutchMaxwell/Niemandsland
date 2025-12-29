@@ -213,7 +213,14 @@ func _ready() -> void:
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo:
+	if event is InputEventKey and not event.echo:
+		# Handle key release for continuous actions
+		if not event.pressed:
+			# Stop group rotation when R or Shift is released
+			if event.keycode == KEY_R or event.keycode == KEY_SHIFT:
+				_is_group_rotating = false
+			return
+
 		# Get cursor position on table for all operations
 		var cursor_pos = object_manager.get_cursor_table_position()
 
@@ -222,8 +229,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			var rows = event.keycode - KEY_0
 			object_manager.arrange_selected_in_rows(rows, cursor_pos)
 			get_viewport().set_input_as_handled()
-		# Arrow formation (A key) at cursor
-		elif event.keycode == KEY_A and not event.ctrl_pressed:
+		# Arrow formation (Shift+A) at cursor
+		elif event.keycode == KEY_A and event.shift_pressed and not event.ctrl_pressed:
 			object_manager.arrange_selected_arrow(cursor_pos)
 			get_viewport().set_input_as_handled()
 		# Copy to clipboard (Ctrl+C)
@@ -245,7 +252,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		# Rotate selected group around first object (Shift+R) - continuous rotation
 		elif event.keycode == KEY_R and event.shift_pressed:
-			_is_group_rotating = event.pressed
+			_is_group_rotating = true
 			get_viewport().set_input_as_handled()
 		# Lighting Presets (F1-F5)
 		elif event.keycode == KEY_F1:
