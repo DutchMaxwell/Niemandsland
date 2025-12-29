@@ -377,7 +377,6 @@ func _parse_text_export(text: String, source_name: String = "") -> OPRArmy:
 
 	var lines = text.split("\n")
 	var current_unit: OPRUnit = null
-	var unit_count_from_header = 0
 
 	for line in lines:
 		line = line.strip_edges()
@@ -388,12 +387,6 @@ func _parse_text_export(text: String, source_name: String = "") -> OPRArmy:
 		if line.begins_with("++") and line.ends_with("++"):
 			var header = line.trim_prefix("++").trim_suffix("++").strip_edges()
 			_parse_header(header, army)
-			# Extract unit count from header
-			var unit_match = RegEx.new()
-			unit_match.compile("\\[(\\d+)\\s*Units?\\]")
-			var result = unit_match.search(header)
-			if result:
-				unit_count_from_header = result.get_string(1).to_int()
 			continue
 
 		# Parse joined unit indicator
@@ -503,6 +496,10 @@ func _parse_header(header: String, army: OPRArmy) -> void:
 func _parse_special_rules_text(rules_str: String) -> Array[String]:
 	var rules: Array[String] = []
 
+	# Regex to remove count prefix like "3x"
+	var count_regex = RegEx.new()
+	count_regex.compile("^\\d+x\\s+")
+
 	# Split by comma, but be careful with rules like "Tough(3)"
 	var current_rule = ""
 	var paren_depth = 0
@@ -516,9 +513,6 @@ func _parse_special_rules_text(rules_str: String) -> Array[String]:
 			current_rule += c
 		elif c == ',' and paren_depth == 0:
 			var rule = current_rule.strip_edges()
-			# Remove count prefix like "3x"
-			var count_regex = RegEx.new()
-			count_regex.compile("^\\d+x\\s+")
 			rule = count_regex.sub(rule, "")
 			if not rule.is_empty():
 				rules.append(rule)
@@ -527,12 +521,10 @@ func _parse_special_rules_text(rules_str: String) -> Array[String]:
 			current_rule += c
 
 	# Don't forget the last rule
-	var rule = current_rule.strip_edges()
-	var count_regex = RegEx.new()
-	count_regex.compile("^\\d+x\\s+")
-	rule = count_regex.sub(rule, "")
-	if not rule.is_empty():
-		rules.append(rule)
+	var last_rule = current_rule.strip_edges()
+	last_rule = count_regex.sub(last_rule, "")
+	if not last_rule.is_empty():
+		rules.append(last_rule)
 
 	return rules
 
