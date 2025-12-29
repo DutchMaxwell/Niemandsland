@@ -129,6 +129,10 @@ class WGSUnit:
 		if model_count > 1:
 			lines.append("%d models" % model_count)
 
+		# Show base size in mm (convert from inches)
+		var base_mm = int(base_size * 25.4)
+		lines.append("%dmm base" % base_mm)
+
 		if not weapons.is_empty():
 			lines.append("")
 			lines.append("[u]Weapons:[/u]")

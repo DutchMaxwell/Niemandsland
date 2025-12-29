@@ -258,7 +258,7 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 
 	# Parse base sizes from Army Forge recommendations
 	var bases = data.get("bases", {})
-	if bases is Dictionary:
+	if bases is Dictionary and not bases.is_empty():
 		var round_size = bases.get("round", "32")
 		var square_size = bases.get("square", "30")
 		# Safely convert to int (value can be string "32" or int 32)
@@ -267,6 +267,9 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 		# Clamp to reasonable miniature base sizes (20mm - 120mm)
 		unit.base_size_round = clampi(unit.base_size_round, 20, 120)
 		unit.base_size_square = clampi(unit.base_size_square, 20, 120)
+		print("OPRApiClient: %s - base size %dmm (from API)" % [unit.name, unit.base_size_round])
+	else:
+		print("OPRApiClient: %s - base size %dmm (default, no 'bases' field)" % [unit.name, unit.base_size_round])
 
 	# Parse special rules (TTS API returns them fully resolved)
 	var rules = data.get("specialRules", [])

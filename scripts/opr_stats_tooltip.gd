@@ -157,6 +157,8 @@ func _update_content() -> void:
 	]
 	if _current_unit.cost > 0:
 		stats_text += " | [color=#ffcc44]%d pts[/color]" % _current_unit.cost
+	# Add base size
+	stats_text += " | [color=#cccccc]%dmm base[/color]" % _current_unit.base_size_round
 	stats_label.text = stats_text
 
 	# Weapons
