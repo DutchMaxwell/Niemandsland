@@ -239,26 +239,35 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 			var rule_name = rule.get("name", "")
 			var rule_rating = rule.get("rating", null)
 			if rule_rating != null and str(rule_rating) != "":
-				unit.special_rules.append("%s(%s)" % [rule_name, str(rule_rating)])
+				unit.special_rules.append("%s(%s)" % [rule_name, _format_rating(rule_rating)])
 			elif not rule_name.is_empty():
 				unit.special_rules.append(rule_name)
 
-	# Parse equipment/loadout (weapons)
+	# Parse equipment/loadout (weapons only - items with attacks > 0)
 	var loadout = data.get("loadout", data.get("equipment", []))
 	for item in loadout:
 		var weapon = _parse_tts_weapon(item)
-		if weapon:
+		if weapon and weapon.attacks > 0:
 			unit.weapons.append(weapon)
+		else:
+			# Items without attacks are special rules/equipment, not weapons
+			var item_name = ""
+			if item is String:
+				item_name = item
+			elif item is Dictionary:
+				item_name = item.get("name", item.get("label", ""))
+			if not item_name.is_empty() and item_name not in unit.special_rules:
+				unit.special_rules.append(item_name)
 
 	return unit
 
 
 ## Parse a weapon from TTS API response
+## Returns null for non-weapon items (string items or items without attacks)
 func _parse_tts_weapon(data) -> OPRWeapon:
+	# String items are equipment/abilities, not weapons
 	if data is String:
-		var str_weapon = OPRWeapon.new()
-		str_weapon.name = data
-		return str_weapon
+		return null
 
 	if not data is Dictionary:
 		return null
@@ -266,7 +275,7 @@ func _parse_tts_weapon(data) -> OPRWeapon:
 	var weapon = OPRWeapon.new()
 	weapon.name = data.get("name", data.get("label", "Unknown"))
 	weapon.range_value = data.get("range", 0)
-	weapon.attacks = data.get("attacks", 1)
+	weapon.attacks = data.get("attacks", 0)  # Default 0 to detect non-weapons
 	weapon.count = data.get("count", 1)
 
 	var rules = data.get("specialRules", [])
@@ -277,11 +286,21 @@ func _parse_tts_weapon(data) -> OPRWeapon:
 			var rule_name = rule.get("name", "")
 			var rule_rating = rule.get("rating", null)
 			if rule_rating != null and str(rule_rating) != "":
-				weapon.special_rules.append("%s(%s)" % [rule_name, str(rule_rating)])
+				weapon.special_rules.append("%s(%s)" % [rule_name, _format_rating(rule_rating)])
 			elif not rule_name.is_empty():
 				weapon.special_rules.append(rule_name)
 
 	return weapon
+
+
+## Format rating value - removes decimal places for whole numbers (1.0 -> 1)
+func _format_rating(value) -> String:
+	if value is float:
+		# Check if it's a whole number
+		if value == int(value):
+			return str(int(value))
+		return str(value)
+	return str(value)
 
 
 ## Parse Army Forge JSON export (the real format)
