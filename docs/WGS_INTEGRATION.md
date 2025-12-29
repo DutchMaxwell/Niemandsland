@@ -17,7 +17,17 @@ Die Integration ermöglicht es, Spielzustände zwischen dem webbasierten WGS (as
 
 ### Spielzustand-Datei (`{gameID}.txt`)
 
-Jede Zeile repräsentiert eine Einheit im Format:
+Die Datei beginnt mit zwei Zeilen für die Tischgröße, gefolgt von den Unit-Zeilen:
+
+```
+72                    ← Tischbreite in Zoll (hier: 6 Fuß)
+48                    ← Tischtiefe in Zoll (hier: 4 Fuß)
+{size},{x},{y},{color},{angle},{imageId},{name}
+{size},{x},{y},{color},{angle},{imageId},{name}
+...
+```
+
+Jede Unit-Zeile hat das Format:
 ```
 {size},{x},{y},{color},{angle},{imageId},{name}
 ```

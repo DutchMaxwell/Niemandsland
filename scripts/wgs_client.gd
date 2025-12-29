@@ -47,6 +47,8 @@ const CSS_COLORS = {
 ## WGS Game state container
 class WGSGame:
 	var game_id: String = ""
+	var table_width: float = 72.0  # Table width in inches (default 6ft)
+	var table_depth: float = 48.0  # Table depth in inches (default 4ft)
 	var units: Array[WGSUnit] = []
 	var log_entries: Array[String] = []
 	var notes: String = ""
@@ -59,6 +61,12 @@ class WGSGame:
 		for unit in units:
 			count += unit.model_count
 		return count
+
+	func get_table_size_feet() -> Vector2:
+		return Vector2(table_width / 12.0, table_depth / 12.0)
+
+	func get_table_size_meters() -> Vector2:
+		return Vector2(table_width * WGSClient.INCH_TO_METER, table_depth * WGSClient.INCH_TO_METER)
 
 
 ## WGS Unit data structure
@@ -160,19 +168,40 @@ func _parse_game_state(content: String, game_id: String) -> WGSGame:
 	var game = WGSGame.new()
 	game.game_id = game_id
 
-	# Split into lines and parse each unit
+	# Split into lines
 	var lines = content.split("\n")
 	var unit_index = 0
+	var line_number = 0
 
 	for line in lines:
 		line = line.strip_edges()
 		if line.is_empty():
+			line_number += 1
 			continue
 
+		# First line: table width in inches
+		if line_number == 0:
+			game.table_width = float(line)
+			line_number += 1
+			continue
+
+		# Second line: table depth in inches
+		if line_number == 1:
+			game.table_depth = float(line)
+			line_number += 1
+			print("WGSClient: Table size %dx%d inches (%.1fx%.1f ft)" % [
+				int(game.table_width), int(game.table_depth),
+				game.table_width / 12.0, game.table_depth / 12.0
+			])
+			continue
+
+		# Remaining lines: units
 		var unit = _parse_unit_line(line, unit_index)
 		if unit:
 			game.units.append(unit)
 			unit_index += 1
+
+		line_number += 1
 
 	print("WGSClient: Loaded game '%s' - %d units, %d models" % [
 		game.game_id, game.get_unit_count(), game.get_model_count()
@@ -330,6 +359,11 @@ func _parse_unit_text(unit: WGSUnit) -> void:
 func export_to_text(game: WGSGame) -> String:
 	var lines: Array[String] = []
 
+	# First two lines: table size
+	lines.append(str(int(game.table_width)))
+	lines.append(str(int(game.table_depth)))
+
+	# Unit lines
 	for unit in game.units:
 		lines.append(_format_unit_line(unit))
 
