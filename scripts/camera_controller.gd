@@ -5,7 +5,7 @@ extends Node3D
 
 @export var rotation_speed: float = 0.005
 @export var pan_speed: float = 0.005  # Pan speed for mouse camera movement
-@export var keyboard_pan_speed: float = 5.0  # Pan speed for WASD movement
+@export var keyboard_pan_speed: float = 1.5  # Pan speed for WASD movement
 @export var keyboard_rotation_speed: float = 90.0  # Rotation speed for Q/E (degrees per second)
 @export var zoom_speed: float = 0.15  # Zoom speed for smooth control
 @export var min_zoom: float = 0.5  # Minimum zoom distance
@@ -33,18 +33,20 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	# Handle WASD keyboard movement
+	# Handle WASD keyboard movement (only when Shift is NOT pressed to avoid conflicts)
 	_move_direction = Vector2.ZERO
 	_rotation_direction = 0.0
 
-	if Input.is_key_pressed(KEY_W):
-		_move_direction.y -= 1.0
-	if Input.is_key_pressed(KEY_S):
-		_move_direction.y += 1.0
-	if Input.is_key_pressed(KEY_A):
-		_move_direction.x -= 1.0
-	if Input.is_key_pressed(KEY_D):
-		_move_direction.x += 1.0
+	# Skip WASD if Shift is held (used for other shortcuts like Shift+A, Shift+R)
+	if not Input.is_key_pressed(KEY_SHIFT):
+		if Input.is_key_pressed(KEY_W):
+			_move_direction.y += 1.0
+		if Input.is_key_pressed(KEY_S):
+			_move_direction.y -= 1.0
+		if Input.is_key_pressed(KEY_A):
+			_move_direction.x -= 1.0
+		if Input.is_key_pressed(KEY_D):
+			_move_direction.x += 1.0
 
 	# Q/E for rotation
 	if Input.is_key_pressed(KEY_Q):
@@ -117,9 +119,9 @@ func _pan_camera(delta: Vector2) -> void:
 func _keyboard_pan(direction: Vector2, delta: float) -> void:
 	# Calculate pan direction based on camera view direction (not world coordinates)
 	# Use the pivot's rotation (yaw) to determine forward/right in world space
-	var basis = global_transform.basis
-	var right = basis.x  # Local X is right
-	var forward = -basis.z  # Local -Z is forward
+	var camera_basis = global_transform.basis
+	var right = camera_basis.x  # Local X is right
+	var forward = -camera_basis.z  # Local -Z is forward
 
 	# Flatten to horizontal plane
 	right.y = 0

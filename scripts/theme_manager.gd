@@ -44,8 +44,8 @@ func set_theme_style(style: KenneyThemeGenerator.ThemeStyle) -> void:
 
 
 ## Set theme by name string
-func set_theme_by_name(name: String) -> void:
-	var style = KenneyThemeGenerator.get_style_from_name(name)
+func set_theme_by_name(theme_name: String) -> void:
+	var style = KenneyThemeGenerator.get_style_from_name(theme_name)
 	set_theme_style(style)
 
 
