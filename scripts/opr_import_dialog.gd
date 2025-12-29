@@ -151,14 +151,20 @@ func _on_select_file() -> void:
 func _on_file_selected(path: String) -> void:
 	_selected_file = path
 	status_label.text = path.get_file()
-	status_label.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5))
+	status_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.5))
 
-	# Parse and preview
-	_preview_army = api_client.import_from_file(path)
+	# Show loading state
+	army_preview.text = "[color=#aaaaaa]Loading army data...[/color]\n\nFetching unit definitions from OPR API..."
+	import_btn.disabled = true
+
+	# Parse and preview (async - fetches from API)
+	_preview_army = await api_client.import_from_file(path)
 	if _preview_army:
+		status_label.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5))
 		_update_preview()
 		import_btn.disabled = false
 	else:
+		status_label.add_theme_color_override("font_color", Color(0.8, 0.5, 0.5))
 		army_preview.text = "[color=red]Failed to parse army file.[/color]\n\nMake sure this is a valid OPR Army Forge export."
 		import_btn.disabled = true
 
@@ -172,12 +178,17 @@ func _update_preview() -> void:
 	text += "[color=#aaaaaa]%s[/color]\n\n" % _preview_army.game_system
 
 	text += "[b]Total Points:[/b] %d\n" % _preview_army.points
-	text += "[b]Units:[/b] %d\n\n" % _preview_army.units.size()
+	text += "[b]Units:[/b] %d\n" % _preview_army.units.size()
+	if _preview_army.model_count > 0:
+		text += "[b]Models:[/b] %d\n" % _preview_army.model_count
+	text += "\n"
 
 	for unit in _preview_army.units:
 		var unit_line = "• %s" % unit.get_display_name()
 		if unit.cost > 0:
 			unit_line += " [color=#ffcc44](%d pts)[/color]" % unit.cost
+		# Show Q/D stats
+		unit_line += " [color=#88ff88]Q%d+[/color] [color=#8888ff]D%d+[/color]" % [unit.quality, unit.defense]
 		text += unit_line + "\n"
 
 		# Show weapons briefly
