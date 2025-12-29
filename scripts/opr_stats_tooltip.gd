@@ -14,8 +14,14 @@ var army_manager: OPRArmyManager
 ## Currently displayed unit
 var _current_unit: OPRApiClient.OPRUnit = null
 
+## Current model (for suffix access)
+var _current_model: Node3D = null
+
 ## Pending unit (waiting for delay)
 var _pending_unit: OPRApiClient.OPRUnit = null
+
+## Pending model (waiting for delay)
+var _pending_model: Node3D = null
 
 ## Delay timer for showing tooltip
 var _show_timer: Timer
@@ -82,7 +88,8 @@ func _update_position() -> void:
 
 
 ## Show tooltip for a specific unit (with delay)
-func show_unit(unit: OPRApiClient.OPRUnit) -> void:
+## model parameter is optional - used to get unit suffix for display
+func show_unit(unit: OPRApiClient.OPRUnit, model: Node3D = null) -> void:
 	if not unit:
 		hide_tooltip()
 		return
@@ -94,8 +101,9 @@ func show_unit(unit: OPRApiClient.OPRUnit) -> void:
 	if _pending_unit == unit:
 		return
 
-	# Store pending unit and start delay timer
+	# Store pending unit/model and start delay timer
 	_pending_unit = unit
+	_pending_model = model
 	_show_timer.start(SHOW_DELAY)
 
 
@@ -103,7 +111,9 @@ func show_unit(unit: OPRApiClient.OPRUnit) -> void:
 func _on_show_timer_timeout() -> void:
 	if _pending_unit:
 		_current_unit = _pending_unit
+		_current_model = _pending_model
 		_pending_unit = null
+		_pending_model = null
 		_update_content()
 		# Force resize to fit content
 		reset_size()
@@ -115,8 +125,10 @@ func _on_show_timer_timeout() -> void:
 func hide_tooltip() -> void:
 	_show_timer.stop()
 	_pending_unit = null
+	_pending_model = null
 	visible = false
 	_current_unit = null
+	_current_model = null
 
 
 ## Update tooltip content with current unit data
@@ -124,8 +136,18 @@ func _update_content() -> void:
 	if not _current_unit:
 		return
 
-	# Unit name with size
-	var name_text = "[b]%s[/b]" % _current_unit.get_display_name()
+	# Unit name with size and optional suffix (e.g., "Saurian Warriors (2)")
+	var display_name = _current_unit.get_display_name()
+	if _current_model and _current_model.has_meta("unit_suffix"):
+		var suffix = _current_model.get_meta("unit_suffix")
+		if not suffix.is_empty():
+			# Remove size suffix temporarily and add unit index suffix
+			var base_name = _current_unit.name
+			if _current_unit.size > 1:
+				display_name = "%s%s [%d]" % [base_name, suffix, _current_unit.size]
+			else:
+				display_name = "%s%s" % [base_name, suffix]
+	var name_text = "[b]%s[/b]" % display_name
 	unit_name_label.text = name_text
 
 	# Core stats
