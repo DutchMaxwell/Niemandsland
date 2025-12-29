@@ -565,19 +565,25 @@ func _start_dragging(_screen_pos: Vector2) -> void:
 
 func _stop_dragging() -> void:
 	if _is_dragging and not _selected_objects.is_empty():
-		# Lower objects back down and re-enable physics for rigid bodies
+		# Smoothly lower objects back down and re-enable physics for rigid bodies
 		for obj in _selected_objects:
 			if is_instance_valid(obj):
-				# Lower object back to table surface
-				obj.global_position.y -= drag_lift_height
+				# Animate smooth lowering
+				var target_y = obj.global_position.y - drag_lift_height
+				var tween = create_tween()
+				tween.set_ease(Tween.EASE_OUT)
+				tween.set_trans(Tween.TRANS_QUAD)
+				tween.tween_property(obj, "global_position:y", target_y, 0.2)
+				# Re-enable physics after animation completes
 				if obj is RigidBody3D:
-					obj.freeze = false
+					tween.tween_callback(func(): obj.freeze = false)
 
 		# Emit final distance for anchor object
 		if _selected_objects.size() > 0:
 			var anchor = _selected_objects[0]
 			if is_instance_valid(anchor):
 				var final_pos = anchor.global_position
+				final_pos.y -= drag_lift_height  # Use target position for distance calculation
 				var distance_m = _drag_anchor_position.distance_to(final_pos)
 				var distance_inches = distance_m * METERS_TO_INCHES
 				if distance_inches > 0.1:  # Only emit if actually moved
