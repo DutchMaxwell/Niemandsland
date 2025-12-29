@@ -2914,7 +2914,6 @@ func rotate_selected_group(angle_degrees: float) -> void:
 	var angle_rad = deg_to_rad(angle_degrees)
 
 	# Rotate all selected objects around the pivot
-	var rotated_count = 0
 	for obj in _selected_objects:
 		if not is_instance_valid(obj):
 			continue
@@ -2938,5 +2937,3 @@ func rotate_selected_group(angle_degrees: float) -> void:
 
 			# Also rotate the object itself to face the same relative direction
 			obj.rotate_y(angle_rad)
-
-		rotated_count += 1

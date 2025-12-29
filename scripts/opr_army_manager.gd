@@ -4,8 +4,9 @@ class_name OPRArmyManager
 ## Handles the relationship between game units and their visual representations
 
 signal army_spawned(army: OPRApiClient.OPRArmy, models: Array[Node3D])
-signal unit_hovered(unit: OPRApiClient.OPRUnit)
-signal unit_unhovered()
+# Reserved for future hover functionality
+#signal unit_hovered(unit: OPRApiClient.OPRUnit)
+#signal unit_unhovered()
 
 ## Player colors for army identification
 const PLAYER_COLORS = {
@@ -97,7 +98,6 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 		spawn_height,
 		tray_pos.z - tray_bounds.y / 2 + edge_padding
 	)
-	var row_start_z = current_pos.z
 	var row_max_x = tray_pos.x + tray_bounds.x / 2 - edge_padding
 
 	# Track unit counts for naming duplicates
@@ -215,8 +215,9 @@ func _create_army_tray(player_id: int, army_name: String, player_color: Color) -
 	collision.position.y = -0.01
 	tray.add_child(collision)
 
-	tray.global_position = tray_pos
+	# Add to scene tree BEFORE setting global_position
 	object_manager.get_parent().add_child(tray)
+	tray.global_position = tray_pos
 
 	army_trays[player_id] = tray
 	return tray
@@ -292,15 +293,15 @@ func _get_tray_position_and_bounds(player_id: int) -> Dictionary:
 
 
 ## Spawn a single unit with all its models
-func _spawn_unit(unit: OPRApiClient.OPRUnit, position: Vector3, player_color: Color, name_suffix: String = "") -> Array[Node3D]:
+func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: Color, name_suffix: String = "") -> Array[Node3D]:
 	var models: Array[Node3D] = []
 	var spacing = 0.04  # 40mm spacing between model centers
 
 	for i in range(unit.size):
 		var model_pos = Vector3(
-			position.x + i * spacing,
-			position.y,  # Preserve Y position for animation
-			position.z
+			spawn_pos.x + i * spacing,
+			spawn_pos.y,  # Preserve Y position for animation
+			spawn_pos.z
 		)
 
 		var model = _create_unit_model(unit, player_color, name_suffix)
