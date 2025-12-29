@@ -53,7 +53,7 @@ func _setup_ui() -> void:
 
 	# Info label
 	var info_label = Label.new()
-	info_label.text = "Export your army from Army Forge as JSON and select the file below."
+	info_label.text = "Use 'Share as Text' in Army Forge (recommended) or JSON export."
 	info_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	info_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
 	vbox.add_child(info_label)
@@ -64,7 +64,7 @@ func _setup_ui() -> void:
 	vbox.add_child(file_row)
 
 	var select_btn = Button.new()
-	select_btn.text = "Select JSON File..."
+	select_btn.text = "Select File..."
 	select_btn.pressed.connect(_on_select_file)
 	file_row.add_child(select_btn)
 
@@ -134,7 +134,7 @@ func _setup_ui() -> void:
 	file_dialog = FileDialog.new()
 	file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	file_dialog.access = FileDialog.ACCESS_FILESYSTEM
-	file_dialog.filters = PackedStringArray(["*.json ; OPR Army Forge JSON"])
+	file_dialog.filters = PackedStringArray(["*.txt ; OPR Text Export (recommended)", "*.json ; OPR Army Forge JSON"])
 	file_dialog.title = "Select OPR Army Forge Export"
 	file_dialog.file_selected.connect(_on_file_selected)
 	add_child(file_dialog)

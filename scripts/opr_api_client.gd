@@ -105,7 +105,7 @@ func _ready() -> void:
 	_http_request.request_completed.connect(_on_request_completed)
 
 
-## Import army from a local JSON file (Army Forge export)
+## Import army from a local file (JSON or TXT Army Forge export)
 func import_from_file(file_path: String) -> OPRArmy:
 	var file = FileAccess.open(file_path, FileAccess.READ)
 	if not file:
@@ -113,10 +113,14 @@ func import_from_file(file_path: String) -> OPRArmy:
 		import_failed.emit("Cannot open file: %s" % file_path.get_file())
 		return null
 
-	var json_text = file.get_as_text()
+	var content = file.get_as_text()
 	file.close()
 
-	return await _parse_army_forge_json(json_text, file_path.get_file())
+	# Detect format: Text export starts with "++"
+	if content.strip_edges().begins_with("++"):
+		return _parse_text_export(content, file_path.get_file())
+	else:
+		return await _parse_army_forge_json(content, file_path.get_file())
 
 
 ## Parse Army Forge JSON export (the real format)
@@ -183,6 +187,238 @@ func _expand_game_system(abbrev: String) -> String:
 		"aofs": return "Age of Fantasy: Skirmish"
 		"aofr": return "Age of Fantasy: Regiments"
 		_: return abbrev
+
+
+## Parse Army Forge TEXT export (contains all resolved data)
+## Format: ++ Army Name - Faction (version) [Game Points] [Unit Count] ++
+func _parse_text_export(text: String, source_name: String = "") -> OPRArmy:
+	var army = OPRArmy.new()
+	army.id = str(Time.get_unix_time_from_system())
+
+	var lines = text.split("\n")
+	var current_unit: OPRUnit = null
+	var unit_count_from_header = 0
+
+	for line in lines:
+		line = line.strip_edges()
+		if line.is_empty():
+			continue
+
+		# Parse header: ++ Army Name - Faction (version) [GF 3000pts] [8 Units] ++
+		if line.begins_with("++") and line.ends_with("++"):
+			var header = line.trim_prefix("++").trim_suffix("++").strip_edges()
+			_parse_header(header, army)
+			# Extract unit count from header
+			var unit_match = RegEx.new()
+			unit_match.compile("\\[(\\d+)\\s*Units?\\]")
+			var result = unit_match.search(header)
+			if result:
+				unit_count_from_header = result.get_string(1).to_int()
+			continue
+
+		# Parse joined unit indicator
+		if line.begins_with("| Joined to:"):
+			continue
+
+		# Check if this is a unit line (has Q#+ D#+ pattern)
+		var unit_regex = RegEx.new()
+		# Pattern: [Nx] Unit Name [size] Q#+ D#+ | pts | Special Rules
+		unit_regex.compile("^(\\d+x\\s+)?(.+?)\\s*\\[(\\d+)\\]\\s+Q(\\d+)\\+\\s+D(\\d+)\\+\\s*\\|\\s*(\\d+)pts\\s*\\|\\s*(.*)$")
+		var unit_match = unit_regex.search(line)
+
+		if unit_match:
+			# Save previous unit
+			if current_unit:
+				army.units.append(current_unit)
+
+			current_unit = OPRUnit.new()
+			current_unit.id = str(randi())
+
+			# Parse multiplier (e.g., "2x")
+			var multiplier_str = unit_match.get_string(1).strip_edges()
+			var multiplier = 1
+			if not multiplier_str.is_empty():
+				multiplier = multiplier_str.trim_suffix("x").to_int()
+
+			current_unit.name = unit_match.get_string(2).strip_edges()
+			current_unit.size = unit_match.get_string(3).to_int()
+			current_unit.quality = unit_match.get_string(4).to_int()
+			current_unit.defense = unit_match.get_string(5).to_int()
+			current_unit.cost = unit_match.get_string(6).to_int()
+
+			# Parse special rules
+			var rules_str = unit_match.get_string(7).strip_edges()
+			if not rules_str.is_empty():
+				current_unit.special_rules = _parse_special_rules_text(rules_str)
+
+			# If there's a multiplier, we need to duplicate units
+			if multiplier > 1:
+				# Add the first unit
+				army.units.append(current_unit)
+				# Add duplicates
+				for i in range(multiplier - 1):
+					var dup_unit = OPRUnit.new()
+					dup_unit.id = str(randi())
+					dup_unit.name = current_unit.name
+					dup_unit.size = current_unit.size
+					dup_unit.quality = current_unit.quality
+					dup_unit.defense = current_unit.defense
+					dup_unit.cost = current_unit.cost
+					dup_unit.special_rules = current_unit.special_rules.duplicate()
+					army.units.append(dup_unit)
+				current_unit = army.units[-1]  # Point to last for weapon parsing
+
+		elif current_unit and not line.begins_with("++"):
+			# This should be a weapons line
+			var weapons = _parse_weapons_text(line)
+			for w in weapons:
+				current_unit.weapons.append(w)
+			# Apply weapons to all duplicated units if applicable
+			# (weapons are added to the last unit reference)
+
+	# Add the last unit
+	if current_unit and not army.units.has(current_unit):
+		army.units.append(current_unit)
+
+	# Calculate model count
+	for unit in army.units:
+		army.model_count += unit.size
+
+	if army.name.is_empty():
+		army.name = source_name.get_basename()
+
+	print("OPRApiClient: Parsed TEXT export '%s' - %d units, %d pts, %d models" % [
+		army.name, army.units.size(), army.points, army.model_count
+	])
+
+	army_loaded.emit(army)
+	return army
+
+
+## Parse header line from text export
+func _parse_header(header: String, army: OPRArmy) -> void:
+	# Format: Army Name - Faction (version) [GF 3000pts] [8 Units]
+
+	# Extract points
+	var pts_regex = RegEx.new()
+	pts_regex.compile("\\[(\\w+)\\s+(\\d+)pts\\]")
+	var pts_match = pts_regex.search(header)
+	if pts_match:
+		army.game_system = _expand_game_system(pts_match.get_string(1).to_lower())
+		army.points = pts_match.get_string(2).to_int()
+
+	# Extract army name (before the first bracket or dash-separated parts)
+	var name_part = header
+	var bracket_pos = header.find("[")
+	if bracket_pos > 0:
+		name_part = header.left(bracket_pos).strip_edges()
+
+	# Try to get just the army name (usually first part before " - ")
+	var parts = name_part.split(" - ")
+	if parts.size() > 0:
+		army.name = parts[0].strip_edges()
+
+
+## Parse special rules from text format
+func _parse_special_rules_text(rules_str: String) -> Array[String]:
+	var rules: Array[String] = []
+
+	# Split by comma, but be careful with rules like "Tough(3)"
+	var current_rule = ""
+	var paren_depth = 0
+
+	for c in rules_str:
+		if c == '(':
+			paren_depth += 1
+			current_rule += c
+		elif c == ')':
+			paren_depth -= 1
+			current_rule += c
+		elif c == ',' and paren_depth == 0:
+			var rule = current_rule.strip_edges()
+			# Remove count prefix like "3x"
+			var count_regex = RegEx.new()
+			count_regex.compile("^\\d+x\\s+")
+			rule = count_regex.sub(rule, "")
+			if not rule.is_empty():
+				rules.append(rule)
+			current_rule = ""
+		else:
+			current_rule += c
+
+	# Don't forget the last rule
+	var rule = current_rule.strip_edges()
+	var count_regex = RegEx.new()
+	count_regex.compile("^\\d+x\\s+")
+	rule = count_regex.sub(rule, "")
+	if not rule.is_empty():
+		rules.append(rule)
+
+	return rules
+
+
+## Parse weapons from text format
+## Format: Weapon Name (Range", A#, Rules), ...
+func _parse_weapons_text(line: String) -> Array[OPRWeapon]:
+	var weapons: Array[OPRWeapon] = []
+
+	# Split by "), " to separate weapons
+	var weapon_strs = line.split("), ")
+
+	for ws in weapon_strs:
+		ws = ws.strip_edges()
+		if ws.is_empty():
+			continue
+
+		# Add back the closing paren if it was stripped
+		if not ws.ends_with(")"):
+			ws += ")"
+
+		var weapon = _parse_single_weapon_text(ws)
+		if weapon:
+			weapons.append(weapon)
+
+	return weapons
+
+
+## Parse a single weapon from text format
+## Format: [Nx] Weapon Name (Range", A#, Rules)
+func _parse_single_weapon_text(weapon_str: String) -> OPRWeapon:
+	var weapon = OPRWeapon.new()
+
+	# Check for count prefix (e.g., "3x")
+	var count_regex = RegEx.new()
+	count_regex.compile("^(\\d+)x\\s+")
+	var count_match = count_regex.search(weapon_str)
+	if count_match:
+		weapon.count = count_match.get_string(1).to_int()
+		weapon_str = weapon_str.substr(count_match.get_end())
+
+	# Find the opening parenthesis to separate name from stats
+	var paren_pos = weapon_str.find("(")
+	if paren_pos < 0:
+		weapon.name = weapon_str.strip_edges()
+		return weapon
+
+	weapon.name = weapon_str.left(paren_pos).strip_edges()
+	var stats_str = weapon_str.substr(paren_pos + 1).trim_suffix(")").strip_edges()
+
+	# Parse stats inside parentheses
+	var stats_parts = stats_str.split(",")
+	for part in stats_parts:
+		part = part.strip_edges()
+
+		# Check for range (e.g., "24"")
+		if part.ends_with("\""):
+			weapon.range_value = part.trim_suffix("\"").to_int()
+		# Check for attacks (e.g., "A3")
+		elif part.begins_with("A") and part.substr(1).is_valid_int():
+			weapon.attacks = part.substr(1).to_int()
+		# Everything else is a special rule
+		elif not part.is_empty():
+			weapon.special_rules.append(part)
+
+	return weapon
 
 
 ## Fetch army book data from OPR API
