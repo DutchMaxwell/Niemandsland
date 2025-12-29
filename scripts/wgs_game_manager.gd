@@ -144,11 +144,14 @@ func _create_model(unit: WGSClient.WGSUnit, position: Vector3) -> StaticBody3D:
 
 	wrapper.add_child(base_instance)
 
-	# Create body (cylinder placeholder)
-	var body_height = 0.025 + randf() * 0.01
+	# Create body (cylinder placeholder) - scale gently with base size
+	var scale_factor = sqrt(base_radius / 0.016)  # Gentle scaling relative to 32mm
+	var body_height = (0.025 + randf() * 0.005) * scale_factor
 	var body_mesh = CylinderMesh.new()
-	body_mesh.top_radius = base_radius * 0.5
-	body_mesh.bottom_radius = base_radius * 0.6
+	# Narrower body relative to base for larger units
+	var body_ratio = lerp(0.5, 0.35, clampf((base_radius - 0.016) / 0.03, 0.0, 1.0))
+	body_mesh.top_radius = base_radius * body_ratio
+	body_mesh.bottom_radius = base_radius * (body_ratio + 0.1)
 	body_mesh.height = body_height
 
 	var body_instance = MeshInstance3D.new()
@@ -163,14 +166,15 @@ func _create_model(unit: WGSClient.WGSUnit, position: Vector3) -> StaticBody3D:
 
 	wrapper.add_child(body_instance)
 
-	# Create head (sphere)
+	# Create head (sphere) - scaled to body
+	var head_radius = base_radius * 0.35 * body_ratio / 0.5  # Scale with body
 	var head_mesh = SphereMesh.new()
-	head_mesh.radius = base_radius * 0.35
-	head_mesh.height = base_radius * 0.7
+	head_mesh.radius = head_radius
+	head_mesh.height = head_radius * 2
 
 	var head_instance = MeshInstance3D.new()
 	head_instance.mesh = head_mesh
-	head_instance.position.y = base_height + body_height + base_radius * 0.35
+	head_instance.position.y = base_height + body_height + head_radius
 
 	var head_material = StandardMaterial3D.new()
 	head_material.albedo_color = Color(0.9, 0.75, 0.6)  # Skin tone
@@ -181,12 +185,13 @@ func _create_model(unit: WGSClient.WGSUnit, position: Vector3) -> StaticBody3D:
 	wrapper.add_child(head_instance)
 
 	# Add collision shape
+	var total_height = base_height + body_height + head_radius * 2
 	var collision = CollisionShape3D.new()
 	var shape = CylinderShape3D.new()
 	shape.radius = base_radius
-	shape.height = base_height + body_height + base_radius * 0.7
+	shape.height = total_height
 	collision.shape = shape
-	collision.position.y = shape.height / 2.0
+	collision.position.y = total_height / 2.0
 	wrapper.add_child(collision)
 
 	# Add to object manager
