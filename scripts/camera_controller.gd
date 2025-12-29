@@ -5,7 +5,7 @@ extends Node3D
 
 @export var rotation_speed: float = 0.005
 @export var pan_speed: float = 0.005  # Pan speed for mouse camera movement
-@export var keyboard_pan_speed: float = 5.0  # Pan speed for WASD movement
+@export var keyboard_pan_speed: float = 1.5  # Pan speed for WASD movement
 @export var keyboard_rotation_speed: float = 90.0  # Rotation speed for Q/E (degrees per second)
 @export var zoom_speed: float = 0.15  # Zoom speed for smooth control
 @export var min_zoom: float = 0.5  # Minimum zoom distance
@@ -38,9 +38,9 @@ func _process(delta: float) -> void:
 	_rotation_direction = 0.0
 
 	if Input.is_key_pressed(KEY_W):
-		_move_direction.y -= 1.0
-	if Input.is_key_pressed(KEY_S):
 		_move_direction.y += 1.0
+	if Input.is_key_pressed(KEY_S):
+		_move_direction.y -= 1.0
 	if Input.is_key_pressed(KEY_A):
 		_move_direction.x -= 1.0
 	if Input.is_key_pressed(KEY_D):

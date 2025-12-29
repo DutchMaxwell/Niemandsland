@@ -1,26 +1,21 @@
 extends Window
 class_name OPRImportDialog
 ## Dialog for importing OPR Army Forge armies
-## Supports both direct text paste and file import
+## Supports direct text paste and Share-Link API import
 
 signal army_imported(army: OPRApiClient.OPRArmy, player_id: int)
 
 ## UI Elements
 var tab_container: TabContainer
 var text_input: TextEdit
-var file_dialog: FileDialog
 var player_option: OptionButton
 var army_preview: RichTextLabel
 var import_btn: Button
 var cancel_btn: Button
-var status_label: Label
 var paste_btn: Button
 var clear_btn: Button
 var share_link_input: LineEdit
 var link_status_label: Label
-
-## Selected file path (for file mode)
-var _selected_file: String = ""
 
 ## Parsed army (preview)
 var _preview_army: OPRApiClient.OPRArmy = null
@@ -29,7 +24,7 @@ var _preview_army: OPRApiClient.OPRArmy = null
 var api_client: OPRApiClient
 
 ## Current import mode
-var _import_mode: String = "text"  # "text" or "file"
+var _import_mode: String = "text"  # "text" or "link"
 
 
 func _ready() -> void:
@@ -104,38 +99,6 @@ func _setup_ui() -> void:
 	parse_btn.text = "Text parsen"
 	parse_btn.pressed.connect(_on_parse_text)
 	text_btn_row.add_child(parse_btn)
-
-	# === FILE IMPORT TAB ===
-	var file_tab = VBoxContainer.new()
-	file_tab.name = "Datei importieren"
-	file_tab.add_theme_constant_override("separation", 8)
-	tab_container.add_child(file_tab)
-
-	var file_info = Label.new()
-	file_info.text = "JSON oder Text-Datei von Army Forge auswählen:"
-	file_info.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	file_tab.add_child(file_info)
-
-	# File selection row
-	var file_row = HBoxContainer.new()
-	file_row.add_theme_constant_override("separation", 8)
-	file_tab.add_child(file_row)
-
-	var select_btn = Button.new()
-	select_btn.text = "Datei auswählen..."
-	select_btn.pressed.connect(_on_select_file)
-	file_row.add_child(select_btn)
-
-	status_label = Label.new()
-	status_label.text = "Keine Datei ausgewählt"
-	status_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	file_row.add_child(status_label)
-
-	# Spacer in file tab
-	var file_spacer = Control.new()
-	file_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	file_tab.add_child(file_spacer)
 
 	# === SHARE LINK TAB ===
 	var link_tab = VBoxContainer.new()
@@ -241,15 +204,6 @@ func _setup_ui() -> void:
 	import_btn.pressed.connect(_on_import)
 	btn_row.add_child(import_btn)
 
-	# File dialog (hidden, used when file tab is active)
-	file_dialog = FileDialog.new()
-	file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-	file_dialog.access = FileDialog.ACCESS_FILESYSTEM
-	file_dialog.filters = PackedStringArray(["*.txt ; OPR Text Export", "*.json ; OPR Army Forge JSON"])
-	file_dialog.title = "OPR Army Forge Export auswählen"
-	file_dialog.file_selected.connect(_on_file_selected)
-	add_child(file_dialog)
-
 	# API Client for parsing
 	api_client = OPRApiClient.new()
 	add_child(api_client)
@@ -258,8 +212,7 @@ func _setup_ui() -> void:
 func _on_tab_changed(tab: int) -> void:
 	match tab:
 		0: _import_mode = "text"
-		1: _import_mode = "file"
-		2: _import_mode = "link"
+		1: _import_mode = "link"
 	# Reset preview when switching tabs (check for null during initial setup)
 	_preview_army = null
 	if army_preview:
@@ -306,31 +259,6 @@ func _on_parse_text() -> void:
 		import_btn.disabled = false
 	else:
 		army_preview.text = "[color=red]Parsing fehlgeschlagen.[/color]\n\nStelle sicher, dass der Text ein gültiger Army Forge Export ist."
-		import_btn.disabled = true
-
-
-func _on_select_file() -> void:
-	file_dialog.popup_centered(Vector2i(700, 500))
-
-
-func _on_file_selected(path: String) -> void:
-	_selected_file = path
-	status_label.text = path.get_file()
-	status_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.5))
-
-	# Show loading state
-	army_preview.text = "[color=#aaaaaa]Lade Armee-Daten...[/color]"
-	import_btn.disabled = true
-
-	# Parse file (async for JSON)
-	_preview_army = await api_client.import_from_file(path)
-	if _preview_army:
-		status_label.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5))
-		_update_preview()
-		import_btn.disabled = false
-	else:
-		status_label.add_theme_color_override("font_color", Color(0.8, 0.5, 0.5))
-		army_preview.text = "[color=red]Datei konnte nicht gelesen werden.[/color]"
 		import_btn.disabled = true
 
 
@@ -420,12 +348,9 @@ func _on_cancel() -> void:
 
 
 func _reset_dialog() -> void:
-	_selected_file = ""
 	_preview_army = null
 	text_input.text = ""
 	share_link_input.text = ""
 	link_status_label.text = ""
-	status_label.text = "Keine Datei ausgewählt"
-	status_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	army_preview.text = ""
 	import_btn.disabled = true
