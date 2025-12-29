@@ -116,7 +116,7 @@ func import_from_file(file_path: String) -> OPRArmy:
 	var json_text = file.get_as_text()
 	file.close()
 
-	return _parse_army_forge_json(json_text, file_path.get_file())
+	return await _parse_army_forge_json(json_text, file_path.get_file())
 
 
 ## Parse Army Forge JSON export (the real format)
@@ -186,7 +186,7 @@ func _expand_game_system(abbrev: String) -> String:
 
 
 ## Fetch army book data from OPR API
-func _fetch_army_book(army_id: String, game_system: String) -> Dictionary:
+func _fetch_army_book(army_id: String, _game_system: String) -> Dictionary:
 	if army_id.is_empty():
 		return {}
 
@@ -333,9 +333,9 @@ func _find_upgrade_in_book(upgrade_id: String, book_data: Dictionary) -> Diction
 ## Parse a weapon from equipment/loadout data
 func _parse_weapon(data) -> OPRWeapon:
 	if data is String:
-		var weapon = OPRWeapon.new()
-		weapon.name = data
-		return weapon
+		var str_weapon = OPRWeapon.new()
+		str_weapon.name = data
+		return str_weapon
 
 	if not data is Dictionary:
 		return null
