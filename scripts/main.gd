@@ -197,6 +197,7 @@ func _ready() -> void:
 	# Initialize OPR Army Manager
 	opr_army_manager = OPRArmyManager.new()
 	opr_army_manager.object_manager = object_manager
+	opr_army_manager.table = table
 	add_child(opr_army_manager)
 
 	# Initialize OPR Import Dialog
@@ -233,7 +234,14 @@ func _ready() -> void:
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo:
+	if event is InputEventKey and not event.echo:
+		# Handle key release for continuous actions
+		if not event.pressed:
+			# Stop group rotation when R or Shift is released
+			if event.keycode == KEY_R or event.keycode == KEY_SHIFT:
+				_is_group_rotating = false
+			return
+
 		# Get cursor position on table for all operations
 		var cursor_pos = object_manager.get_cursor_table_position()
 
@@ -242,8 +250,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			var rows = event.keycode - KEY_0
 			object_manager.arrange_selected_in_rows(rows, cursor_pos)
 			get_viewport().set_input_as_handled()
-		# Arrow formation (A key) at cursor
-		elif event.keycode == KEY_A and not event.ctrl_pressed:
+		# Arrow formation (Shift+A) at cursor
+		elif event.keycode == KEY_A and event.shift_pressed and not event.ctrl_pressed:
 			object_manager.arrange_selected_arrow(cursor_pos)
 			get_viewport().set_input_as_handled()
 		# Copy to clipboard (Ctrl+C)
@@ -265,7 +273,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		# Rotate selected group around first object (Shift+R) - continuous rotation
 		elif event.keycode == KEY_R and event.shift_pressed:
-			_is_group_rotating = event.pressed
+			_is_group_rotating = true
 			get_viewport().set_input_as_handled()
 		# Lighting Presets (F1-F5)
 		elif event.keycode == KEY_F1:
@@ -1083,25 +1091,9 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
 	# Store army
 	opr_army_manager.armies[player_id] = army
 
-	# Calculate spawn position based on player
-	var table_size = table.table_size * 0.3048  # FEET_TO_METERS
-	var spawn_pos: Vector3
-
-	match player_id:
-		1:  # Player 1: Bottom of table (near camera)
-			spawn_pos = Vector3(-table_size.x / 2 + 0.1, 0, table_size.y / 2 - 0.15)
-		2:  # Player 2: Top of table (far side)
-			spawn_pos = Vector3(-table_size.x / 2 + 0.1, 0, -table_size.y / 2 + 0.15)
-		3:  # Player 3: Left side
-			spawn_pos = Vector3(-table_size.x / 2 + 0.1, 0, 0)
-		4:  # Player 4: Right side
-			spawn_pos = Vector3(table_size.x / 2 - 0.3, 0, 0)
-		_:
-			spawn_pos = Vector3.ZERO
-
-	# Spawn the army
-	var spawned = opr_army_manager.spawn_army(army, spawn_pos)
-	print("Spawned %d models for army '%s'" % [spawned.size(), army.name])
+	# Spawn the army on tray (position determined by player ID)
+	var spawned = opr_army_manager.spawn_army(army)
+	print("Spawned %d models for army '%s' on Player %d's tray" % [spawned.size(), army.name, player_id])
 
 
 ## Update OPR unit hover detection
@@ -1130,25 +1122,7 @@ func _update_opr_hover() -> void:
 				_hovered_model = collider
 				var unit = opr_army_manager.get_unit_for_model(collider)
 				if unit:
-					opr_stats_tooltip.show_unit(unit)
-		# Check if this is a WGS unit
-		elif collider.is_in_group("wgs_unit"):
-			if _hovered_model != collider:
-				_hovered_model = collider
-				var wgs_unit = wgs_game_manager.get_unit_for_model(collider)
-				if wgs_unit:
-					# Use the same tooltip for WGS units by creating a temporary OPR unit
-					var temp_unit = OPRApiClient.OPRUnit.new()
-					temp_unit.name = wgs_unit.get_display_name()
-					temp_unit.quality = wgs_unit.quality if wgs_unit.quality > 0 else 4
-					temp_unit.defense = wgs_unit.defense if wgs_unit.defense > 0 else 4
-					temp_unit.size = wgs_unit.model_count
-					temp_unit.cost = wgs_unit.points
-					for weapon_str in wgs_unit.weapons:
-						var weapon = OPRApiClient.OPRWeapon.new()
-						weapon.name = weapon_str
-						temp_unit.weapons.append(weapon)
-					opr_stats_tooltip.show_unit(temp_unit)
+					opr_stats_tooltip.show_unit(unit, collider)
 		else:
 			_clear_opr_hover()
 	else:

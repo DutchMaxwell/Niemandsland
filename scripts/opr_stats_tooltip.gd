@@ -14,14 +14,35 @@ var army_manager: OPRArmyManager
 ## Currently displayed unit
 var _current_unit: OPRApiClient.OPRUnit = null
 
+## Current model (for suffix access)
+var _current_model: Node3D = null
+
+## Pending unit (waiting for delay)
+var _pending_unit: OPRApiClient.OPRUnit = null
+
+## Pending model (waiting for delay)
+var _pending_model: Node3D = null
+
+## Delay timer for showing tooltip
+var _show_timer: Timer
+
 ## Offset from cursor
 const TOOLTIP_OFFSET = Vector2(15, 15)
+
+## Delay before showing tooltip (seconds)
+const SHOW_DELAY: float = 0.4
 
 
 func _ready() -> void:
 	# Start hidden
 	visible = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Create delay timer
+	_show_timer = Timer.new()
+	_show_timer.one_shot = true
+	_show_timer.timeout.connect(_on_show_timer_timeout)
+	add_child(_show_timer)
 
 	# Make sure all children ignore mouse
 	_set_mouse_ignore_recursive(self)
@@ -66,8 +87,9 @@ func _update_position() -> void:
 	global_position = new_pos
 
 
-## Show tooltip for a specific unit
-func show_unit(unit: OPRApiClient.OPRUnit) -> void:
+## Show tooltip for a specific unit (with delay)
+## model parameter is optional - used to get unit suffix for display
+func show_unit(unit: OPRApiClient.OPRUnit, model: Node3D = null) -> void:
 	if not unit:
 		hide_tooltip()
 		return
@@ -75,16 +97,38 @@ func show_unit(unit: OPRApiClient.OPRUnit) -> void:
 	if _current_unit == unit and visible:
 		return  # Already showing this unit
 
-	_current_unit = unit
-	_update_content()
-	visible = true
-	_update_position()
+	# If we're already waiting for this unit, don't restart timer
+	if _pending_unit == unit:
+		return
+
+	# Store pending unit/model and start delay timer
+	_pending_unit = unit
+	_pending_model = model
+	_show_timer.start(SHOW_DELAY)
+
+
+## Called when the show delay timer expires
+func _on_show_timer_timeout() -> void:
+	if _pending_unit:
+		_current_unit = _pending_unit
+		_current_model = _pending_model
+		_pending_unit = null
+		_pending_model = null
+		_update_content()
+		# Force resize to fit content
+		reset_size()
+		visible = true
+		_update_position()
 
 
 ## Hide the tooltip
 func hide_tooltip() -> void:
+	_show_timer.stop()
+	_pending_unit = null
+	_pending_model = null
 	visible = false
 	_current_unit = null
+	_current_model = null
 
 
 ## Update tooltip content with current unit data
@@ -92,8 +136,18 @@ func _update_content() -> void:
 	if not _current_unit:
 		return
 
-	# Unit name with size
-	var name_text = "[b]%s[/b]" % _current_unit.get_display_name()
+	# Unit name with size and optional suffix (e.g., "Saurian Warriors (2)")
+	var display_name = _current_unit.get_display_name()
+	if _current_model and _current_model.has_meta("unit_suffix"):
+		var suffix = _current_model.get_meta("unit_suffix")
+		if not suffix.is_empty():
+			# Remove size suffix temporarily and add unit index suffix
+			var base_name = _current_unit.name
+			if _current_unit.size > 1:
+				display_name = "%s%s [%d]" % [base_name, suffix, _current_unit.size]
+			else:
+				display_name = "%s%s" % [base_name, suffix]
+	var name_text = "[b]%s[/b]" % display_name
 	unit_name_label.text = name_text
 
 	# Core stats
@@ -132,8 +186,11 @@ func _update_content() -> void:
 func _format_weapon(weapon: OPRApiClient.OPRWeapon) -> String:
 	var parts: Array[String] = []
 
-	# Name
-	parts.append(weapon.name)
+	# Name with count
+	if weapon.count > 1:
+		parts.append("%dx %s" % [weapon.count, weapon.name])
+	else:
+		parts.append(weapon.name)
 
 	# Range
 	if weapon.range_value > 0:

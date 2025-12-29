@@ -16,6 +16,7 @@ signal drag_ended()
 @export var drag_height: float = 0.5  # Drag height in meters
 @export var rotation_speed_degrees: float = 2.0  # Degrees per second while R held
 @export var min_drag_height: float = 0.01  # Minimum height above table when dragging
+@export var drag_lift_height: float = 0.05  # Lift height when dragging (5cm)
 
 # Debug logging
 @export var debug_dice_physics: bool = true  # Set to false to disable logging
@@ -544,17 +545,19 @@ func _start_dragging(_screen_pos: Vector2) -> void:
 	_is_dragging = true
 	_drag_start_positions.clear()
 
-	# Store start positions for all selected objects
+	# Store start positions for all selected objects and lift them
 	for obj in _selected_objects:
 		if is_instance_valid(obj):
 			_drag_start_positions[obj] = obj.global_position
 			# For rigid bodies, make them kinematic while dragging
 			if obj is RigidBody3D:
 				obj.freeze = true
+			# Lift object above the table surface
+			obj.global_position.y += drag_lift_height
 
-	# Use first selected object as anchor for distance calculation
+	# Use first selected object as anchor for distance calculation (using original position)
 	if _selected_objects.size() > 0:
-		_drag_anchor_position = _selected_objects[0].global_position
+		_drag_anchor_position = _drag_start_positions[_selected_objects[0]]
 
 	# Create drag visualization line
 	_create_drag_line()
@@ -562,16 +565,25 @@ func _start_dragging(_screen_pos: Vector2) -> void:
 
 func _stop_dragging() -> void:
 	if _is_dragging and not _selected_objects.is_empty():
-		# Re-enable physics for rigid bodies
+		# Smoothly lower objects back down and re-enable physics for rigid bodies
 		for obj in _selected_objects:
-			if is_instance_valid(obj) and obj is RigidBody3D:
-				obj.freeze = false
+			if is_instance_valid(obj):
+				# Animate smooth lowering
+				var target_y = obj.global_position.y - drag_lift_height
+				var tween = create_tween()
+				tween.set_ease(Tween.EASE_OUT)
+				tween.set_trans(Tween.TRANS_QUAD)
+				tween.tween_property(obj, "global_position:y", target_y, 0.2)
+				# Re-enable physics after animation completes
+				if obj is RigidBody3D:
+					tween.tween_callback(func(): obj.freeze = false)
 
 		# Emit final distance for anchor object
 		if _selected_objects.size() > 0:
 			var anchor = _selected_objects[0]
 			if is_instance_valid(anchor):
 				var final_pos = anchor.global_position
+				final_pos.y -= drag_lift_height  # Use target position for distance calculation
 				var distance_m = _drag_anchor_position.distance_to(final_pos)
 				var distance_inches = distance_m * METERS_TO_INCHES
 				if distance_inches > 0.1:  # Only emit if actually moved
@@ -708,11 +720,12 @@ func _update_drag(screen_pos: Vector2) -> void:
 		var anchor_start = _drag_start_positions.get(anchor, anchor.global_position)
 		var delta_xz = Vector3(intersection.x - anchor_start.x, 0, intersection.z - anchor_start.z)
 
-		# Move all selected objects by the same XZ delta, preserving their original Y
+		# Move all selected objects by the same XZ delta, keeping them lifted
 		for obj in _selected_objects:
 			if is_instance_valid(obj):
 				var obj_start = _drag_start_positions.get(obj, obj.global_position)
-				var new_pos = Vector3(obj_start.x + delta_xz.x, obj_start.y, obj_start.z + delta_xz.z)
+				# Keep object at lifted height (original Y + lift height)
+				var new_pos = Vector3(obj_start.x + delta_xz.x, obj_start.y + drag_lift_height, obj_start.z + delta_xz.z)
 				obj.global_position = new_pos
 
 				# Broadcast position to other clients
@@ -2901,7 +2914,6 @@ func rotate_selected_group(angle_degrees: float) -> void:
 	var angle_rad = deg_to_rad(angle_degrees)
 
 	# Rotate all selected objects around the pivot
-	var rotated_count = 0
 	for obj in _selected_objects:
 		if not is_instance_valid(obj):
 			continue
@@ -2925,5 +2937,3 @@ func rotate_selected_group(angle_degrees: float) -> void:
 
 			# Also rotate the object itself to face the same relative direction
 			obj.rotate_y(angle_rad)
-
-		rotated_count += 1
