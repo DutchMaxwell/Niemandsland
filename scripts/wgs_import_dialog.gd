@@ -183,7 +183,7 @@ func _setup_server_tab(container: VBoxContainer) -> void:
 	id_row.add_child(fetch_btn)
 
 	var url_info = Label.new()
-	url_info.text = "The game state will be fetched from:\nhttps://udos3dworld.com/WargamingSimulator/{game_id}.txt"
+	url_info.text = "The game state will be fetched from:\nhttps://udos3dworld.com/WargamingSimulator/getGameState.php?gameID={game_id}"
 	url_info.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
 	url_info.add_theme_font_size_override("font_size", 11)
 	container.add_child(url_info)
@@ -221,7 +221,7 @@ func _on_fetch() -> void:
 	add_child(http)
 	http.request_completed.connect(_on_fetch_completed.bind(http, game_id))
 
-	var url = "https://udos3dworld.com/WargamingSimulator/%s.txt" % game_id
+	var url = "https://udos3dworld.com/WargamingSimulator/getGameState.php?gameID=%s" % game_id
 	var error = http.request(url)
 
 	if error != OK:

@@ -315,7 +315,7 @@ func fetch_game_from_server(game_id: String, base_url: String = "https://udos3dw
 		add_child(http_request)
 		http_request.request_completed.connect(_on_fetch_completed)
 
-	var url = "%s%s.txt" % [base_url, game_id]
+	var url = "%sgetGameState.php?gameID=%s" % [base_url, game_id]
 	var error = http_request.request(url)
 
 	if error != OK:

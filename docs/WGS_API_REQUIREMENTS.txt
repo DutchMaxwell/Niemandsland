@@ -12,11 +12,13 @@ OpenTTS hat bereits eine WGS-Integration implementiert:
 - Parsing der OPR-Stats aus dem Name-Feld (Q+/D+, Waffen, Punkte)
 
 
-PROBLEM
--------
-Direkter HTTP-Zugriff auf die Spielzustand-Dateien ist blockiert (403 Forbidden):
+STATUS: API ENDPOINT ONLINE ✓
+-----------------------------
+Der getGameState.php Endpoint ist jetzt verfügbar:
 
-    https://udos3dworld.com/WargamingSimulator/{gameID}.txt → 403
+    https://udos3dworld.com/WargamingSimulator/getGameState.php?gameID={gameID}
+
+OpenTTS nutzt diesen Endpoint für den Server-Import.
 
 
 ================================================================================
