@@ -6,6 +6,7 @@
 
 # Imported textures and samples
 .import/
+*.import
 
 # Export templates
 export/
