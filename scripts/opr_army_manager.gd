@@ -84,9 +84,8 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	var tray_pos = tray_info.position
 	var tray_bounds = tray_info.bounds  # Vector2 (width, depth)
 
-	# Base diameter is 32mm (0.032m), model spacing within unit is 40mm
-	var base_diameter = 0.032
-	var model_spacing = 0.04  # 40mm spacing between models in a unit
+	# Default spacing values - will be adjusted per unit based on base size
+	var default_base_diameter = 0.032  # 32mm default
 	var unit_gap = 0.08  # 8cm gap between different units
 	var row_height = 0.10  # 10cm between rows for clear separation
 	var edge_padding = 0.06  # Padding from tray edge
@@ -120,8 +119,12 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 		if unit_name_counts[base_name] > 1:
 			display_suffix = " (%d)" % unit_index
 
+		# Use unit's actual base size for spacing calculations
+		var unit_base_diameter = unit.get_base_diameter_meters()
+		var model_spacing = unit_base_diameter * 1.25  # 25% gap between models
+
 		# Calculate unit width before spawning to check if we need a new row
-		var unit_width = base_diameter + (unit.size - 1) * model_spacing
+		var unit_width = unit_base_diameter + (unit.size - 1) * model_spacing
 
 		# Check if this unit would exceed row width - if so, start new row first
 		if current_pos.x + unit_width > row_max_x and current_pos.x > tray_pos.x - tray_bounds.x / 2 + edge_padding + 0.01:
@@ -295,7 +298,8 @@ func _get_tray_position_and_bounds(player_id: int) -> Dictionary:
 ## Spawn a single unit with all its models
 func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: Color, name_suffix: String = "") -> Array[Node3D]:
 	var models: Array[Node3D] = []
-	var spacing = 0.04  # 40mm spacing between model centers
+	# Use unit's base diameter with 25% gap for spacing
+	var spacing = unit.get_base_diameter_meters() * 1.25
 
 	for i in range(unit.size):
 		var model_pos = Vector3(
@@ -328,10 +332,13 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 	var display_name = unit.name + name_suffix
 	wrapper.name = "OPR_%s" % display_name.replace(" ", "_")
 
-	# Create 32mm base
+	# Use Army Forge recommended base size
+	var base_radius = unit.get_base_radius_meters()  # e.g., 32mm -> 0.016m
+
+	# Create base mesh with correct size
 	var base_mesh = CylinderMesh.new()
-	base_mesh.top_radius = 0.016  # 32mm diameter
-	base_mesh.bottom_radius = 0.016
+	base_mesh.top_radius = base_radius
+	base_mesh.bottom_radius = base_radius
 	base_mesh.height = 0.003
 
 	var base_instance = MeshInstance3D.new()
@@ -346,11 +353,13 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 	wrapper.add_child(base_instance)
 
-	# Create placeholder body (cylinder)
-	var body_height = 0.025 + randf() * 0.01  # Slight variation
+	# Create placeholder body (cylinder) - scaled to base size
+	# Larger bases (like 60mm walkers) get taller bodies
+	var scale_factor = base_radius / 0.016  # Relative to standard 32mm base
+	var body_height = (0.025 + randf() * 0.01) * scale_factor
 	var body_mesh = CylinderMesh.new()
-	body_mesh.top_radius = 0.008
-	body_mesh.bottom_radius = 0.01
+	body_mesh.top_radius = base_radius * 0.5
+	body_mesh.bottom_radius = base_radius * 0.625
 	body_mesh.height = body_height
 
 	var body_instance = MeshInstance3D.new()
@@ -365,14 +374,15 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 	wrapper.add_child(body_instance)
 
-	# Create head (sphere)
+	# Create head (sphere) - scaled to base size
+	var head_radius = base_radius * 0.375
 	var head_mesh = SphereMesh.new()
-	head_mesh.radius = 0.006
-	head_mesh.height = 0.012
+	head_mesh.radius = head_radius
+	head_mesh.height = head_radius * 2
 
 	var head_instance = MeshInstance3D.new()
 	head_instance.mesh = head_mesh
-	head_instance.position.y = 0.003 + body_height + 0.006
+	head_instance.position.y = 0.003 + body_height + head_radius
 
 	var head_material = StandardMaterial3D.new()
 	head_material.albedo_color = Color(0.9, 0.75, 0.6)  # Skin tone
@@ -382,13 +392,14 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 	wrapper.add_child(head_instance)
 
-	# Add collision shape
+	# Add collision shape - scaled to base size
+	var total_height = 0.003 + body_height + head_radius * 2
 	var collision = CollisionShape3D.new()
 	var shape = CylinderShape3D.new()
-	shape.radius = 0.016
-	shape.height = 0.04
+	shape.radius = base_radius
+	shape.height = total_height
 	collision.shape = shape
-	collision.position.y = 0.02
+	collision.position.y = total_height / 2
 	wrapper.add_child(collision)
 
 	# Add script for selection

@@ -54,6 +54,8 @@ class OPRUnit:
 	var weapons: Array[OPRWeapon] = []
 	var custom_name: String = ""  # User's nickname for the unit
 	var upgrades: Array[String] = []  # Selected upgrade names
+	var base_size_round: int = 32  # Recommended round base size in mm
+	var base_size_square: int = 30  # Recommended square base size in mm
 
 	func get_display_name() -> String:
 		if not custom_name.is_empty():
@@ -62,11 +64,19 @@ class OPRUnit:
 			return "%s [%d]" % [name, size]
 		return name
 
+	## Get base radius in meters (for 3D spawning)
+	func get_base_radius_meters() -> float:
+		return (base_size_round / 2.0) * 0.001  # mm to meters
+
+	## Get base diameter in meters
+	func get_base_diameter_meters() -> float:
+		return base_size_round * 0.001  # mm to meters
+
 	func get_stats_text() -> String:
 		var lines: Array[String] = []
 		lines.append("[b]%s[/b]" % get_display_name())
 		lines.append("Q%d+ | D%d+" % [quality, defense])
-		lines.append("%d models | %d pts" % [size, cost])
+		lines.append("%d models | %d pts | %dmm base" % [size, cost, base_size_round])
 
 		if not weapons.is_empty():
 			lines.append("")
@@ -229,6 +239,14 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 	unit.cost = data.get("cost", 0)
 	unit.quality = data.get("quality", 4)
 	unit.defense = data.get("defense", 4)
+
+	# Parse base sizes from Army Forge recommendations
+	var bases = data.get("bases", {})
+	if bases is Dictionary:
+		var round_size = bases.get("round", "32")
+		var square_size = bases.get("square", "30")
+		unit.base_size_round = int(round_size) if round_size else 32
+		unit.base_size_square = int(square_size) if square_size else 30
 
 	# Parse special rules (TTS API returns them fully resolved)
 	var rules = data.get("specialRules", [])
