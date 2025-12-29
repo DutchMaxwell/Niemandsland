@@ -1117,7 +1117,7 @@ func _update_opr_hover() -> void:
 				_hovered_model = collider
 				var unit = opr_army_manager.get_unit_for_model(collider)
 				if unit:
-					opr_stats_tooltip.show_unit(unit)
+					opr_stats_tooltip.show_unit(unit, collider)
 		else:
 			_clear_opr_hover()
 	else:
