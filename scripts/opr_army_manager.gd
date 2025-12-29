@@ -83,18 +83,22 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	var tray_pos = tray_info.position
 	var tray_bounds = tray_info.bounds  # Vector2 (width, depth)
 
-	var unit_spacing = 0.06  # Space between units
-	var model_spacing = 0.035  # Space between models in a unit
+	# Base diameter is 32mm (0.032m), model spacing within unit is 40mm
+	var base_diameter = 0.032
+	var model_spacing = 0.04  # 40mm spacing between models in a unit
+	var unit_gap = 0.08  # 8cm gap between different units
+	var row_height = 0.10  # 10cm between rows for clear separation
+	var edge_padding = 0.06  # Padding from tray edge
 
 	# Start position on tray (at elevated height)
 	var spawn_height = TRAY_DROP_HEIGHT
 	var current_pos = Vector3(
-		tray_pos.x - tray_bounds.x / 2 + 0.04,
+		tray_pos.x - tray_bounds.x / 2 + edge_padding,
 		spawn_height,
-		tray_pos.z - tray_bounds.y / 2 + 0.04
+		tray_pos.z - tray_bounds.y / 2 + edge_padding
 	)
 	var row_start_z = current_pos.z
-	var row_max_x = tray_pos.x + tray_bounds.x / 2 - 0.04
+	var row_max_x = tray_pos.x + tray_bounds.x / 2 - edge_padding
 
 	# Track unit counts for naming duplicates
 	var unit_name_counts: Dictionary = {}
@@ -116,6 +120,14 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 		if unit_name_counts[base_name] > 1:
 			display_suffix = " (%d)" % unit_index
 
+		# Calculate unit width before spawning to check if we need a new row
+		var unit_width = base_diameter + (unit.size - 1) * model_spacing
+
+		# Check if this unit would exceed row width - if so, start new row first
+		if current_pos.x + unit_width > row_max_x and current_pos.x > tray_pos.x - tray_bounds.x / 2 + edge_padding + 0.01:
+			current_pos.x = tray_pos.x - tray_bounds.x / 2 + edge_padding
+			current_pos.z += row_height
+
 		var unit_models = _spawn_unit(unit, current_pos, player_color, display_suffix)
 		all_models.append_array(unit_models)
 
@@ -125,14 +137,8 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 			model_to_unit[model] = unit
 			model.set_meta("unit_suffix", display_suffix)
 
-		# Calculate next position - move along X axis (width of tray)
-		var unit_width = unit.size * model_spacing
-		current_pos.x += unit_width + unit_spacing
-
-		# Start new row if too wide
-		if current_pos.x > row_max_x:
-			current_pos.x = tray_pos.x - tray_bounds.x / 2 + 0.04
-			current_pos.z += 0.08  # Next row
+		# Move to next position with gap between units
+		current_pos.x += unit_width + unit_gap
 
 	# Animate tray and models dropping down
 	_animate_tray_drop(tray, all_models, spawn_height)
@@ -142,15 +148,15 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	return all_models
 
 
-## Animate tray and models dropping from above
+## Animate tray and models dropping from above - smooth deceleration
 func _animate_tray_drop(tray: Node3D, models: Array[Node3D], start_height: float) -> void:
 	# Position tray at elevated height
 	tray.position.y = start_height
 
-	# Create tween for smooth drop animation
+	# Create tween for smooth drop animation (fast start, gradual slowdown)
 	var tween = create_tween()
 	tween.set_ease(Tween.EASE_OUT)
-	tween.set_trans(Tween.TRANS_BOUNCE)
+	tween.set_trans(Tween.TRANS_CUBIC)  # Smooth deceleration, no bounce
 
 	# Animate tray dropping
 	tween.tween_property(tray, "position:y", 0.0, TRAY_DROP_DURATION)
@@ -159,7 +165,7 @@ func _animate_tray_drop(tray: Node3D, models: Array[Node3D], start_height: float
 	for model in models:
 		var model_tween = create_tween()
 		model_tween.set_ease(Tween.EASE_OUT)
-		model_tween.set_trans(Tween.TRANS_BOUNCE)
+		model_tween.set_trans(Tween.TRANS_CUBIC)  # Smooth deceleration, no bounce
 		var target_y = 0.0
 		model_tween.tween_property(model, "position:y", target_y, TRAY_DROP_DURATION)
 
@@ -288,12 +294,12 @@ func _get_tray_position_and_bounds(player_id: int) -> Dictionary:
 ## Spawn a single unit with all its models
 func _spawn_unit(unit: OPRApiClient.OPRUnit, position: Vector3, player_color: Color, name_suffix: String = "") -> Array[Node3D]:
 	var models: Array[Node3D] = []
-	var spacing = 0.04  # 40mm spacing
+	var spacing = 0.04  # 40mm spacing between model centers
 
 	for i in range(unit.size):
 		var model_pos = Vector3(
 			position.x + i * spacing,
-			0,
+			position.y,  # Preserve Y position for animation
 			position.z
 		)
 
