@@ -1179,14 +1179,15 @@ func _on_wgs_game_imported(game: WGSClient.WGSGame) -> void:
 	# Store the game
 	wgs_game_manager.current_game = game
 
-	# Calculate offset to center the game on the table
-	# WGS coordinates are in inches from top-left (0,0)
-	# We want to center it on our table
-	var table_size = table.table_size * 0.3048  # FEET_TO_METERS
+	# Set table size from WGS game
+	var wgs_table_size = game.get_table_size_feet()
+	print("Setting table size to %.0fx%.0f ft (from WGS)" % [wgs_table_size.x, wgs_table_size.y])
+	table.setup_table(wgs_table_size)
+	_adjust_camera_for_table_size(wgs_table_size)
 
-	# WGS uses top-left as origin, OpenTTS uses center
-	# Offset to position relative to table center
-	var offset = Vector3(-table_size.x / 2, 0, -table_size.y / 2)
+	# Calculate offset: WGS uses top-left (0,0), OpenTTS uses center
+	var table_meters = game.get_table_size_meters()
+	var offset = Vector3(-table_meters.x / 2, 0, -table_meters.y / 2)
 
 	# Spawn all units
 	var spawned = wgs_game_manager.spawn_game(offset)
