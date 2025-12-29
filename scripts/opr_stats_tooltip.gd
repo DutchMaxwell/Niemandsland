@@ -132,8 +132,11 @@ func _update_content() -> void:
 func _format_weapon(weapon: OPRApiClient.OPRWeapon) -> String:
 	var parts: Array[String] = []
 
-	# Name
-	parts.append(weapon.name)
+	# Name with count
+	if weapon.count > 1:
+		parts.append("%dx %s" % [weapon.count, weapon.name])
+	else:
+		parts.append(weapon.name)
 
 	# Range
 	if weapon.range_value > 0:
