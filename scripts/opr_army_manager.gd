@@ -353,13 +353,15 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 	wrapper.add_child(base_instance)
 
-	# Create placeholder body (cylinder) - scaled to base size
-	# Larger bases (like 60mm walkers) get taller bodies
-	var scale_factor = base_radius / 0.016  # Relative to standard 32mm base
-	var body_height = (0.025 + randf() * 0.01) * scale_factor
+	# Create placeholder body (cylinder) - moderately scaled to base size
+	# Use sqrt for gentler scaling: 60mm base gets ~1.37x height, not 1.875x
+	var scale_factor = sqrt(base_radius / 0.016)  # Gentler scaling
+	var body_height = (0.025 + randf() * 0.005) * scale_factor
 	var body_mesh = CylinderMesh.new()
-	body_mesh.top_radius = base_radius * 0.5
-	body_mesh.bottom_radius = base_radius * 0.625
+	# Body width relative to base - slightly narrower for larger bases
+	var body_width_ratio = lerp(0.5, 0.35, clampf((base_radius - 0.016) / 0.03, 0.0, 1.0))
+	body_mesh.top_radius = base_radius * body_width_ratio
+	body_mesh.bottom_radius = base_radius * (body_width_ratio + 0.1)
 	body_mesh.height = body_height
 
 	var body_instance = MeshInstance3D.new()

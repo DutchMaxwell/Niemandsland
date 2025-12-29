@@ -109,6 +109,22 @@ class OPRWeapon:
 		return text
 
 
+## Safely convert a value to int (handles string, int, float, null)
+static func _safe_int(value, default: int = 0) -> int:
+	if value == null:
+		return default
+	if value is int:
+		return value
+	if value is float:
+		return int(value)
+	if value is String:
+		if value.is_valid_int():
+			return value.to_int()
+		elif value.is_valid_float():
+			return int(value.to_float())
+	return default
+
+
 func _ready() -> void:
 	_http_request = HTTPRequest.new()
 	add_child(_http_request)
@@ -245,8 +261,12 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 	if bases is Dictionary:
 		var round_size = bases.get("round", "32")
 		var square_size = bases.get("square", "30")
-		unit.base_size_round = int(round_size) if round_size else 32
-		unit.base_size_square = int(square_size) if square_size else 30
+		# Safely convert to int (value can be string "32" or int 32)
+		unit.base_size_round = _safe_int(round_size, 32)
+		unit.base_size_square = _safe_int(square_size, 30)
+		# Clamp to reasonable miniature base sizes (20mm - 120mm)
+		unit.base_size_round = clampi(unit.base_size_round, 20, 120)
+		unit.base_size_square = clampi(unit.base_size_square, 20, 120)
 
 	# Parse special rules (TTS API returns them fully resolved)
 	var rules = data.get("specialRules", [])
