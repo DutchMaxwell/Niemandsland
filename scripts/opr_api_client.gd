@@ -123,6 +123,167 @@ func import_from_file(file_path: String) -> OPRArmy:
 		return await _parse_army_forge_json(content, file_path.get_file())
 
 
+## Import army from a share link or list ID
+## Share link format: https://army-forge.onepagerules.com/share?id=XXX&name=YYY
+## Or just the list ID: XXX
+func import_from_share_link(share_link_or_id: String) -> OPRArmy:
+	var list_id = _extract_list_id(share_link_or_id)
+	if list_id.is_empty():
+		import_failed.emit("Ungültige Share-URL oder List-ID")
+		return null
+
+	loading_progress.emit("Lade Armee von Army Forge...")
+
+	# Call the TTS API endpoint
+	var url = "%s/tts?id=%s" % [API_BASE_URL, list_id]
+	print("OPRApiClient: Fetching from %s" % url)
+
+	var error = _http_request.request(url)
+	if error != OK:
+		push_error("OPRApiClient: HTTP request failed: %d" % error)
+		import_failed.emit("Verbindung fehlgeschlagen")
+		return null
+
+	# Wait for response
+	var result = await _http_request.request_completed
+
+	var response_code = result[1]
+	var body = result[3]
+
+	if response_code != 200:
+		push_error("OPRApiClient: API returned %d" % response_code)
+		import_failed.emit("API-Fehler: %d" % response_code)
+		return null
+
+	var json_text = body.get_string_from_utf8()
+	return _parse_tts_api_response(json_text)
+
+
+## Extract list ID from share link or raw ID
+func _extract_list_id(input: String) -> String:
+	input = input.strip_edges()
+
+	# If it's a URL, extract the id parameter
+	if input.begins_with("http"):
+		# Parse URL: https://army-forge.onepagerules.com/share?id=XXX&name=YYY
+		var id_start = input.find("id=")
+		if id_start < 0:
+			return ""
+		id_start += 3  # Skip "id="
+		var id_end = input.find("&", id_start)
+		if id_end < 0:
+			id_end = input.length()
+		return input.substr(id_start, id_end - id_start)
+
+	# Otherwise assume it's a raw ID
+	return input
+
+
+## Parse the TTS API response (contains full resolved unit data!)
+func _parse_tts_api_response(json_text: String) -> OPRArmy:
+	var json = JSON.new()
+	var error = json.parse(json_text)
+
+	if error != OK:
+		push_error("OPRApiClient: JSON parse error: %s" % json.get_error_message())
+		import_failed.emit("Ungültiges API-Response Format")
+		return null
+
+	var data = json.data
+	if not data is Dictionary:
+		import_failed.emit("Ungültige Armee-Daten")
+		return null
+
+	var army = OPRArmy.new()
+
+	# Parse army info
+	army.id = data.get("listId", str(Time.get_unix_time_from_system()))
+	army.name = data.get("listName", "Imported Army")
+	army.game_system = _expand_game_system(data.get("gameSystem", "gf"))
+	army.points = data.get("listPoints", 0)
+
+	# Parse units - TTS API returns fully resolved units!
+	var units_data = data.get("units", [])
+	for unit_data in units_data:
+		var unit = _parse_tts_unit(unit_data)
+		if unit:
+			army.units.append(unit)
+			army.model_count += unit.size
+
+	print("OPRApiClient: Loaded from API '%s' - %d units, %d pts, %d models" % [
+		army.name, army.units.size(), army.points, army.model_count
+	])
+
+	army_loaded.emit(army)
+	return army
+
+
+## Parse a unit from TTS API response
+func _parse_tts_unit(data: Dictionary) -> OPRUnit:
+	var unit = OPRUnit.new()
+
+	unit.id = data.get("id", str(randi()))
+	unit.name = data.get("name", "Unknown Unit")
+	unit.custom_name = data.get("customName", "")
+	unit.size = data.get("size", 1)
+	unit.cost = data.get("cost", 0)
+	unit.quality = data.get("quality", 4)
+	unit.defense = data.get("defense", 4)
+
+	# Parse special rules (TTS API returns them fully resolved)
+	var rules = data.get("specialRules", [])
+	for rule in rules:
+		if rule is String:
+			unit.special_rules.append(rule)
+		elif rule is Dictionary:
+			var rule_name = rule.get("name", "")
+			var rule_rating = rule.get("rating", "")
+			if rule_rating != "" and rule_rating != null:
+				unit.special_rules.append("%s(%s)" % [rule_name, str(rule_rating)])
+			elif not rule_name.is_empty():
+				unit.special_rules.append(rule_name)
+
+	# Parse equipment/loadout (weapons)
+	var loadout = data.get("loadout", data.get("equipment", []))
+	for item in loadout:
+		var weapon = _parse_tts_weapon(item)
+		if weapon:
+			unit.weapons.append(weapon)
+
+	return unit
+
+
+## Parse a weapon from TTS API response
+func _parse_tts_weapon(data) -> OPRWeapon:
+	if data is String:
+		var str_weapon = OPRWeapon.new()
+		str_weapon.name = data
+		return str_weapon
+
+	if not data is Dictionary:
+		return null
+
+	var weapon = OPRWeapon.new()
+	weapon.name = data.get("name", data.get("label", "Unknown"))
+	weapon.range_value = data.get("range", 0)
+	weapon.attacks = data.get("attacks", 1)
+	weapon.count = data.get("count", 1)
+
+	var rules = data.get("specialRules", [])
+	for rule in rules:
+		if rule is String:
+			weapon.special_rules.append(rule)
+		elif rule is Dictionary:
+			var rule_name = rule.get("name", "")
+			var rule_rating = rule.get("rating", "")
+			if rule_rating != "" and rule_rating != null:
+				weapon.special_rules.append("%s(%s)" % [rule_name, str(rule_rating)])
+			elif not rule_name.is_empty():
+				weapon.special_rules.append(rule_name)
+
+	return weapon
+
+
 ## Parse Army Forge JSON export (the real format)
 func _parse_army_forge_json(json_text: String, source_name: String = "") -> OPRArmy:
 	var json = JSON.new()

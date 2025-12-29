@@ -16,6 +16,8 @@ var cancel_btn: Button
 var status_label: Label
 var paste_btn: Button
 var clear_btn: Button
+var share_link_input: LineEdit
+var link_status_label: Label
 
 ## Selected file path (for file mode)
 var _selected_file: String = ""
@@ -135,6 +137,54 @@ func _setup_ui() -> void:
 	file_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	file_tab.add_child(file_spacer)
 
+	# === SHARE LINK TAB ===
+	var link_tab = VBoxContainer.new()
+	link_tab.name = "Share-Link"
+	link_tab.add_theme_constant_override("separation", 8)
+	tab_container.add_child(link_tab)
+
+	var link_info = Label.new()
+	link_info.text = "Army Forge Share-Link oder List-ID eingeben:"
+	link_info.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	link_tab.add_child(link_info)
+
+	var link_example = Label.new()
+	link_example.text = "z.B. https://army-forge.onepagerules.com/share?id=XXX"
+	link_example.add_theme_font_size_override("font_size", 11)
+	link_example.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+	link_tab.add_child(link_example)
+
+	# Link input
+	share_link_input = LineEdit.new()
+	share_link_input.placeholder_text = "Share-Link oder List-ID hier einfügen..."
+	share_link_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	link_tab.add_child(share_link_input)
+
+	# Link buttons row
+	var link_btn_row = HBoxContainer.new()
+	link_btn_row.add_theme_constant_override("separation", 8)
+	link_tab.add_child(link_btn_row)
+
+	var paste_link_btn = Button.new()
+	paste_link_btn.text = "Aus Zwischenablage"
+	paste_link_btn.pressed.connect(_on_paste_link)
+	link_btn_row.add_child(paste_link_btn)
+
+	var fetch_btn = Button.new()
+	fetch_btn.text = "Armee laden"
+	fetch_btn.pressed.connect(_on_fetch_from_link)
+	link_btn_row.add_child(fetch_btn)
+
+	link_status_label = Label.new()
+	link_status_label.text = ""
+	link_status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	link_btn_row.add_child(link_status_label)
+
+	# Spacer in link tab
+	var link_spacer = Control.new()
+	link_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	link_tab.add_child(link_spacer)
+
 	# === COMMON ELEMENTS (below tabs) ===
 
 	# Player selection
@@ -206,7 +256,10 @@ func _setup_ui() -> void:
 
 
 func _on_tab_changed(tab: int) -> void:
-	_import_mode = "text" if tab == 0 else "file"
+	match tab:
+		0: _import_mode = "text"
+		1: _import_mode = "file"
+		2: _import_mode = "link"
 	# Reset preview when switching tabs
 	_preview_army = null
 	army_preview.text = ""
@@ -279,6 +332,38 @@ func _on_file_selected(path: String) -> void:
 		import_btn.disabled = true
 
 
+func _on_paste_link() -> void:
+	var clipboard = DisplayServer.clipboard_get()
+	if not clipboard.is_empty():
+		share_link_input.text = clipboard
+
+
+func _on_fetch_from_link() -> void:
+	var link = share_link_input.text.strip_edges()
+	if link.is_empty():
+		link_status_label.text = "Kein Link eingegeben"
+		link_status_label.add_theme_color_override("font_color", Color(0.8, 0.5, 0.5))
+		return
+
+	link_status_label.text = "Lädt..."
+	link_status_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.5))
+	army_preview.text = "[color=#aaaaaa]Lade Armee von Army Forge API...[/color]"
+	import_btn.disabled = true
+
+	# Fetch from API
+	_preview_army = await api_client.import_from_share_link(link)
+	if _preview_army and _preview_army.units.size() > 0:
+		link_status_label.text = "Geladen!"
+		link_status_label.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5))
+		_update_preview()
+		import_btn.disabled = false
+	else:
+		link_status_label.text = "Fehler"
+		link_status_label.add_theme_color_override("font_color", Color(0.8, 0.5, 0.5))
+		army_preview.text = "[color=red]Konnte Armee nicht laden.[/color]\n\nPrüfe den Link und die Internetverbindung."
+		import_btn.disabled = true
+
+
 func _update_preview() -> void:
 	if not _preview_army:
 		army_preview.text = ""
@@ -336,6 +421,8 @@ func _reset_dialog() -> void:
 	_selected_file = ""
 	_preview_army = null
 	text_input.text = ""
+	share_link_input.text = ""
+	link_status_label.text = ""
 	status_label.text = "Keine Datei ausgewählt"
 	status_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	army_preview.text = ""
