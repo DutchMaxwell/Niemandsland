@@ -33,18 +33,20 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	# Handle WASD keyboard movement
+	# Handle WASD keyboard movement (only when Shift is NOT pressed to avoid conflicts)
 	_move_direction = Vector2.ZERO
 	_rotation_direction = 0.0
 
-	if Input.is_key_pressed(KEY_W):
-		_move_direction.y += 1.0
-	if Input.is_key_pressed(KEY_S):
-		_move_direction.y -= 1.0
-	if Input.is_key_pressed(KEY_A):
-		_move_direction.x -= 1.0
-	if Input.is_key_pressed(KEY_D):
-		_move_direction.x += 1.0
+	# Skip WASD if Shift is held (used for other shortcuts like Shift+A, Shift+R)
+	if not Input.is_key_pressed(KEY_SHIFT):
+		if Input.is_key_pressed(KEY_W):
+			_move_direction.y += 1.0
+		if Input.is_key_pressed(KEY_S):
+			_move_direction.y -= 1.0
+		if Input.is_key_pressed(KEY_A):
+			_move_direction.x -= 1.0
+		if Input.is_key_pressed(KEY_D):
+			_move_direction.x += 1.0
 
 	# Q/E for rotation
 	if Input.is_key_pressed(KEY_Q):
