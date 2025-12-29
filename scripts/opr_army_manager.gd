@@ -25,8 +25,11 @@ const TRAY_SIDES = {
 }
 
 const FEET_TO_METERS: float = 0.3048
-const TRAY_WIDTH: float = 0.4  # 40cm wide trays
+const INCHES_TO_METERS: float = 0.0254
+const TRAY_SIZE_INCHES: float = 32.0  # 32x32 inch tray
 const TRAY_MARGIN: float = 0.05  # 5cm gap from table edge
+const TRAY_DROP_HEIGHT: float = 0.5  # Start 50cm above table
+const TRAY_DROP_DURATION: float = 1.5  # Animation duration in seconds
 
 ## Reference to the object manager for spawning
 var object_manager: Node3D
@@ -74,19 +77,24 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	var all_models: Array[Node3D] = []
 	var player_color = PLAYER_COLORS.get(army.player_id, Color.GRAY)
 
-	# Create army tray and get spawn position
+	# Create army tray and get spawn position (starts elevated)
 	var tray = _create_army_tray(army.player_id, army.name, player_color)
 	var tray_info = _get_tray_position_and_bounds(army.player_id)
 	var tray_pos = tray_info.position
 	var tray_bounds = tray_info.bounds  # Vector2 (width, depth)
 
-	var unit_spacing = 0.08  # Space between units
-	var model_spacing = 0.04  # Space between models in a unit
+	var unit_spacing = 0.06  # Space between units
+	var model_spacing = 0.035  # Space between models in a unit
 
-	# Start position on tray
-	var current_pos = Vector3(tray_pos.x - tray_bounds.x / 2 + 0.03, 0, tray_pos.z - tray_bounds.y / 2 + 0.03)
-	var row_start_x = current_pos.x
-	var row_max_z = tray_pos.z + tray_bounds.y / 2 - 0.03
+	# Start position on tray (at elevated height)
+	var spawn_height = TRAY_DROP_HEIGHT
+	var current_pos = Vector3(
+		tray_pos.x - tray_bounds.x / 2 + 0.04,
+		spawn_height,
+		tray_pos.z - tray_bounds.y / 2 + 0.04
+	)
+	var row_start_z = current_pos.z
+	var row_max_x = tray_pos.x + tray_bounds.x / 2 - 0.04
 
 	# Track unit counts for naming duplicates
 	var unit_name_counts: Dictionary = {}
@@ -117,18 +125,43 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 			model_to_unit[model] = unit
 			model.set_meta("unit_suffix", display_suffix)
 
-		# Calculate next position - move along Z axis (depth of tray)
+		# Calculate next position - move along X axis (width of tray)
 		var unit_width = unit.size * model_spacing
-		current_pos.z += unit_width + unit_spacing
+		current_pos.x += unit_width + unit_spacing
 
-		# Start new row if too deep
-		if current_pos.z > row_max_z:
-			current_pos.z = tray_pos.z - tray_bounds.y / 2 + 0.03
-			current_pos.x += 0.1  # Next column
+		# Start new row if too wide
+		if current_pos.x > row_max_x:
+			current_pos.x = tray_pos.x - tray_bounds.x / 2 + 0.04
+			current_pos.z += 0.08  # Next row
+
+	# Animate tray and models dropping down
+	_animate_tray_drop(tray, all_models, spawn_height)
 
 	print("OPRArmyManager: Spawned %d models for army '%s' on tray" % [all_models.size(), army.name])
 	army_spawned.emit(army, all_models)
 	return all_models
+
+
+## Animate tray and models dropping from above
+func _animate_tray_drop(tray: Node3D, models: Array[Node3D], start_height: float) -> void:
+	# Position tray at elevated height
+	tray.position.y = start_height
+
+	# Create tween for smooth drop animation
+	var tween = create_tween()
+	tween.set_ease(Tween.EASE_OUT)
+	tween.set_trans(Tween.TRANS_BOUNCE)
+
+	# Animate tray dropping
+	tween.tween_property(tray, "position:y", 0.0, TRAY_DROP_DURATION)
+
+	# Animate all models dropping together
+	for model in models:
+		var model_tween = create_tween()
+		model_tween.set_ease(Tween.EASE_OUT)
+		model_tween.set_trans(Tween.TRANS_BOUNCE)
+		var target_y = 0.0
+		model_tween.tween_property(model, "position:y", target_y, TRAY_DROP_DURATION)
 
 
 ## Create an army tray beside the table for a player
@@ -222,33 +255,32 @@ func _add_tray_border(tray: Node3D, tray_size: Vector2, border_color: Color) -> 
 func _get_tray_position_and_bounds(player_id: int) -> Dictionary:
 	# Get table size (default 4x4 feet)
 	var table_size_feet = Vector2(4, 4)
-	if table and table.has_method("get") and table.get("table_size"):
+	if table and table.get("table_size"):
 		table_size_feet = table.table_size
 
 	var table_size_m = table_size_feet * FEET_TO_METERS
-	var tray_depth = table_size_m.y  # Tray as long as table
-	var tray_width = TRAY_WIDTH
+
+	# Fixed tray size: 32x32 inches
+	var tray_size_m = TRAY_SIZE_INCHES * INCHES_TO_METERS  # ~0.81m
 
 	var pos = Vector3.ZERO
-	var bounds = Vector2(tray_width, tray_depth)
+	var bounds = Vector2(tray_size_m, tray_size_m)  # Square tray
 
 	var side = TRAY_SIDES.get(player_id, "left")
 
 	match side:
 		"left":
-			pos.x = -table_size_m.x / 2 - TRAY_MARGIN - tray_width / 2
+			pos.x = -table_size_m.x / 2 - TRAY_MARGIN - tray_size_m / 2
 			pos.z = 0
 		"right":
-			pos.x = table_size_m.x / 2 + TRAY_MARGIN + tray_width / 2
+			pos.x = table_size_m.x / 2 + TRAY_MARGIN + tray_size_m / 2
 			pos.z = 0
 		"front":
 			pos.x = 0
-			pos.z = -table_size_m.y / 2 - TRAY_MARGIN - tray_width / 2
-			bounds = Vector2(table_size_m.x, tray_width)  # Swap for horizontal tray
+			pos.z = -table_size_m.y / 2 - TRAY_MARGIN - tray_size_m / 2
 		"back":
 			pos.x = 0
-			pos.z = table_size_m.y / 2 + TRAY_MARGIN + tray_width / 2
-			bounds = Vector2(table_size_m.x, tray_width)
+			pos.z = table_size_m.y / 2 + TRAY_MARGIN + tray_size_m / 2
 
 	return {"position": pos, "bounds": bounds}
 
