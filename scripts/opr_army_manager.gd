@@ -332,18 +332,34 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 	var display_name = unit.name + name_suffix
 	wrapper.name = "OPR_%s" % display_name.replace(" ", "_")
 
-	# Use Army Forge recommended base size
-	var base_radius = unit.get_base_radius_meters()  # e.g., 32mm -> 0.016m
+	# Get base dimensions from Army Forge
+	var base_is_oval = unit.base_is_oval
+	var base_width = unit.base_width_mm * 0.001  # mm to meters (perpendicular to facing)
+	var base_depth = unit.base_depth_mm * 0.001  # mm to meters (in facing direction / "north")
+	var base_radius = unit.get_base_radius_meters()  # For body scaling
 
-	# Create base mesh with correct size
-	var base_mesh = CylinderMesh.new()
-	base_mesh.top_radius = base_radius
-	base_mesh.bottom_radius = base_radius
-	base_mesh.height = 0.003
-
+	# Create base mesh
 	var base_instance = MeshInstance3D.new()
-	base_instance.mesh = base_mesh
-	base_instance.position.y = 0.0015
+
+	if base_is_oval:
+		# Oval base: use cylinder with non-uniform scale
+		# Long side (depth) faces north (+Z direction)
+		var base_mesh = CylinderMesh.new()
+		base_mesh.top_radius = 0.5  # Unit radius, will be scaled
+		base_mesh.bottom_radius = 0.5
+		base_mesh.height = 0.003
+		base_instance.mesh = base_mesh
+		# Scale: X = width, Y = height (unchanged), Z = depth
+		base_instance.scale = Vector3(base_width, 1.0, base_depth)
+		base_instance.position.y = 0.0015
+	else:
+		# Round base: normal cylinder
+		var base_mesh = CylinderMesh.new()
+		base_mesh.top_radius = base_radius
+		base_mesh.bottom_radius = base_radius
+		base_mesh.height = 0.003
+		base_instance.mesh = base_mesh
+		base_instance.position.y = 0.0015
 
 	var base_material = StandardMaterial3D.new()
 	base_material.albedo_color = player_color
@@ -394,11 +410,12 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 	wrapper.add_child(head_instance)
 
-	# Add collision shape - scaled to base size
+	# Add collision shape - scaled to base size (use larger dimension for oval)
+	var collision_radius = max(base_width, base_depth) / 2.0 if base_is_oval else base_radius
 	var total_height = 0.003 + body_height + head_radius * 2
 	var collision = CollisionShape3D.new()
 	var shape = CylinderShape3D.new()
-	shape.radius = base_radius
+	shape.radius = collision_radius
 	shape.height = total_height
 	collision.shape = shape
 	collision.position.y = total_height / 2

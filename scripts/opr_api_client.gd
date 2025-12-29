@@ -56,6 +56,9 @@ class OPRUnit:
 	var upgrades: Array[String] = []  # Selected upgrade names
 	var base_size_round: int = 32  # Recommended round base size in mm
 	var base_size_square: int = 30  # Recommended square base size in mm
+	var base_is_oval: bool = false  # True if base is oval (WIDTHxDEPTH format)
+	var base_width_mm: int = 32  # Width in mm (perpendicular to facing)
+	var base_depth_mm: int = 32  # Depth in mm (in facing direction / "north")
 
 	func get_display_name() -> String:
 		if not custom_name.is_empty():
@@ -76,7 +79,8 @@ class OPRUnit:
 		var lines: Array[String] = []
 		lines.append("[b]%s[/b]" % get_display_name())
 		lines.append("Q%d+ | D%d+" % [quality, defense])
-		lines.append("%d models | %d pts | %dmm base" % [size, cost, base_size_round])
+		var base_text = "%dx%dmm oval" % [base_width_mm, base_depth_mm] if base_is_oval else "%dmm round" % base_size_round
+		lines.append("%d models | %d pts | %s base" % [size, cost, base_text])
 
 		if not weapons.is_empty():
 			lines.append("")
@@ -132,6 +136,42 @@ static func _safe_int(value, default: int = 0) -> int:
 		elif value.is_valid_float():
 			return int(value.to_float())
 	return default
+
+
+## Parse base size value and return [is_oval, width, depth]
+## For round bases: returns [false, size, size]
+## For oval bases like "60x35": returns [true, 35, 60] (width perpendicular to facing, depth in facing direction)
+static func _parse_base_size(value, default: int = 32) -> Array:
+	if value == null:
+		return [false, default, default]
+
+	if value is int:
+		return [false, value, value]
+
+	if value is float:
+		return [false, int(value), int(value)]
+
+	if value is String:
+		# Handle oval base format like "60x35" or "120x92" (WIDTHxDEPTH)
+		if "x" in value:
+			var parts = value.split("x")
+			if parts.size() >= 2:
+				var first = parts[0].to_int() if parts[0].is_valid_int() else default
+				var second = parts[1].to_int() if parts[1].is_valid_int() else default
+				# Army Forge format: first number is WIDTH (larger), second is DEPTH (smaller)
+				# But for miniatures, long side faces forward (north)
+				# So: depth (facing direction) = larger value, width (perpendicular) = smaller value
+				var depth = max(first, second)  # Long side in facing direction
+				var width = min(first, second)  # Short side perpendicular
+				return [true, width, depth]
+		if value.is_valid_int():
+			var size = value.to_int()
+			return [false, size, size]
+		elif value.is_valid_float():
+			var size = int(value.to_float())
+			return [false, size, size]
+
+	return [false, default, default]
 
 
 func _ready() -> void:
@@ -270,13 +310,19 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 	if bases is Dictionary and not bases.is_empty():
 		var round_size = bases.get("round", "32")
 		var square_size = bases.get("square", "30")
-		# Safely convert to int (value can be string "32" or int 32)
-		unit.base_size_round = _safe_int(round_size, 32)
+		# Parse base size including oval format like "60x35"
+		var parsed = _parse_base_size(round_size, 32)
+		unit.base_is_oval = parsed[0]
+		unit.base_width_mm = clampi(parsed[1], 20, 150)
+		unit.base_depth_mm = clampi(parsed[2], 20, 150)
+		# base_size_round stores the larger dimension for compatibility
+		unit.base_size_round = max(unit.base_width_mm, unit.base_depth_mm)
 		unit.base_size_square = _safe_int(square_size, 30)
-		# Clamp to reasonable miniature base sizes (20mm - 120mm)
-		unit.base_size_round = clampi(unit.base_size_round, 20, 120)
-		unit.base_size_square = clampi(unit.base_size_square, 20, 120)
-		print("OPRApiClient: %s - base size %dmm (from API)" % [unit.name, unit.base_size_round])
+		unit.base_size_square = clampi(unit.base_size_square, 20, 150)
+		if unit.base_is_oval:
+			print("OPRApiClient: %s - oval base %dx%dmm (from API)" % [unit.name, unit.base_width_mm, unit.base_depth_mm])
+		else:
+			print("OPRApiClient: %s - round base %dmm (from API)" % [unit.name, unit.base_size_round])
 	else:
 		print("OPRApiClient: %s - base size %dmm (default, no 'bases' field)" % [unit.name, unit.base_size_round])
 
