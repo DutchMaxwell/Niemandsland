@@ -76,6 +76,11 @@ var opr_import_dialog: OPRImportDialog
 var opr_stats_tooltip: OPRStatsTooltip
 var _hovered_model: Node3D = null
 
+# WGS (Wargaming Simulator) Integration
+@onready var import_wgs_btn: Button = %ImportWGS
+var wgs_game_manager: WGSGameManager
+var wgs_import_dialog: WGSImportDialog
+
 # TTS Import state
 var _tts_json_path: String = ""
 var _tts_models_dir: String = ""
@@ -209,6 +214,21 @@ func _ready() -> void:
 
 	# Connect OPR import button
 	import_opr_btn.pressed.connect(_on_import_opr_army)
+
+	# Initialize WGS Game Manager
+	wgs_game_manager = WGSGameManager.new()
+	wgs_game_manager.object_manager = object_manager
+	add_child(wgs_game_manager)
+
+	# Initialize WGS Import Dialog
+	wgs_import_dialog = WGSImportDialog.new()
+	get_tree().root.add_child(wgs_import_dialog)
+	wgs_import_dialog.game_imported.connect(_on_wgs_game_imported)
+	wgs_import_dialog.hide()
+
+	# Connect WGS import button (if it exists in UI)
+	if import_wgs_btn:
+		import_wgs_btn.pressed.connect(_on_import_wgs_game)
 
 	print("OpenTTS ready!")
 
@@ -1115,3 +1135,34 @@ func _clear_opr_hover() -> void:
 		_hovered_model = null
 		if opr_stats_tooltip:
 			opr_stats_tooltip.hide_tooltip()
+
+
+## ============================================================================
+## WGS (Wargaming Simulator) Integration
+## ============================================================================
+
+## Open WGS import dialog
+func _on_import_wgs_game() -> void:
+	wgs_import_dialog.popup_centered()
+
+
+## Handle game imported from WGS dialog
+func _on_wgs_game_imported(game: WGSClient.WGSGame) -> void:
+	print("Importing WGS game '%s' with %d units" % [game.game_id, game.get_unit_count()])
+
+	# Store the game
+	wgs_game_manager.current_game = game
+
+	# Set table size from WGS game
+	var wgs_table_size = game.get_table_size_feet()
+	print("Setting table size to %.0fx%.0f ft (from WGS)" % [wgs_table_size.x, wgs_table_size.y])
+	table.setup_table(wgs_table_size)
+	_adjust_camera_for_table_size(wgs_table_size)
+
+	# Calculate offset: WGS uses top-left (0,0), OpenTTS uses center
+	var table_meters = game.get_table_size_meters()
+	var offset = Vector3(-table_meters.x / 2, 0, -table_meters.y / 2)
+
+	# Spawn all units
+	var spawned = wgs_game_manager.spawn_game(offset)
+	print("Spawned %d models from WGS game '%s'" % [spawned.size(), game.game_id])
