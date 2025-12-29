@@ -260,10 +260,12 @@ func _on_tab_changed(tab: int) -> void:
 		0: _import_mode = "text"
 		1: _import_mode = "file"
 		2: _import_mode = "link"
-	# Reset preview when switching tabs
+	# Reset preview when switching tabs (check for null during initial setup)
 	_preview_army = null
-	army_preview.text = ""
-	import_btn.disabled = true
+	if army_preview:
+		army_preview.text = ""
+	if import_btn:
+		import_btn.disabled = true
 
 
 func _on_paste_from_clipboard() -> void:
