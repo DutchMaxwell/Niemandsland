@@ -8,6 +8,10 @@ extends Node3D
 @onready var directional_light: DirectionalLight3D = $DirectionalLight3D
 @onready var world_environment: WorldEnvironment = $WorldEnvironment
 
+# Tron Intro
+var tron_intro: TronIntro
+var _intro_finished: bool = false
+
 # Lighting Controller
 var lighting_controller: Node
 var lighting_panel: Window
@@ -61,6 +65,9 @@ const GROUP_ROTATION_SPEED: float = 90.0  # degrees per second
 @onready var load_game_btn: Button = %LoadGameBtn
 @onready var save_game_dialog: FileDialog = %SaveGameDialog
 @onready var load_game_dialog: FileDialog = %LoadGameDialog
+
+# Graphics Settings UI
+@onready var graphics_quality_option: OptionButton = %GraphicsQualityOption
 
 # Terrain Browser UI
 @onready var terrain_library = %TerrainLibrary
@@ -156,6 +163,12 @@ func _ready() -> void:
 	save_manager.object_manager = object_manager
 	save_manager.table = table
 
+	# Connect Graphics Settings UI
+	graphics_quality_option.item_selected.connect(_on_graphics_quality_changed)
+	# Set initial selection based on current preset (map enum to UI index)
+	# Enum: ULTRA=0, HIGH=1, MEDIUM=2, LOW=3 -> UI: Low=0, Medium=1, High=2, Ultra=3
+	graphics_quality_option.selected = 3 - GraphicsSettings.current_preset
+
 	# Connect Terrain Browser UI
 	terrain_library.object_manager = object_manager
 	terrain_browser_btn.pressed.connect(_on_terrain_browser_pressed)
@@ -229,6 +242,9 @@ func _ready() -> void:
 	# Connect WGS import button (if it exists in UI)
 	if import_wgs_btn:
 		import_wgs_btn.pressed.connect(_on_import_wgs_game)
+
+	# Initialize and play Tron intro
+	_start_tron_intro()
 
 	print("OpenTTS ready!")
 
@@ -1166,3 +1182,74 @@ func _on_wgs_game_imported(game: WGSClient.WGSGame) -> void:
 	# Spawn all units
 	var spawned = wgs_game_manager.spawn_game(offset)
 	print("Spawned %d models from WGS game '%s'" % [spawned.size(), game.game_id])
+
+
+## ============================================================================
+## Tron Intro Animation
+## ============================================================================
+
+## Start the Tron-style intro animation
+func _start_tron_intro() -> void:
+	# Create intro node
+	tron_intro = TronIntro.new()
+	tron_intro.name = "TronIntro"
+	add_child(tron_intro)
+
+	# Connect signals
+	tron_intro.intro_finished.connect(_on_intro_finished)
+	tron_intro.intro_skipped.connect(_on_intro_finished)
+
+	# Hide UI during intro
+	$UI.visible = false
+
+	# Start the intro
+	tron_intro.play_intro(self)
+
+
+## Called when intro finishes or is skipped
+func _on_intro_finished() -> void:
+	_intro_finished = true
+
+	# Show UI
+	$UI.visible = true
+
+	# Clean up intro after a delay
+	if tron_intro:
+		await get_tree().create_timer(1.0).timeout
+		if is_instance_valid(tron_intro):
+			tron_intro.queue_free()
+			tron_intro = null
+
+	print("Tron intro finished - welcome to OpenTTS!")
+
+
+## ============================================================================
+## Graphics Settings
+## ============================================================================
+
+## Handle graphics quality selection change
+## UI order: Low=0, Medium=1, High=2, Ultra=3
+## Enum order: ULTRA=0, HIGH=1, MEDIUM=2, LOW=3
+func _on_graphics_quality_changed(index: int) -> void:
+	var preset: GraphicsSettings.QualityPreset
+	var preset_name: String
+
+	match index:
+		0:  # Low
+			preset = GraphicsSettings.QualityPreset.LOW
+			preset_name = "Low"
+		1:  # Medium
+			preset = GraphicsSettings.QualityPreset.MEDIUM
+			preset_name = "Medium"
+		2:  # High
+			preset = GraphicsSettings.QualityPreset.HIGH
+			preset_name = "High"
+		3:  # Ultra
+			preset = GraphicsSettings.QualityPreset.ULTRA
+			preset_name = "Ultra"
+		_:
+			preset = GraphicsSettings.QualityPreset.MEDIUM
+			preset_name = "Medium"
+
+	GraphicsSettings.apply_preset(preset)
+	print("Graphics quality set to: %s" % preset_name)

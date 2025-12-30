@@ -15,68 +15,85 @@ enum QualityPreset {
 var current_preset: QualityPreset = QualityPreset.MEDIUM
 var custom_settings: Dictionary = {}
 
-# Preset configurations
+# Preset configurations - ALL use native resolution for sharp rendering
 const PRESETS = {
 	QualityPreset.ULTRA: {
 		"name": "Ultra",
-		"description": "4K, All Effects",
-		"msaa_3d": 3,  # 8x
-		"use_taa": false,  # Disabled to prevent ghosting
-		"shadow_size": 4096,
-		"shadow_filter": 3,
+		"description": "Native 4K, Maximum Quality",
+		"msaa_3d": 3,  # 8x MSAA
+		"use_taa": false,
+		"shadow_size": 8192,
+		"shadow_filter": 5,  # Ultra soft shadows
 		"ssao": true,
+		"ssao_radius": 2.5,
+		"ssao_intensity": 2.0,
 		"ssil": true,
 		"ssr": true,
 		"sdfgi": true,
 		"sdfgi_cascades": 6,
 		"volumetric_fog": true,
-		"fsr_scale": 1.0,  # Native
+		"fsr_scale": 1.0,  # NATIVE - no scaling!
 		"glow": true,
+		"glow_intensity": 0.7,
+		"glow_bloom": 0.2,
 	},
 	QualityPreset.HIGH: {
 		"name": "High",
-		"description": "1440p, Most Effects",
-		"msaa_3d": 3,  # 8x
-		"use_taa": false,  # Disabled to prevent ghosting
-		"shadow_size": 2048,
-		"shadow_filter": 2,
+		"description": "Native Resolution, High Quality",
+		"msaa_3d": 3,  # 8x MSAA
+		"use_taa": false,
+		"shadow_size": 8192,
+		"shadow_filter": 5,
 		"ssao": true,
+		"ssao_radius": 2.5,
+		"ssao_intensity": 1.8,
+		"ssil": true,
+		"ssr": true,
+		"sdfgi": true,
+		"sdfgi_cascades": 4,
+		"volumetric_fog": false,
+		"fsr_scale": 1.0,  # NATIVE - no scaling!
+		"glow": true,
+		"glow_intensity": 0.7,
+		"glow_bloom": 0.2,
+	},
+	QualityPreset.MEDIUM: {
+		"name": "Medium",
+		"description": "Native Resolution, Balanced",
+		"msaa_3d": 3,  # 8x MSAA - keep high for sharp edges
+		"use_taa": false,
+		"shadow_size": 4096,
+		"shadow_filter": 4,
+		"ssao": true,
+		"ssao_radius": 2.0,
+		"ssao_intensity": 1.5,
 		"ssil": false,
 		"ssr": true,
 		"sdfgi": false,
 		"volumetric_fog": false,
-		"fsr_scale": 0.77,  # FSR Quality
+		"fsr_scale": 1.0,  # NATIVE - no scaling!
 		"glow": true,
-	},
-	QualityPreset.MEDIUM: {
-		"name": "Medium",
-		"description": "1080p, Balanced",
-		"msaa_3d": 2,  # 4x (increased from 2x)
-		"use_taa": false,  # Disabled to prevent ghosting
-		"shadow_size": 2048,
-		"shadow_filter": 1,
-		"ssao": true,
-		"ssil": false,
-		"ssr": false,
-		"sdfgi": false,
-		"volumetric_fog": false,
-		"fsr_scale": 0.67,  # FSR Balanced
-		"glow": true,
+		"glow_intensity": 0.6,
+		"glow_bloom": 0.15,
 	},
 	QualityPreset.LOW: {
 		"name": "Low",
-		"description": "1080p, Performance",
-		"msaa_3d": 0,  # Disabled
+		"description": "Performance Mode",
+		"msaa_3d": 2,  # 4x MSAA
 		"use_taa": false,
-		"shadow_size": 1024,
-		"shadow_filter": 0,
-		"ssao": false,
+		"shadow_size": 2048,
+		"shadow_filter": 2,
+		"ssao": true,
+		"ssao_radius": 1.5,
+		"ssao_intensity": 1.0,
 		"ssil": false,
 		"ssr": false,
 		"sdfgi": false,
 		"volumetric_fog": false,
-		"fsr_scale": 0.59,  # FSR Performance
-		"glow": false,
+		"fsr_scale": 1.0,  # Keep native even on low
+		"glow": true,
+		"glow_intensity": 0.5,
+		"glow_bloom": 0.1,
 	}
 }
 
@@ -138,6 +155,10 @@ func apply_environment_settings(settings: Dictionary) -> void:
 
 	# SSAO
 	env.ssao_enabled = settings["ssao"]
+	if settings.has("ssao_radius"):
+		env.ssao_radius = settings["ssao_radius"]
+	if settings.has("ssao_intensity"):
+		env.ssao_intensity = settings["ssao_intensity"]
 
 	# SSIL
 	env.ssil_enabled = settings.get("ssil", false)
@@ -166,6 +187,10 @@ func apply_environment_settings(settings: Dictionary) -> void:
 
 	# Glow
 	env.glow_enabled = settings["glow"]
+	if settings.has("glow_intensity"):
+		env.glow_intensity = settings["glow_intensity"]
+	if settings.has("glow_bloom"):
+		env.glow_bloom = settings["glow_bloom"]
 
 
 ## Apply custom settings
