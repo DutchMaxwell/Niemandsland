@@ -48,15 +48,20 @@ func _draw() -> void:
 	var grid_dims = map_layout._calculate_grid_dimensions()
 	var grid_rect = _get_grid_rect()
 	var cell_size = Vector2(grid_rect.size.x / grid_dims.x, grid_rect.size.y / grid_dims.y)
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
 
 	# Draw table background (always axis-aligned)
 	draw_rect(grid_rect, Color(0.15, 0.15, 0.15, 1.0), true)
 
-	# Draw terrain cells (always axis-aligned - no rotation)
+	# Draw terrain cells - rotated with the grid
+	draw_set_transform(center, angle_rad, Vector2.ONE)
+	var half_grid = grid_rect.size / 2.0
+
 	for x in range(grid_dims.x):
 		for y in range(grid_dims.y):
 			var cell_pos = Vector2i(x, y)
-			var rect_pos = grid_rect.position + Vector2(x * cell_size.x, y * cell_size.y)
+			var rect_pos = Vector2(x * cell_size.x, y * cell_size.y) - half_grid
 			var rect = Rect2(rect_pos, cell_size)
 
 			var terrain_type = map_layout.grid_cells.get(cell_pos, map_layout.TerrainType.NONE)
@@ -74,30 +79,50 @@ func _draw() -> void:
 				var inner_rect = Rect2(rect_pos + Vector2(inset, inset), cell_size - Vector2(inset * 2, inset * 2))
 				draw_rect(inner_rect, Color(0.2, 0.4, 0.9, 0.9), false, 2.0)
 
-	# Draw table outline (always axis-aligned)
+	# Draw grid lines (also rotated)
+	var line_color = Color(0.6, 0.6, 0.6, 0.4)
+	var major_color = Color(1.0, 1.0, 1.0, 0.6)
+
+	# Vertical lines
+	for x in range(grid_dims.x + 1):
+		var start = Vector2(x * cell_size.x, 0) - half_grid
+		var end = Vector2(x * cell_size.x, grid_rect.size.y) - half_grid
+		var is_major = (x % 4 == 0)
+		draw_line(start, end, major_color if is_major else line_color, 2.0 if is_major else 1.0)
+
+	# Horizontal lines
+	for y in range(grid_dims.y + 1):
+		var start = Vector2(0, y * cell_size.y) - half_grid
+		var end = Vector2(grid_rect.size.x, y * cell_size.y) - half_grid
+		var is_major = (y % 4 == 0)
+		draw_line(start, end, major_color if is_major else line_color, 2.0 if is_major else 1.0)
+
+	# Reset transform
+	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
+
+	# Draw table outline (always axis-aligned - represents the actual table)
 	draw_rect(grid_rect, Color.WHITE, false, 3.0)
 
-	# Draw rotated grid overlay lines (for diagonal terrain placement visualization)
-	if map_layout.grid_rotation_degrees != 0:
-		_draw_rotated_grid_lines(grid_rect, grid_dims, cell_size)
-
 	# Draw center point (for symmetry reference)
-	var center = grid_rect.position + grid_rect.size / 2.0
 	draw_circle(center, 5.0, Color(1.0, 1.0, 0.0, 0.8))
 
 	# Draw symmetry indicator if enabled
 	if map_layout.point_symmetry_enabled:
-		# Draw symmetry axes
-		draw_line(
-			Vector2(grid_rect.position.x, center.y),
-			Vector2(grid_rect.end.x, center.y),
-			Color(1.0, 1.0, 0.0, 0.3), 2.0
-		)
-		draw_line(
-			Vector2(center.x, grid_rect.position.y),
-			Vector2(center.x, grid_rect.end.y),
-			Color(1.0, 1.0, 0.0, 0.3), 2.0
-		)
+		# Draw rotated symmetry axes
+		var axis_length = grid_rect.size.length() / 2.0
+		var h_start = Vector2(-axis_length, 0).rotated(angle_rad) + center
+		var h_end = Vector2(axis_length, 0).rotated(angle_rad) + center
+		var v_start = Vector2(0, -axis_length).rotated(angle_rad) + center
+		var v_end = Vector2(0, axis_length).rotated(angle_rad) + center
+
+		# Clip to grid bounds
+		var h_clipped = _clip_line_to_rect(h_start, h_end, grid_rect)
+		var v_clipped = _clip_line_to_rect(v_start, v_end, grid_rect)
+
+		if h_clipped:
+			draw_line(h_clipped[0], h_clipped[1], Color(1.0, 1.0, 0.0, 0.3), 2.0)
+		if v_clipped:
+			draw_line(v_clipped[0], v_clipped[1], Color(1.0, 1.0, 0.0, 0.3), 2.0)
 
 	# Draw table size info
 	var table_size = map_layout.table_size_feet
@@ -107,52 +132,6 @@ func _draw() -> void:
 		grid_dims.x, grid_dims.y
 	]
 	draw_string(ThemeDB.fallback_font, grid_rect.position + Vector2(5, -5), size_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
-
-
-func _draw_rotated_grid_lines(grid_rect: Rect2, grid_dims: Vector2i, cell_size: Vector2) -> void:
-	## Draw rotated grid lines as an overlay to show diagonal placement angles
-	## Lines are clipped to the table boundaries
-	var center = grid_rect.position + grid_rect.size / 2.0
-	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
-	var line_color = Color(1.0, 0.5, 0.0, 0.6)  # Orange for rotated lines
-	var major_color = Color(1.0, 0.7, 0.0, 0.8)
-
-	# Calculate how far lines need to extend to cover the entire grid when rotated
-	var diagonal = grid_rect.size.length() * 0.75
-
-	# Draw vertical lines (rotated)
-	var num_lines_x = int(diagonal / cell_size.x) + 1
-	for i in range(-num_lines_x, num_lines_x + 1):
-		var offset = i * cell_size.x
-		var start = Vector2(offset, -diagonal)
-		var end = Vector2(offset, diagonal)
-
-		# Rotate around origin
-		start = start.rotated(angle_rad) + center
-		end = end.rotated(angle_rad) + center
-
-		# Clip line to grid bounds
-		var clipped = _clip_line_to_rect(start, end, grid_rect)
-		if clipped:
-			var is_major = (i % 4 == 0)
-			draw_line(clipped[0], clipped[1], major_color if is_major else line_color, 2.0 if is_major else 1.0)
-
-	# Draw horizontal lines (rotated)
-	var num_lines_y = int(diagonal / cell_size.y) + 1
-	for i in range(-num_lines_y, num_lines_y + 1):
-		var offset = i * cell_size.y
-		var start = Vector2(-diagonal, offset)
-		var end = Vector2(diagonal, offset)
-
-		# Rotate around origin
-		start = start.rotated(angle_rad) + center
-		end = end.rotated(angle_rad) + center
-
-		# Clip line to grid bounds
-		var clipped = _clip_line_to_rect(start, end, grid_rect)
-		if clipped:
-			var is_major = (i % 4 == 0)
-			draw_line(clipped[0], clipped[1], major_color if is_major else line_color, 2.0 if is_major else 1.0)
 
 
 func _clip_line_to_rect(p1: Vector2, p2: Vector2, rect: Rect2):
