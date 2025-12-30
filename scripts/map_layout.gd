@@ -167,70 +167,161 @@ func _update_stats() -> void:
 
 	counts[TerrainType.NONE] = total_cells - (counts[TerrainType.RUINS] + counts[TerrainType.FOREST] + counts[TerrainType.CONTAINER] + counts[TerrainType.DANGEROUS])
 
-	# Calculate percentages
+	# Count terrain pieces (connected cells of same type count as one piece)
+	var piece_counts = _count_terrain_pieces()
+	var total_pieces = piece_counts[TerrainType.RUINS] + piece_counts[TerrainType.FOREST] + piece_counts[TerrainType.CONTAINER] + piece_counts[TerrainType.DANGEROUS]
+
+	# Calculate coverage percentages
+	var terrain_cells = counts[TerrainType.RUINS] + counts[TerrainType.FOREST] + counts[TerrainType.CONTAINER] + counts[TerrainType.DANGEROUS]
+	var coverage_pct = (float(terrain_cells) / total_cells) * 100.0 if total_cells > 0 else 0.0
+
 	# Blocking LOS = everything that provides cover (Ruins, Forest, Container)
-	var blocking_count = counts[TerrainType.RUINS] + counts[TerrainType.FOREST] + counts[TerrainType.CONTAINER]
-	var cover_count = counts[TerrainType.RUINS] + counts[TerrainType.FOREST] + counts[TerrainType.CONTAINER]  # All cover terrain
-	var difficult_count = counts[TerrainType.FOREST]  # Only Forest is difficult
-	var dangerous_count = counts[TerrainType.DANGEROUS]
+	var blocking_cells = counts[TerrainType.RUINS] + counts[TerrainType.FOREST] + counts[TerrainType.CONTAINER]
+	var blocking_pieces = piece_counts[TerrainType.RUINS] + piece_counts[TerrainType.FOREST] + piece_counts[TerrainType.CONTAINER]
 
-	var blocking_pct = (float(blocking_count) / total_cells) * 100.0 if total_cells > 0 else 0.0
-	var cover_pct = (float(cover_count) / total_cells) * 100.0 if total_cells > 0 else 0.0
-	var difficult_pct = (float(difficult_count) / total_cells) * 100.0 if total_cells > 0 else 0.0
-	var dangerous_pct = (float(dangerous_count) / total_cells) * 100.0 if total_cells > 0 else 0.0
+	# Cover = Ruins, Forest, Container
+	var cover_pieces = piece_counts[TerrainType.RUINS] + piece_counts[TerrainType.FOREST] + piece_counts[TerrainType.CONTAINER]
 
-	stats_label.text = """Current Coverage (%d total cells):
-• Blocking LOS: %d cells (%.1f%%)
-• Cover: %d cells (%.1f%%)
-• Difficult: %d cells (%.1f%%)
-• Dangerous: %d cells (%.1f%%)
+	# Difficult = Forest only
+	var difficult_pieces = piece_counts[TerrainType.FOREST]
 
-Terrain breakdown:
-  Ruins: %d | Forest: %d | Container: %d | Dangerous: %d""" % [
-		total_cells,
-		blocking_count, blocking_pct,
-		cover_count, cover_pct,
-		difficult_count, difficult_pct,
-		dangerous_count, dangerous_pct,
-		counts[TerrainType.RUINS],
-		counts[TerrainType.FOREST],
-		counts[TerrainType.CONTAINER],
-		counts[TerrainType.DANGEROUS]
+	# Dangerous pieces
+	var dangerous_pieces = piece_counts[TerrainType.DANGEROUS]
+
+	# Calculate piece percentages (relative to total terrain pieces)
+	var blocking_pct = (float(blocking_pieces) / total_pieces) * 100.0 if total_pieces > 0 else 0.0
+	var cover_pct = (float(cover_pieces) / total_pieces) * 100.0 if total_pieces > 0 else 0.0
+	var difficult_pct = (float(difficult_pieces) / total_pieces) * 100.0 if total_pieces > 0 else 0.0
+
+	stats_label.text = """Coverage: %.1f%% (%d/%d cells)
+Terrain Pieces: %d (goal: 15-20)
+
+Pieces by type:
+  Ruins: %d | Forest: %d
+  Container: %d | Dangerous: %d
+
+Of %d pieces:
+• Blocking LOS: %d (%.0f%%)
+• Cover: %d (%.0f%%)
+• Difficult: %d (%.0f%%)""" % [
+		coverage_pct, terrain_cells, total_cells,
+		total_pieces,
+		piece_counts[TerrainType.RUINS],
+		piece_counts[TerrainType.FOREST],
+		piece_counts[TerrainType.CONTAINER],
+		piece_counts[TerrainType.DANGEROUS],
+		total_pieces,
+		blocking_pieces, blocking_pct,
+		cover_pieces, cover_pct,
+		difficult_pieces, difficult_pct
 	]
 
-	_update_recommendations_with_values(total_cells, blocking_pct, cover_pct, difficult_pct, dangerous_count)
+	_update_recommendations_with_values(total_pieces, coverage_pct, blocking_pct, cover_pct, difficult_pct, dangerous_pieces)
+
+
+func _count_terrain_pieces() -> Dictionary:
+	## Count connected terrain pieces using flood fill
+	## Adjacent cells of the same type count as ONE piece
+	var piece_counts := {
+		TerrainType.RUINS: 0,
+		TerrainType.FOREST: 0,
+		TerrainType.CONTAINER: 0,
+		TerrainType.DANGEROUS: 0
+	}
+
+	var visited := {}
+
+	for cell_pos in grid_cells:
+		if visited.has(cell_pos):
+			continue
+
+		var terrain_type = grid_cells[cell_pos]
+		if terrain_type == TerrainType.NONE:
+			continue
+
+		# Flood fill to find all connected cells of same type
+		_flood_fill(cell_pos, terrain_type, visited)
+		piece_counts[terrain_type] += 1
+
+	return piece_counts
+
+
+func _flood_fill(start: Vector2i, terrain_type: int, visited: Dictionary) -> void:
+	## Mark all connected cells of the same type as visited
+	var stack := [start]
+
+	while stack.size() > 0:
+		var current = stack.pop_back()
+
+		if visited.has(current):
+			continue
+
+		if not grid_cells.has(current):
+			continue
+
+		if grid_cells[current] != terrain_type:
+			continue
+
+		visited[current] = true
+
+		# Check 4 neighbors (orthogonal only - not diagonal)
+		var neighbors := [
+			Vector2i(current.x + 1, current.y),
+			Vector2i(current.x - 1, current.y),
+			Vector2i(current.x, current.y + 1),
+			Vector2i(current.x, current.y - 1)
+		]
+
+		for neighbor in neighbors:
+			if not visited.has(neighbor):
+				stack.append(neighbor)
 
 
 func _update_recommendations() -> void:
 	_update_stats()
 
 
-func _update_recommendations_with_values(total_cells: int, blocking_pct: float, cover_pct: float, difficult_pct: float, dangerous_count: int) -> void:
+func _update_recommendations_with_values(total_pieces: int, coverage_pct: float, blocking_pct: float, cover_pct: float, difficult_pct: float, dangerous_pieces: int) -> void:
+	# OPR Guidelines:
+	# - 15-20 terrain pieces
+	# - At least 25% table coverage
+	# - 50% of pieces should block LOS
+	# - 33% should provide cover
+	# - 33% should be difficult
+	# - 2 dangerous pieces (1 per player)
+
+	var pieces_ok = total_pieces >= 15
+	var coverage_ok = coverage_pct >= 25.0
 	var blocking_ok = blocking_pct >= 50.0
 	var cover_ok = cover_pct >= 33.0
 	var difficult_ok = difficult_pct >= 33.0
-	var dangerous_ok = dangerous_count >= 2  # Each player picks 1 piece
+	var dangerous_ok = dangerous_pieces >= 2
 
 	var check_mark = "✓"
 	var cross_mark = "✗"
 
-	recommendations_label.text = """OPR Terrain Recommendations:
+	recommendations_label.text = """OPR Terrain Guidelines:
 
-%s At least 50%% should block LOS (current: %.1f%%)
-%s At least 33%% should provide cover (current: %.1f%%)
-%s At least 33%% should be difficult (current: %.1f%%)
-%s Each player picks 1 dangerous piece (need 2, have: %d)
+%s 15-20 terrain pieces (have: %d)
+%s At least 25%% table coverage (%.1f%%)
+%s 50%% should block LOS (%.0f%%)
+%s 33%% should provide cover (%.0f%%)
+%s 33%% should be difficult (%.0f%%)
+%s 1 dangerous piece per player (have: %d)
 
-Example for 12 terrain pieces:
-6 block LOS, 4 cover, 4 difficult, 2 dangerous""" % [
+Tip: Connected cells = 1 piece
+No gaps >12" between terrain""" % [
+		check_mark if pieces_ok else cross_mark, total_pieces,
+		check_mark if coverage_ok else cross_mark, coverage_pct,
 		check_mark if blocking_ok else cross_mark, blocking_pct,
 		check_mark if cover_ok else cross_mark, cover_pct,
 		check_mark if difficult_ok else cross_mark, difficult_pct,
-		check_mark if dangerous_ok else cross_mark, dangerous_count
+		check_mark if dangerous_ok else cross_mark, dangerous_pieces
 	]
 
 	# Color code the recommendations
-	if blocking_ok and cover_ok and difficult_ok and dangerous_ok:
+	var all_ok = pieces_ok and coverage_ok and blocking_ok and cover_ok and difficult_ok and dangerous_ok
+	if all_ok:
 		recommendations_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
 	else:
 		recommendations_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))
