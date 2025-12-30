@@ -54,6 +54,11 @@ class OPRUnit:
 	var weapons: Array[OPRWeapon] = []
 	var custom_name: String = ""  # User's nickname for the unit
 	var upgrades: Array[String] = []  # Selected upgrade names
+	var base_size_round: int = 32  # Recommended round base size in mm
+	var base_size_square: int = 30  # Recommended square base size in mm
+	var base_is_oval: bool = false  # True if base is oval (WIDTHxDEPTH format)
+	var base_width_mm: int = 32  # Width in mm (perpendicular to facing)
+	var base_depth_mm: int = 32  # Depth in mm (in facing direction / "north")
 
 	func get_display_name() -> String:
 		if not custom_name.is_empty():
@@ -62,11 +67,20 @@ class OPRUnit:
 			return "%s [%d]" % [name, size]
 		return name
 
+	## Get base radius in meters (for 3D spawning)
+	func get_base_radius_meters() -> float:
+		return (base_size_round / 2.0) * 0.001  # mm to meters
+
+	## Get base diameter in meters
+	func get_base_diameter_meters() -> float:
+		return base_size_round * 0.001  # mm to meters
+
 	func get_stats_text() -> String:
 		var lines: Array[String] = []
 		lines.append("[b]%s[/b]" % get_display_name())
 		lines.append("Q%d+ | D%d+" % [quality, defense])
-		lines.append("%d models | %d pts" % [size, cost])
+		var base_text = "%dx%dmm oval" % [base_width_mm, base_depth_mm] if base_is_oval else "%dmm round" % base_size_round
+		lines.append("%d models | %d pts | %s base" % [size, cost, base_text])
 
 		if not weapons.is_empty():
 			lines.append("")
@@ -97,6 +111,67 @@ class OPRWeapon:
 		if not special_rules.is_empty():
 			text += " [%s]" % ", ".join(special_rules)
 		return text
+
+
+## Safely convert a value to int (handles string, int, float, null)
+## Also handles oval base format like "60x35" - returns the larger dimension
+static func _safe_int(value, default: int = 0) -> int:
+	if value == null:
+		return default
+	if value is int:
+		return value
+	if value is float:
+		return int(value)
+	if value is String:
+		# Handle oval base format like "60x35" or "120x92"
+		if "x" in value:
+			var parts = value.split("x")
+			if parts.size() >= 2:
+				var width = parts[0].to_int() if parts[0].is_valid_int() else 0
+				var depth = parts[1].to_int() if parts[1].is_valid_int() else 0
+				# Return the larger dimension for sizing
+				return max(width, depth)
+		if value.is_valid_int():
+			return value.to_int()
+		elif value.is_valid_float():
+			return int(value.to_float())
+	return default
+
+
+## Parse base size value and return [is_oval, width, depth]
+## For round bases: returns [false, size, size]
+## For oval bases like "60x35": returns [true, 35, 60] (width perpendicular to facing, depth in facing direction)
+static func _parse_base_size(value, default: int = 32) -> Array:
+	if value == null:
+		return [false, default, default]
+
+	if value is int:
+		return [false, value, value]
+
+	if value is float:
+		return [false, int(value), int(value)]
+
+	if value is String:
+		# Handle oval base format like "60x35" or "120x92" (WIDTHxDEPTH)
+		if "x" in value:
+			var parts = value.split("x")
+			if parts.size() >= 2:
+				var first = parts[0].to_int() if parts[0].is_valid_int() else default
+				var second = parts[1].to_int() if parts[1].is_valid_int() else default
+				# Army Forge format: first number is WIDTH (larger), second is DEPTH (smaller)
+				# But for miniatures, long side faces forward (north)
+				# So: depth (facing direction) = larger value, width (perpendicular) = smaller value
+				var depth = max(first, second)  # Long side in facing direction
+				var width = min(first, second)  # Short side perpendicular
+				return [true, width, depth]
+		if value.is_valid_int():
+			var size = value.to_int()
+			return [false, size, size]
+		elif value.is_valid_float():
+			var size = int(value.to_float())
+			return [false, size, size]
+
+	return [false, default, default]
 
 
 func _ready() -> void:
@@ -229,6 +304,27 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 	unit.cost = data.get("cost", 0)
 	unit.quality = data.get("quality", 4)
 	unit.defense = data.get("defense", 4)
+
+	# Parse base sizes from Army Forge recommendations
+	var bases = data.get("bases", {})
+	if bases is Dictionary and not bases.is_empty():
+		var round_size = bases.get("round", "32")
+		var square_size = bases.get("square", "30")
+		# Parse base size including oval format like "60x35"
+		var parsed = _parse_base_size(round_size, 32)
+		unit.base_is_oval = parsed[0]
+		unit.base_width_mm = clampi(parsed[1], 20, 150)
+		unit.base_depth_mm = clampi(parsed[2], 20, 150)
+		# base_size_round stores the larger dimension for compatibility
+		unit.base_size_round = max(unit.base_width_mm, unit.base_depth_mm)
+		unit.base_size_square = _safe_int(square_size, 30)
+		unit.base_size_square = clampi(unit.base_size_square, 20, 150)
+		if unit.base_is_oval:
+			print("OPRApiClient: %s - oval base %dx%dmm (from API)" % [unit.name, unit.base_width_mm, unit.base_depth_mm])
+		else:
+			print("OPRApiClient: %s - round base %dmm (from API)" % [unit.name, unit.base_size_round])
+	else:
+		print("OPRApiClient: %s - base size %dmm (default, no 'bases' field)" % [unit.name, unit.base_size_round])
 
 	# Parse special rules (TTS API returns them fully resolved)
 	var rules = data.get("specialRules", [])

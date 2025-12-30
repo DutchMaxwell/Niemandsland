@@ -112,7 +112,9 @@ class WGSUnit:
 		)
 
 	func get_base_radius_meters() -> float:
-		return (base_size / 2.0) * WGSClient.INCH_TO_METER
+		# Clamp base_size to reasonable values (0.5" to 6" - 13mm to 150mm)
+		var clamped_size = clampf(base_size, 0.5, 6.0)
+		return (clamped_size / 2.0) * WGSClient.INCH_TO_METER
 
 	func get_stats_text() -> String:
 		var lines: Array[String] = []
@@ -126,6 +128,10 @@ class WGSUnit:
 
 		if model_count > 1:
 			lines.append("%d models" % model_count)
+
+		# Show base size in mm (convert from inches)
+		var base_mm = int(base_size * 25.4)
+		lines.append("%dmm base" % base_mm)
 
 		if not weapons.is_empty():
 			lines.append("")
