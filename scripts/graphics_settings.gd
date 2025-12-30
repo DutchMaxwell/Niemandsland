@@ -15,68 +15,72 @@ enum QualityPreset {
 var current_preset: QualityPreset = QualityPreset.MEDIUM
 var custom_settings: Dictionary = {}
 
-# Preset configurations
+# Preset configurations - ALL use native resolution for sharp rendering
 const PRESETS = {
 	QualityPreset.ULTRA: {
 		"name": "Ultra",
-		"description": "4K, All Effects",
-		"msaa_3d": 3,  # 8x
-		"use_taa": false,  # Disabled to prevent ghosting
-		"shadow_size": 4096,
-		"shadow_filter": 3,
+		"description": "Native 4K, All Effects",
+		"msaa_3d": 3,  # 8x MSAA
+		"use_taa": false,
+		"shadow_size": 8192,
+		"shadow_filter": 5,  # Ultra soft shadows
 		"ssao": true,
 		"ssil": true,
 		"ssr": true,
 		"sdfgi": true,
 		"sdfgi_cascades": 6,
 		"volumetric_fog": true,
-		"fsr_scale": 1.0,  # Native
+		"fsr_scale": 1.0,  # NATIVE - no scaling!
 		"glow": true,
+		"glow_intensity": 0.8,
 	},
 	QualityPreset.HIGH: {
 		"name": "High",
-		"description": "1440p, Most Effects",
-		"msaa_3d": 3,  # 8x
-		"use_taa": false,  # Disabled to prevent ghosting
-		"shadow_size": 2048,
-		"shadow_filter": 2,
+		"description": "Native Resolution, Most Effects",
+		"msaa_3d": 3,  # 8x MSAA
+		"use_taa": false,
+		"shadow_size": 4096,
+		"shadow_filter": 4,
 		"ssao": true,
 		"ssil": false,
 		"ssr": true,
 		"sdfgi": false,
 		"volumetric_fog": false,
-		"fsr_scale": 0.77,  # FSR Quality
+		"fsr_scale": 1.0,  # NATIVE - no scaling!
 		"glow": true,
+		"glow_intensity": 0.8,
 	},
 	QualityPreset.MEDIUM: {
 		"name": "Medium",
-		"description": "1080p, Balanced",
-		"msaa_3d": 2,  # 4x (increased from 2x)
-		"use_taa": false,  # Disabled to prevent ghosting
+		"description": "Native Resolution, Balanced",
+		"msaa_3d": 2,  # 4x MSAA
+		"use_taa": false,
 		"shadow_size": 2048,
-		"shadow_filter": 1,
+		"shadow_filter": 3,
 		"ssao": true,
 		"ssil": false,
 		"ssr": false,
 		"sdfgi": false,
 		"volumetric_fog": false,
-		"fsr_scale": 0.67,  # FSR Balanced
+		"fsr_scale": 1.0,  # NATIVE - no scaling!
 		"glow": true,
+		"glow_intensity": 0.6,
 	},
 	QualityPreset.LOW: {
 		"name": "Low",
-		"description": "1080p, Performance",
-		"msaa_3d": 0,  # Disabled
+		"description": "Performance Mode",
+		"msaa_3d": 1,  # 2x MSAA (minimum for decent edges)
 		"use_taa": false,
 		"shadow_size": 1024,
-		"shadow_filter": 0,
+		"shadow_filter": 1,
 		"ssao": false,
 		"ssil": false,
 		"ssr": false,
 		"sdfgi": false,
 		"volumetric_fog": false,
-		"fsr_scale": 0.59,  # FSR Performance
+		"fsr_scale": 0.77,  # Only Low uses FSR
 		"glow": false,
+		"glow_intensity": 0.0,
 	}
 }
 
@@ -166,6 +170,8 @@ func apply_environment_settings(settings: Dictionary) -> void:
 
 	# Glow
 	env.glow_enabled = settings["glow"]
+	if settings.has("glow_intensity"):
+		env.glow_intensity = settings["glow_intensity"]
 
 
 ## Apply custom settings
