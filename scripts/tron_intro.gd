@@ -1,60 +1,61 @@
 extends Node3D
 class_name TronIntro
-## Tron-style intro animation with laser-drawing effect
-## Lines are drawn by visible cursor points, camera starts flat and rises
+## Tron-style intro with individual lines drawn one by one
+## Each line is animated from start to end with a visible laser cursor
 
 signal intro_finished
 signal intro_skipped
 
-## Animation timing (total ~8 seconds)
-const PHASE_BLACKOUT_DURATION: float = 0.3
-const PHASE_GRID_DRAW_DURATION: float = 3.0      # Grid lines drawn by laser
-const PHASE_TABLE_DRAW_DURATION: float = 2.0     # Table edges drawn
-const PHASE_MATERIALIZE_DURATION: float = 1.5    # Fill in and reveal
-const PHASE_CAMERA_SETTLE_DURATION: float = 1.2  # Camera moves to final position
+## Animation timing
+const GRID_LINE_DRAW_TIME: float = 0.08   # Time to draw one grid line
+const TABLE_LINE_DRAW_TIME: float = 0.15  # Time to draw one table edge
+const CURSOR_SIZE: float = 0.04
+const LINE_WIDTH: float = 0.008
 
 ## Colors
 const CYAN = Color(0.0, 1.0, 1.0)
-const MAGENTA = Color(1.0, 0.0, 1.0)
 const WHITE = Color(1.0, 1.0, 1.0)
-const DARK_BLUE = Color(0.0, 0.02, 0.08)
+const DARK_BG = Color(0.0, 0.01, 0.04)
+
+## Grid configuration
+const GRID_EXTENT: float = 8.0  # How far grid extends
+const GRID_SPACING: float = 0.5
 
 ## References
 var main_scene: Node3D
 var world_environment: WorldEnvironment
 var table: Node3D
 var original_camera_pivot: Node3D
-var original_environment: Environment
 
 ## Intro elements
-var grid_floor: MeshInstance3D
-var grid_material: ShaderMaterial
-var wireframe_table: MeshInstance3D
-var wireframe_material: ShaderMaterial
+var lines_container: Node3D
+var cursor_mesh: MeshInstance3D
 var intro_camera: Camera3D
 var intro_camera_pivot: Node3D
+var canvas_layer: CanvasLayer
 var black_overlay: ColorRect
 var skip_label: Label
-var canvas_layer: CanvasLayer
 
-## Original values to restore
+## Line drawing state
+var _lines_to_draw: Array = []  # Array of {start: Vector3, end: Vector3, color: Color}
+var _current_line_index: int = 0
+var _current_line_progress: float = 0.0
+var _current_line_mesh: MeshInstance3D = null
+var _phase: int = 0  # 0=blackout, 1=grid, 2=table, 3=materialize, 4=done
+
+## Original values
 var _original_glow_intensity: float = 1.0
 var _original_glow_bloom: float = 0.3
-var _original_camera_transform: Transform3D
 
 ## State
 var _is_playing: bool = false
-var _current_phase: int = 0
-var _phase_timer: float = 0.0
 var _total_time: float = 0.0
-var _can_skip: bool = true
+var _phase_start_time: float = 0.0
 
 
 func _input(event: InputEvent) -> void:
-	if not _is_playing or not _can_skip:
+	if not _is_playing:
 		return
-
-	# Skip on any key press or mouse click
 	if event is InputEventKey and event.pressed and not event.echo:
 		_skip_intro()
 	elif event is InputEventMouseButton and event.pressed:
@@ -65,158 +66,153 @@ func _process(delta: float) -> void:
 	if not _is_playing:
 		return
 
-	_phase_timer += delta
 	_total_time += delta
-	_update_current_phase()
-	_update_camera_animation()
+
+	match _phase:
+		0:
+			_update_blackout(delta)
+		1:
+			_update_line_drawing(delta, GRID_LINE_DRAW_TIME)
+		2:
+			_update_line_drawing(delta, TABLE_LINE_DRAW_TIME)
+		3:
+			_update_materialize(delta)
+		4:
+			_finish_intro()
+
+	_update_camera()
 
 
-## Start the intro animation
+## Start the intro
 func play_intro(main: Node3D) -> void:
 	main_scene = main
 	world_environment = main.get_node("WorldEnvironment")
 	table = main.get_node("Table")
 	original_camera_pivot = main.get_node("CameraPivot")
 
-	# Store original environment settings
+	# Store original settings
 	if world_environment and world_environment.environment:
-		original_environment = world_environment.environment
-		_original_glow_intensity = original_environment.glow_intensity
-		_original_glow_bloom = original_environment.glow_bloom
-
-	# Store original camera transform
-	if original_camera_pivot:
-		var cam = original_camera_pivot.get_node_or_null("Camera3D")
-		if cam:
-			_original_camera_transform = cam.global_transform
+		_original_glow_intensity = world_environment.environment.glow_intensity
+		_original_glow_bloom = world_environment.environment.glow_bloom
 
 	_is_playing = true
-	_current_phase = 0
-	_phase_timer = 0.0
+	_phase = 0
 	_total_time = 0.0
+	_phase_start_time = 0.0
 
-	# Setup
 	_hide_main_scene()
-	_setup_environment_for_intro()
+	_setup_environment()
 	_create_intro_elements()
-	_setup_intro_camera()
-
-	# Start
-	_start_phase(0)
+	_setup_camera()
+	_generate_grid_lines()
 
 
-## Hide main scene elements during intro
 func _hide_main_scene() -> void:
 	if table:
 		table.visible = false
-	# Disable original camera
 	if original_camera_pivot:
 		var cam = original_camera_pivot.get_node_or_null("Camera3D") as Camera3D
 		if cam:
 			cam.current = false
 
 
-## Setup environment for sharp, crisp intro visuals
-func _setup_environment_for_intro() -> void:
-	if not world_environment or not world_environment.environment:
-		return
-
-	var env = world_environment.environment
-
-	# Black background
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = DARK_BLUE
-
-	# Reduce glow for sharper lines
-	env.glow_intensity = 0.8
-	env.glow_bloom = 0.1
-	env.glow_strength = 0.8
-
-
-## Restore main scene after intro
 func _show_main_scene() -> void:
 	if table:
 		table.visible = true
-
-	# Restore sky
 	if world_environment and world_environment.environment:
 		world_environment.environment.background_mode = Environment.BG_SKY
 		world_environment.environment.glow_intensity = _original_glow_intensity
 		world_environment.environment.glow_bloom = _original_glow_bloom
-
-	# Re-enable original camera
 	if original_camera_pivot:
 		var cam = original_camera_pivot.get_node_or_null("Camera3D") as Camera3D
 		if cam:
 			cam.current = true
 
 
-## Setup camera starting from a flat, dramatic angle
-func _setup_intro_camera() -> void:
-	# Create our own camera for the intro
+func _setup_environment() -> void:
+	if world_environment and world_environment.environment:
+		var env = world_environment.environment
+		env.background_mode = Environment.BG_COLOR
+		env.background_color = DARK_BG
+		env.glow_intensity = 0.6
+		env.glow_bloom = 0.05
+
+
+func _setup_camera() -> void:
 	intro_camera_pivot = Node3D.new()
 	intro_camera_pivot.name = "IntroCameraPivot"
 	add_child(intro_camera_pivot)
 
 	intro_camera = Camera3D.new()
 	intro_camera.name = "IntroCamera"
-	intro_camera.fov = 50.0
-	intro_camera.near = 0.05
+	intro_camera.fov = 45.0
+	intro_camera.near = 0.01
 	intro_camera.far = 100.0
 	intro_camera_pivot.add_child(intro_camera)
 
-	# Start position: low angle, looking across the grid
-	# Camera at edge of grid, low height, looking toward center
-	intro_camera_pivot.position = Vector3(0, 0.3, 12)  # Low, far back
-	intro_camera_pivot.rotation_degrees = Vector3(-5, 0, 0)  # Slight look down
-
-	intro_camera.position = Vector3.ZERO
-	intro_camera.rotation_degrees = Vector3.ZERO
-
+	# Start: very low angle, looking across grid
+	intro_camera_pivot.position = Vector3(0, 0.15, 6)
+	intro_camera_pivot.rotation_degrees = Vector3(-3, 0, 0)
 	intro_camera.current = true
 
 
-## Animate camera from flat angle to normal overhead view
-func _update_camera_animation() -> void:
-	if not intro_camera_pivot or not intro_camera:
+func _update_camera() -> void:
+	if not intro_camera_pivot:
 		return
 
-	# Total camera animation time spans most of the intro
-	var camera_duration = PHASE_GRID_DRAW_DURATION + PHASE_TABLE_DRAW_DURATION + PHASE_MATERIALIZE_DURATION
-	var camera_progress = clampf(_total_time / camera_duration, 0.0, 1.0)
+	# Camera rises during the animation
+	var total_anim_time = 6.0
+	var progress = clampf(_total_time / total_anim_time, 0.0, 1.0)
+	var eased = progress * progress * (3.0 - 2.0 * progress)
 
-	# Ease in-out for smooth camera movement
-	var eased = camera_progress * camera_progress * (3.0 - 2.0 * camera_progress)
-
-	# Start: low angle from edge (Y=0.3, Z=12, rotX=-5)
-	# End: higher angle, closer, more overhead (Y=6, Z=6, rotX=-45)
-	var start_pos = Vector3(0, 0.3, 12)
-	var end_pos = Vector3(0, 6, 6)
-	var start_rot = Vector3(-5, 0, 0)
+	var start_pos = Vector3(0, 0.15, 6)
+	var end_pos = Vector3(0, 5, 5)
+	var start_rot = Vector3(-3, 0, 0)
 	var end_rot = Vector3(-45, 0, 0)
 
 	intro_camera_pivot.position = start_pos.lerp(end_pos, eased)
 	intro_camera_pivot.rotation_degrees = start_rot.lerp(end_rot, eased)
 
 
-## Create all intro visual elements
 func _create_intro_elements() -> void:
-	# Canvas layer for overlay
+	# Container for all lines
+	lines_container = Node3D.new()
+	lines_container.name = "LinesContainer"
+	add_child(lines_container)
+
+	# Laser cursor (bright glowing sphere)
+	cursor_mesh = MeshInstance3D.new()
+	cursor_mesh.name = "LaserCursor"
+	var sphere = SphereMesh.new()
+	sphere.radius = CURSOR_SIZE
+	sphere.height = CURSOR_SIZE * 2
+	sphere.radial_segments = 16
+	sphere.rings = 8
+	cursor_mesh.mesh = sphere
+
+	var cursor_mat = StandardMaterial3D.new()
+	cursor_mat.albedo_color = WHITE
+	cursor_mat.emission_enabled = true
+	cursor_mat.emission = WHITE
+	cursor_mat.emission_energy_multiplier = 8.0
+	cursor_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	cursor_mesh.material_override = cursor_mat
+	cursor_mesh.visible = false
+	add_child(cursor_mesh)
+
+	# UI overlay
 	canvas_layer = CanvasLayer.new()
-	canvas_layer.name = "IntroCanvas"
 	canvas_layer.layer = 100
 	add_child(canvas_layer)
 
-	# Black overlay
 	black_overlay = ColorRect.new()
 	black_overlay.color = Color.BLACK
 	black_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	canvas_layer.add_child(black_overlay)
 
-	# Skip hint
 	skip_label = Label.new()
 	skip_label.text = "Press any key to skip"
-	skip_label.add_theme_color_override("font_color", CYAN.darkened(0.5))
+	skip_label.add_theme_color_override("font_color", CYAN.darkened(0.4))
 	skip_label.add_theme_font_size_override("font_size", 14)
 	skip_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	skip_label.offset_left = -180
@@ -224,220 +220,267 @@ func _create_intro_elements() -> void:
 	skip_label.modulate.a = 0.0
 	canvas_layer.add_child(skip_label)
 
-	# Create grid
-	_create_grid_floor()
 
-	# Create wireframe table
-	_create_wireframe_table()
+## Generate grid lines radiating from center
+func _generate_grid_lines() -> void:
+	_lines_to_draw.clear()
+
+	# Generate X lines (parallel to X axis)
+	for z in range(-int(GRID_EXTENT / GRID_SPACING), int(GRID_EXTENT / GRID_SPACING) + 1):
+		var z_pos = z * GRID_SPACING
+		# Draw from center outward in both directions
+		_lines_to_draw.append({
+			"start": Vector3(0, 0, z_pos),
+			"end": Vector3(-GRID_EXTENT, 0, z_pos),
+			"color": CYAN
+		})
+		_lines_to_draw.append({
+			"start": Vector3(0, 0, z_pos),
+			"end": Vector3(GRID_EXTENT, 0, z_pos),
+			"color": CYAN
+		})
+
+	# Generate Z lines (parallel to Z axis)
+	for x in range(-int(GRID_EXTENT / GRID_SPACING), int(GRID_EXTENT / GRID_SPACING) + 1):
+		var x_pos = x * GRID_SPACING
+		_lines_to_draw.append({
+			"start": Vector3(x_pos, 0, 0),
+			"end": Vector3(x_pos, 0, -GRID_EXTENT),
+			"color": CYAN
+		})
+		_lines_to_draw.append({
+			"start": Vector3(x_pos, 0, 0),
+			"end": Vector3(x_pos, 0, GRID_EXTENT),
+			"color": CYAN
+		})
+
+	# Sort by distance from center for radial effect
+	_lines_to_draw.sort_custom(func(a, b):
+		var dist_a = a["start"].length() + a["end"].length()
+		var dist_b = b["start"].length() + b["end"].length()
+		return dist_a < dist_b
+	)
 
 
-## Create the Tron grid floor
-func _create_grid_floor() -> void:
-	grid_floor = MeshInstance3D.new()
-	grid_floor.name = "TronGrid"
+## Generate table wireframe lines
+func _generate_table_lines() -> void:
+	_lines_to_draw.clear()
 
-	var plane_mesh = PlaneMesh.new()
-	plane_mesh.size = Vector2(60, 60)
-	plane_mesh.subdivide_width = 2
-	plane_mesh.subdivide_depth = 2
-	grid_floor.mesh = plane_mesh
-
-	# Load shader
-	grid_material = ShaderMaterial.new()
-	var shader = load("res://shaders/tron_grid.gdshader")
-	if shader:
-		grid_material.shader = shader
-		grid_material.set_shader_parameter("grid_color", Vector3(CYAN.r, CYAN.g, CYAN.b))
-		grid_material.set_shader_parameter("cursor_color", Vector3(WHITE.r, WHITE.g, WHITE.b))
-		grid_material.set_shader_parameter("cursor_progress", 0.0)
-		grid_material.set_shader_parameter("grid_spacing", 0.5)
-		grid_material.set_shader_parameter("line_width", 0.006)
-		grid_material.set_shader_parameter("glow_intensity", 1.2)
-		grid_material.set_shader_parameter("grid_size", 25.0)
-		grid_material.set_shader_parameter("cursor_size", 0.2)
-
-	grid_floor.material_override = grid_material
-	grid_floor.position.y = -0.01
-
-	add_child(grid_floor)
-	grid_floor.visible = false
-
-
-## Create wireframe preview of the table
-func _create_wireframe_table() -> void:
-	wireframe_table = MeshInstance3D.new()
-	wireframe_table.name = "WireframeTable"
-
-	# Get table size
-	var table_size = Vector2(6, 4)  # Default 6x4 feet
+	var table_size = Vector2(6, 4)  # feet
 	if table and table.get("table_size"):
 		table_size = table.table_size
 
-	var size_m = table_size * 0.3048  # feet to meters
-	var box_mesh = BoxMesh.new()
-	box_mesh.size = Vector3(size_m.x, 0.05, size_m.y)
-	wireframe_table.mesh = box_mesh
+	var size_m = table_size * 0.3048
+	var hx = size_m.x / 2
+	var hz = size_m.y / 2
+	var h = 0.025  # Table height
 
-	# Load wireframe shader
-	wireframe_material = ShaderMaterial.new()
-	var shader = load("res://shaders/tron_wireframe.gdshader")
-	if shader:
-		wireframe_material.shader = shader
-		wireframe_material.set_shader_parameter("wire_color", Vector3(CYAN.r, CYAN.g, CYAN.b))
-		wireframe_material.set_shader_parameter("cursor_color", Vector3(WHITE.r, WHITE.g, WHITE.b))
-		wireframe_material.set_shader_parameter("draw_progress", 0.0)
-		wireframe_material.set_shader_parameter("glow_intensity", 1.5)
-		wireframe_material.set_shader_parameter("box_size", box_mesh.size)
-		wireframe_material.set_shader_parameter("wire_width", 0.012)
+	# Bottom rectangle
+	_lines_to_draw.append({"start": Vector3(-hx, 0, -hz), "end": Vector3(hx, 0, -hz), "color": CYAN})
+	_lines_to_draw.append({"start": Vector3(hx, 0, -hz), "end": Vector3(hx, 0, hz), "color": CYAN})
+	_lines_to_draw.append({"start": Vector3(hx, 0, hz), "end": Vector3(-hx, 0, hz), "color": CYAN})
+	_lines_to_draw.append({"start": Vector3(-hx, 0, hz), "end": Vector3(-hx, 0, -hz), "color": CYAN})
 
-	wireframe_table.material_override = wireframe_material
-	wireframe_table.position.y = 0.025
+	# Vertical edges
+	_lines_to_draw.append({"start": Vector3(-hx, 0, -hz), "end": Vector3(-hx, h, -hz), "color": CYAN})
+	_lines_to_draw.append({"start": Vector3(hx, 0, -hz), "end": Vector3(hx, h, -hz), "color": CYAN})
+	_lines_to_draw.append({"start": Vector3(hx, 0, hz), "end": Vector3(hx, h, hz), "color": CYAN})
+	_lines_to_draw.append({"start": Vector3(-hx, 0, hz), "end": Vector3(-hx, h, hz), "color": CYAN})
 
-	add_child(wireframe_table)
-	wireframe_table.visible = false
-
-
-## Start a specific phase
-func _start_phase(phase: int) -> void:
-	_current_phase = phase
-	_phase_timer = 0.0
-
-	match phase:
-		0:  # Blackout
-			_start_blackout_phase()
-		1:  # Grid drawing
-			_start_grid_draw_phase()
-		2:  # Table drawing
-			_start_table_draw_phase()
-		3:  # Materialize
-			_start_materialize_phase()
-		4:  # Camera settle
-			_start_camera_settle_phase()
-		5:  # Done
-			_finish_intro()
+	# Top rectangle
+	_lines_to_draw.append({"start": Vector3(-hx, h, -hz), "end": Vector3(hx, h, -hz), "color": CYAN})
+	_lines_to_draw.append({"start": Vector3(hx, h, -hz), "end": Vector3(hx, h, hz), "color": CYAN})
+	_lines_to_draw.append({"start": Vector3(hx, h, hz), "end": Vector3(-hx, h, hz), "color": CYAN})
+	_lines_to_draw.append({"start": Vector3(-hx, h, hz), "end": Vector3(-hx, h, -hz), "color": CYAN})
 
 
-## Update current phase
-func _update_current_phase() -> void:
-	var phase_duration = _get_phase_duration(_current_phase)
+func _update_blackout(delta: float) -> void:
+	var phase_time = _total_time - _phase_start_time
+	var fade_duration = 0.3
 
-	match _current_phase:
-		0:
-			_update_blackout_phase()
-		1:
-			_update_grid_draw_phase()
-		2:
-			_update_table_draw_phase()
-		3:
-			_update_materialize_phase()
-		4:
-			_update_camera_settle_phase()
-
-	if _phase_timer >= phase_duration:
-		_start_phase(_current_phase + 1)
+	if phase_time < fade_duration:
+		black_overlay.modulate.a = 1.0 - (phase_time / fade_duration)
+		skip_label.modulate.a = phase_time / fade_duration * 0.5
+	else:
+		black_overlay.modulate.a = 0.0
+		skip_label.modulate.a = 0.5
+		# Start grid drawing
+		_phase = 1
+		_phase_start_time = _total_time
+		_current_line_index = 0
+		_current_line_progress = 0.0
+		cursor_mesh.visible = true
 
 
-func _get_phase_duration(phase: int) -> float:
-	match phase:
-		0: return PHASE_BLACKOUT_DURATION
-		1: return PHASE_GRID_DRAW_DURATION
-		2: return PHASE_TABLE_DRAW_DURATION
-		3: return PHASE_MATERIALIZE_DURATION
-		4: return PHASE_CAMERA_SETTLE_DURATION
-		_: return 0.0
+func _update_line_drawing(delta: float, line_time: float) -> void:
+	if _current_line_index >= _lines_to_draw.size():
+		# Done with current phase
+		if _phase == 1:
+			# Move to table drawing
+			_phase = 2
+			_phase_start_time = _total_time
+			_generate_table_lines()
+			_current_line_index = 0
+			_current_line_progress = 0.0
+		else:
+			# Move to materialize
+			_phase = 3
+			_phase_start_time = _total_time
+			cursor_mesh.visible = false
+		return
+
+	var line_data = _lines_to_draw[_current_line_index]
+	_current_line_progress += delta / line_time
+
+	if _current_line_progress >= 1.0:
+		# Finish current line
+		_finish_current_line(line_data)
+		_current_line_index += 1
+		_current_line_progress = 0.0
+		_current_line_mesh = null
+	else:
+		# Update current line
+		_update_current_line(line_data)
 
 
-## Phase 0: Quick blackout
-func _start_blackout_phase() -> void:
-	black_overlay.modulate.a = 1.0
-	grid_floor.visible = false
-	wireframe_table.visible = false
+func _update_current_line(line_data: Dictionary) -> void:
+	var start = line_data["start"]
+	var end = line_data["end"]
+	var color = line_data["color"]
+
+	# Calculate current endpoint
+	var current_end = start.lerp(end, _current_line_progress)
+
+	# Update cursor position
+	cursor_mesh.global_position = current_end
+	cursor_mesh.global_position.y += 0.01  # Slightly above
+
+	# Pulse cursor
+	var pulse = sin(_total_time * 20.0) * 0.3 + 0.7
+	cursor_mesh.scale = Vector3.ONE * pulse
+
+	# Create or update line mesh
+	if not _current_line_mesh:
+		_current_line_mesh = _create_line_mesh(start, current_end, color)
+		lines_container.add_child(_current_line_mesh)
+	else:
+		_update_line_mesh(_current_line_mesh, start, current_end, color)
 
 
-func _update_blackout_phase() -> void:
-	var progress = _phase_timer / PHASE_BLACKOUT_DURATION
-	black_overlay.modulate.a = 1.0 - progress
+func _finish_current_line(line_data: Dictionary) -> void:
+	var start = line_data["start"]
+	var end = line_data["end"]
+	var color = line_data["color"]
 
-	# Fade in skip hint
-	skip_label.modulate.a = progress * 0.6
-
-
-## Phase 1: Grid lines drawn by laser cursor
-func _start_grid_draw_phase() -> void:
-	grid_floor.visible = true
-	grid_material.set_shader_parameter("cursor_progress", 0.0)
+	if _current_line_mesh:
+		_update_line_mesh(_current_line_mesh, start, end, color)
+	else:
+		var mesh = _create_line_mesh(start, end, color)
+		lines_container.add_child(mesh)
 
 
-func _update_grid_draw_phase() -> void:
-	var progress = _phase_timer / PHASE_GRID_DRAW_DURATION
-	# Ease out for natural deceleration as it spreads
-	var eased = 1.0 - pow(1.0 - progress, 2.0)
-	grid_material.set_shader_parameter("cursor_progress", eased)
+func _create_line_mesh(start: Vector3, end: Vector3, color: Color) -> MeshInstance3D:
+	var mesh_instance = MeshInstance3D.new()
+
+	var immediate_mesh = ImmediateMesh.new()
+	mesh_instance.mesh = immediate_mesh
+
+	var material = StandardMaterial3D.new()
+	material.albedo_color = color
+	material.emission_enabled = true
+	material.emission = color
+	material.emission_energy_multiplier = 2.0
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mesh_instance.material_override = material
+
+	_draw_line_geometry(immediate_mesh, start, end)
+
+	return mesh_instance
 
 
-## Phase 2: Table edges drawn by laser
-func _start_table_draw_phase() -> void:
-	wireframe_table.visible = true
-	wireframe_material.set_shader_parameter("draw_progress", 0.0)
+func _update_line_mesh(mesh_instance: MeshInstance3D, start: Vector3, end: Vector3, _color: Color) -> void:
+	var immediate_mesh = mesh_instance.mesh as ImmediateMesh
+	if immediate_mesh:
+		immediate_mesh.clear_surfaces()
+		_draw_line_geometry(immediate_mesh, start, end)
 
 
-func _update_table_draw_phase() -> void:
-	var progress = _phase_timer / PHASE_TABLE_DRAW_DURATION
-	wireframe_material.set_shader_parameter("draw_progress", progress)
+func _draw_line_geometry(immediate_mesh: ImmediateMesh, start: Vector3, end: Vector3) -> void:
+	# Draw a thin box/cylinder as a line
+	var direction = (end - start).normalized()
+	var length = start.distance_to(end)
+
+	if length < 0.001:
+		return
+
+	# Create perpendicular vectors for line width
+	var up = Vector3.UP
+	if abs(direction.dot(up)) > 0.9:
+		up = Vector3.RIGHT
+
+	var right = direction.cross(up).normalized() * LINE_WIDTH
+	var forward = direction.cross(right).normalized() * LINE_WIDTH
+
+	immediate_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+
+	# Create quad strip along the line
+	var p1 = start + right
+	var p2 = start - right
+	var p3 = end + right
+	var p4 = end - right
+
+	# Top face
+	immediate_mesh.surface_add_vertex(p1)
+	immediate_mesh.surface_add_vertex(p2)
+	immediate_mesh.surface_add_vertex(p3)
+
+	immediate_mesh.surface_add_vertex(p2)
+	immediate_mesh.surface_add_vertex(p4)
+	immediate_mesh.surface_add_vertex(p3)
+
+	# Bottom face
+	var p1b = start + forward
+	var p2b = start - forward
+	var p3b = end + forward
+	var p4b = end - forward
+
+	immediate_mesh.surface_add_vertex(p1b)
+	immediate_mesh.surface_add_vertex(p3b)
+	immediate_mesh.surface_add_vertex(p2b)
+
+	immediate_mesh.surface_add_vertex(p2b)
+	immediate_mesh.surface_add_vertex(p3b)
+	immediate_mesh.surface_add_vertex(p4b)
+
+	immediate_mesh.surface_end()
 
 
-## Phase 3: Materialize - transition to real table
-func _start_materialize_phase() -> void:
-	if table:
-		table.visible = true
-		_set_table_transparency(0.0)
+func _update_materialize(delta: float) -> void:
+	var phase_time = _total_time - _phase_start_time
+	var duration = 1.5
+
+	if phase_time < 0.3:
+		# Show table
+		if table and not table.visible:
+			table.visible = true
+	elif phase_time < duration:
+		# Fade out lines
+		var fade = 1.0 - ((phase_time - 0.3) / (duration - 0.3))
+		for child in lines_container.get_children():
+			if child is MeshInstance3D:
+				child.transparency = 1.0 - fade
+
+		# Transition to sky
+		if phase_time > 0.5 and world_environment and world_environment.environment:
+			world_environment.environment.background_mode = Environment.BG_SKY
+	else:
+		_phase = 4
 
 
-func _update_materialize_phase() -> void:
-	var progress = _phase_timer / PHASE_MATERIALIZE_DURATION
-
-	# Fade out wireframe and grid
-	var fade = 1.0 - progress
-	grid_material.set_shader_parameter("glow_intensity", fade * 1.2)
-	wireframe_material.set_shader_parameter("glow_intensity", fade * 1.5)
-
-	# Fade in real table
-	_set_table_transparency(progress)
-
-	# Transition to sky background
-	if progress > 0.4 and world_environment and world_environment.environment:
-		world_environment.environment.background_mode = Environment.BG_SKY
-
-
-## Phase 4: Camera settles to final position
-func _start_camera_settle_phase() -> void:
-	# Hide intro elements
-	grid_floor.visible = false
-	wireframe_table.visible = false
-
-	# Ensure table fully visible
-	_set_table_transparency(1.0)
-
-	# Restore original glow settings
-	if world_environment and world_environment.environment:
-		world_environment.environment.glow_intensity = _original_glow_intensity
-		world_environment.environment.glow_bloom = _original_glow_bloom
-
-
-func _update_camera_settle_phase() -> void:
-	var progress = _phase_timer / PHASE_CAMERA_SETTLE_DURATION
-
-	# Fade out skip hint
-	skip_label.modulate.a = (1.0 - progress) * 0.6
-
-
-## Finish intro
 func _finish_intro() -> void:
 	_is_playing = false
-
 	_show_main_scene()
 
-	# Switch back to original camera
 	if intro_camera:
 		intro_camera.current = false
 	if original_camera_pivot:
@@ -445,32 +488,21 @@ func _finish_intro() -> void:
 		if cam:
 			cam.current = true
 
-	# Cleanup after delay
+	# Fade out skip label
 	var tween = create_tween()
-	tween.tween_interval(0.5)
+	tween.tween_property(skip_label, "modulate:a", 0.0, 0.3)
 	tween.tween_callback(_cleanup)
 
 	intro_finished.emit()
 
 
-## Skip intro
 func _skip_intro() -> void:
 	if not _is_playing:
 		return
 
 	_is_playing = false
-
-	# Immediately show final state
 	_show_main_scene()
-	_set_table_transparency(1.0)
 
-	# Hide intro elements
-	if grid_floor:
-		grid_floor.visible = false
-	if wireframe_table:
-		wireframe_table.visible = false
-
-	# Switch camera
 	if intro_camera:
 		intro_camera.current = false
 	if original_camera_pivot:
@@ -478,50 +510,20 @@ func _skip_intro() -> void:
 		if cam:
 			cam.current = true
 
-	# Quick fade out overlay
 	var tween = create_tween()
 	if black_overlay:
-		tween.tween_property(black_overlay, "modulate:a", 0.0, 0.15)
+		tween.tween_property(black_overlay, "modulate:a", 0.0, 0.1)
 	tween.tween_callback(_cleanup)
 
 	intro_skipped.emit()
 
 
-## Cleanup
 func _cleanup() -> void:
-	if grid_floor:
-		grid_floor.queue_free()
-		grid_floor = null
-	if wireframe_table:
-		wireframe_table.queue_free()
-		wireframe_table = null
+	if lines_container:
+		lines_container.queue_free()
+	if cursor_mesh:
+		cursor_mesh.queue_free()
 	if intro_camera_pivot:
 		intro_camera_pivot.queue_free()
-		intro_camera_pivot = null
 	if canvas_layer:
 		canvas_layer.queue_free()
-		canvas_layer = null
-
-
-## Set table transparency
-func _set_table_transparency(alpha: float) -> void:
-	if not table:
-		return
-
-	var table_mesh = table.get_node_or_null("TableMesh") as MeshInstance3D
-	if not table_mesh:
-		return
-
-	# Get or create material
-	var mat = table_mesh.get_surface_override_material(0)
-	if not mat and table_mesh.mesh:
-		mat = table_mesh.mesh.surface_get_material(0)
-
-	if mat is StandardMaterial3D:
-		var std_mat = mat as StandardMaterial3D
-		if alpha < 0.99:
-			std_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			std_mat.albedo_color.a = alpha
-		else:
-			std_mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
-			std_mat.albedo_color.a = 1.0
