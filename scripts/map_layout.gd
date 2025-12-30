@@ -351,15 +351,26 @@ func _get_cell_at_screen_pos(screen_pos: Vector2) -> Vector2i:
 	# Calculate cell size in pixels
 	var cell_size = Vector2(grid_rect.size.x / grid_dims.x, grid_rect.size.y / grid_dims.y)
 
-	# Get position relative to grid container, then to grid rect
-	var local_pos = screen_pos - grid_container.global_position - grid_rect.position
+	# Get position relative to grid container
+	var local_pos = screen_pos - grid_container.global_position
 
-	# No rotation applied to cell selection - cells are always axis-aligned
-	# Rotation only affects the visual grid lines overlay
+	# Get center of grid
+	var center = grid_rect.position + grid_rect.size / 2.0
+
+	# Apply inverse rotation around center to get position in grid coordinate system
+	var rotated_pos = local_pos - center
+	var angle_rad = deg_to_rad(-grid_rotation_degrees)
+	rotated_pos = Vector2(
+		rotated_pos.x * cos(angle_rad) - rotated_pos.y * sin(angle_rad),
+		rotated_pos.x * sin(angle_rad) + rotated_pos.y * cos(angle_rad)
+	)
+
+	# Convert back to grid coordinates (from center)
+	rotated_pos += grid_rect.size / 2.0
 
 	# Calculate cell coordinates
-	var cell_x = int(local_pos.x / cell_size.x)
-	var cell_y = int(local_pos.y / cell_size.y)
+	var cell_x = int(rotated_pos.x / cell_size.x)
+	var cell_y = int(rotated_pos.y / cell_size.y)
 
 	return Vector2i(cell_x, cell_y)
 
