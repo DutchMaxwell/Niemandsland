@@ -29,7 +29,7 @@ func clear_overlay() -> void:
 	overlay_meshes.clear()
 
 
-func update_overlay(grid_cells: Dictionary, table_size: Vector2, _rotation_degrees: float) -> void:
+func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degrees: float) -> void:
 	clear_overlay()
 	table_size_feet = table_size
 
@@ -43,6 +43,7 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, _rotation_degre
 	)
 
 	var cell_size_meters = GRID_SIZE_INCHES * INCHES_TO_METERS
+	var rotation_rad = deg_to_rad(rotation_degrees)
 
 	# Create a mesh for each terrain cell
 	for cell_pos in grid_cells:
@@ -52,16 +53,20 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, _rotation_degre
 
 		var color = TERRAIN_COLORS.get(terrain_type, Color.WHITE)
 
-		# Calculate world position (table center is at origin)
-		var center_x = (cell_pos.x + 0.5) * cell_size_meters - (grid_dims.x * cell_size_meters / 2.0)
-		var center_z = (cell_pos.y + 0.5) * cell_size_meters - (grid_dims.y * cell_size_meters / 2.0)
+		# Calculate position in grid coordinates (before rotation)
+		var local_x = (cell_pos.x + 0.5) * cell_size_meters - (grid_dims.x * cell_size_meters / 2.0)
+		var local_z = (cell_pos.y + 0.5) * cell_size_meters - (grid_dims.y * cell_size_meters / 2.0)
 
-		var mesh_instance = _create_cell_mesh(Vector3(center_x, 0, center_z), cell_size_meters, color)
+		# Apply rotation around center (Y-axis in 3D = rotation in XZ plane)
+		var rotated_x = local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
+		var rotated_z = local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
+
+		var mesh_instance = _create_cell_mesh(Vector3(rotated_x, 0, rotated_z), cell_size_meters, color, rotation_degrees)
 		add_child(mesh_instance)
 		overlay_meshes.append(mesh_instance)
 
 
-func _create_cell_mesh(pos: Vector3, size: float, color: Color) -> MeshInstance3D:
+func _create_cell_mesh(pos: Vector3, size: float, color: Color, rotation_degrees: float = 0.0) -> MeshInstance3D:
 	var mesh_instance = MeshInstance3D.new()
 
 	# Create a flat quad
@@ -70,6 +75,7 @@ func _create_cell_mesh(pos: Vector3, size: float, color: Color) -> MeshInstance3
 
 	mesh_instance.mesh = plane_mesh
 	mesh_instance.position = pos
+	mesh_instance.rotation.y = deg_to_rad(rotation_degrees)  # Rotate the cell to match grid
 
 	# Create transparent material
 	var material = StandardMaterial3D.new()
