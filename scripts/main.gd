@@ -66,6 +66,9 @@ const GROUP_ROTATION_SPEED: float = 90.0  # degrees per second
 @onready var save_game_dialog: FileDialog = %SaveGameDialog
 @onready var load_game_dialog: FileDialog = %LoadGameDialog
 
+# Graphics Settings UI
+@onready var graphics_quality_option: OptionButton = %GraphicsQualityOption
+
 # Terrain Browser UI
 @onready var terrain_library = %TerrainLibrary
 @onready var terrain_browser_btn: Button = %TerrainBrowser
@@ -159,6 +162,12 @@ func _ready() -> void:
 	# Initialize SaveManager references
 	save_manager.object_manager = object_manager
 	save_manager.table = table
+
+	# Connect Graphics Settings UI
+	graphics_quality_option.item_selected.connect(_on_graphics_quality_changed)
+	# Set initial selection based on current preset (map enum to UI index)
+	# Enum: ULTRA=0, HIGH=1, MEDIUM=2, LOW=3 -> UI: Low=0, Medium=1, High=2, Ultra=3
+	graphics_quality_option.selected = 3 - GraphicsSettings.current_preset
 
 	# Connect Terrain Browser UI
 	terrain_library.object_manager = object_manager
@@ -1212,3 +1221,35 @@ func _on_intro_finished() -> void:
 			tron_intro = null
 
 	print("Tron intro finished - welcome to OpenTTS!")
+
+
+## ============================================================================
+## Graphics Settings
+## ============================================================================
+
+## Handle graphics quality selection change
+## UI order: Low=0, Medium=1, High=2, Ultra=3
+## Enum order: ULTRA=0, HIGH=1, MEDIUM=2, LOW=3
+func _on_graphics_quality_changed(index: int) -> void:
+	var preset: GraphicsSettings.QualityPreset
+	var preset_name: String
+
+	match index:
+		0:  # Low
+			preset = GraphicsSettings.QualityPreset.LOW
+			preset_name = "Low"
+		1:  # Medium
+			preset = GraphicsSettings.QualityPreset.MEDIUM
+			preset_name = "Medium"
+		2:  # High
+			preset = GraphicsSettings.QualityPreset.HIGH
+			preset_name = "High"
+		3:  # Ultra
+			preset = GraphicsSettings.QualityPreset.ULTRA
+			preset_name = "Ultra"
+		_:
+			preset = GraphicsSettings.QualityPreset.MEDIUM
+			preset_name = "Medium"
+
+	GraphicsSettings.apply_preset(preset)
+	print("Graphics quality set to: %s" % preset_name)
