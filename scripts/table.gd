@@ -64,7 +64,7 @@ func setup_table(size_feet: Vector2) -> void:
 	if _default_texture:
 		material.albedo_texture = _default_texture
 		material.albedo_color = Color.WHITE  # White to show texture as-is
-		material.uv1_scale = Vector3(size_feet.x, size_feet.y, 1.0)  # Scale texture to table size
+		# Texture is displayed once, stretched to fit the entire table
 	else:
 		material.albedo_color = default_color
 
