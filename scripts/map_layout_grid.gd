@@ -111,9 +111,11 @@ func _draw() -> void:
 
 func _draw_rotated_grid_lines(grid_rect: Rect2, grid_dims: Vector2i, cell_size: Vector2) -> void:
 	## Draw rotated grid lines as an overlay to show diagonal placement angles
+	## Lines are clipped to the table boundaries
 	var center = grid_rect.position + grid_rect.size / 2.0
 	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
 	var line_color = Color(1.0, 0.5, 0.0, 0.6)  # Orange for rotated lines
+	var major_color = Color(1.0, 0.7, 0.0, 0.8)
 
 	# Calculate how far lines need to extend to cover the entire grid when rotated
 	var diagonal = grid_rect.size.length() * 0.75
@@ -129,9 +131,11 @@ func _draw_rotated_grid_lines(grid_rect: Rect2, grid_dims: Vector2i, cell_size: 
 		start = start.rotated(angle_rad) + center
 		end = end.rotated(angle_rad) + center
 
-		# Clip to grid bounds
-		if _line_intersects_rect(start, end, grid_rect):
-			draw_line(start, end, line_color, 1.0)
+		# Clip line to grid bounds
+		var clipped = _clip_line_to_rect(start, end, grid_rect)
+		if clipped:
+			var is_major = (i % 4 == 0)
+			draw_line(clipped[0], clipped[1], major_color if is_major else line_color, 2.0 if is_major else 1.0)
 
 	# Draw horizontal lines (rotated)
 	var num_lines_y = int(diagonal / cell_size.y) + 1
@@ -144,25 +148,71 @@ func _draw_rotated_grid_lines(grid_rect: Rect2, grid_dims: Vector2i, cell_size: 
 		start = start.rotated(angle_rad) + center
 		end = end.rotated(angle_rad) + center
 
-		# Clip to grid bounds
-		if _line_intersects_rect(start, end, grid_rect):
-			draw_line(start, end, line_color, 1.0)
+		# Clip line to grid bounds
+		var clipped = _clip_line_to_rect(start, end, grid_rect)
+		if clipped:
+			var is_major = (i % 4 == 0)
+			draw_line(clipped[0], clipped[1], major_color if is_major else line_color, 2.0 if is_major else 1.0)
 
-	# Draw major rotated grid lines (every 4 cells = 1 foot)
-	var major_color = Color(1.0, 0.7, 0.0, 0.8)
-	for i in range(-num_lines_x, num_lines_x + 1, 4):
-		var offset = i * cell_size.x
-		var start = Vector2(offset, -diagonal).rotated(angle_rad) + center
-		var end = Vector2(offset, diagonal).rotated(angle_rad) + center
-		if _line_intersects_rect(start, end, grid_rect):
-			draw_line(start, end, major_color, 2.0)
 
-	for i in range(-num_lines_y, num_lines_y + 1, 4):
-		var offset = i * cell_size.y
-		var start = Vector2(-diagonal, offset).rotated(angle_rad) + center
-		var end = Vector2(diagonal, offset).rotated(angle_rad) + center
-		if _line_intersects_rect(start, end, grid_rect):
-			draw_line(start, end, major_color, 2.0)
+func _clip_line_to_rect(p1: Vector2, p2: Vector2, rect: Rect2):
+	## Cohen-Sutherland line clipping algorithm
+	## Returns null if line is outside, or [clipped_start, clipped_end] if inside
+	const INSIDE = 0
+	const LEFT = 1
+	const RIGHT = 2
+	const BOTTOM = 4
+	const TOP = 8
+
+	var xmin = rect.position.x
+	var xmax = rect.end.x
+	var ymin = rect.position.y
+	var ymax = rect.end.y
+
+	var _compute_code = func(p: Vector2) -> int:
+		var code = INSIDE
+		if p.x < xmin:
+			code |= LEFT
+		elif p.x > xmax:
+			code |= RIGHT
+		if p.y < ymin:
+			code |= TOP
+		elif p.y > ymax:
+			code |= BOTTOM
+		return code
+
+	var code1 = _compute_code.call(p1)
+	var code2 = _compute_code.call(p2)
+
+	while true:
+		if (code1 | code2) == 0:
+			# Both inside
+			return [p1, p2]
+		elif (code1 & code2) != 0:
+			# Both outside same region
+			return null
+		else:
+			# Needs clipping
+			var code_out = code1 if code1 != 0 else code2
+			var p: Vector2
+
+			if code_out & BOTTOM:
+				p = Vector2(p1.x + (p2.x - p1.x) * (ymax - p1.y) / (p2.y - p1.y), ymax)
+			elif code_out & TOP:
+				p = Vector2(p1.x + (p2.x - p1.x) * (ymin - p1.y) / (p2.y - p1.y), ymin)
+			elif code_out & RIGHT:
+				p = Vector2(xmax, p1.y + (p2.y - p1.y) * (xmax - p1.x) / (p2.x - p1.x))
+			elif code_out & LEFT:
+				p = Vector2(xmin, p1.y + (p2.y - p1.y) * (xmin - p1.x) / (p2.x - p1.x))
+
+			if code_out == code1:
+				p1 = p
+				code1 = _compute_code.call(p1)
+			else:
+				p2 = p
+				code2 = _compute_code.call(p2)
+
+	return null
 
 
 func _line_intersects_rect(start: Vector2, end: Vector2, rect: Rect2) -> bool:
