@@ -7,10 +7,11 @@ signal intro_finished
 signal intro_skipped
 
 ## Animation timing
-const GRID_LINE_DRAW_TIME: float = 0.08   # Time to draw one grid line
-const TABLE_LINE_DRAW_TIME: float = 0.15  # Time to draw one table edge
+const GRID_LINE_DRAW_TIME: float = 0.05   # Time to draw one grid line (faster)
+const TABLE_LINE_DRAW_TIME: float = 0.04  # Time to draw table lines (fast for surface grid)
 const CURSOR_SIZE: float = 0.04
 const LINE_WIDTH: float = 0.008
+const TABLE_GRID_SPACING: float = 0.15  # Grid spacing on table surface in meters (~6")
 
 ## Colors
 const CYAN = Color(0.0, 1.0, 1.0)
@@ -26,6 +27,7 @@ var main_scene: Node3D
 var world_environment: WorldEnvironment
 var table: Node3D
 var original_camera_pivot: Node3D
+var main_ui: Control  # Reference to main UI for fade-in
 
 ## Intro elements
 var lines_container: Node3D
@@ -89,6 +91,7 @@ func play_intro(main: Node3D) -> void:
 	world_environment = main.get_node("WorldEnvironment")
 	table = main.get_node("Table")
 	original_camera_pivot = main.get_node("CameraPivot")
+	main_ui = main.get_node_or_null("UI")
 
 	# Store original settings
 	if world_environment and world_environment.environment:
@@ -105,6 +108,11 @@ func play_intro(main: Node3D) -> void:
 	_create_intro_elements()
 	_setup_camera()
 	_generate_grid_lines()
+
+	# Prepare UI for fade-in (visible but transparent)
+	if main_ui:
+		main_ui.visible = true
+		main_ui.modulate.a = 0.0
 
 
 func _hide_main_scene() -> void:
@@ -127,6 +135,10 @@ func _show_main_scene() -> void:
 		var cam = original_camera_pivot.get_node_or_null("Camera3D") as Camera3D
 		if cam:
 			cam.current = true
+	# Ensure UI is fully visible
+	if main_ui:
+		main_ui.visible = true
+		main_ui.modulate.a = 1.0
 
 
 func _setup_environment() -> void:
@@ -160,18 +172,45 @@ func _update_camera() -> void:
 	if not intro_camera_pivot:
 		return
 
-	# Camera rises during the animation
-	var total_anim_time = 6.0
-	var progress = clampf(_total_time / total_anim_time, 0.0, 1.0)
-	var eased = progress * progress * (3.0 - 2.0 * progress)
+	# Phase 1 (grid): Rise from flat angle, pull back to see grid
+	# Phase 2 (table): Zoom toward table, continue rising to final position
+	# Phase 3+: Hold final position
 
 	var start_pos = Vector3(0, 0.15, 6)
-	var end_pos = Vector3(0, 5, 5)
-	var start_rot = Vector3(-3, 0, 0)
-	var end_rot = Vector3(-45, 0, 0)
+	var mid_pos = Vector3(0, 2.5, 4.5)  # Mid-point when grid is done
+	var end_pos = Vector3(0, 3.5, 3.0)  # Final position closer to table
 
-	intro_camera_pivot.position = start_pos.lerp(end_pos, eased)
-	intro_camera_pivot.rotation_degrees = start_rot.lerp(end_rot, eased)
+	var start_rot = Vector3(-3, 0, 0)
+	var mid_rot = Vector3(-25, 0, 0)
+	var end_rot = Vector3(-50, 0, 0)
+
+	if _phase <= 1:
+		# Grid phase: animate from start to mid
+		var grid_duration = 3.0  # Estimated grid drawing time
+		var progress = clampf(_total_time / grid_duration, 0.0, 1.0)
+		var eased = progress * progress * (3.0 - 2.0 * progress)
+
+		intro_camera_pivot.position = start_pos.lerp(mid_pos, eased)
+		intro_camera_pivot.rotation_degrees = start_rot.lerp(mid_rot, eased)
+	elif _phase == 2:
+		# Table phase: animate from mid to end (zoom toward table)
+		var phase_time = _total_time - _phase_start_time
+		var table_duration = 2.5  # Estimated table drawing time
+		var progress = clampf(phase_time / table_duration, 0.0, 1.0)
+		var eased = progress * progress * (3.0 - 2.0 * progress)
+
+		intro_camera_pivot.position = mid_pos.lerp(end_pos, eased)
+		intro_camera_pivot.rotation_degrees = mid_rot.lerp(end_rot, eased)
+
+		# Fade in UI during table generation
+		if main_ui:
+			main_ui.modulate.a = eased
+	else:
+		# Hold final position
+		intro_camera_pivot.position = end_pos
+		intro_camera_pivot.rotation_degrees = end_rot
+		if main_ui:
+			main_ui.modulate.a = 1.0
 
 
 func _create_intro_elements() -> void:
@@ -262,7 +301,7 @@ func _generate_grid_lines() -> void:
 	)
 
 
-## Generate table wireframe lines
+## Generate table wireframe lines including surface grid
 func _generate_table_lines() -> void:
 	_lines_to_draw.clear()
 
@@ -275,19 +314,43 @@ func _generate_table_lines() -> void:
 	var hz = size_m.y / 2
 	var h = 0.025  # Table height
 
-	# Bottom rectangle
+	# First: Draw the surface grid (interior lines on table top)
+	# Grid lines parallel to X axis (running left-right)
+	var z_steps = int(size_m.y / TABLE_GRID_SPACING)
+	for i in range(-z_steps / 2, z_steps / 2 + 1):
+		var z_pos = i * TABLE_GRID_SPACING
+		if abs(z_pos) < hz - 0.01:  # Skip edge lines, we'll draw them as part of frame
+			_lines_to_draw.append({
+				"start": Vector3(-hx, h, z_pos),
+				"end": Vector3(hx, h, z_pos),
+				"color": CYAN.darkened(0.3)  # Slightly dimmer for surface grid
+			})
+
+	# Grid lines parallel to Z axis (running front-back)
+	var x_steps = int(size_m.x / TABLE_GRID_SPACING)
+	for i in range(-x_steps / 2, x_steps / 2 + 1):
+		var x_pos = i * TABLE_GRID_SPACING
+		if abs(x_pos) < hx - 0.01:  # Skip edge lines
+			_lines_to_draw.append({
+				"start": Vector3(x_pos, h, -hz),
+				"end": Vector3(x_pos, h, hz),
+				"color": CYAN.darkened(0.3)
+			})
+
+	# Then: Draw the table frame (edges) - brighter
+	# Bottom rectangle (ground level)
 	_lines_to_draw.append({"start": Vector3(-hx, 0, -hz), "end": Vector3(hx, 0, -hz), "color": CYAN})
 	_lines_to_draw.append({"start": Vector3(hx, 0, -hz), "end": Vector3(hx, 0, hz), "color": CYAN})
 	_lines_to_draw.append({"start": Vector3(hx, 0, hz), "end": Vector3(-hx, 0, hz), "color": CYAN})
 	_lines_to_draw.append({"start": Vector3(-hx, 0, hz), "end": Vector3(-hx, 0, -hz), "color": CYAN})
 
-	# Vertical edges
+	# Vertical edges (corners)
 	_lines_to_draw.append({"start": Vector3(-hx, 0, -hz), "end": Vector3(-hx, h, -hz), "color": CYAN})
 	_lines_to_draw.append({"start": Vector3(hx, 0, -hz), "end": Vector3(hx, h, -hz), "color": CYAN})
 	_lines_to_draw.append({"start": Vector3(hx, 0, hz), "end": Vector3(hx, h, hz), "color": CYAN})
 	_lines_to_draw.append({"start": Vector3(-hx, 0, hz), "end": Vector3(-hx, h, hz), "color": CYAN})
 
-	# Top rectangle
+	# Top rectangle (table surface edge) - brightest
 	_lines_to_draw.append({"start": Vector3(-hx, h, -hz), "end": Vector3(hx, h, -hz), "color": CYAN})
 	_lines_to_draw.append({"start": Vector3(hx, h, -hz), "end": Vector3(hx, h, hz), "color": CYAN})
 	_lines_to_draw.append({"start": Vector3(hx, h, hz), "end": Vector3(-hx, h, hz), "color": CYAN})
