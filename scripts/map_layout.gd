@@ -156,9 +156,10 @@ func _update_stats() -> void:
 	counts[TerrainType.NONE] = total_cells - (counts[TerrainType.RUINS] + counts[TerrainType.FOREST] + counts[TerrainType.CONTAINER] + counts[TerrainType.DANGEROUS])
 
 	# Calculate percentages
-	var blocking_count = counts[TerrainType.CONTAINER]  # Blocking LOS
-	var cover_count = counts[TerrainType.RUINS] + counts[TerrainType.FOREST]  # Provide cover
-	var difficult_count = counts[TerrainType.FOREST]  # Difficult terrain
+	# Blocking LOS = everything that provides cover (Ruins, Forest, Container)
+	var blocking_count = counts[TerrainType.RUINS] + counts[TerrainType.FOREST] + counts[TerrainType.CONTAINER]
+	var cover_count = counts[TerrainType.RUINS] + counts[TerrainType.FOREST] + counts[TerrainType.CONTAINER]  # All cover terrain
+	var difficult_count = counts[TerrainType.FOREST]  # Only Forest is difficult
 	var dangerous_count = counts[TerrainType.DANGEROUS]
 
 	var blocking_pct = (float(blocking_count) / total_cells) * 100.0 if total_cells > 0 else 0.0
@@ -223,28 +224,46 @@ Example for 12 terrain pieces:
 		recommendations_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))
 
 
+func _get_grid_rect() -> Rect2:
+	## Calculate the grid rectangle that maintains table aspect ratio
+	var table_aspect = table_size_feet.x / table_size_feet.y
+	var available_size = grid_container.size
+	var grid_size: Vector2
+
+	if available_size.x / available_size.y > table_aspect:
+		grid_size.y = available_size.y
+		grid_size.x = grid_size.y * table_aspect
+	else:
+		grid_size.x = available_size.x
+		grid_size.y = grid_size.x / table_aspect
+
+	var offset = (available_size - grid_size) / 2.0
+	return Rect2(offset, grid_size)
+
+
 func _get_cell_at_screen_pos(screen_pos: Vector2) -> Vector2i:
-	var grid_rect = grid_container.get_rect()
 	var grid_dims = _calculate_grid_dimensions()
+	var grid_rect = _get_grid_rect()
 
 	# Calculate cell size in pixels
-	var cell_size = Vector2(
-		grid_rect.size.x / grid_dims.x,
-		grid_rect.size.y / grid_dims.y
-	)
+	var cell_size = Vector2(grid_rect.size.x / grid_dims.x, grid_rect.size.y / grid_dims.y)
 
 	# Get position relative to grid container
 	var local_pos = screen_pos - grid_container.global_position
 
-	# Apply inverse rotation around center
-	var center = grid_rect.size / 2.0
-	var rotated_pos = local_pos - center
+	# Get grid center
+	var grid_center = grid_rect.position + grid_rect.size / 2.0
+
+	# Apply inverse rotation around grid center
+	var rotated_pos = local_pos - grid_center
 	var angle_rad = deg_to_rad(-grid_rotation_degrees)
 	rotated_pos = Vector2(
 		rotated_pos.x * cos(angle_rad) - rotated_pos.y * sin(angle_rad),
 		rotated_pos.x * sin(angle_rad) + rotated_pos.y * cos(angle_rad)
 	)
-	rotated_pos += center
+
+	# Offset back to grid coordinates (top-left origin)
+	rotated_pos += grid_rect.size / 2.0
 
 	# Calculate cell coordinates
 	var cell_x = int(rotated_pos.x / cell_size.x)
