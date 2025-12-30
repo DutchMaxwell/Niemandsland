@@ -87,6 +87,11 @@ layout_mode = 2
 max_value = 360.0
 step = 1.0
 
+[node name="SymmetryCheck" type="CheckBox" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Point Symmetry (Mirror)"
+
 [node name="HSeparator3" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanel"]
 layout_mode = 2
 

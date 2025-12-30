@@ -3,6 +3,7 @@ extends Control
 ## OPR terrain recommendations are displayed in real-time
 
 signal layout_closed
+signal layout_updated(grid_cells: Dictionary, table_size: Vector2, rotation: float)
 
 # Terrain types with their properties
 enum TerrainType {
@@ -44,6 +45,7 @@ var grid_rotation_degrees := 0.0
 var grid_cells := {}  # Dictionary[Vector2i, TerrainType]
 var selected_terrain_type := TerrainType.RUINS
 var is_painting := false
+var point_symmetry_enabled := false  # Mirror placement across center
 
 @onready var grid_container: Control = %GridContainer
 @onready var rotation_slider: HSlider = %RotationSlider
@@ -53,12 +55,15 @@ var is_painting := false
 @onready var recommendations_label: Label = %RecommendationsLabel
 @onready var close_button: Button = %CloseButton
 @onready var clear_button: Button = %ClearButton
+@onready var symmetry_check: CheckBox = %SymmetryCheck
 
 
 func _ready() -> void:
 	close_button.pressed.connect(_on_close_pressed)
 	clear_button.pressed.connect(_on_clear_pressed)
 	rotation_slider.value_changed.connect(_on_rotation_changed)
+	if symmetry_check:
+		symmetry_check.toggled.connect(_on_symmetry_toggled)
 
 	_setup_terrain_buttons()
 	_update_stats()
@@ -107,7 +112,13 @@ func _on_terrain_button_pressed(type: TerrainType, button: Button) -> void:
 
 func _on_rotation_changed(value: float) -> void:
 	grid_rotation_degrees = value
-	rotation_label.text = "Rotation: %.0f°" % value
+	rotation_label.text = "Grid Rotation: %.0f°" % value
+	grid_container.queue_redraw()
+	_emit_layout_update()
+
+
+func _on_symmetry_toggled(enabled: bool) -> void:
+	point_symmetry_enabled = enabled
 	grid_container.queue_redraw()
 
 
@@ -120,6 +131,7 @@ func _on_clear_pressed() -> void:
 	grid_cells.clear()
 	grid_container.queue_redraw()
 	_update_stats()
+	_emit_layout_update()
 
 
 func set_table_size(size_feet: Vector2) -> void:
@@ -248,28 +260,23 @@ func _get_cell_at_screen_pos(screen_pos: Vector2) -> Vector2i:
 	# Calculate cell size in pixels
 	var cell_size = Vector2(grid_rect.size.x / grid_dims.x, grid_rect.size.y / grid_dims.y)
 
-	# Get position relative to grid container
-	var local_pos = screen_pos - grid_container.global_position
+	# Get position relative to grid container, then to grid rect
+	var local_pos = screen_pos - grid_container.global_position - grid_rect.position
 
-	# Get grid center
-	var grid_center = grid_rect.position + grid_rect.size / 2.0
-
-	# Apply inverse rotation around grid center
-	var rotated_pos = local_pos - grid_center
-	var angle_rad = deg_to_rad(-grid_rotation_degrees)
-	rotated_pos = Vector2(
-		rotated_pos.x * cos(angle_rad) - rotated_pos.y * sin(angle_rad),
-		rotated_pos.x * sin(angle_rad) + rotated_pos.y * cos(angle_rad)
-	)
-
-	# Offset back to grid coordinates (top-left origin)
-	rotated_pos += grid_rect.size / 2.0
+	# No rotation applied to cell selection - cells are always axis-aligned
+	# Rotation only affects the visual grid lines overlay
 
 	# Calculate cell coordinates
-	var cell_x = int(rotated_pos.x / cell_size.x)
-	var cell_y = int(rotated_pos.y / cell_size.y)
+	var cell_x = int(local_pos.x / cell_size.x)
+	var cell_y = int(local_pos.y / cell_size.y)
 
 	return Vector2i(cell_x, cell_y)
+
+
+func _get_mirrored_cell(cell: Vector2i) -> Vector2i:
+	## Get the point-symmetric (180° rotated) cell position
+	var grid_dims = _calculate_grid_dimensions()
+	return Vector2i(grid_dims.x - 1 - cell.x, grid_dims.y - 1 - cell.y)
 
 
 func _is_valid_cell(cell: Vector2i) -> bool:
@@ -296,7 +303,46 @@ func _paint_at_position(screen_pos: Vector2) -> void:
 	if _is_valid_cell(cell):
 		if selected_terrain_type == TerrainType.NONE:
 			grid_cells.erase(cell)
+			# Also erase mirrored cell if symmetry is enabled
+			if point_symmetry_enabled:
+				var mirrored = _get_mirrored_cell(cell)
+				grid_cells.erase(mirrored)
 		else:
 			grid_cells[cell] = selected_terrain_type
+			# Also paint mirrored cell if symmetry is enabled
+			if point_symmetry_enabled:
+				var mirrored = _get_mirrored_cell(cell)
+				grid_cells[mirrored] = selected_terrain_type
 		grid_container.queue_redraw()
 		_update_stats()
+		_emit_layout_update()
+
+
+func _emit_layout_update() -> void:
+	layout_updated.emit(grid_cells.duplicate(), table_size_feet, grid_rotation_degrees)
+
+
+## Get all cells including their world positions for overlay rendering
+func get_cells_for_overlay() -> Array:
+	var result := []
+	var grid_dims = _calculate_grid_dimensions()
+	var cell_size_inches = GRID_SIZE_INCHES
+
+	for cell_pos in grid_cells:
+		var terrain_type = grid_cells[cell_pos]
+		if terrain_type == TerrainType.NONE:
+			continue
+
+		# Calculate center position in inches from table center
+		var center_x = (cell_pos.x + 0.5) * cell_size_inches - (grid_dims.x * cell_size_inches / 2.0)
+		var center_y = (cell_pos.y + 0.5) * cell_size_inches - (grid_dims.y * cell_size_inches / 2.0)
+
+		result.append({
+			"cell": cell_pos,
+			"type": terrain_type,
+			"color": TERRAIN_COLORS[terrain_type],
+			"center_inches": Vector2(center_x, center_y),
+			"size_inches": cell_size_inches
+		})
+
+	return result
