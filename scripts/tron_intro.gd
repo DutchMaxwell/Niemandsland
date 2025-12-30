@@ -191,18 +191,24 @@ func _update_camera() -> void:
 
 	if _phase <= 1:
 		# Grid phase: animate from start to mid
-		var grid_duration = 3.0  # Estimated grid drawing time
+		var grid_duration = 3.5  # Slightly longer for smoother motion
 		var progress = clampf(_total_time / grid_duration, 0.0, 1.0)
-		var eased = progress * progress * (3.0 - 2.0 * progress)
+		# Ease-out cubic for smooth deceleration
+		var eased = 1.0 - pow(1.0 - progress, 3.0)
 
 		intro_camera_pivot.position = start_pos.lerp(mid_pos, eased)
 		intro_camera_pivot.rotation_degrees = start_rot.lerp(mid_rot, eased)
 	elif _phase == 2:
 		# Table phase: animate from mid to end (zoom toward table)
 		var phase_time = _total_time - _phase_start_time
-		var table_duration = 2.5  # Estimated table drawing time
+		var table_duration = 3.0  # Longer duration for smoother zoom
 		var progress = clampf(phase_time / table_duration, 0.0, 1.0)
-		var eased = progress * progress * (3.0 - 2.0 * progress)
+		# Ease-in-out for smooth start and end
+		var eased: float
+		if progress < 0.5:
+			eased = 4.0 * progress * progress * progress
+		else:
+			eased = 1.0 - pow(-2.0 * progress + 2.0, 3.0) / 2.0
 
 		intro_camera_pivot.position = mid_pos.lerp(end_pos, eased)
 		intro_camera_pivot.rotation_degrees = mid_rot.lerp(end_rot, eased)
