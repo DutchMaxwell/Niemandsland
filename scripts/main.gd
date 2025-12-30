@@ -88,6 +88,10 @@ var _hovered_model: Node3D = null
 var wgs_game_manager: WGSGameManager
 var wgs_import_dialog: WGSImportDialog
 
+# Map Layout Editor
+@onready var map_layout_btn: Button = %MapLayoutBtn
+var map_layout_editor: Control
+
 # TTS Import state
 var _tts_json_path: String = ""
 var _tts_models_dir: String = ""
@@ -242,6 +246,14 @@ func _ready() -> void:
 	# Connect WGS import button (if it exists in UI)
 	if import_wgs_btn:
 		import_wgs_btn.pressed.connect(_on_import_wgs_game)
+
+	# Initialize Map Layout Editor
+	var map_layout_scene = load("res://scenes/map_layout.tscn")
+	map_layout_editor = map_layout_scene.instantiate()
+	map_layout_editor.visible = false
+	$UI.add_child(map_layout_editor)
+	map_layout_editor.layout_closed.connect(_on_map_layout_closed)
+	map_layout_btn.pressed.connect(_on_map_layout_pressed)
 
 	# Initialize and play Tron intro
 	_start_tron_intro()
@@ -1253,3 +1265,20 @@ func _on_graphics_quality_changed(index: int) -> void:
 
 	GraphicsSettings.apply_preset(preset)
 	print("Graphics quality set to: %s" % preset_name)
+
+
+## ============================================================================
+## Map Layout Editor
+## ============================================================================
+
+## Open Map Layout Editor
+func _on_map_layout_pressed() -> void:
+	if map_layout_editor:
+		map_layout_editor.set_table_size(table.table_size)
+		map_layout_editor.visible = true
+		$UI/HUD.visible = false  # Hide main HUD while in layout mode
+
+
+## Close Map Layout Editor
+func _on_map_layout_closed() -> void:
+	$UI/HUD.visible = true  # Show main HUD again
