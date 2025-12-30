@@ -8,6 +8,10 @@ extends Node3D
 @onready var directional_light: DirectionalLight3D = $DirectionalLight3D
 @onready var world_environment: WorldEnvironment = $WorldEnvironment
 
+# Tron Intro
+var tron_intro: TronIntro
+var _intro_finished: bool = false
+
 # Lighting Controller
 var lighting_controller: Node
 var lighting_panel: Window
@@ -229,6 +233,9 @@ func _ready() -> void:
 	# Connect WGS import button (if it exists in UI)
 	if import_wgs_btn:
 		import_wgs_btn.pressed.connect(_on_import_wgs_game)
+
+	# Initialize and play Tron intro
+	_start_tron_intro()
 
 	print("OpenTTS ready!")
 
@@ -1166,3 +1173,42 @@ func _on_wgs_game_imported(game: WGSClient.WGSGame) -> void:
 	# Spawn all units
 	var spawned = wgs_game_manager.spawn_game(offset)
 	print("Spawned %d models from WGS game '%s'" % [spawned.size(), game.game_id])
+
+
+## ============================================================================
+## Tron Intro Animation
+## ============================================================================
+
+## Start the Tron-style intro animation
+func _start_tron_intro() -> void:
+	# Create intro node
+	tron_intro = TronIntro.new()
+	tron_intro.name = "TronIntro"
+	add_child(tron_intro)
+
+	# Connect signals
+	tron_intro.intro_finished.connect(_on_intro_finished)
+	tron_intro.intro_skipped.connect(_on_intro_finished)
+
+	# Hide UI during intro
+	$UI.visible = false
+
+	# Start the intro
+	tron_intro.play_intro(self)
+
+
+## Called when intro finishes or is skipped
+func _on_intro_finished() -> void:
+	_intro_finished = true
+
+	# Show UI
+	$UI.visible = true
+
+	# Clean up intro after a delay
+	if tron_intro:
+		await get_tree().create_timer(1.0).timeout
+		if is_instance_valid(tron_intro):
+			tron_intro.queue_free()
+			tron_intro = null
+
+	print("Tron intro finished - welcome to OpenTTS!")
