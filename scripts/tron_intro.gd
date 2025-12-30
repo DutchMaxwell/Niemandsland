@@ -27,7 +27,8 @@ var main_scene: Node3D
 var world_environment: WorldEnvironment
 var table: Node3D
 var original_camera_pivot: Node3D
-var main_ui: Control  # Reference to main UI for fade-in
+var main_ui: CanvasLayer  # Reference to main UI CanvasLayer
+var main_hud: Control  # Reference to HUD control for fade-in
 
 ## Intro elements
 var lines_container: Node3D
@@ -92,6 +93,8 @@ func play_intro(main: Node3D) -> void:
 	table = main.get_node("Table")
 	original_camera_pivot = main.get_node("CameraPivot")
 	main_ui = main.get_node_or_null("UI")
+	if main_ui:
+		main_hud = main_ui.get_node_or_null("HUD")
 
 	# Store original settings
 	if world_environment and world_environment.environment:
@@ -112,7 +115,8 @@ func play_intro(main: Node3D) -> void:
 	# Prepare UI for fade-in (visible but transparent)
 	if main_ui:
 		main_ui.visible = true
-		main_ui.modulate.a = 0.0
+	if main_hud:
+		main_hud.modulate.a = 0.0
 
 
 func _hide_main_scene() -> void:
@@ -138,7 +142,8 @@ func _show_main_scene() -> void:
 	# Ensure UI is fully visible
 	if main_ui:
 		main_ui.visible = true
-		main_ui.modulate.a = 1.0
+	if main_hud:
+		main_hud.modulate.a = 1.0
 
 
 func _setup_environment() -> void:
@@ -203,14 +208,14 @@ func _update_camera() -> void:
 		intro_camera_pivot.rotation_degrees = mid_rot.lerp(end_rot, eased)
 
 		# Fade in UI during table generation
-		if main_ui:
-			main_ui.modulate.a = eased
+		if main_hud:
+			main_hud.modulate.a = eased
 	else:
 		# Hold final position
 		intro_camera_pivot.position = end_pos
 		intro_camera_pivot.rotation_degrees = end_rot
-		if main_ui:
-			main_ui.modulate.a = 1.0
+		if main_hud:
+			main_hud.modulate.a = 1.0
 
 
 func _create_intro_elements() -> void:
