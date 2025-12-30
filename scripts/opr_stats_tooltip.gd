@@ -157,6 +157,11 @@ func _update_content() -> void:
 	]
 	if _current_unit.cost > 0:
 		stats_text += " | [color=#ffcc44]%d pts[/color]" % _current_unit.cost
+	# Add base size (oval or round)
+	if _current_unit.base_is_oval:
+		stats_text += " | [color=#cccccc]%dx%dmm oval[/color]" % [_current_unit.base_width_mm, _current_unit.base_depth_mm]
+	else:
+		stats_text += " | [color=#cccccc]%dmm round[/color]" % _current_unit.base_size_round
 	stats_label.text = stats_text
 
 	# Weapons
