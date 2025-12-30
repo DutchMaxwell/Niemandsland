@@ -1,14 +1,17 @@
 shader_type spatial;
-render_mode unshaded, cull_disabled;
+render_mode unshaded, cull_disabled, depth_draw_always;
 
-// Tron-style wireframe effect for objects building up
+// Tron-style wireframe with laser-drawing effect for table edges
+// Each edge is drawn by a traveling laser cursor
+
 uniform vec3 wire_color : source_color = vec3(0.0, 1.0, 1.0);  // Cyan
-uniform float wire_width = 0.02;
-uniform float glow_intensity = 2.5;
-uniform float build_progress : hint_range(0.0, 1.0) = 0.0;
-uniform float scan_height = 0.0;  // Current scan line height
-uniform float scan_width = 0.3;   // Width of the scan band
-uniform float pulse_speed = 3.0;
+uniform vec3 cursor_color : source_color = vec3(1.0, 1.0, 1.0);  // White hot
+uniform float wire_width = 0.015;
+uniform float glow_intensity = 2.0;
+uniform float draw_progress : hint_range(0.0, 1.0) = 0.0;  // 0-1 animation progress
+uniform float cursor_size = 0.05;
+uniform float cursor_pulse_speed = 20.0;
+uniform vec3 box_size = vec3(1.83, 0.05, 1.22);  // Table dimensions in meters
 
 varying vec3 local_pos;
 varying vec3 world_pos;
@@ -18,44 +21,72 @@ void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
+// Check if point is near an edge of the box
+float edge_distance(vec3 pos, vec3 size) {
+	vec3 half_size = size * 0.5;
+
+	// Distance to each face
+	vec3 d = abs(pos) - half_size;
+
+	// Count how many axes are near the edge
+	float edge_x = 1.0 - smoothstep(0.0, wire_width, abs(abs(pos.x) - half_size.x));
+	float edge_y = 1.0 - smoothstep(0.0, wire_width, abs(abs(pos.y) - half_size.y));
+	float edge_z = 1.0 - smoothstep(0.0, wire_width, abs(abs(pos.z) - half_size.z));
+
+	// Edges are where two faces meet
+	float edge_xy = edge_x * edge_y;
+	float edge_xz = edge_x * edge_z;
+	float edge_yz = edge_y * edge_z;
+
+	return max(max(edge_xy, edge_xz), edge_yz);
+}
+
 void fragment() {
-	// Edge detection using screen-space derivatives
-	vec3 dx = dFdx(local_pos);
-	vec3 dy = dFdy(local_pos);
-	float edge = length(cross(dx, dy));
+	// Calculate edge wireframe
+	float wire = edge_distance(local_pos, box_size);
 
-	// Wireframe effect based on barycentric-like coordinates
-	float wire = 0.0;
+	// Calculate "drawing progress" based on position
+	// Start from bottom-left corner and draw around the perimeter
+	vec3 half_size = box_size * 0.5;
 
-	// Create wireframe from UV coordinates or position
-	vec3 pos_frac = fract(local_pos * 10.0);
-	float wx = smoothstep(wire_width, 0.0, pos_frac.x) + smoothstep(1.0 - wire_width, 1.0, pos_frac.x);
-	float wy = smoothstep(wire_width, 0.0, pos_frac.y) + smoothstep(1.0 - wire_width, 1.0, pos_frac.y);
-	float wz = smoothstep(wire_width, 0.0, pos_frac.z) + smoothstep(1.0 - wire_width, 1.0, pos_frac.z);
-	wire = max(max(wx, wy), wz);
+	// Normalize position to 0-1 range for progress calculation
+	float perimeter_progress = 0.0;
 
-	// Scan line effect - reveals geometry from bottom to top
-	float normalized_height = (world_pos.y + 1.0) / 2.0;  // Normalize height
-	float scan_mask = smoothstep(scan_height - scan_width, scan_height, normalized_height);
-	scan_mask *= smoothstep(scan_height + scan_width * 2.0, scan_height + scan_width, normalized_height);
+	// Calculate progress around the box perimeter (bottom edges first, then top)
+	// Bottom layer - start from -X, -Z corner
+	float bottom_perimeter = (local_pos.x + half_size.x) / box_size.x;  // 0 to 1 for X
+	bottom_perimeter += (local_pos.z + half_size.z) / box_size.z;  // Add Z progress
 
-	// Build progress - geometry appears as progress increases
-	float build_mask = step(normalized_height, build_progress);
+	// Top layer comes after bottom
+	float is_top = step(half_size.y * 0.5, local_pos.y);
+	float is_bottom = 1.0 - is_top;
 
-	// Pulse effect
-	float pulse = sin(TIME * pulse_speed + world_pos.y * 5.0) * 0.3 + 0.7;
+	perimeter_progress = bottom_perimeter * 0.25 * is_bottom;
+	perimeter_progress += (0.5 + bottom_perimeter * 0.25) * is_top;
 
-	// Combine effects
-	float intensity = wire * glow_intensity * pulse;
+	// Vertical edges
+	float is_vertical = (1.0 - abs(local_pos.y) / half_size.y);
 
-	// Bright scan line
-	float scan_glow = scan_mask * 3.0;
-	intensity = max(intensity, scan_glow);
+	// Draw progress reveals edges progressively
+	float total_progress = draw_progress * 4.0;  // Speed up the drawing
+	float reveal = smoothstep(perimeter_progress - 0.02, perimeter_progress + 0.02, total_progress);
 
-	// Apply build mask
-	intensity *= build_mask;
+	// Cursor at the drawing front
+	float cursor_dist = abs(total_progress - perimeter_progress);
+	float cursor = smoothstep(cursor_size, 0.0, cursor_dist);
 
-	ALBEDO = wire_color;
-	ALPHA = clamp(intensity, 0.0, 1.0);
-	EMISSION = wire_color * intensity * 2.0;
+	// Pulse the cursor
+	float pulse = sin(TIME * cursor_pulse_speed) * 0.4 + 0.6;
+	cursor *= pulse;
+
+	// Final wire intensity
+	float intensity = wire * reveal * glow_intensity;
+
+	// Combine colors
+	vec3 final_color = wire_color * intensity;
+	final_color += cursor_color * cursor * wire * 5.0;  // Bright cursor on edges only
+
+	ALBEDO = final_color;
+	ALPHA = clamp(intensity + cursor * wire * 2.0, 0.0, 1.0);
+	EMISSION = final_color * 2.5;
 }
