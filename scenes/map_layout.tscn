@@ -1,0 +1,128 @@
+[gd_scene load_steps=3 format=3 uid="uid://map_layout001"]
+
+[ext_resource type="Script" path="res://scripts/map_layout.gd" id="1_maplayout"]
+[ext_resource type="Script" path="res://scripts/map_layout_grid.gd" id="2_grid"]
+
+[node name="MapLayout" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_maplayout")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.1, 0.1, 0.15, 1)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+
+[node name="Header" type="HBoxContainer" parent="MarginContainer/VBox"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="MarginContainer/VBox/Header"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Map Layout Editor"
+
+[node name="Spacer" type="Control" parent="MarginContainer/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ClearButton" type="Button" parent="MarginContainer/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Clear All"
+
+[node name="CloseButton" type="Button" parent="MarginContainer/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Close"
+
+[node name="HSeparator" type="HSeparator" parent="MarginContainer/VBox"]
+layout_mode = 2
+
+[node name="MainContent" type="HBoxContainer" parent="MarginContainer/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="LeftPanel" type="VBoxContainer" parent="MarginContainer/VBox/MainContent"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 0.3
+
+[node name="TerrainLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Terrain Types"
+
+[node name="TerrainButtons" type="VBoxContainer" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="HSeparator2" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+layout_mode = 2
+
+[node name="RotationLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Rotation: 0°"
+
+[node name="RotationSlider" type="HSlider" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 360.0
+step = 1.0
+
+[node name="HSeparator3" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+layout_mode = 2
+
+[node name="StatsLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Current Coverage:"
+
+[node name="HSeparator4" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+layout_mode = 2
+
+[node name="RecommendationsLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.8, 0.4, 1)
+text = "OPR Recommendations:"
+
+[node name="Spacer" type="Control" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="GridPanel" type="PanelContainer" parent="MarginContainer/VBox/MainContent"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 0.7
+
+[node name="GridMargin" type="MarginContainer" parent="MarginContainer/VBox/MainContent/GridPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="GridContainer" type="Control" parent="MarginContainer/VBox/MainContent/GridPanel/GridMargin"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("2_grid")
