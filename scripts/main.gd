@@ -91,6 +91,7 @@ var wgs_import_dialog: WGSImportDialog
 # Map Layout Editor
 @onready var map_layout_btn: Button = %MapLayoutBtn
 var map_layout_editor: Control
+var terrain_overlay: Node3D
 
 # TTS Import state
 var _tts_json_path: String = ""
@@ -253,7 +254,15 @@ func _ready() -> void:
 	map_layout_editor.visible = false
 	$UI.add_child(map_layout_editor)
 	map_layout_editor.layout_closed.connect(_on_map_layout_closed)
+	map_layout_editor.layout_updated.connect(_on_map_layout_updated)
 	map_layout_btn.pressed.connect(_on_map_layout_pressed)
+
+	# Initialize Terrain Overlay (on the 3D table)
+	var overlay_script = load("res://scripts/terrain_overlay.gd")
+	terrain_overlay = Node3D.new()
+	terrain_overlay.set_script(overlay_script)
+	terrain_overlay.name = "TerrainOverlay"
+	table.add_child(terrain_overlay)
 
 	# Initialize and play Tron intro
 	_start_tron_intro()
@@ -1282,3 +1291,9 @@ func _on_map_layout_pressed() -> void:
 ## Close Map Layout Editor
 func _on_map_layout_closed() -> void:
 	$UI/HUD.visible = true  # Show main HUD again
+
+
+## Update terrain overlay when map layout changes
+func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2, rotation: float) -> void:
+	if terrain_overlay and terrain_overlay.has_method("update_overlay"):
+		terrain_overlay.update_overlay(grid_cells, table_size, rotation)
