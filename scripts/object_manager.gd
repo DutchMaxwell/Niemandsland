@@ -59,11 +59,15 @@ var _measure_start_object: Node3D = null  # Reference to start object for edge c
 var _measure_end_object: Node3D = null    # Reference to end object for edge calculation
 var _measure_line: MeshInstance3D = null
 var _measure_label: Label3D = null
+var _measure_terrain_warning: Label3D = null  # Warning icon for terrain (⚠️ or 💀)
 
 const METERS_TO_INCHES: float = 39.3701
 
 # Network manager reference
 var _network_manager: Node = null
+
+# Terrain overlay reference (for terrain hints)
+var terrain_overlay: Node3D = null
 
 # Preload resources (will be scenes in full version)
 # Standard wargaming miniature sizes
@@ -1021,13 +1025,60 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 	var label_angle = atan2(direction.x, direction.z)
 	_measure_label.rotation = Vector3(-PI/2, label_angle, 0)  # Flat, facing up, aligned with line
 
-	# Set line color based on snap status (label stays white)
+	# Check terrain along the measurement path
+	var terrain_warning_text = ""
+	var terrain_warning_color = Color.WHITE
 	var line_color = Color.GREEN if both_snapped else Color.YELLOW
+
+	if terrain_overlay and terrain_overlay.has_method("get_terrain_at_world_position"):
+		# Sample terrain at multiple points along the line
+		var num_samples = int(max(3, length * 20))  # At least 3 samples, more for longer lines
+		var has_difficult = false
+		var has_dangerous = false
+
+		for i in range(num_samples):
+			var t = float(i) / float(num_samples - 1)
+			var sample_pos = from_pos.lerp(to_pos, t)
+			var terrain_type = terrain_overlay.get_terrain_at_world_position(sample_pos)
+
+			# TerrainType enum: NONE=0, RUINS=1, FOREST=2, CONTAINER=3, DANGEROUS=4
+			if terrain_type == 2:  # FOREST (Difficult Terrain)
+				has_difficult = true
+			elif terrain_type == 4:  # DANGEROUS
+				has_dangerous = true
+
+		# Set warning based on terrain (Dangerous overrides Difficult)
+		if has_dangerous:
+			terrain_warning_text = "💀"
+			terrain_warning_color = Color.RED
+			line_color = Color.RED
+		elif has_difficult:
+			terrain_warning_text = "⚠️"
+			terrain_warning_color = Color.ORANGE
+			line_color = Color.ORANGE
 
 	# Update line material color
 	var mat = _measure_line.material_override as StandardMaterial3D
 	if mat:
 		mat.albedo_color = line_color
+
+	# Update terrain warning label
+	if terrain_warning_text != "":
+		if not _measure_terrain_warning:
+			_measure_terrain_warning = Label3D.new()
+			_measure_terrain_warning.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			_measure_terrain_warning.no_depth_test = true
+			_measure_terrain_warning.font_size = 48
+			add_child(_measure_terrain_warning)
+
+		_measure_terrain_warning.visible = true
+		_measure_terrain_warning.text = terrain_warning_text
+		_measure_terrain_warning.modulate = terrain_warning_color
+		# Position above the distance label
+		_measure_terrain_warning.global_position = Vector3(midpoint.x, 0.06, midpoint.z)
+	else:
+		if _measure_terrain_warning:
+			_measure_terrain_warning.visible = false
 
 	# Label stays white with black outline for best readability
 	_measure_label.modulate = Color.WHITE

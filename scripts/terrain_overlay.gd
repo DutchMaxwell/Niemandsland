@@ -62,6 +62,8 @@ var deployment_zone_meshes: Array[MeshInstance3D] = []
 var table_size_feet := Vector2(6, 4)
 var current_deployment_type := DeploymentType.NONE
 var deployment_zones_visible := false
+var grid_cells := {}  # Dictionary[Vector2i, TerrainType] - stores terrain data
+var grid_rotation_degrees := 0.0
 
 
 func _ready() -> void:
@@ -94,6 +96,10 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 
 	clear_overlay()
 	table_size_feet = table_size
+	grid_rotation_degrees = rotation_degrees
+
+	# Store grid_cells for terrain lookup
+	self.grid_cells = grid_cells
 
 	# Update deployment zones when table size changes
 	_update_deployment_zones()
@@ -328,6 +334,48 @@ func is_position_in_deployment_zone(world_pos: Vector3) -> Dictionary:
 ## @param world_pos: Position to check (in 3D world coordinates)
 ## @return: TerrainType enum value at that position
 func get_terrain_at_world_position(world_pos: Vector3) -> int:
-	# TODO: Implement terrain lookup based on grid_cells
-	# This will be used for terrain hints (difficult terrain, dangerous, etc.)
+	if grid_cells.is_empty():
+		return TerrainType.NONE
+
+	# Calculate grid dimensions
+	var grid_dims = Vector2i(
+		int(ceil(table_size_feet.x * 12.0 / GRID_SIZE_INCHES)),
+		int(ceil(table_size_feet.y * 12.0 / GRID_SIZE_INCHES))
+	)
+
+	var cell_size_meters = GRID_SIZE_INCHES * INCHES_TO_METERS
+	var rotation_rad = deg_to_rad(grid_rotation_degrees)
+
+	# Reverse rotation to get local coordinates
+	var rotated_x = world_pos.x * cos(-rotation_rad) - world_pos.z * sin(-rotation_rad)
+	var rotated_z = world_pos.x * sin(-rotation_rad) + world_pos.z * cos(-rotation_rad)
+
+	# Convert to grid coordinates
+	var grid_x = int(floor((rotated_x + (grid_dims.x * cell_size_meters / 2.0)) / cell_size_meters))
+	var grid_z = int(floor((rotated_z + (grid_dims.y * cell_size_meters / 2.0)) / cell_size_meters))
+
+	var cell_pos = Vector2i(grid_x, grid_z)
+
+	# Lookup terrain type
+	if grid_cells.has(cell_pos):
+		return grid_cells[cell_pos]
+
 	return TerrainType.NONE
+
+
+## Check if terrain blocks line of sight
+##
+## @param terrain_type: TerrainType to check
+## @param viewer_in_terrain: Is the viewer inside this terrain?
+## @param target_in_terrain: Is the target inside this terrain?
+## @return: true if LOS is blocked
+func is_terrain_los_blocking(terrain_type: int, viewer_in_terrain: bool, target_in_terrain: bool) -> bool:
+	match terrain_type:
+		TerrainType.CONTAINER:
+			# Container always blocks unless you can fly over
+			return true
+		TerrainType.FOREST, TerrainType.RUINS:
+			# Forest/Ruins block LOS unless viewer or target is inside
+			return not (viewer_in_terrain or target_in_terrain)
+
+	return false

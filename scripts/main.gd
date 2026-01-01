@@ -296,6 +296,9 @@ func _ready() -> void:
 	terrain_overlay.name = "TerrainOverlay"
 	table.add_child(terrain_overlay)
 
+	# Give object_manager reference to terrain_overlay for terrain hints
+	object_manager.terrain_overlay = terrain_overlay
+
 	# Initialize Deployment Zones UI
 	_init_deployment_zones_ui()
 
