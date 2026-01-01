@@ -589,14 +589,24 @@ func _try_generate_layout() -> bool:
 
 				# Check if placement is valid (3" minimum spacing)
 				if _can_place_piece(pos, template, placed_pieces):
-					_place_piece(pos, template, terrain_type)
-					placed_pieces.append({"pos": pos, "size": template, "type": terrain_type})
-
-					# If symmetry is enabled, mirror the piece
+					# If symmetry is enabled, check if mirrored position is also valid
 					if point_symmetry_enabled:
-						var mirrored_pos = _mirror_position(pos + template / 2, grid_dims) - template / 2
+						var mirrored_pos = _mirror_position(pos, template, grid_dims)
+
+						# Check if mirrored piece can also be placed
+						if not _can_place_piece(mirrored_pos, template, placed_pieces):
+							continue  # Try another position
+
+						# Place both original and mirrored piece
+						_place_piece(pos, template, terrain_type)
+						placed_pieces.append({"pos": pos, "size": template, "type": terrain_type})
+
 						_place_piece(mirrored_pos, template, terrain_type)
 						placed_pieces.append({"pos": mirrored_pos, "size": template, "type": terrain_type})
+					else:
+						# No symmetry - just place the piece
+						_place_piece(pos, template, terrain_type)
+						placed_pieces.append({"pos": pos, "size": template, "type": terrain_type})
 
 					placed = true
 					break
@@ -608,9 +618,11 @@ func _try_generate_layout() -> bool:
 
 
 ## Mirror a position across the grid center (point symmetry)
-func _mirror_position(pos: Vector2i, grid_dims: Vector2i) -> Vector2i:
+## For a piece at position pos with given size, returns the mirrored top-left corner position
+func _mirror_position(pos: Vector2i, size: Vector2i, grid_dims: Vector2i) -> Vector2i:
 	# Point symmetry: reflect across center (180° rotation)
-	return Vector2i(grid_dims.x - pos.x, grid_dims.y - pos.y)
+	# Mirror the top-left corner of the piece
+	return Vector2i(grid_dims.x - pos.x - size.x, grid_dims.y - pos.y - size.y)
 
 
 ## Check if a piece can be placed without overlapping existing pieces
