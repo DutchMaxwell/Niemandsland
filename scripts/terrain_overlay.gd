@@ -29,6 +29,16 @@ enum TerrainType {
 	DANGEROUS = 4
 }
 
+## Deployment zone types
+enum DeploymentType {
+	NONE = 0,
+	FRONT_LINE = 1,      # 12" from long table edges
+	CORNER_DEPLOYMENT = 2,
+	DAWN_ASSAULT = 3,
+	PITCHED_BATTLE = 4,
+	MEETING_ENGAGEMENT = 5
+}
+
 # Terrain colors (matching map_layout.gd)
 const TERRAIN_COLORS := {
 	TerrainType.RUINS: Color(0.3, 0.5, 0.8, 0.4),      # Blue
@@ -37,12 +47,21 @@ const TERRAIN_COLORS := {
 	TerrainType.DANGEROUS: Color(0.8, 0.2, 0.2, 0.4)   # Red
 }
 
+# Deployment zone colors
+const DEPLOYMENT_COLORS := {
+	"player1": Color(0.2, 0.5, 1.0, 0.3),  # Blue for Player 1
+	"player2": Color(1.0, 0.3, 0.2, 0.3)   # Red for Player 2
+}
+
 # ==============================================================================
 # STATE
 # ==============================================================================
 
 var overlay_meshes: Array[MeshInstance3D] = []
+var deployment_zone_meshes: Array[MeshInstance3D] = []
 var table_size_feet := Vector2(6, 4)
+var current_deployment_type := DeploymentType.NONE
+var deployment_zones_visible := false
 
 
 func _ready() -> void:
@@ -75,6 +94,9 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 
 	clear_overlay()
 	table_size_feet = table_size
+
+	# Update deployment zones when table size changes
+	_update_deployment_zones()
 
 	if grid_cells.is_empty():
 		return
@@ -148,3 +170,164 @@ func set_visible_overlay(is_visible: bool) -> void:
 	for mesh in overlay_meshes:
 		if is_instance_valid(mesh):
 			mesh.visible = is_visible
+
+
+## Set deployment zone type and create visualizations
+##
+## @param deployment_type: Type of deployment zone to display
+func set_deployment_zones(deployment_type: int) -> void:
+	current_deployment_type = deployment_type
+	_update_deployment_zones()
+
+
+## Toggle visibility of deployment zones
+##
+## @param is_visible: true to show deployment zones, false to hide them
+func set_deployment_zones_visible(is_visible: bool) -> void:
+	deployment_zones_visible = is_visible
+	for mesh in deployment_zone_meshes:
+		if is_instance_valid(mesh):
+			mesh.visible = is_visible
+
+
+## Clear all deployment zone meshes
+func _clear_deployment_zones() -> void:
+	for mesh in deployment_zone_meshes:
+		if is_instance_valid(mesh):
+			mesh.queue_free()
+	deployment_zone_meshes.clear()
+
+
+## Update deployment zone visualization based on current type
+func _update_deployment_zones() -> void:
+	_clear_deployment_zones()
+
+	if current_deployment_type == DeploymentType.NONE:
+		return
+
+	# Convert table size from feet to meters
+	var table_width_m = table_size_feet.x * 12.0 * INCHES_TO_METERS  # Long edge (X-axis)
+	var table_depth_m = table_size_feet.y * 12.0 * INCHES_TO_METERS  # Short edge (Z-axis)
+
+	match current_deployment_type:
+		DeploymentType.FRONT_LINE:
+			_create_front_line_zones(table_width_m, table_depth_m)
+		DeploymentType.CORNER_DEPLOYMENT:
+			_create_corner_deployment_zones(table_width_m, table_depth_m)
+		DeploymentType.DAWN_ASSAULT:
+			_create_dawn_assault_zones(table_width_m, table_depth_m)
+		DeploymentType.PITCHED_BATTLE:
+			_create_pitched_battle_zones(table_width_m, table_depth_m)
+		DeploymentType.MEETING_ENGAGEMENT:
+			_create_meeting_engagement_zones(table_width_m, table_depth_m)
+
+
+## Create Front-line deployment zones (12" from long table edges)
+func _create_front_line_zones(table_width: float, table_depth: float) -> void:
+	var deployment_depth = 12.0 * INCHES_TO_METERS  # 12" deployment zone
+
+	# Player 1 zone (bottom, facing forward along +Z)
+	var p1_position = Vector3(0, 0, -table_depth/2 + deployment_depth/2)
+	var p1_size = Vector2(table_width, deployment_depth)
+	var p1_mesh = _create_deployment_zone_mesh(p1_position, p1_size, DEPLOYMENT_COLORS["player1"])
+	add_child(p1_mesh)
+	deployment_zone_meshes.append(p1_mesh)
+
+	# Player 2 zone (top, facing backward along -Z)
+	var p2_position = Vector3(0, 0, table_depth/2 - deployment_depth/2)
+	var p2_size = Vector2(table_width, deployment_depth)
+	var p2_mesh = _create_deployment_zone_mesh(p2_position, p2_size, DEPLOYMENT_COLORS["player2"])
+	add_child(p2_mesh)
+	deployment_zone_meshes.append(p2_mesh)
+
+	p1_mesh.visible = deployment_zones_visible
+	p2_mesh.visible = deployment_zones_visible
+
+
+## Placeholder for Corner Deployment
+func _create_corner_deployment_zones(table_width: float, table_depth: float) -> void:
+	# TODO: Implement corner deployment zones
+	pass
+
+
+## Placeholder for Dawn Assault
+func _create_dawn_assault_zones(table_width: float, table_depth: float) -> void:
+	# TODO: Implement dawn assault zones
+	pass
+
+
+## Placeholder for Pitched Battle
+func _create_pitched_battle_zones(table_width: float, table_depth: float) -> void:
+	# TODO: Implement pitched battle zones
+	pass
+
+
+## Placeholder for Meeting Engagement
+func _create_meeting_engagement_zones(table_width: float, table_depth: float) -> void:
+	# TODO: Implement meeting engagement zones
+	pass
+
+
+## Create a mesh for a deployment zone
+##
+## @param pos: Center position of the deployment zone
+## @param size: Size of the deployment zone (width, depth)
+## @param color: Color of the deployment zone
+## @return: Configured MeshInstance3D
+func _create_deployment_zone_mesh(pos: Vector3, size: Vector2, color: Color) -> MeshInstance3D:
+	var mesh_instance = MeshInstance3D.new()
+
+	# Create a flat quad for the deployment zone
+	var plane_mesh = PlaneMesh.new()
+	plane_mesh.size = size
+
+	mesh_instance.mesh = plane_mesh
+	mesh_instance.position = pos
+
+	# Create semi-transparent, unshaded material
+	var material = StandardMaterial3D.new()
+	material.albedo_color = color
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+	mesh_instance.material_override = material
+
+	return mesh_instance
+
+
+## Check if a world position is within a deployment zone
+##
+## @param world_pos: Position to check (in 3D world coordinates)
+## @return: Dictionary with keys: "in_zone" (bool), "player" (String: "player1"/"player2"/"none")
+func is_position_in_deployment_zone(world_pos: Vector3) -> Dictionary:
+	if current_deployment_type == DeploymentType.NONE:
+		return {"in_zone": false, "player": "none"}
+
+	var table_width_m = table_size_feet.x * 12.0 * INCHES_TO_METERS
+	var table_depth_m = table_size_feet.y * 12.0 * INCHES_TO_METERS
+	var deployment_depth = 12.0 * INCHES_TO_METERS
+
+	match current_deployment_type:
+		DeploymentType.FRONT_LINE:
+			# Check if in Player 1 zone (bottom, -Z side)
+			if world_pos.z >= (-table_depth_m/2) and world_pos.z <= (-table_depth_m/2 + deployment_depth):
+				if abs(world_pos.x) <= table_width_m/2:
+					return {"in_zone": true, "player": "player1"}
+
+			# Check if in Player 2 zone (top, +Z side)
+			if world_pos.z <= (table_depth_m/2) and world_pos.z >= (table_depth_m/2 - deployment_depth):
+				if abs(world_pos.x) <= table_width_m/2:
+					return {"in_zone": true, "player": "player2"}
+
+	return {"in_zone": false, "player": "none"}
+
+
+## Get terrain type at a world position
+##
+## @param world_pos: Position to check (in 3D world coordinates)
+## @return: TerrainType enum value at that position
+func get_terrain_at_world_position(world_pos: Vector3) -> int:
+	# TODO: Implement terrain lookup based on grid_cells
+	# This will be used for terrain hints (difficult terrain, dangerous, etc.)
+	return TerrainType.NONE
