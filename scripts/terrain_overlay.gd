@@ -123,14 +123,20 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 	if grid_cells.is_empty():
 		return
 
-	# Calculate grid dimensions
-	var grid_dims = Vector2i(
-		int(ceil(table_size_feet.x * 12.0 / GRID_SIZE_INCHES)),
-		int(ceil(table_size_feet.y * 12.0 / GRID_SIZE_INCHES))
-	)
+	# Calculate grid dimensions using diagonal to cover table at any rotation
+	var width_inches = table_size_feet.x * 12.0
+	var height_inches = table_size_feet.y * 12.0
+	var diagonal = sqrt(width_inches * width_inches + height_inches * height_inches)
+	var grid_size = int(ceil(diagonal / GRID_SIZE_INCHES))
+	var grid_dims = Vector2i(grid_size, grid_size)
 
 	var cell_size_meters = GRID_SIZE_INCHES * INCHES_TO_METERS
 	var rotation_rad = deg_to_rad(rotation_degrees)
+
+	# Table bounds for culling cells outside the table
+	var table_width_m = table_size_feet.x * 12.0 * INCHES_TO_METERS
+	var table_depth_m = table_size_feet.y * 12.0 * INCHES_TO_METERS
+	var max_extent = max(table_width_m, table_depth_m) / 2.0 * 1.1  # 10% tolerance
 
 	# Create a mesh for each terrain cell
 	for cell_pos in grid_cells:
@@ -140,13 +146,18 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 
 		var color = TERRAIN_COLORS.get(terrain_type, Color.WHITE)
 
-		# Calculate position in grid coordinates (before rotation)
-		var local_x = (cell_pos.x + 0.5) * cell_size_meters - (grid_dims.x * cell_size_meters / 2.0)
-		var local_z = (cell_pos.y + 0.5) * cell_size_meters - (grid_dims.y * cell_size_meters / 2.0)
+		# Calculate position in grid coordinates (centered, before rotation)
+		var local_x = (cell_pos.x - grid_dims.x / 2.0 + 0.5) * cell_size_meters
+		var local_z = (cell_pos.y - grid_dims.y / 2.0 + 0.5) * cell_size_meters
 
 		# Apply rotation around center (Y-axis in 3D = rotation in XZ plane)
 		var rotated_x = local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
 		var rotated_z = local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
+
+		# Skip cells that are outside table bounds (after rotation)
+		var dist_from_center = sqrt(rotated_x * rotated_x + rotated_z * rotated_z)
+		if dist_from_center > max_extent:
+			continue
 
 		var mesh_instance = _create_cell_mesh(Vector3(rotated_x, 0, rotated_z), cell_size_meters, color, rotation_degrees)
 		add_child(mesh_instance)
@@ -903,11 +914,12 @@ func get_terrain_at_world_position(world_pos: Vector3) -> int:
 	if grid_cells.is_empty():
 		return TerrainType.NONE
 
-	# Calculate grid dimensions
-	var grid_dims = Vector2i(
-		int(ceil(table_size_feet.x * 12.0 / GRID_SIZE_INCHES)),
-		int(ceil(table_size_feet.y * 12.0 / GRID_SIZE_INCHES))
-	)
+	# Calculate grid dimensions using diagonal (same as update_overlay)
+	var width_inches = table_size_feet.x * 12.0
+	var height_inches = table_size_feet.y * 12.0
+	var diagonal = sqrt(width_inches * width_inches + height_inches * height_inches)
+	var grid_size = int(ceil(diagonal / GRID_SIZE_INCHES))
+	var grid_dims = Vector2i(grid_size, grid_size)
 
 	var cell_size_meters = GRID_SIZE_INCHES * INCHES_TO_METERS
 	var rotation_rad = deg_to_rad(grid_rotation_degrees)
@@ -916,9 +928,9 @@ func get_terrain_at_world_position(world_pos: Vector3) -> int:
 	var rotated_x = world_pos.x * cos(-rotation_rad) - world_pos.z * sin(-rotation_rad)
 	var rotated_z = world_pos.x * sin(-rotation_rad) + world_pos.z * cos(-rotation_rad)
 
-	# Convert to grid coordinates
-	var grid_x = int(floor((rotated_x + (grid_dims.x * cell_size_meters / 2.0)) / cell_size_meters))
-	var grid_z = int(floor((rotated_z + (grid_dims.y * cell_size_meters / 2.0)) / cell_size_meters))
+	# Convert to grid coordinates (centered grid)
+	var grid_x = int(floor(rotated_x / cell_size_meters + grid_dims.x / 2.0))
+	var grid_z = int(floor(rotated_z / cell_size_meters + grid_dims.y / 2.0))
 
 	var cell_pos = Vector2i(grid_x, grid_z)
 
