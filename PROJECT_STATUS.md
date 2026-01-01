@@ -1,7 +1,7 @@
 # OpenTTS - Projekt Status
 **Stand:** 2026-01-01
 **Version:** 0.2-alpha
-**Branch:** `claude/cleanup-and-docs-0Ri4c`
+**Branch:** `main` (alle Feature-Branches gemerged)
 
 ---
 
@@ -39,6 +39,20 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 - ✅ **Distanzmessung** - In Zoll
 - ✅ **Terrain-Library** - Felsen, Gebäude, Bäume
 
+### Terrain & Map Layout System (NEU!)
+- ✅ **Map Layout Editor** - Top-down 3" Grid für Terrain-Planung
+- ✅ **Terrain-Typen mit Eigenschaften**:
+  - Ruins (Height 5, Cover, Impassable Walls)
+  - Forest (Height 5, Difficult + Cover)
+  - Container (Height 5, Impassable + Blocking)
+  - Dangerous (Minefields/Acid/Radiation)
+- ✅ **Deployment Zones** - Standard 6"/9", Diagonal, Hammer & Anvil
+- ✅ **Objectives System** - Platzierung und Visualisierung von Zielpunkten
+- ✅ **Auto-Generate Terrain** - Automatische Terrain-Generierung mit Symmetrie
+- ✅ **3D Overlay Visualisierung** - Terrain-Grid im 3D-Spiel sichtbar
+- ✅ **Save/Load Layouts** - Terrain-Setups speichern und laden
+- ✅ **Table Background Texture** - Standard-Untergrund für den Spieltisch
+
 ### OPR Integration
 - ✅ **OPR API Client** - Army Forge API Integration
 - ✅ **Stats Tooltips** - Unit-Statistiken beim Hover
@@ -65,21 +79,36 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 - ✅ **SSR** - Screen-Space Reflections
 - ✅ **Glow & Bloom** - Post-Processing
 
+### Content Creation Tools (NEU!)
+- ✅ **Miniature Pipeline** - Gemini → TRELLIS.2 Workflow
+- ✅ **GUI Batch Processor** - Tkinter-basierte Batch-Konvertierung
+- ✅ **Intelligente Watermark Removal** - Automatische Background-Sampling
+- ✅ **Preprocessing Pipeline** - White Background Removal + Upload zu HuggingFace
+
 ---
 
 ## 📋 In Arbeit (Milestone 2)
 
-### UI-Verbesserungen
-- [ ] Erweiterte Settings-Menü-Integration
-- [ ] In-Game HUD Overhaul
-- [ ] Radial Context Menu
-- [ ] Minimap
+### Terrain-Gameplay Integration (PRIORITÄT!)
+- [ ] **Deployment Zones im 3D-Spiel** - Sichtbare Zonen beim Spielstart
+- [ ] **Cover-System** - Deckung durch Terrain (Ruins, Forest)
+- [ ] **Schwieriges Gelände** - Movement-Modifikatoren (Forest)
+- [ ] **LOS-Blocking** - Container blockieren Sichtlinien komplett
+- [ ] **Dangerous Terrain** - Schaden bei Betreten (Minefields, Acid)
+- [ ] **Terrain-Höhen** - Height 5 Objekte für Sichtlinien
 
 ### Gameplay-Features
-- [ ] Gelände-System mit Eigenschaften (Deckung, Schwieriges Gelände)
 - [ ] Einheiten-Karten und erweiterte Stats
 - [ ] Erweiterte Würfel-Optionen (Modifikatoren, mehr Typen)
-- [ ] Phasen-Management System
+- [ ] Phasen-Management System (Turn-Tracker, Aktivierung)
+- [ ] Wunden-Tracking pro Modell
+- [ ] Status-Marker (Aktiviert, Pinned, etc.)
+
+### UI-Verbesserungen
+- [ ] In-Game HUD Overhaul
+- [ ] Radial Context Menu
+- [ ] Minimap mit Terrain-Overlay
+- [ ] Erweiterte Settings-Menü-Integration
 
 ---
 
@@ -103,6 +132,7 @@ openTTS/
 ├── scenes/                  # Godot-Szenen
 │   ├── main.tscn           # Hauptszene
 │   ├── startup_menu.tscn   # Startmenü
+│   ├── map_layout.tscn     # Map Layout Editor (NEU!)
 │   └── opr_stats_tooltip.tscn
 ├── scripts/                 # GDScript-Dateien
 │   ├── main.gd             # Hauptszene-Controller
@@ -110,6 +140,9 @@ openTTS/
 │   ├── table.gd
 │   ├── object_manager.gd
 │   ├── selectable_object.gd
+│   ├── map_layout.gd       # Map Layout Editor (NEU! 852 Zeilen)
+│   ├── map_layout_grid.gd  # Grid Rendering (NEU! 272 Zeilen)
+│   ├── terrain_overlay.gd  # 3D Overlay (NEU! 150 Zeilen)
 │   ├── network_manager.gd
 │   ├── save_manager.gd
 │   ├── lighting_controller.gd
@@ -120,14 +153,23 @@ openTTS/
 │   └── ...
 ├── assets/                  # Texturen, Modelle, Audio
 │   ├── miniatures/
+│   │   └── alien_hives/    # Pipeline mit GUI (NEU!)
+│   │       ├── pipeline_gui.py
+│   │       ├── batch_convert.py
+│   │       └── Start Pipeline.bat/.command
+│   ├── kenney_ui/          # Kenney UI Assets (NEU!)
 │   └── textures/
 ├── addons/                  # Godot Addons
 │   └── dice_roller/
 ├── docs/                    # Dokumentation
-│   ├── WGS_INTEGRATION.md
-│   ├── UI_OVERHAUL_README.md
-│   ├── GRAPHICS_UPGRADE_PLAN.md
-│   └── ...
+│   ├── ASSETS.md
+│   ├── DICE_PHYSICS_WIP.md
+│   ├── OPR_API_Research_Report.md
+│   └── README.md           # Docs Index (NEU!)
+├── examples/                # Beispiel-Dateien (NEU!)
+│   ├── README.md
+│   └── Custodian Brothers.json
+├── serve_web.py            # Python Server für Web Export (NEU!)
 ├── README.md               # Projekt-Readme
 ├── PLAN.md                 # Entwicklungsplan
 └── PROJECT_STATUS.md       # Dieser Status-Bericht
@@ -138,19 +180,22 @@ openTTS/
 ## 🚀 Nächste Schritte (Priorität)
 
 ### Kurzfristig (Diese Woche)
-1. **Dokumentation aufräumen** - Veraltete Docs entfernen/aktualisieren
-2. **UI Polish** - Settings-Menü vollständig integrieren
-3. **Testing** - Graphics Quality Presets testen
+1. ✅ **Dokumentation aktualisieren** - PROJECT_STATUS.md, README.md, PLAN.md
+2. **Deployment Zones ins 3D-Spiel** - Visualisierung beim Spielstart
+3. **Cover-System implementieren** - Terrain gibt Deckung (Ruins, Forest)
+4. **Schwieriges Gelände** - Movement-Modifikatoren aktivieren
 
 ### Mittelfristig (Diesen Monat)
-1. **Gelände-System** - Eigenschaften (Deckung, Schwieriges Gelände)
-2. **Einheiten-Karten** - Erweiterte Stats-Anzeige
-3. **Phasen-Management** - Turn-basiertes Spiel unterstützen
+1. **Terrain-Gameplay Features** - LOS-Blocking, Dangerous Terrain, Höhen
+2. **Einheiten-Karten** - Erweiterte Stats-Anzeige im 3D-Spiel
+3. **Phasen-Management** - Turn-Tracker, Aktivierungs-System
+4. **Wunden-Tracking** - HP-Anzeige pro Modell
 
 ### Langfristig (Milestone 3)
 1. **Lobby-System** - Multiplayer-Lobby mit Raum-Browser
 2. **Chat-System** - Text-Chat mit Würfel-Notation
 3. **Voice-Chat** - Integration (optional)
+4. **Kampagnen-System** - Persistente Kampagnen mit Progression
 
 ---
 
@@ -201,17 +246,15 @@ openTTS/
 ## 🤝 Entwicklung
 
 ### Aktive Branches
-- `main` - Stabile Version
-- `claude/cleanup-and-docs-0Ri4c` - Dokumentation & Cleanup (aktuell)
+- `main` - Stabile Version mit allen Features
+- `claude/merge-branches-to-main-8aVWC` - Alle Feature-Branches gemerged (aktuell)
 
-### Recent Commits
-- `f268955` - Standard Untergrund
-- `3a830bc` - Merge: Wargaming Integration
-- `83235ec` - Graphics Settings Autoload
-- `595e0d0` - Graphics Quality Selector
-- `1a09ced` - Camera Easing Improvements
-- `1f1546f` - Graphics Quality Improvements
-- `61a1e7b` - Tron-Style Intro
+### Recent Merges (2026-01-01)
+- `74ef811` - Merge: Comprehensive cleanup and documentation update
+- `24b65bc` - Merge: Fix watermark removal and add batch processing GUI
+- `49de9dd` - Merge: Add Kenney UI assets (SciFi and Fantasy themes)
+- `4b1d9b2` - Merge: Complete terrain editor with deployment zones, objectives, and auto-generate
+- `5079956` - Merge: Add table background and terrain features from set-default-background
 
 ---
 
