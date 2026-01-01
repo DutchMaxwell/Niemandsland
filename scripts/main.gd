@@ -307,6 +307,9 @@ func _ready() -> void:
 	# Initialize Deployment Zones UI
 	_init_deployment_zones_ui()
 
+	# Initialize Scout/Ambush Panel
+	_init_scout_ambush_panel()
+
 	# Initialize and play Tron intro
 	_start_tron_intro()
 
@@ -1420,6 +1423,51 @@ func _on_deployment_mode_toggled(is_active: bool) -> void:
 	is_deployment_mode = is_active
 	_check_all_units_deployment()
 	print("Deployment mode: %s" % ("active" if is_active else "inactive"))
+
+
+## ============================================================================
+## Scout/Ambush Panel
+## ============================================================================
+
+## Initialize Scout/Ambush panel UI
+func _init_scout_ambush_panel() -> void:
+	# Get the left panel VBox to add UI elements
+	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
+	if not left_panel_vbox:
+		push_error("Could not find LeftPanelVBox for scout/ambush panel")
+		return
+
+	# Create a VBoxContainer for scout/ambush units
+	var scout_panel = VBoxContainer.new()
+	scout_panel.name = "ScoutAmbushPanel"
+	left_panel_vbox.add_child(scout_panel)
+
+	# Add label
+	var label = Label.new()
+	label.text = "Scout/Ambush Units:"
+	label.add_theme_color_override("font_color", Color.CYAN)
+	scout_panel.add_child(label)
+
+	# Create a ScrollContainer for the unit list
+	var scroll = ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(180, 100)
+	scout_panel.add_child(scroll)
+
+	# Create ItemList for units
+	var unit_list = ItemList.new()
+	unit_list.name = "ScoutAmbushList"
+	unit_list.custom_minimum_size = Vector2(180, 100)
+	scroll.add_child(unit_list)
+
+	# Add example text (will be populated when units are added)
+	unit_list.add_item("(No scout/ambush units)")
+
+	# Add info label
+	var info_label = Label.new()
+	info_label.text = "Units with Scout or Ambush\ndeploy outside normal zones"
+	info_label.add_theme_font_size_override("font_size", 10)
+	info_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	scout_panel.add_child(info_label)
 
 
 ## Handle unit movement (re-check deployment)
