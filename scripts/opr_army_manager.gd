@@ -170,7 +170,9 @@ func _animate_tray_drop(tray: Node3D, models: Array[Node3D], start_height: float
 		model_tween.set_ease(Tween.EASE_OUT)
 		model_tween.set_trans(Tween.TRANS_CUBIC)  # Smooth deceleration, no bounce
 		var target_y = 0.0
-		model_tween.tween_property(model, "position:y", target_y, TRAY_DROP_DURATION)
+		model_tween.tween_property(model, "global_position:y", target_y, TRAY_DROP_DURATION)
+		# Ensure final position is exactly at table surface
+		model_tween.tween_callback(func(): model.global_position.y = 0.0)
 
 
 ## Create an army tray beside the table for a player

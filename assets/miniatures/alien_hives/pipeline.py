@@ -67,20 +67,31 @@ def remove_gemini_watermark(img: "Image.Image") -> "Image.Image":
     """
     Remove Gemini watermark from bottom-right corner.
 
-    INTELLIGENT REMOVAL: Only removes bright pixels (the star watermark)
-    while preserving the dark background. This prevents TRELLIS from
-    interpreting a black square as floor geometry.
+    PAINT-OVER METHOD: Samples the actual background color and paints
+    over watermark pixels with that color to blend seamlessly.
     """
     width, height = img.size
     pixels = img.load()
 
-    # Gemini watermark is a small bright star in bottom-right corner
-    # We scan a 200x200 area but only modify bright pixels
+    # Gemini watermark is a small star in bottom-right corner
+    # Scan a 200x200 area and paint over any non-black pixels
     watermark_size = 200
 
-    # Threshold: pixels brighter than this are considered part of the watermark
-    # The Gemini star is typically white/bright, background is dark
-    BRIGHTNESS_THRESHOLD = 100  # 0-255 scale
+    # Sample background color from a safe area (top-left of watermark zone)
+    # This should be pure background without watermark
+    sample_x = width - watermark_size - 50
+    sample_y = height - watermark_size - 50
+
+    if img.mode == "RGBA":
+        bg_r, bg_g, bg_b, bg_a = pixels[sample_x, sample_y]
+        bg_color = (bg_r, bg_g, bg_b, 255)
+    else:
+        bg_r, bg_g, bg_b = pixels[sample_x, sample_y]
+        bg_color = (bg_r, bg_g, bg_b)
+
+    # Threshold slightly above background brightness to catch watermark
+    bg_brightness = (bg_r + bg_g + bg_b) / 3
+    BRIGHTNESS_THRESHOLD = bg_brightness + 10  # Anything brighter than background + margin
 
     for y in range(height - watermark_size, height):
         for x in range(width - watermark_size, width):
@@ -88,18 +99,13 @@ def remove_gemini_watermark(img: "Image.Image") -> "Image.Image":
                 r, g, b, a = pixels[x, y]
             else:
                 r, g, b = pixels[x, y]
-                a = 255
 
-            # Calculate pixel brightness (simple average)
+            # Calculate pixel brightness
             brightness = (r + g + b) / 3
 
-            # Only remove bright pixels (the watermark star)
-            # Leave dark pixels (background) untouched
+            # Paint over anything brighter than background
             if brightness > BRIGHTNESS_THRESHOLD:
-                if img.mode == "RGBA":
-                    pixels[x, y] = (0, 0, 0, 0)  # Transparent
-                else:
-                    pixels[x, y] = (0, 0, 0)  # Black
+                pixels[x, y] = bg_color
 
     return img
 
@@ -597,6 +603,7 @@ class HuggingFaceTrellis:
                 processed_path = remove_watermark_from_file(image_path)
 
             # Step 1: Generate 3D with correct API parameters
+            print(f"   📤 Uploading: {processed_path}")
             print("   ⏳ Generating 3D model (this may take 1-2 minutes)...")
 
             # Use random seed like web interface
