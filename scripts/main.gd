@@ -1,6 +1,37 @@
 extends Node3D
 ## Main scene controller for OpenTTS
-## Handles initialization and connects UI signals
+##
+## Handles initialization, UI management, and coordinates various subsystems
+## including networking, terrain, lighting, graphics, and save/load functionality.
+##
+## @tutorial: See PROJECT_STATUS.md for complete feature documentation
+
+# ==============================================================================
+# CONSTANTS
+# ==============================================================================
+
+## Default table dimensions
+const DEFAULT_TABLE_SIZE_FEET := Vector2(6, 4)  # 72x48 inches (landscape)
+const TABLE_SIZE_4X4_FEET := Vector2(4, 4)      # 48x48 inches (square)
+
+## UI indices for predefined table sizes
+const TABLE_SIZE_INDEX_4X4 := 0
+const TABLE_SIZE_INDEX_6X4 := 1
+const TABLE_SIZE_INDEX_CUSTOM := 2
+
+## Graphics quality mapping (UI index to enum)
+const GRAPHICS_QUALITY_UI_MAX := 3  # Maps UI (Low=0, Medium=1, High=2, Ultra=3) to enum
+
+## Group rotation
+const GROUP_ROTATION_SPEED: float = 90.0  # degrees per second
+
+## Unit conversion constants
+const INCHES_TO_FEET: float = 1.0 / 12.0
+const CM_TO_FEET: float = 1.0 / 30.48
+
+# ==============================================================================
+# NODE REFERENCES
+# ==============================================================================
 
 @onready var object_manager: Node3D = $ObjectManager
 @onready var table: StaticBody3D = $Table
@@ -9,16 +40,16 @@ extends Node3D
 @onready var world_environment: WorldEnvironment = $WorldEnvironment
 
 # Tron Intro
-var tron_intro: TronIntro
+var tron_intro: TronIntro = null
 var _intro_finished: bool = false
 
 # Lighting Controller
-var lighting_controller: Node
-var lighting_panel: Window
+var lighting_controller: Node = null
+var lighting_panel: Window = null
 
 # Group rotation state
 var _is_group_rotating: bool = false
-const GROUP_ROTATION_SPEED: float = 90.0  # degrees per second
+
 @onready var dice_result_label: Label = $UI/HUD/DiceResult
 @onready var distance_label: Label = $UI/HUD/DistanceLabel
 @onready var clear_all_btn: Button = %ClearAll
@@ -33,7 +64,7 @@ const GROUP_ROTATION_SPEED: float = 90.0  # degrees per second
 @onready var apply_custom_btn: Button = %ApplyCustomBtn
 
 # Dice Roller Plugin UI
-@onready var dice_roller_control = %DiceRollerControl
+@onready var dice_roller_control: Control = %DiceRollerControl
 @onready var roll_button: Button = %RollButton
 @onready var quick_roll_button: Button = %QuickRollButton
 @onready var roller_result_label: Label = %RollerResultLabel
@@ -41,7 +72,7 @@ const GROUP_ROTATION_SPEED: float = 90.0  # degrees per second
 @onready var current_dice_label: Label = %CurrentDiceLabel
 
 # Network UI elements
-@onready var network_manager = %NetworkManager
+@onready var network_manager: Node = %NetworkManager
 @onready var network_status_label: Label = %StatusLabel
 @onready var host_button: Button = %HostButton
 @onready var join_button: Button = %JoinButton
@@ -60,7 +91,7 @@ const GROUP_ROTATION_SPEED: float = 90.0  # degrees per second
 @onready var tts_images_dialog: FileDialog = %TTSImagesDialog
 
 # Save/Load UI
-@onready var save_manager = %SaveManager
+@onready var save_manager: Node = %SaveManager
 @onready var save_game_btn: Button = %SaveGameBtn
 @onready var load_game_btn: Button = %LoadGameBtn
 @onready var save_game_dialog: FileDialog = %SaveGameDialog
@@ -70,7 +101,7 @@ const GROUP_ROTATION_SPEED: float = 90.0  # degrees per second
 @onready var graphics_quality_option: OptionButton = %GraphicsQualityOption
 
 # Terrain Browser UI
-@onready var terrain_library = %TerrainLibrary
+@onready var terrain_library: Node = %TerrainLibrary
 @onready var terrain_browser_btn: Button = %TerrainBrowser
 @onready var terrain_browser_popup: Window = %TerrainBrowserPopup
 @onready var terrain_category_option: OptionButton = %CategoryOption
@@ -78,23 +109,31 @@ const GROUP_ROTATION_SPEED: float = 90.0  # degrees per second
 
 # OPR Army Integration
 @onready var import_opr_btn: Button = %ImportOPRArmy
-var opr_army_manager: OPRArmyManager
-var opr_import_dialog: OPRImportDialog
-var opr_stats_tooltip: OPRStatsTooltip
+var opr_army_manager: OPRArmyManager = null
+var opr_import_dialog: OPRImportDialog = null
+var opr_stats_tooltip: OPRStatsTooltip = null
 var _hovered_model: Node3D = null
 
 # WGS (Wargaming Simulator) Integration
 @onready var import_wgs_btn: Button = %ImportWGS
-var wgs_game_manager: WGSGameManager
-var wgs_import_dialog: WGSImportDialog
+var wgs_game_manager: WGSGameManager = null
+var wgs_import_dialog: WGSImportDialog = null
+
+# Map Layout Editor
+@onready var map_layout_btn: Button = %MapLayoutBtn
+var map_layout_editor: Control = null
+var terrain_overlay: Node3D = null
+
+# Deployment Zones UI
+var deployment_zone_option: OptionButton = null
+var deployment_zone_check: CheckBox = null
+var deployment_mode_check: CheckBox = null
+var is_deployment_mode: bool = false
 
 # TTS Import state
 var _tts_json_path: String = ""
 var _tts_models_dir: String = ""
 var _tts_import_mode: String = "local"  # "local" or "online"
-
-const INCHES_TO_FEET: float = 1.0 / 12.0
-const CM_TO_FEET: float = 1.0 / 30.48
 
 
 func _ready() -> void:
@@ -167,7 +206,7 @@ func _ready() -> void:
 	graphics_quality_option.item_selected.connect(_on_graphics_quality_changed)
 	# Set initial selection based on current preset (map enum to UI index)
 	# Enum: ULTRA=0, HIGH=1, MEDIUM=2, LOW=3 -> UI: Low=0, Medium=1, High=2, Ultra=3
-	graphics_quality_option.selected = 3 - GraphicsSettings.current_preset
+	graphics_quality_option.selected = GRAPHICS_QUALITY_UI_MAX - GraphicsSettings.current_preset
 
 	# Connect Terrain Browser UI
 	terrain_library.object_manager = object_manager
@@ -186,9 +225,9 @@ func _ready() -> void:
 
 	# Initialize table with default size (6x4 feet = 72x48 inches, landscape)
 	# Long side (72") faces the viewer (X-axis), short side (48") is depth (Z-axis)
-	table.setup_table(Vector2(6, 4))
-	_adjust_camera_for_table_size(Vector2(6, 4))
-	table_size_option.selected = 1  # Select 72x48 option
+	table.setup_table(DEFAULT_TABLE_SIZE_FEET)
+	_adjust_camera_for_table_size(DEFAULT_TABLE_SIZE_FEET)
+	table_size_option.selected = TABLE_SIZE_INDEX_6X4
 
 	# Initialize Lighting Controller
 	lighting_controller = Node.new()
@@ -242,6 +281,34 @@ func _ready() -> void:
 	# Connect WGS import button (if it exists in UI)
 	if import_wgs_btn:
 		import_wgs_btn.pressed.connect(_on_import_wgs_game)
+
+	# Initialize Map Layout Editor
+	var map_layout_scene = load("res://scenes/map_layout.tscn")
+	map_layout_editor = map_layout_scene.instantiate()
+	map_layout_editor.visible = false
+	$UI.add_child(map_layout_editor)
+	map_layout_editor.layout_closed.connect(_on_map_layout_closed)
+	map_layout_editor.layout_updated.connect(_on_map_layout_updated)
+	map_layout_btn.pressed.connect(_on_map_layout_pressed)
+
+	# Initialize Terrain Overlay (on the 3D table)
+	var overlay_script = load("res://scripts/terrain_overlay.gd")
+	terrain_overlay = Node3D.new()
+	terrain_overlay.set_script(overlay_script)
+	terrain_overlay.name = "TerrainOverlay"
+	table.add_child(terrain_overlay)
+
+	# Give object_manager reference to terrain_overlay for terrain hints
+	object_manager.terrain_overlay = terrain_overlay
+
+	# Connect object_manager signals for deployment checking
+	object_manager.drag_ended.connect(_on_unit_moved)
+
+	# Initialize Deployment Zones UI
+	_init_deployment_zones_ui()
+
+	# Initialize Scout/Ambush Panel
+	_init_scout_ambush_panel()
 
 	# Initialize and play Tron intro
 	_start_tron_intro()
@@ -630,13 +697,13 @@ func _get_random_table_position() -> Vector3:
 ## Handle table size preset selection
 func _on_table_size_selected(index: int) -> void:
 	match index:
-		0:  # 48x48 inches (4x4 feet) - square
+		TABLE_SIZE_INDEX_4X4:  # 48x48 inches (4x4 feet) - square
 			custom_size_container.visible = false
-			_set_table_size(Vector2(4, 4))
-		1:  # 72x48 inches (6x4 feet) - landscape, standard wargaming
+			_set_table_size(TABLE_SIZE_4X4_FEET)
+		TABLE_SIZE_INDEX_6X4:  # 72x48 inches (6x4 feet) - landscape, standard wargaming
 			custom_size_container.visible = false
-			_set_table_size(Vector2(6, 4))
-		2:  # Custom
+			_set_table_size(DEFAULT_TABLE_SIZE_FEET)
+		TABLE_SIZE_INDEX_CUSTOM:  # Custom
 			custom_size_container.visible = true
 
 
@@ -686,15 +753,13 @@ func _set_table_size(size_feet: Vector2) -> void:
 
 ## Adjust camera zoom based on table size
 func _adjust_camera_for_table_size(size_feet: Vector2) -> void:
-	# Calculate appropriate zoom based on table diagonal
-	var diagonal = sqrt(size_feet.x * size_feet.x + size_feet.y * size_feet.y)
-	var target_zoom = diagonal * 0.4  # Scale factor for good view
-
-	# Reset camera view with appropriate zoom
+	# Reset camera view first
 	if camera_pivot.has_method("reset_view"):
 		camera_pivot.reset_view()
-	camera_pivot._current_zoom = clamp(target_zoom, camera_pivot.min_zoom, camera_pivot.max_zoom)
-	camera_pivot._update_camera_transform()
+
+	# Adjust zoom for table size using public API
+	if camera_pivot.has_method("adjust_for_table_size"):
+		camera_pivot.adjust_for_table_size(size_feet)
 
 
 ## Network UI handlers
@@ -1253,3 +1318,201 @@ func _on_graphics_quality_changed(index: int) -> void:
 
 	GraphicsSettings.apply_preset(preset)
 	print("Graphics quality set to: %s" % preset_name)
+
+
+## ============================================================================
+## Map Layout Editor
+## ============================================================================
+
+## Open Map Layout Editor
+func _on_map_layout_pressed() -> void:
+	if map_layout_editor:
+		map_layout_editor.set_table_size(table.table_size)
+		map_layout_editor.visible = true
+		$UI/HUD.visible = false  # Hide main HUD while in layout mode
+
+
+## Close Map Layout Editor
+func _on_map_layout_closed() -> void:
+	$UI/HUD.visible = true  # Show main HUD again
+
+
+## Update terrain overlay when map layout changes
+func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2, rotation: float) -> void:
+	if terrain_overlay and terrain_overlay.has_method("update_overlay"):
+		terrain_overlay.update_overlay(grid_cells, table_size, rotation)
+
+
+## ============================================================================
+## Deployment Zones
+## ============================================================================
+
+## Initialize deployment zones UI (programmatically)
+func _init_deployment_zones_ui() -> void:
+	# Get the left panel VBox to add UI elements
+	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
+	if not left_panel_vbox:
+		push_error("Could not find LeftPanelVBox for deployment zones UI")
+		return
+
+	# Create a VBoxContainer for deployment zones
+	var deployment_panel = VBoxContainer.new()
+	deployment_panel.name = "DeploymentPanel"
+	left_panel_vbox.add_child(deployment_panel)
+
+	# Add label
+	var label = Label.new()
+	label.text = "Deployment Zones:"
+	deployment_panel.add_child(label)
+
+	# Create OptionButton for deployment zone types
+	deployment_zone_option = OptionButton.new()
+	deployment_zone_option.add_item("None", 0)
+	deployment_zone_option.add_item("Front-line (12\")", 1)
+	deployment_zone_option.add_item("Corner Deployment", 2)
+	deployment_zone_option.add_item("Dawn Assault", 3)
+	deployment_zone_option.add_item("Pitched Battle", 4)
+	deployment_zone_option.add_item("Meeting Engagement", 5)
+	deployment_zone_option.selected = 0  # Start with "None"
+	deployment_zone_option.item_selected.connect(_on_deployment_zone_selected)
+	deployment_panel.add_child(deployment_zone_option)
+
+	# Create CheckBox for visibility toggle
+	deployment_zone_check = CheckBox.new()
+	deployment_zone_check.text = "Show Deployment Zones"
+	deployment_zone_check.button_pressed = false
+	deployment_zone_check.toggled.connect(_on_deployment_zones_visibility_toggled)
+	deployment_panel.add_child(deployment_zone_check)
+
+	# Create CheckBox for Deployment Mode (check units in zones)
+	deployment_mode_check = CheckBox.new()
+	deployment_mode_check.text = "Deployment Mode (Check Units)"
+	deployment_mode_check.button_pressed = false
+	deployment_mode_check.toggled.connect(_on_deployment_mode_toggled)
+	deployment_panel.add_child(deployment_mode_check)
+
+
+## Handle deployment zone type selection
+func _on_deployment_zone_selected(index: int) -> void:
+	if not terrain_overlay or not terrain_overlay.has_method("set_deployment_zones"):
+		return
+
+	terrain_overlay.set_deployment_zones(index)
+	print("Deployment zone set to: %d" % index)
+
+	# Automatically show deployment zones when a type is selected (not "None")
+	if index > 0:
+		deployment_zone_check.button_pressed = true
+		terrain_overlay.set_deployment_zones_visible(true)
+	else:
+		deployment_zone_check.button_pressed = false
+		terrain_overlay.set_deployment_zones_visible(false)
+
+
+## Handle deployment zone visibility toggle
+func _on_deployment_zones_visibility_toggled(is_visible: bool) -> void:
+	if not terrain_overlay or not terrain_overlay.has_method("set_deployment_zones_visible"):
+		return
+
+	terrain_overlay.set_deployment_zones_visible(is_visible)
+	print("Deployment zones visibility: %s" % ("visible" if is_visible else "hidden"))
+
+
+## Handle deployment mode toggle
+func _on_deployment_mode_toggled(is_active: bool) -> void:
+	is_deployment_mode = is_active
+	_check_all_units_deployment()
+	print("Deployment mode: %s" % ("active" if is_active else "inactive"))
+
+
+## ============================================================================
+## Scout/Ambush Panel
+## ============================================================================
+
+## Initialize Scout/Ambush panel UI
+func _init_scout_ambush_panel() -> void:
+	# Get the left panel VBox to add UI elements
+	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
+	if not left_panel_vbox:
+		push_error("Could not find LeftPanelVBox for scout/ambush panel")
+		return
+
+	# Create a VBoxContainer for scout/ambush units
+	var scout_panel = VBoxContainer.new()
+	scout_panel.name = "ScoutAmbushPanel"
+	left_panel_vbox.add_child(scout_panel)
+
+	# Add label
+	var label = Label.new()
+	label.text = "Scout/Ambush Units:"
+	label.add_theme_color_override("font_color", Color.CYAN)
+	scout_panel.add_child(label)
+
+	# Create a ScrollContainer for the unit list
+	var scroll = ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(180, 100)
+	scout_panel.add_child(scroll)
+
+	# Create ItemList for units
+	var unit_list = ItemList.new()
+	unit_list.name = "ScoutAmbushList"
+	unit_list.custom_minimum_size = Vector2(180, 100)
+	scroll.add_child(unit_list)
+
+	# Add example text (will be populated when units are added)
+	unit_list.add_item("(No scout/ambush units)")
+
+	# Add info label
+	var info_label = Label.new()
+	info_label.text = "Units with Scout or Ambush\ndeploy outside normal zones"
+	info_label.add_theme_font_size_override("font_size", 10)
+	info_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	scout_panel.add_child(info_label)
+
+
+## Handle unit movement (re-check deployment)
+func _on_unit_moved() -> void:
+	if is_deployment_mode:
+		_check_all_units_deployment()
+
+
+## Check all units for deployment zone compliance
+func _check_all_units_deployment() -> void:
+	if not terrain_overlay or not terrain_overlay.has_method("is_position_in_deployment_zone"):
+		return
+
+	# Get all miniatures
+	var miniatures = get_tree().get_nodes_in_group("miniature")
+
+	for miniature in miniatures:
+		if not is_instance_valid(miniature):
+			continue
+
+		# Check if miniature has a deployment warning label
+		var warning_label = miniature.get_node_or_null("DeploymentWarning")
+
+		if is_deployment_mode:
+			# Check if unit is in a deployment zone
+			var zone_info = terrain_overlay.is_position_in_deployment_zone(miniature.global_position)
+
+			if not zone_info["in_zone"]:
+				# Unit is outside deployment zone - show warning
+				if not warning_label:
+					warning_label = Label3D.new()
+					warning_label.name = "DeploymentWarning"
+					warning_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+					warning_label.no_depth_test = true
+					warning_label.font_size = 64
+					warning_label.text = "⚠️"
+					warning_label.modulate = Color.ORANGE
+					warning_label.position = Vector3(0, 0.1, 0)  # 10cm above unit
+					miniature.add_child(warning_label)
+				warning_label.visible = true
+			else:
+				# Unit is in deployment zone - hide warning
+				if warning_label:
+					warning_label.visible = false
+		else:
+			# Deployment mode inactive - hide all warnings
+			if warning_label:
+				warning_label.visible = false

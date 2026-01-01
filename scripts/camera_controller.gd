@@ -170,3 +170,25 @@ func reset_view() -> void:
 	_yaw = 0.0
 	_current_zoom = 10.0  # Default zoom distance
 	_update_camera_transform()
+
+
+## Set zoom level with automatic clamping
+## @param zoom: New zoom distance in meters
+func set_zoom(zoom: float) -> void:
+	_current_zoom = clamp(zoom, min_zoom, max_zoom)
+	_update_camera_transform()
+
+
+## Get current zoom level
+## @return: Current zoom distance in meters
+func get_zoom() -> float:
+	return _current_zoom
+
+
+## Adjust camera for table size
+## @param table_size_feet: Table dimensions in feet
+func adjust_for_table_size(table_size_feet: Vector2) -> void:
+	var table_diagonal_feet = table_size_feet.length()
+	var table_diagonal_meters = table_diagonal_feet * 0.3048
+	var target_zoom = table_diagonal_meters * 0.7
+	set_zoom(target_zoom)
