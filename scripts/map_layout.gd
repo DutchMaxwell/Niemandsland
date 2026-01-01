@@ -607,6 +607,12 @@ func _try_generate_layout() -> bool:
 	return true  # Successfully placed all pieces
 
 
+## Mirror a position across the grid center (point symmetry)
+func _mirror_position(pos: Vector2i, grid_dims: Vector2i) -> Vector2i:
+	# Point symmetry: reflect across center (180° rotation)
+	return Vector2i(grid_dims.x - pos.x, grid_dims.y - pos.y)
+
+
 ## Check if a piece can be placed without overlapping existing pieces
 ## Enforces 3" (1 cell) minimum spacing between all terrain pieces
 func _can_place_piece(pos: Vector2i, size: Vector2i, existing_pieces: Array) -> bool:
