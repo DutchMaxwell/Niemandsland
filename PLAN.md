@@ -510,15 +510,27 @@ openTTS/
 - TTS-Import ermöglicht sofortigen Zugang zu tausenden Miniaturen
 - Performance ist hervorragend auch bei 1000+ Objekten
 
-### Milestone 2: Alpha
+### Milestone 2: Alpha (IN ARBEIT)
 **Ziel: Vollständiges Einzelspieler-Erlebnis**
 
 7. [x] Erweitertes Objekt-Management (Multi-Select, Arrangements, Copy/Paste)
-8. [ ] Gelände-System (Eigenschaften: Deckung, Schwieriges Gelände)
-9. [ ] Einheiten-Karten und Stats
-10. [ ] Vollständiges Würfel-System (mehr Würfeltypen, Modifikatoren)
-11. [x] Speichern/Laden von Tisch-Setups (inkl. Multiplayer-Sync an Clients)
-12. [ ] Basic UI-Overhaul
+8. [x] **Map Layout Editor** - Top-down 3" Grid für Terrain-Planung
+9. [x] **Terrain-Typen** - Ruins, Forest, Container, Dangerous mit Eigenschaften
+10. [x] **Deployment Zones** - Standard 6"/9", Diagonal, Hammer & Anvil
+11. [x] **Objectives System** - Bis zu 6 Zielpunkte
+12. [x] **Auto-Generate Terrain** - Zufällige faire Layouts mit Symmetrie
+13. [x] **3D Terrain Overlay** - Grid-Visualisierung im 3D-Spiel
+14. [ ] **Terrain-Gameplay Integration** (NEXT):
+    - [ ] Cover-System (Ruins/Forest geben Deckung)
+    - [ ] Schwieriges Gelände (Movement-Modifikatoren)
+    - [ ] LOS-Blocking (Container)
+    - [ ] Dangerous Terrain (Schaden)
+15. [ ] Deployment Zones im 3D-Spiel anzeigen
+16. [ ] Einheiten-Karten und Stats im 3D-Spiel
+17. [ ] Vollständiges Würfel-System (mehr Würfeltypen, Modifikatoren)
+18. [x] Speichern/Laden von Tisch-Setups (inkl. Multiplayer-Sync an Clients)
+19. [x] **Kenney UI Assets** - 9 Themes (SciFi + Fantasy)
+20. [x] **Table Background Texture** - Standard-Untergrund
 
 ### Milestone 3: Beta
 **Ziel: Multiplayer-fähig**
@@ -590,25 +602,38 @@ openTTS/
 
 ## Nächste Schritte
 
-### ✅ Erledigt
+### ✅ Erledigt (2026-01-01 Update)
 1. **Repository einrichten** ✅
 2. **Godot-Projekt initialisieren** ✅
 3. **Prototyp Phase (Milestone 1)** ✅
 4. **3D-Modell Pipeline** ✅
    - Gemini → TRELLIS.2 Workflow funktioniert
    - Intelligente Wasserzeichen-Entfernung implementiert
+   - GUI Batch Processor mit Tkinter
    - 35 Alien Hives Einheiten definiert
+5. **Map Layout Editor** ✅
+   - Top-down 3" Grid System
+   - 4 Terrain-Typen mit Eigenschaften
+   - Deployment Zones (5 Typen)
+   - Objectives System (bis zu 6 Punkte)
+   - Auto-Generate mit Symmetrie
+   - 3D Overlay Visualisierung
+   - Save/Load Layouts
+6. **Kenney UI Assets Integration** ✅
+7. **Table Background Texture** ✅
 
-### 🔄 Aktuell in Arbeit (Milestone 2)
-1. **Gelände-System** - Eigenschaften wie Deckung, Schwieriges Gelände
-2. **Einheiten-Karten** - Stats-Anzeige für Miniaturen
-3. **Erweitertes Würfel-System** - D4, D8, D10, D12, D20 + Modifikatoren
-4. **UI-Verbesserungen** - Übersichtlichere Oberfläche
+### 🔄 Aktuell in Arbeit (Milestone 2 - PRIORITÄT)
+1. **Terrain-Gameplay Integration** - Cover, Schwieriges Gelände, LOS-Blocking, Dangerous
+2. **Deployment Zones im 3D-Spiel** - Visualisierung beim Spielstart
+3. **Einheiten-Karten im Spiel** - Stats-Anzeige auf dem Tisch
+4. **Phasen-Management** - Turn-Tracker, Aktivierungs-System
 
 ### 📋 Geplant
+- **Wunden-Tracking** - HP-Anzeige pro Modell
+- **Status-Marker** - Aktiviert, Pinned, etc.
+- **Erweitertes Würfel-System** - Modifikatoren, Rerolls
 - **3D-Batch-Generierung** - Alle 35 Alien Hives Einheiten durchgehen
-- **GLB-Nachbearbeitung** - Blender-Script für Cleanup
-- **OPR Army Forge Integration** - Armeelisten importieren
+- **OPR Army Forge Integration** - Erweiterte Armeelisten-Features
 
 ---
 
@@ -635,6 +660,6 @@ openTTS/
 ---
 
 *Dokument erstellt: 2025-12-17*
-*Letzte Überarbeitung: 2025-12-23*
-*Version: 1.4*
-*Status: Milestone 1 abgeschlossen, 3D-Pipeline funktioniert, Milestone 2 in Arbeit*
+*Letzte Überarbeitung: 2026-01-01*
+*Version: 1.5*
+*Status: Milestone 2 zu ~60% fertig - Map Layout System komplett, Terrain-Gameplay Integration next*
