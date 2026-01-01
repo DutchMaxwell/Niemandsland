@@ -104,10 +104,6 @@ func _draw() -> void:
 	if map_layout.show_deployment_zones:
 		_draw_deployment_zones(grid_rect)
 
-	# Draw objectives
-	if map_layout.show_objectives:
-		_draw_objectives(grid_rect)
-
 	# Draw table outline (always axis-aligned - represents the actual table)
 	draw_rect(grid_rect, Color.WHITE, false, 3.0)
 
@@ -242,31 +238,3 @@ func _draw_deployment_zones(grid_rect: Rect2) -> void:
 			draw_rect(Rect2(grid_rect.position, Vector2(grid_rect.size.x, margin)), zone_color_p1, true)
 			# Bottom zone (Player 2)
 			draw_rect(Rect2(grid_rect.position + Vector2(0, grid_rect.size.y - margin), Vector2(grid_rect.size.x, margin)), zone_color_p2, true)
-
-
-func _draw_objectives(grid_rect: Rect2) -> void:
-	## Draw objective markers
-	if not map_layout or map_layout.objectives.is_empty():
-		return
-
-	var table_size_inches = map_layout.table_size_feet * 12.0
-	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
-	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
-
-	var center = grid_rect.position + grid_rect.size / 2.0
-
-	for obj_pos in map_layout.objectives:
-		# Convert from inches (relative to center) to pixels
-		var screen_x = center.x + obj_pos.x * pixels_per_inch_x
-		var screen_y = center.y + obj_pos.y * pixels_per_inch_y
-		var screen_pos = Vector2(screen_x, screen_y)
-
-		# Draw objective marker (circle with cross)
-		var marker_radius = 8.0
-		draw_circle(screen_pos, marker_radius, Color(1.0, 0.8, 0.0, 0.8))
-		draw_circle(screen_pos, marker_radius, Color(0.0, 0.0, 0.0, 1.0), false, 2.0)
-
-		# Draw cross
-		var cross_size = marker_radius * 0.6
-		draw_line(screen_pos - Vector2(cross_size, 0), screen_pos + Vector2(cross_size, 0), Color.BLACK, 2.0)
-		draw_line(screen_pos - Vector2(0, cross_size), screen_pos + Vector2(0, cross_size), Color.BLACK, 2.0)
