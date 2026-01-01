@@ -60,6 +60,7 @@ var _measure_end_object: Node3D = null    # Reference to end object for edge cal
 var _measure_line: MeshInstance3D = null
 var _measure_label: Label3D = null
 var _measure_terrain_warning: Label3D = null  # Warning icon for terrain (⚠️ or 💀)
+var _measure_los_warning: Label3D = null  # Warning icon for LOS blocking (🚫)
 
 const METERS_TO_INCHES: float = 39.3701
 
@@ -1082,9 +1083,50 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 
 	# Update line material color (green if both ends snapped, yellow otherwise)
 	var line_color = Color.GREEN if both_snapped else Color.YELLOW
+
+	# Check LOS blocking along the measurement path
+	var los_blocked = false
+	if terrain_overlay and terrain_overlay.has_method("get_terrain_at_world_position") and terrain_overlay.has_method("is_terrain_los_blocking"):
+		# Sample terrain at multiple points along the line
+		var num_samples = int(max(5, length * 30))  # More samples for accurate LOS check
+
+		for i in range(num_samples):
+			var t = float(i) / float(num_samples - 1)
+			var sample_pos = from_pos.lerp(to_pos, t)
+			var terrain_type = terrain_overlay.get_terrain_at_world_position(sample_pos)
+
+			if terrain_type != 0:  # Not NONE
+				# Check if viewer or target is in the same terrain
+				var viewer_in_terrain = (i == 0)  # First sample is viewer
+				var target_in_terrain = (i == num_samples - 1)  # Last sample is target
+
+				# For intermediate samples, assume neither is in terrain
+				if terrain_overlay.is_terrain_los_blocking(terrain_type, viewer_in_terrain, target_in_terrain):
+					los_blocked = true
+					line_color = Color.RED  # Change line to red if LOS is blocked
+					break
+
 	var mat = _measure_line.material_override as StandardMaterial3D
 	if mat:
 		mat.albedo_color = line_color
+
+	# Show LOS blocking warning if blocked
+	if los_blocked:
+		if not _measure_los_warning:
+			_measure_los_warning = Label3D.new()
+			_measure_los_warning.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			_measure_los_warning.no_depth_test = true
+			_measure_los_warning.font_size = 32
+			add_child(_measure_los_warning)
+
+		_measure_los_warning.visible = true
+		_measure_los_warning.text = "🚫"  # Blocked symbol
+		_measure_los_warning.modulate = Color.RED
+		# Position slightly higher than other labels
+		_measure_los_warning.global_position = Vector3(midpoint.x, 0.08, midpoint.z)
+	else:
+		if _measure_los_warning:
+			_measure_los_warning.visible = false
 
 	# Label stays white with black outline for best readability
 	_measure_label.modulate = Color.WHITE
