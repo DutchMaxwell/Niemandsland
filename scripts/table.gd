@@ -6,6 +6,9 @@ extends StaticBody3D
 @export var grid_color: Color = Color(0.15, 0.25, 0.15)
 @export var show_grid: bool = true
 @export var grid_size_inches: float = 1.0
+@export var default_texture_path: String = "res://assets/terrain/Gemini_Generated_Image_lbg60llbg60llbg6.png"
+
+var _default_texture: Texture2D = null
 
 var table_size: Vector2 = Vector2(4, 4)  # In feet, will be converted to meters
 
@@ -29,6 +32,10 @@ func _ready() -> void:
 	table_physics.bounce = 0.1  # Very low bounce
 	physics_material_override = table_physics
 
+	# Load default table texture
+	if ResourceLoader.exists(default_texture_path):
+		_default_texture = load(default_texture_path)
+
 
 ## Setup table with given size in feet
 func setup_table(size_feet: Vector2) -> void:
@@ -50,9 +57,17 @@ func setup_table(size_feet: Vector2) -> void:
 
 	# Create material
 	var material = StandardMaterial3D.new()
-	material.albedo_color = default_color
 	material.roughness = 0.9
 	material.metallic = 0.0
+
+	# Use texture if available, otherwise fall back to color
+	if _default_texture:
+		material.albedo_texture = _default_texture
+		material.albedo_color = Color.WHITE  # White to show texture as-is
+		# Texture is displayed once, stretched to fit the entire table
+	else:
+		material.albedo_color = default_color
+
 	mesh_instance.material_override = material
 
 	# Create collision shape - MUCH larger to catch falling dice
