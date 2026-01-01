@@ -21,6 +21,15 @@ Ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wie OnePageRul
 - ✅ Würfel-System mit Physik (D4, D6, D8, D10, D12, D20, D100)
 - ✅ Distanzmessung in Zoll
 
+### 🗺️ Terrain & Map Layout (NEU!)
+- ✅ **Map Layout Editor** - Top-down 3" Grid für Terrain-Planung
+- ✅ **4 Terrain-Typen**: Ruins (Cover), Forest (Difficult+Cover), Container (Blocking), Dangerous (Minefields)
+- ✅ **Deployment Zones** - Standard 6"/9", Diagonal, Hammer & Anvil
+- ✅ **Objectives System** - Platzierung von bis zu 6 Zielpunkten
+- ✅ **Auto-Generate** - Automatische Terrain-Generierung mit Symmetrie-Option
+- ✅ **3D Overlay** - Terrain-Grid im 3D-Spiel visualisiert
+- ✅ **Save/Load Layouts** - Terrain-Setups speichern und wiederverwenden
+
 ### 🌐 Multiplayer
 - ✅ Multiplayer-Support (ENet-basiert)
 - ✅ State-Sync beim Laden
@@ -120,6 +129,21 @@ godot --path . --editor
 
 ## 📋 Features im Detail
 
+### Map Layout Editor
+Plane dein Spielfeld mit dem integrierten Map Layout Editor:
+- **Top-Down Ansicht** mit 3" Grid (OPR-Standard)
+- **4 Terrain-Typen**:
+  - **Ruins**: Höhe 5, gibt Deckung, Wände unpassierbar
+  - **Forest**: Höhe 5, schwieriges Gelände + Deckung
+  - **Container**: Höhe 5, unpassierbar + blockiert Sichtlinien komplett
+  - **Dangerous**: Offen, gefährlich (Minenfelder, Säure, Strahlung)
+- **Symmetrie-Modus**: Automatisches Spiegeln über Tischmitte
+- **Auto-Generate**: Zufällige faire Terrain-Layouts
+- **OPR Guidelines**: Echtzeit-Feedback zu Terrain-Empfehlungen
+- **Deployment Zones**: 5 verschiedene Aufstellungsarten
+- **Objectives**: Bis zu 6 Zielpunkte platzieren
+- **3D Overlay**: Sieh das Grid direkt im 3D-Spiel
+
 ### TTS Import
 Importiere 3D-Modelle direkt vom Tabletop Simulator Steam CDN:
 - Online-Download mit automatischem Caching
@@ -191,11 +215,17 @@ OpenTTS soll eine freie Alternative zum kommerziellen Tabletop Simulator bieten,
 Siehe [PLAN.md](./PLAN.md) für den vollständigen Entwicklungsplan.
 
 ### Milestone 2 (Alpha) - In Arbeit
-- [ ] Gelände-System mit Eigenschaften (Deckung, Schwieriges Gelände)
+- [x] Map Layout Editor mit Terrain-Typen
+- [x] Deployment Zones & Objectives
+- [ ] **Terrain-Gameplay Integration** (PRIORITÄT):
+  - [ ] Cover-System (Ruins, Forest geben Deckung)
+  - [ ] Schwieriges Gelände (Movement-Modifikatoren)
+  - [ ] LOS-Blocking (Container blockieren Sicht)
+  - [ ] Dangerous Terrain (Schaden bei Betreten)
+- [ ] Deployment Zones im 3D-Spiel visualisieren
 - [ ] Einheiten-Karten und erweiterte Stats
-- [ ] Erweiterte Würfel-Optionen (Modifikatoren, mehr Typen)
-- [ ] UI-Verbesserungen (HUD, Minimap, Radial Menu)
-- [ ] Phasen-Management System
+- [ ] Phasen-Management System (Turn-Tracker, Aktivierung)
+- [ ] Wunden-Tracking pro Modell
 
 ### Milestone 3 (Beta)
 - [ ] Vollständige Multiplayer-Lobby
