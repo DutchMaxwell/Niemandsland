@@ -47,22 +47,44 @@ func _draw() -> void:
 
 	var grid_dims = map_layout._calculate_grid_dimensions()
 	var grid_rect = _get_grid_rect()
-	var cell_size = Vector2(grid_rect.size.x / grid_dims.x, grid_rect.size.y / grid_dims.y)
 	var center = grid_rect.position + grid_rect.size / 2.0
 	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
+
+	# Calculate correct cell size in pixels (always 3" regardless of grid dimensions)
+	var table_size_inches = map_layout.table_size_feet * 12.0
+	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
+	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
+	var cell_size = Vector2(
+		map_layout.GRID_SIZE_INCHES * pixels_per_inch_x,
+		map_layout.GRID_SIZE_INCHES * pixels_per_inch_y
+	)
 
 	# Draw table background (always axis-aligned)
 	draw_rect(grid_rect, Color(0.15, 0.15, 0.15, 1.0), true)
 
 	# Draw terrain cells - rotated with the grid
 	draw_set_transform(center, angle_rad, Vector2.ONE)
-	var half_grid = grid_rect.size / 2.0
+
+	# Calculate half extents for centering the grid
+	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
 
 	for x in range(grid_dims.x):
 		for y in range(grid_dims.y):
 			var cell_pos = Vector2i(x, y)
-			var rect_pos = Vector2(x * cell_size.x, y * cell_size.y) - half_grid
+			# Position relative to grid center
+			var rect_pos = Vector2(
+				(x - half_grid_cells.x) * cell_size.x,
+				(y - half_grid_cells.y) * cell_size.y
+			)
 			var rect = Rect2(rect_pos, cell_size)
+
+			# Check if this cell (after rotation) is within table bounds
+			# Simple check: if cell center is too far from origin, skip it
+			var cell_center = rect_pos + cell_size / 2.0
+			var dist_from_center = cell_center.length()
+			var max_dist = max(grid_rect.size.x, grid_rect.size.y) / 2.0 * 1.1  # 10% tolerance
+			if dist_from_center > max_dist:
+				continue  # Skip cells that are definitely outside table bounds
 
 			var terrain_type = map_layout.grid_cells.get(cell_pos, map_layout.TerrainType.NONE)
 			var color = map_layout.TERRAIN_COLORS[terrain_type]
@@ -85,15 +107,17 @@ func _draw() -> void:
 
 	# Vertical lines
 	for x in range(grid_dims.x + 1):
-		var start = Vector2(x * cell_size.x, 0) - half_grid
-		var end = Vector2(x * cell_size.x, grid_rect.size.y) - half_grid
+		var line_x = (x - half_grid_cells.x) * cell_size.x
+		var start = Vector2(line_x, -half_grid_cells.y * cell_size.y)
+		var end = Vector2(line_x, half_grid_cells.y * cell_size.y)
 		var is_major = (x % 4 == 0)
 		draw_line(start, end, major_color if is_major else line_color, 2.0 if is_major else 1.0)
 
 	# Horizontal lines
 	for y in range(grid_dims.y + 1):
-		var start = Vector2(0, y * cell_size.y) - half_grid
-		var end = Vector2(grid_rect.size.x, y * cell_size.y) - half_grid
+		var line_y = (y - half_grid_cells.y) * cell_size.y
+		var start = Vector2(-half_grid_cells.x * cell_size.x, line_y)
+		var end = Vector2(half_grid_cells.x * cell_size.x, line_y)
 		var is_major = (y % 4 == 0)
 		draw_line(start, end, major_color if is_major else line_color, 2.0 if is_major else 1.0)
 
