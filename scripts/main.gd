@@ -124,6 +124,10 @@ var wgs_import_dialog: WGSImportDialog = null
 var map_layout_editor: Control = null
 var terrain_overlay: Node3D = null
 
+# Deployment Zones UI
+var deployment_zone_option: OptionButton = null
+var deployment_zone_check: CheckBox = null
+
 # TTS Import state
 var _tts_json_path: String = ""
 var _tts_models_dir: String = ""
@@ -291,6 +295,9 @@ func _ready() -> void:
 	terrain_overlay.set_script(overlay_script)
 	terrain_overlay.name = "TerrainOverlay"
 	table.add_child(terrain_overlay)
+
+	# Initialize Deployment Zones UI
+	_init_deployment_zones_ui()
 
 	# Initialize and play Tron intro
 	_start_tron_intro()
@@ -1323,3 +1330,71 @@ func _on_map_layout_closed() -> void:
 func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2, rotation: float) -> void:
 	if terrain_overlay and terrain_overlay.has_method("update_overlay"):
 		terrain_overlay.update_overlay(grid_cells, table_size, rotation)
+
+
+## ============================================================================
+## Deployment Zones
+## ============================================================================
+
+## Initialize deployment zones UI (programmatically)
+func _init_deployment_zones_ui() -> void:
+	# Get the left panel VBox to add UI elements
+	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
+	if not left_panel_vbox:
+		push_error("Could not find LeftPanelVBox for deployment zones UI")
+		return
+
+	# Create a VBoxContainer for deployment zones
+	var deployment_panel = VBoxContainer.new()
+	deployment_panel.name = "DeploymentPanel"
+	left_panel_vbox.add_child(deployment_panel)
+
+	# Add label
+	var label = Label.new()
+	label.text = "Deployment Zones:"
+	deployment_panel.add_child(label)
+
+	# Create OptionButton for deployment zone types
+	deployment_zone_option = OptionButton.new()
+	deployment_zone_option.add_item("None", 0)
+	deployment_zone_option.add_item("Front-line (12\")", 1)
+	deployment_zone_option.add_item("Corner Deployment", 2)
+	deployment_zone_option.add_item("Dawn Assault", 3)
+	deployment_zone_option.add_item("Pitched Battle", 4)
+	deployment_zone_option.add_item("Meeting Engagement", 5)
+	deployment_zone_option.selected = 0  # Start with "None"
+	deployment_zone_option.item_selected.connect(_on_deployment_zone_selected)
+	deployment_panel.add_child(deployment_zone_option)
+
+	# Create CheckBox for visibility toggle
+	deployment_zone_check = CheckBox.new()
+	deployment_zone_check.text = "Show Deployment Zones"
+	deployment_zone_check.button_pressed = false
+	deployment_zone_check.toggled.connect(_on_deployment_zones_visibility_toggled)
+	deployment_panel.add_child(deployment_zone_check)
+
+
+## Handle deployment zone type selection
+func _on_deployment_zone_selected(index: int) -> void:
+	if not terrain_overlay or not terrain_overlay.has_method("set_deployment_zones"):
+		return
+
+	terrain_overlay.set_deployment_zones(index)
+	print("Deployment zone set to: %d" % index)
+
+	# Automatically show deployment zones when a type is selected (not "None")
+	if index > 0:
+		deployment_zone_check.button_pressed = true
+		terrain_overlay.set_deployment_zones_visible(true)
+	else:
+		deployment_zone_check.button_pressed = false
+		terrain_overlay.set_deployment_zones_visible(false)
+
+
+## Handle deployment zone visibility toggle
+func _on_deployment_zones_visibility_toggled(is_visible: bool) -> void:
+	if not terrain_overlay or not terrain_overlay.has_method("set_deployment_zones_visible"):
+		return
+
+	terrain_overlay.set_deployment_zones_visible(is_visible)
+	print("Deployment zones visibility: %s" % ("visible" if is_visible else "hidden"))
