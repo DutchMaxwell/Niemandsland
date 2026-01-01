@@ -127,6 +127,8 @@ var terrain_overlay: Node3D = null
 # Deployment Zones UI
 var deployment_zone_option: OptionButton = null
 var deployment_zone_check: CheckBox = null
+var deployment_mode_check: CheckBox = null
+var is_deployment_mode: bool = false
 
 # TTS Import state
 var _tts_json_path: String = ""
@@ -298,6 +300,9 @@ func _ready() -> void:
 
 	# Give object_manager reference to terrain_overlay for terrain hints
 	object_manager.terrain_overlay = terrain_overlay
+
+	# Connect object_manager signals for deployment checking
+	object_manager.drag_ended.connect(_on_unit_moved)
 
 	# Initialize Deployment Zones UI
 	_init_deployment_zones_ui()
@@ -1376,6 +1381,13 @@ func _init_deployment_zones_ui() -> void:
 	deployment_zone_check.toggled.connect(_on_deployment_zones_visibility_toggled)
 	deployment_panel.add_child(deployment_zone_check)
 
+	# Create CheckBox for Deployment Mode (check units in zones)
+	deployment_mode_check = CheckBox.new()
+	deployment_mode_check.text = "Deployment Mode (Check Units)"
+	deployment_mode_check.button_pressed = false
+	deployment_mode_check.toggled.connect(_on_deployment_mode_toggled)
+	deployment_panel.add_child(deployment_mode_check)
+
 
 ## Handle deployment zone type selection
 func _on_deployment_zone_selected(index: int) -> void:
@@ -1401,3 +1413,58 @@ func _on_deployment_zones_visibility_toggled(is_visible: bool) -> void:
 
 	terrain_overlay.set_deployment_zones_visible(is_visible)
 	print("Deployment zones visibility: %s" % ("visible" if is_visible else "hidden"))
+
+
+## Handle deployment mode toggle
+func _on_deployment_mode_toggled(is_active: bool) -> void:
+	is_deployment_mode = is_active
+	_check_all_units_deployment()
+	print("Deployment mode: %s" % ("active" if is_active else "inactive"))
+
+
+## Handle unit movement (re-check deployment)
+func _on_unit_moved() -> void:
+	if is_deployment_mode:
+		_check_all_units_deployment()
+
+
+## Check all units for deployment zone compliance
+func _check_all_units_deployment() -> void:
+	if not terrain_overlay or not terrain_overlay.has_method("is_position_in_deployment_zone"):
+		return
+
+	# Get all miniatures
+	var miniatures = get_tree().get_nodes_in_group("miniature")
+
+	for miniature in miniatures:
+		if not is_instance_valid(miniature):
+			continue
+
+		# Check if miniature has a deployment warning label
+		var warning_label = miniature.get_node_or_null("DeploymentWarning")
+
+		if is_deployment_mode:
+			# Check if unit is in a deployment zone
+			var zone_info = terrain_overlay.is_position_in_deployment_zone(miniature.global_position)
+
+			if not zone_info["in_zone"]:
+				# Unit is outside deployment zone - show warning
+				if not warning_label:
+					warning_label = Label3D.new()
+					warning_label.name = "DeploymentWarning"
+					warning_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+					warning_label.no_depth_test = true
+					warning_label.font_size = 64
+					warning_label.text = "⚠️"
+					warning_label.modulate = Color.ORANGE
+					warning_label.position = Vector3(0, 0.1, 0)  # 10cm above unit
+					miniature.add_child(warning_label)
+				warning_label.visible = true
+			else:
+				# Unit is in deployment zone - hide warning
+				if warning_label:
+					warning_label.visible = false
+		else:
+			# Deployment mode inactive - hide all warnings
+			if warning_label:
+				warning_label.visible = false
