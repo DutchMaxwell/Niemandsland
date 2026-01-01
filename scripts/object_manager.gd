@@ -568,8 +568,15 @@ func _stop_dragging() -> void:
 		# Smoothly lower objects back down and re-enable physics for rigid bodies
 		for obj in _selected_objects:
 			if is_instance_valid(obj):
-				# Animate smooth lowering
-				var target_y = obj.global_position.y - drag_lift_height
+				# For static bodies, snap to table surface (y=0)
+				# For rigid bodies, lower by lift height and let physics handle it
+				var target_y: float
+				if obj is RigidBody3D:
+					target_y = obj.global_position.y - drag_lift_height
+				else:
+					# Static bodies snap to table surface
+					target_y = 0.0
+
 				var tween = create_tween()
 				tween.set_ease(Tween.EASE_OUT)
 				tween.set_trans(Tween.TRANS_QUAD)
@@ -583,7 +590,8 @@ func _stop_dragging() -> void:
 			var anchor = _selected_objects[0]
 			if is_instance_valid(anchor):
 				var final_pos = anchor.global_position
-				final_pos.y -= drag_lift_height  # Use target position for distance calculation
+				# Use table surface level for distance calculation
+				final_pos.y = 0.0
 				var distance_m = _drag_anchor_position.distance_to(final_pos)
 				var distance_inches = distance_m * METERS_TO_INCHES
 				if distance_inches > 0.1:  # Only emit if actually moved
