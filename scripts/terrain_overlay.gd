@@ -783,21 +783,116 @@ func is_position_in_deployment_zone(world_pos: Vector3) -> Dictionary:
 
 	var table_width_m = table_size_feet.x * 12.0 * INCHES_TO_METERS
 	var table_depth_m = table_size_feet.y * 12.0 * INCHES_TO_METERS
-	var deployment_depth = 12.0 * INCHES_TO_METERS
 
 	match current_deployment_type:
 		DeploymentType.FRONT_LINE:
-			# Check if in Player 1 zone (bottom, -Z side)
+			var deployment_depth = 12.0 * INCHES_TO_METERS
+			# Player 1 zone (bottom)
 			if world_pos.z >= (-table_depth_m/2) and world_pos.z <= (-table_depth_m/2 + deployment_depth):
 				if abs(world_pos.x) <= table_width_m/2:
 					return {"in_zone": true, "player": "player1"}
-
-			# Check if in Player 2 zone (top, +Z side)
+			# Player 2 zone (top)
 			if world_pos.z <= (table_depth_m/2) and world_pos.z >= (table_depth_m/2 - deployment_depth):
 				if abs(world_pos.x) <= table_width_m/2:
 					return {"in_zone": true, "player": "player2"}
 
+		DeploymentType.GROUND_WAR:
+			var deployment_depth = 12.0 * INCHES_TO_METERS
+			# Player 1 zone (left)
+			if world_pos.x >= (-table_width_m/2) and world_pos.x <= (-table_width_m/2 + deployment_depth):
+				if abs(world_pos.z) <= table_depth_m/2:
+					return {"in_zone": true, "player": "player1"}
+			# Player 2 zone (right)
+			if world_pos.x <= (table_width_m/2) and world_pos.x >= (table_width_m/2 - deployment_depth):
+				if abs(world_pos.z) <= table_depth_m/2:
+					return {"in_zone": true, "player": "player2"}
+
+		DeploymentType.SIDE_BATTLE:
+			var deployment_depth = 12.0 * INCHES_TO_METERS
+			# Player 1 zone (bottom half)
+			if abs(world_pos.x) <= table_width_m/2:
+				if world_pos.z <= -table_depth_m/4 + deployment_depth/2 and world_pos.z >= -table_depth_m/4 - deployment_depth/2:
+					return {"in_zone": true, "player": "player1"}
+			# Player 2 zone (top half)
+			if abs(world_pos.x) <= table_width_m/2:
+				if world_pos.z >= table_depth_m/4 - deployment_depth/2 and world_pos.z <= table_depth_m/4 + deployment_depth/2:
+					return {"in_zone": true, "player": "player2"}
+
+		DeploymentType.DISORDERED:
+			var radius = 15.0 * INCHES_TO_METERS
+			var circle_offset = table_depth_m / 4
+			# Player 1 circle (bottom)
+			if world_pos.distance_to(Vector3(0, 0, -circle_offset)) <= radius:
+				return {"in_zone": true, "player": "player1"}
+			# Player 2 circle (top)
+			if world_pos.distance_to(Vector3(0, 0, circle_offset)) <= radius:
+				return {"in_zone": true, "player": "player2"}
+
+		DeploymentType.SPEARHEAD:
+			var corner_dist = 24.0 * INCHES_TO_METERS
+			# Player 1 corners (bottom-left and bottom-right)
+			var p1_bl_center = Vector3(-table_width_m/2 + corner_dist/2, 0, -table_depth_m/2 + corner_dist/2)
+			var p1_br_center = Vector3(table_width_m/2 - corner_dist/2, 0, -table_depth_m/2 + corner_dist/2)
+			if _is_in_rect(world_pos, p1_bl_center, Vector2(corner_dist, corner_dist)):
+				return {"in_zone": true, "player": "player1"}
+			if _is_in_rect(world_pos, p1_br_center, Vector2(corner_dist, corner_dist)):
+				return {"in_zone": true, "player": "player1"}
+			# Player 2 corners (top-left and top-right)
+			var p2_tl_center = Vector3(-table_width_m/2 + corner_dist/2, 0, table_depth_m/2 - corner_dist/2)
+			var p2_tr_center = Vector3(table_width_m/2 - corner_dist/2, 0, table_depth_m/2 - corner_dist/2)
+			if _is_in_rect(world_pos, p2_tl_center, Vector2(corner_dist, corner_dist)):
+				return {"in_zone": true, "player": "player2"}
+			if _is_in_rect(world_pos, p2_tr_center, Vector2(corner_dist, corner_dist)):
+				return {"in_zone": true, "player": "player2"}
+
+		DeploymentType.OPPOSING_FORCES:
+			var zone_width = 18.0 * INCHES_TO_METERS
+			# Player 1 diagonal (left side)
+			if world_pos.x >= -table_width_m/2 and world_pos.x <= -table_width_m/2 + zone_width:
+				if abs(world_pos.z) <= table_depth_m/2:
+					return {"in_zone": true, "player": "player1"}
+			# Player 2 diagonal (right side)
+			if world_pos.x <= table_width_m/2 and world_pos.x >= table_width_m/2 - zone_width:
+				if abs(world_pos.z) <= table_depth_m/2:
+					return {"in_zone": true, "player": "player2"}
+
+		# Asymmetric deployment zones
+		DeploymentType.OPEN_WARZONE:
+			var deployment_dist = 12.0 * INCHES_TO_METERS
+			# Player 1: left short edge
+			if world_pos.x >= -table_width_m/2 and world_pos.x <= -table_width_m/2 + deployment_dist:
+				if abs(world_pos.z) <= table_depth_m/2:
+					return {"in_zone": true, "player": "player1"}
+			# Player 2: top and bottom long edges
+			if abs(world_pos.x) <= table_width_m/2:
+				if world_pos.z >= table_depth_m/2 - deployment_dist or world_pos.z <= -table_depth_m/2 + deployment_dist:
+					return {"in_zone": true, "player": "player2"}
+
+		DeploymentType.NO_MANS_LAND:
+			var deployment_dist = 9.0 * INCHES_TO_METERS
+			# Player 1 (left)
+			if world_pos.x >= -table_width_m/2 and world_pos.x <= -table_width_m/2 + deployment_dist:
+				if abs(world_pos.z) <= table_depth_m/2:
+					return {"in_zone": true, "player": "player1"}
+			# Player 2 (right)
+			if world_pos.x <= table_width_m/2 and world_pos.x >= table_width_m/2 - deployment_dist:
+				if abs(world_pos.z) <= table_depth_m/2:
+					return {"in_zone": true, "player": "player2"}
+
+		# Add basic checks for remaining types (can be expanded)
+		_:
+			# For deployment types without specific logic yet, always return in_zone true
+			# This prevents false warnings until all types are fully implemented
+			return {"in_zone": true, "player": "unknown"}
+
 	return {"in_zone": false, "player": "none"}
+
+
+## Helper function to check if a position is inside a rectangle
+func _is_in_rect(world_pos: Vector3, rect_center: Vector3, rect_size: Vector2) -> bool:
+	var half_width = rect_size.x / 2.0
+	var half_depth = rect_size.y / 2.0
+	return abs(world_pos.x - rect_center.x) <= half_width and abs(world_pos.z - rect_center.z) <= half_depth
 
 
 ## Get terrain type at a world position
