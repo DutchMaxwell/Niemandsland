@@ -208,10 +208,15 @@ func set_table_size(size_feet: Vector2) -> void:
 func _calculate_grid_dimensions() -> Vector2i:
 	var width_inches = table_size_feet.x * 12.0
 	var height_inches = table_size_feet.y * 12.0
-	return Vector2i(
-		int(ceil(width_inches / GRID_SIZE_INCHES)),
-		int(ceil(height_inches / GRID_SIZE_INCHES))
-	)
+
+	# Calculate diagonal to ensure grid covers table at any rotation
+	# This makes the grid large enough so rotation doesn't create gaps
+	var diagonal = sqrt(width_inches * width_inches + height_inches * height_inches)
+
+	# Use diagonal for both dimensions to create a square grid that covers the table
+	var grid_size = int(ceil(diagonal / GRID_SIZE_INCHES))
+
+	return Vector2i(grid_size, grid_size)
 
 
 func _update_stats() -> void:
