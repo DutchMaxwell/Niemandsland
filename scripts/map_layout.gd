@@ -56,6 +56,7 @@ var point_symmetry_enabled := false  # Mirror placement across center
 @onready var close_button: Button = %CloseButton
 @onready var clear_button: Button = %ClearButton
 @onready var symmetry_check: CheckBox = %SymmetryCheck
+@onready var autogen_button: Button = %AutoGenButton
 
 
 func _ready() -> void:
@@ -64,6 +65,8 @@ func _ready() -> void:
 	rotation_slider.value_changed.connect(_on_rotation_changed)
 	if symmetry_check:
 		symmetry_check.toggled.connect(_on_symmetry_toggled)
+	if autogen_button:
+		autogen_button.pressed.connect(_on_autogen_pressed)
 
 	_setup_terrain_buttons()
 	_update_stats()
@@ -129,6 +132,13 @@ func _on_close_pressed() -> void:
 
 func _on_clear_pressed() -> void:
 	grid_cells.clear()
+	grid_container.queue_redraw()
+	_update_stats()
+	_emit_layout_update()
+
+
+func _on_autogen_pressed() -> void:
+	_generate_terrain_layout()
 	grid_container.queue_redraw()
 	_update_stats()
 	_emit_layout_update()
@@ -422,6 +432,124 @@ func _paint_at_position(screen_pos: Vector2) -> void:
 
 func _emit_layout_update() -> void:
 	layout_updated.emit(grid_cells.duplicate(), table_size_feet, grid_rotation_degrees)
+
+
+## Auto-generate terrain layout following OPR guidelines
+func _generate_terrain_layout() -> void:
+	# Clear existing layout
+	grid_cells.clear()
+
+	var grid_dims = _calculate_grid_dimensions()
+
+	# Define terrain piece templates (in grid cells: width x height)
+	# Ruins: 9"x9" (3x3) and 9"x6" (3x2)
+	# Forest: 9"x9" (3x3)
+	# Dangerous: 6"x9" (2x3)
+	# Container: 6"x3" (2x1)
+
+	var piece_templates := {
+		TerrainType.RUINS: [
+			Vector2i(3, 3),  # 9"x9"
+			Vector2i(3, 2),  # 9"x6"
+		],
+		TerrainType.FOREST: [
+			Vector2i(3, 3),  # 9"x9"
+		],
+		TerrainType.DANGEROUS: [
+			Vector2i(2, 3),  # 6"x9"
+		],
+		TerrainType.CONTAINER: [
+			Vector2i(2, 1),  # 6"x3"
+		]
+	}
+
+	# Target: 15-20 pieces total
+	# Distribution strategy based on OPR guidelines:
+	# - 50% blocking LOS (Ruins + Forest + Container)
+	# - 33% cover (all except Dangerous)
+	# - 33% difficult (Forest)
+	# - 2 dangerous pieces minimum
+
+	var target_pieces := {
+		TerrainType.RUINS: 5,      # ~30% of pieces
+		TerrainType.FOREST: 6,     # ~35% of pieces (provides difficult terrain)
+		TerrainType.CONTAINER: 4,  # ~25% of pieces
+		TerrainType.DANGEROUS: 2   # ~10% of pieces (minimum 2)
+	}
+
+	# Try to place all pieces with some randomization
+	var max_attempts = 100
+	var placed_pieces := []
+
+	for terrain_type in target_pieces:
+		var count = target_pieces[terrain_type]
+		var templates = piece_templates[terrain_type]
+
+		for i in range(count):
+			var placed = false
+			for attempt in range(max_attempts):
+				# Pick random template
+				var template = templates[randi() % templates.size()]
+
+				# Pick random position
+				var max_x = grid_dims.x - template.x
+				var max_y = grid_dims.y - template.y
+
+				if max_x <= 0 or max_y <= 0:
+					break  # Template too large for grid
+
+				var pos = Vector2i(
+					randi() % (max_x + 1),
+					randi() % (max_y + 1)
+				)
+
+				# Check if placement is valid (no overlap)
+				if _can_place_piece(pos, template, placed_pieces):
+					_place_piece(pos, template, terrain_type)
+					placed_pieces.append({"pos": pos, "size": template})
+					placed = true
+					break
+
+			if not placed:
+				push_warning("Could not place terrain piece %d of type %d" % [i, terrain_type])
+
+	print("Auto-generated terrain layout with %d pieces" % placed_pieces.size())
+
+
+## Check if a piece can be placed without overlapping existing pieces
+func _can_place_piece(pos: Vector2i, size: Vector2i, existing_pieces: Array) -> bool:
+	# Check bounds
+	var grid_dims = _calculate_grid_dimensions()
+	if pos.x + size.x > grid_dims.x or pos.y + size.y > grid_dims.y:
+		return false
+
+	# Define piece rectangle
+	var piece_rect = Rect2i(pos, size)
+
+	# Check overlap with existing pieces
+	for piece in existing_pieces:
+		var other_rect = Rect2i(piece.pos, piece.size)
+		if piece_rect.intersects(other_rect):
+			return false
+
+	# Add minimum spacing (at least 1 cell gap between pieces to avoid clustering)
+	var expanded_rect = Rect2i(pos - Vector2i(1, 1), size + Vector2i(2, 2))
+	for piece in existing_pieces:
+		var other_rect = Rect2i(piece.pos, piece.size)
+		if expanded_rect.intersects(other_rect):
+			# Allow some overlap for variety (50% chance)
+			if randf() > 0.5:
+				return false
+
+	return true
+
+
+## Place a piece on the grid
+func _place_piece(pos: Vector2i, size: Vector2i, terrain_type: int) -> void:
+	for x in range(size.x):
+		for y in range(size.y):
+			var cell_pos = pos + Vector2i(x, y)
+			grid_cells[cell_pos] = terrain_type
 
 
 ## Get all cells including their world positions for overlay rendering
