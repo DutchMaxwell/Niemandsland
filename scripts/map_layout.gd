@@ -40,12 +40,29 @@ const TERRAIN_DESCRIPTIONS := {
 const GRID_SIZE_INCHES := 3.0
 const INCHES_TO_METERS := 0.0254
 
+# Deployment zone types
+enum DeploymentType {
+	NONE,
+	STANDARD_6,   # 6" from edges
+	STANDARD_9,   # 9" from edges
+	DIAGONAL,     # Corners
+	HAMMER_ANVIL  # Short edges
+}
+
 var table_size_feet := Vector2(6, 4)  # Default 6x4 table
 var grid_rotation_degrees := 0.0
 var grid_cells := {}  # Dictionary[Vector2i, TerrainType]
 var selected_terrain_type := TerrainType.RUINS
 var is_painting := false
 var point_symmetry_enabled := false  # Mirror placement across center
+
+# Deployment zones
+var deployment_type := DeploymentType.STANDARD_6
+var show_deployment_zones := false
+
+# Objectives
+var objectives := []  # Array of Vector2 (in inches from table center)
+var show_objectives := true
 
 @onready var grid_container: Control = %GridContainer
 @onready var rotation_slider: HSlider = %RotationSlider
@@ -55,18 +72,38 @@ var point_symmetry_enabled := false  # Mirror placement across center
 @onready var recommendations_label: Label = %RecommendationsLabel
 @onready var close_button: Button = %CloseButton
 @onready var clear_button: Button = %ClearButton
+@onready var save_button: Button = %SaveButton
+@onready var load_button: Button = %LoadButton
 @onready var symmetry_check: CheckBox = %SymmetryCheck
 @onready var autogen_button: Button = %AutoGenButton
+@onready var deployment_check: CheckBox = %DeploymentCheck
+@onready var objectives_check: CheckBox = %ObjectivesCheck
+@onready var save_file_dialog: FileDialog = %SaveFileDialog
+@onready var load_file_dialog: FileDialog = %LoadFileDialog
 
 
 func _ready() -> void:
 	close_button.pressed.connect(_on_close_pressed)
 	clear_button.pressed.connect(_on_clear_pressed)
 	rotation_slider.value_changed.connect(_on_rotation_changed)
+
+	if save_button:
+		save_button.pressed.connect(_on_save_pressed)
+	if load_button:
+		load_button.pressed.connect(_on_load_pressed)
 	if symmetry_check:
 		symmetry_check.toggled.connect(_on_symmetry_toggled)
 	if autogen_button:
 		autogen_button.pressed.connect(_on_autogen_pressed)
+	if deployment_check:
+		deployment_check.toggled.connect(_on_deployment_toggled)
+	if objectives_check:
+		objectives_check.toggled.connect(_on_objectives_toggled)
+
+	if save_file_dialog:
+		save_file_dialog.file_selected.connect(_on_save_file_selected)
+	if load_file_dialog:
+		load_file_dialog.file_selected.connect(_on_load_file_selected)
 
 	_setup_terrain_buttons()
 	_update_stats()
@@ -139,9 +176,41 @@ func _on_clear_pressed() -> void:
 
 func _on_autogen_pressed() -> void:
 	_generate_terrain_layout()
+	_generate_objectives()
 	grid_container.queue_redraw()
 	_update_stats()
 	_emit_layout_update()
+
+
+func _on_save_pressed() -> void:
+	if save_file_dialog:
+		save_file_dialog.popup_centered()
+
+
+func _on_load_pressed() -> void:
+	if load_file_dialog:
+		load_file_dialog.popup_centered()
+
+
+func _on_deployment_toggled(enabled: bool) -> void:
+	show_deployment_zones = enabled
+	grid_container.queue_redraw()
+
+
+func _on_objectives_toggled(enabled: bool) -> void:
+	show_objectives = enabled
+	grid_container.queue_redraw()
+
+
+func _on_save_file_selected(path: String) -> void:
+	save_layout(path)
+
+
+func _on_load_file_selected(path: String) -> void:
+	if load_layout(path):
+		print("Layout loaded successfully")
+	else:
+		push_error("Failed to load layout")
 
 
 func set_table_size(size_feet: Vector2) -> void:
@@ -307,6 +376,10 @@ func _update_recommendations_with_values(total_pieces: int, coverage_pct: float,
 	var difficult_ok = difficult_pct >= 33.0
 	var dangerous_ok = dangerous_pieces >= 2
 
+	# Extended guidelines
+	var extended = _check_extended_guidelines()
+	var objectives_ok = objectives.size() >= 3
+
 	var check_mark = "✓"
 	var cross_mark = "✗"
 
@@ -319,18 +392,25 @@ func _update_recommendations_with_values(total_pieces: int, coverage_pct: float,
 %s 33%% should be difficult (%.0f%%)
 %s 1 dangerous piece per player (have: %d)
 
-Tip: Connected cells = 1 piece
-No gaps >12" between terrain""" % [
+Extended Guidelines:
+%s Max 12" gap between terrain (%.1f")
+%s Balanced symmetry (%.0f%%)
+%s 3+ Objectives (have: %d)
+
+Tip: Connected cells = 1 piece""" % [
 		check_mark if pieces_ok else cross_mark, total_pieces,
 		check_mark if coverage_ok else cross_mark, coverage_pct,
 		check_mark if blocking_ok else cross_mark, blocking_pct,
 		check_mark if cover_ok else cross_mark, cover_pct,
 		check_mark if difficult_ok else cross_mark, difficult_pct,
-		check_mark if dangerous_ok else cross_mark, dangerous_pieces
+		check_mark if dangerous_ok else cross_mark, dangerous_pieces,
+		check_mark if extended.max_gap_ok else cross_mark, extended.max_gap_inches,
+		check_mark if extended.symmetry_ok else cross_mark, extended.symmetry_score,
+		check_mark if objectives_ok else cross_mark, objectives.size()
 	]
 
 	# Color code the recommendations
-	var all_ok = pieces_ok and coverage_ok and blocking_ok and cover_ok and difficult_ok and dangerous_ok
+	var all_ok = pieces_ok and coverage_ok and blocking_ok and cover_ok and difficult_ok and dangerous_ok and extended.max_gap_ok and extended.symmetry_ok and objectives_ok
 	if all_ok:
 		recommendations_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
 	else:
@@ -550,6 +630,200 @@ func _place_piece(pos: Vector2i, size: Vector2i, terrain_type: int) -> void:
 		for y in range(size.y):
 			var cell_pos = pos + Vector2i(x, y)
 			grid_cells[cell_pos] = terrain_type
+
+
+## Generate objectives following OPR guidelines
+func _generate_objectives() -> void:
+	objectives.clear()
+
+	# OPR standard: 3-5 objectives
+	var num_objectives = 3
+	var table_size_inches = table_size_feet * 12.0
+
+	# Minimum distance from edges (in inches)
+	var edge_buffer = 6.0
+	# Minimum distance between objectives (in inches)
+	var min_spacing = 12.0
+
+	var max_attempts = 100
+
+	for i in range(num_objectives):
+		var placed = false
+		for attempt in range(max_attempts):
+			# Random position within valid area
+			var x = randf_range(-table_size_inches.x/2 + edge_buffer, table_size_inches.x/2 - edge_buffer)
+			var z = randf_range(-table_size_inches.y/2 + edge_buffer, table_size_inches.y/2 - edge_buffer)
+			var pos = Vector2(x, z)
+
+			# Check distance from existing objectives
+			var valid = true
+			for obj in objectives:
+				if pos.distance_to(obj) < min_spacing:
+					valid = false
+					break
+
+			# Check if on terrain (convert to grid coords)
+			if valid:
+				var grid_dims = _calculate_grid_dimensions()
+				var cell_x = int((pos.x + table_size_inches.x/2) / GRID_SIZE_INCHES)
+				var cell_y = int((pos.y + table_size_inches.y/2) / GRID_SIZE_INCHES)
+				var cell_pos = Vector2i(cell_x, cell_y)
+
+				if grid_cells.has(cell_pos) and grid_cells[cell_pos] != TerrainType.NONE:
+					valid = false  # On terrain, try again
+
+			if valid:
+				objectives.append(pos)
+				placed = true
+				break
+
+		if not placed:
+			push_warning("Could not place objective %d" % i)
+
+	print("Generated %d objectives" % objectives.size())
+	grid_container.queue_redraw()
+
+
+## Save current layout to file
+func save_layout(file_path: String) -> void:
+	var data = {
+		"version": "1.0",
+		"table_size": {"x": table_size_feet.x, "y": table_size_feet.y},
+		"grid_rotation": grid_rotation_degrees,
+		"deployment_type": deployment_type,
+		"grid_cells": {},
+		"objectives": []
+	}
+
+	# Convert grid_cells keys to strings (JSON doesn't support Vector2i keys)
+	for cell_pos in grid_cells:
+		var key = "%d,%d" % [cell_pos.x, cell_pos.y]
+		data.grid_cells[key] = grid_cells[cell_pos]
+
+	# Save objectives
+	for obj in objectives:
+		data.objectives.append({"x": obj.x, "y": obj.y})
+
+	var json_string = JSON.stringify(data, "\t")
+	var file = FileAccess.open(file_path, FileAccess.WRITE)
+	if file:
+		file.store_string(json_string)
+		file.close()
+		print("Layout saved to: %s" % file_path)
+	else:
+		push_error("Failed to save layout: %s" % file_path)
+
+
+## Load layout from file
+func load_layout(file_path: String) -> bool:
+	var file = FileAccess.open(file_path, FileAccess.READ)
+	if not file:
+		push_error("Failed to open layout file: %s" % file_path)
+		return false
+
+	var json_text = file.get_as_text()
+	file.close()
+
+	var json = JSON.new()
+	if json.parse(json_text) != OK:
+		push_error("Failed to parse JSON: %s" % file_path)
+		return false
+
+	var data = json.data
+	if not data is Dictionary:
+		push_error("Invalid layout data")
+		return false
+
+	# Load table size
+	if data.has("table_size"):
+		var ts = data.table_size
+		table_size_feet = Vector2(ts.x, ts.y)
+
+	# Load rotation
+	if data.has("grid_rotation"):
+		grid_rotation_degrees = data.grid_rotation
+		if rotation_slider:
+			rotation_slider.value = grid_rotation_degrees
+
+	# Load deployment type
+	if data.has("deployment_type"):
+		deployment_type = data.deployment_type
+
+	# Load grid cells
+	grid_cells.clear()
+	if data.has("grid_cells"):
+		for key in data.grid_cells:
+			var coords = key.split(",")
+			if coords.size() == 2:
+				var cell_pos = Vector2i(int(coords[0]), int(coords[1]))
+				grid_cells[cell_pos] = data.grid_cells[key]
+
+	# Load objectives
+	objectives.clear()
+	if data.has("objectives"):
+		for obj_data in data.objectives:
+			objectives.append(Vector2(obj_data.x, obj_data.y))
+
+	grid_container.queue_redraw()
+	_update_stats()
+	_emit_layout_update()
+
+	print("Layout loaded from: %s" % file_path)
+	return true
+
+
+## Check extended OPR guidelines
+func _check_extended_guidelines() -> Dictionary:
+	var results = {
+		"max_gap_ok": true,
+		"max_gap_inches": 0.0,
+		"deployment_coverage_ok": true,
+		"symmetry_ok": true,
+		"symmetry_score": 0.0
+	}
+
+	# Check maximum gap between terrain (should be < 12")
+	# This is a simplified check - just finds largest empty circle
+	var grid_dims = _calculate_grid_dimensions()
+	var max_gap = 0.0
+
+	# Sample points across the table
+	for test_x in range(0, int(table_size_feet.x * 12), 3):
+		for test_y in range(0, int(table_size_feet.y * 12), 3):
+			var min_dist = INF
+			# Find nearest terrain
+			for cell_pos in grid_cells:
+				if grid_cells[cell_pos] == TerrainType.NONE:
+					continue
+				var cell_center_x = (cell_pos.x + 0.5) * GRID_SIZE_INCHES
+				var cell_center_y = (cell_pos.y + 0.5) * GRID_SIZE_INCHES
+				var dist = Vector2(test_x, test_y).distance_to(Vector2(cell_center_x, cell_center_y))
+				min_dist = min(min_dist, dist)
+			max_gap = max(max_gap, min_dist)
+
+	results.max_gap_inches = max_gap
+	results.max_gap_ok = max_gap <= 12.0
+
+	# Symmetry check (simplified - count terrain in each half)
+	var half_x = grid_dims.x / 2
+	var left_count = 0
+	var right_count = 0
+
+	for cell_pos in grid_cells:
+		if grid_cells[cell_pos] == TerrainType.NONE:
+			continue
+		if cell_pos.x < half_x:
+			left_count += 1
+		else:
+			right_count += 1
+
+	var total = left_count + right_count
+	if total > 0:
+		var balance = float(min(left_count, right_count)) / float(max(left_count, right_count))
+		results.symmetry_score = balance * 100.0
+		results.symmetry_ok = balance >= 0.7  # At least 70% balanced
+
+	return results
 
 
 ## Get all cells including their world positions for overlay rendering
