@@ -307,9 +307,6 @@ func _ready() -> void:
 	# Initialize Deployment Zones UI
 	_init_deployment_zones_ui()
 
-	# Initialize Scout/Ambush Panel
-	_init_scout_ambush_panel()
-
 	# Initialize and play Tron intro
 	_start_tron_intro()
 
@@ -1365,14 +1362,30 @@ func _init_deployment_zones_ui() -> void:
 	label.text = "Deployment Zones:"
 	deployment_panel.add_child(label)
 
-	# Create OptionButton for deployment zone types
+	# Create OptionButton for deployment zone types (18 total from OPR)
 	deployment_zone_option = OptionButton.new()
 	deployment_zone_option.add_item("None", 0)
-	deployment_zone_option.add_item("Front-line (12\")", 1)
-	deployment_zone_option.add_item("Corner Deployment", 2)
-	deployment_zone_option.add_item("Dawn Assault", 3)
-	deployment_zone_option.add_item("Pitched Battle", 4)
-	deployment_zone_option.add_item("Meeting Engagement", 5)
+	# Standard (1-6)
+	deployment_zone_option.add_item("Front Line (12\")", 1)
+	deployment_zone_option.add_item("Ground War", 2)
+	deployment_zone_option.add_item("Side Battle", 3)
+	deployment_zone_option.add_item("Disordered", 4)
+	deployment_zone_option.add_item("Spearhead", 5)
+	deployment_zone_option.add_item("Opposing Forces", 6)
+	# Asymmetric (7-12)
+	deployment_zone_option.add_item("Open Warzone", 7)
+	deployment_zone_option.add_item("Pushback", 8)
+	deployment_zone_option.add_item("Cornered", 9)
+	deployment_zone_option.add_item("Encircled", 10)
+	deployment_zone_option.add_item("Behind Enemy Lines", 11)
+	deployment_zone_option.add_item("Lightning Strike", 12)
+	# Advanced (13-18)
+	deployment_zone_option.add_item("No Man's Land", 13)
+	deployment_zone_option.add_item("Long Haul", 14)
+	deployment_zone_option.add_item("Flank Assault", 15)
+	deployment_zone_option.add_item("Frontal Clash", 16)
+	deployment_zone_option.add_item("Tactical Push", 17)
+	deployment_zone_option.add_item("Meeting Engagement", 18)
 	deployment_zone_option.selected = 0  # Start with "None"
 	deployment_zone_option.item_selected.connect(_on_deployment_zone_selected)
 	deployment_panel.add_child(deployment_zone_option)
@@ -1423,51 +1436,6 @@ func _on_deployment_mode_toggled(is_active: bool) -> void:
 	is_deployment_mode = is_active
 	_check_all_units_deployment()
 	print("Deployment mode: %s" % ("active" if is_active else "inactive"))
-
-
-## ============================================================================
-## Scout/Ambush Panel
-## ============================================================================
-
-## Initialize Scout/Ambush panel UI
-func _init_scout_ambush_panel() -> void:
-	# Get the left panel VBox to add UI elements
-	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
-	if not left_panel_vbox:
-		push_error("Could not find LeftPanelVBox for scout/ambush panel")
-		return
-
-	# Create a VBoxContainer for scout/ambush units
-	var scout_panel = VBoxContainer.new()
-	scout_panel.name = "ScoutAmbushPanel"
-	left_panel_vbox.add_child(scout_panel)
-
-	# Add label
-	var label = Label.new()
-	label.text = "Scout/Ambush Units:"
-	label.add_theme_color_override("font_color", Color.CYAN)
-	scout_panel.add_child(label)
-
-	# Create a ScrollContainer for the unit list
-	var scroll = ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(180, 100)
-	scout_panel.add_child(scroll)
-
-	# Create ItemList for units
-	var unit_list = ItemList.new()
-	unit_list.name = "ScoutAmbushList"
-	unit_list.custom_minimum_size = Vector2(180, 100)
-	scroll.add_child(unit_list)
-
-	# Add example text (will be populated when units are added)
-	unit_list.add_item("(No scout/ambush units)")
-
-	# Add info label
-	var info_label = Label.new()
-	info_label.text = "Units with Scout or Ambush\ndeploy outside normal zones"
-	info_label.add_theme_font_size_override("font_size", 10)
-	info_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	scout_panel.add_child(info_label)
 
 
 ## Handle unit movement (re-check deployment)
