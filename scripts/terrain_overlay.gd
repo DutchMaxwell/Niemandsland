@@ -137,6 +137,10 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 	var table_width_m = table_size_feet.x * 12.0 * INCHES_TO_METERS
 	var table_depth_m = table_size_feet.y * 12.0 * INCHES_TO_METERS
 
+	# Helper to check if a 2D point is within table bounds
+	var is_point_in_table = func(x: float, z: float) -> bool:
+		return abs(x) <= table_width_m / 2.0 and abs(z) <= table_depth_m / 2.0
+
 	# Create a mesh for each terrain cell
 	for cell_pos in grid_cells:
 		var terrain_type = grid_cells[cell_pos]
@@ -150,14 +154,31 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 		var local_x = (cell_pos.x - grid_dims.x / 2.0 + 0.5) * cell_size_meters
 		var local_z = (cell_pos.y - grid_dims.y / 2.0 + 0.5) * cell_size_meters
 
-		# Apply rotation around center (Y-axis in 3D = rotation in XZ plane)
+		# Calculate all 4 corners of the cell in local space
+		var half_cell = cell_size_meters / 2.0
+		var corners_local = [
+			Vector2(local_x - half_cell, local_z - half_cell),
+			Vector2(local_x + half_cell, local_z - half_cell),
+			Vector2(local_x + half_cell, local_z + half_cell),
+			Vector2(local_x - half_cell, local_z + half_cell)
+		]
+
+		# Rotate all corners and check if any are inside table bounds
+		var any_inside = false
+		for corner in corners_local:
+			var rotated_corner_x = corner.x * cos(rotation_rad) - corner.y * sin(rotation_rad)
+			var rotated_corner_z = corner.x * sin(rotation_rad) + corner.y * cos(rotation_rad)
+			if is_point_in_table.call(rotated_corner_x, rotated_corner_z):
+				any_inside = true
+				break
+
+		# Skip cells that have no corners inside table
+		if not any_inside:
+			continue
+
+		# Apply rotation to cell center for mesh positioning
 		var rotated_x = local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
 		var rotated_z = local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
-
-		# Skip cells that extend outside table bounds (check cell must be fully within)
-		var half_cell = cell_size_meters / 2.0
-		if abs(rotated_x) + half_cell > table_width_m / 2.0 or abs(rotated_z) + half_cell > table_depth_m / 2.0:
-			continue
 
 		var mesh_instance = _create_cell_mesh(Vector3(rotated_x, 0, rotated_z), cell_size_meters, color, rotation_degrees)
 		add_child(mesh_instance)

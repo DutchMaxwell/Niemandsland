@@ -690,18 +690,29 @@ func _is_cell_within_table_bounds(cell_pos: Vector2i, grid_dims: Vector2i) -> bo
 	var local_x = (cell_pos.x - grid_dims.x / 2.0 + 0.5) * cell_size_inches
 	var local_y = (cell_pos.y - grid_dims.y / 2.0 + 0.5) * cell_size_inches
 
-	# Apply rotation
-	var rotation_rad = deg_to_rad(grid_rotation_degrees)
-	var rotated_x = local_x * cos(rotation_rad) - local_y * sin(rotation_rad)
-	var rotated_y = local_x * sin(rotation_rad) + local_y * cos(rotation_rad)
+	# Calculate all 4 corners of the cell in local space
+	var half_cell = cell_size_inches / 2.0
+	var corners_local = [
+		Vector2(local_x - half_cell, local_y - half_cell),
+		Vector2(local_x + half_cell, local_y - half_cell),
+		Vector2(local_x + half_cell, local_y + half_cell),
+		Vector2(local_x - half_cell, local_y + half_cell)
+	]
 
-	# Check if rotated position is within table bounds
+	# Table bounds
 	var table_width_inches = table_size_feet.x * 12.0
 	var table_height_inches = table_size_feet.y * 12.0
 
-	# Cell must be fully within bounds (check distance from center to cell edge)
-	var half_cell = cell_size_inches / 2.0
-	return abs(rotated_x) + half_cell <= table_width_inches / 2.0 and abs(rotated_y) + half_cell <= table_height_inches / 2.0
+	# Apply rotation and check if at least one corner is inside table
+	var rotation_rad = deg_to_rad(grid_rotation_degrees)
+	for corner in corners_local:
+		var rotated_x = corner.x * cos(rotation_rad) - corner.y * sin(rotation_rad)
+		var rotated_y = corner.x * sin(rotation_rad) + corner.y * cos(rotation_rad)
+
+		if abs(rotated_x) <= table_width_inches / 2.0 and abs(rotated_y) <= table_height_inches / 2.0:
+			return true  # At least one corner inside
+
+	return false  # No corners inside table
 
 
 ## Place a piece on the grid
