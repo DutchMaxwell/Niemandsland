@@ -558,18 +558,20 @@ func _try_generate_layout() -> bool:
 		var count = target_pieces[terrain_type]
 		var templates = piece_templates[terrain_type]
 
-		for i in range(count):
+		# When symmetry is enabled, place half the pieces (they will be mirrored)
+		var pieces_to_place = count if not point_symmetry_enabled else int(ceil(count / 2.0))
+
+		for i in range(pieces_to_place):
 			var placed = false
 			for attempt in range(max_attempts):
 				# Pick random template
 				var template = templates[randi() % templates.size()]
 
-				# Pick random position (only half the table if symmetry is enabled)
+				# Pick random position
 				var pos: Vector2i
 				if point_symmetry_enabled:
-					# Place in left half only
-					var half_x = grid_dims.x / 2
-					var max_x = half_x - template.x
+					# Place anywhere in the grid (will check bounds later)
+					var max_x = grid_dims.x - template.x
 					var max_y = grid_dims.y - template.y
 
 					if max_x <= 0 or max_y <= 0:

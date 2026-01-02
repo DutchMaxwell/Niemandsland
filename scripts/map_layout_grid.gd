@@ -68,6 +68,9 @@ func _draw() -> void:
 	# Calculate half extents for centering the grid
 	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
 
+	# Table bounds in rotated space (for proper clipping)
+	var half_table = grid_rect.size / 2.0
+
 	for x in range(grid_dims.x):
 		for y in range(grid_dims.y):
 			var cell_pos = Vector2i(x, y)
@@ -78,13 +81,24 @@ func _draw() -> void:
 			)
 			var rect = Rect2(rect_pos, cell_size)
 
-			# Check if this cell (after rotation) is within table bounds
-			# Simple check: if cell center is too far from origin, skip it
-			var cell_center = rect_pos + cell_size / 2.0
-			var dist_from_center = cell_center.length()
-			var max_dist = max(grid_rect.size.x, grid_rect.size.y) / 2.0 * 1.1  # 10% tolerance
-			if dist_from_center > max_dist:
-				continue  # Skip cells that are definitely outside table bounds
+			# Check if this cell's corners are within table bounds (more accurate clipping)
+			# Since we're in rotated space, check against non-rotated table bounds
+			var corners = [
+				rect_pos,
+				rect_pos + Vector2(cell_size.x, 0),
+				rect_pos + Vector2(0, cell_size.y),
+				rect_pos + Vector2(cell_size.x, cell_size.y)
+			]
+
+			# Skip if all corners are outside table bounds
+			var any_inside = false
+			for corner in corners:
+				if abs(corner.x) <= half_table.x and abs(corner.y) <= half_table.y:
+					any_inside = true
+					break
+
+			if not any_inside:
+				continue  # Skip cells completely outside table
 
 			var terrain_type = map_layout.grid_cells.get(cell_pos, map_layout.TerrainType.NONE)
 			var color = map_layout.TERRAIN_COLORS[terrain_type]
@@ -105,19 +119,25 @@ func _draw() -> void:
 	var line_color = Color(0.6, 0.6, 0.6, 0.4)
 	var major_color = Color(1.0, 1.0, 1.0, 0.6)
 
-	# Vertical lines
+	# Vertical lines - only draw within table bounds
 	for x in range(grid_dims.x + 1):
 		var line_x = (x - half_grid_cells.x) * cell_size.x
-		var start = Vector2(line_x, -half_grid_cells.y * cell_size.y)
-		var end = Vector2(line_x, half_grid_cells.y * cell_size.y)
+		# Clip line to table bounds
+		if abs(line_x) > half_table.x:
+			continue
+		var start = Vector2(line_x, -half_table.y)
+		var end = Vector2(line_x, half_table.y)
 		var is_major = (x % 4 == 0)
 		draw_line(start, end, major_color if is_major else line_color, 2.0 if is_major else 1.0)
 
-	# Horizontal lines
+	# Horizontal lines - only draw within table bounds
 	for y in range(grid_dims.y + 1):
 		var line_y = (y - half_grid_cells.y) * cell_size.y
-		var start = Vector2(-half_grid_cells.x * cell_size.x, line_y)
-		var end = Vector2(half_grid_cells.x * cell_size.x, line_y)
+		# Clip line to table bounds
+		if abs(line_y) > half_table.y:
+			continue
+		var start = Vector2(-half_table.x, line_y)
+		var end = Vector2(half_table.x, line_y)
 		var is_major = (y % 4 == 0)
 		draw_line(start, end, major_color if is_major else line_color, 2.0 if is_major else 1.0)
 
