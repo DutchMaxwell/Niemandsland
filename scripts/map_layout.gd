@@ -516,9 +516,15 @@ func _generate_terrain_layout() -> void:
 			success = true
 			print("Auto-generated terrain layout (attempt %d)" % (retry + 1))
 			break
+		else:
+			print("Auto-generate attempt %d failed" % (retry + 1))
 
 	if not success:
 		push_error("Failed to generate compliant terrain layout after %d attempts" % max_retries)
+		print("Grid rotation: %.1f°, Table size: %.0fx%.0f feet, Point symmetry: %s" % [
+			grid_rotation_degrees, table_size_feet.x, table_size_feet.y,
+			"enabled" if point_symmetry_enabled else "disabled"
+		])
 
 
 ## Attempt to generate a complete terrain layout
@@ -619,8 +625,15 @@ func _try_generate_layout() -> bool:
 					break
 
 			if not placed:
+				print("Failed to place %s piece %d/%d after %d attempts" % [
+					TerrainType.keys()[terrain_type], i + 1, pieces_to_place, max_attempts
+				])
 				return false  # Failed to place all pieces
 
+	print("Successfully placed all %d pieces (symmetry: %s)" % [
+		placed_pieces.size(),
+		"enabled" if point_symmetry_enabled else "disabled"
+	])
 	return true  # Successfully placed all pieces
 
 
@@ -671,8 +684,9 @@ func _can_place_piece(pos: Vector2i, size: Vector2i, existing_pieces: Array) -> 
 
 ## Check if a grid cell is within the actual table bounds (accounting for rotation)
 func _is_cell_within_table_bounds(cell_pos: Vector2i, grid_dims: Vector2i) -> bool:
-	# Calculate cell center position in grid coordinates (centered grid)
+	# Calculate cell center position in grid coordinates (grid centered on intersection point)
 	var cell_size_inches = GRID_SIZE_INCHES
+	# Grid centered on intersection - cells offset by 0.5 from intersections
 	var local_x = (cell_pos.x - grid_dims.x / 2.0 + 0.5) * cell_size_inches
 	var local_y = (cell_pos.y - grid_dims.y / 2.0 + 0.5) * cell_size_inches
 
@@ -685,7 +699,9 @@ func _is_cell_within_table_bounds(cell_pos: Vector2i, grid_dims: Vector2i) -> bo
 	var table_width_inches = table_size_feet.x * 12.0
 	var table_height_inches = table_size_feet.y * 12.0
 
-	return abs(rotated_x) <= table_width_inches / 2.0 and abs(rotated_y) <= table_height_inches / 2.0
+	# Cell must be fully within bounds (check distance from center to cell edge)
+	var half_cell = cell_size_inches / 2.0
+	return abs(rotated_x) + half_cell <= table_width_inches / 2.0 and abs(rotated_y) + half_cell <= table_height_inches / 2.0
 
 
 ## Place a piece on the grid
