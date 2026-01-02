@@ -640,6 +640,13 @@ func _can_place_piece(pos: Vector2i, size: Vector2i, existing_pieces: Array) -> 
 	if pos.x < 0 or pos.y < 0:
 		return false
 
+	# Check if ALL cells of this piece are within table bounds (after rotation)
+	for x in range(size.x):
+		for y in range(size.y):
+			var cell_pos = pos + Vector2i(x, y)
+			if not _is_cell_within_table_bounds(cell_pos, grid_dims):
+				return false  # Piece extends outside table
+
 	# Define piece rectangle
 	var piece_rect = Rect2i(pos, size)
 
@@ -658,6 +665,25 @@ func _can_place_piece(pos: Vector2i, size: Vector2i, existing_pieces: Array) -> 
 			return false
 
 	return true
+
+
+## Check if a grid cell is within the actual table bounds (accounting for rotation)
+func _is_cell_within_table_bounds(cell_pos: Vector2i, grid_dims: Vector2i) -> bool:
+	# Calculate cell center position in grid coordinates (centered grid)
+	var cell_size_inches = GRID_SIZE_INCHES
+	var local_x = (cell_pos.x - grid_dims.x / 2.0 + 0.5) * cell_size_inches
+	var local_y = (cell_pos.y - grid_dims.y / 2.0 + 0.5) * cell_size_inches
+
+	# Apply rotation
+	var rotation_rad = deg_to_rad(grid_rotation_degrees)
+	var rotated_x = local_x * cos(rotation_rad) - local_y * sin(rotation_rad)
+	var rotated_y = local_x * sin(rotation_rad) + local_y * cos(rotation_rad)
+
+	# Check if rotated position is within table bounds
+	var table_width_inches = table_size_feet.x * 12.0
+	var table_height_inches = table_size_feet.y * 12.0
+
+	return abs(rotated_x) <= table_width_inches / 2.0 and abs(rotated_y) <= table_height_inches / 2.0
 
 
 ## Place a piece on the grid
