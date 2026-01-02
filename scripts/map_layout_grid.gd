@@ -62,87 +62,118 @@ func _draw() -> void:
 	# Draw table background (always axis-aligned)
 	draw_rect(grid_rect, Color(0.15, 0.15, 0.15, 1.0), true)
 
-	# Draw terrain cells - rotated with the grid
-	draw_set_transform(center, angle_rad, Vector2.ONE)
-
 	# Calculate half extents for centering the grid
 	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
 
-	# Table bounds in rotated space (for proper clipping)
-	var half_table = grid_rect.size / 2.0
+	# Helper function to rotate a point around center
+	var rotate_point = func(p: Vector2) -> Vector2:
+		var cos_a = cos(angle_rad)
+		var sin_a = sin(angle_rad)
+		return Vector2(
+			p.x * cos_a - p.y * sin_a,
+			p.x * sin_a + p.y * cos_a
+		) + center
 
+	# Draw terrain cells with manual rotation
 	for x in range(grid_dims.x):
 		for y in range(grid_dims.y):
 			var cell_pos = Vector2i(x, y)
-			# Position relative to grid center (grid centered on intersection, cells offset by 0.5)
-			var rect_pos = Vector2(
-				(x - half_grid_cells.x + 0.5) * cell_size.x,
-				(y - half_grid_cells.y + 0.5) * cell_size.y
-			)
-			var rect = Rect2(rect_pos, cell_size)
 
-			# Check if cell is FULLY within table bounds (all corners inside)
-			# This prevents drawing cells that extend outside the table border
-			var corners = [
-				rect_pos,
-				rect_pos + Vector2(cell_size.x, 0),
-				rect_pos + Vector2(0, cell_size.y),
-				rect_pos + Vector2(cell_size.x, cell_size.y)
+			# Position relative to grid center (grid centered on intersection)
+			# Cells are offset by 0.5 from grid lines
+			var local_x = (x - half_grid_cells.x + 0.5) * cell_size.x
+			var local_y = (y - half_grid_cells.y + 0.5) * cell_size.y
+
+			# Calculate 4 corners in local space, then rotate
+			var corners_local = [
+				Vector2(local_x - cell_size.x / 2.0, local_y - cell_size.y / 2.0),
+				Vector2(local_x + cell_size.x / 2.0, local_y - cell_size.y / 2.0),
+				Vector2(local_x + cell_size.x / 2.0, local_y + cell_size.y / 2.0),
+				Vector2(local_x - cell_size.x / 2.0, local_y + cell_size.y / 2.0)
 			]
 
-			# All corners must be inside table bounds
-			var all_inside = true
-			for corner in corners:
-				if abs(corner.x) > half_table.x or abs(corner.y) > half_table.y:
-					all_inside = false
-					break
+			var corners_rotated = []
+			var any_inside = false
+			for corner in corners_local:
+				var rotated = rotate_point.call(corner)
+				corners_rotated.append(rotated)
+				# Check if any corner is inside table bounds
+				if grid_rect.has_point(rotated):
+					any_inside = true
 
-			if not all_inside:
-				continue  # Skip cells that extend outside table
+			# Skip if no corners are inside table
+			if not any_inside:
+				continue
 
 			var terrain_type = map_layout.grid_cells.get(cell_pos, map_layout.TerrainType.NONE)
 			var color = map_layout.TERRAIN_COLORS[terrain_type]
 
-			# Fill cell
-			draw_rect(rect, color, true)
+			# Draw filled polygon for cell
+			draw_colored_polygon(PackedVector2Array(corners_rotated), color)
 
 			# Draw cell border
-			draw_rect(rect, Color(0.4, 0.4, 0.4, 0.5), false, 1.0)
+			for i in range(4):
+				var next_i = (i + 1) % 4
+				draw_line(corners_rotated[i], corners_rotated[next_i], Color(0.4, 0.4, 0.4, 0.5), 1.0)
 
 			# Draw special markers for Ruins (blue border lines for impassable walls)
 			if terrain_type == map_layout.TerrainType.RUINS:
-				var inset = 3.0
-				var inner_rect = Rect2(rect_pos + Vector2(inset, inset), cell_size - Vector2(inset * 2, inset * 2))
-				draw_rect(inner_rect, Color(0.2, 0.4, 0.9, 0.9), false, 2.0)
+				var inset_ratio = 0.15  # 15% inset
+				var center_cell = Vector2.ZERO
+				for corner in corners_rotated:
+					center_cell += corner
+				center_cell /= 4.0
 
-	# Draw grid lines (also rotated)
+				var inner_corners = []
+				for corner in corners_rotated:
+					var dir = (corner - center_cell) * (1.0 - inset_ratio)
+					inner_corners.append(center_cell + dir)
+
+				for i in range(4):
+					var next_i = (i + 1) % 4
+					draw_line(inner_corners[i], inner_corners[next_i], Color(0.2, 0.4, 0.9, 0.9), 2.0)
+
+	# Draw grid lines with manual rotation and clipping
 	var line_color = Color(0.6, 0.6, 0.6, 0.4)
 	var major_color = Color(1.0, 1.0, 1.0, 0.6)
 
-	# Vertical lines - only draw within table bounds
+	# Vertical lines (centered on intersection point)
 	for x in range(grid_dims.x + 1):
 		var line_x = (x - half_grid_cells.x) * cell_size.x
-		# Clip line to table bounds
-		if abs(line_x) > half_table.x:
-			continue
-		var start = Vector2(line_x, -half_table.y)
-		var end = Vector2(line_x, half_table.y)
-		var is_major = (x % 4 == 0)
-		draw_line(start, end, major_color if is_major else line_color, 2.0 if is_major else 1.0)
 
-	# Horizontal lines - only draw within table bounds
+		# Create line in local space (long enough to cover table at any rotation)
+		var line_length = grid_rect.size.length()
+		var start_local = Vector2(line_x, -line_length)
+		var end_local = Vector2(line_x, line_length)
+
+		# Rotate line
+		var start = rotate_point.call(start_local)
+		var end = rotate_point.call(end_local)
+
+		# Clip to table bounds
+		var clipped = _clip_line_to_rect(start, end, grid_rect)
+		if clipped:
+			var is_major = (x % 4 == 0)
+			draw_line(clipped[0], clipped[1], major_color if is_major else line_color, 2.0 if is_major else 1.0)
+
+	# Horizontal lines (centered on intersection point)
 	for y in range(grid_dims.y + 1):
 		var line_y = (y - half_grid_cells.y) * cell_size.y
-		# Clip line to table bounds
-		if abs(line_y) > half_table.y:
-			continue
-		var start = Vector2(-half_table.x, line_y)
-		var end = Vector2(half_table.x, line_y)
-		var is_major = (y % 4 == 0)
-		draw_line(start, end, major_color if is_major else line_color, 2.0 if is_major else 1.0)
 
-	# Reset transform for deployment zones and objectives (they should be axis-aligned)
-	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
+		# Create line in local space
+		var line_length = grid_rect.size.length()
+		var start_local = Vector2(-line_length, line_y)
+		var end_local = Vector2(line_length, line_y)
+
+		# Rotate line
+		var start = rotate_point.call(start_local)
+		var end = rotate_point.call(end_local)
+
+		# Clip to table bounds
+		var clipped = _clip_line_to_rect(start, end, grid_rect)
+		if clipped:
+			var is_major = (y % 4 == 0)
+			draw_line(clipped[0], clipped[1], major_color if is_major else line_color, 2.0 if is_major else 1.0)
 
 	# Draw deployment zones (if enabled)
 	if map_layout.show_deployment_zones:
