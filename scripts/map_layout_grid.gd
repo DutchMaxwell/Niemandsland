@@ -74,15 +74,15 @@ func _draw() -> void:
 	for x in range(grid_dims.x):
 		for y in range(grid_dims.y):
 			var cell_pos = Vector2i(x, y)
-			# Position relative to grid center
+			# Position relative to grid center (grid centered on intersection, cells offset by 0.5)
 			var rect_pos = Vector2(
-				(x - half_grid_cells.x) * cell_size.x,
-				(y - half_grid_cells.y) * cell_size.y
+				(x - half_grid_cells.x + 0.5) * cell_size.x,
+				(y - half_grid_cells.y + 0.5) * cell_size.y
 			)
 			var rect = Rect2(rect_pos, cell_size)
 
-			# Check if this cell's corners are within table bounds (more accurate clipping)
-			# Since we're in rotated space, check against non-rotated table bounds
+			# Check if cell is FULLY within table bounds (all corners inside)
+			# This prevents drawing cells that extend outside the table border
 			var corners = [
 				rect_pos,
 				rect_pos + Vector2(cell_size.x, 0),
@@ -90,15 +90,15 @@ func _draw() -> void:
 				rect_pos + Vector2(cell_size.x, cell_size.y)
 			]
 
-			# Skip if all corners are outside table bounds
-			var any_inside = false
+			# All corners must be inside table bounds
+			var all_inside = true
 			for corner in corners:
-				if abs(corner.x) <= half_table.x and abs(corner.y) <= half_table.y:
-					any_inside = true
+				if abs(corner.x) > half_table.x or abs(corner.y) > half_table.y:
+					all_inside = false
 					break
 
-			if not any_inside:
-				continue  # Skip cells completely outside table
+			if not all_inside:
+				continue  # Skip cells that extend outside table
 
 			var terrain_type = map_layout.grid_cells.get(cell_pos, map_layout.TerrainType.NONE)
 			var color = map_layout.TERRAIN_COLORS[terrain_type]

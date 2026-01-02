@@ -136,7 +136,6 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 	# Table bounds for culling cells outside the table
 	var table_width_m = table_size_feet.x * 12.0 * INCHES_TO_METERS
 	var table_depth_m = table_size_feet.y * 12.0 * INCHES_TO_METERS
-	var max_extent = max(table_width_m, table_depth_m) / 2.0 * 1.1  # 10% tolerance
 
 	# Create a mesh for each terrain cell
 	for cell_pos in grid_cells:
@@ -146,7 +145,8 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 
 		var color = TERRAIN_COLORS.get(terrain_type, Color.WHITE)
 
-		# Calculate position in grid coordinates (centered, before rotation)
+		# Calculate cell center position in grid coordinates (grid centered on intersection)
+		# Cells are offset by 0.5 from intersection points
 		var local_x = (cell_pos.x - grid_dims.x / 2.0 + 0.5) * cell_size_meters
 		var local_z = (cell_pos.y - grid_dims.y / 2.0 + 0.5) * cell_size_meters
 
@@ -154,9 +154,9 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 		var rotated_x = local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
 		var rotated_z = local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
 
-		# Skip cells that are outside table bounds (after rotation)
-		var dist_from_center = sqrt(rotated_x * rotated_x + rotated_z * rotated_z)
-		if dist_from_center > max_extent:
+		# Skip cells that extend outside table bounds (check cell must be fully within)
+		var half_cell = cell_size_meters / 2.0
+		if abs(rotated_x) + half_cell > table_width_m / 2.0 or abs(rotated_z) + half_cell > table_depth_m / 2.0:
 			continue
 
 		var mesh_instance = _create_cell_mesh(Vector3(rotated_x, 0, rotated_z), cell_size_meters, color, rotation_degrees)
