@@ -209,14 +209,12 @@ func _calculate_grid_dimensions() -> Vector2i:
 	var width_inches = table_size_feet.x * 12.0
 	var height_inches = table_size_feet.y * 12.0
 
-	# Calculate diagonal to ensure grid covers table at any rotation
-	# This makes the grid large enough so rotation doesn't create gaps
-	var diagonal = sqrt(width_inches * width_inches + height_inches * height_inches)
-
-	# Use diagonal for both dimensions to create a square grid that covers the table
-	var grid_size = int(ceil(diagonal / GRID_SIZE_INCHES))
-
-	return Vector2i(grid_size, grid_size)
+	# Grid dimensions based on table size (e.g., 72"÷3" = 24, 48"÷3" = 16)
+	# When rotated, corners will extend outside - clipping handles this
+	return Vector2i(
+		int(ceil(width_inches / GRID_SIZE_INCHES)),
+		int(ceil(height_inches / GRID_SIZE_INCHES))
+	)
 
 
 func _update_stats() -> void:

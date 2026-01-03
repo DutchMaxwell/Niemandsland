@@ -123,12 +123,13 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 	if grid_cells.is_empty():
 		return
 
-	# Calculate grid dimensions using diagonal to cover table at any rotation
+	# Calculate grid dimensions based on table size (e.g., 72"÷3" = 24, 48"÷3" = 16)
 	var width_inches = table_size_feet.x * 12.0
 	var height_inches = table_size_feet.y * 12.0
-	var diagonal = sqrt(width_inches * width_inches + height_inches * height_inches)
-	var grid_size = int(ceil(diagonal / GRID_SIZE_INCHES))
-	var grid_dims = Vector2i(grid_size, grid_size)
+	var grid_dims = Vector2i(
+		int(ceil(width_inches / GRID_SIZE_INCHES)),
+		int(ceil(height_inches / GRID_SIZE_INCHES))
+	)
 
 	var cell_size_meters = GRID_SIZE_INCHES * INCHES_TO_METERS
 	var rotation_rad = deg_to_rad(rotation_degrees)
@@ -935,12 +936,13 @@ func get_terrain_at_world_position(world_pos: Vector3) -> int:
 	if grid_cells.is_empty():
 		return TerrainType.NONE
 
-	# Calculate grid dimensions using diagonal (same as update_overlay)
+	# Calculate grid dimensions based on table size (same as update_overlay)
 	var width_inches = table_size_feet.x * 12.0
 	var height_inches = table_size_feet.y * 12.0
-	var diagonal = sqrt(width_inches * width_inches + height_inches * height_inches)
-	var grid_size = int(ceil(diagonal / GRID_SIZE_INCHES))
-	var grid_dims = Vector2i(grid_size, grid_size)
+	var grid_dims = Vector2i(
+		int(ceil(width_inches / GRID_SIZE_INCHES)),
+		int(ceil(height_inches / GRID_SIZE_INCHES))
+	)
 
 	var cell_size_meters = GRID_SIZE_INCHES * INCHES_TO_METERS
 	var rotation_rad = deg_to_rad(grid_rotation_degrees)
