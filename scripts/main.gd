@@ -1336,8 +1336,20 @@ func _on_map_layout_closed() -> void:
 
 ## Update terrain overlay when map layout changes
 func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2, grid_rotation: float) -> void:
-	if terrain_overlay and terrain_overlay.has_method("update_overlay"):
-		terrain_overlay.update_overlay(grid_cells, table_size, grid_rotation)
+	print("Main._on_map_layout_updated: grid_cells=%d, table_size=(%.1f, %.1f), rotation=%.1f°" % [
+		grid_cells.size(), table_size.x, table_size.y, grid_rotation
+	])
+
+	if not terrain_overlay:
+		print("  ERROR: terrain_overlay is null!")
+		return
+
+	if not terrain_overlay.has_method("update_overlay"):
+		print("  ERROR: terrain_overlay doesn't have update_overlay method!")
+		return
+
+	terrain_overlay.update_overlay(grid_cells, table_size, grid_rotation)
+	print("  Successfully called terrain_overlay.update_overlay()")
 
 
 ## ============================================================================
