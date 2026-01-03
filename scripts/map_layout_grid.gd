@@ -289,7 +289,7 @@ func _draw_deployment_zones(grid_rect: Rect2) -> void:
 
 	var table_size_inches = map_layout.table_size_feet * 12.0
 	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
-	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
+	var _pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
 
 	var zone_color_p1 = Color(0.2, 0.5, 1.0, 0.2)  # Blue for player 1
 	var zone_color_p2 = Color(1.0, 0.3, 0.3, 0.2)  # Red for player 2

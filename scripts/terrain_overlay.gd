@@ -97,10 +97,10 @@ func clear_overlay() -> void:
 
 ## Update terrain overlay based on map layout
 ##
-## @param grid_cells: Dictionary mapping Vector2i cell positions to terrain types
+## @param cells_data: Dictionary mapping Vector2i cell positions to terrain types
 ## @param table_size: Table dimensions in feet (Vector2)
-## @param rotation_degrees: Grid rotation angle in degrees
-func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degrees: float) -> void:
+## @param grid_rotation: Grid rotation angle in degrees
+func update_overlay(cells_data: Dictionary, table_size: Vector2, grid_rotation: float) -> void:
 	# Validate inputs
 	if not is_instance_valid(self):
 		push_error("TerrainOverlay: Invalid instance during update")
@@ -112,17 +112,17 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 
 	clear_overlay()
 	table_size_feet = table_size
-	grid_rotation_degrees = rotation_degrees
+	grid_rotation_degrees = grid_rotation
 
-	print("TerrainOverlay.update_overlay: rotation = %.1f°, cells = %d" % [rotation_degrees, grid_cells.size()])
+	print("TerrainOverlay.update_overlay: rotation = %.1f°, cells = %d" % [grid_rotation, cells_data.size()])
 
 	# Store grid_cells for terrain lookup
-	self.grid_cells = grid_cells
+	self.grid_cells = cells_data
 
 	# Update deployment zones when table size changes
 	_update_deployment_zones()
 
-	if grid_cells.is_empty():
+	if cells_data.is_empty():
 		return
 
 	# Use diagonal to ensure grid covers entire table at any rotation
@@ -138,7 +138,7 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 	var grid_dims = Vector2i(grid_size, grid_size)
 
 	var cell_size_meters = GRID_SIZE_INCHES * INCHES_TO_METERS
-	var rotation_rad = deg_to_rad(rotation_degrees)
+	var rotation_rad = deg_to_rad(grid_rotation)
 
 	# Table bounds for culling cells outside the table
 	var table_width_m = table_size_feet.x * 12.0 * INCHES_TO_METERS
@@ -149,8 +149,8 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 		return abs(x) <= table_width_m / 2.0 and abs(z) <= table_depth_m / 2.0
 
 	# Create a mesh for each terrain cell
-	for cell_pos in grid_cells:
-		var terrain_type = grid_cells[cell_pos]
+	for cell_pos in cells_data:
+		var terrain_type = cells_data[cell_pos]
 		if terrain_type == TerrainType.NONE:
 			continue
 
@@ -188,7 +188,7 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 		var rotated_z = local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
 
 		# Create mesh at rotated position WITH rotation to match grid
-		var mesh_instance = _create_cell_mesh(Vector3(rotated_x, 0, rotated_z), cell_size_meters, color, rotation_degrees)
+		var mesh_instance = _create_cell_mesh(Vector3(rotated_x, 0, rotated_z), cell_size_meters, color, grid_rotation)
 		add_child(mesh_instance)
 		overlay_meshes.append(mesh_instance)
 
@@ -198,25 +198,25 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 ## Creates a flat quad mesh with transparent colored material
 ##
 ## @param pos: World position for the mesh center (already rotated)
-## @param size: Cell size in meters
+## @param cell_size: Cell size in meters
 ## @param color: Terrain color with alpha for transparency
-## @param rotation_degrees: Grid rotation for the mesh itself
+## @param grid_rotation: Grid rotation for the mesh itself
 ## @return: Configured MeshInstance3D ready to be added to scene tree
-func _create_cell_mesh(pos: Vector3, size: float, color: Color, rotation_degrees: float = 0.0) -> MeshInstance3D:
+func _create_cell_mesh(pos: Vector3, cell_size: float, color: Color, grid_rotation: float = 0.0) -> MeshInstance3D:
 	var mesh_instance = MeshInstance3D.new()
 
 	# Create a flat quad (slightly smaller to show grid lines between cells)
 	var plane_mesh = PlaneMesh.new()
-	plane_mesh.size = Vector2(size * CELL_SIZE_REDUCTION, size * CELL_SIZE_REDUCTION)
+	plane_mesh.size = Vector2(cell_size * CELL_SIZE_REDUCTION, cell_size * CELL_SIZE_REDUCTION)
 
 	mesh_instance.mesh = plane_mesh
 	mesh_instance.position = pos
 	# Negate rotation because Godot Y-axis rotation is clockwise (viewed from above)
 	# while our position rotation is counter-clockwise
-	mesh_instance.rotation.y = -deg_to_rad(rotation_degrees)
+	mesh_instance.rotation.y = -deg_to_rad(grid_rotation)
 
-	if rotation_degrees != 0:
-		print("  Created cell mesh: pos=(%.2f, %.2f, %.2f), rotation_y=%.1f° (negated)" % [pos.x, pos.y, pos.z, -rotation_degrees])
+	if grid_rotation != 0:
+		print("  Created cell mesh: pos=(%.2f, %.2f, %.2f), rotation_y=%.1f° (negated)" % [pos.x, pos.y, pos.z, -grid_rotation])
 
 	# Create transparent, unshaded material
 	var material = StandardMaterial3D.new()
@@ -387,7 +387,7 @@ func _create_side_battle_zones(table_width: float, table_depth: float) -> void:
 
 
 ## Disordered - Two 15" radius circles
-func _create_disordered_zones(table_width: float, table_depth: float) -> void:
+func _create_disordered_zones(_table_width: float, table_depth: float) -> void:
 	var radius = 15.0 * INCHES_TO_METERS
 	var circle_offset = table_depth / 4  # Place circles 1/4 from edges
 
@@ -742,7 +742,7 @@ func _create_tactical_push_zones(table_width: float, table_depth: float) -> void
 
 
 ## Meeting Engagement - Center rectangle zones
-func _create_meeting_engagement_zones(table_width: float, table_depth: float) -> void:
+func _create_meeting_engagement_zones(_table_width: float, _table_depth: float) -> void:
 	var zone_width = 24.0 * INCHES_TO_METERS
 	var zone_height = 18.0 * INCHES_TO_METERS
 	var separation = 6.0 * INCHES_TO_METERS
