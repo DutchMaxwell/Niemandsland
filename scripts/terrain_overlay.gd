@@ -185,8 +185,8 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 		var rotated_x = local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
 		var rotated_z = local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
 
-		# Create mesh at rotated position, but without individual rotation
-		var mesh_instance = _create_cell_mesh(Vector3(rotated_x, 0, rotated_z), cell_size_meters, color, 0.0)
+		# Create mesh at rotated position WITH rotation to match grid
+		var mesh_instance = _create_cell_mesh(Vector3(rotated_x, 0, rotated_z), cell_size_meters, color, rotation_degrees)
 		add_child(mesh_instance)
 		overlay_meshes.append(mesh_instance)
 
