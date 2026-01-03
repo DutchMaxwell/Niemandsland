@@ -211,7 +211,8 @@ func set_table_size(size_feet: Vector2) -> void:
 
 	grid_container.queue_redraw()
 	_update_stats()
-	_emit_layout_update()  # Notify 3D view of table size change
+	# NOTE: Don't emit layout_updated here - it may be called during initialization
+	# before terrain_overlay exists. Updates are sent when user closes editor.
 
 
 func _calculate_grid_dimensions() -> Vector2i:
