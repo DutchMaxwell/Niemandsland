@@ -915,3 +915,12 @@ func get_cells_for_overlay() -> Array:
 		})
 
 	return result
+
+
+## Get current layout data (for table size changes)
+func get_current_layout() -> Dictionary:
+	return {
+		"grid_cells": grid_cells.duplicate(),
+		"table_size": table_size_feet,
+		"rotation": grid_rotation_degrees
+	}
