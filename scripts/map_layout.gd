@@ -209,12 +209,12 @@ func _calculate_grid_dimensions() -> Vector2i:
 	var width_inches = table_size_feet.x * 12.0
 	var height_inches = table_size_feet.y * 12.0
 
-	# Grid dimensions based on table size (e.g., 72"÷3" = 24, 48"÷3" = 16)
-	# When rotated, corners will extend outside - clipping handles this
-	return Vector2i(
-		int(ceil(width_inches / GRID_SIZE_INCHES)),
-		int(ceil(height_inches / GRID_SIZE_INCHES))
-	)
+	# Use diagonal to ensure grid covers entire table at any rotation
+	# This prevents gaps in corners when rotated (e.g., 29x29 for 72x48 table)
+	var diagonal = sqrt(width_inches * width_inches + height_inches * height_inches)
+	var grid_size = int(ceil(diagonal / GRID_SIZE_INCHES))
+
+	return Vector2i(grid_size, grid_size)
 
 
 func _update_stats() -> void:
@@ -701,16 +701,18 @@ func _is_cell_within_table_bounds(cell_pos: Vector2i, grid_dims: Vector2i) -> bo
 	var table_width_inches = table_size_feet.x * 12.0
 	var table_height_inches = table_size_feet.y * 12.0
 
-	# Apply rotation and check if at least one corner is inside table
+	# Apply rotation and check if ALL corners are inside table
+	# For terrain placement, cells must be fully within bounds
 	var rotation_rad = deg_to_rad(grid_rotation_degrees)
 	for corner in corners_local:
 		var rotated_x = corner.x * cos(rotation_rad) - corner.y * sin(rotation_rad)
 		var rotated_y = corner.x * sin(rotation_rad) + corner.y * cos(rotation_rad)
 
-		if abs(rotated_x) <= table_width_inches / 2.0 and abs(rotated_y) <= table_height_inches / 2.0:
-			return true  # At least one corner inside
+		# If ANY corner is outside, cell is not valid for terrain placement
+		if abs(rotated_x) > table_width_inches / 2.0 or abs(rotated_y) > table_height_inches / 2.0:
+			return false
 
-	return false  # No corners inside table
+	return true  # All corners inside table
 
 
 ## Place a piece on the grid
