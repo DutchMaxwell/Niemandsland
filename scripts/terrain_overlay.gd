@@ -185,7 +185,8 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 		var rotated_x = local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
 		var rotated_z = local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
 
-		var mesh_instance = _create_cell_mesh(Vector3(rotated_x, 0, rotated_z), cell_size_meters, color, rotation_degrees)
+		# Create mesh at rotated position, but without individual rotation
+		var mesh_instance = _create_cell_mesh(Vector3(rotated_x, 0, rotated_z), cell_size_meters, color, 0.0)
 		add_child(mesh_instance)
 		overlay_meshes.append(mesh_instance)
 
@@ -194,10 +195,10 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 ##
 ## Creates a flat quad mesh with transparent colored material
 ##
-## @param pos: World position for the mesh center
+## @param pos: World position for the mesh center (already rotated)
 ## @param size: Cell size in meters
 ## @param color: Terrain color with alpha for transparency
-## @param rotation_degrees: Rotation angle to match grid orientation
+## @param rotation_degrees: Grid rotation for the mesh itself
 ## @return: Configured MeshInstance3D ready to be added to scene tree
 func _create_cell_mesh(pos: Vector3, size: float, color: Color, rotation_degrees: float = 0.0) -> MeshInstance3D:
 	var mesh_instance = MeshInstance3D.new()
@@ -208,7 +209,7 @@ func _create_cell_mesh(pos: Vector3, size: float, color: Color, rotation_degrees
 
 	mesh_instance.mesh = plane_mesh
 	mesh_instance.position = pos
-	mesh_instance.rotation.y = deg_to_rad(rotation_degrees)  # Rotate to match grid
+	mesh_instance.rotation.y = deg_to_rad(rotation_degrees)
 
 	# Create transparent, unshaded material
 	var material = StandardMaterial3D.new()
