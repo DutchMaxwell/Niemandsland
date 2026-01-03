@@ -189,8 +189,12 @@ func update_overlay(cells_data: Dictionary, table_size: Vector2, grid_rotation: 
 
 		# Create mesh at rotated position WITH rotation to match grid
 		var mesh_instance = _create_cell_mesh(Vector3(rotated_x, 0, rotated_z), cell_size_meters, color, grid_rotation)
+		mesh_instance.visible = true  # Ensure mesh is visible
 		add_child(mesh_instance)
 		overlay_meshes.append(mesh_instance)
+
+	print("TerrainOverlay: Created %d mesh instances from %d cells_data entries" % [overlay_meshes.size(), cells_data.size()])
+	print("  Visible: %s, Position: (%.2f, %.2f, %.2f)" % [visible, position.x, position.y, position.z])
 
 
 ## Create a mesh instance for a single terrain cell
@@ -214,9 +218,6 @@ func _create_cell_mesh(pos: Vector3, cell_size: float, color: Color, grid_rotati
 	# Negate rotation because Godot Y-axis rotation is clockwise (viewed from above)
 	# while our position rotation is counter-clockwise
 	mesh_instance.rotation.y = -deg_to_rad(grid_rotation)
-
-	if grid_rotation != 0:
-		print("  Created cell mesh: pos=(%.2f, %.2f, %.2f), rotation_y=%.1f° (negated)" % [pos.x, pos.y, pos.z, -grid_rotation])
 
 	# Create transparent, unshaded material
 	var material = StandardMaterial3D.new()
