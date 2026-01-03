@@ -73,83 +73,84 @@ layout_mode = 2
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="LeftPanel" type="VBoxContainer" parent="MarginContainer/VBox/MainContent"]
+[node name="LeftPanelScroll" type="ScrollContainer" parent="MarginContainer/VBox/MainContent"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 0.3
+horizontal_scroll_mode = 0
 
-[node name="TerrainLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+[node name="LeftPanel" type="VBoxContainer" parent="MarginContainer/VBox/MainContent/LeftPanelScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="TerrainLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
 text = "Terrain Types"
 
-[node name="TerrainButtons" type="VBoxContainer" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+[node name="TerrainButtons" type="VBoxContainer" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="HSeparator2" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+[node name="HSeparator2" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
 layout_mode = 2
 
-[node name="RotationLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+[node name="RotationLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Rotation: 0°"
 
-[node name="RotationSlider" type="HSlider" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+[node name="RotationSlider" type="HSlider" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 360.0
 step = 1.0
 
-[node name="SymmetryCheck" type="CheckBox" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+[node name="SymmetryCheck" type="CheckBox" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Point Symmetry (Mirror)"
 
-[node name="HSeparator3" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+[node name="HSeparator3" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
 layout_mode = 2
 
-[node name="AutoGenButton" type="Button" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+[node name="AutoGenButton" type="Button" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.2, 1, 0.4, 1)
 theme_override_font_sizes/font_size = 16
 text = "🎲 Auto-Generate Layout"
 
-[node name="HSeparator3b" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+[node name="HSeparator3b" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
 layout_mode = 2
 
-[node name="DeploymentCheck" type="CheckBox" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+[node name="DeploymentCheck" type="CheckBox" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Show Deployment Zones (6\")"
 
-[node name="ObjectivesCheck" type="CheckBox" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+[node name="ObjectivesCheck" type="CheckBox" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 text = "Show Objectives"
 
-[node name="HSeparator3c" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+[node name="HSeparator3c" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
 layout_mode = 2
 
-[node name="StatsLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+[node name="StatsLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Current Coverage:"
 
-[node name="HSeparator4" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+[node name="HSeparator4" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
 layout_mode = 2
 
-[node name="RecommendationsLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanel"]
+[node name="RecommendationsLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.8, 0.4, 1)
 text = "OPR Recommendations:"
-
-[node name="Spacer" type="Control" parent="MarginContainer/VBox/MainContent/LeftPanel"]
-layout_mode = 2
-size_flags_vertical = 3
 
 [node name="GridPanel" type="PanelContainer" parent="MarginContainer/VBox/MainContent"]
 layout_mode = 2
