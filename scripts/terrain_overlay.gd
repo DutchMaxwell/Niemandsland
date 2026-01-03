@@ -211,10 +211,12 @@ func _create_cell_mesh(pos: Vector3, size: float, color: Color, rotation_degrees
 
 	mesh_instance.mesh = plane_mesh
 	mesh_instance.position = pos
-	mesh_instance.rotation.y = deg_to_rad(rotation_degrees)
+	# Negate rotation because Godot Y-axis rotation is clockwise (viewed from above)
+	# while our position rotation is counter-clockwise
+	mesh_instance.rotation.y = -deg_to_rad(rotation_degrees)
 
 	if rotation_degrees != 0:
-		print("  Created cell mesh: pos=(%.2f, %.2f, %.2f), rotation_y=%.1f°" % [pos.x, pos.y, pos.z, rotation_degrees])
+		print("  Created cell mesh: pos=(%.2f, %.2f, %.2f), rotation_y=%.1f° (negated)" % [pos.x, pos.y, pos.z, -rotation_degrees])
 
 	# Create transparent, unshaded material
 	var material = StandardMaterial3D.new()
