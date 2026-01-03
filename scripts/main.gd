@@ -1335,9 +1335,9 @@ func _on_map_layout_closed() -> void:
 
 
 ## Update terrain overlay when map layout changes
-func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2, rotation: float) -> void:
+func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2, grid_rotation: float) -> void:
 	if terrain_overlay and terrain_overlay.has_method("update_overlay"):
-		terrain_overlay.update_overlay(grid_cells, table_size, rotation)
+		terrain_overlay.update_overlay(grid_cells, table_size, grid_rotation)
 
 
 ## ============================================================================
@@ -1423,12 +1423,12 @@ func _on_deployment_zone_selected(index: int) -> void:
 
 
 ## Handle deployment zone visibility toggle
-func _on_deployment_zones_visibility_toggled(is_visible: bool) -> void:
+func _on_deployment_zones_visibility_toggled(show_zones: bool) -> void:
 	if not terrain_overlay or not terrain_overlay.has_method("set_deployment_zones_visible"):
 		return
 
-	terrain_overlay.set_deployment_zones_visible(is_visible)
-	print("Deployment zones visibility: %s" % ("visible" if is_visible else "hidden"))
+	terrain_overlay.set_deployment_zones_visible(show_zones)
+	print("Deployment zones visibility: %s" % ("visible" if show_zones else "hidden"))
 
 
 ## Handle deployment mode toggle

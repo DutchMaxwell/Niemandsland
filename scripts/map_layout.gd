@@ -249,7 +249,7 @@ func _update_stats() -> void:
 	var coverage_pct = (float(terrain_cells) / total_cells) * 100.0 if total_cells > 0 else 0.0
 
 	# Blocking LOS = everything that provides cover (Ruins, Forest, Container)
-	var blocking_cells = counts[TerrainType.RUINS] + counts[TerrainType.FOREST] + counts[TerrainType.CONTAINER]
+	var _blocking_cells = counts[TerrainType.RUINS] + counts[TerrainType.FOREST] + counts[TerrainType.CONTAINER]
 	var blocking_pieces = piece_counts[TerrainType.RUINS] + piece_counts[TerrainType.FOREST] + piece_counts[TerrainType.CONTAINER]
 
 	# Cover = Ruins, Forest, Container
@@ -641,32 +641,32 @@ func _try_generate_layout() -> bool:
 
 
 ## Mirror a position across the grid center (point symmetry)
-## For a piece at position pos with given size, returns the mirrored top-left corner position
-func _mirror_position(pos: Vector2i, size: Vector2i, grid_dims: Vector2i) -> Vector2i:
+## For a piece at position pos with given piece_size, returns the mirrored top-left corner position
+func _mirror_position(pos: Vector2i, piece_size: Vector2i, grid_dims: Vector2i) -> Vector2i:
 	# Point symmetry: reflect across center (180° rotation)
 	# Mirror the top-left corner of the piece
-	return Vector2i(grid_dims.x - pos.x - size.x, grid_dims.y - pos.y - size.y)
+	return Vector2i(grid_dims.x - pos.x - piece_size.x, grid_dims.y - pos.y - piece_size.y)
 
 
 ## Check if a piece can be placed without overlapping existing pieces
 ## Enforces 3" (1 cell) minimum spacing between all terrain pieces
-func _can_place_piece(pos: Vector2i, size: Vector2i, existing_pieces: Array) -> bool:
+func _can_place_piece(pos: Vector2i, piece_size: Vector2i, existing_pieces: Array) -> bool:
 	# Check bounds
 	var grid_dims = _calculate_grid_dimensions()
-	if pos.x + size.x > grid_dims.x or pos.y + size.y > grid_dims.y:
+	if pos.x + piece_size.x > grid_dims.x or pos.y + piece_size.y > grid_dims.y:
 		return false
 	if pos.x < 0 or pos.y < 0:
 		return false
 
 	# Check if ALL cells of this piece are within table bounds (after rotation)
-	for x in range(size.x):
-		for y in range(size.y):
+	for x in range(piece_size.x):
+		for y in range(piece_size.y):
 			var cell_pos = pos + Vector2i(x, y)
 			if not _is_cell_within_table_bounds(cell_pos, grid_dims):
 				return false  # Piece extends outside table
 
 	# Define piece rectangle
-	var piece_rect = Rect2i(pos, size)
+	var piece_rect = Rect2i(pos, piece_size)
 
 	# Check overlap with existing pieces
 	for piece in existing_pieces:
@@ -676,7 +676,7 @@ func _can_place_piece(pos: Vector2i, size: Vector2i, existing_pieces: Array) -> 
 
 	# Enforce minimum 3" spacing (1 cell = 3")
 	# Expand piece by 1 cell on all sides
-	var expanded_rect = Rect2i(pos - Vector2i(1, 1), size + Vector2i(2, 2))
+	var expanded_rect = Rect2i(pos - Vector2i(1, 1), piece_size + Vector2i(2, 2))
 	for piece in existing_pieces:
 		var other_rect = Rect2i(piece.pos, piece.size)
 		if expanded_rect.intersects(other_rect):
@@ -721,9 +721,9 @@ func _is_cell_within_table_bounds(cell_pos: Vector2i, grid_dims: Vector2i) -> bo
 
 
 ## Place a piece on the grid
-func _place_piece(pos: Vector2i, size: Vector2i, terrain_type: int) -> void:
-	for x in range(size.x):
-		for y in range(size.y):
+func _place_piece(pos: Vector2i, piece_size: Vector2i, terrain_type: int) -> void:
+	for x in range(piece_size.x):
+		for y in range(piece_size.y):
 			var cell_pos = pos + Vector2i(x, y)
 			grid_cells[cell_pos] = terrain_type
 
