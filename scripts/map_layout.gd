@@ -201,8 +201,15 @@ func _on_load_file_selected(path: String) -> void:
 
 func set_table_size(size_feet: Vector2) -> void:
 	table_size_feet = size_feet
+	print("MapLayout.set_table_size: (%.1f, %.1f) feet" % [size_feet.x, size_feet.y])
+
+	# Recalculate grid dimensions
+	var grid_dims = _calculate_grid_dimensions()
+	print("  Grid dimensions: %dx%d cells" % [grid_dims.x, grid_dims.y])
+
 	grid_container.queue_redraw()
 	_update_stats()
+	_emit_layout_update()  # Notify 3D view of table size change
 
 
 func _calculate_grid_dimensions() -> Vector2i:
@@ -560,15 +567,27 @@ func _try_generate_layout() -> bool:
 	}
 
 	var placed_pieces := []
-	var max_attempts = 200
+	var max_attempts = 500  # Increased for larger tables
 
 	# Place pieces with symmetry support
-	for terrain_type in target_pieces:
+	# Use explicit ordering to ensure all types are attempted
+	var terrain_order = [TerrainType.FOREST, TerrainType.RUINS, TerrainType.CONTAINER, TerrainType.DANGEROUS]
+	var pieces_placed_by_type := {}
+	var pieces_failed_by_type := {}
+
+	for terrain_type in terrain_order:
+		if not target_pieces.has(terrain_type):
+			continue
+
 		var count = target_pieces[terrain_type]
 		var templates = piece_templates[terrain_type]
+		var type_name = TerrainType.keys()[terrain_type]
 
 		# When symmetry is enabled, place half the pieces (they will be mirrored)
 		var pieces_to_place = count if not point_symmetry_enabled else int(ceil(count / 2.0))
+
+		pieces_placed_by_type[terrain_type] = 0
+		pieces_failed_by_type[terrain_type] = 0
 
 		for i in range(pieces_to_place):
 			var placed = false
@@ -577,31 +596,17 @@ func _try_generate_layout() -> bool:
 				var template = templates[randi() % templates.size()]
 
 				# Pick random position
-				var pos: Vector2i
-				if point_symmetry_enabled:
-					# Place anywhere in the grid (will check bounds later)
-					var max_x = grid_dims.x - template.x
-					var max_y = grid_dims.y - template.y
+				var max_x = grid_dims.x - template.x
+				var max_y = grid_dims.y - template.y
 
-					if max_x <= 0 or max_y <= 0:
-						continue
+				if max_x <= 0 or max_y <= 0:
+					print("  Template %dx%d too large for grid %dx%d" % [template.x, template.y, grid_dims.x, grid_dims.y])
+					break
 
-					pos = Vector2i(
-						randi() % (max_x + 1),
-						randi() % (max_y + 1)
-					)
-				else:
-					# Place anywhere
-					var max_x = grid_dims.x - template.x
-					var max_y = grid_dims.y - template.y
-
-					if max_x <= 0 or max_y <= 0:
-						continue
-
-					pos = Vector2i(
-						randi() % (max_x + 1),
-						randi() % (max_y + 1)
-					)
+				var pos = Vector2i(
+					randi() % (max_x + 1),
+					randi() % (max_y + 1)
+				)
 
 				# Check if placement is valid (3" minimum spacing)
 				if _can_place_piece(pos, template, placed_pieces):
@@ -619,25 +624,49 @@ func _try_generate_layout() -> bool:
 
 						_place_piece(mirrored_pos, template, terrain_type)
 						placed_pieces.append({"pos": mirrored_pos, "size": template, "type": terrain_type})
+
+						pieces_placed_by_type[terrain_type] += 2
 					else:
 						# No symmetry - just place the piece
 						_place_piece(pos, template, terrain_type)
 						placed_pieces.append({"pos": pos, "size": template, "type": terrain_type})
 
+						pieces_placed_by_type[terrain_type] += 1
+
 					placed = true
 					break
 
 			if not placed:
-				print("Failed to place %s piece %d/%d after %d attempts" % [
-					TerrainType.keys()[terrain_type], i + 1, pieces_to_place, max_attempts
+				pieces_failed_by_type[terrain_type] += 1
+				print("  Failed to place %s piece %d/%d after %d attempts" % [
+					type_name, i + 1, pieces_to_place, max_attempts
 				])
-				return false  # Failed to place all pieces
+				# Continue trying other pieces instead of failing immediately
 
-	print("Successfully placed all %d pieces (symmetry: %s)" % [
-		placed_pieces.size(),
-		"enabled" if point_symmetry_enabled else "disabled"
-	])
-	return true  # Successfully placed all pieces
+	# Print summary
+	print("Terrain placement summary (symmetry: %s):" % ("enabled" if point_symmetry_enabled else "disabled"))
+	var total_placed = 0
+	var total_failed = 0
+	for terrain_type in terrain_order:
+		if not pieces_placed_by_type.has(terrain_type):
+			continue
+		var type_name = TerrainType.keys()[terrain_type]
+		var placed = pieces_placed_by_type[terrain_type]
+		var failed = pieces_failed_by_type[terrain_type]
+		var target = target_pieces[terrain_type]
+		print("  %s: %d/%d placed (%d failed)" % [type_name, placed, target, failed])
+		total_placed += placed
+		total_failed += failed
+
+	print("Total: %d pieces placed, %d failed" % [total_placed, total_failed])
+
+	# Consider it successful if we placed at least 50% of target pieces
+	var min_required = 8  # Minimum 8 pieces total (half of 15-20 range)
+	if total_placed >= min_required:
+		return true
+	else:
+		print("  FAILED: Only placed %d pieces (minimum %d required)" % [total_placed, min_required])
+		return false
 
 
 ## Mirror a position across the grid center (point symmetry)
