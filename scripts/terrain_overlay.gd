@@ -128,6 +128,11 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 	var height_inches = table_size_feet.y * 12.0
 	var diagonal = sqrt(width_inches * width_inches + height_inches * height_inches)
 	var grid_size = int(ceil(diagonal / GRID_SIZE_INCHES))
+
+	# Round UP to even number for intersection point at center
+	if grid_size % 2 != 0:
+		grid_size += 1
+
 	var grid_dims = Vector2i(grid_size, grid_size)
 
 	var cell_size_meters = GRID_SIZE_INCHES * INCHES_TO_METERS
@@ -940,6 +945,11 @@ func get_terrain_at_world_position(world_pos: Vector3) -> int:
 	var height_inches = table_size_feet.y * 12.0
 	var diagonal = sqrt(width_inches * width_inches + height_inches * height_inches)
 	var grid_size = int(ceil(diagonal / GRID_SIZE_INCHES))
+
+	# Round UP to even number for intersection point at center
+	if grid_size % 2 != 0:
+		grid_size += 1
+
 	var grid_dims = Vector2i(grid_size, grid_size)
 
 	var cell_size_meters = GRID_SIZE_INCHES * INCHES_TO_METERS
