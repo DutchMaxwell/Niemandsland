@@ -2824,9 +2824,9 @@ func _duplicate_tts_object(original: Node3D) -> Node3D:
 ## Terrain System
 ## ============================================================================
 
-## Spawn terrain from TTS URLs at given position
+## Spawn terrain from TTS URLs at given spawn position
 ## Returns the spawned terrain object
-func spawn_tts_terrain(mesh_url: String, diffuse_url: String, tts_scale: Vector3, position: Vector3, terrain_name: String = "Terrain") -> Node3D:
+func spawn_tts_terrain(mesh_url: String, diffuse_url: String, tts_scale: Vector3, spawn_pos: Vector3, terrain_name: String = "Terrain") -> Node3D:
 	if mesh_url.is_empty():
 		push_error("spawn_tts_terrain: No mesh URL provided")
 		return null
@@ -2917,7 +2917,7 @@ func spawn_tts_terrain(mesh_url: String, diffuse_url: String, tts_scale: Vector3
 
 	# Add to scene
 	add_child(wrapper)
-	wrapper.global_position = position
+	wrapper.global_position = spawn_pos
 
 	print("  [OK] Terrain: %s" % terrain_name)
 	return wrapper
