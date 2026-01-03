@@ -296,7 +296,9 @@ func _ready() -> void:
 	terrain_overlay = Node3D.new()
 	terrain_overlay.set_script(overlay_script)
 	terrain_overlay.name = "TerrainOverlay"
+	terrain_overlay.visible = true  # Ensure it's visible
 	table.add_child(terrain_overlay)
+	print("TerrainOverlay initialized and added to table")
 
 	# Give object_manager reference to terrain_overlay for terrain hints
 	object_manager.terrain_overlay = terrain_overlay

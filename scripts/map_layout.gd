@@ -155,6 +155,8 @@ func _on_symmetry_toggled(enabled: bool) -> void:
 
 
 func _on_close_pressed() -> void:
+	# Send final update to 3D view before closing
+	_emit_layout_update()
 	layout_closed.emit()
 	hide()
 
