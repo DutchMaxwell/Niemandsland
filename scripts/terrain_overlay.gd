@@ -232,11 +232,11 @@ func _create_cell_mesh(pos: Vector3, size: float, color: Color, rotation_degrees
 
 ## Toggle visibility of all terrain overlay meshes
 ##
-## @param is_visible: true to show overlays, false to hide them
-func set_visible_overlay(is_visible: bool) -> void:
+## @param show_overlay: true to show overlays, false to hide them
+func set_visible_overlay(show_overlay: bool) -> void:
 	for mesh in overlay_meshes:
 		if is_instance_valid(mesh):
-			mesh.visible = is_visible
+			mesh.visible = show_overlay
 
 
 ## Set deployment zone type and create visualizations
@@ -249,12 +249,12 @@ func set_deployment_zones(deployment_type: int) -> void:
 
 ## Toggle visibility of deployment zones
 ##
-## @param is_visible: true to show deployment zones, false to hide them
-func set_deployment_zones_visible(is_visible: bool) -> void:
-	deployment_zones_visible = is_visible
+## @param show_zones: true to show deployment zones, false to hide them
+func set_deployment_zones_visible(show_zones: bool) -> void:
+	deployment_zones_visible = show_zones
 	for mesh in deployment_zone_meshes:
 		if is_instance_valid(mesh):
-			mesh.visible = is_visible
+			mesh.visible = show_zones
 
 
 ## Clear all deployment zone meshes
