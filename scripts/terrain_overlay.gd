@@ -114,6 +114,8 @@ func update_overlay(grid_cells: Dictionary, table_size: Vector2, rotation_degree
 	table_size_feet = table_size
 	grid_rotation_degrees = rotation_degrees
 
+	print("TerrainOverlay.update_overlay: rotation = %.1f°, cells = %d" % [rotation_degrees, grid_cells.size()])
+
 	# Store grid_cells for terrain lookup
 	self.grid_cells = grid_cells
 
@@ -210,6 +212,9 @@ func _create_cell_mesh(pos: Vector3, size: float, color: Color, rotation_degrees
 	mesh_instance.mesh = plane_mesh
 	mesh_instance.position = pos
 	mesh_instance.rotation.y = deg_to_rad(rotation_degrees)
+
+	if rotation_degrees != 0:
+		print("  Created cell mesh: pos=(%.2f, %.2f, %.2f), rotation_y=%.1f°" % [pos.x, pos.y, pos.z, rotation_degrees])
 
 	# Create transparent, unshaded material
 	var material = StandardMaterial3D.new()
