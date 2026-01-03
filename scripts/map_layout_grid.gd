@@ -93,16 +93,16 @@ func _draw() -> void:
 			]
 
 			var corners_rotated = []
-			var any_inside = false
+			var all_inside = true
 			for corner in corners_local:
 				var rotated = rotate_point.call(corner)
 				corners_rotated.append(rotated)
-				# Check if any corner is inside table bounds
-				if grid_rect.has_point(rotated):
-					any_inside = true
+				# Check if ALL corners are inside table bounds
+				if not grid_rect.has_point(rotated):
+					all_inside = false
 
-			# Skip if no corners are inside table
-			if not any_inside:
+			# Skip if any corner is outside table
+			if not all_inside:
 				continue
 
 			var terrain_type = map_layout.grid_cells.get(cell_pos, map_layout.TerrainType.NONE)
@@ -135,7 +135,6 @@ func _draw() -> void:
 
 	# Draw grid lines with manual rotation and clipping
 	var line_color = Color(0.6, 0.6, 0.6, 0.4)
-	var major_color = Color(1.0, 1.0, 1.0, 0.6)
 
 	# Vertical lines (centered on intersection point)
 	for x in range(grid_dims.x + 1):
@@ -153,8 +152,7 @@ func _draw() -> void:
 		# Clip to table bounds
 		var clipped = _clip_line_to_rect(start, end, grid_rect)
 		if clipped:
-			var is_major = (x % 4 == 0)
-			draw_line(clipped[0], clipped[1], major_color if is_major else line_color, 2.0 if is_major else 1.0)
+			draw_line(clipped[0], clipped[1], line_color, 1.0)
 
 	# Horizontal lines (centered on intersection point)
 	for y in range(grid_dims.y + 1):
@@ -172,8 +170,7 @@ func _draw() -> void:
 		# Clip to table bounds
 		var clipped = _clip_line_to_rect(start, end, grid_rect)
 		if clipped:
-			var is_major = (y % 4 == 0)
-			draw_line(clipped[0], clipped[1], major_color if is_major else line_color, 2.0 if is_major else 1.0)
+			draw_line(clipped[0], clipped[1], line_color, 1.0)
 
 	# Draw deployment zones (if enabled)
 	if map_layout.show_deployment_zones:
