@@ -210,9 +210,14 @@ func _calculate_grid_dimensions() -> Vector2i:
 	var height_inches = table_size_feet.y * 12.0
 
 	# Use diagonal to ensure grid covers entire table at any rotation
-	# This prevents gaps in corners when rotated (e.g., 29x29 for 72x48 table)
 	var diagonal = sqrt(width_inches * width_inches + height_inches * height_inches)
 	var grid_size = int(ceil(diagonal / GRID_SIZE_INCHES))
+
+	# Round UP to even number to ensure intersection point at center
+	# Even number of cells → odd number of lines → center line exists
+	# E.g., 30 cells → 31 lines (0-30) → line 15 is center
+	if grid_size % 2 != 0:
+		grid_size += 1
 
 	return Vector2i(grid_size, grid_size)
 
