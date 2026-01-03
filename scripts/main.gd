@@ -745,16 +745,26 @@ func _set_table_size(size_feet: Vector2) -> void:
 	table.setup_table(size_feet)
 
 	# Update terrain overlay with new table size (if it exists and has terrain data)
+	print("  DEBUG: terrain_overlay=%s, map_layout_editor=%s" % [terrain_overlay != null, map_layout_editor != null])
 	if terrain_overlay and map_layout_editor:
+		print("  DEBUG: has get_current_layout = %s" % map_layout_editor.has_method("get_current_layout"))
 		if map_layout_editor.has_method("get_current_layout"):
 			var layout_data = map_layout_editor.get_current_layout()
+			print("  DEBUG: layout_data=%s, grid_cells size=%d" % [layout_data != null, layout_data.grid_cells.size() if layout_data else 0])
 			if layout_data and not layout_data.grid_cells.is_empty():
+				print("  DEBUG: Calling terrain_overlay.update_overlay with %d cells" % layout_data.grid_cells.size())
 				terrain_overlay.update_overlay(
 					layout_data.grid_cells,
 					size_feet,
 					layout_data.rotation
 				)
-				print("  Updated terrain overlay for new table size")
+				print("  ✓ Updated terrain overlay for new table size")
+			else:
+				print("  DEBUG: No terrain data to update (grid_cells empty or layout_data null)")
+		else:
+			print("  DEBUG: get_current_layout method not found!")
+	else:
+		print("  DEBUG: terrain_overlay or map_layout_editor is null")
 
 	# Adjust camera view
 	_adjust_camera_for_table_size(size_feet)
