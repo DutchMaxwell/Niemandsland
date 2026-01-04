@@ -202,12 +202,21 @@ func _on_load_file_selected(path: String) -> void:
 
 
 func set_table_size(size_feet: Vector2) -> void:
+	# Check if table size actually changed
+	var size_changed = table_size_feet != size_feet
+
 	table_size_feet = size_feet
 	print("MapLayout.set_table_size: (%.1f, %.1f) feet" % [size_feet.x, size_feet.y])
 
 	# Recalculate grid dimensions
 	var grid_dims = _calculate_grid_dimensions()
 	print("  Grid dimensions: %dx%d cells" % [grid_dims.x, grid_dims.y])
+
+	# CRITICAL: If table size changed and we have terrain data, clear it
+	# Grid cell coordinates are ABSOLUTE and become invalid when grid dimensions change
+	if size_changed and not grid_cells.is_empty():
+		print("  ⚠ Table size changed - clearing terrain data (grid coordinates are now invalid)")
+		grid_cells.clear()
 
 	grid_container.queue_redraw()
 	_update_stats()
