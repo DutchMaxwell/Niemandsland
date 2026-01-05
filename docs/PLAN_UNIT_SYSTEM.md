@@ -356,7 +356,61 @@ static func _parse_tough_rating(rules: Array) -> int:
     return 1  # Default: 1 Wunde
 ```
 
-### 4.4 Manueller Override
+### 4.4 Hero-Attachment (Manuell nach Import)
+
+Heroes können manuell einer Unit zugewiesen werden:
+
+```gdscript
+## Prüft ob Unit ein Hero ist (hat "Hero" Special Rule)
+static func is_hero(game_unit: GameUnit) -> bool:
+    var rules = game_unit.unit_properties.get("special_rules", [])
+    for rule in rules:
+        if rule is String and rule == "Hero":
+            return true
+        elif rule is Dictionary and rule.get("name", "") == "Hero":
+            return true
+    return false
+
+## Attached Hero zu einer Unit
+static func attach_hero_to_unit(hero: GameUnit, target: GameUnit) -> void:
+    # Hero merkt sich Ziel
+    hero.unit_properties["attached_to"] = target
+
+    # Target merkt sich Hero
+    var heroes = target.unit_properties.get("attached_heroes", [])
+    heroes.append(hero)
+    target.unit_properties["attached_heroes"] = heroes
+
+## Detach Hero
+static func detach_hero(hero: GameUnit) -> void:
+    var target = hero.unit_properties.get("attached_to", null)
+    if target:
+        var heroes = target.unit_properties.get("attached_heroes", [])
+        heroes.erase(hero)
+        target.unit_properties["attached_heroes"] = heroes
+    hero.unit_properties["attached_to"] = null
+```
+
+**UI-Flow nach Import:**
+```
+┌─────────────────────────────────────────────────────────┐
+│  HERO ATTACHMENT                                        │
+│                                                         │
+│  "Captain" has the Hero rule.                           │
+│  Attach to a unit?                                      │
+│                                                         │
+│  ┌───────────────────────────────────────────────────┐  │
+│  │ ○ Battle Brothers [5]                             │  │
+│  │ ○ Assault Squad [10]                              │  │
+│  │ ○ Heavy Support [3]                               │  │
+│  │ ● (Independent - no attachment)                   │  │
+│  └───────────────────────────────────────────────────┘  │
+│                                                         │
+│  [Skip All]                              [Confirm]      │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 4.5 Manueller Equipment Override
 
 User kann Equipment-Verteilung anpassen (via Radialmenü → "Edit Loadout"):
 
@@ -397,7 +451,7 @@ static func reassign_weapon(
     to_model.properties["weapons"] = to_weapons
 ```
 
-### 4.5 Metadaten auf Node3D
+### 4.6 Metadaten auf Node3D
 
 Jedes 3D-Modell speichert:
 
@@ -757,15 +811,15 @@ Bei kritischen Aktionen auf Leader/Specialists:
 
 5. **API vs Text-Export:** ✅ ENTSCHIEDEN → API bevorzugt
    - Army Forge TTS API liefert vollständig aufgelöste Daten
-   - Text-Export nur als Fallback (hat zusätzliche Infos wie "Joined to:")
+   - Base Sizes nur in API verfügbar (kritisch für Spawning)
+
+6. **Hero-Attachment ("Joined to:"):** ✅ ENTSCHIEDEN → Manuell via Radialmenü
+   - API hat diese Info nicht, Text-Export schon - aber API hat mehr andere Infos
+   - Nach Import: User wird bei Heroes gefragt "Attach to Unit?"
+   - Einfacher Dialog mit Liste aller Units der gleichen Armee
+   - Typischerweise nur 3-5 Heroes pro Armee → akzeptabler Aufwand
 
 ### Noch zu klären ❓
-
-6. **Hero-Attachment ("Joined to:"):**
-   - Nur in Text-Export, nicht in API!
-   - Option A: Text-Export parsen für diese Info
-   - Option B: User manuell zuweisen via Radialmenü
-   - Option C: Separate API-Call für Hero-Details
 
 7. **Proxy-System:** Sollen generische Miniaturen als "Proxy" markiert werden können?
    - Vorschlag: Ja, via Radialmenü → "Assign Stats" → Unit-Picker
