@@ -2,6 +2,11 @@ class_name AIDecisionTree
 extends RefCounted
 ## Implements decision trees for AI unit activation.
 ## Based on OPR Solo & Co-Op Rules v3.5.0.
+## NOTE: All distances should be in METERS for consistency with positions.
+
+
+## Conversion constant: 1 inch = 0.0254 meters
+const INCHES_TO_METERS: float = 0.0254
 
 
 ## Possible AI actions
@@ -318,16 +323,18 @@ static func _will_enemies_be_in_range_after_advance(
 	return false
 
 
+## Returns the maximum weapon range in METERS.
 static func _get_max_weapon_range(ai_unit: GameUnit) -> float:
-	var max_range = 0.0
+	var max_range_inches = 0.0
 	for model in ai_unit.models:
 		var weapons = model.get_weapons()
 		for weapon in weapons:
 			if weapon is Dictionary:
 				var range_val = weapon.get("range", 0)
-				if range_val > max_range:
-					max_range = range_val
-	return max_range
+				if range_val > max_range_inches:
+					max_range_inches = range_val
+	# Convert inches to meters
+	return max_range_inches * INCHES_TO_METERS
 
 
 static func _find_best_shooting_target(ai_unit: GameUnit, context: AIContext) -> GameUnit:
