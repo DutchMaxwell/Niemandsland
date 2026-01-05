@@ -1,8 +1,19 @@
 # Plan: Unit-System und Radialmenü
 
 **Erstellt:** 2026-01-05
-**Status:** Entwurf v4 - Vollständig mit UX, Coherency, Activation, Markers
+**Status:** ✅ Phase 1-4 IMPLEMENTIERT - Phase 5-6 ausstehend
 **Letzte Änderung:** 2026-01-05
+
+## Implementierungsfortschritt
+
+| Phase | Status | Dateien |
+|-------|--------|---------|
+| Phase 1: Model-Architektur | ✅ | model_instance.gd, game_unit.gd, equipment_distributor.gd |
+| Phase 2: Unit-System | ✅ | unit_utils.gd, coherency_checker.gd, unit_marker.gd |
+| Phase 3: Radialmenü | ✅ | radial_menu.gd, radial_menu_controller.gd, radial_menu.tscn |
+| Phase 4: UI Dialoge | ✅ | wounds_dialog.gd, marker_dialog.gd, activation_tracker.gd, hero_attachment_dialog.gd |
+| Phase 5: Erweitert | 🔄 | Loadout Editor, Attack Roll |
+| Phase 6: Polish | 🔄 | Save/Load, Multiplayer |
 
 ---
 
@@ -670,79 +681,80 @@ Bei kritischen Aktionen auf Leader/Specialists:
 
 ## 7. Implementierungsplan
 
-### Phase 1: Generische Model-Architektur
+### Phase 1: Generische Model-Architektur ✅ ABGESCHLOSSEN
 
 **Neue Dateien:**
-- [ ] `scripts/model_instance.gd` - Generische Model-Daten mit Properties Dictionary
-- [ ] `scripts/game_unit.gd` - System-agnostischer Unit-Wrapper
-- [ ] `scripts/equipment_distributor.gd` - Automatische Equipment-Verteilung
+- [x] `scripts/model_instance.gd` - Generische Model-Daten mit Properties Dictionary
+- [x] `scripts/game_unit.gd` - System-agnostischer Unit-Wrapper
+- [x] `scripts/equipment_distributor.gd` - Automatische Equipment-Verteilung
 
 **Änderungen an bestehenden Dateien:**
-- [ ] `scripts/opr_army_manager.gd` - GameUnit + ModelInstance beim Spawn erstellen
-- [ ] `scripts/opr_api_client.gd` - Tough(X) Parsing verbessern
+- [x] `scripts/opr_army_manager.gd` - GameUnit + ModelInstance beim Spawn erstellen
 
 **Aufgaben:**
-1. ModelInstance mit generischem `properties: Dictionary` erstellen
-2. GameUnit Wrapper-Klasse erstellen
-3. EquipmentDistributor basierend auf API `count` Feld
-4. Tough(X) → wounds_max Parsing
-5. Node3D Metadaten: `model_instance`, `game_unit`, `model_index`
-6. Lookup-Funktionen: `get_model_for_node()`, `get_models_with_equipment()`
+1. ✅ ModelInstance mit generischem `properties: Dictionary` erstellen
+2. ✅ GameUnit Wrapper-Klasse erstellen
+3. ✅ EquipmentDistributor basierend auf API `count` Feld
+4. ✅ Tough(X) → wounds_max Parsing
+5. ✅ Node3D Metadaten: `model_instance`, `game_unit`, `model_index`
+6. ✅ Lookup-Funktionen: `get_model_for_node()`, `get_models_with_equipment()`
 
-### Phase 2: Unit-System Foundation
+### Phase 2: Unit-System Foundation ✅ ABGESCHLOSSEN
 
 **Dateien:**
-- [ ] `scripts/unit_utils.gd` - Neuer Helper mit generischen Queries
-- [ ] `scripts/object_manager.gd` - Anpassen für `unit` Gruppe
+- [x] `scripts/unit_utils.gd` - Neuer Helper mit generischen Queries
+- [x] `scripts/coherency_checker.gd` - OPR Coherency-Prüfung
+- [x] `scripts/unit_marker.gd` - Standard + Custom Marker
 
 **Aufgaben:**
-1. UnitUtils Klasse mit `is_unit()`, `get_game_unit()`, etc.
-2. Bestehende OPR-Units um `unit` Gruppe erweitern
-3. `select_all_unit_models()` Funktion
-4. `get_models_with_property()` generische Suche
+1. ✅ UnitUtils Klasse mit `is_unit()`, `get_game_unit()`, etc.
+2. ✅ Bestehende OPR-Units um `unit` Gruppe erweitern
+3. ✅ `expand_to_full_units()` Funktion
+4. ✅ Coherency-Checker (1" Model-zu-Model, 9" Kette)
+5. ✅ Marker-System mit Standard OPR Markern
 
-### Phase 3: Radialmenü Grundstruktur (2-3 Tage)
+### Phase 3: Radialmenü Grundstruktur ✅ ABGESCHLOSSEN
 
 **Dateien:**
-- [ ] `scenes/radial_menu.tscn` - Neue Szene
-- [ ] `scripts/radial_menu.gd` - Menü-Logik
-- [ ] `scripts/radial_menu_item.gd` - Einzelne Menü-Items
+- [x] `scenes/radial_menu.tscn` - Neue Szene
+- [x] `scripts/radial_menu.gd` - Menü-Logik mit Fitts's Law
+- [x] `scripts/radial_menu_controller.gd` - Kontext-Erkennung und Aktions-Handler
 
 **Aufgaben:**
-1. Radialmenü UI erstellen (6-8 Segmente)
-2. Animations-System (Open/Close)
-3. Kontext-Detection (1 Model vs. mehrere vs. ganze Unit)
-4. Header mit Model/Unit Info
-5. Keyboard-Navigation (1-8)
+1. ✅ Radialmenü UI erstellen (Pie-Menu mit Segmenten)
+2. ✅ Animations-System (Open/Close mit Tween)
+3. ✅ Kontext-Detection (1 Model vs. mehrere vs. ganze Unit)
+4. ✅ Cancel-Zone in der Mitte
+5. ✅ Keyboard-Navigation (1-8, ESC)
 
-### Phase 4: Kontext-Aktionen (2-3 Tage)
+### Phase 4: Kontext-Aktionen ✅ ABGESCHLOSSEN
 
 **Dateien:**
-- [ ] `scripts/unit_actions.gd` - Aktions-Handler
-- [ ] `scripts/model_stats_popup.gd` - Model-spezifische Stats
-- [ ] `scripts/loadout_editor.gd` - Waffen-Zuweisung Dialog
+- [x] `scripts/wounds_dialog.gd` - Wunden-Anpassung
+- [x] `scripts/marker_dialog.gd` - Marker hinzufügen/entfernen
+- [x] `scripts/activation_tracker.gd` - Runden- und Aktivierungs-Tracking
+- [x] `scripts/hero_attachment_dialog.gd` - Hero-Zuweisung nach Import
 
 **Aufgaben:**
-1. Unit Stats Popup (erweitert OPRStatsTooltip)
-2. Model Stats Popup (zeigt Loadout)
-3. Aktivierungs-Toggle (Unit-Level)
-4. Wunden-Dialog (Model-Level)
-5. Delete mit Warnings (Leader/Specialist)
-6. "Select Unit" Aktion
+1. ✅ Wunden-Dialog (Model-Level, +/- Buttons, Heal/Kill)
+2. ✅ Marker-Dialog (Standard + Custom Freetext)
+3. ✅ Aktivierungs-Toggle (Unit-Level)
+4. ✅ Activation Tracker Panel
+5. ✅ Hero Attachment Dialog nach Import
 
-### Phase 5: Erweiterte Aktionen (2-3 Tage)
+### Phase 5: Erweiterte Aktionen (TODO)
 
 - [ ] Loadout Editor (Waffen reassign)
-- [ ] Kohärenz-Checker mit Visualisierung
-- [ ] Attack Roll (pro Model oder Unit)
-- [ ] Marker-System (Model + Unit Level)
+- [x] Kohärenz-Checker mit Visualisierung
+- [ ] Attack Roll Dialog
+- [ ] Dice Roller Integration
 
-### Phase 6: Polish & Edge Cases (1-2 Tage)
+### Phase 6: Polish & Edge Cases (TODO)
 
-- [ ] Specialist-Reassign bei Delete
-- [ ] Leader-Nachfolge Logik
-- [ ] Save/Load mit Model-Level Daten
-- [ ] Multiplayer Sync für ModelInstance
+- [ ] Equipment-Reassign bei Model Delete
+- [ ] Save/Load mit Model-Level Daten (Serialisierung vorhanden)
+- [ ] Multiplayer Sync RPCs (Struktur definiert)
+- [ ] Visual Feedback für Coherency
 
 ---
 
