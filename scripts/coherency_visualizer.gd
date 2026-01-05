@@ -24,6 +24,12 @@ var _highlights: Array[Node3D] = []
 var _current_unit: GameUnit = null
 var _tween: Tween = null
 
+## Custom alpha for 3D fade (Node3D doesn't have modulate)
+var _visualization_alpha: float = 1.0:
+	set(value):
+		_visualization_alpha = value
+		_update_materials_alpha(value)
+
 
 func _ready() -> void:
 	# Start invisible
@@ -68,7 +74,7 @@ func hide_coherency() -> void:
 		_tween.kill()
 
 	_tween = create_tween()
-	_tween.tween_property(self, "modulate:a", 0.0, FADE_DURATION)
+	_tween.tween_property(self, "_visualization_alpha", 0.0, FADE_DURATION)
 	_tween.tween_callback(_clear_visualization)
 
 
@@ -206,13 +212,30 @@ func _animate_pulse(mesh: MeshInstance3D) -> void:
 
 ## Animates fade in.
 func _animate_fade_in() -> void:
-	modulate.a = 0.0
+	_visualization_alpha = 0.0
 
 	if _tween:
 		_tween.kill()
 
 	_tween = create_tween()
-	_tween.tween_property(self, "modulate:a", 1.0, FADE_DURATION)
+	_tween.tween_property(self, "_visualization_alpha", 1.0, FADE_DURATION)
+
+
+## Updates alpha on all materials (for 3D fade effect).
+func _update_materials_alpha(alpha: float) -> void:
+	for line in _lines:
+		if is_instance_valid(line) and line.material_override:
+			var mat = line.material_override as StandardMaterial3D
+			if mat:
+				mat.albedo_color.a = alpha
+
+	for highlight in _highlights:
+		if is_instance_valid(highlight):
+			for child in highlight.get_children():
+				if child is MeshInstance3D and child.material_override:
+					var mat = child.material_override as StandardMaterial3D
+					if mat:
+						mat.albedo_color.a = alpha
 
 
 ## Clears all visualization elements.
