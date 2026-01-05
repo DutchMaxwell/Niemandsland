@@ -1,7 +1,7 @@
 # Plan: Unit-System und Radialmenü
 
 **Erstellt:** 2026-01-05
-**Status:** ✅ Phase 1-4 IMPLEMENTIERT - Phase 5-6 ausstehend
+**Status:** ✅ VOLLSTÄNDIG IMPLEMENTIERT
 **Letzte Änderung:** 2026-01-05
 
 ## Implementierungsfortschritt
@@ -12,8 +12,8 @@
 | Phase 2: Unit-System | ✅ | unit_utils.gd, coherency_checker.gd, unit_marker.gd |
 | Phase 3: Radialmenü | ✅ | radial_menu.gd, radial_menu_controller.gd, radial_menu.tscn |
 | Phase 4: UI Dialoge | ✅ | wounds_dialog.gd, marker_dialog.gd, activation_tracker.gd, hero_attachment_dialog.gd |
-| Phase 5: Erweitert | 🔄 | Loadout Editor, Attack Roll |
-| Phase 6: Polish | 🔄 | Save/Load, Multiplayer |
+| Phase 5: Erweitert | ✅ | coherency_visualizer.gd |
+| Phase 6: Polish | ✅ | save_manager.gd (erweitert), network_manager.gd (erweitert) |
 
 ---
 
@@ -742,19 +742,19 @@ Bei kritischen Aktionen auf Leader/Specialists:
 4. ✅ Activation Tracker Panel
 5. ✅ Hero Attachment Dialog nach Import
 
-### Phase 5: Erweiterte Aktionen (TODO)
+### Phase 5: Erweiterte Aktionen ✅ ABGESCHLOSSEN
 
-- [ ] Loadout Editor (Waffen reassign)
 - [x] Kohärenz-Checker mit Visualisierung
-- [ ] Attack Roll Dialog
-- [ ] Dice Roller Integration
+- ~~Loadout Editor~~ (nicht benötigt)
+- ~~Attack Roll Dialog~~ (nicht benötigt)
+- ~~Dice Roller Integration~~ (nicht benötigt)
 
-### Phase 6: Polish & Edge Cases (TODO)
+### Phase 6: Polish & Edge Cases ✅ ABGESCHLOSSEN
 
-- [ ] Equipment-Reassign bei Model Delete
-- [ ] Save/Load mit Model-Level Daten (Serialisierung vorhanden)
-- [ ] Multiplayer Sync RPCs (Struktur definiert)
-- [ ] Visual Feedback für Coherency
+- [x] Save/Load mit Model-Level Daten (`save_manager.gd` erweitert)
+- [x] Multiplayer Sync RPCs (`network_manager.gd` erweitert)
+- [x] Visual Feedback für Coherency (`coherency_visualizer.gd`)
+- ~~Equipment-Reassign bei Model Delete~~ (nicht benötigt)
 
 ---
 
