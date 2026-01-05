@@ -47,6 +47,12 @@ var model_to_unit: Dictionary = {}  # Node3D -> OPRUnit
 ## Mapping from unit to spawned models
 var unit_to_models: Dictionary = {}  # OPRUnit -> Array[Node3D]
 
+## Mapping from OPRUnit to GameUnit wrapper
+var unit_to_game_unit: Dictionary = {}  # OPRUnit -> GameUnit
+
+## All GameUnits by unit_id
+var game_units: Dictionary = {}  # unit_id (String) -> GameUnit
+
 ## Army trays by player
 var army_trays: Dictionary = {}  # player_id -> Node3D
 
@@ -302,6 +308,7 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 	var models: Array[Node3D] = []
 	# Use unit's base diameter with 25% gap for spacing
 	var spacing = unit.get_base_diameter_meters() * 1.25
+	var player_id = unit.get_meta("player_id", 1)
 
 	for i in range(unit.size):
 		var model_pos = Vector3(
@@ -318,12 +325,26 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 			# Add to selectable group
 			model.add_to_group("selectable")
 			model.add_to_group("opr_unit")
+			model.add_to_group("unit")  # NEW: Generic unit group
 
-			# Store unit reference in model metadata
+			# Store unit reference in model metadata (legacy)
 			model.set_meta("opr_unit", unit)
-			model.set_meta("opr_player_id", unit.get_meta("player_id", 1))
+			model.set_meta("opr_player_id", player_id)
 
 			models.append(model)
+
+	# NEW: Create GameUnit wrapper with ModelInstances
+	if not models.is_empty():
+		var typed_models: Array[Node3D] = []
+		typed_models.assign(models)
+		var game_unit = EquipmentDistributor.create_from_opr_unit(unit, typed_models, player_id)
+
+		# Store mappings
+		unit_to_game_unit[unit] = game_unit
+		game_units[game_unit.unit_id] = game_unit
+
+		# Store name suffix on GameUnit
+		game_unit.unit_properties["display_suffix"] = name_suffix
 
 	return models
 
@@ -444,6 +465,50 @@ func get_army(player_id: int) -> OPRApiClient.OPRArmy:
 	return armies.get(player_id, null)
 
 
+# ===== NEW: GameUnit Access Methods =====
+
+## Get GameUnit wrapper for a model
+func get_game_unit_for_model(model: Node3D) -> GameUnit:
+	return model.get_meta("game_unit", null)
+
+
+## Get ModelInstance for a model node
+func get_model_instance(model: Node3D) -> ModelInstance:
+	return model.get_meta("model_instance", null)
+
+
+## Get GameUnit for an OPRUnit
+func get_game_unit(opr_unit: OPRApiClient.OPRUnit) -> GameUnit:
+	return unit_to_game_unit.get(opr_unit, null)
+
+
+## Get GameUnit by unit_id
+func get_game_unit_by_id(unit_id: String) -> GameUnit:
+	return game_units.get(unit_id, null)
+
+
+## Get all GameUnits for a player
+func get_game_units_for_player(player_id: int) -> Array[GameUnit]:
+	var result: Array[GameUnit] = []
+	for game_unit in game_units.values():
+		if game_unit.unit_properties.get("player_id", 0) == player_id:
+			result.append(game_unit)
+	return result
+
+
+## Get all GameUnits
+func get_all_game_units() -> Array[GameUnit]:
+	var result: Array[GameUnit] = []
+	for game_unit in game_units.values():
+		result.append(game_unit)
+	return result
+
+
+## Check if a node is a unit model
+func is_unit_model(node: Node3D) -> bool:
+	return node.is_in_group("unit") or node.is_in_group("opr_unit")
+
+
 ## Clear all armies and spawned models
 func clear_all() -> void:
 	# Remove all spawned models
@@ -461,6 +526,8 @@ func clear_all() -> void:
 	armies.clear()
 	model_to_unit.clear()
 	unit_to_models.clear()
+	unit_to_game_unit.clear()
+	game_units.clear()
 	army_trays.clear()
 
 
@@ -471,6 +538,12 @@ func clear_army(player_id: int) -> void:
 		return
 
 	for unit in army.units:
+		# Clear GameUnit mappings
+		if unit in unit_to_game_unit:
+			var game_unit = unit_to_game_unit[unit]
+			game_units.erase(game_unit.unit_id)
+			unit_to_game_unit.erase(unit)
+
 		if unit in unit_to_models:
 			var models = unit_to_models[unit]
 			for model in models:
