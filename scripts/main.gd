@@ -296,7 +296,9 @@ func _ready() -> void:
 	terrain_overlay = Node3D.new()
 	terrain_overlay.set_script(overlay_script)
 	terrain_overlay.name = "TerrainOverlay"
+	terrain_overlay.visible = true  # Ensure it's visible
 	table.add_child(terrain_overlay)
+	print("TerrainOverlay initialized and added to table")
 
 	# Give object_manager reference to terrain_overlay for terrain hints
 	object_manager.terrain_overlay = terrain_overlay
@@ -306,9 +308,6 @@ func _ready() -> void:
 
 	# Initialize Deployment Zones UI
 	_init_deployment_zones_ui()
-
-	# Initialize Scout/Ambush Panel
-	_init_scout_ambush_panel()
 
 	# Initialize and play Tron intro
 	_start_tron_intro()
@@ -744,6 +743,17 @@ func _set_table_size(size_feet: Vector2) -> void:
 
 	# Rebuild table
 	table.setup_table(size_feet)
+
+	# Update terrain overlay with new table size (if it exists and has terrain data)
+	# Note: Map Layout Editor clears terrain when table size changes (see set_table_size)
+	if terrain_overlay and map_layout_editor and map_layout_editor.has_method("get_current_layout"):
+		var layout_data = map_layout_editor.get_current_layout()
+		if layout_data and not layout_data.grid_cells.is_empty():
+			terrain_overlay.update_overlay(
+				layout_data.grid_cells,
+				size_feet,
+				layout_data.rotation
+			)
 
 	# Adjust camera view
 	_adjust_camera_for_table_size(size_feet)
@@ -1338,9 +1348,16 @@ func _on_map_layout_closed() -> void:
 
 
 ## Update terrain overlay when map layout changes
-func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2, rotation: float) -> void:
-	if terrain_overlay and terrain_overlay.has_method("update_overlay"):
-		terrain_overlay.update_overlay(grid_cells, table_size, rotation)
+func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2, grid_rotation: float) -> void:
+	# This may be called during initialization before terrain_overlay exists
+	if not terrain_overlay:
+		return  # Silently ignore - will be updated when user closes map layout
+
+	if not terrain_overlay.has_method("update_overlay"):
+		push_warning("TerrainOverlay missing update_overlay method")
+		return
+
+	terrain_overlay.update_overlay(grid_cells, table_size, grid_rotation)
 
 
 ## ============================================================================
@@ -1365,14 +1382,30 @@ func _init_deployment_zones_ui() -> void:
 	label.text = "Deployment Zones:"
 	deployment_panel.add_child(label)
 
-	# Create OptionButton for deployment zone types
+	# Create OptionButton for deployment zone types (18 total from OPR)
 	deployment_zone_option = OptionButton.new()
 	deployment_zone_option.add_item("None", 0)
-	deployment_zone_option.add_item("Front-line (12\")", 1)
-	deployment_zone_option.add_item("Corner Deployment", 2)
-	deployment_zone_option.add_item("Dawn Assault", 3)
-	deployment_zone_option.add_item("Pitched Battle", 4)
-	deployment_zone_option.add_item("Meeting Engagement", 5)
+	# Standard (1-6)
+	deployment_zone_option.add_item("Front Line (12\")", 1)
+	deployment_zone_option.add_item("Ground War", 2)
+	deployment_zone_option.add_item("Side Battle", 3)
+	deployment_zone_option.add_item("Disordered", 4)
+	deployment_zone_option.add_item("Spearhead", 5)
+	deployment_zone_option.add_item("Opposing Forces", 6)
+	# Asymmetric (7-12)
+	deployment_zone_option.add_item("Open Warzone", 7)
+	deployment_zone_option.add_item("Pushback", 8)
+	deployment_zone_option.add_item("Cornered", 9)
+	deployment_zone_option.add_item("Encircled", 10)
+	deployment_zone_option.add_item("Behind Enemy Lines", 11)
+	deployment_zone_option.add_item("Lightning Strike", 12)
+	# Advanced (13-18)
+	deployment_zone_option.add_item("No Man's Land", 13)
+	deployment_zone_option.add_item("Long Haul", 14)
+	deployment_zone_option.add_item("Flank Assault", 15)
+	deployment_zone_option.add_item("Frontal Clash", 16)
+	deployment_zone_option.add_item("Tactical Push", 17)
+	deployment_zone_option.add_item("Meeting Engagement", 18)
 	deployment_zone_option.selected = 0  # Start with "None"
 	deployment_zone_option.item_selected.connect(_on_deployment_zone_selected)
 	deployment_panel.add_child(deployment_zone_option)
@@ -1410,12 +1443,12 @@ func _on_deployment_zone_selected(index: int) -> void:
 
 
 ## Handle deployment zone visibility toggle
-func _on_deployment_zones_visibility_toggled(is_visible: bool) -> void:
+func _on_deployment_zones_visibility_toggled(show_zones: bool) -> void:
 	if not terrain_overlay or not terrain_overlay.has_method("set_deployment_zones_visible"):
 		return
 
-	terrain_overlay.set_deployment_zones_visible(is_visible)
-	print("Deployment zones visibility: %s" % ("visible" if is_visible else "hidden"))
+	terrain_overlay.set_deployment_zones_visible(show_zones)
+	print("Deployment zones visibility: %s" % ("visible" if show_zones else "hidden"))
 
 
 ## Handle deployment mode toggle
@@ -1423,51 +1456,6 @@ func _on_deployment_mode_toggled(is_active: bool) -> void:
 	is_deployment_mode = is_active
 	_check_all_units_deployment()
 	print("Deployment mode: %s" % ("active" if is_active else "inactive"))
-
-
-## ============================================================================
-## Scout/Ambush Panel
-## ============================================================================
-
-## Initialize Scout/Ambush panel UI
-func _init_scout_ambush_panel() -> void:
-	# Get the left panel VBox to add UI elements
-	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
-	if not left_panel_vbox:
-		push_error("Could not find LeftPanelVBox for scout/ambush panel")
-		return
-
-	# Create a VBoxContainer for scout/ambush units
-	var scout_panel = VBoxContainer.new()
-	scout_panel.name = "ScoutAmbushPanel"
-	left_panel_vbox.add_child(scout_panel)
-
-	# Add label
-	var label = Label.new()
-	label.text = "Scout/Ambush Units:"
-	label.add_theme_color_override("font_color", Color.CYAN)
-	scout_panel.add_child(label)
-
-	# Create a ScrollContainer for the unit list
-	var scroll = ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(180, 100)
-	scout_panel.add_child(scroll)
-
-	# Create ItemList for units
-	var unit_list = ItemList.new()
-	unit_list.name = "ScoutAmbushList"
-	unit_list.custom_minimum_size = Vector2(180, 100)
-	scroll.add_child(unit_list)
-
-	# Add example text (will be populated when units are added)
-	unit_list.add_item("(No scout/ambush units)")
-
-	# Add info label
-	var info_label = Label.new()
-	info_label.text = "Units with Scout or Ambush\ndeploy outside normal zones"
-	info_label.add_theme_font_size_override("font_size", 10)
-	info_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	scout_panel.add_child(info_label)
 
 
 ## Handle unit movement (re-check deployment)
