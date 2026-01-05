@@ -175,31 +175,25 @@ func _build_control_panel() -> void:
 	# Battle controls
 	var battle_section = _create_section("Battle Controls")
 	left_container.add_child(battle_section)
-
-	var battle_buttons = VBoxContainer.new()
-	battle_buttons.add_theme_constant_override("separation", 8)
-	battle_section.add_child(battle_buttons)
+	var battle_content: VBoxContainer = battle_section.get_meta("content_container")
 
 	start_button = Button.new()
 	start_button.text = "Start Battle"
 	start_button.custom_minimum_size.y = 40
 	start_button.pressed.connect(_on_start_pressed)
-	battle_buttons.add_child(start_button)
+	battle_content.add_child(start_button)
 
 	stop_button = Button.new()
 	stop_button.text = "Stop Battle"
 	stop_button.custom_minimum_size.y = 40
 	stop_button.disabled = true
 	stop_button.pressed.connect(_on_stop_pressed)
-	battle_buttons.add_child(stop_button)
+	battle_content.add_child(stop_button)
 
 
 func _create_army_section(player_id: int, title: String, color: Color) -> VBoxContainer:
 	var section = _create_section(title, color)
-
-	var content = VBoxContainer.new()
-	content.add_theme_constant_override("separation", 8)
-	section.add_child(content)
+	var content: VBoxContainer = section.get_meta("content_container")
 
 	var army_label = Label.new()
 	army_label.text = "No army loaded"
@@ -249,7 +243,10 @@ func _create_section(title: String, accent_color: Color = Color.WHITE) -> VBoxCo
 	title_label.add_theme_color_override("font_color", accent_color)
 	container.add_child(title_label)
 
-	return container
+	# Store content container reference for adding children later
+	section.set_meta("content_container", container)
+
+	return section
 
 
 func _build_center_panel() -> void:
