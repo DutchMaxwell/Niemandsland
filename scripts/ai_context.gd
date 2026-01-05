@@ -2,6 +2,11 @@ class_name AIContext
 extends RefCounted
 ## Holds game state information needed for AI decision making.
 ## This is populated by the AIManager before each unit activation.
+## NOTE: All distances are stored in METERS for consistency with Godot positions.
+
+
+## Conversion constant: 1 inch = 0.0254 meters
+const INCHES_TO_METERS: float = 0.0254
 
 
 ## Objective data structure
@@ -34,22 +39,22 @@ var ai_player_id: int = 2
 var player_id: int = 1
 
 
-# ===== Movement Constants =====
+# ===== Movement Constants (in METERS) =====
 
-## Standard advance distance (inches)
-var advance_distance: float = 6.0
+## Standard advance distance: 6" = 0.1524m
+var advance_distance: float = 6.0 * INCHES_TO_METERS
 
-## Standard rush distance (inches)
-var rush_distance: float = 12.0
+## Standard rush distance: 12" = 0.3048m
+var rush_distance: float = 12.0 * INCHES_TO_METERS
 
-## Standard charge range (inches)
-var charge_range: float = 12.0
+## Standard charge range: 12" = 0.3048m
+var charge_range: float = 12.0 * INCHES_TO_METERS
 
-## Objective control radius (inches)
-var objective_radius: float = 3.0
+## Objective control radius: 3" = 0.0762m
+var objective_radius: float = 3.0 * INCHES_TO_METERS
 
-## "Enemies in the way" detection radius (inches)
-var path_detection_radius: float = 6.0
+## "Enemies in the way" detection radius: 6" = 0.1524m
+var path_detection_radius: float = 6.0 * INCHES_TO_METERS
 
 
 # ===== Table Sections =====

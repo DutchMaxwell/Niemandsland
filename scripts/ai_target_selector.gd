@@ -2,6 +2,11 @@ class_name AITargetSelector
 extends RefCounted
 ## Selects targets for AI units based on OPR Solo & Co-Op Rules.
 ## Handles priority rules for different weapon types and special rules.
+## NOTE: All distances should be in METERS for consistency with positions.
+
+
+## Conversion constant: 1 inch = 0.0254 meters
+const INCHES_TO_METERS: float = 0.0254
 
 
 ## Target selection result
@@ -18,7 +23,7 @@ class TargetResult:
 static func find_shooting_target(
 	ai_unit: GameUnit,
 	enemy_units: Array[GameUnit],
-	max_range: float = 24.0
+	max_range: float = 24.0 * INCHES_TO_METERS
 ) -> TargetResult:
 	var result = TargetResult.new()
 	var ai_position = _get_unit_center(ai_unit)
@@ -53,7 +58,7 @@ static func find_shooting_target(
 static func find_charge_target(
 	ai_unit: GameUnit,
 	enemy_units: Array[GameUnit],
-	charge_range: float = 12.0
+	charge_range: float = 12.0 * INCHES_TO_METERS
 ) -> TargetResult:
 	var result = TargetResult.new()
 	var ai_position = _get_unit_center(ai_unit)

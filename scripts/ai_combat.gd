@@ -4,6 +4,11 @@ extends RefCounted
 ## Based on OPR Grimdark Future v3.5.1 rules.
 ## Shooting Sequence: Determine Attacks → Roll to Hit → Roll to Block → Remove Casualties
 ## Melee Sequence: Same + Return Strikes + Fatigue
+## NOTE: Weapon ranges are in inches, positions are in meters. Conversion applied in range checks.
+
+
+## Conversion constant: 1 inch = 0.0254 meters
+const INCHES_TO_METERS: float = 0.0254
 
 
 ## Combat result structure
@@ -313,8 +318,10 @@ static func _get_shooting_weapons(attacker: GameUnit, defender: GameUnit) -> Dic
 			if range_val == 0:
 				continue  # Melee weapon
 
+			# Convert range from inches to meters for comparison
+			var range_meters = range_val * INCHES_TO_METERS
 			var distance = model_pos.distance_to(defender_pos)
-			if distance > range_val:
+			if distance > range_meters:
 				continue  # Out of range
 
 			var attacks = weapon.get("attacks", 1)
@@ -379,7 +386,8 @@ static func _get_melee_weapons(attacker: GameUnit, defender: GameUnit) -> Dictio
 		var horizontal_dist = Vector2(model_pos.x, model_pos.z).distance_to(
 			Vector2(defender_pos.x, defender_pos.z)
 		)
-		if horizontal_dist > 2.0:
+		var melee_reach = 2.0 * INCHES_TO_METERS
+		if horizontal_dist > melee_reach:
 			continue
 
 		var weapons = model.get_weapons()
@@ -437,12 +445,14 @@ static func _get_shooting_modifiers(
 	var modifier = 0
 	var distance = _get_unit_center(attacker).distance_to(_get_unit_center(defender))
 
+	var nine_inches = 9.0 * INCHES_TO_METERS
+
 	# Stealth: -1 to hit from over 9" away
-	if defender.has_special_rule("Stealth") and distance > 9.0:
+	if defender.has_special_rule("Stealth") and distance > nine_inches:
 		modifier -= 1
 
 	# Artillery: -2 to hit from over 9" (attacker is artillery)
-	if attacker.has_special_rule("Artillery") and distance > 9.0:
+	if attacker.has_special_rule("Artillery") and distance > nine_inches:
 		modifier += 1  # Artillery gets +1 when shooting over 9"
 
 	# Aircraft: -12" to range (effectively harder to hit)
