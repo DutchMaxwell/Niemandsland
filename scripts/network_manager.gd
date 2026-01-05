@@ -187,3 +187,134 @@ func broadcast_move(object_id: int, pos: Vector3) -> void:
 func broadcast_clear() -> void:
 	if is_multiplayer_active():
 		clear_objects_networked.rpc()
+
+
+# ===== GameUnit State Synchronization =====
+
+## Reference to army manager (set by main.gd)
+var army_manager: OPRArmyManager = null
+
+
+## RPC: Sync unit activation state
+@rpc("any_peer", "call_remote", "reliable")
+func sync_unit_activation(unit_id: String, activated: bool, activation_round: int) -> void:
+	if not army_manager:
+		return
+
+	var game_unit = army_manager.get_game_unit_by_id(unit_id)
+	if game_unit:
+		game_unit.is_activated = activated
+		game_unit.activation_round = activation_round
+		print("[Network] Unit %s activation: %s (round %d)" % [game_unit.get_name(), activated, activation_round])
+
+
+## RPC: Sync model wounds
+@rpc("any_peer", "call_remote", "reliable")
+func sync_model_wounds(unit_id: String, model_index: int, wounds: int, is_alive: bool) -> void:
+	if not army_manager:
+		return
+
+	var game_unit = army_manager.get_game_unit_by_id(unit_id)
+	if game_unit:
+		var model = game_unit.get_model(model_index)
+		if model:
+			model.wounds_current = wounds
+			model.is_alive = is_alive
+
+			# Update node visibility
+			if model.node and is_instance_valid(model.node):
+				model.node.visible = is_alive
+
+			print("[Network] Model %d wounds: %d/%d (alive: %s)" % [model_index + 1, wounds, model.wounds_max, is_alive])
+
+
+## RPC: Sync model marker (add or remove)
+@rpc("any_peer", "call_remote", "reliable")
+func sync_model_marker(unit_id: String, model_index: int, marker_name: String, add: bool) -> void:
+	if not army_manager:
+		return
+
+	var game_unit = army_manager.get_game_unit_by_id(unit_id)
+	if game_unit:
+		var model = game_unit.get_model(model_index)
+		if model:
+			if add:
+				model.add_marker(marker_name)
+				print("[Network] Model %d: +marker '%s'" % [model_index + 1, marker_name])
+			else:
+				model.remove_marker(marker_name)
+				print("[Network] Model %d: -marker '%s'" % [model_index + 1, marker_name])
+
+
+## RPC: Sync unit marker (add or remove from all models)
+@rpc("any_peer", "call_remote", "reliable")
+func sync_unit_marker(unit_id: String, marker_name: String, add: bool) -> void:
+	if not army_manager:
+		return
+
+	var game_unit = army_manager.get_game_unit_by_id(unit_id)
+	if game_unit:
+		if add:
+			game_unit.add_marker_to_all(marker_name)
+			print("[Network] Unit %s: +marker '%s'" % [game_unit.get_name(), marker_name])
+		else:
+			game_unit.remove_marker_from_all(marker_name)
+			print("[Network] Unit %s: -marker '%s'" % [game_unit.get_name(), marker_name])
+
+
+## RPC: Sync hero attachment
+@rpc("any_peer", "call_remote", "reliable")
+func sync_hero_attachment(hero_id: String, target_id: String) -> void:
+	if not army_manager:
+		return
+
+	var hero = army_manager.get_game_unit_by_id(hero_id)
+	if not hero:
+		return
+
+	if target_id.is_empty():
+		# Detach hero
+		EquipmentDistributor.detach_hero(hero)
+		print("[Network] Hero %s detached" % hero.get_name())
+	else:
+		var target = army_manager.get_game_unit_by_id(target_id)
+		if target:
+			EquipmentDistributor.attach_hero_to_unit(hero, target)
+			print("[Network] Hero %s attached to %s" % [hero.get_name(), target.get_name()])
+
+
+# ===== Broadcast Helpers for GameUnit State =====
+
+## Broadcast unit activation change
+func broadcast_unit_activation(game_unit: GameUnit) -> void:
+	if is_multiplayer_active() and game_unit:
+		sync_unit_activation.rpc(game_unit.unit_id, game_unit.is_activated, game_unit.activation_round)
+
+
+## Broadcast model wounds change
+func broadcast_model_wounds(model: ModelInstance) -> void:
+	if is_multiplayer_active() and model and model.unit:
+		var game_unit = model.unit as GameUnit
+		if game_unit:
+			sync_model_wounds.rpc(game_unit.unit_id, model.model_index, model.wounds_current, model.is_alive)
+
+
+## Broadcast model marker change
+func broadcast_model_marker(model: ModelInstance, marker_name: String, add: bool) -> void:
+	if is_multiplayer_active() and model and model.unit:
+		var game_unit = model.unit as GameUnit
+		if game_unit:
+			sync_model_marker.rpc(game_unit.unit_id, model.model_index, marker_name, add)
+
+
+## Broadcast unit marker change (all models)
+func broadcast_unit_marker(game_unit: GameUnit, marker_name: String, add: bool) -> void:
+	if is_multiplayer_active() and game_unit:
+		sync_unit_marker.rpc(game_unit.unit_id, marker_name, add)
+
+
+## Broadcast hero attachment change
+func broadcast_hero_attachment(hero: GameUnit, target: GameUnit) -> void:
+	if is_multiplayer_active() and hero:
+		var target_id = target.unit_id if target else ""
+		sync_hero_attachment.rpc(hero.unit_id, target_id)

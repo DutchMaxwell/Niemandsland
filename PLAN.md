@@ -205,12 +205,22 @@ openTTS/
 
 **Priorität: KRITISCH**
 
-- [ ] Einheiten-Karten mit Stats (importierbar aus OPR Army Forge etc.)
-- [ ] Wunden-Tracking pro Modell
-- [ ] Status-Marker (Aktiviert, Pinned, etc.)
-- [ ] Einheiten-Aktivierungs-Tracker
+- [x] Einheiten-Karten mit Stats (importierbar aus OPR Army Forge etc.)
+- [x] Wunden-Tracking pro Modell (wounds_dialog.gd)
+- [x] Status-Marker (Aktiviert, Pinned, etc.) - marker_dialog.gd mit Standard OPR + Custom
+- [x] Einheiten-Aktivierungs-Tracker (activation_tracker.gd)
 - [ ] Befehls-/Strategiepunkte-Counter
 - [ ] Quick-Reference für Einheiten-Regeln
+
+**Unit-System (NEU implementiert):**
+- [x] ModelInstance - Model-Level Daten mit generischem Properties-Dictionary
+- [x] GameUnit - System-agnostischer Wrapper (OPR, WGS, generisch)
+- [x] EquipmentDistributor - Automatische Waffen-Verteilung basierend auf API-Count
+- [x] Coherency-System - 1" Model-zu-Model, 9" Kette, visuelle Linien
+- [x] Hero-Attachment - Manueller Dialog nach Import
+- [x] Radial Context Menu - Pie-Menu mit Fitts's Law Design
+- [x] Multiplayer Sync - RPCs für Wounds, Markers, Activation, Hero-Attachment
+- [x] Save/Load Integration - GameUnit-Serialisierung mit Model-Positionen
 
 ### 3.4 Gelände-System
 
@@ -510,27 +520,54 @@ openTTS/
 - TTS-Import ermöglicht sofortigen Zugang zu tausenden Miniaturen
 - Performance ist hervorragend auch bei 1000+ Objekten
 
-### Milestone 2: Alpha (IN ARBEIT)
+### Milestone 2: Alpha (IN ARBEIT - ~90% fertig)
 **Ziel: Vollständiges Einzelspieler-Erlebnis**
 
 7. [x] Erweitertes Objekt-Management (Multi-Select, Arrangements, Copy/Paste)
 8. [x] **Map Layout Editor** - Top-down 3" Grid für Terrain-Planung
 9. [x] **Terrain-Typen** - Ruins, Forest, Container, Dangerous mit Eigenschaften
-10. [x] **Deployment Zones** - Standard 6"/9", Diagonal, Hammer & Anvil
+10. [x] **Deployment Zones (Map Editor)** - Standard 6"/9", Diagonal, Hammer & Anvil
 11. [x] **Objectives System** - Bis zu 6 Zielpunkte
 12. [x] **Auto-Generate Terrain** - Zufällige faire Layouts mit Symmetrie
 13. [x] **3D Terrain Overlay** - Grid-Visualisierung im 3D-Spiel
-14. [ ] **Terrain-Gameplay Integration** (NEXT):
-    - [ ] Cover-System (Ruins/Forest geben Deckung)
+14. [x] **Deployment Zones im 3D-Spiel** - Front-line (12") visualisiert
+15. [x] **Deployment Mode** - Zone Compliance Checking für Einheiten
+16. [x] **Terrain Hints** - Anzeige für Difficult/Dangerous Terrain
+17. [x] **LOS-Blocking Check** - Funktion implementiert (is_terrain_los_blocking)
+18. [x] **Scout/Ambush Units Panel** - UI-Panel für spezielle Einheiten
+19. [x] Speichern/Laden von Tisch-Setups (inkl. Multiplayer-Sync an Clients)
+20. [x] **Kenney UI Assets** - 9 Themes (SciFi + Fantasy)
+21. [x] **Table Background Texture** - Standard-Untergrund
+22. [x] **Unit-System** - Komplett implementiert:
+    - [x] ModelInstance (Model-Level Daten mit Properties-Dictionary)
+    - [x] GameUnit (System-agnostischer Wrapper)
+    - [x] EquipmentDistributor (Waffen-Verteilung basierend auf API-Count)
+    - [x] Coherency-System (1" Model-zu-Model, 9" Kette)
+    - [x] Coherency-Visualizer (Grün/Gelb/Rot Linien)
+    - [x] Hero-Attachment Dialog
+    - [x] Radial Context Menu (Fitts's Law Design)
+    - [x] Wounds Dialog (+/- Buttons pro Model)
+    - [x] Marker Dialog (Standard OPR + Custom Freetext)
+    - [x] Activation Tracker (Runden/Turn-Management)
+    - [x] Multiplayer Sync RPCs
+    - [x] Save/Load Integration
+23. [x] **AI-System** - OPR Solo & Co-Op Rules v3.5.0:
+    - [x] AIUnitClassifier (Hybrid/Shooting/Melee)
+    - [x] AIDecisionTree (3 Entscheidungsbäume)
+    - [x] AITargetSelector (Waffen-Prioritäten)
+    - [x] AIManager (Aktivierung, Actions)
+    - [x] AISpecialRules (Ambush, Scout, Transport, etc.)
+    - [x] AIObjectiveSetup (6-Quadrat-Grid)
+24. [ ] **Weitere Deployment Zones**:
+    - [ ] Corner Deployment
+    - [ ] Dawn Assault
+    - [ ] Pitched Battle
+    - [ ] Meeting Engagement
+25. [ ] **Terrain-Gameplay Mechaniken**:
+    - [ ] Cover-System (Würfelmodifikatoren)
     - [ ] Schwieriges Gelände (Movement-Modifikatoren)
-    - [ ] LOS-Blocking (Container)
-    - [ ] Dangerous Terrain (Schaden)
-15. [ ] Deployment Zones im 3D-Spiel anzeigen
-16. [ ] Einheiten-Karten und Stats im 3D-Spiel
-17. [ ] Vollständiges Würfel-System (mehr Würfeltypen, Modifikatoren)
-18. [x] Speichern/Laden von Tisch-Setups (inkl. Multiplayer-Sync an Clients)
-19. [x] **Kenney UI Assets** - 9 Themes (SciFi + Fantasy)
-20. [x] **Table Background Texture** - Standard-Untergrund
+    - [ ] Dangerous Terrain (Schaden bei Betreten)
+26. [ ] Vollständiges Würfel-System (mehr Würfeltypen, Modifikatoren)
 
 ### Milestone 3: Beta
 **Ziel: Multiplayer-fähig**
@@ -622,18 +659,44 @@ openTTS/
 6. **Kenney UI Assets Integration** ✅
 7. **Table Background Texture** ✅
 
+### ✅ Kürzlich Erledigt
+1. **Deployment Zones im 3D-Spiel** - Front-line (12") visualisiert
+2. **Deployment Mode** - Zone Compliance Checking implementiert
+3. **Terrain Hints** - Anzeige für Difficult/Dangerous Terrain
+4. **LOS-Blocking Check** - Prüfung ob Terrain Sichtlinien blockiert
+5. **Scout/Ambush Units Panel** - UI-Panel für spezielle Einheiten
+6. **Unit-System komplett implementiert:**
+   - ModelInstance (Model-Level Daten)
+   - GameUnit (System-agnostischer Wrapper)
+   - EquipmentDistributor (Waffen-Verteilung)
+   - Coherency-System (1" Model-zu-Model, visuelles Feedback)
+   - Hero-Attachment Dialog
+   - Radial Context Menu
+   - Wunden-Tracking Dialog
+   - Status-Marker Dialog
+   - Aktivierungs-Tracker
+   - Multiplayer Sync RPCs
+   - Save/Load Integration
+7. **AI-System (OPR Solo & Co-Op Rules v3.5.0):**
+   - AIUnitClassifier (Hybrid/Shooting/Melee)
+   - AIDecisionTree (alle 3 Entscheidungsbäume)
+   - AITargetSelector (AP, Deadly, Takedown Prioritäten)
+   - AIManager (Aktivierungsreihenfolge, Action Execution)
+   - AISpecialRules (Ambush, Scout, Transport, Artillery, Caster)
+   - AIObjectiveSetup (6-Quadrat-Grid Platzierung)
+   - Challenge Bonus Option
+
 ### 🔄 Aktuell in Arbeit (Milestone 2 - PRIORITÄT)
-1. **Terrain-Gameplay Integration** - Cover, Schwieriges Gelände, LOS-Blocking, Dangerous
-2. **Deployment Zones im 3D-Spiel** - Visualisierung beim Spielstart
-3. **Einheiten-Karten im Spiel** - Stats-Anzeige auf dem Tisch
-4. **Phasen-Management** - Turn-Tracker, Aktivierungs-System
+1. **Weitere Deployment Zones** - Corner, Dawn Assault, Pitched Battle, Meeting Engagement
+2. **Terrain-Gameplay Mechaniken** - Cover-Würfel, Movement-Modifikatoren, Dangerous-Schaden
 
 ### 📋 Geplant
-- **Wunden-Tracking** - HP-Anzeige pro Modell
-- **Status-Marker** - Aktiviert, Pinned, etc.
 - **Erweitertes Würfel-System** - Modifikatoren, Rerolls
 - **3D-Batch-Generierung** - Alle 35 Alien Hives Einheiten durchgehen
 - **OPR Army Forge Integration** - Erweiterte Armeelisten-Features
+- **Multiplayer Lobby UI** - Lobby-System für Netzwerkspiele
+- **Load Game Dialog** - Spielstände laden
+- **Befehls-/Strategiepunkte-Counter** - CP/Stratagem Tracking
 
 ---
 
@@ -660,6 +723,6 @@ openTTS/
 ---
 
 *Dokument erstellt: 2025-12-17*
-*Letzte Überarbeitung: 2026-01-01*
-*Version: 1.5*
-*Status: Milestone 2 zu ~60% fertig - Map Layout System komplett, Terrain-Gameplay Integration next*
+*Letzte Überarbeitung: 2026-01-05*
+*Version: 1.8*
+*Status: Milestone 2 zu ~90% fertig - AI-System für Solo & Co-Op implementiert (OPR Rules v3.5.0)*
