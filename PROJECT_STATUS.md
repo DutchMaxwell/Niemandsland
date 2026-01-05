@@ -1,5 +1,5 @@
 # OpenTTS - Projekt Status
-**Stand:** 2026-01-01
+**Stand:** 2026-01-05
 **Version:** 0.2-alpha
 **Branch:** `main` (alle Feature-Branches gemerged)
 
@@ -53,6 +53,13 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 - ✅ **Save/Load Layouts** - Terrain-Setups speichern und laden
 - ✅ **Table Background Texture** - Standard-Untergrund für den Spieltisch
 
+### Deployment & Terrain Gameplay (NEU!)
+- ✅ **Deployment Zones im 3D-Spiel** - Front-line (12") Visualisierung
+- ✅ **Deployment Mode** - Zone Compliance Checking für Einheiten
+- ✅ **Terrain Hints** - Anzeige für Difficult und Dangerous Terrain
+- ✅ **LOS-Blocking Check** - Prüfung ob Terrain Sichtlinien blockiert
+- ✅ **Scout/Ambush Units Panel** - UI-Panel für Scout/Ambush Einheiten
+
 ### OPR Integration
 - ✅ **OPR API Client** - Army Forge API Integration
 - ✅ **Stats Tooltips** - Unit-Statistiken beim Hover
@@ -89,17 +96,24 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 
 ## 📋 In Arbeit (Milestone 2)
 
-### Terrain-Gameplay Integration (PRIORITÄT!)
-- [ ] **Deployment Zones im 3D-Spiel** - Sichtbare Zonen beim Spielstart
-- [ ] **Cover-System** - Deckung durch Terrain (Ruins, Forest)
-- [ ] **Schwieriges Gelände** - Movement-Modifikatoren (Forest)
-- [ ] **LOS-Blocking** - Container blockieren Sichtlinien komplett
-- [ ] **Dangerous Terrain** - Schaden bei Betreten (Minefields, Acid)
-- [ ] **Terrain-Höhen** - Height 5 Objekte für Sichtlinien
+### Deployment Zones (Teilweise implementiert)
+- ✅ **Front-line (12")** - Implementiert und visualisiert
+- [ ] **Corner Deployment** - Noch nicht implementiert
+- [ ] **Dawn Assault** - Noch nicht implementiert
+- [ ] **Pitched Battle** - Noch nicht implementiert
+- [ ] **Meeting Engagement** - Noch nicht implementiert
+
+### Terrain-Gameplay Integration
+- ✅ **LOS-Blocking Check** - Funktion implementiert (is_terrain_los_blocking)
+- ✅ **Terrain Hints** - Anzeige für Difficult/Dangerous Terrain
+- [ ] **Cover-System** - Gameplay-Mechanik für Deckung (Würfelmodifikatoren)
+- [ ] **Schwieriges Gelände** - Movement-Modifikatoren anwenden
+- [ ] **Dangerous Terrain** - Schaden bei Betreten
+- [ ] **Terrain-Höhen** - Height 5 Objekte für Sichtlinien-Berechnung
 
 ### Gameplay-Features
-- [ ] Einheiten-Karten und erweiterte Stats
-- [ ] Erweiterte Würfel-Optionen (Modifikatoren, mehr Typen)
+- [ ] Einheiten-Karten und erweiterte Stats im 3D-Spiel
+- [ ] Erweiterte Würfel-Optionen (Modifikatoren, Rerolls)
 - [ ] Phasen-Management System (Turn-Tracker, Aktivierung)
 - [ ] Wunden-Tracking pro Modell
 - [ ] Status-Marker (Aktiviert, Pinned, etc.)
@@ -108,7 +122,8 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 - [ ] In-Game HUD Overhaul
 - [ ] Radial Context Menu
 - [ ] Minimap mit Terrain-Overlay
-- [ ] Erweiterte Settings-Menü-Integration
+- [ ] Multiplayer Lobby UI
+- [ ] Load Game Dialog
 
 ---
 
@@ -180,13 +195,14 @@ openTTS/
 ## 🚀 Nächste Schritte (Priorität)
 
 ### Kurzfristig (Diese Woche)
-1. ✅ **Dokumentation aktualisieren** - PROJECT_STATUS.md, README.md, PLAN.md
-2. **Deployment Zones ins 3D-Spiel** - Visualisierung beim Spielstart
-3. **Cover-System implementieren** - Terrain gibt Deckung (Ruins, Forest)
-4. **Schwieriges Gelände** - Movement-Modifikatoren aktivieren
+1. ✅ **Deployment Zones (Front-line)** - Im 3D-Spiel visualisiert
+2. ✅ **Deployment Mode** - Zone Compliance Checking implementiert
+3. ✅ **Terrain Hints** - Anzeige für Difficult/Dangerous Terrain
+4. **Weitere Deployment Zones** - Corner, Dawn Assault, Pitched Battle, Meeting Engagement
+5. **Cover-System** - Gameplay-Mechanik für Würfelmodifikatoren
 
 ### Mittelfristig (Diesen Monat)
-1. **Terrain-Gameplay Features** - LOS-Blocking, Dangerous Terrain, Höhen
+1. **Terrain-Gameplay Mechaniken** - Cover-Würfel, Movement-Modifikatoren, Dangerous-Schaden
 2. **Einheiten-Karten** - Erweiterte Stats-Anzeige im 3D-Spiel
 3. **Phasen-Management** - Turn-Tracker, Aktivierungs-System
 4. **Wunden-Tracking** - HP-Anzeige pro Modell
@@ -247,14 +263,13 @@ openTTS/
 
 ### Aktive Branches
 - `main` - Stabile Version mit allen Features
-- `claude/merge-branches-to-main-8aVWC` - Alle Feature-Branches gemerged (aktuell)
 
-### Recent Merges (2026-01-01)
-- `74ef811` - Merge: Comprehensive cleanup and documentation update
-- `24b65bc` - Merge: Fix watermark removal and add batch processing GUI
-- `49de9dd` - Merge: Add Kenney UI assets (SciFi and Fantasy themes)
-- `4b1d9b2` - Merge: Complete terrain editor with deployment zones, objectives, and auto-generate
-- `5079956` - Merge: Add table background and terrain features from set-default-background
+### Recent Commits (2026-01-05)
+- `9bb455a` - Merge: All feature branches to main
+- `fbba127` - feat: Add Scout/Ambush units panel
+- `19c4bb3` - feat: Add deployment mode with zone compliance checking
+- `a0ab277` - feat: Add terrain hints for difficult and dangerous terrain
+- `ebfcaa5` - feat: Add Deployment Zone system with Front-line (12") support
 
 ---
 
@@ -266,4 +281,4 @@ MIT License - Siehe [LICENSE](./LICENSE) für Details.
 
 **Status:** ✅ Alpha-Version funktionsfähig, aktive Entwicklung
 **Contributors:** DutchMaxwell, Community
-**Letzte Aktualisierung:** 2026-01-01
+**Letzte Aktualisierung:** 2026-01-05
