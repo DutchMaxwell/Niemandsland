@@ -147,6 +147,10 @@ func _ready() -> void:
 
 ## Initializes the simulator with references.
 func initialize(p_army_manager: OPRArmyManager) -> void:
+	if p_army_manager == null:
+		push_error("BattleSimulator: army_manager is null")
+		return
+
 	army_manager = p_army_manager
 
 	# Create AI manager instance
@@ -155,9 +159,12 @@ func initialize(p_army_manager: OPRArmyManager) -> void:
 	ai_manager.ai_enabled = true
 
 	# Connect AI signals for logging
-	ai_manager.action_log.connect(_on_ai_log)
-	ai_manager.combat_result.connect(_on_combat_result)
-	ai_manager.morale_test.connect(_on_morale_test)
+	if ai_manager.has_signal("action_log"):
+		ai_manager.action_log.connect(_on_ai_log)
+	if ai_manager.has_signal("combat_result"):
+		ai_manager.combat_result.connect(_on_combat_result)
+	if ai_manager.has_signal("morale_test"):
+		ai_manager.morale_test.connect(_on_morale_test)
 
 
 ## Loads armies for both players from file paths.
@@ -207,8 +214,16 @@ func setup_loaded_armies() -> void:
 
 ## Sets up the mission with objectives.
 func setup_mission(table_bounds: Rect2) -> void:
+	if ai_manager == null:
+		push_error("BattleSimulator: ai_manager not initialized")
+		return
+
 	ai_manager.setup_mission(table_bounds)
 	mission = ai_manager.mission_state
+
+	if mission == null:
+		push_warning("BattleSimulator: mission_state is null after setup")
+		return
 
 	_log("Mission: %d objectives, %d rounds" % [
 		mission.objectives.size(),

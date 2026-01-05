@@ -51,6 +51,14 @@ static func resolve_shooting(
 	context: AIContext
 ) -> CombatResult:
 	var result = CombatResult.new()
+
+	if attacker == null or defender == null:
+		push_error("AICombat: resolve_shooting called with null unit")
+		return result
+
+	if context == null:
+		push_warning("AICombat: context is null in resolve_shooting")
+
 	result.attacker = attacker
 	result.defender = defender
 	result.is_melee = false
@@ -107,6 +115,11 @@ static func resolve_melee(
 	is_fatigued: bool = false
 ) -> CombatResult:
 	var result = CombatResult.new()
+
+	if attacker == null or defender == null:
+		push_error("AICombat: resolve_melee called with null unit")
+		return result
+
 	result.attacker = attacker
 	result.defender = defender
 	result.is_melee = true
@@ -649,6 +662,10 @@ static func _is_in_cover(unit: GameUnit, context: AIContext) -> bool:
 # ===== Helper Methods =====
 
 static func _get_unit_center(game_unit: GameUnit) -> Vector3:
+	if game_unit == null:
+		push_warning("AICombat: _get_unit_center called with null unit")
+		return Vector3.ZERO
+
 	var sum = Vector3.ZERO
 	var count = 0
 	for model in game_unit.models:
