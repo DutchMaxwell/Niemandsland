@@ -114,16 +114,25 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 ### Gameplay-Features
 - [ ] Einheiten-Karten und erweiterte Stats im 3D-Spiel
 - [ ] Erweiterte Würfel-Optionen (Modifikatoren, Rerolls)
-- [ ] Phasen-Management System (Turn-Tracker, Aktivierung)
-- [ ] Wunden-Tracking pro Modell
-- [ ] Status-Marker (Aktiviert, Pinned, etc.)
+- [x] **Phasen-Management System** - Turn-Tracker mit Runden und Aktivierungen (activation_tracker.gd)
+- [x] **Wunden-Tracking pro Modell** - wounds_dialog.gd mit +/- Buttons
+- [x] **Status-Marker** - Standard OPR + Custom Freetext (marker_dialog.gd, unit_marker.gd)
 
 ### UI-Verbesserungen
 - [ ] In-Game HUD Overhaul
-- [ ] Radial Context Menu
+- [x] **Radial Context Menu** - radial_menu.gd mit Kontext-Erkennung
 - [ ] Minimap mit Terrain-Overlay
 - [ ] Multiplayer Lobby UI
 - [ ] Load Game Dialog
+
+### Unit-System (NEU!)
+- [x] **Model-Level Architektur** - ModelInstance mit generischem Properties-Dictionary
+- [x] **GameUnit Wrapper** - System-agnostisch (OPR, WGS, generisch)
+- [x] **Equipment-Verteilung** - Automatisch basierend auf API-Count
+- [x] **Coherency-System** - 1" Model-zu-Model, 9" Kette, visuelle Darstellung
+- [x] **Hero-Attachment** - Manueller Dialog nach Import
+- [x] **Multiplayer Sync** - RPCs für Wounds, Markers, Activation, Hero-Attachment
+- [x] **Save/Load Integration** - GameUnit-Serialisierung mit Model-Positionen
 
 ---
 
@@ -147,7 +156,8 @@ openTTS/
 ├── scenes/                  # Godot-Szenen
 │   ├── main.tscn           # Hauptszene
 │   ├── startup_menu.tscn   # Startmenü
-│   ├── map_layout.tscn     # Map Layout Editor (NEU!)
+│   ├── map_layout.tscn     # Map Layout Editor
+│   ├── radial_menu.tscn    # NEU: Radial Context Menu
 │   └── opr_stats_tooltip.tscn
 ├── scripts/                 # GDScript-Dateien
 │   ├── main.gd             # Hauptszene-Controller
@@ -155,16 +165,30 @@ openTTS/
 │   ├── table.gd
 │   ├── object_manager.gd
 │   ├── selectable_object.gd
-│   ├── map_layout.gd       # Map Layout Editor (NEU! 852 Zeilen)
-│   ├── map_layout_grid.gd  # Grid Rendering (NEU! 272 Zeilen)
-│   ├── terrain_overlay.gd  # 3D Overlay (NEU! 150 Zeilen)
-│   ├── network_manager.gd
-│   ├── save_manager.gd
+│   ├── map_layout.gd       # Map Layout Editor (852 Zeilen)
+│   ├── map_layout_grid.gd  # Grid Rendering (272 Zeilen)
+│   ├── terrain_overlay.gd  # 3D Overlay (150 Zeilen)
+│   ├── network_manager.gd  # Mit GameUnit Sync RPCs
+│   ├── save_manager.gd     # Mit GameUnit Serialisierung
 │   ├── lighting_controller.gd
 │   ├── theme_manager.gd
 │   ├── tts_importer.gd
 │   ├── opr_api_client.gd
+│   ├── opr_army_manager.gd # Mit GameUnit Integration
 │   ├── wgs_client.gd
+│   ├── model_instance.gd   # NEU: Model-Level Daten
+│   ├── game_unit.gd        # NEU: System-agnostischer Unit-Wrapper
+│   ├── equipment_distributor.gd  # NEU: Waffen-Verteilung
+│   ├── unit_utils.gd       # NEU: Unit-Erkennung Helpers
+│   ├── coherency_checker.gd     # NEU: Coherency-Validierung
+│   ├── coherency_visualizer.gd  # NEU: Visuelle Coherency-Linien
+│   ├── unit_marker.gd      # NEU: Standard + Custom Marker
+│   ├── radial_menu.gd      # NEU: Pie-Menu UI
+│   ├── radial_menu_controller.gd  # NEU: Kontext-Handler
+│   ├── wounds_dialog.gd    # NEU: Wunden-Tracking Dialog
+│   ├── marker_dialog.gd    # NEU: Marker-Verwaltung Dialog
+│   ├── activation_tracker.gd    # NEU: Runden/Aktivierungs-Panel
+│   ├── hero_attachment_dialog.gd  # NEU: Hero-Zuweisung
 │   └── ...
 ├── assets/                  # Texturen, Modelle, Audio
 │   ├── miniatures/

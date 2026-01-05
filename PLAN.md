@@ -205,12 +205,22 @@ openTTS/
 
 **Priorität: KRITISCH**
 
-- [ ] Einheiten-Karten mit Stats (importierbar aus OPR Army Forge etc.)
-- [ ] Wunden-Tracking pro Modell
-- [ ] Status-Marker (Aktiviert, Pinned, etc.)
-- [ ] Einheiten-Aktivierungs-Tracker
+- [x] Einheiten-Karten mit Stats (importierbar aus OPR Army Forge etc.)
+- [x] Wunden-Tracking pro Modell (wounds_dialog.gd)
+- [x] Status-Marker (Aktiviert, Pinned, etc.) - marker_dialog.gd mit Standard OPR + Custom
+- [x] Einheiten-Aktivierungs-Tracker (activation_tracker.gd)
 - [ ] Befehls-/Strategiepunkte-Counter
 - [ ] Quick-Reference für Einheiten-Regeln
+
+**Unit-System (NEU implementiert):**
+- [x] ModelInstance - Model-Level Daten mit generischem Properties-Dictionary
+- [x] GameUnit - System-agnostischer Wrapper (OPR, WGS, generisch)
+- [x] EquipmentDistributor - Automatische Waffen-Verteilung basierend auf API-Count
+- [x] Coherency-System - 1" Model-zu-Model, 9" Kette, visuelle Linien
+- [x] Hero-Attachment - Manueller Dialog nach Import
+- [x] Radial Context Menu - Pie-Menu mit Fitts's Law Design
+- [x] Multiplayer Sync - RPCs für Wounds, Markers, Activation, Hero-Attachment
+- [x] Save/Load Integration - GameUnit-Serialisierung mit Model-Positionen
 
 ### 3.4 Gelände-System
 
@@ -510,7 +520,7 @@ openTTS/
 - TTS-Import ermöglicht sofortigen Zugang zu tausenden Miniaturen
 - Performance ist hervorragend auch bei 1000+ Objekten
 
-### Milestone 2: Alpha (IN ARBEIT - ~75% fertig)
+### Milestone 2: Alpha (IN ARBEIT - ~85% fertig)
 **Ziel: Vollständiges Einzelspieler-Erlebnis**
 
 7. [x] Erweitertes Objekt-Management (Multi-Select, Arrangements, Copy/Paste)
@@ -528,16 +538,28 @@ openTTS/
 19. [x] Speichern/Laden von Tisch-Setups (inkl. Multiplayer-Sync an Clients)
 20. [x] **Kenney UI Assets** - 9 Themes (SciFi + Fantasy)
 21. [x] **Table Background Texture** - Standard-Untergrund
-22. [ ] **Weitere Deployment Zones** (NEXT):
+22. [x] **Unit-System** - Komplett implementiert:
+    - [x] ModelInstance (Model-Level Daten mit Properties-Dictionary)
+    - [x] GameUnit (System-agnostischer Wrapper)
+    - [x] EquipmentDistributor (Waffen-Verteilung basierend auf API-Count)
+    - [x] Coherency-System (1" Model-zu-Model, 9" Kette)
+    - [x] Coherency-Visualizer (Grün/Gelb/Rot Linien)
+    - [x] Hero-Attachment Dialog
+    - [x] Radial Context Menu (Fitts's Law Design)
+    - [x] Wounds Dialog (+/- Buttons pro Model)
+    - [x] Marker Dialog (Standard OPR + Custom Freetext)
+    - [x] Activation Tracker (Runden/Turn-Management)
+    - [x] Multiplayer Sync RPCs
+    - [x] Save/Load Integration
+23. [ ] **Weitere Deployment Zones** (NEXT):
     - [ ] Corner Deployment
     - [ ] Dawn Assault
     - [ ] Pitched Battle
     - [ ] Meeting Engagement
-23. [ ] **Terrain-Gameplay Mechaniken**:
+24. [ ] **Terrain-Gameplay Mechaniken**:
     - [ ] Cover-System (Würfelmodifikatoren)
     - [ ] Schwieriges Gelände (Movement-Modifikatoren)
     - [ ] Dangerous Terrain (Schaden bei Betreten)
-24. [ ] Einheiten-Karten und Stats im 3D-Spiel
 25. [ ] Vollständiges Würfel-System (mehr Würfeltypen, Modifikatoren)
 
 ### Milestone 3: Beta
@@ -636,21 +658,30 @@ openTTS/
 3. **Terrain Hints** - Anzeige für Difficult/Dangerous Terrain
 4. **LOS-Blocking Check** - Prüfung ob Terrain Sichtlinien blockiert
 5. **Scout/Ambush Units Panel** - UI-Panel für spezielle Einheiten
+6. **Unit-System komplett implementiert:**
+   - ModelInstance (Model-Level Daten)
+   - GameUnit (System-agnostischer Wrapper)
+   - EquipmentDistributor (Waffen-Verteilung)
+   - Coherency-System (1" Model-zu-Model, visuelles Feedback)
+   - Hero-Attachment Dialog
+   - Radial Context Menu
+   - Wunden-Tracking Dialog
+   - Status-Marker Dialog
+   - Aktivierungs-Tracker
+   - Multiplayer Sync RPCs
+   - Save/Load Integration
 
 ### 🔄 Aktuell in Arbeit (Milestone 2 - PRIORITÄT)
 1. **Weitere Deployment Zones** - Corner, Dawn Assault, Pitched Battle, Meeting Engagement
 2. **Terrain-Gameplay Mechaniken** - Cover-Würfel, Movement-Modifikatoren, Dangerous-Schaden
-3. **Einheiten-Karten im Spiel** - Stats-Anzeige auf dem Tisch
-4. **Phasen-Management** - Turn-Tracker, Aktivierungs-System
 
 ### 📋 Geplant
-- **Wunden-Tracking** - HP-Anzeige pro Modell
-- **Status-Marker** - Aktiviert, Pinned, etc.
 - **Erweitertes Würfel-System** - Modifikatoren, Rerolls
 - **3D-Batch-Generierung** - Alle 35 Alien Hives Einheiten durchgehen
 - **OPR Army Forge Integration** - Erweiterte Armeelisten-Features
 - **Multiplayer Lobby UI** - Lobby-System für Netzwerkspiele
 - **Load Game Dialog** - Spielstände laden
+- **Befehls-/Strategiepunkte-Counter** - CP/Stratagem Tracking
 
 ---
 
@@ -678,5 +709,5 @@ openTTS/
 
 *Dokument erstellt: 2025-12-17*
 *Letzte Überarbeitung: 2026-01-05*
-*Version: 1.6*
-*Status: Milestone 2 zu ~75% fertig - Deployment Zones & Terrain Hints implementiert, weitere Deployment-Typen und Gameplay-Mechaniken next*
+*Version: 1.7*
+*Status: Milestone 2 zu ~85% fertig - Unit-System komplett implementiert (ModelInstance, GameUnit, Radial Menu, Wounds/Markers, Multiplayer Sync)*
