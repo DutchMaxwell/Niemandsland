@@ -1,7 +1,7 @@
 # Plan: Unit-System und Radialmenü
 
 **Erstellt:** 2026-01-05
-**Status:** Entwurf v2 - Mit Model-Level Architektur
+**Status:** Entwurf v3 - Generische Architektur (API-verifiziert)
 **Letzte Änderung:** 2026-01-05
 
 ---
@@ -20,26 +20,27 @@ Aktuell gibt es im Code verschiedene Objekttypen, aber keine einheitliche Defini
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                        UNIT                             │
-│  "Battle Brothers" (5 Modelle, 100pts)                  │
-│  Quality: 4+, Defense: 4+                               │
+│  "Saurian Warriors" (20 Modelle, 200pts)                │
+│  Quality: 4+, Defense: 4+, Tough(3)                     │
 ├─────────────────────────────────────────────────────────┤
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐
-│  │ MODEL 1 │ │ MODEL 2 │ │ MODEL 3 │ │ MODEL 4 │ │ MODEL 5 │
-│  │ Sergeant│ │ Trooper │ │ Trooper │ │ Heavy   │ │ Medic   │
-│  │ Leader  │ │         │ │         │ │Specialist│ │Specialist│
-│  │ Pistol  │ │ Rifle   │ │ Rifle   │ │ H.Bolter│ │ Rifle   │
-│  │ CCW     │ │         │ │         │ │         │ │ MedicKit│
-│  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘
-│       ↓           ↓           ↓           ↓           ↓
-│    Node3D      Node3D      Node3D      Node3D      Node3D
-│   (auf Tisch) (auf Tisch) (auf Tisch) (auf Tisch) (auf Tisch)
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐  ...   │
+│  │ MODEL 1 │ │ MODEL 2 │ │ MODEL 3 │ │ MODEL 4 │        │
+│  │ 3 Wunden│ │ 3 Wunden│ │ 3 Wunden│ │ 3 Wunden│        │
+│  │ Banner  │ │ Primal  │ │ Primal  │ │ Primal  │        │
+│  │ Primal  │ │ Fearless│ │ Fearless│ │ Fearless│        │
+│  │ Fearless│ │         │ │         │ │         │        │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘        │
+│       ↓           ↓           ↓           ↓             │
+│    Node3D      Node3D      Node3D      Node3D           │
 └─────────────────────────────────────────────────────────┘
 ```
 
 **Wichtig:**
 - Eine **Unit** ist die spielmechanische Einheit (teilt Q/D, aktiviert zusammen)
 - Ein **Model** ist ein einzelnes 3D-Objekt auf dem Tisch
-- Models können unterschiedliche Ausrüstung/Rollen haben (Leader, Specialist)
+- Tough(X) → JEDES Model der Unit hat X Wunden
+- Equipment ohne "Nx" Prefix → NUR EIN Model hat es (z.B. Banner)
+- Equipment mit "20x" Prefix → ALLE 20 Models haben es
 
 ---
 
@@ -76,164 +77,353 @@ class OPRUnit:
     defense: int           # D-Wert (2-6)
     cost: int              # Punktekosten
     weapons: Array         # Waffen mit Range, Attacks, Rules
-    special_rules: Array   # Spezialregeln
+    special_rules: Array   # Spezialregeln (Strings wie "Tough(3)", "Primal")
     base_size_round: int   # Basengröße in mm
 ```
 
 ---
 
-## 3. Model-Level Architektur (NEU)
+## 3. Army Forge API Analyse (Verifiziert)
 
-### 3.1 ModelInstance Klasse
+### 3.1 API Datenstruktur (aus opr_api_client.gd)
 
-Jedes einzelne Modell auf dem Tisch erhält eine `ModelInstance`-Referenz:
+Die TTS API (`/api/tts?id=XXX`) liefert **vollständig aufgelöste** Unit-Daten:
+
+```json
+{
+  "listId": "xxx",
+  "listName": "My Army",
+  "gameSystem": "gf",
+  "listPoints": 2000,
+  "units": [
+    {
+      "id": "unit_123",
+      "name": "Saurian Warriors",
+      "customName": "",
+      "size": 20,
+      "cost": 200,
+      "quality": 4,
+      "defense": 4,
+      "bases": { "round": "32", "square": "30" },
+      "specialRules": [
+        { "name": "Tough", "rating": 3 },
+        { "name": "Primal" },
+        { "name": "Fearless" }
+      ],
+      "loadout": [
+        {
+          "name": "Claws",
+          "range": 0,
+          "attacks": 2,
+          "count": 20,
+          "specialRules": []
+        },
+        {
+          "name": "Banner",
+          "attacks": 0
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 3.2 Wichtige API-Erkenntnisse
+
+| Aspekt | API-Verhalten | Implikation |
+|--------|---------------|-------------|
+| **Tough(X)** | `{"name": "Tough", "rating": 3}` | Jedes Model hat 3 Wunden |
+| **Weapon Count** | `"count": 20` | 20 Models haben diese Waffe |
+| **Equipment** | `"attacks": 0` → kein Count | In `special_rules` Array |
+| **Banner/etc.** | Keine Count-Info | Annahme: 1 Model hat es |
+| **"Joined to:"** | Nicht in API! | Nur in Text-Export |
+
+### 3.3 Was die API NICHT liefert
+
+1. **Keine Modell-spezifische Zuweisung** - Wir wissen "Unit hat Banner", aber nicht "Model 3 hat Banner"
+2. **Keine Hero-Attachment-Info** - "Joined to:" nur in Text-Export
+3. **Keine expliziten Rollen** - Kein "Leader", "Specialist" Flag
+
+### 3.4 Parsing-Regeln für Import
+
+```gdscript
+# Tough(X) → wounds_max für jedes Model
+func _parse_tough(special_rules: Array) -> int:
+    for rule in special_rules:
+        if rule.begins_with("Tough("):
+            var rating = rule.substr(6, rule.length() - 7)
+            return rating.to_int()
+    return 1  # Default: 1 Wunde
+
+# Waffen mit count → auf N Models verteilen
+func _distribute_weapons(weapons: Array, unit_size: int) -> void:
+    for weapon in weapons:
+        var count = weapon.count if weapon.count > 0 else 1
+        # Verteile auf erste N Models
+        for i in range(min(count, unit_size)):
+            models[i].weapons.append(weapon)
+
+# Equipment ohne attacks → Spezial-Equipment
+func _identify_equipment(loadout: Array) -> Array:
+    var equipment = []
+    for item in loadout:
+        if item.attacks == 0:
+            equipment.append(item.name)
+    return equipment
+```
+
+---
+
+## 4. Model-Level Architektur (GENERISCH)
+
+### 4.1 ModelInstance Klasse (Generisch)
+
+**WICHTIG:** Keine hardcodierten Rollen! Alles kommt als Properties aus dem Import.
 
 ```gdscript
 class_name ModelInstance
 extends RefCounted
 
 # Referenzen
-var unit: OPRUnit              # Parent Unit
+var unit: Variant              # Parent Unit (OPRUnit, WGSUnit, etc.)
 var node: Node3D               # 3D Modell auf dem Tisch
-var model_index: int           # Position in Unit (0-4)
+var model_index: int           # Position in Unit (0-based)
 
-# Model-spezifische Ausrüstung
-var weapons: Array[OPRWeapon]  # Waffen DIESES Modells
-var equipment: Array[String]   # Equipment DIESES Modells
-var special_rules: Array[String]  # Model-spezifische Regeln
+# GENERISCHE Properties (alles aus Import, keine Interpretation!)
+var properties: Dictionary = {}
+# Beispiel-Inhalt:
+# {
+#   "weapons": [OPRWeapon, OPRWeapon],      # Waffen DIESES Modells
+#   "equipment": ["Banner"],                 # Equipment DIESES Modells (ohne Count)
+#   "special_rules": ["Primal", "Fearless"], # Regeln DIESES Modells
+#   "tough": 3,                              # Geparst aus "Tough(3)"
+#   "hero": false,                           # Optional: Hero-Flag
+#   "attached_to": null,                     # Optional: "Joined to:" Unit-Referenz
+# }
 
-# Rollen
-enum ModelRole { TROOPER, LEADER, SPECIALIST }
-var role: ModelRole = ModelRole.TROOPER
-var specialist_type: String = ""  # "Medic", "Radio", "Banner", "Heavy"
-
-# Zustand (Runtime)
+# Zustand (Runtime) - NICHT aus Import
 var wounds_current: int = 1
-var wounds_max: int = 1
+var wounds_max: int = 1          # Aus Tough(X) oder Default 1
 var is_alive: bool = true
-var status_markers: Array[String] = []  # ["Activated", "Pinned"]
+var markers: Array[String] = []  # Runtime-Marker: ["Activated", "Pinned"]
 
-# Helper
+# ===== Helper Methoden (Query, keine Hardcoding) =====
+
 func get_display_name() -> String:
-    if role == ModelRole.LEADER:
-        return "Leader"
-    elif role == ModelRole.SPECIALIST:
-        return specialist_type
-    return "Trooper"
+    # Zeigt Equipment wenn vorhanden, sonst Model-Index
+    var equip = properties.get("equipment", [])
+    if not equip.is_empty():
+        return equip[0]  # Erstes Equipment als Name
+    return "Model %d" % (model_index + 1)
 
-func is_leader() -> bool:
-    return role == ModelRole.LEADER
+func has_property(key: String) -> bool:
+    return properties.has(key)
 
-func is_specialist() -> bool:
-    return role == ModelRole.SPECIALIST
+func get_property(key: String, default: Variant = null) -> Variant:
+    return properties.get(key, default)
+
+func has_special_rule(rule: String) -> bool:
+    var rules = properties.get("special_rules", [])
+    for r in rules:
+        if r.begins_with(rule):  # Matcht "Tough" auch für "Tough(3)"
+            return true
+    return false
+
+func get_weapons() -> Array:
+    return properties.get("weapons", [])
+
+func get_equipment() -> Array:
+    return properties.get("equipment", [])
 ```
 
-### 3.2 Erweiterte OPRUnit Struktur
+### 4.2 GameUnit Wrapper Klasse (System-Agnostisch)
 
 ```gdscript
-class OPRUnit:
-    # Bestehende Felder (Unit-Level)
-    name: String
-    size: int
-    quality: int
-    defense: int
-    cost: int
+class_name GameUnit
+extends RefCounted
 
-    # NEU: Model-Level Daten
-    var models: Array[ModelInstance] = []
+# Die Unit-Daten (kann OPRUnit, WGSUnit, oder generisch sein)
+var source_data: Variant       # Original-Daten vom Import
+var source_type: String        # "opr", "wgs", "generic"
 
-    # Bestehende Felder werden zu "Pool" (für Verteilung)
-    var weapons_pool: Array[OPRWeapon]    # Alle Waffen der Unit
-    var equipment_pool: Array[String]      # Alle Equipment Items
+# Model-Level Daten
+var models: Array[ModelInstance] = []
 
-    # Helper Methoden
-    func get_model(index: int) -> ModelInstance
-    func get_leader() -> ModelInstance
-    func get_specialists() -> Array[ModelInstance]
-    func get_alive_models() -> Array[ModelInstance]
-    func get_model_for_node(node: Node3D) -> ModelInstance
+# Unit-Level Properties (aus Import extrahiert)
+var unit_properties: Dictionary = {}
+# Beispiel:
+# {
+#   "name": "Saurian Warriors",
+#   "size": 20,
+#   "quality": 4,
+#   "defense": 4,
+#   "cost": 200,
+#   "special_rules": ["Tough(3)", "Primal", "Fearless"],
+#   "attached_heroes": [],       # Units die "Joined to:" this sind
+#   "attached_to": null,         # Unit zu der wir "Joined to:" sind
+# }
+
+# ===== Helper Methoden =====
+
+func get_model(index: int) -> ModelInstance:
+    if index >= 0 and index < models.size():
+        return models[index]
+    return null
+
+func get_model_for_node(node: Node3D) -> ModelInstance:
+    for model in models:
+        if model.node == node:
+            return model
+    return null
+
+func get_alive_models() -> Array[ModelInstance]:
+    var alive: Array[ModelInstance] = []
+    for model in models:
+        if model.is_alive:
+            alive.append(model)
+    return alive
+
+func get_models_with_property(key: String) -> Array[ModelInstance]:
+    var result: Array[ModelInstance] = []
+    for model in models:
+        if model.has_property(key):
+            result.append(model)
+    return result
+
+func get_models_with_equipment(equipment_name: String) -> Array[ModelInstance]:
+    var result: Array[ModelInstance] = []
+    for model in models:
+        if equipment_name in model.get_equipment():
+            result.append(model)
+    return result
 ```
 
-### 3.3 Automatische Waffen-Verteilung (Option C)
+### 4.3 Automatische Equipment-Verteilung (Generisch)
 
-Beim Import werden Waffen/Equipment automatisch auf Modelle verteilt:
+Beim Import werden Waffen/Equipment basierend auf `count` Feld verteilt:
 
 ```gdscript
-func distribute_equipment_to_models(unit: OPRUnit) -> void:
-    # Schritt 1: Leader identifizieren und ausstatten
-    var leader = unit.models[0]
-    leader.role = ModelRole.LEADER
-    _assign_leader_weapons(leader, unit.weapons_pool)
+class_name EquipmentDistributor
+extends RefCounted
 
-    # Schritt 2: Spezialisten identifizieren
-    for equipment in unit.equipment_pool:
-        if equipment in ["Medic", "Radio", "Banner"]:
-            var model = _find_unassigned_model(unit)
-            model.role = ModelRole.SPECIALIST
-            model.specialist_type = equipment
-            model.equipment.append(equipment)
+## Verteilt Equipment aus API-Daten auf ModelInstances
+## Keine hardcodierten Rollen - alles basiert auf count und attacks
+static func distribute(game_unit: GameUnit, loadout: Array, special_rules: Array) -> void:
+    var unit_size = game_unit.models.size()
 
-    # Schritt 3: Heavy Weapons verteilen
-    for weapon in unit.weapons_pool:
-        if _is_heavy_weapon(weapon):
-            var model = _find_unassigned_model(unit)
-            model.role = ModelRole.SPECIALIST
-            model.specialist_type = "Heavy"
-            model.weapons.append(weapon)
+    # Schritt 1: Wounds aus Tough(X) für ALLE Models
+    var wounds = _parse_tough_rating(special_rules)
+    for model in game_unit.models:
+        model.wounds_max = wounds
+        model.wounds_current = wounds
+        model.properties["tough"] = wounds
 
-    # Schritt 4: Standard-Waffen an restliche Modelle
-    var standard_weapon = _get_standard_weapon(unit.weapons_pool)
-    for model in unit.models:
-        if model.weapons.is_empty():
-            model.weapons.append(standard_weapon)
+    # Schritt 2: Special Rules auf ALLE Models kopieren
+    # (API gibt unit-wide rules, nicht model-specific)
+    for model in game_unit.models:
+        model.properties["special_rules"] = special_rules.duplicate()
 
-func _is_heavy_weapon(weapon: OPRWeapon) -> bool:
-    # Heavy Weapons haben oft spezielle Regeln oder hohe AP
-    return "Heavy" in weapon.special_rules or \
-           "Blast" in weapon.special_rules or \
-           weapon.name.contains("Heavy")
+    # Schritt 3: Waffen verteilen basierend auf count
+    for item in loadout:
+        if item.attacks > 0:  # Ist eine Waffe
+            var count = item.count if item.count > 0 else unit_size
+            for i in range(min(count, unit_size)):
+                var weapons = game_unit.models[i].properties.get("weapons", [])
+                weapons.append(item)
+                game_unit.models[i].properties["weapons"] = weapons
+        else:
+            # Equipment ohne attacks → erstes verfügbares Model
+            var assigned = false
+            for model in game_unit.models:
+                var equip = model.properties.get("equipment", [])
+                if equip.is_empty():  # Noch kein Special-Equipment
+                    equip.append(item.name)
+                    model.properties["equipment"] = equip
+                    assigned = true
+                    break
+            if not assigned:
+                # Fallback: erstes Model
+                var equip = game_unit.models[0].properties.get("equipment", [])
+                equip.append(item.name)
+                game_unit.models[0].properties["equipment"] = equip
+
+## Parsed Tough(X) aus special_rules Array
+static func _parse_tough_rating(rules: Array) -> int:
+    for rule in rules:
+        if rule is String and rule.begins_with("Tough("):
+            var rating_str = rule.substr(6, rule.length() - 7)
+            return rating_str.to_int()
+    return 1  # Default: 1 Wunde
 ```
 
-### 3.4 Manueller Override
+### 4.4 Manueller Override
 
-User kann Equipment-Verteilung anpassen:
+User kann Equipment-Verteilung anpassen (via Radialmenü → "Edit Loadout"):
 
 ```gdscript
-# Via Radialmenü → "Edit Model Loadout"
-func reassign_weapon(model: ModelInstance, weapon: OPRWeapon) -> void:
-    # Waffe von aktuellem Träger entfernen
-    var current_carrier = _find_weapon_carrier(weapon)
-    if current_carrier:
-        current_carrier.weapons.erase(weapon)
+## Reassign equipment from one model to another
+static func reassign_equipment(
+    from_model: ModelInstance,
+    to_model: ModelInstance,
+    equipment_name: String
+) -> void:
+    # Entferne von aktuellem Träger
+    var from_equip = from_model.properties.get("equipment", [])
+    from_equip.erase(equipment_name)
+    from_model.properties["equipment"] = from_equip
 
-    # Waffe diesem Modell zuweisen
-    model.weapons.append(weapon)
+    # Füge zum neuen Träger hinzu
+    var to_equip = to_model.properties.get("equipment", [])
+    to_equip.append(equipment_name)
+    to_model.properties["equipment"] = to_equip
 
-    # Event für UI-Update
-    model_loadout_changed.emit(model)
+## Reassign weapon
+static func reassign_weapon(
+    game_unit: GameUnit,
+    weapon: Variant,
+    to_model: ModelInstance
+) -> void:
+    # Finde aktuellen Träger
+    for model in game_unit.models:
+        var weapons = model.properties.get("weapons", [])
+        if weapon in weapons:
+            weapons.erase(weapon)
+            model.properties["weapons"] = weapons
+            break
+
+    # Zum neuen Model hinzufügen
+    var to_weapons = to_model.properties.get("weapons", [])
+    to_weapons.append(weapon)
+    to_model.properties["weapons"] = to_weapons
 ```
 
-### 3.5 Metadaten auf Node3D
+### 4.5 Metadaten auf Node3D
 
 Jedes 3D-Modell speichert:
 
 ```gdscript
 # Beim Spawnen
-node.set_meta("model_instance", model_instance)  # NEU
-node.set_meta("opr_unit", unit)                  # Bestehend
-node.set_meta("model_index", index)              # NEU
-node.set_meta("player_id", player_id)
+node.set_meta("model_instance", model_instance)  # NEU: ModelInstance
+node.set_meta("game_unit", game_unit)            # NEU: GameUnit wrapper
+node.set_meta("model_index", index)              # NEU: Index in Unit (0-based)
+node.set_meta("player_id", player_id)            # Bestehend
 
-# Lookup
+# Legacy-Kompatibilität (optional)
+node.set_meta("opr_unit", game_unit.source_data) # Falls source_type == "opr"
+
+# Lookup Funktionen
 func get_model_instance(node: Node3D) -> ModelInstance:
     return node.get_meta("model_instance", null)
+
+func get_game_unit(node: Node3D) -> GameUnit:
+    return node.get_meta("game_unit", null)
 ```
 
 ---
 
-## 4. Einheiten-Kategorien
+## 5. Einheiten-Kategorien
 
-### 4.1 Kategorien definieren
+### 5.1 Kategorien definieren
 
 Wir definieren drei Einheiten-Typen:
 
@@ -246,7 +436,7 @@ enum UnitType {
 }
 ```
 
-### 3.2 Neue Gruppe: `unit`
+### 5.2 Neue Gruppe: `unit`
 
 **Alle Einheiten erhalten zusätzlich die Gruppe `unit`:**
 
@@ -260,7 +450,7 @@ miniature.add_to_group("unit")
 miniature.add_to_group("miniature")
 ```
 
-### 3.3 Unit Helper Script: `unit_utils.gd`
+### 5.3 Unit Helper Script: `unit_utils.gd`
 
 ```gdscript
 class_name UnitUtils
@@ -426,32 +616,36 @@ Bei kritischen Aktionen auf Leader/Specialists:
 
 ## 7. Implementierungsplan
 
-### Phase 1: Model-Level Architektur (2-3 Tage)
+### Phase 1: Generische Model-Architektur
 
-**Dateien:**
-- [ ] `scripts/model_instance.gd` - Neue Klasse für Model-Daten
-- [ ] `scripts/opr_api_client.gd` - OPRUnit erweitern mit models Array
-- [ ] `scripts/opr_army_manager.gd` - ModelInstance beim Spawn erstellen
-- [ ] `scripts/equipment_distributor.gd` - Automatische Waffen-Verteilung
+**Neue Dateien:**
+- [ ] `scripts/model_instance.gd` - Generische Model-Daten mit Properties Dictionary
+- [ ] `scripts/game_unit.gd` - System-agnostischer Unit-Wrapper
+- [ ] `scripts/equipment_distributor.gd` - Automatische Equipment-Verteilung
+
+**Änderungen an bestehenden Dateien:**
+- [ ] `scripts/opr_army_manager.gd` - GameUnit + ModelInstance beim Spawn erstellen
+- [ ] `scripts/opr_api_client.gd` - Tough(X) Parsing verbessern
 
 **Aufgaben:**
-1. ModelInstance Klasse erstellen
-2. OPRUnit um `models: Array[ModelInstance]` erweitern
-3. Equipment-Verteilungslogik implementieren
-4. Node3D Metadaten erweitern (`model_instance`, `model_index`)
-5. Lookup-Funktionen: `get_model_for_node()`, `get_all_unit_models()`
+1. ModelInstance mit generischem `properties: Dictionary` erstellen
+2. GameUnit Wrapper-Klasse erstellen
+3. EquipmentDistributor basierend auf API `count` Feld
+4. Tough(X) → wounds_max Parsing
+5. Node3D Metadaten: `model_instance`, `game_unit`, `model_index`
+6. Lookup-Funktionen: `get_model_for_node()`, `get_models_with_equipment()`
 
-### Phase 2: Unit-System Foundation (1-2 Tage)
+### Phase 2: Unit-System Foundation
 
 **Dateien:**
-- [ ] `scripts/unit_utils.gd` - Neuer Helper
+- [ ] `scripts/unit_utils.gd` - Neuer Helper mit generischen Queries
 - [ ] `scripts/object_manager.gd` - Anpassen für `unit` Gruppe
 
 **Aufgaben:**
-1. UnitUtils Klasse erstellen
+1. UnitUtils Klasse mit `is_unit()`, `get_game_unit()`, etc.
 2. Bestehende OPR-Units um `unit` Gruppe erweitern
 3. `select_all_unit_models()` Funktion
-4. Unit-Detection Funktionen testen
+4. `get_models_with_property()` generische Suche
 
 ### Phase 3: Radialmenü Grundstruktur (2-3 Tage)
 
@@ -498,9 +692,9 @@ Bei kritischen Aktionen auf Leader/Specialists:
 
 ---
 
-## 6. UI/UX Spezifikation
+## 8. UI/UX Spezifikation
 
-### 6.1 Radialmenü Erscheinung
+### 8.1 Radialmenü Erscheinung
 
 ```
      [Stats]
@@ -516,7 +710,7 @@ Bei kritischen Aktionen auf Leader/Specialists:
 - **Trigger:** Rechtsklick auf selektiertes Objekt
 - **Schließen:** Klick außerhalb, ESC, oder Aktion ausführen
 
-### 6.2 Farbschema (passend zu Kenney UI)
+### 8.2 Farbschema (passend zu Kenney UI)
 
 | Element | Farbe |
 |---------|-------|
@@ -527,7 +721,7 @@ Bei kritischen Aktionen auf Leader/Specialists:
 | Text | `Color(1.0, 1.0, 1.0, 1.0)` |
 | Disabled | `Color(0.5, 0.5, 0.5, 0.5)` |
 
-### 6.3 Keyboard Shortcuts
+### 8.3 Keyboard Shortcuts
 
 | Taste | Aktion |
 |-------|--------|
@@ -538,42 +732,56 @@ Bei kritischen Aktionen auf Leader/Specialists:
 
 ---
 
-## 10. Offene Fragen (Aktualisiert)
+## 9. Offene Fragen (Aktualisiert)
 
 ### Entschieden ✅
 
 1. **Multi-Modell-Einheiten:** ✅ ENTSCHIEDEN
-   - Alle Modelle einzeln als Node3D, mit shared Unit-Reference
-   - Jedes Model hat eigene `ModelInstance` mit Loadout
+   - Alle Modelle einzeln als Node3D, mit shared GameUnit-Reference
+   - Jedes Model hat eigene `ModelInstance` mit generischen Properties
 
-2. **Waffen-Verteilung:** ✅ ENTSCHIEDEN → Option C
-   - Automatische Verteilung beim Import
-   - Manueller Override via "Edit Loadout" im Radialmenü
+2. **Architektur:** ✅ ENTSCHIEDEN → Generisch
+   - **KEINE hardcodierten Rollen** (kein LEADER, SPECIALIST enum)
+   - **KEINE hardcodierten Equipment-Namen** (kein "Medic", "Banner" special case)
+   - Alles kommt als `properties: Dictionary` aus dem Import
+   - Flexible Abfragen via `has_property()`, `get_equipment()`, etc.
 
-3. **Wunden-Tracking:** ✅ Pro Modell
-   - Jedes Model hat `wounds_current` und `wounds_max`
-   - Heroes haben oft mehrere Wounds
+3. **Waffen-Verteilung:** ✅ ENTSCHIEDEN → Basierend auf API `count`
+   - Automatische Verteilung basierend auf `weapon.count` Feld
+   - Equipment ohne `attacks` → erstes verfügbares Model
+   - Manueller Override via Radialmenü möglich
+
+4. **Wunden-Tracking:** ✅ Pro Modell
+   - Parsed aus `Tough(X)` → `wounds_max` für JEDES Model
+   - Default: 1 Wunde wenn kein Tough
+
+5. **API vs Text-Export:** ✅ ENTSCHIEDEN → API bevorzugt
+   - Army Forge TTS API liefert vollständig aufgelöste Daten
+   - Text-Export nur als Fallback (hat zusätzliche Infos wie "Joined to:")
 
 ### Noch zu klären ❓
 
-4. **Proxy-System:** Sollen generische Miniaturen als "Proxy" für OPR-Einheiten markiert werden können?
-   - Vorschlag: Ja, via Radialmenü → "Assign as Proxy" → Unit-Picker
+6. **Hero-Attachment ("Joined to:"):**
+   - Nur in Text-Export, nicht in API!
+   - Option A: Text-Export parsen für diese Info
+   - Option B: User manuell zuweisen via Radialmenü
+   - Option C: Separate API-Call für Hero-Details
 
-5. **Status-Marker:** Welche Marker standardmäßig?
-   - Vorschlag: Activated, Pinned, Shaken, Stunned, Fatigued, Custom
+7. **Proxy-System:** Sollen generische Miniaturen als "Proxy" markiert werden können?
+   - Vorschlag: Ja, via Radialmenü → "Assign Stats" → Unit-Picker
 
-6. **Leader-Nachfolge:** Was passiert wenn Leader stirbt?
-   - Option A: Nächstes Model wird automatisch Leader
-   - Option B: User wählt neuen Leader
-   - Option C: Kein neuer Leader (Unit ohne Leader-Bonus)
+8. **Status-Marker:** Welche Marker standardmäßig?
+   - Vorschlag: Dynamisch aus Spielsystem (keine hardcodierten Marker)
+   - OPR: Activated, Stunned, Shaken, Fatigued
+   - Custom Marker immer möglich
 
-7. **Kohärenz-Distanz:** Welche Standard-Distanz?
+9. **Kohärenz-Distanz:** Welche Standard-Distanz?
    - OPR Standard: 1" zwischen Modellen
-   - Konfigurierbar pro Spielsystem?
+   - Konfigurierbar pro Spielsystem
 
 ---
 
-## 8. Abhängigkeiten
+## 10. Abhängigkeiten
 
 - **Kenney UI Theme** - Für konsistentes Styling ✅ Vorhanden
 - **OPRArmyManager** - Für Unit-Lookups ✅ Vorhanden
@@ -581,7 +789,7 @@ Bei kritischen Aktionen auf Leader/Specialists:
 
 ---
 
-## 9. Risiken
+## 11. Risiken
 
 | Risiko | Wahrscheinlichkeit | Mitigation |
 |--------|-------------------|------------|
@@ -591,16 +799,19 @@ Bei kritischen Aktionen auf Leader/Specialists:
 
 ---
 
-## 10. Nächste Schritte
+## 12. Nächste Schritte
 
 Nach Genehmigung dieses Plans:
 
-1. [ ] **Phase 1 starten:** `unit_utils.gd` erstellen
-2. [ ] Bestehende Units mit `unit` Gruppe taggen
-3. [ ] Unit-Detection testen
-4. [ ] Radialmenü Prototyp bauen
+1. [ ] **Phase 1 starten:** `model_instance.gd` mit generischem Properties-System
+2. [ ] `game_unit.gd` als System-agnostischer Wrapper
+3. [ ] `equipment_distributor.gd` basierend auf API `count`
+4. [ ] Integration in `opr_army_manager.gd`
+5. [ ] Unit-Detection testen mit verschiedenen Army-Imports
+6. [ ] Radialmenü Prototyp bauen
 
 ---
 
 *Erstellt von Claude*
+*Version: v3 - Generische Architektur (API-verifiziert)*
 *Letzte Aktualisierung: 2026-01-05*
