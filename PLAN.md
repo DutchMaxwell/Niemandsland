@@ -520,7 +520,7 @@ openTTS/
 - TTS-Import ermöglicht sofortigen Zugang zu tausenden Miniaturen
 - Performance ist hervorragend auch bei 1000+ Objekten
 
-### Milestone 2: Alpha (IN ARBEIT - ~85% fertig)
+### Milestone 2: Alpha (IN ARBEIT - ~90% fertig)
 **Ziel: Vollständiges Einzelspieler-Erlebnis**
 
 7. [x] Erweitertes Objekt-Management (Multi-Select, Arrangements, Copy/Paste)
@@ -551,16 +551,23 @@ openTTS/
     - [x] Activation Tracker (Runden/Turn-Management)
     - [x] Multiplayer Sync RPCs
     - [x] Save/Load Integration
-23. [ ] **Weitere Deployment Zones** (NEXT):
+23. [x] **AI-System** - OPR Solo & Co-Op Rules v3.5.0:
+    - [x] AIUnitClassifier (Hybrid/Shooting/Melee)
+    - [x] AIDecisionTree (3 Entscheidungsbäume)
+    - [x] AITargetSelector (Waffen-Prioritäten)
+    - [x] AIManager (Aktivierung, Actions)
+    - [x] AISpecialRules (Ambush, Scout, Transport, etc.)
+    - [x] AIObjectiveSetup (6-Quadrat-Grid)
+24. [ ] **Weitere Deployment Zones**:
     - [ ] Corner Deployment
     - [ ] Dawn Assault
     - [ ] Pitched Battle
     - [ ] Meeting Engagement
-24. [ ] **Terrain-Gameplay Mechaniken**:
+25. [ ] **Terrain-Gameplay Mechaniken**:
     - [ ] Cover-System (Würfelmodifikatoren)
     - [ ] Schwieriges Gelände (Movement-Modifikatoren)
     - [ ] Dangerous Terrain (Schaden bei Betreten)
-25. [ ] Vollständiges Würfel-System (mehr Würfeltypen, Modifikatoren)
+26. [ ] Vollständiges Würfel-System (mehr Würfeltypen, Modifikatoren)
 
 ### Milestone 3: Beta
 **Ziel: Multiplayer-fähig**
@@ -670,6 +677,14 @@ openTTS/
    - Aktivierungs-Tracker
    - Multiplayer Sync RPCs
    - Save/Load Integration
+7. **AI-System (OPR Solo & Co-Op Rules v3.5.0):**
+   - AIUnitClassifier (Hybrid/Shooting/Melee)
+   - AIDecisionTree (alle 3 Entscheidungsbäume)
+   - AITargetSelector (AP, Deadly, Takedown Prioritäten)
+   - AIManager (Aktivierungsreihenfolge, Action Execution)
+   - AISpecialRules (Ambush, Scout, Transport, Artillery, Caster)
+   - AIObjectiveSetup (6-Quadrat-Grid Platzierung)
+   - Challenge Bonus Option
 
 ### 🔄 Aktuell in Arbeit (Milestone 2 - PRIORITÄT)
 1. **Weitere Deployment Zones** - Corner, Dawn Assault, Pitched Battle, Meeting Engagement
@@ -709,5 +724,5 @@ openTTS/
 
 *Dokument erstellt: 2025-12-17*
 *Letzte Überarbeitung: 2026-01-05*
-*Version: 1.7*
-*Status: Milestone 2 zu ~85% fertig - Unit-System komplett implementiert (ModelInstance, GameUnit, Radial Menu, Wounds/Markers, Multiplayer Sync)*
+*Version: 1.8*
+*Status: Milestone 2 zu ~90% fertig - AI-System für Solo & Co-Op implementiert (OPR Rules v3.5.0)*
