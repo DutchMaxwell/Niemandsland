@@ -134,6 +134,17 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 - [x] **Multiplayer Sync** - RPCs für Wounds, Markers, Activation, Hero-Attachment
 - [x] **Save/Load Integration** - GameUnit-Serialisierung mit Model-Positionen
 
+### AI-System (NEU!) - OPR Solo & Co-Op Rules v3.5.0
+- [x] **Unit-Klassifizierung** - Hybrid/Shooting/Melee basierend auf Waffen
+- [x] **Decision Trees** - Alle 3 Entscheidungsbäume aus OPR-Regeln
+- [x] **Target Selector** - Prioritätsregeln für AP, Deadly, Takedown, Unstoppable
+- [x] **Aktivierungsreihenfolge** - Sektions-basiert (D3 für Sektion)
+- [x] **Special Rules** - Ambush, Scout, Transport, Artillery, Caster, Flying, Strider
+- [x] **Objective Placement** - 6-Quadrat-Grid, zufällige Platzierung
+- [x] **Challenge Bonus** - Optional +1 Hit/Defense basierend auf Objectives
+- [ ] **Kampf-Integration** - Würfelsystem für AI-Angriffe
+- [ ] **Terrain-Integration** - Vollständige Cover/Difficult/Dangerous Logik
+
 ---
 
 ## 🏗️ Technologie-Stack
@@ -189,6 +200,13 @@ openTTS/
 │   ├── marker_dialog.gd    # NEU: Marker-Verwaltung Dialog
 │   ├── activation_tracker.gd    # NEU: Runden/Aktivierungs-Panel
 │   ├── hero_attachment_dialog.gd  # NEU: Hero-Zuweisung
+│   ├── ai_manager.gd            # NEU: AI-Gegner Controller
+│   ├── ai_unit_classifier.gd    # NEU: Hybrid/Shooting/Melee
+│   ├── ai_decision_tree.gd      # NEU: OPR Decision Trees
+│   ├── ai_context.gd            # NEU: AI Game State
+│   ├── ai_target_selector.gd    # NEU: Target Priorität
+│   ├── ai_special_rules.gd      # NEU: Special Rules Handler
+│   ├── ai_objective_setup.gd    # NEU: Objective Placement
 │   └── ...
 ├── assets/                  # Texturen, Modelle, Audio
 │   ├── miniatures/
