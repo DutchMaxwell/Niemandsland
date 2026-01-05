@@ -29,6 +29,14 @@ class ActionResult:
 ## @param ai_unit: The AI unit to evaluate
 ## @param context: AIContext with game state information
 static func evaluate(ai_unit: GameUnit, context: AIContext) -> ActionResult:
+	if ai_unit == null:
+		push_error("AIDecisionTree: evaluate called with null unit")
+		return ActionResult.new()
+
+	if context == null:
+		push_error("AIDecisionTree: evaluate called with null context")
+		return ActionResult.new()
+
 	var unit_type = AIUnitClassifier.classify(ai_unit)
 
 	match unit_type:
@@ -39,6 +47,7 @@ static func evaluate(ai_unit: GameUnit, context: AIContext) -> ActionResult:
 		AIUnitClassifier.UnitType.MELEE:
 			return _evaluate_melee(ai_unit, context)
 
+	push_warning("AIDecisionTree: Unknown unit type for %s" % ai_unit.get_name())
 	return ActionResult.new()
 
 

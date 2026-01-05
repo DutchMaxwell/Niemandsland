@@ -78,6 +78,9 @@ func _ready() -> void:
 
 ## Initializes the AI manager with references.
 func initialize(p_army_manager: Node) -> void:
+	if p_army_manager == null:
+		push_error("AIManager: army_manager is null")
+		return
 	army_manager = p_army_manager
 
 
@@ -154,6 +157,16 @@ func set_table_dimensions(width: float, depth: float) -> void:
 ## Starts the AI turn.
 func start_ai_turn(round_number: int) -> void:
 	if not ai_enabled:
+		ai_turn_ended.emit()
+		return
+
+	if context == null:
+		push_error("AIManager: context not initialized")
+		ai_turn_ended.emit()
+		return
+
+	if context.ai_units.is_empty():
+		push_warning("AIManager: No AI units to activate")
 		ai_turn_ended.emit()
 		return
 
@@ -262,6 +275,7 @@ func _execute_action(unit: GameUnit, action: AIDecisionTree.ActionResult) -> voi
 ## Executes a charge action with full combat resolution.
 func _execute_charge(unit: GameUnit, action: AIDecisionTree.ActionResult) -> void:
 	if action.charge_target == null:
+		push_warning("AIManager: Charge action has no target for %s" % unit.get_name())
 		return
 
 	var target_pos = action.target_position
@@ -542,6 +556,10 @@ func _remove_shaken_marker(unit: GameUnit) -> void:
 
 
 func _get_unit_center(game_unit: GameUnit) -> Vector3:
+	if game_unit == null:
+		push_warning("AIManager: _get_unit_center called with null unit")
+		return Vector3.ZERO
+
 	var sum = Vector3.ZERO
 	var count = 0
 	for model in game_unit.models:
