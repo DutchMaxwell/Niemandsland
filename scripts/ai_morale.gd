@@ -36,6 +36,10 @@ static func needs_morale_test(
 	unit: GameUnit,
 	wounds_taken_this_activation: int
 ) -> bool:
+	if unit == null:
+		push_warning("AIMorale: needs_morale_test called with null unit")
+		return false
+
 	if wounds_taken_this_activation == 0:
 		return false
 
@@ -83,6 +87,11 @@ static func take_morale_test(
 	lost_melee: bool = false
 ) -> MoraleOutcome:
 	var outcome = MoraleOutcome.new()
+
+	if unit == null:
+		push_error("AIMorale: take_morale_test called with null unit")
+		return outcome
+
 	outcome.quality = unit.get_quality()
 	outcome.was_at_half = was_at_half_strength(unit)
 
