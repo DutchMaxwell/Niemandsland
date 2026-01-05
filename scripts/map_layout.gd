@@ -60,10 +60,6 @@ var point_symmetry_enabled := false  # Mirror placement across center
 var deployment_type := DeploymentType.STANDARD_6
 var show_deployment_zones := false
 
-# Objectives
-var objectives := []  # Array of Vector2 (in inches from table center)
-var show_objectives := true
-
 @onready var grid_container: Control = %GridContainer
 @onready var rotation_slider: HSlider = %RotationSlider
 @onready var rotation_label: Label = %RotationLabel
@@ -77,7 +73,6 @@ var show_objectives := true
 @onready var symmetry_check: CheckBox = %SymmetryCheck
 @onready var autogen_button: Button = %AutoGenButton
 @onready var deployment_check: CheckBox = %DeploymentCheck
-@onready var objectives_check: CheckBox = %ObjectivesCheck
 @onready var save_file_dialog: FileDialog = %SaveFileDialog
 @onready var load_file_dialog: FileDialog = %LoadFileDialog
 
@@ -97,9 +92,6 @@ func _ready() -> void:
 		autogen_button.pressed.connect(_on_autogen_pressed)
 	if deployment_check:
 		deployment_check.toggled.connect(_on_deployment_toggled)
-	if objectives_check:
-		objectives_check.toggled.connect(_on_objectives_toggled)
-
 	if save_file_dialog:
 		save_file_dialog.file_selected.connect(_on_save_file_selected)
 	if load_file_dialog:
@@ -163,6 +155,8 @@ func _on_symmetry_toggled(enabled: bool) -> void:
 
 
 func _on_close_pressed() -> void:
+	# Send final update to 3D view before closing
+	_emit_layout_update()
 	layout_closed.emit()
 	hide()
 
@@ -176,7 +170,6 @@ func _on_clear_pressed() -> void:
 
 func _on_autogen_pressed() -> void:
 	_generate_terrain_layout()
-	_generate_objectives()
 	grid_container.queue_redraw()
 	_update_stats()
 	_emit_layout_update()
@@ -197,11 +190,6 @@ func _on_deployment_toggled(enabled: bool) -> void:
 	grid_container.queue_redraw()
 
 
-func _on_objectives_toggled(enabled: bool) -> void:
-	show_objectives = enabled
-	grid_container.queue_redraw()
-
-
 func _on_save_file_selected(path: String) -> void:
 	save_layout(path)
 
@@ -214,18 +202,43 @@ func _on_load_file_selected(path: String) -> void:
 
 
 func set_table_size(size_feet: Vector2) -> void:
+	# Check if table size actually changed
+	var size_changed = table_size_feet != size_feet
+
 	table_size_feet = size_feet
+	print("MapLayout.set_table_size: (%.1f, %.1f) feet" % [size_feet.x, size_feet.y])
+
+	# Recalculate grid dimensions
+	var grid_dims = _calculate_grid_dimensions()
+	print("  Grid dimensions: %dx%d cells" % [grid_dims.x, grid_dims.y])
+
+	# CRITICAL: If table size changed and we have terrain data, clear it
+	# Grid cell coordinates are ABSOLUTE and become invalid when grid dimensions change
+	if size_changed and not grid_cells.is_empty():
+		print("  ⚠ Table size changed - clearing terrain data (grid coordinates are now invalid)")
+		grid_cells.clear()
+
 	grid_container.queue_redraw()
 	_update_stats()
+	# NOTE: Don't emit layout_updated here - it may be called during initialization
+	# before terrain_overlay exists. Updates are sent when user closes editor.
 
 
 func _calculate_grid_dimensions() -> Vector2i:
 	var width_inches = table_size_feet.x * 12.0
 	var height_inches = table_size_feet.y * 12.0
-	return Vector2i(
-		int(ceil(width_inches / GRID_SIZE_INCHES)),
-		int(ceil(height_inches / GRID_SIZE_INCHES))
-	)
+
+	# Use diagonal to ensure grid covers entire table at any rotation
+	var diagonal = sqrt(width_inches * width_inches + height_inches * height_inches)
+	var grid_size = int(ceil(diagonal / GRID_SIZE_INCHES))
+
+	# Round UP to even number to ensure intersection point at center
+	# Even number of cells → odd number of lines → center line exists
+	# E.g., 30 cells → 31 lines (0-30) → line 15 is center
+	if grid_size % 2 != 0:
+		grid_size += 1
+
+	return Vector2i(grid_size, grid_size)
 
 
 func _update_stats() -> void:
@@ -255,7 +268,7 @@ func _update_stats() -> void:
 	var coverage_pct = (float(terrain_cells) / total_cells) * 100.0 if total_cells > 0 else 0.0
 
 	# Blocking LOS = everything that provides cover (Ruins, Forest, Container)
-	var blocking_cells = counts[TerrainType.RUINS] + counts[TerrainType.FOREST] + counts[TerrainType.CONTAINER]
+	var _blocking_cells = counts[TerrainType.RUINS] + counts[TerrainType.FOREST] + counts[TerrainType.CONTAINER]
 	var blocking_pieces = piece_counts[TerrainType.RUINS] + piece_counts[TerrainType.FOREST] + piece_counts[TerrainType.CONTAINER]
 
 	# Cover = Ruins, Forest, Container
@@ -378,7 +391,6 @@ func _update_recommendations_with_values(total_pieces: int, coverage_pct: float,
 
 	# Extended guidelines
 	var extended = _check_extended_guidelines()
-	var objectives_ok = objectives.size() >= 3
 
 	var check_mark = "✓"
 	var cross_mark = "✗"
@@ -395,7 +407,6 @@ func _update_recommendations_with_values(total_pieces: int, coverage_pct: float,
 Extended Guidelines:
 %s Max 12" gap between terrain (%.1f")
 %s Balanced symmetry (%.0f%%)
-%s 3+ Objectives (have: %d)
 
 Tip: Connected cells = 1 piece""" % [
 		check_mark if pieces_ok else cross_mark, total_pieces,
@@ -405,12 +416,11 @@ Tip: Connected cells = 1 piece""" % [
 		check_mark if difficult_ok else cross_mark, difficult_pct,
 		check_mark if dangerous_ok else cross_mark, dangerous_pieces,
 		check_mark if extended.max_gap_ok else cross_mark, extended.max_gap_inches,
-		check_mark if extended.symmetry_ok else cross_mark, extended.symmetry_score,
-		check_mark if objectives_ok else cross_mark, objectives.size()
+		check_mark if extended.symmetry_ok else cross_mark, extended.symmetry_score
 	]
 
 	# Color code the recommendations
-	var all_ok = pieces_ok and coverage_ok and blocking_ok and cover_ok and difficult_ok and dangerous_ok and extended.max_gap_ok and extended.symmetry_ok and objectives_ok
+	var all_ok = pieces_ok and coverage_ok and blocking_ok and cover_ok and difficult_ok and dangerous_ok and extended.max_gap_ok and extended.symmetry_ok
 	if all_ok:
 		recommendations_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
 	else:
@@ -515,18 +525,35 @@ func _emit_layout_update() -> void:
 
 
 ## Auto-generate terrain layout following OPR guidelines
+## Respects point symmetry if enabled, maintains 3" minimum spacing
 func _generate_terrain_layout() -> void:
-	# Clear existing layout
-	grid_cells.clear()
+	# Keep trying until we successfully place all required terrain
+	var max_retries = 10
+	var success = false
 
+	for retry in range(max_retries):
+		grid_cells.clear()
+
+		if _try_generate_layout():
+			success = true
+			print("Auto-generated terrain layout (attempt %d)" % (retry + 1))
+			break
+		else:
+			print("Auto-generate attempt %d failed" % (retry + 1))
+
+	if not success:
+		push_error("Failed to generate compliant terrain layout after %d attempts" % max_retries)
+		print("Grid rotation: %.1f°, Table size: %.0fx%.0f feet, Point symmetry: %s" % [
+			grid_rotation_degrees, table_size_feet.x, table_size_feet.y,
+			"enabled" if point_symmetry_enabled else "disabled"
+		])
+
+
+## Attempt to generate a complete terrain layout
+func _try_generate_layout() -> bool:
 	var grid_dims = _calculate_grid_dimensions()
 
 	# Define terrain piece templates (in grid cells: width x height)
-	# Ruins: 9"x9" (3x3) and 9"x6" (3x2)
-	# Forest: 9"x9" (3x3)
-	# Dangerous: 6"x9" (2x3)
-	# Container: 6"x3" (2x1)
-
 	var piece_templates := {
 		TerrainType.RUINS: [
 			Vector2i(3, 3),  # 9"x9"
@@ -543,13 +570,7 @@ func _generate_terrain_layout() -> void:
 		]
 	}
 
-	# Target: 15-20 pieces total
-	# Distribution strategy based on OPR guidelines:
-	# - 50% blocking LOS (Ruins + Forest + Container)
-	# - 33% cover (all except Dangerous)
-	# - 33% difficult (Forest)
-	# - 2 dangerous pieces minimum
-
+	# Target: 15-20 pieces total (OPR requirements)
 	var target_pieces := {
 		TerrainType.RUINS: 5,      # ~30% of pieces
 		TerrainType.FOREST: 6,     # ~35% of pieces (provides difficult terrain)
@@ -557,15 +578,30 @@ func _generate_terrain_layout() -> void:
 		TerrainType.DANGEROUS: 2   # ~10% of pieces (minimum 2)
 	}
 
-	# Try to place all pieces with some randomization
-	var max_attempts = 100
 	var placed_pieces := []
+	var max_attempts = 500  # Increased for larger tables
 
-	for terrain_type in target_pieces:
+	# Place pieces with symmetry support
+	# Use explicit ordering to ensure all types are attempted
+	var terrain_order = [TerrainType.FOREST, TerrainType.RUINS, TerrainType.CONTAINER, TerrainType.DANGEROUS]
+	var pieces_placed_by_type := {}
+	var pieces_failed_by_type := {}
+
+	for terrain_type in terrain_order:
+		if not target_pieces.has(terrain_type):
+			continue
+
 		var count = target_pieces[terrain_type]
 		var templates = piece_templates[terrain_type]
+		var type_name = TerrainType.keys()[terrain_type]
 
-		for i in range(count):
+		# When symmetry is enabled, place half the pieces (they will be mirrored)
+		var pieces_to_place = count if not point_symmetry_enabled else int(ceil(count / 2.0))
+
+		pieces_placed_by_type[terrain_type] = 0
+		pieces_failed_by_type[terrain_type] = 0
+
+		for i in range(pieces_to_place):
 			var placed = false
 			for attempt in range(max_attempts):
 				# Pick random template
@@ -576,35 +612,102 @@ func _generate_terrain_layout() -> void:
 				var max_y = grid_dims.y - template.y
 
 				if max_x <= 0 or max_y <= 0:
-					break  # Template too large for grid
+					print("  Template %dx%d too large for grid %dx%d" % [template.x, template.y, grid_dims.x, grid_dims.y])
+					break
 
 				var pos = Vector2i(
 					randi() % (max_x + 1),
 					randi() % (max_y + 1)
 				)
 
-				# Check if placement is valid (no overlap)
+				# Check if placement is valid (3" minimum spacing)
 				if _can_place_piece(pos, template, placed_pieces):
-					_place_piece(pos, template, terrain_type)
-					placed_pieces.append({"pos": pos, "size": template})
+					# If symmetry is enabled, check if mirrored position is also valid
+					if point_symmetry_enabled:
+						var mirrored_pos = _mirror_position(pos, template, grid_dims)
+
+						# Check if mirrored piece can also be placed
+						if not _can_place_piece(mirrored_pos, template, placed_pieces):
+							continue  # Try another position
+
+						# Place both original and mirrored piece
+						_place_piece(pos, template, terrain_type)
+						placed_pieces.append({"pos": pos, "size": template, "type": terrain_type})
+
+						_place_piece(mirrored_pos, template, terrain_type)
+						placed_pieces.append({"pos": mirrored_pos, "size": template, "type": terrain_type})
+
+						pieces_placed_by_type[terrain_type] += 2
+					else:
+						# No symmetry - just place the piece
+						_place_piece(pos, template, terrain_type)
+						placed_pieces.append({"pos": pos, "size": template, "type": terrain_type})
+
+						pieces_placed_by_type[terrain_type] += 1
+
 					placed = true
 					break
 
 			if not placed:
-				push_warning("Could not place terrain piece %d of type %d" % [i, terrain_type])
+				pieces_failed_by_type[terrain_type] += 1
+				print("  Failed to place %s piece %d/%d after %d attempts" % [
+					type_name, i + 1, pieces_to_place, max_attempts
+				])
+				# Continue trying other pieces instead of failing immediately
 
-	print("Auto-generated terrain layout with %d pieces" % placed_pieces.size())
+	# Print summary
+	print("Terrain placement summary (symmetry: %s):" % ("enabled" if point_symmetry_enabled else "disabled"))
+	var total_placed = 0
+	var total_failed = 0
+	for terrain_type in terrain_order:
+		if not pieces_placed_by_type.has(terrain_type):
+			continue
+		var type_name = TerrainType.keys()[terrain_type]
+		var placed = pieces_placed_by_type[terrain_type]
+		var failed = pieces_failed_by_type[terrain_type]
+		var target = target_pieces[terrain_type]
+		print("  %s: %d/%d placed (%d failed)" % [type_name, placed, target, failed])
+		total_placed += placed
+		total_failed += failed
+
+	print("Total: %d pieces placed, %d failed" % [total_placed, total_failed])
+
+	# Consider it successful if we placed at least 50% of target pieces
+	var min_required = 8  # Minimum 8 pieces total (half of 15-20 range)
+	if total_placed >= min_required:
+		return true
+	else:
+		print("  FAILED: Only placed %d pieces (minimum %d required)" % [total_placed, min_required])
+		return false
+
+
+## Mirror a position across the grid center (point symmetry)
+## For a piece at position pos with given piece_size, returns the mirrored top-left corner position
+func _mirror_position(pos: Vector2i, piece_size: Vector2i, grid_dims: Vector2i) -> Vector2i:
+	# Point symmetry: reflect across center (180° rotation)
+	# Mirror the top-left corner of the piece
+	return Vector2i(grid_dims.x - pos.x - piece_size.x, grid_dims.y - pos.y - piece_size.y)
 
 
 ## Check if a piece can be placed without overlapping existing pieces
-func _can_place_piece(pos: Vector2i, size: Vector2i, existing_pieces: Array) -> bool:
+## Enforces 3" (1 cell) minimum spacing between all terrain pieces
+func _can_place_piece(pos: Vector2i, piece_size: Vector2i, existing_pieces: Array) -> bool:
 	# Check bounds
 	var grid_dims = _calculate_grid_dimensions()
-	if pos.x + size.x > grid_dims.x or pos.y + size.y > grid_dims.y:
+	if pos.x + piece_size.x > grid_dims.x or pos.y + piece_size.y > grid_dims.y:
+		return false
+	if pos.x < 0 or pos.y < 0:
 		return false
 
+	# Check if ALL cells of this piece are within table bounds (after rotation)
+	for x in range(piece_size.x):
+		for y in range(piece_size.y):
+			var cell_pos = pos + Vector2i(x, y)
+			if not _is_cell_within_table_bounds(cell_pos, grid_dims):
+				return false  # Piece extends outside table
+
 	# Define piece rectangle
-	var piece_rect = Rect2i(pos, size)
+	var piece_rect = Rect2i(pos, piece_size)
 
 	# Check overlap with existing pieces
 	for piece in existing_pieces:
@@ -612,76 +715,58 @@ func _can_place_piece(pos: Vector2i, size: Vector2i, existing_pieces: Array) -> 
 		if piece_rect.intersects(other_rect):
 			return false
 
-	# Add minimum spacing (at least 1 cell gap between pieces to avoid clustering)
-	var expanded_rect = Rect2i(pos - Vector2i(1, 1), size + Vector2i(2, 2))
+	# Enforce minimum 3" spacing (1 cell = 3")
+	# Expand piece by 1 cell on all sides
+	var expanded_rect = Rect2i(pos - Vector2i(1, 1), piece_size + Vector2i(2, 2))
 	for piece in existing_pieces:
 		var other_rect = Rect2i(piece.pos, piece.size)
 		if expanded_rect.intersects(other_rect):
-			# Allow some overlap for variety (50% chance)
-			if randf() > 0.5:
-				return false
+			return false
 
 	return true
 
 
+## Check if a grid cell is within the actual table bounds (accounting for rotation)
+func _is_cell_within_table_bounds(cell_pos: Vector2i, grid_dims: Vector2i) -> bool:
+	# Calculate cell center position in grid coordinates (grid centered on intersection point)
+	var cell_size_inches = GRID_SIZE_INCHES
+	# Grid centered on intersection - cells offset by 0.5 from intersections
+	var local_x = (cell_pos.x - grid_dims.x / 2.0 + 0.5) * cell_size_inches
+	var local_y = (cell_pos.y - grid_dims.y / 2.0 + 0.5) * cell_size_inches
+
+	# Calculate all 4 corners of the cell in local space
+	var half_cell = cell_size_inches / 2.0
+	var corners_local = [
+		Vector2(local_x - half_cell, local_y - half_cell),
+		Vector2(local_x + half_cell, local_y - half_cell),
+		Vector2(local_x + half_cell, local_y + half_cell),
+		Vector2(local_x - half_cell, local_y + half_cell)
+	]
+
+	# Table bounds
+	var table_width_inches = table_size_feet.x * 12.0
+	var table_height_inches = table_size_feet.y * 12.0
+
+	# Apply rotation and check if ALL corners are inside table
+	# For terrain placement, cells must be fully within bounds
+	var rotation_rad = deg_to_rad(grid_rotation_degrees)
+	for corner in corners_local:
+		var rotated_x = corner.x * cos(rotation_rad) - corner.y * sin(rotation_rad)
+		var rotated_y = corner.x * sin(rotation_rad) + corner.y * cos(rotation_rad)
+
+		# If ANY corner is outside, cell is not valid for terrain placement
+		if abs(rotated_x) > table_width_inches / 2.0 or abs(rotated_y) > table_height_inches / 2.0:
+			return false
+
+	return true  # All corners inside table
+
+
 ## Place a piece on the grid
-func _place_piece(pos: Vector2i, size: Vector2i, terrain_type: int) -> void:
-	for x in range(size.x):
-		for y in range(size.y):
+func _place_piece(pos: Vector2i, piece_size: Vector2i, terrain_type: int) -> void:
+	for x in range(piece_size.x):
+		for y in range(piece_size.y):
 			var cell_pos = pos + Vector2i(x, y)
 			grid_cells[cell_pos] = terrain_type
-
-
-## Generate objectives following OPR guidelines
-func _generate_objectives() -> void:
-	objectives.clear()
-
-	# OPR standard: 3-5 objectives
-	var num_objectives = 3
-	var table_size_inches = table_size_feet * 12.0
-
-	# Minimum distance from edges (in inches)
-	var edge_buffer = 6.0
-	# Minimum distance between objectives (in inches)
-	var min_spacing = 12.0
-
-	var max_attempts = 100
-
-	for i in range(num_objectives):
-		var placed = false
-		for attempt in range(max_attempts):
-			# Random position within valid area
-			var x = randf_range(-table_size_inches.x/2 + edge_buffer, table_size_inches.x/2 - edge_buffer)
-			var z = randf_range(-table_size_inches.y/2 + edge_buffer, table_size_inches.y/2 - edge_buffer)
-			var pos = Vector2(x, z)
-
-			# Check distance from existing objectives
-			var valid = true
-			for obj in objectives:
-				if pos.distance_to(obj) < min_spacing:
-					valid = false
-					break
-
-			# Check if on terrain (convert to grid coords)
-			if valid:
-				var grid_dims = _calculate_grid_dimensions()
-				var cell_x = int((pos.x + table_size_inches.x/2) / GRID_SIZE_INCHES)
-				var cell_y = int((pos.y + table_size_inches.y/2) / GRID_SIZE_INCHES)
-				var cell_pos = Vector2i(cell_x, cell_y)
-
-				if grid_cells.has(cell_pos) and grid_cells[cell_pos] != TerrainType.NONE:
-					valid = false  # On terrain, try again
-
-			if valid:
-				objectives.append(pos)
-				placed = true
-				break
-
-		if not placed:
-			push_warning("Could not place objective %d" % i)
-
-	print("Generated %d objectives" % objectives.size())
-	grid_container.queue_redraw()
 
 
 ## Save current layout to file
@@ -691,18 +776,13 @@ func save_layout(file_path: String) -> void:
 		"table_size": {"x": table_size_feet.x, "y": table_size_feet.y},
 		"grid_rotation": grid_rotation_degrees,
 		"deployment_type": deployment_type,
-		"grid_cells": {},
-		"objectives": []
+		"grid_cells": {}
 	}
 
 	# Convert grid_cells keys to strings (JSON doesn't support Vector2i keys)
 	for cell_pos in grid_cells:
 		var key = "%d,%d" % [cell_pos.x, cell_pos.y]
 		data.grid_cells[key] = grid_cells[cell_pos]
-
-	# Save objectives
-	for obj in objectives:
-		data.objectives.append({"x": obj.x, "y": obj.y})
 
 	var json_string = JSON.stringify(data, "\t")
 	var file = FileAccess.open(file_path, FileAccess.WRITE)
@@ -757,12 +837,6 @@ func load_layout(file_path: String) -> bool:
 			if coords.size() == 2:
 				var cell_pos = Vector2i(int(coords[0]), int(coords[1]))
 				grid_cells[cell_pos] = data.grid_cells[key]
-
-	# Load objectives
-	objectives.clear()
-	if data.has("objectives"):
-		for obj_data in data.objectives:
-			objectives.append(Vector2(obj_data.x, obj_data.y))
 
 	grid_container.queue_redraw()
 	_update_stats()
@@ -850,3 +924,12 @@ func get_cells_for_overlay() -> Array:
 		})
 
 	return result
+
+
+## Get current layout data (for table size changes)
+func get_current_layout() -> Dictionary:
+	return {
+		"grid_cells": grid_cells.duplicate(),
+		"table_size": table_size_feet,
+		"rotation": grid_rotation_degrees
+	}

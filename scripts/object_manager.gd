@@ -60,6 +60,7 @@ var _measure_end_object: Node3D = null    # Reference to end object for edge cal
 var _measure_line: MeshInstance3D = null
 var _measure_label: Label3D = null
 var _measure_terrain_warning: Label3D = null  # Warning icon for terrain (⚠️ or 💀)
+var _measure_los_warning: Label3D = null  # Warning icon for LOS blocking (🚫)
 
 const METERS_TO_INCHES: float = 39.3701
 
@@ -696,6 +697,61 @@ func _update_drag_line(from_pos: Vector3, to_pos: Vector3, distance_inches: floa
 	_drag_label.text = "%.1f\"" % distance_inches
 	_drag_label.rotation = Vector3(-PI/2, angle, 0)
 
+	# Check terrain along the drag path
+	var terrain_warning_text = ""
+	var terrain_warning_color = Color.WHITE
+	var line_color = Color.CYAN  # Default drag line color
+
+	if terrain_overlay and terrain_overlay.has_method("get_terrain_at_world_position"):
+		# Sample terrain at multiple points along the line
+		var num_samples = int(max(3, length * 20))  # At least 3 samples, more for longer lines
+		var has_difficult = false
+		var has_dangerous = false
+
+		for i in range(num_samples):
+			var t = float(i) / float(num_samples - 1)
+			var sample_pos = from_pos.lerp(to_pos, t)
+			var terrain_type = terrain_overlay.get_terrain_at_world_position(sample_pos)
+
+			# TerrainType enum: NONE=0, RUINS=1, FOREST=2, CONTAINER=3, DANGEROUS=4
+			if terrain_type == 2:  # FOREST (Difficult Terrain)
+				has_difficult = true
+			elif terrain_type == 4:  # DANGEROUS
+				has_dangerous = true
+
+		# Set warning based on terrain (Dangerous overrides Difficult)
+		if has_dangerous:
+			terrain_warning_text = "💀"
+			terrain_warning_color = Color.RED
+			line_color = Color.RED
+		elif has_difficult:
+			terrain_warning_text = "⚠️"
+			terrain_warning_color = Color.ORANGE
+			line_color = Color.ORANGE
+
+	# Update line material color
+	var mat = _drag_line.material_override as StandardMaterial3D
+	if mat:
+		mat.albedo_color = line_color
+
+	# Update terrain warning label (smaller font than measurement mode)
+	if terrain_warning_text != "":
+		if not _measure_terrain_warning:
+			_measure_terrain_warning = Label3D.new()
+			_measure_terrain_warning.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			_measure_terrain_warning.no_depth_test = true
+			_measure_terrain_warning.font_size = 28  # Smaller than measurement mode
+			add_child(_measure_terrain_warning)
+
+		_measure_terrain_warning.visible = true
+		_measure_terrain_warning.text = terrain_warning_text
+		_measure_terrain_warning.modulate = terrain_warning_color
+		# Position above the distance label
+		_measure_terrain_warning.global_position = Vector3(midpoint.x, 0.06, midpoint.z)
+	else:
+		if _measure_terrain_warning:
+			_measure_terrain_warning.visible = false
+
 
 ## Destroy drag visualization
 func _destroy_drag_line() -> void:
@@ -1025,60 +1081,52 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 	var label_angle = atan2(direction.x, direction.z)
 	_measure_label.rotation = Vector3(-PI/2, label_angle, 0)  # Flat, facing up, aligned with line
 
-	# Check terrain along the measurement path
-	var terrain_warning_text = ""
-	var terrain_warning_color = Color.WHITE
+	# Update line material color (green if both ends snapped, yellow otherwise)
 	var line_color = Color.GREEN if both_snapped else Color.YELLOW
 
-	if terrain_overlay and terrain_overlay.has_method("get_terrain_at_world_position"):
+	# Check LOS blocking along the measurement path
+	var los_blocked = false
+	if terrain_overlay and terrain_overlay.has_method("get_terrain_at_world_position") and terrain_overlay.has_method("is_terrain_los_blocking"):
 		# Sample terrain at multiple points along the line
-		var num_samples = int(max(3, length * 20))  # At least 3 samples, more for longer lines
-		var has_difficult = false
-		var has_dangerous = false
+		var num_samples = int(max(5, length * 30))  # More samples for accurate LOS check
 
 		for i in range(num_samples):
 			var t = float(i) / float(num_samples - 1)
 			var sample_pos = from_pos.lerp(to_pos, t)
 			var terrain_type = terrain_overlay.get_terrain_at_world_position(sample_pos)
 
-			# TerrainType enum: NONE=0, RUINS=1, FOREST=2, CONTAINER=3, DANGEROUS=4
-			if terrain_type == 2:  # FOREST (Difficult Terrain)
-				has_difficult = true
-			elif terrain_type == 4:  # DANGEROUS
-				has_dangerous = true
+			if terrain_type != 0:  # Not NONE
+				# Check if viewer or target is in the same terrain
+				var viewer_in_terrain = (i == 0)  # First sample is viewer
+				var target_in_terrain = (i == num_samples - 1)  # Last sample is target
 
-		# Set warning based on terrain (Dangerous overrides Difficult)
-		if has_dangerous:
-			terrain_warning_text = "💀"
-			terrain_warning_color = Color.RED
-			line_color = Color.RED
-		elif has_difficult:
-			terrain_warning_text = "⚠️"
-			terrain_warning_color = Color.ORANGE
-			line_color = Color.ORANGE
+				# For intermediate samples, assume neither is in terrain
+				if terrain_overlay.is_terrain_los_blocking(terrain_type, viewer_in_terrain, target_in_terrain):
+					los_blocked = true
+					line_color = Color.RED  # Change line to red if LOS is blocked
+					break
 
-	# Update line material color
 	var mat = _measure_line.material_override as StandardMaterial3D
 	if mat:
 		mat.albedo_color = line_color
 
-	# Update terrain warning label
-	if terrain_warning_text != "":
-		if not _measure_terrain_warning:
-			_measure_terrain_warning = Label3D.new()
-			_measure_terrain_warning.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-			_measure_terrain_warning.no_depth_test = true
-			_measure_terrain_warning.font_size = 48
-			add_child(_measure_terrain_warning)
+	# Show LOS blocking warning if blocked
+	if los_blocked:
+		if not _measure_los_warning:
+			_measure_los_warning = Label3D.new()
+			_measure_los_warning.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			_measure_los_warning.no_depth_test = true
+			_measure_los_warning.font_size = 32
+			add_child(_measure_los_warning)
 
-		_measure_terrain_warning.visible = true
-		_measure_terrain_warning.text = terrain_warning_text
-		_measure_terrain_warning.modulate = terrain_warning_color
-		# Position above the distance label
-		_measure_terrain_warning.global_position = Vector3(midpoint.x, 0.06, midpoint.z)
+		_measure_los_warning.visible = true
+		_measure_los_warning.text = "🚫"  # Blocked symbol
+		_measure_los_warning.modulate = Color.RED
+		# Position slightly higher than other labels
+		_measure_los_warning.global_position = Vector3(midpoint.x, 0.08, midpoint.z)
 	else:
-		if _measure_terrain_warning:
-			_measure_terrain_warning.visible = false
+		if _measure_los_warning:
+			_measure_los_warning.visible = false
 
 	# Label stays white with black outline for best readability
 	_measure_label.modulate = Color.WHITE
@@ -2776,9 +2824,9 @@ func _duplicate_tts_object(original: Node3D) -> Node3D:
 ## Terrain System
 ## ============================================================================
 
-## Spawn terrain from TTS URLs at given position
+## Spawn terrain from TTS URLs at given spawn position
 ## Returns the spawned terrain object
-func spawn_tts_terrain(mesh_url: String, diffuse_url: String, tts_scale: Vector3, position: Vector3, terrain_name: String = "Terrain") -> Node3D:
+func spawn_tts_terrain(mesh_url: String, diffuse_url: String, tts_scale: Vector3, spawn_pos: Vector3, terrain_name: String = "Terrain") -> Node3D:
 	if mesh_url.is_empty():
 		push_error("spawn_tts_terrain: No mesh URL provided")
 		return null
@@ -2869,7 +2917,7 @@ func spawn_tts_terrain(mesh_url: String, diffuse_url: String, tts_scale: Vector3
 
 	# Add to scene
 	add_child(wrapper)
-	wrapper.global_position = position
+	wrapper.global_position = spawn_pos
 
 	print("  [OK] Terrain: %s" % terrain_name)
 	return wrapper

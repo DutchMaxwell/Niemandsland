@@ -85,7 +85,7 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	var tray_bounds = tray_info.bounds  # Vector2 (width, depth)
 
 	# Default spacing values - will be adjusted per unit based on base size
-	var default_base_diameter = 0.032  # 32mm default
+	var _default_base_diameter = 0.032  # 32mm default
 	var unit_gap = 0.08  # 8cm gap between different units
 	var row_height = 0.10  # 10cm between rows for clear separation
 	var edge_padding = 0.06  # Padding from tray edge
