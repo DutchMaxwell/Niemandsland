@@ -1173,12 +1173,7 @@ func sync_hero_attachment(hero_id: String, target_id: String) -> void:
 
 ### Noch zu klären ❓
 
-12. **Proxy-System:** Sollen generische Miniaturen als "Proxy" markiert werden können?
-    - Vorschlag: Ja, via Radialmenü → "Assign Stats" → Unit-Picker
-
-13. **Skirmish-Modus:** Spiel-System erkennen und Regeln anpassen?
-    - Skirmish: 6" max Kettenlänge statt 9"
-    - Automatisch aus `gameSystem` ableiten (gff, aofs)?
+(Alle Fragen entschieden!)
 
 ---
 
