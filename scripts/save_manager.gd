@@ -7,11 +7,12 @@ signal save_completed(path: String)
 signal load_completed(object_count: int)
 signal load_failed(error: String)
 
-const SAVE_VERSION = "1.0"
+const SAVE_VERSION = "1.1"  # Updated for GameUnit support
 const SAVE_EXTENSION = "otts"  # OpenTTS Save
 
 var object_manager: Node3D
 var table: Node3D
+var army_manager: OPRArmyManager  # NEW: Reference for GameUnit data
 
 
 func _ready() -> void:
@@ -25,7 +26,9 @@ func serialize_game_state() -> Dictionary:
 		"version": SAVE_VERSION,
 		"saved_at": Time.get_datetime_string_from_system(),
 		"table": _serialize_table(),
-		"objects": _serialize_objects()
+		"objects": _serialize_objects(),
+		"game_units": _serialize_game_units(),  # NEW
+		"game_state": _serialize_game_state()   # NEW: Round, activations
 	}
 	return state
 
@@ -65,7 +68,14 @@ func _serialize_object(obj: Node3D) -> Dictionary:
 	var data: Dictionary = {}
 
 	# Determine object type
-	if obj.is_in_group("tts_import"):
+	if obj.is_in_group("opr_unit"):
+		data["type"] = "opr_unit"
+		# Store GameUnit reference info
+		var game_unit = obj.get_meta("game_unit", null)
+		if game_unit:
+			data["game_unit_id"] = game_unit.unit_id
+			data["model_index"] = obj.get_meta("model_index", 0)
+	elif obj.is_in_group("tts_import"):
 		data["type"] = "tts_import"
 		data["tts_mesh_url"] = obj.get_meta("tts_mesh_url", "")
 		data["tts_diffuse_url"] = obj.get_meta("tts_diffuse_url", "")
@@ -87,6 +97,42 @@ func _serialize_object(obj: Node3D) -> Dictionary:
 	data["rotation"] = [obj.rotation_degrees.x, obj.rotation_degrees.y, obj.rotation_degrees.z]
 
 	return data
+
+
+## Serialize all GameUnits with model-level data
+func _serialize_game_units() -> Array:
+	var units: Array = []
+
+	if not army_manager:
+		return units
+
+	for game_unit in army_manager.get_all_game_units():
+		var unit_data = game_unit.to_dict()
+
+		# Add node positions for each model
+		var model_positions: Array = []
+		for model in game_unit.models:
+			if model.node and is_instance_valid(model.node):
+				model_positions.append({
+					"position": [model.node.global_position.x, model.node.global_position.y, model.node.global_position.z],
+					"rotation": [model.node.rotation_degrees.x, model.node.rotation_degrees.y, model.node.rotation_degrees.z],
+					"visible": model.node.visible
+				})
+			else:
+				model_positions.append(null)
+
+		unit_data["model_positions"] = model_positions
+		units.append(unit_data)
+
+	return units
+
+
+## Serialize global game state (round, turn, etc.)
+func _serialize_game_state() -> Dictionary:
+	return {
+		"current_round": 1,  # TODO: Get from game manager when implemented
+		"current_player": 1
+	}
 
 
 ## Save game state to file
@@ -147,10 +193,16 @@ func load_game(path: String) -> Error:
 	# Load table
 	_deserialize_table(state.get("table", {}))
 
+	# Load GameUnits first (they contain model-level state)
+	var game_units_loaded = _deserialize_game_units(state.get("game_units", []))
+
 	# Load objects (async for TTS downloads)
 	var loaded_count = await _deserialize_objects(state.get("objects", []))
 
-	print("Game loaded from: %s (%d objects)" % [path, loaded_count])
+	# Restore game state
+	_deserialize_game_state(state.get("game_state", {}))
+
+	print("Game loaded from: %s (%d objects, %d game units)" % [path, loaded_count, game_units_loaded])
 	load_completed.emit(loaded_count)
 	return OK
 
@@ -307,3 +359,88 @@ static func get_default_save_dir() -> String:
 	if not DirAccess.dir_exists_absolute(dir):
 		DirAccess.make_dir_recursive_absolute(dir)
 	return dir
+
+
+# ===== GameUnit Deserialization =====
+
+## Temporary storage for loaded game units (used during load)
+var _loaded_game_units: Dictionary = {}  # unit_id -> GameUnit
+
+
+## Deserialize GameUnits from saved data
+func _deserialize_game_units(units_data: Array) -> int:
+	_loaded_game_units.clear()
+
+	if units_data.is_empty():
+		return 0
+
+	var count = 0
+	for unit_data in units_data:
+		if not unit_data is Dictionary:
+			continue
+
+		var game_unit = GameUnit.from_dict(unit_data)
+		if game_unit:
+			_loaded_game_units[game_unit.unit_id] = {
+				"game_unit": game_unit,
+				"model_positions": unit_data.get("model_positions", [])
+			}
+			count += 1
+
+	return count
+
+
+## Deserialize game state (round, turn, etc.)
+func _deserialize_game_state(state_data: Dictionary) -> void:
+	# TODO: Apply to game manager when implemented
+	var _current_round = state_data.get("current_round", 1)
+	var _current_player = state_data.get("current_player", 1)
+
+
+## Restore GameUnit data to a spawned model node
+## Called after OPR units are re-spawned
+func restore_game_unit_state(node: Node3D, unit_id: String, model_index: int) -> bool:
+	if not _loaded_game_units.has(unit_id):
+		return false
+
+	var loaded_data = _loaded_game_units[unit_id]
+	var game_unit = loaded_data.game_unit as GameUnit
+	var model_positions = loaded_data.model_positions as Array
+
+	if model_index >= game_unit.models.size():
+		return false
+
+	# Restore model instance reference
+	var model = game_unit.models[model_index]
+	model.node = node
+
+	# Set metadata on node
+	node.set_meta("game_unit", game_unit)
+	node.set_meta("model_instance", model)
+	node.set_meta("model_index", model_index)
+
+	# Restore position if available
+	if model_index < model_positions.size() and model_positions[model_index] != null:
+		var pos_data = model_positions[model_index]
+		node.global_position = _array_to_vector3(pos_data.get("position", [0, 0, 0]))
+		node.rotation_degrees = _array_to_vector3(pos_data.get("rotation", [0, 0, 0]))
+		node.visible = pos_data.get("visible", true)
+
+	# Register with army manager if available
+	if army_manager:
+		if not army_manager.game_units.has(game_unit.unit_id):
+			army_manager.game_units[game_unit.unit_id] = game_unit
+
+	return true
+
+
+## Get a loaded GameUnit by ID (for use during load process)
+func get_loaded_game_unit(unit_id: String) -> GameUnit:
+	if _loaded_game_units.has(unit_id):
+		return _loaded_game_units[unit_id].game_unit
+	return null
+
+
+## Clear loaded game units cache after load is complete
+func clear_loaded_cache() -> void:
+	_loaded_game_units.clear()
