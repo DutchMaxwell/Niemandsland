@@ -1,8 +1,8 @@
 class_name AIManager
 extends Node
 ## Central manager for AI opponent behavior.
-## Based on OPR Solo & Co-Op Rules v3.5.0.
-## Handles activation order, decision making, and action execution.
+## Based on OPR Solo & Co-Op Rules v3.5.0 + Grimdark Future v3.5.1.
+## Handles activation order, decision making, combat, and action execution.
 
 
 ## Emitted when AI starts its turn
@@ -19,6 +19,17 @@ signal ai_turn_ended
 
 ## Emitted for UI logging
 signal action_log(message: String)
+
+## Combat signals
+signal combat_started(attacker: GameUnit, defender: GameUnit, is_melee: bool)
+signal combat_result(result: AICombat.CombatResult)
+signal dice_rolled(description: String, dice: Array, successes: int)
+signal morale_test(unit: GameUnit, outcome: AIMorale.MoraleOutcome)
+
+## Mission signals
+signal objective_seized(objective: AIMission.Objective, new_controller: int)
+signal round_ended(state: AIMission.MissionState)
+signal game_over(state: AIMission.MissionState)
 
 
 # ===== Configuration =====
@@ -38,11 +49,16 @@ signal action_log(message: String)
 ## Movement speed for AI units (units per second)
 @export var movement_speed: float = 6.0
 
+## Delay before combat resolution (seconds)
+@export var combat_delay: float = 0.5
+
 
 # ===== References =====
 
 var army_manager: Node = null  # OPRArmyManager reference
 var context: AIContext = null
+var mission_state: AIMission.MissionState = null
+var terrain_pieces: Array[AITerrain.TerrainPiece] = []
 
 
 # ===== State =====
@@ -50,17 +66,54 @@ var context: AIContext = null
 var _is_ai_turn: bool = false
 var _pending_activations: Array[GameUnit] = []
 var _current_unit: GameUnit = null
+var _combat_log: Array[String] = []
 
 
 func _ready() -> void:
 	context = AIContext.new()
 	context.ai_player_id = ai_player_id
 	context.challenge_bonus_enabled = challenge_bonus
+	mission_state = AIMission.MissionState.new()
 
 
 ## Initializes the AI manager with references.
 func initialize(p_army_manager: Node) -> void:
 	army_manager = p_army_manager
+
+
+## Sets up the mission (objectives, rounds).
+func setup_mission(table_bounds: Rect2, deployment_depth: float = 12.0) -> void:
+	mission_state.objectives = AIMission.setup_objectives(table_bounds, deployment_depth)
+	mission_state.current_round = 1
+	mission_state.max_rounds = 4
+
+	# Sync objectives to context
+	context.objectives.clear()
+	for obj in mission_state.objectives:
+		var ctx_obj = AIContext.ObjectiveData.new()
+		ctx_obj.index = obj.id
+		ctx_obj.position = obj.position
+		context.objectives.append(ctx_obj)
+
+	_log("Mission setup: %d objectives placed" % mission_state.objectives.size())
+
+
+## Sets terrain pieces for AI terrain awareness.
+func set_terrain(pieces: Array[AITerrain.TerrainPiece]) -> void:
+	terrain_pieces = pieces
+
+	# Sync to context
+	context.cover_areas.clear()
+	context.difficult_terrain.clear()
+	context.dangerous_terrain.clear()
+
+	for piece in pieces:
+		if piece.is_cover():
+			context.cover_areas.append(piece.bounds)
+		if piece.is_difficult():
+			context.difficult_terrain.append(piece.bounds)
+		if piece.is_dangerous():
+			context.dangerous_terrain.append(piece.bounds)
 
 
 ## Sets up AI units at game start.
@@ -206,7 +259,7 @@ func _execute_action(unit: GameUnit, action: AIDecisionTree.ActionResult) -> voi
 			pass  # Do nothing
 
 
-## Executes a charge action.
+## Executes a charge action with full combat resolution.
 func _execute_charge(unit: GameUnit, action: AIDecisionTree.ActionResult) -> void:
 	if action.charge_target == null:
 		return
@@ -218,10 +271,39 @@ func _execute_charge(unit: GameUnit, action: AIDecisionTree.ActionResult) -> voi
 
 	_log("  -> Charging %s" % action.charge_target.get_name())
 
-	# TODO: Trigger melee combat
-	# For now, just mark as having charged
 	unit.unit_properties["last_action"] = "charge"
-	unit.unit_properties["charge_target"] = action.charge_target.unit_id
+	unit.unit_properties["moved_this_turn"] = true
+
+	# Resolve melee combat
+	var defender = action.charge_target
+	var is_fatigued = unit.unit_properties.get("fought_this_round", false)
+
+	combat_started.emit(unit, defender, true)
+
+	if combat_delay > 0:
+		await get_tree().create_timer(combat_delay).timeout
+
+	var result = AICombat.resolve_melee(unit, defender, context, is_fatigued)
+
+	# Log combat results
+	_log("    Attacks: %d, Hits: %d, Blocked: %d, Wounds: %d" % [
+		result.total_attacks, result.hits, result.blocked, result.wounds
+	])
+
+	if result.casualties.size() > 0:
+		_log("    Casualties: %d models" % result.casualties.size())
+
+	combat_result.emit(result)
+
+	# Handle morale
+	await _handle_melee_morale(result)
+
+	# Consolidation move
+	if defender.is_destroyed():
+		await _consolidation_move(unit)
+	else:
+		# Move back 1" to separate
+		await _separate_from_combat(unit, defender)
 
 
 ## Executes a rush action.
@@ -235,7 +317,7 @@ func _execute_rush(unit: GameUnit, action: AIDecisionTree.ActionResult) -> void:
 	unit.unit_properties["last_action"] = "rush"
 
 
-## Executes an advance + shoot action.
+## Executes an advance + shoot action with full combat resolution.
 func _execute_advance_shoot(unit: GameUnit, action: AIDecisionTree.ActionResult) -> void:
 	var target_pos = action.target_position
 	target_pos = _apply_terrain_avoidance(unit, target_pos)
@@ -244,11 +326,11 @@ func _execute_advance_shoot(unit: GameUnit, action: AIDecisionTree.ActionResult)
 	# Advance
 	await _move_unit_toward(unit, target_pos, context.advance_distance)
 
+	unit.unit_properties["moved_this_turn"] = true
+
 	# Shoot
 	if action.shoot_target != null:
-		_log("  -> Shooting at %s" % action.shoot_target.get_name())
-		# TODO: Trigger shooting
-		unit.unit_properties["shoot_target"] = action.shoot_target.unit_id
+		await _resolve_shooting(unit, action.shoot_target)
 
 	unit.unit_properties["last_action"] = "advance_shoot"
 
@@ -266,11 +348,90 @@ func _execute_advance(unit: GameUnit, action: AIDecisionTree.ActionResult) -> vo
 ## Executes a hold + shoot action (for Artillery, Indirect, Relentless).
 func _execute_hold_shoot(unit: GameUnit, action: AIDecisionTree.ActionResult) -> void:
 	if action.shoot_target != null:
-		_log("  -> Holding position, shooting at %s" % action.shoot_target.get_name())
-		# TODO: Trigger shooting
-		unit.unit_properties["shoot_target"] = action.shoot_target.unit_id
+		await _resolve_shooting(unit, action.shoot_target)
 
 	unit.unit_properties["last_action"] = "hold_shoot"
+
+
+# ===== Combat Resolution =====
+
+## Resolves a shooting attack.
+func _resolve_shooting(attacker: GameUnit, defender: GameUnit) -> void:
+	_log("  -> Shooting at %s" % defender.get_name())
+
+	combat_started.emit(attacker, defender, false)
+
+	if combat_delay > 0:
+		await get_tree().create_timer(combat_delay).timeout
+
+	var result = AICombat.resolve_shooting(attacker, defender, context)
+
+	# Log results
+	_log("    Attacks: %d, Hits: %d, Blocked: %d, Wounds: %d" % [
+		result.total_attacks, result.hits, result.blocked, result.wounds
+	])
+
+	if result.casualties.size() > 0:
+		_log("    Casualties: %d models" % result.casualties.size())
+
+	combat_result.emit(result)
+
+	# Check for morale test
+	if AIMorale.needs_morale_test(defender, result.wounds):
+		var outcome = AIMorale.take_morale_test(defender)
+		AIMorale.apply_morale_outcome(defender, outcome)
+
+		morale_test.emit(defender, outcome)
+
+		match outcome.result:
+			AIMorale.MoraleResult.SHAKEN:
+				_log("    %s is Shaken!" % defender.get_name())
+			AIMorale.MoraleResult.ROUTED:
+				_log("    %s has Routed!" % defender.get_name())
+
+
+## Handles morale after melee combat.
+func _handle_melee_morale(result: AICombat.CombatResult) -> void:
+	if result.winner == null:
+		_log("    Melee is a tie - no morale test")
+		return
+
+	var loser = result.defender if result.winner == result.attacker else result.attacker
+
+	if loser.is_destroyed():
+		_log("    %s destroyed - no morale test needed" % loser.get_name())
+		return
+
+	var outcome = AIMorale.handle_melee_morale(result.winner, loser)
+
+	morale_test.emit(loser, outcome)
+
+	match outcome.result:
+		AIMorale.MoraleResult.PASSED:
+			_log("    %s passed morale test" % loser.get_name())
+		AIMorale.MoraleResult.SHAKEN:
+			_log("    %s is Shaken!" % loser.get_name())
+		AIMorale.MoraleResult.ROUTED:
+			_log("    %s has Routed!" % loser.get_name())
+
+
+## 3" consolidation move after destroying enemy in melee.
+func _consolidation_move(unit: GameUnit) -> void:
+	# Find nearest objective or enemy
+	var unit_pos = _get_unit_center(unit)
+	var nearest_obj = context.get_nearest_uncontrolled_objective(unit_pos)
+	var target = nearest_obj.position if nearest_obj else unit_pos
+
+	await _move_unit_toward(unit, target, 3.0)
+
+
+## Move back 1" to separate from combat.
+func _separate_from_combat(attacker: GameUnit, defender: GameUnit) -> void:
+	var attacker_pos = _get_unit_center(attacker)
+	var defender_pos = _get_unit_center(defender)
+	var direction = (attacker_pos - defender_pos).normalized()
+
+	await _move_unit_toward(attacker, attacker_pos + direction * 1.0, 1.0)
 
 
 ## Moves a unit toward a target position.
@@ -544,3 +705,156 @@ func handle_transports(round_number: int) -> void:
 		if idx > 0:
 			_pending_activations.erase(transport)
 			_pending_activations.push_front(transport)
+
+
+# ===== Round & Mission Management =====
+
+## Ends the current round and updates objectives.
+func end_round() -> void:
+	# Reset unit states for new round
+	for unit in context.ai_units:
+		unit.reset_activation()
+		unit.unit_properties["fought_this_round"] = false
+		unit.unit_properties["moved_this_turn"] = false
+
+	for unit in context.enemy_units:
+		unit.reset_activation()
+		unit.unit_properties["fought_this_round"] = false
+		unit.unit_properties["moved_this_turn"] = false
+
+	# Update mission state
+	mission_state = AIMission.end_round(
+		mission_state,
+		context.enemy_units,
+		context.ai_units
+	)
+
+	# Log objective status
+	var scores = AIMission.calculate_scores(mission_state.objectives)
+	_log("Round %d ended - Player: %d objectives, AI: %d objectives" % [
+		mission_state.current_round - 1,
+		scores.player,
+		scores.ai
+	])
+
+	round_ended.emit(mission_state)
+
+	# Check for game over
+	if mission_state.is_game_over:
+		_handle_game_over()
+
+
+## Handles game over.
+func _handle_game_over() -> void:
+	var winner_text = "Tie!"
+	if mission_state.winner == 1:
+		winner_text = "Player wins!"
+	elif mission_state.winner == 2:
+		winner_text = "AI wins!"
+
+	_log("GAME OVER - %s (Player: %d, AI: %d)" % [
+		winner_text,
+		mission_state.player_score,
+		mission_state.ai_score
+	])
+
+	game_over.emit(mission_state)
+
+
+## Gets current mission status.
+func get_mission_status() -> Dictionary:
+	var scores = AIMission.calculate_scores(mission_state.objectives)
+	return {
+		"current_round": mission_state.current_round,
+		"max_rounds": mission_state.max_rounds,
+		"player_objectives": scores.player,
+		"ai_objectives": scores.ai,
+		"total_objectives": mission_state.objectives.size(),
+		"is_game_over": mission_state.is_game_over,
+		"winner": mission_state.winner
+	}
+
+
+## Gets objective markers for visualization.
+func get_objective_markers() -> Array[AIMission.Objective]:
+	return mission_state.objectives
+
+
+# ===== Terrain Integration =====
+
+## Checks if target position requires terrain test.
+func _check_dangerous_terrain(unit: GameUnit, target_pos: Vector3) -> void:
+	var current_pos = _get_unit_center(unit)
+
+	if AITerrain.path_crosses_dangerous(current_pos, target_pos, terrain_pieces):
+		if not unit.has_special_rule("Flying"):
+			var wounds = AITerrain.take_dangerous_terrain_test(unit)
+			if wounds > 0:
+				_log("    Dangerous terrain: %d wounds!" % wounds)
+
+				# Check morale if needed
+				if AIMorale.needs_morale_test(unit, wounds):
+					var outcome = AIMorale.take_morale_test(unit)
+					AIMorale.apply_morale_outcome(unit, outcome)
+
+
+## Gets adjusted movement distance considering terrain.
+func _get_terrain_adjusted_movement(unit: GameUnit, base_move: float, target: Vector3) -> float:
+	var current_pos = _get_unit_center(unit)
+	var crosses_difficult = AITerrain.path_crosses_difficult(current_pos, target, terrain_pieces)
+
+	return AITerrain.get_movement_limit(unit, crosses_difficult, base_move)
+
+
+# ===== AI Strategic Decisions =====
+
+## Gets strategic stance for this round.
+func get_strategic_stance() -> String:
+	return AIMission.get_strategic_stance(mission_state)
+
+
+## Assigns units to defender/attacker roles.
+func assign_unit_roles() -> Dictionary:
+	var stance = get_strategic_stance()
+	return AIMission.assign_unit_roles(context.ai_units, mission_state.objectives, stance)
+
+
+# ===== Full Game Loop Helper =====
+
+## Runs a complete AI turn (for testing/automation).
+func run_full_ai_turn() -> void:
+	if mission_state.is_game_over:
+		_log("Game is already over!")
+		return
+
+	_log("=== AI Turn - Round %d ===" % mission_state.current_round)
+
+	# Handle start of round special rules
+	handle_ambush_units(mission_state.current_round)
+	handle_transports(mission_state.current_round)
+
+	# Start AI turn
+	start_ai_turn(mission_state.current_round)
+
+	# Wait for turn to complete
+	await ai_turn_ended
+
+
+## Records starting unit sizes for morale calculations.
+func record_starting_sizes() -> void:
+	for unit in context.ai_units:
+		unit.unit_properties["starting_size"] = unit.get_alive_count()
+		# Record starting tough for single models
+		if unit.get_alive_count() == 1:
+			var total_tough = 0
+			for model in unit.models:
+				total_tough += model.wounds_max
+			unit.unit_properties["starting_tough"] = total_tough
+
+	for unit in context.enemy_units:
+		unit.unit_properties["starting_size"] = unit.get_alive_count()
+		if unit.get_alive_count() == 1:
+			var total_tough = 0
+			for model in unit.models:
+				total_tough += model.wounds_max
+			unit.unit_properties["starting_tough"] = total_tough
