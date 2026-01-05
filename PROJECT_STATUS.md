@@ -1,5 +1,5 @@
 # OpenTTS - Projekt Status
-**Stand:** 2026-01-01
+**Stand:** 2026-01-05
 **Version:** 0.2-alpha
 **Branch:** `main` (alle Feature-Branches gemerged)
 
@@ -53,6 +53,13 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 - ✅ **Save/Load Layouts** - Terrain-Setups speichern und laden
 - ✅ **Table Background Texture** - Standard-Untergrund für den Spieltisch
 
+### Deployment & Terrain Gameplay (NEU!)
+- ✅ **Deployment Zones im 3D-Spiel** - Front-line (12") Visualisierung
+- ✅ **Deployment Mode** - Zone Compliance Checking für Einheiten
+- ✅ **Terrain Hints** - Anzeige für Difficult und Dangerous Terrain
+- ✅ **LOS-Blocking Check** - Prüfung ob Terrain Sichtlinien blockiert
+- ✅ **Scout/Ambush Units Panel** - UI-Panel für Scout/Ambush Einheiten
+
 ### OPR Integration
 - ✅ **OPR API Client** - Army Forge API Integration
 - ✅ **Stats Tooltips** - Unit-Statistiken beim Hover
@@ -89,26 +96,54 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 
 ## 📋 In Arbeit (Milestone 2)
 
-### Terrain-Gameplay Integration (PRIORITÄT!)
-- [ ] **Deployment Zones im 3D-Spiel** - Sichtbare Zonen beim Spielstart
-- [ ] **Cover-System** - Deckung durch Terrain (Ruins, Forest)
-- [ ] **Schwieriges Gelände** - Movement-Modifikatoren (Forest)
-- [ ] **LOS-Blocking** - Container blockieren Sichtlinien komplett
-- [ ] **Dangerous Terrain** - Schaden bei Betreten (Minefields, Acid)
-- [ ] **Terrain-Höhen** - Height 5 Objekte für Sichtlinien
+### Deployment Zones (Teilweise implementiert)
+- ✅ **Front-line (12")** - Implementiert und visualisiert
+- [ ] **Corner Deployment** - Noch nicht implementiert
+- [ ] **Dawn Assault** - Noch nicht implementiert
+- [ ] **Pitched Battle** - Noch nicht implementiert
+- [ ] **Meeting Engagement** - Noch nicht implementiert
+
+### Terrain-Gameplay Integration
+- ✅ **LOS-Blocking Check** - Funktion implementiert (is_terrain_los_blocking)
+- ✅ **Terrain Hints** - Anzeige für Difficult/Dangerous Terrain
+- [ ] **Cover-System** - Gameplay-Mechanik für Deckung (Würfelmodifikatoren)
+- [ ] **Schwieriges Gelände** - Movement-Modifikatoren anwenden
+- [ ] **Dangerous Terrain** - Schaden bei Betreten
+- [ ] **Terrain-Höhen** - Height 5 Objekte für Sichtlinien-Berechnung
 
 ### Gameplay-Features
-- [ ] Einheiten-Karten und erweiterte Stats
-- [ ] Erweiterte Würfel-Optionen (Modifikatoren, mehr Typen)
-- [ ] Phasen-Management System (Turn-Tracker, Aktivierung)
-- [ ] Wunden-Tracking pro Modell
-- [ ] Status-Marker (Aktiviert, Pinned, etc.)
+- [ ] Einheiten-Karten und erweiterte Stats im 3D-Spiel
+- [ ] Erweiterte Würfel-Optionen (Modifikatoren, Rerolls)
+- [x] **Phasen-Management System** - Turn-Tracker mit Runden und Aktivierungen (activation_tracker.gd)
+- [x] **Wunden-Tracking pro Modell** - wounds_dialog.gd mit +/- Buttons
+- [x] **Status-Marker** - Standard OPR + Custom Freetext (marker_dialog.gd, unit_marker.gd)
 
 ### UI-Verbesserungen
 - [ ] In-Game HUD Overhaul
-- [ ] Radial Context Menu
+- [x] **Radial Context Menu** - radial_menu.gd mit Kontext-Erkennung
 - [ ] Minimap mit Terrain-Overlay
-- [ ] Erweiterte Settings-Menü-Integration
+- [ ] Multiplayer Lobby UI
+- [ ] Load Game Dialog
+
+### Unit-System (NEU!)
+- [x] **Model-Level Architektur** - ModelInstance mit generischem Properties-Dictionary
+- [x] **GameUnit Wrapper** - System-agnostisch (OPR, WGS, generisch)
+- [x] **Equipment-Verteilung** - Automatisch basierend auf API-Count
+- [x] **Coherency-System** - 1" Model-zu-Model, 9" Kette, visuelle Darstellung
+- [x] **Hero-Attachment** - Manueller Dialog nach Import
+- [x] **Multiplayer Sync** - RPCs für Wounds, Markers, Activation, Hero-Attachment
+- [x] **Save/Load Integration** - GameUnit-Serialisierung mit Model-Positionen
+
+### AI-System (NEU!) - OPR Solo & Co-Op Rules v3.5.0
+- [x] **Unit-Klassifizierung** - Hybrid/Shooting/Melee basierend auf Waffen
+- [x] **Decision Trees** - Alle 3 Entscheidungsbäume aus OPR-Regeln
+- [x] **Target Selector** - Prioritätsregeln für AP, Deadly, Takedown, Unstoppable
+- [x] **Aktivierungsreihenfolge** - Sektions-basiert (D3 für Sektion)
+- [x] **Special Rules** - Ambush, Scout, Transport, Artillery, Caster, Flying, Strider
+- [x] **Objective Placement** - 6-Quadrat-Grid, zufällige Platzierung
+- [x] **Challenge Bonus** - Optional +1 Hit/Defense basierend auf Objectives
+- [ ] **Kampf-Integration** - Würfelsystem für AI-Angriffe
+- [ ] **Terrain-Integration** - Vollständige Cover/Difficult/Dangerous Logik
 
 ---
 
@@ -132,7 +167,8 @@ openTTS/
 ├── scenes/                  # Godot-Szenen
 │   ├── main.tscn           # Hauptszene
 │   ├── startup_menu.tscn   # Startmenü
-│   ├── map_layout.tscn     # Map Layout Editor (NEU!)
+│   ├── map_layout.tscn     # Map Layout Editor
+│   ├── radial_menu.tscn    # NEU: Radial Context Menu
 │   └── opr_stats_tooltip.tscn
 ├── scripts/                 # GDScript-Dateien
 │   ├── main.gd             # Hauptszene-Controller
@@ -140,16 +176,37 @@ openTTS/
 │   ├── table.gd
 │   ├── object_manager.gd
 │   ├── selectable_object.gd
-│   ├── map_layout.gd       # Map Layout Editor (NEU! 852 Zeilen)
-│   ├── map_layout_grid.gd  # Grid Rendering (NEU! 272 Zeilen)
-│   ├── terrain_overlay.gd  # 3D Overlay (NEU! 150 Zeilen)
-│   ├── network_manager.gd
-│   ├── save_manager.gd
+│   ├── map_layout.gd       # Map Layout Editor (852 Zeilen)
+│   ├── map_layout_grid.gd  # Grid Rendering (272 Zeilen)
+│   ├── terrain_overlay.gd  # 3D Overlay (150 Zeilen)
+│   ├── network_manager.gd  # Mit GameUnit Sync RPCs
+│   ├── save_manager.gd     # Mit GameUnit Serialisierung
 │   ├── lighting_controller.gd
 │   ├── theme_manager.gd
 │   ├── tts_importer.gd
 │   ├── opr_api_client.gd
+│   ├── opr_army_manager.gd # Mit GameUnit Integration
 │   ├── wgs_client.gd
+│   ├── model_instance.gd   # NEU: Model-Level Daten
+│   ├── game_unit.gd        # NEU: System-agnostischer Unit-Wrapper
+│   ├── equipment_distributor.gd  # NEU: Waffen-Verteilung
+│   ├── unit_utils.gd       # NEU: Unit-Erkennung Helpers
+│   ├── coherency_checker.gd     # NEU: Coherency-Validierung
+│   ├── coherency_visualizer.gd  # NEU: Visuelle Coherency-Linien
+│   ├── unit_marker.gd      # NEU: Standard + Custom Marker
+│   ├── radial_menu.gd      # NEU: Pie-Menu UI
+│   ├── radial_menu_controller.gd  # NEU: Kontext-Handler
+│   ├── wounds_dialog.gd    # NEU: Wunden-Tracking Dialog
+│   ├── marker_dialog.gd    # NEU: Marker-Verwaltung Dialog
+│   ├── activation_tracker.gd    # NEU: Runden/Aktivierungs-Panel
+│   ├── hero_attachment_dialog.gd  # NEU: Hero-Zuweisung
+│   ├── ai_manager.gd            # NEU: AI-Gegner Controller
+│   ├── ai_unit_classifier.gd    # NEU: Hybrid/Shooting/Melee
+│   ├── ai_decision_tree.gd      # NEU: OPR Decision Trees
+│   ├── ai_context.gd            # NEU: AI Game State
+│   ├── ai_target_selector.gd    # NEU: Target Priorität
+│   ├── ai_special_rules.gd      # NEU: Special Rules Handler
+│   ├── ai_objective_setup.gd    # NEU: Objective Placement
 │   └── ...
 ├── assets/                  # Texturen, Modelle, Audio
 │   ├── miniatures/
@@ -180,13 +237,14 @@ openTTS/
 ## 🚀 Nächste Schritte (Priorität)
 
 ### Kurzfristig (Diese Woche)
-1. ✅ **Dokumentation aktualisieren** - PROJECT_STATUS.md, README.md, PLAN.md
-2. **Deployment Zones ins 3D-Spiel** - Visualisierung beim Spielstart
-3. **Cover-System implementieren** - Terrain gibt Deckung (Ruins, Forest)
-4. **Schwieriges Gelände** - Movement-Modifikatoren aktivieren
+1. ✅ **Deployment Zones (Front-line)** - Im 3D-Spiel visualisiert
+2. ✅ **Deployment Mode** - Zone Compliance Checking implementiert
+3. ✅ **Terrain Hints** - Anzeige für Difficult/Dangerous Terrain
+4. **Weitere Deployment Zones** - Corner, Dawn Assault, Pitched Battle, Meeting Engagement
+5. **Cover-System** - Gameplay-Mechanik für Würfelmodifikatoren
 
 ### Mittelfristig (Diesen Monat)
-1. **Terrain-Gameplay Features** - LOS-Blocking, Dangerous Terrain, Höhen
+1. **Terrain-Gameplay Mechaniken** - Cover-Würfel, Movement-Modifikatoren, Dangerous-Schaden
 2. **Einheiten-Karten** - Erweiterte Stats-Anzeige im 3D-Spiel
 3. **Phasen-Management** - Turn-Tracker, Aktivierungs-System
 4. **Wunden-Tracking** - HP-Anzeige pro Modell
@@ -247,14 +305,13 @@ openTTS/
 
 ### Aktive Branches
 - `main` - Stabile Version mit allen Features
-- `claude/merge-branches-to-main-8aVWC` - Alle Feature-Branches gemerged (aktuell)
 
-### Recent Merges (2026-01-01)
-- `74ef811` - Merge: Comprehensive cleanup and documentation update
-- `24b65bc` - Merge: Fix watermark removal and add batch processing GUI
-- `49de9dd` - Merge: Add Kenney UI assets (SciFi and Fantasy themes)
-- `4b1d9b2` - Merge: Complete terrain editor with deployment zones, objectives, and auto-generate
-- `5079956` - Merge: Add table background and terrain features from set-default-background
+### Recent Commits (2026-01-05)
+- `9bb455a` - Merge: All feature branches to main
+- `fbba127` - feat: Add Scout/Ambush units panel
+- `19c4bb3` - feat: Add deployment mode with zone compliance checking
+- `a0ab277` - feat: Add terrain hints for difficult and dangerous terrain
+- `ebfcaa5` - feat: Add Deployment Zone system with Front-line (12") support
 
 ---
 
@@ -266,4 +323,4 @@ MIT License - Siehe [LICENSE](./LICENSE) für Details.
 
 **Status:** ✅ Alpha-Version funktionsfähig, aktive Entwicklung
 **Contributors:** DutchMaxwell, Community
-**Letzte Aktualisierung:** 2026-01-01
+**Letzte Aktualisierung:** 2026-01-05
