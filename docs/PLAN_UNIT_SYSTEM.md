@@ -1,7 +1,7 @@
 # Plan: Unit-System und Radialmenü
 
 **Erstellt:** 2026-01-05
-**Status:** Entwurf v3 - Generische Architektur (API-verifiziert)
+**Status:** Entwurf v4 - Vollständig mit UX, Coherency, Activation, Markers
 **Letzte Änderung:** 2026-01-05
 
 ---
@@ -784,9 +784,334 @@ Bei kritischen Aktionen auf Leader/Specialists:
 | `Enter` | Hovering Segment ausführen |
 | `Tab` | Nächstes Segment |
 
+### 8.4 UX Best Practices (Recherche-Ergebnis)
+
+Basierend auf [Radial Menu UX Research](https://www.stirlingweir.com/radial-menus) und [Apex Legends Analysis](https://uxdesign.cc/the-power-of-the-radial-menu-a-love-letter-to-apex-legends-from-a-ux-designer-and-perpetual-noob-1bec9b05e805):
+
+| Feature | Implementierung | Priorität |
+|---------|-----------------|-----------|
+| **Discoverability** | Tooltip "Right-click for menu" bei Hover | Hoch |
+| **Gesture Support** | Swipe-Richtung = direkte Aktion (ohne Loslassen) | Mittel |
+| **Muscle Memory** | Feste Positionen, nie umsortieren | Hoch |
+| **Audio Feedback** | Hover-Sound, Select-Sound | Niedrig |
+| **Cancel Zone** | Mauszeiger zurück zur Mitte = Abbruch | Hoch |
+| **Nested Menus** | Sub-Menü für "Add Marker" | Mittel |
+
+**Fitts's Law:** Alle Optionen gleich weit vom Zentrum → gleicher Aufwand für jede Aktion.
+
 ---
 
-## 9. Offene Fragen (Aktualisiert)
+## 9. Coherency System (NEU)
+
+### 9.1 OPR Coherency Regeln
+
+Basierend auf [OPR Rules FAQ](https://wiki.onepagerules.com/index.php/Rules_FAQ):
+
+| Regel | Wert | Beschreibung |
+|-------|------|--------------|
+| **Model-zu-Model** | 1" | Jedes Model max 1" von einem anderen Model entfernt |
+| **Max Kettenlänge** | 9" | Gesamte Unit innerhalb 9" (6" bei Skirmish) |
+| **Elevated** | 3" | Wenn auf unterschiedlichen Höhen und 1" nicht passt |
+
+### 9.2 Coherency Checker
+
+```gdscript
+class_name CoherencyChecker
+extends RefCounted
+
+const COHERENCY_DISTANCE_INCHES := 1.0
+const MAX_CHAIN_DISTANCE_INCHES := 9.0  # 6.0 for Skirmish
+const ELEVATED_COHERENCY_INCHES := 3.0
+
+## Prüft Coherency für eine Unit
+## Returns: { "valid": bool, "issues": Array[CoherencyIssue] }
+static func check_unit_coherency(game_unit: GameUnit) -> Dictionary:
+    var issues: Array = []
+    var models = game_unit.get_alive_models()
+
+    if models.size() <= 1:
+        return { "valid": true, "issues": [] }
+
+    # Check 1: Jedes Model muss innerhalb 1" von einem anderen sein
+    for model in models:
+        var has_neighbor = false
+        for other in models:
+            if model == other:
+                continue
+            var dist = _distance_between_models(model, other)
+            if dist <= COHERENCY_DISTANCE_INCHES:
+                has_neighbor = true
+                break
+            # Elevated coherency check
+            if _is_elevated_different(model, other) and dist <= ELEVATED_COHERENCY_INCHES:
+                has_neighbor = true
+                break
+
+        if not has_neighbor:
+            issues.append({
+                "type": "isolated",
+                "model": model,
+                "message": "Model %d is out of coherency" % (model.model_index + 1)
+            })
+
+    # Check 2: Max Kettenlänge 9"
+    var max_dist = _get_max_chain_distance(models)
+    if max_dist > MAX_CHAIN_DISTANCE_INCHES:
+        issues.append({
+            "type": "chain_too_long",
+            "distance": max_dist,
+            "message": "Unit chain exceeds %.0f\" (%.1f\")" % [MAX_CHAIN_DISTANCE_INCHES, max_dist]
+        })
+
+    return { "valid": issues.is_empty(), "issues": issues }
+
+## Visualisiert Coherency-Linien zwischen Models
+static func visualize_coherency(game_unit: GameUnit, parent: Node3D) -> Node3D:
+    # Erstellt temporäre Linien zwischen Models
+    # Grün = OK, Rot = zu weit
+    pass
+```
+
+### 9.3 Coherency UI
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  ⚠️ COHERENCY WARNING                                   │
+│                                                         │
+│  "Battle Brothers" has coherency issues:                │
+│                                                         │
+│  • Model 3 is isolated (nearest: 2.4")                  │
+│  • Unit chain: 10.2" (max 9")                           │
+│                                                         │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │      ●───●───●                                  │    │
+│  │              ╲                                  │    │
+│  │               ⚠️●  ← Out of coherency           │    │
+│  └─────────────────────────────────────────────────┘    │
+│                                                         │
+│  [Fix Automatically]          [Ignore]     [Close]      │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 10. Activation System (NEU)
+
+### 10.1 Unit Activation State
+
+```gdscript
+# In GameUnit:
+var is_activated: bool = false      # Diese Runde aktiviert?
+var activation_round: int = 0       # In welcher Runde aktiviert?
+
+# In Main/GameManager:
+var current_round: int = 1
+var current_player: int = 1         # 1 oder 2
+
+func activate_unit(game_unit: GameUnit) -> void:
+    game_unit.is_activated = true
+    game_unit.activation_round = current_round
+
+    # Attached Heroes werden mit-aktiviert
+    for hero in game_unit.unit_properties.get("attached_heroes", []):
+        hero.is_activated = true
+        hero.activation_round = current_round
+
+func new_round() -> void:
+    current_round += 1
+    # Reset alle Units
+    for unit in all_game_units:
+        unit.is_activated = false
+```
+
+### 10.2 Activation Tracker UI
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  ROUND 2 - Player 1's Turn                              │
+├─────────────────────────────────────────────────────────┤
+│  Player 1 (Blue):                                       │
+│  ✅ Battle Brothers [5]      100pts   (activated)       │
+│  ⬜ Assault Squad [10]       150pts                     │
+│  ✅ Captain → Brothers       80pts    (with unit)       │
+│  ⬜ Heavy Support [3]        120pts                     │
+│                                                         │
+│  Player 2 (Red):                                        │
+│  ✅ Ork Boyz [20]            180pts   (activated)       │
+│  ⬜ Warboss                  100pts                     │
+│  ⬜ Lootas [5]               75pts                      │
+├─────────────────────────────────────────────────────────┤
+│  [End Turn]                              [New Round]    │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 11. Marker System (NEU)
+
+### 11.1 Standard OPR Marker
+
+Basierend auf [OPR Official Tokens](https://www.myminifactory.com/object/3d-print-opr-play-tokens-ruler-136924):
+
+| Marker | Icon | Farbe | Beschreibung |
+|--------|------|-------|--------------|
+| **Activated** | ✓ | Grau | Unit hat diese Runde aktiviert |
+| **Shaken** | S | Gelb | -1 Q/D, halbe Bewegung, keine Objectives |
+| **Fatigued** | ⚡ | Orange | Keine Impact-Attacken diese Runde |
+| **Wound** | ❤️ | Rot | Verlorene Wunden (1, 3, 5) |
+| **Pinned** | 📍 | Blau | Kann sich nicht bewegen |
+| **Spell** | ✨ | Lila | Aktiver Zauber-Effekt |
+
+### 11.2 Custom Marker (Freitext)
+
+```gdscript
+class_name UnitMarker
+extends RefCounted
+
+enum MarkerType {
+    STANDARD,    # Vordefiniert (Activated, Shaken, etc.)
+    CUSTOM       # Freitext
+}
+
+var type: MarkerType
+var name: String           # "Shaken" oder custom "Blessed by Priest"
+var icon: String           # Emoji oder Icon-Path
+var color: Color           # Hintergrundfarbe
+var tooltip: String        # Optionale Beschreibung
+var expires_on_round: int  # 0 = permanent, >0 = verschwindet nach Runde X
+
+static func create_custom(text: String, color: Color = Color.WHITE) -> UnitMarker:
+    var marker = UnitMarker.new()
+    marker.type = MarkerType.CUSTOM
+    marker.name = text
+    marker.icon = "📝"
+    marker.color = color
+    marker.expires_on_round = 0
+    return marker
+```
+
+### 11.3 Marker UI (Add Marker Dialog)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  ADD MARKER                                             │
+├─────────────────────────────────────────────────────────┤
+│  Standard Markers:                                      │
+│  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐               │
+│  │  ✓  │ │  S  │ │  ⚡ │ │  📍 │ │  ✨ │               │
+│  │ Act │ │Shake│ │Fatig│ │Pinnd│ │Spell│               │
+│  └─────┘ └─────┘ └─────┘ └─────┘ └─────┘               │
+│                                                         │
+│  Wounds: [-] 3 [+]                                      │
+│                                                         │
+│  ─────────────────────────────────────────────────────  │
+│  Custom Marker:                                         │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │ Blessed by Priest                               │    │
+│  └─────────────────────────────────────────────────┘    │
+│                                                         │
+│  Color: [🔴] [🟡] [🟢] [🔵] [⚪]                         │
+│                                                         │
+│  [Cancel]                                   [Add]       │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 11.4 Marker Visualisierung auf Model
+
+```
+       📍 S ❤️3
+         ↓
+    ┌─────────┐
+    │  Model  │
+    │    ●    │
+    └─────────┘
+```
+
+- Marker als kleine Icons über dem Model (Billboard)
+- Klick auf Marker → Entfernen oder Details
+- Mehrere Marker nebeneinander
+
+---
+
+## 12. Save/Load & Multiplayer (NEU)
+
+### 12.1 Save Format Erweiterung
+
+```gdscript
+# In save_manager.gd - Erweiterung für GameUnit/ModelInstance
+
+func _serialize_game_unit(game_unit: GameUnit) -> Dictionary:
+    var data = {
+        "source_type": game_unit.source_type,
+        "unit_properties": game_unit.unit_properties.duplicate(true),
+        "is_activated": game_unit.is_activated,
+        "activation_round": game_unit.activation_round,
+        "models": []
+    }
+
+    for model in game_unit.models:
+        data.models.append(_serialize_model_instance(model))
+
+    return data
+
+func _serialize_model_instance(model: ModelInstance) -> Dictionary:
+    return {
+        "model_index": model.model_index,
+        "properties": model.properties.duplicate(true),
+        "wounds_current": model.wounds_current,
+        "wounds_max": model.wounds_max,
+        "is_alive": model.is_alive,
+        "markers": model.markers.duplicate(),
+        "node_transform": _serialize_transform(model.node.global_transform)
+    }
+```
+
+### 12.2 Multiplayer Sync
+
+```gdscript
+# In network_manager.gd - Neue RPCs für Unit-State
+
+@rpc("any_peer", "call_remote", "reliable")
+func sync_unit_activation(unit_id: String, is_activated: bool, round: int) -> void:
+    var unit = _find_unit_by_id(unit_id)
+    if unit:
+        unit.is_activated = is_activated
+        unit.activation_round = round
+
+@rpc("any_peer", "call_remote", "reliable")
+func sync_model_wounds(unit_id: String, model_index: int, wounds: int, is_alive: bool) -> void:
+    var unit = _find_unit_by_id(unit_id)
+    if unit:
+        var model = unit.get_model(model_index)
+        if model:
+            model.wounds_current = wounds
+            model.is_alive = is_alive
+
+@rpc("any_peer", "call_remote", "reliable")
+func sync_model_marker(unit_id: String, model_index: int, marker_data: Dictionary, add: bool) -> void:
+    var unit = _find_unit_by_id(unit_id)
+    if unit:
+        var model = unit.get_model(model_index)
+        if model:
+            if add:
+                model.markers.append(marker_data.name)
+            else:
+                model.markers.erase(marker_data.name)
+
+@rpc("any_peer", "call_remote", "reliable")
+func sync_hero_attachment(hero_id: String, target_id: String) -> void:
+    var hero = _find_unit_by_id(hero_id)
+    var target = _find_unit_by_id(target_id) if not target_id.is_empty() else null
+    if hero:
+        if target:
+            HeroAttachment.attach_hero_to_unit(hero, target)
+        else:
+            HeroAttachment.detach_hero(hero)
+```
+
+---
+
+## 13. Offene Fragen (Aktualisiert)
 
 ### Entschieden ✅
 
@@ -819,23 +1144,45 @@ Bei kritischen Aktionen auf Leader/Specialists:
    - Einfacher Dialog mit Liste aller Units der gleichen Armee
    - Typischerweise nur 3-5 Heroes pro Armee → akzeptabler Aufwand
 
+7. **Coherency System:** ✅ ENTSCHIEDEN → Implementieren
+   - 1" Model-zu-Model, 9" max Kettenlänge (6" Skirmish)
+   - 3" bei unterschiedlichen Höhen
+   - Visueller Check via Radialmenü "Check Coherency"
+   - Optional: "Fix Automatically" Button
+
+8. **Activation System:** ✅ ENTSCHIEDEN → Implementieren
+   - Unit-Level Activation Toggle
+   - Attached Heroes werden mit-aktiviert
+   - Activation Tracker Panel (optional)
+   - Runden-Counter
+
+9. **Marker System:** ✅ ENTSCHIEDEN → Standard + Custom
+   - Standard OPR Marker: Activated, Shaken, Fatigued, Pinned, Wound, Spell
+   - Custom Marker mit Freitext + Farbauswahl
+   - Marker können ablaufen (nach Runde X)
+   - Visualisierung als Billboard über Model
+
+10. **Save/Load:** ✅ ENTSCHIEDEN → Implementieren
+    - GameUnit + ModelInstance Serialisierung
+    - Wounds, Markers, Activation-State speichern
+    - Positions via Transform
+
+11. **Multiplayer Sync:** ✅ ENTSCHIEDEN → Implementieren
+    - RPCs für: Activation, Wounds, Markers, Hero-Attachment
+    - Reliable mode für State-Changes
+
 ### Noch zu klären ❓
 
-7. **Proxy-System:** Sollen generische Miniaturen als "Proxy" markiert werden können?
-   - Vorschlag: Ja, via Radialmenü → "Assign Stats" → Unit-Picker
+12. **Proxy-System:** Sollen generische Miniaturen als "Proxy" markiert werden können?
+    - Vorschlag: Ja, via Radialmenü → "Assign Stats" → Unit-Picker
 
-8. **Status-Marker:** Welche Marker standardmäßig?
-   - Vorschlag: Dynamisch aus Spielsystem (keine hardcodierten Marker)
-   - OPR: Activated, Stunned, Shaken, Fatigued
-   - Custom Marker immer möglich
-
-9. **Kohärenz-Distanz:** Welche Standard-Distanz?
-   - OPR Standard: 1" zwischen Modellen
-   - Konfigurierbar pro Spielsystem
+13. **Skirmish-Modus:** Spiel-System erkennen und Regeln anpassen?
+    - Skirmish: 6" max Kettenlänge statt 9"
+    - Automatisch aus `gameSystem` ableiten (gff, aofs)?
 
 ---
 
-## 10. Abhängigkeiten
+## 14. Abhängigkeiten
 
 - **Kenney UI Theme** - Für konsistentes Styling ✅ Vorhanden
 - **OPRArmyManager** - Für Unit-Lookups ✅ Vorhanden
@@ -843,7 +1190,7 @@ Bei kritischen Aktionen auf Leader/Specialists:
 
 ---
 
-## 11. Risiken
+## 15. Risiken
 
 | Risiko | Wahrscheinlichkeit | Mitigation |
 |--------|-------------------|------------|
@@ -853,7 +1200,7 @@ Bei kritischen Aktionen auf Leader/Specialists:
 
 ---
 
-## 12. Nächste Schritte
+## 16. Nächste Schritte
 
 Nach Genehmigung dieses Plans:
 
@@ -867,5 +1214,5 @@ Nach Genehmigung dieses Plans:
 ---
 
 *Erstellt von Claude*
-*Version: v3 - Generische Architektur (API-verifiziert)*
+*Version: v4 - Vollständig mit UX, Coherency, Activation, Markers, Save/Load, Multiplayer*
 *Letzte Aktualisierung: 2026-01-05*
