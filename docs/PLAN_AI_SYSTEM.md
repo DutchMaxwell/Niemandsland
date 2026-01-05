@@ -311,7 +311,7 @@ ai.action_log.connect(_on_ai_log)
 - [x] Full Terrain Integration (AITerrain)
 - [x] Mission System (AIMission with objectives)
 - [x] Morale System (AIMorale with Shaken/Rout)
-- [ ] UI for AI actions (visual feedback)
+- [x] Battle Simulator (AI vs AI with step-by-step control)
 
 ## Additional Files (v2)
 
@@ -370,8 +370,124 @@ Based on GDF v3.5.1 rules:
 - Fearless: 4+ reroll
 - Fear(X): +X wounds in comparison
 
+## Battle Simulator (AI vs AI)
+
+A step-by-step battle simulation mode where two AI-controlled armies fight each other.
+Every action requires user confirmation via click, providing full control and visibility.
+
+### Files
+
+| File | Description |
+|------|-------------|
+| `battle_simulator.gd` | Core battle logic, step generation, execution |
+| `battle_simulator_ui.gd` | UI for army loading, step controls, battle log |
+
+### Features
+
+- **Load two army lists** - Use OPR Army Forge import for both players
+- **Step-by-step execution** - Each action (deploy, move, shoot, melee) is a discrete step
+- **Click to advance** - User confirms each action before execution
+- **Auto-advance mode** - Optional automatic step advancement with delay
+- **Skip controls** - Jump to specific phases (deployment, round end)
+- **Visual feedback** - Unit highlighting (green = active, red = target)
+- **Battle log** - Complete action history with color-coded entries
+- **Score tracking** - Objectives controlled, casualties inflicted
+
+### Battle Phases
+
+1. **SETUP** - Initialize armies and mission
+2. **DEPLOYMENT** - Place units in deployment zones
+3. **ROUND_START** - Begin new round, reset activations
+4. **ACTIVATION** - Unit activation sequence
+5. **MOVEMENT** - Charge/Rush/Advance movement
+6. **SHOOTING** - Ranged attacks with full combat resolution
+7. **MELEE** - Close combat with counter-attacks
+8. **MORALE** - Morale tests when triggered
+9. **ROUND_END** - Check objectives, prepare next round
+10. **GAME_OVER** - Determine winner
+
+### Step Types
+
+| Type | Description |
+|------|-------------|
+| `deploy` | Unit deployment to starting position |
+| `round_start` | Round initialization |
+| `activation_start` | Unit begins activation |
+| `charge` | Charge movement (12" + melee) |
+| `rush` | Rush movement (12", no shooting) |
+| `advance` | Advance movement (6", can shoot) |
+| `hold` | Hold position (no movement) |
+| `idle` | No action (Shaken units) |
+| `shoot` | Ranged attack resolution |
+| `melee` | Melee combat resolution |
+| `morale` | Morale test |
+| `activation_end` | Unit finishes activation |
+| `round_end` | Round completion |
+
+### Usage Example
+
+```gdscript
+# From main scene - Battle Simulator is auto-initialized
+
+# Manual usage:
+var simulator = BattleSimulator.new()
+add_child(simulator)
+simulator.initialize(army_manager)
+
+# Setup armies (already loaded via OPR import)
+simulator.setup_loaded_armies()
+
+# Setup mission
+var table_bounds = Rect2(-0.6, -0.6, 1.2, 1.2)
+simulator.setup_mission(table_bounds)
+
+# Start battle
+simulator.start_battle()
+
+# Connect to step signals
+simulator.step_ready.connect(_on_step_ready)
+simulator.step_executed.connect(_on_step_executed)
+
+# Advance step on user click
+func _on_click():
+    simulator.advance_step()
+```
+
+### UI Layout
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Battle Simulator                                    [X]│
+├──────────┬──────────────────────────────┬───────────────┤
+│ Controls │      Step Display            │  Battle Log   │
+│          │                              │               │
+│ Army 1   │  "Unit A charges!"           │  [Log entry]  │
+│ [Load]   │                              │  [Log entry]  │
+│          │  Details: Charging Unit B    │  [Log entry]  │
+│ Army 2   │  (12" move + melee)          │  [Log entry]  │
+│ [Load]   │                              │               │
+│          │  Result: 3 hits, 2 wounds    │               │
+│          │                              │               │
+│ [Start]  │  [  CLICK TO EXECUTE  ]      │  [Clear]      │
+│ [Stop]   │                              │               │
+│          │  [x] Auto-advance  [Skip...] │               │
+├──────────┴──────────────────────────────┴───────────────┤
+│  Phase: Melee | Round: 2/4 | Score: P1: 2 | P2: 1       │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Integration with Main Scene
+
+The Battle Simulator is accessible via button in the left panel:
+1. Click "Battle Simulator" button
+2. Load Army 1 (Player 1 - Blue)
+3. Load Army 2 (Player 2 - Red)
+4. Click "Start Battle"
+5. Click to advance through each step
+6. Watch the battle unfold with full combat resolution
+
 ---
 
 *Basiert auf OPR Solo & Co-Op Rules v3.5.0 + Grimdark Future v3.5.1*
 *Erstellt: 2026-01-05*
-*Aktualisiert: 2026-01-05 - Combat, Terrain, Mission, Morale*
+*Aktualisiert: 2026-01-05 - Combat, Terrain, Mission, Morale, Battle Simulator*
