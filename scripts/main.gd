@@ -1197,6 +1197,10 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
 	var spawned = opr_army_manager.spawn_army(army)
 	print("Spawned %d models for army '%s' on Player %d's tray" % [spawned.size(), army.name, player_id])
 
+	# Update battle simulator UI if open (so Start Battle button enables)
+	if battle_simulator_ui:
+		battle_simulator_ui.on_armies_loaded()
+
 
 ## Update OPR unit hover detection
 func _update_opr_hover() -> void:
