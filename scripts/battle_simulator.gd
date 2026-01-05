@@ -138,6 +138,13 @@ var player2_army_name: String = "Army 2"
 var _is_running: bool = false
 var _waiting_for_input: bool = false
 
+## Tracks deployed unit positions for collision detection
+## Each entry: { "center": Vector3, "radius": float }
+var _deployed_positions: Array[Dictionary] = []
+
+## Table dimensions (set via setup_mission)
+var _table_bounds: Rect2 = Rect2(-0.6096, -0.6096, 1.2192, 1.2192)  # 4x4 feet default
+
 
 func _ready() -> void:
 	state = BattleState.new()
@@ -218,6 +225,7 @@ func setup_mission(table_bounds: Rect2) -> void:
 		push_error("BattleSimulator: ai_manager not initialized")
 		return
 
+	_table_bounds = table_bounds
 	ai_manager.setup_mission(table_bounds)
 	mission = ai_manager.mission_state
 
@@ -245,6 +253,7 @@ func start_battle() -> void:
 	state.max_rounds = 4
 	step_queue.clear()
 	step_counter = 0
+	_deployed_positions.clear()  # Reset collision tracking
 
 	# Setup AI contexts
 	ai_manager.context.ai_units.clear()
@@ -307,27 +316,57 @@ func stop_battle() -> void:
 # ===== Step Generation =====
 
 ## Generates deployment steps for both armies.
+## Alternates between players: P1, P2, P1, P2...
 func _generate_deployment_steps() -> void:
 	state.phase = Phase.DEPLOYMENT
 	state_changed.emit(state)
 
 	_log("--- DEPLOYMENT PHASE ---", "phase")
 
-	# Player 1 deployment
-	for unit in player1_units:
-		var step = _create_step("deploy", unit)
-		step.description = "Deploy %s" % unit.get_name()
-		step.details = "Player 1 deploys unit to their deployment zone"
-		step.action_data["player"] = 1
-		step_queue.append(step)
+	# Interleave deployment: P1, P2, P1, P2...
+	var p1_queue = player1_units.duplicate()
+	var p2_queue = player2_units.duplicate()
+	var p1_idx = 0
+	var p2_idx = 0
+	var current_player = 1  # P1 deploys first
 
-	# Player 2 deployment
-	for unit in player2_units:
-		var step = _create_step("deploy", unit)
-		step.description = "Deploy %s" % unit.get_name()
-		step.details = "Player 2 deploys unit to their deployment zone"
-		step.action_data["player"] = 2
-		step_queue.append(step)
+	while p1_idx < p1_queue.size() or p2_idx < p2_queue.size():
+		if current_player == 1 and p1_idx < p1_queue.size():
+			var unit = p1_queue[p1_idx]
+			var step = _create_step("deploy", unit)
+			step.description = "Deploy %s" % unit.get_name()
+			step.details = "Player 1 deploys unit to their deployment zone"
+			step.action_data["player"] = 1
+			step_queue.append(step)
+			p1_idx += 1
+		elif current_player == 2 and p2_idx < p2_queue.size():
+			var unit = p2_queue[p2_idx]
+			var step = _create_step("deploy", unit)
+			step.description = "Deploy %s" % unit.get_name()
+			step.details = "Player 2 deploys unit to their deployment zone"
+			step.action_data["player"] = 2
+			step_queue.append(step)
+			p2_idx += 1
+		elif p1_idx < p1_queue.size():
+			# P2 has no more units, continue with P1
+			var unit = p1_queue[p1_idx]
+			var step = _create_step("deploy", unit)
+			step.description = "Deploy %s" % unit.get_name()
+			step.details = "Player 1 deploys unit to their deployment zone"
+			step.action_data["player"] = 1
+			step_queue.append(step)
+			p1_idx += 1
+		elif p2_idx < p2_queue.size():
+			# P1 has no more units, continue with P2
+			var unit = p2_queue[p2_idx]
+			var step = _create_step("deploy", unit)
+			step.description = "Deploy %s" % unit.get_name()
+			step.details = "Player 2 deploys unit to their deployment zone"
+			step.action_data["player"] = 2
+			step_queue.append(step)
+			p2_idx += 1
+
+		current_player = 3 - current_player  # Toggle 1<->2
 
 	# Add round start step
 	var round_step = _create_step("round_start", null)
@@ -597,15 +636,30 @@ func _execute_current_step() -> void:
 ## Executes a deployment step.
 func _execute_deploy(step: BattleStep) -> void:
 	var unit = step.unit
+	if unit == null:
+		push_error("BattleSimulator: _execute_deploy called with null unit")
+		step.result_text = "Error: null unit"
+		return
+
 	var player_id = step.action_data.get("player", 1)
 
-	# Calculate deployment position
-	var deploy_pos = _get_deployment_position(unit, player_id)
+	# Get unit dimensions for collision detection
+	var unit_radius = _get_unit_footprint_radius(unit)
 
-	# Move unit models to deployment position
-	_move_unit_instantly(unit, deploy_pos)
+	# Calculate deployment position with collision avoidance
+	var deploy_pos = _get_deployment_position(unit, player_id, unit_radius)
 
-	step.result_text = "Deployed at (%.1f, %.1f)" % [deploy_pos.x, deploy_pos.z]
+	# Move unit models to deployment position with proper formation
+	_move_unit_to_position(unit, deploy_pos, player_id)
+
+	# Track this position for future collision detection
+	_deployed_positions.append({
+		"center": deploy_pos,
+		"radius": unit_radius,
+		"player": player_id
+	})
+
+	step.result_text = "Deployed at (%.2fm, %.2fm)" % [deploy_pos.x, deploy_pos.z]
 	_log("  %s deployed" % unit.get_name(), "action")
 
 
@@ -615,11 +669,15 @@ func _execute_round_start(step: BattleStep) -> void:
 	state.current_round = round_num
 	state.phase = Phase.ROUND_START
 
-	# Reset activations
+	# Reset activations and combat state for all units
 	for unit in player1_units:
 		unit.reset_activation()
+		unit.unit_properties["fought_this_round"] = false
+		unit.unit_properties["moved_this_turn"] = false
 	for unit in player2_units:
 		unit.reset_activation()
+		unit.unit_properties["fought_this_round"] = false
+		unit.unit_properties["moved_this_turn"] = false
 
 	state_changed.emit(state)
 	step.result_text = "Round %d begins" % round_num
@@ -682,11 +740,20 @@ func _execute_movement(step: BattleStep) -> void:
 	var unit = step.unit
 	var target = step.target_position
 
+	if unit == null:
+		push_error("BattleSimulator: _execute_movement called with null unit")
+		return
+
 	state.phase = Phase.MOVEMENT
 	state_changed.emit(state)
 
-	# Animate movement
-	await _animate_unit_movement(unit, target)
+	# Determine facing: towards target unit (charge) or movement direction
+	var facing_target: Vector3 = target
+	if step.target_unit and not step.target_unit.is_destroyed():
+		facing_target = _get_unit_center(step.target_unit)
+
+	# Animate movement with proper facing
+	await _animate_unit_movement(unit, target, facing_target)
 
 	var distance = step.path_start.distance_to(target)
 	step.result_text = "Moved %.1f\"" % (distance / 0.0254)  # Convert to inches
@@ -704,16 +771,22 @@ func _execute_shooting(step: BattleStep) -> void:
 	var attacker = step.unit
 	var defender = step.target_unit
 
-	if not defender or defender.is_destroyed():
+	if attacker == null:
+		push_error("BattleSimulator: _execute_shooting called with null attacker")
+		step.result_text = "Error: null attacker"
+		return
+
+	if defender == null or defender.is_destroyed():
 		step.result_text = "No valid target"
+		_log("  No valid target for shooting", "action")
 		return
 
 	state.phase = Phase.SHOOTING
 	state_changed.emit(state)
 
 	# Setup context
-	var player_id = attacker.unit_properties.get("player_id", 1)
-	if player_id == 1:
+	var attacker_player_id = attacker.unit_properties.get("player_id", 1)
+	if attacker_player_id == 1:
 		ai_manager.context.ai_units = [attacker]
 		ai_manager.context.enemy_units.assign(player2_units)
 	else:
@@ -723,27 +796,27 @@ func _execute_shooting(step: BattleStep) -> void:
 	# Resolve shooting
 	var result = AICombat.resolve_shooting(attacker, defender, ai_manager.context)
 
-	step.dice_results = []  # Would need to capture from combat
 	step.casualties = result.casualties.size()
-	step.result_text = "Hits: %d, Wounds: %d, Casualties: %d" % [
+	step.result_text = "Attacks: %d, Hits: %d, Wounds: %d, Kills: %d" % [
+		result.total_attacks,
 		result.hits,
 		result.wounds,
 		result.casualties.size()
 	]
 
-	_log("  Shooting: %d attacks, %d hits, %d wounds, %d casualties" % [
+	_log("  Shooting: %d attacks, %d hits, %d wounds, %d kills" % [
 		result.total_attacks, result.hits, result.wounds, result.casualties.size()
 	], "combat")
 
-	# Update kill count
+	# Update kill count - attacker inflicted these casualties
 	if result.casualties.size() > 0:
-		if player_id == 1:
+		if attacker_player_id == 1:
 			state.player1_kills += result.casualties.size()
 		else:
 			state.player2_kills += result.casualties.size()
 
-	# Check morale
-	if AIMorale.needs_morale_test(defender, result.wounds):
+	# Check morale - defender takes test if they took wounds
+	if not defender.is_destroyed() and AIMorale.needs_morale_test(defender, result.wounds):
 		_queue_morale_step(defender, "shooting")
 
 
@@ -752,60 +825,94 @@ func _execute_melee(step: BattleStep) -> void:
 	var attacker = step.unit
 	var defender = step.target_unit
 
-	if not defender or defender.is_destroyed():
+	if attacker == null:
+		push_error("BattleSimulator: _execute_melee called with null attacker")
+		step.result_text = "Error: null attacker"
+		return
+
+	if defender == null or defender.is_destroyed():
 		step.result_text = "No valid target"
+		_log("  No valid target for melee", "action")
 		return
 
 	state.phase = Phase.MELEE
 	state_changed.emit(state)
 
 	# Setup context
-	var player_id = attacker.unit_properties.get("player_id", 1)
-	if player_id == 1:
+	var attacker_player_id = attacker.unit_properties.get("player_id", 1)
+
+	if attacker_player_id == 1:
 		ai_manager.context.ai_units = [attacker]
 		ai_manager.context.enemy_units.assign(player2_units)
 	else:
 		ai_manager.context.ai_units = [attacker]
 		ai_manager.context.enemy_units.assign(player1_units)
 
-	# Resolve melee
+	# Resolve melee (includes attacker strikes AND defender strike-backs)
 	var is_fatigued = attacker.unit_properties.get("fought_this_round", false)
 	var result = AICombat.resolve_melee(attacker, defender, ai_manager.context, is_fatigued)
 
-	attacker.unit_properties["fought_this_round"] = true
+	# Note: fought_this_round is already set by AICombat.resolve_melee for both units
 
-	step.casualties = result.casualties.size()
-	step.result_text = "Hits: %d, Wounds: %d, Casualties: %d" % [
-		result.hits,
-		result.wounds,
-		result.casualties.size()
+	# Casualties inflicted BY attacker ON defender
+	var attacker_inflicted = result.casualties.size()
+	# Wounds inflicted BY defender ON attacker (from strike-backs)
+	# Note: AICombat doesn't track attacker casualties separately, only wounds
+	var defender_inflicted_wounds = result.attacker_wounds
+
+	step.casualties = attacker_inflicted
+	step.result_text = "Attacker deals %d wounds (%d kills), Defender strikes back for %d wounds" % [
+		result.defender_wounds,
+		attacker_inflicted,
+		defender_inflicted_wounds
 	]
 
 	var winner_text = "Tie"
 	if result.winner:
 		winner_text = result.winner.get_name() + " wins"
 
-	_log("  Melee: %d attacks, %d hits, %d wounds - %s" % [
-		result.total_attacks, result.hits, result.wounds, winner_text
+	_log("  Melee: %s deals %d wounds (%d kills), %s strikes back for %d wounds - %s" % [
+		attacker.get_name(),
+		result.defender_wounds,
+		attacker_inflicted,
+		defender.get_name(),
+		defender_inflicted_wounds,
+		winner_text
 	], "combat")
 
-	# Update kill count
-	if result.casualties.size() > 0:
-		if player_id == 1:
-			state.player1_kills += result.casualties.size()
+	# Update kill counts - track who inflicted kills
+	# Attacker's kills (casualties on defender)
+	if attacker_inflicted > 0:
+		if attacker_player_id == 1:
+			state.player1_kills += attacker_inflicted
 		else:
-			state.player2_kills += result.casualties.size()
+			state.player2_kills += attacker_inflicted
 
-	# Check morale
-	if result.winner and result.winner != defender:
-		if not defender.is_destroyed():
-			_queue_morale_step(defender, "melee")
+	# Defender's kills would be tracked via attacker_wounds, but AICombat
+	# doesn't remove attacker models - this is a known limitation
+	# TODO: AICombat should track attacker_casualties for proper kill counting
+
+	# Check morale - the melee loser takes the test
+	if result.winner != null:
+		var loser = defender if result.winner == attacker else attacker
+		if not loser.is_destroyed():
+			_queue_morale_step(loser, "melee")
 
 
 ## Executes a morale step.
 func _execute_morale(step: BattleStep) -> void:
 	var unit = step.unit
-	var context = step.action_data.get("context", "")
+	var trigger_context = step.action_data.get("context", "combat")
+
+	if unit == null:
+		push_error("BattleSimulator: _execute_morale called with null unit")
+		step.result_text = "Error: null unit"
+		return
+
+	if unit.is_destroyed():
+		step.result_text = "Unit already destroyed"
+		_log("  %s already destroyed, skipping morale" % unit.get_name(), "morale")
+		return
 
 	state.phase = Phase.MORALE
 	state_changed.emit(state)
@@ -813,16 +920,17 @@ func _execute_morale(step: BattleStep) -> void:
 	var outcome = AIMorale.take_morale_test(unit)
 	AIMorale.apply_morale_outcome(unit, outcome)
 
+	var unit_name = unit.get_name()
 	match outcome.result:
 		AIMorale.MoraleResult.PASSED:
-			step.result_text = "Morale test PASSED (rolled %d)" % outcome.roll
-			_log("  %s passes morale (rolled %d)" % [unit.get_name(), outcome.roll], "morale")
+			step.result_text = "Morale test PASSED (rolled %d vs %d+)" % [outcome.roll, outcome.quality]
+			_log("  %s passes morale (rolled %d vs %d+)" % [unit_name, outcome.roll, outcome.quality], "morale")
 		AIMorale.MoraleResult.SHAKEN:
-			step.result_text = "Morale test FAILED - SHAKEN! (rolled %d)" % outcome.roll
-			_log("  %s is SHAKEN! (rolled %d)" % [unit.get_name(), outcome.roll], "morale")
+			step.result_text = "Morale test FAILED - SHAKEN! (rolled %d vs %d+)" % [outcome.roll, outcome.quality]
+			_log("  %s is SHAKEN! (rolled %d vs %d+)" % [unit_name, outcome.roll, outcome.quality], "morale")
 		AIMorale.MoraleResult.ROUTED:
-			step.result_text = "Morale test FAILED - ROUTED! (rolled %d)" % outcome.roll
-			_log("  %s has ROUTED! (rolled %d)" % [unit.get_name(), outcome.roll], "morale")
+			step.result_text = "Morale test FAILED - ROUTED! (rolled %d vs %d+)" % [outcome.roll, outcome.quality]
+			_log("  %s has ROUTED and is destroyed! (rolled %d vs %d+)" % [unit_name, outcome.roll, outcome.quality], "morale")
 
 
 ## Queues a morale step for a unit.
@@ -866,57 +974,212 @@ func _get_unit_center(unit: GameUnit) -> Vector3:
 	return Vector3.ZERO
 
 
-## Gets deployment position for a unit.
-func _get_deployment_position(unit: GameUnit, player_id: int) -> Vector3:
-	# Get table dimensions (assume 4x4 feet)
-	var table_width = 1.2192  # 4 feet in meters
-	var table_depth = 1.2192
-	var deployment_depth = 0.3048  # 12 inches
+## Gets unit footprint radius (for collision detection).
+## Takes into account unit size and base dimensions.
+func _get_unit_footprint_radius(unit: GameUnit) -> float:
+	var base_diameter = _get_unit_base_diameter(unit)
+	var model_count = unit.get_alive_count()
+	if model_count == 0:
+		model_count = unit.models.size()
 
-	# Random position within deployment zone
-	var x = randf_range(-table_width / 2 + 0.1, table_width / 2 - 0.1)
-	var z: float
+	# Calculate line formation width
+	var spacing = base_diameter * 1.25  # 25% gap between models
+	var formation_width = base_diameter + (model_count - 1) * spacing
+
+	# Return radius (half of diagonal for safety margin)
+	return formation_width / 2.0 + base_diameter / 2.0
+
+
+## Gets the base diameter for a unit in meters.
+func _get_unit_base_diameter(unit: GameUnit) -> float:
+	# Try to get from unit_properties (set during import)
+	var base_mm = unit.unit_properties.get("base_size_round", 0)
+	if base_mm <= 0:
+		base_mm = unit.unit_properties.get("base_width_mm", 32)
+	if base_mm <= 0:
+		base_mm = 32  # Default 32mm
+
+	return base_mm * 0.001  # Convert mm to meters
+
+
+## Gets deployment position for a unit with collision avoidance.
+func _get_deployment_position(unit: GameUnit, player_id: int, unit_radius: float) -> Vector3:
+	# Use stored table bounds
+	var table_width = _table_bounds.size.x
+	var table_depth = _table_bounds.size.y
+	var deployment_depth = 0.3048  # 12 inches in meters
+
+	# Define deployment zone
+	var min_x = _table_bounds.position.x + unit_radius + 0.05
+	var max_x = _table_bounds.position.x + table_width - unit_radius - 0.05
+	var z_base: float
+	var z_range: float
 
 	if player_id == 1:
-		z = randf_range(-table_depth / 2, -table_depth / 2 + deployment_depth)
+		# Player 1: bottom edge (negative Z)
+		z_base = _table_bounds.position.y + unit_radius + 0.02
+		z_range = deployment_depth - unit_radius * 2
 	else:
-		z = randf_range(table_depth / 2 - deployment_depth, table_depth / 2)
+		# Player 2: top edge (positive Z)
+		z_base = _table_bounds.position.y + table_depth - deployment_depth + unit_radius + 0.02
+		z_range = deployment_depth - unit_radius * 2
 
-	return Vector3(x, 0, z)
+	# Try to find non-colliding position (max 50 attempts)
+	var best_pos = Vector3.ZERO
+	var best_min_distance = -1.0
+	var attempts = 0
+	var max_attempts = 50
+
+	while attempts < max_attempts:
+		var test_x = randf_range(min_x, max_x)
+		var test_z = z_base + randf_range(0, max(z_range, 0.01))
+		var test_pos = Vector3(test_x, 0, test_z)
+
+		# Check collision with already deployed units
+		var min_distance = _get_min_distance_to_deployed(test_pos, player_id)
+
+		# If no collision, use this position
+		if min_distance < 0 or min_distance > unit_radius * 2:
+			return test_pos
+
+		# Track best position found so far
+		if min_distance > best_min_distance:
+			best_min_distance = min_distance
+			best_pos = test_pos
+
+		attempts += 1
+
+	# Return best position found (may have some overlap)
+	if best_min_distance >= 0:
+		push_warning("BattleSimulator: Could not find collision-free deployment for %s" % unit.get_name())
+		return best_pos
+
+	# Fallback: return center of deployment zone
+	return Vector3((min_x + max_x) / 2, 0, z_base + z_range / 2)
 
 
-## Moves a unit instantly to a position.
+## Returns minimum distance to any deployed unit of the same player.
+func _get_min_distance_to_deployed(pos: Vector3, player_id: int) -> float:
+	var min_dist = -1.0
+
+	for deployed in _deployed_positions:
+		# Only check same player (units on same side shouldn't overlap)
+		if deployed.player != player_id:
+			continue
+
+		var dist = pos.distance_to(deployed.center) - deployed.radius
+		if min_dist < 0 or dist < min_dist:
+			min_dist = dist
+
+	return min_dist
+
+
+## Moves a unit to a position with proper formation and facing.
+func _move_unit_to_position(unit: GameUnit, target: Vector3, player_id: int) -> void:
+	var base_diameter = _get_unit_base_diameter(unit)
+	var spacing = base_diameter * 1.25  # 25% gap between models
+	var alive_models = unit.get_alive_models()
+	var model_count = alive_models.size()
+
+	if model_count == 0:
+		return
+
+	# Calculate formation: line formation centered on target
+	var formation_width = (model_count - 1) * spacing
+	var start_x = target.x - formation_width / 2
+
+	# Determine facing direction (towards enemy)
+	var facing_angle: float
+	if player_id == 1:
+		facing_angle = 0.0  # Face positive Z (towards P2)
+	else:
+		facing_angle = PI   # Face negative Z (towards P1)
+
+	# Position each model
+	for i in range(alive_models.size()):
+		var model = alive_models[i]
+		if model.node:
+			var model_x = start_x + i * spacing
+			var model_pos = Vector3(model_x, 0, target.z)
+			model.node.global_position = model_pos
+
+			# Rotate to face enemy
+			model.node.rotation.y = facing_angle
+
+
+## Moves a unit instantly to a position (legacy, used for non-deployment moves).
 func _move_unit_instantly(unit: GameUnit, target: Vector3) -> void:
-	var offset = Vector3.ZERO
-	var base_diameter = 0.032  # Default 32mm
+	var base_diameter = _get_unit_base_diameter(unit)
+	var spacing = base_diameter * 1.25
+	var alive_models = unit.get_alive_models()
 
-	for i in range(unit.models.size()):
-		var model = unit.models[i]
-		if model.is_alive and model.node:
-			# Arrange in line formation
-			var model_offset = Vector3(i * base_diameter * 1.25, 0, 0)
-			model.node.global_position = target + model_offset
+	if alive_models.is_empty():
+		return
+
+	var formation_width = (alive_models.size() - 1) * spacing
+	var start_x = target.x - formation_width / 2
+
+	for i in range(alive_models.size()):
+		var model = alive_models[i]
+		if model.node:
+			var model_x = start_x + i * spacing
+			model.node.global_position = Vector3(model_x, 0, target.z)
 
 
-## Animates unit movement to target position.
-func _animate_unit_movement(unit: GameUnit, target: Vector3) -> void:
+## Animates unit movement to target position with proper facing.
+## facing_target: Position to face towards after movement (enemy unit or movement direction).
+func _animate_unit_movement(unit: GameUnit, target: Vector3, facing_target: Vector3 = Vector3.ZERO) -> void:
+	if unit == null:
+		push_error("BattleSimulator: _animate_unit_movement called with null unit")
+		return
+
+	var alive_models = unit.get_alive_models()
+	if alive_models.is_empty():
+		return
+
 	var start_pos = _get_unit_center(unit)
 	var distance = start_pos.distance_to(target)
 	var duration = distance / 0.15  # Speed: 0.15 m/s
 	duration = clampf(duration, 0.5, 3.0)
 
-	for model in unit.models:
-		if model.is_alive and model.node:
-			var offset = model.node.global_position - start_pos
-			var target_pos = target + offset
+	# Calculate proper formation at target
+	var base_diameter = _get_unit_base_diameter(unit)
+	var spacing = base_diameter * 1.25
+	var formation_width = (alive_models.size() - 1) * spacing
+	var start_x = target.x - formation_width / 2
+
+	# Calculate facing angle
+	var facing_angle = 0.0
+	if facing_target != Vector3.ZERO:
+		var direction = facing_target - target
+		if direction.length_squared() > 0.001:
+			facing_angle = atan2(direction.x, direction.z)
+
+	# Animate each model
+	for i in range(alive_models.size()):
+		var model = alive_models[i]
+		if model.node:
+			var model_x = start_x + i * spacing
+			var target_pos = Vector3(model_x, 0, target.z)
 
 			var tween = create_tween()
+			tween.set_parallel(true)
+
+			# Move position
 			tween.tween_property(
 				model.node,
 				"global_position",
 				target_pos,
 				duration
-			)
+			).set_ease(Tween.EASE_IN_OUT)
+
+			# Rotate to face target
+			tween.tween_property(
+				model.node,
+				"rotation:y",
+				facing_angle,
+				duration * 0.5
+			).set_ease(Tween.EASE_OUT)
 
 	await get_tree().create_timer(duration).timeout
 
