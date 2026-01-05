@@ -9,33 +9,43 @@ This document describes the AI opponent system for OpenTTS, implementing the One
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        AIManager                                 │
-│  Central controller for AI turns, activation order, signals      │
+│  Central controller for AI turns, combat, missions, signals      │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌──────────────────┐    ┌──────────────────┐                   │
 │  │ AIUnitClassifier │    │  AIDecisionTree  │                   │
-│  │                  │    │                  │                   │
-│  │ - Hybrid         │    │ - Hybrid Tree    │                   │
-│  │ - Shooting       │───▶│ - Shooting Tree  │                   │
-│  │ - Melee          │    │ - Melee Tree     │                   │
-│  └──────────────────┘    └────────┬─────────┘                   │
+│  │ - Hybrid         │───▶│ - Hybrid/Shoot/  │                   │
+│  │ - Shooting       │    │   Melee Trees    │                   │
+│  │ - Melee          │    └────────┬─────────┘                   │
+│  └──────────────────┘             │                              │
 │                                   │                              │
 │  ┌──────────────────┐    ┌────────▼─────────┐                   │
 │  │ AITargetSelector │    │    AIContext     │                   │
-│  │                  │    │                  │                   │
-│  │ - Priority Rules │    │ - Game State     │                   │
-│  │ - Weapon Bonuses │◀───│ - Objectives     │                   │
-│  │ - Cover Check    │    │ - Table Sections │                   │
+│  │ - Priority Rules │◀───│ - Game State     │                   │
+│  │ - Weapon Bonuses │    │ - Objectives     │                   │
+│  └──────────────────┘    └──────────────────┘                   │
+│                                                                  │
+│  ┌──────────────────┐    ┌──────────────────┐                   │
+│  │   AICombat       │    │    AITerrain     │                   │
+│  │ - Shooting       │    │ - Cover Check    │                   │
+│  │ - Melee          │    │ - Difficult      │                   │
+│  │ - Dice Rolling   │    │ - Dangerous      │                   │
+│  │ - Casualties     │    │ - Pathfinding    │                   │
+│  └──────────────────┘    └──────────────────┘                   │
+│                                                                  │
+│  ┌──────────────────┐    ┌──────────────────┐                   │
+│  │   AIMission      │    │    AIMorale      │                   │
+│  │ - Objectives     │    │ - Morale Tests   │                   │
+│  │ - Seize/Contest  │    │ - Shaken/Rout    │                   │
+│  │ - Win Condition  │    │ - Fearless       │                   │
+│  │ - Round Mgmt     │    │ - Fear Bonus     │                   │
 │  └──────────────────┘    └──────────────────┘                   │
 │                                                                  │
 │  ┌──────────────────┐    ┌──────────────────┐                   │
 │  │ AISpecialRules   │    │ AIObjectiveSetup │                   │
-│  │                  │    │                  │                   │
-│  │ - Ambush         │    │ - 6-Square Grid  │                   │
-│  │ - Scout          │    │ - Random Place   │                   │
-│  │ - Transport      │    │ - Validation     │                   │
-│  │ - Artillery      │    │                  │                   │
-│  │ - Caster         │    │                  │                   │
+│  │ - Ambush/Scout   │    │ - 6-Square Grid  │                   │
+│  │ - Transport      │    │ - Random Place   │                   │
+│  │ - Artillery      │    │ - Validation     │                   │
 │  └──────────────────┘    └──────────────────┘                   │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -297,11 +307,71 @@ ai.action_log.connect(_on_ai_log)
 - [x] Special Rules (Ambush, Scout, Transport, etc.)
 - [x] Objective Placement
 - [x] Terrain Avoidance (basic)
-- [ ] Combat Resolution (needs dice roller integration)
-- [ ] Full Terrain Integration (needs terrain system)
+- [x] Combat Resolution (AICombat with full GDF rules)
+- [x] Full Terrain Integration (AITerrain)
+- [x] Mission System (AIMission with objectives)
+- [x] Morale System (AIMorale with Shaken/Rout)
 - [ ] UI for AI actions (visual feedback)
+
+## Additional Files (v2)
+
+| File | Description |
+|------|-------------|
+| `ai_combat.gd` | Full combat resolution (shooting + melee) |
+| `ai_terrain.gd` | Terrain interaction (cover, difficult, dangerous) |
+| `ai_mission.gd` | Mission objectives and game structure |
+| `ai_morale.gd` | Morale tests (Shaken, Rout, Fearless) |
+
+## Combat System (AICombat)
+
+Based on GDF v3.5.1 rules:
+
+**Shooting Sequence:**
+1. Determine Attacks (sum weapon attacks in range)
+2. Roll to Hit (Quality tests with modifiers)
+3. Roll to Block (Defense tests with AP/cover)
+4. Remove Casualties (Deadly, Tough handling)
+
+**Melee Sequence:**
+- Same as shooting + Impact + Counter + Fatigue
+- Strike back (AI always strikes back)
+- Fear bonus for wound comparison
+- Consolidation move (3") after destroying enemy
+
+**Weapon Rules:**
+- AP(X), Blast(X), Deadly(X), Rending
+- Indirect, Relentless, Thrust, Furious
+- Regeneration, Bane, Unstoppable
+
+## Terrain System (AITerrain)
+
+- Cover: +1 Defense (majority in cover)
+- Difficult: 6" max move (Strider ignores)
+- Dangerous: Roll 1 = wound (Flying ignores)
+- LOS blocking checks
+- Pathfinding around obstacles
+- Artillery deployment on high ground
+
+## Mission System (AIMission)
+
+- D3+2 objectives (3-5 markers)
+- 9" minimum distance
+- Seize within 3" (no enemies)
+- Contested = neutral
+- 4 rounds, most objectives wins
+- Strategic stance (aggressive/defensive)
+
+## Morale System (AIMorale)
+
+- Test at half strength
+- Non-melee fail = Shaken
+- Melee fail + half = Rout
+- Shaken: idle only, can't seize
+- Fearless: 4+ reroll
+- Fear(X): +X wounds in comparison
 
 ---
 
-*Basiert auf OPR Solo & Co-Op Rules v3.5.0*
+*Basiert auf OPR Solo & Co-Op Rules v3.5.0 + Grimdark Future v3.5.1*
 *Erstellt: 2026-01-05*
+*Aktualisiert: 2026-01-05 - Combat, Terrain, Mission, Morale*
