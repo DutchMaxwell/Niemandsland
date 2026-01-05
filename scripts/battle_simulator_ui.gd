@@ -683,6 +683,7 @@ func on_armies_loaded() -> void:
 
 ## Shows the UI.
 func show_ui() -> void:
+	_update_army_display()  # Refresh army display when opening
 	show()
 
 
