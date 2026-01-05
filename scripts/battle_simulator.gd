@@ -142,9 +142,14 @@ var _waiting_for_input: bool = false
 ## Each entry: { "center": Vector3, "radius": float }
 var _deployed_positions: Array[Dictionary] = []
 
-## The player who won the deployment roll-off (and takes first turn each round)
+## The player who won the deployment roll-off (and takes first turn in round 1)
 ## Per OPR rules: "the player that won the deployment roll-off takes the first turn"
 var _deployment_winner: int = 1
+
+## The player who finished activating first last round (goes first next round)
+## Per OPR rules: "On each new round the player that finished activating first
+## on the last round gets to activate first."
+var _last_round_first_finisher: int = 1
 
 ## Table dimensions (set via setup_mission)
 var _table_bounds: Rect2 = Rect2(-0.6096, -0.6096, 1.2192, 1.2192)  # 4x4 feet default
@@ -418,10 +423,21 @@ func _generate_round_steps(round_num: int) -> void:
 	p2_queue.shuffle()
 
 	# Interleave activations
+	# Round 1: deployment winner goes first
+	# Round 2+: player who finished activating first last round goes first
 	var activation_order: Array[GameUnit] = []
 	var p1_idx = 0
 	var p2_idx = 0
-	var current_player = _deployment_winner  # Deployment roll-off winner goes first each round
+	var current_player: int
+	if round_num == 1:
+		current_player = _deployment_winner
+		_log("Deployment winner (Player %d) activates first" % current_player, "turn")
+	else:
+		current_player = _last_round_first_finisher
+		_log("Player %d finished first last round, activates first" % current_player, "turn")
+
+	# Track who finishes first (runs out of units to activate)
+	var first_finisher: int = 0
 
 	while p1_idx < p1_queue.size() or p2_idx < p2_queue.size():
 		if current_player == 1 and p1_idx < p1_queue.size():
@@ -431,13 +447,27 @@ func _generate_round_steps(round_num: int) -> void:
 			activation_order.append(p2_queue[p2_idx])
 			p2_idx += 1
 		elif p1_idx < p1_queue.size():
+			# P2 finished first (no more P2 units)
+			if first_finisher == 0:
+				first_finisher = 2
 			activation_order.append(p1_queue[p1_idx])
 			p1_idx += 1
 		elif p2_idx < p2_queue.size():
+			# P1 finished first (no more P1 units)
+			if first_finisher == 0:
+				first_finisher = 1
 			activation_order.append(p2_queue[p2_idx])
 			p2_idx += 1
 
 		current_player = 3 - current_player  # Toggle 1<->2
+
+	# If equal units, the one who activated last finishes first (other player still had units)
+	if first_finisher == 0:
+		# Both finished at the same time (equal units), last activator finished first
+		first_finisher = 3 - current_player
+
+	_last_round_first_finisher = first_finisher
+	_log("Player %d finished activating first (goes first next round)" % first_finisher, "turn")
 
 	# Generate activation steps for each unit
 	for unit in activation_order:
@@ -455,6 +485,17 @@ func _generate_round_steps(round_num: int) -> void:
 func _generate_unit_activation_steps(unit: GameUnit) -> void:
 	var player_id = unit.unit_properties.get("player_id", 1)
 	var is_player1 = player_id == 1
+
+	# Check if unit is Shaken - must go Idle to remove Shaken
+	# Per OPR: "Shaken units must stay idle (can't take any actions),
+	# which stops them being Shaken at the end of the activation."
+	if AIMorale.is_shaken(unit):
+		var idle_step = _create_step("shaken_idle", unit)
+		idle_step.description = "%s is Shaken - goes Idle" % unit.get_name()
+		idle_step.details = "Shaken units must stay idle to recover"
+		idle_step.action_data["player"] = player_id
+		step_queue.append(idle_step)
+		return
 
 	# Setup AI context
 	if is_player1:
@@ -629,6 +670,8 @@ func _execute_current_step() -> void:
 			await _execute_movement(current_step)
 		"hold", "idle":
 			_execute_hold(current_step)
+		"shaken_idle":
+			_execute_shaken_idle(current_step)
 		"shoot":
 			_execute_shooting(current_step)
 		"melee":
@@ -776,6 +819,24 @@ func _execute_hold(step: BattleStep) -> void:
 	_log("  Holding position", "action")
 
 
+## Executes Shaken unit idle step.
+## Per OPR: "When activated, Shaken units must spend their activation being idle,
+## which stops them being Shaken at the end of the activation."
+func _execute_shaken_idle(step: BattleStep) -> void:
+	var unit = step.unit
+	if unit == null:
+		push_error("BattleSimulator: _execute_shaken_idle called with null unit")
+		step.result_text = "Error: null unit"
+		return
+
+	# Remove Shaken status
+	AIMorale.remove_shaken(unit)
+	unit.is_activated = true
+
+	step.result_text = "Recovered from Shaken - idle"
+	_log("  %s recovers from Shaken (idle activation)" % unit.get_name(), "morale")
+
+
 ## Executes a shooting step.
 func _execute_shooting(step: BattleStep) -> void:
 	var attacker = step.unit
@@ -907,6 +968,20 @@ func _execute_melee(step: BattleStep) -> void:
 		var loser = defender if result.winner == attacker else attacker
 		if not loser.is_destroyed():
 			_queue_morale_step(loser, "melee")
+
+	# Consolidation moves (per OPR rules)
+	# "If one of the two units was destroyed, then the other unit may move by up to 3"."
+	# "If neither of the units was destroyed, then the charging unit must move back by 1"."
+	if defender.is_destroyed():
+		_consolidation_move(attacker, 3.0, "forward")
+		_log("  %s consolidates 3\" (defender destroyed)" % attacker.get_name(), "movement")
+	elif attacker.is_destroyed():
+		_consolidation_move(defender, 3.0, "forward")
+		_log("  %s consolidates 3\" (attacker destroyed)" % defender.get_name(), "movement")
+	else:
+		# Neither destroyed - charger moves back 1"
+		_consolidation_move(attacker, 1.0, "back")
+		_log("  %s moves back 1\" (disengage)" % attacker.get_name(), "movement")
 
 
 ## Executes a morale step.
@@ -1134,6 +1209,36 @@ func _move_unit_instantly(unit: GameUnit, target: Vector3) -> void:
 		if model.node:
 			var model_x = start_x + i * spacing
 			model.node.global_position = Vector3(model_x, 0, target.z)
+
+
+## Performs consolidation move after melee.
+## @param unit: The unit to move
+## @param distance_inches: Distance in inches to move
+## @param direction: "forward" (toward enemy) or "back" (away from enemy)
+func _consolidation_move(unit: GameUnit, distance_inches: float, direction: String) -> void:
+	if unit == null or unit.is_destroyed():
+		return
+
+	var distance_meters = distance_inches * 0.0254  # Convert inches to meters
+	var player_id = unit.unit_properties.get("player_id", 1)
+	var unit_center = _get_unit_center(unit)
+
+	# Determine movement direction based on player and consolidation type
+	var move_direction: float
+	if player_id == 1:
+		# P1 faces positive Z
+		move_direction = 1.0 if direction == "forward" else -1.0
+	else:
+		# P2 faces negative Z
+		move_direction = -1.0 if direction == "forward" else 1.0
+
+	var new_z = unit_center.z + (distance_meters * move_direction)
+
+	# Move all models
+	for model in unit.models:
+		if model.is_alive and model.node:
+			var current_pos = model.node.global_position
+			model.node.global_position = Vector3(current_pos.x, current_pos.y, new_z + (current_pos.z - unit_center.z))
 
 
 ## Animates unit movement to target position with proper facing.
