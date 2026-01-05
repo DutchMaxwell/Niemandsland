@@ -142,6 +142,10 @@ var _waiting_for_input: bool = false
 ## Each entry: { "center": Vector3, "radius": float }
 var _deployed_positions: Array[Dictionary] = []
 
+## The player who won the deployment roll-off (and takes first turn each round)
+## Per OPR rules: "the player that won the deployment roll-off takes the first turn"
+var _deployment_winner: int = 1
+
 ## Table dimensions (set via setup_mission)
 var _table_bounds: Rect2 = Rect2(-0.6096, -0.6096, 1.2192, 1.2192)  # 4x4 feet default
 
@@ -317,18 +321,24 @@ func stop_battle() -> void:
 
 ## Generates deployment steps for both armies.
 ## Alternates between players: P1, P2, P1, P2...
+## Per OPR: "Players roll-off to determine who places first, highest winner picks."
+## "The player that won the deployment roll-off takes the first turn."
 func _generate_deployment_steps() -> void:
 	state.phase = Phase.DEPLOYMENT
 	state_changed.emit(state)
 
 	_log("--- DEPLOYMENT PHASE ---", "phase")
 
-	# Interleave deployment: P1, P2, P1, P2...
+	# Deployment roll-off: random winner deploys first and takes first turn
+	_deployment_winner = 1 if randf() < 0.5 else 2
+	_log("Player %d wins deployment roll-off (deploys first, takes first turn)" % _deployment_winner, "roll")
+
+	# Interleave deployment: winner first, then alternate
 	var p1_queue = player1_units.duplicate()
 	var p2_queue = player2_units.duplicate()
 	var p1_idx = 0
 	var p2_idx = 0
-	var current_player = 1  # P1 deploys first
+	var current_player = _deployment_winner  # Roll-off winner deploys first
 
 	while p1_idx < p1_queue.size() or p2_idx < p2_queue.size():
 		if current_player == 1 and p1_idx < p1_queue.size():
@@ -411,7 +421,7 @@ func _generate_round_steps(round_num: int) -> void:
 	var activation_order: Array[GameUnit] = []
 	var p1_idx = 0
 	var p2_idx = 0
-	var current_player = 1 if randf() < 0.5 else 2  # Random first player
+	var current_player = _deployment_winner  # Deployment roll-off winner goes first each round
 
 	while p1_idx < p1_queue.size() or p2_idx < p2_queue.size():
 		if current_player == 1 and p1_idx < p1_queue.size():
