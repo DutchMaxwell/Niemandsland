@@ -136,7 +136,7 @@ static func resolve_melee(
 
 	# Impact hits (only if charging and not fatigued)
 	if not is_fatigued:
-		var impact_hits = _roll_impact_hits(attacker)
+		var impact_hits = _roll_impact_hits(attacker, defender)
 		if impact_hits > 0:
 			var defense = defender.get_defense()
 			var block_roll = _roll_defense_tests(impact_hits, defense, 0)
@@ -605,26 +605,53 @@ static func _remove_casualties(
 # ===== Impact Hits =====
 
 ## Rolls impact hits for charging unit.
-static func _roll_impact_hits(attacker: GameUnit) -> int:
-	var total_impact = 0
-
+## Per OPR: "Roll X dice when attacking after charging. For each 2+ the target takes one hit."
+## Per OPR Counter: "the charging unit gets -1 total Impact rolls per model with Counter."
+static func _roll_impact_hits(attacker: GameUnit, defender: GameUnit) -> int:
+	# Count total Impact value from attacker
+	var total_impact_value = 0
 	for model in attacker.models:
 		if not model.is_alive:
 			continue
-
 		var rules = model.properties.get("special_rules", [])
 		for rule in rules:
 			var name = _get_rule_name(rule)
 			var rating = _get_rule_rating(rule)
 			if name == "Impact":
-				# Check for Counter reduction
-				# (handled elsewhere, but would reduce rating by 1 per Counter model)
-				for i in range(rating):
-					var roll = randi() % 6 + 1
-					if roll >= 2:
-						total_impact += 1
+				total_impact_value += rating
+
+	if total_impact_value == 0:
+		return 0
+
+	# Count Counter models in defender to reduce Impact rolls
+	var counter_models = _count_counter_models(defender)
+	var impact_rolls = max(0, total_impact_value - counter_models)
+
+	if impact_rolls == 0:
+		return 0
+
+	# Roll Impact dice (2+ = hit)
+	var total_impact = 0
+	for i in range(impact_rolls):
+		var roll = randi() % 6 + 1
+		if roll >= 2:
+			total_impact += 1
 
 	return total_impact
+
+
+## Counts models with Counter special rule in a unit.
+static func _count_counter_models(unit: GameUnit) -> int:
+	var count = 0
+	for model in unit.models:
+		if not model.is_alive:
+			continue
+		var weapons = model.get_weapons()
+		for weapon in weapons:
+			if _weapon_has_rule(weapon, "Counter"):
+				count += 1
+				break  # Count model only once even if multiple Counter weapons
+	return count
 
 
 # ===== Melee Resolution =====
