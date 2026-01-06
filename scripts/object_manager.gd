@@ -2152,6 +2152,7 @@ func _enable_shadows_recursive(node: Node) -> void:
 
 
 ## Calculate smooth normals for a mesh (vertex normals averaged from face normals)
+## Ensures normals point outward (for terrain: generally upward)
 func _calculate_smooth_normals(vertices: PackedVector3Array) -> PackedVector3Array:
 	var normals = PackedVector3Array()
 	normals.resize(vertices.size())
@@ -2163,6 +2164,9 @@ func _calculate_smooth_normals(vertices: PackedVector3Array) -> PackedVector3Arr
 	# Calculate face normals and accumulate to vertex normals
 	@warning_ignore("integer_division")
 	var tri_count = vertices.size() / 3
+
+	# Track total Y component to detect if normals are inverted
+	var total_y: float = 0.0
 
 	for i in range(tri_count):
 		var idx0 = i * 3
@@ -2178,17 +2182,29 @@ func _calculate_smooth_normals(vertices: PackedVector3Array) -> PackedVector3Arr
 		var edge2 = v2 - v0
 		var face_normal = edge1.cross(edge2).normalized()
 
+		# Track total Y for inversion detection
+		total_y += face_normal.y
+
 		# Add face normal to all three vertices of this triangle
 		normals[idx0] += face_normal
 		normals[idx1] += face_normal
 		normals[idx2] += face_normal
 
+	# If average Y is negative, normals are likely inverted (pointing down/inward)
+	# This is common in TTS terrain models - flip all normals
+	var flip_normals = total_y < 0
+
 	# Normalize all vertex normals
 	for i in range(normals.size()):
 		if normals[i].length_squared() > 0.0001:
 			normals[i] = normals[i].normalized()
+			if flip_normals:
+				normals[i] = -normals[i]
 		else:
 			normals[i] = Vector3.UP  # Fallback for degenerate cases
+
+	if flip_normals:
+		print("  Flipped normals (were pointing inward)")
 
 	return normals
 
