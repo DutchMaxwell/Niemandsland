@@ -276,20 +276,25 @@ func _toggle_activation(context: Dictionary) -> void:
 
 ## Adds visual activation markers to all models in a unit.
 func _add_activation_markers(game_unit: GameUnit) -> void:
+	# Get base size from unit properties (in mm, convert to meters)
+	var base_size_mm = game_unit.unit_properties.get("base_size_round", 32)
+	var base_radius_m = (base_size_mm / 2.0) * 0.001  # mm to meters
+
 	for model in game_unit.models:
 		if not model.node or not is_instance_valid(model.node):
 			continue
 		if model.node in _activation_markers:
 			continue  # Already has marker
 
-		# Create checkmark marker above model
+		# Create ring marker around the base
 		var marker = MeshInstance3D.new()
 		marker.name = "ActivationMarker"
 
-		# Use a torus as a "ring" indicator
+		# Use a torus sized to wrap around the base
 		var torus = TorusMesh.new()
-		torus.inner_radius = 0.012
-		torus.outer_radius = 0.018
+		# Ring sits just outside the base
+		torus.inner_radius = base_radius_m + 0.002  # 2mm outside base edge
+		torus.outer_radius = base_radius_m + 0.006  # 4mm ring thickness
 		marker.mesh = torus
 		marker.rotation_degrees.x = 90  # Lay flat
 
@@ -302,8 +307,8 @@ func _add_activation_markers(game_unit: GameUnit) -> void:
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		marker.material_override = mat
 
-		# Position above model
-		marker.position = Vector3(0, 0.05, 0)
+		# Position at base level (just above ground)
+		marker.position = Vector3(0, 0.004, 0)
 
 		model.node.add_child(marker)
 		_activation_markers[model.node] = marker
@@ -311,7 +316,7 @@ func _add_activation_markers(game_unit: GameUnit) -> void:
 		# Add pulsing animation with finite loops to avoid Godot 4.5 infinite loop error
 		var tween = marker.create_tween()
 		tween.set_loops(1000)  # Long enough for any practical use
-		tween.tween_property(marker, "scale", Vector3(1.2, 1.2, 1.2), 0.5)
+		tween.tween_property(marker, "scale", Vector3(1.1, 1.1, 1.1), 0.5)
 		tween.tween_property(marker, "scale", Vector3(1.0, 1.0, 1.0), 0.5)
 
 
