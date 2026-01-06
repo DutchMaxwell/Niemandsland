@@ -48,9 +48,10 @@ func initialize(p_object_manager: Node, p_army_manager: OPRArmyManager) -> void:
 	army_manager = p_army_manager
 
 	# Create radial menu instance if not exists
-	# Get or create UI layer reference
-	var ui_layer = get_tree().root.find_child("UILayer", true, false)
+	# Get UI CanvasLayer (node is named "UI")
+	var ui_layer = get_tree().root.find_child("UI", true, false)
 	var ui_parent = ui_layer if ui_layer else get_tree().root
+	print("DEBUG: UI layer found: %s" % ui_layer)
 
 	if not radial_menu:
 		radial_menu = _menu_scene.instantiate() as RadialMenu
