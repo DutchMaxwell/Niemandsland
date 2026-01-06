@@ -455,7 +455,7 @@ func _on_wounds_changed(model: ModelInstance, new_wounds: int) -> void:
 		model.node.set_meta("deleted", false)
 
 
-## Updates or creates a wound marker next to a model.
+## Updates or creates a wound marker (blood drop) next to a model.
 func _update_wound_marker(model: ModelInstance) -> void:
 	if not model.node or not is_instance_valid(model.node):
 		return
@@ -469,30 +469,57 @@ func _update_wound_marker(model: ModelInstance) -> void:
 			existing_marker.queue_free()
 		return
 
-	# Create marker if needed
-	var marker: Label3D
+	var wounds_taken = model.wounds_max - model.wounds_current
+
+	# Create marker container if needed
+	var marker: Node3D
+	var label: Label3D
+	var blood_mesh: MeshInstance3D
+
 	if existing_marker:
-		marker = existing_marker as Label3D
+		marker = existing_marker
+		label = marker.get_node_or_null("Label") as Label3D
+		blood_mesh = marker.get_node_or_null("BloodDrop") as MeshInstance3D
 	else:
-		marker = Label3D.new()
+		marker = Node3D.new()
 		marker.name = marker_name
-		marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		marker.no_depth_test = true
-		marker.font_size = 48
-		marker.outline_size = 8
-		marker.modulate = Color(1, 0.2, 0.2, 1)  # Red color
-		marker.outline_modulate = Color(0, 0, 0, 1)
 		model.node.add_child(marker)
 
-		# Position marker offset from model center
+		# Create blood drop mesh (red sphere, flattened)
+		blood_mesh = MeshInstance3D.new()
+		blood_mesh.name = "BloodDrop"
+		var sphere = SphereMesh.new()
+		sphere.radius = 0.012  # ~24mm diameter
+		sphere.height = 0.016
+		blood_mesh.mesh = sphere
+		var mat = StandardMaterial3D.new()
+		mat.albedo_color = Color(0.8, 0.1, 0.1, 0.9)  # Dark red
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		blood_mesh.material_override = mat
+		marker.add_child(blood_mesh)
+
+		# Create number label
+		label = Label3D.new()
+		label.name = "Label"
+		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		label.no_depth_test = true
+		label.font_size = 64
+		label.outline_size = 0
+		label.modulate = Color.WHITE
+		label.pixel_size = 0.001
+		label.position = Vector3(0, 0.001, 0)  # Slightly above blood drop
+		marker.add_child(label)
+
+		# Position marker next to base
 		var base_radius = 0.02  # Default
 		if model.unit:
 			var game_unit = model.unit as GameUnit
 			if game_unit and game_unit.unit_properties:
 				var base_mm = game_unit.unit_properties.get("base_size_round", 32)
 				base_radius = (base_mm / 2.0) * 0.001
-		marker.position = Vector3(base_radius + 0.01, 0.03, 0)
+		marker.position = Vector3(base_radius + 0.015, 0.01, 0)  # At base level
 
-	# Update text to show wounds taken (not remaining)
-	var wounds_taken = model.wounds_max - model.wounds_current
-	marker.text = "-%d" % wounds_taken
+	# Update number
+	if label:
+		label.text = str(wounds_taken)

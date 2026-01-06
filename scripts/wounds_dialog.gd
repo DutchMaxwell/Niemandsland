@@ -58,16 +58,8 @@ func open(model: ModelInstance) -> void:
 	print("DEBUG WoundsDialog: open() called with model=%s" % model)
 	_model = model
 	visible = true
-
 	_update_display()
-
-	# Force size update
-	size = custom_minimum_size
-
-	# Center on screen
-	var viewport_size = get_viewport_rect().size
-	position = (viewport_size - size) / 2
-	print("DEBUG WoundsDialog: visible=%s, viewport=%s, size=%s, position=%s" % [visible, viewport_size, size, position])
+	# Panel is auto-centered via PRESET_CENTER, no manual positioning needed
 
 
 ## Closes the dialog.
@@ -166,15 +158,26 @@ func _input(event: InputEvent) -> void:
 static func create_simple() -> WoundsDialog:
 	var dialog = WoundsDialog.new()
 	dialog.name = "WoundsDialog"
-	# Don't fill screen - just be the size of the panel
-	dialog.custom_minimum_size = Vector2(250, 200)
-	dialog.mouse_filter = Control.MOUSE_FILTER_STOP  # Capture input
+	# Fill entire screen to block all input when visible
+	dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dialog.mouse_filter = Control.MOUSE_FILTER_STOP  # Block all clicks
 
-	# Create panel directly in dialog (no centering needed - dialog IS the panel container)
+	# Semi-transparent background to dim the scene and block input
+	var bg = ColorRect.new()
+	bg.name = "Background"
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color(0, 0, 0, 0.4)  # Semi-transparent black
+	bg.mouse_filter = Control.MOUSE_FILTER_STOP  # Block clicks
+	dialog.add_child(bg)
+
+	# Create centered panel container
 	var panel = PanelContainer.new()
 	panel.name = "Panel"
-	panel.set_anchors_preset(Control.PRESET_FULL_RECT)  # Fill dialog
-	panel.mouse_filter = Control.MOUSE_FILTER_PASS  # Pass clicks to children
+	panel.custom_minimum_size = Vector2(250, 200)
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP  # Panel captures its area
 	dialog.add_child(panel)
 
 	# VBox container
