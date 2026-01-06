@@ -106,9 +106,13 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 		else:
 			# Single or partial model selection
 			var model_instance = UnitUtils.get_model_instance(first_obj)
+			print("DEBUG: model_instance from meta = %s" % model_instance)
 			if model_instance:
+				print("DEBUG: model_instance.wounds_max = %d" % model_instance.wounds_max)
 				context["model_instance"] = model_instance
 				items = RadialMenu.create_model_menu(model_instance)
+			else:
+				print("DEBUG: model_instance is NULL for %s" % first_obj.name)
 	elif UnitUtils.is_terrain(first_obj):
 		context["terrain"] = first_obj
 		items = RadialMenu.create_terrain_menu()
