@@ -1039,17 +1039,22 @@ func _get_object_radius(obj: Node3D) -> float:
 	if obj.is_in_group("miniature"):
 		# Try to get actual base size from unit properties
 		var game_unit = obj.get_meta("game_unit", null) as GameUnit
+		print("DEBUG _get_object_radius: obj=%s, game_unit=%s" % [obj.name, game_unit])
 		if game_unit and game_unit.unit_properties:
 			var props = game_unit.unit_properties
+			print("DEBUG: unit_properties keys=%s" % str(props.keys()))
 			# Handle oval bases - use smaller dimension to be conservative
 			if props.get("base_is_oval", false):
 				var width_mm = props.get("base_width_mm", 32)
 				var depth_mm = props.get("base_depth_mm", 32)
 				var min_dim = mini(width_mm, depth_mm)
+				print("DEBUG: oval base %dx%d, using radius=%.4f" % [width_mm, depth_mm, (min_dim / 2.0) * 0.001])
 				return (min_dim / 2.0) * 0.001  # mm to meters
 			else:
 				var base_mm = props.get("base_size_round", 32)
+				print("DEBUG: round base %dmm, using radius=%.4f" % [base_mm, (base_mm / 2.0) * 0.001])
 				return (base_mm / 2.0) * 0.001  # mm to meters
+		print("DEBUG: no game_unit/props, using default MINIATURE_RADIUS")
 		return MINIATURE_RADIUS  # Default 16mm = 0.016m
 	elif obj.is_in_group("dice"):
 		return 0.008  # Half of 16mm dice = 8mm diagonal approximation
