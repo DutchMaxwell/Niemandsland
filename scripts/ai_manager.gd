@@ -106,6 +106,7 @@ func set_terrain(pieces: Array[AITerrain.TerrainPiece]) -> void:
 	terrain_pieces = pieces
 
 	# Sync to context
+	context.terrain_pieces = pieces
 	context.cover_areas.clear()
 	context.difficult_terrain.clear()
 	context.dangerous_terrain.clear()
