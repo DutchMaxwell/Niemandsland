@@ -89,13 +89,27 @@ func _update_position() -> void:
 
 ## Show tooltip for a specific unit (with delay)
 ## model parameter is optional - used to get unit suffix for display
-func show_unit(unit: OPRApiClient.OPRUnit, model: Node3D = null) -> void:
+## immediate: if true, shows tooltip immediately without delay (useful for menu actions)
+func show_unit(unit: OPRApiClient.OPRUnit, model: Node3D = null, immediate: bool = false) -> void:
 	if not unit:
 		hide_tooltip()
 		return
 
 	if _current_unit == unit and visible:
 		return  # Already showing this unit
+
+	# If immediate mode, show right away
+	if immediate:
+		_show_timer.stop()
+		_pending_unit = null
+		_pending_model = null
+		_current_unit = unit
+		_current_model = model
+		_update_content()
+		reset_size()
+		visible = true
+		_update_position()
+		return
 
 	# If we're already waiting for this unit, don't restart timer
 	if _pending_unit == unit:
@@ -157,6 +171,13 @@ func _update_content() -> void:
 	]
 	if _current_unit.cost > 0:
 		stats_text += " | [color=#ffcc44]%d pts[/color]" % _current_unit.cost
+
+	# Show Tough/wounds info if model has multiple wounds
+	if _current_model:
+		var model_inst = _current_model.get_meta("model_instance", null) as ModelInstance
+		if model_inst and model_inst.wounds_max > 1:
+			stats_text += " | [color=#ff8888]Tough(%d)[/color]" % model_inst.wounds_max
+
 	# Add base size (oval or round)
 	if _current_unit.base_is_oval:
 		stats_text += " | [color=#cccccc]%dx%dmm oval[/color]" % [_current_unit.base_width_mm, _current_unit.base_depth_mm]
