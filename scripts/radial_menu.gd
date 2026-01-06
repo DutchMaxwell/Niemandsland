@@ -290,12 +290,9 @@ func is_open() -> bool:
 static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []
 
-	items.append(RadialMenuItem.new("unit_stats", "Unit Stats", "📊"))
-	items.append(RadialMenuItem.new("model_stats", "Model Info", "ℹ️"))
-	items.append(RadialMenuItem.new("select_unit", "Select Unit", "⬚"))
-	items.append(RadialMenuItem.new("wounds", "Wounds", "❤️"))
-	items.append(RadialMenuItem.new("add_marker", "Add Marker", "🏷️"))
-	items.append(RadialMenuItem.new("delete_model", "Delete", "🗑️"))
+	items.append(RadialMenuItem.new("unit_stats", "Stats", "📊"))
+	items.append(RadialMenuItem.new("select_unit", "Select All", "⬚"))
+	items.append(RadialMenuItem.new("delete_model", "Remove", "🗑️"))
 
 	return items
 
@@ -304,15 +301,14 @@ static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 static func create_unit_menu(game_unit: GameUnit) -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []
 
-	items.append(RadialMenuItem.new("unit_stats", "Unit Stats", "📊"))
+	items.append(RadialMenuItem.new("unit_stats", "Stats", "📊"))
 
 	var activate_label = "Deactivate" if game_unit.is_activated else "Activate"
-	items.append(RadialMenuItem.new("toggle_activate", activate_label, "✓"))
+	var activate_icon = "✗" if game_unit.is_activated else "✓"
+	items.append(RadialMenuItem.new("toggle_activate", activate_label, activate_icon))
 
 	items.append(RadialMenuItem.new("check_coherency", "Coherency", "📏"))
-	items.append(RadialMenuItem.new("add_marker", "Add Marker", "🏷️"))
-	items.append(RadialMenuItem.new("roll_attack", "Roll Attack", "🎲"))
-	items.append(RadialMenuItem.new("delete_unit", "Delete Unit", "🗑️"))
+	items.append(RadialMenuItem.new("delete_unit", "Delete", "🗑️"))
 
 	return items
 
@@ -321,8 +317,6 @@ static func create_unit_menu(game_unit: GameUnit) -> Array[RadialMenuItem]:
 static func create_terrain_menu() -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []
 
-	items.append(RadialMenuItem.new("terrain_info", "Info", "ℹ️"))
-	items.append(RadialMenuItem.new("toggle_los", "Toggle LoS", "👁️"))
 	items.append(RadialMenuItem.new("delete_terrain", "Delete", "🗑️"))
 
 	return items

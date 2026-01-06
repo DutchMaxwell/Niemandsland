@@ -89,13 +89,27 @@ func _update_position() -> void:
 
 ## Show tooltip for a specific unit (with delay)
 ## model parameter is optional - used to get unit suffix for display
-func show_unit(unit: OPRApiClient.OPRUnit, model: Node3D = null) -> void:
+## immediate: if true, shows tooltip immediately without delay (useful for menu actions)
+func show_unit(unit: OPRApiClient.OPRUnit, model: Node3D = null, immediate: bool = false) -> void:
 	if not unit:
 		hide_tooltip()
 		return
 
 	if _current_unit == unit and visible:
 		return  # Already showing this unit
+
+	# If immediate mode, show right away
+	if immediate:
+		_show_timer.stop()
+		_pending_unit = null
+		_pending_model = null
+		_current_unit = unit
+		_current_model = model
+		_update_content()
+		reset_size()
+		visible = true
+		_update_position()
+		return
 
 	# If we're already waiting for this unit, don't restart timer
 	if _pending_unit == unit:
