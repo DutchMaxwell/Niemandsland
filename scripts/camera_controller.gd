@@ -64,12 +64,12 @@ func _process(delta: float) -> void:
 		_update_camera_transform()
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	# Handle mouse button events (unhandled, so radial menu can take priority)
+func _input(event: InputEvent) -> void:
+	# Handle mouse button events
 	if event is InputEventMouseButton:
 		var mouse_event = event as InputEventMouseButton
 
-		# Right click for rotation (only if not handled by radial menu)
+		# Right click for rotation
 		if mouse_event.button_index == MOUSE_BUTTON_RIGHT:
 			_is_rotating = mouse_event.pressed
 			if mouse_event.pressed:
