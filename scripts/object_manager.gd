@@ -12,6 +12,7 @@ signal selection_changed(selected_objects: Array[Node3D])
 signal distance_changed(distance_inches: float, from_pos: Vector3, to_pos: Vector3)
 signal measurement_finished(distance_inches: float)
 signal drag_ended()
+signal context_menu_requested(screen_pos: Vector2, selected_objects: Array)
 
 @export var drag_height: float = 0.5  # Drag height in meters
 @export var rotation_speed_degrees: float = 2.0  # Degrees per second while R held
@@ -293,6 +294,12 @@ func _input(event: InputEvent) -> void:
 				else:
 					_stop_dragging()
 
+		elif mouse_event.button_index == MOUSE_BUTTON_RIGHT:
+			if mouse_event.pressed and not _selected_objects.is_empty():
+				# Right-click with selection opens context menu
+				context_menu_requested.emit(mouse_event.position, _selected_objects.duplicate())
+				get_viewport().set_input_as_handled()
+
 	elif event is InputEventMouseMotion:
 		if _is_dragging:
 			_update_drag(event.position)
@@ -403,6 +410,19 @@ func _deselect_all() -> void:
 	_selected_objects.clear()
 	object_deselected.emit()
 	selection_changed.emit(_selected_objects)
+
+
+## Public: Get currently selected objects
+func get_selected_objects() -> Array[Node3D]:
+	return _selected_objects.duplicate()
+
+
+## Public: Select specific objects (replaces current selection)
+func select_objects(objects: Array) -> void:
+	_deselect_all()
+	for obj in objects:
+		if obj is Node3D and is_instance_valid(obj):
+			_add_to_selection(obj)
 
 
 ## Apply highlight to an object to show it's selected

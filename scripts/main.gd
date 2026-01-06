@@ -129,6 +129,9 @@ var battle_simulator: BattleSimulator = null
 var battle_simulator_ui: BattleSimulatorUI = null
 var battle_sim_btn: Button = null
 
+# Radial Menu
+var radial_menu_controller: RadialMenuController = null
+
 # Deployment Zones UI
 var deployment_zone_option: OptionButton = null
 var deployment_zone_check: CheckBox = null
@@ -319,6 +322,9 @@ func _ready() -> void:
 
 	# Initialize Battle Simulator
 	_init_battle_simulator()
+
+	# Initialize Radial Menu
+	_init_radial_menu()
 
 	# Initialize and play Tron intro
 	_start_tron_intro()
@@ -1723,3 +1729,28 @@ func _clear_highlight_from_model(model: Node3D) -> void:
 	var highlight = model.get_node_or_null("BattleHighlight")
 	if highlight:
 		highlight.visible = false
+
+
+## ============================================================================
+## Radial Menu
+## ============================================================================
+
+func _init_radial_menu() -> void:
+	radial_menu_controller = RadialMenuController.new()
+	radial_menu_controller.name = "RadialMenuController"
+	add_child(radial_menu_controller)
+	radial_menu_controller.initialize(object_manager, opr_army_manager)
+
+	# Connect object manager's right-click signal to open the menu
+	object_manager.context_menu_requested.connect(_on_context_menu_requested)
+
+
+## Handle context menu request from object manager
+func _on_context_menu_requested(screen_pos: Vector2, selected_objects: Array) -> void:
+	if radial_menu_controller:
+		radial_menu_controller.open_menu(screen_pos, selected_objects)
+
+
+## Check if radial menu is currently open
+func is_radial_menu_open() -> bool:
+	return radial_menu_controller and radial_menu_controller.is_menu_open()
