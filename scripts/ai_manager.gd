@@ -166,7 +166,7 @@ func start_ai_turn(round_number: int) -> void:
 		return
 
 	if context.ai_units.is_empty():
-		push_warning("AIManager: No AI units to activate")
+		# Normal condition: AI has no units left (all destroyed or not set up)
 		ai_turn_ended.emit()
 		return
 
@@ -275,7 +275,7 @@ func _execute_action(unit: GameUnit, action: AIDecisionTree.ActionResult) -> voi
 ## Executes a charge action with full combat resolution.
 func _execute_charge(unit: GameUnit, action: AIDecisionTree.ActionResult) -> void:
 	if action.charge_target == null:
-		push_warning("AIManager: Charge action has no target for %s" % unit.get_name())
+		push_error("AIManager: Charge action has no target for %s (decision tree bug)" % unit.get_name())
 		return
 
 	var target_pos = action.target_position
@@ -557,7 +557,6 @@ func _remove_shaken_marker(unit: GameUnit) -> void:
 
 func _get_unit_center(game_unit: GameUnit) -> Vector3:
 	if game_unit == null:
-		push_warning("AIManager: _get_unit_center called with null unit")
 		return Vector3.ZERO
 
 	var sum = Vector3.ZERO

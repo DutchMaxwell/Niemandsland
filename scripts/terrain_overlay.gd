@@ -997,3 +997,114 @@ func is_terrain_los_blocking(terrain_type: int, viewer_in_terrain: bool, target_
 			return not (viewer_in_terrain or target_in_terrain)
 
 	return false
+
+
+# ==============================================================================
+# AI TERRAIN INTEGRATION
+# ==============================================================================
+
+## Terrain type to AI terrain properties mapping.
+## Based on OPR Grimdark Future v3.5.1 terrain rules.
+const TERRAIN_TYPE_PROPERTIES := {
+	TerrainType.RUINS: ["cover"],                    # Ruins provide cover
+	TerrainType.FOREST: ["cover", "difficult"],      # Forest provides cover and is difficult
+	TerrainType.CONTAINER: ["blocking"],             # Containers block LOS completely
+	TerrainType.DANGEROUS: ["dangerous"]             # Dangerous terrain causes wounds
+}
+
+
+## Converts grid_cells terrain data to AITerrain.TerrainPiece array for AI combat system.
+## This bridges the visual terrain system with the AI combat mechanics.
+##
+## @return: Array of AITerrain.TerrainPiece objects ready for AIManager.set_terrain()
+func get_terrain_pieces_for_ai() -> Array[AITerrain.TerrainPiece]:
+	var pieces: Array[AITerrain.TerrainPiece] = []
+
+	if grid_cells.is_empty():
+		return pieces
+
+	# Calculate grid dimensions (same logic as update_overlay)
+	var width_inches := table_size_feet.x * 12.0
+	var height_inches := table_size_feet.y * 12.0
+	var diagonal := sqrt(width_inches * width_inches + height_inches * height_inches)
+	var grid_size := int(ceil(diagonal / GRID_SIZE_INCHES))
+
+	# Round UP to even number for intersection point at center
+	if grid_size % 2 != 0:
+		grid_size += 1
+
+	var grid_dims := Vector2i(grid_size, grid_size)
+	var cell_size_inches := GRID_SIZE_INCHES
+	var cell_size_meters := cell_size_inches * INCHES_TO_METERS
+	var rotation_rad := deg_to_rad(grid_rotation_degrees)
+
+	for cell_pos: Vector2i in grid_cells:
+		var terrain_type: int = grid_cells[cell_pos]
+		if terrain_type == TerrainType.NONE:
+			continue
+
+		# Get terrain properties for this type
+		var properties: Array = TERRAIN_TYPE_PROPERTIES.get(terrain_type, [])
+		if properties.is_empty():
+			continue
+
+		# Calculate cell center in local grid coordinates
+		var local_x := (cell_pos.x - grid_dims.x / 2.0 + 0.5) * cell_size_meters
+		var local_z := (cell_pos.y - grid_dims.y / 2.0 + 0.5) * cell_size_meters
+
+		# Apply grid rotation to get world position
+		var world_x := local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
+		var world_z := local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
+		var world_pos := Vector3(world_x, 0.0, world_z)
+
+		# Calculate AABB bounds for this cell (in world coordinates, axis-aligned)
+		# Note: We use axis-aligned bounds even for rotated cells for simplicity
+		var half_size := cell_size_meters / 2.0
+		var bounds := AABB(
+			Vector3(world_x - half_size, 0.0, world_z - half_size),
+			Vector3(cell_size_meters, 1.0, cell_size_meters)  # 1m height for vertical checks
+		)
+
+		# Create TerrainPiece
+		var piece := AITerrain.TerrainPiece.new()
+		piece.id = "terrain_%d_%d" % [cell_pos.x, cell_pos.y]
+		piece.position = world_pos
+		piece.bounds = bounds
+		piece.height = 0.0  # Ground level terrain
+
+		# Convert properties array to typed array
+		var typed_props: Array[String] = []
+		for prop in properties:
+			typed_props.append(prop)
+		piece.types = typed_props
+
+		pieces.append(piece)
+
+	return pieces
+
+
+## Gets the bounds of all terrain cells for a specific type.
+## Useful for debugging and visualization.
+##
+## @param terrain_type: TerrainType to filter by
+## @return: Array of AABB bounds
+func get_terrain_bounds_by_type(terrain_type: int) -> Array[AABB]:
+	var bounds: Array[AABB] = []
+	var pieces := get_terrain_pieces_for_ai()
+
+	var type_name := ""
+	match terrain_type:
+		TerrainType.RUINS:
+			type_name = "cover"
+		TerrainType.FOREST:
+			type_name = "cover"  # Forest has both cover and difficult
+		TerrainType.CONTAINER:
+			type_name = "blocking"
+		TerrainType.DANGEROUS:
+			type_name = "dangerous"
+
+	for piece in pieces:
+		if type_name in piece.types:
+			bounds.append(piece.bounds)
+
+	return bounds
