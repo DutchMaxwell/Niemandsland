@@ -18,6 +18,9 @@ var _model: ModelInstance = null
 @onready var kill_button: Button = $Panel/VBox/KillButton
 @onready var close_button: Button = $Panel/VBox/CloseButton
 
+## Flag to prevent double signal connection
+var _signals_connected: bool = false
+
 
 func _ready() -> void:
 	visible = false
@@ -25,6 +28,11 @@ func _ready() -> void:
 
 
 func _setup_ui() -> void:
+	# Skip if already connected (from create_simple)
+	if _signals_connected:
+		return
+	_signals_connected = true
+
 	# Connect buttons if they exist
 	if minus_button:
 		minus_button.pressed.connect(_on_minus_pressed)
@@ -45,11 +53,12 @@ func open(model: ModelInstance) -> void:
 	visible = true
 
 	_update_display()
-	print("DEBUG WoundsDialog: dialog visible=%s, position=%s" % [visible, position])
 
-	# Center on screen
+	# Center on screen - use custom_minimum_size if size is 0
 	var viewport_size = get_viewport_rect().size
-	position = (viewport_size - size) / 2
+	var dialog_size = size if size.x > 0 else Vector2(250, 200)
+	position = (viewport_size - dialog_size) / 2
+	print("DEBUG WoundsDialog: visible=%s, viewport=%s, dialog_size=%s, position=%s" % [visible, viewport_size, dialog_size, position])
 
 
 ## Closes the dialog.
@@ -235,5 +244,8 @@ static func create_simple() -> WoundsDialog:
 	heal_btn.pressed.connect(dialog._on_heal_full_pressed)
 	kill_btn.pressed.connect(dialog._on_kill_pressed)
 	close_btn.pressed.connect(dialog.close)
+
+	# Mark signals as connected to prevent double connection in _ready
+	dialog._signals_connected = true
 
 	return dialog
