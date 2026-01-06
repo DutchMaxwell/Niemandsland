@@ -71,6 +71,14 @@ var _network_manager: Node = null
 # Terrain overlay reference (for terrain hints)
 var terrain_overlay: Node3D = null
 
+# Long-press for context menu
+var _long_press_timer: float = 0.0
+var _long_press_position: Vector2 = Vector2.ZERO
+var _is_long_pressing: bool = false
+var _long_press_object: Node3D = null
+const LONG_PRESS_DURATION: float = 0.4  # Seconds to hold for context menu
+const LONG_PRESS_MOVE_THRESHOLD: float = 10.0  # Pixels - cancel if moved more than this
+
 # Preload resources (will be scenes in full version)
 # Standard wargaming miniature sizes
 const MINIATURE_HEIGHT: float = 0.032  # 32mm height
@@ -273,6 +281,13 @@ func _process(delta: float) -> void:
 			if is_instance_valid(obj):
 				obj.rotate_y(rotation_amount)
 
+	# Long-press timer for context menu
+	if _is_long_pressing:
+		_long_press_timer += delta
+		if _long_press_timer >= LONG_PRESS_DURATION:
+			_trigger_context_menu()
+			_cancel_long_press()
+
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
@@ -284,9 +299,12 @@ func _input(event: InputEvent) -> void:
 					# Shift + Left-click starts measurement
 					_start_measuring(mouse_event.position)
 				else:
-					# Pass Alt state for multi-select
+					# Start long-press detection and selection
+					_start_long_press(mouse_event.position)
 					_try_select_at_mouse(mouse_event.position, mouse_event.alt_pressed)
 			else:
+				# Mouse released - cancel long press and handle other actions
+				_cancel_long_press()
 				if _is_measuring:
 					_stop_measuring(mouse_event.position)
 				elif _is_box_selecting:
@@ -294,13 +312,13 @@ func _input(event: InputEvent) -> void:
 				else:
 					_stop_dragging()
 
-		elif mouse_event.button_index == MOUSE_BUTTON_RIGHT:
-			if mouse_event.pressed and not _selected_objects.is_empty():
-				# Right-click with selection opens context menu
-				context_menu_requested.emit(mouse_event.position, _selected_objects.duplicate())
-				get_viewport().set_input_as_handled()
-
 	elif event is InputEventMouseMotion:
+		# Check if mouse moved too far during long press
+		if _is_long_pressing:
+			var distance = event.position.distance_to(_long_press_position)
+			if distance > LONG_PRESS_MOVE_THRESHOLD:
+				_cancel_long_press()
+
 		if _is_dragging:
 			_update_drag(event.position)
 		elif _is_box_selecting:
@@ -423,6 +441,32 @@ func select_objects(objects: Array) -> void:
 	for obj in objects:
 		if obj is Node3D and is_instance_valid(obj):
 			_add_to_selection(obj)
+
+
+## Start long-press detection for context menu
+func _start_long_press(screen_pos: Vector2) -> void:
+	_is_long_pressing = true
+	_long_press_timer = 0.0
+	_long_press_position = screen_pos
+
+
+## Cancel long-press detection
+func _cancel_long_press() -> void:
+	_is_long_pressing = false
+	_long_press_timer = 0.0
+
+
+## Trigger the context menu after successful long-press
+func _trigger_context_menu() -> void:
+	if _selected_objects.is_empty():
+		return
+
+	# Stop any dragging
+	if _is_dragging:
+		_cancel_drag()
+
+	# Emit context menu signal
+	context_menu_requested.emit(_long_press_position, _selected_objects.duplicate())
 
 
 ## Apply highlight to an object to show it's selected
