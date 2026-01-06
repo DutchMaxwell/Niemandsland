@@ -1,5 +1,5 @@
 # OpenTTS - Projekt Status
-**Stand:** 2026-01-05
+**Stand:** 2026-01-06
 **Version:** 0.2-alpha
 **Branch:** `main` (alle Feature-Branches gemerged)
 
@@ -85,6 +85,10 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 - ✅ **SSAO** - Screen-Space Ambient Occlusion
 - ✅ **SSR** - Screen-Space Reflections
 - ✅ **Glow & Bloom** - Post-Processing
+- ✅ **Two-Sided Lighting Shader** - Korrekte Beleuchtung für Terrain-Modelle (NEU!)
+- ✅ **Ring Overlay Highlight** - Ersetzt material-basierte Hervorhebung (NEU!)
+- ✅ **Auto-Flip Inverted Normals** - Automatische Korrektur für Terrain-Modelle (NEU!)
+- ✅ **Image Format Detection** - Magic Bytes statt Dateiendung (NEU!)
 
 ### Content Creation Tools (NEU!)
 - ✅ **Miniature Pipeline** - Gemini → TRELLIS.2 Workflow
@@ -306,12 +310,17 @@ openTTS/
 ### Aktive Branches
 - `main` - Stabile Version mit allen Features
 
-### Recent Commits (2026-01-05)
-- `9bb455a` - Merge: All feature branches to main
-- `fbba127` - feat: Add Scout/Ambush units panel
-- `19c4bb3` - feat: Add deployment mode with zone compliance checking
-- `a0ab277` - feat: Add terrain hints for difficult and dangerous terrain
-- `ebfcaa5` - feat: Add Deployment Zone system with Front-line (12") support
+### Recent Commits (2026-01-06)
+- `b97ff8b` - Merge: Fix Godot filesystem warning PR
+- `fe4c68c` - fix: Correct VIEW vector direction in shader
+- `f460b50` - fix: Improve shader to handle all inverted normal cases
+- `80c18c4` - fix: Add two-sided lighting shader for terrain models
+- `0af9f06` - fix: Use original OBJ normals instead of recalculating
+- `e54ad6e` - fix: Improve normal calculation and silence metadata warnings
+- `12e5b3a` - fix: Auto-flip inverted normals for terrain models
+- `5f0be30` - fix: Detect image format from magic bytes, not file extension
+- `b5f0eb9` - fix: Recalculate normals for terrain models to fix lighting
+- `d3bcdc4` - fix: Replace material-based highlight with ring overlay
 
 ---
 
@@ -323,4 +332,4 @@ MIT License - Siehe [LICENSE](./LICENSE) für Details.
 
 **Status:** ✅ Alpha-Version funktionsfähig, aktive Entwicklung
 **Contributors:** DutchMaxwell, Community
-**Letzte Aktualisierung:** 2026-01-05
+**Letzte Aktualisierung:** 2026-01-06
