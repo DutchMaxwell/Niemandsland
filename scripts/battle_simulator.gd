@@ -830,11 +830,31 @@ func _execute_deploy(step: BattleStep) -> void:
 	# Get unit dimensions for collision detection
 	var unit_radius = _get_unit_footprint_radius(unit)
 
-	# Calculate deployment position with collision avoidance
+	# Calculate deployment position with collision avoidance and zone validation
 	var deploy_pos = _get_deployment_position(unit, player_id, unit_radius)
 
 	# Move unit models to deployment position with proper formation
 	_move_unit_to_position(unit, deploy_pos, player_id)
+
+	# Validate final deployment zone (post-deployment check)
+	if terrain_overlay != null and terrain_overlay.has_method("is_position_in_deployment_zone"):
+		var zone_check = terrain_overlay.is_position_in_deployment_zone(deploy_pos)
+		var expected_player = "player%d" % player_id
+		var in_zone = zone_check.get("in_zone", false)
+		var zone_player = zone_check.get("player", "none")
+
+		if not in_zone or zone_player != expected_player:
+			_log("  WARNING: %s deployed outside correct deployment zone! Position: (%.2fm, %.2fm), Expected: Player %d, Got: %s" % [
+				unit.get_name(), deploy_pos.x, deploy_pos.z, player_id, zone_player
+			], "warning")
+			step.result_text = "⚠ Deployed at (%.2fm, %.2fm) - OUTSIDE ZONE" % [deploy_pos.x, deploy_pos.z]
+		else:
+			step.result_text = "Deployed at (%.2fm, %.2fm)" % [deploy_pos.x, deploy_pos.z]
+			_log("  %s deployed in Player %d zone" % [unit.get_name(), player_id], "action")
+	else:
+		# No terrain overlay available, just report position
+		step.result_text = "Deployed at (%.2fm, %.2fm)" % [deploy_pos.x, deploy_pos.z]
+		_log("  %s deployed (no zone validation available)" % unit.get_name(), "action")
 
 	# Track this position for future collision detection
 	_deployed_positions.append({
@@ -842,9 +862,6 @@ func _execute_deploy(step: BattleStep) -> void:
 		"radius": unit_radius,
 		"player": player_id
 	})
-
-	step.result_text = "Deployed at (%.2fm, %.2fm)" % [deploy_pos.x, deploy_pos.z]
-	_log("  %s deployed" % unit.get_name(), "action")
 
 
 ## Executes round start step.
@@ -1259,12 +1276,12 @@ func _get_unit_base_diameter(unit: GameUnit) -> float:
 	return base_mm * 0.001  # Convert mm to meters
 
 
-## Gets deployment position for a unit with collision avoidance.
+## Gets deployment position for a unit with collision avoidance and zone validation.
 func _get_deployment_position(unit: GameUnit, player_id: int, unit_radius: float) -> Vector3:
 	# Use stored table bounds
 	var table_width = _table_bounds.size.x
 	var table_depth = _table_bounds.size.y
-	var deployment_depth = 0.3048  # 12 inches in meters
+	var deployment_depth = 0.3048  # 12 inches in meters (OPR standard)
 
 	# Define deployment zone
 	var min_x = _table_bounds.position.x + unit_radius + 0.05
@@ -1281,11 +1298,12 @@ func _get_deployment_position(unit: GameUnit, player_id: int, unit_radius: float
 		z_base = _table_bounds.position.y + table_depth - deployment_depth + unit_radius + 0.02
 		z_range = deployment_depth - unit_radius * 2
 
-	# Try to find non-colliding position (max 50 attempts)
+	# Try to find non-colliding position in valid deployment zone (max 50 attempts)
 	var best_pos = Vector3.ZERO
 	var best_min_distance = -1.0
 	var attempts = 0
 	var max_attempts = 50
+	var valid_zone_found = false
 
 	while attempts < max_attempts:
 		var test_x = randf_range(min_x, max_x)
@@ -1295,20 +1313,43 @@ func _get_deployment_position(unit: GameUnit, player_id: int, unit_radius: float
 		# Check collision with already deployed units
 		var min_distance = _get_min_distance_to_deployed(test_pos, player_id)
 
-		# If no collision, use this position
-		if min_distance < 0 or min_distance > unit_radius * 2:
+		# Validate deployment zone if terrain_overlay is available
+		var zone_valid = true
+		if terrain_overlay != null and terrain_overlay.has_method("is_position_in_deployment_zone"):
+			var zone_check = terrain_overlay.is_position_in_deployment_zone(test_pos)
+			var expected_player = "player%d" % player_id
+			zone_valid = zone_check.get("in_zone", false) and zone_check.get("player", "") == expected_player
+
+			if not zone_valid and (min_distance < 0 or min_distance > unit_radius * 2):
+				# Position is collision-free but outside correct zone
+				_log("  Warning: Position (%.2f, %.2f) outside Player %d deployment zone" % [
+					test_pos.x, test_pos.z, player_id
+				], "warning")
+
+		# If no collision and valid zone, use this position
+		if (min_distance < 0 or min_distance > unit_radius * 2) and zone_valid:
+			valid_zone_found = true
 			return test_pos
 
-		# Track best position found so far
-		if min_distance > best_min_distance:
+		# Track best position found so far (prefer valid zones)
+		if zone_valid and (not valid_zone_found or min_distance > best_min_distance):
+			valid_zone_found = true
+			best_min_distance = min_distance
+			best_pos = test_pos
+		elif not valid_zone_found and min_distance > best_min_distance:
 			best_min_distance = min_distance
 			best_pos = test_pos
 
 		attempts += 1
 
-	# Return best position found (may have some overlap)
+	# Return best position found (may have some overlap or zone issues)
 	if best_min_distance >= 0:
-		push_warning("BattleSimulator: Could not find collision-free deployment for %s" % unit.get_name())
+		if not valid_zone_found:
+			push_warning("BattleSimulator: Could not find valid deployment zone position for %s (Player %d)" % [
+				unit.get_name(), player_id
+			])
+		else:
+			push_warning("BattleSimulator: Could not find collision-free deployment for %s" % unit.get_name())
 		return best_pos
 
 	# Fallback: return center of deployment zone
@@ -1383,34 +1424,152 @@ func _move_unit_instantly(unit: GameUnit, target: Vector3) -> void:
 			model.node.global_position = Vector3(model_x, 0, target.z)
 
 
-## Performs consolidation move after melee.
+## Performs consolidation move after melee with intelligent targeting.
+## Per OPR Rules:
+## - "If one of the two units was destroyed, then the other unit may move by up to 3"."
+## - "If neither of the units was destroyed, then the charging unit must move back by 1"."
+## - Consolidation can be toward nearest objective or nearest enemy.
 ## @param unit: The unit to move
 ## @param distance_inches: Distance in inches to move
-## @param direction: "forward" (toward enemy) or "back" (away from enemy)
+## @param direction: "forward" (toward enemy/objective) or "back" (away from enemy)
 func _consolidation_move(unit: GameUnit, distance_inches: float, direction: String) -> void:
+	# OPR consolidation move distances
+	const CONSOLIDATION_ADVANCE_INCHES = 3.0  # When enemy destroyed
+	const CONSOLIDATION_RETREAT_INCHES = 1.0  # When neither destroyed
+	const INCHES_TO_METERS = 0.0254
+
+	# Validate unit
 	if unit == null or unit.is_destroyed():
 		return
 
-	var distance_meters = distance_inches * 0.0254  # Convert inches to meters
+	# Validate mission context
+	if mission == null:
+		push_warning("BattleSimulator: _consolidation_move called without mission context")
+		return
+
+	var distance_meters = distance_inches * INCHES_TO_METERS
 	var player_id = unit.unit_properties.get("player_id", 1)
 	var unit_center = _get_unit_center(unit)
 
-	# Determine movement direction based on player and consolidation type
-	var move_direction: float
-	if player_id == 1:
-		# P1 faces positive Z
-		move_direction = 1.0 if direction == "forward" else -1.0
+	# Determine target position and facing
+	var target_position: Vector3
+	var facing_target: Vector3
+
+	if direction == "forward":
+		# Find best consolidation target (objective or enemy)
+		var consolidation_target = _get_consolidation_target(unit, player_id)
+
+		if consolidation_target != Vector3.ZERO:
+			# Move toward target, respecting max distance
+			var direction_to_target = (consolidation_target - unit_center).normalized()
+			target_position = unit_center + direction_to_target * distance_meters
+			facing_target = consolidation_target
+		else:
+			# Fallback: move forward based on player orientation
+			var forward_dir = 1.0 if player_id == 1 else -1.0
+			target_position = unit_center + Vector3(0, 0, distance_meters * forward_dir)
+			facing_target = target_position + Vector3(0, 0, forward_dir)
 	else:
-		# P2 faces negative Z
-		move_direction = -1.0 if direction == "forward" else 1.0
+		# Move back (disengage) - away from enemy deployment zone
+		var back_dir = -1.0 if player_id == 1 else 1.0
+		target_position = unit_center + Vector3(0, 0, distance_meters * back_dir)
+		facing_target = unit_center + Vector3(0, 0, -back_dir)  # Face forward while moving back
 
-	var new_z = unit_center.z + (distance_meters * move_direction)
+	# Move all models while maintaining formation
+	_move_unit_maintaining_formation(unit, target_position, facing_target)
 
-	# Move all models
+
+## Finds the best consolidation target (nearest objective or enemy).
+## Returns Vector3.ZERO if no valid target found.
+func _get_consolidation_target(unit: GameUnit, player_id: int) -> Vector3:
+	if unit == null:
+		return Vector3.ZERO
+
+	var unit_center = _get_unit_center(unit)
+	var nearest_objective = _find_nearest_objective(unit_center)
+	var nearest_enemy = _find_nearest_enemy_position(unit, player_id)
+
+	# Determine which target is closer
+	if nearest_objective != Vector3.ZERO and nearest_enemy != Vector3.ZERO:
+		var dist_to_obj = unit_center.distance_to(nearest_objective)
+		var dist_to_enemy = unit_center.distance_to(nearest_enemy)
+		return nearest_objective if dist_to_obj < dist_to_enemy else nearest_enemy
+	elif nearest_objective != Vector3.ZERO:
+		return nearest_objective
+	elif nearest_enemy != Vector3.ZERO:
+		return nearest_enemy
+
+	return Vector3.ZERO
+
+
+## Finds the nearest objective position.
+## Returns Vector3.ZERO if no objectives exist.
+func _find_nearest_objective(from_position: Vector3) -> Vector3:
+	if mission == null or mission.objectives.is_empty():
+		return Vector3.ZERO
+
+	var nearest_pos = Vector3.ZERO
+	var nearest_dist = INF
+
+	for obj in mission.objectives:
+		var dist = from_position.distance_to(obj.position)
+		if dist < nearest_dist:
+			nearest_dist = dist
+			nearest_pos = obj.position
+
+	return nearest_pos
+
+
+## Finds the nearest enemy unit position.
+## Returns Vector3.ZERO if no enemies found.
+func _find_nearest_enemy_position(unit: GameUnit, player_id: int) -> Vector3:
+	if unit == null:
+		return Vector3.ZERO
+
+	var unit_center = _get_unit_center(unit)
+	var enemy_units = player2_units if player_id == 1 else player1_units
+
+	var nearest_pos = Vector3.ZERO
+	var nearest_dist = INF
+
+	for enemy in enemy_units:
+		if enemy.is_destroyed():
+			continue
+
+		var enemy_center = _get_unit_center(enemy)
+		var dist = unit_center.distance_to(enemy_center)
+		if dist < nearest_dist:
+			nearest_dist = dist
+			nearest_pos = enemy_center
+
+	return nearest_pos
+
+
+## Moves a unit to target position while maintaining formation and facing.
+## Preserves relative model positions within the unit.
+func _move_unit_maintaining_formation(unit: GameUnit, target_position: Vector3, facing_target: Vector3) -> void:
+	if unit == null or unit.is_destroyed():
+		return
+
+	var unit_center = _get_unit_center(unit)
+	var offset = target_position - unit_center
+
+	# Calculate facing angle
+	var facing_angle = 0.0
+	if facing_target != Vector3.ZERO:
+		var direction = facing_target - target_position
+		if direction.length_squared() > 0.001:
+			facing_angle = atan2(direction.x, direction.z)
+
+	# Move all models while preserving formation
 	for model in unit.models:
 		if model.is_alive and model.node:
 			var current_pos = model.node.global_position
-			model.node.global_position = Vector3(current_pos.x, current_pos.y, new_z + (current_pos.z - unit_center.z))
+			var new_pos = current_pos + offset
+
+			# Apply position and facing
+			model.node.global_position = new_pos
+			model.node.rotation.y = facing_angle
 
 
 ## Animates unit movement to target position with proper facing.
