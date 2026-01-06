@@ -487,31 +487,56 @@ func _trigger_context_menu() -> void:
 
 ## Apply highlight to an object to show it's selected
 func _highlight_object(obj: Node3D) -> void:
-	# Find all MeshInstance3D children and apply highlight
-	for child in obj.get_children():
-		if child is MeshInstance3D:
-			var mat = child.material_override
-			if mat is StandardMaterial3D:
-				# Store original color and apply highlight
-				child.set_meta("original_emission", mat.emission)
-				child.set_meta("original_emission_enabled", mat.emission_enabled)
-				mat.emission_enabled = true
-				mat.emission = Color(0.3, 0.5, 1.0)  # Blue glow
-				mat.emission_energy_multiplier = 0.5
+	# Find all MeshInstance3D descendants and apply highlight
+	_apply_highlight_recursive(obj)
+
+
+## Recursively apply highlight to all MeshInstance3D nodes
+func _apply_highlight_recursive(node: Node) -> void:
+	if node is MeshInstance3D:
+		var mat = node.material_override
+		if mat is StandardMaterial3D:
+			# Store original emission settings
+			node.set_meta("original_emission", mat.emission)
+			node.set_meta("original_emission_enabled", mat.emission_enabled)
+			node.set_meta("original_emission_energy", mat.emission_energy_multiplier)
+			# Apply highlight
+			mat.emission_enabled = true
+			mat.emission = Color(0.3, 0.5, 1.0)  # Blue glow
+			mat.emission_energy_multiplier = 0.5
+
+	# Recurse into children
+	for child in node.get_children():
+		_apply_highlight_recursive(child)
 
 
 ## Remove highlight from an object
 func _unhighlight_object(obj: Node3D) -> void:
-	for child in obj.get_children():
-		if child is MeshInstance3D:
-			var mat = child.material_override
-			if mat is StandardMaterial3D:
-				# Restore original emission settings
-				if child.has_meta("original_emission_enabled"):
-					mat.emission_enabled = child.get_meta("original_emission_enabled")
-					mat.emission = child.get_meta("original_emission")
-				else:
-					mat.emission_enabled = false
+	_remove_highlight_recursive(obj)
+
+
+## Recursively remove highlight from all MeshInstance3D nodes
+func _remove_highlight_recursive(node: Node) -> void:
+	if node is MeshInstance3D:
+		var mat = node.material_override
+		if mat is StandardMaterial3D:
+			# Restore original emission settings
+			if node.has_meta("original_emission_enabled"):
+				mat.emission_enabled = node.get_meta("original_emission_enabled")
+				mat.emission = node.get_meta("original_emission")
+				mat.emission_energy_multiplier = node.get_meta("original_emission_energy", 1.0)
+				# Clean up metadata
+				node.remove_meta("original_emission")
+				node.remove_meta("original_emission_enabled")
+				node.remove_meta("original_emission_energy")
+			else:
+				# Fallback: disable emission entirely
+				mat.emission_enabled = false
+				mat.emission_energy_multiplier = 1.0
+
+	# Recurse into children
+	for child in node.get_children():
+		_remove_highlight_recursive(child)
 
 
 ## Start box selection (drag rectangle to select multiple objects)
