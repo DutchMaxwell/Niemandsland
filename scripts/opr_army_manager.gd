@@ -321,10 +321,11 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 			object_manager.add_child(model)
 			model.global_position = model_pos
 
-			# Add to selectable group
+			# Add to groups
 			model.add_to_group("selectable")
+			model.add_to_group("miniature")  # Required for measurement
 			model.add_to_group("opr_unit")
-			model.add_to_group("unit")  # NEW: Generic unit group
+			model.add_to_group("unit")
 
 			# Store unit reference in model metadata (legacy)
 			model.set_meta("opr_unit", unit)
