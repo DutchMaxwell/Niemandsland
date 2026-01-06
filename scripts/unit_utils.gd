@@ -58,7 +58,9 @@ static func is_dice(obj: Node3D) -> bool:
 static func get_game_unit(obj: Node3D) -> GameUnit:
 	if not obj:
 		return null
-	return obj.get_meta("game_unit", null)
+	if not obj.has_meta("game_unit"):
+		return null
+	return obj.get_meta("game_unit")
 
 
 ## Gets the ModelInstance for a model node.
