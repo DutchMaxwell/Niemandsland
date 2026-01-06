@@ -129,6 +129,7 @@ static func _get_nearest_model(model: ModelInstance, all_models: Array[ModelInst
 
 
 ## Calculates distance between two models in inches (edge-to-edge, not center-to-center).
+## For oval bases, calculates actual edge distance in the direction between models.
 static func _distance_between_models(model_a: ModelInstance, model_b: ModelInstance) -> float:
 	if not model_a.node or not model_b.node:
 		return INF
@@ -138,13 +139,22 @@ static func _distance_between_models(model_a: ModelInstance, model_b: ModelInsta
 	var pos_a = model_a.node.global_position
 	var pos_b = model_b.node.global_position
 
-	# 2D distance (ignore Y for base measurement)
-	var dist_2d = Vector2(pos_a.x, pos_a.z).distance_to(Vector2(pos_b.x, pos_b.z))
+	# 2D positions (ignore Y)
+	var pos_a_2d = Vector2(pos_a.x, pos_a.z)
+	var pos_b_2d = Vector2(pos_b.x, pos_b.z)
+	var dist_2d = pos_a_2d.distance_to(pos_b_2d)
 
-	# Get base radii and subtract them to get edge-to-edge distance
-	var radius_a = _get_base_radius_meters(model_a)
-	var radius_b = _get_base_radius_meters(model_b)
-	var edge_to_edge = dist_2d - radius_a - radius_b
+	if dist_2d < 0.001:
+		return 0.0  # Models at same position
+
+	# Direction from A to B (normalized)
+	var dir = (pos_b_2d - pos_a_2d).normalized()
+
+	# Get edge distance from each model's center in the direction of the other
+	var edge_dist_a = _get_edge_distance_in_direction(model_a, dir.x, dir.y)
+	var edge_dist_b = _get_edge_distance_in_direction(model_b, -dir.x, -dir.y)
+
+	var edge_to_edge = dist_2d - edge_dist_a - edge_dist_b
 
 	# Ensure non-negative (bases can overlap)
 	edge_to_edge = maxf(0.0, edge_to_edge)
@@ -153,26 +163,35 @@ static func _distance_between_models(model_a: ModelInstance, model_b: ModelInsta
 	return edge_to_edge / INCHES_TO_METERS
 
 
-## Gets the base radius in meters for a model.
-## For oval bases, uses the smaller dimension to be conservative (avoids false positives).
-static func _get_base_radius_meters(model: ModelInstance) -> float:
-	# Try to get from the unit's properties
-	if model.unit:
-		var game_unit = model.unit as GameUnit
-		if game_unit and game_unit.unit_properties:
-			var props = game_unit.unit_properties
-			# Check for oval bases - use smaller dimension to be conservative
-			if props.get("base_is_oval", false):
-				var width_mm = props.get("base_width_mm", 32)
-				var depth_mm = props.get("base_depth_mm", 32)
-				# Use minimum dimension for edge-to-edge (conservative)
-				var min_dim = mini(width_mm, depth_mm)
-				return (min_dim / 2.0) * 0.001  # mm to meters
-			else:
-				var base_mm = props.get("base_size_round", 32)
-				return (base_mm / 2.0) * 0.001  # mm to meters
-	# Default: 32mm base = 16mm radius
-	return 0.016
+## Gets the edge distance from center in a specific direction for a model.
+## For oval bases, calculates actual ellipse edge distance.
+static func _get_edge_distance_in_direction(model: ModelInstance, dir_x: float, dir_z: float) -> float:
+	if not model.unit:
+		return 0.016  # Default 32mm diameter
+
+	var game_unit = model.unit as GameUnit
+	if not game_unit or not game_unit.unit_properties:
+		return 0.016
+
+	var props = game_unit.unit_properties
+
+	if props.get("base_is_oval", false):
+		# Oval base - calculate actual ellipse edge distance
+		var width_mm = props.get("base_width_mm", 32)
+		var depth_mm = props.get("base_depth_mm", 32)
+		var a = (width_mm / 2.0) * 0.001  # Semi-axis X (width/2) in meters
+		var b = (depth_mm / 2.0) * 0.001  # Semi-axis Z (depth/2) in meters
+
+		# Distance to ellipse edge in direction (dir_x, dir_z):
+		# r = (a * b) / sqrt(b² * dir_x² + a² * dir_z²)
+		var denominator = sqrt(b * b * dir_x * dir_x + a * a * dir_z * dir_z)
+		if denominator < 0.0001:
+			return (a + b) / 2.0  # Fallback to average
+		return (a * b) / denominator
+	else:
+		# Round base - simple radius
+		var base_mm = props.get("base_size_round", 32)
+		return (base_mm / 2.0) * 0.001
 
 
 ## Checks if two models are at significantly different heights.

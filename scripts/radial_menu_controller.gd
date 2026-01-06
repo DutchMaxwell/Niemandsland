@@ -489,26 +489,27 @@ func _update_wound_marker(model: ModelInstance) -> void:
 		blood_mesh = MeshInstance3D.new()
 		blood_mesh.name = "BloodDrop"
 		var sphere = SphereMesh.new()
-		sphere.radius = 0.012  # ~24mm diameter
-		sphere.height = 0.016
+		sphere.radius = 0.010  # ~20mm diameter
+		sphere.height = 0.012
 		blood_mesh.mesh = sphere
 		var mat = StandardMaterial3D.new()
-		mat.albedo_color = Color(0.8, 0.1, 0.1, 0.9)  # Dark red
+		mat.albedo_color = Color(0.8, 0.05, 0.05, 0.95)  # Dark red, more opaque
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		blood_mesh.material_override = mat
 		marker.add_child(blood_mesh)
 
-		# Create number label
+		# Create number label - sized to fit inside sphere
 		label = Label3D.new()
 		label.name = "Label"
 		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		label.no_depth_test = true
-		label.font_size = 64
-		label.outline_size = 0
+		label.font_size = 48
+		label.outline_size = 4
 		label.modulate = Color.WHITE
-		label.pixel_size = 0.001
-		label.position = Vector3(0, 0.001, 0)  # Slightly above blood drop
+		label.outline_modulate = Color(0.3, 0, 0)  # Dark red outline
+		label.pixel_size = 0.0003  # Small: 48 * 0.0003 = ~14mm height
+		label.position = Vector3(0, 0.002, 0)  # Slightly in front
 		marker.add_child(label)
 
 		# Position marker next to base
