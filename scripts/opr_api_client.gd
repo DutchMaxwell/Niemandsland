@@ -329,10 +329,10 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 	else:
 		print("OPRApiClient: %s - base size %dmm (default, no 'bases' field)" % [unit.name, unit.base_size_round])
 
-	# Parse special rules (TTS API returns them fully resolved)
-	var rules = data.get("specialRules", [])
+	# Parse special rules (TTS API uses "rules" field, not "specialRules")
+	var rules = data.get("rules", data.get("specialRules", []))
 	if not rules.is_empty():
-		print("OPRApiClient: %s - raw specialRules: %s" % [unit.name, str(rules)])
+		print("OPRApiClient: %s - raw rules: %s" % [unit.name, str(rules)])
 	for rule in rules:
 		if rule is String:
 			unit.special_rules.append(rule)
