@@ -434,6 +434,9 @@ func _delete_generic(context: Dictionary) -> void:
 
 ## Called when wounds are changed via the wounds dialog.
 func _on_wounds_changed(model: ModelInstance, new_wounds: int) -> void:
+	# Update visual wound marker
+	_update_wound_marker(model)
+
 	# Hide model if dead
 	if new_wounds <= 0 and not model.is_alive:
 		if model.node and is_instance_valid(model.node):
@@ -444,3 +447,46 @@ func _on_wounds_changed(model: ModelInstance, new_wounds: int) -> void:
 	elif new_wounds > 0 and model.node and is_instance_valid(model.node):
 		model.node.visible = true
 		model.node.set_meta("deleted", false)
+
+
+## Updates or creates a wound marker next to a model.
+func _update_wound_marker(model: ModelInstance) -> void:
+	if not model.node or not is_instance_valid(model.node):
+		return
+
+	var marker_name = "WoundMarker"
+	var existing_marker = model.node.get_node_or_null(marker_name)
+
+	# Remove marker if at full health
+	if model.wounds_current >= model.wounds_max:
+		if existing_marker:
+			existing_marker.queue_free()
+		return
+
+	# Create marker if needed
+	var marker: Label3D
+	if existing_marker:
+		marker = existing_marker as Label3D
+	else:
+		marker = Label3D.new()
+		marker.name = marker_name
+		marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		marker.no_depth_test = true
+		marker.font_size = 48
+		marker.outline_size = 8
+		marker.modulate = Color(1, 0.2, 0.2, 1)  # Red color
+		marker.outline_modulate = Color(0, 0, 0, 1)
+		model.node.add_child(marker)
+
+		# Position marker offset from model center
+		var base_radius = 0.02  # Default
+		if model.unit:
+			var game_unit = model.unit as GameUnit
+			if game_unit and game_unit.unit_properties:
+				var base_mm = game_unit.unit_properties.get("base_size_round", 32)
+				base_radius = (base_mm / 2.0) * 0.001
+		marker.position = Vector3(base_radius + 0.01, 0.03, 0)
+
+	# Update text to show wounds taken (not remaining)
+	var wounds_taken = model.wounds_max - model.wounds_current
+	marker.text = "-%d" % wounds_taken

@@ -154,13 +154,23 @@ static func _distance_between_models(model_a: ModelInstance, model_b: ModelInsta
 
 
 ## Gets the base radius in meters for a model.
+## For oval bases, uses the smaller dimension to be conservative (avoids false positives).
 static func _get_base_radius_meters(model: ModelInstance) -> float:
 	# Try to get from the unit's properties
 	if model.unit:
 		var game_unit = model.unit as GameUnit
 		if game_unit and game_unit.unit_properties:
-			var base_mm = game_unit.unit_properties.get("base_size_round", 32)
-			return (base_mm / 2.0) * 0.001  # mm to meters
+			var props = game_unit.unit_properties
+			# Check for oval bases - use smaller dimension to be conservative
+			if props.get("base_is_oval", false):
+				var width_mm = props.get("base_width_mm", 32)
+				var depth_mm = props.get("base_depth_mm", 32)
+				# Use minimum dimension for edge-to-edge (conservative)
+				var min_dim = mini(width_mm, depth_mm)
+				return (min_dim / 2.0) * 0.001  # mm to meters
+			else:
+				var base_mm = props.get("base_size_round", 32)
+				return (base_mm / 2.0) * 0.001  # mm to meters
 	# Default: 32mm base = 16mm radius
 	return 0.016
 
