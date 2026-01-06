@@ -296,7 +296,7 @@ func _add_activation_markers(game_unit: GameUnit) -> void:
 		torus.inner_radius = base_radius_m + 0.002  # 2mm outside base edge
 		torus.outer_radius = base_radius_m + 0.006  # 4mm ring thickness
 		marker.mesh = torus
-		marker.rotation_degrees.x = 90  # Lay flat
+		# TorusMesh defaults to flat (hole up), no rotation needed
 
 		# Green glowing material
 		var mat = StandardMaterial3D.new()
