@@ -137,7 +137,7 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 			current_pos.x = tray_pos.x - tray_bounds.x / 2 + edge_padding
 			current_pos.z += row_height
 
-		var unit_models = _spawn_unit(unit, current_pos, player_color, display_suffix)
+		var unit_models = _spawn_unit(unit, current_pos, player_color, display_suffix, army.player_id)
 		all_models.append_array(unit_models)
 
 		# Store mappings
@@ -304,11 +304,10 @@ func _get_tray_position_and_bounds(player_id: int) -> Dictionary:
 
 
 ## Spawn a single unit with all its models
-func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: Color, name_suffix: String = "") -> Array[Node3D]:
+func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: Color, name_suffix: String = "", player_id: int = 1) -> Array[Node3D]:
 	var models: Array[Node3D] = []
 	# Use unit's base diameter with 25% gap for spacing
 	var spacing = unit.get_base_diameter_meters() * 1.25
-	var player_id = unit.get_meta("player_id", 1)
 
 	for i in range(unit.size):
 		var model_pos = Vector3(
@@ -322,10 +321,11 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 			object_manager.add_child(model)
 			model.global_position = model_pos
 
-			# Add to selectable group
+			# Add to groups
 			model.add_to_group("selectable")
+			model.add_to_group("miniature")  # Required for measurement
 			model.add_to_group("opr_unit")
-			model.add_to_group("unit")  # NEW: Generic unit group
+			model.add_to_group("unit")
 
 			# Store unit reference in model metadata (legacy)
 			model.set_meta("opr_unit", unit)

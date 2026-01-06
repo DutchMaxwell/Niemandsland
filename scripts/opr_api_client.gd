@@ -319,15 +319,16 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 		unit.base_size_round = max(unit.base_width_mm, unit.base_depth_mm)
 		unit.base_size_square = _safe_int(square_size, 30)
 		unit.base_size_square = clampi(unit.base_size_square, 20, 150)
-		if unit.base_is_oval:
-			print("OPRApiClient: %s - oval base %dx%dmm (from API)" % [unit.name, unit.base_width_mm, unit.base_depth_mm])
-		else:
-			print("OPRApiClient: %s - round base %dmm (from API)" % [unit.name, unit.base_size_round])
-	else:
-		print("OPRApiClient: %s - base size %dmm (default, no 'bases' field)" % [unit.name, unit.base_size_round])
 
-	# Parse special rules (TTS API returns them fully resolved)
-	var rules = data.get("specialRules", [])
+	# Parse special rules (TTS API uses "rules" field, not "specialRules")
+	var rules_field = data.get("rules", null)
+	var special_rules_field = data.get("specialRules", null)
+
+	var rules = []
+	if rules_field is Array:
+		rules = rules_field
+	elif special_rules_field is Array:
+		rules = special_rules_field
 	for rule in rules:
 		if rule is String:
 			unit.special_rules.append(rule)

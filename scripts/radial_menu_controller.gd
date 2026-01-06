@@ -18,11 +18,23 @@ var object_manager: Node = null
 ## Reference to the OPR army manager
 var army_manager: OPRArmyManager = null
 
+## Reference to OPR stats tooltip
+var stats_tooltip: Node = null
+
+## Reference to coherency visualizer
+var coherency_visualizer: CoherencyVisualizer = null
+
+## Reference to wounds dialog
+var wounds_dialog: WoundsDialog = null
+
 ## Current selection context
 var _current_selection: Array = []
 
 ## Is the radial menu scene loaded
 var _menu_scene: PackedScene = null
+
+## Activation markers on models
+var _activation_markers: Dictionary = {}  # Node3D -> MeshInstance3D
 
 
 func _ready() -> void:
@@ -36,16 +48,20 @@ func initialize(p_object_manager: Node, p_army_manager: OPRArmyManager) -> void:
 	army_manager = p_army_manager
 
 	# Create radial menu instance if not exists
+	# Get UI CanvasLayer (node is named "UI")
+	var ui_layer = get_tree().root.find_child("UI", true, false)
+	var ui_parent = ui_layer if ui_layer else get_tree().root
+
 	if not radial_menu:
 		radial_menu = _menu_scene.instantiate() as RadialMenu
-		# Add to UI layer (should be added to CanvasLayer)
-		var ui_layer = get_tree().root.find_child("UILayer", true, false)
-		if ui_layer:
-			ui_layer.add_child(radial_menu)
-		else:
-			get_tree().root.add_child(radial_menu)
-
+		ui_parent.add_child(radial_menu)
 		radial_menu.action_selected.connect(_on_action_selected)
+
+	# Create wounds dialog
+	if not wounds_dialog:
+		wounds_dialog = WoundsDialog.create_simple()
+		ui_parent.add_child(wounds_dialog)
+		wounds_dialog.wounds_changed.connect(_on_wounds_changed)
 
 
 ## Opens the radial menu for the current selection at the given position.
@@ -84,14 +100,18 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 
 		context["is_full_unit"] = is_full_unit
 
-		if is_full_unit:
+		# For single-model units, use model menu to show wounds option
+		# For multi-model units with full selection, use unit menu
+		var model_instance = UnitUtils.get_model_instance(first_obj)
+		var is_single_model_unit = all_models.size() == 1
+
+		if is_full_unit and not is_single_model_unit:
+			# Multi-model unit fully selected - show unit menu
 			items = RadialMenu.create_unit_menu(game_unit)
-		else:
-			# Single or partial model selection
-			var model_instance = UnitUtils.get_model_instance(first_obj)
-			if model_instance:
-				context["model_instance"] = model_instance
-				items = RadialMenu.create_model_menu(model_instance)
+		elif model_instance:
+			# Single model or partial selection - show model menu (includes wounds)
+			context["model_instance"] = model_instance
+			items = RadialMenu.create_model_menu(model_instance)
 	elif UnitUtils.is_terrain(first_obj):
 		context["terrain"] = first_obj
 		items = RadialMenu.create_terrain_menu()
@@ -157,12 +177,25 @@ func _show_unit_stats(context: Dictionary) -> void:
 	if not game_unit:
 		return
 
-	# Get first model node to show tooltip near it
-	if game_unit.models.size() > 0 and game_unit.models[0].node:
-		var node = game_unit.models[0].node
-		# Trigger the stats tooltip (handled by existing system)
-		print("Show unit stats for: %s" % game_unit.get_name())
-		# TODO: Integrate with OPRStatsTooltip
+	# Check if we have a stats tooltip reference
+	if not stats_tooltip:
+		print("Stats tooltip not connected")
+		return
+
+	# Get the OPRUnit from source_data (only works for OPR units)
+	if game_unit.source_type == "opr" and game_unit.source_data:
+		var opr_unit = game_unit.source_data as OPRApiClient.OPRUnit
+		if opr_unit:
+			# Get first model node for reference
+			var model_node: Node3D = null
+			if game_unit.models.size() > 0 and game_unit.models[0].node:
+				model_node = game_unit.models[0].node
+
+			# Show the tooltip immediately (bypass delay for menu action)
+			stats_tooltip.show_unit(opr_unit, model_node, true)
+	else:
+		# Fallback for non-OPR units - show basic info
+		print("Unit stats for: %s (non-OPR unit)" % game_unit.get_name())
 
 
 func _show_model_stats(context: Dictionary) -> void:
@@ -218,12 +251,10 @@ func _open_wounds_dialog(context: Dictionary) -> void:
 	if not model:
 		return
 
-	# TODO: Open wounds adjustment dialog
-	print("Open wounds dialog for model %d (current: %d/%d)" % [
-		model.model_index + 1,
-		model.wounds_current,
-		model.wounds_max
-	])
+	if wounds_dialog:
+		wounds_dialog.open(model)
+	else:
+		print("Wounds dialog not available")
 
 
 func _open_marker_dialog(context: Dictionary) -> void:
@@ -244,13 +275,70 @@ func _toggle_activation(context: Dictionary) -> void:
 
 	if game_unit.is_activated:
 		game_unit.is_activated = false
+		_remove_activation_markers(game_unit)
 		unit_deactivated.emit(game_unit)
-		print("Deactivated: %s" % game_unit.get_name())
 	else:
-		# TODO: Get current round from game manager
 		game_unit.activate(1)
+		_add_activation_markers(game_unit)
 		unit_activated.emit(game_unit)
-		print("Activated: %s" % game_unit.get_name())
+
+
+## Adds visual activation markers to all models in a unit.
+func _add_activation_markers(game_unit: GameUnit) -> void:
+	# Get base size from unit properties (in mm, convert to meters)
+	var base_size_mm = game_unit.unit_properties.get("base_size_round", 32)
+	var base_radius_m = (base_size_mm / 2.0) * 0.001  # mm to meters
+
+	for model in game_unit.models:
+		if not model.node or not is_instance_valid(model.node):
+			continue
+		if model.node in _activation_markers:
+			continue  # Already has marker
+
+		# Create ring marker around the base
+		var marker = MeshInstance3D.new()
+		marker.name = "ActivationMarker"
+
+		# Use a torus sized to wrap around the base
+		var torus = TorusMesh.new()
+		# Ring sits just outside the base
+		torus.inner_radius = base_radius_m + 0.002  # 2mm outside base edge
+		torus.outer_radius = base_radius_m + 0.006  # 4mm ring thickness
+		marker.mesh = torus
+		# TorusMesh defaults to flat (hole up), no rotation needed
+
+		# Green glowing material
+		var mat = StandardMaterial3D.new()
+		mat.albedo_color = Color(0.2, 0.9, 0.3, 0.9)
+		mat.emission_enabled = true
+		mat.emission = Color(0.2, 0.9, 0.3)
+		mat.emission_energy_multiplier = 1.5
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		marker.material_override = mat
+
+		# Position at base level (just above ground)
+		marker.position = Vector3(0, 0.004, 0)
+
+		model.node.add_child(marker)
+		_activation_markers[model.node] = marker
+
+		# Add pulsing animation with finite loops to avoid Godot 4.5 infinite loop error
+		var tween = marker.create_tween()
+		tween.set_loops(1000)  # Long enough for any practical use
+		tween.tween_property(marker, "scale", Vector3(1.1, 1.1, 1.1), 0.5)
+		tween.tween_property(marker, "scale", Vector3(1.0, 1.0, 1.0), 0.5)
+
+
+## Removes activation markers from all models in a unit.
+func _remove_activation_markers(game_unit: GameUnit) -> void:
+	for model in game_unit.models:
+		if not model.node:
+			continue
+		if model.node in _activation_markers:
+			var marker = _activation_markers[model.node]
+			if is_instance_valid(marker):
+				marker.queue_free()
+			_activation_markers.erase(model.node)
 
 
 func _check_coherency(context: Dictionary) -> void:
@@ -258,17 +346,18 @@ func _check_coherency(context: Dictionary) -> void:
 	if not game_unit:
 		return
 
-	var result = CoherencyChecker.check_unit_coherency(game_unit)
-	coherency_checked.emit(game_unit, result)
-
-	if result.valid:
-		print("✓ %s is in coherency" % game_unit.get_name())
+	# Use visualizer if available
+	if coherency_visualizer:
+		var result = coherency_visualizer.show_coherency(game_unit)
+		coherency_checked.emit(game_unit, result)
 	else:
-		print("⚠ %s has coherency issues:" % game_unit.get_name())
-		for issue in result.issues:
-			print("  - %s" % issue.message)
-
-	# TODO: Show visual coherency lines
+		# Fallback to just checking without visualization
+		var result = CoherencyChecker.check_unit_coherency(game_unit)
+		coherency_checked.emit(game_unit, result)
+		if result.valid:
+			print("✓ %s is in coherency" % game_unit.get_name())
+		else:
+			print("⚠ %s has coherency issues" % game_unit.get_name())
 
 
 func _roll_attack(context: Dictionary) -> void:
@@ -345,3 +434,155 @@ func _delete_generic(context: Dictionary) -> void:
 	if obj:
 		obj.queue_free()
 		print("Deleted: %s" % obj.name)
+
+
+## Called when wounds are changed via the wounds dialog.
+func _on_wounds_changed(model: ModelInstance, new_wounds: int) -> void:
+	# Update visual wound marker
+	_update_wound_marker(model)
+
+	# Hide model if dead
+	if new_wounds <= 0 and not model.is_alive:
+		if model.node and is_instance_valid(model.node):
+			model.node.visible = false
+			model.node.set_meta("deleted", true)
+		model_deleted.emit(model)
+	# Show model if revived
+	elif new_wounds > 0 and model.node and is_instance_valid(model.node):
+		model.node.visible = true
+		model.node.set_meta("deleted", false)
+
+
+## Updates or creates a wound marker (red disc with border) next to a model.
+func _update_wound_marker(model: ModelInstance) -> void:
+	if not model.node or not is_instance_valid(model.node):
+		return
+
+	var marker_name = "WoundMarker"
+	var existing_marker = model.node.get_node_or_null(marker_name)
+
+	# Remove marker if at full health
+	if model.wounds_current >= model.wounds_max:
+		if existing_marker:
+			existing_marker.queue_free()
+		return
+
+	var wounds_taken = model.wounds_max - model.wounds_current
+
+	# Create marker container if needed
+	var marker: Node3D
+	var number_label: Label3D
+
+	# Marker dimensions: 20mm diameter disc
+	var disc_radius = 0.010  # 10mm radius = 20mm diameter
+	var disc_height = 0.003  # 3mm thick
+
+	if existing_marker:
+		marker = existing_marker
+		number_label = marker.get_node_or_null("NumberLabel") as Label3D
+	else:
+		marker = Node3D.new()
+		marker.name = marker_name
+		model.node.add_child(marker)
+
+		# Create black base disc (slightly larger for border effect)
+		var border_mesh = MeshInstance3D.new()
+		border_mesh.name = "Border"
+		var border_cyl = CylinderMesh.new()
+		border_cyl.top_radius = disc_radius + 0.001  # 1mm larger = thin border
+		border_cyl.bottom_radius = disc_radius + 0.001
+		border_cyl.height = disc_height
+		border_mesh.mesh = border_cyl
+		var border_mat = StandardMaterial3D.new()
+		border_mat.albedo_color = Color(0.02, 0.02, 0.02)  # Black
+		border_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		border_mesh.material_override = border_mat
+		border_mesh.position = Vector3(0, disc_height / 2, 0)
+		marker.add_child(border_mesh)
+
+		# Create red disc (main body) - sits on top of black border
+		var disc_mesh = MeshInstance3D.new()
+		disc_mesh.name = "Disc"
+		var disc_cyl = CylinderMesh.new()
+		disc_cyl.top_radius = disc_radius
+		disc_cyl.bottom_radius = disc_radius
+		disc_cyl.height = disc_height + 0.0002  # Slightly taller to sit on top
+		disc_mesh.mesh = disc_cyl
+		var disc_mat = StandardMaterial3D.new()
+		disc_mat.albedo_color = Color(0.9, 0.15, 0.15)  # Bright red
+		disc_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		disc_mesh.material_override = disc_mat
+		disc_mesh.position = Vector3(0, disc_height / 2 + 0.0001, 0)
+		marker.add_child(disc_mesh)
+
+		# Create "WOUNDS" text along outer top edge
+		_create_wound_text_arc(marker, disc_radius * 0.75, disc_height + 0.001)
+
+		# Create number label in center (slightly lower to make room for WOUNDS text)
+		number_label = Label3D.new()
+		number_label.name = "NumberLabel"
+		number_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+		number_label.no_depth_test = true
+		number_label.font_size = 72
+		number_label.outline_size = 8
+		number_label.modulate = Color.WHITE
+		number_label.outline_modulate = Color(0.5, 0, 0)  # Dark red outline
+		number_label.pixel_size = 0.00016  # Slightly smaller to fit
+		number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		number_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		number_label.position = Vector3(0, disc_height + 0.001, 0.002)  # Offset toward bottom
+		number_label.rotation = Vector3(-PI / 2, 0, 0)  # Face up
+		marker.add_child(number_label)
+
+		# Position marker touching the base
+		var base_x_radius = 0.016  # Default 32mm base
+		if model.unit:
+			var game_unit = model.unit as GameUnit
+			if game_unit and game_unit.unit_properties:
+				# Check for oval base first
+				var oval_width = game_unit.unit_properties.get("base_size_oval_width", 0)
+				var oval_length = game_unit.unit_properties.get("base_size_oval_length", 0)
+				if oval_width > 0 and oval_length > 0:
+					# Oval base: use the narrow side (width) for X positioning
+					base_x_radius = (oval_width / 2.0) * 0.001
+				else:
+					# Round base
+					var base_mm = game_unit.unit_properties.get("base_size_round", 32)
+					base_x_radius = (base_mm / 2.0) * 0.001
+		# Direct contact: marker edge touches base edge
+		marker.position = Vector3(base_x_radius + disc_radius, 0, 0)
+
+	# Update number
+	if number_label:
+		number_label.text = str(wounds_taken)
+
+
+## Creates "WOUNDS" text as an arc along the top outer edge of the disc.
+func _create_wound_text_arc(parent: Node3D, radius: float, height: float) -> void:
+	var text = "WOUNDS"
+	var angle_per_char = PI / 10  # More spacing between letters
+	var total_arc = (text.length() - 1) * angle_per_char
+	var start_angle = PI / 2 + total_arc / 2  # Center at top
+
+	for i in range(text.length()):
+		var char_label = Label3D.new()
+		char_label.name = "WoundChar%d" % i
+		char_label.text = text[i]
+		char_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+		char_label.no_depth_test = true
+		char_label.font_size = 24
+		char_label.outline_size = 2
+		char_label.modulate = Color.WHITE
+		char_label.outline_modulate = Color(0.3, 0, 0)  # Dark red outline
+		char_label.pixel_size = 0.0001  # Slightly larger for readability
+		char_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+		# Position in arc at outer edge, at the TOP of the marker (negative Z)
+		var angle = start_angle - i * angle_per_char
+		var x = cos(angle) * radius
+		var z = -sin(angle) * radius  # Negative to put at top
+		char_label.position = Vector3(x, height, z)
+		# Rotate to face up and follow the arc
+		char_label.rotation = Vector3(-PI / 2, angle - PI / 2, 0)
+
+		parent.add_child(char_label)

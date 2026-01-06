@@ -18,13 +18,27 @@ var _model: ModelInstance = null
 @onready var kill_button: Button = $Panel/VBox/KillButton
 @onready var close_button: Button = $Panel/VBox/CloseButton
 
+## Flag to prevent double signal connection
+var _signals_connected: bool = false
+
 
 func _ready() -> void:
 	visible = false
 	_setup_ui()
+	# Debug: Listen for any GUI input
+	gui_input.connect(_on_gui_input)
+
+
+func _on_gui_input(_event: InputEvent) -> void:
+	pass  # Input handled by child controls
 
 
 func _setup_ui() -> void:
+	# Skip if already connected (from create_simple)
+	if _signals_connected:
+		return
+	_signals_connected = true
+
 	# Connect buttons if they exist
 	if minus_button:
 		minus_button.pressed.connect(_on_minus_pressed)
@@ -42,12 +56,8 @@ func _setup_ui() -> void:
 func open(model: ModelInstance) -> void:
 	_model = model
 	visible = true
-
 	_update_display()
-
-	# Center on screen
-	var viewport_size = get_viewport_rect().size
-	position = (viewport_size - size) / 2
+	# Panel is auto-centered via PRESET_CENTER, no manual positioning needed
 
 
 ## Closes the dialog.
@@ -145,17 +155,33 @@ func _input(event: InputEvent) -> void:
 static func create_simple() -> WoundsDialog:
 	var dialog = WoundsDialog.new()
 	dialog.name = "WoundsDialog"
+	# Fill entire screen to block all input when visible
+	dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dialog.mouse_filter = Control.MOUSE_FILTER_STOP  # Block all clicks
 
-	# Create panel
+	# Semi-transparent background to dim the scene and block input
+	var bg = ColorRect.new()
+	bg.name = "Background"
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color(0, 0, 0, 0.4)  # Semi-transparent black
+	bg.mouse_filter = Control.MOUSE_FILTER_STOP  # Block clicks
+	dialog.add_child(bg)
+
+	# Create centered panel container
 	var panel = PanelContainer.new()
 	panel.name = "Panel"
 	panel.custom_minimum_size = Vector2(250, 200)
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP  # Panel captures its area
 	dialog.add_child(panel)
 
 	# VBox container
 	var vbox = VBoxContainer.new()
 	vbox.name = "VBox"
 	vbox.add_theme_constant_override("separation", 10)
+	vbox.mouse_filter = Control.MOUSE_FILTER_PASS  # Pass clicks to children
 	panel.add_child(vbox)
 
 	# Title
@@ -170,6 +196,7 @@ static func create_simple() -> WoundsDialog:
 	var wounds_hbox = HBoxContainer.new()
 	wounds_hbox.name = "WoundsContainer"
 	wounds_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	wounds_hbox.mouse_filter = Control.MOUSE_FILTER_PASS  # Pass clicks to children
 	vbox.add_child(wounds_hbox)
 
 	# Minus button
@@ -177,6 +204,7 @@ static func create_simple() -> WoundsDialog:
 	minus_btn.name = "MinusButton"
 	minus_btn.text = "-"
 	minus_btn.custom_minimum_size = Vector2(40, 40)
+	minus_btn.mouse_filter = Control.MOUSE_FILTER_STOP  # Ensure button captures input
 	wounds_hbox.add_child(minus_btn)
 	dialog.minus_button = minus_btn
 
@@ -218,7 +246,14 @@ static func create_simple() -> WoundsDialog:
 	vbox.add_child(close_btn)
 	dialog.close_button = close_btn
 
-	# Connect signals
-	dialog._setup_ui()
+	# Connect signals directly (not using _setup_ui which checks @onready vars)
+	minus_btn.pressed.connect(dialog._on_minus_pressed)
+	plus_btn.pressed.connect(dialog._on_plus_pressed)
+	heal_btn.pressed.connect(dialog._on_heal_full_pressed)
+	kill_btn.pressed.connect(dialog._on_kill_pressed)
+	close_btn.pressed.connect(dialog.close)
+
+	# Mark signals as connected to prevent double connection in _ready
+	dialog._signals_connected = true
 
 	return dialog

@@ -12,6 +12,7 @@ signal selection_changed(selected_objects: Array[Node3D])
 signal distance_changed(distance_inches: float, from_pos: Vector3, to_pos: Vector3)
 signal measurement_finished(distance_inches: float)
 signal drag_ended()
+signal context_menu_requested(screen_pos: Vector2, selected_objects: Array)
 
 @export var drag_height: float = 0.5  # Drag height in meters
 @export var rotation_speed_degrees: float = 2.0  # Degrees per second while R held
@@ -69,6 +70,14 @@ var _network_manager: Node = null
 
 # Terrain overlay reference (for terrain hints)
 var terrain_overlay: Node3D = null
+
+# Long-press for context menu
+var _long_press_timer: float = 0.0
+var _long_press_position: Vector2 = Vector2.ZERO
+var _is_long_pressing: bool = false
+var _long_press_object: Node3D = null
+const LONG_PRESS_DURATION: float = 0.4  # Seconds to hold for context menu
+const LONG_PRESS_MOVE_THRESHOLD: float = 10.0  # Pixels - cancel if moved more than this
 
 # Preload resources (will be scenes in full version)
 # Standard wargaming miniature sizes
@@ -272,8 +281,31 @@ func _process(delta: float) -> void:
 			if is_instance_valid(obj):
 				obj.rotate_y(rotation_amount)
 
+	# Long-press timer for context menu
+	if _is_long_pressing:
+		_long_press_timer += delta
+		if _long_press_timer >= LONG_PRESS_DURATION:
+			_trigger_context_menu()
+			_cancel_long_press()
+
+
+## Checks if a GUI element is blocking input (e.g., modal dialog)
+func _is_gui_blocking_input() -> bool:
+	# Check if any modal Control is visible and covering the viewport
+	var ui_layer = get_tree().root.find_child("UI", true, false)
+	if ui_layer:
+		# Check for WoundsDialog or other modal dialogs
+		var wounds_dialog = ui_layer.find_child("WoundsDialog", false, false)
+		if wounds_dialog and wounds_dialog is Control and wounds_dialog.visible:
+			return true
+	return false
+
 
 func _input(event: InputEvent) -> void:
+	# Skip if GUI is handling input (dialog open, etc.)
+	if _is_gui_blocking_input():
+		return
+
 	if event is InputEventMouseButton:
 		var mouse_event = event as InputEventMouseButton
 
@@ -283,9 +315,12 @@ func _input(event: InputEvent) -> void:
 					# Shift + Left-click starts measurement
 					_start_measuring(mouse_event.position)
 				else:
-					# Pass Alt state for multi-select
+					# Start long-press detection and selection
+					_start_long_press(mouse_event.position)
 					_try_select_at_mouse(mouse_event.position, mouse_event.alt_pressed)
 			else:
+				# Mouse released - cancel long press and handle other actions
+				_cancel_long_press()
 				if _is_measuring:
 					_stop_measuring(mouse_event.position)
 				elif _is_box_selecting:
@@ -294,6 +329,12 @@ func _input(event: InputEvent) -> void:
 					_stop_dragging()
 
 	elif event is InputEventMouseMotion:
+		# Check if mouse moved too far during long press
+		if _is_long_pressing:
+			var distance = event.position.distance_to(_long_press_position)
+			if distance > LONG_PRESS_MOVE_THRESHOLD:
+				_cancel_long_press()
+
 		if _is_dragging:
 			_update_drag(event.position)
 		elif _is_box_selecting:
@@ -405,33 +446,95 @@ func _deselect_all() -> void:
 	selection_changed.emit(_selected_objects)
 
 
+## Public: Get currently selected objects
+func get_selected_objects() -> Array[Node3D]:
+	return _selected_objects.duplicate()
+
+
+## Public: Select specific objects (replaces current selection)
+func select_objects(objects: Array) -> void:
+	_deselect_all()
+	for obj in objects:
+		if obj is Node3D and is_instance_valid(obj):
+			_add_to_selection(obj)
+
+
+## Start long-press detection for context menu
+func _start_long_press(screen_pos: Vector2) -> void:
+	_is_long_pressing = true
+	_long_press_timer = 0.0
+	_long_press_position = screen_pos
+
+
+## Cancel long-press detection
+func _cancel_long_press() -> void:
+	_is_long_pressing = false
+	_long_press_timer = 0.0
+
+
+## Trigger the context menu after successful long-press
+func _trigger_context_menu() -> void:
+	if _selected_objects.is_empty():
+		return
+
+	# Stop any dragging
+	if _is_dragging:
+		_cancel_drag()
+
+	# Emit context menu signal
+	context_menu_requested.emit(_long_press_position, _selected_objects.duplicate())
+
+
 ## Apply highlight to an object to show it's selected
+## Uses a visual ring overlay instead of material modification to avoid Godot material bugs
 func _highlight_object(obj: Node3D) -> void:
-	# Find all MeshInstance3D children and apply highlight
-	for child in obj.get_children():
-		if child is MeshInstance3D:
-			var mat = child.material_override
-			if mat is StandardMaterial3D:
-				# Store original color and apply highlight
-				child.set_meta("original_emission", mat.emission)
-				child.set_meta("original_emission_enabled", mat.emission_enabled)
-				mat.emission_enabled = true
-				mat.emission = Color(0.3, 0.5, 1.0)  # Blue glow
-				mat.emission_energy_multiplier = 0.5
+	# Check if already highlighted
+	if obj.get_node_or_null("SelectionHighlight"):
+		return
+
+	# Get base size for the highlight ring
+	var base_radius = 0.016  # Default 32mm
+	var game_unit = UnitUtils.get_game_unit(obj)
+	if game_unit and game_unit.unit_properties:
+		var oval_width = game_unit.unit_properties.get("base_size_oval_width", 0)
+		var oval_length = game_unit.unit_properties.get("base_size_oval_length", 0)
+		if oval_width > 0 and oval_length > 0:
+			base_radius = (max(oval_width, oval_length) / 2.0) * 0.001
+		else:
+			var base_mm = game_unit.unit_properties.get("base_size_round", 32)
+			base_radius = (base_mm / 2.0) * 0.001
+
+	# Create highlight ring container
+	var highlight = Node3D.new()
+	highlight.name = "SelectionHighlight"
+
+	# Create glowing torus ring around the base
+	var ring = MeshInstance3D.new()
+	ring.name = "Ring"
+	var torus = TorusMesh.new()
+	torus.inner_radius = base_radius + 0.001
+	torus.outer_radius = base_radius + 0.004
+	ring.mesh = torus
+
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.3, 0.6, 1.0, 0.9)
+	mat.emission_enabled = true
+	mat.emission = Color(0.3, 0.6, 1.0)
+	mat.emission_energy_multiplier = 1.5
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ring.material_override = mat
+	ring.position = Vector3(0, 0.003, 0)
+
+	highlight.add_child(ring)
+	obj.add_child(highlight)
 
 
 ## Remove highlight from an object
 func _unhighlight_object(obj: Node3D) -> void:
-	for child in obj.get_children():
-		if child is MeshInstance3D:
-			var mat = child.material_override
-			if mat is StandardMaterial3D:
-				# Restore original emission settings
-				if child.has_meta("original_emission_enabled"):
-					mat.emission_enabled = child.get_meta("original_emission_enabled")
-					mat.emission = child.get_meta("original_emission")
-				else:
-					mat.emission_enabled = false
+	var highlight = obj.get_node_or_null("SelectionHighlight")
+	if highlight:
+		highlight.queue_free()
 
 
 ## Start box selection (drag rectangle to select multiple objects)
@@ -970,22 +1073,44 @@ func _get_measure_end_position(screen_pos: Vector2) -> Variant:
 	return null
 
 
-## Get the radius/size of an object for edge calculation
-func _get_object_radius(obj: Node3D) -> float:
-	if obj.is_in_group("miniature"):
-		return MINIATURE_RADIUS  # 16mm = 0.016m
-	elif obj.is_in_group("dice"):
-		return 0.008  # Half of 16mm dice = 8mm diagonal approximation
-	elif obj.is_in_group("terrain"):
-		# Terrain is larger, estimate from typical sizes
-		return 0.015  # 15mm average
-	return 0.016  # Default to miniature size
+## Get edge distance from center in a specific direction for an object.
+## For oval bases, calculates actual ellipse edge distance.
+## dir_x, dir_z should be normalized direction components.
+func _get_edge_distance_in_direction(obj: Node3D, dir_x: float, dir_z: float) -> float:
+	if not obj.is_in_group("miniature"):
+		if obj.is_in_group("dice"):
+			return 0.008
+		elif obj.is_in_group("terrain"):
+			return 0.015
+		return 0.016
+
+	var game_unit = obj.get_meta("game_unit", null) as GameUnit
+	if not game_unit or not game_unit.unit_properties:
+		return MINIATURE_RADIUS
+
+	var props = game_unit.unit_properties
+
+	if props.get("base_is_oval", false):
+		# Oval base - calculate actual ellipse edge distance
+		var width_mm = props.get("base_width_mm", 32)
+		var depth_mm = props.get("base_depth_mm", 32)
+		var a = (width_mm / 2.0) * 0.001  # Semi-axis X (width/2) in meters
+		var b = (depth_mm / 2.0) * 0.001  # Semi-axis Z (depth/2) in meters
+
+		# Distance to ellipse edge in direction (dir_x, dir_z):
+		# r = (a * b) / sqrt(b² * dir_x² + a² * dir_z²)
+		var denominator = sqrt(b * b * dir_x * dir_x + a * a * dir_z * dir_z)
+		if denominator < 0.0001:
+			return (a + b) / 2.0  # Fallback to average
+		return (a * b) / denominator
+	else:
+		# Round base - simple radius
+		var base_mm = props.get("base_size_round", 32)
+		return (base_mm / 2.0) * 0.001
 
 
 ## Calculate edge position on object closest to target point
 func _get_edge_position(obj: Node3D, obj_center: Vector3, target_pos: Vector3) -> Vector3:
-	var radius = _get_object_radius(obj)
-
 	# Direction from object center to target (horizontal only)
 	var dir = Vector3(target_pos.x - obj_center.x, 0, target_pos.z - obj_center.z)
 	var dist = dir.length()
@@ -996,8 +1121,11 @@ func _get_edge_position(obj: Node3D, obj_center: Vector3, target_pos: Vector3) -
 	else:
 		dir = dir.normalized()
 
-	# Edge point is center + direction * radius
-	var edge_pos = Vector3(obj_center.x + dir.x * radius, 0.02, obj_center.z + dir.z * radius)
+	# Get edge distance in this direction (handles oval bases)
+	var edge_dist = _get_edge_distance_in_direction(obj, dir.x, dir.z)
+
+	# Edge point is center + direction * edge_distance
+	var edge_pos = Vector3(obj_center.x + dir.x * edge_dist, 0.02, obj_center.z + dir.z * edge_dist)
 	return edge_pos
 
 
@@ -1895,6 +2023,19 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 		push_error("No geometry found in OBJ: %s" % file_path)
 		return null
 
+	# Check if we have valid normals from the OBJ file
+	# The shader handles backface lighting, so we just need normals to exist
+	var has_valid_normals = false
+	for i in range(mesh_normals.size()):
+		if mesh_normals[i].length_squared() > 0.0001:
+			has_valid_normals = true
+			break
+
+	if not has_valid_normals:
+		# No valid normals in file, calculate from geometry
+		print("  No normals in OBJ, calculating from geometry")
+		mesh_normals = _calculate_smooth_normals(mesh_vertices)
+
 	# Create mesh
 	var arrays = []
 	arrays.resize(Mesh.ARRAY_MAX)
@@ -1910,19 +2051,50 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 	var mesh_instance = MeshInstance3D.new()
 	mesh_instance.mesh = mesh
 
-	# Create material with optional texture
-	var material = StandardMaterial3D.new()
-	material.albedo_color = Color(0.7, 0.7, 0.7)
-	material.roughness = 0.9  # Matte finish like painted miniatures
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED  # Show both sides of polygons (TTS models often have flipped normals)
+	# Create shader material with two-sided lighting
+	# This flips normals for backfaces so both sides are lit correctly
+	# (TTS/Unity does this automatically, Godot requires a shader)
+	var shader = Shader.new()
+	shader.code = """
+shader_type spatial;
+render_mode cull_disabled;
+
+uniform vec4 albedo_color : source_color = vec4(1.0);
+uniform sampler2D albedo_texture : source_color, filter_linear_mipmap;
+uniform bool use_texture = false;
+uniform float roughness : hint_range(0.0, 1.0) = 0.9;
+
+void fragment() {
+	// Ensure normal always faces the camera for proper lighting
+	// VIEW points FROM camera TO fragment in Godot
+	// So if dot(NORMAL, VIEW) > 0, they point same direction = normal faces away
+	// In that case, flip the normal to face the camera
+	if (dot(NORMAL, VIEW) > 0.0) {
+		NORMAL = -NORMAL;
+	}
+
+	if (use_texture) {
+		ALBEDO = texture(albedo_texture, UV).rgb * albedo_color.rgb;
+	} else {
+		ALBEDO = albedo_color.rgb;
+	}
+	ROUGHNESS = roughness;
+}
+"""
+
+	var material = ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("albedo_color", Color(0.7, 0.7, 0.7))
+	material.set_shader_parameter("roughness", 0.9)
+	material.set_shader_parameter("use_texture", false)
 
 	# Load texture if provided
 	if not texture_path.is_empty():
 		var texture = _load_texture(texture_path)
 		if texture:
-			material.albedo_texture = texture
-			material.albedo_color = Color.WHITE  # Use full texture color
-			material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+			material.set_shader_parameter("albedo_texture", texture)
+			material.set_shader_parameter("albedo_color", Color.WHITE)
+			material.set_shader_parameter("use_texture", true)
 			print("Applied texture: %s" % texture_path.get_file())
 
 	mesh_instance.material_override = material
@@ -1956,28 +2128,51 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 
 
 ## Load a texture from file path (supports PNG, JPG, WEBP)
+## Detects format from file content (magic bytes), not extension
 func _load_texture(texture_path: String) -> ImageTexture:
 	if not FileAccess.file_exists(texture_path):
 		push_warning("Texture file not found: %s" % texture_path)
 		return null
 
-	var image = Image.new()
-	var extension = texture_path.get_extension().to_lower()
+	# Read file content
+	var file = FileAccess.open(texture_path, FileAccess.READ)
+	if not file:
+		push_warning("Failed to open texture file: %s" % texture_path)
+		return null
 
-	var error: Error
-	match extension:
-		"png":
-			error = image.load(texture_path)
-		"jpg", "jpeg":
-			error = image.load(texture_path)
-		"webp":
-			error = image.load(texture_path)
-		_:
-			# Try generic load
-			error = image.load(texture_path)
+	var buffer = file.get_buffer(file.get_length())
+	file.close()
+
+	if buffer.size() < 12:
+		push_warning("Texture file too small: %s" % texture_path)
+		return null
+
+	# Detect format from magic bytes (file signature)
+	var image = Image.new()
+	var error: Error = ERR_FILE_UNRECOGNIZED
+
+	# PNG: 89 50 4E 47 0D 0A 1A 0A (first 8 bytes)
+	if buffer[0] == 0x89 and buffer[1] == 0x50 and buffer[2] == 0x4E and buffer[3] == 0x47:
+		error = image.load_png_from_buffer(buffer)
+	# JPEG: FF D8 FF (first 3 bytes)
+	elif buffer[0] == 0xFF and buffer[1] == 0xD8 and buffer[2] == 0xFF:
+		error = image.load_jpg_from_buffer(buffer)
+	# WebP: RIFF....WEBP (bytes 0-3 = RIFF, bytes 8-11 = WEBP)
+	elif buffer[0] == 0x52 and buffer[1] == 0x49 and buffer[2] == 0x46 and buffer[3] == 0x46:
+		if buffer.size() >= 12 and buffer[8] == 0x57 and buffer[9] == 0x45 and buffer[10] == 0x42 and buffer[11] == 0x50:
+			error = image.load_webp_from_buffer(buffer)
+	# BMP: 42 4D (BM)
+	elif buffer[0] == 0x42 and buffer[1] == 0x4D:
+		error = image.load_bmp_from_buffer(buffer)
+	# TGA: Try as fallback (no reliable magic bytes)
+	else:
+		# Try TGA as last resort
+		error = image.load_tga_from_buffer(buffer)
 
 	if error != OK:
-		push_warning("Failed to load texture: %s (error %d)" % [texture_path, error])
+		# Log the magic bytes for debugging
+		var magic = "%02X %02X %02X %02X" % [buffer[0], buffer[1], buffer[2], buffer[3]]
+		push_warning("Failed to load texture: %s (error %d, magic: %s)" % [texture_path, error, magic])
 		return null
 
 	# Generate mipmaps for better rendering at distance
@@ -1997,6 +2192,7 @@ func _enable_shadows_recursive(node: Node) -> void:
 
 
 ## Calculate smooth normals for a mesh (vertex normals averaged from face normals)
+## Uses centroid-based detection to ensure normals point outward
 func _calculate_smooth_normals(vertices: PackedVector3Array) -> PackedVector3Array:
 	var normals = PackedVector3Array()
 	normals.resize(vertices.size())
@@ -2005,9 +2201,20 @@ func _calculate_smooth_normals(vertices: PackedVector3Array) -> PackedVector3Arr
 	for i in range(normals.size()):
 		normals[i] = Vector3.ZERO
 
-	# Calculate face normals and accumulate to vertex normals
 	@warning_ignore("integer_division")
 	var tri_count = vertices.size() / 3
+
+	if tri_count == 0:
+		return normals
+
+	# Calculate mesh centroid (average of all vertices)
+	var centroid = Vector3.ZERO
+	for i in range(vertices.size()):
+		centroid += vertices[i]
+	centroid /= vertices.size()
+
+	# Calculate face normals, ensuring they point outward from centroid
+	var flipped_count = 0
 
 	for i in range(tri_count):
 		var idx0 = i * 3
@@ -2018,10 +2225,21 @@ func _calculate_smooth_normals(vertices: PackedVector3Array) -> PackedVector3Arr
 		var v1 = vertices[idx1]
 		var v2 = vertices[idx2]
 
+		# Calculate face center
+		var face_center = (v0 + v1 + v2) / 3.0
+
 		# Calculate face normal using cross product
 		var edge1 = v1 - v0
 		var edge2 = v2 - v0
 		var face_normal = edge1.cross(edge2).normalized()
+
+		# Check if normal points outward (away from centroid)
+		# The vector from centroid to face center should align with normal
+		var outward_dir = (face_center - centroid).normalized()
+		if face_normal.dot(outward_dir) < 0:
+			# Normal is pointing inward, flip it
+			face_normal = -face_normal
+			flipped_count += 1
 
 		# Add face normal to all three vertices of this triangle
 		normals[idx0] += face_normal
@@ -2034,6 +2252,9 @@ func _calculate_smooth_normals(vertices: PackedVector3Array) -> PackedVector3Arr
 			normals[i] = normals[i].normalized()
 		else:
 			normals[i] = Vector3.UP  # Fallback for degenerate cases
+
+	if flipped_count > 0:
+		print("  Fixed %d/%d inverted face normals" % [flipped_count, tri_count])
 
 	return normals
 

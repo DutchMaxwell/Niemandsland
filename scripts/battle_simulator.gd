@@ -151,6 +151,9 @@ var _deployment_winner: int = 1
 ## on the last round gets to activate first."
 var _last_round_first_finisher: int = 1
 
+## 3D objective markers
+var _objective_markers: Array[Node3D] = []
+
 ## Table dimensions (set via setup_mission)
 var _table_bounds: Rect2 = Rect2(-0.6096, -0.6096, 1.2192, 1.2192)  # 4x4 feet default
 
@@ -242,10 +245,90 @@ func setup_mission(table_bounds: Rect2) -> void:
 		push_warning("BattleSimulator: mission_state is null after setup")
 		return
 
+	# Create 3D objective markers
+	_create_objective_markers()
+
 	_log("Mission: %d objectives, %d rounds" % [
 		mission.objectives.size(),
 		mission.max_rounds
 	], "info")
+
+
+## Creates 3D objective markers on the table.
+func _create_objective_markers() -> void:
+	# Clear existing markers
+	_clear_objective_markers()
+
+	if mission == null or mission.objectives.is_empty():
+		return
+
+	# Get table reference from army_manager
+	var parent = army_manager.table if army_manager and army_manager.table else self
+
+	# Create markers for each objective
+	for obj in mission.objectives:
+		var marker = _create_single_objective_marker(obj.id, obj.position)
+		if marker:
+			parent.add_child(marker)
+			_objective_markers.append(marker)
+
+
+## Creates a single objective marker with number label.
+func _create_single_objective_marker(obj_id: int, position: Vector3) -> Node3D:
+	var marker = Node3D.new()
+	marker.name = "Objective_%d" % obj_id
+
+	# Objective marker (40mm base, golden ring)
+	var ring = MeshInstance3D.new()
+	var torus = TorusMesh.new()
+	torus.inner_radius = 0.018  # ~36mm inner
+	torus.outer_radius = 0.022  # ~44mm outer
+	ring.mesh = torus
+	ring.rotation_degrees.x = 90  # Lay flat
+
+	var ring_mat = StandardMaterial3D.new()
+	ring_mat.albedo_color = Color(1.0, 0.85, 0.0)  # Gold
+	ring_mat.emission_enabled = true
+	ring_mat.emission = Color(1.0, 0.85, 0.0)
+	ring_mat.emission_energy_multiplier = 0.5
+	ring.material_override = ring_mat
+	marker.add_child(ring)
+
+	# Center disc
+	var disc = MeshInstance3D.new()
+	var cylinder = CylinderMesh.new()
+	cylinder.top_radius = 0.018
+	cylinder.bottom_radius = 0.018
+	cylinder.height = 0.002
+	disc.mesh = cylinder
+
+	var disc_mat = StandardMaterial3D.new()
+	disc_mat.albedo_color = Color(0.2, 0.2, 0.2, 0.8)
+	disc_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	disc.material_override = disc_mat
+	marker.add_child(disc)
+
+	# Number label
+	var label = Label3D.new()
+	label.text = str(obj_id)
+	label.font_size = 64
+	label.position.y = 0.02
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.modulate = Color(1.0, 0.85, 0.0)
+	marker.add_child(label)
+
+	marker.position = position
+	marker.position.y = 0.005  # Slightly above table
+
+	return marker
+
+
+## Clears all objective markers from the scene.
+func _clear_objective_markers() -> void:
+	for marker in _objective_markers:
+		if is_instance_valid(marker):
+			marker.queue_free()
+	_objective_markers.clear()
 
 
 # ===== Battle Control =====
@@ -319,6 +402,7 @@ func stop_battle() -> void:
 	_is_running = false
 	_waiting_for_input = false
 	step_queue.clear()
+	_clear_objective_markers()
 	_log("Battle stopped", "info")
 
 
