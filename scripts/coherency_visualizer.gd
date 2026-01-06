@@ -51,18 +51,16 @@ func show_coherency(game_unit: GameUnit, is_skirmish: bool = false) -> Coherency
 		visualization_completed.emit(result)
 		return result
 
-	# Create lines between adjacent models
-	_create_coherency_lines(models)
-
-	# Highlight isolated models
+	# Only highlight isolated models (no lines between all models)
 	if not result.valid:
 		for issue in result.issues:
 			if issue.type == CoherencyChecker.IssueType.ISOLATED and issue.model:
 				_highlight_model(issue.model, COLOR_ERROR)
-
-	# Animate in
-	visible = true
-	_animate_fade_in()
+		# Animate in only if there are issues
+		visible = true
+		_animate_fade_in()
+	else:
+		visible = false
 
 	visualization_completed.emit(result)
 	return result

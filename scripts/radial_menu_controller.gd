@@ -24,6 +24,9 @@ var stats_tooltip: Node = null
 ## Reference to coherency visualizer
 var coherency_visualizer: CoherencyVisualizer = null
 
+## Reference to wounds dialog
+var wounds_dialog: WoundsDialog = null
+
 ## Current selection context
 var _current_selection: Array = []
 
@@ -45,16 +48,20 @@ func initialize(p_object_manager: Node, p_army_manager: OPRArmyManager) -> void:
 	army_manager = p_army_manager
 
 	# Create radial menu instance if not exists
+	# Get or create UI layer reference
+	var ui_layer = get_tree().root.find_child("UILayer", true, false)
+	var ui_parent = ui_layer if ui_layer else get_tree().root
+
 	if not radial_menu:
 		radial_menu = _menu_scene.instantiate() as RadialMenu
-		# Add to UI layer (should be added to CanvasLayer)
-		var ui_layer = get_tree().root.find_child("UILayer", true, false)
-		if ui_layer:
-			ui_layer.add_child(radial_menu)
-		else:
-			get_tree().root.add_child(radial_menu)
-
+		ui_parent.add_child(radial_menu)
 		radial_menu.action_selected.connect(_on_action_selected)
+
+	# Create wounds dialog
+	if not wounds_dialog:
+		wounds_dialog = WoundsDialog.create_simple()
+		ui_parent.add_child(wounds_dialog)
+		wounds_dialog.wounds_changed.connect(_on_wounds_changed)
 
 
 ## Opens the radial menu for the current selection at the given position.
@@ -240,12 +247,10 @@ func _open_wounds_dialog(context: Dictionary) -> void:
 	if not model:
 		return
 
-	# TODO: Open wounds adjustment dialog
-	print("Open wounds dialog for model %d (current: %d/%d)" % [
-		model.model_index + 1,
-		model.wounds_current,
-		model.wounds_max
-	])
+	if wounds_dialog:
+		wounds_dialog.open(model)
+	else:
+		print("Wounds dialog not available")
 
 
 func _open_marker_dialog(context: Dictionary) -> void:
@@ -425,3 +430,17 @@ func _delete_generic(context: Dictionary) -> void:
 	if obj:
 		obj.queue_free()
 		print("Deleted: %s" % obj.name)
+
+
+## Called when wounds are changed via the wounds dialog.
+func _on_wounds_changed(model: ModelInstance, new_wounds: int) -> void:
+	# Hide model if dead
+	if new_wounds <= 0 and not model.is_alive:
+		if model.node and is_instance_valid(model.node):
+			model.node.visible = false
+			model.node.set_meta("deleted", true)
+		model_deleted.emit(model)
+	# Show model if revived
+	elif new_wounds > 0 and model.node and is_instance_valid(model.node):
+		model.node.visible = true
+		model.node.set_meta("deleted", false)

@@ -291,6 +291,12 @@ static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []
 
 	items.append(RadialMenuItem.new("unit_stats", "Stats", "📊"))
+
+	# Show wounds option for Tough models
+	if model.wounds_max > 1:
+		var wounds_label = "Wounds %d/%d" % [model.wounds_current, model.wounds_max]
+		items.append(RadialMenuItem.new("wounds", wounds_label, "❤️"))
+
 	items.append(RadialMenuItem.new("select_unit", "Select All", "⬚"))
 	items.append(RadialMenuItem.new("delete_model", "Remove", "🗑️"))
 
