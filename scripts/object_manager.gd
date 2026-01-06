@@ -494,20 +494,34 @@ func _highlight_object(obj: Node3D) -> void:
 ## Recursively apply highlight to all MeshInstance3D nodes
 func _apply_highlight_recursive(node: Node) -> void:
 	if node is MeshInstance3D:
-		var mat = node.material_override
+		var mesh_inst = node as MeshInstance3D
+		# Try material_override first
+		var mat = mesh_inst.material_override
 		if mat is StandardMaterial3D:
-			# Store original emission settings
-			node.set_meta("original_emission", mat.emission)
-			node.set_meta("original_emission_enabled", mat.emission_enabled)
-			node.set_meta("original_emission_energy", mat.emission_energy_multiplier)
-			# Apply highlight
-			mat.emission_enabled = true
-			mat.emission = Color(0.3, 0.5, 1.0)  # Blue glow
-			mat.emission_energy_multiplier = 0.5
+			_highlight_material(mesh_inst, mat, "override")
+		else:
+			# Check surface materials on the mesh
+			if mesh_inst.mesh:
+				for surface_idx in range(mesh_inst.mesh.get_surface_count()):
+					var surface_mat = mesh_inst.get_surface_override_material(surface_idx)
+					if surface_mat is StandardMaterial3D:
+						_highlight_material(mesh_inst, surface_mat, "surface_%d" % surface_idx)
 
 	# Recurse into children
 	for child in node.get_children():
 		_apply_highlight_recursive(child)
+
+
+## Apply highlight to a specific material
+func _highlight_material(node: MeshInstance3D, mat: StandardMaterial3D, mat_id: String) -> void:
+	# Store original emission settings with unique keys per material
+	node.set_meta("orig_emission_%s" % mat_id, mat.emission)
+	node.set_meta("orig_emission_en_%s" % mat_id, mat.emission_enabled)
+	node.set_meta("orig_emission_energy_%s" % mat_id, mat.emission_energy_multiplier)
+	# Apply highlight
+	mat.emission_enabled = true
+	mat.emission = Color(0.3, 0.5, 1.0)  # Blue glow
+	mat.emission_energy_multiplier = 0.5
 
 
 ## Remove highlight from an object
@@ -518,25 +532,42 @@ func _unhighlight_object(obj: Node3D) -> void:
 ## Recursively remove highlight from all MeshInstance3D nodes
 func _remove_highlight_recursive(node: Node) -> void:
 	if node is MeshInstance3D:
-		var mat = node.material_override
+		var mesh_inst = node as MeshInstance3D
+		# Try material_override first
+		var mat = mesh_inst.material_override
 		if mat is StandardMaterial3D:
-			# Restore original emission settings
-			if node.has_meta("original_emission_enabled"):
-				mat.emission_enabled = node.get_meta("original_emission_enabled")
-				mat.emission = node.get_meta("original_emission")
-				mat.emission_energy_multiplier = node.get_meta("original_emission_energy", 1.0)
-				# Clean up metadata
-				node.remove_meta("original_emission")
-				node.remove_meta("original_emission_enabled")
-				node.remove_meta("original_emission_energy")
-			else:
-				# Fallback: disable emission entirely
-				mat.emission_enabled = false
-				mat.emission_energy_multiplier = 1.0
+			_unhighlight_material(mesh_inst, mat, "override")
+		else:
+			# Check surface materials on the mesh
+			if mesh_inst.mesh:
+				for surface_idx in range(mesh_inst.mesh.get_surface_count()):
+					var surface_mat = mesh_inst.get_surface_override_material(surface_idx)
+					if surface_mat is StandardMaterial3D:
+						_unhighlight_material(mesh_inst, surface_mat, "surface_%d" % surface_idx)
 
 	# Recurse into children
 	for child in node.get_children():
 		_remove_highlight_recursive(child)
+
+
+## Restore original material settings
+func _unhighlight_material(node: MeshInstance3D, mat: StandardMaterial3D, mat_id: String) -> void:
+	var key_enabled = "orig_emission_en_%s" % mat_id
+	var key_color = "orig_emission_%s" % mat_id
+	var key_energy = "orig_emission_energy_%s" % mat_id
+
+	if node.has_meta(key_enabled):
+		mat.emission_enabled = node.get_meta(key_enabled)
+		mat.emission = node.get_meta(key_color)
+		mat.emission_energy_multiplier = node.get_meta(key_energy, 1.0)
+		# Clean up metadata
+		node.remove_meta(key_enabled)
+		node.remove_meta(key_color)
+		node.remove_meta(key_energy)
+	else:
+		# Fallback: just disable emission
+		mat.emission_enabled = false
+		mat.emission_energy_multiplier = 1.0
 
 
 ## Start box selection (drag rectangle to select multiple objects)
