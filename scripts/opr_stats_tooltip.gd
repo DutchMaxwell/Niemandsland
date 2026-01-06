@@ -171,6 +171,13 @@ func _update_content() -> void:
 	]
 	if _current_unit.cost > 0:
 		stats_text += " | [color=#ffcc44]%d pts[/color]" % _current_unit.cost
+
+	# Show Tough/wounds info if model has multiple wounds
+	if _current_model:
+		var model_inst = _current_model.get_meta("model_instance", null) as ModelInstance
+		if model_inst and model_inst.wounds_max > 1:
+			stats_text += " | [color=#ff8888]Tough(%d)[/color]" % model_inst.wounds_max
+
 	# Add base size (oval or round)
 	if _current_unit.base_is_oval:
 		stats_text += " | [color=#cccccc]%dx%dmm oval[/color]" % [_current_unit.base_width_mm, _current_unit.base_depth_mm]
