@@ -167,12 +167,14 @@ static func create_simple() -> WoundsDialog:
 	var panel = PanelContainer.new()
 	panel.name = "Panel"
 	panel.set_anchors_preset(Control.PRESET_FULL_RECT)  # Fill dialog
+	panel.mouse_filter = Control.MOUSE_FILTER_PASS  # Pass clicks to children
 	dialog.add_child(panel)
 
 	# VBox container
 	var vbox = VBoxContainer.new()
 	vbox.name = "VBox"
 	vbox.add_theme_constant_override("separation", 10)
+	vbox.mouse_filter = Control.MOUSE_FILTER_PASS  # Pass clicks to children
 	panel.add_child(vbox)
 
 	# Title
@@ -187,6 +189,7 @@ static func create_simple() -> WoundsDialog:
 	var wounds_hbox = HBoxContainer.new()
 	wounds_hbox.name = "WoundsContainer"
 	wounds_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	wounds_hbox.mouse_filter = Control.MOUSE_FILTER_PASS  # Pass clicks to children
 	vbox.add_child(wounds_hbox)
 
 	# Minus button
