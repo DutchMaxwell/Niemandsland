@@ -2023,6 +2023,10 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 		push_error("No geometry found in OBJ: %s" % file_path)
 		return null
 
+	# Recalculate normals from face winding to fix inverted normals
+	# TTS models often have inconsistent or flipped normals
+	mesh_normals = _calculate_smooth_normals(mesh_vertices)
+
 	# Create mesh
 	var arrays = []
 	arrays.resize(Mesh.ARRAY_MAX)
