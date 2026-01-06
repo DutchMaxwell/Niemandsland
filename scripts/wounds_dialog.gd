@@ -29,9 +29,8 @@ func _ready() -> void:
 	gui_input.connect(_on_gui_input)
 
 
-func _on_gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed:
-		print("DEBUG WoundsDialog: gui_input received mouse button at %s" % event.position)
+func _on_gui_input(_event: InputEvent) -> void:
+	pass  # Input handled by child controls
 
 
 func _setup_ui() -> void:
@@ -55,7 +54,6 @@ func _setup_ui() -> void:
 
 ## Opens the dialog for a specific model.
 func open(model: ModelInstance) -> void:
-	print("DEBUG WoundsDialog: open() called with model=%s" % model)
 	_model = model
 	visible = true
 	_update_display()
@@ -95,7 +93,6 @@ func _update_display() -> void:
 
 
 func _on_minus_pressed() -> void:
-	print("DEBUG WoundsDialog: _on_minus_pressed called, model=%s" % _model)
 	if not _model or _model.wounds_current <= 0:
 		return
 
@@ -210,7 +207,6 @@ static func create_simple() -> WoundsDialog:
 	minus_btn.mouse_filter = Control.MOUSE_FILTER_STOP  # Ensure button captures input
 	wounds_hbox.add_child(minus_btn)
 	dialog.minus_button = minus_btn
-	print("DEBUG: minus_btn created, mouse_filter=%s" % minus_btn.mouse_filter)
 
 	# Wounds label
 	var wounds_lbl = Label.new()
