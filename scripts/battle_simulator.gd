@@ -1019,7 +1019,7 @@ func _execute_shooting(step: BattleStep) -> void:
 
 	# Check morale - defender takes test if they took wounds
 	if not defender.is_destroyed() and AIMorale.needs_morale_test(defender, result.wounds):
-		_queue_morale_step(defender, "shooting")
+		_queue_morale_step(defender, "shooting", false, false)
 
 
 ## Executes a melee step.
@@ -1058,27 +1058,28 @@ func _execute_melee(step: BattleStep) -> void:
 
 	# Casualties inflicted BY attacker ON defender
 	var attacker_inflicted = result.casualties.size()
-	# Wounds inflicted BY defender ON attacker (from strike-backs)
-	# Note: AICombat doesn't track attacker casualties separately, only wounds
-	var defender_inflicted_wounds = result.attacker_wounds
+	# Casualties inflicted BY defender ON attacker (from strike-backs and Counter)
+	var defender_inflicted = result.attacker_casualties.size()
 
 	step.casualties = attacker_inflicted
-	step.result_text = "Attacker deals %d wounds (%d kills), Defender strikes back for %d wounds" % [
+	step.result_text = "Attacker deals %d wounds (%d kills), Defender strikes back for %d wounds (%d kills)" % [
 		result.defender_wounds,
 		attacker_inflicted,
-		defender_inflicted_wounds
+		result.attacker_wounds,
+		defender_inflicted
 	]
 
 	var winner_text = "Tie"
 	if result.winner:
 		winner_text = result.winner.get_name() + " wins"
 
-	_log("  Melee: %s deals %d wounds (%d kills), %s strikes back for %d wounds - %s" % [
+	_log("  Melee: %s deals %d wounds (%d kills), %s strikes back for %d wounds (%d kills) - %s" % [
 		attacker.get_name(),
 		result.defender_wounds,
 		attacker_inflicted,
 		defender.get_name(),
-		defender_inflicted_wounds,
+		result.attacker_wounds,
+		defender_inflicted,
 		winner_text
 	], "combat")
 
@@ -1090,15 +1091,42 @@ func _execute_melee(step: BattleStep) -> void:
 		else:
 			state.player2_kills += attacker_inflicted
 
-	# Defender's kills would be tracked via attacker_wounds, but AICombat
-	# doesn't remove attacker models - this is a known limitation
-	# TODO: AICombat should track attacker_casualties for proper kill counting
+	# Defender's kills (casualties on attacker from strike-backs and Counter)
+	# Per OPR: "When two units fight, both fight, and the side that dealt most wounds wins."
+	if defender_inflicted > 0:
+		var defender_player_id = defender.unit_properties.get("player_id", 2)
+		if defender_player_id == 1:
+			state.player1_kills += defender_inflicted
+		else:
+			state.player2_kills += defender_inflicted
 
-	# Check morale - the melee loser takes the test
+	# Check morale - BOTH sides test if they took casualties
+	# Per OPR: "After a unit takes casualties from an attack, it must take a morale test."
+
+	# 1. Loser always tests (from losing melee)
 	if result.winner != null:
 		var loser = defender if result.winner == attacker else attacker
 		if not loser.is_destroyed():
-			_queue_morale_step(loser, "melee")
+			_queue_morale_step(loser, "melee", true, true)
+
+		# 2. Winner tests if they took casualties (from counter-attack)
+		var winner = result.winner
+		if not winner.is_destroyed():
+			var winner_casualties = 0
+			if winner == attacker:
+				winner_casualties = defender_inflicted
+			else:
+				winner_casualties = attacker_inflicted
+
+			# Winner tests if they took any casualties
+			if winner_casualties > 0:
+				_queue_morale_step(winner, "melee_counter", false, false)
+	else:
+		# Tie - both test if they took casualties
+		if not attacker.is_destroyed() and defender_inflicted > 0:
+			_queue_morale_step(attacker, "melee", true, false)
+		if not defender.is_destroyed() and attacker_inflicted > 0:
+			_queue_morale_step(defender, "melee", true, false)
 
 	# Consolidation moves (per OPR rules)
 	# "If one of the two units was destroyed, then the other unit may move by up to 3"."
@@ -1119,6 +1147,8 @@ func _execute_melee(step: BattleStep) -> void:
 func _execute_morale(step: BattleStep) -> void:
 	var unit = step.unit
 	var trigger_context = step.action_data.get("context", "combat")
+	var is_melee = step.action_data.get("is_melee", false)
+	var lost_melee = step.action_data.get("lost_melee", false)
 
 	if unit == null:
 		push_error("BattleSimulator: _execute_morale called with null unit")
@@ -1133,7 +1163,8 @@ func _execute_morale(step: BattleStep) -> void:
 	state.phase = Phase.MORALE
 	state_changed.emit(state)
 
-	var outcome = AIMorale.take_morale_test(unit)
+	# Take morale test with proper melee parameters
+	var outcome = AIMorale.take_morale_test(unit, is_melee, lost_melee)
 	AIMorale.apply_morale_outcome(unit, outcome)
 
 	var unit_name = unit.get_name()
@@ -1150,11 +1181,21 @@ func _execute_morale(step: BattleStep) -> void:
 
 
 ## Queues a morale step for a unit.
-func _queue_morale_step(unit: GameUnit, context: String) -> void:
+## @param unit: The unit taking the morale test
+## @param context: Context string for logging (e.g., "shooting", "melee", "melee_counter")
+## @param is_melee: Whether this is from melee combat (affects Shaken vs Routed outcome)
+## @param lost_melee: Whether the unit lost the melee (only relevant if is_melee=true)
+func _queue_morale_step(unit: GameUnit, context: String, is_melee: bool = false, lost_melee: bool = false) -> void:
+	if unit == null:
+		push_error("BattleSimulator: _queue_morale_step called with null unit")
+		return
+
 	var step = _create_step("morale", unit)
 	step.description = "%s takes morale test" % unit.get_name()
 	step.details = "Triggered by %s casualties" % context
 	step.action_data["context"] = context
+	step.action_data["is_melee"] = is_melee
+	step.action_data["lost_melee"] = lost_melee
 
 	# Insert at front to execute immediately
 	step_queue.push_front(step)

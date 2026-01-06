@@ -342,7 +342,8 @@ static func _find_best_shooting_target(ai_unit: GameUnit, context: AIContext) ->
 	var result = AITargetSelector.find_shooting_target(
 		ai_unit,
 		context.enemy_units,
-		max_range
+		max_range,
+		context.terrain_pieces
 	)
 	return result.target
 
