@@ -2023,26 +2023,15 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 		push_error("No geometry found in OBJ: %s" % file_path)
 		return null
 
-	# Check if original normals need to be flipped
-	# TTS models sometimes have all normals inverted
-	# We detect this by checking if the average Y component is strongly negative
-	# (terrain/surfaces should generally face upward)
-	var total_y: float = 0.0
-	var valid_normals = 0
+	# Check if we have valid normals from the OBJ file
+	# The shader handles backface lighting, so we just need normals to exist
+	var has_valid_normals = false
 	for i in range(mesh_normals.size()):
 		if mesh_normals[i].length_squared() > 0.0001:
-			total_y += mesh_normals[i].y
-			valid_normals += 1
+			has_valid_normals = true
+			break
 
-	# Only flip if we have normals and they're clearly inverted (strong negative Y average)
-	# Threshold of -0.1 means most normals are pointing down
-	if valid_normals > 0:
-		var avg_y = total_y / valid_normals
-		if avg_y < -0.1:
-			print("  Flipping inverted normals (avg Y: %.2f)" % avg_y)
-			for i in range(mesh_normals.size()):
-				mesh_normals[i] = -mesh_normals[i]
-	else:
+	if not has_valid_normals:
 		# No valid normals in file, calculate from geometry
 		print("  No normals in OBJ, calculating from geometry")
 		mesh_normals = _calculate_smooth_normals(mesh_vertices)
@@ -2062,19 +2051,48 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 	var mesh_instance = MeshInstance3D.new()
 	mesh_instance.mesh = mesh
 
-	# Create material with optional texture
-	var material = StandardMaterial3D.new()
-	material.albedo_color = Color(0.7, 0.7, 0.7)
-	material.roughness = 0.9  # Matte finish like painted miniatures
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED  # Show both sides of polygons (TTS models often have flipped normals)
+	# Create shader material with two-sided lighting
+	# This flips normals for backfaces so both sides are lit correctly
+	# (TTS/Unity does this automatically, Godot requires a shader)
+	var shader = Shader.new()
+	shader.code = """
+shader_type spatial;
+render_mode cull_disabled;
+
+uniform vec4 albedo_color : source_color = vec4(1.0);
+uniform sampler2D albedo_texture : source_color, filter_linear_mipmap;
+uniform bool use_texture = false;
+uniform float roughness : hint_range(0.0, 1.0) = 0.9;
+
+void fragment() {
+	// Flip normal for backfaces to achieve two-sided lighting
+	// This is what Unity/TTS does automatically
+	if (!FRONT_FACING) {
+		NORMAL = -NORMAL;
+	}
+
+	if (use_texture) {
+		ALBEDO = texture(albedo_texture, UV).rgb * albedo_color.rgb;
+	} else {
+		ALBEDO = albedo_color.rgb;
+	}
+	ROUGHNESS = roughness;
+}
+"""
+
+	var material = ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("albedo_color", Color(0.7, 0.7, 0.7))
+	material.set_shader_parameter("roughness", 0.9)
+	material.set_shader_parameter("use_texture", false)
 
 	# Load texture if provided
 	if not texture_path.is_empty():
 		var texture = _load_texture(texture_path)
 		if texture:
-			material.albedo_texture = texture
-			material.albedo_color = Color.WHITE  # Use full texture color
-			material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+			material.set_shader_parameter("albedo_texture", texture)
+			material.set_shader_parameter("albedo_color", Color.WHITE)
+			material.set_shader_parameter("use_texture", true)
 			print("Applied texture: %s" % texture_path.get_file())
 
 	mesh_instance.material_override = material
