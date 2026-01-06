@@ -2065,9 +2065,12 @@ uniform bool use_texture = false;
 uniform float roughness : hint_range(0.0, 1.0) = 0.9;
 
 void fragment() {
-	// Flip normal for backfaces to achieve two-sided lighting
-	// This is what Unity/TTS does automatically
-	if (!FRONT_FACING) {
+	// Ensure normal always faces the camera for proper lighting
+	// This handles both:
+	// 1. Backface rendering (FRONT_FACING = false)
+	// 2. Inverted normals in the mesh data
+	// VIEW points from fragment to camera, so if dot < 0, normal faces away
+	if (dot(NORMAL, VIEW) < 0.0) {
 		NORMAL = -NORMAL;
 	}
 
