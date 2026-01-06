@@ -2023,9 +2023,29 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 		push_error("No geometry found in OBJ: %s" % file_path)
 		return null
 
-	# Recalculate normals from face winding to fix inverted normals
-	# TTS models often have inconsistent or flipped normals
-	mesh_normals = _calculate_smooth_normals(mesh_vertices)
+	# Check if original normals need to be flipped
+	# TTS models sometimes have all normals inverted
+	# We detect this by checking if the average Y component is strongly negative
+	# (terrain/surfaces should generally face upward)
+	var total_y: float = 0.0
+	var valid_normals = 0
+	for i in range(mesh_normals.size()):
+		if mesh_normals[i].length_squared() > 0.0001:
+			total_y += mesh_normals[i].y
+			valid_normals += 1
+
+	# Only flip if we have normals and they're clearly inverted (strong negative Y average)
+	# Threshold of -0.1 means most normals are pointing down
+	if valid_normals > 0:
+		var avg_y = total_y / valid_normals
+		if avg_y < -0.1:
+			print("  Flipping inverted normals (avg Y: %.2f)" % avg_y)
+			for i in range(mesh_normals.size()):
+				mesh_normals[i] = -mesh_normals[i]
+	else:
+		# No valid normals in file, calculate from geometry
+		print("  No normals in OBJ, calculating from geometry")
+		mesh_normals = _calculate_smooth_normals(mesh_vertices)
 
 	# Create mesh
 	var arrays = []
