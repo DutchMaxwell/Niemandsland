@@ -33,17 +33,12 @@ class DiceRoll:
 	var modifier: int = 0
 	var successes: int = 0
 	var fails: int = 0
+	var sixes: int = 0  ## Count of natural 6s (for Furious)
 
 
-signal combat_started(attacker: GameUnit, defender: GameUnit, is_melee: bool)
-signal dice_rolled(roll_type: String, result: DiceRoll)
-signal hits_scored(count: int)
-signal wounds_dealt(count: int)
-signal casualties_removed(models: Array[ModelInstance])
-signal combat_ended(result: CombatResult)
-
-
-# ===== Shooting =====
+# ==============================================================================
+# SHOOTING COMBAT
+# ==============================================================================
 
 ## Resolves a shooting attack from AI unit.
 ## @param attacker: The attacking AI unit
@@ -61,8 +56,9 @@ static func resolve_shooting(
 		push_error("AICombat: resolve_shooting called with null unit")
 		return result
 
+	# Context is required for terrain-aware combat
 	if context == null:
-		push_warning("AICombat: context is null in resolve_shooting")
+		push_error("AICombat: context is required for resolve_shooting (terrain/cover unavailable)")
 
 	result.attacker = attacker
 	result.defender = defender
@@ -234,23 +230,28 @@ static func _resolve_melee_attacks(
 # ===== Dice Rolling =====
 
 ## Rolls quality tests (to hit).
-## @returns: DiceRoll with results
+## Per OPR: Natural 1 always fails, natural 6 always succeeds.
+## @param count: Number of dice to roll
+## @param quality: Target number to meet or exceed
+## @param modifier: Modifier to apply to each roll
+## @return: DiceRoll with results including sixes count
 static func _roll_quality_tests(count: int, quality: int, modifier: int) -> DiceRoll:
-	var result = DiceRoll.new()
+	var result := DiceRoll.new()
 	result.target = quality
 	result.modifier = modifier
 
 	for i in range(count):
-		var roll = randi() % 6 + 1
+		var roll := randi() % 6 + 1
 		result.dice.append(roll)
 
-		var modified_roll = roll + modifier
+		var modified_roll := roll + modifier
 		if roll == 1:
-			# 1 always fails
+			# Natural 1 always fails
 			result.fails += 1
 		elif roll == 6:
-			# 6 always succeeds
+			# Natural 6 always succeeds
 			result.successes += 1
+			result.sixes += 1
 		elif modified_roll >= quality:
 			result.successes += 1
 		else:
@@ -679,28 +680,34 @@ static func _has_counter(unit: GameUnit) -> bool:
 # ===== Cover Check =====
 
 ## Checks if majority of unit is in cover.
+## @param unit: The unit to check
+## @param context: AIContext with terrain data
+## @return: True if majority of models are in cover terrain
 static func _is_in_cover(unit: GameUnit, context: AIContext) -> bool:
-	var in_cover = 0
-	var total = 0
+	if unit == null or context == null:
+		return false
+
+	var in_cover := 0
+	var total := 0
 
 	for model in unit.models:
-		if not model.is_alive:
+		if model == null or not model.is_alive:
 			continue
 
 		total += 1
-		if model.node:
-			var pos = model.node.global_position
+		if model.node != null:
+			var pos := model.node.global_position
 			if context.is_in_cover(pos):
 				in_cover += 1
 
-	return in_cover > total / 2
+	# Guard against division by zero, use float division for accuracy
+	return total > 0 and in_cover > (total / 2.0)
 
 
 # ===== Helper Methods =====
 
 static func _get_unit_center(game_unit: GameUnit) -> Vector3:
 	if game_unit == null:
-		push_warning("AICombat: _get_unit_center called with null unit")
 		return Vector3.ZERO
 
 	var sum = Vector3.ZERO

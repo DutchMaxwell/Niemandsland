@@ -37,7 +37,6 @@ static func needs_morale_test(
 	wounds_taken_this_activation: int
 ) -> bool:
 	if unit == null:
-		push_warning("AIMorale: needs_morale_test called with null unit")
 		return false
 
 	if wounds_taken_this_activation == 0:
