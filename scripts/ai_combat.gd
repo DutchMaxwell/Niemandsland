@@ -23,6 +23,7 @@ class CombatResult:
 	var is_melee: bool = false
 	var attacker_wounds: int = 0  # For melee comparison
 	var defender_wounds: int = 0
+	var attacker_casualties: Array[ModelInstance] = []  ## OPR: Models killed by defender's strike-backs and Counter
 	var winner: GameUnit = null   # For melee resolution
 
 
@@ -125,10 +126,11 @@ static func resolve_melee(
 	result.defender = defender
 	result.is_melee = true
 
-	# Check for Counter - defender strikes first
+	# Check for Counter - defender strikes first (OPR: Counter special rule)
 	if _has_counter(defender) and not is_fatigued:
 		var counter_result = _resolve_melee_attacks(defender, attacker, context, false)
 		result.attacker_wounds = counter_result.wounds
+		result.attacker_casualties.append_array(counter_result.casualties)
 
 	# Impact hits (only if charging and not fatigued)
 	if not is_fatigued:
@@ -155,6 +157,7 @@ static func resolve_melee(
 		var defender_fatigued = is_fatigued or defender.unit_properties.get("fought_this_round", false)
 		var strike_back = _resolve_melee_attacks(defender, attacker, context, defender_fatigued)
 		result.attacker_wounds += strike_back.wounds
+		result.attacker_casualties.append_array(strike_back.casualties)
 
 	# Determine winner
 	result.winner = _determine_melee_winner(result)

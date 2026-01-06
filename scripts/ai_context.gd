@@ -87,6 +87,10 @@ var difficult_terrain: Array[AABB] = []
 ## Areas of dangerous terrain
 var dangerous_terrain: Array[AABB] = []
 
+## All terrain pieces (includes blocking, cover, difficult, dangerous)
+## Used for LOS checks and advanced terrain queries
+var terrain_pieces: Array[AITerrain.TerrainPiece] = []
+
 
 # ===== Query Methods =====
 
