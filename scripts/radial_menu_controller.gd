@@ -18,11 +18,20 @@ var object_manager: Node = null
 ## Reference to the OPR army manager
 var army_manager: OPRArmyManager = null
 
+## Reference to OPR stats tooltip
+var stats_tooltip: Node = null
+
+## Reference to coherency visualizer
+var coherency_visualizer: CoherencyVisualizer = null
+
 ## Current selection context
 var _current_selection: Array = []
 
 ## Is the radial menu scene loaded
 var _menu_scene: PackedScene = null
+
+## Activation markers on models
+var _activation_markers: Dictionary = {}  # Node3D -> MeshInstance3D
 
 
 func _ready() -> void:
@@ -157,12 +166,25 @@ func _show_unit_stats(context: Dictionary) -> void:
 	if not game_unit:
 		return
 
-	# Get first model node to show tooltip near it
-	if game_unit.models.size() > 0 and game_unit.models[0].node:
-		var node = game_unit.models[0].node
-		# Trigger the stats tooltip (handled by existing system)
-		print("Show unit stats for: %s" % game_unit.get_name())
-		# TODO: Integrate with OPRStatsTooltip
+	# Check if we have a stats tooltip reference
+	if not stats_tooltip:
+		print("Stats tooltip not connected")
+		return
+
+	# Get the OPRUnit from source_data (only works for OPR units)
+	if game_unit.source_type == "opr" and game_unit.source_data:
+		var opr_unit = game_unit.source_data as OPRApiClient.OPRUnit
+		if opr_unit:
+			# Get first model node for reference
+			var model_node: Node3D = null
+			if game_unit.models.size() > 0 and game_unit.models[0].node:
+				model_node = game_unit.models[0].node
+
+			# Show the tooltip immediately (bypass delay for menu action)
+			stats_tooltip.show_unit(opr_unit, model_node, true)
+	else:
+		# Fallback for non-OPR units - show basic info
+		print("Unit stats for: %s (non-OPR unit)" % game_unit.get_name())
 
 
 func _show_model_stats(context: Dictionary) -> void:
@@ -244,13 +266,65 @@ func _toggle_activation(context: Dictionary) -> void:
 
 	if game_unit.is_activated:
 		game_unit.is_activated = false
+		_remove_activation_markers(game_unit)
 		unit_deactivated.emit(game_unit)
-		print("Deactivated: %s" % game_unit.get_name())
 	else:
-		# TODO: Get current round from game manager
 		game_unit.activate(1)
+		_add_activation_markers(game_unit)
 		unit_activated.emit(game_unit)
-		print("Activated: %s" % game_unit.get_name())
+
+
+## Adds visual activation markers to all models in a unit.
+func _add_activation_markers(game_unit: GameUnit) -> void:
+	for model in game_unit.models:
+		if not model.node or not is_instance_valid(model.node):
+			continue
+		if model.node in _activation_markers:
+			continue  # Already has marker
+
+		# Create checkmark marker above model
+		var marker = MeshInstance3D.new()
+		marker.name = "ActivationMarker"
+
+		# Use a torus as a "ring" indicator
+		var torus = TorusMesh.new()
+		torus.inner_radius = 0.012
+		torus.outer_radius = 0.018
+		marker.mesh = torus
+		marker.rotation_degrees.x = 90  # Lay flat
+
+		# Green glowing material
+		var mat = StandardMaterial3D.new()
+		mat.albedo_color = Color(0.2, 0.9, 0.3, 0.9)
+		mat.emission_enabled = true
+		mat.emission = Color(0.2, 0.9, 0.3)
+		mat.emission_energy_multiplier = 1.5
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		marker.material_override = mat
+
+		# Position above model
+		marker.position = Vector3(0, 0.05, 0)
+
+		model.node.add_child(marker)
+		_activation_markers[model.node] = marker
+
+		# Add pulsing animation
+		var tween = marker.create_tween()
+		tween.set_loops()
+		tween.tween_property(marker, "scale", Vector3(1.2, 1.2, 1.2), 0.5)
+		tween.tween_property(marker, "scale", Vector3(1.0, 1.0, 1.0), 0.5)
+
+
+## Removes activation markers from all models in a unit.
+func _remove_activation_markers(game_unit: GameUnit) -> void:
+	for model in game_unit.models:
+		if not model.node:
+			continue
+		if model.node in _activation_markers:
+			var marker = _activation_markers[model.node]
+			if is_instance_valid(marker):
+				marker.queue_free()
+			_activation_markers.erase(model.node)
 
 
 func _check_coherency(context: Dictionary) -> void:
@@ -258,17 +332,18 @@ func _check_coherency(context: Dictionary) -> void:
 	if not game_unit:
 		return
 
-	var result = CoherencyChecker.check_unit_coherency(game_unit)
-	coherency_checked.emit(game_unit, result)
-
-	if result.valid:
-		print("✓ %s is in coherency" % game_unit.get_name())
+	# Use visualizer if available
+	if coherency_visualizer:
+		var result = coherency_visualizer.show_coherency(game_unit)
+		coherency_checked.emit(game_unit, result)
 	else:
-		print("⚠ %s has coherency issues:" % game_unit.get_name())
-		for issue in result.issues:
-			print("  - %s" % issue.message)
-
-	# TODO: Show visual coherency lines
+		# Fallback to just checking without visualization
+		var result = CoherencyChecker.check_unit_coherency(game_unit)
+		coherency_checked.emit(game_unit, result)
+		if result.valid:
+			print("✓ %s is in coherency" % game_unit.get_name())
+		else:
+			print("⚠ %s has coherency issues" % game_unit.get_name())
 
 
 func _roll_attack(context: Dictionary) -> void:
