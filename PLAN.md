@@ -723,6 +723,6 @@ openTTS/
 ---
 
 *Dokument erstellt: 2025-12-17*
-*Letzte Überarbeitung: 2026-01-05*
-*Version: 1.8*
-*Status: Milestone 2 zu ~90% fertig - AI-System für Solo & Co-Op implementiert (OPR Rules v3.5.0)*
+*Letzte Überarbeitung: 2026-01-06*
+*Version: 1.9*
+*Status: Milestone 2 zu ~95% fertig - Shader-Fixes und Rendering-Verbesserungen implementiert*
