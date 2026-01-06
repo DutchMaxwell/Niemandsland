@@ -495,33 +495,40 @@ func _highlight_object(obj: Node3D) -> void:
 func _apply_highlight_recursive(node: Node) -> void:
 	if node is MeshInstance3D:
 		var mesh_inst = node as MeshInstance3D
-		# Try material_override first
+		# Handle material_override
 		var mat = mesh_inst.material_override
 		if mat is StandardMaterial3D:
-			_highlight_material(mesh_inst, mat, "override")
-		else:
-			# Check surface materials on the mesh
-			if mesh_inst.mesh:
-				for surface_idx in range(mesh_inst.mesh.get_surface_count()):
-					var surface_mat = mesh_inst.get_surface_override_material(surface_idx)
-					if surface_mat is StandardMaterial3D:
-						_highlight_material(mesh_inst, surface_mat, "surface_%d" % surface_idx)
+			_highlight_with_duplicate(mesh_inst, mat, "override", -1)
+		# Also check surface materials
+		if mesh_inst.mesh:
+			for surface_idx in range(mesh_inst.mesh.get_surface_count()):
+				var surface_mat = mesh_inst.get_surface_override_material(surface_idx)
+				if surface_mat is StandardMaterial3D:
+					_highlight_with_duplicate(mesh_inst, surface_mat, "surface", surface_idx)
 
 	# Recurse into children
 	for child in node.get_children():
 		_apply_highlight_recursive(child)
 
 
-## Apply highlight to a specific material
-func _highlight_material(node: MeshInstance3D, mat: StandardMaterial3D, mat_id: String) -> void:
-	# Store original emission settings with unique keys per material
-	node.set_meta("orig_emission_%s" % mat_id, mat.emission)
-	node.set_meta("orig_emission_en_%s" % mat_id, mat.emission_enabled)
-	node.set_meta("orig_emission_energy_%s" % mat_id, mat.emission_energy_multiplier)
-	# Apply highlight
-	mat.emission_enabled = true
-	mat.emission = Color(0.3, 0.5, 1.0)  # Blue glow
-	mat.emission_energy_multiplier = 0.5
+## Apply highlight by duplicating material (prevents corruption of original)
+func _highlight_with_duplicate(node: MeshInstance3D, original_mat: StandardMaterial3D, mat_type: String, surface_idx: int) -> void:
+	var key = "orig_mat_%s_%d" % [mat_type, surface_idx]
+
+	# Store reference to original material
+	node.set_meta(key, original_mat)
+
+	# Create a duplicate for highlighting
+	var highlight_mat = original_mat.duplicate() as StandardMaterial3D
+	highlight_mat.emission_enabled = true
+	highlight_mat.emission = Color(0.3, 0.5, 1.0)  # Blue glow
+	highlight_mat.emission_energy_multiplier = 0.5
+
+	# Apply the duplicate
+	if mat_type == "override":
+		node.material_override = highlight_mat
+	else:
+		node.set_surface_override_material(surface_idx, highlight_mat)
 
 
 ## Remove highlight from an object
@@ -533,41 +540,32 @@ func _unhighlight_object(obj: Node3D) -> void:
 func _remove_highlight_recursive(node: Node) -> void:
 	if node is MeshInstance3D:
 		var mesh_inst = node as MeshInstance3D
-		# Try material_override first
-		var mat = mesh_inst.material_override
-		if mat is StandardMaterial3D:
-			_unhighlight_material(mesh_inst, mat, "override")
-		else:
-			# Check surface materials on the mesh
-			if mesh_inst.mesh:
-				for surface_idx in range(mesh_inst.mesh.get_surface_count()):
-					var surface_mat = mesh_inst.get_surface_override_material(surface_idx)
-					if surface_mat is StandardMaterial3D:
-						_unhighlight_material(mesh_inst, surface_mat, "surface_%d" % surface_idx)
+
+		# Restore material_override
+		_restore_original_material(mesh_inst, "override", -1)
+
+		# Restore surface materials
+		if mesh_inst.mesh:
+			for surface_idx in range(mesh_inst.mesh.get_surface_count()):
+				_restore_original_material(mesh_inst, "surface", surface_idx)
 
 	# Recurse into children
 	for child in node.get_children():
 		_remove_highlight_recursive(child)
 
 
-## Restore original material settings
-func _unhighlight_material(node: MeshInstance3D, mat: StandardMaterial3D, mat_id: String) -> void:
-	var key_enabled = "orig_emission_en_%s" % mat_id
-	var key_color = "orig_emission_%s" % mat_id
-	var key_energy = "orig_emission_energy_%s" % mat_id
+## Restore original material (replaces duplicate with original reference)
+func _restore_original_material(node: MeshInstance3D, mat_type: String, surface_idx: int) -> void:
+	var key = "orig_mat_%s_%d" % [mat_type, surface_idx]
 
-	if node.has_meta(key_enabled):
-		mat.emission_enabled = node.get_meta(key_enabled)
-		mat.emission = node.get_meta(key_color)
-		mat.emission_energy_multiplier = node.get_meta(key_energy, 1.0)
-		# Clean up metadata
-		node.remove_meta(key_enabled)
-		node.remove_meta(key_color)
-		node.remove_meta(key_energy)
-	else:
-		# Fallback: just disable emission
-		mat.emission_enabled = false
-		mat.emission_energy_multiplier = 1.0
+	if node.has_meta(key):
+		var original_mat = node.get_meta(key) as StandardMaterial3D
+		if original_mat:
+			if mat_type == "override":
+				node.material_override = original_mat
+			else:
+				node.set_surface_override_material(surface_idx, original_mat)
+		node.remove_meta(key)
 
 
 ## Start box selection (drag rectangle to select multiple objects)
