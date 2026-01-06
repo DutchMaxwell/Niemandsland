@@ -121,6 +121,7 @@ class BattleStep extends RefCounted:
 var army_manager: OPRArmyManager = null
 var ai_manager: AIManager = null
 var mission: AIMission.MissionState = null
+var terrain_overlay: Node3D = null  ## Reference to TerrainOverlay for AI terrain integration
 
 
 # ===== State =====
@@ -231,7 +232,15 @@ func setup_loaded_armies() -> void:
 	_log("Setup: %d units vs %d units" % [player1_units.size(), player2_units.size()], "info")
 
 
-## Sets up the mission with objectives.
+## Sets the terrain overlay reference for AI terrain integration.
+## Call this before setup_mission() to enable terrain mechanics in combat.
+##
+## @param overlay: The TerrainOverlay node from the main scene
+func set_terrain_overlay(overlay: Node3D) -> void:
+	terrain_overlay = overlay
+
+
+## Sets up the mission with objectives and terrain.
 func setup_mission(table_bounds: Rect2) -> void:
 	if ai_manager == null:
 		push_error("BattleSimulator: ai_manager not initialized")
@@ -242,8 +251,11 @@ func setup_mission(table_bounds: Rect2) -> void:
 	mission = ai_manager.mission_state
 
 	if mission == null:
-		push_warning("BattleSimulator: mission_state is null after setup")
+		push_error("BattleSimulator: mission_state is null after setup")
 		return
+
+	# Setup terrain for AI combat system
+	_setup_terrain_for_ai()
 
 	# Create 3D objective markers
 	_create_objective_markers()
@@ -251,6 +263,41 @@ func setup_mission(table_bounds: Rect2) -> void:
 	_log("Mission: %d objectives, %d rounds" % [
 		mission.objectives.size(),
 		mission.max_rounds
+	], "info")
+
+
+## Transfers terrain data from TerrainOverlay to AIManager for combat calculations.
+## This enables cover bonuses, difficult terrain movement limits, and dangerous terrain tests.
+func _setup_terrain_for_ai() -> void:
+	if ai_manager == null:
+		return
+
+	if terrain_overlay == null:
+		_log("Terrain: No terrain overlay set, combat will not use terrain bonuses", "info")
+		return
+
+	if not terrain_overlay.has_method("get_terrain_pieces_for_ai"):
+		_log("Terrain: terrain_overlay missing get_terrain_pieces_for_ai method", "info")
+		return
+
+	var pieces: Array[AITerrain.TerrainPiece] = terrain_overlay.get_terrain_pieces_for_ai()
+	ai_manager.set_terrain(pieces)
+
+	# Count terrain types for logging
+	var cover_count := 0
+	var difficult_count := 0
+	var dangerous_count := 0
+
+	for piece in pieces:
+		if piece.is_cover():
+			cover_count += 1
+		if piece.is_difficult():
+			difficult_count += 1
+		if piece.is_dangerous():
+			dangerous_count += 1
+
+	_log("Terrain: %d pieces (%d cover, %d difficult, %d dangerous)" % [
+		pieces.size(), cover_count, difficult_count, dangerous_count
 	], "info")
 
 
