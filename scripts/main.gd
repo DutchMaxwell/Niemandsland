@@ -129,6 +129,10 @@ var battle_simulator: BattleSimulator = null
 var battle_simulator_ui: BattleSimulatorUI = null
 var battle_sim_btn: Button = null
 
+# Radial Menu
+var radial_menu_controller: RadialMenuController = null
+var coherency_visualizer: CoherencyVisualizer = null
+
 # Deployment Zones UI
 var deployment_zone_option: OptionButton = null
 var deployment_zone_check: CheckBox = null
@@ -319,6 +323,9 @@ func _ready() -> void:
 
 	# Initialize Battle Simulator
 	_init_battle_simulator()
+
+	# Initialize Radial Menu
+	_init_radial_menu()
 
 	# Initialize and play Tron intro
 	_start_tron_intro()
@@ -1197,6 +1204,10 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
 	var spawned = opr_army_manager.spawn_army(army)
 	print("Spawned %d models for army '%s' on Player %d's tray" % [spawned.size(), army.name, player_id])
 
+	# Update battle simulator UI if open (so Start Battle button enables)
+	if battle_simulator_ui:
+		battle_simulator_ui.on_armies_loaded()
+
 
 ## Update OPR unit hover detection
 func _update_opr_hover() -> void:
@@ -1510,10 +1521,35 @@ func _init_scout_ambush_panel() -> void:
 	scout_panel.add_child(info_label)
 
 
-## Handle unit movement (re-check deployment)
+## Handle unit movement (re-check deployment and coherency)
 func _on_unit_moved() -> void:
 	if is_deployment_mode:
 		_check_all_units_deployment()
+
+	# Auto-check coherency for any selected units after movement
+	_check_coherency_for_selected_units()
+
+
+## Check coherency for all currently selected units
+func _check_coherency_for_selected_units() -> void:
+	if not coherency_visualizer or not object_manager:
+		return
+
+	# Get selected objects
+	var selected = object_manager.get_selected_objects()
+	if selected.is_empty():
+		return
+
+	# Find unique game units from selection
+	var checked_units: Array = []
+	for obj in selected:
+		if not obj.has_meta("game_unit"):
+			continue
+		var game_unit = obj.get_meta("game_unit") as GameUnit
+		if game_unit and game_unit not in checked_units:
+			checked_units.append(game_unit)
+			# Show coherency visualization for this unit
+			coherency_visualizer.show_coherency(game_unit)
 
 
 ## Check all units for deployment zone compliance
@@ -1622,6 +1658,9 @@ func _on_battle_sim_army_load_requested(player: int) -> void:
 	# Store which player we're loading for
 	battle_simulator.set_meta("loading_for_player", player)
 
+	# Pre-select the correct player in the import dialog
+	opr_import_dialog.set_player(player)
+
 	# Use the existing OPR import dialog
 	opr_import_dialog.popup_centered()
 
@@ -1716,3 +1755,37 @@ func _clear_highlight_from_model(model: Node3D) -> void:
 	var highlight = model.get_node_or_null("BattleHighlight")
 	if highlight:
 		highlight.visible = false
+
+
+## ============================================================================
+## Radial Menu
+## ============================================================================
+
+func _init_radial_menu() -> void:
+	radial_menu_controller = RadialMenuController.new()
+	radial_menu_controller.name = "RadialMenuController"
+	add_child(radial_menu_controller)
+	radial_menu_controller.initialize(object_manager, opr_army_manager)
+
+	# Pass stats tooltip reference for displaying unit stats
+	radial_menu_controller.stats_tooltip = opr_stats_tooltip
+
+	# Create and pass coherency visualizer
+	coherency_visualizer = CoherencyVisualizer.new()
+	coherency_visualizer.name = "CoherencyVisualizer"
+	add_child(coherency_visualizer)
+	radial_menu_controller.coherency_visualizer = coherency_visualizer
+
+	# Connect object manager's right-click signal to open the menu
+	object_manager.context_menu_requested.connect(_on_context_menu_requested)
+
+
+## Handle context menu request from object manager
+func _on_context_menu_requested(screen_pos: Vector2, selected_objects: Array) -> void:
+	if radial_menu_controller:
+		radial_menu_controller.open_menu(screen_pos, selected_objects)
+
+
+## Check if radial menu is currently open
+func is_radial_menu_open() -> bool:
+	return radial_menu_controller and radial_menu_controller.is_menu_open()

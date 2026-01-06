@@ -16,6 +16,8 @@ static func distribute(game_unit: GameUnit, loadout: Array, special_rules: Array
 
 	# Step 1: Parse Tough(X) and set wounds for ALL models
 	var wounds = _parse_tough_rating(special_rules)
+	if wounds > 1:
+		print("EquipmentDistributor: Found Tough(%d) for unit with %d models" % [wounds, unit_size])
 	for model in game_unit.models:
 		model.wounds_max = wounds
 		model.wounds_current = wounds

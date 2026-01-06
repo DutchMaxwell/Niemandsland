@@ -354,3 +354,12 @@ func _reset_dialog() -> void:
 	link_status_label.text = ""
 	army_preview.text = ""
 	import_btn.disabled = true
+
+
+## Sets the pre-selected player for import.
+func set_player(player_id: int) -> void:
+	# Find index for the given player ID
+	for i in range(player_option.item_count):
+		if player_option.get_item_id(i) == player_id:
+			player_option.select(i)
+			return
