@@ -25,6 +25,13 @@ var _signals_connected: bool = false
 func _ready() -> void:
 	visible = false
 	_setup_ui()
+	# Debug: Listen for any GUI input
+	gui_input.connect(_on_gui_input)
+
+
+func _on_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		print("DEBUG WoundsDialog: gui_input received mouse button at %s" % event.position)
 
 
 func _setup_ui() -> void:
@@ -197,8 +204,10 @@ static func create_simple() -> WoundsDialog:
 	minus_btn.name = "MinusButton"
 	minus_btn.text = "-"
 	minus_btn.custom_minimum_size = Vector2(40, 40)
+	minus_btn.mouse_filter = Control.MOUSE_FILTER_STOP  # Ensure button captures input
 	wounds_hbox.add_child(minus_btn)
 	dialog.minus_button = minus_btn
+	print("DEBUG: minus_btn created, mouse_filter=%s" % minus_btn.mouse_filter)
 
 	# Wounds label
 	var wounds_lbl = Label.new()
