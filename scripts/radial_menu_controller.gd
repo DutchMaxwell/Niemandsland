@@ -308,9 +308,9 @@ func _add_activation_markers(game_unit: GameUnit) -> void:
 		model.node.add_child(marker)
 		_activation_markers[model.node] = marker
 
-		# Add pulsing animation
+		# Add pulsing animation with finite loops to avoid Godot 4.5 infinite loop error
 		var tween = marker.create_tween()
-		tween.set_loops()
+		tween.set_loops(1000)  # Long enough for any practical use
 		tween.tween_property(marker, "scale", Vector3(1.2, 1.2, 1.2), 0.5)
 		tween.tween_property(marker, "scale", Vector3(1.0, 1.0, 1.0), 0.5)
 

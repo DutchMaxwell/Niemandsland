@@ -87,6 +87,8 @@ func _create_coherency_lines(models: Array[ModelInstance]) -> void:
 
 			if not model_a.node or not model_b.node:
 				continue
+			if not model_a.node.is_inside_tree() or not model_b.node.is_inside_tree():
+				continue
 
 			var dist = CoherencyChecker._distance_between_models(model_a, model_b)
 
@@ -139,19 +141,22 @@ func _create_line_mesh(from: Vector3, to: Vector3, color: Color) -> MeshInstance
 
 	mesh_instance.mesh = cylinder
 
-	# Position at midpoint
-	mesh_instance.global_position = (from_adj + to_adj) / 2
+	# Calculate position and rotation WITHOUT needing to be in tree
+	# Position at midpoint (use position, not global_position since not in tree yet)
+	var midpoint = (from_adj + to_adj) / 2
+	mesh_instance.position = midpoint
 
-	# Rotate to face target
-	var up = Vector3.UP
+	# Calculate rotation to align cylinder with direction
 	var forward = direction.normalized()
-
+	var up = Vector3.UP
 	if abs(forward.dot(up)) > 0.999:
-		# Nearly vertical, use different up vector
 		up = Vector3.FORWARD
 
-	mesh_instance.look_at(to_adj, up)
-	mesh_instance.rotate_object_local(Vector3.RIGHT, PI / 2)
+	# Build rotation basis manually instead of using look_at
+	var right = up.cross(forward).normalized()
+	var actual_up = forward.cross(right).normalized()
+	var basis = Basis(right, forward, actual_up)
+	mesh_instance.basis = basis
 
 	# Material
 	var material = StandardMaterial3D.new()
@@ -169,6 +174,8 @@ func _create_line_mesh(from: Vector3, to: Vector3, color: Color) -> MeshInstance
 ## Highlights a model with a colored ring.
 func _highlight_model(model: ModelInstance, color: Color) -> void:
 	if not model.node or not is_instance_valid(model.node):
+		return
+	if not model.node.is_inside_tree():
 		return
 
 	var highlight = Node3D.new()
@@ -193,19 +200,25 @@ func _highlight_model(model: ModelInstance, color: Color) -> void:
 	mesh_instance.material_override = material
 
 	highlight.add_child(mesh_instance)
-	highlight.global_position = model.node.global_position + Vector3(0, 0.005, 0)
 
+	# Add to tree FIRST, then set global position
 	add_child(highlight)
+	highlight.global_position = model.node.global_position + Vector3(0, 0.005, 0)
 	_highlights.append(highlight)
 
-	# Add pulsing animation
-	_animate_pulse(mesh_instance)
+	# Add pulsing animation (deferred to ensure node is ready)
+	mesh_instance.ready.connect(func(): _animate_pulse(mesh_instance), CONNECT_ONE_SHOT)
 
 
 ## Animates a pulse effect on a mesh.
 func _animate_pulse(mesh: MeshInstance3D) -> void:
-	var tween = create_tween()
-	tween.set_loops()
+	if not mesh or not is_instance_valid(mesh):
+		return
+	if not mesh.is_inside_tree():
+		return
+	# Use finite loops to avoid Godot 4.5 infinite loop error
+	var tween = mesh.create_tween()
+	tween.set_loops(100)  # Plenty of loops for visualization duration
 	tween.tween_property(mesh, "scale", Vector3(1.2, 1.2, 1.2), PULSE_DURATION / 2)
 	tween.tween_property(mesh, "scale", Vector3(1.0, 1.0, 1.0), PULSE_DURATION / 2)
 
