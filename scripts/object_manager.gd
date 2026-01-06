@@ -486,118 +486,55 @@ func _trigger_context_menu() -> void:
 
 
 ## Apply highlight to an object to show it's selected
+## Uses a visual ring overlay instead of material modification to avoid Godot material bugs
 func _highlight_object(obj: Node3D) -> void:
-	# Store list of highlighted meshes on the object for reliable unhighlighting
-	var highlighted_meshes: Array[MeshInstance3D] = []
-	_apply_highlight_recursive(obj, highlighted_meshes)
-	obj.set_meta("_highlighted_meshes", highlighted_meshes)
+	# Check if already highlighted
+	if obj.get_node_or_null("SelectionHighlight"):
+		return
 
+	# Get base size for the highlight ring
+	var base_radius = 0.016  # Default 32mm
+	var game_unit = UnitUtils.get_game_unit(obj)
+	if game_unit and game_unit.unit_properties:
+		var oval_width = game_unit.unit_properties.get("base_size_oval_width", 0)
+		var oval_length = game_unit.unit_properties.get("base_size_oval_length", 0)
+		if oval_width > 0 and oval_length > 0:
+			base_radius = (max(oval_width, oval_length) / 2.0) * 0.001
+		else:
+			var base_mm = game_unit.unit_properties.get("base_size_round", 32)
+			base_radius = (base_mm / 2.0) * 0.001
 
-## Recursively apply highlight to all MeshInstance3D nodes
-func _apply_highlight_recursive(node: Node, highlighted_meshes: Array[MeshInstance3D]) -> void:
-	if node is MeshInstance3D:
-		var mesh_inst = node as MeshInstance3D
-		var did_highlight = false
+	# Create highlight ring container
+	var highlight = Node3D.new()
+	highlight.name = "SelectionHighlight"
 
-		# Handle material_override (takes priority)
-		var mat = mesh_inst.material_override
-		if mat is StandardMaterial3D:
-			_highlight_with_duplicate(mesh_inst, mat, "override", -1)
-			did_highlight = true
+	# Create glowing torus ring around the base
+	var ring = MeshInstance3D.new()
+	ring.name = "Ring"
+	var torus = TorusMesh.new()
+	torus.inner_radius = base_radius + 0.001
+	torus.outer_radius = base_radius + 0.004
+	ring.mesh = torus
 
-		# Only check surface materials if no material_override
-		if not did_highlight and mesh_inst.mesh:
-			for surface_idx in range(mesh_inst.mesh.get_surface_count()):
-				var surface_mat = mesh_inst.get_surface_override_material(surface_idx)
-				if surface_mat is StandardMaterial3D:
-					_highlight_with_duplicate(mesh_inst, surface_mat, "surface", surface_idx)
-					did_highlight = true
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.3, 0.6, 1.0, 0.9)
+	mat.emission_enabled = true
+	mat.emission = Color(0.3, 0.6, 1.0)
+	mat.emission_energy_multiplier = 1.5
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ring.material_override = mat
+	ring.position = Vector3(0, 0.003, 0)
 
-		if did_highlight:
-			highlighted_meshes.append(mesh_inst)
-
-	# Recurse into children
-	for child in node.get_children():
-		_apply_highlight_recursive(child, highlighted_meshes)
-
-
-## Apply highlight by duplicating material (prevents corruption of original)
-func _highlight_with_duplicate(node: MeshInstance3D, original_mat: StandardMaterial3D, mat_type: String, surface_idx: int) -> void:
-	# Use valid metadata key (no minus signs allowed)
-	var key: String
-	if mat_type == "override":
-		key = "orig_mat_override"
-	else:
-		key = "orig_mat_surface_%d" % surface_idx
-
-	# Store reference to original material
-	node.set_meta(key, original_mat)
-
-	# Create a duplicate for highlighting
-	var highlight_mat = original_mat.duplicate() as StandardMaterial3D
-	highlight_mat.emission_enabled = true
-	highlight_mat.emission = Color(0.3, 0.5, 1.0)  # Blue glow
-	highlight_mat.emission_energy_multiplier = 0.5
-
-	# Apply the duplicate
-	if mat_type == "override":
-		node.material_override = highlight_mat
-	else:
-		node.set_surface_override_material(surface_idx, highlight_mat)
+	highlight.add_child(ring)
+	obj.add_child(highlight)
 
 
 ## Remove highlight from an object
 func _unhighlight_object(obj: Node3D) -> void:
-	# Use stored list of highlighted meshes for reliable restoration
-	if obj.has_meta("_highlighted_meshes"):
-		var highlighted_meshes = obj.get_meta("_highlighted_meshes") as Array
-		for mesh in highlighted_meshes:
-			if mesh is MeshInstance3D and is_instance_valid(mesh):
-				_restore_mesh_materials(mesh)
-		obj.remove_meta("_highlighted_meshes")
-	else:
-		# Fallback to recursive search
-		_remove_highlight_recursive(obj)
-
-
-## Restore all materials on a specific mesh
-func _restore_mesh_materials(mesh_inst: MeshInstance3D) -> void:
-	# Restore material_override
-	_restore_original_material(mesh_inst, "override", 0)
-
-	# Restore surface materials
-	if mesh_inst.mesh:
-		for surface_idx in range(mesh_inst.mesh.get_surface_count()):
-			_restore_original_material(mesh_inst, "surface", surface_idx)
-
-
-## Recursively remove highlight from all MeshInstance3D nodes (fallback)
-func _remove_highlight_recursive(node: Node) -> void:
-	if node is MeshInstance3D:
-		_restore_mesh_materials(node as MeshInstance3D)
-
-	# Recurse into children
-	for child in node.get_children():
-		_remove_highlight_recursive(child)
-
-
-## Restore original material (replaces duplicate with original reference)
-func _restore_original_material(node: MeshInstance3D, mat_type: String, surface_idx: int) -> void:
-	# Use same key format as highlight (no minus signs)
-	var key: String
-	if mat_type == "override":
-		key = "orig_mat_override"
-	else:
-		key = "orig_mat_surface_%d" % surface_idx
-
-	if node.has_meta(key):
-		var original_mat = node.get_meta(key) as StandardMaterial3D
-		if original_mat:
-			if mat_type == "override":
-				node.material_override = original_mat
-			else:
-				node.set_surface_override_material(surface_idx, original_mat)
-		node.remove_meta(key)
+	var highlight = obj.get_node_or_null("SelectionHighlight")
+	if highlight:
+		highlight.queue_free()
 
 
 ## Start box selection (drag rectangle to select multiple objects)
