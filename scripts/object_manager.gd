@@ -487,28 +487,38 @@ func _trigger_context_menu() -> void:
 
 ## Apply highlight to an object to show it's selected
 func _highlight_object(obj: Node3D) -> void:
-	# Find all MeshInstance3D descendants and apply highlight
-	_apply_highlight_recursive(obj)
+	# Store list of highlighted meshes on the object for reliable unhighlighting
+	var highlighted_meshes: Array[MeshInstance3D] = []
+	_apply_highlight_recursive(obj, highlighted_meshes)
+	obj.set_meta("_highlighted_meshes", highlighted_meshes)
 
 
 ## Recursively apply highlight to all MeshInstance3D nodes
-func _apply_highlight_recursive(node: Node) -> void:
+func _apply_highlight_recursive(node: Node, highlighted_meshes: Array[MeshInstance3D]) -> void:
 	if node is MeshInstance3D:
 		var mesh_inst = node as MeshInstance3D
-		# Handle material_override
+		var did_highlight = false
+
+		# Handle material_override (takes priority)
 		var mat = mesh_inst.material_override
 		if mat is StandardMaterial3D:
 			_highlight_with_duplicate(mesh_inst, mat, "override", -1)
-		# Also check surface materials
-		if mesh_inst.mesh:
+			did_highlight = true
+
+		# Only check surface materials if no material_override
+		if not did_highlight and mesh_inst.mesh:
 			for surface_idx in range(mesh_inst.mesh.get_surface_count()):
 				var surface_mat = mesh_inst.get_surface_override_material(surface_idx)
 				if surface_mat is StandardMaterial3D:
 					_highlight_with_duplicate(mesh_inst, surface_mat, "surface", surface_idx)
+					did_highlight = true
+
+		if did_highlight:
+			highlighted_meshes.append(mesh_inst)
 
 	# Recurse into children
 	for child in node.get_children():
-		_apply_highlight_recursive(child)
+		_apply_highlight_recursive(child, highlighted_meshes)
 
 
 ## Apply highlight by duplicating material (prevents corruption of original)
@@ -533,21 +543,33 @@ func _highlight_with_duplicate(node: MeshInstance3D, original_mat: StandardMater
 
 ## Remove highlight from an object
 func _unhighlight_object(obj: Node3D) -> void:
-	_remove_highlight_recursive(obj)
+	# Use stored list of highlighted meshes for reliable restoration
+	if obj.has_meta("_highlighted_meshes"):
+		var highlighted_meshes = obj.get_meta("_highlighted_meshes") as Array
+		for mesh in highlighted_meshes:
+			if mesh is MeshInstance3D and is_instance_valid(mesh):
+				_restore_mesh_materials(mesh)
+		obj.remove_meta("_highlighted_meshes")
+	else:
+		# Fallback to recursive search
+		_remove_highlight_recursive(obj)
 
 
-## Recursively remove highlight from all MeshInstance3D nodes
+## Restore all materials on a specific mesh
+func _restore_mesh_materials(mesh_inst: MeshInstance3D) -> void:
+	# Restore material_override
+	_restore_original_material(mesh_inst, "override", -1)
+
+	# Restore surface materials
+	if mesh_inst.mesh:
+		for surface_idx in range(mesh_inst.mesh.get_surface_count()):
+			_restore_original_material(mesh_inst, "surface", surface_idx)
+
+
+## Recursively remove highlight from all MeshInstance3D nodes (fallback)
 func _remove_highlight_recursive(node: Node) -> void:
 	if node is MeshInstance3D:
-		var mesh_inst = node as MeshInstance3D
-
-		# Restore material_override
-		_restore_original_material(mesh_inst, "override", -1)
-
-		# Restore surface materials
-		if mesh_inst.mesh:
-			for surface_idx in range(mesh_inst.mesh.get_surface_count()):
-				_restore_original_material(mesh_inst, "surface", surface_idx)
+		_restore_mesh_materials(node as MeshInstance3D)
 
 	# Recurse into children
 	for child in node.get_children():
