@@ -1626,6 +1626,9 @@ func _on_battle_sim_army_load_requested(player: int) -> void:
 	# Store which player we're loading for
 	battle_simulator.set_meta("loading_for_player", player)
 
+	# Pre-select the correct player in the import dialog
+	opr_import_dialog.set_player(player)
+
 	# Use the existing OPR import dialog
 	opr_import_dialog.popup_centered()
 
