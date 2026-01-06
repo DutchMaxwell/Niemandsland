@@ -131,6 +131,7 @@ var battle_sim_btn: Button = null
 
 # Radial Menu
 var radial_menu_controller: RadialMenuController = null
+var coherency_visualizer: CoherencyVisualizer = null
 
 # Deployment Zones UI
 var deployment_zone_option: OptionButton = null
@@ -1740,6 +1741,15 @@ func _init_radial_menu() -> void:
 	radial_menu_controller.name = "RadialMenuController"
 	add_child(radial_menu_controller)
 	radial_menu_controller.initialize(object_manager, opr_army_manager)
+
+	# Pass stats tooltip reference for displaying unit stats
+	radial_menu_controller.stats_tooltip = opr_stats_tooltip
+
+	# Create and pass coherency visualizer
+	coherency_visualizer = CoherencyVisualizer.new()
+	coherency_visualizer.name = "CoherencyVisualizer"
+	add_child(coherency_visualizer)
+	radial_menu_controller.coherency_visualizer = coherency_visualizer
 
 	# Connect object manager's right-click signal to open the menu
 	object_manager.context_menu_requested.connect(_on_context_menu_requested)
