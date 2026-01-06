@@ -1037,7 +1037,20 @@ func _get_measure_end_position(screen_pos: Vector2) -> Variant:
 ## Get the radius/size of an object for edge calculation
 func _get_object_radius(obj: Node3D) -> float:
 	if obj.is_in_group("miniature"):
-		return MINIATURE_RADIUS  # 16mm = 0.016m
+		# Try to get actual base size from unit properties
+		var game_unit = obj.get_meta("game_unit", null) as GameUnit
+		if game_unit and game_unit.unit_properties:
+			var props = game_unit.unit_properties
+			# Handle oval bases - use smaller dimension to be conservative
+			if props.get("base_is_oval", false):
+				var width_mm = props.get("base_width_mm", 32)
+				var depth_mm = props.get("base_depth_mm", 32)
+				var min_dim = mini(width_mm, depth_mm)
+				return (min_dim / 2.0) * 0.001  # mm to meters
+			else:
+				var base_mm = props.get("base_size_round", 32)
+				return (base_mm / 2.0) * 0.001  # mm to meters
+		return MINIATURE_RADIUS  # Default 16mm = 0.016m
 	elif obj.is_in_group("dice"):
 		return 0.008  # Half of 16mm dice = 8mm diagonal approximation
 	elif obj.is_in_group("terrain"):

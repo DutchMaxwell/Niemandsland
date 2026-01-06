@@ -145,11 +145,18 @@ func _input(event: InputEvent) -> void:
 static func create_simple() -> WoundsDialog:
 	var dialog = WoundsDialog.new()
 	dialog.name = "WoundsDialog"
+	# Make dialog fill screen but only capture input on panel
+	dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dialog.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	# Create panel
 	var panel = PanelContainer.new()
 	panel.name = "Panel"
 	panel.custom_minimum_size = Vector2(250, 200)
+	# Center the panel
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	dialog.add_child(panel)
 
 	# VBox container
@@ -218,7 +225,11 @@ static func create_simple() -> WoundsDialog:
 	vbox.add_child(close_btn)
 	dialog.close_button = close_btn
 
-	# Connect signals
-	dialog._setup_ui()
+	# Connect signals directly (not using _setup_ui which checks @onready vars)
+	minus_btn.pressed.connect(dialog._on_minus_pressed)
+	plus_btn.pressed.connect(dialog._on_plus_pressed)
+	heal_btn.pressed.connect(dialog._on_heal_full_pressed)
+	kill_btn.pressed.connect(dialog._on_kill_pressed)
+	close_btn.pressed.connect(dialog.close)
 
 	return dialog
