@@ -669,7 +669,7 @@ func _generate_unit_activation_steps(unit: GameUnit) -> void:
 				melee_step.description = "Melee Combat"
 				melee_step.target_unit = action.charge_target
 				melee_step.details = "%s vs %s" % [unit.get_name(), action.charge_target.get_name()]
-				melee_step.highlight_units = [unit, action.charge_target]
+				melee_step.highlight_units.assign([unit, action.charge_target])
 				melee_step.action_data["action"] = action
 				step_queue.append(melee_step)
 
@@ -701,7 +701,7 @@ func _generate_unit_activation_steps(unit: GameUnit) -> void:
 				shoot_step.description = "%s shoots" % unit.get_name()
 				shoot_step.target_unit = action.shoot_target
 				shoot_step.details = "Shooting at %s" % action.shoot_target.get_name()
-				shoot_step.highlight_units = [unit, action.shoot_target]
+				shoot_step.highlight_units.assign([unit, action.shoot_target])
 				shoot_step.action_data["action"] = action
 				step_queue.append(shoot_step)
 
@@ -728,7 +728,7 @@ func _generate_unit_activation_steps(unit: GameUnit) -> void:
 				shoot_step.description = "%s shoots" % unit.get_name()
 				shoot_step.target_unit = action.shoot_target
 				shoot_step.details = "Shooting at %s" % action.shoot_target.get_name()
-				shoot_step.highlight_units = [unit, action.shoot_target]
+				shoot_step.highlight_units.assign([unit, action.shoot_target])
 				shoot_step.action_data["action"] = action
 				step_queue.append(shoot_step)
 
@@ -1298,19 +1298,37 @@ func _get_deployment_position(unit: GameUnit, player_id: int, unit_radius: float
 		z_base = _table_bounds.position.y + table_depth - deployment_depth + unit_radius + 0.02
 		z_range = deployment_depth - unit_radius * 2
 
-	# Try to find non-colliding position in valid deployment zone (max 50 attempts)
+	# OPR Rule: Minimum 1" between enemy units during deployment
+	const MIN_UNIT_SPACING_INCHES: float = 1.0
+	const INCHES_TO_METERS: float = 0.0254
+	var min_spacing = MIN_UNIT_SPACING_INCHES * INCHES_TO_METERS
+
+	# Required clearance = own radius + spacing buffer
+	var required_clearance = unit_radius + min_spacing
+
+	# Try to find non-colliding position in valid deployment zone (max 100 attempts)
 	var best_pos = Vector3.ZERO
 	var best_min_distance = -1.0
 	var attempts = 0
-	var max_attempts = 50
+	var max_attempts = 100
 	var valid_zone_found = false
 
 	while attempts < max_attempts:
-		var test_x = randf_range(min_x, max_x)
-		var test_z = z_base + randf_range(0, max(z_range, 0.01))
+		# Use grid-based positioning for better distribution
+		var grid_cols = 5
+		var grid_x = (attempts % grid_cols) / float(grid_cols - 1)
+		var grid_z = (attempts / grid_cols) / float(max_attempts / grid_cols)
+
+		# Add small random offset for natural look
+		var jitter_x = randf_range(-0.02, 0.02)
+		var jitter_z = randf_range(-0.02, 0.02)
+
+		var test_x = min_x + (max_x - min_x) * grid_x + jitter_x
+		var test_z = z_base + max(z_range, 0.01) * grid_z + jitter_z
 		var test_pos = Vector3(test_x, 0, test_z)
 
 		# Check collision with already deployed units
+		# _get_min_distance_to_deployed returns distance to EDGE of nearest unit
 		var min_distance = _get_min_distance_to_deployed(test_pos, player_id)
 
 		# Validate deployment zone if terrain_overlay is available
@@ -1320,18 +1338,13 @@ func _get_deployment_position(unit: GameUnit, player_id: int, unit_radius: float
 			var expected_player = "player%d" % player_id
 			zone_valid = zone_check.get("in_zone", false) and zone_check.get("player", "") == expected_player
 
-			if not zone_valid and (min_distance < 0 or min_distance > unit_radius * 2):
-				# Position is collision-free but outside correct zone
-				_log("  Warning: Position (%.2f, %.2f) outside Player %d deployment zone" % [
-					test_pos.x, test_pos.z, player_id
-				], "warning")
-
 		# If no collision and valid zone, use this position
-		if (min_distance < 0 or min_distance > unit_radius * 2) and zone_valid:
+		# min_distance already accounts for deployed unit's radius, so we check against our radius + buffer
+		if (min_distance < 0 or min_distance > required_clearance) and zone_valid:
 			valid_zone_found = true
 			return test_pos
 
-		# Track best position found so far (prefer valid zones)
+		# Track best position found so far (prefer valid zones, maximize spacing)
 		if zone_valid and (not valid_zone_found or min_distance > best_min_distance):
 			valid_zone_found = true
 			best_min_distance = min_distance

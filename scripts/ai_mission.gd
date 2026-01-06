@@ -39,11 +39,24 @@ class MissionState:
 	var winner: int = 0  # 0=tie, 1=player, 2=AI
 
 
-## Objective seizure radius (inches)
-const SEIZE_RADIUS: float = 3.0
+## Unit conversion: 1 inch = 0.0254 meters
+const INCHES_TO_METERS: float = 0.0254
 
-## Minimum distance between objectives (inches)
-const MIN_OBJECTIVE_DISTANCE: float = 9.0
+## Objective seizure radius: 3" per OPR rules (in METERS)
+const SEIZE_RADIUS_INCHES: float = 3.0
+const SEIZE_RADIUS: float = SEIZE_RADIUS_INCHES * INCHES_TO_METERS  # ~0.0762m
+
+## Minimum distance between objectives: 9" per OPR rules (in METERS)
+const MIN_OBJECTIVE_DISTANCE_INCHES: float = 9.0
+const MIN_OBJECTIVE_DISTANCE: float = MIN_OBJECTIVE_DISTANCE_INCHES * INCHES_TO_METERS  # ~0.2286m
+
+## Standard deployment zone depth: 12" per OPR rules (in METERS)
+const DEPLOYMENT_DEPTH_INCHES: float = 12.0
+const DEPLOYMENT_DEPTH: float = DEPLOYMENT_DEPTH_INCHES * INCHES_TO_METERS  # ~0.3048m
+
+## Minimum distance from table edge for objectives: 6" (in METERS)
+const MIN_EDGE_DISTANCE_INCHES: float = 6.0
+const MIN_EDGE_DISTANCE: float = MIN_EDGE_DISTANCE_INCHES * INCHES_TO_METERS
 
 
 signal objective_seized(objective: Objective, new_controller: int)
@@ -55,36 +68,54 @@ signal game_ended(state: MissionState)
 
 # ===== Mission Setup =====
 
-## Sets up objectives for the mission.
+## Sets up objectives for the mission using OPR standard rules.
 ## "D3+2 objective markers, over 9" apart, outside deployment zones"
+## @param table_bounds: Table boundaries as Rect2 (in METERS)
+## @param deployment_zone_depth_meters: Depth of deployment zones (in METERS), defaults to 12"
 static func setup_objectives(
 	table_bounds: Rect2,
-	deployment_zone_depth: float = 12.0
+	deployment_zone_depth_meters: float = DEPLOYMENT_DEPTH
 ) -> Array[Objective]:
 	var objectives: Array[Objective] = []
 
-	# D3+2 = 3-5 objectives
+	# D3+2 = 3-5 objectives (roll D3 and add 2)
 	var num_objectives = (randi() % 3) + 3
 
-	# Calculate valid placement area (outside deployment zones)
+	# Calculate valid placement area (outside deployment zones, with edge buffer)
+	# OPR Rule: Objectives must be outside deployment zones and at least 6" from edges
+	var edge_buffer = MIN_EDGE_DISTANCE
 	var valid_area = Rect2(
-		table_bounds.position.x,
-		table_bounds.position.y + deployment_zone_depth,
-		table_bounds.size.x,
-		table_bounds.size.y - 2 * deployment_zone_depth
+		table_bounds.position.x + edge_buffer,
+		table_bounds.position.y + deployment_zone_depth_meters + edge_buffer,
+		table_bounds.size.x - 2 * edge_buffer,
+		table_bounds.size.y - 2 * deployment_zone_depth_meters - 2 * edge_buffer
 	)
+
+	# Ensure valid area has positive dimensions
+	if valid_area.size.x <= 0 or valid_area.size.y <= 0:
+		push_warning("AIMission: Table too small for proper objective placement!")
+		# Fallback to center placement
+		valid_area = Rect2(
+			table_bounds.position.x + table_bounds.size.x * 0.25,
+			table_bounds.position.y + table_bounds.size.y * 0.25,
+			table_bounds.size.x * 0.5,
+			table_bounds.size.y * 0.5
+		)
 
 	var placed_positions: Array[Vector3] = []
 
+	# Use strategic placement: distribute objectives evenly across the battlefield
 	for i in range(num_objectives):
 		var obj = Objective.new()
 		obj.id = i + 1
 
-		# Try to find valid position
-		var valid_pos = _find_valid_objective_position(
+		# Try to find valid position using grid-based distribution
+		var valid_pos = _find_valid_objective_position_distributed(
 			valid_area,
 			placed_positions,
-			MIN_OBJECTIVE_DISTANCE
+			MIN_OBJECTIVE_DISTANCE,
+			i,
+			num_objectives
 		)
 
 		obj.position = valid_pos
@@ -94,7 +125,75 @@ static func setup_objectives(
 	return objectives
 
 
-## Finds a valid position for an objective.
+## Finds a valid position for an objective using grid-based distribution.
+## Ensures objectives are spread across the battlefield, not clustered.
+static func _find_valid_objective_position_distributed(
+	valid_area: Rect2,
+	existing: Array[Vector3],
+	min_distance: float,
+	objective_index: int,
+	total_objectives: int
+) -> Vector3:
+	# Calculate grid-based target position for even distribution
+	# For 3-5 objectives, use patterns that spread them across the table
+	var target_x: float
+	var target_z: float
+
+	match total_objectives:
+		3:
+			# Triangle pattern: center, left-back, right-back
+			match objective_index:
+				0: target_x = 0.5; target_z = 0.5  # Center
+				1: target_x = 0.2; target_z = 0.3  # Left-front
+				2: target_x = 0.8; target_z = 0.7  # Right-back
+		4:
+			# Diamond pattern
+			match objective_index:
+				0: target_x = 0.5; target_z = 0.2  # Center-front
+				1: target_x = 0.2; target_z = 0.5  # Left-center
+				2: target_x = 0.8; target_z = 0.5  # Right-center
+				3: target_x = 0.5; target_z = 0.8  # Center-back
+		5, _:
+			# X pattern with center
+			match objective_index:
+				0: target_x = 0.5; target_z = 0.5  # Center
+				1: target_x = 0.2; target_z = 0.2  # Front-left
+				2: target_x = 0.8; target_z = 0.2  # Front-right
+				3: target_x = 0.2; target_z = 0.8  # Back-left
+				4: target_x = 0.8; target_z = 0.8  # Back-right
+				_: target_x = randf(); target_z = randf()
+
+	# Convert to actual position with some randomization
+	var base_x = valid_area.position.x + valid_area.size.x * target_x
+	var base_z = valid_area.position.y + valid_area.size.y * target_z
+
+	# Try the target position first, then nearby positions
+	var max_attempts = 30
+	var jitter_range = min(valid_area.size.x, valid_area.size.y) * 0.15  # 15% jitter
+
+	for attempt in range(max_attempts):
+		var jitter_x = randf_range(-jitter_range, jitter_range) * (attempt / float(max_attempts))
+		var jitter_z = randf_range(-jitter_range, jitter_range) * (attempt / float(max_attempts))
+
+		var test_x = clampf(base_x + jitter_x, valid_area.position.x, valid_area.position.x + valid_area.size.x)
+		var test_z = clampf(base_z + jitter_z, valid_area.position.y, valid_area.position.y + valid_area.size.y)
+		var pos = Vector3(test_x, 0, test_z)
+
+		# Check distance from existing objectives
+		var too_close = false
+		for existing_pos in existing:
+			if pos.distance_to(existing_pos) < min_distance:
+				too_close = true
+				break
+
+		if not too_close:
+			return pos
+
+	# Fallback: return target position anyway (better than clustering)
+	return Vector3(base_x, 0, base_z)
+
+
+## Legacy function for random placement (kept for compatibility).
 static func _find_valid_objective_position(
 	valid_area: Rect2,
 	existing: Array[Vector3],
