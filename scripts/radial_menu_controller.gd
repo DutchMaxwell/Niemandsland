@@ -485,35 +485,35 @@ func _update_wound_marker(model: ModelInstance) -> void:
 		marker.name = marker_name
 		model.node.add_child(marker)
 
-		# Create red disc (main body) - sits directly on ground
+		# Create black base disc (slightly larger for border effect)
+		var border_mesh = MeshInstance3D.new()
+		border_mesh.name = "Border"
+		var border_cyl = CylinderMesh.new()
+		border_cyl.top_radius = disc_radius + 0.001  # 1mm larger = thin border
+		border_cyl.bottom_radius = disc_radius + 0.001
+		border_cyl.height = disc_height
+		border_mesh.mesh = border_cyl
+		var border_mat = StandardMaterial3D.new()
+		border_mat.albedo_color = Color(0.02, 0.02, 0.02)  # Black
+		border_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		border_mesh.material_override = border_mat
+		border_mesh.position = Vector3(0, disc_height / 2, 0)
+		marker.add_child(border_mesh)
+
+		# Create red disc (main body) - sits on top of black border
 		var disc_mesh = MeshInstance3D.new()
 		disc_mesh.name = "Disc"
 		var disc_cyl = CylinderMesh.new()
 		disc_cyl.top_radius = disc_radius
 		disc_cyl.bottom_radius = disc_radius
-		disc_cyl.height = disc_height
+		disc_cyl.height = disc_height + 0.0002  # Slightly taller to sit on top
 		disc_mesh.mesh = disc_cyl
 		var disc_mat = StandardMaterial3D.new()
 		disc_mat.albedo_color = Color(0.9, 0.15, 0.15)  # Bright red
 		disc_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		disc_mat.no_depth_test = false  # Normal depth testing
 		disc_mesh.material_override = disc_mat
-		disc_mesh.position = Vector3(0, disc_height / 2, 0)
+		disc_mesh.position = Vector3(0, disc_height / 2 + 0.0001, 0)
 		marker.add_child(disc_mesh)
-
-		# Create black border ring (torus around edge)
-		var border_mesh = MeshInstance3D.new()
-		border_mesh.name = "Border"
-		var border_torus = TorusMesh.new()
-		border_torus.inner_radius = disc_radius - 0.001
-		border_torus.outer_radius = disc_radius + 0.0015
-		border_mesh.mesh = border_torus
-		var border_mat = StandardMaterial3D.new()
-		border_mat.albedo_color = Color(0.05, 0.05, 0.05)  # Black
-		border_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		border_mesh.material_override = border_mat
-		border_mesh.position = Vector3(0, disc_height + 0.0005, 0)  # On top of disc
-		marker.add_child(border_mesh)
 
 		# Create "WOUNDS" text along outer top edge
 		_create_wound_text_arc(marker, disc_radius * 0.75, disc_height + 0.001)
@@ -560,9 +560,9 @@ func _update_wound_marker(model: ModelInstance) -> void:
 ## Creates "WOUNDS" text as an arc along the top outer edge of the disc.
 func _create_wound_text_arc(parent: Node3D, radius: float, height: float) -> void:
 	var text = "WOUNDS"
-	var angle_per_char = PI / 18  # Tighter spacing for outer edge
+	var angle_per_char = PI / 10  # More spacing between letters
 	var total_arc = (text.length() - 1) * angle_per_char
-	var start_angle = PI / 2 + total_arc / 2  # Center at top (negative Z direction when viewed from above)
+	var start_angle = PI / 2 + total_arc / 2  # Center at top
 
 	for i in range(text.length()):
 		var char_label = Label3D.new()
@@ -570,11 +570,11 @@ func _create_wound_text_arc(parent: Node3D, radius: float, height: float) -> voi
 		char_label.text = text[i]
 		char_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 		char_label.no_depth_test = true
-		char_label.font_size = 28
-		char_label.outline_size = 3
+		char_label.font_size = 24
+		char_label.outline_size = 2
 		char_label.modulate = Color.WHITE
-		char_label.outline_modulate = Color(0.4, 0, 0)  # Dark red outline
-		char_label.pixel_size = 0.00008  # Small text for outer ring
+		char_label.outline_modulate = Color(0.3, 0, 0)  # Dark red outline
+		char_label.pixel_size = 0.0001  # Slightly larger for readability
 		char_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 		# Position in arc at outer edge, at the TOP of the marker (negative Z)
