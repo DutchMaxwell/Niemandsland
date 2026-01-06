@@ -101,18 +101,19 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 
 		context["is_full_unit"] = is_full_unit
 
-		if is_full_unit:
+		# For single-model units, use model menu to show wounds option
+		# For multi-model units with full selection, use unit menu
+		var model_instance = UnitUtils.get_model_instance(first_obj)
+		var is_single_model_unit = all_models.size() == 1
+
+		if is_full_unit and not is_single_model_unit:
+			# Multi-model unit fully selected - show unit menu
 			items = RadialMenu.create_unit_menu(game_unit)
-		else:
-			# Single or partial model selection
-			var model_instance = UnitUtils.get_model_instance(first_obj)
-			print("DEBUG: model_instance from meta = %s" % model_instance)
-			if model_instance:
-				print("DEBUG: model_instance.wounds_max = %d" % model_instance.wounds_max)
-				context["model_instance"] = model_instance
-				items = RadialMenu.create_model_menu(model_instance)
-			else:
-				print("DEBUG: model_instance is NULL for %s" % first_obj.name)
+		elif model_instance:
+			# Single model or partial selection - show model menu (includes wounds)
+			context["model_instance"] = model_instance
+			items = RadialMenu.create_model_menu(model_instance)
+			print("DEBUG: Using model menu for %s, wounds_max=%d" % [model_instance, model_instance.wounds_max])
 	elif UnitUtils.is_terrain(first_obj):
 		context["terrain"] = first_obj
 		items = RadialMenu.create_terrain_menu()
