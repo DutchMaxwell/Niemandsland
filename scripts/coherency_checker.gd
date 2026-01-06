@@ -128,7 +128,7 @@ static func _get_nearest_model(model: ModelInstance, all_models: Array[ModelInst
 	return nearest
 
 
-## Calculates distance between two models in inches.
+## Calculates distance between two models in inches (edge-to-edge, not center-to-center).
 static func _distance_between_models(model_a: ModelInstance, model_b: ModelInstance) -> float:
 	if not model_a.node or not model_b.node:
 		return INF
@@ -141,8 +141,28 @@ static func _distance_between_models(model_a: ModelInstance, model_b: ModelInsta
 	# 2D distance (ignore Y for base measurement)
 	var dist_2d = Vector2(pos_a.x, pos_a.z).distance_to(Vector2(pos_b.x, pos_b.z))
 
+	# Get base radii and subtract them to get edge-to-edge distance
+	var radius_a = _get_base_radius_meters(model_a)
+	var radius_b = _get_base_radius_meters(model_b)
+	var edge_to_edge = dist_2d - radius_a - radius_b
+
+	# Ensure non-negative (bases can overlap)
+	edge_to_edge = maxf(0.0, edge_to_edge)
+
 	# Convert meters to inches
-	return dist_2d / INCHES_TO_METERS
+	return edge_to_edge / INCHES_TO_METERS
+
+
+## Gets the base radius in meters for a model.
+static func _get_base_radius_meters(model: ModelInstance) -> float:
+	# Try to get from the unit's properties
+	if model.unit:
+		var game_unit = model.unit as GameUnit
+		if game_unit and game_unit.unit_properties:
+			var base_mm = game_unit.unit_properties.get("base_size_round", 32)
+			return (base_mm / 2.0) * 0.001  # mm to meters
+	# Default: 32mm base = 16mm radius
+	return 0.016
 
 
 ## Checks if two models are at significantly different heights.
