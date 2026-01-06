@@ -51,9 +51,9 @@ static func evaluate(ai_unit: GameUnit, context: AIContext) -> ActionResult:
 			return _evaluate_shooting(ai_unit, context)
 		AIUnitClassifier.UnitType.MELEE:
 			return _evaluate_melee(ai_unit, context)
-
-	push_warning("AIDecisionTree: Unknown unit type for %s" % ai_unit.get_name())
-	return ActionResult.new()
+		_:
+			# Default to hybrid behavior for any unhandled unit types
+			return _evaluate_hybrid(ai_unit, context)
 
 
 ## DECISION TREE - HYBRID
