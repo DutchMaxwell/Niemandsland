@@ -3,16 +3,50 @@ extends RefCounted
 ## Handles terrain interactions for AI units.
 ## Based on OPR Grimdark Future v3.5.1 terrain rules.
 ## Terrain types: Open, Impassable, Blocking, Cover, Difficult, Dangerous, Elevated
+##
+## UNIT CONVENTION:
+## - All public API distances are in INCHES (Wargaming standard)
+## - Internal calculations use METERS (Godot standard)
+## - Base sizes are in MILLIMETERS
+## - Use INCHES_TO_METERS for conversions
 
+
+# ==============================================================================
+# CONSTANTS
+# ==============================================================================
+
+## Conversion: 1 inch = 0.0254 meters
+const INCHES_TO_METERS: float = 0.0254
+
+## Conversion: 1 millimeter = 0.001 meters (for base sizes)
+const MM_TO_METERS: float = 0.001
+
+## Terrain height threshold for "elevated" classification (in inches)
+const ELEVATED_HEIGHT_THRESHOLD_INCHES: float = 3.0
+
+## Standard movement limits (in inches)
+const DIFFICULT_TERRAIN_MAX_MOVEMENT_INCHES: float = 6.0
+
+## Cover search radius default (in inches)
+const DEFAULT_COVER_SEARCH_RADIUS_INCHES: float = 6.0
+
+## Standard coherency distances (in inches)
+const STANDARD_COHERENCY_INCHES: float = 1.0
+const ELEVATED_COHERENCY_INCHES: float = 3.0
+
+
+# ==============================================================================
+# DATA STRUCTURES
+# ==============================================================================
 
 ## Terrain piece data
 class TerrainPiece:
 	var id: String = ""
-	var bounds: AABB = AABB()
-	var position: Vector3 = Vector3.ZERO
-	var types: Array[String] = []  # ["cover", "difficult", etc.]
-	var height: float = 0.0
-	var node: Node3D = null
+	var bounds: AABB = AABB()           ## Bounds in METERS (for Godot collision)
+	var position: Vector3 = Vector3.ZERO ## Position in METERS (Godot world space)
+	var types: Array[String] = []        ## ["cover", "difficult", "dangerous", "blocking", "impassable"]
+	var height: float = 0.0              ## Height in INCHES (for rules calculations)
+	var node: Node3D = null              ## Optional reference to visual node
 
 	func is_cover() -> bool:
 		return "cover" in types
@@ -30,7 +64,7 @@ class TerrainPiece:
 		return "blocking" in types
 
 	func is_elevated() -> bool:
-		return height > 3.0
+		return height > ELEVATED_HEIGHT_THRESHOLD_INCHES
 
 
 ## Terrain query result
@@ -107,14 +141,20 @@ static func is_los_blocked(
 
 
 ## Finds cover terrain near a position that provides cover from a threat.
+## @param pos: Current position (METERS, Godot world space)
+## @param threat_pos: Threat position (METERS, Godot world space)
+## @param terrain_pieces: Array of terrain pieces to search
+## @param max_distance_inches: Maximum search radius in INCHES (default: 6")
+## @return: Best cover position (METERS, Godot world space)
 static func find_cover_near(
 	pos: Vector3,
 	threat_pos: Vector3,
 	terrain_pieces: Array[TerrainPiece],
-	max_distance: float = 6.0
+	max_distance_inches: float = DEFAULT_COVER_SEARCH_RADIUS_INCHES
 ) -> Vector3:
 	var best_cover = pos
 	var best_score = -INF
+	var max_distance_meters := max_distance_inches * INCHES_TO_METERS
 
 	for piece in terrain_pieces:
 		if not piece.is_cover():
@@ -123,7 +163,7 @@ static func find_cover_near(
 		var piece_pos = piece.position
 		var distance = pos.distance_to(piece_pos)
 
-		if distance > max_distance:
+		if distance > max_distance_meters:
 			continue
 
 		# Score: prefer cover between us and threat
@@ -178,24 +218,30 @@ static func get_safe_path(
 	return path
 
 
-# ===== Dangerous Terrain Tests =====
+# ==============================================================================
+# DANGEROUS TERRAIN TESTS
+# ==============================================================================
 
 ## Takes a dangerous terrain test for a unit.
-## @returns: Number of wounds taken (0 or 1 per model typically)
+## Per OPR rules: "Roll one die for each model, for each roll of 1 the model takes 1 wound."
+## Note: Each model can only take 1 wound from dangerous terrain, regardless of Tough value.
+##
+## @param unit: The unit taking the dangerous terrain test
+## @return: Total number of wounds taken by the unit
 static func take_dangerous_terrain_test(unit: GameUnit) -> int:
-	var total_wounds = 0
+	if unit == null:
+		return 0
+
+	var total_wounds := 0
 
 	for model in unit.models:
-		if not model.is_alive:
+		if model == null or not model.is_alive:
 			continue
 
-		# Roll 1 die (or Tough value dice)
-		var dice_count = model.wounds_max
-		for i in range(dice_count):
-			var roll = randi() % 6 + 1
-			if roll == 1:
-				total_wounds += 1
-				break  # Only one wound per model from dangerous terrain
+		# Per OPR: Roll 1 die per model, on a 1 the model takes 1 wound
+		var roll := randi() % 6 + 1
+		if roll == 1:
+			total_wounds += 1
 
 	return total_wounds
 
@@ -238,56 +284,81 @@ static func should_enter_terrain(
 
 
 ## Gets movement limit when crossing difficult terrain.
-## "Units may not move more than 6" when crossing difficult terrain"
+## Per OPR: "Units may not move more than 6" when crossing difficult terrain"
+##
+## @param unit: The unit attempting to move
+## @param crosses_difficult: Whether the path crosses difficult terrain
+## @param base_movement_inches: Base movement distance in INCHES
+## @return: Adjusted movement distance in INCHES
 static func get_movement_limit(
 	unit: GameUnit,
 	crosses_difficult: bool,
-	base_movement: float
+	base_movement_inches: float
 ) -> float:
 	if not crosses_difficult:
-		return base_movement
+		return base_movement_inches
+
+	if unit == null:
+		return minf(DIFFICULT_TERRAIN_MAX_MOVEMENT_INCHES, base_movement_inches)
 
 	if unit.has_special_rule("Strider") or unit.has_special_rule("Flying"):
-		return base_movement
+		return base_movement_inches
 
-	return min(6.0, base_movement)
+	return minf(DIFFICULT_TERRAIN_MAX_MOVEMENT_INCHES, base_movement_inches)
 
 
 # ===== Cover Rules =====
 
 ## Checks if a unit gets cover bonus.
-## "Majority of models fully inside cover or behind sight blocker"
+## Per OPR: "Majority of models fully inside cover or behind sight blocker"
+## Note: A model is counted as "in cover" if EITHER in cover terrain OR behind blocking terrain,
+## but only counted once even if both conditions are met.
+##
+## @param unit: The defending unit
+## @param terrain_pieces: Array of terrain pieces
+## @param attacker_pos: Position of the attacker (METERS, Godot world space)
+## @return: True if majority of models are in cover
 static func unit_has_cover(
 	unit: GameUnit,
 	terrain_pieces: Array[TerrainPiece],
 	attacker_pos: Vector3
 ) -> bool:
-	var in_cover = 0
-	var total = 0
+	if unit == null:
+		return false
+
+	var in_cover := 0
+	var total := 0
 
 	for model in unit.models:
-		if not model.is_alive:
+		if model == null or not model.is_alive:
 			continue
 
 		total += 1
-		if model.node:
-			var model_pos = model.node.global_position
 
-			# Check if in cover terrain
+		if model.node == null:
+			continue
+
+		var model_pos := model.node.global_position
+		var model_has_cover := false
+
+		# Check if in cover terrain
+		for piece in terrain_pieces:
+			if piece.is_cover() and piece.bounds.has_point(model_pos):
+				model_has_cover = true
+				break
+
+		# Only check blocking terrain if not already in cover
+		if not model_has_cover:
 			for piece in terrain_pieces:
-				if piece.is_cover() and piece.bounds.has_point(model_pos):
-					in_cover += 1
+				if piece.is_blocking() and _is_behind_cover(model_pos, attacker_pos, piece):
+					model_has_cover = true
 					break
 
-			# Check if behind blocking terrain (sight blocker)
-			for piece in terrain_pieces:
-				if piece.is_blocking():
-					if _is_behind_cover(model_pos, attacker_pos, piece):
-						in_cover += 1
-						break
+		if model_has_cover:
+			in_cover += 1
 
-	# Majority = more than half
-	return in_cover > total / 2.0
+	# Majority = more than half (explicit float division for clarity)
+	return total > 0 and in_cover > (total / 2.0)
 
 
 ## Checks if a position is behind cover relative to attacker.
@@ -314,21 +385,28 @@ static func _is_behind_cover(
 
 # ===== Elevated Terrain =====
 
-## Checks coherency for elevated units.
-## "If not all models can fit on elevation, 3" coherency is allowed"
+## Gets coherency distance for a unit based on elevation.
+## Per OPR: "If not all models can fit on elevation, 3" coherency is allowed"
+##
+## @param unit: The unit to check
+## @param terrain_pieces: Array of terrain pieces
+## @return: Required coherency distance in INCHES
 static func get_coherency_distance(
 	unit: GameUnit,
 	terrain_pieces: Array[TerrainPiece]
 ) -> float:
-	var has_elevated = false
-	var has_ground = false
+	if unit == null:
+		return STANDARD_COHERENCY_INCHES
+
+	var has_elevated := false
+	var has_ground := false
 
 	for model in unit.models:
-		if not model.is_alive or not model.node:
+		if model == null or not model.is_alive or model.node == null:
 			continue
 
-		var pos = model.node.global_position
-		var on_elevated = false
+		var pos := model.node.global_position
+		var on_elevated := false
 
 		for piece in terrain_pieces:
 			if piece.is_elevated() and piece.bounds.has_point(pos):
@@ -340,11 +418,11 @@ static func get_coherency_distance(
 		else:
 			has_ground = true
 
-	# If models at different elevations, allow 3" coherency
+	# If models at different elevations, allow extended coherency
 	if has_elevated and has_ground:
-		return 3.0
+		return ELEVATED_COHERENCY_INCHES
 
-	return 1.0  # Standard coherency
+	return STANDARD_COHERENCY_INCHES
 
 
 # ===== Artillery Deployment =====

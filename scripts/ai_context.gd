@@ -130,8 +130,13 @@ func get_nearest_enemy(from_pos: Vector3) -> GameUnit:
 ## "Enemy units within 6" of the path count as being in the way"
 func get_enemies_in_path(from_pos: Vector3, to_pos: Vector3) -> Array[GameUnit]:
 	var result: Array[GameUnit] = []
-	var path_dir = (to_pos - from_pos).normalized()
-	var path_length = from_pos.distance_to(to_pos)
+	var path_length := from_pos.distance_to(to_pos)
+
+	# Guard against zero-length path (division by zero)
+	if path_length < 0.001:
+		return result
+
+	var path_dir := (to_pos - from_pos).normalized()
 
 	for enemy in enemy_units:
 		if enemy.is_destroyed():
