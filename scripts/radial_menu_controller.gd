@@ -472,13 +472,10 @@ func _update_wound_marker(model: ModelInstance) -> void:
 	# Create marker container if needed
 	var marker: Node3D
 	var number_label: Label3D
-	var disc_mesh: MeshInstance3D
-	var border_mesh: MeshInstance3D
 
 	# Marker dimensions: 20mm diameter disc
 	var disc_radius = 0.010  # 10mm radius = 20mm diameter
-	var disc_height = 0.002  # 2mm thick
-	var border_width = 0.001  # 1mm border
+	var disc_height = 0.003  # 3mm thick
 
 	if existing_marker:
 		marker = existing_marker
@@ -488,63 +485,63 @@ func _update_wound_marker(model: ModelInstance) -> void:
 		marker.name = marker_name
 		model.node.add_child(marker)
 
-		# Create black border ring (slightly larger cylinder underneath)
-		border_mesh = MeshInstance3D.new()
-		border_mesh.name = "Border"
-		var border_cyl = CylinderMesh.new()
-		border_cyl.top_radius = disc_radius + border_width
-		border_cyl.bottom_radius = disc_radius + border_width
-		border_cyl.height = disc_height
-		border_mesh.mesh = border_cyl
-		var border_mat = StandardMaterial3D.new()
-		border_mat.albedo_color = Color(0.05, 0.05, 0.05)  # Near black
-		border_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		border_mesh.material_override = border_mat
-		border_mesh.position = Vector3(0, disc_height / 2, 0)
-		marker.add_child(border_mesh)
-
-		# Create red disc (main body)
-		disc_mesh = MeshInstance3D.new()
+		# Create red disc (main body) - sits directly on ground
+		var disc_mesh = MeshInstance3D.new()
 		disc_mesh.name = "Disc"
 		var disc_cyl = CylinderMesh.new()
 		disc_cyl.top_radius = disc_radius
 		disc_cyl.bottom_radius = disc_radius
-		disc_cyl.height = disc_height + 0.0005  # Slightly taller to be on top
+		disc_cyl.height = disc_height
 		disc_mesh.mesh = disc_cyl
 		var disc_mat = StandardMaterial3D.new()
 		disc_mat.albedo_color = Color(0.85, 0.1, 0.1)  # Bright red
 		disc_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		disc_mesh.material_override = disc_mat
-		disc_mesh.position = Vector3(0, disc_height / 2 + 0.0003, 0)
+		disc_mesh.position = Vector3(0, disc_height / 2, 0)
 		marker.add_child(disc_mesh)
 
-		# Create "WOUNDS" text around the edge (curved via multiple labels)
-		_create_wound_text_ring(marker, disc_radius * 0.7)
+		# Create black border ring (torus around edge)
+		var border_mesh = MeshInstance3D.new()
+		border_mesh.name = "Border"
+		var border_torus = TorusMesh.new()
+		border_torus.inner_radius = disc_radius - 0.0005
+		border_torus.outer_radius = disc_radius + 0.001
+		border_mesh.mesh = border_torus
+		var border_mat = StandardMaterial3D.new()
+		border_mat.albedo_color = Color(0.02, 0.02, 0.02)  # Black
+		border_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		border_mesh.material_override = border_mat
+		border_mesh.position = Vector3(0, disc_height, 0)  # On top of disc
+		marker.add_child(border_mesh)
+
+		# Create "WOUNDS" text curved along outer edge
+		_create_wound_text_ring(marker, disc_radius * 0.65, disc_height + 0.0005)
 
 		# Create number label in center
 		number_label = Label3D.new()
 		number_label.name = "NumberLabel"
 		number_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 		number_label.no_depth_test = true
-		number_label.font_size = 64
-		number_label.outline_size = 6
+		number_label.font_size = 72
+		number_label.outline_size = 8
 		number_label.modulate = Color.WHITE
-		number_label.outline_modulate = Color(0.3, 0, 0)  # Dark red outline
-		number_label.pixel_size = 0.00025  # Size to fit in disc
+		number_label.outline_modulate = Color(0.4, 0, 0)  # Dark red outline
+		number_label.pixel_size = 0.00018  # Fit nicely in center
 		number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		number_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		number_label.position = Vector3(0, disc_height + 0.001, 0)
+		number_label.position = Vector3(0, disc_height + 0.0005, 0)
 		number_label.rotation = Vector3(-PI / 2, 0, 0)  # Face up
 		marker.add_child(number_label)
 
-		# Position marker next to base
-		var base_radius = 0.02  # Default
+		# Position marker touching the base (no gap)
+		var base_radius = 0.016  # Default 32mm base
 		if model.unit:
 			var game_unit = model.unit as GameUnit
 			if game_unit and game_unit.unit_properties:
 				var base_mm = game_unit.unit_properties.get("base_size_round", 32)
 				base_radius = (base_mm / 2.0) * 0.001
-		marker.position = Vector3(base_radius + disc_radius + 0.003, 0, 0)
+		# Direct contact: marker edge touches base edge
+		marker.position = Vector3(base_radius + disc_radius, 0, 0)
 
 	# Update number
 	if number_label:
@@ -552,10 +549,10 @@ func _update_wound_marker(model: ModelInstance) -> void:
 
 
 ## Creates "WOUNDS" text arranged in an arc around the disc edge.
-func _create_wound_text_ring(parent: Node3D, radius: float) -> void:
+func _create_wound_text_ring(parent: Node3D, radius: float, height: float) -> void:
 	var text = "WOUNDS"
-	var angle_per_char = PI / 8  # Spread across ~90 degrees
-	var start_angle = PI / 2 + (text.length() * angle_per_char) / 2  # Start from top
+	var angle_per_char = PI / 12  # Tighter spacing
+	var start_angle = PI / 2 + (text.length() - 1) * angle_per_char / 2  # Center the text
 
 	for i in range(text.length()):
 		var char_label = Label3D.new()
@@ -563,18 +560,18 @@ func _create_wound_text_ring(parent: Node3D, radius: float) -> void:
 		char_label.text = text[i]
 		char_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 		char_label.no_depth_test = true
-		char_label.font_size = 24
-		char_label.outline_size = 2
-		char_label.modulate = Color(0.15, 0.15, 0.15)  # Dark gray text
-		char_label.outline_modulate = Color.BLACK
-		char_label.pixel_size = 0.00015
+		char_label.font_size = 32
+		char_label.outline_size = 4
+		char_label.modulate = Color(0.9, 0.9, 0.9)  # Light gray/white text
+		char_label.outline_modulate = Color(0.3, 0, 0)  # Dark red outline
+		char_label.pixel_size = 0.00012
 		char_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
-		# Position in arc
+		# Position in arc at outer edge
 		var angle = start_angle - i * angle_per_char
 		var x = cos(angle) * radius
 		var z = sin(angle) * radius
-		char_label.position = Vector3(x, 0.003, z)
-		char_label.rotation = Vector3(-PI / 2, -angle + PI / 2, 0)  # Face up, rotated
+		char_label.position = Vector3(x, height, z)
+		char_label.rotation = Vector3(-PI / 2, -angle + PI / 2, 0)  # Face up, rotated to follow arc
 
 		parent.add_child(char_label)
