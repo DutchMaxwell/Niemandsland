@@ -218,6 +218,38 @@ static func get_safe_path(
 	return path
 
 
+## Checks if a path intersects with a terrain piece.
+## Public wrapper for internal collision detection.
+## @param from_pos: Starting position (METERS, Godot world space)
+## @param to_pos: Target position (METERS, Godot world space)
+## @param piece: Terrain piece to check against
+## @return: True if path crosses the terrain piece
+static func path_intersects_terrain(
+	from_pos: Vector3,
+	to_pos: Vector3,
+	piece: TerrainPiece
+) -> bool:
+	if piece == null:
+		return false
+	return _path_intersects_aabb(from_pos, to_pos, piece.bounds)
+
+
+## Finds an avoidance waypoint around an obstacle.
+## Public wrapper for pathfinding support.
+## @param from_pos: Starting position (METERS, Godot world space)
+## @param to_pos: Target position (METERS, Godot world space)
+## @param obstacle: Terrain piece to avoid
+## @return: Waypoint position (METERS, Godot world space)
+static func find_avoidance_waypoint(
+	from_pos: Vector3,
+	to_pos: Vector3,
+	obstacle: TerrainPiece
+) -> Vector3:
+	if obstacle == null:
+		return to_pos
+	return _find_avoidance_point(from_pos, to_pos, obstacle)
+
+
 # ==============================================================================
 # DANGEROUS TERRAIN TESTS
 # ==============================================================================

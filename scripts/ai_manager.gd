@@ -475,18 +475,108 @@ func _move_unit_toward(unit: GameUnit, target: Vector3, max_distance: float) -> 
 
 ## Applies terrain avoidance to target position.
 ## AI units avoid difficult/dangerous terrain unless necessary.
+## Based on OPR Grimdark Future v3.5.1 terrain rules:
+## - Flying units ignore all terrain
+## - Strider units ignore difficult terrain
+## - Other units avoid both difficult and dangerous terrain when possible
+## Uses simple waypoint pathfinding (max 3 waypoints) for performance.
 func _apply_terrain_avoidance(unit: GameUnit, target: Vector3) -> Vector3:
+	# Null check for safety
+	if unit == null or terrain_pieces.is_empty():
+		return target
+
+	var current_pos = _get_unit_center(unit)
+
 	# Check for special rules that ignore terrain
 	if unit.has_special_rule("Flying"):
 		return target
-	if unit.has_special_rule("Strider"):
-		# Strider ignores difficult terrain
-		if not context.is_in_dangerous_terrain(target):
-			return target
 
-	# TODO: Pathfinding around terrain
-	# For now, return target as-is
+	var ignores_difficult = unit.has_special_rule("Strider")
+
+	# Check if direct path is clear
+	var crosses_dangerous = AITerrain.path_crosses_dangerous(current_pos, target, terrain_pieces)
+	var crosses_difficult = AITerrain.path_crosses_difficult(current_pos, target, terrain_pieces)
+
+	# If path is clear (or unit ignores the terrain types it crosses), use direct path
+	if not crosses_dangerous and (not crosses_difficult or ignores_difficult):
+		return target
+
+	# Build list of obstacles to avoid
+	var obstacles: Array[AITerrain.TerrainPiece] = []
+	for piece in terrain_pieces:
+		var should_avoid = false
+
+		if piece.is_dangerous():
+			should_avoid = true
+		elif piece.is_difficult() and not ignores_difficult:
+			should_avoid = true
+
+		if should_avoid:
+			if AITerrain.path_intersects_terrain(current_pos, target, piece):
+				obstacles.append(piece)
+
+	# No obstacles found (shouldn't happen, but handle gracefully)
+	if obstacles.is_empty():
+		return target
+
+	# Performance limit: max 3 waypoints
+	const MAX_WAYPOINTS: int = 3
+	var waypoints_to_process = min(obstacles.size(), MAX_WAYPOINTS)
+
+	# Find waypoint(s) to navigate around obstacles
+	# Simple approach: Find avoidance point for the first/largest obstacle
+	var primary_obstacle = _find_primary_obstacle(obstacles, current_pos, target)
+	if primary_obstacle == null:
+		return target
+
+	var waypoint = AITerrain.find_avoidance_waypoint(current_pos, target, primary_obstacle)
+
+	# Validate waypoint doesn't create worse path
+	if _is_waypoint_valid(waypoint, current_pos, target):
+		return waypoint
+
+	# If waypoint is invalid, try direct path anyway (better than getting stuck)
 	return target
+
+
+## Finds the primary obstacle to avoid (closest to path).
+func _find_primary_obstacle(
+	obstacles: Array[AITerrain.TerrainPiece],
+	from_pos: Vector3,
+	to_pos: Vector3
+) -> AITerrain.TerrainPiece:
+	if obstacles.is_empty():
+		return null
+
+	var path_midpoint = (from_pos + to_pos) / 2.0
+	var closest_obstacle: AITerrain.TerrainPiece = null
+	var closest_distance = INF
+
+	for obstacle in obstacles:
+		var distance = path_midpoint.distance_to(obstacle.position)
+		if distance < closest_distance:
+			closest_distance = distance
+			closest_obstacle = obstacle
+
+	return closest_obstacle
+
+
+## Validates that a waypoint creates a reasonable path.
+func _is_waypoint_valid(waypoint: Vector3, from_pos: Vector3, to_pos: Vector3) -> bool:
+	# Check that waypoint doesn't make path more than 2x longer
+	var direct_distance = from_pos.distance_to(to_pos)
+	var waypoint_distance = from_pos.distance_to(waypoint) + waypoint.distance_to(to_pos)
+
+	const MAX_DETOUR_RATIO: float = 2.5
+	if waypoint_distance > direct_distance * MAX_DETOUR_RATIO:
+		return false
+
+	# Check that waypoint itself isn't in dangerous terrain
+	for piece in terrain_pieces:
+		if piece.is_dangerous() and piece.bounds.has_point(waypoint):
+			return false
+
+	return true
 
 
 ## Applies positioning rules for shooting units.
