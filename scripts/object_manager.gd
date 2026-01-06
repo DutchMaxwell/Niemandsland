@@ -2088,28 +2088,51 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 
 
 ## Load a texture from file path (supports PNG, JPG, WEBP)
+## Detects format from file content (magic bytes), not extension
 func _load_texture(texture_path: String) -> ImageTexture:
 	if not FileAccess.file_exists(texture_path):
 		push_warning("Texture file not found: %s" % texture_path)
 		return null
 
-	var image = Image.new()
-	var extension = texture_path.get_extension().to_lower()
+	# Read file content
+	var file = FileAccess.open(texture_path, FileAccess.READ)
+	if not file:
+		push_warning("Failed to open texture file: %s" % texture_path)
+		return null
 
-	var error: Error
-	match extension:
-		"png":
-			error = image.load(texture_path)
-		"jpg", "jpeg":
-			error = image.load(texture_path)
-		"webp":
-			error = image.load(texture_path)
-		_:
-			# Try generic load
-			error = image.load(texture_path)
+	var buffer = file.get_buffer(file.get_length())
+	file.close()
+
+	if buffer.size() < 12:
+		push_warning("Texture file too small: %s" % texture_path)
+		return null
+
+	# Detect format from magic bytes (file signature)
+	var image = Image.new()
+	var error: Error = ERR_FILE_UNRECOGNIZED
+
+	# PNG: 89 50 4E 47 0D 0A 1A 0A (first 8 bytes)
+	if buffer[0] == 0x89 and buffer[1] == 0x50 and buffer[2] == 0x4E and buffer[3] == 0x47:
+		error = image.load_png_from_buffer(buffer)
+	# JPEG: FF D8 FF (first 3 bytes)
+	elif buffer[0] == 0xFF and buffer[1] == 0xD8 and buffer[2] == 0xFF:
+		error = image.load_jpg_from_buffer(buffer)
+	# WebP: RIFF....WEBP (bytes 0-3 = RIFF, bytes 8-11 = WEBP)
+	elif buffer[0] == 0x52 and buffer[1] == 0x49 and buffer[2] == 0x46 and buffer[3] == 0x46:
+		if buffer.size() >= 12 and buffer[8] == 0x57 and buffer[9] == 0x45 and buffer[10] == 0x42 and buffer[11] == 0x50:
+			error = image.load_webp_from_buffer(buffer)
+	# BMP: 42 4D (BM)
+	elif buffer[0] == 0x42 and buffer[1] == 0x4D:
+		error = image.load_bmp_from_buffer(buffer)
+	# TGA: Try as fallback (no reliable magic bytes)
+	else:
+		# Try TGA as last resort
+		error = image.load_tga_from_buffer(buffer)
 
 	if error != OK:
-		push_warning("Failed to load texture: %s (error %d)" % [texture_path, error])
+		# Log the magic bytes for debugging
+		var magic = "%02X %02X %02X %02X" % [buffer[0], buffer[1], buffer[2], buffer[3]]
+		push_warning("Failed to load texture: %s (error %d, magic: %s)" % [texture_path, error, magic])
 		return null
 
 	# Generate mipmaps for better rendering at distance
