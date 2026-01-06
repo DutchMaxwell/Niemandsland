@@ -40,10 +40,12 @@ func _setup_ui() -> void:
 
 ## Opens the dialog for a specific model.
 func open(model: ModelInstance) -> void:
+	print("DEBUG WoundsDialog: open() called with model=%s" % model)
 	_model = model
 	visible = true
 
 	_update_display()
+	print("DEBUG WoundsDialog: dialog visible=%s, position=%s" % [visible, position])
 
 	# Center on screen
 	var viewport_size = get_viewport_rect().size
@@ -83,6 +85,7 @@ func _update_display() -> void:
 
 
 func _on_minus_pressed() -> void:
+	print("DEBUG WoundsDialog: _on_minus_pressed called, model=%s" % _model)
 	if not _model or _model.wounds_current <= 0:
 		return
 
@@ -145,14 +148,15 @@ func _input(event: InputEvent) -> void:
 static func create_simple() -> WoundsDialog:
 	var dialog = WoundsDialog.new()
 	dialog.name = "WoundsDialog"
-	# Make dialog fill screen but only capture input on panel
+	# Make dialog fill screen - IGNORE so clicks pass to panel children
 	dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dialog.mouse_filter = Control.MOUSE_FILTER_STOP
+	dialog.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	# Create panel
+	# Create panel - this captures input within its area
 	var panel = PanelContainer.new()
 	panel.name = "Panel"
 	panel.custom_minimum_size = Vector2(250, 200)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP  # Panel blocks clicks outside buttons
 	# Center the panel
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
