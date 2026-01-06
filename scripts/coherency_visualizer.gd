@@ -178,13 +178,21 @@ func _highlight_model(model: ModelInstance, color: Color) -> void:
 	if not model.node.is_inside_tree():
 		return
 
+	# Get base size from the unit
+	var base_radius_m = 0.016  # Default 32mm
+	if model.unit:
+		var game_unit = model.unit as GameUnit
+		if game_unit and game_unit.unit_properties:
+			var base_mm = game_unit.unit_properties.get("base_size_round", 32)
+			base_radius_m = (base_mm / 2.0) * 0.001
+
 	var highlight = Node3D.new()
 	highlight.name = "Highlight_%d" % model.model_index
 
-	# Create ring mesh
+	# Create ring mesh sized to base
 	var torus = TorusMesh.new()
-	torus.inner_radius = 0.015
-	torus.outer_radius = 0.025
+	torus.inner_radius = base_radius_m + 0.003  # 3mm outside base
+	torus.outer_radius = base_radius_m + 0.008  # 5mm ring thickness
 
 	var mesh_instance = MeshInstance3D.new()
 	mesh_instance.mesh = torus
@@ -194,16 +202,16 @@ func _highlight_model(model: ModelInstance, color: Color) -> void:
 	material.albedo_color = color
 	material.emission_enabled = true
 	material.emission = color
-	material.emission_energy_multiplier = 1.0
+	material.emission_energy_multiplier = 1.5
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mesh_instance.material_override = material
 
 	highlight.add_child(mesh_instance)
 
-	# Add to tree FIRST, then set global position
+	# Add to tree FIRST, then set global position at base level
 	add_child(highlight)
-	highlight.global_position = model.node.global_position + Vector3(0, 0.005, 0)
+	highlight.global_position = model.node.global_position + Vector3(0, 0.004, 0)
 	_highlights.append(highlight)
 
 	# Add pulsing animation (deferred to ensure node is ready)
