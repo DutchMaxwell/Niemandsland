@@ -523,7 +523,12 @@ func _apply_highlight_recursive(node: Node, highlighted_meshes: Array[MeshInstan
 
 ## Apply highlight by duplicating material (prevents corruption of original)
 func _highlight_with_duplicate(node: MeshInstance3D, original_mat: StandardMaterial3D, mat_type: String, surface_idx: int) -> void:
-	var key = "orig_mat_%s_%d" % [mat_type, surface_idx]
+	# Use valid metadata key (no minus signs allowed)
+	var key: String
+	if mat_type == "override":
+		key = "orig_mat_override"
+	else:
+		key = "orig_mat_surface_%d" % surface_idx
 
 	# Store reference to original material
 	node.set_meta(key, original_mat)
@@ -558,7 +563,7 @@ func _unhighlight_object(obj: Node3D) -> void:
 ## Restore all materials on a specific mesh
 func _restore_mesh_materials(mesh_inst: MeshInstance3D) -> void:
 	# Restore material_override
-	_restore_original_material(mesh_inst, "override", -1)
+	_restore_original_material(mesh_inst, "override", 0)
 
 	# Restore surface materials
 	if mesh_inst.mesh:
@@ -578,7 +583,12 @@ func _remove_highlight_recursive(node: Node) -> void:
 
 ## Restore original material (replaces duplicate with original reference)
 func _restore_original_material(node: MeshInstance3D, mat_type: String, surface_idx: int) -> void:
-	var key = "orig_mat_%s_%d" % [mat_type, surface_idx]
+	# Use same key format as highlight (no minus signs)
+	var key: String
+	if mat_type == "override":
+		key = "orig_mat_override"
+	else:
+		key = "orig_mat_surface_%d" % surface_idx
 
 	if node.has_meta(key):
 		var original_mat = node.get_meta(key) as StandardMaterial3D
