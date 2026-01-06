@@ -207,9 +207,11 @@ func _highlight_model(model: ModelInstance, color: Color) -> void:
 
 	highlight.add_child(mesh_instance)
 
-	# Add to tree FIRST, then set global position at base level
+	# Add to tree FIRST, then set global position at base level (always on ground)
 	add_child(highlight)
-	highlight.global_position = model.node.global_position + Vector3(0, 0.004, 0)
+	# Use model's X/Z but always place ring at ground level (y=0.004)
+	var model_pos = model.node.global_position
+	highlight.global_position = Vector3(model_pos.x, 0.004, model_pos.z)
 	_highlights.append(highlight)
 
 	# Add pulsing animation (deferred to ensure node is ready)
