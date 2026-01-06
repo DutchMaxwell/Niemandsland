@@ -289,7 +289,23 @@ func _process(delta: float) -> void:
 			_cancel_long_press()
 
 
+## Checks if a GUI element is blocking input (e.g., modal dialog)
+func _is_gui_blocking_input() -> bool:
+	# Check if any modal Control is visible and covering the viewport
+	var ui_layer = get_tree().root.find_child("UI", true, false)
+	if ui_layer:
+		# Check for WoundsDialog or other modal dialogs
+		var wounds_dialog = ui_layer.find_child("WoundsDialog", false, false)
+		if wounds_dialog and wounds_dialog is Control and wounds_dialog.visible:
+			return true
+	return false
+
+
 func _input(event: InputEvent) -> void:
+	# Skip if GUI is handling input (dialog open, etc.)
+	if _is_gui_blocking_input():
+		return
+
 	if event is InputEventMouseButton:
 		var mouse_event = event as InputEventMouseButton
 
@@ -1034,40 +1050,44 @@ func _get_measure_end_position(screen_pos: Vector2) -> Variant:
 	return null
 
 
-## Get the radius/size of an object for edge calculation
-func _get_object_radius(obj: Node3D) -> float:
-	if obj.is_in_group("miniature"):
-		# Try to get actual base size from unit properties
-		var game_unit = obj.get_meta("game_unit", null) as GameUnit
-		print("DEBUG _get_object_radius: obj=%s, game_unit=%s" % [obj.name, game_unit])
-		if game_unit and game_unit.unit_properties:
-			var props = game_unit.unit_properties
-			print("DEBUG: unit_properties keys=%s" % str(props.keys()))
-			# Handle oval bases - use smaller dimension to be conservative
-			if props.get("base_is_oval", false):
-				var width_mm = props.get("base_width_mm", 32)
-				var depth_mm = props.get("base_depth_mm", 32)
-				var min_dim = mini(width_mm, depth_mm)
-				print("DEBUG: oval base %dx%d, using radius=%.4f" % [width_mm, depth_mm, (min_dim / 2.0) * 0.001])
-				return (min_dim / 2.0) * 0.001  # mm to meters
-			else:
-				var base_mm = props.get("base_size_round", 32)
-				print("DEBUG: round base %dmm, using radius=%.4f" % [base_mm, (base_mm / 2.0) * 0.001])
-				return (base_mm / 2.0) * 0.001  # mm to meters
-		print("DEBUG: no game_unit/props, using default MINIATURE_RADIUS")
-		return MINIATURE_RADIUS  # Default 16mm = 0.016m
-	elif obj.is_in_group("dice"):
-		return 0.008  # Half of 16mm dice = 8mm diagonal approximation
-	elif obj.is_in_group("terrain"):
-		# Terrain is larger, estimate from typical sizes
-		return 0.015  # 15mm average
-	return 0.016  # Default to miniature size
+## Get edge distance from center in a specific direction for an object.
+## For oval bases, calculates actual ellipse edge distance.
+## dir_x, dir_z should be normalized direction components.
+func _get_edge_distance_in_direction(obj: Node3D, dir_x: float, dir_z: float) -> float:
+	if not obj.is_in_group("miniature"):
+		if obj.is_in_group("dice"):
+			return 0.008
+		elif obj.is_in_group("terrain"):
+			return 0.015
+		return 0.016
+
+	var game_unit = obj.get_meta("game_unit", null) as GameUnit
+	if not game_unit or not game_unit.unit_properties:
+		return MINIATURE_RADIUS
+
+	var props = game_unit.unit_properties
+
+	if props.get("base_is_oval", false):
+		# Oval base - calculate actual ellipse edge distance
+		var width_mm = props.get("base_width_mm", 32)
+		var depth_mm = props.get("base_depth_mm", 32)
+		var a = (width_mm / 2.0) * 0.001  # Semi-axis X (width/2) in meters
+		var b = (depth_mm / 2.0) * 0.001  # Semi-axis Z (depth/2) in meters
+
+		# Distance to ellipse edge in direction (dir_x, dir_z):
+		# r = (a * b) / sqrt(b² * dir_x² + a² * dir_z²)
+		var denominator = sqrt(b * b * dir_x * dir_x + a * a * dir_z * dir_z)
+		if denominator < 0.0001:
+			return (a + b) / 2.0  # Fallback to average
+		return (a * b) / denominator
+	else:
+		# Round base - simple radius
+		var base_mm = props.get("base_size_round", 32)
+		return (base_mm / 2.0) * 0.001
 
 
 ## Calculate edge position on object closest to target point
 func _get_edge_position(obj: Node3D, obj_center: Vector3, target_pos: Vector3) -> Vector3:
-	var radius = _get_object_radius(obj)
-
 	# Direction from object center to target (horizontal only)
 	var dir = Vector3(target_pos.x - obj_center.x, 0, target_pos.z - obj_center.z)
 	var dist = dir.length()
@@ -1078,8 +1098,11 @@ func _get_edge_position(obj: Node3D, obj_center: Vector3, target_pos: Vector3) -
 	else:
 		dir = dir.normalized()
 
-	# Edge point is center + direction * radius
-	var edge_pos = Vector3(obj_center.x + dir.x * radius, 0.02, obj_center.z + dir.z * radius)
+	# Get edge distance in this direction (handles oval bases)
+	var edge_dist = _get_edge_distance_in_direction(obj, dir.x, dir.z)
+
+	# Edge point is center + direction * edge_distance
+	var edge_pos = Vector3(obj_center.x + dir.x * edge_dist, 0.02, obj_center.z + dir.z * edge_dist)
 	return edge_pos
 
 
