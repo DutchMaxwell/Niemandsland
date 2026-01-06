@@ -1521,10 +1521,35 @@ func _init_scout_ambush_panel() -> void:
 	scout_panel.add_child(info_label)
 
 
-## Handle unit movement (re-check deployment)
+## Handle unit movement (re-check deployment and coherency)
 func _on_unit_moved() -> void:
 	if is_deployment_mode:
 		_check_all_units_deployment()
+
+	# Auto-check coherency for any selected units after movement
+	_check_coherency_for_selected_units()
+
+
+## Check coherency for all currently selected units
+func _check_coherency_for_selected_units() -> void:
+	if not coherency_visualizer or not object_manager:
+		return
+
+	# Get selected objects
+	var selected = object_manager.get_selected_objects()
+	if selected.is_empty():
+		return
+
+	# Find unique game units from selection
+	var checked_units: Array = []
+	for obj in selected:
+		if not obj.has_meta("game_unit"):
+			continue
+		var game_unit = obj.get_meta("game_unit") as GameUnit
+		if game_unit and game_unit not in checked_units:
+			checked_units.append(game_unit)
+			# Show coherency visualization for this unit
+			coherency_visualizer.show_coherency(game_unit)
 
 
 ## Check all units for deployment zone compliance

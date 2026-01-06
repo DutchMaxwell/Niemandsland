@@ -196,7 +196,7 @@ func _highlight_model(model: ModelInstance, color: Color) -> void:
 
 	var mesh_instance = MeshInstance3D.new()
 	mesh_instance.mesh = torus
-	mesh_instance.rotation_degrees.x = 90  # Lay flat
+	# TorusMesh defaults to flat (hole up), no rotation needed
 
 	var material = StandardMaterial3D.new()
 	material.albedo_color = color
