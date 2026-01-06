@@ -297,6 +297,9 @@ func _parse_tts_api_response(json_text: String) -> OPRArmy:
 func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 	var unit = OPRUnit.new()
 
+	# Debug: Print all keys in the data to see what's available
+	print("OPRApiClient DEBUG: Unit '%s' raw data keys: %s" % [data.get("name", "?"), str(data.keys())])
+
 	unit.id = data.get("id", str(randi()))
 	unit.name = data.get("name", "Unknown Unit")
 	unit.custom_name = data.get("customName", "")
