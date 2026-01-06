@@ -2066,11 +2066,10 @@ uniform float roughness : hint_range(0.0, 1.0) = 0.9;
 
 void fragment() {
 	// Ensure normal always faces the camera for proper lighting
-	// This handles both:
-	// 1. Backface rendering (FRONT_FACING = false)
-	// 2. Inverted normals in the mesh data
-	// VIEW points from fragment to camera, so if dot < 0, normal faces away
-	if (dot(NORMAL, VIEW) < 0.0) {
+	// VIEW points FROM camera TO fragment in Godot
+	// So if dot(NORMAL, VIEW) > 0, they point same direction = normal faces away
+	// In that case, flip the normal to face the camera
+	if (dot(NORMAL, VIEW) > 0.0) {
 		NORMAL = -NORMAL;
 	}
 
