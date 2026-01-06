@@ -56,8 +56,9 @@ static func resolve_shooting(
 		push_error("AICombat: resolve_shooting called with null unit")
 		return result
 
+	# Context is required for terrain-aware combat
 	if context == null:
-		push_warning("AICombat: context is null in resolve_shooting")
+		push_error("AICombat: context is required for resolve_shooting (terrain/cover unavailable)")
 
 	result.attacker = attacker
 	result.defender = defender
@@ -707,7 +708,6 @@ static func _is_in_cover(unit: GameUnit, context: AIContext) -> bool:
 
 static func _get_unit_center(game_unit: GameUnit) -> Vector3:
 	if game_unit == null:
-		push_warning("AICombat: _get_unit_center called with null unit")
 		return Vector3.ZERO
 
 	var sum = Vector3.ZERO
