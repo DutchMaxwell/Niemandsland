@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://startup_menu_001"]
 
 [ext_resource type="Script" path="res://scripts/startup_menu.gd" id="1_startup"]
-[ext_resource type="Texture2D" path="res://assets/Gemini_Generated_Image_qogyfvqogyfvqogy.png" id="2_bg_image"]
+[ext_resource type="Texture2D" path="res://assets/startup_background.png" id="2_bg_image"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 bg_color = Color(0.078, 0.098, 0.137, 0.85)

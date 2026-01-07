@@ -6,7 +6,7 @@ extends StaticBody3D
 @export var grid_color: Color = Color(0.15, 0.25, 0.15)
 @export var show_grid: bool = true
 @export var grid_size_inches: float = 1.0
-@export var default_texture_path: String = "res://assets/terrain/Gemini_Generated_Image_lbg60llbg60llbg6.png"
+@export var default_texture_path: String = "res://assets/terrain/table_surface_default.png"
 
 var _default_texture: Texture2D = null
 
