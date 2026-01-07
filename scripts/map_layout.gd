@@ -1010,11 +1010,15 @@ func _get_valid_cell_range() -> Rect2i:
 	var table_cells_y = int(table_size_feet.y * 12.0 / GRID_SIZE_INCHES)
 
 	# For 0° rotation, valid cells are centered in the grid
-	# With 1 cell margin from edges for safety
-	var min_x = int(half_grid.x) - int(table_cells_x / 2) + 1
-	var max_x = int(half_grid.x) + int(table_cells_x / 2) - 1
-	var min_y = int(half_grid.y) - int(table_cells_y / 2) + 1
-	var max_y = int(half_grid.y) + int(table_cells_y / 2) - 1
+	# No margin - we want terrain at all valid table positions including edges
+	var min_x = int(half_grid.x) - int(table_cells_x / 2)
+	var max_x = int(half_grid.x) + int((table_cells_x + 1) / 2) - 1  # Handle odd cell counts
+	var min_y = int(half_grid.y) - int(table_cells_y / 2)
+	var max_y = int(half_grid.y) + int((table_cells_y + 1) / 2) - 1
+
+	# Debug output
+	print("_get_valid_cell_range: grid=%dx%d, table_cells=%dx%d" % [grid_dims.x, grid_dims.y, table_cells_x, table_cells_y])
+	print("  Range: (%d,%d) to (%d,%d)" % [min_x, min_y, max_x, max_y])
 
 	# Clamp to grid bounds
 	min_x = max(0, min_x)
@@ -1048,13 +1052,15 @@ func _is_cell_within_table_bounds(cell_pos: Vector2i, grid_dims: Vector2i) -> bo
 
 	# Apply rotation and check if ALL corners are inside table
 	# For terrain placement, cells must be fully within bounds
+	# Small epsilon for floating-point tolerance at exact boundaries
+	var epsilon = 0.01
 	var rotation_rad = deg_to_rad(grid_rotation_degrees)
 	for corner in corners_local:
 		var rotated_x = corner.x * cos(rotation_rad) - corner.y * sin(rotation_rad)
 		var rotated_y = corner.x * sin(rotation_rad) + corner.y * cos(rotation_rad)
 
-		# If ANY corner is outside, cell is not valid for terrain placement
-		if abs(rotated_x) > table_width_inches / 2.0 or abs(rotated_y) > table_height_inches / 2.0:
+		# If ANY corner is outside (with small tolerance), cell is not valid
+		if abs(rotated_x) > table_width_inches / 2.0 + epsilon or abs(rotated_y) > table_height_inches / 2.0 + epsilon:
 			return false
 
 	return true  # All corners inside table
