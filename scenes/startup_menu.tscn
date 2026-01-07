@@ -145,18 +145,6 @@ text = "💾  LOAD GAME"
 flat = true
 alignment = 0
 
-[node name="SettingsBtn" type="Button" parent="LogoContainer/MenuPanel/MarginContainer/MenuButtons"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(400, 56)
-layout_mode = 2
-focus_mode = 0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_hover_color = Color(0, 0.85098, 1, 1)
-theme_override_font_sizes/font_size = 16
-text = "⚙  SETTINGS"
-flat = true
-alignment = 0
-
 [node name="ExitBtn" type="Button" parent="LogoContainer/MenuPanel/MarginContainer/MenuButtons"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(400, 56)
