@@ -1,0 +1,1449 @@
+[gd_scene load_steps=134 format=3 uid="uid://bfbq8rrf4ksbx"]
+
+[ext_resource type="Script" uid="uid://bc465bqvclbk3" path="res://Scenes/Tools/SimpleSVGEditor/simple_svg_editor.gd" id="1_yxl4k"]
+[ext_resource type="Texture2D" uid="uid://w1nqaqynegvi" path="res://Assets/Images/Backgrounds/Unsplash/jeremy-bishop-G9i_plbfDgk-unsplash.jpg" id="2_vpkhs"]
+[ext_resource type="PackedScene" uid="uid://deyabyx7mvttg" path="res://Scripts/Nodes/Control/TextureRect/AnimatedRocking/animated_rocking_texture.tscn" id="3_e23nw"]
+[ext_resource type="Texture2D" uid="uid://c8avix48xfeff" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/Gradients/black_blue.tres" id="5_f123r"]
+[ext_resource type="PackedScene" uid="uid://cfopwr4txmeg" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/Shaders/Scenes/blur_shader.tscn" id="5_x0oir"]
+[ext_resource type="Texture2D" uid="uid://cr02gnersrxkh" path="res://Assets/Icons/Phosphor/dot-bold.svg" id="6_a8bf6"]
+[ext_resource type="Shader" uid="uid://c5iiohuiarbp8" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/Shaders/blur.gdshader" id="6_f123r"]
+[ext_resource type="FontFile" uid="uid://dtrwmi2prxa7j" path="res://Assets/Fonts/GoogleFonts/Monospace/SourceCodePro-VariableFont_wght.ttf" id="7_wyntg"]
+[ext_resource type="PackedScene" uid="uid://32ps8lb55j17" path="res://Scripts/Modules/Control/expand_hovered_control_module.tscn" id="10_1dt2v"]
+[ext_resource type="Theme" uid="uid://b0bk3opnihwjp" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/Themes/glassmorphism_color_picker.tres" id="10_evkyg"]
+[ext_resource type="Texture2D" uid="uid://dctroyxfyatss" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/Gradients/orange_green.tres" id="11_pgouj"]
+[ext_resource type="PackedScene" uid="uid://b8qi1eld0fd72" path="res://Scripts/Modules/Button/shrink_pressed_button_module.tscn" id="13_4vruq"]
+[ext_resource type="Texture2D" uid="uid://ccp6nk7prllhg" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/Gradients/yellow_blue.tres" id="14_sgu3h"]
+[ext_resource type="FontFile" uid="uid://b26duiovna46r" path="res://Assets/Fonts/GoogleFonts/Normal/Montserrat-VariableFont_wght.ttf" id="37_v4bhr"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1dt2v"]
+content_margin_left = 15.0
+content_margin_top = 15.0
+content_margin_right = 15.0
+content_margin_bottom = 15.0
+bg_color = Color(0, 0, 0, 0.784314)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_evkyg"]
+content_margin_left = 10.0
+content_margin_right = 10.0
+bg_color = Color(1, 1, 1, 0.156863)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 0.529412)
+border_blend = true
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_pgouj"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_4vruq"]
+content_margin_left = 10.0
+content_margin_right = 10.0
+bg_color = Color(1, 1, 1, 0.156863)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 0.529412)
+border_blend = true
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_sgu3h"]
+content_margin_left = 10.0
+content_margin_right = 10.0
+bg_color = Color(1, 1, 1, 0.333333)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+border_blend = true
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_lph3o"]
+content_margin_left = 10.0
+content_margin_right = 10.0
+bg_color = Color(1, 1, 1, 0.54902)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+border_blend = true
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_7iy5k"]
+load_path = "res://.godot/imported/check-square-fill.svg-147385e10b5f1ded62a42d0a41997232.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_eofg6"]
+load_path = "res://.godot/imported/square-bold.svg-d6ec47cb18eb7929bc708d3d95814d89.ctex"
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_w7ibt"]
+content_margin_right = 10.0
+bg_color = Color(1, 1, 1, 0.156863)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 0.529412)
+border_blend = true
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_iib6d"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_42wbc"]
+content_margin_right = 10.0
+bg_color = Color(1, 1, 1, 0.156863)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 0.529412)
+border_blend = true
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_purs7"]
+content_margin_right = 10.0
+bg_color = Color(1, 1, 1, 0.54902)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+border_blend = true
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_nybgd"]
+content_margin_right = 10.0
+bg_color = Color(1, 1, 1, 0.333333)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+border_blend = true
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_tjn1w"]
+content_margin_right = 10.0
+bg_color = Color(1, 1, 1, 0.54902)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+border_blend = true
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_g24f4"]
+load_path = "res://.godot/imported/toggle-right-fill.svg-92afb9f0c85604b5a45fa7c72eeb47d2.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_y2885"]
+load_path = "res://.godot/imported/toggle-right-fill-disabled.svg-edd545300f39f5efcf31f78f80ad05d4.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_hoxha"]
+load_path = "res://.godot/imported/toggle-left.svg-c841d46c5287f268eb76c97c2317b3cd.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_f1i6d"]
+load_path = "res://.godot/imported/toggle-left-disabled.svg-2386e2fc95b2c790c2ac781834bc2aba.ctex"
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_8fi0c"]
+content_margin_left = 10.0
+bg_color = Color(1, 1, 1, 0.156863)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 0.529412)
+border_blend = true
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_60d7r"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3fekw"]
+content_margin_left = 10.0
+bg_color = Color(1, 1, 1, 0.156863)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 0.529412)
+border_blend = true
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_m3fnx"]
+content_margin_left = 10.0
+bg_color = Color(1, 1, 1, 0.54902)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+border_blend = true
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_oetym"]
+content_margin_left = 10.0
+bg_color = Color(1, 1, 1, 0.333333)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+border_blend = true
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_30kqn"]
+content_margin_left = 10.0
+bg_color = Color(1, 1, 1, 0.54902)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+border_blend = true
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="FontVariation" id="FontVariation_nnlgm"]
+base_font = ExtResource("7_wyntg")
+variation_embolden = 1.07
+
+[sub_resource type="Gradient" id="Gradient_xxw6v"]
+colors = PackedColorArray(0, 0, 0, 0, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_2jxv4"]
+gradient = SubResource("Gradient_xxw6v")
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_8atlu"]
+content_margin_left = 4.0
+content_margin_top = 4.0
+content_margin_right = 4.0
+content_margin_bottom = 4.0
+bg_color = Color(1, 1, 1, 0.333333)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ys6h2"]
+bg_color = Color(1, 1, 1, 0.498039)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2gh4a"]
+bg_color = Color(1, 1, 1, 0.666667)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_qyhic"]
+bg_color = Color(1, 1, 1, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_hit4j"]
+content_margin_top = 5.0
+content_margin_bottom = 5.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ypu78"]
+content_margin_left = 5.0
+content_margin_right = 5.0
+bg_color = Color(0.6, 0.6, 0.6, 0)
+
+[sub_resource type="StyleBoxLine" id="StyleBoxLine_lvito"]
+color = Color(1, 1, 1, 1)
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_h1e7p"]
+load_path = "res://.godot/imported/dot-bold.svg-c61cf0f2e6178e8fadf5d284ac96cbcd.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_gd8f5"]
+load_path = "res://.godot/imported/dot-bold-disabled.svg-b8b717b0023280947b3458933aae88f4.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_i8vxh"]
+load_path = "res://.godot/imported/dot-bold-highlight.svg-32636992935a9a9eb508d3a65f56a1a1.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_roh2r"]
+load_path = "res://.godot/imported/line-vertical.svg-2d549e89cbd97fa9f58dd02de97ce68d.ctex"
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_re3v4"]
+atlas = SubResource("CompressedTexture2D_roh2r")
+margin = Rect2(0, -0.52, 0, 0)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_wyntg"]
+content_margin_top = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(1, 1, 1, 0.333333)
+corner_radius_top_left = 80
+corner_radius_top_right = 80
+corner_radius_bottom_right = 80
+corner_radius_bottom_left = 80
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_7okv0"]
+content_margin_top = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(1, 1, 1, 0.666667)
+corner_radius_top_left = 80
+corner_radius_top_right = 80
+corner_radius_bottom_right = 80
+corner_radius_bottom_left = 80
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_jcjol"]
+content_margin_top = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(1, 1, 1, 0.333333)
+corner_radius_top_left = 80
+corner_radius_top_right = 80
+corner_radius_bottom_right = 80
+corner_radius_bottom_left = 80
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_rpssv"]
+load_path = "res://.godot/imported/line-vertical-longer-hsplit_container.svg-7e867b84cde6543738b31c8701262be7.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_875ur"]
+load_path = "res://.godot/imported/x-bold.svg-d00dab1474d1d24e34dce2f6d5d3e5ff.ctex"
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_m7omi"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_0femo"]
+content_margin_left = 10.0
+content_margin_top = 4.0
+content_margin_right = 10.0
+content_margin_bottom = 2.0
+bg_color = Color(1, 1, 1, 0.156863)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 1, 1, 1)
+border_blend = true
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pw7hb"]
+content_margin_left = 10.0
+content_margin_top = 4.0
+content_margin_right = 10.0
+content_margin_bottom = 4.0
+bg_color = Color(0.52, 0.52, 0.52, 0.333333)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_sliit"]
+load_path = "res://.godot/imported/caret-down-bold.svg-19bc852e2fc77986ad5196716d074c40.ctex"
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1wqgo"]
+content_margin_left = 8.0
+content_margin_top = 4.0
+content_margin_right = 8.0
+content_margin_bottom = 4.0
+bg_color = Color(0, 0, 0, 0.6)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+corner_detail = 5
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_phyiu"]
+bg_color = Color(1, 1, 1, 0.498039)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hi78x"]
+bg_color = Color(1, 1, 1, 0.333333)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_et4kr"]
+load_path = "res://.godot/imported/check-square-fill.svg-147385e10b5f1ded62a42d0a41997232.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_luh00"]
+load_path = "res://.godot/imported/radio-button-fill.svg-5e9c8ff74eae127ef7fa3cb477d045e5.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_a1e80"]
+load_path = "res://.godot/imported/circle-fill.svg-11658209f763b081b3ccaaf3e0934d22.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_vn3ar"]
+load_path = "res://.godot/imported/square-bold.svg-d6ec47cb18eb7929bc708d3d95814d89.ctex"
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_b4n6r"]
+content_margin_left = 15.0
+content_margin_top = 15.0
+content_margin_right = 15.0
+content_margin_bottom = 15.0
+bg_color = Color(0, 0, 0, 0.784314)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_o2n0o"]
+content_margin_left = 15.0
+content_margin_top = 15.0
+content_margin_right = 15.0
+content_margin_bottom = 15.0
+bg_color = Color(0, 0, 0, 0.784314)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3g22x"]
+bg_color = Color(1, 1, 1, 0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1cijb"]
+bg_color = Color(1, 1, 1, 0.25098)
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_jcq1c"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_2b2ss"]
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_fdigm"]
+load_path = "res://.godot/imported/caret-down-bold_spinbox-normal.svg-d9e5eb8271d642b9920563c3e0c84e76.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_0fnot"]
+load_path = "res://.godot/imported/caret-down-bold_spinbox-disabled.svg-1c81fef5c9bb6018c3ffbcdd78f4fec3.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_x3mlc"]
+load_path = "res://.godot/imported/caret-down-bold_spinbox-hovered.svg-69c8a8e539fc737fbefc2a5a48f251f3.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_u5bqr"]
+load_path = "res://.godot/imported/caret-down-bold_spinbox-pressed.svg-e8416859b412e1eb48994f72932493c7.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_erufs"]
+load_path = "res://.godot/imported/caret-up-bold_spinbox_normal.svg-1e45a367852885f4e51c2d0b397c3603.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_7ltob"]
+load_path = "res://.godot/imported/caret-up-bold-spinbox-disabled.svg-aee5b0919a2a973d331c477419359ee7.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_ypm34"]
+load_path = "res://.godot/imported/caret-up-bold-spinbox-hovered.svg-b75b6b8edc8b70acb0913b6e5b2c1782.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_v4bhr"]
+load_path = "res://.godot/imported/caret-up-bold-spinbox-pressed.svg-04a3ad6f1d740dec008b99e31a5166f0.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_y0e57"]
+load_path = "res://.godot/imported/caret-circle-left-bold.svg-cca60f225407aadc676c454879daccde.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_56xp6"]
+load_path = "res://.godot/imported/caret-circle-left-bold-highlight.svg-2afc9d6502b21fb4f85ef60bb4f62aba.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_adgvn"]
+load_path = "res://.godot/imported/line-vertical.svg-2d549e89cbd97fa9f58dd02de97ce68d.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_qy0jf"]
+load_path = "res://.godot/imported/caret-circle-right-bold.svg-5040d6590dc01b1f00fea412a2575f95.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_e4h3x"]
+load_path = "res://.godot/imported/caret-circle-right-bold-highlight.svg-ea6c1a044bcb32eea0d90b5b7c6fd91f.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_hip1l"]
+load_path = "res://.godot/imported/dots-three-vertical-bold.svg-fc857cae5024d62d296a5aab37604a22.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_ulpdq"]
+load_path = "res://.godot/imported/dots-three-vertical-bold-highlight.svg-c2491defe5c7986312c2b3a9f870a200.ctex"
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_gxyy5"]
+bg_color = Color(1, 1, 1, 0.333333)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_uqaxh"]
+content_margin_left = 9.0
+content_margin_right = 9.0
+bg_color = Color(0, 0, 0, 0.333333)
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_g8mms"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_j1vna"]
+content_margin_left = 9.0
+content_margin_right = 9.0
+bg_color = Color(1, 1, 1, 0.247059)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_jbupo"]
+content_margin_left = 9.0
+content_margin_right = 9.0
+bg_color = Color(1, 1, 1, 0.333333)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_g8a8w"]
+content_margin_left = 9.0
+bg_color = Color(1, 1, 1, 0.164706)
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_u6tej"]
+load_path = "res://.godot/imported/dot-bold-small.svg-76132991e973d5d7397da53bd9c684e5.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_sbrlq"]
+load_path = "res://.godot/imported/caret-line-right.svg-ad8c8fc81f8c29422efdc076f81cb5a5.ctex"
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_vgt0k"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_mak2d"]
+content_margin_left = 11.0
+content_margin_top = 4.0
+content_margin_right = 14.0
+content_margin_bottom = 8.0
+bg_color = Color(1, 1, 1, 0.156863)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 8
+border_color = Color(1, 1, 1, 1)
+border_blend = true
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_qgev5"]
+content_margin_left = 10.0
+content_margin_right = 10.0
+bg_color = Color(0, 0, 0, 0.666667)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_imn8b"]
+load_path = "res://.godot/imported/caret-down-bold_spinbox-hovered.svg-69c8a8e539fc737fbefc2a5a48f251f3.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_w86oq"]
+load_path = "res://.godot/imported/caret-right-bold.svg-e52b0783529ef51bf5f3fb20a36a95be.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_f3lbq"]
+load_path = "res://.godot/imported/check-square-fill.svg-147385e10b5f1ded62a42d0a41997232.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_r8l26"]
+load_path = "res://.godot/imported/caret-down-bold_spinbox-hovered.svg-69c8a8e539fc737fbefc2a5a48f251f3.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_bkua4"]
+load_path = "res://.godot/imported/square-bold.svg-d6ec47cb18eb7929bc708d3d95814d89.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_8qyt8"]
+load_path = "res://.godot/imported/caret-up-down-bold.svg-7b5a46f942b022a633f951595b83c11b.ctex"
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_tucje"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_e6yvu"]
+content_margin_left = 10.0
+bg_color = Color(1, 1, 1, 0.156863)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_r1mr5"]
+content_margin_left = 10.0
+content_margin_top = 10.0
+content_margin_right = 10.0
+content_margin_bottom = 10.0
+bg_color = Color(1, 1, 1, 0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_sbb0y"]
+bg_color = Color(1, 1, 1, 0.333333)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_0fl7j"]
+bg_color = Color(1, 1, 1, 0.498039)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yslja"]
+bg_color = Color(1, 1, 1, 0.666667)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_8kspe"]
+bg_color = Color(1, 1, 1, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ut2cc"]
+content_margin_left = 5.0
+content_margin_right = 5.0
+bg_color = Color(0.6, 0.6, 0.6, 0)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_o36kn"]
+content_margin_left = 5.0
+content_margin_right = 5.0
+bg_color = Color(0.6, 0.6, 0.6, 0)
+
+[sub_resource type="StyleBoxLine" id="StyleBoxLine_orhx8"]
+color = Color(1, 1, 1, 1)
+vertical = true
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_4k4l2"]
+load_path = "res://.godot/imported/dot-bold.svg-c61cf0f2e6178e8fadf5d284ac96cbcd.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_ltx0a"]
+load_path = "res://.godot/imported/dot-bold-disabled.svg-b8b717b0023280947b3458933aae88f4.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_d5bsw"]
+load_path = "res://.godot/imported/dot-bold-highlight.svg-32636992935a9a9eb508d3a65f56a1a1.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_gjji7"]
+load_path = "res://.godot/imported/line-horizontal.svg-c3a09046c6382dac46710c8ed71b256f.ctex"
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hu1kk"]
+content_margin_top = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(1, 1, 1, 0.333333)
+corner_radius_top_left = 80
+corner_radius_top_right = 80
+corner_radius_bottom_right = 80
+corner_radius_bottom_left = 80
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_as57v"]
+content_margin_top = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(1, 1, 1, 0.666667)
+corner_radius_top_left = 80
+corner_radius_top_right = 80
+corner_radius_bottom_right = 80
+corner_radius_bottom_left = 80
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_f0vng"]
+content_margin_left = 6.0
+content_margin_right = 7.0
+bg_color = Color(1, 1, 1, 0.333333)
+corner_radius_top_left = 80
+corner_radius_top_right = 80
+corner_radius_bottom_right = 80
+corner_radius_bottom_left = 80
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_aj50v"]
+load_path = "res://.godot/imported/line-horizontal-longer-vsplit_container.svg-f0e0680ce0b23fed5799787df54a6a3a.ctex"
+
+[sub_resource type="FontVariation" id="FontVariation_esxlt"]
+base_font = ExtResource("37_v4bhr")
+variation_embolden = 1.0
+
+[sub_resource type="Theme" id="Theme_0ap2r"]
+default_font = SubResource("FontVariation_esxlt")
+default_font_size = 20
+AcceptDialog/styles/panel = SubResource("StyleBoxFlat_1dt2v")
+Button/colors/font_color = Color(1, 1, 1, 1)
+Button/colors/font_disabled_color = Color(1, 1, 1, 0.5)
+Button/colors/font_hover_color = Color(1, 1, 1, 1)
+Button/font_sizes/font_size = 22
+Button/styles/disabled = SubResource("StyleBoxFlat_evkyg")
+Button/styles/focus = SubResource("StyleBoxEmpty_pgouj")
+Button/styles/hover = SubResource("StyleBoxFlat_4vruq")
+Button/styles/normal = SubResource("StyleBoxFlat_sgu3h")
+Button/styles/pressed = SubResource("StyleBoxFlat_lph3o")
+CheckBox/constants/h_separation = 0
+CheckBox/font_sizes/font_size = 22
+CheckBox/icons/checked = SubResource("CompressedTexture2D_7iy5k")
+CheckBox/icons/unchecked = SubResource("CompressedTexture2D_eofg6")
+CheckBox/styles/disabled = SubResource("StyleBoxFlat_w7ibt")
+CheckBox/styles/focus = SubResource("StyleBoxEmpty_iib6d")
+CheckBox/styles/hover = SubResource("StyleBoxFlat_42wbc")
+CheckBox/styles/hover_pressed = SubResource("StyleBoxFlat_purs7")
+CheckBox/styles/normal = SubResource("StyleBoxFlat_nybgd")
+CheckBox/styles/pressed = SubResource("StyleBoxFlat_tjn1w")
+CheckButton/constants/h_separation = 0
+CheckButton/font_sizes/font_size = 22
+CheckButton/icons/checked = SubResource("CompressedTexture2D_g24f4")
+CheckButton/icons/checked_disabled = SubResource("CompressedTexture2D_y2885")
+CheckButton/icons/unchecked = SubResource("CompressedTexture2D_hoxha")
+CheckButton/icons/unchecked_disabled = SubResource("CompressedTexture2D_f1i6d")
+CheckButton/styles/disabled = SubResource("StyleBoxFlat_8fi0c")
+CheckButton/styles/focus = SubResource("StyleBoxEmpty_60d7r")
+CheckButton/styles/hover = SubResource("StyleBoxFlat_3fekw")
+CheckButton/styles/hover_pressed = SubResource("StyleBoxFlat_m3fnx")
+CheckButton/styles/normal = SubResource("StyleBoxFlat_oetym")
+CheckButton/styles/pressed = SubResource("StyleBoxFlat_30kqn")
+CodeEdit/fonts/font = SubResource("FontVariation_nnlgm")
+ColorPickerButton/icons/bg = SubResource("GradientTexture1D_2jxv4")
+ColorPickerButton/styles/normal = SubResource("StyleBoxFlat_8atlu")
+HScrollBar/styles/grabber = SubResource("StyleBoxFlat_ys6h2")
+HScrollBar/styles/grabber_highlight = SubResource("StyleBoxFlat_2gh4a")
+HScrollBar/styles/grabber_pressed = SubResource("StyleBoxFlat_qyhic")
+HScrollBar/styles/scroll = SubResource("StyleBoxEmpty_hit4j")
+HScrollBar/styles/scroll_focus = SubResource("StyleBoxFlat_ypu78")
+HSeparator/styles/separator = SubResource("StyleBoxLine_lvito")
+HSlider/icons/grabber = SubResource("CompressedTexture2D_h1e7p")
+HSlider/icons/grabber_disabled = SubResource("CompressedTexture2D_gd8f5")
+HSlider/icons/grabber_highlight = SubResource("CompressedTexture2D_i8vxh")
+HSlider/icons/tick = SubResource("AtlasTexture_re3v4")
+HSlider/styles/grabber_area = SubResource("StyleBoxFlat_wyntg")
+HSlider/styles/grabber_area_highlight = SubResource("StyleBoxFlat_7okv0")
+HSlider/styles/slider = SubResource("StyleBoxFlat_jcjol")
+HSplitContainer/constants/autohide = 0
+HSplitContainer/icons/grabber = SubResource("CompressedTexture2D_rpssv")
+LineEdit/colors/clear_button_color = Color(1, 1, 1, 0.666667)
+LineEdit/colors/clear_button_color_pressed = Color(1, 1, 1, 1)
+LineEdit/colors/font_color = Color(1, 1, 1, 1)
+LineEdit/colors/font_placeholder_color = Color(1, 1, 1, 0.639216)
+LineEdit/icons/clear = SubResource("CompressedTexture2D_875ur")
+LineEdit/styles/focus = SubResource("StyleBoxEmpty_m7omi")
+LineEdit/styles/normal = SubResource("StyleBoxFlat_0femo")
+LineEdit/styles/read_only = SubResource("StyleBoxFlat_pw7hb")
+LinkButton/colors/font_color = Color(1, 1, 1, 0.666667)
+LinkButton/colors/font_disabled_color = Color(1, 1, 1, 0.333333)
+LinkButton/colors/font_focus_color = Color(1, 1, 1, 0.666667)
+LinkButton/colors/font_hover_color = Color(1, 1, 1, 0.784314)
+LinkButton/colors/font_hover_pressed_color = Color(1, 1, 1, 1)
+LinkButton/colors/font_pressed_color = Color(1, 1, 1, 1)
+OptionButton/colors/font_color = Color(1, 1, 1, 1)
+OptionButton/colors/font_disabled_color = Color(0.875, 0.875, 0.875, 0.5)
+OptionButton/colors/font_focus_color = Color(1, 1, 1, 1)
+OptionButton/colors/font_hover_color = Color(0.95, 0.95, 0.95, 1)
+OptionButton/colors/font_hover_pressed_color = Color(1, 1, 1, 1)
+OptionButton/colors/font_outline_color = Color(0, 0, 0, 1)
+OptionButton/colors/font_pressed_color = Color(1, 1, 1, 1)
+OptionButton/constants/arrow_margin = 4
+OptionButton/constants/h_separation = 4
+OptionButton/constants/modulate_arrow = 0
+OptionButton/constants/outline_size = 0
+OptionButton/icons/arrow = SubResource("CompressedTexture2D_sliit")
+OptionButton/styles/pressed_mirrored = SubResource("StyleBoxFlat_1wqgo")
+Panel/styles/panel = SubResource("StyleBoxFlat_phyiu")
+PanelContainer/styles/panel = SubResource("StyleBoxFlat_hi78x")
+PopupMenu/icons/checked = SubResource("CompressedTexture2D_et4kr")
+PopupMenu/icons/radio_checked = SubResource("CompressedTexture2D_luh00")
+PopupMenu/icons/radio_unchecked = SubResource("CompressedTexture2D_a1e80")
+PopupMenu/icons/unchecked = SubResource("CompressedTexture2D_vn3ar")
+PopupMenu/styles/panel = SubResource("StyleBoxFlat_b4n6r")
+PopupPanel/styles/panel = SubResource("StyleBoxFlat_o2n0o")
+ProgressBar/colors/font_color = Color(1, 1, 1, 1)
+ProgressBar/styles/background = SubResource("StyleBoxFlat_3g22x")
+ProgressBar/styles/fill = SubResource("StyleBoxFlat_1cijb")
+RichTextLabel/colors/default_color = Color(1, 1, 1, 1)
+RichTextLabel/colors/selection_color = Color(1, 1, 1, 0.501961)
+RichTextLabel/styles/focus = SubResource("StyleBoxEmpty_jcq1c")
+ScrollContainer/styles/focus = SubResource("StyleBoxEmpty_2b2ss")
+SpinBox/icons/down = SubResource("CompressedTexture2D_fdigm")
+SpinBox/icons/down_disabled = SubResource("CompressedTexture2D_0fnot")
+SpinBox/icons/down_hover = SubResource("CompressedTexture2D_x3mlc")
+SpinBox/icons/down_pressed = SubResource("CompressedTexture2D_u5bqr")
+SpinBox/icons/up = SubResource("CompressedTexture2D_erufs")
+SpinBox/icons/up_disabled = SubResource("CompressedTexture2D_7ltob")
+SpinBox/icons/up_hover = SubResource("CompressedTexture2D_ypm34")
+SpinBox/icons/up_pressed = SubResource("CompressedTexture2D_v4bhr")
+TabContainer/colors/font_selected_color = Color(1, 1, 1, 1)
+TabContainer/colors/font_unselected_color = Color(1, 1, 1, 0.501961)
+TabContainer/constants/side_margin = 21
+TabContainer/font_sizes/font_size = 14
+TabContainer/icons/decrement = SubResource("CompressedTexture2D_y0e57")
+TabContainer/icons/decrement_highlight = SubResource("CompressedTexture2D_56xp6")
+TabContainer/icons/drop_mark = SubResource("CompressedTexture2D_adgvn")
+TabContainer/icons/increment = SubResource("CompressedTexture2D_qy0jf")
+TabContainer/icons/increment_highlight = SubResource("CompressedTexture2D_e4h3x")
+TabContainer/icons/menu = SubResource("CompressedTexture2D_hip1l")
+TabContainer/icons/menu_highlight = SubResource("CompressedTexture2D_ulpdq")
+TabContainer/styles/panel = SubResource("StyleBoxFlat_gxyy5")
+TabContainer/styles/tab_disabled = SubResource("StyleBoxFlat_uqaxh")
+TabContainer/styles/tab_focus = SubResource("StyleBoxEmpty_g8mms")
+TabContainer/styles/tab_hovered = SubResource("StyleBoxFlat_j1vna")
+TabContainer/styles/tab_selected = SubResource("StyleBoxFlat_jbupo")
+TabContainer/styles/tab_unselected = SubResource("StyleBoxFlat_g8a8w")
+TextEdit/colors/font_color = Color(1, 1, 1, 1)
+TextEdit/colors/font_placeholder_color = Color(1, 1, 1, 0.639216)
+TextEdit/colors/selection_color = Color(0, 0, 0, 0.235294)
+TextEdit/constants/line_spacing = -3
+TextEdit/icons/space = SubResource("CompressedTexture2D_u6tej")
+TextEdit/icons/tab = SubResource("CompressedTexture2D_sbrlq")
+TextEdit/styles/focus = SubResource("StyleBoxEmpty_vgt0k")
+TextEdit/styles/normal = SubResource("StyleBoxFlat_mak2d")
+TooltipLabel/colors/font_color = Color(1, 1, 1, 1)
+TooltipLabel/font_sizes/font_size = 16
+TooltipPanel/styles/panel = SubResource("StyleBoxFlat_qgev5")
+Tree/colors/children_hl_line_color = Color(1, 1, 1, 0.666667)
+Tree/colors/font_color = Color(1, 1, 1, 1)
+Tree/colors/font_disabled_color = Color(1, 1, 1, 0.235294)
+Tree/colors/font_hovered_color = Color(0.95, 0.95, 0.95, 1)
+Tree/colors/guide_color = Color(1, 1, 1, 0.666667)
+Tree/colors/parent_hl_line_color = Color(1, 0.980392, 0.980392, 0.666667)
+Tree/colors/relationship_line_color = Color(1, 0.98, 0.98, 0.333333)
+Tree/constants/children_hl_line_width = 2
+Tree/constants/draw_relationship_lines = 1
+Tree/constants/h_separation = -5
+Tree/constants/inner_item_margin_left = 5
+Tree/constants/item_margin = 14
+Tree/constants/parent_hl_line_width = 3
+Tree/font_sizes/font_size = 14
+Tree/icons/arrow = SubResource("CompressedTexture2D_imn8b")
+Tree/icons/arrow_collapsed = SubResource("CompressedTexture2D_w86oq")
+Tree/icons/checked = SubResource("CompressedTexture2D_f3lbq")
+Tree/icons/select_arrow = SubResource("CompressedTexture2D_r8l26")
+Tree/icons/unchecked = SubResource("CompressedTexture2D_bkua4")
+Tree/icons/updown = SubResource("CompressedTexture2D_8qyt8")
+Tree/styles/focus = SubResource("StyleBoxEmpty_tucje")
+Tree/styles/hovered = SubResource("StyleBoxFlat_e6yvu")
+Tree/styles/panel = SubResource("StyleBoxFlat_r1mr5")
+Tree/styles/selected = SubResource("StyleBoxFlat_sbb0y")
+VScrollBar/icons/decrement = null
+VScrollBar/icons/decrement_highlight = null
+VScrollBar/icons/decrement_pressed = null
+VScrollBar/icons/increment = null
+VScrollBar/icons/increment_highlight = null
+VScrollBar/icons/increment_pressed = null
+VScrollBar/styles/grabber = SubResource("StyleBoxFlat_0fl7j")
+VScrollBar/styles/grabber_highlight = SubResource("StyleBoxFlat_yslja")
+VScrollBar/styles/grabber_pressed = SubResource("StyleBoxFlat_8kspe")
+VScrollBar/styles/scroll = SubResource("StyleBoxFlat_ut2cc")
+VScrollBar/styles/scroll_focus = SubResource("StyleBoxFlat_o36kn")
+VSeparator/styles/separator = SubResource("StyleBoxLine_orhx8")
+VSlider/icons/grabber = SubResource("CompressedTexture2D_4k4l2")
+VSlider/icons/grabber_disabled = SubResource("CompressedTexture2D_ltx0a")
+VSlider/icons/grabber_highlight = SubResource("CompressedTexture2D_d5bsw")
+VSlider/icons/tick = SubResource("CompressedTexture2D_gjji7")
+VSlider/styles/grabber_area = SubResource("StyleBoxFlat_hu1kk")
+VSlider/styles/grabber_area_highlight = SubResource("StyleBoxFlat_as57v")
+VSlider/styles/slider = SubResource("StyleBoxFlat_f0vng")
+VSplitContainer/constants/autohide = 0
+VSplitContainer/icons/grabber = SubResource("CompressedTexture2D_aj50v")
+
+[sub_resource type="Gradient" id="Gradient_1dt2v"]
+offsets = PackedFloat32Array(0, 0.113636, 0.836364, 1)
+colors = PackedColorArray(0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_a8bf6"]
+bg_color = Color(1, 1, 1, 0.0901961)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_pgouj"]
+shader = ExtResource("6_f123r")
+shader_parameter/strength = 3.3
+shader_parameter/mix_percentage = 0.0
+shader_parameter/base_alpha = 1.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_lvito"]
+bg_color = Color(1, 1, 1, 0.282353)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_evkyg"]
+shader = ExtResource("6_f123r")
+shader_parameter/strength = 3.146
+shader_parameter/mix_percentage = 0.0
+shader_parameter/base_alpha = 1.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pgouj"]
+bg_color = Color(1, 1, 1, 0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+
+[node name="SimpleSVGEditor" type="Control" node_paths=PackedStringArray("svg_input_field", "svg_preview_label", "convert_color_button", "target_color_picker", "save_replace_button", "save_dupe_button", "canvas_width_spinbox", "canvas_height_spinbox", "change_canvas_size_button")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("Theme_0ap2r")
+script = ExtResource("1_yxl4k")
+svg_input_field = NodePath("MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/VBoxContainer/VBoxContainer/LineEdit")
+svg_preview_label = NodePath("MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/VBoxContainer/MarginContainer/MarginContainer/RichTextLabel")
+convert_color_button = NodePath("MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer/MarginContainer/VBoxContainer/MarginContainer/ConvertColorButton")
+target_color_picker = NodePath("MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/ColorPickerButton")
+save_replace_button = NodePath("MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer2/MarginContainer4/SaveAndReplaceColorButton")
+save_dupe_button = NodePath("MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer2/MarginContainer3/SaveAsDupeColorButton")
+canvas_width_spinbox = NodePath("MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer2/MarginContainer/VBoxContainer/HBoxContainer/WidthSpinBox")
+canvas_height_spinbox = NodePath("MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer2/MarginContainer/VBoxContainer/HBoxContainer/HeightSpinBox")
+change_canvas_size_button = NodePath("MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer2/MarginContainer/VBoxContainer/MarginContainer/ChangeCanvasSizeButton")
+
+[node name="AnimatedGradientBG2" parent="." instance=ExtResource("3_e23nw")]
+layout_mode = 0
+grow_horizontal = 1
+grow_vertical = 1
+texture = ExtResource("2_vpkhs")
+expand_mode = 2
+rock_distance = 50.0
+
+[node name="AnimatedGradientBG" parent="." instance=ExtResource("3_e23nw")]
+modulate = Color(1, 1, 1, 0.560784)
+layout_mode = 0
+grow_horizontal = 1
+grow_vertical = 1
+texture = ExtResource("5_f123r")
+
+[node name="GPUParticles2D" type="CPUParticles2D" parent="."]
+modulate = Color(0.13, 0.681, 1, 0.827451)
+position = Vector2(576, 71)
+amount = 24
+texture = ExtResource("6_a8bf6")
+lifetime = 1.2
+emission_shape = 3
+emission_rect_extents = Vector2(500, 1)
+direction = Vector2(126.7, 0)
+scale_amount_min = 0.2
+scale_amount_max = 0.3
+color_ramp = SubResource("Gradient_1dt2v")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 40
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 40
+
+[node name="Panel" type="Panel" parent="MarginContainer"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_a8bf6")
+
+[node name="BlurShader" parent="MarginContainer/Panel" instance=ExtResource("5_x0oir")]
+material = SubResource("ShaderMaterial_pgouj")
+layout_mode = 1
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/MarginContainer"]
+layout_mode = 2
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="Panel" type="Panel" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/VBoxContainer/MarginContainer"]
+clip_children = 1
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_lvito")
+
+[node name="AnimatedGradientBG" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/VBoxContainer/MarginContainer/Panel" instance=ExtResource("3_e23nw")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 0.0
+offset_bottom = 0.0
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/VBoxContainer/MarginContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="RichTextLabel" type="RichTextLabel" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/VBoxContainer/MarginContainer/MarginContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_font_sizes/normal_font_size = 15
+theme_override_font_sizes/bold_font_size = 61
+bbcode_enabled = true
+text = "[b]Simple SVG Editor"
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="VBoxContainer" type="HBoxContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 20
+
+[node name="LineEdit" type="LineEdit" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/VBoxContainer/VBoxContainer"]
+custom_minimum_size = Vector2(354.82, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+placeholder_text = "Paste SVG Path Here"
+alignment = 1
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+clip_children = 1
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="BlurShader" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer" instance=ExtResource("5_x0oir")]
+show_behind_parent = false
+clip_children = 1
+material = SubResource("ShaderMaterial_evkyg")
+layout_mode = 2
+mouse_filter = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer2" type="VBoxContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 25
+alignment = 1
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Panel" type="Panel" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_pgouj")
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 11
+alignment = 1
+
+[node name="RichTextLabel" type="RichTextLabel" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+bbcode_enabled = true
+text = "Select Color"
+fit_content = true
+autowrap_mode = 0
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ColorPickerButton" type="ColorPickerButton" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+custom_minimum_size = Vector2(26, 0)
+layout_mode = 2
+theme = ExtResource("10_evkyg")
+color = Color(1, 1, 1, 1)
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(289.725, 42.79)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 6
+
+[node name="Panel" type="Panel" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer/MarginContainer/VBoxContainer/MarginContainer"]
+clip_children = 1
+layout_mode = 2
+
+[node name="AnimatedGradientBG" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer/MarginContainer/VBoxContainer/MarginContainer/Panel" instance=ExtResource("3_e23nw")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 0.0
+offset_bottom = 0.0
+texture = ExtResource("11_pgouj")
+
+[node name="ConvertColorButton" type="Button" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer/MarginContainer/VBoxContainer/MarginContainer"]
+custom_minimum_size = Vector2(273.415, 0)
+layout_mode = 2
+size_flags_horizontal = 6
+text = "Convert Color"
+flat = true
+
+[node name="ExpandHoveredButtonModule" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer/MarginContainer/VBoxContainer/MarginContainer/ConvertColorButton" node_paths=PackedStringArray("target_control") instance=ExtResource("10_1dt2v")]
+target_control = NodePath("../..")
+
+[node name="ShrinkPressedButtonModule" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer/MarginContainer/VBoxContainer/MarginContainer/ConvertColorButton" instance=ExtResource("13_4vruq")]
+
+[node name="MarginContainer3" type="MarginContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Panel" type="Panel" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer3"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_pgouj")
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer3"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer3/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer3/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 11
+alignment = 1
+
+[node name="RichTextLabel" type="RichTextLabel" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer3/MarginContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+bbcode_enabled = true
+text = "Select Opacity"
+fit_content = true
+autowrap_mode = 0
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="HSlider" type="HSlider" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer3/MarginContainer/VBoxContainer/HBoxContainer"]
+custom_minimum_size = Vector2(142.925, 0)
+layout_mode = 2
+size_flags_vertical = 1
+max_value = 1.0
+step = 0.01
+value = 1.0
+tick_count = 3
+
+[node name="Label" type="Label" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer3/MarginContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+text = "1.0"
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer3/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(289.725, 42.79)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 6
+
+[node name="Panel" type="Panel" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer3/MarginContainer/VBoxContainer/MarginContainer"]
+clip_children = 1
+layout_mode = 2
+
+[node name="AnimatedGradientBG" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer3/MarginContainer/VBoxContainer/MarginContainer/Panel" instance=ExtResource("3_e23nw")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 0.0
+offset_bottom = 0.0
+texture = ExtResource("11_pgouj")
+
+[node name="ConvertColorButton" type="Button" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer3/MarginContainer/VBoxContainer/MarginContainer"]
+custom_minimum_size = Vector2(273.415, 0)
+layout_mode = 2
+size_flags_horizontal = 6
+text = "Change Opacity"
+flat = true
+
+[node name="ExpandHoveredButtonModule" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer3/MarginContainer/VBoxContainer/MarginContainer/ConvertColorButton" node_paths=PackedStringArray("target_control") instance=ExtResource("10_1dt2v")]
+target_control = NodePath("../..")
+
+[node name="ShrinkPressedButtonModule" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer3/MarginContainer/VBoxContainer/MarginContainer/ConvertColorButton" instance=ExtResource("13_4vruq")]
+
+[node name="MarginContainer2" type="MarginContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Panel" type="Panel" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer2"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_pgouj")
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer2"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer2/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer2/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 11
+alignment = 1
+
+[node name="WidthSpinBox" type="SpinBox" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer2/MarginContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+alignment = 1
+suffix = "X"
+
+[node name="HeightSpinBox" type="SpinBox" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer2/MarginContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+alignment = 1
+suffix = "Y"
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer2/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(289.725, 42.79)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 6
+
+[node name="Panel" type="Panel" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer2/MarginContainer/VBoxContainer/MarginContainer"]
+clip_children = 1
+layout_mode = 2
+
+[node name="AnimatedGradientBG" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer2/MarginContainer/VBoxContainer/MarginContainer/Panel" instance=ExtResource("3_e23nw")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 0.0
+offset_bottom = 0.0
+texture = ExtResource("11_pgouj")
+
+[node name="ChangeCanvasSizeButton" type="Button" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer2/MarginContainer/VBoxContainer/MarginContainer"]
+custom_minimum_size = Vector2(273.415, 0)
+layout_mode = 2
+size_flags_horizontal = 6
+text = "Change Canvas Size"
+flat = true
+
+[node name="ExpandHoveredButtonModule" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer2/MarginContainer/VBoxContainer/MarginContainer/ChangeCanvasSizeButton" node_paths=PackedStringArray("target_control") instance=ExtResource("10_1dt2v")]
+target_control = NodePath("../..")
+
+[node name="ShrinkPressedButtonModule" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer/MarginContainer2/MarginContainer/VBoxContainer/MarginContainer/ChangeCanvasSizeButton" instance=ExtResource("13_4vruq")]
+
+[node name="VBoxContainer2" type="VBoxContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2"]
+layout_mode = 2
+size_flags_vertical = 8
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="MarginContainer4" type="MarginContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer2"]
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+
+[node name="Panel" type="Panel" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer2/MarginContainer4"]
+clip_children = 1
+layout_mode = 2
+
+[node name="AnimatedGradientBG" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer2/MarginContainer4/Panel" instance=ExtResource("3_e23nw")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 0.0
+offset_bottom = 0.0
+texture = ExtResource("14_sgu3h")
+
+[node name="SaveAndReplaceColorButton" type="Button" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer2/MarginContainer4"]
+custom_minimum_size = Vector2(228.465, 50)
+layout_mode = 2
+size_flags_horizontal = 6
+text = "Save and Replace"
+flat = true
+
+[node name="ExpandHoveredButtonModule" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer2/MarginContainer4/SaveAndReplaceColorButton" node_paths=PackedStringArray("target_control") instance=ExtResource("10_1dt2v")]
+expand_scale = Vector2(1.05, 1.05)
+target_control = NodePath("../..")
+
+[node name="ShrinkPressedButtonModule" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer2/MarginContainer4/SaveAndReplaceColorButton" instance=ExtResource("13_4vruq")]
+
+[node name="MarginContainer3" type="MarginContainer" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer2"]
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+
+[node name="Panel" type="Panel" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer2/MarginContainer3"]
+clip_children = 1
+layout_mode = 2
+
+[node name="AnimatedGradientBG" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer2/MarginContainer3/Panel" instance=ExtResource("3_e23nw")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 0.0
+offset_bottom = 0.0
+texture = ExtResource("14_sgu3h")
+
+[node name="SaveAsDupeColorButton" type="Button" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer2/MarginContainer3"]
+custom_minimum_size = Vector2(228.465, 50)
+layout_mode = 2
+size_flags_horizontal = 6
+text = "Save as Dupe"
+flat = true
+
+[node name="ExpandHoveredButtonModule" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer2/MarginContainer3/SaveAsDupeColorButton" node_paths=PackedStringArray("target_control") instance=ExtResource("10_1dt2v")]
+expand_scale = Vector2(1.05, 1.05)
+target_control = NodePath("../..")
+
+[node name="ShrinkPressedButtonModule" parent="MarginContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/MarginContainer/VBoxContainer2/VBoxContainer2/MarginContainer3/SaveAsDupeColorButton" instance=ExtResource("13_4vruq")]

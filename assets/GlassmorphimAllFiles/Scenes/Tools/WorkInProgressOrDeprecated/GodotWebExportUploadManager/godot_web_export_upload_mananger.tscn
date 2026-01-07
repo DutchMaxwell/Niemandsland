@@ -1,0 +1,39 @@
+[gd_scene load_steps=5 format=3 uid="uid://bmxc1v6nv6vwq"]
+
+[ext_resource type="Script" uid="uid://birehado8f6ll" path="res://Scenes/Tools/WorkInProgressOrDeprecated/GodotWebExportUploadManager/godot_web_export_upload_mananger.gd" id="1_5rhlu"]
+[ext_resource type="PackedScene" uid="uid://deyabyx7mvttg" path="res://Scripts/Nodes/Control/TextureRect/AnimatedRocking/animated_rocking_texture.tscn" id="2_o13hq"]
+[ext_resource type="Texture2D" uid="uid://da2xoagk6vmx" path="res://Assets/Images/Backgrounds/Unsplash/shannon-potter-bHlZX1D4I8g-unsplash.jpg" id="3_ywojh"]
+[ext_resource type="Texture2D" uid="uid://ccp6nk7prllhg" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/Gradients/yellow_blue_gradient.tres" id="4_2g5ti"]
+
+[node name="GodotWebExportUploadMananger" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_5rhlu")
+
+[node name="AnimatedRockingTexture" parent="." instance=ExtResource("2_o13hq")]
+layout_mode = 0
+grow_horizontal = 1
+grow_vertical = 1
+texture = ExtResource("3_ywojh")
+expand_mode = 5
+rock_distance = 50.0
+
+[node name="AnimatedRockingTexture2" parent="." instance=ExtResource("2_o13hq")]
+modulate = Color(1, 1, 1, 0.34902)
+layout_mode = 0
+texture = ExtResource("4_2g5ti")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PanelContainer" type="PanelContainer" parent="MarginContainer"]
+layout_mode = 2
