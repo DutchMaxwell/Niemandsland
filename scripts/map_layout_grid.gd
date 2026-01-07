@@ -284,29 +284,39 @@ func _line_intersects_rect(start: Vector2, end: Vector2, rect: Rect2) -> bool:
 
 func _draw_deployment_zones(grid_rect: Rect2) -> void:
 	## Draw deployment zones based on deployment type
+	## Uses the same enum as terrain_overlay.gd: NONE=0, FRONT_LINE=1
 	if not map_layout:
 		return
 
 	var table_size_inches = map_layout.table_size_feet * 12.0
 	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
-	var _pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
+	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
 
-	var zone_color_p1 = Color(0.2, 0.5, 1.0, 0.2)  # Blue for player 1
-	var zone_color_p2 = Color(1.0, 0.3, 0.3, 0.2)  # Red for player 2
+	var zone_color_p1 = Color(0.2, 0.5, 1.0, 0.25)  # Blue for player 1
+	var zone_color_p2 = Color(1.0, 0.3, 0.3, 0.25)  # Red for player 2
+	var zone_border_p1 = Color(0.3, 0.6, 1.0, 0.6)
+	var zone_border_p2 = Color(1.0, 0.4, 0.4, 0.6)
 
-	match map_layout.deployment_type:
-		map_layout.DeploymentType.STANDARD_6:
-			# 6" from all edges
-			var margin = 6.0 * pixels_per_inch_x
-			# Top zone (Player 1)
-			draw_rect(Rect2(grid_rect.position, Vector2(grid_rect.size.x, margin)), zone_color_p1, true)
-			# Bottom zone (Player 2)
-			draw_rect(Rect2(grid_rect.position + Vector2(0, grid_rect.size.y - margin), Vector2(grid_rect.size.x, margin)), zone_color_p2, true)
+	# Check deployment type by value (0=NONE, 1=FRONT_LINE)
+	var deploy_type = map_layout.deployment_type
 
-		map_layout.DeploymentType.STANDARD_9:
-			# 9" from all edges
-			var margin = 9.0 * pixels_per_inch_x
-			# Top zone (Player 1)
-			draw_rect(Rect2(grid_rect.position, Vector2(grid_rect.size.x, margin)), zone_color_p1, true)
-			# Bottom zone (Player 2)
-			draw_rect(Rect2(grid_rect.position + Vector2(0, grid_rect.size.y - margin), Vector2(grid_rect.size.x, margin)), zone_color_p2, true)
+	if deploy_type == 1:  # FRONT_LINE - 12" from long edges
+		var margin = 12.0 * pixels_per_inch_y  # 12" deployment zone
+
+		# Player 1 zone (top/bottom depends on table orientation)
+		var p1_rect = Rect2(grid_rect.position, Vector2(grid_rect.size.x, margin))
+		draw_rect(p1_rect, zone_color_p1, true)
+		draw_rect(p1_rect, zone_border_p1, false, 2.0)
+
+		# Player 2 zone (opposite side)
+		var p2_rect = Rect2(
+			grid_rect.position + Vector2(0, grid_rect.size.y - margin),
+			Vector2(grid_rect.size.x, margin)
+		)
+		draw_rect(p2_rect, zone_color_p2, true)
+		draw_rect(p2_rect, zone_border_p2, false, 2.0)
+
+		# Draw labels
+		var font = ThemeDB.fallback_font
+		draw_string(font, p1_rect.position + Vector2(10, 20), "Player 1 (12\")", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, zone_border_p1)
+		draw_string(font, p2_rect.position + Vector2(10, 20), "Player 2 (12\")", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, zone_border_p2)
