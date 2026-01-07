@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3 uid="uid://cfopwr4txmeg"]
+
+[ext_resource type="Shader" uid="uid://c5iiohuiarbp8" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/Shaders/blur.gdshader" id="1_w6g3i"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_wt17y"]
+shader = ExtResource("1_w6g3i")
+shader_parameter/strength = 3.3
+shader_parameter/mix_percentage = 0.0
+shader_parameter/base_alpha = 1.0
+
+[node name="BlurShader" type="ColorRect"]
+show_behind_parent = true
+material = SubResource("ShaderMaterial_wt17y")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+metadata/_edit_lock_ = true
