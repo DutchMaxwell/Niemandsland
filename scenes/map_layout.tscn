@@ -1,7 +1,35 @@
-[gd_scene load_steps=3 format=3 uid="uid://map_layout001"]
+[gd_scene load_steps=5 format=3 uid="uid://map_layout001"]
 
 [ext_resource type="Script" path="res://scripts/map_layout.gd" id="1_maplayout"]
 [ext_resource type="Script" path="res://scripts/map_layout_grid.gd" id="2_grid"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_leftpanel"]
+bg_color = Color(1.0, 1.0, 1.0, 0.08)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1.0, 1.0, 1.0, 0.1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+content_margin_left = 16.0
+content_margin_top = 16.0
+content_margin_right = 16.0
+content_margin_bottom = 16.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_gridpanel"]
+bg_color = Color(0.0, 0.0, 0.0, 0.5)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1.0, 1.0, 1.0, 0.15)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
 
 [node name="MapLayout" type="Control"]
 layout_mode = 3
@@ -15,7 +43,7 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-color = Color(0.1, 0.1, 0.15, 1)
+color = Color(0.05, 0.06, 0.09, 1)
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 layout_mode = 1
@@ -32,11 +60,13 @@ layout_mode = 2
 
 [node name="Header" type="HBoxContainer" parent="MarginContainer/VBox"]
 layout_mode = 2
+theme_override_constants/separation = 12
 
 [node name="Title" type="Label" parent="MarginContainer/VBox/Header"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
-text = "Map Layout Editor"
+theme_override_colors/font_color = Color(0.95, 0.97, 1.0, 1)
+theme_override_font_sizes/font_size = 26
+text = "MAP LAYOUT EDITOR"
 
 [node name="Spacer" type="Control" parent="MarginContainer/VBox/Header"]
 layout_mode = 2
@@ -44,125 +74,172 @@ size_flags_horizontal = 3
 
 [node name="SaveButton" type="Button" parent="MarginContainer/VBox/Header"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 36)
 layout_mode = 2
 size_flags_horizontal = 0
+theme_override_colors/font_color = Color(0.9, 0.92, 0.96, 1)
+theme_override_colors/font_hover_color = Color(0.35, 0.68, 1.0, 1)
 text = "Save"
 
 [node name="LoadButton" type="Button" parent="MarginContainer/VBox/Header"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 36)
 layout_mode = 2
 size_flags_horizontal = 0
+theme_override_colors/font_color = Color(0.9, 0.92, 0.96, 1)
+theme_override_colors/font_hover_color = Color(0.35, 0.68, 1.0, 1)
 text = "Load"
 
 [node name="ClearButton" type="Button" parent="MarginContainer/VBox/Header"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 36)
 layout_mode = 2
 size_flags_horizontal = 0
+theme_override_colors/font_color = Color(1.0, 0.75, 0.35, 1)
+theme_override_colors/font_hover_color = Color(1.0, 0.85, 0.5, 1)
 text = "Clear All"
 
 [node name="CloseButton" type="Button" parent="MarginContainer/VBox/Header"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 36)
 layout_mode = 2
 size_flags_horizontal = 0
+theme_override_colors/font_color = Color(1.0, 0.35, 0.45, 1)
+theme_override_colors/font_hover_color = Color(1.0, 0.5, 0.6, 1)
 text = "Close"
 
 [node name="HSeparator" type="HSeparator" parent="MarginContainer/VBox"]
 layout_mode = 2
+modulate = Color(1, 1, 1, 0.15)
 
 [node name="MainContent" type="HBoxContainer" parent="MarginContainer/VBox"]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="LeftPanelScroll" type="ScrollContainer" parent="MarginContainer/VBox/MainContent"]
+[node name="LeftPanelContainer" type="PanelContainer" parent="MarginContainer/VBox/MainContent"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 0.3
-horizontal_scroll_mode = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_leftpanel")
 
-[node name="LeftPanel" type="VBoxContainer" parent="MarginContainer/VBox/MainContent/LeftPanelScroll"]
+[node name="LeftPanelScroll" type="ScrollContainer" parent="MarginContainer/VBox/MainContent/LeftPanelContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
+horizontal_scroll_mode = 0
 
-[node name="TerrainLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
+[node name="LeftPanel" type="VBoxContainer" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll"]
 layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="TerrainLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.92, 0.96, 1)
 theme_override_font_sizes/font_size = 18
 text = "Terrain Types"
 
-[node name="TerrainButtons" type="VBoxContainer" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
+[node name="TerrainButtons" type="VBoxContainer" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_constants/separation = 8
 
-[node name="HSeparator2" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
+[node name="HSeparator2" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 layout_mode = 2
+theme_override_styles/separator = null
+modulate = Color(1, 1, 1, 0.2)
 
-[node name="RotationLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
+[node name="RotationLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.73, 0.8, 1)
 text = "Rotation: 0°"
 
-[node name="RotationSlider" type="HSlider" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
+[node name="RotationSlider" type="HSlider" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 360.0
 step = 1.0
 
-[node name="SymmetryCheck" type="CheckBox" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
+[node name="SymmetryCheck" type="CheckBox" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.87, 0.92, 1)
 text = "Point Symmetry (Mirror)"
 
-[node name="HSeparator3" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
+[node name="HSeparator3" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 layout_mode = 2
+modulate = Color(1, 1, 1, 0.2)
 
-[node name="AutoGenButton" type="Button" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
+[node name="AutoGenButton" type="Button" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.2, 1, 0.4, 1)
+theme_override_colors/font_color = Color(0.3, 0.85, 0.55, 1)
+theme_override_colors/font_hover_color = Color(0.4, 1.0, 0.65, 1)
 theme_override_font_sizes/font_size = 16
-text = "🎲 Auto-Generate Layout"
+text = "Auto-Generate Layout"
 
-[node name="HSeparator3b" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
+[node name="HSeparator3b" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 layout_mode = 2
+modulate = Color(1, 1, 1, 0.2)
 
-[node name="DeploymentCheck" type="CheckBox" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
+[node name="DeploymentLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.92, 0.96, 1)
+theme_override_font_sizes/font_size = 16
+text = "Deployment Zones"
+
+[node name="DeploymentTypeOption" type="OptionButton" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Show Deployment Zones (6\")"
+theme_override_colors/font_color = Color(0.9, 0.92, 0.96, 1)
 
-[node name="ObjectivesCheck" type="CheckBox" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
+[node name="DeploymentCheck" type="CheckBox" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.87, 0.92, 1)
+text = "Show in Preview"
+
+[node name="ObjectivesCheck" type="CheckBox" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
+theme_override_colors/font_color = Color(0.85, 0.87, 0.92, 1)
 text = "Show Objectives"
 
-[node name="HSeparator3c" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
+[node name="HSeparator3c" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 layout_mode = 2
+modulate = Color(1, 1, 1, 0.2)
 
-[node name="StatsLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
+[node name="StatsLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.73, 0.8, 1)
+theme_override_font_sizes/font_size = 13
 text = "Current Coverage:"
 
-[node name="HSeparator4" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
+[node name="HSeparator4" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 layout_mode = 2
+modulate = Color(1, 1, 1, 0.2)
 
-[node name="RecommendationsLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelScroll/LeftPanel"]
+[node name="RecommendationsLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.8, 0.4, 1)
+theme_override_colors/font_color = Color(1.0, 0.75, 0.35, 1)
+theme_override_font_sizes/font_size = 13
 text = "OPR Recommendations:"
 
 [node name="GridPanel" type="PanelContainer" parent="MarginContainer/VBox/MainContent"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 0.7
+theme_override_styles/panel = SubResource("StyleBoxFlat_gridpanel")
 
 [node name="GridMargin" type="MarginContainer" parent="MarginContainer/VBox/MainContent/GridPanel"]
 layout_mode = 2
-theme_override_constants/margin_left = 10
-theme_override_constants/margin_top = 10
-theme_override_constants/margin_right = 10
-theme_override_constants/margin_bottom = 10
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
 
 [node name="GridContainer" type="Control" parent="MarginContainer/VBox/MainContent/GridPanel/GridMargin"]
 unique_name_in_owner = true

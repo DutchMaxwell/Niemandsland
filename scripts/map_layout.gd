@@ -40,13 +40,13 @@ const TERRAIN_DESCRIPTIONS := {
 const GRID_SIZE_INCHES := 3.0
 const INCHES_TO_METERS := 0.0254
 
-# Deployment zone types
+# Deployment zone types (must match terrain_overlay.gd)
+# NOTE: Only FRONT_LINE is from OPR free rules.
+# Other deployment types are behind OPR's paywall.
 enum DeploymentType {
-	NONE,
-	STANDARD_6,   # 6" from edges
-	STANDARD_9,   # 9" from edges
-	DIAGONAL,     # Corners
-	HAMMER_ANVIL  # Short edges
+	NONE = 0,
+	FRONT_LINE = 1,  # 12" from long edges (OPR free rule)
+	# CUSTOM = 2     # Custom polygon zones - can be added later
 }
 
 var table_size_feet := Vector2(6, 4)  # Default 6x4 table
@@ -57,8 +57,11 @@ var is_painting := false
 var point_symmetry_enabled := false  # Mirror placement across center
 
 # Deployment zones
-var deployment_type := DeploymentType.STANDARD_6
+var deployment_type := DeploymentType.NONE
 var show_deployment_zones := false
+
+# Signal to notify terrain_overlay of deployment changes
+signal deployment_type_changed(type: int)
 
 @onready var grid_container: Control = %GridContainer
 @onready var rotation_slider: HSlider = %RotationSlider
@@ -73,6 +76,7 @@ var show_deployment_zones := false
 @onready var symmetry_check: CheckBox = %SymmetryCheck
 @onready var autogen_button: Button = %AutoGenButton
 @onready var deployment_check: CheckBox = %DeploymentCheck
+@onready var deployment_type_option: OptionButton = %DeploymentTypeOption
 @onready var save_file_dialog: FileDialog = %SaveFileDialog
 @onready var load_file_dialog: FileDialog = %LoadFileDialog
 
@@ -97,9 +101,52 @@ func _ready() -> void:
 	if load_file_dialog:
 		load_file_dialog.file_selected.connect(_on_load_file_selected)
 
+	# Setup deployment zone type selection
+	_setup_deployment_type_option()
+
 	_setup_terrain_buttons()
 	_update_stats()
 	_update_recommendations()
+
+
+## Setup the deployment zone type option button
+func _setup_deployment_type_option() -> void:
+	if not deployment_type_option:
+		return
+
+	# Clear existing items
+	deployment_type_option.clear()
+
+	# Add deployment zone types (matching terrain_overlay.gd DeploymentType enum)
+	# NOTE: Only Front Line is from OPR free rules. Other types would need to be added.
+	deployment_type_option.add_item("None", 0)
+	deployment_type_option.add_item("Front Line (12\")", 1)  # Standard OPR free rule
+	# deployment_type_option.add_item("Custom", 2)  # Custom zones - can be added later
+
+	# Select current type
+	deployment_type_option.selected = deployment_type
+
+	# Connect signal
+	deployment_type_option.item_selected.connect(_on_deployment_type_selected)
+
+
+## Handle deployment zone type selection
+func _on_deployment_type_selected(index: int) -> void:
+	deployment_type = index
+	deployment_type_changed.emit(index)
+
+	# Auto-show deployment zones when a type is selected
+	if index > 0:
+		show_deployment_zones = true
+		if deployment_check:
+			deployment_check.button_pressed = true
+	else:
+		show_deployment_zones = false
+		if deployment_check:
+			deployment_check.button_pressed = false
+
+	grid_container.queue_redraw()
+	print("Map Tool: Deployment type set to %d" % index)
 
 
 func _setup_terrain_buttons() -> void:
@@ -109,23 +156,47 @@ func _setup_terrain_buttons() -> void:
 	for type in [TerrainType.RUINS, TerrainType.FOREST, TerrainType.CONTAINER, TerrainType.DANGEROUS, TerrainType.NONE]:
 		var btn = Button.new()
 		btn.text = TERRAIN_NAMES[type]
-		btn.custom_minimum_size = Vector2(100, 40)
+		btn.custom_minimum_size = Vector2(0, 44)
 		btn.toggle_mode = true
 		btn.button_pressed = (type == selected_terrain_type)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-		# Color the button
+		# Glassmorphism style - semi-transparent with terrain color tint
+		var terrain_color = TERRAIN_COLORS[type]
+
+		# Normal state - glass panel with terrain color
 		var style = StyleBoxFlat.new()
-		style.bg_color = TERRAIN_COLORS[type]
-		style.set_corner_radius_all(4)
+		style.bg_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.25)
+		style.set_corner_radius_all(8)
+		style.border_width_left = 1
+		style.border_width_top = 1
+		style.border_width_right = 1
+		style.border_width_bottom = 1
+		style.border_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.4)
+		style.content_margin_left = 12
+		style.content_margin_right = 12
 		btn.add_theme_stylebox_override("normal", style)
 
+		# Hover state - brighter
+		var hover_style = style.duplicate()
+		hover_style.bg_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.35)
+		hover_style.border_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.6)
+		btn.add_theme_stylebox_override("hover", hover_style)
+
+		# Pressed/selected state - solid with glow border
 		var pressed_style = style.duplicate()
-		pressed_style.border_width_bottom = 3
-		pressed_style.border_width_top = 3
-		pressed_style.border_width_left = 3
-		pressed_style.border_width_right = 3
-		pressed_style.border_color = Color.WHITE
+		pressed_style.bg_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.5)
+		pressed_style.border_width_left = 2
+		pressed_style.border_width_top = 2
+		pressed_style.border_width_right = 2
+		pressed_style.border_width_bottom = 2
+		pressed_style.border_color = Color(1.0, 1.0, 1.0, 0.8)
 		btn.add_theme_stylebox_override("pressed", pressed_style)
+
+		# Text color
+		btn.add_theme_color_override("font_color", Color(0.95, 0.97, 1.0, 1.0))
+		btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0, 1.0))
+		btn.add_theme_color_override("font_pressed_color", Color(1.0, 1.0, 1.0, 1.0))
 
 		btn.pressed.connect(_on_terrain_button_pressed.bind(type, btn))
 		terrain_buttons.add_child(btn)
@@ -419,12 +490,12 @@ Tip: Connected cells = 1 piece""" % [
 		check_mark if extended.symmetry_ok else cross_mark, extended.symmetry_score
 	]
 
-	# Color code the recommendations
+	# Color code the recommendations - Glassmorphism accent colors
 	var all_ok = pieces_ok and coverage_ok and blocking_ok and cover_ok and difficult_ok and dangerous_ok and extended.max_gap_ok and extended.symmetry_ok
 	if all_ok:
-		recommendations_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
+		recommendations_label.add_theme_color_override("font_color", Color(0.3, 0.85, 0.55))  # Accent green
 	else:
-		recommendations_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))
+		recommendations_label.add_theme_color_override("font_color", Color(1.0, 0.75, 0.35))  # Accent amber
 
 
 func _get_grid_rect() -> Rect2:
@@ -828,6 +899,10 @@ func load_layout(file_path: String) -> bool:
 	# Load deployment type
 	if data.has("deployment_type"):
 		deployment_type = data.deployment_type
+		if deployment_type_option:
+			deployment_type_option.selected = deployment_type
+		# Emit signal to update terrain_overlay
+		deployment_type_changed.emit(deployment_type)
 
 	# Load grid cells
 	grid_cells.clear()
@@ -931,5 +1006,6 @@ func get_current_layout() -> Dictionary:
 	return {
 		"grid_cells": grid_cells.duplicate(),
 		"table_size": table_size_feet,
-		"rotation": grid_rotation_degrees
+		"rotation": grid_rotation_degrees,
+		"deployment_type": deployment_type
 	}
