@@ -21,11 +21,14 @@ Ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wie OnePageRul
 - ✅ Würfel-System mit Physik (D4, D6, D8, D10, D12, D20, D100)
 - ✅ Distanzmessung in Zoll
 
-### 🗺️ Terrain & Map Layout (NEU!)
+### 🗺️ Terrain & Map Layout
 - ✅ **Map Layout Editor** - Top-down 3" Grid für Terrain-Planung
 - ✅ **4 Terrain-Typen**: Ruins (Cover), Forest (Difficult+Cover), Container (Blocking), Dangerous (Minefields)
-- ✅ **Deployment Zones** - Standard 6"/9", Diagonal, Hammer & Anvil
-- ✅ **Objectives System** - Platzierung von bis zu 6 Zielpunkten
+- ✅ **Deployment Zones**:
+  - **Front-line (12")** - Standard OPR Free Rules Deployment
+  - **Custom Polygon Zones** - Zeichne eigene Aufstellungszonen mit 1" Raster
+  - **Symmetrisch/Asymmetrisch** - Punktsymmetrische oder individuelle Zonen
+- ✅ **Objectives System** - Platzierung von bis zu 6 Zielpunkten (abwechselnd)
 - ✅ **Auto-Generate** - Automatische Terrain-Generierung mit Symmetrie-Option
 - ✅ **3D Overlay** - Terrain-Grid im 3D-Spiel visualisiert
 - ✅ **Save/Load Layouts** - Terrain-Setups speichern und wiederverwenden
@@ -140,9 +143,22 @@ Plane dein Spielfeld mit dem integrierten Map Layout Editor:
 - **Symmetrie-Modus**: Automatisches Spiegeln über Tischmitte
 - **Auto-Generate**: Zufällige faire Terrain-Layouts
 - **OPR Guidelines**: Echtzeit-Feedback zu Terrain-Empfehlungen
-- **Deployment Zones**: 5 verschiedene Aufstellungsarten
-- **Objectives**: Bis zu 6 Zielpunkte platzieren
 - **3D Overlay**: Sieh das Grid direkt im 3D-Spiel
+
+### Deployment Zones
+Aufstellungszonen für beide Spieler:
+- **Front-line (12")**: Standard-Aufstellung aus den OPR Free Rules - 12" von der langen Tischkante
+- **Custom Polygon Zones**: Zeichne eigene Aufstellungszonen als Polygone
+  - **1" Feines Raster**: Höhere Auflösung für präzise Platzierung
+  - **Symmetrischer Modus**: Beide Zonen werden gleichzeitig punktsymmetrisch gezeichnet
+  - **Asymmetrischer Modus**: Zuerst Spieler 1, dann Spieler 2 separat zeichnen
+  - **Vertex-Marker**: Nummerierte Punkte zeigen die Polygon-Ecken
+- **Hinweis**: Weitere Deployment-Typen (Ground War, Spearhead, etc.) können mit Custom Zones manuell nachgebaut werden
+
+### Objectives
+- **Bis zu 6 Zielpunkte** platzieren
+- **Abwechselnde Platzierung** gemäß OPR-Regeln
+- **40mm Marker** mit gelber Basis und schwarzem Rand
 
 ### TTS Import
 Importiere 3D-Modelle direkt vom Tabletop Simulator Steam CDN:
@@ -216,16 +232,18 @@ Siehe [PLAN.md](./PLAN.md) für den vollständigen Entwicklungsplan.
 
 ### Milestone 2 (Alpha) - In Arbeit
 - [x] Map Layout Editor mit Terrain-Typen
-- [x] Deployment Zones & Objectives
+- [x] Deployment Zones (Front-line + Custom Polygon)
+- [x] Objectives System mit abwechselnder Platzierung
+- [x] 1" Grid für Custom Zone Editing
+- [x] Deployment Zones im 3D-Spiel visualisiert
+- [x] Phasen-Management System (Turn-Tracker, Aktivierung)
+- [x] Wunden-Tracking pro Modell
 - [ ] **Terrain-Gameplay Integration** (PRIORITÄT):
   - [ ] Cover-System (Ruins, Forest geben Deckung)
   - [ ] Schwieriges Gelände (Movement-Modifikatoren)
   - [ ] LOS-Blocking (Container blockieren Sicht)
   - [ ] Dangerous Terrain (Schaden bei Betreten)
-- [ ] Deployment Zones im 3D-Spiel visualisieren
 - [ ] Einheiten-Karten und erweiterte Stats
-- [ ] Phasen-Management System (Turn-Tracker, Aktivierung)
-- [ ] Wunden-Tracking pro Modell
 
 ### Milestone 3 (Beta)
 - [ ] Vollständige Multiplayer-Lobby
@@ -326,4 +344,4 @@ Siehe [docs/ASSETS.md](./docs/ASSETS.md) für vollständige Asset-Attributionen.
 
 **Version**: 0.2-alpha
 **Status**: Active Development
-**Letzte Aktualisierung**: 2026-01-06
+**Letzte Aktualisierung**: 2026-01-07
