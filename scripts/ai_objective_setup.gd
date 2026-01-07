@@ -287,15 +287,15 @@ static func _create_default_marker(number: int) -> Node3D:
 
 	marker.add_child(base_mesh)
 
-	# Add objective number label on top
+	# Add objective number label on top of the base
 	var label = Label3D.new()
 	label.text = str(number)
-	label.position.y = BASE_HEIGHT + 0.005  # Just above the base
-	label.pixel_size = 0.0005  # Smaller pixel size for crisp text
-	label.font_size = 64  # Large font for visibility
-	label.modulate = Color(0.1, 0.1, 0.1)  # Dark text color (near-black)
-	label.outline_modulate = Color(1, 1, 1)  # White outline for readability
-	label.outline_size = 8
+	label.position.y = BASE_HEIGHT + 0.002  # Just barely above the base surface
+	label.pixel_size = 0.0004  # ~24mm text height with font_size 60
+	label.font_size = 60  # Fits nicely on 40mm base
+	label.modulate = Color(0.05, 0.05, 0.05)  # Very dark text (near-black)
+	label.outline_modulate = Color(1, 1, 1)  # White outline for contrast
+	label.outline_size = 4  # Thinner outline
 	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED  # Flat on ground
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
