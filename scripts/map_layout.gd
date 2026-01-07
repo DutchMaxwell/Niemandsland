@@ -46,8 +46,15 @@ const INCHES_TO_METERS := 0.0254
 enum DeploymentType {
 	NONE = 0,
 	FRONT_LINE = 1,  # 12" from long edges (OPR free rule)
-	# CUSTOM = 2     # Custom polygon zones - can be added later
+	CUSTOM = 2       # Custom polygon zones defined by user
 }
+
+# Custom zone editing state
+var custom_zone_editing := false
+var custom_zone_symmetric := true
+var custom_zone_current_player := 1  # 1 or 2
+var custom_zone_vertices_p1: Array[Vector2i] = []  # Grid cell positions
+var custom_zone_vertices_p2: Array[Vector2i] = []
 
 var table_size_feet := Vector2(6, 4)  # Default 6x4 table
 var grid_rotation_degrees := 0.0
@@ -118,16 +125,18 @@ func _setup_deployment_type_option() -> void:
 	deployment_type_option.clear()
 
 	# Add deployment zone types (matching terrain_overlay.gd DeploymentType enum)
-	# NOTE: Only Front Line is from OPR free rules. Other types would need to be added.
 	deployment_type_option.add_item("None", 0)
 	deployment_type_option.add_item("Front Line (12\")", 1)  # Standard OPR free rule
-	# deployment_type_option.add_item("Custom", 2)  # Custom zones - can be added later
+	deployment_type_option.add_item("Custom Zones", 2)  # User-defined polygon zones
 
 	# Select current type
 	deployment_type_option.selected = deployment_type
 
 	# Connect signal
 	deployment_type_option.item_selected.connect(_on_deployment_type_selected)
+
+	# Setup custom zone UI (initially hidden)
+	_setup_custom_zone_ui()
 
 
 ## Handle deployment zone type selection
@@ -145,8 +154,181 @@ func _on_deployment_type_selected(index: int) -> void:
 		if deployment_check:
 			deployment_check.button_pressed = false
 
+	# Show/hide custom zone UI
+	_update_custom_zone_ui_visibility()
+
 	grid_container.queue_redraw()
 	print("Map Tool: Deployment type set to %d" % index)
+
+
+# ============================================================================
+# Custom Deployment Zone Editing
+# ============================================================================
+
+var _custom_zone_panel: VBoxContainer = null
+var _custom_zone_symmetric_check: CheckBox = null
+var _custom_zone_start_btn: Button = null
+var _custom_zone_confirm_btn: Button = null
+var _custom_zone_cancel_btn: Button = null
+var _custom_zone_clear_btn: Button = null
+var _custom_zone_status_label: Label = null
+
+
+## Setup custom zone editing UI
+func _setup_custom_zone_ui() -> void:
+	# Find the LeftPanel to add custom zone controls
+	var left_panel = deployment_type_option.get_parent()
+	if not left_panel:
+		return
+
+	# Create custom zone panel (after DeploymentCheck)
+	_custom_zone_panel = VBoxContainer.new()
+	_custom_zone_panel.name = "CustomZonePanel"
+	_custom_zone_panel.visible = false
+
+	# Find DeploymentCheck and insert after it
+	var deploy_check_idx = deployment_check.get_index()
+	left_panel.add_child(_custom_zone_panel)
+	left_panel.move_child(_custom_zone_panel, deploy_check_idx + 1)
+
+	# Symmetric mode checkbox
+	_custom_zone_symmetric_check = CheckBox.new()
+	_custom_zone_symmetric_check.text = "Symmetric (point-mirrored)"
+	_custom_zone_symmetric_check.button_pressed = true
+	_custom_zone_symmetric_check.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
+	_custom_zone_symmetric_check.toggled.connect(func(v): custom_zone_symmetric = v)
+	_custom_zone_panel.add_child(_custom_zone_symmetric_check)
+
+	# Status label
+	_custom_zone_status_label = Label.new()
+	_custom_zone_status_label.text = "Click grid to add zone vertices"
+	_custom_zone_status_label.add_theme_font_size_override("font_size", 12)
+	_custom_zone_status_label.add_theme_color_override("font_color", Color(0.7, 0.73, 0.8, 1.0))
+	_custom_zone_panel.add_child(_custom_zone_status_label)
+
+	# Button container
+	var btn_row = HBoxContainer.new()
+	btn_row.add_theme_constant_override("separation", 8)
+	_custom_zone_panel.add_child(btn_row)
+
+	# Start button
+	_custom_zone_start_btn = Button.new()
+	_custom_zone_start_btn.text = "Start Drawing"
+	_custom_zone_start_btn.add_theme_color_override("font_color", Color(0.3, 0.85, 0.55, 1.0))
+	_custom_zone_start_btn.pressed.connect(_on_custom_zone_start)
+	btn_row.add_child(_custom_zone_start_btn)
+
+	# Confirm button
+	_custom_zone_confirm_btn = Button.new()
+	_custom_zone_confirm_btn.text = "Confirm"
+	_custom_zone_confirm_btn.disabled = true
+	_custom_zone_confirm_btn.add_theme_color_override("font_color", Color(0.35, 0.68, 1.0, 1.0))
+	_custom_zone_confirm_btn.pressed.connect(_on_custom_zone_confirm)
+	btn_row.add_child(_custom_zone_confirm_btn)
+
+	# Clear button
+	_custom_zone_clear_btn = Button.new()
+	_custom_zone_clear_btn.text = "Clear"
+	_custom_zone_clear_btn.add_theme_color_override("font_color", Color(1.0, 0.75, 0.35, 1.0))
+	_custom_zone_clear_btn.pressed.connect(_on_custom_zone_clear)
+	btn_row.add_child(_custom_zone_clear_btn)
+
+
+## Update visibility of custom zone UI based on deployment type
+func _update_custom_zone_ui_visibility() -> void:
+	if _custom_zone_panel:
+		_custom_zone_panel.visible = (deployment_type == DeploymentType.CUSTOM)
+
+
+## Start custom zone drawing
+func _on_custom_zone_start() -> void:
+	custom_zone_editing = true
+	custom_zone_current_player = 1
+
+	# Clear previous vertices if starting fresh
+	if custom_zone_symmetric:
+		custom_zone_vertices_p1.clear()
+		custom_zone_vertices_p2.clear()
+		_custom_zone_status_label.text = "Drawing zones (symmetric)..."
+	else:
+		custom_zone_vertices_p1.clear()
+		_custom_zone_status_label.text = "Drawing Player 1 zone..."
+
+	_custom_zone_start_btn.disabled = true
+	_custom_zone_symmetric_check.disabled = true
+	_custom_zone_confirm_btn.disabled = false
+
+	grid_container.queue_redraw()
+
+
+## Confirm current zone and move to next (or finish)
+func _on_custom_zone_confirm() -> void:
+	if custom_zone_symmetric:
+		# Symmetric mode - both zones done at once
+		custom_zone_editing = false
+		_custom_zone_status_label.text = "Custom zones defined!"
+		_finish_custom_zone_editing()
+	else:
+		# Asymmetric mode
+		if custom_zone_current_player == 1:
+			# Move to player 2
+			custom_zone_current_player = 2
+			_custom_zone_status_label.text = "Drawing Player 2 zone..."
+		else:
+			# Done with both
+			custom_zone_editing = false
+			_custom_zone_status_label.text = "Custom zones defined!"
+			_finish_custom_zone_editing()
+
+	grid_container.queue_redraw()
+
+
+## Finish custom zone editing
+func _finish_custom_zone_editing() -> void:
+	_custom_zone_start_btn.disabled = false
+	_custom_zone_symmetric_check.disabled = false
+	_custom_zone_confirm_btn.disabled = true
+
+	# Emit signal to update terrain_overlay with custom zones
+	deployment_type_changed.emit(DeploymentType.CUSTOM)
+
+
+## Clear all custom zone vertices
+func _on_custom_zone_clear() -> void:
+	custom_zone_vertices_p1.clear()
+	custom_zone_vertices_p2.clear()
+	custom_zone_editing = false
+	custom_zone_current_player = 1
+	_custom_zone_status_label.text = "Click grid to add zone vertices"
+	_custom_zone_start_btn.disabled = false
+	_custom_zone_symmetric_check.disabled = false
+	_custom_zone_confirm_btn.disabled = true
+	grid_container.queue_redraw()
+
+
+## Handle click during custom zone editing
+func _handle_custom_zone_click(cell: Vector2i) -> void:
+	if not custom_zone_editing:
+		return
+
+	if custom_zone_symmetric:
+		# Add to player 1 vertices, mirrored vertex added automatically
+		custom_zone_vertices_p1.append(cell)
+		var mirrored = _get_mirrored_cell(cell)
+		custom_zone_vertices_p2.append(mirrored)
+		_custom_zone_status_label.text = "P1: %d vertices | P2: %d vertices" % [
+			custom_zone_vertices_p1.size(), custom_zone_vertices_p2.size()
+		]
+	else:
+		# Add to current player's vertices
+		if custom_zone_current_player == 1:
+			custom_zone_vertices_p1.append(cell)
+			_custom_zone_status_label.text = "Player 1: %d vertices" % custom_zone_vertices_p1.size()
+		else:
+			custom_zone_vertices_p2.append(cell)
+			_custom_zone_status_label.text = "Player 2: %d vertices" % custom_zone_vertices_p2.size()
+
+	grid_container.queue_redraw()
 
 
 func _setup_terrain_buttons() -> void:
@@ -583,6 +765,11 @@ func _input(event: InputEvent) -> void:
 func _paint_at_position(screen_pos: Vector2) -> void:
 	var cell = _get_cell_at_screen_pos(screen_pos)
 	if _is_valid_cell(cell):
+		# Check if we're editing custom deployment zones
+		if custom_zone_editing:
+			_handle_custom_zone_click(cell)
+			return
+
 		if selected_terrain_type == TerrainType.NONE:
 			grid_cells.erase(cell)
 			# Also erase mirrored cell if symmetry is enabled
@@ -884,17 +1071,27 @@ func _place_piece(pos: Vector2i, piece_size: Vector2i, terrain_type: int) -> voi
 ## Save current layout to file
 func save_layout(file_path: String) -> void:
 	var data = {
-		"version": "1.0",
+		"version": "1.1",
 		"table_size": {"x": table_size_feet.x, "y": table_size_feet.y},
 		"grid_rotation": grid_rotation_degrees,
 		"deployment_type": deployment_type,
-		"grid_cells": {}
+		"grid_cells": {},
+		"custom_zones": {
+			"player1": [],
+			"player2": []
+		}
 	}
 
 	# Convert grid_cells keys to strings (JSON doesn't support Vector2i keys)
 	for cell_pos in grid_cells:
 		var key = "%d,%d" % [cell_pos.x, cell_pos.y]
 		data.grid_cells[key] = grid_cells[cell_pos]
+
+	# Save custom zone vertices as coordinate arrays
+	for cell in custom_zone_vertices_p1:
+		data.custom_zones.player1.append({"x": cell.x, "y": cell.y})
+	for cell in custom_zone_vertices_p2:
+		data.custom_zones.player2.append({"x": cell.x, "y": cell.y})
 
 	var json_string = JSON.stringify(data, "\t")
 	var file = FileAccess.open(file_path, FileAccess.WRITE)
@@ -942,8 +1139,28 @@ func load_layout(file_path: String) -> bool:
 		deployment_type = data.deployment_type
 		if deployment_type_option:
 			deployment_type_option.selected = deployment_type
-		# Emit signal to update terrain_overlay
-		deployment_type_changed.emit(deployment_type)
+		_update_custom_zone_ui_visibility()
+
+	# Load custom zone vertices
+	custom_zone_vertices_p1.clear()
+	custom_zone_vertices_p2.clear()
+	if data.has("custom_zones"):
+		var zones = data.custom_zones
+		if zones.has("player1"):
+			for v in zones.player1:
+				custom_zone_vertices_p1.append(Vector2i(int(v.x), int(v.y)))
+		if zones.has("player2"):
+			for v in zones.player2:
+				custom_zone_vertices_p2.append(Vector2i(int(v.x), int(v.y)))
+
+	# Update visibility toggle based on deployment type
+	if deployment_type > 0:
+		show_deployment_zones = true
+		if deployment_check:
+			deployment_check.button_pressed = true
+
+	# Emit signal to update terrain_overlay with deployment type and custom zones
+	deployment_type_changed.emit(deployment_type)
 
 	# Load grid cells
 	grid_cells.clear()
@@ -1048,5 +1265,37 @@ func get_current_layout() -> Dictionary:
 		"grid_cells": grid_cells.duplicate(),
 		"table_size": table_size_feet,
 		"rotation": grid_rotation_degrees,
-		"deployment_type": deployment_type
+		"deployment_type": deployment_type,
+		"custom_zones": get_custom_zone_data()
 	}
+
+
+## Get custom zone data in a format suitable for save/load and terrain_overlay
+func get_custom_zone_data() -> Dictionary:
+	return {
+		"player1_cells": custom_zone_vertices_p1.duplicate(),
+		"player2_cells": custom_zone_vertices_p2.duplicate(),
+		"player1_world": _convert_zone_cells_to_world(custom_zone_vertices_p1),
+		"player2_world": _convert_zone_cells_to_world(custom_zone_vertices_p2)
+	}
+
+
+## Convert grid cell vertices to world coordinates (meters) for terrain_overlay
+func _convert_zone_cells_to_world(vertices: Array[Vector2i]) -> Array[Vector3]:
+	var result: Array[Vector3] = []
+	var grid_dims = _calculate_grid_dimensions()
+	var cell_size_meters = GRID_SIZE_INCHES * 0.0254  # INCHES_TO_METERS
+
+	for cell in vertices:
+		# Calculate cell center in local grid coordinates
+		var local_x = (cell.x - grid_dims.x / 2.0 + 0.5) * cell_size_meters
+		var local_z = (cell.y - grid_dims.y / 2.0 + 0.5) * cell_size_meters
+
+		# Apply grid rotation to get world position
+		var rotation_rad = deg_to_rad(grid_rotation_degrees)
+		var world_x = local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
+		var world_z = local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
+
+		result.append(Vector3(world_x, 0.0, world_z))
+
+	return result
