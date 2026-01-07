@@ -1361,6 +1361,15 @@ func _on_deployment_type_changed(deployment_type: int) -> void:
 	if not terrain_overlay or not terrain_overlay.has_method("set_deployment_zones"):
 		return
 
+	# For custom zones, pass the zone data to terrain_overlay
+	if deployment_type == 2 and map_layout_editor:  # CUSTOM
+		var zone_data = map_layout_editor.get_custom_zone_data()
+		if terrain_overlay.has_method("set_custom_zones"):
+			terrain_overlay.set_custom_zones(zone_data.player1_world, zone_data.player2_world)
+			print("Custom zones set: P1=%d vertices, P2=%d vertices" % [
+				zone_data.player1_world.size(), zone_data.player2_world.size()
+			])
+
 	terrain_overlay.set_deployment_zones(deployment_type)
 	print("Deployment zone type set from Map Tool: %d" % deployment_type)
 

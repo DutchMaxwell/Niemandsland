@@ -284,7 +284,7 @@ func _line_intersects_rect(start: Vector2, end: Vector2, rect: Rect2) -> bool:
 
 func _draw_deployment_zones(grid_rect: Rect2) -> void:
 	## Draw deployment zones based on deployment type
-	## Uses the same enum as terrain_overlay.gd: NONE=0, FRONT_LINE=1
+	## Uses the same enum as terrain_overlay.gd: NONE=0, FRONT_LINE=1, CUSTOM=2
 	if not map_layout:
 		return
 
@@ -297,7 +297,7 @@ func _draw_deployment_zones(grid_rect: Rect2) -> void:
 	var zone_border_p1 = Color(0.3, 0.6, 1.0, 0.6)
 	var zone_border_p2 = Color(1.0, 0.4, 0.4, 0.6)
 
-	# Check deployment type by value (0=NONE, 1=FRONT_LINE)
+	# Check deployment type by value (0=NONE, 1=FRONT_LINE, 2=CUSTOM)
 	var deploy_type = map_layout.deployment_type
 
 	if deploy_type == 1:  # FRONT_LINE - 12" from long edges
@@ -320,3 +320,103 @@ func _draw_deployment_zones(grid_rect: Rect2) -> void:
 		var font = ThemeDB.fallback_font
 		draw_string(font, p1_rect.position + Vector2(10, 20), "Player 1 (12\")", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, zone_border_p1)
 		draw_string(font, p2_rect.position + Vector2(10, 20), "Player 2 (12\")", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, zone_border_p2)
+
+	elif deploy_type == 2:  # CUSTOM - user-defined polygon zones
+		_draw_custom_zones(grid_rect, zone_color_p1, zone_color_p2, zone_border_p1, zone_border_p2)
+
+
+func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: Color, zone_border_p1: Color, zone_border_p2: Color) -> void:
+	## Draw custom deployment zones defined by user clicks
+	if not map_layout:
+		return
+
+	var grid_dims = map_layout._calculate_grid_dimensions()
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
+
+	# Calculate cell size
+	var table_size_inches = map_layout.table_size_feet * 12.0
+	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
+	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
+	var cell_size = Vector2(
+		map_layout.GRID_SIZE_INCHES * pixels_per_inch_x,
+		map_layout.GRID_SIZE_INCHES * pixels_per_inch_y
+	)
+	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
+
+	# Helper to convert cell to screen position
+	var cell_to_screen = func(cell: Vector2i) -> Vector2:
+		var local_x = (cell.x - half_grid_cells.x + 0.5) * cell_size.x
+		var local_y = (cell.y - half_grid_cells.y + 0.5) * cell_size.y
+		var cos_a = cos(angle_rad)
+		var sin_a = sin(angle_rad)
+		return Vector2(
+			local_x * cos_a - local_y * sin_a,
+			local_x * sin_a + local_y * cos_a
+		) + center
+
+	# Draw Player 1 zone
+	var p1_verts = map_layout.custom_zone_vertices_p1
+	if p1_verts.size() >= 3:
+		var screen_verts: PackedVector2Array = []
+		for cell in p1_verts:
+			screen_verts.append(cell_to_screen.call(cell))
+		draw_colored_polygon(screen_verts, zone_color_p1)
+		# Draw border
+		for i in range(screen_verts.size()):
+			var next_i = (i + 1) % screen_verts.size()
+			draw_line(screen_verts[i], screen_verts[next_i], zone_border_p1, 2.0)
+
+	# Draw Player 2 zone
+	var p2_verts = map_layout.custom_zone_vertices_p2
+	if p2_verts.size() >= 3:
+		var screen_verts: PackedVector2Array = []
+		for cell in p2_verts:
+			screen_verts.append(cell_to_screen.call(cell))
+		draw_colored_polygon(screen_verts, zone_color_p2)
+		# Draw border
+		for i in range(screen_verts.size()):
+			var next_i = (i + 1) % screen_verts.size()
+			draw_line(screen_verts[i], screen_verts[next_i], zone_border_p2, 2.0)
+
+	# Draw vertex markers (always show during editing, or if we have vertices)
+	var is_editing = map_layout.custom_zone_editing
+	var vertex_size = 6.0 if is_editing else 4.0
+
+	# Player 1 vertices
+	for i in range(p1_verts.size()):
+		var screen_pos = cell_to_screen.call(p1_verts[i])
+		draw_circle(screen_pos, vertex_size, zone_border_p1)
+		if is_editing:
+			# Show vertex number
+			draw_string(ThemeDB.fallback_font, screen_pos + Vector2(8, -4), str(i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, zone_border_p1)
+
+	# Player 2 vertices
+	for i in range(p2_verts.size()):
+		var screen_pos = cell_to_screen.call(p2_verts[i])
+		draw_circle(screen_pos, vertex_size, zone_border_p2)
+		if is_editing:
+			draw_string(ThemeDB.fallback_font, screen_pos + Vector2(8, -4), str(i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, zone_border_p2)
+
+	# Draw lines connecting vertices while editing (even if < 3 vertices)
+	if is_editing:
+		if p1_verts.size() >= 2:
+			for i in range(p1_verts.size() - 1):
+				var start = cell_to_screen.call(p1_verts[i])
+				var end = cell_to_screen.call(p1_verts[i + 1])
+				draw_line(start, end, zone_border_p1, 1.5)
+
+		if p2_verts.size() >= 2:
+			for i in range(p2_verts.size() - 1):
+				var start = cell_to_screen.call(p2_verts[i])
+				var end = cell_to_screen.call(p2_verts[i + 1])
+				draw_line(start, end, zone_border_p2, 1.5)
+
+	# Draw labels
+	var font = ThemeDB.fallback_font
+	if p1_verts.size() > 0:
+		var first_pos = cell_to_screen.call(p1_verts[0])
+		draw_string(font, first_pos + Vector2(-40, -20), "P1", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, zone_border_p1)
+	if p2_verts.size() > 0:
+		var first_pos = cell_to_screen.call(p2_verts[0])
+		draw_string(font, first_pos + Vector2(-40, -20), "P2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, zone_border_p2)
