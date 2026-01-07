@@ -124,6 +124,9 @@ var wgs_import_dialog: WGSImportDialog = null
 var map_layout_editor: Control = null
 var terrain_overlay: Node3D = null
 
+# Atmospheric Effects
+var atmospheric_clouds: Node3D = null
+
 # Battle Simulator
 var battle_simulator: BattleSimulator = null
 var battle_simulator_ui: BattleSimulatorUI = null
@@ -313,6 +316,9 @@ func _ready() -> void:
 
 	# Connect object_manager signals for deployment checking
 	object_manager.drag_ended.connect(_on_unit_moved)
+
+	# Initialize Atmospheric Clouds (RTS-style drifting clouds at high zoom)
+	_init_atmospheric_clouds()
 
 	# Initialize Deployment Zones UI
 	_init_deployment_zones_ui()
@@ -1441,6 +1447,32 @@ func _on_deployment_mode_toggled(is_active: bool) -> void:
 	is_deployment_mode = is_active
 	_check_all_units_deployment()
 	print("Deployment mode: %s" % ("active" if is_active else "inactive"))
+
+
+## ============================================================================
+## Atmospheric Effects
+## ============================================================================
+
+## Initialize atmospheric clouds that appear at high zoom levels
+## Creates RTS-style drifting cloud layers (like Victoria, EU4, etc.)
+func _init_atmospheric_clouds() -> void:
+	var clouds_script = load("res://scripts/atmospheric_clouds.gd")
+	if not clouds_script:
+		push_warning("Could not load atmospheric_clouds.gd - clouds disabled")
+		return
+
+	atmospheric_clouds = Node3D.new()
+	atmospheric_clouds.set_script(clouds_script)
+	atmospheric_clouds.name = "AtmosphericClouds"
+
+	# Add to root so clouds are above everything
+	add_child(atmospheric_clouds)
+
+	# Give reference to camera controller for zoom-based visibility
+	if camera_pivot:
+		atmospheric_clouds.camera_controller = camera_pivot
+
+	print("Atmospheric clouds initialized")
 
 
 ## Initialize Scout/Ambush Panel UI
