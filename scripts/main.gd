@@ -251,9 +251,8 @@ func _ready() -> void:
 	lighting_panel.initialize(lighting_controller)
 	lighting_panel.hide()  # Start hidden
 
-	# Apply Kenney UI theme to HUD
-	_apply_kenney_theme()
-	ThemeManager.theme_changed.connect(_on_theme_changed)
+	# Apply UI theme to HUD
+	_apply_ui_theme()
 
 	# Initialize OPR Army Manager
 	opr_army_manager = OPRArmyManager.new()
@@ -1143,11 +1142,11 @@ func _spawn_selected_terrain(index: int) -> void:
 
 
 ## ============================================================================
-## Kenney UI Theme System
+## UI Theme System
 ## ============================================================================
 
-## Apply Kenney UI theme to the HUD and dialogs
-func _apply_kenney_theme() -> void:
+## Apply UI theme to the HUD and dialogs
+func _apply_ui_theme() -> void:
 	var current_theme = ThemeManager.get_current_theme()
 
 	# Apply to HUD
@@ -1163,25 +1162,7 @@ func _apply_kenney_theme() -> void:
 	load_game_dialog.theme = current_theme
 	terrain_browser_popup.theme = current_theme
 
-	print("Applied Kenney UI theme: %s" % ThemeManager.get_current_theme_name())
-
-
-## Handle theme changes from ThemeManager
-func _on_theme_changed(new_theme: Theme) -> void:
-	# Re-apply theme to all UI elements
-	var hud = $UI/HUD
-	hud.theme = new_theme
-
-	# Update all dialogs
-	model_file_dialog.theme = new_theme
-	tts_json_dialog.theme = new_theme
-	tts_models_dialog.theme = new_theme
-	tts_images_dialog.theme = new_theme
-	save_game_dialog.theme = new_theme
-	load_game_dialog.theme = new_theme
-	terrain_browser_popup.theme = new_theme
-
-	print("Main scene theme updated to: %s" % ThemeManager.get_current_theme_name())
+	print("Applied UI theme: Glassmorphism")
 
 
 ## ============================================================================

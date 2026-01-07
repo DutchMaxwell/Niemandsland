@@ -13,13 +13,10 @@ var animation_played: bool = false
 
 
 func _ready() -> void:
-	# Apply Kenney UI theme from global ThemeManager
+	# Apply Glassmorphism theme
 	theme = ThemeManager.get_current_theme()
 
-	# Listen for theme changes
-	ThemeManager.theme_changed.connect(_on_theme_changed)
-
-	# Remove hardcoded theme overrides to allow Kenney theme to apply
+	# Remove hardcoded theme overrides to allow theme to apply
 	_remove_theme_overrides()
 
 	# Hide menu initially for animation
@@ -166,10 +163,3 @@ func _remove_theme_overrides() -> void:
 	exit_btn.remove_theme_font_size_override("font_size")
 	exit_btn.add_theme_color_override("font_color", Color(1.0, 0.35, 0.45))
 	exit_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.5, 0.6))
-
-
-func _on_theme_changed(new_theme: Theme) -> void:
-	"""Handle theme changes from ThemeManager"""
-	theme = new_theme
-	_remove_theme_overrides()
-	print("Startup menu theme updated to: %s" % ThemeManager.get_current_theme_name())
