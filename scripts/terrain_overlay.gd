@@ -13,6 +13,7 @@ extends Node3D
 
 const INCHES_TO_METERS := 0.0254
 const GRID_SIZE_INCHES := 3.0
+const FINE_GRID_SIZE_INCHES := 1.0  # 1" grid for custom zone editing
 
 ## Height offset above table to prevent z-fighting (2mm)
 const Z_FIGHT_OFFSET := 0.002
@@ -29,30 +30,14 @@ enum TerrainType {
 	DANGEROUS = 4
 }
 
-## Deployment zone types (18 total from OPR)
+## Deployment zone types
+## NOTE: Only FRONT_LINE is included from OPR free rules.
+## Other deployment types (Ground War, Spearhead, etc.) are behind OPR's paywall.
+## CUSTOM allows players to draw their own deployment zones using polygon vertices.
 enum DeploymentType {
 	NONE = 0,
-	# Standard (1-6)
-	FRONT_LINE = 1,          # 12" from long edges
-	GROUND_WAR = 2,          # 12" from short edges
-	SIDE_BATTLE = 3,         # 12" from one long edge each
-	DISORDERED = 4,          # Two 15" radius circles
-	SPEARHEAD = 5,           # Corner triangles (24" from corners)
-	OPPOSING_FORCES = 6,     # Diagonal deployment
-	# Asymmetric (7-12)
-	OPEN_WARZONE = 7,        # Player 1: 12" from short edge, Player 2: 12" from long edges
-	PUSHBACK = 8,            # Player 1: 18" from short edge, Player 2: 6" from opposite short
-	CORNERED = 9,            # Player 1: 12" radius corner, Player 2: 18" from opposite short
-	ENCIRCLED = 10,          # Player 1: 15" radius center, Player 2: 6" from all edges
-	BEHIND_ENEMY_LINES = 11, # Player 1: 12" from short edge, Player 2: 12" from opposite long edges
-	LIGHTNING_STRIKE = 12,   # Player 1: 6" from short edge, Player 2: 18" from all edges
-	# Advanced (13-18)
-	NO_MANS_LAND = 13,       # 9" from short edges
-	LONG_HAUL = 14,          # 6" from long edges
-	FLANK_ASSAULT = 15,      # 6" from one long edge each
-	FRONTAL_CLASH = 16,      # 15" radius circles near short edges
-	TACTICAL_PUSH = 17,      # 18" radius circles offset
-	MEETING_ENGAGEMENT = 18  # Center rectangle zones
+	FRONT_LINE = 1,   # 12" from long edges (OPR free rules)
+	CUSTOM = 2        # User-defined polygon zones
 }
 
 # Terrain colors (matching map_layout.gd)
@@ -80,6 +65,33 @@ var current_deployment_type := DeploymentType.NONE
 var deployment_zones_visible := false
 var grid_cells := {}  # Dictionary[Vector2i, TerrainType] - stores terrain data
 var grid_rotation_degrees := 0.0
+
+## Custom deployment zone polygons (in meters, world coordinates)
+## Each zone is an array of Vector3 points defining the polygon vertices
+var custom_zone_player1: Array[Vector3] = []
+var custom_zone_player2: Array[Vector3] = []
+
+## Custom zone editing mode
+enum CustomZoneMode {
+	NONE,           # Not editing custom zones
+	SYMMETRIC,      # Both zones mirrored (point-symmetric around table center)
+	ASYMMETRIC_P1,  # Drawing Player 1 zone
+	ASYMMETRIC_P2   # Drawing Player 2 zone
+}
+var custom_zone_mode := CustomZoneMode.NONE
+
+## Signal emitted when custom zone editing state changes
+signal custom_zone_editing_changed(is_editing: bool, mode: CustomZoneMode)
+signal custom_zone_vertex_added(player: int, vertex: Vector3)
+signal custom_zone_completed(player: int)
+
+## Fine grid (1") for custom zone editing
+var fine_grid_meshes: Array[MeshInstance3D] = []
+var fine_grid_visible := false
+
+## Vertex markers showing placed polygon points during editing
+var vertex_markers: Array[MeshInstance3D] = []
+var preview_line_mesh: MeshInstance3D = null
 
 
 func _ready() -> void:
@@ -278,45 +290,10 @@ func _update_deployment_zones() -> void:
 	var table_depth_m = table_size_feet.y * 12.0 * INCHES_TO_METERS  # Short edge (Z-axis)
 
 	match current_deployment_type:
-		# Standard (1-6)
 		DeploymentType.FRONT_LINE:
 			_create_front_line_zones(table_width_m, table_depth_m)
-		DeploymentType.GROUND_WAR:
-			_create_ground_war_zones(table_width_m, table_depth_m)
-		DeploymentType.SIDE_BATTLE:
-			_create_side_battle_zones(table_width_m, table_depth_m)
-		DeploymentType.DISORDERED:
-			_create_disordered_zones(table_width_m, table_depth_m)
-		DeploymentType.SPEARHEAD:
-			_create_spearhead_zones(table_width_m, table_depth_m)
-		DeploymentType.OPPOSING_FORCES:
-			_create_opposing_forces_zones(table_width_m, table_depth_m)
-		# Asymmetric (7-12)
-		DeploymentType.OPEN_WARZONE:
-			_create_open_warzone_zones(table_width_m, table_depth_m)
-		DeploymentType.PUSHBACK:
-			_create_pushback_zones(table_width_m, table_depth_m)
-		DeploymentType.CORNERED:
-			_create_cornered_zones(table_width_m, table_depth_m)
-		DeploymentType.ENCIRCLED:
-			_create_encircled_zones(table_width_m, table_depth_m)
-		DeploymentType.BEHIND_ENEMY_LINES:
-			_create_behind_enemy_lines_zones(table_width_m, table_depth_m)
-		DeploymentType.LIGHTNING_STRIKE:
-			_create_lightning_strike_zones(table_width_m, table_depth_m)
-		# Advanced (13-18)
-		DeploymentType.NO_MANS_LAND:
-			_create_no_mans_land_zones(table_width_m, table_depth_m)
-		DeploymentType.LONG_HAUL:
-			_create_long_haul_zones(table_width_m, table_depth_m)
-		DeploymentType.FLANK_ASSAULT:
-			_create_flank_assault_zones(table_width_m, table_depth_m)
-		DeploymentType.FRONTAL_CLASH:
-			_create_frontal_clash_zones(table_width_m, table_depth_m)
-		DeploymentType.TACTICAL_PUSH:
-			_create_tactical_push_zones(table_width_m, table_depth_m)
-		DeploymentType.MEETING_ENGAGEMENT:
-			_create_meeting_engagement_zones(table_width_m, table_depth_m)
+		DeploymentType.CUSTOM:
+			_create_custom_polygon_zones()
 
 
 ## Create Front-line deployment zones (12" from long table edges)
@@ -341,427 +318,388 @@ func _create_front_line_zones(table_width: float, table_depth: float) -> void:
 	p2_mesh.visible = deployment_zones_visible
 
 
-## STANDARD DEPLOYMENT ZONES (2-6)
-
-## Ground War - 12" from short table edges
-func _create_ground_war_zones(table_width: float, table_depth: float) -> void:
-	var deployment_depth = 12.0 * INCHES_TO_METERS
-
-	# Player 1 zone (left side, -X)
-	var p1_position = Vector3(-table_width/2 + deployment_depth/2, 0, 0)
-	var p1_size = Vector2(deployment_depth, table_depth)
-	var p1_mesh = _create_deployment_zone_mesh(p1_position, p1_size, DEPLOYMENT_COLORS["player1"])
-	add_child(p1_mesh)
-	deployment_zone_meshes.append(p1_mesh)
-
-	# Player 2 zone (right side, +X)
-	var p2_position = Vector3(table_width/2 - deployment_depth/2, 0, 0)
-	var p2_size = Vector2(deployment_depth, table_depth)
-	var p2_mesh = _create_deployment_zone_mesh(p2_position, p2_size, DEPLOYMENT_COLORS["player2"])
-	add_child(p2_mesh)
-	deployment_zone_meshes.append(p2_mesh)
-
-	p1_mesh.visible = deployment_zones_visible
-	p2_mesh.visible = deployment_zones_visible
-
-
-## Side Battle - 12" from one long edge each (split table horizontally)
-func _create_side_battle_zones(table_width: float, table_depth: float) -> void:
-	var deployment_depth = 12.0 * INCHES_TO_METERS
-
-	# Player 1 zone (bottom half, -Z)
-	var p1_position = Vector3(0, 0, -table_depth/4)
-	var p1_size = Vector2(table_width, deployment_depth)
-	var p1_mesh = _create_deployment_zone_mesh(p1_position, p1_size, DEPLOYMENT_COLORS["player1"])
-	add_child(p1_mesh)
-	deployment_zone_meshes.append(p1_mesh)
-
-	# Player 2 zone (top half, +Z)
-	var p2_position = Vector3(0, 0, table_depth/4)
-	var p2_size = Vector2(table_width, deployment_depth)
-	var p2_mesh = _create_deployment_zone_mesh(p2_position, p2_size, DEPLOYMENT_COLORS["player2"])
-	add_child(p2_mesh)
-	deployment_zone_meshes.append(p2_mesh)
-
-	p1_mesh.visible = deployment_zones_visible
-	p2_mesh.visible = deployment_zones_visible
-
-
-## Disordered - Two 15" radius circles
-func _create_disordered_zones(_table_width: float, table_depth: float) -> void:
-	var radius = 15.0 * INCHES_TO_METERS
-	var circle_offset = table_depth / 4  # Place circles 1/4 from edges
-
-	# Player 1 circle (bottom, -Z)
-	var p1_position = Vector3(0, 0, -circle_offset)
-	var p1_mesh = _create_circular_deployment_zone(p1_position, radius, DEPLOYMENT_COLORS["player1"])
-	add_child(p1_mesh)
-	deployment_zone_meshes.append(p1_mesh)
-
-	# Player 2 circle (top, +Z)
-	var p2_position = Vector3(0, 0, circle_offset)
-	var p2_mesh = _create_circular_deployment_zone(p2_position, radius, DEPLOYMENT_COLORS["player2"])
-	add_child(p2_mesh)
-	deployment_zone_meshes.append(p2_mesh)
-
-	p1_mesh.visible = deployment_zones_visible
-	p2_mesh.visible = deployment_zones_visible
-
-
-## Spearhead - Corner triangles (24" from corners)
-func _create_spearhead_zones(table_width: float, table_depth: float) -> void:
-	var corner_dist = 24.0 * INCHES_TO_METERS
-
-	# Player 1 corners (bottom-left and bottom-right)
-	# Bottom-left triangle
-	var p1_bl_position = Vector3(-table_width/2 + corner_dist/2, 0, -table_depth/2 + corner_dist/2)
-	var p1_bl_mesh = _create_deployment_zone_mesh(p1_bl_position, Vector2(corner_dist, corner_dist), DEPLOYMENT_COLORS["player1"])
-	add_child(p1_bl_mesh)
-	deployment_zone_meshes.append(p1_bl_mesh)
-
-	# Bottom-right triangle
-	var p1_br_position = Vector3(table_width/2 - corner_dist/2, 0, -table_depth/2 + corner_dist/2)
-	var p1_br_mesh = _create_deployment_zone_mesh(p1_br_position, Vector2(corner_dist, corner_dist), DEPLOYMENT_COLORS["player1"])
-	add_child(p1_br_mesh)
-	deployment_zone_meshes.append(p1_br_mesh)
-
-	# Player 2 corners (top-left and top-right)
-	# Top-left triangle
-	var p2_tl_position = Vector3(-table_width/2 + corner_dist/2, 0, table_depth/2 - corner_dist/2)
-	var p2_tl_mesh = _create_deployment_zone_mesh(p2_tl_position, Vector2(corner_dist, corner_dist), DEPLOYMENT_COLORS["player2"])
-	add_child(p2_tl_mesh)
-	deployment_zone_meshes.append(p2_tl_mesh)
-
-	# Top-right triangle
-	var p2_tr_position = Vector3(table_width/2 - corner_dist/2, 0, table_depth/2 - corner_dist/2)
-	var p2_tr_mesh = _create_deployment_zone_mesh(p2_tr_position, Vector2(corner_dist, corner_dist), DEPLOYMENT_COLORS["player2"])
-	add_child(p2_tr_mesh)
-	deployment_zone_meshes.append(p2_tr_mesh)
-
-	for mesh in [p1_bl_mesh, p1_br_mesh, p2_tl_mesh, p2_tr_mesh]:
-		mesh.visible = deployment_zones_visible
-
-
-## Opposing Forces - Diagonal deployment
-func _create_opposing_forces_zones(table_width: float, table_depth: float) -> void:
-	var zone_width = 18.0 * INCHES_TO_METERS
-
-	# Player 1 diagonal (bottom-left to top-left)
-	var p1_width = zone_width
-	var p1_depth = table_depth
-	var p1_position = Vector3(-table_width/2 + p1_width/2, 0, 0)
-	var p1_mesh = _create_deployment_zone_mesh(p1_position, Vector2(p1_width, p1_depth), DEPLOYMENT_COLORS["player1"])
-	add_child(p1_mesh)
-	deployment_zone_meshes.append(p1_mesh)
-
-	# Player 2 diagonal (bottom-right to top-right)
-	var p2_width = zone_width
-	var p2_depth = table_depth
-	var p2_position = Vector3(table_width/2 - p2_width/2, 0, 0)
-	var p2_mesh = _create_deployment_zone_mesh(p2_position, Vector2(p2_width, p2_depth), DEPLOYMENT_COLORS["player2"])
-	add_child(p2_mesh)
-	deployment_zone_meshes.append(p2_mesh)
-
-	p1_mesh.visible = deployment_zones_visible
-	p2_mesh.visible = deployment_zones_visible
-
-
-## ASYMMETRIC DEPLOYMENT ZONES (7-12)
-
-## Open Warzone - P1: 12" from short edge, P2: 12" from long edges
-func _create_open_warzone_zones(table_width: float, table_depth: float) -> void:
-	var deployment_dist = 12.0 * INCHES_TO_METERS
-
-	# Player 1: 12" from left short edge
-	var p1_position = Vector3(-table_width/2 + deployment_dist/2, 0, 0)
-	var p1_mesh = _create_deployment_zone_mesh(p1_position, Vector2(deployment_dist, table_depth), DEPLOYMENT_COLORS["player1"])
-	add_child(p1_mesh)
-	deployment_zone_meshes.append(p1_mesh)
-
-	# Player 2: 12" from both long edges (top and bottom)
-	var p2_bottom_position = Vector3(0, 0, -table_depth/2 + deployment_dist/2)
-	var p2_bottom_mesh = _create_deployment_zone_mesh(p2_bottom_position, Vector2(table_width, deployment_dist), DEPLOYMENT_COLORS["player2"])
-	add_child(p2_bottom_mesh)
-	deployment_zone_meshes.append(p2_bottom_mesh)
-
-	var p2_top_position = Vector3(0, 0, table_depth/2 - deployment_dist/2)
-	var p2_top_mesh = _create_deployment_zone_mesh(p2_top_position, Vector2(table_width, deployment_dist), DEPLOYMENT_COLORS["player2"])
-	add_child(p2_top_mesh)
-	deployment_zone_meshes.append(p2_top_mesh)
-
-	p1_mesh.visible = deployment_zones_visible
-	p2_bottom_mesh.visible = deployment_zones_visible
-	p2_top_mesh.visible = deployment_zones_visible
-
-
-## Pushback - P1: 18" from short edge, P2: 6" from opposite short
-func _create_pushback_zones(table_width: float, table_depth: float) -> void:
-	var p1_depth = 18.0 * INCHES_TO_METERS
-	var p2_depth = 6.0 * INCHES_TO_METERS
-
-	# Player 1: 18" from left edge
-	var p1_position = Vector3(-table_width/2 + p1_depth/2, 0, 0)
-	var p1_mesh = _create_deployment_zone_mesh(p1_position, Vector2(p1_depth, table_depth), DEPLOYMENT_COLORS["player1"])
-	add_child(p1_mesh)
-	deployment_zone_meshes.append(p1_mesh)
-
-	# Player 2: 6" from right edge
-	var p2_position = Vector3(table_width/2 - p2_depth/2, 0, 0)
-	var p2_mesh = _create_deployment_zone_mesh(p2_position, Vector2(p2_depth, table_depth), DEPLOYMENT_COLORS["player2"])
-	add_child(p2_mesh)
-	deployment_zone_meshes.append(p2_mesh)
-
-	p1_mesh.visible = deployment_zones_visible
-	p2_mesh.visible = deployment_zones_visible
-
-
-## Cornered - P1: 12" radius corner, P2: 18" from opposite short
-func _create_cornered_zones(table_width: float, table_depth: float) -> void:
-	var p1_radius = 12.0 * INCHES_TO_METERS
-	var p2_depth = 18.0 * INCHES_TO_METERS
-
-	# Player 1: 12" radius circle in corner (bottom-left)
-	var p1_position = Vector3(-table_width/2 + p1_radius, 0, -table_depth/2 + p1_radius)
-	var p1_mesh = _create_circular_deployment_zone(p1_position, p1_radius, DEPLOYMENT_COLORS["player1"])
-	add_child(p1_mesh)
-	deployment_zone_meshes.append(p1_mesh)
-
-	# Player 2: 18" from opposite short edge (right)
-	var p2_position = Vector3(table_width/2 - p2_depth/2, 0, 0)
-	var p2_mesh = _create_deployment_zone_mesh(p2_position, Vector2(p2_depth, table_depth), DEPLOYMENT_COLORS["player2"])
-	add_child(p2_mesh)
-	deployment_zone_meshes.append(p2_mesh)
-
-	p1_mesh.visible = deployment_zones_visible
-	p2_mesh.visible = deployment_zones_visible
-
-
-## Encircled - P1: 15" radius center, P2: 6" from all edges
-func _create_encircled_zones(table_width: float, table_depth: float) -> void:
-	var p1_radius = 15.0 * INCHES_TO_METERS
-	var p2_margin = 6.0 * INCHES_TO_METERS
-
-	# Player 1: 15" radius circle in center
-	var p1_position = Vector3(0, 0, 0)
-	var p1_mesh = _create_circular_deployment_zone(p1_position, p1_radius, DEPLOYMENT_COLORS["player1"])
-	add_child(p1_mesh)
-	deployment_zone_meshes.append(p1_mesh)
-
-	# Player 2: 6" from all edges (4 rectangles around the perimeter)
-	# Top
-	var p2_top = _create_deployment_zone_mesh(
-		Vector3(0, 0, table_depth/2 - p2_margin/2),
-		Vector2(table_width, p2_margin),
-		DEPLOYMENT_COLORS["player2"]
-	)
-	add_child(p2_top)
-	deployment_zone_meshes.append(p2_top)
-
-	# Bottom
-	var p2_bottom = _create_deployment_zone_mesh(
-		Vector3(0, 0, -table_depth/2 + p2_margin/2),
-		Vector2(table_width, p2_margin),
-		DEPLOYMENT_COLORS["player2"]
-	)
-	add_child(p2_bottom)
-	deployment_zone_meshes.append(p2_bottom)
-
-	# Left
-	var p2_left = _create_deployment_zone_mesh(
-		Vector3(-table_width/2 + p2_margin/2, 0, 0),
-		Vector2(p2_margin, table_depth - 2 * p2_margin),
-		DEPLOYMENT_COLORS["player2"]
-	)
-	add_child(p2_left)
-	deployment_zone_meshes.append(p2_left)
-
-	# Right
-	var p2_right = _create_deployment_zone_mesh(
-		Vector3(table_width/2 - p2_margin/2, 0, 0),
-		Vector2(p2_margin, table_depth - 2 * p2_margin),
-		DEPLOYMENT_COLORS["player2"]
-	)
-	add_child(p2_right)
-	deployment_zone_meshes.append(p2_right)
-
-	for mesh in [p1_mesh, p2_top, p2_bottom, p2_left, p2_right]:
-		mesh.visible = deployment_zones_visible
-
-
-## Behind Enemy Lines - P1: 12" from short edge, P2: 12" from opposite long edges
-func _create_behind_enemy_lines_zones(table_width: float, table_depth: float) -> void:
-	var deployment_dist = 12.0 * INCHES_TO_METERS
-
-	# Player 1: 12" from left short edge
-	var p1_position = Vector3(-table_width/2 + deployment_dist/2, 0, 0)
-	var p1_mesh = _create_deployment_zone_mesh(p1_position, Vector2(deployment_dist, table_depth), DEPLOYMENT_COLORS["player1"])
-	add_child(p1_mesh)
-	deployment_zone_meshes.append(p1_mesh)
-
-	# Player 2: 12" from top and bottom long edges
-	var p2_top_position = Vector3(0, 0, table_depth/2 - deployment_dist/2)
-	var p2_top_mesh = _create_deployment_zone_mesh(p2_top_position, Vector2(table_width, deployment_dist), DEPLOYMENT_COLORS["player2"])
-	add_child(p2_top_mesh)
-	deployment_zone_meshes.append(p2_top_mesh)
-
-	var p2_bottom_position = Vector3(0, 0, -table_depth/2 + deployment_dist/2)
-	var p2_bottom_mesh = _create_deployment_zone_mesh(p2_bottom_position, Vector2(table_width, deployment_dist), DEPLOYMENT_COLORS["player2"])
-	add_child(p2_bottom_mesh)
-	deployment_zone_meshes.append(p2_bottom_mesh)
-
-	p1_mesh.visible = deployment_zones_visible
-	p2_top_mesh.visible = deployment_zones_visible
-	p2_bottom_mesh.visible = deployment_zones_visible
-
-
-## Lightning Strike - P1: 6" from short edge, P2: 18" from all edges
-func _create_lightning_strike_zones(table_width: float, table_depth: float) -> void:
-	var p1_depth = 6.0 * INCHES_TO_METERS
-	var p2_margin = 18.0 * INCHES_TO_METERS
-
-	# Player 1: 6" from left short edge
-	var p1_position = Vector3(-table_width/2 + p1_depth/2, 0, 0)
-	var p1_mesh = _create_deployment_zone_mesh(p1_position, Vector2(p1_depth, table_depth), DEPLOYMENT_COLORS["player1"])
-	add_child(p1_mesh)
-	deployment_zone_meshes.append(p1_mesh)
-
-	# Player 2: 18" from all edges (center rectangle)
-	var p2_width = table_width - 2 * p2_margin
-	var p2_depth = table_depth - 2 * p2_margin
-	var p2_position = Vector3(0, 0, 0)
-	var p2_mesh = _create_deployment_zone_mesh(p2_position, Vector2(p2_width, p2_depth), DEPLOYMENT_COLORS["player2"])
-	add_child(p2_mesh)
-	deployment_zone_meshes.append(p2_mesh)
-
-	p1_mesh.visible = deployment_zones_visible
-	p2_mesh.visible = deployment_zones_visible
-
-
-## ADVANCED DEPLOYMENT ZONES (13-18)
-
-## No Man's Land - 9" from short edges
-func _create_no_mans_land_zones(table_width: float, table_depth: float) -> void:
-	var deployment_dist = 9.0 * INCHES_TO_METERS
-
-	# Player 1 zone (left side)
-	var p1_position = Vector3(-table_width/2 + deployment_dist/2, 0, 0)
-	var p1_mesh = _create_deployment_zone_mesh(p1_position, Vector2(deployment_dist, table_depth), DEPLOYMENT_COLORS["player1"])
-	add_child(p1_mesh)
-	deployment_zone_meshes.append(p1_mesh)
-
-	# Player 2 zone (right side)
-	var p2_position = Vector3(table_width/2 - deployment_dist/2, 0, 0)
-	var p2_mesh = _create_deployment_zone_mesh(p2_position, Vector2(deployment_dist, table_depth), DEPLOYMENT_COLORS["player2"])
-	add_child(p2_mesh)
-	deployment_zone_meshes.append(p2_mesh)
-
-	p1_mesh.visible = deployment_zones_visible
-	p2_mesh.visible = deployment_zones_visible
-
-
-## Long Haul - 6" from long edges
-func _create_long_haul_zones(table_width: float, table_depth: float) -> void:
-	var deployment_depth = 6.0 * INCHES_TO_METERS
-
-	# Player 1 zone (bottom)
-	var p1_position = Vector3(0, 0, -table_depth/2 + deployment_depth/2)
-	var p1_mesh = _create_deployment_zone_mesh(p1_position, Vector2(table_width, deployment_depth), DEPLOYMENT_COLORS["player1"])
-	add_child(p1_mesh)
-	deployment_zone_meshes.append(p1_mesh)
-
-	# Player 2 zone (top)
-	var p2_position = Vector3(0, 0, table_depth/2 - deployment_depth/2)
-	var p2_mesh = _create_deployment_zone_mesh(p2_position, Vector2(table_width, deployment_depth), DEPLOYMENT_COLORS["player2"])
-	add_child(p2_mesh)
-	deployment_zone_meshes.append(p2_mesh)
-
-	p1_mesh.visible = deployment_zones_visible
-	p2_mesh.visible = deployment_zones_visible
-
-
-## Flank Assault - 6" from one long edge each
-func _create_flank_assault_zones(table_width: float, table_depth: float) -> void:
-	var deployment_depth = 6.0 * INCHES_TO_METERS
-
-	# Player 1 zone (bottom half)
-	var p1_position = Vector3(0, 0, -table_depth/4)
-	var p1_mesh = _create_deployment_zone_mesh(p1_position, Vector2(table_width, deployment_depth), DEPLOYMENT_COLORS["player1"])
-	add_child(p1_mesh)
-	deployment_zone_meshes.append(p1_mesh)
-
-	# Player 2 zone (top half)
-	var p2_position = Vector3(0, 0, table_depth/4)
-	var p2_mesh = _create_deployment_zone_mesh(p2_position, Vector2(table_width, deployment_depth), DEPLOYMENT_COLORS["player2"])
-	add_child(p2_mesh)
-	deployment_zone_meshes.append(p2_mesh)
-
-	p1_mesh.visible = deployment_zones_visible
-	p2_mesh.visible = deployment_zones_visible
-
-
-## Frontal Clash - 15" radius circles near short edges
-func _create_frontal_clash_zones(table_width: float, table_depth: float) -> void:
-	var radius = 15.0 * INCHES_TO_METERS
-	var edge_offset = 15.0 * INCHES_TO_METERS  # Distance from edge to circle center
-
-	# Player 1 circle (left side)
-	var p1_position = Vector3(-table_width/2 + edge_offset, 0, 0)
-	var p1_mesh = _create_circular_deployment_zone(p1_position, radius, DEPLOYMENT_COLORS["player1"])
-	add_child(p1_mesh)
-	deployment_zone_meshes.append(p1_mesh)
-
-	# Player 2 circle (right side)
-	var p2_position = Vector3(table_width/2 - edge_offset, 0, 0)
-	var p2_mesh = _create_circular_deployment_zone(p2_position, radius, DEPLOYMENT_COLORS["player2"])
-	add_child(p2_mesh)
-	deployment_zone_meshes.append(p2_mesh)
-
-	p1_mesh.visible = deployment_zones_visible
-	p2_mesh.visible = deployment_zones_visible
-
-
-## Tactical Push - 18" radius circles offset
-func _create_tactical_push_zones(table_width: float, table_depth: float) -> void:
-	var radius = 18.0 * INCHES_TO_METERS
-	var x_offset = table_width / 4  # 1/4 from center
-	var z_offset = table_depth / 4  # 1/4 from center
-
-	# Player 1 circle (bottom-left quadrant)
-	var p1_position = Vector3(-x_offset, 0, -z_offset)
-	var p1_mesh = _create_circular_deployment_zone(p1_position, radius, DEPLOYMENT_COLORS["player1"])
-	add_child(p1_mesh)
-	deployment_zone_meshes.append(p1_mesh)
-
-	# Player 2 circle (top-right quadrant)
-	var p2_position = Vector3(x_offset, 0, z_offset)
-	var p2_mesh = _create_circular_deployment_zone(p2_position, radius, DEPLOYMENT_COLORS["player2"])
-	add_child(p2_mesh)
-	deployment_zone_meshes.append(p2_mesh)
-
-	p1_mesh.visible = deployment_zones_visible
-	p2_mesh.visible = deployment_zones_visible
-
-
-## Meeting Engagement - Center rectangle zones
-func _create_meeting_engagement_zones(_table_width: float, _table_depth: float) -> void:
-	var zone_width = 24.0 * INCHES_TO_METERS
-	var zone_height = 18.0 * INCHES_TO_METERS
-	var separation = 6.0 * INCHES_TO_METERS
-
-	# Player 1 zone (left of center)
-	var p1_position = Vector3(-separation/2 - zone_width/2, 0, 0)
-	var p1_mesh = _create_deployment_zone_mesh(p1_position, Vector2(zone_width, zone_height), DEPLOYMENT_COLORS["player1"])
-	add_child(p1_mesh)
-	deployment_zone_meshes.append(p1_mesh)
-
-	# Player 2 zone (right of center)
-	var p2_position = Vector3(separation/2 + zone_width/2, 0, 0)
-	var p2_mesh = _create_deployment_zone_mesh(p2_position, Vector2(zone_width, zone_height), DEPLOYMENT_COLORS["player2"])
-	add_child(p2_mesh)
-	deployment_zone_meshes.append(p2_mesh)
-
-	p1_mesh.visible = deployment_zones_visible
-	p2_mesh.visible = deployment_zones_visible
+# ==============================================================================
+# CUSTOM POLYGON DEPLOYMENT ZONES
+# ==============================================================================
+
+## Create custom polygon deployment zones from stored vertices
+func _create_custom_polygon_zones() -> void:
+	# Create Player 1 zone if vertices exist
+	if custom_zone_player1.size() >= 3:
+		var p1_mesh = _create_polygon_zone_mesh(custom_zone_player1, DEPLOYMENT_COLORS["player1"])
+		add_child(p1_mesh)
+		deployment_zone_meshes.append(p1_mesh)
+		p1_mesh.visible = deployment_zones_visible
+
+	# Create Player 2 zone if vertices exist
+	if custom_zone_player2.size() >= 3:
+		var p2_mesh = _create_polygon_zone_mesh(custom_zone_player2, DEPLOYMENT_COLORS["player2"])
+		add_child(p2_mesh)
+		deployment_zone_meshes.append(p2_mesh)
+		p2_mesh.visible = deployment_zones_visible
+
+
+## Create a mesh from polygon vertices using triangulation
+func _create_polygon_zone_mesh(vertices: Array[Vector3], color: Color) -> MeshInstance3D:
+	var mesh_instance = MeshInstance3D.new()
+
+	if vertices.size() < 3:
+		return mesh_instance
+
+	# Convert 3D vertices to 2D for triangulation (XZ plane)
+	var points_2d: PackedVector2Array = PackedVector2Array()
+	for v in vertices:
+		points_2d.append(Vector2(v.x, v.z))
+
+	# Triangulate the polygon
+	var indices = Geometry2D.triangulate_polygon(points_2d)
+	if indices.is_empty():
+		push_warning("TerrainOverlay: Failed to triangulate custom zone polygon")
+		return mesh_instance
+
+	# Create mesh using SurfaceTool
+	var st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+	# Add vertices
+	for i in range(indices.size()):
+		var idx = indices[i]
+		var v = vertices[idx]
+		st.add_vertex(Vector3(v.x, 0.001, v.z))  # Slightly above ground
+
+	st.generate_normals()
+	mesh_instance.mesh = st.commit()
+
+	# Create semi-transparent material
+	var material = StandardMaterial3D.new()
+	material.albedo_color = color
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+	mesh_instance.material_override = material
+
+	return mesh_instance
+
+
+# ==============================================================================
+# CUSTOM ZONE EDITING API
+# ==============================================================================
+
+## Start editing custom deployment zones
+## @param symmetric: If true, both zones are drawn simultaneously (point-symmetric)
+func start_custom_zone_editing(symmetric: bool) -> void:
+	if symmetric:
+		custom_zone_mode = CustomZoneMode.SYMMETRIC
+	else:
+		custom_zone_mode = CustomZoneMode.ASYMMETRIC_P1
+
+	# Clear existing custom zones
+	custom_zone_player1.clear()
+	custom_zone_player2.clear()
+
+	# Show fine grid for vertex placement
+	show_fine_grid()
+	_clear_vertex_markers()
+
+	custom_zone_editing_changed.emit(true, custom_zone_mode)
+	print("Custom zone editing started: %s" % ("symmetric" if symmetric else "asymmetric P1"))
+
+
+## Add a vertex to the current custom zone being edited
+## @param world_pos: Position in world coordinates (meters)
+## Note: Position is automatically snapped to 1" grid intersection
+func add_custom_zone_vertex(world_pos: Vector3) -> void:
+	# Snap to 1" grid intersection
+	var snapped_pos = snap_to_fine_grid(world_pos)
+
+	match custom_zone_mode:
+		CustomZoneMode.SYMMETRIC:
+			# Add vertex to P1 zone
+			custom_zone_player1.append(snapped_pos)
+			custom_zone_vertex_added.emit(1, snapped_pos)
+
+			# Add point-symmetric vertex to P2 zone (mirrored around center)
+			var mirrored_pos = Vector3(-snapped_pos.x, snapped_pos.y, -snapped_pos.z)
+			custom_zone_player2.append(mirrored_pos)
+			custom_zone_vertex_added.emit(2, mirrored_pos)
+
+		CustomZoneMode.ASYMMETRIC_P1:
+			custom_zone_player1.append(snapped_pos)
+			custom_zone_vertex_added.emit(1, snapped_pos)
+
+		CustomZoneMode.ASYMMETRIC_P2:
+			custom_zone_player2.append(snapped_pos)
+			custom_zone_vertex_added.emit(2, snapped_pos)
+
+	# Update visualization
+	_update_deployment_zones()
+	_update_vertex_markers()
+
+
+## Complete the current custom zone and move to next (for asymmetric mode)
+func complete_current_custom_zone() -> void:
+	match custom_zone_mode:
+		CustomZoneMode.SYMMETRIC:
+			# Both zones completed simultaneously
+			custom_zone_mode = CustomZoneMode.NONE
+			custom_zone_completed.emit(1)
+			custom_zone_completed.emit(2)
+			custom_zone_editing_changed.emit(false, CustomZoneMode.NONE)
+			# Hide editing aids
+			hide_fine_grid()
+			_clear_vertex_markers()
+
+		CustomZoneMode.ASYMMETRIC_P1:
+			# P1 done, start P2
+			custom_zone_completed.emit(1)
+			custom_zone_mode = CustomZoneMode.ASYMMETRIC_P2
+			custom_zone_editing_changed.emit(true, custom_zone_mode)
+			# Keep grid, clear markers for new zone
+			_clear_vertex_markers()
+			print("Player 1 zone completed. Now drawing Player 2 zone.")
+
+		CustomZoneMode.ASYMMETRIC_P2:
+			# P2 done, editing complete
+			custom_zone_completed.emit(2)
+			custom_zone_mode = CustomZoneMode.NONE
+			custom_zone_editing_changed.emit(false, CustomZoneMode.NONE)
+			# Hide editing aids
+			hide_fine_grid()
+			_clear_vertex_markers()
+			print("Player 2 zone completed. Custom zone editing finished.")
+
+
+## Cancel custom zone editing
+func cancel_custom_zone_editing() -> void:
+	custom_zone_mode = CustomZoneMode.NONE
+	custom_zone_player1.clear()
+	custom_zone_player2.clear()
+	_update_deployment_zones()
+	# Hide editing aids
+	hide_fine_grid()
+	_clear_vertex_markers()
+	custom_zone_editing_changed.emit(false, CustomZoneMode.NONE)
+
+
+## Remove the last vertex from the current zone being edited
+func undo_last_custom_zone_vertex() -> void:
+	match custom_zone_mode:
+		CustomZoneMode.SYMMETRIC:
+			if not custom_zone_player1.is_empty():
+				custom_zone_player1.pop_back()
+			if not custom_zone_player2.is_empty():
+				custom_zone_player2.pop_back()
+
+		CustomZoneMode.ASYMMETRIC_P1:
+			if not custom_zone_player1.is_empty():
+				custom_zone_player1.pop_back()
+
+		CustomZoneMode.ASYMMETRIC_P2:
+			if not custom_zone_player2.is_empty():
+				custom_zone_player2.pop_back()
+
+	_update_deployment_zones()
+	_update_vertex_markers()
+
+
+## Check if currently editing custom zones
+func is_editing_custom_zones() -> bool:
+	return custom_zone_mode != CustomZoneMode.NONE
+
+
+## Get the current editing mode
+func get_custom_zone_mode() -> CustomZoneMode:
+	return custom_zone_mode
+
+
+## Set custom zone vertices directly (for loading saved zones)
+func set_custom_zones(p1_vertices: Array[Vector3], p2_vertices: Array[Vector3]) -> void:
+	custom_zone_player1 = p1_vertices.duplicate()
+	custom_zone_player2 = p2_vertices.duplicate()
+	if current_deployment_type == DeploymentType.CUSTOM:
+		_update_deployment_zones()
+
+
+## Get custom zone vertices (for saving)
+func get_custom_zones() -> Dictionary:
+	return {
+		"player1": custom_zone_player1.duplicate(),
+		"player2": custom_zone_player2.duplicate()
+	}
+
+
+# ==============================================================================
+# FINE GRID (1") FOR CUSTOM ZONE EDITING
+# ==============================================================================
+
+## Show the 1" fine grid for custom zone editing
+func show_fine_grid() -> void:
+	if fine_grid_visible:
+		return
+
+	_create_fine_grid()
+	fine_grid_visible = true
+
+
+## Hide the 1" fine grid
+func hide_fine_grid() -> void:
+	_clear_fine_grid()
+	fine_grid_visible = false
+
+
+## Clear all fine grid meshes
+func _clear_fine_grid() -> void:
+	for mesh in fine_grid_meshes:
+		if is_instance_valid(mesh):
+			mesh.queue_free()
+	fine_grid_meshes.clear()
+
+
+## Create the 1" fine grid visualization
+func _create_fine_grid() -> void:
+	_clear_fine_grid()
+
+	var table_width_m = table_size_feet.x * 12.0 * INCHES_TO_METERS
+	var table_depth_m = table_size_feet.y * 12.0 * INCHES_TO_METERS
+	var cell_size = FINE_GRID_SIZE_INCHES * INCHES_TO_METERS
+
+	# Grid line color (subtle gray)
+	var line_color = Color(0.4, 0.4, 0.4, 0.5)
+
+	# Create horizontal lines (along X axis)
+	var num_z_lines = int(table_depth_m / cell_size) + 1
+	for i in range(num_z_lines + 1):
+		var z = -table_depth_m / 2.0 + i * cell_size
+		if z > table_depth_m / 2.0 + 0.001:
+			continue
+		var line = _create_grid_line(
+			Vector3(-table_width_m / 2.0, 0.003, z),
+			Vector3(table_width_m / 2.0, 0.003, z),
+			line_color
+		)
+		add_child(line)
+		fine_grid_meshes.append(line)
+
+	# Create vertical lines (along Z axis)
+	var num_x_lines = int(table_width_m / cell_size) + 1
+	for i in range(num_x_lines + 1):
+		var x = -table_width_m / 2.0 + i * cell_size
+		if x > table_width_m / 2.0 + 0.001:
+			continue
+		var line = _create_grid_line(
+			Vector3(x, 0.003, -table_depth_m / 2.0),
+			Vector3(x, 0.003, table_depth_m / 2.0),
+			line_color
+		)
+		add_child(line)
+		fine_grid_meshes.append(line)
+
+
+## Create a single grid line mesh
+func _create_grid_line(start: Vector3, end: Vector3, color: Color) -> MeshInstance3D:
+	var mesh_instance = MeshInstance3D.new()
+
+	var im = ImmediateMesh.new()
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	im.surface_add_vertex(start)
+	im.surface_add_vertex(end)
+	im.surface_end()
+
+	mesh_instance.mesh = im
+
+	var material = StandardMaterial3D.new()
+	material.albedo_color = color
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+
+	mesh_instance.material_override = material
+
+	return mesh_instance
+
+
+## Snap a world position to the nearest 1" grid intersection
+## @param world_pos: Position in world coordinates
+## @return: Snapped position on the nearest grid intersection
+func snap_to_fine_grid(world_pos: Vector3) -> Vector3:
+	var cell_size = FINE_GRID_SIZE_INCHES * INCHES_TO_METERS
+	var table_width_m = table_size_feet.x * 12.0 * INCHES_TO_METERS
+	var table_depth_m = table_size_feet.y * 12.0 * INCHES_TO_METERS
+
+	# Snap to nearest intersection
+	var snapped_x = round((world_pos.x + table_width_m / 2.0) / cell_size) * cell_size - table_width_m / 2.0
+	var snapped_z = round((world_pos.z + table_depth_m / 2.0) / cell_size) * cell_size - table_depth_m / 2.0
+
+	# Clamp to table bounds
+	snapped_x = clamp(snapped_x, -table_width_m / 2.0, table_width_m / 2.0)
+	snapped_z = clamp(snapped_z, -table_depth_m / 2.0, table_depth_m / 2.0)
+
+	return Vector3(snapped_x, 0.0, snapped_z)
+
+
+## Clear vertex markers
+func _clear_vertex_markers() -> void:
+	for marker in vertex_markers:
+		if is_instance_valid(marker):
+			marker.queue_free()
+	vertex_markers.clear()
+
+
+## Update vertex markers to show current polygon vertices
+func _update_vertex_markers() -> void:
+	_clear_vertex_markers()
+
+	# Get current vertices based on mode
+	var vertices: Array[Vector3] = []
+	match custom_zone_mode:
+		CustomZoneMode.SYMMETRIC, CustomZoneMode.ASYMMETRIC_P1:
+			vertices = custom_zone_player1
+		CustomZoneMode.ASYMMETRIC_P2:
+			vertices = custom_zone_player2
+
+	# Create marker for each vertex
+	for i in range(vertices.size()):
+		var v = vertices[i]
+		var marker = _create_vertex_marker(v, i + 1)
+		add_child(marker)
+		vertex_markers.append(marker)
+
+	# In symmetric mode, also show P2 markers
+	if custom_zone_mode == CustomZoneMode.SYMMETRIC:
+		for i in range(custom_zone_player2.size()):
+			var v = custom_zone_player2[i]
+			var marker = _create_vertex_marker(v, i + 1, DEPLOYMENT_COLORS["player2"])
+			add_child(marker)
+			vertex_markers.append(marker)
+
+
+## Create a vertex marker (small sphere with number)
+func _create_vertex_marker(pos: Vector3, number: int, color: Color = Color(0.2, 0.5, 1.0, 0.8)) -> MeshInstance3D:
+	var mesh_instance = MeshInstance3D.new()
+
+	var sphere = SphereMesh.new()
+	sphere.radius = 0.01  # 1cm radius
+	sphere.height = 0.02
+	mesh_instance.mesh = sphere
+	mesh_instance.position = Vector3(pos.x, 0.015, pos.z)  # Slightly above table
+
+	var material = StandardMaterial3D.new()
+	material.albedo_color = color
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	mesh_instance.material_override = material
+
+	# Add number label
+	var label = Label3D.new()
+	label.text = str(number)
+	label.position.y = 0.02
+	label.pixel_size = 0.001
+	label.font_size = 32
+	label.modulate = Color.WHITE
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	mesh_instance.add_child(label)
+
+	return mesh_instance
 
 
 ## Helper function to create circular deployment zones
@@ -842,96 +780,37 @@ func is_position_in_deployment_zone(world_pos: Vector3) -> Dictionary:
 				if abs(world_pos.x) <= table_width_m/2:
 					return {"in_zone": true, "player": "player2"}
 
-		DeploymentType.GROUND_WAR:
-			var deployment_depth = 12.0 * INCHES_TO_METERS
-			# Player 1 zone (left)
-			if world_pos.x >= (-table_width_m/2) and world_pos.x <= (-table_width_m/2 + deployment_depth):
-				if abs(world_pos.z) <= table_depth_m/2:
-					return {"in_zone": true, "player": "player1"}
-			# Player 2 zone (right)
-			if world_pos.x <= (table_width_m/2) and world_pos.x >= (table_width_m/2 - deployment_depth):
-				if abs(world_pos.z) <= table_depth_m/2:
-					return {"in_zone": true, "player": "player2"}
-
-		DeploymentType.SIDE_BATTLE:
-			var deployment_depth = 12.0 * INCHES_TO_METERS
-			# Player 1 zone (bottom half)
-			if abs(world_pos.x) <= table_width_m/2:
-				if world_pos.z <= -table_depth_m/4 + deployment_depth/2 and world_pos.z >= -table_depth_m/4 - deployment_depth/2:
-					return {"in_zone": true, "player": "player1"}
-			# Player 2 zone (top half)
-			if abs(world_pos.x) <= table_width_m/2:
-				if world_pos.z >= table_depth_m/4 - deployment_depth/2 and world_pos.z <= table_depth_m/4 + deployment_depth/2:
-					return {"in_zone": true, "player": "player2"}
-
-		DeploymentType.DISORDERED:
-			var radius = 15.0 * INCHES_TO_METERS
-			var circle_offset = table_depth_m / 4
-			# Player 1 circle (bottom)
-			if world_pos.distance_to(Vector3(0, 0, -circle_offset)) <= radius:
+		DeploymentType.CUSTOM:
+			# Check custom polygon zones using point-in-polygon test
+			if _is_point_in_polygon(world_pos, custom_zone_player1):
 				return {"in_zone": true, "player": "player1"}
-			# Player 2 circle (top)
-			if world_pos.distance_to(Vector3(0, 0, circle_offset)) <= radius:
+			if _is_point_in_polygon(world_pos, custom_zone_player2):
 				return {"in_zone": true, "player": "player2"}
-
-		DeploymentType.SPEARHEAD:
-			var corner_dist = 24.0 * INCHES_TO_METERS
-			# Player 1 corners (bottom-left and bottom-right)
-			var p1_bl_center = Vector3(-table_width_m/2 + corner_dist/2, 0, -table_depth_m/2 + corner_dist/2)
-			var p1_br_center = Vector3(table_width_m/2 - corner_dist/2, 0, -table_depth_m/2 + corner_dist/2)
-			if _is_in_rect(world_pos, p1_bl_center, Vector2(corner_dist, corner_dist)):
-				return {"in_zone": true, "player": "player1"}
-			if _is_in_rect(world_pos, p1_br_center, Vector2(corner_dist, corner_dist)):
-				return {"in_zone": true, "player": "player1"}
-			# Player 2 corners (top-left and top-right)
-			var p2_tl_center = Vector3(-table_width_m/2 + corner_dist/2, 0, table_depth_m/2 - corner_dist/2)
-			var p2_tr_center = Vector3(table_width_m/2 - corner_dist/2, 0, table_depth_m/2 - corner_dist/2)
-			if _is_in_rect(world_pos, p2_tl_center, Vector2(corner_dist, corner_dist)):
-				return {"in_zone": true, "player": "player2"}
-			if _is_in_rect(world_pos, p2_tr_center, Vector2(corner_dist, corner_dist)):
-				return {"in_zone": true, "player": "player2"}
-
-		DeploymentType.OPPOSING_FORCES:
-			var zone_width = 18.0 * INCHES_TO_METERS
-			# Player 1 diagonal (left side)
-			if world_pos.x >= -table_width_m/2 and world_pos.x <= -table_width_m/2 + zone_width:
-				if abs(world_pos.z) <= table_depth_m/2:
-					return {"in_zone": true, "player": "player1"}
-			# Player 2 diagonal (right side)
-			if world_pos.x <= table_width_m/2 and world_pos.x >= table_width_m/2 - zone_width:
-				if abs(world_pos.z) <= table_depth_m/2:
-					return {"in_zone": true, "player": "player2"}
-
-		# Asymmetric deployment zones
-		DeploymentType.OPEN_WARZONE:
-			var deployment_dist = 12.0 * INCHES_TO_METERS
-			# Player 1: left short edge
-			if world_pos.x >= -table_width_m/2 and world_pos.x <= -table_width_m/2 + deployment_dist:
-				if abs(world_pos.z) <= table_depth_m/2:
-					return {"in_zone": true, "player": "player1"}
-			# Player 2: top and bottom long edges
-			if abs(world_pos.x) <= table_width_m/2:
-				if world_pos.z >= table_depth_m/2 - deployment_dist or world_pos.z <= -table_depth_m/2 + deployment_dist:
-					return {"in_zone": true, "player": "player2"}
-
-		DeploymentType.NO_MANS_LAND:
-			var deployment_dist = 9.0 * INCHES_TO_METERS
-			# Player 1 (left)
-			if world_pos.x >= -table_width_m/2 and world_pos.x <= -table_width_m/2 + deployment_dist:
-				if abs(world_pos.z) <= table_depth_m/2:
-					return {"in_zone": true, "player": "player1"}
-			# Player 2 (right)
-			if world_pos.x <= table_width_m/2 and world_pos.x >= table_width_m/2 - deployment_dist:
-				if abs(world_pos.z) <= table_depth_m/2:
-					return {"in_zone": true, "player": "player2"}
-
-		# Add basic checks for remaining types (can be expanded)
-		_:
-			# For deployment types without specific logic yet, always return in_zone true
-			# This prevents false warnings until all types are fully implemented
-			return {"in_zone": true, "player": "unknown"}
 
 	return {"in_zone": false, "player": "none"}
+
+
+## Check if a point is inside a polygon (2D test on XZ plane)
+## Uses ray casting algorithm
+func _is_point_in_polygon(point: Vector3, polygon: Array[Vector3]) -> bool:
+	if polygon.size() < 3:
+		return false
+
+	var inside := false
+	var n := polygon.size()
+
+	var j := n - 1
+	for i in range(n):
+		var pi := polygon[i]
+		var pj := polygon[j]
+
+		# Ray casting on XZ plane
+		if ((pi.z > point.z) != (pj.z > point.z)) and \
+		   (point.x < (pj.x - pi.x) * (point.z - pi.z) / (pj.z - pi.z) + pi.x):
+			inside = not inside
+		j = i
+
+	return inside
 
 
 ## Helper function to check if a position is inside a rectangle
