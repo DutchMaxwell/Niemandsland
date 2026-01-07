@@ -3,6 +3,7 @@
 
 # Godot-specific ignores
 *.translation
+*.uid
 
 # Imported textures and samples
 .import/
