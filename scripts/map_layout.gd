@@ -519,29 +519,38 @@ func _get_cell_at_screen_pos(screen_pos: Vector2) -> Vector2i:
 	var grid_dims = _calculate_grid_dimensions()
 	var grid_rect = _get_grid_rect()
 
-	# Calculate cell size in pixels
-	var cell_size = Vector2(grid_rect.size.x / grid_dims.x, grid_rect.size.y / grid_dims.y)
+	# Calculate cell size using same method as grid drawing
+	# (pixels per inch * 3" grid size)
+	var table_size_inches = table_size_feet * 12.0
+	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
+	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
+	var cell_size = Vector2(
+		GRID_SIZE_INCHES * pixels_per_inch_x,
+		GRID_SIZE_INCHES * pixels_per_inch_y
+	)
 
 	# Get position relative to grid container
 	var local_pos = screen_pos - grid_container.global_position
 
-	# Get center of grid
+	# Get center of grid (grid is centered in the container)
 	var center = grid_rect.position + grid_rect.size / 2.0
 
+	# Half grid cells for centering calculation
+	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
+
 	# Apply inverse rotation around center to get position in grid coordinate system
-	var rotated_pos = local_pos - center
+	var pos_from_center = local_pos - center
 	var angle_rad = deg_to_rad(-grid_rotation_degrees)
-	rotated_pos = Vector2(
-		rotated_pos.x * cos(angle_rad) - rotated_pos.y * sin(angle_rad),
-		rotated_pos.x * sin(angle_rad) + rotated_pos.y * cos(angle_rad)
+	var rotated_pos = Vector2(
+		pos_from_center.x * cos(angle_rad) - pos_from_center.y * sin(angle_rad),
+		pos_from_center.x * sin(angle_rad) + pos_from_center.y * cos(angle_rad)
 	)
 
-	# Convert back to grid coordinates (from center)
-	rotated_pos += grid_rect.size / 2.0
-
-	# Calculate cell coordinates
-	var cell_x = int(rotated_pos.x / cell_size.x)
-	var cell_y = int(rotated_pos.y / cell_size.y)
+	# Convert from center-relative position to cell coordinates
+	# Cell (x,y) has its center at ((x - half_grid_cells.x + 0.5) * cell_size.x, ...)
+	# So to get cell from position: cell_x = pos / cell_size + half_grid_cells - 0.5
+	var cell_x = int(floor(rotated_pos.x / cell_size.x + half_grid_cells.x))
+	var cell_y = int(floor(rotated_pos.y / cell_size.y + half_grid_cells.y))
 
 	return Vector2i(cell_x, cell_y)
 
@@ -672,23 +681,29 @@ func _try_generate_layout() -> bool:
 		pieces_placed_by_type[terrain_type] = 0
 		pieces_failed_by_type[terrain_type] = 0
 
+		# Calculate valid cell range based on table bounds (at 0° rotation)
+		# This ensures pieces are placed within the actual table, not just the grid
+		var valid_range = _get_valid_cell_range()
+
 		for i in range(pieces_to_place):
 			var placed = false
 			for attempt in range(max_attempts):
 				# Pick random template
 				var template = templates[randi() % templates.size()]
 
-				# Pick random position
-				var max_x = grid_dims.x - template.x
-				var max_y = grid_dims.y - template.y
+				# Pick random position WITHIN VALID TABLE BOUNDS
+				var min_x = valid_range.position.x
+				var min_y = valid_range.position.y
+				var max_x = valid_range.end.x - template.x
+				var max_y = valid_range.end.y - template.y
 
-				if max_x <= 0 or max_y <= 0:
-					print("  Template %dx%d too large for grid %dx%d" % [template.x, template.y, grid_dims.x, grid_dims.y])
+				if max_x <= min_x or max_y <= min_y:
+					print("  Template %dx%d too large for valid area" % [template.x, template.y])
 					break
 
 				var pos = Vector2i(
-					randi() % (max_x + 1),
-					randi() % (max_y + 1)
+					min_x + randi() % (max_x - min_x + 1),
+					min_y + randi() % (max_y - min_y + 1)
 				)
 
 				# Check if placement is valid (3" minimum spacing)
@@ -795,6 +810,32 @@ func _can_place_piece(pos: Vector2i, piece_size: Vector2i, existing_pieces: Arra
 			return false
 
 	return true
+
+
+## Get the valid cell range for the current table size (at current rotation)
+## Returns Rect2i with min/max cell coordinates that are within the table
+func _get_valid_cell_range() -> Rect2i:
+	var grid_dims = _calculate_grid_dimensions()
+	var half_grid = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
+
+	# Table size in cells (at 0° rotation)
+	var table_cells_x = int(table_size_feet.x * 12.0 / GRID_SIZE_INCHES)
+	var table_cells_y = int(table_size_feet.y * 12.0 / GRID_SIZE_INCHES)
+
+	# For 0° rotation, valid cells are centered in the grid
+	# With 1 cell margin from edges for safety
+	var min_x = int(half_grid.x) - int(table_cells_x / 2) + 1
+	var max_x = int(half_grid.x) + int(table_cells_x / 2) - 1
+	var min_y = int(half_grid.y) - int(table_cells_y / 2) + 1
+	var max_y = int(half_grid.y) + int(table_cells_y / 2) - 1
+
+	# Clamp to grid bounds
+	min_x = max(0, min_x)
+	min_y = max(0, min_y)
+	max_x = min(grid_dims.x - 1, max_x)
+	max_y = min(grid_dims.y - 1, max_y)
+
+	return Rect2i(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
 
 
 ## Check if a grid cell is within the actual table bounds (accounting for rotation)
