@@ -69,7 +69,8 @@ signal game_ended(state: MissionState)
 # ===== Mission Setup =====
 
 ## Sets up objectives for the mission using OPR standard rules.
-## "D3+2 objective markers, over 9" apart, outside deployment zones"
+## OPR Rule: "Place D3+2 objectives. Players roll-off to go first, then alternate
+## placing one marker each outside of deployment zones, over 9" away from each other."
 ## @param table_bounds: Table boundaries as Rect2 (in METERS)
 ## @param deployment_zone_depth_meters: Depth of deployment zones (in METERS), defaults to 12"
 static func setup_objectives(
@@ -82,7 +83,6 @@ static func setup_objectives(
 	var num_objectives = (randi() % 3) + 3
 
 	# Calculate valid placement area (outside deployment zones, with edge buffer)
-	# OPR Rule: Objectives must be outside deployment zones and at least 6" from edges
 	var edge_buffer = MIN_EDGE_DISTANCE
 	var valid_area = Rect2(
 		table_bounds.position.x + edge_buffer,
@@ -94,7 +94,6 @@ static func setup_objectives(
 	# Ensure valid area has positive dimensions
 	if valid_area.size.x <= 0 or valid_area.size.y <= 0:
 		push_warning("AIMission: Table too small for proper objective placement!")
-		# Fallback to center placement
 		valid_area = Rect2(
 			table_bounds.position.x + table_bounds.size.x * 0.25,
 			table_bounds.position.y + table_bounds.size.y * 0.25,
@@ -104,18 +103,28 @@ static func setup_objectives(
 
 	var placed_positions: Array[Vector3] = []
 
-	# Use strategic placement: distribute objectives evenly across the battlefield
+	# OPR Rule: Roll-off to determine who places first
+	var first_player = (randi() % 2) + 1  # 1 or 2
+
+	# Alternate placing objectives between players
 	for i in range(num_objectives):
 		var obj = Objective.new()
 		obj.id = i + 1
 
-		# Try to find valid position using grid-based distribution
-		var valid_pos = _find_valid_objective_position_distributed(
+		# Determine which player places this objective (alternating)
+		var placing_player: int
+		if i % 2 == 0:
+			placing_player = first_player
+		else:
+			placing_player = 3 - first_player  # Swap: 1->2, 2->1
+
+		# Find strategic position for this player
+		var valid_pos = _find_objective_position_for_player(
 			valid_area,
 			placed_positions,
 			MIN_OBJECTIVE_DISTANCE,
-			i,
-			num_objectives
+			placing_player,
+			table_bounds
 		)
 
 		obj.position = valid_pos
@@ -123,6 +132,77 @@ static func setup_objectives(
 		objectives.append(obj)
 
 	return objectives
+
+
+## Finds a valid objective position with strategic bias for the placing player.
+## Player 1 prefers positions closer to their edge (lower Z / "south").
+## Player 2 prefers positions closer to their edge (higher Z / "north").
+static func _find_objective_position_for_player(
+	valid_area: Rect2,
+	existing: Array[Vector3],
+	min_distance: float,
+	placing_player: int,
+	table_bounds: Rect2
+) -> Vector3:
+	var max_attempts = 50
+	var best_pos = Vector3.ZERO
+	var best_score = -INF
+
+	# Calculate center line and player preference zones
+	var table_center_z = table_bounds.position.y + table_bounds.size.y / 2.0
+
+	for attempt in range(max_attempts):
+		# Generate random position within valid area
+		var test_x = valid_area.position.x + randf() * valid_area.size.x
+		var test_z = valid_area.position.y + randf() * valid_area.size.y
+		var test_pos = Vector3(test_x, 0, test_z)
+
+		# Check minimum distance from existing objectives
+		var too_close = false
+		for existing_pos in existing:
+			if test_pos.distance_to(existing_pos) < min_distance:
+				too_close = true
+				break
+
+		if too_close:
+			continue
+
+		# Calculate strategic score for this player
+		var score = 0.0
+
+		# Player 1 prefers southern positions (closer to their deployment)
+		# Player 2 prefers northern positions (closer to their deployment)
+		var z_preference: float
+		if placing_player == 1:
+			# Lower Z is better for Player 1
+			z_preference = table_center_z - test_z
+		else:
+			# Higher Z is better for Player 2
+			z_preference = test_z - table_center_z
+
+		score += z_preference * 10.0
+
+		# Bonus for being spread out from existing objectives (better coverage)
+		for existing_pos in existing:
+			var dist = test_pos.distance_to(existing_pos)
+			score += dist * 0.5
+
+		# Small randomization to avoid predictable patterns
+		score += randf() * 0.05
+
+		if score > best_score:
+			best_score = score
+			best_pos = test_pos
+
+	# If no valid position found, use center fallback
+	if best_pos == Vector3.ZERO:
+		best_pos = Vector3(
+			valid_area.position.x + valid_area.size.x / 2.0,
+			0,
+			valid_area.position.y + valid_area.size.y / 2.0
+		)
+
+	return best_pos
 
 
 ## Finds a valid position for an objective using grid-based distribution.
