@@ -133,8 +133,7 @@ var battle_sim_btn: Button = null
 var radial_menu_controller: RadialMenuController = null
 var coherency_visualizer: CoherencyVisualizer = null
 
-# Deployment Zones UI
-var deployment_zone_option: OptionButton = null
+# Deployment Zones UI (visibility only - editing is in Map Tool)
 var deployment_zone_check: CheckBox = null
 var deployment_mode_check: CheckBox = null
 var is_deployment_mode: bool = false
@@ -297,6 +296,7 @@ func _ready() -> void:
 	$UI.add_child(map_layout_editor)
 	map_layout_editor.layout_closed.connect(_on_map_layout_closed)
 	map_layout_editor.layout_updated.connect(_on_map_layout_updated)
+	map_layout_editor.deployment_type_changed.connect(_on_deployment_type_changed)
 	map_layout_btn.pressed.connect(_on_map_layout_pressed)
 
 	# Initialize Terrain Overlay (on the 3D table)
@@ -1350,6 +1350,21 @@ func _on_map_layout_closed() -> void:
 	$UI/HUD.visible = true  # Show main HUD again
 
 
+## Handle deployment type change from Map Tool
+func _on_deployment_type_changed(deployment_type: int) -> void:
+	if not terrain_overlay or not terrain_overlay.has_method("set_deployment_zones"):
+		return
+
+	terrain_overlay.set_deployment_zones(deployment_type)
+	print("Deployment zone type set from Map Tool: %d" % deployment_type)
+
+	# Auto-show deployment zones when a type is selected
+	if deployment_type > 0:
+		terrain_overlay.set_deployment_zones_visible(true)
+		if deployment_zone_check:
+			deployment_zone_check.button_pressed = true
+
+
 ## Update terrain overlay when map layout changes
 func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2, grid_rotation: float) -> void:
 	# This may be called during initialization before terrain_overlay exists
@@ -1364,12 +1379,12 @@ func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2, grid_ro
 
 
 ## ============================================================================
-## Deployment Zones
+## Deployment Zones (Visibility Only - Editing is in Map Tool)
 ## ============================================================================
 
-## Initialize deployment zones UI (programmatically)
-## NOTE: Only Front Line (from OPR free rules) and Custom zones are available.
-## Other deployment types are behind OPR's paywall and not implemented.
+## Initialize deployment zones UI (simplified - only visibility toggle)
+## NOTE: Deployment zone type selection and custom zone editing is now in Map Tool.
+## This ensures a single point of truth for deployment zone configuration.
 func _init_deployment_zones_ui() -> void:
 	# Get the left panel VBox to add UI elements
 	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
@@ -1382,115 +1397,34 @@ func _init_deployment_zones_ui() -> void:
 	deployment_panel.name = "DeploymentPanel"
 	left_panel_vbox.add_child(deployment_panel)
 
-	# Add label
+	# Add label with Glassmorphism styling
 	var label = Label.new()
 	label.text = "Deployment Zones:"
+	label.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
 	deployment_panel.add_child(label)
 
-	# Create OptionButton for deployment zone types
-	# Only Front Line (free OPR rule) and Custom are available
-	deployment_zone_option = OptionButton.new()
-	deployment_zone_option.add_item("None", 0)
-	deployment_zone_option.add_item("Front Line (12\")", 1)  # Standard OPR free rule
-	deployment_zone_option.add_item("Custom", 2)  # User-defined polygon zones
-	deployment_zone_option.selected = 0  # Start with "None"
-	deployment_zone_option.item_selected.connect(_on_deployment_zone_selected)
-	deployment_panel.add_child(deployment_zone_option)
+	# Info label explaining where to edit
+	var info_label = Label.new()
+	info_label.text = "(Configure in Map Tool)"
+	info_label.add_theme_font_size_override("font_size", 11)
+	info_label.add_theme_color_override("font_color", Color(0.6, 0.63, 0.7, 1.0))
+	deployment_panel.add_child(info_label)
 
 	# Create CheckBox for visibility toggle
 	deployment_zone_check = CheckBox.new()
 	deployment_zone_check.text = "Show Deployment Zones"
 	deployment_zone_check.button_pressed = false
+	deployment_zone_check.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
 	deployment_zone_check.toggled.connect(_on_deployment_zones_visibility_toggled)
 	deployment_panel.add_child(deployment_zone_check)
 
 	# Create CheckBox for Deployment Mode (check units in zones)
 	deployment_mode_check = CheckBox.new()
-	deployment_mode_check.text = "Deployment Mode (Check Units)"
+	deployment_mode_check.text = "Check Unit Placement"
 	deployment_mode_check.button_pressed = false
+	deployment_mode_check.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
 	deployment_mode_check.toggled.connect(_on_deployment_mode_toggled)
 	deployment_panel.add_child(deployment_mode_check)
-
-	# Custom zone editing controls (initially hidden)
-	_custom_zone_panel = VBoxContainer.new()
-	_custom_zone_panel.name = "CustomZonePanel"
-	_custom_zone_panel.visible = false
-	deployment_panel.add_child(_custom_zone_panel)
-
-	var custom_label = Label.new()
-	custom_label.text = "Custom Zone Mode:"
-	custom_label.add_theme_color_override("font_color", Color.YELLOW)
-	_custom_zone_panel.add_child(custom_label)
-
-	# Symmetric/Asymmetric toggle
-	_custom_zone_symmetric_check = CheckBox.new()
-	_custom_zone_symmetric_check.text = "Symmetric (point-mirrored)"
-	_custom_zone_symmetric_check.button_pressed = true
-	_custom_zone_panel.add_child(_custom_zone_symmetric_check)
-
-	# Info label
-	_custom_zone_info_label = Label.new()
-	_custom_zone_info_label.text = "Click 1\" grid points to add vertices"
-	_custom_zone_info_label.add_theme_font_size_override("font_size", 12)
-	_custom_zone_panel.add_child(_custom_zone_info_label)
-
-	# Button container
-	var button_box = HBoxContainer.new()
-	_custom_zone_panel.add_child(button_box)
-
-	_custom_zone_start_btn = Button.new()
-	_custom_zone_start_btn.text = "Start Drawing"
-	_custom_zone_start_btn.pressed.connect(_on_custom_zone_start_pressed)
-	button_box.add_child(_custom_zone_start_btn)
-
-	_custom_zone_confirm_btn = Button.new()
-	_custom_zone_confirm_btn.text = "Confirm"
-	_custom_zone_confirm_btn.pressed.connect(_on_custom_zone_confirm_pressed)
-	_custom_zone_confirm_btn.disabled = true
-	button_box.add_child(_custom_zone_confirm_btn)
-
-	_custom_zone_cancel_btn = Button.new()
-	_custom_zone_cancel_btn.text = "Cancel"
-	_custom_zone_cancel_btn.pressed.connect(_on_custom_zone_cancel_pressed)
-	_custom_zone_cancel_btn.disabled = true
-	button_box.add_child(_custom_zone_cancel_btn)
-
-	_custom_zone_undo_btn = Button.new()
-	_custom_zone_undo_btn.text = "Undo"
-	_custom_zone_undo_btn.pressed.connect(_on_custom_zone_undo_pressed)
-	_custom_zone_undo_btn.disabled = true
-	button_box.add_child(_custom_zone_undo_btn)
-
-
-# Custom zone UI references
-var _custom_zone_panel: VBoxContainer
-var _custom_zone_symmetric_check: CheckBox
-var _custom_zone_info_label: Label
-var _custom_zone_start_btn: Button
-var _custom_zone_confirm_btn: Button
-var _custom_zone_cancel_btn: Button
-var _custom_zone_undo_btn: Button
-
-
-## Handle deployment zone type selection
-func _on_deployment_zone_selected(index: int) -> void:
-	if not terrain_overlay or not terrain_overlay.has_method("set_deployment_zones"):
-		return
-
-	terrain_overlay.set_deployment_zones(index)
-	print("Deployment zone set to: %d" % index)
-
-	# Show/hide custom zone panel based on selection
-	if _custom_zone_panel:
-		_custom_zone_panel.visible = (index == 2)  # Custom = 2
-
-	# Automatically show deployment zones when a type is selected (not "None")
-	if index > 0:
-		deployment_zone_check.button_pressed = true
-		terrain_overlay.set_deployment_zones_visible(true)
-	else:
-		deployment_zone_check.button_pressed = false
-		terrain_overlay.set_deployment_zones_visible(false)
 
 
 ## Handle deployment zone visibility toggle
@@ -1507,75 +1441,6 @@ func _on_deployment_mode_toggled(is_active: bool) -> void:
 	is_deployment_mode = is_active
 	_check_all_units_deployment()
 	print("Deployment mode: %s" % ("active" if is_active else "inactive"))
-
-
-# ==============================================================================
-# CUSTOM ZONE EDITING HANDLERS
-# ==============================================================================
-
-## Start drawing custom deployment zones
-func _on_custom_zone_start_pressed() -> void:
-	if not terrain_overlay:
-		return
-
-	var symmetric = _custom_zone_symmetric_check.button_pressed
-	terrain_overlay.start_custom_zone_editing(symmetric)
-
-	# Update UI state
-	_custom_zone_start_btn.disabled = true
-	_custom_zone_symmetric_check.disabled = true
-	_custom_zone_confirm_btn.disabled = false
-	_custom_zone_cancel_btn.disabled = false
-	_custom_zone_undo_btn.disabled = false
-
-	if symmetric:
-		_custom_zone_info_label.text = "Drawing P1 zone (P2 mirrored)..."
-	else:
-		_custom_zone_info_label.text = "Drawing Player 1 zone..."
-
-
-## Confirm current custom zone
-func _on_custom_zone_confirm_pressed() -> void:
-	if not terrain_overlay:
-		return
-
-	terrain_overlay.complete_current_custom_zone()
-
-	# Check if we need to draw another zone (asymmetric mode)
-	if terrain_overlay.is_editing_custom_zones():
-		_custom_zone_info_label.text = "Drawing Player 2 zone..."
-	else:
-		# Editing complete
-		_custom_zone_start_btn.disabled = false
-		_custom_zone_symmetric_check.disabled = false
-		_custom_zone_confirm_btn.disabled = true
-		_custom_zone_cancel_btn.disabled = true
-		_custom_zone_undo_btn.disabled = true
-		_custom_zone_info_label.text = "Custom zones complete!"
-
-
-## Cancel custom zone editing
-func _on_custom_zone_cancel_pressed() -> void:
-	if not terrain_overlay:
-		return
-
-	terrain_overlay.cancel_custom_zone_editing()
-
-	# Reset UI state
-	_custom_zone_start_btn.disabled = false
-	_custom_zone_symmetric_check.disabled = false
-	_custom_zone_confirm_btn.disabled = true
-	_custom_zone_cancel_btn.disabled = true
-	_custom_zone_undo_btn.disabled = true
-	_custom_zone_info_label.text = "Click 1\" grid points to add vertices"
-
-
-## Undo last vertex in custom zone
-func _on_custom_zone_undo_pressed() -> void:
-	if not terrain_overlay:
-		return
-
-	terrain_overlay.undo_last_custom_zone_vertex()
 
 
 ## Initialize Scout/Ambush Panel UI
