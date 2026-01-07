@@ -888,10 +888,38 @@ func _try_generate_layout() -> bool:
 					print("  Template %dx%d too large for valid area" % [template.x, template.y])
 					break
 
-				var pos = Vector2i(
-					min_x + randi() % (max_x - min_x + 1),
-					min_y + randi() % (max_y - min_y + 1)
-				)
+				var pos: Vector2i
+				# First 50 attempts: try edge positions to ensure edge coverage
+				if attempt < 50:
+					# Alternate between different edges
+					var edge = attempt % 4
+					match edge:
+						0:  # Top edge
+							pos = Vector2i(
+								min_x + randi() % (max_x - min_x + 1),
+								min_y + randi() % mini(3, max_y - min_y + 1)
+							)
+						1:  # Bottom edge
+							pos = Vector2i(
+								min_x + randi() % (max_x - min_x + 1),
+								maxi(min_y, max_y - 2) + randi() % mini(3, max_y - min_y + 1)
+							)
+						2:  # Left edge
+							pos = Vector2i(
+								min_x + randi() % mini(3, max_x - min_x + 1),
+								min_y + randi() % (max_y - min_y + 1)
+							)
+						3:  # Right edge
+							pos = Vector2i(
+								maxi(min_x, max_x - 2) + randi() % mini(3, max_x - min_x + 1),
+								min_y + randi() % (max_y - min_y + 1)
+							)
+				else:
+					# Remaining attempts: random positions across entire table
+					pos = Vector2i(
+						min_x + randi() % (max_x - min_x + 1),
+						min_y + randi() % (max_y - min_y + 1)
+					)
 
 				# Check if placement is valid (3" minimum spacing)
 				if _can_place_piece(pos, template, placed_pieces):
