@@ -1,0 +1,15 @@
+[gd_scene load_steps=4 format=3 uid="uid://simnpyem21vg"]
+
+[ext_resource type="Texture2D" uid="uid://ds4nlb614eb0f" path="res://Assets/Icons/Phosphor/caret-circle-left-bold.svg" id="1_vw181"]
+[ext_resource type="Texture2D" uid="uid://brmyehlci5sk6" path="res://Assets/Icons/Phosphor/caret-circle-left-bold-highlight.svg" id="2_340ud"]
+[ext_resource type="Texture2D" uid="uid://4kheqegx3jr6" path="res://Assets/Icons/Phosphor/caret-circle-left-bold-hover.svg" id="3_340ud"]
+
+[node name="BackButton" type="TextureButton"]
+modulate = Color(1, 1, 1, 0.666667)
+custom_minimum_size = Vector2(40, 40)
+offset_right = 40.0
+offset_bottom = 40.0
+texture_normal = ExtResource("1_vw181")
+texture_pressed = ExtResource("2_340ud")
+texture_hover = ExtResource("3_340ud")
+stretch_mode = 4

@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3 uid="uid://b8qi1eld0fd72"]
+
+[ext_resource type="Script" uid="uid://d1qmtwovrflgb" path="res://Scripts/Modules/Button/shrink_pressed_button_module.gd" id="1_8xqh1"]
+
+[node name="ShrinkPressedButtonModule" type="Node"]
+script = ExtResource("1_8xqh1")
+shrink_scale = Vector2(0.9, 0.9)
+shrink_duration = 0.3
+return_duration = 0.3
+tween_type = 5

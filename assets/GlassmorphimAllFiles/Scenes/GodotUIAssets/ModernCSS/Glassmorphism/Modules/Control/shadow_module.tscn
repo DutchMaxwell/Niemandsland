@@ -1,0 +1,72 @@
+[gd_scene load_steps=5 format=3 uid="uid://ddqg85jj5jo42"]
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_ckss8"]
+blend_mode = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_wsiwu"]
+bg_color = Color(0.71, 0.71, 0.71, 0)
+border_width_bottom = 10
+border_color = Color(0, 0, 0, 0.419608)
+border_blend = true
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+expand_margin_left = 1.0
+expand_margin_right = 1.0
+expand_margin_bottom = 11.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_vf5gu"]
+bg_color = Color(1, 1, 1, 0)
+border_width_bottom = 6
+border_color = Color(0, 0, 0, 0.419608)
+border_blend = true
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+expand_margin_left = 1.0
+expand_margin_right = 1.0
+expand_margin_bottom = 7.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_0kjxm"]
+bg_color = Color(1, 1, 1, 0)
+border_width_bottom = 3
+border_color = Color(0, 0, 0, 0.419608)
+border_blend = true
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+expand_margin_left = 1.0
+expand_margin_right = 1.0
+expand_margin_bottom = 4.0
+
+[node name="ShadowModule" type="MarginContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="BigShadow" type="Panel" parent="."]
+material = SubResource("CanvasItemMaterial_ckss8")
+custom_minimum_size = Vector2(42.015, 19.305)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_wsiwu")
+
+[node name="MediumShadow" type="Panel" parent="."]
+material = SubResource("CanvasItemMaterial_ckss8")
+custom_minimum_size = Vector2(42.015, 19.305)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_vf5gu")
+
+[node name="SmallShadow" type="Panel" parent="."]
+material = SubResource("CanvasItemMaterial_ckss8")
+custom_minimum_size = Vector2(42.015, 19.305)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_0kjxm")

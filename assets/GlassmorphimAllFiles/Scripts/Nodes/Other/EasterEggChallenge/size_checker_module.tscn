@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://es45oxk7rc5i"]
+
+[ext_resource type="Script" uid="uid://btgvdh20wwf28" path="res://Scripts/Nodes/Other/EasterEggChallenge/size_checker.gd" id="1_cfhfj"]
+
+[node name="SizeCheckerModule" type="Node"]
+script = ExtResource("1_cfhfj")
