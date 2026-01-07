@@ -173,16 +173,22 @@ func _input(event: InputEvent) -> void:
 
 
 func _remove_theme_overrides() -> void:
-	"""Remove hardcoded theme overrides to allow Kenney theme to show"""
+	"""Remove hardcoded theme overrides to allow theme to show"""
 	# Remove panel style override
 	menu_panel.remove_theme_stylebox_override("panel")
 
 	# Remove button overrides and make them use theme
-	for button in [quick_battle_btn, multiplayer_btn, load_game_btn, settings_btn, exit_btn]:
+	for button in [quick_battle_btn, multiplayer_btn, load_game_btn, settings_btn]:
 		button.flat = false  # Enable theme styling
 		button.remove_theme_color_override("font_color")
 		button.remove_theme_color_override("font_hover_color")
 		button.remove_theme_font_size_override("font_size")
+
+	# Exit button keeps red color for emphasis
+	exit_btn.flat = false
+	exit_btn.remove_theme_font_size_override("font_size")
+	exit_btn.add_theme_color_override("font_color", Color(1.0, 0.35, 0.45))
+	exit_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.5, 0.6))
 
 
 func _on_theme_changed(new_theme: Theme) -> void:
