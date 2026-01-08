@@ -299,6 +299,13 @@ static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 		var wounds_label = "Wounds %d/%d" % [model.wounds_current, model.wounds_max]
 		items.append(RadialMenuItem.new("wounds", wounds_label, "❤️"))
 
+	# Show casts option for Caster units
+	if model.unit and model.unit is GameUnit:
+		var game_unit = model.unit as GameUnit
+		if game_unit.is_caster():
+			var casts_label = "Casts %d/%d" % [game_unit.casts_current, GameUnit.CASTER_POINTS_CAP]
+			items.append(RadialMenuItem.new("casts", casts_label, "✨"))
+
 	items.append(RadialMenuItem.new("select_unit", "Select All", "⬚"))
 	items.append(RadialMenuItem.new("delete_model", "Remove", "🗑️"))
 
@@ -314,6 +321,11 @@ static func create_unit_menu(game_unit: GameUnit) -> Array[RadialMenuItem]:
 	var activate_label = "Deactivate" if game_unit.is_activated else "Activate"
 	var activate_icon = "✗" if game_unit.is_activated else "✓"
 	items.append(RadialMenuItem.new("toggle_activate", activate_label, activate_icon))
+
+	# Show casts option for Caster units
+	if game_unit.is_caster():
+		var casts_label = "Casts %d/%d" % [game_unit.casts_current, GameUnit.CASTER_POINTS_CAP]
+		items.append(RadialMenuItem.new("casts", casts_label, "✨"))
 
 	items.append(RadialMenuItem.new("check_coherency", "Coherency", "📏"))
 	items.append(RadialMenuItem.new("delete_unit", "Delete", "🗑️"))
