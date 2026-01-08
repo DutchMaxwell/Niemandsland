@@ -738,9 +738,14 @@ func _get_cell_at_screen_pos(screen_pos: Vector2) -> Vector2i:
 
 
 func _get_mirrored_cell(cell: Vector2i) -> Vector2i:
-	## Get the point-symmetric (180° rotated) cell position
-	var grid_dims = _calculate_grid_dimensions()
-	return Vector2i(grid_dims.x - 1 - cell.x, grid_dims.y - 1 - cell.y)
+	## Get the point-symmetric (180° rotated) cell position relative to TABLE center
+	var valid_range = _get_valid_cell_range()
+	var table_min_x = valid_range.position.x
+	var table_min_y = valid_range.position.y
+	var table_max_x = valid_range.position.x + valid_range.size.x - 1
+	var table_max_y = valid_range.position.y + valid_range.size.y - 1
+	# Mirror: cell at min maps to max, cell at max maps to min
+	return Vector2i(table_min_x + table_max_x - cell.x, table_min_y + table_max_y - cell.y)
 
 
 func _is_valid_cell(cell: Vector2i) -> bool:
@@ -982,12 +987,23 @@ func _try_generate_layout() -> bool:
 		return false
 
 
-## Mirror a position across the grid center (point symmetry)
+## Mirror a position across the TABLE center (point symmetry)
 ## For a piece at position pos with given piece_size, returns the mirrored top-left corner position
-func _mirror_position(pos: Vector2i, piece_size: Vector2i, grid_dims: Vector2i) -> Vector2i:
-	# Point symmetry: reflect across center (180° rotation)
-	# Mirror the top-left corner of the piece
-	return Vector2i(grid_dims.x - pos.x - piece_size.x, grid_dims.y - pos.y - piece_size.y)
+## IMPORTANT: Uses table bounds, not grid bounds, for correct edge-to-edge mirroring
+func _mirror_position(pos: Vector2i, piece_size: Vector2i, _grid_dims: Vector2i) -> Vector2i:
+	# Get actual table bounds in grid coordinates
+	var valid_range = _get_valid_cell_range()
+	var table_min_x = valid_range.position.x
+	var table_min_y = valid_range.position.y
+	var table_max_x = valid_range.position.x + valid_range.size.x - 1
+	var table_max_y = valid_range.position.y + valid_range.size.y - 1
+
+	# Point symmetry: a piece at the top-left edge should mirror to bottom-right edge
+	# The mirrored piece's bottom-right corner should match the original's distance from top-left
+	var mirrored_x = table_min_x + table_max_x - pos.x - piece_size.x + 1
+	var mirrored_y = table_min_y + table_max_y - pos.y - piece_size.y + 1
+
+	return Vector2i(mirrored_x, mirrored_y)
 
 
 ## Check if a piece can be placed without overlapping existing pieces
