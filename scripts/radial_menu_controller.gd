@@ -27,6 +27,9 @@ var coherency_visualizer: CoherencyVisualizer = null
 ## Reference to wounds dialog
 var wounds_dialog: WoundsDialog = null
 
+## Reference to casts dialog
+var casts_dialog: CastsDialog = null
+
 ## Current selection context
 var _current_selection: Array = []
 
@@ -62,6 +65,12 @@ func initialize(p_object_manager: Node, p_army_manager: OPRArmyManager) -> void:
 		wounds_dialog = WoundsDialog.create_simple()
 		ui_parent.add_child(wounds_dialog)
 		wounds_dialog.wounds_changed.connect(_on_wounds_changed)
+
+	# Create casts dialog
+	if not casts_dialog:
+		casts_dialog = CastsDialog.create_simple()
+		ui_parent.add_child(casts_dialog)
+		casts_dialog.casts_changed.connect(_on_casts_changed)
 
 
 ## Opens the radial menu for the current selection at the given position.
@@ -148,6 +157,8 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_select_entire_unit(context)
 		"wounds":
 			_open_wounds_dialog(context)
+		"casts":
+			_open_casts_dialog(context)
 		"add_marker":
 			_open_marker_dialog(context)
 		"toggle_activate":
@@ -255,6 +266,23 @@ func _open_wounds_dialog(context: Dictionary) -> void:
 		wounds_dialog.open(model)
 	else:
 		print("Wounds dialog not available")
+
+
+func _open_casts_dialog(context: Dictionary) -> void:
+	var game_unit = context.get("game_unit") as GameUnit
+	if not game_unit:
+		# Try to get unit from model
+		var model = context.get("model_instance") as ModelInstance
+		if model and model.unit and model.unit is GameUnit:
+			game_unit = model.unit as GameUnit
+
+	if not game_unit:
+		return
+
+	if casts_dialog:
+		casts_dialog.open(game_unit)
+	else:
+		print("Casts dialog not available")
 
 
 func _open_marker_dialog(context: Dictionary) -> void:
@@ -583,6 +611,142 @@ func _create_wound_text_arc(parent: Node3D, radius: float, height: float) -> voi
 		var z = -sin(angle) * radius  # Negative to put at top
 		char_label.position = Vector3(x, height, z)
 		# Rotate to face up and follow the arc
+		char_label.rotation = Vector3(-PI / 2, angle - PI / 2, 0)
+
+		parent.add_child(char_label)
+
+
+## Called when casts are changed via the casts dialog.
+func _on_casts_changed(unit: GameUnit, new_casts: int) -> void:
+	# Update visual caster marker if needed
+	_update_caster_marker(unit)
+	print("Caster points changed for %s: %d/%d" % [unit.get_name(), new_casts, GameUnit.CASTER_POINTS_CAP])
+
+
+## Updates or creates a caster point marker (purple disc) next to a unit's first model.
+func _update_caster_marker(unit: GameUnit) -> void:
+	if unit.models.is_empty():
+		return
+
+	var model = unit.models[0]
+	if not model.node or not is_instance_valid(model.node):
+		return
+
+	var marker_name = "CasterMarker"
+	var existing_marker = model.node.get_node_or_null(marker_name)
+
+	# Remove marker if unit is not a caster or has no points
+	if not unit.is_caster():
+		if existing_marker:
+			existing_marker.queue_free()
+		return
+
+	# Marker dimensions: 20mm diameter disc
+	var disc_radius = 0.010  # 10mm radius = 20mm diameter
+	var disc_height = 0.003  # 3mm thick
+
+	var marker: Node3D
+	var number_label: Label3D
+
+	if existing_marker:
+		marker = existing_marker
+		number_label = marker.get_node_or_null("NumberLabel") as Label3D
+	else:
+		marker = Node3D.new()
+		marker.name = marker_name
+		model.node.add_child(marker)
+
+		# Create black base disc (border)
+		var border_mesh = MeshInstance3D.new()
+		border_mesh.name = "Border"
+		var border_cyl = CylinderMesh.new()
+		border_cyl.top_radius = disc_radius + 0.001
+		border_cyl.bottom_radius = disc_radius + 0.001
+		border_cyl.height = disc_height
+		border_mesh.mesh = border_cyl
+		var border_mat = StandardMaterial3D.new()
+		border_mat.albedo_color = Color(0.02, 0.02, 0.02)
+		border_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		border_mesh.material_override = border_mat
+		border_mesh.position = Vector3(0, disc_height / 2, 0)
+		marker.add_child(border_mesh)
+
+		# Create purple disc (main body)
+		var disc_mesh = MeshInstance3D.new()
+		disc_mesh.name = "Disc"
+		var disc_cyl = CylinderMesh.new()
+		disc_cyl.top_radius = disc_radius
+		disc_cyl.bottom_radius = disc_radius
+		disc_cyl.height = disc_height + 0.0002
+		disc_mesh.mesh = disc_cyl
+		var disc_mat = StandardMaterial3D.new()
+		disc_mat.albedo_color = Color(0.6, 0.3, 0.9)  # Purple
+		disc_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		disc_mesh.material_override = disc_mat
+		disc_mesh.position = Vector3(0, disc_height / 2 + 0.0001, 0)
+		marker.add_child(disc_mesh)
+
+		# Create "CASTS" text arc
+		_create_caster_text_arc(marker, disc_radius * 0.75, disc_height + 0.001)
+
+		# Create number label in center
+		number_label = Label3D.new()
+		number_label.name = "NumberLabel"
+		number_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+		number_label.no_depth_test = true
+		number_label.font_size = 72
+		number_label.outline_size = 8
+		number_label.modulate = Color.WHITE
+		number_label.outline_modulate = Color(0.3, 0.1, 0.5)  # Dark purple outline
+		number_label.pixel_size = 0.00016
+		number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		number_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		number_label.position = Vector3(0, disc_height + 0.001, 0.002)
+		number_label.rotation = Vector3(-PI / 2, 0, 0)
+		marker.add_child(number_label)
+
+		# Position marker on opposite side from wound marker
+		var base_x_radius = 0.016
+		if unit.unit_properties:
+			var oval_width = unit.unit_properties.get("base_size_oval_width", 0)
+			var oval_length = unit.unit_properties.get("base_size_oval_length", 0)
+			if oval_width > 0 and oval_length > 0:
+				base_x_radius = (oval_width / 2.0) * 0.001
+			else:
+				var base_mm = unit.unit_properties.get("base_size_round", 32)
+				base_x_radius = (base_mm / 2.0) * 0.001
+		# Position on opposite side (-X) from wound marker
+		marker.position = Vector3(-(base_x_radius + disc_radius), 0, 0)
+
+	# Update number
+	if number_label:
+		number_label.text = str(unit.casts_current)
+
+
+## Creates "CASTS" text as an arc along the top outer edge of the caster disc.
+func _create_caster_text_arc(parent: Node3D, radius: float, height: float) -> void:
+	var text = "CASTS"
+	var angle_per_char = PI / 10
+	var total_arc = (text.length() - 1) * angle_per_char
+	var start_angle = PI / 2 + total_arc / 2
+
+	for i in range(text.length()):
+		var char_label = Label3D.new()
+		char_label.name = "CasterChar%d" % i
+		char_label.text = text[i]
+		char_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+		char_label.no_depth_test = true
+		char_label.font_size = 24
+		char_label.outline_size = 2
+		char_label.modulate = Color.WHITE
+		char_label.outline_modulate = Color(0.3, 0.1, 0.5)  # Dark purple
+		char_label.pixel_size = 0.0001
+		char_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+		var angle = start_angle - i * angle_per_char
+		var x = cos(angle) * radius
+		var z = -sin(angle) * radius
+		char_label.position = Vector3(x, height, z)
 		char_label.rotation = Vector3(-PI / 2, angle - PI / 2, 0)
 
 		parent.add_child(char_label)
