@@ -94,11 +94,17 @@ func _draw() -> void:
 
 			var corners_rotated = []
 			var all_inside = true
+			# Use slightly expanded rect for boundary check (has_point uses < not <=)
+			var epsilon = 0.5
+			var expanded_rect = Rect2(
+				grid_rect.position - Vector2(epsilon, epsilon),
+				grid_rect.size + Vector2(epsilon * 2, epsilon * 2)
+			)
 			for corner in corners_local:
 				var rotated = rotate_point.call(corner)
 				corners_rotated.append(rotated)
-				# Check if ALL corners are inside table bounds
-				if not grid_rect.has_point(rotated):
+				# Check if ALL corners are inside table bounds (with epsilon tolerance)
+				if not expanded_rect.has_point(rotated):
 					all_inside = false
 
 			# Skip if any corner is outside table
