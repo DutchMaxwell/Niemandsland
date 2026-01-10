@@ -429,7 +429,14 @@ func _process(delta: float) -> void:
 		fps_color = Color.RED
 
 	performance_label.add_theme_color_override("font_color", fps_color)
-	performance_label.text = "FPS: %d | Objects: %d" % [fps, object_count]
+
+	# Get zoom level from camera
+	var zoom_text = ""
+	if camera_pivot and camera_pivot.has_method("get_zoom"):
+		var zoom = camera_pivot.get_zoom()
+		zoom_text = " | Zoom: %.1f" % zoom
+
+	performance_label.text = "FPS: %d | Objects: %d%s" % [fps, object_count, zoom_text]
 
 	# Handle OPR unit hover detection
 	_update_opr_hover()

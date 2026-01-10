@@ -315,7 +315,9 @@ func _handle_custom_zone_click(cell: Vector2i) -> void:
 		# Add to player 1 vertices, mirrored vertex added automatically
 		custom_zone_vertices_p1.append(cell)
 		var mirrored = _get_mirrored_cell(cell)
-		custom_zone_vertices_p2.append(mirrored)
+		# Insert at beginning to reverse winding order for 180° symmetry
+		# This ensures the mirrored polygon has correct orientation
+		custom_zone_vertices_p2.insert(0, mirrored)
 		_custom_zone_status_label.text = "P1: %d vertices | P2: %d vertices" % [
 			custom_zone_vertices_p1.size(), custom_zone_vertices_p2.size()
 		]
@@ -1306,13 +1308,18 @@ func get_custom_zone_data() -> Dictionary:
 ## Convert grid cell vertices to world coordinates (meters) for terrain_overlay
 func _convert_zone_cells_to_world(vertices: Array[Vector2i]) -> Array[Vector3]:
 	var result: Array[Vector3] = []
-	var grid_dims = _calculate_grid_dimensions()
+	var valid_range = _get_valid_cell_range()
 	var cell_size_meters = GRID_SIZE_INCHES * 0.0254  # INCHES_TO_METERS
 
+	# Calculate table center in cell coordinates
+	var table_center_x = valid_range.position.x + valid_range.size.x / 2.0
+	var table_center_y = valid_range.position.y + valid_range.size.y / 2.0
+
 	for cell in vertices:
-		# Calculate cell center in local grid coordinates
-		var local_x = (cell.x - grid_dims.x / 2.0 + 0.5) * cell_size_meters
-		var local_z = (cell.y - grid_dims.y / 2.0 + 0.5) * cell_size_meters
+		# Calculate position relative to TABLE center (not grid center)
+		# No +0.5 offset since we now place vertices at intersections
+		var local_x = (cell.x - table_center_x) * cell_size_meters
+		var local_z = (cell.y - table_center_y) * cell_size_meters
 
 		# Apply grid rotation to get world position
 		var rotation_rad = deg_to_rad(grid_rotation_degrees)
