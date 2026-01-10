@@ -41,15 +41,25 @@ func _find_camera_controller() -> void:
 	var cameras = get_tree().get_nodes_in_group("camera_controller")
 	if cameras.size() > 0:
 		camera_controller = cameras[0]
-	else:
-		# Try to find by path
-		camera_controller = get_node_or_null("/root/Main/CameraController")
-		if not camera_controller:
-			# Search for any CameraController script
-			for node in get_tree().get_nodes_in_group(""):
-				if node.has_method("get_zoom"):
-					camera_controller = node
-					break
+		return
+
+	# Try to find by path
+	camera_controller = get_node_or_null("/root/Main/CameraController")
+	if camera_controller:
+		return
+
+	# Search all nodes for any with get_zoom method (recursive search)
+	camera_controller = _find_node_with_method(get_tree().root, "get_zoom")
+
+
+func _find_node_with_method(node: Node, method_name: String) -> Node:
+	if node.has_method(method_name):
+		return node
+	for child in node.get_children():
+		var result = _find_node_with_method(child, method_name)
+		if result:
+			return result
+	return null
 
 
 func _create_cloud_layers() -> void:

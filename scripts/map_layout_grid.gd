@@ -330,6 +330,10 @@ func _draw_deployment_zones(grid_rect: Rect2) -> void:
 	elif deploy_type == 2:  # CUSTOM - user-defined polygon zones
 		_draw_custom_zones(grid_rect, zone_color_p1, zone_color_p2, zone_border_p1, zone_border_p2)
 
+	# Draw 1" fine grid when custom zone editing is active
+	if map_layout.custom_zone_editing:
+		_draw_fine_grid(grid_rect, pixels_per_inch_x, pixels_per_inch_y)
+
 
 func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: Color, zone_border_p1: Color, zone_border_p2: Color) -> void:
 	## Draw custom deployment zones defined by user clicks
@@ -350,10 +354,11 @@ func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: C
 	)
 	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
 
-	# Helper to convert cell to screen position
+	# Helper to convert cell to screen position (at intersections, not cell centers)
 	var cell_to_screen = func(cell: Vector2i) -> Vector2:
-		var local_x = (cell.x - half_grid_cells.x + 0.5) * cell_size.x
-		var local_y = (cell.y - half_grid_cells.y + 0.5) * cell_size.y
+		# Remove +0.5 to place at grid intersections instead of cell centers
+		var local_x = (cell.x - half_grid_cells.x) * cell_size.x
+		var local_y = (cell.y - half_grid_cells.y) * cell_size.y
 		var cos_a = cos(angle_rad)
 		var sin_a = sin(angle_rad)
 		return Vector2(
@@ -426,3 +431,36 @@ func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: C
 	if p2_verts.size() > 0:
 		var first_pos = cell_to_screen.call(p2_verts[0])
 		draw_string(font, first_pos + Vector2(-40, -20), "P2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, zone_border_p2)
+
+
+func _draw_fine_grid(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch_y: float) -> void:
+	## Draw 1" fine grid for custom deployment zone editing
+	## Grid lines are drawn at intersections (table edges and every inch)
+	var line_color = Color(0.5, 0.5, 0.5, 0.4)
+	var inch_size_x = pixels_per_inch_x
+	var inch_size_y = pixels_per_inch_y
+
+	var table_size_inches = map_layout.table_size_feet * 12.0
+
+	# Draw vertical lines (every inch along X axis)
+	# Lines start at left edge (intersection), not at cell center
+	for i in range(int(table_size_inches.x) + 1):
+		var x = grid_rect.position.x + i * inch_size_x
+		if x > grid_rect.end.x + 0.5:
+			break
+		draw_line(
+			Vector2(x, grid_rect.position.y),
+			Vector2(x, grid_rect.end.y),
+			line_color, 0.5
+		)
+
+	# Draw horizontal lines (every inch along Y axis)
+	for i in range(int(table_size_inches.y) + 1):
+		var y = grid_rect.position.y + i * inch_size_y
+		if y > grid_rect.end.y + 0.5:
+			break
+		draw_line(
+			Vector2(grid_rect.position.x, y),
+			Vector2(grid_rect.end.x, y),
+			line_color, 0.5
+		)

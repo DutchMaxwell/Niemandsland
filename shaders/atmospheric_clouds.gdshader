@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode blend_mix, depth_draw_opaque, cull_disabled, diffuse_burley, specular_disabled, unshaded;
+render_mode blend_mix, depth_draw_never, cull_disabled, diffuse_burley, specular_disabled, unshaded, depth_test_disabled;
 
 // Cloud appearance
 uniform vec4 cloud_color : source_color = vec4(0.85, 0.88, 0.95, 0.3);
