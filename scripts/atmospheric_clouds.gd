@@ -4,9 +4,9 @@ extends Node3D
 ## Inspired by grand strategy games like Victoria, EU4, etc.
 
 ## Minimum zoom level where clouds start to appear
-@export var min_zoom_for_clouds: float = 3.0
+@export var min_zoom_for_clouds: float = 2.0
 ## Zoom level where clouds are fully visible
-@export var full_visibility_zoom: float = 5.0
+@export var full_visibility_zoom: float = 4.0
 ## Height offset above camera target
 @export var cloud_height: float = 2.0
 ## Cloud layer size (width/depth of each cloud plane)

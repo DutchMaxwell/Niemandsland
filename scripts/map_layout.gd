@@ -746,13 +746,16 @@ func _get_cell_at_screen_pos(screen_pos: Vector2) -> Vector2i:
 
 
 func _get_mirrored_cell(cell: Vector2i) -> Vector2i:
-	## Get the point-symmetric (180° rotated) cell position relative to TABLE center
+	## Get the point-symmetric (180° rotated) position relative to TABLE center
+	## NOTE: We use intersections (not cell centers), so max = position + size (not size-1)
+	## For 24 cells, there are 25 intersections (indices 0 to 24)
 	var valid_range = _get_valid_cell_range()
 	var table_min_x = valid_range.position.x
 	var table_min_y = valid_range.position.y
-	var table_max_x = valid_range.position.x + valid_range.size.x - 1
-	var table_max_y = valid_range.position.y + valid_range.size.y - 1
-	# Mirror: cell at min maps to max, cell at max maps to min
+	# For intersections: max index = position + size (one more than cell count)
+	var table_max_x = valid_range.position.x + valid_range.size.x
+	var table_max_y = valid_range.position.y + valid_range.size.y
+	# Mirror: intersection at min maps to max, intersection at max maps to min
 	return Vector2i(table_min_x + table_max_x - cell.x, table_min_y + table_max_y - cell.y)
 
 
