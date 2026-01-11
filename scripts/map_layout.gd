@@ -1488,15 +1488,16 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 	var center = grid_rect.position + grid_rect.size / 2.0
 	var angle_rad = deg_to_rad(grid_rotation_degrees)
 
-	# Calculate cell size in pixels
+	# Calculate pixels per inch
 	var table_size_inches = table_size_feet * 12.0
 	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
 	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
-	var cell_size = Vector2(
-		GRID_SIZE_INCHES * pixels_per_inch_x,
-		GRID_SIZE_INCHES * pixels_per_inch_y
-	)
-	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
+
+	# Use 1" intervals (same as fine grid)
+	var total_inches_x = grid_dims.x * 3  # 3 inches per cell
+	var total_inches_y = grid_dims.y * 3
+	var half_inches_x = total_inches_x / 2.0
+	var half_inches_y = total_inches_y / 2.0
 
 	var rotate_point = func(p: Vector2) -> Vector2:
 		var cos_a = cos(angle_rad)
@@ -1514,9 +1515,9 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 	var closest_cell = Vector2i.ZERO
 	var closest_screen = Vector2.ZERO
 
-	# Check vertical grid lines
-	for x in range(grid_dims.x + 1):
-		var line_x = (x - half_grid_cells.x) * cell_size.x
+	# Check vertical grid lines (at 1" intervals)
+	for i in range(total_inches_x + 1):
+		var line_x = (i - half_inches_x) * pixels_per_inch_x
 
 		var start_local = Vector2(line_x, -line_length)
 		var end_local = Vector2(line_x, line_length)
@@ -1533,12 +1534,12 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 				if dist < BOUNDARY_SNAP_RADIUS and dist < closest_dist:
 					closest_dist = dist
 					closest_screen = pt
-					# Convert screen position back to cell
-					closest_cell = _screen_to_cell(pt, grid_rect, cell_size, half_grid_cells, angle_rad, center)
+					# Convert screen position back to cell (using 1" precision)
+					closest_cell = _screen_to_cell_inches(pt, grid_rect, pixels_per_inch_x, pixels_per_inch_y, half_inches_x, half_inches_y, angle_rad, center)
 
-	# Check horizontal grid lines
-	for y in range(grid_dims.y + 1):
-		var line_y = (y - half_grid_cells.y) * cell_size.y
+	# Check horizontal grid lines (at 1" intervals)
+	for i in range(total_inches_y + 1):
+		var line_y = (i - half_inches_y) * pixels_per_inch_y
 
 		var start_local = Vector2(-line_length, line_y)
 		var end_local = Vector2(line_length, line_y)
@@ -1553,12 +1554,34 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 				if dist < BOUNDARY_SNAP_RADIUS and dist < closest_dist:
 					closest_dist = dist
 					closest_screen = pt
-					closest_cell = _screen_to_cell(pt, grid_rect, cell_size, half_grid_cells, angle_rad, center)
+					closest_cell = _screen_to_cell_inches(pt, grid_rect, pixels_per_inch_x, pixels_per_inch_y, half_inches_x, half_inches_y, angle_rad, center)
 
 	if closest_dist < INF:
 		return {found = true, cell = closest_cell, screen_pos = closest_screen}
 	else:
 		return {found = false, cell = Vector2i.ZERO, screen_pos = Vector2.ZERO}
+
+
+## Convert screen position to cell coordinates using 1" precision
+func _screen_to_cell_inches(screen_pt: Vector2, grid_rect: Rect2, ppi_x: float, ppi_y: float, half_inches_x: float, half_inches_y: float, angle_rad: float, center: Vector2) -> Vector2i:
+	# Reverse rotation
+	var rel = screen_pt - center
+	var cos_a = cos(-angle_rad)
+	var sin_a = sin(-angle_rad)
+	var local = Vector2(
+		rel.x * cos_a - rel.y * sin_a,
+		rel.x * sin_a + rel.y * cos_a
+	)
+
+	# Convert to inch coordinates, then to cell (3" per cell)
+	var inch_x = local.x / ppi_x + half_inches_x
+	var inch_y = local.y / ppi_y + half_inches_y
+
+	# Convert inches to cells (round to nearest 1/3 cell = 1")
+	var cell_x = int(round(inch_x / 3.0))
+	var cell_y = int(round(inch_y / 3.0))
+
+	return Vector2i(cell_x, cell_y)
 
 
 ## Convert screen position to cell coordinates (for snap points)
