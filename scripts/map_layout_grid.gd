@@ -469,7 +469,7 @@ func _draw_fine_grid(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch
 
 		# Clip to table bounds
 		var clipped = _clip_line_to_rect(start, end_point, grid_rect)
-		if clipped:
+		if clipped != null:
 			draw_line(clipped[0], clipped[1], line_color, 0.5)
 
 	# Draw horizontal lines (every inch along Y axis)
@@ -487,5 +487,5 @@ func _draw_fine_grid(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch
 
 		# Clip to table bounds
 		var clipped = _clip_line_to_rect(start, end_point, grid_rect)
-		if clipped:
+		if clipped != null:
 			draw_line(clipped[0], clipped[1], line_color, 0.5)
