@@ -720,8 +720,8 @@ func _get_cell_at_screen_pos(screen_pos: Vector2) -> Vector2i:
 		GRID_SIZE_INCHES * pixels_per_inch_y
 	)
 
-	# Get position relative to grid container
-	var local_pos = screen_pos - grid_container.global_position
+	# Get position relative to grid container using proper coordinate transform
+	var local_pos = grid_container.get_local_mouse_position()
 
 	# Get center of grid (grid is centered in the container)
 	var center = grid_rect.position + grid_rect.size / 2.0
@@ -1447,8 +1447,8 @@ func _find_vertex_at_screen_pos(screen_pos: Vector2) -> Dictionary:
 			local_x * sin_a + local_y * cos_a
 		) + center
 
-	# Get position relative to grid container
-	var local_pos = screen_pos - grid_container.global_position
+	# Get position relative to grid container using proper coordinate transform
+	var local_pos = grid_container.get_local_mouse_position()
 
 	var closest_dist = INF
 	var closest_player = 0
@@ -1653,8 +1653,8 @@ func _get_inch_at_screen_pos(screen_pos: Vector2) -> Vector2i:
 	var half_inches_x = grid_dims.x * 3.0 / 2.0
 	var half_inches_y = grid_dims.y * 3.0 / 2.0
 
-	# Get position relative to grid container
-	var local_pos = screen_pos - grid_container.global_position
+	# Get position relative to grid container using proper coordinate transform
+	var local_pos = grid_container.get_local_mouse_position()
 
 	# Reverse rotation
 	var pos_from_center = local_pos - center
