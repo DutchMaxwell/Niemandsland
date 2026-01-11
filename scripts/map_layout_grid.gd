@@ -216,7 +216,7 @@ func _draw() -> void:
 	draw_string(ThemeDB.fallback_font, grid_rect.position + Vector2(5, -5), size_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
 
 
-func _clip_line_to_rect(p1: Vector2, p2: Vector2, rect: Rect2):
+func _clip_line_to_rect(p1: Vector2, p2: Vector2, rect: Rect2) -> Variant:
 	## Cohen-Sutherland line clipping algorithm
 	## Returns null if line is outside, or [clipped_start, clipped_end] if inside
 	const INSIDE = 0
