@@ -53,7 +53,8 @@ enum DeploymentType {
 var custom_zone_editing := false
 var custom_zone_symmetric := true
 var custom_zone_current_player := 1  # 1 or 2
-var custom_zone_vertices_p1: Array[Vector2i] = []  # Grid cell positions
+# Vertices stored as 1" coordinates (not 3" cells) for finer precision
+var custom_zone_vertices_p1: Array[Vector2i] = []  # 1" grid positions
 var custom_zone_vertices_p2: Array[Vector2i] = []
 
 # Vertex dragging state
@@ -747,21 +748,24 @@ func _get_cell_at_screen_pos(screen_pos: Vector2) -> Vector2i:
 
 func _get_mirrored_cell(cell: Vector2i) -> Vector2i:
 	## Get the point-symmetric (180° rotated) position relative to TABLE center
-	## NOTE: We use intersections (not cell centers), so max = position + size (not size-1)
-	## For 24 cells, there are 25 intersections (indices 0 to 24)
+	## Cell coordinates are in 1" units (not 3" cells)
 	var valid_range = _get_valid_cell_range()
-	var table_min_x = valid_range.position.x
-	var table_min_y = valid_range.position.y
-	# For intersections: max index = position + size (one more than cell count)
-	var table_max_x = valid_range.position.x + valid_range.size.x
-	var table_max_y = valid_range.position.y + valid_range.size.y
-	# Mirror: intersection at min maps to max, intersection at max maps to min
+	# Convert cell bounds to inch bounds (multiply by 3)
+	var table_min_x = valid_range.position.x * 3
+	var table_min_y = valid_range.position.y * 3
+	var table_max_x = (valid_range.position.x + valid_range.size.x) * 3
+	var table_max_y = (valid_range.position.y + valid_range.size.y) * 3
+	# Mirror: inch position at min maps to max, position at max maps to min
 	return Vector2i(table_min_x + table_max_x - cell.x, table_min_y + table_max_y - cell.y)
 
 
 func _is_valid_cell(cell: Vector2i) -> bool:
+	## Check if cell (in 1" coordinates) is within grid bounds
 	var grid_dims = _calculate_grid_dimensions()
-	return cell.x >= 0 and cell.x < grid_dims.x and cell.y >= 0 and cell.y < grid_dims.y
+	# Grid dimensions are in 3" cells, multiply by 3 for 1" bounds
+	var max_x = grid_dims.x * 3
+	var max_y = grid_dims.y * 3
+	return cell.x >= 0 and cell.x <= max_x and cell.y >= 0 and cell.y <= max_y
 
 
 func _input(event: InputEvent) -> void:
@@ -1355,21 +1359,20 @@ func get_custom_zone_data() -> Dictionary:
 	}
 
 
-## Convert grid cell vertices to world coordinates (meters) for terrain_overlay
+## Convert 1" vertex coordinates to world coordinates (meters) for terrain_overlay
 func _convert_zone_cells_to_world(vertices: Array[Vector2i]) -> Array[Vector3]:
 	var result: Array[Vector3] = []
 	var valid_range = _get_valid_cell_range()
-	var cell_size_meters = GRID_SIZE_INCHES * 0.0254  # INCHES_TO_METERS
+	var inch_to_meters = 0.0254  # 1 inch = 0.0254 meters
 
-	# Calculate table center in cell coordinates
-	var table_center_x = valid_range.position.x + valid_range.size.x / 2.0
-	var table_center_y = valid_range.position.y + valid_range.size.y / 2.0
+	# Calculate table center in 1" coordinates (cell bounds * 3)
+	var table_center_x = (valid_range.position.x + valid_range.size.x / 2.0) * 3.0
+	var table_center_y = (valid_range.position.y + valid_range.size.y / 2.0) * 3.0
 
-	for cell in vertices:
-		# Calculate position relative to TABLE center (not grid center)
-		# No +0.5 offset since we now place vertices at intersections
-		var local_x = (cell.x - table_center_x) * cell_size_meters
-		var local_z = (cell.y - table_center_y) * cell_size_meters
+	for vertex in vertices:
+		# Calculate position relative to TABLE center in inches, then convert to meters
+		var local_x = (vertex.x - table_center_x) * inch_to_meters
+		var local_z = (vertex.y - table_center_y) * inch_to_meters
 
 		# Apply grid rotation to get world position
 		var rotation_rad = deg_to_rad(grid_rotation_degrees)
@@ -1389,20 +1392,19 @@ func _find_vertex_at_screen_pos(screen_pos: Vector2) -> Dictionary:
 	var center = grid_rect.position + grid_rect.size / 2.0
 	var angle_rad = deg_to_rad(grid_rotation_degrees)
 
-	# Calculate cell size
+	# Calculate pixels per inch
 	var table_size_inches = table_size_feet * 12.0
 	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
 	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
-	var cell_size = Vector2(
-		GRID_SIZE_INCHES * pixels_per_inch_x,
-		GRID_SIZE_INCHES * pixels_per_inch_y
-	)
-	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
 
-	# Helper to convert cell to screen position (at intersections)
-	var cell_to_screen = func(cell: Vector2i) -> Vector2:
-		var local_x = (cell.x - half_grid_cells.x) * cell_size.x
-		var local_y = (cell.y - half_grid_cells.y) * cell_size.y
+	# Half of total inches (for centering)
+	var half_inches_x = grid_dims.x * 3.0 / 2.0
+	var half_inches_y = grid_dims.y * 3.0 / 2.0
+
+	# Helper to convert 1" vertex coords to screen position
+	var inch_to_screen = func(inch_pos: Vector2i) -> Vector2:
+		var local_x = (inch_pos.x - half_inches_x) * pixels_per_inch_x
+		var local_y = (inch_pos.y - half_inches_y) * pixels_per_inch_y
 		var cos_a = cos(angle_rad)
 		var sin_a = sin(angle_rad)
 		return Vector2(
@@ -1419,7 +1421,7 @@ func _find_vertex_at_screen_pos(screen_pos: Vector2) -> Dictionary:
 
 	# Check Player 1 vertices
 	for i in range(custom_zone_vertices_p1.size()):
-		var vertex_screen = cell_to_screen.call(custom_zone_vertices_p1[i])
+		var vertex_screen = inch_to_screen.call(custom_zone_vertices_p1[i])
 		var dist = local_pos.distance_to(vertex_screen)
 		if dist < VERTEX_CLICK_RADIUS and dist < closest_dist:
 			closest_dist = dist
@@ -1428,7 +1430,7 @@ func _find_vertex_at_screen_pos(screen_pos: Vector2) -> Dictionary:
 
 	# Check Player 2 vertices
 	for i in range(custom_zone_vertices_p2.size()):
-		var vertex_screen = cell_to_screen.call(custom_zone_vertices_p2[i])
+		var vertex_screen = inch_to_screen.call(custom_zone_vertices_p2[i])
 		var dist = local_pos.distance_to(vertex_screen)
 		if dist < VERTEX_CLICK_RADIUS and dist < closest_dist:
 			closest_dist = dist
@@ -1443,8 +1445,8 @@ func _move_vertex_to_screen_pos(screen_pos: Vector2) -> void:
 	if not _dragging_vertex or _dragging_player == 0 or _dragging_index < 0:
 		return
 
-	# Convert screen position to cell
-	var new_cell = _get_cell_at_screen_pos(screen_pos)
+	# Convert screen position to 1" coordinates
+	var new_cell = _get_inch_at_screen_pos(screen_pos)
 
 	# Only update if cell is valid
 	if not _is_valid_cell(new_cell):
@@ -1562,7 +1564,7 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 		return {found = false, cell = Vector2i.ZERO, screen_pos = Vector2.ZERO}
 
 
-## Convert screen position to cell coordinates using 1" precision
+## Convert screen position to 1" coordinates (not 3" cells)
 func _screen_to_cell_inches(screen_pt: Vector2, grid_rect: Rect2, ppi_x: float, ppi_y: float, half_inches_x: float, half_inches_y: float, angle_rad: float, center: Vector2) -> Vector2i:
 	# Reverse rotation
 	var rel = screen_pt - center
@@ -1573,15 +1575,12 @@ func _screen_to_cell_inches(screen_pt: Vector2, grid_rect: Rect2, ppi_x: float, 
 		rel.x * sin_a + rel.y * cos_a
 	)
 
-	# Convert to inch coordinates, then to cell (3" per cell)
+	# Convert to inch coordinates (each unit = 1")
 	var inch_x = local.x / ppi_x + half_inches_x
 	var inch_y = local.y / ppi_y + half_inches_y
 
-	# Convert inches to cells (round to nearest 1/3 cell = 1")
-	var cell_x = int(round(inch_x / 3.0))
-	var cell_y = int(round(inch_y / 3.0))
-
-	return Vector2i(cell_x, cell_y)
+	# Return 1" coordinates directly (round to nearest inch)
+	return Vector2i(int(round(inch_x)), int(round(inch_y)))
 
 
 ## Convert screen position to cell coordinates (for snap points)
@@ -1600,6 +1599,41 @@ func _screen_to_cell(screen_pt: Vector2, grid_rect: Rect2, cell_size: Vector2, h
 	var cell_y = int(round(local.y / cell_size.y + half_grid_cells.y))
 
 	return Vector2i(cell_x, cell_y)
+
+
+## Convert screen position to 1" coordinates for vertex dragging
+func _get_inch_at_screen_pos(screen_pos: Vector2) -> Vector2i:
+	var grid_dims = _calculate_grid_dimensions()
+	var grid_rect = _get_grid_rect()
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(grid_rotation_degrees)
+
+	# Calculate pixels per inch
+	var table_size_inches = table_size_feet * 12.0
+	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
+	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
+
+	# Half of total inches
+	var half_inches_x = grid_dims.x * 3.0 / 2.0
+	var half_inches_y = grid_dims.y * 3.0 / 2.0
+
+	# Get position relative to grid container
+	var local_pos = screen_pos - grid_container.global_position
+
+	# Reverse rotation
+	var pos_from_center = local_pos - center
+	var cos_a = cos(-angle_rad)
+	var sin_a = sin(-angle_rad)
+	var rotated_pos = Vector2(
+		pos_from_center.x * cos_a - pos_from_center.y * sin_a,
+		pos_from_center.x * sin_a + pos_from_center.y * cos_a
+	)
+
+	# Convert to inch coordinates
+	var inch_x = int(round(rotated_pos.x / pixels_per_inch_x + half_inches_x))
+	var inch_y = int(round(rotated_pos.y / pixels_per_inch_y + half_inches_y))
+
+	return Vector2i(inch_x, inch_y)
 
 
 ## Internal line clipping (same as grid's but local to this file)
