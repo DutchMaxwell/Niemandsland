@@ -56,6 +56,12 @@ var custom_zone_current_player := 1  # 1 or 2
 var custom_zone_vertices_p1: Array[Vector2i] = []  # Grid cell positions
 var custom_zone_vertices_p2: Array[Vector2i] = []
 
+# Vertex dragging state
+var _dragging_vertex := false
+var _dragging_player := 0  # 1 or 2
+var _dragging_index := -1
+const VERTEX_CLICK_RADIUS := 10.0  # Pixels for vertex selection
+
 var table_size_feet := Vector2(6, 4)  # Default 6x4 table
 var grid_rotation_degrees := 0.0
 var grid_cells := {}  # Dictionary[Vector2i, TerrainType]
@@ -761,12 +767,46 @@ func _input(event: InputEvent) -> void:
 
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
-			is_painting = event.pressed
-			if is_painting:
+			if event.pressed:
+				# Check if clicking on an existing vertex (for dragging)
+				# Allow dragging whenever custom zones are selected (not just during editing)
+				var has_custom_zones = deployment_type == DeploymentType.CUSTOM and (
+					custom_zone_vertices_p1.size() > 0 or custom_zone_vertices_p2.size() > 0
+				)
+				if custom_zone_editing or has_custom_zones:
+					var vertex_hit = _find_vertex_at_screen_pos(event.global_position)
+					if vertex_hit.player > 0:
+						# Start dragging this vertex
+						_dragging_vertex = true
+						_dragging_player = vertex_hit.player
+						_dragging_index = vertex_hit.index
+						if _custom_zone_status_label:
+							_custom_zone_status_label.text = "Dragging P%d vertex %d..." % [
+								vertex_hit.player, vertex_hit.index + 1
+							]
+						return
+				# Not dragging a vertex, start painting
+				is_painting = true
 				_paint_at_position(event.global_position)
+			else:
+				# Mouse released
+				if _dragging_vertex:
+					_dragging_vertex = false
+					_dragging_player = 0
+					_dragging_index = -1
+					if _custom_zone_status_label:
+						_custom_zone_status_label.text = "P1: %d vertices | P2: %d vertices" % [
+							custom_zone_vertices_p1.size(), custom_zone_vertices_p2.size()
+						]
+					# Emit signal to update 3D terrain overlay
+					deployment_type_changed.emit(DeploymentType.CUSTOM)
+				is_painting = false
 
-	elif event is InputEventMouseMotion and is_painting:
-		_paint_at_position(event.global_position)
+	elif event is InputEventMouseMotion:
+		if _dragging_vertex:
+			_move_vertex_to_screen_pos(event.global_position)
+		elif is_painting:
+			_paint_at_position(event.global_position)
 
 
 func _paint_at_position(screen_pos: Vector2) -> void:
@@ -1329,3 +1369,100 @@ func _convert_zone_cells_to_world(vertices: Array[Vector2i]) -> Array[Vector3]:
 		result.append(Vector3(world_x, 0.0, world_z))
 
 	return result
+
+
+## Find vertex at screen position for dragging
+## Returns {player: int, index: int} or {player: 0} if no vertex found
+func _find_vertex_at_screen_pos(screen_pos: Vector2) -> Dictionary:
+	var grid_dims = _calculate_grid_dimensions()
+	var grid_rect = _get_grid_rect()
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(grid_rotation_degrees)
+
+	# Calculate cell size
+	var table_size_inches = table_size_feet * 12.0
+	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
+	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
+	var cell_size = Vector2(
+		GRID_SIZE_INCHES * pixels_per_inch_x,
+		GRID_SIZE_INCHES * pixels_per_inch_y
+	)
+	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
+
+	# Helper to convert cell to screen position (at intersections)
+	var cell_to_screen = func(cell: Vector2i) -> Vector2:
+		var local_x = (cell.x - half_grid_cells.x) * cell_size.x
+		var local_y = (cell.y - half_grid_cells.y) * cell_size.y
+		var cos_a = cos(angle_rad)
+		var sin_a = sin(angle_rad)
+		return Vector2(
+			local_x * cos_a - local_y * sin_a,
+			local_x * sin_a + local_y * cos_a
+		) + center
+
+	# Get position relative to grid container
+	var local_pos = screen_pos - grid_container.global_position
+
+	var closest_dist = INF
+	var closest_player = 0
+	var closest_index = -1
+
+	# Check Player 1 vertices
+	for i in range(custom_zone_vertices_p1.size()):
+		var vertex_screen = cell_to_screen.call(custom_zone_vertices_p1[i])
+		var dist = local_pos.distance_to(vertex_screen)
+		if dist < VERTEX_CLICK_RADIUS and dist < closest_dist:
+			closest_dist = dist
+			closest_player = 1
+			closest_index = i
+
+	# Check Player 2 vertices
+	for i in range(custom_zone_vertices_p2.size()):
+		var vertex_screen = cell_to_screen.call(custom_zone_vertices_p2[i])
+		var dist = local_pos.distance_to(vertex_screen)
+		if dist < VERTEX_CLICK_RADIUS and dist < closest_dist:
+			closest_dist = dist
+			closest_player = 2
+			closest_index = i
+
+	return {player = closest_player, index = closest_index}
+
+
+## Move dragged vertex to new screen position
+func _move_vertex_to_screen_pos(screen_pos: Vector2) -> void:
+	if not _dragging_vertex or _dragging_player == 0 or _dragging_index < 0:
+		return
+
+	# Convert screen position to cell
+	var new_cell = _get_cell_at_screen_pos(screen_pos)
+
+	# Only update if cell is valid
+	if not _is_valid_cell(new_cell):
+		return
+
+	if custom_zone_symmetric:
+		# In symmetric mode, moving P1 vertex updates P2 mirror, and vice versa
+		if _dragging_player == 1:
+			if _dragging_index < custom_zone_vertices_p1.size():
+				custom_zone_vertices_p1[_dragging_index] = new_cell
+				# Update mirrored vertex (P2 vertices are in reverse order)
+				var mirror_index = custom_zone_vertices_p2.size() - 1 - _dragging_index
+				if mirror_index >= 0 and mirror_index < custom_zone_vertices_p2.size():
+					custom_zone_vertices_p2[mirror_index] = _get_mirrored_cell(new_cell)
+		else:  # Player 2
+			if _dragging_index < custom_zone_vertices_p2.size():
+				custom_zone_vertices_p2[_dragging_index] = new_cell
+				# Update mirrored vertex (P1 vertices are in reverse order relative to P2)
+				var mirror_index = custom_zone_vertices_p1.size() - 1 - _dragging_index
+				if mirror_index >= 0 and mirror_index < custom_zone_vertices_p1.size():
+					custom_zone_vertices_p1[mirror_index] = _get_mirrored_cell(new_cell)
+	else:
+		# Non-symmetric mode - just update the single vertex
+		if _dragging_player == 1:
+			if _dragging_index < custom_zone_vertices_p1.size():
+				custom_zone_vertices_p1[_dragging_index] = new_cell
+		else:
+			if _dragging_index < custom_zone_vertices_p2.size():
+				custom_zone_vertices_p2[_dragging_index] = new_cell
+
+	grid_container.queue_redraw()
