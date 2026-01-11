@@ -435,32 +435,57 @@ func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: C
 
 func _draw_fine_grid(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch_y: float) -> void:
 	## Draw 1" fine grid for custom deployment zone editing
-	## Grid lines are drawn at intersections (table edges and every inch)
+	## Grid lines rotate with the main 3" grid
 	var line_color = Color(0.5, 0.5, 0.5, 0.4)
-	var inch_size_x = pixels_per_inch_x
-	var inch_size_y = pixels_per_inch_y
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
 
 	var table_size_inches = map_layout.table_size_feet * 12.0
+	var half_table_x = table_size_inches.x / 2.0
+	var half_table_y = table_size_inches.y / 2.0
+
+	# Helper function to rotate a point around center
+	var rotate_point = func(p: Vector2) -> Vector2:
+		var cos_a = cos(angle_rad)
+		var sin_a = sin(angle_rad)
+		return Vector2(
+			p.x * cos_a - p.y * sin_a,
+			p.x * sin_a + p.y * cos_a
+		) + center
 
 	# Draw vertical lines (every inch along X axis)
-	# Lines start at left edge (intersection), not at cell center
+	# Lines are centered on table, from -half to +half
 	for i in range(int(table_size_inches.x) + 1):
-		var x = grid_rect.position.x + i * inch_size_x
-		if x > grid_rect.end.x + 0.5:
-			break
-		draw_line(
-			Vector2(x, grid_rect.position.y),
-			Vector2(x, grid_rect.end.y),
-			line_color, 0.5
-		)
+		var line_x = (i - half_table_x) * pixels_per_inch_x
+
+		# Create line in local space (long enough to cover table at any rotation)
+		var line_length = grid_rect.size.length()
+		var start_local = Vector2(line_x, -line_length)
+		var end_local = Vector2(line_x, line_length)
+
+		# Rotate line
+		var start = rotate_point.call(start_local)
+		var end_point = rotate_point.call(end_local)
+
+		# Clip to table bounds
+		var clipped = _clip_line_to_rect(start, end_point, grid_rect)
+		if clipped:
+			draw_line(clipped[0], clipped[1], line_color, 0.5)
 
 	# Draw horizontal lines (every inch along Y axis)
 	for i in range(int(table_size_inches.y) + 1):
-		var y = grid_rect.position.y + i * inch_size_y
-		if y > grid_rect.end.y + 0.5:
-			break
-		draw_line(
-			Vector2(grid_rect.position.x, y),
-			Vector2(grid_rect.end.x, y),
-			line_color, 0.5
-		)
+		var line_y = (i - half_table_y) * pixels_per_inch_y
+
+		# Create line in local space
+		var line_length = grid_rect.size.length()
+		var start_local = Vector2(-line_length, line_y)
+		var end_local = Vector2(line_length, line_y)
+
+		# Rotate line
+		var start = rotate_point.call(start_local)
+		var end_point = rotate_point.call(end_local)
+
+		# Clip to table bounds
+		var clipped = _clip_line_to_rect(start, end_point, grid_rect)
+		if clipped:
+			draw_line(clipped[0], clipped[1], line_color, 0.5)
