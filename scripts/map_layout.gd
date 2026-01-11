@@ -813,13 +813,20 @@ func _input(event: InputEvent) -> void:
 
 
 func _paint_at_position(screen_pos: Vector2) -> void:
+	# Check if we're editing custom deployment zones - use snap points
+	if custom_zone_editing:
+		var snap_result = _find_nearest_boundary_snap_point(screen_pos)
+		if snap_result.found:
+			_handle_custom_zone_click(snap_result.cell)
+		else:
+			# Fallback to regular cell if no snap point nearby
+			var cell = _get_cell_at_screen_pos(screen_pos)
+			if _is_valid_cell(cell):
+				_handle_custom_zone_click(cell)
+		return
+
 	var cell = _get_cell_at_screen_pos(screen_pos)
 	if _is_valid_cell(cell):
-		# Check if we're editing custom deployment zones
-		if custom_zone_editing:
-			_handle_custom_zone_click(cell)
-			return
-
 		if selected_terrain_type == TerrainType.NONE:
 			grid_cells.erase(cell)
 			# Also erase mirrored cell if symmetry is enabled
@@ -1469,3 +1476,160 @@ func _move_vertex_to_screen_pos(screen_pos: Vector2) -> void:
 				custom_zone_vertices_p2[_dragging_index] = new_cell
 
 	grid_container.queue_redraw()
+
+
+## Find nearest boundary snap point (where grid lines intersect table edges)
+## Returns {found: bool, cell: Vector2i, screen_pos: Vector2}
+const BOUNDARY_SNAP_RADIUS := 15.0  # Pixels
+
+func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
+	var grid_dims = _calculate_grid_dimensions()
+	var grid_rect = _get_grid_rect()
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(grid_rotation_degrees)
+
+	# Calculate cell size in pixels
+	var table_size_inches = table_size_feet * 12.0
+	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
+	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
+	var cell_size = Vector2(
+		GRID_SIZE_INCHES * pixels_per_inch_x,
+		GRID_SIZE_INCHES * pixels_per_inch_y
+	)
+	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
+
+	var rotate_point = func(p: Vector2) -> Vector2:
+		var cos_a = cos(angle_rad)
+		var sin_a = sin(angle_rad)
+		return Vector2(
+			p.x * cos_a - p.y * sin_a,
+			p.x * sin_a + p.y * cos_a
+		) + center
+
+	# Get position relative to grid container
+	var local_pos = screen_pos - grid_container.global_position
+	var line_length = grid_rect.size.length()
+
+	var closest_dist = INF
+	var closest_cell = Vector2i.ZERO
+	var closest_screen = Vector2.ZERO
+
+	# Check vertical grid lines
+	for x in range(grid_dims.x + 1):
+		var line_x = (x - half_grid_cells.x) * cell_size.x
+
+		var start_local = Vector2(line_x, -line_length)
+		var end_local = Vector2(line_x, line_length)
+
+		var start = rotate_point.call(start_local)
+		var end_point = rotate_point.call(end_local)
+
+		# Get clipped endpoints (on table boundary)
+		var clipped = _clip_line_to_rect_internal(start, end_point, grid_rect)
+		if clipped != null:
+			# Check both endpoints
+			for pt in [clipped[0], clipped[1]]:
+				var dist = local_pos.distance_to(pt)
+				if dist < BOUNDARY_SNAP_RADIUS and dist < closest_dist:
+					closest_dist = dist
+					closest_screen = pt
+					# Convert screen position back to cell
+					closest_cell = _screen_to_cell(pt, grid_rect, cell_size, half_grid_cells, angle_rad, center)
+
+	# Check horizontal grid lines
+	for y in range(grid_dims.y + 1):
+		var line_y = (y - half_grid_cells.y) * cell_size.y
+
+		var start_local = Vector2(-line_length, line_y)
+		var end_local = Vector2(line_length, line_y)
+
+		var start = rotate_point.call(start_local)
+		var end_point = rotate_point.call(end_local)
+
+		var clipped = _clip_line_to_rect_internal(start, end_point, grid_rect)
+		if clipped != null:
+			for pt in [clipped[0], clipped[1]]:
+				var dist = local_pos.distance_to(pt)
+				if dist < BOUNDARY_SNAP_RADIUS and dist < closest_dist:
+					closest_dist = dist
+					closest_screen = pt
+					closest_cell = _screen_to_cell(pt, grid_rect, cell_size, half_grid_cells, angle_rad, center)
+
+	if closest_dist < INF:
+		return {found = true, cell = closest_cell, screen_pos = closest_screen}
+	else:
+		return {found = false, cell = Vector2i.ZERO, screen_pos = Vector2.ZERO}
+
+
+## Convert screen position to cell coordinates (for snap points)
+func _screen_to_cell(screen_pt: Vector2, grid_rect: Rect2, cell_size: Vector2, half_grid_cells: Vector2, angle_rad: float, center: Vector2) -> Vector2i:
+	# Reverse rotation
+	var rel = screen_pt - center
+	var cos_a = cos(-angle_rad)
+	var sin_a = sin(-angle_rad)
+	var local = Vector2(
+		rel.x * cos_a - rel.y * sin_a,
+		rel.x * sin_a + rel.y * cos_a
+	)
+
+	# Convert to cell coordinates
+	var cell_x = int(round(local.x / cell_size.x + half_grid_cells.x))
+	var cell_y = int(round(local.y / cell_size.y + half_grid_cells.y))
+
+	return Vector2i(cell_x, cell_y)
+
+
+## Internal line clipping (same as grid's but local to this file)
+func _clip_line_to_rect_internal(p1: Vector2, p2: Vector2, rect: Rect2) -> Variant:
+	const INSIDE = 0
+	const LEFT = 1
+	const RIGHT = 2
+	const BOTTOM = 4
+	const TOP = 8
+
+	var xmin = rect.position.x
+	var xmax = rect.end.x
+	var ymin = rect.position.y
+	var ymax = rect.end.y
+
+	var compute_code = func(p: Vector2) -> int:
+		var code = INSIDE
+		if p.x < xmin:
+			code |= LEFT
+		elif p.x > xmax:
+			code |= RIGHT
+		if p.y < ymin:
+			code |= TOP
+		elif p.y > ymax:
+			code |= BOTTOM
+		return code
+
+	var code1 = compute_code.call(p1)
+	var code2 = compute_code.call(p2)
+
+	while true:
+		if (code1 | code2) == 0:
+			return [p1, p2]
+		elif (code1 & code2) != 0:
+			return null
+		else:
+			var code_out = code1 if code1 != 0 else code2
+			var p: Vector2
+
+			if code_out & BOTTOM:
+				p = Vector2(p1.x + (p2.x - p1.x) * (ymax - p1.y) / (p2.y - p1.y), ymax)
+			elif code_out & TOP:
+				p = Vector2(p1.x + (p2.x - p1.x) * (ymin - p1.y) / (p2.y - p1.y), ymin)
+			elif code_out & RIGHT:
+				p = Vector2(xmax, p1.y + (p2.y - p1.y) * (xmax - p1.x) / (p2.x - p1.x))
+			elif code_out & LEFT:
+				p = Vector2(xmin, p1.y + (p2.y - p1.y) * (xmin - p1.x) / (p2.x - p1.x))
+
+			if code_out == code1:
+				p1 = p
+				code1 = compute_code.call(p1)
+			else:
+				p2 = p
+				code2 = compute_code.call(p2)
+
+	return null
