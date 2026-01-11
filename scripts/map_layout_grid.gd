@@ -337,6 +337,7 @@ func _draw_deployment_zones(grid_rect: Rect2) -> void:
 
 func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: Color, zone_border_p1: Color, zone_border_p2: Color) -> void:
 	## Draw custom deployment zones defined by user clicks
+	## Vertices are stored in 1" coordinates (not 3" cells)
 	if not map_layout:
 		return
 
@@ -344,21 +345,19 @@ func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: C
 	var center = grid_rect.position + grid_rect.size / 2.0
 	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
 
-	# Calculate cell size
+	# Calculate pixels per inch
 	var table_size_inches = map_layout.table_size_feet * 12.0
 	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
 	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
-	var cell_size = Vector2(
-		map_layout.GRID_SIZE_INCHES * pixels_per_inch_x,
-		map_layout.GRID_SIZE_INCHES * pixels_per_inch_y
-	)
-	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
 
-	# Helper to convert cell to screen position (at intersections, not cell centers)
-	var cell_to_screen = func(cell: Vector2i) -> Vector2:
-		# Remove +0.5 to place at grid intersections instead of cell centers
-		var local_x = (cell.x - half_grid_cells.x) * cell_size.x
-		var local_y = (cell.y - half_grid_cells.y) * cell_size.y
+	# Half of total inches (for centering)
+	var half_inches_x = grid_dims.x * 3.0 / 2.0
+	var half_inches_y = grid_dims.y * 3.0 / 2.0
+
+	# Helper to convert 1" coordinates to screen position
+	var inch_to_screen = func(inch_pos: Vector2i) -> Vector2:
+		var local_x = (inch_pos.x - half_inches_x) * pixels_per_inch_x
+		var local_y = (inch_pos.y - half_inches_y) * pixels_per_inch_y
 		var cos_a = cos(angle_rad)
 		var sin_a = sin(angle_rad)
 		return Vector2(
@@ -370,8 +369,8 @@ func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: C
 	var p1_verts = map_layout.custom_zone_vertices_p1
 	if p1_verts.size() >= 3:
 		var screen_verts: PackedVector2Array = []
-		for cell in p1_verts:
-			screen_verts.append(cell_to_screen.call(cell))
+		for vertex in p1_verts:
+			screen_verts.append(inch_to_screen.call(vertex))
 		draw_colored_polygon(screen_verts, zone_color_p1)
 		# Draw border
 		for i in range(screen_verts.size()):
@@ -382,8 +381,8 @@ func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: C
 	var p2_verts = map_layout.custom_zone_vertices_p2
 	if p2_verts.size() >= 3:
 		var screen_verts: PackedVector2Array = []
-		for cell in p2_verts:
-			screen_verts.append(cell_to_screen.call(cell))
+		for vertex in p2_verts:
+			screen_verts.append(inch_to_screen.call(vertex))
 		draw_colored_polygon(screen_verts, zone_color_p2)
 		# Draw border
 		for i in range(screen_verts.size()):
@@ -396,7 +395,7 @@ func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: C
 
 	# Player 1 vertices
 	for i in range(p1_verts.size()):
-		var screen_pos = cell_to_screen.call(p1_verts[i])
+		var screen_pos = inch_to_screen.call(p1_verts[i])
 		draw_circle(screen_pos, vertex_size, zone_border_p1)
 		if is_editing:
 			# Show vertex number
@@ -404,7 +403,7 @@ func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: C
 
 	# Player 2 vertices
 	for i in range(p2_verts.size()):
-		var screen_pos = cell_to_screen.call(p2_verts[i])
+		var screen_pos = inch_to_screen.call(p2_verts[i])
 		draw_circle(screen_pos, vertex_size, zone_border_p2)
 		if is_editing:
 			draw_string(ThemeDB.fallback_font, screen_pos + Vector2(8, -4), str(i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, zone_border_p2)
@@ -413,23 +412,23 @@ func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: C
 	if is_editing:
 		if p1_verts.size() >= 2:
 			for i in range(p1_verts.size() - 1):
-				var start = cell_to_screen.call(p1_verts[i])
-				var end = cell_to_screen.call(p1_verts[i + 1])
-				draw_line(start, end, zone_border_p1, 1.5)
+				var start = inch_to_screen.call(p1_verts[i])
+				var end_pt = inch_to_screen.call(p1_verts[i + 1])
+				draw_line(start, end_pt, zone_border_p1, 1.5)
 
 		if p2_verts.size() >= 2:
 			for i in range(p2_verts.size() - 1):
-				var start = cell_to_screen.call(p2_verts[i])
-				var end = cell_to_screen.call(p2_verts[i + 1])
-				draw_line(start, end, zone_border_p2, 1.5)
+				var start = inch_to_screen.call(p2_verts[i])
+				var end_pt = inch_to_screen.call(p2_verts[i + 1])
+				draw_line(start, end_pt, zone_border_p2, 1.5)
 
 	# Draw labels
 	var font = ThemeDB.fallback_font
 	if p1_verts.size() > 0:
-		var first_pos = cell_to_screen.call(p1_verts[0])
+		var first_pos = inch_to_screen.call(p1_verts[0])
 		draw_string(font, first_pos + Vector2(-40, -20), "P1", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, zone_border_p1)
 	if p2_verts.size() > 0:
-		var first_pos = cell_to_screen.call(p2_verts[0])
+		var first_pos = inch_to_screen.call(p2_verts[0])
 		draw_string(font, first_pos + Vector2(-40, -20), "P2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, zone_border_p2)
 
 
