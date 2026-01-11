@@ -490,18 +490,16 @@ func _draw_fine_grid(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch
 
 
 func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch_y: float) -> void:
-	## Draw clickable snap points where grid lines intersect with table boundary
+	## Draw clickable snap points where 1" grid lines intersect with table boundary
 	var center = grid_rect.position + grid_rect.size / 2.0
 	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
 
+	# Use 1" intervals (same as fine grid)
 	var grid_dims = map_layout._calculate_grid_dimensions()
-	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
-
-	# Cell size in pixels (3" per cell)
-	var cell_size = Vector2(
-		map_layout.GRID_SIZE_INCHES * pixels_per_inch_x,
-		map_layout.GRID_SIZE_INCHES * pixels_per_inch_y
-	)
+	var total_inches_x = grid_dims.x * 3  # 3 inches per cell
+	var total_inches_y = grid_dims.y * 3
+	var half_inches_x = total_inches_x / 2.0
+	var half_inches_y = total_inches_y / 2.0
 
 	var rotate_point = func(p: Vector2) -> Vector2:
 		var cos_a = cos(angle_rad)
@@ -512,15 +510,13 @@ func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixe
 		) + center
 
 	var snap_color = Color(1.0, 1.0, 0.3, 0.8)  # Yellow for visibility
-	var snap_size = 4.0
+	var snap_size = 3.0
 
-	# Find all grid line intersections with the 4 table edges
-	# For each grid line, check where it intersects each edge
 	var line_length = grid_rect.size.length()
 
-	# Check vertical grid lines (at 3" intervals like main grid)
-	for x in range(grid_dims.x + 1):
-		var line_x = (x - half_grid_cells.x) * cell_size.x
+	# Check vertical grid lines (at 1" intervals)
+	for i in range(total_inches_x + 1):
+		var line_x = (i - half_inches_x) * pixels_per_inch_x
 
 		var start_local = Vector2(line_x, -line_length)
 		var end_local = Vector2(line_x, line_length)
@@ -535,9 +531,9 @@ func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixe
 			draw_circle(clipped[0], snap_size, snap_color)
 			draw_circle(clipped[1], snap_size, snap_color)
 
-	# Check horizontal grid lines
-	for y in range(grid_dims.y + 1):
-		var line_y = (y - half_grid_cells.y) * cell_size.y
+	# Check horizontal grid lines (at 1" intervals)
+	for i in range(total_inches_y + 1):
+		var line_y = (i - half_inches_y) * pixels_per_inch_y
 
 		var start_local = Vector2(-line_length, line_y)
 		var end_local = Vector2(line_length, line_y)
