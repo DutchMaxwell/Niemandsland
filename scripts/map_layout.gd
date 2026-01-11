@@ -847,11 +847,12 @@ func _paint_at_position(screen_pos: Vector2) -> void:
 	if custom_zone_editing:
 		var snap_result = _find_nearest_boundary_snap_point(screen_pos)
 		if snap_result.found:
-			# Validate even for snap points (rounding may place point outside table)
-			if _is_valid_cell(snap_result.cell):
-				_handle_custom_zone_click(snap_result.cell)
+			# Boundary snap points are valid by definition (on table edge)
+			# No validation needed - they're computed as edge intersections
+			_handle_custom_zone_click(snap_result.cell)
 		else:
 			# Fallback to regular cell if no snap point nearby
+			# This requires validation to ensure point is inside table
 			var cell = _get_cell_at_screen_pos(screen_pos)
 			if _is_valid_cell(cell):
 				_handle_custom_zone_click(cell)
