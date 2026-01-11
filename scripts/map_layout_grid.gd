@@ -435,14 +435,17 @@ func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: C
 
 func _draw_fine_grid(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch_y: float) -> void:
 	## Draw 1" fine grid for custom deployment zone editing
-	## Grid lines rotate with the main 3" grid
-	var line_color = Color(0.5, 0.5, 0.5, 0.4)
+	## Grid lines rotate with the main 3" grid, covering the full diagonal
+	var line_color = Color(0.5, 0.5, 0.5, 0.3)
 	var center = grid_rect.position + grid_rect.size / 2.0
 	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
 
-	var table_size_inches = map_layout.table_size_feet * 12.0
-	var half_table_x = table_size_inches.x / 2.0
-	var half_table_y = table_size_inches.y / 2.0
+	# Use grid dimensions (covers diagonal) - each 3" cell has 3 subdivisions of 1"
+	var grid_dims = map_layout._calculate_grid_dimensions()
+	var total_inches_x = grid_dims.x * 3  # 3 inches per cell
+	var total_inches_y = grid_dims.y * 3
+	var half_inches_x = total_inches_x / 2.0
+	var half_inches_y = total_inches_y / 2.0
 
 	# Helper function to rotate a point around center
 	var rotate_point = func(p: Vector2) -> Vector2:
@@ -453,39 +456,96 @@ func _draw_fine_grid(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch
 			p.x * sin_a + p.y * cos_a
 		) + center
 
-	# Draw vertical lines (every inch along X axis)
-	# Lines are centered on table, from -half to +half
-	for i in range(int(table_size_inches.x) + 1):
-		var line_x = (i - half_table_x) * pixels_per_inch_x
+	# Draw vertical lines (every inch)
+	var line_length = grid_rect.size.length()
+	for i in range(total_inches_x + 1):
+		var line_x = (i - half_inches_x) * pixels_per_inch_x
 
-		# Create line in local space (long enough to cover table at any rotation)
-		var line_length = grid_rect.size.length()
 		var start_local = Vector2(line_x, -line_length)
 		var end_local = Vector2(line_x, line_length)
 
-		# Rotate line
 		var start = rotate_point.call(start_local)
 		var end_point = rotate_point.call(end_local)
 
-		# Clip to table bounds
 		var clipped = _clip_line_to_rect(start, end_point, grid_rect)
 		if clipped != null:
 			draw_line(clipped[0], clipped[1], line_color, 0.5)
 
-	# Draw horizontal lines (every inch along Y axis)
-	for i in range(int(table_size_inches.y) + 1):
-		var line_y = (i - half_table_y) * pixels_per_inch_y
+	# Draw horizontal lines (every inch)
+	for i in range(total_inches_y + 1):
+		var line_y = (i - half_inches_y) * pixels_per_inch_y
 
-		# Create line in local space
-		var line_length = grid_rect.size.length()
 		var start_local = Vector2(-line_length, line_y)
 		var end_local = Vector2(line_length, line_y)
 
-		# Rotate line
 		var start = rotate_point.call(start_local)
 		var end_point = rotate_point.call(end_local)
 
-		# Clip to table bounds
 		var clipped = _clip_line_to_rect(start, end_point, grid_rect)
 		if clipped != null:
 			draw_line(clipped[0], clipped[1], line_color, 0.5)
+
+	# Draw table boundary intersection points as snap targets
+	_draw_boundary_snap_points(grid_rect, pixels_per_inch_x, pixels_per_inch_y)
+
+
+func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch_y: float) -> void:
+	## Draw clickable snap points where grid lines intersect with table boundary
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
+
+	var grid_dims = map_layout._calculate_grid_dimensions()
+	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
+
+	# Cell size in pixels (3" per cell)
+	var cell_size = Vector2(
+		map_layout.GRID_SIZE_INCHES * pixels_per_inch_x,
+		map_layout.GRID_SIZE_INCHES * pixels_per_inch_y
+	)
+
+	var rotate_point = func(p: Vector2) -> Vector2:
+		var cos_a = cos(angle_rad)
+		var sin_a = sin(angle_rad)
+		return Vector2(
+			p.x * cos_a - p.y * sin_a,
+			p.x * sin_a + p.y * cos_a
+		) + center
+
+	var snap_color = Color(1.0, 1.0, 0.3, 0.8)  # Yellow for visibility
+	var snap_size = 4.0
+
+	# Find all grid line intersections with the 4 table edges
+	# For each grid line, check where it intersects each edge
+	var line_length = grid_rect.size.length()
+
+	# Check vertical grid lines (at 3" intervals like main grid)
+	for x in range(grid_dims.x + 1):
+		var line_x = (x - half_grid_cells.x) * cell_size.x
+
+		var start_local = Vector2(line_x, -line_length)
+		var end_local = Vector2(line_x, line_length)
+
+		var start = rotate_point.call(start_local)
+		var end_point = rotate_point.call(end_local)
+
+		# Get clipped line - the endpoints are on the table boundary
+		var clipped = _clip_line_to_rect(start, end_point, grid_rect)
+		if clipped != null:
+			# Draw snap points at both ends (where line meets table edge)
+			draw_circle(clipped[0], snap_size, snap_color)
+			draw_circle(clipped[1], snap_size, snap_color)
+
+	# Check horizontal grid lines
+	for y in range(grid_dims.y + 1):
+		var line_y = (y - half_grid_cells.y) * cell_size.y
+
+		var start_local = Vector2(-line_length, line_y)
+		var end_local = Vector2(line_length, line_y)
+
+		var start = rotate_point.call(start_local)
+		var end_point = rotate_point.call(end_local)
+
+		var clipped = _clip_line_to_rect(start, end_point, grid_rect)
+		if clipped != null:
+			draw_circle(clipped[0], snap_size, snap_color)
+			draw_circle(clipped[1], snap_size, snap_color)
