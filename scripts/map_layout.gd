@@ -784,10 +784,16 @@ func _inch_to_screen_pos(inch_pos: Vector2i) -> Vector2:
 
 
 func _is_valid_cell(cell: Vector2i) -> bool:
-	## Check if cell (in 1" coordinates) is within the table boundary
-	## When grid is rotated, we must check screen position, not just inch bounds
+	## Check if 3" cell is within grid bounds (for terrain painting)
+	var grid_dims = _calculate_grid_dimensions()
+	return cell.x >= 0 and cell.x < grid_dims.x and cell.y >= 0 and cell.y < grid_dims.y
+
+
+func _is_valid_inch_pos(inch_pos: Vector2i) -> bool:
+	## Check if 1" coordinate is within the table boundary (for deployment zones)
+	## When grid is rotated, we must check screen position against table bounds
 	var grid_rect = _get_grid_rect()
-	var screen_pos = _inch_to_screen_pos(cell)
+	var screen_pos = _inch_to_screen_pos(inch_pos)
 	# Add small tolerance for boundary snap points (rounding may cause slight offset)
 	var tolerance = 2.0  # pixels
 	var expanded_rect = grid_rect.grow(tolerance)
@@ -851,11 +857,11 @@ func _paint_at_position(screen_pos: Vector2) -> void:
 			# No validation needed - they're computed as edge intersections
 			_handle_custom_zone_click(snap_result.cell)
 		else:
-			# Fallback to regular cell if no snap point nearby
-			# This requires validation to ensure point is inside table
-			var cell = _get_cell_at_screen_pos(screen_pos)
-			if _is_valid_cell(cell):
-				_handle_custom_zone_click(cell)
+			# Fallback to 1" grid position if no snap point nearby
+			# Use _get_inch_at_screen_pos for 1" coordinates (not 3" cells)
+			var inch_pos = _get_inch_at_screen_pos(screen_pos)
+			if _is_valid_inch_pos(inch_pos):
+				_handle_custom_zone_click(inch_pos)
 		return
 
 	var cell = _get_cell_at_screen_pos(screen_pos)
@@ -1477,8 +1483,8 @@ func _move_vertex_to_screen_pos(screen_pos: Vector2) -> void:
 	# Convert screen position to 1" coordinates
 	var new_cell = _get_inch_at_screen_pos(screen_pos)
 
-	# Only update if cell is valid
-	if not _is_valid_cell(new_cell):
+	# Only update if position is within table bounds
+	if not _is_valid_inch_pos(new_cell):
 		return
 
 	if custom_zone_symmetric:
