@@ -759,13 +759,39 @@ func _get_mirrored_cell(cell: Vector2i) -> Vector2i:
 	return Vector2i(table_min_x + table_max_x - cell.x, table_min_y + table_max_y - cell.y)
 
 
-func _is_valid_cell(cell: Vector2i) -> bool:
-	## Check if cell (in 1" coordinates) is within grid bounds
+func _inch_to_screen_pos(inch_pos: Vector2i) -> Vector2:
+	## Convert 1" coordinates to screen position (relative to grid_container)
 	var grid_dims = _calculate_grid_dimensions()
-	# Grid dimensions are in 3" cells, multiply by 3 for 1" bounds
-	var max_x = grid_dims.x * 3
-	var max_y = grid_dims.y * 3
-	return cell.x >= 0 and cell.x <= max_x and cell.y >= 0 and cell.y <= max_y
+	var grid_rect = _get_grid_rect()
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(grid_rotation_degrees)
+
+	var table_size_inches = table_size_feet * 12.0
+	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
+	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
+
+	var half_inches_x = grid_dims.x * 3.0 / 2.0
+	var half_inches_y = grid_dims.y * 3.0 / 2.0
+
+	var local_x = (inch_pos.x - half_inches_x) * pixels_per_inch_x
+	var local_y = (inch_pos.y - half_inches_y) * pixels_per_inch_y
+	var cos_a = cos(angle_rad)
+	var sin_a = sin(angle_rad)
+	return Vector2(
+		local_x * cos_a - local_y * sin_a,
+		local_x * sin_a + local_y * cos_a
+	) + center
+
+
+func _is_valid_cell(cell: Vector2i) -> bool:
+	## Check if cell (in 1" coordinates) is within the table boundary
+	## When grid is rotated, we must check screen position, not just inch bounds
+	var grid_rect = _get_grid_rect()
+	var screen_pos = _inch_to_screen_pos(cell)
+	# Add small tolerance for boundary snap points (rounding may cause slight offset)
+	var tolerance = 2.0  # pixels
+	var expanded_rect = grid_rect.grow(tolerance)
+	return expanded_rect.has_point(screen_pos)
 
 
 func _input(event: InputEvent) -> void:
@@ -821,7 +847,9 @@ func _paint_at_position(screen_pos: Vector2) -> void:
 	if custom_zone_editing:
 		var snap_result = _find_nearest_boundary_snap_point(screen_pos)
 		if snap_result.found:
-			_handle_custom_zone_click(snap_result.cell)
+			# Validate even for snap points (rounding may place point outside table)
+			if _is_valid_cell(snap_result.cell):
+				_handle_custom_zone_click(snap_result.cell)
 		else:
 			# Fallback to regular cell if no snap point nearby
 			var cell = _get_cell_at_screen_pos(screen_pos)
