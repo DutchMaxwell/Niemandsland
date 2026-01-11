@@ -1544,8 +1544,9 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 			p.x * sin_a + p.y * cos_a
 		) + center
 
-	# Get position relative to grid container
-	var local_pos = screen_pos - grid_container.global_position
+	# Get position relative to grid container using proper coordinate transform
+	# This handles any parent transforms/scaling correctly
+	var local_pos = grid_container.get_local_mouse_position()
 	var line_length = grid_rect.size.length()
 
 	var closest_dist = INF
