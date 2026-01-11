@@ -544,3 +544,15 @@ func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixe
 		if clipped != null:
 			draw_circle(clipped[0], snap_size, snap_color)
 			draw_circle(clipped[1], snap_size, snap_color)
+
+	# Always draw snap points at the 4 table corners (even if no grid line intersects there)
+	var corner_color = Color(1.0, 0.8, 0.2, 0.9)  # Slightly different yellow for corners
+	var corner_size = 4.0
+	var corners = [
+		grid_rect.position,                                      # Top-left
+		grid_rect.position + Vector2(grid_rect.size.x, 0),       # Top-right
+		grid_rect.position + Vector2(0, grid_rect.size.y),       # Bottom-left
+		grid_rect.end                                            # Bottom-right
+	]
+	for corner in corners:
+		draw_circle(corner, corner_size, corner_color)

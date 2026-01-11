@@ -1594,6 +1594,20 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 					closest_screen = pt
 					closest_cell = _screen_to_cell_inches(pt, grid_rect, pixels_per_inch_x, pixels_per_inch_y, half_inches_x, half_inches_y, angle_rad, center)
 
+	# Also check the 4 table corners (even if no grid line intersects there)
+	var corners = [
+		grid_rect.position,                                      # Top-left
+		grid_rect.position + Vector2(grid_rect.size.x, 0),       # Top-right
+		grid_rect.position + Vector2(0, grid_rect.size.y),       # Bottom-left
+		grid_rect.end                                            # Bottom-right
+	]
+	for corner in corners:
+		var dist = local_pos.distance_to(corner)
+		if dist < BOUNDARY_SNAP_RADIUS and dist < closest_dist:
+			closest_dist = dist
+			closest_screen = corner
+			closest_cell = _screen_to_cell_inches(corner, grid_rect, pixels_per_inch_x, pixels_per_inch_y, half_inches_x, half_inches_y, angle_rad, center)
+
 	if closest_dist < INF:
 		return {found = true, cell = closest_cell, screen_pos = closest_screen}
 	else:
