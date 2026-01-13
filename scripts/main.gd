@@ -1805,13 +1805,14 @@ func is_radial_menu_open() -> bool:
 	return radial_menu_controller and radial_menu_controller.is_menu_open()
 
 
-## Initialize caster markers for all caster units when an army is spawned
+## Initialize caster and status markers for all units when an army is spawned
 func _on_army_spawned_init_caster_markers(army: OPRApiClient.OPRArmy, _models: Array[Node3D]) -> void:
 	if not radial_menu_controller:
 		return
 
-	# Get all game units for this army and initialize caster markers
+	# Get all game units for this army and initialize markers
 	for unit in army.units:
 		var game_unit = opr_army_manager.get_game_unit(unit)
 		if game_unit:
 			radial_menu_controller.initialize_caster_marker_for_unit(game_unit)
+			radial_menu_controller.initialize_status_markers_for_unit(game_unit)
