@@ -1,5 +1,5 @@
 # OpenTTS - Projekt Status
-**Stand:** 2026-01-06
+**Stand:** 2026-01-07
 **Version:** 0.2-alpha
 **Branch:** `main` (alle Feature-Branches gemerged)
 
@@ -53,12 +53,19 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 - ✅ **Save/Load Layouts** - Terrain-Setups speichern und laden
 - ✅ **Table Background Texture** - Standard-Untergrund für den Spieltisch
 
-### Deployment & Terrain Gameplay (NEU!)
-- ✅ **Deployment Zones im 3D-Spiel** - Front-line (12") Visualisierung
+### Deployment & Terrain Gameplay
+- ✅ **Deployment Zones im 3D-Spiel**:
+  - **Front-line (12")** - Standard OPR Free Rules Aufstellung
+  - **Custom Polygon Zones** - Benutzerdefinierte Polygon-Aufstellungszonen
+  - **1" Feines Raster** - Höhere Auflösung für Custom Zone Vertex-Platzierung
+  - **Symmetrischer Modus** - Beide Zonen punktsymmetrisch um Tischmitte
+  - **Asymmetrischer Modus** - Spieler 1 und 2 separat zeichnen
+  - **Vertex-Marker** - Nummerierte Punkte während der Bearbeitung
 - ✅ **Deployment Mode** - Zone Compliance Checking für Einheiten
 - ✅ **Terrain Hints** - Anzeige für Difficult und Dangerous Terrain
 - ✅ **LOS-Blocking Check** - Prüfung ob Terrain Sichtlinien blockiert
 - ✅ **Scout/Ambush Units Panel** - UI-Panel für Scout/Ambush Einheiten
+- ✅ **Objectives** - 40mm Marker mit abwechselnder Platzierung gemäß OPR-Regeln
 
 ### OPR Integration
 - ✅ **OPR API Client** - Army Forge API Integration
@@ -100,12 +107,12 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 
 ## 📋 In Arbeit (Milestone 2)
 
-### Deployment Zones (Teilweise implementiert)
-- ✅ **Front-line (12")** - Implementiert und visualisiert
-- [ ] **Corner Deployment** - Noch nicht implementiert
-- [ ] **Dawn Assault** - Noch nicht implementiert
-- [ ] **Pitched Battle** - Noch nicht implementiert
-- [ ] **Meeting Engagement** - Noch nicht implementiert
+### Deployment Zones (Abgeschlossen)
+- ✅ **Front-line (12")** - Standard OPR Free Rules Aufstellung
+- ✅ **Custom Polygon Zones** - Benutzerdefinierte Aufstellungszonen mit Polygon-Editor
+- ✅ **1" Grid für Custom Zones** - Feines Raster für präzise Platzierung
+- ✅ **Symmetrisch/Asymmetrisch** - Zwei Modi für Zone-Erstellung
+- ℹ️ **Hinweis**: Weitere OPR-Deployment-Typen (Ground War, Spearhead, etc.) sind hinter der OPR-Paywall. Nutzer mit dem Regelbuch können diese mit Custom Zones manuell nachbauen.
 
 ### Terrain-Gameplay Integration
 - ✅ **LOS-Blocking Check** - Funktion implementiert (is_terrain_los_blocking)
@@ -182,7 +189,7 @@ openTTS/
 │   ├── selectable_object.gd
 │   ├── map_layout.gd       # Map Layout Editor (852 Zeilen)
 │   ├── map_layout_grid.gd  # Grid Rendering (272 Zeilen)
-│   ├── terrain_overlay.gd  # 3D Overlay (150 Zeilen)
+│   ├── terrain_overlay.gd  # 3D Overlay + Custom Deployment Zones (~850 Zeilen)
 │   ├── network_manager.gd  # Mit GameUnit Sync RPCs
 │   ├── save_manager.gd     # Mit GameUnit Serialisierung
 │   ├── lighting_controller.gd
@@ -241,10 +248,10 @@ openTTS/
 ## 🚀 Nächste Schritte (Priorität)
 
 ### Kurzfristig (Diese Woche)
-1. ✅ **Deployment Zones (Front-line)** - Im 3D-Spiel visualisiert
-2. ✅ **Deployment Mode** - Zone Compliance Checking implementiert
-3. ✅ **Terrain Hints** - Anzeige für Difficult/Dangerous Terrain
-4. **Weitere Deployment Zones** - Corner, Dawn Assault, Pitched Battle, Meeting Engagement
+1. ✅ **Deployment Zones** - Front-line + Custom Polygon Zones implementiert
+2. ✅ **1" Grid für Custom Zones** - Feines Raster mit Vertex-Snapping
+3. ✅ **Symmetrisch/Asymmetrisch** - Zwei Modi für Zone-Erstellung
+4. ✅ **Objectives System** - Abwechselnde Platzierung mit 40mm Markern
 5. **Cover-System** - Gameplay-Mechanik für Würfelmodifikatoren
 
 ### Mittelfristig (Diesen Monat)
@@ -310,17 +317,17 @@ openTTS/
 ### Aktive Branches
 - `main` - Stabile Version mit allen Features
 
-### Recent Commits (2026-01-06)
+### Recent Commits (2026-01-07)
+- `2b5961b` - feat: Simplified deployment zones - Frontline only + Custom polygon zones
+- `80c1dcb` - fix: Objective placement rules and marker labels
+- `1175ea6` - fix: Critical Test 1 issues - deployment, objectives, markers
+- `b7e7dea` - feat: AAA phase 2 - Pathfinding, Deployment, Consolidation
+- `fe8f65f` - feat: AAA quality upgrade - critical combat fixes
 - `b97ff8b` - Merge: Fix Godot filesystem warning PR
 - `fe4c68c` - fix: Correct VIEW vector direction in shader
 - `f460b50` - fix: Improve shader to handle all inverted normal cases
 - `80c18c4` - fix: Add two-sided lighting shader for terrain models
 - `0af9f06` - fix: Use original OBJ normals instead of recalculating
-- `e54ad6e` - fix: Improve normal calculation and silence metadata warnings
-- `12e5b3a` - fix: Auto-flip inverted normals for terrain models
-- `5f0be30` - fix: Detect image format from magic bytes, not file extension
-- `b5f0eb9` - fix: Recalculate normals for terrain models to fix lighting
-- `d3bcdc4` - fix: Replace material-based highlight with ring overlay
 
 ---
 
@@ -332,4 +339,4 @@ MIT License - Siehe [LICENSE](./LICENSE) für Details.
 
 **Status:** ✅ Alpha-Version funktionsfähig, aktive Entwicklung
 **Contributors:** DutchMaxwell, Community
-**Letzte Aktualisierung:** 2026-01-06
+**Letzte Aktualisierung:** 2026-01-07

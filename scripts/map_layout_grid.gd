@@ -94,11 +94,17 @@ func _draw() -> void:
 
 			var corners_rotated = []
 			var all_inside = true
+			# Use slightly expanded rect for boundary check (has_point uses < not <=)
+			var epsilon = 0.5
+			var expanded_rect = Rect2(
+				grid_rect.position - Vector2(epsilon, epsilon),
+				grid_rect.size + Vector2(epsilon * 2, epsilon * 2)
+			)
 			for corner in corners_local:
 				var rotated = rotate_point.call(corner)
 				corners_rotated.append(rotated)
-				# Check if ALL corners are inside table bounds
-				if not grid_rect.has_point(rotated):
+				# Check if ALL corners are inside table bounds (with epsilon tolerance)
+				if not expanded_rect.has_point(rotated):
 					all_inside = false
 
 			# Skip if any corner is outside table
@@ -210,7 +216,7 @@ func _draw() -> void:
 	draw_string(ThemeDB.fallback_font, grid_rect.position + Vector2(5, -5), size_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
 
 
-func _clip_line_to_rect(p1: Vector2, p2: Vector2, rect: Rect2):
+func _clip_line_to_rect(p1: Vector2, p2: Vector2, rect: Rect2) -> Variant:
 	## Cohen-Sutherland line clipping algorithm
 	## Returns null if line is outside, or [clipped_start, clipped_end] if inside
 	const INSIDE = 0
@@ -284,29 +290,269 @@ func _line_intersects_rect(start: Vector2, end: Vector2, rect: Rect2) -> bool:
 
 func _draw_deployment_zones(grid_rect: Rect2) -> void:
 	## Draw deployment zones based on deployment type
+	## Uses the same enum as terrain_overlay.gd: NONE=0, FRONT_LINE=1, CUSTOM=2
 	if not map_layout:
 		return
 
 	var table_size_inches = map_layout.table_size_feet * 12.0
 	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
-	var _pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
+	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
 
-	var zone_color_p1 = Color(0.2, 0.5, 1.0, 0.2)  # Blue for player 1
-	var zone_color_p2 = Color(1.0, 0.3, 0.3, 0.2)  # Red for player 2
+	var zone_color_p1 = Color(0.2, 0.5, 1.0, 0.25)  # Blue for player 1
+	var zone_color_p2 = Color(1.0, 0.3, 0.3, 0.25)  # Red for player 2
+	var zone_border_p1 = Color(0.3, 0.6, 1.0, 0.6)
+	var zone_border_p2 = Color(1.0, 0.4, 0.4, 0.6)
 
-	match map_layout.deployment_type:
-		map_layout.DeploymentType.STANDARD_6:
-			# 6" from all edges
-			var margin = 6.0 * pixels_per_inch_x
-			# Top zone (Player 1)
-			draw_rect(Rect2(grid_rect.position, Vector2(grid_rect.size.x, margin)), zone_color_p1, true)
-			# Bottom zone (Player 2)
-			draw_rect(Rect2(grid_rect.position + Vector2(0, grid_rect.size.y - margin), Vector2(grid_rect.size.x, margin)), zone_color_p2, true)
+	# Check deployment type by value (0=NONE, 1=FRONT_LINE, 2=CUSTOM)
+	var deploy_type = map_layout.deployment_type
 
-		map_layout.DeploymentType.STANDARD_9:
-			# 9" from all edges
-			var margin = 9.0 * pixels_per_inch_x
-			# Top zone (Player 1)
-			draw_rect(Rect2(grid_rect.position, Vector2(grid_rect.size.x, margin)), zone_color_p1, true)
-			# Bottom zone (Player 2)
-			draw_rect(Rect2(grid_rect.position + Vector2(0, grid_rect.size.y - margin), Vector2(grid_rect.size.x, margin)), zone_color_p2, true)
+	if deploy_type == 1:  # FRONT_LINE - 12" from long edges
+		var margin = 12.0 * pixels_per_inch_y  # 12" deployment zone
+
+		# Player 1 zone (top/bottom depends on table orientation)
+		var p1_rect = Rect2(grid_rect.position, Vector2(grid_rect.size.x, margin))
+		draw_rect(p1_rect, zone_color_p1, true)
+		draw_rect(p1_rect, zone_border_p1, false, 2.0)
+
+		# Player 2 zone (opposite side)
+		var p2_rect = Rect2(
+			grid_rect.position + Vector2(0, grid_rect.size.y - margin),
+			Vector2(grid_rect.size.x, margin)
+		)
+		draw_rect(p2_rect, zone_color_p2, true)
+		draw_rect(p2_rect, zone_border_p2, false, 2.0)
+
+		# Draw labels
+		var font = ThemeDB.fallback_font
+		draw_string(font, p1_rect.position + Vector2(10, 20), "Player 1 (12\")", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, zone_border_p1)
+		draw_string(font, p2_rect.position + Vector2(10, 20), "Player 2 (12\")", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, zone_border_p2)
+
+	elif deploy_type == 2:  # CUSTOM - user-defined polygon zones
+		_draw_custom_zones(grid_rect, zone_color_p1, zone_color_p2, zone_border_p1, zone_border_p2)
+
+	# Draw 1" fine grid when custom zone editing is active
+	if map_layout.custom_zone_editing:
+		_draw_fine_grid(grid_rect, pixels_per_inch_x, pixels_per_inch_y)
+
+
+func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: Color, zone_border_p1: Color, zone_border_p2: Color) -> void:
+	## Draw custom deployment zones defined by user clicks
+	## Vertices are stored in 1" coordinates (not 3" cells)
+	if not map_layout:
+		return
+
+	var grid_dims = map_layout._calculate_grid_dimensions()
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
+
+	# Calculate pixels per inch
+	var table_size_inches = map_layout.table_size_feet * 12.0
+	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
+	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
+
+	# Half of total inches (for centering)
+	var half_inches_x = grid_dims.x * 3.0 / 2.0
+	var half_inches_y = grid_dims.y * 3.0 / 2.0
+
+	# Helper to convert 1" coordinates to screen position
+	var inch_to_screen = func(inch_pos: Vector2i) -> Vector2:
+		var local_x = (inch_pos.x - half_inches_x) * pixels_per_inch_x
+		var local_y = (inch_pos.y - half_inches_y) * pixels_per_inch_y
+		var cos_a = cos(angle_rad)
+		var sin_a = sin(angle_rad)
+		return Vector2(
+			local_x * cos_a - local_y * sin_a,
+			local_x * sin_a + local_y * cos_a
+		) + center
+
+	# Draw Player 1 zone
+	var p1_verts = map_layout.custom_zone_vertices_p1
+	if p1_verts.size() >= 3:
+		var screen_verts: PackedVector2Array = []
+		for vertex in p1_verts:
+			screen_verts.append(inch_to_screen.call(vertex))
+		draw_colored_polygon(screen_verts, zone_color_p1)
+		# Draw border
+		for i in range(screen_verts.size()):
+			var next_i = (i + 1) % screen_verts.size()
+			draw_line(screen_verts[i], screen_verts[next_i], zone_border_p1, 2.0)
+
+	# Draw Player 2 zone
+	var p2_verts = map_layout.custom_zone_vertices_p2
+	if p2_verts.size() >= 3:
+		var screen_verts: PackedVector2Array = []
+		for vertex in p2_verts:
+			screen_verts.append(inch_to_screen.call(vertex))
+		draw_colored_polygon(screen_verts, zone_color_p2)
+		# Draw border
+		for i in range(screen_verts.size()):
+			var next_i = (i + 1) % screen_verts.size()
+			draw_line(screen_verts[i], screen_verts[next_i], zone_border_p2, 2.0)
+
+	# Draw vertex markers (always show during editing, or if we have vertices)
+	var is_editing = map_layout.custom_zone_editing
+	var vertex_size = 6.0 if is_editing else 4.0
+
+	# Player 1 vertices
+	for i in range(p1_verts.size()):
+		var screen_pos = inch_to_screen.call(p1_verts[i])
+		draw_circle(screen_pos, vertex_size, zone_border_p1)
+		if is_editing:
+			# Show vertex number
+			draw_string(ThemeDB.fallback_font, screen_pos + Vector2(8, -4), str(i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, zone_border_p1)
+
+	# Player 2 vertices
+	for i in range(p2_verts.size()):
+		var screen_pos = inch_to_screen.call(p2_verts[i])
+		draw_circle(screen_pos, vertex_size, zone_border_p2)
+		if is_editing:
+			draw_string(ThemeDB.fallback_font, screen_pos + Vector2(8, -4), str(i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, zone_border_p2)
+
+	# Draw lines connecting vertices while editing (even if < 3 vertices)
+	if is_editing:
+		if p1_verts.size() >= 2:
+			for i in range(p1_verts.size() - 1):
+				var start = inch_to_screen.call(p1_verts[i])
+				var end_pt = inch_to_screen.call(p1_verts[i + 1])
+				draw_line(start, end_pt, zone_border_p1, 1.5)
+
+		if p2_verts.size() >= 2:
+			for i in range(p2_verts.size() - 1):
+				var start = inch_to_screen.call(p2_verts[i])
+				var end_pt = inch_to_screen.call(p2_verts[i + 1])
+				draw_line(start, end_pt, zone_border_p2, 1.5)
+
+	# Draw labels
+	var font = ThemeDB.fallback_font
+	if p1_verts.size() > 0:
+		var first_pos = inch_to_screen.call(p1_verts[0])
+		draw_string(font, first_pos + Vector2(-40, -20), "P1", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, zone_border_p1)
+	if p2_verts.size() > 0:
+		var first_pos = inch_to_screen.call(p2_verts[0])
+		draw_string(font, first_pos + Vector2(-40, -20), "P2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, zone_border_p2)
+
+
+func _draw_fine_grid(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch_y: float) -> void:
+	## Draw 1" fine grid for custom deployment zone editing
+	## Grid lines rotate with the main 3" grid, covering the full diagonal
+	var line_color = Color(0.5, 0.5, 0.5, 0.3)
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
+
+	# Use grid dimensions (covers diagonal) - each 3" cell has 3 subdivisions of 1"
+	var grid_dims = map_layout._calculate_grid_dimensions()
+	var total_inches_x = grid_dims.x * 3  # 3 inches per cell
+	var total_inches_y = grid_dims.y * 3
+	var half_inches_x = total_inches_x / 2.0
+	var half_inches_y = total_inches_y / 2.0
+
+	# Helper function to rotate a point around center
+	var rotate_point = func(p: Vector2) -> Vector2:
+		var cos_a = cos(angle_rad)
+		var sin_a = sin(angle_rad)
+		return Vector2(
+			p.x * cos_a - p.y * sin_a,
+			p.x * sin_a + p.y * cos_a
+		) + center
+
+	# Draw vertical lines (every inch)
+	var line_length = grid_rect.size.length()
+	for i in range(total_inches_x + 1):
+		var line_x = (i - half_inches_x) * pixels_per_inch_x
+
+		var start_local = Vector2(line_x, -line_length)
+		var end_local = Vector2(line_x, line_length)
+
+		var start = rotate_point.call(start_local)
+		var end_point = rotate_point.call(end_local)
+
+		var clipped = _clip_line_to_rect(start, end_point, grid_rect)
+		if clipped != null:
+			draw_line(clipped[0], clipped[1], line_color, 0.5)
+
+	# Draw horizontal lines (every inch)
+	for i in range(total_inches_y + 1):
+		var line_y = (i - half_inches_y) * pixels_per_inch_y
+
+		var start_local = Vector2(-line_length, line_y)
+		var end_local = Vector2(line_length, line_y)
+
+		var start = rotate_point.call(start_local)
+		var end_point = rotate_point.call(end_local)
+
+		var clipped = _clip_line_to_rect(start, end_point, grid_rect)
+		if clipped != null:
+			draw_line(clipped[0], clipped[1], line_color, 0.5)
+
+	# Draw table boundary intersection points as snap targets
+	_draw_boundary_snap_points(grid_rect, pixels_per_inch_x, pixels_per_inch_y)
+
+
+func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch_y: float) -> void:
+	## Draw clickable snap points where 1" grid lines intersect with table boundary
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
+
+	# Use 1" intervals (same as fine grid)
+	var grid_dims = map_layout._calculate_grid_dimensions()
+	var total_inches_x = grid_dims.x * 3  # 3 inches per cell
+	var total_inches_y = grid_dims.y * 3
+	var half_inches_x = total_inches_x / 2.0
+	var half_inches_y = total_inches_y / 2.0
+
+	var rotate_point = func(p: Vector2) -> Vector2:
+		var cos_a = cos(angle_rad)
+		var sin_a = sin(angle_rad)
+		return Vector2(
+			p.x * cos_a - p.y * sin_a,
+			p.x * sin_a + p.y * cos_a
+		) + center
+
+	var snap_color = Color(1.0, 1.0, 0.3, 0.8)  # Yellow for visibility
+	var snap_size = 3.0
+
+	var line_length = grid_rect.size.length()
+
+	# Check vertical grid lines (at 1" intervals)
+	for i in range(total_inches_x + 1):
+		var line_x = (i - half_inches_x) * pixels_per_inch_x
+
+		var start_local = Vector2(line_x, -line_length)
+		var end_local = Vector2(line_x, line_length)
+
+		var start = rotate_point.call(start_local)
+		var end_point = rotate_point.call(end_local)
+
+		# Get clipped line - the endpoints are on the table boundary
+		var clipped = _clip_line_to_rect(start, end_point, grid_rect)
+		if clipped != null:
+			# Draw snap points at both ends (where line meets table edge)
+			draw_circle(clipped[0], snap_size, snap_color)
+			draw_circle(clipped[1], snap_size, snap_color)
+
+	# Check horizontal grid lines (at 1" intervals)
+	for i in range(total_inches_y + 1):
+		var line_y = (i - half_inches_y) * pixels_per_inch_y
+
+		var start_local = Vector2(-line_length, line_y)
+		var end_local = Vector2(line_length, line_y)
+
+		var start = rotate_point.call(start_local)
+		var end_point = rotate_point.call(end_local)
+
+		var clipped = _clip_line_to_rect(start, end_point, grid_rect)
+		if clipped != null:
+			draw_circle(clipped[0], snap_size, snap_color)
+			draw_circle(clipped[1], snap_size, snap_color)
+
+	# Always draw snap points at the 4 table corners (even if no grid line intersects there)
+	var corner_color = Color(1.0, 0.8, 0.2, 0.9)  # Slightly different yellow for corners
+	var corner_size = 4.0
+	var corners = [
+		grid_rect.position,                                      # Top-left
+		grid_rect.position + Vector2(grid_rect.size.x, 0),       # Top-right
+		grid_rect.position + Vector2(0, grid_rect.size.y),       # Bottom-left
+		grid_rect.end                                            # Bottom-right
+	]
+	for corner in corners:
+		draw_circle(corner, corner_size, corner_color)

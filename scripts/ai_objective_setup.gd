@@ -3,6 +3,14 @@ extends RefCounted
 ## Handles objective placement for AI according to Solo & Co-Op rules.
 ## "Divide objective area into 6 equal squares, roll for random square,
 ## place objective in center. If not valid, roll for another square."
+## NOTE: All distances are in METERS internally.
+
+
+## Unit conversion: 1 inch = 0.0254 meters
+const INCHES_TO_METERS: float = 0.0254
+
+## Default minimum distance between objectives: 9" (in meters)
+const DEFAULT_MIN_DISTANCE: float = 9.0 * INCHES_TO_METERS  # ~0.2286m
 
 
 ## Result of objective placement
@@ -37,12 +45,12 @@ static func calculate_objective_grid(table_bounds: Rect2) -> Array[Rect2]:
 ## Places an objective for the AI.
 ## @param grid: The 6-square grid from calculate_objective_grid()
 ## @param existing_objectives: Already placed objectives (for collision check)
-## @param min_distance: Minimum distance between objectives
+## @param min_distance: Minimum distance between objectives (in METERS)
 ## @param mission_rules: Optional mission-specific placement rules
 static func place_objective(
 	grid: Array[Rect2],
 	existing_objectives: Array[Vector3],
-	min_distance: float = 9.0,
+	min_distance: float = DEFAULT_MIN_DISTANCE,
 	mission_rules: Dictionary = {}
 ) -> ObjectivePlacement:
 	var result = ObjectivePlacement.new()
@@ -181,7 +189,8 @@ static func place_all_ai_objectives(
 			result.append(placement.position)
 			existing.append(placement.position)
 		else:
-			# Fallback: place in center of random empty square
+			# Fallback: place in center of random empty square with reduced min distance
+			var reduced_min_distance = DEFAULT_MIN_DISTANCE * 0.66  # ~6" instead of 9"
 			for j in range(6):
 				var square = grid[j]
 				var center = Vector3(
@@ -192,7 +201,7 @@ static func place_all_ai_objectives(
 
 				var too_close = false
 				for obj in existing:
-					if center.distance_to(obj) < 6.0:  # Reduced distance
+					if center.distance_to(obj) < reduced_min_distance:
 						too_close = true
 						break
 
@@ -229,26 +238,71 @@ static func create_objective_markers(
 	return markers
 
 
-## Creates a default objective marker (simple cylinder with number).
+## Creates a default objective marker (40mm yellow base with black border and number).
+## Design matches OPR standard objective markers.
 static func _create_default_marker(number: int) -> Node3D:
 	var marker = Node3D.new()
 	marker.name = "Objective_%d" % number
 
-	# Add cylinder mesh
-	var mesh_instance = MeshInstance3D.new()
-	var cylinder = CylinderMesh.new()
-	cylinder.top_radius = 1.5  # 3" diameter objective
-	cylinder.bottom_radius = 1.5
-	cylinder.height = 0.2
+	# Constants for 40mm base (in meters)
+	const BASE_DIAMETER_MM: float = 40.0
+	const BASE_RADIUS: float = BASE_DIAMETER_MM * 0.001 / 2.0  # 0.02m
+	const BASE_HEIGHT: float = 0.003  # 3mm tall base
+	const BORDER_WIDTH: float = 0.002  # 2mm black border
 
-	mesh_instance.mesh = cylinder
-	marker.add_child(mesh_instance)
+	# Create black border ring (slightly larger cylinder underneath)
+	var border_mesh = MeshInstance3D.new()
+	var border_cylinder = CylinderMesh.new()
+	border_cylinder.top_radius = BASE_RADIUS + BORDER_WIDTH
+	border_cylinder.bottom_radius = BASE_RADIUS + BORDER_WIDTH
+	border_cylinder.height = BASE_HEIGHT
+	border_mesh.mesh = border_cylinder
+	border_mesh.name = "Border"
 
-	# Add label
+	# Black material for border
+	var border_material = StandardMaterial3D.new()
+	border_material.albedo_color = Color(0.1, 0.1, 0.1)  # Near-black
+	border_material.metallic = 0.0
+	border_material.roughness = 0.8
+	border_mesh.material_override = border_material
+
+	marker.add_child(border_mesh)
+
+	# Create yellow main base (on top of border)
+	var base_mesh = MeshInstance3D.new()
+	var base_cylinder = CylinderMesh.new()
+	base_cylinder.top_radius = BASE_RADIUS
+	base_cylinder.bottom_radius = BASE_RADIUS
+	base_cylinder.height = BASE_HEIGHT + 0.001  # Slightly taller to sit above border
+	base_mesh.mesh = base_cylinder
+	base_mesh.position.y = 0.0005  # Raise slightly above border
+	base_mesh.name = "Base"
+
+	# Yellow material for base
+	var base_material = StandardMaterial3D.new()
+	base_material.albedo_color = Color(0.95, 0.85, 0.2)  # Bright yellow
+	base_material.metallic = 0.1
+	base_material.roughness = 0.6
+	base_mesh.material_override = base_material
+
+	marker.add_child(base_mesh)
+
+	# Add objective number label on top of the base
 	var label = Label3D.new()
 	label.text = str(number)
-	label.position.y = 0.5
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.position.y = BASE_HEIGHT + 0.002  # Just barely above the base surface
+	label.pixel_size = 0.0004  # ~24mm text height with font_size 60
+	label.font_size = 60  # Fits nicely on 40mm base
+	label.modulate = Color(0.05, 0.05, 0.05)  # Very dark text (near-black)
+	label.outline_modulate = Color(1, 1, 1)  # White outline for contrast
+	label.outline_size = 4  # Thinner outline
+	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED  # Flat on ground
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# Rotate to face up (lie flat on the base)
+	label.rotation_degrees.x = -90
+	label.name = "Number"
+
 	marker.add_child(label)
 
 	return marker

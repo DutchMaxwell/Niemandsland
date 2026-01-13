@@ -17,12 +17,12 @@ signal menu_closed()
 ## Animation duration in seconds
 @export var animation_duration: float = 0.15
 
-## Colors
-@export var background_color: Color = Color(0.1, 0.1, 0.15, 0.95)
-@export var segment_color: Color = Color(0.2, 0.25, 0.3, 1.0)
-@export var segment_hover_color: Color = Color(0.3, 0.5, 0.8, 1.0)
+## Colors - Glassmorphism style
+@export var background_color: Color = Color(0.0, 0.0, 0.0, 0.7)
+@export var segment_color: Color = Color(1.0, 1.0, 1.0, 0.15)
+@export var segment_hover_color: Color = Color(1.0, 1.0, 1.0, 0.35)
 @export var text_color: Color = Color(1.0, 1.0, 1.0, 1.0)
-@export var disabled_color: Color = Color(0.5, 0.5, 0.5, 0.5)
+@export var disabled_color: Color = Color(1.0, 1.0, 1.0, 0.3)
 
 
 # ===== Internal State =====
@@ -82,11 +82,13 @@ func _draw() -> void:
 	var angle_step = TAU / item_count
 	var start_angle = -PI / 2 - angle_step / 2  # Start from top
 
-	# Draw background circle
+	# Draw background circle with border
+	draw_circle(_center_pos, menu_radius + 2, Color(1.0, 1.0, 1.0, 0.3))  # Border
 	draw_circle(_center_pos, menu_radius, background_color)
 
-	# Draw center (cancel zone)
-	draw_circle(_center_pos, center_radius, segment_color.darkened(0.3))
+	# Draw center (cancel zone) with glass effect
+	draw_circle(_center_pos, center_radius + 1, Color(1.0, 1.0, 1.0, 0.2))  # Border
+	draw_circle(_center_pos, center_radius, Color(0.0, 0.0, 0.0, 0.5))
 
 	# Draw segments
 	for i in range(item_count):
@@ -297,6 +299,13 @@ static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 		var wounds_label = "Wounds %d/%d" % [model.wounds_current, model.wounds_max]
 		items.append(RadialMenuItem.new("wounds", wounds_label, "❤️"))
 
+	# Show casts option for Caster units
+	if model.unit and model.unit is GameUnit:
+		var game_unit = model.unit as GameUnit
+		if game_unit.is_caster():
+			var casts_label = "Casts %d/%d" % [game_unit.casts_current, GameUnit.CASTER_POINTS_CAP]
+			items.append(RadialMenuItem.new("casts", casts_label, "✨"))
+
 	items.append(RadialMenuItem.new("select_unit", "Select All", "⬚"))
 	items.append(RadialMenuItem.new("delete_model", "Remove", "🗑️"))
 
@@ -312,6 +321,11 @@ static func create_unit_menu(game_unit: GameUnit) -> Array[RadialMenuItem]:
 	var activate_label = "Deactivate" if game_unit.is_activated else "Activate"
 	var activate_icon = "✗" if game_unit.is_activated else "✓"
 	items.append(RadialMenuItem.new("toggle_activate", activate_label, activate_icon))
+
+	# Show casts option for Caster units
+	if game_unit.is_caster():
+		var casts_label = "Casts %d/%d" % [game_unit.casts_current, GameUnit.CASTER_POINTS_CAP]
+		items.append(RadialMenuItem.new("casts", casts_label, "✨"))
 
 	items.append(RadialMenuItem.new("check_coherency", "Coherency", "📏"))
 	items.append(RadialMenuItem.new("delete_unit", "Delete", "🗑️"))

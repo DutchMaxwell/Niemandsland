@@ -311,6 +311,14 @@ func _input(event: InputEvent) -> void:
 
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
 			if mouse_event.pressed:
+				# Check if we're in custom zone editing mode
+				if terrain_overlay and terrain_overlay.is_editing_custom_zones():
+					# Add vertex at click position (snapped to 1" grid)
+					var table_pos = _get_table_position_at_screen(mouse_event.position)
+					if table_pos != Vector3.INF:
+						terrain_overlay.add_custom_zone_vertex(table_pos)
+					return  # Don't process normal click handling
+
 				if mouse_event.shift_pressed:
 					# Shift + Left-click starts measurement
 					_start_measuring(mouse_event.position)
@@ -2865,6 +2873,27 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 ## ============================================================================
 ## Arrangement Functions (TTS-style formations)
 ## ============================================================================
+
+## Get table position from screen position (for input handling)
+## @param screen_pos: Screen coordinates to project
+## @return: World position on table, or Vector3.INF if not intersecting
+func _get_table_position_at_screen(screen_pos: Vector2) -> Vector3:
+	var camera = get_viewport().get_camera_3d()
+	if not camera:
+		return Vector3.INF
+
+	var from = camera.project_ray_origin(screen_pos)
+	var dir = camera.project_ray_normal(screen_pos)
+
+	# Intersect with table plane (y=0)
+	var table_plane = Plane(Vector3.UP, 0)
+	var intersection = table_plane.intersects_ray(from, dir)
+
+	if intersection:
+		return Vector3(intersection.x, 0, intersection.z)
+
+	return Vector3.INF
+
 
 ## Get cursor position on the table from current mouse position
 func get_cursor_table_position() -> Vector3:

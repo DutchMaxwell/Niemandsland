@@ -1,0 +1,20 @@
+[gd_scene load_steps=2 format=3 uid="uid://djndgxe6uw2cn"]
+
+[sub_resource type="Curve2D" id="Curve2D_fhkex"]
+bake_interval = 36.11
+_data = {
+"points": PackedVector2Array(-11.9168, 19.6277, 11.9168, -19.6277, 121, 38, -68.4661, -71.6261, 68.4661, 71.6261, 229, 30, 47.4827, 12.6621, -47.4827, -12.6621, 162, 145, -0.163508, 18.9669, 0.163508, -18.9669, 102, 88, 0, 0, 0, 0, 121, 38)
+}
+point_count = 5
+
+[node name="Control" type="Node2D"]
+
+[node name="Path2D" type="Path2D" parent="."]
+position = Vector2(-2, -5)
+scale = Vector2(1.31, 1.31)
+curve = SubResource("Curve2D_fhkex")
+
+[node name="Line2D" type="Line2D" parent="."]
+scale = Vector2(1.62, 1.62)
+points = PackedVector2Array(76, 128, 286, 252, 432, 98, 387, 8, 167.284, -14.1975)
+closed = true
