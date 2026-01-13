@@ -38,6 +38,15 @@ Ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wie OnePageRul
 - ✅ State-Sync beim Laden
 - ✅ Getestet mit localhost
 
+### 🤖 AI-System (OPR Solo & Co-Op Rules v3.5.0)
+- ✅ **Battle Simulator** - Vollständige KI vs KI Kampfsimulation
+- ✅ **Step-by-Step Visualisierung** - Jeder Kampfschritt mit Pause/Play/Speed-Control
+- ✅ **OPR Decision Trees** - Alle 3 Entscheidungsbäume (Hybrid, Shooting, Melee)
+- ✅ **Unit-Klassifizierung** - Automatisch basierend auf Waffen-Loadout
+- ✅ **Target Priority System** - AP, Deadly, Takedown, Unstoppable Regeln
+- ✅ **Morale System** - Vollständige Flucht-/Rout-Mechanik mit Consolidation Moves
+- ✅ **Special Rules** - Ambush, Scout, Transport, Artillery, Caster, Flying, Strider
+
 ### 📦 Import/Export
 - ✅ TTS Import (Online von Steam CDN + Local Cache)
 - ✅ Custom 3D Models (glTF, STL, OBJ)
@@ -153,6 +162,7 @@ Aufstellungszonen für beide Spieler:
   - **Symmetrischer Modus**: Beide Zonen werden gleichzeitig punktsymmetrisch gezeichnet
   - **Asymmetrischer Modus**: Zuerst Spieler 1, dann Spieler 2 separat zeichnen
   - **Vertex-Marker**: Nummerierte Punkte zeigen die Polygon-Ecken
+  - **Table Corner Snap Points**: Vertices snappen an Tischecken und Kanten
 - **Hinweis**: Weitere Deployment-Typen (Ground War, Spearhead, etc.) können mit Custom Zones manuell nachgebaut werden
 
 ### Objectives
@@ -202,7 +212,11 @@ openTTS/
 │   ├── theme_manager.gd       # UI-Themes
 │   ├── tts_importer.gd        # TTS Import
 │   ├── opr_api_client.gd      # OPR API
-│   └── wgs_client.gd          # WGS Integration
+│   ├── wgs_client.gd          # WGS Integration
+│   ├── ai_manager.gd          # AI-Gegner Controller
+│   ├── ai_decision_tree.gd    # OPR Decision Trees
+│   ├── ai_target_selector.gd  # Target Priorität
+│   └── battle_simulator.gd    # KI vs KI Simulation
 ├── assets/          # Texturen, Modelle, Audio
 ├── addons/          # Godot Addons
 │   └── dice_roller/           # Würfel-System
@@ -238,6 +252,8 @@ Siehe [PLAN.md](./PLAN.md) für den vollständigen Entwicklungsplan.
 - [x] Deployment Zones im 3D-Spiel visualisiert
 - [x] Phasen-Management System (Turn-Tracker, Aktivierung)
 - [x] Wunden-Tracking pro Modell
+- [x] **AI-System (OPR Solo & Co-Op Rules v3.5.0)**
+- [x] **Battle Simulator** - Vollständige KI vs KI Kampfsimulation mit Step-by-Step Visualisierung
 - [ ] **Terrain-Gameplay Integration** (PRIORITÄT):
   - [ ] Cover-System (Ruins, Forest geben Deckung)
   - [ ] Schwieriges Gelände (Movement-Modifikatoren)
@@ -344,4 +360,4 @@ Siehe [docs/ASSETS.md](./docs/ASSETS.md) für vollständige Asset-Attributionen.
 
 **Version**: 0.2-alpha
 **Status**: Active Development
-**Letzte Aktualisierung**: 2026-01-07
+**Letzte Aktualisierung**: 2026-01-13
