@@ -306,6 +306,14 @@ static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 			var casts_label = "Casts %d/%d" % [game_unit.casts_current, GameUnit.CASTER_POINTS_CAP]
 			items.append(RadialMenuItem.new("casts", casts_label, "✨"))
 
+	# Status tokens (unit-wide)
+	if model.unit and model.unit is GameUnit:
+		var game_unit = model.unit as GameUnit
+		var fatigue_label = "Fatigued ✓" if game_unit.is_fatigued else "Fatigued"
+		var shaken_label = "Shaken ✓" if game_unit.is_shaken else "Shaken"
+		items.append(RadialMenuItem.new("toggle_fatigued", fatigue_label, "😓"))
+		items.append(RadialMenuItem.new("toggle_shaken", shaken_label, "😨"))
+
 	items.append(RadialMenuItem.new("select_unit", "Select All", "⬚"))
 	items.append(RadialMenuItem.new("delete_model", "Remove", "🗑️"))
 
@@ -326,6 +334,12 @@ static func create_unit_menu(game_unit: GameUnit) -> Array[RadialMenuItem]:
 	if game_unit.is_caster():
 		var casts_label = "Casts %d/%d" % [game_unit.casts_current, GameUnit.CASTER_POINTS_CAP]
 		items.append(RadialMenuItem.new("casts", casts_label, "✨"))
+
+	# Status tokens (unit-wide)
+	var fatigue_label = "Fatigued ✓" if game_unit.is_fatigued else "Fatigued"
+	var shaken_label = "Shaken ✓" if game_unit.is_shaken else "Shaken"
+	items.append(RadialMenuItem.new("toggle_fatigued", fatigue_label, "😓"))
+	items.append(RadialMenuItem.new("toggle_shaken", shaken_label, "😨"))
 
 	items.append(RadialMenuItem.new("check_coherency", "Coherency", "📏"))
 	items.append(RadialMenuItem.new("delete_unit", "Delete", "🗑️"))

@@ -163,6 +163,10 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_open_marker_dialog(context)
 		"toggle_activate":
 			_toggle_activation(context)
+		"toggle_fatigued":
+			_toggle_fatigued(context)
+		"toggle_shaken":
+			_toggle_shaken(context)
 		"check_coherency":
 			_check_coherency(context)
 		"roll_attack":
@@ -309,6 +313,40 @@ func _toggle_activation(context: Dictionary) -> void:
 		game_unit.activate(1)
 		_add_activation_markers(game_unit)
 		unit_activated.emit(game_unit)
+
+
+func _toggle_fatigued(context: Dictionary) -> void:
+	var game_unit = _get_game_unit_from_context(context)
+	if not game_unit:
+		return
+
+	game_unit.is_fatigued = not game_unit.is_fatigued
+	_update_fatigued_markers(game_unit)
+	print("%s is now %s" % [game_unit.get_name(), "Fatigued" if game_unit.is_fatigued else "not Fatigued"])
+
+
+func _toggle_shaken(context: Dictionary) -> void:
+	var game_unit = _get_game_unit_from_context(context)
+	if not game_unit:
+		return
+
+	game_unit.is_shaken = not game_unit.is_shaken
+	_update_shaken_markers(game_unit)
+	print("%s is now %s" % [game_unit.get_name(), "Shaken" if game_unit.is_shaken else "not Shaken"])
+
+
+## Helper to get GameUnit from context (supports both unit and model selection)
+func _get_game_unit_from_context(context: Dictionary) -> GameUnit:
+	var game_unit = context.get("game_unit") as GameUnit
+	if game_unit:
+		return game_unit
+
+	# Try to get from model
+	var model = context.get("model_instance") as ModelInstance
+	if model and model.unit and model.unit is GameUnit:
+		return model.unit as GameUnit
+
+	return null
 
 
 ## Adds visual activation markers to all models in a unit.
@@ -757,3 +795,78 @@ func _create_caster_text_arc(parent: Node3D, radius: float, height: float) -> vo
 		char_label.rotation = Vector3(-PI / 2, angle - PI / 2, 0)
 
 		parent.add_child(char_label)
+
+
+# ===== Fatigue and Shaken Token Markers =====
+
+## Updates fatigued markers for all models in a unit.
+func _update_fatigued_markers(unit: GameUnit) -> void:
+	for model in unit.models:
+		if not model.node or not is_instance_valid(model.node):
+			continue
+		_update_status_marker(model.node, "FatiguedMarker", unit.is_fatigued, Color(0.9, 0.6, 0.1), "😓")
+
+
+## Updates shaken markers for all models in a unit.
+func _update_shaken_markers(unit: GameUnit) -> void:
+	for model in unit.models:
+		if not model.node or not is_instance_valid(model.node):
+			continue
+		_update_status_marker(model.node, "ShakenMarker", unit.is_shaken, Color(0.3, 0.5, 0.9), "😨")
+
+
+## Creates or removes a status marker (token) above a model.
+func _update_status_marker(model_node: Node3D, marker_name: String, is_active: bool, color: Color, icon: String) -> void:
+	var existing_marker = model_node.get_node_or_null(marker_name)
+
+	# Remove marker if status is inactive
+	if not is_active:
+		if existing_marker:
+			existing_marker.queue_free()
+		return
+
+	# Create marker if it doesn't exist
+	if not existing_marker:
+		var marker = Node3D.new()
+		marker.name = marker_name
+		model_node.add_child(marker)
+
+		# Create disc background
+		var disc_mesh = MeshInstance3D.new()
+		disc_mesh.name = "Disc"
+		var disc_cyl = CylinderMesh.new()
+		disc_cyl.top_radius = 0.008
+		disc_cyl.bottom_radius = 0.008
+		disc_cyl.height = 0.002
+		disc_mesh.mesh = disc_cyl
+
+		var disc_mat = StandardMaterial3D.new()
+		disc_mat.albedo_color = color
+		disc_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		disc_mesh.material_override = disc_mat
+		marker.add_child(disc_mesh)
+
+		# Create icon label
+		var icon_label = Label3D.new()
+		icon_label.name = "IconLabel"
+		icon_label.text = icon
+		icon_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		icon_label.no_depth_test = true
+		icon_label.font_size = 48
+		icon_label.pixel_size = 0.0003
+		icon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		icon_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		icon_label.position = Vector3(0, 0.003, 0)
+		marker.add_child(icon_label)
+
+		# Position marker above the model (offset based on marker type)
+		var z_offset = 0.012 if marker_name == "FatiguedMarker" else -0.012
+		marker.position = Vector3(0, 0.05, z_offset)
+
+
+## Public method to initialize status markers for a unit after import.
+func initialize_status_markers_for_unit(game_unit: GameUnit) -> void:
+	if game_unit.is_fatigued:
+		_update_fatigued_markers(game_unit)
+	if game_unit.is_shaken:
+		_update_shaken_markers(game_unit)
