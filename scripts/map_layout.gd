@@ -40,14 +40,28 @@ const TERRAIN_DESCRIPTIONS := {
 const GRID_SIZE_INCHES := 3.0
 const INCHES_TO_METERS := 0.0254
 
-# Deployment zone types
+# Deployment zone types (must match terrain_overlay.gd)
+# NOTE: Only FRONT_LINE is from OPR free rules.
+# Other deployment types are behind OPR's paywall.
 enum DeploymentType {
-	NONE,
-	STANDARD_6,   # 6" from edges
-	STANDARD_9,   # 9" from edges
-	DIAGONAL,     # Corners
-	HAMMER_ANVIL  # Short edges
+	NONE = 0,
+	FRONT_LINE = 1,  # 12" from long edges (OPR free rule)
+	CUSTOM = 2       # Custom polygon zones defined by user
 }
+
+# Custom zone editing state
+var custom_zone_editing := false
+var custom_zone_symmetric := true
+var custom_zone_current_player := 1  # 1 or 2
+# Vertices stored as 1" coordinates (not 3" cells) for finer precision
+var custom_zone_vertices_p1: Array[Vector2i] = []  # 1" grid positions
+var custom_zone_vertices_p2: Array[Vector2i] = []
+
+# Vertex dragging state
+var _dragging_vertex := false
+var _dragging_player := 0  # 1 or 2
+var _dragging_index := -1
+const VERTEX_CLICK_RADIUS := 10.0  # Pixels for vertex selection
 
 var table_size_feet := Vector2(6, 4)  # Default 6x4 table
 var grid_rotation_degrees := 0.0
@@ -57,8 +71,11 @@ var is_painting := false
 var point_symmetry_enabled := false  # Mirror placement across center
 
 # Deployment zones
-var deployment_type := DeploymentType.STANDARD_6
+var deployment_type := DeploymentType.NONE
 var show_deployment_zones := false
+
+# Signal to notify terrain_overlay of deployment changes
+signal deployment_type_changed(type: int)
 
 @onready var grid_container: Control = %GridContainer
 @onready var rotation_slider: HSlider = %RotationSlider
@@ -73,6 +90,7 @@ var show_deployment_zones := false
 @onready var symmetry_check: CheckBox = %SymmetryCheck
 @onready var autogen_button: Button = %AutoGenButton
 @onready var deployment_check: CheckBox = %DeploymentCheck
+@onready var deployment_type_option: OptionButton = %DeploymentTypeOption
 @onready var save_file_dialog: FileDialog = %SaveFileDialog
 @onready var load_file_dialog: FileDialog = %LoadFileDialog
 
@@ -97,9 +115,229 @@ func _ready() -> void:
 	if load_file_dialog:
 		load_file_dialog.file_selected.connect(_on_load_file_selected)
 
+	# Setup deployment zone type selection
+	_setup_deployment_type_option()
+
 	_setup_terrain_buttons()
 	_update_stats()
 	_update_recommendations()
+
+
+## Setup the deployment zone type option button
+func _setup_deployment_type_option() -> void:
+	if not deployment_type_option:
+		return
+
+	# Clear existing items
+	deployment_type_option.clear()
+
+	# Add deployment zone types (matching terrain_overlay.gd DeploymentType enum)
+	deployment_type_option.add_item("None", 0)
+	deployment_type_option.add_item("Front Line (12\")", 1)  # Standard OPR free rule
+	deployment_type_option.add_item("Custom Zones", 2)  # User-defined polygon zones
+
+	# Select current type
+	deployment_type_option.selected = deployment_type
+
+	# Connect signal
+	deployment_type_option.item_selected.connect(_on_deployment_type_selected)
+
+	# Setup custom zone UI (initially hidden)
+	_setup_custom_zone_ui()
+
+
+## Handle deployment zone type selection
+func _on_deployment_type_selected(index: int) -> void:
+	deployment_type = index
+	deployment_type_changed.emit(index)
+
+	# Auto-show deployment zones when a type is selected
+	if index > 0:
+		show_deployment_zones = true
+		if deployment_check:
+			deployment_check.button_pressed = true
+	else:
+		show_deployment_zones = false
+		if deployment_check:
+			deployment_check.button_pressed = false
+
+	# Show/hide custom zone UI
+	_update_custom_zone_ui_visibility()
+
+	grid_container.queue_redraw()
+	print("Map Tool: Deployment type set to %d" % index)
+
+
+# ============================================================================
+# Custom Deployment Zone Editing
+# ============================================================================
+
+var _custom_zone_panel: VBoxContainer = null
+var _custom_zone_symmetric_check: CheckBox = null
+var _custom_zone_start_btn: Button = null
+var _custom_zone_confirm_btn: Button = null
+var _custom_zone_cancel_btn: Button = null
+var _custom_zone_clear_btn: Button = null
+var _custom_zone_status_label: Label = null
+
+
+## Setup custom zone editing UI
+func _setup_custom_zone_ui() -> void:
+	# Find the LeftPanel to add custom zone controls
+	var left_panel = deployment_type_option.get_parent()
+	if not left_panel:
+		return
+
+	# Create custom zone panel (after DeploymentCheck)
+	_custom_zone_panel = VBoxContainer.new()
+	_custom_zone_panel.name = "CustomZonePanel"
+	_custom_zone_panel.visible = false
+
+	# Find DeploymentCheck and insert after it
+	var deploy_check_idx = deployment_check.get_index()
+	left_panel.add_child(_custom_zone_panel)
+	left_panel.move_child(_custom_zone_panel, deploy_check_idx + 1)
+
+	# Symmetric mode checkbox
+	_custom_zone_symmetric_check = CheckBox.new()
+	_custom_zone_symmetric_check.text = "Symmetric (point-mirrored)"
+	_custom_zone_symmetric_check.button_pressed = true
+	_custom_zone_symmetric_check.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
+	_custom_zone_symmetric_check.toggled.connect(func(v): custom_zone_symmetric = v)
+	_custom_zone_panel.add_child(_custom_zone_symmetric_check)
+
+	# Status label
+	_custom_zone_status_label = Label.new()
+	_custom_zone_status_label.text = "Click grid to add zone vertices"
+	_custom_zone_status_label.add_theme_font_size_override("font_size", 12)
+	_custom_zone_status_label.add_theme_color_override("font_color", Color(0.7, 0.73, 0.8, 1.0))
+	_custom_zone_panel.add_child(_custom_zone_status_label)
+
+	# Button container
+	var btn_row = HBoxContainer.new()
+	btn_row.add_theme_constant_override("separation", 8)
+	_custom_zone_panel.add_child(btn_row)
+
+	# Start button
+	_custom_zone_start_btn = Button.new()
+	_custom_zone_start_btn.text = "Start Drawing"
+	_custom_zone_start_btn.add_theme_color_override("font_color", Color(0.3, 0.85, 0.55, 1.0))
+	_custom_zone_start_btn.pressed.connect(_on_custom_zone_start)
+	btn_row.add_child(_custom_zone_start_btn)
+
+	# Confirm button
+	_custom_zone_confirm_btn = Button.new()
+	_custom_zone_confirm_btn.text = "Confirm"
+	_custom_zone_confirm_btn.disabled = true
+	_custom_zone_confirm_btn.add_theme_color_override("font_color", Color(0.35, 0.68, 1.0, 1.0))
+	_custom_zone_confirm_btn.pressed.connect(_on_custom_zone_confirm)
+	btn_row.add_child(_custom_zone_confirm_btn)
+
+	# Clear button
+	_custom_zone_clear_btn = Button.new()
+	_custom_zone_clear_btn.text = "Clear"
+	_custom_zone_clear_btn.add_theme_color_override("font_color", Color(1.0, 0.75, 0.35, 1.0))
+	_custom_zone_clear_btn.pressed.connect(_on_custom_zone_clear)
+	btn_row.add_child(_custom_zone_clear_btn)
+
+
+## Update visibility of custom zone UI based on deployment type
+func _update_custom_zone_ui_visibility() -> void:
+	if _custom_zone_panel:
+		_custom_zone_panel.visible = (deployment_type == DeploymentType.CUSTOM)
+
+
+## Start custom zone drawing
+func _on_custom_zone_start() -> void:
+	custom_zone_editing = true
+	custom_zone_current_player = 1
+
+	# Clear previous vertices if starting fresh
+	if custom_zone_symmetric:
+		custom_zone_vertices_p1.clear()
+		custom_zone_vertices_p2.clear()
+		_custom_zone_status_label.text = "Drawing zones (symmetric)..."
+	else:
+		custom_zone_vertices_p1.clear()
+		_custom_zone_status_label.text = "Drawing Player 1 zone..."
+
+	_custom_zone_start_btn.disabled = true
+	_custom_zone_symmetric_check.disabled = true
+	_custom_zone_confirm_btn.disabled = false
+
+	grid_container.queue_redraw()
+
+
+## Confirm current zone and move to next (or finish)
+func _on_custom_zone_confirm() -> void:
+	if custom_zone_symmetric:
+		# Symmetric mode - both zones done at once
+		custom_zone_editing = false
+		_custom_zone_status_label.text = "Custom zones defined!"
+		_finish_custom_zone_editing()
+	else:
+		# Asymmetric mode
+		if custom_zone_current_player == 1:
+			# Move to player 2
+			custom_zone_current_player = 2
+			_custom_zone_status_label.text = "Drawing Player 2 zone..."
+		else:
+			# Done with both
+			custom_zone_editing = false
+			_custom_zone_status_label.text = "Custom zones defined!"
+			_finish_custom_zone_editing()
+
+	grid_container.queue_redraw()
+
+
+## Finish custom zone editing
+func _finish_custom_zone_editing() -> void:
+	_custom_zone_start_btn.disabled = false
+	_custom_zone_symmetric_check.disabled = false
+	_custom_zone_confirm_btn.disabled = true
+
+	# Emit signal to update terrain_overlay with custom zones
+	deployment_type_changed.emit(DeploymentType.CUSTOM)
+
+
+## Clear all custom zone vertices
+func _on_custom_zone_clear() -> void:
+	custom_zone_vertices_p1.clear()
+	custom_zone_vertices_p2.clear()
+	custom_zone_editing = false
+	custom_zone_current_player = 1
+	_custom_zone_status_label.text = "Click grid to add zone vertices"
+	_custom_zone_start_btn.disabled = false
+	_custom_zone_symmetric_check.disabled = false
+	_custom_zone_confirm_btn.disabled = true
+	grid_container.queue_redraw()
+
+
+## Handle click during custom zone editing
+func _handle_custom_zone_click(cell: Vector2i) -> void:
+	if not custom_zone_editing:
+		return
+
+	if custom_zone_symmetric:
+		# Add to player 1 vertices, mirrored vertex added automatically
+		custom_zone_vertices_p1.append(cell)
+		var mirrored = _get_mirrored_cell(cell)
+		# Insert at beginning to reverse winding order for 180° symmetry
+		# This ensures the mirrored polygon has correct orientation
+		custom_zone_vertices_p2.insert(0, mirrored)
+		_custom_zone_status_label.text = "P1: %d vertices | P2: %d vertices" % [
+			custom_zone_vertices_p1.size(), custom_zone_vertices_p2.size()
+		]
+	else:
+		# Add to current player's vertices
+		if custom_zone_current_player == 1:
+			custom_zone_vertices_p1.append(cell)
+			_custom_zone_status_label.text = "Player 1: %d vertices" % custom_zone_vertices_p1.size()
+		else:
+			custom_zone_vertices_p2.append(cell)
+			_custom_zone_status_label.text = "Player 2: %d vertices" % custom_zone_vertices_p2.size()
+
+	grid_container.queue_redraw()
 
 
 func _setup_terrain_buttons() -> void:
@@ -109,23 +347,47 @@ func _setup_terrain_buttons() -> void:
 	for type in [TerrainType.RUINS, TerrainType.FOREST, TerrainType.CONTAINER, TerrainType.DANGEROUS, TerrainType.NONE]:
 		var btn = Button.new()
 		btn.text = TERRAIN_NAMES[type]
-		btn.custom_minimum_size = Vector2(100, 40)
+		btn.custom_minimum_size = Vector2(0, 44)
 		btn.toggle_mode = true
 		btn.button_pressed = (type == selected_terrain_type)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-		# Color the button
+		# Glassmorphism style - semi-transparent with terrain color tint
+		var terrain_color = TERRAIN_COLORS[type]
+
+		# Normal state - glass panel with terrain color
 		var style = StyleBoxFlat.new()
-		style.bg_color = TERRAIN_COLORS[type]
-		style.set_corner_radius_all(4)
+		style.bg_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.25)
+		style.set_corner_radius_all(8)
+		style.border_width_left = 1
+		style.border_width_top = 1
+		style.border_width_right = 1
+		style.border_width_bottom = 1
+		style.border_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.4)
+		style.content_margin_left = 12
+		style.content_margin_right = 12
 		btn.add_theme_stylebox_override("normal", style)
 
+		# Hover state - brighter
+		var hover_style = style.duplicate()
+		hover_style.bg_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.35)
+		hover_style.border_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.6)
+		btn.add_theme_stylebox_override("hover", hover_style)
+
+		# Pressed/selected state - solid with glow border
 		var pressed_style = style.duplicate()
-		pressed_style.border_width_bottom = 3
-		pressed_style.border_width_top = 3
-		pressed_style.border_width_left = 3
-		pressed_style.border_width_right = 3
-		pressed_style.border_color = Color.WHITE
+		pressed_style.bg_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.5)
+		pressed_style.border_width_left = 2
+		pressed_style.border_width_top = 2
+		pressed_style.border_width_right = 2
+		pressed_style.border_width_bottom = 2
+		pressed_style.border_color = Color(1.0, 1.0, 1.0, 0.8)
 		btn.add_theme_stylebox_override("pressed", pressed_style)
+
+		# Text color
+		btn.add_theme_color_override("font_color", Color(0.95, 0.97, 1.0, 1.0))
+		btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0, 1.0))
+		btn.add_theme_color_override("font_pressed_color", Color(1.0, 1.0, 1.0, 1.0))
 
 		btn.pressed.connect(_on_terrain_button_pressed.bind(type, btn))
 		terrain_buttons.add_child(btn)
@@ -419,12 +681,12 @@ Tip: Connected cells = 1 piece""" % [
 		check_mark if extended.symmetry_ok else cross_mark, extended.symmetry_score
 	]
 
-	# Color code the recommendations
+	# Color code the recommendations - Glassmorphism accent colors
 	var all_ok = pieces_ok and coverage_ok and blocking_ok and cover_ok and difficult_ok and dangerous_ok and extended.max_gap_ok and extended.symmetry_ok
 	if all_ok:
-		recommendations_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
+		recommendations_label.add_theme_color_override("font_color", Color(0.3, 0.85, 0.55))  # Accent green
 	else:
-		recommendations_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))
+		recommendations_label.add_theme_color_override("font_color", Color(1.0, 0.75, 0.35))  # Accent amber
 
 
 func _get_grid_rect() -> Rect2:
@@ -448,42 +710,94 @@ func _get_cell_at_screen_pos(screen_pos: Vector2) -> Vector2i:
 	var grid_dims = _calculate_grid_dimensions()
 	var grid_rect = _get_grid_rect()
 
-	# Calculate cell size in pixels
-	var cell_size = Vector2(grid_rect.size.x / grid_dims.x, grid_rect.size.y / grid_dims.y)
-
-	# Get position relative to grid container
-	var local_pos = screen_pos - grid_container.global_position
-
-	# Get center of grid
-	var center = grid_rect.position + grid_rect.size / 2.0
-
-	# Apply inverse rotation around center to get position in grid coordinate system
-	var rotated_pos = local_pos - center
-	var angle_rad = deg_to_rad(-grid_rotation_degrees)
-	rotated_pos = Vector2(
-		rotated_pos.x * cos(angle_rad) - rotated_pos.y * sin(angle_rad),
-		rotated_pos.x * sin(angle_rad) + rotated_pos.y * cos(angle_rad)
+	# Calculate cell size using same method as grid drawing
+	# (pixels per inch * 3" grid size)
+	var table_size_inches = table_size_feet * 12.0
+	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
+	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
+	var cell_size = Vector2(
+		GRID_SIZE_INCHES * pixels_per_inch_x,
+		GRID_SIZE_INCHES * pixels_per_inch_y
 	)
 
-	# Convert back to grid coordinates (from center)
-	rotated_pos += grid_rect.size / 2.0
+	# Get position relative to grid container using proper coordinate transform
+	var local_pos = grid_container.get_local_mouse_position()
 
-	# Calculate cell coordinates
-	var cell_x = int(rotated_pos.x / cell_size.x)
-	var cell_y = int(rotated_pos.y / cell_size.y)
+	# Get center of grid (grid is centered in the container)
+	var center = grid_rect.position + grid_rect.size / 2.0
+
+	# Half grid cells for centering calculation
+	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
+
+	# Apply inverse rotation around center to get position in grid coordinate system
+	var pos_from_center = local_pos - center
+	var angle_rad = deg_to_rad(-grid_rotation_degrees)
+	var rotated_pos = Vector2(
+		pos_from_center.x * cos(angle_rad) - pos_from_center.y * sin(angle_rad),
+		pos_from_center.x * sin(angle_rad) + pos_from_center.y * cos(angle_rad)
+	)
+
+	# Convert from center-relative position to cell coordinates
+	# Cell (x,y) has its center at ((x - half_grid_cells.x + 0.5) * cell_size.x, ...)
+	# So to get cell from position: cell_x = pos / cell_size + half_grid_cells - 0.5
+	var cell_x = int(floor(rotated_pos.x / cell_size.x + half_grid_cells.x))
+	var cell_y = int(floor(rotated_pos.y / cell_size.y + half_grid_cells.y))
 
 	return Vector2i(cell_x, cell_y)
 
 
 func _get_mirrored_cell(cell: Vector2i) -> Vector2i:
-	## Get the point-symmetric (180° rotated) cell position
+	## Get the point-symmetric (180° rotated) position relative to TABLE center
+	## Cell coordinates are in 1" units (not 3" cells)
+	var valid_range = _get_valid_cell_range()
+	# Convert cell bounds to inch bounds (multiply by 3)
+	var table_min_x = valid_range.position.x * 3
+	var table_min_y = valid_range.position.y * 3
+	var table_max_x = (valid_range.position.x + valid_range.size.x) * 3
+	var table_max_y = (valid_range.position.y + valid_range.size.y) * 3
+	# Mirror: inch position at min maps to max, position at max maps to min
+	return Vector2i(table_min_x + table_max_x - cell.x, table_min_y + table_max_y - cell.y)
+
+
+func _inch_to_screen_pos(inch_pos: Vector2i) -> Vector2:
+	## Convert 1" coordinates to screen position (relative to grid_container)
 	var grid_dims = _calculate_grid_dimensions()
-	return Vector2i(grid_dims.x - 1 - cell.x, grid_dims.y - 1 - cell.y)
+	var grid_rect = _get_grid_rect()
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(grid_rotation_degrees)
+
+	var table_size_inches = table_size_feet * 12.0
+	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
+	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
+
+	var half_inches_x = grid_dims.x * 3.0 / 2.0
+	var half_inches_y = grid_dims.y * 3.0 / 2.0
+
+	var local_x = (inch_pos.x - half_inches_x) * pixels_per_inch_x
+	var local_y = (inch_pos.y - half_inches_y) * pixels_per_inch_y
+	var cos_a = cos(angle_rad)
+	var sin_a = sin(angle_rad)
+	return Vector2(
+		local_x * cos_a - local_y * sin_a,
+		local_x * sin_a + local_y * cos_a
+	) + center
 
 
 func _is_valid_cell(cell: Vector2i) -> bool:
+	## Check if 3" cell is within grid bounds (for terrain painting)
 	var grid_dims = _calculate_grid_dimensions()
 	return cell.x >= 0 and cell.x < grid_dims.x and cell.y >= 0 and cell.y < grid_dims.y
+
+
+func _is_valid_inch_pos(inch_pos: Vector2i) -> bool:
+	## Check if 1" coordinate is within the table boundary (for deployment zones)
+	## When grid is rotated, we must check screen position against table bounds
+	var grid_rect = _get_grid_rect()
+	var screen_pos = _inch_to_screen_pos(inch_pos)
+	# Add small tolerance for boundary snap points (rounding may cause slight offset)
+	var tolerance = 2.0  # pixels
+	var expanded_rect = grid_rect.grow(tolerance)
+	return expanded_rect.has_point(screen_pos)
 
 
 func _input(event: InputEvent) -> void:
@@ -492,15 +806,64 @@ func _input(event: InputEvent) -> void:
 
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
-			is_painting = event.pressed
-			if is_painting:
+			if event.pressed:
+				# Check if clicking on an existing vertex (for dragging)
+				# Allow dragging whenever custom zones are selected (not just during editing)
+				var has_custom_zones = deployment_type == DeploymentType.CUSTOM and (
+					custom_zone_vertices_p1.size() > 0 or custom_zone_vertices_p2.size() > 0
+				)
+				if custom_zone_editing or has_custom_zones:
+					var vertex_hit = _find_vertex_at_screen_pos(event.global_position)
+					if vertex_hit.player > 0:
+						# Start dragging this vertex
+						_dragging_vertex = true
+						_dragging_player = vertex_hit.player
+						_dragging_index = vertex_hit.index
+						if _custom_zone_status_label:
+							_custom_zone_status_label.text = "Dragging P%d vertex %d..." % [
+								vertex_hit.player, vertex_hit.index + 1
+							]
+						return
+				# Not dragging a vertex, start painting
+				is_painting = true
 				_paint_at_position(event.global_position)
+			else:
+				# Mouse released
+				if _dragging_vertex:
+					_dragging_vertex = false
+					_dragging_player = 0
+					_dragging_index = -1
+					if _custom_zone_status_label:
+						_custom_zone_status_label.text = "P1: %d vertices | P2: %d vertices" % [
+							custom_zone_vertices_p1.size(), custom_zone_vertices_p2.size()
+						]
+					# Emit signal to update 3D terrain overlay
+					deployment_type_changed.emit(DeploymentType.CUSTOM)
+				is_painting = false
 
-	elif event is InputEventMouseMotion and is_painting:
-		_paint_at_position(event.global_position)
+	elif event is InputEventMouseMotion:
+		if _dragging_vertex:
+			_move_vertex_to_screen_pos(event.global_position)
+		elif is_painting:
+			_paint_at_position(event.global_position)
 
 
 func _paint_at_position(screen_pos: Vector2) -> void:
+	# Check if we're editing custom deployment zones - use snap points
+	if custom_zone_editing:
+		var snap_result = _find_nearest_boundary_snap_point(screen_pos)
+		if snap_result.found:
+			# Boundary snap points are valid by definition (on table edge)
+			# No validation needed - they're computed as edge intersections
+			_handle_custom_zone_click(snap_result.cell)
+		else:
+			# Fallback to 1" grid position if no snap point nearby
+			# Use _get_inch_at_screen_pos for 1" coordinates (not 3" cells)
+			var inch_pos = _get_inch_at_screen_pos(screen_pos)
+			if _is_valid_inch_pos(inch_pos):
+				_handle_custom_zone_click(inch_pos)
+		return
+
 	var cell = _get_cell_at_screen_pos(screen_pos)
 	if _is_valid_cell(cell):
 		if selected_terrain_type == TerrainType.NONE:
@@ -601,23 +964,30 @@ func _try_generate_layout() -> bool:
 		pieces_placed_by_type[terrain_type] = 0
 		pieces_failed_by_type[terrain_type] = 0
 
+		# Calculate valid cell range based on table bounds (at 0° rotation)
+		# This ensures pieces are placed within the actual table, not just the grid
+		var valid_range = _get_valid_cell_range()
+
 		for i in range(pieces_to_place):
 			var placed = false
 			for attempt in range(max_attempts):
 				# Pick random template
 				var template = templates[randi() % templates.size()]
 
-				# Pick random position
-				var max_x = grid_dims.x - template.x
-				var max_y = grid_dims.y - template.y
+				# Pick random position WITHIN VALID TABLE BOUNDS
+				var min_x = valid_range.position.x
+				var min_y = valid_range.position.y
+				var max_x = valid_range.end.x - template.x
+				var max_y = valid_range.end.y - template.y
 
-				if max_x <= 0 or max_y <= 0:
-					print("  Template %dx%d too large for grid %dx%d" % [template.x, template.y, grid_dims.x, grid_dims.y])
+				if max_x <= min_x or max_y <= min_y:
+					print("  Template %dx%d too large for valid area" % [template.x, template.y])
 					break
 
+				# Random position across entire table
 				var pos = Vector2i(
-					randi() % (max_x + 1),
-					randi() % (max_y + 1)
+					min_x + randi() % (max_x - min_x + 1),
+					min_y + randi() % (max_y - min_y + 1)
 				)
 
 				# Check if placement is valid (3" minimum spacing)
@@ -681,12 +1051,23 @@ func _try_generate_layout() -> bool:
 		return false
 
 
-## Mirror a position across the grid center (point symmetry)
+## Mirror a position across the TABLE center (point symmetry)
 ## For a piece at position pos with given piece_size, returns the mirrored top-left corner position
-func _mirror_position(pos: Vector2i, piece_size: Vector2i, grid_dims: Vector2i) -> Vector2i:
-	# Point symmetry: reflect across center (180° rotation)
-	# Mirror the top-left corner of the piece
-	return Vector2i(grid_dims.x - pos.x - piece_size.x, grid_dims.y - pos.y - piece_size.y)
+## IMPORTANT: Uses table bounds, not grid bounds, for correct edge-to-edge mirroring
+func _mirror_position(pos: Vector2i, piece_size: Vector2i, _grid_dims: Vector2i) -> Vector2i:
+	# Get actual table bounds in grid coordinates
+	var valid_range = _get_valid_cell_range()
+	var table_min_x = valid_range.position.x
+	var table_min_y = valid_range.position.y
+	var table_max_x = valid_range.position.x + valid_range.size.x - 1
+	var table_max_y = valid_range.position.y + valid_range.size.y - 1
+
+	# Point symmetry: a piece at the top-left edge should mirror to bottom-right edge
+	# The mirrored piece's bottom-right corner should match the original's distance from top-left
+	var mirrored_x = table_min_x + table_max_x - pos.x - piece_size.x + 1
+	var mirrored_y = table_min_y + table_max_y - pos.y - piece_size.y + 1
+
+	return Vector2i(mirrored_x, mirrored_y)
 
 
 ## Check if a piece can be placed without overlapping existing pieces
@@ -726,6 +1107,36 @@ func _can_place_piece(pos: Vector2i, piece_size: Vector2i, existing_pieces: Arra
 	return true
 
 
+## Get the valid cell range for the current table size (at current rotation)
+## Returns Rect2i with min/max cell coordinates that are within the table
+func _get_valid_cell_range() -> Rect2i:
+	var grid_dims = _calculate_grid_dimensions()
+	var half_grid = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
+
+	# Table size in cells (at 0° rotation)
+	var table_cells_x = int(table_size_feet.x * 12.0 / GRID_SIZE_INCHES)
+	var table_cells_y = int(table_size_feet.y * 12.0 / GRID_SIZE_INCHES)
+
+	# For 0° rotation, valid cells are centered in the grid
+	# No margin - we want terrain at all valid table positions including edges
+	var min_x = int(half_grid.x) - int(table_cells_x / 2)
+	var max_x = int(half_grid.x) + int((table_cells_x + 1) / 2) - 1  # Handle odd cell counts
+	var min_y = int(half_grid.y) - int(table_cells_y / 2)
+	var max_y = int(half_grid.y) + int((table_cells_y + 1) / 2) - 1
+
+	# Debug output
+	print("_get_valid_cell_range: grid=%dx%d, table_cells=%dx%d" % [grid_dims.x, grid_dims.y, table_cells_x, table_cells_y])
+	print("  Range: (%d,%d) to (%d,%d)" % [min_x, min_y, max_x, max_y])
+
+	# Clamp to grid bounds
+	min_x = max(0, min_x)
+	min_y = max(0, min_y)
+	max_x = min(grid_dims.x - 1, max_x)
+	max_y = min(grid_dims.y - 1, max_y)
+
+	return Rect2i(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
+
+
 ## Check if a grid cell is within the actual table bounds (accounting for rotation)
 func _is_cell_within_table_bounds(cell_pos: Vector2i, grid_dims: Vector2i) -> bool:
 	# Calculate cell center position in grid coordinates (grid centered on intersection point)
@@ -749,13 +1160,15 @@ func _is_cell_within_table_bounds(cell_pos: Vector2i, grid_dims: Vector2i) -> bo
 
 	# Apply rotation and check if ALL corners are inside table
 	# For terrain placement, cells must be fully within bounds
+	# Small epsilon for floating-point tolerance at exact boundaries
+	var epsilon = 0.01
 	var rotation_rad = deg_to_rad(grid_rotation_degrees)
 	for corner in corners_local:
 		var rotated_x = corner.x * cos(rotation_rad) - corner.y * sin(rotation_rad)
 		var rotated_y = corner.x * sin(rotation_rad) + corner.y * cos(rotation_rad)
 
-		# If ANY corner is outside, cell is not valid for terrain placement
-		if abs(rotated_x) > table_width_inches / 2.0 or abs(rotated_y) > table_height_inches / 2.0:
+		# If ANY corner is outside (with small tolerance), cell is not valid
+		if abs(rotated_x) > table_width_inches / 2.0 + epsilon or abs(rotated_y) > table_height_inches / 2.0 + epsilon:
 			return false
 
 	return true  # All corners inside table
@@ -772,17 +1185,27 @@ func _place_piece(pos: Vector2i, piece_size: Vector2i, terrain_type: int) -> voi
 ## Save current layout to file
 func save_layout(file_path: String) -> void:
 	var data = {
-		"version": "1.0",
+		"version": "1.1",
 		"table_size": {"x": table_size_feet.x, "y": table_size_feet.y},
 		"grid_rotation": grid_rotation_degrees,
 		"deployment_type": deployment_type,
-		"grid_cells": {}
+		"grid_cells": {},
+		"custom_zones": {
+			"player1": [],
+			"player2": []
+		}
 	}
 
 	# Convert grid_cells keys to strings (JSON doesn't support Vector2i keys)
 	for cell_pos in grid_cells:
 		var key = "%d,%d" % [cell_pos.x, cell_pos.y]
 		data.grid_cells[key] = grid_cells[cell_pos]
+
+	# Save custom zone vertices as coordinate arrays
+	for cell in custom_zone_vertices_p1:
+		data.custom_zones.player1.append({"x": cell.x, "y": cell.y})
+	for cell in custom_zone_vertices_p2:
+		data.custom_zones.player2.append({"x": cell.x, "y": cell.y})
 
 	var json_string = JSON.stringify(data, "\t")
 	var file = FileAccess.open(file_path, FileAccess.WRITE)
@@ -828,6 +1251,30 @@ func load_layout(file_path: String) -> bool:
 	# Load deployment type
 	if data.has("deployment_type"):
 		deployment_type = data.deployment_type
+		if deployment_type_option:
+			deployment_type_option.selected = deployment_type
+		_update_custom_zone_ui_visibility()
+
+	# Load custom zone vertices
+	custom_zone_vertices_p1.clear()
+	custom_zone_vertices_p2.clear()
+	if data.has("custom_zones"):
+		var zones = data.custom_zones
+		if zones.has("player1"):
+			for v in zones.player1:
+				custom_zone_vertices_p1.append(Vector2i(int(v.x), int(v.y)))
+		if zones.has("player2"):
+			for v in zones.player2:
+				custom_zone_vertices_p2.append(Vector2i(int(v.x), int(v.y)))
+
+	# Update visibility toggle based on deployment type
+	if deployment_type > 0:
+		show_deployment_zones = true
+		if deployment_check:
+			deployment_check.button_pressed = true
+
+	# Emit signal to update terrain_overlay with deployment type and custom zones
+	deployment_type_changed.emit(deployment_type)
 
 	# Load grid cells
 	grid_cells.clear()
@@ -931,5 +1378,365 @@ func get_current_layout() -> Dictionary:
 	return {
 		"grid_cells": grid_cells.duplicate(),
 		"table_size": table_size_feet,
-		"rotation": grid_rotation_degrees
+		"rotation": grid_rotation_degrees,
+		"deployment_type": deployment_type,
+		"custom_zones": get_custom_zone_data()
 	}
+
+
+## Get custom zone data in a format suitable for save/load and terrain_overlay
+func get_custom_zone_data() -> Dictionary:
+	return {
+		"player1_cells": custom_zone_vertices_p1.duplicate(),
+		"player2_cells": custom_zone_vertices_p2.duplicate(),
+		"player1_world": _convert_zone_cells_to_world(custom_zone_vertices_p1),
+		"player2_world": _convert_zone_cells_to_world(custom_zone_vertices_p2)
+	}
+
+
+## Convert 1" vertex coordinates to world coordinates (meters) for terrain_overlay
+func _convert_zone_cells_to_world(vertices: Array[Vector2i]) -> Array[Vector3]:
+	var result: Array[Vector3] = []
+	var valid_range = _get_valid_cell_range()
+	var inch_to_meters = 0.0254  # 1 inch = 0.0254 meters
+
+	# Calculate table center in 1" coordinates (cell bounds * 3)
+	var table_center_x = (valid_range.position.x + valid_range.size.x / 2.0) * 3.0
+	var table_center_y = (valid_range.position.y + valid_range.size.y / 2.0) * 3.0
+
+	for vertex in vertices:
+		# Calculate position relative to TABLE center in inches, then convert to meters
+		var local_x = (vertex.x - table_center_x) * inch_to_meters
+		var local_z = (vertex.y - table_center_y) * inch_to_meters
+
+		# Apply grid rotation to get world position
+		var rotation_rad = deg_to_rad(grid_rotation_degrees)
+		var world_x = local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
+		var world_z = local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
+
+		result.append(Vector3(world_x, 0.0, world_z))
+
+	return result
+
+
+## Find vertex at screen position for dragging
+## Returns {player: int, index: int} or {player: 0} if no vertex found
+func _find_vertex_at_screen_pos(screen_pos: Vector2) -> Dictionary:
+	var grid_dims = _calculate_grid_dimensions()
+	var grid_rect = _get_grid_rect()
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(grid_rotation_degrees)
+
+	# Calculate pixels per inch
+	var table_size_inches = table_size_feet * 12.0
+	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
+	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
+
+	# Half of total inches (for centering)
+	var half_inches_x = grid_dims.x * 3.0 / 2.0
+	var half_inches_y = grid_dims.y * 3.0 / 2.0
+
+	# Helper to convert 1" vertex coords to screen position
+	var inch_to_screen = func(inch_pos: Vector2i) -> Vector2:
+		var local_x = (inch_pos.x - half_inches_x) * pixels_per_inch_x
+		var local_y = (inch_pos.y - half_inches_y) * pixels_per_inch_y
+		var cos_a = cos(angle_rad)
+		var sin_a = sin(angle_rad)
+		return Vector2(
+			local_x * cos_a - local_y * sin_a,
+			local_x * sin_a + local_y * cos_a
+		) + center
+
+	# Get position relative to grid container using proper coordinate transform
+	var local_pos = grid_container.get_local_mouse_position()
+
+	var closest_dist = INF
+	var closest_player = 0
+	var closest_index = -1
+
+	# Check Player 1 vertices
+	for i in range(custom_zone_vertices_p1.size()):
+		var vertex_screen = inch_to_screen.call(custom_zone_vertices_p1[i])
+		var dist = local_pos.distance_to(vertex_screen)
+		if dist < VERTEX_CLICK_RADIUS and dist < closest_dist:
+			closest_dist = dist
+			closest_player = 1
+			closest_index = i
+
+	# Check Player 2 vertices
+	for i in range(custom_zone_vertices_p2.size()):
+		var vertex_screen = inch_to_screen.call(custom_zone_vertices_p2[i])
+		var dist = local_pos.distance_to(vertex_screen)
+		if dist < VERTEX_CLICK_RADIUS and dist < closest_dist:
+			closest_dist = dist
+			closest_player = 2
+			closest_index = i
+
+	return {player = closest_player, index = closest_index}
+
+
+## Move dragged vertex to new screen position
+func _move_vertex_to_screen_pos(screen_pos: Vector2) -> void:
+	if not _dragging_vertex or _dragging_player == 0 or _dragging_index < 0:
+		return
+
+	# Convert screen position to 1" coordinates
+	var new_cell = _get_inch_at_screen_pos(screen_pos)
+
+	# Only update if position is within table bounds
+	if not _is_valid_inch_pos(new_cell):
+		return
+
+	if custom_zone_symmetric:
+		# In symmetric mode, moving P1 vertex updates P2 mirror, and vice versa
+		if _dragging_player == 1:
+			if _dragging_index < custom_zone_vertices_p1.size():
+				custom_zone_vertices_p1[_dragging_index] = new_cell
+				# Update mirrored vertex (P2 vertices are in reverse order)
+				var mirror_index = custom_zone_vertices_p2.size() - 1 - _dragging_index
+				if mirror_index >= 0 and mirror_index < custom_zone_vertices_p2.size():
+					custom_zone_vertices_p2[mirror_index] = _get_mirrored_cell(new_cell)
+		else:  # Player 2
+			if _dragging_index < custom_zone_vertices_p2.size():
+				custom_zone_vertices_p2[_dragging_index] = new_cell
+				# Update mirrored vertex (P1 vertices are in reverse order relative to P2)
+				var mirror_index = custom_zone_vertices_p1.size() - 1 - _dragging_index
+				if mirror_index >= 0 and mirror_index < custom_zone_vertices_p1.size():
+					custom_zone_vertices_p1[mirror_index] = _get_mirrored_cell(new_cell)
+	else:
+		# Non-symmetric mode - just update the single vertex
+		if _dragging_player == 1:
+			if _dragging_index < custom_zone_vertices_p1.size():
+				custom_zone_vertices_p1[_dragging_index] = new_cell
+		else:
+			if _dragging_index < custom_zone_vertices_p2.size():
+				custom_zone_vertices_p2[_dragging_index] = new_cell
+
+	grid_container.queue_redraw()
+
+
+## Find nearest boundary snap point (where grid lines intersect table edges)
+## Returns {found: bool, cell: Vector2i, screen_pos: Vector2}
+const BOUNDARY_SNAP_RADIUS := 15.0  # Pixels
+
+func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
+	var grid_dims = _calculate_grid_dimensions()
+	var grid_rect = _get_grid_rect()
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(grid_rotation_degrees)
+
+	# Calculate pixels per inch
+	var table_size_inches = table_size_feet * 12.0
+	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
+	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
+
+	# Use 1" intervals (same as fine grid)
+	var total_inches_x = grid_dims.x * 3  # 3 inches per cell
+	var total_inches_y = grid_dims.y * 3
+	var half_inches_x = total_inches_x / 2.0
+	var half_inches_y = total_inches_y / 2.0
+
+	var rotate_point = func(p: Vector2) -> Vector2:
+		var cos_a = cos(angle_rad)
+		var sin_a = sin(angle_rad)
+		return Vector2(
+			p.x * cos_a - p.y * sin_a,
+			p.x * sin_a + p.y * cos_a
+		) + center
+
+	# Get position relative to grid container using proper coordinate transform
+	# This handles any parent transforms/scaling correctly
+	var local_pos = grid_container.get_local_mouse_position()
+	var line_length = grid_rect.size.length()
+
+	var closest_dist = INF
+	var closest_cell = Vector2i.ZERO
+	var closest_screen = Vector2.ZERO
+
+	# Check vertical grid lines (at 1" intervals)
+	for i in range(total_inches_x + 1):
+		var line_x = (i - half_inches_x) * pixels_per_inch_x
+
+		var start_local = Vector2(line_x, -line_length)
+		var end_local = Vector2(line_x, line_length)
+
+		var start = rotate_point.call(start_local)
+		var end_point = rotate_point.call(end_local)
+
+		# Get clipped endpoints (on table boundary)
+		var clipped = _clip_line_to_rect_internal(start, end_point, grid_rect)
+		if clipped != null:
+			# Check both endpoints
+			for pt in [clipped[0], clipped[1]]:
+				var dist = local_pos.distance_to(pt)
+				if dist < BOUNDARY_SNAP_RADIUS and dist < closest_dist:
+					closest_dist = dist
+					closest_screen = pt
+					# Convert screen position back to cell (using 1" precision)
+					closest_cell = _screen_to_cell_inches(pt, grid_rect, pixels_per_inch_x, pixels_per_inch_y, half_inches_x, half_inches_y, angle_rad, center)
+
+	# Check horizontal grid lines (at 1" intervals)
+	for i in range(total_inches_y + 1):
+		var line_y = (i - half_inches_y) * pixels_per_inch_y
+
+		var start_local = Vector2(-line_length, line_y)
+		var end_local = Vector2(line_length, line_y)
+
+		var start = rotate_point.call(start_local)
+		var end_point = rotate_point.call(end_local)
+
+		var clipped = _clip_line_to_rect_internal(start, end_point, grid_rect)
+		if clipped != null:
+			for pt in [clipped[0], clipped[1]]:
+				var dist = local_pos.distance_to(pt)
+				if dist < BOUNDARY_SNAP_RADIUS and dist < closest_dist:
+					closest_dist = dist
+					closest_screen = pt
+					closest_cell = _screen_to_cell_inches(pt, grid_rect, pixels_per_inch_x, pixels_per_inch_y, half_inches_x, half_inches_y, angle_rad, center)
+
+	# Also check the 4 table corners (even if no grid line intersects there)
+	var corners = [
+		grid_rect.position,                                      # Top-left
+		grid_rect.position + Vector2(grid_rect.size.x, 0),       # Top-right
+		grid_rect.position + Vector2(0, grid_rect.size.y),       # Bottom-left
+		grid_rect.end                                            # Bottom-right
+	]
+	for corner in corners:
+		var dist = local_pos.distance_to(corner)
+		if dist < BOUNDARY_SNAP_RADIUS and dist < closest_dist:
+			closest_dist = dist
+			closest_screen = corner
+			closest_cell = _screen_to_cell_inches(corner, grid_rect, pixels_per_inch_x, pixels_per_inch_y, half_inches_x, half_inches_y, angle_rad, center)
+
+	if closest_dist < INF:
+		return {found = true, cell = closest_cell, screen_pos = closest_screen}
+	else:
+		return {found = false, cell = Vector2i.ZERO, screen_pos = Vector2.ZERO}
+
+
+## Convert screen position to 1" coordinates (not 3" cells)
+func _screen_to_cell_inches(screen_pt: Vector2, grid_rect: Rect2, ppi_x: float, ppi_y: float, half_inches_x: float, half_inches_y: float, angle_rad: float, center: Vector2) -> Vector2i:
+	# Reverse rotation
+	var rel = screen_pt - center
+	var cos_a = cos(-angle_rad)
+	var sin_a = sin(-angle_rad)
+	var local = Vector2(
+		rel.x * cos_a - rel.y * sin_a,
+		rel.x * sin_a + rel.y * cos_a
+	)
+
+	# Convert to inch coordinates (each unit = 1")
+	var inch_x = local.x / ppi_x + half_inches_x
+	var inch_y = local.y / ppi_y + half_inches_y
+
+	# Return 1" coordinates directly (round to nearest inch)
+	return Vector2i(int(round(inch_x)), int(round(inch_y)))
+
+
+## Convert screen position to cell coordinates (for snap points)
+func _screen_to_cell(screen_pt: Vector2, grid_rect: Rect2, cell_size: Vector2, half_grid_cells: Vector2, angle_rad: float, center: Vector2) -> Vector2i:
+	# Reverse rotation
+	var rel = screen_pt - center
+	var cos_a = cos(-angle_rad)
+	var sin_a = sin(-angle_rad)
+	var local = Vector2(
+		rel.x * cos_a - rel.y * sin_a,
+		rel.x * sin_a + rel.y * cos_a
+	)
+
+	# Convert to cell coordinates
+	var cell_x = int(round(local.x / cell_size.x + half_grid_cells.x))
+	var cell_y = int(round(local.y / cell_size.y + half_grid_cells.y))
+
+	return Vector2i(cell_x, cell_y)
+
+
+## Convert screen position to 1" coordinates for vertex dragging
+func _get_inch_at_screen_pos(screen_pos: Vector2) -> Vector2i:
+	var grid_dims = _calculate_grid_dimensions()
+	var grid_rect = _get_grid_rect()
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(grid_rotation_degrees)
+
+	# Calculate pixels per inch
+	var table_size_inches = table_size_feet * 12.0
+	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
+	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
+
+	# Half of total inches
+	var half_inches_x = grid_dims.x * 3.0 / 2.0
+	var half_inches_y = grid_dims.y * 3.0 / 2.0
+
+	# Get position relative to grid container using proper coordinate transform
+	var local_pos = grid_container.get_local_mouse_position()
+
+	# Reverse rotation
+	var pos_from_center = local_pos - center
+	var cos_a = cos(-angle_rad)
+	var sin_a = sin(-angle_rad)
+	var rotated_pos = Vector2(
+		pos_from_center.x * cos_a - pos_from_center.y * sin_a,
+		pos_from_center.x * sin_a + pos_from_center.y * cos_a
+	)
+
+	# Convert to inch coordinates
+	var inch_x = int(round(rotated_pos.x / pixels_per_inch_x + half_inches_x))
+	var inch_y = int(round(rotated_pos.y / pixels_per_inch_y + half_inches_y))
+
+	return Vector2i(inch_x, inch_y)
+
+
+## Internal line clipping (same as grid's but local to this file)
+func _clip_line_to_rect_internal(p1: Vector2, p2: Vector2, rect: Rect2) -> Variant:
+	const INSIDE = 0
+	const LEFT = 1
+	const RIGHT = 2
+	const BOTTOM = 4
+	const TOP = 8
+
+	var xmin = rect.position.x
+	var xmax = rect.end.x
+	var ymin = rect.position.y
+	var ymax = rect.end.y
+
+	var compute_code = func(p: Vector2) -> int:
+		var code = INSIDE
+		if p.x < xmin:
+			code |= LEFT
+		elif p.x > xmax:
+			code |= RIGHT
+		if p.y < ymin:
+			code |= TOP
+		elif p.y > ymax:
+			code |= BOTTOM
+		return code
+
+	var code1 = compute_code.call(p1)
+	var code2 = compute_code.call(p2)
+
+	while true:
+		if (code1 | code2) == 0:
+			return [p1, p2]
+		elif (code1 & code2) != 0:
+			return null
+		else:
+			var code_out = code1 if code1 != 0 else code2
+			var p: Vector2
+
+			if code_out & BOTTOM:
+				p = Vector2(p1.x + (p2.x - p1.x) * (ymax - p1.y) / (p2.y - p1.y), ymax)
+			elif code_out & TOP:
+				p = Vector2(p1.x + (p2.x - p1.x) * (ymin - p1.y) / (p2.y - p1.y), ymin)
+			elif code_out & RIGHT:
+				p = Vector2(xmax, p1.y + (p2.y - p1.y) * (xmax - p1.x) / (p2.x - p1.x))
+			elif code_out & LEFT:
+				p = Vector2(xmin, p1.y + (p2.y - p1.y) * (xmin - p1.x) / (p2.x - p1.x))
+
+			if code_out == code1:
+				p1 = p
+				code1 = compute_code.call(p1)
+			else:
+				p2 = p
+				code2 = compute_code.call(p2)
+
+	return null

@@ -1,0 +1,2398 @@
+[gd_scene load_steps=74 format=3 uid="uid://cldg7ewlpsii5"]
+
+[ext_resource type="Theme" uid="uid://dr4hm86sugbmt" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/Themes/glassmorphism.tres" id="1_wi41b"]
+[ext_resource type="PackedScene" uid="uid://deyabyx7mvttg" path="res://Scripts/Nodes/Control/TextureRect/AnimatedRocking/animated_rocking_texture.tscn" id="2_pd73r"]
+[ext_resource type="Texture2D" uid="uid://bdda8su6uc4oe" path="res://Assets/Images/Backgrounds/Unsplash/matthieu-buhler-WnfKYqxWH8Q-unsplash.jpg" id="2_r687l"]
+[ext_resource type="Texture2D" uid="uid://lec38v7hmako" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/Gradients/cyan_purple_gradient.tres" id="3_ysibr"]
+[ext_resource type="PackedScene" uid="uid://ddqg85jj5jo42" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/Modules/Control/shadow_module.tscn" id="4_r687l"]
+[ext_resource type="Texture2D" uid="uid://8i78r3y4gf81" path="res://Assets/Icons/Phosphor/heart-bold.svg" id="5_lf1fn"]
+[ext_resource type="PackedScene" uid="uid://cfopwr4txmeg" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/Shaders/Scenes/blur_shader.tscn" id="6_vxvjw"]
+[ext_resource type="Shader" uid="uid://c5iiohuiarbp8" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/Shaders/blur.gdshader" id="7_ro0ks"]
+[ext_resource type="PackedScene" uid="uid://32ps8lb55j17" path="res://Scripts/Modules/Control/expand_hovered_control_module.tscn" id="8_et28q"]
+[ext_resource type="StyleBox" uid="uid://d34m7f0kpcp7s" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/CommonStyleBoxes/ButtonCornerRadius20/glassmorphism_button_disabled_corner_radius_20.tres" id="9_b3ys1"]
+[ext_resource type="StyleBox" uid="uid://670cqppe0eoc" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/CommonStyleBoxes/ButtonCornerRadius20/glassmorphism_button_hovered__corner_radius_20.tres" id="10_4a15r"]
+[ext_resource type="StyleBox" uid="uid://coput1kun0q23" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/CommonStyleBoxes/ButtonCornerRadius20/glassmorphism_button_pressed__corner_radius_20.tres" id="11_0kmtx"]
+[ext_resource type="StyleBox" uid="uid://dkqrdu6u33vcv" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/CommonStyleBoxes/ButtonCornerRadius20/glassmorphism_button_normal__corner_radius_20.tres" id="12_ewyi2"]
+[ext_resource type="Script" uid="uid://d1qmtwovrflgb" path="res://Scripts/Modules/Button/shrink_pressed_button_module.gd" id="13_h8i5m"]
+[ext_resource type="Script" uid="uid://hre2tqplv7sj" path="res://Scripts/Modules/Control/expand_hovered_control_module.gd" id="14_exov8"]
+[ext_resource type="Theme" uid="uid://b0bk3opnihwjp" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/Themes/glassmorphism_color_picker.tres" id="15_n3ruf"]
+[ext_resource type="Script" uid="uid://bubd3hl32culp" path="res://Scripts/Nodes/Control/Button/menu_button_demo.gd" id="16_2wp81"]
+[ext_resource type="PackedScene" uid="uid://b8qi1eld0fd72" path="res://Scripts/Modules/Button/shrink_pressed_button_module.tscn" id="17_3474d"]
+[ext_resource type="Texture2D" uid="uid://clx4jbnuu87w8" path="res://Assets/Icons/Phosphor/magnifying-glass-bold.svg" id="18_mmw2i"]
+[ext_resource type="Script" uid="uid://cscvb1dcn62j0" path="res://Scripts/Nodes/Control/ProgressBar/animated_progress_bar.gd" id="19_c7e6i"]
+[ext_resource type="Script" uid="uid://cyp825dr2aowf" path="res://Scripts/Nodes/Control/TabContainer/tab_container_demo.gd" id="20_153qd"]
+[ext_resource type="Script" uid="uid://bpkhajywppd3l" path="res://Scripts/Nodes/Control/Tree/tree_demo.gd" id="21_p3saj"]
+[ext_resource type="Script" uid="uid://dyqku3t1nqf6o" path="res://Scripts/Nodes/Control/Button/accept_dialog_button.gd" id="22_pjbv5"]
+[ext_resource type="Theme" uid="uid://bmse7nh08kylw" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/Themes/glassmorphism_file_dialog.tres" id="23_21cg8"]
+[ext_resource type="Script" uid="uid://38jq8pj3jwjv" path="res://Scripts/Nodes/Control/Button/confirmation_dialog_button.gd" id="24_ppwvp"]
+[ext_resource type="Script" uid="uid://clr5u56551jmv" path="res://Scripts/Nodes/Control/Button/file_dialog_button.gd" id="25_t7t2g"]
+[ext_resource type="Script" uid="uid://hjtt3qbta1v8" path="res://Scripts/Managers/SceneManager/scene_manager.gd" id="26_hm1f8"]
+[ext_resource type="Script" uid="uid://dxtdh2nblm8l1" path="res://Scripts/Managers/ViewManager/view_manager.gd" id="27_5b4ux"]
+[ext_resource type="StyleBox" uid="uid://b5xyadfe74p0u" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/CommonStyleBoxes/BorderlessDefaultPanel/glassmorphism_borderless_default_panel_alpha_full.tres" id="27_ewyi2"]
+[ext_resource type="PackedScene" uid="uid://simnpyem21vg" path="res://Scenes/GodotUIAssets/Scenes/back_button.tscn" id="27_pd73r"]
+[ext_resource type="PackedScene" uid="uid://es45oxk7rc5i" path="res://Scripts/Nodes/Other/EasterEggChallenge/size_checker_module.tscn" id="28_clry6"]
+[ext_resource type="Texture2D" uid="uid://bdew5fwpb75rm" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/Gradients/blue_purple_dark_gradient.tres" id="28_h8i5m"]
+[ext_resource type="Texture2D" uid="uid://cbru4lfsyi01e" path="res://Assets/Icons/Phosphor/android-logo-bold.svg" id="29_aeypk"]
+[ext_resource type="Texture2D" uid="uid://ds0ws0pebwwb5" path="res://Assets/Icons/Phosphor/arrow-square-out-bold.svg" id="30_gh3e3"]
+[ext_resource type="FontFile" uid="uid://c7awtxcu2me8m" path="res://Assets/Fonts/GoogleFonts/Normal/RobotoFlex-VariableFont_GRAD,XOPQ,XTRA,YOPQ,YTAS,YTDE,YTFI,YTLC,YTUC,opsz,slnt,wdth,wght.ttf" id="31_exov8"]
+[ext_resource type="Texture2D" uid="uid://45mm675a7uqv" path="res://Assets/Icons/Phosphor/bell-simple-bold.svg" id="31_l0gci"]
+[ext_resource type="Texture2D" uid="uid://di1syauiqta8" path="res://Assets/Icons/Phosphor/bowl-food-bold.svg" id="32_wob2f"]
+[ext_resource type="Texture2D" uid="uid://ta0qif3mqilg" path="res://Assets/Icons/Phosphor/cactus-bold.svg" id="33_fhcrq"]
+[ext_resource type="Texture2D" uid="uid://bgyuigvpmhson" path="res://Assets/Icons/Phosphor/cake-bold.svg" id="34_eimdp"]
+[ext_resource type="Texture2D" uid="uid://deqtpnw7k3rpr" path="res://Assets/Icons/Phosphor/calendar-blank-bold.svg" id="35_uahl1"]
+[ext_resource type="Texture2D" uid="uid://bwohmclot6ub0" path="res://Assets/Icons/Phosphor/crown-simple-bold.svg" id="36_upls2"]
+[ext_resource type="Texture2D" uid="uid://btsd182vgheaw" path="res://Assets/Icons/Phosphor/cube-bold.svg" id="37_g7w6x"]
+[ext_resource type="Texture2D" uid="uid://bc3e8r1hokqxj" path="res://Assets/Icons/Phosphor/currency-circle-dollar-bold.svg" id="38_5fk7h"]
+[ext_resource type="Texture2D" uid="uid://boosihip6xocl" path="res://Assets/Icons/Phosphor/disco-ball-bold.svg" id="39_c8wya"]
+[ext_resource type="Texture2D" uid="uid://1tb7bq6r6hbe" path="res://Assets/Icons/Phosphor/discord-logo-bold.svg" id="40_va1ph"]
+[ext_resource type="Texture2D" uid="uid://pcwm2u04aess" path="res://Assets/Icons/Phosphor/finn-the-human-bold.svg" id="41_cv8k4"]
+[ext_resource type="Texture2D" uid="uid://d1tubme7j72jj" path="res://Assets/Icons/Phosphor/ghost-bold.svg" id="42_gls56"]
+[ext_resource type="Script" uid="uid://cpuijqhc1vp1" path="res://Scripts/Nodes/Control/Button/link_tree_button.gd" id="43_cemds"]
+[ext_resource type="Texture2D" uid="uid://crfi2civdmobq" path="res://Assets/Icons/Phosphor/cursor-bold.svg" id="44_7bhoq"]
+[ext_resource type="PackedScene" uid="uid://bg246q0how8ra" path="res://Scripts/Modules/Other/WorldEnvironment/glowing_world_environment.tscn" id="46_ysibr"]
+[ext_resource type="Script" uid="uid://b58cancccs8g4" path="res://Scripts/Managers/TutorialFairyManager/tutorial_fairy_manager.gd" id="48_vxvjw"]
+[ext_resource type="PackedScene" uid="uid://csl35jhpmcbbw" path="res://Scripts/Managers/TutorialFairyManager/Scenes/tutorial_fairy_ui_highlight_panel.tscn" id="49_ro0ks"]
+[ext_resource type="Script" uid="uid://cvexpnnimqmiv" path="res://Scripts/Managers/TutorialFairyManager/Resources/tutorial_fairy_chat_box_parent.gd" id="50_b3ys1"]
+[ext_resource type="PackedScene" uid="uid://d2kgp442lgfk6" path="res://Scripts/Managers/TutorialFairyManager/Scenes/tutorial_fairy_chatbox.tscn" id="50_ro0ks"]
+[ext_resource type="PackedScene" uid="uid://bfcdf44m2bbur" path="res://Scripts/Managers/TutorialFairyManager/Resources/tutorial_fairy_chat_box_parent.tscn" id="52_b3ys1"]
+[ext_resource type="StyleBox" uid="uid://mwkonv0y4og5" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/CommonStyleBoxes/DefaultPanel/glassmorphism_default_panel_alpha_none.tres" id="53_4a15r"]
+[ext_resource type="Texture2D" uid="uid://bmf8arb6o1kdl" path="res://Scenes/GodotUIAssets/ModernCSS/Glassmorphism/Gradients/border_highlights_more_white_gradient.tres" id="54_0kmtx"]
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_lf1fn"]
+blend_mode = 3
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_lbbrl"]
+bg_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_8mi4k"]
+bg_color = Color(1, 1, 1, 0.156863)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_olhxk"]
+shader = ExtResource("7_ro0ks")
+shader_parameter/strength = 4.602
+shader_parameter/mix_percentage = 0.0
+shader_parameter/base_alpha = 1.0
+
+[sub_resource type="SystemFont" id="SystemFont_wsiwu"]
+font_names = PackedStringArray("Segoe UI")
+font_weight = 650
+subpixel_positioning = 0
+
+[sub_resource type="FontVariation" id="FontVariation_0kjxm"]
+base_font = SubResource("SystemFont_wsiwu")
+variation_opentype = {
+2003265652: 999
+}
+spacing_bottom = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_j788q"]
+bg_color = Color(1, 1, 1, 0.156863)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_iarpf"]
+bg_color = Color(1, 1, 1, 0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ao6rs"]
+bg_color = Color(1, 1, 1, 0.498039)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_xoufb"]
+bg_color = Color(1, 1, 1, 0.498039)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="FontVariation" id="FontVariation_n3ruf"]
+base_font = ExtResource("31_exov8")
+variation_opentype = {
+2003265652: 900
+}
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_mcw2f"]
+bg_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+
+[sub_resource type="Environment" id="Environment_ysibr"]
+background_mode = 3
+glow_enabled = true
+glow_intensity = 2.0
+fog_light_energy = 7.67
+fog_sun_scatter = 0.6
+
+[sub_resource type="Gradient" id="Gradient_vxvjw"]
+offsets = PackedFloat32Array(0, 0.452381, 0.924603, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ro0ks"]
+bg_color = Color(1, 1, 1, 0)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 24
+corner_radius_top_right = 24
+corner_radius_bottom_right = 24
+corner_radius_bottom_left = 24
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_vxvjw"]
+bg_color = Color(1, 1, 1, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+
+[node name="GlassmorphismMain" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("1_wi41b")
+
+[node name="Background" type="TextureRect" parent="."]
+self_modulate = Color(3, 1, 3, 1)
+clip_children = 2
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -50.0
+offset_right = 50.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_r687l")
+expand_mode = 3
+
+[node name="ColorRect" type="ColorRect" parent="Background"]
+layout_mode = 0
+offset_left = 1860.0
+offset_top = -349.0
+offset_right = 3225.0
+offset_bottom = 2303.0
+rotation = 1.07163
+
+[node name="AnimatedGradientBG" parent="Background" instance=ExtResource("2_pd73r")]
+modulate = Color(1, 1, 1, 0.509804)
+material = SubResource("CanvasItemMaterial_lf1fn")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 0.0
+offset_bottom = 0.0
+
+[node name="BackgroundAnimatedRockingTexture" parent="." instance=ExtResource("2_pd73r")]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 0.0
+offset_bottom = 0.0
+
+[node name="BottomRightPanelMarginContainer" type="MarginContainer" parent="."]
+layout_mode = 2
+offset_left = 850.0
+offset_top = 479.0
+offset_right = 1133.0
+offset_bottom = 632.0
+mouse_filter = 2
+
+[node name="AestheticsPanelContainer" type="PanelContainer" parent="BottomRightPanelMarginContainer"]
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="BottomRightPanelMarginContainer/AestheticsPanelContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 5
+theme_override_constants/margin_top = 5
+theme_override_constants/margin_right = 5
+theme_override_constants/margin_bottom = 5
+
+[node name="Panel" type="Panel" parent="BottomRightPanelMarginContainer/AestheticsPanelContainer/MarginContainer"]
+clip_children = 1
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_lbbrl")
+
+[node name="BottomRightPanelAnimatedRockingTexture" parent="BottomRightPanelMarginContainer/AestheticsPanelContainer/MarginContainer/Panel" instance=ExtResource("2_pd73r")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 0.0
+offset_bottom = 0.0
+texture = ExtResource("3_ysibr")
+rock_distance = 200.0
+
+[node name="ShadowModule" parent="BottomRightPanelMarginContainer/AestheticsPanelContainer" instance=ExtResource("4_r687l")]
+layout_mode = 2
+
+[node name="ContentMarginContainer" type="MarginContainer" parent="BottomRightPanelMarginContainer"]
+layout_mode = 2
+metadata/_edit_lock_ = true
+
+[node name="HBoxContainer" type="HBoxContainer" parent="BottomRightPanelMarginContainer/ContentMarginContainer"]
+layout_mode = 2
+
+[node name="HeartTextureRect" type="TextureRect" parent="BottomRightPanelMarginContainer/ContentMarginContainer/HBoxContainer"]
+modulate = Color(2, 2, 2, 1)
+layout_mode = 2
+size_flags_horizontal = 3
+texture = ExtResource("5_lf1fn")
+stretch_mode = 3
+
+[node name="RightHBoxContainer" type="HBoxContainer" parent="BottomRightPanelMarginContainer/ContentMarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="VBoxContainer" type="VBoxContainer" parent="BottomRightPanelMarginContainer/ContentMarginContainer/HBoxContainer/RightHBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 17
+
+[node name="SpacerControl" type="Control" parent="BottomRightPanelMarginContainer/ContentMarginContainer/HBoxContainer/RightHBoxContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 13.53)
+layout_mode = 2
+
+[node name="AudaciousGabeRichTextLabel" type="RichTextLabel" parent="BottomRightPanelMarginContainer/ContentMarginContainer/HBoxContainer/RightHBoxContainer/VBoxContainer"]
+modulate = Color(2.4, 2.4, 2.4, 1)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/normal_font_size = 11
+theme_override_font_sizes/bold_font_size = 16
+bbcode_enabled = true
+text = "[color=dim_gray]Made w/ Love by:[/color]
+[b][wave]Audacious Gabe[/wave][/b]"
+fit_content = true
+horizontal_alignment = 1
+
+[node name="SpacerControl" type="Control" parent="BottomRightPanelMarginContainer/ContentMarginContainer/HBoxContainer/RightHBoxContainer"]
+visible = false
+custom_minimum_size = Vector2(9.175, 0)
+layout_mode = 2
+
+[node name="SpacerControl" type="Control" parent="BottomRightPanelMarginContainer/ContentMarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(5.325, 0)
+layout_mode = 2
+
+[node name="MainMarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 40
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 40
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MainMarginContainer"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="MainPanel" type="Panel" parent="MainMarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(944, 564)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_8mi4k")
+
+[node name="BlurShader" parent="MainMarginContainer/HBoxContainer/MainPanel" instance=ExtResource("6_vxvjw")]
+material = SubResource("ShaderMaterial_olhxk")
+layout_mode = 1
+
+[node name="MarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+metadata/_edit_lock_ = true
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="TopHeaderPanel" type="PanelContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TopHeaderPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TopHeaderPanel/MarginContainer"]
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TopHeaderPanel/MarginContainer/HBoxContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = -6
+
+[node name="TitleRichTextLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TopHeaderPanel/MarginContainer/HBoxContainer/MarginContainer"]
+modulate = Color(1.8, 1.8, 1.8, 1)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.479)
+theme_override_constants/outline_size = 12
+theme_override_fonts/bold_font = SubResource("FontVariation_0kjxm")
+theme_override_font_sizes/bold_font_size = 41
+bbcode_enabled = true
+text = "[b] Glassmorphism"
+fit_content = true
+autowrap_mode = 0
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TopHeaderPanel/MarginContainer/HBoxContainer/MarginContainer/TitleRichTextLabel" instance=ExtResource("8_et28q")]
+expand_scale = Vector2(1.03, 1.03)
+
+[node name="PanelContainerLabel" type="Label" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TopHeaderPanel/MarginContainer/HBoxContainer"]
+modulate = Color(1, 1, 1, 0.5)
+layout_mode = 2
+size_flags_horizontal = 6
+mouse_filter = 0
+text = "Panel Container"
+horizontal_alignment = 1
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TopHeaderPanel/MarginContainer/HBoxContainer/PanelContainerLabel" instance=ExtResource("8_et28q")]
+
+[node name="HSeparator" type="HSeparator" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ButtonsMarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 19
+theme_override_constants/margin_right = 19
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 22
+alignment = 1
+
+[node name="FirstVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="Button" type="Button" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/FirstVBoxContainer"]
+custom_minimum_size = Vector2(237, 42)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+text = "Button"
+
+[node name="ShrinkPressedButtonModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/FirstVBoxContainer/Button"]
+script = ExtResource("13_h8i5m")
+shrink_scale = Vector2(0.9, 0.9)
+shrink_duration = 0.3
+return_duration = 0.3
+
+[node name="ExpandHoveredButtonModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/FirstVBoxContainer/Button"]
+script = ExtResource("14_exov8")
+expand_scale = Vector2(1.1, 1.1)
+expand_duration = 0.3
+return_duration = 0.3
+tween_type = 5
+
+[node name="ToggleButton" type="Button" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/FirstVBoxContainer"]
+custom_minimum_size = Vector2(237, 42)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+toggle_mode = true
+text = "Toggle Button"
+
+[node name="ShrinkPressedButtonModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/FirstVBoxContainer/ToggleButton"]
+script = ExtResource("13_h8i5m")
+shrink_scale = Vector2(0.9, 0.9)
+shrink_duration = 0.3
+return_duration = 0.3
+
+[node name="ExpandHoveredButtonModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/FirstVBoxContainer/ToggleButton"]
+script = ExtResource("14_exov8")
+expand_scale = Vector2(1.1, 1.1)
+expand_duration = 0.3
+return_duration = 0.3
+tween_type = 5
+
+[node name="DisabledButton" type="Button" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/FirstVBoxContainer"]
+custom_minimum_size = Vector2(237, 42)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+disabled = true
+text = "Disabled Button"
+
+[node name="ShrinkPressedButtonModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/FirstVBoxContainer/DisabledButton"]
+script = ExtResource("13_h8i5m")
+shrink_scale = Vector2(0.9, 0.9)
+shrink_duration = 0.3
+return_duration = 0.3
+
+[node name="ExpandHoveredButtonModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/FirstVBoxContainer/DisabledButton"]
+script = ExtResource("14_exov8")
+expand_scale = Vector2(1.1, 1.1)
+expand_duration = 0.3
+return_duration = 0.3
+tween_type = 5
+
+[node name="FlatButton" type="Button" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/FirstVBoxContainer"]
+custom_minimum_size = Vector2(237, 42)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+text = "Button"
+flat = true
+
+[node name="ShrinkPressedButtonModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/FirstVBoxContainer/FlatButton"]
+script = ExtResource("13_h8i5m")
+shrink_scale = Vector2(0.9, 0.9)
+shrink_duration = 0.3
+return_duration = 0.3
+
+[node name="ExpandHoveredButtonModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/FirstVBoxContainer/FlatButton"]
+script = ExtResource("14_exov8")
+expand_scale = Vector2(1.1, 1.1)
+expand_duration = 0.3
+return_duration = 0.3
+tween_type = 5
+
+[node name="SecondVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="CheckButton" type="CheckButton" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/SecondVBoxContainer"]
+custom_minimum_size = Vector2(237, 42)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Check Button"
+alignment = 1
+
+[node name="ShrinkPressedButtonModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/SecondVBoxContainer/CheckButton"]
+script = ExtResource("13_h8i5m")
+shrink_scale = Vector2(0.9, 0.9)
+shrink_duration = 0.3
+return_duration = 0.3
+
+[node name="ExpandHoveredButtonModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/SecondVBoxContainer/CheckButton"]
+script = ExtResource("14_exov8")
+expand_scale = Vector2(1.1, 1.1)
+expand_duration = 0.3
+return_duration = 0.3
+tween_type = 5
+
+[node name="CheckBox" type="CheckBox" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/SecondVBoxContainer"]
+custom_minimum_size = Vector2(237, 42)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Check Box"
+alignment = 1
+
+[node name="ShrinkPressedButtonModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/SecondVBoxContainer/CheckBox"]
+script = ExtResource("13_h8i5m")
+shrink_scale = Vector2(0.9, 0.9)
+shrink_duration = 0.3
+return_duration = 0.3
+
+[node name="ExpandHoveredButtonModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/SecondVBoxContainer/CheckBox"]
+script = ExtResource("14_exov8")
+expand_scale = Vector2(1.1, 1.1)
+expand_duration = 0.3
+return_duration = 0.3
+tween_type = 5
+
+[node name="CenterContainer" type="CenterContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/SecondVBoxContainer"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+
+[node name="LinkButton" type="LinkButton" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/SecondVBoxContainer/CenterContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+text = "Link Button"
+uri = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+[node name="ShrinkPressedButtonModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/SecondVBoxContainer/CenterContainer/LinkButton"]
+script = ExtResource("13_h8i5m")
+shrink_scale = Vector2(0.9, 0.9)
+shrink_duration = 0.3
+return_duration = 0.3
+
+[node name="ExpandHoveredButtonModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/SecondVBoxContainer/CenterContainer/LinkButton"]
+script = ExtResource("14_exov8")
+expand_scale = Vector2(1.1, 1.1)
+expand_duration = 0.3
+return_duration = 0.3
+tween_type = 5
+
+[node name="ThirdVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="ColorPickerButton" type="ColorPickerButton" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/ThirdVBoxContainer"]
+custom_minimum_size = Vector2(237, 42)
+layout_mode = 2
+size_flags_horizontal = 4
+theme = ExtResource("15_n3ruf")
+text = "Color Picker Button"
+color = Color(0.516666, 0, 1, 0)
+
+[node name="ShrinkPressedButtonModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/ThirdVBoxContainer/ColorPickerButton"]
+script = ExtResource("13_h8i5m")
+shrink_scale = Vector2(0.9, 0.9)
+shrink_duration = 0.3
+return_duration = 0.3
+
+[node name="ExpandHoveredButtonModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/ThirdVBoxContainer/ColorPickerButton"]
+script = ExtResource("14_exov8")
+expand_scale = Vector2(1.1, 1.1)
+expand_duration = 0.3
+return_duration = 0.3
+tween_type = 5
+
+[node name="OptionButton" type="OptionButton" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/ThirdVBoxContainer"]
+custom_minimum_size = Vector2(237, 42)
+layout_mode = 2
+size_flags_horizontal = 4
+alignment = 1
+selected = 0
+item_count = 4
+popup/item_0/text = "Option Button"
+popup/item_0/id = 0
+popup/item_1/text = "Option 1"
+popup/item_1/id = 1
+popup/item_2/text = "Option 2"
+popup/item_2/id = 2
+popup/item_3/text = "Option 3"
+popup/item_3/id = 3
+
+[node name="ShrinkPressedButtonModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/ThirdVBoxContainer/OptionButton"]
+script = ExtResource("13_h8i5m")
+shrink_scale = Vector2(0.9, 0.9)
+shrink_duration = 0.3
+return_duration = 0.3
+
+[node name="ExpandHoveredButtonModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/ThirdVBoxContainer/OptionButton"]
+script = ExtResource("14_exov8")
+expand_scale = Vector2(1.1, 1.1)
+expand_duration = 0.3
+return_duration = 0.3
+tween_type = 5
+
+[node name="MenuButton" type="MenuButton" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/ThirdVBoxContainer"]
+custom_minimum_size = Vector2(237, 42)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Menu Button"
+item_count = 6
+popup/item_0/text = "Radio Button 1"
+popup/item_0/checkable = 2
+popup/item_0/checked = true
+popup/item_0/id = 0
+popup/item_1/text = "Radio Button 2"
+popup/item_1/id = 1
+popup/item_2/text = "Check Box"
+popup/item_2/checkable = 1
+popup/item_2/checked = true
+popup/item_2/id = 2
+popup/item_3/text = "Separator"
+popup/item_3/id = 3
+popup/item_3/separator = true
+popup/item_4/text = "Option 1"
+popup/item_4/id = 4
+popup/item_5/text = "Option 2"
+popup/item_5/id = 5
+script = ExtResource("16_2wp81")
+
+[node name="ShrinkPressedButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/ThirdVBoxContainer/MenuButton" instance=ExtResource("17_3474d")]
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ButtonsMarginContainer/HBoxContainer/ThirdVBoxContainer/MenuButton" instance=ExtResource("8_et28q")]
+
+[node name="TextMarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 19
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 19
+theme_override_constants/margin_bottom = 10
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TextMarginContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 22
+alignment = 1
+
+[node name="FirstVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TextMarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="MarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TextMarginContainer/HBoxContainer/FirstVBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="TextEdit" type="TextEdit" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TextMarginContainer/HBoxContainer/FirstVBoxContainer/MarginContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_font_sizes/font_size = 15
+text = "
+                 Text Edit
+
+Once upon a time there was
+It went right, expecting more
+Only to find nothing
+
+Their dissappointment was     [[ immeasurable ]]
+And their day was ruined
+
+
+
+
+
+
+
+
+
+
+hi                                                                                 uh... bye"
+placeholder_text = "Text Edit"
+autowrap_mode = 2
+
+[node name="MiddleVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TextMarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="Label" type="Label" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TextMarginContainer/HBoxContainer/MiddleVBoxContainer"]
+custom_minimum_size = Vector2(78.92, 50)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 1
+mouse_filter = 0
+theme_override_font_sizes/font_size = 23
+text = "Label"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TextMarginContainer/HBoxContainer/MiddleVBoxContainer/Label" instance=ExtResource("8_et28q")]
+
+[node name="RichTextLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TextMarginContainer/HBoxContainer/MiddleVBoxContainer"]
+custom_minimum_size = Vector2(207.89, 50)
+layout_mode = 2
+size_flags_horizontal = 4
+bbcode_enabled = true
+text = "[tornado]Rich Text Label"
+fit_content = true
+autowrap_mode = 0
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TextMarginContainer/HBoxContainer/MiddleVBoxContainer/RichTextLabel" instance=ExtResource("8_et28q")]
+
+[node name="LineEdit" type="LineEdit" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TextMarginContainer/HBoxContainer/MiddleVBoxContainer"]
+layout_mode = 2
+placeholder_text = "      Line Edit"
+alignment = 1
+clear_button_enabled = true
+right_icon = ExtResource("18_mmw2i")
+
+[node name="LastVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TextMarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="MarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TextMarginContainer/HBoxContainer/LastVBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="CodeEdit" type="CodeEdit" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/TextMarginContainer/HBoxContainer/LastVBoxContainer/MarginContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/line_spacing = 0
+theme_override_font_sizes/font_size = 14
+text = "
+       Code Edit
+
+func _ready() -> void:
+	
+	#WARNING
+	run_program()
+	
+	#ERROR
+	program_no_work()"
+draw_tabs = true
+
+[node name="RangesMarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 19
+theme_override_constants/margin_right = 19
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 22
+alignment = 1
+
+[node name="LeftVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(553.09, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 25
+alignment = 1
+
+[node name="HSliderHBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/LeftVBoxContainer"]
+custom_minimum_size = Vector2(0, 37.95)
+layout_mode = 2
+
+[node name="HSliderRichTextLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/LeftVBoxContainer/HSliderHBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/normal_font_size = 24
+bbcode_enabled = true
+text = "[u]H Slider"
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/LeftVBoxContainer/HSliderHBoxContainer/HSliderRichTextLabel" instance=ExtResource("8_et28q")]
+
+[node name="HSlider" type="HSlider" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/LeftVBoxContainer/HSliderHBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+value = 63.0
+tick_count = 5
+
+[node name="HScrollBarHBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/LeftVBoxContainer"]
+custom_minimum_size = Vector2(0, 37.95)
+layout_mode = 2
+
+[node name="HScrollBarRichTextLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/LeftVBoxContainer/HScrollBarHBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/normal_font_size = 24
+bbcode_enabled = true
+text = "[u]H Scroll Bar"
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/LeftVBoxContainer/HScrollBarHBoxContainer/HScrollBarRichTextLabel" instance=ExtResource("8_et28q")]
+
+[node name="HScrollBar" type="HScrollBar" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/LeftVBoxContainer/HScrollBarHBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+page = 30.0
+value = 20.0
+
+[node name="SpinBoxHBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/LeftVBoxContainer"]
+custom_minimum_size = Vector2(0, 37.95)
+layout_mode = 2
+
+[node name="SpinBoxRichTextLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/LeftVBoxContainer/SpinBoxHBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/normal_font_size = 24
+bbcode_enabled = true
+text = "[u]SpinBox"
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/LeftVBoxContainer/SpinBoxHBoxContainer/SpinBoxRichTextLabel" instance=ExtResource("8_et28q")]
+
+[node name="SpinBox" type="SpinBox" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/LeftVBoxContainer/SpinBoxHBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1e+15
+value = 1e+15
+alignment = 1
+
+[node name="ProgressBarHBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/LeftVBoxContainer"]
+custom_minimum_size = Vector2(0, 37.95)
+layout_mode = 2
+
+[node name="ProgressBarRichTextLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/LeftVBoxContainer/ProgressBarHBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/normal_font_size = 24
+bbcode_enabled = true
+text = "[u]Progress Bar"
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/LeftVBoxContainer/ProgressBarHBoxContainer/ProgressBarRichTextLabel" instance=ExtResource("8_et28q")]
+
+[node name="ProgressBar" type="ProgressBar" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/LeftVBoxContainer/ProgressBarHBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 1
+script = ExtResource("19_c7e6i")
+animation_duration = 4.0
+loop_animation = true
+loop_delay = 0.3
+
+[node name="RightVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="MarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/RightVBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/RightVBoxContainer/MarginContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="VSliderVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/RightVBoxContainer/MarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 33
+
+[node name="VSliderRichTextLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/RightVBoxContainer/MarginContainer/HBoxContainer/VSliderVBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 24
+bbcode_enabled = true
+text = "[u]V Slider"
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/RightVBoxContainer/MarginContainer/HBoxContainer/VSliderVBoxContainer/VSliderRichTextLabel" instance=ExtResource("8_et28q")]
+
+[node name="VSlider" type="VSlider" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/RightVBoxContainer/MarginContainer/HBoxContainer/VSliderVBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 1
+size_flags_vertical = 3
+value = 50.0
+tick_count = 4
+
+[node name="VScrollBarVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/RightVBoxContainer/MarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 33
+
+[node name="VScrollBarRichTextLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/RightVBoxContainer/MarginContainer/HBoxContainer/VScrollBarVBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 24
+bbcode_enabled = true
+text = "[u]V Scroll Bar"
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/RightVBoxContainer/MarginContainer/HBoxContainer/VScrollBarVBoxContainer/VScrollBarRichTextLabel" instance=ExtResource("8_et28q")]
+
+[node name="VScrollBar" type="VScrollBar" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/RangesMarginContainer/HBoxContainer/RightVBoxContainer/MarginContainer/HBoxContainer/VScrollBarVBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 3
+page = 30.0
+value = 20.0
+
+[node name="ContainersMarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 19
+theme_override_constants/margin_right = 19
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 22
+alignment = 1
+
+[node name="LeftVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="TabContainer" type="TabContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer" node_paths=PackedStringArray("popup_menu")]
+custom_minimum_size = Vector2(548.745, 130.57)
+layout_mode = 2
+current_tab = 0
+drag_to_rearrange_enabled = true
+script = ExtResource("20_153qd")
+popup_menu = NodePath("PopupMenu")
+
+[node name="Tab 1" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer"]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+metadata/_tab_index = 0
+
+[node name="RichTextLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer/Tab 1"]
+layout_mode = 2
+bbcode_enabled = true
+text = "Tab Container"
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer/Tab 1/RichTextLabel" instance=ExtResource("8_et28q")]
+
+[node name="Tab 2" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer"]
+visible = false
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+metadata/_tab_index = 1
+
+[node name="RichTextLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer/Tab 2"]
+layout_mode = 2
+bbcode_enabled = true
+text = "You can drag and re-arrange the tabs"
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer/Tab 2/RichTextLabel" instance=ExtResource("8_et28q")]
+
+[node name="Tab 3" type="Control" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer"]
+visible = false
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+metadata/_tab_index = 2
+
+[node name="Tab 4" type="Control" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer"]
+visible = false
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+metadata/_tab_index = 3
+
+[node name="Tab 5" type="Control" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer"]
+visible = false
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+metadata/_tab_index = 4
+
+[node name="Tab 6" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer"]
+visible = false
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+metadata/_tab_index = 5
+
+[node name="RichTextLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer/Tab 6"]
+visible = false
+layout_mode = 2
+bbcode_enabled = true
+text = "You can drag and re-arrange the tabs"
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer/Tab 6/RichTextLabel" instance=ExtResource("8_et28q")]
+
+[node name="Tab 7" type="Control" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer"]
+visible = false
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+metadata/_tab_index = 6
+
+[node name="Tab 8" type="Control" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer"]
+visible = false
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+metadata/_tab_index = 7
+
+[node name="Tab 9" type="Control" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer"]
+visible = false
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+metadata/_tab_index = 8
+
+[node name="Tab 10" type="Control" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer"]
+visible = false
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+metadata/_tab_index = 9
+
+[node name="Tab 11" type="Control" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer"]
+visible = false
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+metadata/_tab_index = 10
+
+[node name="Tab 12" type="Control" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer"]
+visible = false
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+metadata/_tab_index = 11
+
+[node name="PopupMenu" type="PopupMenu" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/TabContainer"]
+size = Vector2i(374, 100)
+item_count = 3
+item_0/text = "This is a Tab Container Pop-up Menu!"
+item_0/id = 0
+item_1/text = "You can have multiple options"
+item_1/id = 1
+item_2/text = "Amazing..."
+item_2/id = 2
+
+[node name="HSplitContainerPanelContainer" type="PanelContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer"]
+custom_minimum_size = Vector2(0, 91.35)
+layout_mode = 2
+size_flags_vertical = 6
+theme_override_styles/panel = SubResource("StyleBoxFlat_j788q")
+
+[node name="HSplitContainer" type="HSplitContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/HSplitContainerPanelContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/autohide = 0
+
+[node name="HSplitContainerLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/HSplitContainerPanelContainer/HSplitContainer"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "H Split Container"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/HSplitContainerPanelContainer/HSplitContainer/HSplitContainerLabel" instance=ExtResource("8_et28q")]
+
+[node name="DragLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/HSplitContainerPanelContainer/HSplitContainer"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "< Drag w/ Mouse"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/LeftVBoxContainer/HSplitContainerPanelContainer/HSplitContainer/DragLabel" instance=ExtResource("8_et28q")]
+
+[node name="RightVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 15
+alignment = 1
+
+[node name="VSplitContainerPanelContainer" type="PanelContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/RightVBoxContainer"]
+custom_minimum_size = Vector2(0, 91.35)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_j788q")
+
+[node name="VSplitContainer" type="VSplitContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/RightVBoxContainer/VSplitContainerPanelContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="VSplitContainerLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/RightVBoxContainer/VSplitContainerPanelContainer/VSplitContainer"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_vertical = 3
+text = "V Split Container"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/RightVBoxContainer/VSplitContainerPanelContainer/VSplitContainer/VSplitContainerLabel" instance=ExtResource("8_et28q")]
+
+[node name="DragLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/RightVBoxContainer/VSplitContainerPanelContainer/VSplitContainer"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_vertical = 3
+text = "^ Drag Me ^"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ContainersMarginContainer/HBoxContainer/RightVBoxContainer/VSplitContainerPanelContainer/VSplitContainer/DragLabel" instance=ExtResource("8_et28q")]
+
+[node name="OtherMarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 19
+theme_override_constants/margin_right = 19
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 22
+alignment = 1
+
+[node name="LeftVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 19
+alignment = 1
+
+[node name="SeparatorsPanelContainer" type="PanelContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer"]
+custom_minimum_size = Vector2(0, 140)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_iarpf")
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/SeparatorsPanelContainer"]
+layout_mode = 2
+
+[node name="VSeparatorRichTextLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/SeparatorsPanelContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/normal_font_size = 16
+bbcode_enabled = true
+text = "V Separator >"
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/SeparatorsPanelContainer/HBoxContainer/VSeparatorRichTextLabel" instance=ExtResource("8_et28q")]
+
+[node name="VSeparator" type="VSeparator" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/SeparatorsPanelContainer/HBoxContainer"]
+custom_minimum_size = Vector2(0, 100.835)
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/SeparatorsPanelContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/SeparatorsPanelContainer/HBoxContainer/VBoxContainer"]
+custom_minimum_size = Vector2(125.195, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+
+[node name="HSeparatorRichTextLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/SeparatorsPanelContainer/HBoxContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/normal_font_size = 16
+bbcode_enabled = true
+text = "^ H Separator ^"
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/SeparatorsPanelContainer/HBoxContainer/VBoxContainer/HSeparatorRichTextLabel" instance=ExtResource("8_et28q")]
+
+[node name="HSeparator2" type="HSeparator" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/SeparatorsPanelContainer/HBoxContainer/VBoxContainer"]
+custom_minimum_size = Vector2(125.195, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+
+[node name="TooltipVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer"]
+layout_mode = 2
+
+[node name="TooltipTutorialRichTextLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/TooltipVBoxContainer"]
+modulate = Color(1, 1, 1, 0.792157)
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 13
+bbcode_enabled = true
+text = "Hover your mouse over the following controls to show a tool tip"
+fit_content = true
+horizontal_alignment = 1
+
+[node name="TooltipExamplesHBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/TooltipVBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 21
+alignment = 1
+
+[node name="TooltipExamplePanel" type="Panel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/TooltipVBoxContainer/TooltipExamplesHBoxContainer"]
+custom_minimum_size = Vector2(42, 42)
+layout_mode = 2
+tooltip_text = "This is a Circle!"
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/TooltipVBoxContainer/TooltipExamplesHBoxContainer/TooltipExamplePanel" instance=ExtResource("8_et28q")]
+
+[node name="TooltipExamplePanel2" type="Panel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/TooltipVBoxContainer/TooltipExamplesHBoxContainer"]
+custom_minimum_size = Vector2(56.915, 42)
+layout_mode = 2
+tooltip_text = "This is a Capsule!"
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/TooltipVBoxContainer/TooltipExamplesHBoxContainer/TooltipExamplePanel2" instance=ExtResource("8_et28q")]
+
+[node name="TooltipExamplePanel3" type="Panel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/TooltipVBoxContainer/TooltipExamplesHBoxContainer"]
+custom_minimum_size = Vector2(42, 42)
+layout_mode = 2
+tooltip_text = "This is a Square!"
+theme_override_styles/panel = SubResource("StyleBoxFlat_ao6rs")
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/TooltipVBoxContainer/TooltipExamplesHBoxContainer/TooltipExamplePanel3" instance=ExtResource("8_et28q")]
+
+[node name="TooltipExamplePanel4" type="Panel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/TooltipVBoxContainer/TooltipExamplesHBoxContainer"]
+custom_minimum_size = Vector2(62.185, 42)
+layout_mode = 2
+tooltip_text = "This is a Pyramid!"
+theme_override_styles/panel = SubResource("StyleBoxFlat_xoufb")
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/LeftVBoxContainer/TooltipVBoxContainer/TooltipExamplesHBoxContainer/TooltipExamplePanel4" instance=ExtResource("8_et28q")]
+
+[node name="ButtonsVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 15
+alignment = 1
+
+[node name="RightVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/ButtonsVBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 19
+
+[node name="Tree" type="Tree" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/ButtonsVBoxContainer/RightVBoxContainer"]
+custom_minimum_size = Vector2(0, 140)
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("21_p3saj")
+
+[node name="DialogVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/ButtonsVBoxContainer/RightVBoxContainer"]
+layout_mode = 2
+
+[node name="DialogTutorialRichTextLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/ButtonsVBoxContainer/RightVBoxContainer/DialogVBoxContainer"]
+modulate = Color(1, 1, 1, 0.792157)
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 13
+bbcode_enabled = true
+text = "Click the buttons below to open the corresponding windows"
+fit_content = true
+horizontal_alignment = 1
+
+[node name="DialogButtonsHBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/ButtonsVBoxContainer/RightVBoxContainer/DialogVBoxContainer"]
+layout_mode = 2
+
+[node name="AcceptDialogButton" type="Button" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/ButtonsVBoxContainer/RightVBoxContainer/DialogVBoxContainer/DialogButtonsHBoxContainer" node_paths=PackedStringArray("accept_dialog")]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 15
+text = "Accept Dialog"
+script = ExtResource("22_pjbv5")
+accept_dialog = NodePath("AcceptDialog")
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/ButtonsVBoxContainer/RightVBoxContainer/DialogVBoxContainer/DialogButtonsHBoxContainer/AcceptDialogButton" instance=ExtResource("8_et28q")]
+expand_scale = Vector2(1.1, 1)
+expand_duration = 0.6
+use_minimum_size = true
+return_duration = 2.0
+
+[node name="AcceptDialog" type="AcceptDialog" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/ButtonsVBoxContainer/RightVBoxContainer/DialogVBoxContainer/DialogButtonsHBoxContainer/AcceptDialogButton"]
+auto_translate_mode = 1
+theme = ExtResource("23_21cg8")
+ok_button_text = "Ok"
+dialog_text = "
+ Error: Please send logs to the Developer!
+
+"
+
+[node name="ConfirmationDialogButton" type="Button" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/ButtonsVBoxContainer/RightVBoxContainer/DialogVBoxContainer/DialogButtonsHBoxContainer" node_paths=PackedStringArray("confirmation_dialog")]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 15
+text = "Confirmation"
+script = ExtResource("24_ppwvp")
+confirmation_dialog = NodePath("ConfirmationDialog")
+
+[node name="ConfirmationDialog" type="ConfirmationDialog" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/ButtonsVBoxContainer/RightVBoxContainer/DialogVBoxContainer/DialogButtonsHBoxContainer/ConfirmationDialogButton"]
+auto_translate_mode = 1
+theme = ExtResource("23_21cg8")
+ok_button_text = "Ok"
+dialog_text = "
+   Do you want to discard your changes?"
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/ButtonsVBoxContainer/RightVBoxContainer/DialogVBoxContainer/DialogButtonsHBoxContainer/ConfirmationDialogButton" instance=ExtResource("8_et28q")]
+expand_scale = Vector2(1.1, 0)
+expand_duration = 0.6
+use_minimum_size = true
+return_duration = 2.0
+
+[node name="FileDialogButton" type="Button" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/ButtonsVBoxContainer/RightVBoxContainer/DialogVBoxContainer/DialogButtonsHBoxContainer" node_paths=PackedStringArray("file_dialog")]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 15
+text = "File Dialog"
+script = ExtResource("25_t7t2g")
+file_dialog = NodePath("FileDialog")
+
+[node name="FileDialog" type="FileDialog" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/ButtonsVBoxContainer/RightVBoxContainer/DialogVBoxContainer/DialogButtonsHBoxContainer/FileDialogButton"]
+auto_translate_mode = 1
+theme = ExtResource("23_21cg8")
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/OtherMarginContainer/HBoxContainer/ButtonsVBoxContainer/RightVBoxContainer/DialogVBoxContainer/DialogButtonsHBoxContainer/FileDialogButton" instance=ExtResource("8_et28q")]
+expand_scale = Vector2(1.1, 0)
+expand_duration = 0.6
+use_minimum_size = true
+return_duration = 2.0
+
+[node name="PlaygroundManualMarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 64
+theme_override_constants/margin_right = 19
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 22
+alignment = 1
+
+[node name="PlaygroundMarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer/PlaygroundMarginContainer"]
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer/PlaygroundMarginContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer/PlaygroundMarginContainer/ScrollContainer/MarginContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="HeadingVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer/PlaygroundMarginContainer/ScrollContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer/PlaygroundMarginContainer/ScrollContainer/MarginContainer/VBoxContainer/HeadingVBoxContainer"]
+layout_mode = 2
+
+[node name="PanelContainer" type="Panel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer/PlaygroundMarginContainer/ScrollContainer/MarginContainer/VBoxContainer/HeadingVBoxContainer/MarginContainer"]
+clip_children = 1
+layout_mode = 2
+theme_override_styles/panel = ExtResource("27_ewyi2")
+
+[node name="AnimatedRockingTexture" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer/PlaygroundMarginContainer/ScrollContainer/MarginContainer/VBoxContainer/HeadingVBoxContainer/MarginContainer/PanelContainer" instance=ExtResource("2_pd73r")]
+layout_mode = 2
+offset_right = 453.0
+offset_bottom = 60.0
+texture = ExtResource("28_h8i5m")
+
+[node name="RichTextLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer/PlaygroundMarginContainer/ScrollContainer/MarginContainer/VBoxContainer/HeadingVBoxContainer/MarginContainer"]
+custom_minimum_size = Vector2(0, 60.445)
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 28
+bbcode_enabled = true
+text = "Playgrounds"
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="MarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer/PlaygroundMarginContainer/ScrollContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 25
+theme_override_constants/margin_top = 5
+theme_override_constants/margin_right = 25
+theme_override_constants/margin_bottom = 5
+
+[node name="DynamicPlaygroundButtonsVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer/PlaygroundMarginContainer/ScrollContainer/MarginContainer/VBoxContainer/MarginContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="SceneManagerModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer/PlaygroundMarginContainer/ScrollContainer" node_paths=PackedStringArray("button_container")]
+script = ExtResource("26_hm1f8")
+scene_paths = Array[String](["uid://bn50b2085s6iv", "uid://bfbq8rrf4ksbx", "uid://dr2vmaxfd858w"])
+custom_button_names = Array[String](["Login Demo", "Simple SVG Editor", "Calculator"])
+button_modules = Array[PackedScene]([ExtResource("17_3474d"), ExtResource("8_et28q")])
+button_container = NodePath("../MarginContainer/VBoxContainer/MarginContainer/DynamicPlaygroundButtonsVBoxContainer")
+fade_out_duration = 0.1
+back_button_scene = ExtResource("27_pd73r")
+back_button_position = Vector2(5, 5)
+debug_mode = true
+
+[node name="ManualMarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(346.565, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer/ManualMarginContainer"]
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer/ManualMarginContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer/ManualMarginContainer/ScrollContainer/MarginContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="WIPRichTextLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer/ManualMarginContainer/ScrollContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_colors/default_color = Color(0.918634, 0.918634, 0.918634, 1)
+theme_override_font_sizes/bold_font_size = 26
+bbcode_enabled = true
+text = "Manual Here!
+"
+fit_content = true
+autowrap_mode = 0
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="LinkButton" type="LinkButton" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer/ManualMarginContainer/ScrollContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_colors/font_color = Color(0.381623, 0.934097, 1, 1)
+theme_override_fonts/font = SubResource("FontVariation_n3ruf")
+theme_override_font_sizes/font_size = 37
+text = "Click on Me"
+uri = "https://scalloped-tibia-594.notion.site/Glassmorphism-Manual-24cbe0445a558046bfcdca4896b1adac"
+
+[node name="ManualSceneManagerModule" type="Node" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/PlaygroundManualMarginContainer/HBoxContainer/ManualMarginContainer"]
+script = ExtResource("26_hm1f8")
+custom_button_names = Array[String](["My Workflow"])
+fade_out_duration = 0.1
+back_button_scene = ExtResource("27_pd73r")
+back_button_position = Vector2(5, 5)
+debug_mode = true
+
+[node name="ShowcaseNavigationHBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer" node_paths=PackedStringArray("buttons", "controls", "title_rich_text_label")]
+layout_mode = 2
+size_flags_vertical = 8
+script = ExtResource("27_5b4ux")
+buttons = [NodePath("MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/TopHBoxContainer/ButtonSectionButton"), NodePath("MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/TopHBoxContainer/TextSectionButton"), NodePath("MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/TopHBoxContainer/RangesSectionButton"), NodePath("MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/TopHBoxContainer/ContainersSectionButton"), NodePath("MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/TopHBoxContainer/OtherSectionButton"), NodePath("MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/BottomHBoxContainer/TipsAndAssetsSectionButton")]
+controls = [NodePath("../ButtonsMarginContainer"), NodePath("../TextMarginContainer"), NodePath("../RangesMarginContainer"), NodePath("../ContainersMarginContainer"), NodePath("../OtherMarginContainer"), NodePath("../PlaygroundManualMarginContainer")]
+title_rich_text_label = NodePath("../TopHeaderPanel/MarginContainer/HBoxContainer/MarginContainer/TitleRichTextLabel")
+title_texts = Array[String](["[b] Glassmorphism: Buttons ", "[b] Glassmorphism: Text ", "[b] Glassmorphism: Ranges ", "[b] Glassmorphism: Containers ", "[b] Glassmorphism: Other ", "[b] Glassmorphism: Handbook "])
+fade_out_duration = 0.2
+fade_in_duration = 0.2
+
+[node name="MarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_right = 136
+
+[node name="ShowcaseNavigationPanelContainer" type="Panel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer"]
+clip_children = 1
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_mcw2f")
+
+[node name="ShowcaseNavigationAnimatedRockingTexture" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationPanelContainer" instance=ExtResource("2_pd73r")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 0.0
+offset_bottom = 0.0
+rock_distance = 800.0
+
+[node name="ShowcaseNavigationMarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer"]
+layout_mode = 2
+size_flags_vertical = 10
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationMarginContainer"]
+layout_mode = 2
+size_flags_vertical = 10
+theme_override_constants/separation = 20
+
+[node name="ShowcaseNavigationRichTextLabel" type="RichTextLabel" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer"]
+modulate = Color(2, 2, 2, 1)
+layout_mode = 2
+focus_mode = 2
+theme_override_font_sizes/normal_font_size = 23
+bbcode_enabled = true
+text = "Showcase
+Navigation"
+fit_content = true
+autowrap_mode = 0
+horizontal_alignment = 1
+selection_enabled = true
+
+[node name="ButtonsVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="TopHBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ButtonSectionButton" type="Button" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/TopHBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 14
+text = "Buttons"
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/TopHBoxContainer/ButtonSectionButton" instance=ExtResource("8_et28q")]
+expand_scale = Vector2(1.2, 1)
+expand_duration = 0.6
+use_minimum_size = true
+return_duration = 2.0
+
+[node name="TextSectionButton" type="Button" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/TopHBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 14
+text = "Text"
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/TopHBoxContainer/TextSectionButton" instance=ExtResource("8_et28q")]
+expand_scale = Vector2(1.2, 1)
+expand_duration = 0.6
+use_minimum_size = true
+return_duration = 2.0
+
+[node name="RangesSectionButton" type="Button" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/TopHBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 14
+text = "Ranges"
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/TopHBoxContainer/RangesSectionButton" instance=ExtResource("8_et28q")]
+expand_scale = Vector2(1.2, 1)
+expand_duration = 0.6
+use_minimum_size = true
+return_duration = 2.0
+
+[node name="ContainersSectionButton" type="Button" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/TopHBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 14
+text = "Containers"
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/TopHBoxContainer/ContainersSectionButton" instance=ExtResource("8_et28q")]
+expand_scale = Vector2(1.2, 1)
+expand_duration = 0.6
+use_minimum_size = true
+return_duration = 2.0
+
+[node name="OtherSectionButton" type="Button" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/TopHBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 14
+text = "Other"
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/TopHBoxContainer/OtherSectionButton" instance=ExtResource("8_et28q")]
+expand_scale = Vector2(1.3, 1)
+expand_duration = 0.6
+use_minimum_size = true
+return_duration = 2.0
+
+[node name="BottomHBoxContainer" type="HBoxContainer" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer"]
+layout_mode = 2
+
+[node name="TipsAndAssetsSectionButton" type="Button" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/BottomHBoxContainer"]
+custom_minimum_size = Vector2(130.775, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 14
+text = "Playgrounds and Manual"
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/BottomHBoxContainer/TipsAndAssetsSectionButton" instance=ExtResource("8_et28q")]
+expand_scale = Vector2(1, 1.3)
+expand_duration = 0.6
+use_minimum_size = true
+return_duration = 2.0
+
+[node name="SizeCheckerModule" parent="MainMarginContainer/HBoxContainer/MainPanel/MarginContainer/VBoxContainer/ShowcaseNavigationHBoxContainer/MarginContainer/ShowcaseNavigationMarginContainer/HBoxContainer/ButtonsVBoxContainer/BottomHBoxContainer/TipsAndAssetsSectionButton" instance=ExtResource("28_clry6")]
+check_mode = 1
+target_size_2d = Vector2(0, 0)
+
+[node name="ShadowModule" parent="MainMarginContainer/HBoxContainer/MainPanel" instance=ExtResource("4_r687l")]
+layout_mode = 1
+theme_override_constants/margin_bottom = 2
+metadata/_edit_lock_ = true
+
+[node name="TopRightDemoButtonsVBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_bottom = 148
+
+[node name="ButtonsScrollContainer" type="ScrollContainer" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 2
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_top = 8
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 2
+theme_override_constants/separation = 12
+
+[node name="IconButton" type="Button" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(58, 58)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+icon = ExtResource("29_aeypk")
+icon_alignment = 1
+
+[node name="ShrinkPressedButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton" instance=ExtResource("17_3474d")]
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton" instance=ExtResource("8_et28q")]
+
+[node name="IconButton2" type="Button" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(58, 58)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+icon = ExtResource("30_gh3e3")
+icon_alignment = 1
+
+[node name="ShrinkPressedButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton2" instance=ExtResource("17_3474d")]
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton2" instance=ExtResource("8_et28q")]
+
+[node name="IconButton3" type="Button" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(58, 58)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+icon = ExtResource("31_l0gci")
+icon_alignment = 1
+
+[node name="ShrinkPressedButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton3" instance=ExtResource("17_3474d")]
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton3" instance=ExtResource("8_et28q")]
+
+[node name="IconButton4" type="Button" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(58, 58)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+icon = ExtResource("32_wob2f")
+icon_alignment = 1
+
+[node name="ShrinkPressedButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton4" instance=ExtResource("17_3474d")]
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton4" instance=ExtResource("8_et28q")]
+
+[node name="IconButton5" type="Button" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(58, 58)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+icon = ExtResource("33_fhcrq")
+icon_alignment = 1
+
+[node name="ShrinkPressedButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton5" instance=ExtResource("17_3474d")]
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton5" instance=ExtResource("8_et28q")]
+
+[node name="IconButton6" type="Button" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(58, 58)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+icon = ExtResource("34_eimdp")
+icon_alignment = 1
+
+[node name="ShrinkPressedButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton6" instance=ExtResource("17_3474d")]
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton6" instance=ExtResource("8_et28q")]
+
+[node name="IconButton7" type="Button" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(58, 58)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+icon = ExtResource("35_uahl1")
+icon_alignment = 1
+
+[node name="ShrinkPressedButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton7" instance=ExtResource("17_3474d")]
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton7" instance=ExtResource("8_et28q")]
+
+[node name="IconButton8" type="Button" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(58, 58)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+icon = ExtResource("36_upls2")
+icon_alignment = 1
+
+[node name="ShrinkPressedButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton8" instance=ExtResource("17_3474d")]
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton8" instance=ExtResource("8_et28q")]
+
+[node name="IconButton9" type="Button" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(58, 58)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+icon = ExtResource("37_g7w6x")
+icon_alignment = 1
+
+[node name="ShrinkPressedButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton9" instance=ExtResource("17_3474d")]
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton9" instance=ExtResource("8_et28q")]
+
+[node name="IconButton10" type="Button" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(58, 58)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+icon = ExtResource("38_5fk7h")
+icon_alignment = 1
+
+[node name="ShrinkPressedButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton10" instance=ExtResource("17_3474d")]
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton10" instance=ExtResource("8_et28q")]
+
+[node name="IconButton11" type="Button" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(58, 58)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+icon = ExtResource("39_c8wya")
+icon_alignment = 1
+
+[node name="ShrinkPressedButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton11" instance=ExtResource("17_3474d")]
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton11" instance=ExtResource("8_et28q")]
+
+[node name="IconButton12" type="Button" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(58, 58)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+icon = ExtResource("40_va1ph")
+icon_alignment = 1
+
+[node name="ShrinkPressedButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton12" instance=ExtResource("17_3474d")]
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton12" instance=ExtResource("8_et28q")]
+
+[node name="IconButton13" type="Button" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(58, 58)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+icon = ExtResource("41_cv8k4")
+icon_alignment = 1
+
+[node name="ShrinkPressedButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton13" instance=ExtResource("17_3474d")]
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton13" instance=ExtResource("8_et28q")]
+
+[node name="IconButton14" type="Button" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(58, 58)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+icon = ExtResource("42_gls56")
+icon_alignment = 1
+
+[node name="ShrinkPressedButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton14" instance=ExtResource("17_3474d")]
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton14" instance=ExtResource("8_et28q")]
+
+[node name="IconButton15" type="Button" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(58, 58)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+icon = ExtResource("5_lf1fn")
+icon_alignment = 1
+
+[node name="ShrinkPressedButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton15" instance=ExtResource("17_3474d")]
+
+[node name="ExpandHoveredButtonModule" parent="MainMarginContainer/HBoxContainer/TopRightDemoButtonsVBoxContainer/MarginContainer/ButtonsScrollContainer/MarginContainer/VBoxContainer/IconButton15" instance=ExtResource("8_et28q")]
+
+[node name="LinkTreeButtonControl" type="Control" parent="."]
+modulate = Color(2.4, 2.4, 2.4, 1)
+anchors_preset = 0
+offset_left = 996.0
+offset_top = 569.0
+offset_right = 1036.0
+offset_bottom = 609.0
+
+[node name="LinkTreeButton" type="Button" parent="LinkTreeButtonControl"]
+modulate = Color(0.64, 1, 0.844, 0.839216)
+custom_minimum_size = Vector2(120.705, 0)
+layout_mode = 0
+offset_right = 120.705
+offset_bottom = 29.0
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 18
+theme_override_styles/disabled = ExtResource("9_b3ys1")
+theme_override_styles/hover = ExtResource("10_4a15r")
+theme_override_styles/pressed = ExtResource("11_0kmtx")
+theme_override_styles/normal = ExtResource("12_ewyi2")
+text = "Link Tree"
+flat = true
+script = ExtResource("43_cemds")
+
+[node name="ShadowModule" parent="LinkTreeButtonControl/LinkTreeButton" instance=ExtResource("4_r687l")]
+layout_mode = 1
+metadata/_edit_lock_ = true
+
+[node name="ShrinkPressedButtonModule" type="Node" parent="LinkTreeButtonControl/LinkTreeButton"]
+script = ExtResource("13_h8i5m")
+shrink_scale = Vector2(0.9, 0.9)
+shrink_duration = 0.3
+return_duration = 0.3
+
+[node name="TextureRect" type="TextureRect" parent="LinkTreeButtonControl/LinkTreeButton"]
+layout_mode = 0
+offset_left = 75.0
+offset_top = 33.0
+offset_right = 97.0
+offset_bottom = 55.0
+texture = ExtResource("44_7bhoq")
+
+[node name="ExpandHoveredButtonModule" type="Node" parent="LinkTreeButtonControl/LinkTreeButton"]
+script = ExtResource("14_exov8")
+expand_scale = Vector2(1.1, 1.1)
+expand_duration = 0.3
+return_duration = 0.3
+tween_type = 5
+
+[node name="GlowingWorldEnvironment" parent="." instance=ExtResource("46_ysibr")]
+environment = SubResource("Environment_ysibr")
+
+[node name="TutorialFairyManager" type="Control" parent="." node_paths=PackedStringArray("tutorial_fairy_sprite", "fairy_navigation", "ui_highlights", "background_darken_rect", "chat_boxes_container", "fairy_sprite_hover_effect", "skip_button", "early_fade_controls", "idle_x_axis_node", "idle_y_axis_node")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("48_vxvjw")
+tutorial_fairy_sprite = NodePath("TutorialFairySprite")
+fairy_navigation = NodePath("FairyNavigation")
+ui_highlights = [NodePath("UIHighlighter/Buttons"), NodePath("UIHighlighter/MainContent"), NodePath("UIHighlighter/PlaygroundAndManual"), NodePath("UIHighlighter/BottomRightPanel")]
+highlight_effect_scene = ExtResource("49_ro0ks")
+background_darken_rect = NodePath("InitialDarkenColorRect")
+chat_boxes_container = NodePath("ChatBoxes")
+fairy_sprite_hover_effect = NodePath("TutorialFairySprite/XAxis/YAxis/TutorialFairySpriteOuter/TutorialFairyCenterHover")
+fairy_click_color = Color(5, 0, 5, 1)
+skip_button = NodePath("SkipTutorialMarginContainer/SkipTutorialButton")
+early_fade_controls = [NodePath("SkipTutorialMarginContainer")]
+idle_x_axis_node = NodePath("TutorialFairySprite/XAxis")
+idle_y_axis_node = NodePath("TutorialFairySprite/XAxis/YAxis")
+idle_x_distance = 5.0
+idle_y_distance = 8.0
+
+[node name="InitialDarkenColorRect" type="ColorRect" parent="TutorialFairyManager"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.852)
+
+[node name="UIHighlighter" type="Control" parent="TutorialFairyManager"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+metadata/_edit_lock_ = true
+
+[node name="Buttons" type="ReferenceRect" parent="TutorialFairyManager/UIHighlighter"]
+layout_mode = 0
+offset_left = 212.0
+offset_top = 493.0
+offset_right = 817.0
+offset_bottom = 549.0
+mouse_filter = 2
+border_width = 5.0
+
+[node name="MainContent" type="ReferenceRect" parent="TutorialFairyManager/UIHighlighter"]
+layout_mode = 0
+offset_left = 65.0
+offset_top = 188.0
+offset_right = 958.0
+offset_bottom = 474.0
+mouse_filter = 2
+border_color = Color(1, 0.433073, 0, 1)
+border_width = 5.0
+
+[node name="PlaygroundAndManual" type="ReferenceRect" parent="TutorialFairyManager/UIHighlighter"]
+layout_mode = 0
+offset_left = 212.0
+offset_top = 538.0
+offset_right = 817.0
+offset_bottom = 574.0
+mouse_filter = 2
+border_color = Color(1, 0.85691, 0, 1)
+border_width = 5.0
+
+[node name="BottomRightPanel" type="ReferenceRect" parent="TutorialFairyManager/UIHighlighter"]
+layout_mode = 0
+offset_left = 846.0
+offset_top = 474.0
+offset_right = 1138.0
+offset_bottom = 637.0
+mouse_filter = 2
+border_color = Color(0.701022, 1, 0, 1)
+border_width = 5.0
+
+[node name="ChatBoxes" type="Control" parent="TutorialFairyManager"]
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="TutorialFairyChatBoxParent" type="Control" parent="TutorialFairyManager/ChatBoxes"]
+physics_interpolation_mode = 0
+anchors_preset = 0
+script = ExtResource("50_b3ys1")
+
+[node name="1" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent" instance=ExtResource("50_ro0ks")]
+layout_mode = 1
+offset_left = 358.0
+offset_top = 60.0
+offset_right = 358.0
+offset_bottom = 60.0
+text_animation_speed = 20.0
+
+[node name="RichTextLabel" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent/1/PanelContainer/MarginContainer" index="0"]
+text = "[b]Hey! Listen![/b][color=lightseagreen][wave]
+I am your tutorial fairy![/wave]
+[color=gray][i][pulse]Click on me to Continue!"
+
+[node name="2" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent" instance=ExtResource("50_ro0ks")]
+layout_mode = 1
+offset_left = 665.0
+offset_top = 218.0
+offset_right = 665.0
+offset_bottom = 218.0
+text_animation_speed = 40.0
+
+[node name="PanelContainer" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent/2" index="0"]
+offset_bottom = 200.73
+
+[node name="RichTextLabel" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent/2/PanelContainer/MarginContainer" index="0"]
+theme_override_font_sizes/italics_font_size = 24
+text = "[i]A tutorial isn't really neccesary. But, it's rather to showcase... [/i][rainbow]
+[b][wave]My Powers!"
+
+[node name="TutorialFairyChatBoxParent2" parent="TutorialFairyManager/ChatBoxes" instance=ExtResource("52_b3ys1")]
+visible = false
+layout_mode = 1
+offset_top = 14.0
+offset_bottom = 14.0
+
+[node name="TutorialFairyChatbox" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent2" index="0"]
+offset_left = 297.0
+offset_top = 192.0
+offset_right = 297.0
+offset_bottom = 192.0
+
+[node name="PanelContainer" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent2/TutorialFairyChatbox" index="0"]
+offset_left = 42.0
+offset_top = -12.0
+offset_right = 373.375
+offset_bottom = 184.0
+
+[node name="RichTextLabel" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent2/TutorialFairyChatbox/PanelContainer/MarginContainer" index="0"]
+text = "Here you can [rainbow]Navi[/rainbow]gate between the different [color=lightseagreen]views!"
+
+[node name="TutorialFairyChatBoxParent3" parent="TutorialFairyManager/ChatBoxes" instance=ExtResource("52_b3ys1")]
+visible = false
+layout_mode = 1
+offset_left = 552.0
+offset_top = 34.0
+offset_right = 552.0
+offset_bottom = 34.0
+
+[node name="PanelContainer" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent3/TutorialFairyChatbox" index="0"]
+offset_left = 14.0
+offset_top = 5.0
+offset_right = 411.755
+offset_bottom = 119.975
+
+[node name="RichTextLabel" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent3/TutorialFairyChatbox/PanelContainer/MarginContainer" index="0"]
+text = "Changing the [color=lightseagreen]view[/color] will change [wave][rainbow]this area!"
+
+[node name="TutorialFairyChatBoxParent4" parent="TutorialFairyManager/ChatBoxes" instance=ExtResource("52_b3ys1")]
+visible = false
+layout_mode = 1
+offset_left = 270.0
+offset_top = 319.0
+offset_right = 270.0
+offset_bottom = 319.0
+
+[node name="TutorialFairyChatbox" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent4" index="0"]
+offset_left = 14.0
+offset_top = -49.0
+offset_right = 14.0
+offset_bottom = -49.0
+
+[node name="PanelContainer" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent4/TutorialFairyChatbox" index="0"]
+offset_left = 14.0
+offset_top = 5.0
+offset_right = 451.0
+offset_bottom = 166.16
+
+[node name="RichTextLabel" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent4/TutorialFairyChatbox/PanelContainer/MarginContainer" index="0"]
+text = "This view is [rainbow]extra special![/rainbow]
+It will allow you to see the [color=lightseagreen]UI theme[/color] in [wave]different ways!"
+
+[node name="TutorialFairyChatBoxParent5" parent="TutorialFairyManager/ChatBoxes" instance=ExtResource("52_b3ys1")]
+visible = false
+layout_mode = 1
+offset_left = 270.0
+offset_top = 319.0
+offset_right = 270.0
+offset_bottom = 319.0
+
+[node name="TutorialFairyChatbox" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent5" index="0"]
+offset_left = 107.0
+offset_top = 104.0
+offset_right = 107.0
+offset_bottom = 104.0
+
+[node name="PanelContainer" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent5/TutorialFairyChatbox" index="0"]
+offset_left = 14.0
+offset_top = 77.0
+offset_right = 451.0
+offset_bottom = 179.1
+
+[node name="MarginContainer" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent5/TutorialFairyChatbox/PanelContainer" index="0"]
+theme_override_constants/margin_top = 17
+
+[node name="RichTextLabel" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent5/TutorialFairyChatbox/PanelContainer/MarginContainer" index="0"]
+theme_override_constants/line_separation = 14
+theme_override_font_sizes/bold_font_size = 38
+text = "[color=gray][pulse]But yeah...[/pulse][/color] That's all! x3"
+
+[node name="TutorialFairyChatbox2" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent5" instance=ExtResource("50_ro0ks")]
+visible = false
+layout_mode = 1
+offset_left = 107.0
+offset_top = 104.0
+offset_right = 107.0
+offset_bottom = 104.0
+
+[node name="PanelContainer" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent5/TutorialFairyChatbox2" index="0"]
+offset_left = 329.0
+offset_top = -89.0
+offset_right = 766.0
+offset_bottom = 34.54
+
+[node name="MarginContainer" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent5/TutorialFairyChatbox2/PanelContainer" index="0"]
+theme_override_constants/margin_top = 31
+
+[node name="RichTextLabel" parent="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent5/TutorialFairyChatbox2/PanelContainer/MarginContainer" index="0"]
+theme_override_constants/line_separation = 14
+theme_override_font_sizes/bold_font_size = 38
+text = "[i][color=darkseagreen]Also [wave]Gabe[/wave] says [rainbow]thanks[/rainbow] for checking this out! He hopes you'll find [wave]good use for it!
+[/wave][/color][/i]"
+
+[node name="TutorialFairySprite" type="MarginContainer" parent="TutorialFairyManager"]
+layout_mode = 0
+offset_left = 552.0
+offset_top = 293.0
+offset_right = 602.0
+offset_bottom = 343.0
+
+[node name="CPUParticles2D" type="CPUParticles2D" parent="TutorialFairyManager/TutorialFairySprite"]
+modulate = Color(4, 4, 0, 1)
+position = Vector2(25, 26)
+amount = 24
+lifetime = 2.0
+spread = 180.0
+gravity = Vector2(0, 50)
+initial_velocity_min = 33.78
+initial_velocity_max = 33.78
+color_ramp = SubResource("Gradient_vxvjw")
+
+[node name="XAxis" type="Control" parent="TutorialFairyManager/TutorialFairySprite"]
+layout_mode = 2
+mouse_filter = 2
+metadata/_edit_lock_ = true
+
+[node name="YAxis" type="Control" parent="TutorialFairyManager/TutorialFairySprite/XAxis"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+metadata/_edit_lock_ = true
+
+[node name="TutorialFairySpriteOuter" type="Panel" parent="TutorialFairyManager/TutorialFairySprite/XAxis/YAxis"]
+self_modulate = Color(3, 3, 3, 1)
+custom_minimum_size = Vector2(50, 50)
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+pivot_offset = Vector2(43, 43)
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_ro0ks")
+metadata/_edit_lock_ = true
+
+[node name="TutorialFairyCenter" type="Panel" parent="TutorialFairyManager/TutorialFairySprite/XAxis/YAxis/TutorialFairySpriteOuter"]
+modulate = Color(0, 0.748765, 4, 1)
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -15.0
+offset_top = -15.0
+offset_right = 15.0
+offset_bottom = 15.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_vxvjw")
+metadata/_edit_lock_ = true
+
+[node name="TutorialFairyCenterHover" type="Panel" parent="TutorialFairyManager/TutorialFairySprite/XAxis/YAxis/TutorialFairySpriteOuter"]
+visible = false
+modulate = Color(4, 0.928, 0, 1)
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -15.0
+offset_top = -15.0
+offset_right = 15.0
+offset_bottom = 15.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_vxvjw")
+metadata/_edit_lock_ = true
+
+[node name="ExpandHoveredButtonModule" parent="TutorialFairyManager/TutorialFairySprite" instance=ExtResource("8_et28q")]
+
+[node name="FairyNavigation" type="Line2D" parent="TutorialFairyManager"]
+visible = false
+position = Vector2(0, -11)
+scale = Vector2(1, 0.995171)
+points = PackedVector2Array(511.75, 458, 511, 113.015, 511, 507, 917, 567)
+
+[node name="SkipTutorialMarginContainer" type="MarginContainer" parent="TutorialFairyManager"]
+layout_mode = 0
+offset_left = 996.0
+offset_top = 12.0
+offset_right = 1138.0
+offset_bottom = 61.25
+
+[node name="SkipTutorialPanel" type="Panel" parent="TutorialFairyManager/SkipTutorialMarginContainer"]
+clip_children = 1
+custom_minimum_size = Vector2(0, 49.25)
+layout_mode = 2
+
+[node name="AnimatedRockingTexture" parent="TutorialFairyManager/SkipTutorialMarginContainer/SkipTutorialPanel" instance=ExtResource("2_pd73r")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 0.0
+offset_bottom = 0.0
+expand_mode = 5
+rock_distance = 100.0
+
+[node name="Panel" type="Panel" parent="TutorialFairyManager/SkipTutorialMarginContainer"]
+clip_children = 1
+layout_mode = 2
+theme_override_styles/panel = ExtResource("53_4a15r")
+
+[node name="AnimatedRockingTexture" parent="TutorialFairyManager/SkipTutorialMarginContainer/Panel" instance=ExtResource("2_pd73r")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 0.0
+offset_bottom = 0.0
+texture = ExtResource("54_0kmtx")
+
+[node name="SkipTutorialButton" type="Button" parent="TutorialFairyManager/SkipTutorialMarginContainer"]
+layout_mode = 2
+text = "Skip Tutorial"
+flat = true
+
+[node name="ExpandHoveredButtonModule" parent="TutorialFairyManager/SkipTutorialMarginContainer/SkipTutorialButton" node_paths=PackedStringArray("target_control") instance=ExtResource("8_et28q")]
+target_control = NodePath("../..")
+
+[node name="ShrinkPressedButtonModule" parent="TutorialFairyManager/SkipTutorialMarginContainer/SkipTutorialButton" instance=ExtResource("17_3474d")]
+
+[editable path="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent/1"]
+[editable path="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent/2"]
+[editable path="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent2"]
+[editable path="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent2/TutorialFairyChatbox"]
+[editable path="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent3"]
+[editable path="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent3/TutorialFairyChatbox"]
+[editable path="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent4"]
+[editable path="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent4/TutorialFairyChatbox"]
+[editable path="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent5"]
+[editable path="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent5/TutorialFairyChatbox"]
+[editable path="TutorialFairyManager/ChatBoxes/TutorialFairyChatBoxParent5/TutorialFairyChatbox2"]

@@ -296,6 +296,9 @@ static func create_from_opr_unit(opr_unit: Variant, nodes: Array[Node3D], player
 	# Distribute equipment using the loadout
 	distribute(game_unit, loadout, opr_unit.special_rules)
 
+	# Initialize caster points if unit has Caster rule
+	game_unit.initialize_caster_points()
+
 	return game_unit
 
 
@@ -339,5 +342,8 @@ static func create_from_opr_api(api_unit: Dictionary, nodes: Array[Node3D]) -> G
 	var loadout = api_unit.get("loadout", [])
 	var special_rules = api_unit.get("specialRules", [])
 	distribute(game_unit, loadout, special_rules)
+
+	# Initialize caster points if unit has Caster rule
+	game_unit.initialize_caster_points()
 
 	return game_unit
