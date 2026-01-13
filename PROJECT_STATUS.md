@@ -1,5 +1,5 @@
 # OpenTTS - Projekt Status
-**Stand:** 2026-01-07
+**Stand:** 2026-01-13
 **Version:** 0.2-alpha
 **Branch:** `main` (alle Feature-Branches gemerged)
 
@@ -112,6 +112,8 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 - ✅ **Custom Polygon Zones** - Benutzerdefinierte Aufstellungszonen mit Polygon-Editor
 - ✅ **1" Grid für Custom Zones** - Feines Raster für präzise Platzierung
 - ✅ **Symmetrisch/Asymmetrisch** - Zwei Modi für Zone-Erstellung
+- ✅ **Table Corner Snap Points** - Vertices snappen an Tischecken und Kanten (NEU!)
+- ✅ **Boundary Constrained Vertices** - Vertices werden auf Tischgrenzen beschränkt (NEU!)
 - ℹ️ **Hinweis**: Weitere OPR-Deployment-Typen (Ground War, Spearhead, etc.) sind hinter der OPR-Paywall. Nutzer mit dem Regelbuch können diese mit Custom Zones manuell nachbauen.
 
 ### Terrain-Gameplay Integration
@@ -153,6 +155,12 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 - [x] **Special Rules** - Ambush, Scout, Transport, Artillery, Caster, Flying, Strider
 - [x] **Objective Placement** - 6-Quadrat-Grid, zufällige Platzierung
 - [x] **Challenge Bonus** - Optional +1 Hit/Defense basierend auf Objectives
+- [x] **Battle Simulator** - Vollständige KI vs KI Kampfsimulation (NEU!)
+  - Step-by-Step Visualisierung mit Pause/Play/Speed-Control
+  - Phasen: SETUP, DEPLOYMENT, ROUND_START, ACTIVATION, MOVEMENT, SHOOTING, MELEE, MORALE, ROUND_END, GAME_OVER
+  - BattleState und BattleStep Klassen für Zustandsmanagement
+  - Morale-System mit Flucht/Rout und Consolidation Moves
+  - Vollständige OPR-Regeltreue (z.B. Consolidation nach Morale-Phase)
 - [ ] **Kampf-Integration** - Würfelsystem für AI-Angriffe
 - [ ] **Terrain-Integration** - Vollständige Cover/Difficult/Dangerous Logik
 
@@ -218,6 +226,7 @@ openTTS/
 │   ├── ai_target_selector.gd    # NEU: Target Priorität
 │   ├── ai_special_rules.gd      # NEU: Special Rules Handler
 │   ├── ai_objective_setup.gd    # NEU: Objective Placement
+│   ├── battle_simulator.gd      # NEU: KI vs KI Simulation (~1800 Zeilen)
 │   └── ...
 ├── assets/                  # Texturen, Modelle, Audio
 │   ├── miniatures/
@@ -317,17 +326,17 @@ openTTS/
 ### Aktive Branches
 - `main` - Stabile Version mit allen Features
 
-### Recent Commits (2026-01-07)
-- `2b5961b` - feat: Simplified deployment zones - Frontline only + Custom polygon zones
-- `80c1dcb` - fix: Objective placement rules and marker labels
-- `1175ea6` - fix: Critical Test 1 issues - deployment, objectives, markers
-- `b7e7dea` - feat: AAA phase 2 - Pathfinding, Deployment, Consolidation
-- `fe8f65f` - feat: AAA quality upgrade - critical combat fixes
-- `b97ff8b` - Merge: Fix Godot filesystem warning PR
-- `fe4c68c` - fix: Correct VIEW vector direction in shader
-- `f460b50` - fix: Improve shader to handle all inverted normal cases
-- `80c18c4` - fix: Add two-sided lighting shader for terrain models
-- `0af9f06` - fix: Use original OBJ normals instead of recalculating
+### Recent Commits (2026-01-13)
+- `bb5dd31` - Merge pull request #25 from DutchMaxwell/claude/data-bridge-units-F67gO
+- `243740b` - Update .gitignore
+- `c4ca763` - feat: Add table corners as snap points for deployment zones
+- `0eee816` - fix: Use get_local_mouse_position for all coordinate conversions
+- `e3de236` - fix: Use get_local_mouse_position for snap point detection
+- `81d65e5` - fix: Separate validation for 3" cells vs 1" deployment coordinates
+- `2750453` - fix: Trust boundary snap points without re-validation
+- `d86d27d` - fix: Constrain deployment zone vertices to table boundary
+- `b930b8f` - feat: Change deployment zone vertices to 1" precision
+- `58e8f6f` - fix: Use 1" grid intervals for boundary snap points
 
 ---
 
@@ -339,4 +348,4 @@ MIT License - Siehe [LICENSE](./LICENSE) für Details.
 
 **Status:** ✅ Alpha-Version funktionsfähig, aktive Entwicklung
 **Contributors:** DutchMaxwell, Community
-**Letzte Aktualisierung:** 2026-01-07
+**Letzte Aktualisierung:** 2026-01-13
