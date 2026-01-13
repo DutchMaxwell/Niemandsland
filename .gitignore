@@ -49,3 +49,6 @@ tts_imports/
 # TTS cache files
 Images/
 Models/
+
+# Auto Claude data directory
+.auto-claude/
