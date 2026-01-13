@@ -804,7 +804,7 @@ func _update_fatigued_markers(unit: GameUnit) -> void:
 	for model in unit.models:
 		if not model.node or not is_instance_valid(model.node):
 			continue
-		_update_status_marker(model.node, "FatiguedMarker", unit.is_fatigued, Color(0.9, 0.6, 0.1), "😓")
+		_update_status_marker(model.node, "FatiguedMarker", unit.is_fatigued, Color(0.9, 0.6, 0.1), "F")
 
 
 ## Updates shaken markers for all models in a unit.
@@ -812,11 +812,11 @@ func _update_shaken_markers(unit: GameUnit) -> void:
 	for model in unit.models:
 		if not model.node or not is_instance_valid(model.node):
 			continue
-		_update_status_marker(model.node, "ShakenMarker", unit.is_shaken, Color(0.3, 0.5, 0.9), "😨")
+		_update_status_marker(model.node, "ShakenMarker", unit.is_shaken, Color(0.3, 0.5, 0.9), "S")
 
 
 ## Creates or removes a status marker (token) above a model.
-func _update_status_marker(model_node: Node3D, marker_name: String, is_active: bool, color: Color, icon: String) -> void:
+func _update_status_marker(model_node: Node3D, marker_name: String, is_active: bool, color: Color, letter: String) -> void:
 	var existing_marker = model_node.get_node_or_null(marker_name)
 
 	# Remove marker if status is inactive
@@ -846,18 +846,21 @@ func _update_status_marker(model_node: Node3D, marker_name: String, is_active: b
 		disc_mesh.material_override = disc_mat
 		marker.add_child(disc_mesh)
 
-		# Create icon label
-		var icon_label = Label3D.new()
-		icon_label.name = "IconLabel"
-		icon_label.text = icon
-		icon_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		icon_label.no_depth_test = true
-		icon_label.font_size = 48
-		icon_label.pixel_size = 0.0003
-		icon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		icon_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		icon_label.position = Vector3(0, 0.003, 0)
-		marker.add_child(icon_label)
+		# Create letter label
+		var letter_label = Label3D.new()
+		letter_label.name = "LetterLabel"
+		letter_label.text = letter
+		letter_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		letter_label.no_depth_test = true
+		letter_label.font_size = 64
+		letter_label.pixel_size = 0.00025
+		letter_label.outline_size = 4
+		letter_label.modulate = Color.WHITE
+		letter_label.outline_modulate = color.darkened(0.4)
+		letter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		letter_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		letter_label.position = Vector3(0, 0.003, 0)
+		marker.add_child(letter_label)
 
 		# Position marker above the model (offset based on marker type)
 		var z_offset = 0.012 if marker_name == "FatiguedMarker" else -0.012
