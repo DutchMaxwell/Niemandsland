@@ -56,11 +56,12 @@ class RadialMenuItem:
 	var tooltip: String = ""
 	var shortcut_key: int = 0  # 1-8
 
-	func _init(p_id: String, p_label: String, p_icon: String = "", p_enabled: bool = true):
+	func _init(p_id: String, p_label: String, p_icon: String = "", p_enabled: bool = true, p_tooltip: String = ""):
 		id = p_id
 		label = p_label
 		icon = p_icon
 		enabled = p_enabled
+		tooltip = p_tooltip if not p_tooltip.is_empty() else p_label
 
 
 # ===== Lifecycle =====
@@ -127,6 +128,26 @@ func _draw() -> void:
 	var font_size = ThemeDB.fallback_font_size
 	var cancel_size = font.get_string_size(cancel_text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
 	draw_string(font, _center_pos - cancel_size / 2, cancel_text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, text_color.darkened(0.3))
+
+	# Draw tooltip for hovered item
+	if _hovered_index >= 0 and _hovered_index < _items.size():
+		var hovered_item = _items[_hovered_index]
+		if not hovered_item.tooltip.is_empty():
+			var tooltip_font_size = font_size
+			var tooltip_text = hovered_item.tooltip
+			var tooltip_size = font.get_string_size(tooltip_text, HORIZONTAL_ALIGNMENT_CENTER, -1, tooltip_font_size)
+
+			# Position tooltip below the menu
+			var tooltip_pos = _center_pos + Vector2(-tooltip_size.x / 2, menu_radius + 20)
+
+			# Draw tooltip background
+			var padding = Vector2(8, 4)
+			var bg_rect = Rect2(tooltip_pos - padding, tooltip_size + padding * 2)
+			draw_rect(bg_rect, Color(0.0, 0.0, 0.0, 0.85))
+			draw_rect(bg_rect, Color(1.0, 1.0, 1.0, 0.3), false, 1.0)
+
+			# Draw tooltip text
+			draw_string(font, tooltip_pos + Vector2(0, tooltip_size.y * 0.8), tooltip_text, HORIZONTAL_ALIGNMENT_LEFT, -1, tooltip_font_size, text_color)
 
 
 func _draw_segment(angle_start: float, angle_end: float, color: Color) -> void:
@@ -292,30 +313,32 @@ func is_open() -> bool:
 static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []
 
-	items.append(RadialMenuItem.new("unit_stats", "Stats", "📊"))
+	items.append(RadialMenuItem.new("unit_stats", "Stats", "i", true, "Show unit statistics and special rules"))
 
 	# Show wounds option for Tough models
 	if model.wounds_max > 1:
-		var wounds_label = "Wounds %d/%d" % [model.wounds_current, model.wounds_max]
-		items.append(RadialMenuItem.new("wounds", wounds_label, "❤️"))
+		var wounds_label = "W %d/%d" % [model.wounds_current, model.wounds_max]
+		items.append(RadialMenuItem.new("wounds", wounds_label, "", true, "Adjust wounds for this model (Tough)"))
 
 	# Show casts option for Caster units
 	if model.unit and model.unit is GameUnit:
 		var game_unit = model.unit as GameUnit
 		if game_unit.is_caster():
-			var casts_label = "Casts %d/%d" % [game_unit.casts_current, GameUnit.CASTER_POINTS_CAP]
-			items.append(RadialMenuItem.new("casts", casts_label, "✨"))
+			var casts_label = "C %d/%d" % [game_unit.casts_current, GameUnit.CASTER_POINTS_CAP]
+			items.append(RadialMenuItem.new("casts", casts_label, "", true, "Adjust caster points for this unit"))
 
 	# Status tokens (unit-wide)
 	if model.unit and model.unit is GameUnit:
 		var game_unit = model.unit as GameUnit
-		var fatigue_label = "Fatigued ✓" if game_unit.is_fatigued else "Fatigued"
-		var shaken_label = "Shaken ✓" if game_unit.is_shaken else "Shaken"
-		items.append(RadialMenuItem.new("toggle_fatigued", fatigue_label, "😓"))
-		items.append(RadialMenuItem.new("toggle_shaken", shaken_label, "😨"))
+		var fatigue_icon = "F+" if game_unit.is_fatigued else "F"
+		var shaken_icon = "S+" if game_unit.is_shaken else "S"
+		var fatigue_tooltip = "Remove Fatigued status from unit" if game_unit.is_fatigued else "Mark unit as Fatigued"
+		var shaken_tooltip = "Remove Shaken status from unit" if game_unit.is_shaken else "Mark unit as Shaken"
+		items.append(RadialMenuItem.new("toggle_fatigued", "Fatigued", fatigue_icon, true, fatigue_tooltip))
+		items.append(RadialMenuItem.new("toggle_shaken", "Shaken", shaken_icon, true, shaken_tooltip))
 
-	items.append(RadialMenuItem.new("select_unit", "Select All", "⬚"))
-	items.append(RadialMenuItem.new("delete_model", "Remove", "🗑️"))
+	items.append(RadialMenuItem.new("select_unit", "Select All", "A", true, "Select all models in this unit"))
+	items.append(RadialMenuItem.new("delete_model", "Remove", "X", true, "Remove this model from the table"))
 
 	return items
 
@@ -324,25 +347,27 @@ static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 static func create_unit_menu(game_unit: GameUnit) -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []
 
-	items.append(RadialMenuItem.new("unit_stats", "Stats", "📊"))
+	items.append(RadialMenuItem.new("unit_stats", "Stats", "i", true, "Show unit statistics and special rules"))
 
-	var activate_label = "Deactivate" if game_unit.is_activated else "Activate"
-	var activate_icon = "✗" if game_unit.is_activated else "✓"
-	items.append(RadialMenuItem.new("toggle_activate", activate_label, activate_icon))
+	var activate_icon = "-" if game_unit.is_activated else "+"
+	var activate_tooltip = "Mark unit as not activated" if game_unit.is_activated else "Mark unit as activated this round"
+	items.append(RadialMenuItem.new("toggle_activate", "Activate", activate_icon, true, activate_tooltip))
 
 	# Show casts option for Caster units
 	if game_unit.is_caster():
-		var casts_label = "Casts %d/%d" % [game_unit.casts_current, GameUnit.CASTER_POINTS_CAP]
-		items.append(RadialMenuItem.new("casts", casts_label, "✨"))
+		var casts_label = "C %d/%d" % [game_unit.casts_current, GameUnit.CASTER_POINTS_CAP]
+		items.append(RadialMenuItem.new("casts", casts_label, "", true, "Adjust caster points for this unit"))
 
 	# Status tokens (unit-wide)
-	var fatigue_label = "Fatigued ✓" if game_unit.is_fatigued else "Fatigued"
-	var shaken_label = "Shaken ✓" if game_unit.is_shaken else "Shaken"
-	items.append(RadialMenuItem.new("toggle_fatigued", fatigue_label, "😓"))
-	items.append(RadialMenuItem.new("toggle_shaken", shaken_label, "😨"))
+	var fatigue_icon = "F+" if game_unit.is_fatigued else "F"
+	var shaken_icon = "S+" if game_unit.is_shaken else "S"
+	var fatigue_tooltip = "Remove Fatigued status from unit" if game_unit.is_fatigued else "Mark unit as Fatigued"
+	var shaken_tooltip = "Remove Shaken status from unit" if game_unit.is_shaken else "Mark unit as Shaken"
+	items.append(RadialMenuItem.new("toggle_fatigued", "Fatigued", fatigue_icon, true, fatigue_tooltip))
+	items.append(RadialMenuItem.new("toggle_shaken", "Shaken", shaken_icon, true, shaken_tooltip))
 
-	items.append(RadialMenuItem.new("check_coherency", "Coherency", "📏"))
-	items.append(RadialMenuItem.new("delete_unit", "Delete", "🗑️"))
+	items.append(RadialMenuItem.new("check_coherency", "Coherency", "~", true, "Check if unit models are in coherency range"))
+	items.append(RadialMenuItem.new("delete_unit", "Delete", "X", true, "Remove entire unit from the table"))
 
 	return items
 
@@ -351,6 +376,6 @@ static func create_unit_menu(game_unit: GameUnit) -> Array[RadialMenuItem]:
 static func create_terrain_menu() -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []
 
-	items.append(RadialMenuItem.new("delete_terrain", "Delete", "🗑️"))
+	items.append(RadialMenuItem.new("delete_terrain", "Delete", "X", true, "Remove terrain piece from the table"))
 
 	return items
