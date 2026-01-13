@@ -7,23 +7,16 @@ extends Control
 @onready var quick_battle_btn: Button = %QuickBattleBtn
 @onready var multiplayer_btn: Button = %MultiplayerBtn
 @onready var load_game_btn: Button = %LoadGameBtn
-@onready var settings_btn: Button = %SettingsBtn
 @onready var exit_btn: Button = %ExitBtn
 
 var animation_played: bool = false
 
-# Theme selector window
-var theme_selector_window: Window = null
-
 
 func _ready() -> void:
-	# Apply Kenney UI theme from global ThemeManager
+	# Apply Glassmorphism theme
 	theme = ThemeManager.get_current_theme()
 
-	# Listen for theme changes
-	ThemeManager.theme_changed.connect(_on_theme_changed)
-
-	# Remove hardcoded theme overrides to allow Kenney theme to apply
+	# Remove hardcoded theme overrides to allow theme to apply
 	_remove_theme_overrides()
 
 	# Hide menu initially for animation
@@ -34,7 +27,6 @@ func _ready() -> void:
 	quick_battle_btn.pressed.connect(_on_quick_battle_pressed)
 	multiplayer_btn.pressed.connect(_on_multiplayer_pressed)
 	load_game_btn.pressed.connect(_on_load_game_pressed)
-	settings_btn.pressed.connect(_on_settings_pressed)
 	exit_btn.pressed.connect(_on_exit_pressed)
 
 	# Setup button hover effects
@@ -50,7 +42,6 @@ func _setup_button_hover_effects() -> void:
 		quick_battle_btn,
 		multiplayer_btn,
 		load_game_btn,
-		settings_btn,
 		exit_btn
 	]
 
@@ -120,21 +111,6 @@ func _on_load_game_pressed() -> void:
 	push_warning("Load game dialog not yet implemented")
 
 
-func _on_settings_pressed() -> void:
-	"""Open settings menu (Theme Selector)"""
-	print("Settings pressed - Opening theme selector")
-
-	# Create theme selector window if it doesn't exist
-	if not theme_selector_window:
-		var ThemeSelector = load("res://scripts/theme_selector.gd")
-		theme_selector_window = ThemeSelector.new()
-		add_child(theme_selector_window)
-
-	# Show the window
-	theme_selector_window.show()
-	theme_selector_window.popup_centered()
-
-
 func _on_exit_pressed() -> void:
 	"""Exit the game"""
 	print("Exit pressed")
@@ -168,25 +144,22 @@ func _input(event: InputEvent) -> void:
 				_on_multiplayer_pressed()
 			KEY_3:
 				_on_load_game_pressed()
-			KEY_4:
-				_on_settings_pressed()
 
 
 func _remove_theme_overrides() -> void:
-	"""Remove hardcoded theme overrides to allow Kenney theme to show"""
+	"""Remove hardcoded theme overrides to allow theme to show"""
 	# Remove panel style override
 	menu_panel.remove_theme_stylebox_override("panel")
 
 	# Remove button overrides and make them use theme
-	for button in [quick_battle_btn, multiplayer_btn, load_game_btn, settings_btn, exit_btn]:
+	for button in [quick_battle_btn, multiplayer_btn, load_game_btn]:
 		button.flat = false  # Enable theme styling
 		button.remove_theme_color_override("font_color")
 		button.remove_theme_color_override("font_hover_color")
 		button.remove_theme_font_size_override("font_size")
 
-
-func _on_theme_changed(new_theme: Theme) -> void:
-	"""Handle theme changes from ThemeManager"""
-	theme = new_theme
-	_remove_theme_overrides()
-	print("Startup menu theme updated to: %s" % ThemeManager.get_current_theme_name())
+	# Exit button keeps red color for emphasis
+	exit_btn.flat = false
+	exit_btn.remove_theme_font_size_override("font_size")
+	exit_btn.add_theme_color_override("font_color", Color(1.0, 0.35, 0.45))
+	exit_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.5, 0.6))

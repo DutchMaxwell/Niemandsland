@@ -20,10 +20,18 @@ class TargetResult:
 
 ## Finds the best shooting target for an AI unit.
 ## Prioritizes: nearest valid target, units not activated, targets in open.
+## Filters out targets blocked by terrain (LOS check).
+##
+## @param ai_unit: The AI unit selecting a target
+## @param enemy_units: Array of potential enemy targets
+## @param max_range: Maximum weapon range in METERS
+## @param terrain_pieces: Terrain pieces for LOS blocking checks (optional)
+## @return: TargetResult with best valid target
 static func find_shooting_target(
 	ai_unit: GameUnit,
 	enemy_units: Array[GameUnit],
-	max_range: float = 24.0 * INCHES_TO_METERS
+	max_range: float = 24.0 * INCHES_TO_METERS,
+	terrain_pieces: Array[AITerrain.TerrainPiece] = []
 ) -> TargetResult:
 	var result = TargetResult.new()
 	var ai_position = _get_unit_center(ai_unit)
@@ -40,6 +48,12 @@ static func find_shooting_target(
 
 		if distance > max_range:
 			continue
+
+		# LOS Check: Skip targets blocked by terrain
+		# Per OPR rules: Blocking terrain (Containers) blocks LOS completely
+		if not terrain_pieces.is_empty():
+			if AITerrain.is_los_blocked(ai_position, enemy_pos, terrain_pieces):
+				continue
 
 		var score = _calculate_shooting_priority(ai_unit, enemy, distance)
 

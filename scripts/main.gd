@@ -124,6 +124,9 @@ var wgs_import_dialog: WGSImportDialog = null
 var map_layout_editor: Control = null
 var terrain_overlay: Node3D = null
 
+# Atmospheric Effects
+var atmospheric_clouds: Node3D = null
+
 # Battle Simulator
 var battle_simulator: BattleSimulator = null
 var battle_simulator_ui: BattleSimulatorUI = null
@@ -133,8 +136,7 @@ var battle_sim_btn: Button = null
 var radial_menu_controller: RadialMenuController = null
 var coherency_visualizer: CoherencyVisualizer = null
 
-# Deployment Zones UI
-var deployment_zone_option: OptionButton = null
+# Deployment Zones UI (visibility only - editing is in Map Tool)
 var deployment_zone_check: CheckBox = null
 var deployment_mode_check: CheckBox = null
 var is_deployment_mode: bool = false
@@ -251,9 +253,8 @@ func _ready() -> void:
 	lighting_panel.initialize(lighting_controller)
 	lighting_panel.hide()  # Start hidden
 
-	# Apply Kenney UI theme to HUD
-	_apply_kenney_theme()
-	ThemeManager.theme_changed.connect(_on_theme_changed)
+	# Apply UI theme to HUD
+	_apply_ui_theme()
 
 	# Initialize OPR Army Manager
 	opr_army_manager = OPRArmyManager.new()
@@ -298,6 +299,7 @@ func _ready() -> void:
 	$UI.add_child(map_layout_editor)
 	map_layout_editor.layout_closed.connect(_on_map_layout_closed)
 	map_layout_editor.layout_updated.connect(_on_map_layout_updated)
+	map_layout_editor.deployment_type_changed.connect(_on_deployment_type_changed)
 	map_layout_btn.pressed.connect(_on_map_layout_pressed)
 
 	# Initialize Terrain Overlay (on the 3D table)
@@ -314,6 +316,9 @@ func _ready() -> void:
 
 	# Connect object_manager signals for deployment checking
 	object_manager.drag_ended.connect(_on_unit_moved)
+
+	# Initialize Atmospheric Clouds (RTS-style drifting clouds at high zoom)
+	_init_atmospheric_clouds()
 
 	# Initialize Deployment Zones UI
 	_init_deployment_zones_ui()
@@ -424,7 +429,14 @@ func _process(delta: float) -> void:
 		fps_color = Color.RED
 
 	performance_label.add_theme_color_override("font_color", fps_color)
-	performance_label.text = "FPS: %d | Objects: %d" % [fps, object_count]
+
+	# Get zoom level from camera
+	var zoom_text = ""
+	if camera_pivot and camera_pivot.has_method("get_zoom"):
+		var zoom = camera_pivot.get_zoom()
+		zoom_text = " | Zoom: %.1f" % zoom
+
+	performance_label.text = "FPS: %d | Objects: %d%s" % [fps, object_count, zoom_text]
 
 	# Handle OPR unit hover detection
 	_update_opr_hover()
@@ -1143,11 +1155,11 @@ func _spawn_selected_terrain(index: int) -> void:
 
 
 ## ============================================================================
-## Kenney UI Theme System
+## UI Theme System
 ## ============================================================================
 
-## Apply Kenney UI theme to the HUD and dialogs
-func _apply_kenney_theme() -> void:
+## Apply UI theme to the HUD and dialogs
+func _apply_ui_theme() -> void:
 	var current_theme = ThemeManager.get_current_theme()
 
 	# Apply to HUD
@@ -1163,25 +1175,7 @@ func _apply_kenney_theme() -> void:
 	load_game_dialog.theme = current_theme
 	terrain_browser_popup.theme = current_theme
 
-	print("Applied Kenney UI theme: %s" % ThemeManager.get_current_theme_name())
-
-
-## Handle theme changes from ThemeManager
-func _on_theme_changed(new_theme: Theme) -> void:
-	# Re-apply theme to all UI elements
-	var hud = $UI/HUD
-	hud.theme = new_theme
-
-	# Update all dialogs
-	model_file_dialog.theme = new_theme
-	tts_json_dialog.theme = new_theme
-	tts_models_dialog.theme = new_theme
-	tts_images_dialog.theme = new_theme
-	save_game_dialog.theme = new_theme
-	load_game_dialog.theme = new_theme
-	terrain_browser_popup.theme = new_theme
-
-	print("Main scene theme updated to: %s" % ThemeManager.get_current_theme_name())
+	print("Applied UI theme: Glassmorphism")
 
 
 ## ============================================================================
@@ -1369,6 +1363,30 @@ func _on_map_layout_closed() -> void:
 	$UI/HUD.visible = true  # Show main HUD again
 
 
+## Handle deployment type change from Map Tool
+func _on_deployment_type_changed(deployment_type: int) -> void:
+	if not terrain_overlay or not terrain_overlay.has_method("set_deployment_zones"):
+		return
+
+	# For custom zones, pass the zone data to terrain_overlay
+	if deployment_type == 2 and map_layout_editor:  # CUSTOM
+		var zone_data = map_layout_editor.get_custom_zone_data()
+		if terrain_overlay.has_method("set_custom_zones"):
+			terrain_overlay.set_custom_zones(zone_data.player1_world, zone_data.player2_world)
+			print("Custom zones set: P1=%d vertices, P2=%d vertices" % [
+				zone_data.player1_world.size(), zone_data.player2_world.size()
+			])
+
+	terrain_overlay.set_deployment_zones(deployment_type)
+	print("Deployment zone type set from Map Tool: %d" % deployment_type)
+
+	# Auto-show deployment zones when a type is selected
+	if deployment_type > 0:
+		terrain_overlay.set_deployment_zones_visible(true)
+		if deployment_zone_check:
+			deployment_zone_check.button_pressed = true
+
+
 ## Update terrain overlay when map layout changes
 func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2, grid_rotation: float) -> void:
 	# This may be called during initialization before terrain_overlay exists
@@ -1383,10 +1401,12 @@ func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2, grid_ro
 
 
 ## ============================================================================
-## Deployment Zones
+## Deployment Zones (Visibility Only - Editing is in Map Tool)
 ## ============================================================================
 
-## Initialize deployment zones UI (programmatically)
+## Initialize deployment zones UI (simplified - only visibility toggle)
+## NOTE: Deployment zone type selection and custom zone editing is now in Map Tool.
+## This ensures a single point of truth for deployment zone configuration.
 func _init_deployment_zones_ui() -> void:
 	# Get the left panel VBox to add UI elements
 	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
@@ -1399,69 +1419,34 @@ func _init_deployment_zones_ui() -> void:
 	deployment_panel.name = "DeploymentPanel"
 	left_panel_vbox.add_child(deployment_panel)
 
-	# Add label
+	# Add label with Glassmorphism styling
 	var label = Label.new()
 	label.text = "Deployment Zones:"
+	label.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
 	deployment_panel.add_child(label)
 
-	# Create OptionButton for deployment zone types (18 total from OPR)
-	deployment_zone_option = OptionButton.new()
-	deployment_zone_option.add_item("None", 0)
-	# Standard (1-6)
-	deployment_zone_option.add_item("Front Line (12\")", 1)
-	deployment_zone_option.add_item("Ground War", 2)
-	deployment_zone_option.add_item("Side Battle", 3)
-	deployment_zone_option.add_item("Disordered", 4)
-	deployment_zone_option.add_item("Spearhead", 5)
-	deployment_zone_option.add_item("Opposing Forces", 6)
-	# Asymmetric (7-12)
-	deployment_zone_option.add_item("Open Warzone", 7)
-	deployment_zone_option.add_item("Pushback", 8)
-	deployment_zone_option.add_item("Cornered", 9)
-	deployment_zone_option.add_item("Encircled", 10)
-	deployment_zone_option.add_item("Behind Enemy Lines", 11)
-	deployment_zone_option.add_item("Lightning Strike", 12)
-	# Advanced (13-18)
-	deployment_zone_option.add_item("No Man's Land", 13)
-	deployment_zone_option.add_item("Long Haul", 14)
-	deployment_zone_option.add_item("Flank Assault", 15)
-	deployment_zone_option.add_item("Frontal Clash", 16)
-	deployment_zone_option.add_item("Tactical Push", 17)
-	deployment_zone_option.add_item("Meeting Engagement", 18)
-	deployment_zone_option.selected = 0  # Start with "None"
-	deployment_zone_option.item_selected.connect(_on_deployment_zone_selected)
-	deployment_panel.add_child(deployment_zone_option)
+	# Info label explaining where to edit
+	var info_label = Label.new()
+	info_label.text = "(Configure in Map Tool)"
+	info_label.add_theme_font_size_override("font_size", 11)
+	info_label.add_theme_color_override("font_color", Color(0.6, 0.63, 0.7, 1.0))
+	deployment_panel.add_child(info_label)
 
 	# Create CheckBox for visibility toggle
 	deployment_zone_check = CheckBox.new()
 	deployment_zone_check.text = "Show Deployment Zones"
 	deployment_zone_check.button_pressed = false
+	deployment_zone_check.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
 	deployment_zone_check.toggled.connect(_on_deployment_zones_visibility_toggled)
 	deployment_panel.add_child(deployment_zone_check)
 
 	# Create CheckBox for Deployment Mode (check units in zones)
 	deployment_mode_check = CheckBox.new()
-	deployment_mode_check.text = "Deployment Mode (Check Units)"
+	deployment_mode_check.text = "Check Unit Placement"
 	deployment_mode_check.button_pressed = false
+	deployment_mode_check.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
 	deployment_mode_check.toggled.connect(_on_deployment_mode_toggled)
 	deployment_panel.add_child(deployment_mode_check)
-
-
-## Handle deployment zone type selection
-func _on_deployment_zone_selected(index: int) -> void:
-	if not terrain_overlay or not terrain_overlay.has_method("set_deployment_zones"):
-		return
-
-	terrain_overlay.set_deployment_zones(index)
-	print("Deployment zone set to: %d" % index)
-
-	# Automatically show deployment zones when a type is selected (not "None")
-	if index > 0:
-		deployment_zone_check.button_pressed = true
-		terrain_overlay.set_deployment_zones_visible(true)
-	else:
-		deployment_zone_check.button_pressed = false
-		terrain_overlay.set_deployment_zones_visible(false)
 
 
 ## Handle deployment zone visibility toggle
@@ -1478,6 +1463,32 @@ func _on_deployment_mode_toggled(is_active: bool) -> void:
 	is_deployment_mode = is_active
 	_check_all_units_deployment()
 	print("Deployment mode: %s" % ("active" if is_active else "inactive"))
+
+
+## ============================================================================
+## Atmospheric Effects
+## ============================================================================
+
+## Initialize atmospheric clouds that appear at high zoom levels
+## Creates RTS-style drifting cloud layers (like Victoria, EU4, etc.)
+func _init_atmospheric_clouds() -> void:
+	var clouds_script = load("res://scripts/atmospheric_clouds.gd")
+	if not clouds_script:
+		push_warning("Could not load atmospheric_clouds.gd - clouds disabled")
+		return
+
+	atmospheric_clouds = Node3D.new()
+	atmospheric_clouds.set_script(clouds_script)
+	atmospheric_clouds.name = "AtmosphericClouds"
+
+	# Add to root so clouds are above everything
+	add_child(atmospheric_clouds)
+
+	# Give reference to camera controller for zoom-based visibility
+	if camera_pivot:
+		atmospheric_clouds.camera_controller = camera_pivot
+
+	print("Atmospheric clouds initialized")
 
 
 ## Initialize Scout/Ambush Panel UI

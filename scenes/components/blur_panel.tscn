@@ -1,0 +1,18 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Shader" path="res://assets/ui_glassmorphism/shaders/blur.gdshader" id="1_blur"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_blur"]
+shader = ExtResource("1_blur")
+shader_parameter/strength = 3.3
+shader_parameter/mix_percentage = 0.0
+shader_parameter/base_alpha = 1.0
+
+[node name="BlurPanel" type="ColorRect"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(1, 1, 1, 0.1)
+material = SubResource("ShaderMaterial_blur")

@@ -29,12 +29,6 @@ window/size/viewport_height=1080
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
-[gui]
-
-theme/default_font_subpixel_positioning=1
-theme/default_font_antialiasing=1
-theme/lcd_subpixel_layout=1
-
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/dice_roller/plugin.cfg")

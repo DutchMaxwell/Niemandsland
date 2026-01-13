@@ -42,6 +42,17 @@ var is_activated: bool = false
 ## Which round this unit activated in
 var activation_round: int = 0
 
+# ===== Caster Points =====
+
+## Maximum caster points cap (OPR rule)
+const CASTER_POINTS_CAP: int = 6
+
+## Current available caster points
+var casts_current: int = 0
+
+## Points granted per round from Caster(X)
+var casts_per_round: int = 0
+
 
 # ===== Model Access Methods =====
 
@@ -211,6 +222,65 @@ func reset_activation() -> void:
 	is_activated = false
 
 
+# ===== Caster Points Methods =====
+
+## Checks if this unit has the Caster special rule.
+func is_caster() -> bool:
+	return has_special_rule("Caster")
+
+
+## Gets the Caster(X) value from special rules.
+## Returns 0 if unit is not a caster.
+func get_caster_value() -> int:
+	var rules = get_special_rules()
+	for r in rules:
+		var rule_name = ""
+		if r is String:
+			rule_name = r
+		elif r is Dictionary:
+			rule_name = r.get("name", "")
+
+		if rule_name.begins_with("Caster("):
+			# Parse "Caster(3)" -> 3
+			var start = rule_name.find("(") + 1
+			var end = rule_name.find(")")
+			if start > 0 and end > start:
+				return int(rule_name.substr(start, end - start))
+	return 0
+
+
+## Initializes caster points based on Caster(X) rule.
+## Should be called when unit is created or game starts.
+func initialize_caster_points() -> void:
+	casts_per_round = get_caster_value()
+	if casts_per_round > 0:
+		casts_current = casts_per_round
+
+
+## Adds caster points for a new round (accumulates, capped at 6).
+func add_round_caster_points() -> void:
+	if casts_per_round > 0:
+		casts_current = mini(casts_current + casts_per_round, CASTER_POINTS_CAP)
+
+
+## Spends caster points. Returns true if successful, false if not enough points.
+func spend_caster_points(amount: int) -> bool:
+	if casts_current >= amount:
+		casts_current -= amount
+		return true
+	return false
+
+
+## Resets caster points to the per-round value (for game reset).
+func reset_caster_points() -> void:
+	casts_current = casts_per_round
+
+
+## Sets caster points to a specific value (for manual adjustment).
+func set_caster_points(value: int) -> void:
+	casts_current = clampi(value, 0, CASTER_POINTS_CAP)
+
+
 # ===== Markers (Unit-Level) =====
 
 ## Adds a marker to all models.
@@ -241,6 +311,8 @@ func to_dict() -> Dictionary:
 		"unit_properties": unit_properties.duplicate(true),
 		"is_activated": is_activated,
 		"activation_round": activation_round,
+		"casts_current": casts_current,
+		"casts_per_round": casts_per_round,
 		"models": []
 	}
 
@@ -259,12 +331,18 @@ static func from_dict(data: Dictionary) -> GameUnit:
 	unit.unit_properties = data.get("unit_properties", {}).duplicate(true)
 	unit.is_activated = data.get("is_activated", false)
 	unit.activation_round = data.get("activation_round", 0)
+	unit.casts_current = data.get("casts_current", 0)
+	unit.casts_per_round = data.get("casts_per_round", 0)
 
 	var saved_models = data.get("models", [])
 	for model_data in saved_models:
 		var model = ModelInstance.from_dict(model_data)
 		model.unit = unit
 		unit.models.append(model)
+
+	# Initialize caster points for old saves that don't have them
+	if unit.casts_per_round == 0 and unit.casts_current == 0:
+		unit.initialize_caster_points()
 
 	return unit
 

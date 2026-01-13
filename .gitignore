@@ -3,6 +3,7 @@
 
 # Godot-specific ignores
 *.translation
+*.uid
 
 # Imported textures and samples
 .import/
@@ -48,3 +49,6 @@ tts_imports/
 # TTS cache files
 Images/
 Models/
+
+# Auto Claude data directory
+.auto-claude/

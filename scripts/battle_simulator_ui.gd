@@ -58,13 +58,14 @@ var score_label: Label
 var step_count_label: Label
 
 
-# ===== Colors =====
+# ===== Colors - Glassmorphism Style =====
 
-const COLOR_PLAYER1 = Color(0.2, 0.4, 0.8)
-const COLOR_PLAYER2 = Color(0.8, 0.2, 0.2)
-const COLOR_HEADER = Color(0.15, 0.15, 0.18)
-const COLOR_PANEL = Color(0.12, 0.12, 0.14)
-const COLOR_HIGHLIGHT = Color(0.3, 0.5, 0.3)
+const COLOR_PLAYER1 = Color(0.35, 0.68, 1.0)   # Accent blue
+const COLOR_PLAYER2 = Color(1.0, 0.35, 0.45)   # Accent red
+const COLOR_HEADER = Color(0.0, 0.0, 0.0, 0.7)
+const COLOR_PANEL = Color(1.0, 1.0, 1.0, 0.1)
+const COLOR_PANEL_SOLID = Color(0.0, 0.0, 0.0, 0.6)
+const COLOR_HIGHLIGHT = Color(0.3, 0.85, 0.55)
 
 
 func _ready() -> void:
@@ -91,12 +92,15 @@ func initialize(p_simulator: BattleSimulator, p_army_manager: OPRArmyManager) ->
 # ===== UI Building =====
 
 func _build_ui() -> void:
+	# Apply Glassmorphism theme
+	theme = ThemeManager.get_current_theme()
+
 	# Make full screen
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 
-	# Main background
+	# Main background - dark with slight transparency
 	var bg = ColorRect.new()
-	bg.color = Color(0.08, 0.08, 0.1, 0.95)
+	bg.color = Color(0.06, 0.06, 0.10, 0.95)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 
@@ -115,8 +119,14 @@ func _build_header() -> void:
 	header_panel = PanelContainer.new()
 	var header_style = StyleBoxFlat.new()
 	header_style.bg_color = COLOR_HEADER
-	header_style.corner_radius_top_left = 8
-	header_style.corner_radius_top_right = 8
+	header_style.border_width_bottom = 1
+	header_style.border_color = Color(1.0, 1.0, 1.0, 0.1)
+	header_style.corner_radius_top_left = 12
+	header_style.corner_radius_top_right = 12
+	header_style.content_margin_left = 16
+	header_style.content_margin_right = 16
+	header_style.content_margin_top = 12
+	header_style.content_margin_bottom = 12
 	header_panel.add_theme_stylebox_override("panel", header_style)
 	main_container.add_child(header_panel)
 
@@ -222,14 +232,21 @@ func _create_section(title: String, accent_color: Color = Color.WHITE) -> VBoxCo
 	var panel = PanelContainer.new()
 	var style = StyleBoxFlat.new()
 	style.bg_color = COLOR_PANEL
-	style.border_color = accent_color
+	style.border_color = Color(1.0, 1.0, 1.0, 0.1)
 	style.border_width_left = 3
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.set_border_color(Color(1.0, 1.0, 1.0, 0.1))
+	style.border_color = accent_color  # Left border accent
 	style.content_margin_left = 12
 	style.content_margin_right = 12
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
-	style.corner_radius_top_right = 4
-	style.corner_radius_bottom_right = 4
+	style.content_margin_top = 10
+	style.content_margin_bottom = 10
+	style.corner_radius_top_left = 0
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_right = 8
+	style.corner_radius_bottom_left = 0
 	panel.add_theme_stylebox_override("panel", style)
 	section.add_child(panel)
 
@@ -267,14 +284,19 @@ func _build_step_panel(parent: Control) -> void:
 	step_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var style = StyleBoxFlat.new()
 	style.bg_color = COLOR_PANEL
-	style.corner_radius_top_left = 4
-	style.corner_radius_top_right = 4
-	style.corner_radius_bottom_left = 4
-	style.corner_radius_bottom_right = 4
-	style.content_margin_left = 16
-	style.content_margin_right = 16
-	style.content_margin_top = 16
-	style.content_margin_bottom = 16
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(1.0, 1.0, 1.0, 0.08)
+	style.corner_radius_top_left = 12
+	style.corner_radius_top_right = 12
+	style.corner_radius_bottom_left = 12
+	style.corner_radius_bottom_right = 12
+	style.content_margin_left = 20
+	style.content_margin_right = 20
+	style.content_margin_top = 20
+	style.content_margin_bottom = 20
 	step_panel.add_theme_stylebox_override("panel", style)
 	parent.add_child(step_panel)
 
@@ -361,11 +383,20 @@ func _build_log_panel(parent: Control) -> void:
 	log_panel = PanelContainer.new()
 	log_panel.custom_minimum_size.x = 300
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.1, 0.12)
-	style.corner_radius_top_left = 4
-	style.corner_radius_top_right = 4
-	style.corner_radius_bottom_left = 4
-	style.corner_radius_bottom_right = 4
+	style.bg_color = COLOR_PANEL_SOLID
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(1.0, 1.0, 1.0, 0.08)
+	style.corner_radius_top_left = 12
+	style.corner_radius_top_right = 12
+	style.corner_radius_bottom_left = 12
+	style.corner_radius_bottom_right = 12
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 12
+	style.content_margin_bottom = 12
 	log_panel.add_theme_stylebox_override("panel", style)
 	parent.add_child(log_panel)
 
@@ -410,12 +441,14 @@ func _build_status_bar() -> void:
 	var status_panel = PanelContainer.new()
 	var style = StyleBoxFlat.new()
 	style.bg_color = COLOR_HEADER
-	style.corner_radius_bottom_left = 8
-	style.corner_radius_bottom_right = 8
-	style.content_margin_left = 16
-	style.content_margin_right = 16
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
+	style.border_width_top = 1
+	style.border_color = Color(1.0, 1.0, 1.0, 0.1)
+	style.corner_radius_bottom_left = 12
+	style.corner_radius_bottom_right = 12
+	style.content_margin_left = 20
+	style.content_margin_right = 20
+	style.content_margin_top = 10
+	style.content_margin_bottom = 10
 	status_panel.add_theme_stylebox_override("panel", style)
 	main_container.add_child(status_panel)
 
