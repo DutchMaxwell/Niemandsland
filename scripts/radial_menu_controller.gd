@@ -723,6 +723,13 @@ func _update_caster_marker(unit: GameUnit) -> void:
 		number_label.text = str(unit.casts_current)
 
 
+## Public method to initialize caster marker for a unit after import.
+## Call this for each caster unit after spawning to show the initial caster token.
+func initialize_caster_marker_for_unit(game_unit: GameUnit) -> void:
+	if game_unit and game_unit.is_caster():
+		_update_caster_marker(game_unit)
+
+
 ## Creates "CASTS" text as an arc along the top outer edge of the caster disc.
 func _create_caster_text_arc(parent: Node3D, radius: float, height: float) -> void:
 	var text = "CASTS"
