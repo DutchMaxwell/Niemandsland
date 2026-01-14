@@ -33,6 +33,9 @@ var _drag_plane: Plane
 var _dice_list: Array[RigidBody3D] = []
 var _object_counter: int = 0
 
+# Selection mode control (can be disabled for map layout mode)
+var selection_enabled: bool = true
+
 # Clipboard for copy/paste
 var _clipboard: Array[Node3D] = []  # Stores references to copied objects for duplication
 
@@ -368,6 +371,10 @@ func _input(event: InputEvent) -> void:
 
 
 func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> void:
+	# Skip selection if disabled (e.g., map layout mode)
+	if not selection_enabled:
+		return
+
 	var camera = get_viewport().get_camera_3d()
 	if not camera:
 		return
@@ -547,6 +554,10 @@ func _unhighlight_object(obj: Node3D) -> void:
 
 ## Start box selection (drag rectangle to select multiple objects)
 func _start_box_selection(screen_pos: Vector2, alt_pressed: bool) -> void:
+	# Skip box selection if disabled (e.g., map layout mode)
+	if not selection_enabled:
+		return
+
 	# If not holding Alt, clear current selection
 	if not alt_pressed:
 		_deselect_all()
