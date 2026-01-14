@@ -39,6 +39,19 @@ var _menu_scene: PackedScene = null
 ## Activation markers on models
 var _activation_markers: Dictionary = {}  # Node3D -> MeshInstance3D
 
+## Token layout constants
+const TOKEN_RADIUS = 0.010  # 10mm radius = 20mm diameter disc
+const TOKEN_HEIGHT = 0.003  # 3mm thick
+const TOKEN_GAP = 0.002  # 2mm gap between tokens
+
+## Token type definitions with colors and labels
+const TOKEN_TYPES = {
+	"WoundMarker": {"color": Color(0.9, 0.15, 0.15), "label": "WOUNDS", "letter": "W", "priority": 1},
+	"CasterMarker": {"color": Color(0.6, 0.3, 0.9), "label": "CASTS", "letter": "C", "priority": 2},
+	"ShakenMarker": {"color": Color(0.3, 0.5, 0.9), "label": "SHAKEN", "letter": "S", "priority": 3},
+	"FatiguedMarker": {"color": Color(0.2, 0.75, 0.4), "label": "FATIGUED", "letter": "F", "priority": 4},
+}
+
 
 func _ready() -> void:
 	# Preload the menu scene
@@ -524,134 +537,11 @@ func _update_wound_marker(model: ModelInstance) -> void:
 	if not model.node or not is_instance_valid(model.node):
 		return
 
-	var marker_name = "WoundMarker"
-	var existing_marker = model.node.get_node_or_null(marker_name)
-
-	# Remove marker if at full health
-	if model.wounds_current >= model.wounds_max:
-		if existing_marker:
-			existing_marker.queue_free()
-		return
-
 	var wounds_taken = model.wounds_max - model.wounds_current
+	var is_active = wounds_taken > 0
 
-	# Create marker container if needed
-	var marker: Node3D
-	var number_label: Label3D
-
-	# Marker dimensions: 20mm diameter disc
-	var disc_radius = 0.010  # 10mm radius = 20mm diameter
-	var disc_height = 0.003  # 3mm thick
-
-	if existing_marker:
-		marker = existing_marker
-		number_label = marker.get_node_or_null("NumberLabel") as Label3D
-	else:
-		marker = Node3D.new()
-		marker.name = marker_name
-		model.node.add_child(marker)
-
-		# Create black base disc (slightly larger for border effect)
-		var border_mesh = MeshInstance3D.new()
-		border_mesh.name = "Border"
-		var border_cyl = CylinderMesh.new()
-		border_cyl.top_radius = disc_radius + 0.001  # 1mm larger = thin border
-		border_cyl.bottom_radius = disc_radius + 0.001
-		border_cyl.height = disc_height
-		border_mesh.mesh = border_cyl
-		var border_mat = StandardMaterial3D.new()
-		border_mat.albedo_color = Color(0.02, 0.02, 0.02)  # Black
-		border_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		border_mesh.material_override = border_mat
-		border_mesh.position = Vector3(0, disc_height / 2, 0)
-		marker.add_child(border_mesh)
-
-		# Create red disc (main body) - sits on top of black border
-		var disc_mesh = MeshInstance3D.new()
-		disc_mesh.name = "Disc"
-		var disc_cyl = CylinderMesh.new()
-		disc_cyl.top_radius = disc_radius
-		disc_cyl.bottom_radius = disc_radius
-		disc_cyl.height = disc_height + 0.0002  # Slightly taller to sit on top
-		disc_mesh.mesh = disc_cyl
-		var disc_mat = StandardMaterial3D.new()
-		disc_mat.albedo_color = Color(0.9, 0.15, 0.15)  # Bright red
-		disc_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		disc_mesh.material_override = disc_mat
-		disc_mesh.position = Vector3(0, disc_height / 2 + 0.0001, 0)
-		marker.add_child(disc_mesh)
-
-		# Create "WOUNDS" text along outer top edge
-		_create_wound_text_arc(marker, disc_radius * 0.75, disc_height + 0.001)
-
-		# Create number label in center (slightly lower to make room for WOUNDS text)
-		number_label = Label3D.new()
-		number_label.name = "NumberLabel"
-		number_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
-		number_label.no_depth_test = true
-		number_label.font_size = 72
-		number_label.outline_size = 8
-		number_label.modulate = Color.WHITE
-		number_label.outline_modulate = Color(0.5, 0, 0)  # Dark red outline
-		number_label.pixel_size = 0.00016  # Slightly smaller to fit
-		number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		number_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		number_label.position = Vector3(0, disc_height + 0.001, 0.002)  # Offset toward bottom
-		number_label.rotation = Vector3(-PI / 2, 0, 0)  # Face up
-		marker.add_child(number_label)
-
-		# Position marker touching the base
-		var base_x_radius = 0.016  # Default 32mm base
-		if model.unit:
-			var game_unit = model.unit as GameUnit
-			if game_unit and game_unit.unit_properties:
-				# Check for oval base first
-				var oval_width = game_unit.unit_properties.get("base_size_oval_width", 0)
-				var oval_length = game_unit.unit_properties.get("base_size_oval_length", 0)
-				if oval_width > 0 and oval_length > 0:
-					# Oval base: use the narrow side (width) for X positioning
-					base_x_radius = (oval_width / 2.0) * 0.001
-				else:
-					# Round base
-					var base_mm = game_unit.unit_properties.get("base_size_round", 32)
-					base_x_radius = (base_mm / 2.0) * 0.001
-		# Direct contact: marker edge touches base edge
-		marker.position = Vector3(base_x_radius + disc_radius, 0, 0)
-
-	# Update number
-	if number_label:
-		number_label.text = str(wounds_taken)
-
-
-## Creates "WOUNDS" text as an arc along the top outer edge of the disc.
-func _create_wound_text_arc(parent: Node3D, radius: float, height: float) -> void:
-	var text = "WOUNDS"
-	var angle_per_char = PI / 10  # More spacing between letters
-	var total_arc = (text.length() - 1) * angle_per_char
-	var start_angle = PI / 2 + total_arc / 2  # Center at top
-
-	for i in range(text.length()):
-		var char_label = Label3D.new()
-		char_label.name = "WoundChar%d" % i
-		char_label.text = text[i]
-		char_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
-		char_label.no_depth_test = true
-		char_label.font_size = 24
-		char_label.outline_size = 2
-		char_label.modulate = Color.WHITE
-		char_label.outline_modulate = Color(0.3, 0, 0)  # Dark red outline
-		char_label.pixel_size = 0.0001  # Slightly larger for readability
-		char_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-		# Position in arc at outer edge, at the TOP of the marker (negative Z)
-		var angle = start_angle - i * angle_per_char
-		var x = cos(angle) * radius
-		var z = -sin(angle) * radius  # Negative to put at top
-		char_label.position = Vector3(x, height, z)
-		# Rotate to face up and follow the arc
-		char_label.rotation = Vector3(-PI / 2, angle - PI / 2, 0)
-
-		parent.add_child(char_label)
+	var unit = model.unit as GameUnit if model.unit else null
+	_update_token(model.node, unit, "WoundMarker", is_active, wounds_taken)
 
 
 ## Called when casts are changed via the casts dialog.
@@ -670,95 +560,8 @@ func _update_caster_marker(unit: GameUnit) -> void:
 	if not model.node or not is_instance_valid(model.node):
 		return
 
-	var marker_name = "CasterMarker"
-	var existing_marker = model.node.get_node_or_null(marker_name)
-
-	# Remove marker if unit is not a caster or has no points
-	if not unit.is_caster():
-		if existing_marker:
-			existing_marker.queue_free()
-		return
-
-	# Marker dimensions: 20mm diameter disc
-	var disc_radius = 0.010  # 10mm radius = 20mm diameter
-	var disc_height = 0.003  # 3mm thick
-
-	var marker: Node3D
-	var number_label: Label3D
-
-	if existing_marker:
-		marker = existing_marker
-		number_label = marker.get_node_or_null("NumberLabel") as Label3D
-	else:
-		marker = Node3D.new()
-		marker.name = marker_name
-		model.node.add_child(marker)
-
-		# Create black base disc (border)
-		var border_mesh = MeshInstance3D.new()
-		border_mesh.name = "Border"
-		var border_cyl = CylinderMesh.new()
-		border_cyl.top_radius = disc_radius + 0.001
-		border_cyl.bottom_radius = disc_radius + 0.001
-		border_cyl.height = disc_height
-		border_mesh.mesh = border_cyl
-		var border_mat = StandardMaterial3D.new()
-		border_mat.albedo_color = Color(0.02, 0.02, 0.02)
-		border_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		border_mesh.material_override = border_mat
-		border_mesh.position = Vector3(0, disc_height / 2, 0)
-		marker.add_child(border_mesh)
-
-		# Create purple disc (main body)
-		var disc_mesh = MeshInstance3D.new()
-		disc_mesh.name = "Disc"
-		var disc_cyl = CylinderMesh.new()
-		disc_cyl.top_radius = disc_radius
-		disc_cyl.bottom_radius = disc_radius
-		disc_cyl.height = disc_height + 0.0002
-		disc_mesh.mesh = disc_cyl
-		var disc_mat = StandardMaterial3D.new()
-		disc_mat.albedo_color = Color(0.6, 0.3, 0.9)  # Purple
-		disc_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		disc_mesh.material_override = disc_mat
-		disc_mesh.position = Vector3(0, disc_height / 2 + 0.0001, 0)
-		marker.add_child(disc_mesh)
-
-		# Create "CASTS" text arc
-		_create_caster_text_arc(marker, disc_radius * 0.75, disc_height + 0.001)
-
-		# Create number label in center
-		number_label = Label3D.new()
-		number_label.name = "NumberLabel"
-		number_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
-		number_label.no_depth_test = true
-		number_label.font_size = 72
-		number_label.outline_size = 8
-		number_label.modulate = Color.WHITE
-		number_label.outline_modulate = Color(0.3, 0.1, 0.5)  # Dark purple outline
-		number_label.pixel_size = 0.00016
-		number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		number_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		number_label.position = Vector3(0, disc_height + 0.001, 0.002)
-		number_label.rotation = Vector3(-PI / 2, 0, 0)
-		marker.add_child(number_label)
-
-		# Position marker on opposite side from wound marker
-		var base_x_radius = 0.016
-		if unit.unit_properties:
-			var oval_width = unit.unit_properties.get("base_size_oval_width", 0)
-			var oval_length = unit.unit_properties.get("base_size_oval_length", 0)
-			if oval_width > 0 and oval_length > 0:
-				base_x_radius = (oval_width / 2.0) * 0.001
-			else:
-				var base_mm = unit.unit_properties.get("base_size_round", 32)
-				base_x_radius = (base_mm / 2.0) * 0.001
-		# Position on opposite side (-X) from wound marker
-		marker.position = Vector3(-(base_x_radius + disc_radius), 0, 0)
-
-	# Update number
-	if number_label:
-		number_label.text = str(unit.casts_current)
+	var is_active = unit.is_caster()
+	_update_token(model.node, unit, "CasterMarker", is_active, unit.casts_current)
 
 
 ## Public method to initialize caster marker for a unit after import.
@@ -768,155 +571,226 @@ func initialize_caster_marker_for_unit(game_unit: GameUnit) -> void:
 		_update_caster_marker(game_unit)
 
 
-## Creates "CASTS" text as an arc along the top outer edge of the caster disc.
-func _create_caster_text_arc(parent: Node3D, radius: float, height: float) -> void:
-	var text = "CASTS"
-	var angle_per_char = PI / 10
-	var total_arc = (text.length() - 1) * angle_per_char
-	var start_angle = PI / 2 + total_arc / 2
-
-	for i in range(text.length()):
-		var char_label = Label3D.new()
-		char_label.name = "CasterChar%d" % i
-		char_label.text = text[i]
-		char_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
-		char_label.no_depth_test = true
-		char_label.font_size = 24
-		char_label.outline_size = 2
-		char_label.modulate = Color.WHITE
-		char_label.outline_modulate = Color(0.3, 0.1, 0.5)  # Dark purple
-		char_label.pixel_size = 0.0001
-		char_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-		var angle = start_angle - i * angle_per_char
-		var x = cos(angle) * radius
-		var z = -sin(angle) * radius
-		char_label.position = Vector3(x, height, z)
-		char_label.rotation = Vector3(-PI / 2, angle - PI / 2, 0)
-
-		parent.add_child(char_label)
-
-
 # ===== Fatigue and Shaken Token Markers =====
 
-## Updates fatigued markers for all models in a unit.
+## Updates fatigued markers for a unit (on first model only).
 func _update_fatigued_markers(unit: GameUnit) -> void:
 	if unit.models.is_empty():
 		return
-	# Only show marker on first model (like Caster marker)
 	var model = unit.models[0]
 	if not model.node or not is_instance_valid(model.node):
 		return
-	_update_status_marker(model, unit, "FatiguedMarker", unit.is_fatigued, Color(0.9, 0.6, 0.1), "FATIGUED")
+	_update_token(model.node, unit, "FatiguedMarker", unit.is_fatigued)
 
 
-## Updates shaken markers for all models in a unit.
+## Updates shaken markers for a unit (on first model only).
 func _update_shaken_markers(unit: GameUnit) -> void:
 	if unit.models.is_empty():
 		return
-	# Only show marker on first model (like Caster marker)
 	var model = unit.models[0]
 	if not model.node or not is_instance_valid(model.node):
 		return
-	_update_status_marker(model, unit, "ShakenMarker", unit.is_shaken, Color(0.3, 0.5, 0.9), "SHAKEN")
+	_update_token(model.node, unit, "ShakenMarker", unit.is_shaken)
 
 
-## Creates or removes a status marker (disc token) next to a model.
-## Style matches Wound/Caster markers: disc on ground with text arc and letter.
-func _update_status_marker(model: ModelInstance, unit: GameUnit, marker_name: String, is_active: bool, color: Color, label_text: String) -> void:
-	var model_node = model.node
-	var existing_marker = model_node.get_node_or_null(marker_name)
+## Public method to initialize status markers for a unit after import.
+func initialize_status_markers_for_unit(game_unit: GameUnit) -> void:
+	if game_unit.is_fatigued:
+		_update_fatigued_markers(game_unit)
+	if game_unit.is_shaken:
+		_update_shaken_markers(game_unit)
 
-	# Remove marker if status is inactive
-	if not is_active:
-		if existing_marker:
-			existing_marker.queue_free()
+
+# ===== Unified Token Layout System =====
+
+## Gets all active token markers on a model node.
+func _get_active_tokens(model_node: Node3D) -> Array[String]:
+	var tokens: Array[String] = []
+	for token_name in TOKEN_TYPES.keys():
+		if model_node.get_node_or_null(token_name):
+			tokens.append(token_name)
+	# Sort by priority
+	tokens.sort_custom(func(a, b): return TOKEN_TYPES[a]["priority"] < TOKEN_TYPES[b]["priority"])
+	return tokens
+
+
+## Gets the base radius for a unit (in meters).
+func _get_base_radius(unit: GameUnit) -> float:
+	var base_radius = 0.016  # Default 32mm base
+	if unit and unit.unit_properties:
+		var oval_width = unit.unit_properties.get("base_size_oval_width", 0)
+		var oval_length = unit.unit_properties.get("base_size_oval_length", 0)
+		if oval_width > 0 and oval_length > 0:
+			# Use average for oval bases
+			base_radius = ((oval_width + oval_length) / 4.0) * 0.001
+		else:
+			var base_mm = unit.unit_properties.get("base_size_round", 32)
+			base_radius = (base_mm / 2.0) * 0.001
+	return base_radius
+
+
+## Calculates positions for tokens around the base edge, centered at 9 o'clock.
+## Returns array of angles (in radians) for each token position.
+func _calculate_token_angles(token_count: int, base_radius: float) -> Array[float]:
+	var angles: Array[float] = []
+	if token_count == 0:
+		return angles
+
+	# Token angular width based on actual token size relative to base circumference
+	var token_angular_width = (2.0 * TOKEN_RADIUS + TOKEN_GAP) / base_radius
+
+	# Total angular span for all tokens
+	var total_span = token_count * token_angular_width - TOKEN_GAP / base_radius
+
+	# Center position is PI (9 o'clock = left side)
+	var center_angle = PI
+
+	# Starting angle: center minus half of total span
+	var start_angle = center_angle - total_span / 2.0 + token_angular_width / 2.0
+
+	for i in range(token_count):
+		angles.append(start_angle + i * token_angular_width)
+
+	return angles
+
+
+## Calculates 3D position for a token at a given angle around the base.
+func _angle_to_position(angle: float, base_radius: float) -> Vector3:
+	var distance = base_radius + TOKEN_RADIUS + 0.001  # Slight gap from base edge
+	return Vector3(cos(angle) * distance, 0, sin(angle) * distance)
+
+
+## Repositions all tokens on a model with optional animation.
+func _reposition_all_tokens(model_node: Node3D, unit: GameUnit, new_token_name: String = "") -> void:
+	var tokens = _get_active_tokens(model_node)
+	if tokens.is_empty():
 		return
 
-	# Marker dimensions: 20mm diameter disc (same as Wound/Caster)
-	var disc_radius = 0.010  # 10mm radius = 20mm diameter
-	var disc_height = 0.003  # 3mm thick
+	var base_radius = _get_base_radius(unit)
+	var angles = _calculate_token_angles(tokens.size(), base_radius)
 
-	# Create marker if it doesn't exist
-	if not existing_marker:
-		var marker = Node3D.new()
-		marker.name = marker_name
-		model_node.add_child(marker)
+	# North angle (12 o'clock) for spawn position
+	var north_angle = -PI / 2.0
 
-		# Create black base disc (border) - same style as Wound/Caster markers
-		var border_mesh = MeshInstance3D.new()
-		border_mesh.name = "Border"
-		var border_cyl = CylinderMesh.new()
-		border_cyl.top_radius = disc_radius + 0.001
-		border_cyl.bottom_radius = disc_radius + 0.001
-		border_cyl.height = disc_height
-		border_mesh.mesh = border_cyl
-		var border_mat = StandardMaterial3D.new()
-		border_mat.albedo_color = Color(0.02, 0.02, 0.02)  # Black
-		border_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		border_mesh.material_override = border_mat
-		border_mesh.position = Vector3(0, disc_height / 2, 0)
-		marker.add_child(border_mesh)
+	for i in range(tokens.size()):
+		var token_name = tokens[i]
+		var marker = model_node.get_node_or_null(token_name)
+		if not marker:
+			continue
 
-		# Create colored disc (main body)
-		var disc_mesh = MeshInstance3D.new()
-		disc_mesh.name = "Disc"
-		var disc_cyl = CylinderMesh.new()
-		disc_cyl.top_radius = disc_radius
-		disc_cyl.bottom_radius = disc_radius
-		disc_cyl.height = disc_height
-		disc_mesh.mesh = disc_cyl
-		var disc_mat = StandardMaterial3D.new()
-		disc_mat.albedo_color = color
-		disc_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		disc_mesh.material_override = disc_mat
-		disc_mesh.position = Vector3(0, disc_height / 2 + 0.0001, 0)
-		marker.add_child(disc_mesh)
+		var target_pos = _angle_to_position(angles[i], base_radius)
 
-		# Create text arc along outer edge (like WOUNDS/CASTS)
-		_create_status_text_arc(marker, label_text, disc_radius * 0.75, disc_height + 0.001, color)
+		if token_name == new_token_name:
+			# New token: spawn at north and animate to position
+			var spawn_pos = _angle_to_position(north_angle, base_radius)
+			marker.position = spawn_pos
+			marker.modulate = Color(1, 1, 1, 0)  # Start transparent
 
-		# Create letter in center (first letter of label_text)
-		var letter_label = Label3D.new()
-		letter_label.name = "LetterLabel"
-		letter_label.text = label_text[0]  # First letter: "F" or "S"
-		letter_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
-		letter_label.no_depth_test = true
-		letter_label.font_size = 72
-		letter_label.outline_size = 8
-		letter_label.modulate = Color.WHITE
-		letter_label.outline_modulate = color.darkened(0.4)
-		letter_label.pixel_size = 0.00016
-		letter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		letter_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		letter_label.position = Vector3(0, disc_height + 0.001, 0.002)
-		letter_label.rotation = Vector3(-PI / 2, 0, 0)  # Face up
-		marker.add_child(letter_label)
-
-		# Position marker next to base (on Z axis, behind/in front of model)
-		var base_z_radius = 0.016  # Default 32mm base
-		if unit.unit_properties:
-			var oval_length = unit.unit_properties.get("base_size_oval_length", 0)
-			if oval_length > 0:
-				base_z_radius = (oval_length / 2.0) * 0.001
-			else:
-				var base_mm = unit.unit_properties.get("base_size_round", 32)
-				base_z_radius = (base_mm / 2.0) * 0.001
-
-		# Position: Fatigued in front (+Z), Shaken behind (-Z)
-		var z_direction = 1.0 if marker_name == "FatiguedMarker" else -1.0
-		marker.position = Vector3(0, 0, z_direction * (base_z_radius + disc_radius))
+			# Animate along arc to final position
+			_animate_token_to_position(marker, spawn_pos, target_pos, base_radius, north_angle, angles[i])
+		else:
+			# Existing token: animate to new position
+			if marker.position.distance_to(target_pos) > 0.001:
+				var tween = marker.create_tween()
+				tween.set_ease(Tween.EASE_OUT)
+				tween.set_trans(Tween.TRANS_CUBIC)
+				tween.tween_property(marker, "position", target_pos, 0.4)
 
 
-## Creates text as an arc along the outer edge of a status marker disc.
-func _create_status_text_arc(parent: Node3D, text: String, radius: float, height: float, color: Color) -> void:
+## Animates a token from north along the base edge to its target position.
+func _animate_token_to_position(marker: Node3D, start_pos: Vector3, end_pos: Vector3, base_radius: float, start_angle: float, end_angle: float) -> void:
+	var tween = marker.create_tween()
+	tween.set_parallel(true)
+
+	# Fade in
+	tween.tween_property(marker, "modulate", Color(1, 1, 1, 1), 0.2)
+
+	# Arc movement - use custom interpolation
+	var distance = base_radius + TOKEN_RADIUS + 0.001
+	var duration = 0.6
+
+	# We'll animate the angle and convert to position
+	var angle_property = "_token_angle"
+	marker.set_meta(angle_property, start_angle)
+
+	tween.set_parallel(false)
+
+	# Create smooth arc animation using multiple keyframes
+	var steps = 20
+	var angle_diff = end_angle - start_angle
+	# Ensure we go the shorter way around
+	if angle_diff > PI:
+		angle_diff -= 2 * PI
+	elif angle_diff < -PI:
+		angle_diff += 2 * PI
+
+	var step_duration = duration / steps
+	for step in range(1, steps + 1):
+		var t = float(step) / steps
+		# Ease out cubic
+		var eased_t = 1.0 - pow(1.0 - t, 3)
+		var current_angle = start_angle + angle_diff * eased_t
+		var pos = Vector3(cos(current_angle) * distance, 0, sin(current_angle) * distance)
+		tween.tween_property(marker, "position", pos, step_duration)
+
+
+## Creates a token disc with the unified style.
+func _create_token_disc(marker_name: String) -> Node3D:
+	var config = TOKEN_TYPES.get(marker_name)
+	if not config:
+		return null
+
+	var marker = Node3D.new()
+	marker.name = marker_name
+
+	var color = config["color"]
+	var label_text = config["label"]
+
+	# Create black base disc (border)
+	var border_mesh = MeshInstance3D.new()
+	border_mesh.name = "Border"
+	var border_cyl = CylinderMesh.new()
+	border_cyl.top_radius = TOKEN_RADIUS + 0.001
+	border_cyl.bottom_radius = TOKEN_RADIUS + 0.001
+	border_cyl.height = TOKEN_HEIGHT
+	border_mesh.mesh = border_cyl
+	var border_mat = StandardMaterial3D.new()
+	border_mat.albedo_color = Color(0.02, 0.02, 0.02)
+	border_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	border_mesh.material_override = border_mat
+	border_mesh.position = Vector3(0, TOKEN_HEIGHT / 2, 0)
+	marker.add_child(border_mesh)
+
+	# Create colored disc (main body)
+	var disc_mesh = MeshInstance3D.new()
+	disc_mesh.name = "Disc"
+	var disc_cyl = CylinderMesh.new()
+	disc_cyl.top_radius = TOKEN_RADIUS
+	disc_cyl.bottom_radius = TOKEN_RADIUS
+	disc_cyl.height = TOKEN_HEIGHT + 0.0002
+	disc_mesh.mesh = disc_cyl
+	var disc_mat = StandardMaterial3D.new()
+	disc_mat.albedo_color = color
+	disc_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	disc_mesh.material_override = disc_mat
+	disc_mesh.position = Vector3(0, TOKEN_HEIGHT / 2 + 0.0001, 0)
+	marker.add_child(disc_mesh)
+
+	# Create text arc
+	_create_token_text_arc(marker, label_text, TOKEN_RADIUS * 0.75, TOKEN_HEIGHT + 0.001, color)
+
+	return marker
+
+
+## Creates text arc for a token.
+func _create_token_text_arc(parent: Node3D, text: String, radius: float, height: float, color: Color) -> void:
 	var angle_per_char = PI / 10
 	var total_arc = (text.length() - 1) * angle_per_char
 	var start_angle = PI / 2 + total_arc / 2
 
 	for i in range(text.length()):
 		var char_label = Label3D.new()
-		char_label.name = "StatusChar%d" % i
+		char_label.name = "TokenChar%d" % i
 		char_label.text = text[i]
 		char_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 		char_label.no_depth_test = true
@@ -927,7 +801,6 @@ func _create_status_text_arc(parent: Node3D, text: String, radius: float, height
 		char_label.pixel_size = 0.0001
 		char_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
-		# Position in arc at outer edge
 		var angle = start_angle - i * angle_per_char
 		var x = cos(angle) * radius
 		var z = -sin(angle) * radius
@@ -937,9 +810,85 @@ func _create_status_text_arc(parent: Node3D, text: String, radius: float, height
 		parent.add_child(char_label)
 
 
-## Public method to initialize status markers for a unit after import.
-func initialize_status_markers_for_unit(game_unit: GameUnit) -> void:
-	if game_unit.is_fatigued:
-		_update_fatigued_markers(game_unit)
-	if game_unit.is_shaken:
-		_update_shaken_markers(game_unit)
+## Adds a number label to a token.
+func _add_token_number_label(marker: Node3D, color: Color) -> Label3D:
+	var number_label = Label3D.new()
+	number_label.name = "NumberLabel"
+	number_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	number_label.no_depth_test = true
+	number_label.font_size = 72
+	number_label.outline_size = 8
+	number_label.modulate = Color.WHITE
+	number_label.outline_modulate = color.darkened(0.4)
+	number_label.pixel_size = 0.00016
+	number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	number_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	number_label.position = Vector3(0, TOKEN_HEIGHT + 0.001, 0.002)
+	number_label.rotation = Vector3(-PI / 2, 0, 0)
+	marker.add_child(number_label)
+	return number_label
+
+
+## Adds a letter label to a token (for status markers like S, F).
+func _add_token_letter_label(marker: Node3D, letter: String, color: Color) -> Label3D:
+	var letter_label = Label3D.new()
+	letter_label.name = "LetterLabel"
+	letter_label.text = letter
+	letter_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	letter_label.no_depth_test = true
+	letter_label.font_size = 72
+	letter_label.outline_size = 8
+	letter_label.modulate = Color.WHITE
+	letter_label.outline_modulate = color.darkened(0.4)
+	letter_label.pixel_size = 0.00016
+	letter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	letter_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	letter_label.position = Vector3(0, TOKEN_HEIGHT + 0.001, 0.002)
+	letter_label.rotation = Vector3(-PI / 2, 0, 0)
+	marker.add_child(letter_label)
+	return letter_label
+
+
+## Updates a token marker (unified version with animation).
+## For tokens with numbers (wounds, casts), pass the value.
+## For tokens with letters (shaken, fatigued), pass -1.
+func _update_token(model_node: Node3D, unit: GameUnit, marker_name: String, is_active: bool, value: int = -1) -> void:
+	var existing_marker = model_node.get_node_or_null(marker_name)
+	var config = TOKEN_TYPES.get(marker_name)
+	if not config:
+		return
+
+	# Remove marker if inactive
+	if not is_active:
+		if existing_marker:
+			existing_marker.queue_free()
+			# Reposition remaining tokens
+			_reposition_all_tokens.call_deferred(model_node, unit)
+		return
+
+	var is_new = existing_marker == null
+
+	# Create marker if needed
+	if not existing_marker:
+		var marker = _create_token_disc(marker_name)
+		model_node.add_child(marker)
+		existing_marker = marker
+
+		# Add appropriate label
+		if value >= 0:
+			var label = _add_token_number_label(marker, config["color"])
+			label.text = str(value)
+		else:
+			_add_token_letter_label(marker, config["letter"], config["color"])
+	else:
+		# Update number if applicable
+		if value >= 0:
+			var label = existing_marker.get_node_or_null("NumberLabel") as Label3D
+			if label:
+				label.text = str(value)
+
+	# Reposition all tokens (with animation for new tokens)
+	if is_new:
+		_reposition_all_tokens(model_node, unit, marker_name)
+	else:
+		_reposition_all_tokens(model_node, unit)
