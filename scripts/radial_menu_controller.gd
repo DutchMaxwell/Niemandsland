@@ -42,7 +42,7 @@ var _activation_markers: Dictionary = {}  # Node3D -> MeshInstance3D
 ## Token layout constants
 const TOKEN_RADIUS = 0.010  # 10mm radius = 20mm diameter disc
 const TOKEN_HEIGHT = 0.003  # 3mm thick
-const TOKEN_GAP = 0.002  # 2mm gap between tokens
+const TOKEN_GAP = 0.0  # No gap - tokens touch each other
 
 ## Token type definitions with colors and labels
 const TOKEN_TYPES = {
@@ -857,9 +857,11 @@ func _update_token(model_node: Node3D, unit: GameUnit, marker_name: String, is_a
 	# Remove marker if inactive
 	if not is_active:
 		if existing_marker:
+			# Remove from tree immediately so _get_active_tokens won't find it
+			model_node.remove_child(existing_marker)
 			existing_marker.queue_free()
-			# Reposition remaining tokens
-			_reposition_all_tokens.call_deferred(model_node, unit)
+			# Reposition remaining tokens with animation
+			_reposition_all_tokens(model_node, unit)
 		return
 
 	var is_new = existing_marker == null
