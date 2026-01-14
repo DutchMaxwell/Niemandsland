@@ -243,6 +243,7 @@ theme_override_constants/margin_bottom = 16
 
 [node name="GridContainer" type="Control" parent="MarginContainer/VBox/MainContent/GridPanel/GridMargin"]
 unique_name_in_owner = true
+clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
