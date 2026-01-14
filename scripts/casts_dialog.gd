@@ -1,7 +1,7 @@
 extends Control
 class_name CastsDialog
 ## Dialog for adjusting caster points on a unit.
-## Shows current points, per-round gain, and allows spending/adjustment.
+## Shows current points, per-round gain, and allows manual adjustment via +/- buttons.
 
 signal casts_changed(unit: GameUnit, new_casts: int)
 signal dialog_closed()
@@ -15,9 +15,6 @@ var _unit: GameUnit = null
 @onready var minus_button: Button = $Panel/VBox/CastsContainer/MinusButton
 @onready var plus_button: Button = $Panel/VBox/CastsContainer/PlusButton
 @onready var per_round_label: Label = $Panel/VBox/PerRoundLabel
-@onready var spend_1_button: Button = $Panel/VBox/SpendContainer/Spend1Button
-@onready var spend_2_button: Button = $Panel/VBox/SpendContainer/Spend2Button
-@onready var spend_3_button: Button = $Panel/VBox/SpendContainer/Spend3Button
 @onready var reset_button: Button = $Panel/VBox/ResetButton
 @onready var close_button: Button = $Panel/VBox/CloseButton
 
@@ -41,12 +38,6 @@ func _setup_ui() -> void:
 		minus_button.pressed.connect(_on_minus_pressed)
 	if plus_button:
 		plus_button.pressed.connect(_on_plus_pressed)
-	if spend_1_button:
-		spend_1_button.pressed.connect(_on_spend_1_pressed)
-	if spend_2_button:
-		spend_2_button.pressed.connect(_on_spend_2_pressed)
-	if spend_3_button:
-		spend_3_button.pressed.connect(_on_spend_3_pressed)
 	if reset_button:
 		reset_button.pressed.connect(_on_reset_pressed)
 	if close_button:
@@ -87,14 +78,6 @@ func _update_display() -> void:
 	if plus_button:
 		plus_button.disabled = _unit.casts_current >= GameUnit.CASTER_POINTS_CAP
 
-	# Update spend buttons
-	if spend_1_button:
-		spend_1_button.disabled = _unit.casts_current < 1
-	if spend_2_button:
-		spend_2_button.disabled = _unit.casts_current < 2
-	if spend_3_button:
-		spend_3_button.disabled = _unit.casts_current < 3
-
 
 func _on_minus_pressed() -> void:
 	if not _unit or _unit.casts_current <= 0:
@@ -112,27 +95,6 @@ func _on_plus_pressed() -> void:
 	_unit.casts_current += 1
 	casts_changed.emit(_unit, _unit.casts_current)
 	_update_display()
-
-
-func _on_spend_1_pressed() -> void:
-	_spend_points(1)
-
-
-func _on_spend_2_pressed() -> void:
-	_spend_points(2)
-
-
-func _on_spend_3_pressed() -> void:
-	_spend_points(3)
-
-
-func _spend_points(amount: int) -> void:
-	if not _unit:
-		return
-
-	if _unit.spend_caster_points(amount):
-		casts_changed.emit(_unit, _unit.casts_current)
-		_update_display()
 
 
 func _on_reset_pressed() -> void:
@@ -158,15 +120,6 @@ func _input(event: InputEvent) -> void:
 		elif event.keycode == KEY_EQUAL or event.keycode == KEY_KP_ADD:
 			_on_plus_pressed()
 			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_1:
-			_on_spend_1_pressed()
-			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_2:
-			_on_spend_2_pressed()
-			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_3:
-			_on_spend_3_pressed()
-			get_viewport().set_input_as_handled()
 
 
 ## Creates a simple casts dialog programmatically (without scene).
@@ -188,7 +141,7 @@ static func create_simple() -> CastsDialog:
 	# Create centered panel container
 	var panel = PanelContainer.new()
 	panel.name = "Panel"
-	panel.custom_minimum_size = Vector2(280, 280)
+	panel.custom_minimum_size = Vector2(250, 180)
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
@@ -252,51 +205,6 @@ static func create_simple() -> CastsDialog:
 	vbox.add_child(per_round)
 	dialog.per_round_label = per_round
 
-	# Separator
-	var sep = HSeparator.new()
-	vbox.add_child(sep)
-
-	# Spend label
-	var spend_label = Label.new()
-	spend_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	spend_label.text = "Spend Points:"
-	vbox.add_child(spend_label)
-
-	# Spend buttons container
-	var spend_hbox = HBoxContainer.new()
-	spend_hbox.name = "SpendContainer"
-	spend_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	spend_hbox.add_theme_constant_override("separation", 10)
-	spend_hbox.mouse_filter = Control.MOUSE_FILTER_PASS
-	vbox.add_child(spend_hbox)
-
-	# Spend 1 button
-	var spend1_btn = Button.new()
-	spend1_btn.name = "Spend1Button"
-	spend1_btn.text = "1"
-	spend1_btn.custom_minimum_size = Vector2(50, 40)
-	spend1_btn.tooltip_text = "Spend 1 point"
-	spend_hbox.add_child(spend1_btn)
-	dialog.spend_1_button = spend1_btn
-
-	# Spend 2 button
-	var spend2_btn = Button.new()
-	spend2_btn.name = "Spend2Button"
-	spend2_btn.text = "2"
-	spend2_btn.custom_minimum_size = Vector2(50, 40)
-	spend2_btn.tooltip_text = "Spend 2 points"
-	spend_hbox.add_child(spend2_btn)
-	dialog.spend_2_button = spend2_btn
-
-	# Spend 3 button
-	var spend3_btn = Button.new()
-	spend3_btn.name = "Spend3Button"
-	spend3_btn.text = "3"
-	spend3_btn.custom_minimum_size = Vector2(50, 40)
-	spend3_btn.tooltip_text = "Spend 3 points"
-	spend_hbox.add_child(spend3_btn)
-	dialog.spend_3_button = spend3_btn
-
 	# Reset button
 	var reset_btn = Button.new()
 	reset_btn.name = "ResetButton"
@@ -315,9 +223,6 @@ static func create_simple() -> CastsDialog:
 	# Connect signals directly
 	minus_btn.pressed.connect(dialog._on_minus_pressed)
 	plus_btn.pressed.connect(dialog._on_plus_pressed)
-	spend1_btn.pressed.connect(dialog._on_spend_1_pressed)
-	spend2_btn.pressed.connect(dialog._on_spend_2_pressed)
-	spend3_btn.pressed.connect(dialog._on_spend_3_pressed)
 	reset_btn.pressed.connect(dialog._on_reset_pressed)
 	close_btn.pressed.connect(dialog.close)
 
