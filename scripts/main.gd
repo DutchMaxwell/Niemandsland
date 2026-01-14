@@ -1356,11 +1356,20 @@ func _on_map_layout_pressed() -> void:
 		map_layout_editor.set_table_size(table.table_size)
 		map_layout_editor.visible = true
 		$UI/HUD.visible = false  # Hide main HUD while in layout mode
+		# Disable object selection while in map layout mode
+		if object_manager:
+			object_manager.selection_enabled = false
 
 
 ## Close Map Layout Editor
 func _on_map_layout_closed() -> void:
 	$UI/HUD.visible = true  # Show main HUD again
+	# Re-enable object selection when leaving map layout mode
+	if object_manager:
+		object_manager.selection_enabled = true
+	# Reset zoom when closing map layout editor
+	if map_layout_editor and map_layout_editor.has_method("reset_zoom"):
+		map_layout_editor.reset_zoom()
 
 
 ## Handle deployment type change from Map Tool
