@@ -801,22 +801,30 @@ func _create_caster_text_arc(parent: Node3D, radius: float, height: float) -> vo
 
 ## Updates fatigued markers for all models in a unit.
 func _update_fatigued_markers(unit: GameUnit) -> void:
-	for model in unit.models:
-		if not model.node or not is_instance_valid(model.node):
-			continue
-		_update_status_marker(model.node, "FatiguedMarker", unit.is_fatigued, Color(0.9, 0.6, 0.1), "F")
+	if unit.models.is_empty():
+		return
+	# Only show marker on first model (like Caster marker)
+	var model = unit.models[0]
+	if not model.node or not is_instance_valid(model.node):
+		return
+	_update_status_marker(model, unit, "FatiguedMarker", unit.is_fatigued, Color(0.9, 0.6, 0.1), "FATIGUED")
 
 
 ## Updates shaken markers for all models in a unit.
 func _update_shaken_markers(unit: GameUnit) -> void:
-	for model in unit.models:
-		if not model.node or not is_instance_valid(model.node):
-			continue
-		_update_status_marker(model.node, "ShakenMarker", unit.is_shaken, Color(0.3, 0.5, 0.9), "S")
+	if unit.models.is_empty():
+		return
+	# Only show marker on first model (like Caster marker)
+	var model = unit.models[0]
+	if not model.node or not is_instance_valid(model.node):
+		return
+	_update_status_marker(model, unit, "ShakenMarker", unit.is_shaken, Color(0.3, 0.5, 0.9), "SHAKEN")
 
 
-## Creates or removes a status marker (token) above a model.
-func _update_status_marker(model_node: Node3D, marker_name: String, is_active: bool, color: Color, letter: String) -> void:
+## Creates or removes a status marker (disc token) next to a model.
+## Style matches Wound/Caster markers: disc on ground with text arc and letter.
+func _update_status_marker(model: ModelInstance, unit: GameUnit, marker_name: String, is_active: bool, color: Color, label_text: String) -> void:
+	var model_node = model.node
 	var existing_marker = model_node.get_node_or_null(marker_name)
 
 	# Remove marker if status is inactive
@@ -825,46 +833,108 @@ func _update_status_marker(model_node: Node3D, marker_name: String, is_active: b
 			existing_marker.queue_free()
 		return
 
+	# Marker dimensions: 20mm diameter disc (same as Wound/Caster)
+	var disc_radius = 0.010  # 10mm radius = 20mm diameter
+	var disc_height = 0.003  # 3mm thick
+
 	# Create marker if it doesn't exist
 	if not existing_marker:
 		var marker = Node3D.new()
 		marker.name = marker_name
 		model_node.add_child(marker)
 
-		# Create disc background
+		# Create black base disc (border) - same style as Wound/Caster markers
+		var border_mesh = MeshInstance3D.new()
+		border_mesh.name = "Border"
+		var border_cyl = CylinderMesh.new()
+		border_cyl.top_radius = disc_radius + 0.001
+		border_cyl.bottom_radius = disc_radius + 0.001
+		border_cyl.height = disc_height
+		border_mesh.mesh = border_cyl
+		var border_mat = StandardMaterial3D.new()
+		border_mat.albedo_color = Color(0.02, 0.02, 0.02)  # Black
+		border_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		border_mesh.material_override = border_mat
+		border_mesh.position = Vector3(0, disc_height / 2, 0)
+		marker.add_child(border_mesh)
+
+		# Create colored disc (main body)
 		var disc_mesh = MeshInstance3D.new()
 		disc_mesh.name = "Disc"
 		var disc_cyl = CylinderMesh.new()
-		disc_cyl.top_radius = 0.008
-		disc_cyl.bottom_radius = 0.008
-		disc_cyl.height = 0.002
+		disc_cyl.top_radius = disc_radius
+		disc_cyl.bottom_radius = disc_radius
+		disc_cyl.height = disc_height
 		disc_mesh.mesh = disc_cyl
-
 		var disc_mat = StandardMaterial3D.new()
 		disc_mat.albedo_color = color
 		disc_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		disc_mesh.material_override = disc_mat
+		disc_mesh.position = Vector3(0, disc_height / 2 + 0.0001, 0)
 		marker.add_child(disc_mesh)
 
-		# Create letter label
+		# Create text arc along outer edge (like WOUNDS/CASTS)
+		_create_status_text_arc(marker, label_text, disc_radius * 0.75, disc_height + 0.001, color)
+
+		# Create letter in center (first letter of label_text)
 		var letter_label = Label3D.new()
 		letter_label.name = "LetterLabel"
-		letter_label.text = letter
-		letter_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		letter_label.text = label_text[0]  # First letter: "F" or "S"
+		letter_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 		letter_label.no_depth_test = true
-		letter_label.font_size = 64
-		letter_label.pixel_size = 0.00025
-		letter_label.outline_size = 4
+		letter_label.font_size = 72
+		letter_label.outline_size = 8
 		letter_label.modulate = Color.WHITE
 		letter_label.outline_modulate = color.darkened(0.4)
+		letter_label.pixel_size = 0.00016
 		letter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		letter_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		letter_label.position = Vector3(0, 0.003, 0)
+		letter_label.position = Vector3(0, disc_height + 0.001, 0.002)
+		letter_label.rotation = Vector3(-PI / 2, 0, 0)  # Face up
 		marker.add_child(letter_label)
 
-		# Position marker above the model (offset based on marker type)
-		var z_offset = 0.012 if marker_name == "FatiguedMarker" else -0.012
-		marker.position = Vector3(0, 0.05, z_offset)
+		# Position marker next to base (on Z axis, behind/in front of model)
+		var base_z_radius = 0.016  # Default 32mm base
+		if unit.unit_properties:
+			var oval_length = unit.unit_properties.get("base_size_oval_length", 0)
+			if oval_length > 0:
+				base_z_radius = (oval_length / 2.0) * 0.001
+			else:
+				var base_mm = unit.unit_properties.get("base_size_round", 32)
+				base_z_radius = (base_mm / 2.0) * 0.001
+
+		# Position: Fatigued in front (+Z), Shaken behind (-Z)
+		var z_direction = 1.0 if marker_name == "FatiguedMarker" else -1.0
+		marker.position = Vector3(0, 0, z_direction * (base_z_radius + disc_radius))
+
+
+## Creates text as an arc along the outer edge of a status marker disc.
+func _create_status_text_arc(parent: Node3D, text: String, radius: float, height: float, color: Color) -> void:
+	var angle_per_char = PI / 10
+	var total_arc = (text.length() - 1) * angle_per_char
+	var start_angle = PI / 2 + total_arc / 2
+
+	for i in range(text.length()):
+		var char_label = Label3D.new()
+		char_label.name = "StatusChar%d" % i
+		char_label.text = text[i]
+		char_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+		char_label.no_depth_test = true
+		char_label.font_size = 24
+		char_label.outline_size = 2
+		char_label.modulate = Color.WHITE
+		char_label.outline_modulate = color.darkened(0.4)
+		char_label.pixel_size = 0.0001
+		char_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+		# Position in arc at outer edge
+		var angle = start_angle - i * angle_per_char
+		var x = cos(angle) * radius
+		var z = -sin(angle) * radius
+		char_label.position = Vector3(x, height, z)
+		char_label.rotation = Vector3(-PI / 2, angle - PI / 2, 0)
+
+		parent.add_child(char_label)
 
 
 ## Public method to initialize status markers for a unit after import.
