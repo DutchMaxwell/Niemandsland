@@ -522,13 +522,13 @@ func _draw_fine_grid(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch
 
 func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch_y: float) -> void:
 	## Draw clickable snap points where 1" grid lines intersect with table boundary
-	## Uses line clipping to find EXACT intersection points on the boundary
+	## IMPORTANT: We draw snap points at the RENDER position of the nearest integer inch,
+	## not at the exact boundary intersection. This ensures vertices snap to where they'll actually appear.
 	var center = grid_rect.position + grid_rect.size / 2.0
 	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
 
-	# Use 1" intervals (same as fine grid)
 	var grid_dims = map_layout._calculate_grid_dimensions()
-	var total_inches_x = grid_dims.x * 3  # 3 inches per cell
+	var total_inches_x = grid_dims.x * 3
 	var total_inches_y = grid_dims.y * 3
 	var half_inches_x = total_inches_x / 2.0
 	var half_inches_y = total_inches_y / 2.0
@@ -541,7 +541,18 @@ func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixe
 			p.x * sin_a + p.y * cos_a
 		) + center
 
-	# Helper: Convert screen position back to inch coordinates
+	# Convert inch coordinates to screen position (for rendering)
+	var inch_to_screen = func(inch_x: int, inch_y: int) -> Vector2:
+		var local_x = (inch_x - half_inches_x) * pixels_per_inch_x
+		var local_y = (inch_y - half_inches_y) * pixels_per_inch_y
+		var cos_a = cos(angle_rad)
+		var sin_a = sin(angle_rad)
+		return Vector2(
+			local_x * cos_a - local_y * sin_a,
+			local_x * sin_a + local_y * cos_a
+		) + center
+
+	# Convert screen position to inch coordinates
 	var screen_to_inch = func(screen_pt: Vector2) -> Vector2i:
 		var rel = screen_pt - center
 		var cos_a = cos(-angle_rad)
@@ -554,62 +565,72 @@ func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixe
 		var inch_y = int(round(local.y / pixels_per_inch_y + half_inches_y))
 		return Vector2i(inch_x, inch_y)
 
-	var snap_color = Color(1.0, 1.0, 0.3, 0.8)  # Yellow for visibility
+	var snap_color = Color(1.0, 1.0, 0.3, 0.8)
 	var zoom = map_layout.zoom_level if map_layout else 1.0
-	var snap_size = 3.0 * zoom
+	var snap_size = 4.0 * zoom
 
-	# Clear and rebuild cached snap points
 	map_layout._cached_boundary_snap_points.clear()
 
 	var line_length = grid_rect.size.length()
+	var added_inch_positions: Dictionary = {}  # Track by inch position to avoid duplicates
 
-	# Track added screen positions to avoid duplicates (corners may be added twice)
-	var added_positions: Dictionary = {}
-	var position_tolerance = 3.0  # Pixels
+	var add_snap_point = func(boundary_screen_pos: Vector2, color: Color, size: float) -> void:
+		# Convert boundary intersection to nearest integer inch
+		var inch_pos = screen_to_inch.call(boundary_screen_pos)
 
-	var add_snap_point = func(screen_pos: Vector2, color: Color, size: float) -> void:
-		# Check if we already have a point very close to this position
-		var pos_key = "%d_%d" % [int(screen_pos.x / position_tolerance), int(screen_pos.y / position_tolerance)]
-		if added_positions.has(pos_key):
+		# Skip if we already have this inch position
+		var inch_key = "%d_%d" % [inch_pos.x, inch_pos.y]
+		if added_inch_positions.has(inch_key):
 			return
-		added_positions[pos_key] = true
+		added_inch_positions[inch_key] = true
 
-		draw_circle(screen_pos, size, color)
-		var inch_pos = screen_to_inch.call(screen_pos)
+		# Calculate where this inch position will RENDER (this is where we draw the snap point)
+		var render_pos = inch_to_screen.call(inch_pos.x, inch_pos.y)
+
+		# Only draw if render position is on or very close to the table boundary
+		var tolerance = 5.0 * zoom
+		var on_boundary = (
+			render_pos.x >= grid_rect.position.x - tolerance and
+			render_pos.x <= grid_rect.end.x + tolerance and
+			render_pos.y >= grid_rect.position.y - tolerance and
+			render_pos.y <= grid_rect.end.y + tolerance
+		)
+		if not on_boundary:
+			return
+
+		draw_circle(render_pos, size, color)
 		map_layout._cached_boundary_snap_points.append({
-			"screen_pos": screen_pos,
+			"screen_pos": render_pos,
 			"inch_pos": inch_pos
 		})
 
-	# Check vertical grid lines (at 1" intervals)
+	# Check vertical grid lines
 	for i in range(total_inches_x + 1):
 		var line_x = (i - half_inches_x) * pixels_per_inch_x
 		var start_local = Vector2(line_x, -line_length)
 		var end_local = Vector2(line_x, line_length)
 		var start = rotate_point.call(start_local)
 		var end_point = rotate_point.call(end_local)
-
 		var clipped = _clip_line_to_rect(start, end_point, grid_rect)
 		if clipped != null:
 			add_snap_point.call(clipped[0], snap_color, snap_size)
 			add_snap_point.call(clipped[1], snap_color, snap_size)
 
-	# Check horizontal grid lines (at 1" intervals)
+	# Check horizontal grid lines
 	for i in range(total_inches_y + 1):
 		var line_y = (i - half_inches_y) * pixels_per_inch_y
 		var start_local = Vector2(-line_length, line_y)
 		var end_local = Vector2(line_length, line_y)
 		var start = rotate_point.call(start_local)
 		var end_point = rotate_point.call(end_local)
-
 		var clipped = _clip_line_to_rect(start, end_point, grid_rect)
 		if clipped != null:
 			add_snap_point.call(clipped[0], snap_color, snap_size)
 			add_snap_point.call(clipped[1], snap_color, snap_size)
 
-	# Always add the 4 table corners as snap points (force add, don't dedupe)
+	# Add table corners
 	var corner_color = Color(1.0, 0.8, 0.2, 0.9)
-	var corner_size = 5.0 * zoom
+	var corner_size = 6.0 * zoom
 	var corners = [
 		grid_rect.position,
 		grid_rect.position + Vector2(grid_rect.size.x, 0),
@@ -617,13 +638,16 @@ func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixe
 		grid_rect.end
 	]
 	for corner in corners:
-		# Force add corners without deduplication check
-		draw_circle(corner, corner_size, corner_color)
 		var inch_pos = screen_to_inch.call(corner)
-		map_layout._cached_boundary_snap_points.append({
-			"screen_pos": corner,
-			"inch_pos": inch_pos
-		})
+		var render_pos = inch_to_screen.call(inch_pos.x, inch_pos.y)
+		var inch_key = "%d_%d" % [inch_pos.x, inch_pos.y]
+		if not added_inch_positions.has(inch_key):
+			added_inch_positions[inch_key] = true
+			draw_circle(render_pos, corner_size, corner_color)
+			map_layout._cached_boundary_snap_points.append({
+				"screen_pos": render_pos,
+				"inch_pos": inch_pos
+			})
 
 	map_layout._snap_points_valid = true
-	print("Boundary snap points cached: ", map_layout._cached_boundary_snap_points.size(), " points")
+	print("Boundary snap points cached: ", map_layout._cached_boundary_snap_points.size())
