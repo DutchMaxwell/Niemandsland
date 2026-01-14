@@ -21,6 +21,7 @@ func set_map_layout(layout: Control) -> void:
 
 func _get_grid_rect() -> Rect2:
 	## Calculate the grid rectangle that maintains table aspect ratio
+	## This is the BASE rect without zoom/pan - used for aspect ratio calculations
 	if not map_layout:
 		return Rect2(Vector2.ZERO, size)
 
@@ -41,16 +42,36 @@ func _get_grid_rect() -> Rect2:
 	return Rect2(offset, grid_size)
 
 
+func _get_zoomed_grid_rect() -> Rect2:
+	## Calculate the grid rectangle WITH zoom and pan applied
+	var base_rect = _get_grid_rect()
+	if not map_layout:
+		return base_rect
+
+	var zoom = map_layout.zoom_level
+	var pan = map_layout.pan_offset
+
+	# Calculate new size (zoomed)
+	var new_size = base_rect.size * zoom
+
+	# Calculate new position (centered, then panned)
+	var container_center = size / 2.0
+	var new_pos = container_center - new_size / 2.0 + pan * zoom
+
+	return Rect2(new_pos, new_size)
+
+
 func _draw() -> void:
 	if not map_layout:
 		return
 
 	var grid_dims = map_layout._calculate_grid_dimensions()
-	var grid_rect = _get_grid_rect()
+	var grid_rect = _get_zoomed_grid_rect()  # Use zoomed rect for drawing
 	var center = grid_rect.position + grid_rect.size / 2.0
 	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
 
 	# Calculate correct cell size in pixels (always 3" regardless of grid dimensions)
+	# Uses zoomed grid_rect so cell_size is also zoomed
 	var table_size_inches = map_layout.table_size_feet * 12.0
 	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
 	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
@@ -59,8 +80,14 @@ func _draw() -> void:
 		map_layout.GRID_SIZE_INCHES * pixels_per_inch_y
 	)
 
+	# Clip rect for the container bounds
+	var clip_rect = Rect2(Vector2.ZERO, size)
+
 	# Draw table background (always axis-aligned)
-	draw_rect(grid_rect, Color(0.15, 0.15, 0.15, 1.0), true)
+	# Clip to container bounds
+	var visible_grid_rect = grid_rect.intersection(clip_rect)
+	if visible_grid_rect.size.x > 0 and visible_grid_rect.size.y > 0:
+		draw_rect(visible_grid_rect, Color(0.15, 0.15, 0.15, 1.0), true)
 
 	# Calculate half extents for centering the grid
 	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
@@ -391,7 +418,8 @@ func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: C
 
 	# Draw vertex markers (always show during editing, or if we have vertices)
 	var is_editing = map_layout.custom_zone_editing
-	var vertex_size = 6.0 if is_editing else 4.0
+	var zoom = map_layout.zoom_level if map_layout else 1.0
+	var vertex_size = (6.0 if is_editing else 4.0) * zoom  # Scale with zoom
 
 	# Player 1 vertices
 	for i in range(p1_verts.size()):
@@ -509,7 +537,9 @@ func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixe
 		) + center
 
 	var snap_color = Color(1.0, 1.0, 0.3, 0.8)  # Yellow for visibility
-	var snap_size = 3.0
+	# Scale snap point size with zoom for better visibility
+	var zoom = map_layout.zoom_level if map_layout else 1.0
+	var snap_size = 3.0 * zoom
 
 	var line_length = grid_rect.size.length()
 
@@ -547,7 +577,7 @@ func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixe
 
 	# Always draw snap points at the 4 table corners (even if no grid line intersects there)
 	var corner_color = Color(1.0, 0.8, 0.2, 0.9)  # Slightly different yellow for corners
-	var corner_size = 4.0
+	var corner_size = 4.0 * zoom  # Scale with zoom
 	var corners = [
 		grid_rect.position,                                      # Top-left
 		grid_rect.position + Vector2(grid_rect.size.x, 0),       # Top-right
