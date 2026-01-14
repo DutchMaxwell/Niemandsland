@@ -636,16 +636,20 @@ func _calculate_token_angles(token_count: int, base_radius: float) -> Array[floa
 	if token_count == 0:
 		return angles
 
-	# Token angular width based on actual token size relative to base circumference
-	var token_angular_width = (2.0 * TOKEN_RADIUS + TOKEN_GAP) / base_radius
+	# Tokens are placed at this distance from base center
+	var token_orbit_radius = base_radius + TOKEN_RADIUS + 0.001
+
+	# For tokens to touch, arc length between centers = 2 * TOKEN_RADIUS (one diameter)
+	# arc_length = angle * radius, so angle = arc_length / radius
+	var token_angular_width = (2.0 * TOKEN_RADIUS) / token_orbit_radius
 
 	# Total angular span for all tokens
-	var total_span = token_count * token_angular_width - TOKEN_GAP / base_radius
+	var total_span = token_count * token_angular_width
 
 	# Center position is PI (9 o'clock = left side)
 	var center_angle = PI
 
-	# Starting angle: center minus half of total span
+	# Starting angle: center minus half of total span, offset by half token width
 	var start_angle = center_angle - total_span / 2.0 + token_angular_width / 2.0
 
 	for i in range(token_count):
