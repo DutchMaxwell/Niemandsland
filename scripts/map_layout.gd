@@ -1599,7 +1599,7 @@ func _move_vertex_to_screen_pos(screen_pos: Vector2) -> void:
 ## Find nearest boundary snap point (where grid lines intersect table edges)
 ## Returns {found: bool, cell: Vector2i, screen_pos: Vector2}
 ## Uses cached snap points from _draw_boundary_snap_points for exact consistency
-const BOUNDARY_SNAP_RADIUS := 40.0  # Pixels - constant, not scaled with zoom
+const BOUNDARY_SNAP_RADIUS := 50.0  # Pixels - increased for better usability
 
 func _find_nearest_boundary_snap_point(_screen_pos: Vector2) -> Dictionary:
 	## Find the nearest cached boundary snap point to the current mouse position.
@@ -1613,6 +1613,11 @@ func _find_nearest_boundary_snap_point(_screen_pos: Vector2) -> Dictionary:
 	var closest_cell = Vector2i.ZERO
 	var closest_screen = Vector2.ZERO
 
+	# Debug: Check if cache is populated
+	if _cached_boundary_snap_points.size() == 0:
+		print("WARNING: No boundary snap points cached! Make sure fine grid is drawn.")
+		return {found = false, cell = Vector2i.ZERO, screen_pos = Vector2.ZERO}
+
 	# Use cached snap points calculated during grid drawing
 	# Each cached point has {screen_pos: Vector2, inch_pos: Vector2i}
 	for snap_point in _cached_boundary_snap_points:
@@ -1622,6 +1627,12 @@ func _find_nearest_boundary_snap_point(_screen_pos: Vector2) -> Dictionary:
 			closest_dist = dist
 			closest_screen = snap_screen
 			closest_cell = snap_point.inch_pos
+
+	# Debug output when dragging
+	if _dragging_vertex and Engine.get_frames_drawn() % 30 == 0:
+		print("Snap debug: local_pos=", local_pos, " cached_points=", _cached_boundary_snap_points.size(),
+			" closest_dist=", closest_dist if closest_dist < INF else "none",
+			" found=", closest_dist < INF)
 
 	if closest_dist < INF:
 		return {found = true, cell = closest_cell, screen_pos = closest_screen}
