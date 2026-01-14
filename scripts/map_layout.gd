@@ -53,9 +53,10 @@ enum DeploymentType {
 var custom_zone_editing := false
 var custom_zone_symmetric := true
 var custom_zone_current_player := 1  # 1 or 2
-# Vertices stored as 1" coordinates (not 3" cells) for finer precision
-var custom_zone_vertices_p1: Array[Vector2i] = []  # 1" grid positions
-var custom_zone_vertices_p2: Array[Vector2i] = []
+# Vertices stored as FLOAT coordinates for precise boundary placement
+# This allows vertices to be placed exactly at grid-boundary intersections
+var custom_zone_vertices_p1: Array[Vector2] = []  # Precise positions
+var custom_zone_vertices_p2: Array[Vector2] = []
 
 # Vertex dragging state
 var _dragging_vertex := false
@@ -82,7 +83,7 @@ var _is_panning := false
 var _last_pan_pos := Vector2.ZERO
 
 # Cached snap points (calculated during grid drawing, used for snapping)
-# Each entry is {screen_pos: Vector2, inch_pos: Vector2i}
+# Each entry is {screen_pos: Vector2, inch_pos: Vector2} - floats for precision
 var _cached_boundary_snap_points: Array[Dictionary] = []
 var _snap_points_valid := false
 
@@ -330,7 +331,8 @@ func _on_custom_zone_clear() -> void:
 
 
 ## Handle click during custom zone editing
-func _handle_custom_zone_click(cell: Vector2i) -> void:
+## cell: Float coordinates (Vector2) for precise boundary placement
+func _handle_custom_zone_click(cell: Vector2) -> void:
 	if not custom_zone_editing:
 		return
 
@@ -780,21 +782,21 @@ func _get_cell_at_screen_pos(screen_pos: Vector2) -> Vector2i:
 	return Vector2i(cell_x, cell_y)
 
 
-func _get_mirrored_cell(cell: Vector2i) -> Vector2i:
+func _get_mirrored_cell(cell: Vector2) -> Vector2:
 	## Get the point-symmetric (180° rotated) position relative to TABLE center
-	## Cell coordinates are in 1" units (not 3" cells)
+	## Cell coordinates are in 1" units (floats for precision)
 	var valid_range = _get_valid_cell_range()
 	# Convert cell bounds to inch bounds (multiply by 3)
-	var table_min_x = valid_range.position.x * 3
-	var table_min_y = valid_range.position.y * 3
-	var table_max_x = (valid_range.position.x + valid_range.size.x) * 3
-	var table_max_y = (valid_range.position.y + valid_range.size.y) * 3
+	var table_min_x = valid_range.position.x * 3.0
+	var table_min_y = valid_range.position.y * 3.0
+	var table_max_x = (valid_range.position.x + valid_range.size.x) * 3.0
+	var table_max_y = (valid_range.position.y + valid_range.size.y) * 3.0
 	# Mirror: inch position at min maps to max, position at max maps to min
-	return Vector2i(table_min_x + table_max_x - cell.x, table_min_y + table_max_y - cell.y)
+	return Vector2(table_min_x + table_max_x - cell.x, table_min_y + table_max_y - cell.y)
 
 
-func _inch_to_screen_pos(inch_pos: Vector2i) -> Vector2:
-	## Convert 1" coordinates to screen position (relative to grid_container)
+func _inch_to_screen_pos(inch_pos: Vector2) -> Vector2:
+	## Convert 1" coordinates (floats for precision) to screen position
 	## Uses zoomed grid rect for proper display
 	var grid_dims = _calculate_grid_dimensions()
 	var grid_rect = _get_zoomed_grid_rect()  # Use zoomed rect
@@ -824,12 +826,12 @@ func _is_valid_cell(cell: Vector2i) -> bool:
 	return cell.x >= 0 and cell.x < grid_dims.x and cell.y >= 0 and cell.y < grid_dims.y
 
 
-func _is_valid_inch_pos(inch_pos: Vector2i) -> bool:
-	## Check if 1" coordinate is within the table boundary (for deployment zones)
+func _is_valid_inch_pos(inch_pos: Vector2) -> bool:
+	## Check if 1" coordinate (float) is within the table boundary
 	## When grid is rotated, we must check screen position against table bounds
 	var grid_rect = _get_zoomed_grid_rect()  # Use zoomed rect
 	var screen_pos = _inch_to_screen_pos(inch_pos)
-	# Add small tolerance for boundary snap points (rounding may cause slight offset)
+	# Add small tolerance for boundary snap points
 	var tolerance = 2.0 * zoom_level  # Scale tolerance with zoom
 	var expanded_rect = grid_rect.grow(tolerance)
 	return expanded_rect.has_point(screen_pos)
@@ -1253,7 +1255,7 @@ func _place_piece(pos: Vector2i, piece_size: Vector2i, terrain_type: int) -> voi
 ## Save current layout to file
 func save_layout(file_path: String) -> void:
 	var data = {
-		"version": "1.1",
+		"version": "1.2",  # v1.2: float precision for custom zone vertices
 		"table_size": {"x": table_size_feet.x, "y": table_size_feet.y},
 		"grid_rotation": grid_rotation_degrees,
 		"deployment_type": deployment_type,
@@ -1323,17 +1325,17 @@ func load_layout(file_path: String) -> bool:
 			deployment_type_option.selected = deployment_type
 		_update_custom_zone_ui_visibility()
 
-	# Load custom zone vertices
+	# Load custom zone vertices (float precision for exact boundary placement)
 	custom_zone_vertices_p1.clear()
 	custom_zone_vertices_p2.clear()
 	if data.has("custom_zones"):
 		var zones = data.custom_zones
 		if zones.has("player1"):
 			for v in zones.player1:
-				custom_zone_vertices_p1.append(Vector2i(int(v.x), int(v.y)))
+				custom_zone_vertices_p1.append(Vector2(float(v.x), float(v.y)))
 		if zones.has("player2"):
 			for v in zones.player2:
-				custom_zone_vertices_p2.append(Vector2i(int(v.x), int(v.y)))
+				custom_zone_vertices_p2.append(Vector2(float(v.x), float(v.y)))
 
 	# Update visibility toggle based on deployment type
 	if deployment_type > 0:
@@ -1462,8 +1464,8 @@ func get_custom_zone_data() -> Dictionary:
 	}
 
 
-## Convert 1" vertex coordinates to world coordinates (meters) for terrain_overlay
-func _convert_zone_cells_to_world(vertices: Array[Vector2i]) -> Array[Vector3]:
+## Convert 1" vertex coordinates (floats) to world coordinates (meters) for terrain_overlay
+func _convert_zone_cells_to_world(vertices: Array[Vector2]) -> Array[Vector3]:
 	var result: Array[Vector3] = []
 	var valid_range = _get_valid_cell_range()
 	var inch_to_meters = 0.0254  # 1 inch = 0.0254 meters
@@ -1504,8 +1506,8 @@ func _find_vertex_at_screen_pos(screen_pos: Vector2) -> Dictionary:
 	var half_inches_x = grid_dims.x * 3.0 / 2.0
 	var half_inches_y = grid_dims.y * 3.0 / 2.0
 
-	# Helper to convert 1" vertex coords to screen position
-	var inch_to_screen = func(inch_pos: Vector2i) -> Vector2:
+	# Helper to convert 1" vertex coords (float precision) to screen position
+	var inch_to_screen = func(inch_pos: Vector2) -> Vector2:
 		var local_x = (inch_pos.x - half_inches_x) * pixels_per_inch_x
 		var local_y = (inch_pos.y - half_inches_y) * pixels_per_inch_y
 		var cos_a = cos(angle_rad)
@@ -1553,13 +1555,13 @@ func _move_vertex_to_screen_pos(screen_pos: Vector2) -> void:
 
 	# First try to snap to boundary snap points (yellow dots)
 	var snap_result = _find_nearest_boundary_snap_point(screen_pos)
-	var new_cell: Vector2i
+	var new_cell: Vector2  # Float precision for exact boundary placement
 
 	if snap_result.found:
-		# Use the snapped position
+		# Use the snapped position (exact boundary intersection)
 		new_cell = snap_result.cell
 	else:
-		# Fallback to 1" grid position
+		# Fallback to 1" grid position (rounded)
 		new_cell = _get_inch_at_screen_pos(screen_pos)
 		# Only update if position is within table bounds
 		if not _is_valid_inch_pos(new_cell):
@@ -1594,7 +1596,7 @@ func _move_vertex_to_screen_pos(screen_pos: Vector2) -> void:
 
 
 ## Find nearest boundary snap point (where grid lines intersect table edges)
-## Returns {found: bool, cell: Vector2i, screen_pos: Vector2}
+## Returns {found: bool, cell: Vector2 (floats for precision), screen_pos: Vector2}
 ## Uses cached snap points from _draw_boundary_snap_points for exact consistency
 const BOUNDARY_SNAP_RADIUS := 50.0  # Pixels - increased for better usability
 
@@ -1606,11 +1608,11 @@ func _find_nearest_boundary_snap_point(_screen_pos: Vector2) -> Dictionary:
 	var local_pos = grid_container.get_local_mouse_position()
 
 	var closest_dist = INF
-	var closest_cell = Vector2i.ZERO
+	var closest_cell = Vector2.ZERO
 	var closest_screen = Vector2.ZERO
 
 	if _cached_boundary_snap_points.size() == 0:
-		return {found = false, cell = Vector2i.ZERO, screen_pos = Vector2.ZERO}
+		return {found = false, cell = Vector2.ZERO, screen_pos = Vector2.ZERO}
 
 	# Find closest snap point within radius
 	for snap_point in _cached_boundary_snap_points:
@@ -1624,10 +1626,11 @@ func _find_nearest_boundary_snap_point(_screen_pos: Vector2) -> Dictionary:
 	if closest_dist < INF:
 		return {found = true, cell = closest_cell, screen_pos = closest_screen}
 	else:
-		return {found = false, cell = Vector2i.ZERO, screen_pos = Vector2.ZERO}
+		return {found = false, cell = Vector2.ZERO, screen_pos = Vector2.ZERO}
 
-## Convert screen position to 1" coordinates for vertex dragging
-func _get_inch_at_screen_pos(screen_pos: Vector2) -> Vector2i:
+## Convert screen position to 1" coordinates (rounded to nearest inch for fallback)
+## Returns Vector2 (floats) but values are rounded to integers
+func _get_inch_at_screen_pos(screen_pos: Vector2) -> Vector2:
 	var grid_dims = _calculate_grid_dimensions()
 	var grid_rect = _get_zoomed_grid_rect()  # Use zoomed rect
 	var center = grid_rect.position + grid_rect.size / 2.0
@@ -1654,11 +1657,11 @@ func _get_inch_at_screen_pos(screen_pos: Vector2) -> Vector2i:
 		pos_from_center.x * sin_a + pos_from_center.y * cos_a
 	)
 
-	# Convert to inch coordinates
-	var inch_x = int(round(rotated_pos.x / pixels_per_inch_x + half_inches_x))
-	var inch_y = int(round(rotated_pos.y / pixels_per_inch_y + half_inches_y))
+	# Convert to inch coordinates (round to nearest integer for fallback)
+	var inch_x = round(rotated_pos.x / pixels_per_inch_x + half_inches_x)
+	var inch_y = round(rotated_pos.y / pixels_per_inch_y + half_inches_y)
 
-	return Vector2i(inch_x, inch_y)
+	return Vector2(inch_x, inch_y)
 
 
 # ============================================================================
