@@ -1356,11 +1356,20 @@ func _on_map_layout_pressed() -> void:
 		map_layout_editor.set_table_size(table.table_size)
 		map_layout_editor.visible = true
 		$UI/HUD.visible = false  # Hide main HUD while in layout mode
+		# Disable object selection while in map layout mode
+		if object_manager:
+			object_manager.selection_enabled = false
 
 
 ## Close Map Layout Editor
 func _on_map_layout_closed() -> void:
 	$UI/HUD.visible = true  # Show main HUD again
+	# Re-enable object selection when leaving map layout mode
+	if object_manager:
+		object_manager.selection_enabled = true
+	# Reset zoom when closing map layout editor
+	if map_layout_editor and map_layout_editor.has_method("reset_zoom"):
+		map_layout_editor.reset_zoom()
 
 
 ## Handle deployment type change from Map Tool
@@ -1790,6 +1799,9 @@ func _init_radial_menu() -> void:
 	# Connect object manager's right-click signal to open the menu
 	object_manager.context_menu_requested.connect(_on_context_menu_requested)
 
+	# Connect army_spawned signal to initialize caster markers for imported units
+	opr_army_manager.army_spawned.connect(_on_army_spawned_init_caster_markers)
+
 
 ## Handle context menu request from object manager
 func _on_context_menu_requested(screen_pos: Vector2, selected_objects: Array) -> void:
@@ -1800,3 +1812,16 @@ func _on_context_menu_requested(screen_pos: Vector2, selected_objects: Array) ->
 ## Check if radial menu is currently open
 func is_radial_menu_open() -> bool:
 	return radial_menu_controller and radial_menu_controller.is_menu_open()
+
+
+## Initialize caster and status markers for all units when an army is spawned
+func _on_army_spawned_init_caster_markers(army: OPRApiClient.OPRArmy, _models: Array[Node3D]) -> void:
+	if not radial_menu_controller:
+		return
+
+	# Get all game units for this army and initialize markers
+	for unit in army.units:
+		var game_unit = opr_army_manager.get_game_unit(unit)
+		if game_unit:
+			radial_menu_controller.initialize_caster_marker_for_unit(game_unit)
+			radial_menu_controller.initialize_status_markers_for_unit(game_unit)
