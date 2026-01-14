@@ -323,6 +323,8 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 	# Parse special rules (TTS API uses "rules" field, not "specialRules")
 	var rules_field = data.get("rules", null)
 	var special_rules_field = data.get("specialRules", null)
+	print("DEBUG: Unit '%s' - rules_field: %s" % [unit.name, rules_field])
+	print("DEBUG: Unit '%s' - specialRules_field: %s" % [unit.name, special_rules_field])
 
 	var rules = []
 	if rules_field is Array:
@@ -342,7 +344,9 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 
 	# Parse equipment/loadout (weapons only - items with attacks > 0)
 	var loadout = data.get("loadout", data.get("equipment", []))
+	print("DEBUG: Parsing loadout with %d items" % loadout.size())
 	for item in loadout:
+		print("DEBUG: Loadout item: ", item)
 		var weapon = _parse_tts_weapon(item)
 		if weapon and weapon.attacks > 0:
 			unit.weapons.append(weapon)
@@ -360,6 +364,7 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 				# IMPORTANT: Also add special rules GRANTED by the upgrade (e.g., "Caster(2)")
 				# This is where upgrades like "Psychic Synapses" grant abilities like Caster
 				var item_rules = item.get("specialRules", [])
+				print("DEBUG: Item '%s' has specialRules: %s" % [item_name, item_rules])
 				for item_rule in item_rules:
 					var granted_rule = ""
 					if item_rule is String:
@@ -373,8 +378,10 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 							granted_rule = rule_name
 
 					if not granted_rule.is_empty() and granted_rule not in unit.special_rules:
+						print("DEBUG: Adding granted rule: %s" % granted_rule)
 						unit.special_rules.append(granted_rule)
 
+	print("DEBUG: Final special_rules for unit: %s" % [unit.special_rules])
 	return unit
 
 
