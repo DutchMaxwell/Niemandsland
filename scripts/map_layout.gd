@@ -70,6 +70,12 @@ var selected_terrain_type := TerrainType.RUINS
 var is_painting := false
 var point_symmetry_enabled := false  # Mirror placement across center
 
+# Zoom settings
+var zoom_level := 1.0
+const ZOOM_MIN := 0.5
+const ZOOM_MAX := 3.0
+const ZOOM_STEP := 0.1
+
 # Deployment zones
 var deployment_type := DeploymentType.NONE
 var show_deployment_zones := false
@@ -804,6 +810,17 @@ func _input(event: InputEvent) -> void:
 	if not visible:
 		return
 
+	# Handle zoom with mouse wheel
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
+			_zoom_in()
+			get_viewport().set_input_as_handled()
+			return
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
+			_zoom_out()
+			get_viewport().set_input_as_handled()
+			return
+
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
@@ -1517,7 +1534,7 @@ func _move_vertex_to_screen_pos(screen_pos: Vector2) -> void:
 
 ## Find nearest boundary snap point (where grid lines intersect table edges)
 ## Returns {found: bool, cell: Vector2i, screen_pos: Vector2}
-const BOUNDARY_SNAP_RADIUS := 15.0  # Pixels
+const BOUNDARY_SNAP_RADIUS := 25.0  # Pixels - increased for easier snapping
 
 func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 	var grid_dims = _calculate_grid_dimensions()
@@ -1740,3 +1757,29 @@ func _clip_line_to_rect_internal(p1: Vector2, p2: Vector2, rect: Rect2) -> Varia
 				code2 = compute_code.call(p2)
 
 	return null
+
+
+# ============================================================================
+# Zoom Functions
+# ============================================================================
+
+func _zoom_in() -> void:
+	zoom_level = clampf(zoom_level + ZOOM_STEP, ZOOM_MIN, ZOOM_MAX)
+	_apply_zoom()
+
+
+func _zoom_out() -> void:
+	zoom_level = clampf(zoom_level - ZOOM_STEP, ZOOM_MIN, ZOOM_MAX)
+	_apply_zoom()
+
+
+func _apply_zoom() -> void:
+	if grid_container:
+		grid_container.scale = Vector2(zoom_level, zoom_level)
+		grid_container.pivot_offset = grid_container.size / 2.0
+		grid_container.queue_redraw()
+
+
+func reset_zoom() -> void:
+	zoom_level = 1.0
+	_apply_zoom()
