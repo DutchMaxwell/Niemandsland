@@ -923,14 +923,19 @@ func _paint_at_position(screen_pos: Vector2) -> void:
 	# Check if we're editing custom deployment zones - use snap points
 	if custom_zone_editing:
 		var snap_result = _find_nearest_boundary_snap_point(screen_pos)
+		print("Paint snap check: found=", snap_result.found,
+			" cell=", snap_result.cell if snap_result.found else "N/A",
+			" cached_points=", _cached_boundary_snap_points.size())
 		if snap_result.found:
 			# Boundary snap points are valid by definition (on table edge)
 			# No validation needed - they're computed as edge intersections
+			print("  -> Using snap point at cell ", snap_result.cell)
 			_handle_custom_zone_click(snap_result.cell)
 		else:
 			# Fallback to 1" grid position if no snap point nearby
 			# Use _get_inch_at_screen_pos for 1" coordinates (not 3" cells)
 			var inch_pos = _get_inch_at_screen_pos(screen_pos)
+			print("  -> Using grid position ", inch_pos, " valid=", _is_valid_inch_pos(inch_pos))
 			if _is_valid_inch_pos(inch_pos):
 				_handle_custom_zone_click(inch_pos)
 		return
@@ -1618,21 +1623,29 @@ func _find_nearest_boundary_snap_point(_screen_pos: Vector2) -> Dictionary:
 		print("WARNING: No boundary snap points cached! Make sure fine grid is drawn.")
 		return {found = false, cell = Vector2i.ZERO, screen_pos = Vector2.ZERO}
 
+	# Find the absolute closest point for debugging
+	var debug_closest_dist = INF
+	var debug_closest_screen = Vector2.ZERO
+
 	# Use cached snap points calculated during grid drawing
 	# Each cached point has {screen_pos: Vector2, inch_pos: Vector2i}
 	for snap_point in _cached_boundary_snap_points:
 		var snap_screen: Vector2 = snap_point.screen_pos
 		var dist = local_pos.distance_to(snap_screen)
+		# Track absolute closest for debug
+		if dist < debug_closest_dist:
+			debug_closest_dist = dist
+			debug_closest_screen = snap_screen
+		# Check if within snap radius
 		if dist < BOUNDARY_SNAP_RADIUS and dist < closest_dist:
 			closest_dist = dist
 			closest_screen = snap_screen
 			closest_cell = snap_point.inch_pos
 
-	# Debug output when dragging
-	if _dragging_vertex and Engine.get_frames_drawn() % 30 == 0:
-		print("Snap debug: local_pos=", local_pos, " cached_points=", _cached_boundary_snap_points.size(),
-			" closest_dist=", closest_dist if closest_dist < INF else "none",
-			" found=", closest_dist < INF)
+	# Always print debug for snap detection
+	print("Snap search: mouse=", local_pos, " closest_snap=", debug_closest_screen,
+		" dist=", debug_closest_dist, " radius=", BOUNDARY_SNAP_RADIUS,
+		" snapped=", closest_dist < INF)
 
 	if closest_dist < INF:
 		return {found = true, cell = closest_cell, screen_pos = closest_screen}
