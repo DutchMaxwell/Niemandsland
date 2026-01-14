@@ -607,7 +607,7 @@ func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixe
 			add_snap_point.call(clipped[0], snap_color, snap_size)
 			add_snap_point.call(clipped[1], snap_color, snap_size)
 
-	# Always add the 4 table corners as snap points
+	# Always add the 4 table corners as snap points (force add, don't dedupe)
 	var corner_color = Color(1.0, 0.8, 0.2, 0.9)
 	var corner_size = 5.0 * zoom
 	var corners = [
@@ -617,6 +617,13 @@ func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixe
 		grid_rect.end
 	]
 	for corner in corners:
-		add_snap_point.call(corner, corner_color, corner_size)
+		# Force add corners without deduplication check
+		draw_circle(corner, corner_size, corner_color)
+		var inch_pos = screen_to_inch.call(corner)
+		map_layout._cached_boundary_snap_points.append({
+			"screen_pos": corner,
+			"inch_pos": inch_pos
+		})
 
 	map_layout._snap_points_valid = true
+	print("Boundary snap points cached: ", map_layout._cached_boundary_snap_points.size(), " points")
