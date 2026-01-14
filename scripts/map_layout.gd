@@ -1629,6 +1629,9 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 	var closest_cell = Vector2i.ZERO
 	var closest_screen = Vector2.ZERO
 
+	# DEBUG: Track all snap points for analysis
+	var all_snap_points: Array[Vector2] = []
+
 	# Use constant snap radius (don't scale with zoom - pixel distance is what matters for user input)
 	var snap_radius = BOUNDARY_SNAP_RADIUS
 
@@ -1645,6 +1648,8 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 		# Get clipped endpoints (on table boundary)
 		var clipped = _clip_line_to_rect_internal(start, end_point, grid_rect)
 		if clipped != null:
+			all_snap_points.append(clipped[0])
+			all_snap_points.append(clipped[1])
 			# Check both endpoints
 			for pt in [clipped[0], clipped[1]]:
 				var dist = local_pos.distance_to(pt)
@@ -1666,6 +1671,8 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 
 		var clipped = _clip_line_to_rect_internal(start, end_point, grid_rect)
 		if clipped != null:
+			all_snap_points.append(clipped[0])
+			all_snap_points.append(clipped[1])
 			for pt in [clipped[0], clipped[1]]:
 				var dist = local_pos.distance_to(pt)
 				if dist < snap_radius and dist < closest_dist:
@@ -1681,11 +1688,31 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 		grid_rect.end                                            # Bottom-right
 	]
 	for corner in corners:
+		all_snap_points.append(corner)
 		var dist = local_pos.distance_to(corner)
 		if dist < snap_radius and dist < closest_dist:
 			closest_dist = dist
 			closest_screen = corner
 			closest_cell = _screen_to_cell_inches(corner, grid_rect, pixels_per_inch_x, pixels_per_inch_y, half_inches_x, half_inches_y, angle_rad, center)
+
+	# DEBUG: Find the actual closest point regardless of radius
+	var debug_closest_dist = INF
+	var debug_closest_pt = Vector2.ZERO
+	for pt in all_snap_points:
+		var d = local_pos.distance_to(pt)
+		if d < debug_closest_dist:
+			debug_closest_dist = d
+			debug_closest_pt = pt
+
+	# Print debug info every 60 frames to avoid spam
+	if Engine.get_frames_drawn() % 60 == 0 and _dragging_vertex:
+		print("=== SNAP DEBUG ===")
+		print("  Mouse local_pos: ", local_pos)
+		print("  grid_rect: ", grid_rect)
+		print("  Total snap points: ", all_snap_points.size())
+		print("  Closest snap point: ", debug_closest_pt, " at dist: ", debug_closest_dist)
+		print("  Snap radius: ", snap_radius)
+		print("  Found snap: ", closest_dist < INF, " at dist: ", closest_dist if closest_dist < INF else "N/A")
 
 	if closest_dist < INF:
 		return {found = true, cell = closest_cell, screen_pos = closest_screen}
