@@ -1549,12 +1549,19 @@ func _move_vertex_to_screen_pos(screen_pos: Vector2) -> void:
 	if not _dragging_vertex or _dragging_player == 0 or _dragging_index < 0:
 		return
 
-	# Convert screen position to 1" coordinates
-	var new_cell = _get_inch_at_screen_pos(screen_pos)
+	# First try to snap to boundary snap points (yellow dots)
+	var snap_result = _find_nearest_boundary_snap_point(screen_pos)
+	var new_cell: Vector2i
 
-	# Only update if position is within table bounds
-	if not _is_valid_inch_pos(new_cell):
-		return
+	if snap_result.found:
+		# Use the snapped position
+		new_cell = snap_result.cell
+	else:
+		# Fallback to 1" grid position
+		new_cell = _get_inch_at_screen_pos(screen_pos)
+		# Only update if position is within table bounds
+		if not _is_valid_inch_pos(new_cell):
+			return
 
 	if custom_zone_symmetric:
 		# In symmetric mode, moving P1 vertex updates P2 mirror, and vice versa
@@ -1586,7 +1593,7 @@ func _move_vertex_to_screen_pos(screen_pos: Vector2) -> void:
 
 ## Find nearest boundary snap point (where grid lines intersect table edges)
 ## Returns {found: bool, cell: Vector2i, screen_pos: Vector2}
-const BOUNDARY_SNAP_RADIUS := 25.0  # Pixels (base value, will be scaled with zoom)
+const BOUNDARY_SNAP_RADIUS := 40.0  # Pixels (base value, will be scaled with zoom)
 
 func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 	var grid_dims = _calculate_grid_dimensions()
@@ -1622,8 +1629,8 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 	var closest_cell = Vector2i.ZERO
 	var closest_screen = Vector2.ZERO
 
-	# Scale snap radius with zoom for consistent feel
-	var scaled_snap_radius = BOUNDARY_SNAP_RADIUS * zoom_level
+	# Use constant snap radius (don't scale with zoom - pixel distance is what matters for user input)
+	var snap_radius = BOUNDARY_SNAP_RADIUS
 
 	# Check vertical grid lines (at 1" intervals)
 	for i in range(total_inches_x + 1):
@@ -1641,7 +1648,7 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 			# Check both endpoints
 			for pt in [clipped[0], clipped[1]]:
 				var dist = local_pos.distance_to(pt)
-				if dist < scaled_snap_radius and dist < closest_dist:
+				if dist < snap_radius and dist < closest_dist:
 					closest_dist = dist
 					closest_screen = pt
 					# Convert screen position back to cell (using 1" precision)
@@ -1661,7 +1668,7 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 		if clipped != null:
 			for pt in [clipped[0], clipped[1]]:
 				var dist = local_pos.distance_to(pt)
-				if dist < scaled_snap_radius and dist < closest_dist:
+				if dist < snap_radius and dist < closest_dist:
 					closest_dist = dist
 					closest_screen = pt
 					closest_cell = _screen_to_cell_inches(pt, grid_rect, pixels_per_inch_x, pixels_per_inch_y, half_inches_x, half_inches_y, angle_rad, center)
@@ -1675,7 +1682,7 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 	]
 	for corner in corners:
 		var dist = local_pos.distance_to(corner)
-		if dist < scaled_snap_radius and dist < closest_dist:
+		if dist < snap_radius and dist < closest_dist:
 			closest_dist = dist
 			closest_screen = corner
 			closest_cell = _screen_to_cell_inches(corner, grid_rect, pixels_per_inch_x, pixels_per_inch_y, half_inches_x, half_inches_y, angle_rad, center)
