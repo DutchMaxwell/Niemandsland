@@ -36,20 +36,18 @@ var _current_selection: Array = []
 ## Is the radial menu scene loaded
 var _menu_scene: PackedScene = null
 
-## Activation markers on models
-var _activation_markers: Dictionary = {}  # Node3D -> MeshInstance3D
-
 ## Token layout constants
 const TOKEN_RADIUS = 0.010  # 10mm radius = 20mm diameter disc
 const TOKEN_HEIGHT = 0.003  # 3mm thick
-const TOKEN_GAP = 0.0  # No gap - tokens touch each other
+const TOKEN_GAP = 0.001  # 1mm gap between tokens
 
 ## Token type definitions with colors and labels
 const TOKEN_TYPES = {
 	"WoundMarker": {"color": Color(0.9, 0.15, 0.15), "label": "WOUNDS", "letter": "W", "priority": 1},
 	"CasterMarker": {"color": Color(0.6, 0.3, 0.9), "label": "CASTS", "letter": "C", "priority": 2},
 	"ShakenMarker": {"color": Color(0.3, 0.5, 0.9), "label": "SHAKEN", "letter": "S", "priority": 3},
-	"FatiguedMarker": {"color": Color(0.2, 0.75, 0.4), "label": "FATIGUED", "letter": "F", "priority": 4},
+	"FatiguedMarker": {"color": Color(0.85, 0.45, 0.1), "label": "FATIGUED", "letter": "F", "priority": 4},
+	"ActivatedMarker": {"color": Color(0.1, 0.5, 0.2), "label": "ACTIVATED", "letter": "A", "priority": 5},
 }
 
 
@@ -320,11 +318,11 @@ func _toggle_activation(context: Dictionary) -> void:
 
 	if game_unit.is_activated:
 		game_unit.is_activated = false
-		_remove_activation_markers(game_unit)
+		_update_activated_markers(game_unit)
 		unit_deactivated.emit(game_unit)
 	else:
 		game_unit.activate(1)
-		_add_activation_markers(game_unit)
+		_update_activated_markers(game_unit)
 		unit_activated.emit(game_unit)
 
 
@@ -360,64 +358,6 @@ func _get_game_unit_from_context(context: Dictionary) -> GameUnit:
 		return model.unit as GameUnit
 
 	return null
-
-
-## Adds visual activation markers to all models in a unit.
-func _add_activation_markers(game_unit: GameUnit) -> void:
-	# Get base size from unit properties (in mm, convert to meters)
-	var base_size_mm = game_unit.unit_properties.get("base_size_round", 32)
-	var base_radius_m = (base_size_mm / 2.0) * 0.001  # mm to meters
-
-	for model in game_unit.models:
-		if not model.node or not is_instance_valid(model.node):
-			continue
-		if model.node in _activation_markers:
-			continue  # Already has marker
-
-		# Create ring marker around the base
-		var marker = MeshInstance3D.new()
-		marker.name = "ActivationMarker"
-
-		# Use a torus sized to wrap around the base
-		var torus = TorusMesh.new()
-		# Ring sits just outside the base
-		torus.inner_radius = base_radius_m + 0.002  # 2mm outside base edge
-		torus.outer_radius = base_radius_m + 0.006  # 4mm ring thickness
-		marker.mesh = torus
-		# TorusMesh defaults to flat (hole up), no rotation needed
-
-		# Green glowing material
-		var mat = StandardMaterial3D.new()
-		mat.albedo_color = Color(0.2, 0.9, 0.3, 0.9)
-		mat.emission_enabled = true
-		mat.emission = Color(0.2, 0.9, 0.3)
-		mat.emission_energy_multiplier = 1.5
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		marker.material_override = mat
-
-		# Position at base level (just above ground)
-		marker.position = Vector3(0, 0.004, 0)
-
-		model.node.add_child(marker)
-		_activation_markers[model.node] = marker
-
-		# Add pulsing animation with finite loops to avoid Godot 4.5 infinite loop error
-		var tween = marker.create_tween()
-		tween.set_loops(1000)  # Long enough for any practical use
-		tween.tween_property(marker, "scale", Vector3(1.1, 1.1, 1.1), 0.5)
-		tween.tween_property(marker, "scale", Vector3(1.0, 1.0, 1.0), 0.5)
-
-
-## Removes activation markers from all models in a unit.
-func _remove_activation_markers(game_unit: GameUnit) -> void:
-	for model in game_unit.models:
-		if not model.node:
-			continue
-		if model.node in _activation_markers:
-			var marker = _activation_markers[model.node]
-			if is_instance_valid(marker):
-				marker.queue_free()
-			_activation_markers.erase(model.node)
 
 
 func _check_coherency(context: Dictionary) -> void:
@@ -571,7 +511,7 @@ func initialize_caster_marker_for_unit(game_unit: GameUnit) -> void:
 		_update_caster_marker(game_unit)
 
 
-# ===== Fatigue and Shaken Token Markers =====
+# ===== Status Token Markers (Fatigue, Shaken, Activated) =====
 
 ## Updates fatigued markers for a unit (on first model only).
 func _update_fatigued_markers(unit: GameUnit) -> void:
@@ -593,12 +533,24 @@ func _update_shaken_markers(unit: GameUnit) -> void:
 	_update_token(model.node, unit, "ShakenMarker", unit.is_shaken)
 
 
+## Updates activated markers for a unit (on first model only).
+func _update_activated_markers(unit: GameUnit) -> void:
+	if unit.models.is_empty():
+		return
+	var model = unit.models[0]
+	if not model.node or not is_instance_valid(model.node):
+		return
+	_update_token(model.node, unit, "ActivatedMarker", unit.is_activated)
+
+
 ## Public method to initialize status markers for a unit after import.
 func initialize_status_markers_for_unit(game_unit: GameUnit) -> void:
 	if game_unit.is_fatigued:
 		_update_fatigued_markers(game_unit)
 	if game_unit.is_shaken:
 		_update_shaken_markers(game_unit)
+	if game_unit.is_activated:
+		_update_activated_markers(game_unit)
 
 
 # ===== Unified Token Layout System =====
@@ -639,12 +591,12 @@ func _calculate_token_angles(token_count: int, base_radius: float) -> Array[floa
 	# Tokens are placed at this distance from base center
 	var token_orbit_radius = base_radius + TOKEN_RADIUS + 0.001
 
-	# For tokens to touch, arc length between centers = 2 * TOKEN_RADIUS (one diameter)
+	# Arc length between token centers = diameter + gap
 	# arc_length = angle * radius, so angle = arc_length / radius
-	var token_angular_width = (2.0 * TOKEN_RADIUS) / token_orbit_radius
+	var token_angular_width = (2.0 * TOKEN_RADIUS + TOKEN_GAP) / token_orbit_radius
 
-	# Total angular span for all tokens
-	var total_span = token_count * token_angular_width
+	# Total angular span for all tokens (n tokens, n-1 gaps already included in width)
+	var total_span = token_count * token_angular_width - TOKEN_GAP / token_orbit_radius
 
 	# Center position is PI (9 o'clock = left side)
 	var center_angle = PI
