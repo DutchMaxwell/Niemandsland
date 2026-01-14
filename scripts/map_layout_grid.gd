@@ -385,8 +385,8 @@ func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: C
 	var half_inches_x = grid_dims.x * 3.0 / 2.0
 	var half_inches_y = grid_dims.y * 3.0 / 2.0
 
-	# Helper to convert 1" coordinates to screen position
-	var inch_to_screen = func(inch_pos: Vector2i) -> Vector2:
+	# Helper to convert 1" coordinates (float precision) to screen position
+	var inch_to_screen = func(inch_pos: Vector2) -> Vector2:
 		var local_x = (inch_pos.x - half_inches_x) * pixels_per_inch_x
 		var local_y = (inch_pos.y - half_inches_y) * pixels_per_inch_y
 		var cos_a = cos(angle_rad)
@@ -540,8 +540,9 @@ func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixe
 			p.x * sin_a + p.y * cos_a
 		) + center
 
-	# Convert screen position to inch coordinates (for vertex storage)
-	var screen_to_inch = func(screen_pt: Vector2) -> Vector2i:
+	# Convert screen position to EXACT inch coordinates (floats for precision)
+	# This allows vertices to be placed at exact grid-boundary intersections
+	var screen_to_inch = func(screen_pt: Vector2) -> Vector2:
 		var rel = screen_pt - center
 		var cos_a = cos(-angle_rad)
 		var sin_a = sin(-angle_rad)
@@ -549,9 +550,9 @@ func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixe
 			rel.x * cos_a - rel.y * sin_a,
 			rel.x * sin_a + rel.y * cos_a
 		)
-		var inch_x = int(round(local.x / pixels_per_inch_x + half_inches_x))
-		var inch_y = int(round(local.y / pixels_per_inch_y + half_inches_y))
-		return Vector2i(inch_x, inch_y)
+		var inch_x = local.x / pixels_per_inch_x + half_inches_x
+		var inch_y = local.y / pixels_per_inch_y + half_inches_y
+		return Vector2(inch_x, inch_y)
 
 	var snap_color = Color(1.0, 1.0, 0.3, 0.9)  # Yellow
 	var zoom = map_layout.zoom_level if map_layout else 1.0
