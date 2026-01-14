@@ -42,6 +42,14 @@ var is_activated: bool = false
 ## Which round this unit activated in
 var activation_round: int = 0
 
+# ===== Status Tokens =====
+
+## Whether this unit is fatigued (unit-wide status)
+var is_fatigued: bool = false
+
+## Whether this unit is shaken (unit-wide status)
+var is_shaken: bool = false
+
 # ===== Caster Points =====
 
 ## Maximum caster points cap (OPR rule)
@@ -311,6 +319,8 @@ func to_dict() -> Dictionary:
 		"unit_properties": unit_properties.duplicate(true),
 		"is_activated": is_activated,
 		"activation_round": activation_round,
+		"is_fatigued": is_fatigued,
+		"is_shaken": is_shaken,
 		"casts_current": casts_current,
 		"casts_per_round": casts_per_round,
 		"models": []
@@ -331,6 +341,8 @@ static func from_dict(data: Dictionary) -> GameUnit:
 	unit.unit_properties = data.get("unit_properties", {}).duplicate(true)
 	unit.is_activated = data.get("is_activated", false)
 	unit.activation_round = data.get("activation_round", 0)
+	unit.is_fatigued = data.get("is_fatigued", false)
+	unit.is_shaken = data.get("is_shaken", false)
 	unit.casts_current = data.get("casts_current", 0)
 	unit.casts_per_round = data.get("casts_per_round", 0)
 
