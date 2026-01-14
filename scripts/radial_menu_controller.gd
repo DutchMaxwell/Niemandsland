@@ -684,7 +684,7 @@ func _reposition_all_tokens(model_node: Node3D, unit: GameUnit, new_token_name: 
 			# New token: spawn at north and animate to position
 			var spawn_pos = _angle_to_position(north_angle, base_radius)
 			marker.position = spawn_pos
-			marker.modulate = Color(1, 1, 1, 0)  # Start transparent
+			marker.scale = Vector3(0.01, 0.01, 0.01)  # Start tiny
 
 			# Animate along arc to final position
 			_animate_token_to_position(marker, spawn_pos, target_pos, base_radius, north_angle, angles[i])
@@ -698,27 +698,23 @@ func _reposition_all_tokens(model_node: Node3D, unit: GameUnit, new_token_name: 
 
 
 ## Animates a token from north along the base edge to its target position.
-func _animate_token_to_position(marker: Node3D, start_pos: Vector3, end_pos: Vector3, base_radius: float, start_angle: float, end_angle: float) -> void:
+func _animate_token_to_position(marker: Node3D, _start_pos: Vector3, _end_pos: Vector3, base_radius: float, start_angle: float, end_angle: float) -> void:
 	var tween = marker.create_tween()
+
+	# Scale up (pop in effect)
 	tween.set_parallel(true)
+	tween.tween_property(marker, "scale", Vector3(1, 1, 1), 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 
-	# Fade in
-	tween.tween_property(marker, "modulate", Color(1, 1, 1, 1), 0.2)
-
-	# Arc movement - use custom interpolation
+	# Arc movement
 	var distance = base_radius + TOKEN_RADIUS + 0.001
 	var duration = 0.6
-
-	# We'll animate the angle and convert to position
-	var angle_property = "_token_angle"
-	marker.set_meta(angle_property, start_angle)
 
 	tween.set_parallel(false)
 
 	# Create smooth arc animation using multiple keyframes
 	var steps = 20
 	var angle_diff = end_angle - start_angle
-	# Ensure we go the shorter way around
+	# Ensure we go the shorter way around (left side, so go clockwise from north)
 	if angle_diff > PI:
 		angle_diff -= 2 * PI
 	elif angle_diff < -PI:
