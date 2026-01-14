@@ -70,11 +70,16 @@ var selected_terrain_type := TerrainType.RUINS
 var is_painting := false
 var point_symmetry_enabled := false  # Mirror placement across center
 
-# Zoom settings
+# Zoom and pan settings
 var zoom_level := 1.0
 const ZOOM_MIN := 0.5
 const ZOOM_MAX := 3.0
 const ZOOM_STEP := 0.1
+
+# Pan offset (in unzoomed pixels, relative to grid center)
+var pan_offset := Vector2.ZERO
+var _is_panning := false
+var _last_pan_pos := Vector2.ZERO
 
 # Deployment zones
 var deployment_type := DeploymentType.NONE
@@ -425,6 +430,8 @@ func _on_symmetry_toggled(enabled: bool) -> void:
 func _on_close_pressed() -> void:
 	# Send final update to 3D view before closing
 	_emit_layout_update()
+	# Reset zoom and pan for next open
+	reset_zoom()
 	layout_closed.emit()
 	hide()
 
@@ -696,7 +703,8 @@ Tip: Connected cells = 1 piece""" % [
 
 
 func _get_grid_rect() -> Rect2:
-	## Calculate the grid rectangle that maintains table aspect ratio
+	## Calculate the BASE grid rectangle that maintains table aspect ratio
+	## This is without zoom/pan - used for internal calculations
 	var table_aspect = table_size_feet.x / table_size_feet.y
 	var available_size = grid_container.size
 	var grid_size: Vector2
@@ -712,12 +720,27 @@ func _get_grid_rect() -> Rect2:
 	return Rect2(offset, grid_size)
 
 
+func _get_zoomed_grid_rect() -> Rect2:
+	## Calculate the grid rectangle WITH zoom and pan applied
+	## This is used for mouse interaction and drawing
+	var base_rect = _get_grid_rect()
+
+	# Calculate new size (zoomed)
+	var new_size = base_rect.size * zoom_level
+
+	# Calculate new position (centered, then panned)
+	var container_center = grid_container.size / 2.0
+	var new_pos = container_center - new_size / 2.0 + pan_offset * zoom_level
+
+	return Rect2(new_pos, new_size)
+
+
 func _get_cell_at_screen_pos(screen_pos: Vector2) -> Vector2i:
 	var grid_dims = _calculate_grid_dimensions()
-	var grid_rect = _get_grid_rect()
+	var grid_rect = _get_zoomed_grid_rect()  # Use zoomed rect for mouse interaction
 
 	# Calculate cell size using same method as grid drawing
-	# (pixels per inch * 3" grid size)
+	# (pixels per inch * 3" grid size) - includes zoom
 	var table_size_inches = table_size_feet * 12.0
 	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
 	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
@@ -729,7 +752,7 @@ func _get_cell_at_screen_pos(screen_pos: Vector2) -> Vector2i:
 	# Get position relative to grid container using proper coordinate transform
 	var local_pos = grid_container.get_local_mouse_position()
 
-	# Get center of grid (grid is centered in the container)
+	# Get center of grid (grid is centered in the container with zoom/pan)
 	var center = grid_rect.position + grid_rect.size / 2.0
 
 	# Half grid cells for centering calculation
@@ -767,8 +790,9 @@ func _get_mirrored_cell(cell: Vector2i) -> Vector2i:
 
 func _inch_to_screen_pos(inch_pos: Vector2i) -> Vector2:
 	## Convert 1" coordinates to screen position (relative to grid_container)
+	## Uses zoomed grid rect for proper display
 	var grid_dims = _calculate_grid_dimensions()
-	var grid_rect = _get_grid_rect()
+	var grid_rect = _get_zoomed_grid_rect()  # Use zoomed rect
 	var center = grid_rect.position + grid_rect.size / 2.0
 	var angle_rad = deg_to_rad(grid_rotation_degrees)
 
@@ -798,10 +822,10 @@ func _is_valid_cell(cell: Vector2i) -> bool:
 func _is_valid_inch_pos(inch_pos: Vector2i) -> bool:
 	## Check if 1" coordinate is within the table boundary (for deployment zones)
 	## When grid is rotated, we must check screen position against table bounds
-	var grid_rect = _get_grid_rect()
+	var grid_rect = _get_zoomed_grid_rect()  # Use zoomed rect
 	var screen_pos = _inch_to_screen_pos(inch_pos)
 	# Add small tolerance for boundary snap points (rounding may cause slight offset)
-	var tolerance = 2.0  # pixels
+	var tolerance = 2.0 * zoom_level  # Scale tolerance with zoom
 	var expanded_rect = grid_rect.grow(tolerance)
 	return expanded_rect.has_point(screen_pos)
 
@@ -810,16 +834,41 @@ func _input(event: InputEvent) -> void:
 	if not visible:
 		return
 
-	# Handle zoom with mouse wheel
+	# Check if mouse is over the grid container (for zoom/pan to work within container bounds)
+	var container_rect = Rect2(Vector2.ZERO, grid_container.size)
+	var local_mouse = grid_container.get_local_mouse_position()
+	var mouse_in_grid = container_rect.has_point(local_mouse)
+
+	# Handle zoom with mouse wheel (only when mouse is in grid area)
 	if event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
-			_zoom_in()
-			get_viewport().set_input_as_handled()
+		if mouse_in_grid:
+			if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
+				_zoom_in(local_mouse)
+				get_viewport().set_input_as_handled()
+				return
+			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
+				_zoom_out(local_mouse)
+				get_viewport().set_input_as_handled()
+				return
+
+		# Handle middle mouse button for panning
+		if event.button_index == MOUSE_BUTTON_MIDDLE:
+			if event.pressed and mouse_in_grid:
+				_is_panning = true
+				_last_pan_pos = event.position
+				get_viewport().set_input_as_handled()
+			else:
+				_is_panning = false
 			return
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
-			_zoom_out()
-			get_viewport().set_input_as_handled()
-			return
+
+	# Handle pan motion
+	if event is InputEventMouseMotion and _is_panning:
+		var delta = event.position - _last_pan_pos
+		pan_offset += delta / zoom_level
+		_last_pan_pos = event.position
+		grid_container.queue_redraw()
+		get_viewport().set_input_as_handled()
+		return
 
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
@@ -1440,11 +1489,11 @@ func _convert_zone_cells_to_world(vertices: Array[Vector2i]) -> Array[Vector3]:
 ## Returns {player: int, index: int} or {player: 0} if no vertex found
 func _find_vertex_at_screen_pos(screen_pos: Vector2) -> Dictionary:
 	var grid_dims = _calculate_grid_dimensions()
-	var grid_rect = _get_grid_rect()
+	var grid_rect = _get_zoomed_grid_rect()  # Use zoomed rect
 	var center = grid_rect.position + grid_rect.size / 2.0
 	var angle_rad = deg_to_rad(grid_rotation_degrees)
 
-	# Calculate pixels per inch
+	# Calculate pixels per inch (includes zoom)
 	var table_size_inches = table_size_feet * 12.0
 	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
 	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
@@ -1471,11 +1520,14 @@ func _find_vertex_at_screen_pos(screen_pos: Vector2) -> Dictionary:
 	var closest_player = 0
 	var closest_index = -1
 
+	# Scale click radius with zoom for consistent feel
+	var scaled_click_radius = VERTEX_CLICK_RADIUS * zoom_level
+
 	# Check Player 1 vertices
 	for i in range(custom_zone_vertices_p1.size()):
 		var vertex_screen = inch_to_screen.call(custom_zone_vertices_p1[i])
 		var dist = local_pos.distance_to(vertex_screen)
-		if dist < VERTEX_CLICK_RADIUS and dist < closest_dist:
+		if dist < scaled_click_radius and dist < closest_dist:
 			closest_dist = dist
 			closest_player = 1
 			closest_index = i
@@ -1484,7 +1536,7 @@ func _find_vertex_at_screen_pos(screen_pos: Vector2) -> Dictionary:
 	for i in range(custom_zone_vertices_p2.size()):
 		var vertex_screen = inch_to_screen.call(custom_zone_vertices_p2[i])
 		var dist = local_pos.distance_to(vertex_screen)
-		if dist < VERTEX_CLICK_RADIUS and dist < closest_dist:
+		if dist < scaled_click_radius and dist < closest_dist:
 			closest_dist = dist
 			closest_player = 2
 			closest_index = i
@@ -1534,15 +1586,15 @@ func _move_vertex_to_screen_pos(screen_pos: Vector2) -> void:
 
 ## Find nearest boundary snap point (where grid lines intersect table edges)
 ## Returns {found: bool, cell: Vector2i, screen_pos: Vector2}
-const BOUNDARY_SNAP_RADIUS := 25.0  # Pixels - increased for easier snapping
+const BOUNDARY_SNAP_RADIUS := 25.0  # Pixels (base value, will be scaled with zoom)
 
 func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 	var grid_dims = _calculate_grid_dimensions()
-	var grid_rect = _get_grid_rect()
+	var grid_rect = _get_zoomed_grid_rect()  # Use zoomed rect
 	var center = grid_rect.position + grid_rect.size / 2.0
 	var angle_rad = deg_to_rad(grid_rotation_degrees)
 
-	# Calculate pixels per inch
+	# Calculate pixels per inch (includes zoom)
 	var table_size_inches = table_size_feet * 12.0
 	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
 	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
@@ -1570,6 +1622,9 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 	var closest_cell = Vector2i.ZERO
 	var closest_screen = Vector2.ZERO
 
+	# Scale snap radius with zoom for consistent feel
+	var scaled_snap_radius = BOUNDARY_SNAP_RADIUS * zoom_level
+
 	# Check vertical grid lines (at 1" intervals)
 	for i in range(total_inches_x + 1):
 		var line_x = (i - half_inches_x) * pixels_per_inch_x
@@ -1586,7 +1641,7 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 			# Check both endpoints
 			for pt in [clipped[0], clipped[1]]:
 				var dist = local_pos.distance_to(pt)
-				if dist < BOUNDARY_SNAP_RADIUS and dist < closest_dist:
+				if dist < scaled_snap_radius and dist < closest_dist:
 					closest_dist = dist
 					closest_screen = pt
 					# Convert screen position back to cell (using 1" precision)
@@ -1606,7 +1661,7 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 		if clipped != null:
 			for pt in [clipped[0], clipped[1]]:
 				var dist = local_pos.distance_to(pt)
-				if dist < BOUNDARY_SNAP_RADIUS and dist < closest_dist:
+				if dist < scaled_snap_radius and dist < closest_dist:
 					closest_dist = dist
 					closest_screen = pt
 					closest_cell = _screen_to_cell_inches(pt, grid_rect, pixels_per_inch_x, pixels_per_inch_y, half_inches_x, half_inches_y, angle_rad, center)
@@ -1620,7 +1675,7 @@ func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
 	]
 	for corner in corners:
 		var dist = local_pos.distance_to(corner)
-		if dist < BOUNDARY_SNAP_RADIUS and dist < closest_dist:
+		if dist < scaled_snap_radius and dist < closest_dist:
 			closest_dist = dist
 			closest_screen = corner
 			closest_cell = _screen_to_cell_inches(corner, grid_rect, pixels_per_inch_x, pixels_per_inch_y, half_inches_x, half_inches_y, angle_rad, center)
@@ -1671,11 +1726,11 @@ func _screen_to_cell(screen_pt: Vector2, grid_rect: Rect2, cell_size: Vector2, h
 ## Convert screen position to 1" coordinates for vertex dragging
 func _get_inch_at_screen_pos(screen_pos: Vector2) -> Vector2i:
 	var grid_dims = _calculate_grid_dimensions()
-	var grid_rect = _get_grid_rect()
+	var grid_rect = _get_zoomed_grid_rect()  # Use zoomed rect
 	var center = grid_rect.position + grid_rect.size / 2.0
 	var angle_rad = deg_to_rad(grid_rotation_degrees)
 
-	# Calculate pixels per inch
+	# Calculate pixels per inch (includes zoom)
 	var table_size_inches = table_size_feet * 12.0
 	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
 	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
@@ -1763,23 +1818,46 @@ func _clip_line_to_rect_internal(p1: Vector2, p2: Vector2, rect: Rect2) -> Varia
 # Zoom Functions
 # ============================================================================
 
-func _zoom_in() -> void:
+func _zoom_in(mouse_pos: Vector2 = Vector2.ZERO) -> void:
+	var old_zoom = zoom_level
 	zoom_level = clampf(zoom_level + ZOOM_STEP, ZOOM_MIN, ZOOM_MAX)
+	_adjust_pan_for_zoom(mouse_pos, old_zoom, zoom_level)
 	_apply_zoom()
 
 
-func _zoom_out() -> void:
+func _zoom_out(mouse_pos: Vector2 = Vector2.ZERO) -> void:
+	var old_zoom = zoom_level
 	zoom_level = clampf(zoom_level - ZOOM_STEP, ZOOM_MIN, ZOOM_MAX)
+	_adjust_pan_for_zoom(mouse_pos, old_zoom, zoom_level)
 	_apply_zoom()
+
+
+func _adjust_pan_for_zoom(mouse_pos: Vector2, old_zoom: float, new_zoom: float) -> void:
+	# Adjust pan offset so that the point under the mouse stays in place
+	if old_zoom == new_zoom or mouse_pos == Vector2.ZERO:
+		return
+
+	var grid_rect = _get_grid_rect()
+	var center = grid_rect.position + grid_rect.size / 2.0
+
+	# Position relative to center (in unzoomed space)
+	var rel_to_center = (mouse_pos - center) / old_zoom - pan_offset
+
+	# After zoom, the same world point should be under the mouse
+	# new_mouse_pos = (world_pos + new_pan) * new_zoom + center
+	# We want new_mouse_pos == mouse_pos, so:
+	# new_pan = (mouse_pos - center) / new_zoom - world_pos
+	pan_offset = (mouse_pos - center) / new_zoom - rel_to_center
 
 
 func _apply_zoom() -> void:
 	if grid_container:
-		grid_container.scale = Vector2(zoom_level, zoom_level)
-		grid_container.pivot_offset = grid_container.size / 2.0
+		# Don't use scale - we handle zoom in drawing code
+		grid_container.scale = Vector2.ONE
 		grid_container.queue_redraw()
 
 
 func reset_zoom() -> void:
 	zoom_level = 1.0
+	pan_offset = Vector2.ZERO
 	_apply_zoom()
