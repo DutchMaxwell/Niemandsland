@@ -81,6 +81,11 @@ var pan_offset := Vector2.ZERO
 var _is_panning := false
 var _last_pan_pos := Vector2.ZERO
 
+# Cached snap points (calculated during grid drawing, used for snapping)
+# Each entry is {screen_pos: Vector2, inch_pos: Vector2i}
+var _cached_boundary_snap_points: Array[Dictionary] = []
+var _snap_points_valid := false
+
 # Deployment zones
 var deployment_type := DeploymentType.NONE
 var show_deployment_zones := false
@@ -1593,169 +1598,35 @@ func _move_vertex_to_screen_pos(screen_pos: Vector2) -> void:
 
 ## Find nearest boundary snap point (where grid lines intersect table edges)
 ## Returns {found: bool, cell: Vector2i, screen_pos: Vector2}
-const BOUNDARY_SNAP_RADIUS := 40.0  # Pixels (base value, will be scaled with zoom)
+## Uses cached snap points from _draw_boundary_snap_points for exact consistency
+const BOUNDARY_SNAP_RADIUS := 40.0  # Pixels - constant, not scaled with zoom
 
-func _find_nearest_boundary_snap_point(screen_pos: Vector2) -> Dictionary:
-	var grid_dims = _calculate_grid_dimensions()
-	var grid_rect = _get_zoomed_grid_rect()  # Use zoomed rect
-	var center = grid_rect.position + grid_rect.size / 2.0
-	var angle_rad = deg_to_rad(grid_rotation_degrees)
+func _find_nearest_boundary_snap_point(_screen_pos: Vector2) -> Dictionary:
+	## Find the nearest cached boundary snap point to the current mouse position.
+	## Uses cached snap points calculated during grid drawing for guaranteed consistency
+	## between visual yellow dots and snapped positions.
 
-	# Calculate pixels per inch (includes zoom)
-	var table_size_inches = table_size_feet * 12.0
-	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
-	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
-
-	# Use 1" intervals (same as fine grid)
-	var total_inches_x = grid_dims.x * 3  # 3 inches per cell
-	var total_inches_y = grid_dims.y * 3
-	var half_inches_x = total_inches_x / 2.0
-	var half_inches_y = total_inches_y / 2.0
-
-	var rotate_point = func(p: Vector2) -> Vector2:
-		var cos_a = cos(angle_rad)
-		var sin_a = sin(angle_rad)
-		return Vector2(
-			p.x * cos_a - p.y * sin_a,
-			p.x * sin_a + p.y * cos_a
-		) + center
-
-	# Get position relative to grid container using proper coordinate transform
-	# This handles any parent transforms/scaling correctly
+	# Get mouse position in grid container local coordinates
 	var local_pos = grid_container.get_local_mouse_position()
-	var line_length = grid_rect.size.length()
 
 	var closest_dist = INF
 	var closest_cell = Vector2i.ZERO
 	var closest_screen = Vector2.ZERO
 
-	# DEBUG: Track all snap points for analysis
-	var all_snap_points: Array[Vector2] = []
-
-	# Use constant snap radius (don't scale with zoom - pixel distance is what matters for user input)
-	var snap_radius = BOUNDARY_SNAP_RADIUS
-
-	# Check vertical grid lines (at 1" intervals)
-	for i in range(total_inches_x + 1):
-		var line_x = (i - half_inches_x) * pixels_per_inch_x
-
-		var start_local = Vector2(line_x, -line_length)
-		var end_local = Vector2(line_x, line_length)
-
-		var start = rotate_point.call(start_local)
-		var end_point = rotate_point.call(end_local)
-
-		# Get clipped endpoints (on table boundary)
-		var clipped = _clip_line_to_rect_internal(start, end_point, grid_rect)
-		if clipped != null:
-			all_snap_points.append(clipped[0])
-			all_snap_points.append(clipped[1])
-			# Check both endpoints
-			for pt in [clipped[0], clipped[1]]:
-				var dist = local_pos.distance_to(pt)
-				if dist < snap_radius and dist < closest_dist:
-					closest_dist = dist
-					closest_screen = pt
-					# Convert screen position back to cell (using 1" precision)
-					closest_cell = _screen_to_cell_inches(pt, grid_rect, pixels_per_inch_x, pixels_per_inch_y, half_inches_x, half_inches_y, angle_rad, center)
-
-	# Check horizontal grid lines (at 1" intervals)
-	for i in range(total_inches_y + 1):
-		var line_y = (i - half_inches_y) * pixels_per_inch_y
-
-		var start_local = Vector2(-line_length, line_y)
-		var end_local = Vector2(line_length, line_y)
-
-		var start = rotate_point.call(start_local)
-		var end_point = rotate_point.call(end_local)
-
-		var clipped = _clip_line_to_rect_internal(start, end_point, grid_rect)
-		if clipped != null:
-			all_snap_points.append(clipped[0])
-			all_snap_points.append(clipped[1])
-			for pt in [clipped[0], clipped[1]]:
-				var dist = local_pos.distance_to(pt)
-				if dist < snap_radius and dist < closest_dist:
-					closest_dist = dist
-					closest_screen = pt
-					closest_cell = _screen_to_cell_inches(pt, grid_rect, pixels_per_inch_x, pixels_per_inch_y, half_inches_x, half_inches_y, angle_rad, center)
-
-	# Also check the 4 table corners (even if no grid line intersects there)
-	var corners = [
-		grid_rect.position,                                      # Top-left
-		grid_rect.position + Vector2(grid_rect.size.x, 0),       # Top-right
-		grid_rect.position + Vector2(0, grid_rect.size.y),       # Bottom-left
-		grid_rect.end                                            # Bottom-right
-	]
-	for corner in corners:
-		all_snap_points.append(corner)
-		var dist = local_pos.distance_to(corner)
-		if dist < snap_radius and dist < closest_dist:
+	# Use cached snap points calculated during grid drawing
+	# Each cached point has {screen_pos: Vector2, inch_pos: Vector2i}
+	for snap_point in _cached_boundary_snap_points:
+		var snap_screen: Vector2 = snap_point.screen_pos
+		var dist = local_pos.distance_to(snap_screen)
+		if dist < BOUNDARY_SNAP_RADIUS and dist < closest_dist:
 			closest_dist = dist
-			closest_screen = corner
-			closest_cell = _screen_to_cell_inches(corner, grid_rect, pixels_per_inch_x, pixels_per_inch_y, half_inches_x, half_inches_y, angle_rad, center)
-
-	# DEBUG: Find the actual closest point regardless of radius
-	var debug_closest_dist = INF
-	var debug_closest_pt = Vector2.ZERO
-	for pt in all_snap_points:
-		var d = local_pos.distance_to(pt)
-		if d < debug_closest_dist:
-			debug_closest_dist = d
-			debug_closest_pt = pt
-
-	# Print debug info every 60 frames to avoid spam
-	if Engine.get_frames_drawn() % 60 == 0 and _dragging_vertex:
-		print("=== SNAP DEBUG ===")
-		print("  Mouse local_pos: ", local_pos)
-		print("  grid_rect: ", grid_rect)
-		print("  Total snap points: ", all_snap_points.size())
-		print("  Closest snap point: ", debug_closest_pt, " at dist: ", debug_closest_dist)
-		print("  Snap radius: ", snap_radius)
-		print("  Found snap: ", closest_dist < INF, " at dist: ", closest_dist if closest_dist < INF else "N/A")
+			closest_screen = snap_screen
+			closest_cell = snap_point.inch_pos
 
 	if closest_dist < INF:
 		return {found = true, cell = closest_cell, screen_pos = closest_screen}
 	else:
 		return {found = false, cell = Vector2i.ZERO, screen_pos = Vector2.ZERO}
-
-
-## Convert screen position to 1" coordinates (not 3" cells)
-func _screen_to_cell_inches(screen_pt: Vector2, grid_rect: Rect2, ppi_x: float, ppi_y: float, half_inches_x: float, half_inches_y: float, angle_rad: float, center: Vector2) -> Vector2i:
-	# Reverse rotation
-	var rel = screen_pt - center
-	var cos_a = cos(-angle_rad)
-	var sin_a = sin(-angle_rad)
-	var local = Vector2(
-		rel.x * cos_a - rel.y * sin_a,
-		rel.x * sin_a + rel.y * cos_a
-	)
-
-	# Convert to inch coordinates (each unit = 1")
-	var inch_x = local.x / ppi_x + half_inches_x
-	var inch_y = local.y / ppi_y + half_inches_y
-
-	# Return 1" coordinates directly (round to nearest inch)
-	return Vector2i(int(round(inch_x)), int(round(inch_y)))
-
-
-## Convert screen position to cell coordinates (for snap points)
-func _screen_to_cell(screen_pt: Vector2, grid_rect: Rect2, cell_size: Vector2, half_grid_cells: Vector2, angle_rad: float, center: Vector2) -> Vector2i:
-	# Reverse rotation
-	var rel = screen_pt - center
-	var cos_a = cos(-angle_rad)
-	var sin_a = sin(-angle_rad)
-	var local = Vector2(
-		rel.x * cos_a - rel.y * sin_a,
-		rel.x * sin_a + rel.y * cos_a
-	)
-
-	# Convert to cell coordinates
-	var cell_x = int(round(local.x / cell_size.x + half_grid_cells.x))
-	var cell_y = int(round(local.y / cell_size.y + half_grid_cells.y))
-
-	return Vector2i(cell_x, cell_y)
-
 
 ## Convert screen position to 1" coordinates for vertex dragging
 func _get_inch_at_screen_pos(screen_pos: Vector2) -> Vector2i:
@@ -1790,62 +1661,6 @@ func _get_inch_at_screen_pos(screen_pos: Vector2) -> Vector2i:
 	var inch_y = int(round(rotated_pos.y / pixels_per_inch_y + half_inches_y))
 
 	return Vector2i(inch_x, inch_y)
-
-
-## Internal line clipping (same as grid's but local to this file)
-func _clip_line_to_rect_internal(p1: Vector2, p2: Vector2, rect: Rect2) -> Variant:
-	const INSIDE = 0
-	const LEFT = 1
-	const RIGHT = 2
-	const BOTTOM = 4
-	const TOP = 8
-
-	var xmin = rect.position.x
-	var xmax = rect.end.x
-	var ymin = rect.position.y
-	var ymax = rect.end.y
-
-	var compute_code = func(p: Vector2) -> int:
-		var code = INSIDE
-		if p.x < xmin:
-			code |= LEFT
-		elif p.x > xmax:
-			code |= RIGHT
-		if p.y < ymin:
-			code |= TOP
-		elif p.y > ymax:
-			code |= BOTTOM
-		return code
-
-	var code1 = compute_code.call(p1)
-	var code2 = compute_code.call(p2)
-
-	while true:
-		if (code1 | code2) == 0:
-			return [p1, p2]
-		elif (code1 & code2) != 0:
-			return null
-		else:
-			var code_out = code1 if code1 != 0 else code2
-			var p: Vector2
-
-			if code_out & BOTTOM:
-				p = Vector2(p1.x + (p2.x - p1.x) * (ymax - p1.y) / (p2.y - p1.y), ymax)
-			elif code_out & TOP:
-				p = Vector2(p1.x + (p2.x - p1.x) * (ymin - p1.y) / (p2.y - p1.y), ymin)
-			elif code_out & RIGHT:
-				p = Vector2(xmax, p1.y + (p2.y - p1.y) * (xmax - p1.x) / (p2.x - p1.x))
-			elif code_out & LEFT:
-				p = Vector2(xmin, p1.y + (p2.y - p1.y) * (xmin - p1.x) / (p2.x - p1.x))
-
-			if code_out == code1:
-				p1 = p
-				code1 = compute_code.call(p1)
-			else:
-				p2 = p
-				code2 = compute_code.call(p2)
-
-	return null
 
 
 # ============================================================================
