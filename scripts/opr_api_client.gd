@@ -362,9 +362,16 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 					unit.special_rules.append(item_name)
 
 				# IMPORTANT: Also add special rules GRANTED by the upgrade (e.g., "Caster(2)")
-				# This is where upgrades like "Psychic Synapses" grant abilities like Caster
+				# The API uses BOTH "specialRules" AND "content" fields for granted abilities
+				# - "specialRules" is used for weapon-style items
+				# - "content" is used for upgrade items like "Psychic Synapses"
 				var item_rules = item.get("specialRules", [])
-				print("DEBUG: Item '%s' has specialRules: %s" % [item_name, item_rules])
+				var item_content = item.get("content", [])
+				# Merge both arrays
+				if item_content is Array:
+					for content_item in item_content:
+						item_rules.append(content_item)
+				print("DEBUG: Item '%s' has rules (specialRules + content): %s" % [item_name, item_rules])
 				for item_rule in item_rules:
 					var granted_rule = ""
 					if item_rule is String:
