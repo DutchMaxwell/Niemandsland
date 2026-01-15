@@ -364,7 +364,7 @@ func get_boundary_anchor_point(game_unit) -> Vector3:
 
 ## Gets positions along the boundary for multiple tokens.
 ## Returns array of Vector3 positions starting from the leftmost point, following the boundary.
-## Tokens follow the boundary as a "rail" but are offset outward.
+## Tokens are offset outward using the boundary normal (like tokens around a base edge).
 func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vector3]:
 	var positions: Array[Vector3] = []
 
@@ -380,13 +380,7 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 
 	# Token spacing along boundary (the "rail")
 	var token_spacing = 0.024  # 24mm between token centers
-	var outward_offset = 0.015  # 15mm offset from boundary line
-
-	# Calculate boundary center for outward direction
-	var center = Vector2.ZERO
-	for point in hull_points:
-		center += point
-	center /= point_count
+	var outward_offset = 0.012  # 12mm offset from boundary line (token radius + small gap)
 
 	# Calculate cumulative distances along the boundary starting from start_index
 	var cumulative_distances: Array[float] = [0.0]
@@ -399,7 +393,7 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 		total_length += (p2 - p1).length()
 		cumulative_distances.append(total_length)
 
-	# Place tokens along boundary rail, offset outward
+	# Place tokens along boundary rail, offset outward using line normal
 	for token_idx in range(token_count):
 		var target_distance = token_idx * token_spacing
 
@@ -428,9 +422,13 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 
 		var pos_on_rail = segment_start.lerp(segment_end, t)
 
-		# Calculate outward direction (away from center) and offset
-		var outward_dir = (pos_on_rail - center).normalized()
-		var final_pos = pos_on_rail + outward_dir * outward_offset
+		# Calculate outward normal of the boundary segment
+		# For a convex hull going counter-clockwise, the outward normal is perpendicular to the right
+		var segment_dir = (segment_end - segment_start).normalized()
+		var outward_normal = Vector2(segment_dir.y, -segment_dir.x)  # Perpendicular, pointing outward
+
+		# Offset position along the normal (like tokens around a base edge)
+		var final_pos = pos_on_rail + outward_normal * outward_offset
 
 		positions.append(Vector3(final_pos.x, 0.0, final_pos.y))
 
