@@ -657,6 +657,80 @@ func _angle_to_position(angle: float, base_radius: float) -> Vector3:
 	return Vector3(cos(angle) * distance, 0, sin(angle) * distance)
 
 
+## Determines the best side (angle) for tokens to avoid overlapping with other models.
+## Returns PI (9 o'clock/left) or 0 (3 o'clock/right).
+func _get_best_token_side(model_node: Node3D, unit: GameUnit, base_radius: float, token_count: int) -> float:
+	var default_angle = PI  # 9 o'clock (left side)
+	var opposite_angle = 0.0  # 3 o'clock (right side)
+
+	if not unit or token_count == 0:
+		return default_angle
+
+	var model_pos = model_node.global_position
+
+	# Calculate the farthest token position on the left side
+	var angles = _calculate_token_angles(token_count, base_radius)
+	if angles.is_empty():
+		return default_angle
+
+	# Check if any token would overlap with another model or its tokens
+	for other_model in unit.models:
+		if not is_instance_valid(other_model) or not is_instance_valid(other_model.node):
+			continue
+		if other_model.node == model_node:
+			continue
+
+		var other_pos = other_model.node.global_position
+		var other_base_radius = _get_base_radius(unit)
+
+		# Check each token position on the left side
+		for angle in angles:
+			var token_local_pos = _angle_to_position(angle, base_radius)
+			var token_world_pos = model_pos + token_local_pos
+
+			# Distance from this token to the other model's center
+			var dist_to_other = Vector2(token_world_pos.x - other_pos.x, token_world_pos.z - other_pos.z).length()
+
+			# Check if token overlaps with other model's base or its token zone
+			# Token zone extends: other_base_radius + TOKEN_RADIUS + small buffer
+			var overlap_threshold = other_base_radius + TOKEN_RADIUS + 0.005
+
+			if dist_to_other < overlap_threshold:
+				# Left side overlaps, try right side
+				# First check if right side is clear
+				var right_clear = true
+				var right_angles = _calculate_token_angles_at_center(token_count, base_radius, opposite_angle)
+
+				for right_angle in right_angles:
+					var right_token_pos = model_pos + _angle_to_position(right_angle, base_radius)
+					var right_dist = Vector2(right_token_pos.x - other_pos.x, right_token_pos.z - other_pos.z).length()
+					if right_dist < overlap_threshold:
+						right_clear = false
+						break
+
+				if right_clear:
+					return opposite_angle
+
+	return default_angle
+
+
+## Calculates token angles centered at a specific angle (for overlap avoidance).
+func _calculate_token_angles_at_center(token_count: int, base_radius: float, center_angle: float) -> Array[float]:
+	var angles: Array[float] = []
+	if token_count == 0:
+		return angles
+
+	var token_orbit_radius = base_radius + TOKEN_RADIUS + 0.001
+	var token_angular_width = (2.0 * TOKEN_RADIUS + TOKEN_GAP) / token_orbit_radius
+	var total_span = token_count * token_angular_width - TOKEN_GAP / token_orbit_radius
+	var start_angle = center_angle - total_span / 2.0 + token_angular_width / 2.0
+
+	for i in range(token_count):
+		angles.append(start_angle + i * token_angular_width)
+
+	return angles
+
+
 ## Repositions all tokens on a model with optional animation.
 func _reposition_all_tokens(model_node: Node3D, unit: GameUnit, new_token_name: String = "") -> void:
 	var tokens = _get_active_tokens(model_node)
@@ -725,7 +799,10 @@ func _reposition_tokens_boundary(container: Node3D, unit: GameUnit, tokens: Arra
 ## Repositions tokens in a circle around base (for model tokens).
 func _reposition_tokens_circular(model_node: Node3D, unit: GameUnit, tokens: Array[String], new_token_name: String = "") -> void:
 	var base_radius = _get_base_radius(unit)
-	var angles = _calculate_token_angles(tokens.size(), base_radius)
+
+	# Determine the best side to place tokens (avoids overlapping with other models)
+	var best_side = _get_best_token_side(model_node, unit, base_radius, tokens.size())
+	var angles = _calculate_token_angles_at_center(tokens.size(), base_radius, best_side)
 
 	# North angle (12 o'clock) for spawn position
 	var north_angle = -PI / 2.0

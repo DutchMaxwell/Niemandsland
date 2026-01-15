@@ -1043,6 +1043,33 @@ static func create_custom(text: String, color: Color = Color.WHITE) -> UnitMarke
 - Klick auf Marker → Entfernen oder Details
 - Mehrere Marker nebeneinander
 
+### 11.5 Smart Token Placement (NEU - 2026-01-15)
+
+**Problem:** Bei engen Formationen (Dreiecke, Klumpen) überlappen Tokens mit Modell-Bases.
+
+**Lösung 1: Boundary Tokens (Unit-Wide)**
+- **Maximum-Minimum-Distanz Algorithmus**: Für jeden Punkt auf der Boundary wird die minimale Distanz zu allen Modellen berechnet. Der Punkt mit der GRÖSSTEN minimalen Distanz wird gewählt.
+- Tokens werden automatisch an der "freisten" Stelle positioniert
+- Implementiert in `unit_boundary_visualizer.gd::_calculate_token_start_index()`
+
+**Lösung 2: Model-Specific Tokens**
+- **Auto-Flip**: Wenn Tokens auf der Standard-Seite (9 Uhr) mit anderen Modellen überlappen würden, werden sie automatisch auf die gegenüberliegende Seite (3 Uhr) verschoben
+- Implementiert in `radial_menu_controller.gd::_get_best_token_side()`
+
+### 11.6 Base Spacing (NEU - 2026-01-15)
+
+**Problem:** Festes 40mm Spacing führt zu Überlappungen bei großen Bases.
+
+**Lösung:** Konstanter Randabstand statt Mittelpunktsabstand
+- **Formel:** `spacing = diameter + 8mm` (konstanter 8mm Randabstand)
+- Gilt für: Spawn, Arrangement (1-9, A), Arrow-Formation
+- Berechnet dynamisch basierend auf größter Base in der Selektion
+- Implementiert in:
+  - `object_manager.gd::_get_max_base_diameter()`
+  - `object_manager.gd::arrange_selected_in_rows()`
+  - `object_manager.gd::arrange_selected_arrow()`
+  - `opr_army_manager.gd::_spawn_unit()`
+
 ---
 
 ## 12. Save/Load & Multiplayer (NEU)
