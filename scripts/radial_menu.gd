@@ -195,11 +195,10 @@ func _input(event: InputEvent) -> void:
 		if event.keycode == KEY_ESCAPE:
 			close()
 			get_viewport().set_input_as_handled()
-		elif event.keycode >= KEY_1 and event.keycode <= KEY_8:
-			var index = event.keycode - KEY_1
-			if index < _items.size():
-				_select_index(index)
-				get_viewport().set_input_as_handled()
+		elif event.keycode >= KEY_1 and event.keycode <= KEY_9:
+			# Close menu and let the arrangement system handle these keys
+			# Don't consume the event so it propagates to arrangement handlers
+			close()
 
 
 func _update_hover(mouse_pos: Vector2) -> void:
