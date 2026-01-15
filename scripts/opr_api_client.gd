@@ -347,14 +347,40 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 		if weapon and weapon.attacks > 0:
 			unit.weapons.append(weapon)
 		else:
-			# Items without attacks are special rules/equipment, not weapons
-			var item_name = ""
+			# Items without attacks are upgrades/equipment, not weapons
 			if item is String:
-				item_name = item
+				if not item.is_empty() and item not in unit.special_rules:
+					unit.special_rules.append(item)
 			elif item is Dictionary:
-				item_name = item.get("name", item.get("label", ""))
-			if not item_name.is_empty() and item_name not in unit.special_rules:
-				unit.special_rules.append(item_name)
+				# Add the item name (e.g., "Psychic Synapses")
+				var item_name = item.get("name", item.get("label", ""))
+				if not item_name.is_empty() and item_name not in unit.special_rules:
+					unit.special_rules.append(item_name)
+
+				# IMPORTANT: Also add special rules GRANTED by the upgrade (e.g., "Caster(2)")
+				# The API uses BOTH "specialRules" AND "content" fields for granted abilities
+				# - "specialRules" is used for weapon-style items
+				# - "content" is used for upgrade items like "Psychic Synapses"
+				var item_rules = item.get("specialRules", [])
+				var item_content = item.get("content", [])
+				# Merge both arrays
+				if item_content is Array:
+					for content_item in item_content:
+						item_rules.append(content_item)
+				for item_rule in item_rules:
+					var granted_rule = ""
+					if item_rule is String:
+						granted_rule = item_rule
+					elif item_rule is Dictionary:
+						var rule_name = item_rule.get("name", "")
+						var rule_rating = item_rule.get("rating", null)
+						if rule_rating != null and str(rule_rating) != "":
+							granted_rule = "%s(%s)" % [rule_name, _format_rating(rule_rating)]
+						elif not rule_name.is_empty():
+							granted_rule = rule_name
+
+					if not granted_rule.is_empty() and granted_rule not in unit.special_rules:
+						unit.special_rules.append(granted_rule)
 
 	return unit
 
