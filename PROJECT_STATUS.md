@@ -39,21 +39,25 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 - ✅ **Distanzmessung** - In Zoll
 - ✅ **Terrain-Library** - Felsen, Gebäude, Bäume
 
-### Terrain & Map Layout System (NEU!)
+### Terrain & Map Layout System
 - ✅ **Map Layout Editor** - Top-down 3" Grid für Terrain-Planung
   - **Zoom-Funktion** - Mausrad-Zoom (0.5x - 3.0x) für präzises Arbeiten (NEU!)
   - **Verbessertes Edge-Snapping** - 25px Snap-Radius zu gelben Randpunkten (NEU!)
   - **Selection Disabled** - Multi-Selection während Map Layout deaktiviert (NEU!)
+  - Zoom (Mausrad, 0.5x-3.0x) mit Fokus auf Mausposition
+  - Pan (Mittelklick + Ziehen) innerhalb des Spielfeld-Fensters
+  - Grid-Rotation für diagonale Terrain-Platzierung
 - ✅ **Terrain-Typen mit Eigenschaften**:
   - Ruins (Height 5, Cover, Impassable Walls)
   - Forest (Height 5, Difficult + Cover)
   - Container (Height 5, Impassable + Blocking)
   - Dangerous (Minefields/Acid/Radiation)
-- ✅ **Deployment Zones** - Standard 6"/9", Diagonal, Hammer & Anvil
-- ✅ **Objectives System** - Platzierung und Visualisierung von Zielpunkten
-- ✅ **Auto-Generate Terrain** - Automatische Terrain-Generierung mit Symmetrie
+- ✅ **Deployment Zones** - Front-line (12") + Custom Polygon Zones
+- ✅ **Objectives System** - Platzierung und Visualisierung von Zielpunkten (bis zu 6)
+- ✅ **Auto-Generate Terrain** - Automatische Terrain-Generierung nach OPR-Richtlinien
+- ✅ **OPR Guidelines Checker** - Echtzeit-Feedback zu Terrain-Empfehlungen
 - ✅ **3D Overlay Visualisierung** - Terrain-Grid im 3D-Spiel sichtbar
-- ✅ **Save/Load Layouts** - Terrain-Setups speichern und laden
+- ✅ **Save/Load Layouts** - Terrain-Setups speichern und laden (v1.2 Format mit Float-Präzision)
 - ✅ **Table Background Texture** - Standard-Untergrund für den Spieltisch
 
 ### Deployment & Terrain Gameplay
@@ -115,8 +119,14 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 - ✅ **Custom Polygon Zones** - Benutzerdefinierte Aufstellungszonen mit Polygon-Editor
 - ✅ **1" Grid für Custom Zones** - Feines Raster für präzise Platzierung
 - ✅ **Symmetrisch/Asymmetrisch** - Zwei Modi für Zone-Erstellung
-- ✅ **Table Corner Snap Points** - Vertices snappen an Tischecken und Kanten (NEU!)
-- ✅ **Boundary Constrained Vertices** - Vertices werden auf Tischgrenzen beschränkt (NEU!)
+- ✅ **Table Corner Snap Points** - Vertices snappen an die 4 Tischecken (orange Punkte)
+- ✅ **Boundary Snap Points** - Vertices snappen an Schnittpunkte von 1" Raster und Spielfeldkante (gelbe Punkte)
+- ✅ **Float-Präzision für Vertices** - Exakte Platzierung ohne Rundungsfehler (NEU!)
+  - Vertices werden mit Float-Koordinaten gespeichert
+  - Ermöglicht pixelgenaue Positionierung an Raster-Kanten-Schnittpunkten
+  - Keine sichtbare Abweichung zwischen Snap-Punkt und platziertem Vertex
+- ✅ **Zoom & Pan im Map Editor** - Mausrad zum Zoomen, Mittelklick zum Schwenken (NEU!)
+- ✅ **Vertex-Dragging** - Bestehende Vertices können per Drag & Drop verschoben werden
 - ℹ️ **Hinweis**: Weitere OPR-Deployment-Typen (Ground War, Spearhead, etc.) sind hinter der OPR-Paywall. Nutzer mit dem Regelbuch können diese mit Custom Zones manuell nachbauen.
 
 ### Terrain-Gameplay Integration
@@ -202,8 +212,8 @@ openTTS/
 │   ├── table.gd
 │   ├── object_manager.gd
 │   ├── selectable_object.gd
-│   ├── map_layout.gd       # Map Layout Editor (852 Zeilen)
-│   ├── map_layout_grid.gd  # Grid Rendering (272 Zeilen)
+│   ├── map_layout.gd       # Map Layout Editor (~1700 Zeilen)
+│   ├── map_layout_grid.gd  # Grid Rendering (~620 Zeilen)
 │   ├── terrain_overlay.gd  # 3D Overlay + Custom Deployment Zones (~850 Zeilen)
 │   ├── network_manager.gd  # Mit GameUnit Sync RPCs
 │   ├── save_manager.gd     # Mit GameUnit Serialisierung
@@ -344,6 +354,23 @@ openTTS/
 - `74ed3d8` - docs: Update documentation after comprehensive code review
 - `bb5dd31` - Merge pull request #25 from DutchMaxwell/claude/data-bridge-units-F67gO
 - `243740b` - Update .gitignore
+### Recent Commits (2026-01-14)
+- `91bc564` - feat: Use float coordinates for precise boundary snap placement
+- `677a81a` - fix: Draw snap points at exact grid-boundary intersections, restore corners
+- `9a52d8f` - fix: Draw snap points at actual render positions, not boundary intersections
+- `8f47084` - debug: Add detailed snap detection logging for placement and dragging
+- `cd14dd2` - debug: Add snap point debug output to diagnose snapping issue
+
+### Frühere Commits (2026-01-13)
+- `bb5dd31` - Merge pull request #25 from DutchMaxwell/claude/data-bridge-units-F67gO
+- `c4ca763` - feat: Add table corners as snap points for deployment zones
+- `0eee816` - fix: Use get_local_mouse_position for all coordinate conversions
+- `e3de236` - fix: Use get_local_mouse_position for snap point detection
+- `81d65e5` - fix: Separate validation for 3" cells vs 1" deployment coordinates
+- `2750453` - fix: Trust boundary snap points without re-validation
+- `d86d27d` - fix: Constrain deployment zone vertices to table boundary
+- `b930b8f` - feat: Change deployment zone vertices to 1" precision
+- `58e8f6f` - fix: Use 1" grid intervals for boundary snap points
 
 ---
 
@@ -356,3 +383,4 @@ MIT License - Siehe [LICENSE](./LICENSE) für Details.
 **Status:** ✅ Alpha-Version funktionsfähig, aktive Entwicklung
 **Contributors:** DutchMaxwell, Community
 **Letzte Aktualisierung:** 2026-01-15
+**Letzte Aktualisierung:** 2026-01-14
