@@ -4,22 +4,22 @@ class_name UnitBoundaryVisualizer
 ## Shows which models belong to which unit at a glance.
 
 ## Height above ground for the boundary mesh
-const BOUNDARY_HEIGHT := 0.002
+const BOUNDARY_HEIGHT := 0.015  # 1.5cm above table surface
 
 ## Padding around models (in meters)
-const BOUNDARY_PADDING := 0.025  # 2.5cm padding around models
+const BOUNDARY_PADDING := 0.03  # 3cm padding around models
 
 ## Smoothing factor for the hull (higher = smoother)
-const HULL_SMOOTHING := 8
+const HULL_SMOOTHING := 12
 
 ## Transparency alpha value
-const BOUNDARY_ALPHA := 0.25
+const BOUNDARY_ALPHA := 0.35
 
 ## Border line thickness
-const BORDER_THICKNESS := 0.004
+const BORDER_THICKNESS := 0.008  # 8mm border
 
 ## Border alpha (more visible than fill)
-const BORDER_ALPHA := 0.6
+const BORDER_ALPHA := 0.85
 
 ## Player colors (must match OPRArmyManager.PLAYER_COLORS)
 const PLAYER_COLORS = {
