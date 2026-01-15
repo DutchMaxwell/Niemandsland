@@ -32,8 +32,11 @@ var _boundaries: Dictionary = {}  # GameUnit -> MeshInstance3D (border only)
 ## Cached token containers per GameUnit (for unit-wide tokens)
 var _token_containers: Dictionary = {}  # GameUnit -> Node3D
 
-## Cached leftmost boundary point per GameUnit (for token positioning)
-var _boundary_token_positions: Dictionary = {}  # GameUnit -> Vector3
+## Cached hull points per GameUnit (for token positioning along boundary)
+var _boundary_hull_points: Dictionary = {}  # GameUnit -> PackedVector2Array
+
+## Cached start index on hull for token positioning (closest to -45° from first model)
+var _boundary_start_indices: Dictionary = {}  # GameUnit -> int
 
 ## Reference to army manager for player colors
 var army_manager = null  # OPRArmyManager
@@ -178,11 +181,14 @@ func _create_boundary_mesh(game_unit, hull_points: PackedVector2Array, color: Co
 
 	var border_instance = _boundaries[game_unit] as MeshInstance3D
 
+	# Store hull points for token positioning
+	_boundary_hull_points[game_unit] = hull_points
+
 	# Create border mesh (outline only)
 	_create_border_mesh(border_instance, hull_points, color)
 
-	# Calculate token position at -45° from first model (like single model tokens)
-	_calculate_token_position(game_unit)
+	# Calculate token start position on boundary (closest to -45° from first model)
+	_calculate_token_start_index(game_unit)
 
 
 ## Creates the border outline mesh with smooth joins
@@ -265,8 +271,10 @@ func remove_token_container(game_unit) -> void:
 		if container and is_instance_valid(container):
 			container.queue_free()
 		_token_containers.erase(game_unit)
-	if game_unit in _boundary_token_positions:
-		_boundary_token_positions.erase(game_unit)
+	if game_unit in _boundary_hull_points:
+		_boundary_hull_points.erase(game_unit)
+	if game_unit in _boundary_start_indices:
+		_boundary_start_indices.erase(game_unit)
 
 
 ## Clears all boundary visualizations and token containers
@@ -281,7 +289,8 @@ func clear_all() -> void:
 		if container and is_instance_valid(container):
 			container.queue_free()
 	_token_containers.clear()
-	_boundary_token_positions.clear()
+	_boundary_hull_points.clear()
+	_boundary_start_indices.clear()
 
 
 ## Toggles visibility of all boundaries
@@ -311,9 +320,16 @@ func get_token_container(game_unit) -> Node3D:
 	return container
 
 
-## Calculates token position at -45° from first model in the unit.
-## This places tokens similarly to single-model units.
-func _calculate_token_position(game_unit) -> void:
+## Finds the hull point closest to -45° from the first model.
+## This determines where tokens start on the boundary.
+func _calculate_token_start_index(game_unit) -> void:
+	if game_unit not in _boundary_hull_points:
+		return
+
+	var hull_points = _boundary_hull_points[game_unit]
+	if hull_points.is_empty():
+		return
+
 	var models = game_unit.get_alive_models()
 	if models.is_empty():
 		return
@@ -324,35 +340,90 @@ func _calculate_token_position(game_unit) -> void:
 		return
 
 	var model_pos = first_model.node.global_position
+	var model_pos_2d = Vector2(model_pos.x, model_pos.z)
 
-	# Get base radius
-	var base_mm = game_unit.unit_properties.get("base_size_round", 32)
-	var base_radius = (base_mm / 2.0) * 0.001
+	# -45° angle (225° or 5π/4 radians) from first model
+	var angle = PI + PI / 4.0  # 225°
 
-	# Token radius (same as in radial_menu_controller)
-	var token_radius = 0.010  # 10mm
+	# Create target direction from first model
+	var target_dir = Vector2(cos(angle), sin(angle))
 
-	# Distance from model center to token center
-	var distance = base_radius + token_radius + 0.001
+	# Find hull point closest to this direction from first model
+	var best_index = 0
+	var best_score = -INF
 
-	# -45° angle (225° or 5π/4 radians in standard math coordinates)
-	# In Godot: X is right, Z is forward (into screen in top view)
-	# -45° from positive X axis, going clockwise = bottom-left
-	var angle = PI + PI / 4.0  # 225° = 5π/4
+	for i in range(hull_points.size()):
+		var point = hull_points[i]
+		var dir_to_point = (point - model_pos_2d).normalized()
+		# Score by how aligned the point is with target direction
+		var score = dir_to_point.dot(target_dir)
+		if score > best_score:
+			best_score = score
+			best_index = i
 
-	# Calculate position offset
-	var offset_x = cos(angle) * distance
-	var offset_z = sin(angle) * distance
-
-	# Store position at ground level (Y=0) like single model tokens
-	_boundary_token_positions[game_unit] = Vector3(
-		model_pos.x + offset_x,
-		0.0,  # Same height as single model tokens
-		model_pos.z + offset_z
-	)
+	_boundary_start_indices[game_unit] = best_index
 
 
-## Updates the token container position to the calculated position.
+## Gets positions along the boundary for multiple tokens.
+## Returns array of Vector3 positions starting from the -45° point.
+func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vector3]:
+	var positions: Array[Vector3] = []
+
+	if game_unit not in _boundary_hull_points or game_unit not in _boundary_start_indices:
+		return positions
+
+	var hull_points = _boundary_hull_points[game_unit]
+	if hull_points.is_empty() or token_count == 0:
+		return positions
+
+	var start_index = _boundary_start_indices[game_unit]
+	var point_count = hull_points.size()
+
+	# Token spacing along boundary (arc length)
+	var token_spacing = 0.022  # 22mm between token centers
+
+	# Calculate total boundary length
+	var total_length = 0.0
+	var segment_lengths: Array[float] = []
+	for i in range(point_count):
+		var p1 = hull_points[i]
+		var p2 = hull_points[(i + 1) % point_count]
+		var length = (p2 - p1).length()
+		segment_lengths.append(length)
+		total_length += length
+
+	# Place tokens starting from start_index, going around the boundary
+	var current_distance = 0.0
+	var current_segment = start_index
+
+	for token_idx in range(token_count):
+		var target_distance = token_idx * token_spacing
+
+		# Walk along boundary to find position
+		while current_distance + segment_lengths[current_segment] < target_distance:
+			current_distance += segment_lengths[current_segment]
+			current_segment = (current_segment + 1) % point_count
+			# Safety: don't loop forever
+			if current_distance > total_length:
+				break
+
+		# Interpolate within current segment
+		var segment_start = hull_points[current_segment]
+		var segment_end = hull_points[(current_segment + 1) % point_count]
+		var segment_length = segment_lengths[current_segment]
+
+		var t = 0.0
+		if segment_length > 0.001:
+			t = (target_distance - current_distance) / segment_length
+		t = clamp(t, 0.0, 1.0)
+
+		var pos_2d = segment_start.lerp(segment_end, t)
+		positions.append(Vector3(pos_2d.x, 0.0, pos_2d.y))
+
+	return positions
+
+
+## Updates the token container position (first token position on boundary).
 func _update_token_container_position(game_unit) -> void:
 	if game_unit not in _token_containers:
 		return
@@ -361,9 +432,10 @@ func _update_token_container_position(game_unit) -> void:
 	if not container or not is_instance_valid(container):
 		return
 
-	# Use the pre-calculated position (at -45° from first model)
-	if game_unit in _boundary_token_positions:
-		container.global_position = _boundary_token_positions[game_unit]
+	# Get first token position on boundary
+	var positions = get_token_positions_on_boundary(game_unit, 1)
+	if not positions.is_empty():
+		container.global_position = positions[0]
 
 
 ## Checks if a unit has multiple models (uses boundary visualization).
