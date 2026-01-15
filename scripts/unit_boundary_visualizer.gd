@@ -1,25 +1,22 @@
 extends Node3D
 class_name UnitBoundaryVisualizer
-## Visualizes unit boundaries with transparent colored hulls.
+## Visualizes unit boundaries with colored outlines.
 ## Shows which models belong to which unit at a glance.
 
 ## Height above ground for the boundary mesh
-const BOUNDARY_HEIGHT := 0.015  # 1.5cm above table surface
+const BOUNDARY_HEIGHT := 0.005  # 5mm above table surface
 
 ## Padding around models (in meters)
-const BOUNDARY_PADDING := 0.03  # 3cm padding around models
+const BOUNDARY_PADDING := 0.02  # 2cm padding around models
 
-## Smoothing factor for the hull (higher = smoother)
-const HULL_SMOOTHING := 12
-
-## Transparency alpha value
-const BOUNDARY_ALPHA := 0.35
+## Smoothing factor for the hull (higher = smoother, no gaps)
+const HULL_SMOOTHING := 24
 
 ## Border line thickness
-const BORDER_THICKNESS := 0.008  # 8mm border
+const BORDER_THICKNESS := 0.003  # 3mm thin border
 
-## Border alpha (more visible than fill)
-const BORDER_ALPHA := 0.85
+## Border alpha
+const BORDER_ALPHA := 0.9
 
 ## Player colors (must match OPRArmyManager.PLAYER_COLORS)
 const PLAYER_COLORS = {
@@ -30,7 +27,7 @@ const PLAYER_COLORS = {
 }
 
 ## Cached boundary meshes per GameUnit
-var _boundaries: Dictionary = {}  # GameUnit -> { "fill": MeshInstance3D, "border": MeshInstance3D }
+var _boundaries: Dictionary = {}  # GameUnit -> MeshInstance3D (border only)
 
 ## Reference to army manager for player colors
 var army_manager = null  # OPRArmyManager
@@ -44,7 +41,6 @@ func _ready() -> void:
 	# Find army manager only if not already set by parent
 	if not army_manager:
 		army_manager = get_node_or_null("/root/Main/OPRArmyManager")
-	print("[UnitBoundaryVisualizer] Ready - army_manager: ", army_manager)
 
 
 func _process(delta: float) -> void:
@@ -63,11 +59,6 @@ func update_all_boundaries() -> void:
 
 	# Track which units still exist
 	var existing_units: Array = []
-
-	# Debug: Check if we have game units
-	var unit_count = army_manager.game_units.size()
-	if unit_count > 0 and _boundaries.size() == 0:
-		print("[UnitBoundaryVisualizer] Found %d game units, creating boundaries..." % unit_count)
 
 	# Update boundaries for all game units
 	for unit_id in army_manager.game_units:
@@ -90,18 +81,14 @@ func update_all_boundaries() -> void:
 func _update_unit_boundary(game_unit) -> void:
 	var models = game_unit.get_alive_models()
 
-	# Need at least 1 model
-	if models.size() == 0:
+	# Skip single models - the miniature IS the unit
+	if models.size() <= 1:
 		_remove_unit_boundary(game_unit)
 		return
 
 	# Get player color
 	var player_id = game_unit.unit_properties.get("player_id", 1)
 	var player_color = PLAYER_COLORS.get(player_id, Color.GRAY)
-
-	# Debug first time
-	if game_unit not in _boundaries:
-		print("[UnitBoundaryVisualizer] Creating boundary for unit with %d models, player %d" % [models.size(), player_id])
 
 	# Get model positions
 	var positions: Array = []
@@ -116,7 +103,7 @@ func _update_unit_boundary(game_unit) -> void:
 			var pos = model.node.global_position
 			positions.append(Vector2(pos.x, pos.z))
 
-	if positions.size() == 0:
+	if positions.size() < 2:
 		_remove_unit_boundary(game_unit)
 		return
 
@@ -124,25 +111,17 @@ func _update_unit_boundary(game_unit) -> void:
 	var hull_points = _calculate_smooth_hull(positions, base_radius + BOUNDARY_PADDING)
 
 	if hull_points.size() < 3:
-		# For 1-2 models, create a circle/capsule shape
-		hull_points = _create_simple_boundary(positions, base_radius + BOUNDARY_PADDING)
+		_remove_unit_boundary(game_unit)
+		return
 
-	# Create or update mesh
+	# Create or update mesh (border only)
 	_create_boundary_mesh(game_unit, hull_points, player_color)
 
 
 ## Calculates a smooth convex hull with padding around positions
 func _calculate_smooth_hull(positions: Array, padding: float) -> PackedVector2Array:
-	if positions.size() == 0:
+	if positions.size() < 2:
 		return PackedVector2Array()
-
-	if positions.size() == 1:
-		# Single point - create circle
-		return _create_circle(positions[0], padding)
-
-	if positions.size() == 2:
-		# Two points - create capsule
-		return _create_capsule(positions[0], positions[1], padding)
 
 	# Expand each point into a circle, then compute convex hull
 	var expanded_points: PackedVector2Array = []
@@ -158,120 +137,25 @@ func _calculate_smooth_hull(positions: Array, padding: float) -> PackedVector2Ar
 	return Geometry2D.convex_hull(expanded_points)
 
 
-## Creates a circle shape for single model
-func _create_circle(center: Vector2, radius: float) -> PackedVector2Array:
-	var points: PackedVector2Array = []
-	var segments = 16
-
-	for i in range(segments):
-		var angle = (float(i) / segments) * TAU
-		var offset = Vector2(cos(angle), sin(angle)) * radius
-		points.append(center + offset)
-
-	return points
-
-
-## Creates a capsule shape for two models
-func _create_capsule(p1: Vector2, p2: Vector2, radius: float) -> PackedVector2Array:
-	var points: PackedVector2Array = []
-	var segments = 8  # Per semicircle
-
-	var dir = (p2 - p1).normalized()
-	var perp = Vector2(-dir.y, dir.x)
-
-	# First semicircle around p1
-	var start_angle = atan2(perp.y, perp.x)
-	for i in range(segments + 1):
-		var angle = start_angle + PI * (float(i) / segments)
-		var offset = Vector2(cos(angle), sin(angle)) * radius
-		points.append(p1 + offset)
-
-	# Second semicircle around p2
-	for i in range(segments + 1):
-		var angle = start_angle + PI + PI * (float(i) / segments)
-		var offset = Vector2(cos(angle), sin(angle)) * radius
-		points.append(p2 + offset)
-
-	return points
-
-
-## Creates simple boundary for 1-2 models
-func _create_simple_boundary(positions: Array, radius: float) -> PackedVector2Array:
-	if positions.size() == 1:
-		return _create_circle(positions[0], radius)
-	elif positions.size() == 2:
-		return _create_capsule(positions[0], positions[1], radius)
-	return PackedVector2Array()
-
-
-## Creates the 3D mesh for the boundary
+## Creates the 3D mesh for the boundary (border only, no fill)
 func _create_boundary_mesh(game_unit, hull_points: PackedVector2Array, color: Color) -> void:
 	if hull_points.size() < 3:
-		print("[UnitBoundaryVisualizer] Warning: hull_points < 3 (%d points)" % hull_points.size())
 		return
-
-	print("[UnitBoundaryVisualizer] Creating mesh with %d hull points, color: %s" % [hull_points.size(), color])
 
 	# Get or create boundary entry
 	if game_unit not in _boundaries:
-		var fill_mesh = MeshInstance3D.new()
-		fill_mesh.name = "BoundaryFill"
-		add_child(fill_mesh)
-
 		var border_mesh = MeshInstance3D.new()
-		border_mesh.name = "BoundaryBorder"
+		border_mesh.name = "UnitBoundary"
 		add_child(border_mesh)
+		_boundaries[game_unit] = border_mesh
 
-		_boundaries[game_unit] = {
-			"fill": fill_mesh,
-			"border": border_mesh
-		}
+	var border_instance = _boundaries[game_unit] as MeshInstance3D
 
-	var entry = _boundaries[game_unit]
-	var fill_instance = entry["fill"] as MeshInstance3D
-	var border_instance = entry["border"] as MeshInstance3D
-
-	# Create fill mesh (polygon)
-	_create_fill_mesh(fill_instance, hull_points, color)
-
-	# Create border mesh (outline)
+	# Create border mesh (outline only)
 	_create_border_mesh(border_instance, hull_points, color)
 
 
-## Creates the filled polygon mesh
-func _create_fill_mesh(mesh_instance: MeshInstance3D, hull_points: PackedVector2Array, color: Color) -> void:
-	var surface_tool = SurfaceTool.new()
-	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
-
-	# Triangulate the polygon
-	var indices = Geometry2D.triangulate_polygon(hull_points)
-
-	if indices.size() == 0:
-		return
-
-	# Add vertices
-	for point in hull_points:
-		surface_tool.add_vertex(Vector3(point.x, BOUNDARY_HEIGHT, point.y))
-
-	# Add triangles (reversed for correct facing)
-	for i in range(0, indices.size(), 3):
-		surface_tool.add_index(indices[i])
-		surface_tool.add_index(indices[i + 2])
-		surface_tool.add_index(indices[i + 1])
-
-	surface_tool.generate_normals()
-	mesh_instance.mesh = surface_tool.commit()
-
-	# Create material
-	var material = StandardMaterial3D.new()
-	material.albedo_color = Color(color.r, color.g, color.b, BOUNDARY_ALPHA)
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED  # Visible from both sides
-	mesh_instance.material_override = material
-
-
-## Creates the border outline mesh
+## Creates the border outline mesh with smooth joins
 func _create_border_mesh(mesh_instance: MeshInstance3D, hull_points: PackedVector2Array, color: Color) -> void:
 	var surface_tool = SurfaceTool.new()
 	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -280,27 +164,37 @@ func _create_border_mesh(mesh_instance: MeshInstance3D, hull_points: PackedVecto
 	if point_count < 3:
 		return
 
-	# Create thick line segments as quads
+	var half_thickness = BORDER_THICKNESS / 2.0
+
+	# Create thick line segments as quads with mitered corners
 	for i in range(point_count):
+		var p0 = hull_points[(i - 1 + point_count) % point_count]
 		var p1 = hull_points[i]
 		var p2 = hull_points[(i + 1) % point_count]
+		var p3 = hull_points[(i + 2) % point_count]
 
-		var dir = (p2 - p1).normalized()
-		var perp = Vector2(-dir.y, dir.x) * (BORDER_THICKNESS / 2.0)
+		# Direction vectors
+		var dir1 = (p2 - p1).normalized()
+		var dir2 = (p3 - p2).normalized()
 
-		# Create quad vertices (inner and outer edge)
-		var v0 = Vector3(p1.x - perp.x, BOUNDARY_HEIGHT + 0.001, p1.y - perp.y)
-		var v1 = Vector3(p1.x + perp.x, BOUNDARY_HEIGHT + 0.001, p1.y + perp.y)
-		var v2 = Vector3(p2.x + perp.x, BOUNDARY_HEIGHT + 0.001, p2.y + perp.y)
-		var v3 = Vector3(p2.x - perp.x, BOUNDARY_HEIGHT + 0.001, p2.y - perp.y)
+		# Perpendicular vectors
+		var perp1 = Vector2(-dir1.y, dir1.x) * half_thickness
+		var perp2 = Vector2(-dir2.y, dir2.x) * half_thickness
 
-		# Add two triangles for the quad
+		# Create quad vertices for this segment
+		var v0 = Vector3(p1.x - perp1.x, BOUNDARY_HEIGHT, p1.y - perp1.y)
+		var v1 = Vector3(p1.x + perp1.x, BOUNDARY_HEIGHT, p1.y + perp1.y)
+		var v2 = Vector3(p2.x + perp1.x, BOUNDARY_HEIGHT, p2.y + perp1.y)
+		var v3 = Vector3(p2.x - perp1.x, BOUNDARY_HEIGHT, p2.y - perp1.y)
+
+		# Add vertices and triangles
 		var base_idx = i * 4
 		surface_tool.add_vertex(v0)
 		surface_tool.add_vertex(v1)
 		surface_tool.add_vertex(v2)
 		surface_tool.add_vertex(v3)
 
+		# Two triangles for the quad
 		surface_tool.add_index(base_idx)
 		surface_tool.add_index(base_idx + 1)
 		surface_tool.add_index(base_idx + 2)
@@ -312,26 +206,21 @@ func _create_border_mesh(mesh_instance: MeshInstance3D, hull_points: PackedVecto
 	surface_tool.generate_normals()
 	mesh_instance.mesh = surface_tool.commit()
 
-	# Create material (slightly brighter than fill)
+	# Create material
 	var material = StandardMaterial3D.new()
 	material.albedo_color = Color(color.r, color.g, color.b, BORDER_ALPHA)
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	material.emission_enabled = true
-	material.emission = color
-	material.emission_energy_multiplier = 0.3
 	mesh_instance.material_override = material
 
 
 ## Removes boundary visualization for a unit
 func _remove_unit_boundary(game_unit) -> void:
 	if game_unit in _boundaries:
-		var entry = _boundaries[game_unit]
-		if entry["fill"] and is_instance_valid(entry["fill"]):
-			entry["fill"].queue_free()
-		if entry["border"] and is_instance_valid(entry["border"]):
-			entry["border"].queue_free()
+		var mesh = _boundaries[game_unit]
+		if mesh and is_instance_valid(mesh):
+			mesh.queue_free()
 		_boundaries.erase(game_unit)
 
 
@@ -344,8 +233,6 @@ func clear_all() -> void:
 
 ## Toggles visibility of all boundaries
 func set_boundaries_visible(visible_flag: bool) -> void:
-	for entry in _boundaries.values():
-		if entry["fill"] and is_instance_valid(entry["fill"]):
-			entry["fill"].visible = visible_flag
-		if entry["border"] and is_instance_valid(entry["border"]):
-			entry["border"].visible = visible_flag
+	for mesh in _boundaries.values():
+		if mesh and is_instance_valid(mesh):
+			mesh.visible = visible_flag
