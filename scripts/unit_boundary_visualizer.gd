@@ -43,6 +43,7 @@ const UPDATE_INTERVAL := 0.1  # Update every 100ms
 func _ready() -> void:
 	# Find army manager
 	army_manager = get_node_or_null("/root/Main/OPRArmyManager")
+	print("[UnitBoundaryVisualizer] Ready - army_manager: ", army_manager)
 
 
 func _process(delta: float) -> void:
@@ -61,6 +62,11 @@ func update_all_boundaries() -> void:
 
 	# Track which units still exist
 	var existing_units: Array = []
+
+	# Debug: Check if we have game units
+	var unit_count = army_manager.game_units.size()
+	if unit_count > 0 and _boundaries.size() == 0:
+		print("[UnitBoundaryVisualizer] Found %d game units, creating boundaries..." % unit_count)
 
 	# Update boundaries for all game units
 	for unit_id in army_manager.game_units:
@@ -91,6 +97,10 @@ func _update_unit_boundary(game_unit) -> void:
 	# Get player color
 	var player_id = game_unit.unit_properties.get("player_id", 1)
 	var player_color = PLAYER_COLORS.get(player_id, Color.GRAY)
+
+	# Debug first time
+	if game_unit not in _boundaries:
+		print("[UnitBoundaryVisualizer] Creating boundary for unit with %d models, player %d" % [models.size(), player_id])
 
 	# Get model positions
 	var positions: Array = []
@@ -196,7 +206,10 @@ func _create_simple_boundary(positions: Array, radius: float) -> PackedVector2Ar
 ## Creates the 3D mesh for the boundary
 func _create_boundary_mesh(game_unit, hull_points: PackedVector2Array, color: Color) -> void:
 	if hull_points.size() < 3:
+		print("[UnitBoundaryVisualizer] Warning: hull_points < 3 (%d points)" % hull_points.size())
 		return
+
+	print("[UnitBoundaryVisualizer] Creating mesh with %d hull points, color: %s" % [hull_points.size(), color])
 
 	# Get or create boundary entry
 	if game_unit not in _boundaries:
