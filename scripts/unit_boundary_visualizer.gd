@@ -7,7 +7,7 @@ class_name UnitBoundaryVisualizer
 const BOUNDARY_HEIGHT := 0.005  # 5mm above table surface
 
 ## Padding around models (in meters)
-const BOUNDARY_PADDING := 0.02  # 2cm padding around models
+const BOUNDARY_PADDING := 0.003  # 3mm from base edge
 
 ## Smoothing factor for the hull (higher = smoother, no gaps)
 const HULL_SMOOTHING := 24
@@ -28,6 +28,9 @@ const PLAYER_COLORS = {
 
 ## Cached boundary meshes per GameUnit
 var _boundaries: Dictionary = {}  # GameUnit -> MeshInstance3D (border only)
+
+## Cached token containers per GameUnit (for unit-wide tokens)
+var _token_containers: Dictionary = {}  # GameUnit -> Node3D
 
 ## Reference to army manager for player colors
 var army_manager = null  # OPRArmyManager
@@ -116,6 +119,9 @@ func _update_unit_boundary(game_unit) -> void:
 
 	# Create or update mesh (border only)
 	_create_boundary_mesh(game_unit, hull_points, player_color)
+
+	# Update token container position
+	_update_token_container_position(game_unit)
 
 
 ## Calculates a smooth convex hull with padding around positions
@@ -223,6 +229,13 @@ func _remove_unit_boundary(game_unit) -> void:
 			mesh.queue_free()
 		_boundaries.erase(game_unit)
 
+	# Also remove token container if unit no longer has boundary
+	if game_unit in _token_containers:
+		var container = _token_containers[game_unit]
+		if container and is_instance_valid(container):
+			container.queue_free()
+		_token_containers.erase(game_unit)
+
 
 ## Clears all boundary visualizations
 func clear_all() -> void:
@@ -236,3 +249,54 @@ func set_boundaries_visible(visible_flag: bool) -> void:
 	for mesh in _boundaries.values():
 		if mesh and is_instance_valid(mesh):
 			mesh.visible = visible_flag
+
+
+## Gets the token container for a unit (creates one if needed).
+## Unit-wide tokens (Shaken, Fatigue, Activated) should be parented to this.
+func get_token_container(game_unit) -> Node3D:
+	if game_unit in _token_containers:
+		var container = _token_containers[game_unit]
+		if is_instance_valid(container):
+			return container
+
+	# Create new container
+	var container = Node3D.new()
+	container.name = "UnitTokenContainer"
+	add_child(container)
+	_token_containers[game_unit] = container
+
+	# Position it at unit center
+	_update_token_container_position(game_unit)
+
+	return container
+
+
+## Updates the token container position to the center of the unit.
+func _update_token_container_position(game_unit) -> void:
+	if game_unit not in _token_containers:
+		return
+
+	var container = _token_containers[game_unit]
+	if not container or not is_instance_valid(container):
+		return
+
+	var models = game_unit.get_alive_models()
+	if models.size() == 0:
+		return
+
+	# Calculate center position of all models
+	var center = Vector3.ZERO
+	var count = 0
+	for model in models:
+		if model.node and is_instance_valid(model.node) and model.node.is_inside_tree():
+			center += model.node.global_position
+			count += 1
+
+	if count > 0:
+		center /= count
+		container.global_position = Vector3(center.x, 0.02, center.z)  # Slightly above ground
+
+
+## Checks if a unit has multiple models (uses boundary visualization).
+func has_boundary(game_unit) -> bool:
+	return game_unit in _boundaries
