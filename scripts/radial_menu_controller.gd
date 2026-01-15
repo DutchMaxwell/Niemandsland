@@ -647,20 +647,16 @@ func _reposition_all_tokens(model_node: Node3D, unit: GameUnit, new_token_name: 
 		_reposition_tokens_circular(model_node, unit, tokens, new_token_name)
 
 
-## Repositions tokens along the boundary edge.
-## Tokens follow the boundary contour starting from -45° of first model.
+## Repositions tokens in circular arc at boundary anchor point.
+## Same arrangement as single models, but centered at -45° point on boundary.
 func _reposition_tokens_boundary(container: Node3D, unit: GameUnit, tokens: Array[String], new_token_name: String = "") -> void:
-	if not boundary_visualizer:
-		return
+	# Use same circular arrangement as single models
+	# Container is at the boundary anchor point, tokens arranged around it
+	var base_radius = _get_base_radius(unit)
+	var angles = _calculate_token_angles(tokens.size(), base_radius)
 
-	# Get positions along boundary for all tokens
-	var boundary_positions = boundary_visualizer.get_token_positions_on_boundary(unit, tokens.size())
-
-	if boundary_positions.is_empty():
-		return
-
-	# Container is at position 0, so we need relative positions
-	var container_pos = container.global_position
+	# North angle (12 o'clock) for spawn position
+	var north_angle = -PI / 2.0
 
 	for i in range(tokens.size()):
 		var token_name = tokens[i]
@@ -668,31 +664,22 @@ func _reposition_tokens_boundary(container: Node3D, unit: GameUnit, tokens: Arra
 		if not marker:
 			continue
 
-		if i >= boundary_positions.size():
-			continue
-
-		# Calculate local position relative to container
-		var world_pos = boundary_positions[i]
-		var local_pos = world_pos - container_pos
+		var target_pos = _angle_to_position(angles[i], base_radius)
 
 		if token_name == new_token_name:
-			# New token: animate in from above
-			marker.position = local_pos + Vector3(0, 0.05, 0)
+			# New token: spawn at north and animate to position
+			var spawn_pos = _angle_to_position(north_angle, base_radius)
+			marker.position = spawn_pos
 			marker.scale = Vector3(0.01, 0.01, 0.01)
 
-			var tween = marker.create_tween()
-			tween.set_parallel(true)
-			tween.tween_property(marker, "scale", Vector3(1, 1, 1), 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-			tween.tween_property(marker, "position", local_pos, 0.3).set_ease(Tween.EASE_OUT)
+			_animate_token_to_position(marker, spawn_pos, target_pos, base_radius, north_angle, angles[i])
 		else:
 			# Existing token: animate to new position
-			if marker.position.distance_to(local_pos) > 0.001:
+			if marker.position.distance_to(target_pos) > 0.001:
 				var tween = marker.create_tween()
 				tween.set_ease(Tween.EASE_OUT)
 				tween.set_trans(Tween.TRANS_CUBIC)
-				tween.tween_property(marker, "position", local_pos, 0.4)
-			else:
-				marker.position = local_pos
+				tween.tween_property(marker, "position", target_pos, 0.4)
 
 
 ## Repositions tokens in a circle around base (for model tokens).
