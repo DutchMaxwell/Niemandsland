@@ -363,7 +363,7 @@ func get_boundary_anchor_point(game_unit) -> Vector3:
 
 
 ## Gets positions along the boundary for multiple tokens.
-## Returns array of Vector3 positions starting from the -45° point, following the boundary.
+## Returns array of Vector3 positions starting from the leftmost point, following the boundary.
 ## Tokens are positioned OUTSIDE the boundary, offset by token radius.
 func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vector3]:
 	var positions: Array[Vector3] = []
@@ -380,8 +380,8 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 
 	# Token parameters
 	var token_radius = 0.010  # 10mm
-	var token_spacing = 0.022  # 22mm between token centers
-	var outward_offset = token_radius + 0.002  # Token radius + 2mm gap
+	var token_spacing = 0.024  # 24mm between token centers (slightly more than diameter)
+	var outward_offset = token_radius + 0.003  # Token radius + 3mm gap from boundary
 
 	# Calculate boundary center for outward direction
 	var center = Vector2.ZERO
@@ -389,38 +389,42 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 		center += point
 	center /= point_count
 
-	# Calculate segment lengths starting from start_index
-	var segment_lengths: Array[float] = []
+	# Calculate cumulative distances along the boundary starting from start_index
+	var cumulative_distances: Array[float] = [0.0]
+	var total_length = 0.0
 	for i in range(point_count):
 		var idx = (start_index + i) % point_count
 		var next_idx = (start_index + i + 1) % point_count
 		var p1 = hull_points[idx]
 		var p2 = hull_points[next_idx]
-		segment_lengths.append((p2 - p1).length())
+		total_length += (p2 - p1).length()
+		cumulative_distances.append(total_length)
 
-	# Place tokens along boundary starting from start_index
-	var current_distance = 0.0
-	var current_segment = 0
-
+	# Place tokens along boundary
 	for token_idx in range(token_count):
 		var target_distance = token_idx * token_spacing
 
-		# Walk along boundary to find position
-		while current_segment < point_count - 1 and current_distance + segment_lengths[current_segment] < target_distance:
-			current_distance += segment_lengths[current_segment]
-			current_segment += 1
+		# Find which segment contains this distance
+		var segment_idx = 0
+		for i in range(point_count):
+			if cumulative_distances[i + 1] >= target_distance:
+				segment_idx = i
+				break
 
-		# Get actual hull indices
-		var seg_start_idx = (start_index + current_segment) % point_count
-		var seg_end_idx = (start_index + current_segment + 1) % point_count
+		# Get hull indices for this segment
+		var seg_start_idx = (start_index + segment_idx) % point_count
+		var seg_end_idx = (start_index + segment_idx + 1) % point_count
 
 		var segment_start = hull_points[seg_start_idx]
 		var segment_end = hull_points[seg_end_idx]
-		var segment_length = segment_lengths[current_segment]
+
+		# Interpolate within segment
+		var segment_start_dist = cumulative_distances[segment_idx]
+		var segment_length = cumulative_distances[segment_idx + 1] - segment_start_dist
 
 		var t = 0.0
 		if segment_length > 0.001:
-			t = (target_distance - current_distance) / segment_length
+			t = (target_distance - segment_start_dist) / segment_length
 		t = clamp(t, 0.0, 1.0)
 
 		var pos_2d = segment_start.lerp(segment_end, t)
