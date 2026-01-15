@@ -368,7 +368,6 @@ func _calculate_token_start_index(game_unit) -> void:
 			best_min_dist = min_dist
 			best_index = i
 
-	print("DEBUG: Best token position at index %d with min_dist=%.3f" % [best_index, best_min_dist])
 	_boundary_start_indices[game_unit] = best_index
 
 
