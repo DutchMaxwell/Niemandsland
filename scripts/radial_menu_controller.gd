@@ -667,7 +667,6 @@ func _get_best_token_side(model_node: Node3D, unit: GameUnit, base_radius: float
 		return default_angle
 
 	var model_pos = model_node.global_position
-	var token_orbit_radius = base_radius + TOKEN_RADIUS + 0.001
 
 	# Calculate the farthest token position on the left side
 	var angles = _calculate_token_angles(token_count, base_radius)
