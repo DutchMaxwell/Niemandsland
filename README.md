@@ -57,9 +57,17 @@ Ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wie OnePageRul
 - ✅ **Unit-Wide Status Tokens** - Fatigue (F), Shaken (S), Activated (A) auf der Unit-Boundary
   - Tokens folgen der Boundary-Kontur wie auf einer Schiene
   - Automatische Neupositionierung bei Formationsänderung (1-9, A)
+  - **Smart Token Placement** - Tokens werden automatisch an der "freisten" Stelle positioniert (Maximum-Minimum-Distanz Algorithmus)
 - ✅ **Model-Specific Tokens** - Wounds (W), Caster (C) bleiben auf einzelnen Modellen
+  - **Auto-Flip bei Überlappung** - Tokens wechseln automatisch auf die gegenüberliegende Seite wenn sie mit anderen Modellen überlappen würden
 - ✅ **Caster-System** - Caster Token Display und Cast Points Tracking
 - ✅ **Wunden-Tracking** - Pro-Modell Wunden-Verwaltung
+
+### 📐 Formation & Spacing
+- ✅ **Konstanter Base-Randabstand** - 8mm Abstand zwischen Base-Rändern unabhängig von der Basegröße
+  - Funktioniert für 25mm, 32mm, 40mm, 50mm und größere Bases
+  - Gilt für Spawn, Arrangement (1-9, A) und alle Formationen
+- ✅ **Dynamisches Spacing** - Arrangement-Funktionen berechnen Spacing basierend auf der größten Base in der Selektion
 
 ### 📦 Import/Export
 - ✅ TTS Import (Online von Steam CDN + Local Cache)
