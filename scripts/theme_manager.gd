@@ -1,5 +1,4 @@
 extends Node
-class_name ThemeManager
 ## Global Theme Manager
 ## Provides the Glassmorphism UI theme
 
