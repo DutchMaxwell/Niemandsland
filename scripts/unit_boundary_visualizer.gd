@@ -378,9 +378,11 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 	var start_index = _boundary_start_indices[game_unit]
 	var point_count = hull_points.size()
 
-	# Token spacing along boundary (the "rail")
-	var token_spacing = 0.024  # 24mm between token centers
-	var outward_offset = 0.012  # 12mm offset from boundary line (token radius + small gap)
+	# Token spacing along boundary (same as single model: 2*radius + gap)
+	var token_radius = 0.010  # 10mm
+	var token_gap = 0.001  # 1mm
+	var token_spacing = 2.0 * token_radius + token_gap  # 21mm between token centers
+	var outward_offset = token_radius + 0.002  # 12mm offset from boundary line
 
 	# Calculate cumulative distances along the boundary starting from start_index
 	var cumulative_distances: Array[float] = [0.0]
