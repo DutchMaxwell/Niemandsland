@@ -127,7 +127,8 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 
 		# Use unit's actual base size for spacing calculations
 		var unit_base_diameter = unit.get_base_diameter_meters()
-		var model_spacing = unit_base_diameter * 1.25  # 25% gap between models
+		var edge_gap = 0.008  # 8mm constant gap between base edges
+		var model_spacing = unit_base_diameter + edge_gap  # diameter + constant edge gap
 
 		# Calculate unit width before spawning to check if we need a new row
 		var unit_width = unit_base_diameter + (unit.size - 1) * model_spacing
@@ -306,8 +307,9 @@ func _get_tray_position_and_bounds(player_id: int) -> Dictionary:
 ## Spawn a single unit with all its models
 func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: Color, name_suffix: String = "", player_id: int = 1) -> Array[Node3D]:
 	var models: Array[Node3D] = []
-	# Use unit's base diameter with 25% gap for spacing
-	var spacing = unit.get_base_diameter_meters() * 1.25
+	# Use unit's base diameter + constant edge gap for spacing (prevents overlap)
+	var edge_gap = 0.008  # 8mm constant gap between base edges
+	var spacing = unit.get_base_diameter_meters() + edge_gap
 
 	for i in range(unit.size):
 		var model_pos = Vector3(
