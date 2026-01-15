@@ -144,15 +144,24 @@ godot --path . --editor
 ### Map Layout Editor
 Plane dein Spielfeld mit dem integrierten Map Layout Editor:
 - **Top-Down Ansicht** mit 3" Grid (OPR-Standard)
+- **Zoom & Pan**:
+  - **Mausrad**: Zoomen (0.5x bis 3.0x)
+  - **Mittelklick + Ziehen**: Schwenken innerhalb des Spielfeld-Fensters
+  - **Zoom unter Mauszeiger**: Zoom fokussiert auf die Mausposition
 - **4 Terrain-Typen**:
   - **Ruins**: Höhe 5, gibt Deckung, Wände unpassierbar
   - **Forest**: Höhe 5, schwieriges Gelände + Deckung
   - **Container**: Höhe 5, unpassierbar + blockiert Sichtlinien komplett
   - **Dangerous**: Offen, gefährlich (Minenfelder, Säure, Strahlung)
-- **Symmetrie-Modus**: Automatisches Spiegeln über Tischmitte
-- **Auto-Generate**: Zufällige faire Terrain-Layouts
+- **Symmetrie-Modus**: Automatisches Spiegeln über Tischmitte (Punktsymmetrie 180°)
+- **Auto-Generate**: Zufällige faire Terrain-Layouts nach OPR-Richtlinien
 - **OPR Guidelines**: Echtzeit-Feedback zu Terrain-Empfehlungen
-- **3D Overlay**: Sieh das Grid direkt im 3D-Spiel
+  - 15-20 Terrain-Teile empfohlen
+  - 25% Tischabdeckung
+  - 50% sollten LOS blockieren
+  - Max. 12" Lücke zwischen Terrain
+- **3D Overlay**: Sieh das Grid direkt im 3D-Spiel visualisiert
+- **Grid-Rotation**: Drehe das Raster für diagonale Terrain-Platzierung
 
 ### Deployment Zones
 Aufstellungszonen für beide Spieler:
@@ -162,7 +171,10 @@ Aufstellungszonen für beide Spieler:
   - **Symmetrischer Modus**: Beide Zonen werden gleichzeitig punktsymmetrisch gezeichnet
   - **Asymmetrischer Modus**: Zuerst Spieler 1, dann Spieler 2 separat zeichnen
   - **Vertex-Marker**: Nummerierte Punkte zeigen die Polygon-Ecken
-  - **Table Corner Snap Points**: Vertices snappen an Tischecken und Kanten
+  - **Boundary Snap Points**: Vertices snappen präzise an Schnittpunkte von 1" Raster und Spielfeldkante
+  - **Table Corner Snap Points**: Vertices snappen an die 4 Tischecken (orange Punkte)
+  - **Zoom & Pan**: Mausrad zum Zoomen, Mittelklick zum Schwenken im Map Editor
+  - **Float-Präzision**: Exakte Platzierung an Raster-Kanten-Schnittpunkten (keine Rundungsfehler)
 - **Hinweis**: Weitere Deployment-Typen (Ground War, Spearhead, etc.) können mit Custom Zones manuell nachgebaut werden
 
 ### Objectives
@@ -360,4 +372,4 @@ Siehe [docs/ASSETS.md](./docs/ASSETS.md) für vollständige Asset-Attributionen.
 
 **Version**: 0.2-alpha
 **Status**: Active Development
-**Letzte Aktualisierung**: 2026-01-13
+**Letzte Aktualisierung**: 2026-01-14
