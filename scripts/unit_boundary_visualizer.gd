@@ -319,7 +319,7 @@ func get_token_container(game_unit) -> Node3D:
 
 
 ## Finds the best starting point on the hull for tokens that avoids model overlap.
-## Tries left side first, then right side if tokens would overlap with models.
+## Checks all points around the boundary and picks the first one without overlap.
 func _calculate_token_start_index(game_unit) -> void:
 	if game_unit not in _boundary_hull_points:
 		return
@@ -327,21 +327,6 @@ func _calculate_token_start_index(game_unit) -> void:
 	var hull_points = _boundary_hull_points[game_unit]
 	if hull_points.is_empty():
 		return
-
-	# Find the leftmost and rightmost points
-	var left_index = 0
-	var right_index = 0
-	var min_x = INF
-	var max_x = -INF
-
-	for i in range(hull_points.size()):
-		var point = hull_points[i]
-		if point.x < min_x:
-			min_x = point.x
-			left_index = i
-		if point.x > max_x:
-			max_x = point.x
-			right_index = i
 
 	# Get model positions for overlap checking
 	var model_positions: Array[Vector2] = []
@@ -357,17 +342,25 @@ func _calculate_token_start_index(game_unit) -> void:
 			var pos = model.node.global_position
 			model_positions.append(Vector2(pos.x, pos.z))
 
-	# Check if left side has overlap
-	var left_overlaps = _check_token_overlap_at_index(hull_points, left_index, model_positions, base_radius)
+	# Find leftmost point as default starting point
+	var default_index = 0
+	var min_x = INF
+	for i in range(hull_points.size()):
+		if hull_points[i].x < min_x:
+			min_x = hull_points[i].x
+			default_index = i
 
-	if left_overlaps:
-		# Try right side
-		var right_overlaps = _check_token_overlap_at_index(hull_points, right_index, model_positions, base_radius)
-		if not right_overlaps:
-			_boundary_start_indices[game_unit] = right_index
+	# Check all points on the boundary, starting from the default (leftmost)
+	# Find the first point where tokens don't overlap with any model
+	var point_count = hull_points.size()
+	for offset in range(point_count):
+		var test_index = (default_index + offset) % point_count
+		if not _check_token_overlap_at_index(hull_points, test_index, model_positions, base_radius):
+			_boundary_start_indices[game_unit] = test_index
 			return
 
-	_boundary_start_indices[game_unit] = left_index
+	# Fallback to default if all positions overlap (shouldn't happen)
+	_boundary_start_indices[game_unit] = default_index
 
 
 ## Checks if token positions starting at given index would overlap with any model.
