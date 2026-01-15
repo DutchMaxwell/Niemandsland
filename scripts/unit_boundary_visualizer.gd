@@ -364,7 +364,7 @@ func get_boundary_anchor_point(game_unit) -> Vector3:
 
 ## Gets positions along the boundary for multiple tokens.
 ## Returns array of Vector3 positions starting from the leftmost point, following the boundary.
-## Tokens are positioned directly ON the boundary line (like on a rail).
+## Tokens follow the boundary as a "rail" but are offset outward.
 func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vector3]:
 	var positions: Array[Vector3] = []
 
@@ -378,8 +378,15 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 	var start_index = _boundary_start_indices[game_unit]
 	var point_count = hull_points.size()
 
-	# Token spacing along boundary
+	# Token spacing along boundary (the "rail")
 	var token_spacing = 0.024  # 24mm between token centers
+	var outward_offset = 0.015  # 15mm offset from boundary line
+
+	# Calculate boundary center for outward direction
+	var center = Vector2.ZERO
+	for point in hull_points:
+		center += point
+	center /= point_count
 
 	# Calculate cumulative distances along the boundary starting from start_index
 	var cumulative_distances: Array[float] = [0.0]
@@ -392,7 +399,7 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 		total_length += (p2 - p1).length()
 		cumulative_distances.append(total_length)
 
-	# Place tokens along boundary (directly on the line)
+	# Place tokens along boundary rail, offset outward
 	for token_idx in range(token_count):
 		var target_distance = token_idx * token_spacing
 
@@ -410,7 +417,7 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 		var segment_start = hull_points[seg_start_idx]
 		var segment_end = hull_points[seg_end_idx]
 
-		# Interpolate within segment
+		# Interpolate within segment (position on the rail)
 		var segment_start_dist = cumulative_distances[segment_idx]
 		var segment_length = cumulative_distances[segment_idx + 1] - segment_start_dist
 
@@ -419,10 +426,13 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 			t = (target_distance - segment_start_dist) / segment_length
 		t = clamp(t, 0.0, 1.0)
 
-		var pos_2d = segment_start.lerp(segment_end, t)
+		var pos_on_rail = segment_start.lerp(segment_end, t)
 
-		# Position directly on boundary (no offset)
-		positions.append(Vector3(pos_2d.x, 0.0, pos_2d.y))
+		# Calculate outward direction (away from center) and offset
+		var outward_dir = (pos_on_rail - center).normalized()
+		var final_pos = pos_on_rail + outward_dir * outward_offset
+
+		positions.append(Vector3(final_pos.x, 0.0, final_pos.y))
 
 	return positions
 
