@@ -1,5 +1,5 @@
 # OpenTTS - Projekt Status
-**Stand:** 2026-01-13
+**Stand:** 2026-01-15
 **Version:** 0.2-alpha
 **Branch:** `main` (alle Feature-Branches gemerged)
 
@@ -41,6 +41,9 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 
 ### Terrain & Map Layout System (NEU!)
 - ✅ **Map Layout Editor** - Top-down 3" Grid für Terrain-Planung
+  - **Zoom-Funktion** - Mausrad-Zoom (0.5x - 3.0x) für präzises Arbeiten (NEU!)
+  - **Verbessertes Edge-Snapping** - 25px Snap-Radius zu gelben Randpunkten (NEU!)
+  - **Selection Disabled** - Multi-Selection während Map Layout deaktiviert (NEU!)
 - ✅ **Terrain-Typen mit Eigenschaften**:
   - Ruins (Height 5, Cover, Impassable Walls)
   - Forest (Height 5, Difficult + Cover)
@@ -134,6 +137,10 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 ### UI-Verbesserungen
 - [ ] In-Game HUD Overhaul
 - [x] **Radial Context Menu** - radial_menu.gd mit Kontext-Erkennung
+  - **Tooltips** - Hilfreiche Beschreibungen für alle Menü-Einträge (NEU!)
+  - **Buchstaben statt Emojis** - F/S statt 😓/😨 für bessere Lesbarkeit (NEU!)
+- [x] **Status Tokens** - Fatigue (F) und Shaken (S) Marker für ganze Units (NEU!)
+- [x] **Caster Token Display** - Korrekte Initialisierung bei Army Import (NEU!)
 - [ ] Minimap mit Terrain-Overlay
 - [ ] Multiplayer Lobby UI
 - [ ] Load Game Dialog
@@ -326,17 +333,17 @@ openTTS/
 ### Aktive Branches
 - `main` - Stabile Version mit allen Features
 
-### Recent Commits (2026-01-13)
+### Recent Commits (2026-01-15)
+- `8ebf4fe` - Merge pull request #27 from DutchMaxwell/claude/fix-caster-token-import-W7Uti
+- `aea4555` - feat: Improve map layout mode with zoom and better snapping
+- `0affe2b` - feat: Replace emojis with letters and add tooltips to radial menu
+- `61bafa1` - feat: Add Fatigue and Shaken status tokens for units
+- `6b50912` - refactor: Remove spend castpoints buttons from casts dialog
+- `bbd5bda` - fix: Initialize caster token display on army import
+- `f8a7f43` - Merge pull request #26 from DutchMaxwell/claude/review-code-update-docs-RV0nt
+- `74ed3d8` - docs: Update documentation after comprehensive code review
 - `bb5dd31` - Merge pull request #25 from DutchMaxwell/claude/data-bridge-units-F67gO
 - `243740b` - Update .gitignore
-- `c4ca763` - feat: Add table corners as snap points for deployment zones
-- `0eee816` - fix: Use get_local_mouse_position for all coordinate conversions
-- `e3de236` - fix: Use get_local_mouse_position for snap point detection
-- `81d65e5` - fix: Separate validation for 3" cells vs 1" deployment coordinates
-- `2750453` - fix: Trust boundary snap points without re-validation
-- `d86d27d` - fix: Constrain deployment zone vertices to table boundary
-- `b930b8f` - feat: Change deployment zone vertices to 1" precision
-- `58e8f6f` - fix: Use 1" grid intervals for boundary snap points
 
 ---
 
@@ -348,4 +355,4 @@ MIT License - Siehe [LICENSE](./LICENSE) für Details.
 
 **Status:** ✅ Alpha-Version funktionsfähig, aktive Entwicklung
 **Contributors:** DutchMaxwell, Community
-**Letzte Aktualisierung:** 2026-01-13
+**Letzte Aktualisierung:** 2026-01-15
