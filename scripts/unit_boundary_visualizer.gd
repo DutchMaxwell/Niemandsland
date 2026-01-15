@@ -21,6 +21,14 @@ const BORDER_THICKNESS := 0.004
 ## Border alpha (more visible than fill)
 const BORDER_ALPHA := 0.6
 
+## Player colors (must match OPRArmyManager.PLAYER_COLORS)
+const PLAYER_COLORS = {
+	1: Color(0.2, 0.4, 0.8),   # Blue
+	2: Color(0.8, 0.2, 0.2),   # Red
+	3: Color(0.2, 0.7, 0.2),   # Green
+	4: Color(0.7, 0.5, 0.1),   # Orange/Gold
+}
+
 ## Cached boundary meshes per GameUnit
 var _boundaries: Dictionary = {}  # GameUnit -> { "fill": MeshInstance3D, "border": MeshInstance3D }
 
@@ -82,7 +90,7 @@ func _update_unit_boundary(game_unit) -> void:
 
 	# Get player color
 	var player_id = game_unit.unit_properties.get("player_id", 1)
-	var player_color = OPRArmyManager.PLAYER_COLORS.get(player_id, Color.GRAY)
+	var player_color = PLAYER_COLORS.get(player_id, Color.GRAY)
 
 	# Get model positions
 	var positions: Array = []
