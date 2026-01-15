@@ -636,6 +636,44 @@ func _reposition_all_tokens(model_node: Node3D, unit: GameUnit, new_token_name: 
 	if tokens.is_empty():
 		return
 
+	# Check if this is a boundary token container (unit-wide tokens)
+	var is_boundary_container = model_node.name == "UnitTokenContainer"
+
+	if is_boundary_container:
+		# Simple horizontal arrangement for unit-wide tokens
+		_reposition_tokens_horizontal(model_node, tokens, new_token_name)
+	else:
+		# Circular arrangement around base for model-specific tokens
+		_reposition_tokens_circular(model_node, unit, tokens, new_token_name)
+
+
+## Repositions tokens in a horizontal line (for boundary containers).
+func _reposition_tokens_horizontal(container: Node3D, tokens: Array[String], new_token_name: String = "") -> void:
+	var spacing = TOKEN_RADIUS * 2.2  # Diameter + small gap
+
+	for i in range(tokens.size()):
+		var token_name = tokens[i]
+		var marker = container.get_node_or_null(token_name)
+		if not marker:
+			continue
+
+		# Arrange horizontally (in Z direction to spread along boundary)
+		var target_pos = Vector3(0, 0, i * spacing)
+
+		if token_name == new_token_name:
+			# New token: animate in
+			marker.position = target_pos + Vector3(0, 0.05, 0)
+			marker.scale = Vector3(0.01, 0.01, 0.01)
+			var tween = marker.create_tween()
+			tween.set_parallel(true)
+			tween.tween_property(marker, "scale", Vector3(1, 1, 1), 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+			tween.tween_property(marker, "position", target_pos, 0.3).set_ease(Tween.EASE_OUT)
+		else:
+			marker.position = target_pos
+
+
+## Repositions tokens in a circle around base (for model tokens).
+func _reposition_tokens_circular(model_node: Node3D, unit: GameUnit, tokens: Array[String], new_token_name: String = "") -> void:
 	var base_radius = _get_base_radius(unit)
 	var angles = _calculate_token_angles(tokens.size(), base_radius)
 
