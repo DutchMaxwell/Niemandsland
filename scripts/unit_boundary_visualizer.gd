@@ -32,6 +32,9 @@ var _boundaries: Dictionary = {}  # GameUnit -> MeshInstance3D (border only)
 ## Cached token containers per GameUnit (for unit-wide tokens)
 var _token_containers: Dictionary = {}  # GameUnit -> Node3D
 
+## Cached leftmost boundary point per GameUnit (for token positioning)
+var _boundary_token_positions: Dictionary = {}  # GameUnit -> Vector3
+
 ## Reference to army manager for player colors
 var army_manager = null  # OPRArmyManager
 
@@ -106,8 +109,13 @@ func _update_unit_boundary(game_unit) -> void:
 			var pos = model.node.global_position
 			positions.append(Vector2(pos.x, pos.z))
 
+	# Don't remove boundary if unit has multiple models but they're temporarily not in tree
+	# (e.g., during arrangement operations)
 	if positions.size() < 2:
-		_remove_unit_boundary(game_unit)
+		# Only remove if unit actually has <= 1 models total
+		if models.size() <= 1:
+			_remove_unit_boundary(game_unit)
+		# Otherwise keep existing boundary, just don't update it
 		return
 
 	# Calculate expanded convex hull with padding
@@ -159,6 +167,13 @@ func _create_boundary_mesh(game_unit, hull_points: PackedVector2Array, color: Co
 
 	# Create border mesh (outline only)
 	_create_border_mesh(border_instance, hull_points, color)
+
+	# Find leftmost point on boundary for token positioning
+	var leftmost_point = hull_points[0]
+	for point in hull_points:
+		if point.x < leftmost_point.x:
+			leftmost_point = point
+	_boundary_token_positions[game_unit] = Vector3(leftmost_point.x - 0.02, 0.015, leftmost_point.y)
 
 
 ## Creates the border outline mesh with smooth joins
@@ -271,7 +286,7 @@ func get_token_container(game_unit) -> Node3D:
 	return container
 
 
-## Updates the token container position to the center of the unit.
+## Updates the token container position to the boundary edge.
 func _update_token_container_position(game_unit) -> void:
 	if game_unit not in _token_containers:
 		return
@@ -280,21 +295,9 @@ func _update_token_container_position(game_unit) -> void:
 	if not container or not is_instance_valid(container):
 		return
 
-	var models = game_unit.get_alive_models()
-	if models.size() == 0:
-		return
-
-	# Calculate center position of all models
-	var center = Vector3.ZERO
-	var count = 0
-	for model in models:
-		if model.node and is_instance_valid(model.node) and model.node.is_inside_tree():
-			center += model.node.global_position
-			count += 1
-
-	if count > 0:
-		center /= count
-		container.global_position = Vector3(center.x, 0.02, center.z)  # Slightly above ground
+	# Use the pre-calculated boundary position (leftmost point)
+	if game_unit in _boundary_token_positions:
+		container.global_position = _boundary_token_positions[game_unit]
 
 
 ## Checks if a unit has multiple models (uses boundary visualization).
