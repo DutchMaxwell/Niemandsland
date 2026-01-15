@@ -330,6 +330,12 @@ static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 	# Status tokens (unit-wide)
 	if model.unit and model.unit is GameUnit:
 		var game_unit = model.unit as GameUnit
+
+		# Activation toggle
+		var activate_icon = "A+" if game_unit.is_activated else "A"
+		var activate_tooltip = "Mark unit as not activated" if game_unit.is_activated else "Mark unit as activated this round"
+		items.append(RadialMenuItem.new("toggle_activate", "Activate", activate_icon, true, activate_tooltip))
+
 		var fatigue_icon = "F+" if game_unit.is_fatigued else "F"
 		var shaken_icon = "S+" if game_unit.is_shaken else "S"
 		var fatigue_tooltip = "Remove Fatigued status from unit" if game_unit.is_fatigued else "Mark unit as Fatigued"
