@@ -364,7 +364,7 @@ func get_boundary_anchor_point(game_unit) -> Vector3:
 
 ## Gets positions along the boundary for multiple tokens.
 ## Returns array of Vector3 positions starting from the leftmost point, following the boundary.
-## Tokens are positioned OUTSIDE the boundary, offset by token radius.
+## Tokens are positioned directly ON the boundary line (like on a rail).
 func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vector3]:
 	var positions: Array[Vector3] = []
 
@@ -378,16 +378,8 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 	var start_index = _boundary_start_indices[game_unit]
 	var point_count = hull_points.size()
 
-	# Token parameters
-	var token_radius = 0.010  # 10mm
-	var token_spacing = 0.024  # 24mm between token centers (slightly more than diameter)
-	var outward_offset = token_radius + 0.003  # Token radius + 3mm gap from boundary
-
-	# Calculate boundary center for outward direction
-	var center = Vector2.ZERO
-	for point in hull_points:
-		center += point
-	center /= point_count
+	# Token spacing along boundary
+	var token_spacing = 0.024  # 24mm between token centers
 
 	# Calculate cumulative distances along the boundary starting from start_index
 	var cumulative_distances: Array[float] = [0.0]
@@ -400,7 +392,7 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 		total_length += (p2 - p1).length()
 		cumulative_distances.append(total_length)
 
-	# Place tokens along boundary
+	# Place tokens along boundary (directly on the line)
 	for token_idx in range(token_count):
 		var target_distance = token_idx * token_spacing
 
@@ -429,13 +421,8 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 
 		var pos_2d = segment_start.lerp(segment_end, t)
 
-		# Calculate outward direction (away from center)
-		var outward_dir = (pos_2d - center).normalized()
-
-		# Offset position outward
-		var offset_pos = pos_2d + outward_dir * outward_offset
-
-		positions.append(Vector3(offset_pos.x, 0.0, offset_pos.y))
+		# Position directly on boundary (no offset)
+		positions.append(Vector3(pos_2d.x, 0.0, pos_2d.y))
 
 	return positions
 
