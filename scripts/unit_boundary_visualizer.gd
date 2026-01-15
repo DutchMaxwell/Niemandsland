@@ -127,10 +127,9 @@ func _update_unit_boundary(game_unit) -> void:
 		# Only remove if unit actually has <= 1 models total
 		if models.size() <= 1:
 			_remove_unit_boundary(game_unit)
-		# Otherwise keep existing boundary and token position, just don't update the mesh
-		# But still try to update token position if we have at least one model in tree
-		elif positions.size() == 1:
-			_calculate_token_position(game_unit)
+		# Otherwise keep existing boundary, just don't update the mesh
+		# Token container position uses cached hull data
+		else:
 			_update_token_container_position(game_unit)
 		return
 
