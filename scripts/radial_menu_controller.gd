@@ -24,6 +24,16 @@ var stats_tooltip: Node = null
 ## Reference to coherency visualizer
 var coherency_visualizer: CoherencyVisualizer = null
 
+## Reference to unit boundary visualizer (for unit-wide tokens)
+var boundary_visualizer: Node3D = null:  # UnitBoundaryVisualizer
+	set(value):
+		if boundary_visualizer and boundary_visualizer.has_signal("boundary_updated"):
+			if boundary_visualizer.is_connected("boundary_updated", _on_boundary_updated):
+				boundary_visualizer.disconnect("boundary_updated", _on_boundary_updated)
+		boundary_visualizer = value
+		if boundary_visualizer and boundary_visualizer.has_signal("boundary_updated"):
+			boundary_visualizer.connect("boundary_updated", _on_boundary_updated)
+
 ## Reference to wounds dialog
 var wounds_dialog: WoundsDialog = null
 
@@ -512,35 +522,46 @@ func initialize_caster_marker_for_unit(game_unit: GameUnit) -> void:
 
 
 # ===== Status Token Markers (Fatigue, Shaken, Activated) =====
+# These are unit-wide markers - placed on boundary for multi-model units
 
-## Updates fatigued markers for a unit (on first model only).
+## Gets the node to attach unit-wide tokens to.
+## Returns boundary container for multi-model units, first model for single-model units.
+func _get_unit_token_node(unit: GameUnit) -> Node3D:
+	# For multi-model units with boundary, use the boundary token container
+	if boundary_visualizer and unit.models.size() > 1:
+		return boundary_visualizer.get_token_container(unit)
+
+	# For single-model units, use the model itself
+	if unit.models.is_empty():
+		return null
+	var model = unit.models[0]
+	if not model.node or not is_instance_valid(model.node):
+		return null
+	return model.node
+
+
+## Updates fatigued markers for a unit.
 func _update_fatigued_markers(unit: GameUnit) -> void:
-	if unit.models.is_empty():
+	var token_node = _get_unit_token_node(unit)
+	if not token_node:
 		return
-	var model = unit.models[0]
-	if not model.node or not is_instance_valid(model.node):
-		return
-	_update_token(model.node, unit, "FatiguedMarker", unit.is_fatigued)
+	_update_token(token_node, unit, "FatiguedMarker", unit.is_fatigued)
 
 
-## Updates shaken markers for a unit (on first model only).
+## Updates shaken markers for a unit.
 func _update_shaken_markers(unit: GameUnit) -> void:
-	if unit.models.is_empty():
+	var token_node = _get_unit_token_node(unit)
+	if not token_node:
 		return
-	var model = unit.models[0]
-	if not model.node or not is_instance_valid(model.node):
-		return
-	_update_token(model.node, unit, "ShakenMarker", unit.is_shaken)
+	_update_token(token_node, unit, "ShakenMarker", unit.is_shaken)
 
 
-## Updates activated markers for a unit (on first model only).
+## Updates activated markers for a unit.
 func _update_activated_markers(unit: GameUnit) -> void:
-	if unit.models.is_empty():
+	var token_node = _get_unit_token_node(unit)
+	if not token_node:
 		return
-	var model = unit.models[0]
-	if not model.node or not is_instance_valid(model.node):
-		return
-	_update_token(model.node, unit, "ActivatedMarker", unit.is_activated)
+	_update_token(token_node, unit, "ActivatedMarker", unit.is_activated)
 
 
 ## Public method to initialize status markers for a unit after import.
@@ -551,6 +572,26 @@ func initialize_status_markers_for_unit(game_unit: GameUnit) -> void:
 		_update_shaken_markers(game_unit)
 	if game_unit.is_activated:
 		_update_activated_markers(game_unit)
+
+
+## Called when a unit's boundary is updated (models moved/rearranged).
+## Repositions tokens along the new boundary shape.
+func _on_boundary_updated(game_unit: GameUnit) -> void:
+	if not boundary_visualizer:
+		return
+
+	# Get the token container for this unit
+	var container = boundary_visualizer.get_token_container(game_unit)
+	if not container or not is_instance_valid(container):
+		return
+
+	# Get active tokens on the container
+	var tokens = _get_active_tokens(container)
+	if tokens.is_empty():
+		return
+
+	# Reposition tokens along the updated boundary
+	_reposition_tokens_boundary(container, game_unit, tokens)
 
 
 # ===== Unified Token Layout System =====
@@ -622,6 +663,67 @@ func _reposition_all_tokens(model_node: Node3D, unit: GameUnit, new_token_name: 
 	if tokens.is_empty():
 		return
 
+	# Check if this is a boundary token container (unit-wide tokens)
+	var is_boundary_container = model_node.name == "UnitTokenContainer"
+
+	if is_boundary_container:
+		# Arrange tokens along boundary edge
+		_reposition_tokens_boundary(model_node, unit, tokens, new_token_name)
+	else:
+		# Circular arrangement around base for model-specific tokens
+		_reposition_tokens_circular(model_node, unit, tokens, new_token_name)
+
+
+## Repositions tokens along boundary edge.
+## Tokens follow the boundary contour starting from -45° of first model.
+func _reposition_tokens_boundary(container: Node3D, unit: GameUnit, tokens: Array[String], new_token_name: String = "") -> void:
+	if not boundary_visualizer:
+		return
+
+	# Get positions along boundary for all tokens
+	var boundary_positions = boundary_visualizer.get_token_positions_on_boundary(unit, tokens.size())
+
+	if boundary_positions.is_empty():
+		return
+
+	# Container is at anchor point, calculate relative positions
+	var container_pos = container.global_position
+
+	for i in range(tokens.size()):
+		var token_name = tokens[i]
+		var marker = container.get_node_or_null(token_name)
+		if not marker:
+			continue
+
+		if i >= boundary_positions.size():
+			continue
+
+		# Calculate local position relative to container
+		var world_pos = boundary_positions[i]
+		var local_pos = world_pos - container_pos
+
+		if token_name == new_token_name:
+			# New token: animate in from above
+			marker.position = local_pos + Vector3(0, 0.03, 0)
+			marker.scale = Vector3(0.01, 0.01, 0.01)
+
+			var tween = marker.create_tween()
+			tween.set_parallel(true)
+			tween.tween_property(marker, "scale", Vector3(1, 1, 1), 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+			tween.tween_property(marker, "position", local_pos, 0.3).set_ease(Tween.EASE_OUT)
+		else:
+			# Existing token: animate to new position if changed
+			if marker.position.distance_to(local_pos) > 0.001:
+				var tween = marker.create_tween()
+				tween.set_ease(Tween.EASE_OUT)
+				tween.set_trans(Tween.TRANS_CUBIC)
+				tween.tween_property(marker, "position", local_pos, 0.4)
+			else:
+				marker.position = local_pos
+
+
+## Repositions tokens in a circle around base (for model tokens).
+func _reposition_tokens_circular(model_node: Node3D, unit: GameUnit, tokens: Array[String], new_token_name: String = "") -> void:
 	var base_radius = _get_base_radius(unit)
 	var angles = _calculate_token_angles(tokens.size(), base_radius)
 

@@ -23,6 +23,8 @@ Ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wie OnePageRul
 
 ### 🗺️ Terrain & Map Layout
 - ✅ **Map Layout Editor** - Top-down 3" Grid für Terrain-Planung
+  - **Zoom-Funktion** - Mausrad-Zoom (0.5x - 3.0x) für präzises Arbeiten
+  - **Verbessertes Snapping** - Einfacheres Snappen zu Tischkanten-Punkten
 - ✅ **4 Terrain-Typen**: Ruins (Cover), Forest (Difficult+Cover), Container (Blocking), Dangerous (Minefields)
 - ✅ **Deployment Zones**:
   - **Front-line (12")** - Standard OPR Free Rules Deployment
@@ -46,6 +48,18 @@ Ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wie OnePageRul
 - ✅ **Target Priority System** - AP, Deadly, Takedown, Unstoppable Regeln
 - ✅ **Morale System** - Vollständige Flucht-/Rout-Mechanik mit Consolidation Moves
 - ✅ **Special Rules** - Ambush, Scout, Transport, Artillery, Caster, Flying, Strider
+
+### ⚙️ Unit-Status & UI
+- ✅ **Radial Context Menu** - Kontextsensitives Pie-Menu mit Tooltips
+- ✅ **Unit Boundary Visualizer** - Farbige Umrandung zeigt Zugehörigkeit von Modellen zu Units
+  - Spielerfarben-codierte Convex-Hull-Darstellung
+  - Nur für Multi-Model Units (Single-Models ohne Boundary)
+- ✅ **Unit-Wide Status Tokens** - Fatigue (F), Shaken (S), Activated (A) auf der Unit-Boundary
+  - Tokens folgen der Boundary-Kontur wie auf einer Schiene
+  - Automatische Neupositionierung bei Formationsänderung (1-9, A)
+- ✅ **Model-Specific Tokens** - Wounds (W), Caster (C) bleiben auf einzelnen Modellen
+- ✅ **Caster-System** - Caster Token Display und Cast Points Tracking
+- ✅ **Wunden-Tracking** - Pro-Modell Wunden-Verwaltung
 
 ### 📦 Import/Export
 - ✅ TTS Import (Online von Steam CDN + Local Cache)
@@ -372,4 +386,4 @@ Siehe [docs/ASSETS.md](./docs/ASSETS.md) für vollständige Asset-Attributionen.
 
 **Version**: 0.2-alpha
 **Status**: Active Development
-**Letzte Aktualisierung**: 2026-01-14
+**Letzte Aktualisierung**: 2026-01-15
