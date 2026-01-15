@@ -24,6 +24,9 @@ var stats_tooltip: Node = null
 ## Reference to coherency visualizer
 var coherency_visualizer: CoherencyVisualizer = null
 
+## Reference to unit boundary visualizer (for unit-wide tokens)
+var boundary_visualizer: Node3D = null  # UnitBoundaryVisualizer
+
 ## Reference to wounds dialog
 var wounds_dialog: WoundsDialog = null
 
@@ -512,35 +515,46 @@ func initialize_caster_marker_for_unit(game_unit: GameUnit) -> void:
 
 
 # ===== Status Token Markers (Fatigue, Shaken, Activated) =====
+# These are unit-wide markers - placed on boundary for multi-model units
 
-## Updates fatigued markers for a unit (on first model only).
+## Gets the node to attach unit-wide tokens to.
+## Returns boundary container for multi-model units, first model for single-model units.
+func _get_unit_token_node(unit: GameUnit) -> Node3D:
+	# For multi-model units with boundary, use the boundary token container
+	if boundary_visualizer and unit.models.size() > 1:
+		return boundary_visualizer.get_token_container(unit)
+
+	# For single-model units, use the model itself
+	if unit.models.is_empty():
+		return null
+	var model = unit.models[0]
+	if not model.node or not is_instance_valid(model.node):
+		return null
+	return model.node
+
+
+## Updates fatigued markers for a unit.
 func _update_fatigued_markers(unit: GameUnit) -> void:
-	if unit.models.is_empty():
+	var token_node = _get_unit_token_node(unit)
+	if not token_node:
 		return
-	var model = unit.models[0]
-	if not model.node or not is_instance_valid(model.node):
-		return
-	_update_token(model.node, unit, "FatiguedMarker", unit.is_fatigued)
+	_update_token(token_node, unit, "FatiguedMarker", unit.is_fatigued)
 
 
-## Updates shaken markers for a unit (on first model only).
+## Updates shaken markers for a unit.
 func _update_shaken_markers(unit: GameUnit) -> void:
-	if unit.models.is_empty():
+	var token_node = _get_unit_token_node(unit)
+	if not token_node:
 		return
-	var model = unit.models[0]
-	if not model.node or not is_instance_valid(model.node):
-		return
-	_update_token(model.node, unit, "ShakenMarker", unit.is_shaken)
+	_update_token(token_node, unit, "ShakenMarker", unit.is_shaken)
 
 
-## Updates activated markers for a unit (on first model only).
+## Updates activated markers for a unit.
 func _update_activated_markers(unit: GameUnit) -> void:
-	if unit.models.is_empty():
+	var token_node = _get_unit_token_node(unit)
+	if not token_node:
 		return
-	var model = unit.models[0]
-	if not model.node or not is_instance_valid(model.node):
-		return
-	_update_token(model.node, unit, "ActivatedMarker", unit.is_activated)
+	_update_token(token_node, unit, "ActivatedMarker", unit.is_activated)
 
 
 ## Public method to initialize status markers for a unit after import.

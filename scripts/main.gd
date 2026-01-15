@@ -1807,6 +1807,7 @@ func _init_radial_menu() -> void:
 	unit_boundary_visualizer.name = "UnitBoundaryVisualizer"
 	unit_boundary_visualizer.army_manager = opr_army_manager
 	add_child(unit_boundary_visualizer)
+	radial_menu_controller.boundary_visualizer = unit_boundary_visualizer
 
 	# Connect object manager's right-click signal to open the menu
 	object_manager.context_menu_requested.connect(_on_context_menu_requested)
