@@ -3,6 +3,8 @@ class_name UnitBoundaryVisualizer
 ## Visualizes unit boundaries with colored outlines.
 ## Shows which models belong to which unit at a glance.
 
+signal boundary_updated(game_unit)
+
 ## Height above ground for the boundary mesh
 const BOUNDARY_HEIGHT := 0.005  # 5mm above table surface
 
@@ -186,8 +188,11 @@ func _create_boundary_mesh(game_unit, hull_points: PackedVector2Array, color: Co
 	# Create border mesh (outline only)
 	_create_border_mesh(border_instance, hull_points, color)
 
-	# Calculate token start position on boundary (closest to -45° from first model)
+	# Calculate token start position on boundary (leftmost point)
 	_calculate_token_start_index(game_unit)
+
+	# Notify that boundary was updated (for token repositioning)
+	boundary_updated.emit(game_unit)
 
 
 ## Creates the border outline mesh with smooth joins
@@ -319,7 +324,7 @@ func get_token_container(game_unit) -> Node3D:
 	return container
 
 
-## Finds the hull point closest to -45° from the first model.
+## Finds the leftmost point on the hull as starting point for tokens.
 ## This determines where tokens start on the boundary.
 func _calculate_token_start_index(game_unit) -> void:
 	if game_unit not in _boundary_hull_points:
@@ -329,35 +334,14 @@ func _calculate_token_start_index(game_unit) -> void:
 	if hull_points.is_empty():
 		return
 
-	var models = game_unit.get_alive_models()
-	if models.is_empty():
-		return
-
-	# Get first model position
-	var first_model = models[0]
-	if not first_model.node or not is_instance_valid(first_model.node) or not first_model.node.is_inside_tree():
-		return
-
-	var model_pos = first_model.node.global_position
-	var model_pos_2d = Vector2(model_pos.x, model_pos.z)
-
-	# -45° angle (225° or 5π/4 radians) from first model
-	var angle = PI + PI / 4.0  # 225°
-
-	# Create target direction from first model
-	var target_dir = Vector2(cos(angle), sin(angle))
-
-	# Find hull point closest to this direction from first model
+	# Find the leftmost point (smallest X coordinate)
 	var best_index = 0
-	var best_score = -INF
+	var min_x = INF
 
 	for i in range(hull_points.size()):
 		var point = hull_points[i]
-		var dir_to_point = (point - model_pos_2d).normalized()
-		# Score by how aligned the point is with target direction
-		var score = dir_to_point.dot(target_dir)
-		if score > best_score:
-			best_score = score
+		if point.x < min_x:
+			min_x = point.x
 			best_index = i
 
 	_boundary_start_indices[game_unit] = best_index
