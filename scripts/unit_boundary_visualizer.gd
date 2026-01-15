@@ -342,6 +342,10 @@ func _calculate_token_start_index(game_unit) -> void:
 			var pos = model.node.global_position
 			model_positions.append(Vector2(pos.x, pos.z))
 
+	print("DEBUG: Checking token positions for unit with %d models, base_radius=%.3f" % [model_positions.size(), base_radius])
+	for i in range(model_positions.size()):
+		print("  Model %d pos: (%.3f, %.3f)" % [i, model_positions[i].x, model_positions[i].y])
+
 	# Find leftmost point as default starting point
 	var default_index = 0
 	var min_x = INF
@@ -350,16 +354,21 @@ func _calculate_token_start_index(game_unit) -> void:
 			min_x = hull_points[i].x
 			default_index = i
 
+	print("DEBUG: Hull has %d points, default_index=%d" % [hull_points.size(), default_index])
+
 	# Check all points on the boundary, starting from the default (leftmost)
 	# Find the first point where tokens don't overlap with any model
 	var point_count = hull_points.size()
 	for offset in range(point_count):
 		var test_index = (default_index + offset) % point_count
-		if not _check_token_overlap_at_index(hull_points, test_index, model_positions, base_radius):
+		var overlaps = _check_token_overlap_at_index(hull_points, test_index, model_positions, base_radius)
+		if not overlaps:
+			print("DEBUG: Found non-overlapping position at index %d (offset %d)" % [test_index, offset])
 			_boundary_start_indices[game_unit] = test_index
 			return
 
 	# Fallback to default if all positions overlap (shouldn't happen)
+	print("DEBUG: All positions overlap! Using fallback index %d" % default_index)
 	_boundary_start_indices[game_unit] = default_index
 
 
@@ -381,9 +390,13 @@ func _check_token_overlap_at_index(hull_points: PackedVector2Array, start_index:
 	var outward_normal = Vector2(segment_dir.y, -segment_dir.x)
 	var token_pos = seg_start + outward_normal * outward_offset
 
+	print("DEBUG idx %d: seg_start=(%.3f,%.3f) token_pos=(%.3f,%.3f) threshold=%.3f" % [start_index, seg_start.x, seg_start.y, token_pos.x, token_pos.y, overlap_threshold])
+
 	# Check against all model positions
-	for model_pos in model_positions:
+	for i in range(model_positions.size()):
+		var model_pos = model_positions[i]
 		var dist = (token_pos - model_pos).length()
+		print("  -> dist to model %d: %.3f (overlap=%s)" % [i, dist, str(dist < overlap_threshold)])
 		if dist < overlap_threshold:
 			return true
 
