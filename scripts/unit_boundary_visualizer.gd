@@ -318,8 +318,8 @@ func get_token_container(game_unit) -> Node3D:
 	return container
 
 
-## Finds the leftmost point on the hull as starting point for tokens.
-## This determines where tokens start on the boundary.
+## Finds the best starting point on the hull for tokens that avoids model overlap.
+## Tries left side first, then right side if tokens would overlap with models.
 func _calculate_token_start_index(game_unit) -> void:
 	if game_unit not in _boundary_hull_points:
 		return
@@ -328,17 +328,73 @@ func _calculate_token_start_index(game_unit) -> void:
 	if hull_points.is_empty():
 		return
 
-	# Find the leftmost point (smallest X coordinate)
-	var best_index = 0
+	# Find the leftmost and rightmost points
+	var left_index = 0
+	var right_index = 0
 	var min_x = INF
+	var max_x = -INF
 
 	for i in range(hull_points.size()):
 		var point = hull_points[i]
 		if point.x < min_x:
 			min_x = point.x
-			best_index = i
+			left_index = i
+		if point.x > max_x:
+			max_x = point.x
+			right_index = i
 
-	_boundary_start_indices[game_unit] = best_index
+	# Get model positions for overlap checking
+	var model_positions: Array[Vector2] = []
+	var base_radius = 0.016  # Default 32mm base
+	if game_unit.models.size() > 0:
+		var first_model = game_unit.models[0]
+		if first_model and is_instance_valid(first_model.node):
+			var base_mm = game_unit.unit_properties.get("base_size_round", 32)
+			base_radius = (base_mm / 2.0) * 0.001
+
+	for model in game_unit.models:
+		if model and is_instance_valid(model.node):
+			var pos = model.node.global_position
+			model_positions.append(Vector2(pos.x, pos.z))
+
+	# Check if left side has overlap
+	var left_overlaps = _check_token_overlap_at_index(hull_points, left_index, model_positions, base_radius)
+
+	if left_overlaps:
+		# Try right side
+		var right_overlaps = _check_token_overlap_at_index(hull_points, right_index, model_positions, base_radius)
+		if not right_overlaps:
+			_boundary_start_indices[game_unit] = right_index
+			return
+
+	_boundary_start_indices[game_unit] = left_index
+
+
+## Checks if token positions starting at given index would overlap with any model.
+func _check_token_overlap_at_index(hull_points: PackedVector2Array, start_index: int, model_positions: Array[Vector2], base_radius: float) -> bool:
+	var token_radius = 0.010  # 10mm
+	var outward_offset = token_radius + 0.002  # 12mm offset
+	var overlap_threshold = base_radius + token_radius + 0.003  # Small buffer
+
+	var point_count = hull_points.size()
+	if point_count < 2:
+		return false
+
+	# Check first token position (most likely to overlap)
+	var seg_start = hull_points[start_index]
+	var seg_end = hull_points[(start_index + 1) % point_count]
+
+	var segment_dir = (seg_end - seg_start).normalized()
+	var outward_normal = Vector2(segment_dir.y, -segment_dir.x)
+	var token_pos = seg_start + outward_normal * outward_offset
+
+	# Check against all model positions
+	for model_pos in model_positions:
+		var dist = (token_pos - model_pos).length()
+		if dist < overlap_threshold:
+			return true
+
+	return false
 
 
 ## Gets the anchor point on boundary at -45° from first model.
