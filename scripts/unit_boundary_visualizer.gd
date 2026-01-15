@@ -25,7 +25,7 @@ const BORDER_ALPHA := 0.6
 var _boundaries: Dictionary = {}  # GameUnit -> { "fill": MeshInstance3D, "border": MeshInstance3D }
 
 ## Reference to army manager for player colors
-var army_manager: OPRArmyManager
+var army_manager = null  # OPRArmyManager
 
 ## Update timer for smooth updates
 var _update_timer: float = 0.0
@@ -52,17 +52,17 @@ func update_all_boundaries() -> void:
 			return
 
 	# Track which units still exist
-	var existing_units: Array[GameUnit] = []
+	var existing_units: Array = []
 
 	# Update boundaries for all game units
 	for unit_id in army_manager.game_units:
-		var game_unit = army_manager.game_units[unit_id] as GameUnit
+		var game_unit = army_manager.game_units[unit_id]
 		if game_unit:
 			existing_units.append(game_unit)
 			_update_unit_boundary(game_unit)
 
 	# Remove boundaries for units that no longer exist
-	var units_to_remove: Array[GameUnit] = []
+	var units_to_remove: Array = []
 	for unit in _boundaries.keys():
 		if unit not in existing_units:
 			units_to_remove.append(unit)
@@ -72,7 +72,7 @@ func update_all_boundaries() -> void:
 
 
 ## Updates boundary for a single unit
-func _update_unit_boundary(game_unit: GameUnit) -> void:
+func _update_unit_boundary(game_unit) -> void:
 	var models = game_unit.get_alive_models()
 
 	# Need at least 1 model
@@ -85,7 +85,7 @@ func _update_unit_boundary(game_unit: GameUnit) -> void:
 	var player_color = OPRArmyManager.PLAYER_COLORS.get(player_id, Color.GRAY)
 
 	# Get model positions
-	var positions: Array[Vector2] = []
+	var positions: Array = []
 	var base_radius: float = 0.016  # Default 32mm base
 
 	# Get base size from unit
@@ -113,7 +113,7 @@ func _update_unit_boundary(game_unit: GameUnit) -> void:
 
 
 ## Calculates a smooth convex hull with padding around positions
-func _calculate_smooth_hull(positions: Array[Vector2], padding: float) -> PackedVector2Array:
+func _calculate_smooth_hull(positions: Array, padding: float) -> PackedVector2Array:
 	if positions.size() == 0:
 		return PackedVector2Array()
 
@@ -177,7 +177,7 @@ func _create_capsule(p1: Vector2, p2: Vector2, radius: float) -> PackedVector2Ar
 
 
 ## Creates simple boundary for 1-2 models
-func _create_simple_boundary(positions: Array[Vector2], radius: float) -> PackedVector2Array:
+func _create_simple_boundary(positions: Array, radius: float) -> PackedVector2Array:
 	if positions.size() == 1:
 		return _create_circle(positions[0], radius)
 	elif positions.size() == 2:
@@ -186,7 +186,7 @@ func _create_simple_boundary(positions: Array[Vector2], radius: float) -> Packed
 
 
 ## Creates the 3D mesh for the boundary
-func _create_boundary_mesh(game_unit: GameUnit, hull_points: PackedVector2Array, color: Color) -> void:
+func _create_boundary_mesh(game_unit, hull_points: PackedVector2Array, color: Color) -> void:
 	if hull_points.size() < 3:
 		return
 
@@ -303,7 +303,7 @@ func _create_border_mesh(mesh_instance: MeshInstance3D, hull_points: PackedVecto
 
 
 ## Removes boundary visualization for a unit
-func _remove_unit_boundary(game_unit: GameUnit) -> void:
+func _remove_unit_boundary(game_unit) -> void:
 	if game_unit in _boundaries:
 		var entry = _boundaries[game_unit]
 		if entry["fill"] and is_instance_valid(entry["fill"]):
