@@ -157,6 +157,13 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
   - Tokens folgen der Boundary-Kontur wie an einer Schiene
   - Outward-Offset mit Boundary-Normal (wie Tokens am Base-Rand)
   - Auto-Repositionierung bei Formation-Änderung (1,2,3 Arrangement Keys)
+  - **Smart Token Placement** - Maximum-Minimum-Distanz Algorithmus für optimale Positionierung (NEU!)
+- [x] **Token Overlap Prevention** - Tokens überlappen nicht mehr mit Modellen (NEU!)
+  - Boundary-Tokens: Automatische Platzierung an der "freisten" Stelle
+  - Model-Tokens: Auto-Flip auf gegenüberliegende Seite bei Überlappung
+- [x] **Konstanter Base-Randabstand** - 8mm Abstand zwischen Bases unabhängig von Basegröße (NEU!)
+  - Gilt für Spawn, Arrangement (1-9, A) und alle Formationen
+  - Dynamisches Spacing basierend auf größter Base in der Selektion
 - [ ] Minimap mit Terrain-Overlay
 - [ ] Multiplayer Lobby UI
 - [ ] Load Game Dialog
@@ -351,16 +358,16 @@ openTTS/
 - `main` - Stabile Version mit allen Features
 
 ### Recent Commits (2026-01-15)
+- `91c6656` - chore: Remove unused variable in token overlap detection
+- `d9ffc4f` - chore: Remove debug logging from token placement
+- `df25629` - fix: Use maximum-minimum-distance algorithm for token placement
+- `8c4a863` - fix: Use constant edge gap for base spacing to prevent overlap
+- `ecd58ce` - fix: Auto-flip tokens to opposite side when overlapping other models
 - `0a5475c` - fix: Token spacing same as single models (21mm = 2*radius + gap)
 - `412c1bf` - fix: Tokens offset using boundary normal (like base edge)
 - `146bee0` - fix: Boundary as rail with outward offset (15mm from line)
-- `b746794` - fix: Tokens directly on boundary line (like on a rail)
-- `5f863ce` - fix: Improved token spacing and boundary walking algorithm
 - `8ebf4fe` - Merge pull request #27 from DutchMaxwell/claude/fix-caster-token-import-W7Uti
 - `aea4555` - feat: Improve map layout mode with zoom and better snapping
-- `0affe2b` - feat: Replace emojis with letters and add tooltips to radial menu
-- `61bafa1` - feat: Add Fatigue and Shaken status tokens for units
-- `6b50912` - refactor: Remove spend castpoints buttons from casts dialog
 ### Recent Commits (2026-01-14)
 - `91bc564` - feat: Use float coordinates for precise boundary snap placement
 - `677a81a` - fix: Draw snap points at exact grid-boundary intersections, restore corners
