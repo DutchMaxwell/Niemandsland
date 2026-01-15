@@ -41,8 +41,9 @@ const UPDATE_INTERVAL := 0.1  # Update every 100ms
 
 
 func _ready() -> void:
-	# Find army manager
-	army_manager = get_node_or_null("/root/Main/OPRArmyManager")
+	# Find army manager only if not already set by parent
+	if not army_manager:
+		army_manager = get_node_or_null("/root/Main/OPRArmyManager")
 	print("[UnitBoundaryVisualizer] Ready - army_manager: ", army_manager)
 
 
