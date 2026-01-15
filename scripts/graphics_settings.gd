@@ -1,4 +1,5 @@
 extends Node
+class_name GraphicsSettings
 ## Graphics Settings Manager
 ## Handles quality presets and graphics configuration
 
