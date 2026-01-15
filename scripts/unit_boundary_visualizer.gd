@@ -376,7 +376,9 @@ func _calculate_token_start_index(game_unit) -> void:
 func _check_token_overlap_at_index(hull_points: PackedVector2Array, start_index: int, model_positions: Array[Vector2], base_radius: float) -> bool:
 	var token_radius = 0.010  # 10mm
 	var outward_offset = token_radius + 0.002  # 12mm offset
-	var overlap_threshold = base_radius + token_radius + 0.003  # Small buffer
+	# Use larger threshold to ensure tokens are visually clear of models
+	# base_radius + token_radius = touching, + 0.015 = 15mm extra clearance
+	var overlap_threshold = base_radius + token_radius + 0.015
 
 	var point_count = hull_points.size()
 	if point_count < 2:
