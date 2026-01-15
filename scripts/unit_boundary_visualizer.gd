@@ -206,20 +206,14 @@ func _create_border_mesh(mesh_instance: MeshInstance3D, hull_points: PackedVecto
 
 	var half_thickness = BORDER_THICKNESS / 2.0
 
-	# Create thick line segments as quads with mitered corners
+	# Create thick line segments as quads
 	for i in range(point_count):
-		var p0 = hull_points[(i - 1 + point_count) % point_count]
 		var p1 = hull_points[i]
 		var p2 = hull_points[(i + 1) % point_count]
-		var p3 = hull_points[(i + 2) % point_count]
 
-		# Direction vectors
+		# Direction and perpendicular vectors
 		var dir1 = (p2 - p1).normalized()
-		var dir2 = (p3 - p2).normalized()
-
-		# Perpendicular vectors
 		var perp1 = Vector2(-dir1.y, dir1.x) * half_thickness
-		var perp2 = Vector2(-dir2.y, dir2.x) * half_thickness
 
 		# Create quad vertices for this segment
 		var v0 = Vector3(p1.x - perp1.x, BOUNDARY_HEIGHT, p1.y - perp1.y)

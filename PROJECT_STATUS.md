@@ -151,6 +151,12 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
   - **Buchstaben statt Emojis** - F/S statt 😓/😨 für bessere Lesbarkeit (NEU!)
 - [x] **Status Tokens** - Fatigue (F) und Shaken (S) Marker für ganze Units (NEU!)
 - [x] **Caster Token Display** - Korrekte Initialisierung bei Army Import (NEU!)
+- [x] **Unit Boundary Visualizer** - Farbige Grenzen um Multi-Model Units (NEU!)
+  - Automatische Convex Hull Berechnung für Unit-Grenzen
+  - Spielerfarben-codierte Boundaries (Blau, Rot, Grün, Orange)
+  - Tokens folgen der Boundary-Kontur wie an einer Schiene
+  - Outward-Offset mit Boundary-Normal (wie Tokens am Base-Rand)
+  - Auto-Repositionierung bei Formation-Änderung (1,2,3 Arrangement Keys)
 - [ ] Minimap mit Terrain-Overlay
 - [ ] Multiplayer Lobby UI
 - [ ] Load Game Dialog
@@ -229,6 +235,7 @@ openTTS/
 │   ├── unit_utils.gd       # NEU: Unit-Erkennung Helpers
 │   ├── coherency_checker.gd     # NEU: Coherency-Validierung
 │   ├── coherency_visualizer.gd  # NEU: Visuelle Coherency-Linien
+│   ├── unit_boundary_visualizer.gd  # NEU: Unit-Grenzen mit Token-Rail
 │   ├── unit_marker.gd      # NEU: Standard + Custom Marker
 │   ├── radial_menu.gd      # NEU: Pie-Menu UI
 │   ├── radial_menu_controller.gd  # NEU: Kontext-Handler
@@ -344,16 +351,16 @@ openTTS/
 - `main` - Stabile Version mit allen Features
 
 ### Recent Commits (2026-01-15)
+- `0a5475c` - fix: Token spacing same as single models (21mm = 2*radius + gap)
+- `412c1bf` - fix: Tokens offset using boundary normal (like base edge)
+- `146bee0` - fix: Boundary as rail with outward offset (15mm from line)
+- `b746794` - fix: Tokens directly on boundary line (like on a rail)
+- `5f863ce` - fix: Improved token spacing and boundary walking algorithm
 - `8ebf4fe` - Merge pull request #27 from DutchMaxwell/claude/fix-caster-token-import-W7Uti
 - `aea4555` - feat: Improve map layout mode with zoom and better snapping
 - `0affe2b` - feat: Replace emojis with letters and add tooltips to radial menu
 - `61bafa1` - feat: Add Fatigue and Shaken status tokens for units
 - `6b50912` - refactor: Remove spend castpoints buttons from casts dialog
-- `bbd5bda` - fix: Initialize caster token display on army import
-- `f8a7f43` - Merge pull request #26 from DutchMaxwell/claude/review-code-update-docs-RV0nt
-- `74ed3d8` - docs: Update documentation after comprehensive code review
-- `bb5dd31` - Merge pull request #25 from DutchMaxwell/claude/data-bridge-units-F67gO
-- `243740b` - Update .gitignore
 ### Recent Commits (2026-01-14)
 - `91bc564` - feat: Use float coordinates for precise boundary snap placement
 - `677a81a` - fix: Draw snap points at exact grid-boundary intersections, restore corners
@@ -383,4 +390,3 @@ MIT License - Siehe [LICENSE](./LICENSE) für Details.
 **Status:** ✅ Alpha-Version funktionsfähig, aktive Entwicklung
 **Contributors:** DutchMaxwell, Community
 **Letzte Aktualisierung:** 2026-01-15
-**Letzte Aktualisierung:** 2026-01-14
