@@ -80,5 +80,5 @@ Dokumentation verbessern:
 
 ---
 
-**Letzte Aktualisierung:** 2026-01-07
+**Letzte Aktualisierung:** 2026-01-15
 **Maintainer:** DutchMaxwell

@@ -1,5 +1,5 @@
 # OpenTTS - Projekt Status
-**Stand:** 2026-01-14
+**Stand:** 2026-01-15
 **Version:** 0.2-alpha
 **Branch:** `main` (alle Feature-Branches gemerged)
 
@@ -41,6 +41,9 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 
 ### Terrain & Map Layout System
 - ✅ **Map Layout Editor** - Top-down 3" Grid für Terrain-Planung
+  - **Zoom-Funktion** - Mausrad-Zoom (0.5x - 3.0x) für präzises Arbeiten (NEU!)
+  - **Verbessertes Edge-Snapping** - 25px Snap-Radius zu gelben Randpunkten (NEU!)
+  - **Selection Disabled** - Multi-Selection während Map Layout deaktiviert (NEU!)
   - Zoom (Mausrad, 0.5x-3.0x) mit Fokus auf Mausposition
   - Pan (Mittelklick + Ziehen) innerhalb des Spielfeld-Fensters
   - Grid-Rotation für diagonale Terrain-Platzierung
@@ -144,6 +147,16 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 ### UI-Verbesserungen
 - [ ] In-Game HUD Overhaul
 - [x] **Radial Context Menu** - radial_menu.gd mit Kontext-Erkennung
+  - **Tooltips** - Hilfreiche Beschreibungen für alle Menü-Einträge (NEU!)
+  - **Buchstaben statt Emojis** - F/S statt 😓/😨 für bessere Lesbarkeit (NEU!)
+- [x] **Status Tokens** - Fatigue (F) und Shaken (S) Marker für ganze Units (NEU!)
+- [x] **Caster Token Display** - Korrekte Initialisierung bei Army Import (NEU!)
+- [x] **Unit Boundary Visualizer** - Farbige Grenzen um Multi-Model Units (NEU!)
+  - Automatische Convex Hull Berechnung für Unit-Grenzen
+  - Spielerfarben-codierte Boundaries (Blau, Rot, Grün, Orange)
+  - Tokens folgen der Boundary-Kontur wie an einer Schiene
+  - Outward-Offset mit Boundary-Normal (wie Tokens am Base-Rand)
+  - Auto-Repositionierung bei Formation-Änderung (1,2,3 Arrangement Keys)
 - [ ] Minimap mit Terrain-Overlay
 - [ ] Multiplayer Lobby UI
 - [ ] Load Game Dialog
@@ -222,6 +235,7 @@ openTTS/
 │   ├── unit_utils.gd       # NEU: Unit-Erkennung Helpers
 │   ├── coherency_checker.gd     # NEU: Coherency-Validierung
 │   ├── coherency_visualizer.gd  # NEU: Visuelle Coherency-Linien
+│   ├── unit_boundary_visualizer.gd  # NEU: Unit-Grenzen mit Token-Rail
 │   ├── unit_marker.gd      # NEU: Standard + Custom Marker
 │   ├── radial_menu.gd      # NEU: Pie-Menu UI
 │   ├── radial_menu_controller.gd  # NEU: Kontext-Handler
@@ -336,6 +350,17 @@ openTTS/
 ### Aktive Branches
 - `main` - Stabile Version mit allen Features
 
+### Recent Commits (2026-01-15)
+- `0a5475c` - fix: Token spacing same as single models (21mm = 2*radius + gap)
+- `412c1bf` - fix: Tokens offset using boundary normal (like base edge)
+- `146bee0` - fix: Boundary as rail with outward offset (15mm from line)
+- `b746794` - fix: Tokens directly on boundary line (like on a rail)
+- `5f863ce` - fix: Improved token spacing and boundary walking algorithm
+- `8ebf4fe` - Merge pull request #27 from DutchMaxwell/claude/fix-caster-token-import-W7Uti
+- `aea4555` - feat: Improve map layout mode with zoom and better snapping
+- `0affe2b` - feat: Replace emojis with letters and add tooltips to radial menu
+- `61bafa1` - feat: Add Fatigue and Shaken status tokens for units
+- `6b50912` - refactor: Remove spend castpoints buttons from casts dialog
 ### Recent Commits (2026-01-14)
 - `91bc564` - feat: Use float coordinates for precise boundary snap placement
 - `677a81a` - fix: Draw snap points at exact grid-boundary intersections, restore corners
@@ -364,4 +389,4 @@ MIT License - Siehe [LICENSE](./LICENSE) für Details.
 
 **Status:** ✅ Alpha-Version funktionsfähig, aktive Entwicklung
 **Contributors:** DutchMaxwell, Community
-**Letzte Aktualisierung:** 2026-01-14
+**Letzte Aktualisierung:** 2026-01-15
