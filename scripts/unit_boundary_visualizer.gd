@@ -318,8 +318,9 @@ func get_token_container(game_unit) -> Node3D:
 	return container
 
 
-## Finds the leftmost point on the hull as starting point for tokens.
-## This determines where tokens start on the boundary.
+## Finds the best starting point on the hull for tokens.
+## Picks the point with the MAXIMUM minimum distance to all models.
+## This ensures tokens are placed at the "most free" spot on the boundary.
 func _calculate_token_start_index(game_unit) -> void:
 	if game_unit not in _boundary_hull_points:
 		return
@@ -328,14 +329,43 @@ func _calculate_token_start_index(game_unit) -> void:
 	if hull_points.is_empty():
 		return
 
-	# Find the leftmost point (smallest X coordinate)
-	var best_index = 0
-	var min_x = INF
+	# Get model positions for distance checking
+	var model_positions: Array[Vector2] = []
+	for model in game_unit.models:
+		if model and is_instance_valid(model.node):
+			var pos = model.node.global_position
+			model_positions.append(Vector2(pos.x, pos.z))
 
-	for i in range(hull_points.size()):
-		var point = hull_points[i]
-		if point.x < min_x:
-			min_x = point.x
+	if model_positions.is_empty():
+		_boundary_start_indices[game_unit] = 0
+		return
+
+	var point_count = hull_points.size()
+	var token_radius = 0.010  # 10mm
+	var outward_offset = token_radius + 0.002  # 12mm offset
+
+	# Find the hull point with the MAXIMUM minimum distance to any model
+	var best_index = 0
+	var best_min_dist = -INF
+
+	for i in range(point_count):
+		# Calculate token position at this hull point
+		var seg_start = hull_points[i]
+		var seg_end = hull_points[(i + 1) % point_count]
+		var segment_dir = (seg_end - seg_start).normalized()
+		var outward_normal = Vector2(segment_dir.y, -segment_dir.x)
+		var token_pos = seg_start + outward_normal * outward_offset
+
+		# Find the minimum distance from this token position to any model
+		var min_dist = INF
+		for model_pos in model_positions:
+			var dist = (token_pos - model_pos).length()
+			if dist < min_dist:
+				min_dist = dist
+
+		# Keep track of the point with the largest minimum distance
+		if min_dist > best_min_dist:
+			best_min_dist = min_dist
 			best_index = i
 
 	_boundary_start_indices[game_unit] = best_index
