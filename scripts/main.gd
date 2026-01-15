@@ -7,6 +7,11 @@ extends Node3D
 ## @tutorial: See PROJECT_STATUS.md for complete feature documentation
 
 # ==============================================================================
+# PRELOADS
+# ==============================================================================
+const UnitBoundaryVisualizerScript = preload("res://scripts/unit_boundary_visualizer.gd")
+
+# ==============================================================================
 # CONSTANTS
 # ==============================================================================
 
@@ -135,6 +140,7 @@ var battle_sim_btn: Button = null
 # Radial Menu
 var radial_menu_controller: RadialMenuController = null
 var coherency_visualizer: CoherencyVisualizer = null
+var unit_boundary_visualizer: Node3D = null  # UnitBoundaryVisualizer
 
 # Deployment Zones UI (visibility only - editing is in Map Tool)
 var deployment_zone_check: CheckBox = null
@@ -1795,6 +1801,13 @@ func _init_radial_menu() -> void:
 	coherency_visualizer.name = "CoherencyVisualizer"
 	add_child(coherency_visualizer)
 	radial_menu_controller.coherency_visualizer = coherency_visualizer
+
+	# Create unit boundary visualizer (shows which models belong to which unit)
+	unit_boundary_visualizer = UnitBoundaryVisualizerScript.new()
+	unit_boundary_visualizer.name = "UnitBoundaryVisualizer"
+	unit_boundary_visualizer.army_manager = opr_army_manager
+	add_child(unit_boundary_visualizer)
+	radial_menu_controller.boundary_visualizer = unit_boundary_visualizer
 
 	# Connect object manager's right-click signal to open the menu
 	object_manager.context_menu_requested.connect(_on_context_menu_requested)
