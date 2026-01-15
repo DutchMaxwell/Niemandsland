@@ -2925,6 +2925,31 @@ func get_cursor_table_position() -> Vector3:
 
 	return Vector3.ZERO
 
+
+## Get the maximum base diameter from a list of objects (in meters)
+## Returns the largest base diameter to ensure proper spacing for all models
+func _get_max_base_diameter(objects: Array) -> float:
+	var max_diameter = 0.032  # Default 32mm
+
+	for obj in objects:
+		if not is_instance_valid(obj):
+			continue
+
+		var game_unit = UnitUtils.get_game_unit(obj)
+		if game_unit and game_unit.unit_properties:
+			var oval_width = game_unit.unit_properties.get("base_size_oval_width", 0)
+			var oval_length = game_unit.unit_properties.get("base_size_oval_length", 0)
+			if oval_width > 0 and oval_length > 0:
+				var diameter = max(oval_width, oval_length) * 0.001
+				max_diameter = maxf(max_diameter, diameter)
+			else:
+				var base_mm = game_unit.unit_properties.get("base_size_round", 32)
+				var diameter = base_mm * 0.001
+				max_diameter = maxf(max_diameter, diameter)
+
+	return max_diameter
+
+
 ## Arrange selected objects in N rows at cursor position (keys 1-9)
 func arrange_selected_in_rows(num_rows: int, cursor_pos: Vector3) -> void:
 	if _selected_objects.size() < 2:
@@ -2934,8 +2959,11 @@ func arrange_selected_in_rows(num_rows: int, cursor_pos: Vector3) -> void:
 	var count = objects.size()
 	var cols = ceili(float(count) / num_rows)
 
-	# Spacing between objects (40mm default)
-	var spacing = 0.04
+	# Calculate spacing based on largest base size to prevent overlap
+	# Spacing = diameter + constant edge gap (8mm)
+	var max_diameter = _get_max_base_diameter(objects)
+	var edge_gap = 0.008  # 8mm constant gap between base edges
+	var spacing = max_diameter + edge_gap
 
 	# Start from cursor position (first object at cursor)
 	var start_x = cursor_pos.x
@@ -2955,7 +2983,7 @@ func arrange_selected_in_rows(num_rows: int, cursor_pos: Vector3) -> void:
 				)
 			idx += 1
 
-	print("Arranged %d objects in %d rows at cursor" % [count, num_rows])
+	print("Arranged %d objects in %d rows at cursor (spacing: %.0fmm)" % [count, num_rows, spacing * 1000])
 
 
 ## Arrange selected objects in arrow/wedge formation at cursor (A key)
@@ -2966,9 +2994,12 @@ func arrange_selected_arrow(cursor_pos: Vector3) -> void:
 	var objects = _selected_objects.duplicate()
 	var count = objects.size()
 
-	# Spacing between objects
-	var spacing = 0.04
-	var row_spacing = 0.035  # Slightly tighter rows for arrow
+	# Calculate spacing based on largest base size to prevent overlap
+	# Spacing = diameter + constant edge gap (8mm)
+	var max_diameter = _get_max_base_diameter(objects)
+	var edge_gap = 0.008  # 8mm constant gap between base edges
+	var spacing = max_diameter + edge_gap
+	var row_spacing = max_diameter + edge_gap  # Same spacing for rows to prevent overlap
 
 	# Arrow formation: 1 in front (at cursor), then 2, then 3, etc.
 	var row = 0
@@ -2994,7 +3025,7 @@ func arrange_selected_arrow(cursor_pos: Vector3) -> void:
 		row += 1
 		row_count += 1
 
-	print("Arranged %d objects in arrow formation at cursor" % count)
+	print("Arranged %d objects in arrow formation at cursor (spacing: %.0fmm)" % [count, spacing * 1000])
 
 
 ## Copy selected objects to clipboard (Ctrl+C)
