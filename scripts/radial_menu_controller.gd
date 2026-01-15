@@ -25,7 +25,14 @@ var stats_tooltip: Node = null
 var coherency_visualizer: CoherencyVisualizer = null
 
 ## Reference to unit boundary visualizer (for unit-wide tokens)
-var boundary_visualizer: Node3D = null  # UnitBoundaryVisualizer
+var boundary_visualizer: Node3D = null:  # UnitBoundaryVisualizer
+	set(value):
+		if boundary_visualizer and boundary_visualizer.has_signal("boundary_updated"):
+			if boundary_visualizer.is_connected("boundary_updated", _on_boundary_updated):
+				boundary_visualizer.disconnect("boundary_updated", _on_boundary_updated)
+		boundary_visualizer = value
+		if boundary_visualizer and boundary_visualizer.has_signal("boundary_updated"):
+			boundary_visualizer.connect("boundary_updated", _on_boundary_updated)
 
 ## Reference to wounds dialog
 var wounds_dialog: WoundsDialog = null
@@ -565,6 +572,26 @@ func initialize_status_markers_for_unit(game_unit: GameUnit) -> void:
 		_update_shaken_markers(game_unit)
 	if game_unit.is_activated:
 		_update_activated_markers(game_unit)
+
+
+## Called when a unit's boundary is updated (models moved/rearranged).
+## Repositions tokens along the new boundary shape.
+func _on_boundary_updated(game_unit: GameUnit) -> void:
+	if not boundary_visualizer:
+		return
+
+	# Get the token container for this unit
+	var container = boundary_visualizer.get_token_container(game_unit)
+	if not container or not is_instance_valid(container):
+		return
+
+	# Get active tokens on the container
+	var tokens = _get_active_tokens(container)
+	if tokens.is_empty():
+		return
+
+	# Reposition tokens along the updated boundary
+	_reposition_tokens_boundary(container, game_unit, tokens)
 
 
 # ===== Unified Token Layout System =====
