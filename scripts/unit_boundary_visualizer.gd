@@ -81,6 +81,15 @@ func update_all_boundaries() -> void:
 
 	for unit in units_to_remove:
 		_remove_unit_boundary(unit)
+		remove_token_container(unit)  # Also remove token container for deleted units
+
+	# Clean up token containers for units that no longer exist
+	var containers_to_remove: Array = []
+	for unit in _token_containers.keys():
+		if unit not in existing_units:
+			containers_to_remove.append(unit)
+	for unit in containers_to_remove:
+		remove_token_container(unit)
 
 
 ## Updates boundary for a single unit
@@ -115,7 +124,11 @@ func _update_unit_boundary(game_unit) -> void:
 		# Only remove if unit actually has <= 1 models total
 		if models.size() <= 1:
 			_remove_unit_boundary(game_unit)
-		# Otherwise keep existing boundary, just don't update it
+		# Otherwise keep existing boundary and token position, just don't update the mesh
+		# But still try to update token position if we have at least one model in tree
+		elif positions.size() == 1:
+			_calculate_token_position(game_unit)
+			_update_token_container_position(game_unit)
 		return
 
 	# Calculate expanded convex hull with padding
@@ -168,12 +181,8 @@ func _create_boundary_mesh(game_unit, hull_points: PackedVector2Array, color: Co
 	# Create border mesh (outline only)
 	_create_border_mesh(border_instance, hull_points, color)
 
-	# Find leftmost point on boundary for token positioning
-	var leftmost_point = hull_points[0]
-	for point in hull_points:
-		if point.x < leftmost_point.x:
-			leftmost_point = point
-	_boundary_token_positions[game_unit] = Vector3(leftmost_point.x - 0.02, 0.015, leftmost_point.y)
+	# Calculate token position at -45° from first model (like single model tokens)
+	_calculate_token_position(game_unit)
 
 
 ## Creates the border outline mesh with smooth joins
@@ -236,7 +245,7 @@ func _create_border_mesh(mesh_instance: MeshInstance3D, hull_points: PackedVecto
 	mesh_instance.material_override = material
 
 
-## Removes boundary visualization for a unit
+## Removes boundary visualization for a unit (but keeps token container!)
 func _remove_unit_boundary(game_unit) -> void:
 	if game_unit in _boundaries:
 		var mesh = _boundaries[game_unit]
@@ -244,19 +253,35 @@ func _remove_unit_boundary(game_unit) -> void:
 			mesh.queue_free()
 		_boundaries.erase(game_unit)
 
-	# Also remove token container if unit no longer has boundary
+	# NOTE: We do NOT remove token containers here - they persist independently
+	# Token containers are only removed when the unit itself is deleted
+	# This prevents tokens from being deleted during temporary operations like arrangement
+
+
+## Removes token container for a unit (call when unit is truly deleted)
+func remove_token_container(game_unit) -> void:
 	if game_unit in _token_containers:
 		var container = _token_containers[game_unit]
 		if container and is_instance_valid(container):
 			container.queue_free()
 		_token_containers.erase(game_unit)
+	if game_unit in _boundary_token_positions:
+		_boundary_token_positions.erase(game_unit)
 
 
-## Clears all boundary visualizations
+## Clears all boundary visualizations and token containers
 func clear_all() -> void:
 	for game_unit in _boundaries.keys():
 		_remove_unit_boundary(game_unit)
 	_boundaries.clear()
+
+	# Also clear all token containers
+	for game_unit in _token_containers.keys():
+		var container = _token_containers[game_unit]
+		if container and is_instance_valid(container):
+			container.queue_free()
+	_token_containers.clear()
+	_boundary_token_positions.clear()
 
 
 ## Toggles visibility of all boundaries
@@ -286,7 +311,48 @@ func get_token_container(game_unit) -> Node3D:
 	return container
 
 
-## Updates the token container position to the boundary edge.
+## Calculates token position at -45° from first model in the unit.
+## This places tokens similarly to single-model units.
+func _calculate_token_position(game_unit) -> void:
+	var models = game_unit.get_alive_models()
+	if models.is_empty():
+		return
+
+	# Get first model position
+	var first_model = models[0]
+	if not first_model.node or not is_instance_valid(first_model.node) or not first_model.node.is_inside_tree():
+		return
+
+	var model_pos = first_model.node.global_position
+
+	# Get base radius
+	var base_mm = game_unit.unit_properties.get("base_size_round", 32)
+	var base_radius = (base_mm / 2.0) * 0.001
+
+	# Token radius (same as in radial_menu_controller)
+	var token_radius = 0.010  # 10mm
+
+	# Distance from model center to token center
+	var distance = base_radius + token_radius + 0.001
+
+	# -45° angle (225° or 5π/4 radians in standard math coordinates)
+	# In Godot: X is right, Z is forward (into screen in top view)
+	# -45° from positive X axis, going clockwise = bottom-left
+	var angle = PI + PI / 4.0  # 225° = 5π/4
+
+	# Calculate position offset
+	var offset_x = cos(angle) * distance
+	var offset_z = sin(angle) * distance
+
+	# Store position at ground level (Y=0) like single model tokens
+	_boundary_token_positions[game_unit] = Vector3(
+		model_pos.x + offset_x,
+		0.0,  # Same height as single model tokens
+		model_pos.z + offset_z
+	)
+
+
+## Updates the token container position to the calculated position.
 func _update_token_container_position(game_unit) -> void:
 	if game_unit not in _token_containers:
 		return
@@ -295,7 +361,7 @@ func _update_token_container_position(game_unit) -> void:
 	if not container or not is_instance_valid(container):
 		return
 
-	# Use the pre-calculated boundary position (leftmost point)
+	# Use the pre-calculated position (at -45° from first model)
 	if game_unit in _boundary_token_positions:
 		container.global_position = _boundary_token_positions[game_unit]
 
