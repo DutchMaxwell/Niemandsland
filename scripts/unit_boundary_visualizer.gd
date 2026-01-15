@@ -380,6 +380,7 @@ func get_boundary_anchor_point(game_unit) -> Vector3:
 
 ## Gets positions along the boundary for multiple tokens.
 ## Returns array of Vector3 positions starting from the -45° point, following the boundary.
+## Tokens are positioned OUTSIDE the boundary, offset by token radius.
 func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vector3]:
 	var positions: Array[Vector3] = []
 
@@ -393,8 +394,16 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 	var start_index = _boundary_start_indices[game_unit]
 	var point_count = hull_points.size()
 
-	# Token spacing along boundary (arc length)
+	# Token parameters
+	var token_radius = 0.010  # 10mm
 	var token_spacing = 0.022  # 22mm between token centers
+	var outward_offset = token_radius + 0.002  # Token radius + 2mm gap
+
+	# Calculate boundary center for outward direction
+	var center = Vector2.ZERO
+	for point in hull_points:
+		center += point
+	center /= point_count
 
 	# Calculate segment lengths starting from start_index
 	var segment_lengths: Array[float] = []
@@ -431,7 +440,14 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 		t = clamp(t, 0.0, 1.0)
 
 		var pos_2d = segment_start.lerp(segment_end, t)
-		positions.append(Vector3(pos_2d.x, 0.0, pos_2d.y))
+
+		# Calculate outward direction (away from center)
+		var outward_dir = (pos_2d - center).normalized()
+
+		# Offset position outward
+		var offset_pos = pos_2d + outward_dir * outward_offset
+
+		positions.append(Vector3(offset_pos.x, 0.0, offset_pos.y))
 
 	return positions
 
