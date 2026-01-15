@@ -378,7 +378,65 @@ func get_boundary_anchor_point(game_unit) -> Vector3:
 	return Vector3(point.x, 0.0, point.y)
 
 
-## Updates the token container position to anchor point on boundary.
+## Gets positions along the boundary for multiple tokens.
+## Returns array of Vector3 positions starting from the -45° point, following the boundary.
+func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vector3]:
+	var positions: Array[Vector3] = []
+
+	if game_unit not in _boundary_hull_points or game_unit not in _boundary_start_indices:
+		return positions
+
+	var hull_points = _boundary_hull_points[game_unit]
+	if hull_points.is_empty() or token_count == 0:
+		return positions
+
+	var start_index = _boundary_start_indices[game_unit]
+	var point_count = hull_points.size()
+
+	# Token spacing along boundary (arc length)
+	var token_spacing = 0.022  # 22mm between token centers
+
+	# Calculate segment lengths starting from start_index
+	var segment_lengths: Array[float] = []
+	for i in range(point_count):
+		var idx = (start_index + i) % point_count
+		var next_idx = (start_index + i + 1) % point_count
+		var p1 = hull_points[idx]
+		var p2 = hull_points[next_idx]
+		segment_lengths.append((p2 - p1).length())
+
+	# Place tokens along boundary starting from start_index
+	var current_distance = 0.0
+	var current_segment = 0
+
+	for token_idx in range(token_count):
+		var target_distance = token_idx * token_spacing
+
+		# Walk along boundary to find position
+		while current_segment < point_count - 1 and current_distance + segment_lengths[current_segment] < target_distance:
+			current_distance += segment_lengths[current_segment]
+			current_segment += 1
+
+		# Get actual hull indices
+		var seg_start_idx = (start_index + current_segment) % point_count
+		var seg_end_idx = (start_index + current_segment + 1) % point_count
+
+		var segment_start = hull_points[seg_start_idx]
+		var segment_end = hull_points[seg_end_idx]
+		var segment_length = segment_lengths[current_segment]
+
+		var t = 0.0
+		if segment_length > 0.001:
+			t = (target_distance - current_distance) / segment_length
+		t = clamp(t, 0.0, 1.0)
+
+		var pos_2d = segment_start.lerp(segment_end, t)
+		positions.append(Vector3(pos_2d.x, 0.0, pos_2d.y))
+
+	return positions
+
+
+## Updates the token container position to first token position on boundary.
 func _update_token_container_position(game_unit) -> void:
 	if game_unit not in _token_containers:
 		return
@@ -387,10 +445,10 @@ func _update_token_container_position(game_unit) -> void:
 	if not container or not is_instance_valid(container):
 		return
 
-	# Position container at the boundary anchor point (-45° from first model)
-	var anchor = get_boundary_anchor_point(game_unit)
-	if anchor != Vector3.ZERO:
-		container.global_position = anchor
+	# Position container at the first token position on boundary
+	var positions = get_token_positions_on_boundary(game_unit, 1)
+	if not positions.is_empty():
+		container.global_position = positions[0]
 
 
 ## Checks if a unit has multiple models (uses boundary visualization).
