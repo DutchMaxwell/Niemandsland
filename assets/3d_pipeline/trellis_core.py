@@ -13,6 +13,7 @@ import os
 import sys
 import random
 import shutil
+import traceback
 from pathlib import Path
 from typing import Optional
 
@@ -227,6 +228,9 @@ class TrellisGenerator:
 
             seed = random.randint(0, 2147483647)
 
+            self.log(f"   Sende Bild an API: {processed_path}")
+            self.log(f"   Seed: {seed}, Resolution: {RESOLUTION}")
+
             result = self.client.predict(
                 image=handle_file(str(processed_path)),
                 seed=seed,
@@ -246,7 +250,10 @@ class TrellisGenerator:
                 api_name="/image_to_3d"
             )
 
+            self.log(f"   image_to_3d Ergebnis: {type(result)} - {result}")
+
             self.log("   Extrahiere GLB...")
+            self.log(f"   Decimation: {DECIMATION}, Texture: {TEXTURE_SIZE}")
 
             glb_result = self.client.predict(
                 decimation_target=DECIMATION,
@@ -254,7 +261,10 @@ class TrellisGenerator:
                 api_name="/extract_glb"
             )
 
+            self.log(f"   extract_glb Ergebnis: {type(glb_result)} - {glb_result}")
+
             glb_path = glb_result[0] if isinstance(glb_result, tuple) else glb_result
+            self.log(f"   GLB Pfad: {glb_path}")
 
             if glb_path and os.path.exists(glb_path):
                 # Ausgabedatei mit gleichem Namen wie Eingabe
@@ -271,6 +281,9 @@ class TrellisGenerator:
 
         except Exception as e:
             self.log(f"   FEHLER: {e}")
+            self.log(f"   TRACEBACK:")
+            for line in traceback.format_exc().split('\n'):
+                self.log(f"   {line}")
             return None
 
 
