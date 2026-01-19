@@ -13,6 +13,9 @@ const API_BASE_URL = "https://army-forge.onepagerules.com/api"
 ## HTTP request node for API calls
 var _http_request: HTTPRequest
 
+## Separate HTTP request node for army book fetches (to avoid conflicts)
+var _book_http_request: HTTPRequest
+
 ## Cached army books (armyId -> book data)
 var _army_books: Dictionary = {}
 
@@ -181,6 +184,10 @@ func _ready() -> void:
 	_http_request = HTTPRequest.new()
 	add_child(_http_request)
 	_http_request.request_completed.connect(_on_request_completed)
+
+	# Separate HTTP request for army book fetches
+	_book_http_request = HTTPRequest.new()
+	add_child(_book_http_request)
 
 
 ## Import army from a local file (JSON or TXT Army Forge export)
@@ -746,19 +753,38 @@ func _fetch_army_book(army_id: String, _game_system: String) -> Dictionary:
 
 	loading_progress.emit("Loading army book data...")
 
-	# Try to fetch from OPR API
+	# Try to fetch from OPR API using separate HTTP request node
 	var url = "%s/army-books/%s" % [API_BASE_URL, army_id]
 	print("OPRApiClient: Fetching army book from %s" % url)
 
-	var error = _http_request.request(url)
+	var error = _book_http_request.request(url)
 	if error != OK:
 		push_warning("OPRApiClient: Failed to request army book: %d" % error)
 		return {}
 
-	# Wait for response (simplified - in production use signals properly)
-	await _http_request.request_completed
+	# Wait for response
+	var result = await _book_http_request.request_completed
+	var response_code = result[1]
+	var body = result[3]
 
-	return _army_books.get(army_id, {})
+	if response_code != 200:
+		push_warning("OPRApiClient: Army book API returned %d" % response_code)
+		return {}
+
+	# Parse the response directly here
+	var json = JSON.new()
+	var parse_result = json.parse(body.get_string_from_utf8())
+	if parse_result != OK:
+		push_warning("OPRApiClient: Failed to parse army book response")
+		return {}
+
+	var data = json.data
+	if data is Dictionary and data.has("name"):
+		_army_books[army_id] = data
+		print("OPRApiClient: Cached army book '%s'" % data.get("name", army_id))
+		return data
+
+	return {}
 
 
 ## HTTP request completed handler
