@@ -13,6 +13,9 @@ const API_BASE_URL = "https://army-forge.onepagerules.com/api"
 ## HTTP request node for API calls
 var _http_request: HTTPRequest
 
+## Separate HTTP request node for army book fetches (to avoid conflicts)
+var _book_http_request: HTTPRequest
+
 ## Cached army books (armyId -> book data)
 var _army_books: Dictionary = {}
 
@@ -26,6 +29,9 @@ class OPRArmy:
 	var player_id: int = 0  # Assigned player (1-4)
 	var units: Array[OPRUnit] = []
 	var model_count: int = 0
+	var army_id: String = ""  # Army Book ID from API (e.g., "w7qor7b2kuifcyvk")
+	var faction_name: String = ""  # Faction name from Army Book (e.g., "Alien Hives")
+	var faction_folder: String = ""  # Normalized folder name (e.g., "alien_hives")
 
 	func get_total_points() -> int:
 		var total = 0
@@ -179,6 +185,10 @@ func _ready() -> void:
 	add_child(_http_request)
 	_http_request.request_completed.connect(_on_request_completed)
 
+	# Separate HTTP request for army book fetches
+	_book_http_request = HTTPRequest.new()
+	add_child(_book_http_request)
+
 
 ## Import army from a local file (JSON or TXT Army Forge export)
 func import_from_file(file_path: String) -> OPRArmy:
@@ -231,7 +241,7 @@ func import_from_share_link(share_link_or_id: String) -> OPRArmy:
 		return null
 
 	var json_text = body.get_string_from_utf8()
-	return _parse_tts_api_response(json_text)
+	return await _parse_tts_api_response(json_text)
 
 
 ## Extract list ID from share link or raw ID
@@ -272,21 +282,48 @@ func _parse_tts_api_response(json_text: String) -> OPRArmy:
 	var army = OPRArmy.new()
 
 	# Parse army info
-	army.id = data.get("listId", str(Time.get_unix_time_from_system()))
-	army.name = data.get("listName", "Imported Army")
+	army.id = data.get("id", str(Time.get_unix_time_from_system()))
+	army.name = data.get("name", "Imported Army")
 	army.game_system = _expand_game_system(data.get("gameSystem", "gf"))
 	army.points = data.get("listPoints", 0)
 
 	# Parse units - TTS API returns fully resolved units!
 	var units_data = data.get("units", [])
+
+	# Extract armyId from first unit (all units share the same armyId)
+	if units_data.size() > 0:
+		var first_unit = units_data[0]
+		if first_unit is Dictionary:
+			army.army_id = first_unit.get("armyId", "")
+
 	for unit_data in units_data:
 		var unit = _parse_tts_unit(unit_data)
 		if unit:
 			army.units.append(unit)
 			army.model_count += unit.size
 
-	print("OPRApiClient: Loaded from API '%s' - %d units, %d pts, %d models" % [
-		army.name, army.units.size(), army.points, army.model_count
+	# Fetch faction name from Army Book API using armyId
+	if not army.army_id.is_empty():
+		var book_data = await _fetch_army_book(army.army_id, army.game_system)
+		if not book_data.is_empty():
+			army.faction_name = book_data.get("name", "")
+			# Normalize faction name for folder: "Alien Hives" -> "alien_hives"
+			army.faction_folder = army.faction_name.to_lower().replace(" ", "_").replace("-", "_")
+			print("OPRApiClient: Detected faction '%s' -> folder '%s'" % [army.faction_name, army.faction_folder])
+
+	# Fallback: If Army Book API failed but we have a list name, try using that
+	if army.faction_folder.is_empty() and not army.name.is_empty():
+		var potential_folder = army.name.to_lower().replace(" ", "_").replace("-", "_")
+		# Check if folder exists using DirAccess.open (works with res:// paths)
+		var glb_path = "res://assets/miniatures/%s/glb/" % potential_folder
+		var dir = DirAccess.open(glb_path)
+		if dir:
+			army.faction_name = army.name
+			army.faction_folder = potential_folder
+			print("OPRApiClient: Using list name as faction (fallback): '%s' -> folder '%s'" % [army.faction_name, army.faction_folder])
+
+	print("OPRApiClient: Loaded from API '%s' - %d units, %d pts, %d models (faction: %s)" % [
+		army.name, army.units.size(), army.points, army.model_count, army.faction_name
 	])
 
 	army_loaded.emit(army)
@@ -727,19 +764,38 @@ func _fetch_army_book(army_id: String, _game_system: String) -> Dictionary:
 
 	loading_progress.emit("Loading army book data...")
 
-	# Try to fetch from OPR API
+	# Try to fetch from OPR API using separate HTTP request node
 	var url = "%s/army-books/%s" % [API_BASE_URL, army_id]
 	print("OPRApiClient: Fetching army book from %s" % url)
 
-	var error = _http_request.request(url)
+	var error = _book_http_request.request(url)
 	if error != OK:
 		push_warning("OPRApiClient: Failed to request army book: %d" % error)
 		return {}
 
-	# Wait for response (simplified - in production use signals properly)
-	await _http_request.request_completed
+	# Wait for response
+	var result = await _book_http_request.request_completed
+	var response_code = result[1]
+	var body = result[3]
 
-	return _army_books.get(army_id, {})
+	if response_code != 200:
+		push_warning("OPRApiClient: Army book API returned %d" % response_code)
+		return {}
+
+	# Parse the response directly here
+	var json = JSON.new()
+	var parse_result = json.parse(body.get_string_from_utf8())
+	if parse_result != OK:
+		push_warning("OPRApiClient: Failed to parse army book response")
+		return {}
+
+	var data = json.data
+	if data is Dictionary and data.has("name"):
+		_army_books[army_id] = data
+		print("OPRApiClient: Cached army book '%s'" % data.get("name", army_id))
+		return data
+
+	return {}
 
 
 ## HTTP request completed handler
