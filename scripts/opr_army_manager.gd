@@ -654,10 +654,10 @@ func _get_tough_value(unit: OPRApiClient.OPRUnit) -> int:
 
 
 ## Calculate model scale based on Tough value
-## Formula: scale = 1.3^(tough/3)
-## Tough(0)=1.0, Tough(3)=1.3, Tough(6)=1.69, Tough(12)=2.86
+## Formula: scale = 1.05^(tough/3)
+## Tough(0)=1.0, Tough(3)=1.05, Tough(6)=1.10, Tough(12)=1.22
 func _calculate_model_scale(tough: int) -> float:
-	return pow(1.3, tough / 3.0)
+	return pow(1.05, tough / 3.0)
 
 
 ## Calculate the combined AABB (bounding box) of a 3D model and all its children
