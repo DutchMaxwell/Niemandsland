@@ -170,12 +170,22 @@ class TrellisGUI:
         main.columnconfigure(0, weight=1)
 
     def log(self, message: str):
-        """Schreibt eine Nachricht ins Log."""
-        self.log_text.configure(state="normal")
-        self.log_text.insert(tk.END, message + "\n")
-        self.log_text.see(tk.END)
-        self.log_text.configure(state="disabled")
-        self.root.update()
+        """Schreibt eine Nachricht ins Log (thread-safe)."""
+        def _log():
+            self.log_text.configure(state="normal")
+            self.log_text.insert(tk.END, message + "\n")
+            self.log_text.see(tk.END)
+            self.log_text.configure(state="disabled")
+            self.log_text.update_idletasks()
+            self.root.update_idletasks()
+
+        # Wenn aus Thread aufgerufen, nach Main-Thread dispatchen
+        try:
+            self.root.after(0, _log)
+            self.root.update()
+        except Exception:
+            # Fallback wenn tkinter Probleme macht
+            print(message)
 
     def save_token_click(self):
         """Speichert den Token."""
