@@ -408,9 +408,15 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 		if glb_scene:
 			var glb_instance = glb_scene.instantiate()
 
-			# GLB models are already correctly sized for their base
-			# No additional scaling needed - models are pre-scaled to match base size
-			# (Tough-based scaling was removed as models are already proportionally sized)
+			# CRITICAL: GLB models are in millimeters, Godot uses meters
+			# Base scale: 0.001 (mm → m conversion)
+			# Tough scale: 1.3^(tough/3) for size variation
+			var base_scale = 0.001  # mm → m
+			var tough = _get_tough_value(unit)
+			var tough_scale = _calculate_model_scale(tough)
+			var final_scale = base_scale * tough_scale
+
+			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
 
 			# Position model on top of base
 			glb_instance.position.y = 0.003  # Slightly above base
@@ -418,11 +424,11 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 			wrapper.add_child(glb_instance)
 			use_glb_model = true
 
-			# Calculate model AABB for collision shape
+			# Calculate model AABB for collision shape (after scaling)
 			var aabb = _get_model_aabb(glb_instance)
-			model_height = aabb.size.y if aabb.size.y > 0 else 0.05
+			model_height = aabb.size.y * final_scale if aabb.size.y > 0 else 0.05
 
-			print("OPRArmyManager: Loaded GLB model for '%s' (height: %.3fm)" % [unit.name, model_height])
+			print("OPRArmyManager: Loaded GLB model for '%s' (scale: %.4f, Tough: %d)" % [unit.name, final_scale, tough])
 
 	# Fallback: Create placeholder body if no GLB model found
 	if not use_glb_model:
