@@ -20,6 +20,11 @@ Willkommen in der OpenTTS Dokumentation! Hier findest du alle technischen Detail
 | [PLAN_AI_SYSTEM.md](./PLAN_AI_SYSTEM.md) | AI-System (OPR Solo Rules) | ✅ Implementiert |
 | [DICE_PHYSICS_WIP.md](./DICE_PHYSICS_WIP.md) | Würfel-Physik Stabilisierung | 🔧 WIP |
 
+### 🎨 UI/UX
+| Dokument | Beschreibung | Status |
+|----------|--------------|--------|
+| [UI_MODERNIZATION_PLAN.md](./UI_MODERNIZATION_PLAN.md) | Dark Glassmorphism Design System | ✅ Implementiert |
+
 ### 📦 Assets
 | Dokument | Beschreibung | Status |
 |----------|--------------|--------|
@@ -43,9 +48,10 @@ Willkommen in der OpenTTS Dokumentation! Hier findest du alle technischen Detail
 
 ### ✅ Fertig & Aktuell
 - WGS Integration
-- OPR API Research
+- OPR API (Share-Link Import)
 - Unit-System Plan
 - AI-System Plan
+- UI Glassmorphism Design
 
 ### 🔧 Work in Progress
 - Dice Physics
@@ -80,5 +86,5 @@ Dokumentation verbessern:
 
 ---
 
-**Letzte Aktualisierung:** 2026-01-15
+**Letzte Aktualisierung:** 2026-01-19
 **Maintainer:** DutchMaxwell
