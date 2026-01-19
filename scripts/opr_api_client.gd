@@ -314,9 +314,10 @@ func _parse_tts_api_response(json_text: String) -> OPRArmy:
 	# Fallback: If Army Book API failed but we have a list name, try using that
 	if army.faction_folder.is_empty() and not army.name.is_empty():
 		var potential_folder = army.name.to_lower().replace(" ", "_").replace("-", "_")
-		# Check if folder exists
+		# Check if folder exists using DirAccess.open (works with res:// paths)
 		var glb_path = "res://assets/miniatures/%s/glb/" % potential_folder
-		if DirAccess.dir_exists_absolute(glb_path):
+		var dir = DirAccess.open(glb_path)
+		if dir:
 			army.faction_name = army.name
 			army.faction_folder = potential_folder
 			print("OPRApiClient: Using list name as faction (fallback): '%s' -> folder '%s'" % [army.faction_name, army.faction_folder])
