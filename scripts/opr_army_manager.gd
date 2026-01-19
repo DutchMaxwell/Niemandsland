@@ -408,10 +408,10 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 		if glb_scene:
 			var glb_instance = glb_scene.instantiate()
 
-			# CRITICAL: GLB models are in centimeters, Godot uses meters
-			# Base scale: 0.01 (cm → m conversion)
+			# CRITICAL: GLB models need scaling to match Godot's meter units
+			# Base scale: 0.1 (determined empirically)
 			# Tough scale: 1.3^(tough/3) for size variation
-			var base_scale = 0.01  # cm → m
+			var base_scale = 0.1
 			var tough = _get_tough_value(unit)
 			var tough_scale = _calculate_model_scale(tough)
 			var final_scale = base_scale * tough_scale
