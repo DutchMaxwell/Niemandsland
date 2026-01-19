@@ -408,24 +408,21 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 		if glb_scene:
 			var glb_instance = glb_scene.instantiate()
 
-			# Calculate scale based on Tough value
-			# Formula: scale = 1.3^(tough/3)
-			var tough = _get_tough_value(unit)
-			var scale_factor = _calculate_model_scale(tough)
-
-			# Base model height is 32mm (0.032m), scale accordingly
-			var base_model_height = 0.032
-			model_height = base_model_height * scale_factor
-
-			# Apply uniform scale to the model
-			glb_instance.scale = Vector3(scale_factor, scale_factor, scale_factor)
+			# GLB models are already correctly sized for their base
+			# No additional scaling needed - models are pre-scaled to match base size
+			# (Tough-based scaling was removed as models are already proportionally sized)
 
 			# Position model on top of base
 			glb_instance.position.y = 0.003  # Slightly above base
 
 			wrapper.add_child(glb_instance)
 			use_glb_model = true
-			print("OPRArmyManager: Loaded GLB model for '%s' with scale %.2f (Tough %d)" % [unit.name, scale_factor, tough])
+
+			# Calculate model AABB for collision shape
+			var aabb = _get_model_aabb(glb_instance)
+			model_height = aabb.size.y if aabb.size.y > 0 else 0.05
+
+			print("OPRArmyManager: Loaded GLB model for '%s' (height: %.3fm)" % [unit.name, model_height])
 
 	# Fallback: Create placeholder body if no GLB model found
 	if not use_glb_model:
@@ -646,6 +643,32 @@ func _get_tough_value(unit: OPRApiClient.OPRUnit) -> int:
 ## Tough(0)=1.0, Tough(3)=1.3, Tough(6)=1.69, Tough(12)=2.86
 func _calculate_model_scale(tough: int) -> float:
 	return pow(1.3, tough / 3.0)
+
+
+## Calculate the combined AABB (bounding box) of a 3D model and all its children
+func _get_model_aabb(node: Node3D) -> AABB:
+	var combined_aabb = AABB()
+	var first = true
+
+	# Recursively collect AABBs from all MeshInstance3D children
+	var nodes_to_check: Array[Node] = [node]
+	while not nodes_to_check.is_empty():
+		var current = nodes_to_check.pop_back()
+		nodes_to_check.append_array(current.get_children())
+
+		if current is MeshInstance3D:
+			var mesh_instance = current as MeshInstance3D
+			if mesh_instance.mesh:
+				var mesh_aabb = mesh_instance.mesh.get_aabb()
+				# Transform AABB to node's local space
+				var transformed_aabb = mesh_instance.transform * mesh_aabb
+				if first:
+					combined_aabb = transformed_aabb
+					first = false
+				else:
+					combined_aabb = combined_aabb.merge(transformed_aabb)
+
+	return combined_aabb
 
 
 func _on_army_loaded(army: OPRApiClient.OPRArmy) -> void:
