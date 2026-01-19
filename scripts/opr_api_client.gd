@@ -311,6 +311,16 @@ func _parse_tts_api_response(json_text: String) -> OPRArmy:
 			army.faction_folder = army.faction_name.to_lower().replace(" ", "_").replace("-", "_")
 			print("OPRApiClient: Detected faction '%s' -> folder '%s'" % [army.faction_name, army.faction_folder])
 
+	# Fallback: If Army Book API failed but we have a list name, try using that
+	if army.faction_folder.is_empty() and not army.name.is_empty():
+		var potential_folder = army.name.to_lower().replace(" ", "_").replace("-", "_")
+		# Check if folder exists
+		var glb_path = "res://assets/miniatures/%s/glb/" % potential_folder
+		if DirAccess.dir_exists_absolute(glb_path):
+			army.faction_name = army.name
+			army.faction_folder = potential_folder
+			print("OPRApiClient: Using list name as faction (fallback): '%s' -> folder '%s'" % [army.faction_name, army.faction_folder])
+
 	print("OPRApiClient: Loaded from API '%s' - %d units, %d pts, %d models (faction: %s)" % [
 		army.name, army.units.size(), army.points, army.model_count, army.faction_name
 	])
