@@ -234,7 +234,7 @@ func import_from_share_link(share_link_or_id: String) -> OPRArmy:
 		return null
 
 	var json_text = body.get_string_from_utf8()
-	return _parse_tts_api_response(json_text)
+	return await _parse_tts_api_response(json_text)
 
 
 ## Extract list ID from share link or raw ID
