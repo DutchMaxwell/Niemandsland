@@ -408,38 +408,24 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 		if glb_scene:
 			var glb_instance = glb_scene.instantiate()
 
-			# 1. Get AABB of unscaled model
+			# Models are already proportionally sized - just apply unit conversion
+			var final_scale = 0.1
+
+			# Get AABB to position model correctly (feet on base, not center)
 			var aabb = _get_model_aabb(glb_instance)
-			var raw_model_height = aabb.size.y
-
-			# 2. Calculate target height based on base size
-			# 25mm base → ~28mm height, 32mm → ~32mm, etc.
-			var base_diameter_m = unit.base_size_round * 0.001  # mm → m
-			var target_height = base_diameter_m * 1.1  # Slightly taller than base diameter
-
-			# 3. Calculate scale factor to normalize model to target height
-			var base_scale = target_height / raw_model_height if raw_model_height > 0 else 0.001
-
-			# 4. Apply Tough scaling: 1.3^(tough/3)
-			var tough = _get_tough_value(unit)
-			var tough_scale = _calculate_model_scale(tough)
-			var final_scale = base_scale * tough_scale
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
 
-			# 5. Position model so feet are on base (not center)
+			# Position model so feet are on base
 			# aabb.position.y is the bottom of the model relative to origin
 			var bottom_offset = -aabb.position.y * final_scale
 			glb_instance.position.y = bottom_offset + 0.003  # + base thickness
 
 			wrapper.add_child(glb_instance)
 			use_glb_model = true
+			model_height = aabb.size.y * final_scale
 
-			# Store final height for collision shape
-			model_height = raw_model_height * final_scale
-
-			print("OPRArmyManager: Loaded GLB '%s' (base: %dmm, target: %.1fmm, scale: %.4f, Tough: %d)" % [
-				unit.name, unit.base_size_round, target_height * 1000, final_scale, tough])
+			print("OPRArmyManager: Loaded GLB '%s' (scale: %.2f)" % [unit.name, final_scale])
 
 	# Fallback: Create placeholder body if no GLB model found
 	if not use_glb_model:
