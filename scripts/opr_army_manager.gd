@@ -138,7 +138,7 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 			current_pos.x = tray_pos.x - tray_bounds.x / 2 + edge_padding
 			current_pos.z += row_height
 
-		var unit_models = _spawn_unit(unit, current_pos, player_color, display_suffix, army.player_id)
+		var unit_models = _spawn_unit(unit, current_pos, player_color, display_suffix, army.player_id, army)
 		all_models.append_array(unit_models)
 
 		# Store mappings
@@ -305,11 +305,14 @@ func _get_tray_position_and_bounds(player_id: int) -> Dictionary:
 
 
 ## Spawn a single unit with all its models
-func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: Color, name_suffix: String = "", player_id: int = 1) -> Array[Node3D]:
+func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: Color, name_suffix: String = "", player_id: int = 1, army: OPRApiClient.OPRArmy = null) -> Array[Node3D]:
 	var models: Array[Node3D] = []
 	# Use unit's base diameter + constant edge gap for spacing (prevents overlap)
 	var edge_gap = 0.008  # 8mm constant gap between base edges
 	var spacing = unit.get_base_diameter_meters() + edge_gap
+
+	# Get faction folder for GLB model lookup
+	var faction_folder = army.faction_folder if army else ""
 
 	for i in range(unit.size):
 		var model_pos = Vector3(
@@ -318,7 +321,7 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 			spawn_pos.z
 		)
 
-		var model = _create_unit_model(unit, player_color, name_suffix)
+		var model = _create_unit_model(unit, player_color, name_suffix, faction_folder)
 		if model:
 			object_manager.add_child(model)
 			model.global_position = model_pos
@@ -351,8 +354,8 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 	return models
 
 
-## Create a visual model for a unit (placeholder miniature with base)
-func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_suffix: String = "") -> StaticBody3D:
+## Create a visual model for a unit (GLB model if available, otherwise placeholder)
+func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_suffix: String = "", faction_folder: String = "") -> StaticBody3D:
 	var wrapper = StaticBody3D.new()
 	var display_name = unit.name + name_suffix
 	wrapper.name = "OPR_%s" % display_name.replace(" ", "_")
@@ -394,50 +397,84 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 	wrapper.add_child(base_instance)
 
-	# Create placeholder body (cylinder) - moderately scaled to base size
-	# Use sqrt for gentler scaling: 60mm base gets ~1.37x height, not 1.875x
-	var scale_factor = sqrt(base_radius / 0.016)  # Gentler scaling
-	var body_height = (0.025 + randf() * 0.005) * scale_factor
-	var body_mesh = CylinderMesh.new()
-	# Body width relative to base - slightly narrower for larger bases
-	var body_width_ratio = lerp(0.5, 0.35, clampf((base_radius - 0.016) / 0.03, 0.0, 1.0))
-	body_mesh.top_radius = base_radius * body_width_ratio
-	body_mesh.bottom_radius = base_radius * (body_width_ratio + 0.1)
-	body_mesh.height = body_height
+	# Try to load GLB model for this unit
+	var model_path = _find_model_for_unit(unit.name, faction_folder)
+	var model_height: float = 0.032  # Default 32mm height for collision calculation
+	var use_glb_model = false
 
-	var body_instance = MeshInstance3D.new()
-	body_instance.mesh = body_mesh
-	body_instance.position.y = 0.003 + body_height / 2
+	if not model_path.is_empty():
+		# Load GLB model
+		var glb_scene = load(model_path)
+		if glb_scene:
+			var glb_instance = glb_scene.instantiate()
 
-	var body_material = StandardMaterial3D.new()
-	body_material.albedo_color = player_color.lightened(0.3)
-	body_material.roughness = 0.8
-	body_instance.material_override = body_material
-	body_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+			# Calculate scale based on Tough value
+			# Formula: scale = 1.3^(tough/3)
+			var tough = _get_tough_value(unit)
+			var scale_factor = _calculate_model_scale(tough)
 
-	wrapper.add_child(body_instance)
+			# Base model height is 32mm (0.032m), scale accordingly
+			var base_model_height = 0.032
+			model_height = base_model_height * scale_factor
 
-	# Create head (sphere) - scaled to base size
-	var head_radius = base_radius * 0.375
-	var head_mesh = SphereMesh.new()
-	head_mesh.radius = head_radius
-	head_mesh.height = head_radius * 2
+			# Apply uniform scale to the model
+			glb_instance.scale = Vector3(scale_factor, scale_factor, scale_factor)
 
-	var head_instance = MeshInstance3D.new()
-	head_instance.mesh = head_mesh
-	head_instance.position.y = 0.003 + body_height + head_radius
+			# Position model on top of base
+			glb_instance.position.y = 0.003  # Slightly above base
 
-	var head_material = StandardMaterial3D.new()
-	head_material.albedo_color = Color(0.9, 0.75, 0.6)  # Skin tone
-	head_material.roughness = 0.9
-	head_instance.material_override = head_material
-	head_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+			wrapper.add_child(glb_instance)
+			use_glb_model = true
+			print("OPRArmyManager: Loaded GLB model for '%s' with scale %.2f (Tough %d)" % [unit.name, scale_factor, tough])
 
-	wrapper.add_child(head_instance)
+	# Fallback: Create placeholder body if no GLB model found
+	if not use_glb_model:
+		# Create placeholder body (cylinder) - moderately scaled to base size
+		# Use sqrt for gentler scaling: 60mm base gets ~1.37x height, not 1.875x
+		var scale_factor = sqrt(base_radius / 0.016)  # Gentler scaling
+		var body_height = (0.025 + randf() * 0.005) * scale_factor
+		var body_mesh = CylinderMesh.new()
+		# Body width relative to base - slightly narrower for larger bases
+		var body_width_ratio = lerp(0.5, 0.35, clampf((base_radius - 0.016) / 0.03, 0.0, 1.0))
+		body_mesh.top_radius = base_radius * body_width_ratio
+		body_mesh.bottom_radius = base_radius * (body_width_ratio + 0.1)
+		body_mesh.height = body_height
+
+		var body_instance = MeshInstance3D.new()
+		body_instance.mesh = body_mesh
+		body_instance.position.y = 0.003 + body_height / 2
+
+		var body_material = StandardMaterial3D.new()
+		body_material.albedo_color = player_color.lightened(0.3)
+		body_material.roughness = 0.8
+		body_instance.material_override = body_material
+		body_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
+		wrapper.add_child(body_instance)
+
+		# Create head (sphere) - scaled to base size
+		var head_radius = base_radius * 0.375
+		var head_mesh = SphereMesh.new()
+		head_mesh.radius = head_radius
+		head_mesh.height = head_radius * 2
+
+		var head_instance = MeshInstance3D.new()
+		head_instance.mesh = head_mesh
+		head_instance.position.y = 0.003 + body_height + head_radius
+
+		var head_material = StandardMaterial3D.new()
+		head_material.albedo_color = Color(0.9, 0.75, 0.6)  # Skin tone
+		head_material.roughness = 0.9
+		head_instance.material_override = head_material
+		head_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
+		wrapper.add_child(head_instance)
+
+		model_height = body_height + head_radius * 2
 
 	# Add collision shape - scaled to base size (use larger dimension for oval)
 	var collision_radius = max(base_width, base_depth) / 2.0 if base_is_oval else base_radius
-	var total_height = 0.003 + body_height + head_radius * 2
+	var total_height = 0.003 + model_height
 	var collision = CollisionShape3D.new()
 	var shape = CylinderShape3D.new()
 	shape.radius = collision_radius
@@ -562,8 +599,57 @@ func clear_army(player_id: int) -> void:
 	armies.erase(player_id)
 
 
+# ===== GLB Model Loading Functions =====
+
+## Find the GLB model file for a unit based on faction folder and unit name
+func _find_model_for_unit(unit_name: String, faction_folder: String) -> String:
+	if faction_folder.is_empty():
+		return ""
+
+	var glb_path = "res://assets/miniatures/%s/glb/" % faction_folder
+
+	# Check if directory exists
+	var dir = DirAccess.open(glb_path)
+	if not dir:
+		print("OPRArmyManager: GLB folder not found: %s" % glb_path)
+		return ""
+
+	dir.list_dir_begin()
+	var file_name = dir.get_next()
+	while file_name != "":
+		if file_name.ends_with(".glb"):
+			# Check if unit name is contained in file name (case insensitive)
+			if unit_name.to_lower() in file_name.to_lower():
+				var full_path = glb_path + file_name
+				print("OPRArmyManager: Found model for '%s' -> %s" % [unit_name, file_name])
+				return full_path
+		file_name = dir.get_next()
+
+	print("OPRArmyManager: No model found for '%s' in %s" % [unit_name, glb_path])
+	return ""
+
+
+## Extract Tough value from unit's special rules
+## Returns 0 if no Tough rule found
+func _get_tough_value(unit: OPRApiClient.OPRUnit) -> int:
+	for rule in unit.special_rules:
+		if rule.begins_with("Tough("):
+			# "Tough(12)" -> 12
+			var value_str = rule.trim_prefix("Tough(").trim_suffix(")")
+			if value_str.is_valid_int():
+				return value_str.to_int()
+	return 0
+
+
+## Calculate model scale based on Tough value
+## Formula: scale = 1.3^(tough/3)
+## Tough(0)=1.0, Tough(3)=1.3, Tough(6)=1.69, Tough(12)=2.86
+func _calculate_model_scale(tough: int) -> float:
+	return pow(1.3, tough / 3.0)
+
+
 func _on_army_loaded(army: OPRApiClient.OPRArmy) -> void:
-	print("Army loaded: %s" % army.name)
+	print("Army loaded: %s (faction: %s)" % [army.name, army.faction_name])
 
 
 func _on_import_failed(error: String) -> void:

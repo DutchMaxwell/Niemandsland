@@ -26,6 +26,9 @@ class OPRArmy:
 	var player_id: int = 0  # Assigned player (1-4)
 	var units: Array[OPRUnit] = []
 	var model_count: int = 0
+	var army_id: String = ""  # Army Book ID from API (e.g., "w7qor7b2kuifcyvk")
+	var faction_name: String = ""  # Faction name from Army Book (e.g., "Alien Hives")
+	var faction_folder: String = ""  # Normalized folder name (e.g., "alien_hives")
 
 	func get_total_points() -> int:
 		var total = 0
@@ -272,21 +275,37 @@ func _parse_tts_api_response(json_text: String) -> OPRArmy:
 	var army = OPRArmy.new()
 
 	# Parse army info
-	army.id = data.get("listId", str(Time.get_unix_time_from_system()))
-	army.name = data.get("listName", "Imported Army")
+	army.id = data.get("id", str(Time.get_unix_time_from_system()))
+	army.name = data.get("name", "Imported Army")
 	army.game_system = _expand_game_system(data.get("gameSystem", "gf"))
 	army.points = data.get("listPoints", 0)
 
 	# Parse units - TTS API returns fully resolved units!
 	var units_data = data.get("units", [])
+
+	# Extract armyId from first unit (all units share the same armyId)
+	if units_data.size() > 0:
+		var first_unit = units_data[0]
+		if first_unit is Dictionary:
+			army.army_id = first_unit.get("armyId", "")
+
 	for unit_data in units_data:
 		var unit = _parse_tts_unit(unit_data)
 		if unit:
 			army.units.append(unit)
 			army.model_count += unit.size
 
-	print("OPRApiClient: Loaded from API '%s' - %d units, %d pts, %d models" % [
-		army.name, army.units.size(), army.points, army.model_count
+	# Fetch faction name from Army Book API using armyId
+	if not army.army_id.is_empty():
+		var book_data = await _fetch_army_book(army.army_id, army.game_system)
+		if not book_data.is_empty():
+			army.faction_name = book_data.get("name", "")
+			# Normalize faction name for folder: "Alien Hives" -> "alien_hives"
+			army.faction_folder = army.faction_name.to_lower().replace(" ", "_").replace("-", "_")
+			print("OPRApiClient: Detected faction '%s' -> folder '%s'" % [army.faction_name, army.faction_folder])
+
+	print("OPRApiClient: Loaded from API '%s' - %d units, %d pts, %d models (faction: %s)" % [
+		army.name, army.units.size(), army.points, army.model_count, army.faction_name
 	])
 
 	army_loaded.emit(army)
