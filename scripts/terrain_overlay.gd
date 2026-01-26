@@ -93,6 +93,11 @@ var fine_grid_visible := false
 var vertex_markers: Array[MeshInstance3D] = []
 var preview_line_mesh: MeshInstance3D = null
 
+## Mission objectives - displayed as markers with 3" seize radius
+var objective_meshes: Array[MeshInstance3D] = []
+var objective_ring_meshes: Array[MeshInstance3D] = []
+var mission_objectives: Array[Vector3] = []  # World positions in meters
+
 
 func _ready() -> void:
 	# Position slightly above table surface to avoid z-fighting
@@ -987,3 +992,120 @@ func get_terrain_bounds_by_type(terrain_type: int) -> Array[AABB]:
 			bounds.append(piece.bounds)
 
 	return bounds
+
+
+# ==============================================================================
+# MISSION OBJECTIVES
+# ==============================================================================
+
+## Update mission objectives display
+##
+## @param objectives: Array of Vector3 world positions (in meters)
+func update_objectives(objectives: Array) -> void:
+	_clear_objectives()
+	mission_objectives.clear()
+
+	for obj in objectives:
+		if obj is Vector3:
+			mission_objectives.append(obj)
+
+	if mission_objectives.is_empty():
+		return
+
+	# Create meshes for each objective
+	for i in range(mission_objectives.size()):
+		var obj_pos = mission_objectives[i]
+		_create_objective_marker(obj_pos, i + 1)
+
+	print("TerrainOverlay: Created %d objective markers" % mission_objectives.size())
+
+
+## Clear all objective meshes
+func _clear_objectives() -> void:
+	for mesh in objective_meshes:
+		if is_instance_valid(mesh):
+			mesh.queue_free()
+	objective_meshes.clear()
+
+	for mesh in objective_ring_meshes:
+		if is_instance_valid(mesh):
+			mesh.queue_free()
+	objective_ring_meshes.clear()
+
+
+## Create a single objective marker with 3" seize radius ring
+##
+## @param pos: World position in meters
+## @param number: Objective number for label
+func _create_objective_marker(pos: Vector3, number: int) -> void:
+	var objective_color = Color(1.0, 0.85, 0.2, 1.0)  # Gold/yellow
+	var ring_color = Color(1.0, 0.85, 0.2, 0.25)  # Semi-transparent gold
+
+	# Create 3" seize radius ring (torus or disc)
+	var seize_radius_m = 3.0 * INCHES_TO_METERS
+	var ring_mesh = _create_ring_mesh(pos, seize_radius_m, ring_color)
+	add_child(ring_mesh)
+	objective_ring_meshes.append(ring_mesh)
+
+	# Create objective marker (cylinder/pillar)
+	var marker_mesh = _create_objective_pillar(pos, objective_color)
+	add_child(marker_mesh)
+	objective_meshes.append(marker_mesh)
+
+
+## Create a ring mesh for the seize radius
+func _create_ring_mesh(pos: Vector3, radius: float, color: Color) -> MeshInstance3D:
+	var mesh_instance = MeshInstance3D.new()
+
+	# Create a flat disc mesh using CylinderMesh with very small height
+	var cylinder = CylinderMesh.new()
+	cylinder.top_radius = radius
+	cylinder.bottom_radius = radius
+	cylinder.height = 0.002  # Very thin disc (2mm)
+	cylinder.radial_segments = 64
+
+	mesh_instance.mesh = cylinder
+	mesh_instance.position = Vector3(pos.x, Z_FIGHT_OFFSET * 2, pos.z)
+
+	# Create transparent material
+	var material = StandardMaterial3D.new()
+	material.albedo_color = color
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+	mesh_instance.material_override = material
+
+	return mesh_instance
+
+
+## Create an objective pillar/marker
+func _create_objective_pillar(pos: Vector3, color: Color) -> MeshInstance3D:
+	var mesh_instance = MeshInstance3D.new()
+
+	# Create a small cylinder as marker
+	var cylinder = CylinderMesh.new()
+	cylinder.top_radius = 0.02  # 2cm top
+	cylinder.bottom_radius = 0.03  # 3cm bottom
+	cylinder.height = 0.08  # 8cm tall
+	cylinder.radial_segments = 16
+
+	mesh_instance.mesh = cylinder
+	# Position at half height so bottom touches ground
+	mesh_instance.position = Vector3(pos.x, 0.04 + Z_FIGHT_OFFSET, pos.z)
+
+	# Create material
+	var material = StandardMaterial3D.new()
+	material.albedo_color = color
+	material.emission_enabled = true
+	material.emission = color
+	material.emission_energy_multiplier = 0.5
+
+	mesh_instance.material_override = material
+
+	return mesh_instance
+
+
+## Get objectives for AI/gameplay use
+func get_objectives() -> Array[Vector3]:
+	return mission_objectives.duplicate()

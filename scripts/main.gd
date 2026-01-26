@@ -306,6 +306,7 @@ func _ready() -> void:
 	map_layout_editor.layout_closed.connect(_on_map_layout_closed)
 	map_layout_editor.layout_updated.connect(_on_map_layout_updated)
 	map_layout_editor.deployment_type_changed.connect(_on_deployment_type_changed)
+	map_layout_editor.objectives_changed.connect(_on_objectives_changed)
 	map_layout_btn.pressed.connect(_on_map_layout_pressed)
 
 	# Initialize Terrain Overlay (on the 3D table)
@@ -1376,6 +1377,11 @@ func _on_map_layout_closed() -> void:
 	# Reset zoom when closing map layout editor
 	if map_layout_editor and map_layout_editor.has_method("reset_zoom"):
 		map_layout_editor.reset_zoom()
+	# Update objectives on 3D terrain when closing
+	if map_layout_editor and map_layout_editor.has_method("get_objectives_for_overlay"):
+		var world_objectives = map_layout_editor.get_objectives_for_overlay()
+		if terrain_overlay and terrain_overlay.has_method("update_objectives"):
+			terrain_overlay.update_objectives(world_objectives)
 
 
 ## Handle deployment type change from Map Tool
@@ -1400,6 +1406,20 @@ func _on_deployment_type_changed(deployment_type: int) -> void:
 		terrain_overlay.set_deployment_zones_visible(true)
 		if deployment_zone_check:
 			deployment_zone_check.button_pressed = true
+
+
+## Handle objectives change from Map Tool
+func _on_objectives_changed(objectives: Array) -> void:
+	if not terrain_overlay or not terrain_overlay.has_method("update_objectives"):
+		return
+
+	# Convert 2D inch positions to 3D world positions
+	var world_objectives: Array[Vector3] = []
+	if map_layout_editor and map_layout_editor.has_method("get_objectives_for_overlay"):
+		world_objectives = map_layout_editor.get_objectives_for_overlay()
+
+	terrain_overlay.update_objectives(world_objectives)
+	print("Mission objectives updated: %d objectives" % world_objectives.size())
 
 
 ## Update terrain overlay when map layout changes

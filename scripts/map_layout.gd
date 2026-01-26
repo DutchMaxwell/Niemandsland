@@ -93,8 +93,10 @@ var show_deployment_zones := false
 
 # Mission objectives - positions stored in 1" coordinates (Vector2 for precision)
 var mission_objectives: Array[Vector2] = []  # Positions in inches
-var show_objectives := true  # Default to showing objectives
 var objectives_editing := false  # Whether we're in objective placement mode
+
+# Signal to notify terrain_overlay of objectives changes
+signal objectives_changed(objectives: Array)
 
 # Signal to notify terrain_overlay of deployment changes
 signal deployment_type_changed(type: int)
@@ -115,7 +117,13 @@ signal deployment_type_changed(type: int)
 @onready var deployment_type_option: OptionButton = %DeploymentTypeOption
 @onready var save_file_dialog: FileDialog = %SaveFileDialog
 @onready var load_file_dialog: FileDialog = %LoadFileDialog
-@onready var objectives_check: CheckBox = %ObjectivesCheck
+
+# Objectives UI (created programmatically)
+var _objectives_panel: VBoxContainer = null
+var _objectives_toggle_btn: Button = null
+var _objectives_clear_btn: Button = null
+var _objectives_status_label: Label = null
+var _objectives_warning_label: Label = null
 
 
 func _ready() -> void:
@@ -141,10 +149,8 @@ func _ready() -> void:
 	# Setup deployment zone type selection
 	_setup_deployment_type_option()
 
-	# Setup objectives checkbox
-	if objectives_check:
-		objectives_check.toggled.connect(_on_objectives_toggled)
-		objectives_check.button_pressed = show_objectives
+	# Setup objectives UI (replaces the ObjectivesCheck checkbox)
+	_setup_objectives_ui()
 
 	_setup_terrain_buttons()
 	_update_stats()
@@ -483,9 +489,136 @@ func _on_deployment_toggled(enabled: bool) -> void:
 	grid_container.queue_redraw()
 
 
-func _on_objectives_toggled(enabled: bool) -> void:
-	show_objectives = enabled
+# ============================================================================
+# Mission Objectives UI Setup
+# ============================================================================
+
+## Setup the objectives deployment UI panel
+func _setup_objectives_ui() -> void:
+	# Find the LeftPanel to add objectives controls (after DeploymentCheck)
+	var left_panel = deployment_check.get_parent() if deployment_check else null
+	if not left_panel:
+		return
+
+	# Remove the old ObjectivesCheck if it exists
+	var old_check = left_panel.get_node_or_null("ObjectivesCheck")
+	if old_check:
+		old_check.queue_free()
+
+	# Create objectives panel
+	_objectives_panel = VBoxContainer.new()
+	_objectives_panel.name = "ObjectivesPanel"
+
+	# Find position after DeploymentCheck
+	var deploy_check_idx = deployment_check.get_index()
+	left_panel.add_child(_objectives_panel)
+	left_panel.move_child(_objectives_panel, deploy_check_idx + 1)
+
+	# Section label
+	var label = Label.new()
+	label.text = "Mission Objectives"
+	label.add_theme_font_size_override("font_size", 16)
+	label.add_theme_color_override("font_color", Color(0.9, 0.92, 0.96, 1.0))
+	_objectives_panel.add_child(label)
+
+	# Status label
+	_objectives_status_label = Label.new()
+	_objectives_status_label.text = "No objectives placed"
+	_objectives_status_label.add_theme_font_size_override("font_size", 12)
+	_objectives_status_label.add_theme_color_override("font_color", Color(0.7, 0.73, 0.8, 1.0))
+	_objectives_panel.add_child(_objectives_status_label)
+
+	# Warning label (for 9" rule)
+	_objectives_warning_label = Label.new()
+	_objectives_warning_label.text = ""
+	_objectives_warning_label.add_theme_font_size_override("font_size", 12)
+	_objectives_warning_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.3, 1.0))
+	_objectives_warning_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_objectives_panel.add_child(_objectives_warning_label)
+
+	# Button container
+	var btn_row = HBoxContainer.new()
+	btn_row.add_theme_constant_override("separation", 8)
+	_objectives_panel.add_child(btn_row)
+
+	# Deploy/Stop button (toggle)
+	_objectives_toggle_btn = Button.new()
+	_objectives_toggle_btn.text = "Deploy Objectives"
+	_objectives_toggle_btn.toggle_mode = true
+	_objectives_toggle_btn.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2, 1.0))
+	_objectives_toggle_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.5, 1.0))
+	_objectives_toggle_btn.toggled.connect(_on_objectives_deploy_toggled)
+	btn_row.add_child(_objectives_toggle_btn)
+
+	# Clear button
+	_objectives_clear_btn = Button.new()
+	_objectives_clear_btn.text = "Clear"
+	_objectives_clear_btn.add_theme_color_override("font_color", Color(1.0, 0.75, 0.35, 1.0))
+	_objectives_clear_btn.pressed.connect(_on_objectives_clear)
+	btn_row.add_child(_objectives_clear_btn)
+
+	_update_objectives_status()
+
+
+## Toggle objectives deployment mode
+func _on_objectives_deploy_toggled(enabled: bool) -> void:
+	objectives_editing = enabled
+	if enabled:
+		_objectives_toggle_btn.text = "Stop Deploying"
+		# Deselect terrain type when entering objectives mode
+		selected_terrain_type = TerrainType.NONE
+		for child in terrain_buttons.get_children():
+			if child is Button:
+				child.button_pressed = (child.text == "None")
+	else:
+		_objectives_toggle_btn.text = "Deploy Objectives"
+		# Emit signal to update 3D view
+		objectives_changed.emit(mission_objectives)
+
 	grid_container.queue_redraw()
+
+
+## Clear all objectives
+func _on_objectives_clear() -> void:
+	mission_objectives.clear()
+	_update_objectives_status()
+	grid_container.queue_redraw()
+	objectives_changed.emit(mission_objectives)
+
+
+## Update the objectives status label and check 9" rule
+func _update_objectives_status() -> void:
+	if not _objectives_status_label:
+		return
+
+	var count = mission_objectives.size()
+	if count == 0:
+		_objectives_status_label.text = "No objectives placed"
+	else:
+		_objectives_status_label.text = "%d objective%s placed" % [count, "s" if count != 1 else ""]
+
+	# Check 9" minimum distance rule
+	_check_objectives_distance_rule()
+
+
+## Check if any objectives are closer than 9" and show warning
+func _check_objectives_distance_rule() -> void:
+	if not _objectives_warning_label:
+		return
+
+	const MIN_DISTANCE_INCHES := 9.0
+	var violations: Array[String] = []
+
+	for i in range(mission_objectives.size()):
+		for j in range(i + 1, mission_objectives.size()):
+			var dist = mission_objectives[i].distance_to(mission_objectives[j])
+			if dist < MIN_DISTANCE_INCHES:
+				violations.append("Obj %d & %d: %.1f\"" % [i + 1, j + 1, dist])
+
+	if violations.size() > 0:
+		_objectives_warning_label.text = "⚠ Too close (<9\"): " + ", ".join(violations)
+	else:
+		_objectives_warning_label.text = ""
 
 
 func _on_save_file_selected(path: String) -> void:
@@ -954,8 +1087,8 @@ func _paint_at_position(screen_pos: Vector2) -> void:
 				_handle_custom_zone_click(inch_pos)
 		return
 
-	# If no terrain type selected and objectives are shown, place objectives on 1" grid
-	if selected_terrain_type == TerrainType.NONE and show_objectives:
+	# If in objectives editing mode, place objectives on 1" grid
+	if objectives_editing:
 		var inch_pos = _get_inch_at_screen_pos(screen_pos)
 		if _is_valid_inch_pos(inch_pos):
 			_toggle_objective_at_position(inch_pos)
@@ -1731,6 +1864,7 @@ func _toggle_objective_at_position(inch_pos: Vector2) -> void:
 			var mirrored = _get_mirrored_cell(inch_pos)
 			mission_objectives.append(mirrored)
 
+	_update_objectives_status()
 	grid_container.queue_redraw()
 	_emit_layout_update()
 
