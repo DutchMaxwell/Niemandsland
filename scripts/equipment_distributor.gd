@@ -149,11 +149,6 @@ static func _assign_equipment_to_model(game_unit: GameUnit, item: Variant) -> vo
 
 # ===== Hero Attachment =====
 
-## Checks if a unit is a hero (has "Hero" special rule).
-static func is_hero(game_unit: GameUnit) -> bool:
-	return game_unit.has_special_rule("Hero")
-
-
 ## Attaches a hero to a target unit.
 static func attach_hero_to_unit(hero: GameUnit, target: GameUnit) -> void:
 	# Hero remembers target
@@ -174,60 +169,6 @@ static func detach_hero(hero: GameUnit) -> void:
 		heroes.erase(hero)
 		target.unit_properties["attached_heroes"] = heroes
 	hero.unit_properties["attached_to"] = null
-
-
-# ===== Equipment Reassignment =====
-
-## Reassigns equipment from one model to another.
-static func reassign_equipment(
-	from_model: ModelInstance,
-	to_model: ModelInstance,
-	equipment_name: String
-) -> bool:
-	# Remove from current carrier
-	var from_equip = from_model.properties.get("equipment", [])
-	if equipment_name not in from_equip:
-		return false
-
-	from_equip.erase(equipment_name)
-	from_model.properties["equipment"] = from_equip
-
-	# Add to new carrier
-	var to_equip = to_model.properties.get("equipment", [])
-	to_equip.append(equipment_name)
-	to_model.properties["equipment"] = to_equip
-
-	return true
-
-
-## Reassigns a weapon from one model to another within the same unit.
-static func reassign_weapon(
-	game_unit: GameUnit,
-	weapon: Variant,
-	to_model: ModelInstance
-) -> bool:
-	# Find current carrier
-	var from_model: ModelInstance = null
-	for model in game_unit.models:
-		var weapons = model.properties.get("weapons", [])
-		if weapon in weapons:
-			from_model = model
-			break
-
-	if from_model == null:
-		return false
-
-	# Remove from current carrier
-	var from_weapons = from_model.properties.get("weapons", [])
-	from_weapons.erase(weapon)
-	from_model.properties["weapons"] = from_weapons
-
-	# Add to new carrier
-	var to_weapons = to_model.properties.get("weapons", [])
-	to_weapons.append(weapon)
-	to_model.properties["weapons"] = to_weapons
-
-	return true
 
 
 # ===== Factory Method =====

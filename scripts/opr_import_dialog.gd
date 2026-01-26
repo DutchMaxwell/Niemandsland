@@ -1,19 +1,14 @@
 extends Window
 class_name OPRImportDialog
-## Dialog for importing OPR Army Forge armies
-## Supports direct text paste and Share-Link API import
+## Dialog for importing OPR Army Forge armies via Share-Link
 
 signal army_imported(army: OPRApiClient.OPRArmy, player_id: int)
 
 ## UI Elements
-var tab_container: TabContainer
-var text_input: TextEdit
 var player_option: OptionButton
 var army_preview: RichTextLabel
 var import_btn: Button
 var cancel_btn: Button
-var paste_btn: Button
-var clear_btn: Button
 var share_link_input: LineEdit
 var link_status_label: Label
 
@@ -23,13 +18,10 @@ var _preview_army: OPRApiClient.OPRArmy = null
 ## API Client for parsing
 var api_client: OPRApiClient
 
-## Current import mode
-var _import_mode: String = "text"  # "text" or "link"
-
 
 func _ready() -> void:
 	title = "Import OPR Army"
-	size = Vector2i(550, 550)
+	size = Vector2i(550, 450)
 	close_requested.connect(_on_cancel)
 
 	_setup_ui()
@@ -55,78 +47,32 @@ func _setup_ui() -> void:
 	title_label.add_theme_font_size_override("font_size", 18)
 	vbox.add_child(title_label)
 
-	# Tab container for import modes
-	tab_container = TabContainer.new()
-	tab_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	tab_container.tab_changed.connect(_on_tab_changed)
-	vbox.add_child(tab_container)
-
-	# === TEXT PASTE TAB ===
-	var text_tab = VBoxContainer.new()
-	text_tab.name = "Text einfügen"
-	text_tab.add_theme_constant_override("separation", 8)
-	tab_container.add_child(text_tab)
-
-	var text_info = Label.new()
-	text_info.text = "Army Forge → Share → 'Share as Text' → Text hier einfügen:"
-	text_info.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	text_tab.add_child(text_info)
-
-	# Text input area
-	text_input = TextEdit.new()
-	text_input.placeholder_text = "++ Army Name - Faction [GF 2000pts] ++\n\nUnit Name [5] Q3+ D4+ | 100pts | Special Rules\nWeapon (24\", A2, AP(1)), CCW (A1)\n..."
-	text_input.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	text_input.custom_minimum_size = Vector2(0, 150)
-	text_input.text_changed.connect(_on_text_changed)
-	text_tab.add_child(text_input)
-
-	# Text buttons row
-	var text_btn_row = HBoxContainer.new()
-	text_btn_row.add_theme_constant_override("separation", 8)
-	text_tab.add_child(text_btn_row)
-
-	paste_btn = Button.new()
-	paste_btn.text = "Aus Zwischenablage einfügen"
-	paste_btn.pressed.connect(_on_paste_from_clipboard)
-	text_btn_row.add_child(paste_btn)
-
-	clear_btn = Button.new()
-	clear_btn.text = "Leeren"
-	clear_btn.pressed.connect(_on_clear_text)
-	text_btn_row.add_child(clear_btn)
-
-	var parse_btn = Button.new()
-	parse_btn.text = "Text parsen"
-	parse_btn.pressed.connect(_on_parse_text)
-	text_btn_row.add_child(parse_btn)
-
-	# === SHARE LINK TAB ===
-	var link_tab = VBoxContainer.new()
-	link_tab.name = "Share-Link"
-	link_tab.add_theme_constant_override("separation", 8)
-	tab_container.add_child(link_tab)
+	# === SHARE LINK SECTION ===
+	var link_section = VBoxContainer.new()
+	link_section.add_theme_constant_override("separation", 8)
+	vbox.add_child(link_section)
 
 	var link_info = Label.new()
 	link_info.text = "Army Forge Share-Link oder List-ID eingeben:"
 	link_info.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	link_tab.add_child(link_info)
+	link_section.add_child(link_info)
 
 	var link_example = Label.new()
 	link_example.text = "z.B. https://army-forge.onepagerules.com/share?id=XXX"
 	link_example.add_theme_font_size_override("font_size", 11)
 	link_example.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
-	link_tab.add_child(link_example)
+	link_section.add_child(link_example)
 
 	# Link input
 	share_link_input = LineEdit.new()
 	share_link_input.placeholder_text = "Share-Link oder List-ID hier einfügen..."
 	share_link_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	link_tab.add_child(share_link_input)
+	link_section.add_child(share_link_input)
 
 	# Link buttons row
 	var link_btn_row = HBoxContainer.new()
 	link_btn_row.add_theme_constant_override("separation", 8)
-	link_tab.add_child(link_btn_row)
+	link_section.add_child(link_btn_row)
 
 	var paste_link_btn = Button.new()
 	paste_link_btn.text = "Aus Zwischenablage"
@@ -143,12 +89,7 @@ func _setup_ui() -> void:
 	link_status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	link_btn_row.add_child(link_status_label)
 
-	# Spacer in link tab
-	var link_spacer = Control.new()
-	link_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	link_tab.add_child(link_spacer)
-
-	# === COMMON ELEMENTS (below tabs) ===
+	# === COMMON ELEMENTS ===
 
 	# Player selection
 	var player_row = HBoxContainer.new()
@@ -174,10 +115,12 @@ func _setup_ui() -> void:
 
 	army_preview = RichTextLabel.new()
 	army_preview.bbcode_enabled = true
-	army_preview.custom_minimum_size = Vector2(0, 120)
+	army_preview.custom_minimum_size = Vector2(0, 150)
 	army_preview.scroll_following = true
+	army_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
 	var preview_panel = PanelContainer.new()
+	preview_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.1, 0.1, 0.12, 0.9)
 	style.border_color = Color(0.3, 0.3, 0.35)
@@ -204,62 +147,9 @@ func _setup_ui() -> void:
 	import_btn.pressed.connect(_on_import)
 	btn_row.add_child(import_btn)
 
-	# API Client for parsing
+	# API Client
 	api_client = OPRApiClient.new()
 	add_child(api_client)
-
-
-func _on_tab_changed(tab: int) -> void:
-	match tab:
-		0: _import_mode = "text"
-		1: _import_mode = "link"
-	# Reset preview when switching tabs (check for null during initial setup)
-	_preview_army = null
-	if army_preview:
-		army_preview.text = ""
-	if import_btn:
-		import_btn.disabled = true
-
-
-func _on_paste_from_clipboard() -> void:
-	var clipboard = DisplayServer.clipboard_get()
-	if not clipboard.is_empty():
-		text_input.text = clipboard
-		_on_parse_text()
-
-
-func _on_clear_text() -> void:
-	text_input.text = ""
-	_preview_army = null
-	army_preview.text = ""
-	import_btn.disabled = true
-
-
-func _on_text_changed() -> void:
-	# Auto-parse when text looks complete (starts with ++)
-	pass  # Don't auto-parse, let user click button
-
-
-func _on_parse_text() -> void:
-	var text = text_input.text.strip_edges()
-	if text.is_empty():
-		army_preview.text = "[color=red]Kein Text eingegeben.[/color]"
-		import_btn.disabled = true
-		return
-
-	if not text.begins_with("++"):
-		army_preview.text = "[color=red]Ungültiges Format.[/color]\n\nText muss mit '++' beginnen (Army Forge Text Export)."
-		import_btn.disabled = true
-		return
-
-	# Parse the text directly
-	_preview_army = api_client._parse_text_export(text, "clipboard")
-	if _preview_army and _preview_army.units.size() > 0:
-		_update_preview()
-		import_btn.disabled = false
-	else:
-		army_preview.text = "[color=red]Parsing fehlgeschlagen.[/color]\n\nStelle sicher, dass der Text ein gültiger Army Forge Export ist."
-		import_btn.disabled = true
 
 
 func _on_paste_link() -> void:
@@ -349,7 +239,6 @@ func _on_cancel() -> void:
 
 func _reset_dialog() -> void:
 	_preview_army = null
-	text_input.text = ""
 	share_link_input.text = ""
 	link_status_label.text = ""
 	army_preview.text = ""
