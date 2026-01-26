@@ -94,7 +94,7 @@ var vertex_markers: Array[MeshInstance3D] = []
 var preview_line_mesh: MeshInstance3D = null
 
 ## Mission objectives - displayed as markers with 3" seize radius
-var objective_meshes: Array[MeshInstance3D] = []
+var objective_meshes: Array[Node3D] = []  # Can be MeshInstance3D or Node3D containers
 var objective_ring_meshes: Array[MeshInstance3D] = []
 var mission_objectives: Array[Vector3] = []  # World positions in meters
 
