@@ -67,7 +67,7 @@ const VERTEX_CLICK_RADIUS := 10.0  # Pixels for vertex selection
 var table_size_feet := Vector2(6, 4)  # Default 6x4 table
 var grid_rotation_degrees := 0.0
 var grid_cells := {}  # Dictionary[Vector2i, TerrainType]
-var selected_terrain_type := TerrainType.RUINS
+var selected_terrain_type := TerrainType.NONE
 var is_painting := false
 var point_symmetry_enabled := false  # Mirror placement across center
 
@@ -91,6 +91,11 @@ var _snap_points_valid := false
 var deployment_type := DeploymentType.NONE
 var show_deployment_zones := false
 
+# Mission objectives - positions stored in 1" coordinates (Vector2 for precision)
+var mission_objectives: Array[Vector2] = []  # Positions in inches
+var show_objectives := true  # Default to showing objectives
+var objectives_editing := false  # Whether we're in objective placement mode
+
 # Signal to notify terrain_overlay of deployment changes
 signal deployment_type_changed(type: int)
 
@@ -110,6 +115,7 @@ signal deployment_type_changed(type: int)
 @onready var deployment_type_option: OptionButton = %DeploymentTypeOption
 @onready var save_file_dialog: FileDialog = %SaveFileDialog
 @onready var load_file_dialog: FileDialog = %LoadFileDialog
+@onready var objectives_check: CheckBox = %ObjectivesCheck
 
 
 func _ready() -> void:
@@ -134,6 +140,11 @@ func _ready() -> void:
 
 	# Setup deployment zone type selection
 	_setup_deployment_type_option()
+
+	# Setup objectives checkbox
+	if objectives_check:
+		objectives_check.toggled.connect(_on_objectives_toggled)
+		objectives_check.button_pressed = show_objectives
 
 	_setup_terrain_buttons()
 	_update_stats()
@@ -472,6 +483,11 @@ func _on_deployment_toggled(enabled: bool) -> void:
 	grid_container.queue_redraw()
 
 
+func _on_objectives_toggled(enabled: bool) -> void:
+	show_objectives = enabled
+	grid_container.queue_redraw()
+
+
 func _on_save_file_selected(path: String) -> void:
 	save_layout(path)
 
@@ -494,11 +510,15 @@ func set_table_size(size_feet: Vector2) -> void:
 	var grid_dims = _calculate_grid_dimensions()
 	print("  Grid dimensions: %dx%d cells" % [grid_dims.x, grid_dims.y])
 
-	# CRITICAL: If table size changed and we have terrain data, clear it
+	# CRITICAL: If table size changed and we have terrain/objective data, clear it
 	# Grid cell coordinates are ABSOLUTE and become invalid when grid dimensions change
-	if size_changed and not grid_cells.is_empty():
-		print("  ⚠ Table size changed - clearing terrain data (grid coordinates are now invalid)")
-		grid_cells.clear()
+	if size_changed:
+		if not grid_cells.is_empty():
+			print("  ⚠ Table size changed - clearing terrain data (grid coordinates are now invalid)")
+			grid_cells.clear()
+		if not mission_objectives.is_empty():
+			print("  ⚠ Table size changed - clearing mission objectives (coordinates are now invalid)")
+			mission_objectives.clear()
 
 	grid_container.queue_redraw()
 	_update_stats()
@@ -934,6 +954,13 @@ func _paint_at_position(screen_pos: Vector2) -> void:
 				_handle_custom_zone_click(inch_pos)
 		return
 
+	# If no terrain type selected and objectives are shown, place objectives on 1" grid
+	if selected_terrain_type == TerrainType.NONE and show_objectives:
+		var inch_pos = _get_inch_at_screen_pos(screen_pos)
+		if _is_valid_inch_pos(inch_pos):
+			_toggle_objective_at_position(inch_pos)
+		return
+
 	var cell = _get_cell_at_screen_pos(screen_pos)
 	if _is_valid_cell(cell):
 		if selected_terrain_type == TerrainType.NONE:
@@ -1255,7 +1282,7 @@ func _place_piece(pos: Vector2i, piece_size: Vector2i, terrain_type: int) -> voi
 ## Save current layout to file
 func save_layout(file_path: String) -> void:
 	var data = {
-		"version": "1.2",  # v1.2: float precision for custom zone vertices
+		"version": "1.3",  # v1.3: added mission objectives on 1" grid
 		"table_size": {"x": table_size_feet.x, "y": table_size_feet.y},
 		"grid_rotation": grid_rotation_degrees,
 		"deployment_type": deployment_type,
@@ -1263,7 +1290,8 @@ func save_layout(file_path: String) -> void:
 		"custom_zones": {
 			"player1": [],
 			"player2": []
-		}
+		},
+		"mission_objectives": []
 	}
 
 	# Convert grid_cells keys to strings (JSON doesn't support Vector2i keys)
@@ -1276,6 +1304,10 @@ func save_layout(file_path: String) -> void:
 		data.custom_zones.player1.append({"x": cell.x, "y": cell.y})
 	for cell in custom_zone_vertices_p2:
 		data.custom_zones.player2.append({"x": cell.x, "y": cell.y})
+
+	# Save mission objectives (1" coordinates)
+	for obj in mission_objectives:
+		data.mission_objectives.append({"x": obj.x, "y": obj.y})
 
 	var json_string = JSON.stringify(data, "\t")
 	var file = FileAccess.open(file_path, FileAccess.WRITE)
@@ -1336,6 +1368,12 @@ func load_layout(file_path: String) -> bool:
 		if zones.has("player2"):
 			for v in zones.player2:
 				custom_zone_vertices_p2.append(Vector2(float(v.x), float(v.y)))
+
+	# Load mission objectives (1" coordinates)
+	mission_objectives.clear()
+	if data.has("mission_objectives"):
+		for obj in data.mission_objectives:
+			mission_objectives.append(Vector2(float(obj.x), float(obj.y)))
 
 	# Update visibility toggle based on deployment type
 	if deployment_type > 0:
@@ -1450,7 +1488,8 @@ func get_current_layout() -> Dictionary:
 		"table_size": table_size_feet,
 		"rotation": grid_rotation_degrees,
 		"deployment_type": deployment_type,
-		"custom_zones": get_custom_zone_data()
+		"custom_zones": get_custom_zone_data(),
+		"mission_objectives": mission_objectives.duplicate()
 	}
 
 
@@ -1662,6 +1701,70 @@ func _get_inch_at_screen_pos(screen_pos: Vector2) -> Vector2:
 	var inch_y = round(rotated_pos.y / pixels_per_inch_y + half_inches_y)
 
 	return Vector2(inch_x, inch_y)
+
+
+# ============================================================================
+# Mission Objectives Functions
+# ============================================================================
+
+const OBJECTIVE_SNAP_TOLERANCE := 1.5  # Inches - how close to click to remove an objective
+
+## Toggle objective at the given 1" position (add if not present, remove if present)
+func _toggle_objective_at_position(inch_pos: Vector2) -> void:
+	# Check if there's already an objective near this position
+	var existing_idx = _find_objective_near_position(inch_pos)
+
+	if existing_idx >= 0:
+		# Remove existing objective
+		mission_objectives.remove_at(existing_idx)
+		# Also remove mirrored if symmetry enabled
+		if point_symmetry_enabled:
+			var mirrored = _get_mirrored_cell(inch_pos)
+			var mirrored_idx = _find_objective_near_position(mirrored)
+			if mirrored_idx >= 0:
+				mission_objectives.remove_at(mirrored_idx)
+	else:
+		# Add new objective at the snapped position
+		mission_objectives.append(inch_pos)
+		# Also add mirrored if symmetry enabled
+		if point_symmetry_enabled:
+			var mirrored = _get_mirrored_cell(inch_pos)
+			mission_objectives.append(mirrored)
+
+	grid_container.queue_redraw()
+	_emit_layout_update()
+
+
+## Find index of objective near the given position, returns -1 if none found
+func _find_objective_near_position(inch_pos: Vector2) -> int:
+	for i in range(mission_objectives.size()):
+		if mission_objectives[i].distance_to(inch_pos) < OBJECTIVE_SNAP_TOLERANCE:
+			return i
+	return -1
+
+
+## Get objectives for 3D overlay rendering
+func get_objectives_for_overlay() -> Array[Vector3]:
+	var result: Array[Vector3] = []
+	var valid_range = _get_valid_cell_range()
+	var inch_to_meters = 0.0254
+
+	# Calculate table center in 1" coordinates
+	var table_center_x = (valid_range.position.x + valid_range.size.x / 2.0) * 3.0
+	var table_center_y = (valid_range.position.y + valid_range.size.y / 2.0) * 3.0
+
+	for obj_pos in mission_objectives:
+		var local_x = (obj_pos.x - table_center_x) * inch_to_meters
+		var local_z = (obj_pos.y - table_center_y) * inch_to_meters
+
+		# Apply grid rotation
+		var rotation_rad = deg_to_rad(grid_rotation_degrees)
+		var world_x = local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
+		var world_z = local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
+
+		result.append(Vector3(world_x, 0.0, world_z))
+
+	return result
 
 
 # ============================================================================

@@ -209,6 +209,10 @@ func _draw() -> void:
 	if map_layout.show_deployment_zones:
 		_draw_deployment_zones(grid_rect)
 
+	# Draw mission objectives (if enabled)
+	if map_layout.show_objectives:
+		_draw_mission_objectives(grid_rect, pixels_per_inch_x, pixels_per_inch_y)
+
 	# Draw table outline (always axis-aligned - represents the actual table)
 	draw_rect(grid_rect, Color.WHITE, false, 3.0)
 
@@ -620,3 +624,66 @@ func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixe
 		add_snap_point.call(corner, corner_color, corner_size)
 
 	map_layout._snap_points_valid = true
+
+
+func _draw_mission_objectives(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch_y: float) -> void:
+	## Draw mission objectives on the 1" grid
+	## Objectives are displayed as target circles
+	if not map_layout:
+		return
+
+	var grid_dims = map_layout._calculate_grid_dimensions()
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
+
+	# Half of total inches (for centering)
+	var half_inches_x = grid_dims.x * 3.0 / 2.0
+	var half_inches_y = grid_dims.y * 3.0 / 2.0
+
+	# Helper to convert 1" coordinates to screen position
+	var inch_to_screen = func(inch_pos: Vector2) -> Vector2:
+		var local_x = (inch_pos.x - half_inches_x) * pixels_per_inch_x
+		var local_y = (inch_pos.y - half_inches_y) * pixels_per_inch_y
+		var cos_a = cos(angle_rad)
+		var sin_a = sin(angle_rad)
+		return Vector2(
+			local_x * cos_a - local_y * sin_a,
+			local_x * sin_a + local_y * cos_a
+		) + center
+
+	var zoom = map_layout.zoom_level if map_layout else 1.0
+
+	# Draw 1" fine grid when objectives mode is active (no terrain selected)
+	if map_layout.selected_terrain_type == map_layout.TerrainType.NONE:
+		_draw_fine_grid(grid_rect, pixels_per_inch_x, pixels_per_inch_y)
+
+	# Draw each objective as a target marker
+	var objective_color = Color(1.0, 0.85, 0.2, 1.0)  # Gold/yellow
+	var objective_outline = Color(0.2, 0.15, 0.05, 1.0)  # Dark outline
+	var objective_size = 12.0 * zoom  # Size in pixels
+
+	for i in range(map_layout.mission_objectives.size()):
+		var obj_pos = map_layout.mission_objectives[i]
+		var screen_pos = inch_to_screen.call(obj_pos)
+
+		# Skip if outside visible area
+		if not grid_rect.has_point(screen_pos):
+			continue
+
+		# Draw objective marker (concentric circles like a target)
+		# Outer ring
+		draw_circle(screen_pos, objective_size, objective_outline)
+		draw_circle(screen_pos, objective_size - 2 * zoom, objective_color)
+
+		# Middle ring
+		draw_circle(screen_pos, objective_size * 0.6, objective_outline)
+		draw_circle(screen_pos, objective_size * 0.6 - 1.5 * zoom, objective_color)
+
+		# Center dot
+		draw_circle(screen_pos, objective_size * 0.25, objective_outline)
+
+		# Draw objective number
+		var font = ThemeDB.fallback_font
+		var label = str(i + 1)
+		draw_string(font, screen_pos + Vector2(objective_size + 4, 4) * zoom, label,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, int(12 * zoom), objective_color)
