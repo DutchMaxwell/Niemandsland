@@ -1039,22 +1039,23 @@ func _clear_objectives() -> void:
 ## @param number: Objective number for label
 func _create_objective_marker(pos: Vector3, number: int) -> void:
 	var objective_color = Color(1.0, 0.85, 0.2, 1.0)  # Gold/yellow
+	var border_color = Color(0.1, 0.1, 0.1, 1.0)  # Black border
 	var ring_color = Color(1.0, 0.85, 0.2, 0.25)  # Semi-transparent gold
 
-	# Create 3" seize radius ring (torus or disc)
+	# Create 3" seize radius ring (flat disc)
 	var seize_radius_m = 3.0 * INCHES_TO_METERS
-	var ring_mesh = _create_ring_mesh(pos, seize_radius_m, ring_color)
+	var ring_mesh = _create_seize_radius_ring(pos, seize_radius_m, ring_color)
 	add_child(ring_mesh)
 	objective_ring_meshes.append(ring_mesh)
 
-	# Create objective marker (cylinder/pillar)
-	var marker_mesh = _create_objective_pillar(pos, objective_color)
-	add_child(marker_mesh)
-	objective_meshes.append(marker_mesh)
+	# Create objective token marker (1" diameter flat disc with black border)
+	var token_container = _create_objective_token(pos, number, objective_color, border_color)
+	add_child(token_container)
+	objective_meshes.append(token_container)
 
 
-## Create a ring mesh for the seize radius
-func _create_ring_mesh(pos: Vector3, radius: float, color: Color) -> MeshInstance3D:
+## Create a ring mesh for the 3" seize radius
+func _create_seize_radius_ring(pos: Vector3, radius: float, color: Color) -> MeshInstance3D:
 	var mesh_instance = MeshInstance3D.new()
 
 	# Create a flat disc mesh using CylinderMesh with very small height
@@ -1079,7 +1080,68 @@ func _create_ring_mesh(pos: Vector3, radius: float, color: Color) -> MeshInstanc
 	return mesh_instance
 
 
-## Create an objective pillar/marker
+## Create an objective token marker (like unit tokens: 1" diameter, black border, numbered)
+func _create_objective_token(pos: Vector3, number: int, fill_color: Color, border_color: Color) -> Node3D:
+	var container = Node3D.new()
+	container.position = Vector3(pos.x, Z_FIGHT_OFFSET * 3, pos.z)
+
+	# Token dimensions: 1" diameter = 0.0254m, but we use half for radius
+	var token_radius = 0.5 * INCHES_TO_METERS  # 0.5" radius = 1" diameter
+	var border_width = 0.08 * INCHES_TO_METERS  # Border thickness
+	var token_height = 0.003  # 3mm thick
+
+	# Create black border disc (slightly larger)
+	var border_mesh = MeshInstance3D.new()
+	var border_cylinder = CylinderMesh.new()
+	border_cylinder.top_radius = token_radius + border_width
+	border_cylinder.bottom_radius = token_radius + border_width
+	border_cylinder.height = token_height
+	border_cylinder.radial_segments = 32
+	border_mesh.mesh = border_cylinder
+	border_mesh.position = Vector3(0, 0, 0)
+
+	var border_material = StandardMaterial3D.new()
+	border_material.albedo_color = border_color
+	border_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	border_mesh.material_override = border_material
+	container.add_child(border_mesh)
+
+	# Create gold fill disc (on top of border)
+	var fill_mesh = MeshInstance3D.new()
+	var fill_cylinder = CylinderMesh.new()
+	fill_cylinder.top_radius = token_radius
+	fill_cylinder.bottom_radius = token_radius
+	fill_cylinder.height = token_height + 0.001  # Slightly higher to prevent z-fighting
+	fill_cylinder.radial_segments = 32
+	fill_mesh.mesh = fill_cylinder
+	fill_mesh.position = Vector3(0, 0.001, 0)
+
+	var fill_material = StandardMaterial3D.new()
+	fill_material.albedo_color = fill_color
+	fill_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	fill_mesh.material_override = fill_material
+	container.add_child(fill_mesh)
+
+	# Create 3D text label for the objective number
+	var label_3d = Label3D.new()
+	label_3d.text = str(number)
+	label_3d.font_size = 72
+	label_3d.pixel_size = 0.0003  # Scale to fit on token
+	label_3d.position = Vector3(0, token_height + 0.002, 0)
+	label_3d.rotation_degrees = Vector3(-90, 0, 0)  # Face upward
+	label_3d.modulate = border_color  # Black text
+	label_3d.outline_modulate = fill_color
+	label_3d.outline_size = 8
+	label_3d.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label_3d.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label_3d.no_depth_test = true  # Always visible
+	label_3d.shaded = false
+	container.add_child(label_3d)
+
+	return container
+
+
+## Legacy function - kept for compatibility
 func _create_objective_pillar(pos: Vector3, color: Color) -> MeshInstance3D:
 	var mesh_instance = MeshInstance3D.new()
 

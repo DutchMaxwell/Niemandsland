@@ -703,6 +703,101 @@ func _draw_mission_objectives(grid_rect: Rect2, pixels_per_inch_x: float, pixels
 		draw_string(font, screen_pos + Vector2(objective_size + 4, 4) * zoom, label,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, int(12 * zoom), objective_color)
 
+	# Third pass: Draw warning lines between objectives that are too close (<9")
+	_draw_objective_distance_warnings(inch_to_screen, zoom)
+
+
+## Draw warning indicators between objectives that are closer than 9"
+func _draw_objective_distance_warnings(inch_to_screen: Callable, zoom: float) -> void:
+	const MIN_DISTANCE_INCHES := 9.0
+	var warning_color = Color(1.0, 0.25, 0.2, 0.9)  # Bright red
+	var warning_fill = Color(1.0, 0.25, 0.2, 0.3)  # Semi-transparent red
+
+	for i in range(map_layout.mission_objectives.size()):
+		for j in range(i + 1, map_layout.mission_objectives.size()):
+			var pos_i = map_layout.mission_objectives[i]
+			var pos_j = map_layout.mission_objectives[j]
+			var dist = pos_i.distance_to(pos_j)
+
+			if dist < MIN_DISTANCE_INCHES:
+				var screen_i = inch_to_screen.call(pos_i)
+				var screen_j = inch_to_screen.call(pos_j)
+
+				# Draw red dashed line between the two objectives
+				_draw_warning_line(screen_i, screen_j, warning_color, 3.0 * zoom)
+
+				# Draw exclamation mark at midpoint
+				var midpoint = (screen_i + screen_j) / 2.0
+				_draw_exclamation_mark(midpoint, warning_color, warning_fill, zoom)
+
+				# Draw distance label
+				var font = ThemeDB.fallback_font
+				var dist_label = "%.1f\"" % dist
+				draw_string(font, midpoint + Vector2(12, -8) * zoom, dist_label,
+					HORIZONTAL_ALIGNMENT_LEFT, -1, int(11 * zoom), warning_color)
+
+
+## Draw a warning line (dashed red line with arrow heads)
+func _draw_warning_line(from: Vector2, to: Vector2, color: Color, width: float) -> void:
+	var direction = (to - from).normalized()
+	var length = from.distance_to(to)
+	var dash_length = 8.0
+	var gap_length = 4.0
+
+	# Draw dashed line
+	var current_dist = 0.0
+	while current_dist < length:
+		var dash_start = from + direction * current_dist
+		var dash_end_dist = min(current_dist + dash_length, length)
+		var dash_end = from + direction * dash_end_dist
+		draw_line(dash_start, dash_end, color, width)
+		current_dist += dash_length + gap_length
+
+	# Draw small arrow heads at both ends pointing inward (indicating "too close")
+	var arrow_size = 8.0
+	var arrow_angle = 0.5  # radians
+
+	# Arrow at 'from' pointing toward 'to'
+	var arrow1_dir = direction
+	var arrow1_left = from + arrow1_dir.rotated(PI - arrow_angle) * arrow_size + direction * 5
+	var arrow1_right = from + arrow1_dir.rotated(PI + arrow_angle) * arrow_size + direction * 5
+	var arrow1_tip = from + direction * 5
+	draw_line(arrow1_tip, arrow1_left, color, width)
+	draw_line(arrow1_tip, arrow1_right, color, width)
+
+	# Arrow at 'to' pointing toward 'from'
+	var arrow2_dir = -direction
+	var arrow2_left = to + arrow2_dir.rotated(PI - arrow_angle) * arrow_size - direction * 5
+	var arrow2_right = to + arrow2_dir.rotated(PI + arrow_angle) * arrow_size - direction * 5
+	var arrow2_tip = to - direction * 5
+	draw_line(arrow2_tip, arrow2_left, color, width)
+	draw_line(arrow2_tip, arrow2_right, color, width)
+
+
+## Draw an exclamation mark warning symbol
+func _draw_exclamation_mark(pos: Vector2, color: Color, fill_color: Color, zoom: float) -> void:
+	var size = 20.0 * zoom
+
+	# Draw warning triangle background
+	var triangle_points = PackedVector2Array([
+		pos + Vector2(0, -size * 0.6),      # Top
+		pos + Vector2(-size * 0.5, size * 0.4),  # Bottom left
+		pos + Vector2(size * 0.5, size * 0.4)    # Bottom right
+	])
+	draw_colored_polygon(triangle_points, fill_color)
+
+	# Draw triangle border
+	for i in range(3):
+		var next_i = (i + 1) % 3
+		draw_line(triangle_points[i], triangle_points[next_i], color, 2.0 * zoom)
+
+	# Draw exclamation mark
+	var exclaim_color = color
+	# Vertical bar
+	draw_line(pos + Vector2(0, -size * 0.35), pos + Vector2(0, size * 0.05), exclaim_color, 3.0 * zoom)
+	# Dot
+	draw_circle(pos + Vector2(0, size * 0.22), 2.5 * zoom, exclaim_color)
+
 
 ## Draw a filled circle with a border ring
 func _draw_circle_ring(pos: Vector2, radius: float, fill_color: Color, border_color: Color, border_width: float) -> void:
