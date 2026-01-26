@@ -1867,6 +1867,8 @@ func _toggle_objective_at_position(inch_pos: Vector2) -> void:
 	_update_objectives_status()
 	grid_container.queue_redraw()
 	_emit_layout_update()
+	# Update 3D view immediately
+	objectives_changed.emit(mission_objectives)
 
 
 ## Find index of objective near the given position, returns -1 if none found
