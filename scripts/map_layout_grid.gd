@@ -209,8 +209,8 @@ func _draw() -> void:
 	if map_layout.show_deployment_zones:
 		_draw_deployment_zones(grid_rect)
 
-	# Draw mission objectives (if enabled)
-	if map_layout.show_objectives:
+	# Draw mission objectives (always shown if any exist)
+	if map_layout.mission_objectives.size() > 0 or map_layout.objectives_editing:
 		_draw_mission_objectives(grid_rect, pixels_per_inch_x, pixels_per_inch_y)
 
 	# Draw table outline (always axis-aligned - represents the actual table)
@@ -628,7 +628,7 @@ func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixe
 
 func _draw_mission_objectives(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch_y: float) -> void:
 	## Draw mission objectives on the 1" grid
-	## Objectives are displayed as target circles
+	## Objectives are displayed as target circles with 3" seize radius rings
 	if not map_layout:
 		return
 
@@ -653,21 +653,36 @@ func _draw_mission_objectives(grid_rect: Rect2, pixels_per_inch_x: float, pixels
 
 	var zoom = map_layout.zoom_level if map_layout else 1.0
 
-	# Draw 1" fine grid when objectives mode is active (no terrain selected)
-	if map_layout.selected_terrain_type == map_layout.TerrainType.NONE:
+	# Draw 1" fine grid when in objectives editing mode
+	if map_layout.objectives_editing:
 		_draw_fine_grid(grid_rect, pixels_per_inch_x, pixels_per_inch_y)
 
-	# Draw each objective as a target marker
+	# Calculate 3" seize radius in pixels (average of x and y scale)
+	var seize_radius_inches = 3.0
+	var seize_radius_pixels = seize_radius_inches * (pixels_per_inch_x + pixels_per_inch_y) / 2.0
+
+	# Colors
 	var objective_color = Color(1.0, 0.85, 0.2, 1.0)  # Gold/yellow
 	var objective_outline = Color(0.2, 0.15, 0.05, 1.0)  # Dark outline
+	var seize_ring_color = Color(1.0, 0.85, 0.2, 0.3)  # Semi-transparent gold
+	var seize_ring_border = Color(1.0, 0.85, 0.2, 0.6)  # Brighter border
 	var objective_size = 12.0 * zoom  # Size in pixels
 
+	# First pass: Draw 3" seize radius rings (behind objectives)
 	for i in range(map_layout.mission_objectives.size()):
 		var obj_pos = map_layout.mission_objectives[i]
 		var screen_pos = inch_to_screen.call(obj_pos)
 
-		# Skip if outside visible area
-		if not grid_rect.has_point(screen_pos):
+		# Draw seize radius ring (3" = capture zone)
+		_draw_circle_ring(screen_pos, seize_radius_pixels, seize_ring_color, seize_ring_border, 2.0 * zoom)
+
+	# Second pass: Draw objective markers (on top of rings)
+	for i in range(map_layout.mission_objectives.size()):
+		var obj_pos = map_layout.mission_objectives[i]
+		var screen_pos = inch_to_screen.call(obj_pos)
+
+		# Skip marker if outside visible area (ring may still be partially visible)
+		if not grid_rect.grow(seize_radius_pixels).has_point(screen_pos):
 			continue
 
 		# Draw objective marker (concentric circles like a target)
@@ -687,3 +702,11 @@ func _draw_mission_objectives(grid_rect: Rect2, pixels_per_inch_x: float, pixels
 		var label = str(i + 1)
 		draw_string(font, screen_pos + Vector2(objective_size + 4, 4) * zoom, label,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, int(12 * zoom), objective_color)
+
+
+## Draw a filled circle with a border ring
+func _draw_circle_ring(pos: Vector2, radius: float, fill_color: Color, border_color: Color, border_width: float) -> void:
+	# Draw filled circle
+	draw_circle(pos, radius, fill_color)
+	# Draw border as arc (full circle)
+	draw_arc(pos, radius, 0, TAU, 64, border_color, border_width)
