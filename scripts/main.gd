@@ -781,16 +781,19 @@ func _set_table_size(size_feet: Vector2) -> void:
 	# Rebuild table
 	table.setup_table(size_feet)
 
-	# Update terrain overlay with new table size (if it exists and has terrain data)
-	# Note: Map Layout Editor clears terrain when table size changes (see set_table_size)
-	if terrain_overlay and map_layout_editor and map_layout_editor.has_method("get_current_layout"):
-		var layout_data = map_layout_editor.get_current_layout()
-		if layout_data and not layout_data.grid_cells.is_empty():
-			terrain_overlay.update_overlay(
-				layout_data.grid_cells,
-				size_feet,
-				layout_data.rotation
-			)
+	# Update map layout editor with new table size (this clears terrain/objectives data)
+	if map_layout_editor and map_layout_editor.has_method("set_table_size"):
+		map_layout_editor.set_table_size(size_feet)
+
+	# Clear and update terrain overlay (must always update, even with empty data)
+	if terrain_overlay:
+		# Clear all overlays since table size changed
+		if terrain_overlay.has_method("update_overlay"):
+			terrain_overlay.update_overlay({}, size_feet, 0.0)
+		if terrain_overlay.has_method("update_objectives"):
+			terrain_overlay.update_objectives([])
+		if terrain_overlay.has_method("set_deployment_zones"):
+			terrain_overlay.set_deployment_zones(0)  # NONE
 
 	# Adjust camera view
 	_adjust_camera_for_table_size(size_feet)
