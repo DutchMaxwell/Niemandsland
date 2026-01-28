@@ -745,6 +745,11 @@ func _on_table_size_selected(index: int) -> void:
 
 ## Apply custom table size
 func _on_apply_custom_size() -> void:
+	# Force SpinBoxes to apply any pending text input
+	# (otherwise clicking Apply without pressing Enter first would use old values)
+	width_input.apply()
+	length_input.apply()
+
 	var width = width_input.value
 	var length = length_input.value
 
