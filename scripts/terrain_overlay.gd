@@ -211,7 +211,6 @@ func update_overlay(cells_data: Dictionary, table_size: Vector2, grid_rotation: 
 		overlay_meshes.append(mesh_instance)
 
 	print("TerrainOverlay: Created %d mesh instances from %d cells_data entries" % [overlay_meshes.size(), cells_data.size()])
-	print("  Visible: %s, Position: (%.2f, %.2f, %.2f)" % [visible, position.x, position.y, position.z])
 
 
 ## Create a mesh instance for a single terrain cell
