@@ -60,6 +60,10 @@ var _is_group_rotating: bool = false
 @onready var clear_all_btn: Button = %ClearAll
 @onready var performance_label: Label = %PerformanceLabel
 
+# Hamburger menu
+@onready var hamburger_button: Button = %HamburgerButton
+@onready var left_panel_scroll: ScrollContainer = $UI/HUD/LeftPanelScroll
+
 # Table size UI elements
 @onready var table_size_option: OptionButton = %TableSizeOption
 @onready var custom_size_container: VBoxContainer = %CustomSizeContainer
@@ -155,6 +159,9 @@ var _tts_import_mode: String = "local"  # "local" or "online"
 
 func _ready() -> void:
 	print("OpenTTS Prototype v0.2 - Initializing...")
+
+	# Connect hamburger menu toggle
+	hamburger_button.pressed.connect(_on_hamburger_pressed)
 
 	# Connect UI buttons
 	load_model_btn.pressed.connect(_on_load_model)
@@ -613,6 +620,25 @@ func _spawn_grid(total: int, cols: int, rows: int) -> void:
 func _on_clear_all() -> void:
 	object_manager.clear_all_objects()
 	dice_result_label.text = ""
+
+
+## Toggle the left panel menu visibility with slide animation
+func _on_hamburger_pressed() -> void:
+	var is_opening = not left_panel_scroll.visible
+
+	if is_opening:
+		# Show panel and animate in
+		left_panel_scroll.visible = true
+		left_panel_scroll.modulate.a = 0.0
+		var tween = create_tween()
+		tween.tween_property(left_panel_scroll, "modulate:a", 1.0, 0.2)
+		hamburger_button.text = "✕"
+	else:
+		# Animate out then hide
+		var tween = create_tween()
+		tween.tween_property(left_panel_scroll, "modulate:a", 0.0, 0.15)
+		tween.tween_callback(func(): left_panel_scroll.visible = false)
+		hamburger_button.text = "☰"
 
 
 func _on_dice_rolled(total: int, results: Array) -> void:
