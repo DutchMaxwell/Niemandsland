@@ -168,11 +168,27 @@ theme_override_font_sizes/font_size = 16
 text = "FPS: 60 | Objects: 0"
 horizontal_alignment = 1
 
-[node name="LeftPanelScroll" type="ScrollContainer" parent="UI/HUD"]
+[node name="HamburgerButton" type="Button" parent="UI/HUD"]
+unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 0
 offset_left = 10.0
 offset_top = 10.0
+offset_right = 55.0
+offset_bottom = 55.0
+focus_mode = 0
+theme_override_colors/font_color = Color(0.95, 0.97, 1.0, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.8, 0.85, 1.0, 1)
+theme_override_font_sizes/font_size = 28
+text = "☰"
+
+[node name="LeftPanelScroll" type="ScrollContainer" parent="UI/HUD"]
+visible = false
+layout_mode = 1
+anchors_preset = 0
+offset_left = 10.0
+offset_top = 60.0
 offset_right = 210.0
 offset_bottom = 700.0
 horizontal_scroll_mode = 0
