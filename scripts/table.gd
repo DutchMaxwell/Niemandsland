@@ -42,9 +42,12 @@ func setup_table(size_feet: Vector2) -> void:
 	table_size = size_feet
 	var size_meters = size_feet * FEET_TO_METERS
 
-	# Remove old borders if any
+	# Remove old borders if any, but preserve overlay nodes
 	for child in get_children():
 		if child != mesh_instance and child != collision_shape:
+			# Preserve terrain overlay and other overlay nodes
+			if child.name == "TerrainOverlay" or child.is_in_group("table_overlay"):
+				continue
 			child.queue_free()
 
 	# Create table mesh

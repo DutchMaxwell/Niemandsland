@@ -209,6 +209,10 @@ func _draw() -> void:
 	if map_layout.show_deployment_zones:
 		_draw_deployment_zones(grid_rect)
 
+	# Draw mission objectives (always shown if any exist)
+	if map_layout.mission_objectives.size() > 0 or map_layout.objectives_editing:
+		_draw_mission_objectives(grid_rect, pixels_per_inch_x, pixels_per_inch_y)
+
 	# Draw table outline (always axis-aligned - represents the actual table)
 	draw_rect(grid_rect, Color.WHITE, false, 3.0)
 
@@ -620,3 +624,184 @@ func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixe
 		add_snap_point.call(corner, corner_color, corner_size)
 
 	map_layout._snap_points_valid = true
+
+
+func _draw_mission_objectives(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch_y: float) -> void:
+	## Draw mission objectives on the 1" grid
+	## Objectives are displayed as target circles with 3" seize radius rings
+	if not map_layout:
+		return
+
+	var grid_dims = map_layout._calculate_grid_dimensions()
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
+
+	# Half of total inches (for centering)
+	var half_inches_x = grid_dims.x * 3.0 / 2.0
+	var half_inches_y = grid_dims.y * 3.0 / 2.0
+
+	# Helper to convert 1" coordinates to screen position
+	var inch_to_screen = func(inch_pos: Vector2) -> Vector2:
+		var local_x = (inch_pos.x - half_inches_x) * pixels_per_inch_x
+		var local_y = (inch_pos.y - half_inches_y) * pixels_per_inch_y
+		var cos_a = cos(angle_rad)
+		var sin_a = sin(angle_rad)
+		return Vector2(
+			local_x * cos_a - local_y * sin_a,
+			local_x * sin_a + local_y * cos_a
+		) + center
+
+	var zoom = map_layout.zoom_level if map_layout else 1.0
+
+	# Draw 1" fine grid when in objectives editing mode
+	if map_layout.objectives_editing:
+		_draw_fine_grid(grid_rect, pixels_per_inch_x, pixels_per_inch_y)
+
+	# Calculate 3" seize radius in pixels (average of x and y scale)
+	var seize_radius_inches = 3.0
+	var seize_radius_pixels = seize_radius_inches * (pixels_per_inch_x + pixels_per_inch_y) / 2.0
+
+	# Colors
+	var objective_color = Color(1.0, 0.85, 0.2, 1.0)  # Gold/yellow
+	var objective_outline = Color(0.2, 0.15, 0.05, 1.0)  # Dark outline
+	var seize_ring_color = Color(1.0, 0.85, 0.2, 0.3)  # Semi-transparent gold
+	var seize_ring_border = Color(1.0, 0.85, 0.2, 0.6)  # Brighter border
+	var objective_size = 12.0 * zoom  # Size in pixels
+
+	# First pass: Draw 3" seize radius rings (behind objectives)
+	for i in range(map_layout.mission_objectives.size()):
+		var obj_pos = map_layout.mission_objectives[i]
+		var screen_pos = inch_to_screen.call(obj_pos)
+
+		# Draw seize radius ring (3" = capture zone)
+		_draw_circle_ring(screen_pos, seize_radius_pixels, seize_ring_color, seize_ring_border, 2.0 * zoom)
+
+	# Second pass: Draw objective markers (on top of rings)
+	for i in range(map_layout.mission_objectives.size()):
+		var obj_pos = map_layout.mission_objectives[i]
+		var screen_pos = inch_to_screen.call(obj_pos)
+
+		# Skip marker if outside visible area (ring may still be partially visible)
+		if not grid_rect.grow(seize_radius_pixels).has_point(screen_pos):
+			continue
+
+		# Draw objective marker (concentric circles like a target)
+		# Outer ring
+		draw_circle(screen_pos, objective_size, objective_outline)
+		draw_circle(screen_pos, objective_size - 2 * zoom, objective_color)
+
+		# Middle ring
+		draw_circle(screen_pos, objective_size * 0.6, objective_outline)
+		draw_circle(screen_pos, objective_size * 0.6 - 1.5 * zoom, objective_color)
+
+		# Center dot
+		draw_circle(screen_pos, objective_size * 0.25, objective_outline)
+
+		# Draw objective number
+		var font = ThemeDB.fallback_font
+		var label = str(i + 1)
+		draw_string(font, screen_pos + Vector2(objective_size + 4, 4) * zoom, label,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, int(12 * zoom), objective_color)
+
+	# Third pass: Draw warning lines between objectives that are too close (<9")
+	_draw_objective_distance_warnings(inch_to_screen, zoom)
+
+
+## Draw warning indicators between objectives that are closer than 9"
+func _draw_objective_distance_warnings(inch_to_screen: Callable, zoom: float) -> void:
+	const MIN_DISTANCE_INCHES := 9.0
+	var warning_color = Color(1.0, 0.25, 0.2, 0.9)  # Bright red
+	var warning_fill = Color(1.0, 0.25, 0.2, 0.3)  # Semi-transparent red
+
+	for i in range(map_layout.mission_objectives.size()):
+		for j in range(i + 1, map_layout.mission_objectives.size()):
+			var pos_i = map_layout.mission_objectives[i]
+			var pos_j = map_layout.mission_objectives[j]
+			var dist = pos_i.distance_to(pos_j)
+
+			if dist < MIN_DISTANCE_INCHES:
+				var screen_i = inch_to_screen.call(pos_i)
+				var screen_j = inch_to_screen.call(pos_j)
+
+				# Draw red dashed line between the two objectives
+				_draw_warning_line(screen_i, screen_j, warning_color, 3.0 * zoom)
+
+				# Draw exclamation mark at midpoint
+				var midpoint = (screen_i + screen_j) / 2.0
+				_draw_exclamation_mark(midpoint, warning_color, warning_fill, zoom)
+
+				# Draw distance label
+				var font = ThemeDB.fallback_font
+				var dist_label = "%.1f\"" % dist
+				draw_string(font, midpoint + Vector2(12, -8) * zoom, dist_label,
+					HORIZONTAL_ALIGNMENT_LEFT, -1, int(11 * zoom), warning_color)
+
+
+## Draw a warning line (dashed red line with arrow heads)
+func _draw_warning_line(from: Vector2, to: Vector2, color: Color, width: float) -> void:
+	var direction = (to - from).normalized()
+	var length = from.distance_to(to)
+	var dash_length = 8.0
+	var gap_length = 4.0
+
+	# Draw dashed line
+	var current_dist = 0.0
+	while current_dist < length:
+		var dash_start = from + direction * current_dist
+		var dash_end_dist = min(current_dist + dash_length, length)
+		var dash_end = from + direction * dash_end_dist
+		draw_line(dash_start, dash_end, color, width)
+		current_dist += dash_length + gap_length
+
+	# Draw small arrow heads at both ends pointing inward (indicating "too close")
+	var arrow_size = 8.0
+	var arrow_angle = 0.5  # radians
+
+	# Arrow at 'from' pointing toward 'to'
+	var arrow1_dir = direction
+	var arrow1_left = from + arrow1_dir.rotated(PI - arrow_angle) * arrow_size + direction * 5
+	var arrow1_right = from + arrow1_dir.rotated(PI + arrow_angle) * arrow_size + direction * 5
+	var arrow1_tip = from + direction * 5
+	draw_line(arrow1_tip, arrow1_left, color, width)
+	draw_line(arrow1_tip, arrow1_right, color, width)
+
+	# Arrow at 'to' pointing toward 'from'
+	var arrow2_dir = -direction
+	var arrow2_left = to + arrow2_dir.rotated(PI - arrow_angle) * arrow_size - direction * 5
+	var arrow2_right = to + arrow2_dir.rotated(PI + arrow_angle) * arrow_size - direction * 5
+	var arrow2_tip = to - direction * 5
+	draw_line(arrow2_tip, arrow2_left, color, width)
+	draw_line(arrow2_tip, arrow2_right, color, width)
+
+
+## Draw an exclamation mark warning symbol
+func _draw_exclamation_mark(pos: Vector2, color: Color, fill_color: Color, zoom: float) -> void:
+	var size = 20.0 * zoom
+
+	# Draw warning triangle background
+	var triangle_points = PackedVector2Array([
+		pos + Vector2(0, -size * 0.6),      # Top
+		pos + Vector2(-size * 0.5, size * 0.4),  # Bottom left
+		pos + Vector2(size * 0.5, size * 0.4)    # Bottom right
+	])
+	draw_colored_polygon(triangle_points, fill_color)
+
+	# Draw triangle border
+	for i in range(3):
+		var next_i = (i + 1) % 3
+		draw_line(triangle_points[i], triangle_points[next_i], color, 2.0 * zoom)
+
+	# Draw exclamation mark
+	var exclaim_color = color
+	# Vertical bar
+	draw_line(pos + Vector2(0, -size * 0.35), pos + Vector2(0, size * 0.05), exclaim_color, 3.0 * zoom)
+	# Dot
+	draw_circle(pos + Vector2(0, size * 0.22), 2.5 * zoom, exclaim_color)
+
+
+## Draw a filled circle with a border ring
+func _draw_circle_ring(pos: Vector2, radius: float, fill_color: Color, border_color: Color, border_width: float) -> void:
+	# Draw filled circle
+	draw_circle(pos, radius, fill_color)
+	# Draw border as arc (full circle)
+	draw_arc(pos, radius, 0, TAU, 64, border_color, border_width)

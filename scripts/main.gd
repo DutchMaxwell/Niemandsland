@@ -60,6 +60,10 @@ var _is_group_rotating: bool = false
 @onready var clear_all_btn: Button = %ClearAll
 @onready var performance_label: Label = %PerformanceLabel
 
+# Hamburger menu
+@onready var hamburger_button: Button = %HamburgerButton
+@onready var left_panel_scroll: ScrollContainer = $UI/HUD/LeftPanelScroll
+
 # Table size UI elements
 @onready var table_size_option: OptionButton = %TableSizeOption
 @onready var custom_size_container: VBoxContainer = %CustomSizeContainer
@@ -155,6 +159,9 @@ var _tts_import_mode: String = "local"  # "local" or "online"
 
 func _ready() -> void:
 	print("OpenTTS Prototype v0.2 - Initializing...")
+
+	# Connect hamburger menu toggle
+	hamburger_button.pressed.connect(_on_hamburger_pressed)
 
 	# Connect UI buttons
 	load_model_btn.pressed.connect(_on_load_model)
@@ -306,6 +313,7 @@ func _ready() -> void:
 	map_layout_editor.layout_closed.connect(_on_map_layout_closed)
 	map_layout_editor.layout_updated.connect(_on_map_layout_updated)
 	map_layout_editor.deployment_type_changed.connect(_on_deployment_type_changed)
+	map_layout_editor.objectives_changed.connect(_on_objectives_changed)
 	map_layout_btn.pressed.connect(_on_map_layout_pressed)
 
 	# Initialize Terrain Overlay (on the 3D table)
@@ -614,6 +622,25 @@ func _on_clear_all() -> void:
 	dice_result_label.text = ""
 
 
+## Toggle the left panel menu visibility with slide animation
+func _on_hamburger_pressed() -> void:
+	var is_opening = not left_panel_scroll.visible
+
+	if is_opening:
+		# Show panel and animate in
+		left_panel_scroll.visible = true
+		left_panel_scroll.modulate.a = 0.0
+		var tween = create_tween()
+		tween.tween_property(left_panel_scroll, "modulate:a", 1.0, 0.2)
+		hamburger_button.text = "✕"
+	else:
+		# Animate out then hide
+		var tween = create_tween()
+		tween.tween_property(left_panel_scroll, "modulate:a", 0.0, 0.15)
+		tween.tween_callback(func(): left_panel_scroll.visible = false)
+		hamburger_button.text = "☰"
+
+
 func _on_dice_rolled(total: int, results: Array) -> void:
 	var result_text = "Dice: %s = %d" % [str(results), total]
 	dice_result_label.text = result_text
@@ -744,6 +771,11 @@ func _on_table_size_selected(index: int) -> void:
 
 ## Apply custom table size
 func _on_apply_custom_size() -> void:
+	# Force SpinBoxes to apply any pending text input
+	# (otherwise clicking Apply without pressing Enter first would use old values)
+	width_input.apply()
+	length_input.apply()
+
 	var width = width_input.value
 	var length = length_input.value
 
@@ -780,16 +812,19 @@ func _set_table_size(size_feet: Vector2) -> void:
 	# Rebuild table
 	table.setup_table(size_feet)
 
-	# Update terrain overlay with new table size (if it exists and has terrain data)
-	# Note: Map Layout Editor clears terrain when table size changes (see set_table_size)
-	if terrain_overlay and map_layout_editor and map_layout_editor.has_method("get_current_layout"):
-		var layout_data = map_layout_editor.get_current_layout()
-		if layout_data and not layout_data.grid_cells.is_empty():
-			terrain_overlay.update_overlay(
-				layout_data.grid_cells,
-				size_feet,
-				layout_data.rotation
-			)
+	# Update map layout editor with new table size (this clears terrain/objectives data)
+	if map_layout_editor and map_layout_editor.has_method("set_table_size"):
+		map_layout_editor.set_table_size(size_feet)
+
+	# Clear and update terrain overlay (must always update, even with empty data)
+	if terrain_overlay:
+		# Clear all overlays since table size changed
+		if terrain_overlay.has_method("update_overlay"):
+			terrain_overlay.update_overlay({}, size_feet, 0.0)
+		if terrain_overlay.has_method("update_objectives"):
+			terrain_overlay.update_objectives([])
+		if terrain_overlay.has_method("set_deployment_zones"):
+			terrain_overlay.set_deployment_zones(0)  # NONE
 
 	# Adjust camera view
 	_adjust_camera_for_table_size(size_feet)
@@ -1376,6 +1411,11 @@ func _on_map_layout_closed() -> void:
 	# Reset zoom when closing map layout editor
 	if map_layout_editor and map_layout_editor.has_method("reset_zoom"):
 		map_layout_editor.reset_zoom()
+	# Update objectives on 3D terrain when closing
+	if map_layout_editor and map_layout_editor.has_method("get_objectives_for_overlay"):
+		var world_objectives = map_layout_editor.get_objectives_for_overlay()
+		if terrain_overlay and terrain_overlay.has_method("update_objectives"):
+			terrain_overlay.update_objectives(world_objectives)
 
 
 ## Handle deployment type change from Map Tool
@@ -1400,6 +1440,20 @@ func _on_deployment_type_changed(deployment_type: int) -> void:
 		terrain_overlay.set_deployment_zones_visible(true)
 		if deployment_zone_check:
 			deployment_zone_check.button_pressed = true
+
+
+## Handle objectives change from Map Tool
+func _on_objectives_changed(objectives: Array) -> void:
+	if not terrain_overlay or not terrain_overlay.has_method("update_objectives"):
+		return
+
+	# Convert 2D inch positions to 3D world positions
+	var world_objectives: Array[Vector3] = []
+	if map_layout_editor and map_layout_editor.has_method("get_objectives_for_overlay"):
+		world_objectives = map_layout_editor.get_objectives_for_overlay()
+
+	terrain_overlay.update_objectives(world_objectives)
+	print("Mission objectives updated: %d objectives" % world_objectives.size())
 
 
 ## Update terrain overlay when map layout changes

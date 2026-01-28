@@ -93,6 +93,11 @@ var fine_grid_visible := false
 var vertex_markers: Array[MeshInstance3D] = []
 var preview_line_mesh: MeshInstance3D = null
 
+## Mission objectives - displayed as markers with 3" seize radius
+var objective_meshes: Array[Node3D] = []  # Can be MeshInstance3D or Node3D containers
+var objective_ring_meshes: Array[MeshInstance3D] = []
+var mission_objectives: Array[Vector3] = []  # World positions in meters
+
 
 func _ready() -> void:
 	# Position slightly above table surface to avoid z-fighting
@@ -206,7 +211,6 @@ func update_overlay(cells_data: Dictionary, table_size: Vector2, grid_rotation: 
 		overlay_meshes.append(mesh_instance)
 
 	print("TerrainOverlay: Created %d mesh instances from %d cells_data entries" % [overlay_meshes.size(), cells_data.size()])
-	print("  Visible: %s, Position: (%.2f, %.2f, %.2f)" % [visible, position.x, position.y, position.z])
 
 
 ## Create a mesh instance for a single terrain cell
@@ -987,3 +991,182 @@ func get_terrain_bounds_by_type(terrain_type: int) -> Array[AABB]:
 			bounds.append(piece.bounds)
 
 	return bounds
+
+
+# ==============================================================================
+# MISSION OBJECTIVES
+# ==============================================================================
+
+## Update mission objectives display
+##
+## @param objectives: Array of Vector3 world positions (in meters)
+func update_objectives(objectives: Array) -> void:
+	_clear_objectives()
+	mission_objectives.clear()
+
+	for obj in objectives:
+		if obj is Vector3:
+			mission_objectives.append(obj)
+
+	if mission_objectives.is_empty():
+		return
+
+	# Create meshes for each objective
+	for i in range(mission_objectives.size()):
+		var obj_pos = mission_objectives[i]
+		_create_objective_marker(obj_pos, i + 1)
+
+	print("TerrainOverlay: Created %d objective markers" % mission_objectives.size())
+
+
+## Clear all objective meshes
+func _clear_objectives() -> void:
+	for mesh in objective_meshes:
+		if is_instance_valid(mesh):
+			mesh.queue_free()
+	objective_meshes.clear()
+
+	for mesh in objective_ring_meshes:
+		if is_instance_valid(mesh):
+			mesh.queue_free()
+	objective_ring_meshes.clear()
+
+
+## Create a single objective marker with 3" seize radius ring
+##
+## @param pos: World position in meters
+## @param number: Objective number for label
+func _create_objective_marker(pos: Vector3, number: int) -> void:
+	var objective_color = Color(1.0, 0.85, 0.2, 1.0)  # Gold/yellow
+	var border_color = Color(0.1, 0.1, 0.1, 1.0)  # Black border
+	var ring_color = Color(1.0, 0.85, 0.2, 0.25)  # Semi-transparent gold
+
+	# Create 3" seize radius ring (flat disc)
+	var seize_radius_m = 3.0 * INCHES_TO_METERS
+	var ring_mesh = _create_seize_radius_ring(pos, seize_radius_m, ring_color)
+	add_child(ring_mesh)
+	objective_ring_meshes.append(ring_mesh)
+
+	# Create objective token marker (1" diameter flat disc with black border)
+	var token_container = _create_objective_token(pos, number, objective_color, border_color)
+	add_child(token_container)
+	objective_meshes.append(token_container)
+
+
+## Create a ring mesh for the 3" seize radius
+func _create_seize_radius_ring(pos: Vector3, radius: float, color: Color) -> MeshInstance3D:
+	var mesh_instance = MeshInstance3D.new()
+
+	# Create a flat disc mesh using CylinderMesh with very small height
+	var cylinder = CylinderMesh.new()
+	cylinder.top_radius = radius
+	cylinder.bottom_radius = radius
+	cylinder.height = 0.002  # Very thin disc (2mm)
+	cylinder.radial_segments = 64
+
+	mesh_instance.mesh = cylinder
+	mesh_instance.position = Vector3(pos.x, Z_FIGHT_OFFSET * 2, pos.z)
+
+	# Create transparent material
+	var material = StandardMaterial3D.new()
+	material.albedo_color = color
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+	mesh_instance.material_override = material
+
+	return mesh_instance
+
+
+## Create an objective token marker (like unit tokens: 1" diameter, black border, numbered)
+func _create_objective_token(pos: Vector3, number: int, fill_color: Color, border_color: Color) -> Node3D:
+	var container = Node3D.new()
+	container.position = Vector3(pos.x, Z_FIGHT_OFFSET * 3, pos.z)
+
+	# Token dimensions: 1" diameter = 0.0254m, but we use half for radius
+	var token_radius = 0.5 * INCHES_TO_METERS  # 0.5" radius = 1" diameter
+	var border_width = 0.08 * INCHES_TO_METERS  # Border thickness
+	var token_height = 0.003  # 3mm thick
+
+	# Create black border disc (slightly larger)
+	var border_mesh = MeshInstance3D.new()
+	var border_cylinder = CylinderMesh.new()
+	border_cylinder.top_radius = token_radius + border_width
+	border_cylinder.bottom_radius = token_radius + border_width
+	border_cylinder.height = token_height
+	border_cylinder.radial_segments = 32
+	border_mesh.mesh = border_cylinder
+	border_mesh.position = Vector3(0, 0, 0)
+
+	var border_material = StandardMaterial3D.new()
+	border_material.albedo_color = border_color
+	border_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	border_mesh.material_override = border_material
+	container.add_child(border_mesh)
+
+	# Create gold fill disc (on top of border)
+	var fill_mesh = MeshInstance3D.new()
+	var fill_cylinder = CylinderMesh.new()
+	fill_cylinder.top_radius = token_radius
+	fill_cylinder.bottom_radius = token_radius
+	fill_cylinder.height = token_height + 0.001  # Slightly higher to prevent z-fighting
+	fill_cylinder.radial_segments = 32
+	fill_mesh.mesh = fill_cylinder
+	fill_mesh.position = Vector3(0, 0.001, 0)
+
+	var fill_material = StandardMaterial3D.new()
+	fill_material.albedo_color = fill_color
+	fill_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	fill_mesh.material_override = fill_material
+	container.add_child(fill_mesh)
+
+	# Create 3D text label for the objective number
+	var label_3d = Label3D.new()
+	label_3d.text = str(number)
+	label_3d.font_size = 72
+	label_3d.pixel_size = 0.0003  # Scale to fit on token
+	label_3d.position = Vector3(0, token_height + 0.002, 0)
+	label_3d.rotation_degrees = Vector3(-90, 0, 0)  # Face upward
+	label_3d.modulate = border_color  # Black text
+	label_3d.outline_modulate = fill_color
+	label_3d.outline_size = 8
+	label_3d.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label_3d.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label_3d.no_depth_test = true  # Always visible
+	label_3d.shaded = false
+	container.add_child(label_3d)
+
+	return container
+
+
+## Legacy function - kept for compatibility
+func _create_objective_pillar(pos: Vector3, color: Color) -> MeshInstance3D:
+	var mesh_instance = MeshInstance3D.new()
+
+	# Create a small cylinder as marker
+	var cylinder = CylinderMesh.new()
+	cylinder.top_radius = 0.02  # 2cm top
+	cylinder.bottom_radius = 0.03  # 3cm bottom
+	cylinder.height = 0.08  # 8cm tall
+	cylinder.radial_segments = 16
+
+	mesh_instance.mesh = cylinder
+	# Position at half height so bottom touches ground
+	mesh_instance.position = Vector3(pos.x, 0.04 + Z_FIGHT_OFFSET, pos.z)
+
+	# Create material
+	var material = StandardMaterial3D.new()
+	material.albedo_color = color
+	material.emission_enabled = true
+	material.emission = color
+	material.emission_energy_multiplier = 0.5
+
+	mesh_instance.material_override = material
+
+	return mesh_instance
+
+
+## Get objectives for AI/gameplay use
+func get_objectives() -> Array[Vector3]:
+	return mission_objectives.duplicate()
