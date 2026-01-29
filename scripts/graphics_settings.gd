@@ -5,6 +5,7 @@ extends Node
 signal settings_applied(preset_name: String)
 
 enum QualityPreset {
+	PERFORMANCE,  # New: Maximum FPS mode
 	LOW,
 	MEDIUM,
 	HIGH,
@@ -15,86 +16,105 @@ enum QualityPreset {
 var current_preset: QualityPreset = QualityPreset.MEDIUM
 var custom_settings: Dictionary = {}
 
-# Preset configurations - ALL use native resolution for sharp rendering
+# Preset configurations - optimized for tabletop gaming performance
 const PRESETS = {
-	QualityPreset.ULTRA: {
-		"name": "Ultra",
-		"description": "Native 4K, Maximum Quality",
-		"msaa_3d": 3,  # 8x MSAA
+	QualityPreset.PERFORMANCE: {
+		"name": "Performance",
+		"description": "Maximum FPS, Minimal Effects",
+		"msaa_3d": 0,  # No MSAA - use FXAA only
 		"use_taa": false,
-		"shadow_size": 8192,
-		"shadow_filter": 5,  # Ultra soft shadows
+		"shadow_size": 1024,
+		"shadow_filter": 1,  # Basic shadows
+		"ssao": false,  # Disabled for max performance
+		"ssao_radius": 0.5,
+		"ssao_intensity": 0.5,
+		"ssil": false,
+		"ssr": false,
+		"sdfgi": false,
+		"volumetric_fog": false,
+		"fsr_scale": 0.77,  # FSR Quality mode for extra FPS
+		"glow": false,
+		"glow_intensity": 0.0,
+		"glow_bloom": 0.0,
+	},
+	QualityPreset.LOW: {
+		"name": "Low",
+		"description": "Good Performance",
+		"msaa_3d": 1,  # 2x MSAA (was 4x)
+		"use_taa": false,
+		"shadow_size": 2048,
+		"shadow_filter": 2,
+		"ssao": false,  # Disabled for better FPS
+		"ssao_radius": 0.8,
+		"ssao_intensity": 0.8,
+		"ssil": false,
+		"ssr": false,
+		"sdfgi": false,
+		"volumetric_fog": false,
+		"fsr_scale": 1.0,
+		"glow": false,
+		"glow_intensity": 0.4,
+		"glow_bloom": 0.05,
+	},
+	QualityPreset.MEDIUM: {
+		"name": "Medium",
+		"description": "Balanced Quality/Performance",
+		"msaa_3d": 2,  # 4x MSAA (was 8x)
+		"use_taa": false,
+		"shadow_size": 4096,
+		"shadow_filter": 3,
 		"ssao": true,
-		"ssao_radius": 2.5,
-		"ssao_intensity": 2.0,
-		"ssil": true,
-		"ssr": true,
-		"sdfgi": true,
-		"sdfgi_cascades": 6,
-		"volumetric_fog": true,
-		"fsr_scale": 1.0,  # NATIVE - no scaling!
+		"ssao_radius": 1.0,  # Reduced from 2.0 - more appropriate for tabletop scale
+		"ssao_intensity": 1.0,
+		"ssil": false,
+		"ssr": false,  # Disabled - expensive and not critical for tabletop
+		"sdfgi": false,
+		"volumetric_fog": false,
+		"fsr_scale": 1.0,
 		"glow": true,
-		"glow_intensity": 0.7,
-		"glow_bloom": 0.2,
+		"glow_intensity": 0.5,
+		"glow_bloom": 0.1,
 	},
 	QualityPreset.HIGH: {
 		"name": "High",
-		"description": "Native Resolution, High Quality",
+		"description": "High Quality",
+		"msaa_3d": 2,  # 4x MSAA (was 8x)
+		"use_taa": false,
+		"shadow_size": 4096,  # Reduced from 8192
+		"shadow_filter": 4,
+		"ssao": true,
+		"ssao_radius": 1.2,
+		"ssao_intensity": 1.2,
+		"ssil": false,  # Disabled - very expensive
+		"ssr": true,
+		"sdfgi": false,  # Disabled - extremely expensive
+		"sdfgi_cascades": 4,
+		"volumetric_fog": false,
+		"fsr_scale": 1.0,
+		"glow": true,
+		"glow_intensity": 0.6,
+		"glow_bloom": 0.15,
+	},
+	QualityPreset.ULTRA: {
+		"name": "Ultra",
+		"description": "Maximum Quality",
 		"msaa_3d": 3,  # 8x MSAA
 		"use_taa": false,
 		"shadow_size": 8192,
 		"shadow_filter": 5,
 		"ssao": true,
-		"ssao_radius": 2.5,
-		"ssao_intensity": 1.8,
+		"ssao_radius": 1.5,  # Reduced from 2.5 - more appropriate
+		"ssao_intensity": 1.5,
 		"ssil": true,
 		"ssr": true,
-		"sdfgi": true,
+		"sdfgi": false,  # Disabled by default - too expensive for most setups
 		"sdfgi_cascades": 4,
 		"volumetric_fog": false,
-		"fsr_scale": 1.0,  # NATIVE - no scaling!
+		"fsr_scale": 1.0,
 		"glow": true,
 		"glow_intensity": 0.7,
 		"glow_bloom": 0.2,
 	},
-	QualityPreset.MEDIUM: {
-		"name": "Medium",
-		"description": "Native Resolution, Balanced",
-		"msaa_3d": 3,  # 8x MSAA - keep high for sharp edges
-		"use_taa": false,
-		"shadow_size": 4096,
-		"shadow_filter": 4,
-		"ssao": true,
-		"ssao_radius": 2.0,
-		"ssao_intensity": 1.5,
-		"ssil": false,
-		"ssr": true,
-		"sdfgi": false,
-		"volumetric_fog": false,
-		"fsr_scale": 1.0,  # NATIVE - no scaling!
-		"glow": true,
-		"glow_intensity": 0.6,
-		"glow_bloom": 0.15,
-	},
-	QualityPreset.LOW: {
-		"name": "Low",
-		"description": "Performance Mode",
-		"msaa_3d": 2,  # 4x MSAA
-		"use_taa": false,
-		"shadow_size": 2048,
-		"shadow_filter": 2,
-		"ssao": true,
-		"ssao_radius": 1.5,
-		"ssao_intensity": 1.0,
-		"ssil": false,
-		"ssr": false,
-		"sdfgi": false,
-		"volumetric_fog": false,
-		"fsr_scale": 1.0,  # Keep native even on low
-		"glow": true,
-		"glow_intensity": 0.5,
-		"glow_bloom": 0.1,
-	}
 }
 
 
