@@ -24,8 +24,8 @@ const TABLE_SIZE_INDEX_4X4 := 0
 const TABLE_SIZE_INDEX_6X4 := 1
 const TABLE_SIZE_INDEX_CUSTOM := 2
 
-## Graphics quality mapping (UI index to enum)
-const GRAPHICS_QUALITY_UI_MAX := 3  # Maps UI (Low=0, Medium=1, High=2, Ultra=3) to enum
+## Graphics quality mapping (UI index matches enum directly)
+## UI: Performance=0, Low=1, Medium=2, High=3, Ultra=4
 
 ## Group rotation
 const GROUP_ROTATION_SPEED: float = 90.0  # degrees per second
@@ -133,6 +133,9 @@ var wgs_import_dialog: WGSImportDialog = null
 var map_layout_editor: Control = null
 var terrain_overlay: Node3D = null
 
+# End Battle / Main Menu
+@onready var end_battle_btn: Button = %EndBattleBtn
+
 # Atmospheric Effects
 var atmospheric_clouds: Node3D = null
 
@@ -162,6 +165,9 @@ func _ready() -> void:
 
 	# Connect hamburger menu toggle
 	hamburger_button.pressed.connect(_on_hamburger_pressed)
+
+	# Connect End Battle button
+	end_battle_btn.pressed.connect(_on_end_battle_pressed)
 
 	# Connect UI buttons
 	load_model_btn.pressed.connect(_on_load_model)
@@ -228,9 +234,8 @@ func _ready() -> void:
 
 	# Connect Graphics Settings UI
 	graphics_quality_option.item_selected.connect(_on_graphics_quality_changed)
-	# Set initial selection based on current preset (map enum to UI index)
-	# Enum: ULTRA=0, HIGH=1, MEDIUM=2, LOW=3 -> UI: Low=0, Medium=1, High=2, Ultra=3
-	graphics_quality_option.selected = GRAPHICS_QUALITY_UI_MAX - GraphicsSettings.current_preset
+	# Set initial selection based on current preset (UI index matches enum directly)
+	graphics_quality_option.selected = GraphicsSettings.current_preset
 
 	# Connect Terrain Browser UI
 	terrain_library.object_manager = object_manager
@@ -639,6 +644,12 @@ func _on_hamburger_pressed() -> void:
 		tween.tween_property(left_panel_scroll, "modulate:a", 0.0, 0.15)
 		tween.tween_callback(func(): left_panel_scroll.visible = false)
 		hamburger_button.text = "☰"
+
+
+## End Battle and return to Main Menu
+func _on_end_battle_pressed() -> void:
+	print("Ending battle, returning to main menu...")
+	get_tree().change_scene_to_file("res://scenes/startup_menu.tscn")
 
 
 func _on_dice_rolled(total: int, results: Array) -> void:
@@ -1360,23 +1371,25 @@ func _on_intro_finished() -> void:
 ## ============================================================================
 
 ## Handle graphics quality selection change
-## UI order: Low=0, Medium=1, High=2, Ultra=3
-## Enum order: ULTRA=0, HIGH=1, MEDIUM=2, LOW=3
+## UI order matches enum: Performance=0, Low=1, Medium=2, High=3, Ultra=4
 func _on_graphics_quality_changed(index: int) -> void:
 	var preset: GraphicsSettings.QualityPreset
 	var preset_name: String
 
 	match index:
-		0:  # Low
+		0:  # Performance
+			preset = GraphicsSettings.QualityPreset.PERFORMANCE
+			preset_name = "Performance"
+		1:  # Low
 			preset = GraphicsSettings.QualityPreset.LOW
 			preset_name = "Low"
-		1:  # Medium
+		2:  # Medium
 			preset = GraphicsSettings.QualityPreset.MEDIUM
 			preset_name = "Medium"
-		2:  # High
+		3:  # High
 			preset = GraphicsSettings.QualityPreset.HIGH
 			preset_name = "High"
-		3:  # Ultra
+		4:  # Ultra
 			preset = GraphicsSettings.QualityPreset.ULTRA
 			preset_name = "Ultra"
 		_:
