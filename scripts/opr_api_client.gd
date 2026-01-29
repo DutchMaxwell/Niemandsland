@@ -430,9 +430,13 @@ func _parse_tts_weapon(data) -> OPRWeapon:
 
 	var weapon = OPRWeapon.new()
 	weapon.name = data.get("name", data.get("label", "Unknown"))
-	weapon.range_value = data.get("range", 0)
-	weapon.attacks = data.get("attacks", 0)  # Default 0 to detect non-weapons
-	weapon.count = data.get("count", 1)
+	# Handle null values explicitly (get() returns null if key exists but value is null)
+	var range_val = data.get("range", 0)
+	weapon.range_value = range_val if range_val != null else 0
+	var attacks_val = data.get("attacks", 0)
+	weapon.attacks = attacks_val if attacks_val != null else 0
+	var count_val = data.get("count", 1)
+	weapon.count = count_val if count_val != null else 1
 
 	var rules = data.get("specialRules", [])
 	for rule in rules:
