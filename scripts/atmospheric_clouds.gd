@@ -21,6 +21,10 @@ var cloud_materials: Array[ShaderMaterial] = []
 var cloud_meshes: Array[MeshInstance3D] = []
 var camera_controller: Node3D = null
 
+# Performance: Cache previous values to avoid redundant updates
+var _last_visibility: float = -1.0
+var _last_target_pos: Vector3 = Vector3(INF, INF, INF)
+
 # Different settings per layer for variation
 const LAYER_SETTINGS = [
 	{"density": 0.35, "scroll_speed": 0.015, "scroll_dir": Vector2(1.0, 0.2), "scale1": 1.2, "scale2": 2.5},
@@ -134,9 +138,11 @@ func _process(_delta: float) -> void:
 			1.0
 		)
 
-	# Update material visibility
-	for material in cloud_materials:
-		material.set_shader_parameter("visibility", visibility)
+	# Performance: Only update material visibility when it actually changes
+	if not is_equal_approx(visibility, _last_visibility):
+		for material in cloud_materials:
+			material.set_shader_parameter("visibility", visibility)
+		_last_visibility = visibility
 
 	# Follow camera target position (stay above the table)
 	if camera_controller:
@@ -146,8 +152,11 @@ func _process(_delta: float) -> void:
 		elif "target_position" in camera_controller:
 			target_pos = camera_controller.target_position
 
-		global_position.x = target_pos.x
-		global_position.z = target_pos.z
+		# Performance: Only update position when it actually changes
+		if not target_pos.is_equal_approx(_last_target_pos):
+			global_position.x = target_pos.x
+			global_position.z = target_pos.z
+			_last_target_pos = target_pos
 
 
 ## Set cloud color theme
