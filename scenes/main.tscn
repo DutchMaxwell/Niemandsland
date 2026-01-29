@@ -589,6 +589,15 @@ file_mode = 0
 access = 2
 filters = PackedStringArray("*.otts ; OpenTTS Save")
 
+[node name="EndBattleConfirmDialog" type="ConfirmationDialog" parent="UI"]
+unique_name_in_owner = true
+title = "End Battle"
+initial_position = 2
+size = Vector2i(350, 100)
+ok_button_text = "Yes, Exit"
+dialog_text = "Really quit to main menu?
+All unsaved progress will be lost."
+
 [node name="TerrainBrowserPopup" type="Window" parent="UI"]
 unique_name_in_owner = true
 title = "Terrain Browser"
