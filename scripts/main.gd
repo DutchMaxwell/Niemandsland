@@ -135,6 +135,7 @@ var terrain_overlay: Node3D = null
 
 # End Battle / Main Menu
 @onready var end_battle_btn: Button = %EndBattleBtn
+@onready var end_battle_confirm_dialog: ConfirmationDialog = %EndBattleConfirmDialog
 
 # Atmospheric Effects
 var atmospheric_clouds: Node3D = null
@@ -166,8 +167,9 @@ func _ready() -> void:
 	# Connect hamburger menu toggle
 	hamburger_button.pressed.connect(_on_hamburger_pressed)
 
-	# Connect End Battle button
+	# Connect End Battle button and confirmation dialog
 	end_battle_btn.pressed.connect(_on_end_battle_pressed)
+	end_battle_confirm_dialog.confirmed.connect(_on_end_battle_confirmed)
 
 	# Connect UI buttons
 	load_model_btn.pressed.connect(_on_load_model)
@@ -646,8 +648,13 @@ func _on_hamburger_pressed() -> void:
 		hamburger_button.text = "☰"
 
 
-## End Battle and return to Main Menu
+## Show confirmation dialog before ending battle
 func _on_end_battle_pressed() -> void:
+	end_battle_confirm_dialog.popup_centered()
+
+
+## Confirmed: End Battle and return to Main Menu
+func _on_end_battle_confirmed() -> void:
 	print("Ending battle, returning to main menu...")
 	get_tree().change_scene_to_file("res://scenes/startup_menu.tscn")
 
