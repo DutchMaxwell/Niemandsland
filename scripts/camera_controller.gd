@@ -77,6 +77,42 @@ func _mark_dirty() -> void:
 	_transform_dirty = true
 
 
+## Check if mouse is over a scrollable UI element (to prevent zoom when scrolling menus)
+func _is_mouse_over_scrollable_ui() -> bool:
+	var mouse_pos = get_viewport().get_mouse_position()
+
+	# Find the UI layer and check for visible scroll containers
+	var ui_layer = get_tree().root.find_child("UI", true, false)
+	if not ui_layer:
+		return false
+
+	# Check LeftPanelScroll (hamburger menu)
+	var left_panel = ui_layer.find_child("LeftPanelScroll", true, false)
+	if left_panel and left_panel is Control and left_panel.visible:
+		if left_panel.get_global_rect().has_point(mouse_pos):
+			return true
+
+	# Check any other visible ScrollContainers
+	for child in ui_layer.get_children():
+		if _check_scroll_container_recursive(child, mouse_pos):
+			return true
+
+	return false
+
+
+## Recursively check if mouse is over any visible ScrollContainer
+func _check_scroll_container_recursive(node: Node, mouse_pos: Vector2) -> bool:
+	if node is ScrollContainer and node.visible:
+		if node.get_global_rect().has_point(mouse_pos):
+			return true
+
+	for child in node.get_children():
+		if _check_scroll_container_recursive(child, mouse_pos):
+			return true
+
+	return false
+
+
 func _input(event: InputEvent) -> void:
 	# Handle mouse button events
 	if event is InputEventMouseButton:
@@ -94,11 +130,13 @@ func _input(event: InputEvent) -> void:
 			if mouse_event.pressed:
 				_last_mouse_pos = mouse_event.position
 
-		# Scroll wheel for zoom
+		# Scroll wheel for zoom - but NOT when mouse is over UI
 		elif mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_zoom(-zoom_speed)
+			if not _is_mouse_over_scrollable_ui():
+				_zoom(-zoom_speed)
 		elif mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_zoom(zoom_speed)
+			if not _is_mouse_over_scrollable_ui():
+				_zoom(zoom_speed)
 
 	# Handle mouse motion
 	elif event is InputEventMouseMotion:
