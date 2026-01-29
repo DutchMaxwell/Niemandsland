@@ -59,12 +59,17 @@ var army_trays: Dictionary = {}  # player_id -> Node3D
 ## OPR API Client
 var api_client: OPRApiClient
 
+## Model registry: faction_folder -> Array of {name: String, path: String}
+## This is loaded at startup to work around DirAccess not working in exports
+var model_registry: Dictionary = {}
+
 
 func _ready() -> void:
 	api_client = OPRApiClient.new()
 	add_child(api_client)
 	api_client.army_loaded.connect(_on_army_loaded)
 	api_client.import_failed.connect(_on_import_failed)
+	_load_model_registry()
 
 
 ## Import army from file for a specific player
@@ -613,31 +618,97 @@ func clear_army(player_id: int) -> void:
 
 # ===== GLB Model Loading Functions =====
 
+## Load the model registry from units.json files in each faction folder
+## This is necessary because DirAccess does not work with res:// paths in exported builds
+func _load_model_registry() -> void:
+	# List of known faction folders with GLB models
+	var faction_folders = ["alien_hives"]
+
+	for folder in faction_folders:
+		var units_json_path = "res://assets/miniatures/%s/units.json" % folder
+		var glb_base_path = "res://assets/miniatures/%s/glb/" % folder
+
+		if not ResourceLoader.exists(units_json_path):
+			print("OPRArmyManager: units.json not found for faction: %s" % folder)
+			continue
+
+		# Load and parse units.json
+		var file = FileAccess.open(units_json_path, FileAccess.READ)
+		if not file:
+			print("OPRArmyManager: Could not open units.json for faction: %s" % folder)
+			continue
+
+		var json_text = file.get_as_text()
+		file.close()
+
+		var json = JSON.new()
+		var parse_result = json.parse(json_text)
+		if parse_result != OK:
+			print("OPRArmyManager: Failed to parse units.json for faction: %s" % folder)
+			continue
+
+		var data = json.data
+		if not data.has("units"):
+			continue
+
+		var models: Array = []
+		var units_dict = data.get("units", {})
+
+		# For each unit, try to find matching GLB file using numbered prefixes
+		for unit_key in units_dict.keys():
+			var unit_data = units_dict[unit_key]
+			var unit_name = unit_data.get("name", unit_key)
+
+			# Try numbered prefixes 01-99
+			for i in range(1, 100):
+				var prefix = "%02d" % i
+				var glb_filename = "%s_%s.glb" % [prefix, unit_name]
+				var full_path = glb_base_path + glb_filename
+
+				if ResourceLoader.exists(full_path):
+					models.append({"name": unit_name, "path": full_path})
+					break
+
+		model_registry[folder] = models
+		print("OPRArmyManager: Loaded %d models for faction '%s'" % [models.size(), folder])
+
+
 ## Find the GLB model file for a unit based on faction folder and unit name
+## Uses the pre-loaded model registry to work in exported builds
 func _find_model_for_unit(unit_name: String, faction_folder: String) -> String:
 	if faction_folder.is_empty():
 		return ""
 
-	var glb_path = "res://assets/miniatures/%s/glb/" % faction_folder
+	# Check if we have models registered for this faction
+	if model_registry.has(faction_folder):
+		var models = model_registry[faction_folder]
+		for model_entry in models:
+			# Check if unit name matches (case insensitive)
+			if unit_name.to_lower() in model_entry.name.to_lower():
+				print("OPRArmyManager: Found model for '%s' -> %s" % [unit_name, model_entry.path])
+				return model_entry.path
 
-	# Check if directory exists
-	var dir = DirAccess.open(glb_path)
-	if not dir:
-		print("OPRArmyManager: GLB folder not found: %s" % glb_path)
-		return ""
+	# Fallback: Try direct path construction with ResourceLoader.exists()
+	# This handles cases where the model might exist but isn't in the registry
+	var glb_base_path = "res://assets/miniatures/%s/glb/" % faction_folder
 
-	dir.list_dir_begin()
-	var file_name = dir.get_next()
-	while file_name != "":
-		if file_name.ends_with(".glb"):
-			# Check if unit name is contained in file name (case insensitive)
-			if unit_name.to_lower() in file_name.to_lower():
-				var full_path = glb_path + file_name
-				print("OPRArmyManager: Found model for '%s' -> %s" % [unit_name, file_name])
-				return full_path
-		file_name = dir.get_next()
+	# Try numbered prefixes 01-99
+	for i in range(1, 100):
+		var prefix = "%02d" % i
+		var glb_filename = "%s_%s.glb" % [prefix, unit_name]
+		var full_path = glb_base_path + glb_filename
 
-	print("OPRArmyManager: No model found for '%s' in %s" % [unit_name, glb_path])
+		if ResourceLoader.exists(full_path):
+			print("OPRArmyManager: Found model for '%s' -> %s (fallback)" % [unit_name, full_path])
+			return full_path
+
+	# Also try without prefix (in case naming convention changes)
+	var direct_path = glb_base_path + unit_name + ".glb"
+	if ResourceLoader.exists(direct_path):
+		print("OPRArmyManager: Found model for '%s' -> %s (direct)" % [unit_name, direct_path])
+		return direct_path
+
+	print("OPRArmyManager: No model found for '%s' in %s" % [unit_name, faction_folder])
 	return ""
 
 
