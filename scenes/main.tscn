@@ -252,6 +252,13 @@ layout_mode = 2
 focus_mode = 0
 text = "Clear Table"
 
+[node name="SortTableBtn" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+text = "Sort Table"
+tooltip_text = "Reset all units to import positions and clear status"
+
 [node name="TableSizePanel" type="VBoxContainer" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox"]
 layout_mode = 2
 
