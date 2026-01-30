@@ -74,14 +74,6 @@ var _network_manager: Node = null
 # Terrain overlay reference (for terrain hints)
 var terrain_overlay: Node3D = null
 
-# Long-press for context menu
-var _long_press_timer: float = 0.0
-var _long_press_position: Vector2 = Vector2.ZERO
-var _is_long_pressing: bool = false
-var _long_press_object: Node3D = null
-const LONG_PRESS_DURATION: float = 0.4  # Seconds to hold for context menu
-const LONG_PRESS_MOVE_THRESHOLD: float = 10.0  # Pixels - cancel if moved more than this
-
 # Preload resources (will be scenes in full version)
 # Standard wargaming miniature sizes
 const MINIATURE_HEIGHT: float = 0.032  # 32mm height
@@ -284,13 +276,6 @@ func _process(delta: float) -> void:
 			if is_instance_valid(obj):
 				obj.rotate_y(rotation_amount)
 
-	# Long-press timer for context menu
-	if _is_long_pressing:
-		_long_press_timer += delta
-		if _long_press_timer >= LONG_PRESS_DURATION:
-			_trigger_context_menu()
-			_cancel_long_press()
-
 
 ## Checks if a GUI element is blocking input (e.g., modal dialog)
 func _is_gui_blocking_input() -> bool:
@@ -326,12 +311,10 @@ func _input(event: InputEvent) -> void:
 					# Shift + Left-click starts measurement
 					_start_measuring(mouse_event.position)
 				else:
-					# Start long-press detection and selection
-					_start_long_press(mouse_event.position)
+					# Left-click for selection
 					_try_select_at_mouse(mouse_event.position, mouse_event.alt_pressed)
 			else:
-				# Mouse released - cancel long press and handle other actions
-				_cancel_long_press()
+				# Mouse released
 				if _is_measuring:
 					_stop_measuring(mouse_event.position)
 				elif _is_box_selecting:
@@ -339,13 +322,20 @@ func _input(event: InputEvent) -> void:
 				else:
 					_stop_dragging()
 
-	elif event is InputEventMouseMotion:
-		# Check if mouse moved too far during long press
-		if _is_long_pressing:
-			var distance = event.position.distance_to(_long_press_position)
-			if distance > LONG_PRESS_MOVE_THRESHOLD:
-				_cancel_long_press()
+		# Right-click for context menu (radial menu)
+		elif mouse_event.button_index == MOUSE_BUTTON_RIGHT:
+			if mouse_event.pressed:
+				var clicked_object = _get_object_at_position(mouse_event.position)
+				if clicked_object:
+					# Select object if not already selected
+					if clicked_object not in _selected_objects:
+						_deselect_all()
+						_add_to_selection(clicked_object)
+					# Open context menu
+					context_menu_requested.emit(mouse_event.position, _selected_objects.duplicate())
+					get_viewport().set_input_as_handled()
 
+	elif event is InputEventMouseMotion:
 		if _is_dragging:
 			_update_drag(event.position)
 		elif _is_box_selecting:
@@ -474,30 +464,28 @@ func select_objects(objects: Array) -> void:
 			_add_to_selection(obj)
 
 
-## Start long-press detection for context menu
-func _start_long_press(screen_pos: Vector2) -> void:
-	_is_long_pressing = true
-	_long_press_timer = 0.0
-	_long_press_position = screen_pos
+## Get the selectable object at screen position (for right-click context menu)
+func _get_object_at_position(screen_pos: Vector2) -> Node3D:
+	var camera = get_viewport().get_camera_3d()
+	if not camera:
+		return null
 
+	var from = camera.project_ray_origin(screen_pos)
+	var to = from + camera.project_ray_normal(screen_pos) * 100
 
-## Cancel long-press detection
-func _cancel_long_press() -> void:
-	_is_long_pressing = false
-	_long_press_timer = 0.0
+	var space_state = get_world_3d().direct_space_state
+	var query = PhysicsRayQueryParameters3D.create(from, to)
+	query.collision_mask = 0xFFFFFFFF
+	query.collide_with_bodies = true
 
+	var result = space_state.intersect_ray(query)
 
-## Trigger the context menu after successful long-press
-func _trigger_context_menu() -> void:
-	if _selected_objects.is_empty():
-		return
+	if result and result.collider:
+		if result.collider.is_in_group("selectable"):
+			if not is_object_locked(result.collider):
+				return result.collider
 
-	# Stop any dragging
-	if _is_dragging:
-		_cancel_drag()
-
-	# Emit context menu signal
-	context_menu_requested.emit(_long_press_position, _selected_objects.duplicate())
+	return null
 
 
 ## Apply highlight to an object to show it's selected
@@ -2448,6 +2436,51 @@ func clear_all_objects(broadcast: bool = true) -> void:
 	_object_counter = 0
 
 
+## Resets all units to their import positions and clears all markers/status
+## Unlike clear_all_objects(), this preserves the models
+func sort_table() -> void:
+	# Get reference to OPR army manager via Main
+	var main = get_tree().root.find_child("Main", true, false)
+	if not main:
+		print("Sort Table: Could not find Main node")
+		return
+
+	var army_manager = main.get("opr_army_manager")
+	if not army_manager:
+		print("Sort Table: No OPR Army Manager found")
+		return
+
+	# Get all game units
+	var all_units: Array = []
+	if army_manager.has_method("get_all_game_units"):
+		all_units = army_manager.get_all_game_units()
+	elif "game_units" in army_manager:
+		all_units = army_manager.game_units.values()
+
+	if all_units.is_empty():
+		print("Sort Table: No units to reset")
+		return
+
+	# Reset all game units to import state
+	for game_unit in all_units:
+		if game_unit and game_unit.has_method("reset_to_import_state"):
+			game_unit.reset_to_import_state()
+
+	# Clear selection
+	_deselect_all()
+
+	# Update visual markers via radial menu controller
+	var radial_controller = main.get("radial_menu_controller")
+	if radial_controller:
+		for game_unit in all_units:
+			if radial_controller.has_method("initialize_status_markers_for_unit"):
+				radial_controller.initialize_status_markers_for_unit(game_unit)
+			if radial_controller.has_method("initialize_caster_marker_for_unit"):
+				radial_controller.initialize_caster_marker_for_unit(game_unit)
+
+	print("Sort Table: Reset %d units to import positions" % all_units.size())
+
+
 ## ============================================================================
 ## TTS (Tabletop Simulator) Import Functions
 ## ============================================================================
@@ -3331,8 +3364,5 @@ func rotate_selected_group(angle_degrees: float) -> void:
 				offset.x * sin(angle_rad) + offset.z * cos(angle_rad)
 			)
 
-			# Apply new position
+			# Apply new position (keep individual model rotation unchanged)
 			obj.global_position = pivot_pos + new_offset
-
-			# Also rotate the object itself to face the same relative direction
-			obj.rotate_y(angle_rad)
