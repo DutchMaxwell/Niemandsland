@@ -58,6 +58,7 @@ var _is_group_rotating: bool = false
 @onready var dice_result_label: Label = $UI/HUD/DiceResult
 @onready var distance_label: Label = $UI/HUD/DistanceLabel
 @onready var clear_all_btn: Button = %ClearAll
+@onready var sort_table_btn: Button = %SortTableBtn
 @onready var performance_label: Label = %PerformanceLabel
 
 # Hamburger menu
@@ -175,6 +176,7 @@ func _ready() -> void:
 	load_model_btn.pressed.connect(_on_load_model)
 	model_file_dialog.file_selected.connect(_on_model_file_selected)
 	clear_all_btn.pressed.connect(_on_clear_all)
+	sort_table_btn.pressed.connect(_on_sort_table)
 
 	# Connect TTS Import UI
 	import_tts_btn.pressed.connect(_on_import_tts)
@@ -627,6 +629,10 @@ func _spawn_grid(total: int, cols: int, rows: int) -> void:
 func _on_clear_all() -> void:
 	object_manager.clear_all_objects()
 	dice_result_label.text = ""
+
+
+func _on_sort_table() -> void:
+	object_manager.sort_table()
 
 
 ## Toggle the left panel menu visibility with slide animation
