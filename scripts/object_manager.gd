@@ -1,9 +1,6 @@
 extends Node3D
 ## Manages all game objects: miniatures, dice, terrain
 ## Handles spawning, selection, dragging, and rotation
-##
-## TODO: Fix measurement line visually overlapping label text despite different Z heights.
-##       This appears to be a depth rendering issue with no_depth_test enabled on both elements.
 
 signal object_selected(obj: Node3D)
 signal object_deselected()
@@ -961,22 +958,24 @@ func _create_measure_line() -> void:
 	if _measure_label:
 		_measure_label.queue_free()
 
-	# Create line mesh
+	# Create line mesh (render first, lower priority)
 	_measure_line = MeshInstance3D.new()
 	_measure_line.name = "MeasureLine"
 	var material = StandardMaterial3D.new()
 	material.albedo_color = Color.YELLOW
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.no_depth_test = true  # Always visible
+	material.render_priority = 0  # Render first
 	_measure_line.material_override = material
 	add_child(_measure_line)
 
 	# Create 3D label for distance display (~2cm text height)
-	# Not billboard - will be rotated to align with measurement line
+	# Render after line to appear on top
 	_measure_label = Label3D.new()
 	_measure_label.name = "MeasureLabel"
 	_measure_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED  # Align with line direction
 	_measure_label.no_depth_test = true
+	_measure_label.render_priority = 1  # Render after line (appears on top)
 	_measure_label.pixel_size = 0.001  # 1mm per pixel
 	_measure_label.font_size = 24      # ~2.4cm text height
 	_measure_label.outline_size = 8  # Thicker outline for better contrast
