@@ -31,8 +31,12 @@ const TABLE_SIZE_INDEX_CUSTOM := 2
 const GROUP_ROTATION_SPEED: float = 90.0  # degrees per second
 
 ## Unit conversion constants
+const FEET_TO_METERS: float = 0.3048
 const INCHES_TO_FEET: float = 1.0 / 12.0
 const CM_TO_FEET: float = 1.0 / 30.48
+
+## Debug mode (set to false for production builds)
+const DEBUG_MODE: bool = false
 
 # ==============================================================================
 # NODE REFERENCES
@@ -46,7 +50,6 @@ const CM_TO_FEET: float = 1.0 / 30.48
 
 # Tron Intro
 var tron_intro: TronIntro = null
-var _intro_finished: bool = false
 
 # Lighting Controller
 var lighting_controller: Node = null
@@ -510,7 +513,7 @@ func _on_spawn_200() -> void:
 	var rows = 10
 
 	# Table size in meters
-	var size_meters = table.table_size * 0.3048  # FEET_TO_METERS
+	var size_meters = table.table_size * FEET_TO_METERS  # FEET_TO_METERS
 	var margin = 0.05  # 5cm margin from edges
 
 	# Calculate spacing
@@ -562,7 +565,7 @@ func _on_spawn_complex() -> void:
 
 	var cols = 10
 	var rows = 10
-	var size_meters = table.table_size * 0.3048
+	var size_meters = table.table_size * FEET_TO_METERS
 	var margin = 0.1
 
 	var usable_width = size_meters.x - (margin * 2)
@@ -595,7 +598,7 @@ func _spawn_grid(total: int, cols: int, rows: int) -> void:
 
 	object_manager.clear_all_objects()
 
-	var size_meters = table.table_size * 0.3048
+	var size_meters = table.table_size * FEET_TO_METERS
 	var margin = 0.03  # Smaller margin for more objects
 
 	var usable_width = size_meters.x - (margin * 2)
@@ -773,7 +776,7 @@ func _format_dice_results(per_dice: Dictionary, _total: int) -> String:
 
 func _get_random_table_position() -> Vector3:
 	# Table size is in feet, convert to meters for positioning
-	var size_meters = table.table_size * 0.3048  # FEET_TO_METERS
+	var size_meters = table.table_size * FEET_TO_METERS  # FEET_TO_METERS
 	var margin = 0.15  # Stay away from edges
 	var x = randf_range(-size_meters.x / 2 + margin, size_meters.x / 2 - margin)
 	var z = randf_range(-size_meters.y / 2 + margin, size_meters.y / 2 - margin)
@@ -1364,8 +1367,6 @@ func _start_tron_intro() -> void:
 
 ## Called when intro finishes or is skipped
 func _on_intro_finished() -> void:
-	_intro_finished = true
-
 	# Show UI
 	$UI.visible = true
 
