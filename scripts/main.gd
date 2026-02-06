@@ -144,11 +144,6 @@ var terrain_overlay: Node3D = null
 # Atmospheric Effects
 var atmospheric_clouds: Node3D = null
 
-# Battle Simulator
-var battle_simulator: BattleSimulator = null
-var battle_simulator_ui: BattleSimulatorUI = null
-var battle_sim_btn: Button = null
-
 # Radial Menu
 var radial_menu_controller: RadialMenuController = null
 var coherency_visualizer: CoherencyVisualizer = null
@@ -350,9 +345,6 @@ func _ready() -> void:
 
 	# Initialize Scout/Ambush Panel
 	_init_scout_ambush_panel()
-
-	# Initialize Battle Simulator
-	_init_battle_simulator()
 
 	# Initialize Radial Menu
 	_init_radial_menu()
@@ -1245,10 +1237,6 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
 	var spawned = opr_army_manager.spawn_army(army)
 	print("Spawned %d models for army '%s' on Player %d's tray" % [spawned.size(), army.name, player_id])
 
-	# Update battle simulator UI if open (so Start Battle button enables)
-	if battle_simulator_ui:
-		battle_simulator_ui.on_armies_loaded()
-
 
 ## Update OPR unit hover detection
 func _update_opr_hover() -> void:
@@ -1678,169 +1666,6 @@ func _check_all_units_deployment() -> void:
 			# Deployment mode inactive - hide all warnings
 			if warning_label:
 				warning_label.visible = false
-
-
-## ============================================================================
-## Battle Simulator (AI vs AI)
-## ============================================================================
-
-## Initialize Battle Simulator
-func _init_battle_simulator() -> void:
-	# Get the left panel VBox to add UI elements
-	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
-	if not left_panel_vbox:
-		push_error("Could not find LeftPanelVBox for battle simulator button")
-		return
-
-	# Create a separator
-	var separator = HSeparator.new()
-	left_panel_vbox.add_child(separator)
-
-	# Create the battle simulator button
-	battle_sim_btn = Button.new()
-	battle_sim_btn.text = "Battle Simulator"
-	battle_sim_btn.tooltip_text = "AI vs AI step-by-step battle simulation"
-	battle_sim_btn.pressed.connect(_on_battle_simulator_pressed)
-	left_panel_vbox.add_child(battle_sim_btn)
-
-	# Create the Battle Simulator instance
-	battle_simulator = BattleSimulator.new()
-	battle_simulator.name = "BattleSimulator"
-	add_child(battle_simulator)
-	battle_simulator.initialize(opr_army_manager)
-
-	# Create the Battle Simulator UI
-	battle_simulator_ui = BattleSimulatorUI.new()
-	battle_simulator_ui.name = "BattleSimulatorUI"
-	battle_simulator_ui.visible = false
-	$UI.add_child(battle_simulator_ui)
-	battle_simulator_ui.initialize(battle_simulator, opr_army_manager)
-
-	# Connect UI signals
-	battle_simulator_ui.army_load_requested.connect(_on_battle_sim_army_load_requested)
-	battle_simulator_ui.close_requested.connect(_on_battle_sim_close)
-
-	# Connect simulator signals for visual feedback
-	battle_simulator.unit_highlighted.connect(_on_battle_sim_unit_highlighted)
-	battle_simulator.highlight_cleared.connect(_on_battle_sim_highlight_cleared)
-
-
-## Open Battle Simulator UI
-func _on_battle_simulator_pressed() -> void:
-	if battle_simulator_ui:
-		$UI/HUD.visible = false
-		battle_simulator_ui.show_ui()
-
-
-## Close Battle Simulator UI
-func _on_battle_sim_close() -> void:
-	if battle_simulator_ui:
-		battle_simulator_ui.hide_ui()
-		$UI/HUD.visible = true
-
-
-## Handle army load request from battle simulator
-func _on_battle_sim_army_load_requested(player: int) -> void:
-	# Store which player we're loading for
-	battle_simulator.set_meta("loading_for_player", player)
-
-	# Pre-select the correct player in the import dialog
-	opr_import_dialog.set_player(player)
-
-	# Use the existing OPR import dialog
-	opr_import_dialog.popup_centered()
-
-	# Temporarily reconnect the signal to handle battle sim import
-	if opr_import_dialog.army_imported.is_connected(_on_opr_army_imported):
-		opr_import_dialog.army_imported.disconnect(_on_opr_army_imported)
-	opr_import_dialog.army_imported.connect(_on_battle_sim_army_imported, CONNECT_ONE_SHOT)
-
-
-## Handle army imported for battle simulator
-func _on_battle_sim_army_imported(army: OPRApiClient.OPRArmy, _player_id: int) -> void:
-	# Get the player we're loading for
-	var target_player = battle_simulator.get_meta("loading_for_player", 1)
-
-	print("Battle Sim: Importing army '%s' for Player %d" % [army.name, target_player])
-
-	# Store army
-	opr_army_manager.armies[target_player] = army
-
-	# Spawn the army on tray
-	var spawned = opr_army_manager.spawn_army(army)
-	print("Battle Sim: Spawned %d models for army '%s'" % [spawned.size(), army.name])
-
-	# Update battle simulator UI
-	if battle_simulator_ui:
-		battle_simulator_ui.on_armies_loaded()
-
-	# Reconnect normal import handler
-	if not opr_import_dialog.army_imported.is_connected(_on_opr_army_imported):
-		opr_import_dialog.army_imported.connect(_on_opr_army_imported)
-
-
-## Highlight a unit during battle simulation
-func _on_battle_sim_unit_highlighted(unit: GameUnit, highlight_type: String) -> void:
-	if not unit:
-		return
-
-	var color: Color
-	match highlight_type:
-		"active":
-			color = Color(0.2, 1.0, 0.2, 0.5)  # Green for active unit
-		"target":
-			color = Color(1.0, 0.2, 0.2, 0.5)  # Red for target
-		_:
-			color = Color(1.0, 1.0, 0.2, 0.5)  # Yellow default
-
-	# Highlight all models in the unit
-	for model in unit.models:
-		if model.is_alive and model.node:
-			_apply_highlight_to_model(model.node, color)
-
-
-## Clear all highlights
-func _on_battle_sim_highlight_cleared() -> void:
-	# Clear highlights from all models
-	for player_id in [1, 2]:
-		var units = opr_army_manager.get_game_units_for_player(player_id)
-		for unit in units:
-			for model in unit.models:
-				if model.node:
-					_clear_highlight_from_model(model.node)
-
-
-## Apply highlight effect to a model
-func _apply_highlight_to_model(model: Node3D, color: Color) -> void:
-	# Find or create highlight ring
-	var highlight = model.get_node_or_null("BattleHighlight")
-	if not highlight:
-		highlight = MeshInstance3D.new()
-		highlight.name = "BattleHighlight"
-
-		var torus_mesh = TorusMesh.new()
-		torus_mesh.inner_radius = 0.015
-		torus_mesh.outer_radius = 0.025
-		highlight.mesh = torus_mesh
-		highlight.position.y = 0.005
-
-		model.add_child(highlight)
-
-	# Set color
-	var material = StandardMaterial3D.new()
-	material.albedo_color = color
-	material.emission_enabled = true
-	material.emission = color
-	material.emission_energy_multiplier = 2.0
-	highlight.material_override = material
-	highlight.visible = true
-
-
-## Clear highlight effect from a model
-func _clear_highlight_from_model(model: Node3D) -> void:
-	var highlight = model.get_node_or_null("BattleHighlight")
-	if highlight:
-		highlight.visible = false
 
 
 ## ============================================================================
