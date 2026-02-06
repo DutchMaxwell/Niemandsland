@@ -19,8 +19,8 @@ signal context_menu_requested(screen_pos: Vector2, selected_objects: Array)
 @export var min_drag_height: float = 0.01  # Minimum height above table when dragging
 @export var drag_lift_height: float = 0.05  # Lift height when dragging (5cm)
 
-# Debug logging
-@export var debug_dice_physics: bool = true  # Set to false to disable logging
+# Debug logging (disabled by default for production)
+@export var debug_dice_physics: bool = false
 var _debug_log_file: FileAccess = null
 var _debug_log_timer: float = 0.0
 const DEBUG_LOG_INTERVAL: float = 0.5  # Log every 0.5 seconds
