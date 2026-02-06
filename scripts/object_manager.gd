@@ -5,7 +5,6 @@ extends Node3D
 ## TODO: Fix measurement line visually overlapping label text despite different Z heights.
 ##       This appears to be a depth rendering issue with no_depth_test enabled on both elements.
 
-signal dice_rolled(total: int, results: Array)
 signal object_selected(obj: Node3D)
 signal object_deselected()
 signal selection_changed(selected_objects: Array[Node3D])
@@ -18,9 +17,6 @@ signal context_menu_requested(screen_pos: Vector2, selected_objects: Array)
 @export var rotation_speed_degrees: float = 2.0  # Degrees per second while R held
 @export var min_drag_height: float = 0.01  # Minimum height above table when dragging
 @export var drag_lift_height: float = 0.05  # Lift height when dragging (5cm)
-
-# Dice manager (handles all dice-related functionality)
-var _dice_manager: DiceManager = null
 
 # Multi-selection support
 var _selected_objects: Array[Node3D] = []
@@ -78,20 +74,8 @@ const MINIATURE_RADIUS: float = 0.016  # 32mm diameter base (16mm radius)
 func _ready() -> void:
 	_drag_plane = Plane(Vector3.UP, 0)
 
-	# Initialize dice manager
-	_dice_manager = DiceManager.new()
-	_dice_manager.name = "DiceManager"
-	add_child(_dice_manager)
-	_dice_manager.initialize(self)
-	_dice_manager.dice_rolled.connect(_on_dice_manager_rolled)
-
 	# Get network manager reference (deferred to ensure scene is ready)
 	call_deferred("_get_network_manager")
-
-
-## Relay dice_rolled signal from DiceManager
-func _on_dice_manager_rolled(total: int, results: Array) -> void:
-	dice_rolled.emit(total, results)
 
 
 func _get_network_manager() -> void:
@@ -185,9 +169,6 @@ func _input(event: InputEvent) -> void:
 	elif event.is_action_pressed("ui_cancel"):
 		if _is_dragging:
 			_cancel_drag()
-
-	elif event.is_action_pressed("roll_dice"):
-		roll_all_dice()
 
 
 func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> void:
@@ -1178,11 +1159,6 @@ func spawn_miniature(pos: Vector3, broadcast: bool = true, network_id: int = -1)
 	return miniature
 
 
-## Spawn a D6 dice at the given position (delegates to DiceManager)
-func spawn_dice(pos: Vector3) -> RigidBody3D:
-	return _dice_manager.spawn_dice(pos)
-
-
 ## Spawn terrain piece at the given position
 ## If broadcast is true and multiplayer is active, syncs to other clients
 func spawn_terrain(pos: Vector3, broadcast: bool = true, network_id: int = -1) -> StaticBody3D:
@@ -1979,11 +1955,6 @@ func _create_tree_mesh() -> Mesh:
 	return mesh
 
 
-## Roll all dice on the table (delegates to DiceManager)
-func roll_all_dice() -> void:
-	_dice_manager.roll_all_dice()
-
-
 ## Clear all objects from the table
 ## If broadcast is true and multiplayer is active, syncs to other clients
 func clear_all_objects(broadcast: bool = true) -> void:
@@ -1992,12 +1963,8 @@ func clear_all_objects(broadcast: bool = true) -> void:
 		_network_manager.broadcast_clear()
 
 	for child in get_children():
-		# Skip the DiceManager node
-		if child == _dice_manager:
-			continue
 		child.queue_free()
 
-	_dice_manager.clear_all_dice()
 	_selected_objects.clear()
 	_object_counter = 0
 

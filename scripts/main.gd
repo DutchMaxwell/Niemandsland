@@ -196,7 +196,6 @@ func _ready() -> void:
 	unit_option.item_selected.connect(_on_unit_changed)
 
 	# Connect to object manager signals
-	object_manager.dice_rolled.connect(_on_dice_rolled)
 	object_manager.distance_changed.connect(_on_distance_changed)
 	object_manager.measurement_finished.connect(_on_measurement_finished)
 	object_manager.drag_ended.connect(_on_drag_ended)
@@ -473,12 +472,6 @@ func _on_spawn_miniature() -> void:
 	object_manager.spawn_miniature(spawn_pos)
 
 
-func _on_spawn_dice() -> void:
-	var spawn_pos = _get_random_table_position()
-	spawn_pos.y = 0.5  # Drop from reasonable height above table
-	object_manager.spawn_dice(spawn_pos)
-
-
 func _on_spawn_terrain() -> void:
 	var spawn_pos = _get_random_table_position()
 	object_manager.spawn_terrain(spawn_pos)
@@ -666,20 +659,6 @@ func _on_end_battle_pressed() -> void:
 func _on_end_battle_confirmed() -> void:
 	print("Ending battle, returning to main menu...")
 	get_tree().change_scene_to_file("res://scenes/startup_menu.tscn")
-
-
-func _on_dice_rolled(total: int, results: Array) -> void:
-	var result_text = "Dice: %s = %d" % [str(results), total]
-	dice_result_label.text = result_text
-
-	# Fade out after 5 seconds
-	var tween = create_tween()
-	tween.tween_interval(5.0)
-	tween.tween_property(dice_result_label, "modulate:a", 0.0, 1.0)
-	tween.tween_callback(func():
-		dice_result_label.text = ""
-		dice_result_label.modulate.a = 1.0
-	)
 
 
 ## Display distance while dragging or measuring
