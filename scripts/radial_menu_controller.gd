@@ -40,6 +40,12 @@ var wounds_dialog: WoundsDialog = null
 ## Reference to casts dialog
 var casts_dialog: CastsDialog = null
 
+## Reference to model info popup
+var model_info_popup: ModelInfoPopup = null
+
+## Reference to marker dialog
+var marker_dialog: MarkerDialog = null
+
 ## Current selection context
 var _current_selection: Array = []
 
@@ -92,6 +98,16 @@ func initialize(p_object_manager: Node, p_army_manager: OPRArmyManager) -> void:
 		casts_dialog = CastsDialog.create_simple()
 		ui_parent.add_child(casts_dialog)
 		casts_dialog.casts_changed.connect(_on_casts_changed)
+
+	# Create model info popup
+	if not model_info_popup:
+		model_info_popup = ModelInfoPopup.create_simple()
+		ui_parent.add_child(model_info_popup)
+
+	# Create marker dialog
+	if not marker_dialog:
+		marker_dialog = MarkerDialog.create_simple()
+		ui_parent.add_child(marker_dialog)
 
 
 ## Opens the radial menu for the current selection at the given position.
@@ -239,34 +255,14 @@ func _show_model_stats(context: Dictionary) -> void:
 	if not model:
 		return
 
-	var lines: Array[String] = []
-	lines.append("[b]%s[/b]" % model.get_display_name())
-	lines.append("Wounds: %d/%d" % [model.wounds_current, model.wounds_max])
-
-	var weapons = model.get_weapons()
-	if not weapons.is_empty():
-		lines.append("")
-		lines.append("[u]Weapons:[/u]")
-		for weapon in weapons:
-			if weapon is Dictionary:
-				var w_name = weapon.get("name", "Unknown")
-				var w_attacks = weapon.get("attacks", 1)
-				var w_range = weapon.get("range", 0)
-				var range_str = "Melee" if w_range == 0 else "%d\"" % w_range
-				lines.append("• %s (%s, A%d)" % [w_name, range_str, w_attacks])
-
-	var equipment = model.get_equipment()
-	if not equipment.is_empty():
-		lines.append("")
-		lines.append("[u]Equipment:[/u]")
-		lines.append(", ".join(equipment))
-
-	if not model.markers.is_empty():
-		lines.append("")
-		lines.append("[u]Markers:[/u]")
-		lines.append(", ".join(model.markers))
-
-	print("\n".join(lines))  # TODO: Show in UI
+	if model_info_popup:
+		model_info_popup.open(model)
+	else:
+		# Fallback to console output
+		var lines: Array[String] = []
+		lines.append("[b]%s[/b]" % model.get_display_name())
+		lines.append("Wounds: %d/%d" % [model.wounds_current, model.wounds_max])
+		print("\n".join(lines))
 
 
 func _select_entire_unit(context: Dictionary) -> void:
@@ -311,14 +307,17 @@ func _open_casts_dialog(context: Dictionary) -> void:
 
 
 func _open_marker_dialog(context: Dictionary) -> void:
+	if not marker_dialog:
+		print("Marker dialog not available")
+		return
+
 	var game_unit = context.get("game_unit") as GameUnit
 	var model = context.get("model_instance") as ModelInstance
 
-	# TODO: Open marker selection dialog
 	if model:
-		print("Open marker dialog for model %d" % (model.model_index + 1))
+		marker_dialog.open_for_model(model)
 	elif game_unit:
-		print("Open marker dialog for unit %s" % game_unit.get_name())
+		marker_dialog.open_for_unit(game_unit)
 
 
 func _toggle_activation(context: Dictionary) -> void:
@@ -394,7 +393,8 @@ func _roll_attack(context: Dictionary) -> void:
 	if not game_unit:
 		return
 
-	# TODO: Open attack roll dialog
+	# TODO: Implement attack roll dialog (integrate with dice_roller plugin)
+	push_warning("Attack roll dialog not yet implemented")
 	print("Roll attack for: %s" % game_unit.get_name())
 
 
@@ -440,9 +440,15 @@ func _show_terrain_info(context: Dictionary) -> void:
 
 func _toggle_los(context: Dictionary) -> void:
 	var terrain = context.get("terrain") as Node3D
-	if terrain:
-		# TODO: Toggle line of sight blocking
-		print("Toggle LoS for: %s" % terrain.name)
+	if not terrain:
+		return
+
+	# Toggle blocks_los metadata
+	var currently_blocking = terrain.get_meta("blocks_los", true)
+	terrain.set_meta("blocks_los", not currently_blocking)
+
+	var status = "blocking" if not currently_blocking else "not blocking"
+	print("%s is now %s LOS" % [terrain.name, status])
 
 
 func _delete_terrain(context: Dictionary) -> void:
