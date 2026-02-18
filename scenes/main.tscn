@@ -252,6 +252,13 @@ layout_mode = 2
 focus_mode = 0
 text = "Clear Table"
 
+[node name="SortTableBtn" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+text = "Sort Table"
+tooltip_text = "Reset all units to import positions and clear status"
+
 [node name="TableSizePanel" type="VBoxContainer" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox"]
 layout_mode = 2
 
@@ -396,16 +403,31 @@ text = "Graphics:"
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
-selected = 1
-item_count = 4
-popup/item_0/text = "Low"
+selected = 2
+item_count = 5
+popup/item_0/text = "Performance"
 popup/item_0/id = 0
-popup/item_1/text = "Medium"
+popup/item_1/text = "Low"
 popup/item_1/id = 1
-popup/item_2/text = "High"
+popup/item_2/text = "Medium"
 popup/item_2/id = 2
-popup/item_3/text = "Ultra"
+popup/item_3/text = "High"
 popup/item_3/id = 3
+popup/item_4/text = "Ultra"
+popup/item_4/id = 4
+
+[node name="EndBattlePanel" type="VBoxContainer" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox"]
+layout_mode = 2
+
+[node name="Separator" type="HSeparator" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/EndBattlePanel"]
+layout_mode = 2
+
+[node name="EndBattleBtn" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/EndBattlePanel"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 0.3, 0.3, 1)
+text = "End Battle - To Main Menu"
 
 [node name="DiceResult" type="Label" parent="UI/HUD"]
 layout_mode = 1
@@ -573,6 +595,15 @@ ok_button_text = "Load"
 file_mode = 0
 access = 2
 filters = PackedStringArray("*.otts ; OpenTTS Save")
+
+[node name="EndBattleConfirmDialog" type="ConfirmationDialog" parent="UI"]
+unique_name_in_owner = true
+title = "End Battle"
+initial_position = 2
+size = Vector2i(350, 100)
+ok_button_text = "Yes, Exit"
+dialog_text = "Really quit to main menu?
+All unsaved progress will be lost."
 
 [node name="TerrainBrowserPopup" type="Window" parent="UI"]
 unique_name_in_owner = true
