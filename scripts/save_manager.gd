@@ -244,6 +244,23 @@ func _deserialize_object(data: Dictionary) -> bool:
 	var spawned_obj: Node3D = null
 
 	match obj_type:
+		"opr_unit":
+			var game_unit_id = data.get("game_unit_id", "")
+			var model_idx = data.get("model_index", 0)
+			if army_manager and _loaded_game_units.has(game_unit_id):
+				var loaded = _loaded_game_units[game_unit_id]
+				var game_unit = loaded.game_unit as GameUnit
+				var props = game_unit.unit_properties
+				spawned_obj = army_manager.create_model_from_properties(props)
+				if spawned_obj:
+					object_manager.add_child(spawned_obj)
+					spawned_obj.global_position = position
+					spawned_obj.rotation_degrees = rotation
+					restore_game_unit_state(spawned_obj, game_unit_id, model_idx)
+					return true
+			else:
+				push_warning("Could not restore OPR unit: game_unit_id=%s" % game_unit_id)
+			return false
 		"tts_import":
 			spawned_obj = await _spawn_tts_object(data, position)
 		"custom_model":
