@@ -353,8 +353,9 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 		unit_to_game_unit[unit] = game_unit
 		game_units[game_unit.unit_id] = game_unit
 
-		# Store name suffix on GameUnit
+		# Store name suffix and faction folder on GameUnit (needed for save/load)
 		game_unit.unit_properties["display_suffix"] = name_suffix
+		game_unit.unit_properties["faction_folder"] = faction_folder
 
 		# Store import positions on ModelInstances (for Sort Table reset)
 		for i in range(game_unit.models.size()):
@@ -511,6 +512,163 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 	wrapper.set_script(load("res://scripts/selectable_object.gd"))
 
 	return wrapper
+
+
+## Create a visual model from saved unit_properties dictionary (for save/load)
+## Uses the same visual logic as _create_unit_model() but reads from Dictionary instead of OPRUnit
+func create_model_from_properties(props: Dictionary) -> StaticBody3D:
+	var wrapper = StaticBody3D.new()
+	var unit_name = props.get("name", "Unknown")
+	var display_suffix = props.get("display_suffix", "")
+	var display_name = unit_name + display_suffix
+	wrapper.name = "OPR_%s" % display_name.replace(" ", "_")
+
+	# Get base dimensions from saved properties
+	var base_is_oval: bool = props.get("base_is_oval", false)
+	var base_width: float = props.get("base_width_mm", 32) * 0.001
+	var base_depth: float = props.get("base_depth_mm", 32) * 0.001
+	var base_size_round: int = props.get("base_size_round", 32)
+	var base_radius: float = (base_size_round / 2.0) * 0.001
+
+	# Get player color
+	var player_id: int = props.get("player_id", 1)
+	var player_color: Color = PLAYER_COLORS.get(player_id, Color.GRAY)
+
+	# Create base mesh
+	var base_instance = MeshInstance3D.new()
+
+	if base_is_oval:
+		var base_mesh = CylinderMesh.new()
+		base_mesh.top_radius = 0.5
+		base_mesh.bottom_radius = 0.5
+		base_mesh.height = 0.003
+		base_instance.mesh = base_mesh
+		base_instance.scale = Vector3(base_width, 1.0, base_depth)
+		base_instance.position.y = 0.0015
+	else:
+		var base_mesh = CylinderMesh.new()
+		base_mesh.top_radius = base_radius
+		base_mesh.bottom_radius = base_radius
+		base_mesh.height = 0.003
+		base_instance.mesh = base_mesh
+		base_instance.position.y = 0.0015
+
+	var base_material = StandardMaterial3D.new()
+	base_material.albedo_color = player_color
+	base_material.roughness = 0.7
+	base_instance.material_override = base_material
+	base_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
+	wrapper.add_child(base_instance)
+
+	# Try to load GLB model for this unit
+	var faction_folder: String = props.get("faction_folder", "")
+	var model_path = _find_model_for_unit(unit_name, faction_folder)
+	var model_height: float = 0.032
+
+	var use_glb_model = false
+	if not model_path.is_empty():
+		var glb_scene = load(model_path)
+		if glb_scene:
+			var glb_instance = glb_scene.instantiate()
+
+			var aabb = _get_model_aabb(glb_instance)
+			var raw_height = aabb.size.y
+
+			var base_mm = base_size_round
+			var target_height_mm = base_mm + 3 if base_mm <= 25 else base_mm
+			var target_height_m = target_height_mm * 0.001
+
+			var base_scale_val = target_height_m / raw_height if raw_height > 0 else 0.001
+
+			var tough = _get_tough_value_from_rules(props.get("special_rules", []))
+			var tough_scale = _calculate_model_scale(tough)
+			var final_scale = base_scale_val * tough_scale
+
+			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
+
+			var bottom_offset = -aabb.position.y * final_scale
+			glb_instance.position.y = bottom_offset + 0.003
+
+			wrapper.add_child(glb_instance)
+			use_glb_model = true
+			model_height = raw_height * final_scale
+
+	# Fallback: Create placeholder body if no GLB model found
+	if not use_glb_model:
+		var scale_factor = sqrt(base_radius / 0.016)
+		var body_height = (0.025 + randf() * 0.005) * scale_factor
+		var body_mesh = CylinderMesh.new()
+		var body_width_ratio = lerp(0.5, 0.35, clampf((base_radius - 0.016) / 0.03, 0.0, 1.0))
+		body_mesh.top_radius = base_radius * body_width_ratio
+		body_mesh.bottom_radius = base_radius * (body_width_ratio + 0.1)
+		body_mesh.height = body_height
+
+		var body_instance = MeshInstance3D.new()
+		body_instance.mesh = body_mesh
+		body_instance.position.y = 0.003 + body_height / 2
+
+		var body_material = StandardMaterial3D.new()
+		body_material.albedo_color = player_color.lightened(0.3)
+		body_material.roughness = 0.8
+		body_instance.material_override = body_material
+		body_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
+		wrapper.add_child(body_instance)
+
+		var head_radius = base_radius * 0.375
+		var head_mesh = SphereMesh.new()
+		head_mesh.radius = head_radius
+		head_mesh.height = head_radius * 2
+
+		var head_instance = MeshInstance3D.new()
+		head_instance.mesh = head_mesh
+		head_instance.position.y = 0.003 + body_height + head_radius
+
+		var head_material = StandardMaterial3D.new()
+		head_material.albedo_color = Color(0.9, 0.75, 0.6)
+		head_material.roughness = 0.9
+		head_instance.material_override = head_material
+		head_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
+		wrapper.add_child(head_instance)
+
+		model_height = body_height + head_radius * 2
+
+	# Add collision shape
+	var collision_radius = max(base_width, base_depth) / 2.0 if base_is_oval else base_radius
+	var total_height = 0.003 + model_height
+	var collision = CollisionShape3D.new()
+	var shape = CylinderShape3D.new()
+	shape.radius = collision_radius
+	shape.height = total_height
+	collision.shape = shape
+	collision.position.y = total_height / 2
+	wrapper.add_child(collision)
+
+	# Add script for selection and groups
+	wrapper.set_script(load("res://scripts/selectable_object.gd"))
+	wrapper.add_to_group("selectable")
+	wrapper.add_to_group("miniature")
+	wrapper.add_to_group("opr_unit")
+	wrapper.add_to_group("unit")
+
+	return wrapper
+
+
+## Extract Tough value from a special_rules array (for save/load)
+func _get_tough_value_from_rules(rules: Array) -> int:
+	for rule in rules:
+		var rule_str = ""
+		if rule is String:
+			rule_str = rule
+		elif rule is Dictionary:
+			rule_str = rule.get("name", "")
+		if rule_str.begins_with("Tough("):
+			var value_str = rule_str.trim_prefix("Tough(").trim_suffix(")")
+			if value_str.is_valid_int():
+				return value_str.to_int()
+	return 0
 
 
 ## Get unit data for a model
@@ -722,13 +880,7 @@ func _find_model_for_unit(unit_name: String, faction_folder: String) -> String:
 ## Extract Tough value from unit's special rules
 ## Returns 0 if no Tough rule found
 func _get_tough_value(unit: OPRApiClient.OPRUnit) -> int:
-	for rule in unit.special_rules:
-		if rule.begins_with("Tough("):
-			# "Tough(12)" -> 12
-			var value_str = rule.trim_prefix("Tough(").trim_suffix(")")
-			if value_str.is_valid_int():
-				return value_str.to_int()
-	return 0
+	return _get_tough_value_from_rules(unit.special_rules)
 
 
 ## Calculate model scale based on Tough value

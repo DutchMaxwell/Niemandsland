@@ -281,6 +281,9 @@ func _ready() -> void:
 	opr_army_manager.table = table
 	add_child(opr_army_manager)
 
+	# Set army_manager reference on SaveManager for GameUnit serialization
+	save_manager.army_manager = opr_army_manager
+
 	# Initialize OPR Import Dialog
 	opr_import_dialog = OPRImportDialog.new()
 	get_tree().root.add_child(opr_import_dialog)
@@ -1065,7 +1068,7 @@ func _on_save_file_selected(path: String) -> void:
 
 ## Load file selected
 func _on_load_file_selected(path: String) -> void:
-	var error = save_manager.load_game(path)
+	var error = await save_manager.load_game(path)
 	if error != OK:
 		push_error("Failed to load game: %d" % error)
 
@@ -1093,7 +1096,7 @@ func _on_load_failed(error: String) -> void:
 ## Load a battle from a path passed via the startup menu
 func _load_pending_battle(path: String) -> void:
 	print("Loading pending battle from startup menu: %s" % path.get_file())
-	var error = save_manager.load_game(path)
+	var error = await save_manager.load_game(path)
 	if error != OK:
 		push_error("Failed to load pending battle: %d" % error)
 
