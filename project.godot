@@ -71,18 +71,22 @@ roll_dice={
 ]
 }
 
+[physics]
+
+common/physics_interpolation=true
+
 [rendering]
 
 textures/vram_compression/import_s3tc_bptc=true
 textures/vram_compression/import_etc2_astc=true
-lights_and_shadows/directional_shadow/size=8192
-lights_and_shadows/directional_shadow/soft_shadow_filter_quality=5
-lights_and_shadows/positional_shadow/soft_shadow_filter_quality=4
-anti_aliasing/quality/msaa_3d=3
-lights_and_shadows/positional_shadow/atlas_size=8192
+lights_and_shadows/directional_shadow/size=4096
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
+lights_and_shadows/positional_shadow/soft_shadow_filter_quality=3
+anti_aliasing/quality/msaa_3d=2
+lights_and_shadows/positional_shadow/atlas_size=4096
 environment/ssao/enabled=true
-environment/ssao/radius=2.0
-environment/ssao/intensity=1.5
+environment/ssao/radius=1.0
+environment/ssao/intensity=1.0
 environment/ssil/enabled=false
-environment/ssr/enabled=true
+environment/ssr/enabled=false
 environment/sdfgi/enabled=false

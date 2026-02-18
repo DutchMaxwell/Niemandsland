@@ -356,6 +356,13 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 		# Store name suffix on GameUnit
 		game_unit.unit_properties["display_suffix"] = name_suffix
 
+		# Store import positions on ModelInstances (for Sort Table reset)
+		for i in range(game_unit.models.size()):
+			var model_instance = game_unit.models[i]
+			if model_instance and model_instance.node and is_instance_valid(model_instance.node):
+				model_instance.import_position = model_instance.node.global_position
+				model_instance.import_rotation = model_instance.node.rotation
+
 	return models
 
 
