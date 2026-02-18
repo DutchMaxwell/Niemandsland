@@ -24,15 +24,19 @@ const TABLE_SIZE_INDEX_4X4 := 0
 const TABLE_SIZE_INDEX_6X4 := 1
 const TABLE_SIZE_INDEX_CUSTOM := 2
 
-## Graphics quality mapping (UI index to enum)
-const GRAPHICS_QUALITY_UI_MAX := 3  # Maps UI (Low=0, Medium=1, High=2, Ultra=3) to enum
+## Graphics quality mapping (UI index matches enum directly)
+## UI: Performance=0, Low=1, Medium=2, High=3, Ultra=4
 
 ## Group rotation
 const GROUP_ROTATION_SPEED: float = 90.0  # degrees per second
 
 ## Unit conversion constants
+const FEET_TO_METERS: float = 0.3048
 const INCHES_TO_FEET: float = 1.0 / 12.0
 const CM_TO_FEET: float = 1.0 / 30.48
+
+## Debug mode (set to false for production builds)
+const DEBUG_MODE: bool = false
 
 # ==============================================================================
 # NODE REFERENCES
@@ -46,7 +50,6 @@ const CM_TO_FEET: float = 1.0 / 30.48
 
 # Tron Intro
 var tron_intro: TronIntro = null
-var _intro_finished: bool = false
 
 # Lighting Controller
 var lighting_controller: Node = null
@@ -58,6 +61,7 @@ var _is_group_rotating: bool = false
 @onready var dice_result_label: Label = $UI/HUD/DiceResult
 @onready var distance_label: Label = $UI/HUD/DistanceLabel
 @onready var clear_all_btn: Button = %ClearAll
+@onready var sort_table_btn: Button = %SortTableBtn
 @onready var performance_label: Label = %PerformanceLabel
 
 # Hamburger menu
@@ -133,13 +137,12 @@ var wgs_import_dialog: WGSImportDialog = null
 var map_layout_editor: Control = null
 var terrain_overlay: Node3D = null
 
+# End Battle / Main Menu
+@onready var end_battle_btn: Button = %EndBattleBtn
+@onready var end_battle_confirm_dialog: ConfirmationDialog = %EndBattleConfirmDialog
+
 # Atmospheric Effects
 var atmospheric_clouds: Node3D = null
-
-# Battle Simulator
-var battle_simulator: BattleSimulator = null
-var battle_simulator_ui: BattleSimulatorUI = null
-var battle_sim_btn: Button = null
 
 # Radial Menu
 var radial_menu_controller: RadialMenuController = null
@@ -163,10 +166,15 @@ func _ready() -> void:
 	# Connect hamburger menu toggle
 	hamburger_button.pressed.connect(_on_hamburger_pressed)
 
+	# Connect End Battle button and confirmation dialog
+	end_battle_btn.pressed.connect(_on_end_battle_pressed)
+	end_battle_confirm_dialog.confirmed.connect(_on_end_battle_confirmed)
+
 	# Connect UI buttons
 	load_model_btn.pressed.connect(_on_load_model)
 	model_file_dialog.file_selected.connect(_on_model_file_selected)
 	clear_all_btn.pressed.connect(_on_clear_all)
+	sort_table_btn.pressed.connect(_on_sort_table)
 
 	# Connect TTS Import UI
 	import_tts_btn.pressed.connect(_on_import_tts)
@@ -183,7 +191,6 @@ func _ready() -> void:
 	unit_option.item_selected.connect(_on_unit_changed)
 
 	# Connect to object manager signals
-	object_manager.dice_rolled.connect(_on_dice_rolled)
 	object_manager.distance_changed.connect(_on_distance_changed)
 	object_manager.measurement_finished.connect(_on_measurement_finished)
 	object_manager.drag_ended.connect(_on_drag_ended)
@@ -228,9 +235,8 @@ func _ready() -> void:
 
 	# Connect Graphics Settings UI
 	graphics_quality_option.item_selected.connect(_on_graphics_quality_changed)
-	# Set initial selection based on current preset (map enum to UI index)
-	# Enum: ULTRA=0, HIGH=1, MEDIUM=2, LOW=3 -> UI: Low=0, Medium=1, High=2, Ultra=3
-	graphics_quality_option.selected = GRAPHICS_QUALITY_UI_MAX - GraphicsSettings.current_preset
+	# Set initial selection based on current preset (UI index matches enum directly)
+	graphics_quality_option.selected = GraphicsSettings.current_preset
 
 	# Connect Terrain Browser UI
 	terrain_library.object_manager = object_manager
@@ -339,9 +345,6 @@ func _ready() -> void:
 
 	# Initialize Scout/Ambush Panel
 	_init_scout_ambush_panel()
-
-	# Initialize Battle Simulator
-	_init_battle_simulator()
 
 	# Initialize Radial Menu
 	_init_radial_menu()
@@ -461,12 +464,6 @@ func _on_spawn_miniature() -> void:
 	object_manager.spawn_miniature(spawn_pos)
 
 
-func _on_spawn_dice() -> void:
-	var spawn_pos = _get_random_table_position()
-	spawn_pos.y = 0.5  # Drop from reasonable height above table
-	object_manager.spawn_dice(spawn_pos)
-
-
 func _on_spawn_terrain() -> void:
 	var spawn_pos = _get_random_table_position()
 	object_manager.spawn_terrain(spawn_pos)
@@ -501,7 +498,7 @@ func _on_spawn_200() -> void:
 	var rows = 10
 
 	# Table size in meters
-	var size_meters = table.table_size * 0.3048  # FEET_TO_METERS
+	var size_meters = table.table_size * FEET_TO_METERS  # FEET_TO_METERS
 	var margin = 0.05  # 5cm margin from edges
 
 	# Calculate spacing
@@ -553,7 +550,7 @@ func _on_spawn_complex() -> void:
 
 	var cols = 10
 	var rows = 10
-	var size_meters = table.table_size * 0.3048
+	var size_meters = table.table_size * FEET_TO_METERS
 	var margin = 0.1
 
 	var usable_width = size_meters.x - (margin * 2)
@@ -586,7 +583,7 @@ func _spawn_grid(total: int, cols: int, rows: int) -> void:
 
 	object_manager.clear_all_objects()
 
-	var size_meters = table.table_size * 0.3048
+	var size_meters = table.table_size * FEET_TO_METERS
 	var margin = 0.03  # Smaller margin for more objects
 
 	var usable_width = size_meters.x - (margin * 2)
@@ -622,6 +619,10 @@ func _on_clear_all() -> void:
 	dice_result_label.text = ""
 
 
+func _on_sort_table() -> void:
+	object_manager.sort_table()
+
+
 ## Toggle the left panel menu visibility with slide animation
 func _on_hamburger_pressed() -> void:
 	var is_opening = not left_panel_scroll.visible
@@ -641,18 +642,15 @@ func _on_hamburger_pressed() -> void:
 		hamburger_button.text = "☰"
 
 
-func _on_dice_rolled(total: int, results: Array) -> void:
-	var result_text = "Dice: %s = %d" % [str(results), total]
-	dice_result_label.text = result_text
+## Show confirmation dialog before ending battle
+func _on_end_battle_pressed() -> void:
+	end_battle_confirm_dialog.popup_centered()
 
-	# Fade out after 5 seconds
-	var tween = create_tween()
-	tween.tween_interval(5.0)
-	tween.tween_property(dice_result_label, "modulate:a", 0.0, 1.0)
-	tween.tween_callback(func():
-		dice_result_label.text = ""
-		dice_result_label.modulate.a = 1.0
-	)
+
+## Confirmed: End Battle and return to Main Menu
+func _on_end_battle_confirmed() -> void:
+	print("Ending battle, returning to main menu...")
+	get_tree().change_scene_to_file("res://scenes/startup_menu.tscn")
 
 
 ## Display distance while dragging or measuring
@@ -749,7 +747,7 @@ func _format_dice_results(per_dice: Dictionary, _total: int) -> String:
 
 func _get_random_table_position() -> Vector3:
 	# Table size is in feet, convert to meters for positioning
-	var size_meters = table.table_size * 0.3048  # FEET_TO_METERS
+	var size_meters = table.table_size * FEET_TO_METERS  # FEET_TO_METERS
 	var margin = 0.15  # Stay away from edges
 	var x = randf_range(-size_meters.x / 2 + margin, size_meters.x / 2 - margin)
 	var z = randf_range(-size_meters.y / 2 + margin, size_meters.y / 2 - margin)
@@ -1239,10 +1237,6 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
 	var spawned = opr_army_manager.spawn_army(army)
 	print("Spawned %d models for army '%s' on Player %d's tray" % [spawned.size(), army.name, player_id])
 
-	# Update battle simulator UI if open (so Start Battle button enables)
-	if battle_simulator_ui:
-		battle_simulator_ui.on_armies_loaded()
-
 
 ## Update OPR unit hover detection
 func _update_opr_hover() -> void:
@@ -1340,8 +1334,6 @@ func _start_tron_intro() -> void:
 
 ## Called when intro finishes or is skipped
 func _on_intro_finished() -> void:
-	_intro_finished = true
-
 	# Show UI
 	$UI.visible = true
 
@@ -1360,23 +1352,25 @@ func _on_intro_finished() -> void:
 ## ============================================================================
 
 ## Handle graphics quality selection change
-## UI order: Low=0, Medium=1, High=2, Ultra=3
-## Enum order: ULTRA=0, HIGH=1, MEDIUM=2, LOW=3
+## UI order matches enum: Performance=0, Low=1, Medium=2, High=3, Ultra=4
 func _on_graphics_quality_changed(index: int) -> void:
 	var preset: GraphicsSettings.QualityPreset
 	var preset_name: String
 
 	match index:
-		0:  # Low
+		0:  # Performance
+			preset = GraphicsSettings.QualityPreset.PERFORMANCE
+			preset_name = "Performance"
+		1:  # Low
 			preset = GraphicsSettings.QualityPreset.LOW
 			preset_name = "Low"
-		1:  # Medium
+		2:  # Medium
 			preset = GraphicsSettings.QualityPreset.MEDIUM
 			preset_name = "Medium"
-		2:  # High
+		3:  # High
 			preset = GraphicsSettings.QualityPreset.HIGH
 			preset_name = "High"
-		3:  # Ultra
+		4:  # Ultra
 			preset = GraphicsSettings.QualityPreset.ULTRA
 			preset_name = "Ultra"
 		_:
@@ -1672,169 +1666,6 @@ func _check_all_units_deployment() -> void:
 			# Deployment mode inactive - hide all warnings
 			if warning_label:
 				warning_label.visible = false
-
-
-## ============================================================================
-## Battle Simulator (AI vs AI)
-## ============================================================================
-
-## Initialize Battle Simulator
-func _init_battle_simulator() -> void:
-	# Get the left panel VBox to add UI elements
-	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
-	if not left_panel_vbox:
-		push_error("Could not find LeftPanelVBox for battle simulator button")
-		return
-
-	# Create a separator
-	var separator = HSeparator.new()
-	left_panel_vbox.add_child(separator)
-
-	# Create the battle simulator button
-	battle_sim_btn = Button.new()
-	battle_sim_btn.text = "Battle Simulator"
-	battle_sim_btn.tooltip_text = "AI vs AI step-by-step battle simulation"
-	battle_sim_btn.pressed.connect(_on_battle_simulator_pressed)
-	left_panel_vbox.add_child(battle_sim_btn)
-
-	# Create the Battle Simulator instance
-	battle_simulator = BattleSimulator.new()
-	battle_simulator.name = "BattleSimulator"
-	add_child(battle_simulator)
-	battle_simulator.initialize(opr_army_manager)
-
-	# Create the Battle Simulator UI
-	battle_simulator_ui = BattleSimulatorUI.new()
-	battle_simulator_ui.name = "BattleSimulatorUI"
-	battle_simulator_ui.visible = false
-	$UI.add_child(battle_simulator_ui)
-	battle_simulator_ui.initialize(battle_simulator, opr_army_manager)
-
-	# Connect UI signals
-	battle_simulator_ui.army_load_requested.connect(_on_battle_sim_army_load_requested)
-	battle_simulator_ui.close_requested.connect(_on_battle_sim_close)
-
-	# Connect simulator signals for visual feedback
-	battle_simulator.unit_highlighted.connect(_on_battle_sim_unit_highlighted)
-	battle_simulator.highlight_cleared.connect(_on_battle_sim_highlight_cleared)
-
-
-## Open Battle Simulator UI
-func _on_battle_simulator_pressed() -> void:
-	if battle_simulator_ui:
-		$UI/HUD.visible = false
-		battle_simulator_ui.show_ui()
-
-
-## Close Battle Simulator UI
-func _on_battle_sim_close() -> void:
-	if battle_simulator_ui:
-		battle_simulator_ui.hide_ui()
-		$UI/HUD.visible = true
-
-
-## Handle army load request from battle simulator
-func _on_battle_sim_army_load_requested(player: int) -> void:
-	# Store which player we're loading for
-	battle_simulator.set_meta("loading_for_player", player)
-
-	# Pre-select the correct player in the import dialog
-	opr_import_dialog.set_player(player)
-
-	# Use the existing OPR import dialog
-	opr_import_dialog.popup_centered()
-
-	# Temporarily reconnect the signal to handle battle sim import
-	if opr_import_dialog.army_imported.is_connected(_on_opr_army_imported):
-		opr_import_dialog.army_imported.disconnect(_on_opr_army_imported)
-	opr_import_dialog.army_imported.connect(_on_battle_sim_army_imported, CONNECT_ONE_SHOT)
-
-
-## Handle army imported for battle simulator
-func _on_battle_sim_army_imported(army: OPRApiClient.OPRArmy, _player_id: int) -> void:
-	# Get the player we're loading for
-	var target_player = battle_simulator.get_meta("loading_for_player", 1)
-
-	print("Battle Sim: Importing army '%s' for Player %d" % [army.name, target_player])
-
-	# Store army
-	opr_army_manager.armies[target_player] = army
-
-	# Spawn the army on tray
-	var spawned = opr_army_manager.spawn_army(army)
-	print("Battle Sim: Spawned %d models for army '%s'" % [spawned.size(), army.name])
-
-	# Update battle simulator UI
-	if battle_simulator_ui:
-		battle_simulator_ui.on_armies_loaded()
-
-	# Reconnect normal import handler
-	if not opr_import_dialog.army_imported.is_connected(_on_opr_army_imported):
-		opr_import_dialog.army_imported.connect(_on_opr_army_imported)
-
-
-## Highlight a unit during battle simulation
-func _on_battle_sim_unit_highlighted(unit: GameUnit, highlight_type: String) -> void:
-	if not unit:
-		return
-
-	var color: Color
-	match highlight_type:
-		"active":
-			color = Color(0.2, 1.0, 0.2, 0.5)  # Green for active unit
-		"target":
-			color = Color(1.0, 0.2, 0.2, 0.5)  # Red for target
-		_:
-			color = Color(1.0, 1.0, 0.2, 0.5)  # Yellow default
-
-	# Highlight all models in the unit
-	for model in unit.models:
-		if model.is_alive and model.node:
-			_apply_highlight_to_model(model.node, color)
-
-
-## Clear all highlights
-func _on_battle_sim_highlight_cleared() -> void:
-	# Clear highlights from all models
-	for player_id in [1, 2]:
-		var units = opr_army_manager.get_game_units_for_player(player_id)
-		for unit in units:
-			for model in unit.models:
-				if model.node:
-					_clear_highlight_from_model(model.node)
-
-
-## Apply highlight effect to a model
-func _apply_highlight_to_model(model: Node3D, color: Color) -> void:
-	# Find or create highlight ring
-	var highlight = model.get_node_or_null("BattleHighlight")
-	if not highlight:
-		highlight = MeshInstance3D.new()
-		highlight.name = "BattleHighlight"
-
-		var torus_mesh = TorusMesh.new()
-		torus_mesh.inner_radius = 0.015
-		torus_mesh.outer_radius = 0.025
-		highlight.mesh = torus_mesh
-		highlight.position.y = 0.005
-
-		model.add_child(highlight)
-
-	# Set color
-	var material = StandardMaterial3D.new()
-	material.albedo_color = color
-	material.emission_enabled = true
-	material.emission = color
-	material.emission_energy_multiplier = 2.0
-	highlight.material_override = material
-	highlight.visible = true
-
-
-## Clear highlight effect from a model
-func _clear_highlight_from_model(model: Node3D) -> void:
-	var highlight = model.get_node_or_null("BattleHighlight")
-	if highlight:
-		highlight.visible = false
 
 
 ## ============================================================================

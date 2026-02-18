@@ -26,10 +26,13 @@ var _last_mouse_pos: Vector2 = Vector2.ZERO
 var _move_direction: Vector2 = Vector2.ZERO
 var _rotation_direction: float = 0.0
 
+# Performance: Dirty flag to avoid unnecessary camera updates
+var _transform_dirty: bool = true
+
 
 func _ready() -> void:
 	_camera = $Camera3D
-	_update_camera_transform()
+	_mark_dirty()
 
 
 func _process(delta: float) -> void:
@@ -61,7 +64,53 @@ func _process(delta: float) -> void:
 	# Apply rotation if Q or E is pressed
 	if _rotation_direction != 0.0:
 		_yaw += _rotation_direction * keyboard_rotation_speed * delta
-		_update_camera_transform()
+		_mark_dirty()
+
+	# Performance: Only update transform when dirty (something changed)
+	if _transform_dirty:
+		_apply_camera_transform()
+		_transform_dirty = false
+
+
+## Mark transform as needing update (call instead of direct _update_camera_transform)
+func _mark_dirty() -> void:
+	_transform_dirty = true
+
+
+## Check if mouse is over a scrollable UI element (to prevent zoom when scrolling menus)
+func _is_mouse_over_scrollable_ui() -> bool:
+	var mouse_pos = get_viewport().get_mouse_position()
+
+	# Find the UI layer and check for visible scroll containers
+	var ui_layer = get_tree().root.find_child("UI", true, false)
+	if not ui_layer:
+		return false
+
+	# Check LeftPanelScroll (hamburger menu)
+	var left_panel = ui_layer.find_child("LeftPanelScroll", true, false)
+	if left_panel and left_panel is Control and left_panel.visible:
+		if left_panel.get_global_rect().has_point(mouse_pos):
+			return true
+
+	# Check any other visible ScrollContainers
+	for child in ui_layer.get_children():
+		if _check_scroll_container_recursive(child, mouse_pos):
+			return true
+
+	return false
+
+
+## Recursively check if mouse is over any visible ScrollContainer
+func _check_scroll_container_recursive(node: Node, mouse_pos: Vector2) -> bool:
+	if node is ScrollContainer and node.visible:
+		if node.get_global_rect().has_point(mouse_pos):
+			return true
+
+	for child in node.get_children():
+		if _check_scroll_container_recursive(child, mouse_pos):
+			return true
+
+	return false
 
 
 func _input(event: InputEvent) -> void:
@@ -81,11 +130,13 @@ func _input(event: InputEvent) -> void:
 			if mouse_event.pressed:
 				_last_mouse_pos = mouse_event.position
 
-		# Scroll wheel for zoom
+		# Scroll wheel for zoom - but NOT when mouse is over UI
 		elif mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_zoom(-zoom_speed)
+			if not _is_mouse_over_scrollable_ui():
+				_zoom(-zoom_speed)
 		elif mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_zoom(zoom_speed)
+			if not _is_mouse_over_scrollable_ui():
+				_zoom(zoom_speed)
 
 	# Handle mouse motion
 	elif event is InputEventMouseMotion:
@@ -101,7 +152,7 @@ func _rotate_camera(delta: Vector2) -> void:
 	_yaw -= delta.x * rotation_speed * 100
 	_pitch -= delta.y * rotation_speed * 100
 	_pitch = clamp(_pitch, min_pitch, max_pitch)
-	_update_camera_transform()
+	_mark_dirty()
 
 
 func _pan_camera(delta: Vector2) -> void:
@@ -113,7 +164,7 @@ func _pan_camera(delta: Vector2) -> void:
 
 	var pan_delta = (-right * delta.x + forward * delta.y) * pan_speed
 	_target_position += pan_delta
-	_update_camera_transform()
+	_mark_dirty()
 
 
 func _keyboard_pan(direction: Vector2, delta: float) -> void:
@@ -131,15 +182,16 @@ func _keyboard_pan(direction: Vector2, delta: float) -> void:
 
 	var pan_delta = (right * direction.x + forward * direction.y) * keyboard_pan_speed * delta
 	_target_position += pan_delta
-	_update_camera_transform()
+	_mark_dirty()
 
 
 func _zoom(amount: float) -> void:
 	_current_zoom = clamp(_current_zoom + amount, min_zoom, max_zoom)
-	_update_camera_transform()
+	_mark_dirty()
 
 
-func _update_camera_transform() -> void:
+## Actually apply the camera transform (called only when dirty)
+func _apply_camera_transform() -> void:
 	# Update pivot position
 	global_position = _target_position
 
@@ -160,7 +212,7 @@ func focus_on(world_position: Vector3) -> void:
 	tween.set_ease(Tween.EASE_OUT)
 	tween.set_trans(Tween.TRANS_CUBIC)
 	tween.tween_property(self, "_target_position", world_position, 0.5)
-	tween.tween_callback(_update_camera_transform)
+	tween.tween_callback(_mark_dirty)
 
 
 ## Reset camera to default view
@@ -169,14 +221,14 @@ func reset_view() -> void:
 	_pitch = -45.0
 	_yaw = 0.0
 	_current_zoom = 10.0  # Default zoom distance
-	_update_camera_transform()
+	_mark_dirty()
 
 
 ## Set zoom level with automatic clamping
 ## @param zoom: New zoom distance in meters
 func set_zoom(zoom: float) -> void:
 	_current_zoom = clamp(zoom, min_zoom, max_zoom)
-	_update_camera_transform()
+	_mark_dirty()
 
 
 ## Get current zoom level

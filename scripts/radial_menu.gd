@@ -187,9 +187,8 @@ func _input(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			_select_current()
 			get_viewport().set_input_as_handled()
-		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-			close()
-			get_viewport().set_input_as_handled()
+		# Note: Right-click no longer closes the menu (it's used to open it)
+		# Click on center zone or press ESC to close
 
 	elif event is InputEventKey and event.pressed:
 		if event.keycode == KEY_ESCAPE:

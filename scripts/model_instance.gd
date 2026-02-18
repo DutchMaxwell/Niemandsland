@@ -42,6 +42,14 @@ var is_alive: bool = true
 ## Runtime markers: ["Activated", "Pinned", "Shaken", etc.]
 var markers: Array[String] = []
 
+# ===== Import/Spawn Position (for Sort Table reset) =====
+
+## Initial position when spawned
+var import_position: Vector3 = Vector3.ZERO
+
+## Initial rotation when spawned
+var import_rotation: Vector3 = Vector3.ZERO
+
 
 # ===== Helper Methods (Query, no hardcoding) =====
 
@@ -142,6 +150,8 @@ func to_dict() -> Dictionary:
 		"wounds_max": wounds_max,
 		"is_alive": is_alive,
 		"markers": markers.duplicate(),
+		"import_position": [import_position.x, import_position.y, import_position.z],
+		"import_rotation": [import_rotation.x, import_rotation.y, import_rotation.z],
 	}
 
 
@@ -158,5 +168,14 @@ static func from_dict(data: Dictionary) -> ModelInstance:
 	instance.markers.clear()
 	for marker in saved_markers:
 		instance.markers.append(marker)
+
+	# Load import position/rotation (for Sort Table reset)
+	var pos = data.get("import_position", [0, 0, 0])
+	if pos is Array and pos.size() >= 3:
+		instance.import_position = Vector3(pos[0], pos[1], pos[2])
+
+	var rot = data.get("import_rotation", [0, 0, 0])
+	if rot is Array and rot.size() >= 3:
+		instance.import_rotation = Vector3(rot[0], rot[1], rot[2])
 
 	return instance

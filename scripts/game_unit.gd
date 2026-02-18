@@ -230,6 +230,38 @@ func reset_activation() -> void:
 	is_activated = false
 
 
+## Resets unit to import state (position, status, wounds, markers).
+## Used by Sort Table functionality.
+func reset_to_import_state() -> void:
+	# Reset unit-level status
+	is_activated = false
+	is_fatigued = false
+	is_shaken = false
+	activation_round = 0
+
+	# Reset caster points
+	reset_caster_points()
+
+	# Reset each model
+	for model in models:
+		# Reset wounds
+		model.reset_wounds()
+
+		# Clear markers
+		model.clear_markers()
+
+		# Reset position and rotation to import state
+		if model.node and is_instance_valid(model.node):
+			if model.import_position != Vector3.ZERO:
+				model.node.global_position = model.import_position
+			if model.import_rotation != Vector3.ZERO:
+				model.node.rotation = model.import_rotation
+
+			# Show model if it was hidden
+			model.node.visible = true
+			model.node.set_meta("deleted", false)
+
+
 # ===== Caster Points Methods =====
 
 ## Checks if this unit has the Caster special rule.
