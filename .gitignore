@@ -52,3 +52,5 @@ Models/
 
 # Auto Claude data directory
 .auto-claude/
+.hf_token
+__pycache__/
