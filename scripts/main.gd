@@ -352,6 +352,11 @@ func _ready() -> void:
 	# Initialize Radial Menu
 	_init_radial_menu()
 
+	# Set save_manager references for terrain/layout and marker restoration
+	save_manager.map_layout_editor = map_layout_editor
+	save_manager.terrain_overlay = terrain_overlay
+	save_manager.radial_menu_controller = radial_menu_controller
+
 	# Initialize and play Tron intro
 	_start_tron_intro()
 
