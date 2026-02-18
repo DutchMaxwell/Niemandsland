@@ -109,7 +109,7 @@ theme_override_constants/margin_bottom = 24
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="QuickBattleBtn" type="Button" parent="LogoContainer/MenuPanel/MarginContainer/MenuButtons"]
+[node name="StartBattleBtn" type="Button" parent="LogoContainer/MenuPanel/MarginContainer/MenuButtons"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(400, 56)
 layout_mode = 2
@@ -117,11 +117,11 @@ focus_mode = 0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_hover_color = Color(0, 0.85098, 1, 1)
 theme_override_font_sizes/font_size = 16
-text = "▶  QUICK BATTLE"
+text = "▶  START NEW BATTLE"
 flat = true
 alignment = 0
 
-[node name="MultiplayerBtn" type="Button" parent="LogoContainer/MenuPanel/MarginContainer/MenuButtons"]
+[node name="LoadBattleBtn" type="Button" parent="LogoContainer/MenuPanel/MarginContainer/MenuButtons"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(400, 56)
 layout_mode = 2
@@ -129,23 +129,11 @@ focus_mode = 0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_hover_color = Color(0, 0.85098, 1, 1)
 theme_override_font_sizes/font_size = 16
-text = "⚔  MULTIPLAYER"
+text = "💾  LOAD BATTLE"
 flat = true
 alignment = 0
 
-[node name="LoadGameBtn" type="Button" parent="LogoContainer/MenuPanel/MarginContainer/MenuButtons"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(400, 56)
-layout_mode = 2
-focus_mode = 0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_hover_color = Color(0, 0.85098, 1, 1)
-theme_override_font_sizes/font_size = 16
-text = "💾  LOAD GAME"
-flat = true
-alignment = 0
-
-[node name="ExitBtn" type="Button" parent="LogoContainer/MenuPanel/MarginContainer/MenuButtons"]
+[node name="ExitGameBtn" type="Button" parent="LogoContainer/MenuPanel/MarginContainer/MenuButtons"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(400, 56)
 layout_mode = 2
@@ -153,7 +141,7 @@ focus_mode = 0
 theme_override_colors/font_color = Color(1, 0.203922, 0.4, 1)
 theme_override_colors/font_hover_color = Color(1, 0.419608, 0.615686, 1)
 theme_override_font_sizes/font_size = 16
-text = "❌  EXIT"
+text = "❌  EXIT GAME"
 flat = true
 alignment = 0
 
