@@ -352,6 +352,12 @@ func _ready() -> void:
 	# Initialize and play Tron intro
 	_start_tron_intro()
 
+	# Check if a saved battle should be loaded (from startup menu)
+	var pending_load := ProjectSettings.get_setting("opentts/pending_load_path", "") as String
+	if not pending_load.is_empty():
+		ProjectSettings.set_setting("opentts/pending_load_path", "")
+		call_deferred("_load_pending_battle", pending_load)
+
 	print("OpenTTS ready!")
 
 
@@ -1082,6 +1088,14 @@ func _on_load_completed(object_count: int) -> void:
 ## Load failed callback
 func _on_load_failed(error: String) -> void:
 	push_error("Load failed: %s" % error)
+
+
+## Load a battle from a path passed via the startup menu
+func _load_pending_battle(path: String) -> void:
+	print("Loading pending battle from startup menu: %s" % path.get_file())
+	var error = save_manager.load_game(path)
+	if error != OK:
+		push_error("Failed to load pending battle: %d" % error)
 
 
 ## Sync loaded state to all connected clients
