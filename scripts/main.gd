@@ -92,6 +92,9 @@ var _is_group_rotating: bool = false
 @onready var disconnect_button: Button = %DisconnectButton
 @onready var address_input: LineEdit = %AddressInput
 
+# Internet multiplayer
+var internet_lobby: InternetLobby = null
+
 # Model loader UI
 @onready var load_model_btn: Button = %LoadModel
 @onready var model_file_dialog: FileDialog = %ModelFileDialog
@@ -220,6 +223,16 @@ func _ready() -> void:
 	network_manager.player_connected.connect(_on_player_joined)
 	network_manager.player_disconnected.connect(_on_player_left)
 
+	# Initialize Internet Lobby for online multiplayer
+	internet_lobby = InternetLobby.new()
+	add_child(internet_lobby)
+	internet_lobby.room_code_ready.connect(_on_internet_room_ready)
+	internet_lobby.internet_connected.connect(_on_internet_connected)
+	internet_lobby.internet_connection_failed.connect(_on_internet_failed)
+	internet_lobby.internet_disconnected.connect(_on_internet_disconnected)
+	internet_lobby.peer_joined.connect(_on_player_joined)
+	internet_lobby.peer_left.connect(_on_player_left)
+
 	# Connect Save/Load UI
 	save_game_btn.pressed.connect(_on_save_game)
 	load_game_btn.pressed.connect(_on_load_game)
@@ -283,6 +296,9 @@ func _ready() -> void:
 
 	# Set army_manager reference on SaveManager for GameUnit serialization
 	save_manager.army_manager = opr_army_manager
+
+	# Set army_manager reference on NetworkManager for unit state sync
+	network_manager.army_manager = opr_army_manager
 
 	# Initialize OPR Import Dialog
 	opr_import_dialog = OPRImportDialog.new()
@@ -914,6 +930,35 @@ func _on_player_left(peer_id: int) -> void:
 	if network_manager.is_host:
 		network_status_label.text = "Hosting (%d players)" % player_count
 	print("Player %d left! Total: %d" % [peer_id, player_count])
+
+
+## Internet multiplayer handlers
+func _on_internet_room_ready(code: String) -> void:
+	_update_network_ui(true, true)
+	var display_code = InternetLobby._format_code(code)
+	network_status_label.text = "Online: %s" % display_code
+	network_status_label.add_theme_color_override("font_color", Color.GREEN)
+	# Copy code to clipboard for easy sharing
+	DisplayServer.clipboard_set(code)
+	print("Room code %s copied to clipboard" % display_code)
+
+
+func _on_internet_connected(peer_id: int) -> void:
+	_update_network_ui(true, false)
+	network_status_label.text = "Online (Peer %d)" % peer_id
+	network_status_label.add_theme_color_override("font_color", Color.GREEN)
+
+
+func _on_internet_failed(reason: String) -> void:
+	_update_network_ui(false, false)
+	network_status_label.text = "Online failed: %s" % reason
+	network_status_label.add_theme_color_override("font_color", Color.RED)
+
+
+func _on_internet_disconnected() -> void:
+	_update_network_ui(false, false)
+	network_status_label.text = "Offline"
+	network_status_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
 
 
 ## Update network UI visibility based on connection state

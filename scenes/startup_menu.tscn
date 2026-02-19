@@ -121,6 +121,30 @@ text = "▶  START NEW BATTLE"
 flat = true
 alignment = 0
 
+[node name="HostOnlineBtn" type="Button" parent="LogoContainer/MenuPanel/MarginContainer/MenuButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 56)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.4, 0.85, 1, 1)
+theme_override_colors/font_hover_color = Color(0.6, 0.92, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "HOST ONLINE GAME"
+flat = true
+alignment = 0
+
+[node name="JoinOnlineBtn" type="Button" parent="LogoContainer/MenuPanel/MarginContainer/MenuButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 56)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.4, 0.85, 1, 1)
+theme_override_colors/font_hover_color = Color(0.6, 0.92, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "JOIN ONLINE GAME"
+flat = true
+alignment = 0
+
 [node name="LoadBattleBtn" type="Button" parent="LogoContainer/MenuPanel/MarginContainer/MenuButtons"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(400, 56)
