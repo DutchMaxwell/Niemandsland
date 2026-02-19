@@ -26,7 +26,7 @@ func test_close_resets_all_state() -> void:
 	peer._room_code = "ABC123"
 	peer._incoming_packets.append({"from_peer": 2, "data": PackedByteArray([1, 2, 3])})
 
-	peer.close()
+	peer._close()
 
 	assert_that(peer._my_peer_id).is_equal(0)
 	assert_that(peer._connection_status).is_equal(MultiplayerPeer.CONNECTION_DISCONNECTED)
