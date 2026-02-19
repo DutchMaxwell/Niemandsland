@@ -72,9 +72,10 @@ func disconnect_game() -> void:
 	print("=== DISCONNECTED ===")
 
 
-## Check if we're currently in a multiplayer session
+## Check if we're currently in a multiplayer session (works for ENet and Relay)
 func is_multiplayer_active() -> bool:
-	return peer != null and peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
+	var mp = multiplayer.multiplayer_peer
+	return mp != null and mp is MultiplayerPeer and mp.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
 
 
 ## Get our peer ID
