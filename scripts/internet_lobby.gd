@@ -78,7 +78,7 @@ func join_internet_game(code: String, url: String = "") -> Error:
 ## Disconnect from internet game and clean up.
 func disconnect_internet_game() -> void:
 	if relay_peer:
-		relay_peer.close()
+		relay_peer._close()
 		relay_peer = null
 
 	# Clear multiplayer peer if it was our relay

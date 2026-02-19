@@ -179,7 +179,18 @@ func _is_server_relay() -> bool:
 
 
 func _close() -> void:
-	close()
+	if _ws:
+		_ws.close()
+		_ws = null
+	_my_peer_id = 0
+	_target_peer = 0
+	_connection_status = MultiplayerPeer.CONNECTION_DISCONNECTED
+	_incoming_packets.clear()
+	_heartbeat_timer = 0.0
+	_room_code = ""
+	_ws_connected = false
+	_pending_action = ""
+	_pending_code = ""
 
 
 func _set_transfer_channel(p_channel: int) -> void:
@@ -196,24 +207,6 @@ func _set_transfer_mode(p_mode: int) -> void:
 
 func _get_transfer_mode() -> int:
 	return _transfer_mode
-
-
-# ===== Internal methods =====
-
-
-func close() -> void:
-	if _ws:
-		_ws.close()
-		_ws = null
-	_my_peer_id = 0
-	_target_peer = 0
-	_connection_status = MultiplayerPeer.CONNECTION_DISCONNECTED
-	_incoming_packets.clear()
-	_heartbeat_timer = 0.0
-	_room_code = ""
-	_ws_connected = false
-	_pending_action = ""
-	_pending_code = ""
 
 
 func _connect_to_relay(url: String) -> Error:
