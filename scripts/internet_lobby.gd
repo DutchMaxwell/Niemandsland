@@ -26,6 +26,14 @@ var room_code: String = ""
 var relay_url: String = DEFAULT_RELAY_URL
 
 
+func _process(_delta: float) -> void:
+	# Manually poll the WebSocket during the connecting phase.
+	# The engine only calls _poll() when the peer is set as multiplayer.multiplayer_peer,
+	# but we don't set it until AFTER room_created/room_joined — creating a deadlock.
+	if relay_peer and multiplayer.multiplayer_peer != relay_peer:
+		relay_peer._poll()
+
+
 ## Host a game via relay: connect to relay, create room, get code.
 func host_internet_game(url: String = "") -> Error:
 	if url.is_empty():

@@ -14,9 +14,7 @@ var animation_played: bool = false
 var _load_dialog: FileDialog
 var _host_popup: AcceptDialog
 var _join_popup: AcceptDialog
-var _internet_lobby: InternetLobby = null
 var _relay_url_input: LineEdit
-var _room_code_label: Label
 var _join_code_input: LineEdit
 var _join_relay_url_input: LineEdit
 
@@ -132,7 +130,7 @@ func _show_host_popup() -> void:
 
 	_host_popup = AcceptDialog.new()
 	_host_popup.title = "Host Online Game"
-	_host_popup.size = Vector2i(450, 280)
+	_host_popup.size = Vector2i(450, 200)
 	_host_popup.ok_button_text = "Start Hosting"
 
 	var vbox = VBoxContainer.new()
@@ -148,18 +146,9 @@ func _show_host_popup() -> void:
 	_relay_url_input.placeholder_text = "wss://opentts-relay.fly.dev"
 	vbox.add_child(_relay_url_input)
 
-	# Room code display (initially hidden)
-	_room_code_label = Label.new()
-	_room_code_label.text = ""
-	_room_code_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_room_code_label.add_theme_font_size_override("font_size", 32)
-	_room_code_label.add_theme_color_override("font_color", Color(0.4, 0.85, 1))
-	_room_code_label.visible = false
-	vbox.add_child(_room_code_label)
-
 	# Info text
 	var info = Label.new()
-	info.text = "Share the room code with your opponent."
+	info.text = "The room code will be shown in-game after connecting."
 	info.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD
 	vbox.add_child(info)
@@ -175,51 +164,11 @@ func _on_host_confirmed() -> void:
 	if url.is_empty():
 		url = InternetLobby.DEFAULT_RELAY_URL
 
-	# Create lobby and start hosting
-	_internet_lobby = InternetLobby.new()
-	add_child(_internet_lobby)
-	_internet_lobby.room_code_ready.connect(_on_room_code_ready)
-	_internet_lobby.peer_joined.connect(_on_startup_peer_joined)
-	_internet_lobby.internet_connection_failed.connect(_on_startup_connection_failed)
-
-	var err = _internet_lobby.host_internet_game(url)
-	if err != OK:
-		_room_code_label.text = "Connection failed!"
-		_room_code_label.add_theme_color_override("font_color", Color.RED)
-		_room_code_label.visible = true
-
-
-func _on_room_code_ready(code: String) -> void:
-	var display_code = InternetLobby._format_code(code)
-	_room_code_label.text = display_code
-	_room_code_label.visible = true
-	DisplayServer.clipboard_set(code)
-	print("Room code %s copied to clipboard" % display_code)
-
-	# Update popup to show waiting state
-	if _host_popup:
-		_host_popup.ok_button_text = "Waiting for player..."
-		_host_popup.get_ok_button().disabled = true
-
-
-func _on_startup_peer_joined(_peer_id: int) -> void:
-	# Player joined - transition to game
-	print("Player joined, starting game!")
-	# Store lobby reference for main scene to pick up
+	# Pass settings to main scene — connection happens there
 	ProjectSettings.set_setting("opentts/pending_internet_lobby", true)
 	ProjectSettings.set_setting("opentts/internet_is_host", true)
-	ProjectSettings.set_setting("opentts/internet_relay_url", _internet_lobby.relay_url)
-	ProjectSettings.set_setting("opentts/internet_room_code", _internet_lobby.room_code)
-	if _host_popup:
-		_host_popup.hide()
+	ProjectSettings.set_setting("opentts/internet_relay_url", url)
 	_transition_to_game()
-
-
-func _on_startup_connection_failed(reason: String) -> void:
-	if _room_code_label:
-		_room_code_label.text = "Error: %s" % reason
-		_room_code_label.add_theme_color_override("font_color", Color.RED)
-		_room_code_label.visible = true
 
 
 func _show_join_popup() -> void:
@@ -271,25 +220,11 @@ func _on_join_confirmed() -> void:
 	if url.is_empty():
 		url = InternetLobby.DEFAULT_RELAY_URL
 
-	# Create lobby and join
-	_internet_lobby = InternetLobby.new()
-	add_child(_internet_lobby)
-	_internet_lobby.internet_connected.connect(_on_join_success)
-	_internet_lobby.internet_connection_failed.connect(_on_startup_connection_failed)
-
-	var err = _internet_lobby.join_internet_game(code, url)
-	if err != OK:
-		push_error("Join failed with error: %d" % err)
-
-
-func _on_join_success(_peer_id: int) -> void:
-	print("Successfully joined game!")
+	# Pass settings to main scene — connection happens there
 	ProjectSettings.set_setting("opentts/pending_internet_lobby", true)
 	ProjectSettings.set_setting("opentts/internet_is_host", false)
-	ProjectSettings.set_setting("opentts/internet_relay_url", _internet_lobby.relay_url)
-	ProjectSettings.set_setting("opentts/internet_room_code", _internet_lobby.room_code)
-	if _join_popup:
-		_join_popup.hide()
+	ProjectSettings.set_setting("opentts/internet_relay_url", url)
+	ProjectSettings.set_setting("opentts/internet_room_code", code)
 	_transition_to_game()
 
 
