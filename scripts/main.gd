@@ -382,6 +382,15 @@ func _ready() -> void:
 		ProjectSettings.set_setting("opentts/pending_load_path", "")
 		call_deferred("_load_pending_battle", pending_load)
 
+	# Check if internet game should be started (from startup menu)
+	var pending_internet = ProjectSettings.get_setting("opentts/pending_internet_lobby", false)
+	if pending_internet:
+		ProjectSettings.set_setting("opentts/pending_internet_lobby", false)
+		var is_internet_host = ProjectSettings.get_setting("opentts/internet_is_host", false)
+		var pending_relay_url = ProjectSettings.get_setting("opentts/internet_relay_url", "")
+		var pending_room_code = ProjectSettings.get_setting("opentts/internet_room_code", "")
+		call_deferred("_start_pending_internet_game", is_internet_host, pending_relay_url, pending_room_code)
+
 	print("OpenTTS ready!")
 
 
@@ -1149,6 +1158,16 @@ func _load_pending_battle(path: String) -> void:
 	var error = await save_manager.load_game(path)
 	if error != OK:
 		push_error("Failed to load pending battle: %d" % error)
+
+
+## Start an internet game from settings passed by the startup menu
+func _start_pending_internet_game(is_internet_host: bool, relay_url: String, room_code_to_join: String) -> void:
+	if is_internet_host:
+		print("Starting internet host via %s" % relay_url)
+		internet_lobby.host_internet_game(relay_url)
+	else:
+		print("Joining internet room %s via %s" % [room_code_to_join, relay_url])
+		internet_lobby.join_internet_game(room_code_to_join, relay_url)
 
 
 ## Sync loaded state to all connected clients
