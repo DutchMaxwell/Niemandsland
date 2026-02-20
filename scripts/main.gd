@@ -913,6 +913,8 @@ func _on_network_connected() -> void:
 	_update_network_ui(true, false)
 	network_status_label.text = "Connected (Peer %d)" % network_manager.get_my_peer_id()
 	network_status_label.add_theme_color_override("font_color", Color.GREEN)
+	# Request game state from host (works for both LAN and Internet)
+	_request_game_state.rpc_id(1)
 
 
 func _on_network_failed() -> void:
@@ -929,11 +931,8 @@ func _on_network_disconnected() -> void:
 
 func _on_player_joined(peer_id: int) -> void:
 	print("Player %d joined!" % peer_id)
-	# Update network status UI (use multiplayer.is_server() — works for both ENet and Relay)
 	if multiplayer.is_server():
 		network_status_label.text = "Hosting (peer %d joined)" % peer_id
-		# Sync full game state to the new peer
-		_sync_state_to_peer(peer_id)
 
 
 func _on_player_left(peer_id: int) -> void:
@@ -958,6 +957,9 @@ func _on_internet_connected(peer_id: int) -> void:
 	_update_network_ui(true, false)
 	network_status_label.text = "Online (Peer %d)" % peer_id
 	network_status_label.add_theme_color_override("font_color", Color.GREEN)
+	# Client requests game state from host — this also makes the host's
+	# SceneMultiplayer detect us as a peer (required for RPCs to work).
+	_request_game_state.rpc_id(1)
 
 
 func _on_internet_failed(reason: String) -> void:
@@ -1172,7 +1174,18 @@ func _start_pending_internet_game(is_internet_host: bool, relay_url: String, roo
 		internet_lobby.join_internet_game(room_code_to_join, relay_url)
 
 
-## Sync full game state to a specific peer (called when a new player joins)
+## Called on the host when a client requests the current game state.
+## The client's binary packet also makes Godot's SceneMultiplayer detect
+## the peer, which is required for all subsequent RPCs to work.
+@rpc("any_peer", "call_remote", "reliable")
+func _request_game_state() -> void:
+	var sender = multiplayer.get_remote_sender_id()
+	print("Peer %d requested game state" % sender)
+	if multiplayer.is_server():
+		_sync_state_to_peer(sender)
+
+
+## Sync full game state to a specific peer
 func _sync_state_to_peer(peer_id: int) -> void:
 	print("Syncing game state to peer %d..." % peer_id)
 	var state = save_manager.serialize_game_state()
