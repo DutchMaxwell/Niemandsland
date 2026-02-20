@@ -928,10 +928,12 @@ func _on_network_disconnected() -> void:
 
 
 func _on_player_joined(peer_id: int) -> void:
-	var player_count = network_manager.connected_peers.size()
-	if network_manager.is_host:
-		network_status_label.text = "Hosting (%d players)" % player_count
-	print("Player %d joined! Total: %d" % [peer_id, player_count])
+	print("Player %d joined!" % peer_id)
+	# Update network status UI (use multiplayer.is_server() — works for both ENet and Relay)
+	if multiplayer.is_server():
+		network_status_label.text = "Hosting (peer %d joined)" % peer_id
+		# Sync full game state to the new peer
+		_sync_state_to_peer(peer_id)
 
 
 func _on_player_left(peer_id: int) -> void:
@@ -1168,6 +1170,13 @@ func _start_pending_internet_game(is_internet_host: bool, relay_url: String, roo
 	else:
 		print("Joining internet room %s via %s" % [room_code_to_join, relay_url])
 		internet_lobby.join_internet_game(room_code_to_join, relay_url)
+
+
+## Sync full game state to a specific peer (called when a new player joins)
+func _sync_state_to_peer(peer_id: int) -> void:
+	print("Syncing game state to peer %d..." % peer_id)
+	var state = save_manager.serialize_game_state()
+	_rpc_sync_game_state.rpc_id(peer_id, state)
 
 
 ## Sync loaded state to all connected clients
