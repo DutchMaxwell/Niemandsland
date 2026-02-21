@@ -328,6 +328,10 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 
 		var model = _create_unit_model(unit, player_color, name_suffix, faction_folder)
 		if model:
+			# Assign network_id for multiplayer position sync
+			object_manager._object_counter += 1
+			model.set_meta("network_id", object_manager._object_counter)
+
 			object_manager.add_child(model)
 			model.global_position = model_pos
 
