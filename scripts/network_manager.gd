@@ -319,3 +319,74 @@ func broadcast_hero_attachment(hero: GameUnit, target: GameUnit) -> void:
 	if is_multiplayer_active() and hero:
 		var target_id = target.unit_id if target else ""
 		sync_hero_attachment.rpc(hero.unit_id, target_id)
+
+
+# ===== Player Presence Synchronization =====
+
+## Signal emitted when a remote player's cursor position is received
+signal remote_cursor_updated(peer_id: int, pos_x: float, pos_z: float)
+
+## Signal emitted when a remote player's camera direction is received
+signal remote_camera_updated(peer_id: int, yaw: float, pitch: float)
+
+## Signal emitted when a remote player rolls dice
+signal remote_dice_rolled(peer_id: int, dice_count: int, results: Array, total: int)
+
+
+## RPC: Sync cursor position on table surface (high frequency, unreliable)
+@rpc("any_peer", "call_remote", "unreliable")
+func sync_cursor_position(pos_x: float, pos_z: float) -> void:
+	var sender = multiplayer.get_remote_sender_id()
+	remote_cursor_updated.emit(sender, pos_x, pos_z)
+
+
+## RPC: Sync camera look direction (low frequency, unreliable)
+@rpc("any_peer", "call_remote", "unreliable")
+func sync_camera_direction(yaw: float, pitch: float) -> void:
+	var sender = multiplayer.get_remote_sender_id()
+	remote_camera_updated.emit(sender, yaw, pitch)
+
+
+## RPC: Sync dice roll event (reliable — everyone must see the result)
+@rpc("any_peer", "call_remote", "reliable")
+func sync_dice_roll(dice_count: int, results: Array, total: int) -> void:
+	var sender = multiplayer.get_remote_sender_id()
+	print("[Network] Peer %d rolled %dd6: %s = %d" % [sender, dice_count, str(results), total])
+	remote_dice_rolled.emit(sender, dice_count, results, total)
+
+
+## Broadcast cursor position to all peers
+func broadcast_cursor_position(pos: Vector3) -> void:
+	if is_multiplayer_active():
+		sync_cursor_position.rpc(pos.x, pos.z)
+
+
+## Broadcast camera direction to all peers
+func broadcast_camera_direction(yaw: float, pitch: float) -> void:
+	if is_multiplayer_active():
+		sync_camera_direction.rpc(yaw, pitch)
+
+
+## Broadcast dice roll to all peers
+func broadcast_dice_roll(dice_count: int, results: Array, total: int) -> void:
+	if is_multiplayer_active():
+		sync_dice_roll.rpc(dice_count, results, total)
+
+
+# ===== Table Settings Synchronization =====
+
+## Signal emitted when remote table settings change
+signal remote_table_settings_changed(settings: Dictionary)
+
+
+## RPC: Sync table settings (deployment type, visibility, etc.)
+@rpc("authority", "call_remote", "reliable")
+func sync_table_settings(settings: Dictionary) -> void:
+	print("[Network] Received table settings: %s" % str(settings))
+	remote_table_settings_changed.emit(settings)
+
+
+## Broadcast table settings to all peers (host only)
+func broadcast_table_settings(settings: Dictionary) -> void:
+	if is_multiplayer_active() and multiplayer.is_server():
+		sync_table_settings.rpc(settings)
