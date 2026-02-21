@@ -500,6 +500,13 @@ func _stop_dragging() -> void:
 					# Static bodies snap to table surface
 					target_y = 0.0
 
+				# Broadcast final ground-level position so remote clients don't see floating models
+				if _network_manager and _network_manager.is_multiplayer_active():
+					if obj.has_meta("network_id"):
+						var net_id = obj.get_meta("network_id")
+						var final_pos = Vector3(obj.global_position.x, target_y, obj.global_position.z)
+						_network_manager.broadcast_move(net_id, final_pos)
+
 				var tween = create_tween()
 				tween.set_ease(Tween.EASE_OUT)
 				tween.set_trans(Tween.TRANS_QUAD)

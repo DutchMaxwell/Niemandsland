@@ -939,8 +939,8 @@ func _on_network_connected() -> void:
 	_update_network_ui(true, false)
 	network_status_label.text = "Connected (Peer %d)" % network_manager.get_my_peer_id()
 	network_status_label.add_theme_color_override("font_color", Color.GREEN)
-	# Request game state from host (works for both LAN and Internet)
-	_request_game_state.rpc_id(1)
+	# State sync is handled by the host via _on_player_joined → _sync_state_to_peer
+	# No need to request explicitly — the host pushes state proactively.
 
 
 func _on_network_failed() -> void:
@@ -1417,8 +1417,8 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	var unit_count = state.get("game_units", []).size()
 	print("[StateSync] Received game state from host: %d objects, %d game_units" % [obj_count, unit_count])
 
-	# Clear current objects
-	object_manager.clear_all_objects()
+	# Clear current objects (broadcast=false to avoid clearing host's objects)
+	object_manager.clear_all_objects(false)
 
 	# Full table deserialization (size + map layout: grid, deployment zones, objectives)
 	var table_data = state.get("table", {})
@@ -1434,13 +1434,18 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	var objects_data = state.get("objects", [])
 	var loaded_count = await save_manager._deserialize_objects(objects_data)
 
+	# Sync object counter so subsequent spawns don't conflict with existing IDs
+	var synced_counter = int(state.get("object_counter", 0))
+	if synced_counter > 0:
+		object_manager._object_counter = synced_counter
+
 	# Restore game state (round, current player)
 	save_manager._deserialize_game_state(state.get("game_state", {}))
 
 	# Restore marker visualizations (fatigue, shaken, wounds)
 	save_manager._restore_markers_after_load()
 
-	print("Synced %d objects from host" % loaded_count)
+	print("Synced %d objects from host (counter=%d)" % [loaded_count, object_manager._object_counter])
 
 
 ## ============================================================================
