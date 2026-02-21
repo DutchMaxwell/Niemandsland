@@ -1204,7 +1204,7 @@ func _sync_loaded_state_to_clients() -> void:
 	_rpc_sync_game_state.rpc(state)
 
 
-## RPC to sync game state to clients
+## RPC to sync game state to clients (mirrors save_manager.load_game() deserialization)
 @rpc("authority", "call_remote", "reliable")
 func _rpc_sync_game_state(state: Dictionary) -> void:
 	print("Received game state from host, loading...")
@@ -1212,16 +1212,25 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	# Clear current objects
 	object_manager.clear_all_objects()
 
-	# Deserialize table
+	# Full table deserialization (size + map layout: grid, deployment zones, objectives)
 	var table_data = state.get("table", {})
+	save_manager._deserialize_table(table_data)
 	var size = table_data.get("size_feet", [6, 4])
 	if size is Array and size.size() >= 2:
-		table.setup_table(Vector2(size[0], size[1]))
 		_adjust_camera_for_table_size(Vector2(size[0], size[1]))
 
-	# Deserialize objects (using save_manager helper, async for TTS downloads)
+	# Restore game units (OPR units with wounds, status, model positions)
+	save_manager._deserialize_game_units(state.get("game_units", []))
+
+	# Deserialize objects (async for TTS downloads)
 	var objects_data = state.get("objects", [])
 	var loaded_count = await save_manager._deserialize_objects(objects_data)
+
+	# Restore game state (round, current player)
+	save_manager._deserialize_game_state(state.get("game_state", {}))
+
+	# Restore marker visualizations (fatigue, shaken, wounds)
+	save_manager._restore_markers_after_load()
 
 	print("Synced %d objects from host" % loaded_count)
 
