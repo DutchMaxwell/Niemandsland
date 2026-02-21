@@ -29,6 +29,8 @@ var _clipboard: Array[Node3D] = []  # Stores references to copied objects for du
 
 # Rotation tracking
 var _is_rotating: bool = false
+var _rotation_broadcast_timer: float = 0.0
+const ROTATION_BROADCAST_INTERVAL: float = 0.066  # ~15 Hz
 
 # Drag distance tracking
 var _drag_start_positions: Dictionary = {}  # Object -> start position mapping
@@ -86,6 +88,16 @@ func _process(delta: float) -> void:
 		for obj in _selected_objects:
 			if is_instance_valid(obj):
 				obj.rotate_y(rotation_amount)
+
+		# Broadcast rotation to remote peers (throttled at ~15 Hz)
+		_rotation_broadcast_timer += delta
+		if _rotation_broadcast_timer >= ROTATION_BROADCAST_INTERVAL and _network_manager:
+			_rotation_broadcast_timer = 0.0
+			for obj in _selected_objects:
+				if is_instance_valid(obj) and obj.has_meta("network_id"):
+					_network_manager.broadcast_rotation(obj.get_meta("network_id"), obj.rotation.y)
+	else:
+		_rotation_broadcast_timer = 0.0
 
 
 ## Checks if a GUI element is blocking input (e.g., modal dialog)
