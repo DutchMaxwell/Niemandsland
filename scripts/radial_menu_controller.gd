@@ -580,6 +580,13 @@ func initialize_status_markers_for_unit(game_unit: GameUnit) -> void:
 		_update_activated_markers(game_unit)
 
 
+## Public method to initialize wound markers for all models in a unit after load.
+func initialize_wound_markers_for_unit(game_unit: GameUnit) -> void:
+	for model in game_unit.models:
+		if model.wounds_current < model.wounds_max:
+			_update_wound_marker(model)
+
+
 ## Called when a unit's boundary is updated (models moved/rearranged).
 ## Repositions tokens along the new boundary shape.
 func _on_boundary_updated(game_unit: GameUnit) -> void:

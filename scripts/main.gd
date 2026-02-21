@@ -92,6 +92,9 @@ var _is_group_rotating: bool = false
 @onready var disconnect_button: Button = %DisconnectButton
 @onready var address_input: LineEdit = %AddressInput
 
+# Internet multiplayer
+var internet_lobby: InternetLobby = null
+
 # Model loader UI
 @onready var load_model_btn: Button = %LoadModel
 @onready var model_file_dialog: FileDialog = %ModelFileDialog
@@ -220,6 +223,16 @@ func _ready() -> void:
 	network_manager.player_connected.connect(_on_player_joined)
 	network_manager.player_disconnected.connect(_on_player_left)
 
+	# Initialize Internet Lobby for online multiplayer
+	internet_lobby = InternetLobby.new()
+	add_child(internet_lobby)
+	internet_lobby.room_code_ready.connect(_on_internet_room_ready)
+	internet_lobby.internet_connected.connect(_on_internet_connected)
+	internet_lobby.internet_connection_failed.connect(_on_internet_failed)
+	internet_lobby.internet_disconnected.connect(_on_internet_disconnected)
+	internet_lobby.peer_joined.connect(_on_player_joined)
+	internet_lobby.peer_left.connect(_on_player_left)
+
 	# Connect Save/Load UI
 	save_game_btn.pressed.connect(_on_save_game)
 	load_game_btn.pressed.connect(_on_load_game)
@@ -280,6 +293,12 @@ func _ready() -> void:
 	opr_army_manager.object_manager = object_manager
 	opr_army_manager.table = table
 	add_child(opr_army_manager)
+
+	# Set army_manager reference on SaveManager for GameUnit serialization
+	save_manager.army_manager = opr_army_manager
+
+	# Set army_manager reference on NetworkManager for unit state sync
+	network_manager.army_manager = opr_army_manager
 
 	# Initialize OPR Import Dialog
 	opr_import_dialog = OPRImportDialog.new()
@@ -349,8 +368,28 @@ func _ready() -> void:
 	# Initialize Radial Menu
 	_init_radial_menu()
 
+	# Set save_manager references for terrain/layout and marker restoration
+	save_manager.map_layout_editor = map_layout_editor
+	save_manager.terrain_overlay = terrain_overlay
+	save_manager.radial_menu_controller = radial_menu_controller
+
 	# Initialize and play Tron intro
 	_start_tron_intro()
+
+	# Check if a saved battle should be loaded (from startup menu)
+	var pending_load := ProjectSettings.get_setting("opentts/pending_load_path", "") as String
+	if not pending_load.is_empty():
+		ProjectSettings.set_setting("opentts/pending_load_path", "")
+		call_deferred("_load_pending_battle", pending_load)
+
+	# Check if internet game should be started (from startup menu)
+	var pending_internet = ProjectSettings.get_setting("opentts/pending_internet_lobby", false)
+	if pending_internet:
+		ProjectSettings.set_setting("opentts/pending_internet_lobby", false)
+		var is_internet_host = ProjectSettings.get_setting("opentts/internet_is_host", false)
+		var pending_relay_url = ProjectSettings.get_setting("opentts/internet_relay_url", "")
+		var pending_room_code = ProjectSettings.get_setting("opentts/internet_room_code", "")
+		call_deferred("_start_pending_internet_game", is_internet_host, pending_relay_url, pending_room_code)
 
 	print("OpenTTS ready!")
 
@@ -874,6 +913,8 @@ func _on_network_connected() -> void:
 	_update_network_ui(true, false)
 	network_status_label.text = "Connected (Peer %d)" % network_manager.get_my_peer_id()
 	network_status_label.add_theme_color_override("font_color", Color.GREEN)
+	# Request game state from host (works for both LAN and Internet)
+	_request_game_state.rpc_id(1)
 
 
 func _on_network_failed() -> void:
@@ -889,10 +930,9 @@ func _on_network_disconnected() -> void:
 
 
 func _on_player_joined(peer_id: int) -> void:
-	var player_count = network_manager.connected_peers.size()
-	if network_manager.is_host:
-		network_status_label.text = "Hosting (%d players)" % player_count
-	print("Player %d joined! Total: %d" % [peer_id, player_count])
+	print("Player %d joined!" % peer_id)
+	if multiplayer.is_server():
+		network_status_label.text = "Hosting (peer %d joined)" % peer_id
 
 
 func _on_player_left(peer_id: int) -> void:
@@ -900,6 +940,38 @@ func _on_player_left(peer_id: int) -> void:
 	if network_manager.is_host:
 		network_status_label.text = "Hosting (%d players)" % player_count
 	print("Player %d left! Total: %d" % [peer_id, player_count])
+
+
+## Internet multiplayer handlers
+func _on_internet_room_ready(code: String) -> void:
+	_update_network_ui(true, true)
+	var display_code = InternetLobby._format_code(code)
+	network_status_label.text = "Online: %s" % display_code
+	network_status_label.add_theme_color_override("font_color", Color.GREEN)
+	# Copy code to clipboard for easy sharing
+	DisplayServer.clipboard_set(code)
+	print("Room code %s copied to clipboard" % display_code)
+
+
+func _on_internet_connected(peer_id: int) -> void:
+	_update_network_ui(true, false)
+	network_status_label.text = "Online (Peer %d)" % peer_id
+	network_status_label.add_theme_color_override("font_color", Color.GREEN)
+	# Client requests game state from host — this also makes the host's
+	# SceneMultiplayer detect us as a peer (required for RPCs to work).
+	_request_game_state.rpc_id(1)
+
+
+func _on_internet_failed(reason: String) -> void:
+	_update_network_ui(false, false)
+	network_status_label.text = "Online failed: %s" % reason
+	network_status_label.add_theme_color_override("font_color", Color.RED)
+
+
+func _on_internet_disconnected() -> void:
+	_update_network_ui(false, false)
+	network_status_label.text = "Offline"
+	network_status_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
 
 
 ## Update network UI visibility based on connection state
@@ -1059,7 +1131,7 @@ func _on_save_file_selected(path: String) -> void:
 
 ## Load file selected
 func _on_load_file_selected(path: String) -> void:
-	var error = save_manager.load_game(path)
+	var error = await save_manager.load_game(path)
 	if error != OK:
 		push_error("Failed to load game: %d" % error)
 
@@ -1084,6 +1156,42 @@ func _on_load_failed(error: String) -> void:
 	push_error("Load failed: %s" % error)
 
 
+## Load a battle from a path passed via the startup menu
+func _load_pending_battle(path: String) -> void:
+	print("Loading pending battle from startup menu: %s" % path.get_file())
+	var error = await save_manager.load_game(path)
+	if error != OK:
+		push_error("Failed to load pending battle: %d" % error)
+
+
+## Start an internet game from settings passed by the startup menu
+func _start_pending_internet_game(is_internet_host: bool, relay_url: String, room_code_to_join: String) -> void:
+	if is_internet_host:
+		print("Starting internet host via %s" % relay_url)
+		internet_lobby.host_internet_game(relay_url)
+	else:
+		print("Joining internet room %s via %s" % [room_code_to_join, relay_url])
+		internet_lobby.join_internet_game(room_code_to_join, relay_url)
+
+
+## Called on the host when a client requests the current game state.
+## The client's binary packet also makes Godot's SceneMultiplayer detect
+## the peer, which is required for all subsequent RPCs to work.
+@rpc("any_peer", "call_remote", "reliable")
+func _request_game_state() -> void:
+	var sender = multiplayer.get_remote_sender_id()
+	print("Peer %d requested game state" % sender)
+	if multiplayer.is_server():
+		_sync_state_to_peer(sender)
+
+
+## Sync full game state to a specific peer
+func _sync_state_to_peer(peer_id: int) -> void:
+	print("Syncing game state to peer %d..." % peer_id)
+	var state = save_manager.serialize_game_state()
+	_rpc_sync_game_state.rpc_id(peer_id, state)
+
+
 ## Sync loaded state to all connected clients
 func _sync_loaded_state_to_clients() -> void:
 	if not network_manager.is_host:
@@ -1096,7 +1204,7 @@ func _sync_loaded_state_to_clients() -> void:
 	_rpc_sync_game_state.rpc(state)
 
 
-## RPC to sync game state to clients
+## RPC to sync game state to clients (mirrors save_manager.load_game() deserialization)
 @rpc("authority", "call_remote", "reliable")
 func _rpc_sync_game_state(state: Dictionary) -> void:
 	print("Received game state from host, loading...")
@@ -1104,16 +1212,25 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	# Clear current objects
 	object_manager.clear_all_objects()
 
-	# Deserialize table
+	# Full table deserialization (size + map layout: grid, deployment zones, objectives)
 	var table_data = state.get("table", {})
+	save_manager._deserialize_table(table_data)
 	var size = table_data.get("size_feet", [6, 4])
 	if size is Array and size.size() >= 2:
-		table.setup_table(Vector2(size[0], size[1]))
 		_adjust_camera_for_table_size(Vector2(size[0], size[1]))
 
-	# Deserialize objects (using save_manager helper, async for TTS downloads)
+	# Restore game units (OPR units with wounds, status, model positions)
+	save_manager._deserialize_game_units(state.get("game_units", []))
+
+	# Deserialize objects (async for TTS downloads)
 	var objects_data = state.get("objects", [])
 	var loaded_count = await save_manager._deserialize_objects(objects_data)
+
+	# Restore game state (round, current player)
+	save_manager._deserialize_game_state(state.get("game_state", {}))
+
+	# Restore marker visualizations (fatigue, shaken, wounds)
+	save_manager._restore_markers_after_load()
 
 	print("Synced %d objects from host" % loaded_count)
 
