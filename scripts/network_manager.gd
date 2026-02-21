@@ -90,10 +90,7 @@ func _on_peer_connected(id: int) -> void:
 	print("Player connected: Peer ID %d" % id)
 	connected_peers.append(id)
 	player_connected.emit(id)
-
-	# If we're the host, send current game state to new player
-	if is_host:
-		_sync_state_to_peer.rpc_id(id)
+	# State sync is handled by main.gd via the player_connected signal
 
 
 func _on_peer_disconnected(id: int) -> void:
@@ -122,14 +119,6 @@ func _on_server_disconnected() -> void:
 	is_host = false
 	connected_peers.clear()
 	server_disconnected.emit()
-
-
-## Sync current game state to a newly connected peer
-@rpc("authority", "call_local", "reliable")
-func _sync_state_to_peer() -> void:
-	# This will be called on the new client
-	# The host will send object data via other RPCs
-	print("Receiving game state sync...")
 
 
 ## RPC: Spawn object on remote clients only (local already spawned)
