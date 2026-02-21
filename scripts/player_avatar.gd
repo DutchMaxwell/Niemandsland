@@ -1,8 +1,8 @@
 extends Node3D
 ## Represents a remote player at the table.
 ##
-## Displays a stylized avatar (body + head) on the opposite side of the table
-## from the local player. The head rotates to show where the remote player
+## Displays a stylized avatar (body + head) that follows the remote player's
+## camera position. The head rotates to show where the remote player
 ## is looking. A name label floats above the avatar.
 
 const PLAYER_COLORS := {
@@ -25,6 +25,13 @@ var _target_pitch: float = -45.0
 var _current_yaw: float = 0.0
 var _current_pitch: float = -45.0
 
+# Smooth interpolation for position (follows remote camera)
+var _target_position: Vector3 = Vector3.ZERO
+var _position_initialized: bool = false
+
+# Body rotation stored for head yaw correction
+var _body_rotation_y: float = 0.0
+
 # Dice roll animation
 var _is_rolling: bool = false
 var _roll_timer: float = 0.0
@@ -41,7 +48,12 @@ func _process(delta: float) -> void:
 	_current_yaw = lerp(_current_yaw, _target_yaw, delta * 5.0)
 	_current_pitch = lerp(_current_pitch, _target_pitch, delta * 5.0)
 	if _head_mesh:
-		_head_mesh.rotation_degrees = Vector3(_current_pitch * 0.3, _current_yaw, 0)
+		# Convert world yaw to avatar-local yaw by subtracting body rotation
+		_head_mesh.rotation_degrees = Vector3(_current_pitch * 0.3, _current_yaw - _body_rotation_y, 0)
+
+	# Smooth position interpolation (follows remote camera)
+	if _position_initialized:
+		position = position.lerp(_target_position, delta * 5.0)
 
 	# Dice roll animation
 	if _is_rolling:
@@ -71,6 +83,14 @@ func setup(p_peer_id: int, table_size_feet: Vector2) -> void:
 func update_look_direction(yaw: float, pitch: float) -> void:
 	_target_yaw = yaw
 	_target_pitch = pitch
+
+
+## Update avatar position to follow remote camera pivot
+func update_position(pos_x: float, pos_z: float) -> void:
+	_target_position = Vector3(pos_x, 0, pos_z)
+	if not _position_initialized:
+		position = _target_position
+		_position_initialized = true
 
 
 ## Play dice roll animation
@@ -148,9 +168,15 @@ func _build_avatar() -> void:
 func _position_at_table(table_size_feet: Vector2) -> void:
 	var half_z = table_size_feet.y * 0.3048 / 2.0  # feet to meters
 	# Peer 1 (host) sits at +Z, peer 2 at -Z, etc.
+	# Godot's -Z is the default forward direction.
+	# Peer 1 at +Z should face -Z (toward table center) → rotation 0°
+	# Peer 2 at -Z should face +Z (toward table center) → rotation 180°
 	if peer_id == 1:
 		position = Vector3(0, 0, half_z + 0.15)
-		rotation_degrees.y = 180.0
+		rotation_degrees.y = 0.0
+		_body_rotation_y = 0.0
 	else:
 		position = Vector3(0, 0, -(half_z + 0.15))
-		rotation_degrees.y = 0.0
+		rotation_degrees.y = 180.0
+		_body_rotation_y = 180.0
+	_target_position = position

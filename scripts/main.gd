@@ -236,6 +236,9 @@ func _ready() -> void:
 	network_manager.remote_camera_updated.connect(_on_remote_camera_updated)
 	network_manager.remote_dice_rolled.connect(_on_remote_dice_rolled)
 	network_manager.remote_table_settings_changed.connect(_on_remote_table_settings_changed)
+	network_manager.remote_army_spawned.connect(_on_remote_army_spawned)
+	network_manager.remote_tts_terrain_spawned.connect(_on_remote_tts_terrain_spawned)
+	network_manager.remote_camera_position_updated.connect(_on_remote_camera_position_updated)
 
 	# Initialize Internet Lobby for online multiplayer
 	internet_lobby = InternetLobby.new()
@@ -1030,6 +1033,7 @@ func _broadcast_presence(delta: float) -> void:
 		if camera_pivot:
 			network_manager.broadcast_camera_direction(
 				camera_pivot._yaw, camera_pivot._pitch)
+			network_manager.broadcast_camera_position(camera_pivot.global_position)
 
 
 ## Called when a remote player's cursor position is received
@@ -1153,6 +1157,25 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 				if obj is Array and obj.size() >= 3:
 					world_objs.append(Vector3(obj[0], obj[1], obj[2]))
 			terrain_overlay.update_objectives(world_objs)
+
+	if settings.has("terrain_layout"):
+		var layout = settings["terrain_layout"]
+		var cells_data = layout.get("grid_cells", {})
+		var grid_cells: Dictionary = {}
+		for key in cells_data:
+			var coords = str(key).split(",")
+			if coords.size() == 2:
+				grid_cells[Vector2i(int(coords[0]), int(coords[1]))] = int(cells_data[key])
+		var ts = layout.get("table_size", [6, 4])
+		var table_sz = Vector2(ts[0], ts[1])
+		var rot = float(layout.get("grid_rotation", 0.0))
+		if terrain_overlay and terrain_overlay.has_method("update_overlay"):
+			terrain_overlay.update_overlay(grid_cells, table_sz, rot)
+		# Also update local map_layout_editor data
+		if map_layout_editor:
+			map_layout_editor.grid_cells = grid_cells
+			map_layout_editor.grid_rotation_degrees = rot
+		print("[Settings] Terrain layout received: %d cells" % grid_cells.size())
 
 
 ## Update network UI visibility based on connection state
@@ -1539,6 +1562,66 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
 	var spawned = opr_army_manager.spawn_army(army)
 	print("Spawned %d models for army '%s' on Player %d's tray" % [spawned.size(), army.name, player_id])
 
+	# Sync to other peers if in multiplayer
+	if network_manager.is_multiplayer_active():
+		_broadcast_army_import(army, spawned)
+
+
+## Broadcast a newly imported army to all remote peers
+func _broadcast_army_import(army: OPRApiClient.OPRArmy, spawned_models: Array[Node3D]) -> void:
+	# Serialize the new GameUnits
+	var units_data: Array = []
+	for unit in army.units:
+		var game_unit = opr_army_manager.get_game_unit(unit)
+		if game_unit:
+			var unit_dict = game_unit.to_dict()
+			# Add model positions
+			var model_positions: Array = []
+			for model in game_unit.models:
+				if model.node and is_instance_valid(model.node):
+					model_positions.append({
+						"position": [model.node.global_position.x, model.node.global_position.y, model.node.global_position.z],
+						"rotation": [model.node.rotation_degrees.x, model.node.rotation_degrees.y, model.node.rotation_degrees.z],
+						"visible": model.node.visible
+					})
+				else:
+					model_positions.append(null)
+			unit_dict["model_positions"] = model_positions
+			units_data.append(unit_dict)
+
+	# Serialize the spawned model nodes
+	var objects_data: Array = []
+	for model in spawned_models:
+		var obj_data = save_manager._serialize_object(model)
+		if not obj_data.is_empty():
+			objects_data.append(obj_data)
+
+	print("[ArmySync] Broadcasting army: %d units, %d objects" % [units_data.size(), objects_data.size()])
+	network_manager.broadcast_army_spawn(units_data, objects_data)
+
+
+## Receive army spawn from a remote peer
+func _on_remote_army_spawned(units_data: Array, objects_data: Array) -> void:
+	print("[ArmySync] Received remote army: %d units, %d objects" % [units_data.size(), objects_data.size()])
+	save_manager._deserialize_game_units(units_data)
+	await save_manager._deserialize_objects(objects_data)
+	save_manager._restore_markers_after_load()
+
+
+## Receive TTS terrain spawn from a remote peer
+func _on_remote_tts_terrain_spawned(mesh_url: String, diffuse_url: String,
+	sx: float, sy: float, sz: float,
+	px: float, py: float, pz: float, tname: String) -> void:
+	print("[TerrainSync] Received remote TTS terrain: %s" % tname)
+	await object_manager.spawn_tts_terrain(mesh_url, diffuse_url,
+		Vector3(sx, sy, sz), Vector3(px, py, pz), tname)
+
+
+## Receive remote camera position update
+func _on_remote_camera_position_updated(peer_id: int, pos_x: float, pos_z: float) -> void:
+	if _player_avatars.has(peer_id):
+		_player_avatars[peer_id].update_position(pos_x, pos_z)
+
 
 ## Update OPR unit hover detection
 func _update_opr_hover() -> void:
@@ -1712,6 +1795,17 @@ func _on_map_layout_closed() -> void:
 		var world_objectives = map_layout_editor.get_objectives_for_overlay()
 		if terrain_overlay and terrain_overlay.has_method("update_objectives"):
 			terrain_overlay.update_objectives(world_objectives)
+
+	# Broadcast terrain layout to remote clients when map editor closes
+	if network_manager.is_multiplayer_active() and map_layout_editor:
+		var cells_serialized = {}
+		for cell_pos in map_layout_editor.grid_cells:
+			cells_serialized["%d,%d" % [cell_pos.x, cell_pos.y]] = map_layout_editor.grid_cells[cell_pos]
+		_broadcast_table_settings_update("terrain_layout", {
+			"grid_cells": cells_serialized,
+			"table_size": [map_layout_editor.table_size_feet.x, map_layout_editor.table_size_feet.y],
+			"grid_rotation": map_layout_editor.grid_rotation_degrees
+		})
 
 
 ## Handle deployment type change from Map Tool

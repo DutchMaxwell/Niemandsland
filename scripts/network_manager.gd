@@ -390,3 +390,69 @@ func sync_table_settings(settings: Dictionary) -> void:
 func broadcast_table_settings(settings: Dictionary) -> void:
 	if is_multiplayer_active() and multiplayer.is_server():
 		sync_table_settings.rpc(settings)
+
+
+# ===== Army Import Synchronization =====
+
+## Signal emitted when a remote player imports an army
+signal remote_army_spawned(units_data: Array, objects_data: Array)
+
+
+## RPC: Sync army spawn data (game units + object nodes)
+@rpc("any_peer", "call_remote", "reliable")
+func sync_army_spawn(units_data: Array, objects_data: Array) -> void:
+	var sender = multiplayer.get_remote_sender_id()
+	print("[Network] Received army spawn from peer %d: %d units, %d objects" % [sender, units_data.size(), objects_data.size()])
+	remote_army_spawned.emit(units_data, objects_data)
+
+
+## Broadcast army import to all peers
+func broadcast_army_spawn(units_data: Array, objects_data: Array) -> void:
+	if is_multiplayer_active():
+		sync_army_spawn.rpc(units_data, objects_data)
+
+
+# ===== TTS Terrain Synchronization =====
+
+## Signal emitted when a remote player spawns TTS terrain
+signal remote_tts_terrain_spawned(mesh_url: String, diffuse_url: String,
+	scale_x: float, scale_y: float, scale_z: float,
+	pos_x: float, pos_y: float, pos_z: float, terrain_name: String)
+
+
+## RPC: Sync TTS terrain spawn
+@rpc("any_peer", "call_remote", "reliable")
+func sync_tts_terrain_spawn(mesh_url: String, diffuse_url: String,
+	scale_x: float, scale_y: float, scale_z: float,
+	pos_x: float, pos_y: float, pos_z: float, terrain_name: String) -> void:
+	var sender = multiplayer.get_remote_sender_id()
+	print("[Network] Received TTS terrain spawn from peer %d: %s" % [sender, terrain_name])
+	remote_tts_terrain_spawned.emit(mesh_url, diffuse_url,
+		scale_x, scale_y, scale_z, pos_x, pos_y, pos_z, terrain_name)
+
+
+## Broadcast TTS terrain spawn to all peers
+func broadcast_tts_terrain_spawn(mesh_url: String, diffuse_url: String,
+	scale: Vector3, pos: Vector3, terrain_name: String) -> void:
+	if is_multiplayer_active():
+		sync_tts_terrain_spawn.rpc(mesh_url, diffuse_url,
+			scale.x, scale.y, scale.z, pos.x, pos.y, pos.z, terrain_name)
+
+
+# ===== Camera Position Synchronization =====
+
+## Signal emitted when a remote player's camera position is received
+signal remote_camera_position_updated(peer_id: int, pos_x: float, pos_z: float)
+
+
+## RPC: Sync camera position (unreliable for performance)
+@rpc("any_peer", "call_remote", "unreliable")
+func sync_camera_position(pos_x: float, pos_z: float) -> void:
+	var sender = multiplayer.get_remote_sender_id()
+	remote_camera_position_updated.emit(sender, pos_x, pos_z)
+
+
+## Broadcast camera position to all peers
+func broadcast_camera_position(pos: Vector3) -> void:
+	if is_multiplayer_active():
+		sync_camera_position.rpc(pos.x, pos.z)
