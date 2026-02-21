@@ -231,6 +231,13 @@ func _ready() -> void:
 	network_manager.player_connected.connect(_on_player_joined)
 	network_manager.player_disconnected.connect(_on_player_left)
 
+	# Connect game state sync signals (remote wounds, activation, markers, casts, delete)
+	network_manager.remote_wounds_updated.connect(_on_remote_wounds_updated)
+	network_manager.remote_activation_updated.connect(_on_remote_activation_updated)
+	network_manager.remote_unit_marker_updated.connect(_on_remote_unit_marker_updated)
+	network_manager.remote_casts_updated.connect(_on_remote_casts_updated)
+	network_manager.remote_unit_deleted.connect(_on_remote_unit_deleted)
+
 	# Connect presence signals
 	network_manager.remote_cursor_updated.connect(_on_remote_cursor_updated)
 	network_manager.remote_camera_updated.connect(_on_remote_camera_updated)
@@ -892,6 +899,9 @@ func _set_table_size(size_feet: Vector2) -> void:
 	# Adjust camera view
 	_adjust_camera_for_table_size(size_feet)
 
+	# Sync table size to remote peers
+	_broadcast_table_settings_update("table_size", [size_feet.x, size_feet.y])
+
 	print("Table resized to %.1fx%.1f feet" % [size_feet.x, size_feet.y])
 
 
@@ -1132,6 +1142,14 @@ func _broadcast_table_settings_update(setting_key: String, value) -> void:
 ## Receive table settings from host (client only)
 func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 	print("[Settings] Received table settings: %s" % str(settings))
+
+	if settings.has("table_size"):
+		var ts = settings["table_size"]
+		if ts is Array and ts.size() >= 2:
+			var size_feet = Vector2(ts[0], ts[1])
+			table.setup_table(size_feet)
+			_adjust_camera_for_table_size(size_feet)
+			print("[Settings] Table resized to %.1fx%.1f feet" % [size_feet.x, size_feet.y])
 
 	if settings.has("deployment_type"):
 		var dtype = int(settings["deployment_type"])
@@ -1612,6 +1630,13 @@ func _on_remote_army_spawned(units_data: Array, objects_data: Array) -> void:
 	await save_manager._deserialize_objects(objects_data)
 	save_manager._restore_markers_after_load()
 
+	# Sync object counter to the highest network_id so future spawns don't conflict
+	for obj_data in objects_data:
+		if obj_data is Dictionary:
+			var net_id = int(obj_data.get("network_id", 0))
+			if net_id > object_manager._object_counter:
+				object_manager._object_counter = net_id
+
 
 ## Receive TTS terrain spawn from a remote peer
 func _on_remote_tts_terrain_spawned(mesh_url: String, diffuse_url: String,
@@ -2091,6 +2116,9 @@ func _init_radial_menu() -> void:
 	add_child(radial_menu_controller)
 	radial_menu_controller.initialize(object_manager, opr_army_manager)
 
+	# Pass network manager reference for broadcasting state changes
+	radial_menu_controller.network_manager = network_manager
+
 	# Pass stats tooltip reference for displaying unit stats
 	radial_menu_controller.stats_tooltip = opr_stats_tooltip
 
@@ -2136,3 +2164,55 @@ func _on_army_spawned_init_caster_markers(army: OPRApiClient.OPRArmy, _models: A
 		if game_unit:
 			radial_menu_controller.initialize_caster_marker_for_unit(game_unit)
 			radial_menu_controller.initialize_status_markers_for_unit(game_unit)
+
+
+## ============================================================================
+## Remote Game State Sync Handlers (visual updates on receiving side)
+## ============================================================================
+
+## Called when a remote peer changes model wounds
+func _on_remote_wounds_updated(model: ModelInstance) -> void:
+	if radial_menu_controller:
+		radial_menu_controller._update_wound_marker(model)
+
+		# Handle model death/revival visibility
+		if not model.is_alive and model.node and is_instance_valid(model.node):
+			model.node.set_meta("deleted", true)
+		elif model.is_alive and model.node and is_instance_valid(model.node):
+			model.node.set_meta("deleted", false)
+
+
+## Called when a remote peer changes unit activation
+func _on_remote_activation_updated(game_unit: GameUnit) -> void:
+	if radial_menu_controller:
+		radial_menu_controller._update_activated_markers(game_unit)
+
+
+## Called when a remote peer changes a unit marker (Fatigued, Shaken, etc.)
+func _on_remote_unit_marker_updated(game_unit: GameUnit, marker_name: String, add: bool) -> void:
+	if not radial_menu_controller:
+		return
+
+	# Update the boolean state and visual markers for known marker types
+	match marker_name:
+		"FatiguedMarker":
+			game_unit.is_fatigued = add
+			radial_menu_controller._update_fatigued_markers(game_unit)
+		"ShakenMarker":
+			game_unit.is_shaken = add
+			radial_menu_controller._update_shaken_markers(game_unit)
+		"ActivatedMarker":
+			game_unit.is_activated = add
+			radial_menu_controller._update_activated_markers(game_unit)
+
+
+## Called when a remote peer changes caster points
+func _on_remote_casts_updated(game_unit: GameUnit) -> void:
+	if radial_menu_controller:
+		radial_menu_controller._update_caster_marker(game_unit)
+
+
+## Called when a remote peer deletes an entire unit
+func _on_remote_unit_deleted(game_unit: GameUnit) -> void:
+	if radial_menu_controller:
+		radial_menu_controller.unit_deleted.emit(game_unit)

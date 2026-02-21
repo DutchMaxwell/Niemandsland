@@ -8,6 +8,13 @@ signal server_disconnected
 signal player_connected(peer_id: int)
 signal player_disconnected(peer_id: int)
 
+# Signals for remote state updates (emitted when RPCs arrive)
+signal remote_wounds_updated(model: ModelInstance)
+signal remote_activation_updated(game_unit: GameUnit)
+signal remote_unit_marker_updated(game_unit: GameUnit, marker_name: String, add: bool)
+signal remote_casts_updated(game_unit: GameUnit)
+signal remote_unit_deleted(game_unit: GameUnit)
+
 const DEFAULT_PORT: int = 7777
 const MAX_PLAYERS: int = 8
 
@@ -196,6 +203,7 @@ func sync_unit_activation(unit_id: String, activated: bool, activation_round: in
 		game_unit.is_activated = activated
 		game_unit.activation_round = activation_round
 		print("[Network] Unit %s activation: %s (round %d)" % [game_unit.get_name(), activated, activation_round])
+		remote_activation_updated.emit(game_unit)
 
 
 ## RPC: Sync model wounds
@@ -216,6 +224,7 @@ func sync_model_wounds(unit_id: String, model_index: int, wounds: int, is_alive:
 				model.node.visible = is_alive
 
 			print("[Network] Model %d wounds: %d/%d (alive: %s)" % [model_index + 1, wounds, model.wounds_max, is_alive])
+			remote_wounds_updated.emit(model)
 
 
 ## RPC: Sync model marker (add or remove)
@@ -250,6 +259,7 @@ func sync_unit_marker(unit_id: String, marker_name: String, add: bool) -> void:
 		else:
 			game_unit.remove_marker_from_all(marker_name)
 			print("[Network] Unit %s: -marker '%s'" % [game_unit.get_name(), marker_name])
+		remote_unit_marker_updated.emit(game_unit, marker_name, add)
 
 
 ## RPC: Sync hero attachment
@@ -271,6 +281,47 @@ func sync_hero_attachment(hero_id: String, target_id: String) -> void:
 		if target:
 			EquipmentDistributor.attach_hero_to_unit(hero, target)
 			print("[Network] Hero %s attached to %s" % [hero.get_name(), target.get_name()])
+
+
+## RPC: Sync unit casts
+@rpc("any_peer", "call_remote", "reliable")
+func sync_unit_casts(unit_id: String, casts_current: int) -> void:
+	if not army_manager:
+		return
+
+	var game_unit = army_manager.get_game_unit_by_id(unit_id)
+	if game_unit:
+		game_unit.casts_current = casts_current
+		print("[Network] Unit %s casts: %d" % [game_unit.get_name(), casts_current])
+		remote_casts_updated.emit(game_unit)
+
+
+## RPC: Sync unit deletion (mark all models dead)
+@rpc("any_peer", "call_remote", "reliable")
+func sync_unit_delete(unit_id: String) -> void:
+	if not army_manager:
+		return
+
+	var game_unit = army_manager.get_game_unit_by_id(unit_id)
+	if game_unit:
+		for model in game_unit.models:
+			model.is_alive = false
+			model.wounds_current = 0
+			if model.node and is_instance_valid(model.node):
+				model.node.queue_free()
+		print("[Network] Unit %s deleted" % game_unit.get_name())
+		remote_unit_deleted.emit(game_unit)
+
+
+## RPC: Sync object rotation (unreliable for performance)
+@rpc("any_peer", "call_remote", "unreliable_ordered")
+func rotate_object_networked(object_id: int, rot_y: float) -> void:
+	var object_manager = get_node_or_null("/root/Main/ObjectManager")
+	if object_manager:
+		for child in object_manager.get_children():
+			if child.has_meta("network_id") and child.get_meta("network_id") == object_id:
+				child.rotation.y = rot_y
+				break
 
 
 # ===== Broadcast Helpers for GameUnit State =====
@@ -301,6 +352,24 @@ func broadcast_model_marker(model: ModelInstance, marker_name: String, add: bool
 func broadcast_unit_marker(game_unit: GameUnit, marker_name: String, add: bool) -> void:
 	if is_multiplayer_active() and game_unit:
 		sync_unit_marker.rpc(game_unit.unit_id, marker_name, add)
+
+
+## Broadcast unit casts change
+func broadcast_unit_casts(game_unit: GameUnit) -> void:
+	if is_multiplayer_active() and game_unit:
+		sync_unit_casts.rpc(game_unit.unit_id, game_unit.casts_current)
+
+
+## Broadcast unit deletion
+func broadcast_unit_delete(game_unit: GameUnit) -> void:
+	if is_multiplayer_active() and game_unit:
+		sync_unit_delete.rpc(game_unit.unit_id)
+
+
+## Broadcast object rotation
+func broadcast_rotation(object_id: int, rot_y: float) -> void:
+	if is_multiplayer_active():
+		rotate_object_networked.rpc(object_id, rot_y)
 
 
 ## Broadcast hero attachment change
