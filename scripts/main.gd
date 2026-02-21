@@ -162,6 +162,14 @@ var _tts_json_path: String = ""
 var _tts_models_dir: String = ""
 var _tts_import_mode: String = "local"  # "local" or "online"
 
+# Player Presence System
+var _remote_cursors: Dictionary = {}  # peer_id -> RemoteCursor node
+var _player_avatars: Dictionary = {}  # peer_id -> PlayerAvatar node
+var _cursor_broadcast_timer: float = 0.0
+var _camera_broadcast_timer: float = 0.0
+const CURSOR_BROADCAST_INTERVAL: float = 0.066  # ~15 Hz
+const CAMERA_BROADCAST_INTERVAL: float = 0.2  # 5 Hz
+
 
 func _ready() -> void:
 	print("OpenTTS Prototype v0.2 - Initializing...")
@@ -223,6 +231,12 @@ func _ready() -> void:
 	network_manager.player_connected.connect(_on_player_joined)
 	network_manager.player_disconnected.connect(_on_player_left)
 
+	# Connect presence signals
+	network_manager.remote_cursor_updated.connect(_on_remote_cursor_updated)
+	network_manager.remote_camera_updated.connect(_on_remote_camera_updated)
+	network_manager.remote_dice_rolled.connect(_on_remote_dice_rolled)
+	network_manager.remote_table_settings_changed.connect(_on_remote_table_settings_changed)
+
 	# Initialize Internet Lobby for online multiplayer
 	internet_lobby = InternetLobby.new()
 	add_child(internet_lobby)
@@ -230,8 +244,9 @@ func _ready() -> void:
 	internet_lobby.internet_connected.connect(_on_internet_connected)
 	internet_lobby.internet_connection_failed.connect(_on_internet_failed)
 	internet_lobby.internet_disconnected.connect(_on_internet_disconnected)
-	internet_lobby.peer_joined.connect(_on_player_joined)
-	internet_lobby.peer_left.connect(_on_player_left)
+	# Peer join/leave for internet relay is handled through the built-in
+	# MultiplayerPeer.peer_connected signal (same path as ENet):
+	# relay emits peer_connected → network_manager._on_peer_connected → _on_player_joined
 
 	# Connect Save/Load UI
 	save_game_btn.pressed.connect(_on_save_game)
@@ -497,6 +512,9 @@ func _process(delta: float) -> void:
 	# Handle OPR unit hover detection
 	_update_opr_hover()
 
+	# Broadcast presence data to remote players
+	_broadcast_presence(delta)
+
 
 func _on_spawn_miniature() -> void:
 	var spawn_pos = _get_random_table_position()
@@ -739,6 +757,11 @@ func _on_roller_finished(result: int) -> void:
 	var per_dice = dice_roller_control.per_dice_result()
 	roller_result_label.text = _format_dice_results(per_dice, result)
 
+	# Broadcast dice roll to remote players
+	if network_manager.is_multiplayer_active():
+		var dice_count = per_dice.size() if per_dice is Array else 0
+		network_manager.broadcast_dice_roll(dice_count, per_dice if per_dice is Array else [], result)
+
 
 func _on_dice_count_changed(new_value: float) -> void:
 	_update_dice_set(int(new_value))
@@ -930,15 +953,23 @@ func _on_network_disconnected() -> void:
 
 
 func _on_player_joined(peer_id: int) -> void:
-	print("Player %d joined!" % peer_id)
+	print("Player %d joined! Peers: %s" % [peer_id, str(multiplayer.get_peers())])
 	if multiplayer.is_server():
 		network_status_label.text = "Hosting (peer %d joined)" % peer_id
+		# Host proactively sends full game state to the newly connected peer.
+		# This fires after SceneMultiplayer._add_peer() has registered the peer,
+		# so rpc_id(peer_id, ...) will succeed.
+		_sync_state_to_peer(peer_id)
+
+	# Spawn avatar for the remote player at the table edge
+	_spawn_player_avatar(peer_id)
 
 
 func _on_player_left(peer_id: int) -> void:
 	var player_count = network_manager.connected_peers.size()
 	if network_manager.is_host:
 		network_status_label.text = "Hosting (%d players)" % player_count
+	_cleanup_peer_presence(peer_id)
 	print("Player %d left! Total: %d" % [peer_id, player_count])
 
 
@@ -957,9 +988,8 @@ func _on_internet_connected(peer_id: int) -> void:
 	_update_network_ui(true, false)
 	network_status_label.text = "Online (Peer %d)" % peer_id
 	network_status_label.add_theme_color_override("font_color", Color.GREEN)
-	# Client requests game state from host — this also makes the host's
-	# SceneMultiplayer detect us as a peer (required for RPCs to work).
-	_request_game_state.rpc_id(1)
+	# State sync is now handled via _on_player_joined when the built-in
+	# peer_connected signal fires (after SceneMultiplayer registers the peer).
 
 
 func _on_internet_failed(reason: String) -> void:
@@ -972,6 +1002,157 @@ func _on_internet_disconnected() -> void:
 	_update_network_ui(false, false)
 	network_status_label.text = "Offline"
 	network_status_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+	# Clean up presence nodes
+	_cleanup_all_presence()
+
+
+## ============================================================================
+## Player Presence System
+## ============================================================================
+
+## Broadcast cursor and camera positions to remote players
+func _broadcast_presence(delta: float) -> void:
+	if not network_manager.is_multiplayer_active():
+		return
+
+	# Broadcast cursor position at ~15 Hz
+	_cursor_broadcast_timer += delta
+	if _cursor_broadcast_timer >= CURSOR_BROADCAST_INTERVAL:
+		_cursor_broadcast_timer = 0.0
+		var cursor_pos = object_manager.get_cursor_table_position()
+		if cursor_pos != Vector3.ZERO:
+			network_manager.broadcast_cursor_position(cursor_pos)
+
+	# Broadcast camera direction at ~5 Hz
+	_camera_broadcast_timer += delta
+	if _camera_broadcast_timer >= CAMERA_BROADCAST_INTERVAL:
+		_camera_broadcast_timer = 0.0
+		if camera_pivot:
+			network_manager.broadcast_camera_direction(
+				camera_pivot._yaw, camera_pivot._pitch)
+
+
+## Called when a remote player's cursor position is received
+func _on_remote_cursor_updated(peer_id: int, pos_x: float, pos_z: float) -> void:
+	if not _remote_cursors.has(peer_id):
+		_spawn_remote_cursor(peer_id)
+	_remote_cursors[peer_id].update_position(pos_x, pos_z)
+
+
+## Called when a remote player's camera direction is received
+func _on_remote_camera_updated(peer_id: int, yaw: float, pitch: float) -> void:
+	if _player_avatars.has(peer_id):
+		_player_avatars[peer_id].update_look_direction(yaw, pitch)
+
+
+## Called when a remote player rolls dice
+func _on_remote_dice_rolled(peer_id: int, dice_count: int, results: Array, total: int) -> void:
+	# Show the roll result in the dice result label
+	roller_result_label.text = "P%d: %s = %d" % [peer_id, str(results), total]
+
+	# Play avatar dice roll animation
+	if _player_avatars.has(peer_id):
+		_player_avatars[peer_id].play_dice_roll_animation()
+
+
+## Spawn a remote cursor visualization for a peer
+func _spawn_remote_cursor(peer_id: int) -> void:
+	var cursor_script = load("res://scripts/remote_cursor.gd")
+	var cursor = Node3D.new()
+	cursor.set_script(cursor_script)
+	cursor.name = "RemoteCursor_%d" % peer_id
+	var color = _get_player_color(peer_id)
+	add_child(cursor)
+	cursor.setup(peer_id, color)
+	_remote_cursors[peer_id] = cursor
+	print("[Presence] Spawned remote cursor for peer %d" % peer_id)
+
+
+## Spawn a player avatar for a peer
+func _spawn_player_avatar(peer_id: int) -> void:
+	var avatar_script = load("res://scripts/player_avatar.gd")
+	var avatar = Node3D.new()
+	avatar.set_script(avatar_script)
+	avatar.name = "PlayerAvatar_%d" % peer_id
+	add_child(avatar)
+	avatar.setup(peer_id, table.table_size)
+	_player_avatars[peer_id] = avatar
+	print("[Presence] Spawned avatar for peer %d at table edge" % peer_id)
+
+
+## Remove presence nodes for a disconnected peer
+func _cleanup_peer_presence(peer_id: int) -> void:
+	if _remote_cursors.has(peer_id):
+		_remote_cursors[peer_id].queue_free()
+		_remote_cursors.erase(peer_id)
+	if _player_avatars.has(peer_id):
+		_player_avatars[peer_id].queue_free()
+		_player_avatars.erase(peer_id)
+
+
+## Remove all presence nodes (on disconnect)
+func _cleanup_all_presence() -> void:
+	for cursor in _remote_cursors.values():
+		if is_instance_valid(cursor):
+			cursor.queue_free()
+	_remote_cursors.clear()
+	for avatar in _player_avatars.values():
+		if is_instance_valid(avatar):
+			avatar.queue_free()
+	_player_avatars.clear()
+
+
+## Get player color for a peer ID
+func _get_player_color(peer_id: int) -> Color:
+	const COLORS := {
+		1: Color(0.2, 0.4, 0.9),  # Blue
+		2: Color(0.9, 0.2, 0.2),  # Red
+		3: Color(0.2, 0.8, 0.3),  # Green
+		4: Color(0.9, 0.7, 0.1),  # Yellow
+	}
+	return COLORS.get(peer_id, Color.WHITE)
+
+
+## ============================================================================
+## Table Settings Synchronization (Phase 3)
+## ============================================================================
+
+## Broadcast current table settings to all clients (host only)
+func _broadcast_table_settings_update(setting_key: String, value) -> void:
+	if not network_manager.is_multiplayer_active() or not multiplayer.is_server():
+		return
+	var settings = {setting_key: value}
+	network_manager.broadcast_table_settings(settings)
+
+
+## Receive table settings from host (client only)
+func _on_remote_table_settings_changed(settings: Dictionary) -> void:
+	print("[Settings] Received table settings: %s" % str(settings))
+
+	if settings.has("deployment_type"):
+		var dtype = int(settings["deployment_type"])
+		if terrain_overlay and terrain_overlay.has_method("set_deployment_zones"):
+			terrain_overlay.set_deployment_zones(dtype)
+			if dtype > 0:
+				terrain_overlay.set_deployment_zones_visible(true)
+				if deployment_zone_check:
+					deployment_zone_check.button_pressed = true
+
+	if settings.has("deployment_visible"):
+		var vis = bool(settings["deployment_visible"])
+		if terrain_overlay and terrain_overlay.has_method("set_deployment_zones_visible"):
+			terrain_overlay.set_deployment_zones_visible(vis)
+			if deployment_zone_check:
+				deployment_zone_check.button_pressed = vis
+
+	if settings.has("objectives"):
+		var objectives = settings["objectives"]
+		if terrain_overlay and terrain_overlay.has_method("update_objectives"):
+			var world_objs: Array[Vector3] = []
+			for obj in objectives:
+				if obj is Array and obj.size() >= 3:
+					world_objs.append(Vector3(obj[0], obj[1], obj[2]))
+			terrain_overlay.update_objectives(world_objs)
 
 
 ## Update network UI visibility based on connection state
@@ -1187,8 +1368,10 @@ func _request_game_state() -> void:
 
 ## Sync full game state to a specific peer
 func _sync_state_to_peer(peer_id: int) -> void:
-	print("Syncing game state to peer %d..." % peer_id)
 	var state = save_manager.serialize_game_state()
+	var obj_count = state.get("objects", []).size()
+	var unit_count = state.get("game_units", []).size()
+	print("[StateSync] Sending state to peer %d: %d objects, %d game_units" % [peer_id, obj_count, unit_count])
 	_rpc_sync_game_state.rpc_id(peer_id, state)
 
 
@@ -1207,7 +1390,9 @@ func _sync_loaded_state_to_clients() -> void:
 ## RPC to sync game state to clients (mirrors save_manager.load_game() deserialization)
 @rpc("authority", "call_remote", "reliable")
 func _rpc_sync_game_state(state: Dictionary) -> void:
-	print("Received game state from host, loading...")
+	var obj_count = state.get("objects", []).size()
+	var unit_count = state.get("game_units", []).size()
+	print("[StateSync] Received game state from host: %d objects, %d game_units" % [obj_count, unit_count])
 
 	# Clear current objects
 	object_manager.clear_all_objects()
@@ -1552,6 +1737,9 @@ func _on_deployment_type_changed(deployment_type: int) -> void:
 		if deployment_zone_check:
 			deployment_zone_check.button_pressed = true
 
+	# Sync deployment type to remote clients
+	_broadcast_table_settings_update("deployment_type", deployment_type)
+
 
 ## Handle objectives change from Map Tool
 func _on_objectives_changed(objectives: Array) -> void:
@@ -1565,6 +1753,12 @@ func _on_objectives_changed(objectives: Array) -> void:
 
 	terrain_overlay.update_objectives(world_objectives)
 	print("Mission objectives updated: %d objectives" % world_objectives.size())
+
+	# Sync objectives to remote clients
+	var obj_data := []
+	for obj in world_objectives:
+		obj_data.append([obj.x, obj.y, obj.z])
+	_broadcast_table_settings_update("objectives", obj_data)
 
 
 ## Update terrain overlay when map layout changes
@@ -1636,6 +1830,9 @@ func _on_deployment_zones_visibility_toggled(show_zones: bool) -> void:
 
 	terrain_overlay.set_deployment_zones_visible(show_zones)
 	print("Deployment zones visibility: %s" % ("visible" if show_zones else "hidden"))
+
+	# Sync visibility to remote clients
+	_broadcast_table_settings_update("deployment_visible", show_zones)
 
 
 ## Handle deployment mode toggle

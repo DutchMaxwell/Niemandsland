@@ -46,12 +46,6 @@ class IncomingPacket:
 		from_peer = p_from
 		data = p_data
 
-	static func new(p_from: int, p_data: PackedByteArray) -> IncomingPacket:
-		var pkt = IncomingPacket.new()
-		pkt.from_peer = p_from
-		pkt.data = p_data
-		return pkt
-
 
 # ===== Public API =====
 
@@ -261,11 +255,17 @@ func _process_control_message(raw: String) -> void:
 
 		"peer_connected":
 			var peer_id = int(parsed.get("peer_id", 0))
+			print("[Relay] Peer %d connected — emitting peer_connected signal" % peer_id)
 			peer_joined.emit(peer_id)
+			# Notify SceneMultiplayer so it adds the peer to connected_peers.
+			# Without this, all RPCs silently fail (both send and receive).
+			emit_signal("peer_connected", peer_id)
 
 		"peer_disconnected":
 			var peer_id = int(parsed.get("peer_id", 0))
+			print("[Relay] Peer %d disconnected — emitting peer_disconnected signal" % peer_id)
 			peer_left.emit(peer_id)
+			emit_signal("peer_disconnected", peer_id)
 
 		"error":
 			var message = parsed.get("message", "Unknown error")
