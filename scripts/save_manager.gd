@@ -30,8 +30,9 @@ func serialize_game_state() -> Dictionary:
 		"saved_at": Time.get_datetime_string_from_system(),
 		"table": _serialize_table(),
 		"objects": _serialize_objects(),
-		"game_units": _serialize_game_units(),  # NEW
-		"game_state": _serialize_game_state()   # NEW: Round, activations
+		"game_units": _serialize_game_units(),
+		"game_state": _serialize_game_state(),
+		"object_counter": object_manager._object_counter if object_manager else 0
 	}
 	return state
 
@@ -357,6 +358,9 @@ func _deserialize_object(data: Dictionary) -> bool:
 
 	var spawned_obj: Node3D = null
 
+	# Preserve network_id from serialized data (broadcast=false to avoid re-broadcasting)
+	var net_id = int(data.get("network_id", -1))
+
 	match obj_type:
 		"opr_unit":
 			var game_unit_id = data.get("game_unit_id", "")
@@ -370,6 +374,8 @@ func _deserialize_object(data: Dictionary) -> bool:
 					object_manager.add_child(spawned_obj)
 					spawned_obj.global_position = position
 					spawned_obj.rotation_degrees = rotation
+					if net_id >= 0:
+						spawned_obj.set_meta("network_id", net_id)
 					restore_game_unit_state(spawned_obj, game_unit_id, model_idx)
 					return true
 			else:
@@ -382,15 +388,18 @@ func _deserialize_object(data: Dictionary) -> bool:
 			if not model_path.is_empty():
 				spawned_obj = object_manager.spawn_custom_model(model_path, position)
 		"miniature":
-			spawned_obj = object_manager.spawn_miniature(position)
+			spawned_obj = object_manager.spawn_miniature(position, false, net_id)
 		"terrain":
-			spawned_obj = object_manager.spawn_terrain(position)
+			spawned_obj = object_manager.spawn_terrain(position, false, net_id)
 		_:
 			push_warning("Unknown object type: %s" % obj_type)
 			return false
 
 	if spawned_obj:
 		spawned_obj.rotation_degrees = rotation
+		# Preserve serialized network_id for all object types (TTS, custom models, etc.)
+		if net_id >= 0:
+			spawned_obj.set_meta("network_id", net_id)
 		return true
 
 	return false
