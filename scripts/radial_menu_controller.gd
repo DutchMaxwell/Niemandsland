@@ -46,6 +46,9 @@ var model_info_popup: ModelInfoPopup = null
 ## Reference to marker dialog
 var marker_dialog: MarkerDialog = null
 
+## Reference to network manager for broadcasting state changes
+var network_manager: Node = null
+
 ## Current selection context
 var _current_selection: Array = []
 
@@ -108,6 +111,8 @@ func initialize(p_object_manager: Node, p_army_manager: OPRArmyManager) -> void:
 	if not marker_dialog:
 		marker_dialog = MarkerDialog.create_simple()
 		ui_parent.add_child(marker_dialog)
+		marker_dialog.marker_added.connect(_on_marker_dialog_marker_added)
+		marker_dialog.marker_removed.connect(_on_marker_dialog_marker_removed)
 
 
 ## Opens the radial menu for the current selection at the given position.
@@ -334,6 +339,10 @@ func _toggle_activation(context: Dictionary) -> void:
 		_update_activated_markers(game_unit)
 		unit_activated.emit(game_unit)
 
+	# Broadcast activation change to remote peers
+	if network_manager:
+		network_manager.broadcast_unit_activation(game_unit)
+
 
 func _toggle_fatigued(context: Dictionary) -> void:
 	var game_unit = _get_game_unit_from_context(context)
@@ -344,6 +353,10 @@ func _toggle_fatigued(context: Dictionary) -> void:
 	_update_fatigued_markers(game_unit)
 	print("%s is now %s" % [game_unit.get_name(), "Fatigued" if game_unit.is_fatigued else "not Fatigued"])
 
+	# Broadcast fatigued change to remote peers
+	if network_manager:
+		network_manager.broadcast_unit_marker(game_unit, "FatiguedMarker", game_unit.is_fatigued)
+
 
 func _toggle_shaken(context: Dictionary) -> void:
 	var game_unit = _get_game_unit_from_context(context)
@@ -353,6 +366,10 @@ func _toggle_shaken(context: Dictionary) -> void:
 	game_unit.is_shaken = not game_unit.is_shaken
 	_update_shaken_markers(game_unit)
 	print("%s is now %s" % [game_unit.get_name(), "Shaken" if game_unit.is_shaken else "not Shaken"])
+
+	# Broadcast shaken change to remote peers
+	if network_manager:
+		network_manager.broadcast_unit_marker(game_unit, "ShakenMarker", game_unit.is_shaken)
 
 
 ## Helper to get GameUnit from context (supports both unit and model selection)
@@ -415,6 +432,10 @@ func _delete_model(context: Dictionary) -> void:
 	model_deleted.emit(model)
 	print("Deleted model %d" % (model.model_index + 1))
 
+	# Broadcast model death to remote peers (wounds=0, alive=false)
+	if network_manager:
+		network_manager.broadcast_model_wounds(model)
+
 
 func _delete_unit(context: Dictionary) -> void:
 	var game_unit = context.get("game_unit") as GameUnit
@@ -430,6 +451,10 @@ func _delete_unit(context: Dictionary) -> void:
 
 	unit_deleted.emit(game_unit)
 	print("Deleted unit: %s" % game_unit.get_name())
+
+	# Broadcast unit deletion to remote peers
+	if network_manager:
+		network_manager.broadcast_unit_delete(game_unit)
 
 
 func _show_terrain_info(context: Dictionary) -> void:
@@ -487,6 +512,10 @@ func _on_wounds_changed(model: ModelInstance, new_wounds: int) -> void:
 		model.node.visible = true
 		model.node.set_meta("deleted", false)
 
+	# Broadcast wounds change to remote peers
+	if network_manager:
+		network_manager.broadcast_model_wounds(model)
+
 
 ## Updates or creates a wound marker (red disc with border) next to a model.
 func _update_wound_marker(model: ModelInstance) -> void:
@@ -505,6 +534,10 @@ func _on_casts_changed(unit: GameUnit, new_casts: int) -> void:
 	# Update visual caster marker if needed
 	_update_caster_marker(unit)
 	print("Caster points changed for %s: %d/%d" % [unit.get_name(), new_casts, GameUnit.CASTER_POINTS_CAP])
+
+	# Broadcast casts change to remote peers
+	if network_manager:
+		network_manager.broadcast_unit_casts(unit)
 
 
 ## Updates or creates a caster point marker (purple disc) next to a unit's first model.
@@ -1038,3 +1071,25 @@ func _update_token(model_node: Node3D, unit: GameUnit, marker_name: String, is_a
 		_reposition_all_tokens(model_node, unit, marker_name)
 	else:
 		_reposition_all_tokens(model_node, unit)
+
+
+# ===== Marker Dialog Network Broadcasts =====
+
+## Called when a marker is added via the marker dialog.
+func _on_marker_dialog_marker_added(target: Variant, marker: UnitMarker) -> void:
+	if not network_manager:
+		return
+	if target is ModelInstance:
+		network_manager.broadcast_model_marker(target, marker.name, true)
+	elif target is GameUnit:
+		network_manager.broadcast_unit_marker(target, marker.name, true)
+
+
+## Called when a marker is removed via the marker dialog.
+func _on_marker_dialog_marker_removed(target: Variant, marker_name: String) -> void:
+	if not network_manager:
+		return
+	if target is ModelInstance:
+		network_manager.broadcast_model_marker(target, marker_name, false)
+	elif target is GameUnit:
+		network_manager.broadcast_unit_marker(target, marker_name, false)
