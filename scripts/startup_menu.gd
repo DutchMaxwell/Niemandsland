@@ -20,6 +20,15 @@ var _join_relay_url_input: LineEdit
 
 
 func _ready() -> void:
+	# Check if an .otts file was passed via command-line (e.g. double-click in file manager)
+	var file_to_open := _get_otts_from_cmdline()
+	if not file_to_open.is_empty():
+		print("Opening file from command line: %s" % file_to_open)
+		ProjectSettings.set_setting("opentts/pending_load_path", file_to_open)
+		# Skip menu entirely and go straight to game
+		get_tree().change_scene_to_file("res://scenes/main.tscn")
+		return
+
 	# Apply Glassmorphism theme
 	theme = ThemeManager.get_current_theme()
 
@@ -263,6 +272,27 @@ func _on_load_file_selected(path: String) -> void:
 	print("Loading battle from: %s" % path.get_file())
 	ProjectSettings.set_setting("opentts/pending_load_path", path)
 	_transition_to_game()
+
+
+## Check command-line arguments for an .otts file path.
+## This handles the case where the user double-clicks an .otts file in the OS file manager
+## or drags a file onto the application executable.
+func _get_otts_from_cmdline() -> String:
+	# OS.get_cmdline_user_args() returns args after "--" separator (Godot convention)
+	# OS.get_cmdline_args() returns all args including engine flags
+	for arg in OS.get_cmdline_user_args():
+		if arg.ends_with(".otts") and FileAccess.file_exists(arg):
+			return arg
+
+	# Also check regular args (some OS pass file path as first arg directly)
+	for arg in OS.get_cmdline_args():
+		# Skip Godot engine flags (start with - or --)
+		if arg.begins_with("-"):
+			continue
+		if arg.ends_with(".otts") and FileAccess.file_exists(arg):
+			return arg
+
+	return ""
 
 
 func _input(event: InputEvent) -> void:
