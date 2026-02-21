@@ -194,3 +194,7 @@ func spawn_terrain_piece(piece: TerrainPiece, position: Vector3) -> void:
 
 	if terrain:
 		terrain_spawned.emit(terrain)
+		# Broadcast to other peers if in multiplayer
+		if object_manager._network_manager and object_manager._network_manager.is_multiplayer_active():
+			object_manager._network_manager.broadcast_tts_terrain_spawn(
+				piece.mesh_url, piece.diffuse_url, piece.scale, position, piece.name)
