@@ -7,12 +7,15 @@ signal save_completed(path: String)
 signal load_completed(object_count: int)
 signal load_failed(error: String)
 
-const SAVE_VERSION = "1.1"  # Updated for GameUnit support
+const SAVE_VERSION = "1.2"  # Updated for map layout + marker restore
 const SAVE_EXTENSION = "otts"  # OpenTTS Save
 
 var object_manager: Node3D
 var table: Node3D
-var army_manager: OPRArmyManager  # NEW: Reference for GameUnit data
+var army_manager: OPRArmyManager  # Reference for GameUnit data
+var map_layout_editor: Control  # Reference to map layout editor (terrain, zones, objectives)
+var terrain_overlay: Node3D  # Reference to 3D terrain overlay
+var radial_menu_controller: Node  # Reference for token/marker visualization after load
 
 
 func _ready() -> void:
@@ -33,14 +36,42 @@ func serialize_game_state() -> Dictionary:
 	return state
 
 
-## Serialize table state
+## Serialize table state including map layout (terrain, deployment, objectives)
 func _serialize_table() -> Dictionary:
 	if not table:
 		return {"size_feet": [6, 4]}
 
-	return {
+	var data = {
 		"size_feet": [table.table_size.x, table.table_size.y]
 	}
+
+	# Serialize map layout data from map_layout_editor
+	if map_layout_editor:
+		data["grid_rotation"] = map_layout_editor.grid_rotation_degrees
+		data["deployment_type"] = map_layout_editor.deployment_type
+
+		# Grid cells - convert Vector2i keys to strings for JSON
+		var cells = {}
+		for cell_pos in map_layout_editor.grid_cells:
+			var key = "%d,%d" % [cell_pos.x, cell_pos.y]
+			cells[key] = map_layout_editor.grid_cells[cell_pos]
+		data["grid_cells"] = cells
+
+		# Custom deployment zones (1" coordinates)
+		var custom_zones = {"player1": [], "player2": []}
+		for v in map_layout_editor.custom_zone_vertices_p1:
+			custom_zones["player1"].append({"x": v.x, "y": v.y})
+		for v in map_layout_editor.custom_zone_vertices_p2:
+			custom_zones["player2"].append({"x": v.x, "y": v.y})
+		data["custom_zones"] = custom_zones
+
+		# Mission objectives (1" coordinates)
+		var objectives = []
+		for obj in map_layout_editor.mission_objectives:
+			objectives.append({"x": obj.x, "y": obj.y})
+		data["mission_objectives"] = objectives
+
+	return data
 
 
 ## Serialize all objects on the table
@@ -202,19 +233,102 @@ func load_game(path: String) -> Error:
 	# Restore game state
 	_deserialize_game_state(state.get("game_state", {}))
 
+	# Restore token/marker visualizations for all loaded game units
+	_restore_markers_after_load()
+
 	print("Game loaded from: %s (%d objects, %d game units)" % [path, loaded_count, game_units_loaded])
 	load_completed.emit(loaded_count)
 	return OK
 
 
-## Deserialize table state
+## Deserialize table state including map layout (terrain, deployment, objectives)
 func _deserialize_table(table_data: Dictionary) -> void:
 	if not table:
 		return
 
 	var size = table_data.get("size_feet", [6, 4])
+	var table_size = Vector2(6, 4)
 	if size is Array and size.size() >= 2:
-		table.setup_table(Vector2(size[0], size[1]))
+		table_size = Vector2(size[0], size[1])
+		table.setup_table(table_size)
+
+	# Restore map layout data
+	_deserialize_map_layout(table_data, table_size)
+
+
+## Deserialize map layout data (terrain grid, deployment zones, objectives)
+func _deserialize_map_layout(table_data: Dictionary, table_size: Vector2) -> void:
+	var grid_rotation = float(table_data.get("grid_rotation", 0.0))
+	var deployment_type = int(table_data.get("deployment_type", 0))
+
+	# Parse grid cells (string keys -> Vector2i)
+	var grid_cells = {}
+	var cells_data = table_data.get("grid_cells", {})
+	if cells_data is Dictionary:
+		for key in cells_data:
+			var coords = str(key).split(",")
+			if coords.size() == 2:
+				var cell_pos = Vector2i(int(coords[0]), int(coords[1]))
+				grid_cells[cell_pos] = int(cells_data[key])
+
+	# Parse custom deployment zones (1" coordinates)
+	var custom_p1: Array[Vector2] = []
+	var custom_p2: Array[Vector2] = []
+	var custom_zones = table_data.get("custom_zones", {})
+	if custom_zones is Dictionary:
+		for v in custom_zones.get("player1", []):
+			if v is Dictionary:
+				custom_p1.append(Vector2(float(v.get("x", 0)), float(v.get("y", 0))))
+		for v in custom_zones.get("player2", []):
+			if v is Dictionary:
+				custom_p2.append(Vector2(float(v.get("x", 0)), float(v.get("y", 0))))
+
+	# Parse mission objectives (1" coordinates)
+	var objectives: Array[Vector2] = []
+	for obj in table_data.get("mission_objectives", []):
+		if obj is Dictionary:
+			objectives.append(Vector2(float(obj.get("x", 0)), float(obj.get("y", 0))))
+
+	# Apply to map_layout_editor (stores raw data in 1" / cell coordinates)
+	if map_layout_editor:
+		map_layout_editor.table_size_feet = table_size
+		map_layout_editor.grid_cells = grid_cells
+		map_layout_editor.grid_rotation_degrees = grid_rotation
+		map_layout_editor.deployment_type = deployment_type
+		map_layout_editor.custom_zone_vertices_p1 = custom_p1
+		map_layout_editor.custom_zone_vertices_p2 = custom_p2
+		map_layout_editor.mission_objectives = objectives
+
+	# Apply to 3D terrain overlay
+	if terrain_overlay:
+		# Update terrain cells
+		if terrain_overlay.has_method("update_overlay"):
+			terrain_overlay.update_overlay(grid_cells, table_size, grid_rotation)
+
+		# Set deployment zones
+		if terrain_overlay.has_method("set_deployment_zones"):
+			# For custom zones, set zone vertices first
+			if deployment_type == 2 and map_layout_editor:
+				var zone_data = map_layout_editor.get_custom_zone_data()
+				if terrain_overlay.has_method("set_custom_zones"):
+					terrain_overlay.set_custom_zones(zone_data.player1_world, zone_data.player2_world)
+			terrain_overlay.set_deployment_zones(deployment_type)
+
+		# Show deployment zones if a type is set
+		if deployment_type > 0 and terrain_overlay.has_method("set_deployment_zones_visible"):
+			terrain_overlay.set_deployment_zones_visible(true)
+
+		# Update mission objectives (convert 1" to world coords)
+		if not objectives.is_empty() and map_layout_editor:
+			if map_layout_editor.has_method("get_objectives_for_overlay"):
+				var world_objectives = map_layout_editor.get_objectives_for_overlay()
+				if terrain_overlay.has_method("update_objectives"):
+					terrain_overlay.update_objectives(world_objectives)
+
+	print("Map layout restored: %d cells, rotation=%.1f°, deployment=%d, zones=P1:%d/P2:%d, objectives=%d" % [
+		grid_cells.size(), grid_rotation, deployment_type,
+		custom_p1.size(), custom_p2.size(), objectives.size()
+	])
 
 
 ## Deserialize all objects (async for TTS downloads)
@@ -244,6 +358,23 @@ func _deserialize_object(data: Dictionary) -> bool:
 	var spawned_obj: Node3D = null
 
 	match obj_type:
+		"opr_unit":
+			var game_unit_id = data.get("game_unit_id", "")
+			var model_idx = data.get("model_index", 0)
+			if army_manager and _loaded_game_units.has(game_unit_id):
+				var loaded = _loaded_game_units[game_unit_id]
+				var game_unit = loaded.game_unit as GameUnit
+				var props = game_unit.unit_properties
+				spawned_obj = army_manager.create_model_from_properties(props)
+				if spawned_obj:
+					object_manager.add_child(spawned_obj)
+					spawned_obj.global_position = position
+					spawned_obj.rotation_degrees = rotation
+					restore_game_unit_state(spawned_obj, game_unit_id, model_idx)
+					return true
+			else:
+				push_warning("Could not restore OPR unit: game_unit_id=%s" % game_unit_id)
+			return false
 		"tts_import":
 			spawned_obj = await _spawn_tts_object(data, position)
 		"custom_model":
@@ -439,6 +570,20 @@ func get_loaded_game_unit(unit_id: String) -> GameUnit:
 	if _loaded_game_units.has(unit_id):
 		return _loaded_game_units[unit_id].game_unit
 	return null
+
+
+## Restore token/marker visualizations after loading game units
+func _restore_markers_after_load() -> void:
+	if not radial_menu_controller or not army_manager:
+		return
+
+	for game_unit in army_manager.get_all_game_units():
+		# Status markers (fatigued, shaken, activated)
+		radial_menu_controller.initialize_status_markers_for_unit(game_unit)
+		# Caster markers
+		radial_menu_controller.initialize_caster_marker_for_unit(game_unit)
+		# Wound markers for models with damage
+		radial_menu_controller.initialize_wound_markers_for_unit(game_unit)
 
 
 ## Clear loaded game units cache after load is complete

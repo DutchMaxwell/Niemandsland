@@ -1,0 +1,580 @@
+"""Tests for the OpenTTS Relay Server."""
+
+import asyncio
+import json
+import struct
+import time
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+import websockets
+
+from relay_server import (
+    RelayServer,
+    CODE_ALPHABET,
+    CODE_LENGTH,
+    MAX_CONNECTIONS_PER_IP,
+    MAX_MESSAGE_SIZE,
+    MAX_PEERS_PER_ROOM,
+    MAX_ROOMS,
+    RATE_LIMIT_MESSAGES_PER_SECOND,
+)
+
+
+# ============================================================================
+# Helper: Start a real relay server for integration tests
+# ============================================================================
+
+
+@pytest.fixture
+async def relay():
+    """Start a relay server on a random port and yield (server, url)."""
+    server = RelayServer()
+    ws_server = await websockets.serve(
+        server.handle_connection,
+        "127.0.0.1",
+        0,  # Random available port
+        max_size=MAX_MESSAGE_SIZE,
+    )
+    port = ws_server.sockets[0].getsockname()[1]
+    url = f"ws://127.0.0.1:{port}"
+    yield server, url
+    ws_server.close()
+    await ws_server.wait_closed()
+
+
+async def create_room(url: str) -> tuple:
+    """Helper: connect and create a room, return (ws, code, peer_id)."""
+    ws = await websockets.connect(url)
+    await ws.send(json.dumps({"type": "create_room"}))
+    resp = json.loads(await ws.recv())
+    assert resp["type"] == "room_created"
+    return ws, resp["code"], resp["peer_id"]
+
+
+async def join_room(url: str, code: str) -> tuple:
+    """Helper: connect and join a room, return (ws, peer_id)."""
+    ws = await websockets.connect(url)
+    await ws.send(json.dumps({"type": "join_room", "code": code}))
+    resp = json.loads(await ws.recv())
+    assert resp["type"] == "room_joined"
+    return ws, resp["peer_id"]
+
+
+# ============================================================================
+# Schritt 1: Room Code Generation
+# ============================================================================
+
+
+class TestRoomCodeGeneration:
+    """Tests for cryptographically secure room code generation."""
+
+    def setup_method(self):
+        self.server = RelayServer()
+
+    def test_code_length_is_six(self):
+        code = self.server.generate_room_code()
+        assert len(code) == 6
+
+    def test_code_uses_only_allowed_characters(self):
+        code = self.server.generate_room_code()
+        for char in code:
+            assert char in CODE_ALPHABET, f"'{char}' not in allowed alphabet"
+
+    def test_code_has_no_ambiguous_characters(self):
+        """Codes must not contain 0, O, 1, I, L to avoid confusion."""
+        ambiguous = set("0OoIi1Ll")
+        for _ in range(100):
+            code = self.server.generate_room_code()
+            for char in code:
+                assert char not in ambiguous, f"Ambiguous char '{char}' found"
+
+    def test_generated_codes_are_unique_over_1000_runs(self):
+        codes = set()
+        for _ in range(1000):
+            code = self.server.generate_room_code()
+            codes.add(code)
+        # With 729M possibilities, 1000 codes should all be unique
+        assert len(codes) == 1000
+
+    def test_code_generation_retries_on_collision(self):
+        """If a generated code already exists as a room, retry."""
+        self.server.rooms["AAAAAA"] = MagicMock()
+        with patch("relay_server.secrets") as mock_secrets:
+            mock_secrets.token_bytes.side_effect = [
+                bytes([0] * CODE_LENGTH),  # Maps to AAAAAA
+                bytes([1] * CODE_LENGTH),  # Maps to BBBBBB
+            ]
+            code = self.server.generate_room_code()
+            assert code != "AAAAAA"
+            assert len(code) == CODE_LENGTH
+
+
+# ============================================================================
+# Schritt 2: Room Management
+# ============================================================================
+
+
+@pytest.mark.asyncio
+class TestRoomManagement:
+    """Tests for creating, joining, and leaving rooms."""
+
+    async def test_create_room_returns_code(self, relay):
+        server, url = relay
+        ws, code, peer_id = await create_room(url)
+        assert len(code) == 6
+        assert code in server.rooms
+        await ws.close()
+
+    async def test_create_room_assigns_peer_id_one(self, relay):
+        server, url = relay
+        ws, code, peer_id = await create_room(url)
+        assert peer_id == 1
+        await ws.close()
+
+    async def test_join_room_with_valid_code(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest_ws, guest_id = await join_room(url, code)
+        assert guest_id == 2
+        assert len(server.rooms[code].peers) == 2
+        await host_ws.close()
+        await guest_ws.close()
+
+    async def test_join_room_with_invalid_code_returns_error(self, relay):
+        server, url = relay
+        ws = await websockets.connect(url)
+        await ws.send(json.dumps({"type": "join_room", "code": "XXXXXX"}))
+        resp = json.loads(await ws.recv())
+        assert resp["type"] == "error"
+        assert "not found" in resp["message"].lower()
+        await ws.close()
+
+    async def test_join_room_notifies_host_of_new_peer(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest_ws, guest_id = await join_room(url, code)
+        # Host should receive peer_connected notification
+        host_msg = json.loads(await host_ws.recv())
+        assert host_msg["type"] == "peer_connected"
+        assert host_msg["peer_id"] == guest_id
+        await host_ws.close()
+        await guest_ws.close()
+
+    async def test_join_room_assigns_incrementing_peer_ids(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest1_ws, guest1_id = await join_room(url, code)
+        # Consume peer_connected on host
+        await host_ws.recv()
+        guest2_ws, guest2_id = await join_room(url, code)
+        assert guest1_id == 2
+        assert guest2_id == 3
+        await host_ws.close()
+        await guest1_ws.close()
+        await guest2_ws.close()
+
+    async def test_max_peers_per_room_enforced(self, relay):
+        server, url = relay
+        # Raise IP limit for this test (all from localhost)
+        server.ip_connection_counts.clear()
+        old_limit = MAX_CONNECTIONS_PER_IP
+        import relay_server
+        relay_server.MAX_CONNECTIONS_PER_IP = 20
+
+        host_ws, code, _ = await create_room(url)
+        guests = []
+        # Fill up to max (host is 1, so MAX_PEERS_PER_ROOM - 1 guests)
+        for i in range(MAX_PEERS_PER_ROOM - 1):
+            ws, _ = await join_room(url, code)
+            guests.append(ws)
+            # Drain notifications on host
+            await host_ws.recv()
+            # Drain notifications on previous guests (each gets a peer_connected)
+            for prev in guests[:-1]:
+                await prev.recv()
+
+        # Next join should fail
+        overflow_ws = await websockets.connect(url)
+        await overflow_ws.send(json.dumps({"type": "join_room", "code": code}))
+        resp = json.loads(await overflow_ws.recv())
+        assert resp["type"] == "error"
+        assert "full" in resp["message"].lower()
+
+        relay_server.MAX_CONNECTIONS_PER_IP = old_limit
+        await host_ws.close()
+        for ws in guests:
+            await ws.close()
+        await overflow_ws.close()
+
+    async def test_max_rooms_enforced(self, relay):
+        server, url = relay
+        # Raise IP limit for this test (all from localhost)
+        import relay_server
+        old_limit = relay_server.MAX_CONNECTIONS_PER_IP
+        relay_server.MAX_CONNECTIONS_PER_IP = 200
+
+        hosts = []
+        for i in range(MAX_ROOMS):
+            ws, code, _ = await create_room(url)
+            hosts.append(ws)
+
+        # Next create should fail
+        overflow_ws = await websockets.connect(url)
+        await overflow_ws.send(json.dumps({"type": "create_room"}))
+        resp = json.loads(await overflow_ws.recv())
+        assert resp["type"] == "error"
+        assert "full" in resp["message"].lower() or "server" in resp["message"].lower()
+
+        relay_server.MAX_CONNECTIONS_PER_IP = old_limit
+        for ws in hosts:
+            await ws.close()
+        await overflow_ws.close()
+
+    async def test_room_cleanup_on_host_disconnect(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest_ws, _ = await join_room(url, code)
+        # Drain peer_connected on both sides
+        await host_ws.recv()  # Host: peer_connected for guest
+        await guest_ws.recv()  # Guest: peer_connected for host
+
+        # Host disconnects
+        await host_ws.close()
+        await asyncio.sleep(0.1)
+
+        # Room should be gone
+        assert code not in server.rooms
+
+        # Guest should get notified
+        msg = json.loads(await guest_ws.recv())
+        assert msg["type"] == "peer_disconnected"
+        assert msg["peer_id"] == 1
+        await guest_ws.close()
+
+    async def test_guest_disconnect_notifies_host(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest_ws, guest_id = await join_room(url, code)
+        # Drain peer_connected
+        await host_ws.recv()
+
+        # Guest disconnects
+        await guest_ws.close()
+        await asyncio.sleep(0.1)
+
+        # Host should get notified
+        msg = json.loads(await host_ws.recv())
+        assert msg["type"] == "peer_disconnected"
+        assert msg["peer_id"] == guest_id
+
+        # Room should still exist (host still connected)
+        assert code in server.rooms
+        await host_ws.close()
+
+    async def test_join_code_is_case_insensitive(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        # Join with lowercase code
+        guest_ws, guest_id = await join_room(url, code.lower())
+        assert guest_id == 2
+        await host_ws.close()
+        await guest_ws.close()
+
+
+# ============================================================================
+# Schritt 3: Security
+# ============================================================================
+
+
+@pytest.mark.asyncio
+class TestSecurity:
+    """Tests for security features: rate limiting, size limits, validation."""
+
+    async def test_oversized_message_rejected(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        # Send a message larger than MAX_MESSAGE_SIZE
+        # The websockets library enforces max_size on the server side
+        # so the connection should be closed
+        try:
+            big_msg = b"\x00" * (MAX_MESSAGE_SIZE + 1000)
+            await host_ws.send(big_msg)
+            # Wait for close
+            await asyncio.sleep(0.1)
+            # Connection should be closed
+            assert host_ws.closed
+        except (websockets.exceptions.ConnectionClosed, Exception):
+            pass  # Expected
+
+    async def test_invalid_json_disconnects_peer(self, relay):
+        server, url = relay
+        ws = await websockets.connect(url)
+        await ws.send("not valid json {{{")
+        await asyncio.sleep(0.1)
+        # Connection should be closed after invalid JSON
+        try:
+            # Try to receive - should get close or error
+            await asyncio.wait_for(ws.recv(), timeout=1.0)
+            assert False, "Should have been disconnected"
+        except (websockets.exceptions.ConnectionClosed, asyncio.TimeoutError):
+            pass
+
+    async def test_unknown_message_type_rejected(self, relay):
+        server, url = relay
+        ws = await websockets.connect(url)
+        await ws.send(json.dumps({"type": "hack_the_planet"}))
+        resp = json.loads(await ws.recv())
+        assert resp["type"] == "error"
+        assert "unknown" in resp["message"].lower()
+        await ws.close()
+
+    async def test_double_create_room_rejected(self, relay):
+        server, url = relay
+        ws, code, _ = await create_room(url)
+        # Try to create another room on same connection
+        await ws.send(json.dumps({"type": "create_room"}))
+        resp = json.loads(await ws.recv())
+        assert resp["type"] == "error"
+        assert "already" in resp["message"].lower()
+        await ws.close()
+
+    async def test_max_connections_per_ip(self, relay):
+        server, url = relay
+        connections = []
+        for i in range(MAX_CONNECTIONS_PER_IP):
+            ws = await websockets.connect(url)
+            connections.append(ws)
+
+        # Next connection should be rejected
+        try:
+            overflow_ws = await websockets.connect(url)
+            # Try to interact - should fail because server closes it
+            await overflow_ws.send(json.dumps({"type": "heartbeat"}))
+            await asyncio.wait_for(overflow_ws.recv(), timeout=1.0)
+            assert False, "Should have been disconnected"
+        except (websockets.exceptions.ConnectionClosed,
+                websockets.exceptions.ConnectionClosedError,
+                asyncio.TimeoutError):
+            pass  # Expected - server rejected the connection
+
+        for ws in connections:
+            await ws.close()
+
+    async def test_heartbeat_ack_sent(self, relay):
+        server, url = relay
+        ws, code, _ = await create_room(url)
+        await ws.send(json.dumps({"type": "heartbeat"}))
+        resp = json.loads(await ws.recv())
+        assert resp["type"] == "heartbeat_ack"
+        await ws.close()
+
+
+# ============================================================================
+# Schritt 4: Message Forwarding
+# ============================================================================
+
+
+@pytest.mark.asyncio
+class TestMessageForwarding:
+    """Tests for binary game data routing between peers."""
+
+    async def test_binary_message_forwarded_to_target_peer(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest_ws, guest_id = await join_room(url, code)
+        # Drain peer_connected notifications
+        await host_ws.recv()  # Host gets peer_connected for guest
+        await guest_ws.recv()  # Guest gets peer_connected for host
+
+        # Host sends binary message targeting guest (peer_id=2)
+        payload = b"hello from host"
+        msg = struct.pack(">i", guest_id) + payload
+        await host_ws.send(msg)
+
+        # Guest should receive it with host's peer_id prepended
+        received = await asyncio.wait_for(guest_ws.recv(), timeout=2.0)
+        assert isinstance(received, bytes)
+        source_id = struct.unpack(">i", received[:4])[0]
+        assert source_id == 1  # From host
+        assert received[4:] == payload
+
+        await host_ws.close()
+        await guest_ws.close()
+
+    async def test_broadcast_reaches_all_other_peers(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest1_ws, guest1_id = await join_room(url, code)
+        await host_ws.recv()  # peer_connected
+        guest2_ws, guest2_id = await join_room(url, code)
+        await host_ws.recv()  # peer_connected
+        await guest1_ws.recv()  # peer_connected for host
+        await guest1_ws.recv()  # peer_connected for guest2
+        await guest2_ws.recv()  # peer_connected for host
+        await guest2_ws.recv()  # peer_connected for guest1
+
+        # Host broadcasts (target=0)
+        payload = b"broadcast from host"
+        msg = struct.pack(">i", 0) + payload
+        await host_ws.send(msg)
+
+        # Both guests should receive it
+        r1 = await asyncio.wait_for(guest1_ws.recv(), timeout=2.0)
+        r2 = await asyncio.wait_for(guest2_ws.recv(), timeout=2.0)
+        assert r1[4:] == payload
+        assert r2[4:] == payload
+
+        await host_ws.close()
+        await guest1_ws.close()
+        await guest2_ws.close()
+
+    async def test_message_not_echoed_to_sender(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest_ws, guest_id = await join_room(url, code)
+        await host_ws.recv()  # peer_connected
+        await guest_ws.recv()  # peer_connected for host
+
+        # Host broadcasts
+        payload = b"should not echo"
+        msg = struct.pack(">i", 0) + payload
+        await host_ws.send(msg)
+
+        # Guest receives it
+        await asyncio.wait_for(guest_ws.recv(), timeout=2.0)
+
+        # Host should NOT receive it back (no echo)
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(host_ws.recv(), timeout=0.3)
+
+        await host_ws.close()
+        await guest_ws.close()
+
+    async def test_message_to_nonexistent_peer_silently_ignored(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest_ws, guest_id = await join_room(url, code)
+        await host_ws.recv()  # peer_connected
+        await guest_ws.recv()  # peer_connected for host
+
+        # Host sends to non-existent peer 99
+        msg = struct.pack(">i", 99) + b"nobody home"
+        await host_ws.send(msg)
+
+        # No crash, no error - message silently dropped
+        # Verify connection is still alive
+        await host_ws.send(json.dumps({"type": "heartbeat"}))
+        resp = json.loads(await host_ws.recv())
+        assert resp["type"] == "heartbeat_ack"
+
+        await host_ws.close()
+        await guest_ws.close()
+
+
+# ============================================================================
+# Integration Tests
+# ============================================================================
+
+
+@pytest.mark.asyncio
+class TestEndToEnd:
+    """Full end-to-end scenarios with real WebSocket connections."""
+
+    async def test_full_host_join_message_roundtrip(self, relay):
+        server, url = relay
+        # Host creates room
+        host_ws, code, host_id = await create_room(url)
+        assert host_id == 1
+
+        # Guest joins
+        guest_ws, guest_id = await join_room(url, code)
+        assert guest_id == 2
+
+        # Drain notifications
+        await host_ws.recv()
+        await guest_ws.recv()
+
+        # Host sends to guest
+        host_payload = b"game state from host"
+        await host_ws.send(struct.pack(">i", guest_id) + host_payload)
+        r = await asyncio.wait_for(guest_ws.recv(), timeout=2.0)
+        assert struct.unpack(">i", r[:4])[0] == 1
+        assert r[4:] == host_payload
+
+        # Guest sends back to host
+        guest_payload = b"move from guest"
+        await guest_ws.send(struct.pack(">i", host_id) + guest_payload)
+        r = await asyncio.wait_for(host_ws.recv(), timeout=2.0)
+        assert struct.unpack(">i", r[:4])[0] == 2
+        assert r[4:] == guest_payload
+
+        await host_ws.close()
+        await guest_ws.close()
+
+    async def test_guest_disconnect_and_host_continues(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest_ws, guest_id = await join_room(url, code)
+        await host_ws.recv()  # peer_connected
+        await guest_ws.recv()
+
+        # Guest disconnects
+        await guest_ws.close()
+        await asyncio.sleep(0.1)
+
+        # Host notified
+        msg = json.loads(await host_ws.recv())
+        assert msg["type"] == "peer_disconnected"
+
+        # Host can still use the room (e.g., new guest joins)
+        guest2_ws, guest2_id = await join_room(url, code)
+        assert guest2_id == 3  # Increments from previous
+        await host_ws.close()
+        await guest2_ws.close()
+
+    async def test_host_disconnect_notifies_guest(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest_ws, _ = await join_room(url, code)
+        await host_ws.recv()
+        await guest_ws.recv()
+
+        # Host disconnects
+        await host_ws.close()
+        await asyncio.sleep(0.1)
+
+        # Guest gets notified
+        msg = json.loads(await guest_ws.recv())
+        assert msg["type"] == "peer_disconnected"
+        assert msg["peer_id"] == 1
+        await guest_ws.close()
+
+    async def test_multiple_rooms_are_isolated(self, relay):
+        server, url = relay
+        # Create two rooms
+        host1_ws, code1, _ = await create_room(url)
+        host2_ws, code2, _ = await create_room(url)
+        guest1_ws, g1_id = await join_room(url, code1)
+        guest2_ws, g2_id = await join_room(url, code2)
+
+        # Drain notifications
+        await host1_ws.recv()
+        await guest1_ws.recv()
+        await host2_ws.recv()
+        await guest2_ws.recv()
+
+        # Host1 sends message - should only reach guest1
+        payload = b"room1 only"
+        await host1_ws.send(struct.pack(">i", 0) + payload)
+        r = await asyncio.wait_for(guest1_ws.recv(), timeout=2.0)
+        assert r[4:] == payload
+
+        # Guest2 should NOT receive it
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(guest2_ws.recv(), timeout=0.3)
+
+        await host1_ws.close()
+        await host2_ws.close()
+        await guest1_ws.close()
+        await guest2_ws.close()

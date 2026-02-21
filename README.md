@@ -112,7 +112,7 @@ godot --path . --editor
 ### Starten
 1. F5 drücken oder "Run Project" im Editor
 2. Genieße das Tron-Style Intro
-3. Wähle "Quick Battle" für ein Schnellspiel
+3. Wähle "Start New Battle" für ein neues Spiel
 
 ---
 
