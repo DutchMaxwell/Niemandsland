@@ -22,6 +22,10 @@ signal peer_left(peer_id: int)
 
 const HEARTBEAT_INTERVAL: float = 10.0
 
+## Max WebSocket frames sent per _poll() cycle.
+## At ~60fps this caps at ~240 msg/s, staying under the relay server limit (300).
+const MAX_SENDS_PER_POLL: int = 4
+
 var _ws: WebSocketPeer = null
 var _relay_url: String = ""
 var _my_peer_id: int = 0
@@ -30,6 +34,7 @@ var _transfer_mode: int = MultiplayerPeer.TRANSFER_MODE_RELIABLE
 var _transfer_channel: int = 0
 var _connection_status: int = MultiplayerPeer.CONNECTION_DISCONNECTED
 var _incoming_packets: Array[IncomingPacket] = []
+var _outgoing_queue: Array[PackedByteArray] = []
 var _heartbeat_timer: float = 0.0
 var _room_code: String = ""
 var _ws_connected: bool = false
@@ -100,6 +105,9 @@ func _poll() -> void:
 			else:
 				_process_incoming_binary(packet)
 
+		# Flush queued outgoing packets (rate-limited)
+		_flush_outgoing_queue()
+
 		# Heartbeat
 		_heartbeat_timer += 0.016  # ~60fps
 		if _heartbeat_timer >= HEARTBEAT_INTERVAL:
@@ -108,6 +116,9 @@ func _poll() -> void:
 
 	elif state == WebSocketPeer.STATE_CLOSED:
 		if _ws_connected or _connection_status == MultiplayerPeer.CONNECTION_CONNECTING:
+			var code = _ws.get_close_code()
+			var reason = _ws.get_close_reason()
+			print("[Relay] WebSocket closed: code=%d reason='%s'" % [code, reason])
 			_ws_connected = false
 			_connection_status = MultiplayerPeer.CONNECTION_DISCONNECTED
 			relay_disconnected.emit()
@@ -124,8 +135,9 @@ func _put_packet_script(p_buffer: PackedByteArray) -> Error:
 	if _ws == null or _ws.get_ready_state() != WebSocketPeer.STATE_OPEN:
 		return ERR_UNAVAILABLE
 
-	var frame = _build_outgoing_frame(p_buffer)
-	return _ws.send(frame)
+	var frame := _build_outgoing_frame(p_buffer)
+	_outgoing_queue.append(frame)
+	return OK
 
 
 func _get_available_packet_count() -> int:
@@ -180,6 +192,7 @@ func _close() -> void:
 	_target_peer = 0
 	_connection_status = MultiplayerPeer.CONNECTION_DISCONNECTED
 	_incoming_packets.clear()
+	_outgoing_queue.clear()
 	_heartbeat_timer = 0.0
 	_room_code = ""
 	_ws_connected = false
@@ -206,6 +219,8 @@ func _get_transfer_mode() -> int:
 func _connect_to_relay(url: String) -> Error:
 	_relay_url = url
 	_ws = WebSocketPeer.new()
+	_ws.inbound_buffer_size = 1048576   # 1MB, matching relay server MAX_MESSAGE_SIZE
+	_ws.outbound_buffer_size = 1048576  # 1MB
 	var err = _ws.connect_to_url(url)
 	if err != OK:
 		push_error("RelayMultiplayerPeer: Failed to connect to %s: %d" % [url, err])
@@ -304,3 +319,20 @@ func _process_incoming_binary(frame: PackedByteArray) -> void:
 	pkt.from_peer = source_peer
 	pkt.data = payload
 	_incoming_packets.append(pkt)
+
+
+## Send queued outgoing frames, limited to MAX_SENDS_PER_POLL per cycle.
+## At ~60fps with MAX_SENDS_PER_POLL=2 this caps at ~120 msg/s,
+## matching the relay server's RATE_LIMIT_MESSAGES_PER_SECOND.
+func _flush_outgoing_queue() -> void:
+	if _ws == null or _ws.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		return
+
+	var sent := 0
+	while not _outgoing_queue.is_empty() and sent < MAX_SENDS_PER_POLL:
+		var frame: PackedByteArray = _outgoing_queue.pop_front()
+		var err := _ws.send(frame)
+		if err != OK:
+			push_warning("[Relay] Send failed: error=%d frame_size=%d bytes" % [err, frame.size()])
+			break
+		sent += 1

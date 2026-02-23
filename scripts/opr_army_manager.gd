@@ -420,8 +420,8 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 	var use_glb_model = false
 
 	if not model_path.is_empty():
-		# Load GLB model
-		var glb_scene = load(model_path)
+		# Load GLB model — use CACHE_MODE_REUSE so host and client share cached resources
+		var glb_scene = ResourceLoader.load(model_path, "", ResourceLoader.CACHE_MODE_REUSE)
 		if glb_scene:
 			var glb_instance = glb_scene.instantiate()
 
@@ -572,7 +572,8 @@ func create_model_from_properties(props: Dictionary) -> StaticBody3D:
 
 	var use_glb_model = false
 	if not model_path.is_empty():
-		var glb_scene = load(model_path)
+		# Use CACHE_MODE_REUSE so host and client share cached resources
+		var glb_scene = ResourceLoader.load(model_path, "", ResourceLoader.CACHE_MODE_REUSE)
 		if glb_scene:
 			var glb_instance = glb_scene.instantiate()
 

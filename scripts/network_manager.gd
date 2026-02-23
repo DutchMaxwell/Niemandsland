@@ -18,9 +18,17 @@ signal remote_unit_deleted(game_unit: GameUnit)
 const DEFAULT_PORT: int = 7777
 const MAX_PLAYERS: int = 8
 
+## How often (seconds) to poll connection health
+const CONNECTION_POLL_INTERVAL: float = 2.0
+
 var peer: ENetMultiplayerPeer = null
 var is_host: bool = false
 var connected_peers: Array[int] = []
+
+## Connection health tracking
+var _last_connection_status: int = -1
+var _poll_timer: float = 0.0
+var _rpc_error_count: int = 0
 
 
 func _ready() -> void:
@@ -30,6 +38,35 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
+
+
+func _process(delta: float) -> void:
+	var mp = multiplayer.multiplayer_peer
+	if not mp or not mp is MultiplayerPeer:
+		return
+
+	_poll_timer += delta
+	if _poll_timer < CONNECTION_POLL_INTERVAL:
+		return
+	_poll_timer = 0.0
+
+	var status = mp.get_connection_status()
+	if status != _last_connection_status:
+		var status_name = _connection_status_name(status)
+		var old_name = _connection_status_name(_last_connection_status)
+		push_warning("[Network] Connection status changed: %s -> %s" % [old_name, status_name])
+		_last_connection_status = status
+
+		if status == MultiplayerPeer.CONNECTION_DISCONNECTED:
+			push_warning("[Network] Peer reports DISCONNECTED (rpc_errors=%d, peers=%s)" % [_rpc_error_count, str(connected_peers)])
+
+
+func _connection_status_name(status: int) -> String:
+	match status:
+		MultiplayerPeer.CONNECTION_DISCONNECTED: return "DISCONNECTED"
+		MultiplayerPeer.CONNECTION_CONNECTING: return "CONNECTING"
+		MultiplayerPeer.CONNECTION_CONNECTED: return "CONNECTED"
+		_: return "UNKNOWN(%d)" % status
 
 
 ## Host a new game server
@@ -44,6 +81,8 @@ func host_game(port: int = DEFAULT_PORT) -> Error:
 	multiplayer.multiplayer_peer = peer
 	is_host = true
 	connected_peers.append(1)  # Server is always peer ID 1
+	_last_connection_status = peer.get_connection_status()
+	_rpc_error_count = 0
 
 	print("=== SERVER STARTED on port %d ===" % port)
 	print("Waiting for players to connect...")
@@ -62,6 +101,8 @@ func join_game(address: String = "localhost", port: int = DEFAULT_PORT) -> Error
 
 	multiplayer.multiplayer_peer = peer
 	is_host = false
+	_last_connection_status = peer.get_connection_status()
+	_rpc_error_count = 0
 
 	print("=== CONNECTING to %s:%d ===" % [address, port])
 	return OK
@@ -69,6 +110,7 @@ func join_game(address: String = "localhost", port: int = DEFAULT_PORT) -> Error
 
 ## Disconnect from the current game
 func disconnect_game() -> void:
+	print("[Network] disconnect_game() called (rpc_errors=%d)" % _rpc_error_count)
 	if peer:
 		peer.close()
 		peer = null
@@ -76,7 +118,30 @@ func disconnect_game() -> void:
 	multiplayer.multiplayer_peer = null
 	is_host = false
 	connected_peers.clear()
-	print("=== DISCONNECTED ===")
+	_last_connection_status = -1
+	print("[Network] === DISCONNECTED ===")
+
+
+## Validate that the peer is still connected before sending an RPC.
+## Returns false and logs a warning if the connection is no longer usable.
+## Uses multiplayer.multiplayer_peer (not the local `peer` var) so it works
+## for both ENet (LAN) and RelayMultiplayerPeer (internet) connections.
+func _validate_rpc_ready(context: String = "") -> bool:
+	var mp = multiplayer.multiplayer_peer
+	if not mp or not mp is MultiplayerPeer:
+		_rpc_error_count += 1
+		if _rpc_error_count <= 5 or _rpc_error_count % 50 == 0:
+			push_warning("[Network] RPC blocked (%s): no multiplayer peer (error #%d)" % [context, _rpc_error_count])
+		return false
+
+	var status = mp.get_connection_status()
+	if status != MultiplayerPeer.CONNECTION_CONNECTED:
+		_rpc_error_count += 1
+		if _rpc_error_count <= 5 or _rpc_error_count % 50 == 0:
+			push_warning("[Network] RPC blocked (%s): status=%s (error #%d)" % [context, _connection_status_name(status), _rpc_error_count])
+		return false
+
+	return true
 
 
 ## Check if we're currently in a multiplayer session (works for ENet and Relay)
@@ -94,37 +159,40 @@ func get_my_peer_id() -> int:
 
 ## Signal handlers
 func _on_peer_connected(id: int) -> void:
-	print("Player connected: Peer ID %d" % id)
+	print("[Network] Player connected: Peer ID %d (total peers: %d)" % [id, connected_peers.size() + 1])
 	connected_peers.append(id)
 	player_connected.emit(id)
 	# State sync is handled by main.gd via the player_connected signal
 
 
 func _on_peer_disconnected(id: int) -> void:
-	print("Player disconnected: Peer ID %d" % id)
+	push_warning("[Network] Player disconnected: Peer ID %d (remaining peers: %d, rpc_errors=%d)" % [id, connected_peers.size() - 1, _rpc_error_count])
 	connected_peers.erase(id)
 	player_disconnected.emit(id)
 
 
 func _on_connected_to_server() -> void:
-	print("=== CONNECTED TO SERVER ===")
-	print("My Peer ID: %d" % multiplayer.get_unique_id())
+	_last_connection_status = MultiplayerPeer.CONNECTION_CONNECTED
+	print("[Network] === CONNECTED TO SERVER ===")
+	print("[Network] My Peer ID: %d" % multiplayer.get_unique_id())
 	connected_to_server.emit()
 
 
 func _on_connection_failed() -> void:
-	print("=== CONNECTION FAILED ===")
+	push_warning("[Network] === CONNECTION FAILED === (rpc_errors=%d)" % _rpc_error_count)
 	peer = null
 	multiplayer.multiplayer_peer = null
+	_last_connection_status = -1
 	connection_failed.emit()
 
 
 func _on_server_disconnected() -> void:
-	print("=== SERVER DISCONNECTED ===")
+	push_warning("[Network] === SERVER DISCONNECTED === (rpc_errors=%d, was_host=%s)" % [_rpc_error_count, is_host])
 	peer = null
 	multiplayer.multiplayer_peer = null
 	is_host = false
 	connected_peers.clear()
+	_last_connection_status = -1
 	server_disconnected.emit()
 
 
@@ -169,15 +237,50 @@ func clear_objects_networked() -> void:
 
 ## Helper to broadcast spawn to all peers (local spawn already happened)
 func broadcast_spawn(object_type: String, pos: Vector3, object_id: int) -> void:
-	if is_multiplayer_active():
-		spawn_object_networked.rpc(object_type, pos.x, pos.y, pos.z, object_id)
-	# No else needed - local spawn already happened before this is called
+	if not is_multiplayer_active():
+		return
+	if not _validate_rpc_ready("broadcast_spawn"):
+		return
+	spawn_object_networked.rpc(object_type, pos.x, pos.y, pos.z, object_id)
 
 
 ## Helper to broadcast movement to all peers
 func broadcast_move(object_id: int, pos: Vector3) -> void:
-	if is_multiplayer_active():
-		move_object_networked.rpc(object_id, pos.x, pos.y, pos.z)
+	if not is_multiplayer_active():
+		return
+	if not _validate_rpc_ready("broadcast_move"):
+		return
+	move_object_networked.rpc(object_id, pos.x, pos.y, pos.z)
+
+
+## Helper to broadcast multiple object movements in a single RPC
+func broadcast_move_batch(batch: Array) -> void:
+	if not is_multiplayer_active():
+		return
+	if not _validate_rpc_ready("broadcast_move_batch"):
+		return
+	move_objects_batch_networked.rpc(batch)
+
+
+## RPC: Move multiple objects in one message. Format: [id, x, y, z, id, x, y, z, ...]
+@rpc("any_peer", "call_remote", "unreliable_ordered")
+func move_objects_batch_networked(batch: Array) -> void:
+	var om := get_node_or_null("/root/Main/ObjectManager")
+	if not om:
+		return
+	# Build lookup once for efficiency
+	var id_to_node: Dictionary = {}
+	for child in om.get_children():
+		if child.has_meta("network_id"):
+			id_to_node[int(child.get_meta("network_id"))] = child
+	# Apply positions: batch = [id, x, y, z, id, x, y, z, ...]
+	var i := 0
+	while i + 3 < batch.size():
+		var obj_id := int(batch[i])
+		var node: Node3D = id_to_node.get(obj_id)
+		if node:
+			node.global_position = Vector3(float(batch[i + 1]), float(batch[i + 2]), float(batch[i + 3]))
+		i += 4
 
 
 ## Helper to broadcast clear to all peers
@@ -324,6 +427,25 @@ func rotate_object_networked(object_id: int, rot_y: float) -> void:
 				break
 
 
+## RPC: Rotate multiple objects in one message. Format: [id, rot_y, id, rot_y, ...]
+@rpc("any_peer", "call_remote", "unreliable_ordered")
+func rotate_objects_batch_networked(batch: Array) -> void:
+	var om := get_node_or_null("/root/Main/ObjectManager")
+	if not om:
+		return
+	var id_to_node: Dictionary = {}
+	for child in om.get_children():
+		if child.has_meta("network_id"):
+			id_to_node[int(child.get_meta("network_id"))] = child
+	var i := 0
+	while i + 1 < batch.size():
+		var obj_id := int(batch[i])
+		var node: Node3D = id_to_node.get(obj_id)
+		if node:
+			node.rotation.y = float(batch[i + 1])
+		i += 2
+
+
 # ===== Broadcast Helpers for GameUnit State =====
 
 ## Broadcast unit activation change
@@ -368,8 +490,20 @@ func broadcast_unit_delete(game_unit: GameUnit) -> void:
 
 ## Broadcast object rotation
 func broadcast_rotation(object_id: int, rot_y: float) -> void:
-	if is_multiplayer_active():
-		rotate_object_networked.rpc(object_id, rot_y)
+	if not is_multiplayer_active():
+		return
+	if not _validate_rpc_ready("broadcast_rotation"):
+		return
+	rotate_object_networked.rpc(object_id, rot_y)
+
+
+## Broadcast multiple object rotations in a single RPC
+func broadcast_rotation_batch(batch: Array) -> void:
+	if not is_multiplayer_active():
+		return
+	if not _validate_rpc_ready("broadcast_rotation_batch"):
+		return
+	rotate_objects_batch_networked.rpc(batch)
 
 
 ## Broadcast hero attachment change
@@ -450,24 +584,71 @@ func broadcast_table_settings(settings: Dictionary) -> void:
 		sync_table_settings.rpc(settings)
 
 
-# ===== Army Import Synchronization =====
+# ===== Army Import Synchronization (Batched) =====
 
-## Signal emitted when a remote player imports an army
-signal remote_army_spawned(units_data: Array, objects_data: Array)
+## Signals for batched army sync
+signal remote_army_header_received(player_id: int, army_name: String, unit_count: int)
+signal remote_army_unit_received(unit_data: Dictionary, objects_data: Array, player_id: int)
+signal remote_army_complete_received(player_id: int)
+
+## Delay between unit batch RPCs to stay under relay rate limit (120 msg/s).
+## Must be high enough so that Godot's internal RPC fragmentation + this delay
+## stays well below the limit. Presence broadcasts are paused during sync.
+const ARMY_BATCH_DELAY_MS: int = 250
 
 
-## RPC: Sync army spawn data (game units + object nodes)
+## RPC: Army sync header — announces incoming army import
 @rpc("any_peer", "call_remote", "reliable")
-func sync_army_spawn(units_data: Array, objects_data: Array) -> void:
-	var sender = multiplayer.get_remote_sender_id()
-	print("[Network] Received army spawn from peer %d: %d units, %d objects" % [sender, units_data.size(), objects_data.size()])
-	remote_army_spawned.emit(units_data, objects_data)
+func sync_army_header(player_id: int, army_name: String, unit_count: int) -> void:
+	var sender := multiplayer.get_remote_sender_id()
+	print("[Network] Army header from peer %d: '%s' (%d units, player_id=%d)" % [sender, army_name, unit_count, player_id])
+	remote_army_header_received.emit(player_id, army_name, unit_count)
 
 
-## Broadcast army import to all peers
-func broadcast_army_spawn(units_data: Array, objects_data: Array) -> void:
-	if is_multiplayer_active():
-		sync_army_spawn.rpc(units_data, objects_data)
+## RPC: Army sync unit — one unit + its model objects
+@rpc("any_peer", "call_remote", "reliable")
+func sync_army_unit(unit_data: Dictionary, objects_data: Array, player_id: int) -> void:
+	var sender := multiplayer.get_remote_sender_id()
+	var unit_name: String = unit_data.get("unit_properties", {}).get("name", "?")
+	print("[Network] Army unit from peer %d: '%s' (%d objects)" % [sender, unit_name, objects_data.size()])
+	remote_army_unit_received.emit(unit_data, objects_data, player_id)
+
+
+## RPC: Army sync complete — all units sent
+@rpc("any_peer", "call_remote", "reliable")
+func sync_army_complete(player_id: int) -> void:
+	var sender := multiplayer.get_remote_sender_id()
+	print("[Network] Army complete from peer %d (player_id=%d)" % [sender, player_id])
+	remote_army_complete_received.emit(player_id)
+
+
+## Broadcast army import in batches to all peers
+func broadcast_army_batched(
+	units_data: Array[Dictionary],
+	objects_per_unit: Array[Array],
+	player_id: int,
+	army_name: String
+) -> void:
+	if not is_multiplayer_active():
+		return
+	if not _validate_rpc_ready("broadcast_army_header"):
+		return
+
+	# 1. Header
+	sync_army_header.rpc(player_id, army_name, units_data.size())
+
+	# 2. Units with delay between each
+	for i in range(units_data.size()):
+		await get_tree().create_timer(ARMY_BATCH_DELAY_MS / 1000.0).timeout
+		if not _validate_rpc_ready("broadcast_army_unit_%d" % i):
+			return
+		var objs: Array = objects_per_unit[i] if i < objects_per_unit.size() else []
+		sync_army_unit.rpc(units_data[i], objs, player_id)
+
+	# 3. Complete
+	await get_tree().create_timer(ARMY_BATCH_DELAY_MS / 1000.0).timeout
+	if _validate_rpc_ready("broadcast_army_complete"):
+		sync_army_complete.rpc(player_id)
 
 
 # ===== TTS Terrain Synchronization =====
@@ -500,17 +681,17 @@ func broadcast_tts_terrain_spawn(mesh_url: String, diffuse_url: String,
 # ===== Camera Position Synchronization =====
 
 ## Signal emitted when a remote player's camera position is received
-signal remote_camera_position_updated(peer_id: int, pos_x: float, pos_z: float)
+signal remote_camera_position_updated(peer_id: int, pos_x: float, pos_y: float, pos_z: float)
 
 
 ## RPC: Sync camera position (unreliable for performance)
 @rpc("any_peer", "call_remote", "unreliable")
-func sync_camera_position(pos_x: float, pos_z: float) -> void:
+func sync_camera_position(pos_x: float, pos_y: float, pos_z: float) -> void:
 	var sender = multiplayer.get_remote_sender_id()
-	remote_camera_position_updated.emit(sender, pos_x, pos_z)
+	remote_camera_position_updated.emit(sender, pos_x, pos_y, pos_z)
 
 
 ## Broadcast camera position to all peers
 func broadcast_camera_position(pos: Vector3) -> void:
 	if is_multiplayer_active():
-		sync_camera_position.rpc(pos.x, pos.z)
+		sync_camera_position.rpc(pos.x, pos.y, pos.z)
