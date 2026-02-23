@@ -57,6 +57,10 @@ var lighting_panel: Window = null
 
 # Group rotation state
 var _is_group_rotating: bool = false
+# Guard to prevent re-broadcasting remote dice rolls (avoids ping-pong loop)
+var _is_showing_remote_roll: bool = false
+var _group_rotation_broadcast_timer: float = 0.0
+const GROUP_ROTATION_BROADCAST_INTERVAL: float = 0.1  # 10 Hz
 
 @onready var dice_result_label: Label = $UI/HUD/DiceResult
 @onready var distance_label: Label = $UI/HUD/DistanceLabel
@@ -80,7 +84,8 @@ var _is_group_rotating: bool = false
 @onready var dice_roller_control: Control = %DiceRollerControl
 @onready var roll_button: Button = %RollButton
 @onready var quick_roll_button: Button = %QuickRollButton
-@onready var roller_result_label: Label = %RollerResultLabel
+@onready var _dice_log_scroll: ScrollContainer = %DiceLogScroll
+@onready var _dice_log_vbox: VBoxContainer = %DiceLogVBox
 @onready var dice_count_spinner: SpinBox = %DiceCountSpinner
 @onready var current_dice_label: Label = %CurrentDiceLabel
 
@@ -170,6 +175,9 @@ var _camera_broadcast_timer: float = 0.0
 const CURSOR_BROADCAST_INTERVAL: float = 0.066  # ~15 Hz
 const CAMERA_BROADCAST_INTERVAL: float = 0.2  # 5 Hz
 
+## True while army batches are being sent — suppresses presence broadcasts
+var _is_army_syncing: bool = false
+
 
 func _ready() -> void:
 	print("OpenTTS Prototype v0.2 - Initializing...")
@@ -243,7 +251,9 @@ func _ready() -> void:
 	network_manager.remote_camera_updated.connect(_on_remote_camera_updated)
 	network_manager.remote_dice_rolled.connect(_on_remote_dice_rolled)
 	network_manager.remote_table_settings_changed.connect(_on_remote_table_settings_changed)
-	network_manager.remote_army_spawned.connect(_on_remote_army_spawned)
+	network_manager.remote_army_header_received.connect(_on_remote_army_header)
+	network_manager.remote_army_unit_received.connect(_on_remote_army_unit)
+	network_manager.remote_army_complete_received.connect(_on_remote_army_complete)
 	network_manager.remote_tts_terrain_spawned.connect(_on_remote_tts_terrain_spawned)
 	network_manager.remote_camera_position_updated.connect(_on_remote_camera_position_updated)
 
@@ -496,6 +506,29 @@ func _process(delta: float) -> void:
 		var rotation_amount = GROUP_ROTATION_SPEED * delta
 		object_manager.rotate_selected_group(rotation_amount)
 
+		# Throttled batch broadcast of positions + rotations to remote peers
+		_group_rotation_broadcast_timer += delta
+		if _group_rotation_broadcast_timer >= GROUP_ROTATION_BROADCAST_INTERVAL and network_manager.is_multiplayer_active():
+			_group_rotation_broadcast_timer = 0.0
+			var selected: Array[Node3D] = object_manager.get_selected_objects()
+			var move_batch: Array = []
+			var rot_batch: Array = []
+			for obj: Node3D in selected:
+				if is_instance_valid(obj) and obj.has_meta("network_id"):
+					var net_id: int = obj.get_meta("network_id")
+					move_batch.append(net_id)
+					move_batch.append(obj.global_position.x)
+					move_batch.append(obj.global_position.y)
+					move_batch.append(obj.global_position.z)
+					rot_batch.append(net_id)
+					rot_batch.append(obj.rotation.y)
+			if move_batch.size() > 0:
+				network_manager.broadcast_move_batch(move_batch)
+			if rot_batch.size() > 0:
+				network_manager.broadcast_rotation_batch(rot_batch)
+	else:
+		_group_rotation_broadcast_timer = 0.0
+
 	# Update performance label
 	var fps = Engine.get_frames_per_second()
 	var object_count = object_manager.get_child_count()
@@ -684,6 +717,7 @@ func _spawn_grid(total: int, cols: int, rows: int) -> void:
 func _on_clear_all() -> void:
 	object_manager.clear_all_objects()
 	dice_result_label.text = ""
+	_clear_dice_log()
 
 
 func _on_sort_table() -> void:
@@ -752,25 +786,38 @@ func _on_drag_ended() -> void:
 
 ## Dice Roller Plugin handlers
 func _on_roll_button_pressed() -> void:
+	_update_dice_set(int(dice_count_spinner.value))
 	dice_roller_control.roll()
 
 
 func _on_quick_roll_button_pressed() -> void:
+	_update_dice_set(int(dice_count_spinner.value))
 	dice_roller_control.quick_roll()
 
 
 func _on_roller_started() -> void:
-	roller_result_label.text = "Rolling..."
+	roll_button.text = "Rolling..."
+	roll_button.disabled = true
 
 
 func _on_roller_finished(result: int) -> void:
-	var per_dice = dice_roller_control.per_dice_result()
-	roller_result_label.text = _format_dice_results(per_dice, result)
+	roll_button.text = "Roll"
+	roll_button.disabled = false
+
+	# Skip broadcast when showing a remote player's roll (prevents ping-pong loop)
+	if _is_showing_remote_roll:
+		_is_showing_remote_roll = false
+		return
+
+	var per_dice: Dictionary = dice_roller_control.per_dice_result()
+	_add_dice_log_entry("Du", per_dice.size(), per_dice)
 
 	# Broadcast dice roll to remote players
 	if network_manager.is_multiplayer_active():
-		var dice_count = per_dice.size() if per_dice is Array else 0
-		network_manager.broadcast_dice_roll(dice_count, per_dice if per_dice is Array else [], result)
+		var values: Array[int] = []
+		for dice_name: String in per_dice:
+			values.append(int(per_dice[dice_name]))
+		network_manager.broadcast_dice_roll(values.size(), values, result)
 
 
 func _on_dice_count_changed(new_value: float) -> void:
@@ -799,22 +846,37 @@ func _update_dice_set(count: int) -> void:
 	)
 
 
-## Format dice results as "x times 6, x times 5, ..." stacked vertically
-func _format_dice_results(per_dice: Dictionary, _total: int) -> String:
-	# Count occurrences of each face value
-	var counts = {6: 0, 5: 0, 4: 0, 3: 0, 2: 0, 1: 0}
-	for dice_name in per_dice:
-		var value = per_dice[dice_name]
+## Add a formatted dice roll entry to the dice log
+func _add_dice_log_entry(player_name: String, dice_count: int, per_dice: Dictionary) -> void:
+	var counts: Dictionary = {6: 0, 5: 0, 4: 0, 3: 0, 2: 0, 1: 0}
+	for dice_name: String in per_dice:
+		var value: int = int(per_dice[dice_name])
 		if value in counts:
 			counts[value] += 1
 
-	# Build result string (no total, just face counts)
-	var lines: Array[String] = []
-	for face in [6, 5, 4, 3, 2, 1]:
+	var parts: Array[String] = []
+	for face: int in [6, 5, 4, 3, 2, 1]:
 		if counts[face] > 0:
-			lines.append("%d× %d" % [counts[face], face])
+			parts.append("%dx %d" % [counts[face], face])
 
-	return "\n".join(lines)
+	var time_str: String = Time.get_time_string_from_system().substr(0, 5)
+	var text: String = "[%s] %s (%dd6): %s" % [time_str, player_name, dice_count, ", ".join(parts)]
+
+	var entry := Label.new()
+	entry.text = text
+	entry.add_theme_font_size_override("font_size", 13)
+	entry.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_dice_log_vbox.add_child(entry)
+
+	# Auto-scroll to bottom
+	await get_tree().process_frame
+	_dice_log_scroll.scroll_vertical = int(_dice_log_scroll.get_v_scroll_bar().max_value)
+
+
+## Clear all entries from the dice log
+func _clear_dice_log() -> void:
+	for child: Node in _dice_log_vbox.get_children():
+		child.queue_free()
 
 
 func _get_random_table_position() -> Vector3:
@@ -1027,6 +1089,8 @@ func _on_internet_disconnected() -> void:
 func _broadcast_presence(delta: float) -> void:
 	if not network_manager.is_multiplayer_active():
 		return
+	if _is_army_syncing:
+		return
 
 	# Broadcast cursor position at ~15 Hz
 	_cursor_broadcast_timer += delta
@@ -1043,7 +1107,9 @@ func _broadcast_presence(delta: float) -> void:
 		if camera_pivot:
 			network_manager.broadcast_camera_direction(
 				camera_pivot._yaw, camera_pivot._pitch)
-			network_manager.broadcast_camera_position(camera_pivot.global_position)
+			var _cam := camera_pivot.get_node("Camera3D") as Camera3D
+			if _cam:
+				network_manager.broadcast_camera_position(_cam.global_position)
 
 
 ## Called when a remote player's cursor position is received
@@ -1061,8 +1127,22 @@ func _on_remote_camera_updated(peer_id: int, yaw: float, pitch: float) -> void:
 
 ## Called when a remote player rolls dice
 func _on_remote_dice_rolled(peer_id: int, dice_count: int, results: Array, total: int) -> void:
-	# Show the roll result in the dice result label
-	roller_result_label.text = "P%d: %s = %d" % [peer_id, str(results), total]
+	# Build per-dice dictionary for log entry
+	var per_dice: Dictionary = {}
+	for i: int in range(results.size()):
+		per_dice["D6_%d" % (i + 1)] = int(results[i])
+
+	_add_dice_log_entry("Spieler %d" % peer_id, dice_count, per_dice)
+
+	# Show 3D dice visualization for remote roll
+	# Guard prevents roll_finnished from re-broadcasting
+	_is_showing_remote_roll = true
+	if dice_count != int(dice_count_spinner.value):
+		_update_dice_set(dice_count)
+	var int_results: Array[int] = []
+	for v: Variant in results:
+		int_results.append(int(v))
+	dice_roller_control.show_faces(int_results)
 
 	# Play avatar dice roll animation
 	if _player_avatars.has(peer_id):
@@ -1590,52 +1670,80 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
 		_broadcast_army_import(army, spawned)
 
 
-## Broadcast a newly imported army to all remote peers
+## Broadcast a newly imported army to all remote peers (batched to avoid rate limits)
 func _broadcast_army_import(army: OPRApiClient.OPRArmy, spawned_models: Array[Node3D]) -> void:
-	# Serialize the new GameUnits
-	var units_data: Array = []
-	for unit in army.units:
-		var game_unit = opr_army_manager.get_game_unit(unit)
-		if game_unit:
-			var unit_dict = game_unit.to_dict()
-			# Add model positions
-			var model_positions: Array = []
-			for model in game_unit.models:
-				if model.node and is_instance_valid(model.node):
-					model_positions.append({
-						"position": [model.node.global_position.x, model.node.global_position.y, model.node.global_position.z],
-						"rotation": [model.node.rotation_degrees.x, model.node.rotation_degrees.y, model.node.rotation_degrees.z],
-						"visible": model.node.visible
-					})
-				else:
-					model_positions.append(null)
-			unit_dict["model_positions"] = model_positions
-			units_data.append(unit_dict)
+	# Build per-unit data: one Dictionary + one objects Array per unit
+	var units_data: Array[Dictionary] = []
+	var objects_per_unit: Array[Array] = []
 
-	# Serialize the spawned model nodes
-	var objects_data: Array = []
+	# Build a lookup: network_id -> serialized object data
+	var model_to_obj: Dictionary = {}
 	for model in spawned_models:
-		var obj_data = save_manager._serialize_object(model)
+		var obj_data: Dictionary = save_manager._serialize_object(model)
 		if not obj_data.is_empty():
-			objects_data.append(obj_data)
+			var net_id := int(obj_data.get("network_id", 0))
+			model_to_obj[net_id] = obj_data
 
-	print("[ArmySync] Broadcasting army: %d units, %d objects" % [units_data.size(), objects_data.size()])
-	network_manager.broadcast_army_spawn(units_data, objects_data)
+	for unit in army.units:
+		var game_unit := opr_army_manager.get_game_unit(unit)
+		if not game_unit:
+			continue
+
+		var unit_dict := game_unit.to_dict()
+		# Add model positions
+		var model_positions: Array = []
+		var unit_objects: Array = []
+		for model in game_unit.models:
+			if model.node and is_instance_valid(model.node):
+				model_positions.append({
+					"position": [model.node.global_position.x, 0.0, model.node.global_position.z],
+					"rotation": [model.node.rotation_degrees.x, model.node.rotation_degrees.y, model.node.rotation_degrees.z],
+					"visible": model.node.visible
+				})
+				# Collect serialized object for this model
+				var net_id := int(model.node.get_meta("network_id", 0))
+				if model_to_obj.has(net_id):
+					unit_objects.append(model_to_obj[net_id])
+			else:
+				model_positions.append(null)
+
+		unit_dict["model_positions"] = model_positions
+		units_data.append(unit_dict)
+		objects_per_unit.append(unit_objects)
+
+	print("[ArmySync] Broadcasting army in batches: %d units (player_id=%d, army='%s')" % [units_data.size(), army.player_id, army.name])
+	_is_army_syncing = true
+	await network_manager.broadcast_army_batched(units_data, objects_per_unit, army.player_id, army.name)
+	_is_army_syncing = false
 
 
-## Receive army spawn from a remote peer
-func _on_remote_army_spawned(units_data: Array, objects_data: Array) -> void:
-	print("[ArmySync] Received remote army: %d units, %d objects" % [units_data.size(), objects_data.size()])
-	save_manager._deserialize_game_units(units_data)
+## Receive army header from a remote peer — prepare for incoming units
+func _on_remote_army_header(player_id: int, army_name: String, unit_count: int) -> void:
+	print("[ArmySync] Header: '%s' — expecting %d units (player_id=%d)" % [army_name, unit_count, player_id])
+	# Create army tray on remote side
+	var player_color: Color = OPRArmyManager.PLAYER_COLORS.get(player_id, Color.GRAY)
+	opr_army_manager._create_army_tray(player_id, army_name, player_color)
+
+
+## Receive a single unit + its objects from a remote peer
+func _on_remote_army_unit(unit_data: Dictionary, objects_data: Array, player_id: int) -> void:
+	var unit_name: String = unit_data.get("unit_properties", {}).get("name", "?")
+	print("[ArmySync] Unit received: '%s' (%d objects, player_id=%d)" % [unit_name, objects_data.size(), player_id])
+	save_manager._deserialize_game_units([unit_data])
 	await save_manager._deserialize_objects(objects_data)
-	save_manager._restore_markers_after_load()
 
-	# Sync object counter to the highest network_id so future spawns don't conflict
+	# Sync object counter per unit
 	for obj_data in objects_data:
 		if obj_data is Dictionary:
-			var net_id = int(obj_data.get("network_id", 0))
+			var net_id := int(obj_data.get("network_id", 0))
 			if net_id > object_manager._object_counter:
 				object_manager._object_counter = net_id
+
+
+## Receive army-complete signal — all units sent, restore markers
+func _on_remote_army_complete(player_id: int) -> void:
+	print("[ArmySync] Complete: all units received (player_id=%d)" % player_id)
+	save_manager._restore_markers_after_load()
 
 
 ## Receive TTS terrain spawn from a remote peer
@@ -1648,9 +1756,9 @@ func _on_remote_tts_terrain_spawned(mesh_url: String, diffuse_url: String,
 
 
 ## Receive remote camera position update
-func _on_remote_camera_position_updated(peer_id: int, pos_x: float, pos_z: float) -> void:
+func _on_remote_camera_position_updated(peer_id: int, pos_x: float, pos_y: float, pos_z: float) -> void:
 	if _player_avatars.has(peer_id):
-		_player_avatars[peer_id].update_position(pos_x, pos_z)
+		_player_avatars[peer_id].update_position(pos_x, pos_y, pos_z)
 
 
 ## Update OPR unit hover detection
