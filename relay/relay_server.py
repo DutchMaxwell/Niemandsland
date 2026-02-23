@@ -33,7 +33,7 @@ MAX_PEERS_PER_ROOM = 8
 ROOM_EXPIRY_SECONDS = 14400  # 4 hours
 HEARTBEAT_TIMEOUT_SECONDS = 30
 MAX_MESSAGE_SIZE = 1048576  # 1MB — game state serializations can be large
-RATE_LIMIT_MESSAGES_PER_SECOND = 60
+RATE_LIMIT_MESSAGES_PER_SECOND = 300
 MAX_CONNECTIONS_PER_IP = 5
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # 30 chars, no ambiguous 0/O/1/I/L
 CODE_LENGTH = 6  # 30^6 = 729,000,000 possibilities
@@ -428,7 +428,7 @@ async def main(host: str = "0.0.0.0", port: int = 8765,
         ssl=ssl_context,
         max_size=MAX_MESSAGE_SIZE,
         ping_interval=20,
-        ping_timeout=10,
+        ping_timeout=30,   # Erhöht für GLB-Ladezeiten (blockiert Main-Thread)
     ) as ws_server:
         logger.info("Relay server started on %s:%d", host, port)
 
