@@ -529,14 +529,17 @@ size_flags_horizontal = 3
 focus_mode = 0
 text = "Quick"
 
-[node name="RollerResultLabel" type="Label" parent="UI/HUD/DiceRollerPanel/VBox"]
+[node name="DiceLogScroll" type="ScrollContainer" parent="UI/HUD/DiceRollerPanel/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 custom_minimum_size = Vector2(0, 120)
-theme_override_font_sizes/font_size = 14
-text = "Click Roll to start"
-horizontal_alignment = 1
-vertical_alignment = 1
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="DiceLogVBox" type="VBoxContainer" parent="UI/HUD/DiceRollerPanel/VBox/DiceLogScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
 
 [node name="ModelFileDialog" type="FileDialog" parent="UI"]
 unique_name_in_owner = true

@@ -30,7 +30,9 @@ var _clipboard: Array[Node3D] = []  # Stores references to copied objects for du
 # Rotation tracking
 var _is_rotating: bool = false
 var _rotation_broadcast_timer: float = 0.0
+var _move_broadcast_timer: float = 0.0
 const ROTATION_BROADCAST_INTERVAL: float = 0.066  # ~15 Hz
+const MOVE_BROADCAST_INTERVAL: float = 0.05  # ~20 Hz
 
 # Drag distance tracking
 var _drag_start_positions: Dictionary = {}  # Object -> start position mapping
@@ -89,13 +91,17 @@ func _process(delta: float) -> void:
 			if is_instance_valid(obj):
 				obj.rotate_y(rotation_amount)
 
-		# Broadcast rotation to remote peers (throttled at ~15 Hz)
+		# Broadcast rotation to remote peers (throttled at ~15 Hz, batched)
 		_rotation_broadcast_timer += delta
 		if _rotation_broadcast_timer >= ROTATION_BROADCAST_INTERVAL and _network_manager:
 			_rotation_broadcast_timer = 0.0
+			var batch: Array = []
 			for obj in _selected_objects:
 				if is_instance_valid(obj) and obj.has_meta("network_id"):
-					_network_manager.broadcast_rotation(obj.get_meta("network_id"), obj.rotation.y)
+					batch.append(obj.get_meta("network_id"))
+					batch.append(obj.rotation.y)
+			if batch.size() > 0:
+				_network_manager.broadcast_rotation_batch(batch)
 	else:
 		_rotation_broadcast_timer = 0.0
 
@@ -500,6 +506,9 @@ func _start_dragging(_screen_pos: Vector2) -> void:
 
 func _stop_dragging() -> void:
 	if _is_dragging and not _selected_objects.is_empty():
+		# Build batch of final positions for network broadcast
+		var drop_batch: Array = []
+
 		# Smoothly lower objects back down and re-enable physics for rigid bodies
 		for obj in _selected_objects:
 			if is_instance_valid(obj):
@@ -512,12 +521,12 @@ func _stop_dragging() -> void:
 					# Static bodies snap to table surface
 					target_y = 0.0
 
-				# Broadcast final ground-level position so remote clients don't see floating models
-				if _network_manager and _network_manager.is_multiplayer_active():
-					if obj.has_meta("network_id"):
-						var net_id = obj.get_meta("network_id")
-						var final_pos = Vector3(obj.global_position.x, target_y, obj.global_position.z)
-						_network_manager.broadcast_move(net_id, final_pos)
+				# Collect final ground-level positions for batched broadcast
+				if obj.has_meta("network_id"):
+					drop_batch.append(obj.get_meta("network_id"))
+					drop_batch.append(obj.global_position.x)
+					drop_batch.append(target_y)
+					drop_batch.append(obj.global_position.z)
 
 				var tween = create_tween()
 				tween.set_ease(Tween.EASE_OUT)
@@ -526,6 +535,10 @@ func _stop_dragging() -> void:
 				# Re-enable physics after animation completes
 				if obj is RigidBody3D:
 					tween.tween_callback(func(): obj.freeze = false)
+
+		# Broadcast all final positions in a single RPC
+		if drop_batch.size() > 0 and _network_manager and _network_manager.is_multiplayer_active():
+			_network_manager.broadcast_move_batch(drop_batch)
 
 		# Emit final distance for anchor object
 		if _selected_objects.size() > 0:
@@ -542,6 +555,7 @@ func _stop_dragging() -> void:
 		drag_ended.emit()
 
 	_is_dragging = false
+	_move_broadcast_timer = 0.0
 	_drag_start_positions.clear()
 	_drag_anchor_position = Vector3.ZERO
 	_destroy_drag_line()
@@ -561,6 +575,7 @@ func _cancel_drag() -> void:
 				obj.freeze = false
 
 	_is_dragging = false
+	_move_broadcast_timer = 0.0
 	_drag_start_positions.clear()
 	_drag_anchor_position = Vector3.ZERO
 	_destroy_drag_line()
@@ -733,11 +748,26 @@ func _update_drag(screen_pos: Vector2) -> void:
 				var new_pos = Vector3(obj_start.x + delta_xz.x, obj_start.y + drag_lift_height, obj_start.z + delta_xz.z)
 				obj.global_position = new_pos
 
-				# Broadcast position to other clients
-				if _network_manager and _network_manager.is_multiplayer_active():
-					if obj.has_meta("network_id"):
-						var net_id = obj.get_meta("network_id")
-						_network_manager.broadcast_move(net_id, new_pos)
+		# Broadcast positions throttled to ~20 Hz to avoid relay rate limit
+		_move_broadcast_timer += get_process_delta_time()
+		if _move_broadcast_timer >= MOVE_BROADCAST_INTERVAL and _network_manager and _network_manager.is_multiplayer_active():
+			_move_broadcast_timer = 0.0
+			if _selected_objects.size() <= 1:
+				# Single object: use regular move broadcast
+				for obj in _selected_objects:
+					if is_instance_valid(obj) and obj.has_meta("network_id"):
+						_network_manager.broadcast_move(obj.get_meta("network_id"), obj.global_position)
+			else:
+				# Multiple objects: batch into a single RPC to avoid relay rate limit
+				var batch: Array = []
+				for obj in _selected_objects:
+					if is_instance_valid(obj) and obj.has_meta("network_id"):
+						batch.append(int(obj.get_meta("network_id")))
+						batch.append(obj.global_position.x)
+						batch.append(obj.global_position.y)
+						batch.append(obj.global_position.z)
+				if not batch.is_empty():
+					_network_manager.broadcast_move_batch(batch)
 
 		# Calculate horizontal distance for display
 		var current_anchor_pos = anchor.global_position
