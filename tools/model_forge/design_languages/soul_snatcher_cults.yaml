@@ -1,0 +1,441 @@
+# =============================================================================
+# Soul-Snatcher Cults - Design Language
+# =============================================================================
+# Basiert auf: GF - Soul-Snatcher Cults v3.5.2
+# Parasitaere Alien-Organismen die menschliche Gesellschaften unterwandern.
+# OPR-Aequivalent zu Genestealer Cults.
+# Alien-Hybriden, gedankenkontrollierte Menschen, lauernder Horror,
+# parasitaere Infizierung.
+
+faction_name: "Soul-Snatcher Cults"
+
+aesthetic:
+  genre: "grimdark sci-fi horror"
+  style: "parasitic infiltration cult"
+  inspiration:
+    - "Alien xenomorph-human hybrid horror"
+    - "Underground doomsday cult aesthetics"
+    - "Industrial mining colony workers corrupted by alien influence"
+    - "Body horror mutations blending human and alien anatomy"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted Genestealer Cult likenesses"
+    - "Pure alien without human elements"
+    - "Clean or heroic aesthetics"
+
+colors:
+  primary: "dirty industrial yellow and faded orange hazard suits"
+  secondary: "bruised purple alien skin and chitin on mutated limbs"
+  accent: "sickly pale flesh tones and glowing psychic teal eyes"
+
+materials:
+  - "worn mining overalls and industrial work gear"
+  - "chitinous alien carapace on mutated limbs and heads"
+  - "rusted industrial metal on improvised weapons and vehicles"
+  - "pale sickly flesh blending into alien purple skin"
+
+creature_type: "alien-human hybrid cult operative"
+
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered creature, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on surface textures
+  - 28mm tabletop miniature aesthetic and proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# =============================================================================
+# Per-Unit Overrides - Alle Einheiten aus GF Soul-Snatcher Cults v3.5.2
+# =============================================================================
+unit_overrides:
+
+  # ==========================================================================
+  # HEROES
+  # ==========================================================================
+
+  supreme_leader:
+    extra_details: "alien patriarch of the cult, towering Soul-Snatcher organism with elongated skull and exposed brain ridges glowing with psychic energy, four arms ending in sharp rending claws dripping with ichor, lean muscular alien body with purple chitinous carapace over pale flesh, tattered ceremonial robes draped over alien frame, hypnotic glowing teal eyes projecting domination, Fast scout predator with Fear(1) aura, Tough(3)"
+    pose: "commanding psychic pose, four clawed arms spread wide, head tilted with glowing eyes fixed on prey, robes billowing"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 80
+      size: 1
+      base: 32
+      rules: ["Fanatic", "Fast", "Fear(1)", "Scout", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Sharp Claws"
+          range: 0
+          attacks: 4
+          rules: ["Reap"]
+  brute_champion:
+    extra_details: "massive third-generation hybrid brute, hulking muscular body with grotesque alien mutations visible under torn mining overalls, oversized mutant arms wielding a massive heavy pick with AP(2) rending edges, thick purple chitinous plates erupting through human skin on shoulders and back, regenerative tissue with visible healing wounds, bald head with vestigial alien ridges, Tough(3)"
+    pose: "aggressive forward lean, massive heavy pick raised overhead ready to crush, mutant muscles bulging"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 60
+      size: 1
+      base: 32
+      rules: ["Fanatic", "Regeneration", "Tough(3)"]
+      weapons:
+        - name: "Massive Heavy Pick"
+          range: 0
+          attacks: 2
+          rules: ["AP(2)"]
+  cult_leader:
+    extra_details: "fourth-generation hybrid cult demagogue nearly human-passing with subtle alien tells, dual sharp claws concealed under long cultist robes, bald head with slightly elongated cranium and hypnotic pale eyes, charismatic preacher pose with tattered scripture scrolls and cult sigils, mining guild insignia repurposed as cult symbols, hidden alien nature beneath human facade, Tough(3)"
+    pose: "inspirational preacher stance, one clawed hand raised in blessing, other claw hidden beneath robes, charismatic gaze"
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 30
+      size: 1
+      base: 32
+      rules: ["Fanatic", "Tough(3)"]
+      weapons:
+        - name: "Dual Sharp Claws"
+          range: 0
+          attacks: 2
+          rules: ["Reap"]
+  cult_hitman:
+    extra_details: "elite cult assassin operative, lean and dangerous fourth-generation hybrid in dark industrial work clothes, cult pistol in one hand, multiple concealed close combat blades (A4) strapped across body, hood partially concealing an almost-human face with cold alien eyes, utility belt with explosives and tools, stealthy killer who eliminates threats to the cult, Tough(3)"
+    pose: "stalking assassin crouch, cult pistol aimed forward, combat blade drawn in off-hand, eyes scanning for targets"
+
+  # ==========================================================================
+  # CORE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 5
+      cost: 50
+      size: 1
+      base: 32
+      rules: ["Fanatic", "Tough(3)"]
+      weapons:
+        - name: "Cult Pistol"
+          range: 12
+          attacks: 2
+        - name: "CCW"
+          range: 0
+          attacks: 4
+  minions:
+    extra_details: "single mind-controlled human cult follower, ordinary civilians and workers in dirty mining overalls and industrial work clothes, armed with basic rifles and improvised close combat weapons, no visible alien mutations just glazed fanatical eyes and cult tattoos, mining helmets and work boots, Fanatic devotion masking their mental enslavement"
+    pose: "mob advance formation, rifles raised with fanatical determination, tightly packed crowd of ordinary workers turned zealots"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 120
+      size: 10
+      base: 25
+      rules: ["Fanatic"]
+      weapons:
+        - name: "Rifles"
+          range: 24
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  support_minions:
+    extra_details: "single heavy weapons of mind-controlled human follower, crew-served mortars with Blast(3) and Indirect fire capability set up on improvised positions, industrial work clothes with ammunition belts and shell crates, glazed fanatical eyes, repurposed mining and industrial equipment as weapon platforms, Tough(3)"
+    pose: "crewed mortar positions, loaders feeding shells, gunners adjusting elevation, ammunition crates stacked nearby"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 135
+      size: 3
+      base: 32
+      rules: ["Fanatic", "Tough(3)"]
+      weapons:
+        - name: "Mortars"
+          range: 30
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "Crews"
+          range: 0
+          attacks: 2
+  neophytes:
+    extra_details: "single early-generation hybrid cultist with subtle mutations hidden under mining gear, armed with rifles and close combat weapons, slight alien tells like extra fingers or pale skin patches visible on closer inspection, mining helmets with cult sigils scratched in, industrial work boots and heavy gloves, more capable fighters than pure human minions"
+    pose: "disciplined tactical advance, rifles shouldered and aimed, subtle mutations visible under mining gear"
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 85
+      size: 5
+      base: 25
+      rules: ["Fanatic"]
+      weapons:
+        - name: "Rifles"
+          range: 24
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  acolytes:
+    extra_details: "single mid-generation hybrid cultist with visible alien mutations, pistols in one hand and mutant claws with AP(1) chitin blades on the other arm, purple alien skin erupting through human flesh on arms and face, third arm vestige visible on some models, Strider adaptations on mutated feet, mining gear barely concealing extensive mutations"
+    pose: "aggressive close-quarters rush, mutant claws raised to strike, pistols firing, alien features snarling"
+
+  # ==========================================================================
+  # ELITE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 105
+      size: 5
+      base: 25
+      rules: ["Fanatic", "Strider"]
+      weapons:
+        - name: "Pistols"
+          range: 12
+          attacks: 1
+        - name: "Mutant Claws"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  mutant_brutes:
+    extra_details: "single massive hybrid brute, hulking third-generation mutations with enormous muscular bodies bursting from torn mining overalls, wielding a heavy pick with AP(1) rending edges repurposed from mining equipment, thick chitinous plates erupting from shoulders and spine, regenerative alien tissue healing wounds in real-time, barely contained rage in mutated alien faces"
+    pose: "berserker charge formation, heavy picks raised, torn overalls revealing mutant musculature, roaring with alien fury"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 145
+      size: 5
+      base: 25
+      rules: ["Fanatic", "Regeneration"]
+      weapons:
+        - name: "Heavy Picks"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  mutant_soul_snatchers:
+    extra_details: "single pure-strain Soul-Snatcher organism that burst from hiding, lithe alien bodies with purple carapace and four arms ending in sharp reaping claws, elongated skulls with psychic sensory organs, Ambush deep-strike deployment from underground tunnels, Bounding movement leaping across terrain, regenerative alien flesh, ultimate revelation of the cult's true alien masters"
+    pose: "erupting from ambush, bounding leap mid-air, four clawed arms spread wide, alien predators revealed"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 145
+      size: 5
+      base: 25
+      rules: ["Ambush", "Bounding", "Fanatic", "Regeneration"]
+      weapons:
+        - name: "Sharp Claws"
+          range: 0
+          attacks: 2
+          rules: ["Reap"]
+  soul_snatchers:
+    extra_details: "single pure-strain Soul-Snatcher organism, lithe fast alien bodies with purple-black chitinous carapace, heavy rending claws with AP(1) on each of four arms, elongated skulls with rows of fangs and psychic sensor pits, digitigrade legs for explosive speed, Fast scout predators with Strider adaptations, the alien elite of the cult hierarchy"
+    pose: "swift hunting formation, heavy claws extended, lean bodies mid-sprint, alien predatory intelligence in glowing eyes"
+
+  # ==========================================================================
+  # BIKES
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 160
+      size: 5
+      base: 25
+      rules: ["Fanatic", "Fast", "Scout", "Strider"]
+      weapons:
+        - name: "Heavy Claws"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  neophyte_bikers:
+    extra_details: "single hybrid cultist on rugged industrial motorcycle, rider in mining gear with goggles and scarves partially concealing alien features, rifles mag-locked to bike frames, close combat weapons strapped to backs, armored fairings with cult sigils, heavy industrial bikes repurposed from mining colony motor pool, Fast with Tough(3)"
+    pose: "riding in formation at speed, rifles ready, mining goggles down, cult banners fluttering"
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 120
+      size: 3
+      base: 32
+      rules: ["Fanatic", "Fast", "Tough(3)"]
+      weapons:
+        - name: "Rifles"
+          range: 24
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  neophyte_quadbike:
+    extra_details: "single hybrid cultist on a heavy industrial quadbike, burst pistol mounted on handlebars, heavy flamer weapon system bolted to front chassis with AP(1) Blast(3), roll cage with cult markings, oversized off-road tires, ammunition crates strapped to rear rack, Fast scout reconnaissance vehicle, Tough(6)"
+    pose: "racing forward, burst pistol firing, heavy flamer ready to unleash, dust trailing behind quadbike"
+
+  # ==========================================================================
+  # VEHICLES (with Transport - auto-detected)
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 100
+      size: 1
+      base: 40
+      rules: ["Fanatic", "Fast", "Tough(6)"]
+      weapons:
+        - name: "Burst Pistol"
+          range: 12
+          attacks: 3
+        - name: "Heavy Flamer"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  light_apc:
+    extra_details: "stolen military light armored personnel carrier repainted in cult mining livery, boxy angular hull with weathered industrial yellow paint and cult graffiti, two heavy flamers with AP(1) and Blast(3) mounted on hull, front ramp for troop deployment, firing ports along sides, heavy wheels, mining company logos partially painted over with cult sigils, Fast with Impact(3), Tough(6), Transport(11)"
+    pose: "driving forward with ramp partially lowered, heavy flamers aimed ahead, cult markings visible"
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 195
+      size: 1
+      base: "100x60"
+      rules: ["Fanatic", "Fast", "Impact(3)", "Tough(6)", "Transport(11)"]
+      weapons:
+        - name: "Heavy Flamers"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+  grinder_truck:
+    extra_details: "massive industrial mining truck converted for war, enormous front grinding mechanism with rotating industrial drill teeth for Impact attacks, heavy machinegun with AP(1) mounted on cab roof, heavy quake cannon with Blast(3) Rending mounted on flatbed, thick industrial armor plates welded on, industrial yellow paint chipped and battle-scarred, Strider mining suspension, Fast with Impact(3), Tough(9), Transport(6)"
+    pose: "charging forward, front grinder mechanism spinning, quake cannon elevated, industrial beast of war"
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 270
+      size: 1
+      base: "100x60"
+      rules: ["Fanatic", "Fast", "Impact(3)", "Strider", "Tough(9)", "Transport(6)"]
+      weapons:
+        - name: "Heavy Machinegun"
+          range: 30
+          attacks: 3
+          rules: ["AP(1)"]
+        - name: "Heavy Quake Cannon"
+          range: 24
+          attacks: 2
+          rules: ["Blast(3)"]
+  mining_truck:
+    extra_details: "colossal mining hauler truck converted to armored transport, twin autocannon turret with AP(2) on top of massive cab, heavy machinegun with AP(1) on secondary mount, enormous reinforced cargo bed converted to troop bay, industrial yellow paint with rust streaks and cult graffiti, eight massive all-terrain wheels, Fast with Impact(3), Tough(9), Transport(11)"
+    pose: "thundering forward, twin autocannon turret traversing, massive profile dominating the road"
+
+  # ==========================================================================
+  # VEHICLES (no Transport)
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 330
+      size: 1
+      base: "100x60"
+      rules: ["Fanatic", "Fast", "Impact(3)", "Tough(9)", "Transport(11)"]
+      weapons:
+        - name: "Twin Autocannon"
+          range: 36
+          attacks: 6
+          rules: ["AP(2)"]
+        - name: "Heavy Machinegun"
+          range: 30
+          attacks: 3
+          rules: ["AP(1)"]
+  attack_vehicle:
+    extra_details: "stolen military light reconnaissance vehicle repurposed by the cult, sleek low-profile hull with heavy machinegun turret AP(1) on top, hull-mounted heavy mining laser with AP(3) Deadly(3), industrial yellow and camo pattern paint over original military grey, cult sigils painted on doors, external fuel tanks and supply crates strapped to hull, Fast with Impact(3), Tough(6)"
+    pose: "speeding into battle, machinegun turret firing, mining laser aimed at target"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 185
+      size: 1
+      base: 40
+      rules: ["Fanatic", "Fast", "Impact(3)", "Tough(6)"]
+      weapons:
+        - name: "Heavy Machinegun"
+          range: 30
+          attacks: 3
+          rules: ["AP(1)"]
+        - name: "Heavy Mining Laser"
+          range: 24
+          attacks: 1
+          rules: ["AP(3)"]
+  light_walker:
+    extra_details: "stolen military bipedal scout walker repainted in mining livery, chicken-legged walking chassis with armored cockpit cabin, twin heavy flamer arm weapon with AP(1) Blast(3), stomping feet with AP(1), industrial yellow paint with mining company logos and cult graffiti overlaid, sensor dome on top, Fear(1) presence, Tough(6)"
+    pose: "striding forward in patrol stance, twin heavy flamer arm aimed ahead, cockpit canopy glinting"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 160
+      size: 1
+      base: 40
+      rules: ["Reliable)", "Fanatic", "Fear(1)", "Tough(6)"]
+      weapons:
+        - name: "Twin Heavy Flamer"
+          range: 12
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  battle_tank:
+    extra_details: "stolen military main battle tank fully repurposed by the cult, large turret with nova cannon main gun firing AP(1) Blast(6) rounds, twin heavy flamer sponson with AP(1) Blast(3), thick sloped armor with cult banners and graffiti over original military paint, industrial yellow and purple cult markings, Fast with Impact(6), Tough(12)"
+    pose: "hull-down position, nova cannon elevated, twin heavy flamer visible, cult banners draped on turret"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 340
+      size: 1
+      base: 50
+      rules: ["Reliable)", "Fanatic", "Fast", "Impact(6)", "Tough(12)"]
+      weapons:
+        - name: "Nova Cannon"
+          range: 36
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Twin Heavy Flamer"
+          range: 12
+          attacks: 2
+          rules: ["AP(1)"]

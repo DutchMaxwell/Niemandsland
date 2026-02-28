@@ -1,0 +1,524 @@
+# =============================================================================
+# Saurian Starhost - Design Language
+# =============================================================================
+# Basiert auf: GF - Saurian Starhost v3.5.2
+# Uralte Reptilien-Sternenkrieger mit Aztekischer Aesthetik, Froschmagier-Fuehrer
+# und genetisch modifizierten Dinosaurier-Kriegsbestien.
+
+faction_name: "Saurian Starhost"
+
+aesthetic:
+  genre: "grimdark sci-fi reptilian"
+  style: "ancient reptilian star-warriors"
+  inspiration:
+    - "Aztec/Mesoamerican reptilian warriors with ancient technology"
+    - "Dinosaur war-beasts armored for battle"
+    - "Ancient alien lizard civilization with cosmic purpose"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted Seraphon/Lizardmen designs"
+    - "Mammalian features"
+    - "Cute or cartoon dinosaurs"
+
+colors:
+  primary: "deep teal-blue scaled reptilian skin"
+  secondary: "burnished gold Aztec ornaments and armor"
+  accent: "bright turquoise cosmic energy and feather crests"
+
+materials:
+  - "thick reptilian scales and armored hide"
+  - "gold Mesoamerican ornamental armor and headdresses"
+  - "obsidian-like alien weaponry with energy cores"
+  - "vibrant feather crests and ceremonial decorations"
+
+creature_type: "ancient reptilian star-warrior"
+
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered creature, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on surface textures (scales, gold ornaments, feathers, cosmic energy)
+  - 28mm tabletop miniature aesthetic and proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# =============================================================================
+# Per-Unit Overrides - Alle Einheiten aus GF Saurian Starhost v3.5.2
+# =============================================================================
+unit_overrides:
+
+  # ==========================================================================
+  # HEROES
+  # ==========================================================================
+
+  frog_mage:
+    extra_details: "massive bloated amphibian mage seated on hovering cosmic palanquin, ancient Frog-Mage of immense psychic power, Caster(3) with swirling cosmic energy orbiting enlarged cranium, ornate gold Aztec headdress with turquoise feather plumes, magic blast energy crackling between webbed hands (12 inch A3 Rending), heavy pulse melee staff with obsidian blade (A6), thick warty toad-like skin covered in glowing arcane glyphs, Fear(1) aura of ancient otherworldly presence, Strider, Tough(6)"
+    pose: "seated on hovering palanquin in meditative pose, one webbed hand raised channeling cosmic energy, magic blast forming between fingers"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 210
+      size: 1
+      base: 40
+      rules: ["Caster(3)", "Fear(1)", "Primal", "Strider", "Tough(6)"]
+      weapons:
+        - name: "Magic Blast"
+          range: 12
+          attacks: 3
+          rules: ["Rending"]
+        - name: "Heavy Pulse"
+          range: 0
+          attacks: 6
+  gator_veteran:
+    extra_details: "hulking crocodilian warrior veteran towering over standard saurians, massive heavily armored alligator-like body with thick scaly hide (Defense 3+), two heavy maces in each hand with obsidian heads crackling with energy (A1 AP1 Blast3 each), powerful stomping legs with crushing force (A2 AP1), gold Aztec ceremonial armor plates riveted to scaled torso and shoulders, Fear(1) intimidating crocodilian presence, Tough(6)"
+    pose: "aggressive combat stance, dual heavy maces raised overhead ready to smash, crocodilian jaw open in war roar"
+
+    game_stats:
+      quality: 4
+      defense: 3
+      cost: 120
+      size: 1
+      base: 40
+      rules: ["Fear(1)", "Primal", "Tough(6)"]
+      weapons:
+        - name: "Heavy Maces"
+          range: 0
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  saurian_veteran:
+    extra_details: "elite saurian warrior officer with scarred teal-blue scales showing veteran experience, veteran pistol holstered at hip with obsidian energy core (12 inch A2), close combat weapon with gold-inlaid obsidian blade (A2), ornate gold Aztec officer headdress with rank feathers, gold ceremonial shoulder guards and chest plate over scaled torso, Fearless commander presence, Tough(3)"
+    pose: "commanding pose, veteran pistol drawn in one hand, close combat blade in the other, feathered headdress catching the light"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 55
+      size: 1
+      base: 32
+      rules: ["Primal", "Tough(3)"]
+      weapons:
+        - name: "Veteran Pistol"
+          range: 12
+          attacks: 2
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  gecko_champion:
+    extra_details: "small agile gecko-like reptilian champion with large darting eyes and adhesive-padded hands, champion burst gun with crystal energy core (12 inch A3 AP1), close combat blade sized for smaller frame (A2), lighter build than standard saurians with mottled green-teal scales, gold champion medallion and minimal ceremonial decoration, Strider nimble feet, Tough(3)"
+    pose: "nimble crouching pose, burst gun aimed forward, ready to spring aside, tail curled for balance"
+
+  # ==========================================================================
+  # CORE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 35
+      size: 1
+      base: 32
+      rules: ["Primal", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Champion Burst Gun"
+          range: 12
+          attacks: 3
+          rules: ["AP(1)"]
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  gecko_cohort:
+    extra_details: "single small agile gecko-like reptilian warrior with adhesive-padded hands and large eyes, shock pistols with crackling energy discharge (12 inch A1 AP4), energy shields generating turquoise force fields (Shielded), mottled green-teal scales with gold shield arm bands, Strider nimble feet for any terrain"
+    pose: "shield wall formation, shock pistols raised over energy shields, gecko bodies low and ready"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 85
+      size: 5
+      base: 25
+      rules: ["Primal", "Shielded", "Strider"]
+      weapons:
+        - name: "Shock Pistols"
+          range: 12
+          attacks: 1
+          rules: ["AP(4)"]
+  saurian_warriors:
+    extra_details: "single standard saurian infantry warrior with teal-blue scaled bodies and raptor-like posture, pistols with obsidian energy cores holstered at hip (12 inch A1), close combat weapons with gold-inlaid obsidian blades (A2 each), gold Aztec ceremonial armor breastplates and arm guards, Fearless disciplined warrior demeanor"
+    pose: "disciplined advancing line, pistols holstered, close combat weapons drawn and ready, heads lowered aggressively"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 100
+      size: 5
+      base: 25
+      rules: ["Primal"]
+      weapons:
+        - name: "Pistols"
+          range: 12
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  chameleons:
+    extra_details: "single color-shifting chameleon saurian with independently rotating eyes and prehensile tails, burst guns with suppressed energy cores (12 inch A2 AP1), small close combat daggers (A1), chromatophore scales constantly shifting color for camouflage (Evasive, Scout), Good Shot marksman augmented eyes, Strider sticky feet, mottled shifting skin tones"
+    pose: "stealthy firing line, partially camouflaged with shifting scales, burst guns aimed with steady precision"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 120
+      size: 5
+      base: 25
+      rules: ["Evasive", "Good Shot", "Primal", "Scout", "Strider"]
+      weapons:
+        - name: "Burst Guns"
+          range: 12
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  saurian_guardians:
+    extra_details: "single elite temple guardian saurian with the heaviest armor and biggest builds (Quality 3+ Defense 3+), massive two-handed war hammers with obsidian heads and gold inlay (A2 AP2), ornate gold Aztec temple guardian full plate armor covering scaled bodies, Fearless zealous temple protectors, ceremonial feather crests on helmets"
+    pose: "temple guardian formation, massive hammers held at the ready, gold armor gleaming, stoic and immovable"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 155
+      size: 5
+      base: 25
+      rules: ["Primal"]
+      weapons:
+        - name: "Hammers"
+          range: 0
+          attacks: 2
+          rules: ["AP(2)"]
+  gecko_snipers:
+    extra_details: "single gecko marksman specialist with enlarged targeting eyes and steady adhesive grips, long-barreled sniper rifles with crystal scopes (30 inch A1 AP1 Reliable Takedown), small close combat blades for self-defense (A1), mottled dark green-teal camouflage scales, minimal gold decoration for stealth, Strider feet"
+    pose: "prone or kneeling sniper positions, rifles aimed through crystal scopes, camouflage scales blending"
+
+  # ==========================================================================
+  # CAVALRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 125
+      size: 3
+      base: 25
+      rules: ["Primal", "Strider"]
+      weapons:
+        - name: "Sniper Rifles"
+          range: 30
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  deinonychus_riders:
+    extra_details: "single gecko warrior mounted on swift deinonychus dinosaurs, riders wielding shock lances crackling with turquoise energy (A1 AP4), deinonychus mounts with feathered crests and razor talons (Bounding movement, Impact1), energy shields on rider arms (Shielded), dinosaurs covered in vibrant feather plumes with gold ceremonial barding, Strider nimble mount feet"
+    pose: "cavalry charge formation, shock lances leveled forward, deinonychus mounts mid-leap with talons extended"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 105
+      size: 5
+      base: 25
+      rules: ["Bounding", "Impact(1)", "Primal", "Shielded", "Strider"]
+      weapons:
+        - name: "Shock Lances"
+          range: 0
+          attacks: 1
+          rules: ["AP(4)"]
+  raptor_riders:
+    extra_details: "single saurian warrior mounted on swift raptor dinosaurs, riders wielding pistols (12 inch A1) and close combat weapons (A2), raptor mounts with sleek scaled bodies built for speed (Fast), powerful jaws with Ravage(1) tearing bite, Fearless riders in gold Aztec cavalry armor, raptors with gold ceremonial bridles and light barding"
+    pose: "fast cavalry advance, raptor mounts running at full speed, riders firing pistols from the saddle"
+
+    game_stats:
+      quality: 4
+      defense: 3
+      cost: 130
+      size: 5
+      base: 25
+      rules: ["Fast", "Primal", "Ravage(1)"]
+      weapons:
+        - name: "Pistols"
+          range: 12
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  pterodactyl_riders:
+    extra_details: "single flight of gecko warrior mounted on pterodactyl flying reptiles, riders wielding close combat weapons (A1), pterodactyl mounts with massive leathery wings and raking claws (A2), Ambush aerial deployment, Fast flying speed, Impact(1) diving charge, energy shields on riders (Shielded), gold ceremonial pterodactyl head crests and wing markings, Tough(3)"
+    pose: "diving aerial attack formation, pterodactyl wings angled for dive, riders brandishing weapons, claws extended"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 130
+      size: 3
+      base: 32
+      rules: ["Ambush", "Fast", "Flying", "Impact(1)", "Primal", "Shielded", "Tough(3)"]
+      weapons:
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+        - name: "Claws"
+          range: 0
+          attacks: 2
+  ripjawdactyl_riders:
+    extra_details: "single flight of gecko warrior mounted on massive ripjawdactyl flying predators, riders wielding close combat weapons (A1), ripjawdactyl mounts with enormous crushing jaws and reinforced beaks, Ambush aerial deployment, Fast flying speed, Heavy Impact(3) devastating diving charge with AP1, energy shields on riders (Shielded), gold ceremonial armor on massive jaw ridges, Tough(3)"
+    pose: "steep diving attack, ripjawdactyl jaws gaping wide, heavy bodies angled for maximum impact, riders braced"
+
+  # ==========================================================================
+  # ELITE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 170
+      size: 3
+      base: 32
+      rules: ["Ambush", "Fast", "Flying", "Heavy Impact(3)", "Primal", "Shielded", "Tough(3)"]
+      weapons:
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  gators:
+    extra_details: "single hulking crocodilian warrior brute with thick armored scaly hide (Defense 3+), bash attacks from powerful fists (A2 each), bludgeon weapons like studded maces and clubs with gold spikes (A1 Thrust each, two ), Fearless berserker aggression, massive crocodilian jaws and tails, gold Aztec war paint and ceremonial arm bands, Tough(3)"
+    pose: "aggressive brawling formation, bludgeons swinging, crocodilian jaws snapping, heavily armored bodies charging forward"
+
+    game_stats:
+      quality: 4
+      defense: 3
+      cost: 155
+      size: 3
+      base: 32
+      rules: ["Primal", "Tough(3)"]
+      weapons:
+        - name: "Bashes"
+          range: 0
+          attacks: 2
+        - name: "Bludgeons"
+          range: 0
+          attacks: 1
+          rules: ["Thrust"]
+  cyber_swarms:
+    extra_details: "3 bases of swarming mechanical-organic hybrid nano-creatures, each base a writhing mass of tiny cybernetic reptilian constructs with glowing turquoise energy cores, swarm attacks with venomous bane-infused bites (A3 Bane), Strider swarm movement across any terrain, ancient Saurian nanotechnology given feral purpose, Tough(3)"
+    pose: "swarm mound formation, hundreds of tiny cybernetic reptilian creatures crawling over each other, glowing turquoise energy visible"
+
+    game_stats:
+      quality: 5
+      defense: 6
+      cost: 75
+      size: 3
+      base: 32
+      rules: ["Primal", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Swarm Attacks"
+          range: 0
+          attacks: 3
+          rules: ["Bane"]
+  vulturedactyls:
+    extra_details: "single feral unridden vulturedactyl flying predator, large pterosaur-like reptiles with ragged leathery wings and hooked beaks, raking claws for tearing prey (A3), Ambush aerial hunters dropping from above, Evasive darting flight, Fast speed, Flying, scavenger-predator appearance with darker mottled scales, Tough(3)"
+    pose: "circling aerial predators, wings spread wide, claws extended for grab-and-tear attack, hooked beaks open"
+
+  # ==========================================================================
+  # MEDIUM MONSTERS (Tough 6)
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 6
+      cost: 115
+      size: 3
+      base: 32
+      rules: ["Ambush", "Evasive", "Fast", "Flying", "Primal", "Tough(3)"]
+      weapons:
+        - name: "Claws"
+          range: 0
+          attacks: 3
+  spiked_lizard:
+    extra_details: "ankylosaurus-like armored dinosaur beast with a crew of saurian handlers, arch rockets launcher mounted on armored back firing indirect explosive projectiles (18 inch A2 Blast3 Indirect), heavy raking claws on forelegs (A3 AP1), thick spiked shell armor covering entire body (Fortified reducing incoming AP), Fearless war-trained beast, Strider heavy feet, Tough(6)"
+    pose: "artillery beast stance, arch rocket launcher elevated on armored back, heavy claws planted, spiked shell bristling"
+
+    game_stats:
+      quality: 4
+      defense: 3
+      cost: 155
+      size: 1
+      base: 40
+      rules: ["Fortified", "Primal", "Strider", "Tough(6)"]
+      weapons:
+        - name: "Arch Rockets"
+          range: 18
+          attacks: 2
+          rules: ["Blast(3)"]
+        - name: "Heavy Claws"
+          range: 0
+          attacks: 3
+          rules: ["AP(1)"]
+  dragon_lizard:
+    extra_details: "fire-breathing dinosaur beast with a crew of saurian handlers, flame burst bio-weapon in fanged jaws spewing napalm-like fire (12 inch A2 AP1 Blast3 Reliable), heavy raking claws on powerful forelegs (A3 AP1), Regeneration healing flesh constantly knitting wounds, Fearless fire-beast, Strider, iridescent heat-shimmer scales along throat and flanks, Tough(6)"
+    pose: "flame burst erupting from open jaws, heavy claws braced, heat shimmer visible around throat, aggressive forward stance"
+
+  # ==========================================================================
+  # LARGE MONSTERS (Tough 12)
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 3
+      cost: 175
+      size: 1
+      base: 40
+      rules: ["Primal", "Regeneration", "Strider", "Tough(6)"]
+      weapons:
+        - name: "Flame Burst"
+          range: 12
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Heavy Claws"
+          range: 0
+          attacks: 3
+          rules: ["AP(1)"]
+  triceratops:
+    extra_details: "massive armored triceratops dinosaur war-beast with gold Aztec barding and howdah platform, three enormous horns with obsidian tips for goring attacks (A6 Rending), powerful stomping legs crushing all beneath (A4 AP1), thick frill shield decorated with gold glyphs and turquoise inlay, carrier platform howdah on back (Transport 11) for embarked troops, Fear(2) massive beast presence, Defense 2+, Tough(12)"
+    pose: "thunderous charge pose, horns lowered for impact, howdah platform visible on back, massive legs mid-stride"
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 295
+      size: 1
+      base: "120x92"
+      rules: ["Fear(2)", "Primal", "Tough(12)", "Transport(11)"]
+      weapons:
+        - name: "Horns"
+          range: 0
+          attacks: 6
+          rules: ["Rending"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  spinosaurus:
+    extra_details: "towering spinosaurus dinosaur predator with massive sail-fin on back crackling with cosmic energy, venomous spit attack launching toxic blast projectiles (18 inch A2 Blast3 Bane), powerful stomping legs (A4 AP1), enormous toxic bite from crocodilian jaws dripping with bane venom (A6 Bane), Fear(2) apex aquatic predator terror, sail-fin decorated with gold Aztec glyphs, Defense 2+, Tough(12)"
+    pose: "rearing up with sail-fin fully displayed, toxic venom dripping from open jaws, one massive foot raised mid-stomp"
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 315
+      size: 1
+      base: 50
+      rules: ["Fear(2)", "Primal", "Tough(12)"]
+      weapons:
+        - name: "Spit Venom"
+          range: 18
+          attacks: 2
+          rules: ["Blast(3)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+        - name: "Toxic Bite"
+          range: 0
+          attacks: 6
+          rules: ["Bane"]
+  ankylosaurus:
+    extra_details: "heavily armored ankylosaurus dinosaur war-beast bristling with weapons, twin beam cannon mounted on armored back firing disintegration energy (24 inch A2 AP2 Deadly6 Disintegrate), massive mace tail swinging with crushing force (A4 AP2), powerful stomping legs (A4 AP1), Fortified extra-thick shell armor reducing incoming AP, Fear(2) armored fortress-beast, gold Aztec decorative plates on shell, Defense 2+, Tough(12)"
+    pose: "broadside stance showing twin beam cannon on back, mace tail raised to strike, armored shell bristling with gold-plated spikes"
+
+  # ==========================================================================
+  # TITAN (Tough 24)
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 430
+      size: 1
+      base: 50
+      rules: ["Disintegrate)", "Fear(2)", "Fortified", "Primal", "Tough(12)"]
+      weapons:
+        - name: "Twin Beam Cannon"
+          range: 24
+          attacks: 2
+          rules: ["AP(2)"]
+        - name: "Mace Tail"
+          range: 0
+          attacks: 4
+          rules: ["AP(2)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  dread_titan:
+    extra_details: "colossal dinosaur titan of apocalyptic scale, the ultimate Saurian war-beast towering over all other creatures, devastating stomp attacks from building-sized legs (A8 AP2), vicious jaws large enough to swallow vehicles whole with obsidian-reinforced teeth (A4 AP4 Deadly3), Fear(4) paralyzing primal terror, Impact(6) earth-shaking charge, Primal Boost Buff inspiring nearby saurians, Unpredictable Fighter with battle frenzy, massive gold Aztec ceremonial armor plates and cosmic glyphs covering scaled body, Defense 2+, Tough(24)"
+    pose: "titanic roaring stance, vicious jaws wide open, one massive leg raised mid-stomp, gold ceremonial armor gleaming, cosmic energy crackling along spine"
+
+  # ==========================================================================
+  # NAMED CHARACTERS
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 830
+      size: 1
+      base: 100
+      rules: ["Fear(4)", "Impact(6)", "Primal", "Primal Boost Buff", "Tough(24)", "Unpredictable Fighter"]
+      weapons:
+        - name: "Stomp"
+          range: 0
+          attacks: 8
+          rules: ["AP(2)"]
+        - name: "Vicious Jaws"
+          range: 0
+          attacks: 4
+          rules: ["AP(4)"]
+  tehaxi:
+    extra_details: "unique gecko shaman riding an ornate starseer palanquin carried by cybernetic attendants, Caster(2) channeling cosmic fire magic through ornamental staff, Breath Attack fire ability conjuring flames from sacred braziers on palanquin, ornate rending claws with gold filigree (A3 AP1 Rending), Spell Conduit crystal orb on palanquin amplifying nearby casters, elaborate feathered headdress with turquoise cosmic gems, Strider palanquin hover-movement, sacred ceremonial robes and golden regalia, Tough(6), Unique"
+    pose: "seated on ornate starseer palanquin, one hand raised channeling cosmic fire, ornate claws resting on staff, elaborate headdress radiating turquoise energy"
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 160
+      size: 1
+      base: 40
+      rules: ["Breath Attack", "Caster(2)", "Primal", "Spell Conduit", "Strider", "Tough(6)"]
+      weapons:
+        - name: "Ornate Claws"
+          range: 0
+          attacks: 3
+          rules: ["AP(1)", "Rending"]

@@ -1,0 +1,543 @@
+# =============================================================================
+# Plague Disciples - Design Language
+# =============================================================================
+# Basiert auf: GF - Plague Disciples v3.5.2
+# Bloated chaos warriors devoted to the god of decay and disease.
+# OPR-Aequivalent zu Death Guard.
+
+faction_name: "Plague Disciples"
+
+aesthetic:
+  genre: "grimdark sci-fi pestilent chaos"
+  style: "diseased decay warriors"
+  inspiration:
+    - "Bloated plague warriors in corroded power armor"
+    - "Walking biohazard with noxious fumes and disease"
+    - "Medieval plague doctor aesthetics meets corrupted military"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted Death Guard iconography"
+    - "Clean or healthy aesthetics"
+    - "Cute or cartoonish decay"
+
+colors:
+  primary: "sickly pale green corroded power armor"
+  secondary: "rusted brown and corroded bronze trim"
+  accent: "putrid yellow-green noxious glow and slime"
+
+materials:
+  - "corroded and pitted ceramite with rust and verdigris"
+  - "bloated organic growths bursting through armor gaps"
+  - "noxious fume vents and plague censers"
+  - "rusted chains and decayed cloth tabards"
+
+creature_type: "bloated plague warrior in corroded power armor"
+
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered figure, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on armor surface textures (corrosion, rust, organic growths, slime)
+  - 28mm tabletop miniature aesthetic and heroic proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# =============================================================================
+# Per-Unit Overrides - Alle Einheiten aus GF Plague Disciples v3.5.2
+# =============================================================================
+unit_overrides:
+
+  # ==========================================================================
+  # HEROES
+  # ==========================================================================
+
+  plague_destroyer_champion:
+    extra_details: "towering elite plague lord in massively bulky terminator-style corroded power armor, bloated gut straining against cracked ceramite plates, champion heavy rifle fused to one arm with AP rounds dripping corrosive ichor, enormous close combat weapon in other hand coated in pestilent slime, noxious fume vents on backpack belching toxic clouds, Plaguebound resilience ignoring wounds on 6+, Ambush deployment via teleportation through warp-rot, Tough(6)"
+    pose: "imposing menacing stance, heavy rifle aimed forward, close combat weapon raised, noxious fumes billowing from vents"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 130
+      size: 1
+      base: 40
+      rules: ["Ambush", "Plaguebound", "Tough(6)"]
+      weapons:
+        - name: "Champion Heavy Rifle"
+          range: 24
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "CCW"
+          range: 0
+          attacks: 4
+  chosen_plague_champion:
+    extra_details: "elite plague officer in ornate corroded power armor with verdigris-encrusted bronze trim, flamer pistol in one hand dripping promethium mixed with plague toxins, close combat weapon in other hand with Bane-coated edge, bloated belly pushing through cracked chest plate, plague censers hanging from belt chains, Versatile Attack switching between precision and raw power, tattered devotional scrolls of plague prayers fluttering from pauldrons, Tough(3)"
+    pose: "commanding combat pose, flamer pistol raised to fire, plague weapon drawn, censers swinging"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 65
+      size: 1
+      base: 32
+      rules: ["Plaguebound", "Tough(3)", "Versatile Attack"]
+      weapons:
+        - name: "Flamer Pistol"
+          range: 6
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  plague_champion:
+    extra_details: "plague warrior officer in corroded power armor, flamer pistol in one hand spewing short-range pestilent fire, close combat weapon in other hand, rusted iron halo or plague-horn crown above helmet, purity seals replaced with diseased skin scrolls, bloated proportions straining armor seals, noxious slime trails from joint gaps, Tough(3)"
+    pose: "leading from the front, flamer pistol aimed, weapon ready, authoritative plague-lord stance"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 55
+      size: 1
+      base: 32
+      rules: ["Plaguebound", "Tough(3)"]
+      weapons:
+        - name: "Flamer Pistol"
+          range: 6
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  plague_cultist_champion:
+    extra_details: "plague-devoted cult leader in ragged corrupted light armor and robes, champion pistol in one hand, close combat weapon in other, plague doctor-style gas mask with elongated beak filter, bubonic sores visible on exposed skin, tattered robes stained with filth and biological waste, plague talismans and fetishes hanging from belt, lesser quality troops leader, Tough(3)"
+    pose: "zealous preaching pose, pistol raised overhead, weapon brandished, robes billowing"
+
+  # ==========================================================================
+  # CORE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 30
+      size: 1
+      base: 32
+      rules: ["Plaguebound", "Tough(3)"]
+      weapons:
+        - name: "Champion Pistol"
+          range: 12
+          attacks: 2
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  plague_zombies:
+    extra_details: "single shambling of reanimated plague victims, rotting flesh hanging from exposed bones, milky dead eyes, ragged remnants of civilian or military clothing, clawed hands grasping mindlessly, some dragging entrails or missing limbs, Fearless undead marching relentlessly, Slow shambling movement, Plaguebound supernatural resilience"
+    pose: "shambling horde advance, arms outstretched, mouths agape, lurching forward mindlessly"
+
+    game_stats:
+      quality: 5
+      defense: 6
+      cost: 95
+      size: 10
+      base: 25
+      rules: ["Plaguebound", "Slow"]
+      weapons:
+        - name: "Claws"
+          range: 0
+          attacks: 2
+  plague_cultists:
+    extra_details: "single plague-devoted human cultist in ragged gas masks and improvised hazmat gear, rifles cobbled together from corroded parts, close combat weapons as crude blades and cleavers, bubonic sores on exposed skin, tattered devotional robes over flak armor, plague talismans and crude censers, desperate fanatical followers"
+    pose: "advancing rabble formation, rifles raised, gas masks obscuring faces, ragged advance"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 125
+      size: 10
+      base: 25
+      rules: ["Plaguebound"]
+      weapons:
+        - name: "Rifles"
+          range: 24
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  plague_brothers:
+    extra_details: "single corrupted battle brothers in bloated corroded power armor, heavy rifles with AP rounds leaking toxic residue, close combat weapons as sidearms coated in rust, swollen belly plates cracked and oozing, helmet respirators clogged with filth, verdigris and rust coating every surface, three-circle plague icon on pauldrons, Plaguebound resilience"
+    pose: "relentless tactical advance, heavy rifles shouldered, bloated armor silhouettes, inexorable march"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 145
+      size: 5
+      base: 25
+      rules: ["Plaguebound"]
+      weapons:
+        - name: "Heavy Rifles"
+          range: 24
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  chosen_plague_brothers:
+    extra_details: "single elite plague warrior in ornate corroded power armor with extra bronze trim covered in verdigris, heavy rifles with AP rounds, close combat weapons, more elaborate plague iconography and devotional trophies, veteran plague warriors with ancient corroded armor showing centuries of decay, Versatile Attack adaptability, Plaguebound resilience"
+    pose: "elite disciplined advance, heavy rifles aimed with practiced precision, veteran bearing"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 120
+      size: 3
+      base: 25
+      rules: ["Plaguebound", "Versatile Attack"]
+      weapons:
+        - name: "Heavy Rifles"
+          range: 24
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  plague_support:
+    extra_details: "single heavy weapons in reinforced corroded power armor, heavy flamers with AP and blast capability spewing streams of toxic plague-fire, close combat weapons as backup, chemical fuel tanks on backs connected via corroded hoses to flamer nozzles, heat-warped and melted armor sections, Relentless sustained fire doctrine, Plaguebound resilience"
+    pose: "braced firing pose, heavy flamers unleashing streams of plague-fire, toxic fumes billowing"
+
+  # ==========================================================================
+  # ELITE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 150
+      size: 3
+      base: 25
+      rules: ["Plaguebound", "Relentless"]
+      weapons:
+        - name: "Heavy Flamers"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  plague_destroyers:
+    extra_details: "single elite assault warrior in bulky corroded terminator-style power armor, dual energy claws crackling with warp-rot energy and Rending capability, massively bloated torsos with cracked armor plates, teleportation deployment via Ambush warp-rot, toxic slime dripping from claw tips, extra-reinforced leg servos supporting immense bloated weight, Tough(3)"
+    pose: "aggressive teleport-assault pose, dual energy claws spread wide, crackling with diseased energy"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 200
+      size: 3
+      base: 32
+      rules: ["Ambush", "Plaguebound", "Tough(3)"]
+      weapons:
+        - name: "Dual Energy Claws"
+          range: 0
+          attacks: 4
+          rules: ["Rending"]
+  plague_mutated_cultists:
+    extra_details: "single hideously mutated plague cultist, bodies twisted by chaotic plague mutations, elongated claws grown from fused fingers, tentacles and extra limbs sprouting randomly, exposed bone and pulsing tumors, remnants of cultist robes stretched over mutated flesh, Unpredictable Fighter with random combat mutations surging mid-fight, Plaguebound resilience"
+    pose: "frenzied charging horde, mutated claws slashing, tentacles flailing, bodies contorted"
+
+    game_stats:
+      quality: 5
+      defense: 6
+      cost: 115
+      size: 10
+      base: 25
+      rules: ["Plaguebound", "Unpredictable Fighter"]
+      weapons:
+        - name: "Claws"
+          range: 0
+          attacks: 2
+  plague_mutated_brothers:
+    extra_details: "single plague marines whose mutations have shattered their armor, heavy claws with AP grown through gauntlets and pauldrons, Fast movement from digitigrade mutated legs, power armor fragments fused into bloated mutated flesh, exposed ribcages and pulsing organs visible, Unpredictable Fighter with surging mutation energy, Plaguebound resilience"
+    pose: "fast loping charge, heavy mutated claws leading, broken armor fused to twisted bodies"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 155
+      size: 5
+      base: 25
+      rules: ["Fast", "Plaguebound", "Unpredictable Fighter"]
+      weapons:
+        - name: "Heavy Claws"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  plague_greater_mutated:
+    extra_details: "single massively mutated plague warrior, enormous bloated bodies that have outgrown their power armor entirely, heavy claws with AP on massive mutated arms, shards of ceramite embedded in swollen flesh, faces lost beneath tumorous growths, Fast despite bulk from warp-empowered mutation, Unpredictable Fighter, Tough(3)"
+    pose: "thundering charge, massive mutated claws raised high, bloated bodies heaving forward"
+
+  # ==========================================================================
+  # BIKES
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 230
+      size: 3
+      base: 32
+      rules: ["Fast", "Plaguebound", "Tough(3)", "Unpredictable Fighter"]
+      weapons:
+        - name: "Heavy Claws"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  plague_bikers:
+    extra_details: "single warrior on corroded heavy combat motorcycle, twin heavy rifles with AP mounted on bike fairings, heavy pistols with AP and close combat weapons for melee, bikes encrusted with rust and organic growths, exhaust pipes belching toxic fumes, plague-flies swarming around riders, bloated riders in corroded power armor, Tough(3)"
+    pose: "riding in formation, twin rifles aimed forward, toxic exhaust trailing behind"
+
+  # ==========================================================================
+  # MONSTERS / ELITE SINGLE MODELS
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 260
+      size: 3
+      base: 32
+      rules: ["Fast", "Plaguebound", "Tough(3)"]
+      weapons:
+        - name: "Twin Heavy Rifles"
+          range: 24
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Heavy Pistols"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  plague_mutated_destroyer:
+    extra_details: "single massively mutated destroyer in warped terminator armor fused with daemonic flesh, dual mutated claws with AP on enormous arms grown far beyond normal proportions, body a horrific fusion of corroded ceramite and pulsing mutant flesh, Unpredictable mutation surges affecting entire combat style, Ambush teleport deployment, Tough(6)"
+    pose: "hulking berserker stance, dual mutated claws spread wide, warped armor bulging with mutation"
+
+  # ==========================================================================
+  # VEHICLES (Transport - auto-detected)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 135
+      size: 1
+      base: 40
+      rules: ["Ambush", "Plaguebound", "Tough(6)", "Unpredictable"]
+      weapons:
+        - name: "Dual Mutated Claws"
+          range: 0
+          attacks: 6
+          rules: ["AP(1)"]
+  plague_apc:
+    extra_details: "armored personnel carrier covered in rust and organic corrosion, boxy angular hull with corroded armor plates, storm rifle turret on top dripping toxic residue, AP rounds, troop compartment sealed with rusted hatches, plague iconography etched into hull, tracks clogged with filth and organic matter, noxious fume exhausts, Fast movement, Impact(3), Tough(6), Transport(11)"
+    pose: "driving forward through toxic mist, turret aimed ahead, rust and decay visible on hull"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 190
+      size: 1
+      base: "100x60"
+      rules: ["Fast", "Impact(3)", "Plaguebound", "Tough(6)", "Transport(11)"]
+      weapons:
+        - name: "Storm Rifle"
+          range: 24
+          attacks: 3
+          rules: ["AP(1)"]
+  plague_heavy_tank:
+    extra_details: "super-heavy plague assault transport, massive corroded hull bristling with weapons, quad laser cannon turret with AP(3) and Deadly(3) as main armament, twin heavy machinegun sponson with AP, extremely thick corroded armor plates with organic growths, troop compartment for plague warriors, plague banners and trophy racks on turret, Fast despite massive size, Impact(9) crushing advance, Tough(18), Transport(11)"
+    pose: "rolling forward unstoppably, quad laser cannon aimed, plague banners fluttering, crushing everything"
+
+  # ==========================================================================
+  # VEHICLES (no Transport - need type: vehicle)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 815
+      size: 1
+      base: "120x92"
+      rules: ["Fast", "Impact(9)", "Plaguebound", "Tough(18)", "Transport(11)"]
+      weapons:
+        - name: "Quad Laser Cannon"
+          range: 36
+          attacks: 4
+          rules: ["AP(3)"]
+        - name: "Twin Heavy Machinegun"
+          range: 30
+          attacks: 6
+          rules: ["AP(1)"]
+  plague_drone:
+    extra_details: "hovering daemon engine drone, bloated organic body fused with corroded mechanical parts, anti-gravity repulsor plates encrusted with filth, meat grinder close combat weapon underneath a spinning mass of corroded blades with Rending capability, Protected by warp-rot energy field, Strider movement ignoring terrain, Fast attack craft, Impact(3), Tough(6)"
+    pose: "hovering menacingly, meat grinder spinning beneath, corroded hull dripping slime"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 170
+      size: 1
+      base: 40
+      rules: ["Fast", "Impact(3)", "Plaguebound", "Protected", "Strider", "Tough(6)"]
+      weapons:
+        - name: "Meat Grinder"
+          range: 0
+          attacks: 5
+          rules: ["Rending"]
+  plague_hauler:
+    extra_details: "walking daemon engine artillery beast, insectoid mechanical legs fused with daemonic flesh, missile pod on back firing AP(2) Deadly(3) Unstoppable rockets, heavy fusion rifle on one arm with AP(4) Deadly(3), daemonic teeth maw with AP snapping, stomping legs with AP crushing hooves, corroded carapace hull covered in rust and plague growths, Protected by warp-rot field, Fear(1), Tough(6)"
+    pose: "stomping forward on mechanical legs, missile pod elevated, fusion rifle aimed, maw snapping"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 255
+      size: 1
+      base: 40
+      rules: ["Fear(1)", "Plaguebound", "Protected", "Tough(6)"]
+      weapons:
+        - name: "Missile Pod"
+          range: 30
+          attacks: 1
+          rules: ["AP(2)"]
+        - name: "Heavy Fusion Rifle"
+          range: 18
+          attacks: 1
+          rules: ["AP(4)"]
+        - name: "Daemonic Teeth"
+          range: 0
+          attacks: 3
+          rules: ["AP(1)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  plague_tank:
+    extra_details: "main battle tank of the plague warband, corroded hull with twin laser cannon turret as main armament firing AP(3) Deadly(3) beams, twin heavy machinegun sponson with AP suppressive fire, hull encrusted with rust and organic decay, plague banners on aerial, tracks grinding through filth, Fast despite decay, Impact(6) crushing charge, Tough(12)"
+    pose: "hull-down firing position, twin laser cannon aimed, corroded hull glistening with toxic slime"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 495
+      size: 1
+      base: 50
+      rules: ["Fast", "Impact(6)", "Plaguebound", "Tough(12)"]
+      weapons:
+        - name: "Twin Laser Cannon"
+          range: 36
+          attacks: 2
+          rules: ["AP(3)"]
+        - name: "Twin Heavy Machinegun"
+          range: 30
+          attacks: 6
+          rules: ["AP(1)"]
+  plague_infernal_brute:
+    extra_details: "massive bipedal daemon engine walker, dreadnought-style armored sarcophagus body fused with daemonic essence, two brute hammers on arms dealing Blast(3) area damage, powerful stomping legs with AP crushing hooves, corroded and pitted armor plates with organic growths bursting through gaps, warp-fire glowing in eye slits, chains and plague censers hanging from chassis, Fear(2) terrifying presence, Tough(12)"
+    pose: "striding forward menacingly, brute hammers raised to crush, warp-fire glowing from within"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 280
+      size: 1
+      base: 50
+      rules: ["Fear(2)", "Plaguebound", "Tough(12)"]
+      weapons:
+        - name: "Brute Hammers"
+          range: 0
+          attacks: 2
+          rules: ["Blast(3)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  plague_mech_fiend:
+    extra_details: "quadruped daemon engine beast-walker, massive predatory mechanical body fused with daemonic flesh, fiend claws on forelimbs with Rending capability tearing through any armor, eight steel tails with AP lashing from rear as whip-like weapons, powerful stomping legs with AP, Regeneration constantly repairing damage with warp-flesh regrowth, corroded mechanical skeleton visible through patches of daemonic skin, Fear(2), Tough(12)"
+    pose: "predatory pounce stance, fiend claws extended, steel tails lashing behind, regenerating flesh visible"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 360
+      size: 1
+      base: 50
+      rules: ["Fear(2)", "Plaguebound", "Regeneration", "Tough(12)"]
+      weapons:
+        - name: "Fiend Claws"
+          range: 0
+          attacks: 4
+          rules: ["Rending"]
+        - name: "Steel Tails"
+          range: 0
+          attacks: 8
+          rules: ["AP(1)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  plague_crab_walker:
+    extra_details: "colossal daemon engine walker of titanic scale, crab-like mechanical body with six articulated legs, battle cannon on dorsal turret firing AP(2) Blast(3) shells, reaper cannon on side mount with Slam capability, massive crab fists on forelimbs with AP(3) crushing grip, crab flail tentacle weapon with 8 attacks lashing from underside, devastating stomp with AP(2), Regeneration via warp-flesh regrowth, entire chassis encrusted with centuries of corrosion and plague growths, Fear(3) apocalyptic presence, Tough(18)"
+    pose: "titanic crab walker advancing, battle cannon firing, crab fists snapping, flail tentacles lashing"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 705
+      size: 1
+      base: 100
+      rules: ["Fear(3)", "Plaguebound", "Regeneration", "Tough(18)"]
+      weapons:
+        - name: "Battle Cannon"
+          range: 30
+          attacks: 2
+          rules: ["AP(2)"]
+        - name: "Reaper Cannon"
+          range: 24
+          attacks: 4
+          rules: ["Slam"]
+        - name: "Crab Fists"
+          range: 0
+          attacks: 4
+          rules: ["AP(3)"]
+        - name: "Crab Flail"
+          range: 0
+          attacks: 8
+        - name: "Stomp"
+          range: 0
+          attacks: 6
+          rules: ["AP(2)"]
