@@ -1,0 +1,437 @@
+# =============================================================================
+# Goblin Reclaimers - Design Language
+# =============================================================================
+# Basiert auf: GF - Goblin Reclaimers v3.5.2
+# Scavenging goblin-like aliens who build ramshackle technology from salvage.
+# Emerged from underground after a nuclear blast wiped out human colonists,
+# now spreading across the stars seeking their lost human friends and new gadgets.
+# OPR-Aequivalent zu Gretchin/Grot-Fraktionen - scrappy, resourceful, swarm tactics.
+
+faction_name: "Goblin Reclaimers"
+
+aesthetic:
+  genre: "grimdark sci-fi comedy"
+  style: "ramshackle scavenger horde"
+  inspiration:
+    - "Junkyard scavenger goblins with cobbled-together technology"
+    - "Post-apocalyptic scrapyard aesthetics with oversized salvaged weapons"
+    - "Scrappy diminutive aliens wielding absurdly large improvised guns"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted Gretchin or Grot likenesses"
+    - "Clean or polished technology"
+    - "Cute or cartoon chibi proportions"
+    - "Standard fantasy goblin tropes (no pointy hats, no medieval)"
+
+colors:
+  primary: "dirty olive green skin with yellowish undertones"
+  secondary: "rusted orange-brown scrap metal armor and weapons"
+  accent: "hazard yellow warning stripes and glowing radioactive green energy"
+
+materials:
+  - "rough leathery green alien skin"
+  - "corroded riveted scrap metal plates and junk armor"
+  - "frayed wire, duct tape, and improvised welding joints"
+  - "oily rags, leather straps, and salvaged fabric"
+
+creature_type: "diminutive goblin alien scavenger"
+
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered creature, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on surface textures (scrap metal, green skin, junk armor)
+  - 28mm tabletop miniature aesthetic and proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# =============================================================================
+# Per-Unit Overrides - Alle Einheiten aus GF Goblin Reclaimers v3.5.2
+# =============================================================================
+unit_overrides:
+
+  # ==========================================================================
+  # HEROES
+  # ==========================================================================
+
+  death_walker_champ:
+    extra_details: "goblin hero piloting a large bipedal scrap walker mech suit, cobbled together from salvaged human technology and junk, rapid rocket launcher mounted on one arm firing AP(2) Deadly(3) rockets, heavy claw on opposite arm with six grinding servo-powered attacks and AP(1), cockpit visible with grinning goblin pilot inside behind cracked viewport, ramshackle welded armor plates with rivets and hazard stripes, exhaust pipes belching black smoke, wires and cables trailing from joints, Tough(6)"
+    pose: "walker mech stomping forward aggressively, rocket launcher arm aimed ahead, heavy claw raised to strike, goblin pilot visible cackling in cockpit"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 3
+      cost: 150
+      size: 1
+      base: 40
+      rules: ["Mischievous", "Tough(6)"]
+      weapons:
+        - name: "Rapid Rocket Launcher"
+          range: 18
+          attacks: 2
+          rules: ["AP(2)"]
+        - name: "Heavy Claw"
+          range: 0
+          attacks: 6
+          rules: ["AP(1)"]
+  killer_tank_champ:
+    extra_details: "goblin hero commanding a fast ramshackle tank built from salvaged vehicle parts, low-slung armored hull with mismatched scrap metal plates welded together, rapid rocket launcher turret on top firing AP(2) Deadly(3) rockets, goblin crew visible in open-topped fighting compartment, oversized engine strapped to the back with exhaust pipes, crude tracks or wheels cobbled from junk, red go-faster paint splashes, Fast movement, Tough(6)"
+    pose: "tank racing forward at speed, rocket launcher turret traversing, goblin commander standing in hatch waving a wrench triumphantly"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 3
+      cost: 130
+      size: 1
+      base: 40
+      rules: ["Fast", "Mischievous", "Tough(6)"]
+      weapons:
+        - name: "Rapid Rocket Launcher"
+          range: 18
+          attacks: 2
+          rules: ["AP(2)"]
+        - name: "Crew"
+          range: 0
+          attacks: 2
+  boss_champ:
+    extra_details: "larger goblin boss hero standing taller than regular goblins, better quality scrap armor with overlapping metal plates and shoulder guards, boss pistol in one hand firing dual shots, close combat weapon in other hand fashioned from salvaged pipe or blade, crude leadership insignia scratched into chest plate, pouches and stolen gadgets hanging from belt, goggles pushed up on forehead, confident swagger despite small stature, Tough(3)"
+    pose: "commanding pose standing on scrap pile, boss pistol aimed forward, combat weapon brandished overhead, shouting orders"
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 35
+      size: 1
+      base: 32
+      rules: ["Mischievous", "Tough(3)"]
+      weapons:
+        - name: "Boss Pistol"
+          range: 12
+          attacks: 2
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  champ:
+    extra_details: "slightly bigger goblin minor hero in cobbled-together scrap armor, boss pistol in one hand, close combat weapon fashioned from junk in other, crude rank markings scratched into armor plates, scavenged gadgets and trinkets hanging from straps, slightly more competent than regular goblins but still scrappy, Tough(3)"
+    pose: "aggressive stance pointing boss pistol forward, combat weapon raised, leading from behind the mob"
+
+  # ==========================================================================
+  # CORE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 6
+      cost: 20
+      size: 1
+      base: 32
+      rules: ["Mischievous", "Tough(3)"]
+      weapons:
+        - name: "Boss Pistol"
+          range: 12
+          attacks: 2
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  shooter_mob:
+    extra_details: "single diminutive goblin shooter armed with scrap guns cobbled together from salvaged weapon parts firing at 18 inch range, close combat weapons fashioned from junk pipes and blades, mismatched scrap armor plates strapped with wire and leather, oversized goggles and crude helmets, ammunition belts wrapped around tiny bodies, chaotic rabble advancing in disorganized mob"
+    pose: "disorganized firing line, scrap guns held in various awkward grips, some goblins aiming carefully while others fire wildly from the hip"
+
+    game_stats:
+      quality: 5
+      defense: 6
+      cost: 100
+      size: 10
+      base: 25
+      rules: ["Mischievous"]
+      weapons:
+        - name: "Scrap Guns"
+          range: 18
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  storm_mob:
+    extra_details: "single close assault goblin storm troops, pistols in one hand and close combat weapons with extra chopping attacks (A2) in other, aggressive melee-focused goblins with crude improvised blades, cleavers, and hammers fashioned from scrap, lighter armor for faster movement, feral grins and wild eyes, charging forward in a screaming green tide"
+    pose: "wild charge forward, pistols blazing, improvised melee weapons raised overhead, screaming war cries"
+
+    game_stats:
+      quality: 5
+      defense: 6
+      cost: 115
+      size: 10
+      base: 25
+      rules: ["Mischievous"]
+      weapons:
+        - name: "Pistols"
+          range: 12
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  freaks:
+    extra_details: "single mutated goblin with rending claws instead of hands, bizarre radiation-induced mutations from their irradiated homeworld, extra limbs, twisted bone growths, glowing eyes, misshapen bodies, rending claws with molecular-sharp edges that tear through armor on lucky strikes, Unpredictable Fighter ability making them erratic in melee, no ranged weapons - pure feral close combat mutants"
+    pose: "frenzied charge, rending claws slashing wildly, mutated bodies contorted in aggressive stances, feral expressions"
+
+    game_stats:
+      quality: 5
+      defense: 6
+      cost: 140
+      size: 10
+      base: 25
+      rules: ["Mischievous", "Unpredictable Fighter"]
+      weapons:
+        - name: "Rending Claws"
+          range: 0
+          attacks: 2
+          rules: ["Rending"]
+  commandos:
+    extra_details: "single goblin special operations scout in dark camouflage gear, scrap guns with crude suppressors and scopes, close combat knives, lighter stealth-oriented armor with dark cloth wrappings over scrap plates, night vision goggles and stolen optics equipment, Scout and Strider abilities for terrain infiltration, more disciplined and sneaky than regular goblins"
+    pose: "stealthy advancing crouch, scrap guns with scopes aimed forward, moving tactically through cover"
+
+    game_stats:
+      quality: 5
+      defense: 6
+      cost: 60
+      size: 5
+      base: 25
+      rules: ["Mischievous", "Scout", "Strider"]
+      weapons:
+        - name: "Scrap Guns"
+          range: 18
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  boss_mob:
+    extra_details: "single elite goblin bosses with better Quality 4+ and Defense 5+, boss pistols firing dual shots at 12 inch range, close combat weapons with extra attacks (A2), heavier overlapping scrap armor plates with crude insignia, stolen human officer equipment repurposed as status symbols, gold-painted shoulder pads and trophy racks, the biggest and meanest goblins in the warband"
+    pose: "swaggering advance in formation, boss pistols drawn, combat weapons ready, displaying status trophies"
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 115
+      size: 5
+      base: 25
+      rules: ["Mischievous"]
+      weapons:
+        - name: "Boss Pistols"
+          range: 12
+          attacks: 2
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  scout_bikers:
+    extra_details: "single goblin riding cobbled-together scrap bikes and motorized junk vehicles, pistols fired one-handed while steering with the other, close combat weapons strapped to handlebars, oversized engines with exposed pistons and belching exhaust, crude roll cages and scrap fairings, Fast and Scout movement abilities, reckless driving at dangerous speeds"
+    pose: "racing forward on ramshackle scrap bikes, pistols blazing, leaning into turns, engines smoking"
+
+  # ==========================================================================
+  # SPECIALISTS
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 6
+      cost: 70
+      size: 5
+      base: 25
+      rules: ["Fast", "Mischievous", "Scout"]
+      weapons:
+        - name: "Pistols"
+          range: 12
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  looters:
+    extra_details: "single goblin heavy weapon specialist carrying absurdly oversized heavy smasher rifles firing AP(4) Deadly(3) shots at 18 inch range, weapons are nearly as big as the goblins themselves requiring bracing stances, close combat weapons as sidearms, heavy weapon harnesses and ammunition backpacks, targeting goggles and stabilizer braces cobbled from junk, Relentless ability allowing them to move and shoot"
+    pose: "braced firing stance, enormous heavy smasher rifles propped on scrap bipods, tiny goblins struggling under weapon weight"
+
+    game_stats:
+      quality: 5
+      defense: 6
+      cost: 130
+      size: 3
+      base: 25
+      rules: ["Mischievous", "Relentless"]
+      weapons:
+        - name: "Heavy Smasher Rifles"
+          range: 18
+          attacks: 1
+          rules: ["AP(4)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  bug_riders:
+    extra_details: "single goblin riding large alien insects native to their homeworld, scrap guns and close combat weapons wielded by goblin riders, alien bugs have rending claws with armor-shredding mandibles, insectoid mounts with chitinous exoskeleton and multiple legs, Bounding movement leaping across terrain, Regeneration from bug biology, Strider ignoring difficult terrain, symbiotic bond between goblin and bug mount, Tough(3)"
+    pose: "alien bugs bounding forward with goblin riders clinging on, mandible claws spread, riders firing scrap guns from the saddle"
+
+  # ==========================================================================
+  # VEHICLES / WALKERS (no Transport - type: vehicle)
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 135
+      size: 3
+      base: 32
+      rules: ["Bounding", "Mischievous", "Regeneration", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Scrap Guns"
+          range: 18
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+        - name: "Rending Claws"
+          range: 0
+          attacks: 2
+          rules: ["Rending"]
+  killer_tanks:
+    extra_details: "single squadron of small ramshackle goblin tanks built from salvaged vehicle parts, low-slung hulls with mismatched scrap armor welded haphazardly, rocket launchers on turrets firing AP(2) Deadly(3) rockets at 18 inch range, goblin crew visible in open-topped compartments, oversized engines with exhaust stacks, crude tracks cobbled from junk treads, Fast movement from recklessly overpowered engines, Tough(3)"
+    pose: "tank squadron racing forward, rocket launcher turrets aimed, exhaust belching, goblin crews cheering"
+    type: vehicle
+
+    game_stats:
+      quality: 5
+      defense: 3
+      cost: 150
+      size: 3
+      base: 32
+      rules: ["Fast", "Mischievous", "Tough(3)"]
+      weapons:
+        - name: "Rocket Launchers"
+          range: 18
+          attacks: 1
+          rules: ["AP(2)"]
+        - name: "Crews"
+          range: 0
+          attacks: 1
+  death_walkers:
+    extra_details: "single squadron of bipedal scrap walker mechs piloted by goblins, cobbled together from salvaged human technology, rocket launchers mounted on one arm firing AP(2) Deadly(3) rockets at 18 inch range, mini-claws on opposite arm with three grinding servo-powered attacks and AP(1), cockpits with goblin pilots visible behind cracked viewports, welded armor plates, trailing wires and cables, unsteady gait from improvised servos, Tough(3)"
+    pose: "walkers advancing in formation, rocket arms aimed forward, mini-claws snapping, wobbling on improvised legs"
+    type: vehicle
+
+    game_stats:
+      quality: 5
+      defense: 3
+      cost: 165
+      size: 3
+      base: 32
+      rules: ["Mischievous", "Tough(3)"]
+      weapons:
+        - name: "Rocket Launchers"
+          range: 18
+          attacks: 1
+          rules: ["AP(2)"]
+        - name: "Mini-Claws"
+          range: 0
+          attacks: 3
+          rules: ["AP(1)"]
+  big_bug:
+    extra_details: "single large alien insect beast from the goblin homeworld, much bigger than bug rider mounts, two rocket launchers strapped to its carapace by goblin handlers firing AP(2) Deadly(3) rockets at 18 inch range, powerful stomp attacks with AP(1) from massive legs, thick chitinous exoskeleton armor (Defense 4+), Bounding leaps across the battlefield, Fear(1) terrifying alien predator, Regeneration healing wounds, Strider movement, goblin handler riding on top directing the beast, Tough(6)"
+    pose: "massive bug rearing up mid-bound, rocket launchers on carapace firing, stomp legs raised, goblin handler clinging to saddle harness"
+    type: vehicle
+
+    game_stats:
+      quality: 5
+      defense: 4
+      cost: 130
+      size: 1
+      base: 40
+      rules: ["Bounding", "Fear(1)", "Mischievous", "Regeneration", "Strider", "Tough(6)"]
+      weapons:
+        - name: "Rocket Launchers"
+          range: 18
+          attacks: 1
+          rules: ["AP(2)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  super_tank:
+    extra_details: "single massive goblin super-heavy battle tank, enormous ramshackle hull built from an entire salvaged human vehicle chassis, heavy lobber mortar on turret firing indirect Blast(6) bombardment at 24 inch range, sponson-flamers on hull sides firing Blast(3) reliable flames at 12 inch range, massively thick scrap armor plates (Defense 2+), oversized engine block dominating the rear hull, Fast despite enormous size from absurdly overpowered engine, Fearless crew bolted into their seats, Impact(6) crushing charge, multiple goblin crew visible in various hatches and gun positions, Tough(12)"
+    pose: "massive tank rolling forward unstoppably, mortar turret elevated for bombardment, sponson flamers blazing, goblin crew whooping from hatches"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 370
+      size: 1
+      base: 50
+      rules: ["Indirect)", "Fast", "Impact(6)", "Mischievous", "Tough(12)"]
+      weapons:
+        - name: "Heavy Lobber Mortar"
+          range: 24
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Sponson-Flamers"
+          range: 12
+          attacks: 2
+          rules: ["Blast(3)"]
+  artillery_gun:
+    extra_details: "single goblin artillery piece crewed by multiple goblin, heavy lobber mortar on a wheeled or tracked carriage firing indirect Blast(6) bombardment at 24 inch range, crew of three goblins loading, aiming, and firing the oversized weapon, sandbag or scrap metal gun shield, ammunition crates and shells stacked nearby, Artillery rule for stationary indirect fire, ramshackle construction with misaligned sights and crude elevation mechanism, Tough(3)"
+    pose: "artillery piece in firing position, mortar elevated for indirect fire, goblin crew frantically loading and adjusting aim"
+    type: vehicle
+
+  # ==========================================================================
+  # NAMED CHARACTERS
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 3
+      cost: 105
+      size: 1
+      base: 32
+      rules: ["Indirect)", "Artillery", "Mischievous", "Tough(3)"]
+      weapons:
+        - name: "Heavy Lobber Mortar"
+          range: 24
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Crew"
+          range: 0
+          attacks: 3
+  waskatsin:
+    extra_details: "unique named goblin hero irradiated beyond recognition, glowing with dangerous radioactive energy, rad-machinegun integrated weapon firing 6 shots at 24 inch range with Shred effect tearing through armor on failed blocks, ventslicer chainsaw melee weapon with AP(2) and Deadly(3), Dangerous Terrain Debuff aura causing nearby enemies to stumble and fall from radiation sickness, Retaliate(1) radioactive backlash damaging melee attackers, rad-glow emanating from body casting eerie green light, crude lead-lined armor failing to contain the radiation, scarred and mutated but still grinning, larger than regular goblins from mutation growth, Tough(6)"
+    pose: "striding forward through radioactive haze, rad-machinegun blazing in one hand, ventslicer chainsaw revving in other, eerie green glow emanating from body"
+
+    game_stats:
+      quality: 4
+      defense: 3
+      cost: 205
+      size: 1
+      base: 40
+      rules: ["Dangerous Terrain Debuff", "Mischievous", "Retaliate(1)", "Tough(6)"]
+      weapons:
+        - name: "Rad-Machinegun"
+          range: 24
+          attacks: 6
+          rules: ["Shred"]
+        - name: "Ventslicer Chainsaw"
+          range: 0
+          attacks: 2
+          rules: ["AP(2)", "Deadly(3)"]

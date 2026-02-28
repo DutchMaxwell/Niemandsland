@@ -1,0 +1,480 @@
+# =============================================================================
+# Machine Cult - Design Language
+# =============================================================================
+# Basiert auf: GF - Machine Cult v3.5.2
+# Tech-Priester und Cyborg-Krieger, die Technologie verehren.
+# Robentragende Cyborgs mit mechanischen Augmentierungen, Arc-Waffen und
+# wandelnden Kriegsmaschinen.
+
+faction_name: "Machine Cult"
+
+aesthetic:
+  genre: "grimdark sci-fi cybernetic"
+  style: "tech-priest cyborg warriors"
+  inspiration:
+    - "Hooded cyborg tech-priests with mechanical augmentations"
+    - "Industrial steampunk-gothic machinery worship"
+    - "Da Vinci mechanical designs meets grimdark cybernetics"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted Adeptus Mechanicus iconography"
+    - "Clean or sleek high-tech aesthetics"
+    - "Fully organic or unaugmented humans"
+
+colors:
+  primary: "dark crimson red robes and cloaks"
+  secondary: "tarnished bronze and copper mechanical parts"
+  accent: "pale green arc energy and optic lenses"
+
+materials:
+  - "heavy red tech-priest robes over mechanical bodies"
+  - "tarnished bronze and copper cybernetic augmentations"
+  - "crackling arc weapon coils and tesla nodes"
+  - "exposed gears, pistons and data-cables"
+
+creature_type: "cyborg tech-priest warrior"
+
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered figure, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on surface textures (mechanical parts, robes, arc energy, cables)
+  - 28mm tabletop miniature aesthetic and proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# =============================================================================
+# Per-Unit Overrides - Alle Einheiten aus GF Machine Cult v3.5.2
+# =============================================================================
+unit_overrides:
+
+  # ==========================================================================
+  # HEROES
+  # ==========================================================================
+
+  high_priest:
+    extra_details: "supreme tech-priest leader draped in heavy dark crimson robes layered over extensive bronze and copper cybernetic augmentations, revolver pistol integrated into one mechanical arm firing AP(1) shots at 12 inch range, massive axe-halberd in the other hand with AP(4) crackling with pale green arc energy, multiple mechadendrite tendrils emerging from beneath robes, glowing green optic lenses replacing eyes, ornate cog-tooth iconography on hood and chest plate, incense burners trailing machine-fog, data-cables connecting to a dorsal cogitator unit, Hero, Machine-Fog, Tough(3)"
+    pose: "commanding stance with axe-halberd raised, revolver arm extended to the side, mechadendrites splayed behind, machine-fog swirling at feet"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 80
+      size: 1
+      base: 32
+      rules: ["Machine-Fog", "Tough(3)"]
+      weapons:
+        - name: "Revolver"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Axe-Halberd"
+          range: 0
+          attacks: 3
+          rules: ["AP(4)"]
+  sect_leader:
+    extra_details: "agile sect commander in crimson half-robes over a lighter cybernetic frame optimized for mobility, leader flechette blaster in one hand firing rapid bursts at 9 inch range (A3), leader taser sword in the other hand crackling with surge energy generating extra hits on critical rolls, exposed mechanical legs with strider adaptations for rough terrain, green optic array visor covering upper face, flexible data-cables and power conduits along arms, Hero, Machine-Fog, Strider, Tough(3)"
+    pose: "dynamic combat stance mid-stride, flechette blaster aimed forward, taser sword crackling with arc energy held ready"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 60
+      size: 1
+      base: 32
+      rules: ["Machine-Fog", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Leader F-Blaster"
+          range: 9
+          attacks: 3
+        - name: "Leader Taser Sword"
+          range: 0
+          attacks: 3
+          rules: ["Surge"]
+  cult_leader:
+    extra_details: "veteran cult commander in weathered crimson robes over sturdy cybernetic frame, leader rad-pistol in one hand firing shred-effect rad rounds at 9 inch range (A2), tech-sword in the other hand, exposed mechanical joints and pistons at knees and elbows, strider-adapted legs for terrain traversal, green optic monocle on one side with data-feed cables trailing to backpack cogitator, cog-tooth pendant and rank insignia on chest, Hero, Machine-Fog, Strider, Tough(3)"
+    pose: "cautious advancing pose, rad-pistol aimed forward, tech-sword at guard position, robes billowing"
+
+  # ==========================================================================
+  # CORE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 45
+      size: 1
+      base: 32
+      rules: ["Machine-Fog", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Leader R-Pistol"
+          range: 9
+          attacks: 2
+          rules: ["Shred"]
+        - name: "Tech-Sword"
+          range: 0
+          attacks: 2
+  cult_rangers:
+    extra_details: "single ranging scout in tattered dark crimson cloaks over lean cybernetic bodies, rad-fusils held in both hands firing shred-effect rounds at 18 inch range, close combat weapons as sidearms, strider-adapted mechanical legs for long-range patrols across hostile terrain, green optic targeting lenses replacing one or both eyes, data-cables connecting to backpack sensor arrays, varied levels of augmentation from partially human faces to full skull-plate replacements, Machine-Fog, Strider"
+    pose: "advancing patrol formation, rad-fusils raised and scanning, cloaks trailing behind, spread out in skirmish line"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 95
+      size: 5
+      base: 25
+      rules: ["Machine-Fog", "Strider"]
+      weapons:
+        - name: "R-Fusils"
+          range: 18
+          attacks: 1
+          rules: ["Shred"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  shock_priests:
+    extra_details: "single fanatical melee combat priest in ragged crimson vestments over heavily augmented bodies, shock staffs in both hands crackling with rending arc energy (A2), furious berserker combat programming driving them forward, melee slayer protocols granting AP(+2) against tough targets, regeneration nanites visible as green glow beneath skin grafts, minimal ranged capability but devastating in close quarters, exposed mechanical spines and piston-driven limbs, Machine-Fog, Furious, Melee Slayer, Regeneration"
+    pose: "charging forward in ecstatic fury, shock staffs raised overhead crackling with rending energy, robes flying"
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 140
+      size: 5
+      base: 25
+      rules: ["Furious", "Machine-Fog", "Melee Slayer", "Regeneration"]
+      weapons:
+        - name: "Shock Staffs"
+          range: 0
+          attacks: 2
+          rules: ["Rending"]
+  sect_stalkers:
+    extra_details: "single elite melee assassin in dark crimson body-wraps over sleek cybernetic frames built for speed, dual sonic blades in both hands with AP(1) rending energy that hums with lethal vibration, fast movement augmentations with piston-driven legs and stabilizer gyroscopes, furious assault protocols, strider-adapted feet, green optic slits in featureless face plates, minimal bulk for maximum agility, Machine-Fog, Fast, Furious, Strider"
+    pose: "blurring charge formation, dual sonic blades crossed in front, lithe cybernetic bodies leaning into sprint"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 180
+      size: 5
+      base: 25
+      rules: ["Fast", "Furious", "Machine-Fog", "Strider"]
+      weapons:
+        - name: "Dual S-Blades"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  sect_infiltrators:
+    extra_details: "single covert operations in hooded dark crimson infiltration cloaks over stealth-augmented cybernetic bodies, flechette blasters firing rapid bursts at 9 inch range (A2), taser swords in melee crackling with surge energy generating extra hits, grounded stealth camouflage systems distorting their silhouettes near terrain, scout advance deployment capability, strider-adapted legs, green optic lenses barely visible beneath deep hoods, Machine-Fog, Grounded Stealth, Scout, Strider"
+    pose: "stealthy advance from cover, flechette blasters at ready, taser swords sheathed at hips, deep hoods shadowing faces"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 165
+      size: 5
+      base: 25
+      rules: ["Grounded Stealth", "Machine-Fog", "Scout", "Strider"]
+      weapons:
+        - name: "F-Blasters"
+          range: 9
+          attacks: 2
+        - name: "Taser Swords"
+          range: 0
+          attacks: 2
+          rules: ["Surge"]
+  sky_stalkers:
+    extra_details: "single airborne assault warrior in crimson jumpsuits over winged cybernetic frames with integrated flight systems, flechette carbines firing at 18 inch range (A2), close combat weapons as sidearms, large mechanical wings or jump-pack turbines extending from backs for flying movement, ambush deployment from high altitude, green optic targeting visors, flexible data-cables trailing from wing mechanisms, Machine-Fog, Ambush, Flying"
+    pose: "descending from above in attack formation, flechette carbines aimed downward, mechanical wings spread wide"
+
+  # ==========================================================================
+  # HEAVY INFANTRY (Tough 3)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 165
+      size: 5
+      base: 25
+      rules: ["Ambush", "Flying", "Machine-Fog"]
+      weapons:
+        - name: "F-Carbines"
+          range: 18
+          attacks: 2
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  breacher_cyborgs:
+    extra_details: "single heavy cyborg warrior in reinforced crimson armor-robes over massive heavily augmented frames (Defense 3+), heavy arc guns mounted on shoulder braces firing rending energy at 36 inch range (A3), massive cyborg claws on both arms for melee combat (A3), slow but implacable advance with piston-driven legs barely visible beneath heavy robes, extensive mechanical augmentation leaving little organic tissue visible, green arc energy crackling along weapon coils, Machine-Fog, Slow, Tough(3)"
+    pose: "slow implacable advance in line formation, heavy arc guns braced and firing, cyborg claws flexing"
+
+    game_stats:
+      quality: 4
+      defense: 3
+      cost: 230
+      size: 3
+      base: 32
+      rules: ["Machine-Fog", "Slow", "Tough(3)"]
+      weapons:
+        - name: "Heavy Arc Guns"
+          range: 36
+          attacks: 3
+          rules: ["Rending"]
+        - name: "Cyborg Claws"
+          range: 0
+          attacks: 3
+  destroyer_cyborgs:
+    extra_details: "single heavy weapons cyborg warrior in crimson robes over bulky augmented frames, graviton cannons mounted on arm braces firing AP(2) blast(3) gravity-warping shots at 24 inch range, massive cyborg claws for melee defense (A3), relentless advance programming never stopping their fire, slow movement compensated by devastating ranged output, extensive mechanical augmentation with exposed gears and pistons, Machine-Fog, Relentless, Slow, Tough(3)"
+    pose: "braced firing positions, graviton cannons charging with visible gravity distortion, cyborg claws ready"
+
+  # ==========================================================================
+  # CAVALRY (Tough 3)
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 255
+      size: 3
+      base: 32
+      rules: ["Machine-Fog", "Relentless", "Slow", "Tough(3)"]
+      weapons:
+        - name: "G-Cannons"
+          range: 24
+          attacks: 1
+          rules: ["AP(2)"]
+        - name: "Cyborg Claws"
+          range: 0
+          attacks: 3
+  raider_cavalry:
+    extra_details: "single mechanical cavalry of cyborg rider mounted on fast mechanical steeds with spider-like or horse-like mechanical legs, twin phosphor pistols firing wreck-effect incendiary rounds at 9 inch range (A4), close combat weapons for melee, mechanical mounts with strider-adapted legs and fast movement systems, scout advance deployment, riders in crimson half-cloaks over augmented torsos, green optic lenses on both rider and mount, Machine-Fog, Fast, Scout, Strider, Tough(3)"
+    pose: "fast scout cavalry charge, twin phosphor pistols blazing from both hands, mechanical steeds galloping"
+
+  # ==========================================================================
+  # TRANSPORTS
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 180
+      size: 3
+      base: 32
+      rules: ["Fast", "Machine-Fog", "Scout", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Twin P-Pistols"
+          range: 9
+          attacks: 4
+          rules: ["Wreck"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  landing_craft:
+    extra_details: "armored troop transport vehicle in dark crimson hull plating with bronze mechanical detail, twin phosphor machinegun turret firing wreck-effect rounds at 30 inch range (A4), fast movement hover or tracked propulsion system, impact(3) reinforced ramming prow, strider-adapted for rough terrain, large transport bay carrying up to 11 models, machine-fog generators mounted on hull, green optic sensor arrays on forward hull, Transport(11), Machine-Fog, Tough(6)"
+    pose: "advancing at speed with transport bay doors visible, twin phosphor machinegun turret tracking, machine-fog billowing"
+
+  # ==========================================================================
+  # WALKERS (Tough 6)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 220
+      size: 1
+      base: "100x60"
+      rules: ["Fast", "Impact(3)", "Machine-Fog", "Strider", "Tough(6)", "Transport(11)"]
+      weapons:
+        - name: "Twin P-Machinegun"
+          range: 30
+          attacks: 4
+          rules: ["Wreck"]
+  dragoon_walker:
+    extra_details: "tall bipedal chicken-walker with a cyborg rider mounted in an open cockpit, taser lance as primary weapon with AP(1) surge and thrust effects for devastating charge attacks (A4), stomp attacks from heavy mechanical legs with AP(1) (A2), fast movement on long striding mechanical legs, fear-inspiring towering silhouette, strider-adapted legs, crimson cowling over cockpit with bronze mechanical joints, green arc energy crackling along taser lance, rider in crimson robes, Machine-Fog, Fast, Fear(1), Strider, Tough(6)"
+    pose: "charging forward at full stride on long mechanical legs, taser lance lowered for a thrust attack, rider hunched in cockpit"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 190
+      size: 1
+      base: 40
+      rules: ["Fast", "Fear(1)", "Machine-Fog", "Strider", "Tough(6)"]
+      weapons:
+        - name: "Stomp"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Taser Lance"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  combat_robot:
+    extra_details: "massive bipedal combat automaton in crimson and bronze heavy armor plating, heavy flamer mounted on one arm firing AP(1) blast(3) reliable incendiary bursts at 12 inch range, dual energy fists on the other arm with AP(4) crushing power (A4), stomp attacks from heavy feet with AP(1) (A2), fear-inspiring hulking robotic presence, fearless automaton programming, no organic components visible, heavy bronze and copper chassis with green optic sensor strip, Machine-Fog, Fear(1), Fearless, Tough(6)"
+    pose: "lumbering forward with heavy flamer arm raised and firing, dual energy fists clenched and crackling, heavy stomp mid-stride"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 210
+      size: 1
+      base: 40
+      rules: ["Fear(1)", "Machine-Fog", "Tough(6)"]
+      weapons:
+        - name: "Heavy Flamer"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Dual Energy Fists"
+          range: 0
+          attacks: 4
+          rules: ["AP(4)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  iron_walker:
+    extra_details: "agile bipedal war walker with enclosed cockpit, twin laser cannon mounted on top turret firing AP(3) deadly(3) shots at 36 inch range (A2), stomp attacks from articulated mechanical legs with AP(1) (A2), fast movement on long striding legs, fear-inspiring silhouette, strider-adapted for all terrain, crimson hull plating over bronze mechanical frame, green optic targeting array on turret, Machine-Fog, Fast, Fear(1), Strider, Tough(6)"
+    pose: "striding forward at speed, twin laser cannon turret tracking and firing green energy beams, mechanical legs mid-stride"
+    type: vehicle
+
+  # ==========================================================================
+  # HEAVY VEHICLES (Tough 12)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 280
+      size: 1
+      base: 40
+      rules: ["Fast", "Fear(1)", "Machine-Fog", "Strider", "Tough(6)"]
+      weapons:
+        - name: "Twin Laser Cannon"
+          range: 36
+          attacks: 2
+          rules: ["AP(3)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  attack_craft:
+    extra_details: "massive multi-legged heavy assault walker in dark crimson armor plating over bronze mechanical frame, energy cannon primary weapon firing blast(3) indirect shots at 30 inch range (A2), triple phosphor machinegun secondary battery firing wreck-effect rounds at 30 inch range (A6), impact(6) devastating charge capability from sheer mass, fast movement on multiple mechanical legs, strider-adapted, towering war engine inspiring fear, green optic sensor cluster on armored head, Machine-Fog, Fast, Impact(6), Strider, Tough(12)"
+    pose: "massive war engine striding forward on multiple legs, energy cannon firing indirect arc, triple phosphor machineguns blazing"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 455
+      size: 1
+      base: 50
+      rules: ["Fast", "Impact(6)", "Machine-Fog", "Strider", "Tough(12)"]
+      weapons:
+        - name: "Energy Cannon"
+          range: 30
+          attacks: 2
+          rules: ["Blast(3)"]
+        - name: "Triple P-Machinegun"
+          range: 30
+          attacks: 6
+          rules: ["Wreck"]
+  crawler_tank:
+    extra_details: "enormous tracked or multi-legged tank in dark crimson armor with bronze mechanical detail, eraser beam primary weapon firing AP(1) blast(3) devastating energy at 36 inch range, twin phosphor machinegun sponson turret firing wreck-effect rounds at 30 inch range (A4), crushing legs with AP(2) trampling attacks (A2), stomp attacks with AP(1) (A4), strider-adapted for all terrain, massive armored hull bristling with weapons and sensor arrays, green optic arrays and arc energy conduits visible, Machine-Fog, Strider, Tough(12)"
+    pose: "grinding forward on tracks or legs, eraser beam charging in primary turret, phosphor machinegun sponson sweeping, crushing legs churning terrain"
+    type: vehicle
+
+  # ==========================================================================
+  # AIRCRAFT
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 415
+      size: 1
+      base: 50
+      rules: ["Machine-Fog", "Strider", "Tough(12)"]
+      weapons:
+        - name: "Eraser Beam"
+          range: 36
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Twin P-Machinegun"
+          range: 30
+          attacks: 4
+          rules: ["Wreck"]
+        - name: "Crushing Legs"
+          range: 0
+          attacks: 2
+          rules: ["AP(2)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  arch_fighter:
+    extra_details: "sleek attack aircraft in dark crimson fuselage with bronze mechanical engine cowlings, twin phosphor machinegun nose-mounted firing wreck-effect rounds at 30 inch range (A4), bomb rack underslung dropping AP(1) blast(3) strafing ordnance on ground targets, aircraft high-speed attack runs, green optic targeting array in cockpit canopy, swept-back wings with mechanical joints, exhaust trails of machine-fog, Machine-Fog, Aircraft, Tough(6)"
+    pose: "diving attack run, twin phosphor machineguns blazing from nose, bomb rack visible under wings"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 280
+      size: 1
+      base: "120x92"
+      rules: ["Aircraft", "Machine-Fog", "Tough(6)"]
+      weapons:
+        - name: "Twin P-Machinegun"
+          range: 30
+          attacks: 4
+          rules: ["Wreck"]
+        - name: "Bomb Rack"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  arch_gunship:
+    extra_details: "heavy gunship aircraft in dark crimson armored fuselage with bronze mechanical detail, phosphor machinegun forward-mounted firing wreck-effect rounds at 30 inch range (A2), rear laser cannon turret firing AP(3) deadly(3) shots at 24 inch range (A2), twin phosphor blaster wing-mounted firing wreck-effect volleys at 18 inch range (A4), aircraft heavy fire support platform, heavily armed and armored, green optic sensor arrays, broad wings with mechanical joints, Machine-Fog, Aircraft, Tough(6)"
+    pose: "level gunship approach, phosphor machinegun firing forward, rear laser cannon tracking, twin phosphor blasters on wings"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 390
+      size: 1
+      base: "120x92"
+      rules: ["Aircraft", "Machine-Fog", "Tough(6)"]
+      weapons:
+        - name: "P-Machinegun"
+          range: 30
+          attacks: 2
+          rules: ["Wreck"]
+        - name: "Rear Laser Cannon"
+          range: 24
+          attacks: 2
+          rules: ["AP(3)"]
+        - name: "Twin P-Blaster"
+          range: 18
+          attacks: 4
+          rules: ["Wreck"]
