@@ -1,0 +1,402 @@
+# =============================================================================
+# Knight Brothers - Design Language
+# =============================================================================
+# Psychische Krieger-Ritter in Silberrstung, Elite-Daemonjaeger mit Kraftwaffen.
+# OPR-Aequivalent zu Grey Knights.
+# Basiert auf: GF - Knight Brothers v3.5.2
+
+faction_name: "Knight Brothers"
+
+aesthetic:
+  genre: "grimdark sci-fi psychic military"
+  style: "psychic knight templar"
+  inspiration:
+    - "Psychic knight templars in silver power armor"
+    - "Daemon-hunting paladins with force weapons"
+    - "Inquisitorial elite strike force"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted Grey Knights iconography"
+    - "Non-psychic mundane aesthetics"
+
+colors:
+  primary: "polished silver power armor"
+  secondary: "deep blue force weapon glow and cloth"
+  accent: "gold psychic inscriptions and ward runes"
+
+materials:
+  - "polished silver ceramite with psychic ward engravings"
+  - "glowing blue force weapons and psychic conduits"
+  - "golden runic inscriptions across armor plates"
+  - "deep blue tabards with arcane sigils"
+
+creature_type: "psychic warrior knight in silver power armor"
+
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered figure, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on armor surface textures (psychic runes, force weapon glow, silver polish)
+  - 28mm tabletop miniature aesthetic and heroic proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# =============================================================================
+# Per-Unit Overrides - Alle Einheiten aus GF Knight Brothers v3.5.2
+# =============================================================================
+unit_overrides:
+
+  # ==========================================================================
+  # HEROES
+  # ==========================================================================
+
+  knight_master_destroyer:
+    extra_details: "towering supreme hero in ornate silver power armor covered head to toe in golden psychic ward runes, massive close combat weapon crackling with blue psychic energy in four devastating attack arcs, combat shield projecting a shimmering psychic barrier, deep strike teleportation capability via psychic translocation, shielded defense against mundane attacks, Tough(6) extreme resilience, tall ornate helmet with psychic hood projecting ethereal blue glow, the most powerful psychic warrior in the brotherhood, Knightborn anti-spell resistance visible as runic aura"
+    pose: "imperious advancing pose, massive force weapon raised for a devastating psychic-charged cleave, combat shield shimmering with ward energy on off-hand"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 135
+      size: 1
+      base: 40
+      rules: ["Ambush", "Knightborn", "Shielded", "Tough(6)"]
+      weapons:
+        - name: "CCW"
+          range: 0
+          attacks: 4
+  knight_veteran_master_brother:
+    extra_details: "senior veteran hero commander in richly decorated silver power armor with extensive gold psychic inscriptions covering every plate, combat shield on one arm with ward runes, close combat weapon channeling psychic force, versatile attack fighting style switching between armor-piercing and precision modes, deep blue tabard with golden sigils beneath chest plate, ornate psychic hood with crystal focus nodes, veteran battle scars and daemon-kill tallies etched into pauldrons, shielded defense, Tough(3)"
+    pose: "dynamic combat stance, force weapon held in two-handed grip transitioning between attack modes, psychic energy crackling along blade"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 65
+      size: 1
+      base: 32
+      rules: ["Knightborn", "Shielded", "Tough(3)", "Versatile Attack"]
+      weapons:
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  knight_master_brother:
+    extra_details: "hero field commander in polished silver power armor with gold psychic ward trim, gravity pistol with reality-warping smash capability in one hand, close combat weapon channeling psychic force in the other, deep blue half-cape with arcane sigils, psychic hood with crystal matrix on helmet, purity seals and daemon-ward scrolls hanging from belt, golden chapter insignia on left pauldron, Tough(3)"
+    pose: "commanding stance, gravity pistol aimed forward with distortion shimmer at barrel, force weapon held across body in guard position"
+
+  # ==========================================================================
+  # CORE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 60
+      size: 1
+      base: 32
+      rules: ["Knightborn", "Tough(3)"]
+      weapons:
+        - name: "Gravity Pistol"
+          range: 9
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  knight_battle_brothers:
+    extra_details: "single psychic warrior in polished silver power armor, armed with assault storm rifle with AP capability and close combat weapon, golden psychic ward runes inscribed across chest plates and pauldrons, deep blue tabards with arcane sigils, helmets with glowing blue psychic hood vents, the backbone of the knight brotherhood, each warrior a trained psyker, Knightborn anti-spell resistance"
+    pose: "tactical advance formation, lead warrior firing assault storm rifle, flanking brothers with weapons ready, psychic energy flickering across squad"
+
+  # ==========================================================================
+  # ELITES
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 230
+      size: 5
+      base: 25
+      rules: ["Knightborn"]
+      weapons:
+        - name: "Assault Storm Rifles"
+          range: 24
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  knight_veteran_brothers:
+    extra_details: "three-model elite veteran squad in ornately decorated silver power armor with extensive golden ward engravings, incinerators with purifying psychic fire and blast capability, close combat weapons, versatile attack adaptation allowing flexible combat modes, more ornate psychic hoods than standard brothers with multiple crystal focus points, veteran daemon-kill honors across armor, deep blue cloaks with golden trim, Knightborn"
+    pose: "disciplined advance formation, incinerators raised with blue psychic flames licking at barrels, veteran confidence in every step"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 175
+      size: 3
+      base: 25
+      rules: ["Knightborn", "Versatile Attack"]
+      weapons:
+        - name: "Incinerators"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  knight_purgation_brothers:
+    extra_details: "three-model heavy fire support squad in silver power armor with reinforced psychic conduits across armor plates, incinerators with enhanced blast capability for area purification, heavier close combat weapons with dual attack profile, relentless fire doctrine markings, psychic targeting arrays integrated into helmets, golden ward runes focused around weapon mounting points, deep blue tabards, ammunition feeds connected to psychic power cells on backpacks"
+    pose: "braced firing line, incinerators unleashing torrents of psychic flame, relentless sustained fire stance"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 175
+      size: 3
+      base: 25
+      rules: ["Knightborn", "Relentless"]
+      weapons:
+        - name: "Incinerators"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  knight_destroyers:
+    extra_details: "three-model elite terminator-equivalent assault squad in heavy silver power armor with layered psychic ward plating, storm rifles with high rate of fire and AP capability, heavier close combat weapons, deep strike teleportation via psychic translocation, ambush specialists materializing from the warp, Tough(3) enhanced resilience, more massive armor profile than standard brothers, golden psychic inscriptions glowing with power, psychic hoods with multiple focusing crystals, deep blue heraldry on shoulder guards"
+    pose: "emerging from psychic teleportation, storm rifles blazing, force weapons crackling with blue energy, translocation afterglow surrounding squad"
+
+  # ==========================================================================
+  # VEHICLES (Transport - auto-detected)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 305
+      size: 3
+      base: 32
+      rules: ["Ambush", "Knightborn", "Tough(3)"]
+      weapons:
+        - name: "Storm Rifles"
+          range: 24
+          attacks: 3
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  knight_apc:
+    extra_details: "silver-armored psychic assault transport, angular hull covered in golden ward runes and protective psychic sigils, storm rifle turret on roof, fast assault vehicle with impact ram on front hull, troop compartment for eleven psychic warriors, blue-glowing psychic conduit lines running along hull, deep blue chapter banners, shimmering ward field visible around hull, Tough(6), Transport(11)"
+    pose: "fast advance, turret aimed forward, assault ramp ready to deploy, ward runes glowing"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 210
+      size: 1
+      base: "100x60"
+      rules: ["Fast", "Impact(3)", "Knightborn", "Tough(6)", "Transport(11)"]
+      weapons:
+        - name: "Storm Rifle"
+          range: 24
+          attacks: 3
+          rules: ["AP(1)"]
+  knight_attack_apc:
+    extra_details: "silver-armored close support transport variant, twin heavy flamer turret spewing purifying psychic fire, angular hull with golden ward inscriptions, smaller troop bay for six warriors, fast assault configuration with impact ram, blue psychic conduit lines along hull panels, deep blue tabard banners on sides, more aggressive forward profile than standard APC, Tough(6), Transport(6)"
+    pose: "aggressive advance, twin heavy flamers unleashing purifying fire, impact ram forward"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 210
+      size: 1
+      base: "100x60"
+      rules: ["Reliable)", "Fast", "Impact(3)", "Knightborn", "Tough(6)", "Transport(6)"]
+      weapons:
+        - name: "Twin Heavy Flamer"
+          range: 12
+          attacks: 2
+          rules: ["AP(1)"]
+  knight_heavy_tank:
+    extra_details: "massive silver-armored super-heavy battle tank, twin heavy machinegun sponson and devastating twin heavy rifle array turret with twelve-barrel volley capability, enormously thick psychic-warded armor plating covered in golden rune inscriptions, fast for its enormous size, devastating impact ram on front, troop transport bay for eleven warriors, command cupola with psychic antenna array, deep blue banners and chapter heraldry, blue psychic conduit network visible across hull, the most powerful armored vehicle in the knight brotherhood, Tough(18), Transport(11)"
+    pose: "rolling advance, twin heavy rifle array turret tracking target, twin heavy machinegun sponson sweeping, dominating battlefield presence"
+
+  # ==========================================================================
+  # VEHICLES (no Transport) - type: vehicle
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 750
+      size: 1
+      base: "120x92"
+      rules: ["Fast", "Impact(9)", "Knightborn", "Tough(18)", "Transport(11)"]
+      weapons:
+        - name: "Twin Heavy Machinegun"
+          range: 30
+          attacks: 6
+          rules: ["AP(1)"]
+        - name: "Twin Heavy Rifle Array"
+          range: 24
+          attacks: 12
+          rules: ["AP(1)"]
+  knight_combat_walker:
+    extra_details: "massive bipedal silver war walker covered in golden psychic ward runes, twin walker fists with AP(4) crushing power channeling psychic energy, heavy stomping feet, Fear(2) terrifying psychic presence radiating from sarcophagus cockpit, Tough(12) extreme durability, pilot entombed in warded silver sarcophagus, psychic conduits running from cockpit to fists glowing blue, deep blue honor scrolls hanging from chassis, golden inscriptions covering every armor panel, the walking embodiment of psychic fury"
+    pose: "advancing menace, both walker fists raised and crackling with blue psychic force, heavy stomp mid-stride"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 375
+      size: 1
+      base: 50
+      rules: ["Fear(2)", "Knightborn", "Tough(12)"]
+      weapons:
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+        - name: "Walker Fists"
+          range: 0
+          attacks: 4
+          rules: ["AP(4)"]
+  knight_veteran_combat_walker:
+    extra_details: "massive bipedal silver war walker with enhanced psychic conduits and more ornate golden ward inscriptions than standard variant, twin walker fists channeling devastating psychic force, heavy stomping feet, versatile attack systems allowing adaptive combat switching between armor-piercing and precision modes, Fear(2) terrifying aura, Tough(12), veteran campaign honors etched across every surface, more elaborate psychic hood array on sarcophagus, blue energy crackling visibly across entire chassis, the most experienced and deadly walker in the brotherhood"
+    pose: "aggressive combat stride, walker fists crackling with intensified psychic energy, veteran kill tallies visible on chassis"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 430
+      size: 1
+      base: 50
+      rules: ["Fear(2)", "Knightborn", "Tough(12)", "Versatile Attack"]
+      weapons:
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+        - name: "Walker Fists"
+          range: 0
+          attacks: 4
+          rules: ["AP(4)"]
+  knight_artillery_gun:
+    extra_details: "silver-armored static artillery emplacement with crew of psychic warriors, heavy gatling cannon with six-barrel rotary mechanism and AP capability, crew armed with close combat weapons for defense, artillery designation equipment with psychic targeting enhancement, golden ward runes on gun shield and mounting, deep blue ammunition crates, psychic conduit feeds enhancing targeting accuracy, stabilizer legs deployed for firing, Tough(3)"
+    pose: "firing position, heavy gatling cannon elevated and spinning, crew operating psychic targeting arrays"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 165
+      size: 1
+      base: 32
+      rules: ["Artillery", "Knightborn", "Tough(3)"]
+      weapons:
+        - name: "Heavy Gatling Cannon"
+          range: 24
+          attacks: 6
+          rules: ["AP(1)"]
+        - name: "Crew"
+          range: 0
+          attacks: 3
+  knight_nemesis_walker:
+    extra_details: "colossal silver war engine towering above all other units, the ultimate psychic war machine of the knight brotherhood, twin super-heavy incinerators spewing massive torrents of psychic purifying fire, twin nemesis fists with AP(4) devastating crushing power, enormous stomping feet with AP(2), built-in Caster(2) psychic ability channeled through crystal matrix array on head, ambush deep-strike teleportation capability for its enormous mass, Fear(3) supreme psychic terror aura, Tough(18) near-indestructible warded armor, entire chassis covered in golden psychic inscriptions glowing with power, massive psychic hood array crowning the head section, blue energy arcing between conduit nodes across body, deep blue chapter banners draped from shoulders"
+    pose: "apocalyptic advance, super-heavy incinerators blazing psychic fire, nemesis fists crackling with devastating energy, psychic aura visibly distorting air around chassis"
+    type: vehicle
+
+  # ==========================================================================
+  # AIRCRAFT
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 820
+      size: 1
+      base: 100
+      rules: ["Reliable)", "Ambush", "Caster(2)", "Fear(3)", "Knightborn", "Tough(18)"]
+      weapons:
+        - name: "Super-Heavy Incinerators"
+          range: 18
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Nemesis Fists"
+          range: 0
+          attacks: 4
+          rules: ["AP(4)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 6
+          rules: ["AP(2)"]
+  knight_light_gunship:
+    extra_details: "sleek silver-armored attack gunship, minigun with four-barrel rotary mechanism and AP capability, twin typhoon missiles with unstoppable armor-piercing warheads on wing pylons, aerodynamic fuselage covered in golden psychic ward runes, blue-glowing psychic engine exhausts, swept-back wings with deep blue chapter markings, cockpit with psychic targeting array, fast and agile air superiority craft, Tough(6)"
+    pose: "banking attack run, minigun blazing, typhoon missiles locked on target, engines trailing blue psychic exhaust"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 345
+      size: 1
+      base: "120x92"
+      rules: ["Unstoppable)", "Aircraft", "Knightborn", "Tough(6)"]
+      weapons:
+        - name: "Minigun"
+          range: 24
+          attacks: 4
+          rules: ["AP(1)"]
+        - name: "Twin Typhoon Missiles"
+          range: 24
+          attacks: 4
+          rules: ["AP(2)"]
+  knight_heavy_gunship:
+    extra_details: "massive silver-armored heavy transport gunship bristling with weapons, storm missiles for long-range AP(3) Deadly strikes, light heavy rifle array for sustained fire, twin minigun with devastating eight-barrel volume of fire, typhoon missiles with unstoppable warheads, enormous fuselage with troop bay for eleven warriors, golden psychic ward inscriptions across entire hull, blue-glowing engine arrays, deep blue chapter heraldry on tail section, the aerial fortress of the knight brotherhood, Tough(9), Transport(11)"
+    pose: "low assault pass, all weapon systems firing, storm missiles launching, troop bay doors preparing to open, dominating aerial presence"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 630
+      size: 1
+      base: "120x92"
+      rules: ["Aircraft", "Knightborn", "Tough(9)", "Transport(11)"]
+      weapons:
+        - name: "Storm Missiles"
+          range: 36
+          attacks: 1
+          rules: ["AP(3)"]
+        - name: "Light Heavy Rifle Array"
+          range: 24
+          attacks: 4
+          rules: ["AP(1)"]
+        - name: "Twin Minigun"
+          range: 24
+          attacks: 8
+          rules: ["AP(1)"]
+        - name: "Typhoon Missiles"
+          range: 24
+          attacks: 2
+          rules: ["AP(2)"]

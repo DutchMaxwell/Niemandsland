@@ -1,0 +1,333 @@
+# =============================================================================
+# Watch Brothers - Design Language
+# =============================================================================
+# Veteranen-Xenojaeger-Spezialisten in schwarzer Power Armor mit silberner
+# linker Schulterplatte. Jeder Krieger stammt aus einem anderen Detachment.
+# OPR-Aequivalent zu Deathwatch.
+# Basiert auf: GF - Watch Brothers v3.5.2
+
+faction_name: "Watch Brothers"
+
+aesthetic:
+  genre: "grimdark sci-fi military"
+  style: "veteran xenos-hunter specialists"
+  inspiration:
+    - "Elite alien-hunting special operations soldiers"
+    - "Black-armored veterans from diverse backgrounds"
+    - "Special forces kill-team with specialized anti-xenos weapons"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted Deathwatch iconography"
+    - "Uniform identical models"
+
+colors:
+  primary: "jet black power armor"
+  secondary: "polished silver left shoulder pad"
+  accent: "crimson red weapon casings and chapter markings"
+
+materials:
+  - "matte black ceramite power armor"
+  - "polished silver veteran shoulder guard"
+  - "specialized xenos-hunting ammunition pouches"
+  - "red optic lenses and targeting arrays"
+
+creature_type: "veteran xenos-hunter specialist in black power armor"
+
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered figure, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on armor surface textures (kill markings, specialist equipment, mixed weapon systems)
+  - 28mm tabletop miniature aesthetic and heroic proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# =============================================================================
+# Per-Unit Overrides - Alle Einheiten aus GF Watch Brothers v3.5.2
+# =============================================================================
+unit_overrides:
+
+  # ==========================================================================
+  # HEROES
+  # ==========================================================================
+
+  watch_master_destroyer:
+    extra_details: "towering elite hero in massively bulky terminator-style black power armor, polished silver left shoulder pad denoting veteran status, ornate combat shield mounted on left arm, devastating close combat weapon in right hand, extra reinforced pauldrons with xenos kill trophies, teleport homer on belt, each piece of armor from a different detachment origin, Tough(6)"
+    pose: "imposing combat stance, combat shield raised defensively, close combat weapon held high ready to strike"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 135
+      size: 1
+      base: 40
+      rules: ["Ambush", "Shielded", "Tough(6)", "Watchborn"]
+      weapons:
+        - name: "CCW"
+          range: 0
+          attacks: 4
+  watch_captain_brother:
+    extra_details: "hero officer in decorated black power armor, polished silver left shoulder pad, flamer pistol in one hand, heavy close combat weapon with AP in other, veteran campaign honors and xenos skull trophies on shoulder pads, iron halo or laurel wreath above helmet, mixed detachment heraldry on armor trim, officer rank insignia, Tough(3)"
+    pose: "commanding combat pose, flamer pistol aimed, heavy close combat weapon ready"
+
+  # ==========================================================================
+  # CORE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 70
+      size: 1
+      base: 32
+      rules: ["Tough(3)", "Watchborn"]
+      weapons:
+        - name: "Flamer Pistol"
+          range: 6
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "Heavy CCW"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  watch_battle_brothers:
+    extra_details: "single elite kill-team warrior in black power armor visually distinct representing different detachment origins, polished silver left shoulder pads, heavy pistols with AP rounds, heavy close combat weapons, specialized xenos-hunting ammunition pouches, mixed weapon loadouts reflecting diverse backgrounds, red optic lenses"
+    pose: "tactical advance in kill-team formation, weapons ready with unique stance"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 130
+      size: 3
+      base: 25
+      rules: ["Watchborn"]
+      weapons:
+        - name: "Heavy Pistols"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Heavy CCWs"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  watch_vanguard:
+    extra_details: "single airborne assault warrior in black power armor with jump packs, polished silver left shoulder pads, heavy pistols and heavy close combat weapons from different detachment with unique armor details, jump pack exhaust vents glowing, aerial assault equipment"
+    pose: "mid-air descent pose, jump packs firing, weapons drawn for close combat assault"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 145
+      size: 3
+      base: 25
+      rules: ["Ambush", "Flying", "Watchborn"]
+      weapons:
+        - name: "Heavy Pistols"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Heavy CCWs"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  watch_destroyers:
+    extra_details: "single elite terminator-style warrior in massively bulky black destroyer armor, polished silver left shoulder pads, combat shields mounted on left arms, triple-attack close combat weapons, extra heavy plating with xenos kill markings uniquely decorated from different detachment, teleport homers, Tough(3) each"
+    pose: "imposing combat advance, shields raised, weapons ready, towering menacing presence"
+
+  # ==========================================================================
+  # BIKES
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 220
+      size: 3
+      base: 32
+      rules: ["Ambush", "Shielded", "Tough(3)", "Watchborn"]
+      weapons:
+        - name: "CCWs"
+          range: 0
+          attacks: 3
+  watch_brother_bikers:
+    extra_details: "single warrior on heavy armored combat motorcycle, black power armor with polished silver left shoulder pads, twin heavy rifles with AP mounted on bike fairing, heavy pistols and close combat weapons, each biker from different detachment with unique bike customization, xenos trophy racks on bikes, Tough(3)"
+    pose: "riding fast in formation, leaning into turn, twin rifles aimed forward"
+
+  # ==========================================================================
+  # VEHICLES (Transport - auto-detected)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 340
+      size: 3
+      base: 32
+      rules: ["Fast", "Tough(3)", "Watchborn"]
+      weapons:
+        - name: "Twin Heavy Rifles"
+          range: 24
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Heavy Pistols"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  watch_apc:
+    extra_details: "armored personnel carrier in black livery with silver watch insignia, angular hull design with front ramp door, storm rifle turret on top with AP rounds, troop compartment with firing ports, heavy armored treads, dozer blade attachment point, hunter missile rack optional, Tough(6), Transport(11)"
+    pose: "driving forward, storm rifle turret aimed ahead, ramp sealed"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 215
+      size: 1
+      base: "100x60"
+      rules: ["Fast", "Impact(3)", "Tough(6)", "Transport(11)", "Watchborn"]
+      weapons:
+        - name: "Storm Rifle"
+          range: 24
+          attacks: 3
+          rules: ["AP(1)"]
+  watch_attack_apc:
+    extra_details: "assault transport variant in black livery, twin heavy flamer turret with AP and blast capability, heavier frontal armor than standard APC, smaller troop compartment, aggressive angular hull design with silver watch markings, dozer blade optional, Tough(6), Transport(6)"
+    pose: "assault advance, twin heavy flamers blazing forward"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 215
+      size: 1
+      base: "100x60"
+      rules: ["Reliable)", "Fast", "Impact(3)", "Tough(6)", "Transport(6)", "Watchborn"]
+      weapons:
+        - name: "Twin Heavy Flamer"
+          range: 12
+          attacks: 2
+          rules: ["AP(1)"]
+  watch_drop_pod:
+    extra_details: "orbital drop capsule in black with silver watch insignia, cylindrical armored pod with opening petal doors, retro-thrusters on bottom, death launcher blast weapon on top, scorched re-entry heat marks on hull, immobile after landing, Tough(6), Transport(11)"
+    pose: "landing pose, petal doors opening outward, retro-thrusters firing"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 145
+      size: 1
+      base: "100x60"
+      rules: ["Ambush", "Immobile", "Tough(6)", "Transport(11)", "Watchborn"]
+      weapons:
+        - name: "Death Launcher"
+          range: 18
+          attacks: 1
+          rules: ["Blast(6)"]
+  watch_heavy_tank:
+    extra_details: "super-heavy assault transport in black livery with silver watch insignia, massive hull with twin heavy machinegun and twin heavy rifle array turrets, extremely thick armor plating, multiple weapon systems, troop compartment, commander cupola, hunter missile rack optional, Tough(18), Transport(11)"
+    pose: "rolling forward, all weapon systems aimed, dominating battlefield presence"
+
+  # ==========================================================================
+  # VEHICLES (no Transport - type: vehicle)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 850
+      size: 1
+      base: "120x92"
+      rules: ["Fast", "Impact(9)", "Tough(18)", "Transport(11)", "Watchborn"]
+      weapons:
+        - name: "Twin Heavy Machinegun"
+          range: 30
+          attacks: 6
+          rules: ["AP(1)"]
+        - name: "Twin Heavy Rifle Array"
+          range: 24
+          attacks: 12
+          rules: ["AP(1)"]
+  watch_combat_walker:
+    extra_details: "massive bipedal war machine in black armor with silver watch insignia, dreadnought-style armored sarcophagus body, two devastating walker fist arms with AP(4), heavy armored legs with stomp attack, exhaust vents and reactor on back, xenos kill trophies mounted on chassis, fear-inducing towering presence, Tough(12)"
+    pose: "striding forward, walker fists raised menacingly, crushing stride"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 395
+      size: 1
+      base: 50
+      rules: ["Fear(2)", "Tough(12)", "Watchborn"]
+      weapons:
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+        - name: "Walker Fists"
+          range: 0
+          attacks: 4
+          rules: ["AP(4)"]
+  watch_artillery_gun:
+    extra_details: "static artillery platform in black with silver watch markings, heavy gatling cannon with AP on wheeled or tracked carriage, crew members in black power armor, ammunition crates and feed mechanisms, targeting array scope, stabilizer legs deployed for firing, Tough(3)"
+    pose: "firing position, gatling cannon elevated, crew operating the weapon"
+    type: vehicle
+
+  # ==========================================================================
+  # AIRCRAFT (Aircraft rule - no type override needed)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 215
+      size: 1
+      base: 32
+      rules: ["Artillery", "Tough(3)", "Watchborn"]
+      weapons:
+        - name: "Heavy Gatling Cannon"
+          range: 24
+          attacks: 6
+          rules: ["AP(1)"]
+        - name: "Crew"
+          range: 0
+          attacks: 3
+  watch_deathstar_gunship:
+    extra_details: "heavy transport gunship aircraft in black livery with silver watch insignia, massive twin engines, troop bay with side doors for deployment, storm missiles with AP(3) and Deadly(3) on wing pylons, twin minigun with AP chin-mounted, heavily armored fuselage, xenos-hunting sensor arrays on nose, Tough(9), Transport(11)"
+    pose: "hovering for troop deployment, side doors open, all weapons visible"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 585
+      size: 1
+      base: "120x92"
+      rules: ["Aircraft", "Tough(9)", "Transport(11)", "Watchborn"]
+      weapons:
+        - name: "Storm Missiles"
+          range: 36
+          attacks: 1
+          rules: ["AP(3)"]
+        - name: "Twin Minigun"
+          range: 24
+          attacks: 8
+          rules: ["AP(1)"]

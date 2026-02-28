@@ -1,0 +1,613 @@
+# =============================================================================
+# Blessed Sisters - Design Language
+# =============================================================================
+# Religioeser weiblicher Militaerorden in Power Armor - Warrior Nuns im Weltraum.
+# OPR-Aequivalent zu Sisters of Battle.
+# Basiert auf: GF - Blessed Sisters v3.5.2
+
+faction_name: "Blessed Sisters"
+
+aesthetic:
+  genre: "grimdark sci-fi religious military"
+  style: "militant religious order"
+  inspiration:
+    - "Warrior nuns in futuristic power armor"
+    - "Gothic cathedral architecture fused with military technology"
+    - "Joan of Arc meets sci-fi crusade"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted Adepta Sororitas iconography"
+    - "Sexualized or impractical armor"
+    - "Cartoon aesthetics"
+
+colors:
+  primary: "jet black power armor"
+  secondary: "ivory white cloth robes and tabards"
+  accent: "deep crimson holy seals and relics"
+
+materials:
+  - "polished ceramite power armor with gothic tracery"
+  - "devotional cloth robes and prayer scrolls"
+  - "golden religious iconography and reliquaries"
+  - "stained glass effect on helmet lenses"
+
+creature_type: "devout warrior sister in ornate power armor"
+
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered figure, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on armor surface textures (gothic tracery, devotional script, battle damage)
+  - 28mm tabletop miniature aesthetic and heroic proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# =============================================================================
+# Per-Unit Overrides - Alle Einheiten aus GF Blessed Sisters v3.5.2
+# =============================================================================
+unit_overrides:
+
+  # ==========================================================================
+  # HEROES
+  # ==========================================================================
+
+  exo_suit_high_sister:
+    extra_details: "towering hero in massive ornate exo-suit power armor, great energy sword crackling with holy energy in right hand, stomp-capable armored feet, gothic cathedral-inspired shoulder pauldrons with devotional carvings, golden reliquary chest plate, fear-inspiring presence, heavy armored frame between infantry and walker size, Tough(9)"
+    pose: "dominating combat stance, great energy sword raised high, armored feet crushing forward"
+
+    game_stats:
+      quality: 4
+      defense: 3
+      cost: 195
+      size: 1
+      base: 40
+      rules: ["Devout", "Fear(2)", "Tough(9)"]
+      weapons:
+        - name: "Great Energy Sword"
+          range: 0
+          attacks: 6
+          rules: ["AP(2)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 3
+          rules: ["AP(1)"]
+  high_destroyer_sister:
+    extra_details: "elite destroyer hero in bulky terminator-style power armor, combat shield on left arm with engraved holy symbols, quadruple-attack close combat weapon in right hand, devotional scrolls and purity seals hanging from armor, ambush deployment equipment, shielded and heavily armored, Tough(6)"
+    pose: "aggressive combat crouch, shield braced forward, close combat weapon poised to strike"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 80
+      size: 1
+      base: 40
+      rules: ["Ambush", "Devout", "Shielded", "Tough(6)"]
+      weapons:
+        - name: "CCW"
+          range: 0
+          attacks: 4
+  celestial_high_sister:
+    extra_details: "elite celestial hero commander in ornate power armor with golden filigree, quality 3+ markings, combat shield with devotional engravings, close combat weapon, ceremonial laurel wreath above helmet visor, prayer scrolls hanging from waist, blessed insignia on pauldrons, shielded defense, Tough(3)"
+    pose: "commanding pose, shield raised, weapon ready, radiating authority"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 40
+      size: 1
+      base: 32
+      rules: ["Devout", "Shielded", "Tough(3)"]
+      weapons:
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  high_sister:
+    extra_details: "hero officer in decorated power armor, combat shield on left arm, close combat weapon in right hand, devotional script etched across armor panels, purity seals and campaign ribbons, officer rank insignia on shoulder pads, shielded defense, Tough(3)"
+    pose: "leading from the front, shield braced, weapon drawn"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 35
+      size: 1
+      base: 32
+      rules: ["Devout", "Shielded", "Tough(3)"]
+      weapons:
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  fanatic_superior:
+    extra_details: "zealous fanatic hero in lighter penitent armor covered in devotional chains and prayer strips, dual shock whip crackling with energy in hand, wild-eyed fervor visible through open-faced helmet, self-flagellation scars on exposed skin, fearless and frenzied, Tough(3)"
+    pose: "ecstatic combat stance, shock whip lashing overhead, charging forward with zealous fury"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 30
+      size: 1
+      base: 32
+      rules: ["Devout", "Piercing Assault", "Tough(3)"]
+      weapons:
+        - name: "Dual Shock Whip"
+          range: 0
+          attacks: 1
+          rules: ["Blast(3)"]
+  novice_leader:
+    extra_details: "young novice hero officer in lighter novice armor less ornate than full sisters, combat shield with simple holy symbol, close combat weapon, training robes beneath armor, devotional prayer beads, hopeful and determined expression, shielded defense, Tough(3)"
+    pose: "determined commanding pose, shield up, rallying novices forward"
+
+  # ==========================================================================
+  # CORE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 6
+      cost: 20
+      size: 1
+      base: 32
+      rules: ["Devout", "Shielded", "Tough(3)"]
+      weapons:
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  novice_sisters:
+    extra_details: "single large novice in light flak armor without full power armor, dual close combat weapons, simple white robes over basic armor, devotional headbands and prayer strips, less experienced and younger appearance, training equipment visible"
+    pose: "massed advance formation, dual weapons ready, eager but undisciplined"
+
+    game_stats:
+      quality: 5
+      defense: 6
+      cost: 100
+      size: 10
+      base: 25
+      rules: ["Devout"]
+      weapons:
+        - name: "Dual CCWs"
+          range: 0
+          attacks: 2
+  fanatic_sisters:
+    extra_details: "single fanatic in lighter penitent armor, chainsaw swords with AP capability, chains and devotional fetishes hanging from armor, wild-eyed zealot expressions, self-flagellation marks, tattered prayer scrolls, fearless berserker demeanor"
+    pose: "frenzied charge, chainsaw swords revving, screaming battle prayers"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 95
+      size: 5
+      base: 25
+      rules: ["Devout", "Piercing Assault"]
+      weapons:
+        - name: "Chainsaw Swords"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  warrior_sisters:
+    extra_details: "single standard battle line warrior in full power armor, heavy rifles with AP rounds as primary weapons, close combat weapons as sidearms, ammunition pouches on belt, fully enclosed helmets with stained-glass visor lenses, devotional script on armor panels, squad insignia on left pauldron"
+    pose: "disciplined tactical advance, rifles shouldered and aimed, formation tight"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 125
+      size: 5
+      base: 25
+      rules: ["Devout"]
+      weapons:
+        - name: "Heavy Rifles"
+          range: 24
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  vanguard_sisters:
+    extra_details: "single scout in power armor with stealth modifications, heavy rifles with AP rounds, close combat weapon sidearms, camouflage cloaks draped over one shoulder, sensor equipment on helmets, scout and strider equipment allowing terrain traversal, recon pouches and mapping tools"
+    pose: "cautious forward advance, rifles ready, scouting through terrain"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 140
+      size: 5
+      base: 25
+      rules: ["Devout", "Scout", "Strider"]
+      weapons:
+        - name: "Heavy Rifles"
+          range: 24
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  protector_sisters:
+    extra_details: "single defensive warrior in power armor, heavy pistols in one hand, long ceremonial spears with counter-attack capability in other hand, large ornate combat shields with holy symbols granting shielded defense, tabards with devotional imagery, procession-guard aesthetic"
+    pose: "shield wall formation, spears braced over shields, heavy pistols ready"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 145
+      size: 5
+      base: 25
+      rules: ["Devout", "Shielded"]
+      weapons:
+        - name: "Heavy Pistols"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Spears"
+          range: 0
+          attacks: 2
+          rules: ["Counter"]
+  pistoleer_sisters:
+    extra_details: "single aerial assault warrior with jump packs, twin heavy pistols with AP in each hand for devastating point-blank firepower, close combat weapons on belt, winged jump pack with exhaust vents, lighter armor for aerial mobility, ambush deployment capable"
+    pose: "descending from above, twin pistols blazing, jump packs flaring"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 165
+      size: 5
+      base: 25
+      rules: ["Ambush", "Devout", "Flying", "Point-Blank Surge"]
+      weapons:
+        - name: "Twin Heavy Pistols"
+          range: 12
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  assault_sisters:
+    extra_details: "single melee aerial assault warrior with jump packs, heavy pistol in one hand, energy sword crackling with rending holy power in other hand, ornate winged jump packs, aggressive forward-leaning posture, ambush deployment capable, devotional war cries on scroll work"
+    pose: "diving charge from the air, energy swords swinging, jump packs blazing"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 185
+      size: 5
+      base: 25
+      rules: ["Ambush", "Devout", "Flying"]
+      weapons:
+        - name: "Heavy Pistols"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Energy Swords"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  celestial_warrior_sisters:
+    extra_details: "single elite warrior in superior quality power armor with golden embellishments, quality 3+ markings, heavy rifles with AP rounds, close combat weapon sidearms, more ornate armor than standard warrior sisters, veteran devotional honors, celestial star motifs on pauldrons"
+    pose: "precision tactical advance, rifles aimed with expert discipline"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 95
+      size: 3
+      base: 25
+      rules: ["Devout"]
+      weapons:
+        - name: "Heavy Rifles"
+          range: 24
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  support_sisters:
+    extra_details: "single heavy weapons support warrior in reinforced power armor, blessed flamers as primary weapons shooting purifying fire with blast and purge capability, close combat weapon sidearms, heat-resistant arm plating, fuel canister backpacks connected via blessed fuel lines, Devout Boost ability enhancing holy strikes"
+    pose: "advancing in line, blessed flamers sweeping wide arcs of holy fire"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 160
+      size: 3
+      base: 25
+      rules: ["Devout", "Devout Boost"]
+      weapons:
+        - name: "Blessed Flamers"
+          range: 12
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  destroyer_sisters:
+    extra_details: "single elite heavy assault warrior in bulky terminator-style power armor, triple-attack close combat weapons, combat shields with holy engravings granting shielded defense, ambush deployment teleport equipment, heavily reinforced armor plating with devotional iconography"
+    pose: "imposing combat advance, shields locked, close combat weapons raised"
+
+  # ==========================================================================
+  # BIKES
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 135
+      size: 3
+      base: 32
+      rules: ["Ambush", "Devout", "Shielded", "Tough(3)"]
+      weapons:
+        - name: "CCWs"
+          range: 0
+          attacks: 3
+  biker_fanatics:
+    extra_details: "single fanatic bike on heavy armored combat motorcycle, twin heavy rifles with AP mounted on bike fairing, heavy chainsaw swords for devastating melee charges, chains and devotional fetishes streaming behind, fearless and zealous rider, tattered prayer scrolls fluttering, Tough(3)"
+    pose: "charging at full speed, chainsaw swords raised, wild zealous riding"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 220
+      size: 3
+      base: 32
+      rules: ["Devout", "Fast", "Piercing Assault", "Tough(3)"]
+      weapons:
+        - name: "Twin Heavy Rifles"
+          range: 24
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Heavy Chainsaw Swords"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  biker_sisters:
+    extra_details: "single power armored bike on sleek heavy combat motorcycle, twin heavy rifles with AP mounted on bike fairing, heavy pistols and close combat weapons, devotional markings on bike fairings, exhaust pipes with incense-burner design, Tough(3)"
+    pose: "riding in tight formation, weapons ready, bikes leaning into turn"
+
+  # ==========================================================================
+  # VEHICLES (Transport - auto-detected)
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 215
+      size: 3
+      base: 32
+      rules: ["Devout", "Fast", "Tough(3)"]
+      weapons:
+        - name: "Twin Heavy Rifles"
+          range: 24
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Heavy Pistols"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  apc:
+    extra_details: "armored personnel carrier with gothic cathedral-inspired hull design, storm rifle turret on top with AP capability, front ramp door for troop deployment, devotional carvings along hull panels, heavy armored tracks, incense-burner exhaust stacks, Tough(6), Transport(11)"
+    pose: "driving forward, turret aimed ahead, ramp sealed"
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 170
+      size: 1
+      base: "100x60"
+      rules: ["Devout", "Fast", "Impact(3)", "Tough(6)", "Transport(11)"]
+      weapons:
+        - name: "Storm Rifle"
+          range: 24
+          attacks: 3
+          rules: ["AP(1)"]
+  procession_altar:
+    extra_details: "mobile religious shrine transport, ornate cathedral-on-tracks design, holy statue mounted on top unleashing flame blasts with blast and purge capability, stained glass panels on hull sides, golden reliquary and devotional banners, angelic statuary, provides courage and guarded and precision shooter buffs to nearby units, Tough(6), Transport(6)"
+    pose: "rolling forward in sacred procession, holy statue blazing with divine fire, banners streaming"
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 250
+      size: 1
+      base: "100x60"
+      rules: ["Reliable", "Purge) Courage Buff", "Devout", "Fast", "Guarded Buff", "Impact(3)", "Precision Shooter Buff", "Tough(6)", "Transport(6)"]
+      weapons:
+        - name: "Holy Statue's Flame Blasts"
+          range: 12
+          attacks: 2
+          rules: ["Blast(3)"]
+  infernal_apc:
+    extra_details: "heavy assault flame transport, twin blessed flamers as main turret weapons with purge capability, hull-mounted blessed flamer, aggressive angular gothic hull design with flame motifs, reinforced frontal armor, incense and flame exhaust ports, devotional script across hull, Tough(9), Transport(6)"
+    pose: "assault advance, all flamers blazing purifying fire forward"
+
+  # ==========================================================================
+  # VEHICLES (no Transport)
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 260
+      size: 1
+      base: "100x60"
+      rules: ["Purge)", "Devout", "Fast", "Impact(3)", "Tough(9)", "Transport(6)"]
+      weapons:
+        - name: "Blessed Flamer"
+          range: 12
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "Twin Blessed Flamer"
+          range: 12
+          attacks: 2
+          rules: ["Blast(3)"]
+  exo_suit:
+    extra_details: "walking exoskeleton suit between infantry and walker size, pilot sister visible in chest cavity, energy mace with blast capability in one arm, stomp-capable armored feet, reactor pack on back with devotional iconography, fear-inspiring gothic design, Tough(6)"
+    pose: "advancing pose, energy mace swinging, stomping stride"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 3
+      cost: 100
+      size: 1
+      base: 40
+      rules: ["Devout", "Fear(1)", "Tough(6)"]
+      weapons:
+        - name: "Energy Mace"
+          range: 0
+          attacks: 1
+          rules: ["AP(2)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  organ_tank:
+    extra_details: "heavy missile artillery tank with distinctive organ-pipe missile launcher array firing devastating AP(2) Deadly(3) unstoppable missiles, gothic pipe organ aesthetic on turret, hull-mounted blessed flamer, heavy armored hull with devotional carvings, incense-burner exhaust, Tough(9)"
+    pose: "firing position, organ missile array elevated and launching"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 365
+      size: 1
+      base: 40
+      rules: ["Unstoppable)", "Devout", "Fast", "Impact(3)", "Tough(9)"]
+      weapons:
+        - name: "Organ Heavy Missile"
+          range: 30
+          attacks: 3
+          rules: ["AP(2)"]
+        - name: "Blessed Flamer"
+          range: 12
+          attacks: 1
+          rules: ["Blast(3)"]
+  battle_tank:
+    extra_details: "main battle tank with anti-tank cannon as primary weapon firing AP(3) Deadly(6) rounds, twin hull-mounted blessed flamers with purge capability, massive gothic hull design with flying buttress-style armor, devotional reliefs on turret, heavy armored tracks, Tough(12)"
+    pose: "hull-down firing position, main cannon aimed, flamers ready"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 380
+      size: 1
+      base: 50
+      rules: ["Devout", "Fast", "Impact(6)", "Tough(12)"]
+      weapons:
+        - name: "Anti-Tank Cannon"
+          range: 30
+          attacks: 1
+          rules: ["AP(3)"]
+        - name: "Blessed Flamers"
+          range: 12
+          attacks: 1
+          rules: ["Blast(3)"]
+  assault_walker:
+    extra_details: "aggressive bipedal walker war machine, two heavy flail arms with AP and blast capability, stomp-capable armored feet, gothic cathedral-inspired torso with devotional carvings, regenerative blessed armor plating, scout deployment capability, fear-inspiring presence, wild frenzied design with chains and devotional fetishes, Tough(9)"
+    pose: "charging forward, flail arms swinging wide, fearless assault stride"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 270
+      size: 1
+      base: 40
+      rules: ["Devout", "Fear(2)", "Piercing Assault", "Regeneration", "Scout", "Tough(9)"]
+      weapons:
+        - name: "Heavy Flails"
+          range: 0
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 3
+          rules: ["AP(1)"]
+  support_walker:
+    extra_details: "defensive bipedal walker war machine, two heavy flail arms with AP and blast capability, stomp-capable armored feet, fortified extra-thick armor plating with gothic tracery, regenerative blessed armor, Devout Boost holy aura radiating outward, more armored and deliberate than assault variant, devotional shrine built into torso, Tough(9)"
+    pose: "steady advancing pose, flails ready, fortified armor gleaming with holy light"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 260
+      size: 1
+      base: 40
+      rules: ["Devout", "Devout Boost", "Fear(2)", "Fortified", "Regeneration", "Tough(9)"]
+      weapons:
+        - name: "Heavy Flails"
+          range: 0
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 3
+          rules: ["AP(1)"]
+  blessed_titan:
+    extra_details: "colossal god-machine war titan towering over all other units, two titan flail arms with devastating blast and rending capability, eight-attack stomp feet with AP(2), twin hull-mounted blessed flamers, gothic cathedral superstructure as torso with stained glass viewports and bell towers, massive fear(4) inspiring presence, devotional banners and holy relics adorning every surface, Tough(24)"
+    pose: "striding forward with earth-shaking steps, titan flails swinging, divine wrath incarnate"
+    type: vehicle
+
+  # ==========================================================================
+  # NAMED / UNIQUE CHARACTERS
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 805
+      size: 1
+      base: 100
+      rules: ["Purge)", "Devout", "Fear(4)", "Tough(24)"]
+      weapons:
+        - name: "Blessed Hull-Flamers"
+          range: 12
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 8
+          rules: ["AP(2)"]
+        - name: "Titan Flails"
+          range: 0
+          attacks: 4
+          rules: ["Blast(3)"]
+  constance:
+    extra_details: "unique named hero sister in power armor, blessed flamer pistol in one hand shooting purifying blast fire, energy sword crackling with rending power in other hand, distinctive rangefinder backpack granting increased shooting range aura to nearby allies, scout and strider capable, individual character with unique heraldry and personal devotional markings, veteran campaign honors, Tough(3)"
+    pose: "dynamic scouting advance, flamer pistol aimed, energy sword ready, rangefinder backpack scanning"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 100
+      size: 1
+      base: 32
+      rules: ["Devout", "Increased Shooting Range Aura", "Scout", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Blessed Flamer Pistol"
+          range: 6
+          attacks: 1
+          rules: ["Blast(3)", "Reliable", "Purge"]
+        - name: "Energy Sword"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)", "Rending"]

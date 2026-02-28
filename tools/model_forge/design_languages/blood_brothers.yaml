@@ -1,0 +1,634 @@
+# =============================================================================
+# Blood Brothers - Design Language
+# =============================================================================
+# Vampirische Berserker-Supersoldaten in blutroter Power Armor.
+# OPR-Aequivalent zu Blood Angels.
+# Basiert auf: GF - Blood Brothers v3.5.2
+
+faction_name: "Blood Brothers"
+
+aesthetic:
+  genre: "grimdark sci-fi military"
+  style: "vampiric berserker power armor"
+  inspiration:
+    - "Vampiric super-soldiers consumed by blood rage"
+    - "Angelic warriors with dark bloodthirsty undertones"
+    - "Renaissance Italian aesthetics fused with gothic horror"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted Blood Angels iconography"
+    - "Cartoon or anime proportions"
+    - "Sparkly vampire aesthetics"
+
+colors:
+  primary: "deep arterial red power armor"
+  secondary: "burnished gold filigree and death masks"
+  accent: "jet black weapon casings and jump pack housings"
+
+materials:
+  - "blood-red ceramite power armor with gold inlay"
+  - "ornate death masks and angelic helmet crests"
+  - "golden filigree on shoulder pads and chest plates"
+  - "black leather weapon holsters and straps"
+
+creature_type: "vampiric super-soldier in blood-red power armor"
+
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered figure, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on armor surface textures (blood drops, angelic motifs, death masks)
+  - 28mm tabletop miniature aesthetic and heroic proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# =============================================================================
+# Per-Unit Overrides - Alle Einheiten aus GF Blood Brothers v3.5.2
+# =============================================================================
+unit_overrides:
+
+  # ==========================================================================
+  # HEROES
+  # ==========================================================================
+
+  blood_master_destroyer:
+    extra_details: "towering elite destroyer hero in massively bulky terminator-style blood-red power armor, ornate golden death mask helmet, combat shield mounted on left arm with blood drop heraldry, enormous close combat weapon in right hand dripping with gore motifs, heavy armor plating with angelic wing engravings on pauldrons, golden filigree across chest plate, blood vials hanging from belt, veteran kill markings in gold script, Tough(6)"
+    pose: "imposing berserker stance, shield raised defensively, close combat weapon held high in blood rage"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 125
+      size: 1
+      base: 40
+      rules: ["Ambush", "Bloodborn", "Shielded", "Tough(6)"]
+      weapons:
+        - name: "CCW"
+          range: 0
+          attacks: 4
+  blood_veteran_master_brother:
+    extra_details: "veteran hero officer in ornately decorated blood-red power armor, combat shield on left arm with golden blood chalice insignia, gravity pistol holstered at hip, close combat weapon drawn and gleaming, veteran campaign honors and blood drop seals on shoulder pads, golden angelic halo above helmet, crimson cape flowing behind, officer rank insignia in gold, fanged death mask helmet, Tough(3)"
+    pose: "commanding combat pose, weapon ready in one hand, shield braced, cape billowing"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 60
+      size: 1
+      base: 32
+      rules: ["Bloodborn", "Shielded", "Tough(3)", "Versatile Attack"]
+      weapons:
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  blood_master_brother:
+    extra_details: "hero commander in ornate blood-red power armor with extensive gold filigree, gravity pistol in one hand, close combat weapon in other, golden angelic halo above fanged death mask helmet, blood drop purity seals and campaign ribbons on armor, officer rank markings in gold, chalice icon on chest plate, Tough(3)"
+    pose: "commanding pose, gravity pistol raised, pointing forward with close combat weapon"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 55
+      size: 1
+      base: 32
+      rules: ["Bloodborn", "Tough(3)"]
+      weapons:
+        - name: "Gravity Pistol"
+          range: 9
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  blood_elite_pathfinder:
+    extra_details: "scout specialist hero in lighter dark red recon armor, tattered crimson cloak draped over shoulders, sensor equipment on helmet with red lenses, gravity pistol and close combat weapon, less bulky than standard blood brothers, pathfinder markings with blood drop insignia, strider equipment on boots, Tough(3)"
+    pose: "crouched predatory scouting pose, pistol aimed, alert vampiric hunter stance"
+
+  # ==========================================================================
+  # CORE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 45
+      size: 1
+      base: 32
+      rules: ["Bloodborn", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Gravity Pistol"
+          range: 9
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  blood_pathfinders:
+    extra_details: "single light recon warrior in lighter dark red scout armor without heavy shoulder pads, tattered crimson cloaks, heavy pistols and close combat weapons with serrated blades, stealth equipment, red-lensed sensor arrays on helmets, ammunition pouches with blood drop clasps, strider gear on boots"
+    pose: "stealthy predatory advance, weapons ready, scanning for prey like vampiric hunters"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 115
+      size: 5
+      base: 25
+      rules: ["Bloodborn", "Strider"]
+      weapons:
+        - name: "Heavy Pistols"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  blood_battle_brothers:
+    extra_details: "single standard line infantry warrior in iconic blood-red power armor, heavy rifles with AP rounds, close combat weapons as sidearms, bolt magazine pouches, fully enclosed fanged death mask helmets with glowing red eye lenses, blood drop insignia on left pauldron, golden trim on shoulder pads"
+    pose: "advancing tactical formation, rifles shouldered and aimed, disciplined blood rage"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 155
+      size: 5
+      base: 25
+      rules: ["Bloodborn"]
+      weapons:
+        - name: "Heavy Rifles"
+          range: 24
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  blood_assault_brothers:
+    extra_details: "single close combat assault warrior in blood-red power armor, heavy pistols in one hand, heavy close combat weapons with AP serrated edges in other, aggressive forward-leaning berserker posture, blood drop insignia prominent, extra ammunition on belt, combat knives with golden crossguards strapped to legs"
+    pose: "charging berserker pose, pistols raised, melee weapons swinging in blood frenzy"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 170
+      size: 5
+      base: 25
+      rules: ["Bloodborn"]
+      weapons:
+        - name: "Heavy Pistols"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Heavy CCWs"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  blood_veteran_battle_brothers:
+    extra_details: "single elite ranged veteran in ornately decorated blood-red power armor with extensive gold filigree, heavy rifles with modular attachments, close combat weapons, veteran golden markings and blood chalice kill tallies, ornate angelic helms with golden crests, ammunition feeds, campaign honor badges with blood drop seals"
+    pose: "veteran tactical advance, rifles aimed with deadly precision, controlled rage"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 125
+      size: 3
+      base: 25
+      rules: ["Bloodborn", "Versatile Attack"]
+      weapons:
+        - name: "Heavy Rifles"
+          range: 24
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  blood_veteran_assault_brothers:
+    extra_details: "single elite assault veteran in ornate blood-red power armor, combat shields with golden blood chalice heraldry providing shielded defense, heavy pistols, veteran campaign markings and golden honors, angelic wing embellishments on armor, battle-worn appearance with blood splatter weathering"
+    pose: "disciplined berserker stance, shields raised, pistols ready to fire"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 95
+      size: 3
+      base: 25
+      rules: ["Bloodborn", "Shielded", "Versatile Attack"]
+      weapons:
+        - name: "Heavy Pistols"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+  blood_death_brothers:
+    extra_details: "single undying warrior in blood-red power armor with black cross markings, heavy rifles and close combat weapons, regeneration sigils etched in gold across armor plates, skeletal death mask helmets with glowing eyes, blood vial necklaces, appearance of warriors who have faced death and returned, eerie crimson glow from armor joints"
+    pose: "relentless undead advance, rifles aimed, inexorable death march"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 170
+      size: 5
+      base: 25
+      rules: ["Bloodborn", "Regeneration"]
+      weapons:
+        - name: "Heavy Rifles"
+          range: 24
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  blood_guard_brothers:
+    extra_details: "single elite jump assault warrior in blood-red power armor with large angelic jump packs with golden wings, assault pistols with dual shots, heavy close combat weapons with AP edges, ornate golden death masks, blood drop heraldry prominent on chest and pauldrons, the most noble and rage-filled warriors of the detachment"
+    pose: "mid-air descent with jump packs firing, weapons raised for devastating charge, angelic fury"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 210
+      size: 5
+      base: 25
+      rules: ["Ambush", "Bloodborn", "Flying"]
+      weapons:
+        - name: "Assault Pistols"
+          range: 12
+          attacks: 2
+        - name: "Heavy CCWs"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  blood_support_brothers:
+    extra_details: "single heavy weapons in reinforced blood-red power armor, heavy flamers with AP and blast capability glowing with heat, ammunition feeds connected to backpacks with blood-red fuel lines, reinforced leg servos with gold trim, heat shielding on arms and chest with golden filigree, relentless advance equipment"
+    pose: "braced firing pose, heavy flamers unleashing purifying fire, advancing relentlessly"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 160
+      size: 3
+      base: 25
+      rules: ["Bloodborn", "Relentless"]
+      weapons:
+        - name: "Heavy Flamers"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  blood_destroyers:
+    extra_details: "single elite terminator-style assault warrior in massively bulky blood-red destroyer armor with extra plating and gold trim, combat shields with blood chalice heraldry, triple-attack close combat weapons crackling with energy, grenade launchers on wrists, golden angelic death masks, teleport homers on belts, blood vials and purity seals"
+    pose: "imposing berserker advance, weapons raised in blood fury, towering menacing presence"
+
+  # ==========================================================================
+  # BIKES
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 195
+      size: 3
+      base: 32
+      rules: ["Ambush", "Bloodborn", "Shielded", "Tough(3)"]
+      weapons:
+        - name: "CCWs"
+          range: 0
+          attacks: 3
+  blood_pathfinder_bikers:
+    extra_details: "single scout bike on dark red reconnaissance motorcycle with golden trim, grenade launchers mounted on bike fairings, heavy pistols and close combat weapons, sensor arrays on handlebars with red lenses, lighter armor than standard bikers, scout equipment with blood drop insignia, Tough(3)"
+    pose: "speeding forward in hunting formation, scout posture, grenade launchers visible"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 235
+      size: 3
+      base: 32
+      rules: ["Bloodborn", "Fast", "Scout", "Tough(3)"]
+      weapons:
+        - name: "Grenade Launchers"
+          range: 24
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "Heavy Pistols"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  blood_brother_bikers:
+    extra_details: "single power armored warrior on heavy armored blood-red combat motorcycle with gold trim, twin heavy rifles mounted on bike fairing, heavy pistols and close combat weapons, exhaust pipes glowing crimson, heavy front armor on bikes with blood drop heraldry, fanged death mask helmets, Tough(3)"
+    pose: "riding fast in aggressive formation, leaning into turn, twin rifles aimed forward"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 280
+      size: 3
+      base: 32
+      rules: ["Bloodborn", "Fast", "Tough(3)"]
+      weapons:
+        - name: "Twin Heavy Rifles"
+          range: 24
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Heavy Pistols"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  blood_support_bike:
+    extra_details: "single heavy assault trike or sidecar bike in blood-red with extensive gold trim, twin heavy rifle and heavy flamer mounted on reinforced chassis, extra armor plating with angelic wing motifs, heavy pistol and triple-attack close combat weapon, Tough(6)"
+    pose: "heavy bike rolling forward aggressively, all weapons aimed, berserker advance"
+
+  # ==========================================================================
+  # VEHICLES (Transport - auto-detected)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 175
+      size: 1
+      base: 40
+      rules: ["Bloodborn", "Fast", "Tough(6)"]
+      weapons:
+        - name: "Twin Heavy Rifle"
+          range: 24
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Heavy Flamer"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Heavy Pistol"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCW"
+          range: 0
+          attacks: 3
+  blood_apc:
+    extra_details: "armored personnel carrier in blood-red livery with golden trim, boxy angular design with front ramp door adorned with blood drop insignia, storm rifle turret on top, hull-mounted weapon options, troop compartment with firing ports, heavy tank treads with gold-trimmed track guards, angelic wing motifs on hull sides, Tough(6), Transport(11)"
+    pose: "driving forward, turret aimed ahead, ramp sealed"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 200
+      size: 1
+      base: "100x60"
+      rules: ["Bloodborn", "Fast", "Impact(3)", "Tough(6)", "Transport(11)"]
+      weapons:
+        - name: "Storm Rifle"
+          range: 24
+          attacks: 3
+          rules: ["AP(1)"]
+  blood_attack_apc:
+    extra_details: "assault transport variant in blood-red with gold filigree, twin heavy flamer turret blazing, heavier frontal armor with blood chalice heraldry, smaller troop compartment than standard APC, aggressive angular hull design with vampiric fang motifs on front, optional dozer blade, Tough(6), Transport(6)"
+    pose: "assault advance, twin flamers aimed forward, aggressive posture"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 205
+      size: 1
+      base: "100x60"
+      rules: ["Reliable)", "Bloodborn", "Fast", "Impact(3)", "Tough(6)", "Transport(6)"]
+      weapons:
+        - name: "Twin Heavy Flamer"
+          range: 12
+          attacks: 2
+          rules: ["AP(1)"]
+  blood_drop_pod:
+    extra_details: "orbital drop capsule in blood-red with golden trim, cylindrical armored pod with opening petal doors bearing blood drop insignia, retro-thrusters on bottom, death launcher blast weapon on top, scorched re-entry heat marks on hull mixed with angelic iconography, immobile after landing, Tough(6), Transport(11)"
+    pose: "landing pose, petal doors opening outward, retro-thrusters firing"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 130
+      size: 1
+      base: "100x60"
+      rules: ["Ambush", "Bloodborn", "Immobile", "Tough(6)", "Transport(11)"]
+      weapons:
+        - name: "Death Launcher"
+          range: 18
+          attacks: 1
+          rules: ["Blast(6)"]
+  blood_heavy_tank:
+    extra_details: "super-heavy assault transport in blood-red livery with extensive golden filigree, massive hull with twin heavy machinegun and twin heavy rifle array turrets, extremely thick armor plating with blood drop and angelic wing heraldry, multiple weapon systems, troop compartment, commander cupola with death mask, Tough(18), Transport(11)"
+    pose: "rolling forward, all weapon systems aimed, dominating presence"
+
+  # ==========================================================================
+  # VEHICLES (no Transport)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 740
+      size: 1
+      base: "120x92"
+      rules: ["Bloodborn", "Fast", "Impact(9)", "Tough(18)", "Transport(11)"]
+      weapons:
+        - name: "Twin Heavy Machinegun"
+          range: 30
+          attacks: 6
+          rules: ["AP(1)"]
+        - name: "Twin Heavy Rifle Array"
+          range: 24
+          attacks: 12
+          rules: ["AP(1)"]
+  blood_attack_speeder:
+    extra_details: "anti-gravity skimmer vehicle in blood-red with gold accents, open cockpit with pilot in death mask helmet visible, dual heavy flamers or typhoon missile pods mounted on wings, sleek aerodynamic hull hovering above ground with angelic wing stabilizers, fast attack craft with blood drop insignia, Tough(6)"
+    pose: "hovering at speed, weapons aimed downward at target, banking turn"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 210
+      size: 1
+      base: 40
+      rules: ["Ambush", "Bloodborn", "Fast", "Impact(3)", "Strider", "Tough(6)"]
+      weapons:
+        - name: "Heavy Flamers"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+  blood_heavy_exo_suit:
+    extra_details: "walking exoskeleton suit in blood-red with gold inlay, between infantry and walker size, power armor pilot visible in chest cavity behind armored sarcophagus plate with blood chalice emblem, twin flamer arm weapons, heavy armored legs with stomp capability, reactor pack on back with angelic wing vents, fear-inducing death mask face plate, Tough(6)"
+    pose: "advancing pose, arm weapons aimed forward, stomping berserker stride"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 160
+      size: 1
+      base: 40
+      rules: ["Bloodborn", "Fear(1)", "Tough(6)"]
+      weapons:
+        - name: "Twin Flamer"
+          range: 12
+          attacks: 2
+          rules: ["Blast(3)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  blood_battle_tank:
+    extra_details: "main battle tank in blood-red livery with golden trim, large turret with twin storm cannon and twin heavy machinegun, thick frontal glacis armor with blood drop heraldry, heavy tank treads with ornate track guards, commander hatch with angelic death mask decoration, hunter missile rack with gold filigree, Tough(12)"
+    pose: "hull-down firing position, main turret aimed"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 480
+      size: 1
+      base: 50
+      rules: ["Bloodborn", "Fast", "Impact(6)", "Tough(12)"]
+      weapons:
+        - name: "Twin Heavy Machinegun"
+          range: 30
+          attacks: 6
+          rules: ["AP(1)"]
+        - name: "Twin Storm Cannon"
+          range: 30
+          attacks: 4
+          rules: ["AP(2)"]
+  blood_combat_walker:
+    extra_details: "massive bipedal war machine in blood-red with gold trim, dreadnought-style armored sarcophagus body with blood chalice emblem, two walker fist arms with devastating AP(4), heavy armored legs with stomp attack, exhaust vents and reactor on back with crimson glow, fear-inducing golden death mask face plate, angelic wing motifs on shoulders, Tough(12)"
+    pose: "striding forward in blood rage, walker fists raised menacingly, crushing stride"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 360
+      size: 1
+      base: 50
+      rules: ["Bloodborn", "Fear(2)", "Tough(12)"]
+      weapons:
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+        - name: "Walker Fists"
+          range: 0
+          attacks: 4
+          rules: ["AP(4)"]
+  blood_veteran_combat_walker:
+    extra_details: "decorated veteran bipedal war machine in ornate blood-red with extensive gold filigree, dreadnought-style armored sarcophagus with golden kill markings and blood chalice honor scrolls, two walker fist arms with AP(4), veteran campaign banners in crimson and gold, reinforced armor with battle damage scars and blood splatter, angelic wing crests, Tough(12)"
+    pose: "advancing with veteran fury, fists clenched, heavy stomp in controlled rage"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 415
+      size: 1
+      base: 50
+      rules: ["Bloodborn", "Fear(2)", "Tough(12)", "Versatile Attack"]
+      weapons:
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+        - name: "Walker Fists"
+          range: 0
+          attacks: 4
+          rules: ["AP(4)"]
+  blood_artillery_gun:
+    extra_details: "static artillery platform in blood-red with gold accents, two crew members in blood-red power armor, heavy gatling cannon on wheeled or tracked carriage with blood drop insignia, ammunition crates with angelic markings and feed mechanisms, targeting array scope with red lenses, stabilizer legs deployed for firing, Tough(3)"
+    pose: "firing position, gatling cannon elevated, crew operating with disciplined intensity"
+    type: vehicle
+
+  # ==========================================================================
+  # AIRCRAFT (Aircraft rule - no type override needed)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 175
+      size: 1
+      base: 32
+      rules: ["Artillery", "Bloodborn", "Tough(3)"]
+      weapons:
+        - name: "Heavy Gatling Cannon"
+          range: 24
+          attacks: 6
+          rules: ["AP(1)"]
+        - name: "Crew"
+          range: 0
+          attacks: 3
+  blood_light_gunship:
+    extra_details: "VTOL gunship aircraft in blood-red livery with gold trim, twin engine nacelles with tilting rotors, nose-mounted minigun with AP, wing-mounted twin typhoon missiles with AP(2) and Unstoppable, armored cockpit canopy with death mask visor, tail stabilizers with angelic wing motifs, blood drop insignia on fuselage, Tough(6)"
+    pose: "banking in flight, weapons aimed downward at target, angelic predator"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 350
+      size: 1
+      base: "120x92"
+      rules: ["Unstoppable)", "Aircraft", "Bloodborn", "Tough(6)"]
+      weapons:
+        - name: "Minigun"
+          range: 24
+          attacks: 4
+          rules: ["AP(1)"]
+        - name: "Twin Typhoon Missiles"
+          range: 24
+          attacks: 4
+          rules: ["AP(2)"]
+  blood_heavy_gunship:
+    extra_details: "heavy transport gunship aircraft in blood-red with extensive gold filigree, massive twin engines with crimson exhaust glow, troop bay with side doors for deployment, chin-mounted storm missiles with AP(3) and Deadly(3), wing pylons with light heavy rifle array and twin minigun, typhoon missiles on hardpoints, heavily armored fuselage with blood chalice and angelic wing heraldry, Tough(9), Transport(11)"
+    pose: "hovering for troop deployment, side doors open, all weapons visible, angelic war machine"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 645
+      size: 1
+      base: "120x92"
+      rules: ["Aircraft", "Bloodborn", "Tough(9)", "Transport(11)"]
+      weapons:
+        - name: "Storm Missiles"
+          range: 36
+          attacks: 1
+          rules: ["AP(3)"]
+        - name: "Light Heavy Rifle Array"
+          range: 24
+          attacks: 4
+          rules: ["AP(1)"]
+        - name: "Twin Minigun"
+          range: 24
+          attacks: 8
+          rules: ["AP(1)"]
+        - name: "Typhoon Missiles"
+          range: 24
+          attacks: 2
+          rules: ["AP(2)"]
