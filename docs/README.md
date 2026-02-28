@@ -25,6 +25,11 @@ Willkommen in der OpenTTS Dokumentation! Hier findest du alle technischen Detail
 |----------|--------------|--------|
 | [UI_MODERNIZATION_PLAN.md](./UI_MODERNIZATION_PLAN.md) | Dark Glassmorphism Design System | ✅ Implementiert |
 
+### 🔨 Tools
+| Dokument | Beschreibung | Status |
+|----------|--------------|--------|
+| [Model Forge README](../tools/model_forge/README.md) | 3D-Modell-Pipeline (38 Fraktionen, 854 Units) | ✅ Implementiert |
+
 ### 📦 Assets
 | Dokument | Beschreibung | Status |
 |----------|--------------|--------|
@@ -52,6 +57,7 @@ Willkommen in der OpenTTS Dokumentation! Hier findest du alle technischen Detail
 - Unit-System Plan
 - AI-System Plan
 - UI Glassmorphism Design
+- Model Forge (3D-Pipeline)
 
 ### 🔧 Work in Progress
 - Dice Physics
@@ -86,5 +92,5 @@ Dokumentation verbessern:
 
 ---
 
-**Letzte Aktualisierung:** 2026-01-19
+**Letzte Aktualisierung:** 2026-02-28
 **Maintainer:** DutchMaxwell
