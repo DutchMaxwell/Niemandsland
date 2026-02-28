@@ -18,9 +18,11 @@ OpenTTS ist ein **Tabletop-Wargaming-Simulator** (v0.2.0-alpha) für OnePageRule
 
 ```
 openTTS/
-├── scripts/           # Kernlogik (~40 Scripts)
+├── scripts/           # Kernlogik (~46 Scripts)
 ├── scenes/            # Hauptszenen (startup_menu, main, map_layout)
 ├── addons/            # dice_roller (Custom), gdUnit4 (Tests)
+├── tools/             # Externe Tools
+│   └── model_forge/   # 3D-Modell-Pipeline (Python/Gradio)
 ├── assets/            # Modelle, Texturen, Audio
 └── docs/              # Projektdokumentation
 ```
