@@ -1,0 +1,522 @@
+# =============================================================================
+# Custodian Brothers - Design Language
+# =============================================================================
+# Ultra-elite goldene Super-Soldaten, persoenliche Wache des Conduit.
+# OPR-Aequivalent zu Custodes. Wenige Modelle, extrem elite.
+
+faction_name: "Custodian Brothers"
+
+aesthetic:
+  genre: "grimdark sci-fi palatial military"
+  style: "ultra-elite golden warriors"
+  inspiration:
+    - "Ancient Roman Praetorian Guard in futuristic golden power armor"
+    - "Spartan elite warriors with ornate ceremonial weapons"
+    - "Byzantine imperial bodyguard aesthetics"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted Custodes iconography"
+    - "Plain or unadorned armor"
+    - "Mass-produced military aesthetics"
+
+colors:
+  primary: "polished auric gold power armor"
+  secondary: "deep crimson red cloth and plumes"
+  accent: "sapphire blue gemstones and lenses"
+
+materials:
+  - "master-crafted auramite golden armor plating"
+  - "ornate filigree and engravings on every surface"
+  - "flowing crimson cloaks and tabards"
+  - "gemstone-encrusted weapon hafts"
+
+creature_type: "elite golden super-warrior in masterwork power armor"
+
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered figure, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on ornate armor textures (gold filigree, gemstones, engravings)
+  - 28mm tabletop miniature aesthetic and heroic proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# Per-Unit Overrides
+unit_overrides:
+
+  # === HEROES ===
+  master_destroyer:
+    extra_details: "towering elite commander in the heaviest golden auramite armor, flame weapon integrated into wrist mount, ornate custodian axe with power field generator, massive stomping greaves, deep teleportation strike capability, Tough(9) monstrous resilience, crimson plume cascading from tall conical helmet, trophy rack of defeated enemies on backpack, the most fearsome individual warrior in the brotherhood"
+    pose: "imperious advancing pose, custodian axe swung back for a devastating cleave, flame mount glowing with heat"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 235
+      size: 1
+      base: 40
+      rules: ["Ambush", "Guardian", "Tough(9)"]
+      weapons:
+        - name: "Flame-Mount"
+          range: 12
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "Custodian Axe"
+          range: 0
+          attacks: 2
+          rules: ["Blast(3)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 3
+          rules: ["AP(1)"]
+  veteran_master_custodian:
+    extra_details: "senior commander in exquisitely engraved golden power armor, rapid-fire shot mount on wrist gauntlet, custodian axe crackling with energy, versatile attack fighting style allowing adaptable combat, crimson cloak draped over one shoulder, extensive battle honors and kill markings engraved across every armor panel, veteran scarring visible on exposed jaw"
+    pose: "dynamic combat stance, custodian axe in two-handed grip angled for a thrust, shot mount aimed forward"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 155
+      size: 1
+      base: 40
+      rules: ["Guardian", "Tough(6)", "Versatile Attack"]
+      weapons:
+        - name: "Rapid Shot-Mount"
+          range: 12
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Custodian Axe"
+          range: 0
+          attacks: 2
+          rules: ["Blast(3)"]
+  master_custodian:
+    extra_details: "field commander in ornate golden power armor, rapid-fire shot mount integrated into forearm, custodian axe with long powered blade, crimson half-cape, purity seals and honor chains across chest plate, leadership crest atop helmet, sapphire eye lenses glowing"
+    pose: "commanding stance, custodian axe held across body in guard position, free hand gesturing orders"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 130
+      size: 1
+      base: 40
+      rules: ["Guardian", "Tough(6)"]
+      weapons:
+        - name: "Rapid Shot-Mount"
+          range: 12
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Custodian Axe"
+          range: 0
+          attacks: 2
+          rules: ["Blast(3)"]
+  great_sister:
+    extra_details: "female warrior-priestess hero in lighter golden-trimmed armor, energy sword with rending molecular edge crackling with power, guardian of the faith, lighter build than custodian brothers but agile and deadly, ornate headpiece or circlet instead of full helm, crimson robes beneath armor plates, sacred texts inscribed on shoulder guards"
+    pose: "elegant combat stance, energy sword held in high guard, other hand open in warding gesture"
+
+  # === CORE INFANTRY ===
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 50
+      size: 1
+      base: 32
+      rules: ["Guardian", "Tough(3)"]
+      weapons:
+        - name: "Energy Sword"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  custodian_brothers:
+    extra_details: "squad of three elite golden warriors, each in individually crafted auramite power armor, wrist-mounted shot weapons for ranged fire, custodian axes with broad powered blades for melee, each warrior unique with personal heraldry and honor engravings, crimson cloth at waist, tall conical helmets with red plumes, the baseline custodian is already the pinnacle of genetic enhancement"
+    pose: "tactical advance formation, lead warrior with axe raised, flanking warriors with shot mounts aimed"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 195
+      size: 3
+      base: 32
+      rules: ["Guardian", "Tough(3)"]
+      weapons:
+        - name: "Shot-Mounts"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Custodian Axes"
+          range: 0
+          attacks: 1
+          rules: ["Blast(3)"]
+  veteran_custodian_brothers:
+    extra_details: "squad of three veteran golden warriors, more ornate armor than standard custodians with additional gold filigree and gemstone inlays, versatile attack training visible in balanced weapon grip, wrist shot mounts and custodian axes, additional honor markings and campaign badges, longer crimson cloaks than standard brothers, more elaborate helmet crests"
+    pose: "disciplined combat formation, weapons transitioning between ranged and melee stances, veteran confidence"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 230
+      size: 3
+      base: 32
+      rules: ["Guardian", "Tough(3)", "Versatile Attack"]
+      weapons:
+        - name: "Shot-Mounts"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Custodian Axes"
+          range: 0
+          attacks: 1
+          rules: ["Blast(3)"]
+  jetpack_brothers:
+    extra_details: "squad of three golden warriors with ornate jump packs featuring eagle-wing stabilizer fins, wrist-mounted shot weapons, heavy close combat weapons with powered edges, designed for deep strike ambush attacks from above, thruster vents glowing blue on golden jump packs, streamlined armor for aerial insertion, crimson streamers trailing from packs"
+    pose: "descending from above in attack formation, heavy weapons raised for impact strike, jump packs firing"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 265
+      size: 3
+      base: 32
+      rules: ["Ambush", "Flying", "Guardian", "Tough(3)"]
+      weapons:
+        - name: "Shot-Mounts"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Heavy CCWs"
+          range: 0
+          attacks: 3
+          rules: ["AP(1)"]
+  sagittarius_brothers:
+    extra_details: "squad of three ranged-specialist golden warriors, bolt rifles with ornate golden casings, disintegrator modification modules adding devastating armor-piercing shots, heavy close combat weapons as sidearms, targeting augments on helmets, longer range optics, ammunition feeds integrated into backpack systems, more rangefinder equipment than standard custodians"
+    pose: "firing line formation, bolt rifles aimed and braced, one warrior adjusting disintegrator module"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 330
+      size: 3
+      base: 32
+      rules: ["Guardian", "Tough(3)"]
+      weapons:
+        - name: "Bolt Rifles"
+          range: 18
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Disintegrator-Mods"
+          range: 18
+          attacks: 2
+          rules: ["AP(3)"]
+        - name: "Heavy CCWs"
+          range: 0
+          attacks: 1
+          rules: ["AP(1)"]
+  vigilant_sisters:
+    extra_details: "squad of five female warrior-zealots in lighter golden-trimmed armor, energy swords with rending molecular edges, furious close combat fighters, flowing crimson robes beneath armor, devotional scripts and prayer scrolls hanging from belts, face-covering masks or ornate helms, agile and aggressive fighting style"
+    pose: "charging melee formation, energy swords raised, furious forward momentum"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 130
+      size: 5
+      base: 25
+      rules: ["Furious", "Guardian"]
+      weapons:
+        - name: "Energy Swords"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  prosecution_sisters:
+    extra_details: "squad of five female warrior-marksmen in lighter golden-trimmed armor, prosecution rifles for long-range engagement, close combat weapons as backup, relentless advancing fire doctrine, targeting monocles or optic enhancements, ammunition bandoliers, disciplined fire-and-advance posture, crimson cloaks"
+    pose: "advancing fire formation, rifles shouldered and aimed, disciplined advance"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 150
+      size: 5
+      base: 25
+      rules: ["Guardian", "Relentless"]
+      weapons:
+        - name: "Prosecution Rifles"
+          range: 24
+          attacks: 2
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  hunter_sisters:
+    extra_details: "squad of three female warrior-scouts in lighter golden-trimmed armor, flamers spewing purifying fire, close combat weapons for follow-up, scout reconnaissance specialists, lighter armor for stealth operations, sensor equipment, tracking devices on belts, hooded crimson cloaks for concealment"
+    pose: "scout advance formation, flamers held ready, crouched and alert"
+
+  # === ELITES ===
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 100
+      size: 3
+      base: 25
+      rules: ["Guardian", "Scout"]
+      weapons:
+        - name: "Flamers"
+          range: 12
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  destroyer:
+    extra_details: "lone elite hunter in heavy golden auramite armor, rapid-fire shot mount on wrist, custodian axe with oversized powered blade, deep strike ambush specialist emerging from teleportation, heavier armor plating than standard custodians, Tough(6), additional targeting sensors on helmet, trophy kills on belt, solo operative markings"
+    pose: "emerging from teleport strike, custodian axe mid-swing, shot mount blazing"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 145
+      size: 1
+      base: 40
+      rules: ["Ambush", "Guardian", "Tough(6)"]
+      weapons:
+        - name: "Rapid Shot-Mount"
+          range: 12
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Custodian Axe"
+          range: 0
+          attacks: 2
+          rules: ["Blast(3)"]
+  destructor:
+    extra_details: "lone heavy assault specialist in reinforced golden auramite armor, heavy flamer belching promethium fire, energy claws crackling with disruptive force on one hand, massive stomping greaves for crushing enemies underfoot, Tough(6), ambush deep strike capability, heavier more brutal armor variant, flame-scorched decorations, kill tallies etched into claws"
+    pose: "aggressive assault pose, heavy flamer spraying fire forward, energy claws spread wide"
+
+  # === TRANSPORTS ===
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 180
+      size: 1
+      base: 40
+      rules: ["Ambush", "Guardian", "Tough(6)"]
+      weapons:
+        - name: "Heavy Flamer"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Energy Claws"
+          range: 0
+          attacks: 3
+          rules: ["Rending"]
+        - name: "Stomp"
+          range: 0
+          attacks: 3
+          rules: ["AP(1)"]
+  custodian_apc:
+    extra_details: "ornate golden armored personnel carrier, imperial eagle or aquila-equivalent prow decoration, storm rifle turret on roof, angular golden hull plates with engraved filigree, fast assault transport for eleven warriors, impact ram on front, crimson cloth banners on hull, blue-glowing viewports, treads or wheels concealed beneath golden skirt armor"
+    pose: "fast advance, turret aimed forward, assault ramp ready to deploy"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 200
+      size: 1
+      base: "100x60"
+      rules: ["Fast", "Guardian", "Impact(3)", "Tough(6)", "Transport(11)"]
+      weapons:
+        - name: "Storm Rifle"
+          range: 24
+          attacks: 3
+          rules: ["AP(1)"]
+  custodian_heavy_battle_tank:
+    extra_details: "massive golden super-heavy battle tank, quad laser cannon turret as primary armament with four barrels, twin heavy machinegun sponson, extremely thick auramite armor plating, troop transport bay for eleven warriors, enormous tracked hull with golden armor panels, ornate command cupola, crimson banner standards mounted on turret, the pinnacle of custodian armored warfare"
+    pose: "rolling advance, quad laser turret aimed, commanding presence"
+
+  # === BIKES ===
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 840
+      size: 1
+      base: "120x92"
+      rules: ["Fast", "Guardian", "Impact(9)", "Tough(18)", "Transport(11)"]
+      weapons:
+        - name: "Quad Laser Cannon"
+          range: 36
+          attacks: 4
+          rules: ["AP(3)"]
+        - name: "Twin Heavy Machinegun"
+          range: 30
+          attacks: 6
+          rules: ["AP(1)"]
+  custodian_jetbiker:
+    extra_details: "golden warrior mounted on an ornate anti-gravity jetbike, heavy rifle array with six barrels mounted on bike cowling, energy lance for devastating charge attacks, fast and agile hover-bike with golden hull panels and crimson trim, rider in full custodian armor leaning into thrust, stabilizer fins with eagle motifs, blue anti-grav glow underneath"
+    pose: "high-speed thrust attack, energy lance lowered for charge, jetbike banking"
+
+  # === GRAV TANKS ===
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 240
+      size: 1
+      base: 40
+      rules: ["Fast", "Guardian", "Strider", "Tough(6)"]
+      weapons:
+        - name: "Heavy Rifle Array"
+          range: 24
+          attacks: 6
+          rules: ["AP(1)"]
+        - name: "Energy Lance"
+          range: 0
+          attacks: 3
+          rules: ["AP(1)"]
+  anti_grav_light_tank:
+    extra_details: "sleek golden anti-gravity light tank, twin blazer cannon turret with deadly energy beams, hovering on blue anti-grav field, fast and maneuverable skimmer design, golden hull with swept-back fins, impact ram for ramming attacks, lighter armor but extreme speed, ornate sensor dome, crimson accent panels"
+    pose: "fast hover advance, twin blazer aimed, anti-grav field glowing blue"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 265
+      size: 1
+      base: 40
+      rules: ["Fast", "Guardian", "Impact(3)", "Strider", "Tough(6)"]
+      weapons:
+        - name: "Twin Blazer"
+          range: 30
+          attacks: 2
+          rules: ["AP(3)"]
+  anti_grav_battle_tank:
+    extra_details: "heavy golden anti-gravity battle tank, twin heavy blazer turret as devastating primary weapon, twin bolt cannon sponson for anti-infantry, hovering on powerful blue anti-grav array, heavier than light variant with thicker golden armor, impact ram for high-speed collisions, ornate hull engravings, command antenna array, crimson pennants"
+    pose: "combat hover, turret tracking target, bolt cannon sponsons sweeping"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 525
+      size: 1
+      base: 50
+      rules: ["Fast", "Guardian", "Impact(6)", "Strider", "Tough(12)"]
+      weapons:
+        - name: "Twin Heavy Blazer"
+          range: 36
+          attacks: 2
+          rules: ["AP(3)"]
+        - name: "Twin Bolt Cannon"
+          range: 30
+          attacks: 6
+          rules: ["AP(1)"]
+  anti_grav_heavy_battle_tank:
+    extra_details: "massive golden anti-gravity super-heavy tank, twin blazer turret and twin heavy bolt cannon with twelve barrels for devastating fire, enormous hovering hull on powerful anti-grav generators, Tough(18) extreme resilience, the heaviest grav-tank in the custodian arsenal, ornate golden prow with ram blade, multiple sensor arrays, crimson and gold heraldry across hull"
+    pose: "dominating hover advance, all weapons aimed, massive anti-grav field distorting air beneath"
+    type: vehicle
+
+  # === WALKERS ===
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 770
+      size: 1
+      base: 100
+      rules: ["Fast", "Guardian", "Impact(9)", "Strider", "Tough(18)"]
+      weapons:
+        - name: "Twin Blazer"
+          range: 30
+          attacks: 2
+          rules: ["AP(3)"]
+        - name: "Twin Heavy Bolt Cannon"
+          range: 30
+          attacks: 12
+          rules: ["AP(1)"]
+  custodian_combat_walker:
+    extra_details: "massive bipedal golden war walker, twin walker fists with AP(4) crushing power, heavy stomping feet, Fear(2) terrifying presence, Tough(12) extreme durability, pilot entombed in golden sarcophagus cockpit, ornate shoulder guards with engravings, hydraulic golden legs, reactor exhaust vents on back, crimson honor scrolls hanging from chassis"
+    pose: "advancing menace, both walker fists raised for crushing blows, heavy stomp mid-stride"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 355
+      size: 1
+      base: 50
+      rules: ["Fear(2)", "Guardian", "Tough(12)"]
+      weapons:
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+        - name: "Walker Fists"
+          range: 0
+          attacks: 4
+          rules: ["AP(4)"]
+  custodian_assault_walker:
+    extra_details: "massive bipedal golden war walker specialized for close assault, rapid burst shot mount for suppressive fire, enormous heavy sword with rending molecular edge, combat shield providing shielded defense, stomping feet for crushing, Fear(2) terrifying presence, Tough(12), more aggressive angular design than combat walker, sword arm dominant, shield on opposite arm, ornate golden plating"
+    pose: "charging assault pose, heavy sword raised high, combat shield forward, shot mount blazing"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 405
+      size: 1
+      base: 50
+      rules: ["Fear(2)", "Guardian", "Shielded", "Tough(12)"]
+      weapons:
+        - name: "Rapid Burst Shot-Mount"
+          range: 12
+          attacks: 4
+          rules: ["AP(1)"]
+        - name: "Heavy Sword"
+          range: 0
+          attacks: 12
+          rules: ["AP(1)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  custodian_heavy_walker:
+    extra_details: "colossal golden war engine, the largest walker in the custodian arsenal, bolt launcher for barrage fire, twin plasma cannons on arms with devastating blast capability, massive stomping feet with AP(2) crushing power, twin walker fists for melee, Fear(3) supreme terror, Tough(15) near-indestructible, towering above all other units, ornate golden chassis covered in victory engravings, reactor core visible on back, crimson banners draped from shoulders"
+    pose: "apocalyptic advance, all weapons systems active, bolt launcher elevated, plasma cannons charged, towering dominant presence"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 685
+      size: 1
+      base: 50
+      rules: ["Fear(3)", "Guardian", "Tough(15)"]
+      weapons:
+        - name: "Bolt Launcher"
+          range: 24
+          attacks: 6
+          rules: ["AP(1)"]
+        - name: "Twin Plasmas"
+          range: 12
+          attacks: 2
+          rules: ["AP(4)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 6
+          rules: ["AP(2)"]
+        - name: "Walker Fists"
+          range: 0
+          attacks: 4
+          rules: ["AP(4)"]

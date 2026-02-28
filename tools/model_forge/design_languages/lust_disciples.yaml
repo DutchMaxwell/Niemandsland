@@ -1,0 +1,515 @@
+# =============================================================================
+# Lust Disciples - Design Language
+# =============================================================================
+# Chaos-Krieger des Gottes der Exzesse und Geschwindigkeit.
+# Perfektionsbesessenheit, Sonic-Waffen, ueberwaetigende Sinnesreize.
+# OPR-Aequivalent zu Emperor's Children.
+# Basiert auf: GF - Lust Disciples v3.5.2
+
+faction_name: "Lust Disciples"
+
+aesthetic:
+  genre: "grimdark sci-fi hedonistic chaos"
+  style: "perfection-obsessed fallen warriors"
+  inspiration:
+    - "Fallen warriors pursuing perfection through excess"
+    - "Elegant corrupted armor with sonic weapons"
+    - "Decadent aesthetics mixed with speed and grace"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted Emperor's Children iconography"
+    - "Overly sexual or gratuitous designs"
+    - "Plain or utilitarian aesthetics"
+
+colors:
+  primary: "rich purple and pink power armor"
+  secondary: "burnished gold filigree and excess motifs"
+  accent: "electric neon pink sonic energy glow"
+
+materials:
+  - "iridescent purple ceramite with gold excess symbols"
+  - "sonic amplifiers and speaker-weapon arrays"
+  - "flowing silk capes and decadent decorations"
+  - "mirror-polished surfaces and gem-encrusted weapons"
+
+creature_type: "perfection-obsessed fallen warrior in ornate power armor"
+
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered figure, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on armor surface textures (iridescent surfaces, sonic weapons, excess motifs)
+  - 28mm tabletop miniature aesthetic and heroic proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# =============================================================================
+# Per-Unit Overrides - Alle Einheiten aus GF Lust Disciples v3.5.2
+# =============================================================================
+unit_overrides:
+
+  # ==========================================================================
+  # HEROES
+  # ==========================================================================
+
+  lust_destroyer_champion:
+    extra_details: "towering elite destroyer hero in massively bulky terminator-style iridescent purple power armor, ornate gold filigree depicting excess motifs across every surface, champion heavy rifle with sonic amplifier barrel attachment in one hand, quad-attack close combat weapon crackling with neon pink energy in other hand, mirror-polished pauldrons with gem-encrusted trim, flowing silk tabard in deep magenta, sensor-studded helmet with resonance horns, perfumed smoke trailing from censer vents, Tough(6)"
+    pose: "imposing predatory stance, heavy rifle aimed with casual arrogance, close combat weapon held wide in a theatrical flourish of excess"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 130
+      size: 1
+      base: 40
+      rules: ["Ambush", "Lustbound", "Tough(6)"]
+      weapons:
+        - name: "Champion Heavy Rifle"
+          range: 24
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "CCW"
+          range: 0
+          attacks: 4
+  chosen_lust_champion:
+    extra_details: "elite champion hero in ornate iridescent purple power armor with extensive gold excess symbols, flamer pistol with jeweled grip in one hand, close combat weapon with razor-edged perfection in the other, silk half-cape draped over one shoulder in magenta, mirror-polished helmet crest shaped like a sonic wave, gem-studded belt with trophies of perfection, versatile attack targeting optics on helmet visor, Tough(3)"
+    pose: "graceful combat pose, flamer pistol elegantly extended, close combat weapon poised for a precise lethal strike"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 60
+      size: 1
+      base: 32
+      rules: ["Lustbound", "Tough(3)", "Versatile Attack"]
+      weapons:
+        - name: "Flamer Pistol"
+          range: 6
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  lust_champion:
+    extra_details: "hero officer in decorated iridescent purple power armor with gold trim on every edge, flamer pistol holstered at hip with ornate chain lanyard, close combat weapon drawn and gleaming with neon pink energy, silk combat sash across chest, mirror-polished helmet with crest of excess, perfume dispensers integrated into armor vents, devotional excess scrolls on pauldrons, Tough(3)"
+    pose: "commanding advance pose, close combat weapon raised overhead, free hand beckoning followers forward with imperious grace"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 50
+      size: 1
+      base: 32
+      rules: ["Lustbound", "Tough(3)"]
+      weapons:
+        - name: "Flamer Pistol"
+          range: 6
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  lust_cultist_champion:
+    extra_details: "mortal cult leader in lighter purple and pink robes over carapace armor, champion pistol with ornate barrel in one hand, close combat weapon with curved blade in other, elaborate headdress with gold excess circlet, flowing robes with iridescent fabric shimmering between purple and pink, ritual scars and piercings as marks of devotion, necklace of sensory amplifier charms, Tough(3)"
+    pose: "fanatical preacher pose, pistol thrust forward, weapon raised in ecstatic devotion to excess"
+
+  # ==========================================================================
+  # CORE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 25
+      size: 1
+      base: 32
+      rules: ["Lustbound", "Tough(3)"]
+      weapons:
+        - name: "Champion Pistol"
+          range: 12
+          attacks: 2
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  lust_cultists:
+    extra_details: "single mortal cultist in purple and pink robes over light carapace armor, rifles with crude sonic modifications, close combat weapons with jagged blades, wild hair and ritual scarification, sensory amplifier piercings, tattered silk sashes in magenta, excess cult icons on crude banners, frenzied devotees of the god of lust"
+    pose: "frenzied mob advance, rifles raised and firing wildly, ecstatic expressions of devoted excess"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 120
+      size: 10
+      base: 25
+      rules: ["Lustbound"]
+      weapons:
+        - name: "Rifles"
+          range: 24
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  lust_brothers:
+    extra_details: "single standard fallen warrior in iridescent purple power armor with gold trim, heavy rifles with AP sonic-tuned barrels, close combat weapons as sidearms, flowing silk tabards in magenta draped from waist, mirror-polished helmets with resonance crests, excess iconography on left pauldron, gem-studded ammunition pouches, neon pink eye lenses glowing"
+    pose: "advancing in swift tactical formation, rifles shouldered and aimed, elegant yet menacing stride"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 145
+      size: 5
+      base: 25
+      rules: ["Lustbound"]
+      weapons:
+        - name: "Heavy Rifles"
+          range: 24
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  chosen_lust_brothers:
+    extra_details: "single elite chosen warrior in ornately decorated iridescent purple power armor with extensive gold filigree, heavy rifles with modular sonic attachments, close combat weapons, versatile attack targeting systems integrated into visors, silk half-capes in deep magenta, mirror-polished armor with gemstone inlays, veteran excess markings in gold script, each warrior a masterwork of corrupted perfection"
+    pose: "confident elite advance, weapons ready with fluid precision, versatile combat stance radiating arrogant perfection"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 120
+      size: 3
+      base: 25
+      rules: ["Lustbound", "Versatile Attack"]
+      weapons:
+        - name: "Heavy Rifles"
+          range: 24
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  lust_talon_raptors:
+    extra_details: "single jump assault warrior in sleek iridescent purple power armor with integrated jump packs shaped like swept-back sonic wings, dual energy claws on both hands crackling with neon pink rending energy, aerodynamic helmet designs with resonance horns, flowing silk streamers trailing from jump packs, lightweight armor optimized for speed, furious assault specialists who drop from the sky with piercing sonic screams"
+    pose: "mid-air descent with jump packs firing purple exhaust, energy claws spread wide, diving predators screaming through the air"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 165
+      size: 5
+      base: 25
+      rules: ["Ambush", "Flying", "Furious", "Lustbound"]
+      weapons:
+        - name: "Dual Energy Claws"
+          range: 0
+          attacks: 2
+          rules: ["Rending"]
+  lust_support:
+    extra_details: "single heavy weapons in reinforced iridescent purple power armor, heavy flamers with sonic-amplified blast projectors glowing with pink flame, ammunition feeds with gold-trimmed connectors, heat-resistant gauntlets with gem inlays, relentless advance servos on legs, excess markings on heat shields, silk wrappings around weapon stocks"
+    pose: "braced firing pose, heavy flamers unleashing waves of pink-tinged fire, advancing relentlessly with graceful purpose"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 150
+      size: 3
+      base: 25
+      rules: ["Lustbound", "Relentless"]
+      weapons:
+        - name: "Heavy Flamers"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  lust_destroyers:
+    extra_details: "single elite terminator-style assault warrior in massively bulky iridescent purple destroyer armor with gold excess filigree, dual energy claws with quad attacks crackling with neon pink rending energy, deep-set helmet visors glowing, silk tabards beneath heavy armor plates, gem-encrusted teleport homers, perfumed smoke vents on backpacks, Tough(3)"
+    pose: "emerging from ambush with devastating presence, energy claws spread wide, bulky silhouettes radiating lethal perfection"
+
+  # ==========================================================================
+  # MUTATED UNITS
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 200
+      size: 3
+      base: 32
+      rules: ["Ambush", "Lustbound", "Tough(3)"]
+      weapons:
+        - name: "Dual Energy Claws"
+          range: 0
+          attacks: 4
+          rules: ["Rending"]
+  lust_mutated_cultists:
+    extra_details: "single mutated cultist with purple-pink flesh mutations warping their bodies, clawed hands with double attacks, tattered remnants of purple robes over twisted flesh, extra sensory organs and iridescent skin patches, some with additional limbs or elongated features, unpredictable mutations shifting between razor sharpness and blinding speed, frenzied pack of excess-corrupted mortals"
+    pose: "swarming charge, claws slashing wildly, twisted bodies contorting with unpredictable feral energy"
+
+    game_stats:
+      quality: 5
+      defense: 6
+      cost: 105
+      size: 10
+      base: 25
+      rules: ["Lustbound", "Unpredictable Fighter"]
+      weapons:
+        - name: "Claws"
+          range: 0
+          attacks: 2
+  lust_mutated_brothers:
+    extra_details: "single mutated fallen warrior with iridescent purple flesh merging with remnants of power armor, heavy claws with AP that have grown from their gauntlets and fused with bone, fast-moving with digitigrade legs and elongated limbs, unpredictable mutation effects rippling across their bodies, gold armor fragments still visible beneath organic growths, faces twisted into permanent expressions of ecstatic anguish"
+    pose: "rapid charge with inhuman speed, heavy claws raised, lithe mutated bodies moving with terrifying unnatural grace"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 155
+      size: 5
+      base: 25
+      rules: ["Fast", "Lustbound", "Unpredictable Fighter"]
+      weapons:
+        - name: "Heavy Claws"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  lust_greater_mutated:
+    extra_details: "single large mutated monstrosity with iridescent purple and pink flesh over massive frames, heavy claws with quad attacks and AP, remnants of gold-trimmed power armor fused into their enlarged bodies, fast and unpredictable with shifting mutations, multiple sensory organs and resonance growths, each a towering figure of corrupted excess, Tough(3)"
+    pose: "loping charge with preternatural speed, massive heavy claws sweeping forward, hulking yet disturbingly graceful mutated forms"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 230
+      size: 3
+      base: 32
+      rules: ["Fast", "Lustbound", "Tough(3)", "Unpredictable Fighter"]
+      weapons:
+        - name: "Heavy Claws"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  lust_mutated_destroyer:
+    extra_details: "single massive mutated destroyer with iridescent purple and pink flesh rippling over a huge frame, dual mutated claws with six attacks and AP grown from fused terminator gauntlets, remnants of gold-trimmed destroyer armor embedded in flesh, unpredictable mutation aura distorting the air around it, multiple eyes and sensory tendrils, ambush predator that materializes from the warp, Tough(6)"
+    pose: "lunging ambush pose, dual mutated claws spread wide for a devastating strike, hulking body coiled with predatory tension"
+
+  # ==========================================================================
+  # BIKES
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 135
+      size: 1
+      base: 40
+      rules: ["Ambush", "Lustbound", "Tough(6)", "Unpredictable"]
+      weapons:
+        - name: "Dual Mutated Claws"
+          range: 0
+          attacks: 6
+          rules: ["AP(1)"]
+  lust_bikers:
+    extra_details: "single power armored warrior on sleek iridescent purple armored combat motorcycle with gold filigree on fairings, twin heavy rifles with AP mounted on bike nose, heavy pistols with AP and close combat weapons, sonic exhaust pipes trailing neon pink energy, streamlined aerodynamic design built for speed, silk pennants fluttering from handlebars, excess iconography on fuel tanks, Tough(3)"
+    pose: "racing forward at breakneck speed in tight formation, bikes leaning into aggressive turn, weapons aimed ahead with casual lethal grace"
+
+  # ==========================================================================
+  # VEHICLES (Transport - auto-detected)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 255
+      size: 3
+      base: 32
+      rules: ["Fast", "Lustbound", "Tough(3)"]
+      weapons:
+        - name: "Twin Heavy Rifles"
+          range: 24
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Heavy Pistols"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  lust_apc:
+    extra_details: "sleek iridescent purple armored personnel carrier with gold trim and excess motifs, angular aerodynamic design with front ramp door, storm rifle turret on top with sonic amplifier barrel, hull-mounted weapon options, troop compartment with firing ports, fast-moving tracked chassis with gold-trimmed track guards, silk pennants on antenna, neon pink running lights, Tough(6), Transport(11)"
+    pose: "speeding forward at high velocity, turret aimed ahead, ramp sealed, purple exhaust trailing behind"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 190
+      size: 1
+      base: "100x60"
+      rules: ["Fast", "Impact(3)", "Lustbound", "Tough(6)", "Transport(11)"]
+      weapons:
+        - name: "Storm Rifle"
+          range: 24
+          attacks: 3
+          rules: ["AP(1)"]
+  lust_heavy_tank:
+    extra_details: "super-heavy iridescent purple assault transport, massive hull with quad laser cannon turret and twin heavy machinegun sponson, extremely thick armor plating with gold excess filigree on every surface, multiple weapon systems, troop compartment, commander cupola with mirror-polished helmet visible, silk banners with excess iconography trailing from turret, neon pink targeting lasers, Tough(18), Transport(11)"
+    pose: "rolling forward at surprising speed for its size, all weapon systems aimed and active, dominating the battlefield like a decadent war cathedral"
+
+  # ==========================================================================
+  # VEHICLES (no Transport)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 800
+      size: 1
+      base: "120x92"
+      rules: ["Fast", "Impact(9)", "Lustbound", "Tough(18)", "Transport(11)"]
+      weapons:
+        - name: "Quad Laser Cannon"
+          range: 36
+          attacks: 4
+          rules: ["AP(3)"]
+        - name: "Twin Heavy Machinegun"
+          range: 30
+          attacks: 6
+          rules: ["AP(1)"]
+  lust_tank:
+    extra_details: "main battle tank in iridescent purple livery with extensive gold filigree, large turret with twin laser cannon and twin heavy machinegun, thick frontal glacis armor with excess heraldry in gold and gems, fast-moving heavy tracked chassis with gold-trimmed track guards, commander hatch with ornate cupola, neon pink targeting array glow, silk pennants on antenna, Tough(12)"
+    pose: "advancing at speed, main turret aimed at distant target, aggressive fast assault posture"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 485
+      size: 1
+      base: 50
+      rules: ["Fast", "Impact(6)", "Lustbound", "Tough(12)"]
+      weapons:
+        - name: "Twin Laser Cannon"
+          range: 36
+          attacks: 2
+          rules: ["AP(3)"]
+        - name: "Twin Heavy Machinegun"
+          range: 30
+          attacks: 6
+          rules: ["AP(1)"]
+  lust_infernal_brute:
+    extra_details: "massive bipedal daemon engine in iridescent purple and gold, hulking armored torso with screaming daemon face plate, two enormous brute hammers crackling with blast energy in both fist mounts, heavy armored legs with stomp-capable feet, warp-infused reactor on back venting neon pink energy, chains and hooks draped over shoulders, excess symbols branded into armor plates, fear-inducing daemonic war engine, Tough(12)"
+    pose: "rampaging forward, both brute hammers raised overhead for a devastating ground-pound, daemonic face howling with excess"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 275
+      size: 1
+      base: 50
+      rules: ["Fear(2)", "Lustbound", "Tough(12)"]
+      weapons:
+        - name: "Brute Hammers"
+          range: 0
+          attacks: 2
+          rules: ["Blast(3)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  lust_mech_fiend:
+    extra_details: "quadrupedal daemon engine in iridescent purple with gold trim, bestial predatory form with fiend claws on front legs crackling with rending energy, eight-attack steel tail whipping behind with AP barbs, stomp-capable hind legs, regenerating warp-flesh visible between armor plates glowing neon pink, daemonic head with multiple sensory horns, chains and excess trophies draped across flanks, fear-inducing serpentine war beast, Tough(12)"
+    pose: "pouncing predator pose, fiend claws extended forward, steel tail arched over back like a scorpion, bestial and terrifyingly graceful"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 350
+      size: 1
+      base: 50
+      rules: ["Fear(2)", "Lustbound", "Regeneration", "Tough(12)"]
+      weapons:
+        - name: "Fiend Claws"
+          range: 0
+          attacks: 4
+          rules: ["Rending"]
+        - name: "Steel Tails"
+          range: 0
+          attacks: 8
+          rules: ["AP(1)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  lust_crab_walker:
+    extra_details: "colossal multi-legged daemon engine in iridescent purple and gold, crab-like armored body with battle cannon and reaper cannon mounted on top carapace, massive crab fists with AP(3) on articulated front arms, flailing chain-tentacle weapon with eight attacks, stomp-capable armored legs, regenerating warp-flesh between armor segments glowing neon pink, fear-inducing daemonic face on front carapace, excess symbols etched across entire hull, towering war engine of corrupted elegance, Tough(18)"
+    pose: "advancing siege pose, crab fists raised menacingly, battle cannon aimed forward, chain-flail whipping, a terrifying colossus of excess"
+    type: vehicle
+
+  # ==========================================================================
+  # AIRCRAFT (Aircraft rule - no type override needed)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 690
+      size: 1
+      base: 100
+      rules: ["Fear(3)", "Lustbound", "Regeneration", "Tough(18)"]
+      weapons:
+        - name: "Battle Cannon"
+          range: 30
+          attacks: 2
+          rules: ["AP(2)"]
+        - name: "Reaper Cannon"
+          range: 24
+          attacks: 4
+          rules: ["Slam"]
+        - name: "Crab Fists"
+          range: 0
+          attacks: 4
+          rules: ["AP(3)"]
+        - name: "Crab Flail"
+          range: 0
+          attacks: 8
+        - name: "Stomp"
+          range: 0
+          attacks: 6
+          rules: ["AP(2)"]
+  lust_dragon:
+    extra_details: "sleek daemon-winged aircraft in iridescent purple with gold filigree along wing edges, forge flamethrower mounted under chin venting pink-tinged fire, swept-back wings with organic daemon-flesh membranes between armored struts, regenerating warp-flesh hull with neon pink energy veins visible through translucent panels, tail stabilizer shaped like a barbed whip, sensor array styled as daemonic eyes, sonic engine intakes with resonance grilles, Tough(6)"
+    pose: "banking in flight with wings spread wide, forge flamethrower unleashing a stream of fire, elegant aerial predator diving with lethal grace"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 300
+      size: 1
+      base: "120x92"
+      rules: ["Reliable)", "Aircraft", "Lustbound", "Regeneration", "Tough(6)"]
+      weapons:
+        - name: "Forge Flamethrower"
+          range: 18
+          attacks: 2
+          rules: ["AP(1)"]

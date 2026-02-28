@@ -1,0 +1,25 @@
+# Virtual Environment
+venv/
+.venv/
+
+# Runtime-Verzeichnisse
+state/
+output/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# IDE
+.idea/
+.vscode/
+
+# Secrets (Security)
+.hf_token
+.gemini_key
+.trellis_space
+
+# OS
+.DS_Store
