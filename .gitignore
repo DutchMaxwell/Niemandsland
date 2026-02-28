@@ -50,7 +50,12 @@ tts_imports/
 Images/
 Models/
 
+# Python
+.venv/
+__pycache__/
+
 # Auto Claude data directory
 .auto-claude/
 .hf_token
-__pycache__/
+.gemini_key
+.trellis_space

@@ -1,0 +1,649 @@
+# =============================================================================
+# High Elf Fleets - Design Language
+# =============================================================================
+# Basiert auf: GF - High Elf Fleets v3.5.2
+# Nomadische Weltraumelfen mit hochspezialisierten Aspektkriegern,
+# Elementargeistern und eleganter Anti-Gravitations-Technologie.
+# OPR-Aequivalent zu Craftworld Eldar / Asuryani.
+
+faction_name: "High Elf Fleets"
+
+aesthetic:
+  genre: "grimdark sci-fi elegant alien"
+  style: "graceful nomadic fleet warriors"
+  inspiration:
+    - "Ancient nomadic space-faring elven civilization with psychic mastery"
+    - "Highly specialized aspect warriors each perfecting a single art of war"
+    - "Sleek anti-gravity technology and wraithbone-like crystalline constructs"
+    - "Flowing organic curves blended with advanced alien technology"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted Aeldari or Craftworld iconography"
+    - "Bulky or heavy industrial aesthetics"
+    - "Human proportions or human technology"
+    - "Cartoon or anime aesthetics"
+
+colors:
+  primary: "bone white and ghostly pale blue armor panels"
+  secondary: "gold trim and deep sapphire blue accent plates"
+  accent: "glowing spirit stones in red and green, bright gemstone nodes"
+
+materials:
+  - "smooth wraithbone-like crystalline armor with flowing organic curves"
+  - "psycho-reactive spirit stone gemstones embedded in armor"
+  - "shimmering gossamer cloaks and silk pennants"
+  - "translucent energy fields and holographic projections"
+  - "polished alien metal with gentle luminescence"
+
+creature_type: "graceful alien fleet warrior"
+
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered figure, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on surface textures (smooth alien armor, gemstones, flowing cloth)
+  - 28mm tabletop miniature aesthetic and proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# =============================================================================
+# Per-Unit Overrides - Alle Einheiten aus GF High Elf Fleets v3.5.2
+# =============================================================================
+unit_overrides:
+
+  # ==========================================================================
+  # HEROES
+  # ==========================================================================
+
+  elven_noble:
+    extra_details: "tall regal alien commander in ornate bone-white armor with gold filigree, combat shield energy barrier on left arm projecting faint shimmer, close combat weapon with elegant curved blade in right hand, tall crested helmet with flowing plume, spirit stones embedded across chest plate and pauldrons, flowing cloak of shimmering alien silk, Highborn enhanced movement, Shielded defensive ward, Tough(3)"
+    pose: "commanding regal stance, curved blade held at guard, shield arm raised, cloak flowing behind"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 40
+      size: 1
+      base: 32
+      rules: ["Highborn", "Shielded", "Tough(3)"]
+      weapons:
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  elite_protector:
+    extra_details: "veteran squad leader in streamlined pale blue and bone-white armor, combat shield energy barrier on left arm, close combat weapon with precision-forged blade, lighter armor than noble but still elegant, tactical sensor crest on helmet, spirit stones on chest, versatile officer who can specialize as warlock, artillery spotter, or squad leader, Highborn enhanced movement, Shielded defensive ward, Tough(3)"
+    pose: "alert combat stance, blade poised to strike, shield arm braced forward"
+
+  # ==========================================================================
+  # CORE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 30
+      size: 1
+      base: 32
+      rules: ["Highborn", "Shielded", "Tough(3)"]
+      weapons:
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  acolytes:
+    extra_details: "single psychic warrior-seer in ornate robes over sleek armor, shard pistols with crystalline ammunition in one hand, energy swords crackling with psychic rending force in the other, tall pointed hoods or crested helmets with psychic focusing gems, flowing tabards inscribed with rune patterns channels psychic power collectively as a Caster Group, Highborn enhanced movement"
+    pose: "ceremonial combat stance, energy swords glowing with psychic power, shard pistols raised"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 145
+      size: 3
+      base: 25
+      rules: ["Caster Group", "Highborn"]
+      weapons:
+        - name: "Shard Pistols"
+          range: 12
+          attacks: 1
+          rules: ["Crack"]
+        - name: "Energy Swords"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  protectors:
+    extra_details: "single disciplined line infantry warrior in bone-white and blue armor, shardguns with crystal ammunition magazines firing crack-enhanced shards at 12 inch range, close combat weapons as sidearms, tall crested helmets with angular visors, spirit stones on chest plates, can mount heavy weapon gun platform on anti-grav disc, Highborn enhanced movement"
+    pose: "disciplined firing line formation, shardguns raised and aimed, helmets scanning forward"
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 90
+      size: 5
+      base: 25
+      rules: ["Highborn"]
+      weapons:
+        - name: "Shardguns"
+          range: 12
+          attacks: 2
+          rules: ["Crack"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  retributors:
+    extra_details: "single elite melee guard warrior in heavy ornate armor with gold trim, energy swords with rending AP(1) blades crackling with contained energy, combat shields projecting shimmering defensive barriers, finest armor in the fleet's infantry, tall plumed helmets with face-concealing visors, heavy spirit stone clusters on pauldrons, Highborn enhanced movement, Shielded defensive ward"
+    pose: "shield wall formation, energy swords raised overhead, shields interlocked forward"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 90
+      size: 5
+      base: 25
+      rules: ["Highborn", "Shielded"]
+      weapons:
+        - name: "Energy Swords"
+          range: 0
+          attacks: 1
+          rules: ["AP(1)"]
+  strikers:
+    extra_details: "single fast assault warrior in lighter streamlined armor optimized for speed, shard pistols with crack rounds in one hand, dual-attack close combat weapons in the other, scout sensor arrays on helmets for forward deployment, lighter plating on legs for rapid movement, throwing knife sheaths on belts, Highborn enhanced movement, Scout forward deployment"
+    pose: "rapid assault advance, shard pistols firing while closing to melee, weapons drawn"
+
+  # ==========================================================================
+  # ELITE INFANTRY - ASPECT WARRIORS
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 95
+      size: 5
+      base: 25
+      rules: ["Highborn", "Scout"]
+      weapons:
+        - name: "Shard Pistols"
+          range: 12
+          attacks: 1
+          rules: ["Crack"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  gliders:
+    extra_details: "single flying assault warrior with elegant swept-back wings or anti-grav jump packs, laser pistols firing focused AP(2) beams at 9 inch range, close combat weapons for aerial strike, sleek aerodynamic armor in dark blue with white accent panels, wing-like stabilizer fins on back and arms, visor-enclosed helmets with targeting reticles, Ambush deep-strike, Flying movement, Highborn enhanced movement"
+    pose: "dynamic aerial diving attack, wings spread, laser pistols aimed downward, descending on target"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 150
+      size: 5
+      base: 25
+      rules: ["Ambush", "Flying", "Highborn"]
+      weapons:
+        - name: "Laser Pistols"
+          range: 9
+          attacks: 1
+          rules: ["AP(2)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  revenants:
+    extra_details: "single elite melee warrior in flowing bone-white armor with ghost motifs, shard pistols with crack ammunition in off-hand, energy swords with rending AP(1) in main hand, tall crested helmets with banshee-like elongated faceplates, flowing tabards and spirit-silk scarves trailing from armor, strider adaptations on greaves for terrain mastery, ghostly and ethereal appearance, Highborn enhanced movement, Strider terrain mastery"
+    pose: "fluid melee assault, energy swords mid-swing, shard pistols firing, flowing movement"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 165
+      size: 5
+      base: 25
+      rules: ["Highborn", "Strider"]
+      weapons:
+        - name: "Shard Pistols"
+          range: 12
+          attacks: 1
+          rules: ["Crack"]
+        - name: "Energy Swords"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  stingers:
+    extra_details: "single stealth assassin in dark angular armor with light-absorbing surfaces, shard pistols with crack rounds in off-hand, stinger blades with reliable bane-coated edges dripping with toxin in main hand, angular faceless helmets with multiple sensor slits, stealth field generators on backs creating visual distortion, chameleon-like cloaks, Highborn enhanced movement, Scout forward deployment, Stealth field"
+    pose: "emerging from stealth, stinger blades poised for killing strike, shard pistols at the ready"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 190
+      size: 5
+      base: 25
+      rules: ["Highborn", "Scout", "Stealth"]
+      weapons:
+        - name: "Shard Pistols"
+          range: 12
+          attacks: 1
+          rules: ["Crack"]
+        - name: "Stinger Blades"
+          range: 0
+          attacks: 2
+          rules: ["Reliable", "Bane"]
+  shifters:
+    extra_details: "single teleporting assault warrior in dark purple and bone-white armor with dimensional distortion effects, web spinners firing AP(4) monofilament webs at 12 inch range, close combat weapons as sidearms, teleportation field generators on backs creating swirling dimensional rifts, helmets with warp-sight visors, reality-distortion halos around hands and weapons, Ambush deep-strike, Highborn enhanced movement, Teleport displacement"
+    pose: "mid-teleport materialization, web spinners firing, dimensional energy crackling around bodies"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 245
+      size: 5
+      base: 25
+      rules: ["Ambush", "Highborn", "Teleport"]
+      weapons:
+        - name: "Web Spinners"
+          range: 12
+          attacks: 2
+          rules: ["AP(4)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  scorchers:
+    extra_details: "single heavy flamer warrior in reinforced armor with heat-resistant plating, heavy flamers with AP(1) reliable blast(3) streams of alien fire, close combat weapons as sidearms, fuel reservoirs integrated into back-mounted systems feeding through arm-linked hoses, heat vents on pauldrons glowing orange, flame-resistant visors on helmets, Highborn enhanced movement"
+    pose: "advancing in flame-sweep formation, heavy flamers streaming fire, heat shimmer visible"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 130
+      size: 3
+      base: 25
+      rules: ["Highborn"]
+      weapons:
+        - name: "Heavy Flamers"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  snipers:
+    extra_details: "single long-range elimination warrior in lightweight camouflage armor, sniper rifles with AP(1) reliable takedown capability at 30 inch range, close combat weapons as sidearms, camouflage cloaks with adaptive fiber patterns, long-range targeting scopes on rifles, prone-adapted leg armor with strider field boots, ghillie-like alien fiber coverings, Highborn enhanced movement, Scout forward deployment, Stealth field, Strider terrain mastery"
+    pose: "kneeling sniper positions, rifles aimed with precision, camouflage cloaks draped"
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 135
+      size: 3
+      base: 25
+      rules: ["Highborn", "Scout", "Stealth", "Strider"]
+      weapons:
+        - name: "Sniper Rifles"
+          range: 30
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  vanquishers:
+    extra_details: "single heavy weapon warrior in reinforced armor with stabilization systems, surge rockets with AP(1) unstoppable warheads on shoulder-mounted multi-tube launchers firing at 24 inch range, close combat weapons as sidearms, targeting arrays on helmets linked to rocket guidance systems, heavy stabilizer boots planted for launch recoil, ammunition feed backpacks, Highborn enhanced movement, Relentless fire discipline"
+    pose: "braced firing stance, surge rocket launchers elevated and firing, recoil stabilizers deployed"
+
+  # ==========================================================================
+  # ELEMENTAL CONSTRUCTS
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 250
+      size: 3
+      base: 25
+      rules: ["Highborn", "Relentless"]
+      weapons:
+        - name: "Surge Rockets"
+          range: 24
+          attacks: 3
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  elemental_protectors:
+    extra_details: "single towering wraithbone construct warrior guided by bound spirits, distortion guns firing AP(2) blast(3) dimensional rift projectiles at 12 inch range, close combat weapon appendages, massive smooth crystalline bodies with glowing spirit stones in chest cavity, angular wraithbone plating in bone-white with blue rune inscriptions, eyeless sculpted faceplates, Fearless bound spirit, Highborn enhanced movement, Relentless fire discipline, Tough(3)"
+    pose: "relentless advance formation, distortion guns aimed, glowing spirit stones pulsing"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 230
+      size: 3
+      base: 32
+      rules: ["Highborn", "Relentless", "Tough(3)"]
+      weapons:
+        - name: "Distortion Guns"
+          range: 12
+          attacks: 1
+          rules: ["AP(2)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  elemental_strikers:
+    extra_details: "single close-combat wraithbone construct bound with vengeful spirits, killing axes with AP(2) deadly(3) massive energy-wreathed blades, combat shield energy barriers, towering smooth crystalline bodies larger than infantry with glowing amber spirit stones, angular wraithbone armor plates in bone-white, sculpted warrior faceplates expressing determination, Fearless bound spirit, Furious charge, Highborn enhanced movement, Shielded defensive ward, Tough(3)"
+    pose: "aggressive charge formation, killing axes raised high, shield barriers shimmering"
+
+  # ==========================================================================
+  # JETBIKES
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 235
+      size: 3
+      base: 32
+      rules: ["Furious", "Highborn", "Shielded", "Tough(3)"]
+      weapons:
+        - name: "Killing Axes"
+          range: 0
+          attacks: 1
+          rules: ["AP(2)"]
+  jetbike_protectors:
+    extra_details: "single rider on sleek anti-gravity jetbikes, mounted shardguns with crack rounds integrated into bike cowling, shard pistols in holsters, close combat weapons for melee passes, streamlined teardrop-shaped jetbike hulls in bone-white with blue racing stripes, anti-grav emitters glowing beneath, aerodynamic fairings and swept-back stabilizer fins, riders in streamlined armor leaning forward, Fast anti-grav movement, Highborn enhanced movement, Strider terrain mastery, Tough(3)"
+    pose: "high-speed formation flight, jetbikes banking in unison, mounted weapons firing"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 200
+      size: 3
+      base: 32
+      rules: ["Fast", "Highborn", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Mounted Shardguns"
+          range: 12
+          attacks: 2
+          rules: ["Crack"]
+        - name: "Shard Pistols"
+          range: 12
+          attacks: 1
+          rules: ["Crack"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  jetbike_strikers:
+    extra_details: "single aggressive assault jetbike rider, mounted shardguns with crack rounds on bike cowling, shard pistols drawn for close passes, close combat weapons for impact strikes, heavier-built jetbikes with reinforced ram prows for impact attacks, bone-white hulls with aggressive red accent markings, riders in combat-ready posture with weapons brandished, Fast anti-grav movement, Highborn enhanced movement, Impact(1) ram strikes, Strider terrain mastery, Tough(3)"
+    pose: "aggressive attack run, jetbikes diving forward, riders with weapons drawn for impact"
+
+  # ==========================================================================
+  # VEHICLES
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 215
+      size: 3
+      base: 32
+      rules: ["Fast", "Highborn", "Impact(1)", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Mounted Shardguns"
+          range: 12
+          attacks: 2
+          rules: ["Crack"]
+        - name: "Shard Pistols"
+          range: 12
+          attacks: 1
+          rules: ["Crack"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  anti_gravity_apc:
+    extra_details: "sleek anti-gravity troop transport skimmer, elongated hull with smooth wraithbone-like armor panels in bone-white and blue, mounted shardguns with crack rounds on pintle turret, open troop bay visible at rear for Transport(11) capacity, anti-grav emitters glowing blue-white underneath, swept-back hull fins for stability, impact ram prow reinforced with crystalline plating, Fast anti-grav movement, Highborn enhanced movement, Impact(3) ram, Strider terrain mastery, Tough(6)"
+    pose: "fast hover transport, skimming at speed, pintle shardguns tracking, troop bay partially visible"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 165
+      size: 1
+      base: "100x60"
+      rules: ["Fast", "Highborn", "Impact(3)", "Strider", "Tough(6)", "Transport(11)"]
+      weapons:
+        - name: "Mounted Shardguns"
+          range: 12
+          attacks: 2
+          rules: ["Crack"]
+  heavy_jetbike:
+    extra_details: "large heavily-armed anti-gravity attack bike, shard cannon with AP(1) crack rounds as primary weapon on dorsal mount firing at 24 inch range, mounted shardguns on chin turret, oversized anti-grav engines for high speed, heavier armor plating than standard jetbikes in bone-white with gold trim, single elite rider in reinforced armor, impact ram prow, wide stabilizer fins, Fast anti-grav movement, Highborn enhanced movement, Impact(3) ram, Strider terrain mastery, Tough(6)"
+    pose: "attack run at speed, shard cannon firing, banking aggressively"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 185
+      size: 1
+      base: 40
+      rules: ["Fast", "Highborn", "Impact(3)", "Strider", "Tough(6)"]
+      weapons:
+        - name: "Shard Cannon"
+          range: 24
+          attacks: 3
+          rules: ["AP(1)"]
+        - name: "Mounted Shardguns"
+          range: 12
+          attacks: 2
+          rules: ["Crack"]
+  combat_walker:
+    extra_details: "elegant bipedal war walker with long slender legs and compact weapon pod body, rapid shard cannon with AP(1) crack rounds as primary weapon firing at 24 inch range, stomp-capable armored feet with AP(1) crushing force, open or semi-enclosed cockpit with pilot visible, wraithbone-like armor in bone-white with blue accent panels, sensor array on weapon pod, scout-capable forward deployment, Highborn enhanced movement, Scout forward deployment, Tough(6)"
+    pose: "striding forward in scout posture, rapid shard cannon scanning ahead, legs in mid-stride"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 210
+      size: 1
+      base: 40
+      rules: ["Highborn", "Scout", "Tough(6)"]
+      weapons:
+        - name: "Rapid Shard Cannon"
+          range: 24
+          attacks: 6
+          rules: ["AP(1)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  anti_gravity_tank:
+    extra_details: "main battle anti-gravity tank with sleek elongated hull, twin rapid shard cannons with AP(1) crack rounds as primary turret weapons, mounted shardguns on hull chin mount, massive anti-grav emitters glowing intensely underneath, sweeping curved armor panels in bone-white with sapphire blue accent panels and gold trim, crystalline sensor dome on turret, impact ram prow, Fast anti-grav movement, Highborn enhanced movement, Impact(6) devastating ram, Strider terrain mastery, Tough(12)"
+    pose: "combat hover advance, twin turret cannons aimed, anti-grav field shimmering beneath hull"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 465
+      size: 1
+      base: 50
+      rules: ["Fast", "Highborn", "Impact(6)", "Strider", "Tough(12)"]
+      weapons:
+        - name: "Rapid Shard Cannons"
+          range: 24
+          attacks: 6
+          rules: ["AP(1)"]
+        - name: "Mounted Shardguns"
+          range: 12
+          attacks: 2
+          rules: ["Crack"]
+  support_artillery:
+    extra_details: "anti-gravity artillery platform with crew, burst mortar firing indirect blast(3) projectiles at 30 inch range, three-person artillery crew operating the weapon, compact oval-shaped anti-grav chassis hovering low, targeting array and ammunition feeds visible, stabilizer field deployed for accurate fire, lighter armor in bone-white, crew in standard fleet armor, Artillery static fire support, Tough(3)"
+    pose: "deployed firing position, burst mortar elevated for indirect bombardment, crew operating controls"
+    type: vehicle
+
+  # ==========================================================================
+  # LARGE ELEMENTAL CONSTRUCTS
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 165
+      size: 1
+      base: 32
+      rules: ["Artillery", "Tough(3)"]
+      weapons:
+        - name: "Burst Mortar"
+          range: 30
+          attacks: 2
+          rules: ["Blast(3)"]
+        - name: "Artillery Crew"
+          range: 0
+          attacks: 3
+  great_elemental:
+    extra_details: "massive towering wraithbone construct warrior of enormous scale, two shardguns with crack rounds mounted on shoulder hardpoints, two great claws with rending capability as primary melee weapons with four attacks each, stomp attacks from massive AP(1) crushing feet, enormous smooth crystalline body with blazing spirit stone in chest, angular wraithbone plating in bone-white with glowing blue rune channels, eyeless sculpted helm with crown-like crest, Fear(2) terrifying presence, Fearless bound spirit, Highborn enhanced movement, Tough(12)"
+    pose: "towering combat stance, great claws raised menacingly, spirit stone blazing, stomp feet planted"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 340
+      size: 1
+      base: 50
+      rules: ["Fear(2)", "Highborn", "Tough(12)"]
+      weapons:
+        - name: "Shardguns"
+          range: 12
+          attacks: 2
+          rules: ["Crack"]
+        - name: "Great Claws"
+          range: 0
+          attacks: 4
+          rules: ["Rending"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  titan_elemental:
+    extra_details: "colossal wraithbone titan construct of city-destroying scale, dual titan claws with 24 rending attacks on massive articulated arms, devastating stomp attacks with AP(2) from building-sized feet, smooth crystalline body of immense proportions with multiple blazing spirit stones across torso and limbs, towering angular wraithbone plating in bone-white with pulsing blue energy channels, crowned eyeless helm radiating psychic presence, Fear(4) paralyzing terror, Fearless bound spirit, Highborn enhanced movement, Tough(24)"
+    pose: "titanic striding pose, dual titan claws extended wide, spirit stones blazing, colossal scale"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 755
+      size: 1
+      base: 100
+      rules: ["Fear(4)", "Highborn", "Tough(24)"]
+      weapons:
+        - name: "Dual Titan Claws"
+          range: 0
+          attacks: 24
+          rules: ["Rending"]
+        - name: "Stomp"
+          range: 0
+          attacks: 8
+          rules: ["AP(2)"]
+  elemental_avatar:
+    extra_details: "legendary awakened avatar of the ancient elven war-spirit, wreathed in spectral flames, flame sword with 12 AP(2) rending attacks blazing with psychic fire, devastating stomp attacks with AP(2) from burning feet, semi-divine construct form combining organic and crystalline elements, glowing molten rune channels across bone-white body, crown of psychic flame on head, Caster(4) master psyker, Fear(3) divine terror, Fearless, Highborn enhanced movement, Regeneration self-repair, Tough(18)"
+    pose: "divine war stance, flame sword raised blazing, psychic fire wreathing entire body, awe-inspiring"
+
+  # ==========================================================================
+  # AIRCRAFT
+  # ==========================================================================
+
+    game_stats:
+      quality: 2
+      defense: 2
+      cost: 870
+      size: 1
+      base: 100
+      rules: ["Caster(4)", "Fear(3)", "Highborn", "Regeneration", "Tough(18)"]
+      weapons:
+        - name: "Flame Sword"
+          range: 0
+          attacks: 12
+          rules: ["AP(2)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 6
+          rules: ["AP(2)"]
+  seer_plane:
+    extra_details: "elegant psychic-capable aircraft with twin distortion guns firing AP(3) blast(3) dimensional rift projectiles at 18 inch range, sleek swept-wing airframe with crystalline canopy, wraithbone-like fuselage in bone-white with blue markings, psychic amplifier array on dorsal spine for Caster(2) abilities, anti-grav engines integrated into wing roots, sensor gems along nose, Aircraft high-altitude operations, Highborn enhanced movement, Tough(6)"
+    pose: "graceful banking flight, twin distortion guns glowing, psychic amplifier pulsing"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 455
+      size: 1
+      base: "120x92"
+      rules: ["Aircraft", "Caster(2)", "Highborn", "Tough(6)"]
+      weapons:
+        - name: "Twin Distortion Guns"
+          range: 18
+          attacks: 4
+          rules: ["AP(3)"]
+  venator_plane:
+    extra_details: "heavy fighter-bomber aircraft bristling with advanced weaponry, rapid pulse laser with AP(3) unstoppable beams firing at 36 inch range as primary nose weapon, twin shatter cannon with AP(1) rending shots at 36 inch range on wing pylons, aggressive swept-wing airframe heavier than seer variant, wraithbone-like fuselage in bone-white with red combat markings, twin engine pods, armored canopy, Aircraft high-altitude operations, Highborn enhanced movement, Tough(6)"
+    pose: "aggressive attack dive, pulse laser and shatter cannons firing, wings swept back"
+
+  # ==========================================================================
+  # NAMED CHARACTERS
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 525
+      size: 1
+      base: "120x92"
+      rules: ["Aircraft", "Highborn", "Tough(6)"]
+      weapons:
+        - name: "Rapid Pulse Laser"
+          range: 36
+          attacks: 6
+          rules: ["AP(3)"]
+        - name: "Twin Shatter Cannon"
+          range: 36
+          attacks: 6
+          rules: ["AP(1)"]
+  trasara_ioncrinius:
+    extra_details: "unique legendary fleet commander in ornate personalized armor with elaborate gold filigree and ancient rune inscriptions, orbital bombardment designator device on left arm calling down AP(2) blast(3) strikes from orbiting fleet ships (limited use), shred blaster pistol firing rending projectiles in right hand at 12 inch range, energy sword with AP(1) rending blade at hip, tall crested helmet with flowing ancestral plume, ancient spirit stones of great heroes embedded across armor, flowing commander's cloak of shimmering psycho-reactive silk, Highborn enhanced movement, Tough(3), Unique named character"
+    pose: "commanding battlefield stance, orbital bombardment arm raised to sky, energy sword at ready, cloak billowing"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 110
+      size: 1
+      base: 32
+      rules: ["Highborn", "Tough(3)"]
+      weapons:
+        - name: "Orbital Bombardment"
+          range: 24
+          attacks: 3
+          rules: ["AP(2)", "Blast(3)", "Limited"]
+        - name: "Shred Blaster Pistol"
+          range: 12
+          attacks: 2
+          rules: ["Rending"]
+        - name: "Energy Sword"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)", "Rending"]
