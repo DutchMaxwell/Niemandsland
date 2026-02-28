@@ -1,0 +1,480 @@
+# =============================================================================
+# DAO Union - Design Language
+# =============================================================================
+# Basiert auf: GF - DAO Union v3.5.2
+# Hochtechnologische Alien-Koalition mit Battlesuits, Drohnen und Railguns.
+# OPR-Aequivalent zu Tau.
+
+faction_name: "DAO Union"
+
+aesthetic:
+  genre: "grimdark sci-fi high-tech"
+  style: "advanced alien coalition"
+  inspiration:
+    - "Blue-skinned aliens with clean advanced technology"
+    - "Battlesuit mecha warriors with railgun technology"
+    - "Japanese mecha anime meets alien civilization"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted Tau Empire designs"
+    - "Medieval or gothic aesthetics"
+    - "Organic or biological technology"
+
+colors:
+  primary: "ochre tan and desert sand armor panels"
+  secondary: "dark grey mechanical underlayer"
+  accent: "orange-red sept markings and sensor lenses"
+
+materials:
+  - "smooth composite armor panels with clean lines"
+  - "advanced sensor arrays and targeting systems"
+  - "sleek energy weapon housings with blue glow"
+  - "mechanical joint servos and thruster vents"
+
+creature_type: "advanced alien warrior in high-tech armor"
+
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered figure, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on armor surface textures (clean panels, sensor arrays, weapon systems)
+  - 28mm tabletop miniature aesthetic and proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# =============================================================================
+# Per-Unit Overrides - Alle Einheiten aus GF DAO Union v3.5.2
+# =============================================================================
+unit_overrides:
+
+  # ==========================================================================
+  # HEROES
+  # ==========================================================================
+
+  battle_suit_elite:
+    extra_details: "elite battlesuit commander in sleek high-tech mech armor, dual suit-burst weapons on forearms firing rending energy rounds at 18 inch range, dual suit-flamer weapons on shoulders firing reliable blast(3) streams at 12 inch range, bash melee attack with armored fists AP(1), jetpack thruster array on back for Flying movement, advanced targeting visor helmet with glowing orange sensor lens, Hero commander with sept markings on shoulder plates, Tough(6)"
+    pose: "heroic hovering stance with thrusters firing, dual burst weapons aimed forward, visor glowing"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 3
+      cost: 150
+      size: 1
+      base: 40
+      rules: ["Flying", "Targeting Visor", "Tough(6)"]
+      weapons:
+        - name: "Suit-Bursts"
+          range: 18
+          attacks: 1
+          rules: ["Rending"]
+        - name: "Suit-Flamers"
+          range: 12
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "Bash"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  grunt_leader:
+    extra_details: "blue-skinned alien officer in lighter infantry armor, holy baton ceremonial weapon with blast(3) energy discharge capability, ornate robes over armor with sept leader insignia, targeting visor integrated into helmet with enhanced sensor array, Good Shot marksman training, Hero commander leading grunt squads, antenna-like communication array on backpack, Tough(3)"
+    pose: "commanding pose raising holy baton, free hand gesturing tactical orders, sensor lens glowing"
+
+  # ==========================================================================
+  # CORE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 4
+      cost: 25
+      size: 1
+      base: 32
+      rules: ["Good Shot", "Targeting Visor", "Tough(3)"]
+      weapons:
+        - name: "Holy Baton"
+          range: 0
+          attacks: 1
+          rules: ["Blast(3)"]
+  security_grunts:
+    extra_details: "single blue-skinned alien infantry warrior in clean composite armor, pulse shotguns held in both hands firing AP(1) energy bursts at 12 inch close range with A2 attacks, CCW combat knives on belt for melee, targeting visor helmets with glowing sensor lenses, Good Shot training, shoulder-mounted sept markings, compact armor designed for close quarters urban combat"
+    pose: "tactical advance formation, pulse shotguns raised and aimed, visors glowing in unison"
+
+    game_stats:
+      quality: 5
+      defense: 4
+      cost: 105
+      size: 5
+      base: 25
+      rules: ["Good Shot", "Targeting Visor"]
+      weapons:
+        - name: "Pulse Shotguns"
+          range: 12
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  tactical_grunts:
+    extra_details: "single blue-skinned alien infantry warrior in clean composite armor, pulse rifles held in firing position with AP(1) energy rounds at 30 inch long range, CCW combat knives on belt for melee, targeting visor helmets with glowing sensor lenses, Good Shot training, shoulder-mounted sept markings, standard line infantry with antenna arrays on backpacks"
+    pose: "disciplined firing line formation, pulse rifles shouldered and aimed downrange, visors active"
+
+    game_stats:
+      quality: 5
+      defense: 4
+      cost: 115
+      size: 5
+      base: 25
+      rules: ["Good Shot", "Targeting Visor"]
+      weapons:
+        - name: "Pulse Rifles"
+          range: 30
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  spotter_squad:
+    extra_details: "single forward recon of blue-skinned alien scout in lighter armor (Defense 5+), pulse carbines firing AP(1) energy rounds at 18 inch medium range with A2 attacks, CCW combat knives, targeting visor helmets with enhanced sensor suites, Good Shot training, Scout forward deployment capability, lighter armor with camouflage patterns and advanced optics equipment, spotting laser attachments available"
+    pose: "crouched recon formation, pulse carbines at the ready, one model scanning with spotting laser"
+
+  # ==========================================================================
+  # ELITE INFANTRY & SUITS
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 140
+      size: 5
+      base: 25
+      rules: ["Good Shot", "Scout", "Targeting Visor"]
+      weapons:
+        - name: "Pulse Carbines"
+          range: 18
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  stealth_suits:
+    extra_details: "single warrior in advanced stealth battlesuits, rapid burst carbines firing rending energy rounds at 18 inch range with A4 sustained fire, CCW integrated blades for melee, Ambush deep-strike deployment via cloaking technology, Stealth field generators distorting suit outlines, targeting visor with enhanced optics, angular stealth panels minimizing sensor signature, larger than infantry but smaller than crisis suits, Tough(3)"
+    pose: "emerging from stealth cloak shimmer, rapid burst carbines firing, angular stealth panels active"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 225
+      size: 3
+      base: 32
+      rules: ["Ambush", "Stealth", "Targeting Visor", "Tough(3)"]
+      weapons:
+        - name: "Rapid Burst Carbines"
+          range: 18
+          attacks: 4
+          rules: ["Rending"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  battle_suits:
+    extra_details: "single warrior in crisis-class battlesuits, nine suit-burst weapons across all three suits firing rending energy rounds at 18 inch range, bash melee attacks with armored fists, jetpack thruster array on back for Flying movement, targeting visor helmets with glowing sensor arrays, modular weapon hardpoints on arms and shoulders, clean angular armor panels with sept markings, Tough(3)"
+    pose: "jetpack-assisted landing pose, multiple burst weapons aimed in different directions, thrusters venting"
+    type: vehicle
+
+  # ==========================================================================
+  # DRONES
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 3
+      cost: 200
+      size: 3
+      base: 32
+      rules: ["Flying", "Targeting Visor", "Tough(3)"]
+      weapons:
+        - name: "Suit-Bursts"
+          range: 18
+          attacks: 1
+          rules: ["Rending"]
+        - name: "Bashes"
+          range: 0
+          attacks: 2
+  gun_drones:
+    extra_details: "single squadron of hovering combat drone, disc-shaped drone chassis with twin pulse-guns underneath firing rending energy rounds at 18 inch range with A2 attacks, taser close-defense probes for melee, anti-gravity hover drives on underside, targeting visor sensor dome on top with glowing lens, Good Shot targeting AI, Strider terrain adaptation thrusters, autonomous combat drones with clean aerodynamic design"
+    pose: "hovering formation at varying heights, twin pulse-guns aimed forward, sensor domes glowing"
+
+    game_stats:
+      quality: 5
+      defense: 4
+      cost: 140
+      size: 5
+      base: 25
+      rules: ["Good Shot", "Strider", "Targeting Visor"]
+      weapons:
+        - name: "Twin Pulse-Guns"
+          range: 18
+          attacks: 2
+          rules: ["Rending"]
+        - name: "Tasers"
+          range: 0
+          attacks: 1
+  sniper_drones:
+    extra_details: "single squadron of precision hovering drone, elongated drone chassis with pulse rifle long-range weapon firing AP(1) energy rounds at 30 inch range, taser close-defense probes for melee, stabilized anti-gravity hover platform for steady aim, targeting visor sensor array with telescopic optics, Good Shot precision AI, Strider movement, sleeker more angular design than gun drones"
+    pose: "stable hovering sniper platform formation, pulse rifles aimed at distant target, optics glowing"
+
+  # ==========================================================================
+  # HOVER VEHICLES
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 4
+      cost: 70
+      size: 3
+      base: 25
+      rules: ["Good Shot", "Strider", "Targeting Visor"]
+      weapons:
+        - name: "Pulse Rifles"
+          range: 30
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Tasers"
+          range: 0
+          attacks: 1
+  hover_transport:
+    extra_details: "sleek anti-gravity troop transport skimmer, heavy burst carbine turret on top firing rending AP(1) rounds at 18 inch range, twin heavy pulse-gun sponson with AP(1) at 18 inch range, smooth aerodynamic hull with clean armor panels, anti-gravity repulsor array underneath glowing blue, rear deployment ramp for Transport(11) capacity, Fast movement, Impact(3) ramming prow, Strider hover movement, Tough(6)"
+    pose: "banking hover turn at speed, heavy burst carbine turret tracking target, repulsor array glowing blue"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 200
+      size: 1
+      base: "100x60"
+      rules: ["Fast", "Impact(3)", "Strider", "Targeting Visor", "Tough(6)", "Transport(11)"]
+      weapons:
+        - name: "Heavy Burst Carbine"
+          range: 18
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Twin Heavy Pulse-Gun"
+          range: 18
+          attacks: 4
+          rules: ["AP(1)"]
+  hover_attack_bike:
+    extra_details: "light anti-gravity attack skimmer, open cockpit with blue-skinned pilot visible, burst carbine on pintle mount firing rending energy rounds at 18 inch range, twin heavy pulse-gun main weapon with AP(1) at 18 inch range, sleek narrow hull designed for speed and agility, anti-gravity repulsor fins glowing blue, Fast attack craft, Impact(3) ramming capability, Strider hover movement, Tough(6)"
+    pose: "high-speed banking maneuver, burst carbine firing, pilot leaning into turn, repulsor fins glowing"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 165
+      size: 1
+      base: 40
+      rules: ["Fast", "Impact(3)", "Strider", "Targeting Visor", "Tough(6)"]
+      weapons:
+        - name: "Burst Carbine"
+          range: 18
+          attacks: 2
+          rules: ["Rending"]
+        - name: "Twin Heavy Pulse-Gun"
+          range: 18
+          attacks: 4
+          rules: ["AP(1)"]
+  hover_tank:
+    extra_details: "main battle tank on anti-gravity chassis, sub-railgun turret as primary weapon firing AP(1) blast(3) electromagnetic rounds at 36 inch range, twin heavy pulse-gun sponson with AP(1) at 18 inch range, heavy armored hull with layered composite panels, large anti-gravity repulsor array underneath glowing bright blue, Fast hover movement, Impact(6) devastating ram, Strider terrain ignoring hover, sensor array and targeting visor dome on turret, Tough(12)"
+    pose: "hovering combat stance, sub-railgun turret aimed and charging, repulsor array blazing blue"
+    type: vehicle
+
+  # ==========================================================================
+  # HEAVY BATTLESUITS
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 355
+      size: 1
+      base: 50
+      rules: ["Fast", "Impact(6)", "Strider", "Targeting Visor", "Tough(12)"]
+      weapons:
+        - name: "Sub-Railgun"
+          range: 36
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Twin Heavy Pulse-Gun"
+          range: 18
+          attacks: 4
+          rules: ["AP(1)"]
+  heavy_battle_suit:
+    extra_details: "massive broadside-class battlesuit weapons platform, quad missile pod primary weapon system on shoulders firing 8 decimate unstoppable rockets at 30 inch range, stomp attack with armored feet AP(1), heavily armored mech chassis with reinforced composite plates, targeting visor array with multiple sensor lenses, stabilizer legs braced for recoil, Fear(2) intimidating presence, no flight capability - ground-based heavy fire support, Tough(12)"
+    pose: "braced firing stance, quad missile pod elevated and launching salvo, stabilizer legs planted firmly"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 330
+      size: 1
+      base: 50
+      rules: ["Fear(2)", "Targeting Visor", "Tough(12)"]
+      weapons:
+        - name: "Quad Missile Pod"
+          range: 30
+          attacks: 8
+          rules: ["Decimate", "Unstoppable"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  heavy_stealth_suit:
+    extra_details: "large stealth battlesuit combining heavy armor with cloaking technology, heavy ion carbine primary weapon firing AP(1) blast(6) energy at 18 inch range, twin burst carbine secondary weapon firing rending rounds at 18 inch range, stomp melee attack with armored feet AP(1), Ambush deep-strike deployment via advanced cloaking field, Stealth field generators on angular panels, Fear(2) intimidating presence, larger and more heavily armored than standard stealth suits, Tough(12)"
+    pose: "materializing from stealth cloak, heavy ion carbine powering up with blue energy glow, angular stealth panels shimmering"
+    type: vehicle
+
+  # ==========================================================================
+  # TITANS
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 325
+      size: 1
+      base: 50
+      rules: ["Ambush", "Fear(2)", "Stealth", "Targeting Visor", "Tough(12)"]
+      weapons:
+        - name: "Heavy Ion Carbine"
+          range: 18
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Twin Burst Carbine"
+          range: 18
+          attacks: 4
+          rules: ["Rending"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  tide_titan:
+    extra_details: "massive riptide-class battlesuit titan, twin plasma rifle primary weapon on right arm firing AP(4) devastating plasma at 24 inch range, heavy plasma sword melee weapon on left arm with A8 rending attacks, powerful stomp legs with AP(2), Evasive agile movement system despite enormous size, nova shield defensive system, Fear(3) towering presence, sleek angular design with flowing lines unlike bulky imperial mechs, massive jetpack thruster array on back, advanced targeting visor sensor suite on head, Tough(18)"
+    pose: "dynamic combat stance, twin plasma rifle aimed and firing, heavy plasma sword ready to swing, thrusters venting energy"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 470
+      size: 1
+      base: 100
+      rules: ["Evasive", "Fear(3)", "Targeting Visor", "Tough(18)"]
+      weapons:
+        - name: "Twin Plasma Rifle"
+          range: 24
+          attacks: 2
+          rules: ["AP(4)"]
+        - name: "Heavy Plasma Sword"
+          range: 0
+          attacks: 8
+          rules: ["AP(1)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 6
+          rules: ["AP(2)"]
+  surge_titan:
+    extra_details: "colossal stormsurge-class battlesuit titan the largest in the DAO arsenal, cluster rockets primary weapon array on shoulders firing 8 AP(1) rockets at 24 inch range, pulse blaster secondary weapon on arm firing AP(2) blast(3) energy at 24 inch range, devastating stomp attacks with A8 AP(2) crushing force, Fear(4) terrifying towering presence, massive hull-mounted weapon systems, stabilizer anchors on legs, heavy layered composite armor across entire chassis, Tough(24)"
+    pose: "full weapon deployment stance, cluster rockets launching salvo, pulse blaster firing, stabilizer anchors deployed"
+    type: vehicle
+
+  # ==========================================================================
+  # AIRCRAFT
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 695
+      size: 1
+      base: 100
+      rules: ["Fear(4)", "Targeting Visor", "Tough(24)"]
+      weapons:
+        - name: "Cluster Rockets"
+          range: 24
+          attacks: 8
+          rules: ["AP(1)"]
+        - name: "Pulse Blaster"
+          range: 24
+          attacks: 3
+          rules: ["AP(2)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 8
+          rules: ["AP(2)"]
+  razor_fighter:
+    extra_details: "sleek alien fighter aircraft, ion cannon primary weapon under nose firing AP(2) blast(3) energy at 30 inch range, twin burst carbine secondary weapons on wing pylons firing rending rounds at 18 inch range, Aircraft high-speed flight rules, aerodynamic swept-wing design with clean alien aesthetics, anti-gravity drive system, targeting visor sensor dome in cockpit, Tough(6)"
+    pose: "banking attack run, ion cannon firing blue energy blast, wings swept in flight configuration"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 295
+      size: 1
+      base: "120x92"
+      rules: ["Aircraft", "Targeting Visor", "Tough(6)"]
+      weapons:
+        - name: "Ion Cannon"
+          range: 30
+          attacks: 2
+          rules: ["AP(2)"]
+        - name: "Twin Burst Carbine"
+          range: 18
+          attacks: 4
+          rules: ["Rending"]
+  sun_bomber:
+    extra_details: "alien bomber aircraft with heavier frame than the razor fighter, ion rifle weapon on nose firing AP(1) blast(3) at 30 inch range, missile pod on wing hardpoint firing decimate unstoppable rockets at 30 inch range, pulse bombs payload underneath for strafing runs dropping AP(1) blast(3) ordnance on ground targets, Aircraft high-speed flight rules, wider wing profile for bomb carrying capacity, targeting visor sensor suite, Tough(6)"
+    pose: "level bombing run, pulse bombs releasing from underbelly, missile pod visible on wing, ion rifle aimed forward"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 245
+      size: 1
+      base: "120x92"
+      rules: ["Aircraft", "Targeting Visor", "Tough(6)"]
+      weapons:
+        - name: "Ion Rifle"
+          range: 30
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Missile Pod"
+          range: 30
+          attacks: 2
+          rules: ["Decimate", "Unstoppable"]
+        - name: "Pulse Bombs"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]

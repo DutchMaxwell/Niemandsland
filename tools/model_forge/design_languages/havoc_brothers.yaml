@@ -1,0 +1,600 @@
+# =============================================================================
+# Havoc Brothers - Design Language
+# =============================================================================
+# Chaos-korrumpierte Super-Soldaten in verdorbener Power Armor.
+# OPR-Aequivalent zu Chaos Space Marines.
+# Basiert auf: GF - Havoc Brothers v3.5.2
+
+faction_name: "Havoc Brothers"
+
+aesthetic:
+  genre: "grimdark sci-fi chaos"
+  style: "corrupted fallen warriors"
+  inspiration:
+    - "Fallen super-soldiers corrupted by dark powers"
+    - "Spiky twisted power armor with daemon iconography"
+    - "Gothic horror fused with corrupted military technology"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted Chaos Space Marine iconography"
+    - "Clean or loyalist aesthetics"
+    - "Cartoon evil"
+
+colors:
+  primary: "dark iron and tarnished black power armor"
+  secondary: "brass trim and daemon-faced shoulder pads"
+  accent: "sickly warpfire green glow from mutations"
+
+materials:
+  - "corroded ceramite power armor with chaos mutations"
+  - "brass spikes and daemon iconography"
+  - "flayed skin trophies and chain decorations"
+  - "glowing warp-tainted weapon runes"
+
+creature_type: "chaos-corrupted fallen warrior in twisted power armor"
+
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered figure, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on armor surface textures (corruption, spikes, mutations, daemon icons)
+  - 28mm tabletop miniature aesthetic and heroic proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# =============================================================================
+# Per-Unit Overrides - Alle Einheiten aus GF Havoc Brothers v3.5.2
+# =============================================================================
+unit_overrides:
+
+  # ==========================================================================
+  # HEROES
+  # ==========================================================================
+
+  havoc_destroyer_champion:
+    extra_details: "towering elite destroyer hero in massively bulky corrupted terminator-style power armor, champion heavy rifle with underslung attachment in one hand, enormous close combat weapon in other, armor covered in brass daemon faces and chaos spikes, warp-tainted trophy racks on back, Ambush teleport capability, Tough(6)"
+    pose: "imposing combat stance, heavy rifle aimed forward, close combat weapon raised high"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 135
+      size: 1
+      base: 40
+      rules: ["Ambush", "Havocbound", "Tough(6)"]
+      weapons:
+        - name: "Champion Heavy Rifle"
+          range: 24
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "CCW"
+          range: 0
+          attacks: 4
+  chosen_havoc_champion:
+    extra_details: "elite chosen hero champion in ornate chaos-touched power armor with flamer pistol in one hand and close combat weapon in other, extra chaos iconography and devotional marks etched into corrupted armor, versatile attack stance shifting between ranged and melee, champion of the dark gods, Tough(3)"
+    pose: "commanding combat pose, flamer pistol raised, close combat weapon ready to strike"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 65
+      size: 1
+      base: 32
+      rules: ["Havocbound", "Tough(3)", "Versatile Attack"]
+      weapons:
+        - name: "Flamer Pistol"
+          range: 6
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  havoc_champion:
+    extra_details: "hero commander in chaos-corrupted power armor, flamer pistol in one hand, close combat weapon in other, spiked pauldrons with daemon trim, chaos icon on chest plate, chains and trophy skulls hanging from belt, rallying nearby warriors, Tough(3)"
+    pose: "defiant commanding pose, flamer pistol aimed forward, rallying the warband"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 55
+      size: 1
+      base: 32
+      rules: ["Havocbound", "Tough(3)"]
+      weapons:
+        - name: "Flamer Pistol"
+          range: 6
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  cultist_champion:
+    extra_details: "mortal cultist hero leader in ragged robes over light flak armor, champion pistol in one hand, close combat weapon in other, chaos devotion tattoos across exposed skin, ritual scarification, crude daemon iconography on tattered cloth, feral zealot appearance, Tough(3)"
+    pose: "zealous rallying pose, pistol raised overhead, close combat weapon brandished"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 25
+      size: 1
+      base: 32
+      rules: ["Havocbound", "Tough(3)"]
+      weapons:
+        - name: "Champion Pistol"
+          range: 12
+          attacks: 2
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  harbinger_of_havoc:
+    extra_details: "massive daemon-blessed champion towering over other warriors, two daemon hammers with blast energy crackling around heads, heavy stomp attacks from warp-enlarged legs, daemonic mutations visible through cracked armor plates, warp energy seeping from joints and eye slits, fear-inducing daemonic presence, Tough(6)"
+    pose: "devastating combat stance, both daemon hammers raised to smash, warp energy swirling around body"
+
+  # ==========================================================================
+  # CORE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 120
+      size: 1
+      base: 40
+      rules: ["Fear(1)", "Havocbound", "Tough(6)"]
+      weapons:
+        - name: "Daemon Hammers"
+          range: 0
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  cultists:
+    extra_details: "single mortal chaos cultist in ragged robes and scavenged flak armor, rifles and crude close combat weapons, chaos devotion marks and ritual scarification, tattered banners with daemon icons, fanatical zealots with wild eyes, expendable cannon fodder for the warband"
+    pose: "surging forward as a mob, rifles raised, zealous charge"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 140
+      size: 10
+      base: 25
+      rules: ["Havocbound"]
+      weapons:
+        - name: "Rifles"
+          range: 24
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  havoc_brothers:
+    extra_details: "single chaos-corrupted power armored warrior, heavy rifles with AP rounds, close combat weapons as sidearms, spiked pauldrons and daemon iconography on armor, eight-pointed star motifs, corroded and battle-scarred ceramite, glowing eye lenses through corrupted helmets"
+    pose: "advancing tactical formation, heavy rifles shouldered and aimed, menacing advance"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 165
+      size: 5
+      base: 25
+      rules: ["Havocbound"]
+      weapons:
+        - name: "Heavy Rifles"
+          range: 24
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  chosen_havoc_brothers:
+    extra_details: "single elite chosen warrior in ornately corrupted power armor, heavy rifles and close combat weapons, extra daemon iconography and trophy racks, versatile attack specialists shifting between ranged and melee excellence, veteran chaos warriors with extensive mutations and battle honors"
+    pose: "elite combat advance, weapons ready, confident veteran warriors"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 130
+      size: 3
+      base: 25
+      rules: ["Havocbound", "Versatile Attack"]
+      weapons:
+        - name: "Heavy Rifles"
+          range: 24
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  talon_raptors:
+    extra_details: "single assault warrior with warp-tainted jump packs and bat-like stabilizer wings, dual energy claws with rending effect on each hand, sleek predatory helmet designs with glowing eye slits, lightning claw energy arcs visible, ambush and flying capability, furious close combat specialists"
+    pose: "diving aerial assault, energy claws spread wide, jump packs flaring"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 175
+      size: 5
+      base: 25
+      rules: ["Ambush", "Flying", "Furious", "Havocbound"]
+      weapons:
+        - name: "Dual Energy Claws"
+          range: 0
+          attacks: 2
+          rules: ["Rending"]
+  havoc_soul_spawn:
+    extra_details: "single warp-spawned lesser daemon bound to the warband, wielding heavy havoc swords with rending warp energy, ethereal and partially translucent bodies, scout and strider movement through terrain, daemonic features with horns and clawed feet, flickering between material and immaterial, Tough(3)"
+    pose: "ghostly advance through terrain, heavy havoc swords raised, ethereal and menacing"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 145
+      size: 3
+      base: 32
+      rules: ["Havocbound", "Scout", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Heavy Havoc Swords"
+          range: 0
+          attacks: 3
+          rules: ["Rending"]
+  havoc_support:
+    extra_details: "single heavy weapons in reinforced corrupted power armor, heavy flamers with AP and blast capability, close combat weapons as sidearms, extra ammunition feeds connected to corrupted backpacks, relentless fire support specialists, heat-warped armor plating around weapon mounts"
+    pose: "braced firing position, heavy flamers aimed forward, relentless advance"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 170
+      size: 3
+      base: 25
+      rules: ["Havocbound", "Relentless"]
+      weapons:
+        - name: "Heavy Flamers"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  havoc_destroyers:
+    extra_details: "single elite assault warrior in massively bulky corrupted terminator-style armor, dual energy claws with rending effect crackling with warp energy, ambush teleport capability, extra spikes and daemon trophies on heavy armor, Tough(3) "
+    pose: "teleport assault stance, energy claws spread wide, emerging from warp rift"
+
+  # ==========================================================================
+  # MUTANTS
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 205
+      size: 3
+      base: 32
+      rules: ["Ambush", "Havocbound", "Tough(3)"]
+      weapons:
+        - name: "Dual Energy Claws"
+          range: 0
+          attacks: 4
+          rules: ["Rending"]
+  mutated_cultists:
+    extra_details: "single chaos-mutated mortal cultist, paired claws from warp mutations replacing hands, hunched and twisted bodies with visible mutations, extra limbs and eyes, tattered remnants of clothing over mutated flesh, unpredictable fighters with random combat blessings"
+    pose: "frenzied charge, mutated claws raised, twisted bodies surging forward"
+
+    game_stats:
+      quality: 5
+      defense: 6
+      cost: 115
+      size: 10
+      base: 25
+      rules: ["Havocbound", "Unpredictable Fighter"]
+      weapons:
+        - name: "Claws"
+          range: 0
+          attacks: 2
+  mutated_brothers:
+    extra_details: "single chaos-mutated space marines, heavy claws with AP bursting through cracked power armor, fast warp-enhanced movement, bodies warping between human and daemon, tentacles and extra limbs emerging from broken armor plates, unpredictable fighters with random combat blessings"
+    pose: "rapid mutated charge, heavy claws slashing, broken armor revealing mutations"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 165
+      size: 5
+      base: 25
+      rules: ["Fast", "Havocbound", "Unpredictable Fighter"]
+      weapons:
+        - name: "Heavy Claws"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  greater_mutated:
+    extra_details: "single massively mutated chaos warrior, enormous heavy claws with AP on oversized mutated arms, towering over standard marines, warp-bloated bodies with extensive daemon mutations, fast and unpredictable movement, remnants of power armor barely containing mutated flesh, Tough(3)"
+    pose: "towering mutated assault, massive claws raised, grotesque warp-swollen bodies"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 235
+      size: 3
+      base: 32
+      rules: ["Fast", "Havocbound", "Tough(3)", "Unpredictable Fighter"]
+      weapons:
+        - name: "Heavy Claws"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  mutated_destroyer:
+    extra_details: "single massively mutated destroyer champion, dual mutated claws with AP on enormous warp-grown arms, ambush capability from warp tunneling, body a twisted fusion of terminator armor and daemon flesh, unpredictable combat behavior, tentacles and mutations erupting from cracked ceramite, Tough(6)"
+    pose: "erupting from warp rift, dual mutated claws spread wide, twisted daemon-marine hybrid"
+
+  # ==========================================================================
+  # BIKES
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 135
+      size: 1
+      base: 40
+      rules: ["Ambush", "Havocbound", "Tough(6)", "Unpredictable"]
+      weapons:
+        - name: "Dual Mutated Claws"
+          range: 0
+          attacks: 6
+          rules: ["AP(1)"]
+  havoc_bikers:
+    extra_details: "single warrior on heavy chaos-corrupted combat motorcycle, twin heavy rifles mounted on bike fairing, heavy pistols and close combat weapons, bikes adorned with spikes and daemon iconography, exhaust pipes venting warp-tainted fumes, skull-adorned front armor, chains trailing behind, Tough(3)"
+    pose: "riding fast in formation, bikes leaning into turn, twin rifles aimed forward"
+
+  # ==========================================================================
+  # VEHICLES (Transport - auto-detected)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 280
+      size: 3
+      base: 32
+      rules: ["Fast", "Havocbound", "Tough(3)"]
+      weapons:
+        - name: "Twin Heavy Rifles"
+          range: 24
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Heavy Pistols"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  havoc_apc:
+    extra_details: "corrupted armored personnel carrier with angular chaos-twisted hull, storm rifle turret on top adorned with daemon face, spiked dozer blade option, troop compartment with daemon-mouth access ramp, chaos iconography welded to hull, warp-tainted engine exhaust, Tough(6), Transport(11)"
+    pose: "driving forward, storm rifle turret aimed ahead, spiked ram leading"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 190
+      size: 1
+      base: "100x60"
+      rules: ["Fast", "Havocbound", "Impact(3)", "Tough(6)", "Transport(11)"]
+      weapons:
+        - name: "Storm Rifle"
+          range: 24
+          attacks: 3
+          rules: ["AP(1)"]
+  havoc_heavy_tank:
+    extra_details: "massive super-heavy chaos transport tank, quad laser cannon main turret with daemon-mouth barrel shrouds, twin heavy machinegun secondary weapons, enormously thick corrupted armor plating with daemon faces and brass trim, troop compartment, warp-enhanced engine, spiked ram option, Tough(18), Transport(11)"
+    pose: "rolling forward with crushing presence, quad laser turret aimed, daemon iconography prominent"
+
+  # ==========================================================================
+  # VEHICLES (no Transport - type: vehicle)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 825
+      size: 1
+      base: "120x92"
+      rules: ["Fast", "Havocbound", "Impact(9)", "Tough(18)", "Transport(11)"]
+      weapons:
+        - name: "Quad Laser Cannon"
+          range: 36
+          attacks: 4
+          rules: ["AP(3)"]
+        - name: "Twin Heavy Machinegun"
+          range: 30
+          attacks: 6
+          rules: ["AP(1)"]
+  havoc_tank:
+    extra_details: "main battle tank with chaos-corrupted hull, twin laser cannon turret with daemon-eye targeting array, twin heavy machinegun secondary weapons, thick corrupted armor with brass trim and daemon iconography, spiked track guards, warp-tainted exhaust, Tough(12)"
+    pose: "hull-down firing position, twin laser turret aimed, daemon iconography visible"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 510
+      size: 1
+      base: 50
+      rules: ["Fast", "Havocbound", "Impact(6)", "Tough(12)"]
+      weapons:
+        - name: "Twin Laser Cannon"
+          range: 36
+          attacks: 2
+          rules: ["AP(3)"]
+        - name: "Twin Heavy Machinegun"
+          range: 30
+          attacks: 6
+          rules: ["AP(1)"]
+  infernal_brute:
+    extra_details: "massive bipedal daemon-engine walker, two brute hammers with blast energy crackling around heads, powerful stomp attacks from massive daemon-fused legs, fusion of corrupted machinery and bound daemon essence, warp energy seeping from joints, Fear(2) terrifying daemonic presence, brass and iron construction with living daemon flesh visible, Tough(12)"
+    pose: "striding forward menacingly, brute hammers raised to smash, daemon-engine roaring"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 285
+      size: 1
+      base: 50
+      rules: ["Fear(2)", "Havocbound", "Tough(12)"]
+      weapons:
+        - name: "Brute Hammers"
+          range: 0
+          attacks: 2
+          rules: ["Blast(3)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  havoc_mech_fiend:
+    extra_details: "serpentine daemon-engine with multiple limbs, fiend claws with rending warp energy on forelimbs, eight steel tails with AP lashing from rear, powerful stomp legs, regenerative daemon flesh constantly repairing damage, Fear(2) terrifying presence, insectoid-reptilian daemon bound into corrupted machinery, Tough(12)"
+    pose: "multi-limbed assault pose, fiend claws spread, steel tails whipping behind"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 365
+      size: 1
+      base: 50
+      rules: ["Fear(2)", "Havocbound", "Regeneration", "Tough(12)"]
+      weapons:
+        - name: "Fiend Claws"
+          range: 0
+          attacks: 4
+          rules: ["Rending"]
+        - name: "Steel Tails"
+          range: 0
+          attacks: 8
+          rules: ["AP(1)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  infernal_stalker:
+    extra_details: "predatory daemon-engine walker with hunting posture, bane flamethrower bio-weapon spewing warp-fire with AP and blast, virus injector appendage with devastating AP(3) Deadly(3) toxin needle, powerful stomp legs with strider capability, Fear(2) stalking predator daemon, arachnid-influenced design with multiple sensor eyes, Tough(12)"
+    pose: "predatory stalking stance, bane flamethrower aimed forward, virus injector poised to strike"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 385
+      size: 1
+      base: 50
+      rules: ["Reliable)", "Fear(2)", "Havocbound", "Strider", "Tough(12)"]
+      weapons:
+        - name: "Bane Flamethrower"
+          range: 18
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+        - name: "Virus Injector"
+          range: 0
+          attacks: 3
+          rules: ["AP(3)"]
+  spider_walker:
+    extra_details: "massive multi-legged daemon-engine with spider-like body plan, twin pain cannons firing blast projectiles from turret mount, eight spider fangs with rending bite on mandibles, powerful stomp legs, regenerative daemon flesh, strider capability across all terrain, Fear(2) terrifying arachnid daemon, warp-web patterns on carapace, Tough(12)"
+    pose: "arachnid hunting stance, pain cannons aimed, spider fangs spread, multiple legs braced"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 415
+      size: 1
+      base: 50
+      rules: ["Fear(2)", "Havocbound", "Regeneration", "Strider", "Tough(12)"]
+      weapons:
+        - name: "Twin Pain Cannons"
+          range: 24
+          attacks: 2
+          rules: ["Blast(3)"]
+        - name: "Spider Fangs"
+          range: 0
+          attacks: 8
+          rules: ["Rending"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  crab_walker:
+    extra_details: "colossal daemon-engine with crustacean body plan, battle cannon turret on back firing blast projectiles, reaper cannon secondary weapon with slam effect, two massive crab fists with devastating AP(3), crab flail tail weapon lashing wildly, powerful stomp attacks with AP(2), regenerative daemon flesh, Fear(3) apocalyptic daemon-engine presence, Tough(18)"
+    pose: "towering crab stance, fists raised to crush, battle cannon elevated, flail lashing"
+    type: vehicle
+
+  # ==========================================================================
+  # AIRCRAFT (Aircraft rule - no type override needed)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 720
+      size: 1
+      base: 100
+      rules: ["Fear(3)", "Havocbound", "Regeneration", "Tough(18)"]
+      weapons:
+        - name: "Battle Cannon"
+          range: 30
+          attacks: 2
+          rules: ["AP(2)"]
+        - name: "Reaper Cannon"
+          range: 24
+          attacks: 4
+          rules: ["Slam"]
+        - name: "Crab Fists"
+          range: 0
+          attacks: 4
+          rules: ["AP(3)"]
+        - name: "Crab Flail"
+          range: 0
+          attacks: 8
+        - name: "Stomp"
+          range: 0
+          attacks: 6
+          rules: ["AP(2)"]
+  havoc_dragon:
+    extra_details: "flying daemon-engine drake with massive bat-like daemon wings, forge flamethrower bio-weapon in maw spewing warp-fire with AP and blast, serpentine body of fused daemon flesh and corrupted machinery, regenerative daemon tissue, warp-fire trailing from wing tips, draconic daemon bound into corrupted airframe, Tough(6)"
+    pose: "wings fully spread in flight, forge flamethrower firing from maw, daemon-engine soaring"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 310
+      size: 1
+      base: "120x92"
+      rules: ["Reliable)", "Aircraft", "Havocbound", "Regeneration", "Tough(6)"]
+      weapons:
+        - name: "Forge Flamethrower"
+          range: 18
+          attacks: 2
+          rules: ["AP(1)"]

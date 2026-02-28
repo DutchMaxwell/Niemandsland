@@ -1,0 +1,354 @@
+# =============================================================================
+# Jackals - Design Language
+# =============================================================================
+# Basiert auf: GF - Jackals v3.5.2
+# Nomadische hundeaehnliche Aliens mit Schrotttechnologie und Reitbeasts.
+
+faction_name: "Jackals"
+
+aesthetic:
+  genre: "grimdark sci-fi tribal"
+  style: "nomadic scavenger aliens"
+  inspiration:
+    - "Humanoid canid aliens with jackal-like features and digitigrade legs"
+    - "Post-apocalyptic nomadic scavengers using salvaged alien technology"
+    - "Tribal hunter-gatherers thrust into the space age with jury-rigged gear"
+    - "Tusken Raiders meets alien canid predators with scrap-tech weapons"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted character likenesses"
+    - "Clean or advanced-looking technology"
+    - "Cute or cartoon dog aesthetics"
+    - "Human facial features"
+
+colors:
+  primary: "tawny brown and sandy fur with darker markings"
+  secondary: "weathered rust-brown and gunmetal scrap metal"
+  accent: "faded red and ochre tribal markings and cloth wrappings"
+
+materials:
+  - "short dense canid fur over lean muscular frame"
+  - "salvaged scrap metal armor plates bolted and strapped together"
+  - "tattered desert cloth wrappings and leather straps"
+  - "bone and tooth trophies from hunted prey"
+  - "crude jury-rigged alien technology with exposed wiring"
+
+creature_type: "humanoid canid alien scavenger"
+
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered creature, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on surface textures
+  - 28mm tabletop miniature aesthetic and proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# =============================================================================
+# Per-Unit Overrides - Alle Einheiten aus GF Jackals v3.5.2
+# =============================================================================
+unit_overrides:
+
+  # ==========================================================================
+  # HEROES
+  # ==========================================================================
+
+  elite_veteran:
+    extra_details: "experienced jackal alpha warrior in quality scrap armor, taller and broader than standard jackals with battle-scarred fur, hunting hook weapon with curved rending blade on a reinforced haft, lean canid face with piercing amber eyes and notched ears from past battles, layered scrap metal shoulder guards and chest plate over leather harness, tribal clan markings etched into armor, strider leg wrappings for rough terrain, Tough(3)"
+    pose: "commanding alpha stance, hunting hook held ready in both hands, ears forward alert"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 40
+      size: 1
+      base: 32
+      rules: ["Scrapper", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Hunting Hook"
+          range: 0
+          attacks: 3
+          rules: ["Rending"]
+  veteran:
+    extra_details: "seasoned jackal warrior leader in standard scrap armor, lean canid build with wiry muscles, elite scrap pistol in one hand cobbled from salvaged alien weapon parts, close combat weapon crude blade in other hand, tattered desert cloak over mismatched scrap armor plates, leather ammo pouches and bone trophy necklace, strider feet wrappings, scarred muzzle showing experience, Tough(3)"
+    pose: "alert leader stance, scrap pistol raised to fire, CCW blade ready at side, ears perked"
+
+  # ==========================================================================
+  # CORE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 25
+      size: 1
+      base: 32
+      rules: ["Scrapper", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Elite Scrap Pistol"
+          range: 12
+          attacks: 2
+        - name: "CCW"
+          range: 0
+          attacks: 1
+  nomads:
+    extra_details: "single rank-and-file jackal warrior armed with scrap rifles and CCWs, lean canid bodies in basic scrap armor plates over cloth wrappings, scrap rifles are long-barreled cobbled weapons made from salvaged alien gun parts with crude sights, close combat weapon backup blades strapped to thighs, digitigrade legs with strider foot wrappings, tawny fur visible between armor gaps, basic tribal markings"
+    pose: "advancing patrol formation, scrap rifles shouldered and aimed, pack moving together alertly"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 135
+      size: 10
+      base: 25
+      rules: ["Scrapper", "Strider"]
+      weapons:
+        - name: "Scrap Rifles"
+          range: 24
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  stalkers:
+    extra_details: "single melee assault jackal warrior dual-wielding CCWs, lean aggressive builds stripped of ranged weapons for maximum close combat lethality, two crude blades per warrior held in reverse grip, minimal armor for speed with furious berserker aggression, melee evasion reflexes from enhanced agility, warpaint-streaked fur and bared fangs, strider feet for terrain navigation"
+    pose: "aggressive charging pose, dual CCWs crossed or spread wide, fangs bared in snarl, low crouching sprint"
+
+  # ==========================================================================
+  # ELITE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 70
+      size: 5
+      base: 25
+      rules: ["Furious", "Melee Evasion", "Scrapper", "Strider"]
+      weapons:
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  elites:
+    extra_details: "single elite jackal warrior in heavier better-quality scrap armor, armed with energy rifles salvaged from alien shipwrecks firing AP(1) beams at 24 inch range, CCW sidearm blades, Quality 4+ skilled fighters with thicker armor plates and reinforced chest guards, clan veteran markings and trophy kills displayed, more sophisticated gear showing better scavenging skills, strider feet"
+    pose: "disciplined firing line, energy rifles shouldered and aimed precisely, CCWs sheathed at hip"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 120
+      size: 5
+      base: 25
+      rules: ["Scrapper", "Strider"]
+      weapons:
+        - name: "Energy Rifles"
+          range: 24
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  vultures:
+    extra_details: "single flying jackal warrior with crude jetpacks or wing-gliders strapped to their backs, scrap pistols in one hand and dual CCW blades in the other, jetpack units built from salvaged thruster components with exposed fuel lines and crude stabilizer fins, ambush drop-assault specialists who swoop in from above, crossing attack ability to strike while flying past enemies, goggles strapped over eyes against wind, Quality 4+"
+    pose: "mid-flight diving attack pose, wings or jetpack flaring, scrap pistol firing down, CCW blade extended"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 125
+      size: 5
+      base: 25
+      rules: ["Ambush", "Crossing Attack(1)", "Flying", "Scrapper"]
+      weapons:
+        - name: "Scrap Pistols"
+          range: 12
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  trackers:
+    extra_details: "single elite jackal marksman with hunting rifles, long-barreled precision weapons with crude scopes salvaged from alien optics firing reliable scratch takedown rounds at 24 inch range, ghillie-like desert camouflage cloaks over light scrap armor, patient stalker hunters who track prey across wastes, CCW knife backup, strider feet with extra-quiet wrappings"
+    pose: "crouched sniper position, hunting rifle braced and aimed through scope, desert cloak draped over body"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 130
+      size: 3
+      base: 25
+      rules: ["Takedown)", "Scrapper", "Strider"]
+      weapons:
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  hounds:
+    extra_details: "single feral quadruped jackal war-beasts, large alien canid predators running on four legs with sharp claws for A2 melee attacks, lean muscular bodies built for extreme speed with fast movement, scout instincts for advance deployment, fur in darker wild patterns than domesticated jackals, fanged maws and pointed ears, strider paw pads for any terrain, pack hunters working in coordinated groups"
+    pose: "bounding sprint pose, claws extended, ears flat back, pack formation running together"
+
+  # ==========================================================================
+  # BEAST CAVALRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 65
+      size: 5
+      base: 25
+      rules: ["Fast", "Scout", "Scrapper", "Strider"]
+      weapons:
+        - name: "Claws"
+          range: 0
+          attacks: 2
+  beast_riders:
+    extra_details: "single jackal warrior mounted on large alien riding beasts, beasts are muscular reptilian-mammalian hybrids with thick hide and bounding legs for explosive repositioning, riders wield hunting hooks with rending curved blades from crude saddles of leather and bone, beasts have impact(2) charging horns or tusks, scrap metal barding on beast flanks, riders in medium armor with strider adaptations, Tough(3)"
+    pose: "beasts mid-bound leaping forward, riders swinging hunting hooks from saddle, beast tusks lowered"
+
+    game_stats:
+      quality: 5
+      defense: 4
+      cost: 135
+      size: 3
+      base: 32
+      rules: ["Bounding", "Impact(2)", "Scrapper", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Hunting Hooks"
+          range: 0
+          attacks: 2
+          rules: ["Rending"]
+  beast_gunners:
+    extra_details: "single jackal warrior mounted on large armored riding beasts carrying heavy machineguns, beasts are stockier and more heavily armored than rider variants with fortified barding plates, heavy machineguns mounted on saddle platforms firing AP(1) rounds at 30 inch range with A3 attacks, CCW sidearm, bounding repositioning movement, riders braced behind gun shields, Tough(3)"
+    pose: "beasts in stable firing stance, riders behind heavy machineguns aiming forward, fortified barding visible"
+
+  # ==========================================================================
+  # GREAT BEASTS (Monsters)
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 4
+      cost: 180
+      size: 3
+      base: 32
+      rules: ["Bounding", "Fortified", "Scrapper", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Heavy Machineguns"
+          range: 30
+          attacks: 3
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  great_beast:
+    extra_details: "massive alien war-beast towering over infantry, enormous quadruped predator with massive jaws delivering A6 AP(4) devastating bites, powerful stomping legs with A4 AP(1) crush attacks, thick armored hide with scrap metal plates bolted on by jackal handlers, bounding movement for terrifying repositioning, Fear(2) apex predator presence, can be fitted with transport platform howdah or harpoon launchers, Tough(12)"
+    pose: "massive jaws open in roar, stomping forward aggressively, armored hide bristling with scrap plates"
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 300
+      size: 1
+      base: 50
+      rules: ["Bounding", "Fear(2)", "Scrapper", "Strider", "Tough(12)"]
+      weapons:
+        - name: "Massive Jaws"
+          range: 0
+          attacks: 6
+          rules: ["AP(4)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  long_neck:
+    extra_details: "enormous long-necked alien beast of dinosaur-like proportions used as mobile artillery platform, heavy rail cannon mounted on armored howdah on its back firing A6 AP(2) Deadly(3) unstoppable rounds at 30 inch range, heavy tusks on head for A6 AP(1) scratch melee, powerful stomp legs with A6 AP(2) crushing attacks, massive creature towering above all other units, Fear(3) terrifying presence, fearless war-beast bonded to jackal handlers, scrap metal armor plates across flanks and neck, Tough(18)"
+    pose: "towering stance with long neck raised, rail cannon on back aimed forward, tusks lowered threateningly"
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 735
+      size: 1
+      base: 100
+      rules: ["Unstoppable)", "Fear(3)", "Scrapper", "Strider", "Tough(18)"]
+      weapons:
+        - name: "Heavy Rail Cannon"
+          range: 30
+          attacks: 6
+          rules: ["AP(2)"]
+        - name: "Heavy Tusks"
+          range: 0
+          attacks: 6
+          rules: ["AP(1)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 6
+          rules: ["AP(2)"]
+  mastodon:
+    extra_details: "colossal elephant-like alien war-beast the largest creature in the jackal army, piercing cannon on main howdah firing A6 AP(2) Deadly(3) indirect bombardment rounds, pipe rockets array on flanks firing A6 AP(2) salvos, great tusks delivering A8 AP(2) scratch devastating charges, powerful stomp legs with A8 AP(2) crushing force, massive howdah platform carrying 21 warriors (Transport 21), layered scrap metal armor plates across entire body, Fear(4) terrifying colossus, fearless bonded war-beast, Tough(24)"
+    pose: "colossal beast dominating the scene, piercing cannon elevated on howdah, great tusks lowered for charge, pipe rockets visible on flanks"
+
+  # ==========================================================================
+  # NAMED CHARACTERS
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 1180
+      size: 1
+      base: "120x92"
+      rules: ["Indirect)", "Fear(4)", "Scrapper", "Strider", "Tough(24)", "Transport(21)"]
+      weapons:
+        - name: "Piercing Cannon"
+          range: 30
+          attacks: 6
+          rules: ["AP(2)"]
+        - name: "Pipe Rockets"
+          range: 24
+          attacks: 6
+          rules: ["AP(2)"]
+        - name: "Great Tusks"
+          range: 0
+          attacks: 8
+          rules: ["AP(2)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 8
+          rules: ["AP(2)"]
+  ruyi_nonga:
+    extra_details: "unique legendary jackal warrior-hero with advanced salvaged alien technology, gauss pistol in one hand firing destructive energy rounds that deal AP(+4) on rolls of 6, explosive spear in other hand with AP(2) for devastating melee strikes, crude jetpack with advanced stabilizers allowing flight and crossing attack(3) fly-by assaults plus crossing strike(1) devastating single-use bombing run, more refined armor than standard jackals showing higher-quality salvage, goggles and flight gear, ambush specialist who drops in unexpectedly, Tough(3), Unique hero"
+    pose: "dramatic mid-flight pose, gauss pistol aimed forward firing, explosive spear held high, jetpack flaring with exhaust"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 80
+      size: 1
+      base: 32
+      rules: ["Ambush", "Crossing Attack(3)", "Crossing Strike(1)", "Flying", "Scrapper", "Tough(3)"]
+      weapons:
+        - name: "Gauss Pistol"
+          range: 12
+          attacks: 2
+          rules: ["Destructive"]
+        - name: "Explosive Spear"
+          range: 0
+          attacks: 3
+          rules: ["AP(2)"]

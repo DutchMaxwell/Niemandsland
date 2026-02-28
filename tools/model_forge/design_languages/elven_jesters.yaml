@@ -1,0 +1,242 @@
+# =============================================================================
+# Elven Jesters - Design Language
+# =============================================================================
+# Basiert auf: GF - Elven Jesters v3.5.2
+# Toedliche Performer-Krieger in Diamantmuster-Kostuemen mit Masken,
+# Akrobatik und theatralischen Waffen. Soeldner und Unterhalter.
+# OPR-Aequivalent zu Harlequins.
+
+faction_name: "Elven Jesters"
+
+aesthetic:
+  genre: "grimdark sci-fi theatrical"
+  style: "deadly performer-warriors"
+  inspiration:
+    - "Deadly masked acrobat-warriors in diamond-patterned costumes"
+    - "Commedia dell'arte performers as alien killers"
+    - "Cirque du Soleil meets alien assassin troupe"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted Harlequin designs"
+    - "Silly or non-threatening clown aesthetics"
+    - "Heavy armor or bulky designs"
+
+colors:
+  primary: "diamond-pattern black and white costume"
+  secondary: "rich purple and teal accent panels"
+  accent: "bright gold mask details and weapon edges"
+
+materials:
+  - "tight-fitting diamond-patterned bodysuit"
+  - "ornate theatrical masks with alien features"
+  - "holographic shimmer-weave fabric"
+  - "crystalline alien performance weapons"
+
+creature_type: "masked alien performer-warrior"
+
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered figure, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on surface textures (diamond patterns, masks, holographic shimmer)
+  - 28mm tabletop miniature aesthetic and proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# =============================================================================
+# Per-Unit Overrides - Alle Einheiten aus GF Elven Jesters v3.5.2
+# =============================================================================
+unit_overrides:
+
+  # ==========================================================================
+  # HEROES
+  # ==========================================================================
+
+  master_jester:
+    extra_details: "supreme troupe leader in elaborate diamond-patterned bodysuit with holographic shimmer-weave fabric shifting between black, white, purple and teal, ornate master theatrical mask with elongated alien features and bright gold filigree, master fragment pistol with crystalline barrel in one hand firing shrapnel rounds, dagger as sidearm, deathly touch power causing blast(3) shockwave on melee contact, quality 3+ elite performer-killer, Evasive enemies suffer -1 to hit, Furious charge bonus, Rapid Blink short-range teleport, Tough(3), the deadliest performer in the troupe"
+    pose: "dramatic theatrical combat stance mid-pirouette, master fragment pistol aimed with one arm extended, other hand crackling with deathly touch energy, mask turned toward viewer, bodysuit shimmering"
+
+    game_stats:
+      quality: 3
+      defense: 5
+      cost: 75
+      size: 1
+      base: 32
+      rules: ["Evasive", "Furious", "Rapid Blink", "Tough(3)"]
+      weapons:
+        - name: "Master Fragment Pistol"
+          range: 12
+          attacks: 2
+          rules: ["Fragment"]
+        - name: "Dagger"
+          range: 0
+          attacks: 1
+        - name: "Deathly Touch"
+          range: 0
+          attacks: 1
+          rules: ["Blast(3)"]
+  fool_champion:
+    extra_details: "junior troupe leader in diamond-patterned bodysuit with less ornate patterns than the Master Jester, theatrical mask with simpler but still alien features in purple and teal, master fragment pistol with crystalline barrel in one hand, dual close combat weapons with curved crystalline performance blades, quality 5+ apprentice leader still learning the deadly arts, Evasive enemies suffer -1 to hit, Furious charge bonus, Rapid Blink short-range teleport, Tough(3), aspiring to master the dance of death"
+    pose: "aggressive forward-leaning combat pose, master fragment pistol extended, dual curved blades crossed before chest, mask tilted in mocking challenge"
+
+  # ==========================================================================
+  # CORE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 50
+      size: 1
+      base: 32
+      rules: ["Evasive", "Furious", "Rapid Blink", "Tough(3)"]
+      weapons:
+        - name: "Master Fragment Pistol"
+          range: 12
+          attacks: 2
+          rules: ["Fragment"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  fools:
+    extra_details: "single apprentice performer-warrior in diamond-patterned bodysuits with simpler patterns than veterans, theatrical masks with basic alien features, fragment pistols firing cover-ignoring shrapnel at 12 inch range, dual close combat weapons with crystalline curved blades for acrobatic melee, quality 5+ learning the deadly arts, Evasive enemies suffer -1 to hit, Furious charge bonus, Rapid Blink short-range teleport, the newest members of the troupe proving their worth"
+    pose: "acrobatic squad formation mid-performance, fragment pistols raised, curved blades drawn, dynamic theatrical stances"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 95
+      size: 5
+      base: 25
+      rules: ["Evasive", "Furious", "Rapid Blink"]
+      weapons:
+        - name: "Fragment Pistols"
+          range: 12
+          attacks: 1
+          rules: ["Fragment"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  jesters:
+    extra_details: "single veteran performer-warrior in elaborate diamond-patterned bodysuits with holographic shimmer-weave shifting between black, white, purple and teal, ornate theatrical masks with expressive alien features and gold trim, fragment pistols firing cover-ignoring shrapnel at 12 inch range, dual close combat weapons with crystalline curved blades, quality 3+ deadly veterans of countless performances, Evasive enemies suffer -1 to hit, Furious charge bonus, Rapid Blink short-range teleport, the core of the troupe's deadly ensemble"
+    pose: "coordinated acrobatic combat formation, fragment pistols aimed, curved blades poised in a different theatrical fighting stance"
+
+    game_stats:
+      quality: 3
+      defense: 5
+      cost: 155
+      size: 5
+      base: 25
+      rules: ["Evasive", "Furious", "Rapid Blink"]
+      weapons:
+        - name: "Fragment Pistols"
+          range: 12
+          attacks: 1
+          rules: ["Fragment"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  pranksters:
+    extra_details: "single elite melee specialist in diamond-patterned bodysuits with dark stealth-adapted shimmer-weave, sinister theatrical masks with narrow eye-slits and angular alien features, energy glaives with AP(1) thrust capability as two-handed crystalline polearms crackling with energy, ambush deployment from concealment, regenerative alien physiology constantly healing wounds, quality 3+ elite close-combat assassins, Evasive enemies suffer -1 to hit, Furious charge bonus, Rapid Blink short-range teleport, the troupe's hidden blade striking from shadows"
+    pose: "emerging from ambush in fluid formation, energy glaives held in sweeping polearm stances, bodies coiled for thrust attacks, masks peering from darkness"
+
+  # ==========================================================================
+  # ELITE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 5
+      cost: 220
+      size: 5
+      base: 25
+      rules: ["Ambush", "Evasive", "Furious", "Rapid Blink", "Regeneration"]
+      weapons:
+        - name: "Energy Glaives"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  jokers:
+    extra_details: "single airborne acrobat-assassin in diamond-patterned bodysuits with lightweight flight-adapted shimmer-weave, wild theatrical masks with exaggerated jester features and bright gold accents, anti-gravity hoverpacks or acrobatic jump systems granting flight, exploding bolas firing blast(3) area-effect projectiles at 12 inch range, dual close combat weapons with crystalline curved blades, point-blank surge generating extra hits at close range on rolls of 6, quality 3+ aerial death-dealers, Evasive enemies suffer -1 to hit, Flying movement, Furious charge bonus, Rapid Blink short-range teleport, the troupe's airborne terror"
+    pose: "dynamic aerial acrobatic combat, hovering mid-air, exploding bolas whirling above head with one hand, curved blade in the other, masks grinning, bodies twisting in impossible aerial poses"
+
+  # ==========================================================================
+  # JETBIKES
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 5
+      cost: 135
+      size: 3
+      base: 25
+      rules: ["Evasive", "Flying", "Furious", "Point-Blank Surge", "Rapid Blink"]
+      weapons:
+        - name: "Exploding Bolas"
+          range: 12
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  jetbikes:
+    extra_details: "single performer-warriors mounted on sleek alien jetbikes with diamond-patterned hull panels in black, white, purple and teal, riders in diamond-patterned bodysuits with theatrical masks featuring aerodynamic visors, exploding bolas launchers firing blast(3) area-effect projectiles mounted on bike cowling, fragment pistols firing cover-ignoring shrapnel as secondary weapons, dual close combat weapons for high-speed drive-by attacks, streamlined anti-gravity jetbike hulls with swept-back crystalline fins and holographic shimmer-weave fairings, quality 3+ defense 4+ armored riders, Evasive enemies suffer -1 to hit, Fast movement, Furious charge bonus, Rapid Blink short-range teleport, Strider terrain mastery, Tough(3)"
+    pose: "high-speed attack formation, jetbikes banking in dramatic sweep, exploding bolas launching, riders leaning into sharp theatrical turns"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 260
+      size: 3
+      base: 32
+      rules: ["Evasive", "Fast", "Furious", "Rapid Blink", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Exploding Bolas"
+          range: 12
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "Fragment Pistols"
+          range: 12
+          attacks: 1
+          rules: ["Fragment"]
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  heavy_jetbike:
+    extra_details: "single large heavily-armed anti-gravity attack bike with elaborate diamond-patterned hull in black, white, purple and teal with gold trim, rider in ornate diamond-patterned bodysuit with theatrical mask featuring targeting visor, twin fragment pistol turret firing cover-ignoring shrapnel salvos at 12 inch range, energy glaive with AP(1) thrust capability mounted as massive crystalline lance with 5 melee attacks, oversized anti-gravity engines with holographic shimmer-weave fairings, impact(3) reinforced prow for devastating ramming attacks, quality 3+ defense 2+ heavily armored, Evasive enemies suffer -1 to hit, Fast movement, Furious charge bonus, Rapid Blink short-range teleport, Strider terrain mastery, Tough(6)"
+    pose: "aggressive attack run at speed, energy glaive lance couched forward, twin fragment pistol turret blazing, holographic shimmer trailing from fairings"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 235
+      size: 1
+      base: 40
+      rules: ["Evasive", "Fast", "Furious", "Impact(3)", "Rapid Blink", "Strider", "Tough(6)"]
+      weapons:
+        - name: "Twin Fragment Pistol"
+          range: 12
+          attacks: 2
+          rules: ["Fragment"]
+        - name: "Energy Glaive"
+          range: 0
+          attacks: 5
+          rules: ["AP(1)"]

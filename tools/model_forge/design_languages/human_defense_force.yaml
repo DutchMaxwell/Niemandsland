@@ -1,0 +1,655 @@
+# =============================================================================
+# Human Defense Force - Design Language
+# =============================================================================
+# Regulaere menschliche Militaermacht - massive Armeen regulaerer Soldaten mit
+# Panzern, Artillerie und Luftunterstuetzung.
+# OPR-Aequivalent zu Astra Militarum / Imperial Guard.
+# Basiert auf: GF - Human Defense Force v3.5.2
+
+faction_name: "Human Defense Force"
+
+aesthetic:
+  genre: "grimdark sci-fi military"
+  style: "utilitarian mass infantry army"
+  inspiration:
+    - "WW1/WW2 infantry aesthetic in a sci-fi setting"
+    - "Massive conscript armies with heavy armor support"
+    - "Pragmatic utilitarian military with mass-produced equipment"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted Imperial Guard regiment designs"
+    - "Super-soldier or power armor aesthetics"
+    - "Alien technology"
+
+colors:
+  primary: "olive drab and khaki uniform fatigues"
+  secondary: "dark steel grey vehicle armor"
+  accent: "regimental red insignia and gold officer trim"
+
+materials:
+  - "canvas and flak armor vest over fatigues"
+  - "heavy riveted steel tank armor"
+  - "leather belts, pouches and webbing"
+  - "matte painted military equipment"
+
+creature_type: "regular human soldier in flak armor"
+
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered figure, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on surface textures (fabric fatigues, flak armor, military equipment)
+  - 28mm tabletop miniature aesthetic and proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# =============================================================================
+# Per-Unit Overrides - Alle Einheiten aus GF Human Defense Force v3.5.2
+# =============================================================================
+unit_overrides:
+
+  # ==========================================================================
+  # HEROES
+  # ==========================================================================
+
+  tank_company_leader:
+    extra_details: "hero battle tank commander variant, massive armored tank hull with nova cannon main turret and twin heavy flamer sponsons, commander cupola with officer standing in hatch giving orders, gold officer trim on turret, regimental banner mounted on antenna, veteran kill markings on barrel, Fast, Hero, Impact(6), Tough(12)"
+    pose: "tank rolling forward, commander visible in open hatch pointing ahead, main cannon elevated"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 335
+      size: 1
+      base: 50
+      rules: ["Reliable)", "Fast", "Hold the Line", "Impact(6)", "Tough(12)"]
+      weapons:
+        - name: "Nova Cannon"
+          range: 36
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Twin Heavy Flamer"
+          range: 12
+          attacks: 2
+          rules: ["AP(1)"]
+  storm_leader:
+    extra_details: "elite storm trooper officer hero in heavier carapace armor with enclosed helmet and red-tinted visor, master heavy pistol in one hand, close combat weapon in other, reinforced armor plates over standard storm trooper gear, tactical data-slate on forearm, officer insignia and gold trim on shoulder pads, Strider gear on boots, Tough(3)"
+    pose: "commanding pose, heavy pistol raised, gesturing orders with combat weapon hand"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 45
+      size: 1
+      base: 32
+      rules: ["Hold the Line", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Master Heavy Pistol"
+          range: 12
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  company_leader:
+    extra_details: "infantry company officer hero in standard flak armor with officer coat and peaked cap or helmet, master pistol holstered, close combat weapon drawn, leather map case and binoculars, gold rank insignia on collar, whistle on lanyard, regimental sash across chest, Tough(3)"
+    pose: "leading from the front, pistol drawn, pointing forward to direct troops"
+
+  # ==========================================================================
+  # UNIQUE CHARACTERS
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 35
+      size: 1
+      base: 32
+      rules: ["Hold the Line", "Tough(3)"]
+      weapons:
+        - name: "Master Pistol"
+          range: 12
+          attacks: 2
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  colonel_rixxon:
+    extra_details: "unique named hero colonel in decorated officer uniform over flak armor, master pistol in one hand, energy sword crackling with power in other hand, peaked officer cap with gold braid, numerous campaign medals and ribbons on chest, intimidating scar across face, commanding presence that demoralizes enemies, Morale Debuff aura, Tough(3)"
+    pose: "dramatic commanding stance, energy sword pointed forward, pistol raised, barking orders"
+
+  # ==========================================================================
+  # CORE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 45
+      size: 1
+      base: 32
+      rules: ["Hold the Line", "Morale Debuff", "Tough(3)"]
+      weapons:
+        - name: "Master Pistol"
+          range: 12
+          attacks: 2
+        - name: "Energy Sword"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)", "Rending"]
+  recruits:
+    extra_details: "single raw conscript soldier in basic olive drab fatigues with minimal flak armor, standard-issue rifles and bayonets as close combat weapons, frightened but determined expressions, ill-fitting helmets, basic ammunition pouches, lowest quality troops (Quality 6+)"
+    pose: "nervous advance in loose formation, rifles held at hip level, huddled together"
+
+    game_stats:
+      quality: 6
+      defense: 5
+      cost: 75
+      size: 10
+      base: 25
+      rules: ["Hold the Line"]
+      weapons:
+        - name: "Rifles"
+          range: 24
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  grunt_robots:
+    extra_details: "single humanoid combat robot with boxy utilitarian chassis, optical sensor clusters for heads, rifles integrated into forearms, basic close combat appendages, matte olive drab painted metal hulls, Good Shot targeting systems with glowing targeting reticle, Fearless autonomous programming"
+    pose: "mechanical synchronized advance, rifles raised in precise unison, emotionless stride"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 80
+      size: 5
+      base: 25
+      rules: ["Good Shot", "Hold the Line"]
+      weapons:
+        - name: "Rifles"
+          range: 24
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  infantry_squad:
+    extra_details: "single standard infantry warrior in olive drab fatigues and flak armor vests, steel helmets, standard-issue rifles with bayonets, ammunition pouches and canteens on webbing belts, squad radio operator, regimental shoulder patches, disciplined rank-and-file soldiers"
+    pose: "advancing in tactical formation, rifles shouldered and aimed, disciplined spacing"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 115
+      size: 10
+      base: 25
+      rules: ["Hold the Line"]
+      weapons:
+        - name: "Rifles"
+          range: 24
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  veterans:
+    extra_details: "single veteran in battle-worn flak armor with additional field modifications, improved rifles with optics and accessories, close combat weapons, campaign ribbons and kill tallies scratched into armor, experienced hard-bitten expressions, extra ammunition and grenades on webbing, Quality 4+"
+    pose: "confident tactical advance, weapons ready, covering angles with practiced precision"
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 80
+      size: 5
+      base: 25
+      rules: ["Hold the Line"]
+      weapons:
+        - name: "Rifles"
+          range: 24
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  storm_troopers:
+    extra_details: "single elite storm trooper in heavy carapace armor over black fatigues, enclosed helmets with red-tinted visors and built-in comms, heavy rifles with AP rounds, tactical webbing with specialized equipment, grav-chutes for Strider capability, elite special forces operators"
+    pose: "professional tactical breach formation, heavy rifles aimed, precise military movement"
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 110
+      size: 5
+      base: 25
+      rules: ["Hold the Line", "Strider"]
+      weapons:
+        - name: "Heavy Rifles"
+          range: 24
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  sappers:
+    extra_details: "single combat engineer warrior in reinforced flak armor with extra blast padding, drum rifles with rotating magazine drums firing rending shrapnel rounds, demolition charges and breaching tools on belts, protective goggles pushed up on helmets, Relentless determination, heavy gloves and knee pads"
+    pose: "advancing through rubble, drum rifles braced at hip, demolition gear visible"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 75
+      size: 3
+      base: 25
+      rules: ["Hold the Line", "Relentless"]
+      weapons:
+        - name: "Drum Rifles"
+          range: 18
+          attacks: 2
+          rules: ["Rending"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  snipers:
+    extra_details: "single sniper in ghillie suits and camouflage cloaks over flak armor, long-barreled sniper rifles with scopes firing AP Reliable Takedown rounds, spotter scopes and range finders, face paint or mesh face covers, Scout and Stealth equipment, ammunition bandolier with specialized rounds"
+    pose: "prone or kneeling firing position, sniper rifles aimed with precision, camouflaged and concealed"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 125
+      size: 3
+      base: 25
+      rules: ["Hold the Line", "Scout", "Stealth"]
+      weapons:
+        - name: "Sniper Rifles"
+          range: 30
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  weapon_teams:
+    extra_details: "single heavy weapon team, each team consisting of gunner and loader operating a mortar with Blast(3) and Indirect capability, sandbag or equipment crate positions, ammunition boxes stacked nearby, range-finding equipment, crew-served weapon aesthetic, Tough(3) per team"
+    pose: "firing positions with mortars elevated, loaders feeding shells, gunners adjusting aim"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 135
+      size: 3
+      base: 32
+      rules: ["Hold the Line", "Tough(3)"]
+      weapons:
+        - name: "Mortars"
+          range: 30
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "Crews"
+          range: 0
+          attacks: 2
+  ogre_robots:
+    extra_details: "single massive heavy combat robot, twice the height of a regular soldier, bulky armored chassis with OGRE designation stenciled on chest plate, triple-barreled gatling guns mounted on one arm firing AP rounds, heavy close combat crushing fist on other arm, stomping reinforced legs, Fearless and Furious programming, glowing red optical arrays, Tough(3)"
+    pose: "aggressive advance, gatling gun arm spinning up, crushing fist raised, towering over infantry"
+
+  # ==========================================================================
+  # BIKES
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 4
+      cost: 160
+      size: 3
+      base: 32
+      rules: ["Furious", "Hold the Line", "Tough(3)"]
+      weapons:
+        - name: "OGRE Gatling Guns"
+          range: 12
+          attacks: 3
+          rules: ["AP(1)"]
+        - name: "Heavy CCWs"
+          range: 0
+          attacks: 1
+          rules: ["AP(1)"]
+  combat_bikers:
+    extra_details: "single soldier on rugged military combat motorcycle, pistols holstered on hip, heavy lances with AP(2) tips couched under arm or strapped to bike frame, armored fairing on bikes, saddlebags with supplies, goggles and scarves over flak armor, Fast with Impact(1) charge capability"
+    pose: "riding at speed in formation, lances lowered for charge, bikes kicking up dust"
+
+  # ==========================================================================
+  # VEHICLES (Transport - auto-detected)
+  # ==========================================================================
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 95
+      size: 5
+      base: 25
+      rules: ["Fast", "Hold the Line", "Impact(1)"]
+      weapons:
+        - name: "Pistols"
+          range: 12
+          attacks: 1
+        - name: "Heavy Lances"
+          range: 0
+          attacks: 1
+          rules: ["AP(2)"]
+  light_apc:
+    extra_details: "light armored personnel carrier, boxy angular hull with riveted steel plates, hull-mounted heavy flamer and turret-mounted heavy flamer both with AP and Blast capability, front ramp door for troop deployment, firing ports along sides, heavy wheels or light tracks, Fast with Impact(3), Tough(6), Transport(11)"
+    pose: "driving forward, turret aimed ahead, ready for troop deployment"
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 195
+      size: 1
+      base: "100x60"
+      rules: ["Reliable)", "Fast", "Hold the Line", "Impact(3)", "Tough(6)", "Transport(11)"]
+      weapons:
+        - name: "Heavy Flamer"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Turret Heavy Flamer"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+  light_gunship:
+    extra_details: "VTOL light transport gunship aircraft, twin turbine engines on stub wings, chin-mounted laser cannon with AP(3) and Deadly(3), wing-mounted twin rocket pods with Blast(3), armored cockpit canopy, side doors for troop deployment, military drab paint scheme with squadron markings, Aircraft, Tough(6), Transport(11)"
+    pose: "banking in flight, weapons aimed at ground target, side doors visible"
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 265
+      size: 1
+      base: "120x92"
+      rules: ["Aircraft", "Tough(6)", "Transport(11)"]
+      weapons:
+        - name: "Laser Cannon"
+          range: 36
+          attacks: 1
+          rules: ["AP(3)"]
+        - name: "Twin Rocket Pod"
+          range: 24
+          attacks: 2
+          rules: ["Blast(3)"]
+  heavy_gunship:
+    extra_details: "heavy assault transport gunship aircraft, massive twin engines, reinforced armored fuselage, nose-mounted fury missiles with Blast(3), twin laser cannons under wings with AP(3) and Deadly(3), smaller troop bay with side doors, heavy armor plating, squadron kill markings, Aircraft, Tough(9), Transport(6)"
+    pose: "hovering for attack run, all weapon systems aimed forward, engines roaring"
+
+  # ==========================================================================
+  # VEHICLES (no Transport)
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 390
+      size: 1
+      base: "120x92"
+      rules: ["Aircraft", "Tough(9)", "Transport(6)"]
+      weapons:
+        - name: "Fury Missiles"
+          range: 36
+          attacks: 2
+          rules: ["Blast(3)"]
+        - name: "Twin Laser Cannon"
+          range: 36
+          attacks: 2
+          rules: ["AP(3)"]
+  armored_truck:
+    extra_details: "fast armored reconnaissance and fire-support truck, open-topped fighting compartment with twin storm machinegun turret firing AP rounds, hull-mounted light gatling gun, six heavy off-road wheels with armored mud guards, Strider capability for rough terrain, angular welded armor hull, spare fuel cans strapped to sides, Fast, Impact(3), Tough(6)"
+    pose: "speeding across terrain, turret tracking target, dust trail behind"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 175
+      size: 1
+      base: 40
+      rules: ["Fast", "Hold the Line", "Impact(3)", "Strider", "Tough(6)"]
+      weapons:
+        - name: "Twin Storm Machinegun"
+          range: 24
+          attacks: 4
+          rules: ["AP(1)"]
+        - name: "Light Gatling Gun"
+          range: 18
+          attacks: 4
+  light_walker:
+    extra_details: "light bipedal scout walker, chicken-legged walking chassis with armored cockpit cabin, rapid heavy flamer arm weapon with AP and Blast capability, stomping feet with AP, sensor array on top, smaller than a full combat walker, utilitarian industrial design, Fear(1), Tough(6)"
+    pose: "striding forward in patrol stance, flamer arm aimed ahead, sensor scanning"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 155
+      size: 1
+      base: 40
+      rules: ["Reliable)", "Fear(1)", "Hold the Line", "Tough(6)"]
+      weapons:
+        - name: "Rapid Heavy Flamer"
+          range: 12
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  attack_vehicle:
+    extra_details: "medium assault vehicle, low-slung tracked chassis with heavy frontal armor, acid cannon turret firing corrosive Bane rounds, hull-mounted heavy flamer with AP and Blast, angled reactive armor plates, commander cupola, exhaust stacks, aggressive hunting vehicle profile, Fast, Impact(3), Tough(9)"
+    pose: "advancing at speed, acid cannon turret traversing, heavy flamer ready"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 225
+      size: 1
+      base: 40
+      rules: ["Fast", "Hold the Line", "Impact(3)", "Tough(9)"]
+      weapons:
+        - name: "Acid Cannon"
+          range: 18
+          attacks: 6
+          rules: ["Bane"]
+        - name: "Heavy Flamer"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+  battle_tank:
+    extra_details: "main battle tank, large turret with nova cannon main gun firing AP Blast(6) rounds, twin heavy flamer sponson with AP and Blast, thick sloped frontal glacis armor, heavy tracks, commander hatch, antenna array, regimental markings stenciled on hull, veteran tank crew, Fast, Impact(6), Tough(12)"
+    pose: "hull-down firing position, main cannon elevated, twin flamer visible"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 335
+      size: 1
+      base: 50
+      rules: ["Reliable)", "Fast", "Hold the Line", "Impact(6)", "Tough(12)"]
+      weapons:
+        - name: "Nova Cannon"
+          range: 36
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Twin Heavy Flamer"
+          range: 12
+          attacks: 2
+          rules: ["AP(1)"]
+  heavy_battle_tank:
+    extra_details: "heavy battle tank, oversized turret with twin light battle cannons firing AP(2) Blast(3) rounds, hull-mounted light gatling gun, side-mounted fusion array with AP(4) and Deadly(3), extremely thick armor plating with additional track guards, massive chassis dwarfing regular battle tanks, dual exhaust stacks, Fast, Impact(6), Tough(15)"
+    pose: "rolling forward, twin barrels elevated, all weapon systems bristling"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 425
+      size: 1
+      base: 50
+      rules: ["Fast", "Hold the Line", "Impact(6)", "Tough(15)"]
+      weapons:
+        - name: "Twin Light Battle Cannon"
+          range: 30
+          attacks: 2
+          rules: ["AP(2)"]
+        - name: "Light Gatling Gun"
+          range: 18
+          attacks: 4
+        - name: "Fusion Array"
+          range: 12
+          attacks: 2
+          rules: ["AP(4)"]
+  combat_walker:
+    extra_details: "heavy bipedal combat walker, armored sarcophagus-style torso with gatling gun arm spinning six barrels, heavy stomping feet with AP, Fortified additional armor plating reducing incoming AP, thick armored legs and reactor on back, Fear(2) intimidating presence, Furious close combat programming, Tough(12)"
+    pose: "striding into battle, gatling gun arm whirring, stomp foot raised"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 255
+      size: 1
+      base: 50
+      rules: ["Fear(2)", "Fortified", "Furious", "Hold the Line", "Tough(12)"]
+      weapons:
+        - name: "Gatling Gun"
+          range: 18
+          attacks: 6
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  tactical_walker:
+    extra_details: "heavy tactical fire-support walker, bipedal armored chassis with walker heavy flamer arm firing AP Blast(3) Reliable volleys, heavy stomping feet with AP, sensor suite and targeting arrays on head unit, missile pods optional on shoulders, heavier fire-support variant than combat walker, Fear(2), Tough(12)"
+    pose: "advancing in fire support stance, heavy flamer arm unleashing, feet stomping forward"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 325
+      size: 1
+      base: 50
+      rules: ["Reliable)", "Fear(2)", "Hold the Line", "Tough(12)"]
+      weapons:
+        - name: "Walker Heavy Flamer"
+          range: 12
+          attacks: 4
+          rules: ["AP(1)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  support_vehicle:
+    extra_details: "mobile artillery support vehicle, tracked chassis with open-topped fighting compartment, shard mortar main weapon firing Indirect Blast(3) Rending rounds, hull-mounted heavy flamer with AP and Blast, Mobile Artillery targeting systems for stationary fire bonus, ammunition racks and shell casings visible, Impact(3), Tough(6)"
+    pose: "stationary firing position, mortar elevated for indirect fire, crew operating"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 265
+      size: 1
+      base: 40
+      rules: ["Hold the Line", "Impact(3)", "Mobile Artillery", "Tough(6)"]
+      weapons:
+        - name: "Shard Mortar"
+          range: 24
+          attacks: 3
+          rules: ["Blast(3)"]
+        - name: "Heavy Flamer"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+  field_artillery:
+    extra_details: "static field artillery piece with crew, light shard mortar on wheeled or tracked carriage firing Indirect Blast(3) Rending rounds, two-man artillery crew operating the gun, ammunition crates stacked beside, ranging equipment and targeting poles, stabilizer legs deployed, Artillery special rule for stationary operation, Tough(3)"
+    pose: "deployed firing position, mortar elevated, crew loading and aiming"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 110
+      size: 1
+      base: 32
+      rules: ["Rending)", "Artillery", "Hold the Line", "Tough(3)"]
+      weapons:
+        - name: "Light Shard Mortar"
+          range: 18
+          attacks: 2
+          rules: ["Blast(3)"]
+        - name: "Artillery Crew"
+          range: 0
+          attacks: 3
+  tactical_titan:
+    extra_details: "massive bipedal war titan towering over all other units, walker heavy flamer arm firing AP Blast(3) volleys, cluster missiles array on opposite shoulder with Blast(3), devastating stomp attacks with AP(2), enormous armored legs and reactor core on back, command antenna array on head, Fear(3) terrifying war engine, Fearless, Tough(18)"
+    pose: "dominating the battlefield, weapons blazing, crushing stride forward"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 540
+      size: 1
+      base: 100
+      rules: ["Reliable)", "Fear(3)", "Hold the Line", "Tough(18)"]
+      weapons:
+        - name: "Cluster Missiles Array"
+          range: 24
+          attacks: 2
+          rules: ["Blast(3)"]
+        - name: "Walker Heavy Flamer"
+          range: 12
+          attacks: 4
+          rules: ["AP(1)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 6
+          rules: ["AP(2)"]
+  super_heavy_battle_tank:
+    extra_details: "super-heavy battle tank of colossal proportions, twin heavy machinegun turret with AP, hell cannon side turret firing AP Blast(3) Unstoppable rounds, siege mortar rear turret firing AP(3) Blast(3) Indirect shells, multiple sponson weapon options, enormously thick armor plating, massive tracks, command cupola, regimental battle standard, Fast, Fearless, Impact(12), Tough(24)"
+    pose: "thundering forward, all weapon systems firing, dominating presence on battlefield"
+    type: vehicle
+
+    game_stats:
+      quality: 4
+      defense: 2
+      cost: 870
+      size: 1
+      base: 100
+      rules: ["Fast", "Hold the Line", "Impact(12)", "Tough(24)"]
+      weapons:
+        - name: "Twin Heavy Machinegun"
+          range: 30
+          attacks: 6
+          rules: ["AP(1)"]
+        - name: "Hell Cannon"
+          range: 24
+          attacks: 4
+          rules: ["AP(1)"]
+        - name: "Siege Mortar"
+          range: 24
+          attacks: 2
+          rules: ["AP(3)"]

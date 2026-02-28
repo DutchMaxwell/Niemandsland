@@ -1,0 +1,574 @@
+# =============================================================================
+# Change Disciples - Design Language
+# =============================================================================
+# Arkane Zauberer-Krieger in ornamentaler Power Armor, dem Gott des Wandels
+# und der Magie verschrieben. Aegyptische und Vogel-Aesthetik, schwere Psyker.
+# OPR-Aequivalent zu Thousand Sons.
+# Basiert auf: GF - Change Disciples v3.5.2
+
+faction_name: "Change Disciples"
+
+aesthetic:
+  genre: "grimdark sci-fi sorcerous chaos"
+  style: "arcane sorcerer warriors"
+  inspiration:
+    - "Egyptian sorcerer-soldiers in ornate power armor"
+    - "Avian and arcane motifs with psychic energy"
+    - "Ancient mystical aesthetics fused with corrupted technology"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted Thousand Sons iconography"
+    - "Non-magical mundane warriors"
+    - "Bright cheerful magic"
+
+colors:
+  primary: "deep sapphire blue power armor"
+  secondary: "burnished gold trim and Egyptian-style engravings"
+  accent: "eldritch pink and purple warpfire glow"
+
+materials:
+  - "ornate blue ceramite with golden hieroglyphic engravings"
+  - "crystalline psychic conduits embedded in armor"
+  - "flowing arcane energy tendrils around weapons"
+  - "avian feather crests and bird-skull motifs"
+
+creature_type: "sorcerous chaos in arcane power armor"
+
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered figure, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on armor surface textures (hieroglyphs, psychic glow, avian motifs)
+  - 28mm tabletop miniature aesthetic and heroic proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# =============================================================================
+# Per-Unit Overrides - Alle Einheiten aus GF Change Disciples v3.5.2
+# =============================================================================
+unit_overrides:
+
+  # ==========================================================================
+  # HEROES
+  # ==========================================================================
+
+  change_destroyer_champion:
+    extra_details: "towering elite destroyer hero in massively bulky terminator-style deep sapphire blue power armor, elaborate golden Egyptian-style hieroglyphic trim covering every surface, crystalline psychic conduits pulsing with pink-purple warpfire along arms and spine, bird-skull helmet with avian feather crest sweeping back, champion heavy rifle with arcane rune engravings in one hand, close combat weapon crackling with eldritch energy in the other, ornate golden scarab and eye-of-change motifs on chest plate, psychic energy tendrils coiling from shoulder vents, Tough(6)"
+    pose: "imposing sorcerous combat stance, heavy rifle braced and aimed, close combat weapon wreathed in warpfire held ready, psychic energy radiating outward"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 130
+      size: 1
+      base: 40
+      rules: ["Ambush", "Changebound", "Tough(6)"]
+      weapons:
+        - name: "Champion Heavy Rifle"
+          range: 24
+          attacks: 2
+          rules: ["AP(1)"]
+        - name: "CCW"
+          range: 0
+          attacks: 4
+  chosen_change_champion:
+    extra_details: "elite hero officer in ornate deep sapphire blue power armor with extensive burnished gold filigree, Egyptian khopesh-inspired energy weapon in one hand, flamer pistol with arcane conduits in the other, tall avian feather crest rising from helmet with glowing psychic eye lens, flowing tabard with hieroglyphic script hanging from waist, crystalline psychic focus gems set into pauldrons, golden scarab clasp on chest, warpfire energy flickering from joints, versatile attack sigils etched into gauntlets, Tough(3)"
+    pose: "commanding sorcerous pose, flamer pistol aimed with arcane precision, close combat weapon raised with eldritch energy coiling along the blade"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 65
+      size: 1
+      base: 32
+      rules: ["Changebound", "Tough(3)", "Versatile Attack"]
+      weapons:
+        - name: "Flamer Pistol"
+          range: 6
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  change_champion:
+    extra_details: "hero commander in deep sapphire blue power armor with golden hieroglyphic engravings, flamer pistol with warpfire-infused barrel in one hand, close combat weapon with arcane runes in the other, bird-skull faceplate on helmet with single glowing psychic eye, avian feather plume crest, golden trim on pauldrons with Egyptian eye motifs, psychic conduit cables running from backpack to gauntlets, scrollwork of arcane formulae etched into leg armor, Tough(3)"
+    pose: "battle-ready sorcerer pose, flamer pistol raised and aimed, close combat weapon at guard position, psychic glow emanating from helmet eye"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 55
+      size: 1
+      base: 32
+      rules: ["Changebound", "Tough(3)"]
+      weapons:
+        - name: "Flamer Pistol"
+          range: 6
+          attacks: 1
+          rules: ["Blast(3)"]
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  change_cultist_champion:
+    extra_details: "chaos cultist hero leader in ragged robes over light armor dyed deep blue, champion pistol with crude arcane modifications in one hand, close combat weapon with change-sigil pommel in the other, twisted bird-skull mask over face with glowing pink eyes, golden amulets and change-god talismans hanging from neck, tattered scrolls of forbidden knowledge tucked into belt, mutation-touched skin visible at wrists with iridescent scales, warpfire-tinged tattoos on exposed flesh, Tough(3)"
+    pose: "fanatical cultist leader stance, pistol raised zealously, close combat weapon brandished, eyes glowing with borrowed sorcerous power"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 30
+      size: 1
+      base: 32
+      rules: ["Changebound", "Tough(3)"]
+      weapons:
+        - name: "Champion Pistol"
+          range: 12
+          attacks: 2
+        - name: "CCW"
+          range: 0
+          attacks: 2
+  change_birdman_champion:
+    extra_details: "avian daemon champion with elongated bird-like features, blue-feathered body with golden ornamental armor plates, hexed sword with shred rune engravings crackling with eldritch energy, pistol with arcane barrel modifications, raptor-like taloned feet, sweeping feathered wings folded behind back, elongated bird-skull head with glowing pink psychic eyes, golden Egyptian collar around neck, iridescent blue plumage mixed with armor segments, Tough(3)"
+    pose: "predatory avian stance, hexed sword raised with eldritch energy trailing, bird-like head tilted with alien intelligence, taloned feet gripping invisible perch"
+
+  # ==========================================================================
+  # CORE INFANTRY
+  # ==========================================================================
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 40
+      size: 1
+      base: 32
+      rules: ["Changebound", "Tough(3)"]
+      weapons:
+        - name: "Pistol"
+          range: 12
+          attacks: 1
+        - name: "Hexed Sword"
+          range: 0
+          attacks: 3
+          rules: ["Shred"]
+  change_cultists:
+    extra_details: "single mass infantry of mortal chaos cultist in ragged blue-dyed robes and light body armor, rifles with crude arcane sigil carvings, close combat weapons with change-god symbols on pommels, twisted bird-skull masks or bare mutation-touched faces with iridescent eyes, golden change-god amulets and talismans, tattered scrolls of forbidden lore, some with minor mutations like extra fingers or feathered patches on skin"
+    pose: "fanatical advancing mob, rifles leveled with zealous intent, surging forward as a frenzied cult warband"
+
+    game_stats:
+      quality: 5
+      defense: 5
+      cost: 130
+      size: 10
+      base: 25
+      rules: ["Changebound"]
+      weapons:
+        - name: "Rifles"
+          range: 24
+          attacks: 1
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  change_birdmen:
+    extra_details: "single avian daemon infantry warrior with bird-like bodies covered in blue iridescent feathers, dual close combat weapons with curved blade designs, raptor-like taloned feet, elongated bird-skull heads with glowing pink psychic eyes, golden ornamental armor plates on chest and shoulders with Egyptian motifs, some with small vestigial wings, lithe and agile builds, feathered crests on heads"
+    pose: "swarming forward in a predatory flock, dual weapons slashing, bird-like movements with alien speed and coordination"
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 140
+      size: 10
+      base: 25
+      rules: ["Changebound"]
+      weapons:
+        - name: "Dual CCWs"
+          range: 0
+          attacks: 2
+  change_brothers:
+    extra_details: "single standard line infantry warrior in deep sapphire blue power armor with golden hieroglyphic trim on every plate, heavy rifles with AP rounds and arcane scope attachments, close combat weapons as sidearms, fully enclosed helmets with single glowing psychic eye lens and avian feather crests, golden scarab insignia on left pauldron, crystalline psychic conduits running along backpacks, Egyptian-style golden trim on greaves and vambraces"
+    pose: "disciplined sorcerous advance, rifles shouldered and aimed with arcane precision, warpfire glowing faintly from armor joints"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 145
+      size: 5
+      base: 25
+      rules: ["Changebound"]
+      weapons:
+        - name: "Heavy Rifles"
+          range: 24
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  chosen_change_brothers:
+    extra_details: "single elite veteran in ornately decorated deep sapphire blue power armor with extensive golden hieroglyphic filigree, heavy rifles with modular arcane attachments, close combat weapons with rune-etched blades, taller avian feather crests on helmets with brighter glowing psychic eyes, golden scarab and eye-of-change motifs prominent on chest plates, crystalline psychic focus gems on pauldrons, versatile attack rune arrays etched into gauntlets, warpfire trailing from weapon barrels"
+    pose: "elite tactical advance, rifles aimed with devastating sorcerous precision, ornate armor gleaming with psychic energy"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 120
+      size: 3
+      base: 25
+      rules: ["Changebound", "Versatile Attack"]
+      weapons:
+        - name: "Heavy Rifles"
+          range: 24
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  change_support:
+    extra_details: "single heavy weapons in reinforced deep sapphire blue power armor, heavy flamers wreathed in warpfire with AP blast capability, arcane fuel feeds connected to backpacks with crystalline conduit tubing, heat shielding etched with golden protective hieroglyphs on arms and chest, golden avian motifs on pauldrons, relentless designation sigils carved into leg armor, psychic conduits glowing pink-purple along weapon barrels"
+    pose: "braced firing pose, heavy flamers unleashing torrents of warpfire, standing firm like arcane sentinels with psychic energy crackling"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 155
+      size: 3
+      base: 25
+      rules: ["Changebound", "Relentless"]
+      weapons:
+        - name: "Heavy Flamers"
+          range: 12
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "CCWs"
+          range: 0
+          attacks: 1
+  change_destroyers:
+    extra_details: "single elite terminator-style assault warrior in massively bulky deep sapphire blue destroyer armor with gold hieroglyphic trim, dual energy claws crackling with rending warpfire on both hands, tall avian feather crests on ornate helmets, golden scarab chest plates, crystalline psychic conduits running along massive pauldrons, teleport-shimmer residue and arcane sigils glowing on armor surfaces, ambush deployment runes, Tough(3)"
+    pose: "imposing sorcerous assault advance from teleport arrival, dual energy claws spread wide and crackling, warpfire energy radiating from entire frame"
+
+    game_stats:
+      quality: 3
+      defense: 3
+      cost: 205
+      size: 3
+      base: 32
+      rules: ["Ambush", "Changebound", "Tough(3)"]
+      weapons:
+        - name: "Dual Energy Claws"
+          range: 0
+          attacks: 4
+          rules: ["Rending"]
+  change_mutated_cultists:
+    extra_details: "single heavily mutated chaos cultist, bodies warped by change-god mutations with iridescent blue-pink skin, clawed hands and tentacle-like appendages as weapons, some with bird-like features like beaks or feathered limbs, tattered remnants of blue robes clinging to twisted forms, glowing pink eyes, unpredictable fighter mutations shifting their forms mid-combat, golden change-god amulets fused into mutated flesh"
+    pose: "surging forward as a writhing mass of mutation, claws raised and tentacles lashing, chaotic and unpredictable movement"
+
+    game_stats:
+      quality: 5
+      defense: 6
+      cost: 120
+      size: 10
+      base: 25
+      rules: ["Changebound", "Unpredictable Fighter"]
+      weapons:
+        - name: "Claws"
+          range: 0
+          attacks: 2
+  change_mutated_brothers:
+    extra_details: "single mutated power armor warrior in warped and cracked deep sapphire blue power armor, heavy claws with AP bursting through gauntlets as mutation overtakes ceramite, armor plates splitting to reveal iridescent mutated flesh beneath, bird-like mutations on helmets with beaks breaking through faceplates, fast-moving with digitigrade mutated legs, unpredictable fighter mutation sigils glowing on chest plates, golden trim distorted by growth"
+    pose: "fast mutated charge, heavy claws raised and slashing, warped power armor cracking with each stride as mutation and speed combine"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 160
+      size: 5
+      base: 25
+      rules: ["Changebound", "Fast", "Unpredictable Fighter"]
+      weapons:
+        - name: "Heavy Claws"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  change_greater_mutated:
+    extra_details: "single elite heavily mutated warrior in massively warped deep sapphire blue power armor barely containing their bulk, enormous heavy claws with AP rending through enlarged gauntlets, extensive bird-like mutations with feathered crests and beak-like helmet growths, iridescent mutated flesh visible through shattered armor plates, fast-moving on powerful mutated legs, psychic energy leaking from cracks in armor, unpredictable fighter mutations constantly shifting, Tough(3)"
+    pose: "thundering mutated assault charge, massive heavy claws raised to strike, towering warped forms surging forward with terrifying speed"
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 235
+      size: 3
+      base: 32
+      rules: ["Changebound", "Fast", "Tough(3)", "Unpredictable Fighter"]
+      weapons:
+        - name: "Heavy Claws"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  change_birdmen_disc_riders:
+    extra_details: "single avian daemon cavalry mounted on floating arcane disc platforms of burnished gold and blue crystal, burst pistols with arcane modifications, close combat weapons with curved avian-blade designs, riders with blue-feathered bodies and golden Egyptian armor plates, disc platforms covered in hieroglyphic engravings and glowing with pink-purple warpfire from beneath, fast and strider-capable hovering movement, Tough(3)"
+    pose: "swooping forward on glowing arcane discs, burst pistols aimed while banking, disc platforms trailing warpfire energy"
+
+    game_stats:
+      quality: 4
+      defense: 5
+      cost: 135
+      size: 3
+      base: 32
+      rules: ["Changebound", "Fast", "Strider", "Tough(3)"]
+      weapons:
+        - name: "Burst Pistols"
+          range: 12
+          attacks: 2
+        - name: "CCWs"
+          range: 0
+          attacks: 2
+  change_mutated_destroyer:
+    extra_details: "single massively mutated elite destroyer in warped and twisted deep sapphire blue terminator-style armor, dual mutated claws with AP bursting from enormous gauntlets crackling with warpfire, extensive avian and tentacle mutations breaking through armor plates, iridescent mutated flesh visible through destroyed ceramite sections, ambush deployment capability with shimmer-residue, unpredictable mutations constantly shifting form, golden hieroglyphic trim warped and fused with mutated flesh, Tough(6)"
+    pose: "towering mutated destroyer lunging forward from ambush, dual mutated claws spread wide and crackling with warpfire, warped armor splitting with each movement"
+
+  # ==========================================================================
+  # VEHICLES (Transport - auto-detected)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 4
+      cost: 135
+      size: 1
+      base: 40
+      rules: ["Ambush", "Changebound", "Tough(6)", "Unpredictable"]
+      weapons:
+        - name: "Dual Mutated Claws"
+          range: 0
+          attacks: 6
+          rules: ["AP(1)"]
+  change_apc:
+    extra_details: "armored personnel carrier in deep sapphire blue livery with burnished gold hieroglyphic engravings along hull, boxy angular design with front ramp door bearing eye-of-change symbol, storm rifle turret on top with arcane scope, hull-mounted weapon options, troop compartment with warpfire-lit interior visible through firing ports, heavy tank treads with golden trim, crystalline psychic conduit arrays on roof, avian skull decorations on front glacis, Tough(6), Transport(11)"
+    pose: "driving forward through battlefield, turret aimed ahead, warpfire glowing from interior, arcane symbols pulsing on hull"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 195
+      size: 1
+      base: "100x60"
+      rules: ["Changebound", "Fast", "Impact(3)", "Tough(6)", "Transport(11)"]
+      weapons:
+        - name: "Storm Rifle"
+          range: 24
+          attacks: 3
+          rules: ["AP(1)"]
+  change_heavy_tank:
+    extra_details: "super-heavy assault transport in deep sapphire blue with extensive golden hieroglyphic filigree covering every surface, massive hull with quad laser cannon turret crackling with arcane energy and twin heavy machinegun coaxial, extremely thick armor plating with Egyptian-style eye-of-change and scarab reliefs, crystalline psychic conduit arrays along hull sides, troop compartment with warpfire-lit interior, commander cupola with sorcerer-commander in ornate helmet, avian skull trophies on antenna, Tough(18), Transport(11)"
+    pose: "rolling forward, all weapon systems aimed with arcane targeting, dominating the battlefield like a mobile sorcerer's fortress"
+
+  # ==========================================================================
+  # VEHICLES (no Transport) - Walkers and Daemon Engines
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 810
+      size: 1
+      base: "120x92"
+      rules: ["Changebound", "Fast", "Impact(9)", "Tough(18)", "Transport(11)"]
+      weapons:
+        - name: "Quad Laser Cannon"
+          range: 36
+          attacks: 4
+          rules: ["AP(3)"]
+        - name: "Twin Heavy Machinegun"
+          range: 30
+          attacks: 6
+          rules: ["AP(1)"]
+  change_sentinel_walker:
+    extra_details: "bipedal sentinel walker in deep sapphire blue with golden hieroglyphic trim, chicken-walker leg configuration with armored joints, hell missile rack on one shoulder with arcane warhead sigils, flamer cannon wreathed in warpfire on arm mount, fusion rifle with crystalline psychic barrel on other arm, stomp-capable armored feet with Egyptian-style toe guards, single glowing psychic eye sensor warrior on head unit, avian skull decorations on hull, Tough(6)"
+    pose: "striding forward on chicken-walker legs, weapons aimed at multiple targets, psychic eye glowing with arcane targeting"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 210
+      size: 1
+      base: 40
+      rules: ["Unstoppable)", "Changebound", "Fear(1)", "Tough(6)"]
+      weapons:
+        - name: "Hell Missile Rack"
+          range: 24
+          attacks: 1
+          rules: ["AP(2)"]
+        - name: "Flamer Cannon"
+          range: 18
+          attacks: 1
+          rules: ["AP(1)"]
+        - name: "Fusion Rifle"
+          range: 12
+          attacks: 1
+          rules: ["AP(4)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 2
+          rules: ["AP(1)"]
+  change_tank:
+    extra_details: "main battle tank in deep sapphire blue livery with extensive burnished gold hieroglyphic engravings, large turret with twin laser cannon crackling with arcane energy and twin heavy machinegun coaxial, thick frontal glacis armor with Egyptian eye-of-change relief, heavy tank treads with golden track guards, commander hatch with psychic sensor array, crystalline conduit arrays along turret ring, avian skull trophies on barrel, Tough(12)"
+    pose: "hull-down firing position, twin laser cannon aimed with arcane precision, psychic energy crackling along barrel"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 495
+      size: 1
+      base: 50
+      rules: ["Changebound", "Fast", "Impact(6)", "Tough(12)"]
+      weapons:
+        - name: "Twin Laser Cannon"
+          range: 36
+          attacks: 2
+          rules: ["AP(3)"]
+        - name: "Twin Heavy Machinegun"
+          range: 30
+          attacks: 6
+          rules: ["AP(1)"]
+  change_infernal_brute:
+    extra_details: "massive daemon engine walker in deep sapphire blue with warped golden trim, hunched bipedal war machine possessed by daemon spirit, two enormous brute hammers crackling with blast energy on arm mounts, heavy armored legs with stomp attack and cloven daemon-feet, daemon face emerging from chest armor with glowing pink eyes, warpfire venting from joints and exhaust ports, golden hieroglyphic binding wards etched into armor to contain the daemon, avian mutations sprouting from shoulders, fear-inducing daemonic presence, Tough(12)"
+    pose: "raging daemon engine charge, dual brute hammers raised for devastating blast strikes, daemon face howling with warpfire energy"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 280
+      size: 1
+      base: 50
+      rules: ["Changebound", "Fear(2)", "Tough(12)"]
+      weapons:
+        - name: "Brute Hammers"
+          range: 0
+          attacks: 2
+          rules: ["Blast(3)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  change_mech_fiend:
+    extra_details: "serpentine daemon engine walker in deep sapphire blue with warped golden hieroglyphic bindings, quadrupedal predatory war machine possessed by avian daemon spirit, fiend claws with rending warpfire on front legs, multiple steel tails lashing with AP barbs, stomp-capable rear legs crushing ground beneath, bird-daemon skull head with glowing psychic eyes and open beak, regenerating daemon flesh visible through cracked armor plates, warpfire venting from spine ridges, golden binding wards barely containing the daemon, feathered mutations along spine, fear-inducing predatory presence, Tough(12)"
+    pose: "lunging predatory attack, fiend claws spread wide with rending energy, steel tails lashing behind, bird-daemon head shrieking with warpfire breath"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 360
+      size: 1
+      base: 50
+      rules: ["Changebound", "Fear(2)", "Regeneration", "Tough(12)"]
+      weapons:
+        - name: "Fiend Claws"
+          range: 0
+          attacks: 4
+          rules: ["Rending"]
+        - name: "Steel Tails"
+          range: 0
+          attacks: 8
+          rules: ["AP(1)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  change_vortex_beast:
+    extra_details: "massive tentacled daemon engine in deep sapphire blue with distorted golden hieroglyphic bindings, bloated warp-beast body possessed by a daemon of change, vortex of mutation cannon on back spewing pink-purple warpfire blasts, eight barbed tentacles with AP lashing from body, stomp-capable legs beneath bulk, constantly shifting form with unpredictable mutations, regenerating daemon flesh splitting and reknitting, golden binding wards flickering and failing across surface, bird-like mutations and feathered growths emerging unpredictably, warpfire energy leaking from every crack, fear-inducing eldritch horror presence, Tough(12)"
+    pose: "rearing up with vortex cannon firing a swirling blast of mutation energy, barbed tentacles spread wide and lashing, form shifting and mutating mid-stride"
+    type: vehicle
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 435
+      size: 1
+      base: 50
+      rules: ["Changebound", "Fear(2)", "Regeneration", "Tough(12)", "Unpredictable Fighter"]
+      weapons:
+        - name: "Vortex of Mutation"
+          range: 18
+          attacks: 3
+          rules: ["Blast(3)"]
+        - name: "Barbed Tentacles"
+          range: 0
+          attacks: 8
+          rules: ["AP(1)"]
+        - name: "Stomp"
+          range: 0
+          attacks: 4
+          rules: ["AP(1)"]
+  change_crab_walker:
+    extra_details: "colossal crab-like daemon engine walker in deep sapphire blue with extensive warped golden hieroglyphic binding wards, massive multi-legged war machine with battle cannon turret on carapace firing arcane shells, reaper cannon mounted alongside with slam capability, two enormous crab fists with devastating AP(3) crushing power on front limbs, crab flail tentacle lashing from rear, stomp-capable armored legs, daemon face emerging from front hull with glowing psychic eyes, regenerating daemon armor constantly reknitting, golden hieroglyphic bindings cracking under strain, avian daemon mutations and feathered growths on carapace, extreme fear-inducing daemonic colossus presence, Tough(18)"
+    pose: "colossal daemon engine advancing with all weapons active, crab fists raised and crushing, battle cannon firing overhead, tentacles lashing, an unstoppable arcane war machine"
+    type: vehicle
+
+  # ==========================================================================
+  # AIRCRAFT (Aircraft rule - no type override needed)
+  # ==========================================================================
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 700
+      size: 1
+      base: 100
+      rules: ["Changebound", "Fear(3)", "Regeneration", "Tough(18)"]
+      weapons:
+        - name: "Battle Cannon"
+          range: 30
+          attacks: 2
+          rules: ["AP(2)"]
+        - name: "Reaper Cannon"
+          range: 24
+          attacks: 4
+          rules: ["Slam"]
+        - name: "Crab Fists"
+          range: 0
+          attacks: 4
+          rules: ["AP(3)"]
+        - name: "Crab Flail"
+          range: 0
+          attacks: 8
+        - name: "Stomp"
+          range: 0
+          attacks: 6
+          rules: ["AP(2)"]
+  change_dragon:
+    extra_details: "avian daemon dragon aircraft in deep sapphire blue with golden hieroglyphic binding wards across wings, serpentine flying daemon beast with massive feathered wings trailing warpfire, forge flamethrower breath weapon spewing arcane fire with AP blast, elongated bird-daemon body with iridescent scales and blue feathers, golden ornamental armor plates on head and chest, regenerating daemon flesh along underbelly, glowing psychic eyes, long tail with golden barbs, warpfire contrail streaming behind wings, airborne daemon predator, Tough(6)"
+    pose: "swooping in flight with wings spread wide, forge flamethrower breath blazing downward, warpfire trailing from wingtips, avian daemon predator descending on prey"
+
+    game_stats:
+      quality: 3
+      defense: 2
+      cost: 300
+      size: 1
+      base: "120x92"
+      rules: ["Reliable)", "Aircraft", "Changebound", "Regeneration", "Tough(6)"]
+      weapons:
+        - name: "Forge Flamethrower"
+          range: 18
+          attacks: 2
+          rules: ["AP(1)"]
