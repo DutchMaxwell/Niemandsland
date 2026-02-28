@@ -3,7 +3,7 @@
 Ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wie OnePageRules, historische Wargames und andere Miniaturenspiele.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Godot Engine](https://img.shields.io/badge/Godot-4.3+-blue.svg)](https://godotengine.org/)
+[![Godot Engine](https://img.shields.io/badge/Godot-4.5.1-blue.svg)](https://godotengine.org/)
 [![Status](https://img.shields.io/badge/Status-Alpha-orange.svg)]()
 
 ---
@@ -36,9 +36,11 @@ Ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wie OnePageRul
 - ✅ **Save/Load Layouts** - Terrain-Setups speichern und wiederverwenden
 
 ### 🌐 Multiplayer
-- ✅ Multiplayer-Support (ENet-basiert)
-- ✅ State-Sync beim Laden
-- ✅ Getestet mit localhost
+- ✅ **LAN & Internet** - ENet-basiert mit WebSocket Relay Server
+- ✅ **State-Sync** - Vollstaendige Synchronisation (Modelle, Terrain, Rotation, Tischgroesse)
+- ✅ **Batch RPCs** - Optimierte Netzwerk-Performance
+- ✅ **Dice Log** - Gemeinsames Wuerfel-Protokoll
+- ✅ **Player Avatars** - Spieler-Praesenz mit Cursor-Tracking
 
 ### 🤖 AI-System (OPR Solo & Co-Op Rules v3.5.0)
 - ✅ **Battle Simulator** - Vollständige KI vs KI Kampfsimulation
@@ -72,9 +74,18 @@ Ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wie OnePageRul
 ### 📦 Import/Export
 - ✅ TTS Import (Online von Steam CDN + Local Cache)
 - ✅ Custom 3D Models (glTF, STL, OBJ)
-- ✅ Speichern/Laden (.otts Format)
-- ✅ OPR Army Forge Integration
+- ✅ Speichern/Laden (.otts Format mit OS-Dateiverknuepfung)
+- ✅ OPR Army Forge Integration (automatisches GLB-Laden)
 - ✅ Wargaming Simulator (WGS) Import/Export
+
+### 🔨 Model Forge (3D-Modell-Pipeline)
+- ✅ **38 Grimdark Future Fraktionen** mit 854 Einheiten
+- ✅ **Echte OPR v3.5.2 Spielwerte** - Quality, Defense, Cost, Weapons, Rules
+- ✅ **Design Languages** - YAML-basierte Fraktions-Aesthetik und Prompt-Templates
+- ✅ **Automatische Prompt-Generierung** - Kombiniert Einheitsdaten mit visueller Identitaet
+- ✅ **Image-Generierung** - Via HuggingFace Spaces (Nano Banana, FLUX, etc.)
+- ✅ **3D-Konvertierung** - TRELLIS fuer automatische Mesh-Generierung
+- ✅ **Gradio Web-UI** - Vollstaendige Pipeline mit Review-Workflow
 
 ### 🎨 Graphics & UI
 - ✅ Theme-System (9 Kenney UI Themes)
@@ -94,7 +105,7 @@ Ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wie OnePageRul
 ## 🚀 Schnellstart
 
 ### Voraussetzungen
-- [Godot 4.3+](https://godotengine.org/download) (Desktop-Version empfohlen)
+- [Godot 4.5.1](https://godotengine.org/download) (Desktop-Version empfohlen)
 
 ### Installation
 ```bash
@@ -221,8 +232,10 @@ Importiere 3D-Modelle direkt vom Tabletop Simulator Steam CDN:
 - Async-Play Support (geplant)
 
 ### Multiplayer
-- Host/Join Funktionalität
-- State-Synchronisation
+- Host/Join ueber LAN oder Internet (WebSocket Relay)
+- Vollstaendige State-Synchronisation (Modelle, Terrain, Tischgroesse)
+- Batch RPCs fuer optimierte Performance
+- Dice Log und Player Avatars
 - Speichern/Laden im Multiplayer
 
 ---
@@ -253,7 +266,9 @@ openTTS/
 │   └── battle_simulator.gd    # KI vs KI Simulation
 ├── assets/          # Texturen, Modelle, Audio
 ├── addons/          # Godot Addons
-│   └── dice_roller/           # Würfel-System
+│   └── dice_roller/           # Wuerfel-System
+├── tools/           # Externe Tools
+│   └── model_forge/           # 3D-Modell-Pipeline (Python/Gradio)
 ├── docs/            # Dokumentation
 ├── PLAN.md          # Entwicklungsplan
 └── PROJECT_STATUS.md # Projekt-Status
@@ -305,7 +320,7 @@ Siehe [PLAN.md](./PLAN.md) für den vollständigen Entwicklungsplan.
 
 ## 💻 Technologie-Stack
 
-- **Engine**: Godot 4.3+ (Open-Source)
+- **Engine**: Godot 4.5.1 (Open-Source)
 - **Sprache**: GDScript
 - **3D-Format**: glTF 2.0, STL, OBJ
 - **Netzwerk**: ENet (Desktop)
@@ -329,7 +344,8 @@ Beiträge sind willkommen!
 - [Entwicklungsplan](./PLAN.md) - Roadmap & Features
 - [Projekt-Status](./PROJECT_STATUS.md) - Aktueller Stand
 - [WGS Integration](./docs/WGS_INTEGRATION.md) - Wargaming Simulator Integration
-- [UI Design](./docs/UI_OVERHAUL_README.md) - UI/UX Mockups
+- [UI Design](./docs/UI_MODERNIZATION_PLAN.md) - UI/UX Design System
+- [Model Forge](./tools/model_forge/README.md) - 3D-Modell-Pipeline
 
 ### Community
 - GitHub Issues für Bug-Reports & Feature-Requests
@@ -394,4 +410,4 @@ Siehe [docs/ASSETS.md](./docs/ASSETS.md) für vollständige Asset-Attributionen.
 
 **Version**: 0.2-alpha
 **Status**: Active Development
-**Letzte Aktualisierung**: 2026-01-15
+**Letzte Aktualisierung**: 2026-02-28

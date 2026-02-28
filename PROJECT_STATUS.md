@@ -1,5 +1,5 @@
 # OpenTTS - Projekt Status
-**Stand:** 2026-01-15
+**Stand:** 2026-02-28
 **Version:** 0.2-alpha
 **Branch:** `main` (alle Feature-Branches gemerged)
 
@@ -29,10 +29,15 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 - ✅ **Custom Models** - glTF, STL, OBJ Support
 - ✅ **Speichern/Laden** - .otts Format mit Multiplayer-Sync
 
-### Multiplayer (Milestone 1)
-- ✅ **Netzwerk-Grundlagen** - ENet-basiert
-- ✅ **State-Sync** - Objekte, Terrain, Spielstand
-- ✅ **Multiplayer-Laden** - Clients erhalten Spielstand beim Laden
+### Multiplayer
+- ✅ **Netzwerk-Grundlagen** - ENet-basiert mit WebSocket Relay Server
+- ✅ **Internet Multiplayer** - Online-Spiele ueber Relay Server
+- ✅ **State-Sync** - Vollstaendige Synchronisation (Modelle, Terrain, Rotation, Tischgroesse)
+- ✅ **Batch RPCs** - Optimierte Netzwerk-Performance fuer grosse State-Updates
+- ✅ **Model Sync** - Beide Peers teilen identische Modell-Instanzen
+- ✅ **Dice Log** - Gemeinsames Wuerfel-Protokoll im Multiplayer
+- ✅ **Player Avatars** - Spieler-Praesenz mit Cursor-Tracking
+- ✅ **Multiplayer-Laden** - Clients erhalten vollstaendigen Spielstand
 
 ### Wargaming-Features
 - ✅ **Würfel-System** - D4, D6, D8, D10, D12, D20, D100
@@ -104,11 +109,25 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 - ✅ **Auto-Flip Inverted Normals** - Automatische Korrektur für Terrain-Modelle (NEU!)
 - ✅ **Image Format Detection** - Magic Bytes statt Dateiendung (NEU!)
 
-### Content Creation Tools (NEU!)
-- ✅ **Miniature Pipeline** - Gemini → TRELLIS.2 Workflow
+### Content Creation Tools
+- ✅ **Miniature Pipeline** - Gemini -> TRELLIS Workflow
 - ✅ **GUI Batch Processor** - Tkinter-basierte Batch-Konvertierung
 - ✅ **Intelligente Watermark Removal** - Automatische Background-Sampling
 - ✅ **Preprocessing Pipeline** - White Background Removal + Upload zu HuggingFace
+
+### Model Forge (3D-Modell-Pipeline)
+- ✅ **Prompt Engine** - Generiert Bild-Prompts aus OPR-Einheitsdaten + Design Language
+- ✅ **38 Design Languages** - YAML-basierte Fraktions-Aesthetik fuer alle GDF-Fraktionen
+- ✅ **854 Unit Overrides** - Individuelle Posen, Details und echte OPR v3.5.2 Spielwerte
+- ✅ **game_stats** - Quality, Defense, Cost, Size, Base, Weapons, Rules aus offiziellen PDFs
+- ✅ **Zwei Betriebsmodi** - Army Forge API oder Design Language Only
+- ✅ **Image-Generierung** - Via HuggingFace Spaces (Nano Banana, FLUX, Z-Image-Turbo)
+- ✅ **3D-Konvertierung** - TRELLIS fuer automatische Mesh-Generierung
+- ✅ **GLB Export** - Direkt nach OpenTTS mit units.json
+- ✅ **Gradio Web-UI** - Vollstaendige Pipeline mit Review-Workflow
+
+### .otts Dateiverknuepfung
+- ✅ **OS File Association** - .otts Dateien direkt aus dem Dateimanager oeffnen
 
 ---
 
@@ -177,22 +196,9 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 - [x] **Multiplayer Sync** - RPCs für Wounds, Markers, Activation, Hero-Attachment
 - [x] **Save/Load Integration** - GameUnit-Serialisierung mit Model-Positionen
 
-### AI-System (NEU!) - OPR Solo & Co-Op Rules v3.5.0
-- [x] **Unit-Klassifizierung** - Hybrid/Shooting/Melee basierend auf Waffen
-- [x] **Decision Trees** - Alle 3 Entscheidungsbäume aus OPR-Regeln
-- [x] **Target Selector** - Prioritätsregeln für AP, Deadly, Takedown, Unstoppable
-- [x] **Aktivierungsreihenfolge** - Sektions-basiert (D3 für Sektion)
-- [x] **Special Rules** - Ambush, Scout, Transport, Artillery, Caster, Flying, Strider
-- [x] **Objective Placement** - 6-Quadrat-Grid, zufällige Platzierung
-- [x] **Challenge Bonus** - Optional +1 Hit/Defense basierend auf Objectives
-- [x] **Battle Simulator** - Vollständige KI vs KI Kampfsimulation (NEU!)
-  - Step-by-Step Visualisierung mit Pause/Play/Speed-Control
-  - Phasen: SETUP, DEPLOYMENT, ROUND_START, ACTIVATION, MOVEMENT, SHOOTING, MELEE, MORALE, ROUND_END, GAME_OVER
-  - BattleState und BattleStep Klassen für Zustandsmanagement
-  - Morale-System mit Flucht/Rout und Consolidation Moves
-  - Vollständige OPR-Regeltreue (z.B. Consolidation nach Morale-Phase)
-- [ ] **Kampf-Integration** - Würfelsystem für AI-Angriffe
-- [ ] **Terrain-Integration** - Vollständige Cover/Difficult/Dangerous Logik
+### AI-System - OPR Solo & Co-Op Rules v3.5.0
+- ℹ️ **Status**: AI-System-Dateien (11 Scripts, ~3000 Zeilen) und BattleSimulator (2518 Zeilen) wurden entfernt (Legacy Code). Neuimplementierung geplant fuer Milestone 3.
+- Dokumentation: `docs/PLAN_AI_SYSTEM.md` beschreibt die Architektur fuer die Neuimplementierung.
 
 ---
 
@@ -200,7 +206,7 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 
 | Komponente | Technologie |
 |------------|-------------|
-| **Engine** | Godot 4.3+ |
+| **Engine** | Godot 4.5.1 |
 | **Sprache** | GDScript |
 | **Netzwerk** | ENet (Desktop) |
 | **3D-Format** | glTF 2.0, STL, OBJ |
@@ -269,12 +275,19 @@ openTTS/
 │   └── textures/
 ├── addons/                  # Godot Addons
 │   └── dice_roller/
+├── tools/                   # Externe Tools
+│   └── model_forge/         # 3D-Modell-Pipeline (Python/Gradio)
+│       ├── app.py           # Gradio Web-UI
+│       ├── prompt_engine.py # Prompt-Generierung + DesignLanguage
+│       ├── opr_client.py    # OPR API + Datenklassen
+│       ├── design_languages/  # 38 Fraktions-YAMLs (854 Units)
+│       └── ...              # image_generator, trellis_bridge, exporter
 ├── docs/                    # Dokumentation
 │   ├── ASSETS.md
 │   ├── DICE_PHYSICS_WIP.md
 │   ├── OPR_API_Research_Report.md
-│   └── README.md           # Docs Index (NEU!)
-├── examples/                # Beispiel-Dateien (NEU!)
+│   └── README.md            # Docs Index
+├── examples/                # Beispiel-Dateien
 │   ├── README.md
 │   └── Custodian Brothers.json
 ├── serve_web.py            # Python Server für Web Export (NEU!)
@@ -343,12 +356,13 @@ openTTS/
 
 ### Technische Dokumentation
 - `docs/WGS_INTEGRATION.md` - Wargaming Simulator Integration
-- `docs/UI_OVERHAUL_README.md` - UI Design & Mockups
-- `docs/GRAPHICS_UPGRADE_PLAN.md` - Rendering-Upgrade Plan
-- `docs/UI_DESIGN_SYSTEM.md` - UI Design-System
-- `docs/DICE_PHYSICS_WIP.md` - Würfel-Physik (WIP)
+- `docs/UI_MODERNIZATION_PLAN.md` - UI Design System (Dark Glassmorphism)
+- `docs/PLAN_UNIT_SYSTEM.md` - Unit-System Architektur
+- `docs/PLAN_AI_SYSTEM.md` - AI-System (OPR Solo Rules)
+- `docs/DICE_PHYSICS_WIP.md` - Wuerfel-Physik (WIP)
 - `docs/ASSETS.md` - Asset-Quellen & Lizenzen
 - `docs/OPR_API_Research_Report.md` - OPR API Recherche
+- `tools/model_forge/README.md` - Model Forge 3D-Pipeline
 
 ---
 
@@ -357,34 +371,34 @@ openTTS/
 ### Aktive Branches
 - `main` - Stabile Version mit allen Features
 
-### Recent Commits (2026-01-15)
+### Recent Commits (2026-02-28)
+- `0e0624a` - feat: Add Model Forge pipeline with real OPR game stats for 38 factions
+- `a8469da` - feat: Stabilize multiplayer with batch RPCs, dice log, and avatar upgrades
+- `df849aa` - feat: Wire full multiplayer sync for model state, rotation, and table size
+- `e1f7bfd` - feat: Open .otts save files directly from OS file manager
+- `9d1ddd5` - fix: Synchronize multiplayer models so both peers share the same instances
+- `e09619b` - fix: Sync models, terrain layout, and avatar tracking across multiplayer
+- `7fa4e53` - fix: Game state sync + player presence system for internet multiplayer
+- `96fb3ba` - feat: Add internet multiplayer via WebSocket relay server
+- `77e971a` - fix: Restore terrain, markers, and map layout on game load
+- `2bd3e5d` - fix: Repair save/load system - restore OPR units, GameUnit data, and async loading
+- `e5b2e3a` - feat: Simplify main menu to 3 buttons with TDD tests
+- `075b859` - feat: Implement model info popup and integrate marker dialog
+- `6201898` - chore: Remove AI system files (11 files, ~3000 lines)
+- `3dbff04` - chore: Remove BattleSimulator (2518 lines legacy code)
+- `bdf525c` - refactor: Extract DiceManager from object_manager.gd
+- `d904a9d` - feat: Improve UX with radial menu, rotation, and sort table
+- `68e6ce7` - perf: Improve rendering performance and reduce stuttering
+- `76d119d` - feat: Add automatic 3D GLB model loading for Army Forge imports
+- `06ca6bc` - feat: Add Alien Hives 3D models
+- `ae49f85` - feat: Add standalone 3D pipeline GUI in assets/3d_pipeline/
+
+### Aeltere Commits (2026-01-15)
 - `91c6656` - chore: Remove unused variable in token overlap detection
-- `d9ffc4f` - chore: Remove debug logging from token placement
 - `df25629` - fix: Use maximum-minimum-distance algorithm for token placement
 - `8c4a863` - fix: Use constant edge gap for base spacing to prevent overlap
-- `ecd58ce` - fix: Auto-flip tokens to opposite side when overlapping other models
-- `0a5475c` - fix: Token spacing same as single models (21mm = 2*radius + gap)
-- `412c1bf` - fix: Tokens offset using boundary normal (like base edge)
-- `146bee0` - fix: Boundary as rail with outward offset (15mm from line)
-- `8ebf4fe` - Merge pull request #27 from DutchMaxwell/claude/fix-caster-token-import-W7Uti
 - `aea4555` - feat: Improve map layout mode with zoom and better snapping
-### Recent Commits (2026-01-14)
 - `91bc564` - feat: Use float coordinates for precise boundary snap placement
-- `677a81a` - fix: Draw snap points at exact grid-boundary intersections, restore corners
-- `9a52d8f` - fix: Draw snap points at actual render positions, not boundary intersections
-- `8f47084` - debug: Add detailed snap detection logging for placement and dragging
-- `cd14dd2` - debug: Add snap point debug output to diagnose snapping issue
-
-### Frühere Commits (2026-01-13)
-- `bb5dd31` - Merge pull request #25 from DutchMaxwell/claude/data-bridge-units-F67gO
-- `c4ca763` - feat: Add table corners as snap points for deployment zones
-- `0eee816` - fix: Use get_local_mouse_position for all coordinate conversions
-- `e3de236` - fix: Use get_local_mouse_position for snap point detection
-- `81d65e5` - fix: Separate validation for 3" cells vs 1" deployment coordinates
-- `2750453` - fix: Trust boundary snap points without re-validation
-- `d86d27d` - fix: Constrain deployment zone vertices to table boundary
-- `b930b8f` - feat: Change deployment zone vertices to 1" precision
-- `58e8f6f` - fix: Use 1" grid intervals for boundary snap points
 
 ---
 
@@ -396,4 +410,4 @@ MIT License - Siehe [LICENSE](./LICENSE) für Details.
 
 **Status:** ✅ Alpha-Version funktionsfähig, aktive Entwicklung
 **Contributors:** DutchMaxwell, Community
-**Letzte Aktualisierung:** 2026-01-15
+**Letzte Aktualisierung:** 2026-02-28
