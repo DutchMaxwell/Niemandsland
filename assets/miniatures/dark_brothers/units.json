@@ -1,0 +1,480 @@
+{
+  "army": "GF - Dark Brothers",
+  "version": "auto-generated",
+  "units": {
+    "dark_master_destroyer": {
+      "name": "Dark Master Destroyer",
+      "size": 1,
+      "points": 135,
+      "qua": "3+",
+      "def": "3+",
+      "equipment": [
+        "1x CCW (A4)"
+      ],
+      "special_rules": [
+        "Darkborn",
+        "Rapid Ambush",
+        "Shielded",
+        "Tough(6)"
+      ],
+      "base_size_mm": 40
+    },
+    "dark_veteran_master_brother": {
+      "name": "Dark Veteran Master Brother",
+      "size": 1,
+      "points": 60,
+      "qua": "3+",
+      "def": "3+",
+      "equipment": [
+        "1x CCW (A2)"
+      ],
+      "special_rules": [
+        "Darkborn",
+        "Shielded",
+        "Tough(3)",
+        "Versatile Attack"
+      ],
+      "base_size_mm": 32
+    },
+    "dark_master_brother": {
+      "name": "Dark Master Brother",
+      "size": 1,
+      "points": 60,
+      "qua": "3+",
+      "def": "3+",
+      "equipment": [
+        "1x Gravity Pistol (9\", A1, AP(1))",
+        "1x CCW (A2)"
+      ],
+      "special_rules": [
+        "Darkborn",
+        "Tough(3)"
+      ],
+      "base_size_mm": 32
+    },
+    "dark_elite_pathfinder": {
+      "name": "Dark Elite Pathfinder",
+      "size": 1,
+      "points": 50,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [
+        "1x Gravity Pistol (9\", A1, AP(1))",
+        "1x CCW (A2)"
+      ],
+      "special_rules": [
+        "Darkborn",
+        "Strider",
+        "Tough(3)"
+      ],
+      "base_size_mm": 32
+    },
+    "dark_pathfinders": {
+      "name": "Dark Pathfinders",
+      "size": 5,
+      "points": 115,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [
+        "1x Heavy Pistols (12\", A1, AP(1))",
+        "1x CCWs (A2)"
+      ],
+      "special_rules": [
+        "Darkborn",
+        "Strider"
+      ],
+      "base_size_mm": 25
+    },
+    "dark_battle_brothers": {
+      "name": "Dark Battle Brothers",
+      "size": 5,
+      "points": 155,
+      "qua": "3+",
+      "def": "3+",
+      "equipment": [
+        "1x Heavy Rifles (24\", A1, AP(1))",
+        "1x CCWs (A1)"
+      ],
+      "special_rules": [
+        "Darkborn"
+      ],
+      "base_size_mm": 25
+    },
+    "dark_assault_brothers": {
+      "name": "Dark Assault Brothers",
+      "size": 5,
+      "points": 170,
+      "qua": "3+",
+      "def": "3+",
+      "equipment": [
+        "1x Heavy Pistols (12\", A1, AP(1))",
+        "1x Heavy CCWs (A2, AP(1))"
+      ],
+      "special_rules": [
+        "Darkborn"
+      ],
+      "base_size_mm": 25
+    },
+    "dark_veteran_battle_brothers": {
+      "name": "Dark Veteran Battle Brothers",
+      "size": 3,
+      "points": 125,
+      "qua": "3+",
+      "def": "3+",
+      "equipment": [
+        "1x Heavy Rifles (24\", A1, AP(1))",
+        "1x CCWs (A1)"
+      ],
+      "special_rules": [
+        "Darkborn",
+        "Versatile Attack"
+      ],
+      "base_size_mm": 25
+    },
+    "dark_veteran_assault_brothers": {
+      "name": "Dark Veteran Assault Brothers",
+      "size": 3,
+      "points": 100,
+      "qua": "3+",
+      "def": "3+",
+      "equipment": [
+        "1x Heavy Pistols (12\", A1, AP(1))"
+      ],
+      "special_rules": [
+        "Darkborn",
+        "Shielded",
+        "Versatile Attack"
+      ],
+      "base_size_mm": 25
+    },
+    "dark_support_brothers": {
+      "name": "Dark Support Brothers",
+      "size": 3,
+      "points": 180,
+      "qua": "3+",
+      "def": "3+",
+      "equipment": [
+        "1x Heavy Flamers (12\", A1, AP(1))",
+        "1x CCWs (A1)"
+      ],
+      "special_rules": [
+        "Darkborn",
+        "Relentless"
+      ],
+      "base_size_mm": 25
+    },
+    "dark_destroyers": {
+      "name": "Dark Destroyers",
+      "size": 3,
+      "points": 210,
+      "qua": "3+",
+      "def": "3+",
+      "equipment": [
+        "1x CCWs (A3)"
+      ],
+      "special_rules": [
+        "Darkborn",
+        "Rapid Ambush",
+        "Shielded",
+        "Tough(3)"
+      ],
+      "base_size_mm": 32
+    },
+    "dark_pathfinder_bikers": {
+      "name": "Dark Pathfinder Bikers",
+      "size": 3,
+      "points": 230,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [
+        "1x Grenade Launchers (24\", A1, Blast(3))",
+        "1x Heavy Pistols (12\", A1, AP(1))",
+        "1x CCWs (A2)"
+      ],
+      "special_rules": [
+        "Darkborn",
+        "Fast",
+        "Scout",
+        "Tough(3)"
+      ],
+      "base_size_mm": 32
+    },
+    "dark_brother_bikers": {
+      "name": "Dark Brother Bikers",
+      "size": 3,
+      "points": 280,
+      "qua": "3+",
+      "def": "3+",
+      "equipment": [
+        "1x Twin Heavy Rifles (24\", A2, AP(1))",
+        "1x Heavy Pistols (12\", A1, AP(1))",
+        "1x CCWs (A2)"
+      ],
+      "special_rules": [
+        "Darkborn",
+        "Fast",
+        "Tough(3)"
+      ],
+      "base_size_mm": 32
+    },
+    "dark_support_bike": {
+      "name": "Dark Support Bike",
+      "size": 1,
+      "points": 185,
+      "qua": "3+",
+      "def": "3+",
+      "equipment": [
+        "1x Twin Heavy Rifle (24\", A2, AP(1))",
+        "1x Heavy Flamer (12\", A1, AP(1))",
+        "1x Heavy Pistol (12\", A1, AP(1))",
+        "1x CCW (A3)"
+      ],
+      "special_rules": [
+        "Darkborn",
+        "Fast",
+        "Tough(6)"
+      ],
+      "base_size_mm": 40
+    },
+    "dark_apc": {
+      "name": "Dark Apc",
+      "size": 1,
+      "points": 200,
+      "qua": "3+",
+      "def": "2+",
+      "equipment": [
+        "1x Storm Rifle (24\", A3, AP(1))"
+      ],
+      "special_rules": [
+        "Darkborn",
+        "Fast",
+        "Impact(3)",
+        "Tough(6)",
+        "Transport(11)"
+      ],
+      "base_size_mm": 100
+    },
+    "dark_attack_apc": {
+      "name": "Dark Attack Apc",
+      "size": 1,
+      "points": 220,
+      "qua": "3+",
+      "def": "2+",
+      "equipment": [
+        "1x Twin Heavy Flamer (12\", A2, AP(1))"
+      ],
+      "special_rules": [
+        "Reliable)",
+        "Darkborn",
+        "Fast",
+        "Impact(3)",
+        "Tough(6)",
+        "Transport(6)"
+      ],
+      "base_size_mm": 100
+    },
+    "dark_drop_pod": {
+      "name": "Dark Drop Pod",
+      "size": 1,
+      "points": 135,
+      "qua": "3+",
+      "def": "2+",
+      "equipment": [
+        "1x Death Launcher (18\", A1, Blast(6))"
+      ],
+      "special_rules": [
+        "Ambush",
+        "Darkborn",
+        "Immobile",
+        "Tough(6)",
+        "Transport(11)"
+      ],
+      "base_size_mm": 100
+    },
+    "dark_heavy_tank": {
+      "name": "Dark Heavy Tank",
+      "size": 1,
+      "points": 735,
+      "qua": "3+",
+      "def": "2+",
+      "equipment": [
+        "1x Twin Heavy Machinegun (30\", A6, AP(1))",
+        "1x Twin Heavy Rifle Array (24\", A12, AP(1))"
+      ],
+      "special_rules": [
+        "Darkborn",
+        "Fast",
+        "Impact(9)",
+        "Tough(18)",
+        "Transport(11)"
+      ],
+      "base_size_mm": 120
+    },
+    "dark_attack_speeder": {
+      "name": "Dark Attack Speeder",
+      "size": 1,
+      "points": 225,
+      "qua": "3+",
+      "def": "2+",
+      "equipment": [
+        "1x Heavy Flamers (12\", A1, AP(1))"
+      ],
+      "special_rules": [
+        "Ambush",
+        "Darkborn",
+        "Fast",
+        "Impact(3)",
+        "Strider",
+        "Tough(6)"
+      ],
+      "base_size_mm": 40
+    },
+    "dark_shroud_speeder": {
+      "name": "Dark Shroud Speeder",
+      "size": 1,
+      "points": 225,
+      "qua": "3+",
+      "def": "2+",
+      "equipment": [
+        "1x Heavy Machinegun (30\", A3, AP(1))"
+      ],
+      "special_rules": [
+        "Ambush",
+        "Darkborn",
+        "Fast",
+        "Impact(3)",
+        "Stealth Buff",
+        "Strider",
+        "Tough(6)"
+      ],
+      "base_size_mm": 40
+    },
+    "dark_heavy_exo_suit": {
+      "name": "Dark Heavy Exo Suit",
+      "size": 1,
+      "points": 170,
+      "qua": "3+",
+      "def": "2+",
+      "equipment": [
+        "1x Twin Flamer (12\", A2, Blast(3))",
+        "1x Stomp (A2, AP(1))"
+      ],
+      "special_rules": [
+        "Darkborn",
+        "Fear(1)",
+        "Tough(6)"
+      ],
+      "base_size_mm": 40
+    },
+    "dark_battle_tank": {
+      "name": "Dark Battle Tank",
+      "size": 1,
+      "points": 475,
+      "qua": "3+",
+      "def": "2+",
+      "equipment": [
+        "1x Twin Heavy Machinegun (30\", A6, AP(1))",
+        "1x Twin Storm Cannon (30\", A4, AP(2))"
+      ],
+      "special_rules": [
+        "Darkborn",
+        "Fast",
+        "Impact(6)",
+        "Tough(12)"
+      ],
+      "base_size_mm": 50
+    },
+    "dark_combat_walker": {
+      "name": "Dark Combat Walker",
+      "size": 1,
+      "points": 355,
+      "qua": "3+",
+      "def": "2+",
+      "equipment": [
+        "1x Stomp (A4, AP(1))",
+        "1x Walker Fists (A4, AP(4))"
+      ],
+      "special_rules": [
+        "Darkborn",
+        "Fear(2)",
+        "Tough(12)"
+      ],
+      "base_size_mm": 50
+    },
+    "dark_veteran_combat_walker": {
+      "name": "Dark Veteran Combat Walker",
+      "size": 1,
+      "points": 410,
+      "qua": "3+",
+      "def": "2+",
+      "equipment": [
+        "1x Stomp (A4, AP(1))",
+        "1x Walker Fists (A4, AP(4))"
+      ],
+      "special_rules": [
+        "Darkborn",
+        "Fear(2)",
+        "Tough(12)",
+        "Versatile Attack"
+      ],
+      "base_size_mm": 50
+    },
+    "dark_artillery_gun": {
+      "name": "Dark Artillery Gun",
+      "size": 1,
+      "points": 170,
+      "qua": "3+",
+      "def": "3+",
+      "equipment": [
+        "1x Heavy Gatling Cannon (24\", A6, AP(1))",
+        "1x Crew (A3)"
+      ],
+      "special_rules": [
+        "Artillery",
+        "Darkborn",
+        "Tough(3)"
+      ],
+      "base_size_mm": 32
+    },
+    "dark_light_gunship": {
+      "name": "Dark Light Gunship",
+      "size": 1,
+      "points": 345,
+      "qua": "3+",
+      "def": "2+",
+      "equipment": [
+        "1x Minigun (24\", A4, AP(1))",
+        "1x Twin Typhoon Missiles (24\", A4, AP(2))"
+      ],
+      "special_rules": [
+        "Unstoppable)",
+        "Aircraft",
+        "Darkborn",
+        "Tough(6)"
+      ],
+      "base_size_mm": 120
+    },
+    "dark_heavy_gunship": {
+      "name": "Dark Heavy Gunship",
+      "size": 1,
+      "points": 635,
+      "qua": "3+",
+      "def": "2+",
+      "equipment": [
+        "1x Storm Missiles (36\", A1, AP(3))",
+        "1x Light Heavy Rifle Array (24\", A4, AP(1))",
+        "1x Twin Minigun (24\", A8, AP(1))",
+        "1x Typhoon Missiles (24\", A2, AP(2))"
+      ],
+      "special_rules": [
+        "Aircraft",
+        "Darkborn",
+        "Tough(9)",
+        "Transport(11)"
+      ],
+      "base_size_mm": 120
+    }
+  },
+  "total_units": 27,
+  "total_models_if_full": 51
+}

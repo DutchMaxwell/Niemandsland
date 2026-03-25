@@ -1,0 +1,176 @@
+theme_name: "Desert Wasteland"
+theme_key: "desert_wasteland"
+
+aesthetic:
+  genre: "post-apocalyptic"
+  style: "arid wasteland"
+  inspiration:
+    - "Mad Max Fury Road"
+    - "Fallout New Vegas desert"
+    - "Middle Eastern archaeological ruins"
+  explicitly_avoid:
+    - "Lush green vegetation"
+    - "Snow or ice"
+    - "Clean modern architecture"
+
+colors:
+  primary: "sun-bleached sandstone and tan"
+  secondary: "burnt sienna and rust orange"
+  accent: "faded turquoise paint and bleached bone white"
+
+materials:
+  - "cracked sandstone and adobe"
+  - "sun-bleached wood and bone"
+  - "heat-warped scrap metal"
+  - "wind-eroded rock formations"
+
+# =============================================================================
+# BATTLE MAP
+# =============================================================================
+
+battle_map:
+  prompt: |
+    Flat uniform ground surface texture, top-down aerial view for tabletop wargaming battle mat.
+    Cracked sun-baked earth with fine sand coverage. Desert wasteland floor.
+    Subtle natural variation, consistent sandstone tan tone across entire surface.
+    NO scattered objects, NO debris, NO rocks, NO vegetation.
+    NO miniatures, NO terrain pieces, NO text, NO shadows.
+    Surface details must be VERY SMALL and fine-grained, as if viewed from far above.
+    Individual features (cracks, sand grains, pebbles) should be no larger than 1% of the image.
+    Flat diffuse lighting, printed gaming mat look.
+    Landscape 3:2 aspect ratio (72x48 inches table). Resolution 4096x2732.
+
+# =============================================================================
+# BASE PLATES
+# =============================================================================
+
+base_plates:
+  ruins:
+    prompt: |
+      Seamless tileable top-down texture, crumbling sandstone floor with sand
+      drifts and broken clay pottery fragments. Adobe rubble, faded tiles.
+      Sun-bleached sandstone tones. 512x512, no shadows, flat lighting.
+  forest:
+    prompt: |
+      Seamless tileable top-down texture, rocky desert ground with scattered
+      dead palm fronds, dried scrub brush, and cracked mud around dried oasis.
+      Tan and burnt sienna. 512x512, no shadows, flat lighting.
+  dangerous:
+    prompt: |
+      Seamless tileable top-down texture, disturbed desert ground with partially
+      visible hazards, faded warning tape remnants, blast crater marks in sand.
+      Scorched earth tones. 512x512, no shadows, flat lighting.
+
+# =============================================================================
+# WALLS
+# =============================================================================
+
+walls:
+  - key: "sandstone_wall_3inch"
+    name: "Sandstone Wall (3\")"
+    length_inches: 3
+    height_inches: 3
+    variants: 3
+    prompt: |
+      Ruined sandstone wall segment, 3 inches long, 3 inches tall, 28mm scale.
+      Crumbling sandstone blocks with sand drift against base, wind erosion.
+      Sun-bleached tan with burnt sienna. Post-apocalyptic desert.
+      CRITICAL: NO base, NO pedestal, NO ground plane. White background.
+      Side view, straight-on.
+    texture_prompt: |
+      Seamless tileable flat sandstone wall surface texture, front view.
+      Crumbling sandstone blocks with wind erosion and sand deposits.
+      Sun-bleached tan with burnt sienna. Post-apocalyptic desert.
+      512x512, flat lighting, no shadows, no perspective, no ground.
+
+  - key: "sandstone_wall_1inch"
+    name: "Sandstone Wall (1\")"
+    length_inches: 1
+    height_inches: 3
+    variants: 3
+    prompt: |
+      Short ruined sandstone wall segment, 1 inch long, 3 inches tall, 28mm scale.
+      Crumbling sandstone with archaeological carvings, wind-eroded surface.
+      Sun-bleached tan. Post-apocalyptic desert.
+      CRITICAL: NO base, NO pedestal, NO ground plane. White background.
+      Side view, straight-on.
+    texture_prompt: |
+      Seamless tileable flat sandstone wall surface texture, front view.
+      Crumbling sandstone with archaeological carvings, wind-eroded surface.
+      Sun-bleached tan. Post-apocalyptic desert.
+      512x512, flat lighting, no shadows, no perspective, no ground.
+
+  - key: "scrap_barricade"
+    name: "Scrap Metal Barricade (3\")"
+    length_inches: 3
+    height_inches: 2
+    variants: 3
+    prompt: |
+      Scrap metal barricade wall, 3 inches long, 2 inches tall, 28mm scale.
+      Welded car doors, corrugated iron sheets, sandbags, gun ports.
+      Heat-warped rusted metal, faded turquoise paint. Post-apocalyptic.
+      CRITICAL: NO base, NO pedestal, NO ground plane. White background.
+      Side view, straight-on.
+    texture_prompt: |
+      Seamless tileable flat scrap metal surface texture, front view.
+      Welded car doors, corrugated iron sheets, bullet holes, faded graffiti.
+      Heat-warped rusted metal, faded turquoise paint. Post-apocalyptic.
+      512x512, flat lighting, no shadows, no perspective, no ground.
+
+# =============================================================================
+# TREES
+# =============================================================================
+
+trees:
+  - key: "dead_palm"
+    name: "Dead Palm Tree"
+    prompt: |
+      Single dead palm tree, tabletop wargaming terrain, 28mm scale.
+      Leaning trunk, dried fronds hanging down, sun-bleached bark.
+      Tan and bleached bone white. Post-apocalyptic desert wasteland.
+      CRITICAL: NO base, NO ground plane. White background. Height approx 4 inches.
+
+  - key: "saguaro_cactus"
+    name: "Saguaro Cactus"
+    prompt: |
+      Single tall saguaro cactus with two arms, tabletop wargaming terrain, 28mm scale.
+      Ribbed texture, nesting holes, some spines visible. Desert green.
+      Post-apocalyptic arid wasteland.
+      CRITICAL: NO base, NO ground plane. White background. Height approx 3.5 inches.
+
+  - key: "joshua_tree"
+    name: "Joshua Tree"
+    prompt: |
+      Single joshua tree, tabletop wargaming terrain, 28mm scale.
+      Twisted trunk forking into spiky branch clusters. Desert scrub.
+      Sun-bleached wood, dried green-brown spikes. Arid wasteland.
+      CRITICAL: NO base, NO ground plane. White background. Height approx 3 inches.
+
+# =============================================================================
+# CONTAINERS
+# =============================================================================
+
+containers:
+  - key: "fuel_tanker_wreck"
+    name: "Fuel Tanker Wreck"
+    prompt: |
+      Wrecked fuel tanker truck half-buried in sand, 28mm scale.
+      Rusted cab section, cylindrical tank with bullet holes, dried fuel stains.
+      Heat-warped rust orange scrap metal. Post-apocalyptic desert.
+      CRITICAL: NO base, NO ground plane. White background.
+
+  - key: "supply_cache"
+    name: "Desert Supply Cache"
+    prompt: |
+      Stacked jerry cans and oil drums under canvas tarp on poles, 28mm scale.
+      Wooden palette base, some containers rusted and leaking, rope tie-downs.
+      Sun-bleached wood, rusted metal. Post-apocalyptic desert.
+      CRITICAL: NO base, NO ground plane. White background.
+
+  - key: "scrap_pile"
+    name: "Scavenged Scrap Pile"
+    prompt: |
+      Pile of scavenged scrap metal, car parts, and salvage, 28mm scale.
+      Wheels, doors, engine blocks stacked haphazardly. Faded graffiti tags.
+      Rust orange and sun-bleached metal. Post-apocalyptic wasteland.
+      CRITICAL: NO base, NO ground plane. White background.

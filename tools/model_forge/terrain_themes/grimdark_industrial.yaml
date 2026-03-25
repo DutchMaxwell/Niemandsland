@@ -1,0 +1,176 @@
+theme_name: "Grimdark Industrial"
+theme_key: "grimdark_industrial"
+
+aesthetic:
+  genre: "grimdark sci-fi"
+  style: "decayed industrial"
+  inspiration:
+    - "Warhammer 40K hive city ruins"
+    - "Blade Runner industrial decay"
+    - "Chernobyl exclusion zone"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Clean or pristine surfaces"
+    - "Modern real-world branding"
+
+colors:
+  primary: "dark concrete gray with rust stains"
+  secondary: "corroded metal and oxidized steel"
+  accent: "toxic green chemical spills and warning stripes"
+
+materials:
+  - "cracked reinforced concrete"
+  - "rusted corrugated metal sheets"
+  - "bent rebar and twisted pipes"
+  - "scorched plasteel panels"
+
+# =============================================================================
+# BATTLE MAP — Top-down background for the entire table
+# =============================================================================
+
+battle_map:
+  prompt: |
+    Flat uniform ground surface texture, top-down aerial view for tabletop wargaming battle mat.
+    Cracked dark concrete with rust stains and faint oil puddles. Industrial wasteland floor.
+    Subtle natural variation, consistent dark gray tone across entire surface.
+    NO scattered objects, NO debris, NO rocks, NO vegetation.
+    NO miniatures, NO terrain pieces, NO text, NO shadows.
+    Surface details must be VERY SMALL and fine-grained, as if viewed from far above.
+    Individual features (cracks, pebbles, stains) should be no larger than 1% of the image.
+    Flat diffuse lighting, printed gaming mat look.
+    Landscape 3:2 aspect ratio (72x48 inches table). Resolution 4096x2732.
+
+# =============================================================================
+# BASE PLATES — Seamless tileable textures for terrain cells (3"x3")
+# =============================================================================
+
+base_plates:
+  ruins:
+    prompt: |
+      Seamless tileable top-down texture, cracked reinforced concrete floor
+      with rubble fragments and rust stains. Exposed rebar poking through.
+      Dark gray concrete, corroded metal flecks. 512x512, no shadows, flat lighting.
+  forest:
+    prompt: |
+      Seamless tileable top-down texture, dark muddy ground with dead leaves
+      and twisted roots. Toxic soil with patches of sickly moss, industrial runoff.
+      512x512, no shadows, flat lighting.
+  dangerous:
+    prompt: |
+      Seamless tileable top-down texture, toxic green chemical spill on
+      cracked industrial floor. Hazard markings, bubbling sludge, corroded metal.
+      512x512, no shadows, flat lighting.
+
+# =============================================================================
+# WALLS — 3D wall segments placed on cell edges
+# =============================================================================
+
+walls:
+  - key: "ruined_concrete_wall_3inch"
+    name: "Ruined Concrete Wall (3\")"
+    length_inches: 3
+    height_inches: 3
+    variants: 3
+    prompt: |
+      Ruined concrete wall segment, 3 inches long, 3 inches tall, 28mm scale.
+      Cracked reinforced concrete with exposed rebar, bullet holes, blast damage.
+      Dark gray concrete with rust stains. Grimdark sci-fi industrial.
+      CRITICAL: NO base, NO pedestal, NO ground plane. White background.
+      Side view, straight-on.
+    texture_prompt: |
+      Seamless tileable flat wall surface texture, front view.
+      Cracked reinforced concrete with exposed rebar, bullet impacts.
+      Dark concrete gray with rust stains. Grimdark sci-fi industrial.
+      512x512, flat lighting, no shadows, no perspective, no ground.
+
+  - key: "ruined_concrete_wall_1inch"
+    name: "Ruined Concrete Wall (1\")"
+    length_inches: 1
+    height_inches: 3
+    variants: 3
+    prompt: |
+      Short ruined concrete wall segment, 1 inch long, 3 inches tall, 28mm scale.
+      Cracked reinforced concrete with exposed rebar, bullet holes.
+      Dark gray concrete with rust stains. Grimdark sci-fi industrial.
+      CRITICAL: NO base, NO pedestal, NO ground plane. White background.
+      Side view, straight-on.
+    texture_prompt: |
+      Seamless tileable flat wall surface texture, front view.
+      Cracked concrete with rebar fragments and bullet holes.
+      Dark concrete gray with rust stains. Grimdark sci-fi industrial.
+      512x512, flat lighting, no shadows, no perspective, no ground.
+
+  - key: "low_industrial_barrier"
+    name: "Low Industrial Barrier (3\")"
+    length_inches: 3
+    height_inches: 1.5
+    variants: 3
+    prompt: |
+      Low industrial barrier wall, 3 inches long, 1.5 inches tall, 28mm scale.
+      Corroded metal barrier with warning stripes, dented and bent.
+      Rusted steel with toxic green chemical stains. Grimdark industrial.
+      CRITICAL: NO base, NO pedestal, NO ground plane. White background.
+      Side view, straight-on.
+    texture_prompt: |
+      Seamless tileable flat metal surface texture, front view.
+      Corroded metal barrier with warning stripes, dented and bent.
+      Rusted steel with toxic green chemical stains. Grimdark industrial.
+      512x512, flat lighting, no shadows, no perspective, no ground.
+
+# =============================================================================
+# TREES — 3D models auto-distributed on FOREST cells
+# =============================================================================
+
+trees:
+  - key: "dead_industrial_oak"
+    name: "Dead Industrial Oak"
+    prompt: |
+      Single dead twisted oak tree, tabletop wargaming terrain, 28mm scale.
+      Gnarled bare branches, toxic soil damage, bark peeling off.
+      Dark gray-brown wood, sickly moss patches. Grimdark industrial decay.
+      CRITICAL: NO base, NO ground plane. White background. Height approx 4 inches.
+
+  - key: "mutated_pine"
+    name: "Mutated Pine"
+    prompt: |
+      Single mutated pine tree, tabletop wargaming terrain, 28mm scale.
+      Twisted trunk with bulbous growths, dark needles, glowing sap veins.
+      Dark green-black foliage, toxic green bioluminescence. Grimdark sci-fi.
+      CRITICAL: NO base, NO ground plane. White background. Height approx 3 inches.
+
+  - key: "toxic_fungal_tree"
+    name: "Toxic Fungal Tree"
+    prompt: |
+      Single large toxic mushroom-tree hybrid, tabletop wargaming terrain, 28mm scale.
+      Thick spongy trunk, wide cap with toxic spore vents, dripping mucus.
+      Purple-brown with toxic green spots. Grimdark industrial wasteland.
+      CRITICAL: NO base, NO ground plane. White background. Height approx 3 inches.
+
+# =============================================================================
+# CONTAINERS — 3D models placed directly on battle map
+# =============================================================================
+
+containers:
+  - key: "cargo_container"
+    name: "Rusted Cargo Container"
+    prompt: |
+      Single rusted industrial shipping container, 28mm scale.
+      Heavy blast doors, rust holes in panels, industrial serial numbers stenciled.
+      Corroded metal, oxidized steel, warning stripes. Grimdark sci-fi.
+      CRITICAL: NO base, NO ground plane. White background.
+
+  - key: "fuel_depot"
+    name: "Fuel Depot Tanks"
+    prompt: |
+      Cluster of three cylindrical fuel tanks on corroded metal frame, 28mm scale.
+      Pipes connecting them, one tank ruptured and leaking, hazard markings faded.
+      Rusted metal, toxic green chemical stains. Grimdark industrial.
+      CRITICAL: NO base, NO ground plane. White background.
+
+  - key: "supply_crates"
+    name: "Supply Crate Stack"
+    prompt: |
+      Stack of armored military supply crates and ammunition boxes, 28mm scale.
+      Some open showing shells, military stencil markings, strapping bands broken.
+      Dark metal and scorched plasteel. Grimdark sci-fi industrial.
+      CRITICAL: NO base, NO ground plane. White background.

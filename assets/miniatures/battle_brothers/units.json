@@ -1,0 +1,348 @@
+{
+  "army": "GF - Battle Brothers",
+  "version": "auto-generated",
+  "units": {
+    "master_brother": {
+      "name": "Master Brother",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "champion": {
+      "name": "Champion",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "elite_pathfinder": {
+      "name": "Elite Pathfinder",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "engineer": {
+      "name": "Engineer",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "battle_brothers": {
+      "name": "Battle Brothers",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "assault_brothers": {
+      "name": "Assault Brothers",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "support_brothers": {
+      "name": "Support Brothers",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "destroyers": {
+      "name": "Destroyers",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "pathfinders": {
+      "name": "Pathfinders",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "brother_bikers": {
+      "name": "Brother Bikers",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "pathfinder_bikers": {
+      "name": "Pathfinder Bikers",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "support_bike": {
+      "name": "Support Bike",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "apc": {
+      "name": "Apc",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "attack_apc": {
+      "name": "Attack Apc",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "drop_pod": {
+      "name": "Drop Pod",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "battle_tank": {
+      "name": "Battle Tank",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "heavy_tank": {
+      "name": "Heavy Tank",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "artillery_gun": {
+      "name": "Artillery Gun",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "attack_speeder": {
+      "name": "Attack Speeder",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "heavy_exo_suit": {
+      "name": "Heavy Exo Suit",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "attack_walker": {
+      "name": "Attack Walker",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "light_gunship": {
+      "name": "Light Gunship",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "heavy_gunship": {
+      "name": "Heavy Gunship",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "blood_death_brothers": {
+      "name": "Blood Death Brothers",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "blood_guard_brothers": {
+      "name": "Blood Guard Brothers",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "dark_destroyers": {
+      "name": "Dark Destroyers",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "knight_brothers": {
+      "name": "Knight Brothers",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "knight_champion": {
+      "name": "Knight Champion",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "knight_nemesis_walker": {
+      "name": "Knight Nemesis Walker",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "watch_brothers": {
+      "name": "Watch Brothers",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "wolf_brothers": {
+      "name": "Wolf Brothers",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "werewolf_brothers": {
+      "name": "Werewolf Brothers",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "hunting_wolves": {
+      "name": "Hunting Wolves",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    },
+    "wolf_riders": {
+      "name": "Wolf Riders",
+      "size": 1,
+      "points": 0,
+      "qua": "4+",
+      "def": "4+",
+      "equipment": [],
+      "special_rules": [],
+      "base_size_mm": 32
+    }
+  },
+  "total_units": 34,
+  "total_models_if_full": 34
+}
