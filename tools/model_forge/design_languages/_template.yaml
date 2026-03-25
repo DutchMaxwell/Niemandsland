@@ -1,0 +1,67 @@
+# =============================================================================
+# Design Language Template
+# =============================================================================
+# Kopiere diese Datei und passe sie fuer deine Fraktion an.
+# Dateiname: {faction_folder}.yaml (z.B. alien_hives.yaml)
+
+faction_name: "Faction Name"
+
+aesthetic:
+  genre: "grimdark sci-fi"
+  style: "horror"
+  inspiration:
+    - "Primary visual reference"
+    - "Secondary visual reference"
+  explicitly_avoid:
+    - "Games Workshop specific designs"
+    - "Copyrighted character likenesses"
+
+colors:
+  primary: "dominant color and material"
+  secondary: "secondary color and material"
+  accent: "accent color for highlights"
+
+materials:
+  - "primary surface material"
+  - "secondary material"
+
+creature_type: "creature/warrior type description"
+
+# Prompt-Template mit Platzhaltern:
+# {unit_name}     - Name der Einheit
+# {creature_type} - Aus dieser Datei
+# {unit_details}  - Generiert aus Waffen + Rules + Overrides
+# {colors}        - Aus dieser Datei
+# {materials}     - Aus dieser Datei
+# {aesthetic}     - Aus dieser Datei
+# {explicitly_avoid} - Aus dieser Datei
+prompt_template: |
+  {unit_name}, {creature_type} miniature for tabletop wargaming.
+
+  CRITICAL REQUIREMENTS:
+  - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
+  - Pose as described in SPECIFIC DETAILS section
+  - Clean silhouette against pure white background (#FFFFFF)
+  - Single centered creature, full body visible
+  - Isometric 3/4 view angle (optimal for 3D reconstruction)
+  - Consistent dramatic lighting from upper left
+  - High detail on surface textures
+  - 28mm tabletop miniature aesthetic and proportions
+
+  STYLE:
+  - {aesthetic}
+  - Color palette: {colors}
+  - Materials: {materials}
+  - Explicitly avoid: {explicitly_avoid}
+
+  SPECIFIC DETAILS:
+  {unit_details}
+
+  OUTPUT:
+  - Square aspect ratio 1:1
+  - Clean edges, no artifacts
+  - Professional miniature photography style
+
+# Per-Unit Overrides (optional)
+# Verwende den unit_key als Schluessel (z.B. hive_lord, assault_grunts)
+unit_overrides: {}
