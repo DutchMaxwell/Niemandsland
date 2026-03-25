@@ -3,7 +3,9 @@ extends Control
 ## OPR terrain recommendations are displayed in real-time
 
 signal layout_closed
-signal layout_updated(grid_cells: Dictionary, table_size: Vector2, rotation: float)
+signal layout_updated(grid_cells: Dictionary, table_size: Vector2, rotation: float,
+	wall_segments: Array, placed_objects: Array)
+signal terrain_theme_changed(theme_key: String)
 
 # Terrain types with their properties
 enum TerrainType {
@@ -71,6 +73,38 @@ var selected_terrain_type := TerrainType.NONE
 var is_painting := false
 var point_symmetry_enabled := false  # Mirror placement across center
 
+# ==============================================================================
+# WALL & OBJECT DATA (modulares Terrain)
+# ==============================================================================
+
+## Editor modes for switching between cell painting and wall placement
+enum EditorMode { PAINT_CELLS, PLACE_WALLS }
+var editor_mode := EditorMode.PAINT_CELLS
+
+## A wall segment on a cell edge
+## edge_cell: Cell the wall is attached to
+## edge_side: 0=North, 1=East, 2=South, 3=West
+## wall_key: Key matching terrain theme wall definition
+## length_inches: 3.0 or 1.0
+## sub_position: For 1"-segments, position 0/1/2 within the 3"-edge
+var wall_segments: Array[Dictionary] = []
+
+## Selected wall variant key for placement
+var selected_wall_key := ""
+## Wall granularity (true = 1" segments, false = 3" full edge)
+var wall_fine_mode := false
+
+## Placed objects (trees and containers) auto-distributed on terrain cells
+## Each entry: {object_key: String, cell: Vector2i, offset: Vector2, object_type: String}
+var placed_objects: Array[Dictionary] = []
+
+## Available wall definitions (loaded from terrain_library)
+var available_walls: Array[Dictionary] = []
+## Available tree definitions
+var available_trees: Array[Dictionary] = []
+## Available container definitions
+var available_containers: Array[Dictionary] = []
+
 # Zoom and pan settings
 var zoom_level := 1.0
 const ZOOM_MIN := 0.5
@@ -125,6 +159,18 @@ var _objectives_clear_btn: Button = null
 var _objectives_status_label: Label = null
 var _objectives_warning_label: Label = null
 
+# Modular Terrain UI (theme selector, walls, auto-populate)
+var _modular_terrain_panel: VBoxContainer = null
+var _theme_option_btn: OptionButton = null
+var _theme_keys: Array[String] = []
+var _theme_names: Array[String] = []
+var _current_theme_key: String = ""
+var _editor_mode_btn: Button = null
+var _wall_option_btn: OptionButton = null
+var _auto_trees_btn: Button = null
+var _auto_containers_btn: Button = null
+var _modular_status_label: Label = null
+
 
 func _ready() -> void:
 	close_button.pressed.connect(_on_close_pressed)
@@ -153,6 +199,7 @@ func _ready() -> void:
 	_setup_objectives_ui()
 
 	_setup_terrain_buttons()
+	_setup_modular_terrain_ui()
 	_update_stats()
 	_update_recommendations()
 
@@ -439,6 +486,228 @@ func _on_terrain_button_pressed(type: TerrainType, button: Button) -> void:
 			child.button_pressed = (child == button)
 
 
+# ==============================================================================
+# MODULAR TERRAIN UI (Walls, Auto-Populate)
+# ==============================================================================
+
+func _setup_modular_terrain_ui() -> void:
+	var left_panel: VBoxContainer = terrain_buttons.get_parent()
+	if not left_panel:
+		return
+
+	_modular_terrain_panel = VBoxContainer.new()
+	_modular_terrain_panel.name = "ModularTerrainPanel"
+	_modular_terrain_panel.add_theme_constant_override("separation", 8)
+	left_panel.add_child(_modular_terrain_panel)
+
+	# Section header
+	var sep := HSeparator.new()
+	sep.modulate = Color(1, 1, 1, 0.2)
+	_modular_terrain_panel.add_child(sep)
+
+	var header := Label.new()
+	header.text = "Modular Terrain"
+	header.add_theme_font_size_override("font_size", 16)
+	header.add_theme_color_override("font_color", Color(0.9, 0.92, 0.96, 1.0))
+	_modular_terrain_panel.add_child(header)
+
+	# Theme selector
+	var theme_label := Label.new()
+	theme_label.text = "Terrain Theme:"
+	theme_label.add_theme_font_size_override("font_size", 13)
+	theme_label.add_theme_color_override("font_color", Color(0.7, 0.73, 0.8, 1.0))
+	_modular_terrain_panel.add_child(theme_label)
+
+	_theme_option_btn = OptionButton.new()
+	_theme_option_btn.add_theme_color_override("font_color", Color(0.9, 0.92, 0.96, 1.0))
+	_theme_option_btn.item_selected.connect(_on_theme_selected)
+	_modular_terrain_panel.add_child(_theme_option_btn)
+	_update_theme_option_list()
+
+	# Editor mode toggle
+	_editor_mode_btn = Button.new()
+	_editor_mode_btn.text = "Mode: Paint Cells"
+	_editor_mode_btn.custom_minimum_size = Vector2(0, 36)
+	_editor_mode_btn.add_theme_color_override("font_color", Color(0.9, 0.75, 0.3, 1.0))
+	_editor_mode_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.85, 0.4, 1.0))
+	_editor_mode_btn.pressed.connect(_on_editor_mode_toggled)
+	_modular_terrain_panel.add_child(_editor_mode_btn)
+
+	# Wall variant selection (visible when PLACE_WALLS mode)
+	var wall_label := Label.new()
+	wall_label.text = "Wall Variant:"
+	wall_label.add_theme_font_size_override("font_size", 13)
+	wall_label.add_theme_color_override("font_color", Color(0.7, 0.73, 0.8, 1.0))
+	_modular_terrain_panel.add_child(wall_label)
+
+	_wall_option_btn = OptionButton.new()
+	_wall_option_btn.add_theme_color_override("font_color", Color(0.9, 0.92, 0.96, 1.0))
+	_wall_option_btn.item_selected.connect(_on_wall_variant_selected)
+	_modular_terrain_panel.add_child(_wall_option_btn)
+
+	# Status label
+	_modular_status_label = Label.new()
+	_modular_status_label.text = "No terrain theme loaded"
+	_modular_status_label.add_theme_font_size_override("font_size", 12)
+	_modular_status_label.add_theme_color_override("font_color", Color(0.6, 0.63, 0.7, 1.0))
+	_modular_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_modular_terrain_panel.add_child(_modular_status_label)
+
+	# Separator before auto-populate
+	var sep2 := HSeparator.new()
+	sep2.modulate = Color(1, 1, 1, 0.15)
+	_modular_terrain_panel.add_child(sep2)
+
+	# Auto-populate buttons
+	_auto_trees_btn = Button.new()
+	_auto_trees_btn.text = "Auto-Populate Trees"
+	_auto_trees_btn.custom_minimum_size = Vector2(0, 36)
+	_auto_trees_btn.add_theme_color_override("font_color", Color(0.2, 0.75, 0.3, 1.0))
+	_auto_trees_btn.add_theme_color_override("font_hover_color", Color(0.3, 0.9, 0.4, 1.0))
+	_auto_trees_btn.tooltip_text = "Place 2-4 trees on each Forest cell"
+	_auto_trees_btn.pressed.connect(_on_auto_trees_pressed)
+	_modular_terrain_panel.add_child(_auto_trees_btn)
+
+	_auto_containers_btn = Button.new()
+	_auto_containers_btn.text = "Auto-Populate Containers"
+	_auto_containers_btn.custom_minimum_size = Vector2(0, 36)
+	_auto_containers_btn.add_theme_color_override("font_color", Color(0.75, 0.5, 0.2, 1.0))
+	_auto_containers_btn.add_theme_color_override("font_hover_color", Color(0.9, 0.6, 0.3, 1.0))
+	_auto_containers_btn.tooltip_text = "Place 1-2 containers on each Container cell"
+	_auto_containers_btn.pressed.connect(_on_auto_containers_pressed)
+	_modular_terrain_panel.add_child(_auto_containers_btn)
+
+	_update_modular_terrain_ui()
+
+
+func _update_modular_terrain_ui() -> void:
+	if not _editor_mode_btn:
+		return
+
+	if editor_mode == EditorMode.PAINT_CELLS:
+		_editor_mode_btn.text = "Mode: Paint Cells"
+	else:
+		_editor_mode_btn.text = "Mode: Place Walls"
+
+	# Wall selection only visible in PLACE_WALLS mode
+	if _wall_option_btn:
+		_wall_option_btn.visible = (editor_mode == EditorMode.PLACE_WALLS)
+		# The label before it
+		var wall_label_node: Node = _wall_option_btn.get_parent().get_child(
+			_wall_option_btn.get_index() - 1)
+		if wall_label_node:
+			wall_label_node.visible = (editor_mode == EditorMode.PLACE_WALLS)
+
+	_update_wall_option_list()
+	_update_modular_status()
+
+
+func _update_wall_option_list() -> void:
+	if not _wall_option_btn:
+		return
+	_wall_option_btn.clear()
+	for i in range(available_walls.size()):
+		var wall: Dictionary = available_walls[i]
+		_wall_option_btn.add_item(wall.get("name", wall.get("key", "?")), i)
+	# Select current
+	for i in range(available_walls.size()):
+		if available_walls[i].get("key", "") == selected_wall_key:
+			_wall_option_btn.selected = i
+			break
+
+
+func _update_modular_status() -> void:
+	if not _modular_status_label:
+		return
+	var parts: PackedStringArray = []
+	if not available_walls.is_empty():
+		parts.append("%d walls" % available_walls.size())
+	if not available_trees.is_empty():
+		parts.append("%d trees" % available_trees.size())
+	if not available_containers.is_empty():
+		parts.append("%d containers" % available_containers.size())
+
+	if parts.is_empty():
+		_modular_status_label.text = "No terrain theme loaded"
+	else:
+		_modular_status_label.text = "Loaded: %s\nWalls: %d | Objects: %d" % [
+			", ".join(parts), wall_segments.size(), placed_objects.size()]
+
+
+func _on_editor_mode_toggled() -> void:
+	if editor_mode == EditorMode.PAINT_CELLS:
+		editor_mode = EditorMode.PLACE_WALLS
+	else:
+		editor_mode = EditorMode.PAINT_CELLS
+	_update_modular_terrain_ui()
+
+
+## Set available terrain themes (called from main.gd)
+func set_available_themes(theme_keys: Array[String], theme_names: Array[String]) -> void:
+	_theme_keys = theme_keys
+	_theme_names = theme_names
+	_update_theme_option_list()
+	# Re-select current theme if still available
+	if not _current_theme_key.is_empty():
+		var idx := _theme_keys.find(_current_theme_key)
+		if idx >= 0 and _theme_option_btn:
+			_theme_option_btn.selected = idx + 1  # +1 for "None" entry
+
+
+## Get the currently selected theme key
+func get_selected_theme() -> String:
+	return _current_theme_key
+
+
+func _update_theme_option_list() -> void:
+	if not _theme_option_btn:
+		return
+	_theme_option_btn.clear()
+	_theme_option_btn.add_item("-- No Theme --", 0)
+	for i in range(_theme_keys.size()):
+		var display_name: String = _theme_names[i] if i < _theme_names.size() else _theme_keys[i]
+		_theme_option_btn.add_item(display_name, i + 1)
+	# Restore selection
+	if not _current_theme_key.is_empty():
+		var idx := _theme_keys.find(_current_theme_key)
+		if idx >= 0:
+			_theme_option_btn.selected = idx + 1
+
+
+func _on_theme_selected(index: int) -> void:
+	if index == 0:
+		# "None" selected — clear theme
+		_current_theme_key = ""
+		available_walls.clear()
+		available_trees.clear()
+		available_containers.clear()
+		selected_wall_key = ""
+		_update_modular_terrain_ui()
+		terrain_theme_changed.emit("")
+	else:
+		var theme_idx: int = index - 1
+		if theme_idx >= 0 and theme_idx < _theme_keys.size():
+			_current_theme_key = _theme_keys[theme_idx]
+			terrain_theme_changed.emit(_current_theme_key)
+
+
+func _on_wall_variant_selected(index: int) -> void:
+	if index >= 0 and index < available_walls.size():
+		selected_wall_key = available_walls[index].get("key", "")
+
+
+func _on_auto_trees_pressed() -> void:
+	var count := auto_populate_trees()
+	_update_modular_status()
+	print("Auto-populated %d trees on FOREST cells" % count)
+
+
+func _on_auto_containers_pressed() -> void:
+	var count := auto_populate_containers()
+	_update_modular_status()
+	print("Auto-populated %d containers on CONTAINER cells" % count)
+
+
 func _on_rotation_changed(value: float) -> void:
 	grid_rotation_degrees = value
 	rotation_label.text = "Grid Rotation: %.0f°" % value
@@ -462,6 +731,8 @@ func _on_close_pressed() -> void:
 
 func _on_clear_pressed() -> void:
 	grid_cells.clear()
+	wall_segments.clear()
+	placed_objects.clear()
 	grid_container.queue_redraw()
 	_update_stats()
 	_emit_layout_update()
@@ -804,6 +1075,52 @@ func _flood_fill(start: Vector2i, terrain_type: int, visited: Dictionary) -> voi
 				stack.append(neighbor)
 
 
+## Flood-fill that collects and returns all connected cells of the same type
+func _flood_fill_collect(start: Vector2i, terrain_type: int, visited: Dictionary) -> Array[Vector2i]:
+	var collected: Array[Vector2i] = []
+	var stack := [start]
+
+	while stack.size() > 0:
+		var current: Vector2i = stack.pop_back()
+
+		if visited.has(current):
+			continue
+		if not grid_cells.has(current):
+			continue
+		if grid_cells[current] != terrain_type:
+			continue
+
+		visited[current] = true
+		collected.append(current)
+
+		var neighbors := [
+			Vector2i(current.x + 1, current.y),
+			Vector2i(current.x - 1, current.y),
+			Vector2i(current.x, current.y + 1),
+			Vector2i(current.x, current.y - 1)
+		]
+		for neighbor in neighbors:
+			if not visited.has(neighbor):
+				stack.append(neighbor)
+
+	return collected
+
+
+## Get all connected regions of non-NONE terrain types
+func get_connected_regions() -> Array[Dictionary]:
+	var visited := {}
+	var regions: Array[Dictionary] = []
+	for cell_pos in grid_cells:
+		if visited.has(cell_pos):
+			continue
+		var terrain_type: int = grid_cells[cell_pos]
+		if terrain_type == TerrainType.NONE:
+			continue
+		var region_cells: Array[Vector2i] = _flood_fill_collect(cell_pos, terrain_type, visited)
+		regions.append({"terrain_type": terrain_type, "cells": region_cells})
+	return regions
+
+
 func _update_recommendations() -> void:
 	_update_stats()
 
@@ -1050,9 +1367,14 @@ func _input(event: InputEvent) -> void:
 								vertex_hit.player, vertex_hit.index + 1
 							]
 						return
-				# Not dragging a vertex, start painting
-				is_painting = true
-				_paint_at_position(event.global_position)
+				# Not dragging a vertex
+				if editor_mode == EditorMode.PLACE_WALLS:
+					# Wall mode: single click only, no drag-painting
+					_paint_at_position(event.global_position)
+				else:
+					# Cell mode: start drag-painting
+					is_painting = true
+					_paint_at_position(event.global_position)
 			else:
 				# Mouse released
 				if _dragging_vertex:
@@ -1066,6 +1388,15 @@ func _input(event: InputEvent) -> void:
 					# Emit signal to update 3D terrain overlay
 					deployment_type_changed.emit(DeploymentType.CUSTOM)
 				is_painting = false
+
+		# Right-click to remove walls in PLACE_WALLS mode
+		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+			if editor_mode == EditorMode.PLACE_WALLS:
+				var edge := _get_edge_at_screen_pos(event.global_position)
+				if edge.x >= 0:
+					remove_wall_segment(Vector2i(edge.x, edge.y), edge.z)
+					_update_modular_status()
+				get_viewport().set_input_as_handled()
 
 	elif event is InputEventMouseMotion:
 		if _dragging_vertex:
@@ -1094,6 +1425,11 @@ func _paint_at_position(screen_pos: Vector2) -> void:
 			_toggle_objective_at_position(inch_pos)
 		return
 
+	# Wall placement mode
+	if editor_mode == EditorMode.PLACE_WALLS:
+		_handle_wall_click(screen_pos)
+		return
+
 	var cell = _get_cell_at_screen_pos(screen_pos)
 	if _is_valid_cell(cell):
 		if selected_terrain_type == TerrainType.NONE:
@@ -1114,7 +1450,8 @@ func _paint_at_position(screen_pos: Vector2) -> void:
 
 
 func _emit_layout_update() -> void:
-	layout_updated.emit(grid_cells.duplicate(), table_size_feet, grid_rotation_degrees)
+	layout_updated.emit(grid_cells.duplicate(), table_size_feet, grid_rotation_degrees,
+		wall_segments.duplicate(), placed_objects.duplicate())
 
 
 ## Auto-generate terrain layout following OPR guidelines
@@ -1950,3 +2287,357 @@ func reset_zoom() -> void:
 	zoom_level = 1.0
 	pan_offset = Vector2.ZERO
 	_apply_zoom()
+
+
+# ==============================================================================
+# WALL CLICK HANDLING
+# ==============================================================================
+
+## Handle a click in PLACE_WALLS mode
+func _handle_wall_click(screen_pos: Vector2) -> void:
+	var edge := _get_edge_at_screen_pos(screen_pos)
+	if edge.x < 0:
+		return  # No valid edge found
+
+	var edge_cell := Vector2i(edge.x, edge.y)
+	var edge_side: int = edge.z
+
+	if selected_wall_key.is_empty():
+		return
+
+	# Check if a wall already exists at this edge — if so, remove it (toggle)
+	var found := false
+	for i in range(wall_segments.size() - 1, -1, -1):
+		var seg: Dictionary = wall_segments[i]
+		if seg["edge_cell"] == edge_cell and seg["edge_side"] == edge_side:
+			wall_segments.remove_at(i)
+			found = true
+			break
+
+	if not found:
+		# Place new wall
+		var length: float = 3.0
+		for w in available_walls:
+			if w.get("key", "") == selected_wall_key:
+				length = w.get("length_inches", 3.0)
+				break
+		add_wall_segment(edge_cell, edge_side, selected_wall_key, length)
+	else:
+		_emit_layout_update()
+		if grid_container:
+			grid_container.queue_redraw()
+
+	_update_modular_status()
+
+
+## Detect which cell edge the screen position is closest to
+## Returns Vector3i(cell_x, cell_y, edge_side) or Vector3i(-1,-1,-1) if no edge found
+func _get_edge_at_screen_pos(screen_pos: Vector2) -> Vector3i:
+	var grid_dims: Vector2i = _calculate_grid_dimensions()
+	var grid_rect: Rect2 = _get_zoomed_grid_rect()
+
+	var table_size_inches: Vector2 = table_size_feet * 12.0
+	var pixels_per_inch_x: float = grid_rect.size.x / table_size_inches.x
+	var pixels_per_inch_y: float = grid_rect.size.y / table_size_inches.y
+	var cell_size := Vector2(
+		GRID_SIZE_INCHES * pixels_per_inch_x,
+		GRID_SIZE_INCHES * pixels_per_inch_y
+	)
+
+	var center: Vector2 = grid_rect.position + grid_rect.size / 2.0
+	var half_grid_cells := Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
+
+	# Get local mouse position and undo rotation
+	var local_pos: Vector2 = grid_container.get_local_mouse_position()
+	var pos_from_center: Vector2 = local_pos - center
+	var angle_rad: float = deg_to_rad(-grid_rotation_degrees)
+	var rotated_pos := Vector2(
+		pos_from_center.x * cos(angle_rad) - pos_from_center.y * sin(angle_rad),
+		pos_from_center.x * sin(angle_rad) + pos_from_center.y * cos(angle_rad)
+	)
+
+	# Find which cell we're in
+	var cell_x: int = int(floor(rotated_pos.x / cell_size.x + half_grid_cells.x))
+	var cell_y: int = int(floor(rotated_pos.y / cell_size.y + half_grid_cells.y))
+
+	if cell_x < 0 or cell_x >= grid_dims.x or cell_y < 0 or cell_y >= grid_dims.y:
+		return Vector3i(-1, -1, -1)
+
+	# Position within cell (0..1)
+	var cell_origin_x: float = (cell_x - half_grid_cells.x) * cell_size.x
+	var cell_origin_y: float = (cell_y - half_grid_cells.y) * cell_size.y
+	var frac_x: float = (rotated_pos.x - cell_origin_x) / cell_size.x
+	var frac_y: float = (rotated_pos.y - cell_origin_y) / cell_size.y
+
+	# Determine closest edge (threshold: 25% from edge)
+	const EDGE_THRESHOLD := 0.25
+	var min_dist: float = 1.0
+	var best_side: int = -1
+
+	# North (top) edge
+	if frac_y < EDGE_THRESHOLD and frac_y < min_dist:
+		min_dist = frac_y
+		best_side = 0
+	# South (bottom) edge
+	if (1.0 - frac_y) < EDGE_THRESHOLD and (1.0 - frac_y) < min_dist:
+		min_dist = 1.0 - frac_y
+		best_side = 2
+	# West (left) edge
+	if frac_x < EDGE_THRESHOLD and frac_x < min_dist:
+		min_dist = frac_x
+		best_side = 3
+	# East (right) edge
+	if (1.0 - frac_x) < EDGE_THRESHOLD and (1.0 - frac_x) < min_dist:
+		min_dist = 1.0 - frac_x
+		best_side = 1
+
+	if best_side < 0:
+		return Vector3i(-1, -1, -1)
+
+	return Vector3i(cell_x, cell_y, best_side)
+
+
+# ==============================================================================
+# WALL SEGMENTS (S7)
+# ==============================================================================
+
+## Add a wall segment to a cell edge
+func add_wall_segment(edge_cell: Vector2i, edge_side: int, wall_key: String,
+		length_inches: float = 3.0, sub_position: int = 0) -> void:
+	# Check for duplicate at same edge position
+	for existing in wall_segments:
+		if existing["edge_cell"] == edge_cell and existing["edge_side"] == edge_side \
+				and existing["sub_position"] == sub_position:
+			# Replace existing wall
+			existing["wall_key"] = wall_key
+			existing["length_inches"] = length_inches
+			_emit_layout_update()
+			if grid_container:
+				grid_container.queue_redraw()
+			return
+
+	wall_segments.append({
+		"edge_cell": edge_cell,
+		"edge_side": edge_side,
+		"wall_key": wall_key,
+		"length_inches": length_inches,
+		"sub_position": sub_position,
+	})
+	_emit_layout_update()
+	if grid_container:
+		grid_container.queue_redraw()
+
+
+## Remove a wall segment from a cell edge
+func remove_wall_segment(edge_cell: Vector2i, edge_side: int, sub_position: int = 0) -> void:
+	for i in range(wall_segments.size() - 1, -1, -1):
+		var seg: Dictionary = wall_segments[i]
+		if seg["edge_cell"] == edge_cell and seg["edge_side"] == edge_side \
+				and seg["sub_position"] == sub_position:
+			wall_segments.remove_at(i)
+			break
+	_emit_layout_update()
+	if grid_container:
+		grid_container.queue_redraw()
+
+
+## Clear all wall segments
+func clear_wall_segments() -> void:
+	wall_segments.clear()
+	_emit_layout_update()
+	if grid_container:
+		grid_container.queue_redraw()
+
+
+## Set wall definitions from terrain library
+func set_wall_definitions(walls: Array[Dictionary]) -> void:
+	available_walls = walls
+	if not walls.is_empty() and selected_wall_key.is_empty():
+		selected_wall_key = walls[0].get("key", "")
+	_update_modular_terrain_ui()
+
+
+## Set tree/container definitions from terrain library
+func set_tree_definitions(trees: Array[Dictionary]) -> void:
+	available_trees = trees
+	_update_modular_status()
+
+
+func set_container_definitions(containers: Array[Dictionary]) -> void:
+	available_containers = containers
+	_update_modular_status()
+
+
+# ==============================================================================
+# AUTO-POPULATE TREES & CONTAINERS (S9)
+# ==============================================================================
+
+## Auto-populate trees on FOREST cells using connected regions
+## Max ~5 trees per 3x3 cell block (~1 tree per 1.8 cells)
+## Returns the number of trees placed
+func auto_populate_trees() -> int:
+	# Remove existing auto-placed trees
+	placed_objects = placed_objects.filter(func(obj: Dictionary) -> bool:
+		return obj.get("object_type", "") != "tree"
+	)
+
+	if available_trees.is_empty():
+		return 0
+
+	var grid_dims := _calculate_grid_dimensions()
+
+	# Collect all valid forest cells per connected region
+	var regions := get_connected_regions()
+	var count := 0
+
+	for region in regions:
+		var terrain_type: int = region["terrain_type"]
+		if terrain_type != TerrainType.FOREST:
+			continue
+
+		var forest_cells: Array[Vector2i] = []
+		for cell_pos in region["cells"]:
+			if _is_cell_within_table_bounds(cell_pos, grid_dims):
+				forest_cells.append(cell_pos)
+
+		if forest_cells.is_empty():
+			continue
+
+		# Max 5 trees per 9-cell block (= ~0.56 trees per cell)
+		var max_trees := ceili(float(forest_cells.size()) * 5.0 / 9.0)
+
+		# Distribute trees randomly across the entire region
+		for i in range(max_trees):
+			var random_cell: Vector2i = forest_cells[randi() % forest_cells.size()]
+			var tree_def: Dictionary = available_trees[randi() % available_trees.size()]
+			var offset := Vector2(randf_range(0.15, 0.85), randf_range(0.15, 0.85))
+			placed_objects.append({
+				"object_key": tree_def.get("key", ""),
+				"cell": random_cell,
+				"offset": offset,
+				"object_type": "tree",
+			})
+			count += 1
+
+	_emit_layout_update()
+	if grid_container:
+		grid_container.queue_redraw()
+	return count
+
+
+## Auto-populate containers on all CONTAINER cells
+## Pairs adjacent container cells (1x2 tiles) where possible; single cells get a 1x1 container
+## Returns the number of containers placed
+func auto_populate_containers() -> int:
+	# Remove existing auto-placed containers
+	placed_objects = placed_objects.filter(func(obj: Dictionary) -> bool:
+		return obj.get("object_type", "") != "container"
+	)
+
+	if available_containers.is_empty():
+		return 0
+
+	var grid_dims := _calculate_grid_dimensions()
+
+	# Collect all valid container cells
+	var container_cells: Array[Vector2i] = []
+	for cell_pos: Vector2i in grid_cells:
+		if grid_cells[cell_pos] != TerrainType.CONTAINER:
+			continue
+		if not _is_cell_within_table_bounds(cell_pos, grid_dims):
+			continue
+		container_cells.append(cell_pos)
+
+	# Pair adjacent cells into 1x2 groups, leftover cells are singles
+	var paired := {}
+	var count := 0
+
+	for cell_pos in container_cells:
+		if paired.has(cell_pos):
+			continue
+
+		# Try horizontal neighbor first (+X), then vertical (+Y)
+		var partner := Vector2i(-1, -1)
+		var horizontal_neighbor := Vector2i(cell_pos.x + 1, cell_pos.y)
+		var vertical_neighbor := Vector2i(cell_pos.x, cell_pos.y + 1)
+
+		if not paired.has(horizontal_neighbor) and container_cells.has(horizontal_neighbor):
+			partner = horizontal_neighbor
+		elif not paired.has(vertical_neighbor) and container_cells.has(vertical_neighbor):
+			partner = vertical_neighbor
+
+		var container_def: Dictionary = available_containers[randi() % available_containers.size()]
+
+		if partner != Vector2i(-1, -1):
+			# Paired: place one container centered between the two cells
+			paired[cell_pos] = true
+			paired[partner] = true
+			# Offset centers the container across both cells
+			# cell_pos is the base cell, offset extends to include partner
+			var center_offset: Vector2
+			if partner.x > cell_pos.x:
+				# Horizontal pair: center X at 1.0 (boundary between cells)
+				center_offset = Vector2(1.0, 0.5)
+			else:
+				# Vertical pair: center Y at 1.0 (boundary between cells)
+				center_offset = Vector2(0.5, 1.0)
+			placed_objects.append({
+				"object_key": container_def.get("key", ""),
+				"cell": cell_pos,
+				"offset": center_offset,
+				"object_type": "container",
+			})
+			count += 1
+		else:
+			# Single cell: one container centered
+			paired[cell_pos] = true
+			placed_objects.append({
+				"object_key": container_def.get("key", ""),
+				"cell": cell_pos,
+				"offset": Vector2(0.5, 0.5),
+				"object_type": "container",
+			})
+			count += 1
+
+	_emit_layout_update()
+	if grid_container:
+		grid_container.queue_redraw()
+	return count
+
+
+## Clear all placed objects
+func clear_placed_objects() -> void:
+	placed_objects.clear()
+	_emit_layout_update()
+	if grid_container:
+		grid_container.queue_redraw()
+
+
+## Get wall segments data (for save/load)
+func get_wall_segments() -> Array[Dictionary]:
+	return wall_segments.duplicate()
+
+
+## Set wall segments data (for loading)
+func set_wall_segments(segments: Array) -> void:
+	wall_segments.clear()
+	for seg in segments:
+		if seg is Dictionary:
+			wall_segments.append(seg)
+	if grid_container:
+		grid_container.queue_redraw()
+
+
+## Get placed objects data (for save/load)
+func get_placed_objects() -> Array[Dictionary]:
+	return placed_objects.duplicate()
+
+
+## Set placed objects data (for loading)
+func set_placed_objects(objects: Array) -> void:
+	placed_objects.clear()
+	for obj in objects:
+		if obj is Dictionary:
+			placed_objects.append(obj)
+	if grid_container:
+		grid_container.queue_redraw()

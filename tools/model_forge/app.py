@@ -7,7 +7,7 @@ Orchestriert den gesamten Workflow:
 
     OPR Share-Link -> Design Language -> Image Generation -> Review -> 3D Conversion -> Export
 
-6 Tabs: Armee laden, Prompts, Bilder generieren, 3D-Konvertierung, Export, Einstellungen.
+7 Tabs: Armee laden, Prompts, Bilder generieren, 3D-Konvertierung, Export, Terrain Generator, Einstellungen.
 """
 
 from __future__ import annotations
@@ -29,6 +29,17 @@ from pipeline_state import PipelineSession, UnitState, UnitStatus
 from image_generator import ImageGenerator, ImageModel, GenerationResult
 from trellis_bridge import convert_image_to_glb, convert_batch
 from exporter import export_army, ExportResult, _unit_name_to_key
+from terrain_prompt_engine import (
+    TerrainPromptEngine,
+    TerrainTheme,
+    load_terrain_theme,
+    scan_terrain_themes,
+)
+from terrain_exporter import export_terrain, TerrainExportResult
+
+# Asset-Typ-Prefixe fuer modulares Terrain
+_IMAGE_ASSET_PREFIXES: frozenset[str] = frozenset({"battle_map", "base_plate_"})
+_GLB_ASSET_PREFIXES: tuple[str, ...] = ("tree_", "container_")
 
 
 # =============================================================================
@@ -38,6 +49,7 @@ from exporter import export_army, ExportResult, _unit_name_to_key
 MODEL_FORGE_DIR: Path = Path(__file__).parent
 PROJECT_ROOT: Path = MODEL_FORGE_DIR.parent.parent
 DESIGN_LANGUAGES_DIR: Path = MODEL_FORGE_DIR / "design_languages"
+TERRAIN_THEMES_DIR: Path = MODEL_FORGE_DIR / "terrain_themes"
 STATE_DIR: Path = MODEL_FORGE_DIR / "state"
 OUTPUT_DIR: Path = MODEL_FORGE_DIR / "output"
 
@@ -1113,6 +1125,351 @@ def _build_status_summary(session: PipelineSession | None) -> str:
 
 
 # =============================================================================
+# TERRAIN HANDLER
+# =============================================================================
+
+def _handle_load_terrain_theme(
+    theme_name: str,
+) -> tuple[TerrainTheme | None, list[list[str]], str]:
+    """Laedt ein Terrain-Theme und zeigt die Asset-Uebersicht.
+
+    Args:
+        theme_name: Theme-Key (ohne .yaml).
+
+    Returns:
+        Tuple: (theme, dataframe_rows, status_message).
+    """
+    if not theme_name:
+        return None, [], "Bitte ein Terrain-Theme auswaehlen."
+
+    yaml_path: Path = TERRAIN_THEMES_DIR / f"{theme_name}.yaml"
+
+    try:
+        theme: TerrainTheme = load_terrain_theme(yaml_path)
+    except Exception as exc:
+        return None, [], f"Fehler beim Laden: {exc}"
+
+    rows: list[list[str]] = []
+
+    # Battle Map
+    rows.append(["battle_map", "Battle Map", "Bild", "Tischgroesse"])
+
+    # Base Plates
+    for terrain_type in theme.base_plate_prompts:
+        rows.append([
+            f"base_plate_{terrain_type}",
+            f"Grundplatte {terrain_type.title()}",
+            "Bild",
+            "512x512 tileable",
+        ])
+
+    # Walls
+    for wall in theme.walls:
+        rows.append([
+            f"wall_{wall.key}",
+            wall.name,
+            "3D (GLB)",
+            f'{wall.length_inches}" x {wall.height_inches}"',
+        ])
+
+    # Trees
+    for tree in theme.trees:
+        rows.append([f"tree_{tree.key}", tree.name, "3D (GLB)", "Auto-Placement"])
+
+    # Containers
+    for container in theme.containers:
+        rows.append([f"container_{container.key}", container.name, "3D (GLB)", "Frei platzierbar"])
+
+    total_assets: int = len(rows)
+    summary: str = f"Theme: {theme.theme_name} — {total_assets} Assets geladen."
+    return theme, rows, summary
+
+
+def _handle_generate_terrain_prompts(
+    theme: TerrainTheme | None,
+    session: PipelineSession | None,
+) -> tuple[PipelineSession | None, list[list[str]], str]:
+    """Generiert Prompts fuer alle modularen Terrain-Assets und erstellt/aktualisiert die Session.
+
+    Args:
+        theme: Geladenes Terrain-Theme.
+        session: Aktive Terrain-Session (oder None fuer neue).
+
+    Returns:
+        Tuple: (session, prompt_dataframe_rows, status_message).
+    """
+    if theme is None:
+        return session, [], "Kein Terrain-Theme geladen."
+
+    # Session erstellen falls noetig
+    if session is None:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        session = PipelineSession.create(
+            base_dir=STATE_DIR,
+            army_name=theme.theme_name,
+            faction_folder=f"terrain_{theme.theme_key}",
+            terrain_mode=True,
+            terrain_theme_key=theme.theme_key,
+        )
+
+    engine: TerrainPromptEngine = TerrainPromptEngine(theme)
+    prompts: dict[str, str] = engine.get_all_prompts()
+
+    for asset_key, prompt in prompts.items():
+        # Display-Name aus dem Key ableiten
+        display_name: str = asset_key.replace("_", " ").title()
+        session.add_unit(asset_key, display_name)
+        session.update_status(
+            asset_key,
+            UnitStatus.PROMPT_GENERATED,
+            prompt=prompt,
+        )
+
+    session.save()
+
+    rows: list[list[str]] = []
+    for us in session.get_all_units():
+        rows.append([us.unit_key, us.unit_name, us.prompt])
+
+    return session, rows, f"{len(prompts)} Terrain-Prompts generiert."
+
+
+def _handle_generate_terrain_images(
+    session: PipelineSession | None,
+    model_name: str,
+    progress: gr.Progress = gr.Progress(),
+) -> tuple[PipelineSession | None, list[tuple[str, str]], str]:
+    """Generiert Bilder fuer alle Terrain-Stuecke mit Prompts.
+
+    Wiederverwendet den ImageGenerator 1:1.
+
+    Args:
+        session: Aktive Terrain-Session.
+        model_name: Name des ImageModel.
+        progress: Gradio Progress-Tracker.
+
+    Returns:
+        Tuple: (session, gallery_items, status_message).
+    """
+    if session is None:
+        return None, [], "Keine aktive Terrain-Session."
+
+    units_to_generate: list[UnitState] = [
+        us for us in session.get_all_units()
+        if us.prompt and us.status in (UnitStatus.PROMPT_GENERATED, UnitStatus.IMAGE_REJECTED)
+    ]
+
+    if not units_to_generate:
+        gallery: list[tuple[str, str]] = _build_terrain_gallery(session)
+        return session, gallery, "Keine Terrain-Stuecke zum Generieren."
+
+    try:
+        model_enum: ImageModel = ImageModel[model_name]
+    except KeyError:
+        model_enum = ImageModel.NANO_BANANA
+
+    hf_token: str = _load_hf_token()
+    gemini_key: str = _load_gemini_key()
+    generator: ImageGenerator = ImageGenerator(
+        model=model_enum,
+        hf_token=hf_token if hf_token else None,
+        gemini_api_key=gemini_key if gemini_key else None,
+    )
+
+    session_dir: Path = STATE_DIR / session.session_id
+    images_dir: Path = session_dir / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+
+    total: int = len(units_to_generate)
+    success_count: int = 0
+    error_count: int = 0
+
+    # Battle Map Dimensionen: 3:2 Landscape (72x48 inch Tisch)
+    BATTLE_MAP_WIDTH: int = 1536
+    BATTLE_MAP_HEIGHT: int = 1024
+
+    for index, unit_state in enumerate(units_to_generate):
+        progress((index, total), desc=f"Generiere: {unit_state.unit_name}")
+
+        output_path: Path = images_dir / f"{unit_state.unit_key}.png"
+
+        # Battle Map bekommt Landscape-Seitenverhaeltnis (3:2)
+        img_width: int = 0
+        img_height: int = 0
+        if unit_state.unit_key == "battle_map":
+            img_width = BATTLE_MAP_WIDTH
+            img_height = BATTLE_MAP_HEIGHT
+
+        result: GenerationResult = generator.generate(
+            prompt=unit_state.prompt,
+            output_path=output_path,
+            width=img_width,
+            height=img_height,
+        )
+
+        if result.success:
+            session.update_status(
+                unit_state.unit_key,
+                UnitStatus.IMAGE_GENERATED,
+                image_path=result.image_path,
+                seed=result.seed,
+                model_used=result.model_used,
+                generation_count=unit_state.generation_count + 1,
+            )
+            success_count += 1
+        else:
+            error_count += 1
+            logger.warning(
+                "Terrain-Bildgenerierung fehlgeschlagen fuer %s: %s",
+                unit_state.unit_key,
+                result.error,
+            )
+
+    session.save()
+
+    gallery_items: list[tuple[str, str]] = _build_terrain_gallery(session)
+    status: str = f"Generierung abgeschlossen: {success_count} erfolgreich, {error_count} fehlgeschlagen."
+    return session, gallery_items, status
+
+
+def _is_3d_asset(unit_key: str) -> bool:
+    """Prueft ob ein Asset-Key ein 3D-Asset ist (benoetigt TRELLIS-Konvertierung)."""
+    return any(unit_key.startswith(prefix) for prefix in _GLB_ASSET_PREFIXES)
+
+
+def _handle_convert_terrain_to_3d(
+    session: PipelineSession | None,
+    progress: gr.Progress = gr.Progress(),
+) -> tuple[PipelineSession | None, str, str]:
+    """Konvertiert genehmigte 3D-Terrain-Bilder zu GLB via TRELLIS.
+
+    Nur wall_, tree_, container_ Assets werden konvertiert.
+    battle_map und base_plate_ bleiben als Bilder.
+
+    Args:
+        session: Aktive Terrain-Session.
+        progress: Gradio Progress-Tracker.
+
+    Returns:
+        Tuple: (session, conversion_list, status_message).
+    """
+    if session is None:
+        return None, "", "Keine aktive Terrain-Session."
+
+    # Nur 3D-Assets filtern (wall/tree/container)
+    approved: list[UnitState] = [
+        us for us in session.get_units_by_status(UnitStatus.IMAGE_APPROVED)
+        if _is_3d_asset(us.unit_key)
+    ]
+    if not approved:
+        return session, "", "Keine genehmigten 3D-Terrain-Bilder zur Konvertierung."
+
+    hf_token: str = _load_hf_token()
+    trellis_space: str = _load_trellis_space()
+    session_dir: Path = STATE_DIR / session.session_id
+    glb_dir: Path = session_dir / "glb"
+    glb_dir.mkdir(parents=True, exist_ok=True)
+
+    total: int = len(approved)
+    success_count: int = 0
+    error_count: int = 0
+    lines: list[str] = []
+
+    for index, unit_state in enumerate(approved):
+        progress((index, total), desc=f"Konvertiere: {unit_state.unit_name}")
+
+        try:
+            glb_result: Path | None = convert_image_to_glb(
+                image_path=Path(unit_state.image_path),
+                output_dir=glb_dir,
+                hf_token=hf_token,
+                space_id=trellis_space,
+            )
+            if glb_result is None:
+                raise RuntimeError("TRELLIS hat keine GLB-Datei erzeugt")
+            session.update_status(
+                unit_state.unit_key,
+                UnitStatus.GLB_READY,
+                glb_path=str(glb_result),
+            )
+            success_count += 1
+            lines.append(f"OK: {unit_state.unit_name}")
+        except Exception as exc:
+            error_count += 1
+            lines.append(f"FEHLER: {unit_state.unit_name} — {exc}")
+            logger.warning(
+                "Terrain 3D-Konvertierung fehlgeschlagen fuer %s: %s",
+                unit_state.unit_key,
+                exc,
+            )
+
+    session.save()
+
+    conversion_list: str = "\n".join(lines)
+    status: str = f"Konvertierung: {success_count} erfolgreich, {error_count} fehlgeschlagen von {total}."
+    return session, conversion_list, status
+
+
+def _handle_export_terrain(
+    session: PipelineSession | None,
+    theme: TerrainTheme | None,
+) -> tuple[PipelineSession | None, str]:
+    """Exportiert Terrain-GLBs und terrain.json nach OpenTTS.
+
+    Args:
+        session: Aktive Terrain-Session.
+        theme: Geladenes Terrain-Theme.
+
+    Returns:
+        Tuple: (session, result_message).
+    """
+    if session is None:
+        return None, "Keine aktive Terrain-Session."
+
+    if theme is None:
+        return session, "Kein Terrain-Theme geladen."
+
+    unit_states: list[UnitState] = session.get_all_units()
+    result: TerrainExportResult = export_terrain(theme, unit_states, PROJECT_ROOT)
+
+    if result.success:
+        for us in unit_states:
+            if us.status in (UnitStatus.GLB_READY, UnitStatus.IMAGE_APPROVED):
+                session.update_status(us.unit_key, UnitStatus.EXPORTED)
+        session.save()
+
+        return session, (
+            f"Export erfolgreich!\n"
+            f"terrain.json: {result.terrain_json_path}\n"
+            f"Exportierte Assets: {result.exported_count}"
+        )
+
+    error_text: str = "\n".join(result.errors)
+    return session, f"Export fehlgeschlagen:\n{error_text}"
+
+
+def _build_terrain_gallery(session: PipelineSession | None) -> list[tuple[str, str]]:
+    """Erstellt Gallery-Items aus Terrain-Session-Bildern.
+
+    Args:
+        session: Aktive Terrain-Session.
+
+    Returns:
+        Liste von (image_path, caption) Tupeln.
+    """
+    if session is None:
+        return []
+
+    items: list[tuple[str, str]] = []
+    for us in session.get_all_units():
+        if us.image_path and Path(us.image_path).exists():
+            status_icon: str = _status_to_german(us.status)
+            items.append((us.image_path, f"{us.unit_name} [{status_icon}]"))
+
+    return items
+
+
+# =============================================================================
 # APP ERSTELLEN
 # =============================================================================
 
@@ -1610,7 +1967,324 @@ def create_app() -> gr.Blocks:
             )
 
         # =================================================================
-        # TAB 6: EINSTELLUNGEN
+        # TAB 6: TERRAIN GENERATOR
+        # =================================================================
+
+        available_terrain_themes: list[str] = scan_terrain_themes(TERRAIN_THEMES_DIR)
+
+        with gr.Tab("Terrain Generator"):
+            terrain_theme_state: gr.State = gr.State(value=None)
+            terrain_session_state: gr.State = gr.State(value=None)
+
+            gr.Markdown("### Modulare Terrain-Generierung")
+            gr.Markdown(
+                "Generiert modulare Terrain-Assets pro Theme: "
+                "Battle Map, Grundplatten-Texturen, Wand-Segmente, Baeume und Container."
+            )
+
+            # --- Schritt 1: Theme laden ---
+            with gr.Group():
+                gr.Markdown("#### 1. Theme laden")
+                with gr.Row():
+                    terrain_theme_dropdown: gr.Dropdown = gr.Dropdown(
+                        choices=available_terrain_themes,
+                        label="Terrain-Theme",
+                        info="Verfuegbare Themes aus terrain_themes/",
+                    )
+                    terrain_load_btn: gr.Button = gr.Button(
+                        "Theme laden",
+                        variant="primary",
+                    )
+
+                terrain_status_text: gr.Textbox = gr.Textbox(
+                    label="Status",
+                    interactive=False,
+                )
+
+                terrain_pieces_df: gr.Dataframe = gr.Dataframe(
+                    headers=["Key", "Name", "Typ", "Details"],
+                    label="Terrain-Assets",
+                    interactive=False,
+                )
+
+            # --- Schritt 2: Prompts ---
+            with gr.Group():
+                gr.Markdown("#### 2. Prompts generieren")
+
+                terrain_generate_prompts_btn: gr.Button = gr.Button(
+                    "Alle Terrain-Prompts generieren",
+                    variant="primary",
+                )
+
+                terrain_prompts_df: gr.Dataframe = gr.Dataframe(
+                    headers=["Key", "Name", "Prompt"],
+                    label="Terrain-Prompts",
+                    interactive=True,
+                )
+
+                terrain_prompts_status: gr.Textbox = gr.Textbox(
+                    label="Prompt-Status",
+                    interactive=False,
+                )
+
+            # --- Schritt 3: Bilder ---
+            with gr.Group():
+                gr.Markdown("#### 3. Bilder generieren")
+
+                terrain_model_dropdown: gr.Dropdown = gr.Dropdown(
+                    choices=image_model_choices,
+                    value=ImageModel.NANO_BANANA.name,
+                    label="Bildgenerierungs-Modell",
+                )
+
+                terrain_generate_images_btn: gr.Button = gr.Button(
+                    "Alle Terrain-Bilder generieren",
+                    variant="primary",
+                )
+
+                terrain_gallery: gr.Gallery = gr.Gallery(
+                    label="Generierte Terrain-Bilder",
+                    columns=4,
+                    height="auto",
+                )
+
+                terrain_images_status: gr.Textbox = gr.Textbox(
+                    label="Bild-Status",
+                    interactive=False,
+                )
+
+                # Per-image Approve/Reject (analog Tab 3)
+                terrain_selected_key_state: gr.State = gr.State(value="")
+
+                terrain_selected_info: gr.Textbox = gr.Textbox(
+                    label="Ausgewaehltes Terrain-Bild",
+                    interactive=False,
+                    lines=4,
+                )
+
+                with gr.Row():
+                    terrain_approve_btn: gr.Button = gr.Button(
+                        "Genehmigen",
+                        variant="primary",
+                    )
+                    terrain_reject_btn: gr.Button = gr.Button(
+                        "Ablehnen",
+                        variant="stop",
+                    )
+                    terrain_reject_feedback: gr.Textbox = gr.Textbox(
+                        label="Feedback (optional)",
+                        placeholder="Was soll anders sein?",
+                        scale=2,
+                    )
+
+                with gr.Row():
+                    terrain_approve_all_btn: gr.Button = gr.Button(
+                        "Alle genehmigen",
+                        variant="primary",
+                    )
+                    terrain_regen_rejected_btn: gr.Button = gr.Button(
+                        "Abgelehnte regenerieren",
+                    )
+
+            # --- Schritt 4: 3D-Konvertierung ---
+            with gr.Group():
+                gr.Markdown("#### 4. 3D-Konvertierung (TRELLIS)")
+                gr.Markdown(
+                    "Konvertiert nur 3D-Assets (Waende, Baeume, Container) zu GLB. "
+                    "Battle Map und Grundplatten bleiben als Bilddateien."
+                )
+
+                terrain_convert_btn: gr.Button = gr.Button(
+                    "Genehmigte zu GLB konvertieren",
+                    variant="primary",
+                )
+
+                terrain_conversion_list: gr.Textbox = gr.Textbox(
+                    label="Konvertierungs-Log",
+                    interactive=False,
+                    lines=8,
+                )
+
+                terrain_conversion_status: gr.Textbox = gr.Textbox(
+                    label="Konvertierungs-Status",
+                    interactive=False,
+                )
+
+            # --- Schritt 5: Export ---
+            with gr.Group():
+                gr.Markdown("#### 5. Export nach OpenTTS")
+                gr.Markdown(
+                    f"Exportiert nach `{PROJECT_ROOT / 'assets' / 'terrain'}`."
+                )
+
+                terrain_export_btn: gr.Button = gr.Button(
+                    "Terrain exportieren",
+                    variant="primary",
+                )
+
+                terrain_export_result: gr.Textbox = gr.Textbox(
+                    label="Export-Ergebnis",
+                    interactive=False,
+                    lines=6,
+                )
+
+            # --- Event Handler ---
+
+            def on_load_terrain_theme(
+                theme_name: str,
+            ) -> tuple[TerrainTheme | None, list[list[str]], str]:
+                return _handle_load_terrain_theme(theme_name)
+
+            terrain_load_btn.click(
+                fn=on_load_terrain_theme,
+                inputs=[terrain_theme_dropdown],
+                outputs=[terrain_theme_state, terrain_pieces_df, terrain_status_text],
+            )
+
+            def on_generate_terrain_prompts(
+                theme: TerrainTheme | None,
+                session: PipelineSession | None,
+            ) -> tuple[PipelineSession | None, list[list[str]], str]:
+                return _handle_generate_terrain_prompts(theme, session)
+
+            terrain_generate_prompts_btn.click(
+                fn=on_generate_terrain_prompts,
+                inputs=[terrain_theme_state, terrain_session_state],
+                outputs=[terrain_session_state, terrain_prompts_df, terrain_prompts_status],
+            )
+
+            def on_generate_terrain_images(
+                session: PipelineSession | None,
+                model_name: str,
+                progress: gr.Progress = gr.Progress(),
+            ) -> tuple[PipelineSession | None, list[tuple[str, str]], str]:
+                return _handle_generate_terrain_images(session, model_name, progress)
+
+            terrain_generate_images_btn.click(
+                fn=on_generate_terrain_images,
+                inputs=[terrain_session_state, terrain_model_dropdown],
+                outputs=[terrain_session_state, terrain_gallery, terrain_images_status],
+            )
+
+            def on_approve_all_terrain(
+                session: PipelineSession | None,
+            ) -> tuple[PipelineSession | None, list[tuple[str, str]], str]:
+                if session is None:
+                    return None, [], "Keine aktive Terrain-Session."
+
+                count: int = 0
+                for us in session.get_all_units():
+                    if us.status == UnitStatus.IMAGE_GENERATED:
+                        session.update_status(us.unit_key, UnitStatus.IMAGE_APPROVED)
+                        count += 1
+
+                session.save()
+                gallery: list[tuple[str, str]] = _build_terrain_gallery(session)
+                return session, gallery, f"{count} Terrain-Bilder genehmigt."
+
+            terrain_approve_all_btn.click(
+                fn=on_approve_all_terrain,
+                inputs=[terrain_session_state],
+                outputs=[terrain_session_state, terrain_gallery, terrain_images_status],
+            )
+
+            # Per-image gallery selection handler
+            def on_terrain_gallery_select(
+                session: PipelineSession | None,
+                evt: gr.SelectData,
+            ) -> tuple[str, str]:
+                return _handle_gallery_select(session, evt)
+
+            terrain_gallery.select(
+                fn=on_terrain_gallery_select,
+                inputs=[terrain_session_state],
+                outputs=[terrain_selected_key_state, terrain_selected_info],
+            )
+
+            # Per-image approve handler
+            def on_terrain_approve_image(
+                session: PipelineSession | None,
+                unit_key: str,
+            ) -> tuple[PipelineSession | None, list[tuple[str, str]], str]:
+                session, gallery, status = _handle_approve_image(session, unit_key)
+                # Rebuild gallery using terrain-specific builder
+                terrain_gallery_items: list[tuple[str, str]] = _build_terrain_gallery(session)
+                return session, terrain_gallery_items, status
+
+            terrain_approve_btn.click(
+                fn=on_terrain_approve_image,
+                inputs=[terrain_session_state, terrain_selected_key_state],
+                outputs=[terrain_session_state, terrain_gallery, terrain_images_status],
+            )
+
+            # Per-image reject handler
+            def on_terrain_reject_image(
+                session: PipelineSession | None,
+                unit_key: str,
+                feedback: str,
+            ) -> tuple[PipelineSession | None, list[tuple[str, str]], str]:
+                session, gallery, status = _handle_reject_image(session, unit_key, feedback)
+                terrain_gallery_items: list[tuple[str, str]] = _build_terrain_gallery(session)
+                return session, terrain_gallery_items, status
+
+            terrain_reject_btn.click(
+                fn=on_terrain_reject_image,
+                inputs=[terrain_session_state, terrain_selected_key_state, terrain_reject_feedback],
+                outputs=[terrain_session_state, terrain_gallery, terrain_images_status],
+            )
+
+            # Regenerate rejected terrain images
+            def on_regen_rejected_terrain(
+                session: PipelineSession | None,
+                model_name: str,
+                progress: gr.Progress = gr.Progress(),
+            ) -> tuple[PipelineSession | None, list[tuple[str, str]], str]:
+                if session is None:
+                    return None, [], "Keine aktive Terrain-Session."
+                # Reset rejected to prompt_generated so they get re-generated
+                count: int = 0
+                for us in session.get_all_units():
+                    if us.status == UnitStatus.IMAGE_REJECTED:
+                        session.update_status(us.unit_key, UnitStatus.PROMPT_GENERATED)
+                        count += 1
+                if count == 0:
+                    gallery: list[tuple[str, str]] = _build_terrain_gallery(session)
+                    return session, gallery, "Keine abgelehnten Bilder vorhanden."
+                session.save()
+                return _handle_generate_terrain_images(session, model_name, progress)
+
+            terrain_regen_rejected_btn.click(
+                fn=on_regen_rejected_terrain,
+                inputs=[terrain_session_state, terrain_model_dropdown],
+                outputs=[terrain_session_state, terrain_gallery, terrain_images_status],
+            )
+
+            def on_convert_terrain(
+                session: PipelineSession | None,
+                progress: gr.Progress = gr.Progress(),
+            ) -> tuple[PipelineSession | None, str, str]:
+                return _handle_convert_terrain_to_3d(session, progress)
+
+            terrain_convert_btn.click(
+                fn=on_convert_terrain,
+                inputs=[terrain_session_state],
+                outputs=[terrain_session_state, terrain_conversion_list, terrain_conversion_status],
+            )
+
+            def on_export_terrain(
+                session: PipelineSession | None,
+                theme: TerrainTheme | None,
+            ) -> tuple[PipelineSession | None, str]:
+                return _handle_export_terrain(session, theme)
+
+            terrain_export_btn.click(
+                fn=on_export_terrain,
+                inputs=[terrain_session_state, terrain_theme_state],
+                outputs=[terrain_session_state, terrain_export_result],
+            )
+
+        # =================================================================
+        # TAB 7: EINSTELLUNGEN
         # =================================================================
 
         with gr.Tab("Einstellungen"):
