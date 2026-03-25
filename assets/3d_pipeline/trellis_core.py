@@ -40,6 +40,8 @@ except ImportError:
 # KONSTANTEN - MAXIMALE QUALITAET
 # =============================================================================
 
+DEFAULT_TRELLIS_SPACE: str = "microsoft/TRELLIS.2"
+
 RESOLUTION = "1536"           # Hoechste Aufloesung
 DECIMATION = 500000           # Maximale Polygonzahl
 TEXTURE_SIZE = 4096           # 4K Texturen
@@ -179,26 +181,34 @@ class TrellisGenerator:
     Verwendet immer maximale Qualitaet.
     """
 
-    def __init__(self, hf_token: Optional[str] = None, log_callback=None):
+    def __init__(
+        self,
+        hf_token: Optional[str] = None,
+        log_callback=None,
+        space_id: Optional[str] = None,
+    ):
         """
         Initialisiert den Generator.
 
         Args:
             hf_token: HuggingFace Token fuer Pro-Quota
             log_callback: Funktion zum Loggen von Nachrichten
+            space_id: HuggingFace Space-ID (z.B. "DutchyMaxwell/TRELLIS-2").
+                      Faellt zurueck auf DEFAULT_TRELLIS_SPACE.
         """
         if not HAS_GRADIO:
             raise ImportError("gradio_client nicht installiert: pip install gradio_client")
 
         self.log = log_callback or print
+        resolved_space: str = space_id or DEFAULT_TRELLIS_SPACE
 
-        self.log("Verbinde mit TRELLIS.2...")
+        self.log(f"Verbinde mit {resolved_space}...")
 
         if hf_token:
             os.environ["HF_TOKEN"] = hf_token
             self.log("   HF Pro Token gesetzt")
 
-        self.client = GradioClient("microsoft/TRELLIS.2")
+        self.client = GradioClient(resolved_space)
         self.log("   Verbunden!")
         self.log(f"   Qualitaet: {RESOLUTION}px, {DECIMATION} Polygone, {TEXTURE_SIZE}px Textur")
 

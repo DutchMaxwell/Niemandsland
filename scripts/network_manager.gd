@@ -678,6 +678,26 @@ func broadcast_tts_terrain_spawn(mesh_url: String, diffuse_url: String,
 			scale.x, scale.y, scale.z, pos.x, pos.y, pos.z, terrain_name)
 
 
+# ===== Terrain Theme Synchronization =====
+
+## Signal emitted when a remote player changes the terrain theme or overlay mode
+signal remote_terrain_theme_changed(theme_key: String, overlay_mode: int)
+
+
+## RPC: Sync terrain theme and overlay mode
+@rpc("any_peer", "call_remote", "reliable")
+func sync_terrain_theme(theme_key: String, overlay_mode: int) -> void:
+	var sender := multiplayer.get_remote_sender_id()
+	print("[Network] Received terrain theme from peer %d: %s (mode=%d)" % [sender, theme_key, overlay_mode])
+	remote_terrain_theme_changed.emit(theme_key, overlay_mode)
+
+
+## Broadcast terrain theme change to all peers
+func broadcast_terrain_theme(theme_key: String, overlay_mode: int) -> void:
+	if is_multiplayer_active():
+		sync_terrain_theme.rpc(theme_key, overlay_mode)
+
+
 # ===== Camera Position Synchronization =====
 
 ## Signal emitted when a remote player's camera position is received

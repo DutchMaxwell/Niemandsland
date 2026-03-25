@@ -7,7 +7,7 @@ signal save_completed(path: String)
 signal load_completed(object_count: int)
 signal load_failed(error: String)
 
-const SAVE_VERSION = "1.2"  # Updated for map layout + marker restore
+const SAVE_VERSION = "1.3"  # Updated for modular terrain (walls, placed objects)
 const SAVE_EXTENSION = "otts"  # OpenTTS Save
 
 var object_manager: Node3D
@@ -72,6 +72,37 @@ func _serialize_table() -> Dictionary:
 			objectives.append({"x": obj.x, "y": obj.y})
 		data["mission_objectives"] = objectives
 
+		# Wall segments (modular terrain)
+		var walls = []
+		for wall in map_layout_editor.wall_segments:
+			walls.append({
+				"edge_cell_x": wall.get("edge_cell", Vector2i.ZERO).x,
+				"edge_cell_y": wall.get("edge_cell", Vector2i.ZERO).y,
+				"edge_side": wall.get("edge_side", 0),
+				"wall_key": wall.get("wall_key", ""),
+				"length_inches": wall.get("length_inches", 3.0),
+				"sub_position": wall.get("sub_position", 0),
+			})
+		data["wall_segments"] = walls
+
+		# Placed objects (trees, containers)
+		var objects = []
+		for obj in map_layout_editor.placed_objects:
+			objects.append({
+				"object_key": obj.get("object_key", ""),
+				"cell_x": obj.get("cell", Vector2i.ZERO).x,
+				"cell_y": obj.get("cell", Vector2i.ZERO).y,
+				"offset_x": obj.get("offset", Vector2(0.5, 0.5)).x,
+				"offset_y": obj.get("offset", Vector2(0.5, 0.5)).y,
+				"object_type": obj.get("object_type", "tree"),
+			})
+		data["placed_objects"] = objects
+
+	# Terrain overlay mode and theme (generated 3D terrain)
+	if terrain_overlay:
+		data["terrain_theme_key"] = terrain_overlay.get_terrain_theme() if terrain_overlay.has_method("get_terrain_theme") else ""
+		data["overlay_mode"] = terrain_overlay.get_overlay_mode() if terrain_overlay.has_method("get_overlay_mode") else 0
+
 	return data
 
 
@@ -116,6 +147,12 @@ func _serialize_object(obj: Node3D) -> Dictionary:
 		data["model_path"] = obj.get_meta("model_path", "")
 	elif obj.is_in_group("miniature"):
 		data["type"] = "miniature"
+	elif obj.is_in_group("generated_terrain"):
+		data["type"] = "generated_terrain"
+		data["terrain_piece_id"] = obj.get_meta("terrain_piece_id", "")
+		data["terrain_theme_key"] = obj.get_meta("terrain_theme_key", "")
+		data["terrain_type"] = obj.get_meta("terrain_type", "")
+		data["grid_footprint"] = obj.get_meta("grid_footprint", "")
 	elif obj.is_in_group("terrain"):
 		data["type"] = "terrain"
 	else:
@@ -290,6 +327,29 @@ func _deserialize_map_layout(table_data: Dictionary, table_size: Vector2) -> voi
 		if obj is Dictionary:
 			objectives.append(Vector2(float(obj.get("x", 0)), float(obj.get("y", 0))))
 
+	# Parse wall segments
+	var wall_segments: Array[Dictionary] = []
+	for w in table_data.get("wall_segments", []):
+		if w is Dictionary:
+			wall_segments.append({
+				"edge_cell": Vector2i(int(w.get("edge_cell_x", 0)), int(w.get("edge_cell_y", 0))),
+				"edge_side": int(w.get("edge_side", 0)),
+				"wall_key": str(w.get("wall_key", "")),
+				"length_inches": float(w.get("length_inches", 3.0)),
+				"sub_position": int(w.get("sub_position", 0)),
+			})
+
+	# Parse placed objects
+	var placed_objects: Array[Dictionary] = []
+	for o in table_data.get("placed_objects", []):
+		if o is Dictionary:
+			placed_objects.append({
+				"object_key": str(o.get("object_key", "")),
+				"cell": Vector2i(int(o.get("cell_x", 0)), int(o.get("cell_y", 0))),
+				"offset": Vector2(float(o.get("offset_x", 0.5)), float(o.get("offset_y", 0.5))),
+				"object_type": str(o.get("object_type", "tree")),
+			})
+
 	# Apply to map_layout_editor (stores raw data in 1" / cell coordinates)
 	if map_layout_editor:
 		map_layout_editor.table_size_feet = table_size
@@ -299,6 +359,8 @@ func _deserialize_map_layout(table_data: Dictionary, table_size: Vector2) -> voi
 		map_layout_editor.custom_zone_vertices_p1 = custom_p1
 		map_layout_editor.custom_zone_vertices_p2 = custom_p2
 		map_layout_editor.mission_objectives = objectives
+		map_layout_editor.wall_segments = wall_segments
+		map_layout_editor.placed_objects = placed_objects
 
 	# Apply to 3D terrain overlay
 	if terrain_overlay:
@@ -326,9 +388,35 @@ func _deserialize_map_layout(table_data: Dictionary, table_size: Vector2) -> voi
 				if terrain_overlay.has_method("update_objectives"):
 					terrain_overlay.update_objectives(world_objectives)
 
-	print("Map layout restored: %d cells, rotation=%.1f°, deployment=%d, zones=P1:%d/P2:%d, objectives=%d" % [
+		# Restore wall models in 3D
+		if not wall_segments.is_empty():
+			if terrain_overlay.has_method("update_wall_models"):
+				terrain_overlay.update_wall_models(wall_segments, table_size, grid_rotation)
+
+		# Restore placed objects (trees, containers) in 3D
+		if not placed_objects.is_empty():
+			if terrain_overlay.has_method("update_placed_objects"):
+				terrain_overlay.update_placed_objects(placed_objects, table_size, grid_rotation)
+
+	# Restore terrain overlay mode and theme
+	if terrain_overlay:
+		var theme_key: String = table_data.get("terrain_theme_key", "")
+		var overlay_mode_val: int = int(table_data.get("overlay_mode", 0))
+		if terrain_overlay.has_method("set_terrain_theme"):
+			terrain_overlay.set_terrain_theme(theme_key)
+		if terrain_overlay.has_method("set_overlay_mode"):
+			terrain_overlay.set_overlay_mode(overlay_mode_val)
+
+		# Load battle map and base plate textures for the theme
+		if not theme_key.is_empty():
+			if terrain_overlay.has_method("set_battle_map"):
+				terrain_overlay.set_battle_map(theme_key)
+			if terrain_overlay.has_method("load_base_plate_textures"):
+				terrain_overlay.load_base_plate_textures(theme_key)
+
+	print("Map layout restored: %d cells, rotation=%.1f, deployment=%d, walls=%d, objects=%d" % [
 		grid_cells.size(), grid_rotation, deployment_type,
-		custom_p1.size(), custom_p2.size(), objectives.size()
+		wall_segments.size(), placed_objects.size()
 	])
 
 
@@ -391,6 +479,8 @@ func _deserialize_object(data: Dictionary) -> bool:
 			spawned_obj = object_manager.spawn_miniature(position, false, net_id)
 		"terrain":
 			spawned_obj = object_manager.spawn_terrain(position, false, net_id)
+		"generated_terrain":
+			spawned_obj = _spawn_generated_terrain(data, position)
 		_:
 			push_warning("Unknown object type: %s" % obj_type)
 			return false
@@ -484,6 +574,32 @@ func _spawn_tts_object(data: Dictionary, position: Vector3) -> Node3D:
 	wrapper.global_position = position
 
 	return wrapper
+
+
+## Spawn a generated terrain piece from saved data via TerrainLibrary
+func _spawn_generated_terrain(data: Dictionary, position: Vector3) -> Node3D:
+	var piece_id: String = data.get("terrain_piece_id", "")
+	if piece_id.is_empty():
+		push_warning("Generated terrain missing piece_id")
+		return null
+
+	# Find the TerrainLibrary node in the scene tree
+	var terrain_lib = get_node_or_null("/root/Main/TerrainLibrary")
+	if not terrain_lib:
+		push_warning("TerrainLibrary not found for generated terrain restore")
+		return null
+
+	var piece = terrain_lib.get_piece_by_id(piece_id)
+	if not piece:
+		push_warning("Generated terrain piece not found: %s" % piece_id)
+		return null
+
+	terrain_lib.spawn_terrain_piece(piece, position)
+	# The spawned body is the last child added to object_manager
+	var children = object_manager.get_children()
+	if children.size() > 0:
+		return children[children.size() - 1]
+	return null
 
 
 ## Helper: Convert array to Vector3

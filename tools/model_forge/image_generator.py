@@ -105,6 +105,8 @@ class ImageGenerator:
         prompt: str,
         output_path: Path,
         seed: int = -1,
+        width: int = 0,
+        height: int = 0,
     ) -> GenerationResult:
         """
         Generiert ein einzelnes Bild aus einem Prompt.
@@ -113,6 +115,8 @@ class ImageGenerator:
             prompt: Textbeschreibung fuer die Bildgenerierung.
             output_path: Zielpfad fuer das generierte Bild.
             seed: Seed fuer reproduzierbare Ergebnisse. -1 = zufaellig.
+            width: Bildbreite in Pixel. 0 = Modell-Default (1024).
+            height: Bildhoehe in Pixel. 0 = Modell-Default (1024).
 
         Returns:
             GenerationResult mit Erfolg/Fehler-Informationen.
@@ -147,13 +151,16 @@ class ImageGenerator:
                 error=f"{error_prefix}: {exc}",
             )
 
+        effective_width: int = width if width > 0 else FLUX_DEFAULT_WIDTH
+        effective_height: int = height if height > 0 else FLUX_DEFAULT_HEIGHT
+
         predict_method = self._get_predict_method()
         result_path: Path | None = None
         last_error: str = ""
 
         for attempt in range(RETRY_MAX_ATTEMPTS):
             try:
-                result_path = predict_method(prompt, seed)
+                result_path = predict_method(prompt, seed, effective_width, effective_height)
                 last_error = ""
                 break
             except RuntimeError as exc:
@@ -277,10 +284,10 @@ class ImageGenerator:
         logger.info("Verbinde zu HuggingFace Space: %s", self._model.value)
         self._client = Client(self._model.value, token=self._hf_token)
 
-    def _get_predict_method(self) -> Callable[[str, int], Path | None]:
+    def _get_predict_method(self) -> Callable[[str, int, int, int], Path | None]:
         """Gibt die passende Predict-Methode fuer das aktuelle Modell zurueck."""
         predict_methods: dict[
-            ImageModel, Callable[[str, int], Path | None]
+            ImageModel, Callable[[str, int, int, int], Path | None]
         ] = {
             ImageModel.NANO_BANANA: self._predict_nano_banana,
             ImageModel.FLUX_SCHNELL: self._predict_flux_schnell,
@@ -288,7 +295,7 @@ class ImageGenerator:
         }
         return predict_methods[self._model]
 
-    def _predict_nano_banana(self, prompt: str, seed: int) -> Path | None:
+    def _predict_nano_banana(self, prompt: str, seed: int, width: int, height: int) -> Path | None:
         """
         Generiert ein Bild mit dem Gemini 2.5 Flash Image Modell (Nano Banana).
 
@@ -298,6 +305,8 @@ class ImageGenerator:
         Args:
             prompt: Textbeschreibung fuer die Bildgenerierung.
             seed: Wird ignoriert (Gemini hat keinen Seed-Support).
+            width: Gewuenschte Bildbreite (Gemini beachtet das aus dem Prompt).
+            height: Gewuenschte Bildhoehe (Gemini beachtet das aus dem Prompt).
 
         Returns:
             Pfad zum generierten Bild oder None bei Fehler.
@@ -329,13 +338,15 @@ class ImageGenerator:
 
         return None
 
-    def _predict_z_image_turbo(self, prompt: str, seed: int) -> Path | None:
+    def _predict_z_image_turbo(self, prompt: str, seed: int, width: int, height: int) -> Path | None:
         """
         Generiert ein Bild mit dem Z-Image-Turbo Modell.
 
         Args:
             prompt: Textbeschreibung fuer die Bildgenerierung.
             seed: Seed fuer reproduzierbare Ergebnisse.
+            width: Bildbreite in Pixel.
+            height: Bildhoehe in Pixel.
 
         Returns:
             Pfad zum generierten Bild oder None bei Fehler.
@@ -347,21 +358,23 @@ class ImageGenerator:
             prompt=prompt,
             seed=seed,
             randomize_seed=(seed == -1),
-            height=FLUX_DEFAULT_HEIGHT,
-            width=FLUX_DEFAULT_WIDTH,
+            height=height,
+            width=width,
             num_inference_steps=9,
             api_name="/generate_image",
         )
 
         return _extract_image_path(result)
 
-    def _predict_flux_schnell(self, prompt: str, seed: int) -> Path | None:
+    def _predict_flux_schnell(self, prompt: str, seed: int, width: int, height: int) -> Path | None:
         """
         Generiert ein Bild mit dem FLUX.1-schnell Modell.
 
         Args:
             prompt: Textbeschreibung fuer die Bildgenerierung.
             seed: Seed fuer reproduzierbare Ergebnisse.
+            width: Bildbreite in Pixel.
+            height: Bildhoehe in Pixel.
 
         Returns:
             Pfad zum generierten Bild oder None bei Fehler.
@@ -373,8 +386,8 @@ class ImageGenerator:
             prompt=prompt,
             seed=seed,
             randomize_seed=(seed == -1),
-            width=FLUX_DEFAULT_WIDTH,
-            height=FLUX_DEFAULT_HEIGHT,
+            width=width,
+            height=height,
             num_inference_steps=FLUX_DEFAULT_STEPS,
             api_name="/infer",
         )

@@ -449,6 +449,7 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 			var bottom_offset = -aabb.position.y * final_scale
 			glb_instance.position.y = bottom_offset + 0.003
 
+			_brighten_trellis_materials(glb_instance)
 			wrapper.add_child(glb_instance)
 			use_glb_model = true
 			model_height = raw_height * final_scale
@@ -595,6 +596,7 @@ func create_model_from_properties(props: Dictionary) -> StaticBody3D:
 			var bottom_offset = -aabb.position.y * final_scale
 			glb_instance.position.y = bottom_offset + 0.003
 
+			_brighten_trellis_materials(glb_instance)
 			wrapper.add_child(glb_instance)
 			use_glb_model = true
 			model_height = raw_height * final_scale
@@ -919,6 +921,28 @@ func _get_model_aabb(node: Node3D) -> AABB:
 					combined_aabb = combined_aabb.merge(transformed_aabb)
 
 	return combined_aabb
+
+
+## Adjust Trellis-generated GLB materials for better visibility
+## Trellis bakes very dark textures — subtle emission + roughness fix compensates
+func _brighten_trellis_materials(node: Node) -> void:
+	var nodes_to_check: Array[Node] = [node]
+	while not nodes_to_check.is_empty():
+		var current = nodes_to_check.pop_back()
+		nodes_to_check.append_array(current.get_children())
+
+		if current is MeshInstance3D:
+			var mesh_instance = current as MeshInstance3D
+			if not mesh_instance.mesh:
+				continue
+			for surface_idx in range(mesh_instance.mesh.get_surface_count()):
+				var mat = mesh_instance.mesh.surface_get_material(surface_idx)
+				if mat is StandardMaterial3D:
+					var adjusted_mat = mat.duplicate() as StandardMaterial3D
+					# Force non-metallic so ambient/fill light works as diffuse
+					adjusted_mat.metallic = 0.0
+					adjusted_mat.roughness = 0.7
+					mesh_instance.mesh.surface_set_material(surface_idx, adjusted_mat)
 
 
 func _on_army_loaded(army: OPRApiClient.OPRArmy) -> void:

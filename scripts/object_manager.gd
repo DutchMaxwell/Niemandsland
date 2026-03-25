@@ -242,6 +242,7 @@ func _add_to_selection(obj: Node3D) -> void:
 
 	_selected_objects.append(obj)
 	_highlight_object(obj)
+	AudioManager.play_sfx(AudioManager.SFXType.MODEL_SELECT)
 	object_selected.emit(obj)
 	selection_changed.emit(_selected_objects)
 
@@ -553,6 +554,7 @@ func _stop_dragging() -> void:
 					distance_changed.emit(distance_inches, _drag_anchor_position, final_pos)
 
 		drag_ended.emit()
+		AudioManager.play_sfx(AudioManager.SFXType.MODEL_PLACE)
 
 	_is_dragging = false
 	_move_broadcast_timer = 0.0
