@@ -30,6 +30,16 @@ enum TerrainType {
 	DANGEROUS = 4
 }
 
+## Overlay display mode for terrain visualization
+## FLAT: Colored 2D planes only (default, existing behavior)
+## MODELS: 3D GLB models only (generated terrain)
+## BOTH: 2D planes + 3D models overlaid
+enum OverlayMode {
+	FLAT = 0,
+	MODELS = 1,
+	BOTH = 2
+}
+
 ## Deployment zone types
 ## NOTE: Only FRONT_LINE is included from OPR free rules.
 ## Other deployment types (Ground War, Spearhead, etc.) are behind OPR's paywall.
@@ -66,6 +76,12 @@ var deployment_zones_visible := false
 var grid_cells := {}  # Dictionary[Vector2i, TerrainType] - stores terrain data
 var grid_rotation_degrees := 0.0
 
+## Overlay mode: FLAT (2D planes), MODELS (3D GLBs), BOTH
+var overlay_mode := OverlayMode.FLAT
+
+## Currently loaded terrain theme key (empty = none)
+var terrain_theme_key := ""
+
 ## Custom deployment zone polygons (in meters, world coordinates)
 ## Each zone is an array of Vector3 points defining the polygon vertices
 var custom_zone_player1: Array[Vector3] = []
@@ -97,6 +113,22 @@ var preview_line_mesh: MeshInstance3D = null
 var objective_meshes: Array[Node3D] = []  # Can be MeshInstance3D or Node3D containers
 var objective_ring_meshes: Array[MeshInstance3D] = []
 var mission_objectives: Array[Vector3] = []  # World positions in meters
+
+## Battle Map background mesh (full table size)
+var _battle_map_mesh: MeshInstance3D = null
+
+## Base plate textures (terrain_type_name -> ImageTexture)
+var _base_plate_textures: Dictionary = {}
+
+## Terrain Library reference for GLB loading
+var terrain_library: Node = null
+
+## Wall model cache and instances
+var _wall_model_cache: Dictionary = {}   ## wall_glb_path -> PackedScene/Node3D
+var _wall_instances: Array[Node3D] = []
+
+## Placed object instances (trees + containers)
+var _object_instances: Array[Node3D] = []
 
 
 func _ready() -> void:
@@ -142,75 +174,284 @@ func update_overlay(cells_data: Dictionary, table_size: Vector2, grid_rotation: 
 	if cells_data.is_empty():
 		return
 
-	# Use diagonal to ensure grid covers entire table at any rotation
-	var width_inches = table_size_feet.x * 12.0
-	var height_inches = table_size_feet.y * 12.0
-	var diagonal = sqrt(width_inches * width_inches + height_inches * height_inches)
-	var grid_size = int(ceil(diagonal / GRID_SIZE_INCHES))
+	var grid_dims := _calculate_grid_dims(table_size)
+	var cell_size_meters := GRID_SIZE_INCHES * INCHES_TO_METERS
+	var rotation_rad := deg_to_rad(grid_rotation)
+	var table_width_m := table_size_feet.x * 12.0 * INCHES_TO_METERS
+	var table_depth_m := table_size_feet.y * 12.0 * INCHES_TO_METERS
 
-	# Round UP to even number for intersection point at center
-	if grid_size % 2 != 0:
-		grid_size += 1
+	# Build connected regions for seamless rendering
+	var regions := _get_connected_regions(cells_data)
 
-	var grid_dims = Vector2i(grid_size, grid_size)
-
-	var cell_size_meters = GRID_SIZE_INCHES * INCHES_TO_METERS
-	var rotation_rad = deg_to_rad(grid_rotation)
-
-	# Table bounds for culling cells outside the table
-	var table_width_m = table_size_feet.x * 12.0 * INCHES_TO_METERS
-	var table_depth_m = table_size_feet.y * 12.0 * INCHES_TO_METERS
-
-	# Helper to check if a 2D point is within table bounds
-	var is_point_in_table = func(x: float, z: float) -> bool:
-		return abs(x) <= table_width_m / 2.0 and abs(z) <= table_depth_m / 2.0
-
-	# Create a mesh for each terrain cell
-	for cell_pos in cells_data:
-		var terrain_type = cells_data[cell_pos]
-		if terrain_type == TerrainType.NONE:
-			continue
-
-		var color = TERRAIN_COLORS.get(terrain_type, Color.WHITE)
-
-		# Calculate cell center position in grid coordinates (grid centered on intersection)
-		# Cells are offset by 0.5 from intersection points
-		var local_x = (cell_pos.x - grid_dims.x / 2.0 + 0.5) * cell_size_meters
-		var local_z = (cell_pos.y - grid_dims.y / 2.0 + 0.5) * cell_size_meters
-
-		# Calculate all 4 corners of the cell in local space
-		var half_cell = cell_size_meters / 2.0
-		var corners_local = [
-			Vector2(local_x - half_cell, local_z - half_cell),
-			Vector2(local_x + half_cell, local_z - half_cell),
-			Vector2(local_x + half_cell, local_z + half_cell),
-			Vector2(local_x - half_cell, local_z + half_cell)
-		]
-
-		# Rotate all corners and check if any are inside table bounds
-		var any_inside = false
-		for corner in corners_local:
-			var rotated_corner_x = corner.x * cos(rotation_rad) - corner.y * sin(rotation_rad)
-			var rotated_corner_z = corner.x * sin(rotation_rad) + corner.y * cos(rotation_rad)
-			if is_point_in_table.call(rotated_corner_x, rotated_corner_z):
-				any_inside = true
-				break
-
-		# Skip cells that have no corners inside table
-		if not any_inside:
-			continue
-
-		# Apply rotation to cell center for mesh positioning
-		var rotated_x = local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
-		var rotated_z = local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
-
-		# Create mesh at rotated position WITH rotation to match grid
-		var mesh_instance = _create_cell_mesh(Vector3(rotated_x, 0, rotated_z), cell_size_meters, color, grid_rotation)
-		mesh_instance.visible = true  # Ensure mesh is visible
-		add_child(mesh_instance)
-		overlay_meshes.append(mesh_instance)
+	if not _base_plate_textures.is_empty() and not regions.is_empty():
+		# Textured path: one seamless mesh per connected region + border outlines
+		for region in regions:
+			var terrain_type: int = region["terrain_type"]
+			var cells: Array = region["cells"]
+			# Filter cells to only those within table bounds
+			var visible_cells: Array[Vector2i] = []
+			for cell_pos in cells:
+				if _is_cell_visible(cell_pos, grid_dims, cell_size_meters, rotation_rad, table_width_m, table_depth_m):
+					visible_cells.append(cell_pos)
+			if visible_cells.is_empty():
+				continue
+			# Create one seamless mesh for the entire region
+			var mesh_instance := _create_connected_region_mesh(visible_cells, terrain_type, grid_dims, cell_size_meters, rotation_rad, grid_rotation)
+			if mesh_instance:
+				mesh_instance.visible = true
+				add_child(mesh_instance)
+				overlay_meshes.append(mesh_instance)
+			# Create border outline around the region
+			var border_mesh := _create_region_border(visible_cells, terrain_type, grid_dims, cell_size_meters, rotation_rad)
+			if border_mesh:
+				border_mesh.visible = true
+				add_child(border_mesh)
+				overlay_meshes.append(border_mesh)
+	else:
+		# Fallback: per-cell colored planes (no textures loaded)
+		for cell_pos: Vector2i in cells_data:
+			var terrain_type: int = cells_data[cell_pos]
+			if terrain_type == TerrainType.NONE:
+				continue
+			if not _is_cell_visible(cell_pos, grid_dims, cell_size_meters, rotation_rad, table_width_m, table_depth_m):
+				continue
+			var color: Color = TERRAIN_COLORS.get(terrain_type, Color.WHITE)
+			var local_x: float = (cell_pos.x - grid_dims.x / 2.0 + 0.5) * cell_size_meters
+			var local_z: float = (cell_pos.y - grid_dims.y / 2.0 + 0.5) * cell_size_meters
+			var rotated_x: float = local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
+			var rotated_z: float = local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
+			var mesh_instance := _create_cell_mesh(Vector3(rotated_x, 0, rotated_z), cell_size_meters, color, grid_rotation)
+			mesh_instance.visible = true
+			add_child(mesh_instance)
+			overlay_meshes.append(mesh_instance)
 
 	print("TerrainOverlay: Created %d mesh instances from %d cells_data entries" % [overlay_meshes.size(), cells_data.size()])
+
+
+## Calculate grid dimensions from table size
+func _calculate_grid_dims(table_size: Vector2) -> Vector2i:
+	var width_inches := table_size.x * 12.0
+	var height_inches := table_size.y * 12.0
+	var diagonal := sqrt(width_inches * width_inches + height_inches * height_inches)
+	var grid_size := int(ceil(diagonal / GRID_SIZE_INCHES))
+	if grid_size % 2 != 0:
+		grid_size += 1
+	return Vector2i(grid_size, grid_size)
+
+
+## Check if a cell has any corner within table bounds (for culling)
+func _is_cell_visible(cell_pos: Vector2i, grid_dims: Vector2i, cell_size_meters: float, rotation_rad: float, table_width_m: float, table_depth_m: float) -> bool:
+	var local_x := (cell_pos.x - grid_dims.x / 2.0 + 0.5) * cell_size_meters
+	var local_z := (cell_pos.y - grid_dims.y / 2.0 + 0.5) * cell_size_meters
+	var half_cell := cell_size_meters / 2.0
+	var corners: Array[Vector2] = [
+		Vector2(local_x - half_cell, local_z - half_cell),
+		Vector2(local_x + half_cell, local_z - half_cell),
+		Vector2(local_x + half_cell, local_z + half_cell),
+		Vector2(local_x - half_cell, local_z + half_cell)
+	]
+	for corner: Vector2 in corners:
+		var rx: float = corner.x * cos(rotation_rad) - corner.y * sin(rotation_rad)
+		var rz: float = corner.x * sin(rotation_rad) + corner.y * cos(rotation_rad)
+		if abs(rx) <= table_width_m / 2.0 and abs(rz) <= table_depth_m / 2.0:
+			return true
+	return false
+
+
+## Get connected regions from cells_data using flood-fill
+func _get_connected_regions(cells_data: Dictionary) -> Array[Dictionary]:
+	var visited := {}
+	var regions: Array[Dictionary] = []
+	for cell_pos: Vector2i in cells_data:
+		if visited.has(cell_pos):
+			continue
+		var terrain_type: int = cells_data[cell_pos]
+		if terrain_type == TerrainType.NONE:
+			continue
+		var region_cells: Array[Vector2i] = []
+		var stack: Array[Vector2i] = [cell_pos]
+		while stack.size() > 0:
+			var current: Vector2i = stack.pop_back()
+			if visited.has(current):
+				continue
+			if not cells_data.has(current):
+				continue
+			if cells_data[current] != terrain_type:
+				continue
+			visited[current] = true
+			region_cells.append(current)
+			stack.append(Vector2i(current.x + 1, current.y))
+			stack.append(Vector2i(current.x - 1, current.y))
+			stack.append(Vector2i(current.x, current.y + 1))
+			stack.append(Vector2i(current.x, current.y - 1))
+		regions.append({"terrain_type": terrain_type, "cells": region_cells})
+	return regions
+
+
+## Create one seamless mesh for a connected region of cells using SurfaceTool
+func _create_connected_region_mesh(cells: Array[Vector2i], terrain_type: int, grid_dims: Vector2i, cell_size_meters: float, rotation_rad: float, grid_rotation: float) -> MeshInstance3D:
+	if cells.is_empty():
+		return null
+
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+	var cos_r := cos(rotation_rad)
+	var sin_r := sin(rotation_rad)
+	var half_cell := cell_size_meters / 2.0
+
+	for cell_pos: Vector2i in cells:
+		var local_x: float = (cell_pos.x - grid_dims.x / 2.0 + 0.5) * cell_size_meters
+		var local_z: float = (cell_pos.y - grid_dims.y / 2.0 + 0.5) * cell_size_meters
+
+		# 4 corners of the cell (NO size reduction — seamless)
+		var corners_local: Array[Vector2] = [
+			Vector2(local_x - half_cell, local_z - half_cell),  # top-left
+			Vector2(local_x + half_cell, local_z - half_cell),  # top-right
+			Vector2(local_x + half_cell, local_z + half_cell),  # bottom-right
+			Vector2(local_x - half_cell, local_z + half_cell),  # bottom-left
+		]
+
+		# Rotate corners to world space
+		var world_corners: Array[Vector3] = []
+		for c: Vector2 in corners_local:
+			var rx: float = c.x * cos_r - c.y * sin_r
+			var rz: float = c.x * sin_r + c.y * cos_r
+			world_corners.append(Vector3(rx, 0, rz))
+
+		# UV: tile based on cell position for seamless tiling
+		var uv_base := Vector2(float(cell_pos.x), float(cell_pos.y))
+		var uvs := [
+			uv_base,                                    # top-left
+			uv_base + Vector2(1, 0),                    # top-right
+			uv_base + Vector2(1, 1),                    # bottom-right
+			uv_base + Vector2(0, 1),                    # bottom-left
+		]
+
+		# Triangle 1: top-left, top-right, bottom-right
+		st.set_uv(uvs[0])
+		st.set_normal(Vector3.UP)
+		st.add_vertex(world_corners[0])
+		st.set_uv(uvs[1])
+		st.set_normal(Vector3.UP)
+		st.add_vertex(world_corners[1])
+		st.set_uv(uvs[2])
+		st.set_normal(Vector3.UP)
+		st.add_vertex(world_corners[2])
+
+		# Triangle 2: top-left, bottom-right, bottom-left
+		st.set_uv(uvs[0])
+		st.set_normal(Vector3.UP)
+		st.add_vertex(world_corners[0])
+		st.set_uv(uvs[2])
+		st.set_normal(Vector3.UP)
+		st.add_vertex(world_corners[2])
+		st.set_uv(uvs[3])
+		st.set_normal(Vector3.UP)
+		st.add_vertex(world_corners[3])
+
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.mesh = st.commit()
+
+	# Apply base plate texture material
+	var material := StandardMaterial3D.new()
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+	var type_name := _terrain_type_to_name(terrain_type)
+	if _base_plate_textures.has(type_name):
+		material.albedo_texture = _base_plate_textures[type_name]
+		material.albedo_color = Color(1, 1, 1, 0.8)
+		# Enable UV tiling/repeat for seamless textures
+		material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		material.uv1_scale = Vector3(1, 1, 1)
+	else:
+		var color: Color = TERRAIN_COLORS.get(terrain_type, Color.WHITE)
+		material.albedo_color = color
+
+	mesh_instance.material_override = material
+	return mesh_instance
+
+
+## Create border outline around a connected region using ImmediateMesh
+func _create_region_border(cells: Array[Vector2i], terrain_type: int, grid_dims: Vector2i, cell_size_meters: float, rotation_rad: float) -> MeshInstance3D:
+	if cells.is_empty():
+		return null
+
+	# Build a set for fast lookup
+	var cell_set := {}
+	for c: Vector2i in cells:
+		cell_set[c] = true
+
+	var cos_r := cos(rotation_rad)
+	var sin_r := sin(rotation_rad)
+	var half_cell := cell_size_meters / 2.0
+
+	# Collect outer edge segments: for each cell, check 4 neighbors
+	# If neighbor is NOT in the region, that edge is an outer border
+	var edge_segments: Array[Array] = []  # Array of [Vector3, Vector3] line pairs
+
+	for cell_pos: Vector2i in cells:
+		var local_x: float = (cell_pos.x - grid_dims.x / 2.0 + 0.5) * cell_size_meters
+		var local_z: float = (cell_pos.y - grid_dims.y / 2.0 + 0.5) * cell_size_meters
+
+		# Check each of the 4 edges
+		# North (-Y in grid = -Z in local): neighbor at (x, y-1)
+		if not cell_set.has(Vector2i(cell_pos.x, cell_pos.y - 1)):
+			var p1 := Vector2(local_x - half_cell, local_z - half_cell)
+			var p2 := Vector2(local_x + half_cell, local_z - half_cell)
+			edge_segments.append([p1, p2])
+		# East (+X): neighbor at (x+1, y)
+		if not cell_set.has(Vector2i(cell_pos.x + 1, cell_pos.y)):
+			var p1 := Vector2(local_x + half_cell, local_z - half_cell)
+			var p2 := Vector2(local_x + half_cell, local_z + half_cell)
+			edge_segments.append([p1, p2])
+		# South (+Y in grid = +Z in local): neighbor at (x, y+1)
+		if not cell_set.has(Vector2i(cell_pos.x, cell_pos.y + 1)):
+			var p1 := Vector2(local_x + half_cell, local_z + half_cell)
+			var p2 := Vector2(local_x - half_cell, local_z + half_cell)
+			edge_segments.append([p1, p2])
+		# West (-X): neighbor at (x-1, y)
+		if not cell_set.has(Vector2i(cell_pos.x - 1, cell_pos.y)):
+			var p1 := Vector2(local_x - half_cell, local_z + half_cell)
+			var p2 := Vector2(local_x - half_cell, local_z - half_cell)
+			edge_segments.append([p1, p2])
+
+	if edge_segments.is_empty():
+		return null
+
+	var im := ImmediateMesh.new()
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+
+	for seg: Array in edge_segments:
+		var p1: Vector2 = seg[0]
+		var p2: Vector2 = seg[1]
+		# Rotate to world space
+		var rx1: float = p1.x * cos_r - p1.y * sin_r
+		var rz1: float = p1.x * sin_r + p1.y * cos_r
+		var rx2: float = p2.x * cos_r - p2.y * sin_r
+		var rz2: float = p2.x * sin_r + p2.y * cos_r
+		# Y=0.0005 local → sits just above base plate surface but below deployment zones
+		im.surface_add_vertex(Vector3(rx1, 0.0005, rz1))
+		im.surface_add_vertex(Vector3(rx2, 0.0005, rz2))
+
+	im.surface_end()
+
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.mesh = im
+
+	# Border color: terrain color at full opacity, slightly darkened
+	var base_color: Color = TERRAIN_COLORS.get(terrain_type, Color.WHITE)
+	var border_color := Color(base_color.r * 0.7, base_color.g * 0.7, base_color.b * 0.7, 1.0)
+
+	var material := StandardMaterial3D.new()
+	material.albedo_color = border_color
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mesh_instance.material_override = material
+
+	return mesh_instance
 
 
 ## Create a mesh instance for a single terrain cell
@@ -305,14 +546,15 @@ func _create_front_line_zones(table_width: float, table_depth: float) -> void:
 	var deployment_depth = 12.0 * INCHES_TO_METERS  # 12" deployment zone
 
 	# Player 1 zone (bottom, facing forward along +Z)
-	var p1_position = Vector3(0, 0, -table_depth/2 + deployment_depth/2)
+	# Y=0.001 local → absolute Y=0.003 (above base plates at Y=0.002)
+	var p1_position = Vector3(0, 0.001, -table_depth/2 + deployment_depth/2)
 	var p1_size = Vector2(table_width, deployment_depth)
 	var p1_mesh = _create_deployment_zone_mesh(p1_position, p1_size, DEPLOYMENT_COLORS["player1"])
 	add_child(p1_mesh)
 	deployment_zone_meshes.append(p1_mesh)
 
 	# Player 2 zone (top, facing backward along -Z)
-	var p2_position = Vector3(0, 0, table_depth/2 - deployment_depth/2)
+	var p2_position = Vector3(0, 0.001, table_depth/2 - deployment_depth/2)
 	var p2_size = Vector2(table_width, deployment_depth)
 	var p2_mesh = _create_deployment_zone_mesh(p2_position, p2_size, DEPLOYMENT_COLORS["player2"])
 	add_child(p2_mesh)
@@ -1059,3 +1301,583 @@ func _create_objective_pillar(pos: Vector3, color: Color) -> MeshInstance3D:
 ## Get objectives for AI/gameplay use
 func get_objectives() -> Array[Vector3]:
 	return mission_objectives.duplicate()
+
+
+# ==============================================================================
+# OVERLAY MODE
+# ==============================================================================
+
+## Set the overlay display mode
+## FLAT: Shows colored 2D planes (default behavior)
+## MODELS: Hides flat overlays (3D terrain models are managed by terrain_library)
+## BOTH: Shows flat overlays AND 3D models
+func set_overlay_mode(mode: OverlayMode) -> void:
+	overlay_mode = mode
+
+	# Update flat overlay visibility based on mode
+	var show_flat := mode != OverlayMode.MODELS
+	for mesh in overlay_meshes:
+		if is_instance_valid(mesh):
+			mesh.visible = show_flat
+
+	print("TerrainOverlay: Overlay mode set to %d" % mode)
+
+
+## Get the current overlay mode
+func get_overlay_mode() -> OverlayMode:
+	return overlay_mode
+
+
+## Set the terrain theme key (for save/load serialization)
+func set_terrain_theme(theme_key: String) -> void:
+	terrain_theme_key = theme_key
+
+
+## Get the current terrain theme key
+func get_terrain_theme() -> String:
+	return terrain_theme_key
+
+
+# ==============================================================================
+# BATTLE MAP (S5)
+# ==============================================================================
+
+## Set a battle map texture as the table background
+## @param theme_key: Theme key to load battle_map.png from
+func set_battle_map(theme_key: String) -> void:
+	clear_battle_map()
+
+	if theme_key.is_empty():
+		return
+
+	var battle_map_path := "res://assets/terrain/%s/battle_map.png" % theme_key
+	if not FileAccess.file_exists(battle_map_path):
+		print("TerrainOverlay: Battle map not found: %s" % battle_map_path)
+		return
+
+	var image := Image.load_from_file(battle_map_path)
+	if not image:
+		push_warning("TerrainOverlay: Failed to load battle map image: %s" % battle_map_path)
+		return
+
+	var texture := ImageTexture.create_from_image(image)
+
+	# Create PlaneMesh in table size
+	var table_width_m := table_size_feet.x * 12.0 * INCHES_TO_METERS
+	var table_depth_m := table_size_feet.y * 12.0 * INCHES_TO_METERS
+
+	_battle_map_mesh = MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(table_width_m, table_depth_m)
+	_battle_map_mesh.mesh = plane
+
+	# Position BELOW base plates (TerrainOverlay is at Y=0.002, so -0.001 → absolute Y=0.001)
+	_battle_map_mesh.position = Vector3(0, -0.001, 0)
+
+	var material := StandardMaterial3D.new()
+	material.albedo_texture = texture
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_battle_map_mesh.material_override = material
+
+	add_child(_battle_map_mesh)
+	set_terrain_theme(theme_key)
+	print("TerrainOverlay: Battle map loaded for theme '%s'" % theme_key)
+
+
+## Clear the battle map background
+func clear_battle_map() -> void:
+	if is_instance_valid(_battle_map_mesh):
+		_battle_map_mesh.queue_free()
+	_battle_map_mesh = null
+
+
+# ==============================================================================
+# BASE PLATE TEXTURES (S6)
+# ==============================================================================
+
+## Load base plate textures for a terrain theme
+## @param theme_key: Theme key to load from
+func load_base_plate_textures(theme_key: String) -> void:
+	_base_plate_textures.clear()
+
+	if theme_key.is_empty():
+		return
+
+	var base_path := "res://assets/terrain/%s/base_plates/" % theme_key
+	for terrain_type_name in ["ruins", "forest", "dangerous"]:
+		var img_path: String = base_path + terrain_type_name + ".png"
+		if FileAccess.file_exists(img_path):
+			var image := Image.load_from_file(img_path)
+			if image:
+				_base_plate_textures[terrain_type_name] = ImageTexture.create_from_image(image)
+
+	print("TerrainOverlay: Loaded %d base plate textures" % _base_plate_textures.size())
+
+
+## Create a textured cell mesh (if base_plate_textures are loaded, use texture; else fallback to color)
+func _create_textured_cell_mesh(pos: Vector3, cell_size: float, terrain_type: int, grid_rotation: float = 0.0) -> MeshInstance3D:
+	var mesh_instance := MeshInstance3D.new()
+
+	var plane_mesh := PlaneMesh.new()
+	plane_mesh.size = Vector2(cell_size * CELL_SIZE_REDUCTION, cell_size * CELL_SIZE_REDUCTION)
+	mesh_instance.mesh = plane_mesh
+	mesh_instance.position = pos
+	mesh_instance.rotation.y = -deg_to_rad(grid_rotation)
+
+	var material := StandardMaterial3D.new()
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+	# Try to use base plate texture
+	var type_name := _terrain_type_to_name(terrain_type)
+	if _base_plate_textures.has(type_name):
+		material.albedo_texture = _base_plate_textures[type_name]
+		material.albedo_color = Color(1, 1, 1, 0.8)  # Slightly transparent
+	else:
+		# Fallback: colored plane
+		var color: Color = TERRAIN_COLORS.get(terrain_type, Color.WHITE)
+		material.albedo_color = color
+
+	mesh_instance.material_override = material
+	return mesh_instance
+
+
+## Convert TerrainType enum to lowercase name string
+func _terrain_type_to_name(terrain_type: int) -> String:
+	match terrain_type:
+		TerrainType.RUINS: return "ruins"
+		TerrainType.FOREST: return "forest"
+		TerrainType.DANGEROUS: return "dangerous"
+		TerrainType.CONTAINER: return "container"
+	return ""
+
+
+# ==============================================================================
+# WALL 3D PLACEMENT (S8)
+# ==============================================================================
+
+## Update wall model instances based on wall segments from map layout
+## @param wall_segments: Array of Dictionaries with {edge_cell, edge_side, wall_key, length_inches, sub_position}
+## @param t_size: Table size in feet
+## @param rotation: Grid rotation in degrees
+func update_wall_models(wall_segments: Array, t_size: Vector2, rotation: float) -> void:
+	_clear_wall_instances()
+
+	if wall_segments.is_empty() or not terrain_library:
+		return
+
+	var cell_size_meters := GRID_SIZE_INCHES * INCHES_TO_METERS
+
+	# Compute grid dimensions (same as update_overlay)
+	var width_inches := t_size.x * 12.0
+	var height_inches := t_size.y * 12.0
+	var diagonal := sqrt(width_inches * width_inches + height_inches * height_inches)
+	var grid_size := int(ceil(diagonal / GRID_SIZE_INCHES))
+	if grid_size % 2 != 0:
+		grid_size += 1
+	var grid_dims := Vector2i(grid_size, grid_size)
+
+	var rotation_rad := deg_to_rad(rotation)
+
+	for segment in wall_segments:
+		var edge_cell: Vector2i = segment.get("edge_cell", Vector2i.ZERO)
+		var edge_side: int = segment.get("edge_side", 0)
+		var wall_key: String = segment.get("wall_key", "")
+		var length_inches: float = segment.get("length_inches", 3.0)
+		var sub_position: int = segment.get("sub_position", 0)
+
+		# Load wall model
+		var model := _get_wall_model(wall_key)
+		if not model:
+			continue
+
+		# Calculate edge center position
+		var local_x := (edge_cell.x - grid_dims.x / 2.0 + 0.5) * cell_size_meters
+		var local_z := (edge_cell.y - grid_dims.y / 2.0 + 0.5) * cell_size_meters
+
+		# Offset to edge center
+		var half_cell := cell_size_meters / 2.0
+		var edge_offset := Vector2.ZERO
+		var wall_y_rotation := 0.0
+
+		match edge_side:
+			0:  # Nord (top edge, -Z)
+				edge_offset = Vector2(0, -half_cell)
+				wall_y_rotation = 0.0
+			1:  # Ost (right edge, +X)
+				edge_offset = Vector2(half_cell, 0)
+				wall_y_rotation = PI / 2.0
+			2:  # Sued (bottom edge, +Z)
+				edge_offset = Vector2(0, half_cell)
+				wall_y_rotation = PI
+			3:  # West (left edge, -X)
+				edge_offset = Vector2(-half_cell, 0)
+				wall_y_rotation = -PI / 2.0
+
+		local_x += edge_offset.x
+		local_z += edge_offset.y
+
+		# Offset for 1"-segments within the 3"-edge
+		# sub_position: 0=left, 1=center, 2=right relative to edge center
+		if length_inches < 3.0:
+			var sub_offset := (float(sub_position) - 1.0) * INCHES_TO_METERS
+			match edge_side:
+				0, 2:  # Horizontal edges
+					local_x += sub_offset
+				1, 3:  # Vertical edges
+					local_z += sub_offset
+
+		# Apply grid rotation
+		var rotated_x := local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
+		var rotated_z := local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
+
+		# Skip walls outside table boundaries
+		if not _is_position_within_table(rotated_x, rotated_z, t_size):
+			continue
+
+		# Place model — preserve Y from AABB correction in _get_wall_model()
+		model.position.x = rotated_x
+		model.position.z = rotated_z
+		model.rotation.y = wall_y_rotation - deg_to_rad(rotation)
+		add_child(model)
+		_wall_instances.append(model)
+
+	# Add corner pieces where perpendicular walls meet
+	_add_wall_corner_pieces(wall_segments, grid_dims, cell_size_meters, rotation_rad, rotation, t_size)
+
+
+## Add corner pieces at intersections where two perpendicular walls meet
+func _add_wall_corner_pieces(wall_segments: Array, grid_dims: Vector2i, cell_size_meters: float, rotation_rad: float, rotation: float, t_size: Vector2) -> void:
+	if not terrain_library or terrain_theme_key.is_empty():
+		return
+
+	var half_cell := cell_size_meters / 2.0
+	var corner_size := 0.25 * INCHES_TO_METERS  # 0.25" corner piece
+
+	# Build a dictionary of wall endpoints: corner_pos -> Array of wall_keys
+	# Each wall segment touches two corners of its edge
+	var corner_walls := {}  # Vector2i corner point -> Array[String] of adjacent wall keys
+
+	for segment in wall_segments:
+		var edge_cell: Vector2i = segment.get("edge_cell", Vector2i.ZERO)
+		var edge_side: int = segment.get("edge_side", 0)
+		var wall_key: String = segment.get("wall_key", "")
+
+		# Determine the two corner grid-points of this edge
+		# Corner coordinates are in grid-point space (not cell space)
+		var corner_a: Vector2i
+		var corner_b: Vector2i
+		match edge_side:
+			0:  # North edge: corners at (x,y) and (x+1,y)
+				corner_a = edge_cell
+				corner_b = Vector2i(edge_cell.x + 1, edge_cell.y)
+			1:  # East edge: corners at (x+1,y) and (x+1,y+1)
+				corner_a = Vector2i(edge_cell.x + 1, edge_cell.y)
+				corner_b = Vector2i(edge_cell.x + 1, edge_cell.y + 1)
+			2:  # South edge: corners at (x,y+1) and (x+1,y+1)
+				corner_a = Vector2i(edge_cell.x, edge_cell.y + 1)
+				corner_b = Vector2i(edge_cell.x + 1, edge_cell.y + 1)
+			3:  # West edge: corners at (x,y) and (x,y+1)
+				corner_a = edge_cell
+				corner_b = Vector2i(edge_cell.x, edge_cell.y + 1)
+
+		if not corner_walls.has(corner_a):
+			corner_walls[corner_a] = []
+		corner_walls[corner_a].append(wall_key)
+		if not corner_walls.has(corner_b):
+			corner_walls[corner_b] = []
+		corner_walls[corner_b].append(wall_key)
+
+	# Place corner pieces where 2+ walls share a corner point
+	for corner_point: Vector2i in corner_walls:
+		var keys: Array = corner_walls[corner_point]
+		if keys.size() < 2:
+			continue
+
+		# Corner position in local grid coordinates (grid points are at cell boundaries)
+		var local_x := (corner_point.x - grid_dims.x / 2.0) * cell_size_meters
+		var local_z := (corner_point.y - grid_dims.y / 2.0) * cell_size_meters
+
+		var rotated_x := local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
+		var rotated_z := local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
+
+		if not _is_position_within_table(rotated_x, rotated_z, t_size):
+			continue
+
+		# Get wall height from first wall key
+		var wall_height_inches := 3.0
+		var texture_path := ""
+		var theme_data = terrain_library.get_theme_data(terrain_theme_key)
+		if theme_data:
+			for wd in theme_data.walls:
+				if wd["key"] == keys[0]:
+					wall_height_inches = wd.get("height_inches", 3.0)
+					texture_path = wd.get("texture", "")
+					break
+
+		var target_height := wall_height_inches * INCHES_TO_METERS
+
+		# Create corner box
+		var root := Node3D.new()
+		var mesh_instance := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = Vector3(corner_size, target_height, corner_size)
+		mesh_instance.mesh = box
+		mesh_instance.position.y = target_height / 2.0 - Z_FIGHT_OFFSET
+
+		# Apply same texture as adjacent wall
+		if not texture_path.is_empty() and FileAccess.file_exists(texture_path):
+			var image := Image.load_from_file(texture_path)
+			if image:
+				var texture := ImageTexture.create_from_image(image)
+				var material := StandardMaterial3D.new()
+				material.albedo_texture = texture
+				material.cull_mode = BaseMaterial3D.CULL_DISABLED
+				mesh_instance.material_override = material
+
+		mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		root.add_child(mesh_instance)
+
+		root.position.x = rotated_x
+		root.position.z = rotated_z
+		add_child(root)
+		_wall_instances.append(root)
+
+
+## Get a wall model instance — dual path: textured BoxMesh or legacy GLB
+func _get_wall_model(wall_key: String) -> Node3D:
+	if not terrain_library or terrain_theme_key.is_empty():
+		return null
+
+	var theme_data = terrain_library.get_theme_data(terrain_theme_key)
+	if not theme_data:
+		return null
+
+	# Find wall definition
+	var wall_def: Dictionary = {}
+	for wd in theme_data.walls:
+		if wd["key"] == wall_key:
+			wall_def = wd
+			break
+
+	if wall_def.is_empty():
+		return null
+
+	var wall_length_inches: float = wall_def.get("length_inches", 3.0)
+	var wall_height_inches: float = wall_def.get("height_inches", 3.0)
+
+	# Path 1: Texture-based BoxMesh wall (seamless)
+	var texture_path: String = wall_def.get("texture", "")
+	if not texture_path.is_empty() and FileAccess.file_exists(texture_path):
+		return _create_textured_box_wall(texture_path, wall_length_inches, wall_height_inches)
+
+	# Path 2: Legacy GLB model
+	var wall_glb: String = wall_def.get("glb", "")
+	if wall_glb.is_empty() or not FileAccess.file_exists(wall_glb):
+		return null
+
+	return _create_glb_wall(wall_glb, wall_length_inches, wall_height_inches)
+
+
+## Create a textured BoxMesh wall with exact dimensions for seamless placement
+func _create_textured_box_wall(texture_path: String, length_inches: float, height_inches: float) -> Node3D:
+	var root := Node3D.new()
+
+	var target_length := length_inches * INCHES_TO_METERS
+	var target_height := height_inches * INCHES_TO_METERS
+	var wall_thickness := 0.25 * INCHES_TO_METERS  # 0.25" thick
+
+	var mesh_instance := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(target_length, target_height, wall_thickness)
+	mesh_instance.mesh = box
+
+	# Box center at half height so bottom sits on table (compensate TerrainOverlay Y offset)
+	mesh_instance.position.y = target_height / 2.0 - Z_FIGHT_OFFSET
+
+	# Load and apply texture
+	var image := Image.load_from_file(texture_path)
+	if image:
+		var texture := ImageTexture.create_from_image(image)
+		var material := StandardMaterial3D.new()
+		material.albedo_texture = texture
+		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mesh_instance.material_override = material
+
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	root.add_child(mesh_instance)
+	return root
+
+
+## Create a wall from GLB model, scaled to target size (legacy path)
+func _create_glb_wall(wall_glb: String, length_inches: float, height_inches: float) -> Node3D:
+	if not _wall_model_cache.has(wall_glb):
+		var loaded: Node3D = terrain_library._load_glb_model(wall_glb)
+		if not loaded:
+			return null
+		_wall_model_cache[wall_glb] = loaded
+
+	var cached: Node3D = _wall_model_cache[wall_glb]
+	var instance: Node3D = cached.duplicate()
+
+	# Scale wall to target size (length x height in inches)
+	var aabb: AABB = terrain_library._calculate_aabb(instance)
+	if aabb.size.length() > 0.001:
+		var target_length := length_inches * INCHES_TO_METERS
+		var target_height := height_inches * INCHES_TO_METERS
+		var scale_x := target_length / maxf(aabb.size.x, 0.001)
+		var scale_y := target_height / maxf(aabb.size.y, 0.001)
+		var uniform := minf(scale_x, scale_y)
+		instance.scale = Vector3(uniform, uniform, uniform)
+
+		# Lift model so bottom sits on table (compensate TerrainOverlay Y offset)
+		var scaled_min_y: float = aabb.position.y * uniform
+		instance.position.y = -scaled_min_y - Z_FIGHT_OFFSET
+
+	return instance
+
+
+## Clear all wall instances
+func _clear_wall_instances() -> void:
+	for instance in _wall_instances:
+		if is_instance_valid(instance):
+			instance.queue_free()
+	_wall_instances.clear()
+
+
+# ==============================================================================
+# PLACED OBJECTS: TREES + CONTAINERS (S9)
+# ==============================================================================
+
+## Update placed object instances (trees and containers)
+## @param objects: Array of Dictionaries {object_key, cell, offset, object_type}
+## @param t_size: Table size in feet
+## @param rotation: Grid rotation in degrees
+func update_placed_objects(objects: Array, t_size: Vector2, rotation: float) -> void:
+	_clear_placed_objects()
+
+	if objects.is_empty() or not terrain_library:
+		return
+
+	var cell_size_meters := GRID_SIZE_INCHES * INCHES_TO_METERS
+
+	# Compute grid dimensions
+	var width_inches := t_size.x * 12.0
+	var height_inches := t_size.y * 12.0
+	var diagonal := sqrt(width_inches * width_inches + height_inches * height_inches)
+	var grid_size := int(ceil(diagonal / GRID_SIZE_INCHES))
+	if grid_size % 2 != 0:
+		grid_size += 1
+	var grid_dims := Vector2i(grid_size, grid_size)
+
+	var rotation_rad := deg_to_rad(rotation)
+
+	for obj in objects:
+		var object_key: String = obj.get("object_key", "")
+		var cell: Vector2i = obj.get("cell", Vector2i.ZERO)
+		var offset: Vector2 = obj.get("offset", Vector2(0.5, 0.5))
+		var object_type: String = obj.get("object_type", "tree")
+
+		# Calculate world position
+		var local_x := (cell.x - grid_dims.x / 2.0 + offset.x) * cell_size_meters
+		var local_z := (cell.y - grid_dims.y / 2.0 + offset.y) * cell_size_meters
+
+		# Apply grid rotation
+		var rotated_x := local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
+		var rotated_z := local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
+
+		# Skip objects outside table boundaries
+		if not _is_position_within_table(rotated_x, rotated_z, t_size):
+			continue
+
+		# Load model
+		var model := _get_object_model(object_key, object_type)
+		if not model:
+			continue
+
+		# Preserve Y from AABB correction in _get_object_model()
+		model.position.x = rotated_x
+		model.position.z = rotated_z
+		# Random Y rotation for visual variety
+		model.rotation.y = randf() * TAU
+		add_child(model)
+		_object_instances.append(model)
+
+
+## Get a tree/container model instance, scaled to fit within one grid cell
+func _get_object_model(object_key: String, object_type: String) -> Node3D:
+	if not terrain_library or terrain_theme_key.is_empty():
+		return null
+
+	var theme_data = terrain_library.get_theme_data(terrain_theme_key)
+	if not theme_data:
+		return null
+
+	var glb_path := ""
+	var definitions: Array = []
+	if object_type == "tree":
+		definitions = theme_data.trees
+	elif object_type == "container":
+		definitions = theme_data.containers
+
+	for def_entry in definitions:
+		if def_entry["key"] == object_key:
+			glb_path = def_entry["glb"]
+			break
+
+	if glb_path.is_empty() or not FileAccess.file_exists(glb_path):
+		return null
+
+	# Use wall model cache (shared cache for all GLBs)
+	if not _wall_model_cache.has(glb_path):
+		var loaded: Node3D = terrain_library._load_glb_model(glb_path)
+		if not loaded:
+			return null
+		_wall_model_cache[glb_path] = loaded
+
+	var cached: Node3D = _wall_model_cache[glb_path]
+	var instance: Node3D = cached.duplicate()
+
+	# Scale object to fit target dimensions
+	var aabb: AABB = terrain_library._calculate_aabb(instance)
+	if aabb.size.length() > 0.001:
+		if object_type == "container":
+			# Containers: 3"x6"x3" (1x2 tiles)
+			var target_x := GRID_SIZE_INCHES * INCHES_TO_METERS          # 3"
+			var target_z := GRID_SIZE_INCHES * 2.0 * INCHES_TO_METERS    # 6"
+			var target_y := GRID_SIZE_INCHES * INCHES_TO_METERS           # 3"
+			instance.scale = Vector3(
+				target_x / maxf(aabb.size.x, 0.001),
+				target_y / maxf(aabb.size.y, 0.001),
+				target_z / maxf(aabb.size.z, 0.001),
+			)
+			var scaled_min_y: float = aabb.position.y * instance.scale.y
+			instance.position.y = -scaled_min_y - Z_FIGHT_OFFSET
+		else:
+			# Trees: fit within cell footprint with variable size (60-90%)
+			var cell_meters := GRID_SIZE_INCHES * INCHES_TO_METERS
+			var scale_x := cell_meters / maxf(aabb.size.x, 0.001)
+			var scale_z := cell_meters / maxf(aabb.size.z, 0.001)
+			var uniform := minf(scale_x, scale_z) * randf_range(0.6, 0.9)
+			instance.scale = Vector3(uniform, uniform, uniform)
+			var scaled_min_y: float = aabb.position.y * uniform
+			instance.position.y = -scaled_min_y - Z_FIGHT_OFFSET
+
+	return instance
+
+
+## Clear all placed object instances
+func _clear_placed_objects() -> void:
+	for instance in _object_instances:
+		if is_instance_valid(instance):
+			instance.queue_free()
+	_object_instances.clear()
+
+
+## Check if a world-space position is within the table boundaries
+func _is_position_within_table(world_x: float, world_z: float, t_size: Vector2) -> bool:
+	var table_width_m := t_size.x * 12.0 * INCHES_TO_METERS
+	var table_depth_m := t_size.y * 12.0 * INCHES_TO_METERS
+	return abs(world_x) <= table_width_m / 2.0 and abs(world_z) <= table_depth_m / 2.0

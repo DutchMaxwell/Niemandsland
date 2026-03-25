@@ -115,6 +115,8 @@ class PipelineSession:
         self._created_at: str = ""
         self._units: dict[str, UnitState] = {}
         self.general_prompt: str = ""
+        self._terrain_mode: bool = False
+        self._terrain_theme_key: str = ""
 
     # =========================================================================
     # PROPERTIES
@@ -140,6 +142,16 @@ class PipelineSession:
         """Erstellungszeitpunkt der Session (ISO-Format)."""
         return self._created_at
 
+    @property
+    def terrain_mode(self) -> bool:
+        """True wenn Session fuer Terrain-Generierung genutzt wird."""
+        return self._terrain_mode
+
+    @property
+    def terrain_theme_key(self) -> str:
+        """Theme-Key bei Terrain-Sessions (leer bei Armee-Sessions)."""
+        return self._terrain_theme_key
+
     # =========================================================================
     # FACTORY METHODS
     # =========================================================================
@@ -150,6 +162,8 @@ class PipelineSession:
         base_dir: Path,
         army_name: str,
         faction_folder: str,
+        terrain_mode: bool = False,
+        terrain_theme_key: str = "",
     ) -> PipelineSession:
         """
         Erstellt eine neue Pipeline-Session.
@@ -161,6 +175,8 @@ class PipelineSession:
             base_dir: Basisverzeichnis fuer Sessions (z.B. state/)
             army_name: Name der Armee
             faction_folder: Normalisierter Ordnername der Fraktion
+            terrain_mode: True fuer Terrain-Generierung statt Armee
+            terrain_theme_key: Theme-Key bei Terrain-Sessions
 
         Returns:
             Neue PipelineSession-Instanz
@@ -178,6 +194,8 @@ class PipelineSession:
         session._army_name = army_name
         session._faction_folder = faction_folder
         session._created_at = datetime.now(timezone.utc).isoformat()
+        session._terrain_mode = terrain_mode
+        session._terrain_theme_key = terrain_theme_key
         session.save()
 
         return session
@@ -362,6 +380,8 @@ class PipelineSession:
         self._created_at = data.get("created_at", "")
         self._session_id = data.get("session_id", self._session_dir.name)
         self.general_prompt = data.get("general_prompt", "")
+        self._terrain_mode = data.get("terrain_mode", False)
+        self._terrain_theme_key = data.get("terrain_theme_key", "")
 
         self._units.clear()
         for unit_data in data.get("units", []):
@@ -374,14 +394,17 @@ class PipelineSession:
 
     def to_dict(self) -> dict:
         """Serialisiert die Session in ein Dictionary."""
-        return {
+        data: dict = {
             "session_id": self._session_id,
             "army_name": self._army_name,
             "faction_folder": self._faction_folder,
             "created_at": self._created_at,
             "general_prompt": self.general_prompt,
+            "terrain_mode": self._terrain_mode,
+            "terrain_theme_key": self._terrain_theme_key,
             "units": [unit.to_dict() for unit in self._units.values()],
         }
+        return data
 
     @classmethod
     def from_dict(cls, data: dict, session_dir: Path) -> PipelineSession:
@@ -401,6 +424,8 @@ class PipelineSession:
         session._faction_folder = data.get("faction_folder", "")
         session._created_at = data.get("created_at", "")
         session.general_prompt = data.get("general_prompt", "")
+        session._terrain_mode = data.get("terrain_mode", False)
+        session._terrain_theme_key = data.get("terrain_theme_key", "")
 
         for unit_data in data.get("units", []):
             unit_state = UnitState.from_dict(unit_data)

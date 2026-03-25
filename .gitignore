@@ -52,7 +52,14 @@ Models/
 
 # Python
 .venv/
+venv/
 __pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Fly.io (only relay/fly.toml is canonical)
+/fly.toml
 
 # Auto Claude data directory
 .auto-claude/

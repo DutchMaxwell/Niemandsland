@@ -64,8 +64,8 @@ const PRESETS = {
 		"shadow_size": 4096,
 		"shadow_filter": 3,
 		"ssao": true,
-		"ssao_radius": 1.0,  # Reduced from 2.0 - more appropriate for tabletop scale
-		"ssao_intensity": 1.0,
+		"ssao_radius": 0.8,
+		"ssao_intensity": 0.4,
 		"ssil": false,
 		"ssr": false,  # Disabled - expensive and not critical for tabletop
 		"sdfgi": false,
@@ -83,8 +83,8 @@ const PRESETS = {
 		"shadow_size": 4096,  # Reduced from 8192
 		"shadow_filter": 4,
 		"ssao": true,
-		"ssao_radius": 1.2,
-		"ssao_intensity": 1.2,
+		"ssao_radius": 1.0,
+		"ssao_intensity": 0.5,
 		"ssil": false,  # Disabled - very expensive
 		"ssr": true,
 		"sdfgi": false,  # Disabled - extremely expensive
@@ -103,8 +103,8 @@ const PRESETS = {
 		"shadow_size": 8192,
 		"shadow_filter": 5,
 		"ssao": true,
-		"ssao_radius": 1.5,  # Reduced from 2.5 - more appropriate
-		"ssao_intensity": 1.5,
+		"ssao_radius": 1.2,
+		"ssao_intensity": 0.6,
 		"ssil": true,
 		"ssr": true,
 		"sdfgi": false,  # Disabled by default - too expensive for most setups

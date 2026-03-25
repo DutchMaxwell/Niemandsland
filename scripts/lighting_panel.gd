@@ -1,6 +1,6 @@
 extends Window
-## Lighting Control Panel
-## Interactive UI with sliders for all lighting parameters
+## Settings Panel — Lighting & Audio controls
+## Interactive UI with sliders for all lighting and volume parameters
 
 var lighting_controller: Node
 
@@ -8,6 +8,7 @@ var lighting_controller: Node
 var sliders: Dictionary = {}
 var color_pickers: Dictionary = {}
 var preset_buttons: Array = []
+var volume_sliders: Dictionary = {}
 
 # Parameters to control
 const PARAMS = {
@@ -39,8 +40,8 @@ func _build_ui() -> void:
 	# Apply UI theme
 	var ui_theme = ThemeManager.get_current_theme()
 
-	title = "Lighting Settings"
-	size = Vector2i(500, 800)
+	title = "Settings"
+	size = Vector2i(500, 900)
 	position = Vector2i(50, 50)
 
 	# Main container
@@ -119,6 +120,25 @@ func _build_ui() -> void:
 	close_btn.pressed.connect(func(): hide())
 	action_hbox.add_child(close_btn)
 
+	# === Audio Volume Section ===
+	vbox.add_child(HSeparator.new())
+
+	var audio_label = Label.new()
+	audio_label.text = "AUDIO:"
+	audio_label.add_theme_font_size_override("font_size", 16)
+	vbox.add_child(audio_label)
+
+	var audio_buses = {
+		AudioManager.BUS_MASTER: "Master Volume",
+		AudioManager.BUS_MUSIC: "Music Volume",
+		AudioManager.BUS_SFX: "SFX Volume",
+		AudioManager.BUS_AMBIENCE: "Ambience Volume",
+	}
+
+	for bus_name: String in audio_buses:
+		var bus_label_text: String = audio_buses[bus_name]
+		_add_volume_slider(vbox, bus_name, bus_label_text)
+
 
 func _add_slider(parent: Control, key: String, data: Dictionary) -> void:
 	var container = VBoxContainer.new()
@@ -167,6 +187,41 @@ func _add_color_picker(parent: Control, key: String, label_text: String) -> void
 	hbox.add_child(picker)
 
 	color_pickers[key] = picker
+
+
+func _add_volume_slider(parent: Control, bus_name: String, label_text: String) -> void:
+	var container = VBoxContainer.new()
+	parent.add_child(container)
+
+	var label_hbox = HBoxContainer.new()
+	container.add_child(label_hbox)
+
+	var label = Label.new()
+	label.text = label_text
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label_hbox.add_child(label)
+
+	var value_label = Label.new()
+	value_label.text = "0 dB"
+	value_label.custom_minimum_size = Vector2(60, 0)
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	label_hbox.add_child(value_label)
+
+	var slider = HSlider.new()
+	slider.min_value = -40.0
+	slider.max_value = 6.0
+	slider.step = 1.0
+	slider.value = AudioManager.get_bus_volume(bus_name)
+	value_label.text = "%d dB" % int(slider.value)
+	slider.value_changed.connect(_on_volume_slider_changed.bind(bus_name, value_label))
+	container.add_child(slider)
+
+	volume_sliders[bus_name] = slider
+
+
+func _on_volume_slider_changed(value: float, bus_name: String, value_label: Label) -> void:
+	value_label.text = "%d dB" % int(value)
+	AudioManager.set_bus_volume(bus_name, value)
 
 
 func _on_slider_changed(value: float, key: String, value_label: Label) -> void:

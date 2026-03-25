@@ -4,6 +4,7 @@ extends Node
 
 # References to scene nodes
 var _directional_light: DirectionalLight3D
+var _fill_light: DirectionalLight3D
 var _world_environment: WorldEnvironment
 var _environment: Environment
 
@@ -18,14 +19,16 @@ const PRESETS = {
 		"sun_color": Color(1.0, 0.8, 0.6),
 		"sun_angle_h": 84.0,  # Horizontal angle (degrees)
 		"sun_angle_v": 43.0,   # Vertical angle (degrees)
-		"ambient_energy": 0.6,
-		"ambient_color": Color(0.9, 0.7, 0.5),
+		"ambient_energy": 0.7,
+		"ambient_color": Color(0.85, 0.82, 0.78),
 		"exposure": 1.3,
 		"shadow_opacity": 0.85,
 		"shadow_blur": 1.5,
 		"shadow_bias": 0.03,  # Balanced to prevent acne and detachment
 		"shadow_normal_bias": 1.0,  # Higher prevents shadow detachment on slopes
-		"ssao_intensity": 0.9,
+		"ssao_intensity": 0.3,
+		"fill_light_energy": 0.3,
+		"fill_light_color": Color(0.7, 0.8, 1.0),
 		"ssr_intensity": 0.2,
 		"glow_intensity": 1.2,
 		"contrast": 1.15,
@@ -37,12 +40,14 @@ const PRESETS = {
 		"sun_color": Color(1.0, 0.8, 0.6),
 		"sun_angle_h": -45.0,
 		"sun_angle_v": 25.0,
-		"ambient_energy": 0.6,
-		"ambient_color": Color(0.9, 0.7, 0.5),
+		"ambient_energy": 0.7,
+		"ambient_color": Color(0.85, 0.82, 0.78),
 		"exposure": 1.3,
 		"shadow_opacity": 0.7,
 		"shadow_blur": 3.0,
-		"ssao_intensity": 2.0,
+		"ssao_intensity": 0.4,
+		"fill_light_energy": 0.3,
+		"fill_light_color": Color(0.7, 0.75, 0.9),
 		"ssr_intensity": 0.8,
 		"glow_intensity": 1.2,
 		"contrast": 1.15,
@@ -59,7 +64,9 @@ const PRESETS = {
 		"exposure": 1.4,
 		"shadow_opacity": 0.6,
 		"shadow_blur": 1.0,
-		"ssao_intensity": 1.0,
+		"ssao_intensity": 0.3,
+		"fill_light_energy": 0.25,
+		"fill_light_color": Color(0.8, 0.85, 1.0),
 		"ssr_intensity": 0.6,
 		"glow_intensity": 0.5,
 		"contrast": 1.0,
@@ -76,7 +83,9 @@ const PRESETS = {
 		"exposure": 1.1,
 		"shadow_opacity": 0.95,
 		"shadow_blur": 1.5,
-		"ssao_intensity": 2.5,
+		"ssao_intensity": 0.6,
+		"fill_light_energy": 0.15,
+		"fill_light_color": Color(0.6, 0.65, 0.8),
 		"ssr_intensity": 1.2,
 		"glow_intensity": 0.6,
 		"contrast": 1.25,
@@ -93,7 +102,9 @@ const PRESETS = {
 		"exposure": 1.0,
 		"shadow_opacity": 0.5,
 		"shadow_blur": 4.0,
-		"ssao_intensity": 1.8,
+		"ssao_intensity": 0.4,
+		"fill_light_energy": 0.25,
+		"fill_light_color": Color(0.75, 0.8, 0.95),
 		"ssr_intensity": 0.9,
 		"glow_intensity": 0.4,
 		"contrast": 1.05,
@@ -108,16 +119,11 @@ func _ready() -> void:
 
 
 ## Initialize with scene references
-func initialize(directional_light: DirectionalLight3D, world_env: WorldEnvironment) -> void:
+func initialize(directional_light: DirectionalLight3D, world_env: WorldEnvironment, fill_light: DirectionalLight3D = null) -> void:
 	_directional_light = directional_light
+	_fill_light = fill_light
 	_world_environment = world_env
 	_environment = world_env.environment
-
-	print("=== LIGHTING DEBUG ===")
-	print("DirectionalLight ref: ", _directional_light)
-	print("Environment ref: ", _environment)
-	print("BEFORE apply_preset - light_energy: ", _directional_light.light_energy if _directional_light else "NULL")
-	print("BEFORE apply_preset - shadow_blur: ", _directional_light.shadow_blur if _directional_light else "NULL")
 
 	# Load default preset - use call_deferred to ensure it happens after scene is fully loaded
 	call_deferred("apply_preset", "Default")
@@ -155,6 +161,10 @@ func apply_preset(preset_name: String) -> void:
 		set_shadow_normal_bias(preset.shadow_normal_bias)
 
 	set_ssao_intensity(preset.ssao_intensity)
+	if preset.has("fill_light_energy"):
+		set_fill_light_energy(preset.fill_light_energy)
+	if preset.has("fill_light_color"):
+		set_fill_light_color(preset.fill_light_color)
 	set_ssr_intensity(preset.ssr_intensity)
 	set_glow_intensity(preset.glow_intensity)
 	set_contrast(preset.contrast)
@@ -240,6 +250,18 @@ func set_shadow_normal_bias(value: float) -> void:
 	if _directional_light:
 		_directional_light.shadow_normal_bias = value  # Correct property name in Godot 4
 		current_preset.shadow_normal_bias = value
+
+
+func set_fill_light_energy(value: float) -> void:
+	if _fill_light:
+		_fill_light.light_energy = value
+		current_preset.fill_light_energy = value
+
+
+func set_fill_light_color(color: Color) -> void:
+	if _fill_light:
+		_fill_light.light_color = color
+		current_preset.fill_light_color = color
 
 
 func set_ssao_intensity(value: float) -> void:

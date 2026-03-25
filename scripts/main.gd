@@ -46,6 +46,7 @@ const DEBUG_MODE: bool = false
 @onready var table: StaticBody3D = $Table
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var directional_light: DirectionalLight3D = $DirectionalLight3D
+@onready var fill_light: DirectionalLight3D = $FillLight
 @onready var world_environment: WorldEnvironment = $WorldEnvironment
 
 # Tron Intro
@@ -311,7 +312,7 @@ func _ready() -> void:
 	lighting_controller = Node.new()
 	lighting_controller.set_script(load("res://scripts/lighting_controller.gd"))
 	add_child(lighting_controller)
-	lighting_controller.initialize(directional_light, world_environment)
+	lighting_controller.initialize(directional_light, world_environment, fill_light)
 
 	# Initialize Lighting Panel UI
 	lighting_panel = Window.new()
@@ -374,6 +375,7 @@ func _ready() -> void:
 	map_layout_editor.layout_updated.connect(_on_map_layout_updated)
 	map_layout_editor.deployment_type_changed.connect(_on_deployment_type_changed)
 	map_layout_editor.objectives_changed.connect(_on_objectives_changed)
+	map_layout_editor.terrain_theme_changed.connect(_on_terrain_theme_changed)
 	map_layout_btn.pressed.connect(_on_map_layout_pressed)
 
 	# Initialize Terrain Overlay (on the 3D table)
@@ -387,6 +389,9 @@ func _ready() -> void:
 
 	# Give object_manager reference to terrain_overlay for terrain hints
 	object_manager.terrain_overlay = terrain_overlay
+
+	# Give terrain_overlay reference to terrain_library for GLB loading
+	terrain_overlay.terrain_library = terrain_library
 
 	# Connect object_manager signals for deployment checking
 	object_manager.drag_ended.connect(_on_unit_moved)
@@ -798,11 +803,13 @@ func _on_quick_roll_button_pressed() -> void:
 func _on_roller_started() -> void:
 	roll_button.text = "Rolling..."
 	roll_button.disabled = true
+	AudioManager.play_sfx(AudioManager.SFXType.DICE_ROLL)
 
 
 func _on_roller_finished(result: int) -> void:
 	roll_button.text = "Roll"
 	roll_button.disabled = false
+	AudioManager.play_sfx(AudioManager.SFXType.DICE_IMPACT)
 
 	# Skip broadcast when showing a remote player's roll (prevents ping-pong loop)
 	if _is_showing_remote_roll:
@@ -953,6 +960,10 @@ func _set_table_size(size_feet: Vector2) -> void:
 		# Clear all overlays since table size changed
 		if terrain_overlay.has_method("update_overlay"):
 			terrain_overlay.update_overlay({}, size_feet, 0.0)
+		if terrain_overlay.has_method("update_wall_models"):
+			terrain_overlay.update_wall_models([], size_feet, 0.0)
+		if terrain_overlay.has_method("update_placed_objects"):
+			terrain_overlay.update_placed_objects([], size_feet, 0.0)
 		if terrain_overlay.has_method("update_objectives"):
 			terrain_overlay.update_objectives([])
 		if terrain_overlay.has_method("set_deployment_zones"):
@@ -1273,7 +1284,40 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 		if map_layout_editor:
 			map_layout_editor.grid_cells = grid_cells
 			map_layout_editor.grid_rotation_degrees = rot
-		print("[Settings] Terrain layout received: %d cells" % grid_cells.size())
+
+		# Deserialize and apply wall segments
+		var wall_segments: Array[Dictionary] = []
+		for w in layout.get("wall_segments", []):
+			if w is Dictionary:
+				wall_segments.append({
+					"edge_cell": Vector2i(int(w.get("edge_cell_x", 0)), int(w.get("edge_cell_y", 0))),
+					"edge_side": int(w.get("edge_side", 0)),
+					"wall_key": str(w.get("wall_key", "")),
+					"length_inches": float(w.get("length_inches", 3.0)),
+					"sub_position": int(w.get("sub_position", 0)),
+				})
+		if map_layout_editor:
+			map_layout_editor.wall_segments = wall_segments
+		if terrain_overlay and terrain_overlay.has_method("update_wall_models"):
+			terrain_overlay.update_wall_models(wall_segments, table_sz, rot)
+
+		# Deserialize and apply placed objects
+		var placed_objects: Array[Dictionary] = []
+		for o in layout.get("placed_objects", []):
+			if o is Dictionary:
+				placed_objects.append({
+					"object_key": str(o.get("object_key", "")),
+					"cell": Vector2i(int(o.get("cell_x", 0)), int(o.get("cell_y", 0))),
+					"offset": Vector2(float(o.get("offset_x", 0.5)), float(o.get("offset_y", 0.5))),
+					"object_type": str(o.get("object_type", "tree")),
+				})
+		if map_layout_editor:
+			map_layout_editor.placed_objects = placed_objects
+		if terrain_overlay and terrain_overlay.has_method("update_placed_objects"):
+			terrain_overlay.update_placed_objects(placed_objects, table_sz, rot)
+
+		print("[Settings] Terrain layout received: %d cells, %d walls, %d objects" % [
+			grid_cells.size(), wall_segments.size(), placed_objects.size()])
 
 
 ## Update network UI visibility based on connection state
@@ -1912,6 +1956,29 @@ func _on_graphics_quality_changed(index: int) -> void:
 func _on_map_layout_pressed() -> void:
 	if map_layout_editor:
 		map_layout_editor.set_table_size(table.table_size)
+
+		# Populate available terrain themes from terrain_library
+		if terrain_library:
+			var theme_keys: Array[String] = terrain_library.get_generated_themes()
+			var theme_names: Array[String] = []
+			for key: String in theme_keys:
+				var data = terrain_library.get_theme_data(key)
+				if data:
+					theme_names.append(data.theme_name)
+				else:
+					theme_names.append(key)
+			map_layout_editor.set_available_themes(theme_keys, theme_names)
+
+		# If a theme is already active, load its definitions
+		if terrain_library and terrain_overlay:
+			var theme_key: String = ""
+			if terrain_overlay.has_method("get_terrain_theme"):
+				theme_key = terrain_overlay.get_terrain_theme()
+			if not theme_key.is_empty() and terrain_library.has_method("get_wall_definitions"):
+				map_layout_editor.set_wall_definitions(terrain_library.get_wall_definitions(theme_key))
+				map_layout_editor.set_tree_definitions(terrain_library.get_tree_definitions(theme_key))
+				map_layout_editor.set_container_definitions(terrain_library.get_container_definitions(theme_key))
+
 		map_layout_editor.visible = true
 		$UI/HUD.visible = false  # Hide main HUD while in layout mode
 		# Disable object selection while in map layout mode
@@ -1939,11 +2006,70 @@ func _on_map_layout_closed() -> void:
 		var cells_serialized = {}
 		for cell_pos in map_layout_editor.grid_cells:
 			cells_serialized["%d,%d" % [cell_pos.x, cell_pos.y]] = map_layout_editor.grid_cells[cell_pos]
+
+		# Serialize wall segments for network
+		var walls_serialized = []
+		for wall in map_layout_editor.wall_segments:
+			walls_serialized.append({
+				"edge_cell_x": wall.get("edge_cell", Vector2i.ZERO).x,
+				"edge_cell_y": wall.get("edge_cell", Vector2i.ZERO).y,
+				"edge_side": wall.get("edge_side", 0),
+				"wall_key": wall.get("wall_key", ""),
+				"length_inches": wall.get("length_inches", 3.0),
+				"sub_position": wall.get("sub_position", 0),
+			})
+
+		# Serialize placed objects for network
+		var objects_serialized = []
+		for obj in map_layout_editor.placed_objects:
+			objects_serialized.append({
+				"object_key": obj.get("object_key", ""),
+				"cell_x": obj.get("cell", Vector2i.ZERO).x,
+				"cell_y": obj.get("cell", Vector2i.ZERO).y,
+				"offset_x": obj.get("offset", Vector2(0.5, 0.5)).x,
+				"offset_y": obj.get("offset", Vector2(0.5, 0.5)).y,
+				"object_type": obj.get("object_type", "tree"),
+			})
+
 		_broadcast_table_settings_update("terrain_layout", {
 			"grid_cells": cells_serialized,
 			"table_size": [map_layout_editor.table_size_feet.x, map_layout_editor.table_size_feet.y],
-			"grid_rotation": map_layout_editor.grid_rotation_degrees
+			"grid_rotation": map_layout_editor.grid_rotation_degrees,
+			"wall_segments": walls_serialized,
+			"placed_objects": objects_serialized,
 		})
+
+
+## Handle terrain theme change from Map Layout Editor
+func _on_terrain_theme_changed(theme_key: String) -> void:
+	if not terrain_library:
+		return
+
+	if theme_key.is_empty():
+		# Clear theme
+		if terrain_overlay:
+			terrain_overlay.clear_battle_map()
+			terrain_overlay.load_base_plate_textures("")
+			terrain_overlay.set_terrain_theme("")
+		if map_layout_editor:
+			map_layout_editor.set_wall_definitions([] as Array[Dictionary])
+			map_layout_editor.set_tree_definitions([] as Array[Dictionary])
+			map_layout_editor.set_container_definitions([] as Array[Dictionary])
+		print("Terrain theme cleared")
+		return
+
+	# Load theme definitions into map_layout_editor
+	if map_layout_editor:
+		map_layout_editor.set_wall_definitions(terrain_library.get_wall_definitions(theme_key))
+		map_layout_editor.set_tree_definitions(terrain_library.get_tree_definitions(theme_key))
+		map_layout_editor.set_container_definitions(terrain_library.get_container_definitions(theme_key))
+
+	# Activate battle map and base plate textures in 3D view
+	if terrain_overlay:
+		terrain_overlay.set_battle_map(theme_key)
+		terrain_overlay.load_base_plate_textures(theme_key)
+
+	print("Terrain theme changed to: %s" % theme_key)
 
 
 ## Handle deployment type change from Map Tool
@@ -1994,7 +2120,8 @@ func _on_objectives_changed(objectives: Array) -> void:
 
 
 ## Update terrain overlay when map layout changes
-func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2, grid_rotation: float) -> void:
+func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2,
+		grid_rotation: float, wall_segments: Array, placed_objects: Array) -> void:
 	# This may be called during initialization before terrain_overlay exists
 	if not terrain_overlay:
 		return  # Silently ignore - will be updated when user closes map layout
@@ -2004,6 +2131,14 @@ func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2, grid_ro
 		return
 
 	terrain_overlay.update_overlay(grid_cells, table_size, grid_rotation)
+
+	# Update wall models in 3D
+	if terrain_overlay.has_method("update_wall_models"):
+		terrain_overlay.update_wall_models(wall_segments, table_size, grid_rotation)
+
+	# Update placed objects (trees, containers) in 3D
+	if terrain_overlay.has_method("update_placed_objects"):
+		terrain_overlay.update_placed_objects(placed_objects, table_size, grid_rotation)
 
 
 ## ============================================================================

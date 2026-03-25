@@ -205,6 +205,14 @@ func _draw() -> void:
 		if clipped:
 			draw_line(clipped[0], clipped[1], line_color, 1.0)
 
+	# Draw wall segments on cell edges
+	if map_layout.wall_segments.size() > 0:
+		_draw_wall_segments(grid_rect, cell_size, grid_dims)
+
+	# Draw placed objects markers (trees, containers)
+	if map_layout.placed_objects.size() > 0:
+		_draw_placed_objects(grid_rect, cell_size, grid_dims)
+
 	# Draw deployment zones (if enabled)
 	if map_layout.show_deployment_zones:
 		_draw_deployment_zones(grid_rect)
@@ -805,3 +813,126 @@ func _draw_circle_ring(pos: Vector2, radius: float, fill_color: Color, border_co
 	draw_circle(pos, radius, fill_color)
 	# Draw border as arc (full circle)
 	draw_arc(pos, radius, 0, TAU, 64, border_color, border_width)
+
+
+# ==============================================================================
+# WAND-SEGMENT-RENDERING
+# ==============================================================================
+
+func _draw_wall_segments(grid_rect: Rect2, cell_size: Vector2, grid_dims: Vector2i) -> void:
+	## Draw placed wall segments as thick colored lines on cell edges
+	if not map_layout:
+		return
+
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
+	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
+
+	var wall_color = Color(0.9, 0.6, 0.2, 0.9)  # Orange for walls
+	var wall_outline = Color(0.3, 0.2, 0.05, 0.8)
+	var zoom = map_layout.zoom_level if map_layout else 1.0
+	var wall_width = 4.0 * zoom
+
+	var rotate_point = func(p: Vector2) -> Vector2:
+		var cos_a = cos(angle_rad)
+		var sin_a = sin(angle_rad)
+		return Vector2(
+			p.x * cos_a - p.y * sin_a,
+			p.x * sin_a + p.y * cos_a
+		) + center
+
+	for wall in map_layout.wall_segments:
+		var cell: Vector2i = wall.get("edge_cell", Vector2i.ZERO)
+		var side: int = wall.get("edge_side", 0)
+
+		# Calculate edge start/end in local space (relative to grid center)
+		var edge_points = _get_edge_local_points(cell, side, cell_size, half_grid_cells)
+		if edge_points.is_empty():
+			continue
+
+		var start = rotate_point.call(edge_points[0])
+		var end_pt = rotate_point.call(edge_points[1])
+
+		# Draw outline first (slightly wider)
+		draw_line(start, end_pt, wall_outline, wall_width + 2.0)
+		# Draw wall line on top
+		draw_line(start, end_pt, wall_color, wall_width)
+
+		# Draw small perpendicular ticks at each end to indicate wall height
+		var dir = (end_pt - start).normalized()
+		var perp = Vector2(-dir.y, dir.x) * 6.0 * zoom
+		draw_line(start - perp, start + perp, wall_color, 1.5)
+		draw_line(end_pt - perp, end_pt + perp, wall_color, 1.5)
+
+
+func _get_edge_local_points(cell: Vector2i, side: int, cell_size: Vector2, half_grid_cells: Vector2) -> Array:
+	## Calculate edge start/end points in local (unrotated) space
+	## side: 0=North, 1=East, 2=South, 3=West
+	var cx = (cell.x - half_grid_cells.x + 0.5) * cell_size.x
+	var cy = (cell.y - half_grid_cells.y + 0.5) * cell_size.y
+	var hx = cell_size.x / 2.0
+	var hy = cell_size.y / 2.0
+
+	match side:
+		0:  # North edge
+			return [Vector2(cx - hx, cy - hy), Vector2(cx + hx, cy - hy)]
+		1:  # East edge
+			return [Vector2(cx + hx, cy - hy), Vector2(cx + hx, cy + hy)]
+		2:  # South edge
+			return [Vector2(cx - hx, cy + hy), Vector2(cx + hx, cy + hy)]
+		3:  # West edge
+			return [Vector2(cx - hx, cy - hy), Vector2(cx - hx, cy + hy)]
+
+	return []
+
+
+# ==============================================================================
+# PLATZIERTE OBJEKTE RENDERING
+# ==============================================================================
+
+func _draw_placed_objects(grid_rect: Rect2, cell_size: Vector2, grid_dims: Vector2i) -> void:
+	## Draw markers for auto-placed trees and containers on the 2D grid
+	if not map_layout:
+		return
+
+	var center = grid_rect.position + grid_rect.size / 2.0
+	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
+	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
+	var zoom = map_layout.zoom_level if map_layout else 1.0
+
+	var tree_color = Color(0.1, 0.7, 0.1, 0.8)
+	var container_color = Color(0.7, 0.4, 0.1, 0.8)
+	var marker_size = 4.0 * zoom
+
+	var rotate_point = func(p: Vector2) -> Vector2:
+		var cos_a = cos(angle_rad)
+		var sin_a = sin(angle_rad)
+		return Vector2(
+			p.x * cos_a - p.y * sin_a,
+			p.x * sin_a + p.y * cos_a
+		) + center
+
+	for obj in map_layout.placed_objects:
+		var cell: Vector2i = obj.get("cell", Vector2i.ZERO)
+		var offset: Vector2 = obj.get("offset", Vector2(0.5, 0.5))
+		var obj_type: String = obj.get("object_type", "tree")
+
+		# Calculate position within cell (offset 0-1 maps to cell area)
+		var local_x = (cell.x - half_grid_cells.x + offset.x) * cell_size.x
+		var local_y = (cell.y - half_grid_cells.y + offset.y) * cell_size.y
+		var screen_pos = rotate_point.call(Vector2(local_x, local_y))
+
+		var color = tree_color if obj_type == "tree" else container_color
+
+		if obj_type == "tree":
+			# Draw tree as small filled circle with cross
+			draw_circle(screen_pos, marker_size, color)
+			var cross_len = marker_size * 0.7
+			draw_line(screen_pos - Vector2(cross_len, 0), screen_pos + Vector2(cross_len, 0), Color.WHITE, 1.0)
+			draw_line(screen_pos - Vector2(0, cross_len), screen_pos + Vector2(0, cross_len), Color.WHITE, 1.0)
+		else:
+			# Draw container as small filled square
+			var half = marker_size * 0.8
+			var rect = Rect2(screen_pos - Vector2(half, half), Vector2(half * 2, half * 2))
+			draw_rect(rect, color, true)
+			draw_rect(rect, Color.WHITE, false, 1.0)
