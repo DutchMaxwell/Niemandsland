@@ -177,6 +177,11 @@ func _on_fetch_from_link() -> void:
 		link_status_label.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5))
 		_update_preview()
 		import_btn.disabled = false
+	elif _preview_army and _preview_army.units.size() == 0:
+		link_status_label.text = "Leer"
+		link_status_label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.3))
+		army_preview.text = "[color=yellow]Die Armeeliste ist leer.[/color]\n\nDiese Liste enthält keine Einheiten. Füge zuerst Units in Army Forge hinzu."
+		import_btn.disabled = true
 	else:
 		link_status_label.text = "Fehler"
 		link_status_label.add_theme_color_override("font_color", Color(0.8, 0.5, 0.5))

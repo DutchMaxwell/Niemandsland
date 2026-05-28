@@ -11,8 +11,12 @@ const COLOR_WARNING := Color(0.9, 0.9, 0.2, 0.8)   # Yellow
 const COLOR_ERROR := Color(0.9, 0.2, 0.2, 0.8)     # Red
 const COLOR_CHAIN := Color(0.2, 0.5, 0.9, 0.5)     # Blue (max chain)
 
-## Line height above ground
-const LINE_HEIGHT := 0.03
+## Table-surface heights (kept flat on the table, like the measurement tool).
+const LINE_Y := 0.005   # Flat line just above the table
+const EDGE_Y := 0.02    # Base-edge endpoints / labels above the table
+
+## Visual line thickness (flat strip on the XZ plane).
+const LINE_WIDTH := 0.004
 
 ## Animation duration
 const FADE_DURATION := 0.3
@@ -21,6 +25,7 @@ const PULSE_DURATION := 1.0
 ## Current visualization elements
 var _lines: Array[MeshInstance3D] = []
 var _highlights: Array[Node3D] = []
+var _labels: Array[Label3D] = []
 var _current_unit: GameUnit = null
 var _tween: Tween = null
 
@@ -37,7 +42,9 @@ func _ready() -> void:
 
 
 ## Shows coherency visualization for a unit.
-func show_coherency(game_unit: GameUnit, is_skirmish: bool = false) -> CoherencyChecker.CoherencyResult:
+## animate: fade/pulse in (for one-off checks). Set false for live updates while
+## dragging - re-running the fade every frame makes the lines flicker badly.
+func show_coherency(game_unit: GameUnit, is_skirmish: bool = false, animate: bool = true) -> CoherencyChecker.CoherencyResult:
 	_clear_visualization()
 	_current_unit = game_unit
 
@@ -51,19 +58,122 @@ func show_coherency(game_unit: GameUnit, is_skirmish: bool = false) -> Coherency
 		visualization_completed.emit(result)
 		return result
 
-	# Only highlight isolated models (no lines between all models)
-	if not result.valid:
-		for issue in result.issues:
-			if issue.type == CoherencyChecker.IssueType.ISOLATED and issue.model:
-				_highlight_model(issue.model, COLOR_ERROR)
-		# Animate in only if there are issues
-		visible = true
+	# Nothing to show for a coherent unit.
+	if result.valid:
+		visible = false
+		visualization_completed.emit(result)
+		return result
+
+	# Show the existing 1" chain in green so the connected part is visible...
+	_draw_chain_edges(models)
+
+	# ...then highlight every problem with a red ring and a labelled line to the
+	# nearest unit model (so it's clear which model breaks coherency to which).
+	for issue in result.issues:
+		match issue.type:
+			CoherencyChecker.IssueType.ISOLATED:
+				if issue.model:
+					_highlight_model(issue.model, COLOR_ERROR, animate)
+					var nearest = issue.get("nearest_model")
+					if nearest:
+						_draw_problem_line(
+							issue.model, nearest, issue.get("nearest_distance", 0.0), COLOR_ERROR
+						)
+			CoherencyChecker.IssueType.CHAIN_TOO_LONG:
+				var model_a = issue.get("model_a")
+				var model_b = issue.get("model_b")
+				if model_a and model_b:
+					_draw_problem_line(
+						model_a, model_b, issue.get("chain_distance", 0.0), COLOR_CHAIN
+					)
+
+	visible = true
+	if animate:
 		_animate_fade_in()
 	else:
-		visible = false
+		# Live update: show at full opacity without re-running the fade each frame.
+		if _tween:
+			_tween.kill()
+			_tween = null
+		_visualization_alpha = 1.0
 
 	visualization_completed.emit(result)
 	return result
+
+
+## Draws green lines for every pair of models that are within 1" coherency
+## (3" across elevation), visualizing the connected chain. Lines run base-edge
+## to base-edge, flat on the table.
+func _draw_chain_edges(models: Array[ModelInstance]) -> void:
+	for i in range(models.size()):
+		for j in range(i + 1, models.size()):
+			var model_a = models[i]
+			var model_b = models[j]
+			if not _models_drawable(model_a, model_b):
+				continue
+			if not CoherencyChecker._are_linked(model_a, model_b):
+				continue
+			_add_surface_line(model_a, model_b, COLOR_OK)
+
+
+## Draws a coloured base-edge-to-base-edge line on the table between two models,
+## with a flat distance label - mirroring the in-game measurement tool.
+func _draw_problem_line(model_a: ModelInstance, model_b: ModelInstance, dist_inches: float, color: Color) -> void:
+	if not _models_drawable(model_a, model_b):
+		return
+
+	var from_edge := CoherencyChecker.get_ground_edge_point(model_a, model_b.node.global_position, EDGE_Y)
+	var to_edge := CoherencyChecker.get_ground_edge_point(model_b, model_a.node.global_position, EDGE_Y)
+
+	_add_surface_line(model_a, model_b, color)
+
+	var midpoint = (from_edge + to_edge) / 2.0
+	_create_distance_label(midpoint, from_edge, to_edge, "%.1f\"" % dist_inches, color)
+
+
+## Returns true if both models have valid nodes that are in the scene tree.
+func _models_drawable(model_a: ModelInstance, model_b: ModelInstance) -> bool:
+	if not model_a.node or not model_b.node:
+		return false
+	if not is_instance_valid(model_a.node) or not is_instance_valid(model_b.node):
+		return false
+	return model_a.node.is_inside_tree() and model_b.node.is_inside_tree()
+
+
+## Adds a flat surface line between two models' base edges.
+func _add_surface_line(model_a: ModelInstance, model_b: ModelInstance, color: Color) -> void:
+	var from_edge := CoherencyChecker.get_ground_edge_point(model_a, model_b.node.global_position, EDGE_Y)
+	var to_edge := CoherencyChecker.get_ground_edge_point(model_b, model_a.node.global_position, EDGE_Y)
+	var line = _create_surface_line(from_edge, to_edge, color)
+	if line:
+		add_child(line)
+		_lines.append(line)
+
+
+## Creates a distance label lying flat on the table, aligned with the line
+## (same style as the in-game measurement tool).
+func _create_distance_label(midpoint: Vector3, from_edge: Vector3, to_edge: Vector3, text: String, color: Color) -> void:
+	var label = Label3D.new()
+	label.text = text
+	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	label.no_depth_test = true
+	label.render_priority = 1
+	label.pixel_size = 0.001
+	label.font_size = 24
+	label.modulate = color
+	label.outline_modulate = Color(0, 0, 0, 1)
+	label.outline_size = 8
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+	add_child(label)
+	label.global_position = Vector3(midpoint.x, EDGE_Y, midpoint.z)
+
+	# Lay flat on the table, aligned with the line direction.
+	var direction = to_edge - from_edge
+	var angle = atan2(direction.x, direction.z)
+	label.rotation = Vector3(-PI / 2.0, angle, 0)
+
+	_labels.append(label)
 
 
 ## Hides the coherency visualization.
@@ -76,101 +186,39 @@ func hide_coherency() -> void:
 	_tween.tween_callback(_clear_visualization)
 
 
-## Creates lines between models showing coherency status.
-func _create_coherency_lines(models: Array[ModelInstance]) -> void:
-	for i in range(models.size()):
-		for j in range(i + 1, models.size()):
-			var model_a = models[i]
-			var model_b = models[j]
+## Creates a thin flat line strip lying on the table between two points
+## (same look as the in-game measurement tool).
+func _create_surface_line(from_edge: Vector3, to_edge: Vector3, color: Color) -> MeshInstance3D:
+	var direction = Vector3(to_edge.x - from_edge.x, 0, to_edge.z - from_edge.z)
+	var length = direction.length()
+	if length < 0.001:
+		return null
 
-			if not model_a.node or not model_b.node:
-				continue
-			if not model_a.node.is_inside_tree() or not model_b.node.is_inside_tree():
-				continue
-
-			var dist = CoherencyChecker._distance_between_models(model_a, model_b)
-
-			# Determine coherency distance
-			var coherency_dist = CoherencyChecker.COHERENCY_DISTANCE_INCHES
-			if CoherencyChecker._is_elevated_different(model_a, model_b):
-				coherency_dist = CoherencyChecker.ELEVATED_COHERENCY_INCHES
-
-			# Only draw lines for models within reasonable distance
-			if dist > coherency_dist * 3:
-				continue
-
-			# Determine line color
-			var color: Color
-			if dist <= coherency_dist:
-				color = COLOR_OK
-			elif dist <= coherency_dist * 1.5:
-				color = COLOR_WARNING
-			else:
-				color = COLOR_ERROR
-
-			var line = _create_line_mesh(
-				model_a.node.global_position,
-				model_b.node.global_position,
-				color
-			)
-			add_child(line)
-			_lines.append(line)
-
-
-## Creates a line mesh between two points.
-func _create_line_mesh(from: Vector3, to: Vector3, color: Color) -> MeshInstance3D:
 	var mesh_instance = MeshInstance3D.new()
 
-	# Adjust height
-	var from_adj = from + Vector3(0, LINE_HEIGHT, 0)
-	var to_adj = to + Vector3(0, LINE_HEIGHT, 0)
+	var line_mesh = BoxMesh.new()
+	line_mesh.size = Vector3(length, 0.001, LINE_WIDTH)
+	mesh_instance.mesh = line_mesh
 
-	# Create cylinder as line
-	var direction = to_adj - from_adj
-	var length = direction.length()
-
-	if length < 0.001:
-		return mesh_instance
-
-	var cylinder = CylinderMesh.new()
-	cylinder.top_radius = 0.003
-	cylinder.bottom_radius = 0.003
-	cylinder.height = length
-
-	mesh_instance.mesh = cylinder
-
-	# Calculate position and rotation WITHOUT needing to be in tree
-	# Position at midpoint (use position, not global_position since not in tree yet)
-	var midpoint = (from_adj + to_adj) / 2
+	# Lie flat on the table at the midpoint, aligned with the direction.
+	var midpoint = (from_edge + to_edge) / 2.0
+	midpoint.y = LINE_Y
 	mesh_instance.position = midpoint
+	mesh_instance.rotation = Vector3(0, atan2(direction.x, direction.z) + PI / 2.0, 0)
 
-	# Calculate rotation to align cylinder with direction
-	var forward = direction.normalized()
-	var up = Vector3.UP
-	if abs(forward.dot(up)) > 0.999:
-		up = Vector3.FORWARD
-
-	# Build rotation basis manually instead of using look_at
-	var right = up.cross(forward).normalized()
-	var actual_up = forward.cross(right).normalized()
-	var basis = Basis(right, forward, actual_up)
-	mesh_instance.basis = basis
-
-	# Material
 	var material = StandardMaterial3D.new()
 	material.albedo_color = color
-	material.emission_enabled = true
-	material.emission = color
-	material.emission_energy_multiplier = 0.5
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.no_depth_test = true
 	mesh_instance.material_override = material
 
 	return mesh_instance
 
 
-## Highlights a model with a colored ring.
-func _highlight_model(model: ModelInstance, color: Color) -> void:
+## Highlights a model with a colored ring. pulse adds a pulsing animation; pass
+## false for live updates so the ring doesn't restart its pulse every frame.
+func _highlight_model(model: ModelInstance, color: Color, pulse: bool = true) -> void:
 	if not model.node or not is_instance_valid(model.node):
 		return
 	if not model.node.is_inside_tree():
@@ -215,7 +263,8 @@ func _highlight_model(model: ModelInstance, color: Color) -> void:
 	_highlights.append(highlight)
 
 	# Add pulsing animation (deferred to ensure node is ready)
-	mesh_instance.ready.connect(func(): _animate_pulse(mesh_instance), CONNECT_ONE_SHOT)
+	if pulse:
+		mesh_instance.ready.connect(func(): _animate_pulse(mesh_instance), CONNECT_ONE_SHOT)
 
 
 ## Animates a pulse effect on a mesh.
@@ -258,6 +307,10 @@ func _update_materials_alpha(alpha: float) -> void:
 					if mat:
 						mat.albedo_color.a = alpha
 
+	for label in _labels:
+		if is_instance_valid(label):
+			label.modulate.a = alpha
+
 
 ## Clears all visualization elements.
 func _clear_visualization() -> void:
@@ -270,6 +323,11 @@ func _clear_visualization() -> void:
 		if is_instance_valid(highlight):
 			highlight.queue_free()
 	_highlights.clear()
+
+	for label in _labels:
+		if is_instance_valid(label):
+			label.queue_free()
+	_labels.clear()
 
 	_current_unit = null
 	visible = false
