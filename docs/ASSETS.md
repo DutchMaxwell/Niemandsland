@@ -142,7 +142,11 @@ assets/
 
 | Asset | Quelle | Lizenz | Verwendet für |
 |-------|--------|--------|---------------|
-| (wird bei Integration ergänzt) | | | |
+| Kenney UI Pack(s) | [kenney.nl](https://kenney.nl) | CC0 | UI-Themes (`assets/kenney_ui/`, `ThemeManager`) |
+| Godot Dice Roller | Addon | MIT | Würfel (`addons/dice_roller/`) |
+| gdUnit4 | [gdUnit4](https://github.com/MikeSchulze/gdUnit4) | MIT | Test-Framework (`addons/gdUnit4/`) |
+| Miniatur-GLBs | Model-Forge-Pipeline (KI-generiert) | projekt-intern | `assets/miniatures/<faction>/` |
+| `model-viewer` | [Google](https://modelviewer.dev) | Apache-2.0 | 3D-Vorschau in der Model-Forge-Review-UI |
 
 ## Lizenz-Hinweise
 

@@ -11,7 +11,7 @@
 | Phase 1: Model-Architektur | ✅ | model_instance.gd, game_unit.gd, equipment_distributor.gd |
 | Phase 2: Unit-System | ✅ | unit_utils.gd, coherency_checker.gd, unit_marker.gd |
 | Phase 3: Radialmenü | ✅ | radial_menu.gd, radial_menu_controller.gd, radial_menu.tscn |
-| Phase 4: UI Dialoge | ✅ | wounds_dialog.gd, marker_dialog.gd, activation_tracker.gd, hero_attachment_dialog.gd |
+| Phase 4: UI Dialoge | ✅ | wounds_dialog.gd, marker_dialog.gd, casts_dialog.gd |
 | Phase 5: Erweitert | ✅ | coherency_visualizer.gd |
 | Phase 6: Polish | ✅ | save_manager.gd (erweitert), network_manager.gd (erweitert) |
 
@@ -732,8 +732,9 @@ Bei kritischen Aktionen auf Leader/Specialists:
 **Dateien:**
 - [x] `scripts/wounds_dialog.gd` - Wunden-Anpassung
 - [x] `scripts/marker_dialog.gd` - Marker hinzufügen/entfernen
-- [x] `scripts/activation_tracker.gd` - Runden- und Aktivierungs-Tracking
-- [x] `scripts/hero_attachment_dialog.gd` - Hero-Zuweisung nach Import
+- [x] `scripts/casts_dialog.gd` - Caster-Punkte
+- [x] Aktivierungs-Tracking - in `game_unit.gd` / `radial_menu.gd` (kein separates Script)
+- [x] Hero-Zuweisung nach Import - in `game_unit.gd` / `equipment_distributor.gd` / `network_manager.gd`
 
 **Aufgaben:**
 1. ✅ Wunden-Dialog (Model-Level, +/- Buttons, Heal/Kill)
