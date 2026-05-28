@@ -107,16 +107,26 @@ class ImageGenerator:
         seed: int = -1,
         width: int = 0,
         height: int = 0,
+        reference_image_path: Path | None = None,
+        edit_image_path: Path | None = None,
     ) -> GenerationResult:
         """
         Generiert ein einzelnes Bild aus einem Prompt.
 
         Args:
-            prompt: Textbeschreibung fuer die Bildgenerierung.
+            prompt: Textbeschreibung fuer die Bildgenerierung. Im Edit-Modus
+                (edit_image_path gesetzt) ist das die Aenderungs-Instruktion.
             output_path: Zielpfad fuer das generierte Bild.
             seed: Seed fuer reproduzierbare Ergebnisse. -1 = zufaellig.
             width: Bildbreite in Pixel. 0 = Modell-Default (1024).
             height: Bildhoehe in Pixel. 0 = Modell-Default (1024).
+            reference_image_path: Optionales Referenzbild fuer Style-Konsistenz
+                (Hero-First-Workflow). Aktuell nur fuer NANO_BANANA wirksam;
+                FLUX/Z-Image-Spaces ignorieren das mit einem Warning.
+            edit_image_path: Optionales Quellbild fuer echtes Image-Editing
+                (nur NANO_BANANA). Wenn gesetzt, wird dieses Bild bearbeitet und
+                `prompt` als minimale Aenderungs-Instruktion interpretiert;
+                reference_image_path wird dann ignoriert.
 
         Returns:
             GenerationResult mit Erfolg/Fehler-Informationen.
@@ -129,6 +139,37 @@ class ImageGenerator:
             )
 
         is_gemini: bool = self._model == ImageModel.NANO_BANANA
+
+        if edit_image_path is not None:
+            if not is_gemini:
+                logger.warning(
+                    "Image-Editing ist nur fuer NANO_BANANA implementiert; "
+                    "Modell %s ignoriert edit_image_path.", self._model.value,
+                )
+                edit_image_path = None
+            elif not edit_image_path.exists():
+                return GenerationResult(
+                    success=False,
+                    model_used=self._model.value,
+                    error=f"Edit-Quellbild existiert nicht: {edit_image_path}",
+                )
+            else:
+                # Edit-Modus uebersteuert die Style-Reference.
+                reference_image_path = None
+
+        if reference_image_path is not None:
+            if not reference_image_path.exists():
+                logger.warning(
+                    "Reference-Image existiert nicht, fahre ohne Style-Pinning fort: %s",
+                    reference_image_path,
+                )
+                reference_image_path = None
+            elif not is_gemini:
+                logger.warning(
+                    "Reference-Image-Pinning ist nur fuer NANO_BANANA implementiert. "
+                    "Modell %s ignoriert das Reference-Image.",
+                    self._model.value,
+                )
 
         # Gemini hat keinen Seed-Support
         if is_gemini:
@@ -154,13 +195,15 @@ class ImageGenerator:
         effective_width: int = width if width > 0 else FLUX_DEFAULT_WIDTH
         effective_height: int = height if height > 0 else FLUX_DEFAULT_HEIGHT
 
-        predict_method = self._get_predict_method()
         result_path: Path | None = None
         last_error: str = ""
 
         for attempt in range(RETRY_MAX_ATTEMPTS):
             try:
-                result_path = predict_method(prompt, seed, effective_width, effective_height)
+                result_path = self._dispatch_predict(
+                    prompt, seed, effective_width, effective_height,
+                    reference_image_path, edit_image_path,
+                )
                 last_error = ""
                 break
             except RuntimeError as exc:
@@ -224,6 +267,7 @@ class ImageGenerator:
         prompts: dict[str, str],
         output_dir: Path,
         progress_callback: Callable[[str, int, int], None] | None = None,
+        reference_image_path: Path | None = None,
     ) -> dict[str, GenerationResult]:
         """
         Generiert Bilder fuer mehrere Einheiten sequentiell.
@@ -232,6 +276,8 @@ class ImageGenerator:
             prompts: Dict von unit_key -> Prompt-Text.
             output_dir: Zielverzeichnis fuer generierte Bilder.
             progress_callback: Optionaler Callback(unit_key, index, total).
+            reference_image_path: Optionales Reference-Image fuer Style-Konsistenz
+                ueber alle Bilder dieser Charge (Hero-First-Workflow).
 
         Returns:
             Dict von unit_key -> GenerationResult.
@@ -244,7 +290,11 @@ class ImageGenerator:
                 progress_callback(unit_key, index, total)
 
             output_path: Path = output_dir / f"{unit_key}.png"
-            result: GenerationResult = self.generate(prompt, output_path)
+            result: GenerationResult = self.generate(
+                prompt,
+                output_path,
+                reference_image_path=reference_image_path,
+            )
             results[unit_key] = result
 
             if result.success:
@@ -284,18 +334,39 @@ class ImageGenerator:
         logger.info("Verbinde zu HuggingFace Space: %s", self._model.value)
         self._client = Client(self._model.value, token=self._hf_token)
 
-    def _get_predict_method(self) -> Callable[[str, int, int, int], Path | None]:
-        """Gibt die passende Predict-Methode fuer das aktuelle Modell zurueck."""
-        predict_methods: dict[
-            ImageModel, Callable[[str, int, int, int], Path | None]
-        ] = {
-            ImageModel.NANO_BANANA: self._predict_nano_banana,
-            ImageModel.FLUX_SCHNELL: self._predict_flux_schnell,
-            ImageModel.Z_IMAGE_TURBO: self._predict_z_image_turbo,
-        }
-        return predict_methods[self._model]
+    def _dispatch_predict(
+        self,
+        prompt: str,
+        seed: int,
+        width: int,
+        height: int,
+        reference_image_path: Path | None,
+        edit_image_path: Path | None = None,
+    ) -> Path | None:
+        """Dispatcht an die passende Predict-Methode fuer das aktuelle Modell.
 
-    def _predict_nano_banana(self, prompt: str, seed: int, width: int, height: int) -> Path | None:
+        Reference-Image / Edit-Image werden nur an NANO_BANANA durchgereicht;
+        FLUX/Z-Image ignorieren beides (Warning wird in generate() geloggt).
+        """
+        if self._model == ImageModel.NANO_BANANA:
+            return self._predict_nano_banana(
+                prompt, seed, width, height, reference_image_path, edit_image_path,
+            )
+        if self._model == ImageModel.FLUX_SCHNELL:
+            return self._predict_flux_schnell(prompt, seed, width, height)
+        if self._model == ImageModel.Z_IMAGE_TURBO:
+            return self._predict_z_image_turbo(prompt, seed, width, height)
+        raise ValueError(f"Unbekanntes Modell: {self._model}")
+
+    def _predict_nano_banana(
+        self,
+        prompt: str,
+        seed: int,
+        width: int,
+        height: int,
+        reference_image_path: Path | None = None,
+        edit_image_path: Path | None = None,
+    ) -> Path | None:
         """
         Generiert ein Bild mit dem Gemini 2.5 Flash Image Modell (Nano Banana).
 
@@ -307,6 +378,9 @@ class ImageGenerator:
             seed: Wird ignoriert (Gemini hat keinen Seed-Support).
             width: Gewuenschte Bildbreite (Gemini beachtet das aus dem Prompt).
             height: Gewuenschte Bildhoehe (Gemini beachtet das aus dem Prompt).
+            reference_image_path: Optionales Style-Reference-Image. Wird als
+                erster Content-Part mitgegeben fuer Style-Konsistenz innerhalb
+                einer Fraktion (Hero-First-Workflow).
 
         Returns:
             Pfad zum generierten Bild oder None bei Fehler.
@@ -314,9 +388,33 @@ class ImageGenerator:
         if self._gemini_client is None:
             return None
 
+        contents: list[object]
+        if edit_image_path is not None and edit_image_path.exists():
+            # Echtes Image-Editing: das Quellbild wird bearbeitet, `prompt` ist
+            # die (minimale) Aenderungs-Instruktion. Kein Style-Wrapper.
+            src_bytes: bytes = edit_image_path.read_bytes()
+            src_part = genai.types.Part.from_bytes(
+                data=src_bytes,
+                mime_type=_guess_mime_type(edit_image_path),
+            )
+            contents = [src_part, prompt]
+        elif reference_image_path is not None and reference_image_path.exists():
+            ref_bytes: bytes = reference_image_path.read_bytes()
+            mime_type: str = _guess_mime_type(reference_image_path)
+            ref_part = genai.types.Part.from_bytes(
+                data=ref_bytes,
+                mime_type=mime_type,
+            )
+            contents = [
+                ref_part,
+                "Use the visual style, lighting, color treatment, and rendering of the reference image above. Maintain consistent aesthetic but produce a different miniature as described:\n\n" + prompt,
+            ]
+        else:
+            contents = [prompt]
+
         response = self._gemini_client.models.generate_content(
             model=self._model.value,
-            contents=prompt,
+            contents=contents,
             config=genai.types.GenerateContentConfig(
                 response_modalities=["IMAGE", "TEXT"],
             ),
@@ -398,6 +496,18 @@ class ImageGenerator:
 # =============================================================================
 # HILFSFUNKTIONEN
 # =============================================================================
+
+def _guess_mime_type(path: Path) -> str:
+    """Mappt Bildendung auf MIME-Typ fuer Gemini Part.from_bytes."""
+    suffix: str = path.suffix.lower()
+    mapping: dict[str, str] = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+    }
+    return mapping.get(suffix, "image/png")
+
 
 def _extract_image_path(result: object) -> Path | None:
     """

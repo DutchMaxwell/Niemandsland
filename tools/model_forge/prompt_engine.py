@@ -37,6 +37,69 @@ TOUGH_STURDY_THRESHOLD: int = 3
 VEHICLE_BASE_THRESHOLD_MM: int = 50
 
 # =============================================================================
+# IP-COMPLIANCE
+# =============================================================================
+# Unverhandelbare Liste konkret zu vermeidender Designs/Symbole, um keine
+# urheberrechtlich geschuetzten Marken oder Designs (insbesondere Games
+# Workshop) zu reproduzieren. Wird zu jedem Prompt hinzugefuegt, unabhaengig
+# vom Faction-YAML. Wirkt als Sicherheitsnetz.
+
+IP_COMPLIANCE_BLOCK: str = (
+    "STRICT IP COMPLIANCE - DO NOT INCLUDE ANY OF THESE COPYRIGHTED ELEMENTS:\n"
+    "- No double-headed eagles (Imperial Aquila), no winged-skull insignia\n"
+    "- No skull-and-cog, skull-and-gear, or mechanical-skull symbols\n"
+    "- No Space Marine specific designs: no characteristic round oversized pauldrons "
+    "with chapter iconography, no Mark VII/VIII/X power armor silhouettes\n"
+    "- No Adeptus Mechanicus cog-mechanicum logos, no red robes with cogwheel symbols\n"
+    "- No Custodes-style golden lion-faced helmets with high tufted crests\n"
+    "- No Sisters of Battle wimpled helmets with red-and-black fleur-de-lys habits\n"
+    "- No Tyranid-specific bone scything-talons-with-skull silhouettes (organic creatures OK, "
+    "but avoid the exact Hive Tyrant pose and Carnifex carapace pattern)\n"
+    "- No Necron green-glowing-rod gauss weapons with skull-faced robotic skeletons\n"
+    "- No Eldar tall-pointy-helmet aspect-warrior silhouettes, no Wraithbone curves\n"
+    "- No T'au battlesuit specific bulbous-shoulder-and-jet-pack silhouettes\n"
+    "- No specific named characters from Warhammer 40K, Age of Sigmar, or Lord of the Rings\n"
+    "- Generic genre archetypes (knight, alien insect, orc, undead, robot) are fine - "
+    "only avoid the specific iconic GW visual signatures listed above"
+)
+
+# Type-spezifische Form-Constraints: werden nur eingehaengt wenn die Unit ein
+# explizites `type:`-Feld hat, das hier gemappt ist. Verhindert dass Aircraft
+# als Suit-mit-Fluegeln rendern (Galerie-Review 2026-05-15 von dao_union zeigte
+# Razor Fighter/Sun Bomber als Battlesuit-Hybride). Walker/Titan-Eintraege
+# liegen praeventiv bereit, sind aktuell aber noch nicht aktiv getunte
+# Problemstellen — bei Bedarf hier einkommentieren/aktivieren.
+FORM_CONSTRAINTS: dict[str, str] = {
+    "aircraft": (
+        "AIRCRAFT FORM CONSTRAINT - render as a vehicle, NOT a mech or suit:\n"
+        "- Single aerodynamic fuselage with swept wings or lifting body, "
+        "purely vehicle silhouette\n"
+        "- NO humanoid body, NO bipedal legs, NO arms — the airframe is the entire model\n"
+        "- NOT a battlesuit, NOT a mech-with-wings, NOT a flying suit of armor\n"
+        "- Cockpit canopy or pilot housing instead of a head/helmet\n"
+        "- Wings are aircraft wings, not jet-pack or shoulder-mounted thrusters\n"
+        "- Reference: fighter jet, atmospheric interceptor, ground-attack craft — "
+        "not Iron Man, not Crisis Suit, not Gundam"
+    ),
+}
+
+
+# Verhindert dass das Bildmodell Tokens wie "Impact(3)", "Tough(6)", "AP(1)",
+# "18 inch range" als sichtbare Stat-Block-Annotationen aufs Bild brennt.
+NO_TEXT_BLOCK: str = (
+    "STRICT RENDERING RULES - THE IMAGE ITSELF MUST CONTAIN NO TEXT:\n"
+    "- DO NOT render any letters, words, numbers, captions, labels, callouts, "
+    "stat blocks, rule names, weapon names, range indicators, or annotations "
+    "anywhere in the image\n"
+    "- DO NOT add UI overlays, badges, ribbons, tooltips, arrows pointing to parts, "
+    "measurement scales, or watermarks\n"
+    "- Tokens like 'Impact(3)', 'Tough(6)', 'AP(1)', '18 inch', 'A4', 'Blast(3)' "
+    "appear in this prompt only as gameplay context for the pose and silhouette - "
+    "they must NEVER appear visibly in the rendered image\n"
+    "- Pure clean miniature photography output, nothing else"
+)
+
+# =============================================================================
 # ENUMS
 # =============================================================================
 
@@ -294,6 +357,19 @@ class PromptEngine:
             aesthetic=aesthetic_str,
             explicitly_avoid=explicitly_avoid,
         )
+
+        # IP-Compliance + No-Text Block immer anhaengen (unverhandelbar)
+        prompt = (
+            prompt.rstrip()
+            + "\n\n" + NO_TEXT_BLOCK
+            + "\n\n" + IP_COMPLIANCE_BLOCK
+        )
+
+        # Type-spezifische Form-Constraint anhaengen (nur wenn gemappt)
+        if override_type:
+            constraint: str | None = FORM_CONSTRAINTS.get(override_type.lower())
+            if constraint:
+                prompt = prompt.rstrip() + "\n\n" + constraint
 
         return prompt
 

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>3D Review — {{ session_id }}</title>
+<script type="module" src="/static/model-viewer.min.js"></script>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background:#141414; color:#eee; margin:0;
+         display:flex; flex-direction:column; min-height:100vh; }
+  header { padding:.6rem 1rem; background:#1f1f1f; display:flex; align-items:center; gap:1rem; border-bottom:1px solid #333; }
+  header a { color:#7ab; text-decoration:none; }
+  header h1 { margin:0; font-size:1.05rem; font-weight:500; }
+  #stats { font-variant-numeric:tabular-nums; color:#aaa; }
+  main { flex:1; display:grid; grid-template-columns: 1fr 280px; grid-template-rows: minmax(0, 1fr); gap:1rem; padding:1rem; min-height:0; }
+  #view { background:#0a0a0a; border:1px solid #333; min-height:0; display:flex; }
+  model-viewer { flex:1; height:100%; min-height:0; --poster-color: transparent; background:#181818; }
+  #side { display:flex; flex-direction:column; gap:.8rem; }
+  .panel { background:#1f1f1f; border:1px solid #333; padding:.8rem; border-radius:4px; }
+  .panel h2 { margin:0 0 .4rem; font-size:.9rem; color:#aaa; font-weight:500; text-transform:uppercase; letter-spacing:.05em; }
+  .name { font-size:1.1rem; }
+  .meta { color:#888; font-size:.85rem; margin-top:.3rem; }
+  .status { display:inline-block; padding:.2rem .5rem; border-radius:3px; font-size:.8rem; margin-top:.3rem; }
+  .status-glb_ready { background:#444; }
+  .status-glb_approved { background:#1a5; color:#fff; }
+  .status-glb_rejected { background:#a31; color:#fff; }
+  .btn-row { display:flex; gap:.4rem; }
+  button { flex:1; padding:.7rem .4rem; border:0; border-radius:3px; cursor:pointer; font-size:.95rem;
+           font-weight:500; transition:opacity .1s; }
+  button:active { opacity:.7; }
+  .btn-approve { background:#2c8; color:#000; }
+  .btn-reject  { background:#c44; color:#fff; }
+  .btn-nav     { background:#444; color:#ddd; padding:.5rem; }
+  .nav-row { display:flex; gap:.4rem; }
+  kbd { background:#333; padding:.1rem .35rem; border-radius:3px; font-size:.78rem; }
+  .help { color:#888; font-size:.8rem; line-height:1.5; }
+  #empty { padding:3rem; text-align:center; color:#888; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/">&larr; Sessions</a>
+  <h1>3D-Review &mdash; {{ session_id }}</h1>
+  <span id="stats"></span>
+  <span style="margin-left:auto"><a href="/{{ session_id }}/2d">&larr; 2D-Review</a></span>
+</header>
+
+{% if units %}
+<main>
+  <div id="view">
+    <model-viewer id="viewer"
+      camera-controls
+      auto-rotate
+      auto-rotate-delay="0"
+      rotation-per-second="20deg"
+      shadow-intensity="1"
+      exposure="1.0"
+      environment-image="neutral">
+    </model-viewer>
+  </div>
+  <aside id="side">
+    <div class="panel">
+      <h2>Unit</h2>
+      <div class="name" id="unit-name">&mdash;</div>
+      <div class="meta" id="unit-class">&mdash;</div>
+      <div class="status" id="unit-status">&mdash;</div>
+    </div>
+    <div class="panel">
+      <h2>Entscheidung</h2>
+      <div class="btn-row">
+        <button class="btn-approve" id="btn-approve">Genehmigen <kbd>A</kbd></button>
+        <button class="btn-reject" id="btn-reject">Ablehnen <kbd>R</kbd></button>
+      </div>
+      <div class="nav-row" style="margin-top:.4rem">
+        <button class="btn-nav" id="btn-prev">&larr; Zurueck <kbd>&larr;</kbd></button>
+        <button class="btn-nav" id="btn-next">Weiter &rarr; <kbd>&rarr;</kbd></button>
+      </div>
+    </div>
+    <div class="panel help">
+      <kbd>A</kbd>/<kbd>R</kbd> = genehmigen/ablehnen + weiter<br>
+      <kbd>&larr;</kbd>/<kbd>&rarr;</kbd> = navigieren ohne Entscheidung<br>
+      Maus = drehen, Mausrad = zoomen
+    </div>
+  </aside>
+</main>
+{% else %}
+<div id="empty">Keine 3D-Modelle zur Review verfuegbar.<br>
+Erst genehmigte Bilder durch TRELLIS konvertieren.</div>
+{% endif %}
+
+<script>
+const SESSION_ID = {{ session_id|tojson }};
+const UNITS = {{ units|tojson }};
+let idx = 0;
+
+function findFirstPending() {
+  const i = UNITS.findIndex(u => u.status === "glb_ready");
+  return i >= 0 ? i : 0;
+}
+
+function render() {
+  if (UNITS.length === 0) return;
+  const u = UNITS[idx];
+  const viewer = document.getElementById("viewer");
+  viewer.src = `/${SESSION_ID}/asset/glb/${u.key}?t=${Date.now()}`;
+  document.getElementById("unit-name").textContent = u.name;
+  document.getElementById("unit-class").textContent = `${u.unit_class} | ${idx + 1}/${UNITS.length}`;
+  const st = document.getElementById("unit-status");
+  st.textContent = u.status;
+  st.className = "status status-" + u.status;
+  updateStats();
+}
+
+function updateStats() {
+  const pending = UNITS.filter(u => u.status === "glb_ready").length;
+  const approved = UNITS.filter(u => u.status === "glb_approved").length;
+  const rejected = UNITS.filter(u => u.status === "glb_rejected").length;
+  document.getElementById("stats").textContent =
+    `pending=${pending}  ok=${approved}  reject=${rejected}  / ${UNITS.length}`;
+}
+
+async function setStatus(unitKey, action) {
+  const r = await fetch(`/api/${SESSION_ID}/${action}-glb/${unitKey}`, { method: "POST" });
+  if (!r.ok) { alert("Fehler"); return null; }
+  return await r.json();
+}
+
+async function approve() {
+  const u = UNITS[idx];
+  const res = await setStatus(u.key, "approve");
+  if (res) { u.status = res.status; advance(); }
+}
+
+async function reject() {
+  const u = UNITS[idx];
+  const res = await setStatus(u.key, "reject");
+  if (res) { u.status = res.status; advance(); }
+}
+
+function advance() {
+  for (let step = 1; step <= UNITS.length; step++) {
+    const next = (idx + step) % UNITS.length;
+    if (UNITS[next].status === "glb_ready") { idx = next; render(); return; }
+  }
+  idx = (idx + 1) % UNITS.length;
+  render();
+}
+
+function prev() { if (UNITS.length === 0) return; idx = (idx - 1 + UNITS.length) % UNITS.length; render(); }
+function next() { if (UNITS.length === 0) return; idx = (idx + 1) % UNITS.length; render(); }
+
+window.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  if (e.key === "a" || e.key === "A") { approve(); e.preventDefault(); }
+  else if (e.key === "r" || e.key === "R") { reject(); e.preventDefault(); }
+  else if (e.key === "ArrowLeft") { prev(); e.preventDefault(); }
+  else if (e.key === "ArrowRight") { next(); e.preventDefault(); }
+});
+
+// Auto-Framing: model-viewer zoomt per Default zu weit raus. Nach dem Laden
+// die Kamera-Distanz an die reale Modellgröße koppeln (TRELLIS normalisiert
+// auf ~1 Einheit, aber so bleibt es auch für abweichende Modelle korrekt).
+function frameModel() {
+  const v = document.getElementById("viewer");
+  const d = v.getDimensions();
+  const maxDim = Math.max(d.x, d.y, d.z) || 1;
+  v.fieldOfView = "35deg";
+  v.cameraTarget = "auto";
+  v.cameraOrbit = `0deg 75deg ${(maxDim * 2.0).toFixed(3)}m`;
+  v.jumpCameraToGoal();
+}
+
+if (UNITS.length) {
+  document.getElementById("btn-approve").onclick = approve;
+  document.getElementById("btn-reject").onclick = reject;
+  document.getElementById("btn-prev").onclick = prev;
+  document.getElementById("btn-next").onclick = next;
+  document.getElementById("viewer").addEventListener("load", frameModel);
+  idx = findFirstPending();
+  render();
+}
+</script>
+</body>
+</html>

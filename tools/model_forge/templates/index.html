@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Model Forge Review</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: system-ui, sans-serif; background:#1a1a1a; color:#eee; margin:0; padding:2rem; }
+  h1 { margin-top:0; }
+  table { border-collapse:collapse; width:100%; max-width:1100px; }
+  th, td { padding:.5rem .8rem; text-align:left; border-bottom:1px solid #333; vertical-align: middle; }
+  th { background:#222; }
+  tr:hover { background:#262626; }
+  a { color:#7ab; text-decoration:none; margin-right:.6rem; }
+  a:hover { text-decoration:underline; }
+  .num { text-align:right; font-variant-numeric:tabular-nums; }
+  .empty { color:#777; font-style:italic; padding:1rem; }
+  button { padding:.35rem .7rem; border:0; border-radius:3px; cursor:pointer; font-size:.85rem;
+           font-weight:500; margin-right:.3rem; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .btn-convert { background:#447; color:#fff; }
+  .btn-export { background:#272; color:#fff; }
+  .job-status { font-size:.95rem; color:#aaa; min-width:18rem; display:block;
+                padding:.5rem .7rem; background:#222; border-radius:3px;
+                margin-top:.5rem; font-weight:500; min-height:1.2em; }
+  .job-status.converting { background:#225; color:#cce; box-shadow:0 0 8px #224a; }
+  .job-status.exporting { background:#252; color:#cec; box-shadow:0 0 8px #242a; }
+  .job-status.done { background:#152; color:#bea; border-left:4px solid #2c8; }
+  .job-status.error { background:#321; color:#fcc; border-left:4px solid #c44; }
+  .progress-bar { height:4px; background:#444; border-radius:2px; overflow:hidden; margin-top:.4rem; }
+  .progress-bar-fill { height:100%; background:#7af; transition:width .3s; }
+  .actions { white-space:nowrap; }
+  .trellis-panel { max-width:1100px; background:#1e1e22; border:1px solid #333; border-radius:5px;
+                   padding:.9rem 1.1rem; margin-bottom:1.4rem; }
+  .trellis-panel h2 { margin:0 0 .6rem; font-size:.9rem; color:#aaa; text-transform:uppercase; letter-spacing:.05em; }
+  .trellis-row { display:flex; align-items:center; gap:1rem; }
+  .trellis-stage { flex:1; font-weight:600; font-variant-numeric:tabular-nums; padding:.45rem .65rem;
+                   border-radius:3px; background:#262626; }
+  .trellis-stage.running  { background:#152; color:#bea; }
+  .trellis-stage.building, .trellis-stage.sleeping { background:#332a14; color:#fc6; }
+  .trellis-stage.paused   { background:#3a2412; color:#fb8; }
+  .trellis-stage.error    { background:#321; color:#fcc; }
+  .btn-wake { background:#a72; color:#fff; padding:.55rem 1.1rem; border:0; border-radius:3px;
+              cursor:pointer; font-weight:600; font-size:.9rem; }
+  .btn-wake:disabled { opacity:.5; cursor:not-allowed; }
+  .trellis-progress { height:6px; background:#333; border-radius:3px; overflow:hidden; margin-top:.7rem; display:none; }
+  .trellis-progress.active { display:block; }
+  .trellis-progress-fill { height:100%; width:0; background:linear-gradient(90deg,#a72,#fc6,#2c8); transition:width .4s linear; }
+  .trellis-timeline { margin:.7rem 0 0; padding-left:1.2rem; font-size:.8rem; color:#9a9;
+                      max-height:8rem; overflow:auto; font-variant-numeric:tabular-nums; }
+  .trellis-timeline li { margin:.12rem 0; }
+  .trellis-timeline li.ok { color:#8e8; font-weight:600; }
+  .trellis-hint { font-size:.78rem; color:#888; margin-top:.6rem; }
+</style>
+</head>
+<body>
+<h1>Model Forge Review</h1>
+<p>Pro Session: 2D-Bilder reviewen &rarr; 3D umwandeln &rarr; 3D-Modelle reviewen &rarr; Export.
+&nbsp;&middot;&nbsp; <a href="/diag">Browser-Diagnose</a></p>
+
+<div class="trellis-panel">
+  <h2>TRELLIS 3D-Server</h2>
+  <div class="trellis-row">
+    <span class="trellis-stage" id="trellis-stage">Status wird geprueft&hellip;</span>
+    <button class="btn-wake" id="btn-wake" disabled>TRELLIS aufwecken</button>
+  </div>
+  <div class="trellis-progress" id="trellis-progress"><div class="trellis-progress-fill" id="trellis-progress-fill"></div></div>
+  <ol class="trellis-timeline" id="trellis-timeline"></ol>
+  <div class="trellis-hint">A100-Boot dauert typisch 2&ndash;5&nbsp;min und kostet GPU-Zeit.
+    &bdquo;3D umwandeln&ldquo; erst starten, wenn der Status <b>RUNNING</b> (gruen) ist.</div>
+</div>
+
+{% if sessions %}
+<table>
+  <thead>
+    <tr>
+      <th>Session</th>
+      <th class="num">Gesamt</th>
+      <th class="num">2D-Pending</th>
+      <th class="num">2D-OK</th>
+      <th class="num">3D-Pending</th>
+      <th class="num">3D-OK</th>
+      <th class="num">Exportiert</th>
+      <th>Review</th>
+      <th>Aktionen</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for s in sessions %}
+    <tr data-sid="{{ s.id }}">
+      <td>{{ s.id }}</td>
+      <td class="num">{{ s.total }}</td>
+      <td class="num">{{ s.image_pending }}</td>
+      <td class="num">{{ s.image_approved }}</td>
+      <td class="num">{{ s.glb_pending }}</td>
+      <td class="num">{{ s.glb_approved }}</td>
+      <td class="num">{{ s.exported }}</td>
+      <td>
+        <a href="/{{ s.id }}/2d">2D</a>
+        <a href="/{{ s.id }}/3d">3D</a>
+      </td>
+      <td class="actions">
+        <button class="btn-convert" data-action="convert-3d">3D umwandeln</button>
+        <button class="btn-export" data-action="export">Export</button>
+        <div class="job-status" data-role="status">&nbsp;</div>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">Noch keine Sessions vorhanden.</p>
+{% endif %}
+
+<script>
+const POLL_INTERVAL_MS = 3000;
+
+async function startJob(sid, action) {
+  const r = await fetch(`/api/${sid}/${action}`, { method: "POST" });
+  if (r.status === 409) {
+    alert("Ein Job laeuft bereits fuer diese Session.");
+    return false;
+  }
+  if (!r.ok) {
+    alert("Fehler beim Start.");
+    return false;
+  }
+  return true;
+}
+
+async function pollStatus(sid) {
+  try {
+    const r = await fetch(`/api/${sid}/job-status`);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
+function renderStatus(row, status) {
+  const div = row.querySelector('[data-role="status"]');
+  if (!div) return;
+  div.className = "job-status " + (status.phase || "");
+  let txt = status.message || "";
+  if (status.total > 0 && status.phase !== "done" && status.phase !== "error") {
+    txt = `[${status.current}/${status.total}] ${txt}`;
+  }
+  if (status.phase === "done") txt = "OK  " + txt;
+  if (status.phase === "error") txt = "FEHLER  " + txt;
+
+  let progressHtml = "";
+  if (status.total > 0 && (status.phase === "converting" || status.phase === "exporting")) {
+    const pct = Math.round((status.current / status.total) * 100);
+    progressHtml = `<div class="progress-bar"><div class="progress-bar-fill" style="width:${pct}%"></div></div>`;
+  }
+  div.innerHTML = `<span>${txt.trim() || " "}</span>${progressHtml}`;
+
+  const busy = status.phase === "converting" || status.phase === "exporting";
+  row.dataset.busy = busy ? "1" : "";
+  row.querySelectorAll("button").forEach(b => {
+    // Convert braucht TRELLIS RUNNING; Export nicht.
+    if (b.dataset.action === "convert-3d") b.disabled = busy || !trellisReady;
+    else b.disabled = busy;
+  });
+}
+
+async function pollLoop(row) {
+  const sid = row.dataset.sid;
+  const status = await pollStatus(sid);
+  if (status) renderStatus(row, status);
+  // Bei done/error: aufhoeren zu pollen, kein Auto-Reload.
+  if (status && (status.phase === "done" || status.phase === "error")) {
+    return;
+  }
+  setTimeout(() => pollLoop(row), POLL_INTERVAL_MS);
+}
+
+document.querySelectorAll("tr[data-sid]").forEach(row => {
+  const sid = row.dataset.sid;
+  row.querySelectorAll("button[data-action]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const action = btn.dataset.action;
+      const ok = await startJob(sid, action);
+      if (ok) pollLoop(row);
+    });
+  });
+  // Initial-Status holen — falls beim Reload ein Job noch laeuft.
+  pollStatus(sid).then(st => {
+    if (st && (st.phase === "converting" || st.phase === "exporting")) {
+      renderStatus(row, st);
+      pollLoop(row);
+    }
+  });
+});
+
+// === TRELLIS-Server: Status, Aufwecken, Zeitleiste ===
+const TRELLIS_POLL_MS = 5000;
+let trellisWaking = false;
+let trellisWakeStart = 0;
+let trellisLastStage = null;
+let trellisProgTimer = null;
+let trellisReady = false;
+
+// Convert-Buttons nur freigeben wenn TRELLIS RUNNING und Zeile nicht busy.
+function gateConvertButtons() {
+  document.querySelectorAll('button[data-action="convert-3d"]').forEach(b => {
+    const row = b.closest("tr");
+    const busy = row && row.dataset.busy === "1";
+    b.disabled = busy || !trellisReady;
+    b.title = trellisReady ? "" : "TRELLIS ist nicht bereit — erst aufwecken (Status RUNNING)";
+  });
+}
+
+function tlAppend(label, ok) {
+  const ol = document.getElementById("trellis-timeline");
+  const li = document.createElement("li");
+  const now = new Date().toLocaleTimeString();
+  const elapsed = trellisWakeStart ? ` (+${Math.floor((Date.now() - trellisWakeStart) / 1000)}s)` : "";
+  li.textContent = `${now}  ${label}${elapsed}`;
+  if (ok) li.className = "ok";
+  ol.appendChild(li);
+  ol.scrollTop = ol.scrollHeight;
+}
+
+function startTrellisProgress() {
+  const box = document.getElementById("trellis-progress");
+  const fill = document.getElementById("trellis-progress-fill");
+  box.classList.add("active");
+  fill.style.width = "0%";
+  trellisProgTimer = setInterval(() => {
+    const t = (Date.now() - trellisWakeStart) / 1000;
+    // asymptotisch (tau=120s): ~bei 4min ~88%, snap auf 100% bei RUNNING
+    fill.style.width = ((1 - Math.exp(-t / 120)) * 95).toFixed(1) + "%";
+  }, 500);
+}
+
+function stopTrellisProgress(success) {
+  if (trellisProgTimer) { clearInterval(trellisProgTimer); trellisProgTimer = null; }
+  const box = document.getElementById("trellis-progress");
+  const fill = document.getElementById("trellis-progress-fill");
+  if (success) { fill.style.width = "100%"; }
+  else { box.classList.remove("active"); }
+}
+
+function renderTrellis(st) {
+  const stageEl = document.getElementById("trellis-stage");
+  const btn = document.getElementById("btn-wake");
+  stageEl.className = "trellis-stage " + (st.css || (st.ready ? "running" : "building"));
+  let txt = (st.stage || "?");
+  if (st.message) txt += " — " + st.message;
+  if (st.hardware) txt += "  [" + st.hardware + "]";
+  stageEl.textContent = txt;
+
+  if (st.stage && st.stage !== trellisLastStage) {
+    tlAppend(st.stage, !!st.ready);
+    trellisLastStage = st.stage;
+  }
+
+  if (st.ready) {
+    if (trellisWaking) stopTrellisProgress(true);
+    trellisWaking = false;
+    btn.disabled = true;
+    btn.textContent = "TRELLIS laeuft ✓";
+  } else {
+    btn.disabled = trellisWaking;
+    btn.textContent = trellisWaking ? "wird wach…" : "TRELLIS aufwecken";
+  }
+
+  trellisReady = !!st.ready;
+  gateConvertButtons();
+}
+
+async function pollTrellis() {
+  try {
+    const r = await fetch("/api/trellis/status");
+    renderTrellis(await r.json());
+  } catch { /* nochmal */ }
+  setTimeout(pollTrellis, trellisWaking ? 4000 : TRELLIS_POLL_MS);
+}
+
+async function wakeTrellis() {
+  const btn = document.getElementById("btn-wake");
+  btn.disabled = true;
+  btn.textContent = "wecke auf…";
+  let res;
+  try {
+    const r = await fetch("/api/trellis/wake", { method: "POST" });
+    res = await r.json();
+  } catch (e) { res = { ok: false, message: String(e) }; }
+  if (!res.ok) {
+    const stageEl = document.getElementById("trellis-stage");
+    stageEl.className = "trellis-stage error";
+    stageEl.textContent = "Fehler: " + (res.message || "unbekannt");
+    btn.disabled = false;
+    btn.textContent = "TRELLIS aufwecken";
+    return;
+  }
+  trellisWaking = true;
+  trellisWakeStart = Date.now();
+  trellisLastStage = null;
+  document.getElementById("trellis-timeline").innerHTML = "";
+  tlAppend("Aufwecken angestossen", false);
+  startTrellisProgress();
+}
+
+document.getElementById("btn-wake").onclick = wakeTrellis;
+gateConvertButtons();  // bis der erste Status da ist: gesperrt
+pollTrellis();
+</script>
+</body>
+</html>

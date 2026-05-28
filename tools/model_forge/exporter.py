@@ -24,6 +24,12 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from glb_optimizer import (
+    DEFAULT_SIMPLIFY_RATIO,
+    DEFAULT_TEXTURE_MAX_DIM,
+    DEFAULT_WEBP_QUALITY,
+    optimize_glb,
+)
 from opr_client import OPRArmy, OPRUnit, OPRWeapon
 from pipeline_state import UnitState, UnitStatus
 
@@ -37,8 +43,14 @@ GLB_SUBDIR = "glb"
 UNITS_JSON_FILENAME = "units.json"
 VERSION_STRING = "auto-generated"
 
+# GLB-Optimierung (vor dem Export): Mesh-Decimation + Texture-Resize
+OPTIMIZE_GLBS_ON_EXPORT: bool = True
+OPTIMIZE_SIMPLIFY_RATIO: float = DEFAULT_SIMPLIFY_RATIO
+OPTIMIZE_TEXTURE_MAX_DIM: int = DEFAULT_TEXTURE_MAX_DIM
+OPTIMIZE_WEBP_QUALITY: int = DEFAULT_WEBP_QUALITY
+
 EXPORTABLE_STATUSES: frozenset[UnitStatus] = frozenset({
-    UnitStatus.GLB_READY,
+    UnitStatus.GLB_APPROVED,
     UnitStatus.EXPORTED,
 })
 
@@ -169,7 +181,7 @@ def export_army(
     """
     Exportiert GLB-Dateien und units.json in das OpenTTS-Projektverzeichnis.
 
-    Nur Einheiten mit Status GLB_READY oder EXPORTED werden exportiert.
+    Nur Einheiten mit Status GLB_APPROVED oder EXPORTED werden exportiert.
     Die Zielstruktur entspricht dem, was opr_army_manager.gd erwartet.
 
     Args:
@@ -213,7 +225,7 @@ def export_army(
             units_json_path="",
             glb_dir=str(glb_dir),
             exported_count=0,
-            errors=["Keine Einheiten mit Status GLB_READY oder EXPORTED gefunden"],
+            errors=["Keine genehmigten Einheiten (GLB_APPROVED) gefunden — erst im 3D-Review genehmigen"],
         )
 
     # GLB-Dateien kopieren mit nummerierter Benennung
@@ -231,13 +243,42 @@ def export_army(
         target_filename = f"{prefix}_{unit_state.unit_name}.glb"
         target_path = glb_dir / target_filename
 
-        try:
-            shutil.copy2(source_path, target_path)
-            exported_count += 1
-        except OSError as exc:
-            errors.append(
-                f"GLB-Kopie fehlgeschlagen fuer '{unit_state.unit_name}': {exc}"
+        if OPTIMIZE_GLBS_ON_EXPORT:
+            opt = optimize_glb(
+                source_path,
+                target_path,
+                simplify_ratio=OPTIMIZE_SIMPLIFY_RATIO,
+                texture_max_dim=OPTIMIZE_TEXTURE_MAX_DIM,
+                webp_quality=OPTIMIZE_WEBP_QUALITY,
             )
+            if opt.success:
+                exported_count += 1
+                print(
+                    f"  Optimized '{unit_state.unit_name}': "
+                    f"{opt.input_bytes/1024/1024:.2f} MB -> "
+                    f"{opt.output_bytes/1024/1024:.2f} MB "
+                    f"(-{opt.reduction_percent:.0f}%)"
+                )
+            else:
+                errors.append(
+                    f"GLB-Optimierung fehlgeschlagen fuer '{unit_state.unit_name}': {opt.error}"
+                )
+                # Fallback: Original kopieren, damit der Export nicht komplett scheitert
+                try:
+                    shutil.copy2(source_path, target_path)
+                    exported_count += 1
+                except OSError as exc:
+                    errors.append(
+                        f"Fallback-Kopie ebenfalls fehlgeschlagen fuer '{unit_state.unit_name}': {exc}"
+                    )
+        else:
+            try:
+                shutil.copy2(source_path, target_path)
+                exported_count += 1
+            except OSError as exc:
+                errors.append(
+                    f"GLB-Kopie fehlgeschlagen fuer '{unit_state.unit_name}': {exc}"
+                )
 
     # units.json erzeugen
     units_dict = _build_units_dict(army)

@@ -49,6 +49,8 @@ class UnitStatus(str, Enum):
     IMAGE_APPROVED = "image_approved"
     IMAGE_REJECTED = "image_rejected"
     GLB_READY = "glb_ready"
+    GLB_APPROVED = "glb_approved"
+    GLB_REJECTED = "glb_rejected"
     EXPORTED = "exported"
 
 
@@ -70,6 +72,7 @@ class UnitState:
     model_used: str = ""
     generation_count: int = 0
     rejection_feedback: str = ""
+    unit_class: str = "infantry"
 
     def to_dict(self) -> dict:
         """Serialisiert den UnitState in ein Dictionary."""
@@ -92,6 +95,7 @@ class UnitState:
             model_used=data.get("model_used", ""),
             generation_count=data.get("generation_count", 0),
             rejection_feedback=data.get("rejection_feedback", ""),
+            unit_class=data.get("unit_class", "infantry"),
         )
 
 
@@ -294,7 +298,7 @@ class PipelineSession:
         allowed_fields = {
             "prompt", "image_path", "glb_path",
             "seed", "model_used", "generation_count",
-            "rejection_feedback",
+            "rejection_feedback", "unit_class",
         }
 
         for key, value in kwargs.items():
@@ -316,7 +320,8 @@ class PipelineSession:
             - pending: Noch nicht begonnen
             - generated: Bild generiert (inkl. abgelehnt)
             - approved: Bild genehmigt
-            - converted: GLB erstellt
+            - converted: GLB erstellt (Review ausstehend oder abgelehnt)
+            - glb_approved: GLB final genehmigt (export-ready)
             - exported: Fertig exportiert
         """
         total = len(self._units)
@@ -324,6 +329,7 @@ class PipelineSession:
         generated = 0
         approved = 0
         converted = 0
+        glb_approved = 0
         exported = 0
 
         for unit in self._units.values():
@@ -335,8 +341,10 @@ class PipelineSession:
                 generated += 1
             elif unit.status == UnitStatus.IMAGE_APPROVED:
                 approved += 1
-            elif unit.status == UnitStatus.GLB_READY:
+            elif unit.status in (UnitStatus.GLB_READY, UnitStatus.GLB_REJECTED):
                 converted += 1
+            elif unit.status == UnitStatus.GLB_APPROVED:
+                glb_approved += 1
             elif unit.status == UnitStatus.EXPORTED:
                 exported += 1
 
@@ -346,6 +354,7 @@ class PipelineSession:
             "generated": generated,
             "approved": approved,
             "converted": converted,
+            "glb_approved": glb_approved,
             "exported": exported,
         }
 

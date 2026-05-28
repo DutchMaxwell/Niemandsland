@@ -43,8 +43,20 @@ except ImportError:
 DEFAULT_TRELLIS_SPACE: str = "microsoft/TRELLIS.2"
 
 RESOLUTION = "1536"           # Hoechste Aufloesung
-DECIMATION = 500000           # Maximale Polygonzahl
-TEXTURE_SIZE = 4096           # 4K Texturen
+DECIMATION = 100000           # Default-Polygonzahl (Server-Minimum, ausreichend
+                              # fuer alle Klassen ausser TITAN)
+TEXTURE_SIZE = 4096           # 4K Texturen (Server-Maximum)
+
+# Pro UnitClass-Wert. Titan-Voxel-Latents sind zu komplex fuer
+# aggressive Server-Decimation und crashen das extract_glb bei <300000;
+# alle anderen Klassen laufen sauber am Server-Minimum.
+DECIMATION_BY_CLASS: dict[str, int] = {
+    "infantry": 100000,
+    "walker":   100000,
+    "vehicle":  100000,
+    "aircraft": 100000,
+    "titan":    300000,
+}
 
 SUPPORTED_FORMATS = ('.png', '.jpg', '.jpeg', '.webp')
 
@@ -213,7 +225,8 @@ class TrellisGenerator:
         self.log(f"   Qualitaet: {RESOLUTION}px, {DECIMATION} Polygone, {TEXTURE_SIZE}px Textur")
 
     def convert(self, image_path: Path, output_dir: Path,
-                preprocess: bool = True) -> Optional[Path]:
+                preprocess: bool = True,
+                unit_class: Optional[str] = None) -> Optional[Path]:
         """
         Konvertiert ein Bild zu einem 3D-Modell.
 
@@ -221,6 +234,9 @@ class TrellisGenerator:
             image_path: Pfad zum Eingabebild
             output_dir: Ausgabeverzeichnis fuer GLB-Datei
             preprocess: Bild vorverarbeiten (Wasserzeichen, Hintergrund)
+            unit_class: Optionaler UnitClass-Wert (str: "infantry"/"walker"/
+                        "vehicle"/"aircraft"/"titan"). Steuert das
+                        Decimation-Target via DECIMATION_BY_CLASS.
 
         Returns:
             Pfad zur GLB-Datei oder None bei Fehler
@@ -262,11 +278,13 @@ class TrellisGenerator:
 
             self.log(f"   image_to_3d Ergebnis: {type(result)} - {result}")
 
+            decimation = DECIMATION_BY_CLASS.get(unit_class or "", DECIMATION)
+
             self.log("   Extrahiere GLB...")
-            self.log(f"   Decimation: {DECIMATION}, Texture: {TEXTURE_SIZE}")
+            self.log(f"   Decimation: {decimation} (class={unit_class or 'default'}), Texture: {TEXTURE_SIZE}")
 
             glb_result = self.client.predict(
-                decimation_target=DECIMATION,
+                decimation_target=decimation,
                 texture_size=TEXTURE_SIZE,
                 api_name="/extract_glb"
             )
