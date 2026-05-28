@@ -24,7 +24,7 @@ func test_close_resets_all_state() -> void:
 	peer._my_peer_id = 1
 	peer._connection_status = MultiplayerPeer.CONNECTION_CONNECTED
 	peer._room_code = "ABC123"
-	peer._incoming_packets.append({"from_peer": 2, "data": PackedByteArray([1, 2, 3])})
+	peer._incoming_packets.append(RelayMultiplayerPeer.IncomingPacket.new(2, PackedByteArray([1, 2, 3])))
 
 	peer._close()
 
