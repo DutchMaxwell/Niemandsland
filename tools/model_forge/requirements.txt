@@ -1,5 +1,7 @@
+flask>=3.0
 gradio>=4.0
 gradio_client>=1.0
+huggingface_hub>=0.23
 google-genai>=1.0
 Pillow>=10.0
 requests>=2.28

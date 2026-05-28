@@ -1,413 +1,142 @@
-# OpenTTS - Open-Source Wargaming Tabletop Simulator
+# OpenTTS — Open-Source Wargaming Tabletop Simulator
 
-Ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wie OnePageRules, historische Wargames und andere Miniaturenspiele.
+A desktop tabletop simulator focused on miniature wargames, with first-class
+support for [OnePageRules](https://onepagerules.com/) (Grimdark Future / Age of
+Fantasy). Built in Godot.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Godot Engine](https://img.shields.io/badge/Godot-4.5.1-blue.svg)](https://godotengine.org/)
-[![Status](https://img.shields.io/badge/Status-Alpha-orange.svg)]()
+[![Godot](https://img.shields.io/badge/Godot-4.6-blue.svg)](https://godotengine.org/)
+[![Status](https://img.shields.io/badge/Status-0.2.0--alpha-orange.svg)]()
 
----
+> **Status: early alpha.** The tabletop sandbox, OPR army import, multiplayer and
+> the 3D-model pipeline work; rules automation (turn/combat resolution, terrain
+> gameplay effects) is **not** implemented. See
+> [`PROJECT_STATUS.md`](PROJECT_STATUS.md) for the honest done / in-progress /
+> planned breakdown.
 
-## 🎮 Status: Milestone 2 (Alpha) in Arbeit
+## Features
 
-**Aktuelle Features:**
+What the code actually does today:
 
-### ⚔️ Gameplay
-- ✅ 3D Spieltisch (variable Größen: 4x4, 6x4, custom)
-- ✅ Kamera-Steuerung (Orbit, Pan, Zoom mit Easing)
-- ✅ Multi-Selection (Alt+Click, Box-Select)
-- ✅ Arrangement-Funktionen (1-9 für Reihen, A für Pfeil-Formation)
-- ✅ Copy/Paste (Ctrl+C/V/D) mit Cursor-Positionierung
-- ✅ Würfel-System mit Physik (D4, D6, D8, D10, D12, D20, D100)
-- ✅ Distanzmessung in Zoll
+- **3D tabletop** — variable table sizes (4×4, 6×4, custom), orbit/pan/zoom camera.
+- **Object handling** — click / Alt-click / box select, drag, rotate, copy / paste /
+  duplicate, formation arrangement (rows `1`–`9`, arrow `A`) with constant base-edge
+  spacing across base sizes.
+- **Dice** — physics dice (D4–D100) via the `dice_roller` addon, rendered in a
+  scaled SubViewport (see [Scaling](#scaling-conventions)).
+- **Measurement** — distance measuring in inches.
+- **Map layout editor** — top-down 3″ grid, terrain pieces (ruins / forest /
+  container / dangerous), front-line + custom-polygon deployment zones, objectives,
+  auto-generate, 3D overlay, save/load layouts. (Terrain is currently visual; it has
+  **no** gameplay effect yet.)
+- **OPR units** — import Army Forge lists via the OPR API, per-model wounds, caster
+  points, unit coherency check + visualizer, radial context menu, docked unit info
+  card, unit-wide status tokens (Fatigue / Shaken / Activated).
+- **Multiplayer** — ENet over LAN, or over the internet via a WebSocket relay
+  (see [`relay/`](relay/README.md)); full state sync (models, terrain, table size),
+  shared dice log, player avatars/cursors, save/load.
+- **Import / export** — Tabletop Simulator import (Steam CDN + local cache),
+  custom models (glTF / STL / OBJ), `.otts` save format with OS file association,
+  Wargaming Simulator (WGS) import/export.
+- **Model Forge** — a Python pipeline that turns OPR unit data into 3D miniatures
+  (image generation → TRELLIS mesh) with a Flask review UI. See
+  [`tools/model_forge/README.md`](tools/model_forge/README.md).
+- **Presentation** — Kenney UI themes, lighting presets (`F1`–`F4`), graphics
+  quality presets, SSAO, glow.
 
-### 🗺️ Terrain & Map Layout
-- ✅ **Map Layout Editor** - Top-down 3" Grid für Terrain-Planung
-  - **Zoom-Funktion** - Mausrad-Zoom (0.5x - 3.0x) für präzises Arbeiten
-  - **Verbessertes Snapping** - Einfacheres Snappen zu Tischkanten-Punkten
-- ✅ **4 Terrain-Typen**: Ruins (Cover), Forest (Difficult+Cover), Container (Blocking), Dangerous (Minefields)
-- ✅ **Deployment Zones**:
-  - **Front-line (12")** - Standard OPR Free Rules Deployment
-  - **Custom Polygon Zones** - Zeichne eigene Aufstellungszonen mit 1" Raster
-  - **Symmetrisch/Asymmetrisch** - Punktsymmetrische oder individuelle Zonen
-- ✅ **Objectives System** - Platzierung von bis zu 6 Zielpunkten (abwechselnd)
-- ✅ **Auto-Generate** - Automatische Terrain-Generierung mit Symmetrie-Option
-- ✅ **3D Overlay** - Terrain-Grid im 3D-Spiel visualisiert
-- ✅ **Save/Load Layouts** - Terrain-Setups speichern und wiederverwenden
+## Quick start
 
-### 🌐 Multiplayer
-- ✅ **LAN & Internet** - ENet-basiert mit WebSocket Relay Server
-- ✅ **State-Sync** - Vollstaendige Synchronisation (Modelle, Terrain, Rotation, Tischgroesse)
-- ✅ **Batch RPCs** - Optimierte Netzwerk-Performance
-- ✅ **Dice Log** - Gemeinsames Wuerfel-Protokoll
-- ✅ **Player Avatars** - Spieler-Praesenz mit Cursor-Tracking
+Requires **[Godot 4.6](https://godotengine.org/download)** (Forward+ renderer).
 
-### 🤖 AI-System (OPR Solo & Co-Op Rules v3.5.0)
-- ✅ **Battle Simulator** - Vollständige KI vs KI Kampfsimulation
-- ✅ **Step-by-Step Visualisierung** - Jeder Kampfschritt mit Pause/Play/Speed-Control
-- ✅ **OPR Decision Trees** - Alle 3 Entscheidungsbäume (Hybrid, Shooting, Melee)
-- ✅ **Unit-Klassifizierung** - Automatisch basierend auf Waffen-Loadout
-- ✅ **Target Priority System** - AP, Deadly, Takedown, Unstoppable Regeln
-- ✅ **Morale System** - Vollständige Flucht-/Rout-Mechanik mit Consolidation Moves
-- ✅ **Special Rules** - Ambush, Scout, Transport, Artillery, Caster, Flying, Strider
-
-### ⚙️ Unit-Status & UI
-- ✅ **Radial Context Menu** - Kontextsensitives Pie-Menu mit Tooltips
-- ✅ **Unit Boundary Visualizer** - Farbige Umrandung zeigt Zugehörigkeit von Modellen zu Units
-  - Spielerfarben-codierte Convex-Hull-Darstellung
-  - Nur für Multi-Model Units (Single-Models ohne Boundary)
-- ✅ **Unit-Wide Status Tokens** - Fatigue (F), Shaken (S), Activated (A) auf der Unit-Boundary
-  - Tokens folgen der Boundary-Kontur wie auf einer Schiene
-  - Automatische Neupositionierung bei Formationsänderung (1-9, A)
-  - **Smart Token Placement** - Tokens werden automatisch an der "freisten" Stelle positioniert (Maximum-Minimum-Distanz Algorithmus)
-- ✅ **Model-Specific Tokens** - Wounds (W), Caster (C) bleiben auf einzelnen Modellen
-  - **Auto-Flip bei Überlappung** - Tokens wechseln automatisch auf die gegenüberliegende Seite wenn sie mit anderen Modellen überlappen würden
-- ✅ **Caster-System** - Caster Token Display und Cast Points Tracking
-- ✅ **Wunden-Tracking** - Pro-Modell Wunden-Verwaltung
-
-### 📐 Formation & Spacing
-- ✅ **Konstanter Base-Randabstand** - 8mm Abstand zwischen Base-Rändern unabhängig von der Basegröße
-  - Funktioniert für 25mm, 32mm, 40mm, 50mm und größere Bases
-  - Gilt für Spawn, Arrangement (1-9, A) und alle Formationen
-- ✅ **Dynamisches Spacing** - Arrangement-Funktionen berechnen Spacing basierend auf der größten Base in der Selektion
-
-### 📦 Import/Export
-- ✅ TTS Import (Online von Steam CDN + Local Cache)
-- ✅ Custom 3D Models (glTF, STL, OBJ)
-- ✅ Speichern/Laden (.otts Format mit OS-Dateiverknuepfung)
-- ✅ OPR Army Forge Integration (automatisches GLB-Laden)
-- ✅ Wargaming Simulator (WGS) Import/Export
-
-### 🔨 Model Forge (3D-Modell-Pipeline)
-- ✅ **38 Grimdark Future Fraktionen** mit 854 Einheiten
-- ✅ **Echte OPR v3.5.2 Spielwerte** - Quality, Defense, Cost, Weapons, Rules
-- ✅ **Design Languages** - YAML-basierte Fraktions-Aesthetik und Prompt-Templates
-- ✅ **Automatische Prompt-Generierung** - Kombiniert Einheitsdaten mit visueller Identitaet
-- ✅ **Image-Generierung** - Via HuggingFace Spaces (Nano Banana, FLUX, etc.)
-- ✅ **3D-Konvertierung** - TRELLIS fuer automatische Mesh-Generierung
-- ✅ **Gradio Web-UI** - Vollstaendige Pipeline mit Review-Workflow
-
-### 🎨 Graphics & UI
-- ✅ Theme-System (9 Kenney UI Themes)
-- ✅ Lighting Presets (F1-F4: Default, Studio, Dramatic, Night)
-- ✅ Graphics Quality Settings (Low, Medium, High, Ultra)
-- ✅ Tron-Style Intro Animation
-- ✅ High-Quality Shadows (8K, 16-bit)
-- ✅ Post-Processing (SSAO, SSR, Glow)
-
-### ⚡ Performance
-- ✅ 1000+ Objekte flüssig darstellbar
-- ✅ Optimierte Shadow Cascades
-- ✅ Multi-Threading Support
-
----
-
-## 🚀 Schnellstart
-
-### Voraussetzungen
-- [Godot 4.5.1](https://godotengine.org/download) (Desktop-Version empfohlen)
-
-### Installation
 ```bash
-# Repository klonen
-git clone https://github.com/DutchMaxwell/openTTS.git
+git clone git@github.com:DutchMaxwell/openTTS.git
 cd openTTS
-
-# Projekt in Godot öffnen
-# Godot Editor starten → "Import" → project.godot auswählen
-
-# Oder direkt mit Godot-CLI
-godot --path . --editor
+godot --path . --editor      # open in the editor, then F5 to run
+# or run directly:
+godot --path .
 ```
 
-### Starten
-1. F5 drücken oder "Run Project" im Editor
-2. Genieße das Tron-Style Intro
-3. Wähle "Start New Battle" für ein neues Spiel
+Main scene: `scenes/startup_menu.tscn`.
 
----
+For headless build/run/test commands (incl. the Flatpak invocation used in
+development and the gdUnit4 test runner), see
+[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
-## 🎮 Steuerung
+## Controls
 
-### Kamera
-| Aktion | Eingabe |
-|--------|---------|
-| Kamera rotieren | Rechtsklick + Ziehen |
-| Kamera schwenken | Mittelklick + Ziehen |
-| Zoomen | Mausrad |
-| Reset Kamera | Home |
+| Camera | |
+|---|---|
+| Rotate | Right-drag |
+| Pan | Middle-drag |
+| Zoom | Mouse wheel |
+| Reset | `Home` |
 
-### Objekte
-| Aktion | Eingabe |
-|--------|---------|
-| Objekt auswählen | Linksklick |
-| Multi-Select | Alt + Linksklick |
-| Box-Select | Linksklick + Ziehen (auf Tisch) |
-| Objekt ziehen | Linksklick + Ziehen |
-| Objekt rotieren | R (während Auswahl) |
-| Objekt löschen | Entf oder Backspace |
-| Copy | Strg + C |
-| Paste | Strg + V |
-| Duplicate | Strg + D |
+| Objects | |
+|---|---|
+| Select / multi-select | Left-click / `Alt`+Left-click |
+| Box select | Left-drag on table |
+| Move / rotate | Left-drag / `R` |
+| Delete | `Del` / `Backspace` |
+| Copy / paste / duplicate | `Ctrl`+`C` / `V` / `D` |
+| Arrange (multi-select) | `1`–`9` rows, `A` arrow |
 
-### Arrangement (Multi-Select)
-| Taste | Funktion |
-|-------|----------|
-| 1-9 | Reihen-Formation (1 = 1 Reihe, 2 = 2 Reihen, etc.) |
-| A | Pfeil-Formation |
+| Other | |
+|---|---|
+| Roll dice | `Space` |
+| Lighting presets | `F1`–`F4` |
 
-### Würfeln
-| Aktion | Eingabe |
-|--------|---------|
-| Würfel werfen | Leertaste |
-| Würfel auswählen | Würfel-Menü (UI) |
-
-### Lighting & UI
-| Aktion | Eingabe |
-|--------|---------|
-| Default Lighting | F1 |
-| Studio Lighting | F2 |
-| Dramatic Lighting | F3 |
-| Night Lighting | F4 |
-
----
-
-## 📋 Features im Detail
-
-### Map Layout Editor
-Plane dein Spielfeld mit dem integrierten Map Layout Editor:
-- **Top-Down Ansicht** mit 3" Grid (OPR-Standard)
-- **Zoom & Pan**:
-  - **Mausrad**: Zoomen (0.5x bis 3.0x)
-  - **Mittelklick + Ziehen**: Schwenken innerhalb des Spielfeld-Fensters
-  - **Zoom unter Mauszeiger**: Zoom fokussiert auf die Mausposition
-- **4 Terrain-Typen**:
-  - **Ruins**: Höhe 5, gibt Deckung, Wände unpassierbar
-  - **Forest**: Höhe 5, schwieriges Gelände + Deckung
-  - **Container**: Höhe 5, unpassierbar + blockiert Sichtlinien komplett
-  - **Dangerous**: Offen, gefährlich (Minenfelder, Säure, Strahlung)
-- **Symmetrie-Modus**: Automatisches Spiegeln über Tischmitte (Punktsymmetrie 180°)
-- **Auto-Generate**: Zufällige faire Terrain-Layouts nach OPR-Richtlinien
-- **OPR Guidelines**: Echtzeit-Feedback zu Terrain-Empfehlungen
-  - 15-20 Terrain-Teile empfohlen
-  - 25% Tischabdeckung
-  - 50% sollten LOS blockieren
-  - Max. 12" Lücke zwischen Terrain
-- **3D Overlay**: Sieh das Grid direkt im 3D-Spiel visualisiert
-- **Grid-Rotation**: Drehe das Raster für diagonale Terrain-Platzierung
-
-### Deployment Zones
-Aufstellungszonen für beide Spieler:
-- **Front-line (12")**: Standard-Aufstellung aus den OPR Free Rules - 12" von der langen Tischkante
-- **Custom Polygon Zones**: Zeichne eigene Aufstellungszonen als Polygone
-  - **1" Feines Raster**: Höhere Auflösung für präzise Platzierung
-  - **Symmetrischer Modus**: Beide Zonen werden gleichzeitig punktsymmetrisch gezeichnet
-  - **Asymmetrischer Modus**: Zuerst Spieler 1, dann Spieler 2 separat zeichnen
-  - **Vertex-Marker**: Nummerierte Punkte zeigen die Polygon-Ecken
-  - **Boundary Snap Points**: Vertices snappen präzise an Schnittpunkte von 1" Raster und Spielfeldkante
-  - **Table Corner Snap Points**: Vertices snappen an die 4 Tischecken (orange Punkte)
-  - **Zoom & Pan**: Mausrad zum Zoomen, Mittelklick zum Schwenken im Map Editor
-  - **Float-Präzision**: Exakte Platzierung an Raster-Kanten-Schnittpunkten (keine Rundungsfehler)
-- **Hinweis**: Weitere Deployment-Typen (Ground War, Spearhead, etc.) können mit Custom Zones manuell nachgebaut werden
-
-### Objectives
-- **Bis zu 6 Zielpunkte** platzieren
-- **Abwechselnde Platzierung** gemäß OPR-Regeln
-- **40mm Marker** mit gelber Basis und schwarzem Rand
-
-### TTS Import
-Importiere 3D-Modelle direkt vom Tabletop Simulator Steam CDN:
-- Online-Download mit automatischem Caching
-- Unterstützte Formate: glTF, STL, OBJ
-- Skalierung und Base-Support
-
-### OPR Integration
-- Import von Army Forge Listen
-- Stats-Tooltips beim Hover über Einheiten
-- Direkte API-Integration
-
-### WGS Integration
-- Import/Export von Wargaming Simulator Spielzuständen
-- Koordinaten-Konvertierung
-- Async-Play Support (geplant)
-
-### Multiplayer
-- Host/Join ueber LAN oder Internet (WebSocket Relay)
-- Vollstaendige State-Synchronisation (Modelle, Terrain, Tischgroesse)
-- Batch RPCs fuer optimierte Performance
-- Dice Log und Player Avatars
-- Speichern/Laden im Multiplayer
-
----
-
-## 🏗️ Projektstruktur
+## Project layout
 
 ```
 openTTS/
-├── scenes/          # Godot-Szenen
-│   ├── main.tscn              # Hauptszene
-│   └── startup_menu.tscn      # Startmenü
-├── scripts/         # GDScript-Dateien
-│   ├── main.gd                # Hauptszene-Controller
-│   ├── camera_controller.gd   # Kamera-Steuerung
-│   ├── table.gd               # Spieltisch
-│   ├── object_manager.gd      # Objekt-Verwaltung
-│   ├── selectable_object.gd   # Auswahl-Logik
-│   ├── network_manager.gd     # Multiplayer
-│   ├── save_manager.gd        # Speichern/Laden
-│   ├── lighting_controller.gd # Beleuchtung
-│   ├── theme_manager.gd       # UI-Themes
-│   ├── tts_importer.gd        # TTS Import
-│   ├── opr_api_client.gd      # OPR API
-│   ├── wgs_client.gd          # WGS Integration
-│   ├── ai_manager.gd          # AI-Gegner Controller
-│   ├── ai_decision_tree.gd    # OPR Decision Trees
-│   ├── ai_target_selector.gd  # Target Priorität
-│   └── battle_simulator.gd    # KI vs KI Simulation
-├── assets/          # Texturen, Modelle, Audio
-├── addons/          # Godot Addons
-│   └── dice_roller/           # Wuerfel-System
-├── tools/           # Externe Tools
-│   └── model_forge/           # 3D-Modell-Pipeline (Python/Gradio)
-├── docs/            # Dokumentation
-├── PLAN.md          # Entwicklungsplan
-└── PROJECT_STATUS.md # Projekt-Status
+├── scenes/            # startup_menu.tscn (main), main.tscn, dialogs
+├── scripts/           # ~48 GDScript files (see docs/ARCHITECTURE.md)
+├── addons/            # dice_roller, gdUnit4 (tests)
+├── test/              # gdUnit4 test suites
+├── assets/            # models, miniatures, 3d_pipeline, opr_samples
+├── relay/             # WebSocket relay server for internet multiplayer
+├── tools/model_forge/ # 3D miniature generation pipeline (Python)
+└── docs/              # architecture, development, design docs
 ```
 
----
+Autoloads: `ThemeManager`, `GraphicsSettings`, `AudioManager`.
 
-## 🎯 Vision
+## Scaling conventions
 
-OpenTTS soll eine freie Alternative zum kommerziellen Tabletop Simulator bieten, die speziell auf die Bedürfnisse von Wargamern zugeschnitten ist:
+1 Godot unit = 1 metre. Tables and movement use real-world scale (a 4×4 ft table is
+1.22 m). Miniatures are ~16–60 mm. Because Godot's physics is unreliable at that
+scale, **dice run in a separate scaled SubViewport** via the `dice_roller` addon, and
+table dice are display-only. Conversions: `INCHES_TO_METERS = 0.0254`,
+`MM_TO_METERS = 0.001`.
 
-- **Desktop-First**: Beste Performance und Features
-- **Wargaming-First Design**: Alle Features sind auf Miniaturenspiele optimiert
-- **OnePageRules Integration**: Native Unterstützung für OPR-Spielsysteme
-- **Mess-Tools**: Professionelle Werkzeuge für Distanzmessung, Sichtlinien und Templates
-- **Army Builder**: Integrierter Import von Army Forge und Battlescribe
-- **Open Source**: Vollständig quelloffen und Community-getrieben
+## Documentation
 
----
+- [`PROJECT_STATUS.md`](PROJECT_STATUS.md) — current status & roadmap
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — systems & code map
+- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — build, run, test
+- [`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md) — Wargaming Simulator integration
+- [`docs/OPR_API_Research_Report.md`](docs/OPR_API_Research_Report.md) — OPR Army Forge API notes
+- [`tools/model_forge/README.md`](tools/model_forge/README.md) — model pipeline
 
-## 📝 Geplante Features
+## Security note
 
-Siehe [PLAN.md](./PLAN.md) für den vollständigen Entwicklungsplan.
+API tokens for the Model Forge (`tools/model_forge/.hf_token`, `.gemini_key`,
+`.trellis_space`) are **git-ignored** and never committed. Nothing in this repo
+contains hardcoded credentials.
 
-### Milestone 2 (Alpha) - In Arbeit
-- [x] Map Layout Editor mit Terrain-Typen
-- [x] Deployment Zones (Front-line + Custom Polygon)
-- [x] Objectives System mit abwechselnder Platzierung
-- [x] 1" Grid für Custom Zone Editing
-- [x] Deployment Zones im 3D-Spiel visualisiert
-- [x] Phasen-Management System (Turn-Tracker, Aktivierung)
-- [x] Wunden-Tracking pro Modell
-- [x] **AI-System (OPR Solo & Co-Op Rules v3.5.0)**
-- [x] **Battle Simulator** - Vollständige KI vs KI Kampfsimulation mit Step-by-Step Visualisierung
-- [ ] **Terrain-Gameplay Integration** (PRIORITÄT):
-  - [ ] Cover-System (Ruins, Forest geben Deckung)
-  - [ ] Schwieriges Gelände (Movement-Modifikatoren)
-  - [ ] LOS-Blocking (Container blockieren Sicht)
-  - [ ] Dangerous Terrain (Schaden bei Betreten)
-- [ ] Einheiten-Karten und erweiterte Stats
+## Contributing
 
-### Milestone 3 (Beta)
-- [ ] Vollständige Multiplayer-Lobby
-- [ ] Chat-System
-- [ ] Voice-Chat (optional)
-- [ ] Erweiterte OPR-Integration
+```bash
+git checkout -b feature/my-change
+# make changes; validate (see docs/DEVELOPMENT.md):
+#   compile-check + gdUnit4 tests must pass
+git commit -m "feat: ..." && git push origin feature/my-change   # open a PR
+```
 
----
+Coding standards: [`.claude/AAA_CODING_STANDARDS.md`](.claude/AAA_CODING_STANDARDS.md).
 
-## 💻 Technologie-Stack
+## Credits & license
 
-- **Engine**: Godot 4.5.1 (Open-Source)
-- **Sprache**: GDScript
-- **3D-Format**: glTF 2.0, STL, OBJ
-- **Netzwerk**: ENet (Desktop)
-- **Rendering**: Forward+ (Vulkan/OpenGL 4.6)
-- **Plattformen**: Windows, Linux, macOS
-
----
-
-## 🤝 Mitmachen
-
-Beiträge sind willkommen!
-
-### Development Setup
-1. Fork das Repository
-2. Erstelle einen Feature-Branch (`git checkout -b feature/amazing-feature`)
-3. Committe deine Änderungen (`git commit -m 'Add amazing feature'`)
-4. Push zum Branch (`git push origin feature/amazing-feature`)
-5. Öffne einen Pull Request
-
-### Dokumentation
-- [Entwicklungsplan](./PLAN.md) - Roadmap & Features
-- [Projekt-Status](./PROJECT_STATUS.md) - Aktueller Stand
-- [WGS Integration](./docs/WGS_INTEGRATION.md) - Wargaming Simulator Integration
-- [UI Design](./docs/UI_MODERNIZATION_PLAN.md) - UI/UX Design System
-- [Model Forge](./tools/model_forge/README.md) - 3D-Modell-Pipeline
-
-### Community
-- GitHub Issues für Bug-Reports & Feature-Requests
-- Discord (coming soon)
-- Forum (coming soon)
-
----
-
-## 📊 System-Anforderungen
-
-### Minimum (Low Preset)
-- **OS**: Windows 10, Ubuntu 20.04, macOS 10.15+
-- **CPU**: Intel i5-4460 / AMD FX-6300
-- **RAM**: 8 GB
-- **GPU**: GTX 960 / RX 560 (4GB VRAM)
-- **Storage**: 2 GB
-
-### Empfohlen (Medium Preset)
-- **OS**: Windows 11, Ubuntu 22.04, macOS 12+
-- **CPU**: Intel i5-8400 / AMD Ryzen 5 2600
-- **RAM**: 16 GB
-- **GPU**: GTX 1660 / RX 580 (6GB VRAM)
-- **Storage**: 5 GB
-
-### High-End (Ultra Preset)
-- **CPU**: Intel i7-10700K / AMD Ryzen 7 5800X
-- **RAM**: 32 GB
-- **GPU**: RTX 3080 / RX 6800 XT (10GB VRAM)
-- **Storage**: 10 GB (mit Mods)
-
----
-
-## 📄 Lizenz
-
-MIT License - Siehe [LICENSE](./LICENSE) für Details.
-
----
-
-## 🙏 Credits
-
-### Projekt
-- **Entwicklung**: DutchMaxwell & Community
-- **Engine**: Godot Engine Foundation
-
-### Assets & Libraries
-- **UI Themes**: Kenney.nl (CC0)
-- **Dice Roller**: Godot Dice Roller Plugin (MIT)
-- **Icons**: Lucide Icons (MIT)
-
-Siehe [docs/ASSETS.md](./docs/ASSETS.md) für vollständige Asset-Attributionen.
-
----
-
-## 📞 Kontakt
-
-- **GitHub**: [DutchMaxwell/openTTS](https://github.com/DutchMaxwell/openTTS)
-- **Issues**: [GitHub Issues](https://github.com/DutchMaxwell/openTTS/issues)
-
----
-
-*Inspiriert von der Wargaming-Community, für die Wargaming-Community.*
-
-**Version**: 0.2-alpha
-**Status**: Active Development
-**Letzte Aktualisierung**: 2026-02-28
+MIT — see [`LICENSE`](LICENSE). UI themes by [Kenney](https://kenney.nl) (CC0);
+dice via the Godot Dice Roller addon (MIT). Asset attributions in
+[`docs/ASSETS.md`](docs/ASSETS.md).
