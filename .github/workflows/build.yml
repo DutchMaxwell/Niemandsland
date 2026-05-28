@@ -21,12 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup export templates
-        run: |
-          mkdir -v -p ~/.local/share/godot/export_templates/
-          mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
-
-      - name: Import project (compile-check)
+      - name: Import project (generates .godot/, compile-check)
         run: godot --headless --editor --quit --path . || true
 
       - name: Run gdUnit4 tests
