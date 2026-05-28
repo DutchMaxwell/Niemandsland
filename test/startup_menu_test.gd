@@ -20,7 +20,7 @@ func after_test() -> void:
 
 ## ===== Button Count =====
 
-func test_menu_has_exactly_three_buttons() -> void:
+func test_menu_has_expected_buttons() -> void:
 	var menu_buttons := _menu.find_child("MenuButtons", true, false) as VBoxContainer
 	assert_that(menu_buttons).is_not_null()
 
@@ -29,7 +29,7 @@ func test_menu_has_exactly_three_buttons() -> void:
 		if child is Button:
 			buttons.append(child)
 
-	assert_that(buttons.size()).is_equal(3)
+	assert_that(buttons.size()).is_equal(5)
 
 
 ## ===== Button Labels =====

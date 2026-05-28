@@ -15,7 +15,7 @@ func test_initial_unique_id_is_zero() -> void:
 
 func test_initial_is_server_false() -> void:
 	var peer = RelayMultiplayerPeer.new()
-	assert_that(peer.is_server_relay_supported()).is_false()
+	assert_that(peer._is_server_relay()).is_false()
 
 
 func test_close_resets_all_state() -> void:

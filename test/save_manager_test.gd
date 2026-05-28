@@ -20,7 +20,7 @@ func test_game_unit_to_dict_contains_all_fields() -> void:
 	assert_that(data.has("casts_current")).is_true()
 	assert_that(data.has("casts_per_round")).is_true()
 	assert_that(data.has("models")).is_true()
-	assert_that(data.models).is_instance_of(TYPE_ARRAY)
+	assert_that(data.models is Array).is_true()
 
 
 func test_model_instance_to_dict_contains_wounds_and_markers() -> void:
@@ -565,7 +565,7 @@ func _create_test_model_instance() -> ModelInstance:
 	model.wounds_current = 2
 	model.wounds_max = 3
 	model.is_alive = true
-	model.markers = ["Activated", "Shaken"]
+	model.markers.assign(["Activated", "Shaken"])
 	model.properties = {
 		"weapons": [{"name": "CCW", "attacks": 2}],
 		"equipment": ["Banner"],
@@ -586,7 +586,9 @@ func _create_mock_map_layout_editor() -> Control:
 		"var table_size_feet := Vector2(6, 4)\n" + \
 		"var custom_zone_vertices_p1: Array[Vector2] = []\n" + \
 		"var custom_zone_vertices_p2: Array[Vector2] = []\n" + \
-		"var mission_objectives: Array[Vector2] = []\n"
+		"var mission_objectives: Array[Vector2] = []\n" + \
+		"var wall_segments: Array[Dictionary] = []\n" + \
+		"var placed_objects: Array[Dictionary] = []\n"
 	script.reload()
 	var editor = Control.new()
 	editor.set_script(script)
