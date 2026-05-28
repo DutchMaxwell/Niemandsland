@@ -119,23 +119,87 @@ Ohne Army Forge. `create_army_from_design_language()` erzeugt eine vollstaendige
 ```
 tools/model_forge/
 ├── app.py                      # Gradio Web-UI (Tabs, Session, Pipeline)
+├── batch_generate.py           # Headless Bulk-CLI fuer alle Fraktionen
 ├── opr_client.py               # OPR API Client + Datenklassen (OPRWeapon, OPRUnit, OPRArmy)
-├── prompt_engine.py            # DesignLanguage, PromptEngine, Posen-Erkennung
-├── image_generator.py          # HF Space Bildgenerierung
+├── prompt_engine.py            # DesignLanguage, PromptEngine, IP-Compliance-Block
+├── image_generator.py          # Gemini/HF Bildgenerierung mit Reference-Pinning
+├── quality_gate.py             # Vision-LLM Quality-Check (technisch + GW-IP)
+├── hero_workflow.py            # Hero-Mini-Auswahl + Reference-Image-Persistenz
 ├── trellis_bridge.py           # Bridge zu trellis_core.py (3D-Generierung)
+├── glb_optimizer.py            # Mesh-Decimation + Texture-Resize fuer GLBs
+├── reprocess_existing.py       # Einmal-Skript: existierende GLBs nach-optimieren
 ├── pipeline_state.py           # Session-Management und Pipeline State
-├── exporter.py                 # GLB-Export nach OpenTTS
+├── exporter.py                 # GLB-Export nach OpenTTS (mit Auto-Optimierung)
 ├── __init__.py
+├── bin/
+│   └── gltfpack-linux          # Mesh-Optimizer-Binary (Meshoptimizer v1.1)
 ├── design_languages/           # 38 Fraktions-YAMLs + Template
 │   ├── _template.yaml          # Vorlage fuer neue Fraktionen
 │   ├── alien_hives.yaml        # 41 Einheiten
-│   ├── battle_brothers.yaml    # 25 Einheiten
-│   ├── prime_brothers.yaml     # 32 Einheiten
-│   └── ... (35 weitere)        # 854 Einheiten insgesamt
+│   └── ... (37 weitere)        # 855 Einheiten insgesamt
 ├── requirements.txt            # Python Dependencies
 ├── Start Model Forge.command   # macOS Launcher
 └── Start Model Forge.bat       # Windows Launcher
 ```
+
+## Bulk-Generierung (Headless)
+
+Fuer die Bulk-Generierung aller Fraktionen ohne Gradio-UI:
+
+```bash
+# Eine Fraktion verarbeiten (mit Hero-First, Quality-Gate, GLB-Optimierung)
+python batch_generate.py --faction alien_hives
+
+# Alle 38 Fraktionen abarbeiten (laeuft Tage wegen HF-Quota)
+python batch_generate.py --all
+
+# Tests ohne 3D (nur Bilder, schneller fuer Quality-Tests)
+python batch_generate.py --faction alien_hives --skip-trellis
+
+# Mehr Re-Rolls bei schwierigen Fraktionen
+python batch_generate.py --faction wormhole_daemons_of_war --max-attempts 5
+```
+
+Voraussetzungen:
+- `.gemini_key` mit Google Gemini API Key (fuer Image-Gen + Quality-Gate)
+- `.hf_token` mit HuggingFace Token (fuer TRELLIS-Space)
+- `.trellis_space` mit Space-ID (z.B. `DutchyMaxwell/TRELLIS-2`)
+
+Workflow je Fraktion:
+1. Hero-Mini bestimmen (Heuristik oder `aesthetic.hero_unit_key` in YAML)
+2. Hero generieren (mit Quality-Gate-Loop bis PASS), als `_reference.webp` persistieren
+3. Restliche Units mit Reference-Pinning generieren
+4. Quality-Gate-Check (technisch + GW-IP) je Bild → bei FAIL Re-Roll
+5. TRELLIS 3D
+6. GLB optimieren (Mesh-Decimation + 1024^2 Textur)
+7. Export nach `assets/miniatures/{faction}/glb/{NN}_{Name}.glb`
+
+Resume-Logic: bereits vorhandene GLBs werden uebersprungen. Sessions liegen unter `state/{faction}_{timestamp}/`.
+
+## IP-Compliance
+
+Jeder generierte Prompt enthaelt automatisch den `IP_COMPLIANCE_BLOCK` aus `prompt_engine.py`,
+der konkrete GW-Designs ausschliesst (Aquila, Skull-Cog, Custodes-Helme etc.).
+Zusaetzlich prueft `quality_gate.py` jedes erzeugte Bild via Gemini Vision auf:
+- technische Kriterien (single mini, no base, white bg)
+- GW-IP-Verletzungen (mit konkreter Liste verbotener Symbole)
+
+Ein Bild mit `ip_concerns != []` schlaegt fehl und wird re-gerollt. Manuelle Review
+des Logs empfohlen, falls eine Fraktion auffaellig viele IP-Flags produziert.
+
+## Hero-First Style-Konsistenz
+
+Damit alle Minis einer Fraktion zusammenpassen, wird eine "Hero-Mini" zuerst generiert
+und als visuelle Reference (`assets/miniatures/{faction}/_reference.webp`) gespeichert.
+Alle weiteren Image-Calls bekommen dieses Bild als Style-Anker mit (Gemini Nano Banana
+unterstuetzt das nativ ueber `contents=[image, prompt]`). Ergebnis: konsistenter
+Render-Look, gleiche Beleuchtung, gleiche Farb-Behandlung quer ueber die ganze Fraktion.
+
+Hero-Auswahl-Heuristik (in `hero_workflow.py`):
+1. `aesthetic.hero_unit_key` aus YAML (manueller Override)
+2. Hero-Infanterie: size=1, base ≤ 40mm, max cost, keine Vehicle-Regeln
+3. Monster-Hero: size=1, base ≤ 50mm, max cost
+4. Globaler Fallback: max cost
 
 ## Tests
 
