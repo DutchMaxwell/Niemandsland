@@ -43,6 +43,9 @@ dist/
 *.log
 logs/
 
+# gdUnit4 test reports
+reports/
+
 # Tabletop Simulator imports (large files)
 tts_imports/
 *.tts.json
@@ -66,3 +69,7 @@ __pycache__/
 .hf_token
 .gemini_key
 .trellis_space
+
+# Model Forge artifacts (GLB-Optimizer-Backups, Gallery-Montagen)
+*.orig-backup
+/dao_union_gallery*.png

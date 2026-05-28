@@ -157,7 +157,7 @@ OpenTTS ist ein Open-Source Tabletop-Simulator mit Fokus auf Wargaming-Spiele wi
 - [ ] **Terrain-Höhen** - Height 5 Objekte für Sichtlinien-Berechnung
 
 ### Gameplay-Features
-- [ ] Einheiten-Karten und erweiterte Stats im 3D-Spiel
+- [x] **Einheiten-Karten und erweiterte Stats im 3D-Spiel** - Angedockte Unit-Karte (unit_card.gd), erscheint automatisch bei Selektion, kombiniert statische OPR-Werte (Q/D/Kosten/Base/Waffen/Regeln) mit Live-Zustand (lebende Modelle, Wunden, Aktivierung, Fatigue/Shaken, Caster-Punkte)
 - [ ] Erweiterte Würfel-Optionen (Modifikatoren, Rerolls)
 - [x] **Phasen-Management System** - Turn-Tracker mit Runden und Aktivierungen (activation_tracker.gd)
 - [x] **Wunden-Tracking pro Modell** - wounds_dialog.gd mit +/- Buttons

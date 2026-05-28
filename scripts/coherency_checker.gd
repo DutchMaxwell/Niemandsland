@@ -18,8 +18,12 @@ const SKIRMISH_CHAIN_DISTANCE_INCHES := 6.0
 ## Elevated coherency distance (different heights)
 const ELEVATED_COHERENCY_INCHES := 3.0
 
-## Height difference threshold for "elevated" check (in meters)
-const ELEVATION_THRESHOLD := 0.05  # 5cm
+## Height difference above which models count as being at "different elevation"
+## (OPR: elevated terrain is >3" tall). Must stay clearly above ObjectManager's
+## drag_lift_height (0.05m) so a model that is briefly lifted while being dragged
+## is NOT mistaken for standing on elevated terrain - that false positive made
+## the 3" elevation allowance trigger and showed models >1" apart as coherent.
+const ELEVATION_THRESHOLD := 0.0762  # 3 inches
 
 ## Inches to meters conversion
 const INCHES_TO_METERS := 0.0254
@@ -52,9 +56,11 @@ class CoherencyResult:
 
 # ===== Main Check Method =====
 
-## Checks coherency for a GameUnit.
+## Checks coherency for a GameUnit per OPR rules (GF Advanced Rules v3.5.0):
+## models must form an uninterrupted chain in 1" coherency (3" across different
+## elevation) AND stay within 9" (6" Skirmish) of all other models.
 ## @param game_unit: The unit to check
-## @param is_skirmish: If true, uses 6" max chain instead of 9"
+## @param is_skirmish: If true, uses 6" max spread instead of 9"
 ## @returns: CoherencyResult with valid flag and issues array
 static func check_unit_coherency(game_unit: GameUnit, is_skirmish: bool = false) -> CoherencyResult:
 	var result = CoherencyResult.new()
@@ -64,27 +70,42 @@ static func check_unit_coherency(game_unit: GameUnit, is_skirmish: bool = false)
 	if models.size() <= 1:
 		return result
 
-	# Check 1: Each model must be within coherency of at least one other
-	for model in models:
-		if not _has_coherent_neighbor(model, models):
-			var nearest = _get_nearest_model(model, models)
-			var dist = _distance_between_models(model, nearest)
-			result.add_issue(
-				IssueType.ISOLATED,
-				model,
-				"Model %d is out of coherency (nearest: %.1f\")" % [model.model_index + 1, dist],
-				{"nearest_distance": dist, "nearest_model": nearest}
-			)
+	# Check 1: The 1" adjacency graph must be a single connected chain.
+	# Any model not reachable from the main chain is out of coherency.
+	var components = _connected_components(models)
+	if components.size() > 1:
+		var main_component := _largest_component(components)
+		var main_models := _models_for_indices(models, main_component)
+		for component in components:
+			if component == main_component:
+				continue
+			for index in component:
+				var model: ModelInstance = models[index]
+				var nearest := _nearest_in_set(model, main_models)
+				var dist := _distance_between_models(model, nearest) if nearest else INF
+				result.add_issue(
+					IssueType.ISOLATED,
+					model,
+					"Model %d is out of coherency (nearest unit model: %.1f\")" % [
+						model.model_index + 1, dist
+					],
+					{"nearest_distance": dist, "nearest_model": nearest}
+				)
 
-	# Check 2: Max chain length
+	# Check 2: Every model must stay within the max spread of all others.
 	var max_chain = SKIRMISH_CHAIN_DISTANCE_INCHES if is_skirmish else MAX_CHAIN_DISTANCE_INCHES
-	var chain_dist = _get_max_chain_distance(models)
-	if chain_dist > max_chain:
+	var spread := _get_max_spread_pair(models)
+	if spread.distance > max_chain:
 		result.add_issue(
 			IssueType.CHAIN_TOO_LONG,
 			null,
-			"Unit chain exceeds %.0f\" (%.1f\")" % [max_chain, chain_dist],
-			{"chain_distance": chain_dist, "max_allowed": max_chain}
+			"Unit spread exceeds %.0f\" (%.1f\")" % [max_chain, spread.distance],
+			{
+				"chain_distance": spread.distance,
+				"max_allowed": max_chain,
+				"model_a": spread.model_a,
+				"model_b": spread.model_b,
+			}
 		)
 
 	return result
@@ -92,31 +113,70 @@ static func check_unit_coherency(game_unit: GameUnit, is_skirmish: bool = false)
 
 # ===== Helper Methods =====
 
-## Checks if a model has at least one neighbor within coherency.
-static func _has_coherent_neighbor(model: ModelInstance, all_models: Array[ModelInstance]) -> bool:
-	for other in all_models:
-		if model == other:
+## Returns true if two models are close enough to count as a coherency link
+## (1", or 3" when they sit at clearly different elevations).
+static func _are_linked(model_a: ModelInstance, model_b: ModelInstance) -> bool:
+	var coherency_dist := COHERENCY_DISTANCE_INCHES
+	if _is_elevated_different(model_a, model_b):
+		coherency_dist = ELEVATED_COHERENCY_INCHES
+	return _distance_between_models(model_a, model_b) <= coherency_dist
+
+
+## Splits models into connected components of the 1" coherency graph (BFS).
+## Each component is an Array of indices into the models array.
+static func _connected_components(models: Array[ModelInstance]) -> Array:
+	var count := models.size()
+	var visited: Array[bool] = []
+	visited.resize(count)
+	visited.fill(false)
+
+	var components: Array = []
+	for start in range(count):
+		if visited[start]:
 			continue
 
-		var dist = _distance_between_models(model, other)
-		var coherency_dist = COHERENCY_DISTANCE_INCHES
+		var component: Array[int] = []
+		var queue: Array[int] = [start]
+		visited[start] = true
 
-		# Use elevated coherency if height difference is significant
-		if _is_elevated_different(model, other):
-			coherency_dist = ELEVATED_COHERENCY_INCHES
+		while not queue.is_empty():
+			var current: int = queue.pop_back()
+			component.append(current)
+			for other in range(count):
+				if visited[other] or other == current:
+					continue
+				if _are_linked(models[current], models[other]):
+					visited[other] = true
+					queue.append(other)
 
-		if dist <= coherency_dist:
-			return true
+		components.append(component)
 
-	return false
+	return components
 
 
-## Gets the nearest model to a given model.
-static func _get_nearest_model(model: ModelInstance, all_models: Array[ModelInstance]) -> ModelInstance:
+## Returns the component with the most models (lowest first index breaks ties).
+static func _largest_component(components: Array) -> Array:
+	var best: Array = components[0]
+	for component in components:
+		if component.size() > best.size():
+			best = component
+	return best
+
+
+## Maps an array of indices back to their ModelInstances.
+static func _models_for_indices(models: Array[ModelInstance], indices: Array) -> Array[ModelInstance]:
+	var result: Array[ModelInstance] = []
+	for index in indices:
+		result.append(models[index])
+	return result
+
+
+## Gets the nearest model to a given model within a set of candidates.
+static func _nearest_in_set(model: ModelInstance, candidates: Array[ModelInstance]) -> ModelInstance:
 	var nearest: ModelInstance = null
 	var min_dist := INF
 
-	for other in all_models:
+	for other in candidates:
 		if model == other:
 			continue
 
@@ -194,6 +254,25 @@ static func _get_edge_distance_in_direction(model: ModelInstance, dir_x: float, 
 		return (base_mm / 2.0) * 0.001
 
 
+## Returns the point on a model's base edge facing another world position,
+## projected onto the table surface (fixed height). Used to draw measurement
+## lines base-edge to base-edge - matching the in-game measurement tool - so the
+## visible line equals the base-to-base gap instead of connecting centers.
+static func get_ground_edge_point(model: ModelInstance, toward: Vector3, ground_y: float = 0.02) -> Vector3:
+	if not model.node or not is_instance_valid(model.node):
+		return toward
+
+	var center = model.node.global_position
+	var dir := Vector2(toward.x - center.x, toward.z - center.z)
+	if dir.length() < 0.001:
+		dir = Vector2(1.0, 0.0)
+	else:
+		dir = dir.normalized()
+
+	var edge = _get_edge_distance_in_direction(model, dir.x, dir.y)
+	return Vector3(center.x + dir.x * edge, ground_y, center.z + dir.y * edge)
+
+
 ## Checks if two models are at significantly different heights.
 static func _is_elevated_different(model_a: ModelInstance, model_b: ModelInstance) -> bool:
 	if not model_a.node or not model_b.node:
@@ -203,17 +282,20 @@ static func _is_elevated_different(model_a: ModelInstance, model_b: ModelInstanc
 	return height_diff > ELEVATION_THRESHOLD
 
 
-## Calculates the maximum chain distance (furthest two models apart).
-static func _get_max_chain_distance(models: Array[ModelInstance]) -> float:
-	var max_dist := 0.0
+## Finds the furthest-apart pair of models (the unit's spread).
+## Returns {distance, model_a, model_b}.
+static func _get_max_spread_pair(models: Array[ModelInstance]) -> Dictionary:
+	var result := {"distance": 0.0, "model_a": null, "model_b": null}
 
 	for i in range(models.size()):
 		for j in range(i + 1, models.size()):
 			var dist = _distance_between_models(models[i], models[j])
-			if dist > max_dist:
-				max_dist = dist
+			if dist > result.distance:
+				result.distance = dist
+				result.model_a = models[i]
+				result.model_b = models[j]
 
-	return max_dist
+	return result
 
 
 # ===== Visualization =====

@@ -8,6 +8,9 @@ signal selection_changed(selected_objects: Array[Node3D])
 signal distance_changed(distance_inches: float, from_pos: Vector3, to_pos: Vector3)
 signal measurement_finished(distance_inches: float)
 signal drag_ended()
+## Emitted (throttled) while dragging, so listeners can refresh live feedback
+## such as unit coherency without waiting for the drag to finish.
+signal drag_updated()
 signal context_menu_requested(screen_pos: Vector2, selected_objects: Array)
 
 @export var drag_height: float = 0.5  # Drag height in meters
@@ -33,6 +36,16 @@ var _rotation_broadcast_timer: float = 0.0
 var _move_broadcast_timer: float = 0.0
 const ROTATION_BROADCAST_INTERVAL: float = 0.066  # ~15 Hz
 const MOVE_BROADCAST_INTERVAL: float = 0.05  # ~20 Hz
+
+# Throttle for live coherency feedback while dragging (~15 Hz).
+const COHERENCY_UPDATE_INTERVAL: float = 0.066
+var _coherency_update_timer: float = 0.0
+
+# Sort Table animation: all models start moving at once but with slightly
+# randomized durations so the swarm looks busy ("wuselig") rather than robotic.
+const SORT_ANIM_DURATION: float = 1.2  # Base travel time in seconds
+const SORT_ANIM_DURATION_JITTER: float = 0.35  # +/- random variation per model
+const SORT_ANIM_RESTING_Y: float = 0.0  # Table surface height for all models
 
 # Drag distance tracking
 var _drag_start_positions: Dictionary = {}  # Object -> start position mapping
@@ -558,6 +571,7 @@ func _stop_dragging() -> void:
 
 	_is_dragging = false
 	_move_broadcast_timer = 0.0
+	_coherency_update_timer = 0.0
 	_drag_start_positions.clear()
 	_drag_anchor_position = Vector3.ZERO
 	_destroy_drag_line()
@@ -578,6 +592,7 @@ func _cancel_drag() -> void:
 
 	_is_dragging = false
 	_move_broadcast_timer = 0.0
+	_coherency_update_timer = 0.0
 	_drag_start_positions.clear()
 	_drag_anchor_position = Vector3.ZERO
 	_destroy_drag_line()
@@ -781,6 +796,12 @@ func _update_drag(screen_pos: Vector2) -> void:
 
 		# Emit distance
 		distance_changed.emit(distance_inches, _drag_anchor_position, current_anchor_pos)
+
+		# Throttled live update for coherency feedback while dragging
+		_coherency_update_timer += get_process_delta_time()
+		if _coherency_update_timer >= COHERENCY_UPDATE_INTERVAL:
+			_coherency_update_timer = 0.0
+			drag_updated.emit()
 
 
 ## Start measuring distance from a point on the table
@@ -2044,10 +2065,12 @@ func sort_table() -> void:
 		print("Sort Table: No units to reset")
 		return
 
-	# Reset all game units to import state
+	# Reset status/wounds/markers/visibility, then animate models back to their
+	# import positions so the movement can be followed on the table.
 	for game_unit in all_units:
 		if game_unit and game_unit.has_method("reset_to_import_state"):
 			game_unit.reset_to_import_state()
+			_animate_unit_to_import(game_unit)
 
 	# Clear selection
 	_deselect_all()
@@ -2062,6 +2085,36 @@ func sort_table() -> void:
 				radial_controller.initialize_caster_marker_for_unit(game_unit)
 
 	print("Sort Table: Reset %d units to import positions" % all_units.size())
+
+
+## Animates every model of a unit from its current spot back to its import
+## position. Tweens are created in the same frame so all models start moving
+## simultaneously; per-model duration jitter gives the swarm a busy look.
+func _animate_unit_to_import(game_unit) -> void:
+	for model in game_unit.models:
+		var node: Node3D = model.node
+		if not node or not is_instance_valid(node):
+			continue
+
+		var target: Vector3 = model.import_position
+		target.y = SORT_ANIM_RESTING_Y
+
+		var duration: float = SORT_ANIM_DURATION + randf_range(
+			-SORT_ANIM_DURATION_JITTER, SORT_ANIM_DURATION_JITTER
+		)
+
+		var move_tween: Tween = create_tween()
+		move_tween.set_ease(Tween.EASE_IN_OUT)
+		move_tween.set_trans(Tween.TRANS_CUBIC)
+		move_tween.tween_property(node, "global_position", target, duration)
+		# Snap to the exact target to avoid floating-point drift.
+		move_tween.tween_callback(func() -> void: node.global_position = target)
+
+		if model.import_rotation != Vector3.ZERO:
+			var rot_tween: Tween = create_tween()
+			rot_tween.set_ease(Tween.EASE_IN_OUT)
+			rot_tween.set_trans(Tween.TRANS_CUBIC)
+			rot_tween.tween_property(node, "rotation", model.import_rotation, duration)
 
 
 ## ============================================================================
