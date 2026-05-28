@@ -1,96 +1,44 @@
-# OpenTTS - Dokumentation
+# Documentation index
 
-Willkommen in der OpenTTS Dokumentation! Hier findest du alle technischen Details und Integrations-Guides.
+Start at the top-level [`README.md`](../README.md). This folder holds the deeper
+technical docs.
 
----
+## Core
 
-## 📁 Dokumentations-Übersicht
+| Doc | Contents |
+|---|---|
+| [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md) | What works / in progress / planned |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Systems, scripts, data flow, networking, scaling |
+| [`DEVELOPMENT.md`](DEVELOPMENT.md) | Build, run, test (Godot 4.6 / Flatpak / gdUnit4) |
+| [`../.claude/AAA_CODING_STANDARDS.md`](../.claude/AAA_CODING_STANDARDS.md) | Coding standards |
 
-### 🔌 Integrationen
-| Dokument | Beschreibung | Status |
-|----------|--------------|--------|
-| [WGS_INTEGRATION.md](./WGS_INTEGRATION.md) | Wargaming Simulator Integration | ✅ Implementiert |
-| [OPR_API_Research_Report.md](./OPR_API_Research_Report.md) | OnePageRules API Recherche | ✅ Recherche abgeschlossen |
-| [WGS_API_REQUIREMENTS.txt](./WGS_API_REQUIREMENTS.txt) | WGS API Anforderungen | 📚 Referenz |
+## Reference
 
-### 🎮 Gameplay-Systeme
-| Dokument | Beschreibung | Status |
-|----------|--------------|--------|
-| [PLAN_UNIT_SYSTEM.md](./PLAN_UNIT_SYSTEM.md) | Unit-System Architektur & Implementation | ✅ Implementiert |
-| [PLAN_AI_SYSTEM.md](./PLAN_AI_SYSTEM.md) | AI-System (OPR Solo Rules) | ✅ Implementiert |
-| [DICE_PHYSICS_WIP.md](./DICE_PHYSICS_WIP.md) | Würfel-Physik Stabilisierung | 🔧 WIP |
+| Doc | Contents | Status |
+|---|---|---|
+| [`WGS_INTEGRATION.md`](WGS_INTEGRATION.md) | Wargaming Simulator integration | Implemented |
+| [`WGS_API_REQUIREMENTS.txt`](WGS_API_REQUIREMENTS.txt) | WGS server endpoint spec | Reference |
+| [`OPR_API_Research_Report.md`](OPR_API_Research_Report.md) | Army Forge API (reverse-engineered) | Reference |
+| [`ASSETS.md`](ASSETS.md) | Asset sources & licenses | Reference |
 
-### 🎨 UI/UX
-| Dokument | Beschreibung | Status |
-|----------|--------------|--------|
-| [UI_MODERNIZATION_PLAN.md](./UI_MODERNIZATION_PLAN.md) | Dark Glassmorphism Design System | ✅ Implementiert |
+## Design docs
 
-### 🔨 Tools
-| Dokument | Beschreibung | Status |
-|----------|--------------|--------|
-| [Model Forge README](../tools/model_forge/README.md) | 3D-Modell-Pipeline (38 Fraktionen, 854 Units) | ✅ Implementiert |
+| Doc | Contents | Status |
+|---|---|---|
+| [`PLAN_UNIT_SYSTEM.md`](PLAN_UNIT_SYSTEM.md) | Unit-system architecture | Implemented |
+| [`UI_MODERNIZATION_PLAN.md`](UI_MODERNIZATION_PLAN.md) | Dark glassmorphism UI design | Draft / partial |
 
-### 📦 Assets
-| Dokument | Beschreibung | Status |
-|----------|--------------|--------|
-| [ASSETS.md](./ASSETS.md) | Asset-Quellen & Lizenzen | 📚 Referenz |
+## Tools
 
----
+| Doc | Contents |
+|---|---|
+| [`../tools/model_forge/README.md`](../tools/model_forge/README.md) | 3D miniature pipeline (38 factions / 855 units) |
+| [`../relay/README.md`](../relay/README.md) | WebSocket relay for internet multiplayer |
 
-## 🚀 Schnellstart
+## External
 
-### Für Entwickler
-1. **Projekt-Übersicht**: Starte mit [../README.md](../README.md)
-2. **Aktueller Status**: Siehe [../PROJECT_STATUS.md](../PROJECT_STATUS.md)
-
-### Für Integration-Entwickler
-1. **WGS Integration**: [WGS_INTEGRATION.md](./WGS_INTEGRATION.md)
-2. **OPR API**: [OPR_API_Research_Report.md](./OPR_API_Research_Report.md)
-
----
-
-## 📊 Dokumentations-Status
-
-### ✅ Fertig & Aktuell
-- WGS Integration
-- OPR API (Share-Link Import)
-- Unit-System Plan
-- AI-System Plan
-- UI Glassmorphism Design
-- Model Forge (3D-Pipeline)
-
-### 🔧 Work in Progress
-- Dice Physics
-
----
-
-## 🤝 Beiträge zur Dokumentation
-
-Dokumentation verbessern:
-1. Fork das Repository
-2. Bearbeite Markdown-Dateien
-3. Öffne einen Pull Request
-
-### Dokumentations-Guidelines
-- **Sprache**: Deutsch (primär), Englisch (sekundär)
-- **Format**: Markdown (.md)
-- **Bilder**: Speichere in `docs/images/`
-- **Code-Snippets**: Verwende GDScript Syntax-Highlighting
-
----
-
-## 🔗 Externe Ressourcen
-
-### Godot
-- [Godot Docs](https://docs.godotengine.org/en/stable/)
-- [GDScript Style Guide](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html)
-
-### Wargaming
-- [OnePageRules](https://onepagerules.com/)
-- [Army Forge](https://army-forge.onepagerules.com/)
-- [Wargaming Simulator](https://udos3dworld.com/WargamingSimulator/)
-
----
-
-**Letzte Aktualisierung:** 2026-02-28
-**Maintainer:** DutchMaxwell
+- [Godot docs](https://docs.godotengine.org/en/stable/) ·
+  [GDScript style guide](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html)
+- [OnePageRules](https://onepagerules.com/) ·
+  [Army Forge](https://army-forge.onepagerules.com/) ·
+  [Wargaming Simulator](https://udos3dworld.com/WargamingSimulator/)

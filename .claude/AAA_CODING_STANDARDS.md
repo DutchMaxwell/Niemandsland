@@ -335,24 +335,23 @@ Jede Klasse hat EINE Verantwortung:
 
 | Klasse | Verantwortung |
 |--------|---------------|
-| `AIManager` | Orchestriert AI-Züge |
-| `AICombat` | Löst Kampf auf (Würfel, Casualties) |
-| `AITerrain` | Terrain-Interaktion (Cover, Pathfinding) |
-| `AIDecisionTree` | Entscheidet Aktionen |
-| `AIContext` | Hält Spielzustand für AI |
+| `ObjectManager` | Tisch-Objekte spawnen/selektieren/draggen |
+| `CoherencyChecker` | OPR-Kohärenz prüfen (reine Logik, keine Darstellung) |
+| `CoherencyVisualizer` | Kohärenz visuell anzeigen |
+| `GameUnit` | Modelle + Zustand einer Einheit halten |
+| `NetworkManager` | Multiplayer-Sync / RPCs |
+| `SaveManager` | `.otts`-Serialisierung |
 
-### 9.2 Data Flow
+### 9.2 Data Flow (Beispiel: OPR-Import → Tisch)
 
 ```
-BattleSimulator (Orchestrator)
+OPRApiClient (Armee von Army Forge holen)
     ↓
-AIManager (AI-Steuerung)
+OPRArmyManager (Units spawnen, GLBs auf Base skalieren)
     ↓
-AIDecisionTree (Entscheidung) ← AIContext (State)
+GameUnit / ModelInstance (Unit- und Modell-Zustand)
     ↓
-AICombat (Ausführung) ← AITerrain (Modifikatoren)
-    ↓
-CombatResult (Ergebnis)
+NetworkManager (zu Peers syncen)  ·  SaveManager (.otts speichern)
 ```
 
 ---
