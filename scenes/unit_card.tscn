@@ -1,0 +1,93 @@
+[gd_scene load_steps=3 format=3 uid="uid://unit_card"]
+
+[ext_resource type="Script" path="res://scripts/unit_card.gd" id="1_unit_card"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
+bg_color = Color(0.08, 0.09, 0.11, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.5, 0.7, 0.8)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+shadow_size = 4
+shadow_color = Color(0, 0, 0, 0.5)
+
+[node name="UnitCard" type="PanelContainer"]
+custom_minimum_size = Vector2(300, 0)
+offset_right = 300.0
+offset_bottom = 0.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+script = ExtResource("1_unit_card")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="VBox" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Header" type="HBoxContainer" parent="MarginContainer/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NameLabel" type="RichTextLabel" parent="MarginContainer/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+bbcode_enabled = true
+text = "[b]Unit Name[/b]"
+fit_content = true
+scroll_active = false
+
+[node name="CloseButton" type="Button" parent="MarginContainer/VBox/Header"]
+custom_minimum_size = Vector2(26, 26)
+layout_mode = 2
+size_flags_vertical = 4
+flat = true
+text = "✕"
+
+[node name="StatsLabel" type="RichTextLabel" parent="MarginContainer/VBox"]
+layout_mode = 2
+bbcode_enabled = true
+text = "Q4+ | D4+"
+fit_content = true
+scroll_active = false
+
+[node name="StatusLabel" type="RichTextLabel" parent="MarginContainer/VBox"]
+layout_mode = 2
+bbcode_enabled = true
+text = "Bereit"
+fit_content = true
+scroll_active = false
+
+[node name="WoundsLabel" type="RichTextLabel" parent="MarginContainer/VBox"]
+layout_mode = 2
+bbcode_enabled = true
+text = "Modelle: 5/5"
+fit_content = true
+scroll_active = false
+
+[node name="Separator" type="HSeparator" parent="MarginContainer/VBox"]
+layout_mode = 2
+
+[node name="WeaponsLabel" type="RichTextLabel" parent="MarginContainer/VBox"]
+layout_mode = 2
+bbcode_enabled = true
+text = "[b]Waffen[/b]"
+fit_content = true
+scroll_active = false
+
+[node name="RulesLabel" type="RichTextLabel" parent="MarginContainer/VBox"]
+layout_mode = 2
+bbcode_enabled = true
+text = "[b]Regeln:[/b]"
+fit_content = true
+scroll_active = false

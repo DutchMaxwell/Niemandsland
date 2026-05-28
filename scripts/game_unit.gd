@@ -230,8 +230,10 @@ func reset_activation() -> void:
 	is_activated = false
 
 
-## Resets unit to import state (position, status, wounds, markers).
-## Used by Sort Table functionality.
+## Resets unit status, wounds, markers and model visibility to import state.
+## Used by Sort Table. Note: model positions/rotations are NOT changed here -
+## the caller animates models back to their import positions (see
+## ObjectManager.sort_table) so the movement can be watched on the table.
 func reset_to_import_state() -> void:
 	# Reset unit-level status
 	is_activated = false
@@ -250,14 +252,8 @@ func reset_to_import_state() -> void:
 		# Clear markers
 		model.clear_markers()
 
-		# Reset position and rotation to import state
+		# Revive hidden/removed models so they animate back into formation
 		if model.node and is_instance_valid(model.node):
-			if model.import_position != Vector3.ZERO:
-				model.node.global_position = model.import_position
-			if model.import_rotation != Vector3.ZERO:
-				model.node.rotation = model.import_rotation
-
-			# Show model if it was hidden
 			model.node.visible = true
 			model.node.set_meta("deleted", false)
 

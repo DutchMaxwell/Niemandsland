@@ -134,6 +134,7 @@ var internet_lobby: InternetLobby = null
 var opr_army_manager: OPRArmyManager = null
 var opr_import_dialog: OPRImportDialog = null
 var opr_stats_tooltip: OPRStatsTooltip = null
+var unit_card: UnitCard = null
 var _hovered_model: Node3D = null
 
 # WGS (Wargaming Simulator) Integration
@@ -214,6 +215,8 @@ func _ready() -> void:
 	object_manager.distance_changed.connect(_on_distance_changed)
 	object_manager.measurement_finished.connect(_on_measurement_finished)
 	object_manager.drag_ended.connect(_on_drag_ended)
+	object_manager.drag_updated.connect(_check_coherency_for_selected_units)
+	object_manager.selection_changed.connect(_on_selection_changed_update_card)
 
 	# Hide distance label initially
 	distance_label.text = ""
@@ -347,6 +350,11 @@ func _ready() -> void:
 	opr_stats_tooltip = tooltip_scene.instantiate()
 	opr_stats_tooltip.army_manager = opr_army_manager
 	$UI.add_child(opr_stats_tooltip)
+
+	# Initialize Unit Card (docked, live battle state for the selected unit)
+	var unit_card_scene = load("res://scenes/unit_card.tscn")
+	unit_card = unit_card_scene.instantiate()
+	$UI.add_child(unit_card)
 
 	# Connect OPR import button
 	import_opr_btn.pressed.connect(_on_import_opr_army)
@@ -1846,6 +1854,25 @@ func _clear_opr_hover() -> void:
 			opr_stats_tooltip.hide_tooltip()
 
 
+## Update the docked unit card when the selection changes.
+## Shows the first selected unit's card; hides it for empty/non-unit selections.
+func _on_selection_changed_update_card(selected_objects: Array[Node3D]) -> void:
+	if not unit_card:
+		return
+
+	if selected_objects.is_empty():
+		unit_card.clear()
+		return
+
+	var units := UnitUtils.get_unique_units(selected_objects)
+	if units.is_empty():
+		unit_card.clear()
+		return
+
+	var extra_units := units.size() - 1
+	unit_card.show_unit(units[0], extra_units)
+
+
 ## ============================================================================
 ## WGS (Wargaming Simulator) Integration
 ## ============================================================================
@@ -2303,8 +2330,10 @@ func _check_coherency_for_selected_units() -> void:
 		var game_unit = obj.get_meta("game_unit") as GameUnit
 		if game_unit and game_unit not in checked_units:
 			checked_units.append(game_unit)
-			# Show coherency visualization for this unit
-			coherency_visualizer.show_coherency(game_unit)
+			# Show coherency visualization for this unit. animate=false: this runs
+			# live (~15 Hz) while dragging, so re-running the fade/pulse each frame
+			# would make the lines flicker.
+			coherency_visualizer.show_coherency(game_unit, false, false)
 
 
 ## Check all units for deployment zone compliance

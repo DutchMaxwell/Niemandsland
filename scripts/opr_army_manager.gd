@@ -27,6 +27,11 @@ const TRAY_SIDES = {
 
 const FEET_TO_METERS: float = 0.3048
 const INCHES_TO_METERS: float = 0.0254
+## Modell-Fit relativ zur Base (gegen Scale-Creep):
+## Die groesste horizontale Ausdehnung darf max. 125% der Base-Langseite betragen.
+const FOOTPRINT_MAX_RATIO: float = 1.25
+## Schwebehoehe fuer Flying-Units, relativ zur Base-Langseite (40mm Base → ~14mm).
+const FLYING_HOVER_RATIO: float = 0.35
 const TRAY_SIZE_INCHES: float = 32.0  # 32x32 inch tray
 const TRAY_MARGIN: float = 0.05  # 5cm gap from table edge
 const TRAY_DROP_HEIGHT: float = 0.5  # Start 50cm above table
@@ -361,11 +366,16 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 		game_unit.unit_properties["display_suffix"] = name_suffix
 		game_unit.unit_properties["faction_folder"] = faction_folder
 
-		# Store import positions on ModelInstances (for Sort Table reset)
+		# Store import positions on ModelInstances (for Sort Table reset).
+		# Capture the resting height (table surface, y=0), NOT the elevated
+		# TRAY_DROP_HEIGHT the models currently sit at before _animate_tray_drop
+		# lowers them - otherwise Sort Table would restore them in mid-air.
 		for i in range(game_unit.models.size()):
 			var model_instance = game_unit.models[i]
 			if model_instance and model_instance.node and is_instance_valid(model_instance.node):
-				model_instance.import_position = model_instance.node.global_position
+				var resting_pos: Vector3 = model_instance.node.global_position
+				resting_pos.y = 0.0
+				model_instance.import_position = resting_pos
 				model_instance.import_rotation = model_instance.node.rotation
 
 	return models
@@ -425,37 +435,24 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 		if glb_scene:
 			var glb_instance = glb_scene.instantiate()
 
-			# 1. Get raw model height from AABB
+			# Modell an die Base anpassen (Footprint-Cap gegen Scale-Creep, Flying schwebt)
 			var aabb = _get_model_aabb(glb_instance)
-			var raw_height = aabb.size.y
-
-			# 2. Target height based on base size (in meters)
-			# 25mm base → 28mm, 32mm+ base → same as base
-			var base_mm = unit.base_size_round
-			var target_height_mm = base_mm + 3 if base_mm <= 25 else base_mm
-			var target_height_m = target_height_mm * 0.001
-
-			# 3. Scale to match target height
-			var base_scale = target_height_m / raw_height if raw_height > 0 else 0.001
-
-			# 4. Apply Tough scaling: 1.3^(tough/3)
+			var base_long_mm = max(unit.base_width_mm, unit.base_depth_mm) if unit.base_is_oval else unit.base_size_round
 			var tough = _get_tough_value(unit)
-			var tough_scale = _calculate_model_scale(tough)
-			var final_scale = base_scale * tough_scale
+			var is_flying = _is_flying_from_rules(unit.special_rules)
+			var fit = _compute_model_fit(aabb, base_long_mm, tough, is_flying)
+			var final_scale = fit.scale
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
-
-			# 5. Position model so feet are on base
-			var bottom_offset = -aabb.position.y * final_scale
-			glb_instance.position.y = bottom_offset + 0.003
+			glb_instance.position.y = fit.y_offset
 
 			_brighten_trellis_materials(glb_instance)
 			wrapper.add_child(glb_instance)
 			use_glb_model = true
-			model_height = raw_height * final_scale
+			model_height = fit.height
 
-			print("OPRArmyManager: GLB '%s' base:%dmm target:%dmm tough:%d scale:%.4f" % [
-				unit.name, base_mm, target_height_mm, tough, final_scale])
+			print("OPRArmyManager: GLB '%s' base:%dmm tough:%d flying:%s scale:%.4f" % [
+				unit.name, base_long_mm, tough, str(is_flying), final_scale])
 
 	# Fallback: Create placeholder body if no GLB model found
 	if not use_glb_model:
@@ -579,27 +576,19 @@ func create_model_from_properties(props: Dictionary) -> StaticBody3D:
 			var glb_instance = glb_scene.instantiate()
 
 			var aabb = _get_model_aabb(glb_instance)
-			var raw_height = aabb.size.y
-
-			var base_mm = base_size_round
-			var target_height_mm = base_mm + 3 if base_mm <= 25 else base_mm
-			var target_height_m = target_height_mm * 0.001
-
-			var base_scale_val = target_height_m / raw_height if raw_height > 0 else 0.001
-
+			var base_long_mm = max(int(props.get("base_width_mm", 32)), int(props.get("base_depth_mm", 32))) if base_is_oval else base_size_round
 			var tough = _get_tough_value_from_rules(props.get("special_rules", []))
-			var tough_scale = _calculate_model_scale(tough)
-			var final_scale = base_scale_val * tough_scale
+			var is_flying = _is_flying_from_rules(props.get("special_rules", []))
+			var fit = _compute_model_fit(aabb, base_long_mm, tough, is_flying)
+			var final_scale = fit.scale
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
-
-			var bottom_offset = -aabb.position.y * final_scale
-			glb_instance.position.y = bottom_offset + 0.003
+			glb_instance.position.y = fit.y_offset
 
 			_brighten_trellis_materials(glb_instance)
 			wrapper.add_child(glb_instance)
 			use_glb_model = true
-			model_height = raw_height * final_scale
+			model_height = fit.height
 
 	# Fallback: Create placeholder body if no GLB model found
 	if not use_glb_model:
@@ -895,6 +884,52 @@ func _get_tough_value(unit: OPRApiClient.OPRUnit) -> int:
 ## Tough(0)=1.0, Tough(3)=1.05, Tough(6)=1.10, Tough(12)=1.22
 func _calculate_model_scale(tough: int) -> float:
 	return pow(1.05, tough / 3.0)
+
+
+## True wenn die Regeln "Flying" (oder Flying(x)) enthalten.
+func _is_flying_from_rules(rules: Array) -> bool:
+	for r in rules:
+		if String(r).strip_edges().to_lower().begins_with("flying"):
+			return true
+	return false
+
+
+## Berechnet Skalierung + vertikalen Offset, damit ein GLB gut zur Base passt.
+##
+## Regel gegen Scale-Creep:
+##   - Hoehen-Ziel ~ Base-Groesse (Tough macht leicht hoeher) → schlanke Bipeds.
+##   - Footprint-Cap: groesste horizontale Ausdehnung <= 125% der Base-Langseite
+##     (bei Oval die lange Seite) → breite Fahrzeuge/Drohnen quellen nicht ueber.
+##   - Der KLEINERE der beiden Faktoren gewinnt (min), so passt beides.
+## Flying-Units schweben leicht ueber der Base.
+## base_long_mm = Base-Langseite in mm (rund: Durchmesser; oval: laengere Achse).
+## Returns { "scale": float, "y_offset": float, "height": float }.
+func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, is_flying: bool) -> Dictionary:
+	var raw_height: float = aabb.size.y
+	var raw_footprint: float = max(aabb.size.x, aabb.size.z)
+	if raw_height <= 0.0 or raw_footprint <= 0.0:
+		return {"scale": 0.001, "y_offset": 0.003, "height": 0.03}
+
+	# Hoehen-Ziel: 25mm-Bases bekommen +3mm, sonst = Base; Tough skaliert mild mit.
+	var height_target_mm: float = float(base_long_mm + 3 if base_long_mm <= 25 else base_long_mm)
+	var target_height_m: float = height_target_mm * 0.001 * _calculate_model_scale(tough)
+	var height_scale: float = target_height_m / raw_height
+
+	# Footprint-Cap: max. 125% der Base-Langseite.
+	var footprint_cap_m: float = base_long_mm * FOOTPRINT_MAX_RATIO * 0.001
+	var footprint_scale: float = footprint_cap_m / raw_footprint
+
+	var final_scale: float = min(height_scale, footprint_scale)
+
+	# Fuesse auf Base-Oberkante (Base ist 3mm hoch); Flying schwebt zusaetzlich.
+	var lift: float = base_long_mm * FLYING_HOVER_RATIO * 0.001 if is_flying else 0.0
+	var y_offset: float = -aabb.position.y * final_scale + 0.003 + lift
+
+	return {
+		"scale": final_scale,
+		"y_offset": y_offset,
+		"height": raw_height * final_scale + lift,
+	}
 
 
 ## Calculate the combined AABB (bounding box) of a 3D model and all its children
