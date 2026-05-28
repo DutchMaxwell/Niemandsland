@@ -72,7 +72,7 @@ unit_overrides:
   battle_suit_elite:
     extra_details: "elite battlesuit commander in sleek high-tech mech armor, dual suit-burst weapons on forearms firing rending energy rounds at 18 inch range, dual suit-flamer weapons on shoulders firing reliable blast(3) streams at 12 inch range, bash melee attack with armored fists AP(1), jetpack thruster array on back for Flying movement, advanced targeting visor helmet with glowing orange sensor lens, Hero commander with sept markings on shoulder plates, Tough(6)"
     pose: "heroic hovering stance with thrusters firing, dual burst weapons aimed forward, visor glowing"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 4
@@ -178,7 +178,7 @@ unit_overrides:
   stealth_suits:
     extra_details: "single warrior in advanced stealth battlesuits, rapid burst carbines firing rending energy rounds at 18 inch range with A4 sustained fire, CCW integrated blades for melee, Ambush deep-strike deployment via cloaking technology, Stealth field generators distorting suit outlines, targeting visor with enhanced optics, angular stealth panels minimizing sensor signature, larger than infantry but smaller than crisis suits, Tough(3)"
     pose: "emerging from stealth cloak shimmer, rapid burst carbines firing, angular stealth panels active"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 4
@@ -198,7 +198,7 @@ unit_overrides:
   battle_suits:
     extra_details: "single warrior in crisis-class battlesuits, nine suit-burst weapons across all three suits firing rending energy rounds at 18 inch range, bash melee attacks with armored fists, jetpack thruster array on back for Flying movement, targeting visor helmets with glowing sensor arrays, modular weapon hardpoints on arms and shoulders, clean angular armor panels with sept markings, Tough(3)"
     pose: "jetpack-assisted landing pose, multiple burst weapons aimed in different directions, thrusters venting"
-    type: vehicle
+    type: walker
 
   # ==========================================================================
   # DRONES
@@ -331,7 +331,7 @@ unit_overrides:
   heavy_battle_suit:
     extra_details: "massive broadside-class battlesuit weapons platform, quad missile pod primary weapon system on shoulders firing 8 decimate unstoppable rockets at 30 inch range, stomp attack with armored feet AP(1), heavily armored mech chassis with reinforced composite plates, targeting visor array with multiple sensor lenses, stabilizer legs braced for recoil, Fear(2) intimidating presence, no flight capability - ground-based heavy fire support, Tough(12)"
     pose: "braced firing stance, quad missile pod elevated and launching salvo, stabilizer legs planted firmly"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 4
@@ -352,7 +352,7 @@ unit_overrides:
   heavy_stealth_suit:
     extra_details: "large stealth battlesuit combining heavy armor with cloaking technology, heavy ion carbine primary weapon firing AP(1) blast(6) energy at 18 inch range, twin burst carbine secondary weapon firing rending rounds at 18 inch range, stomp melee attack with armored feet AP(1), Ambush deep-strike deployment via advanced cloaking field, Stealth field generators on angular panels, Fear(2) intimidating presence, larger and more heavily armored than standard stealth suits, Tough(12)"
     pose: "materializing from stealth cloak, heavy ion carbine powering up with blue energy glow, angular stealth panels shimmering"
-    type: vehicle
+    type: walker
 
   # ==========================================================================
   # TITANS
@@ -381,7 +381,7 @@ unit_overrides:
   tide_titan:
     extra_details: "massive riptide-class battlesuit titan, twin plasma rifle primary weapon on right arm firing AP(4) devastating plasma at 24 inch range, heavy plasma sword melee weapon on left arm with A8 rending attacks, powerful stomp legs with AP(2), Evasive agile movement system despite enormous size, nova shield defensive system, Fear(3) towering presence, sleek angular design with flowing lines unlike bulky imperial mechs, massive jetpack thruster array on back, advanced targeting visor sensor suite on head, Tough(18)"
     pose: "dynamic combat stance, twin plasma rifle aimed and firing, heavy plasma sword ready to swing, thrusters venting energy"
-    type: vehicle
+    type: titan
 
     game_stats:
       quality: 4
@@ -406,7 +406,7 @@ unit_overrides:
   surge_titan:
     extra_details: "colossal stormsurge-class battlesuit titan the largest in the DAO arsenal, cluster rockets primary weapon array on shoulders firing 8 AP(1) rockets at 24 inch range, pulse blaster secondary weapon on arm firing AP(2) blast(3) energy at 24 inch range, devastating stomp attacks with A8 AP(2) crushing force, Fear(4) terrifying towering presence, massive hull-mounted weapon systems, stabilizer anchors on legs, heavy layered composite armor across entire chassis, Tough(24)"
     pose: "full weapon deployment stance, cluster rockets launching salvo, pulse blaster firing, stabilizer anchors deployed"
-    type: vehicle
+    type: titan
 
   # ==========================================================================
   # AIRCRAFT
@@ -435,7 +435,7 @@ unit_overrides:
   razor_fighter:
     extra_details: "sleek alien fighter aircraft, ion cannon primary weapon under nose firing AP(2) blast(3) energy at 30 inch range, twin burst carbine secondary weapons on wing pylons firing rending rounds at 18 inch range, Aircraft high-speed flight rules, aerodynamic swept-wing design with clean alien aesthetics, anti-gravity drive system, targeting visor sensor dome in cockpit, Tough(6)"
     pose: "banking attack run, ion cannon firing blue energy blast, wings swept in flight configuration"
-    type: vehicle
+    type: aircraft
 
     game_stats:
       quality: 4
@@ -456,7 +456,7 @@ unit_overrides:
   sun_bomber:
     extra_details: "alien bomber aircraft with heavier frame than the razor fighter, ion rifle weapon on nose firing AP(1) blast(3) at 30 inch range, missile pod on wing hardpoint firing decimate unstoppable rockets at 30 inch range, pulse bombs payload underneath for strafing runs dropping AP(1) blast(3) ordnance on ground targets, Aircraft high-speed flight rules, wider wing profile for bomb carrying capacity, targeting visor sensor suite, Tough(6)"
     pose: "level bombing run, pulse bombs releasing from underbelly, missile pod visible on wing, ion rifle aimed forward"
-    type: vehicle
+    type: aircraft
 
     game_stats:
       quality: 4
