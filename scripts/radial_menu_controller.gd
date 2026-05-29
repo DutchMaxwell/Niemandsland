@@ -1098,9 +1098,9 @@ func _on_marker_dialog_marker_added(target: Variant, marker: UnitMarker) -> void
 
 	if network_manager:
 		if target is ModelInstance:
-			network_manager.broadcast_model_marker(target, marker.name, true)
+			network_manager.broadcast_model_marker(target, marker.name, true, marker.color)
 		elif target is GameUnit:
-			network_manager.broadcast_unit_marker(target, marker.name, true)
+			network_manager.broadcast_unit_marker(target, marker.name, true, marker.color)
 
 
 ## Called when a marker is removed via the marker dialog.
@@ -1216,11 +1216,24 @@ func initialize_marker_tokens_for_unit(game_unit: GameUnit) -> void:
 
 
 ## Adds/removes a dialog marker token on all models of a unit (remote sync).
-func set_unit_marker_token(game_unit: GameUnit, marker_name: String, add: bool) -> void:
+func set_unit_marker_token(game_unit: GameUnit, marker_name: String, add: bool, color: Color = Color.WHITE) -> void:
 	for model in game_unit.models:
+		_sync_marker_color_store(model, marker_name, color, add)
 		_render_marker_token(model, game_unit, marker_name, _resolve_marker_color(marker_name, model), add)
 
 
 ## Adds/removes a dialog marker token on a single model (remote sync).
-func set_model_marker_token(model: ModelInstance, marker_name: String, add: bool) -> void:
+func set_model_marker_token(model: ModelInstance, marker_name: String, add: bool, color: Color = Color.WHITE) -> void:
+	_sync_marker_color_store(model, marker_name, color, add)
 	_render_marker_token(model, model.unit as GameUnit, marker_name, _resolve_marker_color(marker_name, model), add)
+
+
+## Stores (add) or erases (remove) a remote custom-marker color on a model so
+## _resolve_marker_color returns it; standard markers derive color from the name.
+func _sync_marker_color_store(model: ModelInstance, marker_name: String, color: Color, add: bool) -> void:
+	if not model:
+		return
+	if add and not UnitMarker.STANDARD_MARKERS.has(marker_name):
+		model.marker_colors[marker_name] = color
+	elif not add:
+		model.marker_colors.erase(marker_name)
