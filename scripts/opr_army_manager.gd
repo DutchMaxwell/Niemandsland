@@ -58,6 +58,10 @@ var unit_to_game_unit: Dictionary = {}  # OPRUnit -> GameUnit
 ## All GameUnits by unit_id
 var game_units: Dictionary = {}  # unit_id (String) -> GameUnit
 
+## Current game round (OPR rounds start at 1). Bookkeeping only - the players
+## decide when a round ends; advance_round() does the standard transition.
+var current_round: int = 1
+
 ## Army trays by player
 var army_trays: Dictionary = {}  # player_id -> Node3D
 
@@ -726,6 +730,24 @@ func is_unit_model(node: Node3D) -> bool:
 	return node.is_in_group("unit") or node.is_in_group("opr_unit")
 
 
+# ===== Round Management =====
+
+## Advances to the next game round (OPR round transition - pure bookkeeping):
+## every unit may activate again and casters gain their per-round points (capped).
+## The players, not the app, decide when to call this.
+func advance_round() -> void:
+	current_round += 1
+	for game_unit in game_units.values():
+		if game_unit:
+			game_unit.reset_activation()
+			game_unit.add_round_caster_points()
+
+
+## Sets the current round (used by save/load restore).
+func set_current_round(value: int) -> void:
+	current_round = maxi(1, value)
+
+
 ## Clear all armies and spawned models
 func clear_all() -> void:
 	# Remove all spawned models. Guard against double-free: ObjectManager.
@@ -748,6 +770,7 @@ func clear_all() -> void:
 	unit_to_game_unit.clear()
 	game_units.clear()
 	army_trays.clear()
+	current_round = 1
 
 
 ## Clear army for a specific player
