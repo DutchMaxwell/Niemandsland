@@ -199,8 +199,8 @@ func _serialize_game_units() -> Array:
 ## Serialize global game state (round, turn, etc.)
 func _serialize_game_state() -> Dictionary:
 	return {
-		"current_round": 1,  # TODO: Get from game manager when implemented
-		"current_player": 1
+		"current_round": army_manager.current_round if army_manager else 1,
+		"current_player": 1  # No turn-order system yet; players track this themselves
 	}
 
 
@@ -648,9 +648,9 @@ func _deserialize_game_units(units_data: Array) -> int:
 
 ## Deserialize game state (round, turn, etc.)
 func _deserialize_game_state(state_data: Dictionary) -> void:
-	# TODO: Apply to game manager when implemented
-	var _current_round = state_data.get("current_round", 1)
-	var _current_player = state_data.get("current_player", 1)
+	if army_manager:
+		army_manager.set_current_round(int(state_data.get("current_round", 1)))
+	# current_player is not restored: there is no turn-order system yet.
 
 
 ## Restore GameUnit data to a spawned model node
