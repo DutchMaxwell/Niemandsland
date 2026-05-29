@@ -56,14 +56,6 @@ jobs:
           name: web-build
           path: build/web
 
-      - name: Deploy to GitHub Pages
-        if: github.ref == 'refs/heads/main'
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./build/web
-          force_orphan: true
-
   export-linux:
     name: Linux Export
     runs-on: ubuntu-latest
