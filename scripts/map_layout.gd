@@ -5,7 +5,6 @@ extends Control
 signal layout_closed
 signal layout_updated(grid_cells: Dictionary, table_size: Vector2, rotation: float,
 	wall_segments: Array, placed_objects: Array)
-signal terrain_theme_changed(theme_key: String)
 
 # Terrain types with their properties
 enum TerrainType {
@@ -77,9 +76,25 @@ var point_symmetry_enabled := false  # Mirror placement across center
 # WALL & OBJECT DATA (modulares Terrain)
 # ==============================================================================
 
-## Editor modes for switching between cell painting and wall placement
-enum EditorMode { PAINT_CELLS, PLACE_WALLS }
+## Editor modes: paint free cells, place walls on edges, drop complete prefab pieces,
+## or select/move/rotate already-placed pieces.
+enum EditorMode { PAINT_CELLS, PLACE_WALLS, PLACE_PREFAB, MOVE_PIECES }
 var editor_mode := EditorMode.PAINT_CELLS
+
+## Selected canonical prefab key for one-click placement (see terrain_prefabs.gd)
+var selected_prefab_key := ""
+
+## Live preview state while in PLACE_PREFAB mode (ghost piece at the cursor).
+var _preview_cell := Vector2i.ZERO
+var _preview_rotation := 0       # 0/90/180/270, cycled with R
+var _preview_flip := false       # mirrored wall-L, toggled with F
+var _preview_active := false     # true while the cursor is over the grid
+
+## Selected / dragged placed piece (MOVE_PIECES mode).
+var _selected_piece_id := -1
+var _dragging_piece := false
+var _drag_pushed := false           # undo snapshot taken for the current drag?
+var _drag_grab_offset := Vector2i.ZERO  # piece.origin - grabbed cell
 
 ## A wall segment on a cell edge
 ## edge_cell: Cell the wall is attached to
@@ -94,16 +109,31 @@ var selected_wall_key := ""
 ## Wall granularity (true = 1" segments, false = 3" full edge)
 var wall_fine_mode := false
 
-## Placed objects (trees and containers) auto-distributed on terrain cells
+## Placed objects (trees, containers, dangerous hazards). DERIVED — see below.
 ## Each entry: {object_key: String, cell: Vector2i, offset: Vector2, object_type: String}
 var placed_objects: Array[Dictionary] = []
 
-## Available wall definitions (loaded from terrain_library)
+# ------------------------------------------------------------------------------
+# Piece-identity model — the SOURCE OF TRUTH. grid_cells / wall_segments /
+# placed_objects above are DERIVED from these via _rebuild_derived() so that whole
+# pieces can be moved / rotated / deleted while the 3D renderer + multiplayer keep
+# consuming the flat derived data unchanged.
+# ------------------------------------------------------------------------------
+## Placed prefab pieces: {id, prefab_key, origin: Vector2i, rotation:int, flip:bool, seed:int}
+var placed_pieces: Array[Dictionary] = []
+var _next_piece_id := 1
+## Free-painted cells (PAINT_CELLS mode): Vector2i -> TerrainType
+var free_cells: Dictionary = {}
+## Manually placed wall segments (PLACE_WALLS mode)
+var free_walls: Array[Dictionary] = []
+
+## Undo / redo snapshot stacks of {pieces, free_cells, free_walls}
+var _undo_stack: Array[Dictionary] = []
+var _redo_stack: Array[Dictionary] = []
+const UNDO_LIMIT := 50
+
+## Available wall variants for manual edge placement (a single procedural default)
 var available_walls: Array[Dictionary] = []
-## Available tree definitions
-var available_trees: Array[Dictionary] = []
-## Available container definitions
-var available_containers: Array[Dictionary] = []
 
 # Zoom and pan settings
 var zoom_level := 1.0
@@ -159,16 +189,13 @@ var _objectives_clear_btn: Button = null
 var _objectives_status_label: Label = null
 var _objectives_warning_label: Label = null
 
-# Modular Terrain UI (theme selector, walls, auto-populate)
+# Modular Terrain UI (prefab palette, walls, undo/redo)
 var _modular_terrain_panel: VBoxContainer = null
-var _theme_option_btn: OptionButton = null
-var _theme_keys: Array[String] = []
-var _theme_names: Array[String] = []
-var _current_theme_key: String = ""
+var _prefab_option_btn: OptionButton = null
 var _editor_mode_btn: Button = null
 var _wall_option_btn: OptionButton = null
-var _auto_trees_btn: Button = null
-var _auto_containers_btn: Button = null
+var _undo_btn: Button = null
+var _redo_btn: Button = null
 var _modular_status_label: Label = null
 
 
@@ -200,8 +227,68 @@ func _ready() -> void:
 
 	_setup_terrain_buttons()
 	_setup_modular_terrain_ui()
+	_setup_tabs()
 	_update_stats()
 	_update_recommendations()
+
+
+## Reorganize the flat left panel into Gelände / Missionsziele / Aufstellung tabs.
+## Reparents the existing scene + code-built controls into a TabContainer.
+func _setup_tabs() -> void:
+	var left_panel := terrain_buttons.get_parent()
+	if not left_panel:
+		return
+
+	var tabs := TabContainer.new()
+	tabs.name = "EditorTabs"
+	tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+	var gelaende := VBoxContainer.new()
+	gelaende.name = "TabGelaende"
+	gelaende.add_theme_constant_override("separation", 8)
+	var ziele := VBoxContainer.new()
+	ziele.name = "TabZiele"
+	ziele.add_theme_constant_override("separation", 8)
+	var aufstellung := VBoxContainer.new()
+	aufstellung.name = "TabAufstellung"
+	aufstellung.add_theme_constant_override("separation", 8)
+	tabs.add_child(gelaende)
+	tabs.add_child(ziele)
+	tabs.add_child(aufstellung)
+	left_panel.add_child(tabs)
+	tabs.set_tab_title(0, "Gelände")
+	tabs.set_tab_title(1, "Missionsziele")
+	tabs.set_tab_title(2, "Aufstellung")
+
+	var into := func(tab: VBoxContainer, node: Node) -> void:
+		if node and is_instance_valid(node) and node.get_parent() == left_panel:
+			node.reparent(tab)
+
+	# Gelände: terrain placement tools
+	into.call(gelaende, left_panel.get_node_or_null("TerrainLabel"))
+	into.call(gelaende, terrain_buttons)
+	into.call(gelaende, _modular_terrain_panel)
+	into.call(gelaende, left_panel.get_node_or_null("RotationLabel"))
+	into.call(gelaende, left_panel.get_node_or_null("RotationSlider"))
+	into.call(gelaende, left_panel.get_node_or_null("SymmetryCheck"))
+	into.call(gelaende, left_panel.get_node_or_null("AutoGenButton"))
+	into.call(gelaende, left_panel.get_node_or_null("StatsLabel"))
+	into.call(gelaende, left_panel.get_node_or_null("RecommendationsLabel"))
+
+	# Missionsziele: objectives (the ObjectivesCheck was replaced by this panel)
+	into.call(ziele, _objectives_panel)
+
+	# Aufstellung: deployment zones + custom zone editor
+	into.call(aufstellung, left_panel.get_node_or_null("DeploymentLabel"))
+	into.call(aufstellung, left_panel.get_node_or_null("DeploymentTypeOption"))
+	into.call(aufstellung, left_panel.get_node_or_null("DeploymentCheck"))
+	into.call(aufstellung, _custom_zone_panel)
+
+	# Drop the now-loose separators left behind in the panel
+	for child in left_panel.get_children():
+		if child != tabs and child is HSeparator:
+			child.queue_free()
 
 
 ## Setup the deployment zone type option button
@@ -511,18 +598,22 @@ func _setup_modular_terrain_ui() -> void:
 	header.add_theme_color_override("font_color", Color(0.9, 0.92, 0.96, 1.0))
 	_modular_terrain_panel.add_child(header)
 
-	# Theme selector
-	var theme_label := Label.new()
-	theme_label.text = "Terrain Theme:"
-	theme_label.add_theme_font_size_override("font_size", 13)
-	theme_label.add_theme_color_override("font_color", Color(0.7, 0.73, 0.8, 1.0))
-	_modular_terrain_panel.add_child(theme_label)
+	# Prefab palette: canonical 1-click pieces (footprint + walls + decoration)
+	var prefab_label := Label.new()
+	prefab_label.text = "Terrain Piece:"
+	prefab_label.add_theme_font_size_override("font_size", 13)
+	prefab_label.add_theme_color_override("font_color", Color(0.7, 0.73, 0.8, 1.0))
+	_modular_terrain_panel.add_child(prefab_label)
 
-	_theme_option_btn = OptionButton.new()
-	_theme_option_btn.add_theme_color_override("font_color", Color(0.9, 0.92, 0.96, 1.0))
-	_theme_option_btn.item_selected.connect(_on_theme_selected)
-	_modular_terrain_panel.add_child(_theme_option_btn)
-	_update_theme_option_list()
+	_prefab_option_btn = OptionButton.new()
+	_prefab_option_btn.add_theme_color_override("font_color", Color(0.9, 0.92, 0.96, 1.0))
+	for prefab_key in TerrainPrefabs.keys():
+		_prefab_option_btn.add_item(TerrainPrefabs.display_name(prefab_key))
+	_prefab_option_btn.item_selected.connect(_on_prefab_selected)
+	_modular_terrain_panel.add_child(_prefab_option_btn)
+	var prefab_keys := TerrainPrefabs.keys()
+	if not prefab_keys.is_empty():
+		selected_prefab_key = prefab_keys[0]
 
 	# Editor mode toggle
 	_editor_mode_btn = Button.new()
@@ -547,35 +638,44 @@ func _setup_modular_terrain_ui() -> void:
 
 	# Status label
 	_modular_status_label = Label.new()
-	_modular_status_label.text = "No terrain theme loaded"
+	_modular_status_label.text = "Walls: 0 | Objects: 0"
 	_modular_status_label.add_theme_font_size_override("font_size", 12)
 	_modular_status_label.add_theme_color_override("font_color", Color(0.6, 0.63, 0.7, 1.0))
 	_modular_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_modular_terrain_panel.add_child(_modular_status_label)
 
-	# Separator before auto-populate
+	# Separator before undo/redo
 	var sep2 := HSeparator.new()
 	sep2.modulate = Color(1, 1, 1, 0.15)
 	_modular_terrain_panel.add_child(sep2)
 
-	# Auto-populate buttons
-	_auto_trees_btn = Button.new()
-	_auto_trees_btn.text = "Auto-Populate Trees"
-	_auto_trees_btn.custom_minimum_size = Vector2(0, 36)
-	_auto_trees_btn.add_theme_color_override("font_color", Color(0.2, 0.75, 0.3, 1.0))
-	_auto_trees_btn.add_theme_color_override("font_hover_color", Color(0.3, 0.9, 0.4, 1.0))
-	_auto_trees_btn.tooltip_text = "Place 2-4 trees on each Forest cell"
-	_auto_trees_btn.pressed.connect(_on_auto_trees_pressed)
-	_modular_terrain_panel.add_child(_auto_trees_btn)
+	# Undo / Redo row
+	var undo_row := HBoxContainer.new()
+	undo_row.add_theme_constant_override("separation", 8)
+	_modular_terrain_panel.add_child(undo_row)
 
-	_auto_containers_btn = Button.new()
-	_auto_containers_btn.text = "Auto-Populate Containers"
-	_auto_containers_btn.custom_minimum_size = Vector2(0, 36)
-	_auto_containers_btn.add_theme_color_override("font_color", Color(0.75, 0.5, 0.2, 1.0))
-	_auto_containers_btn.add_theme_color_override("font_hover_color", Color(0.9, 0.6, 0.3, 1.0))
-	_auto_containers_btn.tooltip_text = "Place 1-2 containers on each Container cell"
-	_auto_containers_btn.pressed.connect(_on_auto_containers_pressed)
-	_modular_terrain_panel.add_child(_auto_containers_btn)
+	_undo_btn = Button.new()
+	_undo_btn.text = "↶ Undo"
+	_undo_btn.custom_minimum_size = Vector2(0, 36)
+	_undo_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_undo_btn.disabled = true
+	_undo_btn.tooltip_text = "Rückgängig (Strg+Z)"
+	_undo_btn.pressed.connect(undo)
+	undo_row.add_child(_undo_btn)
+
+	_redo_btn = Button.new()
+	_redo_btn.text = "↷ Redo"
+	_redo_btn.custom_minimum_size = Vector2(0, 36)
+	_redo_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_redo_btn.disabled = true
+	_redo_btn.tooltip_text = "Wiederholen (Strg+Y)"
+	_redo_btn.pressed.connect(redo)
+	undo_row.add_child(_redo_btn)
+
+	# Built-in default wall for manual edge placement (procedural hologram wall).
+	# No terrain theme needed — the renderer builds wall geometry procedurally.
+	available_walls = [{"key": TerrainPrefabs.PROC_WALL_KEY, "name": "Wall (3\")"}]
+	selected_wall_key = TerrainPrefabs.PROC_WALL_KEY
 
 	_update_modular_terrain_ui()
 
@@ -584,19 +684,31 @@ func _update_modular_terrain_ui() -> void:
 	if not _editor_mode_btn:
 		return
 
-	if editor_mode == EditorMode.PAINT_CELLS:
-		_editor_mode_btn.text = "Mode: Paint Cells"
-	else:
-		_editor_mode_btn.text = "Mode: Place Walls"
+	match editor_mode:
+		EditorMode.PAINT_CELLS:
+			_editor_mode_btn.text = "Mode: Paint Cells"
+		EditorMode.PLACE_WALLS:
+			_editor_mode_btn.text = "Mode: Place Walls"
+		EditorMode.PLACE_PREFAB:
+			_editor_mode_btn.text = "Mode: Place Piece  (R rotate · F flip)"
+		EditorMode.MOVE_PIECES:
+			_editor_mode_btn.text = "Mode: Move Pieces  (R/F · Del)"
 
 	# Wall selection only visible in PLACE_WALLS mode
 	if _wall_option_btn:
 		_wall_option_btn.visible = (editor_mode == EditorMode.PLACE_WALLS)
-		# The label before it
 		var wall_label_node: Node = _wall_option_btn.get_parent().get_child(
 			_wall_option_btn.get_index() - 1)
 		if wall_label_node:
 			wall_label_node.visible = (editor_mode == EditorMode.PLACE_WALLS)
+
+	# Prefab selection only visible in PLACE_PREFAB mode
+	if _prefab_option_btn:
+		_prefab_option_btn.visible = (editor_mode == EditorMode.PLACE_PREFAB)
+		var prefab_label_node: Node = _prefab_option_btn.get_parent().get_child(
+			_prefab_option_btn.get_index() - 1)
+		if prefab_label_node:
+			prefab_label_node.visible = (editor_mode == EditorMode.PLACE_PREFAB)
 
 	_update_wall_option_list()
 	_update_modular_status()
@@ -619,93 +731,232 @@ func _update_wall_option_list() -> void:
 func _update_modular_status() -> void:
 	if not _modular_status_label:
 		return
-	var parts: PackedStringArray = []
-	if not available_walls.is_empty():
-		parts.append("%d walls" % available_walls.size())
-	if not available_trees.is_empty():
-		parts.append("%d trees" % available_trees.size())
-	if not available_containers.is_empty():
-		parts.append("%d containers" % available_containers.size())
-
-	if parts.is_empty():
-		_modular_status_label.text = "No terrain theme loaded"
-	else:
-		_modular_status_label.text = "Loaded: %s\nWalls: %d | Objects: %d" % [
-			", ".join(parts), wall_segments.size(), placed_objects.size()]
+	_modular_status_label.text = "Walls: %d | Objects: %d" % [
+		wall_segments.size(), placed_objects.size()]
 
 
 func _on_editor_mode_toggled() -> void:
-	if editor_mode == EditorMode.PAINT_CELLS:
-		editor_mode = EditorMode.PLACE_WALLS
-	else:
-		editor_mode = EditorMode.PAINT_CELLS
+	match editor_mode:
+		EditorMode.PAINT_CELLS:
+			editor_mode = EditorMode.PLACE_WALLS
+		EditorMode.PLACE_WALLS:
+			editor_mode = EditorMode.PLACE_PREFAB
+		EditorMode.PLACE_PREFAB:
+			editor_mode = EditorMode.MOVE_PIECES
+		EditorMode.MOVE_PIECES:
+			editor_mode = EditorMode.PAINT_CELLS
+	_selected_piece_id = -1
+	_dragging_piece = false
+	_preview_active = false
+	_update_modular_terrain_ui()
+	if grid_container:
+		grid_container.queue_redraw()
+
+
+## Handle prefab selection from the palette and switch to placement mode.
+func _on_prefab_selected(index: int) -> void:
+	var prefab_keys := TerrainPrefabs.keys()
+	if index < 0 or index >= prefab_keys.size():
+		return
+	selected_prefab_key = prefab_keys[index]
+	editor_mode = EditorMode.PLACE_PREFAB
 	_update_modular_terrain_ui()
 
 
-## Set available terrain themes (called from main.gd)
-func set_available_themes(theme_keys: Array[String], theme_names: Array[String]) -> void:
-	_theme_keys = theme_keys
-	_theme_names = theme_names
-	_update_theme_option_list()
-	# Re-select current theme if still available
-	if not _current_theme_key.is_empty():
-		var idx := _theme_keys.find(_current_theme_key)
-		if idx >= 0 and _theme_option_btn:
-			_theme_option_btn.selected = idx + 1  # +1 for "None" entry
-
-
-## Get the currently selected theme key
-func get_selected_theme() -> String:
-	return _current_theme_key
-
-
-func _update_theme_option_list() -> void:
-	if not _theme_option_btn:
+## Place a complete canonical terrain piece (footprint + walls + decoration) in one
+## click, in the given orientation. Mirrors across the table center when enabled.
+func place_prefab(prefab_key: String, origin: Vector2i, rotation: int, flip: bool, mirror: bool) -> void:
+	if not TerrainPrefabs.has_prefab(prefab_key):
 		return
-	_theme_option_btn.clear()
-	_theme_option_btn.add_item("-- No Theme --", 0)
-	for i in range(_theme_keys.size()):
-		var display_name: String = _theme_names[i] if i < _theme_names.size() else _theme_keys[i]
-		_theme_option_btn.add_item(display_name, i + 1)
-	# Restore selection
-	if not _current_theme_key.is_empty():
-		var idx := _theme_keys.find(_current_theme_key)
+	_push_undo()
+	_add_piece(prefab_key, origin, rotation, flip)
+	if mirror:
+		var size := TerrainPrefabs.footprint_size(prefab_key, rotation)
+		var mirrored := _mirror_position(origin, size, _calculate_grid_dimensions())
+		# Point symmetry = 180° rotation about the table center, so the mirrored piece's
+		# walls land on the opposite corner (e.g. N+W -> S+E).
+		_add_piece(prefab_key, mirrored, (rotation + 180) % 360, flip)
+	_rebuild_derived()
+	_update_modular_status()
+
+
+## Append a new piece (source of truth). seed=id keeps its decoration layout stable.
+func _add_piece(prefab_key: String, origin: Vector2i, rotation: int, flip: bool) -> int:
+	var id := _next_piece_id
+	_next_piece_id += 1
+	placed_pieces.append({
+		"id": id,
+		"prefab_key": prefab_key,
+		"origin": origin,
+		"rotation": rotation,
+		"flip": flip,
+		"seed": id,
+	})
+	return id
+
+
+## Index of the topmost placed piece whose footprint covers `cell`, or -1.
+func _piece_index_at_cell(cell: Vector2i) -> int:
+	for i in range(placed_pieces.size() - 1, -1, -1):
+		var p: Dictionary = placed_pieces[i]
+		for fc in TerrainPrefabs.footprint_cells(p["prefab_key"], p["origin"], p.get("rotation", 0), p.get("flip", false)):
+			if fc == cell:
+				return i
+	return -1
+
+
+func _piece_index_by_id(piece_id: int) -> int:
+	for i in range(placed_pieces.size()):
+		if placed_pieces[i]["id"] == piece_id:
+			return i
+	return -1
+
+
+## Rotate the prefab preview (PLACE_PREFAB) or the selected piece (MOVE_PIECES) 90° CW.
+func _rotate_active() -> void:
+	if editor_mode == EditorMode.PLACE_PREFAB:
+		_preview_rotation = wrapi(_preview_rotation + 90, 0, 360)
+		if grid_container:
+			grid_container.queue_redraw()
+	elif editor_mode == EditorMode.MOVE_PIECES and _selected_piece_id >= 0:
+		var idx := _piece_index_by_id(_selected_piece_id)
 		if idx >= 0:
-			_theme_option_btn.selected = idx + 1
+			_push_undo()
+			placed_pieces[idx]["rotation"] = wrapi(int(placed_pieces[idx].get("rotation", 0)) + 90, 0, 360)
+			_rebuild_derived()
 
 
-func _on_theme_selected(index: int) -> void:
-	if index == 0:
-		# "None" selected — clear theme
-		_current_theme_key = ""
-		available_walls.clear()
-		available_trees.clear()
-		available_containers.clear()
-		selected_wall_key = ""
-		_update_modular_terrain_ui()
-		terrain_theme_changed.emit("")
-	else:
-		var theme_idx: int = index - 1
-		if theme_idx >= 0 and theme_idx < _theme_keys.size():
-			_current_theme_key = _theme_keys[theme_idx]
-			terrain_theme_changed.emit(_current_theme_key)
+## Flip the prefab preview / selected piece (mirror the wall L onto the other side).
+func _flip_active() -> void:
+	if editor_mode == EditorMode.PLACE_PREFAB:
+		_preview_flip = not _preview_flip
+		if grid_container:
+			grid_container.queue_redraw()
+	elif editor_mode == EditorMode.MOVE_PIECES and _selected_piece_id >= 0:
+		var idx := _piece_index_by_id(_selected_piece_id)
+		if idx >= 0:
+			_push_undo()
+			placed_pieces[idx]["flip"] = not bool(placed_pieces[idx].get("flip", false))
+			_rebuild_derived()
+
+
+## Delete the selected piece (MOVE_PIECES mode).
+func _delete_selected_piece() -> void:
+	var idx := _piece_index_by_id(_selected_piece_id)
+	if idx < 0:
+		return
+	_push_undo()
+	placed_pieces.remove_at(idx)
+	_selected_piece_id = -1
+	_rebuild_derived()
+	_update_modular_status()
+
+
+## Move the currently-dragged piece so it follows the cursor (gated on cell change).
+func _drag_selected_piece(screen_pos: Vector2) -> void:
+	var idx := _piece_index_by_id(_selected_piece_id)
+	if idx < 0:
+		return
+	var new_origin: Vector2i = _get_cell_at_screen_pos(screen_pos) + _drag_grab_offset
+	if new_origin == placed_pieces[idx]["origin"]:
+		return
+	if not _drag_pushed:
+		_push_undo()
+		_drag_pushed = true
+	placed_pieces[idx]["origin"] = new_origin
+	_rebuild_derived()
+
+
+## Rebuild the derived grid_cells / wall_segments / placed_objects from the
+## source-of-truth (free edits + placed pieces), then refresh UI + 3D + network.
+func _rebuild_derived() -> void:
+	grid_cells.clear()
+	wall_segments.clear()
+	placed_objects.clear()
+
+	for cell: Vector2i in free_cells:
+		grid_cells[cell] = free_cells[cell]
+	for w: Dictionary in free_walls:
+		wall_segments.append(w.duplicate())
+
+	for piece: Dictionary in placed_pieces:
+		var key: String = piece["prefab_key"]
+		var origin: Vector2i = piece["origin"]
+		var rot: int = piece.get("rotation", 0)
+		var flip: bool = piece.get("flip", false)
+		var ttype: int = TerrainPrefabs.terrain_type(key)
+		for cell: Vector2i in TerrainPrefabs.footprint_cells(key, origin, rot, flip):
+			grid_cells[cell] = ttype
+		for seg: Dictionary in TerrainPrefabs.wall_segments_for(key, origin, rot, flip):
+			wall_segments.append(seg)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = piece.get("seed", piece["id"])
+		for obj: Dictionary in TerrainPrefabs.decoration_for(key, origin, rng, rot, flip):
+			placed_objects.append(obj)
+
+	_update_stats()
+	if grid_container:
+		grid_container.queue_redraw()
+	_emit_layout_update()
+
+
+# ==============================================================================
+# UNDO / REDO (snapshots of the source-of-truth)
+# ==============================================================================
+
+func _snapshot() -> Dictionary:
+	return {
+		"pieces": placed_pieces.duplicate(true),
+		"free_cells": free_cells.duplicate(true),
+		"free_walls": free_walls.duplicate(true),
+		"next_id": _next_piece_id,
+	}
+
+
+func _apply_snapshot(snap: Dictionary) -> void:
+	placed_pieces = (snap["pieces"] as Array).duplicate(true)
+	free_cells = (snap["free_cells"] as Dictionary).duplicate(true)
+	free_walls = (snap["free_walls"] as Array).duplicate(true)
+	_next_piece_id = int(snap.get("next_id", _next_piece_id))
+	_rebuild_derived()
+	_update_modular_status()
+
+
+## Push the current state onto the undo stack (call BEFORE a mutation).
+func _push_undo() -> void:
+	_undo_stack.append(_snapshot())
+	if _undo_stack.size() > UNDO_LIMIT:
+		_undo_stack.pop_front()
+	_redo_stack.clear()
+	_update_undo_redo_buttons()
+
+
+func undo() -> void:
+	if _undo_stack.is_empty():
+		return
+	_redo_stack.append(_snapshot())
+	_apply_snapshot(_undo_stack.pop_back())
+	_update_undo_redo_buttons()
+
+
+func redo() -> void:
+	if _redo_stack.is_empty():
+		return
+	_undo_stack.append(_snapshot())
+	_apply_snapshot(_redo_stack.pop_back())
+	_update_undo_redo_buttons()
+
+
+func _update_undo_redo_buttons() -> void:
+	if _undo_btn:
+		_undo_btn.disabled = _undo_stack.is_empty()
+	if _redo_btn:
+		_redo_btn.disabled = _redo_stack.is_empty()
 
 
 func _on_wall_variant_selected(index: int) -> void:
 	if index >= 0 and index < available_walls.size():
 		selected_wall_key = available_walls[index].get("key", "")
-
-
-func _on_auto_trees_pressed() -> void:
-	var count := auto_populate_trees()
-	_update_modular_status()
-	print("Auto-populated %d trees on FOREST cells" % count)
-
-
-func _on_auto_containers_pressed() -> void:
-	var count := auto_populate_containers()
-	_update_modular_status()
-	print("Auto-populated %d containers on CONTAINER cells" % count)
 
 
 func _on_rotation_changed(value: float) -> void:
@@ -730,19 +981,20 @@ func _on_close_pressed() -> void:
 
 
 func _on_clear_pressed() -> void:
-	grid_cells.clear()
-	wall_segments.clear()
-	placed_objects.clear()
-	grid_container.queue_redraw()
-	_update_stats()
-	_emit_layout_update()
+	_push_undo()
+	placed_pieces.clear()
+	free_cells.clear()
+	free_walls.clear()
+	_selected_piece_id = -1
+	_rebuild_derived()
+	_update_modular_status()
 
 
 func _on_autogen_pressed() -> void:
+	_push_undo()
 	_generate_terrain_layout()
-	grid_container.queue_redraw()
-	_update_stats()
-	_emit_layout_update()
+	_rebuild_derived()
+	_update_modular_status()
 
 
 func _on_save_pressed() -> void:
@@ -917,9 +1169,15 @@ func set_table_size(size_feet: Vector2) -> void:
 	# CRITICAL: If table size changed and we have terrain/objective data, clear it
 	# Grid cell coordinates are ABSOLUTE and become invalid when grid dimensions change
 	if size_changed:
-		if not grid_cells.is_empty():
+		if not placed_pieces.is_empty() or not free_cells.is_empty() or not free_walls.is_empty():
 			print("  ⚠ Table size changed - clearing terrain data (grid coordinates are now invalid)")
+			placed_pieces.clear()
+			free_cells.clear()
+			free_walls.clear()
 			grid_cells.clear()
+			wall_segments.clear()
+			placed_objects.clear()
+			_selected_piece_id = -1
 		if not mission_objectives.is_empty():
 			print("  ⚠ Table size changed - clearing mission objectives (coordinates are now invalid)")
 			mission_objectives.clear()
@@ -1104,21 +1362,6 @@ func _flood_fill_collect(start: Vector2i, terrain_type: int, visited: Dictionary
 				stack.append(neighbor)
 
 	return collected
-
-
-## Get all connected regions of non-NONE terrain types
-func get_connected_regions() -> Array[Dictionary]:
-	var visited := {}
-	var regions: Array[Dictionary] = []
-	for cell_pos in grid_cells:
-		if visited.has(cell_pos):
-			continue
-		var terrain_type: int = grid_cells[cell_pos]
-		if terrain_type == TerrainType.NONE:
-			continue
-		var region_cells: Array[Vector2i] = _flood_fill_collect(cell_pos, terrain_type, visited)
-		regions.append({"terrain_type": terrain_type, "cells": region_cells})
-	return regions
 
 
 func _update_recommendations() -> void:
@@ -1316,15 +1559,50 @@ func _input(event: InputEvent) -> void:
 	var local_mouse = grid_container.get_local_mouse_position()
 	var mouse_in_grid = container_rect.has_point(local_mouse)
 
+	# Keyboard shortcuts (skip while a text field is focused so filenames type normally)
+	if event is InputEventKey and event.pressed and not event.echo \
+			and not (get_viewport().gui_get_focus_owner() is LineEdit):
+		var placing := editor_mode == EditorMode.PLACE_PREFAB or editor_mode == EditorMode.MOVE_PIECES
+		if event.ctrl_pressed and event.keycode == KEY_Y:
+			redo()
+			get_viewport().set_input_as_handled()
+			return
+		if event.ctrl_pressed and event.keycode == KEY_Z:
+			if event.shift_pressed:
+				redo()
+			else:
+				undo()
+			get_viewport().set_input_as_handled()
+			return
+		if event.keycode == KEY_R and placing:
+			_rotate_active()
+			get_viewport().set_input_as_handled()
+			return
+		if event.keycode == KEY_F and placing:
+			_flip_active()
+			get_viewport().set_input_as_handled()
+			return
+		if event.keycode == KEY_DELETE and editor_mode == EditorMode.MOVE_PIECES:
+			_delete_selected_piece()
+			get_viewport().set_input_as_handled()
+			return
+
 	# Handle zoom with mouse wheel (only when mouse is in grid area)
 	if event is InputEventMouseButton:
 		if mouse_in_grid:
 			if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
-				_zoom_in(local_mouse)
+				if editor_mode == EditorMode.PLACE_PREFAB:
+					_rotate_active()
+				else:
+					_zoom_in(local_mouse)
 				get_viewport().set_input_as_handled()
 				return
 			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
-				_zoom_out(local_mouse)
+				if editor_mode == EditorMode.PLACE_PREFAB:
+					_preview_rotation = wrapi(_preview_rotation - 90, 0, 360)
+					grid_container.queue_redraw()
+				else:
+					_zoom_out(local_mouse)
 				get_viewport().set_input_as_handled()
 				return
 
@@ -1367,12 +1645,28 @@ func _input(event: InputEvent) -> void:
 								vertex_hit.player, vertex_hit.index + 1
 							]
 						return
-				# Not dragging a vertex
-				if editor_mode == EditorMode.PLACE_WALLS:
-					# Wall mode: single click only, no drag-painting
+				# Not dragging a vertex.
+				# Objective / custom-zone editing ALWAYS take priority over the terrain
+				# editor mode — they route through _paint_at_position regardless of mode.
+				if objectives_editing or custom_zone_editing:
+					_paint_at_position(event.global_position)
+				elif editor_mode == EditorMode.MOVE_PIECES:
+					var grab_cell := _get_cell_at_screen_pos(event.global_position)
+					var grab_idx := _piece_index_at_cell(grab_cell)
+					if grab_idx >= 0:
+						_selected_piece_id = placed_pieces[grab_idx]["id"]
+						_dragging_piece = true
+						_drag_pushed = false
+						_drag_grab_offset = placed_pieces[grab_idx]["origin"] - grab_cell
+					else:
+						_selected_piece_id = -1
+					grid_container.queue_redraw()
+				elif editor_mode == EditorMode.PLACE_WALLS or editor_mode == EditorMode.PLACE_PREFAB:
+					# Single click only; place_prefab / add_wall_segment push their own undo
 					_paint_at_position(event.global_position)
 				else:
-					# Cell mode: start drag-painting
+					# PAINT_CELLS: one undo snapshot per stroke, then drag-paint
+					_push_undo()
 					is_painting = true
 					_paint_at_position(event.global_position)
 			else:
@@ -1388,6 +1682,8 @@ func _input(event: InputEvent) -> void:
 					# Emit signal to update 3D terrain overlay
 					deployment_type_changed.emit(DeploymentType.CUSTOM)
 				is_painting = false
+				_dragging_piece = false
+				_drag_pushed = false
 
 		# Right-click to remove walls in PLACE_WALLS mode
 		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
@@ -1401,8 +1697,15 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion:
 		if _dragging_vertex:
 			_move_vertex_to_screen_pos(event.global_position)
+		elif _dragging_piece:
+			_drag_selected_piece(event.global_position)
 		elif is_painting:
 			_paint_at_position(event.global_position)
+		elif editor_mode == EditorMode.PLACE_PREFAB and mouse_in_grid \
+				and not objectives_editing and not custom_zone_editing:
+			_preview_cell = _get_cell_at_screen_pos(event.global_position)
+			_preview_active = true
+			grid_container.queue_redraw()
 
 
 func _paint_at_position(screen_pos: Vector2) -> void:
@@ -1430,23 +1733,25 @@ func _paint_at_position(screen_pos: Vector2) -> void:
 		_handle_wall_click(screen_pos)
 		return
 
+	# Prefab placement mode: one click drops a complete canonical piece (with orientation)
+	if editor_mode == EditorMode.PLACE_PREFAB:
+		var prefab_cell := _get_cell_at_screen_pos(screen_pos)
+		if _is_valid_cell(prefab_cell):
+			place_prefab(selected_prefab_key, prefab_cell, _preview_rotation, _preview_flip, point_symmetry_enabled)
+		return
+
+	# Paint free cells (undo snapshot is pushed once at stroke start in _input)
 	var cell = _get_cell_at_screen_pos(screen_pos)
 	if _is_valid_cell(cell):
 		if selected_terrain_type == TerrainType.NONE:
-			grid_cells.erase(cell)
-			# Also erase mirrored cell if symmetry is enabled
+			free_cells.erase(cell)
 			if point_symmetry_enabled:
-				var mirrored = _get_mirrored_cell(cell)
-				grid_cells.erase(mirrored)
+				free_cells.erase(Vector2i(_get_mirrored_cell(cell)))
 		else:
-			grid_cells[cell] = selected_terrain_type
-			# Also paint mirrored cell if symmetry is enabled
+			free_cells[cell] = selected_terrain_type
 			if point_symmetry_enabled:
-				var mirrored = _get_mirrored_cell(cell)
-				grid_cells[mirrored] = selected_terrain_type
-		grid_container.queue_redraw()
-		_update_stats()
-		_emit_layout_update()
+				free_cells[Vector2i(_get_mirrored_cell(cell))] = selected_terrain_type
+		_rebuild_derived()
 
 
 func _emit_layout_update() -> void:
@@ -1462,7 +1767,7 @@ func _generate_terrain_layout() -> void:
 	var success = false
 
 	for retry in range(max_retries):
-		grid_cells.clear()
+		placed_pieces.clear()
 
 		if _try_generate_layout():
 			success = true
@@ -1508,7 +1813,7 @@ func _try_generate_layout() -> bool:
 		TerrainType.DANGEROUS: 2   # ~10% of pieces (minimum 2)
 	}
 
-	var placed_pieces := []
+	var tracked := []  # spacing tracker: [{pos, size, type}] (not the member placed_pieces)
 	var max_attempts = 500  # Increased for larger tables
 
 	# Place pieces with symmetry support
@@ -1558,27 +1863,30 @@ func _try_generate_layout() -> bool:
 				)
 
 				# Check if placement is valid (3" minimum spacing)
-				if _can_place_piece(pos, template, placed_pieces):
+				if _can_place_piece(pos, template, tracked):
+					var prefab := _template_to_prefab(terrain_type, template)
 					# If symmetry is enabled, check if mirrored position is also valid
 					if point_symmetry_enabled:
 						var mirrored_pos = _mirror_position(pos, template, grid_dims)
 
 						# Check if mirrored piece can also be placed
-						if not _can_place_piece(mirrored_pos, template, placed_pieces):
+						if not _can_place_piece(mirrored_pos, template, tracked):
 							continue  # Try another position
 
-						# Place both original and mirrored piece
-						_place_piece(pos, template, terrain_type)
-						placed_pieces.append({"pos": pos, "size": template, "type": terrain_type})
+						# Place both original and mirrored piece as prefab pieces
+						_add_piece(prefab["key"], pos, prefab["rotation"], false)
+						tracked.append({"pos": pos, "size": template, "type": terrain_type})
 
-						_place_piece(mirrored_pos, template, terrain_type)
-						placed_pieces.append({"pos": mirrored_pos, "size": template, "type": terrain_type})
+						# Point symmetry: mirrored piece is rotated 180° so its walls land
+						# on the opposite corner (true point-symmetric layout).
+						_add_piece(prefab["key"], mirrored_pos, (int(prefab["rotation"]) + 180) % 360, false)
+						tracked.append({"pos": mirrored_pos, "size": template, "type": terrain_type})
 
 						pieces_placed_by_type[terrain_type] += 2
 					else:
 						# No symmetry - just place the piece
-						_place_piece(pos, template, terrain_type)
-						placed_pieces.append({"pos": pos, "size": template, "type": terrain_type})
+						_add_piece(prefab["key"], pos, prefab["rotation"], false)
+						tracked.append({"pos": pos, "size": template, "type": terrain_type})
 
 						pieces_placed_by_type[terrain_type] += 1
 
@@ -1742,32 +2050,37 @@ func _is_cell_within_table_bounds(cell_pos: Vector2i, grid_dims: Vector2i) -> bo
 
 
 ## Place a piece on the grid
-func _place_piece(pos: Vector2i, piece_size: Vector2i, terrain_type: int) -> void:
-	for x in range(piece_size.x):
-		for y in range(piece_size.y):
-			var cell_pos = pos + Vector2i(x, y)
-			grid_cells[cell_pos] = terrain_type
+## Map an autogen (terrain_type, template-size) to a canonical prefab key + rotation.
+func _template_to_prefab(terrain_type: int, template: Vector2i) -> Dictionary:
+	match terrain_type:
+		TerrainType.RUINS:
+			return {"key": "ruine_9x9" if template == Vector2i(3, 3) else "ruine_9x6", "rotation": 0}
+		TerrainType.FOREST:
+			return {"key": "wald_9x9", "rotation": 0}
+		TerrainType.CONTAINER:
+			return {"key": "blocker_6x3", "rotation": 0}
+		TerrainType.DANGEROUS:
+			# prefab dangerous_9x6 is 3×2; the 2×3 template is that piece rotated 90°
+			return {"key": "dangerous_9x6", "rotation": 90 if template == Vector2i(2, 3) else 0}
+	return {"key": "", "rotation": 0}
 
 
 ## Save current layout to file
 func save_layout(file_path: String) -> void:
 	var data = {
-		"version": "1.3",  # v1.3: added mission objectives on 1" grid
+		"version": "1.5",  # v1.5: piece-identity model (placed_pieces + free_cells/free_walls)
 		"table_size": {"x": table_size_feet.x, "y": table_size_feet.y},
 		"grid_rotation": grid_rotation_degrees,
 		"deployment_type": deployment_type,
-		"grid_cells": {},
 		"custom_zones": {
 			"player1": [],
 			"player2": []
 		},
-		"mission_objectives": []
+		"mission_objectives": [],
+		"placed_pieces": [],
+		"free_cells": {},
+		"free_walls": []
 	}
-
-	# Convert grid_cells keys to strings (JSON doesn't support Vector2i keys)
-	for cell_pos in grid_cells:
-		var key = "%d,%d" % [cell_pos.x, cell_pos.y]
-		data.grid_cells[key] = grid_cells[cell_pos]
 
 	# Save custom zone vertices as coordinate arrays
 	for cell in custom_zone_vertices_p1:
@@ -1778,6 +2091,34 @@ func save_layout(file_path: String) -> void:
 	# Save mission objectives (1" coordinates)
 	for obj in mission_objectives:
 		data.mission_objectives.append({"x": obj.x, "y": obj.y})
+
+	# Save placed prefab pieces (the source of truth)
+	for piece in placed_pieces:
+		var origin: Vector2i = piece["origin"]
+		data.placed_pieces.append({
+			"prefab_key": piece["prefab_key"],
+			"origin_x": origin.x,
+			"origin_y": origin.y,
+			"rotation": piece.get("rotation", 0),
+			"flip": piece.get("flip", false),
+			"seed": piece.get("seed", 0),
+		})
+
+	# Save free-painted cells
+	for cell_pos in free_cells:
+		data.free_cells["%d,%d" % [cell_pos.x, cell_pos.y]] = free_cells[cell_pos]
+
+	# Save manually placed walls
+	for wall in free_walls:
+		var edge_cell: Vector2i = wall.get("edge_cell", Vector2i.ZERO)
+		data.free_walls.append({
+			"edge_cell_x": edge_cell.x,
+			"edge_cell_y": edge_cell.y,
+			"edge_side": wall.get("edge_side", 0),
+			"wall_key": wall.get("wall_key", ""),
+			"length_inches": wall.get("length_inches", GRID_SIZE_INCHES),
+			"sub_position": wall.get("sub_position", 0),
+		})
 
 	var json_string = JSON.stringify(data, "\t")
 	var file = FileAccess.open(file_path, FileAccess.WRITE)
@@ -1854,18 +2195,49 @@ func load_layout(file_path: String) -> bool:
 	# Emit signal to update terrain_overlay with deployment type and custom zones
 	deployment_type_changed.emit(deployment_type)
 
-	# Load grid cells
-	grid_cells.clear()
-	if data.has("grid_cells"):
-		for key in data.grid_cells:
-			var coords = key.split(",")
-			if coords.size() == 2:
-				var cell_pos = Vector2i(int(coords[0]), int(coords[1]))
-				grid_cells[cell_pos] = data.grid_cells[key]
+	# --- Terrain source-of-truth: placed pieces + free cells + free walls ---
+	placed_pieces.clear()
+	free_cells.clear()
+	free_walls.clear()
+	_next_piece_id = 1
+	_undo_stack.clear()
+	_redo_stack.clear()
+	_selected_piece_id = -1
 
-	grid_container.queue_redraw()
-	_update_stats()
-	_emit_layout_update()
+	if data.has("placed_pieces"):
+		for p in data.placed_pieces:
+			var id := _next_piece_id
+			_next_piece_id += 1
+			placed_pieces.append({
+				"id": id,
+				"prefab_key": p.get("prefab_key", ""),
+				"origin": Vector2i(int(p.get("origin_x", 0)), int(p.get("origin_y", 0))),
+				"rotation": int(p.get("rotation", 0)),
+				"flip": bool(p.get("flip", false)),
+				"seed": int(p.get("seed", id)),
+			})
+
+	# Free cells: new "free_cells" key, else legacy "grid_cells"
+	var cells_src: Dictionary = data.get("free_cells", data.get("grid_cells", {}))
+	for key in cells_src:
+		var coords: PackedStringArray = key.split(",")
+		if coords.size() == 2:
+			free_cells[Vector2i(int(coords[0]), int(coords[1]))] = int(cells_src[key])
+
+	# Free walls: new "free_walls" key, else legacy "wall_segments"
+	var walls_src: Array = data.get("free_walls", data.get("wall_segments", []))
+	for w in walls_src:
+		free_walls.append({
+			"edge_cell": Vector2i(int(w.get("edge_cell_x", 0)), int(w.get("edge_cell_y", 0))),
+			"edge_side": int(w.get("edge_side", 0)),
+			"wall_key": w.get("wall_key", ""),
+			"length_inches": float(w.get("length_inches", GRID_SIZE_INCHES)),
+			"sub_position": int(w.get("sub_position", 0)),
+		})
+
+	_rebuild_derived()
+	_update_modular_status()
+	_update_undo_redo_buttons()
 
 	print("Layout loaded from: %s" % file_path)
 	return true
@@ -2305,27 +2677,22 @@ func _handle_wall_click(screen_pos: Vector2) -> void:
 	if selected_wall_key.is_empty():
 		return
 
-	# Check if a wall already exists at this edge — if so, remove it (toggle)
+	# Toggle: if a free wall already exists at this edge, remove it, else place one.
 	var found := false
-	for i in range(wall_segments.size() - 1, -1, -1):
-		var seg: Dictionary = wall_segments[i]
+	for seg in free_walls:
 		if seg["edge_cell"] == edge_cell and seg["edge_side"] == edge_side:
-			wall_segments.remove_at(i)
 			found = true
 			break
 
-	if not found:
-		# Place new wall
+	if found:
+		remove_wall_segment(edge_cell, edge_side)
+	else:
 		var length: float = 3.0
 		for w in available_walls:
 			if w.get("key", "") == selected_wall_key:
 				length = w.get("length_inches", 3.0)
 				break
 		add_wall_segment(edge_cell, edge_side, selected_wall_key, length)
-	else:
-		_emit_layout_update()
-		if grid_container:
-			grid_container.queue_redraw()
 
 	_update_modular_status()
 
@@ -2404,240 +2771,41 @@ func _get_edge_at_screen_pos(screen_pos: Vector2) -> Vector3i:
 ## Add a wall segment to a cell edge
 func add_wall_segment(edge_cell: Vector2i, edge_side: int, wall_key: String,
 		length_inches: float = 3.0, sub_position: int = 0) -> void:
-	# Check for duplicate at same edge position
-	for existing in wall_segments:
+	_push_undo()
+	# Replace an existing free wall at the same edge, else append a new one.
+	for existing in free_walls:
 		if existing["edge_cell"] == edge_cell and existing["edge_side"] == edge_side \
 				and existing["sub_position"] == sub_position:
-			# Replace existing wall
 			existing["wall_key"] = wall_key
 			existing["length_inches"] = length_inches
-			_emit_layout_update()
-			if grid_container:
-				grid_container.queue_redraw()
+			_rebuild_derived()
 			return
-
-	wall_segments.append({
+	free_walls.append({
 		"edge_cell": edge_cell,
 		"edge_side": edge_side,
 		"wall_key": wall_key,
 		"length_inches": length_inches,
 		"sub_position": sub_position,
 	})
-	_emit_layout_update()
-	if grid_container:
-		grid_container.queue_redraw()
+	_rebuild_derived()
 
 
-## Remove a wall segment from a cell edge
+## Remove a manually placed wall segment from a cell edge
 func remove_wall_segment(edge_cell: Vector2i, edge_side: int, sub_position: int = 0) -> void:
-	for i in range(wall_segments.size() - 1, -1, -1):
-		var seg: Dictionary = wall_segments[i]
+	for i in range(free_walls.size() - 1, -1, -1):
+		var seg: Dictionary = free_walls[i]
 		if seg["edge_cell"] == edge_cell and seg["edge_side"] == edge_side \
 				and seg["sub_position"] == sub_position:
-			wall_segments.remove_at(i)
-			break
-	_emit_layout_update()
-	if grid_container:
-		grid_container.queue_redraw()
+			_push_undo()
+			free_walls.remove_at(i)
+			_rebuild_derived()
+			return
 
 
-## Clear all wall segments
+## Clear all manually placed wall segments (piece walls stay with their pieces)
 func clear_wall_segments() -> void:
-	wall_segments.clear()
-	_emit_layout_update()
-	if grid_container:
-		grid_container.queue_redraw()
+	_push_undo()
+	free_walls.clear()
+	_rebuild_derived()
 
 
-## Set wall definitions from terrain library
-func set_wall_definitions(walls: Array[Dictionary]) -> void:
-	available_walls = walls
-	if not walls.is_empty() and selected_wall_key.is_empty():
-		selected_wall_key = walls[0].get("key", "")
-	_update_modular_terrain_ui()
-
-
-## Set tree/container definitions from terrain library
-func set_tree_definitions(trees: Array[Dictionary]) -> void:
-	available_trees = trees
-	_update_modular_status()
-
-
-func set_container_definitions(containers: Array[Dictionary]) -> void:
-	available_containers = containers
-	_update_modular_status()
-
-
-# ==============================================================================
-# AUTO-POPULATE TREES & CONTAINERS (S9)
-# ==============================================================================
-
-## Auto-populate trees on FOREST cells using connected regions
-## Max ~5 trees per 3x3 cell block (~1 tree per 1.8 cells)
-## Returns the number of trees placed
-func auto_populate_trees() -> int:
-	# Remove existing auto-placed trees
-	placed_objects = placed_objects.filter(func(obj: Dictionary) -> bool:
-		return obj.get("object_type", "") != "tree"
-	)
-
-	if available_trees.is_empty():
-		return 0
-
-	var grid_dims := _calculate_grid_dimensions()
-
-	# Collect all valid forest cells per connected region
-	var regions := get_connected_regions()
-	var count := 0
-
-	for region in regions:
-		var terrain_type: int = region["terrain_type"]
-		if terrain_type != TerrainType.FOREST:
-			continue
-
-		var forest_cells: Array[Vector2i] = []
-		for cell_pos in region["cells"]:
-			if _is_cell_within_table_bounds(cell_pos, grid_dims):
-				forest_cells.append(cell_pos)
-
-		if forest_cells.is_empty():
-			continue
-
-		# Max 5 trees per 9-cell block (= ~0.56 trees per cell)
-		var max_trees := ceili(float(forest_cells.size()) * 5.0 / 9.0)
-
-		# Distribute trees randomly across the entire region
-		for i in range(max_trees):
-			var random_cell: Vector2i = forest_cells[randi() % forest_cells.size()]
-			var tree_def: Dictionary = available_trees[randi() % available_trees.size()]
-			var offset := Vector2(randf_range(0.15, 0.85), randf_range(0.15, 0.85))
-			placed_objects.append({
-				"object_key": tree_def.get("key", ""),
-				"cell": random_cell,
-				"offset": offset,
-				"object_type": "tree",
-			})
-			count += 1
-
-	_emit_layout_update()
-	if grid_container:
-		grid_container.queue_redraw()
-	return count
-
-
-## Auto-populate containers on all CONTAINER cells
-## Pairs adjacent container cells (1x2 tiles) where possible; single cells get a 1x1 container
-## Returns the number of containers placed
-func auto_populate_containers() -> int:
-	# Remove existing auto-placed containers
-	placed_objects = placed_objects.filter(func(obj: Dictionary) -> bool:
-		return obj.get("object_type", "") != "container"
-	)
-
-	if available_containers.is_empty():
-		return 0
-
-	var grid_dims := _calculate_grid_dimensions()
-
-	# Collect all valid container cells
-	var container_cells: Array[Vector2i] = []
-	for cell_pos: Vector2i in grid_cells:
-		if grid_cells[cell_pos] != TerrainType.CONTAINER:
-			continue
-		if not _is_cell_within_table_bounds(cell_pos, grid_dims):
-			continue
-		container_cells.append(cell_pos)
-
-	# Pair adjacent cells into 1x2 groups, leftover cells are singles
-	var paired := {}
-	var count := 0
-
-	for cell_pos in container_cells:
-		if paired.has(cell_pos):
-			continue
-
-		# Try horizontal neighbor first (+X), then vertical (+Y)
-		var partner := Vector2i(-1, -1)
-		var horizontal_neighbor := Vector2i(cell_pos.x + 1, cell_pos.y)
-		var vertical_neighbor := Vector2i(cell_pos.x, cell_pos.y + 1)
-
-		if not paired.has(horizontal_neighbor) and container_cells.has(horizontal_neighbor):
-			partner = horizontal_neighbor
-		elif not paired.has(vertical_neighbor) and container_cells.has(vertical_neighbor):
-			partner = vertical_neighbor
-
-		var container_def: Dictionary = available_containers[randi() % available_containers.size()]
-
-		if partner != Vector2i(-1, -1):
-			# Paired: place one container centered between the two cells
-			paired[cell_pos] = true
-			paired[partner] = true
-			# Offset centers the container across both cells
-			# cell_pos is the base cell, offset extends to include partner
-			var center_offset: Vector2
-			if partner.x > cell_pos.x:
-				# Horizontal pair: center X at 1.0 (boundary between cells)
-				center_offset = Vector2(1.0, 0.5)
-			else:
-				# Vertical pair: center Y at 1.0 (boundary between cells)
-				center_offset = Vector2(0.5, 1.0)
-			placed_objects.append({
-				"object_key": container_def.get("key", ""),
-				"cell": cell_pos,
-				"offset": center_offset,
-				"object_type": "container",
-			})
-			count += 1
-		else:
-			# Single cell: one container centered
-			paired[cell_pos] = true
-			placed_objects.append({
-				"object_key": container_def.get("key", ""),
-				"cell": cell_pos,
-				"offset": Vector2(0.5, 0.5),
-				"object_type": "container",
-			})
-			count += 1
-
-	_emit_layout_update()
-	if grid_container:
-		grid_container.queue_redraw()
-	return count
-
-
-## Clear all placed objects
-func clear_placed_objects() -> void:
-	placed_objects.clear()
-	_emit_layout_update()
-	if grid_container:
-		grid_container.queue_redraw()
-
-
-## Get wall segments data (for save/load)
-func get_wall_segments() -> Array[Dictionary]:
-	return wall_segments.duplicate()
-
-
-## Set wall segments data (for loading)
-func set_wall_segments(segments: Array) -> void:
-	wall_segments.clear()
-	for seg in segments:
-		if seg is Dictionary:
-			wall_segments.append(seg)
-	if grid_container:
-		grid_container.queue_redraw()
-
-
-## Get placed objects data (for save/load)
-func get_placed_objects() -> Array[Dictionary]:
-	return placed_objects.duplicate()
-
-
-## Set placed objects data (for loading)
-func set_placed_objects(objects: Array) -> void:
-	placed_objects.clear()
-	for obj in objects:
-		if obj is Dictionary:
-			placed_objects.append(obj)
-	if grid_container:
-		grid_container.queue_redraw()
