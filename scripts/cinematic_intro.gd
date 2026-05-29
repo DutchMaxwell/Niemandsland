@@ -1,5 +1,5 @@
 extends Node3D
-class_name TronIntro
+class_name CinematicIntro
 ## Cinematic launch sequence — directed in a Christopher Nolan / Interstellar register:
 ## a single unbroken ~12 s IMAX-style take. We open from black, drift in the void on a
 ## long lens (telephoto compression of the table against the stars), then begin a slow,
@@ -57,7 +57,7 @@ const POS_START := Vector3(0.0, 22.0, 34.0)
 const FALLBACK_FINAL_POS := Vector3(0.0, 7.07, 7.07)
 const LOOK_TARGET := Vector3(0.0, 0.0, 0.0)
 
-## Holo grid — cool "engineering blueprint" light, not neon Tron cyan.
+## Holo grid — cool "engineering blueprint" light, not neon cyan.
 const GRID_SPACING: float = 0.1524   # ~6" between lines
 const HOLO_HEIGHT: float = 0.03      # above the table surface to avoid z-fighting
 const HOLO_COLOR := Color(0.55, 0.72, 1.0)

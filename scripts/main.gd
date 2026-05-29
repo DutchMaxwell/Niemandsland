@@ -49,8 +49,8 @@ const DEBUG_MODE: bool = false
 @onready var fill_light: DirectionalLight3D = $FillLight
 @onready var world_environment: WorldEnvironment = $WorldEnvironment
 
-# Tron Intro
-var tron_intro: TronIntro = null
+# Cinematic Intro
+var cinematic_intro: CinematicIntro = null
 ## Opaque black backdrop shown behind the table-size chooser, so selection happens on
 ## black and dissolves cleanly into the intro (freed once the intro's own black is up).
 var _prompt_overlay: CanvasLayer = null
@@ -470,7 +470,7 @@ func _ready() -> void:
 	else:
 		# Loaded battle / joining client: size comes from the saved/host data, so there is
 		# no chooser — go straight into the intro.
-		_start_tron_intro()
+		_start_cinematic_intro()
 
 	print("OpenTTS ready!")
 
@@ -1057,7 +1057,7 @@ func _on_table_size_chosen(size_feet: Vector2, dialog: Window) -> void:
 		dialog.queue_free()
 		# Start the intro (its own opaque black covers the screen), then drop our backdrop
 		# so the intro fades in from black.
-		_start_tron_intro()
+		_start_cinematic_intro()
 		if is_instance_valid(_prompt_overlay):
 			_prompt_overlay.queue_free()
 			_prompt_overlay = null
@@ -2039,25 +2039,25 @@ func _on_wgs_game_imported(game: WGSClient.WGSGame) -> void:
 
 
 ## ============================================================================
-## Tron Intro Animation
+## Cinematic Intro Animation
 ## ============================================================================
 
-## Start the Tron-style intro animation
-func _start_tron_intro() -> void:
+## Start the cinematic intro animation
+func _start_cinematic_intro() -> void:
 	# Create intro node
-	tron_intro = TronIntro.new()
-	tron_intro.name = "TronIntro"
-	add_child(tron_intro)
+	cinematic_intro = CinematicIntro.new()
+	cinematic_intro.name = "CinematicIntro"
+	add_child(cinematic_intro)
 
 	# Connect signals
-	tron_intro.intro_finished.connect(_on_intro_finished)
-	tron_intro.intro_skipped.connect(_on_intro_finished)
+	cinematic_intro.intro_finished.connect(_on_intro_finished)
+	cinematic_intro.intro_skipped.connect(_on_intro_finished)
 
 	# Hide UI during intro
 	$UI.visible = false
 
 	# Start the intro
-	tron_intro.play_intro(self)
+	cinematic_intro.play_intro(self)
 
 
 ## Called when intro finishes or is skipped
@@ -2073,13 +2073,13 @@ func _on_intro_finished() -> void:
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 	# Clean up intro after a delay
-	if tron_intro:
+	if cinematic_intro:
 		await get_tree().create_timer(1.0).timeout
-		if is_instance_valid(tron_intro):
-			tron_intro.queue_free()
-			tron_intro = null
+		if is_instance_valid(cinematic_intro):
+			cinematic_intro.queue_free()
+			cinematic_intro = null
 
-	print("Tron intro finished - welcome to OpenTTS!")
+	print("Cinematic intro finished - welcome to OpenTTS!")
 
 
 ## ============================================================================
