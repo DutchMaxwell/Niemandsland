@@ -42,6 +42,10 @@ var is_alive: bool = true
 ## Runtime markers: ["Activated", "Pinned", "Shaken", etc.]
 var markers: Array[String] = []
 
+## Colors for custom (non-standard) markers, keyed by marker name. Standard
+## marker colors come from UnitMarker.STANDARD_MARKERS and are not stored here.
+var marker_colors: Dictionary = {}  # marker_name (String) -> Color
+
 # ===== Import/Spawn Position (for Sort Table reset) =====
 
 ## Initial position when spawned
@@ -143,6 +147,11 @@ func clear_markers() -> void:
 
 ## Returns a dictionary representation for saving.
 func to_dict() -> Dictionary:
+	var colors_data := {}
+	for key in marker_colors:
+		var color: Color = marker_colors[key]
+		colors_data[key] = [color.r, color.g, color.b, color.a]
+
 	return {
 		"model_index": model_index,
 		"properties": properties.duplicate(true),
@@ -150,6 +159,7 @@ func to_dict() -> Dictionary:
 		"wounds_max": wounds_max,
 		"is_alive": is_alive,
 		"markers": markers.duplicate(),
+		"marker_colors": colors_data,
 		"import_position": [import_position.x, import_position.y, import_position.z],
 		"import_rotation": [import_rotation.x, import_rotation.y, import_rotation.z],
 	}
@@ -168,6 +178,13 @@ static func from_dict(data: Dictionary) -> ModelInstance:
 	instance.markers.clear()
 	for marker in saved_markers:
 		instance.markers.append(marker)
+
+	var saved_colors = data.get("marker_colors", {})
+	if saved_colors is Dictionary:
+		for key in saved_colors:
+			var arr = saved_colors[key]
+			if arr is Array and arr.size() >= 4:
+				instance.marker_colors[key] = Color(arr[0], arr[1], arr[2], arr[3])
 
 	# Load import position/rotation (for Sort Table reset)
 	var pos = data.get("import_position", [0, 0, 0])

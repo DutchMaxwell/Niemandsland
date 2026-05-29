@@ -22,8 +22,17 @@ var _is_unit: bool = false
 @onready var add_custom_button: Button = $Panel/VBox/CustomContainer/AddButton
 @onready var close_button: Button = $Panel/VBox/CloseButton
 
+## Standard markers that are owned by the radial-menu state toggles (they set
+## is_shaken/is_fatigued/is_activated and render their own unit-level token).
+## Excluded here so the dialog can't create a second, conflicting indicator.
+const STATE_OWNED_MARKERS := ["Activated", "Shaken", "Fatigued"]
+
 ## Standard marker buttons
 var _standard_buttons: Dictionary = {}
+
+## Guards against connecting signals twice: create_simple() runs _setup_ui()
+## before the node enters the tree, then _ready() would call it again.
+var _signals_connected: bool = false
 
 
 func _ready() -> void:
@@ -32,6 +41,12 @@ func _ready() -> void:
 
 
 func _setup_ui() -> void:
+	# Skip if already connected (from create_simple) to avoid duplicate signal
+	# connections - matches WoundsDialog / CastsDialog.
+	if _signals_connected:
+		return
+	_signals_connected = true
+
 	if add_custom_button:
 		add_custom_button.pressed.connect(_on_add_custom_pressed)
 	if close_button:
@@ -60,8 +75,11 @@ func _create_standard_marker_buttons() -> void:
 		child.queue_free()
 	_standard_buttons.clear()
 
-	# Create button for each standard marker
+	# Create button for each standard marker (skip state-owned ones - those are
+	# controlled by the dedicated radial-menu toggles).
 	for marker_name in UnitMarker.STANDARD_MARKERS.keys():
+		if marker_name in STATE_OWNED_MARKERS:
+			continue
 		var def = UnitMarker.STANDARD_MARKERS[marker_name]
 		var btn = Button.new()
 		btn.text = "%s %s" % [def.icon, marker_name]
