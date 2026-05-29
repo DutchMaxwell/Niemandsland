@@ -55,6 +55,14 @@ var _current_selection: Array = []
 ## Is the radial menu scene loaded
 var _menu_scene: PackedScene = null
 
+## Runtime token configs for dialog markers (node_name -> {color, label, letter,
+## priority}). Lets arbitrary MarkerDialog markers reuse the same token engine as
+## the built-in TOKEN_TYPES without hardcoding them.
+var _dynamic_token_configs: Dictionary = {}
+
+## Priority for dialog marker tokens - placed after the built-in status tokens.
+const MARKER_TOKEN_PRIORITY := 100
+
 ## Token layout constants
 const TOKEN_RADIUS = 0.010  # 10mm radius = 20mm diameter disc
 const TOKEN_HEIGHT = 0.003  # 3mm thick
@@ -642,14 +650,22 @@ func _on_boundary_updated(game_unit: GameUnit) -> void:
 
 # ===== Unified Token Layout System =====
 
+## Returns the layout/style config for a token node name, looking at the built-in
+## TOKEN_TYPES first and then the runtime dialog-marker configs. Null if unknown.
+func _token_config(token_name: String) -> Variant:
+	if TOKEN_TYPES.has(token_name):
+		return TOKEN_TYPES[token_name]
+	return _dynamic_token_configs.get(token_name, null)
+
+
 ## Gets all active token markers on a model node.
 func _get_active_tokens(model_node: Node3D) -> Array[String]:
 	var tokens: Array[String] = []
-	for token_name in TOKEN_TYPES.keys():
+	for token_name in TOKEN_TYPES.keys() + _dynamic_token_configs.keys():
 		if model_node.get_node_or_null(token_name):
 			tokens.append(token_name)
 	# Sort by priority
-	tokens.sort_custom(func(a, b): return TOKEN_TYPES[a]["priority"] < TOKEN_TYPES[b]["priority"])
+	tokens.sort_custom(func(a, b): return _token_config(a)["priority"] < _token_config(b)["priority"])
 	return tokens
 
 
@@ -913,7 +929,7 @@ func _animate_token_to_position(marker: Node3D, _start_pos: Vector3, _end_pos: V
 
 ## Creates a token disc with the unified style.
 func _create_token_disc(marker_name: String) -> Node3D:
-	var config = TOKEN_TYPES.get(marker_name)
+	var config = _token_config(marker_name)
 	if not config:
 		return null
 
@@ -1031,7 +1047,7 @@ func _add_token_letter_label(marker: Node3D, letter: String, color: Color) -> La
 ## For tokens with letters (shaken, fatigued), pass -1.
 func _update_token(model_node: Node3D, unit: GameUnit, marker_name: String, is_active: bool, value: int = -1) -> void:
 	var existing_marker = model_node.get_node_or_null(marker_name)
-	var config = TOKEN_TYPES.get(marker_name)
+	var config = _token_config(marker_name)
 	if not config:
 		return
 
@@ -1077,19 +1093,134 @@ func _update_token(model_node: Node3D, unit: GameUnit, marker_name: String, is_a
 
 ## Called when a marker is added via the marker dialog.
 func _on_marker_dialog_marker_added(target: Variant, marker: UnitMarker) -> void:
-	if not network_manager:
-		return
-	if target is ModelInstance:
-		network_manager.broadcast_model_marker(target, marker.name, true)
-	elif target is GameUnit:
-		network_manager.broadcast_unit_marker(target, marker.name, true)
+	_store_marker_color(target, marker.name, marker.color)
+	_apply_marker_token(target, marker.name, marker.color, true)
+
+	if network_manager:
+		if target is ModelInstance:
+			network_manager.broadcast_model_marker(target, marker.name, true)
+		elif target is GameUnit:
+			network_manager.broadcast_unit_marker(target, marker.name, true)
 
 
 ## Called when a marker is removed via the marker dialog.
 func _on_marker_dialog_marker_removed(target: Variant, marker_name: String) -> void:
-	if not network_manager:
+	_apply_marker_token(target, marker_name, Color.WHITE, false)
+	_clear_marker_color(target, marker_name)
+
+	if network_manager:
+		if target is ModelInstance:
+			network_manager.broadcast_model_marker(target, marker_name, false)
+		elif target is GameUnit:
+			network_manager.broadcast_unit_marker(target, marker_name, false)
+
+
+# ===== Dialog Marker Tokens =====
+# Dialog markers reuse the unified token engine: each marker becomes a runtime
+# token config (color + center letter) rendered per model via _update_token.
+
+## Node name for a dialog marker's orbit token (kept distinct from TOKEN_TYPES).
+## Hash the raw text: validate_node_name() collapses '. : / @ %' all to '_', so
+## distinct marker texts (e.g. "Aura: Fear" vs "Aura/Fear") would otherwise share
+## one node and corrupt each other's color/removal. The hash is injective enough.
+func _marker_token_name(marker_name: String) -> String:
+	return "DlgMarker_" + str(marker_name.hash())
+
+
+## Center letter shown on a dialog marker token (first character, uppercased).
+func _marker_token_letter(marker_name: String) -> String:
+	if marker_name.is_empty():
+		return "?"
+	return marker_name.substr(0, 1).to_upper()
+
+
+## Resolves a marker's display color: standard markers from the UnitMarker defs,
+## custom markers from the model's stored color, else a neutral gray.
+func _resolve_marker_color(marker_name: String, model: ModelInstance) -> Color:
+	if UnitMarker.STANDARD_MARKERS.has(marker_name):
+		return UnitMarker.STANDARD_MARKERS[marker_name].color
+	if model and model.marker_colors.has(marker_name):
+		return model.marker_colors[marker_name]
+	return Color(0.6, 0.6, 0.6)
+
+
+## Adds/removes a dialog marker token on every model the target covers.
+func _apply_marker_token(target: Variant, marker_name: String, color: Color, is_active: bool) -> void:
+	if target is ModelInstance:
+		_render_marker_token(target, target.unit as GameUnit, marker_name, color, is_active)
+	elif target is GameUnit:
+		for model in target.models:
+			_render_marker_token(model, target, marker_name, color, is_active)
+
+
+## Renders or removes a single dialog marker token on one model.
+func _render_marker_token(model: ModelInstance, unit: GameUnit, marker_name: String, color: Color, is_active: bool) -> void:
+	if not model or not model.node or not is_instance_valid(model.node):
+		return
+	var node_name := _marker_token_name(marker_name)
+	if is_active:
+		_dynamic_token_configs[node_name] = {
+			"color": color,
+			"label": "",  # no curved label; custom text varies, just show the letter
+			"letter": _marker_token_letter(marker_name),
+			"priority": MARKER_TOKEN_PRIORITY,
+		}
+	_update_token(model.node, unit, node_name, is_active)
+	# _update_token only colors NEW tokens; re-applying a marker with a changed
+	# color must recolor the existing disc too.
+	if is_active:
+		_recolor_token(model.node.get_node_or_null(node_name), color)
+
+
+## Re-applies a token's color to its disc + letter outline (for color changes on
+## an already-rendered token).
+func _recolor_token(token: Node, color: Color) -> void:
+	if not token:
+		return
+	var disc := token.get_node_or_null("Disc") as MeshInstance3D
+	if disc and disc.material_override is StandardMaterial3D:
+		(disc.material_override as StandardMaterial3D).albedo_color = color
+	var letter := token.get_node_or_null("LetterLabel") as Label3D
+	if letter:
+		letter.outline_modulate = color.darkened(0.4)
+
+
+## Stores a custom marker's color on the affected models (standard colors are
+## derivable from the marker name, so they are not stored).
+func _store_marker_color(target: Variant, marker_name: String, color: Color) -> void:
+	if UnitMarker.STANDARD_MARKERS.has(marker_name):
 		return
 	if target is ModelInstance:
-		network_manager.broadcast_model_marker(target, marker_name, false)
+		target.marker_colors[marker_name] = color
 	elif target is GameUnit:
-		network_manager.broadcast_unit_marker(target, marker_name, false)
+		for model in target.models:
+			model.marker_colors[marker_name] = color
+
+
+## Clears a stored custom marker color from the affected models.
+func _clear_marker_color(target: Variant, marker_name: String) -> void:
+	if target is ModelInstance:
+		target.marker_colors.erase(marker_name)
+	elif target is GameUnit:
+		for model in target.models:
+			model.marker_colors.erase(marker_name)
+
+
+## Re-creates all dialog marker tokens for a unit (used after load).
+func initialize_marker_tokens_for_unit(game_unit: GameUnit) -> void:
+	for model in game_unit.models:
+		if not model.node or not is_instance_valid(model.node):
+			continue
+		for marker_name in model.markers:
+			_render_marker_token(model, game_unit, marker_name, _resolve_marker_color(marker_name, model), true)
+
+
+## Adds/removes a dialog marker token on all models of a unit (remote sync).
+func set_unit_marker_token(game_unit: GameUnit, marker_name: String, add: bool) -> void:
+	for model in game_unit.models:
+		_render_marker_token(model, game_unit, marker_name, _resolve_marker_color(marker_name, model), add)
+
+
+## Adds/removes a dialog marker token on a single model (remote sync).
+func set_model_marker_token(model: ModelInstance, marker_name: String, add: bool) -> void:
+	_render_marker_token(model, model.unit as GameUnit, marker_name, _resolve_marker_color(marker_name, model), add)
