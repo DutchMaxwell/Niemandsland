@@ -728,16 +728,18 @@ func is_unit_model(node: Node3D) -> bool:
 
 ## Clear all armies and spawned models
 func clear_all() -> void:
-	# Remove all spawned models
+	# Remove all spawned models. Guard against double-free: ObjectManager.
+	# clear_all_objects() may have already queued these (the models are its
+	# children) before delegating here.
 	for unit in unit_to_models:
 		var models = unit_to_models[unit]
 		for model in models:
-			if is_instance_valid(model):
+			if is_instance_valid(model) and not model.is_queued_for_deletion():
 				model.queue_free()
 
 	# Remove all army trays
 	for player_id in army_trays:
-		if is_instance_valid(army_trays[player_id]):
+		if is_instance_valid(army_trays[player_id]) and not army_trays[player_id].is_queued_for_deletion():
 			army_trays[player_id].queue_free()
 
 	armies.clear()
