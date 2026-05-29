@@ -1,0 +1,173 @@
+extends GdUnitTestSuite
+## Tests for TerrainPrefabs — the canonical OPR tournament terrain pieces that expand
+## into grid_cells footprints, auto-suggested ruin walls, and decoration objects.
+
+
+func _seeded_rng() -> RandomNumberGenerator:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 12345
+	return rng
+
+
+func test_palette_has_all_canonical_pieces() -> void:
+	var keys := TerrainPrefabs.keys()
+	assert_int(keys.size()).is_equal(5)
+	for key in ["ruine_9x9", "ruine_9x6", "wald_9x9", "blocker_6x3", "dangerous_9x6"]:
+		assert_bool(TerrainPrefabs.has_prefab(key)).is_true()
+
+
+func test_terrain_types_match_enum() -> void:
+	assert_int(TerrainPrefabs.terrain_type("ruine_9x9")).is_equal(TerrainPrefabs.TYPE_RUINS)
+	assert_int(TerrainPrefabs.terrain_type("wald_9x9")).is_equal(TerrainPrefabs.TYPE_FOREST)
+	assert_int(TerrainPrefabs.terrain_type("blocker_6x3")).is_equal(TerrainPrefabs.TYPE_CONTAINER)
+	assert_int(TerrainPrefabs.terrain_type("dangerous_9x6")).is_equal(TerrainPrefabs.TYPE_DANGEROUS)
+
+
+func test_footprint_cell_counts() -> void:
+	assert_int(TerrainPrefabs.footprint_cells("ruine_9x9", Vector2i.ZERO).size()).is_equal(9)
+	assert_int(TerrainPrefabs.footprint_cells("ruine_9x6", Vector2i.ZERO).size()).is_equal(6)
+	assert_int(TerrainPrefabs.footprint_cells("wald_9x9", Vector2i.ZERO).size()).is_equal(9)
+	assert_int(TerrainPrefabs.footprint_cells("blocker_6x3", Vector2i.ZERO).size()).is_equal(2)
+	assert_int(TerrainPrefabs.footprint_cells("dangerous_9x6", Vector2i.ZERO).size()).is_equal(6)
+
+
+func test_footprint_is_offset_by_origin() -> void:
+	# 3x2 ruin at origin (2,3) spans (2,3)..(4,4)
+	var cells := TerrainPrefabs.footprint_cells("ruine_9x6", Vector2i(2, 3))
+	assert_array(cells).contains([Vector2i(2, 3), Vector2i(4, 4)])
+	assert_array(cells).not_contains([Vector2i(5, 3)])
+
+
+func test_unknown_prefab_returns_empty() -> void:
+	assert_int(TerrainPrefabs.footprint_cells("does_not_exist", Vector2i.ZERO).size()).is_equal(0)
+	assert_int(TerrainPrefabs.wall_segments_for("does_not_exist", Vector2i.ZERO).size()).is_equal(0)
+
+
+func test_ruin_walls_form_l_shape() -> void:
+	# 3x3 ruin -> 3 north edges + 3 west edges = 6 segments
+	var segments := TerrainPrefabs.wall_segments_for("ruine_9x9", Vector2i.ZERO)
+	assert_int(segments.size()).is_equal(6)
+
+	var all_sides_north_or_west := true
+	var proc_keyed := true
+	for seg in segments:
+		var side: int = seg["edge_side"]
+		if side != TerrainPrefabs.EDGE_NORTH and side != TerrainPrefabs.EDGE_WEST:
+			all_sides_north_or_west = false
+		if seg["wall_key"] != TerrainPrefabs.PROC_WALL_KEY:
+			proc_keyed = false
+	assert_bool(all_sides_north_or_west).is_true()
+	assert_bool(proc_keyed).is_true()
+
+
+func test_ruin_walls_share_the_origin_corner() -> void:
+	# The L pivots on the origin cell: it carries both a north and a west edge.
+	var segments := TerrainPrefabs.wall_segments_for("ruine_9x6", Vector2i.ZERO)
+	assert_int(segments.size()).is_equal(5)  # 3 north + 2 west
+	var has_north_at_origin := false
+	var has_west_at_origin := false
+	for seg in segments:
+		if seg["edge_cell"] == Vector2i.ZERO and seg["edge_side"] == TerrainPrefabs.EDGE_NORTH:
+			has_north_at_origin = true
+		if seg["edge_cell"] == Vector2i.ZERO and seg["edge_side"] == TerrainPrefabs.EDGE_WEST:
+			has_west_at_origin = true
+	assert_bool(has_north_at_origin).is_true()
+	assert_bool(has_west_at_origin).is_true()
+
+
+func test_non_ruin_has_no_walls() -> void:
+	assert_int(TerrainPrefabs.wall_segments_for("wald_9x9", Vector2i.ZERO).size()).is_equal(0)
+	assert_int(TerrainPrefabs.wall_segments_for("dangerous_9x6", Vector2i.ZERO).size()).is_equal(0)
+
+
+func test_ruins_have_no_decoration() -> void:
+	assert_int(TerrainPrefabs.decoration_for("ruine_9x9", Vector2i.ZERO, _seeded_rng()).size()).is_equal(0)
+
+
+func test_forest_decoration_places_trees() -> void:
+	# 9 cells * 0.6 trees/cell -> ceil(5.4) = 6 trees
+	var objects := TerrainPrefabs.decoration_for("wald_9x9", Vector2i.ZERO, _seeded_rng())
+	assert_int(objects.size()).is_equal(6)
+	for obj in objects:
+		assert_str(obj["object_type"]).is_equal("tree")
+
+
+func test_blocker_decoration_is_single_centered_container() -> void:
+	var objects := TerrainPrefabs.decoration_for("blocker_6x3", Vector2i.ZERO, _seeded_rng())
+	assert_int(objects.size()).is_equal(1)
+	assert_str(objects[0]["object_type"]).is_equal("container")
+	assert_that(objects[0]["offset"]).is_equal(Vector2(1.0, 0.5))
+
+
+func test_dangerous_decoration_places_hazards() -> void:
+	# 6 cells * 0.5 hazards/cell -> ceil(3.0) = 3 hazards, alternating mine/puddle
+	var objects := TerrainPrefabs.decoration_for("dangerous_9x6", Vector2i.ZERO, _seeded_rng())
+	assert_int(objects.size()).is_equal(3)
+	for obj in objects:
+		assert_bool(obj["object_type"] == "mine" or obj["object_type"] == "puddle").is_true()
+
+
+# --- Orientation (rotation / flip) ---
+
+func test_footprint_size_swaps_on_rotation() -> void:
+	assert_that(TerrainPrefabs.footprint_size("ruine_9x6", 0)).is_equal(Vector2i(3, 2))
+	assert_that(TerrainPrefabs.footprint_size("ruine_9x6", 90)).is_equal(Vector2i(2, 3))
+	assert_that(TerrainPrefabs.footprint_size("ruine_9x6", 180)).is_equal(Vector2i(3, 2))
+	assert_that(TerrainPrefabs.footprint_size("ruine_9x6", 270)).is_equal(Vector2i(2, 3))
+
+
+func test_rotated_footprint_bounding_box() -> void:
+	# 3×2 rotated 90° -> 2 wide × 3 tall, anchored at origin (0,0)
+	var cells := TerrainPrefabs.footprint_cells("ruine_9x6", Vector2i.ZERO, 90)
+	assert_int(cells.size()).is_equal(6)
+	var min_x := 9999
+	var min_y := 9999
+	var max_x := -9999
+	var max_y := -9999
+	for c in cells:
+		min_x = mini(min_x, c.x)
+		max_x = maxi(max_x, c.x)
+		min_y = mini(min_y, c.y)
+		max_y = maxi(max_y, c.y)
+	assert_int(min_x).is_equal(0)
+	assert_int(min_y).is_equal(0)
+	assert_int(max_x - min_x + 1).is_equal(2)
+	assert_int(max_y - min_y + 1).is_equal(3)
+
+
+func test_wall_sides_rotate() -> void:
+	var sides0 := {}
+	for s in TerrainPrefabs.wall_segments_for("ruine_9x9", Vector2i.ZERO, 0):
+		sides0[s["edge_side"]] = true
+	assert_bool(sides0.has(TerrainPrefabs.EDGE_NORTH) and sides0.has(TerrainPrefabs.EDGE_WEST)).is_true()
+
+	# 90° CW: north -> east, west -> north
+	var sides90 := {}
+	for s in TerrainPrefabs.wall_segments_for("ruine_9x9", Vector2i.ZERO, 90):
+		sides90[s["edge_side"]] = true
+	assert_bool(sides90.has(TerrainPrefabs.EDGE_NORTH) and sides90.has(TerrainPrefabs.EDGE_EAST)).is_true()
+	assert_bool(sides90.has(TerrainPrefabs.EDGE_WEST)).is_false()
+
+	# 180° (point-symmetric mirror): north -> south, west -> east
+	var sides180 := {}
+	for s in TerrainPrefabs.wall_segments_for("ruine_9x9", Vector2i.ZERO, 180):
+		sides180[s["edge_side"]] = true
+	assert_bool(sides180.has(TerrainPrefabs.EDGE_SOUTH) and sides180.has(TerrainPrefabs.EDGE_EAST)).is_true()
+	assert_bool(sides180.has(TerrainPrefabs.EDGE_NORTH)).is_false()
+
+
+func test_flip_changes_wall_layout() -> void:
+	var sig := func(flip: bool) -> Array:
+		var out := []
+		for s in TerrainPrefabs.wall_segments_for("ruine_9x9", Vector2i.ZERO, 0, flip):
+			out.append([s["edge_cell"], s["edge_side"]])
+		return out
+	assert_bool(sig.call(false) == sig.call(true)).is_false()
+	assert_int(TerrainPrefabs.wall_segments_for("ruine_9x9", Vector2i.ZERO, 0, true).size()).is_equal(6)
+
+
+func test_container_decoration_records_rotation() -> void:
+	var objs0 := TerrainPrefabs.decoration_for("blocker_6x3", Vector2i.ZERO, _seeded_rng(), 0, false)
+	assert_int(int(objs0[0].get("angle_deg", -1))).is_equal(0)
+	var objs90 := TerrainPrefabs.decoration_for("blocker_6x3", Vector2i.ZERO, _seeded_rng(), 90, false)
+	assert_int(int(objs90[0].get("angle_deg", -1))).is_equal(90)
