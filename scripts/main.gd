@@ -1637,6 +1637,7 @@ func _on_terrain_library_loaded(categories: Array) -> void:
 func _on_terrain_category_selected(index: int) -> void:
 	terrain_list.clear()
 
+	save_manager._restore_hero_attachments_after_load()
 	var category_name = terrain_category_option.get_item_text(index)
 	var pieces = terrain_library.get_pieces_in_category(category_name)
 
@@ -1839,6 +1840,7 @@ func _update_opr_hover() -> void:
 	if result and result.collider:
 		var collider = result.collider
 		# Check if this is an OPR unit
+	save_manager._restore_hero_attachments_after_load()
 		if collider.is_in_group("opr_unit"):
 			if _hovered_model != collider:
 				_hovered_model = collider
@@ -1874,8 +1876,25 @@ func _on_selection_changed_update_card(selected_objects: Array[Node3D]) -> void:
 		unit_card.clear()
 		return
 
-	var extra_units := units.size() - 1
-	unit_card.show_unit(units[0], extra_units)
+	# Prefer a host unit (not a joined Hero) as the card subject, so its attached
+	# Hero shows as part of it rather than as a separate "+1".
+	var primary: GameUnit = units[0]
+	for unit in units:
+		if not unit.is_attached():
+			primary = unit
+			break
+
+	# Count other distinct units, excluding Heroes that are attached to the primary
+	# (those are shown as part of it).
+	var extra_units := 0
+	for unit in units:
+		if unit == primary:
+			continue
+		if unit.is_attached() and unit.get_attached_to() == primary:
+			continue
+		extra_units += 1
+
+	unit_card.show_unit(primary, extra_units)
 
 
 ## ============================================================================
@@ -2333,7 +2352,12 @@ func _check_coherency_for_selected_units() -> void:
 		if not obj.has_meta("game_unit"):
 			continue
 		var game_unit = obj.get_meta("game_unit") as GameUnit
-		if game_unit and game_unit not in checked_units:
+		if not game_unit:
+			continue
+		# A joined Hero is checked as part of its host unit.
+		if game_unit.is_attached() and game_unit.get_attached_to() is GameUnit:
+			game_unit = game_unit.get_attached_to()
+		if game_unit not in checked_units:
 			checked_units.append(game_unit)
 			# Show coherency visualization for this unit. animate=false: this runs
 			# live (~15 Hz) while dragging, so re-running the fade/pulse each frame

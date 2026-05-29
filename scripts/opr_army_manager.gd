@@ -128,8 +128,12 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 		var base_name = unit.name
 		unit_name_counts[base_name] = unit_name_counts.get(base_name, 0) + 1
 
+	# Order units so each joined Hero spawns right after its host unit (adjacent
+	# on the tray), instead of as a separate group elsewhere.
+	var ordered_units := _order_units_heroes_after_host(army.units)
+
 	# Second pass: spawn with indices
-	for unit in army.units:
+	for unit in ordered_units:
 		var base_name = unit.name
 		var unit_index = unit_name_indices.get(base_name, 0) + 1
 		unit_name_indices[base_name] = unit_index
@@ -166,6 +170,9 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 
 	# Animate tray and models dropping down
 	_animate_tray_drop(tray, all_models, spawn_height)
+
+	# Wire up joined Heroes (OPR: a Hero "joined to" a unit belongs to it).
+	_attach_joined_heroes(army)
 
 	print("OPRArmyManager: Spawned %d models for army '%s' on tray" % [all_models.size(), army.name])
 	army_spawned.emit(army, all_models)
@@ -428,6 +435,11 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 	wrapper.add_child(base_instance)
 
+	# Visual hover: Flying units, drones and hover vehicles float above the base.
+	var should_hover := _should_hover(unit.name, unit.special_rules)
+	var base_long_mm: int = max(unit.base_width_mm, unit.base_depth_mm) if base_is_oval else unit.base_size_round
+	var hover_lift: float = base_long_mm * FLYING_HOVER_RATIO * 0.001 if should_hover else 0.0
+
 	# Try to load GLB model for this unit
 	var model_path = _find_model_for_unit(unit.name, faction_folder)
 	var model_height: float = 0.032  # Default 32mm height for collision calculation
@@ -441,10 +453,8 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 			# Modell an die Base anpassen (Footprint-Cap gegen Scale-Creep, Flying schwebt)
 			var aabb = _get_model_aabb(glb_instance)
-			var base_long_mm = max(unit.base_width_mm, unit.base_depth_mm) if unit.base_is_oval else unit.base_size_round
 			var tough = _get_tough_value(unit)
-			var is_flying = _is_flying_from_rules(unit.special_rules)
-			var fit = _compute_model_fit(aabb, base_long_mm, tough, is_flying)
+			var fit = _compute_model_fit(aabb, base_long_mm, tough, should_hover)
 			var final_scale = fit.scale
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
@@ -455,8 +465,8 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 			use_glb_model = true
 			model_height = fit.height
 
-			print("OPRArmyManager: GLB '%s' base:%dmm tough:%d flying:%s scale:%.4f" % [
-				unit.name, base_long_mm, tough, str(is_flying), final_scale])
+			print("OPRArmyManager: GLB '%s' base:%dmm tough:%d hover:%s scale:%.4f" % [
+				unit.name, base_long_mm, tough, str(should_hover), final_scale])
 
 	# Fallback: Create placeholder body if no GLB model found
 	if not use_glb_model:
@@ -473,7 +483,7 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 		var body_instance = MeshInstance3D.new()
 		body_instance.mesh = body_mesh
-		body_instance.position.y = 0.003 + body_height / 2
+		body_instance.position.y = 0.003 + body_height / 2 + hover_lift
 
 		var body_material = StandardMaterial3D.new()
 		body_material.albedo_color = player_color.lightened(0.3)
@@ -491,7 +501,7 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 		var head_instance = MeshInstance3D.new()
 		head_instance.mesh = head_mesh
-		head_instance.position.y = 0.003 + body_height + head_radius
+		head_instance.position.y = 0.003 + body_height + head_radius + hover_lift
 
 		var head_material = StandardMaterial3D.new()
 		head_material.albedo_color = Color(0.9, 0.75, 0.6)  # Skin tone
@@ -501,7 +511,7 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 		wrapper.add_child(head_instance)
 
-		model_height = body_height + head_radius * 2
+		model_height = body_height + head_radius * 2 + hover_lift
 
 	# Add collision shape - scaled to base size (use larger dimension for oval)
 	var collision_radius = max(base_width, base_depth) / 2.0 if base_is_oval else base_radius
@@ -567,6 +577,11 @@ func create_model_from_properties(props: Dictionary) -> StaticBody3D:
 
 	wrapper.add_child(base_instance)
 
+	# Visual hover: Flying units, drones and hover vehicles float above the base.
+	var should_hover := _should_hover(unit_name, props.get("special_rules", []))
+	var base_long_mm: int = max(int(props.get("base_width_mm", 32)), int(props.get("base_depth_mm", 32))) if base_is_oval else base_size_round
+	var hover_lift: float = base_long_mm * FLYING_HOVER_RATIO * 0.001 if should_hover else 0.0
+
 	# Try to load GLB model for this unit
 	var faction_folder: String = props.get("faction_folder", "")
 	var model_path = _find_model_for_unit(unit_name, faction_folder)
@@ -580,10 +595,8 @@ func create_model_from_properties(props: Dictionary) -> StaticBody3D:
 			var glb_instance = glb_scene.instantiate()
 
 			var aabb = _get_model_aabb(glb_instance)
-			var base_long_mm = max(int(props.get("base_width_mm", 32)), int(props.get("base_depth_mm", 32))) if base_is_oval else base_size_round
 			var tough = _get_tough_value_from_rules(props.get("special_rules", []))
-			var is_flying = _is_flying_from_rules(props.get("special_rules", []))
-			var fit = _compute_model_fit(aabb, base_long_mm, tough, is_flying)
+			var fit = _compute_model_fit(aabb, base_long_mm, tough, should_hover)
 			var final_scale = fit.scale
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
@@ -606,7 +619,7 @@ func create_model_from_properties(props: Dictionary) -> StaticBody3D:
 
 		var body_instance = MeshInstance3D.new()
 		body_instance.mesh = body_mesh
-		body_instance.position.y = 0.003 + body_height / 2
+		body_instance.position.y = 0.003 + body_height / 2 + hover_lift
 
 		var body_material = StandardMaterial3D.new()
 		body_material.albedo_color = player_color.lightened(0.3)
@@ -623,7 +636,7 @@ func create_model_from_properties(props: Dictionary) -> StaticBody3D:
 
 		var head_instance = MeshInstance3D.new()
 		head_instance.mesh = head_mesh
-		head_instance.position.y = 0.003 + body_height + head_radius
+		head_instance.position.y = 0.003 + body_height + head_radius + hover_lift
 
 		var head_material = StandardMaterial3D.new()
 		head_material.albedo_color = Color(0.9, 0.75, 0.6)
@@ -633,7 +646,7 @@ func create_model_from_properties(props: Dictionary) -> StaticBody3D:
 
 		wrapper.add_child(head_instance)
 
-		model_height = body_height + head_radius * 2
+		model_height = body_height + head_radius * 2 + hover_lift
 
 	# Add collision shape
 	var collision_radius = max(base_width, base_depth) / 2.0 if base_is_oval else base_radius
@@ -728,6 +741,57 @@ func get_all_game_units() -> Array[GameUnit]:
 ## Check if a node is a unit model
 func is_unit_model(node: Node3D) -> bool:
 	return node.is_in_group("unit") or node.is_in_group("opr_unit")
+
+
+# ===== Hero Attachment =====
+
+## Returns the units ordered so each joined Hero comes right after its host unit
+## (matched by selectionId). Heroes whose host is missing keep their place.
+func _order_units_heroes_after_host(units: Array) -> Array:
+	var heroes_by_host: Dictionary = {}
+	for unit in units:
+		if not unit.join_to_unit.is_empty():
+			if not heroes_by_host.has(unit.join_to_unit):
+				heroes_by_host[unit.join_to_unit] = []
+			heroes_by_host[unit.join_to_unit].append(unit)
+
+	var ordered: Array = []
+	for unit in units:
+		if not unit.join_to_unit.is_empty():
+			continue  # placed right after its host below
+		ordered.append(unit)
+		if heroes_by_host.has(unit.selection_id):
+			for hero in heroes_by_host[unit.selection_id]:
+				ordered.append(hero)
+
+	# Heroes whose host was not found must not be dropped - append them.
+	for unit in units:
+		if not unit.join_to_unit.is_empty() and unit not in ordered:
+			ordered.append(unit)
+
+	return ordered
+
+
+## Attaches joined Heroes to their host units after spawning.
+## OPR: a Hero unit can be "joined to" another unit (Army Forge sets the Hero's
+## joinToUnit to the host's selectionId). Combined-unit halves were already merged
+## away during parsing, so the remaining units carrying join_to_unit are Heroes.
+func _attach_joined_heroes(army: OPRApiClient.OPRArmy) -> void:
+	# Index every unit's GameUnit by its selectionId.
+	var by_selection: Dictionary = {}
+	for unit in army.units:
+		var game_unit: GameUnit = unit_to_game_unit.get(unit)
+		if game_unit and not unit.selection_id.is_empty():
+			by_selection[unit.selection_id] = game_unit
+
+	for unit in army.units:
+		if unit.join_to_unit.is_empty():
+			continue
+		var hero_unit: GameUnit = unit_to_game_unit.get(unit)
+		var host_unit: GameUnit = by_selection.get(unit.join_to_unit)
+		if hero_unit and host_unit and hero_unit != host_unit:
+			EquipmentDistributor.attach_hero_to_unit(hero_unit, host_unit)
+			print("OPRArmyManager: Hero '%s' joined to '%s'" % [hero_unit.get_name(), host_unit.get_name()])
 
 
 # ===== Round Management =====
@@ -917,6 +981,17 @@ func _is_flying_from_rules(rules: Array) -> bool:
 		if String(r).strip_edges().to_lower().begins_with("flying"):
 			return true
 	return false
+
+
+## True if a unit should visually hover above its base: it has the Flying rule,
+## or its name marks it as a drone / hover vehicle (e.g. "Gun Drones", "Hover
+## Tank"). Hover is cosmetic only - in this sim Flying has no other effect since
+## coherency reads the model wrapper at table level, not the rule.
+func _should_hover(unit_name: String, rules: Array) -> bool:
+	if _is_flying_from_rules(rules):
+		return true
+	var lowered := unit_name.to_lower()
+	return "drone" in lowered or "hover" in lowered
 
 
 ## Berechnet Skalierung + vertikalen Offset, damit ein GLB gut zur Base passt.

@@ -55,6 +55,29 @@ func _flagged_indices(issues: Array) -> Array:
 	return indices
 
 
+# ===== Joined Hero coherency =====
+
+func test_attached_hero_out_of_coherency_is_flagged() -> void:
+	# Host: two models 0.5" apart (coherent). Joined hero 5" away -> isolated.
+	var host := _make_unit([Vector3.ZERO, Vector3(0.5 * INCH, 0, 0)])
+	var hero := _make_unit([Vector3(5.0 * INCH, 0, 0)])
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+
+	var result := CoherencyChecker.check_unit_coherency(host)
+	assert_bool(result.valid).is_false()
+	assert_int(_isolated(result).size()).is_equal(1)
+
+
+func test_attached_hero_within_coherency_is_valid() -> void:
+	# Host two models at 0 and 0.5"; hero 0.5" from the second -> coherent.
+	var host := _make_unit([Vector3.ZERO, Vector3(0.5 * INCH, 0, 0)])
+	var hero := _make_unit([Vector3(1.0 * INCH, 0, 0)])
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+
+	var result := CoherencyChecker.check_unit_coherency(host)
+	assert_bool(result.valid).is_true()
+
+
 # ===== 1" Chain (connectivity) =====
 
 func test_single_model_is_always_coherent() -> void:
