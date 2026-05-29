@@ -98,9 +98,8 @@ func _serialize_table() -> Dictionary:
 			})
 		data["placed_objects"] = objects
 
-	# Terrain overlay mode and theme (generated 3D terrain)
+	# Terrain overlay display mode
 	if terrain_overlay:
-		data["terrain_theme_key"] = terrain_overlay.get_terrain_theme() if terrain_overlay.has_method("get_terrain_theme") else ""
 		data["overlay_mode"] = terrain_overlay.get_overlay_mode() if terrain_overlay.has_method("get_overlay_mode") else 0
 
 	return data
@@ -401,21 +400,11 @@ func _deserialize_map_layout(table_data: Dictionary, table_size: Vector2) -> voi
 			if terrain_overlay.has_method("update_placed_objects"):
 				terrain_overlay.update_placed_objects(placed_objects, table_size, grid_rotation)
 
-	# Restore terrain overlay mode and theme
+	# Restore terrain overlay display mode
 	if terrain_overlay:
-		var theme_key: String = table_data.get("terrain_theme_key", "")
 		var overlay_mode_val: int = int(table_data.get("overlay_mode", 0))
-		if terrain_overlay.has_method("set_terrain_theme"):
-			terrain_overlay.set_terrain_theme(theme_key)
 		if terrain_overlay.has_method("set_overlay_mode"):
 			terrain_overlay.set_overlay_mode(overlay_mode_val)
-
-		# Load battle map and base plate textures for the theme
-		if not theme_key.is_empty():
-			if terrain_overlay.has_method("set_battle_map"):
-				terrain_overlay.set_battle_map(theme_key)
-			if terrain_overlay.has_method("load_base_plate_textures"):
-				terrain_overlay.load_base_plate_textures(theme_key)
 
 	print("Map layout restored: %d cells, rotation=%.1f, deployment=%d, walls=%d, objects=%d" % [
 		grid_cells.size(), grid_rotation, deployment_type,
