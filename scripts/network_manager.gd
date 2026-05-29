@@ -11,8 +11,8 @@ signal player_disconnected(peer_id: int)
 # Signals for remote state updates (emitted when RPCs arrive)
 signal remote_wounds_updated(model: ModelInstance)
 signal remote_activation_updated(game_unit: GameUnit)
-signal remote_unit_marker_updated(game_unit: GameUnit, marker_name: String, add: bool)
-signal remote_model_marker_updated(model: ModelInstance, marker_name: String, add: bool)
+signal remote_unit_marker_updated(game_unit: GameUnit, marker_name: String, add: bool, color: Color)
+signal remote_model_marker_updated(model: ModelInstance, marker_name: String, add: bool, color: Color)
 signal remote_casts_updated(game_unit: GameUnit)
 signal remote_unit_deleted(game_unit: GameUnit)
 
@@ -333,7 +333,7 @@ func sync_model_wounds(unit_id: String, model_index: int, wounds: int, is_alive:
 
 ## RPC: Sync model marker (add or remove)
 @rpc("any_peer", "call_remote", "reliable")
-func sync_model_marker(unit_id: String, model_index: int, marker_name: String, add: bool) -> void:
+func sync_model_marker(unit_id: String, model_index: int, marker_name: String, add: bool, color: Color) -> void:
 	if not army_manager:
 		return
 
@@ -347,12 +347,12 @@ func sync_model_marker(unit_id: String, model_index: int, marker_name: String, a
 			else:
 				model.remove_marker(marker_name)
 				print("[Network] Model %d: -marker '%s'" % [model_index + 1, marker_name])
-			remote_model_marker_updated.emit(model, marker_name, add)
+			remote_model_marker_updated.emit(model, marker_name, add, color)
 
 
 ## RPC: Sync unit marker (add or remove from all models)
 @rpc("any_peer", "call_remote", "reliable")
-func sync_unit_marker(unit_id: String, marker_name: String, add: bool) -> void:
+func sync_unit_marker(unit_id: String, marker_name: String, add: bool, color: Color) -> void:
 	if not army_manager:
 		return
 
@@ -364,7 +364,7 @@ func sync_unit_marker(unit_id: String, marker_name: String, add: bool) -> void:
 		else:
 			game_unit.remove_marker_from_all(marker_name)
 			print("[Network] Unit %s: -marker '%s'" % [game_unit.get_name(), marker_name])
-		remote_unit_marker_updated.emit(game_unit, marker_name, add)
+		remote_unit_marker_updated.emit(game_unit, marker_name, add, color)
 
 
 ## RPC: Sync hero attachment
@@ -464,18 +464,19 @@ func broadcast_model_wounds(model: ModelInstance) -> void:
 			sync_model_wounds.rpc(game_unit.unit_id, model.model_index, model.wounds_current, model.is_alive)
 
 
-## Broadcast model marker change
-func broadcast_model_marker(model: ModelInstance, marker_name: String, add: bool) -> void:
+## Broadcast model marker change. color carries custom-marker colors so remote
+## peers render them correctly (ignored for built-in/state markers).
+func broadcast_model_marker(model: ModelInstance, marker_name: String, add: bool, color: Color = Color.WHITE) -> void:
 	if is_multiplayer_active() and model and model.unit:
 		var game_unit = model.unit as GameUnit
 		if game_unit:
-			sync_model_marker.rpc(game_unit.unit_id, model.model_index, marker_name, add)
+			sync_model_marker.rpc(game_unit.unit_id, model.model_index, marker_name, add, color)
 
 
-## Broadcast unit marker change (all models)
-func broadcast_unit_marker(game_unit: GameUnit, marker_name: String, add: bool) -> void:
+## Broadcast unit marker change (all models). color carries custom-marker colors.
+func broadcast_unit_marker(game_unit: GameUnit, marker_name: String, add: bool, color: Color = Color.WHITE) -> void:
 	if is_multiplayer_active() and game_unit:
-		sync_unit_marker.rpc(game_unit.unit_id, marker_name, add)
+		sync_unit_marker.rpc(game_unit.unit_id, marker_name, add, color)
 
 
 ## Broadcast unit casts change

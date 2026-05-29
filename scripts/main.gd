@@ -2490,7 +2490,7 @@ func _on_remote_activation_updated(game_unit: GameUnit) -> void:
 
 
 ## Called when a remote peer changes a unit marker (Fatigued, Shaken, etc.)
-func _on_remote_unit_marker_updated(game_unit: GameUnit, marker_name: String, add: bool) -> void:
+func _on_remote_unit_marker_updated(game_unit: GameUnit, marker_name: String, add: bool, color: Color) -> void:
 	if not radial_menu_controller:
 		return
 
@@ -2507,13 +2507,13 @@ func _on_remote_unit_marker_updated(game_unit: GameUnit, marker_name: String, ad
 			radial_menu_controller._update_activated_markers(game_unit)
 		_:
 			# Dialog marker (Pinned, Stunned, custom, ...) - render its orbit token
-			radial_menu_controller.set_unit_marker_token(game_unit, marker_name, add)
+			radial_menu_controller.set_unit_marker_token(game_unit, marker_name, add, color)
 
 
 ## Called when a remote peer changes a single model's dialog marker.
-func _on_remote_model_marker_updated(model: ModelInstance, marker_name: String, add: bool) -> void:
+func _on_remote_model_marker_updated(model: ModelInstance, marker_name: String, add: bool, color: Color) -> void:
 	if radial_menu_controller and model:
-		radial_menu_controller.set_model_marker_token(model, marker_name, add)
+		radial_menu_controller.set_model_marker_token(model, marker_name, add, color)
 
 
 ## Called when a remote peer changes caster points
