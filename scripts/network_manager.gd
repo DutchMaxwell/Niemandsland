@@ -12,6 +12,7 @@ signal player_disconnected(peer_id: int)
 signal remote_wounds_updated(model: ModelInstance)
 signal remote_activation_updated(game_unit: GameUnit)
 signal remote_unit_marker_updated(game_unit: GameUnit, marker_name: String, add: bool)
+signal remote_model_marker_updated(model: ModelInstance, marker_name: String, add: bool)
 signal remote_casts_updated(game_unit: GameUnit)
 signal remote_unit_deleted(game_unit: GameUnit)
 
@@ -346,6 +347,7 @@ func sync_model_marker(unit_id: String, model_index: int, marker_name: String, a
 			else:
 				model.remove_marker(marker_name)
 				print("[Network] Model %d: -marker '%s'" % [model_index + 1, marker_name])
+			remote_model_marker_updated.emit(model, marker_name, add)
 
 
 ## RPC: Sync unit marker (add or remove from all models)

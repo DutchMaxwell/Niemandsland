@@ -711,6 +711,8 @@ func _restore_markers_after_load() -> void:
 		radial_menu_controller.initialize_caster_marker_for_unit(game_unit)
 		# Wound markers for models with damage
 		radial_menu_controller.initialize_wound_markers_for_unit(game_unit)
+		# Dialog markers (Pinned, Stunned, custom, ...) re-created as orbit tokens
+		radial_menu_controller.initialize_marker_tokens_for_unit(game_unit)
 
 
 ## Clear loaded game units cache after load is complete
