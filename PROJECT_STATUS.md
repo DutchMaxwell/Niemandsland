@@ -36,7 +36,7 @@ save format with OS file association, WGS import/export
 ([`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md)).
 
 **Presentation** — 9 Kenney UI themes (persisted), lighting presets (F1–F4),
-graphics quality presets, SSAO + glow, Tron-style intro, glassmorphic startup menu.
+graphics quality presets, SSAO + glow, cinematic intro, glassmorphic startup menu.
 
 **Model Forge** — Python pipeline (OPR data → image → TRELLIS mesh → GLB) with a
 Flask review UI; 38 faction design languages / 855 unit overrides with real OPR

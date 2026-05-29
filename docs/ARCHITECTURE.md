@@ -13,7 +13,7 @@ Forward+ renderer. Entry scene: `scenes/startup_menu.tscn`.
 
 ## Scenes
 
-- `startup_menu.tscn` — main scene; menu + `tron_intro.gd` animation.
+- `startup_menu.tscn` — main scene; menu + `cinematic_intro.gd` animation.
 - `main.tscn` — the game table; instantiates the subsystems below.
 - Dialog/overlay scenes: `map_layout`, `radial_menu`, `opr_stats_tooltip`,
   `unit_card`, and the import/wounds/marker/casts dialogs.
@@ -62,7 +62,7 @@ Forward+ renderer. Entry scene: `scenes/startup_menu.tscn`.
 
 **Presentation**
 - `lighting_controller.gd` / `lighting_panel.gd` — F1–F4 presets.
-- `atmospheric_clouds.gd`, `glassmorphism_theme.gd`, `tron_intro.gd`,
+- `atmospheric_clouds.gd`, `glassmorphism_theme.gd`, `cinematic_intro.gd`,
   `model_info_popup.gd`, `opr_stats_tooltip.gd`.
 
 ## Save format (`.otts`)
