@@ -330,6 +330,10 @@ func _ready() -> void:
 	# Initialize OPR Army Manager
 	opr_army_manager = OPRArmyManager.new()
 	opr_army_manager.object_manager = object_manager
+	# Name the node explicitly: ObjectManager.clear_all_objects() and
+	# UnitBoundaryVisualizer both resolve it via "/root/Main/OPRArmyManager".
+	# Without this, add_child() auto-names it "@Node@N" and those lookups fail.
+	opr_army_manager.name = "OPRArmyManager"
 	opr_army_manager.table = table
 	add_child(opr_army_manager)
 

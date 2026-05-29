@@ -2039,6 +2039,17 @@ func clear_all_objects(broadcast: bool = true) -> void:
 	_selected_objects.clear()
 	_object_counter = 0
 
+	# Clear OPR army state and unit boundary outlines too. The boundary
+	# visualizer renders from OPRArmyManager.game_units, which is otherwise never
+	# cleared - without this, a cleared (or reloaded) table keeps stale unit
+	# outlines lingering on the surface.
+	var army_manager = get_node_or_null("/root/Main/OPRArmyManager")
+	if army_manager and army_manager.has_method("clear_all"):
+		army_manager.clear_all()
+	var boundary_visualizer = get_node_or_null("/root/Main/UnitBoundaryVisualizer")
+	if boundary_visualizer and boundary_visualizer.has_method("clear_all"):
+		boundary_visualizer.clear_all()
+
 
 ## Resets all units to their import positions and clears all markers/status
 ## Unlike clear_all_objects(), this preserves the models

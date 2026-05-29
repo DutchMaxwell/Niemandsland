@@ -682,10 +682,12 @@ func restore_game_unit_state(node: Node3D, unit_id: String, model_index: int) ->
 		node.rotation_degrees = _array_to_vector3(pos_data.get("rotation", [0, 0, 0]))
 		node.visible = pos_data.get("visible", true)
 
-	# Register with army manager if available
+	# Register with army manager if available. Always map the unit_id to the
+	# freshly loaded GameUnit (within one load every model of a unit resolves to
+	# the same object, so this is a no-op for them); this also defends against a
+	# stale entry from a prior session lingering in game_units.
 	if army_manager:
-		if not army_manager.game_units.has(game_unit.unit_id):
-			army_manager.game_units[game_unit.unit_id] = game_unit
+		army_manager.game_units[game_unit.unit_id] = game_unit
 
 	return true
 
