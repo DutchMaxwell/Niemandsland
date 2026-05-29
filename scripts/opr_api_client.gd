@@ -337,6 +337,61 @@ func _parse_tts_api_response(json_text: String) -> OPRArmy:
 	return army
 
 
+## Estimate a round base size (mm) from a unit's Tough value, used when Army Forge
+## gives no base recommendation (common for vehicles / large monsters). Bands follow
+## the Asgard rulebook height categories (Tough -> size class). 0 = leave unchanged.
+static func _base_size_from_tough(tough: int) -> int:
+	if tough >= 18:
+		return 150  # Titans
+	if tough >= 12:
+		return 120  # Large monsters / giants / large vehicles
+	if tough >= 9:
+		return 80
+	if tough >= 6:
+		return 60   # Monsters / vehicles
+	if tough >= 3:
+		return 40   # Large infantry / cavalry
+	return 0        # Normal infantry: keep the default base
+
+
+## True if an Army Forge base value is a real recommendation. Army Forge sends
+## bases:{round:"none"} for models without one (many vehicles / monsters), so the
+## dict is non-empty but carries no usable size — those must fall back to Tough.
+static func _is_usable_base_value(value) -> bool:
+	if value is int or value is float:
+		return value > 0
+	if value is String:
+		var s: String = value.strip_edges().to_lower()
+		if s.is_empty() or s == "none" or s == "null" or s == "0":
+			return false
+		return "x" in s or s.is_valid_int() or s.is_valid_float()
+	return false
+
+
+## Read the Tough(x) value from a special_rules array (0 if none).
+static func _tough_from_rules(rules: Array) -> int:
+	for rule in rules:
+		var s := String(rule)
+		if s.begins_with("Tough("):
+			var v := s.trim_prefix("Tough(").trim_suffix(")")
+			if v.is_valid_int():
+				return v.to_int()
+	return 0
+
+
+## Enlarge a unit's (round) base to a Tough-derived size when the current base is
+## smaller — gives bracketless vehicles / large monsters a sensible base + model
+## scale instead of defaulting to a tiny 32mm base. Never shrinks an existing base.
+static func _apply_tough_base_fallback(unit: OPRUnit) -> void:
+	var estimate := _base_size_from_tough(_tough_from_rules(unit.special_rules))
+	if estimate <= unit.base_size_round:
+		return
+	unit.base_is_oval = false
+	unit.base_size_round = estimate
+	unit.base_width_mm = estimate
+	unit.base_depth_mm = estimate
+
+
 ## Parse a unit from TTS API response
 func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 	var unit = OPRUnit.new()
@@ -353,10 +408,13 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 	unit.quality = data.get("quality", 4)
 	unit.defense = data.get("defense", 4)
 
-	# Parse base sizes from Army Forge recommendations
+	# Parse base sizes from Army Forge recommendations. Army Forge returns
+	# bases:{round:"none"} for models without one (many vehicles / monsters), so a
+	# non-empty dict is not proof of a real recommendation — require a usable value.
 	var bases = data.get("bases", {})
-	if bases is Dictionary and not bases.is_empty():
-		var round_size = bases.get("round", "32")
+	var round_size = bases.get("round", "") if bases is Dictionary else ""
+	var had_base_recommendation: bool = _is_usable_base_value(round_size)
+	if had_base_recommendation:
 		var square_size = bases.get("square", "30")
 		# Parse base size including oval format like "60x35"
 		var parsed = _parse_base_size(round_size, 32)
@@ -429,6 +487,10 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 
 					if not granted_rule.is_empty() and granted_rule not in unit.special_rules:
 						unit.special_rules.append(granted_rule)
+
+	# No base recommendation from Army Forge → estimate from Tough (vehicles/monsters).
+	if not had_base_recommendation:
+		_apply_tough_base_fallback(unit)
 
 	return unit
 
@@ -680,6 +742,10 @@ func _parse_unit_from_list(list_unit: Dictionary, book_data: Dictionary) -> OPRU
 				unit.upgrades.append(upgrade_name)
 				# Add upgrade cost
 				unit.cost += upgrade_def.get("cost", 0)
+
+	# This path carries no base recommendation, so size the base from Tough
+	# (only enlarges high-Tough vehicles/monsters; normal infantry keep the default).
+	_apply_tough_base_fallback(unit)
 
 	return unit
 
