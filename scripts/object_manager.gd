@@ -73,6 +73,10 @@ var _measure_los_warning: Label3D = null  # Warning icon for LOS blocking (🚫)
 
 const METERS_TO_INCHES: float = 39.3701
 
+## Max edge gap (meters) used when auto-arranging, so the smallest base stays
+## within OPR 1" coherency of its neighbour (kept just under 1" = 0.0254 m).
+const ARRANGE_COHERENCY_GAP: float = 0.022
+
 # Network manager reference
 var _network_manager: Node = null
 
@@ -2608,28 +2612,49 @@ func get_cursor_table_position() -> Vector3:
 	return Vector3.ZERO
 
 
-## Get the maximum base diameter from a list of objects (in meters)
-## Returns the largest base diameter to ensure proper spacing for all models
-func _get_max_base_diameter(objects: Array) -> float:
-	var max_diameter = 0.032  # Default 32mm
+## Base footprint of an object as Vector2(x_extent, z_extent) in meters. Oval
+## bases use their real width (X) and depth (Z); round bases use the diameter on
+## both axes. (The keys base_width_mm/base_depth_mm/base_is_oval are the ones the
+## OPR importer actually sets - see EquipmentDistributor.create_from_opr_unit.)
+func _base_footprint(obj: Node3D) -> Vector2:
+	var game_unit = UnitUtils.get_game_unit(obj)
+	if game_unit and game_unit.unit_properties:
+		var props: Dictionary = game_unit.unit_properties
+		if props.get("base_is_oval", false):
+			return Vector2(float(props.get("base_width_mm", 32)), float(props.get("base_depth_mm", 32))) * 0.001
+		var diameter := float(props.get("base_size_round", 32)) * 0.001
+		return Vector2(diameter, diameter)
+	return Vector2(0.032, 0.032)
 
+
+## Per-axis arrangement spacing (center-to-center) as Vector2(x, z). Each axis is
+## the largest base extent on that axis + a small gap (no overlap), capped so even
+## the smallest base stays within ~1" of its neighbour on that axis (OPR coherency)
+## - so a big joined-Hero base can't push the troops out of coherency, and oval
+## bases get tight spacing on their short axis instead of their long one.
+func _arrange_spacing(objects: Array) -> Vector2:
+	var max_x := 0.0
+	var min_x := INF
+	var max_z := 0.0
+	var min_z := INF
 	for obj in objects:
 		if not is_instance_valid(obj):
 			continue
+		var footprint := _base_footprint(obj)
+		max_x = maxf(max_x, footprint.x)
+		min_x = minf(min_x, footprint.x)
+		# footprint.y holds the Z-axis (depth) extent.
+		max_z = maxf(max_z, footprint.y)
+		min_z = minf(min_z, footprint.y)
 
-		var game_unit = UnitUtils.get_game_unit(obj)
-		if game_unit and game_unit.unit_properties:
-			var oval_width = game_unit.unit_properties.get("base_size_oval_width", 0)
-			var oval_length = game_unit.unit_properties.get("base_size_oval_length", 0)
-			if oval_width > 0 and oval_length > 0:
-				var diameter = max(oval_width, oval_length) * 0.001
-				max_diameter = maxf(max_diameter, diameter)
-			else:
-				var base_mm = game_unit.unit_properties.get("base_size_round", 32)
-				var diameter = base_mm * 0.001
-				max_diameter = maxf(max_diameter, diameter)
+	if min_x == INF:
+		return Vector2(0.04, 0.04)
 
-	return max_diameter
+	var edge_gap := 0.008  # 8mm constant gap between base edges
+	return Vector2(
+		minf(max_x + edge_gap, min_x + ARRANGE_COHERENCY_GAP),
+		minf(max_z + edge_gap, min_z + ARRANGE_COHERENCY_GAP)
+	)
 
 
 ## Arrange selected objects in N rows at cursor position (keys 1-9)
@@ -2641,11 +2666,9 @@ func arrange_selected_in_rows(num_rows: int, cursor_pos: Vector3) -> void:
 	var count = objects.size()
 	var cols = ceili(float(count) / num_rows)
 
-	# Calculate spacing based on largest base size to prevent overlap
-	# Spacing = diameter + constant edge gap (8mm)
-	var max_diameter = _get_max_base_diameter(objects)
-	var edge_gap = 0.008  # 8mm constant gap between base edges
-	var spacing = max_diameter + edge_gap
+	# Per-axis spacing, capped so neighbours stay within ~1" coherency on each
+	# axis (handles oval bases and a big joined-Hero base correctly).
+	var spacing := _arrange_spacing(objects)
 
 	# Start from cursor position (first object at cursor)
 	var start_x = cursor_pos.x
@@ -2659,13 +2682,13 @@ func arrange_selected_in_rows(num_rows: int, cursor_pos: Vector3) -> void:
 			var obj = objects[idx]
 			if is_instance_valid(obj):
 				obj.global_position = Vector3(
-					start_x + col * spacing,
+					start_x + col * spacing.x,
 					obj.global_position.y,
-					start_z + row * spacing
+					start_z + row * spacing.y
 				)
 			idx += 1
 
-	print("Arranged %d objects in %d rows at cursor (spacing: %.0fmm)" % [count, num_rows, spacing * 1000])
+	print("Arranged %d objects in %d rows (spacing: %.0fx%.0fmm)" % [count, num_rows, spacing.x * 1000, spacing.y * 1000])
 
 
 ## Arrange selected objects in arrow/wedge formation at cursor (A key)
@@ -2676,12 +2699,12 @@ func arrange_selected_arrow(cursor_pos: Vector3) -> void:
 	var objects = _selected_objects.duplicate()
 	var count = objects.size()
 
-	# Calculate spacing based on largest base size to prevent overlap
-	# Spacing = diameter + constant edge gap (8mm)
-	var max_diameter = _get_max_base_diameter(objects)
-	var edge_gap = 0.008  # 8mm constant gap between base edges
-	var spacing = max_diameter + edge_gap
-	var row_spacing = max_diameter + edge_gap  # Same spacing for rows to prevent overlap
+	# Within-row spacing on X, capped for coherency (see arrange_selected_in_rows).
+	var col_spacing := _arrange_spacing(objects).x
+	# Triangular lattice: rows are offset by col_spacing/2, so a row height of
+	# col_spacing*sqrt(3)/2 puts EVERY nearest neighbour (incl. the diagonal
+	# apex->row links) at exactly col_spacing apart - the whole wedge stays coherent.
+	var row_spacing := col_spacing * sqrt(3.0) / 2.0
 
 	# Arrow formation: 1 in front (at cursor), then 2, then 3, etc.
 	var row = 0
@@ -2690,7 +2713,7 @@ func arrange_selected_arrow(cursor_pos: Vector3) -> void:
 
 	while idx < count:
 		# Position objects in this row, centered on cursor X
-		var row_start_x = cursor_pos.x - (row_count - 1) * spacing / 2
+		var row_start_x = cursor_pos.x - (row_count - 1) * col_spacing / 2
 
 		for col in range(row_count):
 			if idx >= count:
@@ -2698,7 +2721,7 @@ func arrange_selected_arrow(cursor_pos: Vector3) -> void:
 			var obj = objects[idx]
 			if is_instance_valid(obj):
 				obj.global_position = Vector3(
-					row_start_x + col * spacing,
+					row_start_x + col * col_spacing,
 					obj.global_position.y,
 					cursor_pos.z + row * row_spacing
 				)
@@ -2707,7 +2730,7 @@ func arrange_selected_arrow(cursor_pos: Vector3) -> void:
 		row += 1
 		row_count += 1
 
-	print("Arranged %d objects in arrow formation at cursor (spacing: %.0fmm)" % [count, spacing * 1000])
+	print("Arranged %d objects in arrow formation at cursor (spacing: %.0fmm)" % [count, col_spacing * 1000])
 
 
 ## Copy selected objects to clipboard (Ctrl+C)
