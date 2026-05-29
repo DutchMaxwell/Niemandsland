@@ -67,6 +67,7 @@ const GROUP_ROTATION_BROADCAST_INTERVAL: float = 0.1  # 10 Hz
 @onready var distance_label: Label = $UI/HUD/DistanceLabel
 @onready var clear_all_btn: Button = %ClearAll
 @onready var sort_table_btn: Button = %SortTableBtn
+@onready var next_round_btn: Button = %NextRoundBtn
 @onready var performance_label: Label = %PerformanceLabel
 
 # Hamburger menu
@@ -196,6 +197,8 @@ func _ready() -> void:
 	model_file_dialog.file_selected.connect(_on_model_file_selected)
 	clear_all_btn.pressed.connect(_on_clear_all)
 	sort_table_btn.pressed.connect(_on_sort_table)
+	next_round_btn.pressed.connect(_on_next_round)
+	_update_round_button()
 
 	# Connect TTS Import UI
 	import_tts_btn.pressed.connect(_on_import_tts)
@@ -250,6 +253,7 @@ func _ready() -> void:
 	network_manager.remote_model_marker_updated.connect(_on_remote_model_marker_updated)
 	network_manager.remote_casts_updated.connect(_on_remote_casts_updated)
 	network_manager.remote_unit_deleted.connect(_on_remote_unit_deleted)
+	network_manager.remote_round_advanced.connect(_on_remote_round_advanced)
 
 	# Connect presence signals
 	network_manager.remote_cursor_updated.connect(_on_remote_cursor_updated)
@@ -736,10 +740,44 @@ func _on_clear_all() -> void:
 	object_manager.clear_all_objects()
 	dice_result_label.text = ""
 	_clear_dice_log()
+	_update_round_button()  # clear_all_objects() resets the round to 1
 
 
 func _on_sort_table() -> void:
 	object_manager.sort_table()
+
+
+## Advances the game round (OPR bookkeeping), refreshes visuals, and syncs to
+## remote peers so everyone shares the same round.
+func _on_next_round() -> void:
+	if opr_army_manager:
+		opr_army_manager.advance_round()
+	_refresh_round_visuals()
+	if network_manager:
+		network_manager.broadcast_round_advance()
+
+
+## A remote peer advanced the round (the RPC already advanced our state).
+func _on_remote_round_advanced() -> void:
+	_refresh_round_visuals()
+
+
+## Refreshes everything advance_round() affects: the button label plus the
+## activation and caster tokens (reset_activation / add_round_caster_points
+## changed is_activated and casts_current on every unit).
+func _refresh_round_visuals() -> void:
+	if radial_menu_controller and opr_army_manager:
+		for game_unit in opr_army_manager.game_units.values():
+			if game_unit:
+				radial_menu_controller._update_activated_markers(game_unit)
+				radial_menu_controller._update_caster_marker(game_unit)
+	_update_round_button()
+
+
+## Updates the Next Round button to show the current round.
+func _update_round_button() -> void:
+	if next_round_btn and opr_army_manager:
+		next_round_btn.text = "Next Round (%d)" % opr_army_manager.current_round
 
 
 ## Toggle the left panel menu visibility with slide animation
@@ -1504,6 +1542,7 @@ func _on_save_completed(path: String) -> void:
 ## Load completed callback
 func _on_load_completed(object_count: int) -> void:
 	print("Game loaded: %d objects" % object_count)
+	_update_round_button()  # restored round may differ from 1
 
 	# Sync to multiplayer clients if hosting
 	if network_manager.is_host and network_manager.connected_peers.size() > 0:
@@ -1598,6 +1637,7 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	save_manager._deserialize_game_state(state.get("game_state", {}))
 
 	# Restore marker visualizations (fatigue, shaken, wounds)
+	save_manager._restore_hero_attachments_after_load()
 	save_manager._restore_markers_after_load()
 
 	print("Synced %d objects from host (counter=%d)" % [loaded_count, object_manager._object_counter])
@@ -1637,7 +1677,6 @@ func _on_terrain_library_loaded(categories: Array) -> void:
 func _on_terrain_category_selected(index: int) -> void:
 	terrain_list.clear()
 
-	save_manager._restore_hero_attachments_after_load()
 	var category_name = terrain_category_option.get_item_text(index)
 	var pieces = terrain_library.get_pieces_in_category(category_name)
 
@@ -1801,6 +1840,7 @@ func _on_remote_army_unit(unit_data: Dictionary, objects_data: Array, player_id:
 ## Receive army-complete signal — all units sent, restore markers
 func _on_remote_army_complete(player_id: int) -> void:
 	print("[ArmySync] Complete: all units received (player_id=%d)" % player_id)
+	save_manager._restore_hero_attachments_after_load()
 	save_manager._restore_markers_after_load()
 
 
@@ -1840,7 +1880,6 @@ func _update_opr_hover() -> void:
 	if result and result.collider:
 		var collider = result.collider
 		# Check if this is an OPR unit
-	save_manager._restore_hero_attachments_after_load()
 		if collider.is_in_group("opr_unit"):
 			if _hovered_model != collider:
 				_hovered_model = collider

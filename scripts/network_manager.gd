@@ -15,6 +15,7 @@ signal remote_unit_marker_updated(game_unit: GameUnit, marker_name: String, add:
 signal remote_model_marker_updated(model: ModelInstance, marker_name: String, add: bool, color: Color)
 signal remote_casts_updated(game_unit: GameUnit)
 signal remote_unit_deleted(game_unit: GameUnit)
+signal remote_round_advanced()
 
 const DEFAULT_PORT: int = 7777
 const MAX_PLAYERS: int = 8
@@ -310,6 +311,14 @@ func sync_unit_activation(unit_id: String, activated: bool, activation_round: in
 		remote_activation_updated.emit(game_unit)
 
 
+## RPC: Sync round advancement (resets activations + adds caster points on this peer)
+@rpc("any_peer", "call_remote", "reliable")
+func sync_round_advance() -> void:
+	if army_manager:
+		army_manager.advance_round()
+		remote_round_advanced.emit()
+
+
 ## RPC: Sync model wounds
 @rpc("any_peer", "call_remote", "reliable")
 func sync_model_wounds(unit_id: String, model_index: int, wounds: int, is_alive: bool) -> void:
@@ -451,6 +460,12 @@ func rotate_objects_batch_networked(batch: Array) -> void:
 # ===== Broadcast Helpers for GameUnit State =====
 
 ## Broadcast unit activation change
+## Broadcast a round advancement so every peer shares the same round.
+func broadcast_round_advance() -> void:
+	if is_multiplayer_active():
+		sync_round_advance.rpc()
+
+
 func broadcast_unit_activation(game_unit: GameUnit) -> void:
 	if is_multiplayer_active() and game_unit:
 		sync_unit_activation.rpc(game_unit.unit_id, game_unit.is_activated, game_unit.activation_round)
