@@ -213,6 +213,15 @@ func _draw() -> void:
 	if map_layout.placed_objects.size() > 0:
 		_draw_placed_objects(grid_rect, cell_size, grid_dims)
 
+	# Draw the prefab placement preview (ghost) following the cursor
+	if map_layout.editor_mode == map_layout.EditorMode.PLACE_PREFAB and map_layout._preview_active \
+			and not map_layout.objectives_editing and not map_layout.custom_zone_editing:
+		_draw_prefab_preview(grid_rect, cell_size, grid_dims)
+
+	# Outline the selected piece in move mode
+	if map_layout.editor_mode == map_layout.EditorMode.MOVE_PIECES and map_layout._selected_piece_id >= 0:
+		_draw_selected_piece_outline(grid_rect, cell_size, grid_dims)
+
 	# Draw deployment zones (if enabled)
 	if map_layout.show_deployment_zones:
 		_draw_deployment_zones(grid_rect)
@@ -891,7 +900,7 @@ func _get_edge_local_points(cell: Vector2i, side: int, cell_size: Vector2, half_
 # ==============================================================================
 
 func _draw_placed_objects(grid_rect: Rect2, cell_size: Vector2, grid_dims: Vector2i) -> void:
-	## Draw markers for auto-placed trees and containers on the 2D grid
+	## Draw markers for placed trees, containers and dangerous hazards on the 2D grid
 	if not map_layout:
 		return
 
@@ -902,6 +911,7 @@ func _draw_placed_objects(grid_rect: Rect2, cell_size: Vector2, grid_dims: Vecto
 
 	var tree_color = Color(0.1, 0.7, 0.1, 0.8)
 	var container_color = Color(0.7, 0.4, 0.1, 0.8)
+	var dangerous_color = Color(0.85, 0.2, 0.2, 0.8)
 	var marker_size = 4.0 * zoom
 
 	var rotate_point = func(p: Vector2) -> Vector2:
@@ -922,17 +932,92 @@ func _draw_placed_objects(grid_rect: Rect2, cell_size: Vector2, grid_dims: Vecto
 		var local_y = (cell.y - half_grid_cells.y + offset.y) * cell_size.y
 		var screen_pos = rotate_point.call(Vector2(local_x, local_y))
 
-		var color = tree_color if obj_type == "tree" else container_color
-
 		if obj_type == "tree":
-			# Draw tree as small filled circle with cross
-			draw_circle(screen_pos, marker_size, color)
+			# Tree: filled circle with a white cross
+			draw_circle(screen_pos, marker_size, tree_color)
 			var cross_len = marker_size * 0.7
 			draw_line(screen_pos - Vector2(cross_len, 0), screen_pos + Vector2(cross_len, 0), Color.WHITE, 1.0)
 			draw_line(screen_pos - Vector2(0, cross_len), screen_pos + Vector2(0, cross_len), Color.WHITE, 1.0)
-		else:
-			# Draw container as small filled square
+		elif obj_type == "container":
+			# Container: filled square
 			var half = marker_size * 0.8
 			var rect = Rect2(screen_pos - Vector2(half, half), Vector2(half * 2, half * 2))
-			draw_rect(rect, color, true)
+			draw_rect(rect, container_color, true)
 			draw_rect(rect, Color.WHITE, false, 1.0)
+		else:
+			# Dangerous hazard (mine / puddle): filled diamond
+			var d = marker_size
+			var diamond := PackedVector2Array([
+				screen_pos + Vector2(0, -d),
+				screen_pos + Vector2(d, 0),
+				screen_pos + Vector2(0, d),
+				screen_pos + Vector2(-d, 0),
+			])
+			draw_colored_polygon(diamond, dangerous_color)
+
+
+## Map a grid-point (cell corner) coordinate to screen space, applying grid rotation.
+func _grid_point_to_screen(gx: float, gy: float, grid_rect: Rect2, cell_size: Vector2, grid_dims: Vector2i) -> Vector2:
+	var center := grid_rect.position + grid_rect.size / 2.0
+	var angle_rad := deg_to_rad(map_layout.grid_rotation_degrees)
+	var lx := (gx - grid_dims.x / 2.0) * cell_size.x
+	var ly := (gy - grid_dims.y / 2.0) * cell_size.y
+	return Vector2(lx * cos(angle_rad) - ly * sin(angle_rad), lx * sin(angle_rad) + ly * cos(angle_rad)) + center
+
+
+## The two grid-point corners of a cell edge (0=N, 1=E, 2=S, 3=W).
+func _edge_corners(cell: Vector2i, side: int) -> Array:
+	match side:
+		0: return [Vector2(cell.x, cell.y), Vector2(cell.x + 1, cell.y)]
+		1: return [Vector2(cell.x + 1, cell.y), Vector2(cell.x + 1, cell.y + 1)]
+		2: return [Vector2(cell.x, cell.y + 1), Vector2(cell.x + 1, cell.y + 1)]
+		3: return [Vector2(cell.x, cell.y), Vector2(cell.x, cell.y + 1)]
+	return [Vector2.ZERO, Vector2.ZERO]
+
+
+## Translucent ghost of the prefab about to be placed (footprint + wall L) at the cursor.
+func _draw_prefab_preview(grid_rect: Rect2, cell_size: Vector2, grid_dims: Vector2i) -> void:
+	var key: String = map_layout.selected_prefab_key
+	if not TerrainPrefabs.has_prefab(key):
+		return
+	var origin: Vector2i = map_layout._preview_cell
+	var rot: int = map_layout._preview_rotation
+	var flip: bool = map_layout._preview_flip
+
+	var ttype: int = TerrainPrefabs.terrain_type(key)
+	var col: Color = map_layout.TERRAIN_COLORS.get(ttype, Color.WHITE)
+	col.a = 0.45
+	for cell in TerrainPrefabs.footprint_cells(key, origin, rot, flip):
+		var poly := PackedVector2Array([
+			_grid_point_to_screen(cell.x, cell.y, grid_rect, cell_size, grid_dims),
+			_grid_point_to_screen(cell.x + 1, cell.y, grid_rect, cell_size, grid_dims),
+			_grid_point_to_screen(cell.x + 1, cell.y + 1, grid_rect, cell_size, grid_dims),
+			_grid_point_to_screen(cell.x, cell.y + 1, grid_rect, cell_size, grid_dims),
+		])
+		draw_colored_polygon(poly, col)
+		for i in range(4):
+			draw_line(poly[i], poly[(i + 1) % 4], Color(1, 1, 1, 0.7), 1.0)
+
+	for seg in TerrainPrefabs.wall_segments_for(key, origin, rot, flip):
+		var pts := _edge_corners(seg["edge_cell"], seg["edge_side"])
+		draw_line(
+			_grid_point_to_screen(pts[0].x, pts[0].y, grid_rect, cell_size, grid_dims),
+			_grid_point_to_screen(pts[1].x, pts[1].y, grid_rect, cell_size, grid_dims),
+			Color(0.3, 0.6, 1.0, 0.95), 3.0)
+
+
+## Bright outline around every footprint cell of the currently selected piece.
+func _draw_selected_piece_outline(grid_rect: Rect2, cell_size: Vector2, grid_dims: Vector2i) -> void:
+	var idx: int = map_layout._piece_index_by_id(map_layout._selected_piece_id)
+	if idx < 0:
+		return
+	var p: Dictionary = map_layout.placed_pieces[idx]
+	for cell in TerrainPrefabs.footprint_cells(p["prefab_key"], p["origin"], p.get("rotation", 0), p.get("flip", false)):
+		var poly := PackedVector2Array([
+			_grid_point_to_screen(cell.x, cell.y, grid_rect, cell_size, grid_dims),
+			_grid_point_to_screen(cell.x + 1, cell.y, grid_rect, cell_size, grid_dims),
+			_grid_point_to_screen(cell.x + 1, cell.y + 1, grid_rect, cell_size, grid_dims),
+			_grid_point_to_screen(cell.x, cell.y + 1, grid_rect, cell_size, grid_dims),
+		])
+		for i in range(4):
+			draw_line(poly[i], poly[(i + 1) % 4], Color(1.0, 0.9, 0.2, 0.95), 2.5)
