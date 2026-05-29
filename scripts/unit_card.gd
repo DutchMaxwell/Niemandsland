@@ -290,6 +290,13 @@ func _format_dict_weapon(weapon: Variant) -> String:
 	return "%s %s A%d" % [w_name, range_str, w_attacks]
 
 func _build_rules_text() -> String:
+	var lines: Array[String] = []
+
+	# Joined Heroes shown as part of the unit.
+	var attached_text := _build_attached_heroes_text()
+	if not attached_text.is_empty():
+		lines.append(attached_text)
+
 	var rules: Array[String] = []
 	var opr_unit := _get_opr_unit()
 	if opr_unit:
@@ -302,9 +309,23 @@ func _build_rules_text() -> String:
 			elif rule is Dictionary:
 				rules.append(str(rule.get("name", "")))
 
-	if rules.is_empty():
+	if not rules.is_empty():
+		lines.append("[b]Regeln:[/b] [color=%s]%s[/color]" % [COLOR_RULES, ", ".join(rules)])
+
+	return "\n".join(lines)
+
+
+## Lists Heroes joined to this unit (name + Q/D), or "" if none.
+func _build_attached_heroes_text() -> String:
+	var parts: Array[String] = []
+	for hero in _current_unit.get_attached_heroes():
+		if hero is GameUnit:
+			parts.append("%s [color=%s]Q%d+[/color] [color=%s]D%d+[/color]" % [
+				hero.get_name(), COLOR_QUALITY, hero.get_quality(), COLOR_DEFENSE, hero.get_defense()
+			])
+	if parts.is_empty():
 		return ""
-	return "[b]Regeln:[/b] [color=%s]%s[/color]" % [COLOR_RULES, ", ".join(rules)]
+	return "[b]Angeschlossener Held:[/b] [color=%s]%s[/color]" % [COLOR_RULES, ", ".join(parts)]
 
 # ===== Helpers =====
 

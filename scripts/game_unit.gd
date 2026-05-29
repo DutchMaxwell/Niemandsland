@@ -88,6 +88,17 @@ func get_alive_models() -> Array[ModelInstance]:
 	return alive
 
 
+## Gets all alive models of this unit PLUS those of any joined Heroes.
+## Used where a joined Hero should be treated as part of the unit (boundary,
+## unit card). Returns just get_alive_models() for units with no attached heroes.
+func get_alive_models_with_attached() -> Array[ModelInstance]:
+	var result: Array[ModelInstance] = get_alive_models()
+	for hero in get_attached_heroes():
+		if hero is GameUnit:
+			result.append_array(hero.get_alive_models())
+	return result
+
+
 ## Gets the count of alive models.
 func get_alive_count() -> int:
 	var count = 0
@@ -341,10 +352,22 @@ func clear_all_markers() -> void:
 
 ## Returns a dictionary representation for saving.
 func to_dict() -> Dictionary:
+	# attached_to / attached_heroes hold GameUnit refs, which are not JSON-
+	# serializable. Store their unit_ids instead so attachment can be rebuilt
+	# after load (see SaveManager._restore_hero_attachments_after_load).
+	var props := unit_properties.duplicate(true)
+	var attached_to = props.get("attached_to")
+	props["attached_to"] = attached_to.unit_id if attached_to is GameUnit else ""
+	var hero_ids: Array = []
+	for hero in props.get("attached_heroes", []):
+		if hero is GameUnit:
+			hero_ids.append(hero.unit_id)
+	props["attached_heroes"] = hero_ids
+
 	var data = {
 		"unit_id": unit_id,
 		"source_type": source_type,
-		"unit_properties": unit_properties.duplicate(true),
+		"unit_properties": props,
 		"is_activated": is_activated,
 		"activation_round": activation_round,
 		"is_fatigued": is_fatigued,

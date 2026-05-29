@@ -64,7 +64,8 @@ class CoherencyResult:
 ## @returns: CoherencyResult with valid flag and issues array
 static func check_unit_coherency(game_unit: GameUnit, is_skirmish: bool = false) -> CoherencyResult:
 	var result = CoherencyResult.new()
-	var models = game_unit.get_alive_models()
+	# Include joined Heroes - they must keep coherency with the unit they joined.
+	var models = game_unit.get_alive_models_with_attached()
 
 	# Single model or no models = always coherent
 	if models.size() <= 1:
@@ -86,8 +87,9 @@ static func check_unit_coherency(game_unit: GameUnit, is_skirmish: bool = false)
 				result.add_issue(
 					IssueType.ISOLATED,
 					model,
-					"Model %d is out of coherency (nearest unit model: %.1f\")" % [
-						model.model_index + 1, dist
+					"%s is out of coherency (nearest unit model: %.1f\")" % [
+						("Hero %s" % model.unit.get_name()) if (model.unit and model.unit != game_unit) else ("Model %d" % (model.model_index + 1)),
+						dist
 					],
 					{"nearest_distance": dist, "nearest_model": nearest}
 				)
@@ -296,71 +298,6 @@ static func _get_max_spread_pair(models: Array[ModelInstance]) -> Dictionary:
 				result.model_b = models[j]
 
 	return result
-
-
-# ===== Visualization =====
-
-## Creates a visual representation of coherency lines.
-## Green lines = OK, Red lines = too far
-## @param game_unit: The unit to visualize
-## @param parent: Parent node for the visualization
-## @returns: Node3D containing the visualization (caller must free it)
-static func create_coherency_visualization(game_unit: GameUnit, parent: Node3D) -> Node3D:
-	var viz = Node3D.new()
-	viz.name = "CoherencyVisualization"
-
-	var models = game_unit.get_alive_models()
-	if models.size() <= 1:
-		parent.add_child(viz)
-		return viz
-
-	# Create lines between adjacent models
-	for i in range(models.size()):
-		for j in range(i + 1, models.size()):
-			var model_a = models[i]
-			var model_b = models[j]
-
-			if not model_a.node or not model_b.node:
-				continue
-
-			var dist = _distance_between_models(model_a, model_b)
-			var coherency_dist = COHERENCY_DISTANCE_INCHES
-			if _is_elevated_different(model_a, model_b):
-				coherency_dist = ELEVATED_COHERENCY_INCHES
-
-			# Only draw lines for nearby models (within 2x coherency)
-			if dist > coherency_dist * 2:
-				continue
-
-			var color = Color.GREEN if dist <= coherency_dist else Color.RED
-			var line = _create_line(model_a.node.global_position, model_b.node.global_position, color)
-			viz.add_child(line)
-
-	parent.add_child(viz)
-	return viz
-
-
-## Creates a 3D line between two points.
-static func _create_line(from: Vector3, to: Vector3, color: Color) -> MeshInstance3D:
-	var mesh_instance = MeshInstance3D.new()
-
-	# Create immediate geometry for line
-	var immediate_mesh = ImmediateMesh.new()
-	immediate_mesh.surface_begin(Mesh.PRIMITIVE_LINES)
-	immediate_mesh.surface_set_color(color)
-	immediate_mesh.surface_add_vertex(from + Vector3(0, 0.02, 0))  # Slightly above ground
-	immediate_mesh.surface_add_vertex(to + Vector3(0, 0.02, 0))
-	immediate_mesh.surface_end()
-
-	mesh_instance.mesh = immediate_mesh
-
-	var material = StandardMaterial3D.new()
-	material.albedo_color = color
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.vertex_color_use_as_albedo = true
-	mesh_instance.material_override = material
-
-	return mesh_instance
 
 
 # ===== Auto-Fix Suggestions =====
