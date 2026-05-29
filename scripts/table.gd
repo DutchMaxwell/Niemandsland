@@ -89,7 +89,7 @@ func setup_table(size_feet: Vector2) -> void:
 
 func _create_table_border(size_meters: Vector2) -> void:
 	var border_height = 0.05
-	var border_width = 0.03
+	var border_width = 0.015  # thin rim (halved from 0.03)
 	var wall_height = 0.15  # Invisible wall height to catch dice
 	var border_material = StandardMaterial3D.new()
 	border_material.albedo_color = Color(0.3, 0.2, 0.1)  # Wood color
