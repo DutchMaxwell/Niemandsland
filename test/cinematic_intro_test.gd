@@ -1,8 +1,8 @@
 extends GdUnitTestSuite
-## Smoke tests for the cinematic intro (TronIntro). Verifies it instantiates with its
+## Smoke tests for the cinematic intro (CinematicIntro). Verifies it instantiates with its
 ## shaders, runs play_intro on a mock scene without crashing, and cleans up fully on skip.
 
-const TronIntroScript = preload("res://scripts/tron_intro.gd")
+const CinematicIntroScript = preload("res://scripts/cinematic_intro.gd")
 
 
 ## Build a minimal stand-in for the Main scene with the nodes play_intro expects.
@@ -39,12 +39,12 @@ func _mock_main() -> Node3D:
 
 
 func test_instantiates_with_shaders() -> void:
-	var intro = auto_free(TronIntroScript.new())
+	var intro = auto_free(CinematicIntroScript.new())
 	assert_object(intro).is_not_null()
 
 
 func test_look_xform_points_at_target() -> void:
-	var intro: Node3D = auto_free(TronIntroScript.new())
+	var intro: Node3D = auto_free(CinematicIntroScript.new())
 	add_child(intro)
 	var xform: Transform3D = intro._look_xform(Vector3(0, 5, 10))
 	# Forward is -Z; from above/behind it should point down toward the table centre.
@@ -55,7 +55,7 @@ func test_look_xform_points_at_target() -> void:
 
 func test_play_intro_then_skip_cleans_up() -> void:
 	var main := _mock_main()
-	var intro: Node3D = auto_free(TronIntroScript.new())
+	var intro: Node3D = auto_free(CinematicIntroScript.new())
 	main.add_child(intro)
 
 	intro.play_intro(main)

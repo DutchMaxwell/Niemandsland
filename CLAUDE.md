@@ -35,7 +35,7 @@ Build/run/test: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 | OPR / import | `opr_api_client.gd`, `opr_army_manager.gd`, `opr_import_dialog.gd`, `tts_importer.gd`, `tts_download_manager.gd`, `wgs_*.gd` |
 | Multiplayer | `network_manager.gd`, `relay_multiplayer_peer.gd`, `internet_lobby.gd`, `player_avatar.gd`, `remote_cursor.gd` |
 | Map / terrain | `map_layout.gd`, `map_layout_grid.gd`, `terrain_library.gd`, `terrain_overlay.gd` |
-| Presentation | `lighting_controller.gd`, `theme_manager.gd`, `graphics_settings.gd`, `audio_manager.gd`, `tron_intro.gd` |
+| Presentation | `lighting_controller.gd`, `theme_manager.gd`, `graphics_settings.gd`, `audio_manager.gd`, `cinematic_intro.gd` |
 
 ## Scaling (CRITICAL)
 
