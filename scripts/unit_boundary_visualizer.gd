@@ -99,7 +99,8 @@ func update_all_boundaries() -> void:
 
 ## Updates boundary for a single unit
 func _update_unit_boundary(game_unit) -> void:
-	var models = game_unit.get_alive_models()
+	# Include joined Heroes so the outline encloses them as part of the unit.
+	var models = game_unit.get_alive_models_with_attached()
 
 	# Skip single models - the miniature IS the unit
 	if models.size() <= 1:
@@ -110,18 +111,16 @@ func _update_unit_boundary(game_unit) -> void:
 	var player_id = game_unit.unit_properties.get("player_id", 1)
 	var player_color = PLAYER_COLORS.get(player_id, Color.GRAY)
 
-	# Get model positions
+	# Get model positions and per-model base radii. A joined Hero can sit on a
+	# larger base than the troops, so each point is expanded by ITS OWN base.
 	var positions: Array = []
-	var base_radius: float = 0.016  # Default 32mm base
-
-	# Get base size from unit
-	var base_mm = game_unit.unit_properties.get("base_size_round", 32)
-	base_radius = (base_mm / 2.0) * 0.001
+	var radii: Array = []
 
 	for model in models:
 		if model.node and is_instance_valid(model.node) and model.node.is_inside_tree():
 			var pos = model.node.global_position
 			positions.append(Vector2(pos.x, pos.z))
+			radii.append(_model_base_radius(model))
 
 	# Don't remove boundary if unit has multiple models but they're temporarily not in tree
 	# (e.g., during arrangement operations)
@@ -135,8 +134,8 @@ func _update_unit_boundary(game_unit) -> void:
 			_update_token_container_position(game_unit)
 		return
 
-	# Calculate expanded convex hull with padding
-	var hull_points = _calculate_smooth_hull(positions, base_radius + BOUNDARY_PADDING)
+	# Calculate expanded convex hull with per-model padding
+	var hull_points = _calculate_smooth_hull(positions, radii)
 
 	if hull_points.size() < 3:
 		_remove_unit_boundary(game_unit)
@@ -149,23 +148,31 @@ func _update_unit_boundary(game_unit) -> void:
 	_update_token_container_position(game_unit)
 
 
-## Calculates a smooth convex hull with padding around positions
-func _calculate_smooth_hull(positions: Array, padding: float) -> PackedVector2Array:
+## Calculates a smooth convex hull, expanding each position by its own base
+## radius (+ padding). positions and radii are parallel arrays.
+func _calculate_smooth_hull(positions: Array, radii: Array) -> PackedVector2Array:
 	if positions.size() < 2:
 		return PackedVector2Array()
 
-	# Expand each point into a circle, then compute convex hull
+	# Expand each point into a circle sized to that model's base, then hull.
 	var expanded_points: PackedVector2Array = []
 
-	for pos in positions:
-		# Add circle points around each model position
-		for i in range(HULL_SMOOTHING):
-			var angle = (float(i) / HULL_SMOOTHING) * TAU
-			var offset = Vector2(cos(angle), sin(angle)) * padding
-			expanded_points.append(pos + offset)
+	for i in range(positions.size()):
+		var radius: float = radii[i] + BOUNDARY_PADDING
+		for j in range(HULL_SMOOTHING):
+			var angle = (float(j) / HULL_SMOOTHING) * TAU
+			expanded_points.append(positions[i] + Vector2(cos(angle), sin(angle)) * radius)
 
 	# Compute convex hull
 	return Geometry2D.convex_hull(expanded_points)
+
+
+## Base radius (metres) of a model, from its OWN unit's recommended round base.
+func _model_base_radius(model) -> float:
+	var base_mm := 32
+	if model.unit and model.unit.unit_properties:
+		base_mm = model.unit.unit_properties.get("base_size_round", 32)
+	return (base_mm / 2.0) * 0.001
 
 
 ## Creates the 3D mesh for the boundary (border only, no fill)

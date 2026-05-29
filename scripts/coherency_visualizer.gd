@@ -51,8 +51,8 @@ func show_coherency(game_unit: GameUnit, is_skirmish: bool = false, animate: boo
 	# Check coherency
 	var result = CoherencyChecker.check_unit_coherency(game_unit, is_skirmish)
 
-	# Get alive models
-	var models = game_unit.get_alive_models()
+	# Get alive models (joined Heroes included - they belong to the unit)
+	var models = game_unit.get_alive_models_with_attached()
 	if models.size() <= 1:
 		visible = false
 		visualization_completed.emit(result)
@@ -233,7 +233,9 @@ func _highlight_model(model: ModelInstance, color: Color, pulse: bool = true) ->
 			base_radius_m = (base_mm / 2.0) * 0.001
 
 	var highlight = Node3D.new()
-	highlight.name = "Highlight_%d" % model.model_index
+	# Use the ModelInstance id (unique) so a host model and a joined hero model
+	# that share model_index 0 do not collide into the same node name.
+	highlight.name = "Highlight_%d" % model.get_instance_id()
 
 	# Create ring mesh sized to base
 	var torus = TorusMesh.new()

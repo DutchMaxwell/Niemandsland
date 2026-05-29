@@ -271,6 +271,9 @@ func load_game(path: String) -> Error:
 	# Restore game state
 	_deserialize_game_state(state.get("game_state", {}))
 
+	# Rebuild hero attachment (stored as unit_ids) into live GameUnit refs.
+	_restore_hero_attachments_after_load()
+
 	# Restore token/marker visualizations for all loaded game units
 	_restore_markers_after_load()
 
@@ -697,6 +700,31 @@ func get_loaded_game_unit(unit_id: String) -> GameUnit:
 	if _loaded_game_units.has(unit_id):
 		return _loaded_game_units[unit_id].game_unit
 	return null
+
+
+## Rebuilds hero attachment after load: to_dict() stored attached_to /
+## attached_heroes as unit_ids (GameUnit refs are not serializable); resolve
+## them back to live GameUnit refs now that every unit is registered.
+func _restore_hero_attachments_after_load() -> void:
+	if not army_manager:
+		return
+
+	for game_unit in army_manager.get_all_game_units():
+		var props: Dictionary = game_unit.unit_properties
+
+		var attached_to_id = props.get("attached_to", "")
+		if attached_to_id is String:
+			props["attached_to"] = army_manager.get_game_unit_by_id(attached_to_id) if not attached_to_id.is_empty() else null
+
+		var resolved_heroes: Array = []
+		for hero_ref in props.get("attached_heroes", []):
+			if hero_ref is String:
+				var hero = army_manager.get_game_unit_by_id(hero_ref)
+				if hero:
+					resolved_heroes.append(hero)
+			elif hero_ref is GameUnit:
+				resolved_heroes.append(hero_ref)
+		props["attached_heroes"] = resolved_heroes
 
 
 ## Restore token/marker visualizations after loading game units
