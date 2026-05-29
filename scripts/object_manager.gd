@@ -2054,8 +2054,10 @@ func clear_all_objects(broadcast: bool = true) -> void:
 ## Resets all units to their import positions and clears all markers/status
 ## Unlike clear_all_objects(), this preserves the models
 func sort_table() -> void:
-	# Get reference to OPR army manager via Main
-	var main = get_tree().root.find_child("Main", true, false)
+	# Get reference to OPR army manager via Main. Use the absolute path (matches
+	# how this manager resolves its other siblings) instead of a recursive
+	# find_child() string search.
+	var main = get_node_or_null("/root/Main")
 	if not main:
 		print("Sort Table: Could not find Main node")
 		return
