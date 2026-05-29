@@ -51,6 +51,9 @@ const DEBUG_MODE: bool = false
 
 # Tron Intro
 var tron_intro: TronIntro = null
+## Opaque black backdrop shown behind the table-size chooser, so selection happens on
+## black and dissolves cleanly into the intro (freed once the intro's own black is up).
+var _prompt_overlay: CanvasLayer = null
 
 # Lighting Controller
 var lighting_controller: Node = null
@@ -309,6 +312,13 @@ func _ready() -> void:
 	close_btn.pressed.connect(_on_close_terrain_browser)
 	terrain_browser_popup.close_requested.connect(_on_close_terrain_browser)
 	terrain_library.library_loaded.connect(_on_terrain_library_loaded)
+	# Legacy TTS terrain browser: superseded by the map-editor prefab palette. Hidden
+	# (no pre-loaded library pieces) but kept wired for ad-hoc TTS terrain imports.
+	terrain_browser_btn.hide()
+	# Removed from the in-game menu (no longer needed): direct 3D model load + TTS import.
+	load_model_btn.hide()
+	import_tts_btn.hide()
+	import_tts_online_btn.hide()
 
 	# Initialize table with default size (6x4 feet = 72x48 inches, landscape)
 	# Long side (72") faces the viewer (X-axis), short side (48") is depth (Z-axis)
@@ -392,7 +402,6 @@ func _ready() -> void:
 	map_layout_editor.layout_updated.connect(_on_map_layout_updated)
 	map_layout_editor.deployment_type_changed.connect(_on_deployment_type_changed)
 	map_layout_editor.objectives_changed.connect(_on_objectives_changed)
-	map_layout_editor.terrain_theme_changed.connect(_on_terrain_theme_changed)
 	map_layout_btn.pressed.connect(_on_map_layout_pressed)
 
 	# Initialize Terrain Overlay (on the 3D table)
@@ -406,9 +415,6 @@ func _ready() -> void:
 
 	# Give object_manager reference to terrain_overlay for terrain hints
 	object_manager.terrain_overlay = terrain_overlay
-
-	# Give terrain_overlay reference to terrain_library for GLB loading
-	terrain_overlay.terrain_library = terrain_library
 
 	# Connect object_manager signals for deployment checking
 	object_manager.drag_ended.connect(_on_unit_moved)
@@ -430,8 +436,9 @@ func _ready() -> void:
 	save_manager.terrain_overlay = terrain_overlay
 	save_manager.radial_menu_controller = radial_menu_controller
 
-	# Initialize and play Tron intro
-	_start_tron_intro()
+	# The intro is started AFTER the table size is chosen (on dialog confirm, see below),
+	# so the size chooser never overlaps the cinematic. Loaded/joined games skip the
+	# chooser and start the intro directly.
 
 	# Check if a saved battle should be loaded (from startup menu)
 	var pending_load := ProjectSettings.get_setting("opentts/pending_load_path", "") as String
@@ -447,6 +454,23 @@ func _ready() -> void:
 		var pending_relay_url = ProjectSettings.get_setting("opentts/internet_relay_url", "")
 		var pending_room_code = ProjectSettings.get_setting("opentts/internet_room_code", "")
 		call_deferred("_start_pending_internet_game", is_internet_host, pending_relay_url, pending_room_code)
+
+	# Table size is chosen ONCE up front, then locked — changing it later wipes the
+	# built layout. Loads and multiplayer clients inherit the size from the saved/host
+	# data, so they skip the chooser. The in-game size panel is hidden in every case.
+	if table_size_option:
+		table_size_option.get_parent().visible = false
+	var joining_client: bool = pending_internet and not ProjectSettings.get_setting("opentts/internet_is_host", false)
+	if pending_load.is_empty() and not joining_client:
+		# Choose the table size FIRST on a black backdrop, then dissolve into the intro —
+		# the chooser must never overlap the cinematic. UI stays hidden until the intro ends.
+		$UI.visible = false
+		_show_prompt_black()
+		call_deferred("_prompt_table_size")
+	else:
+		# Loaded battle / joining client: size comes from the saved/host data, so there is
+		# no chooser — go straight into the intro.
+		_start_tron_intro()
 
 	print("OpenTTS ready!")
 
@@ -991,6 +1015,53 @@ func _on_unit_changed(index: int) -> void:
 		length_input.max_value = 600.0
 		width_input.suffix = " cm"
 		length_input.suffix = " cm"
+
+
+## Show the one-time table-size chooser at the start of a fresh game.
+## Opaque black backdrop behind the chooser (3D scene hidden), on its own layer below the
+## intro's overlay so the intro can cover and then reveal through it seamlessly.
+func _show_prompt_black() -> void:
+	_prompt_overlay = CanvasLayer.new()
+	_prompt_overlay.layer = 95
+	add_child(_prompt_overlay)
+	var rect := ColorRect.new()
+	rect.color = Color.BLACK
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_prompt_overlay.add_child(rect)
+
+
+func _prompt_table_size() -> void:
+	var dialog := TableSizeDialog.new()
+	add_child(dialog)
+	dialog.size_chosen.connect(_on_table_size_chosen.bind(dialog))
+	dialog.popup_centered()
+	# Gently fade the chooser in over the black backdrop.
+	var content := dialog.get_child(0) as Control
+	if content:
+		content.modulate.a = 0.0
+		var fade_in := create_tween()
+		fade_in.tween_property(content, "modulate:a", 1.0, 0.5).set_trans(Tween.TRANS_SINE)
+
+
+## Apply the chosen table size, dissolve the chooser into black, then play the intro.
+func _on_table_size_chosen(size_feet: Vector2, dialog: Window) -> void:
+	_set_table_size(size_feet)
+	var content := dialog.get_child(0) as Control
+	var t := create_tween()
+	if content:
+		t.tween_property(content, "modulate:a", 0.0, 0.8).set_trans(Tween.TRANS_SINE)
+	else:
+		t.tween_interval(0.4)
+	t.tween_callback(func() -> void:
+		dialog.queue_free()
+		# Start the intro (its own opaque black covers the screen), then drop our backdrop
+		# so the intro fades in from black.
+		_start_tron_intro()
+		if is_instance_valid(_prompt_overlay):
+			_prompt_overlay.queue_free()
+			_prompt_overlay = null
+	)
 
 
 ## Set table to specific size and clear objects
@@ -1991,8 +2062,15 @@ func _start_tron_intro() -> void:
 
 ## Called when intro finishes or is skipped
 func _on_intro_finished() -> void:
-	# Show UI
+	# Reveal the gameplay UI only now that the intro is fully built — fade it in gently
+	# so the panels don't pop in during the build.
 	$UI.visible = true
+	var hud := $UI.get_node_or_null("HUD") as Control
+	if hud:
+		hud.modulate.a = 0.0
+		var ui_fade := create_tween()
+		ui_fade.tween_property(hud, "modulate:a", 1.0, 1.5) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 	# Clean up intro after a delay
 	if tron_intro:
@@ -2046,29 +2124,6 @@ func _on_graphics_quality_changed(index: int) -> void:
 func _on_map_layout_pressed() -> void:
 	if map_layout_editor:
 		map_layout_editor.set_table_size(table.table_size)
-
-		# Populate available terrain themes from terrain_library
-		if terrain_library:
-			var theme_keys: Array[String] = terrain_library.get_generated_themes()
-			var theme_names: Array[String] = []
-			for key: String in theme_keys:
-				var data = terrain_library.get_theme_data(key)
-				if data:
-					theme_names.append(data.theme_name)
-				else:
-					theme_names.append(key)
-			map_layout_editor.set_available_themes(theme_keys, theme_names)
-
-		# If a theme is already active, load its definitions
-		if terrain_library and terrain_overlay:
-			var theme_key: String = ""
-			if terrain_overlay.has_method("get_terrain_theme"):
-				theme_key = terrain_overlay.get_terrain_theme()
-			if not theme_key.is_empty() and terrain_library.has_method("get_wall_definitions"):
-				map_layout_editor.set_wall_definitions(terrain_library.get_wall_definitions(theme_key))
-				map_layout_editor.set_tree_definitions(terrain_library.get_tree_definitions(theme_key))
-				map_layout_editor.set_container_definitions(terrain_library.get_container_definitions(theme_key))
-
 		map_layout_editor.visible = true
 		$UI/HUD.visible = false  # Hide main HUD while in layout mode
 		# Disable object selection while in map layout mode
@@ -2128,38 +2183,6 @@ func _on_map_layout_closed() -> void:
 			"wall_segments": walls_serialized,
 			"placed_objects": objects_serialized,
 		})
-
-
-## Handle terrain theme change from Map Layout Editor
-func _on_terrain_theme_changed(theme_key: String) -> void:
-	if not terrain_library:
-		return
-
-	if theme_key.is_empty():
-		# Clear theme
-		if terrain_overlay:
-			terrain_overlay.clear_battle_map()
-			terrain_overlay.load_base_plate_textures("")
-			terrain_overlay.set_terrain_theme("")
-		if map_layout_editor:
-			map_layout_editor.set_wall_definitions([] as Array[Dictionary])
-			map_layout_editor.set_tree_definitions([] as Array[Dictionary])
-			map_layout_editor.set_container_definitions([] as Array[Dictionary])
-		print("Terrain theme cleared")
-		return
-
-	# Load theme definitions into map_layout_editor
-	if map_layout_editor:
-		map_layout_editor.set_wall_definitions(terrain_library.get_wall_definitions(theme_key))
-		map_layout_editor.set_tree_definitions(terrain_library.get_tree_definitions(theme_key))
-		map_layout_editor.set_container_definitions(terrain_library.get_container_definitions(theme_key))
-
-	# Activate battle map and base plate textures in 3D view
-	if terrain_overlay:
-		terrain_overlay.set_battle_map(theme_key)
-		terrain_overlay.load_base_plate_textures(theme_key)
-
-	print("Terrain theme changed to: %s" % theme_key)
 
 
 ## Handle deployment type change from Map Tool

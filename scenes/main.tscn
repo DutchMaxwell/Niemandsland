@@ -17,9 +17,9 @@ shader_parameter/deep_space_color = Vector3(0.01, 0.01, 0.04)
 shader_parameter/nebula_color_1 = Vector3(0.08, 0.02, 0.15)
 shader_parameter/nebula_color_2 = Vector3(0.02, 0.08, 0.12)
 shader_parameter/star_density = 0.5
-shader_parameter/star_brightness = 1.5
+shader_parameter/star_brightness = 1.1
 shader_parameter/twinkle_speed = 1.2
-shader_parameter/nebula_intensity = 0.25
+shader_parameter/nebula_intensity = 0.22
 
 [sub_resource type="Sky" id="Sky_1"]
 sky_material = SubResource("ShaderMaterial_Skybox")
@@ -49,9 +49,9 @@ ssil_enabled = false
 glow_enabled = true
 glow_intensity = 1.2
 glow_strength = 1.0
-glow_bloom = 0.3
+glow_bloom = 0.2
 glow_blend_mode = 2
-glow_hdr_threshold = 1.0
+glow_hdr_threshold = 1.3
 glow_hdr_scale = 2.0
 adjustment_enabled = true
 adjustment_brightness = 1.05

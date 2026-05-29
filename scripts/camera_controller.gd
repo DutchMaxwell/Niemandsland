@@ -242,5 +242,5 @@ func get_zoom() -> float:
 func adjust_for_table_size(table_size_feet: Vector2) -> void:
 	var table_diagonal_feet = table_size_feet.length()
 	var table_diagonal_meters = table_diagonal_feet * 0.3048
-	var target_zoom = table_diagonal_meters * 0.7
+	var target_zoom = table_diagonal_meters * 0.95
 	set_zoom(target_zoom)
