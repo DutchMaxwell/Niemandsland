@@ -50,6 +50,7 @@ const SORT_ANIM_RESTING_Y: float = 0.0  # Table surface height for all models
 # Drag distance tracking
 var _drag_start_positions: Dictionary = {}  # Object -> start position mapping
 var _drag_anchor_position: Vector3 = Vector3.ZERO  # Primary drag anchor point
+var _drag_grab_world: Vector3 = Vector3.ZERO  # Cursor table position at grab (preserves grab offset)
 var _drag_line: MeshInstance3D = null  # Visual line during drag
 var _drag_label: Label3D = null  # Distance label during drag
 
@@ -497,7 +498,7 @@ func _destroy_box_select_rect() -> void:
 		_box_select_rect = null
 
 
-func _start_dragging(_screen_pos: Vector2) -> void:
+func _start_dragging(screen_pos: Vector2) -> void:
 	if _selected_objects.is_empty():
 		return
 
@@ -517,6 +518,17 @@ func _start_dragging(_screen_pos: Vector2) -> void:
 	# Use first selected object as anchor for distance calculation (using original position)
 	if _selected_objects.size() > 0:
 		_drag_anchor_position = _drag_start_positions[_selected_objects[0]]
+
+	# Remember where on the table the cursor grabbed, so the unit keeps that grab offset
+	# while dragging instead of snapping its first model onto the cursor.
+	_drag_grab_world = _drag_anchor_position
+	var grab_camera = get_viewport().get_camera_3d()
+	if grab_camera:
+		var grab_from = grab_camera.project_ray_origin(screen_pos)
+		var grab_dir = grab_camera.project_ray_normal(screen_pos)
+		var grab_hit = Plane(Vector3.UP, 0).intersects_ray(grab_from, grab_dir)
+		if grab_hit:
+			_drag_grab_world = grab_hit
 
 	# Create drag visualization line
 	_create_drag_line()
@@ -757,9 +769,9 @@ func _update_drag(screen_pos: Vector2) -> void:
 	var intersection = drag_plane_at_table.intersects_ray(from, dir)
 
 	if intersection:
-		# Calculate movement delta in XZ only (from anchor's original XZ position)
-		var anchor_start = _drag_start_positions.get(anchor, anchor.global_position)
-		var delta_xz = Vector3(intersection.x - anchor_start.x, 0, intersection.z - anchor_start.z)
+		# Movement delta = how far the cursor moved since the grab, so the grabbed point
+		# stays under the cursor (the unit no longer snaps its first model to the cursor).
+		var delta_xz = Vector3(intersection.x - _drag_grab_world.x, 0, intersection.z - _drag_grab_world.z)
 
 		# Move all selected objects by the same XZ delta, keeping them lifted
 		for obj in _selected_objects:
