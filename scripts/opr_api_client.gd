@@ -50,6 +50,13 @@ class OPRArmy:
 class OPRUnit:
 	var id: String = ""
 	var selection_id: String = ""
+	## True if this unit is one half of an OPR "Combined" unit (two same-type
+	## units merged into one larger unit). Both halves carry combined==true.
+	var combined: bool = false
+	## selectionId of the unit this one is joined to. For a Combined unit's
+	## secondary half this points at the primary half; for a joined Hero it
+	## points at the unit the Hero attached to.
+	var join_to_unit: String = ""
 	var name: String = ""
 	var size: int = 1  # Number of models in unit
 	var cost: int = 0  # Points cost
@@ -298,6 +305,10 @@ func _parse_tts_api_response(json_text: String) -> OPRArmy:
 			army.units.append(unit)
 			army.model_count += unit.size
 
+	# Fold OPR "Combined" unit halves into single larger units (e.g. 2x[5] -> 1x[10]).
+	# model_count is the sum of model sizes and is unchanged by merging.
+	army.units = _merge_combined_units(army.units)
+
 	# Fetch faction name from Army Book API using armyId
 	if not army.army_id.is_empty():
 		var book_data = await _fetch_army_book(army.army_id, army.game_system)
@@ -331,6 +342,10 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 	var unit = OPRUnit.new()
 
 	unit.id = data.get("id", str(randi()))
+	unit.selection_id = data.get("selectionId", "")
+	unit.combined = data.get("combined", false)
+	var join_target = data.get("joinToUnit", null)
+	unit.join_to_unit = join_target if join_target is String else ""
 	unit.name = data.get("name", "Unknown Unit")
 	unit.custom_name = data.get("customName", "")
 	unit.size = data.get("size", 1)
@@ -510,6 +525,9 @@ func _parse_army_forge_json(json_text: String, source_name: String = "") -> OPRA
 		if unit:
 			army.units.append(unit)
 
+	# Fold OPR "Combined" unit halves into single larger units (e.g. 2x[5] -> 1x[10]).
+	army.units = _merge_combined_units(army.units)
+
 	print("OPRApiClient: Loaded army '%s' - %d units, %d pts, %d models" % [
 		army.name, army.units.size(), army.points, army.model_count
 	])
@@ -603,6 +621,9 @@ func _parse_unit_from_list(list_unit: Dictionary, book_data: Dictionary) -> OPRU
 
 	unit.id = unit_def_id
 	unit.selection_id = selection_id
+	unit.combined = list_unit.get("combined", false)
+	var join_target = list_unit.get("joinToUnit", null)
+	unit.join_to_unit = join_target if join_target is String else ""
 
 	# Try to find unit definition in book data
 	var unit_def = _find_unit_in_book(unit_def_id, book_data)
@@ -722,6 +743,54 @@ func _parse_weapon(data) -> OPRWeapon:
 				weapon.special_rules.append(rule_name)
 
 	return weapon
+
+
+## Folds OPR "Combined" unit halves into single larger units.
+## OPR rule (core): two units of the SAME type may be Combined into one unit at
+## list-building (e.g. 2x[5 models] -> 1x[10 models]). Army Forge exports both
+## halves as separate entries, each with combined==true; the secondary half's
+## joinToUnit points at the primary (anchor) half's selectionId. We fold the
+## secondary into the anchor - summing model count, cost and weapon counts - and
+## drop it from the unit list.
+## A joined Hero (combined==false, joinToUnit set) is a distinct model and is
+## intentionally left as its own unit.
+func _merge_combined_units(units: Array[OPRUnit]) -> Array[OPRUnit]:
+	# Index the anchor halves (combined, no joinToUnit) by their selectionId.
+	var anchors_by_selection: Dictionary = {}
+	for unit in units:
+		if unit.combined and unit.join_to_unit.is_empty() and not unit.selection_id.is_empty():
+			anchors_by_selection[unit.selection_id] = unit
+
+	var merged: Array[OPRUnit] = []
+	for unit in units:
+		# Secondary half of a Combined unit: fold it into its anchor and drop it.
+		if unit.combined and not unit.join_to_unit.is_empty() and anchors_by_selection.has(unit.join_to_unit):
+			var anchor: OPRUnit = anchors_by_selection[unit.join_to_unit]
+			anchor.size += unit.size
+			anchor.cost += unit.cost
+			_merge_weapon_counts(anchor.weapons, unit.weapons)
+			continue
+		merged.append(unit)
+
+	return merged
+
+
+## Folds `extra` weapons into `target`, summing counts for identical weapons
+## (same name/range/attacks/rules) so a merged unit shows e.g. "Rifle x10".
+func _merge_weapon_counts(target: Array[OPRWeapon], extra: Array[OPRWeapon]) -> void:
+	for weapon in extra:
+		var existing_match: OPRWeapon = null
+		for existing in target:
+			if existing.name == weapon.name \
+					and existing.range_value == weapon.range_value \
+					and existing.attacks == weapon.attacks \
+					and existing.special_rules == weapon.special_rules:
+				existing_match = existing
+				break
+		if existing_match:
+			existing_match.count += weapon.count
+		else:
+			target.append(weapon)
 
 
 ## Create a sample/test army for development
