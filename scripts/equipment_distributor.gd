@@ -29,18 +29,37 @@ static func distribute(game_unit: GameUnit, loadout: Array, special_rules: Array
 	for model in game_unit.models:
 		model.properties["special_rules"] = rule_strings.duplicate()
 
-	# Step 3: Distribute weapons based on count field
+	# Step 3: Distribute weapons.
+	# - Universal weapons (carried by every model) go to ALL models.
+	# - Limited weapons (a subset of models) fill DISTINCT models via a sequential
+	#   cursor instead of all stacking on model 0. So a special weapon (e.g. a
+	#   Flamer, count 1) lands on the model the base weapon's reduced count never
+	#   reached - i.e. it REPLACES the base on that model. An additional weapon on
+	#   a full-count base (count == unit_size) still stacks on top (an add-on).
+	var universal_weapons: Array = []
+	var limited_weapons: Array = []
 	for item in loadout:
-		var attacks = _get_attacks(item)
-
-		if attacks > 0:
-			# This is a weapon
-			var count = _get_count(item, unit_size)
-			for i in range(min(count, unit_size)):
-				_add_weapon_to_model(game_unit.models[i], item)
+		if _get_attacks(item) > 0:
+			if _get_count(item, unit_size) >= unit_size:
+				universal_weapons.append(item)
+			else:
+				limited_weapons.append(item)
 		else:
-			# This is equipment (attacks = 0)
+			# Equipment (attacks = 0)
 			_assign_equipment_to_model(game_unit, item)
+
+	for item in universal_weapons:
+		for model in game_unit.models:
+			_add_weapon_to_model(model, item)
+
+	var cursor := 0
+	for item in limited_weapons:
+		var count = _get_count(item, unit_size)
+		for _k in range(count):
+			if cursor >= unit_size:
+				cursor = 0  # safety wrap if limited counts exceed the unit size
+			_add_weapon_to_model(game_unit.models[cursor], item)
+			cursor += 1
 
 
 # ===== Tough Parsing =====

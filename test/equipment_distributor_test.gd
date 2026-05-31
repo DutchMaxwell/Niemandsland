@@ -69,6 +69,46 @@ func test_weapon_without_count_goes_to_all_models() -> void:
 		assert_int(model.get_weapons().size()).is_equal(1)
 
 
+func test_limited_special_weapon_replaces_base_on_distinct_model() -> void:
+	# 9 Rifles + 1 Flamer across 10 models: each model gets exactly one weapon and
+	# the Flamer model does NOT also carry a Rifle (special replaced the base).
+	var unit := _unit_with_models(10)
+	EquipmentDistributor.distribute(unit, [
+		{"name": "Rifle", "attacks": 1, "count": 9},
+		{"name": "Flamer", "attacks": 1, "count": 1},
+	], [])
+
+	var flamer_models := 0
+	for model in unit.models:
+		assert_int(model.get_weapons().size()).is_equal(1)
+		var names: Array = []
+		for w in model.get_weapons():
+			names.append(w["name"])
+		if "Flamer" in names:
+			flamer_models += 1
+			assert_bool("Rifle" in names).is_false()
+	assert_int(flamer_models).is_equal(1)
+
+
+func test_universal_weapon_stacks_with_a_limited_one() -> void:
+	# Everyone has a CCW (count == size); one model also has a special gun (add-on).
+	var unit := _unit_with_models(5)
+	EquipmentDistributor.distribute(unit, [
+		{"name": "CCW", "attacks": 1, "count": 5},
+		{"name": "Special Gun", "attacks": 1, "count": 1},
+	], [])
+
+	var special_models := 0
+	for model in unit.models:
+		var names: Array = []
+		for w in model.get_weapons():
+			names.append(w["name"])
+		assert_bool("CCW" in names).is_true()  # universal weapon on every model
+		if "Special Gun" in names:
+			special_models += 1
+	assert_int(special_models).is_equal(1)
+
+
 # ===== Equipment (attacks == 0) goes to a single model =====
 
 func test_equipment_assigned_to_single_model() -> void:

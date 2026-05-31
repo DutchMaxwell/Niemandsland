@@ -27,3 +27,44 @@ func test_standard_marker_stores_no_color() -> void:
 
 	assert_int(restored.marker_colors.size()).is_equal(0)
 	assert_array(restored.markers).contains(["Shaken"])
+
+
+func test_counter_value_survives_serialization_roundtrip() -> void:
+	var model := ModelInstance.new()
+	model.add_marker("Havoc")
+	model.set_marker_value("Havoc", 3)
+
+	var restored := ModelInstance.from_dict(model.to_dict())
+
+	assert_bool(restored.is_counter_marker("Havoc")).is_true()
+	assert_int(restored.get_marker_value("Havoc")).is_equal(3)
+
+
+func test_status_marker_is_not_a_counter() -> void:
+	var model := ModelInstance.new()
+	model.add_marker("Pinned")  # no value set -> status token, not a counter
+	assert_bool(model.is_counter_marker("Pinned")).is_false()
+	assert_int(model.get_marker_value("Pinned")).is_equal(0)
+
+
+func test_set_marker_value_clamps_to_non_negative() -> void:
+	var model := ModelInstance.new()
+	model.add_marker("Fury")
+	model.set_marker_value("Fury", -5)
+	assert_int(model.get_marker_value("Fury")).is_equal(0)
+
+
+func test_remove_marker_clears_its_counter_value() -> void:
+	var model := ModelInstance.new()
+	model.add_marker("Havoc")
+	model.set_marker_value("Havoc", 4)
+	model.remove_marker("Havoc")
+	assert_bool(model.is_counter_marker("Havoc")).is_false()
+
+
+func test_clear_markers_clears_all_counter_values() -> void:
+	var model := ModelInstance.new()
+	model.add_marker("Havoc")
+	model.set_marker_value("Havoc", 2)
+	model.clear_markers()
+	assert_int(model.marker_values.size()).is_equal(0)

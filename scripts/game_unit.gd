@@ -149,6 +149,62 @@ func get_models_with_marker(marker_name: String) -> Array[ModelInstance]:
 	return result
 
 
+# ===== Special-Equipment Detection =====
+
+## Extracts a weapon's display name from an OPRWeapon object or a Dictionary.
+static func _weapon_name_of(weapon: Variant) -> String:
+	if weapon is Dictionary:
+		return str(weapon.get("name", ""))
+	if weapon is Object and "name" in weapon:
+		return str(weapon.name)
+	return ""
+
+
+## The distinct equipment/weapon names a model carries (weapons first, then
+## equipment), de-duplicated and order-preserving.
+func _model_loadout_names(model: ModelInstance) -> Array[String]:
+	var names: Array[String] = []
+	var seen: Dictionary = {}
+	for weapon in model.get_weapons():
+		var wname := _weapon_name_of(weapon)
+		if not wname.is_empty() and not seen.has(wname):
+			seen[wname] = true
+			names.append(wname)
+	for equip in model.get_equipment():
+		var ename := str(equip)
+		if not ename.is_empty() and not seen.has(ename):
+			seen[ename] = true
+			names.append(ename)
+	return names
+
+
+## Counts how many models carry each distinct weapon/equipment name.
+func _loadout_carrier_counts() -> Dictionary:
+	var carriers: Dictionary = {}
+	for model in models:
+		for item_name in _model_loadout_names(model):
+			carriers[item_name] = carriers.get(item_name, 0) + 1
+	return carriers
+
+
+## Returns a model's SPECIAL loadout: weapons/equipment carried by only a strict
+## MINORITY of the unit (carriers * 2 <= unit size). This flags genuine specials
+## (a 1-of-10 Flamer, a Banner, a Sergeant's gear) while NOT flagging a base
+## weapon whose count was merely reduced by a swap (e.g. 9-of-10). Order/dedup
+## preserved (weapons first, then equipment). Single-model units return [].
+func get_special_equipment_names(model: ModelInstance) -> Array[String]:
+	var result: Array[String] = []
+	var n := models.size()
+	if n <= 1:
+		return result
+
+	var carriers := _loadout_carrier_counts()
+	for item_name in _model_loadout_names(model):
+		if carriers.get(item_name, 0) * 2 <= n:
+			result.append(item_name)
+	return result
+
+
 # ===== Unit-Level Properties Access =====
 
 ## Gets the unit name.
@@ -346,6 +402,19 @@ func remove_marker_from_all(marker_name: String) -> void:
 func clear_all_markers() -> void:
 	for model in models:
 		model.clear_markers()
+
+
+## Sets a counter marker's value on all models (keeps the unit-wide token in sync).
+func set_marker_value_on_all(marker_name: String, value: int) -> void:
+	for model in models:
+		model.set_marker_value(marker_name, value)
+
+
+## Gets a counter marker's value (read from the first model as representative).
+func get_marker_value(marker_name: String) -> int:
+	if models.is_empty():
+		return 0
+	return models[0].get_marker_value(marker_name)
 
 
 # ===== Serialization =====

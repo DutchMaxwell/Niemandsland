@@ -254,6 +254,11 @@ func _ready() -> void:
 	network_manager.remote_activation_updated.connect(_on_remote_activation_updated)
 	network_manager.remote_unit_marker_updated.connect(_on_remote_unit_marker_updated)
 	network_manager.remote_model_marker_updated.connect(_on_remote_model_marker_updated)
+	network_manager.remote_unit_marker_value_updated.connect(_on_remote_unit_marker_value_updated)
+	network_manager.remote_model_marker_value_updated.connect(_on_remote_model_marker_value_updated)
+	network_manager.remote_objective_owner_updated.connect(_on_remote_objective_owner_updated)
+	network_manager.remote_token_defined.connect(_on_remote_token_defined)
+	network_manager.remote_token_edited.connect(_on_remote_token_edited)
 	network_manager.remote_casts_updated.connect(_on_remote_casts_updated)
 	network_manager.remote_unit_deleted.connect(_on_remote_unit_deleted)
 	network_manager.remote_round_advanced.connect(_on_remote_round_advanced)
@@ -1384,10 +1389,12 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 		var objectives = settings["objectives"]
 		if terrain_overlay and terrain_overlay.has_method("update_objectives"):
 			var world_objs: Array[Vector3] = []
+			var owners: Array[int] = []
 			for obj in objectives:
 				if obj is Array and obj.size() >= 3:
 					world_objs.append(Vector3(obj[0], obj[1], obj[2]))
-			terrain_overlay.update_objectives(world_objs)
+					owners.append(int(obj[3]) if obj.size() >= 4 else 0)
+			terrain_overlay.update_objectives(world_objs, owners)
 
 	if settings.has("terrain_layout"):
 		var layout = settings["terrain_layout"]
@@ -2225,10 +2232,13 @@ func _on_objectives_changed(objectives: Array) -> void:
 	terrain_overlay.update_objectives(world_objectives)
 	print("Mission objectives updated: %d objectives" % world_objectives.size())
 
-	# Sync objectives to remote clients
+	# Sync objectives to remote clients (4th element = owner, 0 = neutral)
+	var obj_owners: Array = terrain_overlay.get_objective_owners() if terrain_overlay.has_method("get_objective_owners") else []
 	var obj_data := []
-	for obj in world_objectives:
-		obj_data.append([obj.x, obj.y, obj.z])
+	for i in range(world_objectives.size()):
+		var obj = world_objectives[i]
+		var owner := int(obj_owners[i]) if i < obj_owners.size() else 0
+		obj_data.append([obj.x, obj.y, obj.z, owner])
 	_broadcast_table_settings_update("objectives", obj_data)
 
 
@@ -2482,8 +2492,15 @@ func _init_radial_menu() -> void:
 	# Pass network manager reference for broadcasting state changes
 	radial_menu_controller.network_manager = network_manager
 
+	# Pass terrain overlay reference for objective capture / recolor
+	radial_menu_controller.terrain_overlay = terrain_overlay
+
 	# Pass stats tooltip reference for displaying unit stats
 	radial_menu_controller.stats_tooltip = opr_stats_tooltip
+
+	# Share the custom-token library with the hover tooltip (for token effects)
+	if opr_stats_tooltip:
+		opr_stats_tooltip.token_library = radial_menu_controller.token_library
 
 	# Create and pass coherency visualizer
 	coherency_visualizer = CoherencyVisualizer.new()
@@ -2527,6 +2544,7 @@ func _on_army_spawned_init_caster_markers(army: OPRApiClient.OPRArmy, _models: A
 		if game_unit:
 			radial_menu_controller.initialize_caster_marker_for_unit(game_unit)
 			radial_menu_controller.initialize_status_markers_for_unit(game_unit)
+			radial_menu_controller.initialize_special_weapon_rings_for_unit(game_unit)
 
 
 ## ============================================================================
@@ -2552,7 +2570,7 @@ func _on_remote_activation_updated(game_unit: GameUnit) -> void:
 
 
 ## Called when a remote peer changes a unit marker (Fatigued, Shaken, etc.)
-func _on_remote_unit_marker_updated(game_unit: GameUnit, marker_name: String, add: bool, color: Color) -> void:
+func _on_remote_unit_marker_updated(game_unit: GameUnit, marker_name: String, add: bool, color: Color, value: int) -> void:
 	if not radial_menu_controller:
 		return
 
@@ -2568,14 +2586,44 @@ func _on_remote_unit_marker_updated(game_unit: GameUnit, marker_name: String, ad
 			game_unit.is_activated = add
 			radial_menu_controller._update_activated_markers(game_unit)
 		_:
-			# Dialog marker (Pinned, Stunned, custom, ...) - render its orbit token
-			radial_menu_controller.set_unit_marker_token(game_unit, marker_name, add, color)
+			# Dialog marker (Pinned, Stunned, custom, counter, ...) - render its token
+			radial_menu_controller.set_unit_marker_token(game_unit, marker_name, add, color, value)
 
 
 ## Called when a remote peer changes a single model's dialog marker.
-func _on_remote_model_marker_updated(model: ModelInstance, marker_name: String, add: bool, color: Color) -> void:
+func _on_remote_model_marker_updated(model: ModelInstance, marker_name: String, add: bool, color: Color, value: int) -> void:
 	if radial_menu_controller and model:
-		radial_menu_controller.set_model_marker_token(model, marker_name, add, color)
+		radial_menu_controller.set_model_marker_token(model, marker_name, add, color, value)
+
+
+## Called when a remote peer changes a unit-wide counter marker's value.
+func _on_remote_unit_marker_value_updated(game_unit: GameUnit, marker_name: String, value: int) -> void:
+	if radial_menu_controller:
+		radial_menu_controller.set_unit_marker_value(game_unit, marker_name, value)
+
+
+## Called when a remote peer changes a single model's counter marker value.
+func _on_remote_model_marker_value_updated(model: ModelInstance, marker_name: String, value: int) -> void:
+	if radial_menu_controller and model:
+		radial_menu_controller.set_model_marker_value(model, marker_name, value)
+
+
+## Called when a remote peer captures/recolors a mission objective.
+func _on_remote_objective_owner_updated(index: int, owner: int) -> void:
+	if terrain_overlay and terrain_overlay.has_method("set_objective_owner"):
+		terrain_overlay.set_objective_owner(index, owner)
+
+
+## Called when a remote peer defines/updates a custom token in the library.
+func _on_remote_token_defined(token_name: String, color: Color, is_counter: bool, effect: String) -> void:
+	if radial_menu_controller:
+		radial_menu_controller.receive_token_define(token_name, color, is_counter, effect)
+
+
+## Called when a remote peer edits a custom token (rename / color / effect).
+func _on_remote_token_edited(old_name: String, new_name: String, color: Color, effect: String) -> void:
+	if radial_menu_controller:
+		radial_menu_controller.apply_token_edit(old_name, new_name, color, effect, false)
 
 
 ## Called when a remote peer changes caster points
