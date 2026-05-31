@@ -114,7 +114,7 @@ class UnitPoseType(str, Enum):
 
 # Mapping von UnitPoseType zu Pose-Beschreibungen fuer Image-Prompts
 POSE_DESCRIPTIONS: dict[UnitPoseType, str] = {
-    UnitPoseType.INFANTRY: "standing firmly on feet in a combat-ready stance, grounded pose",
+    UnitPoseType.INFANTRY: "dynamic predatory creature stance, crouched and coiled to strike, weight on digitigrade legs, OnePageRules studio miniature hero pose",
     UnitPoseType.JUMPPACK: "dynamic leaping pose, slightly airborne, jump pack or wings propelling upward",
     UnitPoseType.AIRCRAFT: "flying through the air, dynamic flight pose, seen from slightly below",
     UnitPoseType.VEHICLE: "vehicle with no crew visible, mechanical/armored design, ground-level perspective",
@@ -327,9 +327,66 @@ class PromptEngine:
             if extra_details:
                 unit_details_parts.append(extra_details)
 
-        # Groessenhinweis bei Einheiten mit mehreren Modellen
-        if size > 1:
-            unit_details_parts.append(f"squad of {size} models")
+        # Tabletop units are represented by a SINGLE sculpt (the game places the rest of
+        # the squad), so a multi-model squad must still render as exactly one figure —
+        # otherwise the single-mini quality gate rejects it.
+        # Shape the look from the unit's stats: Tough -> bulk/scale (from rules),
+        # defense -> how armored, quality -> how elite. Faction-neutral wording.
+        stat_bits: list[str] = []
+        _tough = 0
+        for _r in special_rules:
+            _m = re.match(r"Tough\((\d+)\)", str(_r))
+            if _m:
+                _tough = int(_m.group(1))
+
+        # EXPLICIT SCALE ANCHOR from base size + Tough. Without this, small rank-and-file
+        # units (e.g. 25mm grunts, no Tough) drift large. The base diameter is the single
+        # strongest real-world size cue, so state it and the matching body class outright.
+        if _tough >= 12:
+            stat_bits.append(
+                f"SCALE: a huge monster centre-piece model on a {base_size}mm base, "
+                "towering many times the height of a normal soldier")
+        elif _tough >= 6:
+            stat_bits.append(
+                f"SCALE: a large beast on a {base_size}mm base, clearly bigger and "
+                "bulkier than a rank-and-file soldier but not a giant monster")
+        elif _tough >= 3:
+            stat_bits.append(
+                f"SCALE: an elite-sized creature on a {base_size}mm base, only "
+                "slightly larger than a standard soldier")
+        else:
+            stat_bits.append(
+                f"SCALE: a small standard rank-and-file creature on a {base_size}mm "
+                "base, roughly human-soldier sized, lean and NOT oversized or bulky")
+
+        _gs = (override or {}).get("game_stats", {}) or {}
+        _dfn = _gs.get("defense")
+        if isinstance(_dfn, int):
+            if _dfn <= 3:
+                stat_bits.append("heavily armored with thick layered plating")
+            elif _dfn >= 5:
+                stat_bits.append("lightly armored and agile, exposed body")
+        _qual = _gs.get("quality")
+        if isinstance(_qual, int):
+            if _qual <= 3:
+                stat_bits.append("elite apex specimen, refined and distinctive")
+            elif _qual >= 5:
+                stat_bits.append("crude, expendable, primal")
+        if stat_bits:
+            unit_details_parts.append(", ".join(stat_bits))
+
+        # "Swarm" is a signal word: such a unit is modelled as ONE base that is itself a
+        # dense cluster of many small creatures (a swarm base), not a single big creature.
+        is_swarm: bool = "swarm" in unit_key.lower() or "swarm" in unit_name.lower()
+        if is_swarm:
+            unit_details_parts.append(
+                "a swarm shown as exactly 5 smaller individual creatures of this species "
+                "standing close together in a tight group, NOT one big creature and NOT a "
+                "base — five separate little bodies clustered side by side")
+        elif size > 1:
+            unit_details_parts.append(
+                "render exactly ONE single representative model, one individual creature "
+                "only, NOT a group, pair or multiple figures")
 
         unit_details: str = ", ".join(unit_details_parts)
 
@@ -398,18 +455,22 @@ class PromptEngine:
             if weapon is None:
                 continue
 
-            name_lower: str = weapon.name.lower()
+            name_lower: str = _biologise_weapon_name(weapon.name)
 
             if weapon.range_value > MELEE_RANGE:
-                # Fernkampfwaffe
-                desc: str = f"ranged {name_lower} integrated into arm"
+                # Fernkampfwaffe: IMMER als gewachsenes Biowaffen-Organ beschreiben,
+                # damit das Bildmodell keine menschliche Schusswaffe malt.
+                desc: str = (
+                    f"a living biological weapon-organ ({name_lower}) grown from the "
+                    f"limb, an organic fleshy-chitin bio-cannon — NOT a manufactured gun"
+                )
                 if weapon.count > 1:
-                    desc = f"{weapon.count}x {desc}"
+                    desc = f"{weapon.count} such bio-weapon organs"
                 descriptions.append(desc)
             else:
-                # Nahkampfwaffe
-                prefix: str = "heavy " if weapon.attacks >= 3 else ""
-                desc = f"{prefix}{name_lower}"
+                # Nahkampfwaffe: organische Klingen/Klauen.
+                prefix: str = "large heavy " if weapon.attacks >= 3 else ""
+                desc = f"{prefix}organic {name_lower} (bone blade / chitin talon)"
                 if weapon.count > 1:
                     desc = f"{weapon.count}x {desc}"
                 descriptions.append(desc)
@@ -749,3 +810,33 @@ def _format_aesthetic(aesthetic: dict[str, Any]) -> str:
             parts.append(str(inspiration))
 
     return ", ".join(parts)
+
+
+# =============================================================================
+# WAFFEN-BIOLOGISIERUNG
+# =============================================================================
+
+# Manufactured-weapon Wörter, die im Bild zu menschlichen Schusswaffen führen.
+_MANUFACTURED_WEAPON_WORDS: dict[str, str] = {
+    "cannon": "spitting-maw",
+    "gun": "spitter-organ",
+    "rifle": "spine-launcher",
+    "launcher": "barb-launcher organ",
+    "pistol": "spitter-organ",
+    "blaster": "spitter-organ",
+    "artillery": "bombard-maw",
+    "mortar": "bombard-maw",
+    "bombs": "spore-sacs",
+    "smoke": "spore-cloud",
+}
+
+
+def _biologise_weapon_name(name: str) -> str:
+    """Ersetzt manufactured-weapon Wörter im Waffennamen durch organische Begriffe,
+    damit das Bildmodell keine menschlichen Schusswaffen malt (z.B. "Shredder Gun"
+    -> "shredder spitter-organ"). Faction-neutral; rein lexikalisch.
+    """
+    out: str = name.lower()
+    for manufactured, organic in _MANUFACTURED_WEAPON_WORDS.items():
+        out = re.sub(rf"\b{manufactured}\b", organic, out)
+    return out
