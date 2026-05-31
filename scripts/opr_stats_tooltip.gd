@@ -8,8 +8,15 @@ class_name OPRStatsTooltip
 @onready var weapons_label: RichTextLabel = $MarginContainer/VBox/WeaponsLabel
 @onready var rules_label: RichTextLabel = $MarginContainer/VBox/RulesLabel
 
+## Token line shown below the rules (custom tokens + their effect). Created
+## programmatically so the scene doesn't need editing.
+var tokens_label: RichTextLabel = null
+
 ## Reference to the army manager for unit lookups
 var army_manager: OPRArmyManager
+
+## Reference to the custom-token library (for token effect text)
+var token_library: TokenLibrary = null
 
 ## Currently displayed unit
 var _current_unit: OPRApiClient.OPRUnit = null
@@ -43,6 +50,17 @@ func _ready() -> void:
 	_show_timer.one_shot = true
 	_show_timer.timeout.connect(_on_show_timer_timeout)
 	add_child(_show_timer)
+
+	# Token line (custom tokens + effects), appended below the rules label
+	tokens_label = RichTextLabel.new()
+	tokens_label.name = "TokensLabel"
+	tokens_label.bbcode_enabled = true
+	tokens_label.fit_content = true
+	tokens_label.scroll_active = false
+	tokens_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tokens_label.custom_minimum_size = Vector2(220, 0)
+	tokens_label.visible = false
+	rules_label.get_parent().add_child(tokens_label)
 
 	# Make sure all children ignore mouse
 	_set_mouse_ignore_recursive(self)
@@ -206,6 +224,43 @@ func _update_content() -> void:
 		rules_label.visible = true
 	else:
 		rules_label.visible = false
+
+	_update_tokens_section()
+
+
+## Lists the hovered model's custom tokens (name, counter value, effect text).
+func _update_tokens_section() -> void:
+	if not tokens_label:
+		return
+
+	var model_inst: ModelInstance = null
+	if _current_model:
+		model_inst = _current_model.get_meta("model_instance", null) as ModelInstance
+	if not model_inst:
+		tokens_label.visible = false
+		return
+
+	var lines: Array[String] = []
+	for marker_name in model_inst.markers:
+		# Only custom tokens (standard/state markers have their own indicators).
+		if UnitMarker.STANDARD_MARKERS.has(marker_name):
+			continue
+		var head := marker_name
+		if model_inst.is_counter_marker(marker_name):
+			head = "%s (%d)" % [marker_name, model_inst.get_marker_value(marker_name)]
+		var effect := ""
+		if token_library:
+			effect = token_library.get_effect(marker_name)
+		if effect.is_empty():
+			lines.append("[color=#ffd86b]%s[/color]" % head)
+		else:
+			lines.append("[color=#ffd86b]%s[/color] [color=#aaaaaa]- %s[/color]" % [head, effect])
+
+	if lines.is_empty():
+		tokens_label.visible = false
+	else:
+		tokens_label.text = "[b]Tokens:[/b]\n%s" % "\n".join(lines)
+		tokens_label.visible = true
 
 
 ## Format weapon for display
