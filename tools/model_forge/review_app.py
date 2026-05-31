@@ -338,9 +338,19 @@ def _convert_worker(session_id: str) -> None:
                      message="Keine genehmigten Bilder zum Konvertieren.")
             return
 
+        # Resume: vorhandene GLBs ueberspringen, damit ein unterbrochener Lauf nicht von
+        # vorne anfaengt (sonst werden bereits konvertierte Units erneut durch TRELLIS
+        # gejagt = verschwendete Credits).
+        glb_dir = session_dir / "glb"
+
         image_paths: dict[str, Path] = {}
         unit_classes: dict[str, str] = {}
+        skipped_existing = 0
         for u in approved:
+            existing_glb = glb_dir / f"{u.unit_key}.glb"
+            if existing_glb.exists() and existing_glb.stat().st_size > 0:
+                skipped_existing += 1
+                continue
             if u.image_path and Path(u.image_path).exists():
                 image_paths[u.unit_key] = Path(u.image_path)
                 # Versuch 1: gespeichertes unit_class. Versuch 2: aus DL.
@@ -349,6 +359,8 @@ def _convert_worker(session_id: str) -> None:
                     override = dl.unit_overrides.get(u.unit_key, {})
                     cls = classify_unit(override).value
                 unit_classes[u.unit_key] = cls
+        logger.info("Convert resume: %d GLBs existieren bereits, %d zu konvertieren",
+                    skipped_existing, len(image_paths))
 
         total = len(image_paths)
         if total == 0:
@@ -359,7 +371,6 @@ def _convert_worker(session_id: str) -> None:
         _set_job(session_id, phase="converting", current=0, total=total,
                  message="Konvertierung laeuft...")
 
-        glb_dir = session_dir / "glb"
         glb_dir.mkdir(parents=True, exist_ok=True)
         hf_token = _read_secret(HF_TOKEN_FILE)
         space_id = _read_secret(TRELLIS_SPACE_FILE)
