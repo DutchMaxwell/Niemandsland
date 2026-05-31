@@ -16,7 +16,11 @@ const LINE_Y := 0.005   # Flat line just above the table
 const EDGE_Y := 0.02    # Base-edge endpoints / labels above the table
 
 ## Visual line thickness (flat strip on the XZ plane).
-const LINE_WIDTH := 0.004
+const LINE_WIDTH := 0.002
+
+## Max opacity of the whole coherency visualization (80% transparent) so the
+## lines/numbers don't dominate the view while moving units.
+const MAX_ALPHA := 0.2
 
 ## Animation duration
 const FADE_DURATION := 0.3
@@ -158,11 +162,11 @@ func _create_distance_label(midpoint: Vector3, from_edge: Vector3, to_edge: Vect
 	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	label.no_depth_test = true
 	label.render_priority = 1
-	label.pixel_size = 0.001
+	label.pixel_size = 0.0005
 	label.font_size = 24
 	label.modulate = color
 	label.outline_modulate = Color(0, 0, 0, 1)
-	label.outline_size = 8
+	label.outline_size = 4
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 	add_child(label)
@@ -295,11 +299,14 @@ func _animate_fade_in() -> void:
 
 ## Updates alpha on all materials (for 3D fade effect).
 func _update_materials_alpha(alpha: float) -> void:
+	# Cap at MAX_ALPHA so the visualization stays subtle (the fade still scales
+	# from 0 up to this cap).
+	var a := alpha * MAX_ALPHA
 	for line in _lines:
 		if is_instance_valid(line) and line.material_override:
 			var mat = line.material_override as StandardMaterial3D
 			if mat:
-				mat.albedo_color.a = alpha
+				mat.albedo_color.a = a
 
 	for highlight in _highlights:
 		if is_instance_valid(highlight):
@@ -307,11 +314,11 @@ func _update_materials_alpha(alpha: float) -> void:
 				if child is MeshInstance3D and child.material_override:
 					var mat = child.material_override as StandardMaterial3D
 					if mat:
-						mat.albedo_color.a = alpha
+						mat.albedo_color.a = a
 
 	for label in _labels:
 		if is_instance_valid(label):
-			label.modulate.a = alpha
+			label.modulate.a = a
 
 
 ## Clears all visualization elements.

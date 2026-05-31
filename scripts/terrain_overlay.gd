@@ -137,6 +137,7 @@ var preview_line_mesh: MeshInstance3D = null
 var objective_meshes: Array[Node3D] = []  # Can be MeshInstance3D or Node3D containers
 var objective_ring_meshes: Array[MeshInstance3D] = []
 var mission_objectives: Array[Vector3] = []  # World positions in meters
+var objective_owners: Array[int] = []  # Owner per objective (0 = neutral, else player_id)
 
 ## Wall instances (procedurally generated holographic walls + corner posts)
 var _wall_instances: Array[Node3D] = []
@@ -923,23 +924,71 @@ func is_terrain_los_blocking(terrain_type: int, viewer_in_terrain: bool, target_
 ## Update mission objectives display
 ##
 ## @param objectives: Array of Vector3 world positions (in meters)
-func update_objectives(objectives: Array) -> void:
+## @param owners: Optional per-objective owner (0 = neutral, else player_id),
+##                index-aligned to `objectives`. Missing entries default to 0.
+func update_objectives(objectives: Array, owners: Array = []) -> void:
 	_clear_objectives()
 	mission_objectives.clear()
+	objective_owners.clear()
 
-	for obj in objectives:
+	for i in range(objectives.size()):
+		var obj = objectives[i]
 		if obj is Vector3:
 			mission_objectives.append(obj)
+			objective_owners.append(int(owners[i]) if i < owners.size() else 0)
 
 	if mission_objectives.is_empty():
 		return
 
 	# Create meshes for each objective
 	for i in range(mission_objectives.size()):
-		var obj_pos = mission_objectives[i]
-		_create_objective_marker(obj_pos, i + 1)
+		_create_objective_marker(mission_objectives[i], i + 1, objective_owners[i])
 
 	print("TerrainOverlay: Created %d objective markers" % mission_objectives.size())
+
+
+## Color for an objective owner: neutral gold for 0, else the army's player color
+## (shared with unit boundaries/bases via OPRArmyManager.PLAYER_COLORS).
+func _objective_owner_color(owner: int) -> Color:
+	if owner <= 0:
+		return Color(1.0, 0.85, 0.2, 1.0)  # Neutral gold/yellow
+	var c: Color = OPRArmyManager.PLAYER_COLORS.get(owner, Color(1.0, 0.85, 0.2, 1.0))
+	return Color(c.r, c.g, c.b, 1.0)
+
+
+## Sets the owner of an objective and recolors its token + seize ring in place.
+func set_objective_owner(index: int, owner: int) -> void:
+	if index < 0 or index >= objective_meshes.size():
+		return
+	while objective_owners.size() <= index:
+		objective_owners.append(0)
+	objective_owners[index] = owner
+
+	var color := _objective_owner_color(owner)
+	var token := objective_meshes[index]
+	if is_instance_valid(token):
+		var fill := token.get_node_or_null("Fill") as MeshInstance3D
+		if fill and fill.material_override is StandardMaterial3D:
+			(fill.material_override as StandardMaterial3D).albedo_color = color
+		var label := token.get_node_or_null("Number") as Label3D
+		if label:
+			label.outline_modulate = color
+	if index < objective_ring_meshes.size():
+		var ring := objective_ring_meshes[index]
+		if is_instance_valid(ring) and ring.material_override is StandardMaterial3D:
+			(ring.material_override as StandardMaterial3D).albedo_color = Color(color.r, color.g, color.b, 0.25)
+
+
+## Returns the owner of an objective (0 = neutral) or 0 if out of range.
+func get_objective_owner(index: int) -> int:
+	if index < 0 or index >= objective_owners.size():
+		return 0
+	return objective_owners[index]
+
+
+## Returns a copy of the per-objective owner list (for saving).
+func get_objective_owners() -> Array[int]:
+	return objective_owners.duplicate()
 
 
 ## Clear all objective meshes
@@ -959,10 +1008,11 @@ func _clear_objectives() -> void:
 ##
 ## @param pos: World position in meters
 ## @param number: Objective number for label
-func _create_objective_marker(pos: Vector3, number: int) -> void:
-	var objective_color = Color(1.0, 0.85, 0.2, 1.0)  # Gold/yellow
+## @param owner: Owner (0 = neutral gold, else player_id -> army color)
+func _create_objective_marker(pos: Vector3, number: int, owner: int = 0) -> void:
+	var objective_color = _objective_owner_color(owner)
 	var border_color = Color(0.1, 0.1, 0.1, 1.0)  # Black border
-	var ring_color = Color(1.0, 0.85, 0.2, 0.25)  # Semi-transparent gold
+	var ring_color = Color(objective_color.r, objective_color.g, objective_color.b, 0.25)
 
 	# Create 3" seize radius ring (flat disc)
 	var seize_radius_m = 3.0 * INCHES_TO_METERS
@@ -1002,18 +1052,37 @@ func _create_seize_radius_ring(pos: Vector3, radius: float, color: Color) -> Mes
 	return mesh_instance
 
 
-## Create an objective token marker (like unit tokens: 1" diameter, black border, numbered)
-func _create_objective_token(pos: Vector3, number: int, fill_color: Color, border_color: Color) -> Node3D:
-	var container = Node3D.new()
+## Create an objective token marker (like unit tokens: 1" diameter, black border,
+## numbered). Returns a StaticBody3D so it can be right-clicked for the radial
+## capture menu: it joins the "selectable" + "objective" groups and carries an
+## "objective_index" meta (see ObjectManager / RadialMenuController).
+func _create_objective_token(pos: Vector3, number: int, fill_color: Color, border_color: Color) -> StaticBody3D:
+	var container = StaticBody3D.new()
 	container.position = Vector3(pos.x, Z_FIGHT_OFFSET * 3, pos.z)
+	container.add_to_group("selectable")
+	container.add_to_group("objective")
+	container.set_meta("objective_index", number - 1)
+	container.collision_layer = 1
+	container.collision_mask = 1
 
 	# Token dimensions: 1" diameter = 0.0254m, but we use half for radius
 	var token_radius = 0.5 * INCHES_TO_METERS  # 0.5" radius = 1" diameter
 	var border_width = 0.08 * INCHES_TO_METERS  # Border thickness
 	var token_height = 0.003  # 3mm thick
 
+	# Collision shape so the raycast picker can hit the token (a bit taller than
+	# the disc for an easy click target).
+	var collision = CollisionShape3D.new()
+	var collision_cyl = CylinderShape3D.new()
+	collision_cyl.radius = token_radius + border_width
+	collision_cyl.height = token_height + 0.02
+	collision.shape = collision_cyl
+	collision.position = Vector3(0, token_height / 2.0, 0)
+	container.add_child(collision)
+
 	# Create black border disc (slightly larger)
 	var border_mesh = MeshInstance3D.new()
+	border_mesh.name = "Border"
 	var border_cylinder = CylinderMesh.new()
 	border_cylinder.top_radius = token_radius + border_width
 	border_cylinder.bottom_radius = token_radius + border_width
@@ -1028,8 +1097,9 @@ func _create_objective_token(pos: Vector3, number: int, fill_color: Color, borde
 	border_mesh.material_override = border_material
 	container.add_child(border_mesh)
 
-	# Create gold fill disc (on top of border)
+	# Create fill disc (on top of border) - colored by owner
 	var fill_mesh = MeshInstance3D.new()
+	fill_mesh.name = "Fill"
 	var fill_cylinder = CylinderMesh.new()
 	fill_cylinder.top_radius = token_radius
 	fill_cylinder.bottom_radius = token_radius
@@ -1046,6 +1116,7 @@ func _create_objective_token(pos: Vector3, number: int, fill_color: Color, borde
 
 	# Create 3D text label for the objective number
 	var label_3d = Label3D.new()
+	label_3d.name = "Number"
 	label_3d.text = str(number)
 	label_3d.font_size = 72
 	label_3d.pixel_size = 0.0003  # Scale to fit on token
