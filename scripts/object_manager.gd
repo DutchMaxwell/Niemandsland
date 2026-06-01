@@ -34,6 +34,9 @@ var undo_manager: UndoManager = null
 # unambiguous which object a click will select.
 var _hover_glow: HoverGlow = HoverGlow.new()
 
+# Persistent green glow for selected objects (replaces the old base ring).
+var _selection_glow_material: StandardMaterial3D = null
+
 # Clipboard for copy/paste
 var _clipboard: Array[Node3D] = []  # Stores references to copied objects for duplication
 
@@ -284,6 +287,9 @@ func _add_to_selection(obj: Node3D) -> void:
 		return
 
 	_selected_objects.append(obj)
+	# Clear any gold hover overlay on this object first, then apply the green glow,
+	# so the two material overlays never fight over the same mesh.
+	_hover_glow.set_target(null)
 	_highlight_object(obj)
 	AudioManager.play_sfx(AudioManager.SFXType.MODEL_SELECT)
 	object_selected.emit(obj)
@@ -363,59 +369,50 @@ func _update_hover(screen_pos: Vector2) -> void:
 	if not selection_enabled:
 		_hover_glow.set_target(null)
 		return
-	_hover_glow.set_target(_get_object_at_position(screen_pos))
+	var obj: Node3D = _get_object_at_position(screen_pos)
+	if obj != null and obj in _selected_objects:
+		obj = null  # selected objects keep their green glow; no gold hover on top
+	_hover_glow.set_target(obj)
 
 
-## Apply highlight to an object to show it's selected
-## Uses a visual ring overlay instead of material modification to avoid Godot material bugs
+## Highlight a selected object with a green model glow (material_overlay), saving
+## any previous overlay per mesh so it can be restored on deselect.
 func _highlight_object(obj: Node3D) -> void:
-	# Check if already highlighted
-	if obj.get_node_or_null("SelectionHighlight"):
-		return
-
-	# Get base size for the highlight ring
-	var base_radius = 0.016  # Default 32mm
-	var game_unit = UnitUtils.get_game_unit(obj)
-	if game_unit and game_unit.unit_properties:
-		var oval_width = game_unit.unit_properties.get("base_size_oval_width", 0)
-		var oval_length = game_unit.unit_properties.get("base_size_oval_length", 0)
-		if oval_width > 0 and oval_length > 0:
-			base_radius = (max(oval_width, oval_length) / 2.0) * 0.001
-		else:
-			var base_mm = game_unit.unit_properties.get("base_size_round", 32)
-			base_radius = (base_mm / 2.0) * 0.001
-
-	# Create highlight ring container
-	var highlight = Node3D.new()
-	highlight.name = "SelectionHighlight"
-
-	# Create glowing torus ring around the base
-	var ring = MeshInstance3D.new()
-	ring.name = "Ring"
-	var torus = TorusMesh.new()
-	torus.inner_radius = base_radius + 0.001
-	torus.outer_radius = base_radius + 0.004
-	ring.mesh = torus
-
-	var mat = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.3, 0.6, 1.0, 0.9)
-	mat.emission_enabled = true
-	mat.emission = Color(0.3, 0.6, 1.0)
-	mat.emission_energy_multiplier = 1.5
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	ring.material_override = mat
-	ring.position = Vector3(0, 0.003, 0)
-
-	highlight.add_child(ring)
-	obj.add_child(highlight)
+	var mat := _get_selection_glow_material()
+	for mesh: MeshInstance3D in _collect_glow_meshes(obj):
+		if not mesh.has_meta("_sel_prev_overlay"):
+			mesh.set_meta("_sel_prev_overlay", mesh.material_overlay)
+		mesh.material_overlay = mat
 
 
-## Remove highlight from an object
+## Remove the green selection glow, restoring the previous overlay per mesh.
 func _unhighlight_object(obj: Node3D) -> void:
-	var highlight = obj.get_node_or_null("SelectionHighlight")
-	if highlight:
-		highlight.queue_free()
+	for mesh: MeshInstance3D in _collect_glow_meshes(obj):
+		if mesh.has_meta("_sel_prev_overlay"):
+			mesh.material_overlay = mesh.get_meta("_sel_prev_overlay")
+			mesh.remove_meta("_sel_prev_overlay")
+
+
+func _collect_glow_meshes(obj: Node3D) -> Array[MeshInstance3D]:
+	var result: Array[MeshInstance3D] = []
+	for node: MeshInstance3D in obj.find_children("*", "MeshInstance3D", true, false):
+		result.append(node)
+	return result
+
+
+func _get_selection_glow_material() -> StandardMaterial3D:
+	if _selection_glow_material == null:
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.albedo_color = Color(0.25, 1.0, 0.4, 0.4)
+		mat.emission_enabled = true
+		mat.emission = Color(0.25, 1.0, 0.4)
+		mat.emission_energy_multiplier = 2.0
+		mat.grow = true
+		mat.grow_amount = 0.003
+		_selection_glow_material = mat
+	return _selection_glow_material
 
 
 ## Start box selection (drag rectangle to select multiple objects)
@@ -2771,12 +2768,22 @@ func _arrange_spacing(objects: Array) -> Vector2:
 	)
 
 
+## Returns the selected objects that are still live (not deleted/hidden), so
+## arranging a unit after casualties leaves no gaps.
+func _live_objects(objs: Array) -> Array[Node3D]:
+	var result: Array[Node3D] = []
+	for obj in objs:
+		if is_instance_valid(obj) and not obj.get_meta("deleted", false):
+			result.append(obj)
+	return result
+
+
 ## Arrange selected objects in N rows at cursor position (keys 1-9)
 func arrange_selected_in_rows(num_rows: int, cursor_pos: Vector3) -> void:
-	if _selected_objects.size() < 2:
+	var objects: Array[Node3D] = _live_objects(_selected_objects)
+	if objects.size() < 2:
 		return
 
-	var objects = _selected_objects.duplicate()
 	var count = objects.size()
 	var cols = ceili(float(count) / num_rows)
 
@@ -2807,10 +2814,10 @@ func arrange_selected_in_rows(num_rows: int, cursor_pos: Vector3) -> void:
 
 ## Arrange selected objects in arrow/wedge formation at cursor (A key)
 func arrange_selected_arrow(cursor_pos: Vector3) -> void:
-	if _selected_objects.size() < 2:
+	var objects: Array[Node3D] = _live_objects(_selected_objects)
+	if objects.size() < 2:
 		return
 
-	var objects = _selected_objects.duplicate()
 	var count = objects.size()
 
 	# Within-row spacing on X, capped for coherency (see arrange_selected_in_rows).

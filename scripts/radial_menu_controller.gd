@@ -69,6 +69,9 @@ var _current_selection: Array = []
 ## Is the radial menu scene loaded
 var _menu_scene: PackedScene = null
 
+## Lazily-loaded font shared by the curved arc labels (see ARC_FONT_PATH).
+var _arc_font: Font = null
+
 ## Runtime token configs for dialog markers (node_name -> {color, label, letter,
 ## priority}). Lets arbitrary MarkerDialog markers reuse the same token engine as
 ## the built-in TOKEN_TYPES without hardcoding them.
@@ -96,6 +99,11 @@ const TOKEN_TYPES = {
 	"FatiguedMarker": {"color": Color(0.85, 0.45, 0.1), "label": "FATIGUED", "letter": "F", "priority": 4},
 	"ActivatedMarker": {"color": Color(0.1, 0.5, 0.2), "label": "ACTIVATED", "letter": "A", "priority": 5},
 }
+
+## Curved token/weapon labels are measured AND rendered with this font so the
+## per-glyph spacing matches; the spacing factor adds air for the arc rotation.
+const ARC_FONT_PATH := "res://assets/ui_glassmorphism/fonts/Inter.ttf"
+const ARC_LETTER_SPACING := 1.15
 
 
 func _ready() -> void:
@@ -536,9 +544,12 @@ func _delete_model(context: Dictionary) -> void:
 	var model = context.get("model_instance") as ModelInstance
 	if not model or not model.node:
 		return
-	# Route through the shared multi-delete path so the single-model delete is
-	# undoable too (it already used reversible casualty semantics).
-	delete_objects([model.node])
+	# Delete the whole current selection (not just the clicked model) so deleting a
+	# multi-selection removes all of them; falls back to the single clicked model.
+	var targets: Array = _current_selection.duplicate() if not _current_selection.is_empty() else [model.node]
+	delete_objects(targets)
+	if object_manager and object_manager.has_method("deselect_all"):
+		object_manager.deselect_all()
 
 
 func _delete_unit(context: Dictionary) -> void:
@@ -1071,6 +1082,13 @@ func _create_token_disc(marker_name: String) -> Node3D:
 	return marker
 
 
+## Lazily loads the shared font for the curved arc labels (see ARC_FONT_PATH).
+func _get_arc_font() -> Font:
+	if _arc_font == null:
+		_arc_font = load(ARC_FONT_PATH)
+	return _arc_font
+
+
 ## Creates text arc for a token.
 func _create_token_text_arc(parent: Node3D, text: String, radius: float, height: float, color: Color) -> void:
 	var angle_per_char = PI / 10
@@ -1556,22 +1574,31 @@ func _create_ring_segment_text(parent: Node3D, text: String, radius: float, cent
 	var n := text.length()
 	if n == 0:
 		return
+	var font := _get_arc_font()
 	var font_size := 48
 	var pixel_size := (band * 0.78) / font_size  # glyph height ~ 0.78 * band
-	var char_advance := font_size * pixel_size * 0.6
-	var angle_per_char := char_advance / radius
-	var total := (n - 1) * angle_per_char
-	if total > max_arc and total > 0.0:
-		var s := max_arc / total
+
+	# Real per-glyph advances (incl. kerning) via cumulative substring widths — NOT a
+	# constant width — so wide letters (W, M) don't overlap and narrow ones don't gap.
+	var total_w: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	var arc_per_px := pixel_size * ARC_LETTER_SPACING / radius
+	var total_arc := total_w * arc_per_px
+	if total_arc > max_arc and total_arc > 0.0:
+		var s := max_arc / total_arc  # shrink to fit the segment, keeping proportions
 		pixel_size *= s
-		angle_per_char *= s
-		total = max_arc
-	var start_angle := center_angle + total / 2.0
+		arc_per_px *= s
+		total_arc = max_arc
 
 	for i in range(n):
+		var left: float = font.get_string_size(text.substr(0, i), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+		var right: float = font.get_string_size(text.substr(0, i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+		var offset_px: float = (left + right) / 2.0 - total_w / 2.0  # glyph centre from text centre
+		var angle := center_angle - offset_px * arc_per_px
+
 		var ch := Label3D.new()
 		ch.name = "Char%d" % i
 		ch.text = text[i]
+		ch.font = font  # render with the font we measured -> correct spacing
 		ch.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 		ch.no_depth_test = false
 		ch.font_size = font_size
@@ -1581,7 +1608,6 @@ func _create_ring_segment_text(parent: Node3D, text: String, radius: float, cent
 		ch.pixel_size = pixel_size
 		ch.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		ch.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		var angle := start_angle - i * angle_per_char
 		ch.position = Vector3(cos(angle) * radius, 0.0065, -sin(angle) * radius)
 		ch.rotation = Vector3(-PI / 2, angle - PI / 2, 0)
 		parent.add_child(ch)

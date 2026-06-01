@@ -29,11 +29,10 @@ signal roll_finnished(total: int)
 # === Constants ===
 
 const DIE_SIZE: float = 2.2
-const SETTLE_LINEAR: float = 0.18
-const SETTLE_ANGULAR: float = 0.25
-const SETTLE_HOLD: float = 0.25   # seconds of stillness before the result is read
-const MAX_ROLL_TIME: float = 4.0  # safety cap
-const WALL_THICKNESS: float = 0.5
+const SETTLE_LINEAR: float = 0.6  # max horizontal motion to count a die as "down and calm"
+const SETTLE_HOLD: float = 0.2    # seconds calm before the result is forced
+const MAX_ROLL_TIME: float = 2.5  # safety cap
+const WALL_THICKNESS: float = 1.5
 
 # === Private variables ===
 
@@ -68,7 +67,7 @@ func _physics_process(delta: float) -> void:
 	_roll_time += delta
 	var settled: bool = true
 	for d: DiceD6 in _dice:
-		if not is_instance_valid(d) or not d.is_settled(SETTLE_LINEAR, SETTLE_ANGULAR):
+		if not is_instance_valid(d) or not d.is_settled(SETTLE_LINEAR):
 			settled = false
 			break
 	_still_time = _still_time + delta if settled else 0.0
@@ -82,8 +81,8 @@ func roll() -> void:
 	_spawn_dice(false)
 	for d: DiceD6 in _dice:
 		d.freeze = false
-		d.linear_velocity = Vector3(randf_range(-3, 3), randf_range(-4, -1), randf_range(-3, 3))
-		d.angular_velocity = Vector3(randf_range(-12, 12), randf_range(-12, 12), randf_range(-12, 12))
+		d.linear_velocity = Vector3(randf_range(-2, 2), randf_range(-2, 0), randf_range(-2, 2))
+		d.angular_velocity = Vector3(randf_range(-8, 8), randf_range(-8, 8), randf_range(-8, 8))
 	_rolling = true
 	_roll_time = 0.0
 	_still_time = 0.0
@@ -122,7 +121,12 @@ func _finalize_roll() -> void:
 	_rolling = false
 	var faces: Array[int] = []
 	for d: DiceD6 in _dice:
-		faces.append(d.top_face() if is_instance_valid(d) else 1)
+		if not is_instance_valid(d):
+			faces.append(1)
+			continue
+		var value: int = d.top_face()
+		d.settle_to_face(value)  # snap flat + freeze → no more teetering
+		faces.append(value)
 	_apply_result(faces)
 	roll_finnished.emit(_total(faces))
 
@@ -155,27 +159,28 @@ func _spawn_dice(resting: bool) -> void:
 
 	var count: int = maxi(1, dice_count)
 	var cols: int = int(ceil(sqrt(float(count))))
-	var spacing: float = DIE_SIZE * 1.3
+	var rows: int = int(ceil(float(count) / float(cols)))
 	var half_x: float = roller_size.x * 0.5 - DIE_SIZE
 	var half_z: float = roller_size.z * 0.5 - DIE_SIZE
+	# Maximum spacing: spread the grid across the full usable box footprint.
+	var spacing_x: float = (2.0 * half_x / float(cols - 1)) if cols > 1 else 0.0
+	var spacing_z: float = (2.0 * half_z / float(rows - 1)) if rows > 1 else 0.0
 
 	for i: int in count:
 		var d := DiceD6.new()
 		d.size = DIE_SIZE
 		d.freeze = resting
 		_root.add_child(d)
+		var col: int = i % cols
+		var row: int = i / cols
+		var gx: float = (col - (cols - 1) * 0.5) * spacing_x
+		var gz: float = (row - (rows - 1) * 0.5) * spacing_z
 		if resting:
-			var col: int = i % cols
-			var row: int = i / cols
-			d.position = Vector3(
-				(col - (cols - 1) * 0.5) * spacing,
-				DIE_SIZE * 0.5 + 0.05,
-				(row - (cols - 1) * 0.5) * spacing)
+			d.position = Vector3(gx, DIE_SIZE * 0.5 + 0.05, gz)
 		else:
-			d.position = Vector3(
-				randf_range(-half_x, half_x),
-				roller_size.y * 0.5 + i * DIE_SIZE * 0.6,
-				randf_range(-half_z, half_z))
+			# Drop from a high grid, capped below the wall top so nothing escapes.
+			var drop_y: float = minf(roller_size.y * 0.7 + (i % 3) * DIE_SIZE, roller_size.y - DIE_SIZE)
+			d.position = Vector3(gx, drop_y, gz)
 			d.rotation = Vector3(randf() * TAU, randf() * TAU, randf() * TAU)
 		_dice.append(d)
 
