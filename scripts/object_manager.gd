@@ -30,6 +30,10 @@ var selection_enabled: bool = true
 # Undo/redo history (injected by main.gd); move and rotate gestures recorded here.
 var undo_manager: UndoManager = null
 
+# Hover highlight: glows the selectable currently under the cursor so it is
+# unambiguous which object a click will select.
+var _hover_glow: HoverGlow = HoverGlow.new()
+
 # Clipboard for copy/paste
 var _clipboard: Array[Node3D] = []  # Stores references to copied objects for duplication
 
@@ -199,6 +203,8 @@ func _input(event: InputEvent) -> void:
 			_update_box_selection(event.position)
 		elif _is_measuring:
 			_update_measurement(event.position)
+		else:
+			_update_hover(event.position)
 
 	# Rotation: hold R key for continuous rotation - requires selection
 	# Only activate if Shift is NOT pressed (Shift+R is for group rotation in main.gd)
@@ -347,6 +353,14 @@ func _get_object_at_position(screen_pos: Vector2) -> Node3D:
 	return null
 
 
+## Updates the hover glow to the selectable currently under the cursor (or none).
+func _update_hover(screen_pos: Vector2) -> void:
+	if not selection_enabled:
+		_hover_glow.set_target(null)
+		return
+	_hover_glow.set_target(_get_object_at_position(screen_pos))
+
+
 ## Apply highlight to an object to show it's selected
 ## Uses a visual ring overlay instead of material modification to avoid Godot material bugs
 func _highlight_object(obj: Node3D) -> void:
@@ -404,6 +418,7 @@ func _start_box_selection(screen_pos: Vector2, alt_pressed: bool) -> void:
 	# Skip box selection if disabled (e.g., map layout mode)
 	if not selection_enabled:
 		return
+	_hover_glow.set_target(null)
 
 	# If not holding Alt, clear current selection
 	if not alt_pressed:
@@ -517,6 +532,7 @@ func _start_dragging(screen_pos: Vector2) -> void:
 		return
 
 	_is_dragging = true
+	_hover_glow.set_target(null)
 	_drag_start_positions.clear()
 
 	# Store start positions for all selected objects and lift them
@@ -902,6 +918,7 @@ func _update_drag(screen_pos: Vector2) -> void:
 
 ## Start measuring distance from a point on the table
 func _start_measuring(screen_pos: Vector2) -> void:
+	_hover_glow.set_target(null)
 	var camera = get_viewport().get_camera_3d()
 	if not camera:
 		return
