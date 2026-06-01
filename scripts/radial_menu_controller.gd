@@ -15,6 +15,9 @@ var radial_menu: RadialMenu = null
 ## Reference to the object manager for selection info
 var object_manager: Node = null
 
+## Reference to the undo/redo history (injected by main.gd)
+var undo_manager: UndoManager = null
+
 ## Reference to the OPR army manager
 var army_manager: OPRArmyManager = null
 
@@ -487,26 +490,55 @@ func _roll_attack(context: Dictionary) -> void:
 	print("Roll attack for: %s" % game_unit.get_name())
 
 
-func _delete_model(context: Dictionary) -> void:
-	var model = context.get("model_instance") as ModelInstance
-	if not model:
+## Deletes (hides) a set of selected objects as one undoable action.
+##
+## Unit models use casualty semantics (is_alive=false, wounds=0, hidden) and sync
+## to peers via NetworkManager.broadcast_model_wounds(). Plain nodes (custom minis
+## / terrain) are hidden locally only — matching the existing, non-networked
+## generic/terrain delete. Nothing is freed, so the whole batch stays undoable.
+func delete_objects(objects: Array) -> void:
+	if objects.is_empty():
 		return
 
-	# Mark as dead
-	model.is_alive = false
-	model.wounds_current = 0
+	var models: Array[ModelInstance] = []
+	var prev_wounds: Array[int] = []
+	var prev_alive: Array[bool] = []
+	var nodes: Array[Node3D] = []
 
-	# Hide the node
-	if model.node and is_instance_valid(model.node):
-		model.node.visible = false
-		model.node.set_meta("deleted", true)
+	for obj in objects:
+		if not (obj is Node3D) or not is_instance_valid(obj):
+			continue
+		var model: ModelInstance = UnitUtils.get_model_instance(obj)
+		if model:
+			models.append(model)
+			prev_wounds.append(model.wounds_current)
+			prev_alive.append(model.is_alive)
+		else:
+			nodes.append(obj)
 
-	model_deleted.emit(model)
-	print("Deleted model %d" % (model.model_index + 1))
+	if models.is_empty() and nodes.is_empty():
+		return
 
-	# Broadcast model death to remote peers (wounds=0, alive=false)
-	if network_manager:
-		network_manager.broadcast_model_wounds(model)
+	# DeleteAction.redo() performs the initial deletion (hide + broadcast), so the
+	# deletion logic lives in exactly one place.
+	var action := UndoManager.DeleteAction.new(models, prev_wounds, prev_alive, nodes, network_manager)
+	action.redo()
+
+	for model in models:
+		model_deleted.emit(model)
+	print("Deleted %d selected object(s)" % (models.size() + nodes.size()))
+
+	if undo_manager:
+		undo_manager.push(action)
+
+
+func _delete_model(context: Dictionary) -> void:
+	var model = context.get("model_instance") as ModelInstance
+	if not model or not model.node:
+		return
+	# Route through the shared multi-delete path so the single-model delete is
+	# undoable too (it already used reversible casualty semantics).
+	delete_objects([model.node])
 
 
 func _delete_unit(context: Dictionary) -> void:

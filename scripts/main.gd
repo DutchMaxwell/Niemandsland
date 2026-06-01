@@ -43,6 +43,8 @@ const DEBUG_MODE: bool = false
 # ==============================================================================
 
 @onready var object_manager: Node3D = $ObjectManager
+## Undo/redo history for table actions (created in _init_radial_menu).
+var undo_manager: UndoManager = null
 @onready var table: StaticBody3D = $Table
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var directional_light: DirectionalLight3D = $DirectionalLight3D
@@ -91,8 +93,21 @@ const GROUP_ROTATION_BROADCAST_INTERVAL: float = 0.1  # 10 Hz
 @onready var quick_roll_button: Button = %QuickRollButton
 @onready var _dice_log_scroll: ScrollContainer = %DiceLogScroll
 @onready var _dice_log_vbox: VBoxContainer = %DiceLogVBox
-@onready var dice_count_spinner: SpinBox = %DiceCountSpinner
 @onready var current_dice_label: Label = %CurrentDiceLabel
+@onready var _dice_vbox: VBoxContainer = $UI/HUD/DiceRollerPanel/VBox
+
+# Dice count selection (click-based; replaces the old SpinBox so keyboard focus
+# never leaves the table and WASD always reaches the camera).
+const MIN_DICE: int = 1
+const MAX_DICE: int = 50
+const DICE_PRESET_MAX: int = 10
+const DEFAULT_DICE_COUNT: int = 6
+const CURRENT_ROLL_ICON_SIZE: int = 26
+const DICE_LOG_ICON_SIZE: int = 16
+var _dice_count: int = DEFAULT_DICE_COUNT
+var _dice_preset_buttons: Array[Button] = []
+var _dice_count_value_label: Label = null
+var _current_roll_column: VBoxContainer = null
 
 # Network UI elements
 @onready var network_manager: Node = %NetworkManager
@@ -232,10 +247,12 @@ func _ready() -> void:
 	quick_roll_button.pressed.connect(_on_quick_roll_button_pressed)
 	dice_roller_control.roll_finnished.connect(_on_roller_finished)
 	dice_roller_control.roll_started.connect(_on_roller_started)
-	dice_count_spinner.value_changed.connect(_on_dice_count_changed)
 
-	# Initialize dice roller with default count
-	_update_dice_set(int(dice_count_spinner.value))
+	# Build the click-based dice count selector and the success readout column,
+	# then initialise the dice set with the default count.
+	_build_dice_count_selector()
+	_build_current_roll_column()
+	_set_dice_count(DEFAULT_DICE_COUNT)
 
 	# Connect network UI
 	host_button.pressed.connect(_on_host_pressed)
@@ -486,6 +503,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		if not event.pressed:
 			# Stop group rotation when R or Shift is released
 			if event.keycode == KEY_R or event.keycode == KEY_SHIFT:
+				if _is_group_rotating:
+					object_manager.commit_rotation_capture()
 				_is_group_rotating = false
 			return
 
@@ -520,7 +539,21 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		# Rotate selected group around first object (Shift+R) - continuous rotation
 		elif event.keycode == KEY_R and event.shift_pressed:
+			if not _is_group_rotating:
+				object_manager.begin_rotation_capture()
 			_is_group_rotating = true
+			get_viewport().set_input_as_handled()
+		# Undo (Ctrl+Z)
+		elif event.keycode == KEY_Z and event.ctrl_pressed and not event.shift_pressed:
+			_undo()
+			get_viewport().set_input_as_handled()
+		# Redo (Ctrl+Shift+Z or Ctrl+Y)
+		elif (event.keycode == KEY_Z and event.ctrl_pressed and event.shift_pressed) or (event.keycode == KEY_Y and event.ctrl_pressed):
+			_redo()
+			get_viewport().set_input_as_handled()
+		# Delete selected objects (Delete / Backspace)
+		elif event.keycode == KEY_DELETE or event.keycode == KEY_BACKSPACE:
+			_delete_selected_objects()
 			get_viewport().set_input_as_handled()
 		# Lighting Presets (F1-F5)
 		elif event.keycode == KEY_F1:
@@ -549,6 +582,29 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			else:
 				lighting_panel.show()
 			get_viewport().set_input_as_handled()
+
+
+## Reverts the most recent undoable action (Ctrl+Z).
+func _undo() -> void:
+	if undo_manager and undo_manager.can_undo():
+		print("Undo: %s" % undo_manager.undo())
+
+
+## Re-applies the most recently undone action (Ctrl+Y / Ctrl+Shift+Z).
+func _redo() -> void:
+	if undo_manager and undo_manager.can_redo():
+		print("Redo: %s" % undo_manager.redo())
+
+
+## Deletes every currently selected object as one undoable action (Delete key).
+func _delete_selected_objects() -> void:
+	if not object_manager or not radial_menu_controller:
+		return
+	var selected: Array[Node3D] = object_manager.get_selected_objects()
+	if selected.is_empty():
+		return
+	radial_menu_controller.delete_objects(selected.duplicate())
+	object_manager.deselect_all()
 
 
 func _process(delta: float) -> void:
@@ -871,12 +927,12 @@ func _on_drag_ended() -> void:
 
 ## Dice Roller Plugin handlers
 func _on_roll_button_pressed() -> void:
-	_update_dice_set(int(dice_count_spinner.value))
+	_update_dice_set(_dice_count)
 	dice_roller_control.roll()
 
 
 func _on_quick_roll_button_pressed() -> void:
-	_update_dice_set(int(dice_count_spinner.value))
+	_update_dice_set(_dice_count)
 	dice_roller_control.quick_roll()
 
 
@@ -891,13 +947,18 @@ func _on_roller_finished(result: int) -> void:
 	roll_button.disabled = false
 	AudioManager.play_sfx(AudioManager.SFXType.DICE_IMPACT)
 
-	# Skip broadcast when showing a remote player's roll (prevents ping-pong loop)
+	var per_dice: Dictionary = dice_roller_control.per_dice_result()
+	var counts: Dictionary = _count_faces(per_dice)
+	# Always update the success column for the most recent roll (local or remote).
+	_populate_current_roll_column(counts)
+
+	# Skip logging/broadcast when showing a remote player's roll: the remote
+	# handler already logged it, and re-broadcasting would cause a ping-pong loop.
 	if _is_showing_remote_roll:
 		_is_showing_remote_roll = false
 		return
 
-	var per_dice: Dictionary = dice_roller_control.per_dice_result()
-	_add_dice_log_entry("Du", per_dice.size(), per_dice)
+	_add_dice_log_entry("Du", per_dice.size(), counts)
 
 	# Broadcast dice roll to remote players
 	if network_manager.is_multiplayer_active():
@@ -907,8 +968,83 @@ func _on_roller_finished(result: int) -> void:
 		network_manager.broadcast_dice_roll(values.size(), values, result)
 
 
-func _on_dice_count_changed(new_value: float) -> void:
-	_update_dice_set(int(new_value))
+## Builds the click-based dice count selector (preset buttons 1..N plus
+## increment buttons) and inserts it right below the panel title.
+func _build_dice_count_selector() -> void:
+	var selector := VBoxContainer.new()
+	selector.name = "DiceCountSelector"
+	selector.add_theme_constant_override("separation", 4)
+
+	# Preset buttons 1..DICE_PRESET_MAX in a 5-column grid.
+	var grid := GridContainer.new()
+	grid.columns = 5
+	grid.add_theme_constant_override("h_separation", 2)
+	grid.add_theme_constant_override("v_separation", 2)
+	_dice_preset_buttons.clear()
+	for n: int in range(1, DICE_PRESET_MAX + 1):
+		var btn := Button.new()
+		btn.text = str(n)
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.custom_minimum_size = Vector2(0, 26)
+		btn.pressed.connect(_on_dice_preset_pressed.bind(n))
+		grid.add_child(btn)
+		_dice_preset_buttons.append(btn)
+	selector.add_child(grid)
+
+	# Increment row: -10 -5 -1 [count] +1 +5 +10
+	var inc_row := HBoxContainer.new()
+	inc_row.add_theme_constant_override("separation", 2)
+	for delta: int in [-10, -5, -1]:
+		inc_row.add_child(_make_dice_delta_button(delta))
+	_dice_count_value_label = Label.new()
+	_dice_count_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_dice_count_value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_dice_count_value_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_dice_count_value_label.custom_minimum_size = Vector2(44, 0)
+	_dice_count_value_label.add_theme_font_size_override("font_size", 20)
+	inc_row.add_child(_dice_count_value_label)
+	for delta: int in [1, 5, 10]:
+		inc_row.add_child(_make_dice_delta_button(delta))
+	selector.add_child(inc_row)
+
+	_dice_vbox.add_child(selector)
+	_dice_vbox.move_child(selector, 1)  # directly below the "Dice Roller" title
+
+
+## Creates one +N / -N increment button for the dice selector.
+func _make_dice_delta_button(delta: int) -> Button:
+	var btn := Button.new()
+	btn.text = "+%d" % delta if delta > 0 else str(delta)
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.custom_minimum_size = Vector2(0, 26)
+	btn.pressed.connect(_on_dice_delta_pressed.bind(delta))
+	return btn
+
+
+func _on_dice_preset_pressed(count: int) -> void:
+	_set_dice_count(count)
+
+
+func _on_dice_delta_pressed(delta: int) -> void:
+	_set_dice_count(_dice_count + delta)
+
+
+## Sets the dice count (clamped), rebuilds the dice set and refreshes the display.
+func _set_dice_count(count: int) -> void:
+	_dice_count = clampi(count, MIN_DICE, MAX_DICE)
+	_update_dice_set(_dice_count)
+	_update_dice_count_display()
+
+
+## Updates the big count label and highlights the matching preset button.
+func _update_dice_count_display() -> void:
+	if _dice_count_value_label:
+		_dice_count_value_label.text = str(_dice_count)
+	for i: int in _dice_preset_buttons.size():
+		var is_active: bool = (i + 1) == _dice_count
+		_dice_preset_buttons[i].modulate = Color(0.55, 0.85, 1.0) if is_active else Color.WHITE
 
 
 ## Update the dice set with the specified number of D6 dice
@@ -933,26 +1069,23 @@ func _update_dice_set(count: int) -> void:
 	)
 
 
-## Add a formatted dice roll entry to the dice log
-func _add_dice_log_entry(player_name: String, dice_count: int, per_dice: Dictionary) -> void:
-	var counts: Dictionary = {6: 0, 5: 0, 4: 0, 3: 0, 2: 0, 1: 0}
-	for dice_name: String in per_dice:
-		var value: int = int(per_dice[dice_name])
-		if value in counts:
-			counts[value] += 1
-
-	var parts: Array[String] = []
-	for face: int in [6, 5, 4, 3, 2, 1]:
-		if counts[face] > 0:
-			parts.append("%dx %d" % [counts[face], face])
-
+## Adds a visual dice-roll entry to the log: a horizontal strip showing each
+## face (6 down to 1) as a die icon followed by its count.
+func _add_dice_log_entry(player_name: String, dice_count: int, counts: Dictionary) -> void:
 	var time_str: String = Time.get_time_string_from_system().substr(0, 5)
-	var text: String = "[%s] %s (%dd6): %s" % [time_str, player_name, dice_count, ", ".join(parts)]
 
-	var entry := Label.new()
-	entry.text = text
-	entry.add_theme_font_size_override("font_size", 13)
-	entry.autowrap_mode = TextServer.AUTOWRAP_WORD
+	var entry := HBoxContainer.new()
+	entry.add_theme_constant_override("separation", 4)
+
+	var head := Label.new()
+	head.text = "%s %s (%dd6)" % [time_str, player_name, dice_count]
+	head.add_theme_font_size_override("font_size", 12)
+	head.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	entry.add_child(head)
+
+	for face: int in [6, 5, 4, 3, 2, 1]:
+		entry.add_child(_make_success_row(face, counts.get(face, 0), DICE_LOG_ICON_SIZE))
+
 	_dice_log_vbox.add_child(entry)
 
 	# Auto-scroll to bottom
@@ -964,6 +1097,75 @@ func _add_dice_log_entry(player_name: String, dice_count: int, per_dice: Diction
 func _clear_dice_log() -> void:
 	for child: Node in _dice_log_vbox.get_children():
 		child.queue_free()
+
+
+## Builds the success readout column to the left of the dice box by reparenting
+## the dice control into a horizontal row: [success column | dice box].
+func _build_current_roll_column() -> void:
+	var box: Control = dice_roller_control
+	var parent: Node = box.get_parent()
+	var idx: int = box.get_index()
+
+	var row := HBoxContainer.new()
+	row.name = "DiceBoxRow"
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 6)
+
+	_current_roll_column = VBoxContainer.new()
+	_current_roll_column.name = "CurrentRollColumn"
+	_current_roll_column.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_current_roll_column.add_theme_constant_override("separation", 2)
+
+	parent.remove_child(box)
+	parent.add_child(row)
+	parent.move_child(row, idx)
+	row.add_child(_current_roll_column)
+	row.add_child(box)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	_populate_current_roll_column({})
+
+
+## Fills the current-roll column with one row per face (6 down to 1); faces with
+## no hits are dimmed so the actual results stand out.
+func _populate_current_roll_column(counts: Dictionary) -> void:
+	if not _current_roll_column:
+		return
+	for child: Node in _current_roll_column.get_children():
+		child.queue_free()
+	for face: int in [6, 5, 4, 3, 2, 1]:
+		_current_roll_column.add_child(_make_success_row(face, counts.get(face, 0), CURRENT_ROLL_ICON_SIZE))
+
+
+## One "die icon + xN" row; dimmed when the count is zero.
+func _make_success_row(face: int, count: int, icon_size: int) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 3)
+	row.modulate.a = 1.0 if count > 0 else 0.32
+
+	var icon := DieFaceIcon.new()
+	icon.face = face
+	icon.custom_minimum_size = Vector2(icon_size, icon_size)
+	icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(icon)
+
+	var lbl := Label.new()
+	lbl.text = "×%d" % count
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", maxi(12, icon_size - 10))
+	row.add_child(lbl)
+	return row
+
+
+## Counts how many dice show each face (1-6) from a name->value result map.
+func _count_faces(per_dice: Dictionary) -> Dictionary:
+	var counts: Dictionary = {6: 0, 5: 0, 4: 0, 3: 0, 2: 0, 1: 0}
+	for dice_name: String in per_dice:
+		var value: int = int(per_dice[dice_name])
+		if value in counts:
+			counts[value] += 1
+	return counts
 
 
 func _get_random_table_position() -> Vector3:
@@ -1270,13 +1472,12 @@ func _on_remote_dice_rolled(peer_id: int, dice_count: int, results: Array, total
 	for i: int in range(results.size()):
 		per_dice["D6_%d" % (i + 1)] = int(results[i])
 
-	_add_dice_log_entry("Spieler %d" % peer_id, dice_count, per_dice)
+	_add_dice_log_entry("Spieler %d" % peer_id, dice_count, _count_faces(per_dice))
 
 	# Show 3D dice visualization for remote roll
 	# Guard prevents roll_finnished from re-broadcasting
 	_is_showing_remote_roll = true
-	if dice_count != int(dice_count_spinner.value):
-		_update_dice_set(dice_count)
+	_update_dice_set(dice_count)
 	var int_results: Array[int] = []
 	for v: Variant in results:
 		int_results.append(int(v))
@@ -1836,8 +2037,9 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
 	# Store army
 	opr_army_manager.armies[player_id] = army
 
-	# Spawn the army on tray (position determined by player ID)
-	var spawned = opr_army_manager.spawn_army(army)
+	# Spawn the army on tray (position determined by player ID).
+	# Awaitable: on-demand models are downloaded up front before spawning.
+	var spawned = await opr_army_manager.spawn_army(army)
 	print("Spawned %d models for army '%s' on Player %d's tray" % [spawned.size(), army.name, player_id])
 
 	# Sync to other peers if in multiplayer
@@ -2494,6 +2696,14 @@ func _init_radial_menu() -> void:
 
 	# Pass terrain overlay reference for objective capture / recolor
 	radial_menu_controller.terrain_overlay = terrain_overlay
+
+	# Create the shared undo/redo history and wire it to the systems that record
+	# actions: object manager (move/rotate gestures) and radial controller (delete).
+	undo_manager = UndoManager.new()
+	undo_manager.name = "UndoManager"
+	add_child(undo_manager)
+	object_manager.undo_manager = undo_manager
+	radial_menu_controller.undo_manager = undo_manager
 
 	# Pass stats tooltip reference for displaying unit stats
 	radial_menu_controller.stats_tooltip = opr_stats_tooltip

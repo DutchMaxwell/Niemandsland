@@ -73,8 +73,9 @@ python batch_generate.py --faction wormhole_daemons_of_war --max-attempts 5
 
 Per faction: pick a hero mini → generate it (quality-gate loop) and persist as
 `_reference.webp` → generate the rest with that image as a style anchor → quality-gate
-each (technical + GW-IP) with re-roll on FAIL → TRELLIS → optimize (mesh decimation +
-1024² texture) → export to `assets/miniatures/<faction>/glb/<NN>_<Name>.glb`. Already
+each (technical + GW-IP) with re-roll on FAIL → TRELLIS → optimize (light mesh
+decimation + 2048² texture; quality-first — see docs/ASSET_DELIVERY.md) → export to
+`assets/miniatures/<faction>/glb/<NN>_<Name>.glb`. Already
 present GLBs are skipped (resume); sessions live under `state/<faction>_<timestamp>/`
 (git-ignored).
 
@@ -122,7 +123,7 @@ white bg) and GW-IP violations; an image with `ip_concerns` is re-rolled.
 | `quality_gate.py` | Vision-LLM quality + IP check |
 | `hero_workflow.py` | Hero/class-anchor selection + reference persistence + unit classification |
 | `trellis_bridge.py` | Bridge to `assets/3d_pipeline/trellis_core.py` + convert auto-recovery |
-| `glb_optimizer.py` | Mesh decimation + texture resize (`bin/gltfpack-linux`) |
+| `glb_optimizer.py` | Light mesh decimation + texture resize, 2048² quality-first (`bin/gltfpack-linux`) |
 | `pipeline_state.py` | Session + unit state (`state/`) |
 | `exporter.py` | Export approved GLBs + `units.json` to OpenTTS |
 | `terrain_*.py` | Experimental terrain-piece generation |
