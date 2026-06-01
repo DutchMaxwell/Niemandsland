@@ -3,20 +3,22 @@ GLB-Optimierung fuer OpenTTS-Tabletop-Minis
 ============================================
 
 TRELLIS produziert GLBs mit ~500k Tris und 4096^2 Texturen (~20MB pro Mini).
-Fuer 16mm-Wargaming-Minis ist das ~10x ueberdimensioniert. Diese Pipeline
-dezimiert das Mesh und verkleinert die Texturen, ohne sichtbaren Qualitaets-
-verlust auf typischer Spielfeld-Distanz.
+
+Die Modelle werden zur Laufzeit ON-DEMAND geladen (siehe docs/ASSET_DELIVERY.md),
+nicht ins Repo/den Build gebuendelt. Die Dateigroesse ist also KEIN
+Repository-Limit mehr — diese Stufe macht deshalb KEINE Qualitaets-Kompromisse
+fuer die Repo-Groesse. Sie normalisiert die TRELLIS-Ausgabe nur leicht fuer
+brauchbare Render-Performance (viele Minis gleichzeitig) und Transfergroesse.
 
 Workflow pro GLB:
-    1. gltfpack -si 0.1 -noq  (Mesh-Decimation auf ~10%, KEINE Quantisierung)
-    2. Pillow Texture-Resize auf max 1024^2, WebP Q85
+    1. gltfpack -si 0.6 -noq  (leichte Mesh-Decimation, KEINE Quantisierung)
+    2. Pillow Texture-Resize auf max 2048^2, WebP Q90
 
-Wichtig: -noq verhindert die KHR_mesh_quantization-Extension. Godot 4.6.1
-(Flatpak) lehnt GLBs mit dieser Extension als required ab.
+Stellschrauben (optimize_glb-Args): fuer Hero-/Display-Stuecke
+simplify_ratio=1.0 (keine Decimation) und texture_max_dim=4096 setzen.
 
-Typische Ergebnisse:
-    19 MB -> 2.5 MB (-87%)
-    854 Units (vorher ~16 GB) -> ~2 GB Repository-Footprint
+Wichtig: -noq verhindert die KHR_mesh_quantization-Extension, die der
+Laufzeit-GLTF-Loader (GLTFDocument) sonst als 'required' ablehnen kann.
 """
 
 from __future__ import annotations
@@ -38,9 +40,11 @@ from PIL import Image
 # KONSTANTEN
 # =============================================================================
 
-DEFAULT_SIMPLIFY_RATIO: float = 0.1
-DEFAULT_TEXTURE_MAX_DIM: int = 1024
-DEFAULT_WEBP_QUALITY: int = 85
+# Quality-first defaults: models are delivered on-demand (not bundled), so these
+# target visual quality + runtime performance — no longer repository size.
+DEFAULT_SIMPLIFY_RATIO: float = 0.6
+DEFAULT_TEXTURE_MAX_DIM: int = 2048
+DEFAULT_WEBP_QUALITY: int = 90
 
 GLB_MAGIC: bytes = b"glTF"
 GLB_CHUNK_JSON: int = 0x4E4F534A  # "JSON"
@@ -228,7 +232,7 @@ def optimize_glb(
     Args:
         input_path: Quell-GLB
         output_path: Ziel-GLB (wird ueberschrieben). Darf gleich input_path sein.
-        simplify_ratio: gltfpack -si Wert (0.1 = 10% der Tris behalten)
+        simplify_ratio: gltfpack -si Wert (0.6 = 60% der Tris behalten; 1.0 = keine Decimation)
         texture_max_dim: Maximale Texture-Kantenlaenge in Pixeln
         webp_quality: WebP-Encode-Quality (0-100, 85 = sauberer Kompromiss)
 
