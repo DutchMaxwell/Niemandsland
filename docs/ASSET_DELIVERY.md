@@ -1,0 +1,88 @@
+# Asset Delivery — on-demand 3D models (plan)
+
+**Status: decided / planned — not yet implemented.** Sequence agreed with the
+owner: **(1) capture this plan → (2) prototype → (3) hosting on GitHub Releases**
+(chosen because it has no extra cost, including no egress/traffic fees).
+
+## Goal
+
+Keep the repository *and* the shipped build lean by **not bundling** the 3D
+miniature models. Instead, deliver them like Tabletop Simulator does: download an
+asset over the internet on first use, cache it locally, and only ever fetch the
+models an imported army actually needs. Today's ~0.5 GB of GLBs would grow to
+several GB at the full 855-unit scale — untenable to bundle.
+
+**Important consequence:** because size is no longer a repo/build constraint, we
+**no longer compromise model quality for size.** The `model_forge` optimizer
+defaults were raised accordingly (light decimation + 2048² textures instead of
+10 %/1024²; see `tools/model_forge/glb_optimizer.py`). Source quality stays full.
+
+## What we already have (reuse, don't rebuild)
+
+- **`scripts/tts_download_manager.gd`** — a working HTTP download + cache manager
+  (`user://tts_cache/…`, `is_cached`/`find_cached_file`, progress signals, chunked
+  HTTPRequest). This is exactly the on-demand pattern, already built for TTS imports.
+- **Runtime GLB loading** via `GLTFDocument.append_from_file()` is already used
+  (`object_manager.gd`, `terrain_library.gd`) — so downloaded GLBs load at runtime
+  with **no build-time import** needed. (This is usually the hard part.)
+- `opr_army_manager` currently loads *bundled* GLBs via `ResourceLoader.load()`;
+  the on-demand path switches those units to the `GLTFDocument` runtime path.
+
+## Architecture
+
+```
+Army import (OPR API)  →  unit list
+        │
+        ▼
+   Manifest (small JSON, our data)     unit → { url, sha256, size }
+        │  "which models does this army need?"
+        ▼
+ AssetDownloadManager  →  user://model_cache/<sha256>.glb   (fetch only missing, parallel, progress)
+        │  (verify sha256)
+        ▼
+ GLTFDocument.append_from_file()  →  spawn (existing scaling + _brighten_trellis_materials)
+        │
+        └─ no model in manifest? → existing primitive/placeholder fallback
+```
+
+- **Content-addressed** storage (`<sha256>.glb`): immutable, dedupes across
+  factions/armies, cache-forever, integrity-checkable.
+- The **manifest** maps our model identity → URL/hash/size. It is *our* data
+  (model↔unit mapping), **not OPR data** — OPR stats/base sizes still come from the
+  API (see `docs/PRE_RELEASE_LICENSING.md`).
+
+## Hosting
+
+- **Chosen: GitHub Releases.** Free, CDN-backed, files up to 2 GB, permissive CORS
+  (browser-friendly), **no egress/traffic cost**. Publish GLBs (content-addressed)
+  as release assets; the manifest can live in the repo or the release.
+- **If it ever outgrows that: Cloudflare R2** (free egress, cheap storage,
+  S3-compatible, configurable CORS). Avoid serving large assets from the Fly relay
+  (egress cost; couples assets to the game server).
+
+## Migration path (incremental, low-risk)
+
+1. Generalize `tts_download_manager` → `asset_download_manager`; add
+   `model_library.gd` (resolve unit→URL via manifest, download, cache, runtime
+   GLTF load). **Keep the bundled-GLB path as a fallback** so nothing breaks.
+2. `model_forge` gains a **publish step**: upload GLBs (content-addressed) to the
+   GitHub release + (re)generate the manifest. (Replaces writing `units.json`.)
+3. Switch `opr_army_manager` resolution order: **manifest/CDN → bundled fallback →
+   placeholder**.
+4. Once stable: remove GLBs from the repo (+ history scrub, see licensing doc) →
+   lean repo and build; the web build no longer needs the ~1.3 GB `.pck`.
+
+## Web / HTML5 notes
+
+- `HTTPRequest` works in-browser; the asset host must send **CORS** headers (GitHub
+  Releases do; R2 is configurable).
+- `user://` in the web export is IndexedDB-backed, so the cache persists
+  per-origin (subject to the browser's storage limits).
+
+## Later: same pattern for terrain & map sheets
+
+The owner wants terrain and **map sheets** (table textures / play mats) delivered
+the same way. They are larger, less-frequently-used assets — ideal for on-demand.
+`model_forge` already generates battle maps at 1536×1024 (`app.py`); with on-demand
+delivery these can also be produced at higher quality without bloating the build.
+Extend the manifest with `terrain/` and `maps/` sections when we get there.
