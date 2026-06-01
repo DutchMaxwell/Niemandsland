@@ -43,6 +43,8 @@ const DEBUG_MODE: bool = false
 # ==============================================================================
 
 @onready var object_manager: Node3D = $ObjectManager
+## Undo/redo history for table actions (created in _init_radial_menu).
+var undo_manager: UndoManager = null
 @onready var table: StaticBody3D = $Table
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var directional_light: DirectionalLight3D = $DirectionalLight3D
@@ -481,6 +483,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		if not event.pressed:
 			# Stop group rotation when R or Shift is released
 			if event.keycode == KEY_R or event.keycode == KEY_SHIFT:
+				if _is_group_rotating:
+					object_manager.commit_rotation_capture()
 				_is_group_rotating = false
 			return
 
@@ -515,7 +519,21 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		# Rotate selected group around first object (Shift+R) - continuous rotation
 		elif event.keycode == KEY_R and event.shift_pressed:
+			if not _is_group_rotating:
+				object_manager.begin_rotation_capture()
 			_is_group_rotating = true
+			get_viewport().set_input_as_handled()
+		# Undo (Ctrl+Z)
+		elif event.keycode == KEY_Z and event.ctrl_pressed and not event.shift_pressed:
+			_undo()
+			get_viewport().set_input_as_handled()
+		# Redo (Ctrl+Shift+Z or Ctrl+Y)
+		elif (event.keycode == KEY_Z and event.ctrl_pressed and event.shift_pressed) or (event.keycode == KEY_Y and event.ctrl_pressed):
+			_redo()
+			get_viewport().set_input_as_handled()
+		# Delete selected objects (Delete / Backspace)
+		elif event.keycode == KEY_DELETE or event.keycode == KEY_BACKSPACE:
+			_delete_selected_objects()
 			get_viewport().set_input_as_handled()
 		# Lighting Presets (F1-F5)
 		elif event.keycode == KEY_F1:
@@ -544,6 +562,29 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			else:
 				lighting_panel.show()
 			get_viewport().set_input_as_handled()
+
+
+## Reverts the most recent undoable action (Ctrl+Z).
+func _undo() -> void:
+	if undo_manager and undo_manager.can_undo():
+		print("Undo: %s" % undo_manager.undo())
+
+
+## Re-applies the most recently undone action (Ctrl+Y / Ctrl+Shift+Z).
+func _redo() -> void:
+	if undo_manager and undo_manager.can_redo():
+		print("Redo: %s" % undo_manager.redo())
+
+
+## Deletes every currently selected object as one undoable action (Delete key).
+func _delete_selected_objects() -> void:
+	if not object_manager or not radial_menu_controller:
+		return
+	var selected: Array[Node3D] = object_manager.get_selected_objects()
+	if selected.is_empty():
+		return
+	radial_menu_controller.delete_objects(selected.duplicate())
+	object_manager.deselect_all()
 
 
 func _process(delta: float) -> void:
@@ -2481,6 +2522,14 @@ func _init_radial_menu() -> void:
 
 	# Pass network manager reference for broadcasting state changes
 	radial_menu_controller.network_manager = network_manager
+
+	# Create the shared undo/redo history and wire it to the systems that record
+	# actions: object manager (move/rotate gestures) and radial controller (delete).
+	undo_manager = UndoManager.new()
+	undo_manager.name = "UndoManager"
+	add_child(undo_manager)
+	object_manager.undo_manager = undo_manager
+	radial_menu_controller.undo_manager = undo_manager
 
 	# Pass stats tooltip reference for displaying unit stats
 	radial_menu_controller.stats_tooltip = opr_stats_tooltip

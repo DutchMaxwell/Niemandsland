@@ -27,6 +27,9 @@ var _object_counter: int = 0
 # Selection mode control (can be disabled for map layout mode)
 var selection_enabled: bool = true
 
+# Undo/redo history (injected by main.gd); move and rotate gestures recorded here.
+var undo_manager: UndoManager = null
+
 # Clipboard for copy/paste
 var _clipboard: Array[Node3D] = []  # Stores references to copied objects for duplication
 
@@ -36,6 +39,13 @@ var _rotation_broadcast_timer: float = 0.0
 var _move_broadcast_timer: float = 0.0
 const ROTATION_BROADCAST_INTERVAL: float = 0.066  # ~15 Hz
 const MOVE_BROADCAST_INTERVAL: float = 0.05  # ~20 Hz
+
+# Undo capture: rotation.y per object snapshotted at the start of a rotate
+# gesture; committed as one RotateAction when the gesture ends.
+var _rotation_capture: Dictionary = {}
+# Minimum change before a gesture is recorded as undoable (avoids no-op entries).
+const MOVE_UNDO_EPSILON_M: float = 0.001  # 1 mm
+const ROTATION_UNDO_EPSILON_RAD: float = 0.0001  # ~0.006 degrees
 
 # Throttle for live coherency feedback while dragging (~15 Hz).
 const COHERENCY_UPDATE_INTERVAL: float = 0.066
@@ -194,8 +204,12 @@ func _input(event: InputEvent) -> void:
 	# Only activate if Shift is NOT pressed (Shift+R is for group rotation in main.gd)
 	elif event.is_action_pressed("rotate_object") and _selected_objects.size() > 0:
 		if not Input.is_key_pressed(KEY_SHIFT):
+			if not _is_rotating:
+				begin_rotation_capture()
 			_is_rotating = true
 	elif event.is_action_released("rotate_object"):
+		if _is_rotating:
+			commit_rotation_capture()
 		_is_rotating = false
 
 	# ESC cancels current drag and restores original positions
@@ -570,6 +584,10 @@ func _stop_dragging() -> void:
 		if drop_batch.size() > 0 and _network_manager and _network_manager.is_multiplayer_active():
 			_network_manager.broadcast_move_batch(drop_batch)
 
+		# Record the whole drag as one undoable move (reads _drag_start_positions,
+		# which is cleared further below).
+		_record_move_for_undo()
+
 		# Emit final distance for anchor object
 		if _selected_objects.size() > 0:
 			var anchor = _selected_objects[0]
@@ -612,6 +630,68 @@ func _cancel_drag() -> void:
 	_drag_start_positions.clear()
 	_drag_anchor_position = Vector3.ZERO
 	_destroy_drag_line()
+
+
+## Records the just-finished drag as one undoable MoveAction. No-op if nothing
+## moved or no undo manager is wired. Call before _drag_start_positions is cleared.
+func _record_move_for_undo() -> void:
+	if undo_manager == null:
+		return
+	var objects: Array[Node3D] = []
+	var from_positions: Array[Vector3] = []
+	var to_positions: Array[Vector3] = []
+	var moved: bool = false
+	for obj in _selected_objects:
+		if not is_instance_valid(obj) or not _drag_start_positions.has(obj):
+			continue
+		var start_pos: Vector3 = _drag_start_positions[obj]
+		# Final resting height: static bodies snap to the table (y=0), rigid bodies
+		# drop back down by the lift height applied at drag start.
+		var end_y: float = obj.global_position.y - drag_lift_height if obj is RigidBody3D else 0.0
+		var end_pos: Vector3 = Vector3(obj.global_position.x, end_y, obj.global_position.z)
+		objects.append(obj)
+		from_positions.append(start_pos)
+		to_positions.append(end_pos)
+		if start_pos.distance_to(end_pos) > MOVE_UNDO_EPSILON_M:
+			moved = true
+	if moved and not objects.is_empty():
+		undo_manager.push(UndoManager.MoveAction.new(objects, from_positions, to_positions, _network_manager))
+
+
+## Snapshots rotation.y of the current selection at the start of a rotate gesture.
+func begin_rotation_capture() -> void:
+	_rotation_capture.clear()
+	for obj in _selected_objects:
+		if is_instance_valid(obj):
+			_rotation_capture[obj] = obj.rotation.y
+
+
+## Commits a rotate gesture as one undoable RotateAction. No-op if nothing rotated.
+func commit_rotation_capture() -> void:
+	if undo_manager == null or _rotation_capture.is_empty():
+		_rotation_capture.clear()
+		return
+	var objects: Array[Node3D] = []
+	var from_rot: Array[float] = []
+	var to_rot: Array[float] = []
+	var rotated: bool = false
+	for obj in _rotation_capture:
+		if not is_instance_valid(obj):
+			continue
+		var start_y: float = _rotation_capture[obj]
+		objects.append(obj)
+		from_rot.append(start_y)
+		to_rot.append(obj.rotation.y)
+		if absf(obj.rotation.y - start_y) > ROTATION_UNDO_EPSILON_RAD:
+			rotated = true
+	_rotation_capture.clear()
+	if rotated and not objects.is_empty():
+		undo_manager.push(UndoManager.RotateAction.new(objects, from_rot, to_rot, _network_manager))
+
+
+## Public wrapper to clear the current selection (e.g., after deleting it).
+func deselect_all() -> void:
+	_deselect_all()
 
 
 ## Create drag visualization line and label
