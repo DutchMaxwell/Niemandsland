@@ -176,16 +176,24 @@ def process_faction(
     glb_dir: Path = MINIATURES_DIR / faction / "glb"
     glb_dir.mkdir(parents=True, exist_ok=True)
 
-    # Hero-Unit ermitteln, damit wir sie nicht doppelt verarbeiten
+    # Hero-Unit ermitteln, damit wir sie nicht doppelt verarbeiten.
+    # Bei all_creatures dient die (ggf. extern gepinnte) Hero-Reference nur als
+    # Stil-Anker; jede Unit — auch die Hero-Unit — bekommt ihr eigenes Bild.
+    all_creatures: bool = bool(dl.aesthetic.get("all_creatures", False))
     hero_sel = select_hero_unit(dl)
-    hero_unit_key: str = hero_sel.unit_key if hero_sel else ""
+    hero_unit_key: str = "" if all_creatures else (hero_sel.unit_key if hero_sel else "")
 
     # Class-Anchors: pro Non-Infantry-Klasse (Walker/Vehicle/Aircraft/Titan)
     # eine eigene Reference erzeugen, falls die Fraktion Units dieser Klasse
     # enthaelt und noch keine Reference gespeichert ist.
+    #
+    # Manche Fraktionen sind durchgehend Kreaturen (z.B. Alien Hives): dort ist die
+    # Vehicle/Aircraft/Titan-Klassifizierung falsch und wuerde Bestien als "Fahrzeug"
+    # ankern. `aesthetic.all_creatures: true` (oben gelesen) schaltet das ab — dann
+    # gehen ALLE Units als normale Units durch (Bild landet in images/<key>.png).
     class_anchor_keys: dict[UnitClass, str] = {}
     class_ref_paths: dict[UnitClass, Path] = {}
-    for cls in NON_INFANTRY_CLASSES:
+    for cls in ([] if all_creatures else NON_INFANTRY_CLASSES):
         sel = select_class_anchor(dl, cls)
         if sel is None:
             continue
@@ -243,21 +251,30 @@ def process_faction(
             effective_ref: Path | None = class_ref_paths.get(unit_class, ref_path)
 
             image_path = _images_dir(session) / f"{unit_key}.png"
-            success = _generate_with_quality_loop(
-                prompt=prompt,
-                output_path=image_path,
-                unit_name=unit_name,
-                faction_name=dl.faction_name,
-                unit_description=str(override.get("extra_details", "")) if isinstance(override, dict) else "",
-                image_gen=image_gen,
-                quality_gate=quality_gate,
-                reference_image_path=effective_ref,
-                max_attempts=max_attempts,
-                stats=stats,
-            )
-            if not success:
-                continue
-            image_for_3d = image_path
+            # Resume: ein bereits generiertes Bild nicht erneut erzeugen, wenn wir
+            # ohne TRELLIS laufen (sonst wuerden gute Reviews bei jedem Lauf neu
+            # gewuerfelt). Re-Rolls laufen ueber die Review-UV / Loeschen der Datei.
+            if skip_trellis and image_path.exists() and image_path.stat().st_size > 0:
+                stats.skipped += 1
+                logger.info("[%s] %s -> skip (Bild existiert: %s)",
+                            faction, unit_name, image_path.name)
+                image_for_3d = image_path
+            else:
+                success = _generate_with_quality_loop(
+                    prompt=prompt,
+                    output_path=image_path,
+                    unit_name=unit_name,
+                    faction_name=dl.faction_name,
+                    unit_description=str(override.get("extra_details", "")) if isinstance(override, dict) else "",
+                    image_gen=image_gen,
+                    quality_gate=quality_gate,
+                    reference_image_path=effective_ref,
+                    max_attempts=max_attempts,
+                    stats=stats,
+                )
+                if not success:
+                    continue
+                image_for_3d = image_path
 
         unit_state.image_path = str(image_for_3d)
         unit_state.status = UnitStatus.IMAGE_APPROVED

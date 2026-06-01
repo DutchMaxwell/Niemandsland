@@ -20,14 +20,6 @@ const BORDER_THICKNESS := 0.003  # 3mm thin border
 ## Border alpha
 const BORDER_ALPHA := 0.9
 
-## Player colors (must match OPRArmyManager.PLAYER_COLORS)
-const PLAYER_COLORS = {
-	1: Color(0.2, 0.4, 0.8),   # Blue
-	2: Color(0.8, 0.2, 0.2),   # Red
-	3: Color(0.2, 0.7, 0.2),   # Green
-	4: Color(0.7, 0.5, 0.1),   # Orange/Gold
-}
-
 ## Cached boundary meshes per GameUnit
 var _boundaries: Dictionary = {}  # GameUnit -> MeshInstance3D (border only)
 
@@ -107,9 +99,9 @@ func _update_unit_boundary(game_unit) -> void:
 		_remove_unit_boundary(game_unit)
 		return
 
-	# Get player color
+	# Get player color (shared canonical source, also used for objective owners)
 	var player_id = game_unit.unit_properties.get("player_id", 1)
-	var player_color = PLAYER_COLORS.get(player_id, Color.GRAY)
+	var player_color = OPRArmyManager.PLAYER_COLORS.get(player_id, Color.GRAY)
 
 	# Get model positions and per-model base radii. A joined Hero can sit on a
 	# larger base than the troops, so each point is expanded by ITS OWN base.

@@ -5,10 +5,10 @@ extends Node3D
 
 @export var rotation_speed: float = 0.005
 @export var pan_speed: float = 0.005  # Pan speed for mouse camera movement
-@export var keyboard_pan_speed: float = 1.5  # Pan speed for WASD movement
+@export var keyboard_pan_speed: float = 0.75  # Pan speed for WASD movement
 @export var keyboard_rotation_speed: float = 90.0  # Rotation speed for Q/E (degrees per second)
-@export var zoom_speed: float = 0.15  # Zoom speed for smooth control
-@export var min_zoom: float = 0.5  # Minimum zoom distance
+@export var zoom_speed: float = 0.12  # Zoom step as a fraction of current distance
+@export var min_zoom: float = 0.06  # Minimum zoom distance (close-up on a single model)
 @export var max_zoom: float = 25.0  # Maximum zoom for larger tables
 @export var min_pitch: float = -80.0  # degrees
 @export var max_pitch: float = -10.0  # degrees
@@ -32,6 +32,10 @@ var _transform_dirty: bool = true
 
 func _ready() -> void:
 	_camera = $Camera3D
+	# Small near plane so close-up zoom doesn't clip into miniatures (they are only
+	# a few cm tall, far below the default 0.05 m near plane).
+	if _camera:
+		_camera.near = 0.01
 	_mark_dirty()
 
 
@@ -186,7 +190,9 @@ func _keyboard_pan(direction: Vector2, delta: float) -> void:
 
 
 func _zoom(amount: float) -> void:
-	_current_zoom = clamp(_current_zoom + amount, min_zoom, max_zoom)
+	# Proportional zoom: each scroll changes distance by a fraction of the current
+	# distance, so it stays smooth from table overview down to a single model.
+	_current_zoom = clamp(_current_zoom * (1.0 + amount), min_zoom, max_zoom)
 	_mark_dirty()
 
 
