@@ -2030,8 +2030,9 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
 	# Store army
 	opr_army_manager.armies[player_id] = army
 
-	# Spawn the army on tray (position determined by player ID)
-	var spawned = opr_army_manager.spawn_army(army)
+	# Spawn the army on tray (position determined by player ID).
+	# Awaitable: on-demand models are downloaded up front before spawning.
+	var spawned = await opr_army_manager.spawn_army(army)
 	print("Spawned %d models for army '%s' on Player %d's tray" % [spawned.size(), army.name, player_id])
 
 	# Sync to other peers if in multiplayer
