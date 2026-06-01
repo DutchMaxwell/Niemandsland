@@ -88,7 +88,7 @@ const GROUP_ROTATION_BROADCAST_INTERVAL: float = 0.1  # 10 Hz
 @onready var apply_custom_btn: Button = %ApplyCustomBtn
 
 # Dice Roller Plugin UI
-@onready var dice_roller_control: Control = %DiceRollerControl
+@onready var dice_roller_control: DiceTray = %DiceRollerControl
 @onready var roll_button: Button = %RollButton
 @onready var quick_roll_button: Button = %QuickRollButton
 @onready var _dice_log_scroll: ScrollContainer = %DiceLogScroll
@@ -1044,15 +1044,7 @@ func _update_dice_count_display() -> void:
 
 ## Update the dice set with the specified number of D6 dice
 func _update_dice_set(count: int) -> void:
-	var dice_set: Array[DiceDef] = []
-	for i in range(count):
-		var dice_def = DiceDef.new()
-		dice_def.name = "D6_%d" % (i + 1)
-		dice_def.color = Color.WHITE
-		dice_def.shape = DiceShape.new("D6")
-		dice_set.append(dice_def)
-
-	dice_roller_control.dice_set = dice_set
+	dice_roller_control.dice_count = count
 	current_dice_label.text = "In box: %d D6" % count
 
 	# Adjust roller size based on dice count
