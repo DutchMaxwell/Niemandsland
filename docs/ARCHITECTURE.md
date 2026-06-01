@@ -24,6 +24,11 @@ Forward+ renderer. Entry scene: `scenes/startup_menu.tscn`.
 - `main.gd` — top-level controller; wires subsystems and UI.
 - `object_manager.gd` — spawns/selects/drags table objects; selection + box-select;
   emits selection/drag signals consumed by the unit overlays.
+- `undo_manager.gd` — local undo/redo history for move/rotate/delete as reversible
+  actions (Ctrl+Z / Ctrl+Y; Delete removes the whole selection). Re-broadcasts the
+  result of each action so multiplayer peers stay in sync ("delete syncs, undo local").
+- `hover_glow.gd` — non-destructive glow on the object under the cursor (via
+  `material_overlay`) so it's clear which model a click will select.
 - `camera_controller.gd` — orbit/pan/zoom with easing.
 - `table.gd` — table dimensions and collision.
 - `selectable_object.gd` — per-object selection behaviour.
@@ -52,6 +57,11 @@ Forward+ renderer. Entry scene: `scenes/startup_menu.tscn`.
 - `opr_import_dialog.gd` — import UI.
 - `tts_importer.gd` / `tts_download_manager.gd` — Tabletop Simulator import (Steam
   CDN + local cache; glTF/STL/OBJ).
+
+> **Planned:** miniature GLBs move to on-demand download + cache (TTS-style) so the
+> repo/build stay lean and only an army's needed models are fetched — see
+> [`docs/ASSET_DELIVERY.md`](ASSET_DELIVERY.md). OPR stats/data load only via the
+> Army Forge API (never bundled) — see [`docs/PRE_RELEASE_LICENSING.md`](PRE_RELEASE_LICENSING.md).
 - `wgs_client.gd` / `wgs_game_manager.gd` / `wgs_import_dialog.gd` — Wargaming
   Simulator format ([`WGS_INTEGRATION.md`](WGS_INTEGRATION.md)).
 

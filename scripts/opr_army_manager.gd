@@ -68,17 +68,18 @@ var army_trays: Dictionary = {}  # player_id -> Node3D
 ## OPR API Client
 var api_client: OPRApiClient
 
-## Model registry: faction_folder -> Array of {name: String, path: String}
-## This is loaded at startup to work around DirAccess not working in exports
-var model_registry: Dictionary = {}
-
+## On-demand model delivery (manifest + CDN cache); see docs/ASSET_DELIVERY.md
+var model_library: ModelLibrary
 
 func _ready() -> void:
 	api_client = OPRApiClient.new()
 	add_child(api_client)
 	api_client.army_loaded.connect(_on_army_loaded)
 	api_client.import_failed.connect(_on_import_failed)
-	_load_model_registry()
+
+	model_library = ModelLibrary.new()
+	model_library.name = "ModelLibrary"
+	add_child(model_library)
 
 
 ## Import army from file for a specific player
@@ -89,11 +90,16 @@ func import_army_for_player(file_path: String, player_id: int) -> void:
 		armies[player_id] = army
 
 
-## Spawn all units of an army on an army tray beside the table
+## Spawn all units of an army on an army tray beside the table.
+## Awaitable: any on-demand models the army needs are downloaded up front.
 func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.ZERO) -> Array[Node3D]:
 	if not object_manager:
 		push_error("OPRArmyManager: No object_manager set")
 		return []
+
+	# Fetch on-demand models this army needs (no-op when the manifest is empty or
+	# everything is cached); the spawn loop below then resolves them locally.
+	await _ensure_army_models_cached(army)
 
 	var all_models: Array[Node3D] = []
 	var player_color = PLAYER_COLORS.get(army.player_id, Color.GRAY)
@@ -446,11 +452,9 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 	var use_glb_model = false
 
 	if not model_path.is_empty():
-		# Load GLB model — use CACHE_MODE_REUSE so host and client share cached resources
-		var glb_scene = ResourceLoader.load(model_path, "", ResourceLoader.CACHE_MODE_REUSE)
-		if glb_scene:
-			var glb_instance = glb_scene.instantiate()
-
+		# Bundled res:// GLBs load via ResourceLoader; downloaded user:// GLBs via glTF.
+		var glb_instance = _instantiate_model(model_path)
+		if glb_instance:
 			# Modell an die Base anpassen (Footprint-Cap gegen Scale-Creep, Flying schwebt)
 			var aabb = _get_model_aabb(glb_instance)
 			var tough = _get_tough_value(unit)
@@ -589,11 +593,9 @@ func create_model_from_properties(props: Dictionary) -> StaticBody3D:
 
 	var use_glb_model = false
 	if not model_path.is_empty():
-		# Use CACHE_MODE_REUSE so host and client share cached resources
-		var glb_scene = ResourceLoader.load(model_path, "", ResourceLoader.CACHE_MODE_REUSE)
-		if glb_scene:
-			var glb_instance = glb_scene.instantiate()
-
+		# Bundled res:// GLBs load via ResourceLoader; downloaded user:// GLBs via glTF.
+		var glb_instance = _instantiate_model(model_path)
+		if glb_instance:
 			var aabb = _get_model_aabb(glb_instance)
 			var tough = _get_tough_value_from_rules(props.get("special_rules", []))
 			var fit = _compute_model_fit(aabb, base_long_mm, tough, should_hover)
@@ -868,78 +870,49 @@ func clear_army(player_id: int) -> void:
 
 # ===== GLB Model Loading Functions =====
 
-## Load the model registry from units.json files in each faction folder
-## This is necessary because DirAccess does not work with res:// paths in exported builds
-func _load_model_registry() -> void:
-	# List of known faction folders with GLB models
-	var faction_folders = ["alien_hives"]
-
-	for folder in faction_folders:
-		var units_json_path = "res://assets/miniatures/%s/units.json" % folder
-		var glb_base_path = "res://assets/miniatures/%s/glb/" % folder
-
-		if not ResourceLoader.exists(units_json_path):
-			print("OPRArmyManager: units.json not found for faction: %s" % folder)
-			continue
-
-		# Load and parse units.json
-		var file = FileAccess.open(units_json_path, FileAccess.READ)
-		if not file:
-			print("OPRArmyManager: Could not open units.json for faction: %s" % folder)
-			continue
-
-		var json_text = file.get_as_text()
-		file.close()
-
-		var json = JSON.new()
-		var parse_result = json.parse(json_text)
-		if parse_result != OK:
-			print("OPRArmyManager: Failed to parse units.json for faction: %s" % folder)
-			continue
-
-		var data = json.data
-		if not data.has("units"):
-			continue
-
-		var models: Array = []
-		var units_dict = data.get("units", {})
-
-		# For each unit, try to find matching GLB file using numbered prefixes
-		for unit_key in units_dict.keys():
-			var unit_data = units_dict[unit_key]
-			var unit_name = unit_data.get("name", unit_key)
-
-			# Try numbered prefixes 01-99
-			for i in range(1, 100):
-				var prefix = "%02d" % i
-				var glb_filename = "%s_%s.glb" % [prefix, unit_name]
-				var full_path = glb_base_path + glb_filename
-
-				if ResourceLoader.exists(full_path):
-					models.append({"name": unit_name, "path": full_path})
-					break
-
-		model_registry[folder] = models
-		print("OPRArmyManager: Loaded %d models for faction '%s'" % [models.size(), folder])
+## Downloads any on-demand models the army needs (manifest + CDN) so the spawn
+## loop can resolve them from the local cache. No-op without a populated manifest.
+func _ensure_army_models_cached(army: OPRApiClient.OPRArmy) -> void:
+	if model_library == null or army == null:
+		return
+	var faction_folder: String = army.faction_folder
+	if faction_folder.is_empty():
+		return
+	var specs: Array = []
+	for unit: OPRApiClient.OPRUnit in army.units:
+		specs.append({"faction": faction_folder, "unit_name": unit.name})
+	await model_library.ensure_models(specs)
 
 
-## Find the GLB model file for a unit based on faction folder and unit name
-## Uses the pre-loaded model registry to work in exported builds
+## Instantiates a model from a local path: bundled res:// GLBs via ResourceLoader,
+## downloaded user:// GLBs via runtime glTF (GLTFDocument).
+func _instantiate_model(path: String) -> Node3D:
+	if path.begins_with("res://"):
+		var packed: Resource = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REUSE)
+		if packed is PackedScene:
+			return (packed as PackedScene).instantiate()
+		return null
+	var doc := GLTFDocument.new()
+	var state := GLTFState.new()
+	if doc.append_from_file(path, state) != OK:
+		return null
+	return doc.generate_scene(state)
+
+
+## Find the GLB model for a unit. Prefers an on-demand model already cached locally
+## (manifest + CDN), then falls back to a bundled GLB probed by name. OPR unit data
+## (incl. names) comes exclusively from the API at runtime.
 func _find_model_for_unit(unit_name: String, faction_folder: String) -> String:
 	if faction_folder.is_empty():
 		return ""
 
-	# Check if we have models registered for this faction
-	if model_registry.has(faction_folder):
-		var models = model_registry[faction_folder]
-		for model_entry in models:
-			# Check if unit name matches (case insensitive)
-			if unit_name.to_lower() in model_entry.name.to_lower():
-				print("OPRArmyManager: Found model for '%s' -> %s" % [unit_name, model_entry.path])
-				return model_entry.path
+	# On-demand model already downloaded? (manifest-driven, content-addressed cache)
+	if model_library != null:
+		var cached: String = model_library.get_cached_path(faction_folder, unit_name)
+		if not cached.is_empty():
+			return cached
 
-	# Fallback: Try direct path construction with ResourceLoader.exists()
-	# This handles cases where the model might exist but isn't in the registry
+	# Probe bundled GLBs by name with ResourceLoader.exists() (works in exports).
 	var glb_base_path = "res://assets/miniatures/%s/glb/" % faction_folder
 
 	# Try numbered prefixes 01-99
