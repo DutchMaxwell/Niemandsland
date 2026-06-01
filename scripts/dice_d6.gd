@@ -32,9 +32,13 @@ var size: float = 2.0
 
 func _ready() -> void:
 	mass = 1.0
+	gravity_scale = 2.0          # snappier fall + settle at this viewport scale
+	linear_damp = 0.3
+	angular_damp = 1.0           # bleed off spin so the die stops tumbling quickly
+	continuous_cd = true         # stop fast dice from tunnelling through thin walls
 	var pm := PhysicsMaterial.new()
-	pm.friction = 0.6
-	pm.bounce = 0.12
+	pm.friction = 0.9
+	pm.bounce = 0.05
 	physics_material_override = pm
 
 	var shape := CollisionShape3D.new()
@@ -69,9 +73,29 @@ func top_face() -> int:
 	return best_value
 
 
-func is_settled(linear_threshold: float, angular_threshold: float) -> bool:
-	return linear_velocity.length() < linear_threshold \
-		and angular_velocity.length() < angular_threshold
+func is_settled(linear_threshold: float) -> bool:
+	# Down on the floor (resting on a face or teetering on an edge) and not sliding.
+	# A teetering die still counts, so the result can be forced rather than waited out.
+	return linear_velocity.length() < linear_threshold and global_position.y < size * 0.95
+
+
+## Forces the die flat onto [param value]'s face (minimal rotation, keeps yaw) and
+## freezes it — ends the end-of-roll teetering.
+func settle_to_face(value: int) -> void:
+	var normal: Vector3 = FACE_NORMALS.get(value, Vector3.UP)
+	var current: Vector3 = (global_transform.basis * normal).normalized()
+	var b: Basis = global_transform.basis
+	var axis: Vector3 = current.cross(Vector3.UP)
+	if axis.length() > 0.0001:
+		b = Basis(axis.normalized(), current.angle_to(Vector3.UP)) * b
+	elif current.dot(Vector3.UP) < 0.0:
+		# Face points straight down: cross() degenerates to zero, so flip 180° about a
+		# fixed horizontal axis (same antiparallel handling as set_top_face).
+		b = Basis(Vector3.RIGHT, PI) * b
+	freeze = true
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	global_transform = Transform3D(b.orthonormalized(), Vector3(global_position.x, size * 0.5, global_position.z))
 
 
 ## Orients the die so [param value] points up (for quick-roll / showing a result).
