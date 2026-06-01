@@ -27,6 +27,8 @@ Forward+ renderer. Entry scene: `scenes/startup_menu.tscn`.
 - `undo_manager.gd` — local undo/redo history for move/rotate/delete as reversible
   actions (Ctrl+Z / Ctrl+Y; Delete removes the whole selection). Re-broadcasts the
   result of each action so multiplayer peers stay in sync ("delete syncs, undo local").
+- `hover_glow.gd` — non-destructive glow on the object under the cursor (via
+  `material_overlay`) so it's clear which model a click will select.
 - `camera_controller.gd` — orbit/pan/zoom with easing.
 - `table.gd` — table dimensions and collision.
 - `selectable_object.gd` — per-object selection behaviour.
