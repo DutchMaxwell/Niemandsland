@@ -341,6 +341,7 @@ static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 		items.append(RadialMenuItem.new("toggle_fatigued", "Fatigued", fatigue_icon, true, fatigue_tooltip))
 		items.append(RadialMenuItem.new("toggle_shaken", "Shaken", shaken_icon, true, shaken_tooltip))
 
+	items.append(RadialMenuItem.new("add_marker", "Token", "T", true, "Add/adjust status & counter tokens for special rules"))
 	items.append(RadialMenuItem.new("select_unit", "Select All", "A", true, "Select all models in this unit"))
 	items.append(RadialMenuItem.new("delete_model", "Remove", "X", true, "Remove this model from the table"))
 
@@ -370,6 +371,7 @@ static func create_unit_menu(game_unit: GameUnit) -> Array[RadialMenuItem]:
 	items.append(RadialMenuItem.new("toggle_fatigued", "Fatigued", fatigue_icon, true, fatigue_tooltip))
 	items.append(RadialMenuItem.new("toggle_shaken", "Shaken", shaken_icon, true, shaken_tooltip))
 
+	items.append(RadialMenuItem.new("add_marker", "Token", "T", true, "Add/adjust status & counter tokens for special rules"))
 	items.append(RadialMenuItem.new("check_coherency", "Coherency", "~", true, "Check if unit models are in coherency range"))
 	items.append(RadialMenuItem.new("delete_unit", "Delete", "X", true, "Remove entire unit from the table"))
 

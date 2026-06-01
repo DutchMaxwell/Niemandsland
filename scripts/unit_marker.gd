@@ -78,6 +78,16 @@ var expires_on_round: int = 0
 ## For wound markers: the wound value
 var wound_value: int = 0
 
+## Whether this is a counter marker (renders an adjustable number instead of a
+## letter). Used to track army special rules with a resource/stacking value.
+var is_counter: bool = false
+
+## Starting value for a counter marker.
+var counter_value: int = 0
+
+## Optional longer effect/description text (shown on hover, stored in the library).
+var effect: String = ""
+
 
 # ===== Factory Methods =====
 
@@ -102,14 +112,24 @@ static func create_standard(marker_name: String) -> UnitMarker:
 	return marker
 
 
-## Creates a custom freetext marker.
-static func create_custom(text: String, marker_color: Color = Color.WHITE) -> UnitMarker:
+## Creates a custom freetext marker (status token: on/off letter).
+static func create_custom(text: String, marker_color: Color = Color.WHITE, effect_text: String = "") -> UnitMarker:
 	var marker = UnitMarker.new()
 	marker.type = MarkerType.CUSTOM
 	marker.name = text
 	marker.icon = "📝"
 	marker.color = marker_color
 	marker.tooltip = text
+	marker.effect = effect_text
+	return marker
+
+
+## Creates a custom counter marker (renders an adjustable number). For special
+## rules whose mechanic is a resource/stacking value the player tracks by hand.
+static func create_counter(text: String, marker_color: Color = Color.WHITE, start_value: int = 0, effect_text: String = "") -> UnitMarker:
+	var marker = create_custom(text, marker_color, effect_text)
+	marker.is_counter = true
+	marker.counter_value = maxi(0, start_value)
 	return marker
 
 
@@ -156,7 +176,9 @@ func to_dict() -> Dictionary:
 		"color": [color.r, color.g, color.b, color.a],
 		"tooltip": tooltip,
 		"expires_on_round": expires_on_round,
-		"wound_value": wound_value
+		"wound_value": wound_value,
+		"is_counter": is_counter,
+		"counter_value": counter_value
 	}
 
 
@@ -173,6 +195,8 @@ static func from_dict(data: Dictionary) -> UnitMarker:
 	marker.tooltip = data.get("tooltip", "")
 	marker.expires_on_round = data.get("expires_on_round", 0)
 	marker.wound_value = data.get("wound_value", 0)
+	marker.is_counter = data.get("is_counter", false)
+	marker.counter_value = data.get("counter_value", 0)
 
 	return marker
 
