@@ -66,10 +66,15 @@ func _serialize_table() -> Dictionary:
 			custom_zones["player2"].append({"x": v.x, "y": v.y})
 		data["custom_zones"] = custom_zones
 
-		# Mission objectives (1" coordinates)
+		# Mission objectives (1" coordinates) + per-objective owner (capture state)
 		var objectives = []
-		for obj in map_layout_editor.mission_objectives:
-			objectives.append({"x": obj.x, "y": obj.y})
+		var obj_owners: Array = []
+		if terrain_overlay and terrain_overlay.has_method("get_objective_owners"):
+			obj_owners = terrain_overlay.get_objective_owners()
+		for i in range(map_layout_editor.mission_objectives.size()):
+			var obj = map_layout_editor.mission_objectives[i]
+			var owner := int(obj_owners[i]) if i < obj_owners.size() else 0
+			objectives.append({"x": obj.x, "y": obj.y, "owner": owner})
 		data["mission_objectives"] = objectives
 
 		# Wall segments (modular terrain)
@@ -197,9 +202,13 @@ func _serialize_game_units() -> Array:
 
 ## Serialize global game state (round, turn, etc.)
 func _serialize_game_state() -> Dictionary:
+	var lib: Dictionary = {}
+	if radial_menu_controller and radial_menu_controller.token_library:
+		lib = radial_menu_controller.token_library.to_dict()
 	return {
 		"current_round": army_manager.current_round if army_manager else 1,
-		"current_player": 1  # No turn-order system yet; players track this themselves
+		"current_player": 1,  # No turn-order system yet; players track this themselves
+		"token_library": lib
 	}
 
 
@@ -323,11 +332,13 @@ func _deserialize_map_layout(table_data: Dictionary, table_size: Vector2) -> voi
 			if v is Dictionary:
 				custom_p2.append(Vector2(float(v.get("x", 0)), float(v.get("y", 0))))
 
-	# Parse mission objectives (1" coordinates)
+	# Parse mission objectives (1" coordinates) + owners (default neutral)
 	var objectives: Array[Vector2] = []
+	var objective_owners: Array[int] = []
 	for obj in table_data.get("mission_objectives", []):
 		if obj is Dictionary:
 			objectives.append(Vector2(float(obj.get("x", 0)), float(obj.get("y", 0))))
+			objective_owners.append(int(obj.get("owner", 0)))
 
 	# Parse wall segments
 	var wall_segments: Array[Dictionary] = []
@@ -383,12 +394,12 @@ func _deserialize_map_layout(table_data: Dictionary, table_size: Vector2) -> voi
 		if deployment_type > 0 and terrain_overlay.has_method("set_deployment_zones_visible"):
 			terrain_overlay.set_deployment_zones_visible(true)
 
-		# Update mission objectives (convert 1" to world coords)
+		# Update mission objectives (convert 1" to world coords), restoring owners
 		if not objectives.is_empty() and map_layout_editor:
 			if map_layout_editor.has_method("get_objectives_for_overlay"):
 				var world_objectives = map_layout_editor.get_objectives_for_overlay()
 				if terrain_overlay.has_method("update_objectives"):
-					terrain_overlay.update_objectives(world_objectives)
+					terrain_overlay.update_objectives(world_objectives, objective_owners)
 
 		# Restore wall models in 3D
 		if not wall_segments.is_empty():
@@ -643,6 +654,9 @@ func _deserialize_game_state(state_data: Dictionary) -> void:
 	if army_manager:
 		army_manager.set_current_round(int(state_data.get("current_round", 1)))
 	# current_player is not restored: there is no turn-order system yet.
+	# Restore the custom-token library before markers re-render so colors/effects resolve.
+	if radial_menu_controller and radial_menu_controller.token_library:
+		radial_menu_controller.token_library.from_dict(state_data.get("token_library", {}))
 
 
 ## Restore GameUnit data to a spawned model node
@@ -730,6 +744,8 @@ func _restore_markers_after_load() -> void:
 		radial_menu_controller.initialize_wound_markers_for_unit(game_unit)
 		# Dialog markers (Pinned, Stunned, custom, ...) re-created as orbit tokens
 		radial_menu_controller.initialize_marker_tokens_for_unit(game_unit)
+		# Special-weapon rings (derived from loadout)
+		radial_menu_controller.initialize_special_weapon_rings_for_unit(game_unit)
 
 
 ## Clear loaded game units cache after load is complete

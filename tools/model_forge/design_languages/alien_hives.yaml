@@ -7,31 +7,38 @@
 faction_name: "Alien Hives"
 
 aesthetic:
+  all_creatures: true   # durchgehende Kreaturen-Armee: keine Vehicle/Aircraft/Titan-Anker
   genre: "grimdark sci-fi"
-  style: "horror"
+  style: "sleek biomechanical alien horror, tabletop wargaming studio sculpt"
   inspiration:
-    - "HR Giger xenomorph"
-    - "Starcraft Zerg"
-    - "Tyranid bioorganic horror"
+    - "sleek draconic-reptilian bio-organism with an elongated fanged skull and spiky crest"
+    - "segmented chitin carapace built from overlapping bone armor plates"
+    - "multiple organic bone-blade scythe limbs on a sinuous, lithe body"
+    - "internal bioluminescent glow seeping through translucent membrane"
   explicitly_avoid:
-    - "Games Workshop specific designs"
+    - "Games Workshop Tyranid designs, silhouettes and head shapes"
+    - "Warhammer 40k hive-fleet bio-titans"
+    - "ridged hooded insect skull or hammerhead bug head"
+    - "bulky armored beetle carapace"
     - "Copyrighted character likenesses"
     - "Cartoon or cute aesthetics"
+    - "muddy low-contrast camouflage texture noise"
 
 colors:
-  primary: "dark purple carapace"
-  secondary: "bone white armor plates"
-  accent: "toxic green bioluminescence"
+  primary: "dark chitin carapace in charcoal and deep oxblood with dark-green undertones"
+  secondary: "bone and ivory armor plates"
+  accent: "toxic-green bioluminescent glow"
 
 materials:
-  - "chitinous exoskeleton"
-  - "biomechanical organic armor"
-  - "translucent membrane tissue"
+  - "segmented chitin exoskeleton with overlapping bone plates"
+  - "organic bone-blade weapons and talons"
+  - "translucent bioluminescent membrane"
 
 creature_type: "alien bioorganic creature"
 
 prompt_template: |
-  {unit_name}, {creature_type} miniature for tabletop wargaming.
+  {unit_name}, {creature_type} miniature for tabletop wargaming, in the style of
+  OnePageRules studio miniature renders (clean resin sculpt, crisp readable detail).
 
   CRITICAL REQUIREMENTS:
   - NO base, NO pedestal, NO platform, NO ground, NO stand, NO shadow on ground
@@ -39,9 +46,25 @@ prompt_template: |
   - Clean silhouette against pure white background (#FFFFFF)
   - Single centered creature, full body visible
   - Isometric 3/4 view angle (optimal for 3D reconstruction)
-  - Consistent dramatic lighting from upper left
-  - High detail on surface textures (chitin, carapace, organic armor)
+  - Bright, even studio lighting with a clear key light from upper left
+  - Sharply readable silhouette; clear separation of body, plates and blades
+  - High, crisp detail on surface textures (chitin, carapace, bone plates) —
+    NOT dark, muddy, low-contrast or camouflage-noisy
   - 28mm tabletop miniature aesthetic and proportions
+
+  WEAPONS — READ CAREFULLY:
+  - Every weapon is a LIVING BIO-WEAPON grown from the creature's own body.
+  - Ranged weapons are organic symbiote weapon-organs / fleshy-chitin bio-cannons
+    fused to the limb, spitting living spores or bio-projectiles.
+  - Melee weapons are bone blades, talons, scything claws and chitin spikes.
+  - ABSOLUTELY NO manufactured or metal firearms: no gun barrels, triggers,
+    magazines, scopes, grips, bolts or any human-made / mechanical weapon.
+
+  COHERENCE (avoid AI slop):
+  - One single coherent creature with a believable, anatomically consistent body.
+  - NO extra, doubled, fused, floating or melted limbs; NO duplicated heads.
+  - NO blurry noise, random spike clutter or smeared "AI-slop" surfaces.
+  - Symmetric where the anatomy should be symmetric; clean, focused sculpt.
 
   STYLE:
   - {aesthetic}
@@ -55,7 +78,7 @@ prompt_template: |
   OUTPUT:
   - Square aspect ratio 1:1
   - Clean edges, no artifacts
-  - Professional miniature photography style
+  - Professional miniature studio render, like a OnePageRules promo render
 
 # =============================================================================
 # Per-Unit Overrides - Alle Einheiten aus GF Alien Hives v3.5.2

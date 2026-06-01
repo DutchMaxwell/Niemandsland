@@ -252,6 +252,11 @@ func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> voi
 			if is_object_locked(collider):
 				return
 
+			# Objectives are fixed by the map: right-click captures them (radial
+			# menu), but left-click must not select or drag them.
+			if collider.is_in_group("objective"):
+				return
+
 			var already_selected = collider in _selected_objects
 
 			if alt_pressed:

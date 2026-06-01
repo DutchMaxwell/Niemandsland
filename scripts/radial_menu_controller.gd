@@ -52,6 +52,17 @@ var marker_dialog: MarkerDialog = null
 ## Reference to network manager for broadcasting state changes
 var network_manager: Node = null
 
+## Reference to the terrain overlay (for objective capture / recolor)
+var terrain_overlay: Node = null
+
+## Reusable library of user-defined custom tokens (color/effect/is_counter,
+## keyed by name). Source of truth for custom-token color + effect.
+var token_library := TokenLibrary.new()
+
+## Display names for the player-owner choices in the objective capture menu,
+## matching OPRArmyManager.PLAYER_COLORS.
+const PLAYER_COLOR_NAMES := {1: "Blue", 2: "Red", 3: "Green", 4: "Gold"}
+
 ## Current selection context
 var _current_selection: Array = []
 
@@ -65,6 +76,12 @@ var _dynamic_token_configs: Dictionary = {}
 
 ## Priority for dialog marker tokens - placed after the built-in status tokens.
 const MARKER_TOKEN_PRIORITY := 100
+
+## Special-weapon ring: an automatic per-model flat base ring + curved label
+## naming the weapons that deviate from the unit's standard loadout (e.g.
+## "Shredding Gun + Gauntlets"). Derived from loadout data, so no flag/save/MP.
+## The ring uses the base/player colour (see _unit_base_color).
+const SPECIAL_WEAPON_RING_NODE := "SpecialWeaponRing"
 
 ## Token layout constants
 const TOKEN_RADIUS = 0.010  # 10mm radius = 20mm diameter disc
@@ -124,6 +141,9 @@ func initialize(p_object_manager: Node, p_army_manager: OPRArmyManager) -> void:
 		ui_parent.add_child(marker_dialog)
 		marker_dialog.marker_added.connect(_on_marker_dialog_marker_added)
 		marker_dialog.marker_removed.connect(_on_marker_dialog_marker_removed)
+		marker_dialog.marker_value_changed.connect(_on_marker_dialog_value_changed)
+		marker_dialog.marker_edited.connect(_on_marker_dialog_marker_edited)
+		marker_dialog.token_library = token_library
 
 
 ## Opens the radial menu for the current selection at the given position.
@@ -143,6 +163,13 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 	# Check if all selected are from the same unit
 	var first_obj = selected_objects[0] as Node3D
 	if not first_obj:
+		return
+
+	# Mission objectives are pickable bodies carrying an objective_index meta;
+	# they have no GameUnit, so detect them first.
+	if first_obj.has_meta("objective_index"):
+		context["objective_index"] = int(first_obj.get_meta("objective_index"))
+		radial_menu.open(screen_position, _create_objective_menu(), context)
 		return
 
 	var game_unit = UnitUtils.get_game_unit(first_obj)
@@ -201,6 +228,11 @@ func is_menu_open() -> bool:
 # ===== Action Handlers =====
 
 func _on_action_selected(action_id: String, context: Dictionary) -> void:
+	# Objective owner actions are dynamic ("set_owner_<player_id>").
+	if action_id.begins_with("set_owner_"):
+		_set_objective_owner(context, action_id)
+		return
+
 	match action_id:
 		"unit_stats":
 			_show_unit_stats(context)
@@ -238,6 +270,38 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_show_generic_info(context)
 		"delete":
 			_delete_generic(context)
+
+
+## Builds the flat objective-capture ring: Neutral plus one item per active
+## player (army slot). Player count caps cleanly at the defined PLAYER_COLORS.
+func _create_objective_menu() -> Array[RadialMenu.RadialMenuItem]:
+	var items: Array[RadialMenu.RadialMenuItem] = []
+	items.append(RadialMenu.RadialMenuItem.new("set_owner_0", "Neutral", "N", true, "Set objective to neutral (gold)"))
+
+	if army_manager:
+		var player_ids: Array = army_manager.armies.keys()
+		player_ids.sort()
+		for pid in player_ids:
+			var pname: String = PLAYER_COLOR_NAMES.get(pid, "Player %d" % pid)
+			items.append(RadialMenu.RadialMenuItem.new(
+				"set_owner_%d" % pid, pname, str(pid), true, "Captured by %s" % pname))
+
+	return items
+
+
+## Sets the owner of the objective in the context, recolors it, and syncs it.
+func _set_objective_owner(context: Dictionary, action_id: String) -> void:
+	var index: int = context.get("objective_index", -1)
+	if index < 0:
+		return
+
+	var owner := int(action_id.substr("set_owner_".length()))
+
+	if terrain_overlay and terrain_overlay.has_method("set_objective_owner"):
+		terrain_overlay.set_objective_owner(index, owner)
+
+	if network_manager:
+		network_manager.broadcast_objective_owner(index, owner)
 
 
 func _show_unit_stats(context: Dictionary) -> void:
@@ -1018,7 +1082,7 @@ func _create_token_text_arc(parent: Node3D, text: String, radius: float, height:
 		char_label.name = "TokenChar%d" % i
 		char_label.text = text[i]
 		char_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
-		char_label.no_depth_test = true
+		char_label.no_depth_test = false  # occlude when the token sits behind a model
 		char_label.font_size = 24
 		char_label.outline_size = 2
 		char_label.modulate = Color.WHITE
@@ -1040,7 +1104,7 @@ func _add_token_number_label(marker: Node3D, color: Color) -> Label3D:
 	var number_label = Label3D.new()
 	number_label.name = "NumberLabel"
 	number_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
-	number_label.no_depth_test = true
+	number_label.no_depth_test = false  # occlude when the token sits behind a model
 	number_label.font_size = 72
 	number_label.outline_size = 8
 	number_label.modulate = Color.WHITE
@@ -1060,7 +1124,7 @@ func _add_token_letter_label(marker: Node3D, letter: String, color: Color) -> La
 	letter_label.name = "LetterLabel"
 	letter_label.text = letter
 	letter_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
-	letter_label.no_depth_test = true
+	letter_label.no_depth_test = false  # occlude when the token sits behind a model
 	letter_label.font_size = 72
 	letter_label.outline_size = 8
 	letter_label.modulate = Color.WHITE
@@ -1079,11 +1143,8 @@ func _add_token_letter_label(marker: Node3D, letter: String, color: Color) -> La
 ## For tokens with letters (shaken, fatigued), pass -1.
 func _update_token(model_node: Node3D, unit: GameUnit, marker_name: String, is_active: bool, value: int = -1) -> void:
 	var existing_marker = model_node.get_node_or_null(marker_name)
-	var config = _token_config(marker_name)
-	if not config:
-		return
 
-	# Remove marker if inactive
+	# Remove marker if inactive (no config needed for removal).
 	if not is_active:
 		if existing_marker:
 			# Remove from tree immediately so _get_active_tokens won't find it
@@ -1091,6 +1152,10 @@ func _update_token(model_node: Node3D, unit: GameUnit, marker_name: String, is_a
 			existing_marker.queue_free()
 			# Reposition remaining tokens with animation
 			_reposition_all_tokens(model_node, unit)
+		return
+
+	var config = _token_config(marker_name)
+	if not config:
 		return
 
 	var is_new = existing_marker == null
@@ -1125,19 +1190,94 @@ func _update_token(model_node: Node3D, unit: GameUnit, marker_name: String, is_a
 
 ## Called when a marker is added via the marker dialog.
 func _on_marker_dialog_marker_added(target: Variant, marker: UnitMarker) -> void:
-	_store_marker_color(target, marker.name, marker.color)
-	_apply_marker_token(target, marker.name, marker.color, true)
+	# Register/update custom tokens in the reusable library (standard markers stay
+	# defined by UnitMarker, not user-editable).
+	if not UnitMarker.STANDARD_MARKERS.has(marker.name):
+		token_library.define(marker.name, marker.color, marker.is_counter, marker.effect)
+		if network_manager:
+			network_manager.broadcast_token_define(marker.name, marker.color, marker.is_counter, marker.effect)
 
+	_store_marker_color(target, marker.name, marker.color)
+	if marker.is_counter:
+		_store_marker_value(target, marker.name, marker.counter_value)
+	_apply_marker_token(target, marker.name)
+
+	var value := marker.counter_value if marker.is_counter else -1
 	if network_manager:
 		if target is ModelInstance:
-			network_manager.broadcast_model_marker(target, marker.name, true, marker.color)
+			network_manager.broadcast_model_marker(target, marker.name, true, marker.color, value)
 		elif target is GameUnit:
-			network_manager.broadcast_unit_marker(target, marker.name, true, marker.color)
+			network_manager.broadcast_unit_marker(target, marker.name, true, marker.color, value)
+
+
+## Called when a custom token's definition is edited via the dialog (rename,
+## recolor, or effect change). Applies across every instance and syncs it.
+func _on_marker_dialog_marker_edited(old_name: String, new_name: String, color: Color, effect: String) -> void:
+	apply_token_edit(old_name, new_name, color, effect, true)
+
+
+## Applies a library token edit everywhere: optional rename (migrates instances),
+## then updates color/effect and re-renders every instance.
+func apply_token_edit(old_name: String, new_name: String, color: Color, effect: String, do_broadcast: bool) -> void:
+	if old_name.is_empty():
+		return
+	var is_counter := token_library.is_counter(old_name) if token_library.has(old_name) else false
+
+	var final_name := old_name
+	if not new_name.is_empty() and new_name != old_name:
+		_rename_token_everywhere(old_name, new_name)
+		token_library.rename(old_name, new_name)
+		final_name = new_name
+
+	token_library.define(final_name, color, is_counter, effect)
+	_rerender_token_everywhere(final_name)
+
+	if do_broadcast and network_manager:
+		network_manager.broadcast_token_edit(old_name, final_name, color, effect)
+
+
+## Migrates a custom token from old_name to new_name on every model that has it
+## (markers, counter value, stored color, and the rendered token node).
+func _rename_token_everywhere(old_name: String, new_name: String) -> void:
+	if not army_manager:
+		return
+	for unit in army_manager.get_all_game_units():
+		if not _any_model_has_marker(unit, old_name):
+			continue
+		# Clear the old token visuals (unit + model nodes) before migrating data.
+		_remove_token_renders(unit, old_name)
+		for model in unit.models:
+			if not model.has_marker(old_name):
+				continue
+			var was_counter := model.is_counter_marker(old_name)
+			var val := model.get_marker_value(old_name)
+			model.remove_marker(old_name)  # also clears its counter value
+			model.marker_colors.erase(old_name)
+			model.add_marker(new_name)
+			if was_counter:
+				model.set_marker_value(new_name, val)
+	# The new-name visuals are drawn by apply_token_edit -> _rerender_token_everywhere.
+
+
+## Re-renders a custom token on every unit that has it (e.g. after a color edit).
+func _rerender_token_everywhere(token_name: String) -> void:
+	if not army_manager:
+		return
+	for unit in army_manager.get_all_game_units():
+		if _any_model_has_marker(unit, token_name):
+			_render_token_for_unit_scoped(unit, token_name)
+
+
+## Remote: a peer defined/updated a custom token (color/effect/is_counter).
+func receive_token_define(token_name: String, color: Color, is_counter: bool, effect: String) -> void:
+	token_library.define(token_name, color, is_counter, effect)
+	_rerender_token_everywhere(token_name)
 
 
 ## Called when a marker is removed via the marker dialog.
 func _on_marker_dialog_marker_removed(target: Variant, marker_name: String) -> void:
-	_apply_marker_token(target, marker_name, Color.WHITE, false)
+	# The dialog already removed the marker data; re-render clears the visual.
+	_apply_marker_token(target, marker_name)
 	_clear_marker_color(target, marker_name)
 
 	if network_manager:
@@ -1145,6 +1285,26 @@ func _on_marker_dialog_marker_removed(target: Variant, marker_name: String) -> v
 			network_manager.broadcast_model_marker(target, marker_name, false)
 		elif target is GameUnit:
 			network_manager.broadcast_unit_marker(target, marker_name, false)
+
+
+## Called when a counter marker's value is changed via the marker dialog (+/-).
+func _on_marker_dialog_value_changed(target: Variant, marker_name: String, value: int) -> void:
+	_store_marker_value(target, marker_name, value)
+	_apply_marker_token(target, marker_name)
+
+	if network_manager:
+		if target is ModelInstance:
+			network_manager.broadcast_model_marker_value(target, marker_name, value)
+		elif target is GameUnit:
+			network_manager.broadcast_unit_marker_value(target, marker_name, value)
+
+
+## Stores a counter marker's value on the affected models.
+func _store_marker_value(target: Variant, marker_name: String, value: int) -> void:
+	if target is ModelInstance:
+		target.set_marker_value(marker_name, value)
+	elif target is GameUnit:
+		target.set_marker_value_on_all(marker_name, value)
 
 
 # ===== Dialog Marker Tokens =====
@@ -1171,37 +1331,102 @@ func _marker_token_letter(marker_name: String) -> String:
 func _resolve_marker_color(marker_name: String, model: ModelInstance) -> Color:
 	if UnitMarker.STANDARD_MARKERS.has(marker_name):
 		return UnitMarker.STANDARD_MARKERS[marker_name].color
+	# Library is authoritative for custom tokens, so editing a definition's color
+	# updates every instance on the next render.
+	if token_library.has(marker_name):
+		return token_library.get_color(marker_name)
 	if model and model.marker_colors.has(marker_name):
 		return model.marker_colors[marker_name]
 	return Color(0.6, 0.6, 0.6)
 
 
-## Adds/removes a dialog marker token on every model the target covers.
-func _apply_marker_token(target: Variant, marker_name: String, color: Color, is_active: bool) -> void:
+## Re-renders the dialog token for `marker_name` from the unit's current data, at
+## the right SCOPE: one token on the unit's boundary node if EVERY model carries
+## it (like the activation/shaken tokens), otherwise one per carrying model.
+func _apply_marker_token(target: Variant, marker_name: String) -> void:
+	var unit: GameUnit = null
 	if target is ModelInstance:
-		_render_marker_token(target, target.unit as GameUnit, marker_name, color, is_active)
+		unit = target.unit as GameUnit
 	elif target is GameUnit:
-		for model in target.models:
-			_render_marker_token(model, target, marker_name, color, is_active)
+		unit = target
+	if unit:
+		_render_token_for_unit_scoped(unit, marker_name)
 
 
-## Renders or removes a single dialog marker token on one model.
+## Scope-aware (re)render: clears any stale renders, then draws the token once on
+## the unit node if all models have it, else per carrying model.
+func _render_token_for_unit_scoped(unit: GameUnit, marker_name: String) -> void:
+	if not unit:
+		return
+	_remove_token_renders(unit, marker_name)
+	if not _any_model_has_marker(unit, marker_name):
+		return
+	if _all_models_have_marker(unit, marker_name):
+		var rep: ModelInstance = unit.models[0] if not unit.models.is_empty() else null
+		_render_dialog_token_on_node(_get_unit_token_node(unit), unit, marker_name, rep, _resolve_marker_color(marker_name, rep))
+	else:
+		for model in unit.models:
+			if model.has_marker(marker_name):
+				_render_dialog_token_on_node(model.node, unit, marker_name, model, _resolve_marker_color(marker_name, model))
+
+
+## Removes every rendered instance of a dialog token (unit node + all model nodes)
+## so a scope change (unit-wide <-> per-model) never leaves a stale disc behind.
+func _remove_token_renders(unit: GameUnit, marker_name: String) -> void:
+	var node_name := _marker_token_name(marker_name)
+	var unit_node := _get_unit_token_node(unit)
+	if unit_node and is_instance_valid(unit_node):
+		_update_token(unit_node, unit, node_name, false)
+	for model in unit.models:
+		if model.node and is_instance_valid(model.node):
+			_update_token(model.node, unit, node_name, false)
+
+
+func _any_model_has_marker(unit: GameUnit, marker_name: String) -> bool:
+	for model in unit.models:
+		if model.has_marker(marker_name):
+			return true
+	return false
+
+
+func _all_models_have_marker(unit: GameUnit, marker_name: String) -> bool:
+	if unit.models.is_empty():
+		return false
+	for model in unit.models:
+		if not model.has_marker(marker_name):
+			return false
+	return true
+
+
+## Renders one dialog token disc (counter number or status letter) on a node. The
+## value/counter state is read from `value_model` (the representative model).
+func _render_dialog_token_on_node(node: Node3D, unit: GameUnit, marker_name: String, value_model: ModelInstance, color: Color) -> void:
+	if not node or not is_instance_valid(node):
+		return
+	var node_name := _marker_token_name(marker_name)
+	var value := value_model.get_marker_value(marker_name) if (value_model and value_model.is_counter_marker(marker_name)) else -1
+	_dynamic_token_configs[node_name] = {
+		"color": color,
+		# Full token name curved small around the rim (like "ACTIVATED" on the
+		# activation token); the center still shows the letter/counter number.
+		"label": marker_name,
+		"letter": _marker_token_letter(marker_name),
+		"priority": MARKER_TOKEN_PRIORITY,
+	}
+	_update_token(node, unit, node_name, true, value)
+	# _update_token only colors NEW tokens; recolor on re-apply too.
+	_recolor_token(node.get_node_or_null(node_name), color)
+
+
+## Renders or removes a single dialog token on ONE model (low-level; the scope-
+## aware path above is preferred). Kept for direct/per-model rendering.
 func _render_marker_token(model: ModelInstance, unit: GameUnit, marker_name: String, color: Color, is_active: bool) -> void:
 	if not model or not model.node or not is_instance_valid(model.node):
 		return
-	var node_name := _marker_token_name(marker_name)
 	if is_active:
-		_dynamic_token_configs[node_name] = {
-			"color": color,
-			"label": "",  # no curved label; custom text varies, just show the letter
-			"letter": _marker_token_letter(marker_name),
-			"priority": MARKER_TOKEN_PRIORITY,
-		}
-	_update_token(model.node, unit, node_name, is_active)
-	# _update_token only colors NEW tokens; re-applying a marker with a changed
-	# color must recolor the existing disc too.
-	if is_active:
-		_recolor_token(model.node.get_node_or_null(node_name), color)
+		_render_dialog_token_on_node(model.node, unit, marker_name, model, color)
+	else:
+		_update_token(model.node, unit, _marker_token_name(marker_name), false)
 
 
 ## Re-applies a token's color to its disc + letter outline (for color changes on
@@ -1215,6 +1440,9 @@ func _recolor_token(token: Node, color: Color) -> void:
 	var letter := token.get_node_or_null("LetterLabel") as Label3D
 	if letter:
 		letter.outline_modulate = color.darkened(0.4)
+	var number := token.get_node_or_null("NumberLabel") as Label3D
+	if number:
+		number.outline_modulate = color.darkened(0.4)
 
 
 ## Stores a custom marker's color on the affected models (standard colors are
@@ -1238,26 +1466,195 @@ func _clear_marker_color(target: Variant, marker_name: String) -> void:
 			model.marker_colors.erase(marker_name)
 
 
-## Re-creates all dialog marker tokens for a unit (used after load).
-func initialize_marker_tokens_for_unit(game_unit: GameUnit) -> void:
+# ===== Special-Weapon Ring =====
+# An automatic per-model flat base ring naming each piece of SPECIAL equipment a
+# model carries. The ring is split into one segment per item, and the item's
+# name is written (curved) from the centre of its segment. Purely derived from
+# loadout data, so no per-model flag, save or network sync is needed.
+
+## Renders (or clears) the special-equipment ring on a single model.
+func _render_special_weapon_ring(model: ModelInstance) -> void:
+	if not model or not model.node or not is_instance_valid(model.node):
+		return
+	var unit := model.unit as GameUnit
+	if not unit:
+		return
+
+	# Always rebuild so loadout edits (Sort-Table, re-import) stay correct.
+	var existing := model.node.get_node_or_null(SPECIAL_WEAPON_RING_NODE)
+	if existing:
+		existing.free()
+
+	var items := unit.get_special_equipment_names(model)
+	if items.is_empty():
+		return
+
+	var base_radius := _get_base_radius(unit)
+	var ring_color := _unit_base_color(unit).lightened(0.25)
+	var ring_root := Node3D.new()
+	ring_root.name = SPECIAL_WEAPON_RING_NODE
+
+	# FLAT ring lying on the base, same outer radius as the base, in the base/
+	# player colour so it reads as a painted rim (not a 3D donut).
+	var band := maxf(0.003, base_radius * 0.22)
+	var ring := MeshInstance3D.new()
+	ring.name = "Ring"
+	ring.mesh = _make_flat_ring_mesh(base_radius - band, base_radius, 48)
+	var ring_mat := StandardMaterial3D.new()
+	ring_mat.albedo_color = ring_color
+	ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ring_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	ring.material_override = ring_mat
+	ring.position = Vector3(0, 0.005, 0)
+	ring_root.add_child(ring)
+
+	# One segment per special item; text is written from the segment centre and
+	# auto-shrinks to fit the band + its arc, so it never overruns the ring.
+	var text_radius := base_radius - band / 2.0
+	var seg := TAU / items.size()
+	var divider_color := ring_color.darkened(0.6)
+	for i in range(items.size()):
+		var center := PI / 2.0 - i * seg  # segment 0 faces the camera (front)
+		var seg_node := Node3D.new()
+		seg_node.name = "RingSegment%d" % i
+		seg_node.set_meta("item", items[i])
+		ring_root.add_child(seg_node)
+		_create_ring_segment_text(seg_node, items[i], text_radius, center, band, seg * 0.82)
+		if items.size() > 1:
+			_create_ring_divider(ring_root, base_radius - band, base_radius, center - seg / 2.0, divider_color)
+
+	model.node.add_child(ring_root)
+
+
+## Builds a flat ring (annulus) mesh in the XZ plane between inner and outer radius.
+func _make_flat_ring_mesh(inner: float, outer: float, segments: int) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(segments):
+		var a0 := TAU * i / segments
+		var a1 := TAU * (i + 1) / segments
+		var ci0 := Vector3(cos(a0) * inner, 0, sin(a0) * inner)
+		var co0 := Vector3(cos(a0) * outer, 0, sin(a0) * outer)
+		var ci1 := Vector3(cos(a1) * inner, 0, sin(a1) * inner)
+		var co1 := Vector3(cos(a1) * outer, 0, sin(a1) * outer)
+		for v in [co0, ci0, ci1, co0, ci1, co1]:
+			st.set_normal(Vector3.UP)
+			st.add_vertex(v)
+	return st.commit()
+
+
+## Colour of a unit's bases (player colour), used so the ring matches the base.
+func _unit_base_color(unit: GameUnit) -> Color:
+	var pid: int = unit.unit_properties.get("player_id", 1)
+	return OPRArmyManager.PLAYER_COLORS.get(pid, Color(0.5, 0.5, 0.5))
+
+
+## Writes one item's name as flat, curved text centered on its segment. Sizes the
+## glyphs to ~0.78 of the band height and shrinks further if the word is wider
+## than max_arc, so the text never overruns the ring (radially or tangentially).
+func _create_ring_segment_text(parent: Node3D, text: String, radius: float, center_angle: float, band: float, max_arc: float) -> void:
+	var n := text.length()
+	if n == 0:
+		return
+	var font_size := 48
+	var pixel_size := (band * 0.78) / font_size  # glyph height ~ 0.78 * band
+	var char_advance := font_size * pixel_size * 0.6
+	var angle_per_char := char_advance / radius
+	var total := (n - 1) * angle_per_char
+	if total > max_arc and total > 0.0:
+		var s := max_arc / total
+		pixel_size *= s
+		angle_per_char *= s
+		total = max_arc
+	var start_angle := center_angle + total / 2.0
+
+	for i in range(n):
+		var ch := Label3D.new()
+		ch.name = "Char%d" % i
+		ch.text = text[i]
+		ch.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+		ch.no_depth_test = false
+		ch.font_size = font_size
+		ch.outline_size = 8
+		ch.modulate = Color.WHITE
+		ch.outline_modulate = Color(0.05, 0.05, 0.05)
+		ch.pixel_size = pixel_size
+		ch.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ch.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		var angle := start_angle - i * angle_per_char
+		ch.position = Vector3(cos(angle) * radius, 0.0065, -sin(angle) * radius)
+		ch.rotation = Vector3(-PI / 2, angle - PI / 2, 0)
+		parent.add_child(ch)
+
+
+## Draws a small radial divider tick on the ring at the given boundary angle.
+func _create_ring_divider(parent: Node3D, inner: float, outer: float, angle: float, color: Color) -> void:
+	var box := MeshInstance3D.new()
+	box.name = "Divider"
+	var m := BoxMesh.new()
+	m.size = Vector3(outer - inner, 0.0012, 0.0008)  # spans the band, thin tangentially
+	box.mesh = m
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	box.material_override = mat
+	var mid := (inner + outer) / 2.0
+	box.position = Vector3(cos(angle) * mid, 0.0055, -sin(angle) * mid)
+	box.rotation = Vector3(0, angle, 0)  # align the box's length axis radially
+	parent.add_child(box)
+
+
+## Renders special-weapon rings for every model of a unit (spawn + after load).
+func initialize_special_weapon_rings_for_unit(game_unit: GameUnit) -> void:
 	for model in game_unit.models:
-		if not model.node or not is_instance_valid(model.node):
-			continue
+		_render_special_weapon_ring(model)
+
+
+## Re-creates all dialog marker tokens for a unit (used after load), each at the
+## correct scope (unit-wide vs per-model).
+func initialize_marker_tokens_for_unit(game_unit: GameUnit) -> void:
+	var seen: Dictionary = {}
+	for model in game_unit.models:
 		for marker_name in model.markers:
-			_render_marker_token(model, game_unit, marker_name, _resolve_marker_color(marker_name, model), true)
+			if seen.has(marker_name):
+				continue
+			seen[marker_name] = true
+			_render_token_for_unit_scoped(game_unit, marker_name)
 
 
-## Adds/removes a dialog marker token on all models of a unit (remote sync).
-func set_unit_marker_token(game_unit: GameUnit, marker_name: String, add: bool, color: Color = Color.WHITE) -> void:
+## Adds/removes a dialog marker token on all models of a unit (remote sync). The
+## marker data was already applied by the RPC; this stores color/value + renders.
+## value >= 0 marks the marker as a counter and seeds its number on add.
+func set_unit_marker_token(game_unit: GameUnit, marker_name: String, add: bool, color: Color = Color.WHITE, value: int = -1) -> void:
 	for model in game_unit.models:
 		_sync_marker_color_store(model, marker_name, color, add)
-		_render_marker_token(model, game_unit, marker_name, _resolve_marker_color(marker_name, model), add)
+		if add and value >= 0:
+			model.set_marker_value(marker_name, value)
+	_render_token_for_unit_scoped(game_unit, marker_name)
 
 
 ## Adds/removes a dialog marker token on a single model (remote sync).
-func set_model_marker_token(model: ModelInstance, marker_name: String, add: bool, color: Color = Color.WHITE) -> void:
+func set_model_marker_token(model: ModelInstance, marker_name: String, add: bool, color: Color = Color.WHITE, value: int = -1) -> void:
 	_sync_marker_color_store(model, marker_name, color, add)
-	_render_marker_token(model, model.unit as GameUnit, marker_name, _resolve_marker_color(marker_name, model), add)
+	if add and value >= 0:
+		model.set_marker_value(marker_name, value)
+	var unit := model.unit as GameUnit
+	if unit:
+		_render_token_for_unit_scoped(unit, marker_name)
+
+
+## Updates a counter marker's value on all models of a unit (remote sync).
+func set_unit_marker_value(game_unit: GameUnit, marker_name: String, value: int) -> void:
+	game_unit.set_marker_value_on_all(marker_name, value)
+	_render_token_for_unit_scoped(game_unit, marker_name)
+
+
+## Updates a counter marker's value on a single model (remote sync).
+func set_model_marker_value(model: ModelInstance, marker_name: String, value: int) -> void:
+	model.set_marker_value(marker_name, value)
+	var unit := model.unit as GameUnit
+	if unit:
+		_render_token_for_unit_scoped(unit, marker_name)
 
 
 ## Stores (add) or erases (remove) a remote custom-marker color on a model so

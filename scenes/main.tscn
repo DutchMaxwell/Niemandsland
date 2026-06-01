@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3 uid="uid://main001"]
+[gd_scene load_steps=14 format=3 uid="uid://main001"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/camera_controller.gd" id="2_camera"]
@@ -10,6 +10,20 @@
 [ext_resource type="Script" path="res://scripts/terrain_library.gd" id="8_terrain"]
 [ext_resource type="Script" path="res://scripts/graphics_settings.gd" id="9_graphics"]
 [ext_resource type="Shader" path="res://shaders/space_skybox.gdshader" id="10_skybox_shader"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.08, 0.09, 0.11, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.5, 0.7, 0.8)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+shadow_size = 4
+shadow_color = Color(0, 0, 0, 0.5)
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_Skybox"]
 shader = ExtResource("10_skybox_shader")
@@ -487,6 +501,7 @@ offset_right = -10.0
 offset_bottom = -10.0
 grow_horizontal = 0
 grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="VBox" type="VBoxContainer" parent="UI/HUD/DiceRollerPanel"]
 layout_mode = 2

@@ -46,6 +46,12 @@ var markers: Array[String] = []
 ## marker colors come from UnitMarker.STANDARD_MARKERS and are not stored here.
 var marker_colors: Dictionary = {}  # marker_name (String) -> Color
 
+## Integer values for counter markers, keyed by marker name. A marker present in
+## this dict is a COUNTER (renders a number, adjustable +/-); a marker only in
+## `markers` is a status token (renders a letter). Used to track army special
+## rules whose mechanic is a resource/stacking value (e.g. spell-like tokens).
+var marker_values: Dictionary = {}  # marker_name (String) -> int
+
 # ===== Import/Spawn Position (for Sort Table reset) =====
 
 ## Initial position when spawned
@@ -130,9 +136,10 @@ func add_marker(marker_name: String) -> void:
 		markers.append(marker_name)
 
 
-## Removes a marker from this model.
+## Removes a marker from this model (and any counter value it carried).
 func remove_marker(marker_name: String) -> void:
 	markers.erase(marker_name)
+	marker_values.erase(marker_name)
 
 
 ## Checks if this model has a specific marker.
@@ -140,9 +147,25 @@ func has_marker(marker_name: String) -> bool:
 	return marker_name in markers
 
 
-## Clears all markers from this model.
+## Clears all markers (and counter values) from this model.
 func clear_markers() -> void:
 	markers.clear()
+	marker_values.clear()
+
+
+## Returns true if the given marker is a counter (carries an integer value).
+func is_counter_marker(marker_name: String) -> bool:
+	return marker_values.has(marker_name)
+
+
+## Sets the integer value of a counter marker (clamped to >= 0).
+func set_marker_value(marker_name: String, value: int) -> void:
+	marker_values[marker_name] = maxi(0, value)
+
+
+## Gets the integer value of a counter marker (0 if not a counter).
+func get_marker_value(marker_name: String) -> int:
+	return marker_values.get(marker_name, 0)
 
 
 ## Returns a dictionary representation for saving.
@@ -160,6 +183,7 @@ func to_dict() -> Dictionary:
 		"is_alive": is_alive,
 		"markers": markers.duplicate(),
 		"marker_colors": colors_data,
+		"marker_values": marker_values.duplicate(),
 		"import_position": [import_position.x, import_position.y, import_position.z],
 		"import_rotation": [import_rotation.x, import_rotation.y, import_rotation.z],
 	}
@@ -185,6 +209,12 @@ static func from_dict(data: Dictionary) -> ModelInstance:
 			var arr = saved_colors[key]
 			if arr is Array and arr.size() >= 4:
 				instance.marker_colors[key] = Color(arr[0], arr[1], arr[2], arr[3])
+
+	# Counter marker values (absent in pre-counter saves -> empty = all status)
+	var saved_values = data.get("marker_values", {})
+	if saved_values is Dictionary:
+		for key in saved_values:
+			instance.marker_values[key] = int(saved_values[key])
 
 	# Load import position/rotation (for Sort Table reset)
 	var pos = data.get("import_position", [0, 0, 0])
