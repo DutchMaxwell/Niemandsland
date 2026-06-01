@@ -24,6 +24,9 @@ Forward+ renderer. Entry scene: `scenes/startup_menu.tscn`.
 - `main.gd` — top-level controller; wires subsystems and UI.
 - `object_manager.gd` — spawns/selects/drags table objects; selection + box-select;
   emits selection/drag signals consumed by the unit overlays.
+- `undo_manager.gd` — local undo/redo history for move/rotate/delete as reversible
+  actions (Ctrl+Z / Ctrl+Y; Delete removes the whole selection). Re-broadcasts the
+  result of each action so multiplayer peers stay in sync ("delete syncs, undo local").
 - `camera_controller.gd` — orbit/pan/zoom with easing.
 - `table.gd` — table dimensions and collision.
 - `selectable_object.gd` — per-object selection behaviour.
