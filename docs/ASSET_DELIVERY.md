@@ -1,8 +1,12 @@
 # Asset Delivery — on-demand 3D models (plan)
 
-**Status: decided / planned — not yet implemented.** Sequence agreed with the
-owner: **(1) capture this plan → (2) prototype → (3) hosting on GitHub Releases**
-(chosen because it has no extra cost, including no egress/traffic fees).
+**Status: client + tooling implemented (behind a bundled fallback); pending = publish
+a release and populate the manifest.** Sequence: (1) plan ✅ → (2) prototype ✅
+(`asset_download_manager.gd`, `model_library.gd`, `assets/model_manifest.json`,
+`opr_army_manager` integration, `tools/model_forge/publish_manifest.py`) →
+(3) hosting on **GitHub Releases** (no egress/traffic cost). While the manifest is
+empty the game uses bundled models exactly as before (zero regression); once it is
+populated the CDN path goes live.
 
 ## Goal
 
@@ -62,15 +66,28 @@ Army import (OPR API)  →  unit list
 
 ## Migration path (incremental, low-risk)
 
-1. Generalize `tts_download_manager` → `asset_download_manager`; add
-   `model_library.gd` (resolve unit→URL via manifest, download, cache, runtime
-   GLTF load). **Keep the bundled-GLB path as a fallback** so nothing breaks.
-2. `model_forge` gains a **publish step**: upload GLBs (content-addressed) to the
-   GitHub release + (re)generate the manifest. (Replaces writing `units.json`.)
-3. Switch `opr_army_manager` resolution order: **manifest/CDN → bundled fallback →
-   placeholder**.
-4. Once stable: remove GLBs from the repo (+ history scrub, see licensing doc) →
-   lean repo and build; the web build no longer needs the ~1.3 GB `.pck`.
+1. ✅ `asset_download_manager.gd` (content-addressed download + cache) +
+   `model_library.gd` (resolve unit→entry via manifest, cache, runtime GLTF load).
+   The **bundled-GLB path remains as a fallback** so nothing breaks.
+2. ✅ `tools/model_forge/publish_manifest.py`: builds `assets/model_manifest.json`
+   (content-addressed) and can upload the GLBs to a GitHub release via `gh`.
+3. ✅ `opr_army_manager` resolution order: **cached on-demand model → bundled
+   fallback → placeholder**; `spawn_army` downloads the army's models up front.
+4. ⏳ Once a release is published + the manifest populated: remove GLBs from the repo
+   (+ history scrub, see licensing doc) → lean repo and build; the web build no
+   longer needs the ~1.3 GB `.pck`.
+
+## Publishing (go live)
+
+```bash
+cd tools/model_forge
+python publish_manifest.py ../../assets/miniatures ../../assets/model_manifest.json \
+  --base-url https://github.com/<owner>/<repo>/releases/download/<tag>/ \
+  --upload --tag <tag> --repo <owner>/<repo>      # needs `gh` + an existing release tag
+```
+
+Commit the regenerated `assets/model_manifest.json`. The game then downloads each
+needed GLB from the release on first use and caches it in `user://model_cache/`.
 
 ## Web / HTML5 notes
 
