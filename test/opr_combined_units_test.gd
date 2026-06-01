@@ -104,8 +104,8 @@ func test_combined_secondary_without_anchor_is_kept() -> void:
 
 func test_list_import_reads_combined_fields_and_merges() -> void:
 	# The Army Forge .json export carries combined/joinToUnit at the units[] level
-	# (verified against examples/*.json). _parse_unit_from_list reads them straight
-	# from the list entry; an empty book just leaves placeholder names/sizes.
+	# (matching the real Army Forge API format). _parse_unit_from_list reads them
+	# straight from the list entry; an empty book just leaves placeholder names/sizes.
 	var client := _client()
 	var anchor_raw := {"id": "Z6", "selectionId": "avx_s", "combined": true}
 	var secondary_raw := {"id": "Z6", "selectionId": "NF0bz", "combined": true, "joinToUnit": "avx_s"}
