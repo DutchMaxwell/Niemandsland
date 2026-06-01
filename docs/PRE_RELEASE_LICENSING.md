@@ -44,7 +44,8 @@ lost between work sessions.**
 ### 🟡 Verify / restructure
 - [ ] **Move `tools/model_forge/` + `assets/3d_pipeline/` to a separate repo** so
       the public game repo carries none of the pipeline (and none of its OPR
-      faction-name references). The game only needs the GLB outputs.
+      faction-name references). The game only needs the GLB outputs — which will be
+      delivered on-demand from a CDN, not bundled (see `docs/ASSET_DELIVERY.md`).
 - [ ] **Neutralize OPR identifiers in `design_languages/*.yaml`** (file names +
       `faction_name` + OPR comments) → our own generic names; keep the aesthetics.
 - [ ] **Verify image-generation ToS** (Gemini / HuggingFace Spaces) permit
