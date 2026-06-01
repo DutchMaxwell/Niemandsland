@@ -1,0 +1,83 @@
+name: Web Build → itch.io
+
+# Builds the WebAssembly export and publishes it to itch.io via butler, so the
+# latest work is playable in a browser. Requires two repository settings:
+#   - secret   BUTLER_API_KEY : an itch.io API key (itch.io/user/settings/api-keys)
+#   - variable ITCH_TARGET    : "<itch-user>/<game-slug>" (e.g. dutchmaxwell/opentts)
+# See docs/WEB_EXPORT.md for the one-time setup. Without them the build still runs
+# and is uploaded as the "web-build" artifact, but the itch.io push is skipped.
+
+on:
+  push:
+    branches: ["claude/**"]
+  workflow_dispatch:
+
+# Only build the latest push per branch; cancel superseded runs to save minutes.
+concurrency:
+  group: web-itch-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: "4.6"
+  ITCH_CHANNEL: html5
+
+jobs:
+  build-and-deploy:
+    name: Export Web and push to itch.io
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.6
+    env:
+      BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+      ITCH_TARGET: ${{ vars.ITCH_TARGET }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Install export templates
+        run: |
+          mkdir -v -p ~/.local/share/godot/export_templates/
+          mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable \
+            ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+
+      - name: Import project (compile-check + generate .godot/)
+        run: godot --headless --editor --quit --path . || true
+
+      - name: Export Web (release)
+        run: |
+          mkdir -v -p build/web
+          godot --headless --verbose --export-release "Web" build/web/index.html
+          test -f build/web/index.html
+
+      - name: Upload web build as artifact (backup / fallback)
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: build/web
+
+      - name: Install butler (itch.io CLI)
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends curl unzip ca-certificates
+          curl -fsSL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -o butler.zip -d butler-bin
+          chmod +x butler-bin/butler
+          butler-bin/butler -V
+
+      - name: Push to itch.io
+        if: ${{ env.BUTLER_API_KEY != '' && env.ITCH_TARGET != '' }}
+        run: |
+          butler-bin/butler push build/web "${ITCH_TARGET}:${ITCH_CHANNEL}" \
+            --userversion "0.2.0-alpha+${GITHUB_SHA::8}"
+          echo "Published to https://itch.io/ channel '${ITCH_CHANNEL}' of ${ITCH_TARGET}"
+
+      - name: itch.io not configured (notice)
+        if: ${{ env.BUTLER_API_KEY == '' || env.ITCH_TARGET == '' }}
+        run: |
+          echo "::warning::Skipped itch.io push. Set the BUTLER_API_KEY secret and the" \
+            "ITCH_TARGET variable to enable it (see docs/WEB_EXPORT.md). The build is" \
+            "available as the 'web-build' artifact on this run."
