@@ -68,11 +68,18 @@ var army_trays: Dictionary = {}  # player_id -> Node3D
 ## OPR API Client
 var api_client: OPRApiClient
 
+## On-demand model delivery (manifest + CDN cache); see docs/ASSET_DELIVERY.md
+var model_library: ModelLibrary
+
 func _ready() -> void:
 	api_client = OPRApiClient.new()
 	add_child(api_client)
 	api_client.army_loaded.connect(_on_army_loaded)
 	api_client.import_failed.connect(_on_import_failed)
+
+	model_library = ModelLibrary.new()
+	model_library.name = "ModelLibrary"
+	add_child(model_library)
 
 
 ## Import army from file for a specific player
@@ -83,11 +90,16 @@ func import_army_for_player(file_path: String, player_id: int) -> void:
 		armies[player_id] = army
 
 
-## Spawn all units of an army on an army tray beside the table
+## Spawn all units of an army on an army tray beside the table.
+## Awaitable: any on-demand models the army needs are downloaded up front.
 func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.ZERO) -> Array[Node3D]:
 	if not object_manager:
 		push_error("OPRArmyManager: No object_manager set")
 		return []
+
+	# Fetch on-demand models this army needs (no-op when the manifest is empty or
+	# everything is cached); the spawn loop below then resolves them locally.
+	await _ensure_army_models_cached(army)
 
 	var all_models: Array[Node3D] = []
 	var player_color = PLAYER_COLORS.get(army.player_id, Color.GRAY)
@@ -440,11 +452,9 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 	var use_glb_model = false
 
 	if not model_path.is_empty():
-		# Load GLB model — use CACHE_MODE_REUSE so host and client share cached resources
-		var glb_scene = ResourceLoader.load(model_path, "", ResourceLoader.CACHE_MODE_REUSE)
-		if glb_scene:
-			var glb_instance = glb_scene.instantiate()
-
+		# Bundled res:// GLBs load via ResourceLoader; downloaded user:// GLBs via glTF.
+		var glb_instance = _instantiate_model(model_path)
+		if glb_instance:
 			# Modell an die Base anpassen (Footprint-Cap gegen Scale-Creep, Flying schwebt)
 			var aabb = _get_model_aabb(glb_instance)
 			var tough = _get_tough_value(unit)
@@ -583,11 +593,9 @@ func create_model_from_properties(props: Dictionary) -> StaticBody3D:
 
 	var use_glb_model = false
 	if not model_path.is_empty():
-		# Use CACHE_MODE_REUSE so host and client share cached resources
-		var glb_scene = ResourceLoader.load(model_path, "", ResourceLoader.CACHE_MODE_REUSE)
-		if glb_scene:
-			var glb_instance = glb_scene.instantiate()
-
+		# Bundled res:// GLBs load via ResourceLoader; downloaded user:// GLBs via glTF.
+		var glb_instance = _instantiate_model(model_path)
+		if glb_instance:
 			var aabb = _get_model_aabb(glb_instance)
 			var tough = _get_tough_value_from_rules(props.get("special_rules", []))
 			var fit = _compute_model_fit(aabb, base_long_mm, tough, should_hover)
@@ -862,14 +870,49 @@ func clear_army(player_id: int) -> void:
 
 # ===== GLB Model Loading Functions =====
 
-## Find the GLB model file for a unit by probing the bundled GLB files by name.
-## OPR unit data (incl. names) comes exclusively from the API at runtime — no OPR
-## data is bundled — so model selection is driven purely by the imported unit name.
+## Downloads any on-demand models the army needs (manifest + CDN) so the spawn
+## loop can resolve them from the local cache. No-op without a populated manifest.
+func _ensure_army_models_cached(army: OPRApiClient.OPRArmy) -> void:
+	if model_library == null or army == null:
+		return
+	var faction_folder: String = army.faction_folder
+	if faction_folder.is_empty():
+		return
+	var specs: Array = []
+	for unit: OPRApiClient.OPRUnit in army.units:
+		specs.append({"faction": faction_folder, "unit_name": unit.name})
+	await model_library.ensure_models(specs)
+
+
+## Instantiates a model from a local path: bundled res:// GLBs via ResourceLoader,
+## downloaded user:// GLBs via runtime glTF (GLTFDocument).
+func _instantiate_model(path: String) -> Node3D:
+	if path.begins_with("res://"):
+		var packed: Resource = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REUSE)
+		if packed is PackedScene:
+			return (packed as PackedScene).instantiate()
+		return null
+	var doc := GLTFDocument.new()
+	var state := GLTFState.new()
+	if doc.append_from_file(path, state) != OK:
+		return null
+	return doc.generate_scene(state)
+
+
+## Find the GLB model for a unit. Prefers an on-demand model already cached locally
+## (manifest + CDN), then falls back to a bundled GLB probed by name. OPR unit data
+## (incl. names) comes exclusively from the API at runtime.
 func _find_model_for_unit(unit_name: String, faction_folder: String) -> String:
 	if faction_folder.is_empty():
 		return ""
 
-	# Probe by name with ResourceLoader.exists() (works in exported builds).
+	# On-demand model already downloaded? (manifest-driven, content-addressed cache)
+	if model_library != null:
+		var cached: String = model_library.get_cached_path(faction_folder, unit_name)
+		if not cached.is_empty():
+			return cached
+
+	# Probe bundled GLBs by name with ResourceLoader.exists() (works in exports).
 	var glb_base_path = "res://assets/miniatures/%s/glb/" % faction_folder
 
 	# Try numbered prefixes 01-99
