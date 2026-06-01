@@ -73,3 +73,9 @@ __pycache__/
 # Model Forge artifacts (GLB-Optimizer-Backups, Gallery-Montagen)
 *.orig-backup
 /dao_union_gallery*.png
+
+# OPR data must NEVER be committed — it is OPR's content (not MIT-licensable) and
+# is loaded exclusively via the Army Forge API at runtime.
+assets/miniatures/*/units.json
+assets/opr_samples/
+examples/*.json
