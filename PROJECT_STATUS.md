@@ -44,17 +44,23 @@ v3.5.x stats. See [`tools/model_forge/README.md`](tools/model_forge/README.md).
 
 ## In progress
 
-- Terrain *gameplay* effects: cover dice modifiers, difficult-terrain movement,
-  dangerous-terrain damage, height-based LOS.
+- Terrain reference aids per the **Asgard tournament standard** — *display only, no
+  auto-resolution*: always-visible effect labels per terrain zone (Cover / Difficult /
+  Dangerous / Impassable / Height) and height-aware top-down line-of-sight in the
+  measure tool. Players apply the effects themselves.
 - Extended dice options (modifiers, rerolls).
 
 ## Planned
 
-- Rules automation: turn/phase tracking, activation, combat/morale resolution.
-- AI opponent (OPR Solo & Co-op rules). **Note:** an earlier AI system and battle
-  simulator (~5500 lines) were removed as legacy; a clean reimplementation is a
-  future milestone.
+- Unit-as-LOS-blocker (Asgard: formation height + closed 1" gaps) — terrain LOS first.
 - Multiplayer lobby UI / room browser, in-game chat.
+
+## Out of scope (by design)
+
+Niemandsland is a **tool for human players, not an automated game**. We deliberately
+do **not** build turn/phase/activation tracking, combat/save/damage resolution, or an
+AI opponent. (An earlier AI system + battle simulator, ~5500 lines, was removed as
+legacy and will not be reimplemented.)
 
 ## Not built (despite older docs)
 
