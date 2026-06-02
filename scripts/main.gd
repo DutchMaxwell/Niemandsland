@@ -1464,7 +1464,7 @@ func _on_remote_dice_rolled(peer_id: int, dice_count: int, results: Array, total
 	for i: int in range(results.size()):
 		per_dice["D6_%d" % (i + 1)] = int(results[i])
 
-	_add_dice_log_entry("Spieler %d" % peer_id, dice_count, _count_faces(per_dice))
+	_add_dice_log_entry("Player %d" % peer_id, dice_count, _count_faces(per_dice))
 
 	# Show 3D dice visualization for remote roll
 	# Guard prevents roll_finnished from re-broadcasting

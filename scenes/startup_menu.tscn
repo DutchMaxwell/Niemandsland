@@ -76,8 +76,8 @@ autowrap_mode = 2
 layout_mode = 2
 theme_override_colors/font_color = Color(0.45, 0.48, 0.56, 0.85)
 theme_override_font_sizes/font_size = 15
-text = "„Kamerad, ich wollte dich nicht töten.“
-— Erich Maria Remarque · Im Westen nichts Neues (1929)"
+text = "“Comrade, I did not want to kill you.”
+— Erich Maria Remarque · All Quiet on the Western Front (1929)"
 horizontal_alignment = 1
 autowrap_mode = 2
 

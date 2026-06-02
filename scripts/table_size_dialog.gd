@@ -19,8 +19,8 @@ var _emitted := false
 
 
 func _ready() -> void:
-	title = "Tischgröße wählen"
-	size = Vector2i(460, 430)
+	title = "Choose Table Size"
+	size = Vector2i(460, 520)
 	unresizable = true
 	exclusive = true
 	close_requested.connect(_on_close)
@@ -41,7 +41,7 @@ func _build_ui() -> void:
 	margin.add_child(vbox)
 
 	var info := Label.new()
-	info.text = "Wähle die Tischgröße.\nSie kann später nicht mehr geändert werden — ein Wechsel würde das aufgebaute Layout verwerfen."
+	info.text = "Choose your table size.\nIt can't be changed later — switching would discard the layout you've built."
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(info)
 
@@ -60,12 +60,12 @@ func _build_ui() -> void:
 	vbox.add_child(HSeparator.new())
 
 	var custom_label := Label.new()
-	custom_label.text = "Eigene Größe:"
+	custom_label.text = "Custom size:"
 	vbox.add_child(custom_label)
 
 	_unit_option = OptionButton.new()
-	_unit_option.add_item("Zoll")
-	_unit_option.add_item("Zentimeter")
+	_unit_option.add_item("Inches")
+	_unit_option.add_item("Centimeters")
 	vbox.add_child(_unit_option)
 
 	var row := HBoxContainer.new()
@@ -73,7 +73,7 @@ func _build_ui() -> void:
 	vbox.add_child(row)
 
 	var wl := Label.new()
-	wl.text = "Breite:"
+	wl.text = "Width:"
 	row.add_child(wl)
 	_width_input = SpinBox.new()
 	_width_input.min_value = 12
@@ -82,7 +82,7 @@ func _build_ui() -> void:
 	row.add_child(_width_input)
 
 	var ll := Label.new()
-	ll.text = "Länge:"
+	ll.text = "Length:"
 	row.add_child(ll)
 	_length_input = SpinBox.new()
 	_length_input.min_value = 12
@@ -91,10 +91,20 @@ func _build_ui() -> void:
 	row.add_child(_length_input)
 
 	var apply := Button.new()
-	apply.text = "Eigene Größe übernehmen"
+	apply.text = "Apply custom size"
 	apply.custom_minimum_size = Vector2(0, 42)
 	apply.pressed.connect(_on_apply_custom)
 	vbox.add_child(apply)
+
+	# Fixed anti-war footer (satirical — the table is the "war room").
+	vbox.add_child(HSeparator.new())
+	var quote := Label.new()
+	quote.text = "“Gentlemen, you can't fight in here! This is the War Room!”\n— President Muffley · Dr. Strangelove (1964)"
+	quote.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	quote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	quote.add_theme_font_size_override("font_size", 13)
+	quote.add_theme_color_override("font_color", Color(0.55, 0.58, 0.66, 0.85))
+	vbox.add_child(quote)
 
 
 func _on_apply_custom() -> void:

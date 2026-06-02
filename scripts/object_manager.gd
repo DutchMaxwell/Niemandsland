@@ -1447,7 +1447,7 @@ func spawn_custom_model(file_path: String, pos: Vector3, _broadcast: bool = true
 		"fbx":
 			# FBX cannot be loaded at runtime - Godot converts it during import
 			push_warning("FBX files must be converted to GLB first. Use Blender or import into Godot project.")
-			print("FBX Runtime-Import nicht möglich. Bitte zuerst zu GLB konvertieren:")
+			print("FBX runtime import not possible. Please convert to GLB first:")
 			print("  - Blender: File > Import FBX, dann File > Export > glTF 2.0 (.glb)")
 			print("  - Oder die FBX-Datei ins Godot-Projekt ziehen (wird automatisch konvertiert)")
 			return null

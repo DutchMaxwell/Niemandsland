@@ -212,7 +212,7 @@ func _token_text(letter: String, active: bool, active_color: String) -> String:
 func _build_wounds_text() -> String:
 	var total := _model_count()
 	var alive := _current_unit.get_alive_count()
-	var text := "Modelle: [color=%s]%d[/color]/%d" % [_alive_color(alive, total), alive, total]
+	var text := "Models: [color=%s]%d[/color]/%d" % [_alive_color(alive, total), alive, total]
 
 	var cur_total := 0
 	var max_total := 0

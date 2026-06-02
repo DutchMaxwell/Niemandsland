@@ -53,19 +53,19 @@ func _setup_ui() -> void:
 	vbox.add_child(link_section)
 
 	var link_info = Label.new()
-	link_info.text = "Army Forge Share-Link oder List-ID eingeben:"
+	link_info.text = "Enter an Army Forge share link or list ID:"
 	link_info.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
 	link_section.add_child(link_info)
 
 	var link_example = Label.new()
-	link_example.text = "z.B. https://army-forge.onepagerules.com/share?id=XXX"
+	link_example.text = "e.g. https://army-forge.onepagerules.com/share?id=XXX"
 	link_example.add_theme_font_size_override("font_size", 11)
 	link_example.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
 	link_section.add_child(link_example)
 
 	# Link input
 	share_link_input = LineEdit.new()
-	share_link_input.placeholder_text = "Share-Link oder List-ID hier einfügen..."
+	share_link_input.placeholder_text = "Paste a share link or list ID here..."
 	share_link_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	link_section.add_child(share_link_input)
 
@@ -75,12 +75,12 @@ func _setup_ui() -> void:
 	link_section.add_child(link_btn_row)
 
 	var paste_link_btn = Button.new()
-	paste_link_btn.text = "Aus Zwischenablage"
+	paste_link_btn.text = "From clipboard"
 	paste_link_btn.pressed.connect(_on_paste_link)
 	link_btn_row.add_child(paste_link_btn)
 
 	var fetch_btn = Button.new()
-	fetch_btn.text = "Armee laden"
+	fetch_btn.text = "Load army"
 	fetch_btn.pressed.connect(_on_fetch_from_link)
 	link_btn_row.add_child(fetch_btn)
 
@@ -97,20 +97,20 @@ func _setup_ui() -> void:
 	vbox.add_child(player_row)
 
 	var player_label = Label.new()
-	player_label.text = "Spieler zuweisen:"
+	player_label.text = "Assign player:"
 	player_row.add_child(player_label)
 
 	player_option = OptionButton.new()
-	player_option.add_item("Spieler 1 (Blau)", 1)
-	player_option.add_item("Spieler 2 (Rot)", 2)
-	player_option.add_item("Spieler 3 (Grün)", 3)
-	player_option.add_item("Spieler 4 (Gold)", 4)
+	player_option.add_item("Player 1 (Blue)", 1)
+	player_option.add_item("Player 2 (Red)", 2)
+	player_option.add_item("Player 3 (Green)", 3)
+	player_option.add_item("Player 4 (Gold)", 4)
 	player_option.select(0)
 	player_row.add_child(player_option)
 
 	# Army preview
 	var preview_label = Label.new()
-	preview_label.text = "Vorschau:"
+	preview_label.text = "Preview:"
 	vbox.add_child(preview_label)
 
 	army_preview = RichTextLabel.new()
@@ -137,12 +137,12 @@ func _setup_ui() -> void:
 	vbox.add_child(btn_row)
 
 	cancel_btn = Button.new()
-	cancel_btn.text = "Abbrechen"
+	cancel_btn.text = "Cancel"
 	cancel_btn.pressed.connect(_on_cancel)
 	btn_row.add_child(cancel_btn)
 
 	import_btn = Button.new()
-	import_btn.text = "Armee importieren"
+	import_btn.text = "Import army"
 	import_btn.disabled = true
 	import_btn.pressed.connect(_on_import)
 	btn_row.add_child(import_btn)
@@ -161,31 +161,31 @@ func _on_paste_link() -> void:
 func _on_fetch_from_link() -> void:
 	var link = share_link_input.text.strip_edges()
 	if link.is_empty():
-		link_status_label.text = "Kein Link eingegeben"
+		link_status_label.text = "No link entered"
 		link_status_label.add_theme_color_override("font_color", Color(0.8, 0.5, 0.5))
 		return
 
-	link_status_label.text = "Lädt..."
+	link_status_label.text = "Loading..."
 	link_status_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.5))
-	army_preview.text = "[color=#aaaaaa]Lade Armee von Army Forge API...[/color]"
+	army_preview.text = "[color=#aaaaaa]Loading army from the Army Forge API...[/color]"
 	import_btn.disabled = true
 
 	# Fetch from API
 	_preview_army = await api_client.import_from_share_link(link)
 	if _preview_army and _preview_army.units.size() > 0:
-		link_status_label.text = "Geladen!"
+		link_status_label.text = "Loaded!"
 		link_status_label.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5))
 		_update_preview()
 		import_btn.disabled = false
 	elif _preview_army and _preview_army.units.size() == 0:
-		link_status_label.text = "Leer"
+		link_status_label.text = "Empty"
 		link_status_label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.3))
-		army_preview.text = "[color=yellow]Die Armeeliste ist leer.[/color]\n\nDiese Liste enthält keine Einheiten. Füge zuerst Units in Army Forge hinzu."
+		army_preview.text = "[color=yellow]The army list is empty.[/color]\n\nThis list contains no units. Add some units in Army Forge first."
 		import_btn.disabled = true
 	else:
-		link_status_label.text = "Fehler"
+		link_status_label.text = "Error"
 		link_status_label.add_theme_color_override("font_color", Color(0.8, 0.5, 0.5))
-		army_preview.text = "[color=red]Konnte Armee nicht laden.[/color]\n\nPrüfe den Link und die Internetverbindung."
+		army_preview.text = "[color=red]Could not load the army.[/color]\n\nCheck the link and your internet connection."
 		import_btn.disabled = true
 
 
@@ -197,10 +197,10 @@ func _update_preview() -> void:
 	var text = "[b]%s[/b]\n" % _preview_army.name
 	text += "[color=#aaaaaa]%s[/color]\n\n" % _preview_army.game_system
 
-	text += "[b]Punkte:[/b] %d | " % _preview_army.points
+	text += "[b]Points:[/b] %d | " % _preview_army.points
 	text += "[b]Units:[/b] %d | " % _preview_army.units.size()
 	if _preview_army.model_count > 0:
-		text += "[b]Modelle:[/b] %d" % _preview_army.model_count
+		text += "[b]Models:[/b] %d" % _preview_army.model_count
 	text += "\n\n"
 
 	for unit in _preview_army.units:
