@@ -30,6 +30,9 @@ func _ready() -> void:
 	UiPolish.keep_window_reachable(self, Vector2i(550, 500))  # never larger than the viewport
 	theme = ThemeManager.get_current_theme()
 	close_requested.connect(_on_cancel)
+	visibility_changed.connect(func() -> void:
+		if visible:
+			UiPolish.grab_first_focus.call_deferred(self))
 
 	_setup_ui()
 

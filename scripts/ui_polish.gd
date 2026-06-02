@@ -65,6 +65,29 @@ static func _host_rect(win: Window) -> Vector2:
 	return Vector2(DisplayServer.screen_get_size())
 
 
+## Reachability: move keyboard/controller focus to the first focusable descendant so a
+## dialog is operable without a mouse. Wire a dialog's visibility_changed to call this
+## (deferred) on open. No-op if nothing is focusable.
+static func grab_first_focus(root: Node) -> void:
+	if not is_instance_valid(root):
+		return
+	var c := _first_focusable(root)
+	if c:
+		c.grab_focus()
+
+
+static func _first_focusable(node: Node) -> Control:
+	for child in node.get_children():
+		if child is Control:
+			var ctrl := child as Control
+			if ctrl.visible and ctrl.focus_mode == Control.FOCUS_ALL and not ctrl.is_queued_for_deletion():
+				return ctrl
+		var deep := _first_focusable(child)
+		if deep:
+			return deep
+	return null
+
+
 ## Pure clamp math (testable): shrink `target` to at most (frac_w, frac_h) of `vp_size`,
 ## with a small absolute floor so a dialog is never clamped to nothing.
 static func clamped_size(target: Vector2i, vp_size: Vector2,
