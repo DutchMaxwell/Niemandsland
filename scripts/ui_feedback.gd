@@ -7,7 +7,9 @@ extends Node
 const WIRED_META := "_ui_feedback_wired"
 
 # ===== UI sound (procedural, no assets) =====
-var _player: AudioStreamPlayer
+const SFX_POOL := 4
+var _players: Array[AudioStreamPlayer] = []
+var _next_player := 0
 var _snd_click: AudioStreamWAV
 var _snd_confirm: AudioStreamWAV
 var _snd_back: AudioStreamWAV
@@ -20,9 +22,13 @@ func _ready() -> void:
 
 
 func _setup_audio() -> void:
-	_player = AudioStreamPlayer.new()
-	_player.bus = "UI" if AudioServer.get_bus_index("UI") >= 0 else "Master"
-	add_child(_player)
+	# A small pool so rapid clicks overlap instead of cutting each other off.
+	var bus := "UI" if AudioServer.get_bus_index("UI") >= 0 else "Master"
+	for _i in SFX_POOL:
+		var p := AudioStreamPlayer.new()
+		p.bus = bus
+		add_child(p)
+		_players.append(p)
 	# Quiet, sub-300ms tones. Click = neutral tick, confirm = rising two-tone (primary),
 	# back = lower single tone (destructive/cancel).
 	_snd_click = _tone([1200.0], 0.035, 0.16)
@@ -31,11 +37,13 @@ func _setup_audio() -> void:
 
 
 func _play(stream: AudioStream) -> void:
-	if _player == null or stream == null:
+	if stream == null or _players.is_empty():
 		return
-	_player.stream = stream
-	_player.pitch_scale = randf_range(0.98, 1.02)  # avoid machine-gun on rapid clicks
-	_player.play()
+	var p := _players[_next_player]
+	_next_player = (_next_player + 1) % _players.size()
+	p.stream = stream
+	p.pitch_scale = randf_range(0.98, 1.02)  # avoid machine-gun on rapid clicks
+	p.play()
 
 
 func _sound_for(b: BaseButton) -> AudioStreamWAV:

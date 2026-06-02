@@ -15,17 +15,20 @@ const MARGIN_FROM_EDGE: int = 16
 ## Interval for refreshing live state while the card is visible (seconds).
 const REFRESH_INTERVAL: float = 0.3
 
+# Gameplay stat sub-palette — a deliberate domain palette (quality/defense/cost/base/melee).
 const COLOR_QUALITY: String = "#88ff88"
 const COLOR_DEFENSE: String = "#8888ff"
 const COLOR_COST: String = "#ffcc44"
 const COLOR_BASE: String = "#cccccc"
-const COLOR_RANGE: String = "#88ccff"
 const COLOR_MELEE: String = "#ff8888"
 const COLOR_RULES: String = "#aaaaaa"
 const COLOR_DIM: String = "#666666"
-const COLOR_ACTIVE: String = "#ffaa44"
-const COLOR_ALIVE: String = "#88ff88"
-const COLOR_DEAD: String = "#ff6666"
+
+# Status colours derived from HudTokens so active/alive/dead/range match the rest of the UI.
+var COLOR_RANGE := "#" + HudTokens.CYAN.to_html(false)
+var COLOR_ACTIVE := "#" + HudTokens.AMBER.to_html(false)
+var COLOR_ALIVE := "#" + HudTokens.SUCCESS.to_html(false)
+var COLOR_DEAD := "#" + HudTokens.DANGER.to_html(false)
 
 const PIP_FILLED: String = "▮"
 const PIP_EMPTY: String = "▯"
