@@ -102,3 +102,47 @@ static func amber_button() -> Dictionary:
 		"hover": button_style(Color(AMBER.r, AMBER.g, AMBER.b, 0.26), AMBER),
 		"pressed": button_style(Color(AMBER.r, AMBER.g, AMBER.b, 0.4), AMBER),
 	}
+
+
+# ===== Chrome =====
+
+## A section header: Orbitron title (+ optional amber mono index) over an accent
+## line (amber tick -> cyan rule). The signature chrome of the tactical HUD; drop it
+## at the top of any panel/dialog content.
+static func header(title: String, index: String = "") -> VBoxContainer:
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+
+	var row := HBoxContainer.new()
+	var t := Label.new()
+	t.text = title
+	t.add_theme_font_override("font", head_font())
+	t.add_theme_font_size_override("font_size", 16)
+	t.add_theme_color_override("font_color", TEXT)
+	row.add_child(t)
+	if index != "":
+		var sp := Control.new()
+		sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(sp)
+		var idx := Label.new()
+		idx.text = index
+		idx.add_theme_font_override("font", mono_font())
+		idx.add_theme_font_size_override("font_size", 12)
+		idx.add_theme_color_override("font_color", AMBER)
+		idx.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		row.add_child(idx)
+	v.add_child(row)
+
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", 0)
+	var amber := ColorRect.new()
+	amber.color = AMBER
+	amber.custom_minimum_size = Vector2(24, ACCENT_LINE)
+	var cyan := ColorRect.new()
+	cyan.color = Color(CYAN.r, CYAN.g, CYAN.b, 0.85)
+	cyan.custom_minimum_size = Vector2(0, ACCENT_LINE)
+	cyan.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	line.add_child(amber)
+	line.add_child(cyan)
+	v.add_child(line)
+	return v
