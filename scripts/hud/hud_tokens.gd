@@ -10,7 +10,7 @@ const CYAN := Color(0.0, 0.85, 1.0)        # primary: structure, focus, primary 
 const AMBER := Color(1.0, 0.64, 0.16)      # secondary: active/selected, warning, key values
 const DANGER := Color(1.0, 0.33, 0.38)     # destructive
 
-const SURFACE := Color(0.066, 0.085, 0.115, 0.92)  # panel fill (dark glass)
+const SURFACE := Color(0.043, 0.058, 0.098, 0.98)  # panel fill (deep navy glass, not gray)
 const RAISED := Color(1.0, 1.0, 1.0, 0.05)          # header strip lift
 const HAIRLINE := Color(1.0, 1.0, 1.0, 0.10)        # subtle border / divider
 const SUNKEN := Color(0.0, 0.0, 0.0, 0.32)          # input / preview wells
