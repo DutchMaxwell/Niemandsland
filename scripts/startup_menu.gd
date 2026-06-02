@@ -22,6 +22,19 @@ var _join_relay_url_input: LineEdit
 const ACCENT_COLOR := Color(0.0, 0.85, 1.0)
 const ORBITRON_PATH := "res://assets/ui_glassmorphism/fonts/Orbitron.ttf"
 const WORDMARK_FONT_SIZE := 64
+## Anti-war quotes under the title; one is chosen at random each time the menu opens.
+const MENU_QUOTES: Array[String] = [
+	"“Comrade, I did not want to kill you.”\n— Erich Maria Remarque · All Quiet on the Western Front (1929)",
+	"“I see how peoples are set against one another, and in silence, unknowingly, foolishly, obediently, innocently slay one another.”\n— Erich Maria Remarque · All Quiet on the Western Front (1929)",
+	"“We are forlorn like children, and experienced like old men; we are crude and sorrowful and superficial — I believe we are lost.”\n— Erich Maria Remarque · All Quiet on the Western Front (1929)",
+	"“The dead only know one thing: it is better to be alive.”\n— Joker · Full Metal Jacket (1987)",
+	"“Babies — infants who belong at their mothers' breasts. You feel ancient among all these kids.”\n— The Captain · Das Boot (1981)",
+	"“We did not fight the enemy; we fought ourselves — and the enemy was in us.”\n— Chris Taylor · Platoon (1986)",
+	"“The enemy is anybody who's going to get you killed, no matter which side he is on.”\n— Joseph Heller · Catch-22 (1961)",
+	"“Patriotism is the last refuge of a scoundrel.”\n— Col. Dax · Paths of Glory (1957)",
+	"“War don't ennoble men. It turns them into dogs — poisons the soul.”\n— Pvt. Witt · The Thin Red Line (1998)",
+	"“The horror… the horror.”\n— Colonel Kurtz · Apocalypse Now (1979)",
+]
 var _wordmark_box: HBoxContainer
 var _backdrop_camera: Camera3D
 var _drift: float = 0.0
@@ -49,6 +62,7 @@ func _ready() -> void:
 	_build_wordmark()
 	_build_embers()
 	_build_post_layers()
+	_apply_random_quote()
 
 	# Hide menu initially for animation
 	menu_panel.modulate.a = 0.0
@@ -409,6 +423,15 @@ func _build_wordmark() -> void:
 	var parent := logo_label.get_parent()
 	parent.add_child(_wordmark_box)
 	parent.move_child(_wordmark_box, logo_label.get_index())
+
+
+## Picks a random anti-war quote for the menu's quote line (rotates each launch).
+func _apply_random_quote() -> void:
+	var quote_label := get_node_or_null("LogoContainer/QuoteLabel") as Label
+	if quote_label == null:
+		return
+	randomize()
+	quote_label.text = MENU_QUOTES[randi() % MENU_QUOTES.size()]
 
 
 func _make_word(text: String, font: FontVariation, color: Color, glow: bool) -> Label:

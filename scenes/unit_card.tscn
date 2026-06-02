@@ -71,7 +71,7 @@ scroll_active = false
 [node name="WoundsLabel" type="RichTextLabel" parent="MarginContainer/VBox"]
 layout_mode = 2
 bbcode_enabled = true
-text = "Modelle: 5/5"
+text = "Models: 5/5"
 fit_content = true
 scroll_active = false
 

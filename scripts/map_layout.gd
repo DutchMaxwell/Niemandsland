@@ -232,7 +232,7 @@ func _ready() -> void:
 	_update_recommendations()
 
 
-## Reorganize the flat left panel into Gelände / Missionsziele / Aufstellung tabs.
+## Reorganize the flat left panel into Terrain / Objectives / Deployment tabs.
 ## Reparents the existing scene + code-built controls into a TabContainer.
 func _setup_tabs() -> void:
 	var left_panel := terrain_buttons.get_parent()
@@ -257,15 +257,15 @@ func _setup_tabs() -> void:
 	tabs.add_child(ziele)
 	tabs.add_child(aufstellung)
 	left_panel.add_child(tabs)
-	tabs.set_tab_title(0, "Gelände")
-	tabs.set_tab_title(1, "Missionsziele")
-	tabs.set_tab_title(2, "Aufstellung")
+	tabs.set_tab_title(0, "Terrain")
+	tabs.set_tab_title(1, "Objectives")
+	tabs.set_tab_title(2, "Deployment")
 
 	var into := func(tab: VBoxContainer, node: Node) -> void:
 		if node and is_instance_valid(node) and node.get_parent() == left_panel:
 			node.reparent(tab)
 
-	# Gelände: terrain placement tools
+	# Terrain: terrain placement tools
 	into.call(gelaende, left_panel.get_node_or_null("TerrainLabel"))
 	into.call(gelaende, terrain_buttons)
 	into.call(gelaende, _modular_terrain_panel)
@@ -659,7 +659,7 @@ func _setup_modular_terrain_ui() -> void:
 	_undo_btn.custom_minimum_size = Vector2(0, 36)
 	_undo_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_undo_btn.disabled = true
-	_undo_btn.tooltip_text = "Rückgängig (Strg+Z)"
+	_undo_btn.tooltip_text = "Undo (Ctrl+Z)"
 	_undo_btn.pressed.connect(undo)
 	undo_row.add_child(_undo_btn)
 
@@ -668,7 +668,7 @@ func _setup_modular_terrain_ui() -> void:
 	_redo_btn.custom_minimum_size = Vector2(0, 36)
 	_redo_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_redo_btn.disabled = true
-	_redo_btn.tooltip_text = "Wiederholen (Strg+Y)"
+	_redo_btn.tooltip_text = "Redo (Ctrl+Y)"
 	_redo_btn.pressed.connect(redo)
 	undo_row.add_child(_redo_btn)
 
