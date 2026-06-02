@@ -18,6 +18,7 @@ licenses — the canonical notice for an open-source release.
 | Inter (font) | SIL OFL 1.1 | yes | `assets/ui_glassmorphism/fonts/Inter.ttf` + `Inter-LICENSE.txt` |
 | Source Code Pro (font) | SIL OFL 1.1 | yes | `assets/ui_glassmorphism/fonts/SourceCodePro.ttf` + `SourceCodePro-LICENSE.txt` (RFN "Source") |
 | Kenney UI Pack(s) | CC0 | yes | `assets/kenney_ui/` (UI themes) |
+| Phosphor Icons | MIT | yes | `assets/ui_glassmorphism/icons/` + `Phosphor-LICENSE.txt` (UI icons, 256px, bold/fill) |
 | 3D dice (own W6) | MIT | yes | `scripts/dice_tray.gd`, `scripts/dice_d6.gd` (replaced the former AGPL addon) |
 | Miniature GLBs | project-internal (AI-generated) | on-demand | see *Generated assets* below |
 | Microsoft TRELLIS | MIT | no (dev tool) | image→3D model generation in `tools/model_forge/` |
@@ -46,7 +47,8 @@ Tracked in [`docs/PRE_RELEASE_LICENSING.md`](docs/PRE_RELEASE_LICENSING.md):
 - **Image-generation ToS** — researched (see `docs/PRE_RELEASE_LICENSING.md`): Gemini
   output is user-owned + commercial-OK (use the paid tier; AI-only output may not be
   copyrightable); TRELLIS is MIT. Final call with the lawyer.
-- **SVG icon / texture provenance** — confirm sources/licenses for any third-party UI icons.
+- ~~SVG icon provenance~~ — ✅ resolved: UI icons are **Phosphor Icons** (MIT),
+  license bundled. (Other textures, e.g. the table surface, are project-internal.)
 - **Git-history scrub** — previously-bundled OPR data and the removed AGPL addon still
   exist in history; scrub before any public/MIT release.
 - **IP-lawyer review** — given the AI-generated and OPR-derived assets.
