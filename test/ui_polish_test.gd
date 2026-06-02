@@ -28,6 +28,15 @@ func test_primary_button_sets_height_keeps_width() -> void:
 
 
 func test_sunken_panel_style_is_rounded_glass() -> void:
+	# Delegates to HudTokens (single source of truth) — radius matches the token,
+	# not the old glassmorphism radius of 12.
 	var s := UiPolish.sunken_panel_style()
-	assert_int(s.corner_radius_top_left).is_equal(12)
+	assert_int(s.corner_radius_top_left).is_equal(HudTokens.RADIUS)
 	assert_int(s.border_width_left).is_greater(0)
+
+
+func test_tokens_delegate_to_hud_tokens() -> void:
+	# UiPolish must not re-introduce a second palette; every token resolves to HudTokens.
+	assert_bool(UiPolish.ACCENT == HudTokens.CYAN).is_true()
+	assert_bool(UiPolish.DESTRUCTIVE == HudTokens.DANGER).is_true()
+	assert_bool(UiPolish.TEXT_MUTED == HudTokens.TEXT_MUTED).is_true()
