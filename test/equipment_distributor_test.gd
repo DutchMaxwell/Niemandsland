@@ -16,6 +16,13 @@ func _unit_with_models(count: int) -> GameUnit:
 	return unit
 
 
+func _weapon_names(model: ModelInstance) -> Array:
+	var names: Array = []
+	for w in model.get_weapons():
+		names.append(w["name"])
+	return names
+
+
 # ===== Tough -> wounds =====
 
 func test_tough_sets_wounds_on_all_models() -> void:
@@ -109,16 +116,43 @@ func test_universal_weapon_stacks_with_a_limited_one() -> void:
 	assert_int(special_models).is_equal(1)
 
 
-# ===== Equipment (attacks == 0) goes to a single model =====
+# ===== Equipment / tools distribute by count (per-model pinning) =====
 
-func test_equipment_assigned_to_single_model() -> void:
+func test_equipment_with_count_one_goes_to_single_model() -> void:
+	# A tool carried by one model (count 1) lands on exactly one model, so the base
+	# ring can label it there.
 	var unit := _unit_with_models(3)
-	EquipmentDistributor.distribute(unit, [{"name": "Banner", "attacks": 0}], [])
+	EquipmentDistributor.distribute(unit, [{"name": "Banner", "attacks": 0, "count": 1}], [])
 	var carriers := 0
 	for model in unit.models:
 		if "Banner" in model.get_equipment():
 			carriers += 1
 	assert_int(carriers).is_equal(1)
+
+
+func test_equipment_with_full_count_goes_to_all_models() -> void:
+	# A unit-wide tool (count == size) lands on every model, so it is NOT special.
+	var unit := _unit_with_models(3)
+	EquipmentDistributor.distribute(unit, [{"name": "Toxic Cysts", "attacks": 0, "count": 3}], [])
+	for model in unit.models:
+		assert_bool("Toxic Cysts" in model.get_equipment()).is_true()
+
+
+func test_special_weapon_and_tool_pin_to_distinct_specials() -> void:
+	# 5 models: a universal weapon on all + a single-model tool. The tool lands on one
+	# model and is flagged as that model's special equipment (what the base ring shows).
+	var unit := _unit_with_models(5)
+	EquipmentDistributor.distribute(unit, [
+		{"name": "Razor Claws", "attacks": 1, "count": 5},
+		{"name": "Synaptic Relay", "attacks": 0, "count": 1},
+	], [])
+	var carriers: Array = []
+	for model in unit.models:
+		assert_bool("Razor Claws" in _weapon_names(model)).is_true()
+		if "Synaptic Relay" in model.get_equipment():
+			carriers.append(model)
+	assert_int(carriers.size()).is_equal(1)
+	assert_array(unit.get_special_equipment_names(carriers[0])).contains_exactly(["Synaptic Relay"])
 
 
 # ===== Hero attach / detach =====
