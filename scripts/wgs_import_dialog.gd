@@ -28,6 +28,7 @@ var wgs_client: WGSClient
 func _ready() -> void:
 	title = "Import WGS Game"
 	size = Vector2i(550, 500)
+	theme = ThemeManager.get_current_theme()
 	close_requested.connect(_on_cancel)
 
 	_setup_ui()
@@ -37,14 +38,11 @@ func _setup_ui() -> void:
 	# Main container
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 16)
-	margin.add_theme_constant_override("margin_top", 16)
-	margin.add_theme_constant_override("margin_right", 16)
-	margin.add_theme_constant_override("margin_bottom", 16)
+	UiPolish.set_dialog_margins(margin)
 	add_child(margin)
 
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
+	vbox.add_theme_constant_override("separation", UiPolish.SECTION_SEP)
 	margin.add_child(vbox)
 
 	# Title
@@ -57,7 +55,7 @@ func _setup_ui() -> void:
 	var info_label = Label.new()
 	info_label.text = "Import a game state from Udo's Wargaming Simulator (udos3dworld.com)"
 	info_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	info_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	info_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(info_label)
 
 	# Tab container for File vs Server import
@@ -93,12 +91,7 @@ func _setup_ui() -> void:
 	game_preview.scroll_following = true
 
 	var preview_panel = PanelContainer.new()
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.1, 0.12, 0.9)
-	style.border_color = Color(0.3, 0.3, 0.35)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(4)
-	preview_panel.add_theme_stylebox_override("panel", style)
+	preview_panel.add_theme_stylebox_override("panel", UiPolish.sunken_panel_style())
 	preview_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(preview_panel)
 	preview_panel.add_child(game_preview)
@@ -111,12 +104,14 @@ func _setup_ui() -> void:
 
 	cancel_btn = Button.new()
 	cancel_btn.text = "Cancel"
+	UiPolish.primary_button(cancel_btn)
 	cancel_btn.pressed.connect(_on_cancel)
 	btn_row.add_child(cancel_btn)
 
 	import_btn = Button.new()
 	import_btn.text = "Import Game"
 	import_btn.disabled = true
+	UiPolish.primary_button(import_btn)
 	import_btn.pressed.connect(_on_import)
 	btn_row.add_child(import_btn)
 
@@ -138,7 +133,7 @@ func _setup_file_tab(container: VBoxContainer) -> void:
 	var file_info = Label.new()
 	file_info.text = "Select a WGS game state file (.txt) exported from the Wargaming Simulator."
 	file_info.autowrap_mode = TextServer.AUTOWRAP_WORD
-	file_info.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	file_info.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	container.add_child(file_info)
 
 	var file_row = HBoxContainer.new()
@@ -146,13 +141,14 @@ func _setup_file_tab(container: VBoxContainer) -> void:
 	container.add_child(file_row)
 
 	var select_btn = Button.new()
-	select_btn.text = "Select File..."
+	select_btn.text = "Select File…"
+	UiPolish.primary_button(select_btn)
 	select_btn.pressed.connect(_on_select_file)
 	file_row.add_child(select_btn)
 
 	status_label = Label.new()
 	status_label.text = "No file selected"
-	status_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	status_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	file_row.add_child(status_label)
 
@@ -161,7 +157,7 @@ func _setup_server_tab(container: VBoxContainer) -> void:
 	var server_info = Label.new()
 	server_info.text = "Enter the Game ID to fetch the current state from the WGS server."
 	server_info.autowrap_mode = TextServer.AUTOWRAP_WORD
-	server_info.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	server_info.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	container.add_child(server_info)
 
 	var id_row = HBoxContainer.new()
@@ -179,12 +175,13 @@ func _setup_server_tab(container: VBoxContainer) -> void:
 
 	fetch_btn = Button.new()
 	fetch_btn.text = "Fetch"
+	UiPolish.primary_button(fetch_btn)
 	fetch_btn.pressed.connect(_on_fetch)
 	id_row.add_child(fetch_btn)
 
 	var url_info = Label.new()
 	url_info.text = "The game state will be fetched from:\nhttps://udos3dworld.com/WargamingSimulator/GetGameState.php?gameID={game_id}"
-	url_info.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+	url_info.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	url_info.add_theme_font_size_override("font_size", 11)
 	container.add_child(url_info)
 
@@ -196,7 +193,7 @@ func _on_select_file() -> void:
 func _on_file_selected(path: String) -> void:
 	_selected_file = path
 	status_label.text = path.get_file()
-	status_label.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5))
+	status_label.add_theme_color_override("font_color", UiPolish.SUCCESS)
 
 	# Parse and preview
 	_preview_game = wgs_client.import_from_file(path)
@@ -204,17 +201,17 @@ func _on_file_selected(path: String) -> void:
 		_update_preview()
 		import_btn.disabled = false
 	else:
-		game_preview.text = "[color=red]Failed to parse game state file.[/color]\n\nMake sure this is a valid WGS game state file."
+		game_preview.text = "[color=#%s]Failed to parse game state file.[/color]\n\nMake sure this is a valid WGS game state file." % UiPolish.hex(UiPolish.DESTRUCTIVE)
 		import_btn.disabled = true
 
 
 func _on_fetch() -> void:
 	var game_id = game_id_input.text.strip_edges()
 	if game_id.is_empty():
-		game_preview.text = "[color=yellow]Please enter a Game ID.[/color]"
+		game_preview.text = "[color=#%s]Please enter a Game ID.[/color]" % UiPolish.hex(UiPolish.WARNING)
 		return
 
-	game_preview.text = "[color=#aaaaaa]Fetching game state...[/color]"
+	game_preview.text = "[color=#%s]Fetching game state…[/color]" % UiPolish.hex(UiPolish.ACCENT)
 	fetch_btn.disabled = true
 
 	var http = HTTPRequest.new()
@@ -235,20 +232,20 @@ func _on_fetch_completed(result: int, response_code: int, _headers: PackedString
 	fetch_btn.disabled = false
 
 	if result != HTTPRequest.RESULT_SUCCESS:
-		game_preview.text = "[color=red]HTTP request failed.[/color]\n\nPlease check your internet connection."
+		game_preview.text = "[color=#%s]HTTP request failed.[/color]\n\nPlease check your internet connection." % UiPolish.hex(UiPolish.DESTRUCTIVE)
 		return
 
 	if response_code == 404:
-		game_preview.text = "[color=red]Game not found.[/color]\n\nThe game ID '%s' does not exist on the server." % game_id
+		game_preview.text = "[color=#%s]Game not found.[/color]\n\nThe game ID '%s' does not exist on the server." % [UiPolish.hex(UiPolish.DESTRUCTIVE), game_id]
 		return
 
 	if response_code != 200:
-		game_preview.text = "[color=red]Server error: %d[/color]" % response_code
+		game_preview.text = "[color=#%s]Server error: %d[/color]" % [UiPolish.hex(UiPolish.DESTRUCTIVE), response_code]
 		return
 
 	var content = body.get_string_from_utf8()
 	if content.is_empty():
-		game_preview.text = "[color=yellow]Game state is empty.[/color]"
+		game_preview.text = "[color=#%s]Game state is empty.[/color]" % UiPolish.hex(UiPolish.WARNING)
 		return
 
 	_preview_game = wgs_client.import_from_text(content, game_id)
@@ -256,7 +253,7 @@ func _on_fetch_completed(result: int, response_code: int, _headers: PackedString
 		_update_preview()
 		import_btn.disabled = false
 	else:
-		game_preview.text = "[color=red]Failed to parse game state.[/color]"
+		game_preview.text = "[color=#%s]Failed to parse game state.[/color]" % UiPolish.hex(UiPolish.DESTRUCTIVE)
 		import_btn.disabled = true
 
 
