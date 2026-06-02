@@ -17,12 +17,42 @@ const SUNKEN := Color(0.0, 0.0, 0.0, 0.32)          # input / preview wells
 const TEXT := Color(0.92, 0.95, 0.98)
 const TEXT_MUTED := Color(0.56, 0.61, 0.69)
 
+# Status colours. Always pair with an icon/shape/label — never carry meaning by hue
+# alone (CVD-safe, WCAG 1.4.1). Used by dialogs, coherency and dice readouts.
+const SUCCESS := Color(0.30, 0.85, 0.55)   # confirmation / pass
+const WARNING := Color(1.0, 0.75, 0.30)    # warning / empty (distinct from AMBER accent)
+
 # ===== Geometry =====
 const RADIUS := 4          # sleek: a touch of rounding (near-sharp)
 const PAD := 16
 const HEADER_H := 34
 const ACCENT_LINE := 2
 const BUTTON_H := 40
+
+# Spacing scale (8pt grid + 4pt half-step). Use these for every separation /
+# margin / content-margin instead of raw pixel literals.
+const SPACE_4 := 4
+const SPACE_8 := 8
+const SPACE_12 := 12
+const SPACE_16 := 16
+const SPACE_24 := 24
+
+# Dialog / hit-target tokens (shared by all dialogs via UiPolish helpers).
+const DIALOG_MARGIN := 18    # outer content margin of a dialog
+const SECTION_SEP := 10      # vertical gap between dialog sections
+const BUTTON_HEIGHT := 42    # comfortable interactive height (>= ~44px hit target)
+
+# ===== Motion =====
+# Centralised so every animation references the same timing/scale and honours the
+# Reduce-Motion toggle. Durations in seconds. (Material 3 easing/duration specs.)
+const DUR_HOVER := 0.10
+const DUR_PRESS := 0.06
+const DUR_PANEL_IN := 0.22
+const DUR_PANEL_OUT := 0.18
+const DUR_SCREEN := 0.35
+const SCALE_HOVER := 1.02
+const SCALE_PRESS := 0.97
+const SCALE_PUNCH := 1.06
 
 # ===== Type =====
 const FONT_DIR := "res://assets/ui_glassmorphism/fonts/"
