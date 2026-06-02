@@ -116,7 +116,7 @@ func _control(name: String, node: Control, size: Vector2i) -> void:
 	vp.add_child(bg)
 	vp.add_child(node)
 	get_tree().root.add_child(vp)
-	await _settle(16)
+	await _settle(80)  # let intro/fade-in animations (e.g. the start menu) finish
 	_save(vp.get_texture().get_image(), name)
 
 
