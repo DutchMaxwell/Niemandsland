@@ -60,7 +60,8 @@ lost between work sessions.**
 - [x] **Bundle the SIL OFL license text** for the fonts (Inter, Source Code Pro) —
       added next to the fonts. ✅
 - [x] **Added `THIRD_PARTY.md`** listing every dependency + asset and its license. ✅
-- [ ] **Verify SVG icon / texture provenance**; attribute third-party sources.
+- [x] **SVG icon provenance** — UI icons are **Phosphor Icons** (MIT); license
+      bundled + attributed in `THIRD_PARTY.md`. ✅
 - [ ] **IP-lawyer review** before public release.
 
 ## Reference: licenses found so far
