@@ -29,36 +29,34 @@ static func distribute(game_unit: GameUnit, loadout: Array, special_rules: Array
 	for model in game_unit.models:
 		model.properties["special_rules"] = rule_strings.duplicate()
 
-	# Step 3: Distribute weapons.
-	# - Universal weapons (carried by every model) go to ALL models.
-	# - Limited weapons (a subset of models) fill DISTINCT models via a sequential
-	#   cursor instead of all stacking on model 0. So a special weapon (e.g. a
-	#   Flamer, count 1) lands on the model the base weapon's reduced count never
-	#   reached - i.e. it REPLACES the base on that model. An additional weapon on
-	#   a full-count base (count == unit_size) still stacks on top (an add-on).
-	var universal_weapons: Array = []
-	var limited_weapons: Array = []
+	# Step 3: Distribute weapons AND tools/equipment by count.
+	# - Universal entries (count >= unit_size) go on ALL models.
+	# - Limited entries (count < unit_size) fill DISTINCT models via a sequential
+	#   cursor instead of all stacking on model 0. So a special weapon (e.g. a Flamer,
+	#   count 1) lands on the model the base weapon's reduced count never reached -
+	#   i.e. it REPLACES the base there; an add-on on a full-count base still stacks.
+	#   A subset tool (e.g. a 1-of-10 "Synaptic Relay") lands on one model the same way.
+	# Weapons go to the model's weapon list, non-weapon items (attacks == 0) to its
+	# equipment list, so the base ring can label per-model specials.
+	var universal: Array = []
+	var limited: Array = []
 	for item in loadout:
-		if _get_attacks(item) > 0:
-			if _get_count(item, unit_size) >= unit_size:
-				universal_weapons.append(item)
-			else:
-				limited_weapons.append(item)
+		if _get_count(item, unit_size) >= unit_size:
+			universal.append(item)
 		else:
-			# Equipment (attacks = 0)
-			_assign_equipment_to_model(game_unit, item)
+			limited.append(item)
 
-	for item in universal_weapons:
+	for item in universal:
 		for model in game_unit.models:
-			_add_weapon_to_model(model, item)
+			_add_loadout_item_to_model(model, item)
 
 	var cursor := 0
-	for item in limited_weapons:
+	for item in limited:
 		var count = _get_count(item, unit_size)
 		for _k in range(count):
 			if cursor >= unit_size:
 				cursor = 0  # safety wrap if limited counts exceed the unit size
-			_add_weapon_to_model(game_unit.models[cursor], item)
+			_add_loadout_item_to_model(game_unit.models[cursor], item)
 			cursor += 1
 
 
@@ -146,24 +144,23 @@ static func _add_weapon_to_model(model: ModelInstance, weapon: Variant) -> void:
 	model.properties["weapons"] = weapons
 
 
-## Assigns equipment (non-weapon) to the first available model.
-## Equipment without count is assigned to one model only.
-static func _assign_equipment_to_model(game_unit: GameUnit, item: Variant) -> void:
-	var equipment_name = _get_name(item)
+## Routes a loadout entry to the right per-model list: weapons (attacks > 0) to the
+## model's weapon list, everything else (tools/equipment) to its equipment list.
+static func _add_loadout_item_to_model(model: ModelInstance, item: Variant) -> void:
+	if _get_attacks(item) > 0:
+		_add_weapon_to_model(model, item)
+	else:
+		_add_equipment_to_model(model, _get_name(item))
 
-	# Try to find a model without special equipment yet
-	for model in game_unit.models:
-		var equip = model.properties.get("equipment", [])
-		if equip.is_empty():
-			equip.append(equipment_name)
-			model.properties["equipment"] = equip
-			return
 
-	# Fallback: assign to first model
-	if game_unit.models.size() > 0:
-		var equip = game_unit.models[0].properties.get("equipment", [])
+## Adds an equipment/tool name to a model's equipment list (deduped per model).
+static func _add_equipment_to_model(model: ModelInstance, equipment_name: String) -> void:
+	if equipment_name.is_empty():
+		return
+	var equip = model.properties.get("equipment", [])
+	if equipment_name not in equip:
 		equip.append(equipment_name)
-		game_unit.models[0].properties["equipment"] = equip
+	model.properties["equipment"] = equip
 
 
 # ===== Hero Attachment =====
@@ -245,12 +242,14 @@ static func create_from_opr_unit(opr_unit: Variant, nodes: Array[Node3D], player
 			"specialRules": weapon.special_rules.duplicate()
 		})
 
-	# Add equipment items (attacks = 0)
-	for equipment_name in opr_unit.equipment:
+	# Add per-model tool/equipment upgrades (non-weapon items on a subset of models).
+	# They flow through the same count-based distribution as weapons, so each lands on
+	# specific model(s) and the base ring can label it.
+	for equip_item in opr_unit.equipment_items:
 		loadout.append({
-			"name": equipment_name,
+			"name": equip_item.get("name", ""),
 			"attacks": 0,
-			"count": 1
+			"count": equip_item.get("count", 1)
 		})
 
 	# Distribute equipment using the loadout
