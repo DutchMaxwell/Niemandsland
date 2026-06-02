@@ -217,10 +217,10 @@ func import_from_file(file_path: String) -> OPRArmy:
 func import_from_share_link(share_link_or_id: String) -> OPRArmy:
 	var list_id = _extract_list_id(share_link_or_id)
 	if list_id.is_empty():
-		import_failed.emit("Ungültige Share-URL oder List-ID")
+		import_failed.emit("Invalid share URL or list ID")
 		return null
 
-	loading_progress.emit("Lade Armee von Army Forge...")
+	loading_progress.emit("Loading army from Army Forge...")
 
 	# Call the TTS API endpoint
 	var url = "%s/tts?id=%s" % [API_BASE_URL, list_id]
@@ -229,7 +229,7 @@ func import_from_share_link(share_link_or_id: String) -> OPRArmy:
 	var error = _http_request.request(url)
 	if error != OK:
 		push_error("OPRApiClient: HTTP request failed: %d" % error)
-		import_failed.emit("Verbindung fehlgeschlagen")
+		import_failed.emit("Connection failed")
 		return null
 
 	# Wait for response
@@ -240,7 +240,7 @@ func import_from_share_link(share_link_or_id: String) -> OPRArmy:
 
 	if response_code != 200:
 		push_error("OPRApiClient: API returned %d" % response_code)
-		import_failed.emit("API-Fehler: %d" % response_code)
+		import_failed.emit("API error: %d" % response_code)
 		return null
 
 	var json_text = body.get_string_from_utf8()
@@ -274,12 +274,12 @@ func _parse_tts_api_response(json_text: String) -> OPRArmy:
 
 	if error != OK:
 		push_error("OPRApiClient: JSON parse error: %s" % json.get_error_message())
-		import_failed.emit("Ungültiges API-Response Format")
+		import_failed.emit("Invalid API response format")
 		return null
 
 	var data = json.data
 	if not data is Dictionary:
-		import_failed.emit("Ungültige Armee-Daten")
+		import_failed.emit("Invalid army data")
 		return null
 
 	var army = OPRArmy.new()
