@@ -1,10 +1,10 @@
 ================================================================================
-OpenTTS ↔ WGS Integration - Technische Anforderungen
+Niemandsland ↔ WGS Integration - Technische Anforderungen
 ================================================================================
 
 AKTUELLER STAND
 ---------------
-OpenTTS hat bereits eine WGS-Integration implementiert:
+Niemandsland hat bereits eine WGS-Integration implementiert:
 - Parser für das WGS-Spielzustand-Format ({gameID}.txt)
 - Konvertierung der Koordinaten (Zoll → Meter)
 - Spawnen von Units basierend auf WGS-Daten
@@ -18,7 +18,7 @@ Der getGameState.php Endpoint ist jetzt verfügbar:
 
     https://udos3dworld.com/WargamingSimulator/getGameState.php?gameID={gameID}
 
-OpenTTS nutzt diesen Endpoint für den Server-Import.
+Niemandsland nutzt diesen Endpoint für den Server-Import.
 
 
 ================================================================================
@@ -105,7 +105,7 @@ Für Chat/Spielprotokoll-Synchronisation:
 WICHTIG: CORS-Header
 ================================================================================
 
-Der Header "Access-Control-Allow-Origin: *" ist notwendig, damit OpenTTS
+Der Header "Access-Control-Allow-Origin: *" ist notwendig, damit Niemandsland
 (als Desktop-Anwendung) auf die Daten zugreifen kann.
 
 
@@ -121,9 +121,9 @@ ZUSAMMENFASSUNG DER OPTIONEN
 
 
 ================================================================================
-RÜCKKANAL (Züge von OpenTTS → WGS)
+RÜCKKANAL (Züge von Niemandsland → WGS)
 ================================================================================
 
-Für bidirektionale Synchronisation könnte OpenTTS POST-Requests an DoAction.php
+Für bidirektionale Synchronisation könnte Niemandsland POST-Requests an DoAction.php
 senden. Das bestehende Format (ActionString) ist bereits dokumentiert und
 verstanden. Hierfür wäre ebenfalls CORS notwendig.

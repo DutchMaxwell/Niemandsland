@@ -1,4 +1,4 @@
-# UI/UX Modernisierungsplan - OpenTTS
+# UI/UX Modernisierungsplan - Niemandsland
 
 ## Executive Summary
 
@@ -273,7 +273,7 @@ class_name GlassPanel extends PanelContainer
 ┌──────────────────────────────────────────────────────────────┐
 │                                                              │
 │                     ╔═══════════════════╗                   │
-│                     ║     OPENTTS       ║                   │
+│                     ║   NIEMANDSLAND    ║                   │
 │                     ║  ═══════════════  ║                   │
 │                     ║  Tactical Tabletop║                   │
 │                     ╚═══════════════════╝                   │

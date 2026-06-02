@@ -13,7 +13,7 @@ VENV_DIR="venv"
 REQUIREMENTS="requirements.txt"
 
 echo "============================================"
-echo "  Model Forge - OpenTTS 3D-Modell-Pipeline"
+echo "  Model Forge - Niemandsland 3D-Modell-Pipeline"
 echo "============================================"
 echo ""
 

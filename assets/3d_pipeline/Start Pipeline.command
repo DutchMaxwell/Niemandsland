@@ -1,9 +1,9 @@
 #!/bin/bash
-# OpenTTS 3D Pipeline - macOS/Linux Starter
+# Niemandsland 3D Pipeline - macOS/Linux Starter
 
 echo ""
 echo "========================================"
-echo " OpenTTS 3D Pipeline - Trellis.2"
+echo " Niemandsland 3D Pipeline - Trellis.2"
 echo "========================================"
 echo ""
 

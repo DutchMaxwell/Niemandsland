@@ -1,5 +1,5 @@
 """
-Terrain Exporter — Exportiert modulare Terrain-Assets fuer OpenTTS
+Terrain Exporter — Exportiert modulare Terrain-Assets fuer Niemandsland
 ===================================================================
 
 Erzeugt die Verzeichnisstruktur fuer Terrain-Themes:
@@ -70,7 +70,7 @@ def export_terrain(
     project_root: Path,
 ) -> TerrainExportResult:
     """
-    Exportiert modulare Terrain-Assets in das OpenTTS-Projektverzeichnis.
+    Exportiert modulare Terrain-Assets in das Niemandsland-Projektverzeichnis.
 
     Erkennt Asset-Typen anhand des unit_key Prefix:
     - battle_map -> battle_map.png (Image)

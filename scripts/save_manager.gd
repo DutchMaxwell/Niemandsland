@@ -8,7 +8,7 @@ signal load_completed(object_count: int)
 signal load_failed(error: String)
 
 const SAVE_VERSION = "1.3"  # Updated for modular terrain (walls, placed objects)
-const SAVE_EXTENSION = "otts"  # OpenTTS Save
+const SAVE_EXTENSION = "nml"  # Niemandsland Save
 
 var object_manager: Node3D
 var table: Node3D

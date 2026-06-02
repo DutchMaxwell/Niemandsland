@@ -1,6 +1,6 @@
-# OpenTTS - Beispiele & Test-Dateien
+# Niemandsland - Beispiele & Test-Dateien
 
-Dieser Ordner enthält Beispieldateien und Test-Daten für OpenTTS.
+Dieser Ordner enthält Beispieldateien und Test-Daten für Niemandsland.
 
 ---
 
@@ -18,7 +18,7 @@ Dieser Ordner enthält Beispieldateien und Test-Daten für OpenTTS.
 ## 🎯 Verwendung
 
 ### Army Forge Import testen
-1. Starte OpenTTS
+1. Starte Niemandsland
 2. Öffne das OPR Import-Menü
 3. Wähle die JSON-Datei aus diesem Ordner
 4. Import sollte die Einheiten spawnen

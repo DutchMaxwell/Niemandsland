@@ -1,15 +1,15 @@
 # WGS (Wargaming Simulator) Integration
 
-Diese Dokumentation beschreibt die Integration zwischen OpenTTS und dem Wargaming Simulator (WGS) von Udo's 3dWorld.
+Diese Dokumentation beschreibt die Integration zwischen Niemandsland und dem Wargaming Simulator (WGS) von Udo's 3dWorld.
 
 ## Übersicht
 
-Die Integration ermöglicht es, Spielzustände zwischen dem webbasierten WGS (asynchrones Spiel) und OpenTTS (Desktop-Direktspiel) auszutauschen.
+Die Integration ermöglicht es, Spielzustände zwischen dem webbasierten WGS (asynchrones Spiel) und Niemandsland (Desktop-Direktspiel) auszutauschen.
 
 ### Unterstützte Funktionen
 
-- **Import**: WGS-Spielzustände in OpenTTS laden
-- **Export**: OpenTTS-Spielzustand als WGS-Format exportieren
+- **Import**: WGS-Spielzustände in Niemandsland laden
+- **Export**: Niemandsland-Spielzustand als WGS-Format exportieren
 - **Server-Sync**: Direkte Abfrage vom WGS-Server (geplant)
 - **Tooltips**: Unit-Statistiken werden beim Hover angezeigt
 
@@ -142,7 +142,7 @@ wgs_import_dialog.popup_centered()
 - Einheit: Zoll
 - Y-Achse: Nach unten positiv
 
-### OpenTTS
+### Niemandsland
 - Origin: Tischmitte
 - Einheit: Meter
 - Z-Achse: Tiefe (entspricht WGS Y)
@@ -151,14 +151,14 @@ wgs_import_dialog.popup_centered()
 ```gdscript
 const INCH_TO_METER = 0.0254
 
-# WGS → OpenTTS
+# WGS → Niemandsland
 var pos_3d = Vector3(
     wgs_x * INCH_TO_METER - table_width/2,
     0,
     wgs_y * INCH_TO_METER - table_depth/2
 )
 
-# OpenTTS → WGS
+# Niemandsland → WGS
 var wgs_pos = Vector2(
     (pos_3d.x + table_width/2) / INCH_TO_METER,
     (pos_3d.z + table_depth/2) / INCH_TO_METER

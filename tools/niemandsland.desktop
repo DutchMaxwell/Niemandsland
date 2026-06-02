@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Niemandsland
+Comment=A Fan-Made Tabletop Simulator for OnePageRules Game Systems
+Exec=Niemandsland.x86_64 -- %f
+Icon=niemandsland
+Terminal=false
+Categories=Game;
+MimeType=application/x-niemandsland;

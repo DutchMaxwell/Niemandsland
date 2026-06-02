@@ -1,6 +1,6 @@
 # Architecture
 
-A map of how OpenTTS is actually put together. Engine: Godot 4.6, GDScript,
+A map of how Niemandsland is actually put together. Engine: Godot 4.6, GDScript,
 Forward+ renderer. Entry scene: `scenes/startup_menu.tscn`.
 
 ## Autoloads (singletons)
@@ -75,11 +75,11 @@ Forward+ renderer. Entry scene: `scenes/startup_menu.tscn`.
 - `atmospheric_clouds.gd`, `glassmorphism_theme.gd`, `cinematic_intro.gd`,
   `model_info_popup.gd`, `opr_stats_tooltip.gd`.
 
-## Save format (`.otts`)
+## Save format (`.nml`)
 
 `save_manager.gd` serializes the full table: objects, `GameUnit`/`ModelInstance`
 state (positions, wounds, markers, activation), terrain layout, table size. Files use
-the `.otts` extension with OS file association; the same serialization feeds
+the `.nml` extension with OS file association; the same serialization feeds
 multiplayer load.
 
 ## Multiplayer

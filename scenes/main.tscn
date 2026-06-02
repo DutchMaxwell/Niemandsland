@@ -157,7 +157,7 @@ anchor_right = 1.0
 offset_left = -300.0
 offset_bottom = 100.0
 grow_horizontal = 0
-text = "OpenTTS v0.2-alpha
+text = "Niemandsland v0.2-alpha
 Controls:
 - WASD: Move Camera
 - Q/E: Rotate Camera
@@ -601,7 +601,7 @@ size = Vector2i(800, 500)
 ok_button_text = "Save"
 file_mode = 4
 access = 2
-filters = PackedStringArray("*.otts ; OpenTTS Save")
+filters = PackedStringArray("*.nml ; Niemandsland Save")
 
 [node name="LoadGameDialog" type="FileDialog" parent="UI"]
 unique_name_in_owner = true
@@ -611,7 +611,7 @@ size = Vector2i(800, 500)
 ok_button_text = "Load"
 file_mode = 0
 access = 2
-filters = PackedStringArray("*.otts ; OpenTTS Save")
+filters = PackedStringArray("*.nml ; Niemandsland Save")
 
 [node name="EndBattleConfirmDialog" type="ConfirmationDialog" parent="UI"]
 unique_name_in_owner = true

@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=OpenTTS
-Comment=Open-Source Wargaming Tabletop Simulator
-Exec=OpenTTS.x86_64 -- %f
-Icon=opentts
-Terminal=false
-Categories=Game;
-MimeType=application/x-opentts;

@@ -1,4 +1,4 @@
-app = "opentts-relay"
+app = "niemandsland-relay"
 primary_region = "fra"
 
 [build]

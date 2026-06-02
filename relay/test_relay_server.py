@@ -1,4 +1,4 @@
-"""Tests for the OpenTTS Relay Server."""
+"""Tests for the Niemandsland Relay Server."""
 
 import asyncio
 import json
