@@ -43,7 +43,9 @@ govern commercial use / redistribution of generated content.
 
 Tracked in [`docs/PRE_RELEASE_LICENSING.md`](docs/PRE_RELEASE_LICENSING.md):
 
-- **Image-generation ToS** (Gemini / HuggingFace) for commercial use + redistribution.
+- **Image-generation ToS** — researched (see `docs/PRE_RELEASE_LICENSING.md`): Gemini
+  output is user-owned + commercial-OK (use the paid tier; AI-only output may not be
+  copyrightable); TRELLIS is MIT. Final call with the lawyer.
 - **SVG icon / texture provenance** — confirm sources/licenses for any third-party UI icons.
 - **Git-history scrub** — previously-bundled OPR data and the removed AGPL addon still
   exist in history; scrub before any public/MIT release.
