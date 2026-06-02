@@ -1216,27 +1216,16 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 	# Update line material color (green if both ends snapped, yellow otherwise)
 	var line_color = Color.GREEN if both_snapped else Color.YELLOW
 
-	# Check LOS blocking along the measurement path
+	# Check LOS along the path, height-aware per the Asgard standard: a terrain zone
+	# between the two points blocks only if its Height >= BOTH endpoints' Height and
+	# neither endpoint stands inside that zone (you see in/out of your own zone).
 	var los_blocked = false
-	if terrain_overlay and terrain_overlay.has_method("get_terrain_at_world_position") and terrain_overlay.has_method("is_terrain_los_blocking"):
-		# Sample terrain at multiple points along the line
-		var num_samples = int(max(5, length * 30))  # More samples for accurate LOS check
-
-		for i in range(num_samples):
-			var t = float(i) / float(num_samples - 1)
-			var sample_pos = from_pos.lerp(to_pos, t)
-			var terrain_type = terrain_overlay.get_terrain_at_world_position(sample_pos)
-
-			if terrain_type != 0:  # Not NONE
-				# Check if viewer or target is in the same terrain
-				var viewer_in_terrain = (i == 0)  # First sample is viewer
-				var target_in_terrain = (i == num_samples - 1)  # Last sample is target
-
-				# For intermediate samples, assume neither is in terrain
-				if terrain_overlay.is_terrain_los_blocking(terrain_type, viewer_in_terrain, target_in_terrain):
-					los_blocked = true
-					line_color = Color.RED  # Change line to red if LOS is blocked
-					break
+	if terrain_overlay and terrain_overlay.has_method("has_line_of_sight"):
+		var from_height := _object_height_category(_measure_start_object)
+		var to_height := _object_height_category(_measure_end_object)
+		if not terrain_overlay.has_line_of_sight(from_pos, to_pos, from_height, to_height):
+			los_blocked = true
+			line_color = Color.RED  # Change line to red if LOS is blocked
 
 	var mat = _measure_line.material_override as StandardMaterial3D
 	if mat:
@@ -1262,6 +1251,19 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 
 	# Label stays white with black outline for best readability
 	_measure_label.modulate = Color.WHITE
+
+
+## Asgard Height category (1-6) of a measured endpoint's object, read from its
+## ModelInstance meta. Table points / non-model objects default to infantry (2).
+func _object_height_category(obj: Node3D) -> int:
+	if obj == null:
+		return LosRules.HEIGHT_INFANTRY
+	for node in [obj, obj.get_parent()]:
+		if node and node.has_meta("model_instance"):
+			var model = node.get_meta("model_instance")
+			if model is ModelInstance:
+				return LosRules.model_height_category(model)
+	return LosRules.HEIGHT_INFANTRY
 
 
 ## Spawn a miniature at the given position

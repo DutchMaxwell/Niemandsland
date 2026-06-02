@@ -145,6 +145,9 @@ var _wall_instances: Array[Node3D] = []
 ## Placed object instances (trees + containers)
 var _object_instances: Array[Node3D] = []
 
+## Always-visible Asgard terrain-effect labels (one Label3D per terrain zone).
+var _terrain_labels: Array[Node3D] = []
+
 
 func _ready() -> void:
 	# Position slightly above table surface to avoid z-fighting
@@ -157,6 +160,7 @@ func clear_overlay() -> void:
 		if is_instance_valid(mesh):
 			mesh.queue_free()
 	overlay_meshes.clear()
+	_clear_terrain_labels()
 
 
 ## Update terrain overlay based on map layout
@@ -215,6 +219,9 @@ func update_overlay(cells_data: Dictionary, table_size: Vector2, grid_rotation: 
 		overlay_meshes.append(mesh_instance)
 
 	print("TerrainOverlay: Created %d mesh instances from %d cells_data entries" % [overlay_meshes.size(), cells_data.size()])
+
+	# Always-visible Asgard effect labels per terrain zone (shown in any overlay mode).
+	_rebuild_terrain_labels(cells_data, grid_dims, cell_size_meters, rotation_rad)
 
 
 ## Calculate grid dimensions from table size
@@ -866,55 +873,172 @@ func _is_in_rect(world_pos: Vector3, rect_center: Vector3, rect_size: Vector2) -
 func get_terrain_at_world_position(world_pos: Vector3) -> int:
 	if grid_cells.is_empty():
 		return TerrainType.NONE
+	return grid_cells.get(world_to_cell(world_pos), TerrainType.NONE)
 
-	# Use diagonal to match update_overlay grid dimensions
-	var width_inches = table_size_feet.x * 12.0
-	var height_inches = table_size_feet.y * 12.0
-	var diagonal = sqrt(width_inches * width_inches + height_inches * height_inches)
-	var grid_size = int(ceil(diagonal / GRID_SIZE_INCHES))
 
-	# Round UP to even number for intersection point at center
+## Convert a world position to its terrain grid cell, matching update_overlay's
+## centered + rotated layout (reverse rotation; even grid dims from the diagonal).
+func world_to_cell(world_pos: Vector3) -> Vector2i:
+	var width_inches := table_size_feet.x * 12.0
+	var height_inches := table_size_feet.y * 12.0
+	var diagonal := sqrt(width_inches * width_inches + height_inches * height_inches)
+	var grid_size := int(ceil(diagonal / GRID_SIZE_INCHES))
 	if grid_size % 2 != 0:
 		grid_size += 1
-
-	var grid_dims = Vector2i(grid_size, grid_size)
-
-	var cell_size_meters = GRID_SIZE_INCHES * INCHES_TO_METERS
-	var rotation_rad = deg_to_rad(grid_rotation_degrees)
-
-	# Reverse rotation to get local coordinates
-	var rotated_x = world_pos.x * cos(-rotation_rad) - world_pos.z * sin(-rotation_rad)
-	var rotated_z = world_pos.x * sin(-rotation_rad) + world_pos.z * cos(-rotation_rad)
-
-	# Convert to grid coordinates (centered grid)
-	var grid_x = int(floor(rotated_x / cell_size_meters + grid_dims.x / 2.0))
-	var grid_z = int(floor(rotated_z / cell_size_meters + grid_dims.y / 2.0))
-
-	var cell_pos = Vector2i(grid_x, grid_z)
-
-	# Lookup terrain type
-	if grid_cells.has(cell_pos):
-		return grid_cells[cell_pos]
-
-	return TerrainType.NONE
+	var cell_size_meters := GRID_SIZE_INCHES * INCHES_TO_METERS
+	var rotation_rad := deg_to_rad(grid_rotation_degrees)
+	var rotated_x := world_pos.x * cos(-rotation_rad) - world_pos.z * sin(-rotation_rad)
+	var rotated_z := world_pos.x * sin(-rotation_rad) + world_pos.z * cos(-rotation_rad)
+	var grid_x := int(floor(rotated_x / cell_size_meters + grid_size / 2.0))
+	var grid_z := int(floor(rotated_z / cell_size_meters + grid_size / 2.0))
+	return Vector2i(grid_x, grid_z)
 
 
-## Check if terrain blocks line of sight
-##
-## @param terrain_type: TerrainType to check
-## @param viewer_in_terrain: Is the viewer inside this terrain?
-## @param target_in_terrain: Is the target inside this terrain?
-## @return: true if LOS is blocked
-func is_terrain_los_blocking(terrain_type: int, viewer_in_terrain: bool, target_in_terrain: bool) -> bool:
+## True if a terrain type blocks line of sight when drawn THROUGH it (ruins,
+## forests, houses). Dangerous terrain is Open and never blocks.
+func terrain_blocks_los(terrain_type: int) -> bool:
+	return terrain_type == TerrainType.RUINS \
+		or terrain_type == TerrainType.FOREST \
+		or terrain_type == TerrainType.CONTAINER
+
+
+## Asgard Height category of a terrain type (blockers are Height 5; open = 0).
+func terrain_height_category(terrain_type: int) -> int:
+	return 5 if terrain_blocks_los(terrain_type) else 0
+
+
+## All cells of the contiguous same-type terrain zone containing `start_cell`
+## (4-connected). Empty set if start_cell holds no terrain.
+func _flood_fill_zone(start_cell: Vector2i) -> Dictionary:
+	var result := {}
+	var ttype: int = grid_cells.get(start_cell, TerrainType.NONE)
+	if ttype == TerrainType.NONE:
+		return result
+	var stack: Array[Vector2i] = [start_cell]
+	result[start_cell] = true
+	while not stack.is_empty():
+		var c: Vector2i = stack.pop_back()
+		for nb in [Vector2i(c.x + 1, c.y), Vector2i(c.x - 1, c.y), Vector2i(c.x, c.y + 1), Vector2i(c.x, c.y - 1)]:
+			if not result.has(nb) and grid_cells.get(nb, TerrainType.NONE) == ttype:
+				result[nb] = true
+				stack.append(nb)
+	return result
+
+
+## Top-down Asgard line-of-sight between two world points. A blocking terrain zone
+## the line crosses blocks LOS only when (a) neither endpoint stands inside that same
+## zone ("see in/out, not through") AND (b) the zone's Height is >= BOTH endpoints'
+## Height categories (otherwise the taller one sees over it). Dangerous terrain never
+## blocks. Heights are Asgard categories 1-6 (see LosRules).
+func has_line_of_sight(from_pos: Vector3, to_pos: Vector3, from_height: int, to_height: int) -> bool:
+	if grid_cells.is_empty():
+		return true
+	var from_zone := _flood_fill_zone(world_to_cell(from_pos))
+	var to_zone := _flood_fill_zone(world_to_cell(to_pos))
+	var span := Vector2(to_pos.x - from_pos.x, to_pos.z - from_pos.z).length()
+	var cell_size := GRID_SIZE_INCHES * INCHES_TO_METERS
+	var steps := int(ceil(span / (cell_size * 0.5)))
+	if steps < 2:
+		return true
+	for i in range(1, steps):  # skip the exact endpoints
+		var cell := world_to_cell(from_pos.lerp(to_pos, float(i) / float(steps)))
+		var ttype: int = grid_cells.get(cell, TerrainType.NONE)
+		if not terrain_blocks_los(ttype):
+			continue
+		if from_zone.has(cell) or to_zone.has(cell):
+			continue  # own zone: you see in/out of it
+		var th := terrain_height_category(ttype)
+		if th >= from_height and th >= to_height:
+			return false
+	return true
+
+
+## Compact, always-visible Asgard effect label for a terrain type (empty for NONE).
+## Players read it to apply Cover/Difficult/Dangerous etc. themselves.
+func _terrain_effect_label(terrain_type: int) -> String:
 	match terrain_type:
+		TerrainType.RUINS:
+			return "Ruine · H5 · Cover · Impassable · LoS: nicht hindurch"
+		TerrainType.FOREST:
+			return "Wald · H5 · Difficult · Cover · LoS: nicht hindurch"
 		TerrainType.CONTAINER:
-			# Container always blocks unless you can fly over
-			return true
-		TerrainType.FOREST, TerrainType.RUINS:
-			# Forest/Ruins block LOS unless viewer or target is inside
-			return not (viewer_in_terrain or target_in_terrain)
+			return "Haus · H5 · Impassable · blockt LoS"
+		TerrainType.DANGEROUS:
+			return "Gefährlich · Dangerous"
+	return ""
 
-	return false
+
+## Group terrain cells into contiguous same-type zones (4-connected components).
+## Each entry: {"type": int, "cells": Array[Vector2i]}.
+func _terrain_zones(cells_data: Dictionary) -> Array:
+	var zones: Array = []
+	var visited := {}
+	for cell in cells_data:
+		var ttype: int = cells_data[cell]
+		if ttype == TerrainType.NONE or visited.has(cell):
+			continue
+		var stack: Array[Vector2i] = [cell]
+		visited[cell] = true
+		var comp: Array = []
+		while not stack.is_empty():
+			var c: Vector2i = stack.pop_back()
+			comp.append(c)
+			for nb in [Vector2i(c.x + 1, c.y), Vector2i(c.x - 1, c.y), Vector2i(c.x, c.y + 1), Vector2i(c.x, c.y - 1)]:
+				if not visited.has(nb) and cells_data.get(nb, TerrainType.NONE) == ttype:
+					visited[nb] = true
+					stack.append(nb)
+		zones.append({"type": ttype, "cells": comp})
+	return zones
+
+
+## World position of a (possibly fractional) grid cell, matching update_overlay's
+## centered + rotated layout. y is 0 (caller lifts the label above the table).
+func _cell_to_world(cell_x: float, cell_y: float, grid_dims: Vector2i, cell_size: float, rotation_rad: float) -> Vector3:
+	var local_x := (cell_x - grid_dims.x / 2.0 + 0.5) * cell_size
+	var local_z := (cell_y - grid_dims.y / 2.0 + 0.5) * cell_size
+	var rx := local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
+	var rz := local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
+	return Vector3(rx, 0.0, rz)
+
+
+## (Re)build one always-visible effect label per terrain zone, floating above the
+## zone centre. Derived purely from terrain data, so no save/network sync needed.
+func _rebuild_terrain_labels(cells_data: Dictionary, grid_dims: Vector2i, cell_size: float, rotation_rad: float) -> void:
+	const LABEL_Y := 0.12  # metres above the table, clear of the standing 3D props
+	_clear_terrain_labels()
+	for zone in _terrain_zones(cells_data):
+		var ttype: int = zone["type"]
+		var text := _terrain_effect_label(ttype)
+		if text.is_empty():
+			continue
+		var cells: Array = zone["cells"]
+		var sx := 0.0
+		var sy := 0.0
+		for c in cells:
+			sx += c.x
+			sy += c.y
+		var n := float(cells.size())
+		var center := _cell_to_world(sx / n, sy / n, grid_dims, cell_size, rotation_rad)
+		var lbl := Label3D.new()
+		lbl.name = "TerrainLabel"
+		lbl.text = text
+		lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		lbl.font_size = 28
+		lbl.outline_size = 10
+		lbl.modulate = Color.WHITE
+		lbl.outline_modulate = Color(0.05, 0.05, 0.05)
+		lbl.pixel_size = 0.0009
+		lbl.position = Vector3(center.x, LABEL_Y, center.z)
+		add_child(lbl)
+		_terrain_labels.append(lbl)
+
+
+## Remove all terrain effect labels.
+func _clear_terrain_labels() -> void:
+	for lbl in _terrain_labels:
+		if is_instance_valid(lbl):
+			lbl.queue_free()
+	_terrain_labels.clear()
 
 
 # ==============================================================================
