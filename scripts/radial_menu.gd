@@ -17,15 +17,15 @@ signal menu_closed()
 ## Animation duration in seconds
 @export var animation_duration: float = 0.15
 
-## Colors — Glassmorphism style
-@export var background_color: Color = Color(0.04, 0.055, 0.085, 0.9)
+## Colors — Tactical HUD tokens
+@export var background_color: Color = Color(HudTokens.SURFACE.r, HudTokens.SURFACE.g, HudTokens.SURFACE.b, 0.9)
 @export var segment_color: Color = Color(1.0, 1.0, 1.0, 0.06)
-@export var segment_hover_color: Color = Color(0.0, 0.85, 1.0, 0.28)
-@export var text_color: Color = Color(0.86, 0.89, 0.94, 1.0)
+@export var segment_hover_color: Color = Color(HudTokens.CYAN.r, HudTokens.CYAN.g, HudTokens.CYAN.b, 0.28)
+@export var text_color: Color = HudTokens.TEXT
 @export var disabled_color: Color = Color(1.0, 1.0, 1.0, 0.25)
 
-const ACCENT_COLOR := Color(0.0, 0.85, 1.0)
-const DESTRUCTIVE_COLOR := Color(1.0, 0.35, 0.43)
+const ACCENT_COLOR := HudTokens.CYAN
+const DESTRUCTIVE_COLOR := HudTokens.DANGER
 const INTER_FONT_PATH := "res://assets/ui_glassmorphism/fonts/Inter.ttf"
 const SEGMENT_GAP := 0.07          # radians trimmed from each side of a segment
 const HOVER_POP := 10.0            # px the hovered segment extends outward
@@ -141,17 +141,17 @@ func _draw() -> void:
 		elif destructive:
 			label_col = DESTRUCTIVE_COLOR
 		elif hovered:
-			label_col = Color(0.92, 0.98, 1.0)
+			label_col = HudTokens.TEXT
 		var ls := font.get_string_size(item.label, HORIZONTAL_ALIGNMENT_CENTER, -1, LABEL_FONT_SIZE)
 		var label_draw := Vector2(label_pos.x - ls.x / 2.0, label_pos.y + ls.y * 0.32)
 		draw_string(font, label_draw, item.label, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE, label_col)
 
 	# Center dead-zone (glass) + cancel glyph.
-	draw_circle(_center_pos, center_radius, Color(0.03, 0.045, 0.07, 0.95))
+	draw_circle(_center_pos, center_radius, Color(HudTokens.SURFACE.r, HudTokens.SURFACE.g, HudTokens.SURFACE.b, 0.95))
 	draw_arc(_center_pos, center_radius, 0.0, TAU, 48, Color(1.0, 1.0, 1.0, 0.16), 1.0, true)
 	var cancel_text := "✕"
 	var cs := font.get_string_size(cancel_text, HORIZONTAL_ALIGNMENT_CENTER, -1, LABEL_FONT_SIZE)
-	var cancel_col: Color = DESTRUCTIVE_COLOR if _hovered_index == -1 else Color(0.55, 0.6, 0.68)
+	var cancel_col: Color = DESTRUCTIVE_COLOR if _hovered_index == -1 else HudTokens.TEXT_MUTED
 	draw_string(font, Vector2(_center_pos.x - cs.x / 2.0, _center_pos.y + cs.y * 0.32), cancel_text, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE, cancel_col)
 
 	# Tooltip for the hovered item.
@@ -169,9 +169,9 @@ func _draw_tooltip(font: Font, tip: String) -> void:
 	var box_pos := _center_pos + Vector2(-box_size.x / 2.0, menu_radius + HOVER_POP + 16.0)
 
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.05, 0.07, 0.10, 0.96)
-	sb.set_corner_radius_all(8)
-	sb.border_color = Color(1.0, 1.0, 1.0, 0.12)
+	sb.bg_color = Color(HudTokens.SURFACE.r, HudTokens.SURFACE.g, HudTokens.SURFACE.b, 0.96)
+	sb.set_corner_radius_all(HudTokens.RADIUS)
+	sb.border_color = HudTokens.HAIRLINE
 	sb.set_border_width_all(1)
 	sb.draw(get_canvas_item(), Rect2(box_pos, box_size))
 
