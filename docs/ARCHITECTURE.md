@@ -94,9 +94,9 @@ multiplayer load.
 
 ## Dice
 
-Provided by the `dice_roller` addon, rendered in a **separate scaled SubViewport**
-because miniature-scale rigid bodies are unstable in Godot's default physics. Table
-dice are display-only.
+Provided by our own `dice_tray.gd` + `dice_d6.gd` (MIT W6 physics), rendered in a
+**separate scaled SubViewport** because miniature-scale rigid bodies are unstable in
+Godot's default physics. Table dice are display-only.
 
 ## Scaling
 

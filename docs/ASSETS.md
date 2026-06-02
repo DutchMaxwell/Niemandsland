@@ -42,13 +42,9 @@ Wir bevorzugen Assets mit folgenden Lizenzen (in dieser Reihenfolge):
 
 ### Godot Asset Library
 
-#### Godot Dice Roller (MIT)
-- **URL**: https://godotengine.org/asset-library/asset/1742
-- **Lizenz**: MIT
-- **Features**:
-  - Physik-basierte Würfel
-  - Mehrere Würfeltypen (D4, D6, D8, D10, D12, D20)
-  - Anpassbare Materialien
+#### 3D-Würfel — eigene Implementierung (MIT)
+- In-house: `scripts/dice_tray.gd` + `scripts/dice_d6.gd` — physikbasierte W6 in
+  einem skalierten SubViewport. Ersetzt den früheren AGPL-Fremd-Addon.
 
 ### Texturen
 
@@ -143,7 +139,7 @@ assets/
 | Asset | Quelle | Lizenz | Verwendet für |
 |-------|--------|--------|---------------|
 | Kenney UI Pack(s) | [kenney.nl](https://kenney.nl) | CC0 | UI-Themes (`assets/kenney_ui/`, `ThemeManager`) |
-| Godot Dice Roller | Addon | MIT | Würfel (`addons/dice_roller/`) |
+| 3D-Würfel (eigene W6) | projekt-intern | MIT | Würfel (`scripts/dice_tray.gd`, `scripts/dice_d6.gd`) |
 | gdUnit4 | [gdUnit4](https://github.com/MikeSchulze/gdUnit4) | MIT | Test-Framework (`addons/gdUnit4/`) |
 | Miniatur-GLBs | Model-Forge-Pipeline (KI-generiert) | projekt-intern | `assets/miniatures/<faction>/` |
 | `model-viewer` | [Google](https://modelviewer.dev) | Apache-2.0 | 3D-Vorschau in der Model-Forge-Review-UI |
