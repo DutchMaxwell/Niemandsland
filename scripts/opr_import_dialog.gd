@@ -9,6 +9,7 @@ var player_option: OptionButton
 var army_preview: RichTextLabel
 var import_btn: Button
 var cancel_btn: Button
+var fetch_btn: Button
 var share_link_input: LineEdit
 var link_status_label: Label
 
@@ -22,6 +23,7 @@ var api_client: OPRApiClient
 func _ready() -> void:
 	title = "Import OPR Army"
 	size = Vector2i(550, 450)
+	theme = ThemeManager.get_current_theme()
 	close_requested.connect(_on_cancel)
 
 	_setup_ui()
@@ -31,14 +33,11 @@ func _setup_ui() -> void:
 	# Main container
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 16)
-	margin.add_theme_constant_override("margin_top", 16)
-	margin.add_theme_constant_override("margin_right", 16)
-	margin.add_theme_constant_override("margin_bottom", 16)
+	UiPolish.set_dialog_margins(margin)
 	add_child(margin)
 
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10)
+	vbox.add_theme_constant_override("separation", UiPolish.SECTION_SEP)
 	margin.add_child(vbox)
 
 	# Title
@@ -54,13 +53,13 @@ func _setup_ui() -> void:
 
 	var link_info = Label.new()
 	link_info.text = "Enter an Army Forge share link or list ID:"
-	link_info.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	link_info.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	link_section.add_child(link_info)
 
 	var link_example = Label.new()
 	link_example.text = "e.g. https://army-forge.onepagerules.com/share?id=XXX"
 	link_example.add_theme_font_size_override("font_size", 11)
-	link_example.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+	link_example.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	link_section.add_child(link_example)
 
 	# Link input
@@ -76,11 +75,13 @@ func _setup_ui() -> void:
 
 	var paste_link_btn = Button.new()
 	paste_link_btn.text = "From clipboard"
+	UiPolish.primary_button(paste_link_btn)
 	paste_link_btn.pressed.connect(_on_paste_link)
 	link_btn_row.add_child(paste_link_btn)
 
-	var fetch_btn = Button.new()
+	fetch_btn = Button.new()
 	fetch_btn.text = "Load army"
+	UiPolish.primary_button(fetch_btn)
 	fetch_btn.pressed.connect(_on_fetch_from_link)
 	link_btn_row.add_child(fetch_btn)
 
@@ -121,12 +122,7 @@ func _setup_ui() -> void:
 
 	var preview_panel = PanelContainer.new()
 	preview_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.1, 0.12, 0.9)
-	style.border_color = Color(0.3, 0.3, 0.35)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(4)
-	preview_panel.add_theme_stylebox_override("panel", style)
+	preview_panel.add_theme_stylebox_override("panel", UiPolish.sunken_panel_style())
 	vbox.add_child(preview_panel)
 	preview_panel.add_child(army_preview)
 
@@ -138,12 +134,14 @@ func _setup_ui() -> void:
 
 	cancel_btn = Button.new()
 	cancel_btn.text = "Cancel"
+	UiPolish.primary_button(cancel_btn)
 	cancel_btn.pressed.connect(_on_cancel)
 	btn_row.add_child(cancel_btn)
 
 	import_btn = Button.new()
 	import_btn.text = "Import army"
 	import_btn.disabled = true
+	UiPolish.primary_button(import_btn)
 	import_btn.pressed.connect(_on_import)
 	btn_row.add_child(import_btn)
 
@@ -161,32 +159,35 @@ func _on_paste_link() -> void:
 func _on_fetch_from_link() -> void:
 	var link = share_link_input.text.strip_edges()
 	if link.is_empty():
-		link_status_label.text = "No link entered"
-		link_status_label.add_theme_color_override("font_color", Color(0.8, 0.5, 0.5))
+		_set_status("No link entered", UiPolish.WARNING)
 		return
 
-	link_status_label.text = "Loading..."
-	link_status_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.5))
-	army_preview.text = "[color=#aaaaaa]Loading army from the Army Forge API...[/color]"
+	_set_status("Loading…", UiPolish.ACCENT)
+	army_preview.text = "[color=#%s]Loading army from the Army Forge API…[/color]" % UiPolish.hex(UiPolish.ACCENT)
 	import_btn.disabled = true
+	fetch_btn.disabled = true
 
 	# Fetch from API
 	_preview_army = await api_client.import_from_share_link(link)
+	fetch_btn.disabled = false
 	if _preview_army and _preview_army.units.size() > 0:
-		link_status_label.text = "Loaded!"
-		link_status_label.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5))
+		_set_status("Loaded!", UiPolish.SUCCESS)
 		_update_preview()
 		import_btn.disabled = false
 	elif _preview_army and _preview_army.units.size() == 0:
-		link_status_label.text = "Empty"
-		link_status_label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.3))
-		army_preview.text = "[color=yellow]The army list is empty.[/color]\n\nThis list contains no units. Add some units in Army Forge first."
+		_set_status("Empty", UiPolish.WARNING)
+		army_preview.text = "[color=#%s]The army list is empty.[/color]\n\nThis list contains no units. Add some units in Army Forge first." % UiPolish.hex(UiPolish.WARNING)
 		import_btn.disabled = true
 	else:
-		link_status_label.text = "Error"
-		link_status_label.add_theme_color_override("font_color", Color(0.8, 0.5, 0.5))
-		army_preview.text = "[color=red]Could not load the army.[/color]\n\nCheck the link and your internet connection."
+		_set_status("Error", UiPolish.DESTRUCTIVE)
+		army_preview.text = "[color=#%s]Could not load the army.[/color]\n\nCheck the link and your internet connection." % UiPolish.hex(UiPolish.DESTRUCTIVE)
 		import_btn.disabled = true
+
+
+## Sets the inline link status text + colour (use a UiPolish token).
+func _set_status(text: String, color: Color) -> void:
+	link_status_label.text = text
+	link_status_label.add_theme_color_override("font_color", color)
 
 
 func _update_preview() -> void:
