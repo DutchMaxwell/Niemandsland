@@ -40,11 +40,8 @@ func _setup_ui() -> void:
 	vbox.add_theme_constant_override("separation", UiPolish.SECTION_SEP)
 	margin.add_child(vbox)
 
-	# Title
-	var title_label = Label.new()
-	title_label.text = "Import Army from OPR Army Forge"
-	title_label.add_theme_font_size_override("font_size", 18)
-	vbox.add_child(title_label)
+	# Tactical header (Orbitron title + amber index + accent line)
+	vbox.add_child(HudTokens.header("ARMY IMPORT", "/// NODE-01"))
 
 	# === SHARE LINK SECTION ===
 	var link_section = VBoxContainer.new()
@@ -52,7 +49,9 @@ func _setup_ui() -> void:
 	vbox.add_child(link_section)
 
 	var link_info = Label.new()
-	link_info.text = "Enter an Army Forge share link or list ID:"
+	link_info.text = "ENTER ARMY FORGE SHARE LINK / LIST ID"
+	link_info.add_theme_font_override("font", HudTokens.mono_font())
+	link_info.add_theme_font_size_override("font_size", 12)
 	link_info.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	link_section.add_child(link_info)
 
@@ -74,13 +73,14 @@ func _setup_ui() -> void:
 	link_section.add_child(link_btn_row)
 
 	var paste_link_btn = Button.new()
-	paste_link_btn.text = "From clipboard"
+	paste_link_btn.text = "FROM CLIPBOARD"
 	UiPolish.primary_button(paste_link_btn)
 	paste_link_btn.pressed.connect(_on_paste_link)
 	link_btn_row.add_child(paste_link_btn)
 
 	fetch_btn = Button.new()
-	fetch_btn.text = "Load army"
+	fetch_btn.text = "LOAD ARMY"
+	fetch_btn.theme_type_variation = "PrimaryButton"
 	UiPolish.primary_button(fetch_btn)
 	fetch_btn.pressed.connect(_on_fetch_from_link)
 	link_btn_row.add_child(fetch_btn)
@@ -98,7 +98,10 @@ func _setup_ui() -> void:
 	vbox.add_child(player_row)
 
 	var player_label = Label.new()
-	player_label.text = "Assign player:"
+	player_label.text = "ASSIGN PLAYER"
+	player_label.add_theme_font_override("font", HudTokens.mono_font())
+	player_label.add_theme_font_size_override("font_size", 12)
+	player_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	player_row.add_child(player_label)
 
 	player_option = OptionButton.new()
@@ -111,7 +114,10 @@ func _setup_ui() -> void:
 
 	# Army preview
 	var preview_label = Label.new()
-	preview_label.text = "Preview:"
+	preview_label.text = "PREVIEW"
+	preview_label.add_theme_font_override("font", HudTokens.mono_font())
+	preview_label.add_theme_font_size_override("font_size", 12)
+	preview_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(preview_label)
 
 	army_preview = RichTextLabel.new()
@@ -133,14 +139,15 @@ func _setup_ui() -> void:
 	vbox.add_child(btn_row)
 
 	cancel_btn = Button.new()
-	cancel_btn.text = "Cancel"
+	cancel_btn.text = "CANCEL"
 	UiPolish.primary_button(cancel_btn)
 	cancel_btn.pressed.connect(_on_cancel)
 	btn_row.add_child(cancel_btn)
 
 	import_btn = Button.new()
-	import_btn.text = "Import army"
+	import_btn.text = "IMPORT ARMY"
 	import_btn.disabled = true
+	import_btn.theme_type_variation = "PrimaryButton"
 	UiPolish.primary_button(import_btn)
 	import_btn.pressed.connect(_on_import)
 	btn_row.add_child(import_btn)
