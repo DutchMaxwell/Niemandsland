@@ -215,25 +215,27 @@ Monospace:      JetBrains Mono, 13px
 
 ## 7. Implementierungsplan
 
-### Phase 1: Foundation (Priorität: HOCH)
+### Phase 1: Foundation (Priorität: HOCH) — ✅ IMPLEMENTIERT
 
-#### 1.1 Neues Theme-System erstellen
-```
-scripts/ui/
-├── modern_theme.gd          # Haupt-Theme-Generator
-├── color_palette.gd         # Farbdefinitionen
-├── typography.gd            # Font-Management
-└── ui_animations.gd         # Tween-basierte Animationen
-```
+> **Status: umgesetzt und live.** Das Theme-System existiert als
+> `scripts/glassmorphism_theme.gd` (Haupt-Theme-Generator: `_create_glass_style()`
+> + StyleBoxFlat für Buttons/Panels/Labels/Inputs), wird über den
+> `ThemeManager`-Autoload bereitgestellt und auf HUD, Startmenü, Dialoge und
+> Panels angewandt (`main.gd`, `startup_menu.gd`, `lighting_panel.gd`).
 
-#### 1.2 Fonts integrieren
-- [ ] Inter Font herunterladen und einbinden
-- [ ] JetBrains Mono für Monospace
-- [ ] Font-Imports in project.godot konfigurieren
+#### 1.1 Theme-System
+- [x] Haupt-Theme-Generator (`glassmorphism_theme.gd`) + `ThemeManager`-Autoload.
+- [ ] *Optional/später:* Aufspaltung in `color_palette.gd` / `typography.gd` /
+      `ui_animations.gd` (derzeit monolithisch, aber funktional vollständig).
+
+#### 1.2 Fonts
+- [x] **Inter** eingebunden (+ OFL-Lizenz beigelegt).
+- [x] Monospace: **Source Code Pro** (statt JetBrains Mono; ebenfalls OFL).
+- [x] Font-Setup inkl. MSDF + Mipmaps in `project.godot`.
 
 #### 1.3 StyleBox-Definitionen
-- [ ] `StyleBoxFlat` für alle Komponenten (statt `StyleBoxTexture`)
-- [ ] Konsistente Radien, Schatten, Borders
+- [x] `StyleBoxFlat` für alle Komponenten (via `_create_glass_style`).
+- [x] Konsistente Radien, Schatten, Borders.
 
 ### Phase 2: Core Components (Priorität: HOCH)
 
