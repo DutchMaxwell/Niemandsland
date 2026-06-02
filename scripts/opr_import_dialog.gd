@@ -24,17 +24,22 @@ func _ready() -> void:
 	title = "Import OPR Army"
 	size = Vector2i(550, 450)
 	theme = ThemeManager.get_current_theme()
+	borderless = true  # we draw our own tactical chrome (no gray Godot title bar)
 	close_requested.connect(_on_cancel)
 
 	_setup_ui()
 
 
 func _setup_ui() -> void:
-	# Main container
+	# Tactical background panel (deep-navy glass + hairline + shadow), then content.
+	var bg_panel = PanelContainer.new()
+	bg_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg_panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
+	add_child(bg_panel)
+
 	var margin = MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	UiPolish.set_dialog_margins(margin)
-	add_child(margin)
+	bg_panel.add_child(margin)
 
 	var vbox = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", UiPolish.SECTION_SEP)
