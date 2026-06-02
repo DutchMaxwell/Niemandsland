@@ -2,7 +2,8 @@
 
 ## Language
 
-The user communicates in German. **Answer in German.**
+Work in **English** — code, comments, commit messages, and chat replies.
+(The user is a German speaker but prefers English for development.)
 
 ## Project
 
