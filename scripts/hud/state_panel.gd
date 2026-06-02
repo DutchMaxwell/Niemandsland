@@ -76,7 +76,7 @@ func _apply(glyph: String, headline: String, detail: String, glyph_color: Color,
 
 func _start_pulse() -> void:
 	_stop_pulse()
-	if UiMotion.reduced():
+	if UiMotion.reduced() or not is_inside_tree():
 		return
 	_pulse = create_tween().set_loops()
 	_pulse.tween_property(_glyph, "modulate:a", 0.35, 0.6).set_trans(Tween.TRANS_SINE)

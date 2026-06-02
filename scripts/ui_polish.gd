@@ -106,8 +106,14 @@ static func keep_window_reachable(win: Window, target: Vector2i,
 		return
 	clamp_window_to_viewport(win, target, frac_w, frac_h)
 	# Re-clamp when the HOST window resizes (root.size_changed). Setting win.size fires
-	# the dialog's own size_changed, not root's, so there is no feedback loop.
+	# the dialog's own size_changed, not root's, so there is no feedback loop. Disconnect
+	# on free so a freed-and-recreated dialog (e.g. TableSizeDialog) never leaks the closure.
 	var tree := win.get_tree()
 	if tree and tree.root:
-		tree.root.size_changed.connect(func() -> void:
-			clamp_window_to_viewport(win, target, frac_w, frac_h))
+		var root := tree.root
+		var cb := func() -> void:
+			clamp_window_to_viewport(win, target, frac_w, frac_h)
+		root.size_changed.connect(cb)
+		win.tree_exiting.connect(func() -> void:
+			if root.size_changed.is_connected(cb):
+				root.size_changed.disconnect(cb))
