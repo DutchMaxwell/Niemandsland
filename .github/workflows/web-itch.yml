@@ -55,6 +55,9 @@ jobs:
           test -f build/web/index.html
 
       - name: Upload web build as artifact (backup / fallback)
+        # Best-effort backup: a full GitHub artifact-storage quota must NOT abort the
+        # job before the itch.io push below (that publish is the actual deliverable).
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: web-build
