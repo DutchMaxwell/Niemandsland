@@ -43,12 +43,21 @@ static func create_theme() -> Theme:
 
 
 # ===== Focus =====
-static func _focus() -> StyleBoxFlat:
+## Visible keyboard/controller focus ring: a >=2px cyan border clearing >=3:1 against
+## the deep-navy SURFACE (WCAG 2.4.13). Reused by every interactive control so focus is
+## never invisible or clipped. `expand` lifts the ring off the control so it reads on
+## small/dense widgets (checkboxes, tabs).
+static func _focus(expand: float = 0.0) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.bg_color = Color(0, 0, 0, 0)
 	s.set_corner_radius_all(T.RADIUS)
-	s.set_border_width_all(1)
-	s.border_color = Color(T.CYAN.r, T.CYAN.g, T.CYAN.b, 0.75)
+	s.set_border_width_all(2)
+	s.border_color = Color(T.CYAN.r, T.CYAN.g, T.CYAN.b, 0.85)
+	if expand > 0.0:
+		s.expand_margin_left = expand
+		s.expand_margin_right = expand
+		s.expand_margin_top = expand
+		s.expand_margin_bottom = expand
 	return s
 
 
@@ -175,9 +184,12 @@ static func _option(th: Theme) -> void:
 # ===== Check controls =====
 static func _checks(th: Theme) -> void:
 	var empty := StyleBoxEmpty.new()
-	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+	for state in ["normal", "hover", "pressed", "disabled"]:
 		th.set_stylebox(state, "CheckBox", empty.duplicate())
 		th.set_stylebox(state, "CheckButton", empty.duplicate())
+	# Visible focus ring (was StyleBoxEmpty -> keyboard/controller users saw nothing).
+	th.set_stylebox("focus", "CheckBox", _focus(3.0))
+	th.set_stylebox("focus", "CheckButton", _focus(3.0))
 	th.set_color("font_color", "CheckBox", T.TEXT)
 	th.set_color("font_color", "CheckButton", T.TEXT)
 	_load_icon(th, "checked", "CheckBox", "check-square-fill.svg")
@@ -273,7 +285,7 @@ static func _tabs(th: Theme) -> void:
 	hov.bg_color = Color(1, 1, 1, 0.06)
 	th.set_stylebox("tab_hovered", "TabContainer", hov)
 	th.set_stylebox("tab_disabled", "TabContainer", unsel.duplicate())
-	th.set_stylebox("tab_focus", "TabContainer", StyleBoxEmpty.new())
+	th.set_stylebox("tab_focus", "TabContainer", _focus())
 
 	th.set_color("font_selected_color", "TabContainer", Color.WHITE)
 	th.set_color("font_unselected_color", "TabContainer", T.TEXT_MUTED)
@@ -294,7 +306,7 @@ static func _tree(th: Theme) -> void:
 	var hov := StyleBoxFlat.new()
 	hov.bg_color = Color(1, 1, 1, 0.08)
 	th.set_stylebox("hovered", "Tree", hov)
-	th.set_stylebox("focus", "Tree", StyleBoxEmpty.new())
+	th.set_stylebox("focus", "Tree", _focus())
 	th.set_color("font_color", "Tree", T.TEXT)
 	th.set_color("font_hovered_color", "Tree", Color.WHITE)
 	th.set_color("guide_color", "Tree", Color(1, 1, 1, 0.06))
