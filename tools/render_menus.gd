@@ -1,21 +1,64 @@
-extends SceneTree
-## Dev tool: render example screenshots of the game's menus/dialogs to renders/.
-## Run headless-with-software-GL:
+extends Node
+## Dev tool: render ONE example menu screenshot to renders/<name>.png, then quit.
+## Runs as a NORMAL scene (tools/render_runner.tscn) so the autoload globals
+## (ThemeManager, ...) are available — a `-s` SceneTree script does not get them,
+## which breaks every themed dialog. One menu per process also keeps software-GL
+## window capture fast and isolated (multiple OS windows per process stall under
+## Mesa llvmpipe). Not shipped with the game.
+##
+## Usage (loop over names in the shell):
 ##   xvfb-run -a godot --path . --display-driver x11 --rendering-driver opengl3 \
-##     --resolution 1366x900 -s tools/render_menus.gd
-## Not shipped with the game; purely for design review.
+##     --resolution 1366x900 tools/render_runner.tscn -- <menu_name>
+##
+## menu_name: table_size_dialog | opr_import_dialog | wgs_import_dialog | lighting_panel
+##          | wounds_dialog | marker_dialog | unit_card | map_layout | startup_menu
 
 const OUT_DIR := "res://renders"
 const BG := Color(0.06, 0.06, 0.10)  # app background so glass panels read
 
 
-func _initialize() -> void:
+func _ready() -> void:
 	_run()
+
+
+func _run() -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
+	var args := OS.get_cmdline_user_args()
+	var name := args[0] if args.size() > 0 else ""
+	await _settle(4)
+
+	match name:
+		"table_size_dialog":
+			await _window(name, TableSizeDialog.new())
+		"opr_import_dialog":
+			await _window(name, OPRImportDialog.new())
+		"wgs_import_dialog":
+			await _window(name, WGSImportDialog.new())
+		"lighting_panel":
+			await _window(name, load("res://scripts/lighting_panel.gd").new())
+		"wounds_dialog":
+			var wd := WoundsDialog.new()
+			await _modal(name, wd, func(): wd.open(_sample_unit().models[0]))
+		"marker_dialog":
+			var md := MarkerDialog.new()
+			await _modal(name, md, func(): md.open_for_model(_sample_unit().models[0]))
+		"unit_card":
+			var card: Control = load("res://scenes/unit_card.tscn").instantiate()
+			await _control(name, card, Vector2i(420, 560))
+		"map_layout":
+			var ml: Control = load("res://scenes/map_layout.tscn").instantiate()
+			await _control(name, ml, Vector2i(1366, 860))
+		"startup_menu":
+			var sm: Control = load("res://scenes/startup_menu.tscn").instantiate()
+			await _control(name, sm, Vector2i(1366, 860))
+		_:
+			print("UNKNOWN menu: '%s'" % name)
+	get_tree().quit()
 
 
 func _settle(n: int) -> void:
 	for _i in range(n):
-		await process_frame
+		await get_tree().process_frame
 
 
 func _save(img: Image, name: String) -> void:
@@ -26,23 +69,35 @@ func _save(img: Image, name: String) -> void:
 	print("RENDERED %s (%dx%d)" % [name, img.get_width(), img.get_height()])
 
 
-## Render a Window-based dialog: add, show, capture its own viewport texture.
-func _render_window(name: String, win: Window) -> void:
+## Window dialog: add, show, capture its own viewport texture.
+func _window(name: String, win: Window) -> void:
 	if win == null:
 		print("SKIP %s (null)" % name)
 		return
 	win.transparent_bg = false
-	root.add_child(win)
-	win.position = Vector2i(40, 40)
+	get_tree().root.add_child(win)
+	win.position = Vector2i(30, 30)
 	win.show()
-	await _settle(18)
+	await _settle(14)
 	_save(win.get_texture().get_image(), name)
-	win.queue_free()
-	await process_frame
 
 
-## Render a Control/scene into a fixed SubViewport over a dark backdrop.
-func _render_control(name: String, node: Control, size: Vector2i) -> void:
+## Full-screen Control modal: backdrop + modal in the root viewport, run open() to
+## populate, capture the root viewport.
+func _modal(name: String, node: Control, opener: Callable) -> void:
+	var bg := ColorRect.new()
+	bg.color = BG
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	get_tree().root.add_child(bg)
+	get_tree().root.add_child(node)
+	if opener.is_valid():
+		opener.call()
+	await _settle(14)
+	_save(get_tree().root.get_texture().get_image(), name)
+
+
+## Control / scene into a fixed SubViewport over a dark backdrop.
+func _control(name: String, node: Control, size: Vector2i) -> void:
 	if node == null:
 		print("SKIP %s (null)" % name)
 		return
@@ -54,60 +109,10 @@ func _render_control(name: String, node: Control, size: Vector2i) -> void:
 	bg.color = BG
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	vp.add_child(bg)
-	if node.theme == null:
-		var glass = load("res://scripts/glassmorphism_theme.gd")
-		node.theme = glass.get_theme()
 	vp.add_child(node)
-	root.add_child(vp)
-	await _settle(18)
+	get_tree().root.add_child(vp)
+	await _settle(16)
 	_save(vp.get_texture().get_image(), name)
-	vp.queue_free()
-	await process_frame
-
-
-func _run() -> void:
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
-	await _settle(4)
-
-	# --- Window-based dialogs (no constructor args) ---
-	await _render_window("table_size_dialog", TableSizeDialog.new())
-	await _render_window("opr_import_dialog", OPRImportDialog.new())
-	await _render_window("wgs_import_dialog", WGSImportDialog.new())
-	var lp: Window = load("res://scripts/lighting_panel.gd").new()
-	await _render_window("lighting_panel", lp)
-
-	# --- Control modals with a known open() API, fed sample data ---
-	var unit := _sample_unit()
-	var wounds := WoundsDialog.new()
-	root.add_child(wounds)
-	if wounds.has_method("open"):
-		wounds.open(unit.models[0])
-	await _settle(12)
-	_save(wounds.get_viewport().get_texture().get_image(), "wounds_dialog")
-	wounds.queue_free()
-	await process_frame
-
-	var marker := MarkerDialog.new()
-	root.add_child(marker)
-	if marker.has_method("open_for_model"):
-		marker.open_for_model(unit.models[0])
-	await _settle(12)
-	_save(marker.get_viewport().get_texture().get_image(), "marker_dialog")
-	marker.queue_free()
-	await process_frame
-
-	# --- Scenes ---
-	var card_scene: Control = load("res://scenes/unit_card.tscn").instantiate()
-	await _render_control("unit_card", card_scene, Vector2i(420, 560))
-
-	var map_scene: Control = load("res://scenes/map_layout.tscn").instantiate()
-	await _render_control("map_layout", map_scene, Vector2i(1366, 860))
-
-	var menu_scene: Control = load("res://scenes/startup_menu.tscn").instantiate()
-	await _render_control("startup_menu", menu_scene, Vector2i(1366, 860))
-
-	print("RENDER_DONE")
-	quit()
 
 
 ## A small demo unit so data-driven dialogs have something to show.
