@@ -17,6 +17,7 @@ licenses — the canonical notice for an open-source release.
 | gdUnit4 | MIT | yes (dev only) | `addons/gdUnit4/` (test framework; `LICENSE` present) |
 | Inter (font) | SIL OFL 1.1 | yes | `assets/ui_glassmorphism/fonts/Inter.ttf` + `Inter-LICENSE.txt` |
 | Source Code Pro (font) | SIL OFL 1.1 | yes | `assets/ui_glassmorphism/fonts/SourceCodePro.ttf` + `SourceCodePro-LICENSE.txt` (RFN "Source") |
+| Orbitron (font) | SIL OFL 1.1 | yes | `assets/ui_glassmorphism/fonts/Orbitron.ttf` + `Orbitron-LICENSE.txt` (title wordmark; RFN "Orbitron") |
 | Kenney UI Pack(s) | CC0 | yes | `assets/kenney_ui/` (UI themes) |
 | Phosphor Icons | MIT | yes | `assets/ui_glassmorphism/icons/` + `Phosphor-LICENSE.txt` (UI icons, 256px, bold/fill) |
 | 3D dice (own W6) | MIT | yes | `scripts/dice_tray.gd`, `scripts/dice_d6.gd` (replaced the former AGPL addon) |

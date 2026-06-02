@@ -18,6 +18,14 @@ var _relay_url_input: LineEdit
 var _join_code_input: LineEdit
 var _join_relay_url_input: LineEdit
 
+# --- Modern menu look (built in code) ---
+const ACCENT_COLOR := Color(0.0, 0.85, 1.0)
+const ORBITRON_PATH := "res://assets/ui_glassmorphism/fonts/Orbitron.ttf"
+var _wordmark_box: HBoxContainer
+var _backdrop_camera: Camera3D
+var _drift: float = 0.0
+var _parallax: Vector2 = Vector2.ZERO
+
 
 func _ready() -> void:
 	# Check if an .otts file was passed via command-line (e.g. double-click in file manager)
@@ -35,8 +43,13 @@ func _ready() -> void:
 	# Remove hardcoded theme overrides to allow theme to apply
 	_remove_theme_overrides()
 
+	# Build the modern look: live skybox backdrop, Orbitron wordmark, embers, post FX.
+	_build_skybox_backdrop()
+	_build_wordmark()
+	_build_embers()
+	_build_post_layers()
+
 	# Hide menu initially for animation
-	logo_label.modulate.a = 0.0
 	menu_panel.modulate.a = 0.0
 
 	# Connect buttons
@@ -84,7 +97,7 @@ func _on_button_unhover(button: Button) -> void:
 func _play_startup_animation() -> void:
 	if animation_played:
 		# Skip animation on subsequent loads
-		logo_label.modulate.a = 1.0
+		_wordmark_box.modulate.a = 1.0
 		menu_panel.modulate.a = 1.0
 		return
 
@@ -94,10 +107,10 @@ func _play_startup_animation() -> void:
 	tween.set_ease(Tween.EASE_OUT)
 	tween.set_trans(Tween.TRANS_CUBIC)
 
-	# Logo fade in + scale
-	logo_label.scale = Vector2(0.8, 0.8)
-	tween.tween_property(logo_label, "modulate:a", 1.0, 0.8)
-	tween.parallel().tween_property(logo_label, "scale", Vector2.ONE, 0.8)
+	# Wordmark "power-on": fade + scale up
+	_wordmark_box.scale = Vector2(0.85, 0.85)
+	tween.tween_property(_wordmark_box, "modulate:a", 1.0, 0.9)
+	tween.parallel().tween_property(_wordmark_box, "scale", Vector2.ONE, 0.9)
 
 	# Menu panel fade in
 	tween.tween_property(menu_panel, "modulate:a", 1.0, 0.4).set_delay(0.3)
@@ -326,3 +339,141 @@ func _remove_theme_overrides() -> void:
 	exit_game_btn.remove_theme_font_size_override("font_size")
 	exit_game_btn.add_theme_color_override("font_color", Color(1.0, 0.35, 0.45))
 	exit_game_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.5, 0.6))
+
+
+# ===== Modern look (built in code) =====
+
+
+func _process(delta: float) -> void:
+	# Slow camera drift + subtle mouse parallax on the live skybox backdrop.
+	if not is_instance_valid(_backdrop_camera):
+		return
+	_drift += delta * 0.012
+	var vp: Vector2 = get_viewport_rect().size
+	var m: Vector2 = get_viewport().get_mouse_position()
+	var target := Vector2(m.x / maxf(vp.x, 1.0) - 0.5, m.y / maxf(vp.y, 1.0) - 0.5)
+	_parallax = _parallax.lerp(target, delta * 2.5)
+	_backdrop_camera.rotation = Vector3(-_parallax.y * 0.06, _drift + _parallax.x * 0.10, 0.0)
+
+
+## Live animated space backdrop (reuses materials/space_skybox.tres) behind the menu.
+func _build_skybox_backdrop() -> void:
+	var container := SubViewportContainer.new()
+	container.name = "SkyBackdrop"
+	container.stretch = true
+	container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(container)
+	move_child(container, 0)
+
+	var viewport := SubViewport.new()
+	viewport.own_world_3d = true
+	viewport.msaa_3d = Viewport.MSAA_DISABLED
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	container.add_child(viewport)
+
+	var env := Environment.new()
+	env.background_mode = Environment.BG_SKY
+	var sky := Sky.new()
+	sky.sky_material = load("res://materials/space_skybox.tres")
+	env.sky = sky
+	env.glow_enabled = true
+	env.glow_intensity = 0.7
+	env.glow_bloom = 0.12
+	var world_env := WorldEnvironment.new()
+	world_env.environment = env
+	viewport.add_child(world_env)
+
+	_backdrop_camera = Camera3D.new()
+	_backdrop_camera.fov = 70.0
+	viewport.add_child(_backdrop_camera)
+
+
+## Replaces the plain "OPENTTS" label with an Orbitron "OPEN" + "TTS" wordmark.
+func _build_wordmark() -> void:
+	var orbitron := FontVariation.new()
+	orbitron.base_font = load(ORBITRON_PATH)
+	orbitron.variation_opentype = {"wght": 700}
+
+	logo_label.visible = false
+	_wordmark_box = HBoxContainer.new()
+	_wordmark_box.name = "Wordmark"
+	_wordmark_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	_wordmark_box.add_theme_constant_override("separation", 2)
+	_wordmark_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_wordmark_box.add_child(_make_word("OPEN", orbitron, Color(0.86, 0.89, 0.94), false))
+	_wordmark_box.add_child(_make_word("TTS", orbitron, ACCENT_COLOR, true))
+	_wordmark_box.modulate.a = 0.0
+
+	var parent := logo_label.get_parent()
+	parent.add_child(_wordmark_box)
+	parent.move_child(_wordmark_box, logo_label.get_index())
+
+
+func _make_word(text: String, font: FontVariation, color: Color, glow: bool) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_override("font", font)
+	label.add_theme_font_size_override("font_size", 84)
+	label.add_theme_color_override("font_color", color)
+	if glow:
+		# Soft "bloom" approximated with a large, offset-less shadow outline.
+		label.add_theme_color_override("font_shadow_color", Color(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b, 0.85))
+		label.add_theme_constant_override("shadow_offset_x", 0)
+		label.add_theme_constant_override("shadow_offset_y", 0)
+		label.add_theme_constant_override("shadow_outline_size", 28)
+		label.add_theme_color_override("font_outline_color", Color(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b, 0.5))
+		label.add_theme_constant_override("outline_size", 2)
+	else:
+		label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.55))
+		label.add_theme_constant_override("shadow_offset_y", 3)
+	return label
+
+
+## Slow rising embers (CPUParticles2D → web-safe, unlike GPUParticles2D on web).
+func _build_embers() -> void:
+	var embers := CPUParticles2D.new()
+	embers.name = "Embers"
+	var vp: Vector2 = get_viewport_rect().size
+	embers.position = Vector2(vp.x * 0.5, vp.y + 16.0)
+	embers.amount = 56
+	embers.lifetime = 9.0
+	embers.preprocess = 9.0
+	embers.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	embers.emission_rect_extents = Vector2(vp.x * 0.55, 6.0)
+	embers.direction = Vector2.UP
+	embers.spread = 14.0
+	embers.gravity = Vector2(0.0, -7.0)
+	embers.initial_velocity_min = 14.0
+	embers.initial_velocity_max = 34.0
+	embers.scale_amount_min = 1.0
+	embers.scale_amount_max = 2.4
+	embers.color = Color(0.2, 0.75, 1.0, 0.5)
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(0.4, 0.85, 1.0, 0.0))
+	ramp.set_color(1, Color(0.1, 0.6, 1.0, 0.0))
+	ramp.add_point(0.25, Color(0.5, 0.9, 1.0, 0.6))
+	embers.color_ramp = ramp
+	var mat := CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	embers.material = mat
+
+	add_child(embers)
+	move_child(embers, 2)  # above backdrop + overlay, behind the logo
+
+
+## Web-safe post layers on top: vignette + film grain (UV/TIME shaders only).
+func _build_post_layers() -> void:
+	_add_fullscreen_shader("Vignette", "res://shaders/menu_vignette.gdshader")
+	_add_fullscreen_shader("Grain", "res://shaders/menu_grain.gdshader")
+
+
+func _add_fullscreen_shader(node_name: String, shader_path: String) -> void:
+	var rect := ColorRect.new()
+	rect.name = node_name
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mat := ShaderMaterial.new()
+	mat.shader = load(shader_path)
+	rect.material = mat
+	add_child(rect)  # added last → on top
