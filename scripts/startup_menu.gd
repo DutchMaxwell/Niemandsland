@@ -19,7 +19,7 @@ var _join_code_input: LineEdit
 var _join_relay_url_input: LineEdit
 
 # --- Modern menu look (built in code) ---
-const ACCENT_COLOR := Color(0.0, 0.85, 1.0)
+const ACCENT_COLOR := HudTokens.CYAN
 const ORBITRON_PATH := "res://assets/ui_glassmorphism/fonts/Orbitron.ttf"
 const WORDMARK_FONT_SIZE := 64
 ## Anti-war quotes under the title; one is chosen at random each time the menu opens.
@@ -57,6 +57,10 @@ func _ready() -> void:
 	# Remove hardcoded theme overrides to allow theme to apply
 	_remove_theme_overrides()
 
+	# Tactical-HUD chrome on the menu panel: deep-navy glass + corner brackets.
+	menu_panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
+	menu_panel.add_child(HudFrame.new())
+
 	# Build the modern look: live skybox backdrop, Orbitron wordmark, embers, post FX.
 	_build_skybox_backdrop()
 	_build_wordmark()
@@ -73,6 +77,10 @@ func _ready() -> void:
 	join_online_btn.pressed.connect(_on_join_online_pressed)
 	load_battle_btn.pressed.connect(_on_load_battle_pressed)
 	exit_game_btn.pressed.connect(_on_exit_pressed)
+
+	# Tactical-HUD button accents: cyan primary action, red destructive exit.
+	start_battle_btn.theme_type_variation = "PrimaryButton"
+	exit_game_btn.theme_type_variation = "DangerButton"
 
 	# Setup button hover effects
 	_setup_button_hover_effects()
@@ -186,7 +194,7 @@ func _show_host_popup() -> void:
 	# Info text
 	var info = Label.new()
 	info.text = "The room code will be shown in-game after connecting."
-	info.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	info.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD
 	vbox.add_child(info)
 
@@ -352,8 +360,8 @@ func _remove_theme_overrides() -> void:
 	# Exit button keeps red color for emphasis
 	exit_game_btn.flat = false
 	exit_game_btn.remove_theme_font_size_override("font_size")
-	exit_game_btn.add_theme_color_override("font_color", Color(1.0, 0.35, 0.45))
-	exit_game_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.5, 0.6))
+	exit_game_btn.add_theme_color_override("font_color", HudTokens.DANGER)
+	exit_game_btn.add_theme_color_override("font_hover_color", HudTokens.DANGER.lightened(0.2))
 
 
 # ===== Modern look (built in code) =====
@@ -416,7 +424,7 @@ func _build_wordmark() -> void:
 	_wordmark_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	_wordmark_box.add_theme_constant_override("separation", 2)
 	_wordmark_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_wordmark_box.add_child(_make_word("NIEMANDS", orbitron, Color(0.86, 0.89, 0.94), false))
+	_wordmark_box.add_child(_make_word("NIEMANDS", orbitron, HudTokens.TEXT, false))
 	_wordmark_box.add_child(_make_word("LAND", orbitron, ACCENT_COLOR, true))
 	_wordmark_box.modulate.a = 0.0
 
