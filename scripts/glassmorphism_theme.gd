@@ -350,6 +350,6 @@ static func _separators(th: Theme) -> void:
 
 # ===== Helpers =====
 static func _load_icon(th: Theme, name: String, type: String, file: String) -> void:
-	var icon = load(ICON_PATH + file)
+	var icon := load(ICON_PATH + file) as Texture2D
 	if icon:
 		th.set_icon(name, type, icon)

@@ -176,6 +176,13 @@ func _setup_ui() -> void:
 	add_child(api_client)
 
 
+## Borderless windows get no WM close/ESC; provide keyboard escape ourselves.
+func _unhandled_key_input(event: InputEvent) -> void:
+	if visible and event is InputEventKey and event.pressed and (event as InputEventKey).keycode == KEY_ESCAPE:
+		_on_cancel()
+		get_viewport().set_input_as_handled()
+
+
 func _on_paste_link() -> void:
 	var clipboard = DisplayServer.clipboard_get()
 	if not clipboard.is_empty():

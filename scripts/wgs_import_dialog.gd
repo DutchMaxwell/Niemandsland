@@ -209,6 +209,13 @@ func _setup_server_tab(container: VBoxContainer) -> void:
 	container.add_child(url_info)
 
 
+## Borderless windows get no WM close/ESC; provide keyboard escape ourselves.
+func _unhandled_key_input(event: InputEvent) -> void:
+	if visible and event is InputEventKey and event.pressed and (event as InputEventKey).keycode == KEY_ESCAPE:
+		_on_cancel()
+		get_viewport().set_input_as_handled()
+
+
 func _on_select_file() -> void:
 	file_dialog.popup_centered(Vector2i(700, 500))
 
