@@ -37,11 +37,17 @@ func _run() -> void:
 		"lighting_panel":
 			await _window(name, load("res://scripts/lighting_panel.gd").new())
 		"wounds_dialog":
-			var wd := WoundsDialog.new()
+			var wd := WoundsDialog.create_simple()
 			await _modal(name, wd, func(): wd.open(_sample_unit().models[0]))
 		"marker_dialog":
-			var md := MarkerDialog.new()
+			var md := MarkerDialog.create_simple()
 			await _modal(name, md, func(): md.open_for_model(_sample_unit().models[0]))
+		"casts_dialog":
+			var cd := CastsDialog.create_simple()
+			await _modal(name, cd, func(): cd.open(_sample_unit()))
+		"model_info_popup":
+			var mip := ModelInfoPopup.create_simple()
+			await _modal(name, mip, func(): mip.open(_sample_unit().models[0]))
 		"unit_card":
 			var card: Control = load("res://scenes/unit_card.tscn").instantiate()
 			await _control(name, card, Vector2i(420, 560))
