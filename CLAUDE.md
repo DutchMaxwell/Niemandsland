@@ -2,8 +2,10 @@
 
 ## Language
 
-Work in **English** — code, comments, commit messages, and chat replies.
-(The user is a German speaker but prefers English for development.)
+- **Reply to the user in German** — the user is a German speaker.
+- **Keep everything in the codebase in English** — identifiers, code comments,
+  commit messages, PR text, and docs — so the project stays usable
+  internationally.
 
 ## Project
 
