@@ -49,12 +49,12 @@ lost between work sessions.**
       `faction_name` + OPR comments) → our own generic names; keep the aesthetics.
 - [ ] **Verify image-generation ToS** (Gemini / HuggingFace Spaces) permit
       commercial use + redistribution of the generated images/models.
-- [ ] **Document model provenance** (AI-generated via TRELLIS, MIT).
+- [x] **Document model provenance** (AI-generated via TRELLIS, MIT) — in `THIRD_PARTY.md`. ✅
 
 ### 🟢 Attribution / housekeeping
-- [ ] **Bundle the SIL OFL license text** for the fonts (Inter, Source Code Pro).
-- [ ] **Add `THIRD_PARTY.md` / `CREDITS.md`** listing every dependency + asset and
-      its license.
+- [x] **Bundle the SIL OFL license text** for the fonts (Inter, Source Code Pro) —
+      added next to the fonts. ✅
+- [x] **Added `THIRD_PARTY.md`** listing every dependency + asset and its license. ✅
 - [ ] **Verify SVG icon / texture provenance**; attribute third-party sources.
 - [ ] **IP-lawyer review** before public release.
 
@@ -65,6 +65,6 @@ lost between work sessions.**
 | Our code | MIT | root `LICENSE` |
 | gdUnit4 (test) | MIT | LICENSE present; dev-only dependency |
 | ~~`dice_roller` (vokimon)~~ | AGPL-3.0 | ✅ removed — replaced by our own MIT dice |
-| Inter, Source Code Pro (fonts) | SIL OFL | include the OFL text when shipping |
+| Inter, Source Code Pro (fonts) | SIL OFL 1.1 | ✅ OFL text bundled next to the fonts |
 | Microsoft TRELLIS | MIT | model outputs are ours |
 | OPR stats / army data | OPR content | API only; never bundle or MIT-license |
