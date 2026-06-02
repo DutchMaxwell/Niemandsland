@@ -5,7 +5,7 @@ Workflow:
     2. Diese App: User reviewed jede Image (A/R) im Browser.
     3. Approved Images werden via _convert_approved-CLI/Knopf zu GLB.
     4. Diese App: User reviewed jedes GLB (A/R).
-    5. Export-CLI kopiert nur GLB_APPROVED ins openTTS-Repo.
+    5. Export-CLI kopiert nur GLB_APPROVED ins Niemandsland-Repo.
 
 Start:
     PYTHONPATH=../../assets/3d_pipeline:. venv/bin/python review_app.py
@@ -413,7 +413,7 @@ def _convert_worker(session_id: str) -> None:
 
 
 def _export_worker(session_id: str) -> None:
-    """Background-Worker: Export der GLB_APPROVED Units nach openTTS."""
+    """Background-Worker: Export der GLB_APPROVED Units nach Niemandsland."""
     try:
         session_dir = STATE_DIR / session_id
         session = PipelineSession.load(session_dir)

@@ -6,7 +6,7 @@ extends Node
 ##   var lobby = InternetLobby.new()
 ##   add_child(lobby)
 ##   lobby.room_code_ready.connect(_on_room_code_ready)
-##   lobby.host_internet_game("wss://opentts-relay.fly.dev")
+##   lobby.host_internet_game("wss://niemandsland-relay.fly.dev")
 ##
 ## Once connected, set multiplayer.multiplayer_peer = lobby.relay_peer
 ## and all existing RPCs will work automatically.
@@ -18,7 +18,7 @@ signal internet_disconnected()
 signal peer_joined(peer_id: int)
 signal peer_left(peer_id: int)
 
-const DEFAULT_RELAY_URL: String = "wss://opentts-relay.fly.dev"
+const DEFAULT_RELAY_URL: String = "wss://niemandsland-relay.fly.dev"
 
 var relay_peer: RelayMultiplayerPeer = null
 var is_host: bool = false

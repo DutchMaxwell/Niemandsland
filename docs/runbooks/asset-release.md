@@ -19,8 +19,8 @@ Tag festlegen, z. B. `models-v1` (Modelle werden separat von Code-Releases versi
 ## 1. Release anlegen (einmal pro Tag)
 ```bash
 gh release create models-v1 \
-  --repo DutchMaxwell/openTTS \
-  --title "OpenTTS models v1" \
+  --repo DutchMaxwell/Niemandsland \
+  --title "Niemandsland models v1" \
   --notes "On-demand miniature models (content-addressed GLBs)."
 ```
 
@@ -28,8 +28,8 @@ gh release create models-v1 \
 ```bash
 python tools/model_forge/publish_manifest.py \
   assets/miniatures assets/model_manifest.json \
-  --base-url "https://github.com/DutchMaxwell/openTTS/releases/download/models-v1/" \
-  --upload --tag models-v1 --repo DutchMaxwell/openTTS
+  --base-url "https://github.com/DutchMaxwell/Niemandsland/releases/download/models-v1/" \
+  --upload --tag models-v1 --repo DutchMaxwell/Niemandsland
 ```
 Das schreibt `assets/model_manifest.json` (Keys `faction/unit`, sha256, size) und
 lädt jede GLB als `<sha256>.glb` ins Release (`--clobber` überschreibt bei Re-Runs).

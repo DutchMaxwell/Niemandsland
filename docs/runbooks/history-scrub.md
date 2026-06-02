@@ -23,7 +23,7 @@ git filter-repo --version
 
 ## 1. Frischer Mirror-Klon (Sicherheit — nie im Arbeits-Repo!)
 ```bash
-git clone --mirror https://github.com/DutchMaxwell/openTTS.git scrub.git
+git clone --mirror https://github.com/DutchMaxwell/Niemandsland.git scrub.git
 cd scrub.git
 ```
 
@@ -50,7 +50,7 @@ git grep -n -i "qua\":" $(git rev-list --all) -- 'assets/miniatures/*/units.json
 
 ## 4. Rewritten History pushen (Force, alle Refs)
 ```bash
-git push --force --mirror https://github.com/DutchMaxwell/openTTS.git
+git push --force --mirror https://github.com/DutchMaxwell/Niemandsland.git
 ```
 
 ## 5. Danach

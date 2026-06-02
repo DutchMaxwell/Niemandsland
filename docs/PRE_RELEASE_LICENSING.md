@@ -1,6 +1,6 @@
 # Pre-Release Licensing & Open-Source Checklist
 
-Goal: eventually release OpenTTS as **open source under the MIT license** (for our
+Goal: eventually release Niemandsland as **open source under the MIT license** (for our
 own code), with third-party dependencies, assets and data kept under their own
 terms. **This file is the durable record of decisions + open items so nothing is
 lost between work sessions.**

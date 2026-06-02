@@ -1,10 +1,10 @@
 @echo off
-title OpenTTS 3D Pipeline
+title Niemandsland 3D Pipeline
 cd /d "%~dp0"
 
 echo.
 echo ========================================
-echo  OpenTTS 3D Pipeline - Trellis.2
+echo  Niemandsland 3D Pipeline - Trellis.2
 echo ========================================
 echo.
 

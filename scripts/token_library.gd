@@ -3,7 +3,7 @@ extends RefCounted
 ## A reusable registry of user-defined custom tokens, keyed by name. Holds the
 ## display color, whether the token is a counter, and an optional effect text
 ## shown on hover. The library is the source of truth for a custom token's color
-## and effect (so editing it updates every instance), is persisted in the .otts
+## and effect (so editing it updates every instance), is persisted in the .nml
 ## save, and synced across multiplayer peers.
 
 ## name (String) -> {color: Color, is_counter: bool, effect: String}

@@ -1,5 +1,5 @@
 extends Node3D
-## Main scene controller for OpenTTS
+## Main scene controller for Niemandsland
 ##
 ## Handles initialization, UI management, and coordinates various subsystems
 ## including networking, terrain, lighting, graphics, and save/load functionality.
@@ -201,7 +201,7 @@ var _is_army_syncing: bool = false
 
 
 func _ready() -> void:
-	print("OpenTTS Prototype v0.2 - Initializing...")
+	print("Niemandsland Prototype v0.2 - Initializing...")
 
 	# Connect hamburger menu toggle
 	hamburger_button.pressed.connect(_on_hamburger_pressed)
@@ -463,18 +463,18 @@ func _ready() -> void:
 	# chooser and start the intro directly.
 
 	# Check if a saved battle should be loaded (from startup menu)
-	var pending_load := ProjectSettings.get_setting("opentts/pending_load_path", "") as String
+	var pending_load := ProjectSettings.get_setting("niemandsland/pending_load_path", "") as String
 	if not pending_load.is_empty():
-		ProjectSettings.set_setting("opentts/pending_load_path", "")
+		ProjectSettings.set_setting("niemandsland/pending_load_path", "")
 		call_deferred("_load_pending_battle", pending_load)
 
 	# Check if internet game should be started (from startup menu)
-	var pending_internet = ProjectSettings.get_setting("opentts/pending_internet_lobby", false)
+	var pending_internet = ProjectSettings.get_setting("niemandsland/pending_internet_lobby", false)
 	if pending_internet:
-		ProjectSettings.set_setting("opentts/pending_internet_lobby", false)
-		var is_internet_host = ProjectSettings.get_setting("opentts/internet_is_host", false)
-		var pending_relay_url = ProjectSettings.get_setting("opentts/internet_relay_url", "")
-		var pending_room_code = ProjectSettings.get_setting("opentts/internet_room_code", "")
+		ProjectSettings.set_setting("niemandsland/pending_internet_lobby", false)
+		var is_internet_host = ProjectSettings.get_setting("niemandsland/internet_is_host", false)
+		var pending_relay_url = ProjectSettings.get_setting("niemandsland/internet_relay_url", "")
+		var pending_room_code = ProjectSettings.get_setting("niemandsland/internet_room_code", "")
 		call_deferred("_start_pending_internet_game", is_internet_host, pending_relay_url, pending_room_code)
 
 	# Table size is chosen ONCE up front, then locked — changing it later wipes the
@@ -482,7 +482,7 @@ func _ready() -> void:
 	# data, so they skip the chooser. The in-game size panel is hidden in every case.
 	if table_size_option:
 		table_size_option.get_parent().visible = false
-	var joining_client: bool = pending_internet and not ProjectSettings.get_setting("opentts/internet_is_host", false)
+	var joining_client: bool = pending_internet and not ProjectSettings.get_setting("niemandsland/internet_is_host", false)
 	if pending_load.is_empty() and not joining_client:
 		# Choose the table size FIRST on a black backdrop, then dissolve into the intro —
 		# the chooser must never overlap the cinematic. UI stays hidden until the intro ends.
@@ -494,7 +494,7 @@ func _ready() -> void:
 		# no chooser — go straight into the intro.
 		_start_cinematic_intro()
 
-	print("OpenTTS ready!")
+	print("Niemandsland ready!")
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -1776,7 +1776,7 @@ func _detect_tts_cache_dir() -> String:
 func _on_save_game() -> void:
 	# Set default directory
 	save_game_dialog.current_dir = SaveManager.get_default_save_dir()
-	save_game_dialog.current_file = "game_%s.otts" % Time.get_datetime_string_from_system().replace(":", "-")
+	save_game_dialog.current_file = "game_%s.nml" % Time.get_datetime_string_from_system().replace(":", "-")
 	save_game_dialog.popup_centered()
 
 
@@ -1788,9 +1788,9 @@ func _on_load_game() -> void:
 
 ## Save file selected
 func _on_save_file_selected(path: String) -> void:
-	# Ensure .otts extension
-	if not path.ends_with(".otts"):
-		path += ".otts"
+	# Ensure .nml extension
+	if not path.ends_with(".nml"):
+		path += ".nml"
 
 	var error = save_manager.save_game(path)
 	if error != OK:
@@ -2230,7 +2230,7 @@ func _on_wgs_game_imported(game: WGSClient.WGSGame) -> void:
 	table.setup_table(wgs_table_size)
 	_adjust_camera_for_table_size(wgs_table_size)
 
-	# Calculate offset: WGS uses top-left (0,0), OpenTTS uses center
+	# Calculate offset: WGS uses top-left (0,0), Niemandsland uses center
 	var table_meters = game.get_table_size_meters()
 	var offset = Vector3(-table_meters.x / 2, 0, -table_meters.y / 2)
 
@@ -2280,7 +2280,7 @@ func _on_intro_finished() -> void:
 			cinematic_intro.queue_free()
 			cinematic_intro = null
 
-	print("Cinematic intro finished - welcome to OpenTTS!")
+	print("Cinematic intro finished - welcome to Niemandsland!")
 
 
 ## ============================================================================

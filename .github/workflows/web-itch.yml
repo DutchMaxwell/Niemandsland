@@ -3,7 +3,7 @@ name: Web Build → itch.io
 # Builds the WebAssembly export and publishes it to itch.io via butler, so the
 # latest work is playable in a browser. Requires two repository settings:
 #   - secret   BUTLER_API_KEY : an itch.io API key (itch.io/user/settings/api-keys)
-#   - variable ITCH_TARGET    : "<itch-user>/<game-slug>" (e.g. dutchmaxwell/opentts)
+#   - variable ITCH_TARGET    : "<itch-user>/<game-slug>" (e.g. dutchmaxwell/niemandsland)
 # See docs/WEB_EXPORT.md for the one-time setup. Without them the build still runs
 # and is uploaded as the "web-build" artifact, but the itch.io push is skipped.
 

@@ -1,4 +1,4 @@
-# OpenTTS — Status & Roadmap
+# Niemandsland — Status & Roadmap
 
 **Version:** 0.2.0-alpha · **Engine:** Godot 4.6 · **Branch:** `main`
 
@@ -31,7 +31,7 @@ Activated tokens; hero attachment.
 size) with batch RPCs; shared dice log; player avatars/cursors; multiplayer
 save/load.
 
-**Import/export** — TTS import (Steam CDN + cache), custom glTF/STL/OBJ, `.otts`
+**Import/export** — TTS import (Steam CDN + cache), custom glTF/STL/OBJ, `.nml`
 save format with OS file association, WGS import/export
 ([`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md)).
 

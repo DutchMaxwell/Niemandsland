@@ -21,7 +21,7 @@ workflow**) for any branch.
 3. **Add the GitHub repo settings**
    (**Settings → Secrets and variables → Actions**)
    - **Secret** `BUTLER_API_KEY` = the itch.io API key.
-   - **Variable** `ITCH_TARGET` = `<itch-user>/<game-slug>` (e.g. `dutchmaxwell/opentts`).
+   - **Variable** `ITCH_TARGET` = `<itch-user>/<game-slug>` (e.g. `dutchmaxwell/niemandsland`).
 
 4. **Trigger a build** — push to your `claude/**` branch, or run the workflow
    manually. CI builds the web export and `butler push`es it to the `html5`

@@ -1,6 +1,6 @@
 extends Node
 class_name WGSGameManager
-## Manages WGS (Wargaming Simulator) game synchronization with OpenTTS
+## Manages WGS (Wargaming Simulator) game synchronization with Niemandsland
 ## Handles importing WGS game states and spawning units on the table
 
 signal game_imported(game: WGSClient.WGSGame)

@@ -1,4 +1,4 @@
-# OpenTTS Relay Server
+# Niemandsland Relay Server
 
 A lightweight WebSocket relay that enables **internet multiplayer** without players
 needing port forwarding. It forwards game messages between peers in the same room and
@@ -36,11 +36,11 @@ cd relay && python -m pytest        # pytest.ini sets asyncio_mode=auto
 
 **Docker:**
 ```bash
-docker build -t opentts-relay .
-docker run -p 8765:8765 opentts-relay
+docker build -t niemandsland-relay .
+docker run -p 8765:8765 niemandsland-relay
 ```
 
-**Fly.io** (`fly.toml`, app `opentts-relay`, internal port 8765, TLS-terminated):
+**Fly.io** (`fly.toml`, app `niemandsland-relay`, internal port 8765, TLS-terminated):
 ```bash
 fly deploy
 ```

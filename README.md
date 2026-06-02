@@ -1,4 +1,4 @@
-# OpenTTS — Open-Source Wargaming Tabletop Simulator
+# Niemandsland — A Fan-Made Tabletop Simulator for OnePageRules Game Systems
 
 A desktop tabletop simulator focused on miniature wargames, with first-class
 support for [OnePageRules](https://onepagerules.com/) (Grimdark Future / Age of
@@ -36,7 +36,7 @@ What the code actually does today:
   (see [`relay/`](relay/README.md)); full state sync (models, terrain, table size),
   shared dice log, player avatars/cursors, save/load.
 - **Import / export** — Tabletop Simulator import (Steam CDN + local cache),
-  custom models (glTF / STL / OBJ), `.otts` save format with OS file association,
+  custom models (glTF / STL / OBJ), `.nml` save format with OS file association,
   Wargaming Simulator (WGS) import/export.
 - **Model Forge** — a Python pipeline that turns OPR unit data into 3D miniatures
   (image generation → TRELLIS mesh) with a Flask review UI. See
@@ -49,8 +49,8 @@ What the code actually does today:
 Requires **[Godot 4.6](https://godotengine.org/download)** (Forward+ renderer).
 
 ```bash
-git clone git@github.com:DutchMaxwell/openTTS.git
-cd openTTS
+git clone git@github.com:DutchMaxwell/Niemandsland.git
+cd Niemandsland
 godot --path . --editor      # open in the editor, then F5 to run
 # or run directly:
 godot --path .
@@ -88,7 +88,7 @@ development and the gdUnit4 test runner), see
 ## Project layout
 
 ```
-openTTS/
+Niemandsland/
 ├── scenes/            # startup_menu.tscn (main), main.tscn, dialogs
 ├── scripts/           # ~48 GDScript files (see docs/ARCHITECTURE.md)
 ├── addons/            # dice_roller, gdUnit4 (tests)

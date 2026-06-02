@@ -1,6 +1,6 @@
 # Model Forge — 3D miniature pipeline
 
-Turns OPR unit data into game-ready 3D miniatures for OpenTTS: image generation →
+Turns OPR unit data into game-ready 3D miniatures for Niemandsland: image generation →
 TRELLIS mesh → optimized GLB + `units.json`. Covers all **38 Grimdark Future
 factions / 855 unit overrides** with real OPR v3.5.x stats.
 
@@ -13,7 +13,7 @@ OPR share-link or Design Language YAML
         → image generation (HuggingFace Spaces / Gemini)
         → 2D review & approval
         → TRELLIS 3D conversion
-        → GLB optimize + export to OpenTTS
+        → GLB optimize + export to Niemandsland
 ```
 
 ## Setup
@@ -125,7 +125,7 @@ white bg) and GW-IP violations; an image with `ip_concerns` is re-rolled.
 | `trellis_bridge.py` | Bridge to `assets/3d_pipeline/trellis_core.py` + convert auto-recovery |
 | `glb_optimizer.py` | Light mesh decimation + texture resize, 2048² quality-first (`bin/gltfpack-linux`) |
 | `pipeline_state.py` | Session + unit state (`state/`) |
-| `exporter.py` | Export approved GLBs + `units.json` to OpenTTS |
+| `exporter.py` | Export approved GLBs + `units.json` to Niemandsland |
 | `terrain_*.py` | Experimental terrain-piece generation |
 
 ## Image models

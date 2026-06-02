@@ -1,4 +1,4 @@
-# OpenTTS 3D Pipeline
+# Niemandsland 3D Pipeline
 
 Konvertiert Bilder zu 3D-Modellen mit Microsoft TRELLIS.2.
 

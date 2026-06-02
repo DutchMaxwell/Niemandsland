@@ -1,4 +1,4 @@
-# Asset-Quellen für OpenTTS
+# Asset-Quellen für Niemandsland
 
 Dieses Dokument listet empfohlene Open-Source Asset-Quellen für das Projekt.
 
