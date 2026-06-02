@@ -63,6 +63,12 @@ func _ready() -> void:
 	visible = false
 	_close_button.pressed.connect(_on_close_pressed)
 
+	# Tactical chrome: deep-navy glass panel + corner-bracket frame.
+	add_theme_stylebox_override("panel", HudTokens.panel_style())
+	var frame := HudFrame.new()
+	frame.bracket_length = 12.0
+	add_child(frame)
+
 	_refresh_timer = Timer.new()
 	_refresh_timer.one_shot = false
 	_refresh_timer.wait_time = REFRESH_INTERVAL
