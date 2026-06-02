@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-niemandsland">
+    <comment>Niemandsland Save File</comment>
+    <glob pattern="*.nml"/>
+    <icon name="niemandsland"/>
+  </mime-type>
+</mime-info>

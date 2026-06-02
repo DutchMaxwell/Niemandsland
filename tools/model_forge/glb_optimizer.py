@@ -1,5 +1,5 @@
 """
-GLB-Optimierung fuer OpenTTS-Tabletop-Minis
+GLB-Optimierung fuer Niemandsland-Tabletop-Minis
 ============================================
 
 TRELLIS produziert GLBs mit ~500k Tris und 4096^2 Texturen (~20MB pro Mini).

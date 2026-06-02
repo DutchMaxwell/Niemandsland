@@ -1,4 +1,4 @@
-"""OpenTTS Relay Server - WebSocket relay for internet multiplayer.
+"""Niemandsland Relay Server - WebSocket relay for internet multiplayer.
 
 A lightweight message relay that forwards game data between players
 in the same room. Does NOT understand game logic - only routes messages.
@@ -63,7 +63,7 @@ class Room:
 
 
 class RelayServer:
-    """WebSocket relay server for OpenTTS multiplayer."""
+    """WebSocket relay server for Niemandsland multiplayer."""
 
     def __init__(self):
         self.rooms: dict[str, Room] = {}
@@ -444,7 +444,7 @@ async def main(host: str = "0.0.0.0", port: int = 8765,
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="OpenTTS Relay Server")
+    parser = argparse.ArgumentParser(description="Niemandsland Relay Server")
     parser.add_argument("--host", default="0.0.0.0", help="Bind address")
     parser.add_argument("--port", type=int, default=8765, help="Port")
     parser.add_argument("--certfile", help="TLS certificate file")

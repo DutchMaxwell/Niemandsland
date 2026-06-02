@@ -2,7 +2,7 @@
 Model Forge Gradio Web-UI
 =========================
 
-Automatisierte 3D-Modell-Pipeline fuer OpenTTS Tabletop Wargaming.
+Automatisierte 3D-Modell-Pipeline fuer Niemandsland Tabletop Wargaming.
 Orchestriert den gesamten Workflow:
 
     OPR Share-Link -> Design Language -> Image Generation -> Review -> 3D Conversion -> Export
@@ -1190,7 +1190,7 @@ def _handle_export(
     session: PipelineSession | None,
     army: OPRArmy | None,
 ) -> tuple[PipelineSession | None, str]:
-    """Exportiert fertige GLB-Dateien und units.json nach OpenTTS.
+    """Exportiert fertige GLB-Dateien und units.json nach Niemandsland.
 
     Args:
         session: Aktive Pipeline-Session.
@@ -1617,7 +1617,7 @@ def _handle_export_terrain(
     session: PipelineSession | None,
     theme: TerrainTheme | None,
 ) -> tuple[PipelineSession | None, str]:
-    """Exportiert Terrain-GLBs und terrain.json nach OpenTTS.
+    """Exportiert Terrain-GLBs und terrain.json nach Niemandsland.
 
     Args:
         session: Aktive Terrain-Session.
@@ -1687,7 +1687,7 @@ def create_app() -> gr.Blocks:
     image_model_choices: list[str] = [m.name for m in ImageModel]
 
     with gr.Blocks(
-        title="Model Forge - OpenTTS 3D Pipeline",
+        title="Model Forge - Niemandsland 3D Pipeline",
     ) as demo:
 
         # =================================================================
@@ -2238,9 +2238,9 @@ def create_app() -> gr.Blocks:
         # =================================================================
 
         with gr.Tab("Export"):
-            gr.Markdown("### Export nach OpenTTS")
+            gr.Markdown("### Export nach Niemandsland")
             gr.Markdown(
-                "Exportiert fertige GLB-Dateien und units.json in das OpenTTS-Projektverzeichnis "
+                "Exportiert fertige GLB-Dateien und units.json in das Niemandsland-Projektverzeichnis "
                 f"(`{PROJECT_ROOT / 'assets' / 'miniatures'}`)."
             )
 
@@ -2251,7 +2251,7 @@ def create_app() -> gr.Blocks:
             )
 
             export_btn: gr.Button = gr.Button(
-                "Nach OpenTTS exportieren",
+                "Nach Niemandsland exportieren",
                 variant="primary",
             )
 
@@ -2431,7 +2431,7 @@ def create_app() -> gr.Blocks:
 
                 # --- Schritt 5: Export ---
                 with gr.Group():
-                    gr.Markdown("#### 5. Export nach OpenTTS")
+                    gr.Markdown("#### 5. Export nach Niemandsland")
                     gr.Markdown(
                         f"Exportiert nach `{PROJECT_ROOT / 'assets' / 'terrain'}`."
                     )

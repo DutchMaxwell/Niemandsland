@@ -1,5 +1,5 @@
 """
-Model Forge Exporter - Exportiert GLB-Dateien und units.json fuer OpenTTS
+Model Forge Exporter - Exportiert GLB-Dateien und units.json fuer Niemandsland
 =========================================================================
 
 Erzeugt die Verzeichnisstruktur und Dateien, die der opr_army_manager.gd
@@ -179,7 +179,7 @@ def export_army(
     project_root: Path,
 ) -> ExportResult:
     """
-    Exportiert GLB-Dateien und units.json in das OpenTTS-Projektverzeichnis.
+    Exportiert GLB-Dateien und units.json in das Niemandsland-Projektverzeichnis.
 
     Nur Einheiten mit Status GLB_APPROVED oder EXPORTED werden exportiert.
     Die Zielstruktur entspricht dem, was opr_army_manager.gd erwartet.

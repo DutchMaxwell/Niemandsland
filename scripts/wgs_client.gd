@@ -2,7 +2,7 @@ extends Node
 class_name WGSClient
 ## Wargaming Simulator (Udo's 3dWorld) Client
 ## Handles importing/exporting game states from WGS format
-## WGS is designed for asynchronous web-based play, OpenTTS for direct desktop play
+## WGS is designed for asynchronous web-based play, Niemandsland for direct desktop play
 
 signal game_loaded(game: WGSGame)
 signal import_failed(error: String)
@@ -103,7 +103,7 @@ class WGSUnit:
 		return name
 
 	func get_position_3d() -> Vector3:
-		# WGS uses inches, OpenTTS uses meters
+		# WGS uses inches, Niemandsland uses meters
 		# Y in WGS maps to Z in 3D (top-down view)
 		return Vector3(
 			position_x * WGSClient.INCH_TO_METER,

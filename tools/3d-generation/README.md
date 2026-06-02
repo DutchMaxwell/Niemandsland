@@ -1,4 +1,4 @@
-# 3D-Modell-Generierung für OpenTTS
+# 3D-Modell-Generierung für Niemandsland
 
 Erstelle texturierte 3D-Modelle aus Bildern für deine Tabletop-Spiele.
 
@@ -23,13 +23,13 @@ Keine Installation nötig - läuft direkt im Browser:
 2. Bild hochladen
 3. "Generate" klicken
 4. GLB herunterladen
-5. In OpenTTS importieren: `Spawn > Import GLB`
+5. In Niemandsland importieren: `Spawn > Import GLB`
 
 ### Option 2: Google Colab (Colab Pro mit A100)
 
 Für Batch-Verarbeitung oder mehr Kontrolle:
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DutchMaxwell/openTTS/blob/main/tools/3d-generation/trellis2_colab.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DutchMaxwell/Niemandsland/blob/main/tools/3d-generation/trellis2_colab.ipynb)
 
 **Voraussetzung:** Colab Pro mit A100 GPU (24GB+ VRAM erforderlich)
 
@@ -40,10 +40,10 @@ Für Batch-Verarbeitung oder mehr Kontrolle:
 - **Gute Beleuchtung**: Gleichmäßig, keine harten Schatten
 - **Hohe Auflösung**: Mindestens 512x512 Pixel
 
-## Import in OpenTTS
+## Import in Niemandsland
 
 1. GLB-Datei herunterladen
-2. In OpenTTS: `Spawn > Import GLB`
+2. In Niemandsland: `Spawn > Import GLB`
 3. Positionieren und skalieren
 4. `L` drücken zum Fixieren (für Terrain)
 

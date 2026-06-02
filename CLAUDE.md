@@ -1,4 +1,4 @@
-# OpenTTS — Instructions for Claude
+# Niemandsland — Instructions for Claude
 
 ## Language
 
@@ -6,7 +6,7 @@ The user communicates in German. **Answer in German.**
 
 ## Project
 
-OpenTTS is a desktop **tabletop wargaming simulator** (v0.2.0-alpha) for
+Niemandsland is a desktop **tabletop wargaming simulator** (v0.2.0-alpha) for
 OnePageRules and similar miniature games.
 
 - **Engine**: Godot **4.6** (Forward+ renderer), `config_version=5`
@@ -30,7 +30,7 @@ Build/run/test: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 | Domain | Scripts |
 |---|---|
 | Core | `main.gd`, `object_manager.gd`, `camera_controller.gd`, `table.gd`, `selectable_object.gd` |
-| Save/Load | `save_manager.gd` (`.otts` format) |
+| Save/Load | `save_manager.gd` (`.nml` format) |
 | Units | `game_unit.gd`, `model_instance.gd`, `unit_utils.gd`, `equipment_distributor.gd`, `coherency_checker.gd`, `coherency_visualizer.gd`, `unit_card.gd`, `unit_marker.gd`, `unit_boundary_visualizer.gd`, `radial_menu*.gd` |
 | OPR / import | `opr_api_client.gd`, `opr_army_manager.gd`, `opr_import_dialog.gd`, `tts_importer.gd`, `tts_download_manager.gd`, `wgs_*.gd` |
 | Multiplayer | `network_manager.gd`, `relay_multiplayer_peer.gd`, `internet_lobby.gd`, `player_avatar.gd`, `remote_cursor.gd` |

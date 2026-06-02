@@ -1,6 +1,6 @@
 # Third-party components & licenses
 
-OpenTTS's **own source code is MIT-licensed** (see [`LICENSE`](LICENSE)). This file
+Niemandsland's **own source code is MIT-licensed** (see [`LICENSE`](LICENSE)). This file
 lists the third-party software, fonts, assets and data the project uses, with their
 licenses — the canonical notice for an open-source release.
 
@@ -12,7 +12,7 @@ licenses — the canonical notice for an open-source release.
 
 | Component | License | Bundled? | Where / notes |
 |---|---|---|---|
-| OpenTTS code | MIT | — | this repo (`LICENSE`) |
+| Niemandsland code | MIT | — | this repo (`LICENSE`) |
 | Godot Engine 4.6 | MIT | no (runtime) | the engine the game runs on |
 | gdUnit4 | MIT | yes (dev only) | `addons/gdUnit4/` (test framework; `LICENSE` present) |
 | Inter (font) | SIL OFL 1.1 | yes | `assets/ui_glassmorphism/fonts/Inter.ttf` + `Inter-LICENSE.txt` |

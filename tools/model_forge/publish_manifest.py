@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-publish_manifest.py — build (and optionally upload) the OpenTTS model manifest.
+publish_manifest.py — build (and optionally upload) the Niemandsland model manifest.
 
 The game loads 3D miniatures on demand (see docs/ASSET_DELIVERY.md): a small
 bundled manifest maps each unit to a content-addressed GLB hosted on a CDN
@@ -88,7 +88,7 @@ def _upload(tag: str, repo: str, files: list[Path]) -> None:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Build/upload the OpenTTS model manifest.")
+    ap = argparse.ArgumentParser(description="Build/upload the Niemandsland model manifest.")
     ap.add_argument("miniatures_dir", type=Path, help=".../assets/miniatures")
     ap.add_argument("out_manifest", type=Path, help=".../assets/model_manifest.json")
     ap.add_argument("--base-url", default="",

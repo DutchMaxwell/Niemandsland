@@ -61,15 +61,25 @@ theme_override_constants/shadow_offset_y = 0
 theme_override_constants/shadow_outline_size = 20
 theme_override_constants/outline_size = 2
 theme_override_font_sizes/font_size = 64
-text = "OPENTTS"
+text = "NIEMANDSLAND"
 horizontal_alignment = 1
 
 [node name="SubtitleLabel" type="Label" parent="LogoContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.545098, 0.572549, 0.658824, 1)
-theme_override_font_sizes/font_size = 20
-text = "TACTICAL TABLETOP SIMULATOR"
+theme_override_font_sizes/font_size = 18
+text = "A Fan-Made Tabletop Simulator for OnePageRules Game Systems"
 horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="QuoteLabel" type="Label" parent="LogoContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.48, 0.56, 0.85)
+theme_override_font_sizes/font_size = 15
+text = "„Kamerad, ich wollte dich nicht töten.“
+— Erich Maria Remarque · Im Westen nichts Neues (1929)"
+horizontal_alignment = 1
+autowrap_mode = 2
 
 [node name="VersionLabel" type="Label" parent="LogoContainer"]
 layout_mode = 2

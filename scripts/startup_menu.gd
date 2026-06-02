@@ -21,6 +21,7 @@ var _join_relay_url_input: LineEdit
 # --- Modern menu look (built in code) ---
 const ACCENT_COLOR := Color(0.0, 0.85, 1.0)
 const ORBITRON_PATH := "res://assets/ui_glassmorphism/fonts/Orbitron.ttf"
+const WORDMARK_FONT_SIZE := 64
 var _wordmark_box: HBoxContainer
 var _backdrop_camera: Camera3D
 var _drift: float = 0.0
@@ -28,11 +29,11 @@ var _parallax: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
-	# Check if an .otts file was passed via command-line (e.g. double-click in file manager)
-	var file_to_open := _get_otts_from_cmdline()
+	# Check if an .nml file was passed via command-line (e.g. double-click in file manager)
+	var file_to_open := _get_save_from_cmdline()
 	if not file_to_open.is_empty():
 		print("Opening file from command line: %s" % file_to_open)
-		ProjectSettings.set_setting("opentts/pending_load_path", file_to_open)
+		ProjectSettings.set_setting("niemandsland/pending_load_path", file_to_open)
 		# Skip menu entirely and go straight to game
 		get_tree().change_scene_to_file("res://scenes/main.tscn")
 		return
@@ -165,7 +166,7 @@ func _show_host_popup() -> void:
 
 	_relay_url_input = LineEdit.new()
 	_relay_url_input.text = InternetLobby.DEFAULT_RELAY_URL
-	_relay_url_input.placeholder_text = "wss://opentts-relay.fly.dev"
+	_relay_url_input.placeholder_text = "wss://niemandsland-relay.fly.dev"
 	vbox.add_child(_relay_url_input)
 
 	# Info text
@@ -187,9 +188,9 @@ func _on_host_confirmed() -> void:
 		url = InternetLobby.DEFAULT_RELAY_URL
 
 	# Pass settings to main scene — connection happens there
-	ProjectSettings.set_setting("opentts/pending_internet_lobby", true)
-	ProjectSettings.set_setting("opentts/internet_is_host", true)
-	ProjectSettings.set_setting("opentts/internet_relay_url", url)
+	ProjectSettings.set_setting("niemandsland/pending_internet_lobby", true)
+	ProjectSettings.set_setting("niemandsland/internet_is_host", true)
+	ProjectSettings.set_setting("niemandsland/internet_relay_url", url)
 	_transition_to_game()
 
 
@@ -224,7 +225,7 @@ func _show_join_popup() -> void:
 
 	_join_relay_url_input = LineEdit.new()
 	_join_relay_url_input.text = InternetLobby.DEFAULT_RELAY_URL
-	_join_relay_url_input.placeholder_text = "wss://opentts-relay.fly.dev"
+	_join_relay_url_input.placeholder_text = "wss://niemandsland-relay.fly.dev"
 	vbox.add_child(_join_relay_url_input)
 
 	_join_popup.add_child(vbox)
@@ -243,10 +244,10 @@ func _on_join_confirmed() -> void:
 		url = InternetLobby.DEFAULT_RELAY_URL
 
 	# Pass settings to main scene — connection happens there
-	ProjectSettings.set_setting("opentts/pending_internet_lobby", true)
-	ProjectSettings.set_setting("opentts/internet_is_host", false)
-	ProjectSettings.set_setting("opentts/internet_relay_url", url)
-	ProjectSettings.set_setting("opentts/internet_room_code", code)
+	ProjectSettings.set_setting("niemandsland/pending_internet_lobby", true)
+	ProjectSettings.set_setting("niemandsland/internet_is_host", false)
+	ProjectSettings.set_setting("niemandsland/internet_relay_url", url)
+	ProjectSettings.set_setting("niemandsland/internet_room_code", code)
 	_transition_to_game()
 
 
@@ -271,7 +272,7 @@ func _open_load_battle_dialog() -> void:
 		_load_dialog = FileDialog.new()
 		_load_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 		_load_dialog.access = FileDialog.ACCESS_FILESYSTEM
-		_load_dialog.filters = PackedStringArray(["*.otts ; OpenTTS Save Files"])
+		_load_dialog.filters = PackedStringArray(["*.nml ; Niemandsland Save Files"])
 		_load_dialog.title = "Load Battle"
 		_load_dialog.size = Vector2i(800, 600)
 		_load_dialog.file_selected.connect(_on_load_file_selected)
@@ -283,18 +284,18 @@ func _open_load_battle_dialog() -> void:
 
 func _on_load_file_selected(path: String) -> void:
 	print("Loading battle from: %s" % path.get_file())
-	ProjectSettings.set_setting("opentts/pending_load_path", path)
+	ProjectSettings.set_setting("niemandsland/pending_load_path", path)
 	_transition_to_game()
 
 
-## Check command-line arguments for an .otts file path.
-## This handles the case where the user double-clicks an .otts file in the OS file manager
+## Check command-line arguments for an .nml file path.
+## This handles the case where the user double-clicks an .nml file in the OS file manager
 ## or drags a file onto the application executable.
-func _get_otts_from_cmdline() -> String:
+func _get_save_from_cmdline() -> String:
 	# OS.get_cmdline_user_args() returns args after "--" separator (Godot convention)
 	# OS.get_cmdline_args() returns all args including engine flags
 	for arg in OS.get_cmdline_user_args():
-		if arg.ends_with(".otts") and FileAccess.file_exists(arg):
+		if arg.ends_with(".nml") and FileAccess.file_exists(arg):
 			return arg
 
 	# Also check regular args (some OS pass file path as first arg directly)
@@ -302,7 +303,7 @@ func _get_otts_from_cmdline() -> String:
 		# Skip Godot engine flags (start with - or --)
 		if arg.begins_with("-"):
 			continue
-		if arg.ends_with(".otts") and FileAccess.file_exists(arg):
+		if arg.ends_with(".nml") and FileAccess.file_exists(arg):
 			return arg
 
 	return ""
@@ -389,7 +390,7 @@ func _build_skybox_backdrop() -> void:
 	viewport.add_child(_backdrop_camera)
 
 
-## Replaces the plain "OPENTTS" label with an Orbitron "OPEN" + "TTS" wordmark.
+## Replaces the plain title label with an Orbitron "NIEMANDS" + "LAND" wordmark.
 func _build_wordmark() -> void:
 	var orbitron := FontVariation.new()
 	orbitron.base_font = load(ORBITRON_PATH)
@@ -401,8 +402,8 @@ func _build_wordmark() -> void:
 	_wordmark_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	_wordmark_box.add_theme_constant_override("separation", 2)
 	_wordmark_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_wordmark_box.add_child(_make_word("OPEN", orbitron, Color(0.86, 0.89, 0.94), false))
-	_wordmark_box.add_child(_make_word("TTS", orbitron, ACCENT_COLOR, true))
+	_wordmark_box.add_child(_make_word("NIEMANDS", orbitron, Color(0.86, 0.89, 0.94), false))
+	_wordmark_box.add_child(_make_word("LAND", orbitron, ACCENT_COLOR, true))
 	_wordmark_box.modulate.a = 0.0
 
 	var parent := logo_label.get_parent()
@@ -414,7 +415,7 @@ func _make_word(text: String, font: FontVariation, color: Color, glow: bool) -> 
 	var label := Label.new()
 	label.text = text
 	label.add_theme_font_override("font", font)
-	label.add_theme_font_size_override("font_size", 84)
+	label.add_theme_font_size_override("font_size", WORDMARK_FONT_SIZE)
 	label.add_theme_color_override("font_color", color)
 	if glow:
 		# Soft "bloom" approximated with a large, offset-less shadow outline.

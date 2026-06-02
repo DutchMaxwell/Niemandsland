@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OpenTTS 3D Pipeline - GUI
+Niemandsland 3D Pipeline - GUI
 ==========================
 
 Einfaches GUI zur Batch-Konvertierung von Bildern zu 3D-Modellen
@@ -52,7 +52,7 @@ class TrellisGUI:
 
     def __init__(self, root):
         self.root = root
-        self.root.title("OpenTTS 3D Pipeline - Trellis.2")
+        self.root.title("Niemandsland 3D Pipeline - Trellis.2")
         self.root.geometry("700x550")
         self.root.minsize(600, 450)
 

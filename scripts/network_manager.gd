@@ -1,5 +1,5 @@
 extends Node
-## Network Manager for OpenTTS Multiplayer
+## Network Manager for Niemandsland Multiplayer
 ## Handles hosting, joining, and basic state synchronization
 
 signal connected_to_server

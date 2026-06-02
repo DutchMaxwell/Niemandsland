@@ -1,0 +1,13 @@
+Windows Registry Editor Version 5.00
+
+; Register .nml file extension with Niemandsland
+; Run this after installing Niemandsland, adjusting the path as needed.
+
+[HKEY_CURRENT_USER\Software\Classes\.nml]
+@="Niemandsland.SaveFile"
+
+[HKEY_CURRENT_USER\Software\Classes\Niemandsland.SaveFile]
+@="Niemandsland Save File"
+
+[HKEY_CURRENT_USER\Software\Classes\Niemandsland.SaveFile\shell\open\command]
+@="\"C:\\Program Files\\Niemandsland\\Niemandsland.exe\" -- \"%1\""

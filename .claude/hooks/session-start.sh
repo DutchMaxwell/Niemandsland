@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# OpenTTS — SessionStart hook for Claude Code on the web
+# Niemandsland — SessionStart hook for Claude Code on the web
 # =============================================================================
 # Provisions the ephemeral web container so code can be validated without a
 # local machine:
@@ -39,11 +39,11 @@ GODOT_BIN="$GODOT_HOME/godot"
 GODOT_ASSET="Godot_v${GODOT_VERSION}_linux.x86_64"
 GODOT_URL="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/${GODOT_ASSET}.zip"
 
-echo "[opentts-hook] Provisioning web environment ..."
+echo "[niemandsland-hook] Provisioning web environment ..."
 
 # === 1. Godot 4.6 headless (idempotent) ======================================
 if [ ! -x "$GODOT_BIN" ]; then
-  echo "[opentts-hook] Downloading Godot ${GODOT_VERSION} ..."
+  echo "[niemandsland-hook] Downloading Godot ${GODOT_VERSION} ..."
   mkdir -p "$GODOT_HOME"
   tmp_zip="$(mktemp "${TMPDIR:-/tmp}/godot.XXXXXX.zip")"
   curl -fL --retry 4 --retry-delay 2 -o "$tmp_zip" "$GODOT_URL"
@@ -55,14 +55,14 @@ if [ ! -x "$GODOT_BIN" ]; then
   rm -f "$tmp_zip"
   extracted="$(find "$GODOT_HOME" -maxdepth 1 -type f -name 'Godot_v*_linux.x86_64' | head -1)"
   if [ -z "$extracted" ]; then
-    echo "[opentts-hook] ERROR: Godot binary not found after extraction." >&2
+    echo "[niemandsland-hook] ERROR: Godot binary not found after extraction." >&2
     exit 1
   fi
   mv -f "$extracted" "$GODOT_BIN"
   chmod +x "$GODOT_BIN"
-  echo "[opentts-hook] Installed Godot to $GODOT_BIN"
+  echo "[niemandsland-hook] Installed Godot to $GODOT_BIN"
 else
-  echo "[opentts-hook] Godot already present at $GODOT_BIN"
+  echo "[niemandsland-hook] Godot already present at $GODOT_BIN"
 fi
 
 # Persist for the session: GODOT_BIN is read by addons/gdUnit4/runtest.sh,
@@ -80,37 +80,37 @@ export GODOT_BIN
 PIP_OPTS=(--quiet --root-user-action=ignore)
 
 # relay/ tests are lightweight and required (websockets + pytest-asyncio).
-echo "[opentts-hook] Installing relay/ test dependencies ..."
+echo "[niemandsland-hook] Installing relay/ test dependencies ..."
 python3 -m pip install "${PIP_OPTS[@]}" pytest pytest-asyncio -r "$PROJECT_DIR/relay/requirements.txt"
 
 # tools/model_forge/ tests pull heavier libs in via their source modules
 # (image_generator -> google-genai, gradio_client; prompt_engine -> pyyaml;
 #  glb_optimizer -> Pillow). Best-effort: never block setup on these.
-echo "[opentts-hook] Installing model_forge test dependencies (best-effort) ..."
+echo "[niemandsland-hook] Installing model_forge test dependencies (best-effort) ..."
 python3 -m pip install "${PIP_OPTS[@]}" pyyaml Pillow google-genai gradio_client \
-  || echo "[opentts-hook] WARN: could not install all model_forge test deps."
+  || echo "[niemandsland-hook] WARN: could not install all model_forge test deps."
 # The base image ships cffi without its compiled backend, which breaks
 # 'from google import genai'. Repair only when needed (idempotent).
 python3 -c "import _cffi_backend" 2>/dev/null \
   || python3 -m pip install "${PIP_OPTS[@]}" --force-reinstall --no-cache-dir cffi \
-  || echo "[opentts-hook] WARN: cffi repair failed; image_generator tests may not collect."
+  || echo "[niemandsland-hook] WARN: cffi repair failed; image_generator tests may not collect."
 
 # === 3. Import project — generates .godot/, doubles as GDScript compile-check =
 # Mirrors build.yml. Bounded so a stuck import cannot stall session start, and
 # non-fatal (|| true) exactly like CI. Output goes to a log to keep the session
 # context clean; only parse errors are surfaced.
-echo "[opentts-hook] Importing project (this is slow on a cold container) ..."
-import_log="${TMPDIR:-/tmp}/opentts-godot-import.log"
+echo "[niemandsland-hook] Importing project (this is slow on a cold container) ..."
+import_log="${TMPDIR:-/tmp}/niemandsland-godot-import.log"
 timeout 900 "$GODOT_BIN" --headless --editor --quit --path "$PROJECT_DIR" >"$import_log" 2>&1 || true
 if grep -qiE "SCRIPT ERROR|Parse Error|Failed to load script" "$import_log"; then
-  echo "[opentts-hook] WARN: GDScript parse errors during import (see $import_log):"
+  echo "[niemandsland-hook] WARN: GDScript parse errors during import (see $import_log):"
   grep -iE "SCRIPT ERROR|Parse Error|Failed to load script" "$import_log" | head -20
 else
-  echo "[opentts-hook] Project import complete (no GDScript parse errors)."
+  echo "[niemandsland-hook] Project import complete (no GDScript parse errors)."
 fi
 
 # === Done ====================================================================
-echo "[opentts-hook] Ready. Useful commands:"
+echo "[niemandsland-hook] Ready. Useful commands:"
 echo "  GDScript tests : \"\$GODOT_BIN\" --headless --path \"$PROJECT_DIR\" \\"
 echo "                     -s -d res://addons/gdUnit4/bin/GdUnitCmdTool.gd \\"
 echo "                     --ignoreHeadlessMode -a res://test"

@@ -1,4 +1,4 @@
-# OpenTTS - AAA Coding Standards
+# Niemandsland - AAA Coding Standards
 
 **Version:** 1.0
 **Stand:** 2026-01-06
@@ -340,7 +340,7 @@ Jede Klasse hat EINE Verantwortung:
 | `CoherencyVisualizer` | Kohärenz visuell anzeigen |
 | `GameUnit` | Modelle + Zustand einer Einheit halten |
 | `NetworkManager` | Multiplayer-Sync / RPCs |
-| `SaveManager` | `.otts`-Serialisierung |
+| `SaveManager` | `.nml`-Serialisierung |
 
 ### 9.2 Data Flow (Beispiel: OPR-Import → Tisch)
 
@@ -351,7 +351,7 @@ OPRArmyManager (Units spawnen, GLBs auf Base skalieren)
     ↓
 GameUnit / ModelInstance (Unit- und Modell-Zustand)
     ↓
-NetworkManager (zu Peers syncen)  ·  SaveManager (.otts speichern)
+NetworkManager (zu Peers syncen)  ·  SaveManager (.nml speichern)
 ```
 
 ---
@@ -405,6 +405,6 @@ if action == ActionType.MELEE:
 
 ---
 
-**Diese Standards sind VERBINDLICH für alle Beiträge zum OpenTTS-Projekt.**
+**Diese Standards sind VERBINDLICH für alle Beiträge zum Niemandsland-Projekt.**
 
 **Ziel: AAA-Qualität - Stabiler, performanter, regelkonformer Wargaming-Simulator.**
