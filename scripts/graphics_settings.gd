@@ -16,6 +16,19 @@ enum QualityPreset {
 var current_preset: QualityPreset = QualityPreset.MEDIUM
 var custom_settings: Dictionary = {}
 
+# ===== Window / UI reachability =====
+## Supported layout floor: the window can never shrink below this, so the left
+## command panel, dice roller and unit card never collapse into each other. Below the
+## floor, content scrolls rather than compresses. (See docs/AAA_UI_PLAYBOOK.md.)
+const MIN_WINDOW_SIZE := Vector2i(1280, 720)
+const UI_SCALE_MIN := 0.8
+const UI_SCALE_MAX := 2.0
+
+## Whole-UI scale (content_scale_factor) for HiDPI / readability. Persisted; bound to a
+## settings slider. DisplayServer.screen_get_scale() returns 1.0 on Windows/X11, so the
+## manual slider stays the source of truth for 4K displays.
+var ui_scale: float = 1.0
+
 # Preset configurations - optimized for tabletop gaming performance
 const PRESETS = {
 	QualityPreset.PERFORMANCE: {
@@ -122,6 +135,24 @@ func _ready() -> void:
 	# Load saved settings or use default
 	load_settings()
 	apply_preset(current_preset)
+	_apply_window_constraints()
+
+
+## Enforce the minimum window size and apply the saved UI scale. Reachability floor.
+func _apply_window_constraints() -> void:
+	var window := get_window()
+	if window:
+		window.min_size = MIN_WINDOW_SIZE
+	apply_ui_scale(ui_scale)
+
+
+## Scale the whole UI; clamps to a sane range and persists. Exposed to a settings slider.
+func apply_ui_scale(factor: float) -> void:
+	ui_scale = clampf(factor, UI_SCALE_MIN, UI_SCALE_MAX)
+	var tree := get_tree()
+	if tree and tree.root:
+		tree.root.content_scale_factor = ui_scale
+	save_settings()
 
 
 ## Apply a quality preset
@@ -237,6 +268,7 @@ func save_settings() -> void:
 	var config = ConfigFile.new()
 	config.set_value("graphics", "preset", current_preset)
 	config.set_value("graphics", "custom_settings", custom_settings)
+	config.set_value("graphics", "ui_scale", ui_scale)
 	config.save("user://graphics_settings.cfg")
 
 
@@ -252,6 +284,7 @@ func load_settings() -> void:
 
 	current_preset = config.get_value("graphics", "preset", QualityPreset.MEDIUM)
 	custom_settings = config.get_value("graphics", "custom_settings", {})
+	ui_scale = config.get_value("graphics", "ui_scale", 1.0)
 
 
 ## Set resolution
