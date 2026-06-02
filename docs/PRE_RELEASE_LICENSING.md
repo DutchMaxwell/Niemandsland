@@ -37,8 +37,9 @@ lost between work sessions.**
 - [x] **Replaced the AGPL `dice_roller` addon** — removed `addons/dice_roller/` and
       its `project.godot` plugin entry; the game uses our own MIT W6 physics dice
       (`scripts/dice_tray.gd` + `scripts/dice_d6.gd`). ✅
-- [ ] **Scrub git history** of the removed OPR data (e.g. `git filter-repo`).
-      `git rm` only removed it from HEAD; the stats are still in the history.
+- [ ] **Scrub git history** — purge the removed OPR data **and** the AGPL addon from
+      all history (they were only removed from HEAD). Runbook:
+      [`runbooks/history-scrub.md`](runbooks/history-scrub.md).
 
 ### 🟡 Verify / restructure
 - [ ] **Move `tools/model_forge/` + `assets/3d_pipeline/` to a separate repo** so
