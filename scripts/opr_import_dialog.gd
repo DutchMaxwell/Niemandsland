@@ -22,7 +22,7 @@ var api_client: OPRApiClient
 
 func _ready() -> void:
 	title = "Import OPR Army"
-	size = Vector2i(550, 450)
+	UiPolish.keep_window_reachable(self, Vector2i(550, 450))  # never larger than the viewport
 	theme = ThemeManager.get_current_theme()
 	borderless = true  # we draw our own tactical chrome (no gray Godot title bar)
 	close_requested.connect(_on_cancel)

@@ -41,7 +41,9 @@ func _build_ui() -> void:
 	var ui_theme = ThemeManager.get_current_theme()
 
 	title = "Settings"
-	size = Vector2i(500, 900)
+	# 900px is taller than a 720p screen; clamp so the ScrollContainer below governs
+	# overflow and every control stays reachable.
+	UiPolish.keep_window_reachable(self, Vector2i(500, 900))
 	position = Vector2i(50, 50)
 
 	# Main container

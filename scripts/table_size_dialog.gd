@@ -20,7 +20,7 @@ var _emitted := false
 
 func _ready() -> void:
 	title = "Choose Table Size"
-	size = Vector2i(460, 520)
+	UiPolish.keep_window_reachable(self, Vector2i(460, 520))  # never larger than the viewport
 	unresizable = true
 	exclusive = true
 	close_requested.connect(_on_close)
