@@ -49,8 +49,8 @@ func _run() -> void:
 			var mip := ModelInfoPopup.create_simple()
 			await _modal(name, mip, func(): mip.open(_sample_unit().models[0]))
 		"unit_card":
-			var card: Control = load("res://scenes/unit_card.tscn").instantiate()
-			await _control(name, card, Vector2i(420, 560))
+			var card := load("res://scenes/unit_card.tscn").instantiate() as UnitCard
+			await _control(name, card, Vector2i(420, 560), func(): card.show_unit(_sample_unit()))
 		"map_layout":
 			var ml: Control = load("res://scenes/map_layout.tscn").instantiate()
 			await _control(name, ml, Vector2i(1366, 860))
@@ -107,8 +107,9 @@ func _modal(name: String, node: Control, opener: Callable) -> void:
 	_save(get_tree().root.get_texture().get_image(), name)
 
 
-## Control / scene into a fixed SubViewport over a dark backdrop.
-func _control(name: String, node: Control, size: Vector2i) -> void:
+## Control / scene into a fixed SubViewport over a dark backdrop. `opener` (optional)
+## runs after the node is in the tree (so @onready refs resolve) to populate it.
+func _control(name: String, node: Control, size: Vector2i, opener := Callable()) -> void:
 	if node == null:
 		print("SKIP %s (null)" % name)
 		return
@@ -122,6 +123,8 @@ func _control(name: String, node: Control, size: Vector2i) -> void:
 	vp.add_child(bg)
 	vp.add_child(node)
 	get_tree().root.add_child(vp)
+	if opener.is_valid():
+		opener.call()
 	await _settle(80)  # let intro/fade-in animations (e.g. the start menu) finish
 	_save(vp.get_texture().get_image(), name)
 
