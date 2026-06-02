@@ -47,8 +47,13 @@ lost between work sessions.**
       delivered on-demand from a CDN, not bundled (see `docs/ASSET_DELIVERY.md`).
 - [ ] **Neutralize OPR identifiers in `design_languages/*.yaml`** (file names +
       `faction_name` + OPR comments) → our own generic names; keep the aesthetics.
-- [ ] **Verify image-generation ToS** (Gemini / HuggingFace Spaces) permit
-      commercial use + redistribution of the generated images/models.
+- [x] **Image-generation ToS — researched** (final call with the lawyer): *Gemini*
+      output is user-owned with commercial use allowed (no royalties) — use the
+      **paid API tier** so prompts/outputs aren't used for training; note purely
+      AI-generated output may not be copyrightable. *TRELLIS* (the HF Space model) is
+      **MIT** → outputs are ours; HF platform terms defer to the model license. The
+      residual risk is **derivative IP** (designs resembling copyrighted minis),
+      mitigated by the pipeline's IP-compliance prompt and covered by the lawyer review.
 - [x] **Document model provenance** (AI-generated via TRELLIS, MIT) — in `THIRD_PARTY.md`. ✅
 
 ### 🟢 Attribution / housekeeping
