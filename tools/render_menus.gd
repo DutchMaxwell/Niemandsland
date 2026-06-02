@@ -74,12 +74,17 @@ func _window(name: String, win: Window) -> void:
 	if win == null:
 		print("SKIP %s (null)" % name)
 		return
-	win.transparent_bg = false
+	# Embed the dialog into the root viewport so its frame + drop shadow render over a
+	# dark backdrop (captures the dialog as it actually appears, not just its content).
+	get_tree().root.gui_embed_subwindows = true
+	var bg := ColorRect.new()
+	bg.color = BG
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	get_tree().root.add_child(bg)
 	get_tree().root.add_child(win)
-	win.position = Vector2i(30, 30)
-	win.show()
-	await _settle(14)
-	_save(win.get_texture().get_image(), name)
+	win.popup_centered()
+	await _settle(16)
+	_save(get_tree().root.get_texture().get_image(), name)
 
 
 ## Full-screen Control modal: backdrop + modal in the root viewport, run open() to
