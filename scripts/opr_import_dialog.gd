@@ -44,6 +44,9 @@ func _setup_ui() -> void:
 	UiPolish.set_dialog_margins(margin)
 	bg_panel.add_child(margin)
 
+	# Corner-bracket chrome on top (instrumentation look)
+	bg_panel.add_child(HudFrame.new())
+
 	var vbox = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", UiPolish.SECTION_SEP)
 	margin.add_child(vbox)
