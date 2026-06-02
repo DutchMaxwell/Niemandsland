@@ -34,10 +34,9 @@ lost between work sessions.**
 ## Open action items
 
 ### 🔴 Blockers (before any public / MIT release)
-- [ ] **Replace the AGPL `dice_roller` addon** (vokimon, AGPL-3.0) with our own
-      MIT W6 physics dice. AGPL is copyleft + has a network clause: distributing or
-      web-hosting the combined game would force AGPL on the whole thing. Until it is
-      replaced, keep the itch.io build **Draft / Restricted** (private testing only).
+- [x] **Replaced the AGPL `dice_roller` addon** — removed `addons/dice_roller/` and
+      its `project.godot` plugin entry; the game uses our own MIT W6 physics dice
+      (`scripts/dice_tray.gd` + `scripts/dice_d6.gd`). ✅
 - [ ] **Scrub git history** of the removed OPR data (e.g. `git filter-repo`).
       `git rm` only removed it from HEAD; the stats are still in the history.
 
@@ -65,7 +64,7 @@ lost between work sessions.**
 |---|---|---|
 | Our code | MIT | root `LICENSE` |
 | gdUnit4 (test) | MIT | LICENSE present; dev-only dependency |
-| `dice_roller` (vokimon) | **AGPL-3.0** | 🔴 must replace for an MIT release |
+| ~~`dice_roller` (vokimon)~~ | AGPL-3.0 | ✅ removed — replaced by our own MIT dice |
 | Inter, Source Code Pro (fonts) | SIL OFL | include the OFL text when shipping |
 | Microsoft TRELLIS | MIT | model outputs are ours |
 | OPR stats / army data | OPR content | API only; never bundle or MIT-license |
