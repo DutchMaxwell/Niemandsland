@@ -8,6 +8,7 @@ const BUS_MASTER := "Master"
 const BUS_MUSIC := "Music"
 const BUS_SFX := "SFX"
 const BUS_AMBIENCE := "Ambience"
+const BUS_UI := "UI"  # short UI feedback ticks (UiFeedback); independently mutable
 
 const SFX_POOL_SIZE: int = 8
 const CROSSFADE_DURATION: float = 2.0
