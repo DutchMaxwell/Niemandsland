@@ -63,6 +63,12 @@ class OPRUnit:
 	var quality: int = 4  # Quality value (lower is better)
 	var defense: int = 4  # Defense value (higher is better)
 	var equipment: Array[String] = []
+	## Per-model tool/equipment upgrades (non-weapon ArmyBookItems) carried by only a
+	## SUBSET of the unit's models (count < size), e.g. "Synaptic Relay" on one model.
+	## Each entry: {name: String, count: int}. Unit-wide items (count == size) are NOT
+	## listed here; their granted rules still fold into special_rules. The
+	## EquipmentDistributor pins these to specific models so the base ring labels them.
+	var equipment_items: Array = []
 	var special_rules: Array[String] = []
 	var weapons: Array[OPRWeapon] = []
 	var custom_name: String = ""  # User's nickname for the unit
@@ -446,53 +452,76 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 			elif not rule_name.is_empty():
 				unit.special_rules.append(rule_name)
 
-	# Parse equipment/loadout (weapons only - items with attacks > 0)
+	# Parse the loadout. Weapons (attacks > 0) become unit.weapons. Non-weapon items
+	# (ArmyBookItem) are tools/upgrades: when only a SUBSET of the unit's models carry
+	# one (count < size, e.g. "Synaptic Relay" on one model) keep it as structured
+	# per-model equipment so EquipmentDistributor can pin it to a model and the base
+	# ring can label it. Unit-wide items (count == size) stay folded into special_rules
+	# as before. Granted abilities (Caster(2), Spell Conduit, ...) always fold into
+	# special_rules, regardless of where the item itself is shown.
 	var loadout = data.get("loadout", data.get("equipment", []))
 	for item in loadout:
 		var weapon = _parse_tts_weapon(item)
 		if weapon and weapon.attacks > 0:
 			unit.weapons.append(weapon)
-		else:
-			# Items without attacks are upgrades/equipment, not weapons
-			if item is String:
-				if not item.is_empty() and item not in unit.special_rules:
-					unit.special_rules.append(item)
-			elif item is Dictionary:
-				# Add the item name (e.g., "Psychic Synapses")
-				var item_name = item.get("name", item.get("label", ""))
-				if not item_name.is_empty() and item_name not in unit.special_rules:
-					unit.special_rules.append(item_name)
+			continue
+		if item is String:
+			if not item.is_empty() and item not in unit.special_rules:
+				unit.special_rules.append(item)
+			continue
+		if not (item is Dictionary):
+			continue
 
-				# IMPORTANT: Also add special rules GRANTED by the upgrade (e.g., "Caster(2)")
-				# The API uses BOTH "specialRules" AND "content" fields for granted abilities
-				# - "specialRules" is used for weapon-style items
-				# - "content" is used for upgrade items like "Psychic Synapses"
-				var item_rules = item.get("specialRules", [])
-				var item_content = item.get("content", [])
-				# Merge both arrays
-				if item_content is Array:
-					for content_item in item_content:
-						item_rules.append(content_item)
-				for item_rule in item_rules:
-					var granted_rule = ""
-					if item_rule is String:
-						granted_rule = item_rule
-					elif item_rule is Dictionary:
-						var rule_name = item_rule.get("name", "")
-						var rule_rating = item_rule.get("rating", null)
-						if rule_rating != null and str(rule_rating) != "":
-							granted_rule = "%s(%s)" % [rule_name, _format_rating(rule_rating)]
-						elif not rule_name.is_empty():
-							granted_rule = rule_name
+		var item_name: String = item.get("name", item.get("label", ""))
+		var item_count: int = _safe_int(item.get("count", unit.size), unit.size)
+		var per_model: bool = unit.size > 1 and item_count > 0 and item_count < unit.size
 
-					if not granted_rule.is_empty() and granted_rule not in unit.special_rules:
-						unit.special_rules.append(granted_rule)
+		if per_model:
+			# Carried by a subset → pin to specific model(s) and show on the base ring.
+			unit.equipment_items.append({"name": item_name, "count": item_count})
+			if not item_name.is_empty() and item_name not in unit.equipment:
+				unit.equipment.append(item_name)
+		elif not item_name.is_empty() and item_name not in unit.special_rules:
+			# Unit-wide tool → keep its name in the unit's rule line (legacy behaviour).
+			unit.special_rules.append(item_name)
+
+		# Abilities the item grants stay unit-wide (rules engine / unit card).
+		for granted_rule in _granted_rules_of_item(item):
+			if granted_rule not in unit.special_rules:
+				unit.special_rules.append(granted_rule)
 
 	# No base recommendation from Army Forge → estimate from Tough (vehicles/monsters).
 	if not had_base_recommendation:
 		_apply_tough_base_fallback(unit)
 
 	return unit
+
+
+## The special-rule names an upgrade item GRANTS, read from both the "specialRules"
+## (weapon-style) and "content" (upgrade-style) fields, formatted like "Caster(2)".
+func _granted_rules_of_item(item: Dictionary) -> Array[String]:
+	var result: Array[String] = []
+	var raw: Array = []
+	var raw_special = item.get("specialRules", [])
+	if raw_special is Array:
+		raw.append_array(raw_special)
+	var raw_content = item.get("content", [])
+	if raw_content is Array:
+		raw.append_array(raw_content)
+	for entry in raw:
+		var granted := ""
+		if entry is String:
+			granted = entry
+		elif entry is Dictionary:
+			var rule_name = entry.get("name", "")
+			var rule_rating = entry.get("rating", null)
+			if rule_rating != null and str(rule_rating) != "":
+				granted = "%s(%s)" % [rule_name, _format_rating(rule_rating)]
+			elif not rule_name.is_empty():
+				granted = rule_name
+		if not granted.is_empty() and granted not in result:
+			result.append(granted)
+	return result
 
 
 ## Parse a weapon from TTS API response
