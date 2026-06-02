@@ -40,8 +40,11 @@ static func attach_button(c: Control) -> void:
 
 
 static func _scale_to(c: Control, s: float, dur: float) -> void:
-	if not is_instance_valid(c):
+	if not is_instance_valid(c) or not c.is_inside_tree():
 		return
+	if c is BaseButton and (c as BaseButton).disabled:
+		return
+	c.pivot_offset = c.size * 0.5  # re-centre (size may have been 0 at attach time)
 	_kill(c)
 	if reduced():
 		c.scale = Vector2(s, s)
@@ -52,8 +55,9 @@ static func _scale_to(c: Control, s: float, dur: float) -> void:
 
 
 static func _punch(c: Control) -> void:
-	if not is_instance_valid(c):
+	if not is_instance_valid(c) or not c.is_inside_tree():
 		return
+	c.pivot_offset = c.size * 0.5
 	_kill(c)
 	if reduced():
 		c.scale = Vector2.ONE
