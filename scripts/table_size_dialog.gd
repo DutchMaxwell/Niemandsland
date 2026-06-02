@@ -24,6 +24,9 @@ func _ready() -> void:
 	unresizable = true
 	exclusive = true
 	close_requested.connect(_on_close)
+	visibility_changed.connect(func() -> void:
+		if visible:
+			UiPolish.grab_first_focus.call_deferred(self))
 	_build_ui()
 
 
