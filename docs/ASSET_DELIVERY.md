@@ -79,6 +79,8 @@ Army import (OPR API)  →  unit list
 
 ## Publishing (go live)
 
+Step-by-step runbook: [`runbooks/asset-release.md`](runbooks/asset-release.md).
+
 ```bash
 cd tools/model_forge
 python publish_manifest.py ../../assets/miniatures ../../assets/model_manifest.json \
