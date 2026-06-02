@@ -34,6 +34,9 @@ func initialize(light_ctrl: Node) -> void:
 
 	# Connect close button signal
 	close_requested.connect(func(): hide())
+	visibility_changed.connect(func() -> void:
+		if visible:
+			UiPolish.grab_first_focus.call_deferred(self))
 
 
 func _build_ui() -> void:
@@ -140,6 +143,46 @@ func _build_ui() -> void:
 	for bus_name: String in audio_buses:
 		var bus_label_text: String = audio_buses[bus_name]
 		_add_volume_slider(vbox, bus_name, bus_label_text)
+
+	# === Display Section ===
+	vbox.add_child(HSeparator.new())
+
+	var display_label = Label.new()
+	display_label.text = "DISPLAY:"
+	display_label.add_theme_font_size_override("font_size", 16)
+	vbox.add_child(display_label)
+
+	_add_ui_scale_slider(vbox)
+
+
+## UI Scale slider (content_scale_factor) — reachability/HiDPI. Bound to GraphicsSettings.
+func _add_ui_scale_slider(parent: Control) -> void:
+	var container := VBoxContainer.new()
+	parent.add_child(container)
+
+	var label_hbox := HBoxContainer.new()
+	container.add_child(label_hbox)
+
+	var label := Label.new()
+	label.text = "UI Scale"
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label_hbox.add_child(label)
+
+	var value_label := Label.new()
+	value_label.custom_minimum_size = Vector2(60, 0)
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	value_label.text = "%.2fx" % GraphicsSettings.ui_scale
+	label_hbox.add_child(value_label)
+
+	var slider := HSlider.new()
+	slider.min_value = GraphicsSettings.UI_SCALE_MIN
+	slider.max_value = GraphicsSettings.UI_SCALE_MAX
+	slider.step = 0.05
+	slider.value = GraphicsSettings.ui_scale
+	slider.value_changed.connect(func(v: float) -> void:
+		GraphicsSettings.apply_ui_scale(v)
+		value_label.text = "%.2fx" % v)
+	container.add_child(slider)
 
 
 func _add_slider(parent: Control, key: String, data: Dictionary) -> void:

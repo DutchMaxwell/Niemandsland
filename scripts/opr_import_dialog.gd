@@ -26,6 +26,9 @@ func _ready() -> void:
 	theme = ThemeManager.get_current_theme()
 	borderless = true  # we draw our own tactical chrome (no gray Godot title bar)
 	close_requested.connect(_on_cancel)
+	visibility_changed.connect(func() -> void:
+		if visible:
+			UiPolish.grab_first_focus.call_deferred(self))
 
 	_setup_ui()
 
