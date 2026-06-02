@@ -35,3 +35,14 @@ func test_meter_reducing_segments_reclamps_filled() -> void:
 	m.filled = 4
 	m.segments = 2
 	assert_int(m.filled).is_equal(2)
+
+
+func test_state_panel_modes_do_not_crash_and_show() -> void:
+	var sp: StatePanel = auto_free(StatePanel.new())
+	add_child(sp)
+	sp.show_empty("NO DATA", "paste a link")
+	assert_bool(sp.visible).is_true()
+	sp.show_loading("LOADING", "fetching")
+	assert_bool(sp.visible).is_true()
+	sp.show_error("FAILED", "try again", "RETRY")
+	assert_bool(sp.visible).is_true()

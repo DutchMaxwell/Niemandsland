@@ -7,6 +7,7 @@ signal army_imported(army: OPRApiClient.OPRArmy, player_id: int)
 ## UI Elements
 var player_option: OptionButton
 var army_preview: RichTextLabel
+var state_panel: StatePanel
 var import_btn: Button
 var cancel_btn: Button
 var fetch_btn: Button
@@ -143,6 +144,13 @@ func _setup_ui() -> void:
 	vbox.add_child(preview_panel)
 	preview_panel.add_child(army_preview)
 
+	# Empty / loading / error state over the same well, so a wait never reads as blank.
+	state_panel = StatePanel.new()
+	state_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	state_panel.action_pressed.connect(_on_fetch_from_link)
+	preview_panel.add_child(state_panel)
+	_show_empty_state()
+
 	# Button row
 	var btn_row = HBoxContainer.new()
 	btn_row.add_theme_constant_override("separation", 8)
@@ -181,7 +189,8 @@ func _on_fetch_from_link() -> void:
 		return
 
 	_set_status("Loading…", UiPolish.ACCENT)
-	army_preview.text = "[color=#%s]Loading army from the Army Forge API…[/color]" % UiPolish.hex(UiPolish.ACCENT)
+	army_preview.visible = false
+	state_panel.show_loading("LOADING ARMY", "Fetching from the Army Forge API…")
 	import_btn.disabled = true
 	fetch_btn.disabled = true
 
@@ -190,16 +199,28 @@ func _on_fetch_from_link() -> void:
 	fetch_btn.disabled = false
 	if _preview_army and _preview_army.units.size() > 0:
 		_set_status("Loaded!", UiPolish.SUCCESS)
+		_show_loaded()
 		_update_preview()
 		import_btn.disabled = false
 	elif _preview_army and _preview_army.units.size() == 0:
 		_set_status("Empty", UiPolish.WARNING)
-		army_preview.text = "[color=#%s]The army list is empty.[/color]\n\nThis list contains no units. Add some units in Army Forge first." % UiPolish.hex(UiPolish.WARNING)
+		state_panel.show_empty("EMPTY LIST", "This list contains no units. Add some in Army Forge first.")
 		import_btn.disabled = true
 	else:
 		_set_status("Error", UiPolish.DESTRUCTIVE)
-		army_preview.text = "[color=#%s]Could not load the army.[/color]\n\nCheck the link and your internet connection." % UiPolish.hex(UiPolish.DESTRUCTIVE)
+		state_panel.show_error("LOAD FAILED", "Check the link and your internet connection.", "RETRY")
 		import_btn.disabled = true
+
+
+## Toggle the preview well between the live army list and the state panel.
+func _show_empty_state() -> void:
+	army_preview.visible = false
+	state_panel.show_empty("NO ARMY LOADED", "Paste an Army Forge share link or list ID above, then Load Army.")
+
+
+func _show_loaded() -> void:
+	state_panel.visible = false
+	army_preview.visible = true
 
 
 ## Sets the inline link status text + colour (use a UiPolish token).
@@ -267,6 +288,8 @@ func _reset_dialog() -> void:
 	link_status_label.text = ""
 	army_preview.text = ""
 	import_btn.disabled = true
+	if state_panel:
+		_show_empty_state()
 
 
 ## Sets the pre-selected player for import.
