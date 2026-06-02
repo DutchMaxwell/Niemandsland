@@ -46,19 +46,45 @@ static func sunken_panel_style() -> StyleBoxFlat:
 
 
 ## Reachability: clamp a free-floating Window's size to the visible viewport so it can
-## never open larger than (or stranded off) the screen, then centre it. Call from a
-## dialog's _ready() and again on the window's size_changed. `target` is the design
-## size; it is shrunk to at most (frac_w, frac_h) of the current viewport.
+## never open larger than (or stranded off) the screen. `target` is the design size; it
+## is shrunk to at most (frac_w, frac_h) of the current viewport.
 static func clamp_window_to_viewport(win: Window, target: Vector2i,
 		frac_w: float = 0.92, frac_h: float = 0.9) -> void:
-	if win == null:
+	if not is_instance_valid(win):
 		return
-	var vp_rect := Vector2(target)
-	var parent_vp := win.get_viewport()
-	if parent_vp:
-		vp_rect = parent_vp.get_visible_rect().size
-	elif win.is_inside_tree():
-		vp_rect = Vector2(DisplayServer.screen_get_size())
-	var w := int(min(float(target.x), vp_rect.x * frac_w))
-	var h := int(min(float(target.y), vp_rect.y * frac_h))
-	win.size = Vector2i(max(w, 240), max(h, 180))
+	win.size = clamped_size(target, _host_rect(win), frac_w, frac_h)
+
+
+## The area a dialog must fit within = its HOST window, not its own viewport. A Window
+## is itself a Viewport, so win.get_viewport() can return the dialog's own (tiny default)
+## rect — use the root window's visible rect (logical units, so it respects UI scale).
+static func _host_rect(win: Window) -> Vector2:
+	var tree := win.get_tree()
+	if tree and tree.root:
+		return tree.root.get_visible_rect().size
+	return Vector2(DisplayServer.screen_get_size())
+
+
+## Pure clamp math (testable): shrink `target` to at most (frac_w, frac_h) of `vp_size`,
+## with a small absolute floor so a dialog is never clamped to nothing.
+static func clamped_size(target: Vector2i, vp_size: Vector2,
+		frac_w: float = 0.92, frac_h: float = 0.9) -> Vector2i:
+	var w := int(min(float(target.x), vp_size.x * frac_w))
+	var h := int(min(float(target.y), vp_size.y * frac_h))
+	return Vector2i(max(w, 240), max(h, 180))
+
+
+## One-call reachability for a dialog Window: clamp now AND re-clamp whenever the host
+## window resizes, so a dialog opened on a wide monitor is never stranded off-edge after
+## the window shrinks. Call once from the dialog's _ready(); replaces a fixed `size =`.
+static func keep_window_reachable(win: Window, target: Vector2i,
+		frac_w: float = 0.92, frac_h: float = 0.9) -> void:
+	if not is_instance_valid(win):
+		return
+	clamp_window_to_viewport(win, target, frac_w, frac_h)
+	# Re-clamp when the HOST window resizes (root.size_changed). Setting win.size fires
+	# the dialog's own size_changed, not root's, so there is no feedback loop.
+	var tree := win.get_tree()
+	if tree and tree.root:
+		tree.root.size_changed.connect(func() -> void:
+			clamp_window_to_viewport(win, target, frac_w, frac_h))
