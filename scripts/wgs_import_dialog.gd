@@ -27,7 +27,7 @@ var wgs_client: WGSClient
 
 func _ready() -> void:
 	title = "Import WGS Game"
-	size = Vector2i(550, 500)
+	UiPolish.keep_window_reachable(self, Vector2i(550, 500))  # never larger than the viewport
 	theme = ThemeManager.get_current_theme()
 	close_requested.connect(_on_cancel)
 
