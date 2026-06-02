@@ -29,6 +29,10 @@ const UI_SCALE_MAX := 2.0
 ## manual slider stays the source of truth for 4K displays.
 var ui_scale: float = 1.0
 
+## Accessibility: when true, UI micro-interactions collapse to instant/opacity-only
+## (WCAG 2.3.3). Read by UiMotion; persisted. Never gate information behind animation.
+var reduce_motion: bool = false
+
 # Preset configurations - optimized for tabletop gaming performance
 const PRESETS = {
 	QualityPreset.PERFORMANCE: {
@@ -269,6 +273,7 @@ func save_settings() -> void:
 	config.set_value("graphics", "preset", current_preset)
 	config.set_value("graphics", "custom_settings", custom_settings)
 	config.set_value("graphics", "ui_scale", ui_scale)
+	config.set_value("graphics", "reduce_motion", reduce_motion)
 	config.save("user://graphics_settings.cfg")
 
 
@@ -285,6 +290,7 @@ func load_settings() -> void:
 	current_preset = config.get_value("graphics", "preset", QualityPreset.MEDIUM)
 	custom_settings = config.get_value("graphics", "custom_settings", {})
 	ui_scale = config.get_value("graphics", "ui_scale", 1.0)
+	reduce_motion = config.get_value("graphics", "reduce_motion", false)
 
 
 ## Set resolution

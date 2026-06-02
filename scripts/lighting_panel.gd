@@ -154,6 +154,15 @@ func _build_ui() -> void:
 
 	_add_ui_scale_slider(vbox)
 
+	# Reduce Motion (accessibility) — collapses UI micro-interactions.
+	var reduce_cb := CheckButton.new()
+	reduce_cb.text = "Reduce Motion"
+	reduce_cb.button_pressed = GraphicsSettings.reduce_motion
+	reduce_cb.toggled.connect(func(on: bool) -> void:
+		GraphicsSettings.reduce_motion = on
+		GraphicsSettings.save_settings())
+	vbox.add_child(reduce_cb)
+
 
 ## UI Scale slider (content_scale_factor) — reachability/HiDPI. Bound to GraphicsSettings.
 func _add_ui_scale_slider(parent: Control) -> void:
