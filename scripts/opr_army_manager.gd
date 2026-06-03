@@ -1050,7 +1050,31 @@ func _brighten_trellis_materials(node: Node) -> void:
 					# Force non-metallic so ambient/fill light works as diffuse
 					adjusted_mat.metallic = 0.0
 					adjusted_mat.roughness = 0.7
+					# Crisp models up close: anisotropic mipmap filtering, and
+					# regenerate mipmaps for runtime GLTF textures, which Godot loads
+					# without a mip chain (godotengine/godot#100481) so they shimmer
+					# and alias on small minis.
+					adjusted_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+					adjusted_mat.albedo_texture = _ensure_texture_mipmaps(adjusted_mat.albedo_texture)
+					adjusted_mat.normal_texture = _ensure_texture_mipmaps(adjusted_mat.normal_texture)
+					adjusted_mat.roughness_texture = _ensure_texture_mipmaps(adjusted_mat.roughness_texture)
+					adjusted_mat.emission_texture = _ensure_texture_mipmaps(adjusted_mat.emission_texture)
+					adjusted_mat.ao_texture = _ensure_texture_mipmaps(adjusted_mat.ao_texture)
 					mesh_instance.mesh.surface_set_material(surface_idx, adjusted_mat)
+
+
+## Returns a copy of [param tex] with a generated mipmap chain, for runtime GLTF
+## textures that Godot loads without mipmaps (godotengine/godot#100481). Returns the
+## texture unchanged when it already has mipmaps, is empty, or is GPU-compressed
+## (mipmaps cannot be generated on compressed data).
+func _ensure_texture_mipmaps(tex: Texture2D) -> Texture2D:
+	if tex == null:
+		return null
+	var img := tex.get_image()
+	if img == null or img.has_mipmaps() or img.is_compressed():
+		return tex
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
 
 
 func _on_army_loaded(army: OPRApiClient.OPRArmy) -> void:
