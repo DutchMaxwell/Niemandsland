@@ -72,6 +72,7 @@ func _run() -> void:
 		mm.roughness = 0.7
 		m.material_override = mm
 		vp.add_child(m)
+		m.add_to_group("miniature")  # so the ground mist parts around it
 		if selected.has(i):
 			# Green emissive overlay (mimics _get_selection_glow_material).
 			var ov := StandardMaterial3D.new()
@@ -89,17 +90,18 @@ func _run() -> void:
 			light.setup(0.02)
 			light.position = Vector3(cell.x, SelectionSpillLight.Y_OFFSET, cell.y)
 
-	# Drifting volumetric mist (Phase 4) — renders because the Environment has
-	# volumetric fog enabled at the baseline.
+	# Low white ground mist. The in-game fade-in happens on intro end; the preview has no
+	# intro, so reveal it immediately to verify the look + the parting around minis.
 	var mist := Node3D.new()
 	mist.set_script(load("res://scripts/atmospheric_clouds.gd"))
 	vp.add_child(mist)
+	mist.fade_in(0.1)
 
 	# 3/4 tabletop camera — steep enough that the surface fills the frame with a strip of sky.
 	var cam := Camera3D.new()
 	cam.fov = 50.0
 	vp.add_child(cam)
-	cam.look_at_from_position(Vector3(0.38, 0.34, 0.58), Vector3(-0.18, 0.01, -0.22), Vector3.UP)
+	cam.look_at_from_position(Vector3(0.0, 0.4, 0.46), Vector3(0.0, 0.0, -0.04), Vector3.UP)
 
 	for _i in range(60):
 		await get_tree().process_frame

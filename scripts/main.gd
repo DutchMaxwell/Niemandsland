@@ -2303,6 +2303,10 @@ func _start_cinematic_intro() -> void:
 
 ## Called when intro finishes or is skipped
 func _on_intro_finished() -> void:
+	# Slowly bring in the ground mist now that the table is built (hidden during the intro).
+	if atmospheric_clouds and atmospheric_clouds.has_method("fade_in"):
+		atmospheric_clouds.fade_in()
+
 	# Reveal the gameplay UI only now that the intro is fully built — fade it in gently
 	# so the panels don't pop in during the build.
 	$UI.visible = true
