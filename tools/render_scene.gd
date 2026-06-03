@@ -55,7 +55,11 @@ func _run() -> void:
 		lc.apply_preset("Default")
 
 	# Stand-in minis for scale / contrast (a small cluster near the centre so they read).
-	for cell in [Vector2(-0.18, -0.1), Vector2(-0.06, 0.04), Vector2(0.06, -0.04), Vector2(0.18, 0.1)]:
+	# A couple get a SelectionGroundGlow halo (player blue / red) to verify Phase 3.
+	var cells := [Vector2(-0.18, -0.1), Vector2(-0.06, 0.04), Vector2(0.06, -0.04), Vector2(0.18, 0.1)]
+	var glow_colors := {0: Color(0.2, 0.4, 0.8), 2: Color(0.8, 0.2, 0.2)}
+	for i in range(cells.size()):
+		var cell: Vector2 = cells[i]
 		var m := MeshInstance3D.new()
 		var cap := CapsuleMesh.new()
 		cap.radius = 0.02
@@ -67,12 +71,19 @@ func _run() -> void:
 		mm.roughness = 0.7
 		m.material_override = mm
 		vp.add_child(m)
+		if glow_colors.has(i):
+			# In-game the wrapper origin sits on the ground; these stand-ins are centred,
+			# so place the halo at ground level under the mini instead of parenting to it.
+			var glow := SelectionGroundGlow.new()
+			vp.add_child(glow)
+			glow.position = Vector3(cell.x, 0.0, cell.y)
+			glow.setup(glow_colors[i], 0.02)
 
 	# 3/4 tabletop camera — steep enough that the surface fills the frame with a strip of sky.
 	var cam := Camera3D.new()
 	cam.fov = 50.0
 	vp.add_child(cam)
-	cam.look_at_from_position(Vector3(0.0, 0.3, 0.52), Vector3(0.0, 0.0, -0.05), Vector3.UP)
+	cam.look_at_from_position(Vector3(0.0, 0.17, 0.34), Vector3(0.0, 0.0, -0.04), Vector3.UP)
 
 	for _i in range(60):
 		await get_tree().process_frame
