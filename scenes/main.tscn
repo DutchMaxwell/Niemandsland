@@ -314,15 +314,6 @@ popup/item_1/id = 1
 popup/item_2/text = "Custom..."
 popup/item_2/id = 2
 
-[node name="BiomeLabel" type="Label" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/TableSizePanel"]
-layout_mode = 2
-text = "Biome:"
-
-[node name="BiomeOption" type="OptionButton" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/TableSizePanel"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-
 [node name="CustomSizeContainer" type="VBoxContainer" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/TableSizePanel"]
 unique_name_in_owner = true
 visible = false

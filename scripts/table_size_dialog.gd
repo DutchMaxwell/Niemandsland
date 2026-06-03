@@ -15,7 +15,12 @@ const DEFAULT_SIZE := Vector2(6, 4)
 var _unit_option: OptionButton
 var _width_input: SpinBox
 var _length_input: SpinBox
+var _biome_option: OptionButton
+var _biome_keys: Array = []
 var _emitted := false
+
+## The biome chosen in this dialog (key into Table.BIOME_TEXTURES); read by main.gd.
+var selected_biome: String = ""
 
 
 func _ready() -> void:
@@ -58,6 +63,20 @@ func _build_ui() -> void:
 	info.add_theme_font_size_override("font_size", 12)
 	info.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(info)
+
+	# Biome / battlemap selector (populated by main via set_biomes()).
+	var biome_label := Label.new()
+	biome_label.text = "BIOME"
+	biome_label.add_theme_font_override("font", HudTokens.mono_font())
+	biome_label.add_theme_font_size_override("font_size", 12)
+	biome_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
+	vbox.add_child(biome_label)
+
+	_biome_option = OptionButton.new()
+	_biome_option.item_selected.connect(_on_biome_item_selected)
+	vbox.add_child(_biome_option)
+
+	vbox.add_child(HSeparator.new())
 
 	var btn_6x4 := Button.new()
 	btn_6x4.text = "72″ × 48″  (6 × 4 ft)  —  Standard"
@@ -123,6 +142,24 @@ func _build_ui() -> void:
 	quote.add_theme_font_size_override("font_size", 13)
 	quote.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(quote)
+
+
+## Populate the biome dropdown (pretty-printed) and preselect the current biome.
+func set_biomes(keys: Array, current: String) -> void:
+	_biome_keys = keys
+	selected_biome = current
+	if not _biome_option:
+		return
+	_biome_option.clear()
+	for i in range(keys.size()):
+		_biome_option.add_item(String(keys[i]).capitalize(), i)
+		if keys[i] == current:
+			_biome_option.selected = i
+
+
+func _on_biome_item_selected(index: int) -> void:
+	if index >= 0 and index < _biome_keys.size():
+		selected_biome = _biome_keys[index]
 
 
 ## Borderless windows get no WM close/ESC; provide keyboard escape (defaults to 6×4).

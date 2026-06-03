@@ -21,6 +21,7 @@ func _run() -> void:
 	var vp := SubViewport.new()
 	vp.size = Vector2i(1280, 720)
 	vp.transparent_bg = false
+	vp.use_debanding = true  # smooth the dark space gradient (matches the in-game viewport)
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	get_tree().root.add_child(vp)
 
@@ -95,13 +96,14 @@ func _run() -> void:
 	var mist := Node3D.new()
 	mist.set_script(load("res://scripts/atmospheric_clouds.gd"))
 	vp.add_child(mist)
+	mist.set_table_size(Vector2(1.22, 1.22))  # 4x4 ft, matches setup_table above
 	mist.fade_in(0.1)
 
 	# 3/4 tabletop camera — steep enough that the surface fills the frame with a strip of sky.
 	var cam := Camera3D.new()
 	cam.fov = 50.0
 	vp.add_child(cam)
-	cam.look_at_from_position(Vector3(0.0, 0.4, 0.46), Vector3(0.0, 0.0, -0.04), Vector3.UP)
+	cam.look_at_from_position(Vector3(0.0, 0.52, 0.55), Vector3(0.0, 0.0, 0.0), Vector3.UP)
 
 	for _i in range(60):
 		await get_tree().process_frame

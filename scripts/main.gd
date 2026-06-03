@@ -83,10 +83,6 @@ const GROUP_ROTATION_BROADCAST_INTERVAL: float = 0.1  # 10 Hz
 @onready var table_size_option: OptionButton = %TableSizeOption
 @onready var custom_size_container: VBoxContainer = %CustomSizeContainer
 @onready var unit_option: OptionButton = %UnitOption
-@onready var biome_option: OptionButton = %BiomeOption
-
-# Biome keys in the order they appear in the BiomeOption dropdown (index -> key).
-var _biome_keys: Array = []
 @onready var width_input: SpinBox = %WidthInput
 @onready var length_input: SpinBox = %LengthInput
 @onready var apply_custom_btn: Button = %ApplyCustomBtn
@@ -207,6 +203,10 @@ var _is_army_syncing: bool = false
 func _ready() -> void:
 	print("Niemandsland Prototype v0.2 - Initializing...")
 
+	# Debanding dithers the final frame, smoothing the dark space gradient so it shows
+	# no banding "segments".
+	get_viewport().use_debanding = true
+
 	# Connect hamburger menu toggle
 	hamburger_button.pressed.connect(_on_hamburger_pressed)
 
@@ -235,10 +235,6 @@ func _ready() -> void:
 	table_size_option.item_selected.connect(_on_table_size_selected)
 	apply_custom_btn.pressed.connect(_on_apply_custom_size)
 	unit_option.item_selected.connect(_on_unit_changed)
-
-	# Populate + connect the biome selector
-	_populate_biome_option()
-	biome_option.item_selected.connect(_on_biome_selected)
 
 	# Connect to object manager signals
 	object_manager.distance_changed.connect(_on_distance_changed)
@@ -1190,27 +1186,6 @@ func _on_table_size_selected(index: int) -> void:
 			custom_size_container.visible = true
 
 
-## Fill the biome dropdown from the table's biome registry (pretty-printed labels).
-func _populate_biome_option() -> void:
-	if not biome_option or not table or not table.has_method("get_biomes"):
-		return
-	biome_option.clear()
-	_biome_keys = table.get_biomes()
-	for i in range(_biome_keys.size()):
-		var key: String = _biome_keys[i]
-		biome_option.add_item(key.capitalize(), i)  # "temperate_grassland" -> "Temperate Grassland"
-		if key == table.biome:
-			biome_option.selected = i
-
-
-## Switch the play-surface biome.
-func _on_biome_selected(index: int) -> void:
-	if index < 0 or index >= _biome_keys.size():
-		return
-	if table and table.has_method("set_biome"):
-		table.set_biome(_biome_keys[index])
-
-
 ## Apply custom table size
 func _on_apply_custom_size() -> void:
 	# Force SpinBoxes to apply any pending text input
@@ -1262,6 +1237,8 @@ func _show_prompt_black() -> void:
 func _prompt_table_size() -> void:
 	var dialog := TableSizeDialog.new()
 	add_child(dialog)
+	if table and table.has_method("get_biomes"):
+		dialog.set_biomes(table.get_biomes(), table.biome)
 	dialog.size_chosen.connect(_on_table_size_chosen.bind(dialog))
 	dialog.popup_centered()
 	# Gently fade the chooser in over the black backdrop.
@@ -1275,6 +1252,10 @@ func _prompt_table_size() -> void:
 ## Apply the chosen table size, dissolve the chooser into black, then play the intro.
 func _on_table_size_chosen(size_feet: Vector2, dialog: Window) -> void:
 	_set_table_size(size_feet)
+	# Apply the biome chosen in the dialog.
+	var td := dialog as TableSizeDialog
+	if td and td.selected_biome != "" and table.has_method("set_biome"):
+		table.set_biome(td.selected_biome)
 	var content := dialog.get_child(0) as Control
 	var t := create_tween()
 	if content:
@@ -1300,6 +1281,10 @@ func _set_table_size(size_feet: Vector2) -> void:
 
 	# Rebuild table
 	table.setup_table(size_feet)
+
+	# Size the ground mist to cover the whole field (feet -> metres).
+	if atmospheric_clouds and atmospheric_clouds.has_method("set_table_size"):
+		atmospheric_clouds.set_table_size(size_feet * FEET_TO_METERS)
 
 	# Update map layout editor with new table size (this clears terrain/objectives data)
 	if map_layout_editor and map_layout_editor.has_method("set_table_size"):
