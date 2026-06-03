@@ -89,6 +89,7 @@ common/physics_interpolation=true
 [rendering]
 
 renderer/rendering_method.web="gl_compatibility"
+textures/default_filters/anisotropic_filtering_level=4
 textures/vram_compression/import_s3tc_bptc=true
 textures/vram_compression/import_etc2_astc=true
 lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
