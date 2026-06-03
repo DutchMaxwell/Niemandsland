@@ -34,8 +34,10 @@ var ui_scale: float = 1.0
 var reduce_motion: bool = false
 
 ## Borderless fullscreen (MODE_FULLSCREEN), NOT exclusive — no display mode switch, so it
-## avoids the NVIDIA/X11 exclusive-fullscreen surface issues. Persisted.
-var fullscreen: bool = false
+## avoids the NVIDIA/X11 exclusive-fullscreen surface issues. Persisted + applied on start.
+## Default on (the user wants auto-fullscreen); untick it to record with OBS (Game Capture
+## stalls fullscreen Vulkan), which persists to windowed on the next launch.
+var fullscreen: bool = true
 
 # Preset configurations - optimized for tabletop gaming performance
 const PRESETS = {
@@ -152,9 +154,9 @@ func _apply_window_constraints() -> void:
 	if window:
 		window.min_size = MIN_WINDOW_SIZE
 	apply_ui_scale(ui_scale)
-	# Auto-start fullscreen is set at the engine level (display/window/size/mode=3), so the
-	# window is already borderless-fullscreen here — just sync our flag for the checkbox.
-	fullscreen = DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+	# Apply the persisted fullscreen choice (default on). Driven here rather than at the
+	# engine level so unticking it actually persists to a windowed start (needed for OBS).
+	apply_fullscreen(fullscreen)
 
 
 ## Toggle borderless fullscreen (safe MODE_FULLSCREEN, never EXCLUSIVE). Persisted.
@@ -307,7 +309,7 @@ func load_settings() -> void:
 	custom_settings = config.get_value("graphics", "custom_settings", {})
 	ui_scale = config.get_value("graphics", "ui_scale", 1.0)
 	reduce_motion = config.get_value("graphics", "reduce_motion", false)
-	fullscreen = config.get_value("graphics", "fullscreen", false)
+	fullscreen = config.get_value("graphics", "fullscreen", true)
 
 
 ## Set resolution
