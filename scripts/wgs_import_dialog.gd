@@ -27,7 +27,8 @@ var wgs_client: WGSClient
 
 func _ready() -> void:
 	title = "Import WGS Game"
-	UiPolish.keep_window_reachable(self, Vector2i(550, 500))  # never larger than the viewport
+	# Tall enough that tabs + preview + the Cancel/Import row always fit (preview scrolls).
+	UiPolish.keep_window_reachable(self, Vector2i(560, 560))
 	theme = ThemeManager.get_current_theme()
 	borderless = true  # we draw our own tactical chrome (no gray Godot title bar)
 	close_requested.connect(_on_cancel)
@@ -100,7 +101,9 @@ func _setup_ui() -> void:
 	game_preview = RichTextLabel.new()
 	game_preview.bbcode_enabled = true
 	game_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	game_preview.custom_minimum_size = Vector2(0, 150)
+	# Small minimum so a long game list never pushes the buttons off; it scrolls instead.
+	game_preview.custom_minimum_size = Vector2(0, 80)
+	game_preview.scroll_active = true
 	game_preview.scroll_following = true
 
 	var preview_panel = PanelContainer.new()
