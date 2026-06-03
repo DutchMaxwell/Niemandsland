@@ -8,6 +8,10 @@
 
 faction_name: "Battle Brothers"
 
+# Style anchor fed to Nano Banana (reference_image_path) so every unit shares the approved
+# render look + design. See references/battle_brothers/ (01_hero_FINAL.png is the approved look).
+hero_reference: "references/battle_brothers/00_style_reference.png"
+
 aesthetic:
   genre: "grimdark sci-fi military"
   style: "heavy original power armour"
@@ -61,7 +65,9 @@ prompt_template: |
   - {aesthetic}
   - Color palette: {colors}
   - Materials: {materials}
-  - Explicitly avoid: {explicitly_avoid}
+  # NOTE: the `explicitly_avoid` list is intentionally NOT injected here. Naming GW terms
+  # (even to "avoid" them) anchors them in text-to-image models and produced the aquila +
+  # Primaris helmet. Describe the original design positively instead (see unit_details).
 
   SPECIFIC DETAILS:
   {unit_details}
