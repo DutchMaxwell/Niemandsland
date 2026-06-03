@@ -23,7 +23,9 @@ var api_client: OPRApiClient
 
 func _ready() -> void:
 	title = "Import OPR Army"
-	UiPolish.keep_window_reachable(self, Vector2i(550, 450))  # never larger than the viewport
+	# Tall enough that the preview + the Cancel/Import button row always fit (the army
+	# list scrolls inside the preview well; the buttons stay pinned). Clamped on open.
+	UiPolish.keep_window_reachable(self, Vector2i(560, 560))
 	theme = ThemeManager.get_current_theme()
 	borderless = true  # we draw our own tactical chrome (no gray Godot title bar)
 	close_requested.connect(_on_cancel)
@@ -134,7 +136,10 @@ func _setup_ui() -> void:
 
 	army_preview = RichTextLabel.new()
 	army_preview.bbcode_enabled = true
-	army_preview.custom_minimum_size = Vector2(0, 150)
+	# Small minimum so a long army list never forces the dialog past its height and pushes
+	# the buttons off — the label EXPANDs to fill the well and SCROLLS its content.
+	army_preview.custom_minimum_size = Vector2(0, 80)
+	army_preview.scroll_active = true
 	army_preview.scroll_following = true
 	army_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
