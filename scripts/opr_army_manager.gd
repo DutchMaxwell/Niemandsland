@@ -71,6 +71,11 @@ var api_client: OPRApiClient
 ## On-demand model delivery (manifest + CDN cache); see docs/ASSET_DELIVERY.md
 var model_library: ModelLibrary
 
+## Parsed-model cache: model path -> PackedScene. Runtime glTF models (user://) are
+## otherwise re-parsed on every spawn, so a unit of N identical models paid N full
+## glTF parses; cached, each distinct model is parsed once and instanced cheaply.
+var _scene_cache: Dictionary = {}
+
 func _ready() -> void:
 	api_client = OPRApiClient.new()
 	add_child(api_client)
@@ -836,6 +841,7 @@ func clear_all() -> void:
 	unit_to_game_unit.clear()
 	game_units.clear()
 	army_trays.clear()
+	_scene_cache.clear()  # release parsed PackedScenes; rebuilt lazily on next spawn
 	current_round = 1
 
 
@@ -884,19 +890,45 @@ func _ensure_army_models_cached(army: OPRApiClient.OPRArmy) -> void:
 	await model_library.ensure_models(specs)
 
 
-## Instantiates a model from a local path: bundled res:// GLBs via ResourceLoader,
-## downloaded user:// GLBs via runtime glTF (GLTFDocument).
+## Instantiates a model from a local path, reusing a per-path PackedScene so each
+## distinct model is parsed once. Bundled res:// GLBs load via ResourceLoader;
+## downloaded user:// GLBs are parsed once via runtime glTF (GLTFDocument) and packed.
 func _instantiate_model(path: String) -> Node3D:
+	var packed: PackedScene = _scene_cache.get(path, null)
+	if packed == null:
+		packed = _load_model_scene(path)
+		if packed == null:
+			return null
+		_scene_cache[path] = packed
+	return packed.instantiate() as Node3D
+
+
+## Loads a model path into a reusable PackedScene (no caching/instancing here).
+func _load_model_scene(path: String) -> PackedScene:
 	if path.begins_with("res://"):
-		var packed: Resource = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REUSE)
-		if packed is PackedScene:
-			return (packed as PackedScene).instantiate()
-		return null
+		return ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REUSE) as PackedScene
+
+	# Runtime glTF for downloaded user:// GLBs: parse once, then pack so subsequent
+	# spawns instance instead of re-parsing.
 	var doc := GLTFDocument.new()
 	var state := GLTFState.new()
 	if doc.append_from_file(path, state) != OK:
 		return null
-	return doc.generate_scene(state)
+	var scene_root := doc.generate_scene(state)
+	if scene_root == null:
+		return null
+	# pack() only stores descendants whose owner is the packed root.
+	_set_owner_recursive(scene_root, scene_root)
+	var packed := PackedScene.new()
+	var ok := packed.pack(scene_root)
+	scene_root.free()
+	return packed if ok == OK else null
+
+
+func _set_owner_recursive(node: Node, scene_owner: Node) -> void:
+	for child: Node in node.get_children():
+		child.owner = scene_owner
+		_set_owner_recursive(child, scene_owner)
 
 
 ## Find the GLB model for a unit. Prefers an on-demand model already cached locally
