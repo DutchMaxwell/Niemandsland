@@ -22,6 +22,8 @@ func _ready() -> void:
 
 
 func _run() -> void:
+	# The project auto-starts fullscreen; force windowed for deterministic captures.
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
 	var args := OS.get_cmdline_user_args()
 	var name := args[0] if args.size() > 0 else ""
@@ -32,19 +34,33 @@ func _run() -> void:
 			await _window(name, TableSizeDialog.new())
 		"opr_import_dialog":
 			await _window(name, OPRImportDialog.new())
+		"opr_loaded":
+			var od := OPRImportDialog.new()
+			await _window("opr_loaded", od, func() -> void:
+				od.share_link_input.text = "https://army-forge.onepagerules.com/share?id=Yz4g2Qs"
+				od.army_preview.text = _sample_army_bbcode()
+				od._show_loaded()
+				od.import_btn.disabled = false)
 		"wgs_import_dialog":
 			await _window(name, WGSImportDialog.new())
 		"lighting_panel":
 			await _window(name, load("res://scripts/lighting_panel.gd").new())
 		"wounds_dialog":
-			var wd := WoundsDialog.new()
+			var wd := WoundsDialog.create_simple()
 			await _modal(name, wd, func(): wd.open(_sample_unit().models[0]))
 		"marker_dialog":
-			var md := MarkerDialog.new()
+			var md := MarkerDialog.create_simple()
 			await _modal(name, md, func(): md.open_for_model(_sample_unit().models[0]))
+		"casts_dialog":
+			var cd := CastsDialog.create_simple()
+			await _modal(name, cd, func(): cd.open(_sample_unit()))
+		"model_info_popup":
+			var mip := ModelInfoPopup.create_simple()
+			await _modal(name, mip, func(): mip.open(_sample_unit().models[0]))
 		"unit_card":
-			var card: Control = load("res://scenes/unit_card.tscn").instantiate()
-			await _control(name, card, Vector2i(420, 560))
+			var card := load("res://scenes/unit_card.tscn").instantiate() as UnitCard
+			card.theme = ThemeManager.get_current_theme()  # so RichTextLabel bold_font applies
+			await _control(name, card, Vector2i(420, 560), func(): card.show_unit(_sample_unit()))
 		"map_layout":
 			var ml: Control = load("res://scenes/map_layout.tscn").instantiate()
 			await _control(name, ml, Vector2i(1366, 860))
@@ -69,8 +85,9 @@ func _save(img: Image, name: String) -> void:
 	print("RENDERED %s (%dx%d)" % [name, img.get_width(), img.get_height()])
 
 
-## Window dialog: add, show, capture its own viewport texture.
-func _window(name: String, win: Window) -> void:
+## Window dialog: add, show, capture its own viewport texture. `opener` (optional) runs
+## after popup to drive the dialog into a particular state.
+func _window(name: String, win: Window, opener := Callable()) -> void:
 	if win == null:
 		print("SKIP %s (null)" % name)
 		return
@@ -83,6 +100,8 @@ func _window(name: String, win: Window) -> void:
 	get_tree().root.add_child(bg)
 	get_tree().root.add_child(win)
 	win.popup_centered()
+	if opener.is_valid():
+		opener.call()
 	await _settle(16)
 	_save(get_tree().root.get_texture().get_image(), name)
 
@@ -101,8 +120,9 @@ func _modal(name: String, node: Control, opener: Callable) -> void:
 	_save(get_tree().root.get_texture().get_image(), name)
 
 
-## Control / scene into a fixed SubViewport over a dark backdrop.
-func _control(name: String, node: Control, size: Vector2i) -> void:
+## Control / scene into a fixed SubViewport over a dark backdrop. `opener` (optional)
+## runs after the node is in the tree (so @onready refs resolve) to populate it.
+func _control(name: String, node: Control, size: Vector2i, opener := Callable()) -> void:
 	if node == null:
 		print("SKIP %s (null)" % name)
 		return
@@ -116,8 +136,23 @@ func _control(name: String, node: Control, size: Vector2i) -> void:
 	vp.add_child(bg)
 	vp.add_child(node)
 	get_tree().root.add_child(vp)
-	await _settle(16)
+	if opener.is_valid():
+		opener.call()
+	await _settle(80)  # let intro/fade-in animations (e.g. the start menu) finish
 	_save(vp.get_texture().get_image(), name)
+
+
+## A long sample army preview (mimics OPRImportDialog._update_preview) so the loaded
+## state can be rendered — used to verify the Cancel/Import buttons stay pinned.
+func _sample_army_bbcode() -> String:
+	var t := "[b]Hive Swarm[/b]\n[color=#aaaaaa]Grimdark Future[/color]\n\n"
+	t += "[b]Points:[/b] 620 | [b]Units:[/b] 3 | [b]Models:[/b] 13\n\n"
+	for i in range(3):
+		t += "• Hive Warriors [color=#ffcc44](115 pts)[/color] [color=#88ff88]Q4+[/color] [color=#8888ff]D4+[/color]\n"
+		t += "  [color=#888888]8x Razor Claws, Piercing Claws, Smashing Claws, Ravager Gun[/color]\n"
+		t += "• Support Grunts [color=#ffcc44](145 pts)[/color] [color=#88ff88]Q5+[/color] [color=#8888ff]D5+[/color]\n"
+		t += "  [color=#888888]3x Razor Claws, 3x Ravager Bio-Cannon[/color]\n"
+	return t
 
 
 ## A small demo unit so data-driven dialogs have something to show.

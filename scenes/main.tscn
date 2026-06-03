@@ -207,11 +207,13 @@ text = "☰"
 [node name="LeftPanelScroll" type="ScrollContainer" parent="UI/HUD"]
 visible = false
 layout_mode = 1
-anchors_preset = 0
+anchors_preset = 9
+anchor_bottom = 1.0
 offset_left = 10.0
 offset_top = 60.0
 offset_right = 210.0
-offset_bottom = 700.0
+offset_bottom = -10.0
+grow_vertical = 2
 horizontal_scroll_mode = 0
 
 [node name="LeftPanelVBox" type="VBoxContainer" parent="UI/HUD/LeftPanelScroll"]

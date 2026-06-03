@@ -2001,6 +2001,9 @@ func _apply_ui_theme() -> void:
 	var hud = $UI/HUD
 	hud.theme = current_theme
 
+	# Tactical corner-bracket chrome on the main HUD panels (additive, mouse-ignore).
+	_add_hud_frame($UI/HUD/DiceRollerPanel)
+
 	# Apply to all file dialogs
 	model_file_dialog.theme = current_theme
 	tts_json_dialog.theme = current_theme
@@ -2011,6 +2014,14 @@ func _apply_ui_theme() -> void:
 	terrain_browser_popup.theme = current_theme
 
 	print("Applied UI theme: Glassmorphism")
+
+
+## Adds a corner-bracket HudFrame overlay to a HUD PanelContainer (idempotent).
+func _add_hud_frame(panel: Control) -> void:
+	if panel and not panel.has_node("HudFrame"):
+		var f := HudFrame.new()
+		f.name = "HudFrame"
+		panel.add_child(f)
 
 
 ## ============================================================================

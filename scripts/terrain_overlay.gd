@@ -148,6 +148,15 @@ var _object_instances: Array[Node3D] = []
 ## Always-visible Asgard terrain-effect labels (one Label3D per terrain zone).
 var _terrain_labels: Array[Node3D] = []
 
+## Cells that carry a wall (from the last wall_segments) so effect labels can avoid
+## sitting under a wall. Cached grid geometry lets labels rebuild once walls arrive.
+var _wall_cells: Dictionary = {}
+var _grid_dims: Vector2i = Vector2i.ZERO
+var _cell_size_m: float = 0.0
+
+## Neighbour offset per edge_side (0=N, 1=E, 2=S, 3=W).
+const _EDGE_DELTA: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
+
 
 func _ready() -> void:
 	# Position slightly above table surface to avoid z-fighting
@@ -198,6 +207,8 @@ func update_overlay(cells_data: Dictionary, table_size: Vector2, grid_rotation: 
 	var rotation_rad := deg_to_rad(grid_rotation)
 	var table_width_m := table_size_feet.x * 12.0 * INCHES_TO_METERS
 	var table_depth_m := table_size_feet.y * 12.0 * INCHES_TO_METERS
+	_grid_dims = grid_dims
+	_cell_size_m = cell_size_meters
 
 	# Per-cell colored planes: one flat, transparent quad per terrain cell.
 	# Colors follow the rulebook scheme (ruins blue / forest green / container brown /
@@ -221,7 +232,8 @@ func update_overlay(cells_data: Dictionary, table_size: Vector2, grid_rotation: 
 	print("TerrainOverlay: Created %d mesh instances from %d cells_data entries" % [overlay_meshes.size(), cells_data.size()])
 
 	# Always-visible Asgard effect labels per terrain zone (shown in any overlay mode).
-	_rebuild_terrain_labels(cells_data, grid_dims, cell_size_meters, rotation_rad)
+	# Wall-aware: rebuilt again from update_wall_models() once wall data is known.
+	_rebuild_terrain_labels()
 
 
 ## Calculate grid dimensions from table size
@@ -955,16 +967,17 @@ func has_line_of_sight(from_pos: Vector3, to_pos: Vector3, from_height: int, to_
 
 ## Compact, always-visible Asgard effect label for a terrain type (empty for NONE).
 ## Players read it to apply Cover/Difficult/Dangerous etc. themselves.
+## Three stacked lines for a terrain zone: Type / Height / Special Rules (English).
 func _terrain_effect_label(terrain_type: int) -> String:
 	match terrain_type:
 		TerrainType.RUINS:
-			return "Ruine · H5 · Cover · Impassable · LoS: nicht hindurch"
+			return "Ruins\nHeight 5\nCover, Blocks LoS"
 		TerrainType.FOREST:
-			return "Wald · H5 · Difficult · Cover · LoS: nicht hindurch"
+			return "Forest\nHeight 5\nDifficult, Cover, Blocks LoS"
 		TerrainType.CONTAINER:
-			return "Haus · H5 · Impassable · blockt LoS"
+			return "Container\nHeight 5\nImpassable, Blocks LoS"
 		TerrainType.DANGEROUS:
-			return "Gefährlich · Dangerous"
+			return "Dangerous\nGround\nDangerous Terrain"
 	return ""
 
 
@@ -1001,36 +1014,82 @@ func _cell_to_world(cell_x: float, cell_y: float, grid_dims: Vector2i, cell_size
 	return Vector3(rx, 0.0, rz)
 
 
-## (Re)build one always-visible effect label per terrain zone, floating above the
-## zone centre. Derived purely from terrain data, so no save/network sync needed.
-func _rebuild_terrain_labels(cells_data: Dictionary, grid_dims: Vector2i, cell_size: float, rotation_rad: float) -> void:
-	const LABEL_Y := 0.12  # metres above the table, clear of the standing 3D props
+## (Re)build one always-visible effect label per terrain zone — small, lying FLAT on the
+## terrain, in a wall-free edge cell of the zone so it stays readable. Uses cached grid
+## geometry + _wall_cells, so it can run from update_overlay() and again from
+## update_wall_models() once walls are known. Pure-derived; no save/network sync needed.
+func _rebuild_terrain_labels() -> void:
+	const LABEL_Y := 0.006  # metres above the terrain plane — lies flat, clear of z-fighting
 	_clear_terrain_labels()
-	for zone in _terrain_zones(cells_data):
+	if grid_cells.is_empty() or _cell_size_m <= 0.0:
+		return
+	var rotation_rad := deg_to_rad(grid_rotation_degrees)
+	for zone in _terrain_zones(grid_cells):
 		var ttype: int = zone["type"]
 		var text := _terrain_effect_label(ttype)
 		if text.is_empty():
 			continue
 		var cells: Array = zone["cells"]
-		var sx := 0.0
-		var sy := 0.0
+		var zone_set := {}
 		for c in cells:
-			sx += c.x
-			sy += c.y
-		var n := float(cells.size())
-		var center := _cell_to_world(sx / n, sy / n, grid_dims, cell_size, rotation_rad)
+			zone_set[c] = true
+		var cell := _pick_label_cell(cells, zone_set)
+		var pos := _cell_to_world(float(cell.x), float(cell.y), _grid_dims, _cell_size_m, rotation_rad)
 		var lbl := Label3D.new()
 		lbl.name = "TerrainLabel"
 		lbl.text = text
-		lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		lbl.font_size = 28
-		lbl.outline_size = 10
+		lbl.billboard = BaseMaterial3D.BILLBOARD_DISABLED  # lie flat on the terrain
+		lbl.font_size = 16
+		lbl.outline_size = 5
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		lbl.modulate = Color.WHITE
-		lbl.outline_modulate = Color(0.05, 0.05, 0.05)
-		lbl.pixel_size = 0.0009
-		lbl.position = Vector3(center.x, LABEL_Y, center.z)
+		lbl.outline_modulate = Color(0.03, 0.03, 0.03, 0.95)
+		lbl.pixel_size = 0.0003  # small (~5 mm per line)
+		lbl.rotation_degrees = Vector3(-90.0, rad_to_deg(rotation_rad), 0.0)  # flat, grid-aligned
+		lbl.position = Vector3(pos.x, LABEL_Y, pos.z)
 		add_child(lbl)
 		_terrain_labels.append(lbl)
+
+
+## Pick a zone cell for the effect label: prefer a wall-free EDGE cell (a Randfeld), then
+## any wall-free cell, then the first cell. Returns the candidate nearest the candidates'
+## centroid for a stable, central placement.
+func _pick_label_cell(cells: Array, zone_set: Dictionary) -> Vector2i:
+	var edge_clear: Array = []
+	var any_clear: Array = []
+	for c: Vector2i in cells:
+		if _wall_cells.has(c):
+			continue
+		any_clear.append(c)
+		for d: Vector2i in _EDGE_DELTA:
+			if not zone_set.has(c + d):
+				edge_clear.append(c)
+				break
+	if not edge_clear.is_empty():
+		return _central_cell(edge_clear)
+	if not any_clear.is_empty():
+		return _central_cell(any_clear)
+	return cells[0]
+
+
+## The cell nearest the centroid of the candidates (deterministic, central).
+func _central_cell(cands: Array) -> Vector2i:
+	var sx := 0.0
+	var sy := 0.0
+	for c: Vector2i in cands:
+		sx += c.x
+		sy += c.y
+	var cx := sx / cands.size()
+	var cy := sy / cands.size()
+	var best: Vector2i = cands[0]
+	var best_d := INF
+	for c: Vector2i in cands:
+		var d: float = (c.x - cx) * (c.x - cx) + (c.y - cy) * (c.y - cy)
+		if d < best_d:
+			best_d = d
+			best = c
+	return best
 
 
 ## Remove all terrain effect labels.
@@ -1325,6 +1384,17 @@ func get_overlay_mode() -> OverlayMode:
 ## @param rotation: Grid rotation in degrees
 func update_wall_models(wall_segments: Array, t_size: Vector2, rotation: float) -> void:
 	_clear_wall_instances()
+
+	# Record which cells carry a wall (the edge cell + its neighbour across that edge), so
+	# terrain effect labels can pick a wall-free field; then rebuild them wall-aware.
+	_wall_cells.clear()
+	for segment in wall_segments:
+		var ec: Vector2i = segment.get("edge_cell", Vector2i.ZERO)
+		var es: int = segment.get("edge_side", 0)
+		_wall_cells[ec] = true
+		if es >= 0 and es < _EDGE_DELTA.size():
+			_wall_cells[ec + _EDGE_DELTA[es]] = true
+	_rebuild_terrain_labels()
 
 	if wall_segments.is_empty():
 		return

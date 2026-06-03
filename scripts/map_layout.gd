@@ -228,8 +228,88 @@ func _ready() -> void:
 	_setup_terrain_buttons()
 	_setup_modular_terrain_ui()
 	_setup_tabs()
+	_style_header_chrome()
 	_update_stats()
 	_update_recommendations()
+
+
+## Restyle the scene-defined "MAP LAYOUT EDITOR" title to the tactical HUD language
+## (Orbitron head font) and drop a thin amber->cyan accent line beneath the header row.
+func _style_header_chrome() -> void:
+	var title := get_node_or_null("MarginContainer/VBox/Header/Title") as Label
+	if title:
+		title.add_theme_font_override("font", HudTokens.head_font())
+		title.add_theme_color_override("font_color", HudTokens.TEXT)
+
+	var header := get_node_or_null("MarginContainer/VBox/Header")
+	if header and header.get_parent():
+		var vbox := header.get_parent()
+		var line := HBoxContainer.new()
+		line.name = "HeaderAccentLine"
+		line.add_theme_constant_override("separation", 0)
+		var amber := ColorRect.new()
+		amber.color = HudTokens.AMBER
+		amber.custom_minimum_size = Vector2(24, HudTokens.ACCENT_LINE)
+		var cyan := ColorRect.new()
+		cyan.color = Color(HudTokens.CYAN.r, HudTokens.CYAN.g, HudTokens.CYAN.b, 0.85)
+		cyan.custom_minimum_size = Vector2(0, HudTokens.ACCENT_LINE)
+		cyan.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		line.add_child(amber)
+		line.add_child(cyan)
+		vbox.add_child(line)
+		vbox.move_child(line, header.get_index() + 1)
+
+	# Migrate the scene-defined header action buttons to token colours + variations.
+	if save_button:
+		save_button.theme_type_variation = "PrimaryButton"
+	if clear_button:
+		clear_button.add_theme_color_override("font_color", HudTokens.AMBER)
+		clear_button.add_theme_color_override(
+			"font_hover_color", Color(HudTokens.AMBER.r, HudTokens.AMBER.g, HudTokens.AMBER.b, 1.0))
+	if close_button:
+		close_button.theme_type_variation = "DangerButton"
+
+	# Migrate the scene-defined left-panel labels to token greys/whites + amber accents.
+	# These scene nodes have been reparented into tabs by _setup_tabs(), so search the
+	# whole subtree recursively rather than by a flat child name.
+	var left_panel := get_node_or_null(
+		"MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel")
+	if left_panel:
+		for label_name in ["TerrainLabel", "DeploymentLabel"]:
+			var lbl := left_panel.find_child(label_name, true, false) as Label
+			if lbl:
+				lbl.add_theme_font_override("font", HudTokens.head_font())
+				lbl.add_theme_color_override("font_color", HudTokens.TEXT)
+		var rot_lbl := left_panel.find_child("RotationLabel", true, false) as Label
+		if rot_lbl:
+			rot_lbl.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+		var stats_lbl := left_panel.find_child("StatsLabel", true, false) as Label
+		if stats_lbl:
+			stats_lbl.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+		var recs_lbl := left_panel.find_child("RecommendationsLabel", true, false) as Label
+		if recs_lbl:
+			recs_lbl.add_theme_color_override("font_color", HudTokens.AMBER)
+		var sym_chk := left_panel.find_child("SymmetryCheck", true, false) as CheckBox
+		if sym_chk:
+			sym_chk.add_theme_color_override("font_color", HudTokens.TEXT)
+		var deploy_chk := left_panel.find_child("DeploymentCheck", true, false) as CheckBox
+		if deploy_chk:
+			deploy_chk.add_theme_color_override("font_color", HudTokens.TEXT)
+		var deploy_opt := left_panel.find_child("DeploymentTypeOption", true, false) as OptionButton
+		if deploy_opt:
+			deploy_opt.add_theme_color_override("font_color", HudTokens.TEXT)
+		var autogen := left_panel.find_child("AutoGenButton", true, false) as Button
+		if autogen:
+			autogen.add_theme_color_override("font_color", HudTokens.SUCCESS)
+			autogen.add_theme_color_override(
+				"font_hover_color", Color(HudTokens.SUCCESS.r, HudTokens.SUCCESS.g, HudTokens.SUCCESS.b, 1.0))
+
+	# Make the left tool panel read as a HUD module: deep-navy fill + corner brackets.
+	var left_container := get_node_or_null(
+		"MarginContainer/VBox/MainContent/LeftPanelContainer") as PanelContainer
+	if left_container:
+		left_container.add_theme_stylebox_override("panel", HudTokens.panel_style())
+		left_container.add_child(HudFrame.new())
 
 
 ## Reorganize the flat left panel into Terrain / Objectives / Deployment tabs.
@@ -370,7 +450,7 @@ func _setup_custom_zone_ui() -> void:
 	_custom_zone_symmetric_check = CheckBox.new()
 	_custom_zone_symmetric_check.text = "Symmetric (point-mirrored)"
 	_custom_zone_symmetric_check.button_pressed = true
-	_custom_zone_symmetric_check.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
+	_custom_zone_symmetric_check.add_theme_color_override("font_color", HudTokens.TEXT)
 	_custom_zone_symmetric_check.toggled.connect(func(v): custom_zone_symmetric = v)
 	_custom_zone_panel.add_child(_custom_zone_symmetric_check)
 
@@ -378,7 +458,7 @@ func _setup_custom_zone_ui() -> void:
 	_custom_zone_status_label = Label.new()
 	_custom_zone_status_label.text = "Click grid to add zone vertices"
 	_custom_zone_status_label.add_theme_font_size_override("font_size", 12)
-	_custom_zone_status_label.add_theme_color_override("font_color", Color(0.7, 0.73, 0.8, 1.0))
+	_custom_zone_status_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 	_custom_zone_panel.add_child(_custom_zone_status_label)
 
 	# Button container
@@ -389,7 +469,7 @@ func _setup_custom_zone_ui() -> void:
 	# Start button
 	_custom_zone_start_btn = Button.new()
 	_custom_zone_start_btn.text = "Start Drawing"
-	_custom_zone_start_btn.add_theme_color_override("font_color", Color(0.3, 0.85, 0.55, 1.0))
+	_custom_zone_start_btn.add_theme_color_override("font_color", HudTokens.SUCCESS)
 	_custom_zone_start_btn.pressed.connect(_on_custom_zone_start)
 	btn_row.add_child(_custom_zone_start_btn)
 
@@ -397,14 +477,14 @@ func _setup_custom_zone_ui() -> void:
 	_custom_zone_confirm_btn = Button.new()
 	_custom_zone_confirm_btn.text = "Confirm"
 	_custom_zone_confirm_btn.disabled = true
-	_custom_zone_confirm_btn.add_theme_color_override("font_color", Color(0.35, 0.68, 1.0, 1.0))
+	_custom_zone_confirm_btn.add_theme_color_override("font_color", HudTokens.CYAN)
 	_custom_zone_confirm_btn.pressed.connect(_on_custom_zone_confirm)
 	btn_row.add_child(_custom_zone_confirm_btn)
 
 	# Clear button
 	_custom_zone_clear_btn = Button.new()
 	_custom_zone_clear_btn.text = "Clear"
-	_custom_zone_clear_btn.add_theme_color_override("font_color", Color(1.0, 0.75, 0.35, 1.0))
+	_custom_zone_clear_btn.add_theme_color_override("font_color", HudTokens.AMBER)
 	_custom_zone_clear_btn.pressed.connect(_on_custom_zone_clear)
 	btn_row.add_child(_custom_zone_clear_btn)
 
@@ -527,7 +607,7 @@ func _setup_terrain_buttons() -> void:
 		# Normal state - glass panel with terrain color
 		var style = StyleBoxFlat.new()
 		style.bg_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.25)
-		style.set_corner_radius_all(8)
+		style.set_corner_radius_all(HudTokens.RADIUS)
 		style.border_width_left = 1
 		style.border_width_top = 1
 		style.border_width_right = 1
@@ -554,7 +634,7 @@ func _setup_terrain_buttons() -> void:
 		btn.add_theme_stylebox_override("pressed", pressed_style)
 
 		# Text color
-		btn.add_theme_color_override("font_color", Color(0.95, 0.97, 1.0, 1.0))
+		btn.add_theme_color_override("font_color", HudTokens.TEXT)
 		btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0, 1.0))
 		btn.add_theme_color_override("font_pressed_color", Color(1.0, 1.0, 1.0, 1.0))
 
@@ -594,19 +674,20 @@ func _setup_modular_terrain_ui() -> void:
 
 	var header := Label.new()
 	header.text = "Modular Terrain"
+	header.add_theme_font_override("font", HudTokens.head_font())
 	header.add_theme_font_size_override("font_size", 16)
-	header.add_theme_color_override("font_color", Color(0.9, 0.92, 0.96, 1.0))
+	header.add_theme_color_override("font_color", HudTokens.TEXT)
 	_modular_terrain_panel.add_child(header)
 
 	# Prefab palette: canonical 1-click pieces (footprint + walls + decoration)
 	var prefab_label := Label.new()
 	prefab_label.text = "Terrain Piece:"
 	prefab_label.add_theme_font_size_override("font_size", 13)
-	prefab_label.add_theme_color_override("font_color", Color(0.7, 0.73, 0.8, 1.0))
+	prefab_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 	_modular_terrain_panel.add_child(prefab_label)
 
 	_prefab_option_btn = OptionButton.new()
-	_prefab_option_btn.add_theme_color_override("font_color", Color(0.9, 0.92, 0.96, 1.0))
+	_prefab_option_btn.add_theme_color_override("font_color", HudTokens.TEXT)
 	for prefab_key in TerrainPrefabs.keys():
 		_prefab_option_btn.add_item(TerrainPrefabs.display_name(prefab_key))
 	_prefab_option_btn.item_selected.connect(_on_prefab_selected)
@@ -619,8 +700,9 @@ func _setup_modular_terrain_ui() -> void:
 	_editor_mode_btn = Button.new()
 	_editor_mode_btn.text = "Mode: Paint Cells"
 	_editor_mode_btn.custom_minimum_size = Vector2(0, 36)
-	_editor_mode_btn.add_theme_color_override("font_color", Color(0.9, 0.75, 0.3, 1.0))
-	_editor_mode_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.85, 0.4, 1.0))
+	_editor_mode_btn.add_theme_color_override("font_color", HudTokens.AMBER)
+	_editor_mode_btn.add_theme_color_override(
+		"font_hover_color", Color(HudTokens.AMBER.r, HudTokens.AMBER.g, HudTokens.AMBER.b, 1.0))
 	_editor_mode_btn.pressed.connect(_on_editor_mode_toggled)
 	_modular_terrain_panel.add_child(_editor_mode_btn)
 
@@ -628,11 +710,11 @@ func _setup_modular_terrain_ui() -> void:
 	var wall_label := Label.new()
 	wall_label.text = "Wall Variant:"
 	wall_label.add_theme_font_size_override("font_size", 13)
-	wall_label.add_theme_color_override("font_color", Color(0.7, 0.73, 0.8, 1.0))
+	wall_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 	_modular_terrain_panel.add_child(wall_label)
 
 	_wall_option_btn = OptionButton.new()
-	_wall_option_btn.add_theme_color_override("font_color", Color(0.9, 0.92, 0.96, 1.0))
+	_wall_option_btn.add_theme_color_override("font_color", HudTokens.TEXT)
 	_wall_option_btn.item_selected.connect(_on_wall_variant_selected)
 	_modular_terrain_panel.add_child(_wall_option_btn)
 
@@ -640,7 +722,7 @@ func _setup_modular_terrain_ui() -> void:
 	_modular_status_label = Label.new()
 	_modular_status_label.text = "Walls: 0 | Objects: 0"
 	_modular_status_label.add_theme_font_size_override("font_size", 12)
-	_modular_status_label.add_theme_color_override("font_color", Color(0.6, 0.63, 0.7, 1.0))
+	_modular_status_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 	_modular_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_modular_terrain_panel.add_child(_modular_status_label)
 
@@ -1040,22 +1122,23 @@ func _setup_objectives_ui() -> void:
 	# Section label
 	var label = Label.new()
 	label.text = "Mission Objectives"
+	label.add_theme_font_override("font", HudTokens.head_font())
 	label.add_theme_font_size_override("font_size", 16)
-	label.add_theme_color_override("font_color", Color(0.9, 0.92, 0.96, 1.0))
+	label.add_theme_color_override("font_color", HudTokens.TEXT)
 	_objectives_panel.add_child(label)
 
 	# Status label
 	_objectives_status_label = Label.new()
 	_objectives_status_label.text = "No objectives placed"
 	_objectives_status_label.add_theme_font_size_override("font_size", 12)
-	_objectives_status_label.add_theme_color_override("font_color", Color(0.7, 0.73, 0.8, 1.0))
+	_objectives_status_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 	_objectives_panel.add_child(_objectives_status_label)
 
 	# Warning label (for 9" rule)
 	_objectives_warning_label = Label.new()
 	_objectives_warning_label.text = ""
 	_objectives_warning_label.add_theme_font_size_override("font_size", 12)
-	_objectives_warning_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.3, 1.0))
+	_objectives_warning_label.add_theme_color_override("font_color", HudTokens.DANGER)
 	_objectives_warning_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_objectives_panel.add_child(_objectives_warning_label)
 
@@ -1068,15 +1151,16 @@ func _setup_objectives_ui() -> void:
 	_objectives_toggle_btn = Button.new()
 	_objectives_toggle_btn.text = "Deploy Objectives"
 	_objectives_toggle_btn.toggle_mode = true
-	_objectives_toggle_btn.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2, 1.0))
-	_objectives_toggle_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.5, 1.0))
+	_objectives_toggle_btn.add_theme_color_override("font_color", HudTokens.AMBER)
+	_objectives_toggle_btn.add_theme_color_override(
+		"font_hover_color", Color(HudTokens.AMBER.r, HudTokens.AMBER.g, HudTokens.AMBER.b, 1.0))
 	_objectives_toggle_btn.toggled.connect(_on_objectives_deploy_toggled)
 	btn_row.add_child(_objectives_toggle_btn)
 
 	# Clear button
 	_objectives_clear_btn = Button.new()
 	_objectives_clear_btn.text = "Clear"
-	_objectives_clear_btn.add_theme_color_override("font_color", Color(1.0, 0.75, 0.35, 1.0))
+	_objectives_clear_btn.add_theme_color_override("font_color", HudTokens.AMBER)
 	_objectives_clear_btn.pressed.connect(_on_objectives_clear)
 	btn_row.add_child(_objectives_clear_btn)
 
@@ -1417,9 +1501,9 @@ Tip: Connected cells = 1 piece""" % [
 	# Color code the recommendations - Glassmorphism accent colors
 	var all_ok = pieces_ok and coverage_ok and blocking_ok and cover_ok and difficult_ok and dangerous_ok and extended.max_gap_ok and extended.symmetry_ok
 	if all_ok:
-		recommendations_label.add_theme_color_override("font_color", Color(0.3, 0.85, 0.55))  # Accent green
+		recommendations_label.add_theme_color_override("font_color", HudTokens.SUCCESS)  # Accent green
 	else:
-		recommendations_label.add_theme_color_override("font_color", Color(1.0, 0.75, 0.35))  # Accent amber
+		recommendations_label.add_theme_color_override("font_color", HudTokens.AMBER)  # Accent amber
 
 
 func _get_grid_rect() -> Rect2:

@@ -16,6 +16,29 @@ enum QualityPreset {
 var current_preset: QualityPreset = QualityPreset.MEDIUM
 var custom_settings: Dictionary = {}
 
+# ===== Window / UI reachability =====
+## Supported layout floor: the window can never shrink below this, so the left
+## command panel, dice roller and unit card never collapse into each other. Below the
+## floor, content scrolls rather than compresses. (See docs/AAA_UI_PLAYBOOK.md.)
+const MIN_WINDOW_SIZE := Vector2i(1280, 720)
+const UI_SCALE_MIN := 0.8
+const UI_SCALE_MAX := 2.0
+
+## Whole-UI scale (content_scale_factor) for HiDPI / readability. Persisted; bound to a
+## settings slider. DisplayServer.screen_get_scale() returns 1.0 on Windows/X11, so the
+## manual slider stays the source of truth for 4K displays.
+var ui_scale: float = 1.0
+
+## Accessibility: when true, UI micro-interactions collapse to instant/opacity-only
+## (WCAG 2.3.3). Read by UiMotion; persisted. Never gate information behind animation.
+var reduce_motion: bool = false
+
+## Borderless fullscreen (MODE_FULLSCREEN), NOT exclusive — no display mode switch, so it
+## avoids the NVIDIA/X11 exclusive-fullscreen surface issues. Persisted + applied on start.
+## Default on (the user wants auto-fullscreen); untick it to record with OBS (Game Capture
+## stalls fullscreen Vulkan), which persists to windowed on the next launch.
+var fullscreen: bool = true
+
 # Preset configurations - optimized for tabletop gaming performance
 const PRESETS = {
 	QualityPreset.PERFORMANCE: {
@@ -122,6 +145,45 @@ func _ready() -> void:
 	# Load saved settings or use default
 	load_settings()
 	apply_preset(current_preset)
+	_apply_window_constraints()
+
+
+## Enforce the minimum window size and apply the saved UI scale. Reachability floor.
+func _apply_window_constraints() -> void:
+	var window := get_window()
+	if window:
+		window.min_size = MIN_WINDOW_SIZE
+	# Cap the frame rate so the non-blocking MAILBOX present mode doesn't render uncapped.
+	Engine.max_fps = 120
+	apply_ui_scale(ui_scale)
+	# Apply the persisted fullscreen choice (default on). Driven here rather than at the
+	# engine level so unticking it actually persists to a windowed start (needed for OBS).
+	apply_fullscreen(fullscreen)
+
+
+## Toggle borderless fullscreen (safe MODE_FULLSCREEN, never EXCLUSIVE). Persisted.
+## In fullscreen we use a NON-blocking present mode (MAILBOX): with blocking FIFO vsync, an
+## OBS screen capture perturbing NVIDIA's page-flip makes vkAcquireNextImageKHR block, which
+## stalls the whole main loop and freezes the (Tween-driven) cinematic intro while recording
+## (Godot #105583 / #80550). MAILBOX never blocks, so the loop keeps running during capture.
+func apply_fullscreen(on: bool) -> void:
+	fullscreen = on
+	if on:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_MAILBOX)
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
+	save_settings()
+
+
+## Scale the whole UI; clamps to a sane range and persists. Exposed to a settings slider.
+func apply_ui_scale(factor: float) -> void:
+	ui_scale = clampf(factor, UI_SCALE_MIN, UI_SCALE_MAX)
+	var tree := get_tree()
+	if tree and tree.root:
+		tree.root.content_scale_factor = ui_scale
+	save_settings()
 
 
 ## Apply a quality preset
@@ -237,6 +299,9 @@ func save_settings() -> void:
 	var config = ConfigFile.new()
 	config.set_value("graphics", "preset", current_preset)
 	config.set_value("graphics", "custom_settings", custom_settings)
+	config.set_value("graphics", "ui_scale", ui_scale)
+	config.set_value("graphics", "reduce_motion", reduce_motion)
+	config.set_value("graphics", "fullscreen", fullscreen)
 	config.save("user://graphics_settings.cfg")
 
 
@@ -252,20 +317,23 @@ func load_settings() -> void:
 
 	current_preset = config.get_value("graphics", "preset", QualityPreset.MEDIUM)
 	custom_settings = config.get_value("graphics", "custom_settings", {})
+	ui_scale = config.get_value("graphics", "ui_scale", 1.0)
+	reduce_motion = config.get_value("graphics", "reduce_motion", false)
+	fullscreen = config.get_value("graphics", "fullscreen", true)
 
 
 ## Set resolution
-func set_resolution(width: int, height: int, fullscreen: bool = false) -> void:
+func set_resolution(width: int, height: int, use_fullscreen: bool = false) -> void:
 	var window = get_window()
 	window.size = Vector2i(width, height)
 
-	if fullscreen:
-		window.mode = Window.MODE_EXCLUSIVE_FULLSCREEN
+	if use_fullscreen:
+		window.mode = Window.MODE_FULLSCREEN  # borderless, not EXCLUSIVE (X11/NVIDIA-safe)
 	else:
 		window.mode = Window.MODE_WINDOWED
 
 	# Center window if windowed
-	if not fullscreen:
+	if not use_fullscreen:
 		var screen_size = DisplayServer.screen_get_size()
 		var window_pos = (screen_size - window.size) / 2
 		window.position = window_pos

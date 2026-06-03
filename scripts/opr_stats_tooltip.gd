@@ -62,6 +62,12 @@ func _ready() -> void:
 	tokens_label.visible = false
 	rules_label.get_parent().add_child(tokens_label)
 
+	# Real bold glyphs (Inter weight axis) so [b] unit names/headers never faux-bold.
+	var bold := HudTokens.bold_font()
+	for rtl: RichTextLabel in [unit_name_label, stats_label, weapons_label, rules_label, tokens_label]:
+		rtl.add_theme_font_override("bold_font", bold)
+	unit_name_label.add_theme_font_size_override("bold_font_size", 22)  # larger, prominent unit name
+
 	# Make sure all children ignore mouse
 	_set_mouse_ignore_recursive(self)
 
