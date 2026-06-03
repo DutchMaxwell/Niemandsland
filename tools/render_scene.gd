@@ -79,11 +79,17 @@ func _run() -> void:
 			glow.position = Vector3(cell.x, 0.0, cell.y)
 			glow.setup(glow_colors[i], 0.02)
 
+	# Drifting volumetric mist (Phase 4) — renders because the Environment has
+	# volumetric fog enabled at the baseline.
+	var mist := Node3D.new()
+	mist.set_script(load("res://scripts/atmospheric_clouds.gd"))
+	vp.add_child(mist)
+
 	# 3/4 tabletop camera — steep enough that the surface fills the frame with a strip of sky.
 	var cam := Camera3D.new()
 	cam.fov = 50.0
 	vp.add_child(cam)
-	cam.look_at_from_position(Vector3(0.0, 0.17, 0.34), Vector3(0.0, 0.0, -0.04), Vector3.UP)
+	cam.look_at_from_position(Vector3(0.0, 0.36, 0.5), Vector3(0.0, 0.0, -0.02), Vector3.UP)
 
 	for _i in range(60):
 		await get_tree().process_frame
