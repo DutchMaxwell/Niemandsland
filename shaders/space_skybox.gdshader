@@ -21,7 +21,7 @@ uniform float star_brightness : hint_range(0.0, 4.0) = 2.2;
 uniform float twinkle_speed : hint_range(0.0, 5.0) = 0.8;
 
 // Per-pixel dither amplitude (in 1/255 units) to break banding in the dark.
-uniform float dither_amount = 2.5;
+uniform float dither_amount = 4.5;
 
 // === Noise ===
 float hash13(vec3 p) {

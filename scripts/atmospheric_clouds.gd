@@ -11,15 +11,16 @@ extends Node3D
 # === Constants ===
 
 const MIST_SHADER: Shader = preload("res://shaders/ground_mist.gdshader")
-## Plane edge length (metres) — covers a 4x4 ft (1.22 m) table with margin.
-const PLANE_SIZE: float = 1.5
+## Fallback plane edge length (metres) before set_table_size() sizes it to the table.
+const PLANE_SIZE: float = 1.85
 ## Heights above the table for the stacked layers (metres) — ~4–6 mm: hugs the ground.
 const LAYER_HEIGHTS: Array = [0.004, 0.006]
 const MIST_COLOR: Color = Color(0.95, 0.96, 0.98)
 const NOISE_SIZE: int = 512
-## Radius (metres) the mist is pushed aside around each miniature, and the soft falloff.
-const CLEAR_RADIUS: float = 0.05
-const CLEAR_SOFTNESS: float = 0.05
+## Water-like parting around each miniature: reach, shove strength, clear core (metres/0..1).
+const CLEAR_RADIUS: float = 0.07
+const PUSH_AMOUNT: float = 0.045
+const CORE_CLEAR: float = 0.7
 ## Max miniatures that part the mist at once (matches the shader array).
 const MAX_CLEAR: int = 32
 ## How often (seconds) to refresh the parting points — 20 Hz is smooth + cheap.
@@ -29,14 +30,13 @@ const FADE_IN_TIME: float = 4.0
 
 # === Public references ===
 
-## Assigned by main.gd; provides _target_position for the follow behaviour.
+## Kept for compatibility (main.gd assigns it); the table-bound mist no longer follows it.
 var camera_controller: Node3D = null
 
 # === Private variables ===
 
 var _layers: Array[MeshInstance3D] = []
 var _enabled: bool = true
-var _last_target: Vector3 = Vector3(INF, INF, INF)
 var _global_alpha: float = 0.0
 var _clear_accum: float = 0.0
 var _fade_tween: Tween = null
@@ -46,31 +46,29 @@ var _fade_tween: Tween = null
 func _ready() -> void:
 	_create_mist_layers()
 	_set_global_alpha(0.0)  # hidden until the table is built (fade_in)
-	await get_tree().process_frame
-	_find_camera_controller()
 
 
 func _process(delta: float) -> void:
 	if not _enabled:
 		return
-	if not camera_controller:
-		_find_camera_controller()
-
-	# Keep the mist under the viewed area.
-	if camera_controller and "_target_position" in camera_controller:
-		var target: Vector3 = camera_controller._target_position
-		if not target.is_equal_approx(_last_target):
-			global_position.x = target.x
-			global_position.z = target.z
-			_last_target = target
-
-	# Refresh the parting points (throttled) so the mist reacts to miniatures moving.
+	# The mist is table-bound (centred on the table at the origin), so it no longer
+	# follows the camera. Refresh the parting points (throttled) so it reacts to models.
 	_clear_accum += delta
 	if _clear_accum >= CLEAR_INTERVAL:
 		_clear_accum = 0.0
 		_update_clear_points()
 
 # === Public API ===
+
+## Size the mist to cover the whole play field (call when the table size is set). A small
+## margin past the edge keeps the soft border out past the table rim.
+func set_table_size(size_meters: Vector2) -> void:
+	var plane_size := size_meters + Vector2(0.08, 0.08)
+	for layer: MeshInstance3D in _layers:
+		var plane := layer.mesh as PlaneMesh
+		if plane:
+			plane.size = plane_size
+
 
 ## Slowly reveal the mist (call once the table/field is built — e.g. on intro end).
 func fade_in(duration: float = FADE_IN_TIME) -> void:
@@ -138,12 +136,13 @@ func _create_mist_layers() -> void:
 		mat.set_shader_parameter("noise_tex", noise)
 		mat.set_shader_parameter("mist_color", MIST_COLOR)
 		mat.set_shader_parameter("density", 0.32 - float(i) * 0.1)
-		mat.set_shader_parameter("tiling", 1.45 + float(i) * 0.4)
-		mat.set_shader_parameter("scroll", Vector2(0.011, 0.006).rotated(float(i) * 1.6))
-		mat.set_shader_parameter("coverage", 0.6 + float(i) * 0.06)
+		mat.set_shader_parameter("noise_freq", 1.3 + float(i) * 0.4)
+		mat.set_shader_parameter("scroll", Vector2(0.012, 0.007).rotated(float(i) * 1.6))
+		mat.set_shader_parameter("coverage", 0.55 + float(i) * 0.06)
 		mat.set_shader_parameter("softness", 0.32)
-		mat.set_shader_parameter("clear_radius", CLEAR_RADIUS)
-		mat.set_shader_parameter("clear_softness", CLEAR_SOFTNESS)
+		mat.set_shader_parameter("push_radius", CLEAR_RADIUS)
+		mat.set_shader_parameter("push_amount", PUSH_AMOUNT)
+		mat.set_shader_parameter("core_clear", CORE_CLEAR)
 		mesh_inst.material_override = mat
 
 		mesh_inst.position.y = LAYER_HEIGHTS[i]
@@ -193,11 +192,3 @@ func _make_noise() -> NoiseTexture2D:
 	tex.seamless = true
 	tex.noise = noise
 	return tex
-
-
-func _find_camera_controller() -> void:
-	var cameras := get_tree().get_nodes_in_group("camera_controller")
-	if cameras.size() > 0:
-		camera_controller = cameras[0]
-		return
-	camera_controller = get_node_or_null("/root/Main/CameraController")
