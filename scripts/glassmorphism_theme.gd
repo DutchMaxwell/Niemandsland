@@ -37,6 +37,7 @@ static func create_theme() -> Theme:
 	_tooltip(th)
 	_labels(th)
 	_separators(th)
+	_richtext(th)
 
 	print("[HudTheme] created")
 	return th
@@ -335,6 +336,14 @@ static func _tooltip(th: Theme) -> void:
 static func _labels(th: Theme) -> void:
 	th.set_color("font_color", "Label", T.TEXT)
 	th.set_color("font_shadow_color", "Label", Color(0, 0, 0, 0))
+
+
+# ===== RichTextLabel =====
+static func _richtext(th: Theme) -> void:
+	# Real bold glyphs for [b] (Inter weight axis) so names/headers never faux-bold and
+	# fray at small sizes — fixes unit cards, the hover tooltip and import previews.
+	th.set_font("bold_font", "RichTextLabel", T.bold_font())
+	th.set_color("default_color", "RichTextLabel", T.TEXT)
 
 
 # ===== Separators =====
