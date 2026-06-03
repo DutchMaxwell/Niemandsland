@@ -13,8 +13,8 @@ extends Node3D
 const MIST_SHADER: Shader = preload("res://shaders/ground_mist.gdshader")
 ## Plane edge length (metres) — covers a 4x4 ft (1.22 m) table with margin.
 const PLANE_SIZE: float = 1.5
-## Heights above the table for the stacked layers (metres) — 12–20 mm: low waft.
-const LAYER_HEIGHTS: Array = [0.012, 0.016, 0.020]
+## Heights above the table for the stacked layers (metres) — ~4–6 mm: hugs the ground.
+const LAYER_HEIGHTS: Array = [0.004, 0.006]
 const MIST_COLOR: Color = Color(0.92, 0.94, 0.97)
 const NOISE_SIZE: int = 512
 
@@ -100,10 +100,11 @@ func _create_mist_layers() -> void:
 		mat.shader = MIST_SHADER
 		mat.set_shader_parameter("noise_tex", noise)
 		mat.set_shader_parameter("mist_color", MIST_COLOR)
-		mat.set_shader_parameter("density", 0.95 - float(i) * 0.15)
-		mat.set_shader_parameter("tiling", 2.2 + float(i) * 0.7)
-		mat.set_shader_parameter("scroll", Vector2(0.012, 0.007).rotated(float(i) * 1.3))
-		mat.set_shader_parameter("wisp", 0.34 + float(i) * 0.05)
+		mat.set_shader_parameter("density", 0.5 - float(i) * 0.12)
+		mat.set_shader_parameter("tiling", 1.2 + float(i) * 0.35)
+		mat.set_shader_parameter("scroll", Vector2(0.0026, 0.0015).rotated(float(i) * 1.6))
+		mat.set_shader_parameter("coverage", 0.5 + float(i) * 0.06)
+		mat.set_shader_parameter("softness", 0.34)
 		mesh_inst.material_override = mat
 
 		mesh_inst.position.y = LAYER_HEIGHTS[i]
@@ -115,8 +116,8 @@ func _create_mist_layers() -> void:
 func _make_noise() -> NoiseTexture2D:
 	var noise := FastNoiseLite.new()
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	noise.frequency = 0.015
-	noise.fractal_octaves = 4
+	noise.frequency = 0.008
+	noise.fractal_octaves = 3
 
 	var tex := NoiseTexture2D.new()
 	tex.width = NOISE_SIZE

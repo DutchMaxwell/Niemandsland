@@ -83,6 +83,10 @@ const GROUP_ROTATION_BROADCAST_INTERVAL: float = 0.1  # 10 Hz
 @onready var table_size_option: OptionButton = %TableSizeOption
 @onready var custom_size_container: VBoxContainer = %CustomSizeContainer
 @onready var unit_option: OptionButton = %UnitOption
+@onready var biome_option: OptionButton = %BiomeOption
+
+# Biome keys in the order they appear in the BiomeOption dropdown (index -> key).
+var _biome_keys: Array = []
 @onready var width_input: SpinBox = %WidthInput
 @onready var length_input: SpinBox = %LengthInput
 @onready var apply_custom_btn: Button = %ApplyCustomBtn
@@ -231,6 +235,10 @@ func _ready() -> void:
 	table_size_option.item_selected.connect(_on_table_size_selected)
 	apply_custom_btn.pressed.connect(_on_apply_custom_size)
 	unit_option.item_selected.connect(_on_unit_changed)
+
+	# Populate + connect the biome selector
+	_populate_biome_option()
+	biome_option.item_selected.connect(_on_biome_selected)
 
 	# Connect to object manager signals
 	object_manager.distance_changed.connect(_on_distance_changed)
@@ -1180,6 +1188,27 @@ func _on_table_size_selected(index: int) -> void:
 			_set_table_size(DEFAULT_TABLE_SIZE_FEET)
 		TABLE_SIZE_INDEX_CUSTOM:  # Custom
 			custom_size_container.visible = true
+
+
+## Fill the biome dropdown from the table's biome registry (pretty-printed labels).
+func _populate_biome_option() -> void:
+	if not biome_option or not table or not table.has_method("get_biomes"):
+		return
+	biome_option.clear()
+	_biome_keys = table.get_biomes()
+	for i in range(_biome_keys.size()):
+		var key: String = _biome_keys[i]
+		biome_option.add_item(key.capitalize(), i)  # "temperate_grassland" -> "Temperate Grassland"
+		if key == table.biome:
+			biome_option.selected = i
+
+
+## Switch the play-surface biome.
+func _on_biome_selected(index: int) -> void:
+	if index < 0 or index >= _biome_keys.size():
+		return
+	if table and table.has_method("set_biome"):
+		table.set_biome(_biome_keys[index])
 
 
 ## Apply custom table size
