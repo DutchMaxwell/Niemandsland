@@ -72,6 +72,12 @@ func _ready() -> void:
 	frame.bracket_length = 12.0
 	add_child(frame)
 
+	# Real bold glyphs (Inter weight axis) directly on each label, so [b] names/headers
+	# never faux-bold even if the card doesn't inherit the themed HUD.
+	var bold := HudTokens.bold_font()
+	for rtl: RichTextLabel in [_name_label, _stats_label, _status_label, _wounds_label, _weapons_label, _rules_label]:
+		rtl.add_theme_font_override("bold_font", bold)
+
 	_refresh_timer = Timer.new()
 	_refresh_timer.one_shot = false
 	_refresh_timer.wait_time = REFRESH_INTERVAL
