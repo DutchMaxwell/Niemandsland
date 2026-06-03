@@ -27,34 +27,45 @@ var wgs_client: WGSClient
 
 func _ready() -> void:
 	title = "Import WGS Game"
-	size = Vector2i(550, 500)
+	# Tall enough that tabs + preview + the Cancel/Import row always fit (preview scrolls).
+	UiPolish.keep_window_reachable(self, Vector2i(560, 560))
 	theme = ThemeManager.get_current_theme()
+	borderless = true  # we draw our own tactical chrome (no gray Godot title bar)
 	close_requested.connect(_on_cancel)
+	visibility_changed.connect(func() -> void:
+		if visible:
+			UiPolish.grab_first_focus.call_deferred(self))
 
 	_setup_ui()
 
 
 func _setup_ui() -> void:
-	# Main container
+	# Tactical background panel (deep-navy glass + hairline + shadow), then content.
+	var bg_panel = PanelContainer.new()
+	bg_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg_panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
+	add_child(bg_panel)
+
 	var margin = MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	UiPolish.set_dialog_margins(margin)
-	add_child(margin)
+	bg_panel.add_child(margin)
+
+	# Corner-bracket chrome on top (instrumentation look)
+	bg_panel.add_child(HudFrame.new())
 
 	var vbox = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", UiPolish.SECTION_SEP)
 	margin.add_child(vbox)
 
-	# Title
-	var title_label = Label.new()
-	title_label.text = "Import from Wargaming Simulator"
-	title_label.add_theme_font_size_override("font_size", 18)
-	vbox.add_child(title_label)
+	# Tactical header (Orbitron title + amber index + accent line)
+	vbox.add_child(HudTokens.header("GAME IMPORT", "/// NODE-02"))
 
 	# Info label
 	var info_label = Label.new()
-	info_label.text = "Import a game state from Udo's Wargaming Simulator (udos3dworld.com)"
+	info_label.text = "IMPORT A GAME STATE FROM UDO'S WARGAMING SIMULATOR (UDOS3DWORLD.COM)"
 	info_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	info_label.add_theme_font_override("font", HudTokens.mono_font())
+	info_label.add_theme_font_size_override("font_size", 12)
 	info_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(info_label)
 
@@ -81,13 +92,18 @@ func _setup_ui() -> void:
 
 	# Game preview (shared)
 	var preview_label = Label.new()
-	preview_label.text = "Game Preview:"
+	preview_label.text = "GAME PREVIEW"
+	preview_label.add_theme_font_override("font", HudTokens.mono_font())
+	preview_label.add_theme_font_size_override("font_size", 12)
+	preview_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(preview_label)
 
 	game_preview = RichTextLabel.new()
 	game_preview.bbcode_enabled = true
 	game_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	game_preview.custom_minimum_size = Vector2(0, 150)
+	# Small minimum so a long game list never pushes the buttons off; it scrolls instead.
+	game_preview.custom_minimum_size = Vector2(0, 80)
+	game_preview.scroll_active = true
 	game_preview.scroll_following = true
 
 	var preview_panel = PanelContainer.new()
@@ -103,14 +119,15 @@ func _setup_ui() -> void:
 	vbox.add_child(btn_row)
 
 	cancel_btn = Button.new()
-	cancel_btn.text = "Cancel"
+	cancel_btn.text = "CANCEL"
 	UiPolish.primary_button(cancel_btn)
 	cancel_btn.pressed.connect(_on_cancel)
 	btn_row.add_child(cancel_btn)
 
 	import_btn = Button.new()
-	import_btn.text = "Import Game"
+	import_btn.text = "IMPORT GAME"
 	import_btn.disabled = true
+	import_btn.theme_type_variation = "PrimaryButton"
 	UiPolish.primary_button(import_btn)
 	import_btn.pressed.connect(_on_import)
 	btn_row.add_child(import_btn)
@@ -131,8 +148,10 @@ func _setup_ui() -> void:
 
 func _setup_file_tab(container: VBoxContainer) -> void:
 	var file_info = Label.new()
-	file_info.text = "Select a WGS game state file (.txt) exported from the Wargaming Simulator."
+	file_info.text = "SELECT A WGS GAME STATE FILE (.TXT) EXPORTED FROM THE WARGAMING SIMULATOR."
 	file_info.autowrap_mode = TextServer.AUTOWRAP_WORD
+	file_info.add_theme_font_override("font", HudTokens.mono_font())
+	file_info.add_theme_font_size_override("font_size", 12)
 	file_info.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	container.add_child(file_info)
 
@@ -141,7 +160,8 @@ func _setup_file_tab(container: VBoxContainer) -> void:
 	container.add_child(file_row)
 
 	var select_btn = Button.new()
-	select_btn.text = "Select File…"
+	select_btn.text = "SELECT FILE…"
+	select_btn.theme_type_variation = "PrimaryButton"
 	UiPolish.primary_button(select_btn)
 	select_btn.pressed.connect(_on_select_file)
 	file_row.add_child(select_btn)
@@ -155,8 +175,10 @@ func _setup_file_tab(container: VBoxContainer) -> void:
 
 func _setup_server_tab(container: VBoxContainer) -> void:
 	var server_info = Label.new()
-	server_info.text = "Enter the Game ID to fetch the current state from the WGS server."
+	server_info.text = "ENTER THE GAME ID TO FETCH THE CURRENT STATE FROM THE WGS SERVER."
 	server_info.autowrap_mode = TextServer.AUTOWRAP_WORD
+	server_info.add_theme_font_override("font", HudTokens.mono_font())
+	server_info.add_theme_font_size_override("font_size", 12)
 	server_info.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	container.add_child(server_info)
 
@@ -165,7 +187,10 @@ func _setup_server_tab(container: VBoxContainer) -> void:
 	container.add_child(id_row)
 
 	var id_label = Label.new()
-	id_label.text = "Game ID:"
+	id_label.text = "GAME ID"
+	id_label.add_theme_font_override("font", HudTokens.mono_font())
+	id_label.add_theme_font_size_override("font_size", 12)
+	id_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	id_row.add_child(id_label)
 
 	game_id_input = LineEdit.new()
@@ -174,7 +199,8 @@ func _setup_server_tab(container: VBoxContainer) -> void:
 	id_row.add_child(game_id_input)
 
 	fetch_btn = Button.new()
-	fetch_btn.text = "Fetch"
+	fetch_btn.text = "FETCH"
+	fetch_btn.theme_type_variation = "PrimaryButton"
 	UiPolish.primary_button(fetch_btn)
 	fetch_btn.pressed.connect(_on_fetch)
 	id_row.add_child(fetch_btn)
@@ -184,6 +210,13 @@ func _setup_server_tab(container: VBoxContainer) -> void:
 	url_info.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	url_info.add_theme_font_size_override("font_size", 11)
 	container.add_child(url_info)
+
+
+## Borderless windows get no WM close/ESC; provide keyboard escape ourselves.
+func _unhandled_key_input(event: InputEvent) -> void:
+	if visible and event is InputEventKey and event.pressed and (event as InputEventKey).keycode == KEY_ESCAPE:
+		_on_cancel()
+		get_viewport().set_input_as_handled()
 
 
 func _on_select_file() -> void:

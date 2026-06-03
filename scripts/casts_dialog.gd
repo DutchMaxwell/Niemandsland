@@ -10,13 +10,13 @@ signal dialog_closed()
 var _unit: GameUnit = null
 
 ## UI references (assigned in _ready or via create_simple)
-@onready var title_label: Label = $Panel/VBox/TitleLabel
-@onready var casts_label: Label = $Panel/VBox/CastsContainer/CastsLabel
-@onready var minus_button: Button = $Panel/VBox/CastsContainer/MinusButton
-@onready var plus_button: Button = $Panel/VBox/CastsContainer/PlusButton
-@onready var per_round_label: Label = $Panel/VBox/PerRoundLabel
-@onready var reset_button: Button = $Panel/VBox/ResetButton
-@onready var close_button: Button = $Panel/VBox/CloseButton
+@onready var title_label: Label = $Panel/Margin/VBox/TitleLabel
+@onready var casts_label: Label = $Panel/Margin/VBox/CastsContainer/CastsLabel
+@onready var minus_button: Button = $Panel/Margin/VBox/CastsContainer/MinusButton
+@onready var plus_button: Button = $Panel/Margin/VBox/CastsContainer/PlusButton
+@onready var per_round_label: Label = $Panel/Margin/VBox/PerRoundLabel
+@onready var reset_button: Button = $Panel/Margin/VBox/ResetButton
+@onready var close_button: Button = $Panel/Margin/VBox/CloseButton
 
 ## Flag to prevent double signal connection
 var _signals_connected: bool = false
@@ -64,13 +64,13 @@ func _update_display() -> void:
 		return
 
 	if title_label:
-		title_label.text = "%s - Caster Points" % _unit.get_name()
+		title_label.text = "%s - CASTER POINTS" % _unit.get_name().to_upper()
 
 	if casts_label:
 		casts_label.text = "%d / %d" % [_unit.casts_current, GameUnit.CASTER_POINTS_CAP]
 
 	if per_round_label:
-		per_round_label.text = "+%d per round" % _unit.casts_per_round
+		per_round_label.text = "+%d PER ROUND" % _unit.casts_per_round
 
 	# Update button states
 	if minus_button:
@@ -126,6 +126,7 @@ func _input(event: InputEvent) -> void:
 static func create_simple() -> CastsDialog:
 	var dialog = CastsDialog.new()
 	dialog.name = "CastsDialog"
+	dialog.theme = ThemeManager.get_current_theme()  # so PrimaryButton/DangerButton variations resolve
 	# Fill entire screen to block all input when visible
 	dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dialog.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -138,7 +139,7 @@ static func create_simple() -> CastsDialog:
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	dialog.add_child(bg)
 
-	# Create centered panel container
+	# Create centered panel container (deep-navy glass + hairline + shadow chrome)
 	var panel = PanelContainer.new()
 	panel.name = "Panel"
 	panel.custom_minimum_size = Vector2(250, 180)
@@ -146,20 +147,34 @@ static func create_simple() -> CastsDialog:
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
 	dialog.add_child(panel)
+
+	# Inner margin so content clears the corner-bracket chrome
+	var margin = MarginContainer.new()
+	margin.name = "Margin"
+	UiPolish.set_dialog_margins(margin)
+	margin.mouse_filter = Control.MOUSE_FILTER_PASS
+	panel.add_child(margin)
 
 	# VBox container
 	var vbox = VBoxContainer.new()
 	vbox.name = "VBox"
-	vbox.add_theme_constant_override("separation", 10)
+	vbox.add_theme_constant_override("separation", HudTokens.SECTION_SEP)
 	vbox.mouse_filter = Control.MOUSE_FILTER_PASS
-	panel.add_child(vbox)
+	margin.add_child(vbox)
 
-	# Title
+	# Tactical header (Orbitron title + amber index + accent line)
+	vbox.add_child(HudTokens.header("CASTS", "/// CAST"))
+
+	# Title (per-unit caster-points subtitle, updated in _update_display)
 	var title = Label.new()
 	title.name = "TitleLabel"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.text = "Caster Points"
+	title.add_theme_font_override("font", HudTokens.mono_font())
+	title.add_theme_font_size_override("font_size", 12)
+	title.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(title)
 	dialog.title_label = title
 
@@ -200,25 +215,34 @@ static func create_simple() -> CastsDialog:
 	var per_round = Label.new()
 	per_round.name = "PerRoundLabel"
 	per_round.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	per_round.text = "+0 per round"
-	per_round.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	per_round.text = "+0 PER ROUND"
+	per_round.add_theme_font_override("font", HudTokens.mono_font())
+	per_round.add_theme_font_size_override("font_size", 12)
+	per_round.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(per_round)
 	dialog.per_round_label = per_round
 
-	# Reset button
+	# Reset button (destructive: clears manual adjustment)
 	var reset_btn = Button.new()
 	reset_btn.name = "ResetButton"
-	reset_btn.text = "Reset to Per-Round"
+	reset_btn.text = "RESET TO PER-ROUND"
 	reset_btn.tooltip_text = "Reset points to per-round value"
+	reset_btn.theme_type_variation = "DangerButton"
 	vbox.add_child(reset_btn)
 	dialog.reset_button = reset_btn
 
-	# Close button
+	# Close button (primary action: confirm + dismiss)
 	var close_btn = Button.new()
 	close_btn.name = "CloseButton"
-	close_btn.text = "Close"
+	close_btn.text = "CLOSE"
+	close_btn.theme_type_variation = "PrimaryButton"
 	vbox.add_child(close_btn)
 	dialog.close_button = close_btn
+
+	# Corner-bracket chrome on top (instrumentation look), as the LAST panel child
+	var frame = HudFrame.new()
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(frame)
 
 	# Connect signals directly
 	minus_btn.pressed.connect(dialog._on_minus_pressed)

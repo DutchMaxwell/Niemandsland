@@ -336,6 +336,7 @@ func _input(event: InputEvent) -> void:
 static func create_simple() -> MarkerDialog:
 	var dialog = MarkerDialog.new()
 	dialog.name = "MarkerDialog"
+	dialog.theme = ThemeManager.get_current_theme()  # so PrimaryButton/DangerButton variations resolve
 	dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dialog.mouse_filter = Control.MOUSE_FILTER_STOP
 
@@ -355,23 +356,36 @@ static func create_simple() -> MarkerDialog:
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
 	dialog.add_child(panel)
+
+	var margin = MarginContainer.new()
+	UiPolish.set_dialog_margins(margin)
+	panel.add_child(margin)
 
 	var vbox = VBoxContainer.new()
 	vbox.name = "VBox"
-	vbox.add_theme_constant_override("separation", 8)
-	panel.add_child(vbox)
+	vbox.add_theme_constant_override("separation", HudTokens.SPACE_8)
+	margin.add_child(vbox)
 
-	# Title
+	# Tactical header (Orbitron title + amber index + accent line)
+	vbox.add_child(HudTokens.header("MARKERS", "/// MARK"))
+
+	# Title (per-target name, updated in _update_display)
 	var title = Label.new()
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.text = "Tokens"
+	title.add_theme_font_override("font", HudTokens.mono_font())
+	title.add_theme_font_size_override("font_size", 12)
+	title.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(title)
 	dialog.title_label = title
 
 	# Active tokens
 	var active_label = Label.new()
-	active_label.text = "Active:"
+	active_label.text = "ACTIVE"
+	active_label.add_theme_font_override("font", HudTokens.mono_font())
+	active_label.add_theme_font_size_override("font_size", 12)
+	active_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(active_label)
 
 	var active_scroll = ScrollContainer.new()
@@ -388,7 +402,10 @@ static func create_simple() -> MarkerDialog:
 
 	# Reusable token library
 	var lib_label = Label.new()
-	lib_label.text = "Saved tokens (click to apply, ✎ to edit):"
+	lib_label.text = "SAVED TOKENS (CLICK TO APPLY, ✎ TO EDIT)"
+	lib_label.add_theme_font_override("font", HudTokens.mono_font())
+	lib_label.add_theme_font_size_override("font_size", 12)
+	lib_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(lib_label)
 
 	var lib_scroll = ScrollContainer.new()
@@ -405,7 +422,10 @@ static func create_simple() -> MarkerDialog:
 
 	# New / edit token
 	var new_label = Label.new()
-	new_label.text = "New / edit token:"
+	new_label.text = "NEW / EDIT TOKEN"
+	new_label.add_theme_font_override("font", HudTokens.mono_font())
+	new_label.add_theme_font_size_override("font_size", 12)
+	new_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(new_label)
 
 	var name_hbox = HBoxContainer.new()
@@ -431,7 +451,10 @@ static func create_simple() -> MarkerDialog:
 	dialog.counter_check = counter_check
 
 	var start_label = Label.new()
-	start_label.text = "Start:"
+	start_label.text = "START"
+	start_label.add_theme_font_override("font", HudTokens.mono_font())
+	start_label.add_theme_font_size_override("font_size", 12)
+	start_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	counter_hbox.add_child(start_label)
 
 	var counter_spin = SpinBox.new()
@@ -454,14 +477,20 @@ static func create_simple() -> MarkerDialog:
 	var add_btn = Button.new()
 	add_btn.text = "Add"
 	add_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	add_btn.theme_type_variation = "PrimaryButton"
+	UiPolish.primary_button(add_btn)
 	buttons_hbox.add_child(add_btn)
 	dialog.add_custom_button = add_btn
 
 	var close_btn = Button.new()
 	close_btn.text = "Close"
 	close_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiPolish.primary_button(close_btn)
 	buttons_hbox.add_child(close_btn)
 	dialog.close_button = close_btn
+
+	# Corner-bracket chrome on top (instrumentation look) — must be the panel's last child
+	panel.add_child(HudFrame.new())
 
 	dialog._setup_ui()
 	return dialog
