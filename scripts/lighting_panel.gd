@@ -163,6 +163,14 @@ func _build_ui() -> void:
 		GraphicsSettings.save_settings())
 	vbox.add_child(reduce_cb)
 
+	# Fullscreen (safe borderless mode, not the crash-prone exclusive fullscreen).
+	var fs_cb := CheckButton.new()
+	fs_cb.text = "Fullscreen"
+	fs_cb.button_pressed = GraphicsSettings.fullscreen
+	fs_cb.toggled.connect(func(on: bool) -> void:
+		GraphicsSettings.apply_fullscreen(on))
+	vbox.add_child(fs_cb)
+
 
 ## UI Scale slider (content_scale_factor) — reachability/HiDPI. Bound to GraphicsSettings.
 func _add_ui_scale_slider(parent: Control) -> void:

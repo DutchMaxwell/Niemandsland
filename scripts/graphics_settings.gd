@@ -33,6 +33,10 @@ var ui_scale: float = 1.0
 ## (WCAG 2.3.3). Read by UiMotion; persisted. Never gate information behind animation.
 var reduce_motion: bool = false
 
+## Borderless fullscreen (MODE_FULLSCREEN), NOT exclusive — no display mode switch, so it
+## avoids the NVIDIA/X11 exclusive-fullscreen surface issues. Persisted.
+var fullscreen: bool = false
+
 # Preset configurations - optimized for tabletop gaming performance
 const PRESETS = {
 	QualityPreset.PERFORMANCE: {
@@ -148,6 +152,16 @@ func _apply_window_constraints() -> void:
 	if window:
 		window.min_size = MIN_WINDOW_SIZE
 	apply_ui_scale(ui_scale)
+	apply_fullscreen(fullscreen)
+
+
+## Toggle borderless fullscreen (safe MODE_FULLSCREEN, never EXCLUSIVE). Persisted.
+func apply_fullscreen(on: bool) -> void:
+	fullscreen = on
+	var window := get_window()
+	if window:
+		window.mode = Window.MODE_FULLSCREEN if on else Window.MODE_WINDOWED
+	save_settings()
 
 
 ## Scale the whole UI; clamps to a sane range and persists. Exposed to a settings slider.
@@ -274,6 +288,7 @@ func save_settings() -> void:
 	config.set_value("graphics", "custom_settings", custom_settings)
 	config.set_value("graphics", "ui_scale", ui_scale)
 	config.set_value("graphics", "reduce_motion", reduce_motion)
+	config.set_value("graphics", "fullscreen", fullscreen)
 	config.save("user://graphics_settings.cfg")
 
 
@@ -291,20 +306,21 @@ func load_settings() -> void:
 	custom_settings = config.get_value("graphics", "custom_settings", {})
 	ui_scale = config.get_value("graphics", "ui_scale", 1.0)
 	reduce_motion = config.get_value("graphics", "reduce_motion", false)
+	fullscreen = config.get_value("graphics", "fullscreen", false)
 
 
 ## Set resolution
-func set_resolution(width: int, height: int, fullscreen: bool = false) -> void:
+func set_resolution(width: int, height: int, use_fullscreen: bool = false) -> void:
 	var window = get_window()
 	window.size = Vector2i(width, height)
 
-	if fullscreen:
-		window.mode = Window.MODE_EXCLUSIVE_FULLSCREEN
+	if use_fullscreen:
+		window.mode = Window.MODE_FULLSCREEN  # borderless, not EXCLUSIVE (X11/NVIDIA-safe)
 	else:
 		window.mode = Window.MODE_WINDOWED
 
 	# Center window if windowed
-	if not fullscreen:
+	if not use_fullscreen:
 		var screen_size = DisplayServer.screen_get_size()
 		var window_pos = (screen_size - window.size) / 2
 		window.position = window_pos
