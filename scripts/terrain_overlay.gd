@@ -955,16 +955,17 @@ func has_line_of_sight(from_pos: Vector3, to_pos: Vector3, from_height: int, to_
 
 ## Compact, always-visible Asgard effect label for a terrain type (empty for NONE).
 ## Players read it to apply Cover/Difficult/Dangerous etc. themselves.
+## Three stacked lines for a terrain zone: Type / Height / Special Rules (English).
 func _terrain_effect_label(terrain_type: int) -> String:
 	match terrain_type:
 		TerrainType.RUINS:
-			return "Ruine · H5 · Cover · Impassable · LoS: nicht hindurch"
+			return "Ruins\nHeight 5\nCover, Impassable, Blocks LoS"
 		TerrainType.FOREST:
-			return "Wald · H5 · Difficult · Cover · LoS: nicht hindurch"
+			return "Forest\nHeight 5\nDifficult, Cover, Blocks LoS"
 		TerrainType.CONTAINER:
-			return "Haus · H5 · Impassable · blockt LoS"
+			return "Container\nHeight 5\nImpassable, Blocks LoS"
 		TerrainType.DANGEROUS:
-			return "Gefährlich · Dangerous"
+			return "Dangerous\nGround\nDangerous Terrain"
 	return ""
 
 
@@ -1011,24 +1012,27 @@ func _rebuild_terrain_labels(cells_data: Dictionary, grid_dims: Vector2i, cell_s
 		var text := _terrain_effect_label(ttype)
 		if text.is_empty():
 			continue
+		# Anchor at the zone's top-left corner cell (small label tucked into a corner),
+		# not floating over the centre.
 		var cells: Array = zone["cells"]
-		var sx := 0.0
-		var sy := 0.0
+		var min_cell := Vector2(cells[0].x, cells[0].y)
 		for c in cells:
-			sx += c.x
-			sy += c.y
-		var n := float(cells.size())
-		var center := _cell_to_world(sx / n, sy / n, grid_dims, cell_size, rotation_rad)
+			min_cell.x = minf(min_cell.x, float(c.x))
+			min_cell.y = minf(min_cell.y, float(c.y))
+		var corner := _cell_to_world(min_cell.x - 0.5, min_cell.y - 0.5, grid_dims, cell_size, rotation_rad)
 		var lbl := Label3D.new()
 		lbl.name = "TerrainLabel"
 		lbl.text = text
 		lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		lbl.font_size = 28
-		lbl.outline_size = 10
+		lbl.font_size = 22  # small
+		lbl.outline_size = 6
+		lbl.line_spacing = 0.0
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 		lbl.modulate = Color.WHITE
-		lbl.outline_modulate = Color(0.05, 0.05, 0.05)
-		lbl.pixel_size = 0.0009
-		lbl.position = Vector3(center.x, LABEL_Y, center.z)
+		lbl.outline_modulate = Color(0.03, 0.03, 0.03, 0.9)
+		lbl.pixel_size = 0.00055  # small physical size (~1.2 cm per line)
+		lbl.position = Vector3(corner.x, LABEL_Y, corner.z)
 		add_child(lbl)
 		_terrain_labels.append(lbl)
 
