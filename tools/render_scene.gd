@@ -103,7 +103,7 @@ func _run() -> void:
 	var cam := Camera3D.new()
 	cam.fov = 50.0
 	vp.add_child(cam)
-	cam.look_at_from_position(Vector3(0.0, 0.52, 0.55), Vector3(0.0, 0.0, 0.0), Vector3.UP)
+	cam.look_at_from_position(Vector3(0.0, 0.28, 0.3), Vector3(0.0, 0.0, -0.05), Vector3.UP)
 
 	for _i in range(60):
 		await get_tree().process_frame

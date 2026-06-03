@@ -21,9 +21,10 @@ uniform float global_alpha : hint_range(0.0, 1.0) = 0.0;
 const int MAX_CLEAR = 32;
 uniform int clear_count = 0;
 uniform vec2 clear_points[MAX_CLEAR];
-uniform float push_radius = 0.07;          // how far out the displacement reaches (m)
-uniform float push_amount = 0.045;         // how hard the mist is shoved aside (m)
-uniform float core_clear : hint_range(0.0, 1.0) = 0.7;  // clearing right under the model
+uniform float push_radius = 0.09;          // how far out the displacement reaches (m)
+uniform float push_amount = 0.06;          // how hard the mist is shoved outward (m)
+uniform float swirl_amount = 0.03;         // tangential flow so it curls around the model (m)
+uniform float core_clear : hint_range(0.0, 1.0) = 0.35;  // small clearing under the model
 
 varying vec3 v_local;
 
@@ -34,15 +35,19 @@ void vertex() {
 void fragment() {
 	vec2 local = v_local.xz;
 
-	// Water-like displacement: shove the sampled position outward around each model,
-	// and clear a small core directly beneath it.
+	// Water-like displacement around each model. To shove the mist OUTWARD the sample is
+	// warped INWARD (domain warp moves content opposite to the offset) — warping outward
+	// instead pulls the mist into the model's centre, which is the bug being fixed here.
+	// A tangential term curls the mist around the model so it flows like water.
 	vec2 pushed = local;
 	float thin = 1.0;
 	for (int i = 0; i < clear_count; i++) {
 		vec2 d = local - clear_points[i];
 		float dist = length(d) + 1e-4;
 		float infl = smoothstep(push_radius, 0.0, dist);     // 1 at centre .. 0 at rim
-		pushed += (d / dist) * infl * push_amount;
+		vec2 radial = d / dist;
+		pushed -= radial * infl * push_amount;               // part the mist outward
+		pushed += vec2(-radial.y, radial.x) * infl * swirl_amount;  // curl around it
 		thin *= 1.0 - infl * core_clear;
 	}
 

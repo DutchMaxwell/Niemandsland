@@ -17,10 +17,11 @@ const PLANE_SIZE: float = 1.85
 const LAYER_HEIGHTS: Array = [0.004, 0.006]
 const MIST_COLOR: Color = Color(0.95, 0.96, 0.98)
 const NOISE_SIZE: int = 512
-## Water-like parting around each miniature: reach, shove strength, clear core (metres/0..1).
-const CLEAR_RADIUS: float = 0.07
-const PUSH_AMOUNT: float = 0.045
-const CORE_CLEAR: float = 0.7
+## Water-like parting around each miniature: reach, outward shove, tangential swirl, core.
+const CLEAR_RADIUS: float = 0.09
+const PUSH_AMOUNT: float = 0.06
+const SWIRL_AMOUNT: float = 0.03
+const CORE_CLEAR: float = 0.35
 ## Max miniatures that part the mist at once (matches the shader array).
 const MAX_CLEAR: int = 32
 ## How often (seconds) to refresh the parting points — 20 Hz is smooth + cheap.
@@ -142,6 +143,7 @@ func _create_mist_layers() -> void:
 		mat.set_shader_parameter("softness", 0.32)
 		mat.set_shader_parameter("push_radius", CLEAR_RADIUS)
 		mat.set_shader_parameter("push_amount", PUSH_AMOUNT)
+		mat.set_shader_parameter("swirl_amount", SWIRL_AMOUNT)
 		mat.set_shader_parameter("core_clear", CORE_CLEAR)
 		mesh_inst.material_override = mat
 
