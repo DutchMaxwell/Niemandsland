@@ -22,6 +22,8 @@ func _ready() -> void:
 
 
 func _run() -> void:
+	# The project auto-starts fullscreen; force windowed for deterministic captures.
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
 	var args := OS.get_cmdline_user_args()
 	var name := args[0] if args.size() > 0 else ""
