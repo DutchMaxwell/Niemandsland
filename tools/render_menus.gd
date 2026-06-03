@@ -57,6 +57,7 @@ func _run() -> void:
 			await _modal(name, mip, func(): mip.open(_sample_unit().models[0]))
 		"unit_card":
 			var card := load("res://scenes/unit_card.tscn").instantiate() as UnitCard
+			card.theme = ThemeManager.get_current_theme()  # so RichTextLabel bold_font applies
 			await _control(name, card, Vector2i(420, 560), func(): card.show_unit(_sample_unit()))
 		"map_layout":
 			var ml: Control = load("res://scenes/map_layout.tscn").instantiate()
