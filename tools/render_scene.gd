@@ -63,10 +63,10 @@ func _run() -> void:
 		var cell: Vector2 = cells[i]
 		var m := MeshInstance3D.new()
 		var cap := CapsuleMesh.new()
-		cap.radius = 0.02
-		cap.height = 0.08
+		cap.radius = 0.013  # ~26 mm — realistic mini footprint
+		cap.height = 0.032  # ~32 mm tall, so the light sits inside it, not above
 		m.mesh = cap
-		m.position = Vector3(cell.x, 0.04, cell.y)
+		m.position = Vector3(cell.x, 0.016, cell.y)
 		var mm := StandardMaterial3D.new()
 		mm.albedo_color = Color(0.5, 0.32, 0.26)
 		mm.roughness = 0.7
@@ -99,7 +99,7 @@ func _run() -> void:
 	var cam := Camera3D.new()
 	cam.fov = 50.0
 	vp.add_child(cam)
-	cam.look_at_from_position(Vector3(0.0, 0.36, 0.5), Vector3(0.0, 0.0, -0.02), Vector3.UP)
+	cam.look_at_from_position(Vector3(0.0, 0.13, 0.3), Vector3(0.0, 0.01, -0.03), Vector3.UP)
 
 	for _i in range(60):
 		await get_tree().process_frame
