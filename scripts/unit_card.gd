@@ -77,6 +77,7 @@ func _ready() -> void:
 	var bold := HudTokens.bold_font()
 	for rtl: RichTextLabel in [_name_label, _stats_label, _status_label, _wounds_label, _weapons_label, _rules_label]:
 		rtl.add_theme_font_override("bold_font", bold)
+	_name_label.add_theme_font_size_override("bold_font_size", 22)  # larger, prominent unit name
 
 	_refresh_timer = Timer.new()
 	_refresh_timer.one_shot = false
