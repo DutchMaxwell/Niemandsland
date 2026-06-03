@@ -7,6 +7,7 @@ signal army_imported(army: OPRApiClient.OPRArmy, player_id: int)
 ## UI Elements
 var player_option: OptionButton
 var army_preview: RichTextLabel
+var state_panel: StatePanel
 var import_btn: Button
 var cancel_btn: Button
 var fetch_btn: Button
@@ -22,29 +23,39 @@ var api_client: OPRApiClient
 
 func _ready() -> void:
 	title = "Import OPR Army"
-	size = Vector2i(550, 450)
+	# Tall enough that the preview + the Cancel/Import button row always fit (the army
+	# list scrolls inside the preview well; the buttons stay pinned). Clamped on open.
+	UiPolish.keep_window_reachable(self, Vector2i(560, 560))
 	theme = ThemeManager.get_current_theme()
+	borderless = true  # we draw our own tactical chrome (no gray Godot title bar)
 	close_requested.connect(_on_cancel)
+	visibility_changed.connect(func() -> void:
+		if visible:
+			UiPolish.grab_first_focus.call_deferred(self))
 
 	_setup_ui()
 
 
 func _setup_ui() -> void:
-	# Main container
+	# Tactical background panel (deep-navy glass + hairline + shadow), then content.
+	var bg_panel = PanelContainer.new()
+	bg_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg_panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
+	add_child(bg_panel)
+
 	var margin = MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	UiPolish.set_dialog_margins(margin)
-	add_child(margin)
+	bg_panel.add_child(margin)
+
+	# Corner-bracket chrome on top (instrumentation look)
+	bg_panel.add_child(HudFrame.new())
 
 	var vbox = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", UiPolish.SECTION_SEP)
 	margin.add_child(vbox)
 
-	# Title
-	var title_label = Label.new()
-	title_label.text = "Import Army from OPR Army Forge"
-	title_label.add_theme_font_size_override("font_size", 18)
-	vbox.add_child(title_label)
+	# Tactical header (Orbitron title + amber index + accent line)
+	vbox.add_child(HudTokens.header("ARMY IMPORT", "/// NODE-01"))
 
 	# === SHARE LINK SECTION ===
 	var link_section = VBoxContainer.new()
@@ -52,7 +63,9 @@ func _setup_ui() -> void:
 	vbox.add_child(link_section)
 
 	var link_info = Label.new()
-	link_info.text = "Enter an Army Forge share link or list ID:"
+	link_info.text = "ENTER ARMY FORGE SHARE LINK / LIST ID"
+	link_info.add_theme_font_override("font", HudTokens.mono_font())
+	link_info.add_theme_font_size_override("font_size", 12)
 	link_info.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	link_section.add_child(link_info)
 
@@ -74,13 +87,14 @@ func _setup_ui() -> void:
 	link_section.add_child(link_btn_row)
 
 	var paste_link_btn = Button.new()
-	paste_link_btn.text = "From clipboard"
+	paste_link_btn.text = "FROM CLIPBOARD"
 	UiPolish.primary_button(paste_link_btn)
 	paste_link_btn.pressed.connect(_on_paste_link)
 	link_btn_row.add_child(paste_link_btn)
 
 	fetch_btn = Button.new()
-	fetch_btn.text = "Load army"
+	fetch_btn.text = "LOAD ARMY"
+	fetch_btn.theme_type_variation = "PrimaryButton"
 	UiPolish.primary_button(fetch_btn)
 	fetch_btn.pressed.connect(_on_fetch_from_link)
 	link_btn_row.add_child(fetch_btn)
@@ -98,7 +112,10 @@ func _setup_ui() -> void:
 	vbox.add_child(player_row)
 
 	var player_label = Label.new()
-	player_label.text = "Assign player:"
+	player_label.text = "ASSIGN PLAYER"
+	player_label.add_theme_font_override("font", HudTokens.mono_font())
+	player_label.add_theme_font_size_override("font_size", 12)
+	player_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	player_row.add_child(player_label)
 
 	player_option = OptionButton.new()
@@ -111,12 +128,18 @@ func _setup_ui() -> void:
 
 	# Army preview
 	var preview_label = Label.new()
-	preview_label.text = "Preview:"
+	preview_label.text = "PREVIEW"
+	preview_label.add_theme_font_override("font", HudTokens.mono_font())
+	preview_label.add_theme_font_size_override("font_size", 12)
+	preview_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(preview_label)
 
 	army_preview = RichTextLabel.new()
 	army_preview.bbcode_enabled = true
-	army_preview.custom_minimum_size = Vector2(0, 150)
+	# Small minimum so a long army list never forces the dialog past its height and pushes
+	# the buttons off — the label EXPANDs to fill the well and SCROLLS its content.
+	army_preview.custom_minimum_size = Vector2(0, 80)
+	army_preview.scroll_active = true
 	army_preview.scroll_following = true
 	army_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
@@ -126,6 +149,13 @@ func _setup_ui() -> void:
 	vbox.add_child(preview_panel)
 	preview_panel.add_child(army_preview)
 
+	# Empty / loading / error state over the same well, so a wait never reads as blank.
+	state_panel = StatePanel.new()
+	state_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	state_panel.action_pressed.connect(_on_fetch_from_link)
+	preview_panel.add_child(state_panel)
+	_show_empty_state()
+
 	# Button row
 	var btn_row = HBoxContainer.new()
 	btn_row.add_theme_constant_override("separation", 8)
@@ -133,14 +163,15 @@ func _setup_ui() -> void:
 	vbox.add_child(btn_row)
 
 	cancel_btn = Button.new()
-	cancel_btn.text = "Cancel"
+	cancel_btn.text = "CANCEL"
 	UiPolish.primary_button(cancel_btn)
 	cancel_btn.pressed.connect(_on_cancel)
 	btn_row.add_child(cancel_btn)
 
 	import_btn = Button.new()
-	import_btn.text = "Import army"
+	import_btn.text = "IMPORT ARMY"
 	import_btn.disabled = true
+	import_btn.theme_type_variation = "PrimaryButton"
 	UiPolish.primary_button(import_btn)
 	import_btn.pressed.connect(_on_import)
 	btn_row.add_child(import_btn)
@@ -148,6 +179,13 @@ func _setup_ui() -> void:
 	# API Client
 	api_client = OPRApiClient.new()
 	add_child(api_client)
+
+
+## Borderless windows get no WM close/ESC; provide keyboard escape ourselves.
+func _unhandled_key_input(event: InputEvent) -> void:
+	if visible and event is InputEventKey and event.pressed and (event as InputEventKey).keycode == KEY_ESCAPE:
+		_on_cancel()
+		get_viewport().set_input_as_handled()
 
 
 func _on_paste_link() -> void:
@@ -163,7 +201,8 @@ func _on_fetch_from_link() -> void:
 		return
 
 	_set_status("Loading…", UiPolish.ACCENT)
-	army_preview.text = "[color=#%s]Loading army from the Army Forge API…[/color]" % UiPolish.hex(UiPolish.ACCENT)
+	army_preview.visible = false
+	state_panel.show_loading("LOADING ARMY", "Fetching from the Army Forge API…")
 	import_btn.disabled = true
 	fetch_btn.disabled = true
 
@@ -172,16 +211,28 @@ func _on_fetch_from_link() -> void:
 	fetch_btn.disabled = false
 	if _preview_army and _preview_army.units.size() > 0:
 		_set_status("Loaded!", UiPolish.SUCCESS)
+		_show_loaded()
 		_update_preview()
 		import_btn.disabled = false
 	elif _preview_army and _preview_army.units.size() == 0:
 		_set_status("Empty", UiPolish.WARNING)
-		army_preview.text = "[color=#%s]The army list is empty.[/color]\n\nThis list contains no units. Add some units in Army Forge first." % UiPolish.hex(UiPolish.WARNING)
+		state_panel.show_empty("EMPTY LIST", "This list contains no units. Add some in Army Forge first.")
 		import_btn.disabled = true
 	else:
 		_set_status("Error", UiPolish.DESTRUCTIVE)
-		army_preview.text = "[color=#%s]Could not load the army.[/color]\n\nCheck the link and your internet connection." % UiPolish.hex(UiPolish.DESTRUCTIVE)
+		state_panel.show_error("LOAD FAILED", "Check the link and your internet connection.", "RETRY")
 		import_btn.disabled = true
+
+
+## Toggle the preview well between the live army list and the state panel.
+func _show_empty_state() -> void:
+	army_preview.visible = false
+	state_panel.show_empty("NO ARMY LOADED", "Paste an Army Forge share link or list ID above, then Load Army.")
+
+
+func _show_loaded() -> void:
+	state_panel.visible = false
+	army_preview.visible = true
 
 
 ## Sets the inline link status text + colour (use a UiPolish token).
@@ -249,6 +300,8 @@ func _reset_dialog() -> void:
 	link_status_label.text = ""
 	army_preview.text = ""
 	import_btn.disabled = true
+	if state_panel:
+		_show_empty_state()
 
 
 ## Sets the pre-selected player for import.

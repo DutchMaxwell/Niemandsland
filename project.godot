@@ -26,6 +26,7 @@ config/icon="res://icon.svg"
 ThemeManager="*res://scripts/theme_manager.gd"
 GraphicsSettings="*res://scripts/graphics_settings.gd"
 AudioManager="*res://scripts/audio_manager.gd"
+UiFeedback="*res://scripts/ui_feedback.gd"
 
 [display]
 

@@ -15,17 +15,20 @@ const MARGIN_FROM_EDGE: int = 16
 ## Interval for refreshing live state while the card is visible (seconds).
 const REFRESH_INTERVAL: float = 0.3
 
+# Gameplay stat sub-palette — a deliberate domain palette (quality/defense/cost/base/melee).
 const COLOR_QUALITY: String = "#88ff88"
 const COLOR_DEFENSE: String = "#8888ff"
 const COLOR_COST: String = "#ffcc44"
 const COLOR_BASE: String = "#cccccc"
-const COLOR_RANGE: String = "#88ccff"
 const COLOR_MELEE: String = "#ff8888"
 const COLOR_RULES: String = "#aaaaaa"
 const COLOR_DIM: String = "#666666"
-const COLOR_ACTIVE: String = "#ffaa44"
-const COLOR_ALIVE: String = "#88ff88"
-const COLOR_DEAD: String = "#ff6666"
+
+# Status colours derived from HudTokens so active/alive/dead/range match the rest of the UI.
+var COLOR_RANGE := "#" + HudTokens.CYAN.to_html(false)
+var COLOR_ACTIVE := "#" + HudTokens.AMBER.to_html(false)
+var COLOR_ALIVE := "#" + HudTokens.SUCCESS.to_html(false)
+var COLOR_DEAD := "#" + HudTokens.DANGER.to_html(false)
 
 const PIP_FILLED: String = "▮"
 const PIP_EMPTY: String = "▯"
@@ -62,6 +65,19 @@ var _refresh_timer: Timer = null
 func _ready() -> void:
 	visible = false
 	_close_button.pressed.connect(_on_close_pressed)
+
+	# Tactical chrome: deep-navy glass panel + corner-bracket frame.
+	add_theme_stylebox_override("panel", HudTokens.panel_style())
+	var frame := HudFrame.new()
+	frame.bracket_length = 12.0
+	add_child(frame)
+
+	# Real bold glyphs (Inter weight axis) directly on each label, so [b] names/headers
+	# never faux-bold even if the card doesn't inherit the themed HUD.
+	var bold := HudTokens.bold_font()
+	for rtl: RichTextLabel in [_name_label, _stats_label, _status_label, _wounds_label, _weapons_label, _rules_label]:
+		rtl.add_theme_font_override("bold_font", bold)
+	_name_label.add_theme_font_size_override("bold_font_size", 22)  # larger, prominent unit name
 
 	_refresh_timer = Timer.new()
 	_refresh_timer.one_shot = false

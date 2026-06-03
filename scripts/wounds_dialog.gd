@@ -10,13 +10,13 @@ signal dialog_closed()
 var _model: ModelInstance = null
 
 ## UI references (assigned in _ready or via scene)
-@onready var title_label: Label = $Panel/VBox/TitleLabel
-@onready var wounds_label: Label = $Panel/VBox/WoundsContainer/WoundsLabel
-@onready var minus_button: Button = $Panel/VBox/WoundsContainer/MinusButton
-@onready var plus_button: Button = $Panel/VBox/WoundsContainer/PlusButton
-@onready var heal_full_button: Button = $Panel/VBox/HealFullButton
-@onready var kill_button: Button = $Panel/VBox/KillButton
-@onready var close_button: Button = $Panel/VBox/CloseButton
+@onready var title_label: Label = $Panel/Margin/VBox/TitleLabel
+@onready var wounds_label: Label = $Panel/Margin/VBox/WoundsContainer/WoundsLabel
+@onready var minus_button: Button = $Panel/Margin/VBox/WoundsContainer/MinusButton
+@onready var plus_button: Button = $Panel/Margin/VBox/WoundsContainer/PlusButton
+@onready var heal_full_button: Button = $Panel/Margin/VBox/HealFullButton
+@onready var kill_button: Button = $Panel/Margin/VBox/KillButton
+@onready var close_button: Button = $Panel/Margin/VBox/CloseButton
 
 ## Flag to prevent double signal connection
 var _signals_connected: bool = false
@@ -155,6 +155,7 @@ func _input(event: InputEvent) -> void:
 static func create_simple() -> WoundsDialog:
 	var dialog = WoundsDialog.new()
 	dialog.name = "WoundsDialog"
+	dialog.theme = ThemeManager.get_current_theme()  # so PrimaryButton/DangerButton variations resolve
 	# Fill entire screen to block all input when visible
 	dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dialog.mouse_filter = Control.MOUSE_FILTER_STOP  # Block all clicks
@@ -175,20 +176,35 @@ static func create_simple() -> WoundsDialog:
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP  # Panel captures its area
+	# Tactical background panel (deep-navy glass + hairline + shadow)
+	panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
 	dialog.add_child(panel)
+
+	# Inner margin so content clears the corner-bracket chrome (matches the other modals).
+	var margin = MarginContainer.new()
+	margin.name = "Margin"
+	UiPolish.set_dialog_margins(margin)
+	margin.mouse_filter = Control.MOUSE_FILTER_PASS
+	panel.add_child(margin)
 
 	# VBox container
 	var vbox = VBoxContainer.new()
 	vbox.name = "VBox"
-	vbox.add_theme_constant_override("separation", 10)
+	vbox.add_theme_constant_override("separation", UiPolish.SECTION_SEP)
 	vbox.mouse_filter = Control.MOUSE_FILTER_PASS  # Pass clicks to children
-	panel.add_child(vbox)
+	margin.add_child(vbox)
 
-	# Title
+	# Tactical header (Orbitron title + amber index + accent line)
+	vbox.add_child(HudTokens.header("WOUNDS", "/// MED"))
+
+	# Title (dynamic unit/model name, mono muted subtitle under the header)
 	var title = Label.new()
 	title.name = "TitleLabel"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.text = "Wounds"
+	title.add_theme_font_override("font", HudTokens.mono_font())
+	title.add_theme_font_size_override("font_size", 12)
+	title.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(title)
 	dialog.title_label = title
 
@@ -214,6 +230,9 @@ static func create_simple() -> WoundsDialog:
 	wounds_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	wounds_lbl.custom_minimum_size = Vector2(80, 0)
 	wounds_lbl.text = "0 / 0"
+	wounds_lbl.add_theme_font_override("font", HudTokens.mono_font())
+	wounds_lbl.add_theme_font_size_override("font_size", 16)
+	wounds_lbl.add_theme_color_override("font_color", HudTokens.AMBER)
 	wounds_hbox.add_child(wounds_lbl)
 	dialog.wounds_label = wounds_lbl
 
@@ -225,24 +244,29 @@ static func create_simple() -> WoundsDialog:
 	wounds_hbox.add_child(plus_btn)
 	dialog.plus_button = plus_btn
 
-	# Heal full button
+	# Heal full button (primary / confirm action)
 	var heal_btn = Button.new()
 	heal_btn.name = "HealFullButton"
-	heal_btn.text = "Heal Full"
+	heal_btn.text = "HEAL FULL"
+	heal_btn.theme_type_variation = "PrimaryButton"
+	UiPolish.primary_button(heal_btn)
 	vbox.add_child(heal_btn)
 	dialog.heal_full_button = heal_btn
 
-	# Kill button
+	# Kill button (destructive)
 	var kill_btn = Button.new()
 	kill_btn.name = "KillButton"
-	kill_btn.text = "Kill"
+	kill_btn.text = "KILL"
+	kill_btn.theme_type_variation = "DangerButton"
+	UiPolish.primary_button(kill_btn)
 	vbox.add_child(kill_btn)
 	dialog.kill_button = kill_btn
 
 	# Close button
 	var close_btn = Button.new()
 	close_btn.name = "CloseButton"
-	close_btn.text = "Close"
+	close_btn.text = "CLOSE"
+	UiPolish.primary_button(close_btn)
 	vbox.add_child(close_btn)
 	dialog.close_button = close_btn
 
@@ -255,5 +279,8 @@ static func create_simple() -> WoundsDialog:
 
 	# Mark signals as connected to prevent double connection in _ready
 	dialog._signals_connected = true
+
+	# Corner-bracket chrome on top (instrumentation look); must be the panel's last child
+	panel.add_child(HudFrame.new())
 
 	return dialog

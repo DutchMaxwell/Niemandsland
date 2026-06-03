@@ -20,34 +20,49 @@ var _emitted := false
 
 func _ready() -> void:
 	title = "Choose Table Size"
-	size = Vector2i(460, 520)
+	theme = ThemeManager.get_current_theme()
+	UiPolish.keep_window_reachable(self, Vector2i(460, 520))  # never larger than the viewport
 	unresizable = true
 	exclusive = true
+	borderless = true  # we draw our own tactical chrome (no gray Godot title bar)
 	close_requested.connect(_on_close)
+	visibility_changed.connect(func() -> void:
+		if visible:
+			UiPolish.grab_first_focus.call_deferred(self))
 	_build_ui()
 
 
 func _build_ui() -> void:
+	# Tactical background panel (deep-navy glass + hairline + shadow) + corner brackets.
+	var bg_panel := PanelContainer.new()
+	bg_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg_panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
+	add_child(bg_panel)
+
 	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 18)
-	margin.add_theme_constant_override("margin_top", 18)
-	margin.add_theme_constant_override("margin_right", 18)
-	margin.add_theme_constant_override("margin_bottom", 18)
-	add_child(margin)
+	UiPolish.set_dialog_margins(margin)
+	bg_panel.add_child(margin)
+
+	bg_panel.add_child(HudFrame.new())
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10)
+	vbox.add_theme_constant_override("separation", UiPolish.SECTION_SEP)
 	margin.add_child(vbox)
 
+	vbox.add_child(HudTokens.header("TABLE SIZE", "/// GRID"))
+
 	var info := Label.new()
-	info.text = "Choose your table size.\nIt can't be changed later — switching would discard the layout you've built."
+	info.text = "Locked once chosen — switching later discards the layout you've built."
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info.add_theme_font_override("font", HudTokens.mono_font())
+	info.add_theme_font_size_override("font_size", 12)
+	info.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(info)
 
 	var btn_6x4 := Button.new()
 	btn_6x4.text = "72″ × 48″  (6 × 4 ft)  —  Standard"
 	btn_6x4.custom_minimum_size = Vector2(0, 42)
+	btn_6x4.theme_type_variation = "PrimaryButton"
 	btn_6x4.pressed.connect(_emit.bind(FEET_6X4))
 	vbox.add_child(btn_6x4)
 
@@ -60,7 +75,10 @@ func _build_ui() -> void:
 	vbox.add_child(HSeparator.new())
 
 	var custom_label := Label.new()
-	custom_label.text = "Custom size:"
+	custom_label.text = "CUSTOM SIZE"
+	custom_label.add_theme_font_override("font", HudTokens.mono_font())
+	custom_label.add_theme_font_size_override("font_size", 12)
+	custom_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(custom_label)
 
 	_unit_option = OptionButton.new()
@@ -103,8 +121,15 @@ func _build_ui() -> void:
 	quote.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	quote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	quote.add_theme_font_size_override("font_size", 13)
-	quote.add_theme_color_override("font_color", Color(0.55, 0.58, 0.66, 0.85))
+	quote.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(quote)
+
+
+## Borderless windows get no WM close/ESC; provide keyboard escape (defaults to 6×4).
+func _unhandled_key_input(event: InputEvent) -> void:
+	if visible and event is InputEventKey and event.pressed and (event as InputEventKey).keycode == KEY_ESCAPE:
+		_on_close()
+		get_viewport().set_input_as_handled()
 
 
 func _on_apply_custom() -> void:
