@@ -152,15 +152,16 @@ func _apply_window_constraints() -> void:
 	if window:
 		window.min_size = MIN_WINDOW_SIZE
 	apply_ui_scale(ui_scale)
-	apply_fullscreen(fullscreen)
+	# Auto-start fullscreen is set at the engine level (display/window/size/mode=3), so the
+	# window is already borderless-fullscreen here — just sync our flag for the checkbox.
+	fullscreen = DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
 
 
 ## Toggle borderless fullscreen (safe MODE_FULLSCREEN, never EXCLUSIVE). Persisted.
 func apply_fullscreen(on: bool) -> void:
 	fullscreen = on
-	var window := get_window()
-	if window:
-		window.mode = Window.MODE_FULLSCREEN if on else Window.MODE_WINDOWED
+	DisplayServer.window_set_mode(
+		DisplayServer.WINDOW_MODE_FULLSCREEN if on else DisplayServer.WINDOW_MODE_WINDOWED)
 	save_settings()
 
 
