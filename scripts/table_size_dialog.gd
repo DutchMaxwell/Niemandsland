@@ -26,7 +26,7 @@ var selected_biome: String = ""
 func _ready() -> void:
 	title = "Choose Table Size"
 	theme = ThemeManager.get_current_theme()
-	UiPolish.keep_window_reachable(self, Vector2i(460, 520))  # never larger than the viewport
+	UiPolish.keep_window_reachable(self, Vector2i(460, 600))  # never larger than the viewport
 	unresizable = true
 	exclusive = true
 	borderless = true  # we draw our own tactical chrome (no gray Godot title bar)
@@ -50,9 +50,16 @@ func _build_ui() -> void:
 
 	bg_panel.add_child(HudFrame.new())
 
+	# Scrollable content so every control stays reachable even if it is taller than the
+	# fixed window (the biome row pushed the size buttons off-screen otherwise).
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	margin.add_child(scroll)
+
 	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_theme_constant_override("separation", UiPolish.SECTION_SEP)
-	margin.add_child(vbox)
+	scroll.add_child(vbox)
 
 	vbox.add_child(HudTokens.header("TABLE SIZE", "/// GRID"))
 
@@ -64,17 +71,22 @@ func _build_ui() -> void:
 	info.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(info)
 
-	# Biome / battlemap selector (populated by main via set_biomes()).
+	# Biome / battlemap selector (populated by main via set_biomes()) — compact row.
+	var biome_row := HBoxContainer.new()
+	biome_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(biome_row)
+
 	var biome_label := Label.new()
-	biome_label.text = "BIOME"
+	biome_label.text = "Biome:"
 	biome_label.add_theme_font_override("font", HudTokens.mono_font())
 	biome_label.add_theme_font_size_override("font_size", 12)
 	biome_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
-	vbox.add_child(biome_label)
+	biome_row.add_child(biome_label)
 
 	_biome_option = OptionButton.new()
+	_biome_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_biome_option.item_selected.connect(_on_biome_item_selected)
-	vbox.add_child(_biome_option)
+	biome_row.add_child(_biome_option)
 
 	vbox.add_child(HSeparator.new())
 
