@@ -376,28 +376,77 @@ func _update_hover(screen_pos: Vector2) -> void:
 
 
 ## Highlight a selected object with a green model glow (material_overlay), saving
-## any previous overlay per mesh so it can be restored on deselect.
+## any previous overlay per mesh so it can be restored on deselect, and cast a
+## pulsing player-coloured halo on the ground beneath it.
 func _highlight_object(obj: Node3D) -> void:
 	var mat := _get_selection_glow_material()
 	for mesh: MeshInstance3D in _collect_glow_meshes(obj):
 		if not mesh.has_meta("_sel_prev_overlay"):
 			mesh.set_meta("_sel_prev_overlay", mesh.material_overlay)
 		mesh.material_overlay = mat
+	_add_ground_glow(obj)
 
 
-## Remove the green selection glow, restoring the previous overlay per mesh.
+## Remove the green selection glow, restoring the previous overlay per mesh, and
+## remove the ground halo.
 func _unhighlight_object(obj: Node3D) -> void:
 	for mesh: MeshInstance3D in _collect_glow_meshes(obj):
 		if mesh.has_meta("_sel_prev_overlay"):
 			mesh.material_overlay = mesh.get_meta("_sel_prev_overlay")
 			mesh.remove_meta("_sel_prev_overlay")
+	_remove_ground_glow(obj)
 
 
 func _collect_glow_meshes(obj: Node3D) -> Array[MeshInstance3D]:
 	var result: Array[MeshInstance3D] = []
 	for node: MeshInstance3D in obj.find_children("*", "MeshInstance3D", true, false):
+		if node.is_in_group(SelectionGroundGlow.OVERLAY_GROUP):
+			continue  # never tint the selection halo with the model overlay
 		result.append(node)
 	return result
+
+
+## Spawn the pulsing ground halo under a selected object (no-op if already present).
+func _add_ground_glow(obj: Node3D) -> void:
+	if obj.get_node_or_null(NodePath(String(SelectionGroundGlow.NODE_NAME))) != null:
+		return
+	var glow := SelectionGroundGlow.new()
+	obj.add_child(glow)
+	glow.setup(_object_player_color(obj), _object_ground_radius(obj))
+
+
+## Free the ground halo under an object, if any.
+func _remove_ground_glow(obj: Node3D) -> void:
+	var glow := obj.get_node_or_null(NodePath(String(SelectionGroundGlow.NODE_NAME)))
+	if glow != null:
+		glow.queue_free()
+
+
+## Player colour for an object's halo, falling back to neutral for non-army selectables.
+func _object_player_color(obj: Node3D) -> Color:
+	if obj.has_meta("opr_player_id"):
+		var pid: int = int(obj.get_meta("opr_player_id"))
+		return OPRArmyManager.PLAYER_COLORS.get(pid, SelectionGroundGlow.NEUTRAL_COLOR)
+	return SelectionGroundGlow.NEUTRAL_COLOR
+
+
+## Horizontal footprint radius (metres) from the object's mesh AABBs, in obj-local space.
+func _object_ground_radius(obj: Node3D) -> float:
+	var merged := AABB()
+	var have := false
+	var inv := obj.global_transform.affine_inverse()
+	for node: MeshInstance3D in obj.find_children("*", "MeshInstance3D", true, false):
+		if node.is_in_group(SelectionGroundGlow.OVERLAY_GROUP):
+			continue
+		var local_aabb := (inv * node.global_transform) * node.get_aabb()
+		if have:
+			merged = merged.merge(local_aabb)
+		else:
+			merged = local_aabb
+			have = true
+	if not have:
+		return 0.02
+	return maxf(merged.size.x, merged.size.z) * 0.5
 
 
 func _get_selection_glow_material() -> StandardMaterial3D:
