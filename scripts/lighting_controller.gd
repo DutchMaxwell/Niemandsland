@@ -20,10 +20,11 @@ const PRESETS = {
 		"sun_angle_h": 84.0,  # Horizontal angle (degrees)
 		"sun_angle_v": 43.0,   # Vertical angle (degrees)
 		# Sky-driven ambient now adds fill, and AgX tonemap has its own contrast/colour
-		# response — so ambient/contrast/saturation are dialled back vs the old ACES setup.
-		"ambient_energy": 0.45,
+		# response — so ambient/exposure/glow are dialled down vs the old ACES setup (the
+		# bright physical sky + sky-ambient otherwise blow the scene out to white).
+		"ambient_energy": 0.25,
 		"ambient_color": Color(0.85, 0.82, 0.78),
-		"exposure": 1.2,
+		"exposure": 0.9,
 		"shadow_opacity": 0.85,
 		"shadow_blur": 1.5,
 		"shadow_bias": 0.03,  # Balanced to prevent acne and detachment
@@ -32,7 +33,7 @@ const PRESETS = {
 		"fill_light_energy": 0.3,
 		"fill_light_color": Color(0.7, 0.8, 1.0),
 		"ssr_intensity": 0.2,
-		"glow_intensity": 1.2,
+		"glow_intensity": 0.9,
 		"contrast": 1.05,
 		"saturation": 1.05,
 	},

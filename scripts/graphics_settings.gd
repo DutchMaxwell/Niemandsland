@@ -263,27 +263,31 @@ func apply_environment_settings(settings: Dictionary) -> void:
 	else:
 		env.sdfgi_enabled = false
 
-	# Distance/aerial fog (atmospheric depth) — MEDIUM and up.
+	# Distance/aerial fog (atmospheric depth) — MEDIUM and up. Kept subtle: the table is only
+	# ~1.2 m across, so heavy fog just hazes the whole frame grey. sky_affect = 0 so the
+	# physical sky stays crisp; the fog only adds a faint depth cue on the far table edge.
 	env.fog_enabled = tier >= QualityPreset.MEDIUM
 	if env.fog_enabled:
-		env.fog_density = 0.004
-		env.fog_aerial_perspective = 0.35
-		env.fog_sky_affect = 0.2
+		env.fog_density = 0.0015
+		env.fog_aerial_perspective = 0.1
+		env.fog_sky_affect = 0.0
 
-	# Volumetric ground fog — MEDIUM(light) .. ULTRA(dense). FogVolume pockets add local
-	# variation on top (Phase 4).
+	# Volumetric ground fog — MEDIUM(light) .. ULTRA(dense). Table-scale densities (FogVolume
+	# pockets add the dramatic local variation in Phase 4).
 	env.volumetric_fog_enabled = tier >= QualityPreset.MEDIUM
 	if env.volumetric_fog_enabled:
-		env.volumetric_fog_density = 0.014 if tier == QualityPreset.MEDIUM else (0.022 if tier == QualityPreset.ULTRA else 0.018)
+		env.volumetric_fog_density = 0.004 if tier == QualityPreset.MEDIUM else (0.008 if tier == QualityPreset.ULTRA else 0.006)
+		env.volumetric_fog_length = 8.0
 		env.volumetric_fog_albedo = Color(0.84, 0.82, 0.8)
 		env.volumetric_fog_emission = Color(0.04, 0.045, 0.06)
 		env.volumetric_fog_emission_energy = 0.4
 		env.volumetric_fog_gi_inject = 0.5
-		env.volumetric_fog_ambient_inject = 0.4
+		env.volumetric_fog_ambient_inject = 0.3
 
-	# Auto-exposure (CameraAttributesPractical on the WorldEnvironment) — LOW and up.
+	# Auto-exposure: disabled for now — it blew the physical-sky scene out to white.
+	# Re-introduce once the fixed-exposure baseline is dialled in.
 	if world_env.camera_attributes:
-		world_env.camera_attributes.auto_exposure_enabled = tier >= QualityPreset.LOW
+		world_env.camera_attributes.auto_exposure_enabled = false
 
 	# Glow
 	env.glow_enabled = settings["glow"]
