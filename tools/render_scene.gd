@@ -55,9 +55,10 @@ func _run() -> void:
 		lc.apply_preset("Default")
 
 	# Stand-in minis for scale / contrast (a small cluster near the centre so they read).
-	# A couple get a SelectionGroundGlow halo (player blue / red) to verify Phase 3.
+	# Two get "selected" (green emissive overlay + a real green SelectionSpillLight) so
+	# the spill onto the ground + the neighbouring unlit minis can be judged (Phase 3 v2).
 	var cells := [Vector2(-0.18, -0.1), Vector2(-0.06, 0.04), Vector2(0.06, -0.04), Vector2(0.18, 0.1)]
-	var glow_colors := {0: Color(0.2, 0.4, 0.8), 2: Color(0.8, 0.2, 0.2)}
+	var selected := {1: true}
 	for i in range(cells.size()):
 		var cell: Vector2 = cells[i]
 		var m := MeshInstance3D.new()
@@ -71,13 +72,22 @@ func _run() -> void:
 		mm.roughness = 0.7
 		m.material_override = mm
 		vp.add_child(m)
-		if glow_colors.has(i):
-			# In-game the wrapper origin sits on the ground; these stand-ins are centred,
-			# so place the halo at ground level under the mini instead of parenting to it.
-			var glow := SelectionGroundGlow.new()
-			vp.add_child(glow)
-			glow.position = Vector3(cell.x, 0.0, cell.y)
-			glow.setup(glow_colors[i], 0.02)
+		if selected.has(i):
+			# Green emissive overlay (mimics _get_selection_glow_material).
+			var ov := StandardMaterial3D.new()
+			ov.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			ov.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			ov.albedo_color = Color(0.25, 1.0, 0.4, 0.4)
+			ov.emission_enabled = true
+			ov.emission = SelectionSpillLight.GREEN_SELECTION
+			ov.emission_energy_multiplier = 2.0
+			m.material_overlay = ov
+			# Spill light at ground level under the mini (in-game it parents to the
+			# ground-origin wrapper; these stand-ins are centred, so place it directly).
+			var light := SelectionSpillLight.new()
+			vp.add_child(light)
+			light.setup(0.02)
+			light.position = Vector3(cell.x, SelectionSpillLight.Y_OFFSET, cell.y)
 
 	# Drifting volumetric mist (Phase 4) — renders because the Environment has
 	# volumetric fog enabled at the baseline.
