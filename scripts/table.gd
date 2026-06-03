@@ -15,6 +15,13 @@ var table_size: Vector2 = Vector2(4, 4)  # In feet, will be converted to meters
 const FEET_TO_METERS: float = 0.3048  # 1 foot = 0.3048 meters
 const INCHES_TO_METERS: float = 0.0254  # 1 inch = 0.0254 meters
 
+# Crisp ground: the battlefield mat is a one-off painted scene (not tileable), so it
+# stays stretched 1:1 over the table while a densely-tiled, seamless procedural
+# micro-relief keeps the surface sharp at close zoom instead of magnifying soft texels.
+const GROUND_SHADER: Shader = preload("res://shaders/table_ground.gdshader")
+const DETAIL_TILING: float = 28.0
+const DETAIL_NOISE_SIZE: int = 512
+
 @onready var mesh_instance: MeshInstance3D = $TableMesh
 @onready var collision_shape: CollisionShape3D = $TableCollision
 
@@ -58,20 +65,7 @@ func setup_table(size_feet: Vector2) -> void:
 
 	mesh_instance.mesh = plane_mesh
 
-	# Create material
-	var material = StandardMaterial3D.new()
-	material.roughness = 0.9
-	material.metallic = 0.0
-
-	# Use texture if available, otherwise fall back to color
-	if _default_texture:
-		material.albedo_texture = _default_texture
-		material.albedo_color = Color.WHITE  # White to show texture as-is
-		# Texture is displayed once, stretched to fit the entire table
-	else:
-		material.albedo_color = default_color
-
-	mesh_instance.material_override = material
+	mesh_instance.material_override = _build_ground_material()
 
 	# Create collision shape - MUCH larger to catch falling dice
 	# Top surface at y=0 (same as visual mesh)
@@ -85,6 +79,47 @@ func setup_table(size_feet: Vector2) -> void:
 	_create_table_border(size_meters)
 
 	print("Table setup: %.1fx%.1f feet (%.2fx%.2f meters)" % [size_feet.x, size_feet.y, size_meters.x, size_meters.y])
+
+
+## Build the play-surface material: macro battlefield mat + tiled procedural micro-relief
+## (anisotropic mipmaps + a seamless detail normal/height so it stays crisp up close).
+func _build_ground_material() -> Material:
+	if not _default_texture:
+		var fallback := StandardMaterial3D.new()
+		fallback.albedo_color = default_color
+		fallback.roughness = 0.9
+		fallback.metallic = 0.0
+		return fallback
+
+	var mat := ShaderMaterial.new()
+	mat.shader = GROUND_SHADER
+	mat.set_shader_parameter("albedo_tex", _default_texture)
+	mat.set_shader_parameter("detail_normal", _make_detail_noise(true))
+	mat.set_shader_parameter("detail_height", _make_detail_noise(false))
+	mat.set_shader_parameter("detail_tiling", DETAIL_TILING)
+	mat.set_shader_parameter("detail_normal_strength", 0.35)
+	mat.set_shader_parameter("detail_albedo_strength", 0.12)
+	mat.set_shader_parameter("roughness_value", 0.9)
+	return mat
+
+
+## Generate a seamless tiling noise texture for ground micro-detail. As a normal map
+## when `as_normal` is true (surface relief), otherwise a height field (albedo variation).
+func _make_detail_noise(as_normal: bool) -> NoiseTexture2D:
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.frequency = 0.05 if as_normal else 0.035
+	noise.fractal_octaves = 4
+
+	var tex := NoiseTexture2D.new()
+	tex.width = DETAIL_NOISE_SIZE
+	tex.height = DETAIL_NOISE_SIZE
+	tex.seamless = true
+	tex.noise = noise
+	if as_normal:
+		tex.as_normal_map = true
+		tex.bump_strength = 6.0
+	return tex
 
 
 func _create_table_border(size_meters: Vector2) -> void:
