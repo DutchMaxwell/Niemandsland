@@ -248,10 +248,13 @@ func apply_environment_settings(settings: Dictionary) -> void:
 	# SSR
 	env.ssr_enabled = settings["ssr"]
 
-	# SDFGI
-	if settings.get("sdfgi", false):
+	# --- Tier-gated atmosphere / GI (centralised so all 5 presets stay consistent) ---
+	var tier: int = current_preset
+
+	# SDFGI: realtime bounce GI — ULTRA only (expensive; can shimmer on small minis).
+	if tier == QualityPreset.ULTRA:
 		env.sdfgi_enabled = true
-		env.sdfgi_cascades = settings.get("sdfgi_cascades", 4)
+		env.sdfgi_cascades = 4
 		env.sdfgi_use_occlusion = true
 		env.sdfgi_read_sky_light = true
 		env.sdfgi_bounce_feedback = 0.5
@@ -260,12 +263,27 @@ func apply_environment_settings(settings: Dictionary) -> void:
 	else:
 		env.sdfgi_enabled = false
 
-	# Volumetric Fog
-	env.volumetric_fog_enabled = settings.get("volumetric_fog", false)
+	# Distance/aerial fog (atmospheric depth) — MEDIUM and up.
+	env.fog_enabled = tier >= QualityPreset.MEDIUM
+	if env.fog_enabled:
+		env.fog_density = 0.004
+		env.fog_aerial_perspective = 0.35
+		env.fog_sky_affect = 0.2
+
+	# Volumetric ground fog — MEDIUM(light) .. ULTRA(dense). FogVolume pockets add local
+	# variation on top (Phase 4).
+	env.volumetric_fog_enabled = tier >= QualityPreset.MEDIUM
 	if env.volumetric_fog_enabled:
-		env.volumetric_fog_density = 0.01
-		env.volumetric_fog_albedo = Color(0.9, 0.9, 1.0)
+		env.volumetric_fog_density = 0.014 if tier == QualityPreset.MEDIUM else (0.022 if tier == QualityPreset.ULTRA else 0.018)
+		env.volumetric_fog_albedo = Color(0.84, 0.82, 0.8)
+		env.volumetric_fog_emission = Color(0.04, 0.045, 0.06)
+		env.volumetric_fog_emission_energy = 0.4
 		env.volumetric_fog_gi_inject = 0.5
+		env.volumetric_fog_ambient_inject = 0.4
+
+	# Auto-exposure (CameraAttributesPractical on the WorldEnvironment) — LOW and up.
+	if world_env.camera_attributes:
+		world_env.camera_attributes.auto_exposure_enabled = tier >= QualityPreset.LOW
 
 	# Glow
 	env.glow_enabled = settings["glow"]
