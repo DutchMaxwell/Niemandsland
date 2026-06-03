@@ -66,6 +66,7 @@ func _ready() -> void:
 	var bold := HudTokens.bold_font()
 	for rtl: RichTextLabel in [unit_name_label, stats_label, weapons_label, rules_label, tokens_label]:
 		rtl.add_theme_font_override("bold_font", bold)
+	unit_name_label.add_theme_font_size_override("bold_font_size", 22)  # larger, prominent unit name
 
 	# Make sure all children ignore mouse
 	_set_mouse_ignore_recursive(self)

@@ -959,7 +959,7 @@ func has_line_of_sight(from_pos: Vector3, to_pos: Vector3, from_height: int, to_
 func _terrain_effect_label(terrain_type: int) -> String:
 	match terrain_type:
 		TerrainType.RUINS:
-			return "Ruins\nHeight 5\nCover, Impassable, Blocks LoS"
+			return "Ruins\nHeight 5\nCover, Blocks LoS"
 		TerrainType.FOREST:
 			return "Forest\nHeight 5\nDifficult, Cover, Blocks LoS"
 		TerrainType.CONTAINER:
@@ -1019,15 +1019,17 @@ func _rebuild_terrain_labels(cells_data: Dictionary, grid_dims: Vector2i, cell_s
 		for c in cells:
 			min_cell.x = minf(min_cell.x, float(c.x))
 			min_cell.y = minf(min_cell.y, float(c.y))
-		var corner := _cell_to_world(min_cell.x - 0.5, min_cell.y - 0.5, grid_dims, cell_size, rotation_rad)
+		# Anchor just OUTSIDE the zone's near corner (on the bare table) so the ruin
+		# walls / standing props never cover the text; centred there.
+		var corner := _cell_to_world(min_cell.x - 1.0, min_cell.y - 1.0, grid_dims, cell_size, rotation_rad)
 		var lbl := Label3D.new()
 		lbl.name = "TerrainLabel"
 		lbl.text = text
 		lbl.billboard = BaseMaterial3D.BILLBOARD_DISABLED  # lie flat on the terrain, not floating
 		lbl.font_size = 20
 		lbl.outline_size = 5
-		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		lbl.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		lbl.modulate = Color.WHITE
 		lbl.outline_modulate = Color(0.03, 0.03, 0.03, 0.95)
 		lbl.pixel_size = 0.0003  # much smaller (~6 mm per line)
