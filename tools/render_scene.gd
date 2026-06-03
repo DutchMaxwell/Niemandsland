@@ -24,11 +24,13 @@ func _run() -> void:
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	get_tree().root.add_child(vp)
 
-	# Pull the Environment + lights out of main.tscn without running Main._ready().
+	# Pull the Environment + lights + the real Table out of main.tscn without running
+	# Main._ready() (instantiate() does not run _ready; only tree-entry does).
 	var main: Node = load("res://scenes/main.tscn").instantiate()
 	var world_env := main.get_node_or_null("WorldEnvironment") as WorldEnvironment
 	var sun := main.get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	var fill := main.get_node_or_null("FillLight") as DirectionalLight3D
+	var table := main.get_node_or_null("Table")
 	if world_env:
 		main.remove_child(world_env)
 		vp.add_child(world_env)
@@ -38,6 +40,10 @@ func _run() -> void:
 	if fill:
 		main.remove_child(fill)
 		vp.add_child(fill)
+	if table:
+		main.remove_child(table)
+		vp.add_child(table)  # Table._ready runs here -> loads the mat texture
+		table.setup_table(Vector2(4, 4))  # real ground material (Phase 2)
 	main.free()
 
 	# Replicate the runtime lighting (LightingController "Default" overrides ambient/exposure/
@@ -47,17 +53,6 @@ func _run() -> void:
 		add_child(lc)
 		lc.initialize(sun, world_env, fill)
 		lc.apply_preset("Default")
-
-	# Ground placeholder (Phase 2 brings the real PBR surface).
-	var ground := MeshInstance3D.new()
-	var pm := PlaneMesh.new()
-	pm.size = Vector2(1.5, 1.5)
-	ground.mesh = pm
-	var gmat := StandardMaterial3D.new()
-	gmat.albedo_color = Color(0.32, 0.29, 0.25)
-	gmat.roughness = 0.92
-	ground.material_override = gmat
-	vp.add_child(ground)
 
 	# Stand-in minis for scale / contrast (a small cluster near the centre so they read).
 	for cell in [Vector2(-0.18, -0.1), Vector2(-0.06, 0.04), Vector2(0.06, -0.04), Vector2(0.18, 0.1)]:
@@ -77,7 +72,7 @@ func _run() -> void:
 	var cam := Camera3D.new()
 	cam.fov = 50.0
 	vp.add_child(cam)
-	cam.look_at_from_position(Vector3(0.0, 0.52, 0.7), Vector3(0.0, 0.0, 0.0), Vector3.UP)
+	cam.look_at_from_position(Vector3(0.0, 0.3, 0.52), Vector3(0.0, 0.0, -0.05), Vector3.UP)
 
 	for _i in range(60):
 		await get_tree().process_frame
