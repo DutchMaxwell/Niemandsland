@@ -1,6 +1,7 @@
-[gd_scene load_steps=14 format=3 uid="uid://main001"]
+[gd_scene load_steps=15 format=3 uid="uid://main001"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="Shader" path="res://shaders/space_skybox.gdshader" id="10_spacesky"]
 [ext_resource type="Script" path="res://scripts/camera_controller.gd" id="2_camera"]
 [ext_resource type="Script" path="res://scripts/table.gd" id="3_table"]
 [ext_resource type="Script" path="res://scripts/object_manager.gd" id="4_objmgr"]
@@ -24,19 +25,11 @@ corner_radius_bottom_left = 6
 shadow_size = 4
 shadow_color = Color(0, 0, 0, 0.5)
 
-[sub_resource type="PhysicalSkyMaterial" id="PhysicalSky_1"]
-rayleigh_coefficient = 2.2
-rayleigh_color = Color(0.26, 0.41, 0.58, 1)
-mie_coefficient = 0.0059
-mie_eccentricity = 0.8
-mie_color = Color(0.63, 0.77, 0.92, 1)
-turbidity = 6.0
-sun_disk_scale = 1.0
-ground_color = Color(0.42, 0.44, 0.47, 1)
-energy_multiplier = 1.0
+[sub_resource type="ShaderMaterial" id="SpaceSky_1"]
+shader = ExtResource("10_spacesky")
 
 [sub_resource type="Sky" id="Sky_1"]
-sky_material = SubResource("PhysicalSky_1")
+sky_material = SubResource("SpaceSky_1")
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributes_1"]
 auto_exposure_enabled = false

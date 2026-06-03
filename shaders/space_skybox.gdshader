@@ -1,116 +1,143 @@
 shader_type sky;
+render_mode use_debanding;
+// Upgraded cosmos backdrop for the tabletop: deep-space gradient, FBM nebulae,
+// multi-layer twinkling starfield, a bright star/sun aligned to the scene's
+// DirectionalLight (LIGHT0), and a few distant lit planets. Procedural — no assets.
 
-// Space skybox shader with animated twinkling stars
-// Creates an immersive cosmos around the play area
+// === Deep space + nebula ===
+uniform vec3 horizon_color : source_color = vec3(0.018, 0.022, 0.045);
+uniform vec3 zenith_color : source_color = vec3(0.004, 0.005, 0.012);
+uniform vec3 nebula_color_a : source_color = vec3(0.16, 0.05, 0.28);
+uniform vec3 nebula_color_b : source_color = vec3(0.02, 0.12, 0.20);
+uniform float nebula_intensity : hint_range(0.0, 3.0) = 1.4;
+uniform float nebula_scale = 1.7;
 
-uniform vec3 deep_space_color : source_color = vec3(0.01, 0.01, 0.04);
-uniform vec3 nebula_color_1 : source_color = vec3(0.08, 0.02, 0.15);
-uniform vec3 nebula_color_2 : source_color = vec3(0.02, 0.08, 0.12);
-uniform float star_density : hint_range(0.0, 1.0) = 0.5;
-uniform float star_brightness : hint_range(0.0, 3.0) = 1.5;
-uniform float twinkle_speed : hint_range(0.0, 5.0) = 1.2;
-uniform float nebula_intensity : hint_range(0.0, 1.0) = 0.25;
+// === Stars ===
+uniform float star_density : hint_range(0.0, 1.0) = 0.6;
+uniform float star_brightness : hint_range(0.0, 8.0) = 3.5;
+uniform float twinkle_speed : hint_range(0.0, 5.0) = 1.0;
 
-// Hash functions for pseudo-random star placement
-float hash(vec3 p) {
-    p = fract(p * vec3(443.897, 441.423, 437.195));
-    p += dot(p, p.yzx + 19.19);
-    return fract((p.x + p.y) * p.z);
+// === Star / sun corona (drawn at the DirectionalLight direction) ===
+uniform vec3 sun_color : source_color = vec3(1.0, 0.93, 0.82);
+uniform float sun_size : hint_range(0.0, 0.2) = 0.02;
+uniform float sun_glow : hint_range(0.0, 6.0) = 2.2;
+
+// === Distant planets ===
+uniform vec3 planet1_dir = vec3(-0.55, 0.18, -0.82);
+uniform float planet1_size : hint_range(0.0, 0.6) = 0.17;
+uniform vec3 planet1_color : source_color = vec3(0.55, 0.40, 0.26);
+uniform vec3 planet2_dir = vec3(0.7, 0.42, 0.58);
+uniform float planet2_size : hint_range(0.0, 0.6) = 0.085;
+uniform vec3 planet2_color : source_color = vec3(0.32, 0.50, 0.62);
+
+// === Noise ===
+float hash13(vec3 p) {
+	p = fract(p * vec3(443.897, 441.423, 437.195));
+	p += dot(p, p.yzx + 19.19);
+	return fract((p.x + p.y) * p.z);
 }
 
-float hash2(vec3 p) {
-    return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
-}
-
-// 3D Noise function for nebula
 float noise3d(vec3 p) {
-    vec3 i = floor(p);
-    vec3 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-
-    float n = mix(
-        mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x),
-            mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
-        mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
-            mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
-    return n;
+	vec3 i = floor(p);
+	vec3 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(
+		mix(mix(hash13(i), hash13(i + vec3(1, 0, 0)), f.x),
+			mix(hash13(i + vec3(0, 1, 0)), hash13(i + vec3(1, 1, 0)), f.x), f.y),
+		mix(mix(hash13(i + vec3(0, 0, 1)), hash13(i + vec3(1, 0, 1)), f.x),
+			mix(hash13(i + vec3(0, 1, 1)), hash13(i + vec3(1, 1, 1)), f.x), f.y), f.z);
 }
 
-// Fractal Brownian Motion for nebula clouds
 float fbm(vec3 p) {
-    float value = 0.0;
-    float amplitude = 0.5;
-    for (int i = 0; i < 4; i++) {
-        value += amplitude * noise3d(p);
-        p *= 2.0;
-        amplitude *= 0.5;
-    }
-    return value;
+	float v = 0.0;
+	float a = 0.5;
+	for (int i = 0; i < 5; i++) {
+		v += a * noise3d(p);
+		p *= 2.02;
+		a *= 0.5;
+	}
+	return v;
 }
 
-// Star field with twinkling
-float stars(vec3 dir, float time) {
-    float star_value = 0.0;
+// Multi-layer twinkling stars.
+vec3 starfield(vec3 dir, float time) {
+	vec3 c = vec3(0.0);
+	for (int layer = 0; layer < 3; layer++) {
+		float scale = 90.0 + float(layer) * 55.0;
+		vec3 cell = floor(dir * scale);
+		vec3 uv = fract(dir * scale);
+		float rnd = hash13(cell + float(layer) * 100.0);
+		if (rnd < star_density * (0.35 + float(layer) * 0.18)) {
+			vec3 sp = vec3(hash13(cell * 1.1), hash13(cell * 2.3), hash13(cell * 3.7)) * 0.7 + 0.15;
+			float dist = length(uv - sp);
+			float size = (0.012 + hash13(cell * 1.7) * 0.02) / (1.0 + float(layer) * 0.5);
+			float twk = 0.6 + 0.4 * sin(time * (0.3 + hash13(cell * 4.2) * twinkle_speed) + hash13(cell * 3.7) * 6.28);
+			float core = smoothstep(size, 0.0, dist);
+			float glow = smoothstep(size * 4.0, 0.0, dist) * 0.4;
+			vec3 tint = mix(vec3(0.8, 0.85, 1.0), vec3(1.0, 0.9, 0.75), hash13(cell * 5.1));
+			c += tint * (core + glow) * twk;
+		}
+	}
+	return c;
+}
 
-    // Multiple star layers for depth
-    for (int layer = 0; layer < 3; layer++) {
-        float layer_scale = 80.0 + float(layer) * 40.0;
-        vec3 grid = floor(dir * layer_scale);
-        vec3 grid_uv = fract(dir * layer_scale);
-
-        float rand = hash(grid + float(layer) * 100.0);
-
-        if (rand < star_density * (0.4 + float(layer) * 0.2)) {
-            vec3 star_pos = vec3(hash(grid * 1.1), hash(grid * 2.3), hash(grid * 3.7)) * 0.8 + 0.1;
-            float dist = length(grid_uv - star_pos);
-
-            float star_size = 0.015 + hash2(grid) * 0.025;
-            star_size /= (1.0 + float(layer) * 0.4);
-
-            // Twinkle effect
-            float twinkle_phase = hash(grid * 3.7) * 6.28;
-            float twinkle_rate = 0.3 + hash(grid * 4.2) * twinkle_speed;
-            float twinkle = 0.6 + 0.4 * sin(time * twinkle_rate + twinkle_phase);
-
-            float twinkle_amount = hash(grid * 5.1);
-            twinkle = mix(1.0, twinkle, twinkle_amount * 0.7);
-
-            float glow = smoothstep(star_size * 4.0, 0.0, dist);
-            float core = smoothstep(star_size, 0.0, dist);
-
-            float brightness = (glow * 0.2 + core * 0.8) * twinkle;
-            brightness *= (0.6 + float(2 - layer) * 0.2);
-
-            star_value += brightness;
-        }
-    }
-
-    return star_value * star_brightness;
+// A distant lit planet rendered as a shaded disc.
+vec3 planet(vec3 col, vec3 dir, vec3 pdir, float psize, vec3 pcol, vec3 sundir) {
+	pdir = normalize(pdir);
+	float d = dot(dir, pdir);
+	float edge = cos(psize);
+	if (d < edge) {
+		return col;
+	}
+	vec3 right = normalize(cross(pdir, vec3(0.0, 1.0, 0.0)));
+	vec3 up = cross(right, pdir);
+	float ang = acos(clamp(d, -1.0, 1.0)) / psize;       // 0 centre .. 1 rim
+	vec2 off = vec2(dot(dir, right), dot(dir, up));
+	off = (length(off) > 1e-5) ? normalize(off) * ang : vec2(0.0);
+	float r = clamp(length(off), 0.0, 1.0);
+	float z = sqrt(max(0.0, 1.0 - r * r));
+	vec3 n = normalize(right * off.x + up * off.y + pdir * z);
+	float ndl = clamp(dot(n, sundir), 0.0, 1.0);
+	float surf = fbm(n * 5.0) * 0.5 + 0.7;               // banding / continents
+	vec3 surface = pcol * surf;
+	vec3 lit = surface * (ndl * 1.25 + 0.03);            // day side + faint night
+	float rim = pow(1.0 - z, 2.0) * pow(ndl, 0.4);       // lit atmosphere rim
+	lit += pcol * 0.35 * rim;
+	float aa = smoothstep(edge, mix(edge, 1.0, 0.04), d);
+	return mix(col, lit, aa);
 }
 
 void sky() {
-    vec3 dir = EYEDIR;
+	vec3 dir = EYEDIR;
 
-    // Deep space base color
-    vec3 color = deep_space_color;
+	// Background gradient by elevation.
+	float up = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
+	vec3 col = mix(horizon_color, zenith_color, up);
 
-    // Add nebula clouds using direction as 3D coordinates
-    float nebula1 = fbm(dir * 2.0 + vec3(TIME * 0.005, 0.0, 0.0));
-    float nebula2 = fbm(dir * 1.5 + vec3(0.0, TIME * 0.003, 0.0));
+	// Nebula clouds.
+	float n = fbm(dir * nebula_scale + vec3(11.0, 5.0, 23.0));
+	float n2 = fbm(dir * nebula_scale * 2.3 + vec3(47.0));
+	float mask = pow(clamp(n, 0.0, 1.0), 1.6);
+	col += mix(nebula_color_a, nebula_color_b, n2) * mask * nebula_intensity;
 
-    vec3 nebula = mix(nebula_color_1, nebula_color_2, nebula1);
-    nebula *= nebula2 * nebula_intensity;
-    color += nebula;
+	// Stars.
+	col += starfield(dir, TIME) * star_brightness;
 
-    // Add stars
-    float star_val = stars(dir, TIME);
-    vec3 star_color = vec3(0.95, 0.97, 1.0);
-    color += star_color * star_val;
+	// Sun / star + planets, aligned to the scene's directional light.
+	vec3 sun_pos = vec3(0.4, 0.7, 0.55);                 // fallback if no light
+	if (LIGHT0_ENABLED) {
+		sun_pos = -LIGHT0_DIRECTION;                     // direction TO the star
+	}
+	vec3 sundir = normalize(sun_pos);
 
-    // Slight horizon glow (optional - for atmosphere feel)
-    float horizon = 1.0 - abs(dir.y);
-    horizon = pow(horizon, 8.0) * 0.1;
-    color += vec3(0.1, 0.15, 0.2) * horizon;
+	col = planet(col, dir, planet1_dir, planet1_size, planet1_color, sundir);
+	col = planet(col, dir, planet2_dir, planet2_size, planet2_color, sundir);
 
-    COLOR = color;
+	// Star disc + corona glow.
+	float s = clamp(dot(dir, sundir), 0.0, 1.0);
+	float disc = smoothstep(cos(sun_size), cos(sun_size * 0.4), s);
+	float glow = pow(s, 220.0) * 0.5 + pow(s, 24.0) * 0.18;
+	col += sun_color * (disc * 6.0 + glow * sun_glow);
+
+	COLOR = col;
 }
