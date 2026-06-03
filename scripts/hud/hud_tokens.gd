@@ -66,13 +66,12 @@ static func body_font() -> FontFile:
 static func mono_font() -> FontFile:
 	return load(FONT_DIR + "SourceCodePro.ttf")
 
-## Real bold via the Inter weight axis — avoids faux-bold (which doubles/frays at small
-## sizes). Use as the RichTextLabel "bold_font" so every [b] renders crisp.
-static func bold_font() -> FontVariation:
-	var fv := FontVariation.new()
-	fv.base_font = body_font()
-	fv.variation_opentype = {"wght": 700}
-	return fv
+## Bold face for [b] text. Inter ships here as a single static weight (no usable variable
+## axis), so faux-bold frays and a FontVariation can't add weight — use the Orbitron
+## display face instead: real heavy glyphs, crisp at any size (MSDF). Use as the
+## RichTextLabel "bold_font".
+static func bold_font() -> Font:
+	return head_font()
 
 
 # ===== StyleBoxes =====
