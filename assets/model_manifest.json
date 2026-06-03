@@ -1,5 +1,111 @@
 {
   "version": 1,
-  "base_url": "",
-  "models": {}
+  "base_url": "https://<legacy-cdn-host>/",
+  "models": {
+    "battle_brothers/battle brothers": {
+      "url": "b45ecc61ffb4059d09abd95f08cac22cd84ab19b031f5e17bcc43f41fb977f14.glb",
+      "sha256": "b45ecc61ffb4059d09abd95f08cac22cd84ab19b031f5e17bcc43f41fb977f14",
+      "size": 22639816
+    },
+    "dao_union/battle suit elite": {
+      "url": "cf32e7b077f397d71dbebb84da800f5e09e71b2fd0ba26a10963877f521754e6.glb",
+      "sha256": "cf32e7b077f397d71dbebb84da800f5e09e71b2fd0ba26a10963877f521754e6",
+      "size": 4452452
+    },
+    "dao_union/grunt leader": {
+      "url": "f0e2527fe04a68b5e47a8580b32891f8a5efe9883c668d39d62caecbeea7144a.glb",
+      "sha256": "f0e2527fe04a68b5e47a8580b32891f8a5efe9883c668d39d62caecbeea7144a",
+      "size": 1991560
+    },
+    "dao_union/security grunts": {
+      "url": "0ccdbb50ba3be23acc5865785650532b2b209fe3cb03fbb4260a08aa2f0d1a38.glb",
+      "sha256": "0ccdbb50ba3be23acc5865785650532b2b209fe3cb03fbb4260a08aa2f0d1a38",
+      "size": 1791316
+    },
+    "dao_union/tactical grunts": {
+      "url": "ffc5276369d480cfba8a54484797d2b3dc78df2cc4473b26c20cf49a93c1306a.glb",
+      "sha256": "ffc5276369d480cfba8a54484797d2b3dc78df2cc4473b26c20cf49a93c1306a",
+      "size": 2117700
+    },
+    "dao_union/spotter squad": {
+      "url": "8c773cb548a32e7410f65e81a09ca02e5b25250ce1bc419eac572aaac98015ca.glb",
+      "sha256": "8c773cb548a32e7410f65e81a09ca02e5b25250ce1bc419eac572aaac98015ca",
+      "size": 1911780
+    },
+    "dao_union/stealth suits": {
+      "url": "771cd856633490a568331d10a340e0227b94d270063b9521753bb4576975ce75.glb",
+      "sha256": "771cd856633490a568331d10a340e0227b94d270063b9521753bb4576975ce75",
+      "size": 2291204
+    },
+    "dao_union/battle suits": {
+      "url": "ffd3f971890e42948d511966482db07df5fabfcfb6c1741762ec7262203c54b3.glb",
+      "sha256": "ffd3f971890e42948d511966482db07df5fabfcfb6c1741762ec7262203c54b3",
+      "size": 2441544
+    },
+    "dao_union/gun drones": {
+      "url": "10984fa493dfb7313f65e5c4364fcd968a7bff7cdb13f261565d1a604697b6ac.glb",
+      "sha256": "10984fa493dfb7313f65e5c4364fcd968a7bff7cdb13f261565d1a604697b6ac",
+      "size": 2801328
+    },
+    "dao_union/sniper drones": {
+      "url": "5b2f509d923b87a4eb52094ecc033960d3cda2e9702783c967777aca2fbaa57c.glb",
+      "sha256": "5b2f509d923b87a4eb52094ecc033960d3cda2e9702783c967777aca2fbaa57c",
+      "size": 1310616
+    },
+    "dao_union/hover transport": {
+      "url": "d05a5427d9594d33f1a1336e617ca7d6ffcfcdbd675b43bf3c789a9b8abd4803.glb",
+      "sha256": "d05a5427d9594d33f1a1336e617ca7d6ffcfcdbd675b43bf3c789a9b8abd4803",
+      "size": 4770732
+    },
+    "dao_union/hover attack bike": {
+      "url": "c261deab4f25613fec0e7c0f53a79efec86685b3e366cfdf00ef9d048163c91e.glb",
+      "sha256": "c261deab4f25613fec0e7c0f53a79efec86685b3e366cfdf00ef9d048163c91e",
+      "size": 2869748
+    },
+    "dao_union/hover tank": {
+      "url": "80dbf44b7241f83da23b6e212c9c81fe412d8b6ae06f7173e5b851c1ee204474.glb",
+      "sha256": "80dbf44b7241f83da23b6e212c9c81fe412d8b6ae06f7173e5b851c1ee204474",
+      "size": 5326428
+    },
+    "dao_union/heavy battle suit": {
+      "url": "4c286ad07103e2593b7ba2d4dc4b113b574f08035dde92355be37e2ed8a59d1c.glb",
+      "sha256": "4c286ad07103e2593b7ba2d4dc4b113b574f08035dde92355be37e2ed8a59d1c",
+      "size": 1916988
+    },
+    "dao_union/heavy stealth suit": {
+      "url": "620e0c899a3654f35b5607ea957b23f7c512a0375e55397526b13d044d7d65af.glb",
+      "sha256": "620e0c899a3654f35b5607ea957b23f7c512a0375e55397526b13d044d7d65af",
+      "size": 2704328
+    },
+    "dao_union/tide titan": {
+      "url": "b13d1b080b2fafa9c6e419db945ebed60309a56ded4e1fc296e70071501ac797.glb",
+      "sha256": "b13d1b080b2fafa9c6e419db945ebed60309a56ded4e1fc296e70071501ac797",
+      "size": 5960172
+    },
+    "dao_union/surge titan": {
+      "url": "cf5a74202b67744fa877e347b106ba06e05265883c871d63f876681011bd52ad.glb",
+      "sha256": "cf5a74202b67744fa877e347b106ba06e05265883c871d63f876681011bd52ad",
+      "size": 7601560
+    },
+    "dao_union/razor fighter": {
+      "url": "09358d79f0280e0221a418d0a0c00f9ffac209b41867bbb59898bff8afb6e579.glb",
+      "sha256": "09358d79f0280e0221a418d0a0c00f9ffac209b41867bbb59898bff8afb6e579",
+      "size": 2311104
+    },
+    "dao_union/sun bomber": {
+      "url": "b5004164ef3bb055e5d979f4b21d343c6b5c2b42ef6b645263cd4cda1ba870eb.glb",
+      "sha256": "b5004164ef3bb055e5d979f4b21d343c6b5c2b42ef6b645263cd4cda1ba870eb",
+      "size": 2698980
+    },
+    "dao_union/hover_tank": {
+      "url": "ac23eca9382841b23711ced529fd08511b703d87fcf62ca5d28f4fe6ebccfea8.glb",
+      "sha256": "ac23eca9382841b23711ced529fd08511b703d87fcf62ca5d28f4fe6ebccfea8",
+      "size": 28794344
+    },
+    "dark_brothers/dark battle tank": {
+      "url": "ff36c2e4c9b70e1cb4665065f8a77824e028dbd347a61b040ec853d92498a318.glb",
+      "sha256": "ff36c2e4c9b70e1cb4665065f8a77824e028dbd347a61b040ec853d92498a318",
+      "size": 26114804
+    }
+  }
 }
