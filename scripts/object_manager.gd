@@ -113,6 +113,10 @@ func _ready() -> void:
 	# Get network manager reference (deferred to ensure scene is ready)
 	call_deferred("_get_network_manager")
 
+	# Rebuild selection spill lights when the graphics preset changes (a drop to a
+	# tier without the lights removes them; a raise adds/recaps them).
+	GraphicsSettings.settings_applied.connect(_on_graphics_settings_applied)
+
 
 func _get_network_manager() -> void:
 	_network_manager = get_node_or_null("/root/Main/NetworkManager")
@@ -376,58 +380,89 @@ func _update_hover(screen_pos: Vector2) -> void:
 
 
 ## Highlight a selected object with a green model glow (material_overlay), saving
-## any previous overlay per mesh so it can be restored on deselect, and cast a
-## pulsing player-coloured halo on the ground beneath it.
+## any previous overlay per mesh so it can be restored on deselect, and cast a real
+## green spill light from it onto the surrounding ground / minis / mist.
 func _highlight_object(obj: Node3D) -> void:
 	var mat := _get_selection_glow_material()
 	for mesh: MeshInstance3D in _collect_glow_meshes(obj):
 		if not mesh.has_meta("_sel_prev_overlay"):
 			mesh.set_meta("_sel_prev_overlay", mesh.material_overlay)
 		mesh.material_overlay = mat
-	_add_ground_glow(obj)
+	_add_spill_light(obj)
 
 
 ## Remove the green selection glow, restoring the previous overlay per mesh, and
-## remove the ground halo.
+## remove the spill light.
 func _unhighlight_object(obj: Node3D) -> void:
 	for mesh: MeshInstance3D in _collect_glow_meshes(obj):
 		if mesh.has_meta("_sel_prev_overlay"):
 			mesh.material_overlay = mesh.get_meta("_sel_prev_overlay")
 			mesh.remove_meta("_sel_prev_overlay")
-	_remove_ground_glow(obj)
+	_remove_spill_light(obj)
 
 
 func _collect_glow_meshes(obj: Node3D) -> Array[MeshInstance3D]:
 	var result: Array[MeshInstance3D] = []
 	for node: MeshInstance3D in obj.find_children("*", "MeshInstance3D", true, false):
-		if node.is_in_group(SelectionGroundGlow.OVERLAY_GROUP):
-			continue  # never tint the selection halo with the model overlay
 		result.append(node)
 	return result
 
 
-## Spawn the pulsing ground halo under a selected object (no-op if already present).
-func _add_ground_glow(obj: Node3D) -> void:
-	if obj.get_node_or_null(NodePath(String(SelectionGroundGlow.NODE_NAME))) != null:
+## Spawn the green spill light under a selected object. No-op if already present, if
+## spill lights are disabled for the current preset, or if the per-preset cap is hit.
+func _add_spill_light(obj: Node3D) -> void:
+	if not _spill_lights_enabled():
 		return
-	var glow := SelectionGroundGlow.new()
-	obj.add_child(glow)
-	glow.setup(_object_player_color(obj), _object_ground_radius(obj))
+	if obj.get_node_or_null(NodePath(String(SelectionSpillLight.NODE_NAME))) != null:
+		return
+	# Live count from the tree (not a manual counter) so freeing a selected object
+	# without going through deselect can't desync the cap. The green overlay still
+	# marks any mini left unlit past the cap.
+	if get_tree().get_node_count_in_group(SelectionSpillLight.GROUP) >= _spill_light_cap():
+		return
+	var light := SelectionSpillLight.new()
+	obj.add_child(light)
+	light.setup(_object_ground_radius(obj))
 
 
-## Free the ground halo under an object, if any.
-func _remove_ground_glow(obj: Node3D) -> void:
-	var glow := obj.get_node_or_null(NodePath(String(SelectionGroundGlow.NODE_NAME)))
-	if glow != null:
-		glow.queue_free()
+## Free the spill light under an object, if any. Detaches immediately (not just
+## queue_free, which defers) so a same-frame rebuild — e.g. _on_graphics_settings_applied
+## removing then re-adding — sees a clean tree/group state instead of the stale light.
+func _remove_spill_light(obj: Node3D) -> void:
+	var light := obj.get_node_or_null(NodePath(String(SelectionSpillLight.NODE_NAME)))
+	if is_instance_valid(light):
+		obj.remove_child(light)
+		light.queue_free()
 
 
-## Player colour for an object's halo, falling back to neutral for non-army selectables.
-func _object_player_color(obj: Node3D) -> Color:
-	if obj.has_meta("opr_player_id"):
-		var pid: int = int(obj.get_meta("opr_player_id"))
-		return OPRArmyManager.PLAYER_COLORS.get(pid, SelectionGroundGlow.NEUTRAL_COLOR)
-	return SelectionGroundGlow.NEUTRAL_COLOR
+## Spill lights are the premium layer: on from MEDIUM up (where glow + volumetric fog
+## are also enabled), off on PERFORMANCE/LOW/CUSTOM where FPS is the priority.
+func _spill_lights_enabled() -> bool:
+	var tier: int = GraphicsSettings.current_preset
+	return tier == GraphicsSettings.QualityPreset.MEDIUM \
+		or tier == GraphicsSettings.QualityPreset.HIGH \
+		or tier == GraphicsSettings.QualityPreset.ULTRA
+
+
+## Hard cap on concurrent spill lights, scaling with tier (conservative starts).
+func _spill_light_cap() -> int:
+	match GraphicsSettings.current_preset:
+		GraphicsSettings.QualityPreset.ULTRA:
+			return 48
+		GraphicsSettings.QualityPreset.HIGH:
+			return 24
+		_:
+			return 12
+
+
+## Rebuild spill lights on the current selection after a preset change.
+func _on_graphics_settings_applied(_preset_name: String) -> void:
+	for obj: Node3D in _selected_objects:
+		if is_instance_valid(obj):
+			_remove_spill_light(obj)
+	for obj: Node3D in _selected_objects:
+		if is_instance_valid(obj):
+			_add_spill_light(obj)
 
 
 ## Horizontal footprint radius (metres) from the object's mesh AABBs, in obj-local space.
@@ -436,8 +471,6 @@ func _object_ground_radius(obj: Node3D) -> float:
 	var have := false
 	var inv := obj.global_transform.affine_inverse()
 	for node: MeshInstance3D in obj.find_children("*", "MeshInstance3D", true, false):
-		if node.is_in_group(SelectionGroundGlow.OVERLAY_GROUP):
-			continue
 		var local_aabb := (inv * node.global_transform) * node.get_aabb()
 		if have:
 			merged = merged.merge(local_aabb)
@@ -451,12 +484,13 @@ func _object_ground_radius(obj: Node3D) -> float:
 
 func _get_selection_glow_material() -> StandardMaterial3D:
 	if _selection_glow_material == null:
+		var green := SelectionSpillLight.GREEN_SELECTION
 		var mat := StandardMaterial3D.new()
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		mat.albedo_color = Color(0.25, 1.0, 0.4, 0.4)
+		mat.albedo_color = Color(green.r, green.g, green.b, 0.4)
 		mat.emission_enabled = true
-		mat.emission = Color(0.25, 1.0, 0.4)
+		mat.emission = green
 		mat.emission_energy_multiplier = 2.0
 		mat.grow = true
 		mat.grow_amount = 0.003
