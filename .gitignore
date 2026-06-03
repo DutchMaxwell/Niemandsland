@@ -68,6 +68,7 @@ __pycache__/
 .auto-claude/
 .hf_token
 .gemini_key
+.r2_credentials
 .trellis_space
 
 # Model Forge artifacts (GLB-Optimizer-Backups, Gallery-Montagen)

@@ -57,12 +57,20 @@ Army import (OPR API)  →  unit list
 
 ## Hosting
 
-- **Chosen: GitHub Releases.** Free, CDN-backed, files up to 2 GB, permissive CORS
-  (browser-friendly), **no egress/traffic cost**. Publish GLBs (content-addressed)
-  as release assets; the manifest can live in the repo or the release.
-- **If it ever outgrows that: Cloudflare R2** (free egress, cheap storage,
-  S3-compatible, configurable CORS). Avoid serving large assets from the Fly relay
-  (egress cost; couples assets to the game server).
+- **Chosen: Cloudflare R2** (public bucket behind a custom domain). Egress is always
+  free, storage is cheap ($0.015/GB-mo, 10 GB free), and it serves anonymous direct
+  **HTTP 200** GETs (no redirect chain) at stable, content-addressed URLs
+  (`https://assets.<domain>/<sha256>.glb`) — so the client fetches with a one-line
+  `base_url` change and zero new code. The default `r2.dev` URL is dev-only/rate-limited;
+  production needs a custom domain on Cloudflare DNS. Upload via
+  `publish_manifest.py --upload-r2` (boto3 / S3 API; build-machine-only credentials in
+  `.r2_credentials`, git-ignored — the public bucket needs no key in the client).
+- **Quick/free alternative: GitHub Releases** on a dedicated PUBLIC assets repo
+  (`--upload`). Zero-config, but only fair-use tolerance (history of account-wide
+  "503 egress over limit", 2025 anon rate-limits, 1000-assets/tag cap) — fine for a
+  prototype, fragile as a player-facing CDN.
+- **Licensing gate (host-independent):** anonymous public URLs = public redistribution.
+  Only publish models you are cleared to redistribute. See `PRE_RELEASE_LICENSING.md`.
 
 ## Migration path (incremental, low-risk)
 
@@ -81,15 +89,27 @@ Army import (OPR API)  →  unit list
 
 Step-by-step runbook: [`runbooks/asset-release.md`](runbooks/asset-release.md).
 
+**Cloudflare R2 (chosen).** One-time: create an R2 bucket, attach a custom domain, make
+a build-only API token; put the creds in `tools/model_forge/.r2_credentials` (see
+`.r2_credentials.example`). Then:
+
 ```bash
 cd tools/model_forge
+python publish_manifest.py ../../assets/miniatures ../../assets/model_manifest.json \
+  --base-url https://assets.<domain>/ \
+  --upload-r2 --bucket <bucket> --endpoint https://<account-id>.r2.cloudflarestorage.com
+```
+
+**GitHub Releases (quick alternative):**
+
+```bash
 python publish_manifest.py ../../assets/miniatures ../../assets/model_manifest.json \
   --base-url https://github.com/<owner>/<repo>/releases/download/<tag>/ \
   --upload --tag <tag> --repo <owner>/<repo>      # needs `gh` + an existing release tag
 ```
 
-Commit the regenerated `assets/model_manifest.json`. The game then downloads each
-needed GLB from the release on first use and caches it in `user://model_cache/`.
+Commit the regenerated `assets/model_manifest.json` only when going live. The game then
+downloads each needed GLB on first use and caches it in `user://model_cache/`.
 
 ## Web / HTML5 notes
 
