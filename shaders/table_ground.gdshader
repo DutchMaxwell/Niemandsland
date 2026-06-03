@@ -1,21 +1,22 @@
 shader_type spatial;
 render_mode cull_back, diffuse_burley, specular_schlick_ggx;
 
-// Macro battlefield mat (one stretched copy across the table — it is a one-off
-// painted scene, not a tileable material, so UV1 stays 0..1).
-uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic;
+// Tileable biome battlemap, repeated several times across the table so the surface
+// stays high-resolution and crisp up close instead of magnifying one stretched copy.
+uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 // Seamless procedural micro-relief, tiled densely so the surface keeps crisp
 // detail at any zoom instead of magnifying the soft mat texels.
 uniform sampler2D detail_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D detail_height : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
 
+uniform float macro_tiling = 3.0;
 uniform float detail_tiling = 28.0;
 uniform float detail_normal_strength : hint_range(0.0, 1.0) = 0.35;
 uniform float detail_albedo_strength : hint_range(0.0, 0.5) = 0.12;
 uniform float roughness_value : hint_range(0.0, 1.0) = 0.9;
 
 void fragment() {
-	vec3 base = texture(albedo_tex, UV).rgb;
+	vec3 base = texture(albedo_tex, UV * macro_tiling).rgb;
 
 	// Micro colour variation keeps the ground from reading as a flat blur up close.
 	vec2 duv = UV * detail_tiling;

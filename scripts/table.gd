@@ -15,12 +15,27 @@ var table_size: Vector2 = Vector2(4, 4)  # In feet, will be converted to meters
 const FEET_TO_METERS: float = 0.3048  # 1 foot = 0.3048 meters
 const INCHES_TO_METERS: float = 0.0254  # 1 inch = 0.0254 meters
 
-# Crisp ground: the battlefield mat is a one-off painted scene (not tileable), so it
-# stays stretched 1:1 over the table while a densely-tiled, seamless procedural
-# micro-relief keeps the surface sharp at close zoom instead of magnifying soft texels.
+# Crisp ground: the biome battlemaps are seamless tileable textures, so they are
+# repeated MACRO_TILING times across the table for high effective resolution, with a
+# densely-tiled procedural micro-relief on top for close-up surface detail.
 const GROUND_SHADER: Shader = preload("res://shaders/table_ground.gdshader")
+const MACRO_TILING: float = 3.0
 const DETAIL_TILING: float = 28.0
 const DETAIL_NOISE_SIZE: int = 512
+
+# Nano-Banana biome battlemaps (assets/terrain/biomes/). The standard map is the default.
+const DEFAULT_BIOME: String = "temperate_grassland"
+const BIOME_TEXTURES: Dictionary = {
+	"temperate_grassland": "res://assets/terrain/biomes/temperate_grassland.png",
+	"arid_desert": "res://assets/terrain/biomes/arid_desert.png",
+	"frozen_tundra": "res://assets/terrain/biomes/frozen_tundra.png",
+	"volcanic_ash": "res://assets/terrain/biomes/volcanic_ash.png",
+	"alien_jungle": "res://assets/terrain/biomes/alien_jungle.png",
+	"urban_ruins": "res://assets/terrain/biomes/urban_ruins.png",
+}
+
+## Currently selected biome (key into BIOME_TEXTURES).
+var biome: String = DEFAULT_BIOME
 
 @onready var mesh_instance: MeshInstance3D = $TableMesh
 @onready var collision_shape: CollisionShape3D = $TableCollision
@@ -39,9 +54,8 @@ func _ready() -> void:
 	table_physics.bounce = 0.1  # Very low bounce
 	physics_material_override = table_physics
 
-	# Load default table texture
-	if ResourceLoader.exists(default_texture_path):
-		_default_texture = load(default_texture_path)
+	# Load the selected biome battlemap (falls back to the legacy mat if missing).
+	_load_biome_texture()
 
 
 ## Setup table with given size in feet
@@ -94,6 +108,7 @@ func _build_ground_material() -> Material:
 	var mat := ShaderMaterial.new()
 	mat.shader = GROUND_SHADER
 	mat.set_shader_parameter("albedo_tex", _default_texture)
+	mat.set_shader_parameter("macro_tiling", MACRO_TILING)
 	mat.set_shader_parameter("detail_normal", _make_detail_noise(true))
 	mat.set_shader_parameter("detail_height", _make_detail_noise(false))
 	mat.set_shader_parameter("detail_tiling", DETAIL_TILING)
@@ -101,6 +116,29 @@ func _build_ground_material() -> Material:
 	mat.set_shader_parameter("detail_albedo_strength", 0.12)
 	mat.set_shader_parameter("roughness_value", 0.9)
 	return mat
+
+
+## Load the current biome's battlemap into _default_texture (legacy mat as fallback).
+func _load_biome_texture() -> void:
+	var path: String = BIOME_TEXTURES.get(biome, "")
+	if path.is_empty() or not ResourceLoader.exists(path):
+		path = default_texture_path
+	_default_texture = load(path) if ResourceLoader.exists(path) else null
+
+
+## Switch the play-surface biome (key into BIOME_TEXTURES) and rebuild the material.
+func set_biome(biome_name: String) -> void:
+	if not BIOME_TEXTURES.has(biome_name):
+		push_warning("Unknown biome '%s' (known: %s)" % [biome_name, ", ".join(BIOME_TEXTURES.keys())])
+		return
+	biome = biome_name
+	_load_biome_texture()
+	mesh_instance.material_override = _build_ground_material()
+
+
+## Available biome keys (for a selection UI).
+func get_biomes() -> Array:
+	return BIOME_TEXTURES.keys()
 
 
 ## Generate a seamless tiling noise texture for ground micro-detail. As a normal map
