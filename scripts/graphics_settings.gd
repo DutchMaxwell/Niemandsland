@@ -153,6 +153,8 @@ func _apply_window_constraints() -> void:
 	var window := get_window()
 	if window:
 		window.min_size = MIN_WINDOW_SIZE
+	# Cap the frame rate so the non-blocking MAILBOX present mode doesn't render uncapped.
+	Engine.max_fps = 120
 	apply_ui_scale(ui_scale)
 	# Apply the persisted fullscreen choice (default on). Driven here rather than at the
 	# engine level so unticking it actually persists to a windowed start (needed for OBS).
@@ -160,10 +162,18 @@ func _apply_window_constraints() -> void:
 
 
 ## Toggle borderless fullscreen (safe MODE_FULLSCREEN, never EXCLUSIVE). Persisted.
+## In fullscreen we use a NON-blocking present mode (MAILBOX): with blocking FIFO vsync, an
+## OBS screen capture perturbing NVIDIA's page-flip makes vkAcquireNextImageKHR block, which
+## stalls the whole main loop and freezes the (Tween-driven) cinematic intro while recording
+## (Godot #105583 / #80550). MAILBOX never blocks, so the loop keeps running during capture.
 func apply_fullscreen(on: bool) -> void:
 	fullscreen = on
-	DisplayServer.window_set_mode(
-		DisplayServer.WINDOW_MODE_FULLSCREEN if on else DisplayServer.WINDOW_MODE_WINDOWED)
+	if on:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_MAILBOX)
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
 	save_settings()
 
 
