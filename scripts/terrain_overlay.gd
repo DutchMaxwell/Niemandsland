@@ -1005,7 +1005,7 @@ func _cell_to_world(cell_x: float, cell_y: float, grid_dims: Vector2i, cell_size
 ## (Re)build one always-visible effect label per terrain zone, floating above the
 ## zone centre. Derived purely from terrain data, so no save/network sync needed.
 func _rebuild_terrain_labels(cells_data: Dictionary, grid_dims: Vector2i, cell_size: float, rotation_rad: float) -> void:
-	const LABEL_Y := 0.12  # metres above the table, clear of the standing 3D props
+	const LABEL_Y := 0.006  # metres above the terrain plane — lies flat, clear of z-fighting
 	_clear_terrain_labels()
 	for zone in _terrain_zones(cells_data):
 		var ttype: int = zone["type"]
@@ -1023,15 +1023,16 @@ func _rebuild_terrain_labels(cells_data: Dictionary, grid_dims: Vector2i, cell_s
 		var lbl := Label3D.new()
 		lbl.name = "TerrainLabel"
 		lbl.text = text
-		lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		lbl.font_size = 22  # small
-		lbl.outline_size = 6
-		lbl.line_spacing = 0.0
+		lbl.billboard = BaseMaterial3D.BILLBOARD_DISABLED  # lie flat on the terrain, not floating
+		lbl.font_size = 20
+		lbl.outline_size = 5
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		lbl.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 		lbl.modulate = Color.WHITE
-		lbl.outline_modulate = Color(0.03, 0.03, 0.03, 0.9)
-		lbl.pixel_size = 0.00055  # small physical size (~1.2 cm per line)
+		lbl.outline_modulate = Color(0.03, 0.03, 0.03, 0.95)
+		lbl.pixel_size = 0.0003  # much smaller (~6 mm per line)
+		# Flat on the table surface, yawed to match the grid rotation.
+		lbl.rotation_degrees = Vector3(-90.0, rad_to_deg(rotation_rad), 0.0)
 		lbl.position = Vector3(corner.x, LABEL_Y, corner.z)
 		add_child(lbl)
 		_terrain_labels.append(lbl)
