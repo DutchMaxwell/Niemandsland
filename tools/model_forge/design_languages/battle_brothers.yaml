@@ -1,33 +1,44 @@
 # =============================================================================
 # Battle Brothers - Design Language
 # =============================================================================
-# Genetisch modifizierte Elite-Soldaten in schwerer Power Armor.
-# OPR-Aequivalent zu Space Marines.
-# Basiert auf: GF - Battle Brothers v3.5.2
+# Original, generic heavy-power-armour super-soldiers for Niemandsland. The GENRE
+# (armoured sci-fi infantry) is a common trope and free to use; the SPECIFIC
+# Games Workshop / Warhammer 40,000 trade dress is NOT. These designs are our own
+# work and are released CC-BY-SA 4.0 — keep them clearly original.
 
 faction_name: "Battle Brothers"
 
 aesthetic:
   genre: "grimdark sci-fi military"
-  style: "militaristic power armor"
+  style: "heavy original power armour"
   inspiration:
-    - "Futuristic heavy power armor soldiers"
-    - "Clone army super-soldiers"
-    - "Medieval knight crusader aesthetics fused with sci-fi technology"
+    - "Futuristic heavy power-armour soldiers (generic sci-fi trope)"
+    - "Augmented super-soldiers"
+    - "Medieval knight-crusader silhouettes fused with original sci-fi technology"
+  original_design_cues:
+    - "Smooth full-face visor helmet with a single horizontal glowing teal slit (not a skull or beak shape)"
+    - "Sharp TRAPEZOIDAL angular shoulder guards — NOT big round Space-Marine pauldrons"
+    - "Original chevron-and-hexagon crest emblem on the chest and shoulder"
+    - "Segmented, layered angular plate armour"
+    - "Slightly stylised, clean comic / video-game render look (crisp readable shapes, not photoreal grime)"
+  weapon_style: "an original sleek angular bullpup heavy rifle with a slim profile and a glowing teal power cell — clearly NOT a boxy magazine-fed bolter"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Space Marine chapter iconography"
-    - "Cartoon or anime proportions"
-    - "Xenos or alien features"
+    - "Games Workshop / Warhammer 40,000 designs of any kind"
+    - "Space Marine look, blue-and-gold Ultramarine colours, big round pauldrons"
+    - "Aquila / imperial double-eagle, purity seals, iron halo, skull motifs"
+    - "Boxy magazine-fed bolter-style rifles"
+    - "The terms ceramite, adamantium, bolter, Astartes, Terminator armour"
+    - "Any real-world military or franchise logos, insignia or trademarks"
+    - "Cartoon-baby or anime proportions; xenos or alien features"
 
 colors:
-  primary: "dark gunmetal blue power armor"
-  secondary: "burnished gold trim and aquila insignia"
-  accent: "deep red cloth tabards and purity seals"
+  primary: "dark slate-grey power armour"
+  secondary: "copper-bronze trim and an original angular crest emblem"
+  accent: "deep maroon cloth tabards, engraved honour plaques, and glowing teal optics"
 
 materials:
-  - "heavy ceramite power armor plating"
-  - "reinforced adamantine joints and servo-mechanisms"
+  - "heavy polymer-ceramic composite armour plating"
+  - "reinforced alloy joints and servo-mechanisms"
   - "leather and cloth tabards"
   - "glowing optic lenses on helmets"
 
@@ -70,7 +81,7 @@ unit_overrides:
   # ==========================================================================
 
   master_destroyer:
-    extra_details: "towering elite destroyer hero in massively bulky terminator-style power armor, ornate golden trim, combat shield mounted on left arm, enormous close combat weapon in right hand, heavy armor plating with extra reinforced pauldrons, teleport homer on belt, veteran kill markings across chest plate, Tough(6)"
+    extra_details: "towering elite destroyer hero in massively bulky heavy siege-class power armor, ornate golden trim, combat shield mounted on left arm, enormous close combat weapon in right hand, heavy armor plating with extra reinforced pauldrons, tactical beacon on belt, veteran kill markings across chest plate, Tough(6)"
     pose: "imposing combat stance, shield raised, close combat weapon held high"
 
     game_stats:
@@ -85,7 +96,7 @@ unit_overrides:
           range: 0
           attacks: 4
   veteran_master_brother:
-    extra_details: "veteran hero officer in decorated power armor, combat shield on left arm, gravity pistol holstered, close combat weapon drawn, veteran campaign honors on shoulder pads, iron halo or laurel wreath above helmet, cape flowing behind, officer rank insignia, Tough(3)"
+    extra_details: "veteran hero officer in decorated power armor, combat shield on left arm, gravity pistol holstered, close combat weapon drawn, veteran campaign honors on shoulder pads, crest arc or laurel wreath above helmet, cape flowing behind, officer rank insignia, Tough(3)"
     pose: "commanding combat pose, weapon ready, shield braced"
 
     game_stats:
@@ -100,7 +111,7 @@ unit_overrides:
           range: 0
           attacks: 2
   master_brother:
-    extra_details: "hero commander in ornate power armor with gold filigree, gravity pistol in one hand, close combat weapon in other, iron halo above helmet, purity seals and campaign ribbons on armor, officer rank markings, Tough(3)"
+    extra_details: "hero commander in ornate power armor with gold filigree, gravity pistol in one hand, close combat weapon in other, crest arc above helmet, honour plaques and campaign ribbons on armor, officer rank markings, Tough(3)"
     pose: "commanding pose, gravity pistol raised, pointing forward"
 
     game_stats:
@@ -161,7 +172,7 @@ unit_overrides:
           range: 0
           attacks: 2
   battle_brothers:
-    extra_details: "single standard line infantry warrior in iconic full power armor, heavy rifles with AP rounds, close combat weapons as sidearms, bolt magazine pouches, fully enclosed helmets with glowing eye lenses, chapter insignia on left pauldron"
+    extra_details: "single standard line infantry warrior in heavy slate-grey full power armour with copper-bronze trim and sharp trapezoidal shoulder guards (not round pauldrons), smooth full-face visor helmet with a single horizontal glowing teal slit, holding an original sleek angular bullpup heavy rifle with a glowing teal power cell (NOT a boxy bolter), original chevron-and-hexagon company insignia on the chest and shoulder, deep maroon cloth tabard, ammunition pouches"
     pose: "advancing tactical formation, rifles shouldered and aimed"
 
     game_stats:
@@ -252,7 +263,7 @@ unit_overrides:
           range: 0
           attacks: 1
   destroyers:
-    extra_details: "single elite terminator-style assault warrior in massively bulky destroyer armor with extra plating, combat shields, triple-attack close combat weapons, grenade launchers on wrists, teleport homers"
+    extra_details: "single elite heavy siege-class assault warrior in massively bulky siege exo-armor with extra plating, combat shields, triple-attack close combat weapons, grenade launchers on wrists, tactical beacons"
     pose: "imposing combat advance, weapons raised, towering menacing presence"
 
   # ==========================================================================
