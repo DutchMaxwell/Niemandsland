@@ -19,20 +19,22 @@ const PRESETS = {
 		"sun_color": Color(1.0, 0.8, 0.6),
 		"sun_angle_h": 84.0,  # Horizontal angle (degrees)
 		"sun_angle_v": 43.0,   # Vertical angle (degrees)
-		"ambient_energy": 0.7,
+		# Sky-driven ambient now adds fill, and AgX tonemap has its own contrast/colour
+		# response — so ambient/contrast/saturation are dialled back vs the old ACES setup.
+		"ambient_energy": 0.45,
 		"ambient_color": Color(0.85, 0.82, 0.78),
-		"exposure": 1.3,
+		"exposure": 1.2,
 		"shadow_opacity": 0.85,
 		"shadow_blur": 1.5,
 		"shadow_bias": 0.03,  # Balanced to prevent acne and detachment
 		"shadow_normal_bias": 1.0,  # Higher prevents shadow detachment on slopes
-		"ssao_intensity": 0.3,
+		"ssao_intensity": 0.4,
 		"fill_light_energy": 0.3,
 		"fill_light_color": Color(0.7, 0.8, 1.0),
 		"ssr_intensity": 0.2,
 		"glow_intensity": 1.2,
-		"contrast": 1.15,
-		"saturation": 1.15,
+		"contrast": 1.05,
+		"saturation": 1.05,
 	},
 	"Warm Sunset": {
 		"name": "Warm Sunset (Cozy)",
