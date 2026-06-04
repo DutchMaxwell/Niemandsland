@@ -8,13 +8,20 @@ faction_name: "Alien Hives"
 
 aesthetic:
   all_creatures: true   # durchgehende Kreaturen-Armee: keine Vehicle/Aircraft/Titan-Anker
-  genre: "grimdark sci-fi"
-  style: "sleek biomechanical alien horror, tabletop wargaming studio sculpt"
+  genre: "sci-fi"
+  style: "sleek crystalline biomechanical alien, clean tabletop wargaming studio sculpt"
+  # Original Niemandsland species — deliberately distinct from any Tyranid (palette, head, limbs).
   inspiration:
-    - "sleek draconic-reptilian bio-organism with an elongated fanged skull and spiky crest"
-    - "segmented chitin carapace built from overlapping bone armor plates"
-    - "multiple organic bone-blade scythe limbs on a sinuous, lithe body"
-    - "internal bioluminescent glow seeping through translucent membrane"
+    - "lithe upright draconic-reptilian bio-warrior with a sleek segmented exoskeleton and a long counterbalancing tail"
+    - "smooth backswept carapace crest crowning the head, with a cluster of small glowing eyes and a short hooked beak-maw"
+    - "straight angular hardened-chitin and crystal blade-limbs growing from the arms"
+    - "bright bioluminescent seams glowing between pale armoured plates"
+  # Internal documentation only (NOT injected): what makes this clearly our own species, not a Tyranid.
+  original_design_cues:
+    - "Head: a smooth backswept carapace crest with a cluster of small amber/cyan sensor-eyes and a short hooked beak (not an elongated fanged skull)"
+    - "Limbs: straight angular crystal-chitin blades (not curved bone scythes)"
+    - "Palette: pale ivory + cool slate-grey + bright turquoise glow (not dark chitin / oxblood / toxic-green)"
+    - "Frame: lithe, upright, elegant draconic (not a bulky hunched bug)"
   explicitly_avoid:
     - "Games Workshop Tyranid designs, silhouettes and head shapes"
     - "Warhammer 40k hive-fleet bio-titans"
@@ -25,14 +32,14 @@ aesthetic:
     - "muddy low-contrast camouflage texture noise"
 
 colors:
-  primary: "dark chitin carapace in charcoal and deep oxblood with dark-green undertones"
-  secondary: "bone and ivory armor plates"
-  accent: "toxic-green bioluminescent glow"
+  primary: "pale ivory and cool slate-grey chitin plating"
+  secondary: "darker slate carapace ridges and bone-white spines"
+  accent: "bright turquoise bioluminescent seams and amber sensory eyes"
 
 materials:
-  - "segmented chitin exoskeleton with overlapping bone plates"
-  - "organic bone-blade weapons and talons"
-  - "translucent bioluminescent membrane"
+  - "pale ivory and slate chitin exoskeleton with smooth overlapping plates"
+  - "hardened crystal-chitin blade limbs"
+  - "glowing turquoise bioluminescent seams"
 
 creature_type: "alien bioorganic creature"
 
