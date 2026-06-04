@@ -34,7 +34,9 @@ creature_type: "creature/warrior type description"
 # {colors}        - Aus dieser Datei
 # {materials}     - Aus dieser Datei
 # {aesthetic}     - Aus dieser Datei
-# {explicitly_avoid} - Aus dieser Datei
+# NOTE: `explicitly_avoid` is intentionally NOT a prompt placeholder. Text-to-image models
+# cannot negate — naming an IP element (even to avoid it) anchors it. The list below is kept
+# as internal design documentation only; describe the original design POSITIVELY instead.
 prompt_template: |
   {unit_name}, {creature_type} miniature for tabletop wargaming.
 
@@ -52,7 +54,6 @@ prompt_template: |
   - {aesthetic}
   - Color palette: {colors}
   - Materials: {materials}
-  - Explicitly avoid: {explicitly_avoid}
 
   SPECIFIC DETAILS:
   {unit_details}

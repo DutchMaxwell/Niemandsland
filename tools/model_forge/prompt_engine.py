@@ -39,28 +39,26 @@ VEHICLE_BASE_THRESHOLD_MM: int = 50
 # =============================================================================
 # IP-COMPLIANCE
 # =============================================================================
-# Unverhandelbare Liste konkret zu vermeidender Designs/Symbole, um keine
-# urheberrechtlich geschuetzten Marken oder Designs (insbesondere Games
-# Workshop) zu reproduzieren. Wird zu jedem Prompt hinzugefuegt, unabhaengig
-# vom Faction-YAML. Wirkt als Sicherheitsnetz.
+# Wird zu jedem Prompt hinzugefuegt, unabhaengig vom Faction-YAML — das
+# Sicherheitsnetz fuer originale, CC-BY-SA-faehige Designs.
+#
+# WICHTIG (Lektion aus der Hero-Iteration): Text-to-Image-Modelle koennen nicht
+# negieren. Konkrete IP-Begriffe ("Aquila", "Space Marine", "Necron" …) im
+# Prompt zu NENNEN — selbst um sie zu VERMEIDEN — verankert sie und produziert
+# genau diese Elemente. Darum ist dieser Block REIN POSITIV formuliert: er
+# fordert Originalitaet, ohne ein einziges geschuetztes Design beim Namen zu
+# nennen. Die distinktiven Merkmale kommen aus den positiven SPECIFIC DETAILS /
+# STYLE / original_design_cues der jeweiligen Faction.
 
 IP_COMPLIANCE_BLOCK: str = (
-    "STRICT IP COMPLIANCE - DO NOT INCLUDE ANY OF THESE COPYRIGHTED ELEMENTS:\n"
-    "- No double-headed eagles (Imperial Aquila), no winged-skull insignia\n"
-    "- No skull-and-cog, skull-and-gear, or mechanical-skull symbols\n"
-    "- No Space Marine specific designs: no characteristic round oversized pauldrons "
-    "with chapter iconography, no Mark VII/VIII/X power armor silhouettes\n"
-    "- No Adeptus Mechanicus cog-mechanicum logos, no red robes with cogwheel symbols\n"
-    "- No Custodes-style golden lion-faced helmets with high tufted crests\n"
-    "- No Sisters of Battle wimpled helmets with red-and-black fleur-de-lys habits\n"
-    "- No Tyranid-specific bone scything-talons-with-skull silhouettes (organic creatures OK, "
-    "but avoid the exact Hive Tyrant pose and Carnifex carapace pattern)\n"
-    "- No Necron green-glowing-rod gauss weapons with skull-faced robotic skeletons\n"
-    "- No Eldar tall-pointy-helmet aspect-warrior silhouettes, no Wraithbone curves\n"
-    "- No T'au battlesuit specific bulbous-shoulder-and-jet-pack silhouettes\n"
-    "- No specific named characters from Warhammer 40K, Age of Sigmar, or Lord of the Rings\n"
-    "- Generic genre archetypes (knight, alien insect, orc, undead, robot) are fine - "
-    "only avoid the specific iconic GW visual signatures listed above"
+    "ORIGINAL DESIGN MANDATE - this is a wholly original miniature:\n"
+    "- Render ONLY the design described in the SPECIFIC DETAILS and STYLE sections; take every "
+    "distinctive element (armour shapes, insignia, weapons, silhouette) from there\n"
+    "- Keep all emblems, badges and heraldry ORIGINAL and abstract: simple geometric shapes "
+    "(chevrons, hexagons, bars, original runes) unique to this faction\n"
+    "- Use broad, generic genre archetypes only (knight, soldier, alien insect, orc, undead, "
+    "robot, daemon) as the starting point, then make every specific detail original\n"
+    "- Clean, distinctive, original shapes that read as this faction's own identity"
 )
 
 # Type-spezifische Form-Constraints: werden nur eingehaengt wenn die Unit ein
@@ -78,8 +76,8 @@ FORM_CONSTRAINTS: dict[str, str] = {
         "- NOT a battlesuit, NOT a mech-with-wings, NOT a flying suit of armor\n"
         "- Cockpit canopy or pilot housing instead of a head/helmet\n"
         "- Wings are aircraft wings, not jet-pack or shoulder-mounted thrusters\n"
-        "- Reference: fighter jet, atmospheric interceptor, ground-attack craft — "
-        "not Iron Man, not Crisis Suit, not Gundam"
+        "- Reference shape: a real fighter jet, atmospheric interceptor or ground-attack "
+        "craft — a pure aircraft airframe"
     ),
 }
 

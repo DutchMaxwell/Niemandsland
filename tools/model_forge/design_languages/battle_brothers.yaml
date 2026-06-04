@@ -65,9 +65,6 @@ prompt_template: |
   - {aesthetic}
   - Color palette: {colors}
   - Materials: {materials}
-  # NOTE: the `explicitly_avoid` list is intentionally NOT injected here. Naming GW terms
-  # (even to "avoid" them) anchors them in text-to-image models and produced the aquila +
-  # Primaris helmet. Describe the original design positively instead (see unit_details).
 
   SPECIFIC DETAILS:
   {unit_details}
