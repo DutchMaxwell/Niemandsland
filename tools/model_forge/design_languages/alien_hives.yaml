@@ -63,7 +63,7 @@ prompt_template: |
   - Every weapon is a LIVING BIO-WEAPON grown from the creature's own body.
   - Ranged weapons are organic symbiote weapon-organs / fleshy-chitin bio-cannons
     fused to the limb, spitting living spores or bio-projectiles.
-  - Melee weapons are bone blades, talons, scything claws and chitin spikes.
+  - Melee weapons are straight crystal-chitin blades, hooked claws and angular chitin spikes.
   - ABSOLUTELY NO manufactured or metal firearms: no gun barrels, triggers,
     magazines, scopes, grips, bolts or any human-made / mechanical weapon.
 
@@ -314,7 +314,7 @@ unit_overrides:
           range: 0
           attacks: 2
   ravenous_beasts:
-    extra_details: "single fast feral quadruped predator, wolf-like alien body plan with six legs and paired razor claws on forelimbs, lean muscular build optimized for speed and pack hunting, strider adaptations on all feet, fanged maws, predatory pack intelligence, Tough(3)"
+    extra_details: "single fast feral quadruped predator, wolf-like alien body plan with six legs and paired razor claws on forelimbs, lean muscular build optimized for speed and pack hunting, strider adaptations on all feet, hooked beak-maws, predatory pack intelligence, Tough(3)"
     pose: "predatory crouch ready to pounce, forelimb razor claws extended, pack formation"
 
     game_stats:
