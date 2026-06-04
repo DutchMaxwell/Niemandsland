@@ -63,7 +63,7 @@ NON_INFANTRY_CLASSES: tuple[UnitClass, ...] = (
     UnitClass.AIRCRAFT,
     UnitClass.TITAN,
 )
-from deshadow import deshadow
+from image_finalize import finalize_image
 from image_generator import ImageGenerator, ImageModel
 from pipeline_state import PipelineSession, UnitStatus
 from prompt_engine import PromptEngine, load_design_language
@@ -134,6 +134,7 @@ def process_faction(
     quality_gate: QualityGate | None,
     hf_token: str | None,
     trellis_space: str | None,
+    limit: int = 0,
 ) -> FactionStats:
     """
     Verarbeitet eine Fraktion komplett.
@@ -211,6 +212,7 @@ def process_faction(
             class_ref_paths[cls] = class_reference_image_path(PROJECT_ROOT, faction, cls)
 
     # Alle Units verarbeiten
+    processed = 0
     for index, (unit_key, override) in enumerate(dl.unit_overrides.items(), start=1):
         unit_name = override.get("name") if isinstance(override, dict) else ""
         unit_name = unit_name or unit_key.replace("_", " ").title()
@@ -221,6 +223,12 @@ def process_faction(
             logger.info("[%s] %s -> skip (GLB existiert: %s)",
                         faction, unit_name, target_glb.name)
             continue
+
+        if limit and processed >= limit:
+            logger.info("[%s] --limit %d reached — stopping after %d units",
+                        faction, limit, processed)
+            break
+        processed += 1
 
         unit_state = session.add_unit(unit_key, unit_name)
 
@@ -275,6 +283,10 @@ def process_faction(
                 )
                 if not success:
                     continue
+                # Make the image base-less before it is reviewed / converted: edit out any base or
+                # scenic diorama, then deshadow to pure white. The reviewed image == the converted
+                # image, so this must happen at generation time (not at the TRELLIS step).
+                finalize_image(image_path, image_gen, log=logger.info)
                 image_for_3d = image_path
 
         unit_state.image_path = str(image_for_3d)
@@ -285,17 +297,8 @@ def process_faction(
             stats.generated += 1
             continue
 
-        # TRELLIS 3D
+        # TRELLIS 3D — the image is already base-less (finalized at generation time).
         glb_dir_session = _glb_dir(session)
-        # Strip the baked-on contact shadow first: the image model renders a grey drop shadow under
-        # the figure, and TRELLIS reconstructs that shadow as a flat base disc. Niemandsland never
-        # wants a modelled base (the game generates it from base_size at spawn). See deshadow.py.
-        deshadowed = glb_dir_session / f"{Path(image_for_3d).stem}_deshadowed.png"
-        try:
-            deshadow(Path(image_for_3d), deshadowed)
-            image_for_3d = deshadowed
-        except Exception as exc:  # noqa: BLE001 — never block generation on the cleanup step
-            logger.warning("deshadow failed for %s (%s) — using original image", unit_name, exc)
         glb = convert_image_to_glb(
             image_for_3d,
             glb_dir_session,
@@ -621,6 +624,8 @@ def main() -> int:
                         help="Quality-Gate deaktivieren (Vision-LLM nicht aufrufen)")
     parser.add_argument("--list", action="store_true",
                         help="Alle verfuegbaren Fraktionen listen und beenden")
+    parser.add_argument("--limit", type=int, default=0,
+                        help="Nur die ersten N noch-nicht-fertigen Units verarbeiten (0 = alle; fuer Tests)")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -672,6 +677,7 @@ def main() -> int:
             quality_gate=quality_gate,
             hf_token=hf_token,
             trellis_space=trellis_space,
+            limit=args.limit,
         )
         all_stats.append(stats)
         logger.info(
