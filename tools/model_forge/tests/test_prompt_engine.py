@@ -161,8 +161,8 @@ class TestGeneratePrompt:
         )
         assert "crown of horns" in prompt.lower()
 
-    def test_prompt_no_base_instruction(self, engine: PromptEngine) -> None:
-        """Prompt enthaelt Anti-Base Anweisung."""
+    def test_prompt_baseless_instruction(self, engine: PromptEngine) -> None:
+        """Prompt asks for a base-less figure POSITIVELY (negation anchors a base)."""
         prompt = engine.generate_prompt(
             unit_name="Hive Lord",
             unit_key="hive_lord",
@@ -170,7 +170,9 @@ class TestGeneratePrompt:
             special_rules=[],
             size=1,
         )
-        assert "NO base" in prompt
+        assert "empty space beneath the feet" in prompt
+        # The old anchoring negation must be gone (text-to-image models cannot negate).
+        assert "NO base" not in prompt
 
     def test_prompt_white_background(self, engine: PromptEngine) -> None:
         """Prompt verlangt weissen Hintergrund."""

@@ -54,7 +54,6 @@ prompt_template: |
   - {aesthetic}
   - Color palette: {colors}
   - Materials: {materials}
-  - Explicitly avoid: {explicitly_avoid}
 
   SPECIFIC DETAILS:
   {unit_details}
