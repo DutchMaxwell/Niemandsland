@@ -1,0 +1,4 @@
+# Heavy / intermediate engine-comparison artifacts — keep the doc, preview & metrics only.
+*.log
+hero_rodin*
+**/*.glb
