@@ -63,6 +63,7 @@ NON_INFANTRY_CLASSES: tuple[UnitClass, ...] = (
     UnitClass.AIRCRAFT,
     UnitClass.TITAN,
 )
+from deshadow import deshadow
 from image_generator import ImageGenerator, ImageModel
 from pipeline_state import PipelineSession, UnitStatus
 from prompt_engine import PromptEngine, load_design_language
@@ -286,6 +287,15 @@ def process_faction(
 
         # TRELLIS 3D
         glb_dir_session = _glb_dir(session)
+        # Strip the baked-on contact shadow first: the image model renders a grey drop shadow under
+        # the figure, and TRELLIS reconstructs that shadow as a flat base disc. Niemandsland never
+        # wants a modelled base (the game generates it from base_size at spawn). See deshadow.py.
+        deshadowed = glb_dir_session / f"{Path(image_for_3d).stem}_deshadowed.png"
+        try:
+            deshadow(Path(image_for_3d), deshadowed)
+            image_for_3d = deshadowed
+        except Exception as exc:  # noqa: BLE001 — never block generation on the cleanup step
+            logger.warning("deshadow failed for %s (%s) — using original image", unit_name, exc)
         glb = convert_image_to_glb(
             image_for_3d,
             glb_dir_session,

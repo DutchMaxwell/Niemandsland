@@ -9,6 +9,7 @@ in the background while the rest of the comparison proceeds.
 from __future__ import annotations
 
 import json
+import sys
 import time
 from pathlib import Path
 
@@ -16,8 +17,9 @@ from huggingface_hub import HfApi
 from trellis_bridge import convert_image_to_glb
 
 THIS_DIR = Path(__file__).resolve().parent
-HERO = THIS_DIR / "references" / "battle_brothers" / "01_hero_FINAL.png"
-OUT_DIR = THIS_DIR / "engine_comparison" / "trellis"
+# Optional CLI overrides: argv[1] = input image, argv[2] = output dir.
+HERO = Path(sys.argv[1]) if len(sys.argv) > 1 else THIS_DIR / "references" / "battle_brothers" / "01_hero_FINAL.png"
+OUT_DIR = Path(sys.argv[2]) if len(sys.argv) > 2 else THIS_DIR / "engine_comparison" / "trellis"
 TOKEN_FILE = THIS_DIR / ".hf_token"
 SPACE_FILE = THIS_DIR / ".trellis_space"
 
