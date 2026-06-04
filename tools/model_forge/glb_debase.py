@@ -25,6 +25,10 @@ if len(argv) < 2:
     sys.exit(1)
 IN_GLB, OUT_GLB = argv[0], argv[1]
 WIDTH_RATIO = float(argv[2]) if len(argv) > 2 else 1.25  # bin wider than this x the bin above = disc
+# Minimum bottom trim as a fraction of height. TRELLIS often leaves a thin flat ground membrane
+# between the feet that the width test misses (it is no wider than the boots). A tiny always-on
+# trim shaves it off; the game's base hides the underside anyway. 0 = off.
+MIN_TRIM_FRACTION = float(argv[3]) if len(argv) > 3 else 0.0
 N_BINS = 40
 MAX_DISC_FRACTION = 0.15  # safety: never cut more than the bottom 15% of height
 
@@ -74,17 +78,26 @@ def main() -> int:
         disc_top_bin = i + 1
         i += 1
 
-    if disc_top_bin == 0:
-        print("No base disc detected (no flaring bottom) — exporting unchanged.")
-    elif disc_top_bin / N_BINS > MAX_DISC_FRACTION:
+    if disc_top_bin / N_BINS > MAX_DISC_FRACTION:
         print(f"SAFETY: detected 'disc' spans {disc_top_bin}/{N_BINS} bins "
-              f"(> {MAX_DISC_FRACTION:.0%}) — too much, refusing to cut. Exporting unchanged.")
+              f"(> {MAX_DISC_FRACTION:.0%}) — too much, refusing the width cut.")
         disc_top_bin = 0
+
+    # Cut at the disc top, but never less than the always-on minimum trim (kills a thin ground
+    # membrane the width test misses). Take whichever removes more.
+    disc_z = zmin + disc_top_bin * height / N_BINS
+    min_z = zmin + MIN_TRIM_FRACTION * height
+    z_cut = max(disc_z, min_z)
+
+    if z_cut <= zmin + 1e-6:
+        print("Nothing to trim (no disc, no min-trim) — exporting unchanged.")
     else:
-        z_cut = zmin + disc_top_bin * height / N_BINS
-        print(f"Disc spans bins 0..{disc_top_bin - 1}; cutting at z={z_cut:.4f} "
-              f"({(z_cut - zmin) / height * 100:.1f}% up). bottom_width={binw[0]:.3f} "
-              f"figure_width≈{binw[disc_top_bin]:.3f}")
+        why = []
+        if disc_top_bin:
+            why.append(f"disc bins 0..{disc_top_bin - 1} (w {binw[0]:.3f} vs {binw[disc_top_bin]:.3f})")
+        if MIN_TRIM_FRACTION > 0:
+            why.append(f"min-trim {MIN_TRIM_FRACTION:.1%}")
+        print(f"Cutting at z={z_cut:.4f} ({(z_cut - zmin) / height * 100:.1f}% up) — {', '.join(why)}.")
         bm = bmesh.new()
         bm.from_mesh(me)
         geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
