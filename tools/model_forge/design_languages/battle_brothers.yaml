@@ -9,8 +9,9 @@
 faction_name: "Battle Brothers"
 
 # Style anchor fed to Nano Banana (reference_image_path) so every unit shares the approved
-# render look + design. See references/battle_brothers/ (01_hero_FINAL.png is the approved look).
-hero_reference: "references/battle_brothers/00_style_reference.png"
+# render look + design. 02_hero_baseless_FINAL.png is the approved v5 look, flat-lit and base-/
+# shadow-less (so TRELLIS reconstructs no base disc). See references/battle_brothers/.
+hero_reference: "references/battle_brothers/02_hero_baseless_FINAL.png"
 
 aesthetic:
   genre: "grimdark sci-fi military"
