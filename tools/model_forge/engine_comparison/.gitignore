@@ -1,4 +1,9 @@
-# Heavy / intermediate engine-comparison artifacts — keep the doc, preview & metrics only.
+# Heavy / intermediate engine-comparison artifacts — keep docs, previews, key inputs & metrics.
 *.log
 hero_rodin*
 **/*.glb
+_zoom_*
+*_preprocessed.png
+*_deshadowed.png
+baseless/hero_baseless.png
+baseless/hero_noshadow.png
