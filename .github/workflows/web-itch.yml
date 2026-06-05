@@ -75,7 +75,7 @@ jobs:
         if: ${{ env.BUTLER_API_KEY != '' && env.ITCH_TARGET != '' }}
         run: |
           butler-bin/butler push build/web "${ITCH_TARGET}:${ITCH_CHANNEL}" \
-            --userversion "0.2.0-alpha+${GITHUB_SHA::8}"
+            --userversion "0.3.0-alpha+${GITHUB_SHA::8}"
           echo "Published to https://itch.io/ channel '${ITCH_CHANNEL}' of ${ITCH_TARGET}"
 
       - name: itch.io not configured (notice)
