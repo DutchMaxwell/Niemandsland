@@ -2,6 +2,211 @@
   "version": 1,
   "base_url": "https://assets.akesberg.de/",
   "models": {
+    "alien_hives/hive lord": {
+      "url": "9a0d7b178c15d1b3d74de062b66cd536c9548e306aa5b6efe2a4246497ea638b.glb",
+      "sha256": "9a0d7b178c15d1b3d74de062b66cd536c9548e306aa5b6efe2a4246497ea638b",
+      "size": 15161408
+    },
+    "alien_hives/prime warrior": {
+      "url": "7b2e84a66a1b36bb92ec2e3510777824bc62b6dd49fdc83c8722e61b9822d2e0.glb",
+      "sha256": "7b2e84a66a1b36bb92ec2e3510777824bc62b6dd49fdc83c8722e61b9822d2e0",
+      "size": 18134476
+    },
+    "alien_hives/snatcher lord": {
+      "url": "329a44403c2b3f5dee8c4853563830630446b85280e4cf6be8800107e752ed99.glb",
+      "sha256": "329a44403c2b3f5dee8c4853563830630446b85280e4cf6be8800107e752ed99",
+      "size": 15610696
+    },
+    "alien_hives/grunt veteran": {
+      "url": "834b1b8d107c028b82c77ae1d6d7f9389df808e28fe8e08842499cb28e4588db.glb",
+      "sha256": "834b1b8d107c028b82c77ae1d6d7f9389df808e28fe8e08842499cb28e4588db",
+      "size": 15410772
+    },
+    "alien_hives/assault grunts": {
+      "url": "10e03717d128fb05d3e5951ab5725d737ab727bedb490c457113dc26cae06c3a.glb",
+      "sha256": "10e03717d128fb05d3e5951ab5725d737ab727bedb490c457113dc26cae06c3a",
+      "size": 14548868
+    },
+    "alien_hives/shooter grunts": {
+      "url": "9d9706383e93e6da6666ad5988522d531aa3f2251eb88de224fedd2328180304.glb",
+      "sha256": "9d9706383e93e6da6666ad5988522d531aa3f2251eb88de224fedd2328180304",
+      "size": 15348124
+    },
+    "alien_hives/psycho grunts": {
+      "url": "93d5a4227c80d460ba3a7cb0c1478d54eeb4ee124c33113e17f43ec581148d14.glb",
+      "sha256": "93d5a4227c80d460ba3a7cb0c1478d54eeb4ee124c33113e17f43ec581148d14",
+      "size": 13831260
+    },
+    "alien_hives/winged grunts": {
+      "url": "edf2243aeb3ab403fe385b63eb1d85c9e59d9cf37e0681460522ad44a96df33e.glb",
+      "sha256": "edf2243aeb3ab403fe385b63eb1d85c9e59d9cf37e0681460522ad44a96df33e",
+      "size": 16080252
+    },
+    "alien_hives/support grunts": {
+      "url": "cd1eccb762728d39d7715e4e6a83d714920a0aea6d443751bc9f84579360d9bc.glb",
+      "sha256": "cd1eccb762728d39d7715e4e6a83d714920a0aea6d443751bc9f84579360d9bc",
+      "size": 14647604
+    },
+    "alien_hives/soul snatchers": {
+      "url": "6db8556bdc649afa92057d0a36632abf8b4d66ccf24fe74682704d9ececd5b16.glb",
+      "sha256": "6db8556bdc649afa92057d0a36632abf8b4d66ccf24fe74682704d9ececd5b16",
+      "size": 14769712
+    },
+    "alien_hives/hive swarms": {
+      "url": "a110900d1f62d993805488625ca8a05071d9e4ae158b9044f23cd16a2ebdcb79.glb",
+      "sha256": "a110900d1f62d993805488625ca8a05071d9e4ae158b9044f23cd16a2ebdcb79",
+      "size": 17037636
+    },
+    "alien_hives/hive warriors": {
+      "url": "8cf218635f55b21636c300dde1402da59d7b978ab7d021dcfabda2a494f9fdd6.glb",
+      "sha256": "8cf218635f55b21636c300dde1402da59d7b978ab7d021dcfabda2a494f9fdd6",
+      "size": 14600928
+    },
+    "alien_hives/ravenous beasts": {
+      "url": "82b96b83321ec147c39e06c1143c1b00483fef87cf893c6c831204b307cb3416.glb",
+      "sha256": "82b96b83321ec147c39e06c1143c1b00483fef87cf893c6c831204b307cb3416",
+      "size": 15130844
+    },
+    "alien_hives/venom beasts": {
+      "url": "3de95fc96889b50a99a39dbe7a42ade50b7162a4afab868b33d50bff2b1472d7.glb",
+      "sha256": "3de95fc96889b50a99a39dbe7a42ade50b7162a4afab868b33d50bff2b1472d7",
+      "size": 14696668
+    },
+    "alien_hives/hive guardians": {
+      "url": "6918dc4c29eb04c71d5c3493916878b52f5dac0dc600143d7eedf0cc2ed8c6ef.glb",
+      "sha256": "6918dc4c29eb04c71d5c3493916878b52f5dac0dc600143d7eedf0cc2ed8c6ef",
+      "size": 14684644
+    },
+    "alien_hives/shadow leapers": {
+      "url": "a8cc6fcc3e4e41b2c3d29bbe986f1dab77ef40064ec3c9d0fa6be7e64f9f94c5.glb",
+      "sha256": "a8cc6fcc3e4e41b2c3d29bbe986f1dab77ef40064ec3c9d0fa6be7e64f9f94c5",
+      "size": 14653028
+    },
+    "alien_hives/synapse beasts": {
+      "url": "561c0518993ac138b0ce02271851b28a7b6162a23c94ec346fadb2f31c00419c.glb",
+      "sha256": "561c0518993ac138b0ce02271851b28a7b6162a23c94ec346fadb2f31c00419c",
+      "size": 15075140
+    },
+    "alien_hives/spores": {
+      "url": "d6d089006f1193d5debbfada9c967724c663ee05d2078016c7d120f9cea005a2.glb",
+      "sha256": "d6d089006f1193d5debbfada9c967724c663ee05d2078016c7d120f9cea005a2",
+      "size": 15824212
+    },
+    "alien_hives/massive spores": {
+      "url": "608655b5521715962310c9ad36f59ade3d3a6a09b2c67c86801ed08cb7904562.glb",
+      "sha256": "608655b5521715962310c9ad36f59ade3d3a6a09b2c67c86801ed08cb7904562",
+      "size": 15868412
+    },
+    "alien_hives/shadow hunter": {
+      "url": "cf39874f280645498ab5dca8e83ff6b871637be47855c96aed8870dd48bda30d.glb",
+      "sha256": "cf39874f280645498ab5dca8e83ff6b871637be47855c96aed8870dd48bda30d",
+      "size": 15117224
+    },
+    "alien_hives/mortar beast": {
+      "url": "76e13839090bc07e5c50319b02b78a8e9a352786960b8c056821320b70db7b28.glb",
+      "sha256": "76e13839090bc07e5c50319b02b78a8e9a352786960b8c056821320b70db7b28",
+      "size": 16274796
+    },
+    "alien_hives/synapse tyrant": {
+      "url": "198b6fc5c1125ea4c969e7f72b85882cdc35750e0cff3cba1a8e73f92b54d451.glb",
+      "sha256": "198b6fc5c1125ea4c969e7f72b85882cdc35750e0cff3cba1a8e73f92b54d451",
+      "size": 16406364
+    },
+    "alien_hives/flamer beast": {
+      "url": "a46c3889b0d3b857f1b98ee695f393ab12e79b2dca4fcc20e6735ff0e4a7116a.glb",
+      "sha256": "a46c3889b0d3b857f1b98ee695f393ab12e79b2dca4fcc20e6735ff0e4a7116a",
+      "size": 16015992
+    },
+    "alien_hives/invasion carrier spore": {
+      "url": "ea1cd212c5b5795899de2cba5029504b94f91ea3a277dc8ebacbed405c78b5ce.glb",
+      "sha256": "ea1cd212c5b5795899de2cba5029504b94f91ea3a277dc8ebacbed405c78b5ce",
+      "size": 16294636
+    },
+    "alien_hives/carnivo rex": {
+      "url": "e7c463e31caadaf1fd120cd54bd348dd92cdb275f144274360d295d07e035eac.glb",
+      "sha256": "e7c463e31caadaf1fd120cd54bd348dd92cdb275f144274360d295d07e035eac",
+      "size": 13575088
+    },
+    "alien_hives/toxico rex": {
+      "url": "eb81549a433647267ecda7b6f18d1f9f6be6c30390f90558a74b67c5f1e80303.glb",
+      "sha256": "eb81549a433647267ecda7b6f18d1f9f6be6c30390f90558a74b67c5f1e80303",
+      "size": 14366500
+    },
+    "alien_hives/psycho rex": {
+      "url": "f2b8b00193d49f0aeabaf81571423d2e8a8488c90e0418221fc45b59efd608c2.glb",
+      "sha256": "f2b8b00193d49f0aeabaf81571423d2e8a8488c90e0418221fc45b59efd608c2",
+      "size": 16322972
+    },
+    "alien_hives/hive burrower": {
+      "url": "045404fdd62b2c7398a6dd0d86373b7e86dc06a57059669d7d962a0a932d9fe2.glb",
+      "sha256": "045404fdd62b2c7398a6dd0d86373b7e86dc06a57059669d7d962a0a932d9fe2",
+      "size": 16251932
+    },
+    "alien_hives/tyrant great beast": {
+      "url": "324a92173d3a505a82854addf7a799abf7b78b1fd42b92a5bdaca6a2346ca8e7.glb",
+      "sha256": "324a92173d3a505a82854addf7a799abf7b78b1fd42b92a5bdaca6a2346ca8e7",
+      "size": 16777016
+    },
+    "alien_hives/spawning great beast": {
+      "url": "bcb68ead32945265320fed01615a122d84bae279ec3b8cb848bc6e9178862b68.glb",
+      "sha256": "bcb68ead32945265320fed01615a122d84bae279ec3b8cb848bc6e9178862b68",
+      "size": 16522912
+    },
+    "alien_hives/devourer great beast": {
+      "url": "317797d58144e7bcb02a416533b7ae7cfb841e0f742d1446d0f9cf1945aac07d.glb",
+      "sha256": "317797d58144e7bcb02a416533b7ae7cfb841e0f742d1446d0f9cf1945aac07d",
+      "size": 15549256
+    },
+    "alien_hives/artillery great beast": {
+      "url": "01d982a3040c420841ef350db35e05adbc05b42acc82b386fb88b457fb735385.glb",
+      "sha256": "01d982a3040c420841ef350db35e05adbc05b42acc82b386fb88b457fb735385",
+      "size": 12971256
+    },
+    "alien_hives/invasion artillery spore": {
+      "url": "b562657fff545e54caace4f6ef5c5cf3e4569ce411557234b08ce258b565fd48.glb",
+      "sha256": "b562657fff545e54caace4f6ef5c5cf3e4569ce411557234b08ce258b565fd48",
+      "size": 14933308
+    },
+    "alien_hives/hive titan": {
+      "url": "7719e5bf9bb91c21213300245916741c506ad0a0c1460a81df1c6830d6e40223.glb",
+      "sha256": "7719e5bf9bb91c21213300245916741c506ad0a0c1460a81df1c6830d6e40223",
+      "size": 15575304
+    },
+    "alien_hives/rapacious beast": {
+      "url": "e22284263f06f0e1557fc7239e112393510e5578b3ac6fcf01d9c9f1395fd312.glb",
+      "sha256": "e22284263f06f0e1557fc7239e112393510e5578b3ac6fcf01d9c9f1395fd312",
+      "size": 17662752
+    },
+    "alien_hives/drekhor the vengeful": {
+      "url": "ff4f8078722db3a59aaafcd37b1f2d8ed3b755971c4010390186732193106f12.glb",
+      "sha256": "ff4f8078722db3a59aaafcd37b1f2d8ed3b755971c4010390186732193106f12",
+      "size": 14472180
+    },
+    "alien_hives/ksiadoz smokeborn": {
+      "url": "d9e1c2eda9bc27badd3f1c9b64a7d7414de3f02e2123500ff3b6b9db26c13895.glb",
+      "sha256": "d9e1c2eda9bc27badd3f1c9b64a7d7414de3f02e2123500ff3b6b9db26c13895",
+      "size": 15770416
+    },
+    "alien_hives/druzhak": {
+      "url": "a4e2ffb0f3de573149fb80b205edb304fca45bca1d02292931ca07a999dd9a0c.glb",
+      "sha256": "a4e2ffb0f3de573149fb80b205edb304fca45bca1d02292931ca07a999dd9a0c",
+      "size": 14736796
+    },
+    "alien_hives/troseis": {
+      "url": "ea8cb4f09aa53f303bd9b31882db3b9afc699cdcf8f1c1b09f5948acf8cd596e.glb",
+      "sha256": "ea8cb4f09aa53f303bd9b31882db3b9afc699cdcf8f1c1b09f5948acf8cd596e",
+      "size": 16395064
+    },
+    "alien_hives/nisuv": {
+      "url": "0463cd6253e95490e2fab4fdfc4cf2b610b1ab799f91c3a8bb5a2a604905ba30.glb",
+      "sha256": "0463cd6253e95490e2fab4fdfc4cf2b610b1ab799f91c3a8bb5a2a604905ba30",
+      "size": 16086440
+    },
+    "alien_hives/vradhez": {
+      "url": "b07ecf782b305ca40e3a910dc4e7b0f5da7638f63b19ec22f84035b7b216caf6.glb",
+      "sha256": "b07ecf782b305ca40e3a910dc4e7b0f5da7638f63b19ec22f84035b7b216caf6",
+      "size": 15111728
+    },
     "battle_brothers/battle brothers": {
       "url": "b45ecc61ffb4059d09abd95f08cac22cd84ab19b031f5e17bcc43f41fb977f14.glb",
       "sha256": "b45ecc61ffb4059d09abd95f08cac22cd84ab19b031f5e17bcc43f41fb977f14",
