@@ -43,8 +43,11 @@ GLB_SUBDIR = "glb"
 UNITS_JSON_FILENAME = "units.json"
 VERSION_STRING = "auto-generated"
 
-# GLB-Optimierung (vor dem Export): Mesh-Decimation + Texture-Resize
-OPTIMIZE_GLBS_ON_EXPORT: bool = True
+# GLB-Optimierung (vor dem Export): Mesh-Decimation + Texture-Resize.
+# OFF by design: the validated pipeline ships TRELLIS output as-is (1536 / 300k tris / 4096 tex, raw).
+# When this was True it silently re-decimated 300k->~179k and shrank textures 4096->2048 on export,
+# undoing the approved quality. Re-enable per-faction only if a smaller delivery size is explicitly wanted.
+OPTIMIZE_GLBS_ON_EXPORT: bool = False
 OPTIMIZE_SIMPLIFY_RATIO: float = DEFAULT_SIMPLIFY_RATIO
 OPTIMIZE_TEXTURE_MAX_DIM: int = DEFAULT_TEXTURE_MAX_DIM
 OPTIMIZE_WEBP_QUALITY: int = DEFAULT_WEBP_QUALITY
