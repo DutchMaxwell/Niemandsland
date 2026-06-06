@@ -75,6 +75,11 @@ __pycache__/
 *.orig-backup
 /dao_union_gallery*.png
 
+# Miniature GLBs are delivered on-demand from R2 (content-addressed, see model_manifest.json),
+# never bundled. Keep them out of git AND out of builds (export_presets exclude_filter).
+# The d6 dice model (assets/models/) is a core bundled asset and stays tracked.
+assets/miniatures/*/glb/
+
 # OPR data must NEVER be committed — it is OPR's content (not MIT-licensable) and
 # is loaded exclusively via the Army Forge API at runtime.
 assets/miniatures/*/units.json
