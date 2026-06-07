@@ -590,16 +590,23 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
-## Reverts the most recent undoable action (Ctrl+Z).
+## Reverts the most recent undoable action OWNED BY THIS PLAYER (Ctrl+Z). In
+## multiplayer each player only undoes their own actions, never a peer's.
 func _undo() -> void:
-	if undo_manager and undo_manager.can_undo():
-		print("Undo: %s" % undo_manager.undo())
+	if not undo_manager:
+		return
+	var my_peer: int = network_manager.get_my_peer_id() if network_manager else 0
+	if undo_manager.can_undo_for(my_peer):
+		print("Undo: %s" % undo_manager.undo_for(my_peer))
 
 
-## Re-applies the most recently undone action (Ctrl+Y / Ctrl+Shift+Z).
+## Re-applies the most recently undone action OWNED BY THIS PLAYER (Ctrl+Y / Ctrl+Shift+Z).
 func _redo() -> void:
-	if undo_manager and undo_manager.can_redo():
-		print("Redo: %s" % undo_manager.redo())
+	if not undo_manager:
+		return
+	var my_peer: int = network_manager.get_my_peer_id() if network_manager else 0
+	if undo_manager.can_redo_for(my_peer):
+		print("Redo: %s" % undo_manager.redo_for(my_peer))
 
 
 ## Deletes every currently selected object as one undoable action (Delete key).
