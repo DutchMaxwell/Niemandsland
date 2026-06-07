@@ -303,7 +303,36 @@ func _format_dict_weapon(weapon: Variant) -> String:
 	var range_str := "[color=%s]Melee[/color]" % COLOR_MELEE
 	if w_range > 0:
 		range_str = "[color=%s]%d\"[/color]" % [COLOR_RANGE, w_range]
-	return "%s %s A%d" % [w_name, range_str, w_attacks]
+	var text := "%s %s A%d" % [w_name, range_str, w_attacks]
+	# Special rules ride on the weapon dict (synced over the network for remote units).
+	var rules := _dict_weapon_rule_names(weapon)
+	if not rules.is_empty():
+		text += " [color=%s](%s)[/color]" % [COLOR_RULES, ", ".join(rules)]
+	return text
+
+
+## Extracts a weapon dict's special-rule names, handling both string entries
+## ("Blast(3)") and object entries ({"name": "AP", "rating": 1}), and both the
+## camelCase "specialRules" and snake_case "special_rules" keys.
+func _dict_weapon_rule_names(weapon: Dictionary) -> Array[String]:
+	var raw: Variant = weapon.get("specialRules", weapon.get("special_rules", []))
+	var names: Array[String] = []
+	if not (raw is Array):
+		return names
+	for rule in raw:
+		if rule is String:
+			if not rule.is_empty():
+				names.append(rule)
+		elif rule is Dictionary:
+			var rule_name: String = str(rule.get("name", ""))
+			if rule_name.is_empty():
+				continue
+			var rating: Variant = rule.get("rating", null)
+			if rating != null and str(rating) != "":
+				names.append("%s(%s)" % [rule_name, str(rating)])
+			else:
+				names.append(rule_name)
+	return names
 
 func _build_rules_text() -> String:
 	var lines: Array[String] = []
