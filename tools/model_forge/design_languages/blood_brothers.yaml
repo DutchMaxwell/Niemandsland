@@ -8,17 +8,31 @@
 faction_name: "Blood Brothers"
 
 aesthetic:
-  genre: "grimdark sci-fi military"
-  style: "vampiric berserker power armor"
+  genre: "clean, bright, heroic sci-fi military — noble crimson armoured crusaders, crisp studio render"
+  ip_strict: true   # power-armour humans: strict IP gate flags generic-marine / Chaos-drift lookalikes
+  style: "sleek heavy original crimson power armour, polished, ornate and noble"
   inspiration:
-    - "Vampiric super-soldiers consumed by blood rage"
-    - "Angelic warriors with dark bloodthirsty undertones"
-    - "Renaissance Italian aesthetics fused with gothic horror"
+    - "Futuristic heavy power-armour soldiers (generic sci-fi trope)"
+    - "Augmented blood-red super-soldiers, fast and ferocious in close combat"
+    - "Renaissance-knight and winged-angel silhouettes fused with original sci-fi technology"
+  # NOTE: original_design_cues + weapon_style ARE now injected into the prompt (prompt_engine
+  # _format_aesthetic) — keep them POSITIVE, never name a protected design here.
+  original_design_cues:
+    - "Smooth full-face visor helmet shaped like a stylised faceplate with a single horizontal glowing crimson slit"
+    - "Sharp trapezoidal angular shoulder guards, flat and faceted, edged in gold"
+    - "Original stylised teardrop-and-chalice crest emblem on the chest and one shoulder"
+    - "Stylised feathered wing-shaped jump-pack vanes on the jump units, in gold and crimson"
+    - "Segmented, layered angular crimson plate armour with polished gold filigree trim"
+    - "Slightly stylised clean comic / video-game render (crisp readable shapes, bright even lighting)"
+  weapon_style: "an original sleek angular bullpup heavy rifle with a slim profile and a glowing crimson power cell, paired with serrated close-combat blades"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Blood Angels iconography"
-    - "Cartoon or anime proportions"
-    - "Sparkly vampire aesthetics"
+    - "Games Workshop / Warhammer 40,000 designs of any kind"
+    - "Generic Space Marine look, big round pauldrons, Aquila / imperial double-eagle, purity-seal scrolls"
+    - "Blood Angels trade dress, blood-drop chapter badge, jump-pack double-eagle"
+    - "The terms ceramite, adamantium, bolter, Astartes, Terminator armour"
+    - "Spikes, horns, daemonic ornament, exposed organic flesh or Chaos drift"
+    - "Cartoon or anime proportions; sparkly vampire aesthetics"
+    - "Any real-world military or franchise logos, insignia or trademarks"
 
 colors:
   primary: "deep arterial red power armor"
@@ -387,6 +401,7 @@ unit_overrides:
           range: 0
           attacks: 3
   blood_apc:
+    type: vehicle
     extra_details: "armored personnel carrier in blood-red livery with golden trim, boxy angular design with front ramp door adorned with blood drop insignia, storm rifle turret on top, hull-mounted weapon options, troop compartment with firing ports, heavy tank treads with gold-trimmed track guards, angelic wing motifs on hull sides, Tough(6), Transport(11)"
     pose: "driving forward, turret aimed ahead, ramp sealed"
 
@@ -403,6 +418,7 @@ unit_overrides:
           attacks: 3
           rules: ["AP(1)"]
   blood_attack_apc:
+    type: vehicle
     extra_details: "assault transport variant in blood-red with gold filigree, twin heavy flamer turret blazing, heavier frontal armor with blood chalice heraldry, smaller troop compartment than standard APC, aggressive angular hull design with vampiric fang motifs on front, optional dozer blade, Tough(6), Transport(6)"
     pose: "assault advance, twin flamers aimed forward, aggressive posture"
 
@@ -419,6 +435,7 @@ unit_overrides:
           attacks: 2
           rules: ["AP(1)"]
   blood_drop_pod:
+    type: vehicle
     extra_details: "orbital drop capsule in blood-red with golden trim, cylindrical armored pod with opening petal doors bearing blood drop insignia, retro-thrusters on bottom, death launcher blast weapon on top, scorched re-entry heat marks on hull mixed with angelic iconography, immobile after landing, Tough(6), Transport(11)"
     pose: "landing pose, petal doors opening outward, retro-thrusters firing"
 
@@ -435,6 +452,7 @@ unit_overrides:
           attacks: 1
           rules: ["Blast(6)"]
   blood_heavy_tank:
+    type: vehicle
     extra_details: "super-heavy assault transport in blood-red livery with extensive golden filigree, massive hull with twin heavy machinegun and twin heavy rifle array turrets, extremely thick armor plating with blood drop and angelic wing heraldry, multiple weapon systems, troop compartment, commander cupola with death mask, Tough(18), Transport(11)"
     pose: "rolling forward, all weapon systems aimed, dominating presence"
 
@@ -478,7 +496,7 @@ unit_overrides:
   blood_heavy_exo_suit:
     extra_details: "walking exoskeleton suit in blood-red with gold inlay, between infantry and walker size, power armor pilot visible in chest cavity behind armored sarcophagus plate with blood chalice emblem, twin flamer arm weapons, heavy armored legs with stomp capability, reactor pack on back with angelic wing vents, fear-inducing death mask face plate, Tough(6)"
     pose: "advancing pose, arm weapons aimed forward, stomping berserker stride"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -520,7 +538,7 @@ unit_overrides:
   blood_combat_walker:
     extra_details: "massive bipedal war machine in blood-red with gold trim, dreadnought-style armored sarcophagus body with blood chalice emblem, two walker fist arms with devastating AP(4), heavy armored legs with stomp attack, exhaust vents and reactor on back with crimson glow, fear-inducing golden death mask face plate, angelic wing motifs on shoulders, Tough(12)"
     pose: "striding forward in blood rage, walker fists raised menacingly, crushing stride"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -541,7 +559,7 @@ unit_overrides:
   blood_veteran_combat_walker:
     extra_details: "decorated veteran bipedal war machine in ornate blood-red with extensive gold filigree, dreadnought-style armored sarcophagus with golden kill markings and blood chalice honor scrolls, two walker fist arms with AP(4), veteran campaign banners in crimson and gold, reinforced armor with battle damage scars and blood splatter, angelic wing crests, Tough(12)"
     pose: "advancing with veteran fury, fists clenched, heavy stomp in controlled rage"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -584,6 +602,7 @@ unit_overrides:
           range: 0
           attacks: 3
   blood_light_gunship:
+    type: aircraft
     extra_details: "VTOL gunship aircraft in blood-red livery with gold trim, twin engine nacelles with tilting rotors, nose-mounted minigun with AP, wing-mounted twin typhoon missiles with AP(2) and Unstoppable, armored cockpit canopy with death mask visor, tail stabilizers with angelic wing motifs, blood drop insignia on fuselage, Tough(6)"
     pose: "banking in flight, weapons aimed downward at target, angelic predator"
 
@@ -604,6 +623,7 @@ unit_overrides:
           attacks: 4
           rules: ["AP(2)"]
   blood_heavy_gunship:
+    type: aircraft
     extra_details: "heavy transport gunship aircraft in blood-red with extensive gold filigree, massive twin engines with crimson exhaust glow, troop bay with side doors for deployment, chin-mounted storm missiles with AP(3) and Deadly(3), wing pylons with light heavy rifle array and twin minigun, typhoon missiles on hardpoints, heavily armored fuselage with blood chalice and angelic wing heraldry, Tough(9), Transport(11)"
     pose: "hovering for troop deployment, side doors open, all weapons visible, angelic war machine"
 

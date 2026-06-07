@@ -8,6 +8,7 @@ faction_name: "Alien Hives"
 
 aesthetic:
   all_creatures: true   # durchgehende Kreaturen-Armee: keine Vehicle/Aircraft/Titan-Anker
+  bio_weapons: true     # organic bio-faction: weapons rendered as living grown weapon-organs (only here)
   genre: "sci-fi"
   style: "sleek crystalline biomechanical alien, clean tabletop wargaming studio sculpt"
   # Original Niemandsland species — deliberately distinct from any Tyranid (palette, head, limbs).

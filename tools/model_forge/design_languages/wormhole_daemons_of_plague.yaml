@@ -3,23 +3,35 @@
 # =============================================================================
 # Basiert auf: GF - Wormhole Daemons of Plague v3.5.2
 # Bloated rotting daemons of decay, disease, and entropy.
-# OPR-Aequivalent zu Nurgle Daemons.
+# Original Niemandsland decay-daemon faction (generic plague-daemon trope).
 # Grotesque jolly plague beings with exposed organs, flies, slime, and disease.
 
 faction_name: "Wormhole Daemons of Plague"
 
 aesthetic:
-  genre: "dark fantasy horror"
-  style: "bloated pestilent daemons"
+  all_creatures: true   # pure daemon/creature swarm — no vehicles, aircraft, walkers or titans
+  bio_weapons: true     # organic daemon faction: weapons read as grown plague-organs, fused maws and corroded daemon arms (only for organic factions)
+  genre: "clean, bright, crisp creature-feature studio render — readable and high-contrast, vivid colourful fantasy sculpt"
+  style: "rotund jolly plague daemons, crisp readable sculpt with bright vivid colour"
+  # Original Niemandsland daemons — deliberately distinct from any specific commercial plague-daemon range.
   inspiration:
-    - "Bloated rotting daemons spreading disease and decay"
-    - "Grotesque jolly plague beings with exposed organs"
-    - "Medieval plague imagery meets supernatural horror"
+    - "Rotund, jovial bloated decay-daemons with a friendly grotesque grin"
+    - "Vivid colourful plague beings (bright lime, coral, sunflower) rather than grim brown sludge"
+    - "Medieval bestiary plague imagery reimagined as a bright, clean creature sculpt"
+  # Internal documentation only (NOT injected for creatures): what makes these clearly our own daemons.
+  original_design_cues:
+    - "Head: a round, jolly, single-horned bald head with a wide friendly toothy grin and milky eyes (not a snarling tusked maw)"
+    - "Body: a perfectly spherical pot belly split into a smiling vertical seam, framed by short stubby limbs"
+    - "Emblem: an original triple-ring spiral 'rot-rune' brand seared into the flesh of one shoulder"
+    - "Palette: bright lime-green flesh + coral-pink seams + sunflower-yellow drips (clean and saturated, not muddy)"
+    - "Adornment: tiny brass plague-bells on simple cord, no spikes, horns-cluster or skull-piles"
+  weapon_style: "a corroded brass plague-hammer or pitted bane-blade grown over with bright fungal nodules, plus body-fused spitter-maws for ranged daemons"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Nurgle daemon designs"
-    - "Clean or healthy aesthetics"
-    - "Power armor or military equipment"
+    - "Any specific commercial plague-daemon miniatures range trade dress"
+    - "Copyrighted decay-god daemon designs of any kind"
+    - "Dark, muddy, brown, low-contrast or gloomy grimdark look"
+    - "Power armor or military hard-tech equipment"
+    - "Grim brown sludge palette; keep colours bright and saturated"
 
 colors:
   primary: "sickly pale green daemon flesh"

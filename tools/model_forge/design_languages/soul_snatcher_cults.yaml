@@ -10,29 +10,41 @@
 faction_name: "Soul-Snatcher Cults"
 
 aesthetic:
-  genre: "grimdark sci-fi horror"
-  style: "parasitic infiltration cult"
+  genre: "clean, bright, crisp sci-fi — an industrial mining-colony infiltration cult of alien-human hybrids, sharp readable studio render"
+  style: "parasitic infiltration cult of hybrid mutants and brainwashed colony workers"
   inspiration:
-    - "Alien xenomorph-human hybrid horror"
-    - "Underground doomsday cult aesthetics"
-    - "Industrial mining colony workers corrupted by alien influence"
-    - "Body horror mutations blending human and alien anatomy"
+    - "Underground mining-colony workers turned into a hidden doomsday cult"
+    - "Insect-like alien hybrids passing among ordinary industrial labourers"
+    - "Repurposed mining gear, hazard suits and stolen colony vehicles"
+    - "Subtle alien mutations emerging from human bodies (hidden-horror reveal)"
+  # original_design_cues + weapon_style ARE injected into the prompt for humanoid units
+  # (prompt_engine generate_prompt). Keep them POSITIVE and ORIGINAL — never name a protected
+  # design, and avoid the literal words organ/chitin/fleshy/talon (verify-gate banned tokens).
+  original_design_cues:
+    - "Elongated bald cranium with smooth backswept ridges and large hypnotic teal-glowing eyes"
+    - "Hardened amethyst-purple alien shell plates erupting through pale human skin on arms and shoulders"
+    - "Multi-fingered rending claws and an extra vestigial limb on the most-mutated hybrids"
+    - "Industrial hazard-yellow mining overalls, helmets and respirators repurposed with a scratched cult sigil"
+    - "Original cult emblem: a downward teal triangle pierced by a single hooked claw"
+    - "Crisp, brightly lit, sharply readable sculpt — clean shapes, no muddy gloom"
+  weapon_style: "repurposed industrial mining tools and stolen colony firearms (heavy picks, drills, rugged rifles and pistols), paired with the hybrids' own hooked rending claws"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Genestealer Cult likenesses"
-    - "Pure alien without human elements"
-    - "Clean or heroic aesthetics"
+    - "Games Workshop / Warhammer 40,000 designs of any kind"
+    - "Copyrighted Genestealer Cult likenesses or trade dress"
+    - "Pure alien with no human or industrial elements"
+    - "Dark, muddy, gloomy or low-contrast grimdark rendering"
+    - "Any real-world military or franchise logos, insignia or trademarks"
 
 colors:
-  primary: "dirty industrial yellow and faded orange hazard suits"
-  secondary: "bruised purple alien skin and chitin on mutated limbs"
-  accent: "sickly pale flesh tones and glowing psychic teal eyes"
+  primary: "bright industrial hazard-yellow and orange mining suits"
+  secondary: "amethyst-purple alien shell plating over pale human skin on mutated limbs"
+  accent: "pale skin tones and glowing psychic teal eyes"
 
 materials:
-  - "worn mining overalls and industrial work gear"
-  - "chitinous alien carapace on mutated limbs and heads"
-  - "rusted industrial metal on improvised weapons and vehicles"
-  - "pale sickly flesh blending into alien purple skin"
+  - "clean industrial mining overalls, hazard suits and work gear"
+  - "hardened amethyst alien shell plating on mutated limbs and heads"
+  - "painted industrial metal on repurposed mining tools and vehicles"
+  - "pale human skin blending into smooth purple alien plating"
 
 creature_type: "alien-human hybrid cult operative"
 
@@ -72,7 +84,7 @@ unit_overrides:
   # ==========================================================================
 
   supreme_leader:
-    extra_details: "alien patriarch of the cult, towering Soul-Snatcher organism with elongated skull and exposed brain ridges glowing with psychic energy, four arms ending in sharp rending claws dripping with ichor, lean muscular alien body with purple chitinous carapace over pale flesh, tattered ceremonial robes draped over alien frame, hypnotic glowing teal eyes projecting domination, Fast scout predator with Fear(1) aura, Tough(3)"
+    extra_details: "alien patriarch of the cult, towering Soul-Snatcher hybrid with elongated skull and ridged cranium glowing with psychic energy, four arms ending in sharp rending claws, lean muscular alien body with smooth amethyst-purple alien shell plating over pale skin, tattered ceremonial robes draped over the alien frame, hypnotic glowing teal eyes projecting domination, Fast scout predator with Fear(1) aura, Tough(3)"
     pose: "commanding psychic pose, four clawed arms spread wide, head tilted with glowing eyes fixed on prey, robes billowing"
 
     game_stats:
@@ -88,7 +100,7 @@ unit_overrides:
           attacks: 4
           rules: ["Reap"]
   brute_champion:
-    extra_details: "massive third-generation hybrid brute, hulking muscular body with grotesque alien mutations visible under torn mining overalls, oversized mutant arms wielding a massive heavy pick with AP(2) rending edges, thick purple chitinous plates erupting through human skin on shoulders and back, regenerative tissue with visible healing wounds, bald head with vestigial alien ridges, Tough(3)"
+    extra_details: "massive third-generation hybrid brute, hulking muscular body with visible alien mutations under torn mining overalls, oversized mutant arms wielding a massive heavy pick with AP(2) rending edges, thick amethyst-purple alien shell plates erupting through human skin on shoulders and back, regenerating wounds, bald head with vestigial alien ridges, Tough(3)"
     pose: "aggressive forward lean, massive heavy pick raised overhead ready to crush, mutant muscles bulging"
 
     game_stats:
@@ -197,7 +209,7 @@ unit_overrides:
           range: 0
           attacks: 1
   acolytes:
-    extra_details: "single mid-generation hybrid cultist with visible alien mutations, pistols in one hand and mutant claws with AP(1) chitin blades on the other arm, purple alien skin erupting through human flesh on arms and face, third arm vestige visible on some models, Strider adaptations on mutated feet, mining gear barely concealing extensive mutations"
+    extra_details: "single mid-generation hybrid cultist with visible alien mutations, pistols in one hand and mutant claws with AP(1) hardened blades on the other arm, smooth purple alien plating erupting through human skin on arms and face, third arm vestige visible on some models, Strider adaptations on mutated feet, mining gear barely concealing extensive mutations"
     pose: "aggressive close-quarters rush, mutant claws raised to strike, pistols firing, alien features snarling"
 
   # ==========================================================================
@@ -220,7 +232,7 @@ unit_overrides:
           attacks: 2
           rules: ["AP(1)"]
   mutant_brutes:
-    extra_details: "single massive hybrid brute, hulking third-generation mutations with enormous muscular bodies bursting from torn mining overalls, wielding a heavy pick with AP(1) rending edges repurposed from mining equipment, thick chitinous plates erupting from shoulders and spine, regenerative alien tissue healing wounds in real-time, barely contained rage in mutated alien faces"
+    extra_details: "single massive hybrid brute, hulking third-generation mutations with enormous muscular bodies bursting from torn mining overalls, wielding a heavy pick with AP(1) rending edges repurposed from mining equipment, thick amethyst alien shell plates erupting from shoulders and spine, regenerating wounds closing in real-time, barely contained rage in mutated alien faces"
     pose: "berserker charge formation, heavy picks raised, torn overalls revealing mutant musculature, roaring with alien fury"
 
     game_stats:
@@ -236,7 +248,7 @@ unit_overrides:
           attacks: 2
           rules: ["AP(1)"]
   mutant_soul_snatchers:
-    extra_details: "single pure-strain Soul-Snatcher organism that burst from hiding, lithe alien bodies with purple carapace and four arms ending in sharp reaping claws, elongated skulls with psychic sensory organs, Ambush deep-strike deployment from underground tunnels, Bounding movement leaping across terrain, regenerative alien flesh, ultimate revelation of the cult's true alien masters"
+    extra_details: "single pure-strain Soul-Snatcher hybrid that burst from hiding, lithe alien bodies with smooth purple carapace and four arms ending in sharp reaping claws, elongated skulls with psychic sensory pits, Ambush deep-strike deployment from underground tunnels, Bounding movement leaping across terrain, regenerating alien hide, ultimate revelation of the cult's true alien masters"
     pose: "erupting from ambush, bounding leap mid-air, four clawed arms spread wide, alien predators revealed"
 
     game_stats:
@@ -252,7 +264,7 @@ unit_overrides:
           attacks: 2
           rules: ["Reap"]
   soul_snatchers:
-    extra_details: "single pure-strain Soul-Snatcher organism, lithe fast alien bodies with purple-black chitinous carapace, heavy rending claws with AP(1) on each of four arms, elongated skulls with rows of fangs and psychic sensor pits, digitigrade legs for explosive speed, Fast scout predators with Strider adaptations, the alien elite of the cult hierarchy"
+    extra_details: "single pure-strain Soul-Snatcher hybrid, lithe fast alien bodies with smooth amethyst-purple carapace, heavy rending claws with AP(1) on each of four arms, elongated skulls with rows of fangs and psychic sensor pits, digitigrade legs for explosive speed, Fast scout predators with Strider adaptations, the alien elite of the cult hierarchy"
     pose: "swift hunting formation, heavy claws extended, lean bodies mid-sprint, alien predatory intelligence in glowing eyes"
 
   # ==========================================================================
@@ -316,6 +328,7 @@ unit_overrides:
           range: 0
           attacks: 2
   light_apc:
+    type: vehicle
     extra_details: "stolen military light armored personnel carrier repainted in cult mining livery, boxy angular hull with weathered industrial yellow paint and cult graffiti, two heavy flamers with AP(1) and Blast(3) mounted on hull, front ramp for troop deployment, firing ports along sides, heavy wheels, mining company logos partially painted over with cult sigils, Fast with Impact(3), Tough(6), Transport(11)"
     pose: "driving forward with ramp partially lowered, heavy flamers aimed ahead, cult markings visible"
 
@@ -332,6 +345,7 @@ unit_overrides:
           attacks: 1
           rules: ["AP(1)"]
   grinder_truck:
+    type: vehicle
     extra_details: "massive industrial mining truck converted for war, enormous front grinding mechanism with rotating industrial drill teeth for Impact attacks, heavy machinegun with AP(1) mounted on cab roof, heavy quake cannon with Blast(3) Rending mounted on flatbed, thick industrial armor plates welded on, industrial yellow paint chipped and battle-scarred, Strider mining suspension, Fast with Impact(3), Tough(9), Transport(6)"
     pose: "charging forward, front grinder mechanism spinning, quake cannon elevated, industrial beast of war"
 
@@ -352,6 +366,7 @@ unit_overrides:
           attacks: 2
           rules: ["Blast(3)"]
   mining_truck:
+    type: vehicle
     extra_details: "colossal mining hauler truck converted to armored transport, twin autocannon turret with AP(2) on top of massive cab, heavy machinegun with AP(1) on secondary mount, enormous reinforced cargo bed converted to troop bay, industrial yellow paint with rust streaks and cult graffiti, eight massive all-terrain wheels, Fast with Impact(3), Tough(9), Transport(11)"
     pose: "thundering forward, twin autocannon turret traversing, massive profile dominating the road"
 
@@ -399,7 +414,7 @@ unit_overrides:
   light_walker:
     extra_details: "stolen military bipedal scout walker repainted in mining livery, chicken-legged walking chassis with armored cockpit cabin, twin heavy flamer arm weapon with AP(1) Blast(3), stomping feet with AP(1), industrial yellow paint with mining company logos and cult graffiti overlaid, sensor dome on top, Fear(1) presence, Tough(6)"
     pose: "striding forward in patrol stance, twin heavy flamer arm aimed ahead, cockpit canopy glinting"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 4

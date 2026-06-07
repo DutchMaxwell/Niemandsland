@@ -8,17 +8,33 @@
 faction_name: "Blessed Sisters"
 
 aesthetic:
-  genre: "grimdark sci-fi religious military"
-  style: "militant religious order"
+  genre: "clean, bright, crisp sci-fi religious military — noble warrior-nun crusaders, crisp studio render"
+  ip_strict: true   # armoured warrior-nuns: strict IP gate flags generic-marine / Chaos-drift lookalikes
+  style: "sleek ornate original power armour, polished and devout"
   inspiration:
-    - "Warrior nuns in futuristic power armor"
-    - "Gothic cathedral architecture fused with military technology"
-    - "Joan of Arc meets sci-fi crusade"
+    - "Warrior nuns in futuristic power armor (generic sci-fi trope)"
+    - "Gothic cathedral architecture fused with original sci-fi technology"
+    - "Joan of Arc meets a sci-fi crusade silhouette"
+  # NOTE: original_design_cues + weapon_style ARE injected into the prompt (prompt_engine
+  # _format_aesthetic / generate_prompt) for humanoid units — keep them POSITIVE, never name a
+  # protected design here.
+  original_design_cues:
+    - "Smooth full-face visor helmet framed by a slim arched halo-ring, with a single narrow stained-glass slit lens glowing soft crimson"
+    - "Tall pointed cathedral-arch shoulder guards with engraved devotional tracery, flat and faceted"
+    - "Original quatrefoil-and-flame crest emblem on the chest plate and one shoulder"
+    - "Segmented layered jet-black plate armour over flowing ivory cloth robes and a tabard"
+    - "Clean, bright and noble look — no spikes, horns, skulls or daemonic ornament"
+    - "Slightly stylised clean comic / video-game render (crisp readable shapes, bright even lighting)"
+  weapon_style: "an original sleek angular bullpup heavy rifle with a slim profile and a glowing crimson power cell, devotional script etched along the casing"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Adepta Sororitas iconography"
+    - "Games Workshop / Warhammer 40,000 designs of any kind"
+    - "Adepta Sororitas / Sisters of Battle trade dress, Sabbat-style helmets, fleur-de-lys icons"
+    - "Aquila / imperial double-eagle, purity-seal layouts copied 1:1, iron halo, skull motifs"
+    - "Boxy magazine-fed bolter-style rifles"
+    - "The terms ceramite, bolter, Astartes, Terminator armour"
+    - "Any real-world military or franchise logos, insignia or trademarks"
     - "Sexualized or impractical armor"
-    - "Cartoon aesthetics"
+    - "Cartoon-baby or anime proportions; xenos or alien features"
 
 colors:
   primary: "jet black power armor"
@@ -71,6 +87,7 @@ unit_overrides:
   exo_suit_high_sister:
     extra_details: "towering hero in massive ornate exo-suit power armor, great energy sword crackling with holy energy in right hand, stomp-capable armored feet, gothic cathedral-inspired shoulder pauldrons with devotional carvings, golden reliquary chest plate, fear-inspiring presence, heavy armored frame between infantry and walker size, Tough(9)"
     pose: "dominating combat stance, great energy sword raised high, armored feet crushing forward"
+    type: walker
 
     game_stats:
       quality: 4
@@ -89,7 +106,7 @@ unit_overrides:
           attacks: 3
           rules: ["AP(1)"]
   high_destroyer_sister:
-    extra_details: "elite destroyer hero in bulky terminator-style power armor, combat shield on left arm with engraved holy symbols, quadruple-attack close combat weapon in right hand, devotional scrolls and purity seals hanging from armor, ambush deployment equipment, shielded and heavily armored, Tough(6)"
+    extra_details: "elite destroyer hero in bulky massive siege-class power armor, combat shield on left arm with engraved holy symbols, quadruple-attack close combat weapon in right hand, devotional scrolls and embossed devotional seals hanging from armor, ambush deployment equipment, shielded and heavily armored, Tough(6)"
     pose: "aggressive combat crouch, shield braced forward, close combat weapon poised to strike"
 
     game_stats:
@@ -335,7 +352,7 @@ unit_overrides:
           range: 0
           attacks: 1
   destroyer_sisters:
-    extra_details: "single elite heavy assault warrior in bulky terminator-style power armor, triple-attack close combat weapons, combat shields with holy engravings granting shielded defense, ambush deployment teleport equipment, heavily reinforced armor plating with devotional iconography"
+    extra_details: "single elite heavy assault warrior in bulky massive siege-class power armor, triple-attack close combat weapons, combat shields with holy engravings granting shielded defense, ambush deployment teleport equipment, heavily reinforced armor plating with devotional iconography"
     pose: "imposing combat advance, shields locked, close combat weapons raised"
 
   # ==========================================================================
@@ -403,6 +420,7 @@ unit_overrides:
   apc:
     extra_details: "armored personnel carrier with gothic cathedral-inspired hull design, storm rifle turret on top with AP capability, front ramp door for troop deployment, devotional carvings along hull panels, heavy armored tracks, incense-burner exhaust stacks, Tough(6), Transport(11)"
     pose: "driving forward, turret aimed ahead, ramp sealed"
+    type: vehicle
 
     game_stats:
       quality: 4
@@ -419,6 +437,7 @@ unit_overrides:
   procession_altar:
     extra_details: "mobile religious shrine transport, ornate cathedral-on-tracks design, holy statue mounted on top unleashing flame blasts with blast and purge capability, stained glass panels on hull sides, golden reliquary and devotional banners, angelic statuary, provides courage and guarded and precision shooter buffs to nearby units, Tough(6), Transport(6)"
     pose: "rolling forward in sacred procession, holy statue blazing with divine fire, banners streaming"
+    type: vehicle
 
     game_stats:
       quality: 4
@@ -435,6 +454,7 @@ unit_overrides:
   infernal_apc:
     extra_details: "heavy assault flame transport, twin blessed flamers as main turret weapons with purge capability, hull-mounted blessed flamer, aggressive angular gothic hull design with flame motifs, reinforced frontal armor, incense and flame exhaust ports, devotional script across hull, Tough(9), Transport(6)"
     pose: "assault advance, all flamers blazing purifying fire forward"
+    type: vehicle
 
   # ==========================================================================
   # VEHICLES (no Transport)
@@ -459,7 +479,7 @@ unit_overrides:
   exo_suit:
     extra_details: "walking exoskeleton suit between infantry and walker size, pilot sister visible in chest cavity, energy mace with blast capability in one arm, stomp-capable armored feet, reactor pack on back with devotional iconography, fear-inspiring gothic design, Tough(6)"
     pose: "advancing pose, energy mace swinging, stomping stride"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 4
@@ -478,8 +498,8 @@ unit_overrides:
           attacks: 2
           rules: ["AP(1)"]
   organ_tank:
-    extra_details: "heavy missile artillery tank with distinctive organ-pipe missile launcher array firing devastating AP(2) Deadly(3) unstoppable missiles, gothic pipe organ aesthetic on turret, hull-mounted blessed flamer, heavy armored hull with devotional carvings, incense-burner exhaust, Tough(9)"
-    pose: "firing position, organ missile array elevated and launching"
+    extra_details: "heavy missile artillery tank, turret shaped like a cathedral pipe-organ instrument made of metal pipes, this bundle of vertical metal launch tubes is a manufactured rocket array firing devastating AP(2) Deadly(3) unstoppable missiles, hull-mounted blessed flamer, heavy armored hull with devotional carvings, incense-burner exhaust, Tough(9)"
+    pose: "firing position, the bundle of metal launch tubes elevated and launching missiles"
     type: vehicle
 
     game_stats:
@@ -522,7 +542,7 @@ unit_overrides:
   assault_walker:
     extra_details: "aggressive bipedal walker war machine, two heavy flail arms with AP and blast capability, stomp-capable armored feet, gothic cathedral-inspired torso with devotional carvings, regenerative blessed armor plating, scout deployment capability, fear-inspiring presence, wild frenzied design with chains and devotional fetishes, Tough(9)"
     pose: "charging forward, flail arms swinging wide, fearless assault stride"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 4
@@ -543,7 +563,7 @@ unit_overrides:
   support_walker:
     extra_details: "defensive bipedal walker war machine, two heavy flail arms with AP and blast capability, stomp-capable armored feet, fortified extra-thick armor plating with gothic tracery, regenerative blessed armor, Devout Boost holy aura radiating outward, more armored and deliberate than assault variant, devotional shrine built into torso, Tough(9)"
     pose: "steady advancing pose, flails ready, fortified armor gleaming with holy light"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 4
@@ -564,7 +584,7 @@ unit_overrides:
   blessed_titan:
     extra_details: "colossal god-machine war titan towering over all other units, two titan flail arms with devastating blast and rending capability, eight-attack stomp feet with AP(2), twin hull-mounted blessed flamers, gothic cathedral superstructure as torso with stained glass viewports and bell towers, massive fear(4) inspiring presence, devotional banners and holy relics adorning every surface, Tough(24)"
     pose: "striding forward with earth-shaking steps, titan flails swinging, divine wrath incarnate"
-    type: vehicle
+    type: titan
 
   # ==========================================================================
   # NAMED / UNIQUE CHARACTERS

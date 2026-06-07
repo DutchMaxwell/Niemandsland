@@ -9,12 +9,22 @@
 faction_name: "Dwarf Guilds"
 
 aesthetic:
-  genre: "grimdark sci-fi industrial"
+  genre: "clean, bright, crisp industrial sci-fi — burnished forge-engineers in a clear studio render"
   style: "space dwarf engineers and warriors"
   inspiration:
     - "Stocky space dwarves with advanced industrial technology"
     - "Norse dwarf forge aesthetics meets sci-fi engineering"
     - "Heavy-armored miners and engineers in a war setting"
+  # NOTE: original_design_cues + weapon_style ARE now injected into the prompt (prompt_engine
+  # _format_aesthetic) — keep them POSITIVE, never name a protected design here.
+  original_design_cues:
+    - "Very stocky, broad-shouldered low-set proportions — wide and compact, never tall or slender"
+    - "Heavy enclosed forge-helm with a single broad horizontal amber visor band and a riveted cheek guard"
+    - "Thick slab-sided armour plates with chunky rivets, bevelled edges and a riveted gorget over a braided beard"
+    - "Original cog-and-anvil guild crest stamped on one shoulder plate and the chest"
+    - "Burnished orange-brown plate over dark steel-grey mechanical underframe with bright amber energy cells"
+    - "Bright, even studio lighting and crisp readable industrial surfaces — no grime, no gloom"
+  weapon_style: "chunky bevelled industrial firearms and heavy forged hammers, picks and axes with riveted casings and amber power cells"
   explicitly_avoid:
     - "Games Workshop specific designs"
     - "Copyrighted Leagues of Votann designs"
@@ -323,8 +333,9 @@ unit_overrides:
           attacks: 1
           rules: ["Blast(3)"]
   mine_bot_guard:
-    extra_details: "single autonomous mining robot repurposed for combat, bulky rectangular industrial chassis in dark steel grey with orange-brown guild markings, light iron cannons mounted on arms firing AP(1) Blast(3) rounds at 24 inch range, close combat manipulators as secondary weapons, no organic components - pure fearless automaton, optical sensor clusters replacing heads glowing amber, heavy tracked or multi-legged locomotion, industrial mining laser arrays visible, Fearless, Slow, Sturdy, Tough(3)"
+    extra_details: "single autonomous mining robot repurposed for combat, bulky rectangular industrial chassis in dark steel grey with orange-brown guild markings, light iron cannons mounted on arms firing AP(1) Blast(3) rounds at 24 inch range, close combat manipulators as secondary weapons, a pure fearless machine automaton with no living parts, optical sensor clusters replacing heads glowing amber, heavy tracked or multi-legged locomotion, industrial mining laser arrays visible, Fearless, Slow, Sturdy, Tough(3)"
     pose: "mechanical advance in formation, light iron cannons aimed and firing, optical sensors scanning, implacable robotic stride"
+    type: walker
 
   # ==========================================================================
   # BIKES
@@ -402,6 +413,7 @@ unit_overrides:
   apc:
     extra_details: "armored personnel carrier in burnished orange-brown hull plating with dark steel riveted armor, heavy machinegun turret firing AP(1) rounds at 30 inch range (A3), twin heavy rifle sponson for additional 24 inch range AP(1) fire, reinforced front ramp for troop deployment, angular industrial armor design with guild insignia, Fast with Impact(3) ramming capability, thick armor plates (Defense 2+), transport bay for up to 11 models, amber running lights and sensor arrays, Fast, Impact(3), Sturdy, Tough(6), Transport(11)"
     pose: "driving forward at speed, heavy machinegun turret tracking, front ramp visible, industrial armored profile"
+    type: vehicle
 
     game_stats:
       quality: 4
@@ -422,6 +434,7 @@ unit_overrides:
   assault_drill:
     extra_details: "massive subterranean assault transport vehicle with enormous front-mounted tunneling drill spinning with AP(4) power, heavy flamer for AP(1) Blast(3) Reliable corridor clearing, heavily armored cylindrical hull designed to bore through rock and emerge behind enemy lines, Ambush deep-strike deployment from underground, grinding drill teeth and excavation blades, amber warning lights along hull, transport bay for 11 models, earth and rock debris on hull, Ambush, Fast, Impact(6), Sturdy, Tough(12), Transport(11)"
     pose: "erupting from the ground at an angle, massive tunneling drill spinning at front, heavy flamer firing, hull emerging from broken earth"
+    type: vehicle
 
     game_stats:
       quality: 4
@@ -442,6 +455,7 @@ unit_overrides:
   fortress_tank:
     extra_details: "colossal super-heavy battle fortress on tracks, the largest vehicle in the dwarf arsenal, rail M-cannon main turret firing AP(2) Deadly(6) Quake rounds at 36 inch range, minigun secondary weapon with AP(1), four twin heavy rifle sponsons along hull sides for overlapping fire, massive transport bay for 16 models, enormously thick industrial armor plating (Defense 2+), guild command tower with multiple amber sensor arrays, multiple exhaust stacks and heat vents, Fast with devastating Impact(9), Sturdy, Tough(18), Transport(16)"
     pose: "thundering forward, rail M-cannon turret elevated, all sponson weapons bristling, massive armored profile dominating"
+    type: vehicle
 
   # ==========================================================================
   # VEHICLES (no Transport)
@@ -529,7 +543,7 @@ unit_overrides:
   dwarf_walker:
     extra_details: "heavy bipedal combat walker with enclosed armored cockpit, two shock hammer arms crackling with Blast(3) energy for devastating melee strikes (A2 each), heavy stomp attacks from armored feet with AP(1), stocky broad-shouldered walker silhouette matching dwarf proportions, thick industrial armor plates with guild insignia, amber optic sensor array in armored head, hydraulic piston-driven legs, back-mounted reactor core with heat vents, Fear(2) intimidating presence, Sturdy, Tough(12)"
     pose: "striding forward aggressively, both shock hammer arms raised and crackling, heavy feet stomping, stocky imposing silhouette"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -570,7 +584,7 @@ unit_overrides:
   mining_titan:
     extra_details: "enormous bipedal mining titan repurposed for war, the second-largest war engine in the dwarf arsenal, dual grabbing claws firing 12 inch range AP(1) Blast(6) crushing projectiles, piercing M-drill melee weapon with AP(2) Deadly(3) Quake, massive stomp attacks (A6) with AP(2), tunneling drill secondary melee weapon with A6 AP(4), towering industrial mining machine bristling with excavation equipment turned weapons, heavy burnished armor over dark steel mechanical frame, amber optic arrays and warning lights, Fear(3) terrifying war engine, Fearless, Sturdy, Tough(18)"
     pose: "towering over the battlefield, dual grabbing claws extended, piercing M-drill grinding, massive industrial mining titan"
-    type: vehicle
+    type: titan
 
     game_stats:
       quality: 3

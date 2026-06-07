@@ -325,7 +325,12 @@ class ImageGenerator:
                     "Bitte in den Einstellungen hinterlegen."
                 )
             logger.info("Verbinde zur Gemini API: %s", self._model.value)
-            self._gemini_client = genai.Client(api_key=self._gemini_api_key)
+            # 180s per-request timeout so a hung call fails (then is retried) instead of blocking
+            # forever — without this, the parallel overnight run froze on a stuck request.
+            self._gemini_client = genai.Client(
+                api_key=self._gemini_api_key,
+                http_options=genai.types.HttpOptions(timeout=180000),
+            )
             return
 
         if self._client is not None:

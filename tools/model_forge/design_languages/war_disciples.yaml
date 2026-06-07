@@ -8,17 +8,30 @@
 faction_name: "War Disciples"
 
 aesthetic:
-  genre: "grimdark sci-fi berserker chaos"
-  style: "blood-mad melee berserkers"
+  genre: "clean, bright, crisp sci-fi warrior-cult — bold blood-red armoured berserkers, vivid readable studio render"
+  ip_strict: true   # blood-red chaos-style power armour: strict IP gate flags generic-marine / specific commercial-range lookalikes
+  style: "bold heavy original power armour, savage but crisply sculpted, high-contrast clean render"
   inspiration:
-    - "Blood-crazed berserker warriors in spiked power armor"
-    - "Skull-obsessed rage warriors with chain weapons"
-    - "Viking berserker rage meets corrupted sci-fi military"
+    - "Blood-crazed berserker warriors in heavy bladed power armour (generic sci-fi trope)"
+    - "Rage-driven warrior-cult zealots with brutal chain melee weapons"
+    - "Norse-berserker fury fused with original heavy sci-fi battle armour"
+  # NOTE: original_design_cues + weapon_style ARE injected into the prompt (prompt_engine
+  # _format_aesthetic / generate_prompt) for humanoid units — keep them POSITIVE and ORIGINAL,
+  # never name a protected design here.
+  original_design_cues:
+    - "Snarling angular full-face helmet with a vertical fin-crest and a pair of narrow glowing crimson eye-slits"
+    - "Heavy faceted wedge-shaped shoulder guards with short blunt rivet-studs (hard machined plate, never spikes or horns)"
+    - "Original triple-fang chevron emblem riveted on the chest plate and one shoulder"
+    - "Layered overlapping blood-red armour plates with hard mechanical edges and brass-trim borders"
+    - "Forged metal trophy-rivets and machined chain links bolted to the armour, all clearly hard manufactured metal"
+    - "High-contrast bold comic / video-game render — vivid crimson, crisp bright lighting, clean readable shapes"
+  weapon_style: "an original heavy serrated chain-blade melee weapon with a roaring toothed track, paired with a stout angular slug-pistol with a glowing crimson power cell"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted World Eaters or Khorne iconography"
-    - "Calm or disciplined aesthetics"
-    - "Ranged-focused or shooty designs"
+    - "Any specific real-world commercial miniatures range or its trade dress"
+    - "Calm or disciplined parade-ground aesthetics"
+    - "Ranged-focused or shooty silhouettes"
+    - "Organic grown flesh weapons, tentacles or living bio-organs (armour and weapons are hard manufactured metal)"
+    - "Any real-world military or franchise logos, insignia or trademarks"
 
 colors:
   primary: "blood red and dark brass power armor"
@@ -390,6 +403,7 @@ unit_overrides:
   war_apc:
     extra_details: "armored personnel carrier in blood-red livery with dark brass trim and skull decorations, angular brutal design with front ramp door adorned with massive skull motif, storm rifle turret on top with skull-faced barrel shroud, heavy tracks with spiked guards, chains and skulls hanging from hull sides, blood splatter weathering on frontal armor, fast assault transport, Tough(6), Transport(11)"
     pose: "driving forward aggressively, turret aimed ahead, ramp sealed, chains rattling"
+    type: vehicle
 
     game_stats:
       quality: 3
@@ -406,6 +420,7 @@ unit_overrides:
   war_heavy_tank:
     extra_details: "super-heavy assault transport in blood-red livery with extensive dark brass filigree and massive skull decorations, enormous hull with quad laser cannon turret and twin heavy machinegun sponsons, extremely thick spiked armor plating with skull motifs and warbound runes, chains wrapped around turret, blood-soaked hull with gore dripping from ram, troop compartment with skull-decorated hatches, Tough(18), Transport(11)"
     pose: "rolling forward with devastating force, all weapon systems aimed, dominating blood-soaked war machine"
+    type: vehicle
 
   # ==========================================================================
   # VEHICLES (no Transport)
@@ -451,7 +466,7 @@ unit_overrides:
   war_infernal_brute:
     extra_details: "massive bipedal daemon engine walker in blood-red with dark brass skull armor, two enormous brute hammers with blast capability crackling with infernal energy, heavy armored legs with devastating stomp attack, skull-faced sarcophagus body with chains and blood flowing from joints, horned head with glowing red eyes and fanged maw, infernal furnace glowing in chest cavity, fear-inducing presence, Tough(12)"
     pose: "striding forward in berserker fury, dual brute hammers raised for devastating swing, furnace blazing"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -472,7 +487,7 @@ unit_overrides:
   war_mech_fiend:
     extra_details: "quadrupedal daemon engine beast in blood-red with dark brass armor plates, enormous fiend claws with rending capability on front limbs, eight-attack steel tails whipping behind with AP(1), heavy armored body with stomp capability, skull-decorated carapace with chains and blood flowing from joints, regenerating flesh visible between armor plates, bestial horned skull head with glowing eyes and dripping fangs, fear-inducing daemon beast, Tough(12)"
     pose: "lunging forward on four legs, fiend claws extended, steel tails lashing, feral daemon predator"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -497,7 +512,7 @@ unit_overrides:
   war_crab_walker:
     extra_details: "colossal multi-legged daemon engine walker in blood-red with dark brass armor, battle cannon turret on back, reaper cannon mounted on hull, massive crab fists with AP(3) on two primary arms, flailing crab flail with eight attacks on secondary arm, six-attack stomp from multiple armored legs, skull-decorated carapace with chains and flowing blood, regenerating flesh between armor segments, enormous horned skull head with blazing eyes, most fear-inducing daemon engine, Tough(18)"
     pose: "towering over battlefield, crab fists raised menacingly, all weapons aimed, colossal daemon horror"
-    type: vehicle
+    type: titan
 
   # ==========================================================================
   # AIRCRAFT (Aircraft rule - no type override needed)
@@ -533,6 +548,7 @@ unit_overrides:
   war_dragon:
     extra_details: "daemonic dragon-shaped aircraft in blood-red with dark brass armor scales, forge flamethrower mounted in gaping fanged maw with AP(1) blast fire, bat-like wings with brass-armored leading edges, serpentine armored body with skull decorations and chains, regenerating daemon flesh visible between scale plates, horned skull head with blazing eyes, tail ending in spiked flail, aerial daemon beast, Tough(6)"
     pose: "diving in attack run, wings spread, forge flamethrower blazing from open maw, aerial berserker predator"
+    type: aircraft
 
     game_stats:
       quality: 3

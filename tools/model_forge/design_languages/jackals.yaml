@@ -7,19 +7,30 @@
 faction_name: "Jackals"
 
 aesthetic:
-  genre: "grimdark sci-fi tribal"
-  style: "nomadic scavenger aliens"
+  all_creatures: true   # no manufactured vehicles/aircraft/walkers — only infantry, beast cavalry and great-beasts
+  genre: "clean, bright sun-bleached desert sci-fi — crisp readable tribal scavenger sculpt, clean studio render"
+  style: "nomadic scavenger canid aliens with salvaged scrap technology"
   inspiration:
     - "Humanoid canid aliens with jackal-like features and digitigrade legs"
-    - "Post-apocalyptic nomadic scavengers using salvaged alien technology"
-    - "Tribal hunter-gatherers thrust into the space age with jury-rigged gear"
-    - "Tusken Raiders meets alien canid predators with scrap-tech weapons"
+    - "Desert-nomad scavengers using salvaged technology and jury-rigged gear"
+    - "Tribal hunter-gatherers thrust into the space age with scrap-built equipment"
+    - "Lean wasteland predators with bone-and-cloth trophies and scrap-metal armour"
+  # NOTE: original_design_cues + weapon_style ARE injected into the prompt (prompt_engine
+  # _format_aesthetic / generate_prompt) — keep them POSITIVE, never name a protected design here.
+  original_design_cues:
+    - "Lean digitigrade canid silhouette with a long jackal-like muzzle, tall pointed ears and an alert forward-leaning stance"
+    - "Asymmetric hand-bolted scrap-metal plate armour over leather harness and tattered desert cloth wrappings"
+    - "An original triangular sun-disc-and-fang clan emblem scratched or painted onto shoulder plates"
+    - "Bone, tooth and scrap trophy fetishes hung from belts, harness straps and weapon hafts"
+    - "Sun-bleached tawny fur with faded red and ochre tribal warpaint, weathered rust-brown metal"
+    - "Crisp, bright readable sculpt — clearly hand-made scrap gear, no spikes, horns, skulls or daemonic ornament"
+  weapon_style: "crude hand-built scrap firearms cobbled from salvaged parts with exposed wiring and mismatched plating, plus curved hooked rending blades on reinforced hafts"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted character likenesses"
-    - "Clean or advanced-looking technology"
+    - "Copyrighted character likenesses or any real-world franchise designs"
+    - "Clean or advanced-looking factory-made technology"
     - "Cute or cartoon dog aesthetics"
     - "Human facial features"
+    - "Spikes, horns, skulls or daemonic ornament"
 
 colors:
   primary: "tawny brown and sandy fur with darker markings"

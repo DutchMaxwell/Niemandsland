@@ -9,17 +9,28 @@
 faction_name: "Wormhole Daemons of Lust"
 
 aesthetic:
-  genre: "dark fantasy horror"
-  style: "elegant predatory daemons"
+  genre: "clean, bright high-fantasy — vivid, crisp, jewel-toned otherworldly creatures, clean studio render"
+  style: "elegant predatory daemons, lithe and graceful"
   inspiration:
-    - "Lithe predatory daemons of alien elegance"
+    - "Lithe predatory creatures of alien elegance and supernatural grace"
     - "Sinuous fast-moving entities with crab-like claws"
-    - "Dark fae court aesthetics meets alien horror"
+    - "Dark fae court aesthetics reimagined as bright, vivid otherworldly creatures"
+  # NOTE: original_design_cues + weapon_style ARE now injected into the prompt
+  # (prompt_engine _format_aesthetic / generate_prompt). Keep them POSITIVE and
+  # ORIGINAL — never name a protected design, real IP, or a "NOT a ..." phrasing here.
+  original_design_cues:
+    - "Tall, impossibly slender silhouette with sinuous, sweeping limbs and a fluid serpentine posture"
+    - "Elongated narrow head with a smooth backswept obsidian horn-crown and several small electric-pink eyes"
+    - "One forearm tapering into a graceful, polished crab-like pincer claw"
+    - "Flowing mane of fine ribbon-like tendrils cascading from the head and spine"
+    - "Original interlocking-crescent emblem etched in deep purple across the chest and shoulder"
+    - "Pale lavender iridescent skin with deep-purple swirling shadow markings and a clean, jewel-bright palette"
+  weapon_style: "elegant slender ritual war-hammers and curved blades of polished obsidian, wreathed in crackling electric-pink energy"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Slaanesh daemon designs"
+    - "Any specific commercial miniatures range or trade dress"
     - "Sexualized or gratuitous designs"
     - "Power armor or military equipment"
+    - "Muddy, dark, gloomy or low-contrast rendering"
 
 colors:
   primary: "pale lavender daemon flesh"
@@ -28,7 +39,7 @@ colors:
 
 materials:
   - "smooth pale daemon skin with iridescent sheen"
-  - "chitinous crab-like claw appendages"
+  - "smooth obsidian-like crab-like claw appendages"
   - "flowing ethereal hair and mane tendrils"
   - "sharp obsidian-like horn and claw formations"
 
@@ -70,7 +81,7 @@ unit_overrides:
   # ==========================================================================
 
   avatar_of_lust:
-    extra_details: "colossal greater daemon of lust towering above all others, impossibly tall and slender pale lavender body with sinuous elongated proportions radiating alien perfection, two pairs of massive crab-like claw arms wielding exalted ritual hammers wreathed in electric pink surge energy with Blast(3) impact, enormous cloven hooves for devastating stomps with AP(2), flowing ethereal mane of pale tendrils cascading from an elongated skull-like head with multiple electric pink eyes, sharp obsidian horns sweeping back in elegant curves, deep purple and magenta shadow patterns rippling across smooth iridescent skin, chitinous claw formations along forearms and shins, an aura of overwhelming alien dread, Fear(3) terrifying presence, Fearless, Lustbound supernatural speed, Tough(18)"
+    extra_details: "colossal greater daemon of lust towering above all others, impossibly tall and slender pale lavender body with sinuous elongated proportions radiating alien perfection, two pairs of massive crab-like claw arms wielding exalted ritual hammers wreathed in electric pink surge energy with Blast(3) impact, enormous cloven hooves for devastating stomps with AP(2), flowing ethereal mane of pale tendrils cascading from an elongated skull-like head with multiple electric pink eyes, sharp obsidian horns sweeping back in elegant curves, deep purple and magenta shadow patterns rippling across smooth iridescent skin, smooth obsidian-like claw formations along forearms and shins, an aura of overwhelming alien dread, Fear(3) terrifying presence, Fearless, Lustbound supernatural speed, Tough(18)"
     pose: "imperious daemon overlord descending with exalted ritual hammers raised, mane tendrils billowing, cloven hooves poised to crush, electric pink energy surging from weapons and eyes, embodiment of predatory alien elegance"
 
     game_stats:
@@ -90,7 +101,7 @@ unit_overrides:
           attacks: 6
           rules: ["AP(2)"]
   ascended_harbinger_of_lust:
-    extra_details: "towering greater daemon herald of lust, tall sinuous pale lavender body with lean powerful musculature rippling beneath smooth iridescent skin, two great ritual hammers in elongated crab-claw arms wreathed in electric pink surge energy with Blast(3), powerful cloven hooves for stomps with AP(1), elongated head with swept-back obsidian horns and multiple electric pink eyes blazing with alien intelligence, flowing ethereal mane tendrils trailing behind, deep purple shadow markings swirling across torso and limbs, chitinous claw plates along forearms, lithe predatory build optimized for terrifying speed, Fear(2) daemonic presence, Lustbound supernatural speed, Tough(12)"
+    extra_details: "towering greater daemon herald of lust, tall sinuous pale lavender body with lean powerful musculature rippling beneath smooth iridescent skin, two great ritual hammers in elongated crab-claw arms wreathed in electric pink surge energy with Blast(3), powerful cloven hooves for stomps with AP(1), elongated head with swept-back obsidian horns and multiple electric pink eyes blazing with alien intelligence, flowing ethereal mane tendrils trailing behind, deep purple shadow markings swirling across torso and limbs, smooth obsidian-like claw plates along forearms, lithe predatory build optimized for terrifying speed, Fear(2) daemonic presence, Lustbound supernatural speed, Tough(12)"
     pose: "lunging charge pose, both great ritual hammers swept back for devastating blast impact, body coiled like a striking serpent, mane tendrils streaming behind, electric pink surge energy crackling along weapon heads"
 
     game_stats:
@@ -110,7 +121,7 @@ unit_overrides:
           attacks: 4
           rules: ["AP(1)"]
   harbinger_of_lust:
-    extra_details: "daemon herald of lust with tall sinuous pale lavender body, lean and elegant with smooth iridescent skin, two ritual hammers in slender crab-claw arms wreathed in electric pink surge energy with Blast(3), cloven hooves for stomps with AP(1), elongated head with swept-back obsidian horns and blazing electric pink eyes, flowing mane tendrils from head crest, deep purple shadow markings along spine and limbs, chitinous claw formations on forearms, Fear(1) intimidating alien presence, Lustbound supernatural speed, Tough(6)"
+    extra_details: "daemon herald of lust with tall sinuous pale lavender body, lean and elegant with smooth iridescent skin, two ritual hammers in slender crab-claw arms wreathed in electric pink surge energy with Blast(3), cloven hooves for stomps with AP(1), elongated head with swept-back obsidian horns and blazing electric pink eyes, flowing mane tendrils from head crest, deep purple shadow markings along spine and limbs, smooth obsidian-like claw formations on forearms, Fear(1) intimidating alien presence, Lustbound supernatural speed, Tough(6)"
     pose: "commanding herald stance, ritual hammers raised crackling with surge energy, mane tendrils fanned wide in display of authority, electric pink eyes surveying the battlefield"
 
     game_stats:
@@ -130,7 +141,7 @@ unit_overrides:
           attacks: 2
           rules: ["AP(1)"]
   champion_of_lust:
-    extra_details: "lesser daemon champion of lust with lithe pale lavender body, slender but coiled with predatory energy, smooth iridescent skin with deep purple shadow patterns, one arm ending in elegant crab-claw hand gripping a surge-enchanted blade, other arm wielding a ritual hammer with Blast(3) surge energy, elongated face with small swept-back obsidian horns and glowing electric pink eyes, short mane tendrils flowing from skull crest, chitinous claw plates on forearms and shins, squad leader daemon radiating alien authority, Lustbound supernatural speed, Tough(3)"
+    extra_details: "lesser daemon champion of lust with lithe pale lavender body, slender but coiled with predatory energy, smooth iridescent skin with deep purple shadow patterns, one arm ending in elegant crab-claw hand gripping a surge-enchanted blade, other arm wielding a ritual hammer with Blast(3) surge energy, elongated face with small swept-back obsidian horns and glowing electric pink eyes, short mane tendrils flowing from skull crest, smooth obsidian-like claw plates on forearms and shins, squad leader daemon radiating alien authority, Lustbound supernatural speed, Tough(3)"
     pose: "aggressive combat stance, blade held low in one claw-hand, ritual hammer raised in the other trailing electric pink surge energy, body tensed for explosive charge"
 
     game_stats:
@@ -170,7 +181,7 @@ unit_overrides:
           attacks: 1
           rules: ["Blast(3)"]
   infernal_siren:
-    extra_details: "daemon siren of lust with ethereal pale lavender body radiating supernatural resonance, slender elegant form with smooth iridescent skin, carrying an infernal harp of obsidian and chitinous material producing devastating sonic blasts at 18 inch range with Blast(3) Indirect Unstoppable warpfire sound-waves, a surge-enchanted blade in the other crab-claw hand for melee defense, elongated head with swept-back obsidian horns and blazing electric pink eyes, long flowing mane tendrils acting as resonance amplifiers, deep purple and magenta energy patterns pulsing across body in rhythm with the harp, the battlefield musician and psychic conductor of the lust daemon legions, Lustbound supernatural speed, Tough(3)"
+    extra_details: "daemon siren of lust with ethereal pale lavender body radiating supernatural resonance, slender elegant form with smooth iridescent skin, carrying an infernal harp of polished obsidian and lacquered shell material producing devastating sonic blasts at 18 inch range with Blast(3) Indirect Unstoppable warpfire sound-waves, a surge-enchanted blade in the other crab-claw hand for melee defense, elongated head with swept-back obsidian horns and blazing electric pink eyes, long flowing mane tendrils acting as resonance amplifiers, deep purple and magenta energy patterns pulsing across body in rhythm with the harp, the battlefield musician and psychic conductor of the lust daemon legions, Lustbound supernatural speed, Tough(3)"
     pose: "performance stance strumming the infernal harp with one claw-hand, visible sonic shockwaves rippling outward in electric pink energy, blade held at guard in the other hand, mane tendrils vibrating with harmonic resonance"
 
   # ==========================================================================
@@ -194,7 +205,7 @@ unit_overrides:
           attacks: 1
           rules: ["Surge"]
   lust_warriors:
-    extra_details: "single daemon infantry, lithe pale lavender bodies with lean athletic builds optimized for speed, smooth iridescent skin with swirling deep purple shadow markings, wielding a surge-enchanted hand weapon in elegant crab-claw hands, elongated faces with small obsidian horns and glowing electric pink eyes, short mane tendrils flowing from skull crests, chitinous claw plates on forearms, the swift backbone infantry of the lust daemon legions, Lustbound supernatural speed granting extra movement"
+    extra_details: "single daemon infantry, lithe pale lavender bodies with lean athletic builds optimized for speed, smooth iridescent skin with swirling deep purple shadow markings, wielding a surge-enchanted hand weapon in elegant crab-claw hands, elongated faces with small obsidian horns and glowing electric pink eyes, short mane tendrils flowing from skull crests, smooth obsidian-like claw plates on forearms, the swift backbone infantry of the lust daemon legions, Lustbound supernatural speed granting extra movement"
     pose: "advancing in swift formation, surge-enchanted hand weapons raised, bodies moving with fluid predatory grace, a tide of pale lavender speed"
 
     game_stats:
@@ -210,7 +221,7 @@ unit_overrides:
           attacks: 1
           rules: ["Surge"]
   lust_furies:
-    extra_details: "single winged daemon predator, lean wiry pale lavender bodies with large membranous wings with deep purple veining, angular elongated faces with small obsidian horns and glowing electric pink eyes, paired rending claws on each arm capable of tearing through armor with supernatural precision, digitigrade legs with taloned feet, short whipping mane tendrils, minimal chitinous plates on lithe agile frames, fast flying scout daemons that descend in shrieking packs, Lustbound supernatural speed"
+    extra_details: "single winged daemon predator, lean wiry pale lavender bodies with large membranous wings with deep purple veining, angular elongated faces with small obsidian horns and glowing electric pink eyes, paired rending claws on each arm capable of tearing through armor with supernatural precision, digitigrade legs with sharp clawed feet, short whipping mane tendrils, minimal smooth obsidian-like plates on lithe agile frames, fast flying scout daemons that descend in shrieking packs, Lustbound supernatural speed"
     pose: "diving swarm attack in flight, rending claws extended for strikes, wings folded for speed, electric pink eyes blazing, a pack of aerial predators descending"
 
     game_stats:
@@ -226,7 +237,7 @@ unit_overrides:
           attacks: 2
           rules: ["Rending"]
   shooter_furies:
-    extra_details: "single ranged winged daemon predator, lean wiry pale lavender bodies with large membranous wings with deep purple veining, angular faces with glowing electric pink eyes, arm-mounted crossbow mechanisms of obsidian and chitin firing surge-enchanted bolts at 12 inch range, secondary claws on feet and free hand for melee, short mane tendrils, fast flying scout skirmisher daemons providing aerial ranged support, Lustbound supernatural speed"
+    extra_details: "single ranged winged daemon predator, lean wiry pale lavender bodies with large membranous wings with deep purple veining, angular faces with glowing electric pink eyes, arm-mounted crossbow mechanisms of polished obsidian and dark shell firing surge-enchanted bolts at 12 inch range, secondary claws on feet and free hand for melee, short mane tendrils, fast flying scout skirmisher daemons providing aerial ranged support, Lustbound supernatural speed"
     pose: "hovering in strafing formation, arm-crossbows aimed and firing surge bolts downward, wings beating for stable hover, claws ready for close combat, aerial firing line"
 
     game_stats:
@@ -245,7 +256,7 @@ unit_overrides:
           range: 0
           attacks: 1
   lust_shooters:
-    extra_details: "single ranged daemon infantry, lithe pale lavender bodies with lean athletic builds, smooth iridescent skin with deep purple shadow patterns, arm-mounted crossbow mechanisms of obsidian and chitin firing surge-enchanted bolts at 12 inch range, hand weapons for melee defense, elongated faces with small obsidian horns and glowing electric pink eyes, short mane tendrils, chitinous claw plates on forearms, disciplined ranged infantry of the lust daemon legions, Lustbound supernatural speed"
+    extra_details: "single ranged daemon infantry, lithe pale lavender bodies with lean athletic builds, smooth iridescent skin with deep purple shadow patterns, arm-mounted crossbow mechanisms of polished obsidian and dark shell firing surge-enchanted bolts at 12 inch range, hand weapons for melee defense, elongated faces with small obsidian horns and glowing electric pink eyes, short mane tendrils, smooth obsidian-like claw plates on forearms, disciplined ranged infantry of the lust daemon legions, Lustbound supernatural speed"
     pose: "firing line formation, arm-crossbows raised and loosing surge bolts in unison, hand weapons at sides, bodies planted but poised for rapid repositioning"
 
   # ==========================================================================
@@ -344,7 +355,8 @@ unit_overrides:
           attacks: 4
           rules: ["Bane"]
   razor_flail_chariot:
-    extra_details: "single daemon war-chariot pulled by sinuous daemon steeds, ornate chariot platform of obsidian and chitinous material with flowing organic curves, crew of pale lavender daemon warriors wielding razor-flails with surge and thrust effects from the platform, chariot pulled by daemon beasts with toxin claws delivering bane strikes, deep purple and magenta energy patterns along chariot edges, bladed wheels or runner-blades extending from the sides, fast with Impact(4) devastating charge, Fear(1), Lustbound supernatural speed, Tough(6)"
+    type: vehicle
+    extra_details: "single daemon war-chariot pulled by sinuous daemon steeds, ornate chariot platform of polished obsidian and lacquered shell material with flowing sinuous curves, crew of pale lavender daemon warriors wielding razor-flails with surge and thrust effects from the platform, chariot pulled by daemon beasts with toxin claws delivering bane strikes, deep purple and magenta energy patterns along chariot edges, bladed wheels or runner-blades extending from the sides, fast with Impact(4) devastating charge, Fear(1), Lustbound supernatural speed, Tough(6)"
     pose: "charging at full speed, daemon steed beasts lunging forward with toxin claws, crew swinging razor-flails from the platform trailing surge energy, chariot blades extended, a blur of elegant destruction"
 
     game_stats:
@@ -364,7 +376,7 @@ unit_overrides:
           attacks: 2
           rules: ["Bane"]
   sacred_mirror:
-    extra_details: "single daemon war-altar bearing an enormous mirror of polished obsidian and warp-crystal, the mirror surface alive with shifting horrific reflections that fire devastating blasts of psychic energy at 12 inch range with AP(2) Blast(3) surge, crew of pale lavender daemon attendants wielding surge-enchanted weapons defending the altar with 3 crew attacks, the mirror frame carved with flowing organic daemon runes of deep purple and electric pink, warp-energy emanating from the reflective surface, Caster(3) sorcerous daemon construct, Resistance to magic, Lustbound supernatural speed, Tough(6)"
+    extra_details: "single daemon war-altar bearing an enormous mirror of polished obsidian and warp-crystal, the mirror surface alive with shifting horrific reflections that fire devastating blasts of psychic energy at 12 inch range with AP(2) Blast(3) surge, crew of pale lavender daemon attendants wielding surge-enchanted weapons defending the altar with 3 crew attacks, the mirror frame carved with flowing sinuous daemon runes of deep purple and electric pink, warp-energy emanating from the reflective surface, Caster(3) sorcerous daemon construct, Resistance to magic, Lustbound supernatural speed, Tough(6)"
     pose: "mobile altar advancing with the sacred mirror blazing with horrific reflections, electric pink psychic energy beams firing from the mirror surface, daemon crew flanking and defending, warp-light spilling from the reflective plane"
     type: vehicle
 
@@ -389,7 +401,7 @@ unit_overrides:
           attacks: 3
           rules: ["Surge"]
   soul_daemon_of_lust:
-    extra_details: "colossal greater daemon of lust rivaling the Avatar in titanic size, impossibly tall and sinuous pale lavender body of breathtaking alien proportions, smooth iridescent skin shimmering with deep purple and magenta warp-energy beneath the surface, one arm fused with a lust cannon firing devastating surge-enchanted projectiles at 24 inch range with 9 attacks, other arm wielding a colossal lust sword delivering 18 surge attacks in sweeping arcs that cut through entire formations, massive cloven hooves for devastating stomps with AP(2) crushing force, elongated head with enormous swept-back obsidian horns and multiple blazing electric pink eyes, flowing mane of ethereal tendrils cascading from head and spine like a living cloak, chitinous claw formations along arms and legs, deep purple shadow patterns flowing across entire body like living tattoos, Fear(3) overwhelming alien dread, Fearless, Lustbound supernatural speed, Tough(18)"
+    extra_details: "colossal greater daemon of lust rivaling the Avatar in titanic size, impossibly tall and sinuous pale lavender body of breathtaking alien proportions, smooth iridescent skin shimmering with deep purple and magenta warp-energy beneath the surface, one arm fused with a lust cannon firing devastating surge-enchanted projectiles at 24 inch range with 9 attacks, other arm wielding a colossal lust sword delivering 18 surge attacks in sweeping arcs that cut through entire formations, massive cloven hooves for devastating stomps with AP(2) crushing force, elongated head with enormous swept-back obsidian horns and multiple blazing electric pink eyes, flowing mane of ethereal tendrils cascading from head and spine like a living cloak, smooth obsidian-like claw formations along arms and legs, deep purple shadow patterns flowing across entire body like living tattoos, Fear(3) overwhelming alien dread, Fearless, Lustbound supernatural speed, Tough(18)"
     pose: "titanic daemon striding forward with terrible alien grace, lust cannon arm raised and firing a barrage of surge-enchanted projectiles, colossal lust sword swept in a devastating arc, cloven hooves crushing the ground, mane tendrils billowing like a storm, the ultimate embodiment of predatory elegance made colossal"
 
     game_stats:

@@ -7,17 +7,30 @@
 faction_name: "Orc Marauders"
 
 aesthetic:
-  genre: "grimdark sci-fi savage"
-  style: "brutal green-skinned marauders"
+  # Greenskin marauders are a generic savage-alien trope (NOT a 1:1 elite power-armour
+  # range), so ip_strict stays off and the lenient gate applies. Weapons are MANUFACTURED
+  # scrap-tech (choppas, shotguns, MGs, flamers) — bio_weapons stays off (default). The
+  # army fields trucks, buggies, walkers and planes, so all_creatures stays off too.
+  genre: "bright, crisp, high-contrast sci-fi — savage scrap-tech raiders rendered as a clean studio sculpt"
+  style: "brutal green-skinned marauders in bolted-together scrap armour"
   inspiration:
     - "Brutal green-skinned aliens with crude scrap technology"
     - "Savage tribal warriors with ramshackle vehicles"
-    - "Mad Max meets alien barbarian horde"
+    - "Post-apocalyptic desert-raider barbarian horde with cobbled-together machines"
+  # NOTE: original_design_cues + weapon_style ARE injected into the prompt (humanoid units
+  # only) — keep them POSITIVE and ORIGINAL; never name a protected design or real IP here.
+  original_design_cues:
+    - "Heavy hunched silhouette with a thick neck, broad sloping shoulders and an oversized jutting under-bite jaw"
+    - "Riveted scrap-plate armour bolted in mismatched panels, with a flat angular shoulder guard on one side"
+    - "Original geometric clan emblem: a bold yellow-and-black hazard chevron scratched onto a metal plate"
+    - "Crude leather straps, trophy bones and exposed welded seams across the armour"
+    - "Bright green skin with scars and rough hand-daubed war paint, sharp readable shapes under even studio light"
+  weapon_style: "crude oversized scrap-metal weapons hand-welded from salvaged parts — chunky barrels, jagged cleaver-blades and visible bolts and rivets, fully mechanical and machine-built hard metal"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Ork clan iconography"
-    - "Clean or refined technology"
+    - "Clean or refined high-tech finishes"
     - "Cute or cartoon orcs"
+    - "Any real-world military or franchise logos, insignia or trademarks"
+    - "Spindly elegant proportions; sleek streamlined armour"
 
 colors:
   primary: "dark green orc skin"
@@ -397,6 +410,7 @@ unit_overrides:
           range: 0
           attacks: 3
   truck:
+    type: vehicle
     extra_details: "orc transport truck with rapid rocket launcher mounted on cab roof, armored troop bay in back for carrying 11 orc warriors, crude welded armor plates over cab and cargo area, ram bar on front for impact charges, big rumbling diesel-like engine, smoke stacks belching black exhaust, fast transport vehicle with Transport(11), Tough(6)"
     pose: "truck barreling forward, rocket launcher on roof aimed ahead, orcs visible in open troop bay"
 
@@ -465,7 +479,7 @@ unit_overrides:
   melee_walker:
     extra_details: "crude bipedal walker mech with two massive buzzsaws for arms, stomping feet with armored plates, Fear(2) intimidating war machine, pilot visible in crude open cockpit behind armored viewport, walker saws are massive circular saw blades on hydraulic arms dripping oil, ramshackle construction with exposed pistons and hydraulic lines, smoke stack on back, scrap metal hull welded together from salvaged vehicle parts, Tough(12)"
     pose: "walker stomping forward aggressively, both buzzsaws raised and spinning, cockpit glowing"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 4
@@ -486,7 +500,7 @@ unit_overrides:
   ranged_walker:
     extra_details: "crude bipedal walker mech armed with two rapid heavy flamers, stomping feet with armored plates, Fear(2) intimidating war machine, pilot visible behind armored viewport, dual heavy flamer arms spraying fire with blast and AP effect, fuel tanks strapped to walker back feeding the flamers, ramshackle construction with exposed mechanical parts, ferocious boost making flame attacks extra deadly, Tough(12)"
     pose: "walker advancing with both flamer arms extended and firing streams of flame, heat shimmer visible"
-    type: vehicle
+    type: walker
 
   # ==========================================================================
   # HEAVY VEHICLES
@@ -509,6 +523,7 @@ unit_overrides:
           attacks: 4
           rules: ["AP(1)"]
   great_battle_truck:
+    type: vehicle
     extra_details: "massive orc super-heavy battle fortress on wheels, heavy machinegun on top turret, basic cannon main gun, rapid rocket launcher on side sponson, enormous armored transport vehicle carrying two full squads (Transport 11 + Transport 11), colossal ram bar for devastating Impact(9) charges, multiple layers of welded scrap armor, smoke stacks belching clouds, fast despite enormous size, mobile fortress, Tough(18)"
     pose: "massive war truck dominating the scene, all weapons firing, smoke and fire, enormous imposing silhouette"
 
@@ -559,7 +574,7 @@ unit_overrides:
   great_walker:
     extra_details: "colossal orc mega-walker war machine towering over the battlefield, deathstorm minigun main weapon spraying rending AP rounds at extreme range, two rocket launcher arrays on shoulders, great walker saw on one arm for devastating melee, enormous stomping feet crushing everything below, Fear(4) terrifying colossus, fearless war machine with no retreat, pilot crew visible in armored head cockpit, ramshackle construction on enormous scale with welded plates and exposed mechanics, Tough(18)"
     pose: "titanic walker striding forward, deathstorm minigun spinning and firing, rocket arrays launching salvos"
-    type: vehicle
+    type: titan
 
     game_stats:
       quality: 4
@@ -626,6 +641,7 @@ unit_overrides:
           attacks: 8
           rules: ["AP(2)"]
   bomber_plane:
+    type: aircraft
     extra_details: "crude orc bomber aircraft with riveted scrap metal fuselage, dorsal gunner turret on top with AP machinegun, forward-facing super-MG with unstoppable AP rounds, heavy bombs slung under wings and fuselage for devastating strafing runs with AP(3) and Deadly(6), propeller-driven ramshackle design with visible engine block, crude aerodynamics held together by rivets and luck, smoke trail from unreliable engine, Aircraft rule, Tough(6)"
     pose: "in flight bombing run angle, bombs visible underneath, dorsal gunner aiming, propeller spinning"
 
@@ -650,6 +666,7 @@ unit_overrides:
           attacks: 1
           rules: ["AP(3)"]
   attack_plane:
+    type: aircraft
     extra_details: "crude orc fighter aircraft built for maximum dakka, two twin super-MGs mounted on wings firing massive volumes of unstoppable AP rounds, propeller-driven ramshackle fighter design with oversized engine, crude aerodynamics with angled scrap armor plates, kill markings painted on fuselage, aggressive low-flying attack profile, Aircraft rule, Tough(6)"
     pose: "aggressive low-altitude strafing run, twin super-MGs blazing from wings, propeller roaring"
 

@@ -9,17 +9,31 @@
 faction_name: "Wormhole Daemons of Change"
 
 aesthetic:
-  genre: "dark fantasy horror"
-  style: "arcane avian daemons"
+  all_creatures: true   # pure daemon army: every model (incl. chariot + soul daemon) is a living
+                        # warp-entity, never a manufactured vehicle/aircraft/walker/titan — no machine anchors
+  # NOTE: bio_weapons stays OMITTED — these weapons are ARCANE warpfire + crystalline magic, NOT living
+  # grown flesh-organs. Turning on bio_weapons would render Tyranid-style fleshy bio-cannons (wrong faction).
+  genre: "clean, bright, crisp high-fantasy arcane — luminous iridescent magic, vivid colourful studio render"
+  style: "radiant arcane avian daemons, crisp and colourful clean tabletop wargaming studio sculpt"
   inspiration:
-    - "Avian sorcerous daemons wreathed in warpfire"
-    - "Shifting iridescent beings of pure magic"
-    - "Lovecraftian cosmic horror meets bird-like entities"
+    - "Avian sorcerer-daemons wreathed in radiant warpfire"
+    - "Shifting, shimmering iridescent beings of pure magic"
+    - "Otherworldly bird-like arcane entities crackling with colourful energy"
+  # Injected into the prompt (no `type:` on any unit, so cues reach every model). POSITIVE + ORIGINAL only:
+  # describes our own avian warp-daemon silhouette. NEVER name a protected design here.
+  original_design_cues:
+    - "Silhouette: a tall upright avian sorcerer-daemon with a slender feathered body, broad outstretched eye-patterned wings and a long counterbalancing tail of flame-quill plumage"
+    - "Head: an elongated curved-beak bird skull crowned with a fan of swept-back ribbon horns and a feathered crest, with blazing gold eyes"
+    - "Body: smooth iridescent jewel-toned daemon plumage over lean limbs, faceted warp-crystal shards budding from shoulders and spine"
+    - "Emblem: an original arcane sigil of nested geometric rings and a single eye, glowing gold, repeated as floating rune-marks"
+    - "Palette: shifting blue-pink iridescence + deep sapphire + bright gold glow — luminous, colourful and clean, never dark or muddy"
+    - "Mood: a bright, vivid, otherworldly magical look — radiant warpfire and clean crisp shapes, NO gore, NO spiky daemonic clutter"
+  weapon_style: "arcane warp-weapons made of channelled magic, not forged metal: hafted hammers and staves whose heads are crystallised warpflame, claws and crystalline warp-blades, and bolts of iridescent gold-blue fire conjured from the hands"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Tzeentch daemon designs"
-    - "Power armor or military equipment"
+    - "Power armour, guns or manufactured military equipment"
+    - "Dark, muddy, grimdark, gory or low-contrast horror rendering"
     - "Cute or friendly magical beings"
+    - "Copyrighted character or miniature-range likenesses"
 
 colors:
   primary: "iridescent blue-pink shifting warpflame"
@@ -194,7 +208,7 @@ unit_overrides:
           attacks: 1
           rules: ["Shred"]
   change_furies:
-    extra_details: "single small winged daemon predator, lean wiry bodies of deep sapphire blue iridescent daemon flesh, bat-like wings with feathered edges for fast flying, angular bird-like faces with sharp beaks and small glowing yellow-gold eyes, paired armblades growing from forearms as natural bone-blade weapons with AP and shred, digitigrade daemon legs with taloned feet, minimal armor relying on speed and scout agility, warpfire flickering faintly along wing edges, pack hunters that swoop from the skies"
+    extra_details: "single small winged daemon predator, lean wiry bodies of deep sapphire blue iridescent daemon flesh, bat-like wings with feathered edges for fast flying, angular bird-like faces with sharp beaks and small glowing yellow-gold eyes, paired crystalline warp-blades extending from the forearms as conjured arcane blade weapons with AP and shred, digitigrade daemon legs with sharp clawed feet, minimal armor relying on speed and scout agility, warpfire flickering faintly along wing edges, pack hunters that swoop from the skies"
     pose: "diving aerial pack attack, wings tucked for speed, armblades extended forward, flock formation swooping down on prey"
 
     game_stats:
@@ -295,7 +309,7 @@ unit_overrides:
           rules: ["Shred"]
   change_warriors:
     extra_details: "single daemon warrior with disciplined avian forms, humanoid bodies of deep sapphire blue daemon flesh with iridescent sheen, bird-like faces with short beaks and glowing yellow-gold eyes, hands hurling fireballs of warpfire energy at 12 inch range, hand weapons with shred enchantment for melee combat, feathered crests along heads and forearms, light crystalline warp-armor formations across chest and shoulders, arcane rune markings across daemon flesh, the rank-and-file soldiers of the change god's daemon legions"
-    pose: "disciplined daemon advance, some hurling fireballs with arcane precision, others with shred hand weapons ready for melee, organized warp-legion formation"
+    pose: "disciplined daemon advance, some hurling fireballs with arcane precision, others with shred hand weapons ready for melee, disciplined warp-legion ranks"
 
     game_stats:
       quality: 4
@@ -368,7 +382,7 @@ unit_overrides:
           attacks: 3
           rules: ["AP(2)"]
   scorchers:
-    extra_details: "single flame-daemon beast, squat hunched daemon bodies of deep sapphire blue flesh with internal warpfire glow visible through translucent skin, wide gaping maws capable of spouting flames at 12 inch range as reliable blast(3) warpfire streams, clawed arms for melee combat, internal combustion organs visible as shifting blue-pink flame cores within torso, iridescent flame vents along spine and flanks, warpfire constantly leaking from mouth and nostrils, waddling but relentless advance, Tough(3)"
+    extra_details: "single flame-daemon beast, squat hunched daemon bodies of deep sapphire blue flesh with internal warpfire glow visible through translucent skin, wide gaping maws capable of spouting flames at 12 inch range as reliable blast(3) warpfire streams, clawed arms for melee combat, an inner furnace of shifting blue-pink warpflame glowing through the translucent torso, iridescent flame vents along spine and flanks, warpfire constantly leaking from mouth and nostrils, waddling but relentless advance, Tough(3)"
     pose: "flame assault advance, maws open wide spouting streams of iridescent warpfire, internal flame cores blazing through translucent daemon flesh, claws raised for close combat"
 
     game_stats:
@@ -482,8 +496,8 @@ unit_overrides:
           attacks: 2
           rules: ["Slash"]
   eonflux:
-    extra_details: "unique daemon champion with protective fungal-warp healing powers, stocky resilient avian daemon body of deep sapphire blue daemon flesh with unusual organic growths, bird-like face with calm knowing eyes glowing yellow-gold, wielding a tainted hammer delivering blast(3) strikes that ignore regeneration with corroding warpfire, body emanating a protected aura that shields nearby allies from harm via warp-fungal spore cloud, strange symbiotic warp-fungal growths across shoulders and back pulsing with protective energy, crystalline spore nodes releasing shimmering protective particles, iridescent mushroom-like warp-growths mixed with daemon feathers, Tough(3)"
-    pose: "protective guardian stance, tainted hammer raised crackling with anti-regeneration warpfire, protective spore cloud visibly emanating from body shielding nearby space, warp-fungal growths pulsing with shielding energy"
+    extra_details: "unique daemon champion with protective restorative warp powers, stocky resilient avian daemon body of deep sapphire blue daemon plumage studded with warding warp-crystal nodes, bird-like face with calm knowing eyes glowing yellow-gold, wielding a tainted hammer of crystallised warpflame delivering blast(3) strikes that ignore regeneration with corroding fire, body emanating a protected aura that shields nearby allies from harm via a shimmering cloud of golden warp-motes, faceted warp-crystal clusters across shoulders and back pulsing with protective light, glowing crystal nodes releasing drifting protective sparks, radiant arcane wards woven through the daemon feathers, Tough(3)"
+    pose: "protective guardian stance, tainted hammer of warpflame raised crackling with anti-regeneration fire, protective cloud of golden warp-motes visibly emanating from body shielding nearby space, warp-crystal wards pulsing with shielding light"
 
     game_stats:
       quality: 4
