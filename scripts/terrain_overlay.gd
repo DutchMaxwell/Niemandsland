@@ -815,69 +815,6 @@ func _create_deployment_zone_mesh(pos: Vector3, size: Vector2, color: Color) -> 
 	return mesh_instance
 
 
-## Check if a world position is within a deployment zone
-##
-## @param world_pos: Position to check (in 3D world coordinates)
-## @return: Dictionary with keys: "in_zone" (bool), "player" (String: "player1"/"player2"/"none")
-func is_position_in_deployment_zone(world_pos: Vector3) -> Dictionary:
-	if current_deployment_type == DeploymentType.NONE:
-		return {"in_zone": false, "player": "none"}
-
-	var table_width_m = table_size_feet.x * 12.0 * INCHES_TO_METERS
-	var table_depth_m = table_size_feet.y * 12.0 * INCHES_TO_METERS
-
-	match current_deployment_type:
-		DeploymentType.FRONT_LINE:
-			var deployment_depth = 12.0 * INCHES_TO_METERS
-			# Player 1 zone (bottom)
-			if world_pos.z >= (-table_depth_m/2) and world_pos.z <= (-table_depth_m/2 + deployment_depth):
-				if abs(world_pos.x) <= table_width_m/2:
-					return {"in_zone": true, "player": "player1"}
-			# Player 2 zone (top)
-			if world_pos.z <= (table_depth_m/2) and world_pos.z >= (table_depth_m/2 - deployment_depth):
-				if abs(world_pos.x) <= table_width_m/2:
-					return {"in_zone": true, "player": "player2"}
-
-		DeploymentType.CUSTOM:
-			# Check custom polygon zones using point-in-polygon test
-			if _is_point_in_polygon(world_pos, custom_zone_player1):
-				return {"in_zone": true, "player": "player1"}
-			if _is_point_in_polygon(world_pos, custom_zone_player2):
-				return {"in_zone": true, "player": "player2"}
-
-	return {"in_zone": false, "player": "none"}
-
-
-## Check if a point is inside a polygon (2D test on XZ plane)
-## Uses ray casting algorithm
-func _is_point_in_polygon(point: Vector3, polygon: Array[Vector3]) -> bool:
-	if polygon.size() < 3:
-		return false
-
-	var inside := false
-	var n := polygon.size()
-
-	var j := n - 1
-	for i in range(n):
-		var pi := polygon[i]
-		var pj := polygon[j]
-
-		# Ray casting on XZ plane
-		if ((pi.z > point.z) != (pj.z > point.z)) and \
-		   (point.x < (pj.x - pi.x) * (point.z - pi.z) / (pj.z - pi.z) + pi.x):
-			inside = not inside
-		j = i
-
-	return inside
-
-
-## Helper function to check if a position is inside a rectangle
-func _is_in_rect(world_pos: Vector3, rect_center: Vector3, rect_size: Vector2) -> bool:
-	var half_width = rect_size.x / 2.0
-	var half_depth = rect_size.y / 2.0
-	return abs(world_pos.x - rect_center.x) <= half_width and abs(world_pos.z - rect_center.z) <= half_depth
-
-
 ## Get terrain type at a world position
 ##
 ## @param world_pos: Position to check (in 3D world coordinates)

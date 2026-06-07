@@ -170,6 +170,10 @@ var terrain_overlay: Node3D = null
 @onready var end_battle_btn: Button = %EndBattleBtn
 @onready var end_battle_confirm_dialog: ConfirmationDialog = %EndBattleConfirmDialog
 
+# Reusable confirmation dialog for destructive table actions (Clear / Sort / Next Round)
+var _action_confirm_dialog: ConfirmationDialog = null
+var _pending_confirm_action: Callable = Callable()
+
 # Atmospheric Effects
 var atmospheric_clouds: Node3D = null
 
@@ -178,10 +182,9 @@ var radial_menu_controller: RadialMenuController = null
 var coherency_visualizer: CoherencyVisualizer = null
 var unit_boundary_visualizer: Node3D = null  # UnitBoundaryVisualizer
 
-# Deployment Zones UI (visibility only - editing is in Map Tool)
+# Deployment Zones UI (visibility toggle only - editing is in Map Tool;
+# unit-placement compliance is verified manually by the players)
 var deployment_zone_check: CheckBox = null
-var deployment_mode_check: CheckBox = null
-var is_deployment_mode: bool = false
 
 # TTS Import state
 var _tts_json_path: String = ""
@@ -452,9 +455,6 @@ func _ready() -> void:
 
 	# Initialize Deployment Zones UI
 	_init_deployment_zones_ui()
-
-	# Initialize Scout/Ambush Panel
-	_init_scout_ambush_panel()
 
 	# Initialize Radial Menu
 	_init_radial_menu()
@@ -827,7 +827,34 @@ func _spawn_grid(total: int, cols: int, rows: int) -> void:
 	print("=== Monitor FPS for performance test ===")
 
 
+## Shows a warning + confirmation before running a destructive table action, so a
+## stray click can't wipe / rearrange / advance the whole table. Reuses one dialog.
+func _show_action_confirm(title: String, message: String, ok_text: String, action: Callable) -> void:
+	if not _action_confirm_dialog:
+		_action_confirm_dialog = ConfirmationDialog.new()
+		add_child(_action_confirm_dialog)
+		_action_confirm_dialog.confirmed.connect(_on_action_confirmed)
+	_action_confirm_dialog.title = title
+	_action_confirm_dialog.dialog_text = message
+	_action_confirm_dialog.ok_button_text = ok_text
+	_pending_confirm_action = action
+	_action_confirm_dialog.popup_centered()
+
+
+func _on_action_confirmed() -> void:
+	if _pending_confirm_action.is_valid():
+		_pending_confirm_action.call()
+	_pending_confirm_action = Callable()
+
+
 func _on_clear_all() -> void:
+	_show_action_confirm(
+		"Clear Table",
+		"Remove ALL objects from the table?\nThis clears every model, army and terrain piece and cannot be undone.",
+		"Clear Table", _do_clear_all)
+
+
+func _do_clear_all() -> void:
 	object_manager.clear_all_objects()
 	dice_result_label.text = ""
 	_clear_dice_log()
@@ -835,12 +862,27 @@ func _on_clear_all() -> void:
 
 
 func _on_sort_table() -> void:
+	_show_action_confirm(
+		"Sort Table",
+		"Sort the whole table?\nEvery unit is reset to its import state and all models return to their starting positions.",
+		"Sort Table", _do_sort_table)
+
+
+func _do_sort_table() -> void:
 	object_manager.sort_table()
 
 
-## Advances the game round (OPR bookkeeping), refreshes visuals, and syncs to
-## remote peers so everyone shares the same round.
+## Advances the game round after confirmation.
 func _on_next_round() -> void:
+	_show_action_confirm(
+		"Next Round",
+		"Advance to the next round?\nAll activation tokens are cleared — no unit stays activated.",
+		"Next Round", _do_next_round)
+
+
+## Advances the game round (OPR bookkeeping; clears all activations), refreshes
+## visuals, and syncs to remote peers so everyone shares the same round.
+func _do_next_round() -> void:
 	if opr_army_manager:
 		opr_army_manager.advance_round()
 	_refresh_round_visuals()
@@ -2565,14 +2607,6 @@ func _init_deployment_zones_ui() -> void:
 	deployment_zone_check.toggled.connect(_on_deployment_zones_visibility_toggled)
 	deployment_panel.add_child(deployment_zone_check)
 
-	# Create CheckBox for Deployment Mode (check units in zones)
-	deployment_mode_check = CheckBox.new()
-	deployment_mode_check.text = "Check Unit Placement"
-	deployment_mode_check.button_pressed = false
-	deployment_mode_check.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
-	deployment_mode_check.toggled.connect(_on_deployment_mode_toggled)
-	deployment_panel.add_child(deployment_mode_check)
-
 
 ## Handle deployment zone visibility toggle
 func _on_deployment_zones_visibility_toggled(show_zones: bool) -> void:
@@ -2584,13 +2618,6 @@ func _on_deployment_zones_visibility_toggled(show_zones: bool) -> void:
 
 	# Sync visibility to remote clients
 	_broadcast_table_settings_update("deployment_visible", show_zones)
-
-
-## Handle deployment mode toggle
-func _on_deployment_mode_toggled(is_active: bool) -> void:
-	is_deployment_mode = is_active
-	_check_all_units_deployment()
-	print("Deployment mode: %s" % ("active" if is_active else "inactive"))
 
 
 ## ============================================================================
@@ -2619,52 +2646,8 @@ func _init_atmospheric_clouds() -> void:
 	print("Atmospheric clouds initialized")
 
 
-## Initialize Scout/Ambush Panel UI
-func _init_scout_ambush_panel() -> void:
-	# Get the left panel VBox to add UI elements
-	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
-	if not left_panel_vbox:
-		push_error("Could not find LeftPanelVBox for scout/ambush panel")
-		return
-
-	# Create a VBoxContainer for scout/ambush units
-	var scout_panel = VBoxContainer.new()
-	scout_panel.name = "ScoutAmbushPanel"
-	left_panel_vbox.add_child(scout_panel)
-
-	# Add label
-	var label = Label.new()
-	label.text = "Scout/Ambush Units:"
-	label.add_theme_color_override("font_color", Color.CYAN)
-	scout_panel.add_child(label)
-
-	# Create a ScrollContainer for the unit list
-	var scroll = ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(180, 100)
-	scout_panel.add_child(scroll)
-
-	# Create ItemList for units
-	var unit_list = ItemList.new()
-	unit_list.name = "ScoutAmbushList"
-	unit_list.custom_minimum_size = Vector2(180, 100)
-	scroll.add_child(unit_list)
-
-	# Add example text (will be populated when units are added)
-	unit_list.add_item("(No scout/ambush units)")
-
-	# Add info label
-	var info_label = Label.new()
-	info_label.text = "Units with Scout or Ambush\ndeploy outside normal zones"
-	info_label.add_theme_font_size_override("font_size", 10)
-	info_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	scout_panel.add_child(info_label)
-
-
-## Handle unit movement (re-check deployment and coherency)
+## Handle unit movement (re-check coherency)
 func _on_unit_moved() -> void:
-	if is_deployment_mode:
-		_check_all_units_deployment()
-
 	# Auto-check coherency for any selected units after movement
 	_check_coherency_for_selected_units()
 
@@ -2696,48 +2679,6 @@ func _check_coherency_for_selected_units() -> void:
 			# live (~15 Hz) while dragging, so re-running the fade/pulse each frame
 			# would make the lines flicker.
 			coherency_visualizer.show_coherency(game_unit, false, false)
-
-
-## Check all units for deployment zone compliance
-func _check_all_units_deployment() -> void:
-	if not terrain_overlay or not terrain_overlay.has_method("is_position_in_deployment_zone"):
-		return
-
-	# Get all miniatures
-	var miniatures = get_tree().get_nodes_in_group("miniature")
-
-	for miniature in miniatures:
-		if not is_instance_valid(miniature):
-			continue
-
-		# Check if miniature has a deployment warning label
-		var warning_label = miniature.get_node_or_null("DeploymentWarning")
-
-		if is_deployment_mode:
-			# Check if unit is in a deployment zone
-			var zone_info = terrain_overlay.is_position_in_deployment_zone(miniature.global_position)
-
-			if not zone_info["in_zone"]:
-				# Unit is outside deployment zone - show warning
-				if not warning_label:
-					warning_label = Label3D.new()
-					warning_label.name = "DeploymentWarning"
-					warning_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-					warning_label.no_depth_test = true
-					warning_label.font_size = 64
-					warning_label.text = "⚠️"
-					warning_label.modulate = Color.ORANGE
-					warning_label.position = Vector3(0, 0.1, 0)  # 10cm above unit
-					miniature.add_child(warning_label)
-				warning_label.visible = true
-			else:
-				# Unit is in deployment zone - hide warning
-				if warning_label:
-					warning_label.visible = false
-		else:
-			# Deployment mode inactive - hide all warnings
-			if warning_label:
-				warning_label.visible = false
 
 
 ## ============================================================================
