@@ -15,6 +15,12 @@ signal room_code_ready(code: String)
 signal internet_connected(peer_id: int)
 signal internet_connection_failed(reason: String)
 signal internet_disconnected()
+## Connection dropped unexpectedly (relayed from the peer); a rejoin may follow.
+signal relay_connection_lost()
+## An automatic rejoin of the same room has started.
+signal relay_reconnecting()
+## An automatic rejoin attempt failed; the session is over.
+signal relay_reconnect_failed(reason: String)
 signal peer_joined(peer_id: int)
 signal peer_left(peer_id: int)
 
@@ -46,6 +52,7 @@ func host_internet_game(url: String = "") -> Error:
 	relay_peer.relay_disconnected.connect(_on_relay_disconnected)
 	relay_peer.peer_joined.connect(_on_peer_joined)
 	relay_peer.peer_left.connect(_on_peer_left)
+	_connect_recovery_signals()
 
 	var err = relay_peer.host_via_relay(url)
 	if err != OK:
@@ -71,6 +78,7 @@ func join_internet_game(code: String, url: String = "") -> Error:
 	relay_peer.relay_disconnected.connect(_on_relay_disconnected)
 	relay_peer.peer_joined.connect(_on_peer_joined)
 	relay_peer.peer_left.connect(_on_peer_left)
+	_connect_recovery_signals()
 
 	var err = relay_peer.join_via_relay(url, code)
 	if err != OK:
@@ -122,6 +130,36 @@ func _on_room_join_failed(reason: String) -> void:
 func _on_relay_disconnected() -> void:
 	internet_disconnected.emit()
 	print("=== RELAY DISCONNECTED ===")
+
+
+## Wire the drop-detection / reconnect signals from the peer (host + join flows).
+func _connect_recovery_signals() -> void:
+	relay_peer.relay_connection_lost.connect(_on_relay_connection_lost)
+	relay_peer.relay_reconnecting.connect(_on_relay_reconnecting)
+	relay_peer.relay_reconnect_failed.connect(_on_relay_reconnect_failed)
+
+
+func _on_relay_connection_lost() -> void:
+	relay_connection_lost.emit()
+	print("=== RELAY CONNECTION LOST ===")
+
+
+func _on_relay_reconnecting() -> void:
+	relay_reconnecting.emit()
+	print("=== RELAY RECONNECTING ===")
+
+
+func _on_relay_reconnect_failed(reason: String) -> void:
+	relay_reconnect_failed.emit(reason)
+	print("=== RELAY RECONNECT FAILED: %s ===" % reason)
+
+
+## Attempt to rejoin the same room after a drop (guest only; the host re-syncs full
+## state to the rejoiner, so no game state is lost). Returns OK if started.
+func reconnect_to_room() -> Error:
+	if relay_peer and not relay_peer.get_room_code().is_empty():
+		return relay_peer.attempt_reconnect()
+	return ERR_UNAVAILABLE
 
 
 func _on_peer_joined(peer_id: int) -> void:

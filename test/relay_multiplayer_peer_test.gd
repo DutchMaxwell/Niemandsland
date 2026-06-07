@@ -111,3 +111,28 @@ func test_broadcast_uses_target_zero() -> void:
 	# Target 0 = broadcast
 	var expected_header = PackedByteArray([0, 0, 0, 0])
 	assert_that(result.slice(0, 4)).is_equal(expected_header)
+
+
+func test_room_joined_stores_room_code_for_reconnect() -> void:
+	# A guest must remember its room code so it can rejoin after a drop.
+	var peer = RelayMultiplayerPeer.new()
+	peer._pending_code = "ABC123"
+	peer._handle_room_joined(2)
+	assert_that(peer.get_room_code()).is_equal("ABC123")
+
+
+func test_is_host_peer_distinguishes_host_and_guest() -> void:
+	var host = RelayMultiplayerPeer.new()
+	host._handle_room_created("XYZ999", 1)
+	assert_that(host.is_host_peer()).is_true()
+
+	var guest = RelayMultiplayerPeer.new()
+	guest._pending_code = "XYZ999"
+	guest._handle_room_joined(2)
+	assert_that(guest.is_host_peer()).is_false()
+
+
+func test_attempt_reconnect_without_room_code_fails() -> void:
+	var peer = RelayMultiplayerPeer.new()
+	# No room code yet -> cannot rejoin.
+	assert_that(peer.attempt_reconnect()).is_equal(ERR_UNAVAILABLE)
