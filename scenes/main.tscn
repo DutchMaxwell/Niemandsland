@@ -221,6 +221,7 @@ offset_right = 210.0
 offset_bottom = -10.0
 grow_vertical = 2
 horizontal_scroll_mode = 0
+clip_contents = false
 
 [node name="LeftPanelVBox" type="VBoxContainer" parent="UI/HUD/LeftPanelScroll"]
 layout_mode = 2
