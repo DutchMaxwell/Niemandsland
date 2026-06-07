@@ -208,9 +208,9 @@
       "size": 15111728
     },
     "battle_brothers/battle brothers": {
-      "url": "b45ecc61ffb4059d09abd95f08cac22cd84ab19b031f5e17bcc43f41fb977f14.glb",
-      "sha256": "b45ecc61ffb4059d09abd95f08cac22cd84ab19b031f5e17bcc43f41fb977f14",
-      "size": 22639816
+      "url": "1fa37d441c48b5818f7bc3189381361e4321875d1706bab9e9454b215d9a75ea.glb",
+      "sha256": "1fa37d441c48b5818f7bc3189381361e4321875d1706bab9e9454b215d9a75ea",
+      "size": 15502780
     },
     "dao_union/battle suit elite": {
       "url": "cf32e7b077f397d71dbebb84da800f5e09e71b2fd0ba26a10963877f521754e6.glb",
@@ -311,6 +311,116 @@
       "url": "ff36c2e4c9b70e1cb4665065f8a77824e028dbd347a61b040ec853d92498a318.glb",
       "sha256": "ff36c2e4c9b70e1cb4665065f8a77824e028dbd347a61b040ec853d92498a318",
       "size": 26114804
+    },
+    "battle_brothers/apc": {
+      "url": "1b4b2929f94494f461fb5e17fc5797b9beb722ab2588b40afd3707b46291751f.glb",
+      "sha256": "1b4b2929f94494f461fb5e17fc5797b9beb722ab2588b40afd3707b46291751f",
+      "size": 17841580
+    },
+    "battle_brothers/artillery gun": {
+      "url": "4f22bcfc9acb40d5364b2d0728a4b1c5e4a387a7a46841a2a795e2f26cca1017.glb",
+      "sha256": "4f22bcfc9acb40d5364b2d0728a4b1c5e4a387a7a46841a2a795e2f26cca1017",
+      "size": 17332716
+    },
+    "battle_brothers/assault brothers": {
+      "url": "56b86d87cf6d1b15f92e2ccddcc2c4186f13f34669b9cc9e15afa771b57a208c.glb",
+      "sha256": "56b86d87cf6d1b15f92e2ccddcc2c4186f13f34669b9cc9e15afa771b57a208c",
+      "size": 15133488
+    },
+    "battle_brothers/attack speeder": {
+      "url": "95ceb8ce8bf9541abf559c46ef0bfd4d33d386b3792315535c647a3d6a349996.glb",
+      "sha256": "95ceb8ce8bf9541abf559c46ef0bfd4d33d386b3792315535c647a3d6a349996",
+      "size": 18463852
+    },
+    "battle_brothers/battle tank": {
+      "url": "fe75e2a3262a32de23fcbddf183e2f54395dcab3310ea4dd78ba8c87ed6982c4.glb",
+      "sha256": "fe75e2a3262a32de23fcbddf183e2f54395dcab3310ea4dd78ba8c87ed6982c4",
+      "size": 17794500
+    },
+    "battle_brothers/brother bikers": {
+      "url": "6398d234c3ec43a15daf8a175cab4bc73fd7f9d859277a66f9dd2e1743dc4d2b.glb",
+      "sha256": "6398d234c3ec43a15daf8a175cab4bc73fd7f9d859277a66f9dd2e1743dc4d2b",
+      "size": 15689700
+    },
+    "battle_brothers/destroyers": {
+      "url": "1220bb35bf01e49afd6a496e209783fa2280e84b2205f8a23d3decf4f6946595.glb",
+      "sha256": "1220bb35bf01e49afd6a496e209783fa2280e84b2205f8a23d3decf4f6946595",
+      "size": 15522172
+    },
+    "battle_brothers/drop pod": {
+      "url": "e13de8e4dda381a66419e31dae10a80123c09f9b3909644e6cc1e2f3c123b7fc.glb",
+      "sha256": "e13de8e4dda381a66419e31dae10a80123c09f9b3909644e6cc1e2f3c123b7fc",
+      "size": 18802700
+    },
+    "battle_brothers/elite pathfinder": {
+      "url": "870bc0db69158e6866991f5a1dc95082737cc975a6b9c6c6d25b6df86502a6be.glb",
+      "sha256": "870bc0db69158e6866991f5a1dc95082737cc975a6b9c6c6d25b6df86502a6be",
+      "size": 15278992
+    },
+    "battle_brothers/heavy exo suit": {
+      "url": "cd978bc75cc358ba73b9f6f28dfb7aeaa1a5f696bfcc90e61b982c10ee92aee3.glb",
+      "sha256": "cd978bc75cc358ba73b9f6f28dfb7aeaa1a5f696bfcc90e61b982c10ee92aee3",
+      "size": 18436588
+    },
+    "battle_brothers/heavy tank": {
+      "url": "68a8044a33c188b5754b3782da26691314efa8f278ffbba03ee1c50224d5d957.glb",
+      "sha256": "68a8044a33c188b5754b3782da26691314efa8f278ffbba03ee1c50224d5d957",
+      "size": 17362744
+    },
+    "battle_brothers/light gunship": {
+      "url": "b4b234e9b167c62bef1393b31add1c0011e10ebbcf250bc5932968119d5f5f1e.glb",
+      "sha256": "b4b234e9b167c62bef1393b31add1c0011e10ebbcf250bc5932968119d5f5f1e",
+      "size": 17923536
+    },
+    "battle_brothers/master brother": {
+      "url": "12ee3cfa6a1d8e01268617d979650ba3578ca5f48577641830a7ba2c172ee2c9.glb",
+      "sha256": "12ee3cfa6a1d8e01268617d979650ba3578ca5f48577641830a7ba2c172ee2c9",
+      "size": 14563616
+    },
+    "battle_brothers/master destroyer": {
+      "url": "4466e0c8143a54b70f2966a59929efbc59173098dbdeb339abc1d905cb0125e6.glb",
+      "sha256": "4466e0c8143a54b70f2966a59929efbc59173098dbdeb339abc1d905cb0125e6",
+      "size": 15744096
+    },
+    "battle_brothers/pathfinder bikers": {
+      "url": "43a31f5aa486c2f04c2d37aac56d12624e858d9b93aa8c0d85b7b627d12daa8a.glb",
+      "sha256": "43a31f5aa486c2f04c2d37aac56d12624e858d9b93aa8c0d85b7b627d12daa8a",
+      "size": 15645796
+    },
+    "battle_brothers/pathfinders": {
+      "url": "d26fb7d04c23eb0f94f7c4b4429d34183f3acfad4f796971a23fb183ebd670ca.glb",
+      "sha256": "d26fb7d04c23eb0f94f7c4b4429d34183f3acfad4f796971a23fb183ebd670ca",
+      "size": 14703140
+    },
+    "battle_brothers/support bike": {
+      "url": "d085ce5eba2c5726fafa43a8ba77acbc2ddc6258ad299b47bcebc0082f218f92.glb",
+      "sha256": "d085ce5eba2c5726fafa43a8ba77acbc2ddc6258ad299b47bcebc0082f218f92",
+      "size": 15326992
+    },
+    "battle_brothers/support brothers": {
+      "url": "fc8ac3a02535b50d68f6e11c930fb93af7f02d8562626a529eb719df524fbaf3.glb",
+      "sha256": "fc8ac3a02535b50d68f6e11c930fb93af7f02d8562626a529eb719df524fbaf3",
+      "size": 14503464
+    },
+    "battle_brothers/veteran assault brothers": {
+      "url": "a4adff3af165029dac33db32b24297e7b35f04d02fd4f5395a2b15bb3234c46a.glb",
+      "sha256": "a4adff3af165029dac33db32b24297e7b35f04d02fd4f5395a2b15bb3234c46a",
+      "size": 14463256
+    },
+    "battle_brothers/veteran battle brothers": {
+      "url": "74f4d37c22c8b2240115c2460b9cccffca3be8fd8d2c8044207843fec304f4ed.glb",
+      "sha256": "74f4d37c22c8b2240115c2460b9cccffca3be8fd8d2c8044207843fec304f4ed",
+      "size": 15746736
+    },
+    "battle_brothers/veteran combat walker": {
+      "url": "5eb09539086644671e300499bb531cab55897a897ef8d197ee81cd241d46626b.glb",
+      "sha256": "5eb09539086644671e300499bb531cab55897a897ef8d197ee81cd241d46626b",
+      "size": 15352392
+    },
+    "battle_brothers/veteran master brother": {
+      "url": "ea159c9855bfcdb150fd53c3b773387dd9c67b7c60c07ff496e986f48ac8eee5.glb",
+      "sha256": "ea159c9855bfcdb150fd53c3b773387dd9c67b7c60c07ff496e986f48ac8eee5",
+      "size": 14975912
     }
   }
 }
