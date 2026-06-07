@@ -61,14 +61,14 @@ func _process(delta: float) -> void:
 
 # === Public API ===
 
-## Size the mist to cover the whole play field (call when the table size is set). A small
-## margin past the edge keeps the soft border out past the table rim.
+## Size the mist to cover the whole play field (call when the table size is set).
+## The plane matches the table EXACTLY (no over-margin) so the mist can never waft
+## past the table edge; the shader's UV edge-fade feathers the rim within the table.
 func set_table_size(size_meters: Vector2) -> void:
-	var plane_size := size_meters + Vector2(0.08, 0.08)
 	for layer: MeshInstance3D in _layers:
 		var plane := layer.mesh as PlaneMesh
 		if plane:
-			plane.size = plane_size
+			plane.size = size_meters
 
 
 ## Slowly reveal the mist (call once the table/field is built — e.g. on intro end).
