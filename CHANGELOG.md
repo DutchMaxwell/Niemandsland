@@ -22,6 +22,16 @@ Goal of this release: a playable, internet-multiplayer Alpha RC with all miniatu
   per-faction `ip_strict` / `bio_weapons` flags, per-unit `type:` (vehicle / walker /
   aircraft / titan), humanoid-only design cues — plus a **3-versions-per-unit "pick the
   best" review tool**.
+- **Alien Hives (41) + Battle Brothers (23)** factions shipped to R2.
+- **OPR special-rule descriptions.** Rule explanations are fetched from the army-forge
+  API on import (army-book + common rules per game system, cached) and shown per rule in
+  the stats tooltip, so players can read what each rule does.
+- **Multiplayer reconnect.** Relay drops are detected (heartbeat-ack timeout / socket
+  close), the player is told, and a guest auto-rejoins the same room — the host re-syncs
+  full game state, so nothing is lost. Failed rejoins / host drops end the session with a
+  clear message.
+- **Confirm dialogs** for the destructive Sort Table / Clear Table / Next Round actions
+  (Next Round also clears all activation tokens).
 
 ### Changed
 - Builds stay slim: miniature GLBs and their textures are gitignored **and** excluded
@@ -29,22 +39,30 @@ Goal of this release: a playable, internet-multiplayer Alpha RC with all miniatu
 - `Shift + Click: Measure` added to the in-game shortcut list.
 - TRELLIS export no longer re-decimates meshes (keeps the approved 1536 / 300k / 4096
   quality).
+- Map editor Deployment tab reduced to a show/hide toggle; the manual unit-placement
+  compliance checks (Scout/Ambush/in-zone) were removed (players verify placement).
 
 ### Fixed
 - Weapon-team `Tough(X)` is applied only to the carrier model, not the whole squad
   (general fix across all armies).
 - Removed the oversized terrain-crossing warning symbols (skull / exclamation) while
   keeping the line-tint + dangerous/difficult detection.
+- Multiplayer: enemy **weapon special rules** now show for networked units; a loaded
+  map's **mission objectives** now sync to all players.
+- `Ctrl+Z` undo only reverts the local player's **own** actions in multiplayer.
+- Ground mist no longer wafts past the table edge (seen in the Windows build).
+- Menu hover-scale no longer clips at the column edge.
 
 ### Maintenance
-- Disk cleanup: purged 734 MB of redundant R2 upload-staging GLBs (all 62 verified
+- Disk cleanup: purged 734 MB of redundant R2 upload-staging GLBs (all verified
   present on R2 before deletion).
-- gdUnit4: 33 suites / 238 tests green.
+- gdUnit4: 253 tests green.
 
-### In progress for this RC
-- Battle Brothers faction → 3D → R2.
-- UI polish: confirm dialogs for Sort / Clear Table / Next Round (with activation
-  reset), deployment-zone menu reduced to show/hide, hover-effect column-width fix.
+### Known follow-ups
+- Host-side reconnect (preserving a room when the HOST drops) needs relay-server room
+  preservation + a Fly.io redeploy.
+- OPR rule descriptions resolve for freshly imported armies; loaded saves / remote-only
+  armies show rule names without descriptions (persist/sync is a future step).
 
 ## [0.3.0-alpha]
 
