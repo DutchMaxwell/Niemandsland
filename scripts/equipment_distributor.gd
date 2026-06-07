@@ -14,14 +14,19 @@ static func distribute(game_unit: GameUnit, loadout: Array, special_rules: Array
 	if unit_size == 0:
 		return
 
-	# Step 1: Parse Tough(X) and set wounds for ALL models
-	var wounds = _parse_tough_rating(special_rules)
-	if wounds > 1:
-		print("EquipmentDistributor: Found Tough(%d) for unit with %d models" % [wounds, unit_size])
+	# Step 1: Set the BASE Tough(X) wounds shared by the whole squad.
+	# OPR Core Rules — Tough(X): "models with this rule are only killed once they have
+	# taken X or more wounds." Tough is a PER-MODEL stat, not a unit-wide one. The unit's
+	# special_rules carry the squad's base value; an upgraded model (weapon-team / special
+	# weapon / joined model) overrides this with its own elevated Tough in Step 3b. Without
+	# that split, a single upgraded model's Tough would wrongly buff every base model.
+	var base_wounds = _parse_tough_rating(special_rules)
+	if base_wounds > 1:
+		print("EquipmentDistributor: Found base Tough(%d) for unit with %d models" % [base_wounds, unit_size])
 	for model in game_unit.models:
-		model.wounds_max = wounds
-		model.wounds_current = wounds
-		model.properties["tough"] = wounds
+		model.wounds_max = base_wounds
+		model.wounds_current = base_wounds
+		model.properties["tough"] = base_wounds
 
 	# Step 2: Copy special rules to ALL models
 	# API gives unit-wide rules, not model-specific
@@ -49,6 +54,7 @@ static func distribute(game_unit: GameUnit, loadout: Array, special_rules: Array
 	for item in universal:
 		for model in game_unit.models:
 			_add_loadout_item_to_model(model, item)
+			_apply_item_tough_to_model(model, item)
 
 	var cursor := 0
 	for item in limited:
@@ -57,10 +63,40 @@ static func distribute(game_unit: GameUnit, loadout: Array, special_rules: Array
 			if cursor >= unit_size:
 				cursor = 0  # safety wrap if limited counts exceed the unit size
 			_add_loadout_item_to_model(game_unit.models[cursor], item)
+			_apply_item_tough_to_model(game_unit.models[cursor], item)
 			cursor += 1
 
 
 # ===== Tough Parsing =====
+
+## Minimum wound count: every model takes at least 1 wound to be killed (OPR core).
+const BASE_WOUNDS: int = 1
+
+## Applies a per-model elevated Tough(X) to ONE model when its OWN loadout item
+## (a weapon-team / special weapon / joined-model upgrade) grants a higher Tough than
+## the squad's base. OPR Core Rules — Tough(X) is a per-model stat, so an upgraded
+## model's extra wounds must NOT spill onto the base squad models. Never lowers a model
+## below its current (base) value; only the carrier of the item is elevated.
+static func _apply_item_tough_to_model(model: ModelInstance, item: Variant) -> void:
+	var item_tough: int = _parse_tough_rating(_item_special_rules(item))
+	if item_tough <= model.wounds_max:
+		return
+	model.wounds_max = item_tough
+	model.wounds_current = item_tough
+	model.properties["tough"] = item_tough
+
+
+## Reads a loadout item's own special-rule list (e.g. a weapon's "specialRules" array).
+## Returns an empty array when the item carries none.
+static func _item_special_rules(item: Variant) -> Array:
+	if item is Dictionary:
+		var rules: Variant = item.get("specialRules", [])
+		return rules if rules is Array else []
+	if "specialRules" in item:
+		var rules: Variant = item.specialRules
+		return rules if rules is Array else []
+	return []
+
 
 ## Parses Tough(X) from special rules array.
 ## Returns the wound count, or 1 if no Tough rule found.
@@ -83,7 +119,7 @@ static func _parse_tough_rating(rules: Array) -> int:
 			if name == "Tough" and rating > 0:
 				return rating
 
-	return 1  # Default: 1 wound
+	return BASE_WOUNDS  # Default: every model takes at least 1 wound to be killed
 
 
 ## Converts special rules to a normalized string array.
@@ -244,12 +280,14 @@ static func create_from_opr_unit(opr_unit: Variant, nodes: Array[Node3D], player
 
 	# Add per-model tool/equipment upgrades (non-weapon items on a subset of models).
 	# They flow through the same count-based distribution as weapons, so each lands on
-	# specific model(s) and the base ring can label it.
+	# specific model(s) and the base ring can label it. The item's granted "rules" ride
+	# along as specialRules so a per-model Tough(X) is applied to its carrier model only.
 	for equip_item in opr_unit.equipment_items:
 		loadout.append({
 			"name": equip_item.get("name", ""),
 			"attacks": 0,
-			"count": equip_item.get("count", 1)
+			"count": equip_item.get("count", 1),
+			"specialRules": equip_item.get("rules", [])
 		})
 
 	# Distribute equipment using the loadout
