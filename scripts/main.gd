@@ -1966,7 +1966,7 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	# Belt-and-suspenders: if the host runs a different version (e.g. an old host
 	# without the join-time handshake), refuse its state and leave the session.
 	var host_version := str(state.get("_host_version", "unknown"))
-	var my_version := network_manager.get_game_version()
+	var my_version: String = network_manager.get_game_version()
 	if host_version != my_version:
 		push_warning("[StateSync] Host version %s != ours %s — refusing state" % [host_version, my_version])
 		_on_version_rejected(host_version, my_version)
