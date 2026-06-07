@@ -117,6 +117,7 @@ layout_mode = 2
 size_flags_vertical = 3
 
 [node name="LeftPanelContainer" type="PanelContainer" parent="MarginContainer/VBox/MainContent"]
+clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 0.3
@@ -126,6 +127,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_leftpanel")
 layout_mode = 2
 size_flags_horizontal = 3
 horizontal_scroll_mode = 0
+clip_contents = false
 
 [node name="LeftPanel" type="VBoxContainer" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll"]
 layout_mode = 2
