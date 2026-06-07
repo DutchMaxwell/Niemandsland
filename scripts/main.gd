@@ -307,6 +307,9 @@ func _ready() -> void:
 	internet_lobby.internet_connected.connect(_on_internet_connected)
 	internet_lobby.internet_connection_failed.connect(_on_internet_failed)
 	internet_lobby.internet_disconnected.connect(_on_internet_disconnected)
+	internet_lobby.relay_connection_lost.connect(_on_relay_connection_lost)
+	internet_lobby.relay_reconnecting.connect(_on_relay_reconnecting)
+	internet_lobby.relay_reconnect_failed.connect(_on_relay_reconnect_failed)
 	# Peer join/leave for internet relay is handled through the built-in
 	# MultiplayerPeer.peer_connected signal (same path as ENet):
 	# relay emits peer_connected → network_manager._on_peer_connected → _on_player_joined
@@ -1496,6 +1499,37 @@ func _on_internet_disconnected() -> void:
 	network_status_label.text = "Offline"
 	network_status_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
 	# Clean up presence nodes
+	_cleanup_all_presence()
+
+
+## The relay link dropped unexpectedly. Inform the player; a guest auto-rejoins the
+## same room (the host then re-syncs full state, so nothing is lost). A host whose
+## link drops cannot rejoin its own room, so the session ends.
+func _on_relay_connection_lost() -> void:
+	if network_manager.is_host:
+		push_warning("[Network] Host connection lost — session ended.")
+		network_status_label.text = "Connection lost — session ended"
+		network_status_label.add_theme_color_override("font_color", Color.RED)
+		_cleanup_all_presence()
+		return
+	push_warning("[Network] Connection lost — attempting to rejoin the room…")
+	network_status_label.text = "Connection lost — reconnecting…"
+	network_status_label.add_theme_color_override("font_color", Color.YELLOW)
+	internet_lobby.reconnect_to_room()
+
+
+func _on_relay_reconnecting() -> void:
+	network_status_label.text = "Reconnecting…"
+	network_status_label.add_theme_color_override("font_color", Color.YELLOW)
+
+
+## Rejoin failed (relay unreachable or the room is gone, e.g. host left). End the
+## session cleanly with a clear message.
+func _on_relay_reconnect_failed(reason: String) -> void:
+	push_warning("[Network] Reconnect failed: %s" % reason)
+	network_status_label.text = "Reconnect failed (%s)" % reason
+	network_status_label.add_theme_color_override("font_color", Color.RED)
+	_update_network_ui(false, false)
 	_cleanup_all_presence()
 
 
