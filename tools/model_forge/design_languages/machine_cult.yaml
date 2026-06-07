@@ -9,17 +9,30 @@
 faction_name: "Machine Cult"
 
 aesthetic:
-  genre: "grimdark sci-fi cybernetic"
-  style: "tech-priest cyborg warriors"
+  genre: "clean, bright, crisp tech-cult sci-fi — ornate machine-worship cyborgs, crisp studio render"
+  ip_strict: true   # hooded augmented tech-priest cyborgs: strict IP gate flags generic-tech-priest lookalikes + Chaos/organic drift
+  style: "ornate robed cyborg tech-priests, polished and readable"
   inspiration:
-    - "Hooded cyborg tech-priests with mechanical augmentations"
-    - "Industrial steampunk-gothic machinery worship"
-    - "Da Vinci mechanical designs meets grimdark cybernetics"
+    - "Hooded cyborg priests fused with mechanical augmentations"
+    - "Renaissance clockwork-engineer machinery worship"
+    - "Da Vinci mechanical designs fused with clean retro-futuristic cybernetics"
+  # NOTE: original_design_cues + weapon_style ARE now injected into the prompt (prompt_engine
+  # _format_aesthetic) — keep them POSITIVE, never name a protected design here.
+  original_design_cues:
+    - "Deep peaked monastic hood over a smooth half-skull face-plate with a single horizontal glowing pale-green optic slit"
+    - "Slender segmented mechadendrite tendrils arching from the back, tipped with small tool-claws"
+    - "Layered heavy robes parting to reveal a polished bronze ribcage exo-frame with exposed brass pistons and cabling"
+    - "Original interlocking-gear-and-triangle cog emblem on the hood and chest plate"
+    - "Clean, bright, ornate look — polished brass and crimson, no spikes, horns, skulls or daemonic ornament"
+    - "Slightly stylised clean comic / video-game render (crisp readable shapes, bright even lighting)"
+  weapon_style: "an original slim arc-coil staff or arm-mounted coil-emitter wreathed in crackling pale-green energy, with a polished brass barrel and visible copper tesla rings"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Adeptus Mechanicus iconography"
-    - "Clean or sleek high-tech aesthetics"
-    - "Fully organic or unaugmented humans"
+    - "Games Workshop / Warhammer 40,000 designs of any kind"
+    - "Adeptus Mechanicus / Skitarii trade dress, the cog-mechanicus skull icon, red-and-white robes layout"
+    - "Spikes, horns, skulls, daemonic, organic or fleshy ornament (Chaos drift)"
+    - "Muddy, dark, gloomy, grimy or low-contrast rendering"
+    - "Any real-world military or franchise logos, insignia or trademarks"
+    - "Cartoon-baby or anime proportions"
 
 colors:
   primary: "dark crimson red robes and cloaks"
@@ -224,7 +237,7 @@ unit_overrides:
           range: 0
           attacks: 1
   breacher_cyborgs:
-    extra_details: "single heavy cyborg warrior in reinforced crimson armor-robes over massive heavily augmented frames (Defense 3+), heavy arc guns mounted on shoulder braces firing rending energy at 36 inch range (A3), massive cyborg claws on both arms for melee combat (A3), slow but implacable advance with piston-driven legs barely visible beneath heavy robes, extensive mechanical augmentation leaving little organic tissue visible, green arc energy crackling along weapon coils, Machine-Fog, Slow, Tough(3)"
+    extra_details: "single heavy cyborg warrior in reinforced crimson armor-robes over massive heavily augmented frames (Defense 3+), heavy arc guns mounted on shoulder braces firing rending energy at 36 inch range (A3), massive cyborg claws on both arms for melee combat (A3), slow but implacable advance with piston-driven legs barely visible beneath heavy robes, extensive mechanical augmentation leaving almost no flesh visible, green arc energy crackling along weapon coils, Machine-Fog, Slow, Tough(3)"
     pose: "slow implacable advance in line formation, heavy arc guns braced and firing, cyborg claws flexing"
 
     game_stats:
@@ -289,6 +302,7 @@ unit_overrides:
           range: 0
           attacks: 1
   landing_craft:
+    type: vehicle
     extra_details: "armored troop transport vehicle in dark crimson hull plating with bronze mechanical detail, twin phosphor machinegun turret firing wreck-effect rounds at 30 inch range (A4), fast movement hover or tracked propulsion system, impact(3) reinforced ramming prow, strider-adapted for rough terrain, large transport bay carrying up to 11 models, machine-fog generators mounted on hull, green optic sensor arrays on forward hull, Transport(11), Machine-Fog, Tough(6)"
     pose: "advancing at speed with transport bay doors visible, twin phosphor machinegun turret tracking, machine-fog billowing"
 
@@ -311,7 +325,7 @@ unit_overrides:
   dragoon_walker:
     extra_details: "tall bipedal chicken-walker with a cyborg rider mounted in an open cockpit, taser lance as primary weapon with AP(1) surge and thrust effects for devastating charge attacks (A4), stomp attacks from heavy mechanical legs with AP(1) (A2), fast movement on long striding mechanical legs, fear-inspiring towering silhouette, strider-adapted legs, crimson cowling over cockpit with bronze mechanical joints, green arc energy crackling along taser lance, rider in crimson robes, Machine-Fog, Fast, Fear(1), Strider, Tough(6)"
     pose: "charging forward at full stride on long mechanical legs, taser lance lowered for a thrust attack, rider hunched in cockpit"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -330,9 +344,9 @@ unit_overrides:
           attacks: 4
           rules: ["AP(1)"]
   combat_robot:
-    extra_details: "massive bipedal combat automaton in crimson and bronze heavy armor plating, heavy flamer mounted on one arm firing AP(1) blast(3) reliable incendiary bursts at 12 inch range, dual energy fists on the other arm with AP(4) crushing power (A4), stomp attacks from heavy feet with AP(1) (A2), fear-inspiring hulking robotic presence, fearless automaton programming, no organic components visible, heavy bronze and copper chassis with green optic sensor strip, Machine-Fog, Fear(1), Fearless, Tough(6)"
+    extra_details: "massive bipedal combat automaton in crimson and bronze heavy armor plating, heavy flamer mounted on one arm firing AP(1) blast(3) reliable incendiary bursts at 12 inch range, dual energy fists on the other arm with AP(4) crushing power (A4), stomp attacks from heavy feet with AP(1) (A2), fear-inspiring hulking robotic presence, fearless automaton programming, fully mechanical with no flesh visible, heavy bronze and copper chassis with green optic sensor strip, Machine-Fog, Fear(1), Fearless, Tough(6)"
     pose: "lumbering forward with heavy flamer arm raised and firing, dual energy fists clenched and crackling, heavy stomp mid-stride"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -357,7 +371,7 @@ unit_overrides:
   iron_walker:
     extra_details: "agile bipedal war walker with enclosed cockpit, twin laser cannon mounted on top turret firing AP(3) deadly(3) shots at 36 inch range (A2), stomp attacks from articulated mechanical legs with AP(1) (A2), fast movement on long striding legs, fear-inspiring silhouette, strider-adapted for all terrain, crimson hull plating over bronze mechanical frame, green optic targeting array on turret, Machine-Fog, Fast, Fear(1), Strider, Tough(6)"
     pose: "striding forward at speed, twin laser cannon turret tracking and firing green energy beams, mechanical legs mid-stride"
-    type: vehicle
+    type: walker
 
   # ==========================================================================
   # HEAVY VEHICLES (Tough 12)
@@ -382,7 +396,7 @@ unit_overrides:
   attack_craft:
     extra_details: "massive multi-legged heavy assault walker in dark crimson armor plating over bronze mechanical frame, energy cannon primary weapon firing blast(3) indirect shots at 30 inch range (A2), triple phosphor machinegun secondary battery firing wreck-effect rounds at 30 inch range (A6), impact(6) devastating charge capability from sheer mass, fast movement on multiple mechanical legs, strider-adapted, towering war engine inspiring fear, green optic sensor cluster on armored head, Machine-Fog, Fast, Impact(6), Strider, Tough(12)"
     pose: "massive war engine striding forward on multiple legs, energy cannon firing indirect arc, triple phosphor machineguns blazing"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -434,6 +448,7 @@ unit_overrides:
           attacks: 4
           rules: ["AP(1)"]
   arch_fighter:
+    type: aircraft
     extra_details: "sleek attack aircraft in dark crimson fuselage with bronze mechanical engine cowlings, twin phosphor machinegun nose-mounted firing wreck-effect rounds at 30 inch range (A4), bomb rack underslung dropping AP(1) blast(3) strafing ordnance on ground targets, aircraft high-speed attack runs, green optic targeting array in cockpit canopy, swept-back wings with mechanical joints, exhaust trails of machine-fog, Machine-Fog, Aircraft, Tough(6)"
     pose: "diving attack run, twin phosphor machineguns blazing from nose, bomb rack visible under wings"
 
@@ -454,6 +469,7 @@ unit_overrides:
           attacks: 2
           rules: ["AP(1)"]
   arch_gunship:
+    type: aircraft
     extra_details: "heavy gunship aircraft in dark crimson armored fuselage with bronze mechanical detail, phosphor machinegun forward-mounted firing wreck-effect rounds at 30 inch range (A2), rear laser cannon turret firing AP(3) deadly(3) shots at 24 inch range (A2), twin phosphor blaster wing-mounted firing wreck-effect volleys at 18 inch range (A4), aircraft heavy fire support platform, heavily armed and armored, green optic sensor arrays, broad wings with mechanical joints, Machine-Fog, Aircraft, Tough(6)"
     pose: "level gunship approach, phosphor machinegun firing forward, rear laser cannon tracking, twin phosphor blasters on wings"
 

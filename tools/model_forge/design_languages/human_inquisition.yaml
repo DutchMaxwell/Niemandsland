@@ -8,17 +8,30 @@
 faction_name: "Human Inquisition"
 
 aesthetic:
-  genre: "grimdark sci-fi gothic"
-  style: "secretive inquisitorial agents"
+  genre: "clean, crisp, high-contrast sci-fi gothic — sharply readable witch-hunter agents, bright studio render"
+  ip_strict: false   # diverse human agent/assassin warband (coats, robes, stealth suits), NOT a uniform armoured super-soldier range — keep the gate lenient
+  style: "secretive covert-operations agents and witch-hunters with diverse retinues"
+  # NOTE: inspiration + original_design_cues + weapon_style ARE injected into the prompt
+  # (prompt_engine). Keep them POSITIVE and ORIGINAL — never name a real commercial range.
   inspiration:
-    - "Gothic witch-hunter inquisitors with diverse retinues"
-    - "Secret agents and assassins in a dark sci-fi setting"
-    - "Spanish Inquisition meets sci-fi covert operations"
+    - "Gothic witch-hunter investigators with a diverse band of agents, zealots and specialists"
+    - "Covert-operations agents and stealth assassins in a crisp sci-fi setting"
+    - "Historical inquisitor-tribunal silhouettes fused with original sci-fi technology"
+  original_design_cues:
+    - "Long flared storm-coat or layered robe over light segmented plate, with a tall collar and a clean readable silhouette"
+    - "Tall wide-brimmed witch-hunter hat or smooth half-cowled hood; bare-head veterans show subtle clean cybernetic implants"
+    - "An original eight-pointed compass-rosette emblem (a small disc with a central eye) worn as a chest seal — geometric, not heraldic"
+    - "Wax-sealed parchment ribbons and tribunal insignia tabs hanging from the belt"
+    - "Crisp, high-contrast finish — clean hard armour, plate and cloth only, smooth purposeful surfaces with no spikes or horns"
+    - "Slightly stylised clean studio render with bright even lighting and sharp readable shapes"
+  weapon_style: "compact original sidearm pistols with a slim grip and a glowing crimson power cell, paired with sleek bladed close-combat weapons; all manufactured hard-tech metal and machined parts"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Inquisition iconography"
-    - "Uniform military aesthetics"
-    - "Bright or cheerful colors"
+    - "Any real-world or franchise commercial miniatures range, logos, insignia or trademarks"
+    - "Power-armour super-soldier look; uniform faceless military aesthetics"
+    - "Skull piles, daemonic spikes, horns, tentacles or organic/grown growths"
+    - "Eagle / double-headed-eagle crests or other protected heraldry"
+    - "Muddy, dark, low-contrast or gloomy lighting"
+    - "Cartoon or anime proportions; xenos or alien features"
 
 colors:
   primary: "dark black and deep red robes and armor"
@@ -130,8 +143,8 @@ unit_overrides:
           attacks: 4
           rules: ["AP(1)"]
   terrorism_ministry_assassin:
-    extra_details: "elite counter-terrorism assassin hero in sleek dark bodysuit with psychic dampening circuits, helmet-mounted triple-beam laser with AP(2) targeting optics, minimal close combat weapon, distinctive full-face helmet with integrated targeting laser array, anti-psyker sigils etched into armor panels, teleport displacement device on belt, reality-warping shimmer around silhouette, Evasive, Casting Debuff, Resistance, Teleport, Tough(3)"
-    pose: "materializing from teleport, helmet laser locking onto target, reality distortion rippling around body"
+    extra_details: "elite counter-terrorism assassin hero in sleek dark bodysuit with psychic-dampening circuits, helmet-mounted triple-beam laser with AP(2) targeting optics, minimal close combat weapon, distinctive full-face helmet with integrated targeting laser array, anti-psychic sigils etched into armor panels, teleport displacement device on belt, faint space-folding shimmer around silhouette, Evasive, Casting Debuff, Resistance, Teleport, Tough(3)"
+    pose: "materializing from teleport, helmet laser locking onto target, space-fold distortion rippling around body"
 
     game_stats:
       quality: 2
@@ -149,7 +162,7 @@ unit_overrides:
           range: 0
           attacks: 1
   warfare_ministry_assassin:
-    extra_details: "elite warfare assassin hero in heavy combat bodysuit with bio-enhanced musculature visible beneath, executioner gun with devastating AP(4) rounds in one hand, massive executioner claw with AP(4) rending power on other arm, bulkier build than other assassins, regenerative bio-implants visible as raised ridges under skin, bestial combat mask with predatory features, Fast, Brutal Fighter, Regeneration, Evasive, Tough(3)"
+    extra_details: "elite warfare assassin hero in heavy combat bodysuit with reinforced exo-muscle harness plating over the limbs, executioner gun with devastating AP(4) rounds in one hand, massive powered executioner gauntlet-claw with AP(4) rending blades on other arm, bulkier build than other assassins, segmented combat-augment panels and auto-repair nanite ports set into the armor, fierce angular combat mask with predatory styling, Fast, Brutal Fighter, Regeneration, Evasive, Tough(3)"
     pose: "explosive forward charge, executioner claw extended to strike, gun blazing, primal violence incarnate"
 
     game_stats:
@@ -259,7 +272,7 @@ unit_overrides:
           attacks: 2
   mystic_henchmen:
     extra_details: "single psychic mystic in flowing layered robes with psychic focusing crystals, pistols in one hand, close combat weapons in other, third eye tattoos or psychic hoods, levitating slightly above ground with Bounding telekinesis, ethereal glow emanating from eyes and hands, mystical sigils woven into robes"
-    pose: "floating advance, psychic energy crackling around hands, eyes glowing with warp sight"
+    pose: "floating advance, bright psychic energy crackling around hands, eyes glowing with second sight"
 
     game_stats:
       quality: 5
@@ -310,8 +323,8 @@ unit_overrides:
           range: 0
           attacks: 1
   psychic_henchmen:
-    extra_details: "single lesser psyker in hooded robes with psychic dampener collars, pistols in one hand, close combat weapons in other, psychic focus staves or crystal pendants, Caster Group combining psychic power, ethereal warp-glow around heads, third eye markings, chained psychic familiars or brain-in-jar servitors nearby"
-    pose: "psychic ritual formation, warp energy arcing between the three psykers, focused concentration"
+    extra_details: "single lesser psychic in hooded robes with psychic dampener collars, pistols in one hand, close combat weapons in other, psychic focus staves or crystal pendants, Caster Group combining psychic power, bright ethereal glow around heads, third-eye markings, hooded tech-servitor attendants nearby"
+    pose: "psychic ritual formation, bright psychic energy arcing between the three figures, focused concentration"
 
     game_stats:
       quality: 5
@@ -344,8 +357,8 @@ unit_overrides:
           attacks: 3
           rules: ["Shred"]
   possessed_henchmen:
-    extra_details: "single partially daemon-possessed agent in reinforced containment suits with arcane binding runes, daemon ripple projectors emitting Indirect Bane attacks from warp-tainted hands, claws on other hand, bodies visibly warping and shifting with daemonic energy, containment collar runes glowing to maintain control, Quick Readjustment allowing precise indirect fire while moving"
-    pose: "advancing with controlled daemonic energy, daemon ripples emanating from outstretched hands, bodies shimmering with warp distortion"
+    extra_details: "single energy-suppressed agent sealed in a reinforced containment suit etched with glowing binding sigils, wrist-mounted disruption projectors emitting Indirect Bane energy ripples from armored gauntlets, bladed close-combat claw on other hand, suit panels rimmed with bright crackling containment-field light, a heavy rune-inscribed control collar, Quick Readjustment allowing precise indirect fire while moving — a fully clad armored human in plate and cloth with no exposed skin"
+    pose: "advancing with controlled disruption energy, bright energy ripples emanating from outstretched gauntlets, containment field shimmering around the armored suit"
 
     game_stats:
       quality: 3
@@ -403,7 +416,8 @@ unit_overrides:
           attacks: 1
           rules: ["AP(2)"]
   transport_vehicle:
-    extra_details: "armored personnel carrier with gothic inquisitorial hull design, twin heavy flamers with AP(1) Blast(3) mounted on hull sponsons, frontal ramp door for troop deployment, inquisitorial rosette emblazoned on hull side, black and red armored plating, smoke launchers and sensor arrays, Fast with Impact(3) ram capability, Tough(6), Transport(11)"
+    type: vehicle
+    extra_details: "armored personnel carrier with angular gothic-paneled hull, twin heavy flamers with AP(1) Blast(3) mounted on hull sponsons, frontal ramp door for troop deployment, tribunal compass-rosette emblem emblazoned on hull side, black and deep-red armored plating with burnished gold trim, smoke launchers and sensor arrays, Fast with Impact(3) ram capability, Tough(6), Transport(11)"
     pose: "driving forward at speed, heavy flamers ready, deployment ramp sealed"
 
   # ==========================================================================

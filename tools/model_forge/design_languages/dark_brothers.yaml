@@ -9,16 +9,30 @@
 faction_name: "Dark Brothers"
 
 aesthetic:
-  genre: "grimdark sci-fi monastic military"
-  style: "secretive monastic knights"
+  genre: "clean, crisp, high-contrast sci-fi military — secretive monastic warrior-knights, sharp readable studio render"
+  ip_strict: true   # elite power-armour humanoids: strict IP gate flags generic-marine / Chaos-drift lookalikes
+  style: "sleek original monastic power armour, disciplined and austere, crisply lit"
   inspiration:
-    - "Monastic knight order with dark secrets"
-    - "Hooded warrior monks in power armor"
-    - "Medieval Templar aesthetics fused with grimdark sci-fi"
+    - "Secretive monastic order of armoured warrior-monks (generic sci-fi trope)"
+    - "Hooded power-armour knights sworn to solemn oaths"
+    - "Medieval cloister-and-crusader silhouettes fused with original sci-fi technology"
+  # NOTE: original_design_cues + weapon_style ARE injected into the prompt (prompt_engine
+  # _format_aesthetic / generate_prompt) — keep them POSITIVE, never name a protected design here.
+  original_design_cues:
+    - "Smooth full-face visor helmet with a deep monastic cowl and a single narrow vertical glowing emerald slit"
+    - "Sharp hexagonal angular shoulder guards, flat and faceted (not round pauldrons)"
+    - "An original closed-book-and-keyhole geometric order emblem on the chest and one shoulder"
+    - "Layered angular plate armour in deep forest green with crisp polished edges and brass-bound trim"
+    - "Hanging oath-strips, wax seals and a single censer chain as austere monastic ornament"
+    - "Disciplined, austere and noble look — no spikes, horns, skulls or daemonic ornament"
+  weapon_style: "an original slim angular heavy rifle with a brass-bound barrel shroud and a softly glowing emerald power cell"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Dark Angels iconography"
-    - "Bright or cheerful color schemes"
+    - "Any real commercial miniatures-range trade dress or franchise iconography"
+    - "Generic super-soldier marine look, big round pauldrons, double-eagle or skull motifs"
+    - "Boxy magazine-fed bolt-rifle silhouettes"
+    - "Spiky, horned, fleshy or daemonic 'Chaos' drift"
+    - "Cheerful pastel colour schemes that break the austere monastic tone"
+    - "Any real-world military or franchise logos, insignia or trademarks"
 
 colors:
   primary: "dark forest green power armor"
@@ -26,10 +40,10 @@ colors:
   accent: "deep crimson weapon casings and wax seals"
 
 materials:
-  - "matte dark green ceramite power armor"
-  - "monastic hooded robes over armor"
-  - "brass-bound plasma weapons with green glow"
-  - "ancient parchment scrolls and devotional chains"
+  - "deep forest-green composite power armour with crisp polished edges"
+  - "monastic hooded robes worn over the armour"
+  - "brass-bound energy weapons with a soft emerald glow"
+  - "parchment oath-strips and devotional chains"
 
 creature_type: "secretive warrior monk in dark power armor"
 
@@ -69,7 +83,7 @@ unit_overrides:
   # ==========================================================================
 
   dark_master_destroyer:
-    extra_details: "towering elite destroyer hero in massively bulky terminator-style power armor, dark forest green with bone white robes draped over one shoulder, ornate brass trim, combat shield mounted on left arm with devotional script engravings, enormous close combat weapon crackling with dark energy in right hand, hooded cowl over helmet, penitent chains and wax seals across chest plate, censer hanging from belt, Tough(6)"
+    extra_details: "towering elite destroyer hero in massively bulky heavy siege-class power armor, dark forest green with bone white robes draped over one shoulder, ornate brass trim, combat shield mounted on left arm with devotional script engravings, enormous close combat weapon crackling with emerald power-field energy in right hand, hooded cowl over helmet, penitent chains and wax seals across chest plate, censer hanging from belt, Tough(6)"
     pose: "imposing combat stance, shield raised with inscribed oaths visible, close combat weapon held high for a crushing downward strike"
 
     game_stats:
@@ -253,7 +267,7 @@ unit_overrides:
           range: 0
           attacks: 1
   dark_destroyers:
-    extra_details: "single elite terminator-style assault warrior in massively bulky dark green destroyer armor with bone white robes draped over shoulders, combat shields with devotional inscriptions, triple-attack close combat weapons crackling with energy, hooded cowls, penitent chains and censers, ancient oaths carved into armor plates, Tough(3)"
+    extra_details: "single elite heavy siege-class assault warrior in massively bulky dark green destroyer armor with bone white robes draped over shoulders, combat shields with devotional inscriptions, triple-attack close combat weapons crackling with emerald power-field energy, hooded cowls, penitent chains and censers, ancient oaths carved into armor plates, Tough(3)"
     pose: "imposing combat advance from teleport arrival, weapons raised, towering robed figures emerging from shadow"
 
   # ==========================================================================
@@ -349,6 +363,7 @@ unit_overrides:
           range: 0
           attacks: 3
   dark_apc:
+    type: vehicle
     extra_details: "dark forest green armored personnel carrier, boxy angular design with front ramp door, storm rifle turret on top, hull-mounted weapon options, troop compartment with firing ports, heavy tank treads, devotional script along hull sides, chapter insignia on rear hatch, Tough(6), Transport(11)"
     pose: "driving forward through battlefield, turret aimed ahead, ramp sealed and ready for deployment"
 
@@ -365,6 +380,7 @@ unit_overrides:
           attacks: 3
           rules: ["AP(1)"]
   dark_attack_apc:
+    type: vehicle
     extra_details: "dark green assault transport variant with twin heavy flamer turret wreathed in heat haze, heavier frontal armor, smaller troop compartment, aggressive angular hull with penitent chains draped over front, dozer blade optional, devotional markings on turret ring, Tough(6), Transport(6)"
     pose: "assault advance, twin flamers venting fire forward, aggressive posture"
 
@@ -381,6 +397,7 @@ unit_overrides:
           attacks: 2
           rules: ["AP(1)"]
   dark_drop_pod:
+    type: vehicle
     extra_details: "dark green orbital drop capsule, cylindrical armored pod with opening petal doors, retro-thrusters on bottom, death launcher blast weapon on top, scorched re-entry heat marks on hull, chapter devotional oaths painted on interior doors, immobile after landing, Tough(6), Transport(11)"
     pose: "landing pose, petal doors deploying outward revealing dark interior, retro-thrusters firing green jets"
 
@@ -397,6 +414,7 @@ unit_overrides:
           attacks: 1
           rules: ["Blast(6)"]
   dark_heavy_tank:
+    type: vehicle
     extra_details: "super-heavy dark forest green assault transport, massive hull with twin heavy machinegun and twin heavy rifle array turrets, extremely thick armor plating with devotional script bands, multiple weapon systems, troop compartment, commander cupola with hooded commander, chapter banners on antenna, Tough(18), Transport(11)"
     pose: "rolling forward, all weapon systems aimed and active, dominating the battlefield like a mobile monastery"
 
@@ -438,8 +456,8 @@ unit_overrides:
           attacks: 1
           rules: ["AP(1)"]
   dark_shroud_speeder:
-    extra_details: "dark green stealth anti-gravity skimmer with massive shroud projector device mounted on rear deck emitting dark energy field, heavy machinegun on front mount, arcane-looking projector array with green energy glow, covered in devotional chains and ancient relics, dark energy tendrils emanating from shroud device, Tough(6)"
-    pose: "hovering forward with dark energy shroud active, tendrils of shadow trailing behind, machinegun scanning ahead"
+    extra_details: "dark green stealth anti-gravity skimmer with massive shroud-projector device mounted on rear deck casting a wide concealment haze, heavy machinegun on front mount, ornate projector array with soft emerald energy glow, covered in devotional chains and ancient relics, faint emerald light wisps drifting from the shroud device, Tough(6)"
+    pose: "hovering forward with the concealment shroud active, soft emerald haze trailing behind, machinegun scanning ahead"
     type: vehicle
 
     game_stats:
@@ -457,7 +475,7 @@ unit_overrides:
   dark_heavy_exo_suit:
     extra_details: "dark green walking exoskeleton suit between infantry and walker size, power armor pilot visible in chest cavity beneath hooded cowl, twin flamer arm weapons venting heat, heavy armored legs with stomp capability, reactor pack on back with devotional chains, censers hanging from waist, fear-inducing monastic presence, Tough(6)"
     pose: "advancing pose, arm weapons aimed forward, stomping stride with censers swinging"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -497,9 +515,9 @@ unit_overrides:
           attacks: 4
           rules: ["AP(2)"]
   dark_combat_walker:
-    extra_details: "massive dark green bipedal war machine, dreadnought-style armored sarcophagus body with devotional scrolls and chapter oaths covering front plate, two walker fist arms with devastating AP(4), heavy armored legs with stomp attack, exhaust vents and reactor on back draped in penitent chains, fear-inducing towering monastic war engine, Tough(12)"
+    extra_details: "massive dark green bipedal war machine, armored reliquary-sarcophagus body with devotional scrolls and order oaths covering front plate, two walker fist arms with devastating AP(4), heavy armored legs with stomp attack, exhaust vents and reactor on back draped in penitent chains, fear-inducing towering monastic war engine, Tough(12)"
     pose: "striding forward, walker fists raised menacingly, crushing stride through rubble"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -518,9 +536,9 @@ unit_overrides:
           attacks: 4
           rules: ["AP(4)"]
   dark_veteran_combat_walker:
-    extra_details: "decorated veteran dark green bipedal war machine, ornate dreadnought-style sarcophagus with ancient kill markings, honor scrolls, and bone white devotional banners, two walker fist arms with AP(4), veteran campaign banners with chapter heraldry, reinforced armor with centuries of battle damage, reliquary mounted on chest, Tough(12)"
+    extra_details: "decorated veteran dark green bipedal war machine, ornate armored reliquary-sarcophagus with ancient kill markings, honor scrolls, and bone white devotional banners, two walker fist arms with AP(4), veteran campaign banners with order heraldry, reinforced armor with centuries of battle damage, reliquary mounted on chest, Tough(12)"
     pose: "advancing with ancient veteran authority, fists clenched, heavy stomp shaking the ground"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -563,6 +581,7 @@ unit_overrides:
           range: 0
           attacks: 3
   dark_light_gunship:
+    type: aircraft
     extra_details: "dark green VTOL gunship aircraft, twin engine nacelles with tilting rotors, nose-mounted minigun with AP, wing-mounted twin typhoon missiles with AP(2) and Unstoppable, armored cockpit canopy with hooded pilot, tail stabilizers with chapter markings, devotional scrolls streaming from tail section, Tough(6)"
     pose: "banking in flight, weapons aimed downward at target, dark silhouette against sky"
 
@@ -583,6 +602,7 @@ unit_overrides:
           attacks: 4
           rules: ["AP(2)"]
   dark_heavy_gunship:
+    type: aircraft
     extra_details: "dark green heavy transport gunship aircraft, massive twin engines, troop bay with side doors for deployment of robed warriors, chin-mounted storm missiles with AP(3) and Deadly(3), wing pylons with light heavy rifle array and twin minigun, typhoon missiles on hardpoints, heavily armored fuselage with chapter banners painted on hull, devotional script along cargo bay interior, Tough(9), Transport(11)"
     pose: "hovering for troop deployment, side doors open revealing dark interior, all weapons visible and active"
 

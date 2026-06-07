@@ -9,16 +9,31 @@
 faction_name: "Watch Brothers"
 
 aesthetic:
-  genre: "grimdark sci-fi military"
-  style: "veteran xenos-hunter specialists"
+  genre: "clean, bright, crisp sci-fi military — elite black-armoured xenos-hunter specialists, sharp readable studio render"
+  ip_strict: true   # elite power-armour super-soldiers: strict IP gate flags generic-marine / Chaos-drift lookalikes
+  style: "sleek heavy original power armour, disciplined veteran kill-team specialists"
   inspiration:
     - "Elite alien-hunting special operations soldiers"
     - "Black-armored veterans from diverse backgrounds"
     - "Special forces kill-team with specialized anti-xenos weapons"
+  # NOTE: original_design_cues + weapon_style ARE now injected into the prompt (prompt_engine
+  # _format_aesthetic / generate_prompt) — keep them POSITIVE, never name a protected design here.
+  original_design_cues:
+    - "Smooth full-face visor helmet with a single horizontal glowing crimson optic slit"
+    - "Sharp angular faceted shoulder guards — the left one a polished bright-silver mirror plate, the right matte black"
+    - "Each warrior visibly individual: subtly varied helmet crests, plating and trim marking different detachment origins"
+    - "Original interlocking-chevron-and-diamond kill-team emblem etched on the silver shoulder and chest"
+    - "Segmented layered jet-black plate armour with clean smooth surfaces and crisp panel lines"
+    - "Disciplined, noble, crisp look — no spikes, horns, skulls or daemonic ornament"
+  weapon_style: "an original compact angular bullpup carbine with a slim profile and a glowing crimson power cell, plus a sleek angular close-combat blade"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Deathwatch iconography"
-    - "Uniform identical models"
+    - "Games Workshop / Warhammer 40,000 designs of any kind"
+    - "Generic Space Marine look, big round pauldrons, imperial double-eagle, purity seals, iron halo, skull motifs"
+    - "Boxy magazine-fed bolter-style rifles"
+    - "The terms ceramite, adamantium, bolter, Astartes, Terminator armour, Deathwatch"
+    - "Any real-world military or franchise logos, insignia or trademarks"
+    - "Spikes, horns, daemonic or Chaos ornament; organic, fleshy or grown elements"
+    - "Cartoon-baby or anime proportions; xenos or alien features"
 
 colors:
   primary: "jet black power armor"
@@ -194,6 +209,7 @@ unit_overrides:
           range: 0
           attacks: 2
   watch_apc:
+    type: vehicle
     extra_details: "armored personnel carrier in black livery with silver watch insignia, angular hull design with front ramp door, storm rifle turret on top with AP rounds, troop compartment with firing ports, heavy armored treads, dozer blade attachment point, hunter missile rack optional, Tough(6), Transport(11)"
     pose: "driving forward, storm rifle turret aimed ahead, ramp sealed"
 
@@ -210,6 +226,7 @@ unit_overrides:
           attacks: 3
           rules: ["AP(1)"]
   watch_attack_apc:
+    type: vehicle
     extra_details: "assault transport variant in black livery, twin heavy flamer turret with AP and blast capability, heavier frontal armor than standard APC, smaller troop compartment, aggressive angular hull design with silver watch markings, dozer blade optional, Tough(6), Transport(6)"
     pose: "assault advance, twin heavy flamers blazing forward"
 
@@ -226,6 +243,7 @@ unit_overrides:
           attacks: 2
           rules: ["AP(1)"]
   watch_drop_pod:
+    type: vehicle
     extra_details: "orbital drop capsule in black with silver watch insignia, cylindrical armored pod with opening petal doors, retro-thrusters on bottom, death launcher blast weapon on top, scorched re-entry heat marks on hull, immobile after landing, Tough(6), Transport(11)"
     pose: "landing pose, petal doors opening outward, retro-thrusters firing"
 
@@ -242,6 +260,7 @@ unit_overrides:
           attacks: 1
           rules: ["Blast(6)"]
   watch_heavy_tank:
+    type: vehicle
     extra_details: "super-heavy assault transport in black livery with silver watch insignia, massive hull with twin heavy machinegun and twin heavy rifle array turrets, extremely thick armor plating, multiple weapon systems, troop compartment, commander cupola, hunter missile rack optional, Tough(18), Transport(11)"
     pose: "rolling forward, all weapon systems aimed, dominating battlefield presence"
 
@@ -266,9 +285,9 @@ unit_overrides:
           attacks: 12
           rules: ["AP(1)"]
   watch_combat_walker:
-    extra_details: "massive bipedal war machine in black armor with silver watch insignia, dreadnought-style armored sarcophagus body, two devastating walker fist arms with AP(4), heavy armored legs with stomp attack, exhaust vents and reactor on back, xenos kill trophies mounted on chassis, fear-inducing towering presence, Tough(12)"
+    extra_details: "massive bipedal war machine in black armor with silver watch insignia, armored sarcophagus body, two devastating walker fist arms with AP(4), heavy armored legs with stomp attack, exhaust vents and reactor on back, xenos kill trophies mounted on chassis, fear-inducing towering presence, Tough(12)"
     pose: "striding forward, walker fists raised menacingly, crushing stride"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -311,6 +330,7 @@ unit_overrides:
           range: 0
           attacks: 3
   watch_deathstar_gunship:
+    type: aircraft
     extra_details: "heavy transport gunship aircraft in black livery with silver watch insignia, massive twin engines, troop bay with side doors for deployment, storm missiles with AP(3) and Deadly(3) on wing pylons, twin minigun with AP chin-mounted, heavily armored fuselage, xenos-hunting sensor arrays on nose, Tough(9), Transport(11)"
     pose: "hovering for troop deployment, side doors open, all weapons visible"
 

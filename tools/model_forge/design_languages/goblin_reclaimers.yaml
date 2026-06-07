@@ -10,12 +10,22 @@
 faction_name: "Goblin Reclaimers"
 
 aesthetic:
-  genre: "grimdark sci-fi comedy"
-  style: "ramshackle scavenger horde"
+  genre: "clean, bright, colourful sci-fi comedy — crisp readable scrap-tech, clean studio render"
+  style: "ramshackle scavenger horde, brightly painted and characterful"
   inspiration:
     - "Junkyard scavenger goblins with cobbled-together technology"
-    - "Post-apocalyptic scrapyard aesthetics with oversized salvaged weapons"
+    - "Scrapyard-tech aesthetics with oversized salvaged weapons"
     - "Scrappy diminutive aliens wielding absurdly large improvised guns"
+  # NOTE: original_design_cues + weapon_style ARE injected into the prompt for humanoid units
+  # (prompt_engine.generate_prompt). Keep them POSITIVE and ORIGINAL — never name a protected
+  # design or use organic/grown terms here (this is a manufactured scrap-tech faction).
+  original_design_cues:
+    - "Big-eared diminutive goblin alien with a broad toothy grin and oversized welding goggles"
+    - "Asymmetric cobbled-together scrap-plate armour, each panel a different riveted salvaged sheet"
+    - "Crude hand-painted hazard chevrons and a scratched cog-and-bolt clan emblem on the chest plate"
+    - "Oversized improvised firearms welded from pipes, tanks and salvaged machinery, far too big for the wielder"
+    - "Bright, crisp, characterful look — colourful scrap, clean readable shapes, no gloom or grime-mud"
+  weapon_style: "an oversized improvised scrap firearm welded from pipes, gas tanks and salvaged plates, with exposed bolts, taped grips and a comically large barrel"
   explicitly_avoid:
     - "Games Workshop specific designs"
     - "Copyrighted Gretchin or Grot likenesses"
@@ -74,7 +84,7 @@ unit_overrides:
   death_walker_champ:
     extra_details: "goblin hero piloting a large bipedal scrap walker mech suit, cobbled together from salvaged human technology and junk, rapid rocket launcher mounted on one arm firing AP(2) Deadly(3) rockets, heavy claw on opposite arm with six grinding servo-powered attacks and AP(1), cockpit visible with grinning goblin pilot inside behind cracked viewport, ramshackle welded armor plates with rivets and hazard stripes, exhaust pipes belching black smoke, wires and cables trailing from joints, Tough(6)"
     pose: "walker mech stomping forward aggressively, rocket launcher arm aimed ahead, heavy claw raised to strike, goblin pilot visible cackling in cockpit"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 4
@@ -153,8 +163,8 @@ unit_overrides:
           range: 0
           attacks: 2
   shooter_mob:
-    extra_details: "single diminutive goblin shooter armed with scrap guns cobbled together from salvaged weapon parts firing at 18 inch range, close combat weapons fashioned from junk pipes and blades, mismatched scrap armor plates strapped with wire and leather, oversized goggles and crude helmets, ammunition belts wrapped around tiny bodies, chaotic rabble advancing in disorganized mob"
-    pose: "disorganized firing line, scrap guns held in various awkward grips, some goblins aiming carefully while others fire wildly from the hip"
+    extra_details: "single diminutive goblin shooter armed with scrap guns cobbled together from salvaged weapon parts firing at 18 inch range, close combat weapons fashioned from junk pipes and blades, mismatched scrap armor plates strapped with wire and leather, oversized goggles and crude helmets, ammunition belts wrapped around tiny bodies, chaotic ragtag rabble advancing in a scrappy mob"
+    pose: "ragged firing line, scrap guns held in various awkward grips, some goblins aiming carefully while others fire wildly from the hip"
 
     game_stats:
       quality: 5
@@ -282,8 +292,8 @@ unit_overrides:
           range: 0
           attacks: 1
   bug_riders:
-    extra_details: "single goblin riding large alien insects native to their homeworld, scrap guns and close combat weapons wielded by goblin riders, alien bugs have rending claws with armor-shredding mandibles, insectoid mounts with chitinous exoskeleton and multiple legs, Bounding movement leaping across terrain, Regeneration from bug biology, Strider ignoring difficult terrain, symbiotic bond between goblin and bug mount, Tough(3)"
-    pose: "alien bugs bounding forward with goblin riders clinging on, mandible claws spread, riders firing scrap guns from the saddle"
+    extra_details: "single goblin riding large alien insects native to their homeworld, scrap guns and close combat weapons wielded by goblin riders, alien beetle-bugs have rending claws with armor-shredding pincer-jaws, insectoid mounts with a hardened armoured shell and multiple legs, Bounding movement leaping across terrain, Regeneration from bug biology, Strider ignoring difficult terrain, working bond between goblin and bug mount, Tough(3)"
+    pose: "alien beetle-bugs bounding forward with goblin riders clinging on, pincer claws spread, riders firing scrap guns from the saddle"
 
   # ==========================================================================
   # VEHICLES / WALKERS (no Transport - type: vehicle)
@@ -330,7 +340,7 @@ unit_overrides:
   death_walkers:
     extra_details: "single squadron of bipedal scrap walker mechs piloted by goblins, cobbled together from salvaged human technology, rocket launchers mounted on one arm firing AP(2) Deadly(3) rockets at 18 inch range, mini-claws on opposite arm with three grinding servo-powered attacks and AP(1), cockpits with goblin pilots visible behind cracked viewports, welded armor plates, trailing wires and cables, unsteady gait from improvised servos, Tough(3)"
     pose: "walkers advancing in formation, rocket arms aimed forward, mini-claws snapping, wobbling on improvised legs"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 5
@@ -349,9 +359,8 @@ unit_overrides:
           attacks: 3
           rules: ["AP(1)"]
   big_bug:
-    extra_details: "single large alien insect beast from the goblin homeworld, much bigger than bug rider mounts, two rocket launchers strapped to its carapace by goblin handlers firing AP(2) Deadly(3) rockets at 18 inch range, powerful stomp attacks with AP(1) from massive legs, thick chitinous exoskeleton armor (Defense 4+), Bounding leaps across the battlefield, Fear(1) terrifying alien predator, Regeneration healing wounds, Strider movement, goblin handler riding on top directing the beast, Tough(6)"
+    extra_details: "single large alien insect beast from the goblin homeworld, much bigger than bug rider mounts, two rocket launchers strapped to its carapace by goblin handlers firing AP(2) Deadly(3) rockets at 18 inch range, powerful stomp attacks with AP(1) from massive legs, thick hardened armoured exoskeleton shell (Defense 4+), Bounding leaps across the battlefield, Fear(1) terrifying alien predator, Regeneration healing wounds, Strider movement, goblin handler riding on top directing the beast, Tough(6)"
     pose: "massive bug rearing up mid-bound, rocket launchers on carapace firing, stomp legs raised, goblin handler clinging to saddle harness"
-    type: vehicle
 
     game_stats:
       quality: 5

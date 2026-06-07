@@ -14,19 +14,23 @@ faction_name: "Battle Brothers"
 hero_reference: "references/battle_brothers/02_hero_baseless_FINAL.png"
 
 aesthetic:
-  genre: "grimdark sci-fi military"
-  style: "heavy original power armour"
+  genre: "clean, bright, heroic sci-fi military — noble armoured crusaders, crisp studio render"
+  ip_strict: true   # power-armour humans: strict IP gate flags generic-marine / Chaos-drift lookalikes
+  style: "sleek heavy original power armour, polished and noble"
   inspiration:
     - "Futuristic heavy power-armour soldiers (generic sci-fi trope)"
     - "Augmented super-soldiers"
     - "Medieval knight-crusader silhouettes fused with original sci-fi technology"
+  # NOTE: original_design_cues + weapon_style ARE now injected into the prompt (prompt_engine
+  # _format_aesthetic) — keep them POSITIVE, never name a protected design here.
   original_design_cues:
-    - "Smooth full-face visor helmet with a single horizontal glowing teal slit (not a skull or beak shape)"
-    - "Sharp TRAPEZOIDAL angular shoulder guards — NOT big round Space-Marine pauldrons"
-    - "Original chevron-and-hexagon crest emblem on the chest and shoulder"
-    - "Segmented, layered angular plate armour"
-    - "Slightly stylised, clean comic / video-game render look (crisp readable shapes, not photoreal grime)"
-  weapon_style: "an original sleek angular bullpup heavy rifle with a slim profile and a glowing teal power cell — clearly NOT a boxy magazine-fed bolter"
+    - "Smooth full-face visor helmet with a single horizontal glowing teal slit"
+    - "Sharp trapezoidal angular shoulder guards, flat and faceted"
+    - "Original chevron-and-hexagon crest emblem on the chest and one shoulder"
+    - "Segmented, layered angular plate armour with clean smooth polished surfaces"
+    - "Clean, bright and noble look — no spikes, horns, skulls or daemonic ornament"
+    - "Slightly stylised clean comic / video-game render (crisp readable shapes, bright even lighting)"
+  weapon_style: "an original sleek angular bullpup heavy rifle with a slim profile and a glowing teal power cell"
   explicitly_avoid:
     - "Games Workshop / Warhammer 40,000 designs of any kind"
     - "Space Marine look, blue-and-gold Ultramarine colours, big round pauldrons"
@@ -37,7 +41,7 @@ aesthetic:
     - "Cartoon-baby or anime proportions; xenos or alien features"
 
 colors:
-  primary: "dark slate-grey power armour"
+  primary: "clean medium slate-grey power armour with bright highlights"
   secondary: "copper-bronze trim and an original angular crest emblem"
   accent: "deep maroon cloth tabards, engraved honour plaques, and glowing teal optics"
 
@@ -176,7 +180,7 @@ unit_overrides:
           range: 0
           attacks: 2
   battle_brothers:
-    extra_details: "single standard line infantry warrior in heavy slate-grey full power armour with copper-bronze trim and sharp trapezoidal shoulder guards (not round pauldrons), smooth full-face visor helmet with a single horizontal glowing teal slit, holding an original sleek angular bullpup heavy rifle with a glowing teal power cell (NOT a boxy bolter), original chevron-and-hexagon company insignia on the chest and shoulder, deep maroon cloth tabard, ammunition pouches"
+    extra_details: "single standard line infantry warrior in heavy slate-grey full power armour with copper-bronze trim and sharp trapezoidal shoulder guards, smooth full-face visor helmet with a single horizontal glowing teal slit, holding an original sleek angular bullpup heavy rifle with a glowing teal power cell, original chevron-and-hexagon company insignia on the chest and shoulder, deep maroon cloth tabard, ammunition pouches"
     pose: "advancing tactical formation, rifles shouldered and aimed"
 
     game_stats:
@@ -363,6 +367,7 @@ unit_overrides:
           range: 0
           attacks: 3
   apc:
+    type: vehicle
     extra_details: "armored personnel carrier, boxy angular design with front ramp door, storm rifle turret on top, hull-mounted weapon options, troop compartment with firing ports, heavy tank treads, Tough(6), Transport(11)"
     pose: "driving forward, turret aimed ahead, ramp sealed"
 
@@ -379,6 +384,7 @@ unit_overrides:
           attacks: 3
           rules: ["AP(1)"]
   attack_apc:
+    type: vehicle
     extra_details: "assault transport variant with twin heavy flamer turret, heavier frontal armor, smaller troop compartment than standard APC, aggressive angular hull design, dozer blade optional, Tough(6), Transport(6)"
     pose: "assault advance, twin flamers blazing forward"
 
@@ -395,6 +401,7 @@ unit_overrides:
           attacks: 2
           rules: ["AP(1)"]
   drop_pod:
+    type: vehicle
     extra_details: "orbital drop capsule, cylindrical armored pod with opening petal doors, retro-thrusters on bottom, death launcher blast weapon on top, scorched re-entry heat marks on hull, immobile after landing, Tough(6), Transport(11)"
     pose: "landing pose, petal doors opening outward, retro-thrusters firing"
 
@@ -411,6 +418,7 @@ unit_overrides:
           attacks: 1
           rules: ["Blast(6)"]
   heavy_tank:
+    type: vehicle
     extra_details: "super-heavy assault transport, massive hull with twin heavy machinegun and twin heavy rifle array turrets, extremely thick armor plating, multiple weapon systems, troop compartment, commander cupola, Tough(18), Transport(11)"
     pose: "rolling forward, all weapon systems aimed, dominating presence"
 
@@ -454,7 +462,7 @@ unit_overrides:
   heavy_exo_suit:
     extra_details: "walking exoskeleton suit between infantry and walker size, power armor pilot visible in chest cavity, twin flamer arm weapons, heavy armored legs with stomp capability, reactor pack on back, fear-inducing presence, Tough(6)"
     pose: "advancing pose, arm weapons aimed forward, stomping stride"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -496,7 +504,7 @@ unit_overrides:
   combat_walker:
     extra_details: "massive bipedal war machine, dreadnought-style armored sarcophagus body, two walker fist arms with devastating AP(4), heavy armored legs with stomp attack, exhaust vents and reactor on back, fear-inducing towering presence, Tough(12)"
     pose: "striding forward, walker fists raised menacingly, crushing stride"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -517,7 +525,7 @@ unit_overrides:
   veteran_combat_walker:
     extra_details: "decorated veteran bipedal war machine, ornate dreadnought-style armored sarcophagus with kill markings and honor scrolls, two walker fist arms with AP(4), veteran campaign banners, reinforced armor with battle damage scars, Tough(12)"
     pose: "advancing with veteran authority, fists clenched, heavy stomp"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -560,6 +568,7 @@ unit_overrides:
           range: 0
           attacks: 3
   light_gunship:
+    type: aircraft
     extra_details: "VTOL gunship aircraft, twin engine nacelles with tilting rotors, nose-mounted minigun with AP, wing-mounted twin typhoon missiles with AP(2) and Unstoppable, armored cockpit canopy, tail stabilizers, Tough(6)"
     pose: "banking in flight, weapons aimed downward at target"
 
@@ -580,6 +589,7 @@ unit_overrides:
           attacks: 4
           rules: ["AP(2)"]
   heavy_gunship:
+    type: aircraft
     extra_details: "heavy transport gunship aircraft, massive twin engines, troop bay with side doors for deployment, chin-mounted storm missiles with AP(3) and Deadly(3), wing pylons with light heavy rifle array and twin minigun, typhoon missiles, heavily armored fuselage, Tough(9), Transport(11)"
     pose: "hovering for troop deployment, side doors open, all weapons visible"
 

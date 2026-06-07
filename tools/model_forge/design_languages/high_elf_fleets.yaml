@@ -4,36 +4,51 @@
 # Basiert auf: GF - High Elf Fleets v3.5.2
 # Nomadische Weltraumelfen mit hochspezialisierten Aspektkriegern,
 # Elementargeistern und eleganter Anti-Gravitations-Technologie.
-# OPR-Aequivalent zu Craftworld Eldar / Asuryani.
+# Original Niemandsland species (CC-BY-SA) — graceful star-faring elf-kin with
+# crystal armour and anti-gravity tech. Deliberately our own design, not any
+# specific commercial range.
 
 faction_name: "High Elf Fleets"
 
 aesthetic:
-  genre: "grimdark sci-fi elegant alien"
-  style: "graceful nomadic fleet warriors"
+  # Clean, bright, crisp studio render — no grimdark / dark / muddy wording.
+  genre: "clean, bright, elegant sci-fi fantasy — graceful crystalline star-elves, crisp studio render"
+  style: "sleek graceful nomadic fleet warriors, polished and luminous"
   inspiration:
-    - "Ancient nomadic space-faring elven civilization with psychic mastery"
-    - "Highly specialized aspect warriors each perfecting a single art of war"
-    - "Sleek anti-gravity technology and wraithbone-like crystalline constructs"
-    - "Flowing organic curves blended with advanced alien technology"
+    - "Ancient nomadic star-faring elf-kin civilization with refined psychic mastery"
+    - "Highly specialized warriors, each perfecting a single discipline of war"
+    - "Sleek anti-gravity technology and smooth pale crystal-ceramic constructs"
+    - "Elegant flowing curves fused with advanced crystalline technology"
+  # NOTE: original_design_cues + weapon_style ARE injected into the prompt
+  # (prompt_engine _format_aesthetic) for humanoid units — keep them POSITIVE,
+  # ORIGINAL and free of any protected design name.
+  original_design_cues:
+    - "Tall, slender, graceful humanoid silhouette with a high upright posture"
+    - "Smooth tall conical crested helmet with a long sweeping plume and a single narrow vertical glowing visor slit"
+    - "Sleek segmented pale crystal-ceramic armour plates with gently flowing curved edges (no bulk, no spikes, no horns)"
+    - "Original teardrop-and-triple-crescent emblem on the chest plate and one shoulder"
+    - "Small luminous faceted gemstone nodes set into the chest, helmet and shoulders"
+    - "Bright noble palette: bone-white and pale ice-blue plates with gold trim and bright gemstone accents"
+  weapon_style: "an original slim crystalline rifle with a long tapered barrel, a faceted glowing power-gem core, and an elegant curved stock"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Aeldari or Craftworld iconography"
-    - "Bulky or heavy industrial aesthetics"
-    - "Human proportions or human technology"
+    - "Any specific commercial miniatures range or franchise designs"
+    - "Bulky, heavy or industrial aesthetics; spikes, horns, skulls or daemonic ornament"
+    - "Human proportions or crude human technology"
     - "Cartoon or anime aesthetics"
+    - "Dark, grim, muddy or low-contrast rendering"
+    - "Any real-world military or franchise logos, insignia or trademarks"
 
 colors:
-  primary: "bone white and ghostly pale blue armor panels"
+  primary: "bone white and pale ice-blue armor panels"
   secondary: "gold trim and deep sapphire blue accent plates"
-  accent: "glowing spirit stones in red and green, bright gemstone nodes"
+  accent: "glowing crystal nodes in red and green, bright faceted gemstone nodes"
 
 materials:
-  - "smooth wraithbone-like crystalline armor with flowing organic curves"
-  - "psycho-reactive spirit stone gemstones embedded in armor"
+  - "smooth pale crystal-ceramic armor with gently flowing curved edges"
+  - "psycho-reactive faceted gemstone nodes embedded in armor"
   - "shimmering gossamer cloaks and silk pennants"
   - "translucent energy fields and holographic projections"
-  - "polished alien metal with gentle luminescence"
+  - "polished pale alloy with gentle luminescence"
 
 creature_type: "graceful alien fleet warrior"
 
@@ -204,7 +219,7 @@ unit_overrides:
           range: 0
           attacks: 2
   revenants:
-    extra_details: "single elite melee warrior in flowing bone-white armor with ghost motifs, shard pistols with crack ammunition in off-hand, energy swords with rending AP(1) in main hand, tall crested helmets with banshee-like elongated faceplates, flowing tabards and spirit-silk scarves trailing from armor, strider adaptations on greaves for terrain mastery, ghostly and ethereal appearance, Highborn enhanced movement, Strider terrain mastery"
+    extra_details: "single elite melee warrior in flowing bone-white armor with ghost motifs, shard pistols with crack ammunition in off-hand, energy swords with rending AP(1) in main hand, tall crested helmets with elongated mournful faceplates, flowing tabards and spirit-silk scarves trailing from armor, strider adaptations on greaves for terrain mastery, ghostly and ethereal appearance, Highborn enhanced movement, Strider terrain mastery"
     pose: "fluid melee assault, energy swords mid-swing, shard pistols firing, flowing movement"
 
     game_stats:
@@ -324,8 +339,9 @@ unit_overrides:
           range: 0
           attacks: 1
   elemental_protectors:
-    extra_details: "single towering wraithbone construct warrior guided by bound spirits, distortion guns firing AP(2) blast(3) dimensional rift projectiles at 12 inch range, close combat weapon appendages, massive smooth crystalline bodies with glowing spirit stones in chest cavity, angular wraithbone plating in bone-white with blue rune inscriptions, eyeless sculpted faceplates, Fearless bound spirit, Highborn enhanced movement, Relentless fire discipline, Tough(3)"
+    extra_details: "single towering crystal-construct warrior guided by bound spirits, distortion guns firing AP(2) blast(3) dimensional rift projectiles at 12 inch range, close combat weapon appendages, massive smooth crystalline bodies with glowing spirit stones in chest cavity, angular crystal-ceramic plating in bone-white with blue rune inscriptions, eyeless sculpted faceplates, Fearless bound spirit, Highborn enhanced movement, Relentless fire discipline, Tough(3)"
     pose: "relentless advance formation, distortion guns aimed, glowing spirit stones pulsing"
+    type: walker
 
     game_stats:
       quality: 3
@@ -343,8 +359,9 @@ unit_overrides:
           range: 0
           attacks: 1
   elemental_strikers:
-    extra_details: "single close-combat wraithbone construct bound with vengeful spirits, killing axes with AP(2) deadly(3) massive energy-wreathed blades, combat shield energy barriers, towering smooth crystalline bodies larger than infantry with glowing amber spirit stones, angular wraithbone armor plates in bone-white, sculpted warrior faceplates expressing determination, Fearless bound spirit, Furious charge, Highborn enhanced movement, Shielded defensive ward, Tough(3)"
+    extra_details: "single close-combat crystal-construct bound with vengeful spirits, killing axes with AP(2) deadly(3) massive energy-wreathed blades, combat shield energy barriers, towering smooth crystalline bodies larger than infantry with glowing amber spirit stones, angular crystal-ceramic armor plates in bone-white, sculpted warrior faceplates expressing determination, Fearless bound spirit, Furious charge, Highborn enhanced movement, Shielded defensive ward, Tough(3)"
     pose: "aggressive charge formation, killing axes raised high, shield barriers shimmering"
+    type: walker
 
   # ==========================================================================
   # JETBIKES
@@ -413,8 +430,9 @@ unit_overrides:
           range: 0
           attacks: 2
   anti_gravity_apc:
-    extra_details: "sleek anti-gravity troop transport skimmer, elongated hull with smooth wraithbone-like armor panels in bone-white and blue, mounted shardguns with crack rounds on pintle turret, open troop bay visible at rear for Transport(11) capacity, anti-grav emitters glowing blue-white underneath, swept-back hull fins for stability, impact ram prow reinforced with crystalline plating, Fast anti-grav movement, Highborn enhanced movement, Impact(3) ram, Strider terrain mastery, Tough(6)"
+    extra_details: "sleek anti-gravity troop transport skimmer, elongated hull with smooth pale crystal-ceramic armor panels in bone-white and blue, mounted shardguns with crack rounds on pintle turret, open troop bay visible at rear for Transport(11) capacity, anti-grav emitters glowing blue-white underneath, swept-back hull fins for stability, impact ram prow reinforced with crystalline plating, Fast anti-grav movement, Highborn enhanced movement, Impact(3) ram, Strider terrain mastery, Tough(6)"
     pose: "fast hover transport, skimming at speed, pintle shardguns tracking, troop bay partially visible"
+    type: vehicle
 
     game_stats:
       quality: 3
@@ -449,9 +467,9 @@ unit_overrides:
           attacks: 2
           rules: ["Crack"]
   combat_walker:
-    extra_details: "elegant bipedal war walker with long slender legs and compact weapon pod body, rapid shard cannon with AP(1) crack rounds as primary weapon firing at 24 inch range, stomp-capable armored feet with AP(1) crushing force, open or semi-enclosed cockpit with pilot visible, wraithbone-like armor in bone-white with blue accent panels, sensor array on weapon pod, scout-capable forward deployment, Highborn enhanced movement, Scout forward deployment, Tough(6)"
+    extra_details: "elegant bipedal war walker with long slender legs and compact weapon pod body, rapid shard cannon with AP(1) crack rounds as primary weapon firing at 24 inch range, stomp-capable armored feet with AP(1) crushing force, open or semi-enclosed cockpit with pilot visible, pale crystal-ceramic armor in bone-white with blue accent panels, sensor array on weapon pod, scout-capable forward deployment, Highborn enhanced movement, Scout forward deployment, Tough(6)"
     pose: "striding forward in scout posture, rapid shard cannon scanning ahead, legs in mid-stride"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -515,8 +533,9 @@ unit_overrides:
           range: 0
           attacks: 3
   great_elemental:
-    extra_details: "massive towering wraithbone construct warrior of enormous scale, two shardguns with crack rounds mounted on shoulder hardpoints, two great claws with rending capability as primary melee weapons with four attacks each, stomp attacks from massive AP(1) crushing feet, enormous smooth crystalline body with blazing spirit stone in chest, angular wraithbone plating in bone-white with glowing blue rune channels, eyeless sculpted helm with crown-like crest, Fear(2) terrifying presence, Fearless bound spirit, Highborn enhanced movement, Tough(12)"
+    extra_details: "massive towering crystal-construct warrior of enormous scale, two shardguns with crack rounds mounted on shoulder hardpoints, two great claws with rending capability as primary melee weapons with four attacks each, stomp attacks from massive AP(1) crushing feet, enormous smooth crystalline body with blazing spirit stone in chest, angular crystal-ceramic plating in bone-white with glowing blue rune channels, eyeless sculpted helm with crown-like crest, Fear(2) terrifying presence, Fearless bound spirit, Highborn enhanced movement, Tough(12)"
     pose: "towering combat stance, great claws raised menacingly, spirit stone blazing, stomp feet planted"
+    type: walker
 
     game_stats:
       quality: 3
@@ -539,8 +558,9 @@ unit_overrides:
           attacks: 4
           rules: ["AP(1)"]
   titan_elemental:
-    extra_details: "colossal wraithbone titan construct of city-destroying scale, dual titan claws with 24 rending attacks on massive articulated arms, devastating stomp attacks with AP(2) from building-sized feet, smooth crystalline body of immense proportions with multiple blazing spirit stones across torso and limbs, towering angular wraithbone plating in bone-white with pulsing blue energy channels, crowned eyeless helm radiating psychic presence, Fear(4) paralyzing terror, Fearless bound spirit, Highborn enhanced movement, Tough(24)"
+    extra_details: "colossal crystal-construct titan of city-destroying scale, dual titan claws with 24 rending attacks on massive articulated arms, devastating stomp attacks with AP(2) from building-sized feet, smooth crystalline body of immense proportions with multiple blazing spirit stones across torso and limbs, towering angular crystal-ceramic plating in bone-white with pulsing blue energy channels, crowned eyeless helm radiating psychic presence, Fear(4) paralyzing terror, Fearless bound spirit, Highborn enhanced movement, Tough(24)"
     pose: "titanic striding pose, dual titan claws extended wide, spirit stones blazing, colossal scale"
+    type: titan
 
     game_stats:
       quality: 3
@@ -559,8 +579,9 @@ unit_overrides:
           attacks: 8
           rules: ["AP(2)"]
   elemental_avatar:
-    extra_details: "legendary awakened avatar of the ancient elven war-spirit, wreathed in spectral flames, flame sword with 12 AP(2) rending attacks blazing with psychic fire, devastating stomp attacks with AP(2) from burning feet, semi-divine construct form combining organic and crystalline elements, glowing molten rune channels across bone-white body, crown of psychic flame on head, Caster(4) master psyker, Fear(3) divine terror, Fearless, Highborn enhanced movement, Regeneration self-repair, Tough(18)"
+    extra_details: "legendary awakened avatar of the ancient elven war-spirit, a towering humanoid war-construct wreathed in spectral flames, flame sword with 12 AP(2) rending attacks blazing with psychic fire, devastating stomp attacks with AP(2) from burning feet, semi-divine sculpted crystal-ceramic body, glowing molten rune channels across bone-white body, crown of psychic flame on head, Caster(4) master psyker, Fear(3) divine terror, Fearless, Highborn enhanced movement, self-repairing constructed form, Tough(18)"
     pose: "divine war stance, flame sword raised blazing, psychic fire wreathing entire body, awe-inspiring"
+    type: walker
 
   # ==========================================================================
   # AIRCRAFT
@@ -583,8 +604,9 @@ unit_overrides:
           attacks: 6
           rules: ["AP(2)"]
   seer_plane:
-    extra_details: "elegant psychic-capable aircraft with twin distortion guns firing AP(3) blast(3) dimensional rift projectiles at 18 inch range, sleek swept-wing airframe with crystalline canopy, wraithbone-like fuselage in bone-white with blue markings, psychic amplifier array on dorsal spine for Caster(2) abilities, anti-grav engines integrated into wing roots, sensor gems along nose, Aircraft high-altitude operations, Highborn enhanced movement, Tough(6)"
+    extra_details: "elegant psychic-capable aircraft with twin distortion guns firing AP(3) blast(3) dimensional rift projectiles at 18 inch range, sleek swept-wing airframe with crystalline canopy, pale crystal-ceramic fuselage in bone-white with blue markings, psychic amplifier array on dorsal spine for Caster(2) abilities, anti-grav engines integrated into wing roots, sensor gems along nose, Aircraft high-altitude operations, Highborn enhanced movement, Tough(6)"
     pose: "graceful banking flight, twin distortion guns glowing, psychic amplifier pulsing"
+    type: aircraft
 
     game_stats:
       quality: 3
@@ -599,8 +621,9 @@ unit_overrides:
           attacks: 4
           rules: ["AP(3)"]
   venator_plane:
-    extra_details: "heavy fighter-bomber aircraft bristling with advanced weaponry, rapid pulse laser with AP(3) unstoppable beams firing at 36 inch range as primary nose weapon, twin shatter cannon with AP(1) rending shots at 36 inch range on wing pylons, aggressive swept-wing airframe heavier than seer variant, wraithbone-like fuselage in bone-white with red combat markings, twin engine pods, armored canopy, Aircraft high-altitude operations, Highborn enhanced movement, Tough(6)"
+    extra_details: "heavy fighter-bomber aircraft bristling with advanced weaponry, rapid pulse laser with AP(3) unstoppable beams firing at 36 inch range as primary nose weapon, twin shatter cannon with AP(1) rending shots at 36 inch range on wing pylons, aggressive swept-wing airframe heavier than seer variant, pale crystal-ceramic fuselage in bone-white with red combat markings, twin engine pods, armored canopy, Aircraft high-altitude operations, Highborn enhanced movement, Tough(6)"
     pose: "aggressive attack dive, pulse laser and shatter cannons firing, wings swept back"
+    type: aircraft
 
   # ==========================================================================
   # NAMED CHARACTERS

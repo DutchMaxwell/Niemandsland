@@ -7,17 +7,31 @@
 faction_name: "Custodian Brothers"
 
 aesthetic:
-  genre: "grimdark sci-fi palatial military"
-  style: "ultra-elite golden warriors"
+  genre: "clean, bright, regal sci-fi military — radiant golden palace guardians, crisp studio render"
+  ip_strict: true   # golden elite power-armour guard: strict IP gate flags generic-marine / Chaos-drift lookalikes
+  style: "ultra-elite golden warriors in ornate ceremonial power armour, polished and noble"
   inspiration:
-    - "Ancient Roman Praetorian Guard in futuristic golden power armor"
+    - "Ancient Roman Praetorian Guard reimagined in futuristic golden power armor"
     - "Spartan elite warriors with ornate ceremonial weapons"
     - "Byzantine imperial bodyguard aesthetics"
+  # NOTE: original_design_cues + weapon_style ARE now injected into the prompt
+  # (prompt_engine _format_aesthetic / generate_prompt) — keep them POSITIVE, never name a
+  # protected design here.
+  original_design_cues:
+    - "Tall conical golden helmet with a smooth full-face faceplate, a narrow vertical brow ridge and a single tall crimson horsehair crest running front-to-back"
+    - "Broad layered lamellar shoulder and chest plates of polished gold, scaled like overlapping ceremonial armour, with flowing fine filigree borders"
+    - "An original radiant sunburst-laurel medallion emblem centred on the chest (concentric rays inside a laurel ring)"
+    - "Deep crimson cloth tabard, half-cape and waist drapery with sapphire-blue gemstone studs at the clasps"
+    - "Sapphire-blue glowing eye lenses and gem inlays set into the gold; clean noble look — no spikes, horns, skulls or daemonic ornament"
+    - "Tall heroic proportions, statuesque and imperious, like a gilded living statue"
+  weapon_style: "an original long ceremonial guardian poleaxe — a gilded haft with a broad single-edged power blade and a glowing sapphire energy core, paired with a slim wrist-mounted projector built into the gauntlet"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Custodes iconography"
+    - "Games Workshop / Warhammer 40,000 designs of any kind"
+    - "Existing golden imperial guardian miniature ranges, double-headed eagles, imperial aquila motifs"
+    - "Skull motifs, purity-seal parchment tabs, daemonic spikes or horns"
     - "Plain or unadorned armor"
     - "Mass-produced military aesthetics"
+    - "Any real-world military or franchise logos, insignia or trademarks"
 
 colors:
   primary: "polished auric gold power armor"
@@ -184,7 +198,7 @@ unit_overrides:
           attacks: 1
           rules: ["Blast(3)"]
   jetpack_brothers:
-    extra_details: "squad of three golden warriors with ornate jump packs featuring eagle-wing stabilizer fins, wrist-mounted shot weapons, heavy close combat weapons with powered edges, designed for deep strike ambush attacks from above, thruster vents glowing blue on golden jump packs, streamlined armor for aerial insertion, crimson streamers trailing from packs"
+    extra_details: "squad of three golden warriors with ornate jump packs featuring swept fan-shaped golden stabilizer fins with engraved sunburst-laurel motifs, wrist-mounted shot weapons, heavy close combat weapons with powered edges, designed for deep strike ambush attacks from above, thruster vents glowing blue on golden jump packs, streamlined armor for aerial insertion, crimson streamers trailing from packs"
     pose: "descending from above in attack formation, heavy weapons raised for impact strike, jump packs firing"
 
     game_stats:
@@ -327,8 +341,9 @@ unit_overrides:
           attacks: 3
           rules: ["AP(1)"]
   custodian_apc:
-    extra_details: "ornate golden armored personnel carrier, imperial eagle or aquila-equivalent prow decoration, storm rifle turret on roof, angular golden hull plates with engraved filigree, fast assault transport for eleven warriors, impact ram on front, crimson cloth banners on hull, blue-glowing viewports, treads or wheels concealed beneath golden skirt armor"
+    extra_details: "ornate golden armored personnel carrier, original radiant sunburst-laurel medallion crest on the prow, storm rifle turret on roof, angular golden hull plates with engraved filigree, fast assault transport for eleven warriors, impact ram on front, crimson cloth banners on hull, blue-glowing viewports, treads or wheels concealed beneath golden skirt armor"
     pose: "fast advance, turret aimed forward, assault ramp ready to deploy"
+    type: vehicle
 
     game_stats:
       quality: 3
@@ -345,6 +360,7 @@ unit_overrides:
   custodian_heavy_battle_tank:
     extra_details: "massive golden super-heavy battle tank, quad laser cannon turret as primary armament with four barrels, twin heavy machinegun sponson, extremely thick auramite armor plating, troop transport bay for eleven warriors, enormous tracked hull with golden armor panels, ornate command cupola, crimson banner standards mounted on turret, the pinnacle of custodian armored warfare"
     pose: "rolling advance, quad laser turret aimed, commanding presence"
+    type: vehicle
 
   # === BIKES ===
     game_stats:
@@ -364,7 +380,7 @@ unit_overrides:
           attacks: 6
           rules: ["AP(1)"]
   custodian_jetbiker:
-    extra_details: "golden warrior mounted on an ornate anti-gravity jetbike, heavy rifle array with six barrels mounted on bike cowling, energy lance for devastating charge attacks, fast and agile hover-bike with golden hull panels and crimson trim, rider in full custodian armor leaning into thrust, stabilizer fins with eagle motifs, blue anti-grav glow underneath"
+    extra_details: "golden warrior mounted on an ornate anti-gravity jetbike, heavy rifle array with six barrels mounted on bike cowling, energy lance for devastating charge attacks, fast and agile hover-bike with golden hull panels and crimson trim, rider in full custodian armor leaning into thrust, swept stabilizer fins with engraved sunburst-laurel motifs, blue anti-grav glow underneath"
     pose: "high-speed thrust attack, energy lance lowered for charge, jetbike banking"
 
   # === GRAV TANKS ===
@@ -447,7 +463,7 @@ unit_overrides:
   custodian_combat_walker:
     extra_details: "massive bipedal golden war walker, twin walker fists with AP(4) crushing power, heavy stomping feet, Fear(2) terrifying presence, Tough(12) extreme durability, pilot entombed in golden sarcophagus cockpit, ornate shoulder guards with engravings, hydraulic golden legs, reactor exhaust vents on back, crimson honor scrolls hanging from chassis"
     pose: "advancing menace, both walker fists raised for crushing blows, heavy stomp mid-stride"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -468,7 +484,7 @@ unit_overrides:
   custodian_assault_walker:
     extra_details: "massive bipedal golden war walker specialized for close assault, rapid burst shot mount for suppressive fire, enormous heavy sword with rending molecular edge, combat shield providing shielded defense, stomping feet for crushing, Fear(2) terrifying presence, Tough(12), more aggressive angular design than combat walker, sword arm dominant, shield on opposite arm, ornate golden plating"
     pose: "charging assault pose, heavy sword raised high, combat shield forward, shot mount blazing"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -493,7 +509,7 @@ unit_overrides:
   custodian_heavy_walker:
     extra_details: "colossal golden war engine, the largest walker in the custodian arsenal, bolt launcher for barrage fire, twin plasma cannons on arms with devastating blast capability, massive stomping feet with AP(2) crushing power, twin walker fists for melee, Fear(3) supreme terror, Tough(15) near-indestructible, towering above all other units, ornate golden chassis covered in victory engravings, reactor core visible on back, crimson banners draped from shoulders"
     pose: "apocalyptic advance, all weapons systems active, bolt launcher elevated, plasma cannons charged, towering dominant presence"
-    type: vehicle
+    type: titan
 
     game_stats:
       quality: 3

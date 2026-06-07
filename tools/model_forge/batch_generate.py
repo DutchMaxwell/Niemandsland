@@ -162,6 +162,15 @@ def process_faction(
     engine = PromptEngine(dl)
     stats.total_units = len(dl.unit_overrides)
 
+    # Configure faction-aware IP strictness for the gate (e.g. human power-armour factions
+    # need strict mode so generic-marine/Chaos-drift lookalikes are flagged, not just logos).
+    if quality_gate is not None:
+        _aes = dl.aesthetic if isinstance(dl.aesthetic, dict) else {}
+        quality_gate.set_ip_profile(
+            strict=bool(_aes.get("ip_strict", False)),
+            signature_cues=_aes.get("original_design_cues", []) or [],
+        )
+
     # Session anlegen oder fortsetzen
     SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
     session = _get_or_create_session(faction, dl)

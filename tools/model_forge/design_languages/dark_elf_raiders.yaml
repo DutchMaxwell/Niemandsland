@@ -8,17 +8,32 @@
 faction_name: "Dark Elf Raiders"
 
 aesthetic:
-  genre: "grimdark sci-fi dark elf"
-  style: "sadistic pirate raiders"
+  # Lithe sci-fi pirate-elf raiders: NOT a bulky power-armour humanoid range, so the strict IP
+  # gate stays OFF (ip_strict omitted) and they read as their own sleek raider archetype. Weapons
+  # are MANUFACTURED splinter-tech and blades (no bio_weapons), and the army fields skimmers,
+  # jetbikes and aircraft (no all_creatures). Keep the look clean, sharp and crisp — never grimdark.
+  genre: "clean, sharp, elegant sci-fi raider — sleek sinister pirate-elves, crisp bright studio render"
+  style: "sleek lithe original raider armour, angular and razor-sharp"
   inspiration:
-    - "Sadistic alien pirates in spiked dark armor"
-    - "Gladiatorial pain-obsessed raiders with poison weapons"
-    - "Dark elf aesthetics meets sci-fi raider culture"
+    - "Lithe agile sci-fi pirate raiders in sleek angular dark armour"
+    - "Fast hit-and-run corsairs with elegant blades and splinter sidearms"
+    - "Sleek alien aristocrat-warriors with a cruel, refined silhouette"
+  # NOTE: original_design_cues + weapon_style ARE injected into the prompt (humanoid units only) —
+  # keep them POSITIVE and ORIGINAL, never name a protected design here.
+  original_design_cues:
+    - "Sleek wraparound helmet with a smooth tapered crest and a thin acid-green visor strip"
+    - "Lithe athletic build in close-fitting segmented plate, no bulk"
+    - "Sharp swept-back angular shoulder fins and slim bladed greaves"
+    - "Original barbed-diamond clan emblem etched on chest and one shoulder"
+    - "Razor-edged silhouette accented with a few crisp spikes, kept clean and readable"
+    - "Palette of deep midnight purple and black with acid-green optic accents"
+  weapon_style: "an original slim splinter-rifle of dark crystalline construction with an acid-green energy cell, plus a slender serrated power-blade"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Drukhari/Dark Eldar designs"
-    - "Bright or cheerful aesthetics"
-    - "Bulky heavy armor"
+    - "Any specific commercial miniatures range or trade dress"
+    - "Bulky heavy power armour or round pauldrons"
+    - "Spiky horned daemonic or chaotic ornament, skulls, fleshy growths"
+    - "Muddy, gloomy, grimdark low-contrast lighting"
+    - "Any real-world military or franchise logos, insignia or trademarks"
 
 colors:
   primary: "deep midnight purple and black armor"
@@ -507,6 +522,7 @@ unit_overrides:
   light_skimmer:
     extra_details: "sleek fast anti-gravity raider transport skimmer, twin barb rifle turret on prow firing lacerate rounds, open-topped crew deck for Transport(11) capacity, fast and strider capable, impact(3) blade-prow ram, dark purple hull with sweeping blade-wing fins, spike-adorned railings along crew deck, pilot and gunner at front, raiding party visible on deck, Tough(6), defense 2+"
     pose: "fast lateral approach, blade-prow cutting through air, crew deck visible, twin barb rifle firing"
+    type: vehicle
 
     game_stats:
       quality: 3
@@ -544,6 +560,7 @@ unit_overrides:
   raven_bomber:
     extra_details: "sleek dark bomber aircraft with swept-back blade-wings, shatter missiles in wing-mounted pods for blast(6) saturation, void cannon on ventral turret firing AP(3) deadly(3) shots, void bombs payload for strafing runs dropping AP(3) deadly(3) munitions over targets, aircraft-class flyer with Tough(6), dark purple fuselage with predatory bird-of-prey silhouette, defense 2+"
     pose: "diving bombing run, blade-wings swept back, shatter missiles visible, void bombs releasing"
+    type: aircraft
 
     game_stats:
       quality: 3
@@ -568,6 +585,7 @@ unit_overrides:
   razor_fighter:
     extra_details: "agile dark fighter aircraft with razor-sharp wing edges, laser cannon as primary weapon firing AP(3) deadly(3) beams, toxin missiles in wing pods with blast(3) bane warheads, twin barb rifle nose gun for strafing, aircraft-class flyer with Tough(6), angular dark purple airframe with blade-like silhouette, defense 2+"
     pose: "aggressive attack vector, laser cannon firing, toxin missiles on hardpoints, blade-wings cutting"
+    type: aircraft
 
     game_stats:
       quality: 3

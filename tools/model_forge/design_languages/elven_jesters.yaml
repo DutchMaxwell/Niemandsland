@@ -9,17 +9,29 @@
 faction_name: "Elven Jesters"
 
 aesthetic:
-  genre: "grimdark sci-fi theatrical"
-  style: "deadly performer-warriors"
+  genre: "clean, bright, vivid sci-fi theatrical — colourful acrobatic performer-warriors, crisp studio render"
+  style: "lithe agile masked performer-warriors, sleek and elegant"
   inspiration:
-    - "Deadly masked acrobat-warriors in diamond-patterned costumes"
-    - "Commedia dell'arte performers as alien killers"
-    - "Cirque du Soleil meets alien assassin troupe"
+    - "Masked acrobat-warriors in bright diamond-patterned costumes"
+    - "Commedia dell'arte performers reimagined as elegant alien duellists"
+    - "Cirque du Soleil agility fused with a sleek alien assassin troupe"
+  # NOTE: original_design_cues + weapon_style ARE now injected into the prompt (prompt_engine
+  # _format_aesthetic) for humanoid units — keep them POSITIVE, never name a protected design here.
+  original_design_cues:
+    - "Sleek elongated full-face theatrical mask with smooth curved alien features, narrow angled eye-slits and bright gold filigree edges"
+    - "Slender lithe acrobat silhouette in a skin-tight bodysuit, agile and unarmoured, never bulky"
+    - "Bold large-scale black-and-white diamond/lozenge chequer pattern across the bodysuit with holographic shimmer between the diamonds"
+    - "An original three-pointed jester-crest emblem (a stylised tri-diamond starburst) on the chest and mask brow"
+    - "Bright high-contrast palette: black and white diamonds with rich purple and teal accent panels and gold edging"
+    - "Slightly stylised clean comic / video-game render (crisp readable shapes, bright even lighting)"
+  weapon_style: "sleek crystalline performance weapons with faceted glowing edges — curved twin duelling blades, a slim crystalline shrapnel pistol and a long crystalline energy glaive"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Harlequin designs"
+    - "Games Workshop / Warhammer 40,000 designs of any kind"
+    - "Copyrighted harlequin or eldar character likenesses"
     - "Silly or non-threatening clown aesthetics"
     - "Heavy armor or bulky designs"
+    - "Spikes, horns, skulls, daemonic or organic Chaos ornament"
+    - "Any real-world military or franchise logos, insignia or trademarks"
 
 colors:
   primary: "diamond-pattern black and white costume"

@@ -12,19 +12,33 @@
 faction_name: "Infected Colonies"
 
 aesthetic:
-  genre: "grimdark sci-fi body horror"
-  style: "parasitic infection and mutation"
+  # Organic parasite-horror horde: weapons are LIVING grown organs (bio_weapons).
+  # NOT a power-armour humanoid range, so no strict IP gate. Has vehicles + an
+  # aircraft, so NOT all_creatures.
+  bio_weapons: true     # weapons rendered as living grown weapon-organs (organic faction)
+  genre: "clean, bright, crisp sci-fi creature-horror — vivid readable parasite mutations, crisp studio render"
+  style: "parasitic infection and mutation, clean tabletop wargaming studio sculpt"
+  # NOTE: genre/style/inspiration ARE injected into the prompt — keep them positive and
+  # original; no real franchise or commercial-IP names here.
   inspiration:
-    - "The Last of Us cordyceps fungal infection"
-    - "John Carpenter's The Thing flesh mutation"
-    - "Dead Space necromorph body horror"
-    - "Parasitic colonial organisms overtaking human hosts"
+    - "humanoid colonists overtaken and reshaped by a colonial parasite organism"
+    - "fungal-chitin growths bursting through the host's skin and torn clothing"
+    - "grotesque mutated beasts grown from once-familiar colony animals"
+  # Original design cues + signature weapon ARE injected (for humanoid units only).
+  # Keep them positive and original — never name a protected design.
+  original_design_cues:
+    - "Hunched asymmetric silhouette: a human frame warped by overlapping parasitic plates and one over-grown limb"
+    - "Head fused with a ridged fungal crest and glowing spore-vents where the face is consumed"
+    - "Hard parasitic carapace plates erupting through split skin, ringed with pulsing spore sacs"
+    - "Tattered remnants of colonial work clothing and webbing hanging off the mutated body"
+    - "An original three-spore-cluster sigil marking the host where the parasite took root"
+    - "Palette: pale necrotic flesh, exposed bone-white, with toxic purple-red and bioluminescent growths"
+  weapon_style: "living grown bio-weapons — bone-blade claws, fused spore-launcher organs and ichor-coated barbs sprouting from the limbs"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Tyranid or Genestealer iconography"
     - "Clean or healthy human appearance"
     - "Cute or cartoonish mutations"
     - "Pure alien without human remnants visible"
+    - "Any real-world or franchise logos, insignia or trademarks"
 
 colors:
   primary: "diseased flesh tones with grey-green necrotic patches"
@@ -397,7 +411,7 @@ unit_overrides:
   combat_walker:
     extra_details: "infected colonial construction mech transformed into war machine, bipedal walker frame overgrown with parasitic tissue fusing pilot inside cockpit, super-heavy fusion rifle at 18 inch range with AP(4) and Deadly(6) firing devastating energy blasts from arm-mounted weapon partially consumed by organic growth, stomp attacks with AP(1) from massive mechanical-organic hybrid legs, Fear(1) from the wrongness of machine-flesh fusion, cockpit viewport cracked and filled with parasitic tendrils, Tough(6)"
     pose: "striding forward menacingly, super-heavy fusion rifle aimed and charging, mechanical legs fused with parasitic flesh, Fear-inducing silhouette"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 4
@@ -441,6 +455,7 @@ unit_overrides:
           attacks: 6
           rules: ["AP(1)"]
   light_dropship:
+    type: aircraft
     extra_details: "infected colonial transport aircraft converted to assault dropship, twin heavy machinegun at 30 inch range with AP(1) on wing hardpoints firing suppressive bursts, minigun at 24 inch range with AP(1) on chin mount delivering sustained fire, Aircraft rule for high-altitude attack and deployment runs, parasitic organic growth covering fuselage but leaving engines and rotors functional, Transport(11) troop compartment in belly with parasitic membrane doors, hull markings of original colonial air service barely visible beneath organic encrustation, Tough(6)"
     pose: "banking in flight with weapons blazing, twin heavy machineguns and minigun firing, parasitic growth on fuselage, transport bay visible"
 

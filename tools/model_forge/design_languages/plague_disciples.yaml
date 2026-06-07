@@ -2,23 +2,36 @@
 # Plague Disciples - Design Language
 # =============================================================================
 # Basiert auf: GF - Plague Disciples v3.5.2
-# Bloated chaos warriors devoted to the god of decay and disease.
-# OPR-Aequivalent zu Death Guard.
+# Bloated plague warriors devoted to a god of decay and disease.
+# Original Niemandsland decay-soldier faction (heavy corroded power armour) — the genre is a
+# common trope and free to use; keep designs clearly our own (no specific commercial trade dress).
 
 faction_name: "Plague Disciples"
 
 aesthetic:
-  genre: "grimdark sci-fi pestilent chaos"
-  style: "diseased decay warriors"
+  genre: "clean, bright, crisp sci-fi miniature render — pestilent plague-warriors shown with sharp readable detail, crisp studio lighting"
+  ip_strict: true   # bloated power-armour humanoids: strict IP gate flags generic-plague-marine lookalikes
+  style: "bloated heavy original plague power armour, corroded but crisply sculpted and readable"
   inspiration:
-    - "Bloated plague warriors in corroded power armor"
-    - "Walking biohazard with noxious fumes and disease"
-    - "Medieval plague doctor aesthetics meets corrupted military"
+    - "Bloated plague-warriors in heavy corroded power armour (generic decay-soldier trope)"
+    - "Walking biohazard troopers trailing noxious fumes"
+    - "Medieval plague-doctor silhouettes fused with original corrupted military tech"
+  # NOTE: original_design_cues + weapon_style ARE injected into humanoid prompts (prompt_engine
+  # generate_prompt) — keep them POSITIVE and ORIGINAL; never name a protected design here.
+  original_design_cues:
+    - "Rounded plague-doctor helmet with a long downward hooked beak-filter and two small glowing amber eye-lenses"
+    - "Heavily swollen barrel torso with a single cracked seam, distended belly plate bulging over the legs"
+    - "Thick, smooth bell-shaped shoulder guards pitted with corrosion (not big round studded pauldrons)"
+    - "Original triple-ring biohazard sigil etched on one shoulder and the chest"
+    - "Backpack stack of tall thin fume-vent chimneys venting pale toxic mist"
+    - "Sickly pale-green and rust palette, corroded but crisp, clean readable surfaces under bright lighting"
+  weapon_style: "an original stubby corroded heavy slug-thrower with a fat drum canister and a dripping corrosion nozzle"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Death Guard iconography"
-    - "Clean or healthy aesthetics"
+    - "Any specific commercial miniatures range or trade dress"
+    - "Clean or healthy heroic aesthetics that lose the decay theme"
     - "Cute or cartoonish decay"
+    - "Any real-world military or franchise logos, insignia or trademarks"
+    - "Dark, gloomy, muddy or low-contrast rendering"
 
 colors:
   primary: "sickly pale green corroded power armor"
@@ -26,8 +39,8 @@ colors:
   accent: "putrid yellow-green noxious glow and slime"
 
 materials:
-  - "corroded and pitted ceramite with rust and verdigris"
-  - "bloated organic growths bursting through armor gaps"
+  - "corroded and pitted heavy armour plating with rust and verdigris"
+  - "swollen diseased growths and pustules bulging through armour gaps"
   - "noxious fume vents and plague censers"
   - "rusted chains and decayed cloth tabards"
 
@@ -43,7 +56,7 @@ prompt_template: |
   - Single centered figure, full body visible
   - Isometric 3/4 view angle (optimal for 3D reconstruction)
   - Bright, even, diffuse studio lighting from the front — soft flat product-shot light that keeps the seamless pure-white floor clean right up to the boot soles
-  - High detail on armor surface textures (corrosion, rust, organic growths, slime)
+  - High detail on armor surface textures (corrosion, rust, diseased growths, slime)
   - 28mm tabletop miniature aesthetic and heroic proportions
 
   STYLE:
@@ -69,7 +82,7 @@ unit_overrides:
   # ==========================================================================
 
   plague_destroyer_champion:
-    extra_details: "towering elite plague lord in massively bulky terminator-style corroded power armor, bloated gut straining against cracked ceramite plates, champion heavy rifle fused to one arm with AP rounds dripping corrosive ichor, enormous close combat weapon in other hand coated in pestilent slime, noxious fume vents on backpack belching toxic clouds, Plaguebound resilience ignoring wounds on 6+, Ambush deployment via teleportation through warp-rot, Tough(6)"
+    extra_details: "towering elite plague lord in massively bulky heavy siege-class corroded power armor, bloated gut straining against cracked corroded armour plates, champion heavy rifle fused to one arm with AP rounds dripping corrosive ichor, enormous close combat weapon in other hand coated in pestilent slime, noxious fume vents on backpack belching toxic clouds, Plaguebound resilience ignoring wounds on 6+, Ambush deployment via teleportation through warp-rot, Tough(6)"
     pose: "imposing menacing stance, heavy rifle aimed forward, close combat weapon raised, noxious fumes billowing from vents"
 
     game_stats:
@@ -242,7 +255,7 @@ unit_overrides:
           range: 0
           attacks: 1
   plague_destroyers:
-    extra_details: "single elite assault warrior in bulky corroded terminator-style power armor, dual energy claws crackling with warp-rot energy and Rending capability, massively bloated torsos with cracked armor plates, teleportation deployment via Ambush warp-rot, toxic slime dripping from claw tips, extra-reinforced leg servos supporting immense bloated weight, Tough(3)"
+    extra_details: "single elite assault warrior in bulky corroded heavy siege-class power armor, dual energy claws crackling with warp-rot energy and Rending capability, massively bloated torsos with cracked armor plates, teleportation deployment via Ambush warp-rot, toxic slime dripping from claw tips, extra-reinforced leg servos supporting immense bloated weight, Tough(3)"
     pose: "aggressive teleport-assault pose, dual energy claws spread wide, crackling with diseased energy"
 
     game_stats:
@@ -289,7 +302,7 @@ unit_overrides:
           attacks: 2
           rules: ["AP(1)"]
   plague_greater_mutated:
-    extra_details: "single massively mutated plague warrior, enormous bloated bodies that have outgrown their power armor entirely, heavy claws with AP on massive mutated arms, shards of ceramite embedded in swollen flesh, faces lost beneath tumorous growths, Fast despite bulk from warp-empowered mutation, Unpredictable Fighter, Tough(3)"
+    extra_details: "single massively mutated plague warrior, enormous bloated bodies that have outgrown their power armor entirely, heavy claws with AP on massive mutated arms, shards of corroded armour plate embedded in swollen flesh, faces lost beneath tumorous growths, Fast despite bulk from warp-empowered mutation, Unpredictable Fighter, Tough(3)"
     pose: "thundering charge, massive mutated claws raised high, bloated bodies heaving forward"
 
   # ==========================================================================
@@ -336,7 +349,7 @@ unit_overrides:
           range: 0
           attacks: 2
   plague_mutated_destroyer:
-    extra_details: "single massively mutated destroyer in warped terminator armor fused with daemonic flesh, dual mutated claws with AP on enormous arms grown far beyond normal proportions, body a horrific fusion of corroded ceramite and pulsing mutant flesh, Unpredictable mutation surges affecting entire combat style, Ambush teleport deployment, Tough(6)"
+    extra_details: "single massively mutated destroyer in warped heavy siege-class armor fused with daemonic flesh, dual mutated claws with AP on enormous arms grown far beyond normal proportions, body a horrific fusion of corroded armour plate and pulsing mutant flesh, Unpredictable mutation surges affecting entire combat style, Ambush teleport deployment, Tough(6)"
     pose: "hulking berserker stance, dual mutated claws spread wide, warped armor bulging with mutation"
 
   # ==========================================================================
@@ -356,8 +369,9 @@ unit_overrides:
           attacks: 6
           rules: ["AP(1)"]
   plague_apc:
-    extra_details: "armored personnel carrier covered in rust and organic corrosion, boxy angular hull with corroded armor plates, storm rifle turret on top dripping toxic residue, AP rounds, troop compartment sealed with rusted hatches, plague iconography etched into hull, tracks clogged with filth and organic matter, noxious fume exhausts, Fast movement, Impact(3), Tough(6), Transport(11)"
+    extra_details: "armored personnel carrier covered in rust and corrosion, boxy angular hull with corroded armor plates, storm rifle turret on top dripping toxic residue, AP rounds, troop compartment sealed with rusted hatches, plague iconography etched into hull, tracks clogged with filth, noxious fume exhausts, Fast movement, Impact(3), Tough(6), Transport(11)"
     pose: "driving forward through toxic mist, turret aimed ahead, rust and decay visible on hull"
+    type: vehicle
 
     game_stats:
       quality: 3
@@ -372,8 +386,9 @@ unit_overrides:
           attacks: 3
           rules: ["AP(1)"]
   plague_heavy_tank:
-    extra_details: "super-heavy plague assault transport, massive corroded hull bristling with weapons, quad laser cannon turret with AP(3) and Deadly(3) as main armament, twin heavy machinegun sponson with AP, extremely thick corroded armor plates with organic growths, troop compartment for plague warriors, plague banners and trophy racks on turret, Fast despite massive size, Impact(9) crushing advance, Tough(18), Transport(11)"
+    extra_details: "super-heavy plague assault transport, massive corroded hull bristling with weapons, quad laser cannon turret with AP(3) and Deadly(3) as main armament, twin heavy machinegun sponson with AP, extremely thick corroded armor plates pitted with rust, troop compartment for plague warriors, plague banners and trophy racks on turret, Fast despite massive size, Impact(9) crushing advance, Tough(18), Transport(11)"
     pose: "rolling forward unstoppably, quad laser cannon aimed, plague banners fluttering, crushing everything"
+    type: vehicle
 
   # ==========================================================================
   # VEHICLES (no Transport - need type: vehicle)
@@ -415,7 +430,7 @@ unit_overrides:
   plague_hauler:
     extra_details: "walking daemon engine artillery beast, insectoid mechanical legs fused with daemonic flesh, missile pod on back firing AP(2) Deadly(3) Unstoppable rockets, heavy fusion rifle on one arm with AP(4) Deadly(3), daemonic teeth maw with AP snapping, stomping legs with AP crushing hooves, corroded carapace hull covered in rust and plague growths, Protected by warp-rot field, Fear(1), Tough(6)"
     pose: "stomping forward on mechanical legs, missile pod elevated, fusion rifle aimed, maw snapping"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -465,7 +480,7 @@ unit_overrides:
   plague_infernal_brute:
     extra_details: "massive bipedal daemon engine walker, dreadnought-style armored sarcophagus body fused with daemonic essence, two brute hammers on arms dealing Blast(3) area damage, powerful stomping legs with AP crushing hooves, corroded and pitted armor plates with organic growths bursting through gaps, warp-fire glowing in eye slits, chains and plague censers hanging from chassis, Fear(2) terrifying presence, Tough(12)"
     pose: "striding forward menacingly, brute hammers raised to crush, warp-fire glowing from within"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -485,8 +500,8 @@ unit_overrides:
           rules: ["AP(1)"]
   plague_mech_fiend:
     extra_details: "quadruped daemon engine beast-walker, massive predatory mechanical body fused with daemonic flesh, fiend claws on forelimbs with Rending capability tearing through any armor, eight steel tails with AP lashing from rear as whip-like weapons, powerful stomping legs with AP, Regeneration constantly repairing damage with warp-flesh regrowth, corroded mechanical skeleton visible through patches of daemonic skin, Fear(2), Tough(12)"
-    pose: "predatory pounce stance, fiend claws extended, steel tails lashing behind, regenerating flesh visible"
-    type: vehicle
+    pose: "predatory pounce stance, fiend claws extended, steel tails lashing behind, regenerating hull visible"
+    type: walker
 
     game_stats:
       quality: 3
@@ -511,7 +526,7 @@ unit_overrides:
   plague_crab_walker:
     extra_details: "colossal daemon engine walker of titanic scale, crab-like mechanical body with six articulated legs, battle cannon on dorsal turret firing AP(2) Blast(3) shells, reaper cannon on side mount with Slam capability, massive crab fists on forelimbs with AP(3) crushing grip, crab flail tentacle weapon with 8 attacks lashing from underside, devastating stomp with AP(2), Regeneration via warp-flesh regrowth, entire chassis encrusted with centuries of corrosion and plague growths, Fear(3) apocalyptic presence, Tough(18)"
     pose: "titanic crab walker advancing, battle cannon firing, crab fists snapping, flail tentacles lashing"
-    type: vehicle
+    type: titan
 
     game_stats:
       quality: 3

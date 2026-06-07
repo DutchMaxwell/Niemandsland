@@ -9,17 +9,29 @@
 faction_name: "Wormhole Daemons of War"
 
 aesthetic:
-  genre: "dark fantasy horror"
-  style: "blood-crazed war daemons"
+  genre: "clean, bright, crisp high-fantasy war-daemon — bold saturated red, crisp studio render"
+  style: "muscular war daemons with hellforged brass weapons, clean and readable sculpt"
   inspiration:
-    - "Muscular red-skinned daemons wielding hellforged weapons"
-    - "Skull-obsessed rage entities of pure war"
-    - "Classical depictions of war demons meets dark fantasy"
+    - "Muscular red-skinned war daemons wielding hellforged brass weapons"
+    - "Skull-and-rage war entities of myth, rendered as a clean readable miniature"
+    - "Classical depictions of war demons in a crisp, brightly lit studio sculpt"
+  # original_design_cues + weapon_style ARE injected into the prompt for humanoid daemons
+  # (prompt_engine generate_prompt). Keep them POSITIVE and ORIGINAL — never name a protected
+  # design or rules term here, since naming an IP anchors the model toward it.
+  original_design_cues:
+    - "Brutal angular skull-faced head with a heavy square jaw and two large backswept obsidian-black horns"
+    - "Broad upper-body silhouette with a deep barrel chest, thick muscle and digitigrade cloven-hoof legs"
+    - "Heavy faceted brass-and-bronze armour bands on the shoulders, forearms and shins (not full plate)"
+    - "An original eight-spoked broken-circle war emblem stamped into the brass plates"
+    - "Deep glowing molten-orange seams in the cracked crimson skin, with bright ember eyes"
+    - "Clean, bold, saturated palette under bright even light — crisp readable shapes, no muddy gloom"
+  weapon_style: "massive hellforged brass war weapons — broad-bladed cleaver-swords, spiked war hammers and double-headed axes with glowing molten-orange edges"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Khorne daemon designs"
+    - "Any specific commercial miniatures range, logos, insignia or trademarks"
     - "Calm or peaceful aesthetics"
-    - "Power armor or military equipment"
+    - "Power armor or modern military equipment"
+    - "Dark, muddy, gloomy, low-contrast or grimdark rendering"
+    - "Insectoid chitin, tentacles, mutated organic growths or living grown weapons"
 
 colors:
   primary: "deep crimson red daemon flesh"
