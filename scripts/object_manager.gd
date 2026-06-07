@@ -755,7 +755,8 @@ func _record_move_for_undo() -> void:
 		if start_pos.distance_to(end_pos) > MOVE_UNDO_EPSILON_M:
 			moved = true
 	if moved and not objects.is_empty():
-		undo_manager.push(UndoManager.MoveAction.new(objects, from_positions, to_positions, _network_manager))
+		var move_peer: int = _network_manager.get_my_peer_id() if _network_manager else 0
+		undo_manager.push(UndoManager.MoveAction.new(objects, from_positions, to_positions, _network_manager, move_peer))
 
 
 ## Snapshots rotation.y of the current selection at the start of a rotate gesture.
@@ -786,7 +787,8 @@ func commit_rotation_capture() -> void:
 			rotated = true
 	_rotation_capture.clear()
 	if rotated and not objects.is_empty():
-		undo_manager.push(UndoManager.RotateAction.new(objects, from_rot, to_rot, _network_manager))
+		var rot_peer: int = _network_manager.get_my_peer_id() if _network_manager else 0
+		undo_manager.push(UndoManager.RotateAction.new(objects, from_rot, to_rot, _network_manager, rot_peer))
 
 
 ## Public wrapper to clear the current selection (e.g., after deleting it).

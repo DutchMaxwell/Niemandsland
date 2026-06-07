@@ -529,7 +529,8 @@ func delete_objects(objects: Array) -> void:
 
 	# DeleteAction.redo() performs the initial deletion (hide + broadcast), so the
 	# deletion logic lives in exactly one place.
-	var action := UndoManager.DeleteAction.new(models, prev_wounds, prev_alive, nodes, network_manager)
+	var del_peer: int = network_manager.get_my_peer_id() if network_manager else 0
+	var action := UndoManager.DeleteAction.new(models, prev_wounds, prev_alive, nodes, network_manager, del_peer)
 	action.redo()
 
 	for model in models:
