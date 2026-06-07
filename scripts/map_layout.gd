@@ -2323,6 +2323,12 @@ func load_layout(file_path: String) -> bool:
 	_update_modular_status()
 	_update_undo_redo_buttons()
 
+	# Apply the loaded mission objectives to the 3D table AND broadcast them to remote
+	# peers (host -> clients). Without this, a loaded map's objectives stayed local and
+	# never reached the other player. Table size + grid are already loaded above, so
+	# get_objectives_for_overlay() resolves correctly.
+	objectives_changed.emit(mission_objectives)
+
 	print("Layout loaded from: %s" % file_path)
 	return true
 
