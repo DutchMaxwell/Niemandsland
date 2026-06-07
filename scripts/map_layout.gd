@@ -151,8 +151,8 @@ var _last_pan_pos := Vector2.ZERO
 var _cached_boundary_snap_points: Array[Dictionary] = []
 var _snap_points_valid := false
 
-# Deployment zones — standard OPR 12" front line; shown/hidden via DeploymentCheck.
-var deployment_type := DeploymentType.FRONT_LINE
+# Deployment zones
+var deployment_type := DeploymentType.NONE
 var show_deployment_zones := false
 
 # Mission objectives - positions stored in 1" coordinates (Vector2 for precision)
@@ -219,8 +219,8 @@ func _ready() -> void:
 	if load_file_dialog:
 		load_file_dialog.file_selected.connect(_on_load_file_selected)
 
-	# Deployment is fixed to the OPR standard front-line zones (no type selector /
-	# custom-zone editor in the tab anymore — players verify placement manually).
+	# Setup deployment zone type selection
+	_setup_deployment_type_option()
 
 	# Setup objectives UI (replaces the ObjectivesCheck checkbox)
 	_setup_objectives_ui()
@@ -359,12 +359,11 @@ func _setup_tabs() -> void:
 	# Missionsziele: objectives (the ObjectivesCheck was replaced by this panel)
 	into.call(ziele, _objectives_panel)
 
-	# Aufstellung: deployment zone show/hide toggle only
+	# Aufstellung: deployment zones + custom zone editor
 	into.call(aufstellung, left_panel.get_node_or_null("DeploymentLabel"))
+	into.call(aufstellung, left_panel.get_node_or_null("DeploymentTypeOption"))
 	into.call(aufstellung, left_panel.get_node_or_null("DeploymentCheck"))
-	var deploy_opt_node := left_panel.get_node_or_null("DeploymentTypeOption")
-	if deploy_opt_node:
-		deploy_opt_node.queue_free()
+	into.call(aufstellung, _custom_zone_panel)
 
 	# Drop the now-loose separators left behind in the panel
 	for child in left_panel.get_children():
@@ -1092,9 +1091,6 @@ func _on_load_pressed() -> void:
 
 func _on_deployment_toggled(enabled: bool) -> void:
 	show_deployment_zones = enabled
-	# Push the standard front-line zones to the 3D table overlay when shown.
-	if enabled:
-		deployment_type_changed.emit(deployment_type)
 	grid_container.queue_redraw()
 
 
