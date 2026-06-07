@@ -169,6 +169,7 @@ Controls:
 - Scroll: Zoom
 - Left Click: Select/Drag
 - Alt + Click: Multi-Select
+- Shift + Click: Measure
 - R (hold): Rotate Selected
 - Shift+R: Rotate Group
 - 1-9: Arrange at cursor
