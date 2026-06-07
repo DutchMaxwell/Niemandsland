@@ -475,18 +475,28 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 		var item_name: String = item.get("name", item.get("label", ""))
 		var item_count: int = _safe_int(item.get("count", unit.size), unit.size)
 		var per_model: bool = unit.size > 1 and item_count > 0 and item_count < unit.size
+		var granted: Array[String] = _granted_rules_of_item(item)
 
 		if per_model:
 			# Carried by a subset → pin to specific model(s) and show on the base ring.
-			unit.equipment_items.append({"name": item_name, "count": item_count})
+			# Carry the item's granted rules ON the entry so the EquipmentDistributor can
+			# apply a per-model stat (Tough) to only the carrier model (see below).
+			unit.equipment_items.append({"name": item_name, "count": item_count, "rules": granted})
 			if not item_name.is_empty() and item_name not in unit.equipment:
 				unit.equipment.append(item_name)
 		elif not item_name.is_empty() and item_name not in unit.special_rules:
 			# Unit-wide tool → keep its name in the unit's rule line (legacy behaviour).
 			unit.special_rules.append(item_name)
 
-		# Abilities the item grants stay unit-wide (rules engine / unit card).
-		for granted_rule in _granted_rules_of_item(item):
+		# Abilities the item grants stay unit-wide (rules engine / unit card), EXCEPT a
+		# per-model Tough(X): OPR Core Rules — Tough is a PER-MODEL stat, so an upgrade
+		# carried by a subset (weapon-team / special weapon) must not buff the base squad's
+		# wounds. Its Tough rides on the equipment_items entry and is applied to the carrier
+		# model only by EquipmentDistributor; folding it unit-wide here caused the squad-wide
+		# Tough bug.
+		for granted_rule in granted:
+			if per_model and granted_rule.begins_with("Tough("):
+				continue
 			if granted_rule not in unit.special_rules:
 				unit.special_rules.append(granted_rule)
 

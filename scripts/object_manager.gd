@@ -86,7 +86,6 @@ var _measure_start_object: Node3D = null  # Reference to start object for edge c
 var _measure_end_object: Node3D = null    # Reference to end object for edge calculation
 var _measure_line: MeshInstance3D = null
 var _measure_label: Label3D = null
-var _measure_terrain_warning: Label3D = null  # Warning icon for terrain (⚠️ or 💀)
 var _measure_los_warning: Label3D = null  # Warning icon for LOS blocking (🚫)
 
 const METERS_TO_INCHES: float = 39.3701
@@ -863,9 +862,9 @@ func _update_drag_line(from_pos: Vector3, to_pos: Vector3, distance_inches: floa
 	_drag_label.text = "%.1f\"" % distance_inches
 	_drag_label.rotation = Vector3(-PI/2, angle, 0)
 
-	# Check terrain along the drag path
-	var terrain_warning_text = ""
-	var terrain_warning_color = Color.WHITE
+	# Tint the drag line by the terrain it crosses (OPR Difficult/Dangerous Terrain,
+	# Asgard rulebook). The detection RULE stays; only the large on-table skull/
+	# exclamation symbols were removed (intentionally no Label3D indicator here).
 	var line_color = Color.CYAN  # Default drag line color
 
 	if terrain_overlay and terrain_overlay.has_method("get_terrain_at_world_position"):
@@ -885,38 +884,16 @@ func _update_drag_line(from_pos: Vector3, to_pos: Vector3, distance_inches: floa
 			elif terrain_type == 4:  # DANGEROUS
 				has_dangerous = true
 
-		# Set warning based on terrain (Dangerous overrides Difficult)
+		# Tint the line by terrain (Dangerous overrides Difficult).
 		if has_dangerous:
-			terrain_warning_text = "💀"
-			terrain_warning_color = Color.RED
 			line_color = Color.RED
 		elif has_difficult:
-			terrain_warning_text = "⚠️"
-			terrain_warning_color = Color.ORANGE
 			line_color = Color.ORANGE
 
 	# Update line material color
 	var mat = _drag_line.material_override as StandardMaterial3D
 	if mat:
 		mat.albedo_color = line_color
-
-	# Update terrain warning label (smaller font than measurement mode)
-	if terrain_warning_text != "":
-		if not _measure_terrain_warning:
-			_measure_terrain_warning = Label3D.new()
-			_measure_terrain_warning.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-			_measure_terrain_warning.no_depth_test = true
-			_measure_terrain_warning.font_size = 28  # Smaller than measurement mode
-			add_child(_measure_terrain_warning)
-
-		_measure_terrain_warning.visible = true
-		_measure_terrain_warning.text = terrain_warning_text
-		_measure_terrain_warning.modulate = terrain_warning_color
-		# Position above the distance label
-		_measure_terrain_warning.global_position = Vector3(midpoint.x, 0.06, midpoint.z)
-	else:
-		if _measure_terrain_warning:
-			_measure_terrain_warning.visible = false
 
 
 ## Destroy drag visualization
