@@ -9,17 +9,30 @@
 faction_name: "Change Disciples"
 
 aesthetic:
-  genre: "grimdark sci-fi sorcerous chaos"
-  style: "arcane sorcerer warriors"
+  genre: "clean, bright, crisp arcane sci-fi — ornate mystic warrior-mages, crisp studio render"
+  ip_strict: true   # ornate sorcerous power-armour humanoids: strict IP gate flags generic-marine / Chaos-drift lookalikes
+  style: "ornate arcane sorcerer-warriors in sleek ceremonial power armour, polished and mystical"
   inspiration:
-    - "Egyptian sorcerer-soldiers in ornate power armor"
-    - "Avian and arcane motifs with psychic energy"
-    - "Ancient mystical aesthetics fused with corrupted technology"
+    - "Ancient-Egyptian sorcerer-soldiers in ornate ceremonial battle armour (generic mystic-warrior trope)"
+    - "Mystic warrior-mages channelling visible arcane energy"
+    - "Falcon and ibis avian motifs fused with original ornamented technology"
+  # NOTE: original_design_cues + weapon_style ARE injected into the prompt (prompt_engine
+  # _format_aesthetic + generate_prompt) — keep them POSITIVE and ORIGINAL, never name a protected design.
+  original_design_cues:
+    - "Smooth tapered helmet shaped like a stylised falcon head with a single curved horizontal glowing magenta eye-slit"
+    - "Tall swept-back feathered crest rising from the helmet crown, fanning to a narrow point"
+    - "Layered overlapping armour plates engraved with original geometric hieroglyph-style banding (chevrons, eye-disc, scarab discs)"
+    - "Original circular eye-and-wing emblem (a stylised eye inside an outspread wing) on the chest and one shoulder"
+    - "Deep sapphire-blue plate with crisp burnished-gold trim and bright magenta arcane-energy glow at the joints and conduits"
+    - "Slightly stylised clean comic / video-game render (crisp readable shapes, bright even lighting)"
+  weapon_style: "an original ornate khopesh-curved energy blade and a slim engraved arcane rifle with a glowing magenta crystal power core"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Thousand Sons iconography"
-    - "Non-magical mundane warriors"
-    - "Bright cheerful magic"
+    - "Games Workshop / Warhammer 40,000 designs of any kind"
+    - "Any specific commercial sorcerer power-armour range, its colours, round pauldrons or trade dress"
+    - "Imperial double-eagle, purity seals, skull motifs"
+    - "Spiky, horned, daemonic or gore Chaos ornament"
+    - "Any real-world military or franchise logos, insignia or trademarks"
+    - "Dark, muddy, gloomy grimdark lighting; cartoon-baby or anime proportions"
 
 colors:
   primary: "deep sapphire blue power armor"
@@ -359,6 +372,7 @@ unit_overrides:
           attacks: 6
           rules: ["AP(1)"]
   change_apc:
+    type: vehicle
     extra_details: "armored personnel carrier in deep sapphire blue livery with burnished gold hieroglyphic engravings along hull, boxy angular design with front ramp door bearing eye-of-change symbol, storm rifle turret on top with arcane scope, hull-mounted weapon options, troop compartment with warpfire-lit interior visible through firing ports, heavy tank treads with golden trim, crystalline psychic conduit arrays on roof, avian skull decorations on front glacis, Tough(6), Transport(11)"
     pose: "driving forward through battlefield, turret aimed ahead, warpfire glowing from interior, arcane symbols pulsing on hull"
 
@@ -375,6 +389,7 @@ unit_overrides:
           attacks: 3
           rules: ["AP(1)"]
   change_heavy_tank:
+    type: vehicle
     extra_details: "super-heavy assault transport in deep sapphire blue with extensive golden hieroglyphic filigree covering every surface, massive hull with quad laser cannon turret crackling with arcane energy and twin heavy machinegun coaxial, extremely thick armor plating with Egyptian-style eye-of-change and scarab reliefs, crystalline psychic conduit arrays along hull sides, troop compartment with warpfire-lit interior, commander cupola with sorcerer-commander in ornate helmet, avian skull trophies on antenna, Tough(18), Transport(11)"
     pose: "rolling forward, all weapon systems aimed with arcane targeting, dominating the battlefield like a mobile sorcerer's fortress"
 
@@ -401,7 +416,7 @@ unit_overrides:
   change_sentinel_walker:
     extra_details: "bipedal sentinel walker in deep sapphire blue with golden hieroglyphic trim, chicken-walker leg configuration with armored joints, hell missile rack on one shoulder with arcane warhead sigils, flamer cannon wreathed in warpfire on arm mount, fusion rifle with crystalline psychic barrel on other arm, stomp-capable armored feet with Egyptian-style toe guards, single glowing psychic eye sensor warrior on head unit, avian skull decorations on hull, Tough(6)"
     pose: "striding forward on chicken-walker legs, weapons aimed at multiple targets, psychic eye glowing with arcane targeting"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -451,7 +466,7 @@ unit_overrides:
   change_infernal_brute:
     extra_details: "massive daemon engine walker in deep sapphire blue with warped golden trim, hunched bipedal war machine possessed by daemon spirit, two enormous brute hammers crackling with blast energy on arm mounts, heavy armored legs with stomp attack and cloven daemon-feet, daemon face emerging from chest armor with glowing pink eyes, warpfire venting from joints and exhaust ports, golden hieroglyphic binding wards etched into armor to contain the daemon, avian mutations sprouting from shoulders, fear-inducing daemonic presence, Tough(12)"
     pose: "raging daemon engine charge, dual brute hammers raised for devastating blast strikes, daemon face howling with warpfire energy"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -472,7 +487,7 @@ unit_overrides:
   change_mech_fiend:
     extra_details: "serpentine daemon engine walker in deep sapphire blue with warped golden hieroglyphic bindings, quadrupedal predatory war machine possessed by avian daemon spirit, fiend claws with rending warpfire on front legs, multiple steel tails lashing with AP barbs, stomp-capable rear legs crushing ground beneath, bird-daemon skull head with glowing psychic eyes and open beak, regenerating daemon flesh visible through cracked armor plates, warpfire venting from spine ridges, golden binding wards barely containing the daemon, feathered mutations along spine, fear-inducing predatory presence, Tough(12)"
     pose: "lunging predatory attack, fiend claws spread wide with rending energy, steel tails lashing behind, bird-daemon head shrieking with warpfire breath"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -497,7 +512,7 @@ unit_overrides:
   change_vortex_beast:
     extra_details: "massive tentacled daemon engine in deep sapphire blue with distorted golden hieroglyphic bindings, bloated warp-beast body possessed by a daemon of change, vortex of mutation cannon on back spewing pink-purple warpfire blasts, eight barbed tentacles with AP lashing from body, stomp-capable legs beneath bulk, constantly shifting form with unpredictable mutations, regenerating daemon flesh splitting and reknitting, golden binding wards flickering and failing across surface, bird-like mutations and feathered growths emerging unpredictably, warpfire energy leaking from every crack, fear-inducing eldritch horror presence, Tough(12)"
     pose: "rearing up with vortex cannon firing a swirling blast of mutation energy, barbed tentacles spread wide and lashing, form shifting and mutating mid-stride"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -522,7 +537,7 @@ unit_overrides:
   change_crab_walker:
     extra_details: "colossal crab-like daemon engine walker in deep sapphire blue with extensive warped golden hieroglyphic binding wards, massive multi-legged war machine with battle cannon turret on carapace firing arcane shells, reaper cannon mounted alongside with slam capability, two enormous crab fists with devastating AP(3) crushing power on front limbs, crab flail tentacle lashing from rear, stomp-capable armored legs, daemon face emerging from front hull with glowing psychic eyes, regenerating daemon armor constantly reknitting, golden hieroglyphic bindings cracking under strain, avian daemon mutations and feathered growths on carapace, extreme fear-inducing daemonic colossus presence, Tough(18)"
     pose: "colossal daemon engine advancing with all weapons active, crab fists raised and crushing, battle cannon firing overhead, tentacles lashing, an unstoppable arcane war machine"
-    type: vehicle
+    type: titan
 
   # ==========================================================================
   # AIRCRAFT (Aircraft rule - no type override needed)

@@ -79,7 +79,33 @@ FORM_CONSTRAINTS: dict[str, str] = {
         "- Reference shape: a real fighter jet, atmospheric interceptor or ground-attack "
         "craft — a pure aircraft airframe"
     ),
+    "vehicle": (
+        "VEHICLE FORM CONSTRAINT - render as a ground vehicle, NOT a humanoid or suit:\n"
+        "- A wheeled, tracked or hover ground vehicle (tank, transport, bike, buggy); the hull is "
+        "the entire model\n"
+        "- NO humanoid body, NO helmeted head, NO bipedal legs, NO arms or hand-held weapons\n"
+        "- Weapons are hull- or turret-mounted, never carried by hands\n"
+        "- A crew hatch / cockpit instead of a head — reference shape: a real armoured fighting vehicle"
+    ),
+    "walker": (
+        "WALKER / MECH FORM CONSTRAINT - render as a piloted machine, NOT an infantry soldier:\n"
+        "- A large mechanical walker / battlesuit on stout mechanical legs, clearly bigger than infantry\n"
+        "- A cockpit or sensor head, NOT a humanoid face or a soldier's helmet; vehicle-scale armour panels\n"
+        "- Heavy hardpoint weapons on the chassis / arms, not hand-held rifles\n"
+        "- Reads as a machine, never a person in power armour"
+    ),
+    "titan": (
+        "TITAN FORM CONSTRAINT - render as a colossal war-engine:\n"
+        "- A towering, massive walking war-machine, vastly larger than infantry, heavy industrial build\n"
+        "- Building-scale weapon hardpoints; a command bridge / sensor head, not a humanoid face\n"
+        "- Clearly a giant machine, never an infantry-scale figure"
+    ),
 }
+
+# Unit types whose silhouette is NOT a human figure. For these the infantry-style original cues
+# (helmet/shoulders/crest/hand-held weapon) are NOT injected into the prompt — they would force an
+# infantry render — and the FORM_CONSTRAINTS above carry the silhouette instead.
+_NON_HUMANOID_TYPES: frozenset = frozenset({"vehicle", "aircraft", "walker", "titan", "monster", "mount"})
 
 
 # Verhindert dass das Bildmodell Tokens wie "Impact(3)", "Tough(6)", "AP(1)",
@@ -397,6 +423,19 @@ class PromptEngine:
         # Aesthetik formatieren
         aesthetic_str: str = _format_aesthetic(dl.aesthetic)
 
+        # Distinctive original cues + signature weapon: inject ONLY for humanoid units. These are
+        # infantry features (helmet, shoulders, crest, hand-held weapon); injecting them into a
+        # vehicle/aircraft/walker/titan prompt makes the model render an infantry figure instead of
+        # the vehicle. (For non-humanoids the FORM_CONSTRAINTS block carries the silhouette.)
+        if (override_type or "").lower() not in _NON_HUMANOID_TYPES:
+            _cues = dl.aesthetic.get("original_design_cues", "")
+            if _cues:
+                _cues_str = "; ".join(str(c) for c in _cues) if isinstance(_cues, list) else str(_cues)
+                aesthetic_str += ", distinctive original design features: " + _cues_str
+            _ws = str(dl.aesthetic.get("weapon_style", "") or "")
+            if _ws:
+                aesthetic_str += ", signature weapon: " + _ws
+
         # Explizit zu vermeidende Elemente
         explicitly_avoid: str = dl.aesthetic.get("explicitly_avoid", "")
         if isinstance(explicitly_avoid, list):
@@ -447,31 +486,46 @@ class PromptEngine:
         if not weapons:
             return ""
 
+        # Bio-weapon biologisation (living grown weapon-organs, chitin talons) is ONLY for organic
+        # factions (Alien Hives) — it was hard-coded for all factions and was poisoning manufactured
+        # factions (e.g. Battle Brothers) with organic/grown "Chaos" elements on every weapon. Opt in
+        # per faction via `aesthetic.bio_weapons: true`; default = manufactured hard-tech weapons.
+        aesthetic = self._design_language.aesthetic
+        bio: bool = bool(aesthetic.get("bio_weapons", False)) if isinstance(aesthetic, dict) else False
+
         descriptions: list[str] = []
 
         for weapon in weapons:
             if weapon is None:
                 continue
 
-            name_lower: str = _biologise_weapon_name(weapon.name)
-
-            if weapon.range_value > MELEE_RANGE:
-                # Fernkampfwaffe: IMMER als gewachsenes Biowaffen-Organ beschreiben,
-                # damit das Bildmodell keine menschliche Schusswaffe malt.
-                desc: str = (
-                    f"a living biological weapon-organ ({name_lower}) grown from the "
-                    f"limb, an organic fleshy-chitin bio-cannon — NOT a manufactured gun"
-                )
-                if weapon.count > 1:
-                    desc = f"{weapon.count} such bio-weapon organs"
-                descriptions.append(desc)
+            if bio:
+                name_lower: str = _biologise_weapon_name(weapon.name)
+                if weapon.range_value > MELEE_RANGE:
+                    desc: str = (
+                        f"a living biological weapon-organ ({name_lower}) grown from the "
+                        f"limb, an organic fleshy-chitin bio-cannon — NOT a manufactured gun"
+                    )
+                    if weapon.count > 1:
+                        desc = f"{weapon.count} such bio-weapon organs"
+                else:
+                    prefix: str = "large heavy " if weapon.attacks >= 3 else ""
+                    desc = f"{prefix}organic {name_lower} (bone blade / chitin talon)"
+                    if weapon.count > 1:
+                        desc = f"{weapon.count}x {desc}"
             else:
-                # Nahkampfwaffe: organische Klingen/Klauen.
-                prefix: str = "large heavy " if weapon.attacks >= 3 else ""
-                desc = f"{prefix}organic {name_lower} (bone blade / chitin talon)"
-                if weapon.count > 1:
-                    desc = f"{weapon.count}x {desc}"
-                descriptions.append(desc)
+                # Manufactured factions: clean hard-tech weapons, NO organic/grown/fleshy language.
+                name_lower = weapon.name.strip().lower() or "ranged weapon"
+                if weapon.range_value > MELEE_RANGE:
+                    desc = f"a {name_lower}, a sleek manufactured hard-tech ranged weapon"
+                    if weapon.count > 1:
+                        desc = f"{weapon.count} {name_lower}s (manufactured hard-tech ranged weapons)"
+                else:
+                    prefix = "large heavy " if weapon.attacks >= 3 else ""
+                    desc = f"a {prefix}{name_lower}, a manufactured close-combat weapon (forged metal blade / power weapon)"
+                    if weapon.count > 1:
+                        desc = f"{weapon.count}x {desc}"
+            descriptions.append(desc)
 
         return ", ".join(descriptions)
 

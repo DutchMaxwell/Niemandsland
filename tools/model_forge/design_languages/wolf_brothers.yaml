@@ -8,17 +8,32 @@
 faction_name: "Wolf Brothers"
 
 aesthetic:
-  genre: "grimdark sci-fi feral military"
-  style: "viking berserker power armor"
+  genre: "clean, bright, heroic sci-fi military — feral norse warriors in crisp studio render"
+  ip_strict: true   # power-armour humans: strict IP gate flags generic-marine / Chaos-drift lookalikes
+  style: "rugged original power armour with viking-berserker styling, crisp and readable"
   inspiration:
-    - "Viking berserkers in futuristic power armor"
-    - "Wolf-themed tribal warriors with advanced technology"
-    - "Norse mythology meets sci-fi military"
+    - "Norse berserker warriors fused with original heavy power armour (generic sci-fi trope)"
+    - "Wolf-themed tribal super-soldiers with advanced technology"
+    - "Medieval viking silhouettes blended with original sci-fi war-tech"
+  # NOTE: original_design_cues + weapon_style ARE now injected into the prompt (prompt_engine
+  # _format_aesthetic) — keep them POSITIVE, never name a protected design here.
+  original_design_cues:
+    - "Snarling wolf-jaw helmet faceplate with two narrow vertical glowing ice-blue eye slits"
+    - "Broad rounded shoulder guards each topped with a draped fur pelt and an original carved-rune trim band"
+    - "Original interlocking triple-knot wolf-paw emblem on the chest and one shoulder"
+    - "Layered storm-grey plate armour with hand-carved geometric runic lines, weathered but clean and readable"
+    - "Braided trophy beads, fang charms and a draped wolf-fur cloak across the back"
+    - "Slightly stylised clean comic / video-game render (crisp readable shapes, bright even lighting)"
+  weapon_style: "an original rugged angular heavy rifle with a chunky fur-wrapped grip and a glowing ice-blue power cell, paired with a broad runic axe-blade close-combat weapon"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Space Wolves iconography"
-    - "Clean or disciplined military aesthetics"
-    - "Cartoon wolf designs"
+    - "Games Workshop / Warhammer 40,000 designs of any kind"
+    - "Space Wolves look, specific wolf-marine chapter trade dress, big round smooth pauldrons"
+    - "Imperial eagle, purity seals, iron halo, skull-rack motifs of any commercial range"
+    - "Boxy magazine-fed bolter-style rifles"
+    - "The terms ceramite, adamantium, bolter, Astartes, Terminator armour"
+    - "Any real-world military or franchise logos, insignia or trademarks"
+    - "Dark, gloomy, muddy, grimdark rendering; cartoon wolf designs; daemonic spiky Chaos ornament"
+    - "Xenos / alien features; organic grown weapons"
 
 colors:
   primary: "storm grey power armor"
@@ -26,7 +41,7 @@ colors:
   accent: "ice blue runic glow and wolf eye lenses"
 
 materials:
-  - "weathered grey ceramite power armor"
+  - "weathered storm-grey heavy composite power armour plating"
   - "wolf pelts and fur cloaks draped over armor"
   - "carved runic inscriptions on armor plates"
   - "bone and fang talismans and trophy racks"
@@ -69,7 +84,7 @@ unit_overrides:
   # ==========================================================================
 
   wolf_master_destroyer:
-    extra_details: "towering elite destroyer hero in massively bulky terminator-style power armor, wolf pelt cloak draped over pauldrons, runic carvings across chest and greaves, wolf fang necklace and bone talismans, combat shield with wolf head emblem on left arm, enormous close combat weapon in right hand, ice blue glowing eye lenses, wolf skull trophy rack on backpack, veteran kill markings carved as runes, Tough(6)"
+    extra_details: "towering elite destroyer hero in massively bulky heavy siege-class power armor, wolf pelt cloak draped over pauldrons, runic carvings across chest and greaves, wolf fang necklace and bone talismans, combat shield with wolf head emblem on left arm, enormous close combat weapon in right hand, ice blue glowing eye lenses, wolf skull trophy rack on backpack, veteran kill markings carved as runes, Tough(6)"
     pose: "savage combat stance, shield raised with wolf snarl, close combat weapon held high overhead in berserker fury"
 
     game_stats:
@@ -234,7 +249,7 @@ unit_overrides:
           range: 0
           attacks: 1
   werewolf_brothers:
-    extra_details: "single savage melee warrior in lighter armor with wolf hammers, half-transformed feral appearance blending human super-soldier with bestial wolf features, elongated fangs and claws visible, thick fur growing through armor joints, energy shields crackling with ice blue runes, regenerating flesh visible at wounds, wild savage eyes, Regeneration and Shielded"
+    extra_details: "single savage melee warrior in lighter armor with wolf hammers, fierce wolf-featured battle-helm with elongated fang faceplate, thick wolf-fur mantle and pelts layered over the armor joints, energy shields crackling with ice blue runes, wild savage glowing eyes, heavily reinforced repaired armor plates, Regeneration and Shielded"
     pose: "lunging feral attack, wolf hammers swinging, bestial snarling charge on all fours transitioning to bipedal strike"
 
     game_stats:
@@ -269,7 +284,7 @@ unit_overrides:
           range: 0
           attacks: 1
   wolf_destroyers:
-    extra_details: "single elite terminator-style assault warrior in massively bulky destroyer armor, combat shields with carved wolf head wards, triple-attack close combat weapons, wolf pelts stretched across massive pauldrons, runic teleport sigils carved on armor, wolf bone trophy racks, ice blue glowing runes across entire suit, feral heraldry, Ambush and Shielded"
+    extra_details: "single elite heavy siege-class assault warrior in massively bulky destroyer armor, combat shields with carved wolf head wards, triple-attack close combat weapons, wolf pelts stretched across massive pauldrons, runic teleport sigils carved on armor, wolf bone trophy racks, ice blue glowing runes across entire suit, feral heraldry, Ambush and Shielded"
     pose: "imposing berserker advance, weapons raised menacingly, towering feral terminator presence"
 
   # ==========================================================================
@@ -412,6 +427,7 @@ unit_overrides:
           range: 0
           attacks: 3
   wolf_apc:
+    type: vehicle
     extra_details: "armored personnel carrier with angular wolf-themed hull design, storm rifle turret on top with wolf head gun shield, wolf pelts and bone trophies draped on hull, runic wards painted on armor plates, front ramp door with wolf fang motif, heavy tank treads with ice-encrusted tracks, Tough(6), Transport(11)"
     pose: "driving forward through snow, turret aimed ahead, ramp sealed, wolf pennants flying"
 
@@ -428,6 +444,7 @@ unit_overrides:
           attacks: 3
           rules: ["AP(1)"]
   wolf_attack_apc:
+    type: vehicle
     extra_details: "assault transport variant with twin heavy flamer turret wreathed in wolf-skull gun mantlet, heavier frontal armor with wolf head ram, smaller troop compartment, aggressive angular hull with runic carvings, wolf pelts stretched across hull as additional insulation, Tough(6), Transport(6)"
     pose: "assault advance, twin flamers blazing forward, wolf-headed ram leading"
 
@@ -444,6 +461,7 @@ unit_overrides:
           attacks: 2
           rules: ["AP(1)"]
   wolf_drop_pod:
+    type: vehicle
     extra_details: "orbital drop capsule decorated with runic wolf sigils, cylindrical armored pod with opening petal doors marked with wolf pack heraldry, retro-thrusters on bottom, death launcher blast weapon on top, scorched re-entry heat marks mixed with glowing ice blue runes on hull, immobile after landing, Tough(6), Transport(11)"
     pose: "landing pose, petal doors opening outward revealing wolf pack interior, retro-thrusters firing"
 
@@ -459,6 +477,7 @@ unit_overrides:
           attacks: 1
           rules: ["Blast(6)"]
   wolf_heavy_tank:
+    type: vehicle
     extra_details: "super-heavy assault transport, massive hull with twin heavy machinegun and twin heavy rifle array turrets, extremely thick armor plating covered in wolf pelts and runic wards, wolf skull commander cupola, fang-shaped dozer blade option, bone trophy racks across hull, ice blue running lights, Tough(18), Transport(11)"
     pose: "rolling forward through snow and debris, all weapon systems aimed, dominating alpha predator presence"
 
@@ -502,7 +521,7 @@ unit_overrides:
   wolf_heavy_exo_suit:
     extra_details: "walking exoskeleton suit between infantry and walker size, storm grey armor with wolf pelt draped across shoulders, power-armored pilot visible in chest cavity, twin flamer arm weapons with wolf-skull muzzles, heavy armored legs with stomp capability, reactor pack on back decorated with runic totems, fear-inducing feral presence, Tough(6)"
     pose: "advancing pose, arm weapons aimed forward, stomping stride like an alpha wolf"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -544,7 +563,7 @@ unit_overrides:
   wolf_combat_walker:
     extra_details: "massive bipedal war machine, dreadnought-style armored sarcophagus body covered in wolf pelts and runic carvings, two walker fist arms with devastating AP(4), wolf skull decorations on shoulders, heavy armored legs with stomp attack, exhaust vents shaped like wolf howling mouths, ice blue reactor glow on back, fear-inducing towering presence, Tough(12)"
     pose: "striding forward like a war-wolf, walker fists raised menacingly, crushing stride through debris"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -565,7 +584,7 @@ unit_overrides:
   wolf_veteran_combat_walker:
     extra_details: "decorated veteran bipedal war machine, ornate dreadnought-style armored sarcophagus covered in saga runes and wolf kill markings, thick wolf pelts stretched across hull, two walker fist arms with AP(4), veteran campaign wolf-bone banners, heavily battle-scarred armor with ice blue runic glow visible through damage, wolf skull trophy collection, Tough(12)"
     pose: "advancing with veteran predator authority, fists clenched, heavy stomp shaking ground"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -608,6 +627,7 @@ unit_overrides:
           range: 0
           attacks: 3
   wolf_light_gunship:
+    type: aircraft
     extra_details: "VTOL gunship aircraft with wolf-themed fuselage, twin engine nacelles with tilting rotors, nose-mounted minigun with wolf-skull gun housing, wing-mounted twin typhoon missiles with AP(2) and Unstoppable, armored cockpit canopy with wolf-fang frame, wolf pelt streamers on tail, ice blue engine glow, Tough(6)"
     pose: "banking in flight like a diving wolf, weapons aimed downward at prey below"
 
@@ -628,6 +648,7 @@ unit_overrides:
           attacks: 4
           rules: ["AP(2)"]
   wolf_heavy_gunship:
+    type: aircraft
     extra_details: "heavy transport gunship aircraft with wolf-pack heraldry across fuselage, massive twin engines, troop bay with side doors decorated with wolf runes for deployment, chin-mounted storm missiles with AP(3) and Deadly(3), wing pylons with light heavy rifle array and twin minigun, typhoon missiles on hardpoints, wolf pelts and bone trophies on hull, heavily armored fuselage with runic wards, Tough(9), Transport(11)"
     pose: "hovering for pack deployment, side doors open showing wolf-themed interior, all weapons visible"
 

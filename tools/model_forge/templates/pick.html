@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Pick — {{ session_id }}</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background:#141414; color:#eee; margin:0; }
+  header { position:sticky; top:0; z-index:5; padding:.6rem 1rem; background:#1f1f1f;
+           display:flex; align-items:center; gap:1rem; border-bottom:1px solid #333; }
+  header a { color:#7ab; text-decoration:none; }
+  header h1 { margin:0; font-size:1.05rem; font-weight:500; }
+  #stats { margin-left:auto; font-variant-numeric:tabular-nums; color:#aaa; }
+  main { padding:1rem; display:grid; grid-template-columns:repeat(auto-fill,minmax(560px,1fr)); gap:1rem; }
+  .card { background:#1b1b1b; border:1px solid #333; border-radius:6px; padding:.6rem; }
+  .card.done { border-color:#2c8; }
+  .card h2 { margin:.1rem 0 .5rem; font-size:.95rem; font-weight:600; }
+  .card .cls { color:#888; font-weight:400; font-size:.8rem; }
+  .versions { display:flex; gap:.5rem; }
+  .v { flex:1; cursor:pointer; border:3px solid transparent; border-radius:5px; background:#0a0a0a;
+       position:relative; overflow:hidden; }
+  .v img { width:100%; display:block; aspect-ratio:1/1; object-fit:contain; }
+  .v .tag { position:absolute; top:3px; left:3px; background:#000a; color:#ddd; font-size:.7rem;
+            padding:1px 5px; border-radius:3px; }
+  .v:hover { border-color:#7ab; }
+  .v.picked { border-color:#2c8; }
+  .v.picked .tag { background:#2c8; color:#000; font-weight:700; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/">&larr; Sessions</a>
+  <h1>Beste Version wählen &mdash; {{ session_id }}</h1>
+  <span id="stats"></span>
+</header>
+<main id="grid">
+{% if not units %}
+  <p style="color:#c88; font-size:1.1rem; grid-column:1/-1;">
+    Keine 3-Versionen-Bilder in dieser Session ({{ session_id }}).<br>
+    Diese Pick-Seite gibt es nur für Fraktionen aus dem Nacht-Lauf. Nutze eine der fertigen
+    Fraktionen (z.&nbsp;B. <a style="color:#7ab" href="/human_defense_force_20260606_202729/pick">human_defense_force</a>).
+  </p>
+{% endif %}
+{% for u in units %}
+  <div class="card" data-key="{{ u.key }}" {% if u.picked %}data-picked="{{ u.picked }}"{% endif %}>
+    <h2>{{ u.name }} <span class="cls">{{ u.unit_class }}</span></h2>
+    <div class="versions">
+      {% for v in u.versions %}
+      <div class="v" data-key="{{ u.key }}" data-v="{{ v }}">
+        <span class="tag">v{{ v }}</span>
+        <img src="/{{ session_id }}/asset/version/{{ u.key }}/{{ v }}" alt="v{{ v }}" loading="lazy">
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+{% endfor %}
+</main>
+<script>
+const SESSION_ID = {{ session_id|tojson }};
+const TOTAL = {{ units|length }};
+
+function applyPicked(card, v) {
+  card.dataset.picked = v;
+  card.classList.add("done");
+  card.querySelectorAll(".v").forEach(el => el.classList.toggle("picked", el.dataset.v === String(v)));
+  updateStats();
+}
+function updateStats() {
+  const done = document.querySelectorAll(".card.done").length;
+  document.getElementById("stats").textContent = `gewählt ${done}/${TOTAL}`;
+}
+// initial highlight from server state
+document.querySelectorAll(".card").forEach(c => { if (c.dataset.picked) applyPicked(c, c.dataset.picked); });
+updateStats();
+
+document.getElementById("grid").addEventListener("click", async (e) => {
+  const v = e.target.closest(".v");
+  if (!v) return;
+  const key = v.dataset.key, ver = v.dataset.v, card = v.closest(".card");
+  v.style.opacity = ".5";
+  try {
+    const r = await fetch(`/${SESSION_ID}/pick/${key}/${ver}`, { method: "POST" });
+    const j = await r.json();
+    if (j.ok) applyPicked(card, j.picked);
+    else alert("Fehler: " + (j.message || "unbekannt"));
+  } catch (err) { alert("Netzwerkfehler: " + err); }
+  v.style.opacity = "";
+});
+</script>
+</body>
+</html>

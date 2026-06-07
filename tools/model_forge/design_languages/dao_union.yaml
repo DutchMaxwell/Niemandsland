@@ -8,17 +8,28 @@
 faction_name: "DAO Union"
 
 aesthetic:
-  genre: "grimdark sci-fi high-tech"
-  style: "advanced alien coalition"
+  genre: "clean, bright, high-tech sci-fi — sleek hopeful alien coalition, crisp studio render"
+  style: "advanced alien coalition with smooth ceramic-composite armour"
   inspiration:
     - "Blue-skinned aliens with clean advanced technology"
-    - "Battlesuit mecha warriors with railgun technology"
-    - "Japanese mecha anime meets alien civilization"
+    - "Battlesuit mecha warriors with electromagnetic accelerator weapons"
+    - "Stylised mecha anime meets a bright spacefaring alien civilization"
+  # NOTE: original_design_cues + weapon_style ARE now injected into the prompt (prompt_engine
+  # _format_aesthetic) for HUMANOID units — keep them POSITIVE and never name a protected design.
+  original_design_cues:
+    - "Tall narrow rounded-rectangle visor helmet with a single wide glowing amber sensor band"
+    - "Smooth rounded composite armour panels with soft beveled edges (not boxy plates)"
+    - "Slim segmented limbs with exposed dark ribbed servo joints at knees and elbows"
+    - "Original concentric-ring-and-chevron sept emblem on one shoulder plate"
+    - "Slim antenna and a low backpack thruster cluster between the shoulders"
+    - "Clean, bright, hopeful look — smooth manufactured surfaces, no spikes, horns, skulls or daemonic ornament"
+  weapon_style: "an original sleek two-handed pulse carbine with a smooth rounded housing and a glowing blue energy coil"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Tau Empire designs"
+    - "Games Workshop / Warhammer 40,000 designs of any kind"
+    - "Any specific commercial blue-alien battlesuit range or its trade dress"
     - "Medieval or gothic aesthetics"
-    - "Organic or biological technology"
+    - "Organic, fleshy or biological technology"
+    - "Spikes, horns, skulls or daemonic ornament"
 
 colors:
   primary: "ochre tan and desert sand armor panels"
@@ -221,6 +232,7 @@ unit_overrides:
   gun_drones:
     extra_details: "single squadron of hovering combat drone, disc-shaped drone chassis with twin pulse-guns underneath firing rending energy rounds at 18 inch range with A2 attacks, taser close-defense probes for melee, anti-gravity hover drives on underside, targeting visor sensor dome on top with glowing lens, Good Shot targeting AI, Strider terrain adaptation thrusters, autonomous combat drones with clean aerodynamic design"
     pose: "hovering formation at varying heights, twin pulse-guns aimed forward, sensor domes glowing"
+    type: vehicle
 
     game_stats:
       quality: 5
@@ -240,6 +252,7 @@ unit_overrides:
   sniper_drones:
     extra_details: "single squadron of precision hovering drone, elongated drone chassis with pulse rifle long-range weapon firing AP(1) energy rounds at 30 inch range, taser close-defense probes for melee, stabilized anti-gravity hover platform for steady aim, targeting visor sensor array with telescopic optics, Good Shot precision AI, Strider movement, sleeker more angular design than gun drones"
     pose: "stable hovering sniper platform formation, pulse rifles aimed at distant target, optics glowing"
+    type: vehicle
 
   # ==========================================================================
   # HOVER VEHICLES
@@ -378,7 +391,7 @@ unit_overrides:
           attacks: 4
           rules: ["AP(1)"]
   tide_titan:
-    extra_details: "massive riptide-class battlesuit titan, twin plasma rifle primary weapon on right arm firing AP(4) devastating plasma at 24 inch range, heavy plasma sword melee weapon on left arm with A8 rending attacks, powerful stomp legs with AP(2), Evasive agile movement system despite enormous size, nova shield defensive system, Fear(3) towering presence, sleek angular design with flowing lines unlike bulky imperial mechs, massive jetpack thruster array on back, advanced targeting visor sensor suite on head, Tough(18)"
+    extra_details: "massive riptide-class battlesuit titan, twin plasma rifle primary weapon on right arm firing AP(4) devastating plasma at 24 inch range, heavy plasma sword melee weapon on left arm with A8 rending attacks, powerful stomp legs with AP(2), Evasive agile movement system despite enormous size, nova shield defensive system, Fear(3) towering presence, sleek design with smooth rounded flowing lines and slim agile proportions, massive jetpack thruster array on back, advanced targeting visor sensor suite on head, Tough(18)"
     pose: "dynamic combat stance, twin plasma rifle aimed and firing, heavy plasma sword ready to swing, thrusters venting energy"
     type: titan
 

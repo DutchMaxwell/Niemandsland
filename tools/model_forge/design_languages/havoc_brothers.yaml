@@ -1,37 +1,53 @@
 # =============================================================================
 # Havoc Brothers - Design Language
 # =============================================================================
-# Chaos-korrumpierte Super-Soldaten in verdorbener Power Armor.
-# OPR-Aequivalent zu Chaos Space Marines.
+# Original renegade/corrupted heavy-power-armour super-soldiers for Niemandsland.
+# The GENRE (armoured renegade sci-fi infantry) is a common trope and free to use;
+# any specific commercial trade dress is NOT. These designs are our own work and are
+# released CC-BY-SA 4.0 — keep them clearly original (ip_strict gate is ON).
 # Basiert auf: GF - Havoc Brothers v3.5.2
 
 faction_name: "Havoc Brothers"
 
 aesthetic:
-  genre: "grimdark sci-fi chaos"
-  style: "corrupted fallen warriors"
+  genre: "clean, bright, crisp sci-fi — menacing fallen warband warriors, sharp readable studio render"
+  ip_strict: true   # corrupted power-armour humans: strict IP gate flags generic-marine / commercial-range lookalikes
+  style: "sleek heavy original corrupted power armour, ominous but crisply sculpted"
   inspiration:
-    - "Fallen super-soldiers corrupted by dark powers"
-    - "Spiky twisted power armor with daemon iconography"
-    - "Gothic horror fused with corrupted military technology"
+    - "Futuristic heavy power-armour soldiers turned renegade (generic sci-fi trope)"
+    - "Augmented super-soldiers warped by a corrupting influence"
+    - "Sinister knight-renegade silhouettes fused with original sci-fi technology"
+  # NOTE: original_design_cues + weapon_style ARE injected into the prompt (prompt_engine
+  # _format_aesthetic) — keep them POSITIVE and original; never name a protected design here.
+  original_design_cues:
+    - "Asymmetric full-face helmet with a snarling fanged faceplate and a single jagged glowing acid-green eye slit"
+    - "One enlarged, sharply faceted angular shoulder guard ringed with short backswept blades"
+    - "Original eight-bladed broken-wheel emblem etched into the chest plate"
+    - "Heavy segmented plate armour with a battered, pitted dark-iron finish and exposed brass joint seams"
+    - "Asymmetric trophy chains and ragged hanging tatters breaking up the silhouette"
+    - "Sinister but crisp, readable comic / video-game render with bright even lighting (no muddy gloom)"
+  weapon_style: "an original heavy blocky rifle with a brass-banded barrel and a glowing acid-green ammo coil, paired with a brutal serrated power-cleaver"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Chaos Space Marine iconography"
-    - "Clean or loyalist aesthetics"
-    - "Cartoon evil"
+    - "Games Workshop / Warhammer 40,000 designs of any kind"
+    - "Chaos Space Marine look, eight-pointed star, big round pauldrons"
+    - "Aquila / imperial double-eagle, purity seals, skull-heap motifs"
+    - "Boxy magazine-fed bolter-style rifles"
+    - "The terms ceramite, adamantium, bolter, Astartes, Terminator armour, Chaos"
+    - "Any real-world military or franchise logos, insignia or trademarks"
+    - "Literal demon/organic flesh growths on the armour itself; cartoon evil"
 
 colors:
-  primary: "dark iron and tarnished black power armor"
-  secondary: "brass trim and daemon-faced shoulder pads"
-  accent: "sickly warpfire green glow from mutations"
+  primary: "clean gunmetal and dark-iron power armour with crisp bright highlights"
+  secondary: "polished brass trim and an original eight-bladed broken-wheel emblem"
+  accent: "bright acid-green glowing optics and weapon coils, deep oxblood-red cloth tatters"
 
 materials:
-  - "corroded ceramite power armor with chaos mutations"
-  - "brass spikes and daemon iconography"
-  - "flayed skin trophies and chain decorations"
-  - "glowing warp-tainted weapon runes"
+  - "heavy battered polymer-ceramic composite armour plating with a pitted dark-iron finish"
+  - "polished brass joint seams and short backswept blades"
+  - "trophy chains and ragged hanging cloth tatters"
+  - "glowing acid-green energy coils and optic lenses"
 
-creature_type: "chaos-corrupted fallen warrior in twisted power armor"
+creature_type: "renegade super-soldier in heavy corrupted power armor"
 
 prompt_template: |
   {unit_name}, {creature_type} miniature for tabletop wargaming.
@@ -69,7 +85,7 @@ unit_overrides:
   # ==========================================================================
 
   havoc_destroyer_champion:
-    extra_details: "towering elite destroyer hero in massively bulky corrupted terminator-style power armor, champion heavy rifle with underslung attachment in one hand, enormous close combat weapon in other, armor covered in brass daemon faces and chaos spikes, warp-tainted trophy racks on back, Ambush teleport capability, Tough(6)"
+    extra_details: "towering elite destroyer hero in massively bulky corrupted heavy siege-class power armour, champion heavy rifle with underslung attachment in one hand, enormous serrated power-cleaver in the other, armour covered in brass broken-wheel emblems and short backswept blades, trophy racks on the back, Ambush teleport capability, Tough(6)"
     pose: "imposing combat stance, heavy rifle aimed forward, close combat weapon raised high"
 
     game_stats:
@@ -144,7 +160,7 @@ unit_overrides:
           range: 0
           attacks: 2
   harbinger_of_havoc:
-    extra_details: "massive daemon-blessed champion towering over other warriors, two daemon hammers with blast energy crackling around heads, heavy stomp attacks from warp-enlarged legs, daemonic mutations visible through cracked armor plates, warp energy seeping from joints and eye slits, fear-inducing daemonic presence, Tough(6)"
+    extra_details: "massive corruption-blessed champion towering over other warriors, two heavy hammers with blast energy crackling around the heads, heavy stomp attacks from over-enlarged armoured legs, twisted mutations visible through cracked armour plates, acid-green energy seeping from joints and eye slits, fear-inducing menacing presence, Tough(6)"
     pose: "devastating combat stance, both daemon hammers raised to smash, warp energy swirling around body"
 
   # ==========================================================================
@@ -186,7 +202,7 @@ unit_overrides:
           range: 0
           attacks: 1
   havoc_brothers:
-    extra_details: "single chaos-corrupted power armored warrior, heavy rifles with AP rounds, close combat weapons as sidearms, spiked pauldrons and daemon iconography on armor, eight-pointed star motifs, corroded and battle-scarred ceramite, glowing eye lenses through corrupted helmets"
+    extra_details: "single corrupted power armoured renegade warrior, heavy rifles with AP rounds, close combat weapons as sidearms, sharply faceted angular shoulder guards and the broken-wheel emblem on the armour, battle-scarred dark-iron plating with brass joint seams, glowing acid-green eye slits in snarling fanged helmets"
     pose: "advancing tactical formation, heavy rifles shouldered and aimed, menacing advance"
 
     game_stats:
@@ -275,7 +291,7 @@ unit_overrides:
           range: 0
           attacks: 1
   havoc_destroyers:
-    extra_details: "single elite assault warrior in massively bulky corrupted terminator-style armor, dual energy claws with rending effect crackling with warp energy, ambush teleport capability, extra spikes and daemon trophies on heavy armor, Tough(3) "
+    extra_details: "single elite assault warrior in massively bulky corrupted heavy siege-class armour, dual energy claws with rending effect crackling with acid-green energy, ambush teleport capability, extra backswept blades and trophy chains on the heavy armour, Tough(3) "
     pose: "teleport assault stance, energy claws spread wide, emerging from warp rift"
 
   # ==========================================================================
@@ -310,8 +326,8 @@ unit_overrides:
           range: 0
           attacks: 2
   mutated_brothers:
-    extra_details: "single chaos-mutated space marines, heavy claws with AP bursting through cracked power armor, fast warp-enhanced movement, bodies warping between human and daemon, tentacles and extra limbs emerging from broken armor plates, unpredictable fighters with random combat blessings"
-    pose: "rapid mutated charge, heavy claws slashing, broken armor revealing mutations"
+    extra_details: "single corrupted mutated power-armoured warrior, heavy claws with AP bursting through cracked armour plates, fast enhanced movement, twisted asymmetric body, extra mechanical limbs emerging from broken armour panels, unpredictable fighters with random combat blessings"
+    pose: "rapid mutated charge, heavy claws slashing, broken armor revealing the twisted frame"
 
     game_stats:
       quality: 3
@@ -326,7 +342,7 @@ unit_overrides:
           attacks: 2
           rules: ["AP(1)"]
   greater_mutated:
-    extra_details: "single massively mutated chaos warrior, enormous heavy claws with AP on oversized mutated arms, towering over standard marines, warp-bloated bodies with extensive daemon mutations, fast and unpredictable movement, remnants of power armor barely containing mutated flesh, Tough(3)"
+    extra_details: "single massively mutated corrupted warrior, enormous heavy claws with AP on oversized mutated arms, towering over standard soldiers, swollen twisted bodies with extensive mutations, fast and unpredictable movement, remnants of power armour barely containing the swollen frame, Tough(3)"
     pose: "towering mutated assault, massive claws raised, grotesque warp-swollen bodies"
 
     game_stats:
@@ -342,7 +358,7 @@ unit_overrides:
           attacks: 4
           rules: ["AP(1)"]
   mutated_destroyer:
-    extra_details: "single massively mutated destroyer champion, dual mutated claws with AP on enormous warp-grown arms, ambush capability from warp tunneling, body a twisted fusion of terminator armor and daemon flesh, unpredictable combat behavior, tentacles and mutations erupting from cracked ceramite, Tough(6)"
+    extra_details: "single massively mutated destroyer champion, dual mutated claws with AP on enormous over-grown armoured arms, ambush capability from teleporting, body a twisted fusion of bulky siege-class armour and corrupted plating, unpredictable combat behavior, extra limbs and jagged spikes erupting from cracked armour panels, Tough(6)"
     pose: "erupting from warp rift, dual mutated claws spread wide, twisted daemon-marine hybrid"
 
   # ==========================================================================
@@ -389,7 +405,8 @@ unit_overrides:
           range: 0
           attacks: 2
   havoc_apc:
-    extra_details: "corrupted armored personnel carrier with angular chaos-twisted hull, storm rifle turret on top adorned with daemon face, spiked dozer blade option, troop compartment with daemon-mouth access ramp, chaos iconography welded to hull, warp-tainted engine exhaust, Tough(6), Transport(11)"
+    type: vehicle
+    extra_details: "corrupted armored personnel carrier with angular renegade-twisted hull, storm rifle turret on top adorned with the broken-wheel emblem, spiked dozer blade option, troop compartment with reinforced rear access ramp, brass iconography welded to hull, smoking engine exhaust, Tough(6), Transport(11)"
     pose: "driving forward, storm rifle turret aimed ahead, spiked ram leading"
 
     game_stats:
@@ -405,8 +422,9 @@ unit_overrides:
           attacks: 3
           rules: ["AP(1)"]
   havoc_heavy_tank:
-    extra_details: "massive super-heavy chaos transport tank, quad laser cannon main turret with daemon-mouth barrel shrouds, twin heavy machinegun secondary weapons, enormously thick corrupted armor plating with daemon faces and brass trim, troop compartment, warp-enhanced engine, spiked ram option, Tough(18), Transport(11)"
-    pose: "rolling forward with crushing presence, quad laser turret aimed, daemon iconography prominent"
+    type: vehicle
+    extra_details: "massive super-heavy renegade transport tank, quad laser cannon main turret with armoured barrel shrouds, twin heavy machinegun secondary weapons, enormously thick corrupted armor plating with brass trim and the broken-wheel emblem, troop compartment, reinforced engine block, spiked ram option, Tough(18), Transport(11)"
+    pose: "rolling forward with crushing presence, quad laser turret aimed, brass iconography prominent"
 
   # ==========================================================================
   # VEHICLES (no Transport - type: vehicle)
@@ -450,9 +468,9 @@ unit_overrides:
           attacks: 6
           rules: ["AP(1)"]
   infernal_brute:
-    extra_details: "massive bipedal daemon-engine walker, two brute hammers with blast energy crackling around heads, powerful stomp attacks from massive daemon-fused legs, fusion of corrupted machinery and bound daemon essence, warp energy seeping from joints, Fear(2) terrifying daemonic presence, brass and iron construction with living daemon flesh visible, Tough(12)"
-    pose: "striding forward menacingly, brute hammers raised to smash, daemon-engine roaring"
-    type: vehicle
+    extra_details: "massive bipedal armoured war-engine walker, two brute hammers with energy crackling around the heads, powerful stomp attacks from massive piston-driven legs, heavily armoured corrupted machine on two legs, glowing acid-green energy venting from joints, Fear(2) terrifying mechanical presence, brass and dark-iron construction, Tough(12)"
+    pose: "striding forward menacingly, brute hammers raised to smash, war-engine roaring"
+    type: walker
 
     game_stats:
       quality: 3
@@ -471,9 +489,9 @@ unit_overrides:
           attacks: 4
           rules: ["AP(1)"]
   havoc_mech_fiend:
-    extra_details: "serpentine daemon-engine with multiple limbs, fiend claws with rending warp energy on forelimbs, eight steel tails with AP lashing from rear, powerful stomp legs, regenerative daemon flesh constantly repairing damage, Fear(2) terrifying presence, insectoid-reptilian daemon bound into corrupted machinery, Tough(12)"
+    extra_details: "serpentine multi-limbed war-engine walker, fiend claws crackling with acid-green energy on the forelimbs, eight articulated steel tails with AP lashing from the rear, powerful piston stomp legs, self-repairing armoured plating, Fear(2) terrifying presence, insectoid-reptilian machine of corrupted metal, Tough(12)"
     pose: "multi-limbed assault pose, fiend claws spread, steel tails whipping behind"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -496,9 +514,9 @@ unit_overrides:
           attacks: 4
           rules: ["AP(1)"]
   infernal_stalker:
-    extra_details: "predatory daemon-engine walker with hunting posture, bane flamethrower bio-weapon spewing warp-fire with AP and blast, virus injector appendage with devastating AP(3) Deadly(3) toxin needle, powerful stomp legs with strider capability, Fear(2) stalking predator daemon, arachnid-influenced design with multiple sensor eyes, Tough(12)"
+    extra_details: "predatory armoured war-engine walker with hunting posture, bane flamethrower spewing acid-green fire with AP and blast, virus injector appendage with devastating AP(3) Deadly(3) toxin needle, powerful stomp legs with strider capability, Fear(2) stalking predator machine, arachnid-influenced metal design with multiple glowing sensor lenses, Tough(12)"
     pose: "predatory stalking stance, bane flamethrower aimed forward, virus injector poised to strike"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -521,9 +539,9 @@ unit_overrides:
           attacks: 3
           rules: ["AP(3)"]
   spider_walker:
-    extra_details: "massive multi-legged daemon-engine with spider-like body plan, twin pain cannons firing blast projectiles from turret mount, eight spider fangs with rending bite on mandibles, powerful stomp legs, regenerative daemon flesh, strider capability across all terrain, Fear(2) terrifying arachnid daemon, warp-web patterns on carapace, Tough(12)"
+    extra_details: "massive multi-legged armoured war-engine walker with spider-like body plan, twin pain cannons firing blast projectiles from turret mount, eight steel spider fangs with rending bite on mechanical mandibles, powerful piston stomp legs, self-repairing plating, strider capability across all terrain, Fear(2) terrifying arachnid machine, engraved web patterns on the armoured carapace, Tough(12)"
     pose: "arachnid hunting stance, pain cannons aimed, spider fangs spread, multiple legs braced"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -546,9 +564,9 @@ unit_overrides:
           attacks: 4
           rules: ["AP(1)"]
   crab_walker:
-    extra_details: "colossal daemon-engine with crustacean body plan, battle cannon turret on back firing blast projectiles, reaper cannon secondary weapon with slam effect, two massive crab fists with devastating AP(3), crab flail tail weapon lashing wildly, powerful stomp attacks with AP(2), regenerative daemon flesh, Fear(3) apocalyptic daemon-engine presence, Tough(18)"
+    extra_details: "colossal armoured war-engine titan with crustacean body plan, battle cannon turret on the back firing blast projectiles, reaper cannon secondary weapon with slam effect, two massive crab fists with devastating AP(3), crab flail tail weapon lashing wildly, powerful stomp attacks with AP(2), self-repairing plating, Fear(3) apocalyptic war-engine presence, Tough(18)"
     pose: "towering crab stance, fists raised to crush, battle cannon elevated, flail lashing"
-    type: vehicle
+    type: titan
 
   # ==========================================================================
   # AIRCRAFT (Aircraft rule - no type override needed)
@@ -582,8 +600,9 @@ unit_overrides:
           attacks: 6
           rules: ["AP(2)"]
   havoc_dragon:
-    extra_details: "flying daemon-engine drake with massive bat-like daemon wings, forge flamethrower bio-weapon in maw spewing warp-fire with AP and blast, serpentine body of fused daemon flesh and corrupted machinery, regenerative daemon tissue, warp-fire trailing from wing tips, draconic daemon bound into corrupted airframe, Tough(6)"
-    pose: "wings fully spread in flight, forge flamethrower firing from maw, daemon-engine soaring"
+    type: aircraft
+    extra_details: "flying armoured war-engine drake with massive bat-like mechanical wings, forge flamethrower in the maw spewing acid-green fire with AP and blast, serpentine body of riveted corrupted machinery, self-repairing plating, exhaust trailing from the wing tips, draconic corrupted airframe, Tough(6)"
+    pose: "wings fully spread in flight, forge flamethrower firing from maw, war-engine soaring"
 
     game_stats:
       quality: 3

@@ -8,17 +8,28 @@
 faction_name: "Rebel Guerrillas"
 
 aesthetic:
-  genre: "grimdark sci-fi underground rebellion"
-  style: "mining cult insurgents"
+  genre: "clean, bright, crisp sci-fi insurgency — gritty industrial rebels rendered as a crisp readable studio sculpt"
+  style: "mining-cult insurgents in improvised gear, clean tabletop wargaming studio render"
   inspiration:
-    - "Underground mining cult rebels with improvised weapons"
-    - "Alien-hybrid insurgents in stolen military gear"
-    - "Industrial workers turned guerrilla fighters"
+    - "Underground mining-cult rebels with improvised, jury-rigged weapons"
+    - "Industrial workers turned guerrilla fighters in stolen military kit"
+    - "Insurgents whose ragtag look mixes hard-hats, work coveralls and patched flak armour"
+  # NOTE: original_design_cues + weapon_style ARE injected into the prompt (prompt_engine
+  # _format_aesthetic only injects genre/style/inspiration; generate_prompt injects these
+  # two for humanoid units). Keep them POSITIVE and ORIGINAL — never name a protected design.
+  original_design_cues:
+    - "Mismatched salvaged headgear — a battered mining hard-hat with a headlamp or a patched military helmet, never a uniform matching helmet"
+    - "Layered improvised armour: a stolen flak vest strapped over grubby work coveralls, with extra plates, pouches and bandoliers bolted and taped on"
+    - "An original triangular wedge-and-three-bars insurgent emblem scratched or stencilled onto a shoulder plate"
+    - "Asymmetric, individual, hand-made silhouette — each fighter clearly cobbled their own kit together, knee-pads and rolled sleeves"
+    - "Dirty industrial yellow-and-grey palette with rust streaks and rebel spray-paint markings"
+    - "Subtle off-human heritage on some fighters: faint purple-tinged skin patches and slightly angular features, kept understated"
+  weapon_style: "improvised insurgent firearms built from converted mining tools — carbines and pistols welded from rock-drill and mining-laser parts, blocky and hand-machined, plus brutal melee picks and powered drills"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Genestealer Cult iconography"
-    - "Clean military aesthetics"
+    - "Clean uniform military aesthetics or matched regulation kit"
     - "Obviously alien appearance for basic troops"
+    - "Any real-world military or franchise logos, insignia or trademarks"
+    - "Spiky, horned, daemonic or organic-growth ornament"
 
 colors:
   primary: "dirty industrial yellow and grey work coveralls"
@@ -327,7 +338,7 @@ unit_overrides:
   combat_walker:
     extra_details: "bipedal mining walker converted to combat use, super-heavy fusion rifle primary weapon on right arm with A1 AP(4) Deadly(6) devastating shot at 18 inch range, stomp attack with massive feet A2 AP(1), Fear(1) intimidating industrial machine repurposed for war, converted mining power-loader chassis with armored cockpit, hydraulic legs with heavy stomping feet, sensor array and targeting optics replacing mining scanners, welded armor plates over critical systems, rebel markings and kill tallies, exposed hydraulic lines and power cables, Guerrilla post-combat repositioning, Tough(6)"
     pose: "combat stride forward, super-heavy fusion rifle aimed and glowing with energy charge, one foot raised mid-stomp"
-    type: vehicle
+    type: walker
 
   # ==========================================================================
   # AIRCRAFT
@@ -352,7 +363,7 @@ unit_overrides:
   light_dropship:
     extra_details: "rebel troop transport aircraft converted from civilian cargo shuttle, twin heavy machinegun primary weapon with A6 AP(1) shots at 30 inch range, minigun secondary weapon with A4 AP(1) suppressive fire at 24 inch range, Aircraft high-speed flight rules, Transport(11) large troop capacity with rear cargo ramp, boxy utilitarian cargo shuttle frame with welded weapon mounts, improvised armor plates over cockpit and engines, rebel insignia on fuselage, cargo netting and jump harnesses visible through open doors, twin engine nacelles with armored cowlings, Tough(6)"
     pose: "banking combat approach, twin heavy machineguns blazing from chin mount, minigun firing from side door, rear ramp lowering for troop deployment"
-    type: vehicle
+    type: aircraft
 
     game_stats:
       quality: 4

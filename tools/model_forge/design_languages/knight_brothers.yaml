@@ -1,23 +1,39 @@
 # =============================================================================
 # Knight Brothers - Design Language
 # =============================================================================
-# Psychische Krieger-Ritter in Silberrstung, Elite-Daemonjaeger mit Kraftwaffen.
-# OPR-Aequivalent zu Grey Knights.
-# Basiert auf: GF - Knight Brothers v3.5.2
+# Original elite psychic warrior-knights in bright polished silver power armour with
+# glowing arcane force weapons. The GENRE (armoured psychic-crusader sci-fi infantry) is a
+# common trope and free to use; specific commercial trade dress is NOT — these designs are our
+# own work, released CC-BY-SA 4.0. Keep them clearly original.
+# Based on: GF - Knight Brothers v3.5.2
 
 faction_name: "Knight Brothers"
 
 aesthetic:
-  genre: "grimdark sci-fi psychic military"
-  style: "psychic knight templar"
+  genre: "clean, bright, crisp sci-fi psychic crusader — radiant silver paladin-knights, crisp studio render"
+  ip_strict: true   # silver power-armour psychic knights: strict IP gate flags generic-marine / Chaos-drift lookalikes
+  style: "sleek original silver power armour with arcane runic ornament, polished and radiant"
   inspiration:
-    - "Psychic knight templars in silver power armor"
-    - "Daemon-hunting paladins with force weapons"
-    - "Inquisitorial elite strike force"
+    - "Radiant armoured psychic crusader-knights in bright polished silver plate (generic sci-fi-paladin trope)"
+    - "Medieval templar-knight silhouettes fused with original glowing arcane sci-fi technology"
+    - "Disciplined elite strike force of warded warrior-mages"
+  # NOTE: original_design_cues + weapon_style ARE injected into the prompt (prompt_engine
+  # _format_aesthetic / generate_prompt, humanoids only) — keep them POSITIVE, never name a protected design.
+  original_design_cues:
+    - "Smooth full-face silver visor helmet with a tall pointed crest and a single horizontal glowing blue optic slit"
+    - "Tall layered psychic hood collar framing the head, etched with original geometric ward lines"
+    - "Sharp pentagonal angular shoulder guards, flat and faceted, with engraved geometric runic borders"
+    - "Original interlocking-diamond ward emblem glowing faint blue on the chest plate and one shoulder"
+    - "Polished smooth silver plate armour with crisp golden geometric inscriptions and a deep blue tabard"
+    - "Clean, bright and noble look — no spikes, horns, skulls or daemonic ornament"
+    - "Slightly stylised clean comic / video-game render (crisp readable shapes, bright even lighting)"
+  weapon_style: "an original sleek angular silver power glaive with a slim faceted blade and a glowing blue energy edge"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Grey Knights iconography"
-    - "Non-psychic mundane aesthetics"
+    - "Generic commercial power-armour super-soldier trade dress of any kind"
+    - "Big round pauplards, double-eagle crests, purity-seal scrolls, skull motifs"
+    - "Chaos / spiky / horned / daemonic drift; dark, muddy or gloomy grimdark mood"
+    - "Boxy magazine-fed rifles; any real-world military or franchise logos, insignia or trademarks"
+    - "Cartoon-baby or anime proportions; xenos or alien features; organic / grown / fleshy elements"
 
 colors:
   primary: "polished silver power armor"
@@ -83,7 +99,7 @@ unit_overrides:
           range: 0
           attacks: 4
   knight_veteran_master_brother:
-    extra_details: "senior veteran hero commander in richly decorated silver power armor with extensive gold psychic inscriptions covering every plate, combat shield on one arm with ward runes, close combat weapon channeling psychic force, versatile attack fighting style switching between armor-piercing and precision modes, deep blue tabard with golden sigils beneath chest plate, ornate psychic hood with crystal focus nodes, veteran battle scars and daemon-kill tallies etched into pauldrons, shielded defense, Tough(3)"
+    extra_details: "senior veteran hero commander in richly decorated silver power armor with extensive gold psychic inscriptions covering every plate, combat shield on one arm with ward runes, close combat weapon channeling psychic force, versatile attack fighting style switching between armor-piercing and precision modes, deep blue tabard with golden sigils beneath chest plate, ornate psychic hood with crystal focus nodes, veteran battle scars and engraved victory tallies on the pauldrons, shielded defense, Tough(3)"
     pose: "dynamic combat stance, force weapon held in two-handed grip transitioning between attack modes, psychic energy crackling along blade"
 
     game_stats:
@@ -98,7 +114,7 @@ unit_overrides:
           range: 0
           attacks: 2
   knight_master_brother:
-    extra_details: "hero field commander in polished silver power armor with gold psychic ward trim, gravity pistol with reality-warping smash capability in one hand, close combat weapon channeling psychic force in the other, deep blue half-cape with arcane sigils, psychic hood with crystal matrix on helmet, purity seals and daemon-ward scrolls hanging from belt, golden chapter insignia on left pauldron, Tough(3)"
+    extra_details: "hero field commander in polished silver power armor with gold psychic ward trim, gravity pistol with reality-warping smash capability in one hand, close combat weapon channeling psychic force in the other, deep blue half-cape with arcane sigils, psychic hood with crystal matrix on helmet, warded oath scrolls and ribboned honour plaques hanging from belt, original interlocking-diamond ward emblem on left pauldron, Tough(3)"
     pose: "commanding stance, gravity pistol aimed forward with distortion shimmer at barrel, force weapon held across body in guard position"
 
   # ==========================================================================
@@ -144,7 +160,7 @@ unit_overrides:
           range: 0
           attacks: 1
   knight_veteran_brothers:
-    extra_details: "three-model elite veteran squad in ornately decorated silver power armor with extensive golden ward engravings, incinerators with purifying psychic fire and blast capability, close combat weapons, versatile attack adaptation allowing flexible combat modes, more ornate psychic hoods than standard brothers with multiple crystal focus points, veteran daemon-kill honors across armor, deep blue cloaks with golden trim, Knightborn"
+    extra_details: "three-model elite veteran squad in ornately decorated silver power armor with extensive golden ward engravings, incinerators with purifying psychic fire and blast capability, close combat weapons, versatile attack adaptation allowing flexible combat modes, more ornate psychic hoods than standard brothers with multiple crystal focus points, veteran victory honours engraved across the armour, deep blue cloaks with golden trim, Knightborn"
     pose: "disciplined advance formation, incinerators raised with blue psychic flames licking at barrels, veteran confidence in every step"
 
     game_stats:
@@ -182,7 +198,7 @@ unit_overrides:
           range: 0
           attacks: 2
   knight_destroyers:
-    extra_details: "three-model elite terminator-equivalent assault squad in heavy silver power armor with layered psychic ward plating, storm rifles with high rate of fire and AP capability, heavier close combat weapons, deep strike teleportation via psychic translocation, ambush specialists materializing from the warp, Tough(3) enhanced resilience, more massive armor profile than standard brothers, golden psychic inscriptions glowing with power, psychic hoods with multiple focusing crystals, deep blue heraldry on shoulder guards"
+    extra_details: "three-model elite heavy-armoured assault squad in massively bulky silver siege-class power armor with layered psychic ward plating, storm rifles with high rate of fire and AP capability, heavier close combat weapons, deep strike teleportation via psychic translocation, ambush specialists materialising from a shimmering blue translocation rift, Tough(3) enhanced resilience, more massive armor profile than standard brothers, golden psychic inscriptions glowing with power, psychic hoods with multiple focusing crystals, deep blue heraldry on shoulder guards"
     pose: "emerging from psychic teleportation, storm rifles blazing, force weapons crackling with blue energy, translocation afterglow surrounding squad"
 
   # ==========================================================================
@@ -205,6 +221,7 @@ unit_overrides:
           range: 0
           attacks: 2
   knight_apc:
+    type: vehicle
     extra_details: "silver-armored psychic assault transport, angular hull covered in golden ward runes and protective psychic sigils, storm rifle turret on roof, fast assault vehicle with impact ram on front hull, troop compartment for eleven psychic warriors, blue-glowing psychic conduit lines running along hull, deep blue chapter banners, shimmering ward field visible around hull, Tough(6), Transport(11)"
     pose: "fast advance, turret aimed forward, assault ramp ready to deploy, ward runes glowing"
 
@@ -221,6 +238,7 @@ unit_overrides:
           attacks: 3
           rules: ["AP(1)"]
   knight_attack_apc:
+    type: vehicle
     extra_details: "silver-armored close support transport variant, twin heavy flamer turret spewing purifying psychic fire, angular hull with golden ward inscriptions, smaller troop bay for six warriors, fast assault configuration with impact ram, blue psychic conduit lines along hull panels, deep blue tabard banners on sides, more aggressive forward profile than standard APC, Tough(6), Transport(6)"
     pose: "aggressive advance, twin heavy flamers unleashing purifying fire, impact ram forward"
 
@@ -237,6 +255,7 @@ unit_overrides:
           attacks: 2
           rules: ["AP(1)"]
   knight_heavy_tank:
+    type: vehicle
     extra_details: "massive silver-armored super-heavy battle tank, twin heavy machinegun sponson and devastating twin heavy rifle array turret with twelve-barrel volley capability, enormously thick psychic-warded armor plating covered in golden rune inscriptions, fast for its enormous size, devastating impact ram on front, troop transport bay for eleven warriors, command cupola with psychic antenna array, deep blue banners and chapter heraldry, blue psychic conduit network visible across hull, the most powerful armored vehicle in the knight brotherhood, Tough(18), Transport(11)"
     pose: "rolling advance, twin heavy rifle array turret tracking target, twin heavy machinegun sponson sweeping, dominating battlefield presence"
 
@@ -263,7 +282,7 @@ unit_overrides:
   knight_combat_walker:
     extra_details: "massive bipedal silver war walker covered in golden psychic ward runes, twin walker fists with AP(4) crushing power channeling psychic energy, heavy stomping feet, Fear(2) terrifying psychic presence radiating from sarcophagus cockpit, Tough(12) extreme durability, pilot entombed in warded silver sarcophagus, psychic conduits running from cockpit to fists glowing blue, deep blue honor scrolls hanging from chassis, golden inscriptions covering every armor panel, the walking embodiment of psychic fury"
     pose: "advancing menace, both walker fists raised and crackling with blue psychic force, heavy stomp mid-stride"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -284,7 +303,7 @@ unit_overrides:
   knight_veteran_combat_walker:
     extra_details: "massive bipedal silver war walker with enhanced psychic conduits and more ornate golden ward inscriptions than standard variant, twin walker fists channeling devastating psychic force, heavy stomping feet, versatile attack systems allowing adaptive combat switching between armor-piercing and precision modes, Fear(2) terrifying aura, Tough(12), veteran campaign honors etched across every surface, more elaborate psychic hood array on sarcophagus, blue energy crackling visibly across entire chassis, the most experienced and deadly walker in the brotherhood"
     pose: "aggressive combat stride, walker fists crackling with intensified psychic energy, veteran kill tallies visible on chassis"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -325,7 +344,7 @@ unit_overrides:
   knight_nemesis_walker:
     extra_details: "colossal silver war engine towering above all other units, the ultimate psychic war machine of the knight brotherhood, twin super-heavy incinerators spewing massive torrents of psychic purifying fire, twin nemesis fists with AP(4) devastating crushing power, enormous stomping feet with AP(2), built-in Caster(2) psychic ability channeled through crystal matrix array on head, ambush deep-strike teleportation capability for its enormous mass, Fear(3) supreme psychic terror aura, Tough(18) near-indestructible warded armor, entire chassis covered in golden psychic inscriptions glowing with power, massive psychic hood array crowning the head section, blue energy arcing between conduit nodes across body, deep blue chapter banners draped from shoulders"
     pose: "apocalyptic advance, super-heavy incinerators blazing psychic fire, nemesis fists crackling with devastating energy, psychic aura visibly distorting air around chassis"
-    type: vehicle
+    type: titan
 
   # ==========================================================================
   # AIRCRAFT
@@ -352,6 +371,7 @@ unit_overrides:
           attacks: 6
           rules: ["AP(2)"]
   knight_light_gunship:
+    type: aircraft
     extra_details: "sleek silver-armored attack gunship, minigun with four-barrel rotary mechanism and AP capability, twin typhoon missiles with unstoppable armor-piercing warheads on wing pylons, aerodynamic fuselage covered in golden psychic ward runes, blue-glowing psychic engine exhausts, swept-back wings with deep blue chapter markings, cockpit with psychic targeting array, fast and agile air superiority craft, Tough(6)"
     pose: "banking attack run, minigun blazing, typhoon missiles locked on target, engines trailing blue psychic exhaust"
 
@@ -372,6 +392,7 @@ unit_overrides:
           attacks: 4
           rules: ["AP(2)"]
   knight_heavy_gunship:
+    type: aircraft
     extra_details: "massive silver-armored heavy transport gunship bristling with weapons, storm missiles for long-range AP(3) Deadly strikes, light heavy rifle array for sustained fire, twin minigun with devastating eight-barrel volume of fire, typhoon missiles with unstoppable warheads, enormous fuselage with troop bay for eleven warriors, golden psychic ward inscriptions across entire hull, blue-glowing engine arrays, deep blue chapter heraldry on tail section, the aerial fortress of the knight brotherhood, Tough(9), Transport(11)"
     pose: "low assault pass, all weapon systems firing, storm missiles launching, troop bay doors preparing to open, dominating aerial presence"
 

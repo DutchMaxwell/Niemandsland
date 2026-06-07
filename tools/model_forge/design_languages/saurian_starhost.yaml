@@ -8,17 +8,28 @@
 faction_name: "Saurian Starhost"
 
 aesthetic:
-  genre: "grimdark sci-fi reptilian"
-  style: "ancient reptilian star-warriors"
+  all_creatures: true   # pure reptilian + dinosaur creature army: no manufactured vehicle/aircraft/walker/titan anchors
+  genre: "clean, bright, vibrant sci-fantasy reptilian — sunlit jewel-toned star-warriors, crisp studio render"
+  style: "ancient reptilian star-warriors with sunlit Mesoamerican gold and cosmic turquoise"
   inspiration:
-    - "Aztec/Mesoamerican reptilian warriors with ancient technology"
+    - "Mesoamerican reptilian warriors fused with original cosmic technology"
     - "Dinosaur war-beasts armored for battle"
-    - "Ancient alien lizard civilization with cosmic purpose"
+    - "Ancient star-faring lizard civilization with cosmic purpose"
+  # NOTE: original_design_cues + weapon_style ARE injected into the prompt (prompt_engine
+  # _format_aesthetic) — keep them POSITIVE and ORIGINAL, never name a protected design here.
+  original_design_cues:
+    - "Sleek upright raptor-headed reptilians with smooth teal-blue scaled skin and a slim counterbalancing tail"
+    - "Stepped-pyramid gold armour plates with crisp ziggurat terraces and angular Mesoamerican fretwork"
+    - "Original sunburst-and-spiral solar emblem in gold on chest and shoulder, ringed with turquoise inlay"
+    - "Tall fanned feather crest of bright turquoise plumes rising from a gold headdress band"
+    - "Polished obsidian-black weapon cores that glow with cosmic turquoise energy seams"
+    - "Bright, sunlit, jewel-toned palette (teal-blue scales, burnished gold, glowing turquoise) — clean and readable, no grime or gloom"
+  weapon_style: "original obsidian-bladed and crystal-cored energy weapons with carved gold Mesoamerican hafts and glowing turquoise power seams"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Seraphon/Lizardmen designs"
+    - "Any specific commercial fantasy lizardman miniatures range or its trade dress"
     - "Mammalian features"
     - "Cute or cartoon dinosaurs"
+    - "Dark, muddy, gloomy or grimdark palettes and lighting"
 
 colors:
   primary: "deep teal-blue scaled reptilian skin"
@@ -331,7 +342,7 @@ unit_overrides:
           attacks: 1
           rules: ["Thrust"]
   cyber_swarms:
-    extra_details: "3 bases of swarming mechanical-organic hybrid nano-creatures, each base a writhing mass of tiny cybernetic reptilian constructs with glowing turquoise energy cores, swarm attacks with venomous bane-infused bites (A3 Bane), Strider swarm movement across any terrain, ancient Saurian nanotechnology given feral purpose, Tough(3)"
+    extra_details: "3 bases of swarming mechanical nano-construct creatures, each base a writhing mass of tiny cybernetic reptilian machine-constructs with polished gold-and-obsidian plating and glowing turquoise energy cores, swarm attacks with venomous bane-infused bites (A3 Bane), Strider swarm movement across any terrain, ancient Saurian nanotechnology given feral purpose, Tough(3)"
     pose: "swarm mound formation, hundreds of tiny cybernetic reptilian creatures crawling over each other, glowing turquoise energy visible"
 
     game_stats:
@@ -386,7 +397,7 @@ unit_overrides:
           attacks: 3
           rules: ["AP(1)"]
   dragon_lizard:
-    extra_details: "fire-breathing dinosaur beast with a crew of saurian handlers, flame burst bio-weapon in fanged jaws spewing napalm-like fire (12 inch A2 AP1 Blast3 Reliable), heavy raking claws on powerful forelegs (A3 AP1), Regeneration healing flesh constantly knitting wounds, Fearless fire-beast, Strider, iridescent heat-shimmer scales along throat and flanks, Tough(6)"
+    extra_details: "fire-breathing dinosaur beast with a crew of saurian handlers, natural flame breath erupting from fanged jaws spewing napalm-like fire (12 inch A2 AP1 Blast3 Reliable), heavy raking claws on powerful forelegs (A3 AP1), rapid self-healing constantly knitting wounds, Fearless fire-beast, Strider, iridescent heat-shimmer scales along throat and flanks, Tough(6)"
     pose: "flame burst erupting from open jaws, heavy claws braced, heat shimmer visible around throat, aggressive forward stance"
 
   # ==========================================================================

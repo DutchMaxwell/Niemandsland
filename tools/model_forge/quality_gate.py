@@ -94,8 +94,22 @@ class QualityGate:
         """
         if not gemini_api_key:
             raise ValueError("Gemini API Key erforderlich fuer QualityGate")
-        self._client: genai.Client = genai.Client(api_key=gemini_api_key)
+        # 180s per-request timeout so a hung check fails instead of freezing the run.
+        self._client: genai.Client = genai.Client(
+            api_key=gemini_api_key, http_options=genai.types.HttpOptions(timeout=180000)
+        )
         self._model_name: str = model_name
+        # Strict-IP profile (set per faction). For human-power-armour factions the
+        # lenient "armoured figure = fine" whitelist is dangerous (the whole design
+        # reads as a specific commercial range), so strict mode flags substantial
+        # similarity + requires the faction's own signature cues to be present.
+        self._strict_ip: bool = False
+        self._signature_cues: list[str] = []
+
+    def set_ip_profile(self, strict: bool, signature_cues: list[str] | None = None) -> None:
+        """Configure faction-specific IP strictness. Call once per faction run."""
+        self._strict_ip = bool(strict)
+        self._signature_cues = list(signature_cues or [])
 
     # =========================================================================
     # OEFFENTLICHE METHODEN
@@ -185,6 +199,47 @@ class QualityGate:
     # PROMPT-AUFBAU
     # =========================================================================
 
+    def _ip_block(self) -> str:
+        """IP-violation section of the check prompt — lenient by default, strict per faction."""
+        if not self._strict_ip:
+            return (
+                'B) HARD GW IP VIOLATIONS (only flag if a GW-specific visual mark is literally,\n'
+                '   unambiguously present — not "reminds me of" or "evokes"):\n'
+                '   - Double-headed eagle (Aquila), skull-and-cog, winged-skull insignia, or a named\n'
+                '     GW character likeness (Calgar, Ghazghkull, Abaddon, Guilliman, etc.).\n'
+                '   GENERIC GENRE ARCHETYPES ARE ALWAYS FINE — even if "kind of like" GW: an armoured\n'
+                '   figure with shoulder pads (not "Space Marine"), a battlesuit (not "Tau"), an insectoid\n'
+                '   (not "Tyranid"), a skeletal robot (not "Necron"), a pointy-helmed elf (not "Eldar"),\n'
+                '   a golden guardian (not "Custodes"). Resemblance to a faction\'s general aesthetic is NOT\n'
+                '   a violation. Only flag a literal copyrighted symbol or named-character likeness.'
+            )
+        cues = "; ".join(self._signature_cues) if self._signature_cues else \
+            "the faction's own distinctive original cues"
+        return (
+            'B) IP VIOLATIONS — STRICT MODE (this is a human heavy-power-armour faction, the single most\n'
+            '   IP-sensitive archetype: armoured super-soldiers read 1:1 as a specific commercial\n'
+            "   miniatures range unless they are clearly the faction's OWN original design). FLAG\n"
+            '   ip_concerns if ANY apply:\n'
+            '   - Any literal GW mark/character (double-eagle Aquila, skull-and-cog, winged skull, named\n'
+            '     character likeness).\n'
+            '   - Trade-dress of a specific commercial power-armour range rather than an original design:\n'
+            '     big round dinner-plate shoulder pauldrons, a boxy magazine-fed bolter-style rifle,\n'
+            '     skull/eagle/halo/purity-seal iconography, or a generic "space-marine" silhouette with\n'
+            '     no distinguishing original features.\n'
+            '   - "Chaos"/grimdark drift: spikes, horns, daemonic skulls, spiked trim, dark corrupted\n'
+            '     menace. This faction is CLEAN and NOBLE, never spiky/daemonic.\n'
+            "   - HUMANOID figures (infantry, heroes) MUST clearly show the faction's required original\n"
+            "     cues: " + cues + ". A humanoid that lacks these and just looks like a generic armoured\n"
+            "     space marine -> FLAG.\n"
+            '   - VEHICLES / aircraft / walkers / mounts (no humanoid body) do NOT need the helmet/\n'
+            '     shoulder/crest cues — pass them if they are a clearly ORIGINAL design and NOT a 1:1 copy\n'
+            '     of a specific commercial vehicle or mech; flag only a literal mark or an unmistakable copy.\n'
+            '   IMPORTANT: for IP in this strict faction, do NOT apply the "when in doubt PASS" rule —\n'
+            '   if unsure whether it reads as a generic commercial space-marine vs a clearly original\n'
+            '   design, treat that as a FAIL and list the reason in ip_concerns. A clean, original,\n'
+            '   non-spiky design that clearly shows the required cues PASSES.'
+        )
+
     def _build_check_prompt(
         self,
         unit_name: str,
@@ -198,6 +253,7 @@ class QualityGate:
             else ""
         )
 
+        ip_block: str = self._ip_block()
         return f"""You are a quality control reviewer for AI-generated tabletop wargaming miniature concept images. Evaluate the attached image.
 
 EXPECTED CONTENT (CONTEXT ONLY, NOT a checklist):
@@ -215,35 +271,15 @@ Evaluate ONLY these dimensions:
 A) HARD TECHNICAL FAILURES (only flag if blatantly wrong):
    - Multiple miniatures fused or stacked into one figure (2+ heads, 2+ torsos)
    - Image clearly cropped (head or feet cut off)
-   - Background is NOT white/near-white (busy scenery, terrain, sky, etc.)
-   - Has a visible base, pedestal, ground plane, or rendered shadow on ground
+   - Background is a BUSY SCENE (terrain, sky, room, landscape filling the frame)
    - Severe AI artifacts (melted face, extra limbs sprouting from torso, missing
      limbs, garbled hands with 7 fingers, etc.)
    Do NOT flag: pose variations, weapon-count differences, color shifts,
    extra/missing accessories, alternative interpretations of the description.
+   Do NOT flag a small base, pedestal, ground patch, contact shadow or near-white
+   backdrop — those are removed automatically after generation (deshadow + base edit).
 
-B) HARD GW IP VIOLATIONS (only flag if a GW-specific visual mark is literally,
-   unambiguously present in the image — not "reminds me of" or "evokes"):
-   - Visible double-headed eagle insignia (Imperial Aquila)
-   - Visible skull-and-cog / skull-and-gear logo (Adeptus Mechanicus)
-   - Visible winged-skull insignia
-   - A specific named GW character clearly recognizable
-     (Marneus Calgar, Ghazghkull, Abaddon, Roboute Guilliman, etc.)
-
-   GENERIC GENRE ARCHETYPES ARE ALWAYS FINE — even if "kind of like" GW:
-   - A bipedal armored figure with shoulder pads is FINE (not "Space Marine")
-   - A battlesuit/mech with shoulder pods is FINE (not "Tau") — battlesuits
-     are a generic sci-fi archetype
-   - An insectoid alien is FINE (not "Tyranid")
-   - A skeletal robot is FINE (not "Necron")
-   - A pointy-helmeted elf is FINE (not "Eldar")
-   - A wimpled nun-warrior is FINE (not "Sisters of Battle")
-   - A robed-cog-tech-priest is FINE (not "AdMech") — only flag if explicit
-     skull-cog logo is on the chest/banner
-   - A golden-armored guardian is FINE (not "Custodes")
-   Resemblance to a GW faction's general aesthetic is NOT an IP violation.
-   Only flag if a literal copyrighted symbol or named-character likeness is on
-   the image.
+{ip_block}
 
 Respond ONLY with strict JSON in this exact schema:
 

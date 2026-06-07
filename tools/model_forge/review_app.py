@@ -16,7 +16,9 @@ Port 5061 ist im Browser auf der Blockliste (SIP-TLS), deshalb 5070.
 
 from __future__ import annotations
 
+import json
 import logging
+import shutil
 import sys
 import threading
 import traceback
@@ -260,6 +262,70 @@ def serve_glb(session_id: str, unit_key: str):
             if path.exists():
                 return send_file(path, mimetype="model/gltf-binary")
     abort(404)
+
+
+@app.route("/<session_id>/asset/version/<unit_key>/<int:v>")
+def serve_version(session_id: str, unit_key: str, v: int):
+    """Serve one of a unit's 3 overnight candidate versions (state/<sid>/versions/<key>_v{v}.png)."""
+    p = STATE_DIR / session_id / "versions" / f"{unit_key}_v{v}.png"
+    if p.exists():
+        return send_file(p)
+    abort(404)
+
+
+def _picks_path(session_id: str) -> Path:
+    return STATE_DIR / session_id / "picks.json"
+
+
+def _load_picks(session_id: str) -> dict[str, int]:
+    p = _picks_path(session_id)
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            return {}
+    return {}
+
+
+@app.route("/<session_id>/pick")
+def pick_page(session_id: str):
+    """Grid of every unit with its 3 candidate versions to choose the best from."""
+    session = _load_session_or_404(session_id)
+    vdir = STATE_DIR / session_id / "versions"
+    picks = _load_picks(session_id)
+    units: list[dict[str, Any]] = []
+    for unit in session.get_all_units():
+        vs = [v for v in (1, 2, 3) if (vdir / f"{unit.unit_key}_v{v}.png").exists()]
+        if vs:
+            units.append({
+                "key": unit.unit_key, "name": unit.unit_name,
+                "unit_class": unit.unit_class, "versions": vs,
+                "picked": picks.get(unit.unit_key),
+            })
+    return render_template("pick.html", session_id=session_id, units=units)
+
+
+@app.route("/<session_id>/pick/<unit_key>/<int:v>", methods=["POST"])
+def pick_action(session_id: str, unit_key: str, v: int):
+    """Choose version v as the unit's final image: copy it to images/<key>.png + set image_path."""
+    session = _load_session_or_404(session_id)
+    src = STATE_DIR / session_id / "versions" / f"{unit_key}_v{v}.png"
+    if not src.exists():
+        return jsonify({"ok": False, "message": "Version nicht gefunden"}), 404
+    images_dir = STATE_DIR / session_id / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+    dst = images_dir / f"{unit_key}.png"
+    shutil.copy(src, dst)
+    for unit in session.get_all_units():
+        if unit.unit_key == unit_key:
+            unit.image_path = str(dst.resolve())
+            unit.status = UnitStatus.IMAGE_APPROVED
+            break
+    session.save()
+    picks = _load_picks(session_id)
+    picks[unit_key] = v
+    _picks_path(session_id).write_text(json.dumps(picks), encoding="utf-8")
+    return jsonify({"ok": True, "picked": v})
 
 
 # =============================================================================

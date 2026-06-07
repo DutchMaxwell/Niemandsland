@@ -8,17 +8,28 @@
 faction_name: "Robot Legions"
 
 aesthetic:
-  genre: "grimdark sci-fi"
-  style: "ancient skeletal robots"
+  genre: "clean, bright, crisp sci-fi — ancient awakened machine warriors, sharp readable studio render"
+  style: "sleek ancient skeletal metal robots, polished and crisply detailed"
   inspiration:
-    - "Ancient skeletal robots awakening from aeons of dormancy"
-    - "Egyptian tomb aesthetics fused with advanced robotics"
-    - "Terminator-like relentless machines with alien technology"
+    - "Ancient skeletal metal robots awakening from aeons of dormancy"
+    - "Tomb-king regalia fused with sleek advanced robotics"
+    - "Relentless implacable machine soldiers powered by cold alien energy"
+  # NOTE: original_design_cues + weapon_style ARE now injected into the prompt (prompt_engine
+  # _format_aesthetic / generate_prompt) — keep them POSITIVE and ORIGINAL, never name a protected
+  # design here.
+  original_design_cues:
+    - "Slim skeletal endoskeleton silhouette of polished gunmetal-silver, lean and angular not bulky"
+    - "Smooth featureless skull-like head with two deep round eye sockets glowing cold green"
+    - "Sharp flat triangular shoulder collars and an angular obsidian-black chest cowl"
+    - "An original sun-disc-and-chevron geometric emblem etched into the chest and shoulder plate"
+    - "Crisp ancient geometric line-engravings glowing faint green along the limbs and spine"
+    - "Clean, bright, crisp metallic look — no flesh, no horns, no spikes, no daemonic ornament"
+  weapon_style: "an original long slim two-handed energy lance with an open crystal vane channelling crackling green power"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Necron iconography"
-    - "Organic or biological elements"
-    - "Cartoon robot aesthetics"
+    - "Any specific commercial miniatures range or franchise designs"
+    - "Copyrighted robot or android iconography of any kind"
+    - "Organic, fleshy or biological elements"
+    - "Cartoon or toy robot aesthetics"
 
 colors:
   primary: "dark metallic silver and gunmetal chassis"
@@ -165,7 +176,7 @@ unit_overrides:
           range: 0
           attacks: 2
   flesh_eaters:
-    extra_details: "single horrific close-combat robot, metal claws on both hands with AP(1) serrated razor edges designed for rending organic matter, crouched predatory stance unlike standard upright robots, dark corroded chassis stained with old battle residue, infiltrate capability for ambush deployment, disturbing feral programming visible in jerky movements, Slow but relentless"
+    extra_details: "single horrific close-combat robot, metal claws on both hands with AP(1) serrated razor edges built for rending and tearing enemies apart, crouched predatory stance unlike standard upright robots, weathered corroded silver chassis marked by old battle residue, infiltrate capability for ambush deployment, disturbing feral programming visible in jerky movements, Slow but relentless"
     pose: "crouched predatory advance, metal claws extended and spread wide, feral hunting posture"
 
     game_stats:
@@ -351,6 +362,7 @@ unit_overrides:
   forge_spider:
     extra_details: "large spider-shaped construct robot, eight articulated legs with obsidian plating, twin atom-beamer mounted on dorsal turret firing AP(1) energy at 24 inch range (A6), spider fangs as melee weapons with bane effect (A6), repair and fabrication unit for the legion, green energy conduits along all legs and body segments, Tough(6)"
     pose: "spider-like stance on eight legs, twin atom-beamer turret aimed forward, fangs dripping green energy"
+    type: walker
 
     game_stats:
       quality: 4
@@ -391,6 +403,7 @@ unit_overrides:
   tripod_walker:
     extra_details: "three-legged walker construct, alien tripod design with central body on three articulated obsidian legs, rapid particle beam turret firing AP(1) blast(3) reliable shots at 12 inch range, stomp attacks from massive legs with AP(1), Fear(1) imposing alien silhouette, ancient design predating most legion technology, green energy crackling between leg joints, Tough(6)"
     pose: "towering tripod stance, particle beam turret tracking target, three massive legs planted wide"
+    type: walker
 
     game_stats:
       quality: 3
@@ -474,7 +487,7 @@ unit_overrides:
   spider_walker:
     extra_details: "colossal spider-shaped war construct on multiple articulated legs, twin heavy gauss cannon dorsal turret firing massive destructive salvos at 24 inch range (A12), crushing legs with AP(2) trampling anything beneath, stomp attacks with AP(1) (A4), Fear(2) terrifying mechanical arachnid silhouette, obsidian and silver plating across massive body, green energy core visible in central thorax, Tough(12)"
     pose: "towering spider stance on multiple legs, twin heavy gauss cannon turret blazing, crushing legs raised"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 3
@@ -527,7 +540,7 @@ unit_overrides:
   great_monolith:
     extra_details: "towering monolithic construct of immense scale, massive obsidian obelisk-shaped body covered in ancient hieroglyphic engravings glowing with green energy, monolith blast weapon firing AP(1) blast(3) energy from apex at 24 inch range, crushing legs with AP(2) devastating trampling (A6), stomp attacks with AP(2) (A6), Caster(3) arcane energy channeler, Fear(3) awe-inspiring ancient machine god presence, Fearless, Tough(18)"
     pose: "towering monolith stance, apex energy weapon charging, ancient engravings blazing with green light"
-    type: vehicle
+    type: titan
 
     game_stats:
       quality: 3
@@ -573,7 +586,6 @@ unit_overrides:
   great_wraith_shard:
     extra_details: "colossal wraith construct of titanic proportions, the most powerful psychic entity in the legion, nanobot shards weapon firing devastating AP(3) Deadly(3) shots at 18 inch range, great wraith strike melee tendrils of pure rending dimensional energy (A12), stomp attacks with AP(2) (A6), dual seer swords with blast(3) and destructive effect, Caster(4) supreme energy manipulator, Self-Repair Boost Buff enhancing nearby allies' regeneration, Fear(3), Fearless, immense spectral green energy corona, Tough(18)"
     pose: "titanic hovering presence, great wraith strike tendrils reaching outward, seer swords crossed, blinding green energy corona"
-    type: vehicle
 
   # ==========================================================================
   # AIRCRAFT
@@ -602,7 +614,7 @@ unit_overrides:
   night_transport:
     extra_details: "crescent-shaped flying transport craft, sleek obsidian hull with swept-back wings, twin flux cannon wing-mounted weapons firing surge-effect AP(1) energy at 24 inch range, close-range gauss array firing destructive energy at 12 inch range from ventral turret, Aircraft high-altitude approach, Transport(11) carrying infantry, green anti-gravity drive glowing from engines, Tough(6)"
     pose: "banking flight approach, twin flux cannons firing from wings, crescent silhouette against sky"
-    type: vehicle
+    type: aircraft
 
     game_stats:
       quality: 3
@@ -623,7 +635,7 @@ unit_overrides:
   doom_fighter:
     extra_details: "sleek attack fighter craft, angular obsidian hull designed for speed and devastation, doom ray primary weapon firing devastating AP(4) unstoppable beam at 24 inch range, twin flux cannon secondary weapons firing surge-effect AP(1) energy at 24 inch range, Aircraft high-speed attack runs, green energy trail from engines, aggressive angular silhouette, Tough(6)"
     pose: "diving attack run, doom ray beam firing from nose, twin flux cannons blazing from wings"
-    type: vehicle
+    type: aircraft
 
   # ==========================================================================
   # NAMED CHARACTERS

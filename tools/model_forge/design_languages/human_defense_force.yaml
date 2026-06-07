@@ -9,17 +9,28 @@
 faction_name: "Human Defense Force"
 
 aesthetic:
-  genre: "grimdark sci-fi military"
-  style: "utilitarian mass infantry army"
+  genre: "clean, bright, crisp sci-fi military — readable regular-army soldiers, crisp studio render"
+  style: "utilitarian mass infantry army, clean and readable"
   inspiration:
-    - "WW1/WW2 infantry aesthetic in a sci-fi setting"
+    - "Early-to-mid 20th century regular-army infantry aesthetic in a near-future setting"
     - "Massive conscript armies with heavy armor support"
     - "Pragmatic utilitarian military with mass-produced equipment"
+  # NOTE: original_design_cues + weapon_style ARE injected into the prompt for humanoid units
+  # (prompt_engine.generate_prompt). Keep them POSITIVE and ORIGINAL — never name a protected
+  # design, and never use "NOT a ..." phrasing here.
+  original_design_cues:
+    - "Practical stamped-steel helmet with a low rounded brow and a short angled neck flare"
+    - "Quilted canvas fatigues layered under a segmented flak-plate chest rig with webbing pouches"
+    - "Soft, human, regular-soldier proportions — no power armour, no super-soldier bulk"
+    - "Original square-and-bar regimental emblem stencilled on the shoulder"
+    - "Olive-drab and khaki palette with dark steel grey kit and small regimental-red markings"
+    - "Clean, bright readable look — no spikes, horns, skulls or daemonic ornament"
+  weapon_style: "an original boxy stamped-metal bolt-action service rifle with a fixed bayonet and a slim wooden stock"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Imperial Guard regiment designs"
-    - "Super-soldier or power armor aesthetics"
-    - "Alien technology"
+    - "Power-armoured super-soldier or enclosed battle-suit aesthetics"
+    - "Alien or biological technology"
+    - "Any real-world military or franchise logos, insignia or trademarks"
+    - "Spikes, horns, skulls, daemonic or organic ornament"
 
 colors:
   primary: "olive drab and khaki uniform fatigues"
@@ -305,6 +316,7 @@ unit_overrides:
   ogre_robots:
     extra_details: "single massive heavy combat robot, twice the height of a regular soldier, bulky armored chassis with OGRE designation stenciled on chest plate, triple-barreled gatling guns mounted on one arm firing AP rounds, heavy close combat crushing fist on other arm, stomping reinforced legs, Fearless and Furious programming, glowing red optical arrays, Tough(3)"
     pose: "aggressive advance, gatling gun arm spinning up, crushing fist raised, towering over infantry"
+    type: walker
 
   # ==========================================================================
   # BIKES
@@ -352,6 +364,7 @@ unit_overrides:
   light_apc:
     extra_details: "light armored personnel carrier, boxy angular hull with riveted steel plates, hull-mounted heavy flamer and turret-mounted heavy flamer both with AP and Blast capability, front ramp door for troop deployment, firing ports along sides, heavy wheels or light tracks, Fast with Impact(3), Tough(6), Transport(11)"
     pose: "driving forward, turret aimed ahead, ready for troop deployment"
+    type: vehicle
 
     game_stats:
       quality: 4
@@ -372,6 +385,7 @@ unit_overrides:
   light_gunship:
     extra_details: "VTOL light transport gunship aircraft, twin turbine engines on stub wings, chin-mounted laser cannon with AP(3) and Deadly(3), wing-mounted twin rocket pods with Blast(3), armored cockpit canopy, side doors for troop deployment, military drab paint scheme with squadron markings, Aircraft, Tough(6), Transport(11)"
     pose: "banking in flight, weapons aimed at ground target, side doors visible"
+    type: aircraft
 
     game_stats:
       quality: 4
@@ -392,6 +406,7 @@ unit_overrides:
   heavy_gunship:
     extra_details: "heavy assault transport gunship aircraft, massive twin engines, reinforced armored fuselage, nose-mounted fury missiles with Blast(3), twin laser cannons under wings with AP(3) and Deadly(3), smaller troop bay with side doors, heavy armor plating, squadron kill markings, Aircraft, Tough(9), Transport(6)"
     pose: "hovering for attack run, all weapon systems aimed forward, engines roaring"
+    type: aircraft
 
   # ==========================================================================
   # VEHICLES (no Transport)
@@ -436,7 +451,7 @@ unit_overrides:
   light_walker:
     extra_details: "light bipedal scout walker, chicken-legged walking chassis with armored cockpit cabin, rapid heavy flamer arm weapon with AP and Blast capability, stomping feet with AP, sensor array on top, smaller than a full combat walker, utilitarian industrial design, Fear(1), Tough(6)"
     pose: "striding forward in patrol stance, flamer arm aimed ahead, sensor scanning"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 4
@@ -523,7 +538,7 @@ unit_overrides:
   combat_walker:
     extra_details: "heavy bipedal combat walker, armored sarcophagus-style torso with gatling gun arm spinning six barrels, heavy stomping feet with AP, Fortified additional armor plating reducing incoming AP, thick armored legs and reactor on back, Fear(2) intimidating presence, Furious close combat programming, Tough(12)"
     pose: "striding into battle, gatling gun arm whirring, stomp foot raised"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 4
@@ -543,7 +558,7 @@ unit_overrides:
   tactical_walker:
     extra_details: "heavy tactical fire-support walker, bipedal armored chassis with walker heavy flamer arm firing AP Blast(3) Reliable volleys, heavy stomping feet with AP, sensor suite and targeting arrays on head unit, missile pods optional on shoulders, heavier fire-support variant than combat walker, Fear(2), Tough(12)"
     pose: "advancing in fire support stance, heavy flamer arm unleashing, feet stomping forward"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 4
@@ -605,7 +620,7 @@ unit_overrides:
   tactical_titan:
     extra_details: "massive bipedal war titan towering over all other units, walker heavy flamer arm firing AP Blast(3) volleys, cluster missiles array on opposite shoulder with Blast(3), devastating stomp attacks with AP(2), enormous armored legs and reactor core on back, command antenna array on head, Fear(3) terrifying war engine, Fearless, Tough(18)"
     pose: "dominating the battlefield, weapons blazing, crushing stride forward"
-    type: vehicle
+    type: titan
 
     game_stats:
       quality: 4

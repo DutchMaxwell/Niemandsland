@@ -3,22 +3,36 @@
 # =============================================================================
 # Basiert auf: GF - Ratmen Clans v3.5.2
 # Scheming rat-like aliens with unstable warpstone technology and swarm tactics.
-# OPR equivalent of Skaven in space. Cowardly, numerous, insane mad-science weapons.
+# Cowardly, numerous, insane mad-science weapons.
+# Original Niemandsland species — manufactured scavenger-tech faction, NOT an
+# organic/bio army. Released CC-BY-SA 4.0; keep designs clearly our own.
 
 faction_name: "Ratmen Clans"
 
 aesthetic:
-  genre: "grimdark sci-fi vermin"
-  style: "scheming rat-alien swarm"
+  # Clean, bright, crisp studio render — the SUBJECT is grimy scavengers, but the
+  # render itself is well-lit, sharp and readable (never a dark/gloomy/muddy image).
+  genre: "clean, bright, crisp sci-fi — scrappy rat-folk scavenger swarm, sharp readable studio render"
+  style: "scheming rat-folk scavenger swarm with jury-rigged green-glow tech"
   inspiration:
-    - "Rat-like aliens with unstable warpstone-powered technology"
-    - "Scheming vermin swarms with insane mad-science weapons"
-    - "Medieval plague rat aesthetics meets chaotic sci-fi tech"
+    - "Rat-folk scavengers wielding unstable green-glowing scavenger technology"
+    - "Scheming vermin swarms with improvised mad-science weapons"
+    - "Plague-rat folklore fused with bodged, riveted sci-fi tech"
+  # original_design_cues + weapon_style ARE injected into the prompt (humanoid units only).
+  # Keep POSITIVE and ORIGINAL — never name a protected design here.
+  original_design_cues:
+    - "Hunched wiry rat-folk silhouette with a long bald tail and pointed snouted muzzle"
+    - "Tall pointed ears, beady glowing eyes, and crude single-lens optic goggles on some"
+    - "Scavenged mismatched armour scraps and dirty cloth wrappings, asymmetric and patched"
+    - "Crude riveted green-glow tech: exposed copper coils, bolted plates and crackling teal-green energy conduits"
+    - "Original three-claw-scratch clan emblem daubed onto chest plates and banners"
+    - "Crisp, bright, readable comic / video-game sculpt look (clean even lighting, sharp shapes)"
+  weapon_style: "improvised scavenger weapons — bodged pistols, serrated close-combat blades and crackling teal-green electro-flails with exposed coils and riveted housings"
   explicitly_avoid:
-    - "Games Workshop specific designs"
-    - "Copyrighted Skaven designs"
+    - "Any specific commercial rat-folk miniatures range or trade dress"
     - "Cute or friendly rodent aesthetics"
-    - "Clean or reliable technology"
+    - "Dark, gloomy, muddy, low-contrast or murky lighting"
+    - "Spikes, horns, skulls, daemonic or organic grown ornament"
 
 colors:
   primary: "mangy brown-grey fur and dirty cloth wrappings"
@@ -379,7 +393,7 @@ unit_overrides:
   mecha_ogre:
     extra_details: "warpstone-powered mechanical rat-ogre construct, massive bipedal mechanical body with crude rat-engineering servos and exposed warpstone power cables, heavy claws with A6 AP(1) attacks on both arms as primary weapons, stomping mechanical legs with A2 AP(1) crushing force, crude armor plates welded over mechanical skeleton, warpstone reactor glowing green in chest cavity, Fear(1) mechanical terror, Fearless programming, Furious assault protocols, Tough(6)"
     pose: "stomping forward menacingly, heavy mechanical claws raised to strike, warpstone reactor glowing green in chest"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 4
@@ -400,7 +414,7 @@ unit_overrides:
   light_mecha_walker:
     extra_details: "small bipedal warpstone-powered walker with ranged armament, crude chicken-walker design with ratman pilot visible in open cockpit, twin rocket launcher as primary weapon firing AP(2) Deadly(3) missiles at 18 inch range, stomping legs with A2 AP(1) crushing attacks, exposed warpstone power cables and sparking joints, riveted crude armor plates, Fear(1) mechanical menace, unstable and twitchy movement, Tough(6)"
     pose: "chicken-walker stance with twin rocket launcher aimed and firing, pilot visible in open cockpit, sparking joints"
-    type: vehicle
+    type: walker
 
   # ==========================================================================
   # VEHICLES (no Transport - need type: vehicle)
@@ -446,6 +460,7 @@ unit_overrides:
   burrower_tank:
     extra_details: "massive tunneling assault transport, enormous drill-nosed armored vehicle designed to burrow underground and emerge behind enemy lines, twin heavy flamer on hull firing AP(1) Blast(3) Reliable warpstone fire, heavy burrower drill with devastating A8 AP(4) attacks in melee, massive reinforced hull for underground travel, Ambush deep-strike deployment from underground, Fast movement after surfacing, Impact(6) emergence attack, Transport(11) carrying capacity for infantry squads, dirt and rock debris on hull, Tough(12)"
     pose: "erupting from underground, massive drill nose spinning, twin heavy flamer firing, dirt and debris flying"
+    type: vehicle
 
     game_stats:
       quality: 4
@@ -466,7 +481,7 @@ unit_overrides:
   great_mecha_beast:
     extra_details: "massive quadruped mechanical rat-beast war construct, enormous four-legged mechanical body with crude rat-engineering and warpstone power systems, twin heavy flamer on back firing AP(1) Blast(3) Reliable streams at 12 inch range, heavy claws with A12 AP(1) attacks on mechanical forelimbs, stomping legs with A4 AP(1) crushing attacks, massive corroded armor plates with green warpstone energy crackling across surface, Fear(2) terrifying mechanical beast, Fearless programming, exposed warpstone reactor on back, Tough(12)"
     pose: "charging quadruped stance, heavy mechanical claws tearing forward, twin heavy flamer firing from back, massive bulk"
-    type: vehicle
+    type: walker
 
     game_stats:
       quality: 4
@@ -511,7 +526,7 @@ unit_overrides:
   titan_mecha_beast:
     extra_details: "colossal quadruped mechanical rat-beast titan, enormous four-legged mechanical construct towering over the battlefield, rapid heavy flamer with A4 AP(1) Blast(3) Reliable warpstone fire streams at 12 inch range, titanic heavy claws with A18 AP(2) attacks on massive mechanical forelimbs, crushing stomp legs with A6 AP(2) attacks, enormous corroded armor plates with glowing green warpstone conduits running across entire hull, Fear(3) paralyzing mechanical terror, Fearless programming, Tough(18) immense durability"
     pose: "titanic quadruped striding forward, enormous mechanical claws raised, rapid heavy flamer blazing, towering over battlefield"
-    type: vehicle
+    type: titan
 
     game_stats:
       quality: 4
@@ -536,7 +551,7 @@ unit_overrides:
   mecha_walker_titan:
     extra_details: "colossal bipedal warpstone-powered titan walker, the ultimate ratmen war machine, massive hunched bipedal frame with titan heavy rocket arrays firing A3 AP(2) Deadly(6) devastating missiles at 24 inch range, twin heavy flamer on torso with AP(1) Blast(3) Reliable close defense, enormous stomping legs with A8 AP(2) crushing attacks, multiple warpstone reactors glowing through cracked hull plates, crude but terrifyingly effective engineering, riveted armor plates the size of buildings, Fear(4) ultimate terror presence, Tough(24) near-indestructible"
     pose: "towering titan walker striding forward, titan heavy rocket arrays firing salvos, massive stomping legs crushing terrain"
-    type: vehicle
+    type: titan
 
     game_stats:
       quality: 4
