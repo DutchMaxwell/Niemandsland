@@ -8,6 +8,12 @@ signal server_disconnected
 signal player_connected(peer_id: int)
 signal player_disconnected(peer_id: int)
 
+## Emitted on the host once a joining peer has announced a matching game version.
+## main.gd gates the full-state sync on this so mismatched peers never receive state.
+signal peer_version_validated(peer_id: int)
+## Emitted on a client when the host rejected us for a version mismatch.
+signal version_rejected(host_version: String, my_version: String)
+
 # Signals for remote state updates (emitted when RPCs arrive)
 signal remote_wounds_updated(model: ModelInstance)
 signal remote_activation_updated(game_unit: GameUnit)
@@ -28,9 +34,19 @@ const MAX_PLAYERS: int = 8
 ## How often (seconds) to poll connection health
 const CONNECTION_POLL_INTERVAL: float = 2.0
 
+## ProjectSettings key holding the release version (e.g. "0.3.0-alpha").
+## Both ends must match exactly or the host refuses the join.
+const VERSION_SETTING: String = "application/config/version"
+## Grace period (seconds) for a joining peer to announce its version before the
+## host kicks it. Covers a pre-handshake (old) client that never announces.
+const VERSION_HANDSHAKE_TIMEOUT: float = 8.0
+
 var peer: ENetMultiplayerPeer = null
 var is_host: bool = false
 var connected_peers: Array[int] = []
+
+## Peers (by id) that announced a matching version. Host-only.
+var validated_peers: Dictionary = {}
 
 ## Connection health tracking
 var _last_connection_status: int = -1
@@ -125,6 +141,7 @@ func disconnect_game() -> void:
 	multiplayer.multiplayer_peer = null
 	is_host = false
 	connected_peers.clear()
+	validated_peers.clear()
 	_last_connection_status = -1
 	print("[Network] === DISCONNECTED ===")
 
@@ -169,12 +186,17 @@ func _on_peer_connected(id: int) -> void:
 	print("[Network] Player connected: Peer ID %d (total peers: %d)" % [id, connected_peers.size() + 1])
 	connected_peers.append(id)
 	player_connected.emit(id)
-	# State sync is handled by main.gd via the player_connected signal
+	# State sync is handled by main.gd via the player_connected signal — but only
+	# after the version handshake. Arm the grace-period kick for this peer here.
+	if multiplayer.is_server():
+		get_tree().create_timer(VERSION_HANDSHAKE_TIMEOUT).timeout.connect(
+			enforce_version_handshake_timeout.bind(id))
 
 
 func _on_peer_disconnected(id: int) -> void:
 	push_warning("[Network] Player disconnected: Peer ID %d (remaining peers: %d, rpc_errors=%d)" % [id, connected_peers.size() - 1, _rpc_error_count])
 	connected_peers.erase(id)
+	validated_peers.erase(id)
 	player_disconnected.emit(id)
 
 
@@ -201,6 +223,79 @@ func _on_server_disconnected() -> void:
 	connected_peers.clear()
 	_last_connection_status = -1
 	server_disconnected.emit()
+
+
+# =============================================================================
+# Version handshake
+# =============================================================================
+# Both ends must run the same release. On join the client announces its version
+# to the host; the host rejects a mismatch (and a silent/old client after a
+# timeout) so a 0.3.0 player can never share a table with a 0.3.1 player.
+
+## The release string both ends compare (from project.godot config/version).
+func get_game_version() -> String:
+	return str(ProjectSettings.get_setting(VERSION_SETTING, "unknown"))
+
+
+## Whether a joining peer has passed the version handshake. Host-only.
+func is_peer_validated(id: int) -> bool:
+	return validated_peers.get(id, false)
+
+
+## Client → host: announce our version right after connecting. The host replies
+## by either validating us (state sync follows) or rejecting us.
+func announce_version_to_host() -> void:
+	if multiplayer.is_server():
+		return
+	if not _validate_rpc_ready("announce_version"):
+		return
+	_rpc_announce_version.rpc_id(1, get_game_version())
+
+
+## Host: kick a peer that never announced a (matching) version within the grace
+## period. A pre-handshake client simply never calls _rpc_announce_version.
+func enforce_version_handshake_timeout(peer_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	if is_peer_validated(peer_id):
+		return
+	if not connected_peers.has(peer_id):
+		return  # already gone
+	push_warning("[Network] Peer %d failed version handshake (no announce in %.0fs) — kicking" % [peer_id, VERSION_HANDSHAKE_TIMEOUT])
+	_disconnect_peer_safe(peer_id)
+
+
+## Disconnect a single peer if the active multiplayer peer supports it
+## (ENet does; a relay peer may not — the client also self-disconnects on reject).
+func _disconnect_peer_safe(id: int) -> void:
+	var mp = multiplayer.multiplayer_peer
+	if mp and mp.has_method("disconnect_peer"):
+		mp.disconnect_peer(id)
+
+
+## RPC (client → host): the joining peer announces its game version.
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_announce_version(client_version: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	var host_version := get_game_version()
+	if client_version != host_version:
+		push_warning("[Network] Version mismatch: host=%s, peer %d=%s — rejecting" % [host_version, sender, client_version])
+		_rpc_reject_version.rpc_id(sender, host_version)
+		# Let the reject RPC flush, then drop the peer host-side.
+		get_tree().create_timer(0.5).timeout.connect(_disconnect_peer_safe.bind(sender))
+		return
+	validated_peers[sender] = true
+	print("[Network] Peer %d passed version handshake (%s)" % [sender, host_version])
+	peer_version_validated.emit(sender)
+
+
+## RPC (host → client): the host refuses us because our versions differ.
+@rpc("authority", "call_remote", "reliable")
+func _rpc_reject_version(host_version: String) -> void:
+	push_warning("[Network] Host rejected us: host=%s, we=%s" % [host_version, get_game_version()])
+	version_rejected.emit(host_version, get_game_version())
 
 
 ## RPC: Spawn object on remote clients only (local already spawned)

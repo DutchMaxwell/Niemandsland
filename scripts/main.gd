@@ -269,6 +269,8 @@ func _ready() -> void:
 	network_manager.server_disconnected.connect(_on_network_disconnected)
 	network_manager.player_connected.connect(_on_player_joined)
 	network_manager.player_disconnected.connect(_on_player_left)
+	network_manager.peer_version_validated.connect(_on_peer_version_validated)
+	network_manager.version_rejected.connect(_on_version_rejected)
 
 	# Connect game state sync signals (remote wounds, activation, markers, casts, delete)
 	network_manager.remote_wounds_updated.connect(_on_remote_wounds_updated)
@@ -1357,8 +1359,9 @@ func _on_network_connected() -> void:
 	_update_network_ui(true, false)
 	network_status_label.text = "Connected (Peer %d)" % network_manager.get_my_peer_id()
 	network_status_label.add_theme_color_override("font_color", Color.GREEN)
-	# State sync is handled by the host via _on_player_joined → _sync_state_to_peer
-	# No need to request explicitly — the host pushes state proactively.
+	# Announce our version so the host can validate us; on a match it then pushes
+	# the full state (gated on the handshake). No explicit state request needed.
+	network_manager.announce_version_to_host()
 
 
 func _on_network_failed() -> void:
@@ -1376,14 +1379,33 @@ func _on_network_disconnected() -> void:
 func _on_player_joined(peer_id: int) -> void:
 	print("Player %d joined! Peers: %s" % [peer_id, str(multiplayer.get_peers())])
 	if multiplayer.is_server():
-		network_status_label.text = "Hosting (peer %d joined)" % peer_id
-		# Host proactively sends full game state to the newly connected peer.
-		# This fires after SceneMultiplayer._add_peer() has registered the peer,
-		# so rpc_id(peer_id, ...) will succeed.
-		_sync_state_to_peer(peer_id)
+		network_status_label.text = "Hosting (peer %d connecting…)" % peer_id
+		# Do NOT push state yet: wait for the peer to announce a matching version
+		# (network_manager → peer_version_validated → _on_peer_version_validated).
+		# The host-side handshake timeout that kicks a silent/old client is armed
+		# inside network_manager._on_peer_connected.
 
 	# Spawn avatar for the remote player at the table edge
 	_spawn_player_avatar(peer_id)
+
+
+## Host: the joining peer's game version matches ours — now push full state.
+## This fires after SceneMultiplayer has registered the peer, so rpc_id() works.
+func _on_peer_version_validated(peer_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	network_status_label.text = "Hosting (peer %d joined)" % peer_id
+	_sync_state_to_peer(peer_id)
+
+
+## Client: the host refused us because our game versions differ. Leave the
+## session and tell the player to match versions before trying again.
+func _on_version_rejected(host_version: String, my_version: String) -> void:
+	push_warning("[Network] Version mismatch — host=%s, us=%s. Disconnecting." % [host_version, my_version])
+	network_manager.disconnect_game()
+	_update_network_ui(false, false)
+	network_status_label.text = "Version mismatch: host %s, you %s — update to match" % [host_version, my_version]
+	network_status_label.add_theme_color_override("font_color", Color.RED)
 
 
 func _on_player_left(peer_id: int) -> void:
@@ -1409,8 +1431,9 @@ func _on_internet_connected(peer_id: int) -> void:
 	_update_network_ui(true, false)
 	network_status_label.text = "Online (Peer %d)" % peer_id
 	network_status_label.add_theme_color_override("font_color", Color.GREEN)
-	# State sync is now handled via _on_player_joined when the built-in
-	# peer_connected signal fires (after SceneMultiplayer registers the peer).
+	# Announce our version to the host; on a match the host pushes full state
+	# (gated on the handshake) once SceneMultiplayer has registered the peer.
+	network_manager.announce_version_to_host()
 
 
 func _on_internet_failed(reason: String) -> void:
@@ -1865,12 +1888,17 @@ func _request_game_state() -> void:
 	var sender = multiplayer.get_remote_sender_id()
 	print("Peer %d requested game state" % sender)
 	if multiplayer.is_server():
+		# Never hand state to a peer that hasn't passed the version handshake.
+		if not network_manager.is_peer_validated(sender):
+			push_warning("[StateSync] Ignoring state request from unvalidated peer %d" % sender)
+			return
 		_sync_state_to_peer(sender)
 
 
 ## Sync full game state to a specific peer
 func _sync_state_to_peer(peer_id: int) -> void:
 	var state = save_manager.serialize_game_state()
+	state["_host_version"] = network_manager.get_game_version()
 	var obj_count = state.get("objects", []).size()
 	var unit_count = state.get("game_units", []).size()
 	print("[StateSync] Sending state to peer %d: %d objects, %d game_units" % [peer_id, obj_count, unit_count])
@@ -1886,12 +1914,22 @@ func _sync_loaded_state_to_clients() -> void:
 
 	# Get current state and broadcast to all clients
 	var state = save_manager.serialize_game_state()
+	state["_host_version"] = network_manager.get_game_version()
 	_rpc_sync_game_state.rpc(state)
 
 
 ## RPC to sync game state to clients (mirrors save_manager.load_game() deserialization)
 @rpc("authority", "call_remote", "reliable")
 func _rpc_sync_game_state(state: Dictionary) -> void:
+	# Belt-and-suspenders: if the host runs a different version (e.g. an old host
+	# without the join-time handshake), refuse its state and leave the session.
+	var host_version := str(state.get("_host_version", "unknown"))
+	var my_version := network_manager.get_game_version()
+	if host_version != my_version:
+		push_warning("[StateSync] Host version %s != ours %s — refusing state" % [host_version, my_version])
+		_on_version_rejected(host_version, my_version)
+		return
+
 	var obj_count = state.get("objects", []).size()
 	var unit_count = state.get("game_units", []).size()
 	print("[StateSync] Received game state from host: %d objects, %d game_units" % [obj_count, unit_count])
