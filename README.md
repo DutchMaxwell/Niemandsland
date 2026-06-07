@@ -6,7 +6,7 @@ Fantasy). Built in Godot.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Godot](https://img.shields.io/badge/Godot-4.6-blue.svg)](https://godotengine.org/)
-[![Status](https://img.shields.io/badge/Status-0.3.0--alpha-orange.svg)]()
+[![Status](https://img.shields.io/badge/Status-0.3.1--alpha-orange.svg)]()
 
 > **Status: early alpha.** The tabletop sandbox, OPR army import, multiplayer and
 > the 3D-model pipeline work; rules automation (turn/combat resolution, terrain
