@@ -706,6 +706,19 @@ func get_army(player_id: int) -> OPRApiClient.OPRArmy:
 	return armies.get(player_id, null)
 
 
+## Look up an OPR special-rule description across all loaded armies. Rule names are
+## mostly shared (Tough, AP, Fast, ...) and army-specific ones are unique, so the
+## first match wins. Returns "" if no army carries a description for it.
+func get_rule_description(rule_name: String) -> String:
+	for army in armies.values():
+		if army == null:
+			continue
+		var desc := OPRApiClient.get_rule_description(rule_name, army)
+		if not desc.is_empty():
+			return desc
+	return ""
+
+
 # ===== NEW: GameUnit Access Methods =====
 
 ## Get GameUnit wrapper for a model

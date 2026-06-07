@@ -19,6 +19,9 @@ var _book_http_request: HTTPRequest
 ## Cached army books (armyId -> book data)
 var _army_books: Dictionary = {}
 
+## Cached common/system rule responses (game-system id -> response data)
+var _common_rules_cache: Dictionary = {}
+
 
 ## Army data structure
 class OPRArmy:
@@ -32,6 +35,8 @@ class OPRArmy:
 	var army_id: String = ""  # Army Book ID from API (e.g., "w7qor7b2kuifcyvk")
 	var faction_name: String = ""  # Faction name from Army Book (e.g., "Alien Hives")
 	var faction_folder: String = ""  # Normalized folder name (e.g., "alien_hives")
+	var game_system_abbrev: String = ""  # Raw form: gf, gff, aof, aofs, aofr (for API calls)
+	var rule_descriptions: Dictionary = {}  # special-rule name -> description text
 
 	func get_total_points() -> int:
 		var total = 0
@@ -293,7 +298,8 @@ func _parse_tts_api_response(json_text: String) -> OPRArmy:
 	# Parse army info
 	army.id = data.get("id", str(Time.get_unix_time_from_system()))
 	army.name = data.get("name", "Imported Army")
-	army.game_system = _expand_game_system(data.get("gameSystem", "gf"))
+	army.game_system_abbrev = str(data.get("gameSystem", "gf"))
+	army.game_system = _expand_game_system(army.game_system_abbrev)
 	army.points = data.get("listPoints", 0)
 
 	# Parse units - TTS API returns fully resolved units!
@@ -323,6 +329,12 @@ func _parse_tts_api_response(json_text: String) -> OPRArmy:
 			# Normalize faction name for folder: "Alien Hives" -> "alien_hives"
 			army.faction_folder = army.faction_name.to_lower().replace(" ", "_").replace("-", "_")
 			print("OPRApiClient: Detected faction '%s' -> folder '%s'" % [army.faction_name, army.faction_folder])
+			# Army-book special-rule descriptions (faction-specific take precedence).
+			_extract_rule_descriptions(army, book_data)
+
+	# Common/system rule descriptions (shared rules: Tough, AP, Fast, ...).
+	if not army.game_system_abbrev.is_empty():
+		await _fetch_common_rules(army)
 
 	# Fallback: If Army Book API failed but we have a list name, try using that
 	if army.faction_folder.is_empty() and not army.name.is_empty():
@@ -599,7 +611,8 @@ func _parse_army_forge_json(json_text: String, source_name: String = "") -> OPRA
 	# Parse top-level fields
 	army.id = data.get("id", str(Time.get_unix_time_from_system()))
 	army.name = data.get("armyName", data.get("list", {}).get("name", source_name.get_basename()))
-	army.game_system = _expand_game_system(data.get("gameSystem", "gf"))
+	army.game_system_abbrev = str(data.get("gameSystem", "gf"))
+	army.game_system = _expand_game_system(army.game_system_abbrev)
 	army.points = data.get("listPoints", 0)
 
 	# Get list data
@@ -628,6 +641,13 @@ func _parse_army_forge_json(json_text: String, source_name: String = "") -> OPRA
 
 	# Fold OPR "Combined" unit halves into single larger units (e.g. 2x[5] -> 1x[10]).
 	army.units = _merge_combined_units(army.units)
+
+	# Special-rule descriptions: army-book first, then shared system rules.
+	army.army_id = army_id
+	if not book_data.is_empty():
+		_extract_rule_descriptions(army, book_data)
+	if not army.game_system_abbrev.is_empty():
+		await _fetch_common_rules(army)
 
 	print("OPRApiClient: Loaded army '%s' - %d units, %d pts, %d models" % [
 		army.name, army.units.size(), army.points, army.model_count
@@ -691,6 +711,95 @@ func _fetch_army_book(army_id: String, _game_system: String) -> Dictionary:
 		return data
 
 	return {}
+
+
+# =============================================================================
+# Special-rule descriptions (army-forge API)
+# =============================================================================
+
+## Maps a game-system abbreviation to the army-forge API game-system id.
+static func _game_system_id(abbrev: String) -> int:
+	match abbrev:
+		"gf": return 2
+		"gff": return 3
+		"aof": return 4
+		"aofs": return 5
+		"aofr": return 6
+		_: return 2
+
+
+## Pulls special-rule name -> description pairs from an army-book response.
+## Army-book rules take precedence over the shared common rules.
+func _extract_rule_descriptions(army: OPRArmy, book_data: Dictionary) -> void:
+	for key in ["specialRules", "customRules"]:
+		var rules = book_data.get(key, [])
+		if not (rules is Array):
+			continue
+		for rule in rules:
+			if rule is Dictionary:
+				var rname := str(rule.get("name", ""))
+				var desc := str(rule.get("description", ""))
+				if not rname.is_empty() and not desc.is_empty():
+					army.rule_descriptions[rname] = desc
+
+
+## Fetches the shared/common rule descriptions for the army's game system and merges
+## them in WITHOUT overwriting army-book-specific descriptions. Cached per system.
+func _fetch_common_rules(army: OPRArmy) -> void:
+	var gs_id := _game_system_id(army.game_system_abbrev)
+	if _common_rules_cache.has(gs_id):
+		_merge_common_descriptions(army, _common_rules_cache[gs_id])
+		return
+	var url = "%s/rules/common/%d" % [API_BASE_URL, gs_id]
+	print("OPRApiClient: Fetching common rules from %s" % url)
+	var error = _book_http_request.request(url)
+	if error != OK:
+		push_warning("OPRApiClient: Failed to request common rules: %d" % error)
+		return
+	var result = await _book_http_request.request_completed
+	var response_code = result[1]
+	var body = result[3]
+	if response_code != 200:
+		push_warning("OPRApiClient: Common rules API returned %d" % response_code)
+		return
+	var json = JSON.new()
+	if json.parse(body.get_string_from_utf8()) != OK or not (json.data is Dictionary):
+		push_warning("OPRApiClient: Failed to parse common rules response")
+		return
+	_common_rules_cache[gs_id] = json.data
+	_merge_common_descriptions(army, json.data)
+
+
+## Merges common "rules" + "traits" ({name, description}) into the army's map,
+## keeping any army-book-specific description already present (precedence).
+func _merge_common_descriptions(army: OPRArmy, data: Dictionary) -> void:
+	for key in ["rules", "traits"]:
+		var arr = data.get(key, [])
+		if not (arr is Array):
+			continue
+		for rule in arr:
+			if rule is Dictionary:
+				var rname := str(rule.get("name", ""))
+				var desc := str(rule.get("description", ""))
+				if rname.is_empty() or desc.is_empty():
+					continue
+				if not army.rule_descriptions.has(rname):
+					army.rule_descriptions[rname] = desc
+
+
+## Returns the description for a special rule, or "" if unknown. Handles
+## parameterised rules: "Tough(3)" / "AP(1)" fall back to the base "Tough" / "AP".
+static func get_rule_description(rule_name: String, army: OPRArmy) -> String:
+	if not army:
+		return ""
+	if army.rule_descriptions.has(rule_name):
+		return army.rule_descriptions[rule_name]
+	var paren := rule_name.find("(")
+	if paren > 0:
+		var base := rule_name.substr(0, paren).strip_edges()
+		if army.rule_descriptions.has(base):
+			return army.rule_descriptions[base]
+	return ""
 
 
 ## HTTP request completed handler

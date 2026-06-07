@@ -219,14 +219,17 @@ func _update_content() -> void:
 	else:
 		weapons_label.visible = false
 
-	# Equipment and special rules
+	# Equipment and special rules — each on its own line with its description (from the
+	# OPR army-forge API, fetched at import) so players can read what every rule does.
 	var all_rules: Array[String] = []
 	all_rules.append_array(_current_unit.equipment)
 	all_rules.append_array(_current_unit.special_rules)
 
 	if all_rules.size() > 0:
-		var rules_text = "[b]Rules:[/b] [color=#aaaaaa]%s[/color]" % ", ".join(all_rules)
-		rules_label.text = rules_text
+		var rule_lines: Array[String] = []
+		for rule_name in all_rules:
+			rule_lines.append(_format_rule_line(rule_name))
+		rules_label.text = "[b]Rules:[/b]\n%s" % "\n".join(rule_lines)
 		rules_label.visible = true
 	else:
 		rules_label.visible = false
@@ -293,3 +296,14 @@ func _format_weapon(weapon: OPRApiClient.OPRWeapon) -> String:
 		parts.append("[color=#aaaaaa](%s)[/color]" % ", ".join(weapon.special_rules))
 
 	return " ".join(parts)
+
+
+## Format a single special rule as "Name — description" when a description is known
+## (from the OPR army-forge API), otherwise just the rule name.
+func _format_rule_line(rule_name: String) -> String:
+	var desc := ""
+	if army_manager and army_manager.has_method("get_rule_description"):
+		desc = army_manager.get_rule_description(rule_name)
+	if desc.is_empty():
+		return "  [color=#aaaaaa]%s[/color]" % rule_name
+	return "  [color=#dddddd]%s[/color] [color=#888888]— %s[/color]" % [rule_name, desc]
