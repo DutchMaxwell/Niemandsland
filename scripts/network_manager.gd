@@ -502,8 +502,8 @@ func sync_unit_marker_value(unit_id: String, marker_name: String, value: int) ->
 
 ## RPC: Sync a mission objective's owner (any peer can capture objectives).
 @rpc("any_peer", "call_remote", "reliable")
-func sync_objective_owner(index: int, owner: int) -> void:
-	remote_objective_owner_updated.emit(index, owner)
+func sync_objective_owner(index: int, owner_id: int) -> void:
+	remote_objective_owner_updated.emit(index, owner_id)
 
 
 ## RPC: Sync a custom-token library definition (created or color/effect change).
@@ -652,9 +652,9 @@ func broadcast_unit_marker_value(game_unit: GameUnit, marker_name: String, value
 
 
 ## Broadcast a mission objective owner change (any peer may capture).
-func broadcast_objective_owner(index: int, owner: int) -> void:
+func broadcast_objective_owner(index: int, owner_id: int) -> void:
 	if is_multiplayer_active():
-		sync_objective_owner.rpc(index, owner)
+		sync_objective_owner.rpc(index, owner_id)
 
 
 ## Broadcast a custom-token library definition (create / color / effect).

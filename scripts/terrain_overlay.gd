@@ -1069,22 +1069,22 @@ func update_objectives(objectives: Array, owners: Array = []) -> void:
 
 ## Color for an objective owner: neutral gold for 0, else the army's player color
 ## (shared with unit boundaries/bases via OPRArmyManager.PLAYER_COLORS).
-func _objective_owner_color(owner: int) -> Color:
-	if owner <= 0:
+func _objective_owner_color(owner_id: int) -> Color:
+	if owner_id <= 0:
 		return Color(1.0, 0.85, 0.2, 1.0)  # Neutral gold/yellow
-	var c: Color = OPRArmyManager.PLAYER_COLORS.get(owner, Color(1.0, 0.85, 0.2, 1.0))
+	var c: Color = OPRArmyManager.PLAYER_COLORS.get(owner_id, Color(1.0, 0.85, 0.2, 1.0))
 	return Color(c.r, c.g, c.b, 1.0)
 
 
 ## Sets the owner of an objective and recolors its token + seize ring in place.
-func set_objective_owner(index: int, owner: int) -> void:
+func set_objective_owner(index: int, owner_id: int) -> void:
 	if index < 0 or index >= objective_meshes.size():
 		return
 	while objective_owners.size() <= index:
 		objective_owners.append(0)
-	objective_owners[index] = owner
+	objective_owners[index] = owner_id
 
-	var color := _objective_owner_color(owner)
+	var color := _objective_owner_color(owner_id)
 	var token := objective_meshes[index]
 	if is_instance_valid(token):
 		var fill := token.get_node_or_null("Fill") as MeshInstance3D
@@ -1128,9 +1128,9 @@ func _clear_objectives() -> void:
 ##
 ## @param pos: World position in meters
 ## @param number: Objective number for label
-## @param owner: Owner (0 = neutral gold, else player_id -> army color)
-func _create_objective_marker(pos: Vector3, number: int, owner: int = 0) -> void:
-	var objective_color = _objective_owner_color(owner)
+## @param owner_id: Owner (0 = neutral gold, else player_id -> army color)
+func _create_objective_marker(pos: Vector3, number: int, owner_id: int = 0) -> void:
+	var objective_color = _objective_owner_color(owner_id)
 	var border_color = Color(0.1, 0.1, 0.1, 1.0)  # Black border
 	var ring_color = Color(objective_color.r, objective_color.g, objective_color.b, 0.25)
 

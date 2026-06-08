@@ -262,8 +262,6 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_toggle_shaken(context)
 		"check_coherency":
 			_check_coherency(context)
-		"roll_attack":
-			_roll_attack(context)
 		"delete_model":
 			_delete_model(context)
 		"delete_unit":
@@ -303,13 +301,13 @@ func _set_objective_owner(context: Dictionary, action_id: String) -> void:
 	if index < 0:
 		return
 
-	var owner := int(action_id.substr("set_owner_".length()))
+	var owner_id := int(action_id.substr("set_owner_".length()))
 
 	if terrain_overlay and terrain_overlay.has_method("set_objective_owner"):
-		terrain_overlay.set_objective_owner(index, owner)
+		terrain_overlay.set_objective_owner(index, owner_id)
 
 	if network_manager:
-		network_manager.broadcast_objective_owner(index, owner)
+		network_manager.broadcast_objective_owner(index, owner_id)
 
 
 func _show_unit_stats(context: Dictionary) -> void:
@@ -486,16 +484,6 @@ func _check_coherency(context: Dictionary) -> void:
 			print("✓ %s is in coherency" % game_unit.get_name())
 		else:
 			print("⚠ %s has coherency issues" % game_unit.get_name())
-
-
-func _roll_attack(context: Dictionary) -> void:
-	var game_unit = context.get("game_unit") as GameUnit
-	if not game_unit:
-		return
-
-	# TODO: Implement attack roll dialog (integrate with dice_roller plugin)
-	push_warning("Attack roll dialog not yet implemented")
-	print("Roll attack for: %s" % game_unit.get_name())
 
 
 ## Deletes (hides) a set of selected objects as one undoable action.
