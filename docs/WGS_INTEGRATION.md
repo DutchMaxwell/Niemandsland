@@ -1,87 +1,87 @@
 # WGS (Wargaming Simulator) Integration
 
-Diese Dokumentation beschreibt die Integration zwischen Niemandsland und dem Wargaming Simulator (WGS) von Udo's 3dWorld.
+This documentation describes the integration between Niemandsland and the Wargaming Simulator (WGS) by Udo's 3dWorld.
 
-## Übersicht
+## Overview
 
-Die Integration ermöglicht es, Spielzustände zwischen dem webbasierten WGS (asynchrones Spiel) und Niemandsland (Desktop-Direktspiel) auszutauschen.
+The integration makes it possible to exchange game states between the web-based WGS (asynchronous play) and Niemandsland (desktop direct play).
 
-### Unterstützte Funktionen
+### Supported features
 
-- **Import**: WGS-Spielzustände in Niemandsland laden
-- **Export**: Niemandsland-Spielzustand als WGS-Format exportieren
-- **Server-Sync**: Direkte Abfrage vom WGS-Server (geplant)
-- **Tooltips**: Unit-Statistiken werden beim Hover angezeigt
+- **Import**: Load WGS game states into Niemandsland
+- **Export**: Export a Niemandsland game state as WGS format
+- **Server sync**: Direct query from the WGS server (planned)
+- **Tooltips**: Unit statistics are shown on hover
 
-## WGS Datenformat
+## WGS data format
 
-### Spielzustand-Datei (`{gameID}.txt`)
+### Game-state file (`{gameID}.txt`)
 
-Die Datei beginnt mit zwei Zeilen für die Tischgröße, gefolgt von den Unit-Zeilen:
+The file starts with two lines for the table size, followed by the unit lines:
 
 ```
-72                    ← Tischbreite in Zoll (hier: 6 Fuß)
-48                    ← Tischtiefe in Zoll (hier: 4 Fuß)
+72                    ← Table width in inches (here: 6 feet)
+48                    ← Table depth in inches (here: 4 feet)
 {size},{x},{y},{color},{angle},{imageId},{name}
 {size},{x},{y},{color},{angle},{imageId},{name}
 ...
 ```
 
-Jede Unit-Zeile hat das Format:
+Each unit line has the format:
 ```
 {size},{x},{y},{color},{angle},{imageId},{name}
 ```
 
-#### Felder
+#### Fields
 
-| Feld | Typ | Beschreibung |
+| Field | Type | Description |
 |------|-----|--------------|
-| size | float/string | Basisgröße in Zoll, oder Multibase-Format |
-| x | float | X-Position in Zoll |
-| y | float | Y-Position in Zoll |
-| color | string | CSS-Farbname (z.B. "BlanchedAlmond", "blue") |
-| angle | float | Rotation in Radiant |
-| imageId | int | Custom-Bild-ID (-1 = keins) |
-| name | string | Einheiten-Name und Statistiken |
+| size | float/string | Base size in inches, or multibase format |
+| x | float | X position in inches |
+| y | float | Y position in inches |
+| color | string | CSS color name (e.g. "BlanchedAlmond", "blue") |
+| angle | float | Rotation in radians |
+| imageId | int | Custom image ID (-1 = none) |
+| name | string | Unit name and statistics |
 
-#### Multibase-Format
+#### Multibase format
 
-Für Einheiten mit mehreren Modellen:
+For units with multiple models:
 ```
 {width}x{depth}x{columns}x{rows}x{modelCount}
 ```
 
-Beispiel: `2.362204724409449x1x1x1x3` = 3 Modelle auf einer 60mm Basis
+Example: `2.362204724409449x1x1x1x3` = 3 models on a 60mm base
 
-#### Escape-Sequenzen im Name-Feld
+#### Escape sequences in the name field
 
-- `NEWLINE` → Zeilenumbruch
-- `BIGNEWLINE` → Doppelter Zeilenumbruch
-- `COMMA` → Komma (da Komma als Trenner verwendet wird)
+- `NEWLINE` → line break
+- `BIGNEWLINE` → double line break
+- `COMMA` → comma (since comma is used as a separator)
 
-### Beispiel-Zeile
+### Example line
 
 ```
 0.984251968503937,13.5,1.5,BlanchedAlmond,-1.5707963,4,Bot Infantry Squad [3]NEWLINEQ5+ D5+ | 40ptsNEWLINENEWLINE3x CCW (A1)NEWLINERifle (24"COMMA A1)
 ```
 
-## API-Referenz
+## API reference
 
 ### WGSClient
 
-Parser und Exporter für das WGS-Format.
+Parser and exporter for the WGS format.
 
 ```gdscript
-# Import aus Datei
+# Import from file
 var game = wgs_client.import_from_file("path/to/game.txt")
 
-# Import aus Text
+# Import from text
 var game = wgs_client.import_from_text(content, "game_id")
 
-# Export als Text
+# Export as text
 var text = wgs_client.export_to_text(game)
 
-# Aktionsstrings erstellen
+# Create action strings
 var move_action = wgs_client.create_move_action(game_id, moves)
 var add_action = wgs_client.create_add_action(game_id, unit)
 var remove_action = wgs_client.create_remove_action(game_id, [0, 1, 2])
@@ -90,64 +90,64 @@ var dice_action = wgs_client.create_dice_action(game_id, 6, "d6")
 
 ### WGSGameManager
 
-Verwaltet WGS-Spiele und spawnt Einheiten.
+Manages WGS games and spawns units.
 
 ```gdscript
-# Import und Spawnen
+# Import and spawn
 wgs_game_manager.import_from_file("path/to/game.txt")
 var models = wgs_game_manager.spawn_game(offset)
 
 # Export
 var text = wgs_game_manager.export_current_state()
 
-# Bewegungs-Aktion generieren
+# Generate movement action
 var action = wgs_game_manager.generate_move_action()
 
-# Unit-Lookup
+# Unit lookup
 var unit = wgs_game_manager.get_unit_for_model(model)
 var models = wgs_game_manager.get_models_for_unit(unit)
 ```
 
 ### WGSImportDialog
 
-UI-Dialog für den Import.
+UI dialog for the import.
 
 ```gdscript
-# Signal: Spiel wurde importiert
+# Signal: a game was imported
 wgs_import_dialog.game_imported.connect(func(game):
     print("Imported: ", game.game_id)
 )
 
-# Dialog öffnen
+# Open dialog
 wgs_import_dialog.popup_centered()
 ```
 
-## WGS Action-Codes
+## WGS action codes
 
-| Code | Aktion | Parameter |
+| Code | Action | Parameters |
 |------|--------|-----------|
-| 2 | Add (mit Bild) | size,x,y,color,imageId,name |
+| 2 | Add (with image) | size,x,y,color,imageId,name |
 | 3 | Move | [index,x,y,angle]... |
 | 4 | Remove | [index]... |
 | 6 | Edit | index,newText |
-| 7 | Dice | anzahl,typ(d6/d8) |
+| 7 | Dice | count,type(d6/d8) |
 | 8 | Chat | text |
 | 9 | Rotate | [index,angle]... |
-| 11 | Add (ohne Bild) | size,x,y,color,imageId,name |
+| 11 | Add (without image) | size,x,y,color,imageId,name |
 
-## Koordinatensystem
+## Coordinate system
 
 ### WGS
 - Origin: Top-Left (0,0)
-- Einheit: Zoll
-- Y-Achse: Nach unten positiv
+- Unit: inches
+- Y axis: positive downward
 
 ### Niemandsland
-- Origin: Tischmitte
-- Einheit: Meter
-- Z-Achse: Tiefe (entspricht WGS Y)
+- Origin: table center
+- Unit: meters
+- Z axis: depth (corresponds to WGS Y)
 
-### Konvertierung
+### Conversion
 ```gdscript
 const INCH_TO_METER = 0.0254
 
@@ -165,21 +165,21 @@ var wgs_pos = Vector2(
 )
 ```
 
-## Server-Integration (Zukunft)
+## Server integration (future)
 
-Die Klasse `WGSGameManager` enthält bereits Grundlagen für die HTTP-basierte Synchronisation:
+The `WGSGameManager` class already contains the basics for HTTP-based synchronization:
 
 ```gdscript
-# Spielzustand vom Server abrufen
+# Fetch game state from the server
 wgs_game_manager.fetch_game_from_server("MyGameID")
 
-# Signale
+# Signals
 wgs_game_manager.sync_started.connect(...)
 wgs_game_manager.sync_completed.connect(...)
 wgs_game_manager.sync_error.connect(...)
 ```
 
-Um Züge an den WGS-Server zu senden, muss ein POST-Request an das PHP-Skript gesendet werden:
+To send moves to the WGS server, a POST request must be sent to the PHP script:
 
 ```
 POST https://udos3dworld.com/WargamingSimulator/DoAction.php
@@ -192,9 +192,9 @@ Form-Data:
 - StdColSend: "BlanchedAlmond"
 ```
 
-## CSS-Farben
+## CSS colors
 
-Unterstützte Farbnamen (nicht vollständig):
+Supported color names (not exhaustive):
 
 | Name | Hex |
 |------|-----|
@@ -207,8 +207,8 @@ Unterstützte Farbnamen (nicht vollständig):
 | purple | #800080 |
 | gray/grey | #808080 |
 
-## Dateien
+## Files
 
-- `scripts/wgs_client.gd` - Parser und Exporter
-- `scripts/wgs_game_manager.gd` - Spiel-Manager
-- `scripts/wgs_import_dialog.gd` - Import-Dialog
+- `scripts/wgs_client.gd` - Parser and exporter
+- `scripts/wgs_game_manager.gd` - Game manager
+- `scripts/wgs_import_dialog.gd` - Import dialog
