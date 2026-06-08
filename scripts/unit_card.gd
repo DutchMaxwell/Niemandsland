@@ -34,6 +34,14 @@ var COLOR_DEAD := "#" + HudTokens.DANGER.to_html(false)
 ## — works for loaded saves + remote units via the session cache.
 var army_manager: OPRArmyManager = null
 
+## Special-rule hover explanation: rules are shown underlined; hovering one for
+## RULE_HOVER_DELAY opens a small popup with its full text.
+const RULE_HOVER_DELAY: float = 1.0
+var _rule_popup: PanelContainer = null
+var _rule_popup_label: RichTextLabel = null
+var _rule_hover_timer: Timer = null
+var _hovered_rule: String = ""
+
 const PIP_FILLED: String = "▮"
 const PIP_EMPTY: String = "▯"
 
@@ -83,6 +91,19 @@ func _ready() -> void:
 		rtl.add_theme_font_override("bold_font", bold)
 	_name_label.add_theme_font_size_override("bold_font_size", 22)  # larger, prominent unit name
 
+	# Special rules are clickable [url] spans -> underlined; hovering one for ~1s opens
+	# a small popup with the rule's full description.
+	_rules_label.meta_underlined = true
+	_rules_label.meta_hover_started.connect(_on_rule_hover_started)
+	_rules_label.meta_hover_ended.connect(_on_rule_hover_ended)
+	_setup_rule_popup()
+
+	_rule_hover_timer = Timer.new()
+	_rule_hover_timer.one_shot = true
+	_rule_hover_timer.wait_time = RULE_HOVER_DELAY
+	_rule_hover_timer.timeout.connect(_on_rule_hover_timeout)
+	add_child(_rule_hover_timer)
+
 	_refresh_timer = Timer.new()
 	_refresh_timer.one_shot = false
 	_refresh_timer.wait_time = REFRESH_INTERVAL
@@ -112,6 +133,11 @@ func clear() -> void:
 	_current_unit = null
 	_extra_units = 0
 	visible = false
+	_hovered_rule = ""
+	if _rule_hover_timer:
+		_rule_hover_timer.stop()
+	if _rule_popup:
+		_rule_popup.visible = false
 	if _refresh_timer:
 		_refresh_timer.stop()
 
@@ -359,20 +385,72 @@ func _build_rules_text() -> String:
 				rules.append(str(rule.get("name", "")))
 
 	if not rules.is_empty():
-		# Each rule on its own line with its OPR description where known, so players can
-		# read what a (possibly enemy / networked) unit's rules do.
-		var rule_lines: Array[String] = []
+		# Each rule is an underlined [url] span; hovering it ~1s opens a popup with the
+		# OPR description (see _on_rule_hover_*). Compact comma list.
+		var rule_spans: Array[String] = []
 		for rule_name in rules:
-			var desc := ""
-			if army_manager and army_manager.has_method("get_rule_description"):
-				desc = army_manager.get_rule_description(rule_name)
-			if desc.is_empty():
-				rule_lines.append("[color=%s]%s[/color]" % [COLOR_RULES, rule_name])
-			else:
-				rule_lines.append("[color=%s]%s[/color] [color=#888888]— %s[/color]" % [COLOR_RULES, rule_name, desc])
-		lines.append("[b]Regeln:[/b]\n%s" % "\n".join(rule_lines))
+			rule_spans.append("[url=%s][color=%s]%s[/color][/url]" % [rule_name, COLOR_RULES, rule_name])
+		lines.append("[b]Regeln:[/b] %s" % ", ".join(rule_spans))
 
 	return "\n".join(lines)
+
+
+## Builds the small hover popup used for rule explanations (created once).
+func _setup_rule_popup() -> void:
+	_rule_popup = PanelContainer.new()
+	_rule_popup.top_level = true  # position in absolute canvas space, not relative to the card
+	_rule_popup.visible = false
+	_rule_popup.z_index = 4096
+	_rule_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(0.05, 0.07, 0.10, 0.97)
+	bg.border_color = Color(HudTokens.CYAN.r, HudTokens.CYAN.g, HudTokens.CYAN.b, 0.6)
+	bg.set_border_width_all(1)
+	bg.set_corner_radius_all(6)
+	bg.set_content_margin_all(8)
+	_rule_popup.add_theme_stylebox_override("panel", bg)
+	_rule_popup_label = RichTextLabel.new()
+	_rule_popup_label.bbcode_enabled = true
+	_rule_popup_label.fit_content = true
+	_rule_popup_label.scroll_active = false
+	_rule_popup_label.custom_minimum_size = Vector2(280, 0)
+	_rule_popup_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_rule_popup_label.add_theme_font_override("bold_font", HudTokens.bold_font())
+	_rule_popup.add_child(_rule_popup_label)
+	add_child(_rule_popup)
+
+
+func _on_rule_hover_started(meta: Variant) -> void:
+	_hovered_rule = str(meta)
+	if _rule_hover_timer:
+		_rule_hover_timer.start()
+
+
+func _on_rule_hover_ended(_meta: Variant) -> void:
+	_hovered_rule = ""
+	if _rule_hover_timer:
+		_rule_hover_timer.stop()
+	if _rule_popup:
+		_rule_popup.visible = false
+
+
+func _on_rule_hover_timeout() -> void:
+	if _hovered_rule.is_empty() or not _rule_popup:
+		return
+	var desc := ""
+	if army_manager and army_manager.has_method("get_rule_description"):
+		desc = army_manager.get_rule_description(_hovered_rule)
+	if desc.is_empty():
+		desc = "[i]Keine Beschreibung verfügbar.[/i]"
+	_rule_popup_label.text = "[b][color=%s]%s[/color][/b]\n%s" % [COLOR_RULES, _hovered_rule, desc]
+	_rule_popup.reset_size()
+	# Place near the cursor, clamped to stay on screen.
+	var pos := get_global_mouse_position() + Vector2(16, 16)
+	var vp := get_viewport_rect().size
+	pos.x = min(pos.x, vp.x - _rule_popup.size.x - 8)
+	pos.y = min(pos.y, vp.y - _rule_popup.size.y - 8)
+	_rule_popup.global_position = pos
+	_rule_popup.visible = true
 
 
 ## Lists Heroes joined to this unit (name + Q/D), or "" if none.
