@@ -28,9 +28,20 @@ func _ready() -> void:
 
 # === Public API ===
 
-## Stable lookup key for a unit's model (case-insensitive).
+## Stable lookup key for a unit's model. The faction is the (already consistent)
+## faction_folder, lowercased; the UNIT NAME is also separator-insensitive so the OPR
+## name ("Heavy Exo-Suit") matches a manifest key generated from a slug-derived name
+## ("Heavy Exo Suit") — hyphens/underscores/extra spaces in the unit name are folded.
 static func make_key(faction: String, unit_name: String) -> String:
-	return "%s/%s" % [faction.strip_edges().to_lower(), unit_name.strip_edges().to_lower()]
+	return "%s/%s" % [faction.strip_edges().to_lower(), _normalize_unit(unit_name)]
+
+
+## Lowercase a unit name, fold -/_ to spaces, collapse repeats. Both sides of the lookup.
+static func _normalize_unit(s: String) -> String:
+	var t := s.strip_edges().to_lower().replace("-", " ").replace("_", " ")
+	while t.contains("  "):
+		t = t.replace("  ", " ")
+	return t
 
 
 func has_model(faction: String, unit_name: String) -> bool:
@@ -102,4 +113,12 @@ func apply_manifest_text(text: String) -> void:
 	_base_url = data.get("base_url", "")
 	var models: Variant = data.get("models", {})
 	if typeof(models) == TYPE_DICTIONARY:
-		_models = models
+		# Re-key with the same normalisation make_key() uses, so manifest keys built from
+		# slug-derived names still match the canonical OPR names at lookup time.
+		_models = {}
+		for k: String in models:
+			var parts: PackedStringArray = k.split("/", true, 1)
+			if parts.size() == 2:
+				_models[make_key(parts[0], parts[1])] = models[k]
+			else:
+				_models[k] = models[k]
