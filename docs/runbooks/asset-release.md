@@ -1,61 +1,73 @@
-# Runbook — Modelle als GitHub-Release veröffentlichen (On-Demand go-live)
+# Runbook — publish miniature models to Cloudflare R2 (on-demand go-live)
 
-**Zweck:** Die Mini-GLBs auf ein **GitHub-Release** hochladen und das
-`assets/model_manifest.json` befüllen, damit das Spiel die Modelle **on-demand**
-lädt (statt sie zu bündeln). Hintergrund: [`../ASSET_DELIVERY.md`](../ASSET_DELIVERY.md).
+**Purpose:** upload the miniature GLBs to **Cloudflare R2** and (re)generate
+`assets/model_manifest.json` so the game fetches models **on demand** instead of
+bundling them. Background: [`../ASSET_DELIVERY.md`](../ASSET_DELIVERY.md).
 
-> Läuft **lokal** (braucht die GLBs + `gh` + Token). Risikoarm und wiederholbar:
-> Modelle sind content-addressed (`<sha256>.glb`), das Manifest ist klein, und das
-> Spiel fällt bei fehlendem Modell auf Bundle/Platzhalter zurück.
+> Live today: **113 models across 5 factions** on `assets.akesberg.de` (Alien
+> Hives, Robot Legions, Battle Brothers, Dao Union, a Dark Brothers hero). This
+> runbook is how you publish more.
+>
+> Runs **locally** (needs the GLBs + R2 credentials). Low-risk and repeatable:
+> models are content-addressed (`<sha256>.glb`), the manifest is small, and the
+> game falls back to a primitive/placeholder for any unmapped model.
 
-## 0. Voraussetzungen
+## 0. Prerequisites
+
 ```bash
-gh auth status                     # GitHub CLI eingeloggt
-python3 --version                  # für publish_manifest.py
-ls assets/miniatures/*/glb/*.glb | head   # GLBs lokal vorhanden
-```
-Tag festlegen, z. B. `models-v1` (Modelle werden separat von Code-Releases versioniert).
-
-## 1. Release anlegen (einmal pro Tag)
-```bash
-gh release create models-v1 \
-  --repo DutchMaxwell/Niemandsland \
-  --title "Niemandsland models v1" \
-  --notes "On-demand miniature models (content-addressed GLBs)."
+python3 --version                          # for publish_manifest.py (boto3 / S3 API)
+ls assets/miniatures/*/glb/*.glb | head    # GLBs present locally
+test -f tools/model_forge/.r2_credentials && echo "R2 creds present"   # git-ignored
 ```
 
-## 2. Manifest erzeugen + GLBs hochladen (in einem Schritt)
-```bash
-python tools/model_forge/publish_manifest.py \
-  assets/miniatures assets/model_manifest.json \
-  --base-url "https://github.com/DutchMaxwell/Niemandsland/releases/download/models-v1/" \
-  --upload --tag models-v1 --repo DutchMaxwell/Niemandsland
-```
-Das schreibt `assets/model_manifest.json` (Keys `faction/unit`, sha256, size) und
-lädt jede GLB als `<sha256>.glb` ins Release (`--clobber` überschreibt bei Re-Runs).
+R2 one-time setup (already done for `assets.akesberg.de`): create a public R2
+bucket, attach a custom domain on Cloudflare DNS, mint a build-only API token, and
+put the creds in `tools/model_forge/.r2_credentials` (see `.r2_credentials.example`).
+The public bucket needs **no** key in the client.
 
-## 3. Manifest committen
+## 1. Generate the manifest + upload to R2 (one step)
+
+```bash
+cd tools/model_forge
+python publish_manifest.py ../../assets/miniatures ../../assets/model_manifest.json \
+  --base-url https://assets.akesberg.de/ \
+  --upload-r2 --bucket <bucket> --endpoint https://<account-id>.r2.cloudflarestorage.com
+```
+
+This writes `assets/model_manifest.json` (keys `faction/unit`, sha256, size) and
+uploads each GLB as `<sha256>.glb` to the bucket. Re-runs are idempotent
+(content-addressed: identical bytes → identical key, already-present objects are
+skipped). The faction batch pipeline wraps this as `faction_publish.py` (R2 upload
++ manifest merge) — prefer it when finalizing a whole faction.
+
+## 2. Commit the regenerated manifest
+
 ```bash
 git add assets/model_manifest.json
-git commit -m "chore(assets): publish model manifest (models-v1)"
+git commit -m "chore(assets): publish <faction> models to R2 (manifest update)"
 git push
 ```
 
-## 4. Im Spiel prüfen
-- Eine Armee importieren → benötigte Modelle werden aus dem Release geladen und in
-  `user://model_cache/<sha256>.glb` gecached (zweiter Import lädt nicht erneut).
-- Kein Eintrag im Manifest → Bundle-Fallback bzw. Platzhalter (kein Crash).
+## 3. Verify in-game
 
-## 5. Optional: gebündelte GLBs aus dem Repo entfernen
-Sobald alle Factions im Manifest sind und das Laden verifiziert ist:
-```bash
-git rm -r assets/miniatures/<faction>/glb        # je migrierter Faction
-git commit -m "chore(assets): drop bundled GLBs (now on-demand)"
-```
-*(Für echte Repo-Verkleinerung gehören die GLBs später auch aus der History — siehe
-[`history-scrub.md`](history-scrub.md).)*
+- Import an army → its models download from `assets.akesberg.de` and cache in
+  `user://model_cache/<sha256>.glb` (a second import does not re-download).
+- No manifest entry → primitive/placeholder fallback (no crash).
+- Spot-check a URL is live: `curl -I https://assets.akesberg.de/<sha256>.glb`
+  should return `HTTP/2 200`.
 
-## Wichtig
-- **`base_url` muss exakt der Release-Download-URL entsprechen** (Tag im Pfad!).
-- Neuer/anderer Tag → `--base-url` und `--tag` konsistent anpassen, Manifest neu erzeugen.
-- GitHub Releases liefern permissive CORS → funktioniert auch im Web-Build.
+## Notes
+
+- **`base_url` must end in `/`** and match the bucket's public domain exactly; the
+  client concatenates `base_url + <sha256>.glb`.
+- GLBs are **git-ignored** (`assets/miniatures/*/glb/`,
+  `assets/terrain/grimdark_industrial/`) **and** excluded from every export preset
+  — they are delivered from R2, never bundled. Keep it that way.
+- **Licensing gate (host-independent):** anonymous public URLs = public
+  redistribution. Only publish models you are cleared to redistribute
+  (CC-BY-SA, IP-safe). See [`../PRE_RELEASE_LICENSING.md`](../PRE_RELEASE_LICENSING.md).
+- R2 serves anonymous direct `HTTP 200` GETs with configurable CORS, so the same
+  URLs work in the desktop **and** web builds.
+- Repo size: the GLBs were removed from the working tree once R2 went live; for a
+  full repo shrink they also need stripping from git history — see
+  [`history-scrub.md`](history-scrub.md).
