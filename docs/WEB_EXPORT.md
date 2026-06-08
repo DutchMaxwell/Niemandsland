@@ -66,7 +66,12 @@ Download the `web-build` artifact from an Actions run, then serve it (the files
 must be served over HTTP, not opened as `file://`):
 
 ```bash
-cd web-build
-python3 -m http.server 8060
-# open http://localhost:8060
+mkdir -p build/web                  # place the downloaded web export's files here
+# (move the unzipped web-build artifact's contents into build/web/)
+python3 serve_web.py                # run from the PROJECT ROOT → http://localhost:8060
 ```
+
+> Use `serve_web.py` (project root, serves `build/web/`), **not** `python3 -m
+> http.server` — the bare server omits the cross-origin isolation headers
+> (COOP/COEP) the Godot 4 web export requires for SharedArrayBuffer, and the build
+> fails to start ("Failed to fetch") without them.
