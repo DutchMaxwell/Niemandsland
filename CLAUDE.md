@@ -15,7 +15,8 @@ OnePageRules and similar miniature games.
 - **Engine**: Godot **4.6** (Forward+ renderer), `config_version=5`
 - **Language**: GDScript
 - **Physics**: Godot's **default** physics (Jolt is *not* configured). Dice run in
-  a scaled SubViewport via the `dice_roller` addon — see [Scaling](#scaling-critical).
+  a scaled SubViewport via our own MIT `dice_tray.gd` / `dice_d6.gd` (procedural W6,
+  replaced the former AGPL addon) — see [Scaling](#scaling-critical).
 - **Platforms**: Linux (dev machine), Windows, macOS
 - **Tests**: gdUnit4 (`test/`), pytest (`relay/`, `tools/model_forge/tests/`)
 - **Main scene**: `scenes/startup_menu.tscn`
@@ -53,8 +54,8 @@ Build/run/test: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 `INCHES_TO_METERS = 0.0254`, `MM_TO_METERS = 0.001`. Table 4×4 ft = 1.22 m.
 
 Miniatures (16–60 mm) are far below Godot physics' stable range (~0.1–10 m), so
-**dice physics runs in a separate scaled SubViewport** (`dice_roller` addon); table
-dice are display-only. GLB minis are scaled to their base at spawn in
+**dice physics runs in a separate scaled SubViewport** (our own MIT `dice_tray.gd` /
+`dice_d6.gd`); table dice are display-only. GLB minis are scaled to their base at spawn in
 `opr_army_manager.gd` (footprint capped at 125 % of base; see ARCHITECTURE).
 
 ## Coding standards
