@@ -1,12 +1,15 @@
-# Asset Delivery — on-demand 3D models (plan)
+# Asset Delivery — on-demand 3D models (R2)
 
-**Status: client + tooling implemented (behind a bundled fallback); pending = publish
-a release and populate the manifest.** Sequence: (1) plan ✅ → (2) prototype ✅
-(`asset_download_manager.gd`, `model_library.gd`, `assets/model_manifest.json`,
-`opr_army_manager` integration, `tools/model_forge/publish_manifest.py`) →
-(3) hosting on **GitHub Releases** (no egress/traffic cost). While the manifest is
-empty the game uses bundled models exactly as before (zero regression); once it is
-populated the CDN path goes live.
+**Status: LIVE.** Miniature GLBs are delivered on demand from **Cloudflare R2**
+(`<legacy-cdn-host>`, content-addressed `<sha256>.glb`), mapped by
+`assets/model_manifest.json` — **113 models across 5 factions** today (Alien Hives,
+Robot Legions, Battle Brothers, Dao Union, a Dark Brothers hero). The GLBs are
+git-ignored and excluded from every export preset, so the repo and shipped builds
+stay lean; the editor/game fetches each needed model at runtime and caches it. A
+model with no manifest entry falls back to a primitive/placeholder (no crash).
+Publish more via [`runbooks/asset-release.md`](runbooks/asset-release.md). The
+client + tooling are `asset_download_manager.gd`, `model_library.gd`,
+`opr_army_manager` integration, and `tools/model_forge/publish_manifest.py`.
 
 ## Goal
 
@@ -81,9 +84,11 @@ Army import (OPR API)  →  unit list
    (content-addressed) and can upload the GLBs to a GitHub release via `gh`.
 3. ✅ `opr_army_manager` resolution order: **cached on-demand model → bundled
    fallback → placeholder**; `spawn_army` downloads the army's models up front.
-4. ⏳ Once a release is published + the manifest populated: remove GLBs from the repo
-   (+ history scrub, see licensing doc) → lean repo and build; the web build no
-   longer needs the ~1.3 GB `.pck`.
+4. ✅ R2 is live + the manifest is populated; GLBs are removed from the working tree
+   and excluded from builds → lean repo and build (the web build no longer needs the
+   ~1.3 GB `.pck`). Remaining: a git-history scrub of the old in-repo GLBs to shrink
+   `.git` itself (see [`runbooks/history-scrub.md`](runbooks/history-scrub.md) and
+   the licensing doc).
 
 ## Publishing (go live)
 

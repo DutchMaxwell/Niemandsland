@@ -58,10 +58,10 @@ Forward+ renderer. Entry scene: `scenes/startup_menu.tscn`.
 - `tts_importer.gd` / `tts_download_manager.gd` — Tabletop Simulator import (Steam
   CDN + local cache; glTF/STL/OBJ).
 
-> **Planned:** miniature GLBs move to on-demand download + cache (TTS-style) so the
-> repo/build stay lean and only an army's needed models are fetched — see
-> [`docs/ASSET_DELIVERY.md`](ASSET_DELIVERY.md). OPR stats/data load only via the
-> Army Forge API (never bundled) — see [`docs/PRE_RELEASE_LICENSING.md`](PRE_RELEASE_LICENSING.md).
+> **On-demand delivery (live):** miniature GLBs are downloaded + cached (TTS-style)
+> from Cloudflare R2 so the repo/build stay lean and only an army's needed models are
+> fetched — see [`ASSET_DELIVERY.md`](ASSET_DELIVERY.md). OPR stats/data load only via
+> the Army Forge API (never bundled) — see [`PRE_RELEASE_LICENSING.md`](PRE_RELEASE_LICENSING.md).
 - `wgs_client.gd` / `wgs_game_manager.gd` / `wgs_import_dialog.gd` — Wargaming
   Simulator format ([`WGS_INTEGRATION.md`](WGS_INTEGRATION.md)).
 
