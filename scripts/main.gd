@@ -221,6 +221,8 @@ func _ready() -> void:
 	# Connect End Battle button and confirmation dialog
 	end_battle_btn.pressed.connect(_on_end_battle_pressed)
 	end_battle_confirm_dialog.confirmed.connect(_on_end_battle_confirmed)
+	if has_node("/root/ThemeManager"):
+		end_battle_confirm_dialog.theme = get_node("/root/ThemeManager").get_current_theme()
 
 	# Connect UI buttons
 	load_model_btn.pressed.connect(_on_load_model)
@@ -855,6 +857,9 @@ func _spawn_grid(total: int, cols: int, rows: int) -> void:
 func _show_action_confirm(title: String, message: String, ok_text: String, action: Callable) -> void:
 	if not _action_confirm_dialog:
 		_action_confirm_dialog = ConfirmationDialog.new()
+		# Match the app's glassmorphism look instead of the default grey Godot dialog.
+		if has_node("/root/ThemeManager"):
+			_action_confirm_dialog.theme = get_node("/root/ThemeManager").get_current_theme()
 		add_child(_action_confirm_dialog)
 		_action_confirm_dialog.confirmed.connect(_on_action_confirmed)
 	_action_confirm_dialog.title = title
@@ -1577,12 +1582,15 @@ func _ensure_cache_progress_ui() -> void:
 	if _cache_progress_panel:
 		return
 	_cache_progress_panel = PanelContainer.new()
+	# Fully centred on screen (both axes).
 	_cache_progress_panel.anchor_left = 0.5
 	_cache_progress_panel.anchor_right = 0.5
-	_cache_progress_panel.anchor_top = 0.0
+	_cache_progress_panel.anchor_top = 0.5
+	_cache_progress_panel.anchor_bottom = 0.5
 	_cache_progress_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_cache_progress_panel.offset_top = 56.0
+	_cache_progress_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_cache_progress_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cache_progress_panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
 	_cache_progress_panel.visible = false
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
