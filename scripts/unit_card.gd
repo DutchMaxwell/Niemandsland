@@ -91,11 +91,12 @@ func _ready() -> void:
 		rtl.add_theme_font_override("bold_font", bold)
 	_name_label.add_theme_font_size_override("bold_font_size", 22)  # larger, prominent unit name
 
-	# Special rules are clickable [url] spans -> underlined; hovering one for ~1s opens
-	# a small popup with the rule's full description.
-	_rules_label.meta_underlined = true
-	_rules_label.meta_hover_started.connect(_on_rule_hover_started)
-	_rules_label.meta_hover_ended.connect(_on_rule_hover_ended)
+	# Special rules (unit-level AND per-weapon) are clickable [url] spans -> underlined;
+	# hovering one for ~1s opens a small popup with the rule's full description.
+	for lbl: RichTextLabel in [_rules_label, _weapons_label]:
+		lbl.meta_underlined = true
+		lbl.meta_hover_started.connect(_on_rule_hover_started)
+		lbl.meta_hover_ended.connect(_on_rule_hover_ended)
 	_setup_rule_popup()
 
 	_rule_hover_timer = Timer.new()
@@ -320,7 +321,7 @@ func _format_opr_weapon(weapon: OPRApiClient.OPRWeapon) -> String:
 	parts.append("A%d" % weapon.attacks)
 
 	if weapon.special_rules.size() > 0:
-		parts.append("[color=%s](%s)[/color]" % [COLOR_RULES, ", ".join(weapon.special_rules)])
+		parts.append("(%s)" % _rule_url_list(weapon.special_rules))
 
 	return " ".join(parts)
 
@@ -337,8 +338,18 @@ func _format_dict_weapon(weapon: Variant) -> String:
 	# Special rules ride on the weapon dict (synced over the network for remote units).
 	var rules := _dict_weapon_rule_names(weapon)
 	if not rules.is_empty():
-		text += " [color=%s](%s)[/color]" % [COLOR_RULES, ", ".join(rules)]
+		text += " (%s)" % _rule_url_list(rules)
 	return text
+
+
+## Render rule names as underlined [url] spans so hovering one shows its description
+## (the [url] meta is the rule name -> _on_rule_hover_* -> get_rule_description).
+func _rule_url_list(rules) -> String:
+	var spans: Array[String] = []
+	for r in rules:
+		var rname := str(r)
+		spans.append("[url=%s][color=%s]%s[/color][/url]" % [rname, COLOR_RULES, rname])
+	return ", ".join(spans)
 
 
 ## Extracts a weapon dict's special-rule names, handling both string entries
