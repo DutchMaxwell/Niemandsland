@@ -66,6 +66,9 @@ models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
 
 - Unit-as-LOS-blocker (Asgard: formation height + closed 1" gaps) — terrain LOS first.
 - Multiplayer lobby UI / room browser, in-game chat.
+- UI audio: a dedicated mutable "UI" bus + a `UiSound` autoload auto-wiring
+  `BaseButton` hover/click/focus feedback (full spec archived in
+  [`docs/archive/AAA_UI_PLAYBOOK.md`](docs/archive/AAA_UI_PLAYBOOK.md)).
 
 ## Out of scope (by design)
 
@@ -86,6 +89,9 @@ and `hero_attachment_dialog.gd` never existed as separate files — that logic l
   dice approach; see [`CLAUDE.md`](CLAUDE.md)).
 - Some TTS texture-loading errors (non-fatal).
 - A few GDScript warnings (parameter shadowing) to clean up.
+- OPR rule descriptions resolve for freshly imported armies; loaded saves /
+  remote-only armies show rule names without descriptions (persist/sync is a
+  future step).
 
 ## Tests
 
