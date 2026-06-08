@@ -17,12 +17,13 @@ Goal of this release: a playable, internet-multiplayer Alpha RC with all miniatu
 - **On-demand 3D model delivery (Cloudflare R2).** Miniature GLBs are content-addressed
   (`sha256.glb`) and fetched at runtime from `assets.akesberg.de`, mapped by
   `assets/model_manifest.json`. Builds no longer bundle them.
-- **Alien Hives faction** (41 models) shipped to R2.
 - **IP-safe faction generation overhaul** in Model Forge: positive-only prompts,
   per-faction `ip_strict` / `bio_weapons` flags, per-unit `type:` (vehicle / walker /
   aircraft / titan), humanoid-only design cues — plus a **3-versions-per-unit "pick the
   best" review tool**.
-- **Alien Hives (41) + Battle Brothers (23)** factions shipped to R2.
+- **Factions shipped to R2:** Alien Hives (41), Battle Brothers (23) and Robot Legions
+  (29), joining the earlier Dao Union (19) and a Dark Brothers hero — `model_manifest.json`
+  now resolves **113 models across 5 factions**, all verified live on `assets.akesberg.de`.
 - **OPR special-rule descriptions.** Rule explanations are fetched from the army-forge
   API on import (army-book + common rules per game system, cached) and shown per rule in
   the stats tooltip, so players can read what each rule does.
@@ -56,7 +57,10 @@ Goal of this release: a playable, internet-multiplayer Alpha RC with all miniatu
 ### Maintenance
 - Disk cleanup: purged 734 MB of redundant R2 upload-staging GLBs (all verified
   present on R2 before deletion).
-- gdUnit4: 253 tests green.
+- Repo hygiene: Model Forge scratch (TRELLIS temp, engine-comparison render sweeps,
+  one-off experiment scripts) is gitignored; the reusable faction batch pipeline
+  (`faction_finalize` / `faction_publish`) and TRELLIS research notes are versioned.
+- gdUnit4: 255 tests green.
 
 ### Known follow-ups
 - Host-side reconnect (preserving a room when the HOST drops) needs relay-server room

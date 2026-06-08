@@ -50,7 +50,9 @@ on demand from Cloudflare R2 (content-addressed `sha256.glb`, `assets.akesberg.d
 mapped by [`assets/model_manifest.json`](assets/model_manifest.json). Builds stay slim
 (GLBs are gitignored + excluded from every export preset); the editor/game fetches
 models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
-[`docs/ASSET_DELIVERY.md`](docs/ASSET_DELIVERY.md).
+[`docs/ASSET_DELIVERY.md`](docs/ASSET_DELIVERY.md). **Live today: 113 models across
+5 factions** — Alien Hives (41), Robot Legions (29), Battle Brothers (23), Dao Union
+(19), a Dark Brothers hero. Remaining factions have 2D generated and pick-ready.
 
 ## In progress
 
@@ -87,7 +89,7 @@ and `hero_attachment_dialog.gd` never existed as separate files — that logic l
 
 ## Tests
 
-gdUnit4: **33 suites / 238 tests green** in `test/` (incl. `coherency_checker`,
+gdUnit4: **37 suites / 255 tests green** in `test/` (incl. `coherency_checker`,
 `save_manager`, `startup_menu`, `internet_lobby`, `relay_multiplayer_peer`,
 `network_version_handshake`). Python: `relay/test_relay_server.py`,
 `tools/model_forge/tests/`. How to run: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
