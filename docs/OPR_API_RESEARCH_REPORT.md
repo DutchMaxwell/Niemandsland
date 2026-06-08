@@ -1,57 +1,57 @@
-# OnePageRules (OPR) Army Forge API - Detaillierte Recherche
+# OnePageRules (OPR) Army Forge API - Detailed Research
 
-**Erstellungsdatum:** 28. Dezember 2025
-**Projektkontext:** Integration in ein Godot-Projekt (GDScript)
+**Creation date:** December 28, 2025
+**Project context:** Integration into a Godot project (GDScript)
 
 ---
 
 ## Executive Summary
 
-Nach umfassender Recherche wurde festgestellt, dass **OnePageRules keine offiziell dokumentierte, öffentliche API** für ihren Army Forge bereitstellt. Allerdings wurden mehrere inoffizielle Endpunkte und Datenstrukturen identifiziert, die von Community-Tools genutzt werden. Die Integration in ein Godot-Projekt ist möglich, erfordert jedoch Reverse Engineering der Web-App oder die Nutzung lokaler Daten.
+After comprehensive research, it was determined that **OnePageRules does not provide an officially documented, public API** for their Army Forge. However, several unofficial endpoints and data structures used by community tools were identified. Integration into a Godot project is possible, but it requires reverse engineering of the web app or the use of local data.
 
 ---
 
-## 1. API-Verfügbarkeit und Authentifizierung
+## 1. API availability and authentication
 
-### 1.1 Offizielle API
-- **Status:** Keine offizielle, dokumentierte API verfügbar
-- **Dokumentation:** Nicht vorhanden
-- **API-Key:** Nicht erforderlich (keine öffentliche API)
-- **Authentifizierung:** Nicht dokumentiert
+### 1.1 Official API
+- **Status:** No official, documented API available
+- **Documentation:** Not available
+- **API key:** Not required (no public API)
+- **Authentication:** Not documented
 
 ### 1.2 Army Forge Studio
 - **URL:** https://army-forge-studio.onepagerules.com/
-- **Zugang:** Patreon Tier 1 erforderlich für das Erstellen eigener Armeen
-- **Öffentlicher Zugriff:** Alle von Nutzern erstellten Armeen sind kostenlos verfügbar
+- **Access:** Patreon Tier 1 required to create your own armies
+- **Public access:** All user-created armies are available for free
 
 ---
 
-## 2. Identifizierte Endpunkte
+## 2. Identified endpoints
 
-Basierend auf der Analyse von Community-Tools und Web-Traffic wurden folgende Endpunkte identifiziert:
+Based on the analysis of community tools and web traffic, the following endpoints were identified:
 
-### 2.1 Army Books (PDF-Export)
+### 2.1 Army Books (PDF export)
 ```
 https://army-forge-studio.onepagerules.com/api/army-books/{book-id}/pdf
 ```
 
-**Beispiele:**
+**Examples:**
 - `https://army-forge-studio.onepagerules.com/api/army-books/w70ha3o85pa7nigq~2/pdf` - GF Knight Brothers 3.4.4
 - `https://army-forge-studio.onepagerules.com/api/army-books/78qp9l5alslt6yj8~2/pdf` - Battle Brothers 3.4.4
 - `https://army-forge-studio.onepagerules.com/api/army-books/tOWt5fgqK2nfpoBN~4/pdf` - AoF Ratmen v3.4.1
 
-**ID-Format:** Alphanumerische Zeichen gefolgt von `~` und Versionsnummer
+**ID format:** Alphanumeric characters followed by `~` and version number
 
 ### 2.2 Share Links (Army Lists)
 ```
 https://army-forge.onepagerules.com/share?id={list-id}&name={army-name}
 ```
 
-**Parameter:**
-- `id`: Eindeutiger Identifier für die Armeeliste (z.B. `OLIsCH_xzKvU`)
-- `name`: Name der Armee (URL-encoded)
+**Parameters:**
+- `id`: Unique identifier for the army list (e.g. `OLIsCH_xzKvU`)
+- `name`: Name of the army (URL-encoded)
 
-**Beispiel:**
+**Example:**
 ```
 https://army-forge.onepagerules.com/share?id=OLIsCH_xzKvU&name=Wolf_Prime%20Brothers
 ```
@@ -61,39 +61,39 @@ https://army-forge.onepagerules.com/share?id=OLIsCH_xzKvU&name=Wolf_Prime%20Brot
 https://army-forge.onepagerules.com/armyInfo?gameSystem={system-id}&armyId={army-id}
 ```
 
-**Parameter:**
-- `gameSystem`: Spiel-System ID (z.B. `2`)
-- `armyId`: Eindeutiger Army Identifier (z.B. `RWvb-wUkrWS_hHBx`)
+**Parameters:**
+- `gameSystem`: Game system ID (e.g. `2`)
+- `armyId`: Unique army identifier (e.g. `RWvb-wUkrWS_hHBx`)
 
-**Beispiel:**
+**Example:**
 ```
 https://army-forge.onepagerules.com/armyInfo?gameSystem=2&armyId=RWvb-wUkrWS_hHBx
 ```
 
 ---
 
-## 3. Datenstruktur und Format
+## 3. Data structure and format
 
-### 3.1 JSON-Export
-Army Forge unterstützt den Export von Armeelisten als JSON:
-- **Methode:** "Share as File" im Army Forge Menü
-- **Format:** JSON-Struktur mit Einheitendaten
+### 3.1 JSON export
+Army Forge supports exporting army lists as JSON:
+- **Method:** "Share as File" in the Army Forge menu
+- **Format:** JSON structure with unit data
 
-### 3.2 Lokale Daten
-Das Open-Source Projekt `opr-army-forge` (GitHub: RobMayer/opr-army-forge) enthält:
-- **Verzeichnis:** `public/definitions/`
-- **Inhalt:** JSON-Dateien mit Army Books, Units, Special Rules
-- **JSON Schema:** Vorhanden im Repository
+### 3.2 Local data
+The open-source project `opr-army-forge` (GitHub: RobMayer/opr-army-forge) contains:
+- **Directory:** `public/definitions/`
+- **Content:** JSON files with Army Books, Units, Special Rules
+- **JSON Schema:** Present in the repository
 
-### 3.3 Unit-Datenstruktur
-Typische Unit-Eigenschaften:
-- **Quality (Q):** z.B. `Q4+`, `Q3+`
-- **Defense (D):** z.B. `D4+`, `D5+`
-- **Points:** Punktkosten der Einheit
-- **Special Rules:** z.B. `Fearless`, `Furious`, `Hero`, `Tough(X)`
-- **Weapons:** Waffen mit Attack-Werten, AP (Armor Piercing), Range
+### 3.3 Unit data structure
+Typical unit properties:
+- **Quality (Q):** e.g. `Q4+`, `Q3+`
+- **Defense (D):** e.g. `D4+`, `D5+`
+- **Points:** Point cost of the unit
+- **Special Rules:** e.g. `Fearless`, `Furious`, `Hero`, `Tough(X)`
+- **Weapons:** Weapons with attack values, AP (Armor Piercing), Range
 
-**Beispiel-Struktur (hypothetisch basierend auf Community-Tools):**
+**Example structure (hypothetical, based on community tools):**
 ```json
 {
   "name": "Space Marine",
@@ -117,54 +117,54 @@ Typische Unit-Eigenschaften:
 
 ## 4. Rate Limits
 
-**Status:** Keine Informationen verfügbar
-- Keine offizielle Dokumentation zu Rate Limits
-- Bei inoffizieller Nutzung: Empfohlen, konservativ vorzugehen (max. 1-2 Requests pro Sekunde)
-- Monitoring von HTTP-Statuscodes (429 = Too Many Requests) empfohlen
+**Status:** No information available
+- No official documentation on rate limits
+- For unofficial use: recommended to proceed conservatively (max. 1-2 requests per second)
+- Monitoring of HTTP status codes (429 = Too Many Requests) recommended
 
 ---
 
-## 5. Community-Projekte
+## 5. Community projects
 
 ### 5.1 opr-army-forge (GitHub: RobMayer/opr-army-forge)
-- **Typ:** Next.js Web-Applikation
-- **Features:** Lokaler Army Builder ohne API-Abhängigkeiten
-- **Daten:** JSON-Dateien im `public/definitions/` Verzeichnis
-- **Lizenz:** Open Source
+- **Type:** Next.js web application
+- **Features:** Local army builder without API dependencies
+- **Data:** JSON files in the `public/definitions/` directory
+- **License:** Open Source
 - **URL:** https://github.com/RobMayer/opr-army-forge
 
 ### 5.2 Tombola's OPR AF to TTS (thomascgray/opr-af-to-tts)
-- **Typ:** Web-Tool für Tabletop Simulator Integration
-- **Features:** Import von Army Forge Share Links, Export zu TTS
-- **Tech Stack:** Netlify Functions für List-Speicherung
+- **Type:** Web tool for Tabletop Simulator integration
+- **Features:** Import of Army Forge Share Links, export to TTS
+- **Tech Stack:** Netlify Functions for list storage
 - **URL:** https://opr-af-to-tts.netlify.app/
 - **GitHub:** https://github.com/thomascgray/opr-af-to-tts
 
 ### 5.3 OPRDataCards (JackGruber/OPRDataCards)
-- **Typ:** PDF-Generator für Datacards
-- **Input:** JSON-Export aus Army Forge
-- **Features:** Bildintegration, Custom Datacards
+- **Type:** PDF generator for datacards
+- **Input:** JSON export from Army Forge
+- **Features:** Image integration, custom datacards
 
 ---
 
-## 6. Godot Integration - Implementierungsstrategien
+## 6. Godot Integration - Implementation strategies
 
-Es gibt drei primäre Ansätze für die Integration in ein Godot-Projekt:
+There are three primary approaches for integration into a Godot project:
 
-### Strategie A: Lokale JSON-Daten
-**Empfohlen für:** Offline-Spiele, vollständige Kontrolle über Daten
+### Strategy A: Local JSON data
+**Recommended for:** Offline games, full control over the data
 
-### Strategie B: HTTP-Requests zu identifizierten Endpunkten
-**Empfohlen für:** Online-Features, aktuelle Daten
+### Strategy B: HTTP requests to identified endpoints
+**Recommended for:** Online features, up-to-date data
 
-### Strategie C: Hybrid-Ansatz
-**Empfohlen für:** Beste Balance zwischen Offline-Funktionalität und Online-Updates
+### Strategy C: Hybrid approach
+**Recommended for:** Best balance between offline functionality and online updates
 
 ---
 
-## 7. GDScript Code-Beispiele
+## 7. GDScript code examples
 
-### 7.1 HTTPRequest Setup für Army Forge
+### 7.1 HTTPRequest setup for Army Forge
 
 ```gdscript
 extends Node
@@ -205,7 +205,7 @@ func _on_request_completed(result, response_code, headers, body):
         push_error("JSON Parse Error: " + str(json_result.error_string))
 ```
 
-### 7.2 Share Link Fetching
+### 7.2 Share Link fetching
 
 ```gdscript
 # Army List von Share Link abrufen
@@ -227,7 +227,7 @@ func _on_button_pressed():
     fetch_army_list("OLIsCH_xzKvU", "Wolf Prime Brothers")
 ```
 
-### 7.3 Army Book PDF Download
+### 7.3 Army Book PDF download
 
 ```gdscript
 # Army Book PDF herunterladen
@@ -251,7 +251,7 @@ func _on_pdf_request_completed(result, response_code, headers, body):
         print("PDF saved to: ", filename)
 ```
 
-### 7.4 Lokale JSON-Daten laden
+### 7.4 Loading local JSON data
 
 ```gdscript
 # Lokale Army Data aus JSON-Datei laden
@@ -467,7 +467,7 @@ func clear_cache():
         dir.list_dir_end()
 ```
 
-### 7.6 Verwendung in einer Scene
+### 7.6 Usage in a Scene
 
 ```gdscript
 extends Control
@@ -517,7 +517,7 @@ func display_army_units(army_data):
         ])
 ```
 
-### 7.7 Datenmodell-Klassen
+### 7.7 Data model classes
 
 ```gdscript
 # ArmyUnit.gd
@@ -638,9 +638,9 @@ func to_dict() -> Dictionary:
 
 ---
 
-## 8. Best Practices und Empfehlungen
+## 8. Best practices and recommendations
 
-### 8.1 Fehlerbehandlung
+### 8.1 Error handling
 ```gdscript
 func robust_http_request(url: String, max_retries: int = 3):
     var retries = 0
@@ -657,7 +657,7 @@ func robust_http_request(url: String, max_retries: int = 3):
     emit_signal("request_failed", "Max retries exceeded")
 ```
 
-### 8.2 Rate Limiting
+### 8.2 Rate limiting
 ```gdscript
 var last_request_time = 0
 var min_request_interval = 1.0  # Mindestens 1 Sekunde zwischen Requests
@@ -673,7 +673,7 @@ func rate_limited_request(url: String):
     http_request.request(url)
 ```
 
-### 8.3 Offline-First Strategie
+### 8.3 Offline-first strategy
 ```gdscript
 func fetch_army_with_fallback(army_id: String):
     # 1. Lokalen Cache prüfen
@@ -693,7 +693,7 @@ func fetch_army_with_fallback(army_id: String):
     fetch_army_list(army_id)
 ```
 
-### 8.4 Android-Export Hinweis
+### 8.4 Android export note
 ```gdscript
 # WICHTIG: Für Android-Export muss die INTERNET-Berechtigung aktiviert werden
 # Project Settings -> Export -> Android -> Permissions -> Internet
@@ -701,114 +701,114 @@ func fetch_army_with_fallback(army_id: String):
 
 ---
 
-## 9. Limitierungen und Risiken
+## 9. Limitations and risks
 
-### 9.1 Keine offizielle API
-- **Risiko:** Endpunkte können sich ohne Vorwarnung ändern
-- **Mitigation:** Versionierung der eigenen Integration, regelmäßige Tests
+### 9.1 No official API
+- **Risk:** Endpoints can change without warning
+- **Mitigation:** Versioning of your own integration, regular tests
 
-### 9.2 Unbekannte Rate Limits
-- **Risiko:** Mögliche Blockierung bei zu vielen Requests
-- **Mitigation:** Conservative Request-Strategie (1-2 Requests/Sekunde)
+### 9.2 Unknown rate limits
+- **Risk:** Possible blocking when making too many requests
+- **Mitigation:** Conservative request strategy (1-2 requests/second)
 
-### 9.3 Datenformat-Änderungen
-- **Risiko:** JSON-Struktur kann sich ändern
-- **Mitigation:** Robuste Fehlerbehandlung, Fallback-Werte
+### 9.3 Data format changes
+- **Risk:** The JSON structure can change
+- **Mitigation:** Robust error handling, fallback values
 
-### 9.4 Rechtliche Aspekte
-- **Beachtung:** OnePageRules behält sich alle Rechte an ihren Inhalten vor
-- **Empfehlung:** Kontakt mit OPR aufnehmen für kommerzielle Nutzung
+### 9.4 Legal aspects
+- **Note:** OnePageRules reserves all rights to their content
+- **Recommendation:** Contact OPR for commercial use
 
 ---
 
-## 10. Alternative Ansätze
+## 10. Alternative approaches
 
-### 10.1 Lokale Kopie des opr-army-forge Repositories
-**Vorteile:**
-- Vollständige Offline-Funktionalität
-- Keine API-Abhängigkeiten
-- Vollständige Datenstruktur verfügbar
+### 10.1 Local copy of the opr-army-forge repository
+**Advantages:**
+- Full offline functionality
+- No API dependencies
+- Complete data structure available
 
-**Nachteile:**
-- Manuelle Updates erforderlich
-- Größeres Projekt-Paket
+**Disadvantages:**
+- Manual updates required
+- Larger project package
 
 **Implementation:**
-1. Klone `github.com/RobMayer/opr-army-forge`
-2. Kopiere `public/definitions/` in dein Godot-Projekt (`res://data/opr/`)
-3. Lade JSON-Dateien mit `load_local_definitions()`
+1. Clone `github.com/RobMayer/opr-army-forge`
+2. Copy `public/definitions/` into your Godot project (`res://data/opr/`)
+3. Load the JSON files with `load_local_definitions()`
 
-### 10.2 Community-Tool Integration
-**Option:** Nutze `opr-af-to-tts` als Middleware
-- Parse Share Links mit dem Tool
-- Exportiere JSON
-- Importiere in Godot
+### 10.2 Community tool integration
+**Option:** Use `opr-af-to-tts` as middleware
+- Parse Share Links with the tool
+- Export JSON
+- Import into Godot
 
-### 10.3 Web-Scraping (NICHT empfohlen)
-**Warnung:** Verstößt möglicherweise gegen ToS
-- Rechtlich problematisch
-- Technisch fragil
-- Ethisch fragwürdig
-
----
-
-## 11. Nächste Schritte
-
-### Für Entwicklung:
-1. ✅ Recherche abgeschlossen
-2. ⬜ Entscheidung: Lokale Daten vs. HTTP-Requests
-3. ⬜ Implementierung der Basis-Klassen
-4. ⬜ Testing mit echten Daten
-5. ⬜ Error Handling & Edge Cases
-6. ⬜ UI-Integration
-
-### Empfohlener Ansatz:
-**Hybrid-Lösung:**
-- Integriere lokale Kopie der Definitions (aus GitHub-Repo)
-- Implementiere optionale Online-Features (Share Links)
-- Ermögliche Offline-Spielbarkeit
+### 10.3 Web scraping (NOT recommended)
+**Warning:** Possibly violates the ToS
+- Legally problematic
+- Technically fragile
+- Ethically questionable
 
 ---
 
-## 12. Ressourcen und Links
+## 11. Next steps
 
-### Offizielle Ressourcen
+### For development:
+1. ✅ Research complete
+2. ⬜ Decision: Local data vs. HTTP requests
+3. ⬜ Implementation of the base classes
+4. ⬜ Testing with real data
+5. ⬜ Error handling & edge cases
+6. ⬜ UI integration
+
+### Recommended approach:
+**Hybrid solution:**
+- Integrate a local copy of the definitions (from the GitHub repo)
+- Implement optional online features (Share Links)
+- Enable offline playability
+
+---
+
+## 12. Resources and links
+
+### Official resources
 - Army Forge: https://army-forge.onepagerules.com/
 - Army Forge Studio: https://army-forge-studio.onepagerules.com/
 - OnePageRules Website: https://www.onepagerules.com/
 - OPR Forum: https://forum.onepagerules.com/
 
-### Community-Projekte
+### Community projects
 - GitHub - opr-army-forge: https://github.com/RobMayer/opr-army-forge
 - GitHub - opr-af-to-tts: https://github.com/thomascgray/opr-af-to-tts
 - OPR AF to TTS Tool: https://opr-af-to-tts.netlify.app/
 
-### Godot-Dokumentation
+### Godot documentation
 - HTTPRequest Class: https://docs.godotengine.org/en/stable/classes/class_httprequest.html
 - Making HTTP Requests: https://docs.godotengine.org/en/stable/tutorials/networking/http_request_class.html
 - JSON Class: https://docs.godotengine.org/en/stable/classes/class_json.html
 
-### Weiterführend
+### Further reading
 - OPR Community Wiki: https://wiki.onepagerules.com/
-- OPR Discord: Verfügbar über die offizielle Website
+- OPR Discord: Available via the official website
 
 ---
 
-## 13. Kontakt und Support
+## 13. Contact and support
 
-**Bei Fragen zur API:**
-- Kontaktiere OnePageRules direkt über ihre Website
-- Nutze das OPR Discord für Community-Support
-- Öffne Issues auf GitHub für spezifische Tool-Probleme
+**For API questions:**
+- Contact OnePageRules directly via their website
+- Use the OPR Discord for community support
+- Open issues on GitHub for specific tool problems
 
-**Für dieses Projekt:**
-- Siehe Projekt-Repository für Issues und Contributions
+**For this project:**
+- See the project repository for issues and contributions
 
 ---
 
-## Anhang A: Vollständiges Beispielprojekt-Setup
+## Appendix A: Complete example project setup
 
-### Verzeichnisstruktur
+### Directory structure
 ```
 res://
 ├── scripts/
@@ -829,7 +829,7 @@ res://
     └── UnitCard.tscn
 ```
 
-### Scene-Setup (ArmyBuilder.tscn)
+### Scene setup (ArmyBuilder.tscn)
 ```
 ArmyBuilder (Control)
 ├── ArmyForgeManager (Node)
@@ -844,41 +844,41 @@ ArmyBuilder (Control)
 
 ---
 
-## Anhang B: Typische Fehler und Lösungen
+## Appendix B: Common errors and solutions
 
-### Fehler: "Connection failed"
-**Ursache:** Keine Internetverbindung oder Server nicht erreichbar
-**Lösung:** Implementiere Offline-Fallback, prüfe Verbindung vor Request
+### Error: "Connection failed"
+**Cause:** No internet connection or server unreachable
+**Solution:** Implement an offline fallback, check the connection before the request
 
-### Fehler: "JSON Parse Error"
-**Ursache:** Unerwartete Datenstruktur oder leere Response
-**Lösung:** Validiere Response vor Parsing, nutze try-catch-ähnliche Struktur
+### Error: "JSON Parse Error"
+**Cause:** Unexpected data structure or empty response
+**Solution:** Validate the response before parsing, use a try-catch-like structure
 
-### Fehler: "HTTP 404"
-**Ursache:** Ungültige Army ID oder geänderter Endpunkt
-**Lösung:** Validiere IDs, implementiere Versionierung
+### Error: "HTTP 404"
+**Cause:** Invalid army ID or changed endpoint
+**Solution:** Validate IDs, implement versioning
 
-### Fehler: "Android: Network blocked"
-**Ursache:** Fehlende INTERNET-Permission im Android-Export
-**Lösung:** Aktiviere in Project Settings -> Export -> Android -> Permissions
-
----
-
-## Schlusswort
-
-Diese Recherche zeigt, dass eine Integration der OPR Army Forge Daten in ein Godot-Projekt **möglich, aber mit Einschränkungen verbunden** ist. Die Kombination aus lokalen Daten (aus dem Open-Source Repository) und optionalen HTTP-Requests zu identifizierten Endpunkten bietet die beste Balance zwischen Funktionalität und Zuverlässigkeit.
-
-**Wichtigste Erkenntnisse:**
-1. Keine offizielle API, aber identifizierbare Endpunkte
-2. Open-Source Daten verfügbar (opr-army-forge Repository)
-3. Community-Tools zeigen erfolgreiche Integration
-4. Godot's HTTPRequest ist gut geeignet für die Implementierung
-5. Hybrid-Ansatz (lokal + online) empfohlen
-
-Bei Fragen oder für Updates zu dieser Recherche, siehe Projekt-Repository.
+### Error: "Android: Network blocked"
+**Cause:** Missing INTERNET permission in the Android export
+**Solution:** Enable in Project Settings -> Export -> Android -> Permissions
 
 ---
 
-**Dokument-Version:** 1.0
-**Letztes Update:** 28. Dezember 2025
-**Nächste Review:** Bei API-Änderungen oder Community-Feedback
+## Closing words
+
+This research shows that integrating the OPR Army Forge data into a Godot project is **possible, but comes with limitations**. The combination of local data (from the open-source repository) and optional HTTP requests to identified endpoints offers the best balance between functionality and reliability.
+
+**Key findings:**
+1. No official API, but identifiable endpoints
+2. Open-source data available (opr-army-forge repository)
+3. Community tools demonstrate successful integration
+4. Godot's HTTPRequest is well suited for the implementation
+5. Hybrid approach (local + online) recommended
+
+For questions or updates on this research, see the project repository.
+
+---
+
+**Document version:** 1.0
+**Last update:** December 28, 2025
+**Next review:** On API changes or community feedback

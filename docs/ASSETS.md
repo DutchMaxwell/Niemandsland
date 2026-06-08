@@ -1,40 +1,40 @@
-# Asset-Quellen für Niemandsland
+# Asset sources for Niemandsland
 
-Dieses Dokument listet empfohlene Open-Source Asset-Quellen für das Projekt.
+This document lists recommended open-source asset sources for the project.
 
-## Lizenz-Priorität
+## License priority
 
-Wir bevorzugen Assets mit folgenden Lizenzen (in dieser Reihenfolge):
-1. **CC0 (Public Domain)** - Keine Einschränkungen, ideal
-2. **CC-BY** - Attribution erforderlich
-3. **MIT/Apache** - Software-Lizenzen, auch für Assets nutzbar
+We prefer assets with the following licenses (in this order):
+1. **CC0 (Public Domain)** - No restrictions, ideal
+2. **CC-BY** - Attribution required
+3. **MIT/Apache** - Software licenses, also usable for assets
 4. **CC-BY-SA** - Attribution + Share-Alike
 
-## Empfohlene Quellen
+## Recommended sources
 
-### 3D-Modelle
+### 3D models
 
 #### Kenney.nl (CC0)
 - **URL**: https://kenney.nl/assets
-- **Lizenz**: CC0 1.0 (Public Domain)
-- **Relevant für**:
+- **License**: CC0 1.0 (Public Domain)
+- **Relevant for**:
   - Dice Pack: https://kenney.nl/assets/dice-pack
   - Board Game Kit: https://kenney.nl/assets/board-game-kit
-  - Furniture Kit (für Tische): https://kenney.nl/assets/furniture-kit
+  - Furniture Kit (for tables): https://kenney.nl/assets/furniture-kit
 
 #### Quaternius (CC0)
 - **URL**: https://quaternius.com/
-- **Lizenz**: CC0 1.0 (Public Domain)
-- **Relevant für**:
-  - Low-Poly Gelände
-  - Umgebungsobjekte
-  - Medieval/Fantasy Assets
+- **License**: CC0 1.0 (Public Domain)
+- **Relevant for**:
+  - Low-poly terrain
+  - Environment objects
+  - Medieval/Fantasy assets
 
 #### OpenGameArt.org
 - **URL**: https://opengameart.org/
-- **Lizenz**: Variiert (CC0, CC-BY, GPL)
-- **Hinweis**: Lizenz pro Asset prüfen!
-- **Suche nach**:
+- **License**: Varies (CC0, CC-BY, GPL)
+- **Note**: Check the license per asset!
+- **Search for**:
   - "tabletop"
   - "miniature"
   - "dice"
@@ -42,67 +42,67 @@ Wir bevorzugen Assets mit folgenden Lizenzen (in dieser Reihenfolge):
 
 ### Godot Asset Library
 
-#### 3D-Würfel — eigene Implementierung (MIT)
-- In-house: `scripts/dice_tray.gd` + `scripts/dice_d6.gd` — physikbasierte W6 in
-  einem skalierten SubViewport. Ersetzt den früheren AGPL-Fremd-Addon.
+#### 3D dice — in-house implementation (MIT)
+- In-house: `scripts/dice_tray.gd` + `scripts/dice_d6.gd` — physics-based D6 in
+  a scaled SubViewport. Replaces the former AGPL third-party addon.
 
-### Texturen
+### Textures
 
 #### Poly Haven (CC0)
 - **URL**: https://polyhaven.com/
-- **Lizenz**: CC0 1.0
-- **Relevant für**:
-  - Holztexturen (Tische)
-  - Stoff/Filz (Spielmatten)
-  - Stein/Gras (Gelände)
+- **License**: CC0 1.0
+- **Relevant for**:
+  - Wood textures (tables)
+  - Fabric/felt (game mats)
+  - Stone/grass (terrain)
 
 #### AmbientCG (CC0)
 - **URL**: https://ambientcg.com/
-- **Lizenz**: CC0 1.0
-- **Relevant für**:
-  - PBR-Materialien
-  - Hochauflösende Texturen
+- **License**: CC0 1.0
+- **Relevant for**:
+  - PBR materials
+  - High-resolution textures
 
-### 3D-Modell-Marktplätze (mit freien Assets)
+### 3D model marketplaces (with free assets)
 
-#### Sketchfab (Lizenz beachten!)
+#### Sketchfab (check the license!)
 - **URL**: https://sketchfab.com/
-- **Filter**: "Downloadable" + "CC0" oder "CC-BY"
-- **Format**: glTF 2.0 direkt exportierbar
-- **Beispiel**: Rounded Cube für Würfel-Basis
+- **Filter**: "Downloadable" + "CC0" or "CC-BY"
+- **Format**: glTF 2.0 directly exportable
+- **Example**: Rounded cube for the dice base
 
 #### Turbosquid (Free Section)
 - **URL**: https://www.turbosquid.com/Search/3D-Models/free
-- **Hinweis**: Lizenz genau prüfen!
+- **Note**: Check the license carefully!
 
 ### Audio
 
-#### Freesound.org (Lizenz variiert)
+#### Freesound.org (license varies)
 - **URL**: https://freesound.org/
-- **Suche nach**:
+- **Search for**:
   - "dice roll"
   - "wooden table"
   - "board game"
 
 #### Kenney Audio (CC0)
 - **URL**: https://kenney.nl/assets/category:Audio
-- **Lizenz**: CC0 1.0
+- **License**: CC0 1.0
 
-## Wargaming-spezifische Quellen
+## Wargaming-specific sources
 
-### STL zu glTF Konvertierung
-Viele Wargaming-Modelle sind als STL verfügbar. Konvertierung zu glTF:
-- Blender (kostenlos): Import STL → Export glTF
+### STL to glTF conversion
+Many wargaming models are available as STL. Conversion to glTF:
+- Blender (free): Import STL → Export glTF
 - Online: https://products.aspose.app/3d/conversion/stl-to-gltf
 
-### Freie Miniatur-STLs
+### Free miniature STLs
 - **Thingiverse**: https://www.thingiverse.com/search?q=wargaming
 - **MyMiniFactory**: https://www.myminifactory.com/search/?free=1&cat=59
 - **Cults3D**: https://cults3d.com/en/search?q=wargaming
 
-**Achtung**: Lizenz jedes Modells prüfen! Viele sind nur für persönliche Nutzung.
+**Caution**: Check the license of each model! Many are for personal use only.
 
-## Asset-Ordnerstruktur
+## Asset folder structure
 
 ```
 assets/
@@ -119,40 +119,40 @@ assets/
     └── ui/             # UI-Feedback-Sounds
 ```
 
-## Import-Workflow
+## Import workflow
 
-### glTF-Import in Godot
-1. Datei in entsprechenden `assets/`-Ordner kopieren
-2. Godot importiert automatisch
-3. In Import-Tab prüfen:
-   - "Generate Collisions" für physikalische Objekte
-   - "Loop" für Animationen falls nötig
+### glTF import into Godot
+1. Copy the file into the corresponding `assets/` folder
+2. Godot imports automatically
+3. Check in the Import tab:
+   - "Generate Collisions" for physical objects
+   - "Loop" for animations if needed
 
-### Textur-Import
-1. PNG/JPG in `assets/textures/` kopieren
-2. Import-Einstellungen anpassen:
-   - "Filter": Für Pixel-Art auf "Nearest" stellen
-   - "Mipmaps": Für 3D aktivieren
+### Texture import
+1. Copy PNG/JPG into `assets/textures/`
+2. Adjust the import settings:
+   - "Filter": Set to "Nearest" for pixel art
+   - "Mipmaps": Enable for 3D
 
-## Verwendete Assets
+## Used assets
 
-| Asset | Quelle | Lizenz | Verwendet für |
+| Asset | Source | License | Used for |
 |-------|--------|--------|---------------|
-| Kenney UI Pack(s) | [kenney.nl](https://kenney.nl) | CC0 | UI-Themes (`assets/kenney_ui/`, `ThemeManager`) |
-| 3D-Würfel (eigene W6) | projekt-intern | MIT | Würfel (`scripts/dice_tray.gd`, `scripts/dice_d6.gd`) |
-| gdUnit4 | [gdUnit4](https://github.com/MikeSchulze/gdUnit4) | MIT | Test-Framework (`addons/gdUnit4/`) |
-| Miniatur-GLBs | Model-Forge-Pipeline (KI-generiert) | projekt-intern | `assets/miniatures/<faction>/` |
-| `model-viewer` | [Google](https://modelviewer.dev) | Apache-2.0 | 3D-Vorschau in der Model-Forge-Review-UI |
+| Kenney UI Pack(s) | [kenney.nl](https://kenney.nl) | CC0 | UI themes (`assets/kenney_ui/`, `ThemeManager`) |
+| 3D dice (in-house D6) | project-internal | MIT | Dice (`scripts/dice_tray.gd`, `scripts/dice_d6.gd`) |
+| gdUnit4 | [gdUnit4](https://github.com/MikeSchulze/gdUnit4) | MIT | Test framework (`addons/gdUnit4/`) |
+| Miniature GLBs | Model Forge pipeline (AI-generated) | project-internal | `assets/miniatures/<faction>/` |
+| `model-viewer` | [Google](https://modelviewer.dev) | Apache-2.0 | 3D preview in the Model Forge review UI |
 
-## Lizenz-Hinweise
+## License notes
 
-Bei Verwendung von CC-BY Assets müssen folgende Informationen dokumentiert werden:
-- Autor/Ersteller
-- Titel des Werks
-- Quelle (URL)
-- Lizenz mit Link
+When using CC-BY assets, the following information must be documented:
+- Author/creator
+- Title of the work
+- Source (URL)
+- License with link
 
-Beispiel Attribution:
+Example attribution:
 ```
 "Dice Model" by [Autor] (https://example.com/asset)
 Licensed under CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
