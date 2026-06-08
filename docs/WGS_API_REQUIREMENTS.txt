@@ -1,34 +1,34 @@
 ================================================================================
-Niemandsland ↔ WGS Integration - Technische Anforderungen
+Niemandsland ↔ WGS Integration - Technical Requirements
 ================================================================================
 
-AKTUELLER STAND
----------------
-Niemandsland hat bereits eine WGS-Integration implementiert:
-- Parser für das WGS-Spielzustand-Format ({gameID}.txt)
-- Konvertierung der Koordinaten (Zoll → Meter)
-- Spawnen von Units basierend auf WGS-Daten
-- Support für Multibase-Units, Farben, Rotation
-- Parsing der OPR-Stats aus dem Name-Feld (Q+/D+, Waffen, Punkte)
+CURRENT STATE
+-------------
+Niemandsland already has a WGS integration implemented:
+- Parser for the WGS game-state format ({gameID}.txt)
+- Conversion of the coordinates (inches → meters)
+- Spawning of units based on WGS data
+- Support for multibase units, colors, rotation
+- Parsing of the OPR stats from the name field (Q+/D+, weapons, points)
 
 
 STATUS: API ENDPOINT ONLINE ✓
 -----------------------------
-Der getGameState.php Endpoint ist jetzt verfügbar:
+The getGameState.php endpoint is now available:
 
     https://udos3dworld.com/WargamingSimulator/getGameState.php?gameID={gameID}
 
-Niemandsland nutzt diesen Endpoint für den Server-Import.
+Niemandsland uses this endpoint for the server import.
 
 
 ================================================================================
-BENÖTIGT: Lese-Endpoint für Spielzustand
+REQUIRED: Read endpoint for game state
 ================================================================================
 
-Ein einfacher PHP-Endpoint der den Inhalt einer Spielzustand-Datei zurückgibt.
+A simple PHP endpoint that returns the contents of a game-state file.
 
 
-MINIMAL-IMPLEMENTIERUNG (GetGameState.php):
+MINIMAL IMPLEMENTATION (GetGameState.php):
 -------------------------------------------
 
     <?php
@@ -54,16 +54,16 @@ MINIMAL-IMPLEMENTIERUNG (GetGameState.php):
     ?>
 
 
-AUFRUF:
+CALL:
 -------
     GET https://udos3dworld.com/WargamingSimulator/GetGameState.php?gameID=20251102092403607291
 
 
 ================================================================================
-OPTIONAL: JSON-Format
+OPTIONAL: JSON format
 ================================================================================
 
-Falls strukturierte Daten bevorzugt werden:
+If structured data is preferred:
 
     <?php
     header('Content-Type: application/json');
@@ -90,10 +90,10 @@ Falls strukturierte Daten bevorzugt werden:
 
 
 ================================================================================
-OPTIONAL: Log-Datei mitlesen
+OPTIONAL: Also read the log file
 ================================================================================
 
-Für Chat/Spielprotokoll-Synchronisation:
+For chat/game-log synchronization:
 
     $logFile = $gameID . "_log.txt";
     if (file_exists($logFile)) {
@@ -102,28 +102,28 @@ Für Chat/Spielprotokoll-Synchronisation:
 
 
 ================================================================================
-WICHTIG: CORS-Header
+IMPORTANT: CORS header
 ================================================================================
 
-Der Header "Access-Control-Allow-Origin: *" ist notwendig, damit Niemandsland
-(als Desktop-Anwendung) auf die Daten zugreifen kann.
+The header "Access-Control-Allow-Origin: *" is necessary so that Niemandsland
+(as a desktop application) can access the data.
 
 
 ================================================================================
-ZUSAMMENFASSUNG DER OPTIONEN
+SUMMARY OF THE OPTIONS
 ================================================================================
 
-    Option              | Aufwand  | Beschreibung
+    Option              | Effort   | Description
     --------------------|----------|---------------------------------------------
-    A) Neuer Endpoint   | Gering   | Neues PHP-Skript wie oben
-    B) CORS für .txt    | Minimal  | .htaccess Regel für direkten Dateizugriff
-    C) ShowMap.php      | Gering   | ?export=json Parameter der nur Daten liefert
+    A) New endpoint     | Low      | New PHP script as above
+    B) CORS for .txt    | Minimal  | .htaccess rule for direct file access
+    C) ShowMap.php      | Low      | ?export=json parameter that returns data only
 
 
 ================================================================================
-RÜCKKANAL (Züge von Niemandsland → WGS)
+RETURN CHANNEL (moves from Niemandsland → WGS)
 ================================================================================
 
-Für bidirektionale Synchronisation könnte Niemandsland POST-Requests an DoAction.php
-senden. Das bestehende Format (ActionString) ist bereits dokumentiert und
-verstanden. Hierfür wäre ebenfalls CORS notwendig.
+For bidirectional synchronization, Niemandsland could send POST requests to DoAction.php.
+The existing format (ActionString) is already documented and understood.
+This would also require CORS.
