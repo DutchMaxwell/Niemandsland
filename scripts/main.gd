@@ -174,6 +174,11 @@ var terrain_overlay: Node3D = null
 var _action_confirm_dialog: ConfirmationDialog = null
 var _pending_confirm_action: Callable = Callable()
 
+# Overlay shown while an army's 3D models are downloaded from R2 (first time only).
+var _cache_progress_panel: PanelContainer = null
+var _cache_progress_label: Label = null
+var _cache_progress_bar: ProgressBar = null
+
 # Atmospheric Effects
 var atmospheric_clouds: Node3D = null
 
@@ -385,6 +390,13 @@ func _ready() -> void:
 	opr_army_manager.name = "OPRArmyManager"
 	opr_army_manager.table = table
 	add_child(opr_army_manager)
+
+	# Model caching (R2 download) progress — model_library is created in the manager's
+	# _ready above, so it exists now.
+	if opr_army_manager.model_library:
+		opr_army_manager.model_library.caching_started.connect(_on_model_caching_started)
+		opr_army_manager.model_library.caching_progress.connect(_on_model_caching_progress)
+		opr_army_manager.model_library.caching_finished.connect(_on_model_caching_finished)
 
 	# Set army_manager reference on SaveManager for GameUnit serialization
 	save_manager.army_manager = opr_army_manager
@@ -1532,6 +1544,61 @@ func _on_relay_reconnect_failed(reason: String) -> void:
 	network_status_label.add_theme_color_override("font_color", Color.RED)
 	_update_network_ui(false, false)
 	_cleanup_all_presence()
+
+
+# ============================================================================
+# Model caching (R2 download) progress
+# ============================================================================
+
+## An imported army needs models that aren't cached yet — show a progress overlay.
+func _on_model_caching_started(total: int) -> void:
+	_ensure_cache_progress_ui()
+	_cache_progress_bar.max_value = maxi(1, total)
+	_cache_progress_bar.value = 0
+	_cache_progress_label.text = "Lade 3D-Modelle … 0/%d" % total
+	_cache_progress_panel.visible = true
+
+
+func _on_model_caching_progress(done: int, total: int) -> void:
+	if not _cache_progress_panel:
+		return
+	_cache_progress_bar.max_value = maxi(1, total)
+	_cache_progress_bar.value = done
+	_cache_progress_label.text = "Lade 3D-Modelle … %d/%d" % [done, total]
+
+
+func _on_model_caching_finished() -> void:
+	if _cache_progress_panel:
+		_cache_progress_panel.visible = false
+
+
+## Lazily builds the centered top "downloading models" overlay (created once).
+func _ensure_cache_progress_ui() -> void:
+	if _cache_progress_panel:
+		return
+	_cache_progress_panel = PanelContainer.new()
+	_cache_progress_panel.anchor_left = 0.5
+	_cache_progress_panel.anchor_right = 0.5
+	_cache_progress_panel.anchor_top = 0.0
+	_cache_progress_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_cache_progress_panel.offset_top = 56.0
+	_cache_progress_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cache_progress_panel.visible = false
+	var margin := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 12)
+	_cache_progress_panel.add_child(margin)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 6)
+	margin.add_child(vb)
+	_cache_progress_label = Label.new()
+	_cache_progress_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(_cache_progress_label)
+	_cache_progress_bar = ProgressBar.new()
+	_cache_progress_bar.custom_minimum_size = Vector2(320, 18)
+	_cache_progress_bar.show_percentage = false
+	vb.add_child(_cache_progress_bar)
+	$UI.add_child(_cache_progress_panel)
 
 
 ## ============================================================================
