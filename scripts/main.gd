@@ -210,8 +210,6 @@ var _is_army_syncing: bool = false
 
 
 func _ready() -> void:
-	print("Niemandsland Prototype v0.2 - Initializing...")
-
 	# Debanding dithers the final frame, smoothing the dark space gradient so it shows
 	# no banding "segments".
 	get_viewport().use_debanding = true
@@ -467,7 +465,6 @@ func _ready() -> void:
 	terrain_overlay.name = "TerrainOverlay"
 	terrain_overlay.visible = true  # Ensure it's visible
 	table.add_child(terrain_overlay)
-	print("TerrainOverlay initialized and added to table")
 
 	# Give object_manager reference to terrain_overlay for terrain hints
 	object_manager.terrain_overlay = terrain_overlay
@@ -524,8 +521,6 @@ func _ready() -> void:
 		# Loaded battle / joining client: size comes from the saved/host data, so there is
 		# no chooser — go straight into the intro.
 		_start_cinematic_intro()
-
-	print("Niemandsland ready!")
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -622,7 +617,7 @@ func _undo() -> void:
 		return
 	var my_peer: int = network_manager.get_my_peer_id() if network_manager else 0
 	if undo_manager.can_undo_for(my_peer):
-		print("Undo: %s" % undo_manager.undo_for(my_peer))
+		undo_manager.undo_for(my_peer)
 
 
 ## Re-applies the most recently undone action OWNED BY THIS PLAYER (Ctrl+Y / Ctrl+Shift+Z).
@@ -631,7 +626,7 @@ func _redo() -> void:
 		return
 	var my_peer: int = network_manager.get_my_peer_id() if network_manager else 0
 	if undo_manager.can_redo_for(my_peer):
-		print("Redo: %s" % undo_manager.redo_for(my_peer))
+		undo_manager.redo_for(my_peer)
 
 
 ## Deletes every currently selected object as one undoable action (Delete key).
@@ -721,20 +716,14 @@ func _on_load_model() -> void:
 
 ## Handle selected model file
 func _on_model_file_selected(path: String) -> void:
-	print("Loading model: %s" % path)
 	var spawn_pos = _get_random_table_position()
 	var model = object_manager.spawn_custom_model(path, spawn_pos)
-	if model:
-		print("Model loaded successfully!")
-	else:
+	if not model:
 		push_error("Failed to load model: %s" % path)
 
 
 ## Performance test: Spawn 200 miniatures in a grid
 func _on_spawn_200() -> void:
-	print("=== PERFORMANCE TEST: Spawning 200 miniatures ===")
-	var start_time = Time.get_ticks_msec()
-
 	# Clear existing objects first
 	object_manager.clear_all_objects()
 
@@ -768,13 +757,6 @@ func _on_spawn_200() -> void:
 			object_manager.spawn_miniature(pos)
 			count += 1
 
-	var end_time = Time.get_ticks_msec()
-	var spawn_duration = end_time - start_time
-
-	print("Spawned %d miniatures in %d ms" % [count, spawn_duration])
-	print("Grid: %dx%d, Spacing: %.3fm x %.3fm" % [cols, rows, spacing_x, spacing_z])
-	print("=== Monitor FPS for performance test ===")
-
 
 ## Performance test: Spawn 500 miniatures
 func _on_spawn_500() -> void:
@@ -788,9 +770,6 @@ func _on_spawn_1000() -> void:
 
 ## Performance test: Spawn 100 complex terrain objects
 func _on_spawn_complex() -> void:
-	print("=== PERFORMANCE TEST: Spawning 100 complex terrain objects ===")
-	var start_time = Time.get_ticks_msec()
-
 	object_manager.clear_all_objects()
 
 	var cols = 10
@@ -817,15 +796,9 @@ func _on_spawn_complex() -> void:
 			object_manager.spawn_terrain(pos)
 			count += 1
 
-	var end_time = Time.get_ticks_msec()
-	print("Spawned %d terrain objects in %d ms" % [count, end_time - start_time])
-
 
 ## Helper function to spawn miniatures in a grid
 func _spawn_grid(total: int, cols: int, rows: int) -> void:
-	print("=== PERFORMANCE TEST: Spawning %d miniatures ===" % total)
-	var start_time = Time.get_ticks_msec()
-
 	object_manager.clear_all_objects()
 
 	var size_meters = table.table_size * FEET_TO_METERS
@@ -853,10 +826,6 @@ func _spawn_grid(total: int, cols: int, rows: int) -> void:
 			count += 1
 		if count >= total:
 			break
-
-	var end_time = Time.get_ticks_msec()
-	print("Spawned %d miniatures in %d ms" % [count, end_time - start_time])
-	print("=== Monitor FPS for performance test ===")
 
 
 ## Shows a warning + confirmation before running a destructive table action, so a
@@ -974,7 +943,6 @@ func _on_end_battle_pressed() -> void:
 
 ## Confirmed: End Battle and return to Main Menu
 func _on_end_battle_confirmed() -> void:
-	print("Ending battle, returning to main menu...")
 	get_tree().change_scene_to_file("res://scenes/startup_menu.tscn")
 
 
@@ -1883,27 +1851,21 @@ func _on_import_tts() -> void:
 
 ## Start TTS online import - only need JSON file
 func _on_import_tts_online() -> void:
-	print("=== TTS Online Import Button Pressed ===")
 	_tts_json_path = ""
 	_tts_models_dir = ""
 	_tts_import_mode = "online"
-	print("Set import mode to: %s" % _tts_import_mode)
 	tts_json_dialog.popup_centered()
 
 
 ## JSON file selected - branch based on import mode
 func _on_tts_json_selected(path: String) -> void:
 	_tts_json_path = path
-	print("TTS Save selected: %s" % path.get_file())
-	print("Import mode: %s" % _tts_import_mode)
 
 	# Hide dialog
 	tts_json_dialog.hide()
 
 	if _tts_import_mode == "online":
 		# Online mode: Start download and import immediately
-		print("=== Starting TTS Online Import ===")
-		print("JSON: %s" % _tts_json_path)
 		import_tts_online_btn.disabled = true
 		import_tts_online_btn.text = "Downloading..."
 		object_manager.import_tts_save_online(_tts_json_path)
@@ -1931,7 +1893,6 @@ func _on_tts_download_progress(current: int, total: int, _url: String) -> void:
 ## Models directory selected - next select Images directory
 func _on_tts_models_dir_selected(path: String) -> void:
 	_tts_models_dir = path
-	print("TTS Models dir selected: %s" % path)
 
 	# Hide previous dialog before opening next
 	tts_models_dialog.hide()
@@ -1942,7 +1903,6 @@ func _on_tts_models_dir_selected(path: String) -> void:
 ## Images directory selected - now perform the import
 func _on_tts_images_dir_selected(path: String) -> void:
 	var images_dir = path
-	print("TTS Images dir selected: %s" % path)
 
 	# Validate paths
 	if _tts_json_path.is_empty() or _tts_models_dir.is_empty():
@@ -1950,13 +1910,7 @@ func _on_tts_images_dir_selected(path: String) -> void:
 		return
 
 	# Perform import
-	print("=== Starting TTS Import ===")
-	print("JSON: %s" % _tts_json_path)
-	print("Models: %s" % _tts_models_dir)
-	print("Images: %s" % images_dir)
-
-	var imported = object_manager.import_tts_save(_tts_json_path, _tts_models_dir, images_dir)
-	print("Imported %d models from TTS save" % imported.size())
+	object_manager.import_tts_save(_tts_json_path, _tts_models_dir, images_dir)
 
 
 ## Try to detect TTS cache directory based on OS
@@ -2220,9 +2174,7 @@ func _spawn_selected_terrain(index: int) -> void:
 
 	var cursor_pos = object_manager.get_cursor_table_position()
 	terrain_library.spawn_terrain_piece(piece, cursor_pos)
-
 	# Keep browser open for placing multiple pieces
-	print("Spawning terrain: %s at cursor" % piece.name)
 
 
 ## ============================================================================
@@ -2248,8 +2200,6 @@ func _apply_ui_theme() -> void:
 	save_game_dialog.theme = current_theme
 	load_game_dialog.theme = current_theme
 	terrain_browser_popup.theme = current_theme
-
-	print("Applied UI theme: Glassmorphism")
 
 
 ## Adds a corner-bracket HudFrame overlay to a HUD PanelContainer (idempotent).
@@ -2531,8 +2481,6 @@ func _on_intro_finished() -> void:
 			cinematic_intro.queue_free()
 			cinematic_intro = null
 
-	print("Cinematic intro finished - welcome to Niemandsland!")
-
 
 ## ============================================================================
 ## Graphics Settings
@@ -2542,30 +2490,22 @@ func _on_intro_finished() -> void:
 ## UI order matches enum: Performance=0, Low=1, Medium=2, High=3, Ultra=4
 func _on_graphics_quality_changed(index: int) -> void:
 	var preset: GraphicsSettings.QualityPreset
-	var preset_name: String
 
 	match index:
 		0:  # Performance
 			preset = GraphicsSettings.QualityPreset.PERFORMANCE
-			preset_name = "Performance"
 		1:  # Low
 			preset = GraphicsSettings.QualityPreset.LOW
-			preset_name = "Low"
 		2:  # Medium
 			preset = GraphicsSettings.QualityPreset.MEDIUM
-			preset_name = "Medium"
 		3:  # High
 			preset = GraphicsSettings.QualityPreset.HIGH
-			preset_name = "High"
 		4:  # Ultra
 			preset = GraphicsSettings.QualityPreset.ULTRA
-			preset_name = "Ultra"
 		_:
 			preset = GraphicsSettings.QualityPreset.MEDIUM
-			preset_name = "Medium"
 
 	GraphicsSettings.apply_preset(preset)
-	print("Graphics quality set to: %s" % preset_name)
 
 
 ## ============================================================================
@@ -2647,12 +2587,8 @@ func _on_deployment_type_changed(deployment_type: int) -> void:
 		var zone_data = map_layout_editor.get_custom_zone_data()
 		if terrain_overlay.has_method("set_custom_zones"):
 			terrain_overlay.set_custom_zones(zone_data.player1_world, zone_data.player2_world)
-			print("Custom zones set: P1=%d vertices, P2=%d vertices" % [
-				zone_data.player1_world.size(), zone_data.player2_world.size()
-			])
 
 	terrain_overlay.set_deployment_zones(deployment_type)
-	print("Deployment zone type set from Map Tool: %d" % deployment_type)
 
 	# Auto-show deployment zones when a type is selected
 	if deployment_type > 0:
@@ -2675,7 +2611,6 @@ func _on_objectives_changed(objectives: Array) -> void:
 		world_objectives = map_layout_editor.get_objectives_for_overlay()
 
 	terrain_overlay.update_objectives(world_objectives)
-	print("Mission objectives updated: %d objectives" % world_objectives.size())
 
 	# Sync objectives to remote clients (4th element = owner, 0 = neutral)
 	var obj_owners: Array = terrain_overlay.get_objective_owners() if terrain_overlay.has_method("get_objective_owners") else []
@@ -2756,7 +2691,6 @@ func _on_deployment_zones_visibility_toggled(show_zones: bool) -> void:
 		return
 
 	terrain_overlay.set_deployment_zones_visible(show_zones)
-	print("Deployment zones visibility: %s" % ("visible" if show_zones else "hidden"))
 
 	# Sync visibility to remote clients
 	_broadcast_table_settings_update("deployment_visible", show_zones)
@@ -2784,8 +2718,6 @@ func _init_atmospheric_clouds() -> void:
 	# Give reference to camera controller for zoom-based visibility
 	if camera_pivot:
 		atmospheric_clouds.camera_controller = camera_pivot
-
-	print("Atmospheric clouds initialized")
 
 
 ## Handle unit movement (re-check coherency)

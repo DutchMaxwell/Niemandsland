@@ -1511,9 +1511,6 @@ func spawn_custom_model(file_path: String, pos: Vector3, _broadcast: bool = true
 		"fbx":
 			# FBX cannot be loaded at runtime - Godot converts it during import
 			push_warning("FBX files must be converted to GLB first. Use Blender or import into Godot project.")
-			print("FBX runtime import not possible. Please convert to GLB first:")
-			print("  - Blender: File > Import FBX, dann File > Export > glTF 2.0 (.glb)")
-			print("  - Oder die FBX-Datei ins Godot-Projekt ziehen (wird automatisch konvertiert)")
 			return null
 		_:
 			push_error("Unsupported model format: %s" % extension)
@@ -1576,7 +1573,6 @@ func spawn_custom_model(file_path: String, pos: Vector3, _broadcast: bool = true
 	add_child(wrapper)
 	wrapper.global_position = pos
 
-	print("Loaded custom model: %s" % file_path.get_file())
 	return wrapper
 
 
@@ -1619,7 +1615,6 @@ func _load_gltf_model(file_path: String, add_base: bool = true) -> Node3D:
 	# Enable shadow casting for all meshes
 	_enable_shadows_recursive(root)
 
-	print("Loaded GLTF with 32mm base: %s" % file_path.get_file())
 	return root
 
 
@@ -1753,7 +1748,6 @@ func _parse_binary_stl(file: FileAccess) -> ArrayMesh:
 	var mesh = ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 
-	print("Loaded binary STL: %d triangles" % tri_count)
 	return mesh
 
 
@@ -1801,8 +1795,6 @@ func _parse_ascii_stl(file: FileAccess) -> ArrayMesh:
 	var mesh = ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 
-	@warning_ignore("integer_division")
-	print("Loaded ASCII STL: %d triangles" % (vertices.size() / 3))
 	return mesh
 
 
@@ -1918,7 +1910,6 @@ func _load_obj_model(file_path: String, texture_path: String = "", add_base: boo
 
 	if not has_valid_normals:
 		# No valid normals in file, calculate from geometry
-		print("  No normals in OBJ, calculating from geometry")
 		mesh_normals = _calculate_smooth_normals(mesh_vertices)
 
 	# Create mesh
@@ -1980,7 +1971,6 @@ void fragment() {
 			material.set_shader_parameter("albedo_texture", texture)
 			material.set_shader_parameter("albedo_color", Color.WHITE)
 			material.set_shader_parameter("use_texture", true)
-			print("Applied texture: %s" % texture_path.get_file())
 
 	mesh_instance.material_override = material
 
@@ -2006,9 +1996,6 @@ void fragment() {
 	# Enable shadow casting for all meshes
 	_enable_shadows_recursive(root)
 
-	var uv_info = " with UVs" if mesh_uvs.size() > 0 else ""
-	@warning_ignore("integer_division")
-	print("Loaded OBJ: %d triangles%s" % [mesh_vertices.size() / 3, uv_info])
 	return root
 
 
@@ -2137,9 +2124,6 @@ func _calculate_smooth_normals(vertices: PackedVector3Array) -> PackedVector3Arr
 			normals[i] = normals[i].normalized()
 		else:
 			normals[i] = Vector3.UP  # Fallback for degenerate cases
-
-	if flipped_count > 0:
-		print("  Fixed %d/%d inverted face normals" % [flipped_count, tri_count])
 
 	return normals
 
@@ -2330,10 +2314,6 @@ func import_tts_save(json_path: String, models_cache_dir: String, images_cache_d
 	# Get unique models (avoid importing duplicates)
 	var unique_models = TTSImporter.get_unique_models(parse_result)
 
-	print("=== TTS Import Starting ===")
-	print("Save: %s" % parse_result.save_name)
-	print("Unique models to import: %d" % unique_models.size())
-
 	# Import each unique model
 	var success_count = 0
 	var fail_count = 0
@@ -2346,8 +2326,7 @@ func import_tts_save(json_path: String, models_cache_dir: String, images_cache_d
 		else:
 			fail_count += 1
 
-	print("=== TTS Import Complete ===")
-	print("Success: %d | Failed: %d" % [success_count, fail_count])
+	print("TTS import complete: %d imported, %d failed" % [success_count, fail_count])
 
 	return imported_objects
 
@@ -2357,7 +2336,6 @@ func _import_tts_object(tts_obj: TTSImporter.TTSObject, models_dir: String, imag
 	# Find the mesh file in cache
 	var mesh_path = TTSImporter.find_cache_file(tts_obj.mesh_url, models_dir, [".obj", ".OBJ"])
 	if mesh_path.is_empty():
-		print("  [SKIP] %s - mesh not found in cache" % tts_obj.name)
 		return null
 
 	# Find texture file if URL is specified
@@ -2377,7 +2355,6 @@ func _import_tts_object(tts_obj: TTSImporter.TTSObject, models_dir: String, imag
 			return null
 
 	if not model_scene:
-		print("  [FAIL] %s - could not load mesh" % tts_obj.name)
 		return null
 
 	# Calculate model bounds to determine appropriate scale
@@ -2392,8 +2369,6 @@ func _import_tts_object(tts_obj: TTSImporter.TTSObject, models_dir: String, imag
 		# Model is in larger units - scale it down to table size
 		model_scale = 0.1 / max_dim  # Target 10cm max dimension
 	model_scene.scale = Vector3(model_scale, model_scale, model_scale)
-
-	print("    Scale: %.6f (raw max dim: %.2f)" % [model_scale, max_dim])
 
 	# Calculate scaled AABB for collision and positioning
 	var scaled_aabb = AABB(mesh_aabb.position * model_scale, mesh_aabb.size * model_scale)
@@ -2442,9 +2417,6 @@ func _import_tts_object(tts_obj: TTSImporter.TTSObject, models_dir: String, imag
 
 	# Apply rotation (TTS uses degrees, only Y rotation for table objects)
 	wrapper.rotation_degrees = Vector3(0, tts_obj.rotation.y, 0)
-
-	var tex_info = " + texture" if not texture_path.is_empty() else ""
-	print("  [OK] %s%s" % [tts_obj.name, tex_info])
 
 	return wrapper
 
@@ -2522,9 +2494,6 @@ func _get_download_manager() -> TTSDownloadManager:
 ## json_path: Path to the TTS save JSON file
 ## Returns immediately, emits tts_online_import_completed when done
 func import_tts_save_online(json_path: String) -> void:
-	print("=== TTS Online Import Starting ===")
-	print("JSON: %s" % json_path)
-
 	# Parse the TTS save file
 	var parse_result = TTSImporter.parse_tts_save(json_path)
 	if not parse_result.error.is_empty():
@@ -2534,8 +2503,6 @@ func import_tts_save_online(json_path: String) -> void:
 
 	# Get unique models (avoid downloading duplicates)
 	var unique_models = TTSImporter.get_unique_models(parse_result)
-	print("Save: %s" % parse_result.save_name)
-	print("Unique models to download: %d" % unique_models.size())
 
 	# Store for later use after downloads complete
 	_pending_tts_import = parse_result
@@ -2564,10 +2531,6 @@ func import_tts_save_online_sync(json_path: String) -> Array[Node3D]:
 	# Get unique models
 	var unique_models = TTSImporter.get_unique_models(parse_result)
 
-	print("=== TTS Online Import (Sync) ===")
-	print("Save: %s" % parse_result.save_name)
-	print("Unique models: %d" % unique_models.size())
-
 	# Queue and start downloads
 	var dm = _get_download_manager()
 	dm.reset()
@@ -2590,8 +2553,7 @@ func import_tts_save_online_sync(json_path: String) -> Array[Node3D]:
 		else:
 			fail_count += 1
 
-	print("=== TTS Online Import Complete ===")
-	print("Success: %d | Failed: %d" % [success_count, fail_count])
+	print("TTS online import complete: %d imported, %d failed" % [success_count, fail_count])
 
 	return imported_objects
 
@@ -2600,8 +2562,6 @@ func import_tts_save_online_sync(json_path: String) -> Array[Node3D]:
 func _on_downloads_completed(_completed: Dictionary) -> void:
 	if _pending_tts_import == null:
 		return
-
-	print("=== Downloads Complete - Importing Models ===")
 
 	var dm = _get_download_manager()
 	var success_count = 0
@@ -2614,8 +2574,7 @@ func _on_downloads_completed(_completed: Dictionary) -> void:
 		else:
 			fail_count += 1
 
-	print("=== TTS Import Complete ===")
-	print("Success: %d | Failed: %d" % [success_count, fail_count])
+	print("TTS online import complete: %d imported, %d failed" % [success_count, fail_count])
 
 	_pending_tts_import = null
 	tts_online_import_completed.emit(success_count, fail_count)
@@ -2631,7 +2590,6 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 	# Find the mesh file in download cache
 	var mesh_path = dm.find_cached_file(tts_obj.mesh_url, true)
 	if mesh_path.is_empty():
-		print("  [SKIP] %s - mesh not downloaded" % tts_obj.name)
 		return null
 
 	# Find texture file if URL is specified
@@ -2651,7 +2609,6 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 			return null
 
 	if not model_scene:
-		print("  [FAIL] %s - could not load mesh" % tts_obj.name)
 		return null
 
 	# TTS uses 1 unit = 1 inch, Godot uses meters
@@ -2674,9 +2631,6 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 	else:
 		# Place model's bottom on table surface (y=0)
 		model_scene.position.y = -mesh_aabb.position.y
-
-	var base_info = " + base" if add_base else ""
-	print("    Size: %.1fmm x %.1fmm x %.1fmm%s" % [mesh_aabb.size.x * 1000, mesh_aabb.size.y * 1000, mesh_aabb.size.z * 1000, base_info])
 
 	# Wrap in StaticBody3D for selection
 	_object_counter += 1
@@ -2735,9 +2689,6 @@ func _import_tts_object_from_cache(tts_obj: TTSImporter.TTSObject, dm: TTSDownlo
 
 	# Apply rotation (TTS uses degrees, only Y rotation for table objects)
 	wrapper.rotation_degrees = Vector3(0, tts_obj.rotation.y, 0)
-
-	var tex_info = " + texture" if not texture_path.is_empty() else ""
-	print("  [OK] %s%s" % [tts_obj.name, tex_info])
 
 	return wrapper
 
@@ -2873,7 +2824,6 @@ func arrange_selected_in_rows(num_rows: int, cursor_pos: Vector3) -> void:
 				)
 			idx += 1
 
-	print("Arranged %d objects in %d rows (spacing: %.0fx%.0fmm)" % [count, num_rows, spacing.x * 1000, spacing.y * 1000])
 
 
 ## Arrange selected objects in arrow/wedge formation at cursor (A key)
@@ -2915,8 +2865,6 @@ func arrange_selected_arrow(cursor_pos: Vector3) -> void:
 		row += 1
 		row_count += 1
 
-	print("Arranged %d objects in arrow formation at cursor (spacing: %.0fmm)" % [count, col_spacing * 1000])
-
 
 ## Copy selected objects to clipboard (Ctrl+C)
 func copy_to_clipboard() -> void:
@@ -2927,8 +2875,6 @@ func copy_to_clipboard() -> void:
 	for obj in _selected_objects:
 		if is_instance_valid(obj):
 			_clipboard.append(obj)
-
-	print("Copied %d objects to clipboard" % _clipboard.size())
 
 
 ## Paste objects from clipboard at cursor position (Ctrl+V)
@@ -2980,8 +2926,6 @@ func paste_from_clipboard(cursor_pos: Vector3) -> void:
 			_add_to_selection(copy)
 			pasted_count += 1
 
-	print("Pasted %d objects at cursor" % pasted_count)
-
 
 ## Duplicate a TTS-imported object
 func _duplicate_tts_object(original: Node3D) -> Node3D:
@@ -3022,7 +2966,6 @@ func spawn_tts_terrain(mesh_url: String, diffuse_url: String, tts_scale: Vector3
 
 	if mesh_path.is_empty():
 		# Need to download
-		print("  [DOWNLOAD] Terrain mesh: %s" % mesh_url.get_file())
 		dm.queue_download(mesh_url, true)
 		if not diffuse_url.is_empty():
 			dm.queue_download(diffuse_url, false)
@@ -3066,8 +3009,6 @@ func spawn_tts_terrain(mesh_url: String, diffuse_url: String, tts_scale: Vector3
 	mesh_aabb.size.y = max(mesh_aabb.size.y, min_size)
 	mesh_aabb.size.z = max(mesh_aabb.size.z, min_size)
 
-	print("  Terrain AABB: %.3f x %.3f x %.3f" % [mesh_aabb.size.x, mesh_aabb.size.y, mesh_aabb.size.z])
-
 	# Create wrapper
 	_object_counter += 1
 	var wrapper = StaticBody3D.new()
@@ -3101,7 +3042,6 @@ func spawn_tts_terrain(mesh_url: String, diffuse_url: String, tts_scale: Vector3
 	add_child(wrapper)
 	wrapper.global_position = spawn_pos
 
-	print("  [OK] Terrain: %s" % terrain_name)
 	return wrapper
 
 
@@ -3122,15 +3062,10 @@ func toggle_lock_selected() -> void:
 			break
 
 	var new_state = any_unlocked  # Lock if any unlocked, unlock if all locked
-	var count = 0
 
 	for obj in _selected_objects:
 		if is_instance_valid(obj):
 			_set_object_locked(obj, new_state)
-			count += 1
-
-	var state_text = "Locked" if new_state else "Unlocked"
-	print("%s %d objects" % [state_text, count])
 
 	# Deselect if locking
 	if new_state:

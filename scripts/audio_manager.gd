@@ -64,7 +64,6 @@ func _ready() -> void:
 	_setup_music_players()
 	_setup_ambience_player()
 	_load_volume_settings()
-	print("AudioManager initialized (SFX pool: %d, buses: Master/Music/SFX/Ambience)" % SFX_POOL_SIZE)
 
 
 # === SFX ===

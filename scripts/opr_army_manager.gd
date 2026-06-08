@@ -478,9 +478,6 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 			use_glb_model = true
 			model_height = fit.height
 
-			print("OPRArmyManager: GLB '%s' base:%dmm tough:%d hover:%s scale:%.4f" % [
-				unit.name, base_long_mm, tough, str(should_hover), final_scale])
-
 	# Fallback: Create placeholder body if no GLB model found
 	if not use_glb_model:
 		# Create placeholder body (cylinder) - moderately scaled to base size
@@ -840,7 +837,6 @@ func _attach_joined_heroes(army: OPRApiClient.OPRArmy) -> void:
 		var host_unit: GameUnit = by_selection.get(unit.join_to_unit)
 		if hero_unit and host_unit and hero_unit != host_unit:
 			EquipmentDistributor.attach_hero_to_unit(hero_unit, host_unit)
-			print("OPRArmyManager: Hero '%s' joined to '%s'" % [hero_unit.get_name(), host_unit.get_name()])
 
 
 # ===== Round Management =====

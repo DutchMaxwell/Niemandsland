@@ -45,7 +45,6 @@ func _ready() -> void:
 	# Check if an .nml file was passed via command-line (e.g. double-click in file manager)
 	var file_to_open := _get_save_from_cmdline()
 	if not file_to_open.is_empty():
-		print("Opening file from command line: %s" % file_to_open)
 		ProjectSettings.set_setting("niemandsland/pending_load_path", file_to_open)
 		# Skip menu entirely and go straight to game
 		get_tree().change_scene_to_file("res://scenes/main.tscn")
@@ -138,21 +137,16 @@ func _play_startup_animation() -> void:
 	# Menu panel fade in
 	tween.tween_property(menu_panel, "modulate:a", 1.0, 0.4).set_delay(0.3)
 
-	print("Startup menu animation complete")
-
 
 func _on_start_battle_pressed() -> void:
-	print("Start New Battle pressed")
 	_transition_to_game()
 
 
 func _on_load_battle_pressed() -> void:
-	print("Load Battle pressed")
 	_open_load_battle_dialog()
 
 
 func _on_exit_pressed() -> void:
-	print("Exit Game pressed")
 	get_tree().quit()
 
 
@@ -160,12 +154,10 @@ func _on_exit_pressed() -> void:
 
 
 func _on_host_online_pressed() -> void:
-	print("Host Online Game pressed")
 	_show_host_popup()
 
 
 func _on_join_online_pressed() -> void:
-	print("Join Online Game pressed")
 	_show_join_popup()
 
 
@@ -305,7 +297,6 @@ func _open_load_battle_dialog() -> void:
 
 
 func _on_load_file_selected(path: String) -> void:
-	print("Loading battle from: %s" % path.get_file())
 	ProjectSettings.set_setting("niemandsland/pending_load_path", path)
 	_transition_to_game()
 

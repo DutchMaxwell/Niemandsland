@@ -525,7 +525,6 @@ func _spawn_tts_object(data: Dictionary, position: Vector3) -> Node3D:
 
 	if mesh_path.is_empty():
 		# Need to download - queue it
-		print("  [DOWNLOAD] %s" % mesh_url.get_file())
 		dm.queue_download(mesh_url, true)
 		if not diffuse_url.is_empty():
 			dm.queue_download(diffuse_url, false)
