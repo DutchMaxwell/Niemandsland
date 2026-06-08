@@ -5,6 +5,15 @@ venv/
 # Runtime-Verzeichnisse
 state/
 output/
+.bbtmp/
+
+# Downloaded third-party binaries / tool checkouts (e.g. realesrgan) — never committed.
+_tools/
+
+# Session-scratch / one-off experiment scripts (underscore-prefixed convention).
+# The graduated, reusable tools have no leading underscore and stay versioned
+# (faction_finalize.py, faction_publish.py, glb_srgb_fix.py, ...).
+_*.py
 
 # Python Cache
 __pycache__/
@@ -20,6 +29,7 @@ __pycache__/
 .hf_token
 .gemini_key
 .trellis_space
+.r2_credentials
 
 # OS
 .DS_Store
