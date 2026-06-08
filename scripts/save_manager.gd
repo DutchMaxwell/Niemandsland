@@ -34,6 +34,10 @@ func serialize_game_state() -> Dictionary:
 		"game_state": _serialize_game_state(),
 		"object_counter": object_manager._object_counter if object_manager else 0
 	}
+	# OPR special-rule descriptions so loaded saves + remote peers can show them
+	# (they carry no OPRArmy with the descriptions otherwise).
+	if army_manager and army_manager.has_method("get_all_rule_descriptions"):
+		state["rule_descriptions"] = army_manager.get_all_rule_descriptions()
 	return state
 
 
@@ -269,6 +273,10 @@ func load_game(path: String) -> Error:
 
 	# Load table
 	_deserialize_table(state.get("table", {}))
+
+	# Restore OPR special-rule descriptions so the loaded army shows them.
+	if army_manager and army_manager.has_method("merge_rule_descriptions"):
+		army_manager.merge_rule_descriptions(state.get("rule_descriptions", {}))
 
 	# Load GameUnits first (they contain model-level state)
 	var game_units_loaded = _deserialize_game_units(state.get("game_units", []))
