@@ -105,8 +105,8 @@ Autoloads: `ThemeManager`, `GraphicsSettings`, `AudioManager`.
 
 1 Godot unit = 1 metre. Tables and movement use real-world scale (a 4×4 ft table is
 1.22 m). Miniatures are ~16–60 mm. Because Godot's physics is unreliable at that
-scale, **dice run in a separate scaled SubViewport** via the `dice_roller` addon, and
-table dice are display-only. Conversions: `INCHES_TO_METERS = 0.0254`,
+scale, **dice run in a separate scaled SubViewport** (our own MIT `dice_tray.gd` /
+`dice_d6.gd`), and table dice are display-only. Conversions: `INCHES_TO_METERS = 0.0254`,
 `MM_TO_METERS = 0.001`.
 
 ## Documentation
@@ -115,7 +115,7 @@ table dice are display-only. Conversions: `INCHES_TO_METERS = 0.0254`,
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — systems & code map
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — build, run, test
 - [`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md) — Wargaming Simulator integration
-- [`docs/OPR_API_Research_Report.md`](docs/OPR_API_Research_Report.md) — OPR Army Forge API notes
+- [`docs/OPR_API_RESEARCH_REPORT.md`](docs/OPR_API_RESEARCH_REPORT.md) — OPR Army Forge API notes
 - [`tools/model_forge/README.md`](tools/model_forge/README.md) — model pipeline
 
 ## Security note

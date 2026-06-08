@@ -11,6 +11,9 @@ Forward+ renderer. Entry scene: `scenes/startup_menu.tscn`.
 | `GraphicsSettings` | `graphics_settings.gd` | Quality presets (shadows, SSAO, glow) |
 | `AudioManager` | `audio_manager.gd` | Audio buses / playback |
 
+`default_bus_layout.tres` (project root) is Godot's implicitly-loaded audio-bus
+layout that `AudioManager` builds on — load-bearing, not clutter; do not move it.
+
 ## Scenes
 
 - `startup_menu.tscn` — main scene; menu + `cinematic_intro.gd` animation.
