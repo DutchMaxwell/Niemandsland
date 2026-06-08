@@ -8,42 +8,42 @@
 faction_name: "Eternal Dynasty"
 
 aesthetic:
-  genre: "clean, bright, elegant psychic sci-fi — graceful ancient alien warriors, crisp studio render"
-  ip_strict: true   # elegant psychic alien warriors read 1:1 like a specific commercial range; strict gate flags lookalikes + Chaos/organic drift
-  style: "sleek graceful psychic alien warrior culture, polished and refined"
+  genre: "elegant sci-fi ronin samurai — an ancient alien warrior clan in laced lamellar armour, crisp studio render"
+  ip_strict: true   # a refined armoured-warrior range can drift toward a specific commercial line; the strict gate flags lookalikes and keeps the feudal-samurai silhouette clean (no spikes / Chaos / organic drift)
+  style: "disciplined feudal-Japanese samurai warrior culture reimagined as a graceful psychic alien dynasty — laced lamellar plate, horned war-helms and fierce demon face-masks, carried with a wandering ronin's weathered poise"
   inspiration:
-    - "Ancient graceful alien civilization with psychic crystal technology"
-    - "Sleek smooth-tech armour with flowing aerodynamic lines"
-    - "Art nouveau elegance fused with a refined alien warrior culture"
+    - "Feudal samurai clan warriors: rows of small plates laced with silk cords (lamellar), broad shoulder guards, a horned helm crest and a snarling demon face-mask"
+    - "A masterless ronin's weathered dignity fused with sleek ancient-alien psychic crystal technology"
+    - "Edo-era arms and armour — curved single-edged swords, polearms and ornate matchlock long-guns — recast in spirit-ivory ceramic and glowing soul-crystal"
   # NOTE: original_design_cues + weapon_style ARE injected into the prompt (humanoid units only) —
   # keep them POSITIVE and ORIGINAL; never name a protected design here.
   original_design_cues:
-    - "Slender elegant tall silhouette with a smooth tapering helmet and a single narrow vertical glowing emerald visor"
-    - "Smooth flowing pale ivory ceramic plates with sweeping curved edges and elongated swept-back shoulder fins"
-    - "An original interlocking three-ring spiral emblem inlaid on the chest and one shoulder"
-    - "Polished ivory armour with deep sapphire accent panels and bright emerald energy lines tracing the plates"
-    - "Clean, bright and refined look — no spikes, horns, skulls, fur or daemonic ornament"
+    - "A wide horned war-helm (kabuto) crowned with a tall original crescent crest, over a fierce snarling demon-faced half-mask (menpo) covering the lower face"
+    - "Armour built from rows of small overlapping plates laced together with dark silk cords (lamellar), worn over a layered silk under-robe and wide pleated trousers"
+    - "Broad rectangular shoulder guards and a hanging skirt of armoured tassets at the hips; a tall slender clan banner standing upright on the back"
+    - "Polished spirit-ivory ceramic plates lacquered deep sapphire, laced with emerald-glowing soul-crystal cords; an original interlocking three-ring clan emblem on one shoulder"
+    - "Tall, upright, disciplined samurai stance with a weathered ronin's poise — graceful, clean and refined; no fur, skulls or daemonic ornament"
     - "Slightly stylised clean studio render (crisp readable shapes, bright even lighting)"
-  weapon_style: "an original slim crystalline rifle with a smooth tapering barrel and a glowing emerald power crystal seated in the housing"
+  weapon_style: "an original single-edged energy katana — a slender curved spirit-ivory blade lit along its edge by an emerald soul-crystal — or an ornate matchlock-style long-gun with a lacquered ivory stock and a glowing crystal lock"
   explicitly_avoid:
     - "Any specific commercial miniatures-range trade dress, iconography or insignia"
+    - "Modern or contemporary military gear, real-world firearms or logos"
     - "Bulky, hunched or heavy proportions"
-    - "Human military designs and real-world firearms"
-    - "Spikes, horns, skulls, fur, daemonic or grimdark ornament"
+    - "Spikes, skulls, fur, daemonic or grimdark ornament (the only horns are the helm's crest)"
     - "Curved bone scythes or any living, grown or fleshy weapons"
 
 colors:
-  primary: "bone-white spirit-ivory ceramic armour"
-  secondary: "deep sapphire-blue soul-crystal accents"
+  primary: "spirit-ivory ceramic lamellar armour lacquered deep indigo-sapphire"
+  secondary: "deep sapphire-blue soul-crystal accents bound with dark silk lacing cords"
   accent: "bright emerald psychic energy glow"
 
 materials:
-  - "smooth spirit-ivory ceramic armour with sweeping polished plates"
-  - "glowing psychic soul-crystals inlaid into the armour"
-  - "flowing silk-like fabric and plumes"
-  - "crystalline psychic weapon housings"
+  - "laced lamellar plates of polished spirit-ivory ceramic lacquered deep sapphire"
+  - "glowing emerald psychic soul-crystals inlaid along the armour and blade edges"
+  - "flowing silk under-robes, sashes and a tall upright back-banner"
+  - "dark silk lacing cords binding the overlapping armour rows"
 
-creature_type: "ancient psychic alien warrior"
+creature_type: "ancient psychic alien samurai warrior"
 
 prompt_template: |
   {unit_name}, {creature_type} miniature for tabletop wargaming.
