@@ -45,6 +45,10 @@ var table: Node3D
 
 ## Loaded armies by player
 var armies: Dictionary = {}  # player_id -> OPRArmy
+## Session-wide special-rule name -> description, populated from save/load and from
+## the multiplayer state sync. Lets loaded saves and remote-only armies (which carry no
+## OPRArmy) still resolve rule descriptions, not just freshly imported armies.
+var rule_descriptions: Dictionary = {}
 
 ## Mapping from spawned model to unit data
 var model_to_unit: Dictionary = {}  # Node3D -> OPRUnit
@@ -706,10 +710,17 @@ func get_army(player_id: int) -> OPRApiClient.OPRArmy:
 	return armies.get(player_id, null)
 
 
-## Look up an OPR special-rule description across all loaded armies. Rule names are
-## mostly shared (Tough, AP, Fast, ...) and army-specific ones are unique, so the
-## first match wins. Returns "" if no army carries a description for it.
+## Look up an OPR special-rule description. Checks the session cache first (populated
+## from save/load + multiplayer sync), then the in-memory imported armies. Handles
+## parameterised rules ("Tough(3)" -> "Tough"). Returns "" if unknown.
 func get_rule_description(rule_name: String) -> String:
+	if rule_descriptions.has(rule_name):
+		return rule_descriptions[rule_name]
+	var paren := rule_name.find("(")
+	if paren > 0:
+		var base := rule_name.substr(0, paren).strip_edges()
+		if rule_descriptions.has(base):
+			return rule_descriptions[base]
 	for army in armies.values():
 		if army == null:
 			continue
@@ -717,6 +728,24 @@ func get_rule_description(rule_name: String) -> String:
 		if not desc.is_empty():
 			return desc
 	return ""
+
+
+## All known rule descriptions (imported armies + session cache), for serialization
+## into a save / the multiplayer state sync.
+func get_all_rule_descriptions() -> Dictionary:
+	var out: Dictionary = rule_descriptions.duplicate()
+	for army in armies.values():
+		if army and army.rule_descriptions is Dictionary:
+			for k in army.rule_descriptions:
+				out[k] = army.rule_descriptions[k]
+	return out
+
+
+## Merge incoming rule descriptions (from a loaded save or a peer's state sync) into
+## the session cache, so loaded/remote units can resolve descriptions too.
+func merge_rule_descriptions(incoming: Dictionary) -> void:
+	for k in incoming:
+		rule_descriptions[k] = incoming[k]
 
 
 # ===== NEW: GameUnit Access Methods =====

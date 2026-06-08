@@ -30,6 +30,10 @@ var COLOR_ACTIVE := "#" + HudTokens.AMBER.to_html(false)
 var COLOR_ALIVE := "#" + HudTokens.SUCCESS.to_html(false)
 var COLOR_DEAD := "#" + HudTokens.DANGER.to_html(false)
 
+## Optional reference (set by main.gd) used to resolve OPR special-rule descriptions
+## — works for loaded saves + remote units via the session cache.
+var army_manager: OPRArmyManager = null
+
 const PIP_FILLED: String = "▮"
 const PIP_EMPTY: String = "▯"
 
@@ -355,7 +359,18 @@ func _build_rules_text() -> String:
 				rules.append(str(rule.get("name", "")))
 
 	if not rules.is_empty():
-		lines.append("[b]Regeln:[/b] [color=%s]%s[/color]" % [COLOR_RULES, ", ".join(rules)])
+		# Each rule on its own line with its OPR description where known, so players can
+		# read what a (possibly enemy / networked) unit's rules do.
+		var rule_lines: Array[String] = []
+		for rule_name in rules:
+			var desc := ""
+			if army_manager and army_manager.has_method("get_rule_description"):
+				desc = army_manager.get_rule_description(rule_name)
+			if desc.is_empty():
+				rule_lines.append("[color=%s]%s[/color]" % [COLOR_RULES, rule_name])
+			else:
+				rule_lines.append("[color=%s]%s[/color] [color=#888888]— %s[/color]" % [COLOR_RULES, rule_name, desc])
+		lines.append("[b]Regeln:[/b]\n%s" % "\n".join(rule_lines))
 
 	return "\n".join(lines)
 
