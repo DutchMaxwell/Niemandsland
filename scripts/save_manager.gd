@@ -77,8 +77,8 @@ func _serialize_table() -> Dictionary:
 			obj_owners = terrain_overlay.get_objective_owners()
 		for i in range(map_layout_editor.mission_objectives.size()):
 			var obj = map_layout_editor.mission_objectives[i]
-			var owner := int(obj_owners[i]) if i < obj_owners.size() else 0
-			objectives.append({"x": obj.x, "y": obj.y, "owner": owner})
+			var owner_id := int(obj_owners[i]) if i < obj_owners.size() else 0
+			objectives.append({"x": obj.x, "y": obj.y, "owner": owner_id})
 		data["mission_objectives"] = objectives
 
 		# Wall segments (modular terrain)

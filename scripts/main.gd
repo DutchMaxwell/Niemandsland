@@ -2682,8 +2682,8 @@ func _on_objectives_changed(objectives: Array) -> void:
 	var obj_data := []
 	for i in range(world_objectives.size()):
 		var obj = world_objectives[i]
-		var owner := int(obj_owners[i]) if i < obj_owners.size() else 0
-		obj_data.append([obj.x, obj.y, obj.z, owner])
+		var owner_id := int(obj_owners[i]) if i < obj_owners.size() else 0
+		obj_data.append([obj.x, obj.y, obj.z, owner_id])
 	_broadcast_table_settings_update("objectives", obj_data)
 
 
@@ -2961,9 +2961,9 @@ func _on_remote_model_marker_value_updated(model: ModelInstance, marker_name: St
 
 
 ## Called when a remote peer captures/recolors a mission objective.
-func _on_remote_objective_owner_updated(index: int, owner: int) -> void:
+func _on_remote_objective_owner_updated(index: int, owner_id: int) -> void:
 	if terrain_overlay and terrain_overlay.has_method("set_objective_owner"):
-		terrain_overlay.set_objective_owner(index, owner)
+		terrain_overlay.set_objective_owner(index, owner_id)
 
 
 ## Called when a remote peer defines/updates a custom token in the library.
