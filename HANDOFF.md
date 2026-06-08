@@ -1,8 +1,8 @@
 # Handoff — Niemandsland codebase
 
-**For the next agent taking over the game codebase.** This is the entry-point briefing;
-the living detail lives in [`docs/SESSION_HANDOFF.md`](docs/SESSION_HANDOFF.md). Read this
-first, then `CLAUDE.md`, then [`PROJECT_STATUS.md`](PROJECT_STATUS.md).
+**For the next agent taking over the game codebase.** This is the entry-point briefing.
+Read this first, then `CLAUDE.md`, then [`PROJECT_STATUS.md`](PROJECT_STATUS.md) for the
+living detail (what works / in progress / roadmap).
 
 ## What you're inheriting
 
@@ -63,8 +63,7 @@ map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
   (`wss://niemandsland-relay.fly.dev`). Don't deploy blind.
 
 Smaller follow-ups (OPR rule-description persistence for loaded saves; pre-release IP
-review) are in [`PROJECT_STATUS.md`](PROJECT_STATUS.md) and
-[`docs/SESSION_HANDOFF.md`](docs/SESSION_HANDOFF.md).
+review) are in [`PROJECT_STATUS.md`](PROJECT_STATUS.md).
 
 ## Gotchas that will bite you (don't re-introduce)
 
@@ -91,5 +90,4 @@ review) are in [`PROJECT_STATUS.md`](PROJECT_STATUS.md) and
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md) (what works / roadmap) ·
 [`CHANGELOG.md`](CHANGELOG.md) (history) ·
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) ·
-[`docs/SESSION_HANDOFF.md`](docs/SESSION_HANDOFF.md) (living detail) ·
 [`docs/ASSET_DELIVERY.md`](docs/ASSET_DELIVERY.md) (R2 model delivery).
