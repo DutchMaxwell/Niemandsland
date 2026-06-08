@@ -2,8 +2,6 @@ extends Node
 ## Global Theme Manager
 ## Provides the Glassmorphism UI theme
 
-signal theme_changed(new_theme: Theme)
-
 const GlassmorphismTheme = preload("res://scripts/glassmorphism_theme.gd")
 
 var current_theme: Theme = null

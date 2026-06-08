@@ -28,6 +28,11 @@ GraphicsSettings="*res://scripts/graphics_settings.gd"
 AudioManager="*res://scripts/audio_manager.gd"
 UiFeedback="*res://scripts/ui_feedback.gd"
 
+[debug]
+
+gdscript/warnings/exclude_addons=true
+gdscript/warnings/treat_warnings_as_errors=true
+
 [display]
 
 window/size/viewport_width=1920
