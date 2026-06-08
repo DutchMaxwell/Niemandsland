@@ -1,72 +1,87 @@
 # Session Handoff — Niemandsland
 
-A snapshot so work can resume after a context reset. Living notes — update or
-delete entries as the project moves on.
+A snapshot so a fresh agent can take over the **game codebase** cleanly. Living
+notes — update or delete entries as the project moves on.
 
-- **Branch:** `claude/zen-bell-XDivY` — push here; the maintainer merges to
-  `main` **locally**.
-- **Engine:** Godot 4.6, GDScript. Test baseline: gdUnit4 **199/199 green**.
+## State at handoff
 
-## Working conventions
-- Respond to the maintainer in **German** (see `CLAUDE.md`).
-- **Never commit without being asked.** Push only to the branch above.
-- GDScript: explicit types, **no warnings** (warnings are treated as errors).
-  Don't use `:=` on Variant-returning calls — e.g. use `lerpf`, not `lerp`.
-- Real visuals can't be rendered headless (dummy renderer) → use PIL mockups
-  for UI previews; validate logic with compile-check + headless smoke + tests.
+- **Version:** `0.3.1-alpha` (Alpha Release Candidate) · **Engine:** Godot 4.6, GDScript.
+- **Branch / sync:** `main` is the source of truth and is **up to date** with all
+  shipped work (the multiplayer + UI fixes #24–42, on-demand R2 model delivery, the
+  0.3.1 docs). Feature work lands on a `claude/*` branch and is fast-forwarded to `main`.
+- **Tests:** gdUnit4 **255 green** across 37 suites (`test/`). No known failures.
+- **Working tree is clean** apart from the maintainer's local Model Forge scratch, which
+  is gitignored (see *Boundaries* below).
 
-### Validation (GODOT_BIN = `$HOME/.local/share/godot/godot`)
-- Compile-check: `"$GODOT_BIN" --headless --editor --quit --path .`
-- Tests: `"$GODOT_BIN" --headless --path . -s addons/gdUnit4/bin/GdUnitCmdTool.gd -a test --ignoreHeadlessMode`
-- Menu smoke: `"$GODOT_BIN" --headless --path . --quit-after 150` (expect "Startup menu animation complete")
+What works today and the roadmap live in [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md);
+the architecture map is [`ARCHITECTURE.md`](ARCHITECTURE.md); build/run/test details are
+in [`DEVELOPMENT.md`](DEVELOPMENT.md); the full history is `git log` / [`../CHANGELOG.md`](../CHANGELOG.md).
 
-## Recent work on this branch (newest first)
-- `ced4c7e` — **Radial menu** polished + trimmed: Inter labels (was cryptic
-  single letters), cyan hover with outward pop + accent arc, segment gaps,
-  dark glass + cyan rim + glow, red destructive actions, styled tooltip.
-  Removed **Stats/Info** and **Coherency**; dropped on-wheel shortcut numbers
-  (keys 1–9 already do "arrange at cursor").
-- `2cd6c81` — **Rotating anti-war menu quotes** (10, English, random per
-  launch) + **Dr. Strangelove** footer on the table-size dialog + **all
-  remaining UI localized to English**.
-- `373f3d5` — **Rebrand OpenTTS → Niemandsland** (no man's land / WWI
-  anti-war framing): app name + window title, README/docs/LICENSE, save
-  extension `.otts`→`.nml` (+ `tools/` MIME/.desktop/.reg renamed),
-  ProjectSettings namespace `opentts/`→`niemandsland/`, relay app/host
-  `opentts-relay`→`niemandsland-relay`, start-menu wordmark **NIEMANDS|LAND**
-  + subtitle + quote.
+## Validation (do this before committing)
 
-## Start-menu identity
-- Subtitle: "A Fan-Made Tabletop Simulator for OnePageRules Game Systems".
-- `scripts/startup_menu.gd` → `MENU_QUOTES` (10, picked at random in `_ready`):
-  Remarque ×3 (All Quiet on the Western Front), Full Metal Jacket, Das Boot,
-  Platoon, Catch-22, Paths of Glory, The Thin Red Line, Apocalypse Now.
-- `scripts/table_size_dialog.gd`: fixed footer — "Gentlemen, you can't fight
-  in here! This is the War Room!" (Dr. Strangelove).
+Godot is installed as a **Flatpak** (`org.godotengine.Godot`); there is no bare binary
+on `PATH`. Always pass `--filesystem=home` so the sandbox can read the project.
+
+```bash
+GODOT="flatpak run --filesystem=home org.godotengine.Godot"
+# 1. Re-import first — a stale class_name cache shows up as false "Identifier not declared".
+$GODOT --headless --path "$PWD" --import
+# 2. Parse/compile-check the WHOLE project (gdUnit4 does NOT load main.gd, so scene-script
+#    parse errors only surface here):
+$GODOT --headless --editor --quit --path "$PWD" 2>&1 \
+  | grep -iE "Fehler bei|nicht ableiten|Parse Error|SCRIPT ERROR|Cannot infer"   # expect none
+# 3. Tests:
+$GODOT --headless --path "$PWD" -s addons/gdUnit4/bin/GdUnitCmdTool.gd -a test --ignoreHeadlessMode
+```
+
+> **German locale:** this machine prints Godot errors in German — *"Fehler bei (1969,23):
+> … kann den Typ nicht ableiten"*, not the English "Parse Error". Grep for **both** (the
+> command above does). Missing this is how a `var x := <Variant call>` parse error once
+> shipped.
+
+## Working conventions (from `CLAUDE.md`)
+
+- Reply to the maintainer in **German**; keep everything in the codebase **English**.
+- **Never commit without being asked.** Conventional commits (`feat:`/`fix:`/…).
+- GDScript: explicit types, **no warnings** (treated as errors). Do **not** use `:=` on a
+  Variant-returning call (e.g. a method on a `Node`-typed reference) — annotate the type.
+- Real visuals can't be rendered headless (dummy renderer); validate logic with the
+  compile-check + tests, and eyeball UI changes in an actual build.
 
 ## Open items / follow-ups
-- **Relay deploy:** default URL is now `wss://niemandsland-relay.fly.dev`
-  (`relay/fly.toml` app = `niemandsland-relay`). The fly.io app must be
-  (re)deployed under that name, or online play breaks on the default URL.
-- **Platform renames (external, maintainer):** GitHub repo
-  `dutchmaxwell/opentts` → `…/niemandsland`; itch.io project slug; set the
-  GitHub variable `ITCH_TARGET`. CI references already point to the new slug;
-  GitHub auto-redirects old URLs.
-- **Pre-release** (runbooks in `docs/runbooks/`, checklist in
-  `docs/PRE_RELEASE_LICENSING.md`): git **history scrub** (old bundled OPR
-  data, the removed AGPL dice addon, and the old "OpenTTS" name still live in
-  history); IP-lawyer review (AI-generated + OPR-derived assets); move
-  `tools/model_forge/` to a separate repo.
-- **OPR data rule (hard):** OPR unit data must never be bundled or MIT — load
-  it only at runtime via the Army Forge API. Keep it that way.
-- **Save format:** extension is now `.nml` (was `.otts`) — breaking for old
-  saves (acceptable pre-release; flag if a user has saves to migrate).
-- **Radial controller:** `scripts/radial_menu_controller.gd` still has
-  `unit_stats` / `check_coherency` action handlers that are now unreachable
-  from the wheel (harmless). Optional cleanup.
-- **i18n:** all user-facing UI is English; some **code comments** remain
-  German (not UI — left as-is).
 
-## Map
-Architecture: `docs/ARCHITECTURE.md` · Project guide: `CLAUDE.md` ·
-Status/roadmap: `PROJECT_STATUS.md` · Build/run/test: `docs/DEVELOPMENT.md`.
+- **#43 — Host-drop reconnect (relay).** Guests already auto-rejoin after a relay blip
+  (#37), but if the **host** drops, the room dies. Full spec in
+  [`../relay/HOST_RECONNECT.md`](../relay/HOST_RECONNECT.md). **Deploy-gated:** it needs a
+  relay-server change + a Fly.io redeploy (`flyctl` is not installed here) and a local
+  two-player test before touching the shared live relay (`wss://niemandsland-relay.fly.dev`).
+- **OPR rule descriptions** resolve for freshly imported armies; loaded saves / remote-only
+  armies show rule *names* without descriptions (persist/sync is a future step).
+- **Pre-release** (see [`PRE_RELEASE_LICENSING.md`](PRE_RELEASE_LICENSING.md)): IP-lawyer
+  review of AI-generated + OPR-derived assets; **OPR unit data must never be bundled or
+  MIT-licensed** — it is loaded only at runtime via the Army Forge API. Keep it that way.
+
+## Known gotchas (don't re-introduce)
+
+- **Headless editor re-saves mutate two tracked files** — if you see them as unexplained
+  working-tree diffs, `git checkout` them; they are editor artifacts, not intended changes:
+  - `project.godot` loses `renderer/rendering_method.web="gl_compatibility"` under
+    `[rendering]`. That line is **required** for the Web/itch.io export (`web-itch.yml`) and
+    is harmless to desktop — it must stay.
+  - `scenes/map_layout.tscn` gets churned (regenerated `uid://`, per-node `unique_id=`,
+    `Color(1.0,…)`→`Color(1,…)`, default-valued properties dropped). No design intent — revert it.
+- **gdUnit4 never instantiates `main.gd`** — run the `--editor --quit` compile-check (step 2
+  above) or a `main.tscn` scene parse error slips past a green test run.
+
+## Boundaries — `tools/model_forge/` is the maintainer's domain
+
+Model Forge is an **offline content pipeline** (OPR data → Gemini image → TRELLIS 3D →
+Cloudflare R2). It is **not** loaded by the running game — the game only reads
+`assets/model_manifest.json` and fetches GLBs on demand. A codebase agent should not need
+to touch `tools/model_forge/`. Its secrets (`.gemini_key`, `.hf_token`, `.r2_credentials`,
+`.trellis_space`) and heavy scratch (`.bbtmp/`, `engine_comparison/` render sweeps,
+`state/`, one-off `_*.py`) are gitignored; the reusable, versioned pipeline is
+`faction_finalize.py` (image→GLB batch) + `faction_publish.py` (R2 upload + manifest merge)
++ `publish_manifest.py`, with `glb_srgb_fix.py` as a documented post-TRELLIS colour fix.
+Live on R2 today: **113 models across 5 factions** (Alien Hives, Battle Brothers, Robot
+Legions, Dao Union, a Dark Brothers hero).
