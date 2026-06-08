@@ -421,6 +421,151 @@
       "url": "ea159c9855bfcdb150fd53c3b773387dd9c67b7c60c07ff496e986f48ac8eee5.glb",
       "sha256": "ea159c9855bfcdb150fd53c3b773387dd9c67b7c60c07ff496e986f48ac8eee5",
       "size": 14975912
+    },
+    "robot_legions/annihilator lord": {
+      "url": "4f87466cfd1687504448a2bdeedd14cd2ae3fb6b107cf5aec9520246610d9ab7.glb",
+      "sha256": "4f87466cfd1687504448a2bdeedd14cd2ae3fb6b107cf5aec9520246610d9ab7",
+      "size": 15156372
+    },
+    "robot_legions/annihilators": {
+      "url": "a09a3c3365d5d33e5bcc52efebe236a33f1bbfaeec648bd42dd0de5f09e1eb61.glb",
+      "sha256": "a09a3c3365d5d33e5bcc52efebe236a33f1bbfaeec648bd42dd0de5f09e1eb61",
+      "size": 15399020
+    },
+    "robot_legions/bot swarms": {
+      "url": "923aff5045bd6efb220a384478499e502e19a94b731e4da771cc7b653d90efbf.glb",
+      "sha256": "923aff5045bd6efb220a384478499e502e19a94b731e4da771cc7b653d90efbf",
+      "size": 15799624
+    },
+    "robot_legions/death fortress": {
+      "url": "d64e52d8ae427865e95cc4683c36f364d3df3d82ed36dac07956e5929df188e7.glb",
+      "sha256": "d64e52d8ae427865e95cc4683c36f364d3df3d82ed36dac07956e5929df188e7",
+      "size": 17474696
+    },
+    "robot_legions/destroyer snakes": {
+      "url": "c146d06180e62e3948780d3508baadf6a307b6cc17fc34d596c14f9e4ec64d23.glb",
+      "sha256": "c146d06180e62e3948780d3508baadf6a307b6cc17fc34d596c14f9e4ec64d23",
+      "size": 14998232
+    },
+    "robot_legions/doom fighter": {
+      "url": "36d610f63a9ded343d500ea358526c208d7248cb7502e6963007fd355e8fdd6c.glb",
+      "sha256": "36d610f63a9ded343d500ea358526c208d7248cb7502e6963007fd355e8fdd6c",
+      "size": 17243304
+    },
+    "robot_legions/doom tank": {
+      "url": "de24cb6b3fca919e81527e518f24cbd38bfbe490b64b24a754f356f138f639f2.glb",
+      "sha256": "de24cb6b3fca919e81527e518f24cbd38bfbe490b64b24a754f356f138f639f2",
+      "size": 17617656
+    },
+    "robot_legions/echo 3g01": {
+      "url": "e3dca3c5827dd4498ba25f85ac6280e19803f0316168d6b4fb5cd3089ce0d781.glb",
+      "sha256": "e3dca3c5827dd4498ba25f85ac6280e19803f0316168d6b4fb5cd3089ce0d781",
+      "size": 14263748
+    },
+    "robot_legions/eternals": {
+      "url": "05e3f09deb00ebade8192ffdc2b880307eef75bb03095da0b067f5b939d5ad02.glb",
+      "sha256": "05e3f09deb00ebade8192ffdc2b880307eef75bb03095da0b067f5b939d5ad02",
+      "size": 15859536
+    },
+    "robot_legions/flesh eaters": {
+      "url": "6831430bb2c634ebd34491911119ce11c089a06d839924fa88d1321afa30ee42.glb",
+      "sha256": "6831430bb2c634ebd34491911119ce11c089a06d839924fa88d1321afa30ee42",
+      "size": 14102232
+    },
+    "robot_legions/forge spider": {
+      "url": "d8d6a8c1363d4b3905f6e41175c45cb68477b8240c929f39d46be653714d4ab0.glb",
+      "sha256": "d8d6a8c1363d4b3905f6e41175c45cb68477b8240c929f39d46be653714d4ab0",
+      "size": 16904628
+    },
+    "robot_legions/great monolith": {
+      "url": "3527f08e6e341c6899ec08426ee17978c026ac1d092d05b2c08826c66193d51c.glb",
+      "sha256": "3527f08e6e341c6899ec08426ee17978c026ac1d092d05b2c08826c66193d51c",
+      "size": 16698712
+    },
+    "robot_legions/great wraith shard": {
+      "url": "8f7605f6728e59e3e50660adaa874963681326faec84ddee44dc2c3cec1684a1.glb",
+      "sha256": "8f7605f6728e59e3e50660adaa874963681326faec84ddee44dc2c3cec1684a1",
+      "size": 17695700
+    },
+    "robot_legions/guardians": {
+      "url": "18f6a23b43d3806d066664b2432b15ca3c039a231a5f61c31307be900a923785.glb",
+      "sha256": "18f6a23b43d3806d066664b2432b15ca3c039a231a5f61c31307be900a923785",
+      "size": 15763236
+    },
+    "robot_legions/heavy annihilator": {
+      "url": "09a4f861ffb6bfc759315321719803ea4d938d3d89ce59c9ce0724a22dad4924.glb",
+      "sha256": "09a4f861ffb6bfc759315321719803ea4d938d3d89ce59c9ce0724a22dad4924",
+      "size": 15029960
+    },
+    "robot_legions/hover bikes": {
+      "url": "60a6222becd9e8b629f62fa571e07e79b23d32c25ef6725ee41a00fb7050e57f.glb",
+      "sha256": "60a6222becd9e8b629f62fa571e07e79b23d32c25ef6725ee41a00fb7050e57f",
+      "size": 15789680
+    },
+    "robot_legions/night transport": {
+      "url": "4c0c7127d140ea0c22ae421222e86c650fd99b93cc49173c011113bdc38fb414.glb",
+      "sha256": "4c0c7127d140ea0c22ae421222e86c650fd99b93cc49173c011113bdc38fb414",
+      "size": 19452100
+    },
+    "robot_legions/robot lord": {
+      "url": "f702cc77127bf0117eae4447b1daf22b782b98e9134c7e61deb28e4c974fa25d.glb",
+      "sha256": "f702cc77127bf0117eae4447b1daf22b782b98e9134c7e61deb28e4c974fa25d",
+      "size": 15777212
+    },
+    "robot_legions/robot snakes": {
+      "url": "1db2269dcad8e7885dc3ceb8884faacb38d775fda3ef88293db0bb3b7909368b.glb",
+      "sha256": "1db2269dcad8e7885dc3ceb8884faacb38d775fda3ef88293db0bb3b7909368b",
+      "size": 13588624
+    },
+    "robot_legions/snipers": {
+      "url": "b983a3a90e5bc70bbcb0460806cd3dacc6b836bc31b6edc5ebd694b1e3ad57a6.glb",
+      "sha256": "b983a3a90e5bc70bbcb0460806cd3dacc6b836bc31b6edc5ebd694b1e3ad57a6",
+      "size": 15800552
+    },
+    "robot_legions/spider walker": {
+      "url": "43a5086a47ce0049fa3a3da69796ed4689b1101e87d71a5372b5f61823054470.glb",
+      "sha256": "43a5086a47ce0049fa3a3da69796ed4689b1101e87d71a5372b5f61823054470",
+      "size": 16422204
+    },
+    "robot_legions/support platform": {
+      "url": "c1150bfdae775f235ab5c466ce3d8fc752cca7cfb4f44e411e2dc41ef1f78bbc.glb",
+      "sha256": "c1150bfdae775f235ab5c466ce3d8fc752cca7cfb4f44e411e2dc41ef1f78bbc",
+      "size": 16957244
+    },
+    "robot_legions/transport tank": {
+      "url": "9d65379a2331b7db76cf6fceccfb0c4b5a7d098dc137be05d94500e383df26a1.glb",
+      "sha256": "9d65379a2331b7db76cf6fceccfb0c4b5a7d098dc137be05d94500e383df26a1",
+      "size": 18330324
+    },
+    "robot_legions/tri scorpion lord": {
+      "url": "db8deb85cdcd17c4bdcb66ec679c6d880b55eacd259b9e363d72b9aca343c9d3.glb",
+      "sha256": "db8deb85cdcd17c4bdcb66ec679c6d880b55eacd259b9e363d72b9aca343c9d3",
+      "size": 18219484
+    },
+    "robot_legions/tri scorpion pistoleer": {
+      "url": "afc86b220d5c3af6d888ea65100ef7f1882a01bb87a56acf4c6500390ce1f52c.glb",
+      "sha256": "afc86b220d5c3af6d888ea65100ef7f1882a01bb87a56acf4c6500390ce1f52c",
+      "size": 18714640
+    },
+    "robot_legions/tri scorpions": {
+      "url": "f52c2ef9bf8276b9d47538a127815c5280d005008951f1267dd3bd0a8c6d9a41.glb",
+      "sha256": "f52c2ef9bf8276b9d47538a127815c5280d005008951f1267dd3bd0a8c6d9a41",
+      "size": 18059028
+    },
+    "robot_legions/tripod walker": {
+      "url": "e294a89fa4830d58547161e1cceb3442d90987840cd954f2d2acb5b163f1202f.glb",
+      "sha256": "e294a89fa4830d58547161e1cceb3442d90987840cd954f2d2acb5b163f1202f",
+      "size": 18008616
+    },
+    "robot_legions/warriors": {
+      "url": "96739df0fe36ee4c42f8816f5d602386edf10ceb2455ee1b18ea3540e7688e3d.glb",
+      "sha256": "96739df0fe36ee4c42f8816f5d602386edf10ceb2455ee1b18ea3540e7688e3d",
+      "size": 15118868
+    },
+    "robot_legions/wraith shard": {
+      "url": "4c3df37e9ccfcd9c653260da2019c160f0f4f67a6a33d496284b1a0461b2a52f.glb",
+      "sha256": "4c3df37e9ccfcd9c653260da2019c160f0f4f67a6a33d496284b1a0461b2a52f",
+      "size": 15238992
     }
   }
 }
