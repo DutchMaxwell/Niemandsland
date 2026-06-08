@@ -178,6 +178,7 @@ var _pending_confirm_action: Callable = Callable()
 var _cache_progress_panel: PanelContainer = null
 var _cache_progress_label: Label = null
 var _cache_progress_bar: ProgressBar = null
+var _cache_progress_tween: Tween = null
 
 # Atmospheric Effects
 var atmospheric_clouds: Node3D = null
@@ -217,6 +218,12 @@ func _ready() -> void:
 
 	# Connect hamburger menu toggle
 	hamburger_button.pressed.connect(_on_hamburger_pressed)
+
+	# AAA-style the slide-out game menu (under the hamburger): glassmorphism theme on its
+	# buttons/labels + a glass panel background, matching the rest of the UI.
+	if has_node("/root/ThemeManager"):
+		left_panel_scroll.theme = get_node("/root/ThemeManager").get_current_theme()
+	left_panel_scroll.add_theme_stylebox_override("panel", HudTokens.panel_style())
 
 	# Connect End Battle button and confirmation dialog
 	end_battle_btn.pressed.connect(_on_end_battle_pressed)
@@ -1181,7 +1188,10 @@ func _build_current_roll_column() -> void:
 
 	_current_roll_column = VBoxContainer.new()
 	_current_roll_column.name = "CurrentRollColumn"
-	_current_roll_column.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	# Fill the dice box's height and centre the stacked die-icons vertically within it,
+	# so the success column lines up with the dice box instead of clinging to the top.
+	_current_roll_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_current_roll_column.alignment = BoxContainer.ALIGNMENT_CENTER
 	_current_roll_column.add_theme_constant_override("separation", 2)
 
 	parent.remove_child(box)
@@ -1558,6 +1568,7 @@ func _on_relay_reconnect_failed(reason: String) -> void:
 ## An imported army needs models that aren't cached yet — show a progress overlay.
 func _on_model_caching_started(total: int) -> void:
 	_ensure_cache_progress_ui()
+	_kill_cache_tween()
 	_cache_progress_bar.max_value = maxi(1, total)
 	_cache_progress_bar.value = 0
 	_cache_progress_label.text = "Lade 3D-Modelle … 0/%d" % total
@@ -1568,8 +1579,18 @@ func _on_model_caching_progress(done: int, total: int) -> void:
 	if not _cache_progress_panel:
 		return
 	_cache_progress_bar.max_value = maxi(1, total)
-	_cache_progress_bar.value = done
+	# Glide smoothly to the new value instead of snapping (no "blob-blob" stepping).
+	_kill_cache_tween()
+	_cache_progress_tween = create_tween()
+	_cache_progress_tween.tween_property(_cache_progress_bar, "value", float(done), 0.4) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	_cache_progress_label.text = "Lade 3D-Modelle … %d/%d" % [done, total]
+
+
+func _kill_cache_tween() -> void:
+	if _cache_progress_tween and _cache_progress_tween.is_valid():
+		_cache_progress_tween.kill()
+	_cache_progress_tween = null
 
 
 func _on_model_caching_finished() -> void:
