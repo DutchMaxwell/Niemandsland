@@ -92,8 +92,6 @@ func setup_table(size_feet: Vector2) -> void:
 	# Add table edge/border
 	_create_table_border(size_meters)
 
-	print("Table setup: %.1fx%.1f feet (%.2fx%.2f meters)" % [size_feet.x, size_feet.y, size_meters.x, size_meters.y])
-
 
 ## Build the play-surface material: macro battlefield mat + tiled procedural micro-relief
 ## (anisotropic mipmaps + a seamless detail normal/height so it stays crisp up close).

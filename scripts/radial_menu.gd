@@ -277,10 +277,10 @@ func _select_index(index: int) -> void:
 # ===== Public API =====
 
 ## Opens the menu at the specified position with the given items.
-func open(position: Vector2, items: Array[RadialMenuItem], context: Dictionary = {}) -> void:
+func open(screen_pos: Vector2, items: Array[RadialMenuItem], context: Dictionary = {}) -> void:
 	_items = items
 	_context = context
-	_center_pos = position
+	_center_pos = screen_pos
 	_hovered_index = -1
 	_is_open = true
 

@@ -191,8 +191,6 @@ func update_overlay(cells_data: Dictionary, table_size: Vector2, grid_rotation: 
 	table_size_feet = table_size
 	grid_rotation_degrees = grid_rotation
 
-	print("TerrainOverlay.update_overlay: rotation = %.1f°, cells = %d" % [grid_rotation, cells_data.size()])
-
 	# Store grid_cells for terrain lookup
 	self.grid_cells = cells_data
 
@@ -228,8 +226,6 @@ func update_overlay(cells_data: Dictionary, table_size: Vector2, grid_rotation: 
 		mesh_instance.visible = true
 		add_child(mesh_instance)
 		overlay_meshes.append(mesh_instance)
-
-	print("TerrainOverlay: Created %d mesh instances from %d cells_data entries" % [overlay_meshes.size(), cells_data.size()])
 
 	# Always-visible Asgard effect labels per terrain zone (shown in any overlay mode).
 	# Wall-aware: rebuilt again from update_wall_models() once wall data is known.
@@ -461,7 +457,6 @@ func start_custom_zone_editing(symmetric: bool) -> void:
 	_clear_vertex_markers()
 
 	custom_zone_editing_changed.emit(true, custom_zone_mode)
-	print("Custom zone editing started: %s" % ("symmetric" if symmetric else "asymmetric P1"))
 
 
 ## Add a vertex to the current custom zone being edited
@@ -515,7 +510,6 @@ func complete_current_custom_zone() -> void:
 			custom_zone_editing_changed.emit(true, custom_zone_mode)
 			# Keep grid, clear markers for new zone
 			_clear_vertex_markers()
-			print("Player 1 zone completed. Now drawing Player 2 zone.")
 
 		CustomZoneMode.ASYMMETRIC_P2:
 			# P2 done, editing complete
@@ -525,7 +519,6 @@ func complete_current_custom_zone() -> void:
 			# Hide editing aids
 			hide_fine_grid()
 			_clear_vertex_markers()
-			print("Player 2 zone completed. Custom zone editing finished.")
 
 
 ## Cancel custom zone editing
@@ -1064,8 +1057,6 @@ func update_objectives(objectives: Array, owners: Array = []) -> void:
 	for i in range(mission_objectives.size()):
 		_create_objective_marker(mission_objectives[i], i + 1, objective_owners[i])
 
-	print("TerrainOverlay: Created %d objective markers" % mission_objectives.size())
-
 
 ## Color for an objective owner: neutral gold for 0, else the army's player color
 ## (shared with unit boundaries/bases via OPRArmyManager.PLAYER_COLORS).
@@ -1303,8 +1294,6 @@ func set_overlay_mode(mode: OverlayMode) -> void:
 		if is_instance_valid(mesh):
 			mesh.visible = show_flat
 
-	print("TerrainOverlay: Overlay mode set to %d" % mode)
-
 
 ## Get the current overlay mode
 func get_overlay_mode() -> OverlayMode:
@@ -1319,7 +1308,7 @@ func get_overlay_mode() -> OverlayMode:
 ## @param wall_segments: Array of Dictionaries with {edge_cell, edge_side, wall_key, length_inches, sub_position}
 ## @param t_size: Table size in feet
 ## @param rotation: Grid rotation in degrees
-func update_wall_models(wall_segments: Array, t_size: Vector2, rotation: float) -> void:
+func update_wall_models(wall_segments: Array, t_size: Vector2, rot_deg: float) -> void:
 	_clear_wall_instances()
 
 	# Record which cells carry a wall (the edge cell + its neighbour across that edge), so
@@ -1347,7 +1336,7 @@ func update_wall_models(wall_segments: Array, t_size: Vector2, rotation: float) 
 		grid_size += 1
 	var grid_dims := Vector2i(grid_size, grid_size)
 
-	var rotation_rad := deg_to_rad(rotation)
+	var rotation_rad := deg_to_rad(rot_deg)
 
 	for segment in wall_segments:
 		var edge_cell: Vector2i = segment.get("edge_cell", Vector2i.ZERO)
@@ -1405,16 +1394,16 @@ func update_wall_models(wall_segments: Array, t_size: Vector2, rotation: float) 
 		# Place the wall — its mesh is already lifted so the base sits on the table
 		model.position.x = rotated_x
 		model.position.z = rotated_z
-		model.rotation.y = wall_y_rotation - deg_to_rad(rotation)
+		model.rotation.y = wall_y_rotation - deg_to_rad(rot_deg)
 		add_child(model)
 		_wall_instances.append(model)
 
 	# Add corner pieces where perpendicular walls meet
-	_add_wall_corner_pieces(wall_segments, grid_dims, cell_size_meters, rotation_rad, rotation, t_size)
+	_add_wall_corner_pieces(wall_segments, grid_dims, cell_size_meters, rotation_rad, rot_deg, t_size)
 
 
 ## Add corner pieces at intersections where two perpendicular walls meet
-func _add_wall_corner_pieces(wall_segments: Array, grid_dims: Vector2i, cell_size_meters: float, rotation_rad: float, rotation: float, t_size: Vector2) -> void:
+func _add_wall_corner_pieces(wall_segments: Array, grid_dims: Vector2i, cell_size_meters: float, rotation_rad: float, rot_deg: float, t_size: Vector2) -> void:
 	var corner_size := CORNER_SIZE_INCHES * INCHES_TO_METERS
 
 	# Build a dictionary of wall endpoints: corner_pos -> Array of wall_keys
@@ -1543,7 +1532,7 @@ func _clear_wall_instances() -> void:
 ## @param objects: Array of Dictionaries {object_key, cell, offset, object_type}
 ## @param t_size: Table size in feet
 ## @param rotation: Grid rotation in degrees
-func update_placed_objects(objects: Array, t_size: Vector2, rotation: float) -> void:
+func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> void:
 	_clear_placed_objects()
 
 	if objects.is_empty():
@@ -1560,7 +1549,7 @@ func update_placed_objects(objects: Array, t_size: Vector2, rotation: float) -> 
 		grid_size += 1
 	var grid_dims := Vector2i(grid_size, grid_size)
 
-	var rotation_rad := deg_to_rad(rotation)
+	var rotation_rad := deg_to_rad(rot_deg)
 
 	for obj in objects:
 		var cell: Vector2i = obj.get("cell", Vector2i.ZERO)

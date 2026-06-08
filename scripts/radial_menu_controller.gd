@@ -432,7 +432,6 @@ func _toggle_fatigued(context: Dictionary) -> void:
 
 	game_unit.is_fatigued = not game_unit.is_fatigued
 	_update_fatigued_markers(game_unit)
-	print("%s is now %s" % [game_unit.get_name(), "Fatigued" if game_unit.is_fatigued else "not Fatigued"])
 
 	# Broadcast fatigued change to remote peers
 	if network_manager:
@@ -446,7 +445,6 @@ func _toggle_shaken(context: Dictionary) -> void:
 
 	game_unit.is_shaken = not game_unit.is_shaken
 	_update_shaken_markers(game_unit)
-	print("%s is now %s" % [game_unit.get_name(), "Shaken" if game_unit.is_shaken else "not Shaken"])
 
 	# Broadcast shaken change to remote peers
 	if network_manager:
@@ -523,7 +521,6 @@ func delete_objects(objects: Array) -> void:
 
 	for model in models:
 		model_deleted.emit(model)
-	print("Deleted %d selected object(s)" % (models.size() + nodes.size()))
 
 	if undo_manager:
 		undo_manager.push(action)
@@ -554,7 +551,6 @@ func _delete_unit(context: Dictionary) -> void:
 			model.node.queue_free()
 
 	unit_deleted.emit(game_unit)
-	print("Deleted unit: %s" % game_unit.get_name())
 
 	# Broadcast unit deletion to remote peers
 	if network_manager:
@@ -576,15 +572,11 @@ func _toggle_los(context: Dictionary) -> void:
 	var currently_blocking = terrain.get_meta("blocks_los", true)
 	terrain.set_meta("blocks_los", not currently_blocking)
 
-	var status = "blocking" if not currently_blocking else "not blocking"
-	print("%s is now %s LOS" % [terrain.name, status])
-
 
 func _delete_terrain(context: Dictionary) -> void:
 	var terrain = context.get("terrain") as Node3D
 	if terrain:
 		terrain.queue_free()
-		print("Deleted terrain: %s" % terrain.name)
 
 
 func _show_generic_info(context: Dictionary) -> void:
@@ -597,7 +589,6 @@ func _delete_generic(context: Dictionary) -> void:
 	var obj = context.get("object") as Node3D
 	if obj:
 		obj.queue_free()
-		print("Deleted: %s" % obj.name)
 
 
 ## Called when wounds are changed via the wounds dialog.
@@ -634,10 +625,9 @@ func _update_wound_marker(model: ModelInstance) -> void:
 
 
 ## Called when casts are changed via the casts dialog.
-func _on_casts_changed(unit: GameUnit, new_casts: int) -> void:
+func _on_casts_changed(unit: GameUnit, _new_casts: int) -> void:
 	# Update visual caster marker if needed
 	_update_caster_marker(unit)
-	print("Caster points changed for %s: %d/%d" % [unit.get_name(), new_casts, GameUnit.CASTER_POINTS_CAP])
 
 	# Broadcast casts change to remote peers
 	if network_manager:

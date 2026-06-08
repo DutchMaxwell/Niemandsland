@@ -9,7 +9,6 @@ var current_theme: Theme = null
 
 func _ready() -> void:
 	current_theme = GlassmorphismTheme.get_theme()
-	print("Theme Manager initialized with: Glassmorphism")
 
 
 ## Get the current theme

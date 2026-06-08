@@ -235,7 +235,6 @@ func import_from_share_link(share_link_or_id: String) -> OPRArmy:
 
 	# Call the TTS API endpoint
 	var url = "%s/tts?id=%s" % [API_BASE_URL, list_id]
-	print("OPRApiClient: Fetching from %s" % url)
 
 	var error = _http_request.request(url)
 	if error != OK:
@@ -328,7 +327,6 @@ func _parse_tts_api_response(json_text: String) -> OPRArmy:
 			army.faction_name = book_data.get("name", "")
 			# Normalize faction name for folder: "Alien Hives" -> "alien_hives"
 			army.faction_folder = army.faction_name.to_lower().replace(" ", "_").replace("-", "_")
-			print("OPRApiClient: Detected faction '%s' -> folder '%s'" % [army.faction_name, army.faction_folder])
 			# Army-book special-rule descriptions (faction-specific take precedence).
 			_extract_rule_descriptions(army, book_data)
 
@@ -345,7 +343,6 @@ func _parse_tts_api_response(json_text: String) -> OPRArmy:
 		if dir:
 			army.faction_name = army.name
 			army.faction_folder = potential_folder
-			print("OPRApiClient: Using list name as faction (fallback): '%s' -> folder '%s'" % [army.faction_name, army.faction_folder])
 
 	print("OPRApiClient: Loaded from API '%s' - %d units, %d pts, %d models (faction: %s)" % [
 		army.name, army.units.size(), army.points, army.model_count, army.faction_name
@@ -683,7 +680,6 @@ func _fetch_army_book(army_id: String, game_system_abbrev: String) -> Dictionary
 	# returns an empty body, so the faction's special rules + name would be missing.
 	var gs_id := _game_system_id(game_system_abbrev)
 	var url = "%s/army-books/%s?gameSystem=%d" % [API_BASE_URL, army_id, gs_id]
-	print("OPRApiClient: Fetching army book from %s" % url)
 
 	var error = _book_http_request.request(url)
 	if error != OK:
@@ -709,7 +705,6 @@ func _fetch_army_book(army_id: String, game_system_abbrev: String) -> Dictionary
 	var data = json.data
 	if data is Dictionary and data.has("name"):
 		_army_books[army_id] = data
-		print("OPRApiClient: Cached army book '%s'" % data.get("name", army_id))
 		return data
 
 	return {}
@@ -753,7 +748,6 @@ func _fetch_common_rules(army: OPRArmy) -> void:
 		_merge_common_descriptions(army, _common_rules_cache[gs_id])
 		return
 	var url = "%s/rules/common/%d" % [API_BASE_URL, gs_id]
-	print("OPRApiClient: Fetching common rules from %s" % url)
 	var error = _book_http_request.request(url)
 	if error != OK:
 		push_warning("OPRApiClient: Failed to request common rules: %d" % error)
@@ -821,7 +815,6 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 		var army_id = data.get("_id", "")
 		if not army_id.is_empty():
 			_army_books[army_id] = data
-			print("OPRApiClient: Cached army book '%s'" % data.get("name", army_id))
 
 
 ## Parse a unit from list data, enriching with book data if available

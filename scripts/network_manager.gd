@@ -107,9 +107,6 @@ func host_game(port: int = DEFAULT_PORT) -> Error:
 	_last_connection_status = peer.get_connection_status()
 	_rpc_error_count = 0
 
-	print("=== SERVER STARTED on port %d ===" % port)
-	print("Waiting for players to connect...")
-	print("Other instances can join with: localhost:%d" % port)
 	return OK
 
 
@@ -127,7 +124,6 @@ func join_game(address: String = "localhost", port: int = DEFAULT_PORT) -> Error
 	_last_connection_status = peer.get_connection_status()
 	_rpc_error_count = 0
 
-	print("=== CONNECTING to %s:%d ===" % [address, port])
 	return OK
 
 
@@ -407,7 +403,6 @@ func sync_unit_activation(unit_id: String, activated: bool, activation_round: in
 	if game_unit:
 		game_unit.is_activated = activated
 		game_unit.activation_round = activation_round
-		print("[Network] Unit %s activation: %s (round %d)" % [game_unit.get_name(), activated, activation_round])
 		remote_activation_updated.emit(game_unit)
 
 
@@ -436,7 +431,6 @@ func sync_model_wounds(unit_id: String, model_index: int, wounds: int, is_alive:
 			if model.node and is_instance_valid(model.node):
 				model.node.visible = is_alive
 
-			print("[Network] Model %d wounds: %d/%d (alive: %s)" % [model_index + 1, wounds, model.wounds_max, is_alive])
 			remote_wounds_updated.emit(model)
 
 
@@ -452,10 +446,8 @@ func sync_model_marker(unit_id: String, model_index: int, marker_name: String, a
 		if model:
 			if add:
 				model.add_marker(marker_name)
-				print("[Network] Model %d: +marker '%s'" % [model_index + 1, marker_name])
 			else:
 				model.remove_marker(marker_name)
-				print("[Network] Model %d: -marker '%s'" % [model_index + 1, marker_name])
 			remote_model_marker_updated.emit(model, marker_name, add, color, value)
 
 
@@ -469,10 +461,8 @@ func sync_unit_marker(unit_id: String, marker_name: String, add: bool, color: Co
 	if game_unit:
 		if add:
 			game_unit.add_marker_to_all(marker_name)
-			print("[Network] Unit %s: +marker '%s'" % [game_unit.get_name(), marker_name])
 		else:
 			game_unit.remove_marker_from_all(marker_name)
-			print("[Network] Unit %s: -marker '%s'" % [game_unit.get_name(), marker_name])
 		remote_unit_marker_updated.emit(game_unit, marker_name, add, color, value)
 
 
@@ -531,12 +521,10 @@ func sync_hero_attachment(hero_id: String, target_id: String) -> void:
 	if target_id.is_empty():
 		# Detach hero
 		EquipmentDistributor.detach_hero(hero)
-		print("[Network] Hero %s detached" % hero.get_name())
 	else:
 		var target = army_manager.get_game_unit_by_id(target_id)
 		if target:
 			EquipmentDistributor.attach_hero_to_unit(hero, target)
-			print("[Network] Hero %s attached to %s" % [hero.get_name(), target.get_name()])
 
 
 ## RPC: Sync unit casts
@@ -548,7 +536,6 @@ func sync_unit_casts(unit_id: String, casts_current: int) -> void:
 	var game_unit = army_manager.get_game_unit_by_id(unit_id)
 	if game_unit:
 		game_unit.casts_current = casts_current
-		print("[Network] Unit %s casts: %d" % [game_unit.get_name(), casts_current])
 		remote_casts_updated.emit(game_unit)
 
 
@@ -565,7 +552,6 @@ func sync_unit_delete(unit_id: String) -> void:
 			model.wounds_current = 0
 			if model.node and is_instance_valid(model.node):
 				model.node.queue_free()
-		print("[Network] Unit %s deleted" % game_unit.get_name())
 		remote_unit_deleted.emit(game_unit)
 
 
@@ -736,7 +722,6 @@ func sync_camera_direction(yaw: float, pitch: float) -> void:
 @rpc("any_peer", "call_remote", "reliable")
 func sync_dice_roll(dice_count: int, results: Array, total: int) -> void:
 	var sender = multiplayer.get_remote_sender_id()
-	print("[Network] Peer %d rolled %dd6: %s = %d" % [sender, dice_count, str(results), total])
 	remote_dice_rolled.emit(sender, dice_count, results, total)
 
 
