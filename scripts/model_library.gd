@@ -8,6 +8,15 @@ extends Node
 ## them. Stats/base sizes still come from the OPR API; this only resolves models.
 ## See docs/ASSET_DELIVERY.md.
 
+# === Signals ===
+
+## Emitted when an on-demand download batch begins (total = number of models to fetch).
+signal caching_started(total: int)
+## Emitted after each model finishes downloading during a batch.
+signal caching_progress(done: int, total: int)
+## Emitted when the batch finishes (all models cached).
+signal caching_finished()
+
 # === Constants ===
 
 const BUNDLED_MANIFEST_PATH: String = "res://assets/model_manifest.json"
@@ -24,6 +33,8 @@ func _ready() -> void:
 	_downloader = AssetDownloadManager.new()
 	_downloader.name = "AssetDownloadManager"
 	add_child(_downloader)
+	_downloader.progress_updated.connect(func(done: int, total: int) -> void:
+		caching_progress.emit(done, total))
 	_load_bundled_manifest()
 
 # === Public API ===
@@ -81,8 +92,13 @@ func ensure_models(unit_specs: Array) -> void:
 			continue
 		seen[sha] = true
 		batch.append({"url": _resolve_url(entry), "sha256": sha})
-	if not batch.is_empty():
-		await _downloader.ensure_batch(batch)
+	# Only the not-yet-cached models are downloaded; if everything is already on disk
+	# the batch is empty and no progress UI is shown (instant on the 2nd+ time).
+	var to_fetch: Array = batch.filter(func(e): return not _downloader.is_cached(e.get("sha256", "")))
+	if not to_fetch.is_empty():
+		caching_started.emit(to_fetch.size())
+		await _downloader.ensure_batch(to_fetch)
+		caching_finished.emit()
 
 # === Private helpers ===
 
