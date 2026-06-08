@@ -407,6 +407,7 @@ func _ready() -> void:
 	# Initialize Unit Card (docked, live battle state for the selected unit)
 	var unit_card_scene = load("res://scenes/unit_card.tscn")
 	unit_card = unit_card_scene.instantiate()
+	unit_card.army_manager = opr_army_manager
 	$UI.add_child(unit_card)
 
 	# Connect OPR import button
@@ -2026,6 +2027,10 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	var size = table_data.get("size_feet", [6, 4])
 	if size is Array and size.size() >= 2:
 		_adjust_camera_for_table_size(Vector2(size[0], size[1]))
+
+	# Adopt the host's OPR special-rule descriptions so this peer can show enemy rules.
+	if opr_army_manager and opr_army_manager.has_method("merge_rule_descriptions"):
+		opr_army_manager.merge_rule_descriptions(state.get("rule_descriptions", {}))
 
 	# Restore game units (OPR units with wounds, status, model positions)
 	save_manager._deserialize_game_units(state.get("game_units", []))
