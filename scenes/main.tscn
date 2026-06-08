@@ -526,23 +526,10 @@ layout_mode = 2
 text = "In box: 6 D6"
 horizontal_alignment = 1
 
-[node name="DiceBoxRow" type="HBoxContainer" parent="UI/HUD/DiceRollerPanel/VBox"]
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 6
-
-[node name="CurrentRollColumn" type="VBoxContainer" parent="UI/HUD/DiceRollerPanel/VBox/DiceBoxRow"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 2
-alignment = 1
-
-[node name="DiceRollerControl" type="SubViewportContainer" parent="UI/HUD/DiceRollerPanel/VBox/DiceBoxRow"]
+[node name="DiceRollerControl" type="SubViewportContainer" parent="UI/HUD/DiceRollerPanel/VBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(300, 220)
 layout_mode = 2
-size_flags_horizontal = 3
 size_flags_vertical = 3
 stretch = true
 script = ExtResource("5_diceroller")
