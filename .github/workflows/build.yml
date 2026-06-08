@@ -2,7 +2,7 @@ name: Build and Export
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -20,6 +20,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Guard — web renderer line present
+        run: |
+          grep -q 'renderer/rendering_method.web="gl_compatibility"' project.godot \
+            || { echo "::error::project.godot lost renderer/rendering_method.web=\"gl_compatibility\" (required for the web/itch.io export)"; exit 1; }
 
       - name: Import project (generates .godot/, compile-check)
         run: godot --headless --editor --quit --path . || true
