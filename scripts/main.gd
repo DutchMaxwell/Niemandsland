@@ -107,7 +107,9 @@ const DICE_LOG_ICON_SIZE: int = 16
 var _dice_count: int = DEFAULT_DICE_COUNT
 var _dice_preset_buttons: Array[Button] = []
 var _dice_count_value_label: Label = null
-var _current_roll_column: VBoxContainer = null
+## The success column now lives in the scene (DiceRollerPanel/VBox/DiceBoxRow) so it can
+## be repositioned in the editor; code only fills it with the per-roll die icons.
+@onready var _current_roll_column: VBoxContainer = %CurrentRollColumn
 
 # Network UI elements
 @onready var network_manager: Node = %NetworkManager
@@ -269,10 +271,10 @@ func _ready() -> void:
 	dice_roller_control.roll_finnished.connect(_on_roller_finished)
 	dice_roller_control.roll_started.connect(_on_roller_started)
 
-	# Build the click-based dice count selector and the success readout column,
-	# then initialise the dice set with the default count.
+	# Build the click-based dice count selector; the success readout column lives in the
+	# scene now, so just fill it with empty (all-zero) rows to start.
 	_build_dice_count_selector()
-	_build_current_roll_column()
+	_populate_current_roll_column({})
 	_set_dice_count(DEFAULT_DICE_COUNT)
 
 	# Connect network UI
@@ -1176,34 +1178,6 @@ func _clear_dice_log() -> void:
 
 ## Builds the success readout column to the left of the dice box by reparenting
 ## the dice control into a horizontal row: [success column | dice box].
-func _build_current_roll_column() -> void:
-	var box: Control = dice_roller_control
-	var parent: Node = box.get_parent()
-	var idx: int = box.get_index()
-
-	var row := HBoxContainer.new()
-	row.name = "DiceBoxRow"
-	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", 6)
-
-	_current_roll_column = VBoxContainer.new()
-	_current_roll_column.name = "CurrentRollColumn"
-	# Fill the dice box's height and centre the stacked die-icons vertically within it,
-	# so the success column lines up with the dice box instead of clinging to the top.
-	_current_roll_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_current_roll_column.alignment = BoxContainer.ALIGNMENT_CENTER
-	_current_roll_column.add_theme_constant_override("separation", 2)
-
-	parent.remove_child(box)
-	parent.add_child(row)
-	parent.move_child(row, idx)
-	row.add_child(_current_roll_column)
-	row.add_child(box)
-	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	_populate_current_roll_column({})
-
-
 ## Fills the current-roll column with one row per face (6 down to 1); faces with
 ## no hits are dimmed so the actual results stand out.
 func _populate_current_roll_column(counts: Dictionary) -> void:
