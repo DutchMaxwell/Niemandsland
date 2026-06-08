@@ -323,7 +323,7 @@ func _parse_tts_api_response(json_text: String) -> OPRArmy:
 
 	# Fetch faction name from Army Book API using armyId
 	if not army.army_id.is_empty():
-		var book_data = await _fetch_army_book(army.army_id, army.game_system)
+		var book_data = await _fetch_army_book(army.army_id, army.game_system_abbrev)
 		if not book_data.is_empty():
 			army.faction_name = book_data.get("name", "")
 			# Normalize faction name for folder: "Alien Hives" -> "alien_hives"
@@ -632,7 +632,7 @@ func _parse_army_forge_json(json_text: String, source_name: String = "") -> OPRA
 	var units_data = list_data.get("units", [])
 
 	# Try to load army book for full unit definitions
-	var book_data = await _fetch_army_book(army_id, army.game_system)
+	var book_data = await _fetch_army_book(army_id, army.game_system_abbrev)
 
 	for unit_data in units_data:
 		var unit = _parse_unit_from_list(unit_data, book_data)
@@ -669,7 +669,7 @@ func _expand_game_system(abbrev: String) -> String:
 
 
 ## Fetch army book data from OPR API
-func _fetch_army_book(army_id: String, _game_system: String) -> Dictionary:
+func _fetch_army_book(army_id: String, game_system_abbrev: String) -> Dictionary:
 	if army_id.is_empty():
 		return {}
 
@@ -679,8 +679,10 @@ func _fetch_army_book(army_id: String, _game_system: String) -> Dictionary:
 
 	loading_progress.emit("Loading army book data...")
 
-	# Try to fetch from OPR API using separate HTTP request node
-	var url = "%s/army-books/%s" % [API_BASE_URL, army_id]
+	# The army-book endpoint REQUIRES the ?gameSystem= query param — without it the API
+	# returns an empty body, so the faction's special rules + name would be missing.
+	var gs_id := _game_system_id(game_system_abbrev)
+	var url = "%s/army-books/%s?gameSystem=%d" % [API_BASE_URL, army_id, gs_id]
 	print("OPRApiClient: Fetching army book from %s" % url)
 
 	var error = _book_http_request.request(url)
