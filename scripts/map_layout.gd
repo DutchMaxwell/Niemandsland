@@ -413,7 +413,6 @@ func _on_deployment_type_selected(index: int) -> void:
 	_update_custom_zone_ui_visibility()
 
 	grid_container.queue_redraw()
-	print("Map Tool: Deployment type set to %d" % index)
 
 
 # ============================================================================
@@ -847,30 +846,30 @@ func _on_prefab_selected(index: int) -> void:
 
 ## Place a complete canonical terrain piece (footprint + walls + decoration) in one
 ## click, in the given orientation. Mirrors across the table center when enabled.
-func place_prefab(prefab_key: String, origin: Vector2i, rotation: int, flip: bool, mirror: bool) -> void:
+func place_prefab(prefab_key: String, origin: Vector2i, rot_deg: int, flip: bool, mirror: bool) -> void:
 	if not TerrainPrefabs.has_prefab(prefab_key):
 		return
 	_push_undo()
-	_add_piece(prefab_key, origin, rotation, flip)
+	_add_piece(prefab_key, origin, rot_deg, flip)
 	if mirror:
-		var size := TerrainPrefabs.footprint_size(prefab_key, rotation)
-		var mirrored := _mirror_position(origin, size, _calculate_grid_dimensions())
+		var dims := TerrainPrefabs.footprint_size(prefab_key, rot_deg)
+		var mirrored := _mirror_position(origin, dims, _calculate_grid_dimensions())
 		# Point symmetry = 180° rotation about the table center, so the mirrored piece's
 		# walls land on the opposite corner (e.g. N+W -> S+E).
-		_add_piece(prefab_key, mirrored, (rotation + 180) % 360, flip)
+		_add_piece(prefab_key, mirrored, (rot_deg + 180) % 360, flip)
 	_rebuild_derived()
 	_update_modular_status()
 
 
 ## Append a new piece (source of truth). seed=id keeps its decoration layout stable.
-func _add_piece(prefab_key: String, origin: Vector2i, rotation: int, flip: bool) -> int:
+func _add_piece(prefab_key: String, origin: Vector2i, rot_deg: int, flip: bool) -> int:
 	var id := _next_piece_id
 	_next_piece_id += 1
 	placed_pieces.append({
 		"id": id,
 		"prefab_key": prefab_key,
 		"origin": origin,
-		"rotation": rotation,
+		"rotation": rot_deg,
 		"flip": flip,
 		"seed": id,
 	})
@@ -1233,9 +1232,7 @@ func _on_save_file_selected(path: String) -> void:
 
 
 func _on_load_file_selected(path: String) -> void:
-	if load_layout(path):
-		print("Layout loaded successfully")
-	else:
+	if not load_layout(path):
 		push_error("Failed to load layout")
 
 
@@ -1244,11 +1241,6 @@ func set_table_size(size_feet: Vector2) -> void:
 	var size_changed = table_size_feet != size_feet
 
 	table_size_feet = size_feet
-	print("MapLayout.set_table_size: (%.1f, %.1f) feet" % [size_feet.x, size_feet.y])
-
-	# Recalculate grid dimensions
-	var grid_dims = _calculate_grid_dimensions()
-	print("  Grid dimensions: %dx%d cells" % [grid_dims.x, grid_dims.y])
 
 	# CRITICAL: If table size changed and we have terrain/objective data, clear it
 	# Grid cell coordinates are ABSOLUTE and become invalid when grid dimensions change
@@ -1855,10 +1847,7 @@ func _generate_terrain_layout() -> void:
 
 		if _try_generate_layout():
 			success = true
-			print("Auto-generated terrain layout (attempt %d)" % (retry + 1))
 			break
-		else:
-			print("Auto-generate attempt %d failed" % (retry + 1))
 
 	if not success:
 		push_error("Failed to generate compliant terrain layout after %d attempts" % max_retries)
@@ -1904,7 +1893,6 @@ func _try_generate_layout() -> bool:
 	# Use explicit ordering to ensure all types are attempted
 	var terrain_order = [TerrainType.FOREST, TerrainType.RUINS, TerrainType.CONTAINER, TerrainType.DANGEROUS]
 	var pieces_placed_by_type := {}
-	var pieces_failed_by_type := {}
 
 	for terrain_type in terrain_order:
 		if not target_pieces.has(terrain_type):
@@ -1912,20 +1900,17 @@ func _try_generate_layout() -> bool:
 
 		var count = target_pieces[terrain_type]
 		var templates = piece_templates[terrain_type]
-		var type_name = TerrainType.keys()[terrain_type]
 
 		# When symmetry is enabled, place half the pieces (they will be mirrored)
 		var pieces_to_place = count if not point_symmetry_enabled else int(ceil(count / 2.0))
 
 		pieces_placed_by_type[terrain_type] = 0
-		pieces_failed_by_type[terrain_type] = 0
 
 		# Calculate valid cell range based on table bounds (at 0° rotation)
 		# This ensures pieces are placed within the actual table, not just the grid
 		var valid_range = _get_valid_cell_range()
 
 		for i in range(pieces_to_place):
-			var placed = false
 			for attempt in range(max_attempts):
 				# Pick random template
 				var template = templates[randi() % templates.size()]
@@ -1937,7 +1922,6 @@ func _try_generate_layout() -> bool:
 				var max_y = valid_range.end.y - template.y
 
 				if max_x <= min_x or max_y <= min_y:
-					print("  Template %dx%d too large for valid area" % [template.x, template.y])
 					break
 
 				# Random position across entire table
@@ -1974,40 +1958,18 @@ func _try_generate_layout() -> bool:
 
 						pieces_placed_by_type[terrain_type] += 1
 
-					placed = true
 					break
 
-			if not placed:
-				pieces_failed_by_type[terrain_type] += 1
-				print("  Failed to place %s piece %d/%d after %d attempts" % [
-					type_name, i + 1, pieces_to_place, max_attempts
-				])
-				# Continue trying other pieces instead of failing immediately
-
-	# Print summary
-	print("Terrain placement summary (symmetry: %s):" % ("enabled" if point_symmetry_enabled else "disabled"))
+	# Tally how many pieces were placed across all terrain types.
 	var total_placed = 0
-	var total_failed = 0
 	for terrain_type in terrain_order:
 		if not pieces_placed_by_type.has(terrain_type):
 			continue
-		var type_name = TerrainType.keys()[terrain_type]
-		var placed = pieces_placed_by_type[terrain_type]
-		var failed = pieces_failed_by_type[terrain_type]
-		var target = target_pieces[terrain_type]
-		print("  %s: %d/%d placed (%d failed)" % [type_name, placed, target, failed])
-		total_placed += placed
-		total_failed += failed
-
-	print("Total: %d pieces placed, %d failed" % [total_placed, total_failed])
+		total_placed += pieces_placed_by_type[terrain_type]
 
 	# Consider it successful if we placed at least 50% of target pieces
 	var min_required = 8  # Minimum 8 pieces total (half of 15-20 range)
-	if total_placed >= min_required:
-		return true
-	else:
-		print("  FAILED: Only placed %d pieces (minimum %d required)" % [total_placed, min_required])
-		return false
+	return total_placed >= min_required
 
 
 ## Mirror a position across the TABLE center (point symmetry)
@@ -2082,10 +2044,6 @@ func _get_valid_cell_range() -> Rect2i:
 	var max_x = int(half_grid.x) + int((table_cells_x + 1) / 2) - 1  # Handle odd cell counts
 	var min_y = int(half_grid.y) - int(table_cells_y / 2)
 	var max_y = int(half_grid.y) + int((table_cells_y + 1) / 2) - 1
-
-	# Debug output
-	print("_get_valid_cell_range: grid=%dx%d, table_cells=%dx%d" % [grid_dims.x, grid_dims.y, table_cells_x, table_cells_y])
-	print("  Range: (%d,%d) to (%d,%d)" % [min_x, min_y, max_x, max_y])
 
 	# Clamp to grid bounds
 	min_x = max(0, min_x)

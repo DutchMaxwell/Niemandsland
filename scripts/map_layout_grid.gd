@@ -793,13 +793,13 @@ func _draw_warning_line(from: Vector2, to: Vector2, color: Color, width: float) 
 
 ## Draw an exclamation mark warning symbol
 func _draw_exclamation_mark(pos: Vector2, color: Color, fill_color: Color, zoom: float) -> void:
-	var size = 20.0 * zoom
+	var marker_size = 20.0 * zoom
 
 	# Draw warning triangle background
 	var triangle_points = PackedVector2Array([
-		pos + Vector2(0, -size * 0.6),      # Top
-		pos + Vector2(-size * 0.5, size * 0.4),  # Bottom left
-		pos + Vector2(size * 0.5, size * 0.4)    # Bottom right
+		pos + Vector2(0, -marker_size * 0.6),      # Top
+		pos + Vector2(-marker_size * 0.5, marker_size * 0.4),  # Bottom left
+		pos + Vector2(marker_size * 0.5, marker_size * 0.4)    # Bottom right
 	])
 	draw_colored_polygon(triangle_points, fill_color)
 
@@ -811,9 +811,9 @@ func _draw_exclamation_mark(pos: Vector2, color: Color, fill_color: Color, zoom:
 	# Draw exclamation mark
 	var exclaim_color = color
 	# Vertical bar
-	draw_line(pos + Vector2(0, -size * 0.35), pos + Vector2(0, size * 0.05), exclaim_color, 3.0 * zoom)
+	draw_line(pos + Vector2(0, -marker_size * 0.35), pos + Vector2(0, marker_size * 0.05), exclaim_color, 3.0 * zoom)
 	# Dot
-	draw_circle(pos + Vector2(0, size * 0.22), 2.5 * zoom, exclaim_color)
+	draw_circle(pos + Vector2(0, marker_size * 0.22), 2.5 * zoom, exclaim_color)
 
 
 ## Draw a filled circle with a border ring

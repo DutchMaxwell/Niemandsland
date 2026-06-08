@@ -114,8 +114,6 @@ func spawn_terrain_piece(piece: TerrainPiece, position: Vector3) -> void:
 		push_error("TerrainLibrary: Piece has no mesh URL")
 		return
 
-	print("Spawning terrain: %s" % piece.name)
-
 	# Use object_manager's TTS download and spawn system
 	var terrain = await object_manager.spawn_tts_terrain(
 		piece.mesh_url,
@@ -177,7 +175,6 @@ func _spawn_generated_terrain(piece: TerrainPiece, spawn_pos: Vector3) -> void:
 	body.global_position = Vector3(spawn_pos.x, 0.0, spawn_pos.z)
 	object_manager.add_child(body)
 
-	print("TerrainLibrary: Spawned generated '%s' at (%.3f, %.3f)" % [piece.name, spawn_pos.x, spawn_pos.z])
 	terrain_spawned.emit(body)
 
 

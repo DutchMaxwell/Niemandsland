@@ -21,8 +21,6 @@ static func distribute(game_unit: GameUnit, loadout: Array, special_rules: Array
 	# weapon / joined model) overrides this with its own elevated Tough in Step 3b. Without
 	# that split, a single upgraded model's Tough would wrongly buff every base model.
 	var base_wounds = _parse_tough_rating(special_rules)
-	if base_wounds > 1:
-		print("EquipmentDistributor: Found base Tough(%d) for unit with %d models" % [base_wounds, unit_size])
 	for model in game_unit.models:
 		model.wounds_max = base_wounds
 		model.wounds_current = base_wounds

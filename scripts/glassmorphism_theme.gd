@@ -39,7 +39,6 @@ static func create_theme() -> Theme:
 	_separators(th)
 	_richtext(th)
 
-	print("[HudTheme] created")
 	return th
 
 

@@ -204,7 +204,6 @@ func apply_preset(preset: QualityPreset) -> void:
 	# Save settings
 	save_settings()
 
-	print("Graphics preset applied: %s" % settings["name"])
 	settings_applied.emit(settings["name"])
 
 

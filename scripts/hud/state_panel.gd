@@ -36,11 +36,11 @@ func _init() -> void:
 	add_child(_action)
 
 
-func _centred_label(font: FontFile, size: int, color: Color) -> Label:
+func _centred_label(font: FontFile, font_size: int, color: Color) -> Label:
 	var l := Label.new()
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.add_theme_font_override("font", font)
-	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_font_size_override("font_size", font_size)
 	l.add_theme_color_override("font_color", color)
 	return l
 

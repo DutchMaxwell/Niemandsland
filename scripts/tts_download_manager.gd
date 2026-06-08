@@ -137,7 +137,6 @@ func start_downloads() -> void:
 	_total_downloads = _pending_downloads.size()
 	_failed_downloads.clear()
 
-	print("TTS Download: Starting %d downloads..." % _total_downloads)
 	_process_next_download()
 
 
@@ -166,8 +165,6 @@ func _process_next_download() -> void:
 	# Set download file
 	_http_request.download_file = cache_path
 
-	print("  [%d/%d] Downloading: %s" % [_current_download_idx + 1, _total_downloads, _shorten_url(url)])
-
 	var error = _http_request.request(url)
 	if error != OK:
 		push_warning("TTS Download: Failed to start request for %s (error %d)" % [url, error])
@@ -189,7 +186,6 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 		var cache_path = get_cache_path(url, is_model) + extension
 		_completed_downloads[url] = cache_path
 		download_completed.emit(url, cache_path, true)
-		print("    ✓ Saved: %s" % cache_path.get_file())
 	else:
 		_failed_downloads.append(url)
 		download_completed.emit(url, "", false)
@@ -233,13 +229,6 @@ func _get_extension_from_url(url: String, is_model: bool) -> String:
 
 	# Default based on type
 	return ".obj" if is_model else ".png"
-
-
-## Shorten URL for display
-func _shorten_url(url: String) -> String:
-	if url.length() > 60:
-		return url.substr(0, 30) + "..." + url.substr(url.length() - 25)
-	return url
 
 
 ## Clear the cache
