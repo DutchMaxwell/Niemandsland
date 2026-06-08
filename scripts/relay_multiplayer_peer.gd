@@ -48,17 +48,22 @@ var _transfer_channel: int = 0
 var _connection_status: int = MultiplayerPeer.CONNECTION_DISCONNECTED
 var _incoming_packets: Array[IncomingPacket] = []
 var _outgoing_queue: Array[PackedByteArray] = []
-var _heartbeat_timer: float = 0.0
-## Seconds since the last heartbeat_ack from the relay (drop detection).
-var _time_since_ack: float = 0.0
+# Heartbeat / drop detection use the WALL CLOCK (Time.get_ticks_msec), NOT a per-frame
+# counter. A frame-based timer runs slow whenever the framerate drops or the main thread
+# stalls (loading GLBs, R2 downloads, scene changes), so heartbeats went out too slowly
+# in real time and the relay's 30 s timeout dropped the client — the main cause of the
+# random disconnects. Wall-clock timing keeps the keepalive on schedule regardless of fps.
+var _last_heartbeat_ms: int = 0  # when we last SENT a heartbeat
+var _last_ack_ms: int = 0        # when we last RECEIVED a heartbeat_ack (alive marker)
+var _last_poll_ms: int = 0       # for stall detection (large gaps delay heartbeats)
 var _room_code: String = ""
 var _ws_connected: bool = false
 var _pending_action: String = ""  # "create" or "join"
 var _pending_code: String = ""
 ## True while an automatic rejoin of the same room is in progress.
 var _is_reconnecting: bool = false
-## Counts up while reconnecting; aborts the attempt past RECONNECT_TIMEOUT.
-var _reconnect_timer: float = 0.0
+## Wall-clock time (ms) the current reconnect attempt started; aborts past RECONNECT_TIMEOUT.
+var _reconnect_start_ms: int = 0
 
 
 ## Stores an incoming packet with its source peer ID.
@@ -106,6 +111,15 @@ func _on_connection_lost() -> void:
 		return  # a rejoin is already in flight; the reconnect timer governs the outcome
 	if _connection_status == MultiplayerPeer.CONNECTION_DISCONNECTED and not _ws_connected:
 		return  # already handled
+	# Diagnostics: a non-1000 close code (esp. 1006 = abnormal/proxy idle) points at the
+	# network/relay; recent "main loop stalled" warnings above point at a client stall.
+	# since_ack shows how long the link was silent before we gave up.
+	var now := Time.get_ticks_msec()
+	var since_ack := (now - _last_ack_ms) / 1000.0
+	var close_code := _ws.get_close_code() if _ws else -1
+	var close_reason := _ws.get_close_reason() if _ws else ""
+	push_warning("[Relay] Connection lost (peer=%d room=%s): %.0fs since last ack, ws_close=%d '%s'" % [
+		_my_peer_id, _room_code, since_ack, close_code, close_reason])
 	_ws_connected = false
 	_connection_status = MultiplayerPeer.CONNECTION_DISCONNECTED
 	relay_connection_lost.emit()
@@ -125,14 +139,12 @@ func attempt_reconnect() -> Error:
 		relay_reconnect_failed.emit("host cannot rejoin")
 		return ERR_UNAVAILABLE
 	_is_reconnecting = true
-	_reconnect_timer = 0.0
+	_reconnect_start_ms = Time.get_ticks_msec()
 	relay_reconnecting.emit()
 	if _ws:
 		_ws.close()
 		_ws = null
 	_ws_connected = false
-	_heartbeat_timer = 0.0
-	_time_since_ack = 0.0
 	_pending_action = "join"
 	_pending_code = _room_code
 	var err := _connect_to_relay(_relay_url)
@@ -151,13 +163,20 @@ func _poll() -> void:
 
 	_ws.poll()
 
+	var now_ms := Time.get_ticks_msec()
+
+	# Stall detection: a long gap between polls means the main thread blocked (loading a
+	# GLB, an R2 download, a scene change). During the gap no heartbeat is sent, and a
+	# gap approaching the relay's 30 s timeout is the prime cause of "random" drops.
+	if _ws_connected and _last_poll_ms > 0 and now_ms - _last_poll_ms > 5000:
+		push_warning("[Relay] main loop stalled %.1fs — heartbeats delayed (can trigger a relay timeout)"
+			% ((now_ms - _last_poll_ms) / 1000.0))
+	_last_poll_ms = now_ms
+
 	# Abort a stuck reconnect (relay unreachable / room gone, no response).
-	if _is_reconnecting:
-		_reconnect_timer += 0.016
-		if _reconnect_timer > RECONNECT_TIMEOUT:
-			_is_reconnecting = false
-			_reconnect_timer = 0.0
-			relay_reconnect_failed.emit("timed out")
+	if _is_reconnecting and now_ms - _reconnect_start_ms > int(RECONNECT_TIMEOUT * 1000.0):
+		_is_reconnecting = false
+		relay_reconnect_failed.emit("timed out")
 
 	var state = _ws.get_ready_state()
 
@@ -165,7 +184,8 @@ func _poll() -> void:
 		if not _ws_connected:
 			_ws_connected = true
 			_connection_status = MultiplayerPeer.CONNECTION_CONNECTING
-			_time_since_ack = 0.0  # fresh socket: reset the drop-detection clock
+			_last_ack_ms = now_ms       # fresh socket: reset the drop-detection clock
+			_last_heartbeat_ms = now_ms
 			relay_connected.emit()
 
 			# Execute pending action
@@ -186,17 +206,14 @@ func _poll() -> void:
 		# Flush queued outgoing packets (rate-limited)
 		_flush_outgoing_queue()
 
-		# Heartbeat
-		_heartbeat_timer += 0.016  # ~60fps
-		if _heartbeat_timer >= HEARTBEAT_INTERVAL:
-			_heartbeat_timer = 0.0
+		# Heartbeat (wall-clock so it stays on schedule even at low fps / during stalls)
+		if now_ms - _last_heartbeat_ms >= int(HEARTBEAT_INTERVAL * 1000.0):
+			_last_heartbeat_ms = now_ms
 			_send_json({"type": "heartbeat"})
 
-		# Drop detection: the relay acks every heartbeat. If acks stop arriving the
-		# link is dead even though the socket may not have reported CLOSED yet.
-		_time_since_ack += 0.016
-		if _time_since_ack > HEARTBEAT_TIMEOUT:
-			print("[Relay] No heartbeat_ack for %.0fs — connection considered lost" % HEARTBEAT_TIMEOUT)
+		# Drop detection: the relay acks every heartbeat. No ack for HEARTBEAT_TIMEOUT
+		# means the link is dead even if the socket hasn't reported CLOSED yet.
+		if now_ms - _last_ack_ms > int(HEARTBEAT_TIMEOUT * 1000.0):
 			_on_connection_lost()
 
 	elif state == WebSocketPeer.STATE_CLOSED:
@@ -276,7 +293,6 @@ func _close() -> void:
 	_connection_status = MultiplayerPeer.CONNECTION_DISCONNECTED
 	_incoming_packets.clear()
 	_outgoing_queue.clear()
-	_heartbeat_timer = 0.0
 	_room_code = ""
 	_ws_connected = false
 	_pending_action = ""
@@ -371,13 +387,12 @@ func _process_control_message(raw: String) -> void:
 			if _is_reconnecting:
 				# The room is gone (e.g. host left) — a rejoin is impossible.
 				_is_reconnecting = false
-				_reconnect_timer = 0.0
 				relay_reconnect_failed.emit(message)
 			elif _connection_status == MultiplayerPeer.CONNECTION_CONNECTING:
 				room_join_failed.emit(message)
 
 		"heartbeat_ack":
-			_time_since_ack = 0.0  # connection is alive
+			_last_ack_ms = Time.get_ticks_msec()  # connection is alive
 
 
 func _handle_room_created(code: String, peer_id: int) -> void:
