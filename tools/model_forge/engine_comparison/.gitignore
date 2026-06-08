@@ -1,12 +1,9 @@
-# Heavy / intermediate engine-comparison artifacts — keep docs, previews, key inputs & metrics.
-*.log
-hero_rodin*
-**/*.glb
-_zoom_*
-*_preprocessed.png
-*_deshadowed.png
-baseless/hero_baseless.png
-baseless/hero_noshadow.png
-**/feet*.png
-**/FINAL.png
-**/preview_debased.png
+# This directory is a COMPLETED engine/texture comparison study (TRELLIS was chosen;
+# see COMPARISON.md). It holds heavy scratch: per-unit render sweeps, texture A/Bs,
+# model-viewer dumps, intermediate atlases. Ignore ALL of it and keep only the written
+# conclusions (*.md). Already-tracked reference images/metrics stay tracked regardless
+# (git never un-tracks a committed file because of a later ignore rule).
+*
+!*/
+!*.md
+!.gitignore
