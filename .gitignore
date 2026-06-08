@@ -79,6 +79,10 @@ __pycache__/
 # never bundled. Keep them out of git AND out of builds (export_presets exclude_filter).
 # The d6 dice model (assets/models/) is a core bundled asset and stays tracked.
 assets/miniatures/*/glb/
+# Model Forge scratch hero temp + stray backups that land in the miniatures tree.
+# (NOT the tracked per-faction _reference*.png style inputs read by hero_workflow.py.)
+assets/miniatures/*/_hero_tmp.png
+assets/miniatures/*/*.tyranid_backup
 
 # OPR data must NEVER be committed — it is OPR's content (not MIT-licensable) and
 # is loaded exclusively via the Army Forge API at runtime.
