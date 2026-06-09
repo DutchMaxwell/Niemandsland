@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_url": "https://assets.akesberg.de/",
+  "biomes": {
+    "alien_jungle": {
+      "url": "8f1eea1bb32d6f84e42193f7a7dda1daf36553015c6320e091a278a6e349f6bc.webp",
+      "sha256": "8f1eea1bb32d6f84e42193f7a7dda1daf36553015c6320e091a278a6e349f6bc",
+      "size": 16706100
+    },
+    "arid_desert": {
+      "url": "949144adfd439f8ddfc8671a6cc8d04ef88dd7273e7adc8d3a734f99c6d84777.webp",
+      "sha256": "949144adfd439f8ddfc8671a6cc8d04ef88dd7273e7adc8d3a734f99c6d84777",
+      "size": 13378202
+    },
+    "frozen_tundra": {
+      "url": "05c4135237def36e69ba114a6b1d228a47e6e775b12315cd30e353977ded98e6.webp",
+      "sha256": "05c4135237def36e69ba114a6b1d228a47e6e775b12315cd30e353977ded98e6",
+      "size": 8371908
+    },
+    "temperate_grassland": {
+      "url": "8561ef8d871f95960279e2f6be250051cf63d25c30b0331bfdcf38b4407d6aed.webp",
+      "sha256": "8561ef8d871f95960279e2f6be250051cf63d25c30b0331bfdcf38b4407d6aed",
+      "size": 16206854
+    },
+    "urban_ruins": {
+      "url": "a72023d518914faf42d1773428e9bb1dce5c99d5d2c20195723943f777d6e7ea.webp",
+      "sha256": "a72023d518914faf42d1773428e9bb1dce5c99d5d2c20195723943f777d6e7ea",
+      "size": 14718176
+    },
+    "volcanic_ash": {
+      "url": "626ed15ee898219c6b7bdd529ee9340bf73f3283b5cae47d786d075527bcca87.webp",
+      "sha256": "626ed15ee898219c6b7bdd529ee9340bf73f3283b5cae47d786d075527bcca87",
+      "size": 14242298
+    }
+  }
+}
