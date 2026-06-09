@@ -10,31 +10,34 @@ extends StaticBody3D
 
 var _default_texture: Texture2D = null
 
+## On-demand biome battlemap delivery (R2 + local cache); see BiomeLibrary.
+var _biome_library: BiomeLibrary = null
+
 var table_size: Vector2 = Vector2(4, 4)  # In feet, will be converted to meters
 
 const FEET_TO_METERS: float = 0.3048  # 1 foot = 0.3048 meters
 const INCHES_TO_METERS: float = 0.0254  # 1 inch = 0.0254 meters
 
-# Crisp ground: the biome battlemaps are seamless tileable textures, so they are
-# repeated MACRO_TILING times across the table for high effective resolution, with a
-# densely-tiled procedural micro-relief on top for close-up surface detail.
+# One biome battlemap covers the whole table at a FIXED real-world extent
+# (REFERENCE_TABLE_FEET); smaller tables show a centred crop, so ground features keep a
+# constant real-world scale regardless of table size. A densely-tiled procedural
+# micro-relief is layered on top for crisp close-up surface detail.
 const GROUND_SHADER: Shader = preload("res://shaders/table_ground.gdshader")
-const MACRO_TILING: float = 3.0
+const REFERENCE_TABLE_FEET: Vector2 = Vector2(6, 4)  # battlemaps are authored for 6x4 ft
 const DETAIL_TILING: float = 28.0
 const DETAIL_NOISE_SIZE: int = 512
 
-# Nano-Banana biome battlemaps (assets/terrain/biomes/). The standard map is the default.
+# Biome battlemaps are delivered on demand from R2 (see docs/ASSET_DELIVERY.md) and cached
+# locally; assets/biome_manifest.json maps each key -> { url, sha256 }. This is the canonical
+# list of selectable biomes (the standard map is the default); delivery is resolved by
+# BiomeLibrary at runtime, with table_surface_default.png as the offline fallback.
 const DEFAULT_BIOME: String = "temperate_grassland"
-const BIOME_TEXTURES: Dictionary = {
-	"temperate_grassland": "res://assets/terrain/biomes/temperate_grassland.png",
-	"arid_desert": "res://assets/terrain/biomes/arid_desert.png",
-	"frozen_tundra": "res://assets/terrain/biomes/frozen_tundra.png",
-	"volcanic_ash": "res://assets/terrain/biomes/volcanic_ash.png",
-	"alien_jungle": "res://assets/terrain/biomes/alien_jungle.png",
-	"urban_ruins": "res://assets/terrain/biomes/urban_ruins.png",
-}
+const BIOMES: Array[String] = [
+	"temperate_grassland", "arid_desert", "frozen_tundra",
+	"volcanic_ash", "alien_jungle", "urban_ruins",
+]
 
-## Currently selected biome (key into BIOME_TEXTURES).
+## Currently selected biome (key into BIOMES).
 var biome: String = DEFAULT_BIOME
 
 @onready var mesh_instance: MeshInstance3D = $TableMesh
@@ -54,8 +57,13 @@ func _ready() -> void:
 	table_physics.bounce = 0.1  # Very low bounce
 	physics_material_override = table_physics
 
-	# Load the selected biome battlemap (falls back to the legacy mat if missing).
-	_load_biome_texture()
+	# Biome battlemaps load on demand from R2 (BiomeLibrary). Start with the bundled
+	# fallback surface so the table always renders, then swap in the biome once cached.
+	_biome_library = BiomeLibrary.new()
+	_biome_library.name = "BiomeLibrary"
+	add_child(_biome_library)
+	_load_fallback_texture()
+	_apply_biome(biome)
 
 
 ## Setup table with given size in feet
@@ -106,7 +114,7 @@ func _build_ground_material() -> Material:
 	var mat := ShaderMaterial.new()
 	mat.shader = GROUND_SHADER
 	mat.set_shader_parameter("albedo_tex", _default_texture)
-	mat.set_shader_parameter("macro_tiling", MACRO_TILING)
+	mat.set_shader_parameter("uv_scale", _biome_uv_scale())
 	mat.set_shader_parameter("detail_normal", _make_detail_noise(true))
 	mat.set_shader_parameter("detail_height", _make_detail_noise(false))
 	mat.set_shader_parameter("detail_tiling", DETAIL_TILING)
@@ -116,27 +124,59 @@ func _build_ground_material() -> Material:
 	return mat
 
 
-## Load the current biome's battlemap into _default_texture (legacy mat as fallback).
-func _load_biome_texture() -> void:
-	var path: String = BIOME_TEXTURES.get(biome, "")
-	if path.is_empty() or not ResourceLoader.exists(path):
-		path = default_texture_path
-	_default_texture = load(path) if ResourceLoader.exists(path) else null
+## Load the bundled fallback surface into _default_texture (used until/unless a biome
+## battlemap is cached from R2).
+func _load_fallback_texture() -> void:
+	_default_texture = load(default_texture_path) if ResourceLoader.exists(default_texture_path) else null
 
 
-## Switch the play-surface biome (key into BIOME_TEXTURES) and rebuild the material.
+## Switch the play-surface biome and resolve its battlemap (async, from R2 + cache).
 func set_biome(biome_name: String) -> void:
-	if not BIOME_TEXTURES.has(biome_name):
-		push_warning("Unknown biome '%s' (known: %s)" % [biome_name, ", ".join(BIOME_TEXTURES.keys())])
+	if not BIOMES.has(biome_name):
+		push_warning("Unknown biome '%s' (known: %s)" % [biome_name, ", ".join(BIOMES)])
 		return
 	biome = biome_name
-	_load_biome_texture()
-	mesh_instance.material_override = _build_ground_material()
+	_apply_biome(biome_name)
 
 
 ## Available biome keys (for a selection UI).
 func get_biomes() -> Array:
-	return BIOME_TEXTURES.keys()
+	return BIOMES
+
+
+## Resolve the biome's battlemap from R2 (cached locally), then swap it onto the table.
+## The bundled fallback stays visible while the download runs / if the biome is
+## unavailable (e.g. before the first R2 publish).
+func _apply_biome(biome_name: String) -> void:
+	mesh_instance.material_override = _build_ground_material()  # show fallback immediately
+	if _biome_library == null:
+		return
+	var path: String = await _biome_library.ensure_biome(biome_name)
+	if biome != biome_name:
+		return  # selection changed during the download; drop this stale result
+	if path.is_empty():
+		return  # not available yet — keep the fallback surface
+	var tex: Texture2D = _texture_from_file(path)
+	if tex == null:
+		return
+	_default_texture = tex
+	mesh_instance.material_override = _build_ground_material()
+
+
+## Build a Texture2D (with mipmaps) from a cached image file on disk (user://).
+func _texture_from_file(path: String) -> Texture2D:
+	var img := Image.new()
+	if img.load(path) != OK:
+		push_warning("Table: failed to load biome image %s" % path)
+		return null
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
+
+
+## UV scale mapping the fixed 6x4 ft battlemap onto the current table, centred. A 6x4
+## table shows the whole image (scale 1); smaller tables show a centred crop (<1).
+func _biome_uv_scale() -> Vector2:
+	return Vector2(table_size.x / REFERENCE_TABLE_FEET.x, table_size.y / REFERENCE_TABLE_FEET.y)
 
 
 ## Generate a seamless tiling noise texture for ground micro-detail. As a normal map

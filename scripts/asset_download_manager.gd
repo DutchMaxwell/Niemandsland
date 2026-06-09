@@ -7,8 +7,13 @@ extends Node
 
 # === Constants ===
 
-const CACHE_DIR: String = "user://model_cache"
+const DEFAULT_CACHE_DIR: String = "user://model_cache"
 const CHUNK_SIZE: int = 65536  # 64 KiB streamed to disk
+
+# Cache location + file extension. The defaults suit the GLB model cache; BiomeLibrary
+# overrides them (WebP battlemap cache) before the node enters the tree.
+var cache_dir: String = DEFAULT_CACHE_DIR
+var file_extension: String = "glb"
 
 # === Signals ===
 
@@ -22,7 +27,7 @@ var _http: HTTPRequest = null
 # === Lifecycle ===
 
 func _ready() -> void:
-	DirAccess.make_dir_recursive_absolute(CACHE_DIR)
+	DirAccess.make_dir_recursive_absolute(cache_dir)
 	_http = HTTPRequest.new()
 	_http.download_chunk_size = CHUNK_SIZE
 	add_child(_http)
@@ -31,7 +36,7 @@ func _ready() -> void:
 
 ## Local cache path for a content hash.
 func cache_path(sha256: String) -> String:
-	return CACHE_DIR.path_join("%s.glb" % sha256)
+	return cache_dir.path_join("%s.%s" % [sha256, file_extension])
 
 
 func is_cached(sha256: String) -> bool:

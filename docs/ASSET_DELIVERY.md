@@ -123,10 +123,22 @@ downloads each needed GLB on first use and caches it in `user://model_cache/`.
 - `user://` in the web export is IndexedDB-backed, so the cache persists
   per-origin (subject to the browser's storage limits).
 
-## Later: same pattern for terrain & map sheets
+## Biome battlemaps (same pattern, separate manifest)
 
-The owner wants terrain and **map sheets** (table textures / play mats) delivered
-the same way. They are larger, less-frequently-used assets — ideal for on-demand.
-`model_forge` already generates battle maps at 1536×1024 (`app.py`); with on-demand
-delivery these can also be produced at higher quality without bloating the build.
-Extend the manifest with `terrain/` and `maps/` sections when we get there.
+The table **biome battlemaps** (play-surface ground textures) use the identical
+on-demand mechanism, with their own small manifest `assets/biome_manifest.json`
+(`{ version, base_url, biomes: { <key>: { url: "<sha>.webp", sha256, size } } }`) and
+client `biome_library.gd` (mirrors `model_library.gd`) on top of the shared
+`asset_download_manager.gd` (cache `user://biome_cache/<sha>.webp`). Each of the 6 biomes
+is a single, **non-tiling, scale-locked** 6×4-ft image generated via Gemini 3 Pro Image
+and sharpened to WebP (`tools/model_forge/generate_battlemaps.py`), then uploaded with
+`tools/model_forge/publish_biomes.py --upload-r2`. The WebPs are git-ignored and never
+bundled; `table.gd` fetches the selected biome at runtime, renders it across a fixed 6×4-ft
+extent (centre-cropping smaller tables — `table_ground.gdshader` `uv_scale`), and falls
+back to the bundled `assets/terrain/table_surface_default.png` until a biome is cached.
+
+Step-by-step (run on the build machine, with `.gemini_key` + `.r2_credentials`):
+[`runbooks/biome-r2-publish.md`](runbooks/biome-r2-publish.md).
+
+**Still future:** modular terrain GLBs (walls/trees/containers) and larger map sheets —
+extend the same pattern when we get there.

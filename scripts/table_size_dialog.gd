@@ -19,7 +19,7 @@ var _biome_option: OptionButton
 var _biome_keys: Array = []
 var _emitted := false
 
-## The biome chosen in this dialog (key into Table.BIOME_TEXTURES); read by main.gd.
+## The biome chosen in this dialog (key into Table.BIOMES); read by main.gd.
 var selected_biome: String = ""
 
 
