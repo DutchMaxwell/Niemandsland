@@ -9,41 +9,43 @@
 faction_name: "Human Defense Force"
 
 aesthetic:
-  genre: "clean, bright, crisp sci-fi military — readable regular-army soldiers, crisp studio render"
-  style: "utilitarian mass infantry army, clean and readable"
+  genre: "clean, bright near-future military sci-fi — modern mobile-infantry troopers, crisp studio render"
+  style: "disciplined near-future human mobile infantry: modern tactical battle-armour with light powered exo-support, mass-produced, agile and readable"
   inspiration:
-    - "Early-to-mid 20th century regular-army infantry aesthetic in a near-future setting"
-    - "Massive conscript armies with heavy armor support"
-    - "Pragmatic utilitarian military with mass-produced equipment"
+    - "Near-future mobile-infantry citizen-soldiers in modern tactical combat armour"
+    - "Contemporary special-forces kit upgraded with sci-fi composite plate, optics and energy weapons"
+    - "Mass-produced practical battledress: plate carriers, modular pouches, full-face combat helmets with a glowing HUD visor"
   # NOTE: original_design_cues + weapon_style ARE injected into the prompt for humanoid units
   # (prompt_engine.generate_prompt). Keep them POSITIVE and ORIGINAL — never name a protected
-  # design, and never use "NOT a ..." phrasing here.
+  # design, and never use "NOT a ..." phrasing here. (The WW2/fascist look to avoid lives in
+  # explicitly_avoid, which is documentation only — it is NOT injected into the image prompt.)
   original_design_cues:
-    - "Practical stamped-steel helmet with a low rounded brow and a short angled neck flare"
-    - "Quilted canvas fatigues layered under a segmented flak-plate chest rig with webbing pouches"
-    - "Soft, human, regular-soldier proportions — no power armour, no super-soldier bulk"
-    - "Original square-and-bar regimental emblem stencilled on the shoulder"
-    - "Olive-drab and khaki palette with dark steel grey kit and small regimental-red markings"
+    - "A smooth modern rounded full-face tactical combat helmet with a wraparound horizontal glowing blue visor band and a low-profile optics-and-comms rig clipped to one side"
+    - "Modern digital-camo combat fatigues worn under a hard composite plate carrier with modular webbing pouches, plus a slim powered exo-frame bracing the spine, hips and legs"
+    - "Segmented composite shin, knee, elbow and forearm guards; an agile athletic mobile-infantry build with light exo-assist"
+    - "An original chevron-and-bar federal unit emblem stencilled on one shoulder plate, with a small glowing blue status panel on the forearm"
+    - "Modern digital camouflage in coyote-tan, olive and slate-grey with crisp glowing blue tech accents on the visor and gear"
     - "Clean, bright readable look — no spikes, horns, skulls or daemonic ornament"
-  weapon_style: "an original boxy stamped-metal bolt-action service rifle with a fixed bayonet and a slim wooden stock"
+  weapon_style: "an original modern bullpup pulse carbine with a stubby composite barrel, a holographic sight, a vertical foregrip and a glowing blue energy cell"
   explicitly_avoid:
-    - "Power-armoured super-soldier or enclosed battle-suit aesthetics"
+    - "Mid-20th-century / world-war military looks: stamped-steel coal-scuttle helmets with a neck flare, greatcoats, gas-mask hoods, bolt-action wooden-stock rifles, feldgrau"
+    - "Any fascist, Nazi, totalitarian or real-world national military insignia, symbols or trade dress"
+    - "Fully-enclosed bulky power-armour super-soldier suits (these are agile human troopers in light tactical armour)"
     - "Alien or biological technology"
-    - "Any real-world military or franchise logos, insignia or trademarks"
     - "Spikes, horns, skulls, daemonic or organic ornament"
 
 colors:
-  primary: "olive drab and khaki uniform fatigues"
-  secondary: "dark steel grey vehicle armor"
-  accent: "regimental red insignia and gold officer trim"
+  primary: "modern digital camo in coyote-tan, olive and slate-grey"
+  secondary: "dark gunmetal composite armour plate"
+  accent: "glowing blue tech lighting with small stencilled federal unit markings"
 
 materials:
-  - "canvas and flak armor vest over fatigues"
-  - "heavy riveted steel tank armor"
-  - "leather belts, pouches and webbing"
-  - "matte painted military equipment"
+  - "modern composite tactical plate and ceramic armour panels"
+  - "ballistic-weave combat fatigues with modular webbing pouches"
+  - "a slim powered exo-frame with visible servos at the spine, hips and knees"
+  - "matte gunmetal sci-fi weapons with glowing energy cells and holographic optics"
 
-creature_type: "regular human soldier in flak armor"
+creature_type: "modern human mobile-infantry trooper in tactical battle-armour"
 
 prompt_template: |
   {unit_name}, {creature_type} miniature for tabletop wargaming.
@@ -121,7 +123,7 @@ unit_overrides:
           range: 0
           attacks: 2
   company_leader:
-    extra_details: "infantry company officer hero in standard flak armor with officer coat and peaked cap or helmet, master pistol holstered, close combat weapon drawn, leather map case and binoculars, gold rank insignia on collar, whistle on lanyard, regimental sash across chest, Tough(3)"
+    extra_details: "infantry company officer hero in standard flak armor with officer's tactical plate armour and full-face combat helmet, master pistol holstered, close combat weapon drawn, forearm data-slate and tactical optics, gold rank insignia on collar, whistle on lanyard, glowing federal unit markings across the chest plate, Tough(3)"
     pose: "leading from the front, pistol drawn, pointing forward to direct troops"
 
   # ==========================================================================
@@ -143,7 +145,7 @@ unit_overrides:
           range: 0
           attacks: 2
   colonel_rixxon:
-    extra_details: "unique named hero colonel in decorated officer uniform over flak armor, master pistol in one hand, energy sword crackling with power in other hand, peaked officer cap with gold braid, numerous campaign medals and ribbons on chest, intimidating scar across face, commanding presence that demoralizes enemies, Morale Debuff aura, Tough(3)"
+    extra_details: "unique named hero colonel in decorated officer uniform over flak armor, master pistol in one hand, energy sword crackling with power in other hand, an officer's full-face tactical combat helmet with gold rank trim and a glowing blue visor, service ribbons stencilled on the chest plate, intimidating scar across face, commanding presence that demoralizes enemies, Morale Debuff aura, Tough(3)"
     pose: "dramatic commanding stance, energy sword pointed forward, pistol raised, barking orders"
 
   # ==========================================================================
@@ -166,7 +168,7 @@ unit_overrides:
           attacks: 2
           rules: ["AP(1)", "Rending"]
   recruits:
-    extra_details: "single raw conscript soldier in basic olive drab fatigues with minimal flak armor, standard-issue rifles and bayonets as close combat weapons, frightened but determined expressions, ill-fitting helmets, basic ammunition pouches, lowest quality troops (Quality 6+)"
+    extra_details: "single raw conscript soldier in basic olive drab fatigues with minimal flak armor, standard-issue pulse carbines as close combat weapons, frightened but determined expressions, ill-fitting tactical helmets, basic ammunition pouches, lowest quality troops (Quality 6+)"
     pose: "nervous advance in loose formation, rifles held at hip level, huddled together"
 
     game_stats:
@@ -202,7 +204,7 @@ unit_overrides:
           range: 0
           attacks: 1
   infantry_squad:
-    extra_details: "single standard infantry warrior in olive drab fatigues and flak armor vests, steel helmets, standard-issue rifles with bayonets, ammunition pouches and canteens on webbing belts, squad radio operator, regimental shoulder patches, disciplined rank-and-file soldiers"
+    extra_details: "single standard infantry warrior in olive drab fatigues and flak armor vests, tactical combat helmets, standard-issue pulse carbines with vibro-bayonets, ammunition pouches and canteens on webbing belts, squad radio operator, regimental shoulder patches, disciplined rank-and-file soldiers"
     pose: "advancing in tactical formation, rifles shouldered and aimed, disciplined spacing"
 
     game_stats:
@@ -362,7 +364,7 @@ unit_overrides:
           attacks: 1
           rules: ["AP(2)"]
   light_apc:
-    extra_details: "light armored personnel carrier, boxy angular hull with riveted steel plates, hull-mounted heavy flamer and turret-mounted heavy flamer both with AP and Blast capability, front ramp door for troop deployment, firing ports along sides, heavy wheels or light tracks, Fast with Impact(3), Tough(6), Transport(11)"
+    extra_details: "light armored personnel carrier, boxy angular hull with angular composite armour plates, hull-mounted heavy flamer and turret-mounted heavy flamer both with AP and Blast capability, front ramp door for troop deployment, firing ports along sides, heavy wheels or light tracks, Fast with Impact(3), Tough(6), Transport(11)"
     pose: "driving forward, turret aimed ahead, ready for troop deployment"
     type: vehicle
 
