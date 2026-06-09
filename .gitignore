@@ -96,3 +96,6 @@ assets/.manifest_upload/
 
 # Terrain GLBs + companion images are R2-delivered, never commit them
 assets/terrain/grimdark_industrial/
+
+# Ruin source/reference art is archived on R2 (terrain-source/ruins/), not bundled.
+assets/terrain/props/ruins/
