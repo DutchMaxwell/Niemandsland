@@ -14,6 +14,22 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   (always the latest deploy), and fails safe when offline. Inert until releases are
   published; see [`docs/UPDATE_CHECK.md`](docs/UPDATE_CHECK.md).
 
+### Changed
+- **Ruin auto-walls** in the OPR map generator now form **two point-symmetric L-corners**
+  (each leg `size−1` cells, mirrored) to match the standard OPR ruin layout, instead of a
+  single full L. Each wall segment carries a crumble `role` so the wall steps down toward
+  its open ends.
+- **Ruin walls are textured**, not holographic: wall segments + corner posts render with a
+  lit world-triplanar stone material (`ruins_wall.webp`) and shadows.
+
+### Maintenance
+- The mossy-stone **ruin source-art set** (solid / top-damage / opening / crumble / Gothic
+  window + normal map + the 2 MB masonry source) is archived on **R2**
+  (`assets.akesberg.de/terrain-source/ruins/`), not bundled — only the runtime
+  `ruins_wall.webp` ships. Reproducible recipe (`tools/model_forge/generate_ruin_walls.py`),
+  a software-GL reference renderer (`tools/render_ruin_walls.gd`), and a GPU-machine handoff
+  (`docs/HANDOFF_RUIN_WALLS.md`) for the shell-wall finishing pass.
+
 ## [0.3.1-alpha] — Alpha Release Candidate
 
 Goal of this release: a playable, internet-multiplayer Alpha RC with all miniature
