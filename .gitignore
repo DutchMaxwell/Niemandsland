@@ -96,3 +96,8 @@ assets/.manifest_upload/
 
 # Terrain GLBs + companion images are R2-delivered, never commit them
 assets/terrain/grimdark_industrial/
+
+# Biome battlemaps are R2-delivered (content-addressed, see assets/biome_manifest.json),
+# never bundled. Keep the WebPs out of git AND out of builds; .biome_upload is build-only.
+assets/terrain/biomes/*.webp
+assets/.biome_upload/

@@ -4,6 +4,27 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [Unreleased]
+
+### Changed
+- **Biome battlemaps reworked + moved to R2 delivery.** Each biome is now a single,
+  non-tiling, scale-locked 6×4-ft ground texture (Gemini 3 Pro Image, ~5056×3392,
+  sharpened to WebP) instead of a 1024² image tiled 3× across the table. This removes the
+  visible repetition and keeps ground features at a realistic scale next to 28–32 mm
+  miniatures. The table renders one image across a fixed 6×4-ft extent and centre-crops it
+  for smaller tables (`table_ground.gdshader` `uv_scale`).
+- Battlemaps are delivered on demand from Cloudflare R2 (content-addressed WebP,
+  `assets/biome_manifest.json` + `biome_library.gd`, cached in `user://biome_cache`),
+  mirroring the miniature pipeline; the bundled 1024² PNGs were removed. Offline fallback
+  is `assets/terrain/table_surface_default.png`.
+
+### Added
+- `tools/model_forge/generate_battlemaps.py` rewritten for the new process, and
+  `tools/model_forge/publish_biomes.py` to upload battlemaps + write the manifest. Runbook:
+  `docs/runbooks/biome-r2-publish.md`.
+- `BiomeLibrary` (+ tests). `AssetDownloadManager` generalized (configurable cache dir +
+  file extension) so it serves both GLBs and WebP battlemaps.
+
 ## [0.3.1-alpha] — Alpha Release Candidate
 
 Goal of this release: a playable, internet-multiplayer Alpha RC with all miniature
