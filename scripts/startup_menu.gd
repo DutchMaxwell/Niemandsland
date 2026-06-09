@@ -87,6 +87,9 @@ func _ready() -> void:
 	# Play startup animation
 	_play_startup_animation()
 
+	# Offer an update if a newer release exists (desktop only; never blocks the menu).
+	_maybe_check_for_updates()
+
 
 func _setup_button_hover_effects() -> void:
 	var buttons: Array[Button] = [
@@ -148,6 +151,40 @@ func _on_load_battle_pressed() -> void:
 
 func _on_exit_pressed() -> void:
 	get_tree().quit()
+
+
+# ===== Update check =====
+
+
+## Asks UpdateChecker whether a newer release exists and, on a hit, shows the prompt.
+## Guarded so it only runs for the live main scene — gdUnit's scene_runner adds the
+## menu under /root directly (not as current_scene), so tests never hit the network.
+func _maybe_check_for_updates() -> void:
+	if get_tree().current_scene != self:
+		return
+	if OS.has_feature("web"):
+		# Web/itch builds are always the latest deploy — nothing to update.
+		return
+	if not UpdateChecker.update_available.is_connected(_on_update_available):
+		UpdateChecker.update_available.connect(_on_update_available)
+	UpdateChecker.check_for_updates()
+
+
+func _on_update_available(latest_version: String, release_url: String, release_notes: String) -> void:
+	var prompt := UpdatePrompt.new()
+	prompt.setup(UpdateChecker.get_current_version(), latest_version, release_url, release_notes)
+	prompt.confirmed.connect(_on_update_prompt_closed.bind(prompt, true))
+	prompt.canceled.connect(_on_update_prompt_closed.bind(prompt, false))
+	add_child(prompt)
+	prompt.popup_centered()
+
+
+func _on_update_prompt_closed(prompt: UpdatePrompt, download: bool) -> void:
+	if prompt.is_skip_checked():
+		UpdateChecker.set_skip_version(prompt.latest_version)
+	if download:
+		OS.shell_open(prompt.release_url)
+	prompt.queue_free()
 
 
 # ===== Online Multiplayer =====

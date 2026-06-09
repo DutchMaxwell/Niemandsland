@@ -4,6 +4,16 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [Unreleased]
+
+### Added
+- **Startup update check.** On launch, the desktop game checks the project's GitHub
+  Releases for a newer build and, on a hit, offers a non-blocking "Download / Later /
+  Skip this version" prompt before the menu — never blocking startup. Compares the
+  running `config/version` with SemVer precedence (prerelease-aware), skips on web/itch
+  (always the latest deploy), and fails safe when offline. Inert until releases are
+  published; see [`docs/UPDATE_CHECK.md`](docs/UPDATE_CHECK.md).
+
 ## [0.3.1-alpha] — Alpha Release Candidate
 
 Goal of this release: a playable, internet-multiplayer Alpha RC with all miniature

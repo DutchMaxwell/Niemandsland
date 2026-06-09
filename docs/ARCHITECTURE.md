@@ -10,6 +10,8 @@ Forward+ renderer. Entry scene: `scenes/startup_menu.tscn`.
 | `ThemeManager` | `theme_manager.gd` | Active Kenney UI theme, persisted |
 | `GraphicsSettings` | `graphics_settings.gd` | Quality presets (shadows, SSAO, glow) |
 | `AudioManager` | `audio_manager.gd` | Audio buses / playback |
+| `UiFeedback` | `ui_feedback.gd` | Global hover/press motion + UI sound for every button |
+| `UpdateChecker` | `update_checker.gd` | Startup release check (GitHub Releases); see [UPDATE_CHECK](UPDATE_CHECK.md) |
 
 `default_bus_layout.tres` (project root) is Godot's implicitly-loaded audio-bus
 layout that `AudioManager` builds on — load-bearing, not clutter; do not move it.
