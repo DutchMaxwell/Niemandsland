@@ -27,6 +27,7 @@ ThemeManager="*res://scripts/theme_manager.gd"
 GraphicsSettings="*res://scripts/graphics_settings.gd"
 AudioManager="*res://scripts/audio_manager.gd"
 UiFeedback="*res://scripts/ui_feedback.gd"
+UpdateChecker="*res://scripts/update_checker.gd"
 
 [debug]
 
