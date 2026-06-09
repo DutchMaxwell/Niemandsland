@@ -1,6 +1,16 @@
 # Host-side reconnect (relay room preservation) — design + deploy plan
 
-**Status:** specced, NOT yet implemented/deployed. Task #43.
+**Status:** ✅ IMPLEMENTED in code + unit-tested — relay **33 pytest green**, client
+compile-check + gdUnit (255) green. ⏳ PENDING (maintainer's gate): the local
+two-instance live test, then the Fly.io deploy (`flyctl` is not installed in the dev
+sandbox). Task #43.
+
+The server + client now match the design below: a host drop preserves the room for
+`HOST_REJOIN_WINDOW_SECONDS` and sends each guest `host_paused`; the host (or the first
+joiner) reclaims peer id 1 via `room_rejoined_host`, the relay re-announces every peer to
+the rejoined host, and the existing version-handshake → `_sync_state_to_peer` path
+re-syncs full state to the waiting guests. An abandoned room is torn down past the window
+with "Host did not return". Both host and guest now auto-rejoin on a drop.
 
 ## Why this is separate from the client reconnect (already shipped)
 
@@ -53,9 +63,14 @@ everyone. It is intentionally not shipped blind.
 
 ## Local test procedure (do this BEFORE deploying to fly.dev)
 
+First, the unit tests (already passing — run them after any further change):
 ```
 cd relay
-python3 -m venv venv && ./venv/bin/pip install -r requirements.txt
+python3 -m venv venv && ./venv/bin/pip install -r requirements.txt pytest pytest-asyncio
+./venv/bin/python -m pytest -q                # expect 33 passed
+```
+Then the manual two-instance test against a local relay:
+```
 ./venv/bin/python relay_server.py            # local relay on ws://localhost:8765
 ```
 Run two game instances, both pointed at `ws://localhost:8765` (the Join/Host dialog

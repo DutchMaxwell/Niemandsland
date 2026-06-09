@@ -322,6 +322,8 @@ func _ready() -> void:
 	internet_lobby.relay_connection_lost.connect(_on_relay_connection_lost)
 	internet_lobby.relay_reconnecting.connect(_on_relay_reconnecting)
 	internet_lobby.relay_reconnect_failed.connect(_on_relay_reconnect_failed)
+	internet_lobby.host_paused.connect(_on_host_paused)
+	internet_lobby.host_rejoined.connect(_on_host_rejoined)
 	# Peer join/leave for internet relay is handled through the built-in
 	# MultiplayerPeer.peer_connected signal (same path as ENet):
 	# relay emits peer_connected → network_manager._on_peer_connected → _on_player_joined
@@ -1498,17 +1500,12 @@ func _on_internet_disconnected() -> void:
 	_cleanup_all_presence()
 
 
-## The relay link dropped unexpectedly. Inform the player; a guest auto-rejoins the
-## same room (the host then re-syncs full state, so nothing is lost). A host whose
-## link drops cannot rejoin its own room, so the session ends.
+## The relay link dropped unexpectedly. Both host and guest now auto-rejoin the same
+## room: the relay preserves a host-dropped room for a short window so the host can
+## reclaim peer id 1 and re-sync state, instead of ending everyone's game on a Wi-Fi blip.
 func _on_relay_connection_lost() -> void:
-	if network_manager.is_host:
-		push_warning("[Network] Host connection lost — session ended.")
-		network_status_label.text = "Connection lost — session ended"
-		network_status_label.add_theme_color_override("font_color", Color.RED)
-		_cleanup_all_presence()
-		return
-	push_warning("[Network] Connection lost — attempting to rejoin the room…")
+	var role := "host" if network_manager.is_host else "guest"
+	push_warning("[Network] Connection lost — attempting to rejoin the room (%s)…" % role)
 	network_status_label.text = "Connection lost — reconnecting…"
 	network_status_label.add_theme_color_override("font_color", Color.YELLOW)
 	internet_lobby.reconnect_to_room()
@@ -1527,6 +1524,20 @@ func _on_relay_reconnect_failed(reason: String) -> void:
 	network_status_label.add_theme_color_override("font_color", Color.RED)
 	_update_network_ui(false, false)
 	_cleanup_all_presence()
+
+
+## Guest side: the host dropped but the room is preserved. Wait for it to return (the
+## host reclaims peer id 1 and re-syncs) instead of treating it as a full disconnect.
+func _on_host_paused() -> void:
+	network_status_label.text = "Host disconnected — waiting for reconnect…"
+	network_status_label.add_theme_color_override("font_color", Color.YELLOW)
+
+
+## The host is present again (we rejoined as host, or our host returned). The full
+## state re-sync runs over the restored peer link; clear the warning.
+func _on_host_rejoined() -> void:
+	network_status_label.text = "Reconnected"
+	network_status_label.add_theme_color_override("font_color", Color.GREEN)
 
 
 # ============================================================================
