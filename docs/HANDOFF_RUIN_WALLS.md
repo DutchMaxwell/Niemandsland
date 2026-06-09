@@ -20,8 +20,9 @@ step down (crumble) toward their open ends, with the occasional Gothic window / 
 **Done & verified (this PR):**
 - `scripts/terrain_prefabs.gd` — ruin walls are now **two point-symmetric L-corners** with a
   per-segment `role` taper. (Was a single full L.) Tests rewritten + green.
-- The **approved art set** is committed under `assets/terrain/props/ruins/*.webp` (the
-  `renders/` dir is git-ignored + ephemeral, so the art was moved into the repo).
+- The **approved art set** is archived on R2 at
+  `https://assets.akesberg.de/terrain-source/ruins/*.webp` (kept off-git so the repo stays
+  slim; the runtime `ruins_wall.webp` stays bundled).
 - The **generation recipe** is captured as a runnable script:
   `tools/model_forge/generate_ruin_walls.py`.
 - A committed **reference renderer** reproduces the approved look:
@@ -67,9 +68,11 @@ Arbeitsstand."). Do not silently revert them:
 
 ---
 
-## 3. The committed art set — `assets/terrain/props/ruins/`
+## 3. The source art set — R2 `terrain-source/ruins/`
 
-All 800×720 WebP (≈ the 3″×2.5″ wall-cell aspect). Alpha = see-through (knocked-out stone).
+Archived on R2 at `https://assets.akesberg.de/terrain-source/ruins/<file>` (not bundled —
+fetch on a GPU machine for the finishing pass). All 800×720 WebP (≈ the 3″×2.5″ wall-cell
+aspect). Alpha = see-through (knocked-out stone).
 
 | File | Mode | Role |
 |---|---|---|
