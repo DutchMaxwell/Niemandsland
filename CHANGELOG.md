@@ -4,6 +4,21 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [Unreleased]
+
+### Changed
+- **Ruin auto-walls** in the OPR map generator now form **two point-symmetric L-corners**
+  (each leg `size−1` cells, mirrored) to match the standard OPR ruin layout, instead of a
+  single full L. Each wall segment carries a crumble `role` so the wall steps down toward
+  its open ends.
+
+### Maintenance
+- Committed the approved mossy-stone **ruin-wall texture set** (`assets/terrain/props/ruins/`:
+  solid / top-damage / opening / crumble / Gothic window + normal map), its reproducible
+  generation recipe (`tools/model_forge/generate_ruin_walls.py`), a software-GL reference
+  renderer (`tools/render_ruin_walls.gd`), and a handoff (`docs/HANDOFF_RUIN_WALLS.md`) for
+  wiring the shell-wall look into `terrain_overlay.gd`.
+
 ## [0.3.1-alpha] — Alpha Release Candidate
 
 Goal of this release: a playable, internet-multiplayer Alpha RC with all miniature
