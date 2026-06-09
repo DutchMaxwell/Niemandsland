@@ -31,6 +31,10 @@ Activated tokens; hero attachment.
 size) with batch RPCs; shared dice log; player avatars/cursors; multiplayer
 save/load. A **version handshake** on join rejects mismatched clients (a 0.3.0 and
 a 0.3.1 player can no longer share a table), gating state sync on a match.
+**Host-drop reconnect** is implemented + unit-tested (the relay preserves a dropped
+host's room for 20 s; the host rehosts and re-syncs full state) but is **deploy-pending**
+— it needs a Fly.io relay redeploy before it is live; see
+[`relay/HOST_RECONNECT.md`](relay/HOST_RECONNECT.md).
 
 **Import/export** — TTS import (Steam CDN + cache), custom glTF/STL/OBJ, `.nml`
 save format with OS file association, WGS import/export
@@ -88,14 +92,13 @@ and `hero_attachment_dialog.gd` never existed as separate files — that logic l
 - Dice can occasionally jitter at miniature scale (mitigated by the scaled-SubViewport
   dice approach; see [`CLAUDE.md`](CLAUDE.md)).
 - Some TTS texture-loading errors (non-fatal).
-- A few GDScript warnings (parameter shadowing) to clean up.
 - OPR rule descriptions resolve for freshly imported armies; loaded saves /
   remote-only armies show rule names without descriptions (persist/sync is a
   future step).
 
 ## Tests
 
-gdUnit4: **37 suites / 255 tests green** in `test/` (incl. `coherency_checker`,
+gdUnit4: **39 suites / 275 tests green** in `test/` (incl. `coherency_checker`,
 `save_manager`, `startup_menu`, `internet_lobby`, `relay_multiplayer_peer`,
 `network_version_handshake`). Python: `relay/test_relay_server.py`,
 `tools/model_forge/tests/`. How to run: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).

@@ -12,10 +12,14 @@ object/unit handling, an OPR Army-Forge importer, a map-layout editor, and
 **internet multiplayer** through a Fly.io WebSocket relay. Miniature 3D models are
 delivered on demand from Cloudflare R2 (not bundled).
 
-- **`main` is the source of truth and is up to date** — every shipped feature
-  (the multiplayer + UI work, on-demand R2 model delivery, the 0.3.1 docs) is on it.
-  Work on a `claude/*` branch and fast-forward to `main`.
-- **Tests: gdUnit4 255 green / 37 suites**, freshly verified. No known failures.
+- **`main` is the source of truth and is up to date.** Work on a `claude/*` branch and
+  merge to `main`. **⚠️ The git history was rewritten on 2026-06-09 (`.git` 1.2 GB → 64 MB
+  via `git filter-repo`, stripping the old bundled GLBs + OPR/AGPL residue). Any clone or
+  branch from before that is incompatible — re-clone it.** Runbook:
+  [`docs/runbooks/history-scrub.md`](docs/runbooks/history-scrub.md).
+- **Tests: gdUnit4 275 green / 39 suites**, freshly verified. No known failures. GDScript
+  warnings are now **enforced** (`gdscript/warnings/treat_warnings_as_errors` in
+  `project.godot` `[debug]`) — your code must stay warning-clean or the build breaks.
 - **Working tree is clean.** The only uncommitted thing you may see is the maintainer's
   local Model Forge content work (see *Scope* below) — not your concern.
 
@@ -56,14 +60,19 @@ map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## The one open feature item
 
-- **Host-drop reconnect (relay).** Guests already auto-rejoin after a relay blip, but if
-  the **host** drops, the room dies. Full spec: [`relay/HOST_RECONNECT.md`](relay/HOST_RECONNECT.md).
-  **Deploy-gated** — it needs a relay-server change + a Fly.io redeploy (`flyctl` is not
-  installed here) and a local two-player test before touching the live relay
-  (`wss://niemandsland-relay.fly.dev`). Don't deploy blind.
+- **Host-drop reconnect (relay) — code done, DEPLOY PENDING.** Implemented + unit-tested
+  2026-06-09: the relay preserves a host-dropped room for 20 s and the host (or first
+  joiner) reclaims peer id 1 and re-syncs; the guest sees a "host paused → reconnected"
+  state. Relay **33 pytest green**, client compile + gdUnit green. What remains is the
+  **maintainer's gate**: a local two-instance test against `relay/relay_server.py`, then
+  `fly deploy -c relay/fly.toml` (`flyctl` is not installed here — never deploy blind to
+  the live `wss://niemandsland-relay.fly.dev`). Full procedure + footguns:
+  [`relay/HOST_RECONNECT.md`](relay/HOST_RECONNECT.md).
 
-Smaller follow-ups (OPR rule-description persistence for loaded saves; pre-release IP
-review) are in [`PROJECT_STATUS.md`](PROJECT_STATUS.md).
+Recently landed (2026-06-09, all on `main`): textured 3D ruin walls + non-tiling biome
+battlemaps (terrain, delivered from R2), a startup update-check, and the deep repo
+housekeeping above. Smaller follow-ups (OPR rule-description persistence for loaded saves;
+pre-release IP review) are in [`PROJECT_STATUS.md`](PROJECT_STATUS.md).
 
 ## Gotchas that will bite you (don't re-introduce)
 
@@ -89,5 +98,7 @@ review) are in [`PROJECT_STATUS.md`](PROJECT_STATUS.md).
 `HANDOFF.md` (this) · `CLAUDE.md` (project guide) ·
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md) (what works / roadmap) ·
 [`CHANGELOG.md`](CHANGELOG.md) (history) ·
+[`docs/VISION_AND_ROADMAP.md`](docs/VISION_AND_ROADMAP.md) (north-star Zielmarke + 0.4→1.0 roadmap) ·
+[`docs/HOUSEKEEPING_PLAN.md`](docs/HOUSEKEEPING_PLAN.md) (repo cleanup plan, P0–P3) ·
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) ·
 [`docs/ASSET_DELIVERY.md`](docs/ASSET_DELIVERY.md) (R2 model delivery).
