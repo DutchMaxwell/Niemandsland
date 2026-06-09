@@ -18,6 +18,7 @@ from relay_server import (
     MAX_PEERS_PER_ROOM,
     MAX_ROOMS,
     RATE_LIMIT_MESSAGES_PER_SECOND,
+    HOST_REJOIN_WINDOW_SECONDS,
 )
 
 
@@ -231,25 +232,95 @@ class TestRoomManagement:
             await ws.close()
         await overflow_ws.close()
 
-    async def test_room_cleanup_on_host_disconnect(self, relay):
+    async def test_host_disconnect_with_guest_preserves_room(self, relay):
+        """Host drop is no longer fatal: the room is preserved and the guest is told
+        the host paused, so the host can rejoin (HOST_RECONNECT.md)."""
         server, url = relay
         host_ws, code, _ = await create_room(url)
         guest_ws, _ = await join_room(url, code)
-        # Drain peer_connected on both sides
-        await host_ws.recv()  # Host: peer_connected for guest
+        await host_ws.recv()   # Host: peer_connected for guest
         await guest_ws.recv()  # Guest: peer_connected for host
 
-        # Host disconnects
         await host_ws.close()
         await asyncio.sleep(0.1)
 
-        # Room should be gone
+        # Room preserved, host slot freed, marked disconnected.
+        assert code in server.rooms
+        assert 1 not in server.rooms[code].peers
+        assert server.rooms[code].host_disconnected_at > 0.0
+
+        # Guest is told the host paused (not booted).
+        msg = json.loads(await guest_ws.recv())
+        assert msg["type"] == "host_paused"
+        await guest_ws.close()
+
+    async def test_host_disconnect_with_no_guests_closes_room(self, relay):
+        """With nobody to rejoin to, a host drop still tears the room down."""
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        await host_ws.close()
+        await asyncio.sleep(0.1)
         assert code not in server.rooms
 
-        # Guest should get notified
+    async def test_host_can_rejoin_and_reclaim_peer_id_one(self, relay):
+        """After a host drop, the next joiner reclaims peer_id 1 and resumes hosting;
+        the waiting guest is told the host returned."""
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest_ws, guest_id = await join_room(url, code)
+        await host_ws.recv()
+        await guest_ws.recv()
+
+        await host_ws.close()
+        await asyncio.sleep(0.1)
+        assert json.loads(await guest_ws.recv())["type"] == "host_paused"
+
+        # A new connection rejoins the preserved room and becomes host again.
+        rehost_ws = await websockets.connect(url)
+        await rehost_ws.send(json.dumps({"type": "join_room", "code": code}))
+        resp = json.loads(await rehost_ws.recv())
+        assert resp["type"] == "room_rejoined_host"
+        assert resp["peer_id"] == 1
+        assert server.rooms[code].host_disconnected_at == 0.0
+        assert 1 in server.rooms[code].peers
+
+        # The rejoined host is told about the waiting guest (so it can re-sync).
+        msg = json.loads(await rehost_ws.recv())
+        assert msg["type"] == "peer_connected"
+        assert msg["peer_id"] == guest_id
+
+        # Guest learns the host is back.
         msg = json.loads(await guest_ws.recv())
-        assert msg["type"] == "peer_disconnected"
+        assert msg["type"] == "peer_connected"
         assert msg["peer_id"] == 1
+
+        await rehost_ws.close()
+        await guest_ws.close()
+
+    async def test_abandoned_room_expires_after_window(self, relay):
+        """A preserved room whose host never returns is closed past the window, and
+        the waiting guest is told the host did not return."""
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest_ws, _ = await join_room(url, code)
+        await host_ws.recv()
+        await guest_ws.recv()
+
+        await host_ws.close()
+        await asyncio.sleep(0.1)
+        await guest_ws.recv()  # drain host_paused
+
+        # Simulate the host having dropped longer than the rejoin window.
+        server.rooms[code].host_disconnected_at = (
+            time.monotonic() - HOST_REJOIN_WINDOW_SECONDS - 1
+        )
+        closed = await server._close_abandoned_rooms()
+        assert code in closed
+        assert code not in server.rooms
+
+        msg = json.loads(await guest_ws.recv())
+        assert msg["type"] == "error"
+        assert "did not return" in msg["message"].lower()
         await guest_ws.close()
 
     async def test_guest_disconnect_notifies_host(self, relay):
@@ -544,10 +615,9 @@ class TestEndToEnd:
         await host_ws.close()
         await asyncio.sleep(0.1)
 
-        # Guest gets notified
+        # Guest is told the host paused (room preserved for rejoin), not booted.
         msg = json.loads(await guest_ws.recv())
-        assert msg["type"] == "peer_disconnected"
-        assert msg["peer_id"] == 1
+        assert msg["type"] == "host_paused"
         await guest_ws.close()
 
     async def test_multiple_rooms_are_isolated(self, relay):

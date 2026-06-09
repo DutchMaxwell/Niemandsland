@@ -37,6 +37,7 @@ RATE_LIMIT_MESSAGES_PER_SECOND = 300
 MAX_CONNECTIONS_PER_IP = 5
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # 30 chars, no ambiguous 0/O/1/I/L
 CODE_LENGTH = 6  # 30^6 = 729,000,000 possibilities
+HOST_REJOIN_WINDOW_SECONDS = 20  # keep a room alive this long after the host drops, so they can rejoin
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("relay")
@@ -60,6 +61,7 @@ class Room:
     peers: dict[int, Peer] = field(default_factory=dict)
     created_at: float = field(default_factory=time.monotonic)
     next_peer_id: int = 2  # Host is always peer_id 1
+    host_disconnected_at: float = 0.0  # >0 = host dropped; room preserved until rejoin or window expiry
 
 
 class RelayServer:
@@ -206,6 +208,41 @@ class RelayServer:
             await self._send_error(websocket, "Room not found")
             return
 
+        # Rehost: the host dropped but the room was preserved (HOST_RECONNECT.md).
+        # The first joiner reclaims peer_id 1 and resumes hosting; the guests were
+        # never booted, so the host re-syncs full state to them after this.
+        if room.host_disconnected_at > 0.0 and 1 not in room.peers:
+            room.host_disconnected_at = 0.0
+            peer = Peer(websocket=websocket, peer_id=1, room_code=code, ip_address=ip)
+            room.peers[1] = peer
+            self.connections[websocket] = peer
+            await websocket.send(json.dumps({
+                "type": "room_rejoined_host",
+                "peer_id": 1,
+            }))
+            for guest in room.peers.values():
+                if guest.peer_id == 1:
+                    continue
+                # Tell the waiting guest the host is back...
+                try:
+                    await guest.websocket.send(json.dumps({
+                        "type": "peer_connected",
+                        "peer_id": 1,
+                    }))
+                except websockets.exceptions.ConnectionClosed:
+                    pass
+                # ...and tell the rejoined host about each guest, so its peer list
+                # is rebuilt and it can re-sync state to them (like a normal join).
+                try:
+                    await websocket.send(json.dumps({
+                        "type": "peer_connected",
+                        "peer_id": guest.peer_id,
+                    }))
+                except websockets.exceptions.ConnectionClosed:
+                    pass
+            logger.info("Host rejoined room %s from %s", code, ip)
+            return
+
         if len(room.peers) >= MAX_PEERS_PER_ROOM:
             await self._send_error(websocket, "Room is full")
             return
@@ -328,19 +365,26 @@ class RelayServer:
         del room.peers[peer.peer_id]
 
         if peer.peer_id == 1:
-            # Host disconnected - close the entire room
-            logger.info("Host left room %s, closing room", peer.room_code)
-            for remaining_peer in list(room.peers.values()):
-                self.connections.pop(remaining_peer.websocket, None)
-                try:
-                    await remaining_peer.websocket.send(json.dumps({
-                        "type": "peer_disconnected",
-                        "peer_id": 1,
-                    }))
-                    await remaining_peer.websocket.close(4000, "Host disconnected")
-                except websockets.exceptions.ConnectionClosed:
-                    pass
-            del self.rooms[peer.room_code]
+            # Host disconnected. Preserve the room for a short window so the host
+            # can rejoin and re-sync state, instead of booting everyone on a Wi-Fi
+            # blip (see HOST_RECONNECT.md). Only tear it down if no guests remain to
+            # rejoin to. Guests keep their sockets OPEN and are told the host paused.
+            if room.peers:
+                room.host_disconnected_at = time.monotonic()
+                logger.info(
+                    "Host left room %s, preserving %ds for rejoin (%d guest(s) waiting)",
+                    peer.room_code, HOST_REJOIN_WINDOW_SECONDS, len(room.peers),
+                )
+                for remaining_peer in room.peers.values():
+                    try:
+                        await remaining_peer.websocket.send(json.dumps({
+                            "type": "host_paused",
+                        }))
+                    except websockets.exceptions.ConnectionClosed:
+                        pass
+            else:
+                logger.info("Host left room %s, no guests waiting, closing room", peer.room_code)
+                del self.rooms[peer.room_code]
         else:
             # Guest disconnected - notify remaining peers
             for remaining_peer in room.peers.values():
@@ -409,6 +453,38 @@ class RelayServer:
                     await ws.close(4408, "Heartbeat timeout")
                 except websockets.exceptions.ConnectionClosed:
                     pass
+
+            await self._close_abandoned_rooms()
+
+    async def _close_abandoned_rooms(self) -> list[str]:
+        """Tear down rooms whose host dropped and did not rejoin within the window.
+
+        Returns the list of closed room codes (for tests). Guests waiting in such a
+        room are told the host did not return and their sockets are closed.
+        """
+        now = time.monotonic()
+        abandoned = [
+            code for code, room in self.rooms.items()
+            if room.host_disconnected_at > 0.0
+            and now - room.host_disconnected_at > HOST_REJOIN_WINDOW_SECONDS
+        ]
+        for code in abandoned:
+            room = self.rooms.get(code)
+            if not room:
+                continue
+            logger.info("Room %s host did not return in %ds, closing", code, HOST_REJOIN_WINDOW_SECONDS)
+            for guest in list(room.peers.values()):
+                self.connections.pop(guest.websocket, None)
+                try:
+                    await guest.websocket.send(json.dumps({
+                        "type": "error",
+                        "message": "Host did not return",
+                    }))
+                    await guest.websocket.close(4000, "Host did not return")
+                except websockets.exceptions.ConnectionClosed:
+                    pass
+            del self.rooms[code]
+        return abandoned
 
 
 async def main(host: str = "0.0.0.0", port: int = 8765,

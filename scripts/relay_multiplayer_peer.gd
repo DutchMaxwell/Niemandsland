@@ -25,6 +25,10 @@ signal relay_reconnecting()
 signal relay_reconnect_failed(reason: String)
 signal peer_joined(peer_id: int)
 signal peer_left(peer_id: int)
+## The host dropped but the room is preserved server-side — guest should wait for rejoin.
+signal host_paused()
+## The host is present again: we rejoined as host, or (guest side) our host returned.
+signal host_rejoined()
 
 const HEARTBEAT_INTERVAL: float = 10.0
 
@@ -64,6 +68,8 @@ var _pending_code: String = ""
 var _is_reconnecting: bool = false
 ## Wall-clock time (ms) the current reconnect attempt started; aborts past RECONNECT_TIMEOUT.
 var _reconnect_start_ms: int = 0
+## Guest side: set when the relay reports the host paused, cleared when peer 1 returns.
+var _host_paused_seen: bool = false
 
 
 ## Stores an incoming packet with its source peer ID.
@@ -125,18 +131,17 @@ func _on_connection_lost() -> void:
 	relay_connection_lost.emit()
 
 
-## Rejoin the SAME room after a drop. Guests get a fresh peer id and the host then
-## re-syncs full state (version handshake -> _sync_state_to_peer), so no game state
-## is lost. Hosts cannot rejoin a room they owned (would need relay-side room
-## preservation), so this reports a reconnect failure for them.
+## Rejoin the SAME room after a drop. We re-send join_room with the stored code; the
+## relay decides between a normal guest rejoin (fresh peer id) and a HOST rehost
+## (reclaim peer id 1) based on whether the room is host-paused. Either way the host
+## re-syncs full state (version handshake -> _sync_state_to_peer), so nothing is lost.
+## Guests get a fresh peer id; a host reclaims peer id 1 if it returns within the
+## relay's rejoin window, else the attempt times out and the session ends.
 func attempt_reconnect() -> Error:
 	if _is_reconnecting:
 		return OK
 	if _room_code.is_empty():
 		relay_reconnect_failed.emit("no room code")
-		return ERR_UNAVAILABLE
-	if _is_server_relay():
-		relay_reconnect_failed.emit("host cannot rejoin")
 		return ERR_UNAVAILABLE
 	_is_reconnecting = true
 	_reconnect_start_ms = Time.get_ticks_msec()
@@ -367,6 +372,10 @@ func _process_control_message(raw: String) -> void:
 			var peer_id = int(parsed.get("peer_id", 0))
 			_handle_room_joined(peer_id)
 
+		"room_rejoined_host":
+			var peer_id = int(parsed.get("peer_id", 1))
+			_handle_room_rejoined_host(peer_id)
+
 		"peer_connected":
 			var peer_id = int(parsed.get("peer_id", 0))
 			print("[Relay] Peer %d connected — emitting peer_connected signal" % peer_id)
@@ -374,6 +383,15 @@ func _process_control_message(raw: String) -> void:
 			# Notify SceneMultiplayer so it adds the peer to connected_peers.
 			# Without this, all RPCs silently fail (both send and receive).
 			emit_signal("peer_connected", peer_id)
+			# Guest side: our paused host has returned (reclaimed peer id 1).
+			if peer_id == 1 and _host_paused_seen:
+				_host_paused_seen = false
+				host_rejoined.emit()
+
+		"host_paused":
+			# Guest side: the host dropped but the room is preserved for a rejoin window.
+			_host_paused_seen = true
+			host_paused.emit()
 
 		"peer_disconnected":
 			var peer_id = int(parsed.get("peer_id", 0))
@@ -409,6 +427,16 @@ func _handle_room_joined(peer_id: int) -> void:
 	_connection_status = MultiplayerPeer.CONNECTION_CONNECTED
 	_is_reconnecting = false
 	room_joined.emit(peer_id)
+
+
+## The relay let us reclaim the host slot (peer id 1) for a room we owned after a drop.
+## Restore host state; the relay then sends peer_connected for each waiting guest, which
+## drives the normal version-handshake -> _sync_state_to_peer re-sync to each of them.
+func _handle_room_rejoined_host(peer_id: int) -> void:
+	_my_peer_id = peer_id
+	_connection_status = MultiplayerPeer.CONNECTION_CONNECTED
+	_is_reconnecting = false
+	host_rejoined.emit()
 
 
 ## Process an incoming binary game data frame from the relay.
