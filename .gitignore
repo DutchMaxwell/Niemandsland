@@ -101,3 +101,5 @@ assets/terrain/grimdark_industrial/
 # never bundled. Keep the WebPs out of git AND out of builds; .biome_upload is build-only.
 assets/terrain/biomes/*.webp
 assets/.biome_upload/
+# Ruin source/reference art is archived on R2 (terrain-source/ruins/), not bundled.
+assets/terrain/props/ruins/

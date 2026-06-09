@@ -43,27 +43,27 @@ func test_unknown_prefab_returns_empty() -> void:
 	assert_int(TerrainPrefabs.wall_segments_for("does_not_exist", Vector2i.ZERO).size()).is_equal(0)
 
 
-func test_ruin_walls_form_l_shape() -> void:
-	# 3x3 ruin -> 3 north edges + 3 west edges = 6 segments
+func test_ruin_walls_two_opposite_corners() -> void:
+	# 3x3 ruin -> two point-symmetric L-corners: (2 north + 2 west) + (2 south + 2 east) = 8
 	var segments := TerrainPrefabs.wall_segments_for("ruine_9x9", Vector2i.ZERO)
-	assert_int(segments.size()).is_equal(6)
+	assert_int(segments.size()).is_equal(8)
 
-	var all_sides_north_or_west := true
+	var sides := {}
 	var proc_keyed := true
 	for seg in segments:
-		var side: int = seg["edge_side"]
-		if side != TerrainPrefabs.EDGE_NORTH and side != TerrainPrefabs.EDGE_WEST:
-			all_sides_north_or_west = false
+		sides[seg["edge_side"]] = true
 		if seg["wall_key"] != TerrainPrefabs.PROC_WALL_KEY:
 			proc_keyed = false
-	assert_bool(all_sides_north_or_west).is_true()
+	# all four edges are represented (two opposite L-corners)
+	assert_bool(sides.has(TerrainPrefabs.EDGE_NORTH) and sides.has(TerrainPrefabs.EDGE_WEST) \
+		and sides.has(TerrainPrefabs.EDGE_SOUTH) and sides.has(TerrainPrefabs.EDGE_EAST)).is_true()
 	assert_bool(proc_keyed).is_true()
 
 
 func test_ruin_walls_share_the_origin_corner() -> void:
 	# The L pivots on the origin cell: it carries both a north and a west edge.
 	var segments := TerrainPrefabs.wall_segments_for("ruine_9x6", Vector2i.ZERO)
-	assert_int(segments.size()).is_equal(5)  # 3 north + 2 west
+	assert_int(segments.size()).is_equal(6)  # NW: 2 north + 1 west; SE: 2 south + 1 east
 	var has_north_at_origin := false
 	var has_west_at_origin := false
 	for seg in segments:
@@ -73,6 +73,17 @@ func test_ruin_walls_share_the_origin_corner() -> void:
 			has_west_at_origin = true
 	assert_bool(has_north_at_origin).is_true()
 	assert_bool(has_west_at_origin).is_true()
+
+
+func test_wall_roles_full_at_corner_crumble_to_ends() -> void:
+	# 3x3 arms are 2 cells each: the corner cell stays "full", the free-end cell
+	# crumbles. With four arms that is 4 "full" + 4 "crumble_steep".
+	var roles := {}
+	for seg in TerrainPrefabs.wall_segments_for("ruine_9x9", Vector2i.ZERO):
+		var role: String = seg["role"]
+		roles[role] = int(roles.get(role, 0)) + 1
+	assert_int(int(roles.get("full", 0))).is_equal(4)
+	assert_int(int(roles.get("crumble_steep", 0))).is_equal(4)
 
 
 func test_non_ruin_has_no_walls() -> void:
@@ -136,24 +147,19 @@ func test_rotated_footprint_bounding_box() -> void:
 
 
 func test_wall_sides_rotate() -> void:
-	var sides0 := {}
-	for s in TerrainPrefabs.wall_segments_for("ruine_9x9", Vector2i.ZERO, 0):
-		sides0[s["edge_side"]] = true
-	assert_bool(sides0.has(TerrainPrefabs.EDGE_NORTH) and sides0.has(TerrainPrefabs.EDGE_WEST)).is_true()
-
-	# 90° CW: north -> east, west -> north
-	var sides90 := {}
-	for s in TerrainPrefabs.wall_segments_for("ruine_9x9", Vector2i.ZERO, 90):
-		sides90[s["edge_side"]] = true
-	assert_bool(sides90.has(TerrainPrefabs.EDGE_NORTH) and sides90.has(TerrainPrefabs.EDGE_EAST)).is_true()
-	assert_bool(sides90.has(TerrainPrefabs.EDGE_WEST)).is_false()
-
-	# 180° (point-symmetric mirror): north -> south, west -> east
-	var sides180 := {}
-	for s in TerrainPrefabs.wall_segments_for("ruine_9x9", Vector2i.ZERO, 180):
-		sides180[s["edge_side"]] = true
-	assert_bool(sides180.has(TerrainPrefabs.EDGE_SOUTH) and sides180.has(TerrainPrefabs.EDGE_EAST)).is_true()
-	assert_bool(sides180.has(TerrainPrefabs.EDGE_NORTH)).is_false()
+	# The two opposite L-corners always cover all four edges; rotation maps each edge
+	# (N->E->S->W) but the segments must stay within the rotated bounding box, which
+	# catches a no-op / broken cell transform on the non-square 3x2 piece.
+	for rot in [0, 90, 180, 270]:
+		var fsize := TerrainPrefabs.footprint_size("ruine_9x6", rot)
+		var segments := TerrainPrefabs.wall_segments_for("ruine_9x6", Vector2i.ZERO, rot)
+		assert_int(segments.size()).is_equal(6)
+		var sides := {}
+		for s in segments:
+			sides[s["edge_side"]] = true
+			var c: Vector2i = s["edge_cell"]
+			assert_bool(c.x >= 0 and c.x < fsize.x and c.y >= 0 and c.y < fsize.y).is_true()
+		assert_int(sides.size()).is_equal(4)
 
 
 func test_flip_changes_wall_layout() -> void:
@@ -163,7 +169,7 @@ func test_flip_changes_wall_layout() -> void:
 			out.append([s["edge_cell"], s["edge_side"]])
 		return out
 	assert_bool(sig.call(false) == sig.call(true)).is_false()
-	assert_int(TerrainPrefabs.wall_segments_for("ruine_9x9", Vector2i.ZERO, 0, true).size()).is_equal(6)
+	assert_int(TerrainPrefabs.wall_segments_for("ruine_9x9", Vector2i.ZERO, 0, true).size()).is_equal(8)
 
 
 func test_container_decoration_records_rotation() -> void:

@@ -91,6 +91,12 @@ const MINE_HEIGHT_INCHES := 0.5
 const PUDDLE_RADIUS_INCHES := 1.3
 const PUDDLE_HEIGHT_INCHES := 0.08
 
+## Textured ruins walls (first pass): the wall + corner-post props use a lit, world-
+## triplanar stone material instead of the hologram look (other props stay holographic for
+## now). The texture repeats every STONE_TILE_METERS in world space.
+const RUINS_WALL_TEX_PATH := "res://assets/terrain/props/ruins_wall.webp"
+const STONE_TILE_METERS := 0.085  # ~3.3" per tile -> ~1 cm stone blocks at 28 mm scale
+
 # ==============================================================================
 # STATE
 # ==============================================================================
@@ -139,8 +145,13 @@ var objective_ring_meshes: Array[MeshInstance3D] = []
 var mission_objectives: Array[Vector3] = []  # World positions in meters
 var objective_owners: Array[int] = []  # Owner per objective (0 = neutral, else player_id)
 
-## Wall instances (procedurally generated holographic walls + corner posts)
+## Wall instances (procedural walls + corner posts; ruins use a textured stone material)
 var _wall_instances: Array[Node3D] = []
+
+## Lit, world-triplanar stone material for the ruins walls + corner posts (built once,
+## shared). Null until first built; falls back to the hologram material if the texture is
+## missing.
+var _ruins_wall_material: Material = null
 
 ## Placed object instances (trees + containers)
 var _object_instances: Array[Node3D] = []
@@ -1467,9 +1478,9 @@ func _add_wall_corner_pieces(wall_segments: Array, grid_dims: Vector2i, cell_siz
 		var box := BoxMesh.new()
 		box.size = Vector3(corner_size, target_height, corner_size)
 		mesh_instance.mesh = box
-		mesh_instance.material_override = TerrainHologram.make_material()
+		mesh_instance.material_override = _get_ruins_wall_material()
 		mesh_instance.position.y = target_height / 2.0 - Z_FIGHT_OFFSET
-		mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		body.add_child(mesh_instance)
 
 		var collision := CollisionShape3D.new()
@@ -1485,8 +1496,31 @@ func _add_wall_corner_pieces(wall_segments: Array, grid_dims: Vector2i, cell_siz
 		_wall_instances.append(body)
 
 
-## Build a procedural holographic wall sized to a segment, with a matching collision
-## body so it physically blocks movement (ruin walls are Impassable per the rulebook).
+## Lit, world-triplanar stone material for the ruins walls + corner posts. Built once and
+## shared; falls back to the holographic material if the bundled texture is unavailable.
+func _get_ruins_wall_material() -> Material:
+	if _ruins_wall_material != null:
+		return _ruins_wall_material
+	var tex: Texture2D = load(RUINS_WALL_TEX_PATH) if ResourceLoader.exists(RUINS_WALL_TEX_PATH) else null
+	if tex == null:
+		_ruins_wall_material = TerrainHologram.make_material()
+		return _ruins_wall_material
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = tex
+	mat.uv1_triplanar = true
+	mat.uv1_world_triplanar = true
+	var tile_scale := 1.0 / STONE_TILE_METERS
+	mat.uv1_scale = Vector3(tile_scale, tile_scale, tile_scale)
+	mat.roughness = 0.95
+	mat.metallic = 0.0
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	_ruins_wall_material = mat
+	return _ruins_wall_material
+
+
+## Build a procedural wall sized to a segment, with a matching collision body so it
+## physically blocks movement (ruin walls are Impassable per the rulebook). The ruins use
+## a textured stone material (see _get_ruins_wall_material).
 func _create_procedural_wall(length_inches: float, height_inches: float) -> StaticBody3D:
 	var target_length := length_inches * INCHES_TO_METERS
 	var target_height := height_inches * INCHES_TO_METERS
@@ -1500,10 +1534,10 @@ func _create_procedural_wall(length_inches: float, height_inches: float) -> Stat
 	var box := BoxMesh.new()
 	box.size = Vector3(target_length, target_height, thickness)
 	mesh_instance.mesh = box
-	mesh_instance.material_override = TerrainHologram.make_material()
+	mesh_instance.material_override = _get_ruins_wall_material()
 	# Box centered at half height so the bottom sits on the table surface.
 	mesh_instance.position.y = target_height / 2.0 - Z_FIGHT_OFFSET
-	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	body.add_child(mesh_instance)
 
 	var collision := CollisionShape3D.new()

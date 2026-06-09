@@ -124,8 +124,12 @@ static func footprint_cells(prefab_key: String, origin: Vector2i, rotation: int 
 	return cells
 
 
-## Auto-suggested ruin walls: an L along the north row + west column of the base
-## footprint, transformed by the same flip+rotation as the piece. Empty for non-ruins.
+## Auto-suggested ruin walls: TWO point-symmetric L-corners (per the agreed design — see
+## docs/HANDOFF_RUIN_WALLS.md). The NW corner carries the north edge (cols 0..X-2) + west
+## edge (rows 0..Y-2); the SE corner carries the south edge (cols 1..X-1) + east edge
+## (rows 1..Y-1). So each arm is (size-1) cells and the centre/opposite corners stay open.
+## Each segment gets a "role": "full" at the corner, "crumble_*" toward the free end (the
+## wall steps down to the open ends). Transformed by the same flip+rotation. Non-ruins: [].
 static func wall_segments_for(prefab_key: String, origin: Vector2i, rotation: int = 0, flip: bool = false) -> Array[Dictionary]:
 	var segments: Array[Dictionary] = []
 	if not PREFABS.has(prefab_key):
@@ -133,10 +137,26 @@ static func wall_segments_for(prefab_key: String, origin: Vector2i, rotation: in
 	if PREFABS[prefab_key].get("wall_shape", "") != "L":
 		return segments
 	var size: Vector2i = PREFABS[prefab_key]["size"]
-	for dx in range(size.x):
-		segments.append(_oriented_wall(Vector2i(dx, 0), EDGE_NORTH, origin, size, rotation, flip))
-	for dy in range(size.y):
-		segments.append(_oriented_wall(Vector2i(0, dy), EDGE_WEST, origin, size, rotation, flip))
+	var sx: int = size.x
+	var sy: int = size.y
+	# NW corner L (free ends point toward +X / +Z)
+	for dx in range(sx - 1):
+		var seg := _oriented_wall(Vector2i(dx, 0), EDGE_NORTH, origin, size, rotation, flip)
+		seg["role"] = _crumble_role(dx, sx - 1)
+		segments.append(seg)
+	for dy in range(sy - 1):
+		var seg := _oriented_wall(Vector2i(0, dy), EDGE_WEST, origin, size, rotation, flip)
+		seg["role"] = _crumble_role(dy, sy - 1)
+		segments.append(seg)
+	# SE corner L (free ends point toward -X / -Z) — point-symmetric to the NW corner
+	for dx in range(1, sx):
+		var seg := _oriented_wall(Vector2i(dx, sy - 1), EDGE_SOUTH, origin, size, rotation, flip)
+		seg["role"] = _crumble_role((sx - 1) - dx, sx - 1)
+		segments.append(seg)
+	for dy in range(1, sy):
+		var seg := _oriented_wall(Vector2i(sx - 1, dy), EDGE_EAST, origin, size, rotation, flip)
+		seg["role"] = _crumble_role((sy - 1) - dy, sy - 1)
+		segments.append(seg)
 	return segments
 
 
@@ -194,6 +214,21 @@ static func _wall(edge_cell: Vector2i, edge_side: int) -> Dictionary:
 		"length_inches": WALL_SEGMENT_INCHES,
 		"sub_position": 0,
 	}
+
+
+## Wall role by distance from its corner along an arm of `arm_len` cells. The corner cell
+## is "full"; cells toward the free end crumble down (so the ruin descends to open ends).
+## A renderer maps the role to a texture/height; see docs/HANDOFF_RUIN_WALLS.md.
+static func _crumble_role(dist_from_corner: int, arm_len: int) -> String:
+	if arm_len <= 1 or dist_from_corner == 0:
+		return "full"
+	if arm_len == 2:
+		return "crumble_steep"
+	if dist_from_corner == arm_len - 1:
+		return "crumble_b"
+	if dist_from_corner == arm_len - 2:
+		return "crumble_a"
+	return "full"
 
 
 static func _object(cell: Vector2i, object_type: String, offset: Vector2) -> Dictionary:

@@ -21,6 +21,10 @@ signal relay_connection_lost()
 signal relay_reconnecting()
 ## An automatic rejoin attempt failed; the session is over.
 signal relay_reconnect_failed(reason: String)
+## Guest side: the host dropped but the room is preserved — waiting for the host to rejoin.
+signal host_paused()
+## The host is present again (we rejoined as host, or the host returned).
+signal host_rejoined()
 signal peer_joined(peer_id: int)
 signal peer_left(peer_id: int)
 
@@ -137,6 +141,8 @@ func _connect_recovery_signals() -> void:
 	relay_peer.relay_connection_lost.connect(_on_relay_connection_lost)
 	relay_peer.relay_reconnecting.connect(_on_relay_reconnecting)
 	relay_peer.relay_reconnect_failed.connect(_on_relay_reconnect_failed)
+	relay_peer.host_paused.connect(_on_host_paused)
+	relay_peer.host_rejoined.connect(_on_host_rejoined)
 
 
 func _on_relay_connection_lost() -> void:
@@ -154,8 +160,17 @@ func _on_relay_reconnect_failed(reason: String) -> void:
 	print("=== RELAY RECONNECT FAILED: %s ===" % reason)
 
 
-## Attempt to rejoin the same room after a drop (guest only; the host re-syncs full
-## state to the rejoiner, so no game state is lost). Returns OK if started.
+func _on_host_paused() -> void:
+	host_paused.emit()
+
+
+func _on_host_rejoined() -> void:
+	host_rejoined.emit()
+
+
+## Attempt to rejoin the same room after a drop. A guest gets a fresh peer id; a host
+## reclaims peer id 1 if it returns within the relay's window. The (re)host re-syncs
+## full state to the waiting peers, so no game state is lost. Returns OK if started.
 func reconnect_to_room() -> Error:
 	if relay_peer and not relay_peer.get_room_code().is_empty():
 		return relay_peer.attempt_reconnect()
