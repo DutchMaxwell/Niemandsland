@@ -279,9 +279,14 @@ func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> voi
 				_deselect_all()
 				_add_to_selection(collider)
 				_start_dragging(screen_pos)
-		elif collider.is_in_group("table"):
-			# Clicking on table starts box selection
-			_start_box_selection(screen_pos, alt_pressed)
+			return
+
+	# Anything else starts a box selection: the table, a terrain prop (walls,
+	# containers, trees...) or empty space past the table edge. Requiring a TABLE hit
+	# here made the rubber band feel view-angle dependent — at shallow camera angles
+	# (or with the cursor over terrain) the ray missed the table collider and no box
+	# ever appeared.
+	_start_box_selection(screen_pos, alt_pressed)
 
 
 ## Add an object to the current selection
@@ -538,6 +543,10 @@ func _finish_box_selection(alt_pressed: bool) -> void:
 		# Check all selectable objects
 		for child in get_children():
 			if child.is_in_group("selectable"):
+				# Objects behind the camera unproject MIRRORED onto the screen — at
+				# shallow view angles the box would silently grab minis behind you.
+				if camera.is_position_behind(child.global_position):
+					continue
 				# Project object position to screen space
 				var screen_pos = camera.unproject_position(child.global_position)
 

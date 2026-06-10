@@ -2,6 +2,11 @@ extends StaticBody3D
 ## Tabletop surface with configurable size
 ## Standard wargaming table sizes: 4x4, 4x6, 6x4 feet
 
+## Emitted whenever the table is rebuilt to a new size (in feet). Dependents that must
+## track the play-field extent (ground mist, ...) connect here, so EVERY resize path —
+## size dialog, save load, network sync, WGS import — keeps them in sync.
+signal table_resized(size_feet: Vector2)
+
 @export var default_color: Color = Color(0.2, 0.35, 0.2)  # Gaming mat green
 @export var grid_color: Color = Color(0.15, 0.25, 0.15)
 @export var show_grid: bool = true
@@ -77,6 +82,11 @@ func setup_table(size_feet: Vector2) -> void:
 			# Preserve terrain overlay and other overlay nodes
 			if child.name == "TerrainOverlay" or child.is_in_group("table_overlay"):
 				continue
+			# Preserve the biome delivery service (it owns the HTTPRequest): freeing it
+			# here killed the battlemap download started by the table-size dialog, so
+			# the chosen biome never replaced the fallback surface.
+			if child == _biome_library:
+				continue
 			child.queue_free()
 
 	# Create table mesh
@@ -99,6 +109,8 @@ func setup_table(size_feet: Vector2) -> void:
 
 	# Add table edge/border
 	_create_table_border(size_meters)
+
+	table_resized.emit(size_feet)
 
 
 ## Build the play-surface material: macro battlefield mat + tiled procedural micro-relief
@@ -131,12 +143,16 @@ func _load_fallback_texture() -> void:
 
 
 ## Switch the play-surface biome and resolve its battlemap (async, from R2 + cache).
+## Also re-themes the terrain props (ruin walls, trees) to the biome's set.
 func set_biome(biome_name: String) -> void:
 	if not BIOMES.has(biome_name):
 		push_warning("Unknown biome '%s' (known: %s)" % [biome_name, ", ".join(BIOMES)])
 		return
 	biome = biome_name
 	_apply_biome(biome_name)
+	var overlay := get_node_or_null("TerrainOverlay")
+	if overlay != null and overlay.has_method("set_biome"):
+		overlay.set_biome(biome_name)
 
 
 ## Available biome keys (for a selection UI).
@@ -149,7 +165,7 @@ func get_biomes() -> Array:
 ## unavailable (e.g. before the first R2 publish).
 func _apply_biome(biome_name: String) -> void:
 	mesh_instance.material_override = _build_ground_material()  # show fallback immediately
-	if _biome_library == null:
+	if not is_instance_valid(_biome_library):
 		return
 	var path: String = await _biome_library.ensure_biome(biome_name)
 	if biome != biome_name:

@@ -1,8 +1,9 @@
 # Handoff — Ruin-wall texturing (OPR map generator)
 
-> **Branch:** `claude/terrain-prop-textures` · **PR:** #48 · **Status:** foundation + art
-> landed and green; the in-game `terrain_overlay.gd` shell-wall upgrade is specified here
-> but **not yet wired in** (best done + visually verified on a GPU machine).
+> **Branch:** `claude/terrain-prop-textures` · **PR:** #48 · **Status:** DONE — the §6
+> shell-wall integration was wired into `scripts/terrain_overlay.gd` on 2026-06-09 (R2
+> panel delivery via `ruins_library.gd`, see §8). This document stays as the design
+> record: the approved look, the art recipe, and the gotchas.
 
 This is a complete handoff for continuing the ruin work on another machine. It records the
 **approved look**, the **art + how it was generated**, the **wall layout** (done, tested),
@@ -237,13 +238,17 @@ Validate the same way every change is validated (`docs/DEVELOPMENT.md`): import/
 
 ---
 
-## 8. Asset delivery (project-level, user-owned)
+## 8. Asset delivery (RESOLVED: on-demand from R2)
 
-Terrain art will be delivered **on-demand via Cloudflare R2** (same pattern as the biome
-ground textures — `BiomeLibrary` / `AssetDownloadManager` / `model_manifest`). The committed
-WebP set keeps the repo self-contained and CI green; the R2 publish is run by the **user from
-their main machine** (they handle the R2 step; do not block on it here). The ruin set is small
-(≈4 MB), so committing it is fine for now.
+The runtime panel set is delivered **on-demand via Cloudflare R2**, mirroring the biome
+ground textures: `assets/ruins_manifest.json` maps the 9 runtime panels (everything except
+`masonry_source`) to `https://<legacy-cdn-host>/terrain-source/ruins/<file>` with sha256
+integrity; `scripts/ruins_library.gd` + `AssetDownloadManager` cache them in
+`user://ruins_cache`. The WebPs stay **out of git** (`assets/terrain/props/ruins/` is
+gitignored; the repo history was scrubbed of binaries on 2026-06-09 — do not commit them
+back). The renderer keeps the first-pass triplanar material as offline fallback and
+upgrades in place once the download lands. Runtime decode via `load_webp_from_buffer`
+preserves the authored hard alpha (so §6 gotcha #4 needs no import settings).
 
 ---
 

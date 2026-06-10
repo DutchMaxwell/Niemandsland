@@ -422,7 +422,6 @@ func _ready() -> void:
 	# Initialize OPR Stats Tooltip
 	var tooltip_scene = load("res://scenes/opr_stats_tooltip.tscn")
 	opr_stats_tooltip = tooltip_scene.instantiate()
-	opr_stats_tooltip.army_manager = opr_army_manager
 	$UI.add_child(opr_stats_tooltip)
 
 	# Initialize Unit Card (docked, live battle state for the selected unit)
@@ -1331,12 +1330,8 @@ func _set_table_size(size_feet: Vector2) -> void:
 	object_manager.clear_all_objects()
 	dice_result_label.text = ""
 
-	# Rebuild table
+	# Rebuild table (the ground mist resizes via the table_resized signal)
 	table.setup_table(size_feet)
-
-	# Size the ground mist to cover the whole field (feet -> metres).
-	if atmospheric_clouds and atmospheric_clouds.has_method("set_table_size"):
-		atmospheric_clouds.set_table_size(size_feet * FEET_TO_METERS)
 
 	# Update map layout editor with new table size (this clears terrain/objectives data)
 	if map_layout_editor and map_layout_editor.has_method("set_table_size"):
@@ -1803,7 +1798,8 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 			map_layout_editor.grid_cells = grid_cells
 			map_layout_editor.grid_rotation_degrees = rot
 
-		# Deserialize and apply wall segments
+		# Deserialize and apply wall segments (role/taper_dir drive the ruin shell
+		# walls; defaults keep peers on older layout payloads rendering "full" panels)
 		var wall_segments: Array[Dictionary] = []
 		for w in layout.get("wall_segments", []):
 			if w is Dictionary:
@@ -1813,6 +1809,8 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 					"wall_key": str(w.get("wall_key", "")),
 					"length_inches": float(w.get("length_inches", 3.0)),
 					"sub_position": int(w.get("sub_position", 0)),
+					"role": str(w.get("role", "full")),
+					"taper_dir": int(w.get("taper_dir", -1)),
 				})
 		if map_layout_editor:
 			map_layout_editor.wall_segments = wall_segments
@@ -2565,6 +2563,8 @@ func _on_map_layout_closed() -> void:
 				"wall_key": wall.get("wall_key", ""),
 				"length_inches": wall.get("length_inches", 3.0),
 				"sub_position": wall.get("sub_position", 0),
+				"role": wall.get("role", "full"),
+				"taper_dir": wall.get("taper_dir", -1),
 			})
 
 		# Serialize placed objects for network
@@ -2729,6 +2729,19 @@ func _init_atmospheric_clouds() -> void:
 	# Give reference to camera controller for zoom-based visibility
 	if camera_pivot:
 		atmospheric_clouds.camera_controller = camera_pivot
+
+	# Track the play-field extent on EVERY resize path (size dialog, save load, network
+	# sync, WGS import) — sizing the mist only in _set_table_size left it hanging past
+	# the table boundaries after loading a save. Apply the current size immediately:
+	# the table is built before the clouds exist.
+	table.table_resized.connect(_on_table_resized)
+	_on_table_resized(table.table_size)
+
+
+## Keep the ground mist matched to the table extent (feet -> metres).
+func _on_table_resized(size_feet: Vector2) -> void:
+	if atmospheric_clouds and atmospheric_clouds.has_method("set_table_size"):
+		atmospheric_clouds.set_table_size(size_feet * FEET_TO_METERS)
 
 
 ## Handle unit movement (re-check coherency)

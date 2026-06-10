@@ -1,5 +1,19 @@
 # Handoff — Finish the ruin texturing in the game (for the local GPU instance)
 
+> **Status: DONE (2026-06-09, local GPU instance).** All four jobs are complete: the 9
+> runtime panels are verified live on R2 (sizes match `assets/ruins_manifest.json`);
+> the shell walls are implemented in `scripts/terrain_overlay.gd` (delivered on demand
+> via `scripts/ruins_library.gd`, triplanar fallback until cached); and the look was
+> **verified on GPU** (RTX 3070 Ti, Forward+) with `tools/render_overlay_ruins_runner.tscn`,
+> which renders the REAL renderer path — R2 fetch → in-place shell upgrade — for a 9×9″,
+> a 9×6″ and a 90°-rotated 9×6″ ruin: every crumble arm steps down toward its free end
+> (gotcha #1 passes, including under rotation via the `taper_dir` emitted by
+> `TerrainPrefabs`). One GPU-only artifact was found and fixed: texture REPEAT wrap-bled
+> the opposite panel edge at u=1.0 under anisotropic filtering (full-height stone slivers
+> at mirrored crumble free ends) — panel materials now use `texture_repeat = false`
+> (also applied to the reference tool). gdUnit4: full suite green. Still user-owned:
+> **rotate the Gemini key** (§ "Do not").
+
 **Date:** 2026-06-09 · **Read with:** [`docs/HANDOFF_RUIN_WALLS.md`](HANDOFF_RUIN_WALLS.md) —
 the full design + §6 integration plan + gotchas. This file is the short "what's actually
 left and what went wrong" directive on top of it.

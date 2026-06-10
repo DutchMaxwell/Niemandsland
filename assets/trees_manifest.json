@@ -1,0 +1,143 @@
+{
+  "version": 1,
+  "base_url": "https://<legacy-cdn-host>/terrain-source/trees",
+  "panels": {
+    "desert_tree_a": {
+      "url": "desert_tree_a.webp?v=ced472b6",
+      "sha256": "ced472b6edc2ab85e5c01d31dd0d9000f688ccf4acb7a1c018d52b6643cce37e",
+      "size": 327312
+    },
+    "desert_tree_a_top": {
+      "url": "desert_tree_a_top.webp?v=476cbb78",
+      "sha256": "476cbb78807b25a1ec4c2b831c7ee0451b31ca73c53f3ea2a50671c6ffda417d",
+      "size": 723538
+    },
+    "desert_tree_b": {
+      "url": "desert_tree_b.webp?v=965014e4",
+      "sha256": "965014e4e90449f9ecee3bd58c461c226163ae1ffc9430ae7760144351fe35ee",
+      "size": 914548
+    },
+    "desert_tree_b_top": {
+      "url": "desert_tree_b_top.webp?v=ea3ca277",
+      "sha256": "ea3ca2778fd25a5d4f0ef733247e519b5c614380d266e50ccde13464b4630892",
+      "size": 1088774
+    },
+    "desert_tree_c": {
+      "url": "desert_tree_c.webp?v=13df5ef7",
+      "sha256": "13df5ef7aaa229bf2cbd06864caf3a802522d5887c8707d9ff521c2b9d0f1f4f",
+      "size": 578916
+    },
+    "desert_tree_c_top": {
+      "url": "desert_tree_c_top.webp?v=685778e8",
+      "sha256": "685778e84fba9356befb94a20ee94eccf9829b917814a648a33eb86ff1861895",
+      "size": 834570
+    },
+    "tree_a": {
+      "url": "tree_a.webp?v=44c0c72d",
+      "sha256": "44c0c72d669423a99e75ec86f74008f2eed6d172a75c6cae173b4d28685af558",
+      "size": 940112
+    },
+    "tree_a_top": {
+      "url": "tree_a_top.webp?v=fda15d93",
+      "sha256": "fda15d93322130914726884a2e5f629452cc436b09dd6d80e72676847e95075a",
+      "size": 1156990
+    },
+    "tree_b": {
+      "url": "tree_b.webp?v=bb66f70d",
+      "sha256": "bb66f70d23a06721fe1f330bbdbdb14beed375fe87a8d72f75a6a325268db5e1",
+      "size": 696652
+    },
+    "tree_b_top": {
+      "url": "tree_b_top.webp?v=16ae6ab8",
+      "sha256": "16ae6ab8ce5b324294d4932ce2ef0c074583e942a9d0a80cf66d95efcaf4e070",
+      "size": 983846
+    },
+    "tree_c": {
+      "url": "tree_c.webp?v=e515a62b",
+      "sha256": "e515a62bc31428c5b2b947316c939d526fba18c0125c0388aa00241b043c0c1b",
+      "size": 729882
+    },
+    "tree_c_top": {
+      "url": "tree_c_top.webp?v=ab29449c",
+      "sha256": "ab29449c777f0c3fce6f239a87ec0cd85a50ad64f2d16473f61e75d4d65b25df",
+      "size": 1193264
+    },
+    "tundra_tree_a": {
+      "url": "tundra_tree_a.webp?v=6983b58c",
+      "sha256": "6983b58c467518e909105b74acd861b1aec87e710c0959ee42e4e056f35f4c55",
+      "size": 511548
+    },
+    "tundra_tree_a_top": {
+      "url": "tundra_tree_a_top.webp?v=1927fa8c",
+      "sha256": "1927fa8c16aea5e92e16bcabaee42a5e91149e49ecf605b9e19f3b9bdb83fd6d",
+      "size": 1297838
+    },
+    "tundra_tree_b": {
+      "url": "tundra_tree_b.webp?v=0290fa60",
+      "sha256": "0290fa6035529f2b0b073594b82fdf8cc849a06a04030ec05a1fb2f876824acc",
+      "size": 272250
+    },
+    "tundra_tree_b_top": {
+      "url": "tundra_tree_b_top.webp?v=ec2471e6",
+      "sha256": "ec2471e6cc02d351c75063e55b22e5f6c6f238354846ac998b31e4e1b1af9817",
+      "size": 561504
+    },
+    "tundra_tree_c": {
+      "url": "tundra_tree_c.webp?v=132debc5",
+      "sha256": "132debc5f2e59e380c8cab78d0ac2619605a53c59fdcd38d28f25869cd0a7b50",
+      "size": 860898
+    },
+    "tundra_tree_c_top": {
+      "url": "tundra_tree_c_top.webp?v=10d19126",
+      "sha256": "10d19126b0c7efdde1f425e315bce1077fb25f974f06cc9fa8fb8f580862268d",
+      "size": 1494098
+    }
+  },
+  "models": {
+    "tree_a": {
+      "url": "tree_a.glb?v=4344b8ae",
+      "sha256": "4344b8aedf08ff750f0a97f11f80a99a882993ea9d7f98cb75a29bff96cba954",
+      "size": 11177988
+    },
+    "tree_b": {
+      "url": "tree_b.glb?v=59c75f38",
+      "sha256": "59c75f3823ae314aa87f67ba0779ac12710e6d1275348bc45d0f3644d56fa92e",
+      "size": 12102680
+    },
+    "tree_c": {
+      "url": "tree_c.glb?v=1c98d349",
+      "sha256": "1c98d349c3983cf845b0c9ea2513945105d883fd762d9e82350165e6374260c1",
+      "size": 11821376
+    },
+    "desert_tree_a": {
+      "url": "desert_tree_a.glb?v=1731f2df",
+      "sha256": "1731f2dfefba7d77bfa7b308d915c0dfc1c4bb11193b20732e64148dbdbf2cb5",
+      "size": 6947080
+    },
+    "desert_tree_b": {
+      "url": "desert_tree_b.glb?v=62fcf015",
+      "sha256": "62fcf015da98aee03d79d2954aa73bfdacc6772dadfd60510969121dea19bf08",
+      "size": 10154656
+    },
+    "desert_tree_c": {
+      "url": "desert_tree_c.glb?v=20668da1",
+      "sha256": "20668da1fc642adeb3b2a4e6fde72fe72ec9cf85027066725fea64df19f403b7",
+      "size": 9627920
+    },
+    "tundra_tree_a": {
+      "url": "tundra_tree_a.glb?v=8b55919a",
+      "sha256": "8b55919accd6dcc5a5d446db0842a99d612114df7d675ed134053ac7bc5d7459",
+      "size": 10754504
+    },
+    "tundra_tree_b": {
+      "url": "tundra_tree_b.glb?v=2e1707a4",
+      "sha256": "2e1707a43af24f1a90d6eb36573bd5aae6da3de56c0c586e0a888e9aad247dae",
+      "size": 15593156
+    },
+    "tundra_tree_c": {
+      "url": "tundra_tree_c.glb?v=dc518a04",
+      "sha256": "dc518a040959ba97194d593e313270d09067bf7d15ee151a17d1df34b6eb6ecc",
+      "size": 11567652
+    }
+  }
+}

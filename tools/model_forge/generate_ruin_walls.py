@@ -297,7 +297,7 @@ def build_normal(masonry: Image.Image) -> None:
 
 def _save(img: Image.Image, name: str) -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    path = OUT_DIR / f"{name}.webp"
+    path = OUT_DIR / f"{NAME_PREFIX}{name}.webp"
     if img.mode == "RGBA":
         # Lossless keeps the hard alpha edges the scissor threshold relies on.
         img.save(path, "WEBP", lossless=True, method=6)
@@ -306,16 +306,153 @@ def _save(img: Image.Image, name: str) -> None:
     LOG.info("wrote %s", path.relative_to(OUT_DIR.parent.parent.parent))
 
 
+# --- Biome themes ---------------------------------------------------------------------------
+# A theme renders the SAME panel set (same roles, same PIL damage pipeline) from a
+# different masonry + window source, written under a name prefix ("desert_solid_a", ...)
+# so the in-game RuinsLibrary can pick the set per table biome.
+
+NAME_PREFIX: str = ""
+
+DESERT_MASONRY_PROMPT: str = (
+    "Seamless tileable front-on orthographic texture of an old sun-dried ADOBE mud-brick "
+    "desert wall built of HORIZONTAL courses of small flat rectangular mud bricks in "
+    "running bond: every brick lies FLAT and is clearly wider than tall, about 18 small "
+    "bricks across the width and about 25 thin horizontal courses stacked vertically. "
+    "Sandy tan and ochre clay bricks, patches of cracked earthen plaster, wind erosion, "
+    "bleached by the sun, pale dust packed into the recessed joints. Natural recessed "
+    "joints. Photorealistic, detailed, flat even lighting with no directional shadows, "
+    "tiles seamlessly. No drawn lines, no grid overlay, no text, no border, no watermark."
+)
+
+## Desert damage grid matching the fine brickwork (~18 bricks across vs the castle's 6),
+## so knock-outs and crumble steps still remove WHOLE bricks.
+DESERT_GRID_ROW_H: float = PANEL_H / 33.0
+DESERT_GRID_BLOCK_W: float = PANEL_W / 18.0
+
+# Tundra: the approved castle masonry, snowed in. Same medium stone scale -> the
+# default damage grid applies unchanged.
+TUNDRA_MASONRY_PROMPT: str = (
+    "Seamless tileable top-down orthographic texture of an old weathered castle wall of "
+    "MEDIUM coursed grey stone blocks, roughly 6 stones across the width (medium size, not "
+    "large, not tiny), IN DEEP WINTER: a layer of fresh snow caught on every ledge and "
+    "horizontal mortar joint, frost and thin ice glaze on the stone faces, icicle traces, "
+    "cold blue-grey tones. Natural deep recessed joints. Photorealistic, detailed, flat "
+    "even lighting with no directional shadows, tiles seamlessly. No drawn lines, no grid "
+    "overlay, no text, no border, no watermark."
+)
+
+TUNDRA_WINDOW_PROMPT: str = (
+    "Front-on orthographic view of a two-light Gothic tracery window built of the SAME "
+    "rough grey weathered castle stone as a medieval wall (grey limestone, NOT sandstone), "
+    "IN DEEP WINTER: snow piled on the sill and every ledge, frost on the tracery, pointed "
+    "equilateral outer arch, slender central mullion, two narrow pointed lancet lights, "
+    "intersecting bar tracery at the head. The two glazed light openings are filled FLAT "
+    "PURE MAGENTA (255,0,255). The entire area outside the window's outer stone frame is "
+    "FLAT PURE GREEN (0,255,0). Only the snowy grey stone window is stone-coloured. Even "
+    "flat lighting, no shadows, no background, no text, centered, fills the frame "
+    "vertically."
+)
+
+DESERT_WINDOW_PROMPT: str = (
+    "Front-on orthographic view of a two-light arched window in a thick sun-dried adobe "
+    "desert wall of SMALL dense mud bricks (sandy tan clay, NOT grey stone): two narrow "
+    "round-arched window lights side by side, divided by a sturdy mud-brick pillar, with a "
+    "simple clay arch of small bricks above each light. The two window light openings are filled FLAT PURE MAGENTA "
+    "(255,0,255). The entire area outside the window's outer clay frame is FLAT PURE GREEN "
+    "(0,255,0). Only the tan adobe window surround is clay-coloured. Even flat lighting, no "
+    "shadows, no background, no text, centered, fills the frame vertically."
+)
+
+
+def refresh_manifest_and_upload(do_upload: bool) -> int:
+    """Merge the current prefix's 9 runtime panels into assets/ruins_manifest.json and
+    optionally push them to R2 (terrain-source/ruins/), mirroring generate_trees.py."""
+    import hashlib  # noqa: PLC0415
+    import json  # noqa: PLC0415
+
+    manifest_path = THIS_DIR.parent.parent / "assets" / "ruins_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    runtime = ["solid_a", "solid_b", "topdmg_a", "opening_a",
+               "crumble_a", "crumble_b", "crumble_steep", "window", "normal"]
+    paths: dict[str, Path] = {}
+    for base in runtime:
+        name = f"{NAME_PREFIX}{base}"
+        path = OUT_DIR / f"{name}.webp"
+        if not path.exists():
+            LOG.error("missing panel %s", path)
+            return 1
+        data = path.read_bytes()
+        sha = hashlib.sha256(data).hexdigest()
+        manifest["panels"][name] = {
+            # Version query busts the CDN edge cache when a named panel is re-published
+            # (the edge may serve stale bytes for up to a day -> sha mismatch otherwise).
+            "url": f"{name}.webp?v={sha[:8]}",
+            "sha256": sha,
+            "size": len(data),
+        }
+        paths[name] = path
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    LOG.info("manifest: +%d panels (%s)", len(paths), NAME_PREFIX or "default")
+    if not do_upload:
+        return 0
+
+    sys.path.insert(0, str(THIS_DIR))
+    from publish_manifest import _load_r2_config  # noqa: PLC0415
+
+    cfg = _load_r2_config("", "")
+    if any(not cfg[k] for k in ("access_key", "secret_key", "endpoint", "bucket")):
+        LOG.error("missing R2 config")
+        return 2
+    import boto3  # noqa: PLC0415
+    from botocore.config import Config  # noqa: PLC0415
+
+    s3 = boto3.client(
+        "s3", endpoint_url=cfg["endpoint"],
+        aws_access_key_id=cfg["access_key"], aws_secret_access_key=cfg["secret_key"],
+        region_name="auto", config=Config(signature_version="s3v4"),
+    )
+    for name, path in sorted(paths.items()):
+        s3.put_object(
+            Bucket=cfg["bucket"], Key=f"terrain-source/ruins/{name}.webp",
+            Body=path.read_bytes(), ContentType="image/webp",
+            CacheControl="public, max-age=86400",
+        )
+        LOG.info("uploaded terrain-source/ruins/%s.webp", name)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
+    global NAME_PREFIX, MASONRY_PROMPT, WINDOW_PROMPT
+
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--only", choices=["all", "masonry", "window", "variants"], default="all",
                     help="run a single stage (variants/window reuse the committed masonry)")
     ap.add_argument("--force", action="store_true",
                     help="re-render Gemini stages even if masonry_source.webp exists")
+    ap.add_argument("--theme", choices=["castle", "desert", "tundra"], default="castle",
+                    help="art theme: castle = the approved grey stone set, desert = adobe, "
+                         "tundra = the castle stone snowed in")
+    ap.add_argument("--upload-r2", action="store_true",
+                    help="merge the theme's panels into ruins_manifest.json and push to R2")
     args = ap.parse_args(argv)
 
-    masonry_path = OUT_DIR / "masonry_source.webp"
+    if args.theme == "desert":
+        global GRID_ROW_H, GRID_BLOCK_W
+        NAME_PREFIX = "desert_"
+        MASONRY_PROMPT = DESERT_MASONRY_PROMPT
+        WINDOW_PROMPT = DESERT_WINDOW_PROMPT
+        GRID_ROW_H = DESERT_GRID_ROW_H
+        GRID_BLOCK_W = DESERT_GRID_BLOCK_W
+    elif args.theme == "tundra":
+        NAME_PREFIX = "tundra_"
+        MASONRY_PROMPT = TUNDRA_MASONRY_PROMPT
+        WINDOW_PROMPT = TUNDRA_WINDOW_PROMPT
+
+    if args.upload_r2:
+        return refresh_manifest_and_upload(True)
+
+    masonry_path = OUT_DIR / f"{NAME_PREFIX}masonry_source.webp"
     need_gemini = args.only in ("all", "masonry", "window")
     client: genai.Client | None = None
     if need_gemini:
@@ -328,7 +465,7 @@ def main(argv: list[str] | None = None) -> int:
     masonry: Image.Image | None = None
     if args.only in ("all", "masonry"):
         if masonry_path.exists() and not args.force and args.only == "all":
-            LOG.info("masonry_source.webp exists; reusing (use --force to re-render)")
+            LOG.info("%smasonry_source.webp exists; reusing (use --force to re-render)", NAME_PREFIX)
             masonry = Image.open(masonry_path).convert("RGB")
         else:
             masonry = generate_masonry(client)
