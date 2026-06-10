@@ -836,6 +836,151 @@
       "url": "5b75f8e10f59a19e69935f5d3fee13776a5c717068ce1c96de52c41fdeac79de.glb",
       "sha256": "5b75f8e10f59a19e69935f5d3fee13776a5c717068ce1c96de52c41fdeac79de",
       "size": 15405040
+    },
+    "orc_marauders/assault buggy": {
+      "url": "695c8638c8700e58145d48f0bd3746a4e8d9947445471884f09511ff37af8e8f.glb",
+      "sha256": "695c8638c8700e58145d48f0bd3746a4e8d9947445471884f09511ff37af8e8f",
+      "size": 17300788
+    },
+    "orc_marauders/attack plane": {
+      "url": "bbe193b586a263dd294e21efbdae9a5fc12dcdf5da37913666514e48472119c5.glb",
+      "sha256": "bbe193b586a263dd294e21efbdae9a5fc12dcdf5da37913666514e48472119c5",
+      "size": 21328404
+    },
+    "orc_marauders/battle truck": {
+      "url": "50282577fe76eb066b863a50cd86026b5b3f660ca9769b03a61e6688a66f2d71.glb",
+      "sha256": "50282577fe76eb066b863a50cd86026b5b3f660ca9769b03a61e6688a66f2d71",
+      "size": 19931728
+    },
+    "orc_marauders/beast titan": {
+      "url": "a1c7779f3749e867b8af7fae42e1fe7a421896fa40813f0dad0a72095af880d1.glb",
+      "sha256": "a1c7779f3749e867b8af7fae42e1fe7a421896fa40813f0dad0a72095af880d1",
+      "size": 17735080
+    },
+    "orc_marauders/berserker beast riders": {
+      "url": "eb6ddb3966f9db2a96ec1911bd65c4fab1eb61afb1c7e7781702ea78f1005dab.glb",
+      "sha256": "eb6ddb3966f9db2a96ec1911bd65c4fab1eb61afb1c7e7781702ea78f1005dab",
+      "size": 15508612
+    },
+    "orc_marauders/berserker leader": {
+      "url": "1e0291e3fa2c3051c548492a8132dd33e7c2b3c0100c326b501debc1c4371648.glb",
+      "sha256": "1e0291e3fa2c3051c548492a8132dd33e7c2b3c0100c326b501debc1c4371648",
+      "size": 15579424
+    },
+    "orc_marauders/berserkers": {
+      "url": "ad3eaefa17990d5446d6b09cd351397df02a4d887818136dde5244419f3a3575.glb",
+      "sha256": "ad3eaefa17990d5446d6b09cd351397df02a4d887818136dde5244419f3a3575",
+      "size": 15614964
+    },
+    "orc_marauders/bomber plane": {
+      "url": "fd89c3cd55e079bd76b4986848a9a02def3ad82db0dceaad4f106d481f0f2448.glb",
+      "sha256": "fd89c3cd55e079bd76b4986848a9a02def3ad82db0dceaad4f106d481f0f2448",
+      "size": 18229400
+    },
+    "orc_marauders/combat beast": {
+      "url": "b711bf5dc63b6e60a1c8c53b9be162a5ea8c49525646f13f39dd7e42ecea6f9e.glb",
+      "sha256": "b711bf5dc63b6e60a1c8c53b9be162a5ea8c49525646f13f39dd7e42ecea6f9e",
+      "size": 17407580
+    },
+    "orc_marauders/great battle truck": {
+      "url": "f7d278e6c1c5fc1d73e8454a09a6a80f238d42aececc7d61f42b057ca5344f34.glb",
+      "sha256": "f7d278e6c1c5fc1d73e8454a09a6a80f238d42aececc7d61f42b057ca5344f34",
+      "size": 19902260
+    },
+    "orc_marauders/great walker": {
+      "url": "a655b3ff0ad4e6e3d78b1852013308f394a2db8e41d9de6a8ade73d569753934.glb",
+      "sha256": "a655b3ff0ad4e6e3d78b1852013308f394a2db8e41d9de6a8ade73d569753934",
+      "size": 18105944
+    },
+    "orc_marauders/hover bikers": {
+      "url": "ed411056c24993b1ea0ad2eb3f6cb8c1784c9858e6805d168570eaf8f750f4f9.glb",
+      "sha256": "ed411056c24993b1ea0ad2eb3f6cb8c1784c9858e6805d168570eaf8f750f4f9",
+      "size": 18034780
+    },
+    "orc_marauders/infiltrators": {
+      "url": "72ca20d7689c49305270179a2baed797b51929b43d0b0a04bbcffe19fa858a07.glb",
+      "sha256": "72ca20d7689c49305270179a2baed797b51929b43d0b0a04bbcffe19fa858a07",
+      "size": 14226852
+    },
+    "orc_marauders/jump pack orcs": {
+      "url": "66fa4808bc4912c5a6b0738ecfef9fc9aa6bfc25f7be19fc3edc8ecb9294368c.glb",
+      "sha256": "66fa4808bc4912c5a6b0738ecfef9fc9aa6bfc25f7be19fc3edc8ecb9294368c",
+      "size": 14839712
+    },
+    "orc_marauders/melee walker": {
+      "url": "a344e986997495d22a5169f29ca850d301e80be4bb3bc4e2a95f1037bf1b3540.glb",
+      "sha256": "a344e986997495d22a5169f29ca850d301e80be4bb3bc4e2a95f1037bf1b3540",
+      "size": 17428024
+    },
+    "orc_marauders/orc bikers": {
+      "url": "f0fa4878cde808d98b9fcdefddfa0281fd54eefcbd398ee48e0713713c1ce4c2.glb",
+      "sha256": "f0fa4878cde808d98b9fcdefddfa0281fd54eefcbd398ee48e0713713c1ce4c2",
+      "size": 13015664
+    },
+    "orc_marauders/orc leader": {
+      "url": "991be8cbd5329028c9d8ce9a80cbb7b2346de9a305b21b7f1d5525a8caf25aa6.glb",
+      "sha256": "991be8cbd5329028c9d8ce9a80cbb7b2346de9a305b21b7f1d5525a8caf25aa6",
+      "size": 16568452
+    },
+    "orc_marauders/orc warriors": {
+      "url": "0eb2beabb523f81a117f5b5bc99674d7046fd314859ae96256378244cd589d91.glb",
+      "sha256": "0eb2beabb523f81a117f5b5bc99674d7046fd314859ae96256378244cd589d91",
+      "size": 14746520
+    },
+    "orc_marauders/ranged walker": {
+      "url": "9176007339308f61f183617d00f233032cf8a2b95ae2e35d91f7b1b219f1c6a5.glb",
+      "sha256": "9176007339308f61f183617d00f233032cf8a2b95ae2e35d91f7b1b219f1c6a5",
+      "size": 17683364
+    },
+    "orc_marauders/rurthdeg": {
+      "url": "16c537ce7b87bc0837ed8b7c60b3e062e714bb19e12b50cb4866a11a907efb38.glb",
+      "sha256": "16c537ce7b87bc0837ed8b7c60b3e062e714bb19e12b50cb4866a11a907efb38",
+      "size": 13960564
+    },
+    "orc_marauders/specialists": {
+      "url": "751aab50132baad94f70ec17a2b0736d3c24edfe72c7900b54fd3e76cf202526.glb",
+      "sha256": "751aab50132baad94f70ec17a2b0736d3c24edfe72c7900b54fd3e76cf202526",
+      "size": 13979104
+    },
+    "orc_marauders/trike": {
+      "url": "4b8a0268d88ee6480959b0ae3467a5951680cbbac3df71bb110493929c269d42.glb",
+      "sha256": "4b8a0268d88ee6480959b0ae3467a5951680cbbac3df71bb110493929c269d42",
+      "size": 17961512
+    },
+    "orc_marauders/truck": {
+      "url": "c905c01e6596463d97835b4efeccd711e2cc01288067b53769f1649da53b4f4e.glb",
+      "sha256": "c905c01e6596463d97835b4efeccd711e2cc01288067b53769f1649da53b4f4e",
+      "size": 18477884
+    },
+    "orc_marauders/ultra veteran leader": {
+      "url": "91a3345f5153fc425aff0f5b1974bda98c0ae3981eef97d04bf2ad581c749ac5.glb",
+      "sha256": "91a3345f5153fc425aff0f5b1974bda98c0ae3981eef97d04bf2ad581c749ac5",
+      "size": 15215688
+    },
+    "orc_marauders/ultra veterans": {
+      "url": "55ebf3dc90d60450097876e63026cef008fd2877da615dbb9c92e79efa80a933.glb",
+      "sha256": "55ebf3dc90d60450097876e63026cef008fd2877da615dbb9c92e79efa80a933",
+      "size": 14691060
+    },
+    "orc_marauders/veteran bikers": {
+      "url": "72ebb1dfe7a614d32429a5ebb6757a035bacb1ca4174739ebeeaa815360aa1d3.glb",
+      "sha256": "72ebb1dfe7a614d32429a5ebb6757a035bacb1ca4174739ebeeaa815360aa1d3",
+      "size": 17567556
+    },
+    "orc_marauders/veteran leader": {
+      "url": "ff4ac0cb04c75ded40861acda6a8416f9f7103fc749b2bd7fa779773146e6138.glb",
+      "sha256": "ff4ac0cb04c75ded40861acda6a8416f9f7103fc749b2bd7fa779773146e6138",
+      "size": 16396236
+    },
+    "orc_marauders/veteran specialists": {
+      "url": "98c639b44bcee3063cbc7c419ba7761a97c2d64fee03fcbf95230a91d24cf496.glb",
+      "sha256": "98c639b44bcee3063cbc7c419ba7761a97c2d64fee03fcbf95230a91d24cf496",
+      "size": 14304052
+    },
+    "orc_marauders/veterans": {
+      "url": "33088685e8708e2cc6d0554d13c629116e1473c43863913239f7853bc3f98960.glb",
+      "sha256": "33088685e8708e2cc6d0554d13c629116e1473c43863913239f7853bc3f98960",
+      "size": 15796444
     }
   }
 }
