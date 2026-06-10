@@ -103,6 +103,42 @@ func test_forest_decoration_places_trees() -> void:
 		assert_str(obj["object_type"]).is_equal("tree")
 
 
+func test_forest_trees_keep_margin_from_area_boundary() -> void:
+	# Trees stay TREE_EDGE_MARGIN_INCHES (in cell units: margin/3") away from the
+	# forest footprint outline, across many seeds and a shifted origin.
+	var origin := Vector2i(4, 7)
+	var margin := TerrainPrefabs.TREE_EDGE_MARGIN_INCHES / TerrainPrefabs.CELL_SIZE_INCHES
+	var size := 3.0  # wald_9x9 = 3x3 cells
+	for seed_value in range(20):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 1000 + seed_value
+		for obj in TerrainPrefabs.decoration_for("wald_9x9", origin, rng):
+			var cell: Vector2i = obj["cell"]
+			var offset: Vector2 = obj["offset"]
+			var pos := Vector2(cell - origin) + offset  # in cell units within the footprint
+			assert_float(pos.x).is_greater_equal(margin)
+			assert_float(pos.x).is_less_equal(size - margin)
+			assert_float(pos.y).is_greater_equal(margin)
+			assert_float(pos.y).is_less_equal(size - margin)
+
+
+func test_forest_trees_keep_minimum_spacing() -> void:
+	# Trees must not interpenetrate: pairwise spacing >= TREE_MIN_SPACING_INCHES.
+	for seed_value in range(20):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 2000 + seed_value
+		var objects := TerrainPrefabs.decoration_for("wald_9x9", Vector2i.ZERO, rng)
+		for i in objects.size():
+			for j in range(i + 1, objects.size()):
+				var cell_a: Vector2i = objects[i]["cell"]
+				var offset_a: Vector2 = objects[i]["offset"]
+				var cell_b: Vector2i = objects[j]["cell"]
+				var offset_b: Vector2 = objects[j]["offset"]
+				var a := (Vector2(cell_a) + offset_a) * TerrainPrefabs.CELL_SIZE_INCHES
+				var b := (Vector2(cell_b) + offset_b) * TerrainPrefabs.CELL_SIZE_INCHES
+				assert_float(a.distance_to(b)).is_greater_equal(TerrainPrefabs.TREE_MIN_SPACING_INCHES)
+
+
 func test_blocker_decoration_is_single_centered_container() -> void:
 	var objects := TerrainPrefabs.decoration_for("blocker_6x3", Vector2i.ZERO, _seeded_rng())
 	assert_int(objects.size()).is_equal(1)
@@ -110,12 +146,39 @@ func test_blocker_decoration_is_single_centered_container() -> void:
 	assert_that(objects[0]["offset"]).is_equal(Vector2(1.0, 0.5))
 
 
-func test_dangerous_decoration_places_hazards() -> void:
-	# 6 cells * 0.5 hazards/cell -> ceil(3.0) = 3 hazards, alternating mine/puddle
+func test_dangerous_decoration_is_a_minefield() -> void:
+	# 6 cells * 2.5 mines/cell -> 15 anti-tank mines, plus 2 warning signs at the
+	# opposite corners of the field.
 	var objects := TerrainPrefabs.decoration_for("dangerous_9x6", Vector2i.ZERO, _seeded_rng())
-	assert_int(objects.size()).is_equal(3)
+	var mines: Array[Dictionary] = []
+	var signs: Array[Dictionary] = []
 	for obj in objects:
-		assert_bool(obj["object_type"] == "mine" or obj["object_type"] == "puddle").is_true()
+		if obj["object_type"] == "mine":
+			mines.append(obj)
+		elif obj["object_type"] == "warning_sign":
+			signs.append(obj)
+	assert_int(mines.size()).is_equal(15)
+	assert_int(signs.size()).is_equal(2)
+	assert_int(objects.size()).is_equal(17)
+	# Signs sit on the NW and SE corner cells of the 3x2 footprint.
+	assert_that(signs[0]["cell"]).is_equal(Vector2i(0, 0))
+	assert_that(signs[1]["cell"]).is_equal(Vector2i(2, 1))
+
+
+func test_minefield_mines_keep_minimum_spacing() -> void:
+	for seed_value in range(20):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 3000 + seed_value
+		var objects := TerrainPrefabs.decoration_for("dangerous_9x6", Vector2i.ZERO, rng)
+		var mines: Array[Vector2] = []
+		for obj in objects:
+			if obj["object_type"] == "mine":
+				var cell: Vector2i = obj["cell"]
+				var offset: Vector2 = obj["offset"]
+				mines.append((Vector2(cell) + offset) * TerrainPrefabs.CELL_SIZE_INCHES)
+		for i in mines.size():
+			for j in range(i + 1, mines.size()):
+				assert_float(mines[i].distance_to(mines[j])).is_greater_equal(TerrainPrefabs.MINE_MIN_SPACING_INCHES)
 
 
 # --- Orientation (rotation / flip) ---
@@ -160,6 +223,46 @@ func test_wall_sides_rotate() -> void:
 			var c: Vector2i = s["edge_cell"]
 			assert_bool(c.x >= 0 and c.x < fsize.x and c.y >= 0 and c.y < fsize.y).is_true()
 		assert_int(sides.size()).is_equal(4)
+
+
+func test_wall_taper_dir_points_to_free_ends() -> void:
+	# Unrotated: the NW corner's arms taper E (north arm) / S (west arm); the SE corner's
+	# arms taper W (south arm) / N (east arm) — each toward the arm's open end.
+	var expected := {
+		TerrainPrefabs.EDGE_NORTH: TerrainPrefabs.EDGE_EAST,
+		TerrainPrefabs.EDGE_WEST: TerrainPrefabs.EDGE_SOUTH,
+		TerrainPrefabs.EDGE_SOUTH: TerrainPrefabs.EDGE_WEST,
+		TerrainPrefabs.EDGE_EAST: TerrainPrefabs.EDGE_NORTH,
+	}
+	var segments := TerrainPrefabs.wall_segments_for("ruine_9x9", Vector2i.ZERO)
+	assert_int(segments.size()).is_equal(8)
+	for seg in segments:
+		assert_int(int(seg["taper_dir"])).is_equal(int(expected[seg["edge_side"]]))
+
+
+func test_wall_taper_dir_rotates_with_the_piece() -> void:
+	# 90° CW maps side and taper together (N->E->S->W each), so (N side, E taper)
+	# becomes (E side, S taper) etc. — the taper keeps pointing at the rotated free end.
+	var expected := {
+		TerrainPrefabs.EDGE_EAST: TerrainPrefabs.EDGE_SOUTH,
+		TerrainPrefabs.EDGE_NORTH: TerrainPrefabs.EDGE_WEST,
+		TerrainPrefabs.EDGE_WEST: TerrainPrefabs.EDGE_NORTH,
+		TerrainPrefabs.EDGE_SOUTH: TerrainPrefabs.EDGE_EAST,
+	}
+	for seg in TerrainPrefabs.wall_segments_for("ruine_9x6", Vector2i.ZERO, 90):
+		assert_int(int(seg["taper_dir"])).is_equal(int(expected[seg["edge_side"]]))
+
+
+func test_wall_taper_dir_mirrors_on_flip() -> void:
+	# Mirror X swaps E<->W for both the side and the taper: (N,E)->(N,W), (W,S)->(E,S)...
+	var expected := {
+		TerrainPrefabs.EDGE_NORTH: TerrainPrefabs.EDGE_WEST,
+		TerrainPrefabs.EDGE_EAST: TerrainPrefabs.EDGE_SOUTH,
+		TerrainPrefabs.EDGE_SOUTH: TerrainPrefabs.EDGE_EAST,
+		TerrainPrefabs.EDGE_WEST: TerrainPrefabs.EDGE_NORTH,
+	}
+	for seg in TerrainPrefabs.wall_segments_for("ruine_9x9", Vector2i.ZERO, 0, true):
+		assert_int(int(seg["taper_dir"])).is_equal(int(expected[seg["edge_side"]]))
 
 
 func test_flip_changes_wall_layout() -> void:

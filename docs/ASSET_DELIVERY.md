@@ -140,5 +140,64 @@ back to the bundled `assets/terrain/table_surface_default.png` until a biome is 
 Step-by-step (run on the build machine, with `.gemini_key` + `.r2_credentials`):
 [`runbooks/biome-r2-publish.md`](runbooks/biome-r2-publish.md).
 
-**Still future:** modular terrain GLBs (walls/trees/containers) and larger map sheets —
-extend the same pattern when we get there.
+## Ruin shell-wall panels (same pattern, separate manifest)
+
+The textured **ruin shell walls** fetch their 9 runtime masonry panels (solid/top-damage/
+doorway/window/crumble variants + normal map, 800×720 WebP) the same way:
+`assets/ruins_manifest.json` (`{ version, base_url, panels: { <name>: { url, sha256,
+size } } }`) + client `ruins_library.gd` on the shared `asset_download_manager.gd`
+(cache `user://ruins_cache/<sha>.webp`). The panels live under the R2 source-art prefix
+`terrain-source/ruins/` (named files; the manifest's sha256 still guarantees integrity
+and content-addresses the cache). `terrain_overlay.gd` keeps its triplanar stone material
+as the offline fallback and upgrades walls in place when the download lands. Panels are
+decoded at runtime via `load_webp_from_buffer`, preserving the authored hard alpha edges
+that the alpha-scissor holes need. Art recipe + design record:
+[`HANDOFF_RUIN_WALLS.md`](HANDOFF_RUIN_WALLS.md).
+
+## Trees: billboards + volumetric GLBs (same pattern, separate manifest)
+
+The **deciduous forest trees** are delivered in two tiers from one manifest
+(`assets/trees_manifest.json`, client `trees_library.gd` on the shared
+`asset_download_manager.gd`, cache `user://trees_cache/<sha>.{webp,glb}`):
+`panels` — 6 keyed-alpha WebPs (3 side silhouettes oak/ash/linden + 3 bird's-eye crown
+caps) for the lightweight billboard tier; `models` — 3 textured TRELLIS GLBs (100k
+tris, 2k texture) for the volumetric tier. Files live under the R2 prefix
+`terrain-source/trees/` (named; the manifest's sha256 content-addresses the cache).
+`terrain_overlay.gd` upgrades progressively: holographic trunk+cone fallback ->
+billboards as soon as the small panels land -> volumetric models once the GLBs are
+cached. Art recipes: `tools/model_forge/generate_trees.py` (Gemini renders, magenta
+chroma key -> hard alpha) and `generate_tree_models.py` (TRELLIS image-to-3D + R2).
+
+## Container faces (same pattern, separate manifest)
+
+The **blocker containers** fetch their 6 face textures (2 colourways × corrugated
+side / cargo-door end / roof, full-bleed RGB WebP) the same way:
+`assets/containers_manifest.json` + client `containers_library.gd` on the shared
+`asset_download_manager.gd` (cache `user://containers_cache/<sha>.webp`). Files live
+under the R2 prefix `terrain-source/containers/`. `terrain_overlay.gd` keeps the
+holographic box as the offline fallback and upgrades blockers in place when the
+download lands. Art recipe: `tools/model_forge/generate_containers.py`.
+
+## Minefield hazards (same pattern, separate manifest)
+
+The **dangerous-terrain minefield** fetches its 2 textures (keyed-alpha anti-tank-mine
+top + full-bleed warning sign) the same way: `assets/hazards_manifest.json` + client
+`hazards_library.gd` on the shared `asset_download_manager.gd` (cache
+`user://hazards_cache/<sha>.webp`). Files live under the R2 prefix
+`terrain-source/hazards/`. `terrain_overlay.gd` keeps holographic mine/sign props as
+the offline fallback and upgrades in place. Art recipe:
+`tools/model_forge/generate_hazards.py`.
+
+## Biome themes
+
+The ruins, trees and containers manifests carry **per-biome panel sets** under a name
+prefix (default unprefixed set = grassland; `desert_*` = adobe walls + cacti for
+`arid_desert`; `tundra_*` = snowed castle stone + snow-laden conifers + snowed
+containers for `frozen_tundra`). The libraries take the prefix in `all_panels_cached`
+/ `ensure_all_panels` (+ model equivalents); `terrain_overlay.gd` maps biome -> prefix
+via `BIOME_PROP_THEMES` (ruins/trees) and `BIOME_CONTAINER_THEMES` (containers — only
+the tundra themes them) and re-themes walls/props in place when `table.set_biome`
+runs. Minefield hazards are biome-agnostic.
+
+**Still future:** modular terrain GLBs (walls) and larger map sheets — extend the same
+pattern when we get there.

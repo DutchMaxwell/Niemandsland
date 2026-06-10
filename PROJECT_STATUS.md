@@ -16,9 +16,17 @@ dice (D4–D100) via the `dice_roller` addon.
 **Map layout** — top-down 3″ grid editor: terrain pieces (ruins/forest/container/
 dangerous), front-line + custom-polygon deployment zones (1″ grid, symmetric/
 asymmetric, snap points, float-precision vertices), objectives, auto-generate, OPR
-guideline checker, 3D overlay, save/load layouts. Terrain is **visual only** so far
-(LOS-blocking and deployment-compliance checks exist as helpers; no movement/cover/
-damage effects).
+guideline checker, 3D overlay, save/load layouts. **The whole prop set is textured and
+R2-delivered** (per-prop manifests + libraries, holographic offline fallbacks that
+upgrade in place): ruin walls as fully closed masonry shells (per-role panels, stepped
+crumble, alpha-profile caps, window reveals), forests as volumetric TRELLIS tree models
+(billboards as the mid tier; deterministic variant/size/facing, spacing + boundary
+margins), blockers as shipping containers (2 colourways), dangerous terrain as a
+minefield (15 anti-tank mines + 2 warning signs). **Biome themes** re-skin the set in
+place via `table.set_biome`: grassland (default), desert (fine adobe + cacti) and
+tundra (snowed stone/conifers/containers); volcanic/jungle/urban still use the default
+set. Terrain is **visual only** so far (LOS-blocking and deployment-compliance checks
+exist as helpers; no movement/cover/damage effects).
 
 **Units (OPR)** — Army Forge import via the OPR API; per-model architecture
 (`ModelInstance`) wrapped by system-agnostic `GameUnit`; automatic equipment
