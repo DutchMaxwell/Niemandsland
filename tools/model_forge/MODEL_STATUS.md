@@ -5,33 +5,29 @@ The "model review" tracker. Every Grimdark Future faction moves through:
 **R2** (uploaded + in [`assets/model_manifest.json`](../../assets/model_manifest.json),
 live in-game on demand).
 
-_Last updated: 2026-06-10 — Eternal Dynasty (samurai) shipped; Orc Marauders converting._
+_Last updated: 2026-06-10 — Eternal Dynasty + Orc Marauders shipped to R2._
 
 ## Summary
 
 | Stage | Factions |
 |---|---|
-| ✅ Live on R2 | **7** (167 models) |
-| ⏳ 3D conversion running | **1** (Orc Marauders) |
+| ✅ Live on R2 | **8** (196 models) |
 | 🎯 Picked — ready for 3D | **4** |
 | 🖼️ 2D done — needs picking | **21** |
 | ⬜ 2D not generated yet | **5** |
 
-## ✅ Live on R2 — playable in-game (167 models)
+## ✅ Live on R2 — playable in-game (196 models)
 
 | Faction | Models | Note |
 |---|---|---|
 | Alien Hives | 41 | |
 | Robot Legions | 29 | |
+| Orc Marauders | 29 | |
 | High Elf Fleets | 28 | |
 | Eternal Dynasty | 26 | ronin-samurai recast |
 | Battle Brothers | 23 | |
 | Dao Union | 19 | |
 | Dark Brothers | 1 | ⚠️ hero only — 26 more units are 2D-done, not yet 3D/R2 |
-
-## ⏳ 3D conversion running
-
-- **Orc Marauders (29)** — TRELLIS finalize in progress → R2 next.
 
 ## 🎯 Picked — ready for 3D → R2 (just run finalize + publish)
 
