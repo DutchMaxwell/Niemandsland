@@ -706,6 +706,136 @@
       "url": "b0f0bffc846746db136b3a3e981c2bacb97d28aa7f6cc2712b0c9505fa08187e.glb",
       "sha256": "b0f0bffc846746db136b3a3e981c2bacb97d28aa7f6cc2712b0c9505fa08187e",
       "size": 21638812
+    },
+    "eternal_dynasty/artillery titan": {
+      "url": "bf5ac8aaedba5e45a4b21a5a58a6f985e8a1e9a86c9731dd36f1d49d2489e7db.glb",
+      "sha256": "bf5ac8aaedba5e45a4b21a5a58a6f985e8a1e9a86c9731dd36f1d49d2489e7db",
+      "size": 18290488
+    },
+    "eternal_dynasty/attack drones": {
+      "url": "21770d4b772494845720a539226c7536706bf3f76e84dd775f8183b74b068d16.glb",
+      "sha256": "21770d4b772494845720a539226c7536706bf3f76e84dd775f8183b74b068d16",
+      "size": 12262728
+    },
+    "eternal_dynasty/captain lyao": {
+      "url": "6ddb09737f10e181ab4d1553cd02e83a63ddf0821e1e91f623767636c62e85db.glb",
+      "sha256": "6ddb09737f10e181ab4d1553cd02e83a63ddf0821e1e91f623767636c62e85db",
+      "size": 13841012
+    },
+    "eternal_dynasty/captain wukaon": {
+      "url": "515c086b3c8de8ea2358cca12526bd091e46f400d3b54be71205d606f983f302.glb",
+      "sha256": "515c086b3c8de8ea2358cca12526bd091e46f400d3b54be71205d606f983f302",
+      "size": 15126360
+    },
+    "eternal_dynasty/commander xao": {
+      "url": "451d32960bf79a02f737585f808d918767ee778e85eb973aaefd69affcbb2bcf.glb",
+      "sha256": "451d32960bf79a02f737585f808d918767ee778e85eb973aaefd69affcbb2bcf",
+      "size": 14637392
+    },
+    "eternal_dynasty/cyber beast": {
+      "url": "5878832475296fc0490dec19f5a7999b41670fc0ce690785d9e262cbabeae713.glb",
+      "sha256": "5878832475296fc0490dec19f5a7999b41670fc0ce690785d9e262cbabeae713",
+      "size": 15411348
+    },
+    "eternal_dynasty/cyber bird swarms": {
+      "url": "eb3c23535ec518bddc821171e9275b056dd5a5b236bd81bdf50bd6cb89125067.glb",
+      "sha256": "eb3c23535ec518bddc821171e9275b056dd5a5b236bd81bdf50bd6cb89125067",
+      "size": 18079164
+    },
+    "eternal_dynasty/cyber lizards": {
+      "url": "bc3f35ae68d9d5534f3a5f4a18d52203b15234b70b288ab9c775a6a73b62a80f.glb",
+      "sha256": "bc3f35ae68d9d5534f3a5f4a18d52203b15234b70b288ab9c775a6a73b62a80f",
+      "size": 14276664
+    },
+    "eternal_dynasty/dragon speeder": {
+      "url": "29f862b57dd6855e7ffd8764c3a4a86a442a5d325f3bbebc8c581e1c0e1f0b17.glb",
+      "sha256": "29f862b57dd6855e7ffd8764c3a4a86a442a5d325f3bbebc8c581e1c0e1f0b17",
+      "size": 16441356
+    },
+    "eternal_dynasty/dragon titan": {
+      "url": "b9ee4868b57b0ad4d08b8a2b02b8894b71f9da2393f7c84f9ebc32f1f452cc62.glb",
+      "sha256": "b9ee4868b57b0ad4d08b8a2b02b8894b71f9da2393f7c84f9ebc32f1f452cc62",
+      "size": 16478336
+    },
+    "eternal_dynasty/dynasty apc": {
+      "url": "dd10893fe0513369668e4d61d0d115f3d70b32c00ba20eaf6371ad5ffe17580c.glb",
+      "sha256": "dd10893fe0513369668e4d61d0d115f3d70b32c00ba20eaf6371ad5ffe17580c",
+      "size": 16086872
+    },
+    "eternal_dynasty/dynasty leader": {
+      "url": "6987ab78b958adf00668c58345596886712ff2d65e6b270cd71c33288bde7d22.glb",
+      "sha256": "6987ab78b958adf00668c58345596886712ff2d65e6b270cd71c33288bde7d22",
+      "size": 15612344
+    },
+    "eternal_dynasty/dynasty tank": {
+      "url": "d843a3e16784a5b0372650fc0f4231264e1fc4cb50217abbe40275b71160192e.glb",
+      "sha256": "d843a3e16784a5b0372650fc0f4231264e1fc4cb50217abbe40275b71160192e",
+      "size": 16245836
+    },
+    "eternal_dynasty/macaque titan": {
+      "url": "7c8751c7300f7045423523d93c958ddd8c65c2b9ed425276b1ecb69ade05df08.glb",
+      "sha256": "7c8751c7300f7045423523d93c958ddd8c65c2b9ed425276b1ecb69ade05df08",
+      "size": 15379900
+    },
+    "eternal_dynasty/ninja walker": {
+      "url": "e6fcdfbf600198a8de0356ef2ea4bdbfa4608545367594779956dd0988e7cfca.glb",
+      "sha256": "e6fcdfbf600198a8de0356ef2ea4bdbfa4608545367594779956dd0988e7cfca",
+      "size": 15173812
+    },
+    "eternal_dynasty/ninja": {
+      "url": "6daa26eafaad7431b32a0ca101470060e2b9a4729994795ca2939d3c078c0800.glb",
+      "sha256": "6daa26eafaad7431b32a0ca101470060e2b9a4729994795ca2939d3c078c0800",
+      "size": 15638056
+    },
+    "eternal_dynasty/oni captain": {
+      "url": "839a0b2d423c527e5e86abeb05a8e12772224402883499b12f01c91268762a4d.glb",
+      "sha256": "839a0b2d423c527e5e86abeb05a8e12772224402883499b12f01c91268762a4d",
+      "size": 14469960
+    },
+    "eternal_dynasty/oni walker": {
+      "url": "a129a89a89307e8fa024f3e7ff387826165c5c5415c9a8f94b3ebaa4dfbb7dc2.glb",
+      "sha256": "a129a89a89307e8fa024f3e7ff387826165c5c5415c9a8f94b3ebaa4dfbb7dc2",
+      "size": 15424692
+    },
+    "eternal_dynasty/onis": {
+      "url": "81dd0108211f34cb0402203d475c62141bf6ff98707c32b08b57543b5953a49b.glb",
+      "sha256": "81dd0108211f34cb0402203d475c62141bf6ff98707c32b08b57543b5953a49b",
+      "size": 13354940
+    },
+    "eternal_dynasty/royal guard": {
+      "url": "294c6549814a8f9357a07260b3cc8e18633ea263ef678cb3e103a829756e4f7c.glb",
+      "sha256": "294c6549814a8f9357a07260b3cc8e18633ea263ef678cb3e103a829756e4f7c",
+      "size": 16311240
+    },
+    "eternal_dynasty/sage myan": {
+      "url": "633d981f094767962b791bbd9fb7463d4afe3625921d95b4f6593a98595db9e7.glb",
+      "sha256": "633d981f094767962b791bbd9fb7463d4afe3625921d95b4f6593a98595db9e7",
+      "size": 16082680
+    },
+    "eternal_dynasty/samurai titan": {
+      "url": "e65647b90bb985edee7447d71ef8081deef2805e14cbbca226b86cdff43bd210.glb",
+      "sha256": "e65647b90bb985edee7447d71ef8081deef2805e14cbbca226b86cdff43bd210",
+      "size": 16922220
+    },
+    "eternal_dynasty/scouts": {
+      "url": "20342d35a5fcc1f000e3f08f7d241ec3679ff542a75de627a95263097e2e7267.glb",
+      "sha256": "20342d35a5fcc1f000e3f08f7d241ec3679ff542a75de627a95263097e2e7267",
+      "size": 14777396
+    },
+    "eternal_dynasty/sergeant wou": {
+      "url": "19c4feaafe5bd4e93ad005c5b0ca7cf09797fb8a935ae74429e39957dd8e5bf5.glb",
+      "sha256": "19c4feaafe5bd4e93ad005c5b0ca7cf09797fb8a935ae74429e39957dd8e5bf5",
+      "size": 16382652
+    },
+    "eternal_dynasty/syen and xaotyan": {
+      "url": "4e5b93f32afa78bc1ea0c2b71f4325610ff3ed4d8311d16b84e091d769264045.glb",
+      "sha256": "4e5b93f32afa78bc1ea0c2b71f4325610ff3ed4d8311d16b84e091d769264045",
+      "size": 16974160
+    },
+    "eternal_dynasty/warriors": {
+      "url": "5b75f8e10f59a19e69935f5d3fee13776a5c717068ce1c96de52c41fdeac79de.glb",
+      "sha256": "5b75f8e10f59a19e69935f5d3fee13776a5c717068ce1c96de52c41fdeac79de",
+      "size": 15405040
     }
   }
 }
