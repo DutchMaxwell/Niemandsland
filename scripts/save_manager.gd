@@ -81,7 +81,8 @@ func _serialize_table() -> Dictionary:
 			objectives.append({"x": obj.x, "y": obj.y, "owner": owner_id})
 		data["mission_objectives"] = objectives
 
-		# Wall segments (modular terrain)
+		# Wall segments (modular terrain). role/taper_dir drive the ruin shell-wall
+		# look (crumble taper + panel pick); old saves without them fall back to "full".
 		var walls = []
 		for wall in map_layout_editor.wall_segments:
 			walls.append({
@@ -91,6 +92,8 @@ func _serialize_table() -> Dictionary:
 				"wall_key": wall.get("wall_key", ""),
 				"length_inches": wall.get("length_inches", 3.0),
 				"sub_position": wall.get("sub_position", 0),
+				"role": wall.get("role", "full"),
+				"taper_dir": wall.get("taper_dir", -1),
 			})
 		data["wall_segments"] = walls
 
@@ -348,7 +351,7 @@ func _deserialize_map_layout(table_data: Dictionary, table_size: Vector2) -> voi
 			objectives.append(Vector2(float(obj.get("x", 0)), float(obj.get("y", 0))))
 			objective_owners.append(int(obj.get("owner", 0)))
 
-	# Parse wall segments
+	# Parse wall segments (role/taper_dir default for saves from before the shell walls)
 	var wall_segments: Array[Dictionary] = []
 	for w in table_data.get("wall_segments", []):
 		if w is Dictionary:
@@ -358,6 +361,8 @@ func _deserialize_map_layout(table_data: Dictionary, table_size: Vector2) -> voi
 				"wall_key": str(w.get("wall_key", "")),
 				"length_inches": float(w.get("length_inches", 3.0)),
 				"sub_position": int(w.get("sub_position", 0)),
+				"role": str(w.get("role", "full")),
+				"taper_dir": int(w.get("taper_dir", -1)),
 			})
 
 	# Parse placed objects

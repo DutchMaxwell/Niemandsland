@@ -80,6 +80,16 @@ const TREE_TRUNK_RADIUS_INCHES := 0.25
 const TREE_CROWN_HEIGHT_INCHES := 2.2
 const TREE_CROWN_RADIUS_INCHES := 1.0
 
+## Textured deciduous trees (R2 panels via TreesLibrary): each tree is two crossed
+## alpha-scissor quads showing a keyed tree photo — organic from every angle, with a
+## deterministic per-tree variant / size / facing so all clients match. The procedural
+## trunk+cone above stays as the offline fallback.
+const TREE_HEIGHT_INCHES := 3.4  # billboard height at 100% (trunk+crown of the fallback)
+const TREE_SCALE_MIN := 0.75
+const TREE_SCALE_MAX := 1.25
+const TREE_CROWN_CAP_FRAC := 0.68  # crown-cap quad height (the crown's widest point)
+const TREE_MODEL_MIN_DEPTH_RATIO := 0.05  # thinner GLBs are degenerate "relief" slabs -> billboard
+
 const CONTAINER_LENGTH_INCHES := 6.0
 const CONTAINER_DEPTH_INCHES := 3.0
 const CONTAINER_HEIGHT_INCHES := 2.5
@@ -91,11 +101,72 @@ const MINE_HEIGHT_INCHES := 0.5
 const PUDDLE_RADIUS_INCHES := 1.3
 const PUDDLE_HEIGHT_INCHES := 0.08
 
+## Textured minefield props (R2 via HazardsLibrary): flat anti-tank mine discs wearing
+## the pressure-plate texture on top, and warning signs on posts at the field corners.
+const MINE_DISC_RADIUS_INCHES := 0.3
+const MINE_DISC_HEIGHT_INCHES := 0.12
+const SIGN_WIDTH_INCHES := 0.9
+const SIGN_POST_HEIGHT_INCHES := 1.2
+const SIGN_POST_RADIUS_INCHES := 0.04
+const MINE_BODY_COLOR := Color(0.25, 0.27, 0.18)  # olive-drab side of the mine disc
+const SIGN_POST_COLOR := Color(0.35, 0.33, 0.3)   # weathered steel post
+## Z-fight margin for overlays on SMALL props (mine top, sign plates). The global
+## Z_FIGHT_OFFSET (2 mm) is sized for walls — on a 3 mm mine disc it visibly floats.
+const PROP_SURFACE_LIFT := 0.0003
+
 ## Textured ruins walls (first pass): the wall + corner-post props use a lit, world-
 ## triplanar stone material instead of the hologram look (other props stay holographic for
 ## now). The texture repeats every STONE_TILE_METERS in world space.
 const RUINS_WALL_TEX_PATH := "res://assets/terrain/props/ruins_wall.webp"
 const STONE_TILE_METERS := 0.085  # ~3.3" per tile -> ~1 cm stone blocks at 28 mm scale
+
+## Shell-wall ruins (second pass): per-role mossy masonry panels delivered on demand from
+## R2 (RuinsLibrary). Each wall cell renders as a SHELL — front + back panel quad + a
+## plain-stone top cap — so doorway/window/crumble holes are see-through; collision stays
+## a full-height Impassable box (OPR: ruin walls are Impassable). Until the panel set is
+## cached locally, walls keep the triplanar first-pass material above as the fallback.
+## Ported from tools/render_ruin_walls.gd; plan + gotchas: docs/HANDOFF_RUIN_WALLS.md §6.
+const RUIN_SHELL_THICKNESS_INCHES := 0.4  # shell depth; reads better than the 0.25" box
+const RUIN_PANEL_ROUGHNESS := 0.93
+const RUIN_NORMAL_STRENGTH := 1.4
+const RUIN_ALPHA_SCISSOR_THRESHOLD := 0.5
+const RUIN_WINDOW_CHANCE := 0.05   # share of "full" panels showing the gothic window
+const RUIN_OPENING_CHANCE := 0.25  # cumulative roll: 0.05..0.25 -> see-through doorway
+const _RUIN_SOLID_PANELS: Array[String] = ["solid_a", "solid_b", "topdmg_a"]
+
+## Shell closure: the wall's top/side faces follow the panel's alpha profile, so caps sit
+## on the real stone silhouette (stepped crumble, knocked-out top courses) instead of
+## floating at full height, and free wall ends + interior openings get stone reveals.
+const RUIN_POST_SIZE_INCHES := 0.6  # corner posts sit proud of the 0.4" shells (kills coplanar z-fighting)
+const RUIN_POST_EXTRA_HEIGHT_INCHES := 0.1  # ...and rise past the wall caps (same reason, on top)
+const RUIN_CAP_STRIPS := 96         # alpha-profile resolution: ~16 strips per stone course
+const RUIN_CAP_MERGE_FRAC := 0.025  # strips within 2.5% wall height merge into one cap
+const RUIN_ALPHA_OPAQUE := 0.5      # alpha >= this counts as stone when profiling panels
+const RUIN_PROFILE_SAMPLE_PX := 4   # pixel step when scanning panel alpha
+const RUIN_HOLE_GRID := 64          # downsample width for interior-opening detection
+const RUIN_HOLE_MIN_CELLS := 4      # ignore alpha specks smaller than this many grid cells
+const RUIN_HOLE_REFINE_STEP_PX := 2 # pixel step when snapping a hole onto its alpha edges
+const RUIN_MIN_CAP_FRAC := 0.04     # skip caps/end faces below 4% wall height
+
+## Quad +U world direction per edge_side (N=0,E=1,S=2,W=3) under this renderer's
+## wall_y_rotation convention (N=0, E=+90°, S=180°, W=-90°). A crumble panel is U-mirrored
+## iff its taper_dir (the arm's free-end direction, from TerrainPrefabs) differs from this,
+## so the wall steps DOWN toward the open end (HANDOFF_RUIN_WALLS.md §6 gotcha #1).
+const _RUIN_QUAD_U_DIR: Array[int] = [1, 0, 3, 2]
+
+## Spatial-hash primes seeding the per-segment panel pick. Walls are rebuilt locally on
+## every client, so the "full" panel draw must be deterministic from stable segment
+## identity — never a global RNG (§6 gotcha #5).
+const _RUIN_SEED_PRIME_X := 73856093
+const _RUIN_SEED_PRIME_Y := 19349663
+const _RUIN_SEED_PRIME_SIDE := 83492791
+
+## Biome-themed prop sets: per-biome name prefix into the ruins/trees manifests
+## (grassland = the default unprefixed set; desert = adobe walls + cacti; tundra =
+## snowed-in stone + snow-laden conifers). Containers have their own theme map (only
+## the tundra snows them in); minefield props are biome-agnostic.
+const BIOME_PROP_THEMES := {"arid_desert": "desert_", "frozen_tundra": "tundra_"}
+const BIOME_CONTAINER_THEMES := {"frozen_tundra": "tundra_"}
 
 # ==============================================================================
 # STATE
@@ -153,6 +224,41 @@ var _wall_instances: Array[Node3D] = []
 ## missing.
 var _ruins_wall_material: Material = null
 
+## On-demand ruin shell-wall panel delivery (R2) + the per-(panel|mirror|slice) material
+## cache. The last wall layout is kept so the triplanar fallback can upgrade itself to
+## shell walls in place once the panel download finishes.
+var _ruins_library: RuinsLibrary = null
+var _ruin_panel_materials: Dictionary = {}
+var _ruin_panel_profiles: Dictionary = {}    # panel name -> PackedFloat32Array strip heights
+var _ruin_panel_hole_rects: Dictionary = {}  # panel name -> Array[Rect2] interior openings
+
+## On-demand tree billboard delivery (R2) + per-panel material cache. The last placed
+## objects are kept so fallback trees can upgrade to textured ones once cached.
+var _trees_library: TreesLibrary = null
+var _tree_panel_materials: Dictionary = {}
+var _tree_fetch_started := false
+var _last_objects: Array = []
+var _last_obj_table_size := Vector2.ZERO
+var _last_obj_rotation := 0.0
+
+## On-demand container face delivery (R2) + per-panel material cache.
+var _containers_library: ContainersLibrary = null
+var _container_panel_materials: Dictionary = {}
+var _container_fetch_started := false
+
+## On-demand minefield texture delivery (R2) + material cache.
+var _hazards_library: HazardsLibrary = null
+var _hazard_materials: Dictionary = {}
+var _hazard_fetch_started := false
+
+## Active biome prop themes (name prefixes into the panel sets).
+var _prop_theme := ""
+var _container_theme := ""
+var _ruin_fetch_started := false
+var _last_wall_segments: Array = []
+var _last_wall_table_size := Vector2.ZERO
+var _last_wall_rotation := 0.0
+
 ## Placed object instances (trees + containers)
 var _object_instances: Array[Node3D] = []
 
@@ -172,6 +278,18 @@ const _EDGE_DELTA: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(
 func _ready() -> void:
 	# Position slightly above table surface to avoid z-fighting
 	position.y = Z_FIGHT_OFFSET
+	_ruins_library = RuinsLibrary.new()
+	_ruins_library.name = "RuinsLibrary"
+	add_child(_ruins_library)
+	_trees_library = TreesLibrary.new()
+	_trees_library.name = "TreesLibrary"
+	add_child(_trees_library)
+	_containers_library = ContainersLibrary.new()
+	_containers_library.name = "ContainersLibrary"
+	add_child(_containers_library)
+	_hazards_library = HazardsLibrary.new()
+	_hazards_library.name = "HazardsLibrary"
+	add_child(_hazards_library)
 
 
 ## Clear all terrain overlay meshes from the scene
@@ -1316,11 +1434,21 @@ func get_overlay_mode() -> OverlayMode:
 # ==============================================================================
 
 ## Update wall model instances based on wall segments from map layout
-## @param wall_segments: Array of Dictionaries with {edge_cell, edge_side, wall_key, length_inches, sub_position}
+## @param wall_segments: Array of Dictionaries with {edge_cell, edge_side, wall_key,
+##                       length_inches, sub_position, role, taper_dir}
 ## @param t_size: Table size in feet
 ## @param rotation: Grid rotation in degrees
 func update_wall_models(wall_segments: Array, t_size: Vector2, rot_deg: float) -> void:
 	_clear_wall_instances()
+
+	# Remember the layout so a finishing panel download can upgrade fallback walls in
+	# place; start the one-time fetch as soon as a map actually shows ruin walls.
+	_last_wall_segments = wall_segments
+	_last_wall_table_size = t_size
+	_last_wall_rotation = rot_deg
+	var use_shell := _ruin_panels_ready()
+	if not use_shell and not wall_segments.is_empty():
+		_request_ruin_panels()
 
 	# Record which cells carry a wall (the edge cell + its neighbour across that edge), so
 	# terrain effect labels can pick a wall-free field; then rebuild them wall-aware.
@@ -1349,14 +1477,34 @@ func update_wall_models(wall_segments: Array, t_size: Vector2, rot_deg: float) -
 
 	var rotation_rad := deg_to_rad(rot_deg)
 
+	# Endpoint usage per grid corner point: an endpoint touched by exactly one wall is a
+	# FREE end and gets a stone end face; shared endpoints are covered by the collinear
+	# neighbour or a corner post (capping those too would z-fight on coplanar quads).
+	var corner_counts := {}
+	for segment in wall_segments:
+		for point in _wall_corner_points(segment):
+			corner_counts[point] = int(corner_counts.get(point, 0)) + 1
+
 	for segment in wall_segments:
 		var edge_cell: Vector2i = segment.get("edge_cell", Vector2i.ZERO)
 		var edge_side: int = segment.get("edge_side", 0)
 		var length_inches: float = segment.get("length_inches", GRID_SIZE_INCHES)
 		var sub_position: int = segment.get("sub_position", 0)
 
-		# Build a procedural holographic wall sized to this segment
-		var model := _create_procedural_wall(length_inches, WALL_HEIGHT_INCHES)
+		# Build the wall for this segment: a textured shell once the panel set is
+		# cached, else the triplanar box fallback (upgraded after the download).
+		var model: StaticBody3D
+		if use_shell:
+			# Quad-local +X endpoint per edge_side under the wall_y_rotation set below:
+			# N/W walls run +X toward corner_b, E/S walls toward corner_a.
+			var points := _wall_corner_points(segment)
+			var pos_x_point: Vector2i = points[1] if (edge_side == 0 or edge_side == 3) else points[0]
+			var neg_x_point: Vector2i = points[0] if (edge_side == 0 or edge_side == 3) else points[1]
+			var cap_neg_x := int(corner_counts.get(neg_x_point, 0)) == 1
+			var cap_pos_x := int(corner_counts.get(pos_x_point, 0)) == 1
+			model = _create_shell_wall(segment, length_inches, cap_neg_x, cap_pos_x)
+		else:
+			model = _create_procedural_wall(length_inches, WALL_HEIGHT_INCHES)
 
 		# Calculate edge center position
 		var local_x := (edge_cell.x - grid_dims.x / 2.0 + 0.5) * cell_size_meters
@@ -1415,41 +1563,23 @@ func update_wall_models(wall_segments: Array, t_size: Vector2, rot_deg: float) -
 
 ## Add corner pieces at intersections where two perpendicular walls meet
 func _add_wall_corner_pieces(wall_segments: Array, grid_dims: Vector2i, cell_size_meters: float, rotation_rad: float, rot_deg: float, t_size: Vector2) -> void:
-	var corner_size := CORNER_SIZE_INCHES * INCHES_TO_METERS
+	# In shell mode the post is a masonry prism slightly PROUD of the 0.4" wall shells —
+	# matching their depth exactly put its faces coplanar with the wall quads (z-fighting
+	# right at the post). Fallback keeps the slim triplanar box post.
+	var use_shell := _ruin_panels_ready()
+	var corner_inches := RUIN_POST_SIZE_INCHES if use_shell else CORNER_SIZE_INCHES
+	var corner_size := corner_inches * INCHES_TO_METERS
 
 	# Build a dictionary of wall endpoints: corner_pos -> Array of wall_keys
 	# Each wall segment touches two corners of its edge
 	var corner_walls := {}  # Vector2i corner point -> Array[String] of adjacent wall keys
 
 	for segment in wall_segments:
-		var edge_cell: Vector2i = segment.get("edge_cell", Vector2i.ZERO)
-		var edge_side: int = segment.get("edge_side", 0)
 		var wall_key: String = segment.get("wall_key", "")
-
-		# Determine the two corner grid-points of this edge
-		# Corner coordinates are in grid-point space (not cell space)
-		var corner_a: Vector2i
-		var corner_b: Vector2i
-		match edge_side:
-			0:  # North edge: corners at (x,y) and (x+1,y)
-				corner_a = edge_cell
-				corner_b = Vector2i(edge_cell.x + 1, edge_cell.y)
-			1:  # East edge: corners at (x+1,y) and (x+1,y+1)
-				corner_a = Vector2i(edge_cell.x + 1, edge_cell.y)
-				corner_b = Vector2i(edge_cell.x + 1, edge_cell.y + 1)
-			2:  # South edge: corners at (x,y+1) and (x+1,y+1)
-				corner_a = Vector2i(edge_cell.x, edge_cell.y + 1)
-				corner_b = Vector2i(edge_cell.x + 1, edge_cell.y + 1)
-			3:  # West edge: corners at (x,y) and (x,y+1)
-				corner_a = edge_cell
-				corner_b = Vector2i(edge_cell.x, edge_cell.y + 1)
-
-		if not corner_walls.has(corner_a):
-			corner_walls[corner_a] = []
-		corner_walls[corner_a].append(wall_key)
-		if not corner_walls.has(corner_b):
-			corner_walls[corner_b] = []
-		corner_walls[corner_b].append(wall_key)
+		for point in _wall_corner_points(segment):
+			if not corner_walls.has(point):
+				corner_walls[point] = []
+			corner_walls[point].append(wall_key)
 
 	# Place corner pieces where 2+ walls share a corner point
 	for corner_point: Vector2i in corner_walls:
@@ -1474,18 +1604,35 @@ func _add_wall_corner_pieces(wall_segments: Array, grid_dims: Vector2i, cell_siz
 		body.add_to_group("terrain")
 		body.add_to_group("terrain_piece")
 
-		var mesh_instance := MeshInstance3D.new()
-		var box := BoxMesh.new()
-		box.size = Vector3(corner_size, target_height, corner_size)
-		mesh_instance.mesh = box
-		mesh_instance.material_override = _get_ruins_wall_material()
-		mesh_instance.position.y = target_height / 2.0 - Z_FIGHT_OFFSET
-		mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-		body.add_child(mesh_instance)
+		if use_shell:
+			# Masonry prism from quads: a BoxMesh would smear the 0..1-UV panel through
+			# its per-face UV atlas. Sides wear a post-width slice of the wall masonry.
+			# The post rises slightly past the wall caps — flush tops were coplanar with
+			# the neighbouring caps and z-fought right above the post.
+			var post_height := target_height + RUIN_POST_EXTRA_HEIGHT_INCHES * INCHES_TO_METERS
+			var y_mid := post_height / 2.0 - Z_FIGHT_OFFSET
+			var half := corner_size / 2.0
+			var post_mat := _ruin_panel_material("solid_a", false, corner_inches / GRID_SIZE_INCHES, 0.0)
+			var side := Vector2(corner_size, post_height)
+			_add_shell_quad(body, side, Vector3(0, y_mid, half), Vector3.ZERO, post_mat)
+			_add_shell_quad(body, side, Vector3(0, y_mid, -half), Vector3.ZERO, post_mat)
+			_add_shell_quad(body, side, Vector3(half, y_mid, 0), Vector3(0, PI / 2.0, 0), post_mat)
+			_add_shell_quad(body, side, Vector3(-half, y_mid, 0), Vector3(0, PI / 2.0, 0), post_mat)
+			_add_shell_quad(body, Vector2(corner_size, corner_size),
+					Vector3(0, post_height - Z_FIGHT_OFFSET, 0), Vector3(-PI / 2.0, 0, 0), post_mat)
+		else:
+			var mesh_instance := MeshInstance3D.new()
+			var box := BoxMesh.new()
+			box.size = Vector3(corner_size, target_height, corner_size)
+			mesh_instance.mesh = box
+			mesh_instance.material_override = _get_ruins_wall_material()
+			mesh_instance.position.y = target_height / 2.0 - Z_FIGHT_OFFSET
+			mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+			body.add_child(mesh_instance)
 
 		var collision := CollisionShape3D.new()
 		var shape := BoxShape3D.new()
-		shape.size = box.size
+		shape.size = Vector3(corner_size, target_height, corner_size)
 		collision.shape = shape
 		collision.position.y = target_height / 2.0 - Z_FIGHT_OFFSET
 		body.add_child(collision)
@@ -1550,6 +1697,438 @@ func _create_procedural_wall(length_inches: float, height_inches: float) -> Stat
 	return body
 
 
+# ==============================================================================
+# RUIN SHELL WALLS (per-role masonry panels, delivered from R2)
+# ==============================================================================
+
+## Switch the prop texture theme to the biome's set and rebuild walls + props in place.
+## Called by table.set_biome; unknown biomes use the default (grassland) set.
+func set_biome(biome_name: String) -> void:
+	var theme: String = BIOME_PROP_THEMES.get(biome_name, "")
+	var container_theme: String = BIOME_CONTAINER_THEMES.get(biome_name, "")
+	if theme == _prop_theme and container_theme == _container_theme:
+		return
+	_prop_theme = theme
+	_container_theme = container_theme
+	# Allow fresh fetches for the new theme's panel sets, then re-render in place.
+	_ruin_fetch_started = false
+	_tree_fetch_started = false
+	_container_fetch_started = false
+	if not _last_wall_segments.is_empty():
+		update_wall_models(_last_wall_segments, _last_wall_table_size, _last_wall_rotation)
+	if not _last_objects.is_empty():
+		update_placed_objects(_last_objects, _last_obj_table_size, _last_obj_rotation)
+
+
+## True once the full ruin panel set is cached locally (sync; no network access).
+func _ruin_panels_ready() -> bool:
+	return _ruins_library != null and _ruins_library.all_panels_cached(_prop_theme)
+
+
+## Start the one-time async panel download. On success the last wall layout is rebuilt,
+## upgrading the triplanar fallback walls to shells in place; on failure the flag resets
+## so the next layout update retries (e.g. after the player comes back online).
+func _request_ruin_panels() -> void:
+	if _ruin_fetch_started or _ruins_library == null:
+		return
+	_ruin_fetch_started = true
+	_fetch_ruin_panels()
+
+
+func _fetch_ruin_panels() -> void:
+	var ok: bool = await _ruins_library.ensure_all_panels(_prop_theme)
+	if not ok:
+		_ruin_fetch_started = false
+		return
+	if not _last_wall_segments.is_empty():
+		update_wall_models(_last_wall_segments, _last_wall_table_size, _last_wall_rotation)
+
+
+## Build one wall cell as a textured SHELL — front + back masonry quad, closed along the
+## panel's real stone silhouette: stepped top caps + risers from the alpha profile, stone
+## end faces at free wall ends, and reveal faces lining interior openings (gothic window
+## lights, doorways). Collision stays a full-height Impassable box: the holes are visual
+## only (OPR: ruin walls are Impassable). Look based on tools/render_ruin_walls.gd::_wall.
+func _create_shell_wall(segment: Dictionary, length_inches: float, cap_neg_x: bool, cap_pos_x: bool) -> StaticBody3D:
+	var width := length_inches * INCHES_TO_METERS
+	var height := WALL_HEIGHT_INCHES * INCHES_TO_METERS
+	var thickness := RUIN_SHELL_THICKNESS_INCHES * INCHES_TO_METERS
+
+	var body := StaticBody3D.new()
+	body.add_to_group("terrain")
+	body.add_to_group("terrain_piece")
+
+	var panel := _panel_for_segment(segment)
+	var mirrored := panel.begins_with("crumble") and _crumble_needs_flip(segment)
+	# Sub-3" free-wall segments show their matching horizontal slice of the panel so the
+	# stone course scale + alignment stay identical to full segments (§6 gotcha #3).
+	var u_width := length_inches / GRID_SIZE_INCHES
+	var u_offset := 0.0
+	if length_inches < GRID_SIZE_INCHES:
+		u_offset = float(segment.get("sub_position", 0)) * u_width
+	var face := _ruin_panel_material(panel, mirrored, u_width, u_offset)
+
+	var y_mid := height / 2.0 - Z_FIGHT_OFFSET
+	_add_shell_quad(body, Vector2(width, height), Vector3(0, y_mid, thickness / 2.0), Vector3.ZERO, face)
+	_add_shell_quad(body, Vector2(width, height), Vector3(0, y_mid, -thickness / 2.0), Vector3.ZERO, face)
+	_add_shell_caps(body, panel, mirrored, u_width, u_offset, width, height, thickness, cap_neg_x, cap_pos_x)
+	_add_shell_reveals(body, panel, mirrored, u_width, u_offset, width, height, thickness)
+
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(width, height, thickness)
+	collision.shape = shape
+	collision.position.y = y_mid
+	body.add_child(collision)
+
+	return body
+
+
+## Close the shell from above along the panel's stone silhouette: per-strip top caps at
+## the alpha-profile height (so crumble steps and knocked-out top courses are capped on
+## the stones themselves — never a lid floating at full height), vertical risers closing
+## every step, and a stone end face where a wall end is FREE (not continued by a
+## neighbour or covered by a corner post).
+func _add_shell_caps(body: Node3D, panel: String, mirrored: bool, u_width: float, u_offset: float, width: float, height: float, thickness: float, cap_neg_x: bool, cap_pos_x: bool) -> void:
+	var profile := _ruin_panel_profile(panel)
+	# Profile strips covering this wall's texture slice, mapped into local-x order.
+	var strips: Array[Dictionary] = []
+	for j in RUIN_CAP_STRIPS:
+		var strip_u0 := float(j) / float(RUIN_CAP_STRIPS)
+		var strip_u1 := float(j + 1) / float(RUIN_CAP_STRIPS)
+		var lo := maxf(strip_u0, u_offset)
+		var hi := minf(strip_u1, u_offset + u_width)
+		if hi <= lo:
+			continue
+		var x0 := ((lo - u_offset) / u_width - 0.5) * width
+		var x1 := ((hi - u_offset) / u_width - 0.5) * width
+		if mirrored:
+			var mirrored_x0 := -x1
+			x1 = -x0
+			x0 = mirrored_x0
+		strips.append({"x0": x0, "x1": x1, "h": profile[j]})
+	if strips.is_empty():
+		return
+	strips.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.x0 < b.x0)
+
+	# Merge near-equal neighbours (stone-surface noise) so each painted step stays one
+	# cap quad; the cap height hugs the LOWEST merged strip so it never floats.
+	var runs: Array[Dictionary] = []
+	for strip in strips:
+		if not runs.is_empty() and absf(runs[-1].h - strip.h) < RUIN_CAP_MERGE_FRAC:
+			runs[-1].x1 = strip.x1
+			runs[-1].h = minf(runs[-1].h, strip.h)
+			continue
+		runs.append(strip.duplicate())
+
+	var previous_h := 0.0  # ground level at the wall's -X start
+	for i in runs.size():
+		var run: Dictionary = runs[i]
+		var run_w: float = run.x1 - run.x0
+		if run.h > RUIN_MIN_CAP_FRAC and run_w > 0.001:
+			var cap_mat := _ruin_panel_material("solid_a", false, u_width * run_w / width,
+					u_offset + (run.x0 + width / 2.0) / width * u_width)
+			_add_shell_quad(body, Vector2(run_w, thickness),
+					Vector3((run.x0 + run.x1) / 2.0, run.h * height - Z_FIGHT_OFFSET, 0),
+					Vector3(-PI / 2.0, 0, 0), cap_mat)
+		# Riser at this run's leading edge; at the very start only when the end is free.
+		if (i > 0 or cap_neg_x) and absf(run.h - previous_h) > RUIN_CAP_MERGE_FRAC:
+			_add_shell_end_face(body, run.x0, minf(previous_h, run.h), maxf(previous_h, run.h),
+					height, thickness, u_width, u_offset, width)
+		previous_h = run.h
+	if cap_pos_x and previous_h > RUIN_MIN_CAP_FRAC:
+		_add_shell_end_face(body, runs[-1].x1, 0.0, previous_h, height, thickness, u_width, u_offset, width)
+
+
+## One vertical stone face across the wall thickness (step riser, free end, window jamb).
+func _add_shell_end_face(body: Node3D, x: float, lo_frac: float, hi_frac: float, height: float, thickness: float, u_width: float, u_offset: float, width: float) -> void:
+	var face_h := (hi_frac - lo_frac) * height
+	var face_u_width := u_width * thickness / width
+	var face_u_offset := clampf(u_offset + (x + width / 2.0) / width * u_width - face_u_width / 2.0,
+			0.0, 1.0 - face_u_width)
+	var mat := _ruin_panel_material("solid_a", false, face_u_width, face_u_offset)
+	_add_shell_quad(body, Vector2(thickness, face_h),
+			Vector3(x, (lo_frac + hi_frac) / 2.0 * height - Z_FIGHT_OFFSET, 0),
+			Vector3(0, PI / 2.0, 0), mat)
+
+
+## Line interior see-through openings (gothic window lights, doorway slots) with stone
+## reveal faces — jambs, head and sill — so the opening reads as a thick wall, not as a
+## hollow two-plane shell.
+func _add_shell_reveals(body: Node3D, panel: String, mirrored: bool, u_width: float, u_offset: float, width: float, height: float, thickness: float) -> void:
+	for rect: Rect2 in _ruin_panel_hole_list(panel):
+		var lo := maxf(rect.position.x, u_offset)
+		var hi := minf(rect.end.x, u_offset + u_width)
+		if hi <= lo:
+			continue
+		var x0 := ((lo - u_offset) / u_width - 0.5) * width
+		var x1 := ((hi - u_offset) / u_width - 0.5) * width
+		if mirrored:
+			var mirrored_x0 := -x1
+			x1 = -x0
+			x0 = mirrored_x0
+		var top_frac := 1.0 - rect.position.y
+		var bottom_frac := 1.0 - rect.end.y
+		# Jambs left/right.
+		_add_shell_end_face(body, x0, bottom_frac, top_frac, height, thickness, u_width, u_offset, width)
+		_add_shell_end_face(body, x1, bottom_frac, top_frac, height, thickness, u_width, u_offset, width)
+		# Head + sill.
+		var span := x1 - x0
+		var cap_mat := _ruin_panel_material("solid_a", false, u_width * span / width,
+				u_offset + (x0 + width / 2.0) / width * u_width)
+		_add_shell_quad(body, Vector2(span, thickness),
+				Vector3((x0 + x1) / 2.0, top_frac * height - Z_FIGHT_OFFSET, 0),
+				Vector3(-PI / 2.0, 0, 0), cap_mat)
+		_add_shell_quad(body, Vector2(span, thickness),
+				Vector3((x0 + x1) / 2.0, bottom_frac * height + Z_FIGHT_OFFSET, 0),
+				Vector3(-PI / 2.0, 0, 0), cap_mat)
+
+
+## One face of a wall shell.
+func _add_shell_quad(parent: Node3D, size: Vector2, pos: Vector3, rot: Vector3, mat: Material) -> void:
+	var mesh_instance := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = size
+	mesh_instance.mesh = quad
+	mesh_instance.material_override = mat
+	mesh_instance.position = pos
+	mesh_instance.rotation = rot
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	parent.add_child(mesh_instance)
+
+
+## Texture panel for a wall segment: crumble roles map 1:1 onto their texture; "full"
+## cells (and role-less free walls / legacy saves) draw a deterministic random pick —
+## seeded from the segment's stable cell identity so every client and every rebuild
+## shows the same window/doorway (§6 gotcha #5; never a global RNG).
+func _panel_for_segment(segment: Dictionary) -> String:
+	var role: String = segment.get("role", "full")
+	if role.begins_with("crumble"):
+		return role
+	var edge_cell: Vector2i = segment.get("edge_cell", Vector2i.ZERO)
+	var edge_side: int = segment.get("edge_side", 0)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = edge_cell.x * _RUIN_SEED_PRIME_X ^ edge_cell.y * _RUIN_SEED_PRIME_Y ^ edge_side * _RUIN_SEED_PRIME_SIDE
+	var roll := rng.randf()
+	if roll < RUIN_WINDOW_CHANCE:
+		return "window"
+	if roll < RUIN_OPENING_CHANCE:
+		return "opening_a"
+	return _RUIN_SOLID_PANELS[rng.randi() % _RUIN_SOLID_PANELS.size()]
+
+
+## Cached alpha-top profile of a panel: RUIN_CAP_STRIPS height fractions (1.0 = full).
+func _ruin_panel_profile(panel: String) -> PackedFloat32Array:
+	var themed := _prop_theme + panel
+	if _ruin_panel_profiles.has(themed):
+		return _ruin_panel_profiles[themed]
+	var tex: Texture2D = _ruins_library.get_texture(themed) if _ruins_library != null else null
+	var profile := _alpha_top_profile(tex.get_image() if tex != null else null, RUIN_CAP_STRIPS)
+	_ruin_panel_profiles[themed] = profile
+	return profile
+
+
+## Cached interior see-through openings of a panel (normalized texture-UV rects).
+func _ruin_panel_hole_list(panel: String) -> Array[Rect2]:
+	var themed := _prop_theme + panel
+	if _ruin_panel_hole_rects.has(themed):
+		return _ruin_panel_hole_rects[themed]
+	var tex: Texture2D = _ruins_library.get_texture(themed) if _ruins_library != null else null
+	var holes := _alpha_interior_holes(tex.get_image() if tex != null else null)
+	_ruin_panel_hole_rects[themed] = holes
+	return holes
+
+
+## Top stone silhouette of a panel: for each of `strips` vertical strips, the fraction of
+## the panel height (from the bottom) that is opaque, scanning columns from the top. The
+## lowest column in a strip wins, so caps never float above missing stones. Panels
+## without alpha yield 1.0 everywhere. Static so tests can feed synthetic images.
+static func _alpha_top_profile(img: Image, strips: int) -> PackedFloat32Array:
+	var profile := PackedFloat32Array()
+	profile.resize(maxi(strips, 0))
+	profile.fill(1.0)
+	if img == null or strips <= 0:
+		return profile
+	var w := img.get_width()
+	var h := img.get_height()
+	if w <= 0 or h <= 0 or img.detect_alpha() == Image.ALPHA_NONE:
+		return profile
+	for j in strips:
+		var x0 := int(j * w / float(strips))
+		var x1 := maxi(x0 + 1, int((j + 1) * w / float(strips)))
+		var deepest_top := 0
+		var x := x0
+		while x < x1:
+			var first_opaque := h
+			var y := 0
+			while y < h:
+				if img.get_pixel(x, y).a >= RUIN_ALPHA_OPAQUE:
+					first_opaque = y
+					break
+				y += RUIN_PROFILE_SAMPLE_PX
+			deepest_top = maxi(deepest_top, first_opaque)
+			x += RUIN_PROFILE_SAMPLE_PX
+		profile[j] = 1.0 - float(deepest_top) / float(h)
+	return profile
+
+
+## Interior see-through openings of a panel: connected transparent regions NOT touching
+## the image border (border-connected damage is silhouette, handled by the caps), as
+## normalized UV rects. Flood-filled on a RUIN_HOLE_GRID-wide downsample. Static for tests.
+static func _alpha_interior_holes(img: Image) -> Array[Rect2]:
+	var holes: Array[Rect2] = []
+	if img == null:
+		return holes
+	var w := img.get_width()
+	var h := img.get_height()
+	if w <= 0 or h <= 0 or img.detect_alpha() == Image.ALPHA_NONE:
+		return holes
+	var gw := mini(RUIN_HOLE_GRID, w)
+	var gh := maxi(1, int(gw * h / float(w)))
+	var open := PackedByteArray()
+	open.resize(gw * gh)
+	for gy in gh:
+		for gx in gw:
+			var px := int((gx + 0.5) * w / float(gw))
+			var py := int((gy + 0.5) * h / float(gh))
+			open[gy * gw + gx] = 1 if img.get_pixel(px, py).a < RUIN_ALPHA_OPAQUE else 0
+	var visited := PackedByteArray()
+	visited.resize(gw * gh)
+	for start in gw * gh:
+		if open[start] == 0 or visited[start] == 1:
+			continue
+		# Flood fill one transparent component, tracking its bounds.
+		var queue: Array[int] = [start]
+		visited[start] = 1
+		var min_x := gw
+		var max_x := -1
+		var min_y := gh
+		var max_y := -1
+		var cells := 0
+		var touches_border := false
+		while not queue.is_empty():
+			var idx: int = queue.pop_back()
+			var cx := idx % gw
+			var cy := int(idx / float(gw))
+			cells += 1
+			min_x = mini(min_x, cx)
+			max_x = maxi(max_x, cx)
+			min_y = mini(min_y, cy)
+			max_y = maxi(max_y, cy)
+			if cx == 0 or cy == 0 or cx == gw - 1 or cy == gh - 1:
+				touches_border = true
+			for delta: Vector2i in _EDGE_DELTA:
+				var nx := cx + delta.x
+				var ny := cy + delta.y
+				if nx < 0 or ny < 0 or nx >= gw or ny >= gh:
+					continue
+				var neighbour := ny * gw + nx
+				if open[neighbour] == 1 and visited[neighbour] == 0:
+					visited[neighbour] = 1
+					queue.append(neighbour)
+		if touches_border or cells < RUIN_HOLE_MIN_CELLS:
+			continue
+		# Pixel-precise refinement: the coarse grid is off by up to one cell (~1.5%), so
+		# snap the bounds onto the actual alpha edges — reveals must sit flush with the
+		# opening. Scans the coarse bbox expanded by one cell on each side.
+		var cell_w := w / float(gw)
+		var cell_h := h / float(gh)
+		var px0 := maxi(0, int((min_x - 1) * cell_w))
+		var px1 := mini(w - 1, int((max_x + 2) * cell_w))
+		var py0 := maxi(0, int((min_y - 1) * cell_h))
+		var py1 := mini(h - 1, int((max_y + 2) * cell_h))
+		var fine_min_x := w
+		var fine_max_x := -1
+		var fine_min_y := h
+		var fine_max_y := -1
+		for py in range(py0, py1 + 1, RUIN_HOLE_REFINE_STEP_PX):
+			for px in range(px0, px1 + 1, RUIN_HOLE_REFINE_STEP_PX):
+				if img.get_pixel(px, py).a < RUIN_ALPHA_OPAQUE:
+					fine_min_x = mini(fine_min_x, px)
+					fine_max_x = maxi(fine_max_x, px)
+					fine_min_y = mini(fine_min_y, py)
+					fine_max_y = maxi(fine_max_y, py)
+		if fine_max_x < fine_min_x:
+			continue
+		holes.append(Rect2(float(fine_min_x) / w, float(fine_min_y) / h,
+				float(fine_max_x - fine_min_x + 1) / w, float(fine_max_y - fine_min_y + 1) / h))
+	return holes
+
+
+## The two grid corner points (grid-point space) bounding a wall segment's edge.
+static func _wall_corner_points(segment: Dictionary) -> Array[Vector2i]:
+	var edge_cell: Vector2i = segment.get("edge_cell", Vector2i.ZERO)
+	match int(segment.get("edge_side", 0)):
+		1:  # East edge
+			return [Vector2i(edge_cell.x + 1, edge_cell.y), Vector2i(edge_cell.x + 1, edge_cell.y + 1)]
+		2:  # South edge
+			return [Vector2i(edge_cell.x, edge_cell.y + 1), Vector2i(edge_cell.x + 1, edge_cell.y + 1)]
+		3:  # West edge
+			return [edge_cell, Vector2i(edge_cell.x, edge_cell.y + 1)]
+		_:  # North edge
+			return [edge_cell, Vector2i(edge_cell.x + 1, edge_cell.y)]
+
+
+## A crumble panel descends toward its +U (right) edge. Mirror U iff the quad's local +U
+## (per _RUIN_QUAD_U_DIR) does not already point at the arm's free end (taper_dir, emitted
+## by TerrainPrefabs and transformed with the piece). Unknown taper — legacy saves or
+## hand-drawn walls — keeps the unmirrored panel (§6 gotcha #1).
+func _crumble_needs_flip(segment: Dictionary) -> bool:
+	var taper_dir: int = segment.get("taper_dir", -1)
+	if taper_dir < 0 or taper_dir >= _RUIN_QUAD_U_DIR.size():
+		return false
+	var edge_side: int = segment.get("edge_side", 0)
+	if edge_side < 0 or edge_side >= _RUIN_QUAD_U_DIR.size():
+		return false
+	return _RUIN_QUAD_U_DIR[edge_side] != taper_dir
+
+
+## Lit material for a ruin panel, cached by (panel | mirror | U-slice). Panels keep their
+## authored 0..1 UVs (bottom-anchored, shared masonry scale — §6 gotcha #3); holed panels
+## use alpha scissor whose hard edges survive the runtime WebP decode (§6 gotcha #4). All
+## panels render double-sided: the shell's back quad shares the front's orientation, so
+## its back face IS the wall's correct world-space appearance from behind — and the orbit
+## camera can look at every wall from both sides.
+func _ruin_panel_material(panel: String, mirrored: bool, u_width: float, u_offset: float) -> Material:
+	var themed := _prop_theme + panel
+	var key := "%s|%s|%.3f|%.3f" % [themed, mirrored, u_width, u_offset]
+	if _ruin_panel_materials.has(key):
+		return _ruin_panel_materials[key]
+	var tex: Texture2D = _ruins_library.get_texture(themed)
+	if tex == null:
+		# Mid-download / decode-failure safety net; intentionally not cached so a later
+		# rebuild can pick up the real panel.
+		return _get_ruins_wall_material()
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = tex
+	mat.roughness = RUIN_PANEL_ROUGHNESS
+	mat.metallic = 0.0
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	# Panels are 0..1-UV one-shot images, never tiled. Repeat would wrap-bleed the
+	# opposite texture edge at u=1.0 under anisotropic filtering — full-height stone
+	# slivers at the free end of (mirrored) crumble walls.
+	mat.texture_repeat = false
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var normal_tex: Texture2D = _ruins_library.get_texture(_prop_theme + "normal")
+	if normal_tex != null:
+		mat.normal_enabled = true
+		mat.normal_texture = normal_tex
+		mat.normal_scale = RUIN_NORMAL_STRENGTH
+	if panel != "solid_a" and panel != "solid_b":
+		# Everything else has knocked-out stones (RGBA): top damage, doorway, crumble,
+		# window — exactly the reference renderer's use_alpha rule.
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		mat.alpha_scissor_threshold = RUIN_ALPHA_SCISSOR_THRESHOLD
+	# Map the quad's 0..1 U onto [u_offset, u_offset + u_width], mirrored when the
+	# crumble must step the other way (u' = (u_offset + u_width) - u * u_width).
+	var u_scale := (-u_width) if mirrored else u_width
+	var u_off := (u_offset + u_width) if mirrored else u_offset
+	mat.uv1_scale = Vector3(u_scale, 1.0, 1.0)
+	mat.uv1_offset = Vector3(u_off, 0.0, 0.0)
+	_ruin_panel_materials[key] = mat
+	return mat
+
+
 ## Clear all wall instances
 func _clear_wall_instances() -> void:
 	for instance in _wall_instances:
@@ -1568,6 +2147,23 @@ func _clear_wall_instances() -> void:
 ## @param rotation: Grid rotation in degrees
 func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> void:
 	_clear_placed_objects()
+
+	# Remember the layout so a finishing panel download can upgrade fallback trees in
+	# place; start the one-time fetch as soon as a map actually shows trees.
+	_last_objects = objects
+	_last_obj_table_size = t_size
+	_last_obj_rotation = rot_deg
+	var use_tree_panels := _tree_panels_ready() or _tree_models_ready()
+	var use_container_panels := _container_panels_ready()
+	var use_hazard_panels := _hazard_panels_ready()
+	for obj in objects:
+		var obj_type: String = obj.get("object_type", "tree")
+		if obj_type == "tree" and not (_tree_panels_ready() and _tree_models_ready()):
+			_request_tree_panels()
+		elif obj_type == "container" and not use_container_panels:
+			_request_container_panels()
+		elif (obj_type == "mine" or obj_type == "warning_sign") and not use_hazard_panels:
+			_request_hazard_panels()
 
 	if objects.is_empty():
 		return
@@ -1602,8 +2198,24 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 		if not _is_position_within_table(rotated_x, rotated_z, t_size):
 			continue
 
-		# Build the procedural prop for this object type
-		var model := _get_object_model(object_type)
+		# Build the prop for this object type (trees, containers and minefield props
+		# upgrade to their textured versions once cached; the rest stays procedural).
+		# Textured props set their own deterministic facing.
+		var model: Node3D
+		var handles_own_facing := false
+		if object_type == "tree" and use_tree_panels:
+			model = _create_textured_tree(obj)
+			handles_own_facing = true
+		elif object_type == "container" and use_container_panels:
+			model = _create_textured_container(obj)
+		elif object_type == "mine" and use_hazard_panels:
+			model = _create_textured_mine(obj)
+			handles_own_facing = true
+		elif object_type == "warning_sign" and use_hazard_panels:
+			model = _create_textured_warning_sign(obj)
+			handles_own_facing = true
+		else:
+			model = _get_object_model(object_type)
 		if not model:
 			continue
 
@@ -1614,7 +2226,7 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 			# fits its (possibly rotated) footprint.
 			var angle_deg: float = obj.get("angle_deg", 0.0)
 			model.rotation.y = -rotation_rad + deg_to_rad(angle_deg)
-		else:
+		elif not handles_own_facing:
 			model.rotation.y = randf() * TAU
 		add_child(model)
 		_object_instances.append(model)
@@ -1630,6 +2242,8 @@ func _get_object_model(object_type: String) -> Node3D:
 			return _create_procedural_tree()
 		"mine":
 			return _create_procedural_mine()
+		"warning_sign":
+			return _create_procedural_sign()
 		"puddle":
 			return _create_procedural_puddle()
 	return null
@@ -1695,6 +2309,383 @@ func _create_procedural_tree() -> Node3D:
 	return root
 
 
+# ==============================================================================
+# TEXTURED TREES (deciduous billboard panels, delivered from R2)
+# ==============================================================================
+
+## True once the full tree panel set is cached locally (sync; no network access).
+func _tree_panels_ready() -> bool:
+	return _trees_library != null and _trees_library.all_panels_cached(_prop_theme)
+
+
+## True once the textured tree GLBs are cached locally (sync; no network access).
+func _tree_models_ready() -> bool:
+	return _trees_library != null and _trees_library.all_models_cached(_prop_theme)
+
+
+## Start the one-time async panel download. On success the last object layout is
+## rebuilt, upgrading the procedural fallback trees in place; on failure the flag
+## resets so the next layout update retries.
+func _request_tree_panels() -> void:
+	if _tree_fetch_started or _trees_library == null:
+		return
+	_tree_fetch_started = true
+	_fetch_tree_panels()
+
+
+## Progressive enhancement: the small billboard panels land first (trees pop in as
+## cutouts), then the textured GLBs upgrade them to volumetric models in place.
+func _fetch_tree_panels() -> void:
+	var panels_ok: bool = await _trees_library.ensure_all_panels(_prop_theme)
+	if panels_ok and not _last_objects.is_empty():
+		update_placed_objects(_last_objects, _last_obj_table_size, _last_obj_rotation)
+	var models_ok: bool = await _trees_library.ensure_all_models(_prop_theme)
+	if models_ok and not _last_objects.is_empty():
+		update_placed_objects(_last_objects, _last_obj_table_size, _last_obj_rotation)
+	if not panels_ok and not models_ok:
+		_tree_fetch_started = false  # offline — retry on the next layout update
+
+
+## A deciduous tree, volumetric when available: the textured TRELLIS GLB of the variant
+## (a real 3D model, like a model-railroad tree), else two crossed alpha-scissor quads
+## plus a bird's-eye crown cap, else the procedural fallback. Variant, size (75-125%)
+## and facing are seeded from the object's stable cell+offset identity so every client
+## and rebuild shows the same tree. Decorative only — forests stay passable.
+func _create_textured_tree(obj: Dictionary) -> Node3D:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _placed_object_seed(obj)
+	var variants: Array[String] = TreesLibrary.TREE_VARIANTS
+	var panel: String = _prop_theme + variants[rng.randi() % variants.size()]
+	var tree_scale := rng.randf_range(TREE_SCALE_MIN, TREE_SCALE_MAX)
+	var height := TREE_HEIGHT_INCHES * INCHES_TO_METERS * tree_scale
+	var facing := rng.randf() * TAU
+
+	# Volumetric tree: instance the variant's GLB, scaled so the model stands on the
+	# table at the same height the billboard would have.
+	var scene: PackedScene = _trees_library.get_model_scene(panel)
+	if scene != null:
+		var model := scene.instantiate() as Node3D
+		if model != null:
+			var aabb := _model_space_aabb(model)
+			# Reject degenerate flat "relief" reconstructions (TRELLIS occasionally
+			# fails to infer depth) — the billboard tier looks far better than a slab.
+			var depth_ok := aabb.size.y > 0.001 \
+					and minf(aabb.size.x, aabb.size.z) / aabb.size.y >= TREE_MODEL_MIN_DEPTH_RATIO
+			if depth_ok:
+				var fit := height / aabb.size.y
+				model.scale = Vector3(fit, fit, fit)
+				model.position.y = -aabb.position.y * fit
+				var model_root := Node3D.new()
+				model_root.add_child(model)
+				model_root.rotation.y = facing
+				return model_root
+			model.free()
+
+	var tex: Texture2D = _trees_library.get_texture(panel)
+	if tex == null:
+		return _create_procedural_tree()  # mid-download / decode-failure safety net
+
+	var width := height * float(tex.get_width()) / float(tex.get_height())
+
+	var root := Node3D.new()
+	var side_mat := _tree_panel_material(panel)
+	for i in 2:
+		var quad_instance := MeshInstance3D.new()
+		var quad := QuadMesh.new()
+		quad.size = Vector2(width, height)
+		quad_instance.mesh = quad
+		quad_instance.material_override = side_mat
+		quad_instance.position.y = height / 2.0
+		quad_instance.rotation.y = i * PI / 2.0
+		quad_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		root.add_child(quad_instance)
+
+	var top_tex: Texture2D = _trees_library.get_texture(panel + "_top")
+	if top_tex != null:
+		var cap_instance := MeshInstance3D.new()
+		var cap := QuadMesh.new()
+		cap.size = Vector2(width, width * float(top_tex.get_height()) / float(top_tex.get_width()))
+		cap_instance.mesh = cap
+		cap_instance.material_override = _tree_panel_material(panel + "_top")
+		cap_instance.position.y = height * TREE_CROWN_CAP_FRAC
+		cap_instance.rotation.x = -PI / 2.0
+		cap_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		root.add_child(cap_instance)
+
+	root.rotation.y = facing
+	return root
+
+
+## Combined local-space AABB of all meshes under `node` (transforms accumulated), used
+## to scale a runtime GLB tree to its target height and stand it on the table.
+static func _model_space_aabb(node: Node3D) -> AABB:
+	return _merge_mesh_aabbs(node, Transform3D.IDENTITY, AABB(), true)[1]
+
+
+static func _merge_mesh_aabbs(node: Node, xform: Transform3D, acc: AABB, first: bool) -> Array:
+	var node_xform := xform
+	if node is Node3D:
+		node_xform = xform * (node as Node3D).transform
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+		var mesh_aabb: AABB = node_xform * (node as MeshInstance3D).mesh.get_aabb()
+		acc = mesh_aabb if first else acc.merge(mesh_aabb)
+		first = false
+	for child: Node in node.get_children():
+		var result := _merge_mesh_aabbs(child, node_xform, acc, first)
+		first = result[0]
+		acc = result[1]
+	return [first, acc]
+
+
+## Lit cutout material for a tree panel, cached per panel (0..1 UVs, never tiled).
+func _tree_panel_material(panel: String) -> Material:
+	if _tree_panel_materials.has(panel):
+		return _tree_panel_materials[panel]
+	var tex: Texture2D = _trees_library.get_texture(panel)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = tex
+	mat.roughness = 0.95
+	mat.metallic = 0.0
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	mat.texture_repeat = false
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	mat.alpha_scissor_threshold = RUIN_ALPHA_SCISSOR_THRESHOLD
+	_tree_panel_materials[panel] = mat
+	return mat
+
+
+## Stable per-object seed from the synced placed-object data (cell + sub-cell offset),
+## so visual draws (tree variant/size, container colourway) are identical on every
+## client (never a global RNG).
+func _placed_object_seed(obj: Dictionary) -> int:
+	var cell: Vector2i = obj.get("cell", Vector2i.ZERO)
+	var offset: Vector2 = obj.get("offset", Vector2(0.5, 0.5))
+	return cell.x * _RUIN_SEED_PRIME_X ^ cell.y * _RUIN_SEED_PRIME_Y \
+			^ int(offset.x * 4096.0) * _RUIN_SEED_PRIME_SIDE ^ int(offset.y * 4096.0)
+
+
+# ==============================================================================
+# TEXTURED CONTAINERS (shipping-container faces, delivered from R2)
+# ==============================================================================
+
+## True once the container face set is cached locally (sync; no network access).
+func _container_panels_ready() -> bool:
+	return _containers_library != null and _containers_library.all_panels_cached(_container_theme)
+
+
+## Start the one-time async panel download; the last object layout rebuilds on success.
+func _request_container_panels() -> void:
+	if _container_fetch_started or _containers_library == null:
+		return
+	_container_fetch_started = true
+	_fetch_container_panels()
+
+
+func _fetch_container_panels() -> void:
+	var ok: bool = await _containers_library.ensure_all_panels(_container_theme)
+	if not ok:
+		_container_fetch_started = false
+		return
+	if not _last_objects.is_empty():
+		update_placed_objects(_last_objects, _last_obj_table_size, _last_obj_rotation)
+
+
+## A blocker as a textured shipping container: a 6x3x2.5" box built from quads wearing
+## the corrugated side / cargo-door end / roof faces, in a colourway seeded from the
+## object's stable identity. Collision stays the full Impassable box.
+func _create_textured_container(obj: Dictionary) -> StaticBody3D:
+	var length := CONTAINER_LENGTH_INCHES * INCHES_TO_METERS
+	var depth := CONTAINER_DEPTH_INCHES * INCHES_TO_METERS
+	var height := CONTAINER_HEIGHT_INCHES * INCHES_TO_METERS
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _placed_object_seed(obj)
+	var colourways: Array[String] = ContainersLibrary.COLOURWAYS
+	var colourway: String = _container_theme + colourways[rng.randi() % colourways.size()]
+	var side_mat := _container_panel_material(colourway + "_side")
+	var end_mat := _container_panel_material(colourway + "_end")
+	var top_mat := _container_panel_material(colourway + "_top")
+	if side_mat == null or end_mat == null or top_mat == null:
+		return _create_procedural_container()  # mid-download safety net
+
+	var body := StaticBody3D.new()
+	body.add_to_group("terrain")
+	body.add_to_group("terrain_piece")
+
+	# Each face is rotated so its normal points OUTWARD: container materials keep
+	# backface culling (correct sun shading), unlike the cull-disabled wall shells.
+	var y_mid := height / 2.0 - Z_FIGHT_OFFSET
+	_add_shell_quad(body, Vector2(length, height), Vector3(0, y_mid, depth / 2.0), Vector3.ZERO, side_mat)
+	_add_shell_quad(body, Vector2(length, height), Vector3(0, y_mid, -depth / 2.0), Vector3(0, PI, 0), side_mat)
+	_add_shell_quad(body, Vector2(depth, height), Vector3(length / 2.0, y_mid, 0), Vector3(0, PI / 2.0, 0), end_mat)
+	_add_shell_quad(body, Vector2(depth, height), Vector3(-length / 2.0, y_mid, 0), Vector3(0, -PI / 2.0, 0), end_mat)
+	_add_shell_quad(body, Vector2(length, depth), Vector3(0, height - Z_FIGHT_OFFSET, 0), Vector3(-PI / 2.0, 0, 0), top_mat)
+
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(length, height, depth)
+	collision.shape = shape
+	collision.position.y = y_mid
+	body.add_child(collision)
+
+	return body
+
+
+## Lit material for a container face, cached per panel (full-bleed RGB, never tiled).
+## Returns null while the panel is not cached/decodable so the caller keeps a fallback.
+func _container_panel_material(panel: String) -> Material:
+	if _container_panel_materials.has(panel):
+		return _container_panel_materials[panel]
+	var tex: Texture2D = _containers_library.get_texture(panel)
+	if tex == null:
+		return null
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = tex
+	mat.roughness = 0.85
+	mat.metallic = 0.0
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	mat.texture_repeat = false
+	_container_panel_materials[panel] = mat
+	return mat
+
+
+# ==============================================================================
+# TEXTURED MINEFIELD (anti-tank mines + warning signs, delivered from R2)
+# ==============================================================================
+
+## True once the minefield texture set is cached locally (sync; no network access).
+func _hazard_panels_ready() -> bool:
+	return _hazards_library != null and _hazards_library.all_panels_cached()
+
+
+## Start the one-time async panel download; the last object layout rebuilds on success.
+func _request_hazard_panels() -> void:
+	if _hazard_fetch_started or _hazards_library == null:
+		return
+	_hazard_fetch_started = true
+	_fetch_hazard_panels()
+
+
+func _fetch_hazard_panels() -> void:
+	var ok: bool = await _hazards_library.ensure_all_panels()
+	if not ok:
+		_hazard_fetch_started = false
+		return
+	if not _last_objects.is_empty():
+		update_placed_objects(_last_objects, _last_obj_table_size, _last_obj_rotation)
+
+
+## An anti-tank mine: a flat olive-drab disc with the pressure-plate texture laid on
+## top (keyed alpha), facing seeded from the object's identity. Decorative only —
+## dangerous terrain stays passable (OPR: Dangerous, not Impassable).
+func _create_textured_mine(obj: Dictionary) -> Node3D:
+	var top_tex: Texture2D = _hazards_library.get_texture("mine_top")
+	if top_tex == null:
+		return _create_procedural_mine()  # mid-download safety net
+	var radius := MINE_DISC_RADIUS_INCHES * INCHES_TO_METERS
+	var height := MINE_DISC_HEIGHT_INCHES * INCHES_TO_METERS
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _placed_object_seed(obj)
+
+	var root := Node3D.new()
+	var disc := MeshInstance3D.new()
+	var disc_mesh := CylinderMesh.new()
+	disc_mesh.top_radius = radius
+	disc_mesh.bottom_radius = radius
+	disc_mesh.height = height
+	disc.mesh = disc_mesh
+	disc.material_override = _hazard_flat_material("mine_body", MINE_BODY_COLOR)
+	disc.position.y = height / 2.0
+	disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	root.add_child(disc)
+
+	var top := MeshInstance3D.new()
+	var top_quad := QuadMesh.new()
+	top_quad.size = Vector2(radius * 2.0, radius * 2.0)
+	top.mesh = top_quad
+	top.material_override = _hazard_texture_material("mine_top", true)
+	top.position.y = height + PROP_SURFACE_LIFT
+	top.rotation.x = -PI / 2.0
+	root.add_child(top)
+
+	root.rotation.y = rng.randf() * TAU
+	return root
+
+
+## A minefield warning sign: weathered plate on a steel post, readable from both sides
+## (two back-to-back quads), facing seeded from the object's identity. Decorative.
+func _create_textured_warning_sign(obj: Dictionary) -> Node3D:
+	var sign_tex: Texture2D = _hazards_library.get_texture("warning_sign")
+	if sign_tex == null:
+		return _create_procedural_sign()  # mid-download safety net
+	var post_height := SIGN_POST_HEIGHT_INCHES * INCHES_TO_METERS
+	var post_radius := SIGN_POST_RADIUS_INCHES * INCHES_TO_METERS
+	var sign_w := SIGN_WIDTH_INCHES * INCHES_TO_METERS
+	var sign_h := sign_w * float(sign_tex.get_height()) / float(sign_tex.get_width())
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _placed_object_seed(obj)
+
+	var root := Node3D.new()
+	var post := MeshInstance3D.new()
+	var post_mesh := CylinderMesh.new()
+	post_mesh.top_radius = post_radius
+	post_mesh.bottom_radius = post_radius
+	post_mesh.height = post_height
+	post.mesh = post_mesh
+	post.material_override = _hazard_flat_material("sign_post", SIGN_POST_COLOR)
+	post.position.y = post_height / 2.0
+	post.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	root.add_child(post)
+
+	var plate_y := post_height - sign_h / 2.0
+	var plate_mat := _hazard_texture_material("warning_sign", false)
+	for i in 2:
+		var plate := MeshInstance3D.new()
+		var plate_quad := QuadMesh.new()
+		plate_quad.size = Vector2(sign_w, sign_h)
+		plate.mesh = plate_quad
+		plate.material_override = plate_mat
+		plate.position = Vector3(0, plate_y, (post_radius + PROP_SURFACE_LIFT) * (1 if i == 0 else -1))
+		plate.rotation.y = i * PI
+		plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		root.add_child(plate)
+
+	root.rotation.y = rng.randf() * TAU
+	return root
+
+
+## Lit cutout/full-bleed material for a hazard texture, cached per panel.
+func _hazard_texture_material(panel: String, alpha_cutout: bool) -> Material:
+	if _hazard_materials.has(panel):
+		return _hazard_materials[panel]
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = _hazards_library.get_texture(panel)
+	mat.roughness = 0.8
+	mat.metallic = 0.0
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	mat.texture_repeat = false
+	if alpha_cutout:
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		mat.alpha_scissor_threshold = RUIN_ALPHA_SCISSOR_THRESHOLD
+	_hazard_materials[panel] = mat
+	return mat
+
+
+## Plain coloured material for hazard prop bodies (mine side, sign post), cached.
+func _hazard_flat_material(key: String, color: Color) -> Material:
+	if _hazard_materials.has(key):
+		return _hazard_materials[key]
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.roughness = 0.85
+	mat.metallic = 0.0
+	_hazard_materials[key] = mat
+	return mat
+
+
 ## Dangerous mine: a small tapered dome. Decorative — dangerous terrain is passable.
 func _create_procedural_mine() -> Node3D:
 	var root := Node3D.new()
@@ -1710,6 +2701,34 @@ func _create_procedural_mine() -> Node3D:
 	dome.position.y = dome_height / 2.0 - Z_FIGHT_OFFSET
 	dome.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(dome)
+
+	return root
+
+
+## Warning sign fallback: holographic post + plate. Decorative.
+func _create_procedural_sign() -> Node3D:
+	var root := Node3D.new()
+	var post_height := SIGN_POST_HEIGHT_INCHES * INCHES_TO_METERS
+	var sign_w := SIGN_WIDTH_INCHES * INCHES_TO_METERS
+
+	var post := MeshInstance3D.new()
+	var post_mesh := BoxMesh.new()
+	post_mesh.size = Vector3(SIGN_POST_RADIUS_INCHES * 2.0 * INCHES_TO_METERS, post_height,
+			SIGN_POST_RADIUS_INCHES * 2.0 * INCHES_TO_METERS)
+	post.mesh = post_mesh
+	post.material_override = TerrainHologram.make_material()
+	post.position.y = post_height / 2.0 - Z_FIGHT_OFFSET
+	post.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(post)
+
+	var plate := MeshInstance3D.new()
+	var plate_mesh := BoxMesh.new()
+	plate_mesh.size = Vector3(sign_w, sign_w * 0.75, 0.002)
+	plate.mesh = plate_mesh
+	plate.material_override = TerrainHologram.make_material()
+	plate.position.y = post_height - sign_w * 0.375
+	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(plate)
 
 	return root
 

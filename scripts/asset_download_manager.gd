@@ -23,6 +23,7 @@ signal progress_updated(done: int, total: int)
 # === Private variables ===
 
 var _http: HTTPRequest = null
+var _request_active: bool = false
 
 # === Lifecycle ===
 
@@ -71,7 +72,22 @@ func ensure_batch(entries: Array) -> Dictionary:
 
 # === Private helpers ===
 
+## Serialises access to the single shared HTTPRequest: one node can only serve one
+## request at a time, so later callers wait their turn instead of failing with ERR_BUSY
+## (e.g. picking a biome in the table-size dialog while the default biome battlemap from
+## table._ready() is still downloading — the pick used to fail silently with no retry).
 func _download(url: String, sha256: String) -> bool:
+	while _request_active:
+		await get_tree().process_frame
+	if is_cached(sha256):
+		return true  # an identical queued request landed while we waited
+	_request_active = true
+	var ok: bool = await _perform_request(url, sha256)
+	_request_active = false
+	return ok
+
+
+func _perform_request(url: String, sha256: String) -> bool:
 	var tmp: String = cache_path(sha256) + ".part"
 	_http.download_file = tmp
 	if _http.request(url) != OK:

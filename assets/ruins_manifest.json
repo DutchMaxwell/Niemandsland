@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "base_url": "https://assets.akesberg.de/terrain-source/ruins",
+  "panels": {
+    "solid_a": {
+      "url": "solid_a.webp",
+      "sha256": "088cd5975d666bfc1e44bbb87152498a0b1a79353e2c0d1c4279e290fda86e94",
+      "size": 283354
+    },
+    "solid_b": {
+      "url": "solid_b.webp",
+      "sha256": "84012b2275b021d07e90965cfba919cfa869d5f73a423db0bf4e8f91d135bb49",
+      "size": 283540
+    },
+    "topdmg_a": {
+      "url": "topdmg_a.webp",
+      "sha256": "5e2e3c30cf722d4880135e921065142915fe683757250d6149dea2f10b173953",
+      "size": 255200
+    },
+    "opening_a": {
+      "url": "opening_a.webp",
+      "sha256": "77cddc7cab947ecf1a79141394799486c7af2dcde67937f829761214e35a1ea4",
+      "size": 238428
+    },
+    "crumble_a": {
+      "url": "crumble_a.webp",
+      "sha256": "13dff0c7cd213f7522cc651ebde4429baa5d805c8791f65a9dd001a2c809824d",
+      "size": 222970
+    },
+    "crumble_b": {
+      "url": "crumble_b.webp",
+      "sha256": "0f29077f1e9cfeedcc4a4e69e0f2c42cf4b2ec8e855e90dab1c7ed761e733d9b",
+      "size": 121904
+    },
+    "crumble_steep": {
+      "url": "crumble_steep.webp",
+      "sha256": "3e13d72ee556bba78def9532f6cc3fee1d53daad17a22c6f158f1469af7f5b65",
+      "size": 176584
+    },
+    "window": {
+      "url": "window.webp",
+      "sha256": "2bd780d065a73dc957ba5580502d63746d3d3fa33e7d025c4e4ce13693e67cb8",
+      "size": 257440
+    },
+    "normal": {
+      "url": "normal.webp",
+      "sha256": "918998de4666094ed65131e39a669ae5ba4333934c8c321a6c193e243eed4502",
+      "size": 137114
+    },
+    "desert_solid_a": {
+      "url": "desert_solid_a.webp?v=dea02a91",
+      "sha256": "dea02a91751da79aa1f8b643ee6b1cd31b18e96181eba33602e41899d3d62208",
+      "size": 777050
+    },
+    "desert_solid_b": {
+      "url": "desert_solid_b.webp?v=88cebd32",
+      "sha256": "88cebd32fe07f2a80930a1d8cc39217f92bb442d6d246e5581a46e42a6835588",
+      "size": 777456
+    },
+    "desert_topdmg_a": {
+      "url": "desert_topdmg_a.webp?v=1c557e3e",
+      "sha256": "1c557e3ec648c60444e2844289053964406f1400c9f7615b8539dc52b4ca4fc8",
+      "size": 767294
+    },
+    "desert_opening_a": {
+      "url": "desert_opening_a.webp?v=a293a40d",
+      "sha256": "a293a40d077a7ca6ccf2fd293b99c12d7dd02add77294c1c63bf7cee0c497f31",
+      "size": 767582
+    },
+    "desert_crumble_a": {
+      "url": "desert_crumble_a.webp?v=8c12887a",
+      "sha256": "8c12887a2cb94b638127fae50f506de8abf9fa12f9e501c5a83816f568ba741d",
+      "size": 653638
+    },
+    "desert_crumble_b": {
+      "url": "desert_crumble_b.webp?v=e880b2a8",
+      "sha256": "e880b2a873e248fb1cc0490d7562c89dc7be76ba7747d7fb613145774245c9f8",
+      "size": 396390
+    },
+    "desert_crumble_steep": {
+      "url": "desert_crumble_steep.webp?v=0a5d0c0c",
+      "sha256": "0a5d0c0ca61ff66f5eaa04da607306cba6616ce89032eaec0852c5b4805d454e",
+      "size": 528026
+    },
+    "desert_window": {
+      "url": "desert_window.webp?v=222fe28e",
+      "sha256": "222fe28eb4ecd9378601549948abb0a44ea47c9208c9bafbc70a97e9a6fc8306",
+      "size": 727778
+    },
+    "desert_normal": {
+      "url": "desert_normal.webp?v=5528e617",
+      "sha256": "5528e6173a83cecffcac182fbbe98f150c47c810cb03b3b79fc4ec1fbe3a50cc",
+      "size": 117640
+    },
+    "tundra_solid_a": {
+      "url": "tundra_solid_a.webp?v=bbee8f0c",
+      "sha256": "bbee8f0c8c0ba33f33e297c384a5432ad242b8dafac7ee79122879cc26aa1888",
+      "size": 873800
+    },
+    "tundra_solid_b": {
+      "url": "tundra_solid_b.webp?v=552523b2",
+      "sha256": "552523b22b1544915d6926d8c1946224060e477c52e114131877a8bfd17cfc11",
+      "size": 874062
+    },
+    "tundra_topdmg_a": {
+      "url": "tundra_topdmg_a.webp?v=ae67cf8f",
+      "sha256": "ae67cf8f06c4a33d849169faffcade76e23185bb84ff407d820365f0ce4dfcb0",
+      "size": 802264
+    },
+    "tundra_opening_a": {
+      "url": "tundra_opening_a.webp?v=e3b4c0fc",
+      "sha256": "e3b4c0fc93112c9230df3e8a27ee43f1ffb88666e61dd8cab01ca5201277306c",
+      "size": 752830
+    },
+    "tundra_crumble_a": {
+      "url": "tundra_crumble_a.webp?v=f34a350b",
+      "sha256": "f34a350bd634591aa626866deb4e94c71a250e9df71a0bd561cbb8ac294c1eba",
+      "size": 717402
+    },
+    "tundra_crumble_b": {
+      "url": "tundra_crumble_b.webp?v=18acc9ee",
+      "sha256": "18acc9ee2f10f41efb4cd75e092e1a775fb9ba7383299db5728cbfb5e0c7bdfc",
+      "size": 418026
+    },
+    "tundra_crumble_steep": {
+      "url": "tundra_crumble_steep.webp?v=c2c2f4da",
+      "sha256": "c2c2f4dab4cb10c196fe4882090c0d7f574f48934b1c173b30bc76167e723181",
+      "size": 581268
+    },
+    "tundra_window": {
+      "url": "tundra_window.webp?v=ec6c50cb",
+      "sha256": "ec6c50cb840afa2d3f058633093f4c1c61bbcda0733f510f9f20a42ccc16ffbd",
+      "size": 760940
+    },
+    "tundra_normal": {
+      "url": "tundra_normal.webp?v=dab68345",
+      "sha256": "dab68345ef59c2dc51552226bffd4a5d5e2c9f30c4fac011b651264a7db3edb2",
+      "size": 157610
+    }
+  }
+}
