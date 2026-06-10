@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "base_url": "https://assets.akesberg.de/terrain-source/containers",
+  "panels": {
+    "container_blue_end": {
+      "url": "container_blue_end.webp",
+      "sha256": "87cde445db19e7ffc3137c1452c3df5344abfa43fec6c1c4a239db54dfa44ca9",
+      "size": 202072
+    },
+    "container_blue_side": {
+      "url": "container_blue_side.webp",
+      "sha256": "708a4a52ed91f0c21b3bc22accd2ef4635232a5ff8a5f5d7beb0c55cfa684379",
+      "size": 93730
+    },
+    "container_blue_top": {
+      "url": "container_blue_top.webp",
+      "sha256": "c58a9a35184b84ccafaca64e636aca3c35672fa5a081185ac62328accdfa8ab0",
+      "size": 162268
+    },
+    "container_red_end": {
+      "url": "container_red_end.webp",
+      "sha256": "1a267f848448bbae9165a914a1913654d01d010917ec92e3effe3b49cfe76e25",
+      "size": 179992
+    },
+    "container_red_side": {
+      "url": "container_red_side.webp",
+      "sha256": "aefd46fda99764e04e3aa681d775d7e347dc77b77ffe812654337a12ddad7f81",
+      "size": 74768
+    },
+    "container_red_top": {
+      "url": "container_red_top.webp",
+      "sha256": "eedd73dca3ed2fe1bc93c50d5c5743084a95e8d8846969e28b0534dd63041e38",
+      "size": 118190
+    },
+    "tundra_container_blue_end": {
+      "url": "tundra_container_blue_end.webp?v=21f2787b",
+      "sha256": "21f2787b48cda1363728354f987c90f500a23ffd33eda4d4a1827912eadc7915",
+      "size": 301444
+    },
+    "tundra_container_blue_side": {
+      "url": "tundra_container_blue_side.webp?v=66b90e1d",
+      "sha256": "66b90e1d598eb1eab929f200aa2db854d5fd753e6b798f16dc80d5fcf044697a",
+      "size": 130966
+    },
+    "tundra_container_blue_top": {
+      "url": "tundra_container_blue_top.webp?v=82c53049",
+      "sha256": "82c5304969934d6f8a76d4b1fda7f9b54c0a17214a69ac1368f0b0f8f76602aa",
+      "size": 167970
+    },
+    "tundra_container_red_end": {
+      "url": "tundra_container_red_end.webp?v=7842fa2c",
+      "sha256": "7842fa2cd9c752f65bf5f0523095910d91c40d759ae6dfbd85ad9f24b75aaacd",
+      "size": 271324
+    },
+    "tundra_container_red_side": {
+      "url": "tundra_container_red_side.webp?v=9da60ca3",
+      "sha256": "9da60ca329fe1d09802d0dc1fd19225099e22d2f2675f50edbfb5095b23f9c6c",
+      "size": 193328
+    },
+    "tundra_container_red_top": {
+      "url": "tundra_container_red_top.webp?v=3682bd0b",
+      "sha256": "3682bd0bc2fa95dd8cb35d5311ad4efd8724a81fd793b0b5e2e7837f7412c5de",
+      "size": 199778
+    }
+  }
+}

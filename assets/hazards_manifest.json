@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "base_url": "https://assets.akesberg.de/terrain-source/hazards",
+  "panels": {
+    "mine_top": {
+      "url": "mine_top.webp",
+      "sha256": "bebdb1607822202472454eecd4aefc02de4f74a45252ed3fd556d8f81d14ee6d",
+      "size": 511412
+    },
+    "warning_sign": {
+      "url": "warning_sign.webp",
+      "sha256": "0e4f791d194961e73618d62a1ea8dcf9a926cbd812bee88afe9299d4c461a33c",
+      "size": 198066
+    }
+  }
+}

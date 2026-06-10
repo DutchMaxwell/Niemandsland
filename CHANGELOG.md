@@ -20,6 +20,64 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   file extension) so it serves both GLBs and WebP battlemaps.
 
 ### Changed
+- **Biome-themed terrain prop sets: desert and tundra maps get their own looks.** The
+  prop manifests carry per-biome panel sets selected by a name prefix
+  (`BIOME_PROP_THEMES` in `terrain_overlay.gd`; `table.set_biome` re-themes the overlay
+  in place). On `arid_desert`, ruin shell walls render fine sun-dried mud-brick masonry
+  with an arched two-light adobe window (`generate_ruin_walls.py --theme desert`), and
+  forests grow saguaro / organ-pipe / joshua-tree variants (billboards + TRELLIS GLBs).
+  On `frozen_tundra`, the approved castle stone comes snowed in (snow on every ledge,
+  frosted Gothic window), forests grow snow-laden conifers (spruce / fir / mountain
+  pine), and even the containers wear snow caps + frost via their own theme map
+  (`BIOME_CONTAINER_THEMES` — the desert keeps the plain containers). The minefield is
+  biome-agnostic; remaining biomes keep the default set for now.
+- **Dangerous terrain is a textured minefield (grassland), delivered from R2.** The
+  3×2-cell piece scatters **15 anti-tank mines** (flat olive discs wearing a keyed
+  TM-62-style pressure-plate texture, ≥0.9″ apart via best-candidate sampling) and
+  plants **2 weathered skull-and-MINES warning signs** at opposite corners of the
+  field. Facings are seeded from the synced layout data (multiplayer-deterministic);
+  everything stays passable (OPR: Dangerous). Textures ship via
+  `assets/hazards_manifest.json` + `hazards_library.gd` (cache `user://hazards_cache`);
+  recipe: `tools/model_forge/generate_hazards.py`. Holographic mine/sign fallbacks
+  upgrade in place; the old mine/puddle mix is no longer generated (puddles still
+  render for legacy saves).
+- **Blockers render as textured shipping containers, delivered from R2.** The 6×3×2.5″
+  box wears weathered container faces (corrugated long sides, cargo-door ends, rusty
+  roof) in two colourways — rust-red and steel-blue — picked deterministically per
+  blocker from the synced layout data. Faces ship via `assets/containers_manifest.json`
+  + `containers_library.gd` (cache `user://containers_cache`); recipe:
+  `tools/model_forge/generate_containers.py`. The holographic box stays as the offline
+  fallback; collision is unchanged (Impassable full box).
+- **Forest trees are textured volumetric 3D models, delivered from R2.** Each of the
+  three deciduous variants (oak / ash / linden — keyed Gemini renders, no cones, no
+  green spheres) is converted to a real textured mesh via TRELLIS (100k tris, 2k
+  texture — the model-railroad-tree look that fits the tabletop aesthetic; recipe:
+  `tools/model_forge/generate_trees.py` + `generate_tree_models.py`). Delivery is
+  progressive: lightweight billboard panels (two crossed alpha quads + a bird's-eye
+  crown cap) pop in first, then the GLBs upgrade the forest in place; offline keeps the
+  holographic trunk+cone fallback (`assets/trees_manifest.json` + `trees_library.gd`,
+  cache `user://trees_cache`). Variant, size (75–125%) and facing are seeded per tree
+  from the synced layout data (multiplayer-deterministic). Trees keep ~1.5″ clear of
+  the forest-area boundary and ≥2″ from each other (best-candidate sampling), so crowns
+  no longer interpenetrate.
+- **Ruin walls render as textured shells (the approved mossy look), delivered from R2.**
+  The in-game renderer now ports `tools/render_ruin_walls.gd`: per-segment masonry panels
+  picked from the wall `role` (solid / top-damaged / see-through doorway / inset Gothic
+  window on "full" cells; the stepped crumble textures toward the open ends, mirrored via
+  a new `taper_dir` emitted by `TerrainPrefabs` so the wall always steps DOWN to the free
+  end), built as front+back quads with a plain-stone top cap (alpha-scissor holes, normal
+  map). Collision stays a full-height Impassable box (OPR: ruin walls are Impassable).
+  The 9 runtime panels are fetched on demand from R2 (`assets/ruins_manifest.json` +
+  `ruins_library.gd`, cached in `user://ruins_cache`); until cached, walls keep the
+  previous triplanar stone material and upgrade in place. The per-cell "full" panel pick
+  is seeded from the segment's cell identity, so all multiplayer clients see the same
+  windows/doorways; `role`/`taper_dir` now survive saves and the network layout sync.
+  The shells are **fully closed**: top caps follow the panel's alpha silhouette strip by
+  strip (stepped crumble tops are capped stone-by-stone, knocked-out top courses never
+  get a floating lid), step risers and free wall ends get stone faces, interior openings
+  (gothic window lights, doorways) are lined with pixel-flush stone reveals, and corner
+  posts are masonry prisms sitting slightly proud of — and rising slightly past — the
+  wall shells (no coplanar z-fighting, neither on the faces nor above the post).
 - **Biome battlemaps reworked + moved to R2 delivery.** Each biome is now a single,
   non-tiling, scale-locked 6×4-ft ground texture (Gemini 3 Pro Image, ~5056×3392,
   sharpened to WebP) instead of a 1024² image tiled 3× across the table. This removes the
@@ -35,6 +93,30 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   its open ends.
 - **Ruin walls are textured**, not holographic: wall segments + corner posts render with a
   lit world-triplanar stone material (`ruins_wall.webp`) and shadows.
+
+### Fixed
+- **Box selection starts reliably regardless of view angle.** The rubber band only
+  appeared when the click ray hit the TABLE collider — at shallow camera angles, past
+  the table edge, or with the cursor over a terrain prop (wall/container/tree) nothing
+  happened. Any click that doesn't hit a selectable object now starts the box. Also,
+  objects behind the camera no longer get caught by the box (unproject mirrors them
+  onto the screen at shallow angles).
+- **Unit hover tooltip stays compact**: it lists special rules / equipment by name only
+  (comma-separated) instead of printing every rule's full explanation — units with many
+  rules grew a screen-filling tooltip. The explanations remain in the unit card opened
+  by clicking the unit.
+- **Biome battlemaps never loaded when chosen in the table-size dialog.** Two stacked
+  bugs: `table.setup_table()`'s border cleanup freed the `BiomeLibrary` child (killing
+  the battlemap download mid-flight, with no retry — the dialog applies the size before
+  the biome, so this hit every fresh start), and `AssetDownloadManager`'s single shared
+  `HTTPRequest` failed follow-up requests with `ERR_BUSY` while another download was
+  running (e.g. picking a biome while the default biome was still downloading).
+  `setup_table()` now preserves the delivery service and downloads queue up instead of
+  failing silently.
+- **GPU texture-wrap slivers on ruin crumble walls**: the 0..1-UV masonry panels are
+  never tiled, but texture REPEAT wrap-bled the opposite edge at u=1.0 under anisotropic
+  filtering — full-height stone slivers at the free end of mirrored crumble panels.
+  Panel materials now clamp (`texture_repeat = false`); same fix in the reference tool.
 
 ### Maintenance
 - The mossy-stone **ruin source-art set** (solid / top-damage / opening / crumble / Gothic

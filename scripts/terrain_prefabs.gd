@@ -34,11 +34,28 @@ const WALL_SEGMENT_INCHES := 3.0
 
 ## Decoration density (objects per 3" footprint cell).
 const TREES_PER_CELL := 0.6
-const HAZARDS_PER_CELL := 0.5
+
+## Grassland minefield: anti-tank mines per footprint cell (~15 on the 3x2 piece) with
+## a small mutual spacing, plus warning signs at two opposite corners of the field.
+const MINES_PER_CELL := 2.5
+const MINE_MIN_SPACING_INCHES := 0.9  # > the 0.6" disc, feasible for 15 mines in the offset windows
 
 ## Object placement margins within a cell (keeps props off the cell borders).
 const OFFSET_MIN := 0.2
 const OFFSET_MAX := 0.8
+
+## Footprint cell edge length (the 3" terrain grid).
+const CELL_SIZE_INCHES := 3.0
+
+## Trees keep this distance from the forest-area BOUNDARY (the footprint outline), so
+## the area edge stays readable on the table and crowns don't overhang neighbours.
+const TREE_EDGE_MARGIN_INCHES := 1.5
+
+## Minimum tree-to-tree spacing so trunks/crowns don't interpenetrate. Scatter
+## placement draws PLACEMENT_TRIES candidates per object and keeps the one farthest
+## from its neighbours, accepting early once the required spacing is met.
+const TREE_MIN_SPACING_INCHES := 2.0
+const PLACEMENT_TRIES := 20
 
 ## Canonical pieces keyed by palette id (insertion order = palette display order).
 ## size = footprint in 3" cells; wall_shape "L" = walls on north + west outer edges.
@@ -129,7 +146,10 @@ static func footprint_cells(prefab_key: String, origin: Vector2i, rotation: int 
 ## edge (rows 0..Y-2); the SE corner carries the south edge (cols 1..X-1) + east edge
 ## (rows 1..Y-1). So each arm is (size-1) cells and the centre/opposite corners stay open.
 ## Each segment gets a "role": "full" at the corner, "crumble_*" toward the free end (the
-## wall steps down to the open ends). Transformed by the same flip+rotation. Non-ruins: [].
+## wall steps down to the open ends), plus a "taper_dir" — the grid direction (edge-side
+## id 0..3) the arm's FREE end lies in, so the renderer can mirror crumble panels to step
+## down the right way without re-deriving the rotation matrix (HANDOFF_RUIN_WALLS.md §6
+## gotcha #1). Transformed by the same flip+rotation. Non-ruins: [].
 static func wall_segments_for(prefab_key: String, origin: Vector2i, rotation: int = 0, flip: bool = false) -> Array[Dictionary]:
 	var segments: Array[Dictionary] = []
 	if not PREFABS.has(prefab_key):
@@ -143,19 +163,23 @@ static func wall_segments_for(prefab_key: String, origin: Vector2i, rotation: in
 	for dx in range(sx - 1):
 		var seg := _oriented_wall(Vector2i(dx, 0), EDGE_NORTH, origin, size, rotation, flip)
 		seg["role"] = _crumble_role(dx, sx - 1)
+		seg["taper_dir"] = _transform_edge(EDGE_EAST, rotation, flip)
 		segments.append(seg)
 	for dy in range(sy - 1):
 		var seg := _oriented_wall(Vector2i(0, dy), EDGE_WEST, origin, size, rotation, flip)
 		seg["role"] = _crumble_role(dy, sy - 1)
+		seg["taper_dir"] = _transform_edge(EDGE_SOUTH, rotation, flip)
 		segments.append(seg)
 	# SE corner L (free ends point toward -X / -Z) — point-symmetric to the NW corner
 	for dx in range(1, sx):
 		var seg := _oriented_wall(Vector2i(dx, sy - 1), EDGE_SOUTH, origin, size, rotation, flip)
 		seg["role"] = _crumble_role((sx - 1) - dx, sx - 1)
+		seg["taper_dir"] = _transform_edge(EDGE_WEST, rotation, flip)
 		segments.append(seg)
 	for dy in range(1, sy):
 		var seg := _oriented_wall(Vector2i(sx - 1, dy), EDGE_EAST, origin, size, rotation, flip)
 		seg["role"] = _crumble_role((sy - 1) - dy, sy - 1)
+		seg["taper_dir"] = _transform_edge(EDGE_NORTH, rotation, flip)
 		segments.append(seg)
 	return segments
 
@@ -181,10 +205,15 @@ static func decoration_for(prefab_key: String, origin: Vector2i, rng: RandomNumb
 
 	match deco:
 		"trees":
+			var cell_set := {}
+			for c in cells:
+				cell_set[c] = true
 			var count := int(ceil(float(cells.size()) * TREES_PER_CELL))
+			var placed: Array[Vector2] = []  # in cell units, for the spacing check
 			for i in range(count):
-				var cell: Vector2i = cells[r.randi() % cells.size()]
-				objects.append(_object(cell, "tree", _random_offset(r)))
+				var spot := _scatter_position(cells, cell_set, placed, TREE_MIN_SPACING_INCHES, true, r)
+				placed.append(Vector2(spot.cell) + spot.offset)
+				objects.append(_object(spot.cell, "tree", spot.offset))
 		"containers":
 			# One container centered on the footprint, aligned to its (rotated) long axis.
 			var sum := Vector2.ZERO
@@ -195,11 +224,24 @@ static func decoration_for(prefab_key: String, origin: Vector2i, rng: RandomNumb
 			entry["angle_deg"] = rotation
 			objects.append(entry)
 		"dangerous":
-			var count := int(ceil(float(cells.size()) * HAZARDS_PER_CELL))
-			for i in range(count):
-				var cell: Vector2i = cells[r.randi() % cells.size()]
-				var kind := "mine" if i % 2 == 0 else "puddle"
-				objects.append(_object(cell, kind, _random_offset(r)))
+			# Grassland minefield: scattered anti-tank mines + a warning sign at two
+			# opposite corners of the field.
+			var mine_cell_set := {}
+			for c in cells:
+				mine_cell_set[c] = true
+			var mine_count := int(ceil(float(cells.size()) * MINES_PER_CELL))
+			var mines_placed: Array[Vector2] = []
+			for i in range(mine_count):
+				var spot := _scatter_position(cells, mine_cell_set, mines_placed, MINE_MIN_SPACING_INCHES, false, r)
+				mines_placed.append(Vector2(spot.cell) + spot.offset)
+				objects.append(_object(spot.cell, "mine", spot.offset))
+			var min_cell: Vector2i = cells[0]
+			var max_cell: Vector2i = cells[0]
+			for c in cells:
+				min_cell = Vector2i(mini(min_cell.x, c.x), mini(min_cell.y, c.y))
+				max_cell = Vector2i(maxi(max_cell.x, c.x), maxi(max_cell.y, c.y))
+			objects.append(_object(min_cell, "warning_sign", Vector2(OFFSET_MIN, OFFSET_MIN)))
+			objects.append(_object(max_cell, "warning_sign", Vector2(OFFSET_MAX, OFFSET_MAX)))
 	return objects
 
 # ==============================================================================
@@ -242,6 +284,42 @@ static func _object(cell: Vector2i, object_type: String, offset: Vector2) -> Dic
 
 static func _random_offset(r: RandomNumberGenerator) -> Vector2:
 	return Vector2(r.randf_range(OFFSET_MIN, OFFSET_MAX), r.randf_range(OFFSET_MIN, OFFSET_MAX))
+
+
+## Best-candidate scatter position: draws PLACEMENT_TRIES candidates and keeps the one
+## farthest from `placed` (cell units), accepting early once `min_spacing_inches` is
+## met. keep_edge_margin applies the tree boundary margin (_tree_offset) per candidate.
+static func _scatter_position(cells: Array[Vector2i], cell_set: Dictionary, placed: Array[Vector2], min_spacing_inches: float, keep_edge_margin: bool, r: RandomNumberGenerator) -> Dictionary:
+	var best_cell := Vector2i.ZERO
+	var best_offset := Vector2.ZERO
+	var best_dist := -1.0
+	for _try in range(PLACEMENT_TRIES):
+		var cell: Vector2i = cells[r.randi() % cells.size()]
+		var offset := _tree_offset(cell, cell_set, r) if keep_edge_margin else _random_offset(r)
+		var pos := Vector2(cell) + offset
+		var nearest := INF
+		for other in placed:
+			nearest = minf(nearest, pos.distance_to(other))
+		if nearest > best_dist:
+			best_dist = nearest
+			best_cell = cell
+			best_offset = offset
+		if nearest * CELL_SIZE_INCHES >= min_spacing_inches:
+			break
+	return {"cell": best_cell, "offset": best_offset}
+
+
+## Tree offset within `cell`: like _random_offset, but every cell side whose neighbour
+## lies OUTSIDE the forest footprint shrinks the range so the tree keeps
+## TREE_EDGE_MARGIN_INCHES from the area boundary (a 1-cell strip collapses to centre).
+static func _tree_offset(cell: Vector2i, cell_set: Dictionary, r: RandomNumberGenerator) -> Vector2:
+	var margin := TREE_EDGE_MARGIN_INCHES / CELL_SIZE_INCHES
+	var min_x := margin if not cell_set.has(cell + Vector2i.LEFT) else OFFSET_MIN
+	var max_x := (1.0 - margin) if not cell_set.has(cell + Vector2i.RIGHT) else OFFSET_MAX
+	var min_y := margin if not cell_set.has(cell + Vector2i.UP) else OFFSET_MIN
+	var max_y := (1.0 - margin) if not cell_set.has(cell + Vector2i.DOWN) else OFFSET_MAX
+	return Vector2(r.randf_range(min_x, maxf(min_x, max_x)),
+			r.randf_range(min_y, maxf(min_y, max_y)))
 
 
 ## Build a wall segment for a local cell+side, transformed by flip+rotation onto origin.

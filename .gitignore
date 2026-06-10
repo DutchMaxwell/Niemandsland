@@ -103,3 +103,9 @@ assets/terrain/biomes/*.webp
 assets/.biome_upload/
 # Ruin source/reference art is archived on R2 (terrain-source/ruins/), not bundled.
 assets/terrain/props/ruins/
+# Tree billboard panels are R2-delivered (terrain-source/trees/), not bundled.
+assets/terrain/props/trees/
+# Container face textures are R2-delivered (terrain-source/containers/), not bundled.
+assets/terrain/props/containers/
+# Minefield hazard textures are R2-delivered (terrain-source/hazards/), not bundled.
+assets/terrain/props/hazards/

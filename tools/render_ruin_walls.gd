@@ -52,6 +52,9 @@ func _mat(tex_name: String, use_alpha: bool, flip: bool) -> StandardMaterial3D:
 		return _cache[key]
 	var m := StandardMaterial3D.new()
 	m.albedo_texture = _load(tex_name)
+	# Panels are 0..1-UV one-shot images; repeat would wrap-bleed the opposite texture
+	# edge at u=1.0 on GPU (full-height stone slivers at mirrored crumble free ends).
+	m.texture_repeat = false
 	m.roughness = 0.93
 	m.metallic = 0.0
 	m.normal_enabled = true
