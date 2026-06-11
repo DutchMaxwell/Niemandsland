@@ -486,6 +486,12 @@ func _ready() -> void:
 	add_child(atmosphere_controller)
 	atmosphere_controller.initialize(lighting_controller, world_environment,
 			atmospheric_clouds, terrain_overlay)
+	# Apply the startup mood (default: Sunset) NOW, synchronously, right after the
+	# lighting controller set its synchronous baseline — so the table is in its final
+	# mood from the first rendered frame, through the whole intro fly-in, with no
+	# mid-intro lighting snap. (restore_saved() post-intro re-applies it + enables the
+	# table-dependent fire/war-sound layers.)
+	atmosphere_controller.apply_saved_lighting()
 	lighting_panel.set_atmosphere_controller(atmosphere_controller)
 
 	# Initialize Deployment Zones UI
@@ -2460,12 +2466,6 @@ func _on_wgs_game_imported(game: WGSClient.WGSGame) -> void:
 
 ## Start the cinematic intro animation
 func _start_cinematic_intro() -> void:
-	# Light the table in its final mood (default: Sunset) BEFORE the cinematic reveals
-	# it, so the lighting doesn't snap when the intro hands off to gameplay. Runs after
-	# the lighting controller's deferred startup preset, so nothing overrides it back.
-	if atmosphere_controller:
-		atmosphere_controller.apply_saved_lighting()
-
 	# Create intro node
 	cinematic_intro = CinematicIntro.new()
 	cinematic_intro.name = "CinematicIntro"

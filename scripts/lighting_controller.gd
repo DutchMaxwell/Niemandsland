@@ -166,8 +166,12 @@ func initialize(directional_light: DirectionalLight3D, world_env: WorldEnvironme
 	_world_environment = world_env
 	_environment = world_env.environment
 
-	# Load default preset - use call_deferred to ensure it happens after scene is fully loaded
-	call_deferred("apply_preset", "Default")
+	# Apply a baseline preset synchronously (the light + environment are passed in, so
+	# they already exist). Deferring it raced the atmosphere controller's startup mood:
+	# the deferred Default fired AFTER the atmosphere applied its preset, snapping the
+	# table back to Default mid-intro. main.gd applies the real startup mood (Sunset)
+	# right after this, overriding the baseline deterministically.
+	apply_preset("Default")
 
 
 ## Apply a preset by name
