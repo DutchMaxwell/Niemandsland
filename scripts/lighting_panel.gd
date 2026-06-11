@@ -3,12 +3,14 @@ extends Window
 ## Interactive UI with sliders for all lighting and volume parameters
 
 var lighting_controller: Node
+var atmosphere_controller: Node = null
 
 # UI References
 var sliders: Dictionary = {}
 var color_pickers: Dictionary = {}
 var preset_buttons: Array = []
 var volume_sliders: Dictionary = {}
+var _main_vbox: VBoxContainer = null
 
 # Parameters to control
 const PARAMS = {
@@ -31,6 +33,50 @@ func initialize(light_ctrl: Node) -> void:
 	lighting_controller = light_ctrl
 	_build_ui()
 	_sync_ui_from_controller()
+
+
+## Late wiring (the atmosphere controller is created after this panel): adds the
+## one-click atmosphere section at the top of the settings list.
+func set_atmosphere_controller(atmosphere_ctrl: Node) -> void:
+	atmosphere_controller = atmosphere_ctrl
+	atmosphere_controller.atmosphere_changed.connect(func(_name: String) -> void:
+		_sync_ui_from_controller())
+	if _main_vbox == null:
+		return
+
+	var section := VBoxContainer.new()
+	var atmosphere_label := Label.new()
+	atmosphere_label.text = "ATMOSPHERE:"
+	atmosphere_label.add_theme_font_size_override("font_size", 16)
+	section.add_child(atmosphere_label)
+
+	var grid := GridContainer.new()
+	grid.columns = 3
+	section.add_child(grid)
+	for preset_name in atmosphere_controller.get_atmosphere_names():
+		var btn := Button.new()
+		btn.text = preset_name
+		btn.pressed.connect(func() -> void:
+			atmosphere_controller.apply_atmosphere(preset_name))
+		grid.add_child(btn)
+
+	var fires_toggle := CheckButton.new()
+	fires_toggle.text = "War-torn (fires at ruins)"
+	fires_toggle.button_pressed = atmosphere_controller.is_fires_enabled()
+	fires_toggle.toggled.connect(func(on: bool) -> void:
+		atmosphere_controller.set_fires_enabled(on))
+	section.add_child(fires_toggle)
+
+	var war_toggle := CheckButton.new()
+	war_toggle.text = "Distant war sounds"
+	war_toggle.button_pressed = atmosphere_controller.is_war_sounds_enabled()
+	war_toggle.toggled.connect(func(on: bool) -> void:
+		atmosphere_controller.set_war_sounds_enabled(on))
+	section.add_child(war_toggle)
+
+	section.add_child(HSeparator.new())
+	_main_vbox.add_child(section)
+	_main_vbox.move_child(section, 0)
 
 	# Connect close button signal
 	close_requested.connect(func(): hide())
@@ -71,6 +117,7 @@ func _build_ui() -> void:
 	vbox.set_h_size_flags(Control.SIZE_EXPAND_FILL)
 	vbox.theme = ui_theme
 	scroll.add_child(vbox)
+	_main_vbox = vbox
 
 	# Presets Section
 	var preset_label = Label.new()
@@ -288,6 +335,10 @@ func _on_volume_slider_changed(value: float, bus_name: String, value_label: Labe
 
 func _on_slider_changed(value: float, key: String, value_label: Label) -> void:
 	value_label.text = "%.2f" % value
+
+	# A manual slider tweak must not fight a running atmosphere preset blend.
+	if atmosphere_controller:
+		atmosphere_controller.cancel_transition()
 
 	# Update lighting controller
 	match key:

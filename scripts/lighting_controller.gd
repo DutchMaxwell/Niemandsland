@@ -113,6 +113,44 @@ const PRESETS = {
 		"contrast": 1.05,
 		"saturation": 0.95,
 	},
+	"Night": {
+		"name": "Night (Moonlit)",
+		"sun_energy": 0.35,  # the sun doubles as cool moonlight
+		"sun_color": Color(0.65, 0.72, 1.0),
+		"sun_angle_h": 120.0,
+		"sun_angle_v": 35.0,
+		"ambient_energy": 0.12,
+		"ambient_color": Color(0.2, 0.25, 0.4),
+		"exposure": 0.8,
+		"shadow_opacity": 0.9,
+		"shadow_blur": 2.0,
+		"ssao_intensity": 0.5,
+		"fill_light_energy": 0.1,
+		"fill_light_color": Color(0.5, 0.6, 0.9),
+		"ssr_intensity": 0.3,
+		"glow_intensity": 1.3,  # emissive props (ruin fires) pop in the dark
+		"contrast": 1.1,
+		"saturation": 0.9,
+	},
+	"Storm": {
+		"name": "Storm (Rain)",
+		"sun_energy": 0.5,
+		"sun_color": Color(0.75, 0.8, 0.9),
+		"sun_angle_h": 0.0,
+		"sun_angle_v": 65.0,
+		"ambient_energy": 0.45,
+		"ambient_color": Color(0.55, 0.6, 0.7),
+		"exposure": 0.85,
+		"shadow_opacity": 0.35,
+		"shadow_blur": 4.5,
+		"ssao_intensity": 0.4,
+		"fill_light_energy": 0.2,
+		"fill_light_color": Color(0.7, 0.75, 0.85),
+		"ssr_intensity": 0.9,  # wet-table sheen
+		"glow_intensity": 0.5,
+		"contrast": 1.05,
+		"saturation": 0.85,
+	},
 }
 
 
