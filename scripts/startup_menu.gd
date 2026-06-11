@@ -1,14 +1,55 @@
 extends Control
-## Startup Menu with animations
-## Handles menu navigation and transitions to game
+## Main menu controller: command-console UI column over the live battlefield diorama
+## (MenuDiorama). Owns the entrance choreography, the CONTINUE save shortcut, the
+## menu Settings window, the network dialogs and the transition into the game scene.
 
+# === Constants ===
+
+const ORBITRON_PATH := "res://assets/ui_glassmorphism/fonts/Orbitron.ttf"
+const MONO_PATH := "res://assets/ui_glassmorphism/fonts/SourceCodePro.ttf"
+const WORDMARK_FONT_SIZE := 46
+const WORDMARK_TRACKING_PX := 4    # Orbitron glyph tracking (editorial AAA lockup)
+const KICKER_TEXT := "TACTICAL TABLETOP WARGAMING"
+const RULE_TICK_W := 26.0          # amber tick, then a cyan hairline (header language)
+const RULE_H := 2.0
+
+## Entrance choreography (motion tokens; see docs/archive/AAA_UI_PLAYBOOK.md).
+const ENTRANCE_WORDMARK_DELAY := 0.05
+const ENTRANCE_WORDMARK_S := 0.45
+const ENTRANCE_BUTTONS_START := 0.30
+const ENTRANCE_BUTTON_STAGGER := 0.06
+const ENTRANCE_SLIDE_PX := 24.0
+const ENTRANCE_FOOTER_AT := 0.60
+const ENTRANCE_TICKER_AT := 1.0
+const REDUCED_MOTION_FADE_S := 0.2
+
+const MUSIC_VOLUME_DB := -12.0
+const MUSIC_FADE_IN_S := 2.5
+
+## Hover camera reactivity (degrees of FOV bias) + idle attract mode.
+const FOV_BIAS_PUSH_IN := -2.0   # Continue/Start: lean toward the battlefield
+const FOV_BIAS_WIDE := 2.0       # Host/Join: step back for the wider table
+const ATTRACT_IDLE_S := 60.0
+const ATTRACT_FADE_S := 0.2
+
+
+# === Node references ===
+
+@onready var diorama: MenuDiorama = %Diorama
 @onready var logo_label: Label = %LogoLabel
-@onready var menu_panel: PanelContainer = %MenuPanel
-@onready var start_battle_btn: Button = %StartBattleBtn
-@onready var host_online_btn: Button = %HostOnlineBtn
-@onready var join_online_btn: Button = %JoinOnlineBtn
-@onready var load_battle_btn: Button = %LoadBattleBtn
-@onready var exit_game_btn: Button = %ExitGameBtn
+@onready var subtitle_label: Label = %SubtitleLabel
+@onready var menu_buttons: VBoxContainer = %MenuButtons
+@onready var continue_btn: MenuListButton = %ContinueBtn
+@onready var start_battle_btn: MenuListButton = %StartBattleBtn
+@onready var host_online_btn: MenuListButton = %HostOnlineBtn
+@onready var join_online_btn: MenuListButton = %JoinOnlineBtn
+@onready var load_battle_btn: MenuListButton = %LoadBattleBtn
+@onready var exit_game_btn: MenuListButton = %ExitGameBtn
+@onready var ticker: MenuTicker = %Ticker
+@onready var version_label: Label = %VersionLabel
+@onready var build_label: Label = %BuildLabel
+
+# === Private variables ===
 
 var animation_played: bool = false
 var _load_dialog: FileDialog
@@ -17,128 +58,119 @@ var _join_popup: AcceptDialog
 var _relay_url_input: LineEdit
 var _join_code_input: LineEdit
 var _join_relay_url_input: LineEdit
-
-# --- Modern menu look (built in code) ---
-const ACCENT_COLOR := HudTokens.CYAN
-const ORBITRON_PATH := "res://assets/ui_glassmorphism/fonts/Orbitron.ttf"
-const WORDMARK_FONT_SIZE := 64
-## Anti-war quotes under the title; one is chosen at random each time the menu opens.
-const MENU_QUOTES: Array[String] = [
-	"“Comrade, I did not want to kill you.”\n— Erich Maria Remarque · All Quiet on the Western Front (1929)",
-	"“I see how peoples are set against one another, and in silence, unknowingly, foolishly, obediently, innocently slay one another.”\n— Erich Maria Remarque · All Quiet on the Western Front (1929)",
-	"“We are forlorn like children, and experienced like old men; we are crude and sorrowful and superficial — I believe we are lost.”\n— Erich Maria Remarque · All Quiet on the Western Front (1929)",
-	"“The dead only know one thing: it is better to be alive.”\n— Joker · Full Metal Jacket (1987)",
-	"“Babies — infants who belong at their mothers' breasts. You feel ancient among all these kids.”\n— The Captain · Das Boot (1981)",
-	"“We did not fight the enemy; we fought ourselves — and the enemy was in us.”\n— Chris Taylor · Platoon (1986)",
-	"“The enemy is anybody who's going to get you killed, no matter which side he is on.”\n— Joseph Heller · Catch-22 (1961)",
-	"“Patriotism is the last refuge of a scoundrel.”\n— Col. Dax · Paths of Glory (1957)",
-	"“War don't ennoble men. It turns them into dogs — poisons the soul.”\n— Pvt. Witt · The Thin Red Line (1998)",
-	"“The horror… the horror.”\n— Colonel Kurtz · Apocalypse Now (1979)",
-]
 var _wordmark_box: HBoxContainer
-var _backdrop_camera: Camera3D
-var _drift: float = 0.0
-var _parallax: Vector2 = Vector2.ZERO
+var _wordmark_lockup: VBoxContainer
+var _entrance_cover: ColorRect = null
+var _continue_path := ""
+var _music_player: AudioStreamPlayer = null
+var _idle_timer: Timer = null
+var _attract_active := false
 
+# === Lifecycle ===
 
 func _ready() -> void:
 	# Check if an .nml file was passed via command-line (e.g. double-click in file manager)
 	var file_to_open := _get_save_from_cmdline()
 	if not file_to_open.is_empty():
 		ProjectSettings.set_setting("niemandsland/pending_load_path", file_to_open)
-		# Skip menu entirely and go straight to game
 		get_tree().change_scene_to_file("res://scenes/main.tscn")
 		return
 
-	# Apply Glassmorphism theme
 	theme = ThemeManager.get_current_theme()
 
-	# Remove hardcoded theme overrides to allow theme to apply
-	_remove_theme_overrides()
-
-	# Tactical-HUD chrome on the menu panel: deep-navy glass + corner brackets.
-	menu_panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
-	menu_panel.add_child(HudFrame.new())
-
-	# Build the modern look: live skybox backdrop, Orbitron wordmark, embers, post FX.
-	_build_skybox_backdrop()
 	_build_wordmark()
-	_build_embers()
+	_style_subtitle()
+	_bind_version()
+	_setup_continue_button()
 	_build_post_layers()
-	_apply_random_quote()
 
-	# Hide menu initially for animation
-	menu_panel.modulate.a = 0.0
-
-	# Connect buttons
+	continue_btn.pressed.connect(_on_continue_pressed)
 	start_battle_btn.pressed.connect(_on_start_battle_pressed)
 	host_online_btn.pressed.connect(_on_host_online_pressed)
 	join_online_btn.pressed.connect(_on_join_online_pressed)
 	load_battle_btn.pressed.connect(_on_load_battle_pressed)
 	exit_game_btn.pressed.connect(_on_exit_pressed)
+	exit_game_btn.accent_color = HudTokens.DANGER
+	exit_game_btn.add_theme_color_override("font_color", HudTokens.DANGER)
 
-	# Tactical-HUD button accents: cyan primary action, red destructive exit.
-	start_battle_btn.theme_type_variation = "PrimaryButton"
-	exit_game_btn.theme_type_variation = "DangerButton"
-
-	# Setup button hover effects
-	_setup_button_hover_effects()
-
-	# Play startup animation
+	_renumber_buttons()
+	_setup_focus_chain()
+	_setup_camera_reactivity()
+	_setup_attract_mode()
+	_start_menu_music()
 	_play_startup_animation()
-
-	# Offer an update if a newer release exists (desktop only; never blocks the menu).
 	_maybe_check_for_updates()
+	if get_tree().current_scene == self:
+		start_battle_btn.grab_focus.call_deferred()
 
-
-func _setup_button_hover_effects() -> void:
-	var buttons: Array[Button] = [
-		start_battle_btn,
-		host_online_btn,
-		join_online_btn,
-		load_battle_btn,
-		exit_game_btn
-	]
-
-	for button in buttons:
-		button.mouse_entered.connect(_on_button_hover.bind(button))
-		button.mouse_exited.connect(_on_button_unhover.bind(button))
-
-
-func _on_button_hover(button: Button) -> void:
-	var tween = create_tween()
-	tween.set_ease(Tween.EASE_OUT)
-	tween.set_trans(Tween.TRANS_CUBIC)
-	tween.tween_property(button, "position:x", 8, 0.2)
-
-
-func _on_button_unhover(button: Button) -> void:
-	var tween = create_tween()
-	tween.set_ease(Tween.EASE_OUT)
-	tween.set_trans(Tween.TRANS_CUBIC)
-	tween.tween_property(button, "position:x", 0, 0.2)
-
+# === Entrance choreography ===
 
 func _play_startup_animation() -> void:
 	if animation_played:
-		# Skip animation on subsequent loads
-		_wordmark_box.modulate.a = 1.0
-		menu_panel.modulate.a = 1.0
+		_wordmark_lockup.modulate.a = 1.0
 		return
-
 	animation_played = true
 
-	var tween = create_tween()
-	tween.set_ease(Tween.EASE_OUT)
-	tween.set_trans(Tween.TRANS_CUBIC)
+	if GraphicsSettings.reduce_motion:
+		# Single quiet fade, no slides/typewriter buildup.
+		modulate.a = 0.0
+		var fade := create_tween()
+		fade.tween_property(self, "modulate:a", 1.0, REDUCED_MOTION_FADE_S)
+		ticker.start()
+		return
 
-	# Wordmark "power-on": fade + scale up
-	_wordmark_box.scale = Vector2(0.85, 0.85)
-	tween.tween_property(_wordmark_box, "modulate:a", 1.0, 0.9)
-	tween.parallel().tween_property(_wordmark_box, "scale", Vector2.ONE, 0.9)
+	# Black cover over everything until the diorama has produced its first frame.
+	_entrance_cover = ColorRect.new()
+	_entrance_cover.color = Color.BLACK
+	_entrance_cover.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_entrance_cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_entrance_cover)
+	diorama.first_frame_rendered.connect(func() -> void:
+		var cover_fade := create_tween()
+		cover_fade.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+		cover_fade.tween_property(_entrance_cover, "modulate:a", 0.0, HudTokens.DUR_SCREEN)
+		cover_fade.tween_callback(_entrance_cover.queue_free))
 
-	# Menu panel fade in
-	tween.tween_property(menu_panel, "modulate:a", 1.0, 0.4).set_delay(0.3)
+	# Wordmark power-on (whole lockup: kicker, wordmark, rule).
+	_wordmark_lockup.modulate.a = 0.0
+	_wordmark_lockup.scale = Vector2(0.92, 0.92)
+	var word := create_tween()
+	word.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	word.tween_interval(ENTRANCE_WORDMARK_DELAY)
+	word.tween_property(_wordmark_lockup, "modulate:a", 1.0, ENTRANCE_WORDMARK_S)
+	word.parallel().tween_property(_wordmark_lockup, "scale", Vector2.ONE, ENTRANCE_WORDMARK_S)
+
+	# Buttons cascade in from the left.
+	var visible_buttons := _visible_menu_buttons()
+	for i in visible_buttons.size():
+		var btn := visible_buttons[i]
+		btn.modulate.a = 0.0
+		var slide := create_tween()
+		slide.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+		slide.tween_interval(ENTRANCE_BUTTONS_START + i * ENTRANCE_BUTTON_STAGGER)
+		slide.tween_property(btn, "modulate:a", 1.0, HudTokens.DUR_PANEL_IN)
+		btn.position.x = -ENTRANCE_SLIDE_PX  # containers re-layout next frame; offset via margin
+		slide.parallel().tween_property(btn, "position:x", 0.0, HudTokens.DUR_PANEL_IN)
+
+	# Footer + ticker beats.
+	for footer in [$FooterLeft]:
+		footer.modulate.a = 0.0
+		var fade := create_tween()
+		fade.tween_interval(ENTRANCE_FOOTER_AT)
+		fade.tween_property(footer, "modulate:a", 1.0, HudTokens.DUR_PANEL_IN)
+	ticker.modulate.a = 0.0
+	var ticker_in := create_tween()
+	ticker_in.tween_interval(ENTRANCE_TICKER_AT)
+	ticker_in.tween_property(ticker, "modulate:a", 1.0, HudTokens.DUR_PANEL_IN)
+	ticker_in.tween_callback(ticker.start)
+
+# === Button handlers ===
+
+func _on_continue_pressed() -> void:
+	if _continue_path.is_empty():
+		return
+	ProjectSettings.set_setting("niemandsland/pending_load_path", _continue_path)
+	_transition_to_game()
 
 
 func _on_start_battle_pressed() -> void:
@@ -152,9 +184,7 @@ func _on_load_battle_pressed() -> void:
 func _on_exit_pressed() -> void:
 	get_tree().quit()
 
-
-# ===== Update check =====
-
+# === Update check =====
 
 ## Asks UpdateChecker whether a newer release exists and, on a hit, shows the prompt.
 ## Guarded so it only runs for the live main scene — gdUnit's scene_runner adds the
@@ -186,9 +216,7 @@ func _on_update_prompt_closed(prompt: UpdatePrompt, download: bool) -> void:
 		OS.shell_open(prompt.release_url)
 	prompt.queue_free()
 
-
 # ===== Online Multiplayer =====
-
 
 func _on_host_online_pressed() -> void:
 	_show_host_popup()
@@ -201,36 +229,22 @@ func _on_join_online_pressed() -> void:
 func _show_host_popup() -> void:
 	if _host_popup:
 		_host_popup.queue_free()
+	_host_popup = _build_net_dialog("HOST ONLINE GAME", "NET-01", "Start Hosting")
 
-	_host_popup = AcceptDialog.new()
-	_host_popup.title = "Host Online Game"
-	_host_popup.size = Vector2i(450, 200)
-	_host_popup.ok_button_text = "Start Hosting"
-
-	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
-
-	# Relay URL
-	var url_label = Label.new()
-	url_label.text = "Relay Server URL:"
-	vbox.add_child(url_label)
-
-	_relay_url_input = LineEdit.new()
-	_relay_url_input.text = InternetLobby.DEFAULT_RELAY_URL
-	_relay_url_input.placeholder_text = "wss://niemandsland-relay.fly.dev"
-	vbox.add_child(_relay_url_input)
-
-	# Info text
-	var info = Label.new()
-	info.text = "The room code will be shown in-game after connecting."
+	var content := _net_dialog_content(_host_popup)
+	content.add_child(_net_label("Relay Server URL:"))
+	_relay_url_input = _net_line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
+	content.add_child(_relay_url_input)
+	var info := _net_label("The room code will be shown in-game after connecting.")
 	info.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD
-	vbox.add_child(info)
+	content.add_child(info)
 
-	_host_popup.add_child(vbox)
 	_host_popup.confirmed.connect(_on_host_confirmed)
 	add_child(_host_popup)
 	_host_popup.popup_centered()
+	UiPolish.keep_window_reachable(_host_popup, Vector2i(460, 240))
+	_relay_url_input.grab_focus()
 
 
 func _on_host_confirmed() -> void:
@@ -248,41 +262,24 @@ func _on_host_confirmed() -> void:
 func _show_join_popup() -> void:
 	if _join_popup:
 		_join_popup.queue_free()
+	_join_popup = _build_net_dialog("JOIN ONLINE GAME", "NET-02", "Join")
 
-	_join_popup = AcceptDialog.new()
-	_join_popup.title = "Join Online Game"
-	_join_popup.size = Vector2i(450, 250)
-	_join_popup.ok_button_text = "Join"
-
-	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
-
-	# Room code input
-	var code_label = Label.new()
-	code_label.text = "Room Code:"
-	vbox.add_child(code_label)
-
-	_join_code_input = LineEdit.new()
-	_join_code_input.placeholder_text = "ABC-123"
+	var content := _net_dialog_content(_join_popup)
+	content.add_child(_net_label("Room Code:"))
+	_join_code_input = _net_line_edit("", "ABC-123")
 	_join_code_input.max_length = 7  # 6 chars + optional hyphen
 	_join_code_input.add_theme_font_size_override("font_size", 24)
 	_join_code_input.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(_join_code_input)
+	content.add_child(_join_code_input)
+	content.add_child(_net_label("Relay Server URL:"))
+	_join_relay_url_input = _net_line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
+	content.add_child(_join_relay_url_input)
 
-	# Relay URL
-	var url_label = Label.new()
-	url_label.text = "Relay Server URL:"
-	vbox.add_child(url_label)
-
-	_join_relay_url_input = LineEdit.new()
-	_join_relay_url_input.text = InternetLobby.DEFAULT_RELAY_URL
-	_join_relay_url_input.placeholder_text = "wss://niemandsland-relay.fly.dev"
-	vbox.add_child(_join_relay_url_input)
-
-	_join_popup.add_child(vbox)
 	_join_popup.confirmed.connect(_on_join_confirmed)
 	add_child(_join_popup)
 	_join_popup.popup_centered()
+	UiPolish.keep_window_reachable(_join_popup, Vector2i(460, 280))
+	_join_code_input.grab_focus()
 
 
 func _on_join_confirmed() -> void:
@@ -302,19 +299,56 @@ func _on_join_confirmed() -> void:
 	_transition_to_game()
 
 
+## Shared chrome for the host/join dialogs: HudTokens glass panel + corner brackets
+## + an Orbitron header with the mono net index — content goes into _net_dialog_content.
+func _build_net_dialog(title_text: String, index: String, ok_text: String) -> AcceptDialog:
+	var dialog := AcceptDialog.new()
+	dialog.title = title_text.capitalize()
+	dialog.ok_button_text = ok_text
+
+	var panel := PanelContainer.new()
+	panel.name = "NetPanel"
+	panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
+	panel.add_child(HudFrame.new())
+
+	var margin := MarginContainer.new()
+	UiPolish.set_dialog_margins(margin)
+	panel.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.name = "NetContent"
+	vbox.add_theme_constant_override("separation", HudTokens.SPACE_12)
+	vbox.add_child(HudTokens.header(title_text, index))
+	margin.add_child(vbox)
+
+	dialog.add_child(panel)
+	return dialog
+
+
+func _net_dialog_content(dialog: AcceptDialog) -> VBoxContainer:
+	return dialog.get_node("NetPanel/MarginContainer/NetContent") as VBoxContainer
+
+
+func _net_label(text_value: String) -> Label:
+	var label := Label.new()
+	label.text = text_value
+	return label
+
+
+func _net_line_edit(text_value: String, placeholder: String) -> LineEdit:
+	var edit := LineEdit.new()
+	edit.text = text_value
+	edit.placeholder_text = placeholder
+	return edit
+
 # ===== Shared =====
 
-
 func _transition_to_game() -> void:
-	# Fade out menu
 	var tween = create_tween()
 	tween.set_ease(Tween.EASE_IN)
 	tween.set_trans(Tween.TRANS_CUBIC)
-
-	tween.tween_property(self, "modulate:a", 0.0, 0.3)
+	tween.tween_property(self, "modulate:a", 0.0, HudTokens.DUR_SCREEN)
 	await tween.finished
-
-	# Load game scene
 	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 
@@ -343,14 +377,12 @@ func _on_load_file_selected(path: String) -> void:
 ## or drags a file onto the application executable.
 func _get_save_from_cmdline() -> String:
 	# OS.get_cmdline_user_args() returns args after "--" separator (Godot convention)
-	# OS.get_cmdline_args() returns all args including engine flags
 	for arg in OS.get_cmdline_user_args():
 		if arg.ends_with(".nml") and FileAccess.file_exists(arg):
 			return arg
 
 	# Also check regular args (some OS pass file path as first arg directly)
 	for arg in OS.get_cmdline_args():
-		# Skip Godot engine flags (start with - or --)
 		if arg.begins_with("-"):
 			continue
 		if arg.ends_with(".nml") and FileAccess.file_exists(arg):
@@ -360,6 +392,7 @@ func _get_save_from_cmdline() -> String:
 
 
 func _input(event: InputEvent) -> void:
+	_register_activity(event)
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
 			KEY_ESCAPE:
@@ -373,116 +406,84 @@ func _input(event: InputEvent) -> void:
 			KEY_4:
 				_on_load_battle_pressed()
 
+# ===== Static (testable) =====
 
-func _remove_theme_overrides() -> void:
-	# Remove panel style override
-	menu_panel.remove_theme_stylebox_override("panel")
+## Version string for the footer, bound to the project config (single source).
+static func version_string() -> String:
+	return "v%s" % ProjectSettings.get_setting("application/config/version", "?")
 
-	# Remove button overrides and make them use theme
-	for button in [start_battle_btn, host_online_btn, join_online_btn, load_battle_btn]:
-		button.flat = false  # Enable theme styling
-		button.remove_theme_color_override("font_color")
-		button.remove_theme_color_override("font_hover_color")
-		button.remove_theme_font_size_override("font_size")
+# ===== Private: build the look =====
 
-	# Exit button keeps red color for emphasis
-	exit_game_btn.flat = false
-	exit_game_btn.remove_theme_font_size_override("font_size")
-	exit_game_btn.add_theme_color_override("font_color", HudTokens.DANGER)
-	exit_game_btn.add_theme_color_override("font_hover_color", HudTokens.DANGER.lightened(0.2))
-
-
-# ===== Modern look (built in code) =====
-
-
-func _process(delta: float) -> void:
-	# Slow camera drift + subtle mouse parallax on the live skybox backdrop.
-	if not is_instance_valid(_backdrop_camera):
-		return
-	_drift += delta * 0.012
-	var vp: Vector2 = get_viewport_rect().size
-	var m: Vector2 = get_viewport().get_mouse_position()
-	var target := Vector2(m.x / maxf(vp.x, 1.0) - 0.5, m.y / maxf(vp.y, 1.0) - 0.5)
-	_parallax = _parallax.lerp(target, delta * 2.5)
-	_backdrop_camera.rotation = Vector3(-_parallax.y * 0.06, _drift + _parallax.x * 0.10, 0.0)
-
-
-## Live animated space backdrop (reuses materials/space_skybox.tres) behind the menu.
-func _build_skybox_backdrop() -> void:
-	var container := SubViewportContainer.new()
-	container.name = "SkyBackdrop"
-	container.stretch = true
-	container.set_anchors_preset(Control.PRESET_FULL_RECT)
-	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(container)
-	move_child(container, 0)
-
-	var viewport := SubViewport.new()
-	viewport.own_world_3d = true
-	viewport.msaa_3d = Viewport.MSAA_DISABLED
-	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	container.add_child(viewport)
-
-	var env := Environment.new()
-	env.background_mode = Environment.BG_SKY
-	var sky := Sky.new()
-	sky.sky_material = load("res://materials/space_skybox.tres")
-	env.sky = sky
-	env.glow_enabled = true
-	env.glow_intensity = 0.7
-	env.glow_bloom = 0.12
-	var world_env := WorldEnvironment.new()
-	world_env.environment = env
-	viewport.add_child(world_env)
-
-	_backdrop_camera = Camera3D.new()
-	_backdrop_camera.fov = 70.0
-	viewport.add_child(_backdrop_camera)
-
-
-## Replaces the plain title label with an Orbitron "NIEMANDS" + "LAND" wordmark.
+## AAA wordmark lockup replacing the plain title label: an amber mono kicker line,
+## the tracked Orbitron "NIEMANDS|LAND" wordmark, and the HudTokens header rule
+## (amber tick + cyan hairline) underneath.
 func _build_wordmark() -> void:
 	var orbitron := FontVariation.new()
 	orbitron.base_font = load(ORBITRON_PATH)
 	orbitron.variation_opentype = {"wght": 700}
+	orbitron.spacing_glyph = WORDMARK_TRACKING_PX
 
 	logo_label.visible = false
+	var lockup := VBoxContainer.new()
+	lockup.name = "WordmarkLockup"
+	lockup.add_theme_constant_override("separation", 6)
+	lockup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var kicker := Label.new()
+	kicker.text = KICKER_TEXT
+	var mono := FontVariation.new()
+	mono.base_font = load(MONO_PATH)
+	mono.spacing_glyph = 3
+	kicker.add_theme_font_override("font", mono)
+	kicker.add_theme_font_size_override("font_size", 11)
+	kicker.add_theme_color_override("font_color", HudTokens.AMBER)
+	lockup.add_child(kicker)
+
 	_wordmark_box = HBoxContainer.new()
 	_wordmark_box.name = "Wordmark"
-	_wordmark_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	_wordmark_box.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_wordmark_box.add_theme_constant_override("separation", 2)
 	_wordmark_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_wordmark_box.add_child(_make_word("NIEMANDS", orbitron, HudTokens.TEXT, false))
-	_wordmark_box.add_child(_make_word("LAND", orbitron, ACCENT_COLOR, true))
-	_wordmark_box.modulate.a = 0.0
+	_wordmark_box.add_child(_make_word("LAND", orbitron, HudTokens.CYAN, true))
+	lockup.add_child(_wordmark_box)
+
+	# Header rule: amber tick -> cyan hairline (the established section language).
+	var rule := HBoxContainer.new()
+	rule.add_theme_constant_override("separation", 6)
+	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tick := ColorRect.new()
+	tick.color = HudTokens.AMBER
+	tick.custom_minimum_size = Vector2(RULE_TICK_W, RULE_H)
+	tick.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	rule.add_child(tick)
+	var hairline := ColorRect.new()
+	hairline.color = Color(HudTokens.CYAN.r, HudTokens.CYAN.g, HudTokens.CYAN.b, 0.45)
+	hairline.custom_minimum_size = Vector2(0, 1)
+	hairline.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hairline.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	rule.add_child(hairline)
+	lockup.add_child(rule)
 
 	var parent := logo_label.get_parent()
-	parent.add_child(_wordmark_box)
-	parent.move_child(_wordmark_box, logo_label.get_index())
+	parent.add_child(lockup)
+	parent.move_child(lockup, logo_label.get_index())
+	_wordmark_lockup = lockup
 
 
-## Picks a random anti-war quote for the menu's quote line (rotates each launch).
-func _apply_random_quote() -> void:
-	var quote_label := get_node_or_null("LogoContainer/QuoteLabel") as Label
-	if quote_label == null:
-		return
-	randomize()
-	quote_label.text = MENU_QUOTES[randi() % MENU_QUOTES.size()]
-
-
-func _make_word(text: String, font: FontVariation, color: Color, glow: bool) -> Label:
+func _make_word(word: String, font: FontVariation, color: Color, glow: bool) -> Label:
 	var label := Label.new()
-	label.text = text
+	label.text = word
 	label.add_theme_font_override("font", font)
 	label.add_theme_font_size_override("font_size", WORDMARK_FONT_SIZE)
 	label.add_theme_color_override("font_color", color)
 	if glow:
 		# Soft "bloom" approximated with a large, offset-less shadow outline.
-		label.add_theme_color_override("font_shadow_color", Color(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b, 0.85))
+		label.add_theme_color_override("font_shadow_color", Color(HudTokens.CYAN.r, HudTokens.CYAN.g, HudTokens.CYAN.b, 0.85))
 		label.add_theme_constant_override("shadow_offset_x", 0)
 		label.add_theme_constant_override("shadow_offset_y", 0)
 		label.add_theme_constant_override("shadow_outline_size", 28)
-		label.add_theme_color_override("font_outline_color", Color(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b, 0.5))
+		label.add_theme_color_override("font_outline_color", Color(HudTokens.CYAN.r, HudTokens.CYAN.g, HudTokens.CYAN.b, 0.5))
 		label.add_theme_constant_override("outline_size", 2)
 	else:
 		label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.55))
@@ -490,36 +491,156 @@ func _make_word(text: String, font: FontVariation, color: Color, glow: bool) -> 
 	return label
 
 
-## Slow rising embers (CPUParticles2D → web-safe, unlike GPUParticles2D on web).
-func _build_embers() -> void:
-	var embers := CPUParticles2D.new()
-	embers.name = "Embers"
-	var vp: Vector2 = get_viewport_rect().size
-	embers.position = Vector2(vp.x * 0.5, vp.y + 16.0)
-	embers.amount = 56
-	embers.lifetime = 9.0
-	embers.preprocess = 9.0
-	embers.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-	embers.emission_rect_extents = Vector2(vp.x * 0.55, 6.0)
-	embers.direction = Vector2.UP
-	embers.spread = 14.0
-	embers.gravity = Vector2(0.0, -7.0)
-	embers.initial_velocity_min = 14.0
-	embers.initial_velocity_max = 34.0
-	embers.scale_amount_min = 1.0
-	embers.scale_amount_max = 2.4
-	embers.color = Color(0.2, 0.75, 1.0, 0.5)
-	var ramp := Gradient.new()
-	ramp.set_color(0, Color(0.4, 0.85, 1.0, 0.0))
-	ramp.set_color(1, Color(0.1, 0.6, 1.0, 0.0))
-	ramp.add_point(0.25, Color(0.5, 0.9, 1.0, 0.6))
-	embers.color_ramp = ramp
-	var mat := CanvasItemMaterial.new()
-	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	embers.material = mat
+func _style_subtitle() -> void:
+	subtitle_label.add_theme_font_size_override("font_size", 13)
+	subtitle_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 
-	add_child(embers)
-	move_child(embers, 2)  # above backdrop + overlay, behind the logo
+
+## Footer version/build lines, bound to the project config (never hardcoded).
+func _bind_version() -> void:
+	var mono := FontVariation.new()
+	mono.base_font = load(MONO_PATH)
+	for label: Label in [version_label, build_label]:
+		label.add_theme_font_override("font", mono)
+		label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	version_label.add_theme_font_size_override("font_size", 12)
+	build_label.add_theme_font_size_override("font_size", 10)
+	version_label.text = version_string()
+	var engine: Dictionary = Engine.get_version_info()
+	build_label.text = "GODOT %d.%d · %s" % [engine["major"], engine["minor"], OS.get_name().to_upper()]
+
+
+## CONTINUE shows only when a save exists; it loads the newest one directly.
+func _setup_continue_button() -> void:
+	var info := SaveManager.latest_save_info()
+	if info.is_empty():
+		continue_btn.visible = false
+		return
+	_continue_path = info["path"]
+	var stamp: Dictionary = Time.get_datetime_dict_from_unix_time(info["modified_unix"])
+	continue_btn.text = "CONTINUE — %s · %02d.%02d.%04d" % [
+		str(info["name"]).to_upper(), stamp["day"], stamp["month"], stamp["year"]]
+	continue_btn.accent_color = HudTokens.AMBER
+	continue_btn.add_theme_color_override("font_color", HudTokens.AMBER)
+	continue_btn.visible = true
+
+
+## Mono index labels ("01"...) reflect the actual visible order.
+func _renumber_buttons() -> void:
+	var visible_buttons := _visible_menu_buttons()
+	for i in visible_buttons.size():
+		visible_buttons[i].index_text = "%02d" % (i + 1)
+
+
+func _visible_menu_buttons() -> Array[MenuListButton]:
+	var result: Array[MenuListButton] = []
+	for child in menu_buttons.get_children():
+		if child is MenuListButton and child.visible:
+			result.append(child)
+	return result
+
+
+## Vertical focus chain that loops first <-> last (linear menus loop; playbook).
+func _setup_focus_chain() -> void:
+	var buttons := _visible_menu_buttons()
+	for i in buttons.size():
+		var prev := buttons[(i - 1 + buttons.size()) % buttons.size()]
+		var next := buttons[(i + 1) % buttons.size()]
+		buttons[i].focus_neighbor_top = buttons[i].get_path_to(prev)
+		buttons[i].focus_neighbor_bottom = buttons[i].get_path_to(next)
+		buttons[i].focus_next = buttons[i].get_path_to(next)
+		buttons[i].focus_previous = buttons[i].get_path_to(prev)
+
+
+## Somber menu score on the Music bus: the CC0 dark-ambient loop once cached
+## (fetched in the background on first run), the synth drone pad until then.
+func _start_menu_music() -> void:
+	_music_player = AudioStreamPlayer.new()
+	_music_player.bus = AudioManager.BUS_MUSIC
+	_music_player.volume_db = -80.0
+	add_child(_music_player)
+
+	var library := AmbienceLibrary.new()
+	add_child(library)
+	var stream: AudioStream = library.get_stream("menu_drone")
+	if stream == null:
+		_music_player.stream = AmbienceSynth.make_menu_drone_pad()
+		# Fetch the real recording in the background (live menu only — never in tests)
+		# and hot-swap once cached.
+		if get_tree().current_scene == self and not OS.has_feature("web"):
+			_fetch_menu_drone(library)
+	else:
+		_music_player.stream = stream
+	_music_player.play()
+	var fade := create_tween()
+	fade.tween_property(_music_player, "volume_db", MUSIC_VOLUME_DB, MUSIC_FADE_IN_S)
+
+
+func _fetch_menu_drone(library: AmbienceLibrary) -> void:
+	var ok: bool = await library.ensure_all_sounds()
+	if not ok or _music_player == null or not is_instance_valid(_music_player):
+		return
+	var stream: AudioStream = library.get_stream("menu_drone")
+	if stream == null:
+		return
+	_music_player.stop()
+	_music_player.stream = stream
+	_music_player.play()
+
+
+## Hover on key entries nudges the diorama lens (push-in toward battle, step back
+## for the online/table entries) — felt rather than seen.
+func _setup_camera_reactivity() -> void:
+	var biases := {
+		continue_btn: FOV_BIAS_PUSH_IN, start_battle_btn: FOV_BIAS_PUSH_IN,
+		host_online_btn: FOV_BIAS_WIDE, join_online_btn: FOV_BIAS_WIDE,
+	}
+	for btn: Button in biases:
+		btn.mouse_entered.connect(func() -> void: diorama.set_fov_bias(biases[btn]))
+		btn.mouse_exited.connect(func() -> void: diorama.set_fov_bias(0.0))
+
+
+## After 60 s without input the UI sleeps and the camera tours the battlefield;
+## any input wakes the menu instantly. Skipped under Reduce Motion.
+func _setup_attract_mode() -> void:
+	if GraphicsSettings.reduce_motion or get_tree().current_scene != self:
+		return
+	_idle_timer = Timer.new()
+	_idle_timer.one_shot = true
+	_idle_timer.wait_time = ATTRACT_IDLE_S
+	_idle_timer.timeout.connect(_enter_attract)
+	add_child(_idle_timer)
+	_idle_timer.start()
+
+
+func _register_activity(_event: InputEvent) -> void:
+	if _idle_timer == null:
+		return
+	if _attract_active:
+		_exit_attract()
+	_idle_timer.start()  # restart the idle countdown
+
+
+func _enter_attract() -> void:
+	_attract_active = true
+	diorama.set_attract(true)
+	for layer in _ui_layers():
+		var fade := create_tween()
+		fade.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
+		fade.tween_property(layer, "modulate:a", 0.0, 1.2)
+
+
+func _exit_attract() -> void:
+	_attract_active = false
+	diorama.set_attract(false)
+	for layer in _ui_layers():
+		var fade := create_tween()
+		fade.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+		fade.tween_property(layer, "modulate:a", 1.0, ATTRACT_FADE_S)
+
+
+func _ui_layers() -> Array:
+	return [$SafeArea, $FooterLeft, $Scrim]
 
 
 ## Web-safe post layers on top: vignette + film grain (UV/TIME shaders only).
@@ -536,4 +657,7 @@ func _add_fullscreen_shader(node_name: String, shader_path: String) -> void:
 	var mat := ShaderMaterial.new()
 	mat.shader = load(shader_path)
 	rect.material = mat
-	add_child(rect)  # added last → on top
+	add_child(rect)
+	# Cinematic post FX belongs on the DIORAMA, not on the UI text: slot the rect
+	# below SafeArea (above diorama + scrim), keeping wordmark/buttons/ticker crisp.
+	move_child(rect, get_node("SafeArea").get_index())
