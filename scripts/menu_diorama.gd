@@ -249,6 +249,13 @@ func _build_environment() -> WorldEnvironment:
 		sky_material.set_shader_parameter("nebula_intensity", NIGHT_NEBULA_INTENSITY)
 	sky.sky_material = sky_material
 	env.sky = sky
+	# Decouple the diorama's lighting from the procedural sky, exactly like the game
+	# scene (see scenes/main.tscn): the TIME-animated space-skybox radiance bake is an
+	# unreliable light source whose intermittent GPU-garbage cubemap floods the whole
+	# diorama magenta/green. The Night lighting preset (applied right after) drives the
+	# ambient colour/energy; the sky stays visible as the backdrop only.
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
 	env.glow_enabled = true
 	env.glow_intensity = 0.7
 	env.glow_bloom = 0.12
