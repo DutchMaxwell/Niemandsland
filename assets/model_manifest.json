@@ -1116,6 +1116,96 @@
       "url": "de0e27f3e3bffab37c4605e17cc527038a670613db8d0899eee74c25d52878f6.glb",
       "sha256": "de0e27f3e3bffab37c4605e17cc527038a670613db8d0899eee74c25d52878f6",
       "size": 16471012
+    },
+    "goblin_reclaimers/artillery gun": {
+      "url": "3d638154faf37021d5b85e7d6a39743801fe8a76277c4858365eb9f091bb6f3f.glb",
+      "sha256": "3d638154faf37021d5b85e7d6a39743801fe8a76277c4858365eb9f091bb6f3f",
+      "size": 16188720
+    },
+    "goblin_reclaimers/big bug": {
+      "url": "77e23ddb17510e2d0cae332b0fc25de56ff10fda31053668605183fa50d9c499.glb",
+      "sha256": "77e23ddb17510e2d0cae332b0fc25de56ff10fda31053668605183fa50d9c499",
+      "size": 15042624
+    },
+    "goblin_reclaimers/boss champ": {
+      "url": "41a0a328c38960520f21940292064e8fa4f77f11a4b58f263ed295bd76cfadae.glb",
+      "sha256": "41a0a328c38960520f21940292064e8fa4f77f11a4b58f263ed295bd76cfadae",
+      "size": 15340820
+    },
+    "goblin_reclaimers/boss mob": {
+      "url": "a9af1a6aa6925824082e042daa5634a5239420f57dec101f8b03462898b5c7e0.glb",
+      "sha256": "a9af1a6aa6925824082e042daa5634a5239420f57dec101f8b03462898b5c7e0",
+      "size": 16813024
+    },
+    "goblin_reclaimers/bug riders": {
+      "url": "997cb5ad8c420c6e55082e4a8410f4ebf2ff0f3ce37f0c240148714e6afb8cae.glb",
+      "sha256": "997cb5ad8c420c6e55082e4a8410f4ebf2ff0f3ce37f0c240148714e6afb8cae",
+      "size": 17341692
+    },
+    "goblin_reclaimers/champ": {
+      "url": "1d37c5342b65c7ffb00c53a5ad99bff5e5b262c99fb7ec7a16227469eca12d1d.glb",
+      "sha256": "1d37c5342b65c7ffb00c53a5ad99bff5e5b262c99fb7ec7a16227469eca12d1d",
+      "size": 15322556
+    },
+    "goblin_reclaimers/commandos": {
+      "url": "89fd5be54f605076cb77338a39357706d793e8e7e5c142d275c9efeaeae94823.glb",
+      "sha256": "89fd5be54f605076cb77338a39357706d793e8e7e5c142d275c9efeaeae94823",
+      "size": 15240148
+    },
+    "goblin_reclaimers/death walker champ": {
+      "url": "f1bdc091fc6f53b0d54c31a594b959d731232455f034c0421740650a01489563.glb",
+      "sha256": "f1bdc091fc6f53b0d54c31a594b959d731232455f034c0421740650a01489563",
+      "size": 16790520
+    },
+    "goblin_reclaimers/death walkers": {
+      "url": "822b947868d824fe59abf9aea50a6fbe3e7af89b8063439a28066cd600632385.glb",
+      "sha256": "822b947868d824fe59abf9aea50a6fbe3e7af89b8063439a28066cd600632385",
+      "size": 15963180
+    },
+    "goblin_reclaimers/freaks": {
+      "url": "f411189420a2687a7108061b2c2c3cff1c03b0b8940ef2c7e769bcb45639d076.glb",
+      "sha256": "f411189420a2687a7108061b2c2c3cff1c03b0b8940ef2c7e769bcb45639d076",
+      "size": 14523988
+    },
+    "goblin_reclaimers/killer tank champ": {
+      "url": "b51d6b42c90f39a2b9db54baecd58c714a28c2db9bbaf370e66bbc7117249c7d.glb",
+      "sha256": "b51d6b42c90f39a2b9db54baecd58c714a28c2db9bbaf370e66bbc7117249c7d",
+      "size": 18842644
+    },
+    "goblin_reclaimers/killer tanks": {
+      "url": "f1e5705995a95d14eaa06bdef2c39e81db67b7eb631d79ad375d183cc6b50b3e.glb",
+      "sha256": "f1e5705995a95d14eaa06bdef2c39e81db67b7eb631d79ad375d183cc6b50b3e",
+      "size": 19137276
+    },
+    "goblin_reclaimers/looters": {
+      "url": "dabaddd0e17a954ed6f562e70fa86f5ff25e88cc20fd44745d2f9ec5917beac4.glb",
+      "sha256": "dabaddd0e17a954ed6f562e70fa86f5ff25e88cc20fd44745d2f9ec5917beac4",
+      "size": 15841500
+    },
+    "goblin_reclaimers/scout bikers": {
+      "url": "518af66c26790b6c13c9ec909f98b13d7d025691cadf73a311dec2202ea0c0bb.glb",
+      "sha256": "518af66c26790b6c13c9ec909f98b13d7d025691cadf73a311dec2202ea0c0bb",
+      "size": 14560300
+    },
+    "goblin_reclaimers/shooter mob": {
+      "url": "84bc3525b8e0ec9ce5b050656c7bc3b5451d56c1128fe2965273ab20458947f3.glb",
+      "sha256": "84bc3525b8e0ec9ce5b050656c7bc3b5451d56c1128fe2965273ab20458947f3",
+      "size": 15227160
+    },
+    "goblin_reclaimers/storm mob": {
+      "url": "c7a04bbc038a3095760549d05075910f5841e37fdfae16afcd3b996ffad058b0.glb",
+      "sha256": "c7a04bbc038a3095760549d05075910f5841e37fdfae16afcd3b996ffad058b0",
+      "size": 14016608
+    },
+    "goblin_reclaimers/super tank": {
+      "url": "f89d05b081d4d586d3e272ec245bbc782bcecbbac1f40d3ccae03f7d1eb1b644.glb",
+      "sha256": "f89d05b081d4d586d3e272ec245bbc782bcecbbac1f40d3ccae03f7d1eb1b644",
+      "size": 17910728
+    },
+    "goblin_reclaimers/waskatsin": {
+      "url": "3bef7545e131ba88a1dccf2fa5baaff7c6816d9a935f18fbb9803863b74d994f.glb",
+      "sha256": "3bef7545e131ba88a1dccf2fa5baaff7c6816d9a935f18fbb9803863b74d994f",
+      "size": 15127872
     }
   }
 }
