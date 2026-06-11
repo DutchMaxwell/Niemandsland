@@ -2460,6 +2460,12 @@ func _on_wgs_game_imported(game: WGSClient.WGSGame) -> void:
 
 ## Start the cinematic intro animation
 func _start_cinematic_intro() -> void:
+	# Light the table in its final mood (default: Sunset) BEFORE the cinematic reveals
+	# it, so the lighting doesn't snap when the intro hands off to gameplay. Runs after
+	# the lighting controller's deferred startup preset, so nothing overrides it back.
+	if atmosphere_controller:
+		atmosphere_controller.apply_saved_lighting()
+
 	# Create intro node
 	cinematic_intro = CinematicIntro.new()
 	cinematic_intro.name = "CinematicIntro"
