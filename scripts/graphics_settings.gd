@@ -255,7 +255,11 @@ func apply_environment_settings(settings: Dictionary) -> void:
 		env.sdfgi_enabled = true
 		env.sdfgi_cascades = 4
 		env.sdfgi_use_occlusion = true
-		env.sdfgi_read_sky_light = true
+		# Do NOT inject the procedural sky into SDFGI: the space-skybox radiance bake is
+		# an unreliable light source (intermittent GPU-garbage cubemap floods the scene
+		# magenta/green/white). Scene lighting is decoupled from the sky (ambient=Color,
+		# reflections disabled in main.tscn); SDFGI keeps geometry bounce only.
+		env.sdfgi_read_sky_light = false
 		env.sdfgi_bounce_feedback = 0.5
 		env.sdfgi_min_cell_size = 0.2
 		env.sdfgi_y_scale = Environment.SDFGI_Y_SCALE_75_PERCENT
