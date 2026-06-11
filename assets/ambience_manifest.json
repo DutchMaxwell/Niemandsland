@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "base_url": "https://assets.akesberg.de/terrain-source/ambience",
+  "sounds": {
+    "fire_crackle": {
+      "url": "fire_crackle.ogg?v=46c60ca7",
+      "sha256": "46c60ca73f88a8eb7fe818372e2784f0080fc098cae10f033d642ccbfa5952f6",
+      "size": 326975,
+      "loop": true
+    },
+    "rain_loop": {
+      "url": "rain_loop.ogg?v=45030015",
+      "sha256": "4503001553fa1dfd22426f19f5b6afee336bccc069e98bb3f93f1bd723bdbff0",
+      "size": 278696,
+      "loop": true
+    },
+    "thunder_a": {
+      "url": "thunder_a.ogg?v=02bbe9c9",
+      "sha256": "02bbe9c9330c15424930b23a3d09aecc6cc4cc71c328d40758eb87490529adda",
+      "size": 167429,
+      "loop": false
+    },
+    "thunder_b": {
+      "url": "thunder_b.ogg?v=f3275152",
+      "sha256": "f32751525bdd67dd4940a1de2dabd5865b5f051a907d004e775e7d0a6db1bfc5",
+      "size": 114405,
+      "loop": false
+    },
+    "war_artillery_a": {
+      "url": "war_artillery_a.ogg?v=b75a8983",
+      "sha256": "b75a8983437a22850b2d82b9fb724c87b5f3c405e39af92f147a5cafcee1abb3",
+      "size": 95656,
+      "loop": false
+    },
+    "war_artillery_b": {
+      "url": "war_artillery_b.ogg?v=6f0b88b3",
+      "sha256": "6f0b88b3525b386df06d1689cee0987278289c1838da7a548b115b8781cbcc58",
+      "size": 66408,
+      "loop": false
+    },
+    "war_mg_a": {
+      "url": "war_mg_a.ogg?v=959467bd",
+      "sha256": "959467bdf363e92fe93e4262dfe283dc5c586cbb5091a25ed5c934fac82853d9",
+      "size": 91273,
+      "loop": false
+    },
+    "war_mg_b": {
+      "url": "war_mg_b.ogg?v=06b81d78",
+      "sha256": "06b81d783e82b650ddf9836cf7c729338558bee9836e651ee70ef0b349e23c40",
+      "size": 17409,
+      "loop": false
+    },
+    "menu_drone": {
+      "url": "menu_drone.ogg?v=b361517d",
+      "sha256": "b361517db4da618ced62b70345185d4a26de338920522b81bf64028da361ac0d",
+      "size": 240089,
+      "loop": true
+    }
+  }
+}

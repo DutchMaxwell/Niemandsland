@@ -60,6 +60,7 @@ var _prompt_overlay: CanvasLayer = null
 # Lighting Controller
 var lighting_controller: Node = null
 var lighting_panel: Window = null
+var atmosphere_controller: AtmosphereController = null
 
 # Group rotation state
 var _is_group_rotating: bool = false
@@ -73,6 +74,7 @@ const GROUP_ROTATION_BROADCAST_INTERVAL: float = 0.1  # 10 Hz
 @onready var clear_all_btn: Button = %ClearAll
 @onready var sort_table_btn: Button = %SortTableBtn
 @onready var next_round_btn: Button = %NextRoundBtn
+@onready var settings_btn: Button = %SettingsBtn
 @onready var performance_label: Label = %PerformanceLabel
 
 # Hamburger menu
@@ -235,6 +237,7 @@ func _ready() -> void:
 	clear_all_btn.pressed.connect(_on_clear_all)
 	sort_table_btn.pressed.connect(_on_sort_table)
 	next_round_btn.pressed.connect(_on_next_round)
+	settings_btn.pressed.connect(_toggle_settings_panel)
 	_update_round_button()
 
 	# Connect TTS Import UI
@@ -476,6 +479,15 @@ func _ready() -> void:
 	# Initialize Atmospheric Clouds (RTS-style drifting clouds at high zoom)
 	_init_atmospheric_clouds()
 
+	# Atmosphere orchestrator: one-click presets (day/sunset/night/overcast/rain),
+	# war-torn ruin fires and the procedural battlefield ambience.
+	atmosphere_controller = AtmosphereController.new()
+	atmosphere_controller.name = "AtmosphereController"
+	add_child(atmosphere_controller)
+	atmosphere_controller.initialize(lighting_controller, world_environment,
+			atmospheric_clouds, terrain_overlay)
+	lighting_panel.set_atmosphere_controller(atmosphere_controller)
+
 	# Initialize Deployment Zones UI
 	_init_deployment_zones_ui()
 
@@ -604,10 +616,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		# Toggle Lighting Panel (F7)
 		elif event.keycode == KEY_F7:
-			if lighting_panel.visible:
-				lighting_panel.hide()
-			else:
-				lighting_panel.show()
+			_toggle_settings_panel()
 			get_viewport().set_input_as_handled()
 
 
@@ -2467,6 +2476,14 @@ func _start_cinematic_intro() -> void:
 	cinematic_intro.play_intro(self)
 
 
+## Toggle the Settings window (lighting / atmosphere / audio) — left-panel button + F7.
+func _toggle_settings_panel() -> void:
+	if lighting_panel.visible:
+		lighting_panel.hide()
+	else:
+		lighting_panel.show()
+
+
 ## Called when intro finishes or is skipped
 func _on_intro_finished() -> void:
 	# Slowly bring in the ground mist now that the table is built (hidden during the intro).
@@ -2482,6 +2499,11 @@ func _on_intro_finished() -> void:
 		var ui_fade := create_tween()
 		ui_fade.tween_property(hud, "modulate:a", 1.0, 1.5) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+	# Restore the player's persisted atmosphere (preset + war-torn/war-sound toggles) —
+	# after the UI reveal, so an atmosphere hiccup can never leave the screen stuck.
+	if atmosphere_controller:
+		atmosphere_controller.restore_saved()
 
 	# Clean up intro after a delay
 	if cinematic_intro:
@@ -2742,6 +2764,8 @@ func _init_atmospheric_clouds() -> void:
 func _on_table_resized(size_feet: Vector2) -> void:
 	if atmospheric_clouds and atmospheric_clouds.has_method("set_table_size"):
 		atmospheric_clouds.set_table_size(size_feet * FEET_TO_METERS)
+	if atmosphere_controller:
+		atmosphere_controller.set_table_size(size_feet * FEET_TO_METERS)
 
 
 ## Handle unit movement (re-check coherency)
