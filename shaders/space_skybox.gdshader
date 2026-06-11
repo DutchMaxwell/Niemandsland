@@ -8,10 +8,18 @@ render_mode use_debanding;
 uniform vec3 space_top : source_color = vec3(0.002, 0.003, 0.008);
 uniform vec3 space_bottom : source_color = vec3(0.008, 0.010, 0.024);
 
-// === Distant nebula (more saturated, a little richer) ===
-uniform vec3 nebula_color_a : source_color = vec3(0.30, 0.07, 0.42);
-uniform vec3 nebula_color_b : source_color = vec3(0.03, 0.20, 0.34);
-uniform vec3 nebula_color_c : source_color = vec3(0.42, 0.16, 0.10);
+// === Distant nebula ===
+// Desaturated on purpose: this sky drives the gameplay scene's lighting
+// (Environment ambient_light_source = Sky, IBL reflections, and SDFGI sky-light on
+// the ULTRA preset). The previous strongly-magenta nebula_color_a (0.30,0.07,0.42 —
+// green ~0) flooded every surface with magenta radiance once the sun was dim or the
+// atmosphere "Night/Sunset" moods raised nebula_intensity, turning the whole table
+// magenta (worst on bright biomes like desert). Keeping the green channel non-trivial
+// and the luminance modest stops the sky from tinting lit materials magenta while
+// still reading as a coloured nebula in the sky itself.
+uniform vec3 nebula_color_a : source_color = vec3(0.18, 0.13, 0.24);
+uniform vec3 nebula_color_b : source_color = vec3(0.06, 0.16, 0.22);
+uniform vec3 nebula_color_c : source_color = vec3(0.24, 0.14, 0.10);
 uniform float nebula_intensity : hint_range(0.0, 2.0) = 0.5;
 uniform float nebula_scale = 2.6;
 
