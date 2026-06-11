@@ -7,6 +7,29 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Added
+- **AAA main menu: command console over a live burning battlefield.** The startup
+  menu is rebuilt around a real-time night diorama (`menu_diorama.gd`) that runs the
+  PRODUCTION battlefield stack in a SubViewport: textured ruin shells with war-torn
+  fires + rubble, volumetric trees, a shipping container, grass, ground mist, the
+  Night lighting preset and a slow long-lens orbit camera with depth of field and
+  mouse parallax — plus a miniatures vignette (curated GLBs, loaded from the local
+  model cache only). The UI is a left command column in the HudTokens language:
+  Orbitron wordmark, frameless list buttons with amber mono indices + cyan accent
+  bars (keyboard focus gets the same affordance; focus chain loops), a typewriter
+  "intel ticker" rotating the anti-war quotes (`menu_ticker.gd`), version/build
+  footer bound to the project config, and the social buttons finally wired. New:
+  **CONTINUE** (loads the newest save, amber, only when a save exists — via
+  `SaveManager.latest_save_info()`) and **SETTINGS** (the in-game settings window,
+  bound against the diorama's lighting controller). Entrance is choreographed on the
+  motion tokens (wordmark power-on, staggered button cascade, ticker beat), hovering
+  key entries nudges the lens, and after 60 s idle the UI sleeps while the camera
+  tours the battlefield (any input wakes it; Reduce Motion skips all of it). A quiet
+  battlefield soundscape plays on the menu (war one-shots at −10 dB + fire crackle)
+  under a somber CC0 dark-ambient drone on the Music bus ("Dark Ambient Loop" by
+  goulven, freesound; synth-pad fallback until cached). Host/Join dialogs restyled to
+  the HudTokens glass + HudFrame chrome. PERFORMANCE tier (and tests/headless) keep
+  the classic space-skybox backdrop; the menu deliberately never instantiates
+  AtmosphereController, so `user://atmosphere.cfg` stays untouched (test-pinned).
 - **Startup update check.** On launch, the desktop game checks the project's GitHub
   Releases for a newer build and, on a hit, offers a non-blocking "Download / Later /
   Skip this version" prompt before the menu — never blocking startup. Compares the
@@ -18,8 +41,35 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   `docs/runbooks/biome-r2-publish.md`.
 - `BiomeLibrary` (+ tests). `AssetDownloadManager` generalized (configurable cache dir +
   file extension) so it serves both GLBs and WebP battlemaps.
+- **Battlefield atmosphere: one-click moods, war-torn fires and a procedural
+  soundscape** (see [`docs/ATMOSPHERE.md`](docs/ATMOSPHERE.md)). The Settings window
+  gains an ATMOSPHERE section: Day / Sunset / Night / Overcast / Rain presets that
+  blend lighting (new "Night" and "Storm" lighting presets), sky mood and ground-mist
+  tint/density over 2 s; Rain adds table-sized rain particles and random lightning
+  (dedicated flash light) with delayed, distance-volume thunder. A "war-torn" toggle
+  dresses ~22% of ruin wall cells with small fires (additive flames, rising smoke,
+  flickering OmniLight — deterministic per cell from the synced wall data, so all
+  clients see the same burning walls; light/smoke counts gate by quality tier). A
+  "distant war sounds" toggle plays occasional artillery/MG rumbles from random
+  directions (first one 2–6 s after enabling). Audio uses real **CC0 recordings**
+  (freesound.org; sources in `tools/model_forge/fetch_ambience_audio.py`) delivered
+  from R2 (`assets/ambience_manifest.json` + `ambience_library.gd`) and hot-swapped in
+  once cached, with procedural synthesis (`scripts/ambience_synth.gd`) as the
+  immediate/offline fallback — all on the existing Ambience bus. Preset + toggles
+  persist per player (`user://atmosphere.cfg`).
 
 ### Changed
+- **Scatter decor: rubble at ruin walls + grassland grass.** Every ruin wall segment
+  grows a deterministic debris pile of angular brick fragments along both sides —
+  densest directly at the wall, tapering out to 1" (quadratic falloff). The fragments
+  wear the wall's own themed masonry panel in world-triplanar projection, so each
+  brick samples a different patch and the biome theme (grey / adobe / snowed) carries
+  over automatically. The grassland biome additionally grows area-wide grass tufts
+  (slender anti-aliased curved blades on crossed quads, 5-10 mm, colour-jittered,
+  mipmapped against distance shimmer; `grass_field.gd`, cleared on other biomes).
+  Both render as ONE MultiMesh each (a single draw call — no measurable cost) and
+  scale with the graphics quality tier (PERFORMANCE: none; LOW..ULTRA: 40-180
+  stones/segment, 1200-6500 tufts/m²), rebuilt only on layout/biome/quality changes.
 - **Biome-themed terrain prop sets: desert and tundra maps get their own looks.** The
   prop manifests carry per-biome panel sets selected by a name prefix
   (`BIOME_PROP_THEMES` in `terrain_overlay.gd`; `table.set_biome` re-themes the overlay
@@ -95,6 +145,11 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   lit world-triplanar stone material (`ruins_wall.webp`) and shadows.
 
 ### Fixed
+- **Flat overlays stack in fixed 1 mm layers instead of sharing planes.** Terrain
+  tiles sit 1 mm above the table, deployment zones (rect, circular and custom
+  polygons) at 2 mm, mission objectives at 3 mm (seize ring on the layer, token on
+  top of the ring) — explicit layer constants in `terrain_overlay.gd`, so overlapping
+  translucent overlays can no longer z-fight or produce shader artifacts.
 - **Box selection starts reliably regardless of view angle.** The rubber band only
   appeared when the click ray hit the TABLE collider — at shallow camera angles, past
   the table edge, or with the cursor over a terrain prop (wall/container/tree) nothing
