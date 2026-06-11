@@ -981,6 +981,141 @@
       "url": "33088685e8708e2cc6d0554d13c629116e1473c43863913239f7853bc3f98960.glb",
       "sha256": "33088685e8708e2cc6d0554d13c629116e1473c43863913239f7853bc3f98960",
       "size": 15796444
+    },
+    "dwarf_guilds/apc": {
+      "url": "0e2bb2cd861df695d13cd55490b57a0c96d2943b89c07a70dd8b9469520a811d.glb",
+      "sha256": "0e2bb2cd861df695d13cd55490b57a0c96d2943b89c07a70dd8b9469520a811d",
+      "size": 18222172
+    },
+    "dwarf_guilds/artillery gun": {
+      "url": "4be52e19e667774c1f7b604543e0edc90091dd636decbc685ec023381f1808c8.glb",
+      "sha256": "4be52e19e667774c1f7b604543e0edc90091dd636decbc685ec023381f1808c8",
+      "size": 18492464
+    },
+    "dwarf_guilds/assault drill": {
+      "url": "39d8096ed5730f9ee0f0cb1f87be290ce15151856d1f3ba24668b8504707ada6.glb",
+      "sha256": "39d8096ed5730f9ee0f0cb1f87be290ce15151856d1f3ba24668b8504707ada6",
+      "size": 17175292
+    },
+    "dwarf_guilds/attack vehicle": {
+      "url": "dcc65d5794d51b95f4bd456ac7c5f17eb813695445522741a684158687a1bff6.glb",
+      "sha256": "dcc65d5794d51b95f4bd456ac7c5f17eb813695445522741a684158687a1bff6",
+      "size": 17223616
+    },
+    "dwarf_guilds/battle tank": {
+      "url": "342d63b90e2efb209df987d094716f4b69d5bcfc5391a1d94a041af3fa509e88.glb",
+      "sha256": "342d63b90e2efb209df987d094716f4b69d5bcfc5391a1d94a041af3fa509e88",
+      "size": 17101884
+    },
+    "dwarf_guilds/berserker veteran": {
+      "url": "159611a79592b2176a3648602c54f13baf469e4d256dcc77dd6535fbc7af5589.glb",
+      "sha256": "159611a79592b2176a3648602c54f13baf469e4d256dcc77dd6535fbc7af5589",
+      "size": 16334888
+    },
+    "dwarf_guilds/berserkers": {
+      "url": "8cd0964fdae68113b35ddf3d5a1d8bb5432fb5e9302b84949151de3faae0c894.glb",
+      "sha256": "8cd0964fdae68113b35ddf3d5a1d8bb5432fb5e9302b84949151de3faae0c894",
+      "size": 16917172
+    },
+    "dwarf_guilds/combat excavator": {
+      "url": "a5ec670f868dba5f6717204b10f1f0727b8c12b9dd4814698510019449f69bc9.glb",
+      "sha256": "a5ec670f868dba5f6717204b10f1f0727b8c12b9dd4814698510019449f69bc9",
+      "size": 18146500
+    },
+    "dwarf_guilds/dwarf bikers": {
+      "url": "a4a4272b77f7ff95695b7523d59485e3b864c45d4b0c3fa89631be6e9a6af3e5.glb",
+      "sha256": "a4a4272b77f7ff95695b7523d59485e3b864c45d4b0c3fa89631be6e9a6af3e5",
+      "size": 14608600
+    },
+    "dwarf_guilds/dwarf champion": {
+      "url": "4b8707c20a43ecac3324b70906ce4eabfcd88cb31046838ee2aa4bc7d376aa07.glb",
+      "sha256": "4b8707c20a43ecac3324b70906ce4eabfcd88cb31046838ee2aa4bc7d376aa07",
+      "size": 17066080
+    },
+    "dwarf_guilds/dwarf trike": {
+      "url": "c7d94a72c042f218a10b03bf7fbda2be7f1260f4853e7c57c3fdb969e56872a1.glb",
+      "sha256": "c7d94a72c042f218a10b03bf7fbda2be7f1260f4853e7c57c3fdb969e56872a1",
+      "size": 16085764
+    },
+    "dwarf_guilds/dwarf walker": {
+      "url": "a5c7f71ff75c8a68fdab5221e1e6de9fce1e6b343ac36a0019b895ea4fdb1044.glb",
+      "sha256": "a5c7f71ff75c8a68fdab5221e1e6de9fce1e6b343ac36a0019b895ea4fdb1044",
+      "size": 16921204
+    },
+    "dwarf_guilds/dwarf warriors": {
+      "url": "e705c0a21c9a3e2a55d26c90fb23b9bb365d49b14da7940e6e015891bbc91bf1.glb",
+      "sha256": "e705c0a21c9a3e2a55d26c90fb23b9bb365d49b14da7940e6e015891bbc91bf1",
+      "size": 16160468
+    },
+    "dwarf_guilds/elites": {
+      "url": "a09942bde5e10d33eb128c6593c7136a1f9d3e55562687cf0d85fbad35ac48aa.glb",
+      "sha256": "a09942bde5e10d33eb128c6593c7136a1f9d3e55562687cf0d85fbad35ac48aa",
+      "size": 17205380
+    },
+    "dwarf_guilds/fortress tank": {
+      "url": "6abf023d9ca74552fee27ef1f1da992af664897d1b0f53cdc7715b3363c214e2.glb",
+      "sha256": "6abf023d9ca74552fee27ef1f1da992af664897d1b0f53cdc7715b3363c214e2",
+      "size": 18486752
+    },
+    "dwarf_guilds/guardians": {
+      "url": "a3b90e9bd4650bc297d02ea1f48c2a4b858016dcd79448d8cca505c2da669e48.glb",
+      "sha256": "a3b90e9bd4650bc297d02ea1f48c2a4b858016dcd79448d8cca505c2da669e48",
+      "size": 16606268
+    },
+    "dwarf_guilds/hadrund oth irnwuld": {
+      "url": "cefe40898917919b9d0d212722cb0665fc73daefba38b480e4bbe262bb5abb39.glb",
+      "sha256": "cefe40898917919b9d0d212722cb0665fc73daefba38b480e4bbe262bb5abb39",
+      "size": 17007112
+    },
+    "dwarf_guilds/iron veterans": {
+      "url": "0e98f5cfaf73411adaf873c341dddc83e3b5ce8eb1db84b1426d82e35af8bf83.glb",
+      "sha256": "0e98f5cfaf73411adaf873c341dddc83e3b5ce8eb1db84b1426d82e35af8bf83",
+      "size": 15754436
+    },
+    "dwarf_guilds/jetpack warriors": {
+      "url": "823059ba6334322a4eb6054e4c5435f5268565d946727f153ebd66d812445fdc.glb",
+      "sha256": "823059ba6334322a4eb6054e4c5435f5268565d946727f153ebd66d812445fdc",
+      "size": 14734360
+    },
+    "dwarf_guilds/land train": {
+      "url": "00b0a3a3d85935f282696e0201a88e4025a0da040842ab489c8c0c19714857ba.glb",
+      "sha256": "00b0a3a3d85935f282696e0201a88e4025a0da040842ab489c8c0c19714857ba",
+      "size": 18746628
+    },
+    "dwarf_guilds/mine bot guard": {
+      "url": "c15b18d2398bdc9b405688e44a84da7b8b18fe1f3ba0709f1fd6a64081f03b11.glb",
+      "sha256": "c15b18d2398bdc9b405688e44a84da7b8b18fe1f3ba0709f1fd6a64081f03b11",
+      "size": 16874360
+    },
+    "dwarf_guilds/miners": {
+      "url": "70af5124439cf2b17948b160712e05b46c154b16e1c8301c74e8e34b48c17d82.glb",
+      "sha256": "70af5124439cf2b17948b160712e05b46c154b16e1c8301c74e8e34b48c17d82",
+      "size": 15312480
+    },
+    "dwarf_guilds/mining titan": {
+      "url": "56964010ebcfa89109003f52d6abcc0469cc4215f19aa2e7f6954fae000fa324.glb",
+      "sha256": "56964010ebcfa89109003f52d6abcc0469cc4215f19aa2e7f6954fae000fa324",
+      "size": 16895844
+    },
+    "dwarf_guilds/powersuit champion": {
+      "url": "e703b8914063bfd15147ce74ab5c8f541f3965aea2de94d4b788ab284f2056ab.glb",
+      "sha256": "e703b8914063bfd15147ce74ab5c8f541f3965aea2de94d4b788ab284f2056ab",
+      "size": 15440752
+    },
+    "dwarf_guilds/powersuit guard": {
+      "url": "49fcaeedf1480dbc7f34d693eee3528719fc7ce42b7ebf81d13b46b7a3b8560b.glb",
+      "sha256": "49fcaeedf1480dbc7f34d693eee3528719fc7ce42b7ebf81d13b46b7a3b8560b",
+      "size": 13140300
+    },
+    "dwarf_guilds/sniper team": {
+      "url": "e21c410d1505c2f8dce8dca5f158c6bc8ca0e00c4f3a1383dbf6c89146a6f697.glb",
+      "sha256": "e21c410d1505c2f8dce8dca5f158c6bc8ca0e00c4f3a1383dbf6c89146a6f697",
+      "size": 20259628
+    },
+    "dwarf_guilds/thunder support": {
+      "url": "de0e27f3e3bffab37c4605e17cc527038a670613db8d0899eee74c25d52878f6.glb",
+      "sha256": "de0e27f3e3bffab37c4605e17cc527038a670613db8d0899eee74c25d52878f6",
+      "size": 16471012
     }
   }
 }
