@@ -11,7 +11,10 @@ var _environment: Environment
 # Current lighting settings
 var current_preset: Dictionary = {}
 
-# Preset definitions
+# Lighting definitions backing each ATMOSPHERE mood (Day->Default, Sunset->Warm
+# Sunset, Night->Night, Overcast->Cool Overcast, Rain->Storm). These are no longer a
+# user-facing preset list — moods are chosen via the AtmosphereController only; this
+# table is the internal lighting data its presets blend between.
 const PRESETS = {
 	"Default": {
 		"name": "Default (Warm & Cozy)",
@@ -55,44 +58,6 @@ const PRESETS = {
 		"glow_intensity": 1.2,
 		"contrast": 1.15,
 		"saturation": 1.15,
-	},
-	"Bright Studio": {
-		"name": "Bright Studio (Clear)",
-		"sun_energy": 1.8,
-		"sun_color": Color(1.0, 1.0, 1.0),
-		"sun_angle_h": 0.0,
-		"sun_angle_v": 60.0,
-		"ambient_energy": 0.8,
-		"ambient_color": Color(0.95, 0.95, 0.95),
-		"exposure": 1.4,
-		"shadow_opacity": 0.6,
-		"shadow_blur": 1.0,
-		"ssao_intensity": 0.3,
-		"fill_light_energy": 0.25,
-		"fill_light_color": Color(0.8, 0.85, 1.0),
-		"ssr_intensity": 0.6,
-		"glow_intensity": 0.5,
-		"contrast": 1.0,
-		"saturation": 1.0,
-	},
-	"Dramatic": {
-		"name": "Dramatic (High Contrast)",
-		"sun_energy": 2.0,
-		"sun_color": Color(1.0, 0.95, 0.85),
-		"sun_angle_h": -60.0,
-		"sun_angle_v": 35.0,
-		"ambient_energy": 0.3,
-		"ambient_color": Color(0.6, 0.65, 0.7),
-		"exposure": 1.1,
-		"shadow_opacity": 0.95,
-		"shadow_blur": 1.5,
-		"ssao_intensity": 0.6,
-		"fill_light_energy": 0.15,
-		"fill_light_color": Color(0.6, 0.65, 0.8),
-		"ssr_intensity": 1.2,
-		"glow_intensity": 0.6,
-		"contrast": 1.25,
-		"saturation": 1.1,
 	},
 	"Cool Overcast": {
 		"name": "Cool Overcast (Moody)",
@@ -208,11 +173,6 @@ func apply_preset(preset_name: String) -> void:
 	set_glow_intensity(preset.glow_intensity)
 	set_contrast(preset.contrast)
 	set_saturation(preset.saturation)
-
-
-## Get list of preset names
-func get_preset_names() -> Array:
-	return PRESETS.keys()
 
 
 ## Individual parameter setters
