@@ -15,7 +15,7 @@ extends Node
 const CONFIG_PATH := "user://atmosphere.cfg"
 const CONFIG_SECTION := "atmosphere"
 const TRANSITION_SECONDS := 2.0
-const DEFAULT_PRESET := "Day"
+const DEFAULT_PRESET := "Sunset"
 
 const LIGHTNING_MIN_INTERVAL_S := 8.0
 const LIGHTNING_MAX_INTERVAL_S := 25.0
@@ -136,7 +136,17 @@ func initialize(lighting_ctrl: Node, world_env: WorldEnvironment, clouds: Node3D
 	_load_config()
 
 
-## Restore the persisted atmosphere instantly (call once the table is built).
+## Apply the saved/default atmosphere's LIGHTING (sun, sky, mist) instantly, without
+## the table-dependent layers (fires, war sounds). Called at startup BEFORE the intro
+## so the table is already lit in its final mood when the cinematic reveals it — avoids
+## a jarring lighting snap when the intro ends.
+func apply_saved_lighting() -> void:
+	apply_atmosphere(_current_name, true)
+
+
+## Restore the persisted atmosphere instantly (call once the table is built). The
+## lighting was already applied at startup (apply_saved_lighting); this re-applies it
+## (a no-op visually) and enables the table-dependent layers (fires, war sounds).
 func restore_saved() -> void:
 	apply_atmosphere(_current_name, true)
 	if _fires_enabled and _terrain_overlay != null:
@@ -310,12 +320,14 @@ func _on_fires_rebuilt() -> void:
 
 
 func _load_config() -> void:
+	# The atmosphere PRESET is NOT persisted across launches: every game starts in the
+	# DEFAULT_PRESET (Sunset) as the standard look. In-game switching still works for the
+	# session; it just doesn't carry over to the next start. The war-torn / war-sound
+	# toggles do persist (they're independent of the lighting mood).
+	_current_name = DEFAULT_PRESET
 	var config := ConfigFile.new()
 	if config.load(CONFIG_PATH) != OK:
 		return
-	_current_name = config.get_value(CONFIG_SECTION, "preset", DEFAULT_PRESET)
-	if not PRESETS.has(_current_name):
-		_current_name = DEFAULT_PRESET
 	_fires_enabled = config.get_value(CONFIG_SECTION, "fires_enabled", false)
 	_war_sounds_enabled = config.get_value(CONFIG_SECTION, "war_sounds_enabled", false)
 
