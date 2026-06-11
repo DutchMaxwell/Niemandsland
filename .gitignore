@@ -109,3 +109,5 @@ assets/terrain/props/trees/
 assets/terrain/props/containers/
 # Minefield hazard textures are R2-delivered (terrain-source/hazards/), not bundled.
 assets/terrain/props/hazards/
+# CC0 ambience recordings are R2-delivered (terrain-source/ambience/), not bundled.
+assets/audio/ambience/*.ogg

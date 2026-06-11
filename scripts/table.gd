@@ -18,6 +18,9 @@ var _default_texture: Texture2D = null
 ## On-demand biome battlemap delivery (R2 + local cache); see BiomeLibrary.
 var _biome_library: BiomeLibrary = null
 
+## Area-wide grass tufts (grassland biome only); see GrassField.
+var _grass_field: GrassField = null
+
 var table_size: Vector2 = Vector2(4, 4)  # In feet, will be converted to meters
 
 const FEET_TO_METERS: float = 0.3048  # 1 foot = 0.3048 meters
@@ -67,6 +70,10 @@ func _ready() -> void:
 	_biome_library = BiomeLibrary.new()
 	_biome_library.name = "BiomeLibrary"
 	add_child(_biome_library)
+	_grass_field = GrassField.new()
+	_grass_field.name = "GrassField"
+	add_child(_grass_field)
+	_grass_field.set_biome(biome)
 	_load_fallback_texture()
 	_apply_biome(biome)
 
@@ -84,8 +91,9 @@ func setup_table(size_feet: Vector2) -> void:
 				continue
 			# Preserve the biome delivery service (it owns the HTTPRequest): freeing it
 			# here killed the battlemap download started by the table-size dialog, so
-			# the chosen biome never replaced the fallback surface.
-			if child == _biome_library:
+			# the chosen biome never replaced the fallback surface. The grass field
+			# resizes itself instead of being rebuilt.
+			if child == _biome_library or child == _grass_field:
 				continue
 			child.queue_free()
 
@@ -110,6 +118,8 @@ func setup_table(size_feet: Vector2) -> void:
 	# Add table edge/border
 	_create_table_border(size_meters)
 
+	if _grass_field != null:
+		_grass_field.set_table_size(size_meters)
 	table_resized.emit(size_feet)
 
 
@@ -150,6 +160,8 @@ func set_biome(biome_name: String) -> void:
 		return
 	biome = biome_name
 	_apply_biome(biome_name)
+	if _grass_field != null:
+		_grass_field.set_biome(biome_name)
 	var overlay := get_node_or_null("TerrainOverlay")
 	if overlay != null and overlay.has_method("set_biome"):
 		overlay.set_biome(biome_name)
@@ -179,12 +191,27 @@ func _apply_biome(biome_name: String) -> void:
 	mesh_instance.material_override = _build_ground_material()
 
 
+## Battlemaps are delivered very large (up to ~7.5k px); cap the GPU texture at this
+## width. Plenty for a 6 ft table on a 4K screen, cuts the upload from ~200 MB to
+## ~45 MB — full-size single-shot uploads triggered sporadic texture corruption
+## (magenta/rainbow battlemap) on 8 GB laptop GPUs.
+const BATTLEMAP_MAX_WIDTH := 4096
+
+
 ## Build a Texture2D (with mipmaps) from a cached image file on disk (user://).
 func _texture_from_file(path: String) -> Texture2D:
 	var img := Image.new()
 	if img.load(path) != OK:
 		push_warning("Table: failed to load biome image %s" % path)
 		return null
+	if img.get_width() > BATTLEMAP_MAX_WIDTH:
+		var scaled_height := int(round(img.get_height() * float(BATTLEMAP_MAX_WIDTH) / float(img.get_width())))
+		img.resize(BATTLEMAP_MAX_WIDTH, scaled_height, Image.INTERPOLATE_LANCZOS)
+	# WebP decodes to RGB8 (3-byte stride) — a niche GPU upload path that corrupted
+	# into rainbow/magenta hues on NVIDIA here. RGBA8 is the well-trodden 4-byte-
+	# aligned path; convert before upload.
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
 	img.generate_mipmaps()
 	return ImageTexture.create_from_image(img)
 

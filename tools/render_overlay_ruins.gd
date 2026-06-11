@@ -54,6 +54,12 @@ func _run() -> void:
 	var overlay: Node3D = load("res://scripts/terrain_overlay.gd").new()
 	vp.add_child(overlay)
 
+	# Grassland grass field under everything (one MultiMesh draw call).
+	var grass := GrassField.new()
+	grass.set_table_size(Vector2(1.22, 1.22))
+	grass.set_biome("temperate_grassland")
+	vp.add_child(grass)
+
 	# Three ruins on a 4x4 ft table grid (24x24 cells, centre 12): plain 3x3, plain 3x2,
 	# and a 90°-rotated 3x2 so the transformed taper_dir is visually checked too.
 	var segments: Array = []
