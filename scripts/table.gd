@@ -15,6 +15,12 @@ signal table_resized(size_feet: Vector2)
 
 var _default_texture: Texture2D = null
 
+## Detail noise is biome-independent — generated ONCE and reused. NoiseTexture2D
+## fills in on a background thread; regenerating it per material rebuild (twice per
+## biome switch) raced the renderer and produced garbage normals (rainbow speckle).
+var _detail_normal_tex: Texture2D = null
+var _detail_height_tex: Texture2D = null
+
 ## On-demand biome battlemap delivery (R2 + local cache); see BiomeLibrary.
 var _biome_library: BiomeLibrary = null
 
@@ -133,12 +139,16 @@ func _build_ground_material() -> Material:
 		fallback.metallic = 0.0
 		return fallback
 
+	if _detail_normal_tex == null:
+		_detail_normal_tex = _make_detail_noise(true)
+		_detail_height_tex = _make_detail_noise(false)
+
 	var mat := ShaderMaterial.new()
 	mat.shader = GROUND_SHADER
 	mat.set_shader_parameter("albedo_tex", _default_texture)
 	mat.set_shader_parameter("uv_scale", _biome_uv_scale())
-	mat.set_shader_parameter("detail_normal", _make_detail_noise(true))
-	mat.set_shader_parameter("detail_height", _make_detail_noise(false))
+	mat.set_shader_parameter("detail_normal", _detail_normal_tex)
+	mat.set_shader_parameter("detail_height", _detail_height_tex)
 	mat.set_shader_parameter("detail_tiling", DETAIL_TILING)
 	mat.set_shader_parameter("detail_normal_strength", 0.35)
 	mat.set_shader_parameter("detail_albedo_strength", 0.12)
