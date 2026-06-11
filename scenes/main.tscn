@@ -296,6 +296,13 @@ focus_mode = 0
 text = "Next Round (1)"
 tooltip_text = "Advance to the next round: every unit may activate again and casters regain points"
 
+[node name="SettingsBtn" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+text = "Settings"
+tooltip_text = "Lighting, atmosphere & audio settings (F7)"
+
 [node name="TableSizePanel" type="VBoxContainer" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox"]
 layout_mode = 2
 

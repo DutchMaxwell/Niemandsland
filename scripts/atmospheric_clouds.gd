@@ -16,6 +16,10 @@ const PLANE_SIZE: float = 1.85
 ## Heights above the table for the stacked layers (metres) — ~4–6 mm: hugs the ground.
 const LAYER_HEIGHTS: Array = [0.004, 0.006]
 const MIST_COLOR: Color = Color(0.95, 0.96, 0.98)
+## Per-layer base density (layer i: BASE_DENSITY - i * DENSITY_LAYER_STEP), scaled
+## live by set_density_scale() for atmosphere moods.
+const BASE_DENSITY := 0.32
+const DENSITY_LAYER_STEP := 0.1
 const NOISE_SIZE: int = 512
 ## Water-like parting around each miniature: reach, outward shove, tangential swirl, core.
 const CLEAR_RADIUS: float = 0.09
@@ -88,6 +92,15 @@ func set_cloud_color(color: Color) -> void:
 			mat.set_shader_parameter("mist_color", color)
 
 
+## Scale the mist density relative to each layer's base value (1.0 = default;
+## atmosphere presets thicken the mist for overcast/storm moods).
+func set_density_scale(density_scale: float) -> void:
+	for i in range(_layers.size()):
+		var mat := _layers[i].material_override as ShaderMaterial
+		if mat:
+			mat.set_shader_parameter("density", (BASE_DENSITY - float(i) * DENSITY_LAYER_STEP) * density_scale)
+
+
 ## Set the drift direction; the passed vector scales the scroll speed per layer.
 func set_wind_direction(direction: Vector2) -> void:
 	var base: Vector2 = direction if direction.length() > 0.0001 else Vector2(0.011, 0.006)
@@ -136,7 +149,7 @@ func _create_mist_layers() -> void:
 		mat.shader = MIST_SHADER
 		mat.set_shader_parameter("noise_tex", noise)
 		mat.set_shader_parameter("mist_color", MIST_COLOR)
-		mat.set_shader_parameter("density", 0.32 - float(i) * 0.1)
+		mat.set_shader_parameter("density", BASE_DENSITY - float(i) * DENSITY_LAYER_STEP)
 		mat.set_shader_parameter("noise_freq", 1.3 + float(i) * 0.4)
 		mat.set_shader_parameter("scroll", Vector2(0.012, 0.007).rotated(float(i) * 1.6))
 		mat.set_shader_parameter("coverage", 0.55 + float(i) * 0.06)

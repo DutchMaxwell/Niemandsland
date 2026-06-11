@@ -18,6 +18,16 @@ const FINE_GRID_SIZE_INCHES := 1.0  # 1" grid for custom zone editing
 ## Height offset above table to prevent z-fighting (2mm)
 const Z_FIGHT_OFFSET := 0.002
 
+## Flat-overlay stacking above the TABLE SURFACE (world metres), bottom-up in fixed
+## 1 mm steps so the translucent layers never share a plane (z-fighting / shader
+## artifacts): terrain tiles lowest, deployment zones above them, mission objectives
+## (seize ring, token on top of it) highest. The overlay node itself sits at
+## Z_FIGHT_OFFSET, so child positions are derived as (WORLD_Y - Z_FIGHT_OFFSET).
+const TERRAIN_TILE_WORLD_Y := 0.001
+const DEPLOYMENT_ZONE_WORLD_Y := 0.002
+const OBJECTIVE_WORLD_Y := 0.003
+const SEIZE_RING_HEIGHT := 0.002  # the 3" seize ring disc; the token sits on top of it
+
 ## Mesh size reduction factor to show grid lines between cells
 const CELL_SIZE_REDUCTION := 0.95
 
@@ -168,6 +178,33 @@ const _RUIN_SEED_PRIME_SIDE := 83492791
 const BIOME_PROP_THEMES := {"arid_desert": "desert_", "frozen_tundra": "tundra_"}
 const BIOME_CONTAINER_THEMES := {"frozen_tundra": "tundra_"}
 
+## War-torn ruin fires: a deterministic share of wall cells carries a small FireProp
+## (flames + smoke + flickering light). The pick derives ONLY from synced segment data
+## via a salted, FRESH RNG — it must never consume draws from the panel RNG, or every
+## window/doorway pick on every map would silently change (multiplayer + saves!).
+const RUIN_FIRE_CHANCE := 0.22
+const _RUIN_SEED_SALT_FIRE := 2654435761
+## Max flickering OmniLights per quality tier (PERFORMANCE..ULTRA); beyond the cap,
+## fires render without a light. PERFORMANCE spawns no fires at all.
+const FIRE_MAX_LIGHTS: Array[int] = [0, 4, 8, 12, 12]
+const FIRE_INSET_FROM_WALL_M := 0.012
+const FIRE_ALONG_WALL_MAX_FRAC := 0.3  # offset from the wall centre, fraction of length
+
+## Rubble at ruin wall bases: small loose stones scattered along both sides of every
+## wall segment, densest directly at the wall and tapering out to 1". One MultiMesh
+## for the whole overlay (a single draw call), deterministic per segment (own salt),
+## stone counts gated by quality tier (PERFORMANCE..ULTRA; 0 = no rubble).
+const _RUIN_SEED_SALT_RUBBLE := 40503
+const RUBBLE_STONES_PER_SEGMENT: Array[int] = [0, 40, 80, 130, 180]
+const RUBBLE_MAX_DIST_M := 0.0254          # taper ends 1" from the wall face
+const RUBBLE_STONE_MIN_M := 0.003
+const RUBBLE_STONE_MAX_M := 0.010
+const RUBBLE_EMBED_FRAC := 0.35            # stones sink partly into the ground
+## Fragments wear the wall's own themed masonry via WORLD triplanar projection, so
+## every brick samples a different patch of the texture (same tile scale as the
+## first-pass wall material) and the biome theme carries over for free.
+const RUBBLE_TEXTURE_TILE_M := 0.085
+
 # ==============================================================================
 # STATE
 # ==============================================================================
@@ -201,6 +238,9 @@ var custom_zone_mode := CustomZoneMode.NONE
 signal custom_zone_editing_changed(is_editing: bool, mode: CustomZoneMode)
 signal custom_zone_vertex_added(player: int, vertex: Vector3)
 signal custom_zone_completed(player: int)
+## Emitted after the war-torn ruin fires were (re)built (also when cleared), so the
+## atmosphere layer can re-park its fire-crackle audio emitters.
+signal fires_rebuilt
 
 ## Fine grid (1") for custom zone editing
 var fine_grid_meshes: Array[MeshInstance3D] = []
@@ -254,6 +294,14 @@ var _hazard_fetch_started := false
 ## Active biome prop themes (name prefixes into the panel sets).
 var _prop_theme := ""
 var _container_theme := ""
+
+## War-torn ruin fires (FireProp instances + their world positions, capped order).
+var _fires_enabled := false
+var _fire_instances: Array[Node3D] = []
+var _fire_positions: Array[Vector3] = []
+
+## Rubble at the ruin wall bases (one MultiMesh for the whole overlay).
+var _rubble_instance: MultiMeshInstance3D = null
 var _ruin_fetch_started := false
 var _last_wall_segments: Array = []
 var _last_wall_table_size := Vector2.ZERO
@@ -290,6 +338,8 @@ func _ready() -> void:
 	_hazards_library = HazardsLibrary.new()
 	_hazards_library.name = "HazardsLibrary"
 	add_child(_hazards_library)
+	# Re-gate the war-torn fires (light/smoke caps) when the quality tier changes.
+	GraphicsSettings.settings_applied.connect(_on_graphics_settings_applied)
 
 
 ## Clear all terrain overlay meshes from the scene
@@ -351,7 +401,9 @@ func update_overlay(cells_data: Dictionary, table_size: Vector2, grid_rotation: 
 		var local_z: float = (cell_pos.y - grid_dims.y / 2.0 + 0.5) * cell_size_meters
 		var rotated_x: float = local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
 		var rotated_z: float = local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
-		var mesh_instance := _create_cell_mesh(Vector3(rotated_x, 0, rotated_z), cell_size_meters, color, grid_rotation)
+		var mesh_instance := _create_cell_mesh(
+				Vector3(rotated_x, TERRAIN_TILE_WORLD_Y - Z_FIGHT_OFFSET, rotated_z),
+				cell_size_meters, color, grid_rotation)
 		mesh_instance.visible = true
 		add_child(mesh_instance)
 		overlay_meshes.append(mesh_instance)
@@ -484,14 +536,14 @@ func _create_front_line_zones(table_width: float, table_depth: float) -> void:
 
 	# Player 1 zone (bottom, facing forward along +Z)
 	# Y=0.001 local → absolute Y=0.003 (above base plates at Y=0.002)
-	var p1_position = Vector3(0, 0.001, -table_depth/2 + deployment_depth/2)
+	var p1_position = Vector3(0, DEPLOYMENT_ZONE_WORLD_Y - Z_FIGHT_OFFSET, -table_depth/2 + deployment_depth/2)
 	var p1_size = Vector2(table_width, deployment_depth)
 	var p1_mesh = _create_deployment_zone_mesh(p1_position, p1_size, DEPLOYMENT_COLORS["player1"])
 	add_child(p1_mesh)
 	deployment_zone_meshes.append(p1_mesh)
 
 	# Player 2 zone (top, facing backward along -Z)
-	var p2_position = Vector3(0, 0.001, table_depth/2 - deployment_depth/2)
+	var p2_position = Vector3(0, DEPLOYMENT_ZONE_WORLD_Y - Z_FIGHT_OFFSET, table_depth/2 - deployment_depth/2)
 	var p2_size = Vector2(table_width, deployment_depth)
 	var p2_mesh = _create_deployment_zone_mesh(p2_position, p2_size, DEPLOYMENT_COLORS["player2"])
 	add_child(p2_mesh)
@@ -548,7 +600,7 @@ func _create_polygon_zone_mesh(vertices: Array[Vector3], color: Color) -> MeshIn
 	for i in range(indices.size()):
 		var idx = indices[i]
 		var v = vertices[idx]
-		st.add_vertex(Vector3(v.x, 0.001, v.z))  # Slightly above ground
+		st.add_vertex(Vector3(v.x, DEPLOYMENT_ZONE_WORLD_Y - Z_FIGHT_OFFSET, v.z))
 
 	st.generate_normals()
 	mesh_instance.mesh = st.commit()
@@ -894,7 +946,9 @@ func _create_circular_deployment_zone(center: Vector3, radius: float, color: Col
 	cylinder_mesh.radial_segments = 32  # Smooth circle
 
 	mesh_instance.mesh = cylinder_mesh
-	mesh_instance.position = center
+	# Disc bottom rests on the deployment layer (cylinder is centre-anchored).
+	mesh_instance.position = Vector3(center.x,
+			DEPLOYMENT_ZONE_WORLD_Y - Z_FIGHT_OFFSET + cylinder_mesh.height / 2.0, center.z)
 	mesh_instance.rotation.x = 0  # Flat on table
 
 	# Create semi-transparent material
@@ -1274,11 +1328,13 @@ func _create_seize_radius_ring(pos: Vector3, radius: float, color: Color) -> Mes
 	var cylinder = CylinderMesh.new()
 	cylinder.top_radius = radius
 	cylinder.bottom_radius = radius
-	cylinder.height = 0.002  # Very thin disc (2mm)
+	cylinder.height = SEIZE_RING_HEIGHT
 	cylinder.radial_segments = 64
 
 	mesh_instance.mesh = cylinder
-	mesh_instance.position = Vector3(pos.x, Z_FIGHT_OFFSET * 2, pos.z)
+	# Ring bottom rests on the objective layer (cylinder is centre-anchored).
+	mesh_instance.position = Vector3(pos.x,
+			OBJECTIVE_WORLD_Y - Z_FIGHT_OFFSET + cylinder.height / 2.0, pos.z)
 
 	# Create transparent material
 	var material = StandardMaterial3D.new()
@@ -1297,18 +1353,21 @@ func _create_seize_radius_ring(pos: Vector3, radius: float, color: Color) -> Mes
 ## capture menu: it joins the "selectable" + "objective" groups and carries an
 ## "objective_index" meta (see ObjectManager / RadialMenuController).
 func _create_objective_token(pos: Vector3, number: int, fill_color: Color, border_color: Color) -> StaticBody3D:
+	# Token dimensions: 1" diameter = 0.0254m, but we use half for radius
+	var token_radius = 0.5 * INCHES_TO_METERS  # 0.5" radius = 1" diameter
+	var border_width = 0.08 * INCHES_TO_METERS  # Border thickness
+	var token_height = 0.003  # 3mm thick
+
 	var container = StaticBody3D.new()
-	container.position = Vector3(pos.x, Z_FIGHT_OFFSET * 3, pos.z)
+	# The token disc rests ON TOP of its seize ring (which sits on the objective
+	# layer); the border cylinder is centre-anchored on the container.
+	container.position = Vector3(pos.x,
+			OBJECTIVE_WORLD_Y - Z_FIGHT_OFFSET + SEIZE_RING_HEIGHT + token_height / 2.0, pos.z)
 	container.add_to_group("selectable")
 	container.add_to_group("objective")
 	container.set_meta("objective_index", number - 1)
 	container.collision_layer = 1
 	container.collision_mask = 1
-
-	# Token dimensions: 1" diameter = 0.0254m, but we use half for radius
-	var token_radius = 0.5 * INCHES_TO_METERS  # 0.5" radius = 1" diameter
-	var border_width = 0.08 * INCHES_TO_METERS  # Border thickness
-	var token_height = 0.003  # 3mm thick
 
 	# Collision shape so the raycast picker can hit the token (a bit taller than
 	# the disc for an easy click target).
@@ -1462,6 +1521,8 @@ func update_wall_models(wall_segments: Array, t_size: Vector2, rot_deg: float) -
 	_rebuild_terrain_labels()
 
 	if wall_segments.is_empty():
+		_rebuild_fires()  # clears stale fires (and notifies the atmosphere layer)
+		_rebuild_rubble()
 		return
 
 	var cell_size_meters := GRID_SIZE_INCHES * INCHES_TO_METERS
@@ -1506,59 +1567,25 @@ func update_wall_models(wall_segments: Array, t_size: Vector2, rot_deg: float) -
 		else:
 			model = _create_procedural_wall(length_inches, WALL_HEIGHT_INCHES)
 
-		# Calculate edge center position
-		var local_x := (edge_cell.x - grid_dims.x / 2.0 + 0.5) * cell_size_meters
-		var local_z := (edge_cell.y - grid_dims.y / 2.0 + 0.5) * cell_size_meters
-
-		# Offset to edge center
-		var half_cell := cell_size_meters / 2.0
-		var edge_offset := Vector2.ZERO
-		var wall_y_rotation := 0.0
-
-		match edge_side:
-			0:  # Nord (top edge, -Z)
-				edge_offset = Vector2(0, -half_cell)
-				wall_y_rotation = 0.0
-			1:  # Ost (right edge, +X)
-				edge_offset = Vector2(half_cell, 0)
-				wall_y_rotation = PI / 2.0
-			2:  # Sued (bottom edge, +Z)
-				edge_offset = Vector2(0, half_cell)
-				wall_y_rotation = PI
-			3:  # West (left edge, -X)
-				edge_offset = Vector2(-half_cell, 0)
-				wall_y_rotation = -PI / 2.0
-
-		local_x += edge_offset.x
-		local_z += edge_offset.y
-
-		# Offset for 1"-segments within the 3"-edge
-		# sub_position: 0=left, 1=center, 2=right relative to edge center
-		if length_inches < 3.0:
-			var sub_offset := (float(sub_position) - 1.0) * INCHES_TO_METERS
-			match edge_side:
-				0, 2:  # Horizontal edges
-					local_x += sub_offset
-				1, 3:  # Vertical edges
-					local_z += sub_offset
-
-		# Apply grid rotation
-		var rotated_x := local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
-		var rotated_z := local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
-
-		# Skip walls outside table boundaries
-		if not _is_position_within_table(rotated_x, rotated_z, t_size):
+		# Place the wall — its mesh is already lifted so the base sits on the table.
+		# Placement math is shared with the war-torn fires (_segment_world_placement).
+		var placement := _segment_world_placement(segment, grid_dims, cell_size_meters, rotation_rad, rot_deg, t_size)
+		if placement.is_empty():
+			model.free()  # outside table boundaries
 			continue
-
-		# Place the wall — its mesh is already lifted so the base sits on the table
-		model.position.x = rotated_x
-		model.position.z = rotated_z
-		model.rotation.y = wall_y_rotation - deg_to_rad(rot_deg)
+		var wall_position: Vector3 = placement["position"]
+		model.position.x = wall_position.x
+		model.position.z = wall_position.z
+		model.rotation.y = placement["y_rotation"]
 		add_child(model)
 		_wall_instances.append(model)
 
 	# Add corner pieces where perpendicular walls meet
 	_add_wall_corner_pieces(wall_segments, grid_dims, cell_size_meters, rotation_rad, rot_deg, t_size)
+
+	# (Re)place the war-torn fires + the wall-base rubble for the new layout.
+	_rebuild_fires()
+	_rebuild_rubble()
 
 
 ## Add corner pieces at intersections where two perpendicular walls meet
@@ -2067,6 +2094,297 @@ static func _wall_corner_points(segment: Dictionary) -> Array[Vector2i]:
 			return [edge_cell, Vector2i(edge_cell.x, edge_cell.y + 1)]
 		_:  # North edge
 			return [edge_cell, Vector2i(edge_cell.x + 1, edge_cell.y)]
+
+
+## World placement of a wall segment: edge-centre position (y = 0), the wall's Y
+## rotation, the unit direction from the wall toward its cell's interior and the unit
+## direction along the wall (all grid-rotation aware). Empty if the segment lies
+## outside the table. Shared by the walls and the war-torn fires so the two can never
+## drift apart.
+func _segment_world_placement(segment: Dictionary, grid_dims: Vector2i, cell_size_meters: float, rotation_rad: float, rot_deg: float, t_size: Vector2) -> Dictionary:
+	var edge_cell: Vector2i = segment.get("edge_cell", Vector2i.ZERO)
+	var edge_side: int = segment.get("edge_side", 0)
+	var length_inches: float = segment.get("length_inches", GRID_SIZE_INCHES)
+	var sub_position: int = segment.get("sub_position", 0)
+
+	# Edge centre position
+	var local_x := (edge_cell.x - grid_dims.x / 2.0 + 0.5) * cell_size_meters
+	var local_z := (edge_cell.y - grid_dims.y / 2.0 + 0.5) * cell_size_meters
+	var half_cell := cell_size_meters / 2.0
+	var edge_offset := Vector2.ZERO
+	var wall_y_rotation := 0.0
+	match edge_side:
+		0:  # Nord (top edge, -Z)
+			edge_offset = Vector2(0, -half_cell)
+			wall_y_rotation = 0.0
+		1:  # Ost (right edge, +X)
+			edge_offset = Vector2(half_cell, 0)
+			wall_y_rotation = PI / 2.0
+		2:  # Sued (bottom edge, +Z)
+			edge_offset = Vector2(0, half_cell)
+			wall_y_rotation = PI
+		3:  # West (left edge, -X)
+			edge_offset = Vector2(-half_cell, 0)
+			wall_y_rotation = -PI / 2.0
+	local_x += edge_offset.x
+	local_z += edge_offset.y
+
+	# Offset for 1"-segments within the 3"-edge (sub_position: 0=left, 1=center, 2=right)
+	if length_inches < GRID_SIZE_INCHES:
+		var sub_offset := (float(sub_position) - 1.0) * INCHES_TO_METERS
+		match edge_side:
+			0, 2:  # Horizontal edges
+				local_x += sub_offset
+			1, 3:  # Vertical edges
+				local_z += sub_offset
+
+	# Apply grid rotation; skip segments outside the table boundaries.
+	var rotated_x := local_x * cos(rotation_rad) - local_z * sin(rotation_rad)
+	var rotated_z := local_x * sin(rotation_rad) + local_z * cos(rotation_rad)
+	if not _is_position_within_table(rotated_x, rotated_z, t_size):
+		return {}
+
+	var interior := -edge_offset.normalized()
+	var along := Vector2(interior.y, -interior.x)
+	return {
+		"position": Vector3(rotated_x, 0.0, rotated_z),
+		"y_rotation": wall_y_rotation - deg_to_rad(rot_deg),
+		"interior_dir": Vector3(
+				interior.x * cos(rotation_rad) - interior.y * sin(rotation_rad), 0.0,
+				interior.x * sin(rotation_rad) + interior.y * cos(rotation_rad)),
+		"along_dir": Vector3(
+				along.x * cos(rotation_rad) - along.y * sin(rotation_rad), 0.0,
+				along.x * sin(rotation_rad) + along.y * cos(rotation_rad)),
+	}
+
+
+# ==============================================================================
+# WAR-TORN RUIN FIRES
+# ==============================================================================
+
+## Toggle the war-torn fires; rebuilds immediately for the current layout.
+func set_fires_enabled(enabled: bool) -> void:
+	if enabled == _fires_enabled:
+		return
+	_fires_enabled = enabled
+	_rebuild_fires()
+
+
+func get_fires_enabled() -> bool:
+	return _fires_enabled
+
+
+## World positions of the active fires, in the deterministic capped order (for the
+## atmosphere layer's fire-crackle audio emitters).
+func get_fire_positions() -> Array[Vector3]:
+	return _fire_positions
+
+
+## Deterministic per-segment fire pick from synced wall data — a FRESH salted RNG, so
+## the panel RNG's draw sequence (windows/doorways) stays byte-identical (§6 gotcha #5).
+static func segment_has_fire(segment: Dictionary) -> bool:
+	return _fire_rng_for(segment).randf() < RUIN_FIRE_CHANCE
+
+
+## The fire RNG for a segment: draw #1 decides has-fire, draws #2/#3 are the along-wall
+## offset and the FireProp seed (consumed in _rebuild_fires).
+static func _fire_rng_for(segment: Dictionary) -> RandomNumberGenerator:
+	var edge_cell: Vector2i = segment.get("edge_cell", Vector2i.ZERO)
+	var edge_side: int = segment.get("edge_side", 0)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = edge_cell.x * _RUIN_SEED_PRIME_X ^ edge_cell.y * _RUIN_SEED_PRIME_Y \
+			^ edge_side * _RUIN_SEED_PRIME_SIDE ^ _RUIN_SEED_SALT_FIRE
+	return rng
+
+
+## Rebuild the FireProp instances for the last wall layout. Sorted by segment identity
+## so the light/crackle caps land on the same fires on every client; light and smoke
+## are gated by the graphics quality tier (PERFORMANCE spawns nothing).
+func _rebuild_fires() -> void:
+	_clear_fire_instances()
+	var tier: int = clampi(GraphicsSettings.current_preset, 0, FIRE_MAX_LIGHTS.size() - 1)
+	if not _fires_enabled or _last_wall_segments.is_empty() \
+			or tier == GraphicsSettings.QualityPreset.PERFORMANCE:
+		fires_rebuilt.emit()
+		return
+
+	# Same grid math as update_wall_models (kept in lockstep via the shared placement).
+	var cell_size_meters := GRID_SIZE_INCHES * INCHES_TO_METERS
+	var width_inches := _last_wall_table_size.x * 12.0
+	var height_inches := _last_wall_table_size.y * 12.0
+	var diagonal := sqrt(width_inches * width_inches + height_inches * height_inches)
+	var grid_size := int(ceil(diagonal / GRID_SIZE_INCHES))
+	if grid_size % 2 != 0:
+		grid_size += 1
+	var grid_dims := Vector2i(grid_size, grid_size)
+	var rotation_rad := deg_to_rad(_last_wall_rotation)
+
+	var fire_segments: Array[Dictionary] = []
+	for segment in _last_wall_segments:
+		if segment_has_fire(segment):
+			fire_segments.append(segment)
+	fire_segments.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var cell_a: Vector2i = a.get("edge_cell", Vector2i.ZERO)
+		var cell_b: Vector2i = b.get("edge_cell", Vector2i.ZERO)
+		if cell_a.x != cell_b.x:
+			return cell_a.x < cell_b.x
+		if cell_a.y != cell_b.y:
+			return cell_a.y < cell_b.y
+		return int(a.get("edge_side", 0)) < int(b.get("edge_side", 0)))
+
+	var with_smoke: bool = tier >= GraphicsSettings.QualityPreset.MEDIUM
+	var max_lights: int = FIRE_MAX_LIGHTS[tier]
+	for segment in fire_segments:
+		var placement := _segment_world_placement(segment, grid_dims, cell_size_meters,
+				rotation_rad, _last_wall_rotation, _last_wall_table_size)
+		if placement.is_empty():
+			continue
+		var rng := _fire_rng_for(segment)
+		rng.randf()  # draw #1: the has-fire decision (already consumed semantically)
+		var length_m: float = segment.get("length_inches", GRID_SIZE_INCHES) * INCHES_TO_METERS
+		var along: float = rng.randf_range(-FIRE_ALONG_WALL_MAX_FRAC, FIRE_ALONG_WALL_MAX_FRAC) * length_m
+		var fire_seed := rng.randi()
+
+		var fire := FireProp.new()
+		fire.setup(fire_seed, _fire_instances.size() < max_lights, with_smoke)
+		var base: Vector3 = placement["position"]
+		fire.position = base + placement["interior_dir"] * FIRE_INSET_FROM_WALL_M \
+				+ placement["along_dir"] * along
+		add_child(fire)
+		_fire_instances.append(fire)
+		_fire_positions.append(fire.position)
+	fires_rebuilt.emit()
+
+
+# ==============================================================================
+# RUBBLE AT RUIN WALL BASES
+# ==============================================================================
+
+## Deterministic local rubble placements for one wall segment: positions in the
+## WALL's local frame (x along the wall, z across it, y = embed height), scale and
+## rotation per stone. Density is highest at the wall face and tapers quadratically
+## to RUBBLE_MAX_DIST_M. Static + pure for tests.
+static func rubble_placements_for(segment: Dictionary, count: int) -> Array[Transform3D]:
+	var placements: Array[Transform3D] = []
+	if count <= 0:
+		return placements
+	var edge_cell: Vector2i = segment.get("edge_cell", Vector2i.ZERO)
+	var edge_side: int = segment.get("edge_side", 0)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = edge_cell.x * _RUIN_SEED_PRIME_X ^ edge_cell.y * _RUIN_SEED_PRIME_Y \
+			^ edge_side * _RUIN_SEED_PRIME_SIDE ^ _RUIN_SEED_SALT_RUBBLE
+	var length_m: float = segment.get("length_inches", GRID_SIZE_INCHES) * INCHES_TO_METERS
+	var half_wall := RUIN_SHELL_THICKNESS_INCHES * INCHES_TO_METERS / 2.0
+	for _i in count:
+		var along := rng.randf_range(-0.5, 0.5) * length_m
+		# Quadratic falloff: squaring a uniform draw clusters distances at the wall.
+		var dist := rng.randf() * rng.randf() * RUBBLE_MAX_DIST_M
+		var side := 1.0 if rng.randf() < 0.5 else -1.0
+		var stone := rng.randf_range(RUBBLE_STONE_MIN_M, RUBBLE_STONE_MAX_M)
+		var basis := Basis.from_euler(Vector3(rng.randf() * TAU, rng.randf() * TAU, rng.randf() * TAU))
+		# Brick-format fragments (the rubble's source IS the wall): elongated boxes
+		# with flat-ish height, randomly tumbled.
+		basis = basis.scaled(Vector3(stone * rng.randf_range(1.0, 2.0),
+				stone * rng.randf_range(0.45, 0.75), stone * rng.randf_range(0.6, 1.1)))
+		var origin := Vector3(along, stone * RUBBLE_EMBED_FRAC, side * (half_wall + dist))
+		placements.append(Transform3D(basis, origin))
+	return placements
+
+
+## Rebuild the rubble MultiMesh for the last wall layout (one draw call total).
+func _rebuild_rubble() -> void:
+	if _rubble_instance != null:
+		_rubble_instance.queue_free()
+		_rubble_instance = null
+	var tier: int = clampi(GraphicsSettings.current_preset, 0, RUBBLE_STONES_PER_SEGMENT.size() - 1)
+	var per_segment: int = RUBBLE_STONES_PER_SEGMENT[tier]
+	if per_segment <= 0 or _last_wall_segments.is_empty():
+		return
+
+	# Same grid math as update_wall_models (shared placement helper).
+	var cell_size_meters := GRID_SIZE_INCHES * INCHES_TO_METERS
+	var width_inches := _last_wall_table_size.x * 12.0
+	var height_inches := _last_wall_table_size.y * 12.0
+	var diagonal := sqrt(width_inches * width_inches + height_inches * height_inches)
+	var grid_size := int(ceil(diagonal / GRID_SIZE_INCHES))
+	if grid_size % 2 != 0:
+		grid_size += 1
+	var grid_dims := Vector2i(grid_size, grid_size)
+	var rotation_rad := deg_to_rad(_last_wall_rotation)
+
+	var transforms: Array[Transform3D] = []
+	for segment in _last_wall_segments:
+		var placement := _segment_world_placement(segment, grid_dims, cell_size_meters,
+				rotation_rad, _last_wall_rotation, _last_wall_table_size)
+		if placement.is_empty():
+			continue
+		var wall_xform := Transform3D(Basis.from_euler(Vector3(0.0, placement["y_rotation"], 0.0)),
+				placement["position"])
+		for local in rubble_placements_for(segment, per_segment):
+			transforms.append(wall_xform * local)
+	if transforms.is_empty():
+		return
+
+	var color_rng := RandomNumberGenerator.new()
+	color_rng.seed = _RUIN_SEED_SALT_RUBBLE
+
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.use_colors = true
+	multimesh.mesh = _rubble_stone_mesh()
+	multimesh.instance_count = transforms.size()
+	for i in transforms.size():
+		multimesh.set_instance_transform(i, transforms[i])
+		# Brightness jitter over the masonry texture (alpha untouched).
+		var jitter := color_rng.randf_range(0.65, 1.0)
+		multimesh.set_instance_color(i, Color(jitter, jitter, jitter, 1.0))
+
+	_rubble_instance = MultiMeshInstance3D.new()
+	_rubble_instance.multimesh = multimesh
+	_rubble_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_rubble_instance)
+
+
+## Shared brick fragment: an angular box wearing the theme's masonry panel in WORLD
+## triplanar projection — each fragment samples a different patch automatically.
+## Falls back to the bundled triplanar wall texture (or flat grey) while the themed
+## panel is not cached yet.
+func _rubble_stone_mesh() -> Mesh:
+	var box := BoxMesh.new()
+	box.size = Vector3.ONE
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.roughness = 0.95
+	mat.metallic = 0.0
+	var tex: Texture2D = null
+	if _ruins_library != null:
+		tex = _ruins_library.get_texture(_prop_theme + "solid_a")
+	if tex == null and ResourceLoader.exists(RUINS_WALL_TEX_PATH):
+		tex = load(RUINS_WALL_TEX_PATH) as Texture2D
+	if tex != null:
+		mat.albedo_texture = tex
+		mat.uv1_triplanar = true
+		mat.uv1_world_triplanar = true
+		var tile := 1.0 / RUBBLE_TEXTURE_TILE_M
+		mat.uv1_scale = Vector3(tile, tile, tile)
+	else:
+		mat.albedo_color = Color(0.45, 0.43, 0.4)
+	box.material = mat
+	return box
+
+
+func _clear_fire_instances() -> void:
+	for fire in _fire_instances:
+		if is_instance_valid(fire):
+			fire.queue_free()
+	_fire_instances.clear()
+	_fire_positions.clear()
+
+
+func _on_graphics_settings_applied(_preset_name: String) -> void:
+	if _fires_enabled:
+		_rebuild_fires()
+	_rebuild_rubble()
 
 
 ## A crumble panel descends toward its +U (right) edge. Mirror U iff the quad's local +U
