@@ -632,6 +632,29 @@ static func get_default_save_dir() -> String:
 	return dir
 
 
+## Newest .nml save in a directory (default: the standard save dir), for the menu's
+## CONTINUE entry. Returns {} when none exist, else { "path", "name", "modified_unix" }.
+static func latest_save_info(dir_path: String = "") -> Dictionary:
+	var dir := dir_path if not dir_path.is_empty() else get_default_save_dir()
+	var best_path := ""
+	var best_time := 0
+	for file in DirAccess.get_files_at(dir):
+		if not file.to_lower().ends_with(".nml"):
+			continue
+		var path := dir.path_join(file)
+		var modified := FileAccess.get_modified_time(path)
+		if modified > best_time:
+			best_time = modified
+			best_path = path
+	if best_path.is_empty():
+		return {}
+	return {
+		"path": best_path,
+		"name": best_path.get_file().get_basename(),
+		"modified_unix": best_time,
+	}
+
+
 # ===== GameUnit Deserialization =====
 
 ## Temporary storage for loaded game units (used during load)
