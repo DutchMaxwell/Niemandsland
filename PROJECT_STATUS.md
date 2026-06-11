@@ -48,8 +48,18 @@ host's room for 20 s; the host rehosts and re-syncs full state) but is **deploy-
 save format with OS file association, WGS import/export
 ([`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md)).
 
-**Presentation** — 9 Kenney UI themes (persisted), lighting presets (F1–F4),
-graphics quality presets, SSAO + glow, cinematic intro, glassmorphic startup menu.
+**Presentation** — 9 Kenney UI themes (persisted), lighting presets (F1–F5),
+graphics quality presets, SSAO + glow, cinematic intro. **Battlefield atmosphere**
+([`docs/ATMOSPHERE.md`](docs/ATMOSPHERE.md)): one-click Day/Sunset/Night/Overcast/Rain
+presets (2 s blends, rain particles, lightning + delayed thunder), a "war-torn" toggle
+(deterministic fires at ruin walls with smoke + flicker light) and "distant war sounds"
+— audio is real CC0 recordings delivered from R2 with procedural synth fallback
+(`ambience_synth.gd`), persisted per player. Scatter decor: brick-rubble piles at ruin
+wall bases + grassland grass field (one MultiMesh each, quality-gated). **AAA main
+menu**: live night-battlefield diorama (production terrain stack + miniatures vignette
++ orbit camera with DoF), left command column (HudTokens), CONTINUE-newest-save entry,
+typewriter quote ticker, menu soundscape + CC0 dark-ambient drone, idle attract mode.
+Settings window reachable in-game via left panel button or F7.
 
 **Model Forge** — Python pipeline (OPR data → image → TRELLIS mesh → GLB) with a
 Flask review UI; 38 faction design languages / 855 unit overrides with real OPR
@@ -68,6 +78,10 @@ models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
 
 ## In progress
 
+- **Verify the GPU-driver fix**: battlemaps showed magenta/rainbow corruption on
+  2026-06-11 — diagnosed as degraded NVIDIA driver state after NVRM OOM (kernel log),
+  not code; needs a reboot to confirm. Runtime hardening already in `table.gd`
+  (battlemaps capped at 4096 px + RGBA8 upload).
 - Terrain reference aids per the **Asgard tournament standard** — *display only, no
   auto-resolution*: always-visible effect labels per terrain zone (Cover / Difficult /
   Dangerous / Impassable / Height) and height-aware top-down line-of-sight in the
