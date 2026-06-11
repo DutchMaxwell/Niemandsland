@@ -8,7 +8,6 @@ var atmosphere_controller: Node = null
 # UI References
 var sliders: Dictionary = {}
 var color_pickers: Dictionary = {}
-var preset_buttons: Array = []
 var volume_sliders: Dictionary = {}
 var _main_vbox: VBoxContainer = null
 
@@ -119,25 +118,10 @@ func _build_ui() -> void:
 	scroll.add_child(vbox)
 	_main_vbox = vbox
 
-	# Presets Section
-	var preset_label = Label.new()
-	preset_label.text = "PRESETS:"
-	preset_label.add_theme_font_size_override("font_size", 16)
-	vbox.add_child(preset_label)
-
-	var preset_grid = GridContainer.new()
-	preset_grid.columns = 2
-	vbox.add_child(preset_grid)
-
-	var preset_names = lighting_controller.get_preset_names()
-	for preset_name in preset_names:
-		var btn = Button.new()
-		btn.text = preset_name
-		btn.pressed.connect(_on_preset_pressed.bind(preset_name))
-		preset_grid.add_child(btn)
-		preset_buttons.append(btn)
-
-	vbox.add_child(HSeparator.new())
+	# Lighting moods are chosen through the ATMOSPHERE section only (added at the top by
+	# set_atmosphere_controller); the old standalone lighting "PRESETS" were a parallel,
+	# confusing second system and have been removed. The PARAMETERS sliders below still
+	# fine-tune the current atmosphere.
 
 	# Parameters Section
 	var params_label = Label.new()
@@ -378,9 +362,6 @@ func _on_color_changed(color: Color, key: String) -> void:
 			lighting_controller.set_ambient_color(color)
 
 
-func _on_preset_pressed(preset_name: String) -> void:
-	lighting_controller.apply_preset(preset_name)
-	_sync_ui_from_controller()
 
 
 func _on_print_pressed() -> void:

@@ -600,22 +600,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_DELETE or event.keycode == KEY_BACKSPACE:
 			_delete_selected_objects()
 			get_viewport().set_input_as_handled()
-		# Lighting Presets (F1-F5)
-		elif event.keycode == KEY_F1:
-			lighting_controller.apply_preset("Default")
-			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_F2:
-			lighting_controller.apply_preset("Warm Sunset")
-			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_F3:
-			lighting_controller.apply_preset("Bright Studio")
-			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_F4:
-			lighting_controller.apply_preset("Dramatic")
-			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_F5:
-			lighting_controller.apply_preset("Cool Overcast")
-			get_viewport().set_input_as_handled()
+		# Lighting moods are chosen through the ATMOSPHERE section in Settings (F7) only;
+		# the old F1-F5 standalone lighting presets were a parallel system and removed.
 		# Print current lighting settings (F6)
 		elif event.keycode == KEY_F6:
 			lighting_controller.print_current_settings()
