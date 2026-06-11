@@ -11,6 +11,12 @@ var color_pickers: Dictionary = {}
 var volume_sliders: Dictionary = {}
 var _main_vbox: VBoxContainer = null
 
+## True while _sync_ui_from_controller is pushing controller values INTO the widgets.
+## Setting slider.value / picker.color emits value_changed/color_changed, which would
+## otherwise call the change handlers and write the (half-synced) widget values BACK
+## into the controller — clobbering e.g. the sun angle. Guard the handlers with this.
+var _syncing := false
+
 # Parameters to control
 const PARAMS = {
 	"sun_energy": {"label": "Sun Energy", "min": 0.0, "max": 3.0, "step": 0.1},
@@ -320,6 +326,12 @@ func _on_volume_slider_changed(value: float, bus_name: String, value_label: Labe
 func _on_slider_changed(value: float, key: String, value_label: Label) -> void:
 	value_label.text = "%.2f" % value
 
+	# Ignore the value_changed emitted while we're pushing controller values into the
+	# widgets (otherwise the half-synced slider values get written back, clobbering the
+	# sun angle etc.).
+	if _syncing:
+		return
+
 	# A manual slider tweak must not fight a running atmosphere preset blend.
 	if atmosphere_controller:
 		atmosphere_controller.cancel_transition()
@@ -355,6 +367,8 @@ func _on_slider_changed(value: float, key: String, value_label: Label) -> void:
 
 
 func _on_color_changed(color: Color, key: String) -> void:
+	if _syncing:
+		return
 	match key:
 		"sun_color":
 			lighting_controller.set_sun_color(color)
@@ -369,6 +383,7 @@ func _on_print_pressed() -> void:
 
 
 func _sync_ui_from_controller() -> void:
+	_syncing = true
 	var preset = lighting_controller.current_preset
 
 	# Update sliders
@@ -384,3 +399,5 @@ func _sync_ui_from_controller() -> void:
 		color_pickers["sun_color"].color = preset.sun_color
 	if color_pickers.has("ambient_color") and preset.has("ambient_color"):
 		color_pickers["ambient_color"].color = preset.ambient_color
+
+	_syncing = false
