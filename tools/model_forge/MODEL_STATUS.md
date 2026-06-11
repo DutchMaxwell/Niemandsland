@@ -5,18 +5,18 @@ The "model review" tracker. Every Grimdark Future faction moves through:
 **R2** (uploaded + in [`assets/model_manifest.json`](../../assets/model_manifest.json),
 live in-game on demand).
 
-_Last updated: 2026-06-11 — Dwarf Guilds shipped to R2 (9 factions, 223 models)._
+_Last updated: 2026-06-11 — Goblin Reclaimers shipped to R2 (10 factions, 241 models)._
 
 ## Summary
 
 | Stage | Factions |
 |---|---|
-| ✅ Live on R2 | **9** (223 models) |
-| 🎯 Picked — ready for 3D | **3** |
+| ✅ Live on R2 | **10** (241 models) |
+| 🎯 Picked — ready for 3D | **2** |
 | 🖼️ 2D done — needs picking | **21** |
 | ⬜ 2D not generated yet | **5** |
 
-## ✅ Live on R2 — playable in-game (223 models)
+## ✅ Live on R2 — playable in-game (241 models)
 
 | Faction | Models | Note |
 |---|---|---|
@@ -28,11 +28,12 @@ _Last updated: 2026-06-11 — Dwarf Guilds shipped to R2 (9 factions, 223 models
 | Eternal Dynasty | 26 | ronin-samurai recast |
 | Battle Brothers | 23 | |
 | Dao Union | 19 | |
+| Goblin Reclaimers | 18 | |
 | Dark Brothers | 1 | ⚠️ hero only — 26 more units are 2D-done, not yet 3D/R2 |
 
 ## 🎯 Picked — ready for 3D → R2 (just run finalize + publish)
 
-Goblin Reclaimers (~18) · Ratmen Clans (~25) · Saurian Starhost (~23).
+Ratmen Clans (~25) · Saurian Starhost (~23).
 
 ## 🖼️ 2D done — needs picking (best of 3) before 3D
 
