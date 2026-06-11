@@ -64,9 +64,14 @@ func _run() -> void:
 		"map_layout":
 			var ml: Control = load("res://scenes/map_layout.tscn").instantiate()
 			await _control(name, ml, Vector2i(1366, 860))
-		"startup_menu":
+		"startup_menu", "startup_menu_wide", "startup_menu_43":
+			var sizes := {"startup_menu": Vector2i(1366, 860),
+					"startup_menu_wide": Vector2i(2560, 1080), "startup_menu_43": Vector2i(1024, 768)}
 			var sm: Control = load("res://scenes/startup_menu.tscn").instantiate()
-			await _control(name, sm, Vector2i(1366, 860))
+			# Force the live diorama (AUTO would see current_scene != menu and fall
+			# back to sky-only); extra settle frames let fallbacks/upgrades appear.
+			(sm.get_node("Diorama") as MenuDiorama).mode = MenuDiorama.Mode.FORCED
+			await _control(name, sm, sizes[name], Callable(), 150)
 		_:
 			print("UNKNOWN menu: '%s'" % name)
 	get_tree().quit()
@@ -122,7 +127,7 @@ func _modal(name: String, node: Control, opener: Callable) -> void:
 
 ## Control / scene into a fixed SubViewport over a dark backdrop. `opener` (optional)
 ## runs after the node is in the tree (so @onready refs resolve) to populate it.
-func _control(name: String, node: Control, size: Vector2i, opener := Callable()) -> void:
+func _control(name: String, node: Control, size: Vector2i, opener := Callable(), settle_frames := 80) -> void:
 	if node == null:
 		print("SKIP %s (null)" % name)
 		return
@@ -138,7 +143,7 @@ func _control(name: String, node: Control, size: Vector2i, opener := Callable())
 	get_tree().root.add_child(vp)
 	if opener.is_valid():
 		opener.call()
-	await _settle(80)  # let intro/fade-in animations (e.g. the start menu) finish
+	await _settle(settle_frames)  # let intro/fade-in animations finish
 	_save(vp.get_texture().get_image(), name)
 
 
