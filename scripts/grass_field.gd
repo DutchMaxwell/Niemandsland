@@ -23,6 +23,10 @@ const RNG_SEED := 71823  # deterministic scatter (purely cosmetic, but stable)
 
 var _table_size := Vector2(1.22, 1.22)
 var _biome := ""
+## The tuft mesh (geometry + blade texture + material) is identical for every rebuild,
+## but _blade_texture() does per-pixel CPU work; build it once and reuse so quality
+## switches and table resizes only re-scatter instances, never regenerate the texture.
+var _tuft_mesh_cache: ArrayMesh = null
 
 # === Lifecycle ===
 
@@ -60,7 +64,9 @@ func _rebuild() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = RNG_SEED
 
-	var mesh := _tuft_mesh()
+	if _tuft_mesh_cache == null:
+		_tuft_mesh_cache = _tuft_mesh()
+	var mesh := _tuft_mesh_cache
 	var grass := MultiMesh.new()
 	grass.transform_format = MultiMesh.TRANSFORM_3D
 	grass.use_colors = true
