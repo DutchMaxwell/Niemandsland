@@ -30,6 +30,8 @@ func _ready() -> void:
 	unresizable = true
 	exclusive = true
 	borderless = true  # we draw our own tactical chrome (no gray Godot title bar)
+	transparent = true  # no grey window backdrop — the glass panel sits on the black
+	# prompt overlay (otherwise the default grey shows through while the content fades in)
 	close_requested.connect(_on_close)
 	visibility_changed.connect(func() -> void:
 		if visible:
