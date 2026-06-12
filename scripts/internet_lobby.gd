@@ -122,7 +122,16 @@ func list_rooms(url: String = "") -> Error:
 	# relay replies with an "error" frame while the socket is still connecting).
 	relay_peer.relay_connection_lost.connect(_on_list_failed.bind("Could not reach the relay."))
 	relay_peer.room_join_failed.connect(_on_list_failed)
-	return relay_peer.list_via_relay(url)
+	# A synchronous connect failure (bad URL, socket error) emits nothing on the
+	# peer — surface it ourselves and drop the dead peer, mirroring host/join.
+	# Direct emit is safe: the browser wires rooms_list_failed before calling.
+	var err := relay_peer.list_via_relay(url)
+	if err != OK:
+		push_error("InternetLobby: Failed to start room listing: %d" % err)
+		relay_peer = null
+		rooms_list_failed.emit("Could not reach the relay.")
+		return err
+	return OK
 
 
 func _on_rooms_list_received(rooms: Array) -> void:
