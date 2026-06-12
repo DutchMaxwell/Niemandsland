@@ -30,8 +30,8 @@ func test_menu_has_expected_buttons() -> void:
 		if child is Button:
 			buttons.append(child)
 
-	# Continue/Start/Host/Join/Load/Exit; CONTINUE may be hidden (no save).
-	assert_that(buttons.size()).is_equal(6)
+	# Continue/Start/Host/Join/Browse/Load/Exit; CONTINUE may be hidden (no save).
+	assert_that(buttons.size()).is_equal(7)
 
 
 func test_continue_button_hidden_without_save() -> void:

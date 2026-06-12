@@ -31,6 +31,9 @@ const FOV_BIAS_PUSH_IN := -2.0   # Continue/Start: lean toward the battlefield
 const FOV_BIAS_WIDE := 2.0       # Host/Join: step back for the wider table
 const ATTRACT_IDLE_S := 60.0
 const ATTRACT_FADE_S := 0.2
+## Fail the room-list request if neither rooms nor an error arrive in this time
+## (safety net for a relay that accepts the socket but never replies).
+const BROWSE_TIMEOUT_S := 8.0
 
 
 # === Node references ===
@@ -43,6 +46,7 @@ const ATTRACT_FADE_S := 0.2
 @onready var start_battle_btn: MenuListButton = %StartBattleBtn
 @onready var host_online_btn: MenuListButton = %HostOnlineBtn
 @onready var join_online_btn: MenuListButton = %JoinOnlineBtn
+@onready var browse_online_btn: MenuListButton = %BrowseOnlineBtn
 @onready var load_battle_btn: MenuListButton = %LoadBattleBtn
 @onready var exit_game_btn: MenuListButton = %ExitGameBtn
 @onready var ticker: MenuTicker = %Ticker
@@ -55,9 +59,18 @@ var animation_played: bool = false
 var _load_dialog: FileDialog
 var _host_popup: AcceptDialog
 var _join_popup: AcceptDialog
+var _browse_popup: AcceptDialog
 var _relay_url_input: LineEdit
+var _host_name_input: LineEdit
+var _host_public_check: CheckBox
 var _join_code_input: LineEdit
 var _join_relay_url_input: LineEdit
+var _join_name_input: LineEdit
+var _browse_name_input: LineEdit
+var _browse_url_input: LineEdit
+var _browse_rooms_vbox: VBoxContainer
+var _browse_lobby: InternetLobby
+var _browse_request_gen: int = 0  # invalidates a stale request's timeout/reply
 var _wordmark_box: HBoxContainer
 var _wordmark_lockup: VBoxContainer
 var _loading_overlay: LoadingOverlay = null
@@ -88,6 +101,7 @@ func _ready() -> void:
 	start_battle_btn.pressed.connect(_on_start_battle_pressed)
 	host_online_btn.pressed.connect(_on_host_online_pressed)
 	join_online_btn.pressed.connect(_on_join_online_pressed)
+	browse_online_btn.pressed.connect(_on_browse_online_pressed)
 	load_battle_btn.pressed.connect(_on_load_battle_pressed)
 	exit_game_btn.pressed.connect(_on_exit_pressed)
 	exit_game_btn.accent_color = HudTokens.DANGER
@@ -255,9 +269,17 @@ func _show_host_popup() -> void:
 	_host_popup = _build_net_dialog("HOST ONLINE GAME", "NET-01", "Start Hosting")
 
 	var content := _net_dialog_content(_host_popup)
+	content.add_child(_net_label("Player Name:"))
+	_host_name_input = _net_line_edit(PlayerIdentity.load_saved_name(), "Your name")
+	_host_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
+	content.add_child(_host_name_input)
 	content.add_child(_net_label("Relay Server URL:"))
 	_relay_url_input = _net_line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 	content.add_child(_relay_url_input)
+	_host_public_check = CheckBox.new()
+	_host_public_check.text = "List this room publicly (Browse Online Games)"
+	_host_public_check.focus_mode = Control.FOCUS_NONE
+	content.add_child(_host_public_check)
 	var info := _net_label("The room code will be shown in-game after connecting.")
 	info.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD
@@ -266,8 +288,8 @@ func _show_host_popup() -> void:
 	_host_popup.confirmed.connect(_on_host_confirmed)
 	add_child(_host_popup)
 	_host_popup.popup_centered()
-	UiPolish.keep_window_reachable(_host_popup, Vector2i(460, 240))
-	_relay_url_input.grab_focus()
+	UiPolish.keep_window_reachable(_host_popup, Vector2i(460, 300))
+	_host_name_input.grab_focus()
 
 
 func _on_host_confirmed() -> void:
@@ -275,10 +297,15 @@ func _on_host_confirmed() -> void:
 	if url.is_empty():
 		url = InternetLobby.DEFAULT_RELAY_URL
 
+	var player_name := PlayerIdentity.sanitize(_host_name_input.text)
+	PlayerIdentity.save_name(player_name)
+
 	# Pass settings to main scene — connection happens there
 	ProjectSettings.set_setting("niemandsland/pending_internet_lobby", true)
 	ProjectSettings.set_setting("niemandsland/internet_is_host", true)
 	ProjectSettings.set_setting("niemandsland/internet_relay_url", url)
+	ProjectSettings.set_setting("niemandsland/player_name", player_name)
+	ProjectSettings.set_setting("niemandsland/internet_public", _host_public_check.button_pressed)
 	_transition_to_game()
 
 
@@ -288,6 +315,10 @@ func _show_join_popup() -> void:
 	_join_popup = _build_net_dialog("JOIN ONLINE GAME", "NET-02", "Join")
 
 	var content := _net_dialog_content(_join_popup)
+	content.add_child(_net_label("Player Name:"))
+	_join_name_input = _net_line_edit(PlayerIdentity.load_saved_name(), "Your name")
+	_join_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
+	content.add_child(_join_name_input)
 	content.add_child(_net_label("Room Code:"))
 	_join_code_input = _net_line_edit("", "ABC-123")
 	_join_code_input.max_length = 7  # 6 chars + optional hyphen
@@ -301,7 +332,7 @@ func _show_join_popup() -> void:
 	_join_popup.confirmed.connect(_on_join_confirmed)
 	add_child(_join_popup)
 	_join_popup.popup_centered()
-	UiPolish.keep_window_reachable(_join_popup, Vector2i(460, 280))
+	UiPolish.keep_window_reachable(_join_popup, Vector2i(460, 340))
 	_join_code_input.grab_focus()
 
 
@@ -309,17 +340,152 @@ func _on_join_confirmed() -> void:
 	var code = _join_code_input.text.strip_edges().replace("-", "").to_upper()
 	if code.is_empty():
 		return
-
 	var url = _join_relay_url_input.text.strip_edges()
 	if url.is_empty():
 		url = InternetLobby.DEFAULT_RELAY_URL
+	_join_room_and_transition(code, url, PlayerIdentity.sanitize(_join_name_input.text))
 
-	# Pass settings to main scene — connection happens there
+
+## Persists the name, hands the join settings to the main scene and transitions.
+## Shared by the Join dialog and the room browser (the connection happens in main).
+func _join_room_and_transition(code: String, url: String, player_name: String) -> void:
+	PlayerIdentity.save_name(player_name)
 	ProjectSettings.set_setting("niemandsland/pending_internet_lobby", true)
 	ProjectSettings.set_setting("niemandsland/internet_is_host", false)
 	ProjectSettings.set_setting("niemandsland/internet_relay_url", url)
 	ProjectSettings.set_setting("niemandsland/internet_room_code", code)
+	ProjectSettings.set_setting("niemandsland/player_name", player_name)
 	_transition_to_game()
+
+
+# ===== Room browser (NET-03) =====
+
+func _on_browse_online_pressed() -> void:
+	_show_browse_popup()
+
+
+func _show_browse_popup() -> void:
+	if _browse_popup:
+		_browse_popup.queue_free()
+	_browse_popup = _build_net_dialog("BROWSE ONLINE GAMES", "NET-03", "Close")
+
+	var content := _net_dialog_content(_browse_popup)
+	content.add_child(_net_label("Player Name:"))
+	_browse_name_input = _net_line_edit(PlayerIdentity.load_saved_name(), "Your name")
+	_browse_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
+	content.add_child(_browse_name_input)
+	content.add_child(_net_label("Relay Server URL:"))
+	_browse_url_input = _net_line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
+	content.add_child(_browse_url_input)
+
+	var refresh_btn := Button.new()
+	refresh_btn.text = "Refresh list"
+	refresh_btn.focus_mode = Control.FOCUS_NONE
+	refresh_btn.pressed.connect(_refresh_browse_list)
+	content.add_child(refresh_btn)
+
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 220)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	content.add_child(scroll)
+	_browse_rooms_vbox = VBoxContainer.new()
+	_browse_rooms_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_browse_rooms_vbox.add_theme_constant_override("separation", HudTokens.SPACE_4)
+	scroll.add_child(_browse_rooms_vbox)
+
+	# A reusable lobby just for listing (its _process polls the relay socket).
+	_browse_lobby = InternetLobby.new()
+	add_child(_browse_lobby)
+	_browse_lobby.rooms_list_received.connect(_on_browse_rooms_received)
+	_browse_lobby.rooms_list_failed.connect(_on_browse_failed)
+
+	_browse_popup.confirmed.connect(_on_browse_closed)
+	_browse_popup.canceled.connect(_on_browse_closed)
+	add_child(_browse_popup)
+	_browse_popup.popup_centered()
+	UiPolish.keep_window_reachable(_browse_popup, Vector2i(460, 460))
+	_refresh_browse_list()
+
+
+func _refresh_browse_list() -> void:
+	if not _browse_lobby:
+		return
+	_set_browse_status("Loading rooms…")
+	var url := _browse_url_input.text.strip_edges()
+	if url.is_empty():
+		url = InternetLobby.DEFAULT_RELAY_URL
+	_browse_request_gen += 1
+	var gen := _browse_request_gen
+	_browse_lobby.list_rooms(url)
+	# Safety net: a relay that never replies leaves the list spinning forever.
+	get_tree().create_timer(BROWSE_TIMEOUT_S).timeout.connect(
+		func() -> void:
+			if gen == _browse_request_gen and _browse_rooms_vbox:
+				_set_browse_status("Could not reach the relay (timed out)."))
+
+
+func _on_browse_rooms_received(rooms: Array) -> void:
+	_browse_request_gen += 1  # a reply arrived; void the pending timeout
+	for child in _browse_rooms_vbox.get_children():
+		child.queue_free()
+	if rooms.is_empty():
+		_set_browse_status("No public rooms right now.")
+		return
+	for room: Variant in rooms:
+		var code := str(room.get("code", ""))
+		var players := int(room.get("players", 0))
+		if code.is_empty():
+			continue
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", HudTokens.SPACE_8)
+		var label := Label.new()
+		label.text = "%s   %d/%d" % [InternetLobby._format_code(code), players, InternetLobby.MAX_ROOM_PLAYERS]
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(label)
+		var join_btn := Button.new()
+		join_btn.text = "Join"
+		join_btn.focus_mode = Control.FOCUS_NONE
+		join_btn.pressed.connect(_on_browse_join.bind(code))
+		row.add_child(join_btn)
+		_browse_rooms_vbox.add_child(row)
+
+
+## The relay was unreachable or rejected list_rooms (e.g. not yet redeployed).
+func _on_browse_failed(reason: String) -> void:
+	_browse_request_gen += 1  # an error arrived; void the pending timeout
+	_set_browse_status(reason)
+
+
+func _on_browse_join(code: String) -> void:
+	var url := _browse_url_input.text.strip_edges()
+	if url.is_empty():
+		url = InternetLobby.DEFAULT_RELAY_URL
+	_cleanup_browse_lobby()
+	_join_room_and_transition(code, url, PlayerIdentity.sanitize(_browse_name_input.text))
+
+
+func _on_browse_closed() -> void:
+	_cleanup_browse_lobby()
+
+
+## Frees the listing lobby (and any open socket) when the browser closes/joins.
+func _cleanup_browse_lobby() -> void:
+	if _browse_lobby:
+		_browse_lobby.disconnect_internet_game()
+		_browse_lobby.queue_free()
+		_browse_lobby = null
+
+
+## Shows a single status line in the room list (loading / empty / error).
+func _set_browse_status(text: String) -> void:
+	if not _browse_rooms_vbox:
+		return
+	for child in _browse_rooms_vbox.get_children():
+		child.queue_free()
+	var label := Label.new()
+	label.text = text
+	label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	_browse_rooms_vbox.add_child(label)
 
 
 ## Shared chrome for the host/join dialogs: HudTokens glass panel + corner brackets
@@ -436,17 +602,22 @@ func _get_save_from_cmdline() -> String:
 func _input(event: InputEvent) -> void:
 	_register_activity(event)
 	if event is InputEventKey and event.pressed and not event.echo:
-		match event.keycode:
-			KEY_ESCAPE:
-				_on_exit_pressed()
-			KEY_1:
-				_on_start_battle_pressed()
-			KEY_2:
-				_on_host_online_pressed()
-			KEY_3:
-				_on_join_online_pressed()
-			KEY_4:
-				_on_load_battle_pressed()
+		# Never fire menu shortcuts while a dialog text field (name / code / URL)
+		# has focus — digits in a name like "Boss5" would otherwise trigger menu
+		# entries and Esc would quit (same LineEdit guard used in-game).
+		if get_viewport().gui_get_focus_owner() is LineEdit:
+			return
+		if event.keycode == KEY_ESCAPE:
+			_on_exit_pressed()
+			return
+		# Number keys press the matching visible menu entry — bound to the live
+		# on-screen index (set by _renumber_buttons), so adding/hiding entries
+		# (e.g. CONTINUE, BROWSE ONLINE GAMES) keeps keys and labels in sync.
+		if event.keycode >= KEY_1 and event.keycode <= KEY_9:
+			var idx: int = event.keycode - KEY_1
+			var buttons := _visible_menu_buttons()
+			if idx < buttons.size():
+				buttons[idx].pressed.emit()
 
 # ===== Static (testable) =====
 
@@ -636,6 +807,7 @@ func _setup_camera_reactivity() -> void:
 	var biases := {
 		continue_btn: FOV_BIAS_PUSH_IN, start_battle_btn: FOV_BIAS_PUSH_IN,
 		host_online_btn: FOV_BIAS_WIDE, join_online_btn: FOV_BIAS_WIDE,
+		browse_online_btn: FOV_BIAS_WIDE,
 	}
 	for btn: Button in biases:
 		btn.mouse_entered.connect(func() -> void: diorama.set_fov_bias(biases[btn]))

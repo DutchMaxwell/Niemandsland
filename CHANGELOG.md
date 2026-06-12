@@ -7,6 +7,20 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Added
+- **Multiplayer lobby, in-game chat and player names.** Players now enter a **name**
+  in the Host/Join dialog (persisted to `user://`, synced host-authoritatively); it
+  shows in the dice log, on 3D avatars and in a new connected-player roster. An
+  **in-game chat** panel (docked bottom-left, Tactical-HUD chrome) carries messages
+  over the existing reliable RPC path — Enter focuses the input, Esc returns to the
+  game, and all three keyboard-input paths (the polled WASD camera, object shortcuts,
+  Delete/Backspace) are frozen while typing so nothing fires mid-message. A **room
+  browser** ("BROWSE ONLINE GAMES") lists joinable public rooms (a new opt-in "list
+  publicly" toggle on hosting) and joins by click; private rooms stay code-only. The
+  relay gains an additive `list_rooms` command (public, non-full, non-paused rooms
+  only). Menu number-key shortcuts are now bound to the live on-screen index. New
+  pure `PlayerIdentity` helper (unit-tested). **Protocol bump → `0.3.2-alpha`**. The
+  relay was redeployed to Fly.io on 2026-06-12 (bundling `list_rooms` + the previously
+  pending host-drop reconnect); a `list_rooms` smoke test against the live server passed.
 - **Extended dice options: success counting, modifiers and rerolls** (display-only
   aids — the tool counts, the players apply the rules). The dice panel gains a
   success target (2+…6+) and a modifier stepper; the per-face readout tints

@@ -62,6 +62,7 @@ class Room:
     created_at: float = field(default_factory=time.monotonic)
     next_peer_id: int = 2  # Host is always peer_id 1
     host_disconnected_at: float = 0.0  # >0 = host dropped; room preserved until rejoin or window expiry
+    is_public: bool = False  # listed in the room browser; private rooms join by code only
 
 
 class RelayServer:
@@ -144,13 +145,17 @@ class RelayServer:
             return
 
         if msg_type == "create_room":
-            await self._handle_create_room(websocket, ip)
+            # Only an explicit JSON boolean true makes a room public; a truthy
+            # string like "false"/"0" must NOT leak the room into the browser.
+            await self._handle_create_room(websocket, ip, msg.get("public", False) is True)
         elif msg_type == "join_room":
             code = msg.get("code", "")
             if not isinstance(code, str):
                 await self._send_error(websocket, "Invalid code format")
                 return
             await self._handle_join_room(websocket, code, ip)
+        elif msg_type == "list_rooms":
+            await self._handle_list_rooms(websocket)
         elif msg_type == "heartbeat":
             if peer:
                 peer.last_heartbeat = time.monotonic()
@@ -159,7 +164,7 @@ class RelayServer:
             await self._send_error(websocket, f"Unknown message type: {msg_type}")
 
     async def _handle_create_room(
-        self, websocket: ServerConnection, ip: str
+        self, websocket: ServerConnection, ip: str, is_public: bool = False
     ) -> None:
         """Create a new room and assign the creator as host (peer_id=1)."""
         # Check if this connection already has a room
@@ -173,7 +178,7 @@ class RelayServer:
             return
 
         code = self.generate_room_code()
-        room = Room(code=code)
+        room = Room(code=code, is_public=is_public)
         peer = Peer(
             websocket=websocket,
             peer_id=1,
@@ -288,6 +293,23 @@ class RelayServer:
                     pass
 
         logger.info("Peer %d joined room %s from %s", peer_id, code, ip)
+
+    async def _handle_list_rooms(self, websocket: ServerConnection) -> None:
+        """Reply with the joinable public rooms for the room browser.
+
+        Works on a connection that has NOT created or joined a room — the browser
+        lists before it joins. Private rooms (the default) are never listed; a
+        host that dropped (room paused) or a full room is excluded so the browser
+        only ever offers a room a player can actually join.
+        """
+        rooms = [
+            {"code": room.code, "players": len(room.peers)}
+            for room in self.rooms.values()
+            if room.is_public
+            and room.host_disconnected_at == 0.0
+            and len(room.peers) < MAX_PEERS_PER_ROOM
+        ]
+        await websocket.send(json.dumps({"type": "rooms_list", "rooms": rooms}))
 
     async def _handle_binary_message(self, sender: Peer, data: bytes) -> None:
         """Forward a binary game data message to the target peer(s).
