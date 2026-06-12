@@ -182,3 +182,33 @@ func test_focus_chain_loops_first_to_last() -> void:
 	if not (_menu.find_child("ContinueBtn", true, false) as Button).visible:
 		assert_that(first.get_node(first.focus_neighbor_top)).is_equal(last)
 		assert_that(last.get_node(last.focus_neighbor_bottom)).is_equal(first)
+
+
+## ===== Online dialogs (regression: the content node must resolve) =====
+## The net dialog's intermediate MarginContainer gets a runtime auto-name, so a
+## fixed get_node path resolved to null and adding content crashed — "Host Online"
+## opened nothing. These guard that the host/join/browse dialogs build fully.
+
+func test_host_online_dialog_builds() -> void:
+	_menu._on_host_online_pressed()
+	await _runner.simulate_frames(3)
+	assert_that(_menu._host_name_input).is_not_null()
+	assert_that(_menu._host_public_check).is_not_null()
+	assert_that(_menu._relay_url_input).is_not_null()
+	assert_that(_menu._host_popup.visible).is_true()
+
+
+func test_join_online_dialog_builds() -> void:
+	_menu._on_join_online_pressed()
+	await _runner.simulate_frames(3)
+	assert_that(_menu._join_name_input).is_not_null()
+	assert_that(_menu._join_code_input).is_not_null()
+	assert_that(_menu._join_popup.visible).is_true()
+
+
+func test_browse_online_dialog_builds() -> void:
+	_menu._on_browse_online_pressed()
+	await _runner.simulate_frames(3)
+	assert_that(_menu._browse_rooms_vbox).is_not_null()
+	assert_that(_menu._browse_lobby).is_not_null()
+	assert_that(_menu._browse_popup.visible).is_true()
