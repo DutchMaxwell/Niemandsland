@@ -38,14 +38,15 @@
   <h1>🗂️ R2 Model Browser</h1>
   <span class="pill">{{ factions }} Fraktionen</span>
   <span class="pill">{{ total }} Modelle auf R2</span>
-  {% if rework_total %}<span class="pill" style="border-color:var(--amber);color:var(--amber)">⚠ {{ rework_total }} zur Überarbeitung</span>{% endif %}
+  {% if rework_total %}<span class="pill" style="border-color:var(--amber);color:var(--amber)">⚠ {{ rework_total }} Überarbeiten</span>{% endif %}
+  {% if debase_total %}<span class="pill" style="border-color:var(--cyan);color:var(--cyan)">⬣ {{ debase_total }} Base entfernen</span>{% endif %}
   <span class="sub">{{ base_url }}</span>
 </header>
 <div class="wrap">
   <table>
     <thead><tr>
       <th>Fraktion</th><th class="n">Auf R2</th><th class="n">Roster</th>
-      <th>Abdeckung</th><th class="n">Lücken</th><th class="n">⚠ Rework</th>
+      <th>Abdeckung</th><th class="n">Lücken</th><th class="n">⚠ Rework</th><th class="n">⬣ Base</th>
     </tr></thead>
     <tbody>
     {% for r in rows %}
@@ -59,6 +60,7 @@
         </td>
         <td class="n {{ 'gap' if r.gaps else '' }}">{{ r.gaps if r.gaps else '✓' }}</td>
         <td class="n" style="{{ 'color:var(--amber);font-weight:600' if r.rework else 'color:var(--dim)' }}">{{ r.rework if r.rework else '–' }}</td>
+        <td class="n" style="{{ 'color:var(--cyan);font-weight:600' if r.debase else 'color:var(--dim)' }}">{{ r.debase if r.debase else '–' }}</td>
       </tr>
     {% endfor %}
     </tbody>
