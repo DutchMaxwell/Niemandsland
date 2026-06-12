@@ -393,23 +393,13 @@ text = "Offline"
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
-text = "Host Game"
-
-[node name="JoinContainer" type="HBoxContainer" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/NetworkPanel"]
-layout_mode = 2
-
-[node name="AddressInput" type="LineEdit" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/NetworkPanel/JoinContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-placeholder_text = "localhost"
-text = "localhost"
+text = "Host Online Game"
 
 [node name="JoinButton" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/NetworkPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
-text = "Join Game"
+text = "Join Online Game"
 
 [node name="DisconnectButton" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/NetworkPanel"]
 unique_name_in_owner = true
