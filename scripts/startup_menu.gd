@@ -515,7 +515,11 @@ func _build_net_dialog(title_text: String, index: String, ok_text: String) -> Ac
 
 
 func _net_dialog_content(dialog: AcceptDialog) -> VBoxContainer:
-	return dialog.get_node("NetPanel/MarginContainer/NetContent") as VBoxContainer
+	# Find the explicitly-named content node directly: the intermediate MarginContainer
+	# gets a runtime auto-name (@MarginContainer@N), so a fixed "NetPanel/MarginContainer/…"
+	# path resolves to null and the caller crashes adding content. find_child is immune
+	# to those auto-names (recursive, owned=false for runtime-built nodes).
+	return dialog.find_child("NetContent", true, false) as VBoxContainer
 
 
 func _net_label(text_value: String) -> Label:
