@@ -44,6 +44,12 @@ func _process(delta: float) -> void:
 	_move_direction = Vector2.ZERO
 	_rotation_direction = 0.0
 
+	# Movement is POLLED via Input.is_key_pressed, which bypasses GUI focus — so a
+	# focused text field (e.g. the chat input) would otherwise still pan the camera.
+	# Freeze movement while any LineEdit has focus.
+	if get_viewport().gui_get_focus_owner() is LineEdit:
+		return
+
 	# Skip WASD if Shift is held (used for other shortcuts like Shift+A, Shift+R)
 	if not Input.is_key_pressed(KEY_SHIFT):
 		if Input.is_key_pressed(KEY_W):

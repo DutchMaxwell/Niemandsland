@@ -28,6 +28,11 @@ signal remote_casts_updated(game_unit: GameUnit)
 signal remote_unit_deleted(game_unit: GameUnit)
 signal remote_round_advanced()
 
+## Emitted when a player's display name becomes known/changes (peer_id -> name).
+signal remote_player_name_updated(peer_id: int, player_name: String)
+## Emitted on a guest when the host sends its chat message (peer_id -> text).
+signal remote_chat_message(peer_id: int, text: String)
+
 const DEFAULT_PORT: int = 7777
 const MAX_PLAYERS: int = 8
 
@@ -47,6 +52,10 @@ var connected_peers: Array[int] = []
 
 ## Peers (by id) that announced a matching version. Host-only.
 var validated_peers: Dictionary = {}
+
+## Display names by peer id. Host-authoritative: guests announce their own name to
+## the host, the host owns the map and pushes the full roster to everyone.
+var player_names: Dictionary = {}  # Dictionary[int, String]
 
 ## Connection health tracking
 var _last_connection_status: int = -1
@@ -193,6 +202,7 @@ func _on_peer_disconnected(id: int) -> void:
 	push_warning("[Network] Player disconnected: Peer ID %d (remaining peers: %d, rpc_errors=%d)" % [id, connected_peers.size() - 1, _rpc_error_count])
 	connected_peers.erase(id)
 	validated_peers.erase(id)
+	player_names.erase(id)
 	player_disconnected.emit(id)
 
 
@@ -744,6 +754,100 @@ func broadcast_camera_direction(yaw: float, pitch: float) -> void:
 func broadcast_dice_roll(results: Array, context: Dictionary) -> void:
 	if is_multiplayer_active():
 		sync_dice_roll.rpc(results, context)
+
+
+# ===== Player names (host-authoritative roster) =====
+
+## RPC (guest → host): a peer announces its own display name. The host sanitizes
+## it at the trust boundary (a guest sends a raw string), records it and
+## re-publishes the full roster so every peer learns it.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_player_name(player_name: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	var clean := PlayerIdentity.sanitize(player_name)
+	player_names[sender] = clean
+	remote_player_name_updated.emit(sender, clean)
+	_publish_roster()
+
+
+## RPC (host → guest, authority): the host pushes the whole name roster. The guest
+## adopts it and emits one update per entry so the UI refreshes.
+@rpc("authority", "call_remote", "reliable")
+func sync_player_roster(roster: Dictionary) -> void:
+	for id: int in roster:
+		player_names[id] = roster[id]
+		remote_player_name_updated.emit(id, roster[id])
+
+
+## Guest → host: announce our own name (no-op as host; the host seeds its own name
+## locally). Sent right after the version handshake is ANNOUNCED (not yet confirmed):
+## a version-mismatched peer's name is tolerated on the host and dropped with it on
+## disconnect (player_names.erase in _on_peer_disconnected), so no cleanup is missed.
+func broadcast_player_name(player_name: String) -> void:
+	if multiplayer.is_server() or not is_multiplayer_active():
+		return
+	sync_player_name.rpc_id(1, player_name)
+
+
+## Host: record our own name and (if peers are present) publish the roster.
+func set_host_name(player_name: String) -> void:
+	if not multiplayer.is_server():
+		return
+	player_names[get_my_peer_id()] = player_name
+	remote_player_name_updated.emit(get_my_peer_id(), player_name)
+	_publish_roster()
+
+
+## Host: send the full roster to one freshly validated peer (called from main.gd
+## on peer_version_validated, alongside the state sync).
+func push_roster_to_peer(peer_id: int) -> void:
+	if not multiplayer.is_server() or not is_multiplayer_active():
+		return
+	sync_player_roster.rpc_id(peer_id, player_names)
+
+
+## Host: re-publish the whole roster to every connected peer.
+func _publish_roster() -> void:
+	if not multiplayer.is_server() or not is_multiplayer_active():
+		return
+	sync_player_roster.rpc(player_names)
+
+
+# ===== In-game chat =====
+
+## Longest chat message kept; the rest is clipped. Guards the log + relay frame.
+const MAX_CHAT_LEN: int = 200
+
+
+## Strips control chars (keeps chat one-line) and clamps the length. Applied on
+## both send and receive so a crafted peer can't overflow the log.
+static func _clean_chat(text: String) -> String:
+	var cleaned := ""
+	for c: String in text:
+		if c.unicode_at(0) >= 32:
+			cleaned += c
+	cleaned = cleaned.strip_edges()
+	return cleaned.substr(0, MAX_CHAT_LEN)
+
+
+## RPC: a player's chat message reaches every other peer (broadcast, reliable).
+@rpc("any_peer", "call_remote", "reliable")
+func sync_chat_message(text: String) -> void:
+	var sender = multiplayer.get_remote_sender_id()
+	var cleaned := _clean_chat(text)
+	if not cleaned.is_empty():
+		remote_chat_message.emit(sender, cleaned)
+
+
+## Broadcast a chat message to all peers and return the cleaned text, so the
+## sender's local echo is identical to what every other peer receives.
+func broadcast_chat_message(text: String) -> String:
+	var cleaned := _clean_chat(text)
+	if not cleaned.is_empty() and is_multiplayer_active():
+		sync_chat_message.rpc(cleaned)
+	return cleaned
 
 
 # ===== Table Settings Synchronization =====
