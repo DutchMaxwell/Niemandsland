@@ -134,7 +134,6 @@ var _remote_roll_context: Dictionary = {}
 @onready var host_button: Button = %HostButton
 @onready var join_button: Button = %JoinButton
 @onready var disconnect_button: Button = %DisconnectButton
-@onready var address_input: LineEdit = %AddressInput
 
 # Internet multiplayer
 var internet_lobby: InternetLobby = null
@@ -142,6 +141,16 @@ var internet_lobby: InternetLobby = null
 # The local player's chosen display name (empty -> "Player N" fallback). Set from
 # the startup-menu Host/Join dialog, otherwise loaded from the saved profile.
 var _local_player_name: String = ""
+
+# In-game online Host/Join dialogs (same NetDialog chrome as the startup menu).
+var _net_host_popup: AcceptDialog = null
+var _net_join_popup: AcceptDialog = null
+var _net_host_name_input: LineEdit = null
+var _net_host_url_input: LineEdit = null
+var _net_host_public_check: CheckBox = null
+var _net_join_name_input: LineEdit = null
+var _net_join_code_input: LineEdit = null
+var _net_join_url_input: LineEdit = null
 
 # In-game chat + roster (built at runtime; visible only during a session).
 const CHAT_PANEL_SMALL_FONT: int = 12
@@ -1663,27 +1672,72 @@ func _adjust_camera_for_table_size(size_feet: Vector2) -> void:
 		camera_pivot.adjust_for_table_size(size_feet)
 
 
-## Network UI handlers
+## Network UI handlers — the in-game Host/Join buttons open the SAME online
+## relay dialogs as the startup menu (shared NetDialog chrome); the connection
+## then runs through internet_lobby, exactly like a menu-launched online game.
 func _on_host_pressed() -> void:
-	var error = network_manager.host_game()
-	if error == OK:
-		_update_network_ui(true, true)
-		network_status_label.text = "Hosting on port 7777"
-		network_status_label.add_theme_color_override("font_color", Color.GREEN)
-		_register_local_name()
+	if _net_host_popup:
+		_net_host_popup.queue_free()
+	_net_host_popup = NetDialog.build("HOST ONLINE GAME", "NET-01", "Start Hosting")
+	var content := NetDialog.content(_net_host_popup)
+	content.add_child(NetDialog.label("Player Name:"))
+	_net_host_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Your name")
+	_net_host_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
+	content.add_child(_net_host_name_input)
+	content.add_child(NetDialog.label("Relay Server URL:"))
+	_net_host_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
+	content.add_child(_net_host_url_input)
+	_net_host_public_check = CheckBox.new()
+	_net_host_public_check.text = "List this room publicly (Browse Online Games)"
+	_net_host_public_check.focus_mode = Control.FOCUS_NONE
+	content.add_child(_net_host_public_check)
+	_net_host_popup.confirmed.connect(_on_net_host_confirmed)
+	add_child(_net_host_popup)
+	_net_host_popup.popup_centered()
+	_net_host_name_input.grab_focus()
+
+
+func _on_net_host_confirmed() -> void:
+	var url := _net_host_url_input.text.strip_edges()
+	if url.is_empty():
+		url = InternetLobby.DEFAULT_RELAY_URL
+	_local_player_name = PlayerIdentity.sanitize(_net_host_name_input.text)
+	PlayerIdentity.save_name(_local_player_name)
+	internet_lobby.host_internet_game(url, _net_host_public_check.button_pressed)
 
 
 func _on_join_pressed() -> void:
-	var address = address_input.text.strip_edges()
-	if address.is_empty():
-		address = "localhost"
+	if _net_join_popup:
+		_net_join_popup.queue_free()
+	_net_join_popup = NetDialog.build("JOIN ONLINE GAME", "NET-02", "Join")
+	var content := NetDialog.content(_net_join_popup)
+	content.add_child(NetDialog.label("Player Name:"))
+	_net_join_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Your name")
+	_net_join_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
+	content.add_child(_net_join_name_input)
+	content.add_child(NetDialog.label("Room Code:"))
+	_net_join_code_input = NetDialog.line_edit("", "ABC-123")
+	_net_join_code_input.max_length = 7  # 6 chars + optional hyphen
+	content.add_child(_net_join_code_input)
+	content.add_child(NetDialog.label("Relay Server URL:"))
+	_net_join_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
+	content.add_child(_net_join_url_input)
+	_net_join_popup.confirmed.connect(_on_net_join_confirmed)
+	add_child(_net_join_popup)
+	_net_join_popup.popup_centered()
+	_net_join_code_input.grab_focus()
 
-	var error = network_manager.join_game(address)
-	if error == OK:
-		network_status_label.text = "Connecting..."
-		network_status_label.add_theme_color_override("font_color", Color.YELLOW)
-		host_button.disabled = true
-		join_button.disabled = true
+
+func _on_net_join_confirmed() -> void:
+	var code := _net_join_code_input.text.strip_edges().replace("-", "").to_upper()
+	if code.is_empty():
+		return
+	var url := _net_join_url_input.text.strip_edges()
+	if url.is_empty():
+		url = InternetLobby.DEFAULT_RELAY_URL
+	_local_player_name = PlayerIdentity.sanitize(_net_join_name_input.text)
+	PlayerIdentity.save_name(_local_player_name)
+	internet_lobby.join_internet_game(code, url)
 
 
 func _on_disconnect_pressed() -> void:
@@ -2354,7 +2408,6 @@ func _update_network_ui(connected: bool, _is_host: bool) -> void:
 	host_button.disabled = false
 	join_button.visible = !connected
 	join_button.disabled = false
-	address_input.visible = !connected
 	disconnect_button.visible = connected
 	# Chat + roster are only meaningful in a live session (central toggle — every
 	# connect/disconnect path routes through here).
