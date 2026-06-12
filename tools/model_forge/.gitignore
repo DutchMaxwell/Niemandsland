@@ -7,6 +7,9 @@ state/
 output/
 .bbtmp/
 
+# R2 browser review state (maintainer's local rework flags; read by the agent, not a build asset)
+rework_flags.json
+
 # Downloaded third-party binaries / tool checkouts (e.g. realesrgan) — never committed.
 _tools/
 
