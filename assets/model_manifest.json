@@ -568,9 +568,9 @@
       "size": 15238992
     },
     "high_elf_fleets/acolytes": {
-      "url": "100ebe0dbdcc91ea7255972b83c9edd4931347e242040c5faa2070d4ca797751.glb",
-      "sha256": "100ebe0dbdcc91ea7255972b83c9edd4931347e242040c5faa2070d4ca797751",
-      "size": 16685144
+      "url": "549e00cc3dff4f73d48e0a2925390a00eddd31da930f9021ff39bca81872c438.glb",
+      "sha256": "549e00cc3dff4f73d48e0a2925390a00eddd31da930f9021ff39bca81872c438",
+      "size": 16688076
     },
     "high_elf_fleets/anti gravity apc": {
       "url": "9dba5ce85ee5d4f374e5cd4e5861d34fe05c64aa07803a3d466157aaae787016.glb",
@@ -588,9 +588,9 @@
       "size": 14379092
     },
     "high_elf_fleets/elemental avatar": {
-      "url": "d6b4451eb69f8c2a0ab850ef05325547ae62d6333a258976d530c3d0f4326446.glb",
-      "sha256": "d6b4451eb69f8c2a0ab850ef05325547ae62d6333a258976d530c3d0f4326446",
-      "size": 20805312
+      "url": "b2c54ec9e393f63c44a2b9af5632040a94ccd7d7a9490ffc4dce169a5aed07ac.glb",
+      "sha256": "b2c54ec9e393f63c44a2b9af5632040a94ccd7d7a9490ffc4dce169a5aed07ac",
+      "size": 20845636
     },
     "high_elf_fleets/elemental protectors": {
       "url": "cbadd0a46c23fc5bd06fd4f1702311f8fe0753c97b1f2ffb76af83ce63db373b.glb",
@@ -598,9 +598,9 @@
       "size": 19893732
     },
     "high_elf_fleets/elemental strikers": {
-      "url": "45b466691f641733cc2181878b37916ff33ffb84bd833820804bcb0e7643e54b.glb",
-      "sha256": "45b466691f641733cc2181878b37916ff33ffb84bd833820804bcb0e7643e54b",
-      "size": 16084412
+      "url": "56b67e6eac9279323366ed9701dab5fdf719e53b3c4b10b5620332db15f9a7b2.glb",
+      "sha256": "56b67e6eac9279323366ed9701dab5fdf719e53b3c4b10b5620332db15f9a7b2",
+      "size": 15637760
     },
     "high_elf_fleets/elite protector": {
       "url": "618b325740e4d7b90219c193a7454cd2b311872c34a69f9e84472dda3eb61f19.glb",
@@ -613,19 +613,19 @@
       "size": 13302984
     },
     "high_elf_fleets/gliders": {
-      "url": "bcb32efe593a9548113db57959b5c9296a94a59f70b7c44b333be0734748e055.glb",
-      "sha256": "bcb32efe593a9548113db57959b5c9296a94a59f70b7c44b333be0734748e055",
-      "size": 19358048
+      "url": "2e5c16646f5df1fa43a73e6e87d25f12c703017aaeaf8ab12eef60bbb7e1d8e9.glb",
+      "sha256": "2e5c16646f5df1fa43a73e6e87d25f12c703017aaeaf8ab12eef60bbb7e1d8e9",
+      "size": 18044816
     },
     "high_elf_fleets/great elemental": {
-      "url": "459efb42771fb757a7259b537ddae94ab4aa21cce2d680921f6d150cc731be54.glb",
-      "sha256": "459efb42771fb757a7259b537ddae94ab4aa21cce2d680921f6d150cc731be54",
-      "size": 16945744
+      "url": "ec5e0f0a430d68ce26a3b4b26ad98787086ff311451632046486a407e9c22b65.glb",
+      "sha256": "ec5e0f0a430d68ce26a3b4b26ad98787086ff311451632046486a407e9c22b65",
+      "size": 17056120
     },
     "high_elf_fleets/heavy jetbike": {
-      "url": "996005da6ebf7be93fa7fbde3b8bdf70f77dfa3de623329b7e09945e868e0780.glb",
-      "sha256": "996005da6ebf7be93fa7fbde3b8bdf70f77dfa3de623329b7e09945e868e0780",
-      "size": 19351768
+      "url": "490700ffd0d7a9f4f807f47083ab9c6b7c8a084e8cf36f383851bd404d565b90.glb",
+      "sha256": "490700ffd0d7a9f4f807f47083ab9c6b7c8a084e8cf36f383851bd404d565b90",
+      "size": 15594692
     },
     "high_elf_fleets/jetbike protectors": {
       "url": "a0f7a37bdffdeeaa01c895004078c7e6670acfda50bbbd38708b5c5f1daf4e08.glb",
@@ -638,19 +638,19 @@
       "size": 16096748
     },
     "high_elf_fleets/protectors": {
-      "url": "2ccaa92e92232e0f9fd9e5c99793571ce6f51601a933c7551d92d462093c7de3.glb",
-      "sha256": "2ccaa92e92232e0f9fd9e5c99793571ce6f51601a933c7551d92d462093c7de3",
-      "size": 14276432
+      "url": "b524cc28946ac5fa2fd97e1693301330b075723917d48289070b9da1d141db09.glb",
+      "sha256": "b524cc28946ac5fa2fd97e1693301330b075723917d48289070b9da1d141db09",
+      "size": 14293860
     },
     "high_elf_fleets/retributors": {
-      "url": "e129e3f0c4bb0d8ce31bba6ed1bc79c82dc76cda28386d7e3366a9766ba396e4.glb",
-      "sha256": "e129e3f0c4bb0d8ce31bba6ed1bc79c82dc76cda28386d7e3366a9766ba396e4",
-      "size": 17332004
+      "url": "bd5a43d31151cce112893dbc37403155f56fb0c3d20fb7475495196c86852887.glb",
+      "sha256": "bd5a43d31151cce112893dbc37403155f56fb0c3d20fb7475495196c86852887",
+      "size": 15920628
     },
     "high_elf_fleets/revenants": {
-      "url": "d0b46b21c8e241710bbe73822408776a9d2c63c52b68c1f461e8fe75b0142495.glb",
-      "sha256": "d0b46b21c8e241710bbe73822408776a9d2c63c52b68c1f461e8fe75b0142495",
-      "size": 17099204
+      "url": "d7e7d730ead0aa81c0226a681e0d3a249c8ac483a02f926a760ed70ad17e072f.glb",
+      "sha256": "d7e7d730ead0aa81c0226a681e0d3a249c8ac483a02f926a760ed70ad17e072f",
+      "size": 17085640
     },
     "high_elf_fleets/scorchers": {
       "url": "3b1eb7d48f59e160b0f31868cf691678482b6aa231f154816915eb57a5e24ea7.glb",
@@ -668,9 +668,9 @@
       "size": 16556652
     },
     "high_elf_fleets/snipers": {
-      "url": "43ab87e1fd0b131f0918bdb46fe6187e12887e881490a08a00dd23b782502e26.glb",
-      "sha256": "43ab87e1fd0b131f0918bdb46fe6187e12887e881490a08a00dd23b782502e26",
-      "size": 14822280
+      "url": "7f993cb858291245bc4a14290818a9c48658a1f588a050f1d314920fae998a67.glb",
+      "sha256": "7f993cb858291245bc4a14290818a9c48658a1f588a050f1d314920fae998a67",
+      "size": 14789244
     },
     "high_elf_fleets/stingers": {
       "url": "8675cfc7e9a75ff9946262cd5b69984c276a876019e569b4ba19218647c3e0b0.glb",
@@ -683,19 +683,19 @@
       "size": 18398840
     },
     "high_elf_fleets/support artillery": {
-      "url": "4fda20fb984fd703329782e726dfc0a5b809eec2f51155d1b2e00febaca6839b.glb",
-      "sha256": "4fda20fb984fd703329782e726dfc0a5b809eec2f51155d1b2e00febaca6839b",
-      "size": 20124816
+      "url": "06bf537f776f9cef2cb3b7f0188b76443c4f842897e661a06b8d3a52d24a208e.glb",
+      "sha256": "06bf537f776f9cef2cb3b7f0188b76443c4f842897e661a06b8d3a52d24a208e",
+      "size": 18233664
     },
     "high_elf_fleets/titan elemental": {
-      "url": "a082d1c75100e87d85a037390a2fdeecfa229fb5f931c10df1d53348486c7ac0.glb",
-      "sha256": "a082d1c75100e87d85a037390a2fdeecfa229fb5f931c10df1d53348486c7ac0",
-      "size": 15934120
+      "url": "eb34b878c7657199e5c17fd751208b030d6bfb9f5c9bc8f6d48a9cde89c344c2.glb",
+      "sha256": "eb34b878c7657199e5c17fd751208b030d6bfb9f5c9bc8f6d48a9cde89c344c2",
+      "size": 16465644
     },
     "high_elf_fleets/trasara ioncrinius": {
-      "url": "44ccc66602d621846866dace4abfc92392a14002652640859461396c54d8365b.glb",
-      "sha256": "44ccc66602d621846866dace4abfc92392a14002652640859461396c54d8365b",
-      "size": 15800560
+      "url": "07f6fd108fb538debd7a332ee9e42b0612031d3af2aa33b3aa38b18c096b9ae0.glb",
+      "sha256": "07f6fd108fb538debd7a332ee9e42b0612031d3af2aa33b3aa38b18c096b9ae0",
+      "size": 14768252
     },
     "high_elf_fleets/vanquishers": {
       "url": "2f0c7fa10f7b99360386c567e964d365b75fdcf2a1a94cfc527a5c789eb88f2a.glb",
