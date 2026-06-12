@@ -175,6 +175,7 @@ func _build_ui() -> void:
 		AudioManager.BUS_MUSIC: "Music Volume",
 		AudioManager.BUS_SFX: "SFX Volume",
 		AudioManager.BUS_AMBIENCE: "Ambience Volume",
+		AudioManager.BUS_UI: "UI Volume",
 	}
 
 	for bus_name: String in audio_buses:

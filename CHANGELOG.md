@@ -7,6 +7,12 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Added
+- **UI audio completed: hover + keyboard-focus ticks and a settings slider.** The
+  `UiFeedback` autoload (procedural tones on the dedicated "UI" bus, auto-wired to
+  every `BaseButton`) now also plays a quiet micro-tick on hover and on keyboard/
+  controller focus — not just on click — and the Settings window gains a "UI Volume"
+  slider; the UI bus volume persists like the other buses. Closes the playbook's
+  "UI audio" item.
 - **Multiplayer lobby, in-game chat and player names.** Players now enter a **name**
   in the Host/Join dialog (persisted to `user://`, synced host-authoritatively); it
   shows in the dice log, on 3D avatars and in a new connected-player roster. An
