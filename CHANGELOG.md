@@ -7,6 +7,20 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Added
+- **Extended dice options: success counting, modifiers and rerolls** (display-only
+  aids — the tool counts, the players apply the rules). The dice panel gains a
+  success target (2+…6+) and a modifier stepper; the per-face readout tints
+  successes and shows the success count, honouring the OPR rule that natural 6s
+  always succeed and natural 1s always fail regardless of modifiers (GF/AoF Core
+  Rules v3.5.1, p.1 "Modifiers" — no artificial modifier cap, OPR has none). After
+  a roll, one click re-rolls the fails / natural 1s / natural 6s (forced rerolls à
+  la "Bane") / all dice: only those dice are physically re-tossed while the kept
+  ones stay frozen in place, and the combined result is logged as a tagged reroll
+  ("↻3 fails"). Rolls broadcast faces + evaluation context, so remote players see
+  the same successes and reroll tags; rule logic lives in the new pure `DiceRules`
+  (`dice_rules.gd`, unit-tested). The dice log's local-player label is now "You"
+  (was the stray German "Du"), and the dead bottom-centre `DiceResult` label is
+  removed.
 - **Loading screens & black scene transitions** (`loading_overlay.gd`): a reusable
   overlay with a label and a cyan bar that fills with continuous exponential smoothing
   (no stepping). Full-screen for the menu build ("PREPARING BATTLEFIELD", gated on
@@ -240,6 +254,13 @@ Goal of this release: a playable, internet-multiplayer Alpha RC with all miniatu
   clear message.
 - **Confirm dialogs** for the destructive Sort Table / Clear Table / Next Round actions
   (Next Round also clears all activation tokens).
+- **Terrain reference aids (Asgard tournament standard, display only).** Every
+  contiguous terrain zone carries an always-visible effect label (Cover / Difficult /
+  Dangerous / Impassable / Height), and the measure tool is height-aware: a terrain
+  zone on the line blocks line of sight only when its Height ≥ both endpoints' Asgard
+  Height category (derived from Tough + Hero/Fear in `los_rules.gd`) and neither
+  endpoint stands inside that zone — a 🚫 marker flags the blocked line. Players apply
+  all effects themselves.
 
 ### Changed
 - Builds stay slim: miniature GLBs and their textures are gitignored **and** excluded

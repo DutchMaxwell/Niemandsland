@@ -69,7 +69,6 @@ var _is_showing_remote_roll: bool = false
 var _group_rotation_broadcast_timer: float = 0.0
 const GROUP_ROTATION_BROADCAST_INTERVAL: float = 0.1  # 10 Hz
 
-@onready var dice_result_label: Label = $UI/HUD/DiceResult
 @onready var distance_label: Label = $UI/HUD/DistanceLabel
 @onready var clear_all_btn: Button = %ClearAll
 @onready var sort_table_btn: Button = %SortTableBtn
@@ -106,10 +105,28 @@ const DICE_PRESET_MAX: int = 10
 const DEFAULT_DICE_COUNT: int = 6
 const CURRENT_ROLL_ICON_SIZE: int = 26
 const DICE_LOG_ICON_SIZE: int = 16
+const DICE_BUTTON_HEIGHT: int = 26
+const ACTIVE_DICE_BUTTON_TINT := Color(0.55, 0.85, 1.0)
+const DICE_CAPTION_FONT_SIZE: int = 12       # row captions + success tag in the log
+const DICE_CAPTION_MIN_WIDTH: int = 56       # caption column width on the option rows
+const MODIFIER_VALUE_MIN_WIDTH: int = 44     # modifier value readout width
+const SUCCESS_SUMMARY_FONT_SIZE: int = 16    # "✔ N" total under the success column
 var _dice_count: int = DEFAULT_DICE_COUNT
 var _dice_preset_buttons: Array[Button] = []
 var _dice_count_value_label: Label = null
 var _current_roll_column: VBoxContainer = null
+
+# Success evaluation + rerolls (display-only aids; the rules live in DiceRules).
+var _success_target: int = DiceRules.TARGET_NONE
+var _success_modifier: int = 0
+var _target_buttons: Array[Button] = []
+var _modifier_value_label: Label = null
+var _reroll_buttons: Dictionary = {}  # Dictionary[DiceRules.RerollMode, Button]
+var _last_faces: Array[int] = []
+var _last_roll_local: bool = false
+var _pending_reroll_mode: int = DiceRules.REROLL_NONE
+var _pending_reroll_count: int = 0
+var _remote_roll_context: Dictionary = {}
 
 # Network UI elements
 @onready var network_manager: Node = %NetworkManager
@@ -273,10 +290,13 @@ func _ready() -> void:
 	dice_roller_control.roll_finnished.connect(_on_roller_finished)
 	dice_roller_control.roll_started.connect(_on_roller_started)
 
-	# Build the click-based dice count selector and the success readout column,
-	# then initialise the dice set with the default count.
+	# Build the click-based dice count selector, the success readout column and
+	# the success/reroll controls, then initialise the dice set with the default
+	# count.
 	_build_dice_count_selector()
 	_build_current_roll_column()
+	_build_success_controls()
+	_build_reroll_row()
 	_set_dice_count(DEFAULT_DICE_COUNT)
 
 	# Connect network UI
@@ -878,7 +898,6 @@ func _on_clear_all() -> void:
 
 func _do_clear_all() -> void:
 	object_manager.clear_all_objects()
-	dice_result_label.text = ""
 	_clear_dice_log()
 	_update_round_button()  # clear_all_objects() resets the round to 1
 
@@ -1008,18 +1027,24 @@ func _on_quick_roll_button_pressed() -> void:
 func _on_roller_started() -> void:
 	roll_button.text = "Rolling..."
 	roll_button.disabled = true
+	for mode: int in _reroll_buttons:
+		(_reroll_buttons[mode] as Button).disabled = true
 	AudioManager.play_sfx(AudioManager.SFXType.DICE_ROLL)
 
 
-func _on_roller_finished(result: int) -> void:
+func _on_roller_finished(_total: int) -> void:
 	roll_button.text = "Roll"
 	roll_button.disabled = false
 	AudioManager.play_sfx(AudioManager.SFXType.DICE_IMPACT)
 
-	var per_dice: Dictionary = dice_roller_control.per_dice_result()
-	var counts: Dictionary = _count_faces(per_dice)
-	# Always update the success column for the most recent roll (local or remote).
-	_populate_current_roll_column(counts)
+	var faces: Array[int] = _faces_in_order(dice_roller_control.per_dice_result())
+	_last_faces = faces
+	_last_roll_local = not _is_showing_remote_roll
+	# Always update the success column for the most recent roll (local or remote);
+	# remote rolls are evaluated under the SENDER's target/modifier context.
+	var context: Dictionary = _remote_roll_context if _is_showing_remote_roll else _current_roll_context()
+	_populate_current_roll_column(faces, context)
+	_update_reroll_buttons()
 
 	# Skip logging/broadcast when showing a remote player's roll: the remote
 	# handler already logged it, and re-broadcasting would cause a ping-pong loop.
@@ -1027,14 +1052,34 @@ func _on_roller_finished(result: int) -> void:
 		_is_showing_remote_roll = false
 		return
 
-	_add_dice_log_entry("Du", per_dice.size(), counts)
+	_add_dice_log_entry("You", faces, context)
 
-	# Broadcast dice roll to remote players
+	# Broadcast dice roll (faces + evaluation context) to remote players
 	if network_manager.is_multiplayer_active():
-		var values: Array[int] = []
-		for dice_name: String in per_dice:
-			values.append(int(per_dice[dice_name]))
-		network_manager.broadcast_dice_roll(values.size(), values, result)
+		network_manager.broadcast_dice_roll(faces, context)
+
+	_pending_reroll_mode = DiceRules.REROLL_NONE
+	_pending_reroll_count = 0
+
+
+## Face values of a tray result in stable die order ("die_0".."die_N" keys).
+func _faces_in_order(per_dice: Dictionary) -> Array[int]:
+	var faces: Array[int] = []
+	for i: int in per_dice.size():
+		faces.append(int(per_dice.get("die_%d" % i, 1)))
+	return faces
+
+
+## Roll-context Dictionary (DiceRules.CTX_* keys) describing the local success
+## selectors and any pending reroll — attached to the success column, the dice
+## log and the multiplayer broadcast so all clients render the same evaluation.
+func _current_roll_context() -> Dictionary:
+	return {
+		DiceRules.CTX_TARGET: _success_target,
+		DiceRules.CTX_MODIFIER: _success_modifier,
+		DiceRules.CTX_REROLL_MODE: _pending_reroll_mode,
+		DiceRules.CTX_REROLL_COUNT: _pending_reroll_count,
+	}
 
 
 ## Builds the click-based dice count selector (preset buttons 1..N plus
@@ -1055,7 +1100,7 @@ func _build_dice_count_selector() -> void:
 		btn.text = str(n)
 		btn.focus_mode = Control.FOCUS_NONE
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.custom_minimum_size = Vector2(0, 26)
+		btn.custom_minimum_size = Vector2(0, DICE_BUTTON_HEIGHT)
 		btn.pressed.connect(_on_dice_preset_pressed.bind(n))
 		grid.add_child(btn)
 		_dice_preset_buttons.append(btn)
@@ -1087,7 +1132,7 @@ func _make_dice_delta_button(delta: int) -> Button:
 	btn.text = "+%d" % delta if delta > 0 else str(delta)
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn.custom_minimum_size = Vector2(0, 26)
+	btn.custom_minimum_size = Vector2(0, DICE_BUTTON_HEIGHT)
 	btn.pressed.connect(_on_dice_delta_pressed.bind(delta))
 	return btn
 
@@ -1113,7 +1158,7 @@ func _update_dice_count_display() -> void:
 		_dice_count_value_label.text = str(_dice_count)
 	for i: int in _dice_preset_buttons.size():
 		var is_active: bool = (i + 1) == _dice_count
-		_dice_preset_buttons[i].modulate = Color(0.55, 0.85, 1.0) if is_active else Color.WHITE
+		_dice_preset_buttons[i].modulate = ACTIVE_DICE_BUTTON_TINT if is_active else Color.WHITE
 
 
 ## Update the dice set with the specified number of D6 dice
@@ -1130,22 +1175,202 @@ func _update_dice_set(count: int) -> void:
 	)
 
 
-## Adds a visual dice-roll entry to the log: a horizontal strip showing each
-## face (6 down to 1) as a die icon followed by its count.
-func _add_dice_log_entry(player_name: String, dice_count: int, counts: Dictionary) -> void:
+## Builds the success-evaluation controls — a target row ("vs" –/2+..6+) and a
+## modifier stepper — inserted directly above the "In box" label. Display-only
+## aid: the tool counts successes, the players apply the rules (OPR GF/AoF Core
+## Rules v3.5.1, p.1 "Quality Tests" / "Shooting").
+func _build_success_controls() -> void:
+	var section := VBoxContainer.new()
+	section.name = "SuccessControls"
+	section.add_theme_constant_override("separation", 4)
+
+	# Target row: no-target ("–") plus 2+..6+.
+	var target_row := HBoxContainer.new()
+	target_row.add_theme_constant_override("separation", 2)
+	target_row.add_child(_make_dice_caption("Success"))
+	_target_buttons.clear()
+	var targets: Array[int] = [DiceRules.TARGET_NONE]
+	for target: int in range(DiceRules.TARGET_MIN, DiceRules.TARGET_MAX + 1):
+		targets.append(target)
+	for target: int in targets:
+		var btn := _make_dice_option_button("–" if target == DiceRules.TARGET_NONE else "%d+" % target)
+		btn.tooltip_text = "No success counting" if target == DiceRules.TARGET_NONE \
+			else "Count rolls of %d+ as successes (OPR Quality/Defense tests)" % target
+		btn.pressed.connect(_on_success_target_pressed.bind(target))
+		target_row.add_child(btn)
+		_target_buttons.append(btn)
+	section.add_child(target_row)
+
+	# Modifier stepper. OPR has no modifier cap; natural 6/1 is the only valve
+	# (OPR GF/AoF Core Rules v3.5.1, p.1 "Modifiers").
+	var modifier_row := HBoxContainer.new()
+	modifier_row.add_theme_constant_override("separation", 2)
+	modifier_row.add_child(_make_dice_caption("Modifier"))
+	var minus := _make_dice_option_button("-")
+	minus.pressed.connect(_on_modifier_delta_pressed.bind(-1))
+	modifier_row.add_child(minus)
+	_modifier_value_label = Label.new()
+	_modifier_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_modifier_value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_modifier_value_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_modifier_value_label.custom_minimum_size = Vector2(MODIFIER_VALUE_MIN_WIDTH, 0)
+	_modifier_value_label.tooltip_text = "Applied to every die. Natural 6 always succeeds," \
+		+ " natural 1 always fails (OPR Core Rules v3.5.1)."
+	modifier_row.add_child(_modifier_value_label)
+	var plus := _make_dice_option_button("+")
+	plus.pressed.connect(_on_modifier_delta_pressed.bind(1))
+	modifier_row.add_child(plus)
+	section.add_child(modifier_row)
+
+	_dice_vbox.add_child(section)
+	_dice_vbox.move_child(section, current_dice_label.get_index())
+	_update_success_controls_display()
+
+
+## Builds the reroll row (Fails / 1s / 6s / All) right below the Roll buttons.
+## Buttons enable only when the matching dice exist in the last LOCAL roll.
+func _build_reroll_row() -> void:
+	var row := HBoxContainer.new()
+	row.name = "RerollRow"
+	row.add_theme_constant_override("separation", 2)
+	row.add_child(_make_dice_caption("Re-roll"))
+
+	var options: Array = [
+		[DiceRules.RerollMode.FAILURES, "Fails", "Re-roll every die that failed the success target"],
+		[DiceRules.RerollMode.ONES, "1s", "Re-roll all natural 1s"],
+		[DiceRules.RerollMode.SIXES, "6s",
+			"Re-roll all natural 6s (OPR \"Bane\", v3.5.1: the target must re-roll unmodified Defense rolls of 6)"],
+		[DiceRules.RerollMode.ALL, "All", "Re-roll every die"],
+	]
+	_reroll_buttons.clear()
+	for option: Array in options:
+		var mode: int = option[0]
+		var btn := _make_dice_option_button(option[1])
+		btn.tooltip_text = option[2]
+		btn.disabled = true
+		btn.pressed.connect(_on_reroll_pressed.bind(mode))
+		row.add_child(btn)
+		_reroll_buttons[mode] = btn
+
+	_dice_vbox.add_child(row)
+	_dice_vbox.move_child(row, roll_button.get_parent().get_index() + 1)
+
+
+## Small muted caption label for the dice option rows.
+func _make_dice_caption(text: String) -> Label:
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.add_theme_font_size_override("font_size", DICE_CAPTION_FONT_SIZE)
+	lbl.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	lbl.custom_minimum_size = Vector2(DICE_CAPTION_MIN_WIDTH, 0)
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	return lbl
+
+
+## One equally-sized, focus-less option button for the dice panel rows.
+func _make_dice_option_button(text: String) -> Button:
+	var btn := Button.new()
+	btn.text = text
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.custom_minimum_size = Vector2(0, DICE_BUTTON_HEIGHT)
+	return btn
+
+
+func _on_success_target_pressed(target: int) -> void:
+	_success_target = target
+	_update_success_controls_display()
+	_refresh_roll_evaluation()
+
+
+func _on_modifier_delta_pressed(delta: int) -> void:
+	_success_modifier = clampi(_success_modifier + delta, DiceRules.MODIFIER_MIN, DiceRules.MODIFIER_MAX)
+	_update_success_controls_display()
+	_refresh_roll_evaluation()
+
+
+## Highlights the active target button and renders the modifier value.
+func _update_success_controls_display() -> void:
+	for i: int in _target_buttons.size():
+		# Button order matches [TARGET_NONE, TARGET_MIN..TARGET_MAX].
+		var button_target: int = DiceRules.TARGET_NONE if i == 0 else DiceRules.TARGET_MIN + i - 1
+		_target_buttons[i].modulate = ACTIVE_DICE_BUTTON_TINT if button_target == _success_target else Color.WHITE
+	if _modifier_value_label:
+		_modifier_value_label.text = "±0" if _success_modifier == 0 else "%+d" % _success_modifier
+
+
+## Re-renders the success column + reroll buttons after a selector change. The
+## last LOCAL roll is re-evaluated live under the new target/modifier; a remote
+## roll keeps its sender's context.
+func _refresh_roll_evaluation() -> void:
+	if not _last_faces.is_empty():
+		var context: Dictionary = _current_roll_context() if _last_roll_local else _remote_roll_context
+		_populate_current_roll_column(_last_faces, context)
+	_update_reroll_buttons()
+
+
+func _on_reroll_pressed(mode: int) -> void:
+	if _last_faces.is_empty() or not _last_roll_local:
+		return
+	var indices: Array[int] = DiceRules.reroll_indices(_last_faces, mode, _success_target, _success_modifier)
+	if indices.is_empty():
+		return
+	_pending_reroll_mode = mode
+	_pending_reroll_count = indices.size()
+	# Deliberately NOT calling _update_dice_set here: the dice_count/roller_size
+	# setters rebuild the tray and would wipe the kept dice.
+	dice_roller_control.reroll(indices)
+
+
+## Enables exactly the reroll buttons that would re-toss at least one die of
+## the last LOCAL roll (remote rolls are not ours to reroll).
+func _update_reroll_buttons() -> void:
+	for mode: int in _reroll_buttons:
+		var btn: Button = _reroll_buttons[mode]
+		btn.disabled = not _last_roll_local or _last_faces.is_empty() \
+			or DiceRules.reroll_indices(_last_faces, mode, _success_target, _success_modifier).is_empty()
+
+
+## Adds a visual dice-roll entry to the log: a header (time, player, formula,
+## reroll tag), a per-face icon strip (6 down to 1) and, when a success target
+## is set, the success count.
+func _add_dice_log_entry(player_name: String, faces: Array[int], context: Dictionary) -> void:
+	var counts: Dictionary = _count_faces(faces)
+	var target: int = context.get(DiceRules.CTX_TARGET, DiceRules.TARGET_NONE)
+	var modifier: int = context.get(DiceRules.CTX_MODIFIER, 0)
+	var reroll_mode: int = context.get(DiceRules.CTX_REROLL_MODE, DiceRules.REROLL_NONE)
 	var time_str: String = Time.get_time_string_from_system().substr(0, 5)
 
 	var entry := HBoxContainer.new()
 	entry.add_theme_constant_override("separation", 4)
 
+	var formula := "%dd6" % faces.size()
+	if target != DiceRules.TARGET_NONE:
+		formula += " vs %d+" % target
+		if modifier != 0:
+			formula += " %+d" % modifier
+	var head_text := "%s %s (%s)" % [time_str, player_name, formula]
+	if reroll_mode != DiceRules.REROLL_NONE:
+		head_text = "%s %s ↻%d %s (%s)" % [time_str, player_name,
+			context.get(DiceRules.CTX_REROLL_COUNT, 0), DiceRules.reroll_mode_label(reroll_mode), formula]
+
 	var head := Label.new()
-	head.text = "%s %s (%dd6)" % [time_str, player_name, dice_count]
+	head.text = head_text
 	head.add_theme_font_size_override("font_size", 12)
 	head.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	entry.add_child(head)
 
 	for face: int in [6, 5, 4, 3, 2, 1]:
-		entry.add_child(_make_success_row(face, counts.get(face, 0), DICE_LOG_ICON_SIZE))
+		entry.add_child(_make_success_row(face, counts.get(face, 0), DICE_LOG_ICON_SIZE,
+			DiceRules.is_success(face, target, modifier)))
+
+	if target != DiceRules.TARGET_NONE:
+		var tag := Label.new()
+		tag.text = "✔%d" % DiceRules.count_successes(faces, target, modifier)
+		tag.add_theme_font_size_override("font_size", DICE_CAPTION_FONT_SIZE)
+		tag.add_theme_color_override("font_color", HudTokens.CYAN)
+		tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		entry.add_child(tag)
 
 	_dice_log_vbox.add_child(entry)
 
@@ -1187,22 +1412,35 @@ func _build_current_roll_column() -> void:
 	row.add_child(box)
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	_populate_current_roll_column({})
+	_populate_current_roll_column([], {})
 
 
 ## Fills the current-roll column with one row per face (6 down to 1); faces with
-## no hits are dimmed so the actual results stand out.
-func _populate_current_roll_column(counts: Dictionary) -> void:
+## no hits are dimmed so the actual results stand out. With a success target in
+## the context, success faces are tinted and a success-count line is appended.
+func _populate_current_roll_column(faces: Array[int], context: Dictionary) -> void:
 	if not _current_roll_column:
 		return
 	for child: Node in _current_roll_column.get_children():
 		child.queue_free()
+	var counts: Dictionary = _count_faces(faces)
+	var target: int = context.get(DiceRules.CTX_TARGET, DiceRules.TARGET_NONE)
+	var modifier: int = context.get(DiceRules.CTX_MODIFIER, 0)
 	for face: int in [6, 5, 4, 3, 2, 1]:
-		_current_roll_column.add_child(_make_success_row(face, counts.get(face, 0), CURRENT_ROLL_ICON_SIZE))
+		_current_roll_column.add_child(_make_success_row(face, counts.get(face, 0),
+			CURRENT_ROLL_ICON_SIZE, DiceRules.is_success(face, target, modifier)))
+	if target != DiceRules.TARGET_NONE:
+		var summary := Label.new()
+		summary.text = "✔ %d" % DiceRules.count_successes(faces, target, modifier)
+		summary.add_theme_font_size_override("font_size", SUCCESS_SUMMARY_FONT_SIZE)
+		summary.add_theme_color_override("font_color", HudTokens.CYAN)
+		summary.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_current_roll_column.add_child(summary)
 
 
-## One "die icon + xN" row; dimmed when the count is zero.
-func _make_success_row(face: int, count: int, icon_size: int) -> HBoxContainer:
+## One "die icon + xN" row; dimmed when the count is zero, count tinted cyan
+## when the face passes the active success target.
+func _make_success_row(face: int, count: int, icon_size: int, highlight: bool) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 3)
 	row.modulate.a = 1.0 if count > 0 else 0.32
@@ -1218,17 +1456,18 @@ func _make_success_row(face: int, count: int, icon_size: int) -> HBoxContainer:
 	lbl.text = "×%d" % count
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	lbl.add_theme_font_size_override("font_size", maxi(12, icon_size - 10))
+	if highlight:
+		lbl.add_theme_color_override("font_color", HudTokens.CYAN)
 	row.add_child(lbl)
 	return row
 
 
-## Counts how many dice show each face (1-6) from a name->value result map.
-func _count_faces(per_dice: Dictionary) -> Dictionary:
+## Counts how many dice show each face (1-6) from an ordered face list.
+func _count_faces(faces: Array[int]) -> Dictionary:
 	var counts: Dictionary = {6: 0, 5: 0, 4: 0, 3: 0, 2: 0, 1: 0}
-	for dice_name: String in per_dice:
-		var value: int = int(per_dice[dice_name])
-		if value in counts:
-			counts[value] += 1
+	for face: int in faces:
+		if face in counts:
+			counts[face] += 1
 	return counts
 
 
@@ -1347,7 +1586,6 @@ func _on_table_size_chosen(size_feet: Vector2, dialog: Window) -> void:
 func _set_table_size(size_feet: Vector2) -> void:
 	# Clear existing objects
 	object_manager.clear_all_objects()
-	dice_result_label.text = ""
 
 	# Rebuild table (the ground mist resizes via the table_resized signal)
 	table.setup_table(size_feet)
@@ -1682,23 +1920,29 @@ func _on_remote_camera_updated(peer_id: int, yaw: float, pitch: float) -> void:
 		_player_avatars[peer_id].update_look_direction(yaw, pitch)
 
 
-## Called when a remote player rolls dice
-func _on_remote_dice_rolled(peer_id: int, dice_count: int, results: Array, total: int) -> void:
-	# Build per-dice dictionary for log entry
-	var per_dice: Dictionary = {}
-	for i: int in range(results.size()):
-		per_dice["D6_%d" % (i + 1)] = int(results[i])
-
-	_add_dice_log_entry("Player %d" % peer_id, dice_count, _count_faces(per_dice))
-
-	# Show 3D dice visualization for remote roll
-	# Guard prevents roll_finnished from re-broadcasting
-	_is_showing_remote_roll = true
-	_update_dice_set(dice_count)
-	var int_results: Array[int] = []
+## Called when a remote player rolls dice. The context carries the sender's
+## success target/modifier and reroll info so the log and success column render
+## the roll exactly as the sender saw it.
+func _on_remote_dice_rolled(peer_id: int, results: Array, context: Dictionary) -> void:
+	var faces: Array[int] = []
 	for v: Variant in results:
-		int_results.append(int(v))
-	dice_roller_control.show_faces(int_results)
+		faces.append(int(v))
+
+	_add_dice_log_entry("Player %d" % peer_id, faces, context)
+
+	# Show 3D dice visualization for remote roll. The 3D tray is shared between
+	# local and remote rolls, so show_faces() respawns the dice and preempts any
+	# in-flight LOCAL physics roll/reroll: that local roll is then dropped (not
+	# logged, not broadcast). Intentional priority — a remote roll is already
+	# part of the shared game state, an un-broadcast local roll is not. Rare
+	# (needs both players rolling within the same ~2.5 s window); see PROJECT_STATUS.
+	# Guard prevents roll_finnished from re-logging/re-broadcasting.
+	_is_showing_remote_roll = true
+	_remote_roll_context = context
+	_pending_reroll_mode = DiceRules.REROLL_NONE
+	_pending_reroll_count = 0
+	_update_dice_set(faces.size())
+	dice_roller_control.show_faces(faces)
 
 	# Play avatar dice roll animation
 	if _player_avatars.has(peer_id):

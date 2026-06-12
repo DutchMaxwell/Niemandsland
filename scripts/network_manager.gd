@@ -700,8 +700,11 @@ signal remote_cursor_updated(peer_id: int, pos_x: float, pos_z: float)
 ## Signal emitted when a remote player's camera direction is received
 signal remote_camera_updated(peer_id: int, yaw: float, pitch: float)
 
-## Signal emitted when a remote player rolls dice
-signal remote_dice_rolled(peer_id: int, dice_count: int, results: Array, total: int)
+## Signal emitted when a remote player rolls dice. `results` carries one face
+## value per die; `context` is the roll-context Dictionary (DiceRules.CTX_*:
+## success target, modifier, reroll mode/count) so every client renders the
+## same success evaluation and log entry.
+signal remote_dice_rolled(peer_id: int, results: Array, context: Dictionary)
 
 
 ## RPC: Sync cursor position on table surface (high frequency, unreliable)
@@ -720,9 +723,9 @@ func sync_camera_direction(yaw: float, pitch: float) -> void:
 
 ## RPC: Sync dice roll event (reliable — everyone must see the result)
 @rpc("any_peer", "call_remote", "reliable")
-func sync_dice_roll(dice_count: int, results: Array, total: int) -> void:
+func sync_dice_roll(results: Array, context: Dictionary) -> void:
 	var sender = multiplayer.get_remote_sender_id()
-	remote_dice_rolled.emit(sender, dice_count, results, total)
+	remote_dice_rolled.emit(sender, results, context)
 
 
 ## Broadcast cursor position to all peers
@@ -738,9 +741,9 @@ func broadcast_camera_direction(yaw: float, pitch: float) -> void:
 
 
 ## Broadcast dice roll to all peers
-func broadcast_dice_roll(dice_count: int, results: Array, total: int) -> void:
+func broadcast_dice_roll(results: Array, context: Dictionary) -> void:
 	if is_multiplayer_active():
-		sync_dice_roll.rpc(dice_count, results, total)
+		sync_dice_roll.rpc(results, context)
 
 
 # ===== Table Settings Synchronization =====
