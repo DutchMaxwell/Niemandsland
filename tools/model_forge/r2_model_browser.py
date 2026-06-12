@@ -126,18 +126,24 @@ def overview():
     m = load_manifest()
     fu = faction_units(m)
     rework = load_rework()
-    rw_by_fac: dict[str, int] = {}
-    for k in rework:
-        rw_by_fac[k.split("/", 1)[0]] = rw_by_fac.get(k.split("/", 1)[0], 0) + 1
+    rw_regen: dict[str, int] = {}
+    rw_debase: dict[str, int] = {}
+    for k, v in rework.items():
+        fac = k.split("/", 1)[0]
+        if v.get("kind") == "debase":
+            rw_debase[fac] = rw_debase.get(fac, 0) + 1
+        else:
+            rw_regen[fac] = rw_regen.get(fac, 0) + 1
     rows = []
     for fac in sorted(fu):
         roster = len(session_units(fac))
         rows.append({"faction": fac, "on_r2": len(fu[fac]),
                      "roster": roster, "gaps": max(0, roster - len(fu[fac])),
-                     "rework": rw_by_fac.get(fac, 0)})
+                     "rework": rw_regen.get(fac, 0), "debase": rw_debase.get(fac, 0)})
     return render_template("r2_overview.html", rows=rows,
                            total=len(m.get("models", {})), factions=len(fu),
-                           rework_total=len(rework), base_url=m.get("base_url", ""))
+                           rework_total=sum(rw_regen.values()),
+                           debase_total=sum(rw_debase.values()), base_url=m.get("base_url", ""))
 
 
 @app.route("/faction/<faction>")
@@ -153,6 +159,7 @@ def faction(faction: str):
         "unit": unit, "sha": entry["sha256"][:12], "size_mb": round(entry["size"] / 1e6, 1),
         "has_2d": unit in imgmap, "public_url": m.get("base_url", "") + entry["url"],
         "flagged": key in rework, "note": rework.get(key, {}).get("note", ""),
+        "kind": rework.get(key, {}).get("kind", "regen"),
     } for unit, key, entry in fu]
     return render_template("r2_faction.html", faction=faction, units=units,
                            gaps=[g for g in gaps if g], on_r2=len(fu),
@@ -216,15 +223,19 @@ def api_rework():
     if key not in load_manifest().get("models", {}):
         return jsonify({"ok": False, "error": "unknown unit: " + key}), 404
     flagged = bool(data.get("flagged", True))
+    kind = data.get("kind", "regen")
+    if kind not in ("regen", "debase"):
+        kind = "regen"
     rework = load_rework()
     if flagged:
-        rework[key] = {"note": (data.get("note") or "").strip(),
+        rework[key] = {"kind": kind, "note": (data.get("note") or "").strip(),
                        "ts": datetime.now().isoformat(timespec="seconds")}
     else:
         rework.pop(key, None)
     save_rework(rework)
-    return jsonify({"ok": True, "flagged": flagged, "note": rework.get(key, {}).get("note", ""),
-                    "total": len(rework)})
+    cur = rework.get(key, {})
+    return jsonify({"ok": True, "flagged": flagged, "kind": cur.get("kind", ""),
+                    "note": cur.get("note", ""), "total": len(rework)})
 
 
 if __name__ == "__main__":
