@@ -540,6 +540,17 @@ func _ready() -> void:
 		# Loaded battle / joining client: size comes from the saved/host data, so there is
 		# no chooser — go straight into the intro.
 		_start_cinematic_intro()
+	# Our own black backdrop (chooser prompt or intro) is up now — fade out the menu's
+	# transition loading overlay so the hand-off stays black, never grey.
+	_dismiss_transition_overlay()
+
+
+## Fade out + free the menu->game loading overlay (added to the SceneTree root by
+## startup_menu so it survives the scene swap). No-op if there is none.
+func _dismiss_transition_overlay() -> void:
+	for node in get_tree().get_nodes_in_group("transition_overlay"):
+		if node.has_method("fade_and_free"):
+			node.fade_and_free()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -1316,13 +1327,15 @@ func _on_table_size_chosen(size_feet: Vector2, dialog: Window) -> void:
 		t.tween_interval(0.4)
 	t.tween_callback(func() -> void:
 		dialog.queue_free()
-		# Start the intro (its own opaque black covers the screen), then drop our backdrop
-		# so the intro fades in from black.
-		_start_cinematic_intro()
+		# Start the intro (its own opaque black covers the screen). Keep our black backdrop
+		# up a few frames longer so the hand-off stays black -> never a grey flash if the
+		# intro's overlay isn't covering on the very first frame.
+		_start_cinematic_intro())
+	t.tween_interval(0.2)
+	t.tween_callback(func() -> void:
 		if is_instance_valid(_prompt_overlay):
 			_prompt_overlay.queue_free()
-			_prompt_overlay = null
-	)
+			_prompt_overlay = null)
 
 
 ## Set table to specific size and clear objects
@@ -1546,7 +1559,7 @@ func _on_model_caching_started(total: int) -> void:
 	_kill_cache_tween()
 	_cache_progress_bar.max_value = maxi(1, total)
 	_cache_progress_bar.value = 0
-	_cache_progress_label.text = "Lade 3D-Modelle … 0/%d" % total
+	_cache_progress_label.text = "LOADING ARMY"
 	_cache_progress_panel.visible = true
 
 
@@ -1559,7 +1572,7 @@ func _on_model_caching_progress(done: int, total: int) -> void:
 	_cache_progress_tween = create_tween()
 	_cache_progress_tween.tween_property(_cache_progress_bar, "value", float(done), 0.4) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	_cache_progress_label.text = "Lade 3D-Modelle … %d/%d" % [done, total]
+	_cache_progress_label.text = "LOADING ARMY"
 
 
 func _kill_cache_tween() -> void:
