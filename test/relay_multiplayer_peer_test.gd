@@ -136,3 +136,35 @@ func test_attempt_reconnect_without_room_code_fails() -> void:
 	var peer = RelayMultiplayerPeer.new()
 	# No room code yet -> cannot rejoin.
 	assert_that(peer.attempt_reconnect()).is_equal(ERR_UNAVAILABLE)
+
+
+## Regression: the rooms_list listing reply must deliver the rooms and must NOT
+## tear the socket down inline — an inline _close() nulled _ws while _poll's
+## receive loop was still iterating (null deref; crashed the engine live).
+func test_rooms_list_emits_rooms_and_defers_close() -> void:
+	var peer = RelayMultiplayerPeer.new()
+	var received: Array = []
+	peer.rooms_list_received.connect(func(rooms: Array) -> void: received.append(rooms))
+
+	peer._process_control_message('{"type": "rooms_list", "rooms": [{"code": "ABC123", "players": 2}]}')
+
+	assert_that(received.size()).is_equal(1)
+	assert_that(received[0].size()).is_equal(1)
+	assert_that(received[0][0]["code"]).is_equal("ABC123")
+	# The close is DEFERRED — state is still intact right after the handler...
+	assert_that(peer._pending_action).is_equal("")
+	# ...and fully reset once deferred calls flush (end of frame).
+	await get_tree().process_frame
+	assert_that(peer.get_connection_status()).is_equal(MultiplayerPeer.CONNECTION_DISCONNECTED)
+	assert_that(peer.get_room_code()).is_equal("")
+
+
+func test_rooms_list_with_empty_array_emits_empty() -> void:
+	var peer = RelayMultiplayerPeer.new()
+	var received: Array = []
+	peer.rooms_list_received.connect(func(rooms: Array) -> void: received.append(rooms))
+
+	peer._process_control_message('{"type": "rooms_list", "rooms": []}')
+
+	assert_that(received.size()).is_equal(1)
+	assert_that(received[0].is_empty()).is_true()

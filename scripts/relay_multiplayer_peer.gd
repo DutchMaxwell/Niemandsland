@@ -214,8 +214,10 @@ func _poll() -> void:
 				_send_json({"type": "list_rooms"})
 			_pending_action = ""
 
-		# Process incoming messages
-		while _ws.get_available_packet_count() > 0:
+		# Process incoming messages. A control handler may close the socket
+		# mid-loop (the rooms_list listing path), nulling _ws — re-check it
+		# every iteration or this dereferences null.
+		while _ws and _ws.get_available_packet_count() > 0:
 			var packet = _ws.get_packet()
 			if _ws.was_string_packet():
 				_process_control_message(packet.get_string_from_utf8())
@@ -425,8 +427,11 @@ func _process_control_message(raw: String) -> void:
 
 		"rooms_list":
 			# Browser-only: deliver the list and close — this socket never joins.
+			# Close DEFERRED: an inline _close() tears the socket down while
+			# _poll's receive loop is still iterating over it (null deref, and a
+			# half-destroyed TLS socket crashed the engine in testing).
 			rooms_list_received.emit(parsed.get("rooms", []))
-			_close()
+			_close.call_deferred()
 
 		"heartbeat_ack":
 			_last_ack_ms = Time.get_ticks_msec()  # connection is alive
