@@ -7,6 +7,36 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Added
+- **Loading screens & black scene transitions** (`loading_overlay.gd`): a reusable
+  overlay with a label and a cyan bar that fills with continuous exponential smoothing
+  (no stepping). Full-screen for the menu build ("PREPARING BATTLEFIELD", gated on
+  diorama-ready so the menu fades in fully built) and the menu→game transition (real
+  threaded-load progress; replaces the old grey fade); a compact centred-panel variant
+  for the in-game army import ("LOADING ARMY"). The table-size chooser no longer flashes
+  grey (`transparent = true`), the army loading bar is visible immediately (dialog hides
+  before the blocking spawn; spawn yields per unit and reports progress).
+
+### Changed
+- **One lighting mood system: atmosphere only.** The standalone lighting "presets"
+  (F1–F5 hotkeys + the settings PRESETS section, plus orphaned Bright Studio / Dramatic)
+  are removed; moods are chosen via the ATMOSPHERE section only. Sunset is the standard,
+  applied from the first rendered frame through the intro fly-in (no mid-intro snap).
+- **Quality-switch freeze fixed & transitions sped up.** Switching to/from Performance
+  no longer freezes in fullscreen (the FSR↔bilinear scaling-mode toggle that recreated
+  the swap chain is gone — scaling mode is now constant; Ultra MSAA 8×→4×). Menu↔game
+  transitions are faster: tree/mini GLB PackedScenes cache statically across instances,
+  minis load after the first frame, the grass tuft mesh/texture is cached.
+
+### Fixed
+- **Pink/magenta/rainbow table — two distinct bugs, both fixed.** (1) The ground
+  micro-detail `NoiseTexture2D`s were regenerated per material rebuild and raced the
+  renderer → rainbow speckle; cached once now. (2) The scene was lit by the procedural
+  space-skybox (ambient=Sky + IBL + SDFGI sky light), whose GGX radiance bake was
+  intermittently GPU-garbage → flat magenta/green/white; scene lighting is decoupled
+  from the sky (ambient=Color, reflections disabled, no SDFGI sky read), in the game and
+  the menu diorama. Battlemaps are also capped at 4096 px + uploaded as RGBA8.
+
+### Added
 - **AAA main menu: command console over a live burning battlefield.** The startup
   menu is rebuilt around a real-time night diorama (`menu_diorama.gd`) that runs the
   PRODUCTION battlefield stack in a SubViewport: textured ruin shells with war-torn
