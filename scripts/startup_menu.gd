@@ -429,8 +429,13 @@ func _on_browse_rooms_received(rooms: Array) -> void:
 	for child in _browse_rooms_vbox.get_children():
 		child.queue_free()
 	if rooms.is_empty():
-		_set_browse_status("No public rooms right now.")
+		_set_browse_status("0 games online right now.")
 		return
+	# Count line above the rows, mirroring the explicit 0-state.
+	var count_label := Label.new()
+	count_label.text = "%d game%s online:" % [rooms.size(), "" if rooms.size() == 1 else "s"]
+	count_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	_browse_rooms_vbox.add_child(count_label)
 	for room: Variant in rooms:
 		var code := str(room.get("code", ""))
 		var players := int(room.get("players", 0))
