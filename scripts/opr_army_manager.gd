@@ -4,6 +4,8 @@ class_name OPRArmyManager
 ## Handles the relationship between game units and their visual representations
 
 signal army_spawned(army: OPRApiClient.OPRArmy, models: Array[Node3D])
+## Per-unit spawn progress so a loading bar can advance during the (synchronous) spawn.
+signal spawn_progress(done: int, total: int)
 # Reserved for future hover functionality
 #signal unit_hovered(unit: OPRApiClient.OPRUnit)
 #signal unit_unhovered()
@@ -148,6 +150,8 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	var ordered_units := _order_units_heroes_after_host(army.units)
 
 	# Second pass: spawn with indices
+	var total_units := ordered_units.size()
+	var spawned_units := 0
 	for unit in ordered_units:
 		var base_name = unit.name
 		var unit_index = unit_name_indices.get(base_name, 0) + 1
@@ -182,6 +186,12 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 
 		# Move to next position with gap between units
 		current_pos.x += unit_width + unit_gap
+
+		# Report progress and yield so the loading bar animates instead of the whole
+		# spawn blocking the main thread in one frozen frame.
+		spawned_units += 1
+		spawn_progress.emit(spawned_units, total_units)
+		await get_tree().process_frame
 
 	# Animate tray and models dropping down
 	_animate_tray_drop(tray, all_models, spawn_height)
