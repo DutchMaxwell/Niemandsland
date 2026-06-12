@@ -38,13 +38,14 @@
   <h1>🗂️ R2 Model Browser</h1>
   <span class="pill">{{ factions }} Fraktionen</span>
   <span class="pill">{{ total }} Modelle auf R2</span>
+  {% if rework_total %}<span class="pill" style="border-color:var(--amber);color:var(--amber)">⚠ {{ rework_total }} zur Überarbeitung</span>{% endif %}
   <span class="sub">{{ base_url }}</span>
 </header>
 <div class="wrap">
   <table>
     <thead><tr>
       <th>Fraktion</th><th class="n">Auf R2</th><th class="n">Roster</th>
-      <th>Abdeckung</th><th class="n">Lücken</th>
+      <th>Abdeckung</th><th class="n">Lücken</th><th class="n">⚠ Rework</th>
     </tr></thead>
     <tbody>
     {% for r in rows %}
@@ -57,6 +58,7 @@
           <div class="bar"><span style="width:{{ pct|round(0,'floor') }}%"></span></div>
         </td>
         <td class="n {{ 'gap' if r.gaps else '' }}">{{ r.gaps if r.gaps else '✓' }}</td>
+        <td class="n" style="{{ 'color:var(--amber);font-weight:600' if r.rework else 'color:var(--dim)' }}">{{ r.rework if r.rework else '–' }}</td>
       </tr>
     {% endfor %}
     </tbody>
