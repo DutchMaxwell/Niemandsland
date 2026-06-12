@@ -33,6 +33,13 @@ var _target := 0.0
 var _current := 0.0
 var _indeterminate := false
 
+# === Exports ===
+
+## Compact mode: a small centred glass panel instead of a full-screen black cover, so
+## the rest of the screen stays visible (used for in-game loads like the army import).
+## Set BEFORE adding the node to the tree.
+@export var compact := false
+
 # === Lifecycle ===
 
 func _init() -> void:
@@ -42,14 +49,15 @@ func _init() -> void:
 func _ready() -> void:
 	_content = Control.new()
 	_content.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_content.mouse_filter = Control.MOUSE_FILTER_STOP  # swallow input while loading
+	_content.mouse_filter = Control.MOUSE_FILTER_STOP if not compact else Control.MOUSE_FILTER_IGNORE
 	add_child(_content)
 
-	var bg := ColorRect.new()
-	bg.color = Color.BLACK
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_content.add_child(bg)
+	if not compact:
+		var bg := ColorRect.new()
+		bg.color = Color.BLACK
+		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_content.add_child(bg)
 
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -59,7 +67,20 @@ func _ready() -> void:
 	var box := VBoxContainer.new()
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	box.add_theme_constant_override("separation", 10)
-	center.add_child(box)
+
+	# Compact: wrap the box in a glass panel so it reads as a small floating window.
+	if compact:
+		var panel := PanelContainer.new()
+		panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
+		panel.add_child(HudFrame.new())
+		var margin := MarginContainer.new()
+		for side in ["left", "right", "top", "bottom"]:
+			margin.add_theme_constant_override("margin_" + side, 18)
+		panel.add_child(margin)
+		margin.add_child(box)
+		center.add_child(panel)
+	else:
+		center.add_child(box)
 
 	var mono := FontVariation.new()
 	mono.base_font = load(MONO_FONT_PATH)
