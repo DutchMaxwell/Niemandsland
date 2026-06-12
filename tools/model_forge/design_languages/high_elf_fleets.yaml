@@ -161,7 +161,7 @@ unit_overrides:
           range: 0
           attacks: 1
   retributors:
-    extra_details: "single elite melee guard warrior in heavy ornate armor with gold trim, energy swords with rending AP(1) blades crackling with contained energy, combat shields projecting shimmering defensive barriers, finest armor in the fleet's infantry, tall plumed helmets with face-concealing visors, heavy spirit stone clusters on pauldrons, Highborn enhanced movement, Shielded defensive ward"
+    extra_details: "single elite melee guard warrior in heavy ornate armor with gold trim, energy swords with rending AP(1) blades crackling with contained energy, combat shields projecting shimmering defensive barriers, finest armor in the fleet's infantry, tall plumed helmets with face-concealing visors, a single clean figure with correct anatomy and natural proportions and no extra or merged limbs, heavy spirit stone clusters on pauldrons, Highborn enhanced movement, Shielded defensive ward"
     pose: "shield wall formation, energy swords raised overhead, shields interlocked forward"
 
     game_stats:
@@ -200,7 +200,7 @@ unit_overrides:
           range: 0
           attacks: 2
   gliders:
-    extra_details: "single flying assault warrior with elegant swept-back wings or anti-grav jump packs, laser pistols firing focused AP(2) beams at 9 inch range, close combat weapons for aerial strike, sleek aerodynamic armor in dark blue with white accent panels, wing-like stabilizer fins on back and arms, visor-enclosed helmets with targeting reticles, Ambush deep-strike, Flying movement, Highborn enhanced movement"
+    extra_details: "single flying assault warrior with elegant swept-back wings as solid continuous membranes with closed connected feathers forming one surface (no gaps or floating feathers), or anti-grav jump packs, laser pistols firing focused AP(2) beams at 9 inch range, close combat weapons for aerial strike, sleek aerodynamic armor in dark blue with white accent panels, wing-like stabilizer fins on back and arms, visor-enclosed helmets with targeting reticles, Ambush deep-strike, Flying movement, Highborn enhanced movement"
     pose: "dynamic aerial diving attack, wings spread, laser pistols aimed downward, descending on target"
 
     game_stats:
@@ -359,7 +359,7 @@ unit_overrides:
           range: 0
           attacks: 1
   elemental_strikers:
-    extra_details: "single close-combat crystal-construct bound with vengeful spirits, killing axes with AP(2) deadly(3) massive energy-wreathed blades, combat shield energy barriers, towering smooth crystalline bodies larger than infantry with glowing amber spirit stones, angular crystal-ceramic armor plates in bone-white, sculpted warrior faceplates expressing determination, Fearless bound spirit, Furious charge, Highborn enhanced movement, Shielded defensive ward, Tough(3)"
+    extra_details: "single close-combat crystal-construct bound with vengeful spirits, killing axes with AP(2) deadly(3) massive energy-wreathed blades, combat shield energy barriers, towering smooth crystalline bodies larger than infantry with glowing amber spirit stones, angular crystal-ceramic armor plates in bone-white, every weapon and part firmly attached and connected to the body with no detached or floating pieces, sculpted warrior faceplates expressing determination, Fearless bound spirit, Furious charge, Highborn enhanced movement, Shielded defensive ward, Tough(3)"
     pose: "aggressive charge formation, killing axes raised high, shield barriers shimmering"
     type: walker
 
@@ -447,7 +447,7 @@ unit_overrides:
           attacks: 2
           rules: ["Crack"]
   heavy_jetbike:
-    extra_details: "large heavily-armed anti-gravity attack bike, shard cannon with AP(1) crack rounds as primary weapon on dorsal mount firing at 24 inch range, mounted shardguns on chin turret, oversized anti-grav engines for high speed, heavier armor plating than standard jetbikes in bone-white with gold trim, single elite rider in reinforced armor, impact ram prow, wide stabilizer fins, Fast anti-grav movement, Highborn enhanced movement, Impact(3) ram, Strider terrain mastery, Tough(6)"
+    extra_details: "large heavily-armed anti-gravity attack bike, shard cannon with AP(1) crack rounds as primary weapon on dorsal mount firing at 24 inch range, mounted shardguns on chin turret, oversized anti-grav engines for high speed, the whole bike clearly floating above the ground on bright glowing blue anti-gravity fields with a smooth rounded underside and downward thruster vents, heavier armor plating than standard jetbikes in bone-white with gold trim, single elite rider in reinforced armor, impact ram prow, wide stabilizer fins, Fast anti-grav movement, Highborn enhanced movement, Impact(3) ram, Strider terrain mastery, Tough(6)"
     pose: "attack run at speed, shard cannon firing, banking aggressively"
 
     game_stats:
@@ -509,8 +509,8 @@ unit_overrides:
           attacks: 2
           rules: ["Crack"]
   support_artillery:
-    extra_details: "anti-gravity artillery platform with crew, burst mortar firing indirect blast(3) projectiles at 30 inch range, three-person artillery crew operating the weapon, compact oval-shaped anti-grav chassis hovering low, targeting array and ammunition feeds visible, stabilizer field deployed for accurate fire, lighter armor in bone-white, crew in standard fleet armor, Artillery static fire support, Tough(3)"
-    pose: "deployed firing position, burst mortar elevated for indirect bombardment, crew operating controls"
+    extra_details: "unmanned automated anti-gravity artillery platform with no crew figures, burst mortar firing indirect blast(3) projectiles at 30 inch range, compact oval-shaped anti-grav chassis hovering low, targeting array and ammunition feeds visible, stabilizer field deployed for accurate fire, lighter armor in bone-white, Artillery static fire support, Tough(3)"
+    pose: "deployed firing position, burst mortar elevated for indirect bombardment, stabiliser fields glowing"
     type: vehicle
 
   # ==========================================================================
@@ -533,9 +533,9 @@ unit_overrides:
           range: 0
           attacks: 3
   great_elemental:
-    extra_details: "massive towering crystal-construct warrior of enormous scale, two shardguns with crack rounds mounted on shoulder hardpoints, two great claws with rending capability as primary melee weapons with four attacks each, stomp attacks from massive AP(1) crushing feet, enormous smooth crystalline body with blazing spirit stone in chest, angular crystal-ceramic plating in bone-white with glowing blue rune channels, eyeless sculpted helm with crown-like crest, Fear(2) terrifying presence, Fearless bound spirit, Highborn enhanced movement, Tough(12)"
-    pose: "towering combat stance, great claws raised menacingly, spirit stone blazing, stomp feet planted"
-    type: walker
+    extra_details: "a tall, elegant crystalline elemental guardian — ONE clean smooth bone-white crystal construct with graceful sweeping lines and a single blazing blue spirit-stone core at its heart, a simple readable UNCLUTTERED silhouette, slender crystalline arms ending in elegant energy blades, soft blue glow within the translucent crystal, calm and majestic with NO floating debris and minimal ornament, immense scale, Fear(2) terrifying presence, Fearless, Tough(12)"
+    pose: "looming abstract presence, orbiting crystal shards and a blazing spirit-stone core, the mass rising from a vortex of levitating shards"
+    type: monster
 
     game_stats:
       quality: 3
@@ -558,9 +558,9 @@ unit_overrides:
           attacks: 4
           rules: ["AP(1)"]
   titan_elemental:
-    extra_details: "colossal crystal-construct titan of city-destroying scale, dual titan claws with 24 rending attacks on massive articulated arms, devastating stomp attacks with AP(2) from building-sized feet, smooth crystalline body of immense proportions with multiple blazing spirit stones across torso and limbs, towering angular crystal-ceramic plating in bone-white with pulsing blue energy channels, crowned eyeless helm radiating psychic presence, Fear(4) paralyzing terror, Fearless bound spirit, Highborn enhanced movement, Tough(24)"
-    pose: "titanic striding pose, dual titan claws extended wide, spirit stones blazing, colossal scale"
-    type: titan
+    extra_details: "a colossal, elegant crystalline elemental guardian of city-destroying scale — ONE clean towering smooth bone-white crystal construct with graceful sweeping lines and a single blazing blue spirit-stone core, a simple readable UNCLUTTERED silhouette, long slender crystalline arms, soft blue inner glow, serene and overwhelming with NO floating debris and minimal ornament, immense scale, Fear(4) paralyzing terror, Fearless, Tough(24)"
+    pose: "colossal abstract presence, a storm of orbiting crystal shards and blazing cores, rising from a churning vortex of levitating shards"
+    type: monster
 
     game_stats:
       quality: 3
@@ -646,7 +646,7 @@ unit_overrides:
           attacks: 6
           rules: ["AP(1)"]
   trasara_ioncrinius:
-    extra_details: "unique legendary fleet commander in ornate personalized armor with elaborate gold filigree and ancient rune inscriptions, orbital bombardment designator device on left arm calling down AP(2) blast(3) strikes from orbiting fleet ships (limited use), shred blaster pistol firing rending projectiles in right hand at 12 inch range, energy sword with AP(1) rending blade at hip, tall crested helmet with flowing ancestral plume, ancient spirit stones of great heroes embedded across armor, flowing commander's cloak of shimmering psycho-reactive silk, Highborn enhanced movement, Tough(3), Unique named character"
+    extra_details: "unique legendary fleet commander in ornate personalized armor with elaborate gold filigree and ancient rune inscriptions, orbital bombardment designator device on left arm calling down AP(2) blast(3) strikes from orbiting fleet ships (limited use), shred blaster pistol firing rending projectiles in right hand at 12 inch range, energy sword with AP(1) rending blade at hip, all equipment firmly attached to the figure with no floating or detached parts, tall crested helmet with flowing ancestral plume, ancient spirit stones of great heroes embedded across armor, flowing commander's cloak of shimmering psycho-reactive silk, Highborn enhanced movement, Tough(3), Unique named character"
     pose: "commanding battlefield stance, orbital bombardment arm raised to sky, energy sword at ready, cloak billowing"
 
     game_stats:
