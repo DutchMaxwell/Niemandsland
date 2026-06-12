@@ -121,7 +121,8 @@ const PRESETS = {
 	QualityPreset.ULTRA: {
 		"name": "Ultra",
 		"description": "Maximum Quality",
-		"msaa_3d": 3,  # 8x MSAA
+		"msaa_3d": 2,  # 4x MSAA (8x doubled the render target — huge on a 2560x1600
+		# fullscreen 8GB GPU — for no visible gain; 4x matches High)
 		"use_taa": false,
 		"shadow_size": 8192,
 		"shadow_filter": 5,
@@ -215,9 +216,13 @@ func apply_rendering_settings(settings: Dictionary) -> void:
 	vp.use_taa = settings["use_taa"]
 	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if not settings["use_taa"] else Viewport.SCREEN_SPACE_AA_DISABLED
 
-	# FSR Scaling
+	# 3D resolution scaling. Keep the scaling MODE constant (always bilinear) and only
+	# vary the scale — toggling scaling_3d_mode between FSR and bilinear at runtime
+	# recreates the 3D render target / Vulkan swap chain, which froze the game when
+	# switching to/from Performance (the only preset that was < 1.0) in fullscreen.
+	# Bilinear upscaling at the Performance tier is visually equivalent there.
 	vp.scaling_3d_scale = settings["fsr_scale"]
-	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if settings["fsr_scale"] < 1.0 else Viewport.SCALING_3D_MODE_BILINEAR
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 
 	# Shadow quality (runtime changes limited, mostly project settings)
 	RenderingServer.directional_shadow_atlas_set_size(settings["shadow_size"], true)
