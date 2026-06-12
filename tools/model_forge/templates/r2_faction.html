@@ -43,6 +43,14 @@
   button:hover { border-color:var(--cyan); }
   button.del { color:var(--red); }
   button.del:hover { border-color:var(--red); background:rgba(255,84,102,.1); }
+  button.rw { color:var(--amber); }
+  button.rw:hover { border-color:var(--amber); background:rgba(255,177,59,.1); }
+  button.rw.on { background:rgba(255,177,59,.16); border-color:var(--amber); }
+  .card.flagged { border-color:var(--amber); box-shadow:0 0 0 1px var(--amber) inset; }
+  .badge { position:absolute; top:8px; left:8px; background:var(--amber); color:#181206;
+           font-size:11px; font-weight:700; padding:3px 8px; border-radius:6px; letter-spacing:.3px; }
+  .rwnote { color:var(--amber); font-size:11.5px; font-style:italic; }
+  .flt { color:var(--dim); font-size:13px; display:flex; align-items:center; gap:6px; cursor:pointer; }
   #toast { position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:#1d222c;
            border:1px solid var(--line); border-radius:10px; padding:11px 18px; font-size:14px;
            opacity:0; transition:opacity .25s; pointer-events:none; }
@@ -54,7 +62,8 @@
   <a class="back" href="/">← Übersicht</a>
   <h1>{{ faction }}</h1>
   <span class="pill" id="count">{{ on_r2 }} auf R2</span>
-  <input id="filter" placeholder="Units filtern…" oninput="filterUnits(this.value)">
+  <input id="filter" placeholder="Units filtern…" oninput="filterUnits()">
+  <label class="flt"><input type="checkbox" id="onlyflag" onchange="filterUnits()"> nur markierte (<span id="flagcount">{{ flagged_count }}</span>)</label>
 </header>
 <div class="wrap">
   {% if gaps %}
@@ -62,13 +71,15 @@
   {% endif %}
   <div class="grid" id="grid">
     {% for u in units %}
-    <div class="card" data-unit="{{ u.unit }}" data-name="{{ u.unit|lower }}">
+    <div class="card{% if u.flagged %} flagged{% endif %}" data-unit="{{ u.unit }}"
+         data-name="{{ u.unit|lower }}" data-flagged="{{ '1' if u.flagged else '0' }}">
       <div class="media">
         {% if u.has_2d %}
           <img loading="lazy" src="/2d/{{ faction }}/{{ u.unit|urlencode }}" alt="{{ u.unit }}">
         {% else %}
           <div class="no2d">keine 2D-Quelle</div>
         {% endif %}
+        {% if u.flagged %}<div class="badge">⚠ Überarbeiten</div>{% endif %}
       </div>
       <div class="body">
         <div class="name">{{ u.unit }}</div>
@@ -76,8 +87,12 @@
           <span>{{ u.size_mb }} MB</span><span>{{ u.sha }}</span>
           <a href="{{ u.public_url }}" target="_blank" rel="noopener">R2 ↗</a>
         </div>
+        {% if u.note %}<div class="rwnote">„{{ u.note }}"</div>{% endif %}
         <div class="row">
           <button onclick="show3d(this)">🔍 3D</button>
+          <button class="rw{% if u.flagged %} on{% endif %}" onclick="rework(this)">{{ '✓ markiert' if u.flagged else '⚠ Überarbeiten' }}</button>
+        </div>
+        <div class="row">
           <button class="del" onclick="del(this)">🗑 Löschen</button>
         </div>
       </div>
@@ -88,11 +103,54 @@
 <div id="toast"></div>
 <script>
   const FACTION = {{ faction|tojson }};
-  function filterUnits(q){
-    q = q.trim().toLowerCase();
+  function filterUnits(){
+    const q = document.getElementById('filter').value.trim().toLowerCase();
+    const only = document.getElementById('onlyflag').checked;
     document.querySelectorAll('#grid .card').forEach(c => {
-      c.style.display = c.dataset.name.includes(q) ? '' : 'none';
+      const okText = c.dataset.name.includes(q);
+      const okFlag = !only || c.dataset.flagged === '1';
+      c.style.display = (okText && okFlag) ? '' : 'none';
     });
+  }
+  function flagCount(){
+    return document.querySelectorAll('#grid .card[data-flagged="1"]').length;
+  }
+  function setFlag(card, on, note){
+    card.dataset.flagged = on ? '1' : '0';
+    card.classList.toggle('flagged', on);
+    const btn = card.querySelector('button.rw');
+    btn.textContent = on ? '✓ markiert' : '⚠ Überarbeiten';
+    btn.classList.toggle('on', on);
+    let badge = card.querySelector('.badge');
+    if(on && !badge){ badge = document.createElement('div'); badge.className = 'badge';
+      badge.textContent = '⚠ Überarbeiten'; card.querySelector('.media').appendChild(badge); }
+    if(!on && badge) badge.remove();
+    let nv = card.querySelector('.rwnote');
+    if(on && note){ if(!nv){ nv = document.createElement('div'); nv.className = 'rwnote';
+        card.querySelector('.body').insertBefore(nv, card.querySelector('.row')); }
+      nv.textContent = '„' + note + '"'; }
+    else if(nv) nv.remove();
+    document.getElementById('flagcount').textContent = flagCount();
+  }
+  async function rework(btn){
+    const card = btn.closest('.card');
+    const unit = card.dataset.unit;
+    const isFlagged = card.dataset.flagged === '1';
+    let note = '';
+    if(!isFlagged){
+      note = prompt('Überarbeitung markieren — kurze Notiz (optional), z. B. „zu nah an IP X":', '');
+      if(note === null) return;            // abgebrochen
+    } else if(!confirm('Markierung „' + unit + '" entfernen?')) return;
+    btn.disabled = true;
+    try{
+      const r = await fetch('/api/rework', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({faction:FACTION, unit:unit, flagged:!isFlagged, note:note})});
+      const j = await r.json();
+      if(!j.ok){ toast('Fehler: ' + (j.error||'')); return; }
+      setFlag(card, !isFlagged, j.note || '');
+      toast(!isFlagged ? '⚠ Markiert: ' + unit + ' (' + j.total + ' gesamt)' : 'Markierung entfernt: ' + unit);
+    }catch(e){ toast('Fehler: ' + e); }
+    finally{ btn.disabled = false; }
   }
   function show3d(btn){
     const card = btn.closest('.card');
