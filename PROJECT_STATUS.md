@@ -78,10 +78,6 @@ models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
 
 ## In progress
 
-- **Verify the GPU-driver fix**: battlemaps showed magenta/rainbow corruption on
-  2026-06-11 — diagnosed as degraded NVIDIA driver state after NVRM OOM (kernel log),
-  not code; needs a reboot to confirm. Runtime hardening already in `table.gd`
-  (battlemaps capped at 4096 px + RGBA8 upload).
 - Terrain reference aids per the **Asgard tournament standard** — *display only, no
   auto-resolution*: always-visible effect labels per terrain zone (Cover / Difficult /
   Dangerous / Impassable / Height) and height-aware top-down line-of-sight in the
