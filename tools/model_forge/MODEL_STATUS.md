@@ -5,18 +5,18 @@ The "model review" tracker. Every Grimdark Future faction moves through:
 **R2** (uploaded + in [`assets/model_manifest.json`](../../assets/model_manifest.json),
 live in-game on demand).
 
-_Last updated: 2026-06-11 — Goblin Reclaimers shipped to R2 (10 factions, 241 models)._
+_Last updated: 2026-06-12 — Ratmen Clans shipped to R2 (11 factions, 266 models)._
 
 ## Summary
 
 | Stage | Factions |
 |---|---|
-| ✅ Live on R2 | **10** (241 models) |
-| 🎯 Picked — ready for 3D | **2** |
+| ✅ Live on R2 | **11** (266 models) |
+| 🎯 Picked — ready for 3D | **1** |
 | 🖼️ 2D done — needs picking | **21** |
 | ⬜ 2D not generated yet | **5** |
 
-## ✅ Live on R2 — playable in-game (241 models)
+## ✅ Live on R2 — playable in-game (266 models)
 
 | Faction | Models | Note |
 |---|---|---|
@@ -26,6 +26,7 @@ _Last updated: 2026-06-11 — Goblin Reclaimers shipped to R2 (10 factions, 241 
 | High Elf Fleets | 28 | |
 | Dwarf Guilds | 27 | |
 | Eternal Dynasty | 26 | ronin-samurai recast |
+| Ratmen Clans | 25 | |
 | Battle Brothers | 23 | |
 | Dao Union | 19 | |
 | Goblin Reclaimers | 18 | |
@@ -33,7 +34,7 @@ _Last updated: 2026-06-11 — Goblin Reclaimers shipped to R2 (10 factions, 241 
 
 ## 🎯 Picked — ready for 3D → R2 (just run finalize + publish)
 
-Ratmen Clans (~25) · Saurian Starhost (~23).
+Saurian Starhost (~23).
 
 ## 🖼️ 2D done — needs picking (best of 3) before 3D
 
@@ -62,6 +63,11 @@ cd tools/model_forge
 # assets/miniatures/*/glb/ staging (they are R2-delivered) — publish asserts that only
 # the target faction has local GLBs. Also purge assets/.manifest_upload/ (transient).
 ```
+
+> TRELLIS Space (DutchyMaxwell/TRELLIS.2) is paid GPU: if it returns 503 then goes PAUSED
+> mid-run, its quota is exhausted — restart fails with 402 until the maintainer tops up HF
+> billing. After top-up, `HfApi().restart_space(...)` un-pauses it; the finalize is resume-safe
+> (skips GLBs already in glb_final/), so just relaunch it.
 
 > Clean-regen gotcha: the pipeline is resume-safe (skips existing images/versions). To force a
 > clean re-gen after a design-language change, archive the old `state/<faction>_*` session,
