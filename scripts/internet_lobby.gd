@@ -27,8 +27,15 @@ signal host_paused()
 signal host_rejoined()
 signal peer_joined(peer_id: int)
 signal peer_left(peer_id: int)
+## The relay returned the joinable public rooms for the room browser.
+signal rooms_list_received(rooms: Array)
+## A room-list request failed (relay unreachable, or it rejected list_rooms — e.g.
+## an old relay that predates the command).
+signal rooms_list_failed(reason: String)
 
 const DEFAULT_RELAY_URL: String = "wss://niemandsland-relay.fly.dev"
+## Room capacity shown in the browser; mirrors relay_server.MAX_PEERS_PER_ROOM.
+const MAX_ROOM_PLAYERS: int = 8
 
 var relay_peer: RelayMultiplayerPeer = null
 var is_host: bool = false
@@ -44,8 +51,9 @@ func _process(_delta: float) -> void:
 		relay_peer._poll()
 
 
-## Host a game via relay: connect to relay, create room, get code.
-func host_internet_game(url: String = "") -> Error:
+## Host a game via relay: connect to relay, create room, get code. When `public`
+## is true the room is listed in the room browser; otherwise it joins by code only.
+func host_internet_game(url: String = "", public: bool = false) -> Error:
 	if url.is_empty():
 		url = relay_url
 	else:
@@ -58,7 +66,7 @@ func host_internet_game(url: String = "") -> Error:
 	relay_peer.peer_left.connect(_on_peer_left)
 	_connect_recovery_signals()
 
-	var err = relay_peer.host_via_relay(url)
+	var err = relay_peer.host_via_relay(url, public)
 	if err != OK:
 		push_error("InternetLobby: Failed to connect to relay: %d" % err)
 		relay_peer = null
@@ -93,6 +101,41 @@ func join_internet_game(code: String, url: String = "") -> Error:
 	is_host = false
 	print("=== JOINING ONLINE room %s via %s ===" % [code, url])
 	return OK
+
+
+## Request the joinable public rooms from the relay (room browser). Opens a
+## short-lived listing connection that is never promoted to the multiplayer peer;
+## it closes itself once the list arrives. Re-emits rooms_list_received.
+func list_rooms(url: String = "") -> Error:
+	if url.is_empty():
+		url = relay_url
+	else:
+		relay_url = url
+
+	# A listing connection is separate from any host/join peer; discard a stale one.
+	if relay_peer:
+		relay_peer._close()
+	relay_peer = RelayMultiplayerPeer.new()
+	relay_peer.rooms_list_received.connect(_on_rooms_list_received)
+	# Surface the two listing failure modes: the relay never reachable
+	# (relay_connection_lost) or it rejected list_rooms (room_join_failed — an old
+	# relay replies with an "error" frame while the socket is still connecting).
+	relay_peer.relay_connection_lost.connect(_on_list_failed.bind("Could not reach the relay."))
+	relay_peer.room_join_failed.connect(_on_list_failed)
+	return relay_peer.list_via_relay(url)
+
+
+func _on_rooms_list_received(rooms: Array) -> void:
+	rooms_list_received.emit(rooms)
+	# The listing socket has closed itself; drop the peer so _process stops polling.
+	relay_peer = null
+
+
+func _on_list_failed(reason: String) -> void:
+	rooms_list_failed.emit(reason)
+	if relay_peer:
+		relay_peer._close()
+		relay_peer = null
 
 
 ## Disconnect from internet game and clean up.

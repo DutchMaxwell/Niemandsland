@@ -127,6 +127,12 @@ func play_dice_roll_animation() -> void:
 		_original_head_pos = _head_mesh.position
 
 
+## Update the floating name label (called when the player's name syncs in).
+func set_player_name(display_name: String) -> void:
+	if _name_label:
+		_name_label.text = display_name
+
+
 # ===== Avatar Construction =====
 
 ## Build the 3D avatar from primitives — head only with eyes, pupils, lids, brows

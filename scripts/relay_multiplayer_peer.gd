@@ -15,6 +15,8 @@ extends MultiplayerPeerExtension
 signal room_created(code: String)
 signal room_joined(peer_id: int)
 signal room_join_failed(reason: String)
+## The relay replied to a list_rooms request with the joinable public rooms.
+signal rooms_list_received(rooms: Array)
 signal relay_connected()
 signal relay_disconnected()
 ## The connection was lost unexpectedly (WebSocket closed or heartbeat-ack timeout).
@@ -62,8 +64,9 @@ var _last_ack_ms: int = 0        # when we last RECEIVED a heartbeat_ack (alive 
 var _last_poll_ms: int = 0       # for stall detection (large gaps delay heartbeats)
 var _room_code: String = ""
 var _ws_connected: bool = false
-var _pending_action: String = ""  # "create" or "join"
+var _pending_action: String = ""  # "create", "join" or "list"
 var _pending_code: String = ""
+var _pending_public: bool = false  # for "create": list this room in the browser
 ## True while an automatic rejoin of the same room is in progress.
 var _is_reconnecting: bool = false
 ## Wall-clock time (ms) the current reconnect attempt started; aborts past RECONNECT_TIMEOUT.
@@ -85,9 +88,11 @@ class IncomingPacket:
 # ===== Public API =====
 
 
-## Connect to a relay server and create a new room (host flow).
-func host_via_relay(url: String) -> Error:
+## Connect to a relay server and create a new room (host flow). When `public` is
+## true the room is listed in the room browser; otherwise it joins by code only.
+func host_via_relay(url: String, public: bool = false) -> Error:
 	_pending_action = "create"
+	_pending_public = public
 	return _connect_to_relay(url)
 
 
@@ -95,6 +100,13 @@ func host_via_relay(url: String) -> Error:
 func join_via_relay(url: String, code: String) -> Error:
 	_pending_action = "join"
 	_pending_code = code.to_upper().strip_edges()
+	return _connect_to_relay(url)
+
+
+## Connect to a relay server, request the public room list and close. This peer
+## is never assigned to multiplayer.multiplayer_peer; the caller polls it.
+func list_via_relay(url: String) -> Error:
+	_pending_action = "list"
 	return _connect_to_relay(url)
 
 
@@ -195,9 +207,11 @@ func _poll() -> void:
 
 			# Execute pending action
 			if _pending_action == "create":
-				_send_json({"type": "create_room"})
+				_send_json({"type": "create_room", "public": _pending_public})
 			elif _pending_action == "join":
 				_send_json({"type": "join_room", "code": _pending_code})
+			elif _pending_action == "list":
+				_send_json({"type": "list_rooms"})
 			_pending_action = ""
 
 		# Process incoming messages
@@ -408,6 +422,11 @@ func _process_control_message(raw: String) -> void:
 				relay_reconnect_failed.emit(message)
 			elif _connection_status == MultiplayerPeer.CONNECTION_CONNECTING:
 				room_join_failed.emit(message)
+
+		"rooms_list":
+			# Browser-only: deliver the list and close — this socket never joins.
+			rooms_list_received.emit(parsed.get("rooms", []))
+			_close()
 
 		"heartbeat_ack":
 			_last_ack_ms = Time.get_ticks_msec()  # connection is alive

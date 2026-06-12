@@ -62,6 +62,25 @@ async def join_room(url: str, code: str) -> tuple:
     return ws, resp["peer_id"]
 
 
+async def create_public_room(url: str) -> tuple:
+    """Helper: connect and create a PUBLIC room, return (ws, code, peer_id)."""
+    ws = await websockets.connect(url)
+    await ws.send(json.dumps({"type": "create_room", "public": True}))
+    resp = json.loads(await ws.recv())
+    assert resp["type"] == "room_created"
+    return ws, resp["code"], resp["peer_id"]
+
+
+async def list_rooms(url: str) -> list:
+    """Helper: connect, request the room list, close, return the rooms array."""
+    ws = await websockets.connect(url)
+    await ws.send(json.dumps({"type": "list_rooms"}))
+    resp = json.loads(await ws.recv())
+    assert resp["type"] == "rooms_list"
+    await ws.close()
+    return resp["rooms"]
+
+
 # ============================================================================
 # Schritt 1: Room Code Generation
 # ============================================================================
@@ -648,3 +667,74 @@ class TestEndToEnd:
         await host2_ws.close()
         await guest1_ws.close()
         await guest2_ws.close()
+
+
+# ============================================================================
+# Room listing (room browser discovery)
+# ============================================================================
+
+
+class TestRoomListing:
+    """list_rooms returns only joinable public rooms, and works before joining."""
+
+    async def test_public_room_is_listed(self, relay):
+        _server, url = relay
+        ws, code, _ = await create_public_room(url)
+        rooms = await list_rooms(url)
+        assert any(r["code"] == code and r["players"] == 1 for r in rooms)
+        await ws.close()
+
+    async def test_private_room_is_not_listed(self, relay):
+        _server, url = relay
+        ws, code, _ = await create_room(url)  # default is private
+        rooms = await list_rooms(url)
+        assert all(r["code"] != code for r in rooms)
+        await ws.close()
+
+    async def test_full_room_is_excluded(self, relay):
+        server, url = relay
+        # All sockets come from localhost, so lift the per-IP cap for this test
+        # (host + MAX_PEERS_PER_ROOM-1 guests + the listing socket > the default 5).
+        import relay_server
+        old_limit = relay_server.MAX_CONNECTIONS_PER_IP
+        relay_server.MAX_CONNECTIONS_PER_IP = MAX_PEERS_PER_ROOM + 5
+        server.ip_connection_counts.clear()
+        host_ws, code, _ = await create_public_room(url)
+        guests = []
+        try:
+            # Fill to capacity: host (1) + (MAX_PEERS_PER_ROOM - 1) guests.
+            for _ in range(MAX_PEERS_PER_ROOM - 1):
+                gws, _pid = await join_room(url, code)
+                await host_ws.recv()  # drain the peer_connected notification
+                guests.append(gws)
+            rooms = await list_rooms(url)
+            assert all(r["code"] != code for r in rooms)
+        finally:
+            relay_server.MAX_CONNECTIONS_PER_IP = old_limit
+            await host_ws.close()
+            for gws in guests:
+                await gws.close()
+
+    async def test_host_paused_room_is_excluded(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_public_room(url)
+        # Simulate the host having dropped (room preserved during the rejoin window).
+        server.rooms[code].host_disconnected_at = time.monotonic()
+        rooms = await list_rooms(url)
+        assert all(r["code"] != code for r in rooms)
+        await host_ws.close()
+
+    async def test_list_rooms_works_on_fresh_connection_without_consuming_a_slot(self, relay):
+        server, url = relay
+        ws, code, _ = await create_public_room(url)
+        # A listing connection never registers as "in a room": it gets a valid
+        # reply and leaves rooms/connections untouched.
+        rooms_before = len(server.rooms)
+        conns_before = len(server.connections)
+        rooms = await list_rooms(url)
+        assert any(r["code"] == code for r in rooms)
+        # Give the server a moment to process the listing socket close.
+        await asyncio.sleep(0.05)
+        assert len(server.rooms) == rooms_before
+        assert len(server.connections) == conns_before
+        await ws.close()

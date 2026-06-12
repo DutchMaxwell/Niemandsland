@@ -144,8 +144,11 @@ func _process(delta: float) -> void:
 		_rotation_broadcast_timer = 0.0
 
 
-## Checks if a GUI element is blocking input (e.g., modal dialog)
+## Checks if a GUI element is blocking input (e.g., modal dialog or a focused text
+## field like the chat input — object shortcuts must not fire while typing).
 func _is_gui_blocking_input() -> bool:
+	if get_viewport().gui_get_focus_owner() is LineEdit:
+		return true
 	# Check if any modal Control is visible and covering the viewport
 	var ui_layer = get_tree().root.find_child("UI", true, false)
 	if ui_layer:
