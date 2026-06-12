@@ -33,6 +33,7 @@ const SETTLE_LINEAR: float = 0.6  # max horizontal motion to count a die as "dow
 const SETTLE_HOLD: float = 0.2    # seconds calm before the result is forced
 const MAX_ROLL_TIME: float = 2.5  # safety cap
 const WALL_THICKNESS: float = 1.5
+const SEPARATION_PASSES: int = 6  # relaxation iterations for the cosmetic de-overlap
 
 # === Private variables ===
 
@@ -89,6 +90,36 @@ func roll() -> void:
 	roll_started.emit()
 
 
+## Re-tosses only the dice at `indices`; every other die stays frozen on its
+## current face (frozen RigidBodies are static colliders, so they sit still
+## while the others roll). The settle loop then reports the COMBINED result of
+## kept + rerolled faces through the usual roll_finnished signal.
+func reroll(indices: Array[int]) -> void:
+	if _rolling:
+		return
+	var tossed := false
+	for idx: int in indices:
+		if idx < 0 or idx >= _dice.size():
+			continue
+		var d: DiceD6 = _dice[idx]
+		if not is_instance_valid(d):
+			continue
+		var slot: Vector2 = _grid_slot(idx, _dice.size())
+		var drop_y: float = minf(roller_size.y * 0.7 + (idx % 3) * DIE_SIZE, roller_size.y - DIE_SIZE)
+		d.freeze = false
+		d.position = Vector3(slot.x, drop_y, slot.y)
+		d.rotation = Vector3(randf() * TAU, randf() * TAU, randf() * TAU)
+		d.linear_velocity = Vector3(randf_range(-2, 2), randf_range(-2, 0), randf_range(-2, 2))
+		d.angular_velocity = Vector3(randf_range(-8, 8), randf_range(-8, 8), randf_range(-8, 8))
+		tossed = true
+	if not tossed:
+		return
+	_rolling = true
+	_roll_time = 0.0
+	_still_time = 0.0
+	roll_started.emit()
+
+
 ## Instant (non-physics) roll: pick random faces and show them.
 func quick_roll() -> void:
 	var faces: Array[int] = []
@@ -127,8 +158,39 @@ func _finalize_roll() -> void:
 		var value: int = d.top_face()
 		d.settle_to_face(value)  # snap flat + freeze → no more teetering
 		faces.append(value)
+	_separate_settled_dice()
 	_apply_result(faces)
 	roll_finnished.emit(_total(faces))
+
+
+## Settled dice all snap to y = DIE_SIZE/2, so a die that came to rest ON
+## another (possible when a reroll drops onto a frozen die) would interpenetrate
+## it — push overlapping pairs apart in XZ and keep them inside the walls.
+## A single sweep can shove a die back onto a lower-indexed one, so relax over a
+## few passes and stop early once a pass changes nothing. Cosmetic only: faces
+## are already read before this runs.
+func _separate_settled_dice() -> void:
+	var half_x: float = roller_size.x * 0.5 - DIE_SIZE
+	var half_z: float = roller_size.z * 0.5 - DIE_SIZE
+	for _pass: int in SEPARATION_PASSES:
+		var moved_any := false
+		for i: int in _dice.size():
+			for j: int in range(i + 1, _dice.size()):
+				if not is_instance_valid(_dice[i]) or not is_instance_valid(_dice[j]):
+					continue
+				var a: Vector3 = _dice[i].position
+				var b: Vector3 = _dice[j].position
+				var offset := Vector2(b.x - a.x, b.z - a.z)
+				if offset.length() >= DIE_SIZE:
+					continue
+				# Degenerate overlap (same spot): pick a fixed push direction.
+				var push: Vector2 = offset.normalized() if offset.length() > 0.001 else Vector2.RIGHT
+				var moved: Vector2 = Vector2(a.x, a.z) + push * DIE_SIZE
+				_dice[j].position.x = clampf(moved.x, -half_x, half_x)
+				_dice[j].position.z = clampf(moved.y, -half_z, half_z)
+				moved_any = true
+		if not moved_any:
+			break
 
 
 func _apply_result(faces: Array[int]) -> void:
@@ -158,31 +220,34 @@ func _spawn_dice(resting: bool) -> void:
 	_dice.clear()
 
 	var count: int = maxi(1, dice_count)
-	var cols: int = int(ceil(sqrt(float(count))))
-	var rows: int = int(ceil(float(count) / float(cols)))
-	var half_x: float = roller_size.x * 0.5 - DIE_SIZE
-	var half_z: float = roller_size.z * 0.5 - DIE_SIZE
-	# Maximum spacing: spread the grid across the full usable box footprint.
-	var spacing_x: float = (2.0 * half_x / float(cols - 1)) if cols > 1 else 0.0
-	var spacing_z: float = (2.0 * half_z / float(rows - 1)) if rows > 1 else 0.0
-
 	for i: int in count:
 		var d := DiceD6.new()
 		d.size = DIE_SIZE
 		d.freeze = resting
 		_root.add_child(d)
-		var col: int = i % cols
-		var row: int = i / cols
-		var gx: float = (col - (cols - 1) * 0.5) * spacing_x
-		var gz: float = (row - (rows - 1) * 0.5) * spacing_z
+		var slot: Vector2 = _grid_slot(i, count)
 		if resting:
-			d.position = Vector3(gx, DIE_SIZE * 0.5 + 0.05, gz)
+			d.position = Vector3(slot.x, DIE_SIZE * 0.5 + 0.05, slot.y)
 		else:
 			# Drop from a high grid, capped below the wall top so nothing escapes.
 			var drop_y: float = minf(roller_size.y * 0.7 + (i % 3) * DIE_SIZE, roller_size.y - DIE_SIZE)
-			d.position = Vector3(gx, drop_y, gz)
+			d.position = Vector3(slot.x, drop_y, slot.y)
 			d.rotation = Vector3(randf() * TAU, randf() * TAU, randf() * TAU)
 		_dice.append(d)
+
+
+## XZ grid slot of die `i` in a set of `count`: maximum spacing, spreading the
+## grid across the full usable box footprint (shared by spawn and reroll drops).
+func _grid_slot(i: int, count: int) -> Vector2:
+	var cols: int = int(ceil(sqrt(float(maxi(1, count)))))
+	var rows: int = int(ceil(float(maxi(1, count)) / float(cols)))
+	var half_x: float = roller_size.x * 0.5 - DIE_SIZE
+	var half_z: float = roller_size.z * 0.5 - DIE_SIZE
+	var spacing_x: float = (2.0 * half_x / float(cols - 1)) if cols > 1 else 0.0
+	var spacing_z: float = (2.0 * half_z / float(rows - 1)) if rows > 1 else 0.0
+	var col: int = i % cols
+	var row: int = i / cols
+	return Vector2((col - (cols - 1) * 0.5) * spacing_x, (row - (rows - 1) * 0.5) * spacing_z)
 
 
 func _setup_lighting() -> void:
