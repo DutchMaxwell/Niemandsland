@@ -22,6 +22,8 @@ const ENTRANCE_SLIDE_PX := 24.0
 const ENTRANCE_FOOTER_AT := 0.60
 const ENTRANCE_TICKER_AT := 1.0
 const REDUCED_MOTION_FADE_S := 0.2
+const ENTRANCE_COVER_FADE_S := 0.8   # slow, deliberate reveal once the diorama is ready
+const MONO_FONT_PATH := "res://assets/ui_glassmorphism/fonts/SourceCodePro.ttf"
 
 const MUSIC_VOLUME_DB := -12.0
 const MUSIC_FADE_IN_S := 2.5
@@ -60,7 +62,9 @@ var _join_code_input: LineEdit
 var _join_relay_url_input: LineEdit
 var _wordmark_box: HBoxContainer
 var _wordmark_lockup: VBoxContainer
-var _entrance_cover: ColorRect = null
+var _loading_cover: ColorRect = null
+var _loading_label: Label = null
+var _loading_bar: ProgressBar = null
 var _continue_path := ""
 var _music_player: AudioStreamPlayer = null
 var _idle_timer: Timer = null
@@ -111,26 +115,97 @@ func _play_startup_animation() -> void:
 		return
 	animation_played = true
 
-	if GraphicsSettings.reduce_motion:
-		# Single quiet fade, no slides/typewriter buildup.
-		modulate.a = 0.0
-		var fade := create_tween()
-		fade.tween_property(self, "modulate:a", 1.0, REDUCED_MOTION_FADE_S)
-		ticker.start()
-		return
+	# Black cover with a loading indicator over EVERYTHING while the diorama parses its
+	# 3D models. Hold it until diorama_ready, then fade the finished scene in — nothing
+	# pops or stutters in view; the bar communicates the app is alive during the parse.
+	_build_loading_cover()
+	diorama.loading_progress.connect(_on_diorama_loading)
+	diorama.diorama_ready.connect(_on_diorama_ready, CONNECT_ONE_SHOT)
 
-	# Black cover over everything until the diorama has produced its first frame.
-	_entrance_cover = ColorRect.new()
-	_entrance_cover.color = Color.BLACK
-	_entrance_cover.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_entrance_cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_entrance_cover)
-	diorama.first_frame_rendered.connect(func() -> void:
+	# Hide the to-be-revealed UI until the cover fades (so nothing shows behind it).
+	_wordmark_lockup.modulate.a = 0.0
+	for btn: Button in _visible_menu_buttons():
+		btn.modulate.a = 0.0
+	$FooterLeft.modulate.a = 0.0
+	ticker.modulate.a = 0.0
+
+
+## Fade the loading cover out, then run the entrance choreography (or, under Reduce
+## Motion, a single quiet fade). Called once the diorama is fully built.
+func _on_diorama_ready() -> void:
+	if diorama.loading_progress.is_connected(_on_diorama_loading):
+		diorama.loading_progress.disconnect(_on_diorama_loading)
+	if _loading_cover != null and is_instance_valid(_loading_cover):
 		var cover_fade := create_tween()
 		cover_fade.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-		cover_fade.tween_property(_entrance_cover, "modulate:a", 0.0, HudTokens.DUR_SCREEN)
-		cover_fade.tween_callback(_entrance_cover.queue_free))
+		cover_fade.tween_property(_loading_cover, "modulate:a", 0.0, ENTRANCE_COVER_FADE_S)
+		cover_fade.tween_callback(_loading_cover.queue_free)
 
+	if GraphicsSettings.reduce_motion:
+		for node in [_wordmark_lockup, $FooterLeft, ticker]:
+			node.modulate.a = 1.0
+		for btn: Button in _visible_menu_buttons():
+			btn.modulate.a = 1.0
+		ticker.start()
+		return
+	_play_entrance()
+
+
+func _on_diorama_loading(label: String, ratio: float) -> void:
+	if _loading_label != null and is_instance_valid(_loading_label):
+		_loading_label.text = label
+	if _loading_bar != null and is_instance_valid(_loading_bar):
+		_loading_bar.value = ratio
+
+
+## Black full-screen cover with a centred "LOADING 3D MODELS" line + a thin cyan bar,
+## shown while the diorama parses its models. Added last so it sits above everything.
+func _build_loading_cover() -> void:
+	_loading_cover = ColorRect.new()
+	_loading_cover.color = Color.BLACK
+	_loading_cover.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_loading_cover.mouse_filter = Control.MOUSE_FILTER_STOP  # swallow input while loading
+	add_child(_loading_cover)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_loading_cover.add_child(center)
+
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 10)
+	center.add_child(box)
+
+	var mono := FontVariation.new()
+	mono.base_font = load(MONO_FONT_PATH)
+	mono.spacing_glyph = 2
+	_loading_label = Label.new()
+	_loading_label.text = "LOADING 3D MODELS"
+	_loading_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_loading_label.add_theme_font_override("font", mono)
+	_loading_label.add_theme_font_size_override("font_size", 13)
+	_loading_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	box.add_child(_loading_label)
+
+	_loading_bar = ProgressBar.new()
+	_loading_bar.custom_minimum_size = Vector2(360, 3)
+	_loading_bar.min_value = 0.0
+	_loading_bar.max_value = 1.0
+	_loading_bar.step = 0.001
+	_loading_bar.value = 0.0
+	_loading_bar.show_percentage = false
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(1, 1, 1, 0.08)
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = HudTokens.CYAN
+	_loading_bar.add_theme_stylebox_override("background", bg)
+	_loading_bar.add_theme_stylebox_override("fill", fill)
+	box.add_child(_loading_bar)
+
+
+## The staggered reveal (wordmark, buttons, footer, ticker), played after the cover fade.
+func _play_entrance() -> void:
 	# Wordmark power-on (whole lockup: kicker, wordmark, rule).
 	_wordmark_lockup.modulate.a = 0.0
 	_wordmark_lockup.scale = Vector2(0.92, 0.92)

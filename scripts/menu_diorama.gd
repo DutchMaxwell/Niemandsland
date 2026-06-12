@@ -100,6 +100,13 @@ const MINI_VIGNETTE: Array[Dictionary] = [
 
 ## Emitted once after the first diorama frame has been drawn (entrance fade gate).
 signal first_frame_rendered
+## Progress during the heavy build (terrain + GLB model parsing): a label for the
+## loading line and a 0..1 ratio for the bar. The menu shows these on a black cover.
+signal loading_progress(label: String, ratio: float)
+## Emitted once the diorama is FULLY built (terrain + all minis placed). The menu keeps
+## its black loading cover up until this fires, then fades the finished scene in — so
+## nothing pops or stutters in view.
+signal diorama_ready
 
 # === Exports ===
 
@@ -216,14 +223,15 @@ func _setup() -> void:
 	_lighting.initialize(sun, world_env, null)
 	_lighting.apply_preset("Night")
 
-	if _diorama_active():
-		_build_diorama(tier)
 	_await_first_frame()
-	if _diorama_built:
-		# Load the minis only AFTER the first frame has rendered, so the menu appears
-		# immediately. Each GLB parse (~3 s cold on the 15-18 MB models) would otherwise
-		# starve the first frame and freeze the menu ~30 s (worst on game -> main menu).
-		first_frame_rendered.connect(_build_minis, CONNECT_ONE_SHOT)
+	if _diorama_active():
+		# Heavy build runs as a coroutine that yields + reports progress; the menu holds
+		# a black loading cover up until diorama_ready and only then fades the scene in.
+		_build_diorama_async()
+	else:
+		# Sky-only (PERFORMANCE / tests): nothing to load — ready next frame (deferred so
+		# the menu has connected to diorama_ready first; emitting now would be missed).
+		_emit_ready_deferred()
 
 
 ## True when this menu instance should build the full diorama. AUTO requires the
@@ -267,6 +275,37 @@ func _build_environment() -> WorldEnvironment:
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
 	return world_env
+
+
+## Emit diorama_ready on the next frame (sky-only path), after the menu has connected.
+func _emit_ready_deferred() -> void:
+	await get_tree().process_frame
+	diorama_ready.emit()
+
+
+## Heavy diorama build as a coroutine: yields between stages so the menu's loading bar
+## animates and the app never looks frozen, reports progress, and ends with
+## diorama_ready once every model is parsed and placed.
+func _build_diorama_async() -> void:
+	# One frame so the menu's _ready has run and connected to our signals.
+	await get_tree().process_frame
+	if not is_instance_valid(_viewport):
+		return
+	loading_progress.emit("PREPARING BATTLEFIELD", 0.05)
+	await get_tree().process_frame
+
+	_build_diorama(0)  # terrain + grass + mist + audio (blocks; cached after first run)
+
+	if not is_instance_valid(_viewport):
+		return
+	loading_progress.emit("LOADING MINIATURES", 0.45)
+	await get_tree().process_frame
+	await _build_minis()  # streams the GLB minis with their own per-model progress
+
+	if not is_instance_valid(_viewport):
+		return
+	loading_progress.emit("READY", 1.0)
+	diorama_ready.emit()
 
 
 func _build_diorama(_tier: int) -> void:
@@ -345,10 +384,13 @@ func _build_minis() -> void:
 	var library := ModelLibrary.new()
 	_viewport.add_child(library)
 	var placed := 0
-	for entry in MINI_VIGNETTE:
+	var total := MINI_VIGNETTE.size()
+	for i in total:
+		var entry: Dictionary = MINI_VIGNETTE[i]
 		# The diorama can be torn down mid-load (quality switch / scene change).
 		if not is_instance_valid(_viewport):
 			return
+		loading_progress.emit("LOADING MINIATURES  %d/%d" % [i + 1, total], 0.45 + 0.55 * float(i) / float(total))
 		var path: String = library.get_cached_path(entry["faction"], entry["unit"])
 		if path.is_empty():
 			continue
@@ -362,9 +404,8 @@ func _build_minis() -> void:
 		model.rotation.y = deg_to_rad(entry["yaw_deg"])
 		_viewport.add_child(model)
 		placed += 1
-		# Spread the (cold-cache) GLB parses out so the menu renders between them. A real
-		# timer (not process_frame) guarantees the engine gets wall-clock time to draw.
-		await get_tree().create_timer(0.05).timeout
+		# Yield so the loading bar redraws between the (cold-cache) GLB parses.
+		await get_tree().process_frame
 
 	if placed > 0 and is_instance_valid(_viewport):
 		for cell in MINI_LIGHT_CELLS:
