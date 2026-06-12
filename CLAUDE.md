@@ -20,7 +20,8 @@ OnePageRules and similar miniature games.
 - **Platforms**: Linux (dev machine), Windows, macOS
 - **Tests**: gdUnit4 (`test/`), pytest (`relay/`, `tools/model_forge/tests/`)
 - **Main scene**: `scenes/startup_menu.tscn`
-- **Autoloads**: `ThemeManager`, `GraphicsSettings`, `AudioManager`
+- **Autoloads**: `ThemeManager`, `GraphicsSettings`, `AudioManager`, `UiFeedback`,
+  `UpdateChecker`
 
 Full system/code map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 Build/run/test: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).

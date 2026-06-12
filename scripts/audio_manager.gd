@@ -9,6 +9,8 @@ const BUS_MUSIC := "Music"
 const BUS_SFX := "SFX"
 const BUS_AMBIENCE := "Ambience"
 const BUS_UI := "UI"  # short UI feedback ticks (UiFeedback); independently mutable
+## Buses whose user-set volume persists across sessions (one list for save+load).
+const PERSISTED_BUSES: Array[String] = [BUS_MASTER, BUS_MUSIC, BUS_SFX, BUS_AMBIENCE, BUS_UI]
 
 const SFX_POOL_SIZE: int = 8
 const CROSSFADE_DURATION: float = 2.0
@@ -252,7 +254,7 @@ func _get_sfx_stream(sfx_type: SFXType) -> AudioStream:
 
 func _save_volume_settings() -> void:
 	var config := ConfigFile.new()
-	for bus_name in [BUS_MASTER, BUS_MUSIC, BUS_SFX, BUS_AMBIENCE]:
+	for bus_name: String in PERSISTED_BUSES:
 		config.set_value("audio", bus_name, get_bus_volume(bus_name))
 	config.save("user://audio_settings.cfg")
 
@@ -263,7 +265,7 @@ func _load_volume_settings() -> void:
 	if err != OK:
 		return
 
-	for bus_name in [BUS_MASTER, BUS_MUSIC, BUS_SFX, BUS_AMBIENCE]:
+	for bus_name: String in PERSISTED_BUSES:
 		if config.has_section_key("audio", bus_name):
 			var vol: float = config.get_value("audio", bus_name, 0.0)
 			set_bus_volume(bus_name, vol)
