@@ -181,6 +181,9 @@ var _cache_progress_panel: PanelContainer = null
 var _cache_progress_label: Label = null
 var _cache_progress_bar: ProgressBar = null
 var _cache_progress_tween: Tween = null
+## Full-screen "LOADING ARMY" overlay shown for the whole import (so it is never hidden
+## behind the import window and is visible even when the models are already cached).
+var _army_loading_overlay: LoadingOverlay = null
 
 # Atmospheric Effects
 var atmospheric_clouds: Node3D = null
@@ -1555,6 +1558,9 @@ func _on_host_rejoined() -> void:
 
 ## An imported army needs models that aren't cached yet — show a progress overlay.
 func _on_model_caching_started(total: int) -> void:
+	# During an army import the full-screen "LOADING ARMY" overlay already covers this.
+	if is_instance_valid(_army_loading_overlay):
+		return
 	_ensure_cache_progress_ui()
 	_kill_cache_tween()
 	_cache_progress_bar.max_value = maxi(1, total)
@@ -1564,6 +1570,10 @@ func _on_model_caching_started(total: int) -> void:
 
 
 func _on_model_caching_progress(done: int, total: int) -> void:
+	# Feed the army-import overlay's bar when it's up (real download progress).
+	if is_instance_valid(_army_loading_overlay):
+		_army_loading_overlay.set_progress(float(done) / float(maxi(1, total)))
+		return
 	if not _cache_progress_panel:
 		return
 	_cache_progress_bar.max_value = maxi(1, total)
@@ -2246,6 +2256,14 @@ func _on_import_opr_army() -> void:
 func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
 	print("Importing army '%s' for Player %d" % [army.name, player_id])
 
+	# Full-screen loading overlay for the whole import — visible above the (now hidden)
+	# import window and present even when the models are already cached. Model caching,
+	# if any, drives its bar (see _on_model_caching_progress); otherwise it creeps.
+	_army_loading_overlay = LoadingOverlay.new()
+	get_tree().root.add_child(_army_loading_overlay)
+	_army_loading_overlay.set_label("LOADING ARMY")
+	_army_loading_overlay.set_indeterminate()
+
 	# Store army
 	opr_army_manager.armies[player_id] = army
 
@@ -2253,6 +2271,10 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
 	# Awaitable: on-demand models are downloaded up front before spawning.
 	var spawned = await opr_army_manager.spawn_army(army)
 	print("Spawned %d models for army '%s' on Player %d's tray" % [spawned.size(), army.name, player_id])
+
+	if is_instance_valid(_army_loading_overlay):
+		_army_loading_overlay.complete_and_free()
+		_army_loading_overlay = null
 
 	# Sync to other peers if in multiplayer
 	if network_manager.is_multiplayer_active():
