@@ -24,6 +24,9 @@ const ENTRANCE_TICKER_AT := 1.0
 const REDUCED_MOTION_FADE_S := 0.2
 const ENTRANCE_COVER_FADE_S := 0.8   # slow, deliberate reveal once the diorama is ready
 const MONO_FONT_PATH := "res://assets/ui_glassmorphism/fonts/SourceCodePro.ttf"
+const LOADING_TRACK_W := 360.0
+const LOADING_STRIPE_W := 110.0
+const LOADING_SWEEP_S := 1.4          # one continuous left-to-right pass of the stripe
 
 const MUSIC_VOLUME_DB := -12.0
 const MUSIC_FADE_IN_S := 2.5
@@ -64,7 +67,7 @@ var _wordmark_box: HBoxContainer
 var _wordmark_lockup: VBoxContainer
 var _loading_cover: ColorRect = null
 var _loading_label: Label = null
-var _loading_bar: ProgressBar = null
+var _loading_tween: Tween = null
 var _continue_path := ""
 var _music_player: AudioStreamPlayer = null
 var _idle_timer: Timer = null
@@ -119,7 +122,6 @@ func _play_startup_animation() -> void:
 	# 3D models. Hold it until diorama_ready, then fade the finished scene in — nothing
 	# pops or stutters in view; the bar communicates the app is alive during the parse.
 	_build_loading_cover()
-	diorama.loading_progress.connect(_on_diorama_loading)
 	diorama.diorama_ready.connect(_on_diorama_ready, CONNECT_ONE_SHOT)
 
 	# Hide the to-be-revealed UI until the cover fades (so nothing shows behind it).
@@ -133,8 +135,8 @@ func _play_startup_animation() -> void:
 ## Fade the loading cover out, then run the entrance choreography (or, under Reduce
 ## Motion, a single quiet fade). Called once the diorama is fully built.
 func _on_diorama_ready() -> void:
-	if diorama.loading_progress.is_connected(_on_diorama_loading):
-		diorama.loading_progress.disconnect(_on_diorama_loading)
+	if _loading_tween != null and _loading_tween.is_valid():
+		_loading_tween.kill()
 	if _loading_cover != null and is_instance_valid(_loading_cover):
 		var cover_fade := create_tween()
 		cover_fade.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
@@ -151,15 +153,9 @@ func _on_diorama_ready() -> void:
 	_play_entrance()
 
 
-func _on_diorama_loading(label: String, ratio: float) -> void:
-	if _loading_label != null and is_instance_valid(_loading_label):
-		_loading_label.text = label
-	if _loading_bar != null and is_instance_valid(_loading_bar):
-		_loading_bar.value = ratio
-
-
-## Black full-screen cover with a centred "LOADING 3D MODELS" line + a thin cyan bar,
-## shown while the diorama parses its models. Added last so it sits above everything.
+## Black full-screen cover with a centred "PREPARING BATTLEFIELD" line and a thin
+## indeterminate bar — a cyan stripe sweeping continuously along the track — shown
+## while the diorama builds. Added last so it sits above everything.
 func _build_loading_cover() -> void:
 	_loading_cover = ColorRect.new()
 	_loading_cover.color = Color.BLACK
@@ -181,27 +177,33 @@ func _build_loading_cover() -> void:
 	mono.base_font = load(MONO_FONT_PATH)
 	mono.spacing_glyph = 2
 	_loading_label = Label.new()
-	_loading_label.text = "LOADING 3D MODELS"
+	_loading_label.text = "PREPARING BATTLEFIELD"
 	_loading_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_loading_label.add_theme_font_override("font", mono)
 	_loading_label.add_theme_font_size_override("font_size", 13)
 	_loading_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 	box.add_child(_loading_label)
 
-	_loading_bar = ProgressBar.new()
-	_loading_bar.custom_minimum_size = Vector2(360, 3)
-	_loading_bar.min_value = 0.0
-	_loading_bar.max_value = 1.0
-	_loading_bar.step = 0.001
-	_loading_bar.value = 0.0
-	_loading_bar.show_percentage = false
-	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(1, 1, 1, 0.08)
-	var fill := StyleBoxFlat.new()
-	fill.bg_color = HudTokens.CYAN
-	_loading_bar.add_theme_stylebox_override("background", bg)
-	_loading_bar.add_theme_stylebox_override("fill", fill)
-	box.add_child(_loading_bar)
+	# Indeterminate bar: a dim track with a cyan stripe sweeping across it on a loop.
+	var track := Control.new()
+	track.custom_minimum_size = Vector2(LOADING_TRACK_W, 3)
+	track.clip_contents = true  # the stripe enters/exits cleanly off the ends
+	box.add_child(track)
+	var track_bg := ColorRect.new()
+	track_bg.color = Color(1, 1, 1, 0.08)
+	track_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	track_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	track.add_child(track_bg)
+	var stripe := ColorRect.new()
+	stripe.color = HudTokens.CYAN
+	stripe.size = Vector2(LOADING_STRIPE_W, 3)
+	stripe.position = Vector2(-LOADING_STRIPE_W, 0)
+	stripe.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	track.add_child(stripe)
+
+	_loading_tween = create_tween().set_loops()
+	_loading_tween.tween_property(stripe, "position:x", LOADING_TRACK_W, LOADING_SWEEP_S) \
+			.from(-LOADING_STRIPE_W)
 
 
 ## The staggered reveal (wordmark, buttons, footer, ticker), played after the cover fade.
