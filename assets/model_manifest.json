@@ -1206,6 +1206,131 @@
       "url": "3bef7545e131ba88a1dccf2fa5baaff7c6816d9a935f18fbb9803863b74d994f.glb",
       "sha256": "3bef7545e131ba88a1dccf2fa5baaff7c6816d9a935f18fbb9803863b74d994f",
       "size": 15127872
+    },
+    "ratmen_clans/artillery gun": {
+      "url": "5cff8b9ec04074f85b72760ccd9490c14c9a523ca1afe299b43b74dc06c4d02c.glb",
+      "sha256": "5cff8b9ec04074f85b72760ccd9490c14c9a523ca1afe299b43b74dc06c4d02c",
+      "size": 17478376
+    },
+    "ratmen_clans/burrower tank": {
+      "url": "59cc570b78a1624b4cc0aa52b630d328e09df9927ee8b548054afe04ab090d77.glb",
+      "sha256": "59cc570b78a1624b4cc0aa52b630d328e09df9927ee8b548054afe04ab090d77",
+      "size": 17461780
+    },
+    "ratmen_clans/clan handler": {
+      "url": "0b8420d2193e14696ca5ae6d08f11c10d08b81f59af027b15e7042dc2a137346.glb",
+      "sha256": "0b8420d2193e14696ca5ae6d08f11c10d08b81f59af027b15e7042dc2a137346",
+      "size": 17970956
+    },
+    "ratmen_clans/combat tank": {
+      "url": "172415e67bccbd0acff783fa13607f55f244255683c9c69857ddb0274a32a20e.glb",
+      "sha256": "172415e67bccbd0acff783fa13607f55f244255683c9c69857ddb0274a32a20e",
+      "size": 18266040
+    },
+    "ratmen_clans/elite handler": {
+      "url": "0e7eb5868c6009382cfc9069d0400f223a391e5d0c352c33ca38ce0ab526a321.glb",
+      "sha256": "0e7eb5868c6009382cfc9069d0400f223a391e5d0c352c33ca38ce0ab526a321",
+      "size": 15644624
+    },
+    "ratmen_clans/elite operators": {
+      "url": "3e9cb099092428694f859314d5b3c21fb82833c7482d794fd7d857e071e3bace.glb",
+      "sha256": "3e9cb099092428694f859314d5b3c21fb82833c7482d794fd7d857e071e3bace",
+      "size": 17080932
+    },
+    "ratmen_clans/giant rats": {
+      "url": "9267d73c92c1a5d7424c16353cc76bac1f5be5a3a21fee2fa8b1abe9d4b5d31f.glb",
+      "sha256": "9267d73c92c1a5d7424c16353cc76bac1f5be5a3a21fee2fa8b1abe9d4b5d31f",
+      "size": 17701204
+    },
+    "ratmen_clans/great death wheel": {
+      "url": "6f7e6e9d06e550d0c1fe7cc68a4d2211fedea0a2184c1acad8db7d5c77e50207.glb",
+      "sha256": "6f7e6e9d06e550d0c1fe7cc68a4d2211fedea0a2184c1acad8db7d5c77e50207",
+      "size": 18671732
+    },
+    "ratmen_clans/great mecha beast": {
+      "url": "bc2b7f4deb4cd5ead19a4b8a905eb0f3ff63a48f04a5252111f6735fec454177.glb",
+      "sha256": "bc2b7f4deb4cd5ead19a4b8a905eb0f3ff63a48f04a5252111f6735fec454177",
+      "size": 17973576
+    },
+    "ratmen_clans/infiltrators": {
+      "url": "e750952d8e0ff872f57bcd76c810e23ec07c23da25eb1d45a77e9ef688d6e502.glb",
+      "sha256": "e750952d8e0ff872f57bcd76c810e23ec07c23da25eb1d45a77e9ef688d6e502",
+      "size": 14511604
+    },
+    "ratmen_clans/light mecha walker": {
+      "url": "07f8817799d094e433215b48071b854911dd5e4b4b43f8614faf7857efc857ca.glb",
+      "sha256": "07f8817799d094e433215b48071b854911dd5e4b4b43f8614faf7857efc857ca",
+      "size": 17510828
+    },
+    "ratmen_clans/mecha beast riders": {
+      "url": "68504e76845e33a5211600c6e549b479723807dee23f8d3684efbde164b776f0.glb",
+      "sha256": "68504e76845e33a5211600c6e549b479723807dee23f8d3684efbde164b776f0",
+      "size": 16882816
+    },
+    "ratmen_clans/mecha ogre": {
+      "url": "1d2a1eef249b914aab06f8a78ca4d7fe9586dd2fe6112d80fcf79f3a2e931347.glb",
+      "sha256": "1d2a1eef249b914aab06f8a78ca4d7fe9586dd2fe6112d80fcf79f3a2e931347",
+      "size": 15475200
+    },
+    "ratmen_clans/mecha walker titan": {
+      "url": "2ea61f59a2e6b773560ddb0cbf451adc8e910e9566593176e555064671bd1486.glb",
+      "sha256": "2ea61f59a2e6b773560ddb0cbf451adc8e910e9566593176e555064671bd1486",
+      "size": 19119040
+    },
+    "ratmen_clans/mine drones": {
+      "url": "1da679246b3bdf40fb976adac95dfdae10e3e271cc477be679432eb963f9130b.glb",
+      "sha256": "1da679246b3bdf40fb976adac95dfdae10e3e271cc477be679432eb963f9130b",
+      "size": 16823688
+    },
+    "ratmen_clans/operators": {
+      "url": "16ac901961e724d115af56674d65d9bf5f589c9a37d766742191ef80c8f882a2.glb",
+      "sha256": "16ac901961e724d115af56674d65d9bf5f589c9a37d766742191ef80c8f882a2",
+      "size": 15339300
+    },
+    "ratmen_clans/rat ogre agents": {
+      "url": "b98828c8ec737065775c05c04a76473cc8db4067108a00b6db56ef7d7151ee8b.glb",
+      "sha256": "b98828c8ec737065775c05c04a76473cc8db4067108a00b6db56ef7d7151ee8b",
+      "size": 17097792
+    },
+    "ratmen_clans/rat ogre bodyguards": {
+      "url": "f33e7c7ef71ae161c6e1421feeed43d831e486088ca0360175ba6c5c5e5cac97.glb",
+      "sha256": "f33e7c7ef71ae161c6e1421feeed43d831e486088ca0360175ba6c5c5e5cac97",
+      "size": 16957820
+    },
+    "ratmen_clans/rat ogre handler": {
+      "url": "6e4a5599256d777f5ad122d35265c044533f1e4512e28ad794f76568b0aed519.glb",
+      "sha256": "6e4a5599256d777f5ad122d35265c044533f1e4512e28ad794f76568b0aed519",
+      "size": 17254016
+    },
+    "ratmen_clans/rat swarms": {
+      "url": "82677158b9c88204f83a84d9758d2c7462941c6ac3226a674722fa9dd1724092.glb",
+      "sha256": "82677158b9c88204f83a84d9758d2c7462941c6ac3226a674722fa9dd1724092",
+      "size": 18486216
+    },
+    "ratmen_clans/saboteurs": {
+      "url": "2b92b7216497815829018a1dfd8d072a28058a5ce27b9772b82f7e34f9197448.glb",
+      "sha256": "2b92b7216497815829018a1dfd8d072a28058a5ce27b9772b82f7e34f9197448",
+      "size": 16116556
+    },
+    "ratmen_clans/sharpshooters": {
+      "url": "c67bb456dc9242896de80f5b07113ddf7caa7ceb5b141a1ad5f64d54f39531cd.glb",
+      "sha256": "c67bb456dc9242896de80f5b07113ddf7caa7ceb5b141a1ad5f64d54f39531cd",
+      "size": 17771196
+    },
+    "ratmen_clans/stalkers": {
+      "url": "1da50fcb769b1b1c0eb22d98190f99946c2d0d20df8fb0b3cf0206238dbf19fe.glb",
+      "sha256": "1da50fcb769b1b1c0eb22d98190f99946c2d0d20df8fb0b3cf0206238dbf19fe",
+      "size": 17854140
+    },
+    "ratmen_clans/titan mecha beast": {
+      "url": "8d0fd4e5e5d80d886e888cf4f6eda5f3ce32c2f984e3e22fd3345909adb90baf.glb",
+      "sha256": "8d0fd4e5e5d80d886e888cf4f6eda5f3ce32c2f984e3e22fd3345909adb90baf",
+      "size": 17192032
+    },
+    "ratmen_clans/weapon experts": {
+      "url": "7e071ce9675c9377b73f76ca3f2662c09742f5f8468a9512e562dfdf9235e31b.glb",
+      "sha256": "7e071ce9675c9377b73f76ca3f2662c09742f5f8468a9512e562dfdf9235e31b",
+      "size": 16549712
     }
   }
 }
