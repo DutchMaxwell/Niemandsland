@@ -75,7 +75,10 @@ wall bases + grassland grass field (one MultiMesh each, quality-gated). **AAA ma
 menu**: live night-battlefield diorama (production terrain stack + miniatures vignette
 + orbit camera with DoF), left command column (HudTokens), CONTINUE-newest-save entry,
 typewriter quote ticker, menu soundscape + CC0 dark-ambient drone, idle attract mode.
-Settings window reachable in-game via left panel button or F7.
+Settings window reachable in-game via left panel button or F7. **UI audio**: every
+`BaseButton` gets procedural hover/click/focus ticks via the `UiFeedback` autoload
+(one `node_added` hook, zero per-button code; variation-aware confirm/back tones) on
+a dedicated, independently mutable "UI" bus with its own persisted settings slider.
 
 **Model Forge** — Python pipeline (OPR data → image → TRELLIS mesh → GLB) with a
 Flask review UI; 38 faction design languages / 855 unit overrides with real OPR
@@ -94,17 +97,14 @@ models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
 
 ## In progress
 
-- **Two-client in-game live test** of the multiplayer lobby/chat/names + the now-live
-  relay (`list_rooms` + host-reconnect deployed 2026-06-12): confirm names/roster/chat
-  across two real clients, the room browser lists a public host, and a dropped host
-  rejoins. The headless half (relay `list_rooms` smoke test) already passed.
-
-## Planned
-
-- Unit-as-LOS-blocker (Asgard: formation height + closed 1" gaps) — terrain LOS first.
-- UI audio: a dedicated mutable "UI" bus + a `UiSound` autoload auto-wiring
-  `BaseButton` hover/click/focus feedback (full spec archived in
-  [`docs/archive/AAA_UI_PLAYBOOK.md`](docs/archive/AAA_UI_PLAYBOOK.md)).
+- **Graphics preset switch FROM Performance hangs** (all other tier switches are
+  fine; user-confirmed 2026-06-12 even after the menu-rebuild loading cover).
+  Prime suspect: `scaling_3d_scale` 0.77↔1.0 resizing the 3D render target —
+  Performance is the only sub-native preset (see `graphics_settings.gd`).
+- Unit-as-LOS-blocker (Asgard: formation height + closed 1" gaps) — in work.
+- **Host-DROP live test**: the two-client lobby/chat/names/browser flow is
+  user-confirmed working (2026-06-12); the one untested piece is a host losing
+  connection mid-game and rejoining (relay side is deployed + unit-tested).
 
 ## Out of scope (by design)
 

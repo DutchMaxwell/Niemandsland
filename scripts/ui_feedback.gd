@@ -13,6 +13,8 @@ var _next_player := 0
 var _snd_click: AudioStreamWAV
 var _snd_confirm: AudioStreamWAV
 var _snd_back: AudioStreamWAV
+var _snd_hover: AudioStreamWAV
+var _snd_focus: AudioStreamWAV
 
 
 func _ready() -> void:
@@ -30,10 +32,14 @@ func _setup_audio() -> void:
 		add_child(p)
 		_players.append(p)
 	# Quiet, sub-300ms tones. Click = neutral tick, confirm = rising two-tone (primary),
-	# back = lower single tone (destructive/cancel).
+	# back = lower single tone (destructive/cancel). Hover/focus are far quieter
+	# micro-ticks: hover fires on every mouse sweep across a button row, focus covers
+	# keyboard/controller navigation (the playbook's "quiet focus tick").
 	_snd_click = _tone([1200.0], 0.035, 0.16)
 	_snd_confirm = _tone([880.0, 1320.0], 0.06, 0.18)
 	_snd_back = _tone([440.0], 0.05, 0.15)
+	_snd_hover = _tone([1600.0], 0.02, 0.05)
+	_snd_focus = _tone([1000.0], 0.025, 0.07)
 
 
 func _play(stream: AudioStream) -> void:
@@ -96,3 +102,6 @@ func _wire(b: BaseButton) -> void:
 	b.set_meta(WIRED_META, true)
 	UiMotion.attach_button(b)
 	b.pressed.connect(func() -> void: _play(_sound_for(b)))
+	b.mouse_entered.connect(func() -> void: _play(_snd_hover))
+	# Keyboard/controller navigation feedback; FOCUS_NONE buttons never fire this.
+	b.focus_entered.connect(func() -> void: _play(_snd_focus))
