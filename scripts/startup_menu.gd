@@ -266,21 +266,21 @@ func _on_join_online_pressed() -> void:
 func _show_host_popup() -> void:
 	if _host_popup:
 		_host_popup.queue_free()
-	_host_popup = _build_net_dialog("HOST ONLINE GAME", "NET-01", "Start Hosting")
+	_host_popup = NetDialog.build("HOST ONLINE GAME", "NET-01", "Start Hosting")
 
-	var content := _net_dialog_content(_host_popup)
-	content.add_child(_net_label("Player Name:"))
-	_host_name_input = _net_line_edit(PlayerIdentity.load_saved_name(), "Your name")
+	var content := NetDialog.content(_host_popup)
+	content.add_child(NetDialog.label("Player Name:"))
+	_host_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Your name")
 	_host_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
 	content.add_child(_host_name_input)
-	content.add_child(_net_label("Relay Server URL:"))
-	_relay_url_input = _net_line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
+	content.add_child(NetDialog.label("Relay Server URL:"))
+	_relay_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 	content.add_child(_relay_url_input)
 	_host_public_check = CheckBox.new()
 	_host_public_check.text = "List this room publicly (Browse Online Games)"
 	_host_public_check.focus_mode = Control.FOCUS_NONE
 	content.add_child(_host_public_check)
-	var info := _net_label("The room code will be shown in-game after connecting.")
+	var info := NetDialog.label("The room code will be shown in-game after connecting.")
 	info.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD
 	content.add_child(info)
@@ -312,21 +312,21 @@ func _on_host_confirmed() -> void:
 func _show_join_popup() -> void:
 	if _join_popup:
 		_join_popup.queue_free()
-	_join_popup = _build_net_dialog("JOIN ONLINE GAME", "NET-02", "Join")
+	_join_popup = NetDialog.build("JOIN ONLINE GAME", "NET-02", "Join")
 
-	var content := _net_dialog_content(_join_popup)
-	content.add_child(_net_label("Player Name:"))
-	_join_name_input = _net_line_edit(PlayerIdentity.load_saved_name(), "Your name")
+	var content := NetDialog.content(_join_popup)
+	content.add_child(NetDialog.label("Player Name:"))
+	_join_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Your name")
 	_join_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
 	content.add_child(_join_name_input)
-	content.add_child(_net_label("Room Code:"))
-	_join_code_input = _net_line_edit("", "ABC-123")
+	content.add_child(NetDialog.label("Room Code:"))
+	_join_code_input = NetDialog.line_edit("", "ABC-123")
 	_join_code_input.max_length = 7  # 6 chars + optional hyphen
 	_join_code_input.add_theme_font_size_override("font_size", 24)
 	_join_code_input.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(_join_code_input)
-	content.add_child(_net_label("Relay Server URL:"))
-	_join_relay_url_input = _net_line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
+	content.add_child(NetDialog.label("Relay Server URL:"))
+	_join_relay_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 	content.add_child(_join_relay_url_input)
 
 	_join_popup.confirmed.connect(_on_join_confirmed)
@@ -367,15 +367,15 @@ func _on_browse_online_pressed() -> void:
 func _show_browse_popup() -> void:
 	if _browse_popup:
 		_browse_popup.queue_free()
-	_browse_popup = _build_net_dialog("BROWSE ONLINE GAMES", "NET-03", "Close")
+	_browse_popup = NetDialog.build("BROWSE ONLINE GAMES", "NET-03", "Close")
 
-	var content := _net_dialog_content(_browse_popup)
-	content.add_child(_net_label("Player Name:"))
-	_browse_name_input = _net_line_edit(PlayerIdentity.load_saved_name(), "Your name")
+	var content := NetDialog.content(_browse_popup)
+	content.add_child(NetDialog.label("Player Name:"))
+	_browse_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Your name")
 	_browse_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
 	content.add_child(_browse_name_input)
-	content.add_child(_net_label("Relay Server URL:"))
-	_browse_url_input = _net_line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
+	content.add_child(NetDialog.label("Relay Server URL:"))
+	_browse_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 	content.add_child(_browse_url_input)
 
 	var refresh_btn := Button.new()
@@ -488,51 +488,6 @@ func _set_browse_status(text: String) -> void:
 	_browse_rooms_vbox.add_child(label)
 
 
-## Shared chrome for the host/join dialogs: HudTokens glass panel + corner brackets
-## + an Orbitron header with the mono net index — content goes into _net_dialog_content.
-func _build_net_dialog(title_text: String, index: String, ok_text: String) -> AcceptDialog:
-	var dialog := AcceptDialog.new()
-	dialog.title = title_text.capitalize()
-	dialog.ok_button_text = ok_text
-
-	var panel := PanelContainer.new()
-	panel.name = "NetPanel"
-	panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
-	panel.add_child(HudFrame.new())
-
-	var margin := MarginContainer.new()
-	UiPolish.set_dialog_margins(margin)
-	panel.add_child(margin)
-
-	var vbox := VBoxContainer.new()
-	vbox.name = "NetContent"
-	vbox.add_theme_constant_override("separation", HudTokens.SPACE_12)
-	vbox.add_child(HudTokens.header(title_text, index))
-	margin.add_child(vbox)
-
-	dialog.add_child(panel)
-	return dialog
-
-
-func _net_dialog_content(dialog: AcceptDialog) -> VBoxContainer:
-	# Find the explicitly-named content node directly: the intermediate MarginContainer
-	# gets a runtime auto-name (@MarginContainer@N), so a fixed "NetPanel/MarginContainer/…"
-	# path resolves to null and the caller crashes adding content. find_child is immune
-	# to those auto-names (recursive, owned=false for runtime-built nodes).
-	return dialog.find_child("NetContent", true, false) as VBoxContainer
-
-
-func _net_label(text_value: String) -> Label:
-	var label := Label.new()
-	label.text = text_value
-	return label
-
-
-func _net_line_edit(text_value: String, placeholder: String) -> LineEdit:
-	var edit := LineEdit.new()
-	edit.text = text_value
-	edit.placeholder_text = placeholder
-	return edit
 
 # ===== Shared =====
 
