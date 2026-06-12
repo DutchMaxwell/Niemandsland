@@ -85,20 +85,30 @@ FORM_CONSTRAINTS: dict[str, str] = {
         "the entire model\n"
         "- NO humanoid body, NO helmeted head, NO bipedal legs, NO arms or hand-held weapons\n"
         "- Weapons are hull- or turret-mounted, never carried by hands\n"
-        "- A crew hatch / cockpit instead of a head — reference shape: a real armoured fighting vehicle"
+        "- A crew hatch / cockpit instead of a head — reference shape: a real armoured fighting vehicle\n"
+        "- An ORIGINAL, distinctive hull silhouette unique to this faction: an original chassis outline "
+        "with a distinctive prow, deck and an original track / wheel / hover arrangement — a clearly "
+        "original vehicle of this faction's own design, not a generic boxy transport"
     ),
     "walker": (
         "WALKER / MECH FORM CONSTRAINT - render as a piloted machine, NOT an infantry soldier:\n"
         "- A large mechanical walker / battlesuit on stout mechanical legs, clearly bigger than infantry\n"
         "- A cockpit or sensor head, NOT a humanoid face or a soldier's helmet; vehicle-scale armour panels\n"
         "- Heavy hardpoint weapons on the chassis / arms, not hand-held rifles\n"
-        "- Reads as a machine, never a person in power armour"
+        "- Reads as a machine, never a person in power armour\n"
+        "- An ORIGINAL, distinctive chassis silhouette unique to this faction: vary the leg "
+        "configuration (digitigrade, multi-legged or an unusual stance), asymmetric weapon mounts and "
+        "an original head / sensor form — clearly this faction's own war-machine, not a generic "
+        "two-legged armoured knight outline"
     ),
     "titan": (
         "TITAN FORM CONSTRAINT - render as a colossal war-engine:\n"
         "- A towering, massive walking war-machine, vastly larger than infantry, heavy industrial build\n"
         "- Building-scale weapon hardpoints; a command bridge / sensor head, not a humanoid face\n"
-        "- Clearly a giant machine, never an infantry-scale figure"
+        "- Clearly a giant machine, never an infantry-scale figure\n"
+        "- An ORIGINAL, distinctive colossal silhouette unique to this faction, with original chassis "
+        "lines, an unusual leg / body configuration and original proportions — not a generic upscaled "
+        "two-legged armoured knight"
     ),
 }
 
