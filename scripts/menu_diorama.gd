@@ -219,6 +219,11 @@ func _setup() -> void:
 	if _diorama_active():
 		_build_diorama(tier)
 	_await_first_frame()
+	if _diorama_built:
+		# Load the minis only AFTER the first frame has rendered, so the menu appears
+		# immediately. Each GLB parse (~3 s cold on the 15-18 MB models) would otherwise
+		# starve the first frame and freeze the menu ~30 s (worst on game -> main menu).
+		first_frame_rendered.connect(_build_minis, CONNECT_ONE_SHOT)
 
 
 ## True when this menu instance should build the full diorama. AUTO requires the
@@ -305,7 +310,8 @@ func _build_diorama(_tier: int) -> void:
 	clouds.set_density_scale(MIST_DENSITY_SCALE)
 	clouds.fade_in(MIST_FADE_IN_S)
 
-	_build_minis()
+	# Minis load progressively AFTER the first frame (see _setup) so the menu appears
+	# instantly instead of blocking on the GLB parses.
 
 	# Quiet battlefield soundscape. Child of the viewport: the 3D one-shots and the
 	# crackle emitters must live in the diorama's World3D (its camera is the listener).
@@ -340,6 +346,9 @@ func _build_minis() -> void:
 	_viewport.add_child(library)
 	var placed := 0
 	for entry in MINI_VIGNETTE:
+		# The diorama can be torn down mid-load (quality switch / scene change).
+		if not is_instance_valid(_viewport):
+			return
 		var path: String = library.get_cached_path(entry["faction"], entry["unit"])
 		if path.is_empty():
 			continue
@@ -353,8 +362,11 @@ func _build_minis() -> void:
 		model.rotation.y = deg_to_rad(entry["yaw_deg"])
 		_viewport.add_child(model)
 		placed += 1
+		# Spread the (cold-cache) GLB parses out so the menu renders between them. A real
+		# timer (not process_frame) guarantees the engine gets wall-clock time to draw.
+		await get_tree().create_timer(0.05).timeout
 
-	if placed > 0:
+	if placed > 0 and is_instance_valid(_viewport):
 		for cell in MINI_LIGHT_CELLS:
 			var spill := OmniLight3D.new()
 			spill.position = _cell_to_local(cell) + Vector3(0.0, MINI_LIGHT_HEIGHT_M, 0.0)
@@ -365,13 +377,38 @@ func _build_minis() -> void:
 			_viewport.add_child(spill)
 
 
-## Runtime glTF load (user:// paths can't go through ResourceLoader).
+## Runtime glTF load (user:// paths can't go through ResourceLoader), parsed once and
+## cached as a PackedScene for the whole app session. The cache is what makes
+## returning to the menu fast: parsing the curated 15-18 MB GLBs took ~3 s each, so
+## re-entering the menu (game -> main menu) used to block ~30 s; the second time it is
+## a cheap instantiate.
+static var _mini_scene_cache: Dictionary = {}
+
+
 func _load_glb(path: String) -> Node3D:
-	var doc := GLTFDocument.new()
-	var state := GLTFState.new()
-	if doc.append_from_file(path, state) != OK:
-		return null
-	return doc.generate_scene(state) as Node3D
+	var packed: PackedScene = _mini_scene_cache.get(path, null)
+	if packed == null:
+		var doc := GLTFDocument.new()
+		var state := GLTFState.new()
+		if doc.append_from_file(path, state) != OK:
+			return null
+		var scene_root := doc.generate_scene(state) as Node3D
+		if scene_root == null:
+			return null
+		_set_owner_recursive(scene_root, scene_root)  # so pack() keeps the descendants
+		packed = PackedScene.new()
+		if packed.pack(scene_root) != OK:
+			scene_root.free()
+			return null
+		scene_root.free()
+		_mini_scene_cache[path] = packed
+	return packed.instantiate() as Node3D
+
+
+func _set_owner_recursive(node: Node, scene_owner: Node) -> void:
+	for child in node.get_children():
+		child.owner = scene_owner
+		_set_owner_recursive(child, scene_owner)
 
 
 ## Uniformly scales a model so its AABB height matches the target. Returns the

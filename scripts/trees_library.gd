@@ -35,7 +35,12 @@ var _panels: Dictionary = {}    # panel name -> { url, sha256, size }
 var _models: Dictionary = {}    # variant name -> { url, sha256, size } (textured GLBs)
 var _base_url: String = ""      # optional prefix for relative entry URLs
 var _textures: Dictionary = {}  # panel name -> Texture2D (decoded once, then reused)
-var _model_scenes: Dictionary = {}  # variant name -> PackedScene (parsed once)
+## Parsed tree-model PackedScenes keyed by their cached file PATH (theme-aware), shared
+## across ALL TreesLibrary instances for the whole app session. Each terrain overlay
+## (in-game AND the menu diorama, rebuilt on every return to the menu) used to own its
+## cache and re-parse the ~3 large tree GLBs from scratch — that was the bulk of the
+## multi-second menu rebuild. Static = parse once, reuse everywhere.
+static var _model_scene_cache: Dictionary = {}
 
 # === Lifecycle ===
 
@@ -151,11 +156,11 @@ func ensure_all_models(theme_prefix: String = "") -> bool:
 ## so subsequent spawns instance instead of re-parsing — the meshes stay shared).
 ## Returns null if the variant is not cached or fails to parse.
 func get_model_scene(variant: String) -> PackedScene:
-	if _model_scenes.has(variant):
-		return _model_scenes[variant]
 	var path := get_cached_model_path(variant)
 	if path.is_empty():
 		return null
+	if _model_scene_cache.has(path):
+		return _model_scene_cache[path]
 	var doc := GLTFDocument.new()
 	var state := GLTFState.new()
 	if doc.append_from_file(path, state) != OK:
@@ -171,7 +176,7 @@ func get_model_scene(variant: String) -> PackedScene:
 	scene_root.free()
 	if ok != OK:
 		return null
-	_model_scenes[variant] = packed
+	_model_scene_cache[path] = packed
 	return packed
 
 # === Private helpers ===
