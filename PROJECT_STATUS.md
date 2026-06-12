@@ -11,7 +11,13 @@ the full change history is in `git log`.
 **Sandbox & objects** — 3D table (variable sizes), orbit/pan/zoom camera, spawn/
 move/rotate/delete, multi- and box-select, copy/paste/duplicate, row/arrow
 arrangement with constant base-edge spacing, distance measuring (inches), physics
-dice (D4–D100) via the `dice_roller` addon.
+D6 dice in a scaled SubViewport (our own MIT `dice_tray.gd` / `dice_d6.gd`; replaced
+the former AGPL `dice_roller` addon) with a per-face result readout and a shared
+multiplayer dice log. **Extended dice options** (display-only, rules in
+`dice_rules.gd`): success target (2+…6+) + modifier with OPR's natural-6/1 rule,
+success counts in readout and log, and one-click partial rerolls (fails / 1s /
+6s / all — only those dice re-toss, the rest stay frozen); faces + evaluation
+context sync to remote players.
 
 **Map layout** — top-down 3″ grid editor: terrain pieces (ruins/forest/container/
 dangerous), front-line + custom-polygon deployment zones (1″ grid, symmetric/
@@ -25,8 +31,12 @@ margins), blockers as shipping containers (2 colourways), dangerous terrain as a
 minefield (15 anti-tank mines + 2 warning signs). **Biome themes** re-skin the set in
 place via `table.set_biome`: grassland (default), desert (fine adobe + cacti) and
 tundra (snowed stone/conifers/containers); volcanic/jungle/urban still use the default
-set. Terrain is **visual only** so far (LOS-blocking and deployment-compliance checks
-exist as helpers; no movement/cover/damage effects).
+set. **Terrain reference aids (Asgard tournament standard, display only)**:
+always-visible effect labels per terrain zone (Cover / Difficult / Dangerous /
+Impassable / Height) and height-aware top-down line-of-sight in the measure tool
+(`los_rules.gd` Height categories + per-zone flood fill in `terrain_overlay.gd`;
+a 🚫 marker on the measure line when LOS is blocked). Players apply the effects
+themselves — terrain has **no automated movement/cover/damage effects** by design.
 
 **Units (OPR)** — Army Forge import via the OPR API; per-model architecture
 (`ModelInstance`) wrapped by system-agnostic `GameUnit`; automatic equipment
@@ -78,10 +88,6 @@ models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
 
 ## In progress
 
-- Terrain reference aids per the **Asgard tournament standard** — *display only, no
-  auto-resolution*: always-visible effect labels per terrain zone (Cover / Difficult /
-  Dangerous / Impassable / Height) and height-aware top-down line-of-sight in the
-  measure tool. Players apply the effects themselves.
 - Extended dice options (modifiers, rerolls).
 
 ## Planned
@@ -113,11 +119,15 @@ and `hero_attachment_dialog.gd` never existed as separate files — that logic l
 - OPR rule descriptions resolve for freshly imported armies; loaded saves /
   remote-only armies show rule names without descriptions (persist/sync is a
   future step).
+- The 3D dice tray is shared between local and remote rolls: a remote roll that
+  arrives while a local physics roll/reroll is still tumbling (same ~2 s window)
+  preempts and drops the local roll (not logged/broadcast). Remote wins by design
+  (it is already shared state); rare in practice.
 
 ## Tests
 
-gdUnit4: **39 suites / 275 tests green** in `test/` (incl. `coherency_checker`,
+gdUnit4: **53 suites / 369 tests green** in `test/` (incl. `coherency_checker`,
 `save_manager`, `startup_menu`, `internet_lobby`, `relay_multiplayer_peer`,
-`network_version_handshake`). Python: `relay/test_relay_server.py`,
+`network_version_handshake`, `dice_rules`). Python: `relay/test_relay_server.py`,
 `tools/model_forge/tests/`. How to run: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 Coverage is still thin — most gameplay scripts are untested.
