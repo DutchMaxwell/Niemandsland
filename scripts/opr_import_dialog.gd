@@ -281,12 +281,14 @@ func _on_import() -> void:
 
 	var player_id = player_option.get_selected_id()
 	_preview_army.player_id = player_id
+	var army := _preview_army  # _reset_dialog() nulls _preview_army; keep a reference
 
-	army_imported.emit(_preview_army, player_id)
+	# Hide + reset BEFORE emitting: the handler spawns the army synchronously (it blocks
+	# the main thread), so anything after the emit would only run once loading is done —
+	# the dialog would otherwise stay on screen over the loading overlay the whole time.
 	hide()
-
-	# Reset state
 	_reset_dialog()
+	army_imported.emit(army, player_id)
 
 
 func _on_cancel() -> void:

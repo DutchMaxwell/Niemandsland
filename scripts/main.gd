@@ -412,6 +412,8 @@ func _ready() -> void:
 		opr_army_manager.model_library.caching_started.connect(_on_model_caching_started)
 		opr_army_manager.model_library.caching_progress.connect(_on_model_caching_progress)
 		opr_army_manager.model_library.caching_finished.connect(_on_model_caching_finished)
+	# Per-unit spawn progress drives the second half of the army loading bar.
+	opr_army_manager.spawn_progress.connect(_on_army_spawn_progress)
 
 	# Set army_manager reference on SaveManager for GameUnit serialization
 	save_manager.army_manager = opr_army_manager
@@ -1570,9 +1572,10 @@ func _on_model_caching_started(total: int) -> void:
 
 
 func _on_model_caching_progress(done: int, total: int) -> void:
-	# Feed the army-import overlay's bar when it's up (real download progress).
+	# Feed the army-import overlay's bar when it's up — downloads are the FIRST half of
+	# the bar (the spawn that follows fills the second half).
 	if is_instance_valid(_army_loading_overlay):
-		_army_loading_overlay.set_progress(float(done) / float(maxi(1, total)))
+		_army_loading_overlay.set_progress(0.5 * float(done) / float(maxi(1, total)))
 		return
 	if not _cache_progress_panel:
 		return
@@ -1583,6 +1586,13 @@ func _on_model_caching_progress(done: int, total: int) -> void:
 	_cache_progress_tween.tween_property(_cache_progress_bar, "value", float(done), 0.4) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	_cache_progress_label.text = "LOADING ARMY"
+
+
+## Per-unit spawn progress fills the SECOND half of the army loading bar (downloads, if
+## any, filled the first half via _on_model_caching_progress).
+func _on_army_spawn_progress(done: int, total: int) -> void:
+	if is_instance_valid(_army_loading_overlay):
+		_army_loading_overlay.set_progress(0.5 + 0.5 * float(done) / float(maxi(1, total)))
 
 
 func _kill_cache_tween() -> void:
@@ -2263,6 +2273,10 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
 	get_tree().root.add_child(_army_loading_overlay)
 	_army_loading_overlay.set_label("LOADING ARMY")
 	_army_loading_overlay.set_indeterminate()
+	# Let the overlay render BEFORE the (synchronous) spawn blocks the main thread, so it
+	# is visible from the start instead of only appearing once loading is done.
+	await get_tree().process_frame
+	await get_tree().process_frame
 
 	# Store army
 	opr_army_manager.armies[player_id] = army
