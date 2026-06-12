@@ -212,3 +212,17 @@ func test_browse_online_dialog_builds() -> void:
 	assert_that(_menu._browse_rooms_vbox).is_not_null()
 	assert_that(_menu._browse_lobby).is_not_null()
 	assert_that(_menu._browse_popup.visible).is_true()
+
+
+## ===== Live quality-switch rebuild cover =====
+## Switching Performance -> higher rebuilds the whole diorama live; without a
+## loading cover the heavy build froze the visible menu with no feedback.
+
+func test_diorama_rebuild_shows_loading_overlay() -> void:
+	await _runner.simulate_frames(3)
+	# After startup the initial overlay is gone (or absent in tests) — force the
+	# rebuild signal like a live Performance -> higher switch would.
+	_menu._loading_overlay = null
+	_menu._on_diorama_rebuild_started()
+	assert_that(_menu._loading_overlay).is_not_null()
+	assert_that(is_instance_valid(_menu._loading_overlay)).is_true()

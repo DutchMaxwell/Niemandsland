@@ -133,6 +133,7 @@ func _play_startup_animation() -> void:
 	_loading_overlay.set_label("PREPARING BATTLEFIELD")
 	diorama.loading_progress.connect(_on_diorama_loading)
 	diorama.diorama_ready.connect(_on_diorama_ready, CONNECT_ONE_SHOT)
+	diorama.rebuild_started.connect(_on_diorama_rebuild_started)
 
 	# Hide the to-be-revealed UI until the cover fades (so nothing shows behind it).
 	_wordmark_lockup.modulate.a = 0.0
@@ -147,6 +148,21 @@ func _play_startup_animation() -> void:
 func _on_diorama_loading(_label: String, ratio: float) -> void:
 	if is_instance_valid(_loading_overlay):
 		_loading_overlay.set_progress(ratio)
+
+
+## A LIVE quality switch (Performance -> higher) rebuilds the whole diorama — the
+## heavy build would freeze the visible menu with no feedback. Cover it with the
+## same loading overlay as the initial start, dismissed on diorama_ready.
+func _on_diorama_rebuild_started() -> void:
+	if is_instance_valid(_loading_overlay):
+		return  # initial-start cover is already up
+	_loading_overlay = LoadingOverlay.new()
+	add_child(_loading_overlay)
+	_loading_overlay.set_label("PREPARING BATTLEFIELD")
+	diorama.diorama_ready.connect(func() -> void:
+		if is_instance_valid(_loading_overlay):
+			_loading_overlay.set_progress(1.0)
+			_loading_overlay.fade_and_free(), CONNECT_ONE_SHOT)
 
 
 func _on_diorama_ready() -> void:

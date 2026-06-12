@@ -107,6 +107,10 @@ signal loading_progress(label: String, ratio: float)
 ## its black loading cover up until this fires, then fades the finished scene in — so
 ## nothing pops or stutters in view.
 signal diorama_ready
+## Emitted when a LIVE quality switch starts a full diorama (re)build (crossing the
+## Performance boundary upward). The menu shows a loading cover until diorama_ready —
+## the heavy build otherwise blocks the UI with no feedback ("the menu froze").
+signal rebuild_started
 
 # === Exports ===
 
@@ -506,6 +510,11 @@ func _on_graphics_settings_applied(_preset_name: String) -> void:
 		return
 	if _diorama_built == _diorama_active():
 		return
+	# Upgrading INTO the diorama is the heavy direction (terrain + GLB parsing,
+	# cold caches when Performance never built it) — let the menu cover it.
+	# Downgrading to sky-only is a cheap teardown and needs no cover.
+	if _diorama_active():
+		rebuild_started.emit()
 	for child in get_children():
 		child.queue_free()
 	_viewport = null
