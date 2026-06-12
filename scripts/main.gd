@@ -2270,6 +2270,7 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
 	# import window and present even when the models are already cached. Model caching,
 	# if any, drives its bar (see _on_model_caching_progress); otherwise it creeps.
 	_army_loading_overlay = LoadingOverlay.new()
+	_army_loading_overlay.compact = true  # small centred window, not a full-screen black
 	get_tree().root.add_child(_army_loading_overlay)
 	_army_loading_overlay.set_label("LOADING ARMY")
 	_army_loading_overlay.set_indeterminate()
