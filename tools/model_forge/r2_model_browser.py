@@ -21,6 +21,7 @@ Run:  ./venv/bin/python r2_model_browser.py   →  http://localhost:5072
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, Response, abort, jsonify, render_template, request, send_file
@@ -33,6 +34,10 @@ THIS: Path = Path(__file__).resolve().parent
 PROJECT_ROOT: Path = THIS.parents[1]
 MANIFEST: Path = PROJECT_ROOT / "assets" / "model_manifest.json"
 STATE: Path = THIS / "state"
+# Review metadata: which shipped models the maintainer flagged for re-generation (IP / quality).
+# Keyed by manifest key "<faction>/<unit>" -> {"note": str, "ts": str}. The agent reads this to
+# target re-gens. Not part of the game build.
+REWORK_FILE: Path = THIS / "rework_flags.json"
 PORT: int = 5072
 
 app = Flask(__name__)
@@ -46,6 +51,19 @@ def load_manifest() -> dict:
 
 def save_manifest(m: dict) -> None:
     MANIFEST.write_text(json.dumps(m, indent=2) + "\n", encoding="utf-8")
+
+
+def load_rework() -> dict:
+    if REWORK_FILE.exists():
+        try:
+            return json.loads(REWORK_FILE.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            return {}
+    return {}
+
+
+def save_rework(data: dict) -> None:
+    REWORK_FILE.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def faction_units(m: dict) -> dict[str, list[tuple[str, str, dict]]]:
@@ -107,14 +125,19 @@ def r2_client():
 def overview():
     m = load_manifest()
     fu = faction_units(m)
+    rework = load_rework()
+    rw_by_fac: dict[str, int] = {}
+    for k in rework:
+        rw_by_fac[k.split("/", 1)[0]] = rw_by_fac.get(k.split("/", 1)[0], 0) + 1
     rows = []
     for fac in sorted(fu):
         roster = len(session_units(fac))
         rows.append({"faction": fac, "on_r2": len(fu[fac]),
-                     "roster": roster, "gaps": max(0, roster - len(fu[fac]))})
+                     "roster": roster, "gaps": max(0, roster - len(fu[fac])),
+                     "rework": rw_by_fac.get(fac, 0)})
     return render_template("r2_overview.html", rows=rows,
                            total=len(m.get("models", {})), factions=len(fu),
-                           base_url=m.get("base_url", ""))
+                           rework_total=len(rework), base_url=m.get("base_url", ""))
 
 
 @app.route("/faction/<faction>")
@@ -125,12 +148,15 @@ def faction(faction: str):
     on_r2_names = {u[0] for u in fu}
     gaps = [u.get("unit_name") for u in session_units(faction)
             if (u.get("unit_name") or "").strip().lower() not in on_r2_names]
+    rework = load_rework()
     units = [{
         "unit": unit, "sha": entry["sha256"][:12], "size_mb": round(entry["size"] / 1e6, 1),
         "has_2d": unit in imgmap, "public_url": m.get("base_url", "") + entry["url"],
+        "flagged": key in rework, "note": rework.get(key, {}).get("note", ""),
     } for unit, key, entry in fu]
     return render_template("r2_faction.html", faction=faction, units=units,
-                           gaps=[g for g in gaps if g], on_r2=len(fu))
+                           gaps=[g for g in gaps if g], on_r2=len(fu),
+                           flagged_count=sum(1 for u in units if u["flagged"]))
 
 
 @app.route("/2d/<faction>/<path:unit>")
@@ -175,8 +201,30 @@ def api_delete():
             return jsonify({"ok": False, "error": "R2 delete failed: " + str(e)}), 502
     del m["models"][key]
     save_manifest(m)
+    rework = load_rework()
+    if rework.pop(key, None) is not None:  # a deleted model no longer needs a rework flag
+        save_rework(rework)
     return jsonify({"ok": True, "deleted_from_r2": deleted_r2,
                     "shared_with": shared, "remaining": len(m["models"])})
+
+
+@app.route("/api/rework", methods=["POST"])
+def api_rework():
+    data = request.get_json(force=True)
+    faction, unit = data.get("faction", ""), data.get("unit", "")
+    key = f"{faction}/{unit}"
+    if key not in load_manifest().get("models", {}):
+        return jsonify({"ok": False, "error": "unknown unit: " + key}), 404
+    flagged = bool(data.get("flagged", True))
+    rework = load_rework()
+    if flagged:
+        rework[key] = {"note": (data.get("note") or "").strip(),
+                       "ts": datetime.now().isoformat(timespec="seconds")}
+    else:
+        rework.pop(key, None)
+    save_rework(rework)
+    return jsonify({"ok": True, "flagged": flagged, "note": rework.get(key, {}).get("note", ""),
+                    "total": len(rework)})
 
 
 if __name__ == "__main__":
