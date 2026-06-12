@@ -47,12 +47,18 @@ Activated tokens; hero attachment.
 **Multiplayer** — ENet over LAN and over the internet via the WebSocket relay
 ([`relay/`](relay/README.md)); full state sync (models, terrain, rotation, table
 size) with batch RPCs; shared dice log; player avatars/cursors; multiplayer
-save/load. A **version handshake** on join rejects mismatched clients (a 0.3.0 and
-a 0.3.1 player can no longer share a table), gating state sync on a match.
-**Host-drop reconnect** is implemented + unit-tested (the relay preserves a dropped
-host's room for 20 s; the host rehosts and re-syncs full state) but is **deploy-pending**
-— it needs a Fly.io relay redeploy before it is live; see
-[`relay/HOST_RECONNECT.md`](relay/HOST_RECONNECT.md).
+save/load. **Player names** (entered in Host/Join, persisted, host-authoritative
+sync) appear in the dice log, on avatars and in a connected-player **roster**;
+an **in-game chat** panel (Enter to type, Esc to return — typing freezes camera
+and object shortcuts). A **version handshake** on join rejects mismatched clients
+(gating state sync on a match). A **room browser** lists joinable public rooms
+(opt-in per host) and joins by click; private rooms stay code-only.
+**Host-drop reconnect** (the relay preserves a dropped host's room for 20 s; the
+host rehosts and re-syncs full state) is also live; see
+[`relay/HOST_RECONNECT.md`](relay/HOST_RECONNECT.md). The relay (`list_rooms` +
+host-reconnect) was deployed to Fly.io on 2026-06-12 (`niemandsland-relay`, fra);
+a `list_rooms` smoke test against the live server passed. The full two-client
+in-game live test is the remaining manual verification.
 
 **Import/export** — TTS import (Steam CDN + cache), custom glTF/STL/OBJ, `.nml`
 save format with OS file association, WGS import/export
@@ -88,12 +94,14 @@ models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
 
 ## In progress
 
-- Extended dice options (modifiers, rerolls).
+- **Two-client in-game live test** of the multiplayer lobby/chat/names + the now-live
+  relay (`list_rooms` + host-reconnect deployed 2026-06-12): confirm names/roster/chat
+  across two real clients, the room browser lists a public host, and a dropped host
+  rejoins. The headless half (relay `list_rooms` smoke test) already passed.
 
 ## Planned
 
 - Unit-as-LOS-blocker (Asgard: formation height + closed 1" gaps) — terrain LOS first.
-- Multiplayer lobby UI / room browser, in-game chat.
 - UI audio: a dedicated mutable "UI" bus + a `UiSound` autoload auto-wiring
   `BaseButton` hover/click/focus feedback (full spec archived in
   [`docs/archive/AAA_UI_PLAYBOOK.md`](docs/archive/AAA_UI_PLAYBOOK.md)).
@@ -126,8 +134,9 @@ and `hero_attachment_dialog.gd` never existed as separate files — that logic l
 
 ## Tests
 
-gdUnit4: **53 suites / 369 tests green** in `test/` (incl. `coherency_checker`,
+gdUnit4: **54 suites / 376 tests green** in `test/` (incl. `coherency_checker`,
 `save_manager`, `startup_menu`, `internet_lobby`, `relay_multiplayer_peer`,
-`network_version_handshake`, `dice_rules`). Python: `relay/test_relay_server.py`,
-`tools/model_forge/tests/`. How to run: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
+`network_version_handshake`, `dice_rules`, `player_identity`). Python:
+`relay/test_relay_server.py` (38 green), `tools/model_forge/tests/`. How to run:
+[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 Coverage is still thin — most gameplay scripts are untested.

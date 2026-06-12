@@ -139,6 +139,18 @@ var _remote_roll_context: Dictionary = {}
 # Internet multiplayer
 var internet_lobby: InternetLobby = null
 
+# The local player's chosen display name (empty -> "Player N" fallback). Set from
+# the startup-menu Host/Join dialog, otherwise loaded from the saved profile.
+var _local_player_name: String = ""
+
+# In-game chat + roster (built at runtime; visible only during a session).
+const CHAT_PANEL_SMALL_FONT: int = 12
+var _chat_panel: PanelContainer = null
+var _chat_log_scroll: ScrollContainer = null
+var _chat_log_vbox: VBoxContainer = null
+var _chat_input: LineEdit = null
+var _roster_vbox: VBoxContainer = null
+
 # Model loader UI
 @onready var load_model_btn: Button = %LoadModel
 @onready var model_file_dialog: FileDialog = %ModelFileDialog
@@ -299,6 +311,9 @@ func _ready() -> void:
 	_build_reroll_row()
 	_set_dice_count(DEFAULT_DICE_COUNT)
 
+	# Build the multiplayer chat + roster panel (hidden until a session is active).
+	_build_chat_panel()
+
 	# Connect network UI
 	host_button.pressed.connect(_on_host_pressed)
 	join_button.pressed.connect(_on_join_pressed)
@@ -331,6 +346,8 @@ func _ready() -> void:
 	network_manager.remote_cursor_updated.connect(_on_remote_cursor_updated)
 	network_manager.remote_camera_updated.connect(_on_remote_camera_updated)
 	network_manager.remote_dice_rolled.connect(_on_remote_dice_rolled)
+	network_manager.remote_player_name_updated.connect(_on_remote_player_name_updated)
+	network_manager.remote_chat_message.connect(_on_remote_chat_message)
 	network_manager.remote_table_settings_changed.connect(_on_remote_table_settings_changed)
 	network_manager.remote_army_header_received.connect(_on_remote_army_header)
 	network_manager.remote_army_unit_received.connect(_on_remote_army_unit)
@@ -540,6 +557,13 @@ func _ready() -> void:
 		ProjectSettings.set_setting("niemandsland/pending_load_path", "")
 		call_deferred("_load_pending_battle", pending_load)
 
+	# Resolve the local player name: the startup-menu dialog passes it through, but
+	# the in-game NetworkPanel Host/Join path does not, so fall back to the saved
+	# profile. Empty stays empty -> the "Player N" display fallback.
+	_local_player_name = PlayerIdentity.sanitize(ProjectSettings.get_setting("niemandsland/player_name", ""))
+	if _local_player_name.is_empty():
+		_local_player_name = PlayerIdentity.load_saved_name()
+
 	# Check if internet game should be started (from startup menu)
 	var pending_internet = ProjectSettings.get_setting("niemandsland/pending_internet_lobby", false)
 	if pending_internet:
@@ -579,6 +603,17 @@ func _dismiss_transition_overlay() -> void:
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
+	# While a text field (e.g. the chat input) is focused, no game shortcut may
+	# fire — especially Delete/Backspace (deletes objects) and the number keys.
+	if get_viewport().gui_get_focus_owner() is LineEdit:
+		return
+	# Enter focuses the chat input during a live session (Esc inside it returns).
+	if event is InputEventKey and event.pressed and not event.echo \
+			and event.keycode in [KEY_ENTER, KEY_KP_ENTER] \
+			and _chat_panel and _chat_panel.visible and _chat_input:
+		_chat_input.grab_focus()
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and not event.echo:
 		# Handle key release for continuous actions
 		if not event.pressed:
@@ -1635,6 +1670,7 @@ func _on_host_pressed() -> void:
 		_update_network_ui(true, true)
 		network_status_label.text = "Hosting on port 7777"
 		network_status_label.add_theme_color_override("font_color", Color.GREEN)
+		_register_local_name()
 
 
 func _on_join_pressed() -> void:
@@ -1664,6 +1700,7 @@ func _on_network_connected() -> void:
 	# Announce our version so the host can validate us; on a match it then pushes
 	# the full state (gated on the handshake). No explicit state request needed.
 	network_manager.announce_version_to_host()
+	_register_local_name()
 
 
 func _on_network_failed() -> void:
@@ -1689,6 +1726,7 @@ func _on_player_joined(peer_id: int) -> void:
 
 	# Spawn avatar for the remote player at the table edge
 	_spawn_player_avatar(peer_id)
+	_rebuild_roster()
 
 
 ## Host: the joining peer's game version matches ours — now push full state.
@@ -1698,6 +1736,9 @@ func _on_peer_version_validated(peer_id: int) -> void:
 		return
 	network_status_label.text = "Hosting (peer %d joined)" % peer_id
 	_sync_state_to_peer(peer_id)
+	# The peer is registered and validated — hand it the full name roster so it
+	# immediately knows everyone already at the table (including the host).
+	network_manager.push_roster_to_peer(peer_id)
 
 
 ## Client: the host refused us because our game versions differ. Leave the
@@ -1715,6 +1756,7 @@ func _on_player_left(peer_id: int) -> void:
 	if network_manager.is_host:
 		network_status_label.text = "Hosting (%d players)" % player_count
 	_cleanup_peer_presence(peer_id)
+	_rebuild_roster()
 	print("Player %d left! Total: %d" % [peer_id, player_count])
 
 
@@ -1727,6 +1769,7 @@ func _on_internet_room_ready(code: String) -> void:
 	# Copy code to clipboard for easy sharing
 	DisplayServer.clipboard_set(code)
 	print("Room code %s copied to clipboard" % display_code)
+	_register_local_name()
 
 
 func _on_internet_connected(peer_id: int) -> void:
@@ -1736,6 +1779,183 @@ func _on_internet_connected(peer_id: int) -> void:
 	# Announce our version to the host; on a match the host pushes full state
 	# (gated on the handshake) once SceneMultiplayer has registered the peer.
 	network_manager.announce_version_to_host()
+	_register_local_name()
+
+
+## Registers the local player's name once a session is live: the host seeds its
+## own roster entry, a guest announces its name to the host. No-op without a name
+## (everyone then shows the "Player N" fallback).
+func _register_local_name() -> void:
+	if _local_player_name.is_empty():
+		return
+	if multiplayer.is_server():
+		network_manager.set_host_name(_local_player_name)
+	else:
+		network_manager.broadcast_player_name(_local_player_name)
+
+
+## Display name for a remote peer: its synced name, or the "Player N" fallback.
+func _peer_display_name(peer_id: int) -> String:
+	return PlayerIdentity.display_name(network_manager.player_names.get(peer_id, ""), peer_id)
+
+
+# ===== Multiplayer chat + roster panel =====
+
+## Builds the in-game chat panel (HudTokens glass + corner brackets), docked
+## bottom-left. Header → connected-player roster → scrollable log → input row.
+## Hidden until a multiplayer session is active.
+func _build_chat_panel() -> void:
+	_chat_panel = PanelContainer.new()
+	_chat_panel.name = "ChatPanel"
+	_chat_panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
+	# Docked bottom, just right of the LeftPanelScroll column (x ends at 210) and
+	# left of the bottom-right DiceRollerPanel, so it overlaps neither.
+	_chat_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_chat_panel.anchor_top = 1.0
+	_chat_panel.anchor_bottom = 1.0
+	_chat_panel.offset_left = 220
+	_chat_panel.offset_top = -310
+	_chat_panel.offset_right = 560
+	_chat_panel.offset_bottom = -10
+	_chat_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_chat_panel.visible = false
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", HudTokens.SPACE_4)
+	_chat_panel.add_child(vbox)
+
+	vbox.add_child(HudTokens.header("CHAT", "NET-04"))
+
+	# Connected-player roster (filled in _rebuild_roster).
+	_roster_vbox = VBoxContainer.new()
+	_roster_vbox.name = "RosterVBox"
+	_roster_vbox.add_theme_constant_override("separation", 2)
+	vbox.add_child(_roster_vbox)
+
+	# Scrollable message log (same pattern as the dice log).
+	_chat_log_scroll = ScrollContainer.new()
+	_chat_log_scroll.custom_minimum_size = Vector2(0, 160)
+	_chat_log_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_chat_log_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	vbox.add_child(_chat_log_scroll)
+	_chat_log_vbox = VBoxContainer.new()
+	_chat_log_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_chat_log_scroll.add_child(_chat_log_vbox)
+
+	# Input row: a focusable LineEdit (the ONE exception to the FOCUS_NONE rule).
+	_chat_input = LineEdit.new()
+	_chat_input.placeholder_text = "Enter: chat · Esc: back to game"
+	# Length is clamped authoritatively in NetworkManager._clean_chat on send/receive.
+	_chat_input.focus_mode = Control.FOCUS_ALL
+	_chat_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_chat_input.text_submitted.connect(_on_chat_submitted)
+	_chat_input.gui_input.connect(_on_chat_input_gui_input)
+	vbox.add_child(_chat_input)
+
+	_chat_panel.add_child(HudFrame.new())
+	$UI/HUD.add_child(_chat_panel)
+
+
+## Show/hide the chat panel and refresh the roster on a session transition.
+func _set_chat_visible(is_visible: bool) -> void:
+	if not _chat_panel:
+		return
+	_chat_panel.visible = is_visible
+	if is_visible:
+		_rebuild_roster()
+	else:
+		if _chat_input:
+			_chat_input.release_focus()
+		if _chat_log_vbox:
+			for child: Node in _chat_log_vbox.get_children():
+				child.queue_free()
+
+
+## Sends the typed message, echoes it locally and keeps focus for the next line.
+## The echo uses the same cleaned text the broadcast sends, so it matches peers.
+func _on_chat_submitted(text: String) -> void:
+	var cleaned: String = network_manager.broadcast_chat_message(text)
+	if not cleaned.is_empty():
+		_add_chat_entry(network_manager.get_my_peer_id(), cleaned)
+	_chat_input.clear()
+	_chat_input.grab_focus()
+
+
+## Esc inside the chat field returns control to the game (releases focus).
+func _on_chat_input_gui_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		_chat_input.release_focus()
+		get_viewport().set_input_as_handled()
+
+
+## A remote chat message arrived — append it to the log.
+func _on_remote_chat_message(peer_id: int, text: String) -> void:
+	_add_chat_entry(peer_id, text)
+
+
+## Appends one "<name>: <text>" line, the name tinted with the player's color.
+func _add_chat_entry(peer_id: int, text: String) -> void:
+	if not _chat_log_vbox:
+		return
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+
+	var name_lbl := Label.new()
+	name_lbl.text = "%s:" % _peer_display_name(peer_id)
+	name_lbl.add_theme_font_size_override("font_size", CHAT_PANEL_SMALL_FONT)
+	name_lbl.add_theme_color_override("font_color", _get_player_color(peer_id))
+	name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	row.add_child(name_lbl)
+
+	var text_lbl := Label.new()
+	text_lbl.text = text
+	text_lbl.add_theme_font_size_override("font_size", CHAT_PANEL_SMALL_FONT)
+	text_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	text_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(text_lbl)
+
+	_chat_log_vbox.add_child(row)
+	await get_tree().process_frame
+	_chat_log_scroll.scroll_vertical = int(_chat_log_scroll.get_v_scroll_bar().max_value)
+
+
+## Rebuilds the connected-player roster: one colored dot + name per peer, the
+## local player tagged "(you)" and the host "(host)".
+func _rebuild_roster() -> void:
+	if not _roster_vbox:
+		return
+	for child: Node in _roster_vbox.get_children():
+		child.queue_free()
+
+	var my_id: int = network_manager.get_my_peer_id()
+	var ids: Array[int] = [my_id]
+	for id: int in network_manager.connected_peers:
+		if not ids.has(id):
+			ids.append(id)
+	ids.sort()  # host (1) first
+
+	for id: int in ids:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", HudTokens.SPACE_4)
+
+		var dot := ColorRect.new()
+		dot.color = _get_player_color(id)
+		dot.custom_minimum_size = Vector2(10, 10)
+		dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(dot)
+
+		var label := Label.new()
+		var suffix := ""
+		if id == my_id:
+			suffix = " (you)"
+		elif id == 1:
+			suffix = " (host)"
+		label.text = "%s%s" % [_peer_display_name(id), suffix]
+		label.add_theme_font_size_override("font_size", CHAT_PANEL_SMALL_FONT)
+		label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+		row.add_child(label)
+
+		_roster_vbox.add_child(row)
 
 
 func _on_internet_failed(reason: String) -> void:
@@ -1928,7 +2148,7 @@ func _on_remote_dice_rolled(peer_id: int, results: Array, context: Dictionary) -
 	for v: Variant in results:
 		faces.append(int(v))
 
-	_add_dice_log_entry("Player %d" % peer_id, faces, context)
+	_add_dice_log_entry(_peer_display_name(peer_id), faces, context)
 
 	# Show 3D dice visualization for remote roll. The 3D tray is shared between
 	# local and remote rolls, so show_faces() respawns the dice and preempts any
@@ -1970,8 +2190,22 @@ func _spawn_player_avatar(peer_id: int) -> void:
 	avatar.name = "PlayerAvatar_%d" % peer_id
 	add_child(avatar)
 	avatar.setup(peer_id, table.table_size)
+	# Seed the name label if this peer's name is already known (roster may arrive
+	# before or after the avatar spawns).
+	if avatar.has_method("set_player_name"):
+		avatar.set_player_name(_peer_display_name(peer_id))
 	_player_avatars[peer_id] = avatar
 	print("[Presence] Spawned avatar for peer %d at table edge" % peer_id)
+
+
+## A peer's name became known/changed: refresh its avatar label and the roster.
+func _on_remote_player_name_updated(peer_id: int, _player_name: String) -> void:
+	if _player_avatars.has(peer_id):
+		var avatar: Node3D = _player_avatars[peer_id]
+		if is_instance_valid(avatar) and avatar.has_method("set_player_name"):
+			avatar.set_player_name(_peer_display_name(peer_id))
+	if _chat_panel and _chat_panel.visible:
+		_rebuild_roster()
 
 
 ## Remove presence nodes for a disconnected peer
@@ -2122,6 +2356,9 @@ func _update_network_ui(connected: bool, _is_host: bool) -> void:
 	join_button.disabled = false
 	address_input.visible = !connected
 	disconnect_button.visible = connected
+	# Chat + roster are only meaningful in a live session (central toggle — every
+	# connect/disconnect path routes through here).
+	_set_chat_visible(connected)
 
 
 ## ============================================================================
@@ -2294,8 +2531,9 @@ func _load_pending_battle(path: String) -> void:
 ## Start an internet game from settings passed by the startup menu
 func _start_pending_internet_game(is_internet_host: bool, relay_url: String, room_code_to_join: String) -> void:
 	if is_internet_host:
-		print("Starting internet host via %s" % relay_url)
-		internet_lobby.host_internet_game(relay_url)
+		var public: bool = ProjectSettings.get_setting("niemandsland/internet_public", false)
+		print("Starting internet host via %s (public=%s)" % [relay_url, public])
+		internet_lobby.host_internet_game(relay_url, public)
 	else:
 		print("Joining internet room %s via %s" % [room_code_to_join, relay_url])
 		internet_lobby.join_internet_game(room_code_to_join, relay_url)
