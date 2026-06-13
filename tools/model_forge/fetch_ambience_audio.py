@@ -44,12 +44,14 @@ import sys
 import urllib.request
 from pathlib import Path
 
+import cdn_config
+
 ROOT = Path(__file__).resolve().parent.parent.parent
 OUT_DIR = ROOT / "assets" / "audio" / "ambience"
 MANIFEST_PATH = ROOT / "assets" / "ambience_manifest.json"
 TMP_DIR = Path(__file__).resolve().parent / ".bbtmp" / "ambience_fetch"
 R2_PREFIX = "terrain-source/ambience"
-BASE_URL = "https://<legacy-cdn-host>/terrain-source/ambience"
+BASE_URL = cdn_config.base_url("/terrain-source/ambience")
 USER_AGENT = "Mozilla/5.0 (Niemandsland asset fetch)"
 
 # name -> { page, loop (make seamless + flag), max_s (trim) }

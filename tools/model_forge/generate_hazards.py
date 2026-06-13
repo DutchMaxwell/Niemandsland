@@ -23,6 +23,8 @@ import os
 import sys
 from pathlib import Path
 
+import cdn_config
+
 import numpy as np
 from google import genai
 from google.genai import types
@@ -33,7 +35,7 @@ OUT_DIR = ROOT / "assets" / "terrain" / "props" / "hazards"
 MANIFEST_PATH = ROOT / "assets" / "hazards_manifest.json"
 GEMINI_KEY_FILE = Path(__file__).resolve().parent / ".gemini_key"
 R2_PREFIX = "terrain-source/hazards"
-BASE_URL = "https://<legacy-cdn-host>/terrain-source/hazards"
+BASE_URL = cdn_config.base_url("/terrain-source/hazards")
 
 MODELS = ["gemini-3-pro-image", "gemini-3-pro-image-preview"]
 PANEL_SIZE = 768  # px; both panels are small props

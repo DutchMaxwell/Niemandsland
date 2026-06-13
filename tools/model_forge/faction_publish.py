@@ -16,6 +16,7 @@ import shutil
 import sys
 from pathlib import Path
 
+import cdn_config
 import publish_manifest as pm
 
 if len(sys.argv) < 2:
@@ -28,7 +29,7 @@ PROJECT_ROOT = THIS.parents[1]
 MINI = PROJECT_ROOT / "assets" / "miniatures"
 MANIFEST = PROJECT_ROOT / "assets" / "model_manifest.json"
 SDIR = THIS / "state" / SESSION
-BASE_URL = "https://<legacy-cdn-host>/"
+BASE_URL = cdn_config.base_url("/")
 
 sess = json.loads((SDIR / "session.json").read_text())
 faction = str(sess.get("faction_folder", "")).strip().lower()

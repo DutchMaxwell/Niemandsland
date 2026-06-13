@@ -1,7 +1,13 @@
 # Asset Delivery — on-demand 3D models (R2)
 
+> **CDN host = one source of truth.** Manifests never hardcode the host; they
+> store the `{cdn}` token in `base_url` (e.g. `"{cdn}/terrain-source/trees"`).
+> The game expands it via `scripts/asset_cdn.gd` (`AssetCDN.HOST`) and the
+> publishing tools via `tools/model_forge/cdn_config.py` (`HOST`). To move asset
+> delivery to a new domain, change those two `HOST` constants — no manifest edits.
+
 **Status: LIVE.** Miniature GLBs are delivered on demand from **Cloudflare R2**
-(`<legacy-cdn-host>`, content-addressed `<sha256>.glb`), mapped by
+(currently `<legacy-cdn-host>`, content-addressed `<sha256>.glb`), mapped by
 `assets/model_manifest.json` — **113 models across 5 factions** today (Alien Hives,
 Robot Legions, Battle Brothers, Dao Union, a Dark Brothers hero). The GLBs are
 git-ignored and excluded from every export preset, so the repo and shipped builds

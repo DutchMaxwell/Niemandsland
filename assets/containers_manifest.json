@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "base_url": "https://<legacy-cdn-host>/terrain-source/containers",
+  "base_url": "{cdn}/terrain-source/containers",
   "panels": {
     "container_blue_end": {
       "url": "container_blue_end.webp",

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "base_url": "https://<legacy-cdn-host>/terrain-source/trees",
+  "base_url": "{cdn}/terrain-source/trees",
   "panels": {
     "desert_tree_a": {
       "url": "desert_tree_a.webp?v=ced472b6",
