@@ -22,8 +22,8 @@ What the code actually does today:
 - **Object handling** — click / Alt-click / box select, drag, rotate, copy / paste /
   duplicate, formation arrangement (rows `1`–`9`, arrow `A`) with constant base-edge
   spacing across base sizes.
-- **Dice** — physics dice (D4–D100) via the `dice_roller` addon, rendered in a
-  scaled SubViewport (see [Scaling](#scaling-conventions)).
+- **Dice** — physics dice (D4–D100) via our own MIT dice scripts (`dice_tray.gd` /
+  `dice_d6.gd`), rendered in a scaled SubViewport (see [Scaling](#scaling-conventions)).
 - **Measurement** — distance measuring in inches.
 - **Map layout editor** — top-down 3″ grid, terrain pieces (ruins / forest /
   container / dangerous), front-line + custom-polygon deployment zones, objectives,
@@ -49,8 +49,8 @@ What the code actually does today:
 Requires **[Godot 4.6](https://godotengine.org/download)** (Forward+ renderer).
 
 ```bash
-git clone git@github.com:DutchMaxwell/Niemandsland.git
-cd Niemandsland
+git clone https://github.com/DutchMaxwell/openTTS.git
+cd openTTS
 godot --path . --editor      # open in the editor, then F5 to run
 # or run directly:
 godot --path .
@@ -121,19 +121,19 @@ scale, **dice run in a separate scaled SubViewport** (our own MIT `dice_tray.gd`
 This repo contains no secrets or hardcoded credentials. The separate asset-pipeline
 repository holds its own API tokens (git-ignored there).
 
-## Contributing
+## Feedback & contributing
 
-```bash
-git checkout -b feature/my-change
-# make changes; validate (see docs/DEVELOPMENT.md):
-#   compile-check + gdUnit4 tests must pass
-git commit -m "feat: ..." && git push origin feature/my-change   # open a PR
-```
+This is an early alpha — **feedback is the most valuable thing right now.** Found a
+bug or have an idea? [Open an issue](../../issues/new/choose) and pick the 🐞 **Bug
+report** or 💡 **Feedback / idea** template.
 
-Coding standards: [`.claude/AAA_CODING_STANDARDS.md`](.claude/AAA_CODING_STANDARDS.md).
+Want to contribute code? See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the dev
+setup, the test workflow and the PR flow. In short: Godot 4.6, branch off `main`,
+conventional commits, gdUnit4 + relay tests green, then open a PR. Coding standards:
+[`.claude/AAA_CODING_STANDARDS.md`](.claude/AAA_CODING_STANDARDS.md).
 
 ## Credits & license
 
 MIT — see [`LICENSE`](LICENSE). UI themes by [Kenney](https://kenney.nl) (CC0);
-dice via the Godot Dice Roller addon (MIT). Asset attributions in
-[`docs/ASSETS.md`](docs/ASSETS.md).
+dice are our own MIT implementation. Full third-party attributions in
+[`THIRD_PARTY.md`](THIRD_PARTY.md) and [`docs/ASSETS.md`](docs/ASSETS.md).
