@@ -63,6 +63,7 @@ var unit_to_game_unit: Dictionary = {}  # OPRUnit -> GameUnit
 
 ## All GameUnits by unit_id
 var game_units: Dictionary = {}  # unit_id (String) -> GameUnit
+var regiments: Dictionary = {}  # unit_id (String) -> Regiment (AoF:R movement-tray blocks)
 
 ## Current game round (OPR rounds start at 1). Bookkeeping only - the players
 ## decide when a round ends; advance_round() does the standard transition.
@@ -201,7 +202,64 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 
 	print("OPRArmyManager: Spawned %d models for army '%s' on tray" % [all_models.size(), army.name])
 	army_spawned.emit(army, all_models)
+
+	# Age of Fantasy: Regiments — form each unit into a movement-tray block once the
+	# drop animation has settled (deferred so it does not fight the drop tween).
+	if army.game_system_abbrev == "aofr":
+		_form_regiments_after_drop(army)
+
 	return all_models
+
+
+## Form a single Age of Fantasy: Regiments unit into a movement-tray block. Collects
+## the unit's live model nodes, creates a RegimentTray under ObjectManager and ranks
+## them. Returns the Regiment, or null if the unit is not a regiment / has no models.
+## Representation only — no rules are enforced.
+func form_regiment(game_unit) -> Regiment:
+	if game_unit == null:
+		return null
+	var props: Dictionary = game_unit.unit_properties
+	if not props.get("regiment_mode", false):
+		return null
+	var w: float = float(props.get("base_width_mm", 25)) * 0.001
+	var d: float = float(props.get("base_depth_mm", 25)) * 0.001
+	var nodes: Array = []
+	var footprints: Array = []
+	for m in game_unit.get_alive_models():
+		if m.node and is_instance_valid(m.node):
+			nodes.append(m.node)
+			footprints.append(Vector2(w, d))
+	if nodes.is_empty():
+		return null
+
+	var tray := RegimentTray.new()
+	tray.name = "Regiment_%s" % game_unit.unit_id
+	object_manager._object_counter += 1
+	tray.set_meta("network_id", object_manager._object_counter)
+	object_manager.add_child(tray)
+
+	var frontage: int = RegimentFormation.default_frontage(nodes.size())
+	tray.form(nodes, footprints, frontage)
+
+	var regiment := Regiment.new(game_unit, tray, frontage)
+	tray.set_meta("regiment", regiment)
+	game_unit.unit_properties["frontage"] = frontage
+	regiments[game_unit.unit_id] = regiment
+	return regiment
+
+
+## Form every regiment-mode unit of an army into a movement-tray block.
+func form_all_regiments(army) -> void:
+	for unit in army.units:
+		var gu = unit_to_game_unit.get(unit, null)
+		if gu:
+			form_regiment(gu)
+
+
+## Defer regiment forming until the spawn drop animation has settled.
+func _form_regiments_after_drop(army) -> void:
+	await get_tree().create_timer(TRAY_DROP_DURATION + 0.1).timeout
+	form_all_regiments(army)
 
 
 ## Animate tray and models dropping from above - smooth deceleration
