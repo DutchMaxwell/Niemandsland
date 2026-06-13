@@ -1,9 +1,0 @@
-# This directory is a COMPLETED engine/texture comparison study (TRELLIS was chosen;
-# see COMPARISON.md). It holds heavy scratch: per-unit render sweeps, texture A/Bs,
-# model-viewer dumps, intermediate atlases. Ignore ALL of it and keep only the written
-# conclusions (*.md). Already-tracked reference images/metrics stay tracked regardless
-# (git never un-tracks a committed file because of a later ignore rule).
-*
-!*/
-!*.md
-!.gitignore

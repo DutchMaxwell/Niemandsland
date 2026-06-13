@@ -1,7 +1,6 @@
 extends GdUnitTestSuite
 ## Tests the ruin shell-wall logic in terrain_overlay.gd: the crumble mirror rule
 ## (taper_dir vs. the quad's +U direction) and the deterministic per-segment panel pick.
-## See docs/HANDOFF_RUIN_WALLS.md §6 (gotchas #1 and #5).
 
 const OverlayScript = preload("res://scripts/terrain_overlay.gd")
 

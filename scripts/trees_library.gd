@@ -8,7 +8,7 @@ extends Node
 ## the renderer keeps its procedural fallback tree (see terrain_overlay.gd). Textures
 ## are decoded from the WebP bytes at runtime so the authored hard alpha edges survive
 ## (alpha scissor needs them). Mirrors RuinsLibrary; see docs/ASSET_DELIVERY.md.
-## Art recipe: tools/model_forge/generate_trees.py.
+## Art recipe lives in the offline asset-pipeline repo.
 
 # === Constants ===
 

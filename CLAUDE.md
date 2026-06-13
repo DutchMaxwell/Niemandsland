@@ -18,7 +18,7 @@ OnePageRules and similar miniature games.
   a scaled SubViewport via our own MIT `dice_tray.gd` / `dice_d6.gd` (procedural W6,
   replaced the former AGPL addon) — see [Scaling](#scaling-critical).
 - **Platforms**: Linux (dev machine), Windows, macOS
-- **Tests**: gdUnit4 (`test/`), pytest (`relay/`, `tools/model_forge/tests/`)
+- **Tests**: gdUnit4 (`test/`), pytest (`relay/`)
 - **Main scene**: `scenes/startup_menu.tscn`
 - **Autoloads**: `ThemeManager`, `GraphicsSettings`, `AudioManager`
 
@@ -78,5 +78,5 @@ for in-flight changes and coordinate before committing shared files.
 1. **Research first** — look for documented Godot/OPR solutions before inventing.
 2. **Validate before committing** — compile-check + gdUnit4 tests
    (see [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)).
-3. Model Forge pipeline lives in `tools/model_forge/`
-   ([`README`](tools/model_forge/README.md)); secrets there are git-ignored.
+3. The offline 3D asset pipeline lives in a **separate private repository**; this
+   repo consumes only its R2-delivered outputs (see `docs/ASSET_DELIVERY.md`).

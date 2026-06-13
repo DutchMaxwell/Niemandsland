@@ -2,7 +2,7 @@ extends Node
 ## Dev/reference tool: renders the APPROVED ruin-wall look (a 9x9" and a 9x6" ruin) to
 ## renders/ruin_walls_reference.png so the art can be judged - and the in-game material
 ## reproduced - without a GPU session. This is the authoritative spec for the shell-wall
-## look that scripts/terrain_overlay.gd should adopt (see docs/HANDOFF_RUIN_WALLS.md).
+## look that scripts/terrain_overlay.gd should adopt.
 ##
 ## It deliberately mirrors the planned in-game pipeline:
 ##   * layout = two point-symmetric L-corners (arms = size-1), matching
