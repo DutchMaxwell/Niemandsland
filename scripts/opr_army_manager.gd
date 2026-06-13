@@ -243,6 +243,34 @@ func form_regiment(game_unit) -> Regiment:
 	return regiment
 
 
+## Rebuild a regiment movement-tray block on load: create the tray at the saved
+## transform and adopt the unit's already-restored model nodes (no re-layout — the
+## exact saved arrangement, including casualty gaps, is preserved).
+func restore_regiment(game_unit, frontage: int, pos: Vector3, rot_y: float) -> Regiment:
+	if game_unit == null:
+		return null
+	var tray := RegimentTray.new()
+	tray.name = "Regiment_%s" % game_unit.unit_id
+	object_manager._object_counter += 1
+	tray.set_meta("network_id", object_manager._object_counter)
+	object_manager.add_child(tray)
+	tray.frontage = maxi(frontage, 1)
+	tray.global_position = pos
+	tray.rotation.y = rot_y
+
+	var nodes: Array = []
+	for m in game_unit.models:
+		if m.node and is_instance_valid(m.node):
+			nodes.append(m.node)
+	tray.adopt_existing(nodes)
+
+	var regiment := Regiment.new(game_unit, tray, tray.frontage)
+	tray.set_meta("regiment", regiment)
+	game_unit.unit_properties["frontage"] = tray.frontage
+	regiments[game_unit.unit_id] = regiment
+	return regiment
+
+
 ## Form every regiment-mode unit of an army into a movement-tray block.
 func form_all_regiments(army) -> void:
 	for unit in army.units:
