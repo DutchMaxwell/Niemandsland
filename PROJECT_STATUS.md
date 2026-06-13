@@ -1,6 +1,6 @@
 # Niemandsland — Status & Roadmap
 
-**Version:** 0.3.1-alpha *(Alpha Release Candidate)* · **Engine:** Godot 4.6 · **Branch:** `main`
+**Version:** 0.3.2-alpha *(Alpha Release Candidate)* · **Engine:** Godot 4.6 · **Branch:** `main`
 
 This is the single source of truth for what works, what's in progress, and what's
 planned. Architecture details live in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md);
