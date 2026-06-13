@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "base_url": "https://assets.akesberg.de/terrain-source/ruins",
+  "base_url": "{cdn}/terrain-source/ruins",
   "panels": {
     "solid_a": {
       "url": "solid_a.webp",
