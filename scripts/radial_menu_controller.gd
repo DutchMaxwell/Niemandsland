@@ -475,13 +475,16 @@ func _check_coherency(context: Dictionary) -> void:
 	if game_unit.unit_properties.get("regiment_mode", false):
 		return
 
+	# Skirmish systems (Firefight / AoF: Skirmish) use 6" max spread, not 9".
+	var skirmish := CoherencyChecker.is_skirmish_system(game_unit)
+
 	# Use visualizer if available
 	if coherency_visualizer:
-		var result = coherency_visualizer.show_coherency(game_unit)
+		var result = coherency_visualizer.show_coherency(game_unit, skirmish)
 		coherency_checked.emit(game_unit, result)
 	else:
 		# Fallback to just checking without visualization
-		var result = CoherencyChecker.check_unit_coherency(game_unit)
+		var result = CoherencyChecker.check_unit_coherency(game_unit, skirmish)
 		coherency_checked.emit(game_unit, result)
 		if result.valid:
 			print("✓ %s is in coherency" % game_unit.get_name())
