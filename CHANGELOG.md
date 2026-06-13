@@ -6,6 +6,16 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+## [0.3.2-alpha] — 2026-06-13
+
+### Changed
+- **Go-public preparation.** The offline asset pipeline (`tools/model_forge/`,
+  `assets/3d_pipeline/`) moved to a separate private repository; the game now
+  consumes only its R2-delivered outputs. The asset-CDN host is centralized behind
+  a `{cdn}` token (`scripts/asset_cdn.gd`), so moving to a new domain is a one-line
+  change. Added issue templates, `SECURITY.md` and `CONTRIBUTING.md` for the public
+  alpha; pruned internal planning/handoff docs.
+
 ### Added
 - **Multiplayer lobby, in-game chat and player names.** Players now enter a **name**
   in the Host/Join dialog (persisted to `user://`, synced host-authoritatively); it
