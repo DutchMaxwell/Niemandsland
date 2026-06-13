@@ -101,9 +101,9 @@ models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
 
 ## Planned
 
-- Unit-as-LOS-blocker (Asgard: formation height + closed 1" gaps) — terrain LOS first.
-- UI audio: a dedicated mutable "UI" bus + a `UiSound` autoload auto-wiring
-  `BaseButton` hover/click/focus feedback.
+The forward-looking plan and the feature-request pipeline now live in
+[`docs/ROADMAP.md`](docs/ROADMAP.md) (single source). Near-term: Regiments
+facing/LOS display, units-as-LOS-blockers, a UI sound bus.
 
 ## Out of scope (by design)
 

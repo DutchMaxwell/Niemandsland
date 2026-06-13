@@ -80,3 +80,7 @@ for in-flight changes and coordinate before committing shared files.
    (see [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)).
 3. The offline 3D asset pipeline lives in a **separate private repository**; this
    repo consumes only its R2-delivered outputs (see `docs/ASSET_DELIVERY.md`).
+4. **Track the work** — [`docs/ROADMAP.md`](docs/ROADMAP.md) is the curated backlog
+   and single forward-looking source. Read it at the start of a session, work the top
+   **Now / Next** item, and move it to **Shipped** (with a PR link) on merge. New
+   requests go to **Next** (accepted) or **Ideas** (icebox).
