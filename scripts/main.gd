@@ -3381,7 +3381,7 @@ func _check_coherency_for_selected_units() -> void:
 			# Show coherency visualization for this unit. animate=false: this runs
 			# live (~15 Hz) while dragging, so re-running the fade/pulse each frame
 			# would make the lines flicker.
-			coherency_visualizer.show_coherency(game_unit, false, false)
+			coherency_visualizer.show_coherency(game_unit, CoherencyChecker.is_skirmish_system(game_unit), false)
 
 
 ## ============================================================================
