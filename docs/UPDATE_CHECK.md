@@ -70,7 +70,7 @@ the prompt.
 ## Repointing at a self-hosted endpoint
 
 If GitHub's unauthenticated rate limit (60 req/h per IP) ever becomes a concern, or you
-prefer to serve version info from the existing asset host (`assets.akesberg.de`), the
+prefer to serve version info from the existing asset host (see `scripts/asset_cdn.gd`), the
 source is isolated to a few constants in `update_checker.gd`
 (`RELEASES_API_URL`, `RELEASES_PAGE_URL`) and the response parsing in
 `_on_request_completed()`/`_select_newest_release()`. Point those at a small
