@@ -6,7 +6,7 @@
 > delivery to a new domain, change that `HOST` constant — no manifest edits.
 
 **Status: LIVE.** Miniature GLBs are delivered on demand from **Cloudflare R2**
-(currently `<legacy-cdn-host>`, content-addressed `<sha256>.glb`), mapped by
+(content-addressed `<sha256>.glb`, host in `scripts/asset_cdn.gd`), mapped by
 `assets/model_manifest.json`. The GLBs are git-ignored and excluded from every
 export preset, so the repo and shipped builds stay lean; the editor/game fetches
 each needed model at runtime and caches it. A model with no manifest entry falls
