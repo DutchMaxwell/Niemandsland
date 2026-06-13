@@ -266,13 +266,17 @@ func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> voi
 			if collider.is_in_group("objective"):
 				return
 
-			var already_selected = collider in _selected_objects
+			# Regiments (AoF:R): clicking a model selects its movement-tray block, so
+			# drag/rotate act on the whole regiment. Loose models resolve to themselves.
+			var target := _regiment_root(collider)
+
+			var already_selected = target in _selected_objects
 
 			if alt_pressed:
 				# Alt+click: toggle selection (add/remove from selection)
-				_toggle_object_selection(collider)
+				_toggle_object_selection(target)
 				# Only start dragging if object is now selected
-				if collider in _selected_objects:
+				if target in _selected_objects:
 					_start_dragging(screen_pos)
 			elif already_selected:
 				# Clicking on already-selected object: just start dragging (keep multi-selection)
@@ -280,7 +284,7 @@ func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> voi
 			else:
 				# Normal click on unselected object: replace selection
 				_deselect_all()
-				_add_to_selection(collider)
+				_add_to_selection(target)
 				_start_dragging(screen_pos)
 			return
 
@@ -370,9 +374,20 @@ func _get_object_at_position(screen_pos: Vector2) -> Node3D:
 	if result and result.collider:
 		if result.collider.is_in_group("selectable"):
 			if not is_object_locked(result.collider):
-				return result.collider
+				return _regiment_root(result.collider)
 
 	return null
+
+
+## Resolve a clicked node to its selection target: a regiment model resolves to its
+## movement-tray block (so the whole regiment is selected/dragged/rotated); any other
+## node resolves to itself. Keyed off the "regiment_tray" meta set by RegimentTray.
+func _regiment_root(node: Node) -> Node3D:
+	if node and node.has_meta(RegimentTray.MEMBER_META):
+		var tray = node.get_meta(RegimentTray.MEMBER_META)
+		if is_instance_valid(tray):
+			return tray
+	return node as Node3D
 
 
 ## Updates the hover glow to the selectable currently under the cursor (or none).
