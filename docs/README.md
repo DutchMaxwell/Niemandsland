@@ -1,14 +1,16 @@
 # Documentation index
 
 Start with the repo entry points: [`../README.md`](../README.md) (project overview) ·
-[`../PROJECT_STATUS.md`](../PROJECT_STATUS.md) (what works / roadmap) ·
+[`../PROJECT_STATUS.md`](../PROJECT_STATUS.md) (what works) ·
+[`ROADMAP.md`](ROADMAP.md) (what's planned) ·
 [`../CHANGELOG.md`](../CHANGELOG.md) (history). This folder holds the deeper technical docs.
 
 ## Core
 
 | Doc | Contents |
 |---|---|
-| [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md) | What works / in progress / planned |
+| [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md) | What works / in progress |
+| [`ROADMAP.md`](ROADMAP.md) | Prioritized plan + how feature requests flow |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Systems, scripts, data flow, networking, scaling |
 | [`DEVELOPMENT.md`](DEVELOPMENT.md) | Build, run, test (Godot 4.6 / Flatpak / gdUnit4) |
 | [`../.claude/AAA_CODING_STANDARDS.md`](../.claude/AAA_CODING_STANDARDS.md) | Coding standards |

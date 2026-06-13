@@ -127,6 +127,9 @@ This is an early alpha — **feedback is the most valuable thing right now.** Fo
 bug or have an idea? [Open an issue](../../issues/new/choose) and pick the 🐞 **Bug
 report** or 💡 **Feedback / idea** template.
 
+Curious what's planned? See the **[roadmap](docs/ROADMAP.md)** (and how requests flow
+from idea to shipped).
+
 Want to contribute code? See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the dev
 setup, the test workflow and the PR flow. In short: Godot 4.6, branch off `main`,
 conventional commits, gdUnit4 + relay tests green, then open a PR. Coding standards:
