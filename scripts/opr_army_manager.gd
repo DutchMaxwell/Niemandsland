@@ -432,7 +432,14 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 	# Create base mesh
 	var base_instance = MeshInstance3D.new()
 
-	if base_is_oval:
+	if unit.base_is_square:
+		# Square/rectangular base (Age of Fantasy: Regiments): flat box.
+		# Long side (depth) faces north (+Z direction), matching the oval convention.
+		var base_mesh = BoxMesh.new()
+		base_mesh.size = Vector3(base_width, 0.003, base_depth)
+		base_instance.mesh = base_mesh
+		base_instance.position.y = 0.0015
+	elif base_is_oval:
 		# Oval base: use cylinder with non-uniform scale
 		# Long side (depth) faces north (+Z direction)
 		var base_mesh = CylinderMesh.new()
@@ -462,7 +469,7 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 	# Visual hover: Flying units, drones and hover vehicles float above the base.
 	var should_hover := _should_hover(unit.name, unit.special_rules)
-	var base_long_mm: int = max(unit.base_width_mm, unit.base_depth_mm) if base_is_oval else unit.base_size_round
+	var base_long_mm: int = max(unit.base_width_mm, unit.base_depth_mm) if (base_is_oval or unit.base_is_square) else unit.base_size_round
 	var hover_lift: float = base_long_mm * FLYING_HOVER_RATIO * 0.001 if should_hover else 0.0
 
 	# Try to load GLB model for this unit
@@ -533,14 +540,20 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 		model_height = body_height + head_radius * 2 + hover_lift
 
-	# Add collision shape - scaled to base size (use larger dimension for oval)
-	var collision_radius = max(base_width, base_depth) / 2.0 if base_is_oval else base_radius
+	# Add collision shape - scaled to base size (box for square/rectangular regiment
+	# bases so they sit edge-to-edge without overlap-reject; cylinder otherwise).
 	var total_height = 0.003 + model_height
 	var collision = CollisionShape3D.new()
-	var shape = CylinderShape3D.new()
-	shape.radius = collision_radius
-	shape.height = total_height
-	collision.shape = shape
+	if unit.base_is_square:
+		var box_shape = BoxShape3D.new()
+		box_shape.size = Vector3(base_width, total_height, base_depth)
+		collision.shape = box_shape
+	else:
+		var collision_radius = max(base_width, base_depth) / 2.0 if base_is_oval else base_radius
+		var shape = CylinderShape3D.new()
+		shape.radius = collision_radius
+		shape.height = total_height
+		collision.shape = shape
 	collision.position.y = total_height / 2
 	wrapper.add_child(collision)
 
