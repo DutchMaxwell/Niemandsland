@@ -470,6 +470,11 @@ func _check_coherency(context: Dictionary) -> void:
 	if not game_unit:
 		return
 
+	# Regiments form tight ranked blocks; the skirmish 1"/9" coherency rule does not
+	# apply, so there is nothing to check or visualize.
+	if game_unit.unit_properties.get("regiment_mode", false):
+		return
+
 	# Use visualizer if available
 	if coherency_visualizer:
 		var result = coherency_visualizer.show_coherency(game_unit)
