@@ -56,6 +56,13 @@ class CoherencyResult:
 
 # ===== Main Check Method =====
 
+## Whether a unit belongs to a skirmish game system (Grimdark Future: Firefight or
+## Age of Fantasy: Skirmish), which uses the 6" max-spread coherency instead of 9".
+## Reads game_system stamped into unit_properties at import.
+static func is_skirmish_system(game_unit: GameUnit) -> bool:
+	return game_unit.unit_properties.get("game_system", "") in ["gff", "aofs"]
+
+
 ## Checks coherency for a GameUnit per OPR rules (GF Advanced Rules v3.5.0):
 ## models must form an uninterrupted chain in 1" coherency (3" across different
 ## elevation) AND stay within 9" (6" Skirmish) of all other models.
