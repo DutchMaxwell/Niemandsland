@@ -84,7 +84,7 @@ v3.5.x stats. IP-safe generation (positive-only prompts, per-faction `ip_strict`
 per-unit "pick the best" review tool. The pipeline lives in a separate private repository; this repo consumes only its R2-delivered GLB outputs.
 
 **3D model delivery (R2)** — miniature GLBs are **not bundled**; they are delivered
-on demand from Cloudflare R2 (content-addressed `sha256.glb`, `<legacy-cdn-host>`),
+on demand from Cloudflare R2 (content-addressed `sha256.glb`, served from the asset CDN),
 mapped by [`assets/model_manifest.json`](assets/model_manifest.json). Builds stay slim
 (GLBs are gitignored + excluded from every export preset); the editor/game fetches
 models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
