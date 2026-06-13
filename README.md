@@ -38,9 +38,9 @@ What the code actually does today:
 - **Import / export** — Tabletop Simulator import (Steam CDN + local cache),
   custom models (glTF / STL / OBJ), `.nml` save format with OS file association,
   Wargaming Simulator (WGS) import/export.
-- **Model Forge** — a Python pipeline that turns OPR unit data into 3D miniatures
-  (image generation → TRELLIS mesh) with a Flask review UI. See
-  [`tools/model_forge/README.md`](tools/model_forge/README.md).
+- **Asset pipeline** — the offline pipeline that generates the 3D miniatures
+  (image generation → TRELLIS mesh) lives in a separate private repository; the
+  game consumes only its R2-delivered outputs.
 - **Presentation** — Kenney UI themes, lighting presets (`F1`–`F4`), graphics
   quality presets, SSAO, glow.
 
@@ -91,11 +91,10 @@ development and the gdUnit4 test runner), see
 Niemandsland/
 ├── scenes/            # startup_menu.tscn (main), main.tscn, dialogs
 ├── scripts/           # ~48 GDScript files (see docs/ARCHITECTURE.md)
-├── addons/            # dice_roller, gdUnit4 (tests)
+├── addons/            # gdUnit4 (tests)
 ├── test/              # gdUnit4 test suites
-├── assets/            # models, miniatures, 3d_pipeline, opr_samples
+├── assets/            # models, miniatures, terrain, UI
 ├── relay/             # WebSocket relay server for internet multiplayer
-├── tools/model_forge/ # 3D miniature generation pipeline (Python)
 └── docs/              # architecture, development, design docs
 ```
 
@@ -116,13 +115,11 @@ scale, **dice run in a separate scaled SubViewport** (our own MIT `dice_tray.gd`
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — build, run, test
 - [`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md) — Wargaming Simulator integration
 - [`docs/OPR_API_RESEARCH_REPORT.md`](docs/OPR_API_RESEARCH_REPORT.md) — OPR Army Forge API notes
-- [`tools/model_forge/README.md`](tools/model_forge/README.md) — model pipeline
 
 ## Security note
 
-API tokens for the Model Forge (`tools/model_forge/.hf_token`, `.gemini_key`,
-`.trellis_space`) are **git-ignored** and never committed. Nothing in this repo
-contains hardcoded credentials.
+This repo contains no secrets or hardcoded credentials. The separate asset-pipeline
+repository holds its own API tokens (git-ignored there).
 
 ## Contributing
 

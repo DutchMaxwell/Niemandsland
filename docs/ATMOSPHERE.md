@@ -42,7 +42,7 @@ drift from their walls.
 ## Audio: CC0 recordings with a procedural fallback
 
 The soundscape prefers **real CC0 recordings** (freesound.org, exact sources +
-licenses documented in `tools/model_forge/fetch_ambience_audio.py`): two artillery
+licenses documented in the asset-pipeline repo): two artillery
 and two machine-gun one-shots, two thunders, a rain loop and a campfire crackle loop,
 delivered on demand from R2 (`assets/ambience_manifest.json` + `ambience_library.gd`,
 cache `user://ambience_cache`) and hot-swapped in once cached. Until then (or
