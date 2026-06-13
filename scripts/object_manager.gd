@@ -374,7 +374,9 @@ func _get_object_at_position(screen_pos: Vector2) -> Node3D:
 	if result and result.collider:
 		if result.collider.is_in_group("selectable"):
 			if not is_object_locked(result.collider):
-				return _regiment_root(result.collider)
+				# Right-click keeps the actual model (the radial menu acts per model:
+				# wounds, markers...). Left-click selection resolves to the tray block.
+				return result.collider
 
 	return null
 
