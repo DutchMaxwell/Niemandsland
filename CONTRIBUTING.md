@@ -74,6 +74,20 @@ a **separate private repository**; this repo consumes only its outputs, delivere
 demand from a CDN. Contributions here are about the game, the relay, and the docs —
 not asset generation.
 
+## How this project is run
+
+Niemandsland is maintained by a single person, for fun, in their spare time — please
+treat it that way:
+
+- **Feedback first.** The most useful contribution is a clear bug report or idea, not
+  a large surprise pull request.
+- **Discuss before you build.** For anything beyond a small fix, open an issue first
+  so we can agree on the approach. Big unsolicited PRs may be declined simply because
+  they don't fit the direction — that's not personal.
+- **The maintainer has the final say** on what gets merged, the roadmap and the
+  scope. Reviews and replies are best-effort, with no timeline or guarantee.
+- **No obligation.** An open issue or PR is a suggestion, not a ticket we owe you.
+
 ## Code of conduct
 
 Be kind and constructive. This is a hobby project made for fun; assume good faith,
