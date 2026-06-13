@@ -23,12 +23,13 @@ ticked; the scrub is done and verified (no `opr_samples`, `units.json`,
    `docs/archive/AAA_UI_PLAYBOOK.md`,
    `tools/model_forge/engine_comparison/trellis/result.json`. Easy fix: replace
    with `$REPO_ROOT` / relative paths, or drop the internal docs entirely.
-2. **`<legacy-cdn-host>`** as the runtime asset CDN (22 files: all asset
-   manifests, publish tools, several docs). **Decision needed:** the shipped
-   game contacts this domain anyway, so the repo going public reveals nothing
-   new — but if you want the project decoupled from your surname, switch to a
-   neutral domain (R2 custom domain / `*.r2.dev`) *before* publishing, since
-   every manifest and client build bakes it in.
+2. **`<legacy-cdn-host>`** as the runtime asset CDN. **Now decoupled:** the
+   host lives in exactly two constants — `AssetCDN.HOST` (`scripts/asset_cdn.gd`,
+   game) and `cdn_config.HOST` (`tools/model_forge/cdn_config.py`, publishing).
+   Manifests carry the `{cdn}` token instead of the host, so moving to a neutral
+   domain is a two-line change once the new domain + R2 custom-domain binding
+   exist. The surname still appears in the constants and in historical docs until
+   the domain is actually switched.
 3. Both also live in **old commits**. If (and only if) the name should go, do
    one final history rewrite right before flipping public — cheap now (no
    forks), impossible later. Otherwise accept and skip.

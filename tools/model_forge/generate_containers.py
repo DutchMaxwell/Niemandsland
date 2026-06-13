@@ -22,6 +22,8 @@ import os
 import sys
 from pathlib import Path
 
+import cdn_config
+
 from google import genai
 from google.genai import types
 from PIL import Image
@@ -31,7 +33,7 @@ OUT_DIR = ROOT / "assets" / "terrain" / "props" / "containers"
 MANIFEST_PATH = ROOT / "assets" / "containers_manifest.json"
 GEMINI_KEY_FILE = Path(__file__).resolve().parent / ".gemini_key"
 R2_PREFIX = "terrain-source/containers"
-BASE_URL = "https://<legacy-cdn-host>/terrain-source/containers"
+BASE_URL = cdn_config.base_url("/terrain-source/containers")
 
 MODELS = ["gemini-3-pro-image", "gemini-3-pro-image-preview"]
 PANEL_WIDTH = 1024  # output width in px; height follows the face aspect

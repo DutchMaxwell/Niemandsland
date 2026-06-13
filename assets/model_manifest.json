@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "base_url": "https://<legacy-cdn-host>/",
+  "base_url": "{cdn}/",
   "models": {
     "alien_hives/hive lord": {
       "url": "9a0d7b178c15d1b3d74de062b66cd536c9548e306aa5b6efe2a4246497ea638b.glb",
