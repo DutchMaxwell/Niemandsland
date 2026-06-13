@@ -1,26 +1,80 @@
-# Contributing
+# Contributing to Niemandsland
 
-Thanks for trying the alpha! Right now, **bug reports and feedback** via the issue
-templates are the most useful thing you can do.
+Thanks for trying the alpha! There are several ways to help, from low to high effort.
 
-## Reporting issues
+## 1. Give feedback (most valuable right now)
 
-Use the **Bug report** or **Feedback / idea** templates. For bugs, include your OS,
-the version, and steps to reproduce.
+This is an early alpha — telling us what's broken or awkward is the single most
+useful thing you can do.
 
-## Code contributions
+- **[Open an issue](../../issues/new/choose)** and pick a template:
+  - 🐞 **Bug report** — something broke or behaves wrong.
+  - 💡 **Feedback / idea** — UX friction, suggestions, feature ideas.
+- For bugs, please include your **OS** (Windows / macOS / Linux / Web), the
+  **version** (title bar, e.g. `v0.3.2-alpha`), and **steps to reproduce**. A Godot
+  log or screenshot helps a lot.
+- Security issues: please report privately — see [`SECURITY.md`](SECURITY.md).
 
-- Engine: **Godot 4.6** (Forward+). Language: GDScript. See
-  [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) to build, run and test.
-- Branch off `main` and open a pull request.
-- **Conventional commits** (`feat:`, `fix:`, `refactor:`, `docs:`, `perf:`).
-- Run the tests before pushing: gdUnit4 suites in `test/` and pytest in `relay/`
-  (commands in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)).
-- Keep the codebase **English**; match the existing style
-  ([`.claude/AAA_CODING_STANDARDS.md`](.claude/AAA_CODING_STANDARDS.md)).
+## 2. Improve the docs
 
-## Scope note
+Spotted something outdated or unclear? Doc-only PRs are very welcome and easy to
+review. The docs index is [`docs/README.md`](docs/README.md).
 
-The offline 3D asset-generation pipeline lives in a separate repository; this repo
-consumes its outputs on demand from a CDN. Contributions here are about the game,
-the relay, and the docs.
+## 3. Contribute code
+
+### Dev setup
+
+You need **[Godot 4.6](https://godotengine.org/download)** (Forward+ renderer).
+
+```bash
+git clone https://github.com/DutchMaxwell/openTTS.git
+cd openTTS
+godot --path . --editor      # open in the editor, then F5 to run
+# or run headless / directly:
+godot --path .
+```
+
+Main scene: `scenes/startup_menu.tscn`. Build/run/test details (incl. the Flatpak
+invocation used in development) are in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
+
+### Where things live
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — systems, scripts, data flow,
+  networking and the (critical) scaling conventions. **Read this first.**
+- [`PROJECT_STATUS.md`](PROJECT_STATUS.md) — what works / in progress / planned, a
+  good place to find something to pick up.
+- `scripts/` — the GDScript game code; `test/` — gdUnit4 suites; `relay/` — the
+  multiplayer WebSocket relay (Python).
+
+### Tests
+
+Run the tests before pushing — CI runs the same on Godot 4.6:
+
+```bash
+# gdUnit4 (GDScript) — see docs/DEVELOPMENT.md for the full runner command:
+godot --headless -s -d res://addons/gdUnit4/bin/GdUnitCmdTool.gd \
+  --ignoreHeadlessMode -a res://test
+# relay (Python):
+cd relay && python -m pytest
+```
+
+### Pull request flow
+
+1. Branch off `main` (`git checkout -b feat/my-change`).
+2. Keep the codebase **English** (identifiers, comments, commit messages) and match
+   the existing style — see [`.claude/AAA_CODING_STANDARDS.md`](.claude/AAA_CODING_STANDARDS.md).
+3. Use **conventional commits**: `feat:`, `fix:`, `refactor:`, `docs:`, `perf:`.
+4. Make sure the tests pass and the project imports without GDScript parse errors.
+5. Open a PR against `main` describing what changed and why. CI must be green.
+
+### Scope note
+
+The offline 3D asset-generation pipeline (image generation → TRELLIS → GLB) lives in
+a **separate private repository**; this repo consumes only its outputs, delivered on
+demand from a CDN. Contributions here are about the game, the relay, and the docs —
+not asset generation.
+
+## Code of conduct
+
+Be kind and constructive. This is a hobby project made for fun; assume good faith,
+keep discussion on-topic, and help newcomers where you can.
