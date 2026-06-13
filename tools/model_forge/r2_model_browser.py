@@ -26,6 +26,7 @@ from pathlib import Path
 
 from flask import Flask, Response, abort, jsonify, render_template, request, send_file
 
+import cdn_config
 import publish_manifest as pm  # reuse _load_r2_config (.r2_credentials)
 
 # === Constants ===
@@ -157,7 +158,7 @@ def faction(faction: str):
     rework = load_rework()
     units = [{
         "unit": unit, "sha": entry["sha256"][:12], "size_mb": round(entry["size"] / 1e6, 1),
-        "has_2d": unit in imgmap, "public_url": m.get("base_url", "") + entry["url"],
+        "has_2d": unit in imgmap, "public_url": cdn_config.expand(m.get("base_url", "")) + entry["url"],
         "flagged": key in rework, "note": rework.get(key, {}).get("note", ""),
         "kind": rework.get(key, {}).get("kind", "regen"),
     } for unit, key, entry in fu]

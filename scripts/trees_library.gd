@@ -243,7 +243,7 @@ func apply_manifest_text(text: String) -> void:
 	var data: Variant = JSON.parse_string(text)
 	if typeof(data) != TYPE_DICTIONARY:
 		return
-	_base_url = data.get("base_url", "")
+	_base_url = AssetCDN.expand(data.get("base_url", ""))
 	var panels: Variant = data.get("panels", {})
 	if typeof(panels) == TYPE_DICTIONARY:
 		_panels = panels

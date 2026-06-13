@@ -22,11 +22,13 @@ from pathlib import Path
 
 from publish_manifest import _load_r2_config, sha256_of  # reuse the miniatures tooling
 
+import cdn_config
+
 THIS_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = THIS_DIR.parent.parent
 DEFAULT_BIOMES_DIR = PROJECT_ROOT / "assets" / "terrain" / "biomes"
 DEFAULT_OUT_MANIFEST = PROJECT_ROOT / "assets" / "biome_manifest.json"
-DEFAULT_BASE_URL = "https://assets.akesberg.de/"
+DEFAULT_BASE_URL = cdn_config.base_url("/")
 
 
 def build_biome_manifest(biomes_dir: Path, base_url: str) -> dict:

@@ -26,6 +26,8 @@ import os
 import sys
 from pathlib import Path
 
+import cdn_config
+
 import numpy as np
 from google import genai
 from google.genai import types
@@ -36,7 +38,7 @@ OUT_DIR = ROOT / "assets" / "terrain" / "props" / "trees"
 MANIFEST_PATH = ROOT / "assets" / "trees_manifest.json"
 GEMINI_KEY_FILE = Path(__file__).resolve().parent / ".gemini_key"
 R2_PREFIX = "terrain-source/trees"
-BASE_URL = "https://assets.akesberg.de/terrain-source/trees"
+BASE_URL = cdn_config.base_url("/terrain-source/trees")
 
 MODELS = ["gemini-3-pro-image", "gemini-3-pro-image-preview"]
 PANEL_HEIGHT = 1024  # output height in px; width follows the silhouette
