@@ -52,6 +52,29 @@ func reform(models: Array, footprints: Array, new_frontage: int = -1) -> void:
 func facing_dir() -> Vector3:
 	return global_transform.basis.z.normalized()
 
+## Re-rank the regiment from its game unit's currently-alive models (used after a
+## casualty or revive — the rear rank closes/opens). Keeps the tray transform.
+func reform_from_unit(game_unit) -> void:
+	var members := collect_members(game_unit)
+	if members.nodes.is_empty():
+		return
+	reform(members.nodes, members.footprints)
+
+## Collect a unit's live model nodes and per-model base footprints (metres) from its
+## unit_properties. Shared by initial forming and re-ranking. Returns
+## {nodes: Array, footprints: Array}.
+static func collect_members(game_unit) -> Dictionary:
+	var props: Dictionary = game_unit.unit_properties
+	var w: float = float(props.get("base_width_mm", 25)) * 0.001
+	var d: float = float(props.get("base_depth_mm", 25)) * 0.001
+	var nodes: Array = []
+	var footprints: Array = []
+	for m in game_unit.get_alive_models():
+		if m.node and is_instance_valid(m.node):
+			nodes.append(m.node)
+			footprints.append(Vector2(w, d))
+	return {"nodes": nodes, "footprints": footprints}
+
 # === Private ===
 
 func _layout(models: Array, footprints: Array) -> void:

@@ -221,14 +221,9 @@ func form_regiment(game_unit) -> Regiment:
 	var props: Dictionary = game_unit.unit_properties
 	if not props.get("regiment_mode", false):
 		return null
-	var w: float = float(props.get("base_width_mm", 25)) * 0.001
-	var d: float = float(props.get("base_depth_mm", 25)) * 0.001
-	var nodes: Array = []
-	var footprints: Array = []
-	for m in game_unit.get_alive_models():
-		if m.node and is_instance_valid(m.node):
-			nodes.append(m.node)
-			footprints.append(Vector2(w, d))
+	var members := RegimentTray.collect_members(game_unit)
+	var nodes: Array = members.nodes
+	var footprints: Array = members.footprints
 	if nodes.is_empty():
 		return null
 
