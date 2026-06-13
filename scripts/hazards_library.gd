@@ -8,7 +8,7 @@ extends Node
 ## locally the first time a map with dangerous terrain is shown; until then the
 ## renderer keeps its holographic props (see terrain_overlay.gd). Mirrors
 ## ContainersLibrary; see docs/ASSET_DELIVERY.md.
-## Art recipe: tools/model_forge/generate_hazards.py.
+## Art recipe lives in the offline asset-pipeline repo.
 
 # === Constants ===
 

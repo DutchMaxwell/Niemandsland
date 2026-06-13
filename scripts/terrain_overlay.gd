@@ -135,7 +135,7 @@ const STONE_TILE_METERS := 0.085  # ~3.3" per tile -> ~1 cm stone blocks at 28 m
 ## plain-stone top cap — so doorway/window/crumble holes are see-through; collision stays
 ## a full-height Impassable box (OPR: ruin walls are Impassable). Until the panel set is
 ## cached locally, walls keep the triplanar first-pass material above as the fallback.
-## Ported from tools/render_ruin_walls.gd; plan + gotchas: docs/HANDOFF_RUIN_WALLS.md §6.
+## Ported from tools/render_ruin_walls.gd.
 const RUIN_SHELL_THICKNESS_INCHES := 0.4  # shell depth; reads better than the 0.25" box
 const RUIN_PANEL_ROUGHNESS := 0.93
 const RUIN_NORMAL_STRENGTH := 1.4
@@ -161,7 +161,7 @@ const RUIN_MIN_CAP_FRAC := 0.04     # skip caps/end faces below 4% wall height
 ## Quad +U world direction per edge_side (N=0,E=1,S=2,W=3) under this renderer's
 ## wall_y_rotation convention (N=0, E=+90°, S=180°, W=-90°). A crumble panel is U-mirrored
 ## iff its taper_dir (the arm's free-end direction, from TerrainPrefabs) differs from this,
-## so the wall steps DOWN toward the open end (HANDOFF_RUIN_WALLS.md §6 gotcha #1).
+## so the wall steps DOWN toward the open end.
 const _RUIN_QUAD_U_DIR: Array[int] = [1, 0, 3, 2]
 
 ## Spatial-hash primes seeding the per-segment panel pick. Walls are rebuilt locally on

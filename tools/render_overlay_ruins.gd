@@ -3,7 +3,7 @@ extends Node
 ## renderer path — terrain_overlay.gd builds the walls, RuinsLibrary fetches the masonry
 ## panels from R2 (or finds them cached), and the triplanar fallback upgrades to shells
 ## in place — for an unrotated 9x9" ruin, an unrotated 9x6" and a 90°-rotated 9x6", so
-## the crumble taper direction can be eyeballed (HANDOFF_RUIN_WALLS.md §6 gotcha #1).
+## the crumble taper direction can be eyeballed.
 ## Output: renders/overlay_ruins_ingame.png + renders/overlay_ruins_closeup.png.
 ##   godot --path . res://tools/render_overlay_ruins_runner.tscn
 ## Not shipped with the game.

@@ -8,7 +8,7 @@ extends Node
 ## downloaded + cached locally the first time a map with blockers is shown; until then
 ## the renderer keeps its holographic box (see terrain_overlay.gd). Mirrors
 ## TreesLibrary; see docs/ASSET_DELIVERY.md.
-## Art recipe: tools/model_forge/generate_containers.py.
+## Art recipe lives in the offline asset-pipeline repo.
 
 # === Constants ===
 
