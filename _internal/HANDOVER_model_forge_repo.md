@@ -26,19 +26,43 @@ up in its own private home.
 3D GLB → optimized GLB, plus terrain/ambience generators, and publishes the results
 + JSON manifests to Cloudflare R2.**
 
-## 1. Input you are given
+## 1. Where the content is (no external file needed)
 
-A tarball: `niemandsland-private-extract.tar.gz` (~15 MB, 178 files). It contains the
-**tracked** contents of the removed paths:
+The full pipeline content **still lives in this repo's git history** — it was only
+removed from the tip of the `openTTS` go-public branch, not from history. So an agent
+working in a clone of `openTTS` can reconstruct everything with one command; the
+`niemandsland-private-extract.tar.gz` tarball is just an offline convenience copy of
+the same tracked files.
 
+Removed paths (all recoverable from history):
 - `tools/model_forge/` — the whole pipeline (this is the repo's main content).
 - `assets/3d_pipeline/` — the TRELLIS GUI/client (`trellis_core.py`, `trellis_gui.py`).
-- A set of removed internal docs (`PRE_RELEASE_LICENSING.md`, `runbooks/*.md`,
-  `HOUSEKEEPING_PLAN.md`, `GO_PUBLIC_PLAN.md`, `HANDOFF*.md`, `docs/archive/*`,
-  `VISION_AND_ROADMAP.md`) — keep these as **private reference docs** (e.g. in a
-  `docs/` folder); they are NOT public material.
+- Internal docs (`PRE_RELEASE_LICENSING.md`, `runbooks/*.md`, `HOUSEKEEPING_PLAN.md`,
+  `GO_PUBLIC_PLAN.md`, `HANDOFF*.md`, `docs/archive/*`, `VISION_AND_ROADMAP.md`) —
+  keep as **private reference docs**; NOT public material.
 
-Extract with: `tar xzf niemandsland-private-extract.tar.gz`
+**Recover the pipeline tree from history** (run in a clone of `openTTS`). `origin/main`
+still has the full content while this PR is unmerged; or use the removal commit's
+parent, which works regardless of merge/rebase:
+
+```bash
+# Option A — from origin/main (works while the go-public PR is unmerged):
+SRC=origin/main
+# Option B — robust even after merge: the commit BEFORE the removal:
+SRC=$(git log --grep='split out the asset pipeline' --format='%H' -n1)^
+
+mkdir -p /tmp/forge-src
+git archive "$SRC" tools/model_forge assets/3d_pipeline | tar -x -C /tmp/forge-src
+# (optionally also grab the internal docs:)
+git archive "$SRC" docs/PRE_RELEASE_LICENSING.md docs/runbooks docs/HOUSEKEEPING_PLAN.md \
+  docs/GO_PUBLIC_PLAN.md HANDOFF.md docs/HANDOFF_RUIN_WALLS.md docs/HANDOFF_RUIN_WALLS_FINISH.md \
+  docs/archive docs/VISION_AND_ROADMAP.md 2>/dev/null | tar -x -C /tmp/forge-src || true
+```
+
+`/tmp/forge-src/tools/model_forge` is now the complete pipeline (142 files incl. the
+4 MB `bin/gltfpack-linux` binary). The git-ignored **secrets are NOT in history** (by
+design — recreate them per §5/§6). This recovery source disappears once the planned
+pre-public history scrub runs, so do the extraction before that.
 
 ## 2. Target repository
 
@@ -75,13 +99,13 @@ one import if needed (`trellis_core.py` is referenced by the pipeline).
 # 1. Create the private repo on GitHub (gh example)
 gh repo create niemandsland-model-forge --private --description "Niemandsland offline 3D asset pipeline (private)"
 
-# 2. Assemble the working tree
+# 2. Assemble the working tree (SRC = /tmp/forge-src from §1, or the extracted tarball)
 mkdir niemandsland-model-forge && cd niemandsland-model-forge
-tar xzf /path/to/niemandsland-private-extract.tar.gz
-# Flatten: move tools/model_forge/* to root, assets/3d_pipeline -> trellis/, docs stay under docs/
-mv tools/model_forge/* tools/model_forge/.[!.]* .  2>/dev/null || true
-mkdir -p trellis && mv assets/3d_pipeline/* trellis/ 2>/dev/null || true
-rmdir -p tools/model_forge assets/3d_pipeline 2>/dev/null || true
+cp -a /tmp/forge-src/tools/model_forge/. .                 # pipeline at root
+mkdir -p trellis && cp -a /tmp/forge-src/assets/3d_pipeline/. trellis/ 2>/dev/null || true
+mkdir -p docs && cp -a /tmp/forge-src/docs/. docs/ 2>/dev/null || true   # private reference docs
+cp -a /tmp/forge-src/HANDOFF.md docs/ 2>/dev/null || true
+rm -f .gdignore                                            # only mattered inside the Godot project
 
 # 3. Verify NO secrets are present (only the .example template may exist)
 ls -la .hf_token .gemini_key .trellis_space .r2_credentials 2>/dev/null \
