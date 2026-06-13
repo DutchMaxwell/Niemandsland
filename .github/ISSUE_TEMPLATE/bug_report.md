@@ -17,7 +17,7 @@ What you expected to happen instead.
 
 **Environment**
 - OS: (Windows / macOS / Linux / Web)
-- Version: (e.g. `v0.2.0-alpha`)
+- Version: (e.g. `v0.3.2-alpha`)
 - Mode: (single / multiplayer host / multiplayer join)
 
 **Logs / screenshots**
