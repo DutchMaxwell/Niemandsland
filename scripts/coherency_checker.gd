@@ -12,7 +12,9 @@ const COHERENCY_DISTANCE_INCHES := 1.0
 ## Maximum chain distance in inches (standard game)
 const MAX_CHAIN_DISTANCE_INCHES := 9.0
 
-## Maximum chain distance for Skirmish mode
+## Maximum chain distance for Skirmish mode (Grimdark Future: Firefight /
+## Age of Fantasy: Skirmish). Verified: GF: Firefight Beginner's Guide v3.5.1, p.7
+## ("within 6” of all other models").
 const SKIRMISH_CHAIN_DISTANCE_INCHES := 6.0
 
 ## Elevated coherency distance (different heights)
