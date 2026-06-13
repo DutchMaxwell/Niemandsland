@@ -440,6 +440,11 @@ func sync_model_wounds(unit_id: String, model_index: int, wounds: int, is_alive:
 			# Update node visibility
 			if model.node and is_instance_valid(model.node):
 				model.node.visible = is_alive
+				# Regiments (AoF:R): close/re-open ranks to match the host.
+				if model.node.has_meta("regiment_tray"):
+					var _tray = model.node.get_meta("regiment_tray")
+					if is_instance_valid(_tray) and _tray.has_method("reform_from_unit"):
+						_tray.reform_from_unit(game_unit)
 
 			remote_wounds_updated.emit(model)
 
