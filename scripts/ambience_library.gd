@@ -1,7 +1,7 @@
 class_name AmbienceLibrary
 extends Node
 ## Resolves the CC0 battlefield-ambience recordings (freesound.org, see
-## tools/model_forge/fetch_ambience_audio.py for the exact sources) to OGG files
+## the offline asset pipeline for the exact sources) to OGG files
 ## delivered on demand from R2.
 ##
 ## A small bundled manifest (assets/ambience_manifest.json) maps each sound name ->

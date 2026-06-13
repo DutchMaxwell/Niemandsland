@@ -81,7 +81,7 @@ Settings window reachable in-game via left panel button or F7.
 Flask review UI; 38 faction design languages / 855 unit overrides with real OPR
 v3.5.x stats. IP-safe generation (positive-only prompts, per-faction `ip_strict` /
 `bio_weapons` flags, per-unit `type:` for vehicles/walkers/aircraft) and a 3-versions-
-per-unit "pick the best" review tool. See [`tools/model_forge/README.md`](tools/model_forge/README.md).
+per-unit "pick the best" review tool. The pipeline lives in a separate private repository; this repo consumes only its R2-delivered GLB outputs.
 
 **3D model delivery (R2)** — miniature GLBs are **not bundled**; they are delivered
 on demand from Cloudflare R2 (content-addressed `sha256.glb`, `assets.akesberg.de`),
@@ -103,8 +103,7 @@ models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
 
 - Unit-as-LOS-blocker (Asgard: formation height + closed 1" gaps) — terrain LOS first.
 - UI audio: a dedicated mutable "UI" bus + a `UiSound` autoload auto-wiring
-  `BaseButton` hover/click/focus feedback (full spec archived in
-  [`docs/archive/AAA_UI_PLAYBOOK.md`](docs/archive/AAA_UI_PLAYBOOK.md)).
+  `BaseButton` hover/click/focus feedback.
 
 ## Out of scope (by design)
 
@@ -137,6 +136,6 @@ and `hero_attachment_dialog.gd` never existed as separate files — that logic l
 gdUnit4: **54 suites / 376 tests green** in `test/` (incl. `coherency_checker`,
 `save_manager`, `startup_menu`, `internet_lobby`, `relay_multiplayer_peer`,
 `network_version_handshake`, `dice_rules`, `player_identity`). Python:
-`relay/test_relay_server.py` (38 green), `tools/model_forge/tests/`. How to run:
+`relay/test_relay_server.py` (38 green). How to run:
 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 Coverage is still thin — most gameplay scripts are untested.

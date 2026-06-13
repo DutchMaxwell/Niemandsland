@@ -19,7 +19,7 @@ var custom_settings: Dictionary = {}
 # ===== Window / UI reachability =====
 ## Supported layout floor: the window can never shrink below this, so the left
 ## command panel, dice roller and unit card never collapse into each other. Below the
-## floor, content scrolls rather than compresses. (See docs/AAA_UI_PLAYBOOK.md.)
+## floor, content scrolls rather than compresses.
 const MIN_WINDOW_SIZE := Vector2i(1280, 720)
 const UI_SCALE_MIN := 0.8
 const UI_SCALE_MAX := 2.0

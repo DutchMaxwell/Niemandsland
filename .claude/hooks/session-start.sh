@@ -5,7 +5,7 @@
 # Provisions the ephemeral web container so code can be validated without a
 # local machine:
 #   1. Godot 4.6 (headless)          -> compile-check + gdUnit4 tests (test/)
-#   2. Python test dependencies      -> relay/ and tools/model_forge/ pytest
+#   2. Python test dependencies      -> relay/ pytest
 #   3. Project import                -> generates .godot/, doubles as a
 #                                       GDScript compile-check
 #
@@ -83,18 +83,6 @@ PIP_OPTS=(--quiet --root-user-action=ignore)
 echo "[niemandsland-hook] Installing relay/ test dependencies ..."
 python3 -m pip install "${PIP_OPTS[@]}" pytest pytest-asyncio -r "$PROJECT_DIR/relay/requirements.txt"
 
-# tools/model_forge/ tests pull heavier libs in via their source modules
-# (image_generator -> google-genai, gradio_client; prompt_engine -> pyyaml;
-#  glb_optimizer -> Pillow). Best-effort: never block setup on these.
-echo "[niemandsland-hook] Installing model_forge test dependencies (best-effort) ..."
-python3 -m pip install "${PIP_OPTS[@]}" pyyaml Pillow google-genai gradio_client \
-  || echo "[niemandsland-hook] WARN: could not install all model_forge test deps."
-# The base image ships cffi without its compiled backend, which breaks
-# 'from google import genai'. Repair only when needed (idempotent).
-python3 -c "import _cffi_backend" 2>/dev/null \
-  || python3 -m pip install "${PIP_OPTS[@]}" --force-reinstall --no-cache-dir cffi \
-  || echo "[niemandsland-hook] WARN: cffi repair failed; image_generator tests may not collect."
-
 # === 3. Import project — generates .godot/, doubles as GDScript compile-check =
 # Mirrors build.yml. Bounded so a stuck import cannot stall session start, and
 # non-fatal (|| true) exactly like CI. Output goes to a log to keep the session
@@ -115,4 +103,3 @@ echo "  GDScript tests : \"\$GODOT_BIN\" --headless --path \"$PROJECT_DIR\" \\"
 echo "                     -s -d res://addons/gdUnit4/bin/GdUnitCmdTool.gd \\"
 echo "                     --ignoreHeadlessMode -a res://test"
 echo "  relay tests    : python3 -m pytest relay/"
-echo "  model_forge    : python3 -m pytest tools/model_forge/tests/"
