@@ -607,9 +607,24 @@ func _on_wounds_changed(model: ModelInstance, new_wounds: int) -> void:
 		model.node.visible = true
 		model.node.set_meta("deleted", false)
 
+	# Regiments (AoF:R): close ranks on a casualty, re-open on revive.
+	_reform_regiment_for_model(model)
+
 	# Broadcast wounds change to remote peers
 	if network_manager:
 		network_manager.broadcast_model_wounds(model)
+
+
+## If the model belongs to a regiment movement-tray block, re-rank the block so the
+## ranks close on a casualty (or re-open on revive). No-op for loose skirmish models.
+func _reform_regiment_for_model(model: ModelInstance) -> void:
+	if model == null or model.node == null or not is_instance_valid(model.node):
+		return
+	if not model.node.has_meta(RegimentTray.MEMBER_META):
+		return
+	var tray = model.node.get_meta(RegimentTray.MEMBER_META)
+	if is_instance_valid(tray) and tray.has_method("reform_from_unit"):
+		tray.reform_from_unit(model.unit)
 
 
 ## Updates or creates a wound marker (red disc with border) next to a model.
