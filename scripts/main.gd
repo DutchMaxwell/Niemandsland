@@ -3372,6 +3372,10 @@ func _check_coherency_for_selected_units() -> void:
 		# A joined Hero is checked as part of its host unit.
 		if game_unit.is_attached() and game_unit.get_attached_to() is GameUnit:
 			game_unit = game_unit.get_attached_to()
+		# Skirmish coherency (1"/9") does not apply to Regiments — they form tight
+		# ranked blocks instead. Skip the check/visualization for regiment units.
+		if game_unit.unit_properties.get("regiment_mode", false):
+			continue
 		if game_unit not in checked_units:
 			checked_units.append(game_unit)
 			# Show coherency visualization for this unit. animate=false: this runs
