@@ -60,6 +60,24 @@ func reform_from_unit(game_unit) -> void:
 		return
 	reform(members.nodes, members.footprints)
 
+## Adopt already-positioned model nodes WITHOUT re-laying them out — each keeps its
+## current world transform, the tray just becomes their rigid parent. Used on load to
+## reproduce the exact saved block (including any casualty gaps); the tray transform
+## should already be set to the saved value before calling.
+func adopt_existing(models: Array) -> void:
+	for m in models:
+		var n := m as Node3D
+		if n == null or not is_instance_valid(n):
+			continue
+		var gx := n.global_transform
+		if n.get_parent() != self:
+			if n.get_parent():
+				n.get_parent().remove_child(n)
+			add_child(n)
+			n.set_meta(MEMBER_META, self)
+		n.global_transform = gx
+
+
 ## Collect a unit's live model nodes and per-model base footprints (metres) from its
 ## unit_properties. Shared by initial forming and re-ranking. Returns
 ## {nodes: Array, footprints: Array}.
