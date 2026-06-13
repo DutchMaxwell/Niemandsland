@@ -81,8 +81,13 @@ class OPRUnit:
 	var base_size_round: int = 32  # Recommended round base size in mm
 	var base_size_square: int = 30  # Recommended square base size in mm
 	var base_is_oval: bool = false  # True if base is oval (WIDTHxDEPTH format)
+	## True for Age of Fantasy: Regiments — square/rectangular bases (rank-and-flank).
+	var base_is_square: bool = false
 	var base_width_mm: int = 32  # Width in mm (perpendicular to facing)
 	var base_depth_mm: int = 32  # Depth in mm (in facing direction / "north")
+	## Game system this unit was imported for (gf/gff/aof/aofs/aofr). Drives
+	## regiment mode downstream; carried so it survives into GameUnit.unit_properties.
+	var game_system: String = ""
 
 	func get_display_name() -> String:
 		if not custom_name.is_empty():
@@ -311,7 +316,7 @@ func _parse_tts_api_response(json_text: String) -> OPRArmy:
 			army.army_id = first_unit.get("armyId", "")
 
 	for unit_data in units_data:
-		var unit = _parse_tts_unit(unit_data)
+		var unit = _parse_tts_unit(unit_data, army.game_system_abbrev)
 		if unit:
 			army.units.append(unit)
 			army.model_count += unit.size
@@ -408,9 +413,10 @@ static func _apply_tough_base_fallback(unit: OPRUnit) -> void:
 
 
 ## Parse a unit from TTS API response
-func _parse_tts_unit(data: Dictionary) -> OPRUnit:
+func _parse_tts_unit(data: Dictionary, game_system_abbrev: String = "") -> OPRUnit:
 	var unit = OPRUnit.new()
 
+	unit.game_system = game_system_abbrev
 	unit.id = data.get("id", str(randi()))
 	unit.selection_id = data.get("selectionId", "")
 	unit.combined = data.get("combined", false)
@@ -428,9 +434,22 @@ func _parse_tts_unit(data: Dictionary) -> OPRUnit:
 	# non-empty dict is not proof of a real recommendation — require a usable value.
 	var bases = data.get("bases", {})
 	var round_size = bases.get("round", "") if bases is Dictionary else ""
-	var had_base_recommendation: bool = _is_usable_base_value(round_size)
-	if had_base_recommendation:
-		var square_size = bases.get("square", "30")
+	var square_size = bases.get("square", "") if bases is Dictionary else ""
+	var is_regiments: bool = game_system_abbrev == "aofr"
+	var had_base_recommendation: bool = false
+	if is_regiments and _is_usable_base_value(square_size):
+		had_base_recommendation = true
+		# Age of Fantasy: Regiments uses square/rectangular bases. Reuse the oval
+		# WIDTHxDEPTH parser (long side faces +Z / "north"); render as a box later.
+		var parsed = _parse_base_size(square_size, 25)
+		unit.base_is_square = true
+		unit.base_is_oval = false
+		unit.base_width_mm = clampi(parsed[1], 20, 150)
+		unit.base_depth_mm = clampi(parsed[2], 20, 150)
+		unit.base_size_round = max(unit.base_width_mm, unit.base_depth_mm)
+		unit.base_size_square = unit.base_size_round
+	elif _is_usable_base_value(round_size):
+		had_base_recommendation = true
 		# Parse base size including oval format like "60x35"
 		var parsed = _parse_base_size(round_size, 32)
 		unit.base_is_oval = parsed[0]
