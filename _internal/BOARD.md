@@ -14,7 +14,7 @@ boxes; the agent works the ROADMAP Now/Next and updates both on merge.
 
 ## 🧑‍✈️ Your tasks — before going public
 
-- [ ] **Merge PR #51 → `main`** (consolidate the go-public + Regiments work; CI is green)
+- [x] **Merge PR #51 → `main`** (consolidated the go-public + Regiments work; merged 2026-06-14, 426 tests green; obsolete terrain branches deleted)
 - [ ] **Register a neutral domain + bind R2**, then change the one `AssetCDN.HOST`
       constant in `scripts/asset_cdn.gd` (drops the surname from the running game)
 - [ ] **Git-history scrub** — purge `_internal/`, the old `tools/model_forge/`, and the
