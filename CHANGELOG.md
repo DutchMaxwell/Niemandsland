@@ -7,6 +7,14 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Added
+- **Units block line of sight (Asgard tournament standard, display-only).** The
+  measure tool's LOS check now treats every on-table OPR model as a blocker: a model
+  stops the line at its Asgard Height when that Height is ≥ both endpoints', gaps under
+  1″ between models of the same unit count as closed (the line can't thread through an
+  almost-closed formation), and the units at the line's own endpoints never block their
+  own sight line. Pure 2D geometry in `LosRules` (`units_block_line`, base-radius +
+  segment/circle helpers), unit-tested; the measure line turns red + shows 🚫 exactly as
+  with terrain. Players still apply the rule themselves.
 - **UI audio completed: hover + keyboard-focus ticks and a settings slider.** The
   `UiFeedback` autoload (procedural tones on the dedicated "UI" bus, auto-wired to
   every `BaseButton`) now also plays a quiet micro-tick on hover and on keyboard/
