@@ -19,7 +19,6 @@ boxes; the agent works the ROADMAP Now/Next and updates both on merge.
       constant in `scripts/asset_cdn.gd` (drops the surname from the running game)
 - [ ] **Git-history scrub** — purge `_internal/`, the old `tools/model_forge/`, and the
       surname from history (one-shot `git filter-repo`, right before flipping public)
-- [ ] **IP-lawyer review** — your declared blocker (AI-generated + OPR-derived assets)
 - [ ] **GitHub settings** — branch protection on `main`, private vulnerability reporting,
       Discussions on (see `GOING_PUBLIC_CONTROLS.md` §B for exact clicks)
 - [ ] **Tag `v0.3.2-alpha`** release (the in-app update checker compares against it)

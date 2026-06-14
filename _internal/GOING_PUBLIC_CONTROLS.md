@@ -56,8 +56,13 @@ Repo → **Settings**:
 - **Git-history scrub** (`git filter-repo`) — removes `_internal/`, the old
   `tools/model_forge/` tree, and the surname from CHANGELOG history. The runbook is in
   the model-forge bundle/handover. One-shot; do it right before going public.
-- **IP-lawyer review** (your own declared blocker, given AI-generated + OPR-derived
-  assets).
+- **IP review — consciously skipped (risk accepted).** A paid IP lawyer is out of
+  budget, so we are not getting one. The residual exposure is reduced: the
+  GW-referencing material (design-language avoid-lists, reference images) moved to the
+  private pipeline repo; OPR data is API-only and never bundled; our code is MIT; the
+  minis are AI-generated. Remaining risk = AI outputs that resemble copyrighted minis —
+  mitigated by the pipeline's IP-compliance prompts, not legally vetted. Mitigation if
+  challenged: take-down/replace the specific asset (R2 is content-addressed, swap is cheap).
 - Tag a **`v0.3.2-alpha`** GitHub Release (the in-app update checker compares against
   the latest release tag).
 
