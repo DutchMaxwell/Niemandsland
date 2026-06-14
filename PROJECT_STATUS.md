@@ -35,8 +35,11 @@ set. **Terrain reference aids (Asgard tournament standard, display only)**:
 always-visible effect labels per terrain zone (Cover / Difficult / Dangerous /
 Impassable / Height) and height-aware top-down line-of-sight in the measure tool
 (`los_rules.gd` Height categories + per-zone flood fill in `terrain_overlay.gd`;
-a 🚫 marker on the measure line when LOS is blocked). Players apply the effects
-themselves — terrain has **no automated movement/cover/damage effects** by design.
+a 🚫 marker on the measure line when LOS is blocked). **Units also block sight
+lines** (Asgard: a model blocks at its Height when ≥ both endpoints' Height, and
+gaps under 1″ inside a unit count as closed; the endpoint units never block their
+own line — `LosRules.units_block_line`). Players apply the effects themselves —
+terrain has **no automated movement/cover/damage effects** by design.
 
 **Units (OPR)** — Army Forge import via the OPR API; per-model architecture
 (`ModelInstance`) wrapped by system-agnostic `GameUnit`; automatic equipment
@@ -101,7 +104,6 @@ models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
   fine; user-confirmed 2026-06-12 even after the menu-rebuild loading cover).
   Prime suspect: `scaling_3d_scale` 0.77↔1.0 resizing the 3D render target —
   Performance is the only sub-native preset (see `graphics_settings.gd`).
-- Unit-as-LOS-blocker (Asgard: formation height + closed 1" gaps) — in work.
 - **Host-DROP live test**: the two-client lobby/chat/names/browser flow is
   user-confirmed working (2026-06-12); the one untested piece is a host losing
   connection mid-game and rejoining (relay side is deployed + unit-tested).

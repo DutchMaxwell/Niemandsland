@@ -1300,6 +1300,10 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 		if not terrain_overlay.has_line_of_sight(from_pos, to_pos, from_height, to_height):
 			los_blocked = true
 			line_color = Color.RED  # Change line to red if LOS is blocked
+		# Units block sight lines too (Asgard: formation Height, <1" gaps closed).
+		elif _units_block_measure_line(from_pos, to_pos, from_height, to_height):
+			los_blocked = true
+			line_color = Color.RED
 
 	var mat = _measure_line.material_override as StandardMaterial3D
 	if mat:
@@ -1330,14 +1334,54 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 ## Asgard Height category (1-6) of a measured endpoint's object, read from its
 ## ModelInstance meta. Table points / non-model objects default to infantry (2).
 func _object_height_category(obj: Node3D) -> int:
+	var model := _object_model_instance(obj)
+	return LosRules.model_height_category(model) if model else LosRules.HEIGHT_INFANTRY
+
+
+## The ModelInstance attached to a measured object (meta on the node or its
+## parent), or null for table points / non-OPR objects.
+func _object_model_instance(obj: Node3D) -> ModelInstance:
 	if obj == null:
-		return LosRules.HEIGHT_INFANTRY
+		return null
 	for node in [obj, obj.get_parent()]:
 		if node and node.has_meta("model_instance"):
 			var model = node.get_meta("model_instance")
 			if model is ModelInstance:
-				return LosRules.model_height_category(model)
-	return LosRules.HEIGHT_INFANTRY
+				return model
+	return null
+
+
+## Unit-as-LOS-blocker check for the measure line (Asgard, display-only): every
+## OPR model on the table blocks at its Height; <1" gaps inside a unit count as
+## closed. The units at the measure line's endpoints never block their own line.
+func _units_block_measure_line(from_pos: Vector3, to_pos: Vector3,
+		from_height: int, to_height: int) -> bool:
+	var exclude_units: Array[int] = []
+	for endpoint: Node3D in [_measure_start_object, _measure_end_object]:
+		var endpoint_model := _object_model_instance(endpoint)
+		if endpoint_model and endpoint_model.unit:
+			exclude_units.append(endpoint_model.unit.get_instance_id())
+
+	var blockers: Array[LosRules.Blocker] = []
+	for node: Node in get_tree().get_nodes_in_group("miniature"):
+		if not (node is Node3D) or not is_instance_valid(node):
+			continue
+		var model := _object_model_instance(node as Node3D)
+		if model == null:
+			continue  # custom minis without an OPR profile carry no Height
+		# Models without a unit block alone, keyed by their own node id (no
+		# gap-closure partner, never excludable via a unit).
+		var unit_key: int = model.unit.get_instance_id() if model.unit else node.get_instance_id()
+		var pos_3d := (node as Node3D).global_position
+		blockers.append(LosRules.Blocker.new(
+			Vector2(pos_3d.x, pos_3d.z),
+			LosRules.model_base_radius_m(model),
+			LosRules.model_height_category(model),
+			unit_key))
+
+	return LosRules.units_block_line(
+		Vector2(from_pos.x, from_pos.z), Vector2(to_pos.x, to_pos.z),
+		from_height, to_height, blockers, exclude_units)
 
 
 ## Spawn a miniature at the given position
