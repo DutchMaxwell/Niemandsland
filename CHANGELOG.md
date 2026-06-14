@@ -6,6 +6,15 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Added
+- **Regiments — facing & front-arc display (AoF:R, display-only).** Every regiment
+  movement-tray block now shows a flat cyan facing arrow ahead of its front rank, and
+  an amber front-arc wedge (the forward 180° half-plane) toggled with the **F** key.
+  The measure tool labels the other endpoint as **▲ Front** or **◣ Flank/Rear** when
+  one endpoint is a regiment. Pure facing geometry in `RegimentFacingVisualizer`
+  (`front_arc_contains`), unit-tested; the arrow/arc follow the tray rigidly. No rule
+  is enforced — players still adjudicate facing themselves.
+
 ## [0.3.2-alpha] — 2026-06-13
 
 ### Changed
