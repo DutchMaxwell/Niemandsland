@@ -35,8 +35,11 @@ set. **Terrain reference aids (Asgard tournament standard, display only)**:
 always-visible effect labels per terrain zone (Cover / Difficult / Dangerous /
 Impassable / Height) and height-aware top-down line-of-sight in the measure tool
 (`los_rules.gd` Height categories + per-zone flood fill in `terrain_overlay.gd`;
-a 🚫 marker on the measure line when LOS is blocked). Players apply the effects
-themselves — terrain has **no automated movement/cover/damage effects** by design.
+a 🚫 marker on the measure line when LOS is blocked). **Units also block sight
+lines** (Asgard: a model blocks at its Height when ≥ both endpoints' Height, and
+gaps under 1″ inside a unit count as closed; the endpoint units never block their
+own line — `LosRules.units_block_line`). Players apply the effects themselves —
+terrain has **no automated movement/cover/damage effects** by design.
 
 **Units (OPR)** — Army Forge import via the OPR API; per-model architecture
 (`ModelInstance`) wrapped by system-agnostic `GameUnit`; automatic equipment
@@ -75,7 +78,10 @@ wall bases + grassland grass field (one MultiMesh each, quality-gated). **AAA ma
 menu**: live night-battlefield diorama (production terrain stack + miniatures vignette
 + orbit camera with DoF), left command column (HudTokens), CONTINUE-newest-save entry,
 typewriter quote ticker, menu soundscape + CC0 dark-ambient drone, idle attract mode.
-Settings window reachable in-game via left panel button or F7.
+Settings window reachable in-game via left panel button or F7. **UI audio**: every
+`BaseButton` gets procedural hover/click/focus ticks via the `UiFeedback` autoload
+(one `node_added` hook, zero per-button code; variation-aware confirm/back tones) on
+a dedicated, independently mutable "UI" bus with its own persisted settings slider.
 
 **Model Forge** — Python pipeline (OPR data → image → TRELLIS mesh → GLB) with a
 Flask review UI; 38 faction design languages / 855 unit overrides with real OPR
@@ -94,10 +100,16 @@ models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
 
 ## In progress
 
-- **Two-client in-game live test** of the multiplayer lobby/chat/names + the now-live
-  relay (`list_rooms` + host-reconnect deployed 2026-06-12): confirm names/roster/chat
-  across two real clients, the room browser lists a public host, and a dropped host
-  rejoins. The headless half (relay `list_rooms` smoke test) already passed.
+- **Host-DROP live test**: the two-client lobby/chat/names/browser flow is
+  user-confirmed working (2026-06-12); the one untested piece is a host losing
+  connection mid-game and rejoining (relay side is deployed + unit-tested).
+- **Graphics preset switch FROM Performance hangs** — root cause is an NVIDIA
+  driver bug (the dev machine runs 580.126.18; 580.142 fixes "Vulkan swapchains stop
+  delivering frames under X11 under load"). Performance is the only sub-native tier,
+  so its switch is the only one that resizes the 3D render target — now de-bursted
+  (the `scaling_3d_scale` change is staggered onto its own frames in
+  `graphics_settings.gd`) as a portable mitigation. **Definitive fix: update the
+  NVIDIA driver to ≥ 580.142;** awaiting user retest of the mitigation + driver update.
 
 ## Planned
 
