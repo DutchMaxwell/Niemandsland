@@ -7,6 +7,15 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Added
+- **Models rest on terrain surfaces when placed.** Dragging a model now raycasts down
+  onto the ground beneath its base and rests it on the highest surface there — the table
+  top, or a terrain prop such as a container — instead of always snapping to `y=0`. Each
+  model in a multi-model unit resolves its own height, so part of a unit can stand on a
+  container while the rest stay on the table; the resting height saves and syncs to peers
+  (both already carried the full position). Miniatures moved to physics layer 2 so the
+  placement raycast (ground = layer 1) rests them on terrain, never on each other; there
+  is no model-vs-model collision (bases may still touch for melee/tight ranks). Lays the
+  groundwork for future multi-level terrain.
 - **Regiments — facing & front-arc display (AoF:R, display-only).** Every regiment
   movement-tray block now shows a flat cyan facing arrow ahead of its front rank, and
   an amber front-arc wedge (the forward 180° half-plane) toggled with the **F** key.

@@ -37,6 +37,8 @@ planned and where ideas go. For what already works see
 
 ## 🧊 Ideas (icebox — captured, not committed)
 
+- **Multi-level terrain** — per-cell elevation, walkable ruin floors, ramps. The
+  surface-aware placement raycast (models rest on terrain tops) is the groundwork. _L_
 - Rules-reference overlays for more game systems.
 - _Community feedback from the alpha lands here first._
 
