@@ -65,6 +65,10 @@ var unit_to_game_unit: Dictionary = {}  # OPRUnit -> GameUnit
 var game_units: Dictionary = {}  # unit_id (String) -> GameUnit
 var regiments: Dictionary = {}  # unit_id (String) -> Regiment (AoF:R movement-tray blocks)
 
+## Whether the regiment front-arc wedges are currently shown (toggled with KEY_F). The
+## facing arrows are always visible; only the wedges toggle. Display only.
+var _regiment_arcs_visible: bool = false
+
 ## Current game round (OPR rounds start at 1). Bookkeeping only - the players
 ## decide when a round ends; advance_round() does the standard transition.
 var current_round: int = 1
@@ -269,6 +273,23 @@ func restore_regiment(game_unit, frontage: int, pos: Vector3, rot_y: float) -> R
 	game_unit.unit_properties["frontage"] = tray.frontage
 	regiments[game_unit.unit_id] = regiment
 	return regiment
+
+
+## Toggle the front-arc wedges on every regiment block (display only). Returns the new
+## visibility state; the facing arrows stay visible regardless.
+func toggle_all_regiment_arcs() -> bool:
+	_regiment_arcs_visible = not _regiment_arcs_visible
+	set_all_regiment_arcs_visible(_regiment_arcs_visible)
+	return _regiment_arcs_visible
+
+
+## Show or hide the front-arc wedge on every regiment block.
+func set_all_regiment_arcs_visible(p_visible: bool) -> void:
+	_regiment_arcs_visible = p_visible
+	for unit_id in regiments:
+		var regiment = regiments[unit_id]
+		if regiment and is_instance_valid(regiment.tray):
+			regiment.tray.set_arc_visible(p_visible)
 
 
 ## Form every regiment-mode unit of an army into a movement-tray block.
