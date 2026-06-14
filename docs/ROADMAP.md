@@ -22,14 +22,10 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **Regiments — facing & front-arc display (M5)** — facing arrow, toggleable front-arc
-  wedge, and a "line of sight toward the front" aid in the measure tool. Display only,
-  no rule enforcement. _M_
-
-## 📋 Next (accepted, queued)
-
 - **AoF: Regiments — verify import vs a real list** — confirm base sizes / frontage
   from Army Forge against an actual `aofr` army. _S_
+
+## 📋 Next (accepted, queued)
 - **Multiplayer — two-client live test** — confirm lobby/chat/names + the relay
   (room browser, host reconnect) across two real clients. _S_
 - **Regiments — handling polish** — frontage cycle (5-wide ↔ other), wheel about the
@@ -47,9 +43,9 @@ planned and where ideas go. For what already works see
 ## ✅ Recently shipped
 
 See [`CHANGELOG.md`](../CHANGELOG.md). Highlights: **Age of Fantasy: Regiments**
-(movement-tray blocks, square bases, casualty re-rank, save/load), **skirmish 6″
-coherency** (Firefight / AoF: Skirmish), the asset-CDN decoupling, and the
-go-public preparation.
+(movement-tray blocks, square bases, casualty re-rank, save/load, **facing &
+front-arc display**), **skirmish 6″ coherency** (Firefight / AoF: Skirmish), the
+asset-CDN decoupling, and the go-public preparation.
 
 ---
 
