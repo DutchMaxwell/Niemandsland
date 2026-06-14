@@ -61,6 +61,96 @@
       "url": "tundra_container_red_top.webp?v=3682bd0b",
       "sha256": "3682bd0bc2fa95dd8cb35d5311ad4efd8724a81fd793b0b5e2e7837f7412c5de",
       "size": 199778
+    },
+    "volcanic_container_blue_end": {
+      "url": "volcanic_container_blue_end.webp?v=a347dc7f",
+      "sha256": "a347dc7f5a2fff5bd6d42b2464f135cd2c925453b2c4e309377dccb3e6abcaca",
+      "size": 318890
+    },
+    "volcanic_container_blue_side": {
+      "url": "volcanic_container_blue_side.webp?v=690a36ad",
+      "sha256": "690a36ad40b2d90dd47e2b63a054cdbd8f8a8e07c84959c620233c449e7a6c21",
+      "size": 172208
+    },
+    "volcanic_container_blue_top": {
+      "url": "volcanic_container_blue_top.webp?v=686e0b82",
+      "sha256": "686e0b821d20f6af17eda18f187d7d5f1d16b65944dd3602934e50f6aa430cbf",
+      "size": 172970
+    },
+    "volcanic_container_red_end": {
+      "url": "volcanic_container_red_end.webp?v=ecca68fb",
+      "sha256": "ecca68fb812b572a58e47ad574b7dcc42a2bb0e7a53a3c2043424622c489defe",
+      "size": 308074
+    },
+    "volcanic_container_red_side": {
+      "url": "volcanic_container_red_side.webp?v=98e5b629",
+      "sha256": "98e5b629f191f59e2e0905ee539669cdf63f1bc15a6f5884c0bf239c54eff4de",
+      "size": 139704
+    },
+    "volcanic_container_red_top": {
+      "url": "volcanic_container_red_top.webp?v=9996c0b7",
+      "sha256": "9996c0b7facfeb71c6e1fe06da98fdbddafeda5ee9ab9fa4dcc0b077fcadf410",
+      "size": 145590
+    },
+    "jungle_container_blue_end": {
+      "url": "jungle_container_blue_end.webp?v=a475382e",
+      "sha256": "a475382e3beb0da33616f90265dc57f702be44c880737a05c980cb36bf90be07",
+      "size": 252004
+    },
+    "jungle_container_blue_side": {
+      "url": "jungle_container_blue_side.webp?v=aae5c697",
+      "sha256": "aae5c697b7bbe50aa334d795c5e0b58d77d4ab3aedd0ccda18411bc55db2fd70",
+      "size": 143484
+    },
+    "jungle_container_blue_top": {
+      "url": "jungle_container_blue_top.webp?v=4c6d8589",
+      "sha256": "4c6d8589b834fe5c02d319e58e094a8f87b7dc1ba3508040054e0d53ee2bc6ce",
+      "size": 192920
+    },
+    "jungle_container_red_end": {
+      "url": "jungle_container_red_end.webp?v=daf259db",
+      "sha256": "daf259dbfe48cacd1969d8a94c67f16db607e7af6e7e480f3eebf6fbc9fd1a1c",
+      "size": 235172
+    },
+    "jungle_container_red_side": {
+      "url": "jungle_container_red_side.webp?v=b924d928",
+      "sha256": "b924d928f392821a9a376f3df5defae513f3853032eeb6e427211dbd6870c257",
+      "size": 141156
+    },
+    "jungle_container_red_top": {
+      "url": "jungle_container_red_top.webp?v=477c3667",
+      "sha256": "477c3667ca35d70ef862e9ff8dae69292e71168837a2f4bfaa521c78a9e14f8d",
+      "size": 220822
+    },
+    "urban_container_blue_end": {
+      "url": "urban_container_blue_end.webp?v=ec50170b",
+      "sha256": "ec50170b852c6552dbeee5c719a40f47574d563d0d3ba147273d0f062a8a0ac1",
+      "size": 258654
+    },
+    "urban_container_blue_side": {
+      "url": "urban_container_blue_side.webp?v=849390f4",
+      "sha256": "849390f4e975d7a101b1a5236638c67d6d821a5ba4ab588f9e6be42f6e074bdf",
+      "size": 117162
+    },
+    "urban_container_blue_top": {
+      "url": "urban_container_blue_top.webp?v=e4bb301c",
+      "sha256": "e4bb301c960996bba95829dd43747b84c483fd40e73f5ad4dbca9c2466f96c48",
+      "size": 158640
+    },
+    "urban_container_red_end": {
+      "url": "urban_container_red_end.webp?v=eaa09262",
+      "sha256": "eaa09262f87911b24c42bd3b91873236875815011649a702a93ec6d8aed6c5ed",
+      "size": 201964
+    },
+    "urban_container_red_side": {
+      "url": "urban_container_red_side.webp?v=81efa0d9",
+      "sha256": "81efa0d96f950a2811739177e9d925eaa79e41fb5b1fcb3fd9fb39d86a7a551f",
+      "size": 148346
+    },
+    "urban_container_red_top": {
+      "url": "urban_container_red_top.webp?v=c7287649",
+      "sha256": "c7287649c0f57a921f8bbea2579203d2c1881e526a236a4e81e3103cb16eabe8",
+      "size": 153478
     }
   }
 }
