@@ -1,6 +1,6 @@
 # Niemandsland — Status & Roadmap
 
-**Version:** 0.3.1-alpha *(Alpha Release Candidate)* · **Engine:** Godot 4.6 · **Branch:** `main`
+**Version:** 0.3.2-alpha *(Alpha Release Candidate)* · **Engine:** Godot 4.6 · **Branch:** `main`
 
 This is the single source of truth for what works, what's in progress, and what's
 planned. Architecture details live in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md);
@@ -87,10 +87,10 @@ a dedicated, independently mutable "UI" bus with its own persisted settings slid
 Flask review UI; 38 faction design languages / 855 unit overrides with real OPR
 v3.5.x stats. IP-safe generation (positive-only prompts, per-faction `ip_strict` /
 `bio_weapons` flags, per-unit `type:` for vehicles/walkers/aircraft) and a 3-versions-
-per-unit "pick the best" review tool. See [`tools/model_forge/README.md`](tools/model_forge/README.md).
+per-unit "pick the best" review tool. The pipeline lives in a separate private repository; this repo consumes only its R2-delivered GLB outputs.
 
 **3D model delivery (R2)** — miniature GLBs are **not bundled**; they are delivered
-on demand from Cloudflare R2 (content-addressed `sha256.glb`, `<legacy-cdn-host>`),
+on demand from Cloudflare R2 (content-addressed `sha256.glb`, served from the asset CDN),
 mapped by [`assets/model_manifest.json`](assets/model_manifest.json). Builds stay slim
 (GLBs are gitignored + excluded from every export preset); the editor/game fetches
 models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
@@ -100,6 +100,9 @@ models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
 
 ## In progress
 
+- **Host-DROP live test**: the two-client lobby/chat/names/browser flow is
+  user-confirmed working (2026-06-12); the one untested piece is a host losing
+  connection mid-game and rejoining (relay side is deployed + unit-tested).
 - **Graphics preset switch FROM Performance hangs** — root cause is an NVIDIA
   driver bug (the dev machine runs 580.126.18; 580.142 fixes "Vulkan swapchains stop
   delivering frames under X11 under load"). Performance is the only sub-native tier,
@@ -107,9 +110,12 @@ models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
   (the `scaling_3d_scale` change is staggered onto its own frames in
   `graphics_settings.gd`) as a portable mitigation. **Definitive fix: update the
   NVIDIA driver to ≥ 580.142;** awaiting user retest of the mitigation + driver update.
-- **Host-DROP live test**: the two-client lobby/chat/names/browser flow is
-  user-confirmed working (2026-06-12); the one untested piece is a host losing
-  connection mid-game and rejoining (relay side is deployed + unit-tested).
+
+## Planned
+
+The forward-looking plan and the feature-request pipeline now live in
+[`docs/ROADMAP.md`](docs/ROADMAP.md) (single source). Near-term: Regiments
+facing/LOS display, units-as-LOS-blockers, a UI sound bus.
 
 ## Out of scope (by design)
 
@@ -142,6 +148,6 @@ and `hero_attachment_dialog.gd` never existed as separate files — that logic l
 gdUnit4: **54 suites / 376 tests green** in `test/` (incl. `coherency_checker`,
 `save_manager`, `startup_menu`, `internet_lobby`, `relay_multiplayer_peer`,
 `network_version_handshake`, `dice_rules`, `player_identity`). Python:
-`relay/test_relay_server.py` (38 green), `tools/model_forge/tests/`. How to run:
+`relay/test_relay_server.py` (38 green). How to run:
 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 Coverage is still thin — most gameplay scripts are untested.

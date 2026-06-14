@@ -76,7 +76,7 @@ func apply_manifest_text(text: String) -> void:
 	var data: Variant = JSON.parse_string(text)
 	if typeof(data) != TYPE_DICTIONARY:
 		return
-	_base_url = data.get("base_url", "")
+	_base_url = AssetCDN.expand(data.get("base_url", ""))
 	var biomes: Variant = data.get("biomes", {})
 	if typeof(biomes) == TYPE_DICTIONARY:
 		_biomes = biomes

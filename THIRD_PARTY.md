@@ -6,7 +6,7 @@ licenses — the canonical notice for an open-source release.
 
 > **Game data note:** One Page Rules (OPR) unit stats / army lists are **not**
 > bundled or redistributed. They are loaded **only at runtime via the Army Forge
-> API** (see [`docs/PRE_RELEASE_LICENSING.md`](docs/PRE_RELEASE_LICENSING.md)).
+> API**.
 
 ## Summary
 
@@ -21,20 +21,20 @@ licenses — the canonical notice for an open-source release.
 | Phosphor Icons | MIT | yes | `assets/ui_glassmorphism/icons/` + `Phosphor-LICENSE.txt` (UI icons, 256px, bold/fill) |
 | 3D dice (own W6) | MIT | yes | `scripts/dice_tray.gd`, `scripts/dice_d6.gd` (replaced the former AGPL addon) |
 | Miniature GLBs | project-internal (AI-generated) | on-demand | see *Generated assets* below |
-| Microsoft TRELLIS | MIT | no (dev tool) | image→3D model generation in `tools/model_forge/` |
+| Microsoft TRELLIS | MIT | no (dev tool) | image→3D model generation (asset-pipeline repo); GLB outputs are ours |
 | `model-viewer` (Google) | Apache-2.0 | no (dev tool) | 3D preview in the Model Forge review UI |
-| gltfpack (meshoptimizer) | MIT | no (dev tool) | `tools/model_forge/bin/gltfpack-linux` (GLB optimization) |
+| gltfpack (meshoptimizer) | MIT | no (dev tool) | GLB optimization (asset-pipeline repo) |
 | OPR unit data | OPR content | **no — API only** | never bundled; fetched from Army Forge at runtime |
 
 ## Generated assets (miniature models)
 
 The miniature GLBs are **AI-generated** by the offline Model Forge pipeline
-(`tools/model_forge/`, not part of the shipped game): image generation → **Microsoft
+(in the separate asset-pipeline repo, not part of this repo or the shipped game): image generation → **Microsoft
 TRELLIS** (MIT; outputs are ours) → optimized GLB. They are delivered **on-demand**
 from a CDN (see [`docs/ASSET_DELIVERY.md`](docs/ASSET_DELIVERY.md)), not bundled in
 the build.
 
-## Dev-only tooling (`tools/model_forge/`, `assets/3d_pipeline/`)
+## Dev-only tooling (separate asset-pipeline repo)
 
 These are authoring tools, **not shipped** with the game (verified: not present in
 the exported `.pck`). They use TRELLIS (MIT), `model-viewer` (Apache-2.0), and image
@@ -43,9 +43,7 @@ govern commercial use / redistribution of generated content.
 
 ## Verification still pending (before public release)
 
-Tracked in [`docs/PRE_RELEASE_LICENSING.md`](docs/PRE_RELEASE_LICENSING.md):
-
-- **Image-generation ToS** — researched (see `docs/PRE_RELEASE_LICENSING.md`): Gemini
+- **Image-generation ToS** — researched: Gemini
   output is user-owned + commercial-OK (use the paid tier; AI-only output may not be
   copyrightable); TRELLIS is MIT. Final call with the lawyer.
 - ~~SVG icon provenance~~ — ✅ resolved: UI icons are **Phosphor Icons** (MIT),

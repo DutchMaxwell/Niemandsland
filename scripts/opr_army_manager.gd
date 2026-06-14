@@ -63,6 +63,7 @@ var unit_to_game_unit: Dictionary = {}  # OPRUnit -> GameUnit
 
 ## All GameUnits by unit_id
 var game_units: Dictionary = {}  # unit_id (String) -> GameUnit
+var regiments: Dictionary = {}  # unit_id (String) -> Regiment (AoF:R movement-tray blocks)
 
 ## Current game round (OPR rounds start at 1). Bookkeeping only - the players
 ## decide when a round ends; advance_round() does the standard transition.
@@ -201,7 +202,87 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 
 	print("OPRArmyManager: Spawned %d models for army '%s' on tray" % [all_models.size(), army.name])
 	army_spawned.emit(army, all_models)
+
+	# Age of Fantasy: Regiments — form each unit into a movement-tray block once the
+	# drop animation has settled (deferred so it does not fight the drop tween).
+	if army.game_system_abbrev == "aofr":
+		_form_regiments_after_drop(army)
+
 	return all_models
+
+
+## Form a single Age of Fantasy: Regiments unit into a movement-tray block. Collects
+## the unit's live model nodes, creates a RegimentTray under ObjectManager and ranks
+## them. Returns the Regiment, or null if the unit is not a regiment / has no models.
+## Representation only — no rules are enforced.
+func form_regiment(game_unit) -> Regiment:
+	if game_unit == null:
+		return null
+	var props: Dictionary = game_unit.unit_properties
+	if not props.get("regiment_mode", false):
+		return null
+	var members := RegimentTray.collect_members(game_unit)
+	var nodes: Array = members.nodes
+	var footprints: Array = members.footprints
+	if nodes.is_empty():
+		return null
+
+	var tray := RegimentTray.new()
+	tray.name = "Regiment_%s" % game_unit.unit_id
+	object_manager._object_counter += 1
+	tray.set_meta("network_id", object_manager._object_counter)
+	object_manager.add_child(tray)
+
+	var frontage: int = RegimentFormation.default_frontage(nodes.size())
+	tray.form(nodes, footprints, frontage)
+
+	var regiment := Regiment.new(game_unit, tray, frontage)
+	tray.set_meta("regiment", regiment)
+	game_unit.unit_properties["frontage"] = frontage
+	regiments[game_unit.unit_id] = regiment
+	return regiment
+
+
+## Rebuild a regiment movement-tray block on load: create the tray at the saved
+## transform and adopt the unit's already-restored model nodes (no re-layout — the
+## exact saved arrangement, including casualty gaps, is preserved).
+func restore_regiment(game_unit, frontage: int, pos: Vector3, rot_y: float) -> Regiment:
+	if game_unit == null:
+		return null
+	var tray := RegimentTray.new()
+	tray.name = "Regiment_%s" % game_unit.unit_id
+	object_manager._object_counter += 1
+	tray.set_meta("network_id", object_manager._object_counter)
+	object_manager.add_child(tray)
+	tray.frontage = maxi(frontage, 1)
+	tray.global_position = pos
+	tray.rotation.y = rot_y
+
+	var nodes: Array = []
+	for m in game_unit.models:
+		if m.node and is_instance_valid(m.node):
+			nodes.append(m.node)
+	tray.adopt_existing(nodes)
+
+	var regiment := Regiment.new(game_unit, tray, tray.frontage)
+	tray.set_meta("regiment", regiment)
+	game_unit.unit_properties["frontage"] = tray.frontage
+	regiments[game_unit.unit_id] = regiment
+	return regiment
+
+
+## Form every regiment-mode unit of an army into a movement-tray block.
+func form_all_regiments(army) -> void:
+	for unit in army.units:
+		var gu = unit_to_game_unit.get(unit, null)
+		if gu:
+			form_regiment(gu)
+
+
+## Defer regiment forming until the spawn drop animation has settled.
+func _form_regiments_after_drop(army) -> void:
+	await get_tree().create_timer(TRAY_DROP_DURATION + 0.1).timeout
+	form_all_regiments(army)
 
 
 ## Animate tray and models dropping from above - smooth deceleration
@@ -432,7 +513,14 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 	# Create base mesh
 	var base_instance = MeshInstance3D.new()
 
-	if base_is_oval:
+	if unit.base_is_square:
+		# Square/rectangular base (Age of Fantasy: Regiments): flat box.
+		# Long side (depth) faces north (+Z direction), matching the oval convention.
+		var base_mesh = BoxMesh.new()
+		base_mesh.size = Vector3(base_width, 0.003, base_depth)
+		base_instance.mesh = base_mesh
+		base_instance.position.y = 0.0015
+	elif base_is_oval:
 		# Oval base: use cylinder with non-uniform scale
 		# Long side (depth) faces north (+Z direction)
 		var base_mesh = CylinderMesh.new()
@@ -462,7 +550,7 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 	# Visual hover: Flying units, drones and hover vehicles float above the base.
 	var should_hover := _should_hover(unit.name, unit.special_rules)
-	var base_long_mm: int = max(unit.base_width_mm, unit.base_depth_mm) if base_is_oval else unit.base_size_round
+	var base_long_mm: int = max(unit.base_width_mm, unit.base_depth_mm) if (base_is_oval or unit.base_is_square) else unit.base_size_round
 	var hover_lift: float = base_long_mm * FLYING_HOVER_RATIO * 0.001 if should_hover else 0.0
 
 	# Try to load GLB model for this unit
@@ -533,14 +621,20 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 		model_height = body_height + head_radius * 2 + hover_lift
 
-	# Add collision shape - scaled to base size (use larger dimension for oval)
-	var collision_radius = max(base_width, base_depth) / 2.0 if base_is_oval else base_radius
+	# Add collision shape - scaled to base size (box for square/rectangular regiment
+	# bases so they sit edge-to-edge without overlap-reject; cylinder otherwise).
 	var total_height = 0.003 + model_height
 	var collision = CollisionShape3D.new()
-	var shape = CylinderShape3D.new()
-	shape.radius = collision_radius
-	shape.height = total_height
-	collision.shape = shape
+	if unit.base_is_square:
+		var box_shape = BoxShape3D.new()
+		box_shape.size = Vector3(base_width, total_height, base_depth)
+		collision.shape = box_shape
+	else:
+		var collision_radius = max(base_width, base_depth) / 2.0 if base_is_oval else base_radius
+		var shape = CylinderShape3D.new()
+		shape.radius = collision_radius
+		shape.height = total_height
+		collision.shape = shape
 	collision.position.y = total_height / 2
 	wrapper.add_child(collision)
 

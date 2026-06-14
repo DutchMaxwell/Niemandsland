@@ -13,7 +13,7 @@ const KICKER_TEXT := "TACTICAL TABLETOP WARGAMING"
 const RULE_TICK_W := 26.0          # amber tick, then a cyan hairline (header language)
 const RULE_H := 2.0
 
-## Entrance choreography (motion tokens; see docs/archive/AAA_UI_PLAYBOOK.md).
+## Entrance choreography (motion tokens).
 const ENTRANCE_WORDMARK_DELAY := 0.05
 const ENTRANCE_WORDMARK_S := 0.45
 const ENTRANCE_BUTTONS_START := 0.30

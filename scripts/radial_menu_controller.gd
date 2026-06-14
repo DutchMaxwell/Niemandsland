@@ -470,13 +470,21 @@ func _check_coherency(context: Dictionary) -> void:
 	if not game_unit:
 		return
 
+	# Regiments form tight ranked blocks; the skirmish 1"/9" coherency rule does not
+	# apply, so there is nothing to check or visualize.
+	if game_unit.unit_properties.get("regiment_mode", false):
+		return
+
+	# Skirmish systems (Firefight / AoF: Skirmish) use 6" max spread, not 9".
+	var skirmish := CoherencyChecker.is_skirmish_system(game_unit)
+
 	# Use visualizer if available
 	if coherency_visualizer:
-		var result = coherency_visualizer.show_coherency(game_unit)
+		var result = coherency_visualizer.show_coherency(game_unit, skirmish)
 		coherency_checked.emit(game_unit, result)
 	else:
 		# Fallback to just checking without visualization
-		var result = CoherencyChecker.check_unit_coherency(game_unit)
+		var result = CoherencyChecker.check_unit_coherency(game_unit, skirmish)
 		coherency_checked.emit(game_unit, result)
 		if result.valid:
 			print("✓ %s is in coherency" % game_unit.get_name())
@@ -607,9 +615,24 @@ func _on_wounds_changed(model: ModelInstance, new_wounds: int) -> void:
 		model.node.visible = true
 		model.node.set_meta("deleted", false)
 
+	# Regiments (AoF:R): close ranks on a casualty, re-open on revive.
+	_reform_regiment_for_model(model)
+
 	# Broadcast wounds change to remote peers
 	if network_manager:
 		network_manager.broadcast_model_wounds(model)
+
+
+## If the model belongs to a regiment movement-tray block, re-rank the block so the
+## ranks close on a casualty (or re-open on revive). No-op for loose skirmish models.
+func _reform_regiment_for_model(model: ModelInstance) -> void:
+	if model == null or model.node == null or not is_instance_valid(model.node):
+		return
+	if not model.node.has_meta(RegimentTray.MEMBER_META):
+		return
+	var tray = model.node.get_meta(RegimentTray.MEMBER_META)
+	if is_instance_valid(tray) and tray.has_method("reform_from_unit"):
+		tray.reform_from_unit(model.unit)
 
 
 ## Updates or creates a wound marker (red disc with border) next to a model.

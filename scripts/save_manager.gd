@@ -7,7 +7,7 @@ signal save_completed(path: String)
 signal load_completed(object_count: int)
 signal load_failed(error: String)
 
-const SAVE_VERSION = "1.3"  # Updated for modular terrain (walls, placed objects)
+const SAVE_VERSION = "1.4"  # Added Age of Fantasy: Regiments movement-tray blocks
 const SAVE_EXTENSION = "nml"  # Niemandsland Save
 
 var object_manager: Node3D
@@ -202,6 +202,14 @@ func _serialize_game_units() -> Array:
 				model_positions.append(null)
 
 		unit_data["model_positions"] = model_positions
+
+		# Age of Fantasy: Regiments — persist the movement-tray block (frontage +
+		# tray transform). Member models are the unit's own models.
+		if army_manager.regiments.has(game_unit.unit_id):
+			var reg = army_manager.regiments[game_unit.unit_id]
+			if reg and is_instance_valid(reg.tray):
+				unit_data["regiment"] = reg.to_dict()
+
 		units.append(unit_data)
 
 	return units
@@ -286,6 +294,10 @@ func load_game(path: String) -> Error:
 
 	# Load objects (async for TTS downloads)
 	var loaded_count = await _deserialize_objects(state.get("objects", []))
+
+	# Rebuild Age of Fantasy: Regiments movement-tray blocks now that the model
+	# nodes exist and are wired to their loaded GameUnits.
+	_restore_regiments_after_load()
 
 	# Restore game state
 	_deserialize_game_state(state.get("game_state", {}))
@@ -677,11 +689,31 @@ func _deserialize_game_units(units_data: Array) -> int:
 		if game_unit:
 			_loaded_game_units[game_unit.unit_id] = {
 				"game_unit": game_unit,
-				"model_positions": unit_data.get("model_positions", [])
+				"model_positions": unit_data.get("model_positions", []),
+				"regiment": unit_data.get("regiment", null)
 			}
 			count += 1
 
 	return count
+
+
+## Rebuild Age of Fantasy: Regiments movement-tray blocks for loaded units that had
+## one. Runs after the model nodes exist and are wired to their loaded GameUnits.
+func _restore_regiments_after_load() -> void:
+	if not army_manager:
+		return
+	for unit_id in _loaded_game_units:
+		var entry = _loaded_game_units[unit_id]
+		var reg_data = entry.get("regiment", null)
+		if reg_data == null:
+			continue
+		var game_unit = entry.game_unit as GameUnit
+		if game_unit == null:
+			continue
+		var frontage = int(reg_data.get("frontage", 5))
+		var pos = _array_to_vector3(reg_data.get("tray_pos", [0, 0, 0]))
+		var rot_y = float(reg_data.get("tray_rot_y", 0.0))
+		army_manager.restore_regiment(game_unit, frontage, pos, rot_y)
 
 
 ## Deserialize game state (round, turn, etc.)
