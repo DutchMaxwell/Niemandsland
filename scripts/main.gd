@@ -662,6 +662,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_L and not event.ctrl_pressed:
 			object_manager.toggle_lock_selected()
 			get_viewport().set_input_as_handled()
+		# Toggle regiment front-arc wedges (F key) - facing display aid (AoF:R, no rule)
+		elif event.keycode == KEY_F and not event.ctrl_pressed and not event.shift_pressed:
+			if opr_army_manager:
+				opr_army_manager.toggle_all_regiment_arcs()
+			get_viewport().set_input_as_handled()
 		# Rotate selected group around first object (Shift+R) - continuous rotation
 		elif event.keycode == KEY_R and event.shift_pressed:
 			if not _is_group_rotating:
