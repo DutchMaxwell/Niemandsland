@@ -18,6 +18,12 @@ const MEMBER_META := "regiment_tray"
 
 var frontage: int = 5
 
+# === Private state ===
+
+var _facing_marker: MeshInstance3D = null   # cyan arrow showing the front (+Z)
+var _front_z: float = 0.0                    # local Z of the front edge (for the marker)
+var _show_facing: bool = true
+
 # === Godot ===
 
 func _ready() -> void:
@@ -52,6 +58,23 @@ func reform(models: Array, footprints: Array, new_frontage: int = -1) -> void:
 func facing_dir() -> Vector3:
 	return global_transform.basis.z.normalized()
 
+## The unit's facing as a top-down (XZ) 2D unit vector.
+func facing_2d() -> Vector2:
+	var z := global_transform.basis.z
+	return Vector2(z.x, z.z).normalized()
+
+## True if a world point lies within the regiment's front arc (Regiments LOS aid).
+func front_arc_contains(target_world: Vector3) -> bool:
+	return LosRules.is_in_front_arc(
+		Vector2(global_position.x, global_position.z),
+		facing_2d(),
+		Vector2(target_world.x, target_world.z))
+
+## Show/hide the front-facing marker (visual aid).
+func set_facing_visible(visible_flag: bool) -> void:
+	_show_facing = visible_flag
+	_refresh_facing_marker()
+
 ## Re-rank the regiment from its game unit's currently-alive models (used after a
 ## casualty or revive — the rear rank closes/opens). Keeps the tray transform.
 func reform_from_unit(game_unit) -> void:
@@ -76,6 +99,8 @@ func adopt_existing(models: Array) -> void:
 			add_child(n)
 			n.set_meta(MEMBER_META, self)
 		n.global_transform = gx
+	_front_z = _front_edge_from_children()
+	_refresh_facing_marker()
 
 
 ## Collect a unit's live model nodes and per-model base footprints (metres) from its
@@ -109,3 +134,48 @@ func _layout(models: Array, footprints: Array) -> void:
 		# Local slot relative to the tray → world transform follows the tray rigidly.
 		m.position = offsets[i] if i < offsets.size() else Vector3.ZERO
 		m.rotation = Vector3.ZERO
+	var max_z := 0.0
+	for off in offsets:
+		max_z = maxf(max_z, off.z)
+	var max_d := 0.0
+	for fp in footprints:
+		max_d = maxf(max_d, fp.y)
+	_front_z = max_z + max_d * 0.5
+	_refresh_facing_marker()
+
+
+## Front edge (local +Z) from the current member children, for the facing marker.
+func _front_edge_from_children() -> float:
+	var fz := 0.0
+	for c in get_children():
+		if c == _facing_marker:
+			continue
+		var n := c as Node3D
+		if n:
+			fz = maxf(fz, n.position.z)
+	return fz + 0.02
+
+
+## Create/update the cyan front-facing arrow (visual aid; tune live).
+func _refresh_facing_marker() -> void:
+	if not _show_facing:
+		if _facing_marker:
+			_facing_marker.visible = false
+		return
+	if _facing_marker == null:
+		_facing_marker = MeshInstance3D.new()
+		_facing_marker.name = "FacingMarker"
+		var cone := CylinderMesh.new()
+		cone.top_radius = 0.0
+		cone.bottom_radius = 0.012
+		cone.height = 0.024
+		_facing_marker.mesh = cone
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.2, 0.9, 1.0)
+		mat.emission_enabled = true
+		mat.emission = Color(0.2, 0.9, 1.0)
+		_facing_marker.material_override = mat
+		_facing_marker.rotation_degrees = Vector3(90.0, 0.0, 0.0)  # cone tip -> +Z
+		add_child(_facing_marker)
+	_facing_marker.visible = true
+	_facing_marker.position = Vector3(0.0, 0.012, _front_z + 0.015)

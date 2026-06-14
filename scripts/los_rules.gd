@@ -140,3 +140,23 @@ static func segment_intersects_circle(from_pos: Vector2, to_pos: Vector2,
 ## True if segments a1->a2 and b1->b2 intersect (touching counts).
 static func segments_intersect(a1: Vector2, a2: Vector2, b1: Vector2, b2: Vector2) -> bool:
 	return Geometry2D.segment_intersects_segment(a1, a2, b1, b2) != null
+
+
+## Regiments (Age of Fantasy: Regiments): line of sight is only to the unit's FRONT.
+## The front arc is the hemisphere ahead of the unit's facing (the base's front
+## facing → 180° total, half-angle 90°). Tunable; this is the conventional "front
+## facing" reading and is a display aid, not verified against a specific rules page.
+const FRONT_ARC_HALF_ANGLE_DEG := 90.0
+
+## True if `target` lies within `half_angle_deg` of the `facing` direction as seen
+## from `origin` (all 2D / top-down XZ). Used for the Regiments "LOS toward front"
+## aid. Degenerate inputs (target on the origin, zero facing) return true.
+static func is_in_front_arc(origin: Vector2, facing: Vector2, target: Vector2,
+		half_angle_deg: float = FRONT_ARC_HALF_ANGLE_DEG) -> bool:
+	var to_target := target - origin
+	if to_target.length_squared() < 0.000001:
+		return true
+	var f := facing.normalized()
+	if f.length_squared() < 0.000001:
+		return true
+	return f.dot(to_target.normalized()) >= cos(deg_to_rad(half_angle_deg))

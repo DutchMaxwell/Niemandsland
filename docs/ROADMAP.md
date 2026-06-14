@@ -22,9 +22,11 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **Regiments — facing & front-arc display (M5)** — facing arrow, toggleable front-arc
-  wedge, and a "line of sight toward the front" aid in the measure tool. Display only,
-  no rule enforcement. _M_
+- **Regiments — facing & front-arc display (M5)** — _logic + facing marker done_
+  (`LosRules.is_in_front_arc`, `RegimentTray.facing_2d` / `front_arc_contains`, a cyan
+  front-facing arrow on the tray; all unit-tested). **Pending (needs live verification):**
+  wiring the "LOS toward front" check into the measure tool + an optional front-arc
+  wedge overlay. Display only, no rule enforcement. _M_
 
 ## 📋 Next (accepted, queued)
 
@@ -34,10 +36,6 @@ planned and where ideas go. For what already works see
   (room browser, host reconnect) across two real clients. _S_
 - **Regiments — handling polish** — frontage cycle (5-wide ↔ other), wheel about the
   front corner. _M_
-- **Units as line-of-sight blockers** — formation height + closed 1″ gaps (after the
-  terrain LOS aid). _M_
-- **UI sound bus** — a dedicated mutable "UI" audio bus + a `UiSound` autoload wiring
-  button hover/click/focus feedback. _S_
 
 ## 🧊 Ideas (icebox — captured, not committed)
 
@@ -48,8 +46,9 @@ planned and where ideas go. For what already works see
 
 See [`CHANGELOG.md`](../CHANGELOG.md). Highlights: **Age of Fantasy: Regiments**
 (movement-tray blocks, square bases, casualty re-rank, save/load), **skirmish 6″
-coherency** (Firefight / AoF: Skirmish), the asset-CDN decoupling, and the
-go-public preparation.
+coherency** (Firefight / AoF: Skirmish), **units block line of sight** (Asgard
+height + closed 1″ gaps), the **UI sound bus** (UiFeedback autoload), the asset-CDN
+decoupling, and the go-public preparation.
 
 ---
 
