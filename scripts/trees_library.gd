@@ -8,7 +8,7 @@ extends Node
 ## the renderer keeps its procedural fallback tree (see terrain_overlay.gd). Textures
 ## are decoded from the WebP bytes at runtime so the authored hard alpha edges survive
 ## (alpha scissor needs them). Mirrors RuinsLibrary; see docs/ASSET_DELIVERY.md.
-## Art recipe: tools/model_forge/generate_trees.py.
+## Art recipe lives in the offline asset-pipeline repo.
 
 # === Constants ===
 
@@ -243,7 +243,7 @@ func apply_manifest_text(text: String) -> void:
 	var data: Variant = JSON.parse_string(text)
 	if typeof(data) != TYPE_DICTIONARY:
 		return
-	_base_url = data.get("base_url", "")
+	_base_url = AssetCDN.expand(data.get("base_url", ""))
 	var panels: Variant = data.get("panels", {})
 	if typeof(panels) == TYPE_DICTIONARY:
 		_panels = panels

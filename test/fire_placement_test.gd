@@ -1,8 +1,7 @@
 extends GdUnitTestSuite
 ## Tests the war-torn ruin-fire placement logic in terrain_overlay.gd: deterministic
 ## per-segment picks from synced wall data, a sane burn rate, and — critically — that
-## the fire pick NEVER disturbs the panel RNG (windows/doorways must stay identical;
-## HANDOFF_RUIN_WALLS.md §6 gotcha #5).
+## the fire pick NEVER disturbs the panel RNG (windows/doorways must stay identical).
 
 const OverlayScript = preload("res://scripts/terrain_overlay.gd")
 

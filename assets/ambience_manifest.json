@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "base_url": "https://assets.akesberg.de/terrain-source/ambience",
+  "base_url": "{cdn}/terrain-source/ambience",
   "sounds": {
     "fire_crackle": {
       "url": "fire_crackle.ogg?v=46c60ca7",

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "base_url": "https://assets.akesberg.de/terrain-source/hazards",
+  "base_url": "{cdn}/terrain-source/hazards",
   "panels": {
     "mine_top": {
       "url": "mine_top.webp",

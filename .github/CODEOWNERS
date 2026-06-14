@@ -1,0 +1,4 @@
+# Every change requests a review from the maintainer. Combined with branch
+# protection ("Require review from Code Owners"), nothing merges into main
+# without @DutchMaxwell's approval.
+* @DutchMaxwell
