@@ -17,6 +17,20 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   alpha; pruned internal planning/handoff docs.
 
 ### Added
+- **Units block line of sight (Asgard tournament standard, display-only).** The
+  measure tool's LOS check now treats every on-table OPR model as a blocker: a model
+  stops the line at its Asgard Height when that Height is ≥ both endpoints', gaps under
+  1″ between models of the same unit count as closed (the line can't thread through an
+  almost-closed formation), and the units at the line's own endpoints never block their
+  own sight line. Pure 2D geometry in `LosRules` (`units_block_line`, base-radius +
+  segment/circle helpers), unit-tested; the measure line turns red + shows 🚫 exactly as
+  with terrain. Players still apply the rule themselves.
+- **UI audio completed: hover + keyboard-focus ticks and a settings slider.** The
+  `UiFeedback` autoload (procedural tones on the dedicated "UI" bus, auto-wired to
+  every `BaseButton`) now also plays a quiet micro-tick on hover and on keyboard/
+  controller focus — not just on click — and the Settings window gains a "UI Volume"
+  slider; the UI bus volume persists like the other buses. Closes the playbook's
+  "UI audio" item.
 - **Multiplayer lobby, in-game chat and player names.** Players now enter a **name**
   in the Host/Join dialog (persisted to `user://`, synced host-authoritatively); it
   shows in the dice log, on 3D avatars and in a new connected-player roster. An
@@ -66,6 +80,13 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   minis load after the first frame, the grass tuft mesh/texture is cached.
 
 ### Fixed
+- **Graphics switch off Performance — de-burst the render-target resize.** Switching
+  from Performance to any higher tier was the only preset change that resizes the 3D
+  render target (`scaling_3d_scale` 0.77→1.0); bundled in one frame with the MSAA +
+  shadow-atlas reallocation it could freeze the picture in fullscreen — root-caused to
+  an NVIDIA driver bug (≤ 580.126 under X11; fixed in 580.142) that the burst triggers.
+  The scale change is now staggered onto its own later frames (no-op when unchanged, so
+  Low↔Ultra stay instant). The definitive fix is updating the NVIDIA driver to ≥ 580.142.
 - **Pink/magenta/rainbow table — two distinct bugs, both fixed.** (1) The ground
   micro-detail `NoiseTexture2D`s were regenerated per material rebuild and raced the
   renderer → rainbow speckle; cached once now. (2) The scene was lit by the procedural
