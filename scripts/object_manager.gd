@@ -106,6 +106,18 @@ var terrain_overlay: Node3D = null
 const MINIATURE_HEIGHT: float = 0.032  # 32mm height
 const MINIATURE_RADIUS: float = 0.016  # 32mm diameter base (16mm radius)
 
+## Physics layers: ground (table + terrain props) on layer 1, miniatures on layer 2.
+## The placement raycast masks ground-only so models rest on terrain, not on each other.
+## Selection/measure/hover raycasts use all layers (0xFFFFFFFF), so they are unaffected.
+## NOTE: kept in sync with the same constants in opr_army_manager.gd (model wrappers).
+const GROUND_COLLISION_LAYER: int = 1
+const MINIATURE_COLLISION_LAYER: int = 2
+
+## Surface raycast probe: cast straight down from this height to this depth (metres) at a
+## model's base centre to find the highest ground surface beneath it (table top = 0).
+const SURFACE_PROBE_TOP_Y: float = 5.0
+const SURFACE_PROBE_BOTTOM_Y: float = -1.0
+
 ## Regiment facing aid (measure tool): target in the front arc vs flank/rear.
 const MEASURE_FRONT_COLOR: Color = Color(0.20, 0.85, 0.95)  # cyan, matches the arrow
 const MEASURE_FLANK_COLOR: Color = Color(0.95, 0.70, 0.20)  # amber, matches the wedge
@@ -746,8 +758,9 @@ func _stop_dragging() -> void:
 				if obj is RigidBody3D:
 					target_y = obj.global_position.y - drag_lift_height
 				else:
-					# Static bodies snap to table surface
-					target_y = 0.0
+					# Static bodies settle onto the ground surface beneath the base
+					# (table top = 0, or a terrain prop like a container).
+					target_y = _surface_y_under(obj.global_position)
 
 				# Collect final ground-level positions for batched broadcast
 				if obj.has_meta("network_id"):
@@ -829,9 +842,9 @@ func _record_move_for_undo() -> void:
 		if not is_instance_valid(obj) or not _drag_start_positions.has(obj):
 			continue
 		var start_pos: Vector3 = _drag_start_positions[obj]
-		# Final resting height: static bodies snap to the table (y=0), rigid bodies
-		# drop back down by the lift height applied at drag start.
-		var end_y: float = obj.global_position.y - drag_lift_height if obj is RigidBody3D else 0.0
+		# Final resting height: static bodies settle on the ground surface beneath the
+		# base (table or terrain prop), rigid bodies drop back by the lift height.
+		var end_y: float = obj.global_position.y - drag_lift_height if obj is RigidBody3D else _surface_y_under(obj.global_position)
 		var end_pos: Vector3 = Vector3(obj.global_position.x, end_y, obj.global_position.z)
 		objects.append(obj)
 		from_positions.append(start_pos)
@@ -992,6 +1005,35 @@ func _destroy_drag_line() -> void:
 		_drag_label = null
 
 
+## Highest ground surface (table top or a terrain prop like a container) directly beneath
+## `xz`, found by a downward physics ray on the ground layer only. Miniatures live on
+## layer 2, so the ray ignores them — models rest on terrain, never on each other.
+## Returns the table top (0.0) when nothing is hit. Placement aid; enforces no rule.
+func _surface_y_under(xz: Vector3) -> float:
+	var space_state := get_world_3d().direct_space_state
+	if space_state == null:
+		return 0.0
+	var from := Vector3(xz.x, SURFACE_PROBE_TOP_Y, xz.z)
+	var to := Vector3(xz.x, SURFACE_PROBE_BOTTOM_Y, xz.z)
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.collision_mask = GROUND_COLLISION_LAYER
+	query.collide_with_bodies = true
+	var hit := space_state.intersect_ray(query)
+	return _pick_surface_y(hit, 0.0)
+
+
+## Pure decision behind _surface_y_under: given a downward-ray hit (empty = miss), return
+## the resting surface Y, or `fallback` on a miss. Extracted so it is unit-testable
+## without a physics scene.
+static func _pick_surface_y(hit: Dictionary, fallback: float) -> float:
+	if hit.is_empty():
+		return fallback
+	var pos = hit.get("position", null)
+	if pos == null:
+		return fallback
+	return (pos as Vector3).y
+
+
 func _update_drag(screen_pos: Vector2) -> void:
 	if _selected_objects.is_empty() or not _is_dragging:
 		return
@@ -1017,13 +1059,17 @@ func _update_drag(screen_pos: Vector2) -> void:
 		# stays under the cursor (the unit no longer snaps its first model to the cursor).
 		var delta_xz = Vector3(intersection.x - _drag_grab_world.x, 0, intersection.z - _drag_grab_world.z)
 
-		# Move all selected objects by the same XZ delta, keeping them lifted
+		# Move all selected objects by the same XZ delta (formation kept). Each model's
+		# Y rests on the ground surface beneath its own base (table or a terrain prop),
+		# lifted by drag_lift_height while dragging — so a unit climbs onto a container
+		# per model and settles to the surface on drop.
 		for obj in _selected_objects:
 			if is_instance_valid(obj):
 				var obj_start = _drag_start_positions.get(obj, obj.global_position)
-				# Keep object at lifted height (original Y + lift height)
-				var new_pos = Vector3(obj_start.x + delta_xz.x, obj_start.y + drag_lift_height, obj_start.z + delta_xz.z)
-				obj.global_position = new_pos
+				var new_x: float = obj_start.x + delta_xz.x
+				var new_z: float = obj_start.z + delta_xz.z
+				var surface_y: float = _surface_y_under(Vector3(new_x, 0.0, new_z))
+				obj.global_position = Vector3(new_x, surface_y + drag_lift_height, new_z)
 
 		# Broadcast positions throttled to ~20 Hz to avoid relay rate limit
 		_move_broadcast_timer += get_process_delta_time()
@@ -1527,9 +1573,10 @@ func spawn_miniature(pos: Vector3, broadcast: bool = true, network_id: int = -1)
 	collision.position.y = (MINIATURE_HEIGHT + base_height) / 2
 	miniature.add_child(collision)
 
-	# Set collision layers
-	miniature.collision_layer = 1
-	miniature.collision_mask = 1
+	# Set collision layers: miniatures on layer 2 so the placement raycast (ground-only)
+	# rests them on terrain, never on each other.
+	miniature.collision_layer = MINIATURE_COLLISION_LAYER
+	miniature.collision_mask = GROUND_COLLISION_LAYER
 
 	# Add selection methods
 	miniature.set_script(preload("res://scripts/selectable_object.gd"))

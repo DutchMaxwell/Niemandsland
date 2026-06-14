@@ -39,6 +39,11 @@ const TRAY_MARGIN: float = 0.05  # 5cm gap from table edge
 const TRAY_DROP_HEIGHT: float = 0.5  # Start 50cm above table
 const TRAY_DROP_DURATION: float = 1.5  # Animation duration in seconds
 
+## Physics layers (kept in sync with ObjectManager): miniatures sit on layer 2 so the
+## placement raycast (which masks ground-only) rests them on terrain, not on each other.
+const GROUND_COLLISION_LAYER: int = 1
+const MINIATURE_COLLISION_LAYER: int = 2
+
 ## Reference to the object manager for spawning
 var object_manager: Node3D
 
@@ -522,6 +527,8 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 ## Create a visual model for a unit (GLB model if available, otherwise placeholder)
 func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_suffix: String = "", faction_folder: String = "") -> StaticBody3D:
 	var wrapper = StaticBody3D.new()
+	wrapper.collision_layer = MINIATURE_COLLISION_LAYER
+	wrapper.collision_mask = GROUND_COLLISION_LAYER
 	var display_name = unit.name + name_suffix
 	wrapper.name = "OPR_%s" % display_name.replace(" ", "_")
 
@@ -669,6 +676,8 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 ## Uses the same visual logic as _create_unit_model() but reads from Dictionary instead of OPRUnit
 func create_model_from_properties(props: Dictionary) -> StaticBody3D:
 	var wrapper = StaticBody3D.new()
+	wrapper.collision_layer = MINIATURE_COLLISION_LAYER
+	wrapper.collision_mask = GROUND_COLLISION_LAYER
 	var unit_name = props.get("name", "Unknown")
 	var display_suffix = props.get("display_suffix", "")
 	var display_name = unit_name + display_suffix
