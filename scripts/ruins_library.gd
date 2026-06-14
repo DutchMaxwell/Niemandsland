@@ -7,8 +7,7 @@ extends Node
 ## downloaded + cached locally the first time a map with ruins is shown; until then the
 ## renderer keeps its bundled triplanar fallback (see terrain_overlay.gd). Textures are
 ## decoded from the WebP bytes at runtime, so the authored hard alpha edges survive
-## without import-settings concerns (alpha scissor needs them — HANDOFF_RUIN_WALLS.md §6
-## gotcha #4). Mirrors BiomeLibrary; see docs/ASSET_DELIVERY.md.
+## without import-settings concerns (alpha scissor needs them). Mirrors BiomeLibrary; see docs/ASSET_DELIVERY.md.
 
 # === Constants ===
 
@@ -119,7 +118,7 @@ func apply_manifest_text(text: String) -> void:
 	var data: Variant = JSON.parse_string(text)
 	if typeof(data) != TYPE_DICTIONARY:
 		return
-	_base_url = data.get("base_url", "")
+	_base_url = AssetCDN.expand(data.get("base_url", ""))
 	var panels: Variant = data.get("panels", {})
 	if typeof(panels) == TYPE_DICTIONARY:
 		_panels = panels

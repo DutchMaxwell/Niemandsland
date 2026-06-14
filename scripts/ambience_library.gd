@@ -1,7 +1,7 @@
 class_name AmbienceLibrary
 extends Node
 ## Resolves the CC0 battlefield-ambience recordings (freesound.org, see
-## tools/model_forge/fetch_ambience_audio.py for the exact sources) to OGG files
+## the offline asset pipeline for the exact sources) to OGG files
 ## delivered on demand from R2.
 ##
 ## A small bundled manifest (assets/ambience_manifest.json) maps each sound name ->
@@ -114,7 +114,7 @@ func apply_manifest_text(text: String) -> void:
 	var data: Variant = JSON.parse_string(text)
 	if typeof(data) != TYPE_DICTIONARY:
 		return
-	_base_url = data.get("base_url", "")
+	_base_url = AssetCDN.expand(data.get("base_url", ""))
 	var sounds: Variant = data.get("sounds", {})
 	if typeof(sounds) == TYPE_DICTIONARY:
 		_sounds = sounds

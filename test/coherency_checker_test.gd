@@ -55,6 +55,36 @@ func _flagged_indices(issues: Array) -> Array:
 	return indices
 
 
+func _line(n: int, step_inch: float) -> Array:
+	var ps: Array = []
+	for i in range(n):
+		ps.append(Vector3(i * step_inch * INCH, 0.0, 0.0))
+	return ps
+
+
+# ===== Skirmish systems (Firefight / AoF: Skirmish) =====
+
+func test_is_skirmish_system_detects_gff_and_aofs() -> void:
+	var u := _make_unit([Vector3.ZERO])
+	for gs in ["gff", "aofs"]:
+		u.unit_properties["game_system"] = gs
+		assert_bool(CoherencyChecker.is_skirmish_system(u)).is_true()
+	for gs in ["gf", "aof", "aofr", ""]:
+		u.unit_properties["game_system"] = gs
+		assert_bool(CoherencyChecker.is_skirmish_system(u)).is_false()
+
+
+func test_skirmish_uses_six_inch_max_spread() -> void:
+	# 9 models in a 0.9"-spaced connected line span 7.2" total.
+	var unit := _make_unit(_line(9, 0.9))
+	# Base game allows up to 9" -> valid.
+	assert_bool(CoherencyChecker.check_unit_coherency(unit, false).valid).is_true()
+	# Skirmish caps at 6" -> chain too long.
+	var skirmish_res = CoherencyChecker.check_unit_coherency(unit, true)
+	assert_bool(skirmish_res.valid).is_false()
+	assert_int(_chain(skirmish_res).size()).is_greater(0)
+
+
 # ===== Joined Hero coherency =====
 
 func test_attached_hero_out_of_coherency_is_flagged() -> void:

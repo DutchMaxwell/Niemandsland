@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "base_url": "https://<legacy-cdn-host>/",
+  "base_url": "{cdn}/",
   "biomes": {
     "alien_jungle": {
       "url": "8f1eea1bb32d6f84e42193f7a7dda1daf36553015c6320e091a278a6e349f6bc.webp",

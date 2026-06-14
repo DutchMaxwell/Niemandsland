@@ -126,7 +126,7 @@ func apply_manifest_text(text: String) -> void:
 	var data: Variant = JSON.parse_string(text)
 	if typeof(data) != TYPE_DICTIONARY:
 		return
-	_base_url = data.get("base_url", "")
+	_base_url = AssetCDN.expand(data.get("base_url", ""))
 	var models: Variant = data.get("models", {})
 	if typeof(models) == TYPE_DICTIONARY:
 		# Re-key with the same normalisation make_key() uses, so manifest keys built from

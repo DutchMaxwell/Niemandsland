@@ -4,8 +4,6 @@
 
 - **Godot 4.6** (Forward+). `project.godot` declares `config/features=("4.6",
   "Forward Plus")`.
-- For the Model Forge tool: Python 3.10+ (see
-  [`tools/model_forge/README.md`](../tools/model_forge/README.md)).
 
 This project is developed with the **Flatpak** Godot (`org.godotengine.Godot`,
 4.6.x). If you have a native `godot` 4.6 binary, drop the `flatpak run
@@ -58,7 +56,6 @@ Reports are written to `reports/` (git-ignored).
 
 ```bash
 cd relay && python -m pytest                       # WebSocket relay
-cd tools/model_forge && venv/bin/python -m pytest tests/   # pipeline modules
 ```
 
 ## CI
@@ -68,9 +65,8 @@ on Godot 4.6. Keep it in sync with `project.godot`'s engine version.
 
 ## Secrets
 
-Model Forge API tokens live in `tools/model_forge/.hf_token`, `.gemini_key`,
-`.trellis_space` and are **git-ignored** (confirm with `git check-ignore`). Never
-commit credentials. There are no secrets anywhere else in the repo.
+This repo contains no secrets or hardcoded credentials. The separate asset-pipeline
+repository holds its own API tokens (git-ignored there).
 
 ## Conventions
 

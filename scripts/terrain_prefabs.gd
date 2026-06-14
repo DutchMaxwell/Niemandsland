@@ -141,15 +141,13 @@ static func footprint_cells(prefab_key: String, origin: Vector2i, rotation: int 
 	return cells
 
 
-## Auto-suggested ruin walls: TWO point-symmetric L-corners (per the agreed design — see
-## docs/HANDOFF_RUIN_WALLS.md). The NW corner carries the north edge (cols 0..X-2) + west
+## Auto-suggested ruin walls: TWO point-symmetric L-corners (per the agreed design). The NW corner carries the north edge (cols 0..X-2) + west
 ## edge (rows 0..Y-2); the SE corner carries the south edge (cols 1..X-1) + east edge
 ## (rows 1..Y-1). So each arm is (size-1) cells and the centre/opposite corners stay open.
 ## Each segment gets a "role": "full" at the corner, "crumble_*" toward the free end (the
 ## wall steps down to the open ends), plus a "taper_dir" — the grid direction (edge-side
 ## id 0..3) the arm's FREE end lies in, so the renderer can mirror crumble panels to step
-## down the right way without re-deriving the rotation matrix (HANDOFF_RUIN_WALLS.md §6
-## gotcha #1). Transformed by the same flip+rotation. Non-ruins: [].
+## down the right way without re-deriving the rotation matrix. Transformed by the same flip+rotation. Non-ruins: [].
 static func wall_segments_for(prefab_key: String, origin: Vector2i, rotation: int = 0, flip: bool = false) -> Array[Dictionary]:
 	var segments: Array[Dictionary] = []
 	if not PREFABS.has(prefab_key):
@@ -260,7 +258,7 @@ static func _wall(edge_cell: Vector2i, edge_side: int) -> Dictionary:
 
 ## Wall role by distance from its corner along an arm of `arm_len` cells. The corner cell
 ## is "full"; cells toward the free end crumble down (so the ruin descends to open ends).
-## A renderer maps the role to a texture/height; see docs/HANDOFF_RUIN_WALLS.md.
+## A renderer maps the role to a texture/height.
 static func _crumble_role(dist_from_corner: int, arm_len: int) -> String:
 	if arm_len <= 1 or dist_from_corner == 0:
 		return "full"
