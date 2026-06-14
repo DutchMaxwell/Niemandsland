@@ -136,6 +136,141 @@
       "url": "tundra_normal.webp?v=dab68345",
       "sha256": "dab68345ef59c2dc51552226bffd4a5d5e2c9f30c4fac011b651264a7db3edb2",
       "size": 157610
+    },
+    "volcanic_solid_a": {
+      "url": "volcanic_solid_a.webp?v=ba461440",
+      "sha256": "ba461440be6cc410cd2344f23c15db4db83a89766833beacf36f82a1716b3ae6",
+      "size": 656162
+    },
+    "volcanic_solid_b": {
+      "url": "volcanic_solid_b.webp?v=73f62724",
+      "sha256": "73f62724fe2eeeff9c3978c03e214a86e60a7826f6e2aaa156b3f9159a69b515",
+      "size": 656240
+    },
+    "volcanic_topdmg_a": {
+      "url": "volcanic_topdmg_a.webp?v=300c222a",
+      "sha256": "300c222a64b99538b07233453e37da532dab4dc21d60e243c54c83a8142d2dec",
+      "size": 602402
+    },
+    "volcanic_opening_a": {
+      "url": "volcanic_opening_a.webp?v=3913f242",
+      "sha256": "3913f242b3e1dd1cf77f923a022ce5717617f4ef74868f14d172197ce56a4cac",
+      "size": 591094
+    },
+    "volcanic_crumble_a": {
+      "url": "volcanic_crumble_a.webp?v=f76caf60",
+      "sha256": "f76caf608dbaf7b02ecf6b9f2595088edf4265de4469f2afd15f4c919978e88c",
+      "size": 565532
+    },
+    "volcanic_crumble_b": {
+      "url": "volcanic_crumble_b.webp?v=9051a896",
+      "sha256": "9051a8965bf1bb25c4ff43914de6c31104b0e346af59803dc60d58af8392df12",
+      "size": 326430
+    },
+    "volcanic_crumble_steep": {
+      "url": "volcanic_crumble_steep.webp?v=0ca7639b",
+      "sha256": "0ca7639b3a35467ac62107391512335f6ae18df9fc02d3e94f90c9a9b30dd31a",
+      "size": 460204
+    },
+    "volcanic_window": {
+      "url": "volcanic_window.webp?v=36ead17b",
+      "sha256": "36ead17b815ab3369bebd7861ad3d50b16459c75d05826542497ece7255d7a98",
+      "size": 623610
+    },
+    "volcanic_normal": {
+      "url": "volcanic_normal.webp?v=da4327cc",
+      "sha256": "da4327cc1c93d04dedb1ecdc9ffbda2c8c6948d43f9e49d7999061771394a5ce",
+      "size": 67490
+    },
+    "jungle_solid_a": {
+      "url": "jungle_solid_a.webp?v=a7f7d32f",
+      "sha256": "a7f7d32f764c1d31322396477afa5a0fd990b535225871746d7e62129586877a",
+      "size": 909452
+    },
+    "jungle_solid_b": {
+      "url": "jungle_solid_b.webp?v=aa33bcc7",
+      "sha256": "aa33bcc7101dbae4d0346edded72809a8ff481dd85cbdefa59c487c5f86070ff",
+      "size": 910040
+    },
+    "jungle_topdmg_a": {
+      "url": "jungle_topdmg_a.webp?v=ccad857d",
+      "sha256": "ccad857d6827b0c1f9834e0644ae6f29196630013f80eed8ed43797ef47bf77f",
+      "size": 836118
+    },
+    "jungle_opening_a": {
+      "url": "jungle_opening_a.webp?v=4ff33974",
+      "sha256": "4ff33974153f2c77bcbfc07a7bceb14d13102df1e0655233e4cab3c20569b635",
+      "size": 782194
+    },
+    "jungle_crumble_a": {
+      "url": "jungle_crumble_a.webp?v=17c9d6b9",
+      "sha256": "17c9d6b95cc99bf47bfaf6a2349fa9a0ef25a46399096d7a9bfc4485451b0d74",
+      "size": 756070
+    },
+    "jungle_crumble_b": {
+      "url": "jungle_crumble_b.webp?v=e954a5df",
+      "sha256": "e954a5df44fa4bc189a782121f3f922b5b2058efe7abda6895c0216f9b40a6d9",
+      "size": 429026
+    },
+    "jungle_crumble_steep": {
+      "url": "jungle_crumble_steep.webp?v=a8fbc267",
+      "sha256": "a8fbc26777d386075303907e4645bf3cb543986dc9ead15daf3e0d18ab2ff601",
+      "size": 614260
+    },
+    "jungle_window": {
+      "url": "jungle_window.webp?v=3a1ee35b",
+      "sha256": "3a1ee35bfd66a5eb898f1ccb884fc74d097c2da959ee8680db72ce286a01c632",
+      "size": 752346
+    },
+    "jungle_normal": {
+      "url": "jungle_normal.webp?v=7f5f843f",
+      "sha256": "7f5f843faedf5ef6be8f3d77fc91cb91c62bada08e836c1bcb0459d246849cab",
+      "size": 134926
+    },
+    "urban_solid_a": {
+      "url": "urban_solid_a.webp?v=215696e4",
+      "sha256": "215696e444361536de9788b1138ad04476b12803434b9ca282d3c46ab050c408",
+      "size": 814886
+    },
+    "urban_solid_b": {
+      "url": "urban_solid_b.webp?v=edce49e4",
+      "sha256": "edce49e4136c6fcea442b9bf998c2054db7e268b52e6769c488091c3f9f7dcd1",
+      "size": 815146
+    },
+    "urban_topdmg_a": {
+      "url": "urban_topdmg_a.webp?v=d71b1c04",
+      "sha256": "d71b1c04b5c877c19197ed7ddf55d15541bb30eecea29f25320b49d0c0f47539",
+      "size": 749358
+    },
+    "urban_opening_a": {
+      "url": "urban_opening_a.webp?v=3a91f603",
+      "sha256": "3a91f6033487245b3973ff2c680df125d2a6adb3fd1c9e5b5e4963a2e08497d6",
+      "size": 704644
+    },
+    "urban_crumble_a": {
+      "url": "urban_crumble_a.webp?v=061a1aca",
+      "sha256": "061a1acadca07d968be1309d6d36ec8c4a203c92f24f3dc76a8d942224668b4f",
+      "size": 669404
+    },
+    "urban_crumble_b": {
+      "url": "urban_crumble_b.webp?v=c3403818",
+      "sha256": "c3403818f0030fb9fbf631751e850690b4f855da6367edcbd736a4d297157411",
+      "size": 387054
+    },
+    "urban_crumble_steep": {
+      "url": "urban_crumble_steep.webp?v=ea5f3fee",
+      "sha256": "ea5f3fee40671316578e24969b3d73cc03ddc862785a39945c90d2f8269c1889",
+      "size": 542292
+    },
+    "urban_window": {
+      "url": "urban_window.webp?v=d05c6ff0",
+      "sha256": "d05c6ff020f4705aa960eb32d1b305bfc2175bcfe8dd2c0cdf112c0af8e71848",
+      "size": 670624
+    },
+    "urban_normal": {
+      "url": "urban_normal.webp?v=4f1ff1de",
+      "sha256": "4f1ff1dee0898daa2e40d7a437a7f2e6c1c52fcb95ebb462958415f21010e88f",
+      "size": 118132
     }
   }
 }
