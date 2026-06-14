@@ -216,16 +216,36 @@ func apply_rendering_settings(settings: Dictionary) -> void:
 	vp.use_taa = settings["use_taa"]
 	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if not settings["use_taa"] else Viewport.SCREEN_SPACE_AA_DISABLED
 
-	# 3D resolution scaling. Keep the scaling MODE constant (always bilinear) and only
-	# vary the scale — toggling scaling_3d_mode between FSR and bilinear at runtime
-	# recreates the 3D render target / Vulkan swap chain, which froze the game when
-	# switching to/from Performance (the only preset that was < 1.0) in fullscreen.
-	# Bilinear upscaling at the Performance tier is visually equivalent there.
-	vp.scaling_3d_scale = settings["fsr_scale"]
-	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
-
 	# Shadow quality (runtime changes limited, mostly project settings)
 	RenderingServer.directional_shadow_atlas_set_size(settings["shadow_size"], true)
+
+	# 3D resolution scaling. Performance (0.77) is the ONLY sub-native tier, so this is
+	# the only preset switch that RESIZES the 3D render target. Bundling that resize in
+	# the same frame as the MSAA + shadow-atlas reallocation above is the app's heaviest
+	# single-frame GPU buffer churn, and crossing the Performance boundary in fullscreen
+	# froze the picture (a Vulkan-swapchain stall under load — NVIDIA 580.x pre-.142 /
+	# Godot #80550 history). Keep the MODE constant (always bilinear; toggling it also
+	# recreates the swap chain) and DEFER the scale change to its own later frames so the
+	# others' deferred buffer frees complete first. No-op when the scale is unchanged, so
+	# Low<->Ultra switches (all 1.0) stay instant — only Performance<->X actually defers.
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+	_apply_scaling_3d_staggered(settings["fsr_scale"])
+
+
+## Applies the 3D resolution scale on a later frame to de-burst the Performance-boundary
+## GPU reallocation (see apply_rendering_settings). Fire-and-forget coroutine; only the
+## render-target resize is deferred, and only when the scale actually changes.
+func _apply_scaling_3d_staggered(scale: float) -> void:
+	var vp := get_viewport()
+	if vp == null or is_equal_approx(vp.scaling_3d_scale, scale):
+		return  # no render-target resize needed
+	await RenderingServer.frame_post_draw
+	await RenderingServer.frame_post_draw
+	if not is_inside_tree():
+		return
+	vp = get_viewport()
+	if vp:
+		vp.scaling_3d_scale = scale
 
 
 ## Apply environment settings
