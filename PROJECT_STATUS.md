@@ -100,10 +100,13 @@ models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
 
 ## In progress
 
-- **Graphics preset switch FROM Performance hangs** (all other tier switches are
-  fine; user-confirmed 2026-06-12 even after the menu-rebuild loading cover).
-  Prime suspect: `scaling_3d_scale` 0.77↔1.0 resizing the 3D render target —
-  Performance is the only sub-native preset (see `graphics_settings.gd`).
+- **Graphics preset switch FROM Performance hangs** — root cause is an NVIDIA
+  driver bug (the dev machine runs 580.126.18; 580.142 fixes "Vulkan swapchains stop
+  delivering frames under X11 under load"). Performance is the only sub-native tier,
+  so its switch is the only one that resizes the 3D render target — now de-bursted
+  (the `scaling_3d_scale` change is staggered onto its own frames in
+  `graphics_settings.gd`) as a portable mitigation. **Definitive fix: update the
+  NVIDIA driver to ≥ 580.142;** awaiting user retest of the mitigation + driver update.
 - **Host-DROP live test**: the two-client lobby/chat/names/browser flow is
   user-confirmed working (2026-06-12); the one untested piece is a host losing
   connection mid-game and rejoining (relay side is deployed + unit-tested).
