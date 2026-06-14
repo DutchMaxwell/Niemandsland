@@ -87,6 +87,7 @@ var _measure_end_object: Node3D = null    # Reference to end object for edge cal
 var _measure_line: MeshInstance3D = null
 var _measure_label: Label3D = null
 var _measure_los_warning: Label3D = null  # Warning icon for LOS blocking (🚫)
+var _measure_front_label: Label3D = null  # Regiment facing aid (front vs flank/rear)
 
 const METERS_TO_INCHES: float = 39.3701
 
@@ -104,6 +105,12 @@ var terrain_overlay: Node3D = null
 # Standard wargaming miniature sizes
 const MINIATURE_HEIGHT: float = 0.032  # 32mm height
 const MINIATURE_RADIUS: float = 0.016  # 32mm diameter base (16mm radius)
+
+## Regiment facing aid (measure tool): target in the front arc vs flank/rear.
+const MEASURE_FRONT_COLOR: Color = Color(0.20, 0.85, 0.95)  # cyan, matches the arrow
+const MEASURE_FLANK_COLOR: Color = Color(0.95, 0.70, 0.20)  # amber, matches the wedge
+const MEASURE_AID_FONT_SIZE: int = 28
+const MEASURE_AID_Y: float = 0.06  # label height above the table
 
 
 func _ready() -> void:
@@ -390,6 +397,54 @@ func _regiment_root(node: Node) -> Node3D:
 		if is_instance_valid(tray):
 			return tray
 	return node as Node3D
+
+
+## Resolve a measured object (a regiment member model) to its RegimentTray, or null if
+## it is not part of a regiment block.
+func _regiment_tray_of(obj: Node3D) -> RegimentTray:
+	if obj and obj.has_meta(RegimentTray.MEMBER_META):
+		var tray = obj.get_meta(RegimentTray.MEMBER_META)
+		if tray is RegimentTray and is_instance_valid(tray):
+			return tray
+	return null
+
+
+## Regiment facing aid for the measure line: when exactly one endpoint is a regiment
+## block, label whether the OTHER endpoint lies in its front arc ("Front") or not
+## ("Flank/Rear"), anchored at the regiment endpoint. Display only — no rule enforced;
+## hidden when neither or both endpoints are regiments.
+func _update_front_arc_aid(start_pos: Vector3, end_pos: Vector3) -> void:
+	var start_tray := _regiment_tray_of(_measure_start_object)
+	var end_tray := _regiment_tray_of(_measure_end_object)
+
+	var tray: RegimentTray = null
+	var target := Vector3.ZERO  # the non-regiment endpoint we classify
+	var anchor := Vector3.ZERO  # where the label sits (the regiment endpoint)
+	if start_tray and not end_tray:
+		tray = start_tray
+		target = end_pos
+		anchor = start_pos
+	elif end_tray and not start_tray:
+		tray = end_tray
+		target = start_pos
+		anchor = end_pos
+
+	if tray == null:
+		if _measure_front_label:
+			_measure_front_label.visible = false
+		return
+
+	var in_front := tray.arc_contains(target)
+	if not _measure_front_label:
+		_measure_front_label = Label3D.new()
+		_measure_front_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_measure_front_label.no_depth_test = true
+		_measure_front_label.font_size = MEASURE_AID_FONT_SIZE
+		add_child(_measure_front_label)
+	_measure_front_label.visible = true
+	_measure_front_label.text = "▲ Front" if in_front else "◣ Flank/Rear"
+	_measure_front_label.modulate = MEASURE_FRONT_COLOR if in_front else MEASURE_FLANK_COLOR
+	_measure_front_label.global_position = Vector3(anchor.x, MEASURE_AID_Y, anchor.z)
 
 
 ## Updates the hover glow to the selectable currently under the cursor (or none).
@@ -1077,6 +1132,8 @@ func _update_measurement(screen_pos: Vector2) -> void:
 
 		distance_changed.emit(distance_inches, start_pos, end_pos)
 
+		_update_front_arc_aid(start_pos, end_pos)
+
 
 ## Stop measuring and emit final result
 func _stop_measuring(screen_pos: Vector2) -> void:
@@ -1108,6 +1165,12 @@ func _stop_measuring(screen_pos: Vector2) -> void:
 		if _measure_label:
 			_measure_label.queue_free()
 			_measure_label = null
+		if _measure_los_warning:
+			_measure_los_warning.queue_free()
+			_measure_los_warning = null
+		if _measure_front_label:
+			_measure_front_label.queue_free()
+			_measure_front_label = null
 
 	_is_measuring = false
 	_measure_start_position = Vector3.ZERO
