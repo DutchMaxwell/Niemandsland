@@ -66,7 +66,7 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
 > **On-demand delivery (live):** miniature GLBs are downloaded + cached (TTS-style)
 > from Cloudflare R2 so the repo/build stay lean and only an army's needed models are
 > fetched — see [`ASSET_DELIVERY.md`](ASSET_DELIVERY.md). OPR stats/data load only via
-> the Army Forge API (never bundled) — see [`PRE_RELEASE_LICENSING.md`](PRE_RELEASE_LICENSING.md).
+> the Army Forge API (never bundled).
 - `wgs_client.gd` / `wgs_game_manager.gd` / `wgs_import_dialog.gd` — Wargaming
   Simulator format ([`WGS_INTEGRATION.md`](WGS_INTEGRATION.md)).
 
@@ -112,14 +112,14 @@ Tough), but the horizontal footprint is capped at 125 % of the base's long side
 (`FOOTPRINT_MAX_RATIO`); the smaller factor wins, so slim infantry stay height-driven
 while wide vehicles are footprint-capped. Flying units hover (`FLYING_HOVER_RATIO`).
 
-## Model Forge (offline tool)
+## Asset pipeline (offline, separate repo)
 
-`tools/model_forge/` (Python) is a separate content pipeline, not part of the running
-game — it produces the GLBs + `units.json` the game imports. The TRELLIS client lives
-in `assets/3d_pipeline/trellis_core.py`. See
-[`tools/model_forge/README.md`](../tools/model_forge/README.md).
+The offline content pipeline (Python; image-gen → TRELLIS → GLB) is **not part of
+this repo or the running game** — it lives in a separate private repository and
+produces the GLBs the game imports. This repo consumes only its R2-delivered
+outputs (see [`ASSET_DELIVERY.md`](ASSET_DELIVERY.md)).
 
 ## Tests
 
-gdUnit4 suites in `test/`; Python tests in `relay/` and `tools/model_forge/tests/`.
+gdUnit4 suites in `test/`; Python tests in `relay/`.
 Runner commands in [`DEVELOPMENT.md`](DEVELOPMENT.md).

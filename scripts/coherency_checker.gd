@@ -12,7 +12,9 @@ const COHERENCY_DISTANCE_INCHES := 1.0
 ## Maximum chain distance in inches (standard game)
 const MAX_CHAIN_DISTANCE_INCHES := 9.0
 
-## Maximum chain distance for Skirmish mode
+## Maximum chain distance for Skirmish mode (Grimdark Future: Firefight /
+## Age of Fantasy: Skirmish). Verified: GF: Firefight Beginner's Guide v3.5.1, p.7
+## ("within 6” of all other models").
 const SKIRMISH_CHAIN_DISTANCE_INCHES := 6.0
 
 ## Elevated coherency distance (different heights)
@@ -55,6 +57,13 @@ class CoherencyResult:
 
 
 # ===== Main Check Method =====
+
+## Whether a unit belongs to a skirmish game system (Grimdark Future: Firefight or
+## Age of Fantasy: Skirmish), which uses the 6" max-spread coherency instead of 9".
+## Reads game_system stamped into unit_properties at import.
+static func is_skirmish_system(game_unit: GameUnit) -> bool:
+	return game_unit.unit_properties.get("game_system", "") in ["gff", "aofs"]
+
 
 ## Checks coherency for a GameUnit per OPR rules (GF Advanced Rules v3.5.0):
 ## models must form an uninterrupted chain in 1" coherency (3" across different

@@ -6,7 +6,7 @@ Fantasy). Built in Godot.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Godot](https://img.shields.io/badge/Godot-4.6-blue.svg)](https://godotengine.org/)
-[![Status](https://img.shields.io/badge/Status-0.3.1--alpha-orange.svg)]()
+[![Status](https://img.shields.io/badge/Status-0.3.2--alpha-orange.svg)]()
 
 > **Status: early alpha.** The tabletop sandbox, OPR army import, multiplayer and
 > the 3D-model pipeline work; rules automation (turn/combat resolution, terrain
@@ -22,8 +22,8 @@ What the code actually does today:
 - **Object handling** — click / Alt-click / box select, drag, rotate, copy / paste /
   duplicate, formation arrangement (rows `1`–`9`, arrow `A`) with constant base-edge
   spacing across base sizes.
-- **Dice** — physics dice (D4–D100) via the `dice_roller` addon, rendered in a
-  scaled SubViewport (see [Scaling](#scaling-conventions)).
+- **Dice** — physics dice (D4–D100) via our own MIT dice scripts (`dice_tray.gd` /
+  `dice_d6.gd`), rendered in a scaled SubViewport (see [Scaling](#scaling-conventions)).
 - **Measurement** — distance measuring in inches.
 - **Map layout editor** — top-down 3″ grid, terrain pieces (ruins / forest /
   container / dangerous), front-line + custom-polygon deployment zones, objectives,
@@ -38,9 +38,9 @@ What the code actually does today:
 - **Import / export** — Tabletop Simulator import (Steam CDN + local cache),
   custom models (glTF / STL / OBJ), `.nml` save format with OS file association,
   Wargaming Simulator (WGS) import/export.
-- **Model Forge** — a Python pipeline that turns OPR unit data into 3D miniatures
-  (image generation → TRELLIS mesh) with a Flask review UI. See
-  [`tools/model_forge/README.md`](tools/model_forge/README.md).
+- **Asset pipeline** — the offline pipeline that generates the 3D miniatures
+  (image generation → TRELLIS mesh) lives in a separate private repository; the
+  game consumes only its R2-delivered outputs.
 - **Presentation** — Kenney UI themes, lighting presets (`F1`–`F4`), graphics
   quality presets, SSAO, glow.
 
@@ -49,8 +49,8 @@ What the code actually does today:
 Requires **[Godot 4.6](https://godotengine.org/download)** (Forward+ renderer).
 
 ```bash
-git clone git@github.com:DutchMaxwell/Niemandsland.git
-cd Niemandsland
+git clone https://github.com/DutchMaxwell/openTTS.git
+cd openTTS
 godot --path . --editor      # open in the editor, then F5 to run
 # or run directly:
 godot --path .
@@ -91,11 +91,10 @@ development and the gdUnit4 test runner), see
 Niemandsland/
 ├── scenes/            # startup_menu.tscn (main), main.tscn, dialogs
 ├── scripts/           # ~48 GDScript files (see docs/ARCHITECTURE.md)
-├── addons/            # dice_roller, gdUnit4 (tests)
+├── addons/            # gdUnit4 (tests)
 ├── test/              # gdUnit4 test suites
-├── assets/            # models, miniatures, 3d_pipeline, opr_samples
+├── assets/            # models, miniatures, terrain, UI
 ├── relay/             # WebSocket relay server for internet multiplayer
-├── tools/model_forge/ # 3D miniature generation pipeline (Python)
 └── docs/              # architecture, development, design docs
 ```
 
@@ -116,27 +115,28 @@ scale, **dice run in a separate scaled SubViewport** (our own MIT `dice_tray.gd`
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — build, run, test
 - [`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md) — Wargaming Simulator integration
 - [`docs/OPR_API_RESEARCH_REPORT.md`](docs/OPR_API_RESEARCH_REPORT.md) — OPR Army Forge API notes
-- [`tools/model_forge/README.md`](tools/model_forge/README.md) — model pipeline
 
 ## Security note
 
-API tokens for the Model Forge (`tools/model_forge/.hf_token`, `.gemini_key`,
-`.trellis_space`) are **git-ignored** and never committed. Nothing in this repo
-contains hardcoded credentials.
+This repo contains no secrets or hardcoded credentials. The separate asset-pipeline
+repository holds its own API tokens (git-ignored there).
 
-## Contributing
+## Feedback & contributing
 
-```bash
-git checkout -b feature/my-change
-# make changes; validate (see docs/DEVELOPMENT.md):
-#   compile-check + gdUnit4 tests must pass
-git commit -m "feat: ..." && git push origin feature/my-change   # open a PR
-```
+This is an early alpha — **feedback is the most valuable thing right now.** Found a
+bug or have an idea? [Open an issue](../../issues/new/choose) and pick the 🐞 **Bug
+report** or 💡 **Feedback / idea** template.
 
-Coding standards: [`.claude/AAA_CODING_STANDARDS.md`](.claude/AAA_CODING_STANDARDS.md).
+Curious what's planned? See the **[roadmap](docs/ROADMAP.md)** (and how requests flow
+from idea to shipped).
+
+Want to contribute code? See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the dev
+setup, the test workflow and the PR flow. In short: Godot 4.6, branch off `main`,
+conventional commits, gdUnit4 + relay tests green, then open a PR. Coding standards:
+[`.claude/AAA_CODING_STANDARDS.md`](.claude/AAA_CODING_STANDARDS.md).
 
 ## Credits & license
 
 MIT — see [`LICENSE`](LICENSE). UI themes by [Kenney](https://kenney.nl) (CC0);
-dice via the Godot Dice Roller addon (MIT). Asset attributions in
-[`docs/ASSETS.md`](docs/ASSETS.md).
+dice are our own MIT implementation. Full third-party attributions in
+[`THIRD_PARTY.md`](THIRD_PARTY.md) and [`docs/ASSETS.md`](docs/ASSETS.md).

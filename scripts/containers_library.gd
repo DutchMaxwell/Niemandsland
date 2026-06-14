@@ -8,7 +8,7 @@ extends Node
 ## downloaded + cached locally the first time a map with blockers is shown; until then
 ## the renderer keeps its holographic box (see terrain_overlay.gd). Mirrors
 ## TreesLibrary; see docs/ASSET_DELIVERY.md.
-## Art recipe: tools/model_forge/generate_containers.py.
+## Art recipe lives in the offline asset-pipeline repo.
 
 # === Constants ===
 
@@ -118,7 +118,7 @@ func apply_manifest_text(text: String) -> void:
 	var data: Variant = JSON.parse_string(text)
 	if typeof(data) != TYPE_DICTIONARY:
 		return
-	_base_url = data.get("base_url", "")
+	_base_url = AssetCDN.expand(data.get("base_url", ""))
 	var panels: Variant = data.get("panels", {})
 	if typeof(panels) == TYPE_DICTIONARY:
 		_panels = panels
