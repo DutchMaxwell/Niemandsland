@@ -7,6 +7,13 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Added
+- **Battlefield stains on removal (issue #60).** Removing a model now leaves a persistent
+  flat decal sized to its base: a **blood splatter** for infantry, and for **vehicles**
+  (Tough 6+) an **oil slick with 1-3 small fires**. Generated splatter textures (R2,
+  prefetched) laid on a flat quad. New `BattlefieldStains` node, hooked off model/unit
+  removal (radial Delete, Delete key, wounds → 0) and the matching remote sync, so peers see
+  the same stains; the fire scatter is seeded from the table position (multiplayer-parity).
+  Stains live outside ObjectManager (survive model cleanup); decorative, not saved.
 - **Alien-jungle dangerous terrain: carnivorous plants.** The `alien_jungle` biome's
   dangerous terrain now spawns a TRELLIS 3D **carnivorous-plant clump** (bioluminescent
   alien flytrap maws) — mirroring the volcanic lava crater, but with no glow light (the
