@@ -230,6 +230,9 @@ var atmospheric_clouds: Node3D = null
 var radial_menu_controller: RadialMenuController = null
 var coherency_visualizer: CoherencyVisualizer = null
 var unit_boundary_visualizer: Node3D = null  # UnitBoundaryVisualizer
+## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
+## ObjectManager so it survives model cleanup; decorative, not saved.
+var battlefield_stains: BattlefieldStains = null
 
 # Deployment Zones UI (visibility toggle only - editing is in Map Tool;
 # unit-placement compliance is verified manually by the players)
@@ -3438,6 +3441,14 @@ func _init_radial_menu() -> void:
 	add_child(unit_boundary_visualizer)
 	radial_menu_controller.boundary_visualizer = unit_boundary_visualizer
 
+	# Battlefield stains: leave a blood pool (or oil + fire for vehicles) where a model is
+	# removed (issue #60). Hooked off model/unit removal, local + remote.
+	battlefield_stains = BattlefieldStains.new()
+	battlefield_stains.name = "BattlefieldStains"
+	add_child(battlefield_stains)
+	radial_menu_controller.model_deleted.connect(_on_model_removed_stain)
+	radial_menu_controller.unit_deleted.connect(_on_unit_removed_stain)
+
 	# Connect object manager's right-click signal to open the menu
 	object_manager.context_menu_requested.connect(_on_context_menu_requested)
 
@@ -3482,8 +3493,56 @@ func _on_remote_wounds_updated(model: ModelInstance) -> void:
 		# Handle model death/revival visibility
 		if not model.is_alive and model.node and is_instance_valid(model.node):
 			model.node.set_meta("deleted", true)
+			_spawn_stain_for_model(model)  # blood/oil where the model fell (issue #60)
 		elif model.is_alive and model.node and is_instance_valid(model.node):
 			model.node.set_meta("deleted", false)
+
+
+## A model was removed locally (radial Delete / Delete key / wounds → 0): leave a stain.
+func _on_model_removed_stain(model: ModelInstance) -> void:
+	_spawn_stain_for_model(model)
+
+
+## A whole unit was deleted (local or, via unit_deleted re-emit, remote): stain each model.
+func _on_unit_removed_stain(game_unit: GameUnit) -> void:
+	if game_unit == null:
+		return
+	for model in game_unit.models:
+		_spawn_stain_for_model(model)
+
+
+## Leave a blood pool (infantry) or oil pool + fires (vehicle) where `model` stood, sized to
+## its base. Idempotent per model (a "stained" meta guards against a double stain from the
+## local + remote paths both firing).
+func _spawn_stain_for_model(model: ModelInstance) -> void:
+	if model == null or battlefield_stains == null:
+		return
+	var node := model.node
+	if node == null or not is_instance_valid(node) or node.has_meta("stained"):
+		return
+	node.set_meta("stained", true)
+	var props: Dictionary = model.unit.unit_properties if model.unit else {}
+	var pos := node.global_position
+	# Deterministic seed from the (synced) table position so the fire scatter matches on peers.
+	var seed_val := int(pos.x * 1000.0) * 73856093 ^ int(pos.z * 1000.0) * 19349663
+	battlefield_stains.add_stain(pos, _stain_base_radius_m(props), _stain_is_vehicle(props), seed_val)
+
+
+## Base radius (metres) of a removed model: half the round base, or half the oval's long axis.
+func _stain_base_radius_m(props: Dictionary) -> float:
+	if props.get("base_is_oval", false):
+		var w: float = float(props.get("base_width_mm", 32))
+		var d: float = float(props.get("base_depth_mm", 32))
+		return maxf(w, d) / 2.0 * 0.001
+	return float(props.get("base_size_round", 32)) / 2.0 * 0.001
+
+
+## A removed model is a vehicle (-> oil + fire, not blood) if its unit is Tough(6+), the OPR
+## convention for vehicles/large monsters.
+func _stain_is_vehicle(props: Dictionary) -> bool:
+	if opr_army_manager == null:
+		return false
+	return opr_army_manager._get_tough_value_from_rules(props.get("special_rules", [])) >= 6
 
 
 ## Called when a remote peer changes unit activation

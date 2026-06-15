@@ -6,6 +6,14 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Added
+- **Battlefield stains on removal (issue #60).** Removing a model now leaves a persistent
+  mark sized to its base: a dark **blood pool** for infantry, and for **vehicles** (Tough 6+)
+  an **oil pool with 1-3 small fires**. New `BattlefieldStains` node, hooked off model/unit
+  removal (radial Delete, Delete key, wounds → 0) and the matching remote sync, so peers see
+  the same stains; the fire scatter is seeded from the table position (multiplayer-parity).
+  Stains live outside ObjectManager (survive model cleanup); decorative, not saved.
+
 ### Changed
 - **Cleaner army import loading (issue #56).** The loading overlay now names each phase
   with a counter — **LOADING ARMY → LOADING 3D MODELS n/x → PLACING ARMY n/x** — instead
