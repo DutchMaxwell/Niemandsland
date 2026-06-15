@@ -1331,6 +1331,761 @@
       "url": "7e071ce9675c9377b73f76ca3f2662c09742f5f8468a9512e562dfdf9235e31b.glb",
       "sha256": "7e071ce9675c9377b73f76ca3f2662c09742f5f8468a9512e562dfdf9235e31b",
       "size": 16549712
+    },
+    "saurian_starhost/ankylosaurus": {
+      "url": "52ff6aaa98f122192eac88c2ab7cddeb1be157cb715ce8fc4af98b949b0f3f56.glb",
+      "sha256": "52ff6aaa98f122192eac88c2ab7cddeb1be157cb715ce8fc4af98b949b0f3f56",
+      "size": 16184128
+    },
+    "saurian_starhost/chameleons": {
+      "url": "f4732f0b47458ac7d55a53cd6bdf24bf5fa286be1e75bd20700a2d2e0d3e76db.glb",
+      "sha256": "f4732f0b47458ac7d55a53cd6bdf24bf5fa286be1e75bd20700a2d2e0d3e76db",
+      "size": 15792940
+    },
+    "saurian_starhost/cyber swarms": {
+      "url": "82e3599c398bbdad895810e36e4e529ca52412f7b08951d8fc8b3f45a4adf84a.glb",
+      "sha256": "82e3599c398bbdad895810e36e4e529ca52412f7b08951d8fc8b3f45a4adf84a",
+      "size": 16597924
+    },
+    "saurian_starhost/deinonychus riders": {
+      "url": "c1282925f8d932f2ee0835d530f4eae0fa10de02d1844eefef318591cd90d11f.glb",
+      "sha256": "c1282925f8d932f2ee0835d530f4eae0fa10de02d1844eefef318591cd90d11f",
+      "size": 16528500
+    },
+    "saurian_starhost/dragon lizard": {
+      "url": "cdac1ac52c1d790dc2216b3b67aa505a1f6aa6b13f71c6f183f9abdd03761cbc.glb",
+      "sha256": "cdac1ac52c1d790dc2216b3b67aa505a1f6aa6b13f71c6f183f9abdd03761cbc",
+      "size": 17368140
+    },
+    "saurian_starhost/dread titan": {
+      "url": "76726aaa1070502f8c8f93b75ca043a8ee25c179b37a1af2b71e6733de9716ae.glb",
+      "sha256": "76726aaa1070502f8c8f93b75ca043a8ee25c179b37a1af2b71e6733de9716ae",
+      "size": 16303856
+    },
+    "saurian_starhost/frog mage": {
+      "url": "77728077903bd0de6b1976ee07e40c858b6f44cd4df19ed005a1a5cd9fe425c7.glb",
+      "sha256": "77728077903bd0de6b1976ee07e40c858b6f44cd4df19ed005a1a5cd9fe425c7",
+      "size": 16065284
+    },
+    "saurian_starhost/gator veteran": {
+      "url": "6c1adb1b2fdc63eed756025ad9ff2ec84e5bae52652cb0b17d2bd40a13e126ec.glb",
+      "sha256": "6c1adb1b2fdc63eed756025ad9ff2ec84e5bae52652cb0b17d2bd40a13e126ec",
+      "size": 15752124
+    },
+    "saurian_starhost/gators": {
+      "url": "064659325189092979b9bd9c801a52e9bbf794440e171cd71d047311d448e746.glb",
+      "sha256": "064659325189092979b9bd9c801a52e9bbf794440e171cd71d047311d448e746",
+      "size": 15194228
+    },
+    "saurian_starhost/gecko champion": {
+      "url": "48eb8d3bfc02f259d54e790d780ae57d4636f285048788baad7221aceeca38f8.glb",
+      "sha256": "48eb8d3bfc02f259d54e790d780ae57d4636f285048788baad7221aceeca38f8",
+      "size": 16079488
+    },
+    "saurian_starhost/gecko cohort": {
+      "url": "4a411c8f0d5d26d57af0f93bf867e749527cd95e6191397cb3706d03913035c5.glb",
+      "sha256": "4a411c8f0d5d26d57af0f93bf867e749527cd95e6191397cb3706d03913035c5",
+      "size": 16385500
+    },
+    "saurian_starhost/gecko snipers": {
+      "url": "d00bd071d5d006bb3ab1319a8ffaee190799045639da64c884e64204ca5f1300.glb",
+      "sha256": "d00bd071d5d006bb3ab1319a8ffaee190799045639da64c884e64204ca5f1300",
+      "size": 17238272
+    },
+    "saurian_starhost/pterodactyl riders": {
+      "url": "1ef81c290f368c4ce3eee627ddbc89ac2b37170f1939df2126083fa21f956e05.glb",
+      "sha256": "1ef81c290f368c4ce3eee627ddbc89ac2b37170f1939df2126083fa21f956e05",
+      "size": 15125400
+    },
+    "saurian_starhost/raptor riders": {
+      "url": "7e225181df324fb9c793810e30e4067c3804a697fd04a8175d92f9e70d2fc49c.glb",
+      "sha256": "7e225181df324fb9c793810e30e4067c3804a697fd04a8175d92f9e70d2fc49c",
+      "size": 15037040
+    },
+    "saurian_starhost/ripjawdactyl riders": {
+      "url": "c12b6c7e35ec88c8c953586a855129a6ece16f62744d92ea34e436ffa5ba4910.glb",
+      "sha256": "c12b6c7e35ec88c8c953586a855129a6ece16f62744d92ea34e436ffa5ba4910",
+      "size": 16190812
+    },
+    "saurian_starhost/saurian guardians": {
+      "url": "3589958e629f15faf834b241708650907ddf46d5ff9a9ddc96a725cba9f868ff.glb",
+      "sha256": "3589958e629f15faf834b241708650907ddf46d5ff9a9ddc96a725cba9f868ff",
+      "size": 20078116
+    },
+    "saurian_starhost/saurian veteran": {
+      "url": "c65f42a8ae86102b1d0127502f5cb275a796b461e9d841fadefce160e38921dc.glb",
+      "sha256": "c65f42a8ae86102b1d0127502f5cb275a796b461e9d841fadefce160e38921dc",
+      "size": 14796288
+    },
+    "saurian_starhost/saurian warriors": {
+      "url": "c483a481402615302646cd08c01b91bec7b67b0ec72c76f1a4784a7084de63d0.glb",
+      "sha256": "c483a481402615302646cd08c01b91bec7b67b0ec72c76f1a4784a7084de63d0",
+      "size": 15229372
+    },
+    "saurian_starhost/spiked lizard": {
+      "url": "c1492b5482d1e16ed9f4a9c8d04e3f882f6a7701e8513a311c5e1c165433f1e0.glb",
+      "sha256": "c1492b5482d1e16ed9f4a9c8d04e3f882f6a7701e8513a311c5e1c165433f1e0",
+      "size": 16460200
+    },
+    "saurian_starhost/spinosaurus": {
+      "url": "0804dc715e31caf261d091f328fd93fc788c59b644bd6769a11bd9e1bb99c24f.glb",
+      "sha256": "0804dc715e31caf261d091f328fd93fc788c59b644bd6769a11bd9e1bb99c24f",
+      "size": 16559028
+    },
+    "saurian_starhost/tehaxi": {
+      "url": "fa42f88a68e3baa69bccdcf9aa54c45816d8183b007f0ea4ef803ba8d2b720b7.glb",
+      "sha256": "fa42f88a68e3baa69bccdcf9aa54c45816d8183b007f0ea4ef803ba8d2b720b7",
+      "size": 16578196
+    },
+    "saurian_starhost/triceratops": {
+      "url": "0198672800dc13444ffb3e67eba77ee98b8bca37056a5feec7bec2507e506e81.glb",
+      "sha256": "0198672800dc13444ffb3e67eba77ee98b8bca37056a5feec7bec2507e506e81",
+      "size": 16678856
+    },
+    "saurian_starhost/vulturedactyls": {
+      "url": "6241c0c9b5ec9193281c38d6af2d93b329d02da0f9b544df641a40b2a13bad25.glb",
+      "sha256": "6241c0c9b5ec9193281c38d6af2d93b329d02da0f9b544df641a40b2a13bad25",
+      "size": 14595248
+    },
+    "human_inquisition/acolyte henchmen": {
+      "url": "00b8951a81ffe61a8367ee718faef6ff7dcd62d550fe09c55395ed5dfd5bb393.glb",
+      "sha256": "00b8951a81ffe61a8367ee718faef6ff7dcd62d550fe09c55395ed5dfd5bb393",
+      "size": 13193724
+    },
+    "human_inquisition/assassin henchmen": {
+      "url": "ed80500d8ad53ab427a63bf3fa0ff1e0abc6d05f5c1f2192cf4e2dff0b9a6503.glb",
+      "sha256": "ed80500d8ad53ab427a63bf3fa0ff1e0abc6d05f5c1f2192cf4e2dff0b9a6503",
+      "size": 18037704
+    },
+    "human_inquisition/breacher guard": {
+      "url": "c442cb2cc96d6732d947f9d211faa590535bbef3d53ed0f28b590dd92cba04f7.glb",
+      "sha256": "c442cb2cc96d6732d947f9d211faa590535bbef3d53ed0f28b590dd92cba04f7",
+      "size": 14778492
+    },
+    "human_inquisition/combat vehicle": {
+      "url": "3f0b20635b4c46646946796ec61303add681610661a37c218f9048af9121b906.glb",
+      "sha256": "3f0b20635b4c46646946796ec61303add681610661a37c218f9048af9121b906",
+      "size": 17433244
+    },
+    "human_inquisition/crusader henchmen": {
+      "url": "4633fc9e9e76c67eb04216471d71017a098e473cdb14597dfd1b9d0e3f9f993c.glb",
+      "sha256": "4633fc9e9e76c67eb04216471d71017a098e473cdb14597dfd1b9d0e3f9f993c",
+      "size": 15613552
+    },
+    "human_inquisition/cyborg henchmen": {
+      "url": "bee9f81ecd529f51ac5202b4a902406c3ea12247e2d87a08330a3e4449c2afef.glb",
+      "sha256": "bee9f81ecd529f51ac5202b4a902406c3ea12247e2d87a08330a3e4449c2afef",
+      "size": 14387420
+    },
+    "human_inquisition/espionage ministry assassin": {
+      "url": "254e833ab8f733c3273bfe5e0307b42d5325b3db3af2edf1d5e0b472dd59f8f9.glb",
+      "sha256": "254e833ab8f733c3273bfe5e0307b42d5325b3db3af2edf1d5e0b472dd59f8f9",
+      "size": 14524388
+    },
+    "human_inquisition/gunsmith henchmen": {
+      "url": "2e0ec950a2376fa6f30a88fbc7e77ca4084d98d16abcf0e02bd179e717212cd9.glb",
+      "sha256": "2e0ec950a2376fa6f30a88fbc7e77ca4084d98d16abcf0e02bd179e717212cd9",
+      "size": 14140792
+    },
+    "human_inquisition/inquisitor": {
+      "url": "dfbe5925fbd2c21a6de733961ff27bdf5039fe7a07ef8d40cdde7c2b001ad185.glb",
+      "sha256": "dfbe5925fbd2c21a6de733961ff27bdf5039fe7a07ef8d40cdde7c2b001ad185",
+      "size": 15172508
+    },
+    "human_inquisition/inquisitorial officer": {
+      "url": "a9aee0e407a8f151877c2b0054ade8f956ae0bc8ac373f4ba7d180c547c3f435.glb",
+      "sha256": "a9aee0e407a8f151877c2b0054ade8f956ae0bc8ac373f4ba7d180c547c3f435",
+      "size": 14216244
+    },
+    "human_inquisition/missionary henchmen": {
+      "url": "e00941f418362de33a3e77c176bb12ba482db379682219490a4e191ef68a8857.glb",
+      "sha256": "e00941f418362de33a3e77c176bb12ba482db379682219490a4e191ef68a8857",
+      "size": 13883540
+    },
+    "human_inquisition/mystic henchmen": {
+      "url": "c621fa460400edd76540a5f752077e8b39e066f56acd6f807c18f5aa6a41d30c.glb",
+      "sha256": "c621fa460400edd76540a5f752077e8b39e066f56acd6f807c18f5aa6a41d30c",
+      "size": 16784844
+    },
+    "human_inquisition/possessed henchmen": {
+      "url": "032aefc20209c471bdc7f26d5389f9b54ea2ed6276e86eb314d6b47f3ddf34eb.glb",
+      "sha256": "032aefc20209c471bdc7f26d5389f9b54ea2ed6276e86eb314d6b47f3ddf34eb",
+      "size": 15052172
+    },
+    "human_inquisition/psychic henchmen": {
+      "url": "8e109b710cff8a8bd011ee10e41b692cbeb47eeebeb462ec46dacf4fc4679dd3.glb",
+      "sha256": "8e109b710cff8a8bd011ee10e41b692cbeb47eeebeb462ec46dacf4fc4679dd3",
+      "size": 12972144
+    },
+    "human_inquisition/repenting henchmen": {
+      "url": "2b028b0991a9fd2b0477388fab8df0be686ab27c0ab56c7a29e0907023cc46c3.glb",
+      "sha256": "2b028b0991a9fd2b0477388fab8df0be686ab27c0ab56c7a29e0907023cc46c3",
+      "size": 17402824
+    },
+    "human_inquisition/riot judges": {
+      "url": "58bca897d84badd302d7efb9d874a4db0646784dde405678a9b0a144879eb4da.glb",
+      "sha256": "58bca897d84badd302d7efb9d874a4db0646784dde405678a9b0a144879eb4da",
+      "size": 15473548
+    },
+    "human_inquisition/surveillance ministry assassin": {
+      "url": "16cd9ece76ad653373747410326dc9839fbeb9578672fb2d597b72d41c178f6e.glb",
+      "sha256": "16cd9ece76ad653373747410326dc9839fbeb9578672fb2d597b72d41c178f6e",
+      "size": 17459456
+    },
+    "human_inquisition/terrorism ministry assassin": {
+      "url": "3a1255310c15256034c8f1e3805e4b04e3b49e97969b29f861ee2613b647bb83.glb",
+      "sha256": "3a1255310c15256034c8f1e3805e4b04e3b49e97969b29f861ee2613b647bb83",
+      "size": 18561904
+    },
+    "human_inquisition/transport vehicle": {
+      "url": "0e606b8760d7f187300e9aff6bb668a9e6de8cf8a984068c6589b0a7af901b6c.glb",
+      "sha256": "0e606b8760d7f187300e9aff6bb668a9e6de8cf8a984068c6589b0a7af901b6c",
+      "size": 16288160
+    },
+    "human_inquisition/warfare ministry assassin": {
+      "url": "0c95e5b4278bd7269594891a9a0a64b16aafb11ffb0fdf952b557520d4a56ddd.glb",
+      "sha256": "0c95e5b4278bd7269594891a9a0a64b16aafb11ffb0fdf952b557520d4a56ddd",
+      "size": 14123456
+    },
+    "elven_jesters/fool champion": {
+      "url": "753d7080fb9ca499cb964d41c2d31e537db491f02046c23cc2bbe348961b28ca.glb",
+      "sha256": "753d7080fb9ca499cb964d41c2d31e537db491f02046c23cc2bbe348961b28ca",
+      "size": 17974436
+    },
+    "elven_jesters/fools": {
+      "url": "ab0a92d17822fb2612c629db9ac20876727c44b327e03c4e8b041d27d9afe71b.glb",
+      "sha256": "ab0a92d17822fb2612c629db9ac20876727c44b327e03c4e8b041d27d9afe71b",
+      "size": 16086840
+    },
+    "elven_jesters/heavy jetbike": {
+      "url": "464c0d9e7cbd87f0e69d26caf2c3932da23b77191c10bbd32b432b7ec75ca8f7.glb",
+      "sha256": "464c0d9e7cbd87f0e69d26caf2c3932da23b77191c10bbd32b432b7ec75ca8f7",
+      "size": 18798780
+    },
+    "elven_jesters/jesters": {
+      "url": "bdb5505e4e2f70ab98331c4eb6e89bccbf8eb687be14b0fc2f52def0155eb2a8.glb",
+      "sha256": "bdb5505e4e2f70ab98331c4eb6e89bccbf8eb687be14b0fc2f52def0155eb2a8",
+      "size": 22230128
+    },
+    "elven_jesters/jetbikes": {
+      "url": "b60a1e3333a4eaa08255517d079033c581283b892603637080986aa11438c340.glb",
+      "sha256": "b60a1e3333a4eaa08255517d079033c581283b892603637080986aa11438c340",
+      "size": 18149532
+    },
+    "elven_jesters/jokers": {
+      "url": "dda1c480be8f01a26abc5d2d1ff6e5cea5bac14ab70c3b19bb3dea50a2a2dba8.glb",
+      "sha256": "dda1c480be8f01a26abc5d2d1ff6e5cea5bac14ab70c3b19bb3dea50a2a2dba8",
+      "size": 21838476
+    },
+    "elven_jesters/master jester": {
+      "url": "b1dd9bc06b6d01c782f5b42de732e388aa1f789321f44e56235509e913a39cd2.glb",
+      "sha256": "b1dd9bc06b6d01c782f5b42de732e388aa1f789321f44e56235509e913a39cd2",
+      "size": 21228820
+    },
+    "elven_jesters/pranksters": {
+      "url": "6d1859931c0133a31b851950c9b8e414eeb2365a426a9598ecc09458f3f70359.glb",
+      "sha256": "6d1859931c0133a31b851950c9b8e414eeb2365a426a9598ecc09458f3f70359",
+      "size": 21415476
+    },
+    "human_defense_force/armored truck": {
+      "url": "9e9cd716dd2c6212d93dd90f866e8b9d417f7caeebbc18fd7d7fd16ce5201f64.glb",
+      "sha256": "9e9cd716dd2c6212d93dd90f866e8b9d417f7caeebbc18fd7d7fd16ce5201f64",
+      "size": 16251984
+    },
+    "human_defense_force/attack vehicle": {
+      "url": "c80fbb8f2794c0cec906498384d5109d25993fe1184f6aaece3566a64d33636c.glb",
+      "sha256": "c80fbb8f2794c0cec906498384d5109d25993fe1184f6aaece3566a64d33636c",
+      "size": 17409596
+    },
+    "human_defense_force/battle tank": {
+      "url": "60b9b7e57d7308d5267b57d0fdb0b084ae64a079a670321f5020bb2d9b7ebb73.glb",
+      "sha256": "60b9b7e57d7308d5267b57d0fdb0b084ae64a079a670321f5020bb2d9b7ebb73",
+      "size": 16910140
+    },
+    "human_defense_force/colonel rixxon": {
+      "url": "0781c9931c203378318ab4e30b23b70096b164a909fa7030e9aac33824a4ef40.glb",
+      "sha256": "0781c9931c203378318ab4e30b23b70096b164a909fa7030e9aac33824a4ef40",
+      "size": 15151744
+    },
+    "human_defense_force/combat bikers": {
+      "url": "a54f82c4557b38725656d6695ff24b61eb91462763516047c6935f8d257417c7.glb",
+      "sha256": "a54f82c4557b38725656d6695ff24b61eb91462763516047c6935f8d257417c7",
+      "size": 17285196
+    },
+    "human_defense_force/combat walker": {
+      "url": "e1ed0a7155fb85f7d5ee0b540e925a4de096ac351bcad80468f4e365f70459e1.glb",
+      "sha256": "e1ed0a7155fb85f7d5ee0b540e925a4de096ac351bcad80468f4e365f70459e1",
+      "size": 16828464
+    },
+    "human_defense_force/company leader": {
+      "url": "3e20c249b7dfb40d2ae3b8aba1b1f4ead13beb49986637d5fa2ad4fb02a20e33.glb",
+      "sha256": "3e20c249b7dfb40d2ae3b8aba1b1f4ead13beb49986637d5fa2ad4fb02a20e33",
+      "size": 15383104
+    },
+    "human_defense_force/field artillery": {
+      "url": "c95bb2890e49497e91b35ddbbba2a26e5caab687ad060a4edd0227c362bbba30.glb",
+      "sha256": "c95bb2890e49497e91b35ddbbba2a26e5caab687ad060a4edd0227c362bbba30",
+      "size": 17471200
+    },
+    "human_defense_force/grunt robots": {
+      "url": "92efa6aa99e287e92d7c4b196d48af13c7e01ff87417b0a23118e824c29e585e.glb",
+      "sha256": "92efa6aa99e287e92d7c4b196d48af13c7e01ff87417b0a23118e824c29e585e",
+      "size": 15205392
+    },
+    "human_defense_force/heavy battle tank": {
+      "url": "ed4ad6ec542e830ffc483f18b419bc6d67e0e6e9ea9c6485eea7b51e8f7bba61.glb",
+      "sha256": "ed4ad6ec542e830ffc483f18b419bc6d67e0e6e9ea9c6485eea7b51e8f7bba61",
+      "size": 17187944
+    },
+    "human_defense_force/heavy gunship": {
+      "url": "7bb179e92da1f302d68b06ce41fc6f7a00f8778e26df903a76d595fd5ac08f89.glb",
+      "sha256": "7bb179e92da1f302d68b06ce41fc6f7a00f8778e26df903a76d595fd5ac08f89",
+      "size": 17623124
+    },
+    "human_defense_force/infantry squad": {
+      "url": "9b5180dba54bbbcb014494cbfee96086a43dd21d5b396a3ca29eac01aa748021.glb",
+      "sha256": "9b5180dba54bbbcb014494cbfee96086a43dd21d5b396a3ca29eac01aa748021",
+      "size": 13943292
+    },
+    "human_defense_force/light apc": {
+      "url": "09e7f0906595d8726f69f5b7255208a3d31eed3eab48f41bec16a431c7971577.glb",
+      "sha256": "09e7f0906595d8726f69f5b7255208a3d31eed3eab48f41bec16a431c7971577",
+      "size": 16674388
+    },
+    "human_defense_force/light gunship": {
+      "url": "8a07b88d10342e4b2c7d243e0e57a4355f34f30f8fcfcdff5263fbd78137c9b1.glb",
+      "sha256": "8a07b88d10342e4b2c7d243e0e57a4355f34f30f8fcfcdff5263fbd78137c9b1",
+      "size": 16985104
+    },
+    "human_defense_force/light walker": {
+      "url": "163ca47aef0f2bd343f0de73bd394ae26457b5a750e12e2a32d256cb624dd98d.glb",
+      "sha256": "163ca47aef0f2bd343f0de73bd394ae26457b5a750e12e2a32d256cb624dd98d",
+      "size": 16268572
+    },
+    "human_defense_force/ogre robots": {
+      "url": "c42952defd607c7fbcb333e96a1cd9d72a79e6e8ea17e5a38e16095454686892.glb",
+      "sha256": "c42952defd607c7fbcb333e96a1cd9d72a79e6e8ea17e5a38e16095454686892",
+      "size": 15335276
+    },
+    "human_defense_force/recruits": {
+      "url": "d5c3760acc692a4487eb968c4227e97334c78a0f94ae3964f982df3a73f9b9f3.glb",
+      "sha256": "d5c3760acc692a4487eb968c4227e97334c78a0f94ae3964f982df3a73f9b9f3",
+      "size": 15324580
+    },
+    "human_defense_force/sappers": {
+      "url": "3b506bd46907e475821b7b61346643a703a3bb9e03d2f0b9d5aaf82634d263eb.glb",
+      "sha256": "3b506bd46907e475821b7b61346643a703a3bb9e03d2f0b9d5aaf82634d263eb",
+      "size": 15413200
+    },
+    "human_defense_force/snipers": {
+      "url": "88c4ea933941764aa911ca631bf0c6ef2db929ca8303a03ccc62dd6c82462426.glb",
+      "sha256": "88c4ea933941764aa911ca631bf0c6ef2db929ca8303a03ccc62dd6c82462426",
+      "size": 17402780
+    },
+    "human_defense_force/storm leader": {
+      "url": "9e2a5f2fbac5c5831fd27f62c4275bd8af14a1f19e2e2db3803afa8b45f626e2.glb",
+      "sha256": "9e2a5f2fbac5c5831fd27f62c4275bd8af14a1f19e2e2db3803afa8b45f626e2",
+      "size": 16613752
+    },
+    "human_defense_force/storm troopers": {
+      "url": "28010f120ce2353cf2701a87eaeb01018ac70bd0112865751b156d876bad4871.glb",
+      "sha256": "28010f120ce2353cf2701a87eaeb01018ac70bd0112865751b156d876bad4871",
+      "size": 15989392
+    },
+    "human_defense_force/super heavy battle tank": {
+      "url": "94f86b211111969a7eae23fc91782b0cd064a8ef9e42be4a6ce29aef8ea63a0e.glb",
+      "sha256": "94f86b211111969a7eae23fc91782b0cd064a8ef9e42be4a6ce29aef8ea63a0e",
+      "size": 19643408
+    },
+    "human_defense_force/support vehicle": {
+      "url": "0b05f869229b71ef637dc7ea4ee86491076b74f94ffb7dc4f16402c9ea0d7f8f.glb",
+      "sha256": "0b05f869229b71ef637dc7ea4ee86491076b74f94ffb7dc4f16402c9ea0d7f8f",
+      "size": 18359132
+    },
+    "human_defense_force/tactical titan": {
+      "url": "4101a716b8d3b451f637276708b9546c8828c980b078e640116b41c3748f3c48.glb",
+      "sha256": "4101a716b8d3b451f637276708b9546c8828c980b078e640116b41c3748f3c48",
+      "size": 17323900
+    },
+    "human_defense_force/tactical walker": {
+      "url": "a584af46d0ad8031eef88307057568262eab8072daf6cbf7a1a958d2780c76cd.glb",
+      "sha256": "a584af46d0ad8031eef88307057568262eab8072daf6cbf7a1a958d2780c76cd",
+      "size": 17454700
+    },
+    "human_defense_force/tank company leader": {
+      "url": "6b0559a4cb16a8bd207e449f0cc0947df26d8767e23df584f588e5044caff8e2.glb",
+      "sha256": "6b0559a4cb16a8bd207e449f0cc0947df26d8767e23df584f588e5044caff8e2",
+      "size": 18102216
+    },
+    "human_defense_force/veterans": {
+      "url": "eb1385de944c1cff4bd00440836e18a8e14145ee6003d53753c01e04f1b6b81e.glb",
+      "sha256": "eb1385de944c1cff4bd00440836e18a8e14145ee6003d53753c01e04f1b6b81e",
+      "size": 15892296
+    },
+    "human_defense_force/weapon teams": {
+      "url": "cf44627f7f5f6b90db59a344404fa7b38d719098ae501e18b69197a2c6140dfa.glb",
+      "sha256": "cf44627f7f5f6b90db59a344404fa7b38d719098ae501e18b69197a2c6140dfa",
+      "size": 14709480
+    },
+    "wormhole_daemons_of_change/ascended harbinger of change": {
+      "url": "c5ad8f17ad5139ec5c28c4e116dd4c95d6eb0b512ba3c9289b67471ebd36d3c7.glb",
+      "sha256": "c5ad8f17ad5139ec5c28c4e116dd4c95d6eb0b512ba3c9289b67471ebd36d3c7",
+      "size": 17308220
+    },
+    "wormhole_daemons_of_change/avatar of change": {
+      "url": "46b2189fa7ec5d8128b13bd782cf40c5d3afdf8dacc9749572fb87350fe5a63c.glb",
+      "sha256": "46b2189fa7ec5d8128b13bd782cf40c5d3afdf8dacc9749572fb87350fe5a63c",
+      "size": 16114884
+    },
+    "wormhole_daemons_of_change/champion of change": {
+      "url": "a38cf9f227bf3f8f433e56f2dd1eb3d2ed015a8413b3f01cecf053b02c2d6262.glb",
+      "sha256": "a38cf9f227bf3f8f433e56f2dd1eb3d2ed015a8413b3f01cecf053b02c2d6262",
+      "size": 15275348
+    },
+    "wormhole_daemons_of_change/change furies": {
+      "url": "861c5dcfd34b4e384e1df99796a7c8dee54b7c3fbb89a0aa57e81458a0487600.glb",
+      "sha256": "861c5dcfd34b4e384e1df99796a7c8dee54b7c3fbb89a0aa57e81458a0487600",
+      "size": 14756112
+    },
+    "wormhole_daemons_of_change/change hexers": {
+      "url": "91472764e14397d20f40be9f1df0281465b8de2dc6c150c24cbf3b4443008fff.glb",
+      "sha256": "91472764e14397d20f40be9f1df0281465b8de2dc6c150c24cbf3b4443008fff",
+      "size": 17631388
+    },
+    "wormhole_daemons_of_change/change horrors": {
+      "url": "c0e391e885b74283595d5a741d2d6d831f4245f99c7b670503dd087617d5f7d7.glb",
+      "sha256": "c0e391e885b74283595d5a741d2d6d831f4245f99c7b670503dd087617d5f7d7",
+      "size": 16654784
+    },
+    "wormhole_daemons_of_change/change soul spawns": {
+      "url": "365d3ef2291cf111b127e6a712fe6ca0d075ea26f10babb1460997bc4c4a0b36.glb",
+      "sha256": "365d3ef2291cf111b127e6a712fe6ca0d075ea26f10babb1460997bc4c4a0b36",
+      "size": 16131144
+    },
+    "wormhole_daemons_of_change/change warriors": {
+      "url": "fbe10447ee094072a750dd0c43f57ab441bbcef9cc8efcb8d73edbbf29b3b140.glb",
+      "sha256": "fbe10447ee094072a750dd0c43f57ab441bbcef9cc8efcb8d73edbbf29b3b140",
+      "size": 15965684
+    },
+    "wormhole_daemons_of_change/changelings": {
+      "url": "4d6cc9003e63e3e66eeb9c6f03ac08d6a71e81a3e0be8aec552a09741d2100db.glb",
+      "sha256": "4d6cc9003e63e3e66eeb9c6f03ac08d6a71e81a3e0be8aec552a09741d2100db",
+      "size": 12990884
+    },
+    "wormhole_daemons_of_change/eonflux": {
+      "url": "3f384cf00a03f10de13b0b1e1de1cea3440ef9f4ef5b9564b96a8c23c4e8a6e7.glb",
+      "sha256": "3f384cf00a03f10de13b0b1e1de1cea3440ef9f4ef5b9564b96a8c23c4e8a6e7",
+      "size": 17900804
+    },
+    "wormhole_daemons_of_change/fury champion of change": {
+      "url": "a362bd7a473f8f4f175ec5a22b10b524b6459943f07aee6f5dfdb22f44520d92.glb",
+      "sha256": "a362bd7a473f8f4f175ec5a22b10b524b6459943f07aee6f5dfdb22f44520d92",
+      "size": 16378812
+    },
+    "wormhole_daemons_of_change/great scorcher": {
+      "url": "f3ee7556f33acbf678e7c275316636921fc6428372764975a551aa94b7a3f5b6.glb",
+      "sha256": "f3ee7556f33acbf678e7c275316636921fc6428372764975a551aa94b7a3f5b6",
+      "size": 16156184
+    },
+    "wormhole_daemons_of_change/harbinger of change": {
+      "url": "18ef0a1ee8a27bb441846bfe05ade5877756ad1654336bb5a8e43ea9b58b6244.glb",
+      "sha256": "18ef0a1ee8a27bb441846bfe05ade5877756ad1654336bb5a8e43ea9b58b6244",
+      "size": 14424720
+    },
+    "wormhole_daemons_of_change/hex furies": {
+      "url": "3b3dd543c74eb7440a041be65e3457051e66ec215782d1347d426f286a12fc24.glb",
+      "sha256": "3b3dd543c74eb7440a041be65e3457051e66ec215782d1347d426f286a12fc24",
+      "size": 15037356
+    },
+    "wormhole_daemons_of_change/horror champion of change": {
+      "url": "b332e6ef4214fcfdfdba6d1d8f15cde4daaf70d99cc88730716fff0ca488d894.glb",
+      "sha256": "b332e6ef4214fcfdfdba6d1d8f15cde4daaf70d99cc88730716fff0ca488d894",
+      "size": 16222768
+    },
+    "wormhole_daemons_of_change/lesser change horrors": {
+      "url": "c77ccb872867ca3d962716abc5a9e7ba3fe58b4da88b868edeb932b24db617a2.glb",
+      "sha256": "c77ccb872867ca3d962716abc5a9e7ba3fe58b4da88b868edeb932b24db617a2",
+      "size": 15538844
+    },
+    "wormhole_daemons_of_change/scorchers": {
+      "url": "07adae674afa86e2e51ba68081e883abeba33c1af8040a0ec367d055016708a2.glb",
+      "sha256": "07adae674afa86e2e51ba68081e883abeba33c1af8040a0ec367d055016708a2",
+      "size": 17028804
+    },
+    "wormhole_daemons_of_change/screecher chariot": {
+      "url": "16d15a06088c6b01ca098db6caffca6cdfd05ff489e21f790deca7eea17be5c4.glb",
+      "sha256": "16d15a06088c6b01ca098db6caffca6cdfd05ff489e21f790deca7eea17be5c4",
+      "size": 15864032
+    },
+    "wormhole_daemons_of_change/screechers": {
+      "url": "4861a6653fe351737eeb1ba176266740f280a9c5138e190d997ee6a6b03eb21d.glb",
+      "sha256": "4861a6653fe351737eeb1ba176266740f280a9c5138e190d997ee6a6b03eb21d",
+      "size": 14731352
+    },
+    "wormhole_daemons_of_change/soul daemon of change": {
+      "url": "cf00d900400aa438b0058657b5cdbeaf3dab0feeb3dee1d6b464b496c61680df.glb",
+      "sha256": "cf00d900400aa438b0058657b5cdbeaf3dab0feeb3dee1d6b464b496c61680df",
+      "size": 15869212
+    },
+    "wormhole_daemons_of_change/swiftclaw": {
+      "url": "7da58a2be0631bada5fcd8847ed09a56982ebfd8b1e665a4cebf7d39f3e33f7b.glb",
+      "sha256": "7da58a2be0631bada5fcd8847ed09a56982ebfd8b1e665a4cebf7d39f3e33f7b",
+      "size": 20820440
+    },
+    "wormhole_daemons_of_plague/ascended harbinger of plague": {
+      "url": "ee3103c0e6eb446e12b44244739549819e08cadf319a78dfd7b55c2bd46d8500.glb",
+      "sha256": "ee3103c0e6eb446e12b44244739549819e08cadf319a78dfd7b55c2bd46d8500",
+      "size": 18207348
+    },
+    "wormhole_daemons_of_plague/avatar of plague": {
+      "url": "3b0ad3e31cc0e3b5fdffdaa8df10307c9d0f8a9e66fff46bf2800c31630ab8d9.glb",
+      "sha256": "3b0ad3e31cc0e3b5fdffdaa8df10307c9d0f8a9e66fff46bf2800c31630ab8d9",
+      "size": 14743680
+    },
+    "wormhole_daemons_of_plague/champion of plague": {
+      "url": "1698bb9ef18414eace79b899112e81b0ee627fcc0eef5b407fcfb263594ddd09.glb",
+      "sha256": "1698bb9ef18414eace79b899112e81b0ee627fcc0eef5b407fcfb263594ddd09",
+      "size": 15623860
+    },
+    "wormhole_daemons_of_plague/fungusfester": {
+      "url": "06e319737efbd68924d2de35c609ca1015e0f6852529f8db8a1afaafeb37b03f.glb",
+      "sha256": "06e319737efbd68924d2de35c609ca1015e0f6852529f8db8a1afaafeb37b03f",
+      "size": 13498312
+    },
+    "wormhole_daemons_of_plague/fury champion of plague": {
+      "url": "1aa438e36729f81f0b446879121d61eb8ee1a74f35ea4c876ed2d5f5d99658b6.glb",
+      "sha256": "1aa438e36729f81f0b446879121d61eb8ee1a74f35ea4c876ed2d5f5d99658b6",
+      "size": 15175112
+    },
+    "wormhole_daemons_of_plague/giant slug": {
+      "url": "65775c5d185ed7fd1f7544ac2cc2d573fdd9296337f6cbe75835db054c42a58e.glb",
+      "sha256": "65775c5d185ed7fd1f7544ac2cc2d573fdd9296337f6cbe75835db054c42a58e",
+      "size": 17033196
+    },
+    "wormhole_daemons_of_plague/harbinger of plague": {
+      "url": "ff18817fd331e76f0462ab78163a391ca9d247c1ffcf72db575773fedad9d5be.glb",
+      "sha256": "ff18817fd331e76f0462ab78163a391ca9d247c1ffcf72db575773fedad9d5be",
+      "size": 15687040
+    },
+    "wormhole_daemons_of_plague/plague beast": {
+      "url": "5bdd387e83a2bb766b7f4b127d8c6b75c31f0675a6a7d546a4730dc291e78f03.glb",
+      "sha256": "5bdd387e83a2bb766b7f4b127d8c6b75c31f0675a6a7d546a4730dc291e78f03",
+      "size": 14772464
+    },
+    "wormhole_daemons_of_plague/plague fly riders": {
+      "url": "f4e6524cfea282530bfa17f8f8487f46239b5b35dcf977fd535844382cf4c047.glb",
+      "sha256": "f4e6524cfea282530bfa17f8f8487f46239b5b35dcf977fd535844382cf4c047",
+      "size": 16839256
+    },
+    "wormhole_daemons_of_plague/plague furies": {
+      "url": "2daac8d2daa7bf88671aac1a94431061cdb0364b85358a83971124a3cc077b90.glb",
+      "sha256": "2daac8d2daa7bf88671aac1a94431061cdb0364b85358a83971124a3cc077b90",
+      "size": 13762848
+    },
+    "wormhole_daemons_of_plague/plague harvester": {
+      "url": "1f26459d5e6fde8e1791dc14698b8b02d52e7f4cb19b3134180eceb33c48f58a.glb",
+      "sha256": "1f26459d5e6fde8e1791dc14698b8b02d52e7f4cb19b3134180eceb33c48f58a",
+      "size": 16657372
+    },
+    "wormhole_daemons_of_plague/plague slingers": {
+      "url": "959e7d014927f0338ce4439d2bf903d40a4c05362d1279fe3619e45cb38bfc93.glb",
+      "sha256": "959e7d014927f0338ce4439d2bf903d40a4c05362d1279fe3619e45cb38bfc93",
+      "size": 17535960
+    },
+    "wormhole_daemons_of_plague/plague soul spawns": {
+      "url": "54ecddc6f9d5df0d4c01f9ffa1afde7a2391764586f91cd8a2e41aa1d064e207.glb",
+      "sha256": "54ecddc6f9d5df0d4c01f9ffa1afde7a2391764586f91cd8a2e41aa1d064e207",
+      "size": 15361764
+    },
+    "wormhole_daemons_of_plague/plague swarms": {
+      "url": "bf035f77c89affcbce6275cd0bd8a61872bbfac0b8d2c612ec03878432fe548b.glb",
+      "sha256": "bf035f77c89affcbce6275cd0bd8a61872bbfac0b8d2c612ec03878432fe548b",
+      "size": 19056572
+    },
+    "wormhole_daemons_of_plague/plague warriors": {
+      "url": "bf4102dfa8f8e7450cbcb2b6dcbcd6a54306d2991ca93ebc4cf62fbd2f603952.glb",
+      "sha256": "bf4102dfa8f8e7450cbcb2b6dcbcd6a54306d2991ca93ebc4cf62fbd2f603952",
+      "size": 15722104
+    },
+    "wormhole_daemons_of_plague/poisonzeal": {
+      "url": "8396d54a6074e12100890e955a3a7001068bff4c50b517bd8c8daffa405b2899.glb",
+      "sha256": "8396d54a6074e12100890e955a3a7001068bff4c50b517bd8c8daffa405b2899",
+      "size": 16411992
+    },
+    "wormhole_daemons_of_plague/sling furies": {
+      "url": "7c8aca1ff81421cbc0f89b38727ec4bd7d2618276ba007672e62d08f3595f8a9.glb",
+      "sha256": "7c8aca1ff81421cbc0f89b38727ec4bd7d2618276ba007672e62d08f3595f8a9",
+      "size": 16369044
+    },
+    "wormhole_daemons_of_plague/soul daemon of plague": {
+      "url": "aa00aa51ad8cd039b49efe51c4e92379790bed52da78c3219934593e1e853b9d.glb",
+      "sha256": "aa00aa51ad8cd039b49efe51c4e92379790bed52da78c3219934593e1e853b9d",
+      "size": 17874880
+    },
+    "wormhole_daemons_of_lust/ascended harbinger of lust": {
+      "url": "a99d702b102932a9f997086a91352ec7761375b706ae7dfcf7640aef193fa52e.glb",
+      "sha256": "a99d702b102932a9f997086a91352ec7761375b706ae7dfcf7640aef193fa52e",
+      "size": 14644500
+    },
+    "wormhole_daemons_of_lust/avatar of lust": {
+      "url": "3850b04cb8e2c3fabd60904941e492d956a648983d96ad2841249f0f0fbaff5a.glb",
+      "sha256": "3850b04cb8e2c3fabd60904941e492d956a648983d96ad2841249f0f0fbaff5a",
+      "size": 16964644
+    },
+    "wormhole_daemons_of_lust/champion of lust": {
+      "url": "84507644208fbf829b895fccbc6749fe34cd4ce1c43cbeb2ee06e1a11fde6773.glb",
+      "sha256": "84507644208fbf829b895fccbc6749fe34cd4ce1c43cbeb2ee06e1a11fde6773",
+      "size": 16099044
+    },
+    "wormhole_daemons_of_lust/fury champion of lust": {
+      "url": "a3c8dc1d9badf8b78068474e58e418fa8c88203884c16a19e14fdca7568ba3da.glb",
+      "sha256": "a3c8dc1d9badf8b78068474e58e418fa8c88203884c16a19e14fdca7568ba3da",
+      "size": 15625188
+    },
+    "wormhole_daemons_of_lust/harbinger of lust": {
+      "url": "046c0658a1ae55ea42d5c18c5aef7dfb5f89bc151f51bac43b9ba48ba5d91e53.glb",
+      "sha256": "046c0658a1ae55ea42d5c18c5aef7dfb5f89bc151f51bac43b9ba48ba5d91e53",
+      "size": 15780204
+    },
+    "wormhole_daemons_of_lust/infernal siren": {
+      "url": "21afe22464d2aa57181995d4a5e1c5f09c3790ef073547d9e7cbc063c12eb0bc.glb",
+      "sha256": "21afe22464d2aa57181995d4a5e1c5f09c3790ef073547d9e7cbc063c12eb0bc",
+      "size": 15277008
+    },
+    "wormhole_daemons_of_lust/lust beast riders": {
+      "url": "8e0c27973d33ba3108bbfb618ebafed2640dfc4a5dcf65985ff48cd7bc30a3e3.glb",
+      "sha256": "8e0c27973d33ba3108bbfb618ebafed2640dfc4a5dcf65985ff48cd7bc30a3e3",
+      "size": 14869320
+    },
+    "wormhole_daemons_of_lust/lust fiend": {
+      "url": "e33feb278c8d1685e6629c1ee64a550bb0a0f9dddf90e6f8fe6673d7db3da265.glb",
+      "sha256": "e33feb278c8d1685e6629c1ee64a550bb0a0f9dddf90e6f8fe6673d7db3da265",
+      "size": 16137784
+    },
+    "wormhole_daemons_of_lust/lust furies": {
+      "url": "bafae9e2500ebcbd0223d86c7d24b411b7468defb83d3510180104a394405604.glb",
+      "sha256": "bafae9e2500ebcbd0223d86c7d24b411b7468defb83d3510180104a394405604",
+      "size": 15532032
+    },
+    "wormhole_daemons_of_lust/lust shooters": {
+      "url": "4324402ce160bcd4df1a553946cbe2b33d1aeff16b13fc5804dac26c328ee236.glb",
+      "sha256": "4324402ce160bcd4df1a553946cbe2b33d1aeff16b13fc5804dac26c328ee236",
+      "size": 18683196
+    },
+    "wormhole_daemons_of_lust/lust soul spawns": {
+      "url": "0150e3efbf958be9fb2af213b2294c585ee9d7297bd97ca5f04198bfa6af8cf5.glb",
+      "sha256": "0150e3efbf958be9fb2af213b2294c585ee9d7297bd97ca5f04198bfa6af8cf5",
+      "size": 15608892
+    },
+    "wormhole_daemons_of_lust/lust warriors": {
+      "url": "8507efb488267257507c465773dc35413309d96c6fb414736b1b924707c1906b.glb",
+      "sha256": "8507efb488267257507c465773dc35413309d96c6fb414736b1b924707c1906b",
+      "size": 13453876
+    },
+    "wormhole_daemons_of_lust/razor flail chariot": {
+      "url": "d628e97530577de53b7b674553631f9f49f4c6d0e2edf17992fc6ba3c4964a97.glb",
+      "sha256": "d628e97530577de53b7b674553631f9f49f4c6d0e2edf17992fc6ba3c4964a97",
+      "size": 17691308
+    },
+    "wormhole_daemons_of_lust/sacred mirror": {
+      "url": "2088b3ef759f399ac57045cc35c9216f9c0aba2d9914f0a4793f9a4aacce2490.glb",
+      "sha256": "2088b3ef759f399ac57045cc35c9216f9c0aba2d9914f0a4793f9a4aacce2490",
+      "size": 17142404
+    },
+    "wormhole_daemons_of_lust/shooter furies": {
+      "url": "5e033ed42cba4d8fd799fa9afe7a5b6603e97a6ffe6e256fd59250f86a3b83dc.glb",
+      "sha256": "5e033ed42cba4d8fd799fa9afe7a5b6603e97a6ffe6e256fd59250f86a3b83dc",
+      "size": 15834148
+    },
+    "wormhole_daemons_of_lust/snake swarms": {
+      "url": "f2e3735a816bfa8a57b4c9fecf2514e42cb9bea68418a7a0fd0085ddde00a523.glb",
+      "sha256": "f2e3735a816bfa8a57b4c9fecf2514e42cb9bea68418a7a0fd0085ddde00a523",
+      "size": 14955712
+    },
+    "wormhole_daemons_of_lust/soul daemon of lust": {
+      "url": "d12208c8097cecb3611ccea0be23107af5137ce0da339a6bf4d56067e714db1b.glb",
+      "sha256": "d12208c8097cecb3611ccea0be23107af5137ce0da339a6bf4d56067e714db1b",
+      "size": 17431252
+    },
+    "wormhole_daemons_of_war/ascended harbinger of war": {
+      "url": "f23b173b70c3b04fe36d3cef71411aa089d7639d729dbc0ae08cd1b2a3fc6c36.glb",
+      "sha256": "f23b173b70c3b04fe36d3cef71411aa089d7639d729dbc0ae08cd1b2a3fc6c36",
+      "size": 16002636
+    },
+    "wormhole_daemons_of_war/avatar of war": {
+      "url": "ff96cd6ef67d84f5a07334b7f79359f3f2f56fe038cfdc9d040e3e07f93dc5d3.glb",
+      "sha256": "ff96cd6ef67d84f5a07334b7f79359f3f2f56fe038cfdc9d040e3e07f93dc5d3",
+      "size": 15299232
+    },
+    "wormhole_daemons_of_war/beast riders": {
+      "url": "e7024e3e47a381aae8b5c490c926fd4e359d210661224301e1d697cb55c26cff.glb",
+      "sha256": "e7024e3e47a381aae8b5c490c926fd4e359d210661224301e1d697cb55c26cff",
+      "size": 15345176
+    },
+    "wormhole_daemons_of_war/blood hounds": {
+      "url": "ef1c0071f6561ca3527b77e78e7b6c43d9c44ee11e1f4a2ad2382daed86eb756.glb",
+      "sha256": "ef1c0071f6561ca3527b77e78e7b6c43d9c44ee11e1f4a2ad2382daed86eb756",
+      "size": 14305804
+    },
+    "wormhole_daemons_of_war/blood warriors": {
+      "url": "0340639277d2f90ff62e32b537d21cb45beef55fd0d077824178d3c2568dcfe3.glb",
+      "sha256": "0340639277d2f90ff62e32b537d21cb45beef55fd0d077824178d3c2568dcfe3",
+      "size": 13056148
+    },
+    "wormhole_daemons_of_war/blood whippers": {
+      "url": "a86147f117dffb45d9cfe240b8db22e71c0e00c5f23d9d8e48b4ce9c75bb3e01.glb",
+      "sha256": "a86147f117dffb45d9cfe240b8db22e71c0e00c5f23d9d8e48b4ce9c75bb3e01",
+      "size": 15153248
+    },
+    "wormhole_daemons_of_war/cannon chariot": {
+      "url": "852e5805970f4299e3887a8bf53ce9468d92a68c5b0fb2511021a72896b9b26f.glb",
+      "sha256": "852e5805970f4299e3887a8bf53ce9468d92a68c5b0fb2511021a72896b9b26f",
+      "size": 15002140
+    },
+    "wormhole_daemons_of_war/champion of war": {
+      "url": "7b9b906db98163e8151d2706c9c36c7c5e620725a839473479cba2c59bcc7b0f.glb",
+      "sha256": "7b9b906db98163e8151d2706c9c36c7c5e620725a839473479cba2c59bcc7b0f",
+      "size": 14050576
+    },
+    "wormhole_daemons_of_war/fury champion of war": {
+      "url": "148383da1004aa5c567875ef567055df077d94363e6d5d1a942d14a88d5a16c1.glb",
+      "sha256": "148383da1004aa5c567875ef567055df077d94363e6d5d1a942d14a88d5a16c1",
+      "size": 14491636
+    },
+    "wormhole_daemons_of_war/giant tri hound": {
+      "url": "96493139f2af41f0037a1404d6c8ee0014c708f5d5b6f02c9e911743a9a2dbf5.glb",
+      "sha256": "96493139f2af41f0037a1404d6c8ee0014c708f5d5b6f02c9e911743a9a2dbf5",
+      "size": 15018832
+    },
+    "wormhole_daemons_of_war/harbinger of war": {
+      "url": "41168f52bdba01221bd8e2cd2aac3a0d91957ced9744cd80f3cae4a5caa98b75.glb",
+      "sha256": "41168f52bdba01221bd8e2cd2aac3a0d91957ced9744cd80f3cae4a5caa98b75",
+      "size": 16345656
+    },
+    "wormhole_daemons_of_war/soul daemon of war": {
+      "url": "e16af7e0d3820e5c6f2f861d5d779b0b5d57d9baa818b511e73a9b5cedd0f1d3.glb",
+      "sha256": "e16af7e0d3820e5c6f2f861d5d779b0b5d57d9baa818b511e73a9b5cedd0f1d3",
+      "size": 13509348
+    },
+    "wormhole_daemons_of_war/tri hound champion": {
+      "url": "9131ccf8c43481b4de848e10be4af7b3c3a17331b419f850b1992ccc80e8debe.glb",
+      "sha256": "9131ccf8c43481b4de848e10be4af7b3c3a17331b419f850b1992ccc80e8debe",
+      "size": 15089760
+    },
+    "wormhole_daemons_of_war/war furies": {
+      "url": "7e94872a8c3c7960652768987c893e2a1410407e0cb0dffef8aa251f93f77f61.glb",
+      "sha256": "7e94872a8c3c7960652768987c893e2a1410407e0cb0dffef8aa251f93f77f61",
+      "size": 13169416
+    },
+    "wormhole_daemons_of_war/war soul spawns": {
+      "url": "12e52559068bfea6d6fb90fb1444ecbbbc5639180731846efc149504df25cc9d.glb",
+      "sha256": "12e52559068bfea6d6fb90fb1444ecbbbc5639180731846efc149504df25cc9d",
+      "size": 13364992
+    },
+    "wormhole_daemons_of_war/whip furies": {
+      "url": "37229b8811b61ac4b0455a7828ff86a42f32c76d1637c3e5a20d5189eee400c1.glb",
+      "sha256": "37229b8811b61ac4b0455a7828ff86a42f32c76d1637c3e5a20d5189eee400c1",
+      "size": 15988512
     }
   }
 }
