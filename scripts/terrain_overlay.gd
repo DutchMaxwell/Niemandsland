@@ -156,8 +156,8 @@ const CRATER_MIN_SPACING_INCHES := LAVA_CRATER_DIAMETER_INCHES * 1.1
 ## Targeted glow light for each crater (the molten lava). Every kept crater gets one — they
 ## are few (non-overlapping) so the scene isn't flooded, and no field is left dark.
 const LAVA_LIGHT_COLOR := Color(1.0, 0.45, 0.13)
-const LAVA_LIGHT_RANGE_M := 0.20
-const LAVA_LIGHT_ENERGY := 0.7
+const LAVA_LIGHT_RANGE_M := 0.17
+const LAVA_LIGHT_ENERGY := 0.4   # dialed down — the craters were still radiating too hard
 const LAVA_LIGHT_HEIGHT_M := 0.02
 
 ## Textured ruins walls (first pass): the wall + corner-post props use a lit, world-
