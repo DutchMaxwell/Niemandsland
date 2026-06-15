@@ -7,6 +7,15 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Added
+- **Models rest on terrain surfaces when placed.** Dragging a model now raycasts down
+  onto the ground beneath its base and rests it on the highest surface there — the table
+  top, or a terrain prop such as a container — instead of always snapping to `y=0`. Each
+  model in a multi-model unit resolves its own height, so part of a unit can stand on a
+  container while the rest stay on the table; the resting height saves and syncs to peers
+  (both already carried the full position). Miniatures moved to physics layer 2 so the
+  placement raycast (ground = layer 1) rests them on terrain, never on each other; there
+  is no model-vs-model collision (bases may still touch for melee/tight ranks). Lays the
+  groundwork for future multi-level terrain.
 - **Three new biomes get themed terrain props: volcanic (dwarven), alien jungle and
   urban ruins.** Each biome's ruin walls, "trees"/flora and containers now have their own
   R2-delivered texture set instead of falling back to grassland. **volcanic_ash** is
