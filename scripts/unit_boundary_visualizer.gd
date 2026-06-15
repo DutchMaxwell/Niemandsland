@@ -94,6 +94,17 @@ func _update_unit_boundary(game_unit) -> void:
 	# Include joined Heroes so the outline encloses them as part of the unit.
 	var models = game_unit.get_alive_models_with_attached()
 
+	# Skip units still being built/hidden — their models are invisible until the whole army
+	# is revealed for the drop, so the boundary must not show during import (issue #56).
+	var any_visible := false
+	for m in models:
+		if m.node and is_instance_valid(m.node) and m.node.is_visible_in_tree():
+			any_visible = true
+			break
+	if not any_visible:
+		_remove_unit_boundary(game_unit)
+		return
+
 	# Skip single models - the miniature IS the unit
 	if models.size() <= 1:
 		_remove_unit_boundary(game_unit)
