@@ -93,34 +93,34 @@
       "size": 1494098
     },
     "volcanic_tree_a": {
-      "url": "volcanic_tree_a.webp?v=16b31260",
-      "sha256": "16b31260d912af4cb3ef491972f59b8e6fb66f3c261959133ccdae428ee770b6",
-      "size": 675336
+      "url": "volcanic_tree_a.webp?v=fbc755df",
+      "sha256": "fbc755df12da4c7224e4a970defd109a740e9f2fd9bb19a3f4de86dd0d41295b",
+      "size": 181890
     },
     "volcanic_tree_a_top": {
-      "url": "volcanic_tree_a_top.webp?v=1c7dd310",
-      "sha256": "1c7dd310464a844fd994315872ee207947ebc56d3d53af00d0d9a23f047d4501",
-      "size": 1042276
+      "url": "volcanic_tree_a_top.webp?v=b770a4ea",
+      "sha256": "b770a4ea4db32e29e0a74e625250a37919a839404d1f04ecad027e80800a082e",
+      "size": 790140
     },
     "volcanic_tree_b": {
-      "url": "volcanic_tree_b.webp?v=083c7861",
-      "sha256": "083c7861f561194382759391fbc5f09d347321773d0e5d4a05d08b140d8e2f15",
-      "size": 790072
+      "url": "volcanic_tree_b.webp?v=3f62ff05",
+      "sha256": "3f62ff05007367a9424ae3714a5ca853c7cab20c1d025091461f594b12aa15fe",
+      "size": 262878
     },
     "volcanic_tree_b_top": {
-      "url": "volcanic_tree_b_top.webp?v=f546db1e",
-      "sha256": "f546db1e5e610f1861c7f0b6f1c052eb25713ea6e2f2cfe9d0f39832cbf98887",
-      "size": 1182936
+      "url": "volcanic_tree_b_top.webp?v=5dfd60a8",
+      "sha256": "5dfd60a8ef8e3c374946c2a5576c7c7ed319b9a98124a99c380c69d3e4d022c2",
+      "size": 788130
     },
     "volcanic_tree_c": {
-      "url": "volcanic_tree_c.webp?v=5a5a4bd7",
-      "sha256": "5a5a4bd71a4c6b368c3032a3ba95e082be685d519a14eb4f6253ac7af8dbc9fa",
-      "size": 532398
+      "url": "volcanic_tree_c.webp?v=5769aec5",
+      "sha256": "5769aec582a044a41301234cdcbafbab7869341eae20b03d05ccc4141f3573e6",
+      "size": 215824
     },
     "volcanic_tree_c_top": {
-      "url": "volcanic_tree_c_top.webp?v=09e399c2",
-      "sha256": "09e399c201c71cf4eed5e0e0bae9f758b587e019c11806935a6cf7b621700bb4",
-      "size": 667082
+      "url": "volcanic_tree_c_top.webp?v=82f8b0ed",
+      "sha256": "82f8b0edb79c815faaab79426d6dc55771a2e5c83c4168cb01a68f7d79f95ab3",
+      "size": 786646
     },
     "jungle_tree_a": {
       "url": "jungle_tree_a.webp?v=7c952f7f",
@@ -230,19 +230,19 @@
       "size": 11567652
     },
     "volcanic_tree_a": {
-      "url": "volcanic_tree_a.glb?v=50f8a5c1",
-      "sha256": "50f8a5c1a3b990117da598c8574f48380dbd9b4a268e37abbb7e8f523f1b71dd",
-      "size": 6719788
+      "url": "volcanic_tree_a.glb?v=7c1d4118",
+      "sha256": "7c1d41186c6f5579daa763f7393a3794825565c986dae86e3a14474664dc46b5",
+      "size": 5336680
     },
     "volcanic_tree_b": {
-      "url": "volcanic_tree_b.glb?v=32c091eb",
-      "sha256": "32c091eb9e165aca698b9be7e9f46d56c3c55c1be4091620d8d989c994603167",
-      "size": 5570640
+      "url": "volcanic_tree_b.glb?v=69ca1269",
+      "sha256": "69ca12695f0e1528b5c225a9ce478034b6abcd09133339af3343d927179e34f8",
+      "size": 5564124
     },
     "volcanic_tree_c": {
-      "url": "volcanic_tree_c.glb?v=39bba575",
-      "sha256": "39bba5752367086de97e4de685ac45e621cbdeb84f17228e27b49a9ea15efc34",
-      "size": 6115872
+      "url": "volcanic_tree_c.glb?v=1701173c",
+      "sha256": "1701173cc1e8fac444d283fd7cdc4cdbc89fa4124a65cfdb2f3356cea1c5787f",
+      "size": 6194596
     },
     "jungle_tree_a": {
       "url": "jungle_tree_a.glb?v=ac34d5ac",
