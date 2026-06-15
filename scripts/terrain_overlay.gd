@@ -124,22 +124,41 @@ const SIGN_POST_COLOR := Color(0.35, 0.33, 0.3)   # weathered steel post
 ## Z_FIGHT_OFFSET (2 mm) is sized for walls — on a 3 mm mine disc it visibly floats.
 const PROP_SURFACE_LIFT := 0.0003
 
-## Ember-glowing crystal cluster: the DANGEROUS-terrain prop in the dwarven volcanic
-## biome (replaces the mine disc there). Emissive only — no dynamic light, no _process —
-## so it stays cheap. Decorative: dangerous terrain stays passable (OPR: Dangerous, not
-## Impassable). Shard shape/placement is seeded from the object's identity (deterministic
-## -> multiplayer + save safe; never a global RNG).
-const CRYSTAL_SHARDS_MIN := 3
-const CRYSTAL_SHARDS_MAX := 5
-const CRYSTAL_CLUSTER_RADIUS_INCHES := 0.35  # how far shards spread from the centre
-const CRYSTAL_HEIGHT_MIN_INCHES := 0.4
-const CRYSTAL_HEIGHT_MAX_INCHES := 1.0
-const CRYSTAL_RADIUS_INCHES := 0.12          # shard base half-width
-const CRYSTAL_SIDES := 5                      # angular prism faces (crystalline look)
-const CRYSTAL_TILT_MAX_DEG := 18.0
-const CRYSTAL_BASE_COLOR := Color(0.20, 0.06, 0.03)    # dark scorched crystal body
-const CRYSTAL_EMISSION_COLOR := Color(1.0, 0.42, 0.10)  # ember-orange glow
-const CRYSTAL_EMISSION_ENERGY := 2.2
+## Glowing lava pool: the DANGEROUS-terrain prop in the volcanic biome (replaces the mine
+## disc; no warning signs there — the lava is self-evident). A shallow molten disc with a
+## dark cooled-crust rim, emissive so it glows under the scene's bloom. Decorative:
+## dangerous terrain stays passable (OPR: Dangerous, not Impassable). Orientation is
+## seeded from the object's identity (deterministic -> MP/save safe; never a global RNG).
+const LAVA_POOL_RADIUS_INCHES := 1.0
+const LAVA_POOL_HEIGHT_INCHES := 0.05        # very shallow molten pool
+const LAVA_POOL_SIDES := 9                     # low-poly disc -> slightly irregular rim
+const LAVA_CORE_FRAC := 0.72                   # bright molten core radius vs the crust rim
+const LAVA_CRUST_COLOR := Color(0.09, 0.05, 0.04)     # dark cooled basalt crust rim
+const LAVA_EMISSION_COLOR := Color(1.0, 0.35, 0.06)    # molten orange-red core
+## Emission is kept LOW: the scene runs a strong bloom, so even a low multiplier reads as
+## molten glow. Higher values blow the whole pool to flat white and hide the texture.
+const LAVA_EMISSION_ENERGY := 0.7              # procedural-fallback core
+## R2 hazard panel name for the lava-pool texture (top-down round molten pool, alpha-keyed);
+## used as both albedo and emission map. Until cached, the pool uses the procedural fallback.
+const LAVA_PANEL := "lava_pool"
+const LAVA_TEXTURE_EMISSION_ENERGY := 0.35     # textured pool (the texture is already bright)
+
+## Preferred prop: a TRELLIS 3D lava CRATER GLB (rocky bowl + molten lava, overflowing the
+## rim). Scaled to this footprint and given a targeted OmniLight for the emanating glow.
+## Falls back to the texture quad, then the procedural pool, until the GLB is cached.
+const LAVA_CRATER_MODEL := "lava_crater"
+const LAVA_CRATER_DIAMETER_INCHES := 2.4       # footprint the GLB is scaled to fit
+## Craters must not overlap: the dense grassland minefield layout (MINES_PER_CELL) is
+## thinned at render time for volcanic to non-overlapping craters at least this far apart
+## (centre-to-centre, a touch over a crater diameter). This naturally yields ~3-5 craters
+## per dangerous field; the rest of the mine slots are skipped.
+const CRATER_MIN_SPACING_INCHES := LAVA_CRATER_DIAMETER_INCHES * 1.1
+## Targeted glow light for each crater (the molten lava). Every kept crater gets one — they
+## are few (non-overlapping) so the scene isn't flooded, and no field is left dark.
+const LAVA_LIGHT_COLOR := Color(1.0, 0.45, 0.13)
+const LAVA_LIGHT_RANGE_M := 0.17
+const LAVA_LIGHT_ENERGY := 0.4   # dialed down — the craters were still radiating too hard
+const LAVA_LIGHT_HEIGHT_M := 0.02
 
 ## Textured ruins walls (first pass): the wall + corner-post props use a lit, world-
 ## triplanar stone material instead of the hologram look (other props stay holographic for
@@ -313,6 +332,13 @@ var _container_fetch_started := false
 var _hazards_library: HazardsLibrary = null
 var _hazard_materials: Dictionary = {}
 var _hazard_fetch_started := false
+
+## One-time async fetches for the volcanic lava prop (texture + the 3D crater GLB).
+var _lava_fetch_started := false
+var _lava_model_fetch_started := false
+## XZ centres (metres) of lava craters kept this layout, so further mine slots that would
+## overlap are skipped (reset per update_placed_objects). Keeps craters from clumping.
+var _crater_positions: Array[Vector2] = []
 
 ## Active biome prop themes (name prefixes into the panel sets).
 var _prop_theme := ""
@@ -1765,6 +1791,8 @@ func set_biome(biome_name: String) -> void:
 	_tree_fetch_started = false
 	_container_fetch_started = false
 	_hazard_fetch_started = false
+	_lava_fetch_started = false
+	_lava_model_fetch_started = false
 	if not _last_wall_segments.is_empty():
 		update_wall_models(_last_wall_segments, _last_wall_table_size, _last_wall_rotation)
 	if not _last_objects.is_empty():
@@ -2498,13 +2526,24 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 	var use_tree_panels := _tree_panels_ready() or _tree_models_ready()
 	var use_container_panels := _container_panels_ready()
 	var use_hazard_panels := _hazard_panels_ready()
+	# Volcanic dangerous terrain renders as lava craters/pools (own fetches, no warning
+	# signs), so only non-volcanic biomes need the mine/sign hazard panel fetch.
+	var volcanic_hazards := _prop_theme == "volcanic_"
+	_crater_positions.clear()
 	for obj in objects:
 		var obj_type: String = obj.get("object_type", "tree")
 		if obj_type == "tree" and not (_tree_panels_ready() and _tree_models_ready()):
 			_request_tree_panels()
 		elif obj_type == "container" and not use_container_panels:
 			_request_container_panels()
-		elif (obj_type == "mine" or obj_type == "warning_sign") and not use_hazard_panels:
+		elif obj_type == "mine" and volcanic_hazards:
+			# Prefer the 3D crater GLB; fall back to the flat texture meanwhile.
+			if not _lava_model_ready():
+				_request_lava_model()
+			if not _lava_panel_ready():
+				_request_lava_panel()
+		elif (obj_type == "mine" or obj_type == "warning_sign") and not use_hazard_panels \
+				and not volcanic_hazards:
 			_request_hazard_panels()
 
 	if objects.is_empty():
@@ -2550,10 +2589,18 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 			handles_own_facing = true
 		elif object_type == "container" and use_container_panels:
 			model = _create_textured_container(obj)
-		elif object_type == "mine" and _prop_theme == "volcanic_":
-			# Dwarven volcanic biome: dangerous terrain glows as ember crystals, not mines.
-			model = _create_crystal_hazard(obj)
-			handles_own_facing = true
+		elif object_type == "mine" and volcanic_hazards:
+			# Volcanic biome: dangerous terrain is a glowing lava crater, not a mine. Thin
+			# the dense mine layout to non-overlapping craters (max ~3-5 per field); skip
+			# slots that would overlap an already-placed crater.
+			if _crater_spot_free(rotated_x, rotated_z):
+				_crater_positions.append(Vector2(rotated_x, rotated_z))
+				model = _create_lava_pool(obj)
+				handles_own_facing = true
+			# else: model stays null -> this overlapping mine slot is skipped
+		elif object_type == "warning_sign" and volcanic_hazards:
+			# No warning signs in the volcanic lava-field biome (the lava speaks for itself).
+			model = null
 		elif object_type == "mine" and use_hazard_panels:
 			model = _create_textured_mine(obj)
 			handles_own_facing = true
@@ -2768,6 +2815,19 @@ static func _model_space_aabb(node: Node3D) -> AABB:
 	return _merge_mesh_aabbs(node, Transform3D.IDENTITY, AABB(), true)[1]
 
 
+## Uniformly scale a runtime GLB so its widest horizontal extent fits `target_diameter_m`,
+## and drop it so its base sits on the table (y = 0). For wide-and-flat props like the
+## lava crater (scaled by footprint, not height, unlike the trees).
+func _fit_to_footprint(node: Node3D, target_diameter_m: float) -> void:
+	var aabb := _model_space_aabb(node)
+	var widest := maxf(aabb.size.x, aabb.size.z)
+	if widest < 0.0001:
+		return
+	var fit := target_diameter_m / widest
+	node.scale = Vector3(fit, fit, fit)
+	node.position.y = -aabb.position.y * fit
+
+
 static func _merge_mesh_aabbs(node: Node, xform: Transform3D, acc: AABB, first: bool) -> Array:
 	var node_xform := xform
 	if node is Node3D:
@@ -2922,6 +2982,53 @@ func _fetch_hazard_panels() -> void:
 		update_placed_objects(_last_objects, _last_obj_table_size, _last_obj_rotation)
 
 
+## True once the volcanic lava-pool texture is cached (sync; no network access). Kept off
+## RUNTIME_PANELS so it never gates the grassland mine/sign set.
+func _lava_panel_ready() -> bool:
+	return _hazards_library != null \
+			and not _hazards_library.get_cached_path(LAVA_PANEL).is_empty()
+
+
+## Start the one-time async lava-texture download; the layout rebuilds (textured) on success.
+func _request_lava_panel() -> void:
+	if _lava_fetch_started or _hazards_library == null:
+		return
+	_lava_fetch_started = true
+	_fetch_lava_panel()
+
+
+func _fetch_lava_panel() -> void:
+	var ok: bool = await _hazards_library.ensure_panel(LAVA_PANEL)
+	if not ok:
+		_lava_fetch_started = false
+		return
+	if not _last_objects.is_empty():
+		update_placed_objects(_last_objects, _last_obj_table_size, _last_obj_rotation)
+
+
+## True once the 3D lava-crater GLB is cached (sync; no network access).
+func _lava_model_ready() -> bool:
+	return _hazards_library != null \
+			and not _hazards_library.get_cached_model_path(LAVA_CRATER_MODEL).is_empty()
+
+
+## Start the one-time async crater-GLB download; the layout rebuilds (3D) on success.
+func _request_lava_model() -> void:
+	if _lava_model_fetch_started or _hazards_library == null:
+		return
+	_lava_model_fetch_started = true
+	_fetch_lava_model()
+
+
+func _fetch_lava_model() -> void:
+	var ok: bool = await _hazards_library.ensure_model(LAVA_CRATER_MODEL)
+	if not ok:
+		_lava_model_fetch_started = false
+		return
+	if not _last_objects.is_empty():
+		update_placed_objects(_last_objects, _last_obj_table_size, _last_obj_rotation)
+
+
 ## An anti-tank mine: a flat olive-drab disc with the pressure-plate texture laid on
 ## top (keyed alpha), facing seeded from the object's identity. Decorative only —
 ## dangerous terrain stays passable (OPR: Dangerous, not Impassable).
@@ -3032,6 +3139,28 @@ func _hazard_flat_material(key: String, color: Color) -> Material:
 	return mat
 
 
+## Lava-pool surface material (cached): the round lava texture as albedo + emission map,
+## alpha-scissored to the round shape, so the molten cracks glow. Two-sided so the flat
+## quad reads from any camera angle.
+func _lava_texture_material() -> Material:
+	if _hazard_materials.has(LAVA_PANEL):
+		return _hazard_materials[LAVA_PANEL]
+	var tex := _hazards_library.get_texture(LAVA_PANEL)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = tex
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	mat.alpha_scissor_threshold = RUIN_ALPHA_SCISSOR_THRESHOLD
+	mat.emission_enabled = true
+	mat.emission_texture = tex
+	mat.emission = Color.WHITE
+	mat.emission_energy_multiplier = LAVA_TEXTURE_EMISSION_ENERGY
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	mat.texture_repeat = false
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_hazard_materials[LAVA_PANEL] = mat
+	return mat
+
+
 ## Dangerous mine: a small tapered dome. Decorative — dangerous terrain is passable.
 func _create_procedural_mine() -> Node3D:
 	var root := Node3D.new()
@@ -3051,47 +3180,99 @@ func _create_procedural_mine() -> Node3D:
 	return root
 
 
-## Glowing ember-crystal cluster: the DANGEROUS-terrain prop in the dwarven volcanic
-## biome (replaces the mine disc). A few angular emissive shards seeded from the object's
-## identity, so every client and every reload builds the SAME cluster. Emissive only (no
-## OmniLight, no _process) -> cheap. Decorative: dangerous terrain stays passable.
-func _create_crystal_hazard(obj: Dictionary) -> Node3D:
+## True if a crater centred at (x, z) world metres is at least CRATER_MIN_SPACING from
+## every crater already kept this layout — thins the dense mine layout to non-overlapping
+## lava craters (≈3-5 per dangerous field) in the volcanic biome.
+func _crater_spot_free(x: float, z: float) -> bool:
+	var min_d := CRATER_MIN_SPACING_INCHES * INCHES_TO_METERS
+	var p := Vector2(x, z)
+	for c in _crater_positions:
+		if p.distance_to(c) < min_d:
+			return false
+	return true
+
+
+## Glowing lava prop: the DANGEROUS-terrain prop in the volcanic biome (replaces the mine
+## disc). Best: a TRELLIS 3D crater GLB + a targeted OmniLight for the molten glow. Until
+## that GLB is cached it falls back to a flat alpha-keyed lava-texture quad, then to a
+## procedural dark-crust + molten-core disc. Orientation seeded from the object's identity so
+## every client + reload matches. Decorative: dangerous terrain stays passable.
+func _create_lava_pool(obj: Dictionary) -> Node3D:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _placed_object_seed(obj)
 
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = CRYSTAL_BASE_COLOR
-	mat.emission_enabled = true
-	mat.emission = CRYSTAL_EMISSION_COLOR
-	mat.emission_energy_multiplier = CRYSTAL_EMISSION_ENERGY
-	mat.metallic = 0.2
-	mat.roughness = 0.35
-
-	var spread := CRYSTAL_CLUSTER_RADIUS_INCHES * INCHES_TO_METERS
-	var base_r := CRYSTAL_RADIUS_INCHES * INCHES_TO_METERS
-	var shard_count := rng.randi_range(CRYSTAL_SHARDS_MIN, CRYSTAL_SHARDS_MAX)
+	var radius := LAVA_POOL_RADIUS_INCHES * INCHES_TO_METERS
+	var height := LAVA_POOL_HEIGHT_INCHES * INCHES_TO_METERS
 
 	var root := Node3D.new()
-	for _i in range(shard_count):
-		var h := rng.randf_range(CRYSTAL_HEIGHT_MIN_INCHES, CRYSTAL_HEIGHT_MAX_INCHES) * INCHES_TO_METERS
-		var shard := MeshInstance3D.new()
-		var mesh := CylinderMesh.new()
-		mesh.top_radius = base_r * 0.15  # pointed tip
-		mesh.bottom_radius = base_r * rng.randf_range(0.7, 1.0)
-		mesh.height = h
-		mesh.radial_segments = CRYSTAL_SIDES
-		shard.mesh = mesh
-		shard.material_override = mat
-		shard.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		# Spread within the cluster, base on the table, tilted slightly outward.
-		var ang := rng.randf() * TAU
-		var dist := rng.randf() * spread
-		shard.position = Vector3(cos(ang) * dist, h / 2.0, sin(ang) * dist)
-		shard.rotation = Vector3(
-			deg_to_rad(rng.randf_range(-CRYSTAL_TILT_MAX_DEG, CRYSTAL_TILT_MAX_DEG)),
-			rng.randf() * TAU,
-			deg_to_rad(rng.randf_range(-CRYSTAL_TILT_MAX_DEG, CRYSTAL_TILT_MAX_DEG)))
-		root.add_child(shard)
+
+	if _lava_model_ready():
+		# Best: the volumetric 3D crater GLB, scaled to its footprint and sitting on the
+		# table, with a targeted molten glow light. Kept craters are few (non-overlapping),
+		# so lighting every one keeps each dangerous field lit without flooding the scene.
+		var scene: PackedScene = _hazards_library.get_model_scene(LAVA_CRATER_MODEL)
+		if scene != null:
+			var crater := scene.instantiate() as Node3D
+			_fit_to_footprint(crater, LAVA_CRATER_DIAMETER_INCHES * INCHES_TO_METERS)
+			root.add_child(crater)
+			var light := OmniLight3D.new()
+			light.light_color = LAVA_LIGHT_COLOR
+			light.light_energy = LAVA_LIGHT_ENERGY
+			light.omni_range = LAVA_LIGHT_RANGE_M
+			light.shadow_enabled = false
+			light.position.y = LAVA_LIGHT_HEIGHT_M
+			root.add_child(light)
+			root.rotation.y = rng.randf() * TAU
+			return root
+
+	if _lava_panel_ready():
+		# Textured pool: a flat quad wearing the lava texture as albedo + emission map
+		# (alpha-keyed to the round shape), so the molten cracks glow.
+		var quad := MeshInstance3D.new()
+		var quad_mesh := QuadMesh.new()
+		quad_mesh.size = Vector2(radius * 2.0, radius * 2.0)
+		quad.mesh = quad_mesh
+		quad.material_override = _lava_texture_material()
+		quad.rotation.x = -PI / 2.0  # lay the +Z-facing quad flat, facing up
+		quad.position.y = height + PROP_SURFACE_LIFT
+		quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(quad)
+	else:
+		# Procedural fallback (until the texture is cached): dark cooled-crust rim disc...
+		var crust := MeshInstance3D.new()
+		var crust_mesh := CylinderMesh.new()
+		crust_mesh.top_radius = radius
+		crust_mesh.bottom_radius = radius
+		crust_mesh.height = height
+		crust_mesh.radial_segments = LAVA_POOL_SIDES
+		crust.mesh = crust_mesh
+		var crust_mat := StandardMaterial3D.new()
+		crust_mat.albedo_color = LAVA_CRUST_COLOR
+		crust_mat.roughness = 0.95
+		crust.material_override = crust_mat
+		crust.position.y = height / 2.0 - Z_FIGHT_OFFSET
+		crust.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(crust)
+
+		# ...and a brighter emissive molten core sitting just proud of the crust.
+		var core := MeshInstance3D.new()
+		var core_mesh := CylinderMesh.new()
+		core_mesh.top_radius = radius * LAVA_CORE_FRAC
+		core_mesh.bottom_radius = radius * LAVA_CORE_FRAC
+		core_mesh.height = height
+		core_mesh.radial_segments = LAVA_POOL_SIDES
+		core.mesh = core_mesh
+		var core_mat := StandardMaterial3D.new()
+		core_mat.albedo_color = LAVA_EMISSION_COLOR
+		core_mat.emission_enabled = true
+		core_mat.emission = LAVA_EMISSION_COLOR
+		core_mat.emission_energy_multiplier = LAVA_EMISSION_ENERGY
+		core.material_override = core_mat
+		core.position.y = height + PROP_SURFACE_LIFT
+		core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(core)
+
+	root.rotation.y = rng.randf() * TAU  # vary the irregular rim per pool
 	return root
 
 
