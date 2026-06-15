@@ -20,15 +20,21 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   urban ruins.** Each biome's ruin walls, "trees"/flora and containers now have their own
   R2-delivered texture set instead of falling back to grassland. **volcanic_ash** is
   styled as a **dwarven hold** — dark basalt ruin walls with restrained gold/copper rune
-  inlay, monolithic standing-stone (menhir) "forests" in place of trees, riveted dwarven
-  ore-chest containers, and — as the **dangerous-terrain** prop — a procedural, emissive
-  **ember-glowing crystal cluster** (`_create_crystal_hazard`, seeded per object → MP/save
-  safe, no dynamic light) instead of mines. **alien_jungle** = overgrown stone with
-  bioluminescent flora; **urban_ruins** = cracked concrete with exposed rebar. Wired via
-  `BIOME_PROP_THEMES` / `BIOME_CONTAINER_THEMES`; the ruins/trees/containers manifests gain
-  the `volcanic_`/`jungle_`/`urban_` panel sets, plus 9 volumetric GLB flora models
-  (3 per biome, TRELLIS-generated, depth-verified) so MODELS mode is 3D, not just
-  billboards. Crystal prop unit-tested.
+  inlay, slender upright standing-stone (menhir) "forests" in place of trees, open dwarven
+  storage crates full of green glowing crystals (open-crate top + plain metal sides), and
+  — as the **dangerous-terrain** prop — a volumetric **3D lava crater** (TRELLIS GLB: rocky
+  bowl with molten lava overflowing the rim) with a tier-capped targeted OmniLight for the
+  glow, instead of mines, and no warning signs. The crater falls back to a flat lava-texture
+  quad, then a procedural crust+core pool, until the GLB downloads. **alien_jungle** =
+  overgrown stone with bioluminescent flora; **urban_ruins** = cracked concrete with exposed
+  rebar. Wired via `BIOME_PROP_THEMES` / `BIOME_CONTAINER_THEMES`; the
+  ruins/trees/containers/hazards manifests gain the `volcanic_`/`jungle_`/`urban_` panel
+  sets + the `lava_pool` texture + the `lava_crater` GLB, plus 9 volumetric GLB flora models
+  (3 per biome, TRELLIS-generated, depth-verified) so MODELS mode is 3D, not just billboards.
+  `HazardsLibrary` gains GLB-model support (mirrors TreesLibrary). Lava pool unit-tested.
+- **Denser forests.** Decoration density (`TREES_PER_CELL`) raised ~20 % (0.6 → 0.72) so
+  woods — especially the slim volcanic menhir "forests" — read as proper stands, not
+  sparse. Placement stays seeded/deterministic; existing saves keep their baked positions.
 - **Regiments — facing & front-arc display (AoF:R, display-only).** Every regiment
   movement-tray block now shows a flat cyan facing arrow ahead of its front rank, and
   an amber front-arc wedge (the forward 180° half-plane) toggled with the **F** key.
