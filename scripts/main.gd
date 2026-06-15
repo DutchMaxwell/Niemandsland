@@ -2077,8 +2077,11 @@ func _on_host_rejoined() -> void:
 
 ## An imported army needs models that aren't cached yet — show a progress overlay.
 func _on_model_caching_started(total: int) -> void:
-	# During an army import the full-screen "LOADING ARMY" overlay already covers this.
+	# Army-import overlay: switch from the "LOADING ARMY" parse phase to the 3D-model
+	# download phase with an n/x counter (issue #56).
 	if is_instance_valid(_army_loading_overlay):
+		_army_loading_overlay.set_label("LOADING 3D MODELS  0/%d" % maxi(1, total))
+		_army_loading_overlay.set_progress(0.0)
 		return
 	_ensure_cache_progress_ui()
 	_kill_cache_tween()
@@ -2092,6 +2095,7 @@ func _on_model_caching_progress(done: int, total: int) -> void:
 	# Feed the army-import overlay's bar when it's up — downloads are the FIRST half of
 	# the bar (the spawn that follows fills the second half).
 	if is_instance_valid(_army_loading_overlay):
+		_army_loading_overlay.set_label("LOADING 3D MODELS  %d/%d" % [done, maxi(1, total)])
 		_army_loading_overlay.set_progress(0.5 * float(done) / float(maxi(1, total)))
 		return
 	if not _cache_progress_panel:
@@ -2109,6 +2113,7 @@ func _on_model_caching_progress(done: int, total: int) -> void:
 ## any, filled the first half via _on_model_caching_progress).
 func _on_army_spawn_progress(done: int, total: int) -> void:
 	if is_instance_valid(_army_loading_overlay):
+		_army_loading_overlay.set_label("PLACING ARMY  %d/%d" % [done, maxi(1, total)])
 		_army_loading_overlay.set_progress(0.5 + 0.5 * float(done) / float(maxi(1, total)))
 
 
