@@ -11,6 +11,11 @@
       "url": "warning_sign.webp",
       "sha256": "0e4f791d194961e73618d62a1ea8dcf9a926cbd812bee88afe9299d4c461a33c",
       "size": 198066
+    },
+    "lava_pool": {
+      "url": "lava_pool.webp?v=9fdb85d1",
+      "sha256": "9fdb85d1463d67debb3a5e8691854028f558461ea8b72f7c1114c353f7c05d71",
+      "size": 695718
     }
   }
 }
