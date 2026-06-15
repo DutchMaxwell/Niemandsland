@@ -6,6 +6,13 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Changed
+- **Cleaner army import loading (issue #56).** The loading overlay now names each phase
+  with a counter — **LOADING ARMY → LOADING 3D MODELS n/x → PLACING ARMY n/x** — instead
+  of one static label that looked like it reset. The army no longer assembles piecemeal in
+  view: the tray and all models stay hidden through the build and are revealed all at once
+  for the drop-in deployment, which now starts only after every model is built.
+
 ### Added
 - **Models rest on terrain surfaces when placed.** Dragging a model now raycasts down
   onto the ground beneath its base and rests it on the highest surface there — the table
