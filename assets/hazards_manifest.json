@@ -21,6 +21,11 @@
       "url": "lava_crater.webp?v=c7717098",
       "sha256": "c7717098e5443b8adcdaca00f8c781390824b311d1fc3f8e3d045195afb5a4df",
       "size": 435728
+    },
+    "carnivore_plant": {
+      "url": "carnivore_plant.webp?v=d28a05b2",
+      "sha256": "d28a05b27ad6a1be09156ffc1b355a494d4955a32fcd3baf77ac6ae801c7969f",
+      "size": 521650
     }
   },
   "models": {
@@ -28,6 +33,11 @@
       "url": "lava_crater.glb?v=4fbccc01",
       "sha256": "4fbccc01d7986347bacdc90665fc8c31b6378a16df10c6ba4e765a18e7a7c0ad",
       "size": 5599400
+    },
+    "carnivore_plant": {
+      "url": "carnivore_plant.glb?v=f9f96394",
+      "sha256": "f9f96394e87361acae5624c4672ef0918a85036c4658b09e20b729b757d99b18",
+      "size": 7422128
     }
   }
 }
