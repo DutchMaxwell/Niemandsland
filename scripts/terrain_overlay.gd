@@ -148,13 +148,17 @@ const LAVA_TEXTURE_EMISSION_ENERGY := 0.35     # textured pool (the texture is a
 ## Falls back to the texture quad, then the procedural pool, until the GLB is cached.
 const LAVA_CRATER_MODEL := "lava_crater"
 const LAVA_CRATER_DIAMETER_INCHES := 2.4       # footprint the GLB is scaled to fit
-## Targeted glow light for the crater (the molten lava). Modest + tier-capped so a field of
-## craters doesn't flood the scene like the old flat pools did.
+## Craters must not overlap: the dense grassland minefield layout (MINES_PER_CELL) is
+## thinned at render time for volcanic to non-overlapping craters at least this far apart
+## (centre-to-centre, a touch over a crater diameter). This naturally yields ~3-5 craters
+## per dangerous field; the rest of the mine slots are skipped.
+const CRATER_MIN_SPACING_INCHES := LAVA_CRATER_DIAMETER_INCHES * 1.1
+## Targeted glow light for each crater (the molten lava). Every kept crater gets one — they
+## are few (non-overlapping) so the scene isn't flooded, and no field is left dark.
 const LAVA_LIGHT_COLOR := Color(1.0, 0.45, 0.13)
 const LAVA_LIGHT_RANGE_M := 0.20
 const LAVA_LIGHT_ENERGY := 0.7
 const LAVA_LIGHT_HEIGHT_M := 0.02
-const LAVA_MAX_LIGHTS: Array[int] = [0, 4, 8, 12, 12]  # per quality tier (PERFORMANCE..ULTRA)
 
 ## Textured ruins walls (first pass): the wall + corner-post props use a lit, world-
 ## triplanar stone material instead of the hologram look (other props stay holographic for
@@ -332,9 +336,9 @@ var _hazard_fetch_started := false
 ## One-time async fetches for the volcanic lava prop (texture + the 3D crater GLB).
 var _lava_fetch_started := false
 var _lava_model_fetch_started := false
-## How many lava craters got a glow OmniLight this layout (reset per update_placed_objects,
-## capped by LAVA_MAX_LIGHTS[quality tier]).
-var _lava_lights_used := 0
+## XZ centres (metres) of lava craters kept this layout, so further mine slots that would
+## overlap are skipped (reset per update_placed_objects). Keeps craters from clumping.
+var _crater_positions: Array[Vector2] = []
 
 ## Active biome prop themes (name prefixes into the panel sets).
 var _prop_theme := ""
@@ -2525,7 +2529,7 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 	# Volcanic dangerous terrain renders as lava craters/pools (own fetches, no warning
 	# signs), so only non-volcanic biomes need the mine/sign hazard panel fetch.
 	var volcanic_hazards := _prop_theme == "volcanic_"
-	_lava_lights_used = 0
+	_crater_positions.clear()
 	for obj in objects:
 		var obj_type: String = obj.get("object_type", "tree")
 		if obj_type == "tree" and not (_tree_panels_ready() and _tree_models_ready()):
@@ -2586,14 +2590,14 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 		elif object_type == "container" and use_container_panels:
 			model = _create_textured_container(obj)
 		elif object_type == "mine" and volcanic_hazards:
-			# Volcanic biome: dangerous terrain is a glowing lava crater/pool, not a mine.
-			# The crater's targeted glow light is capped per quality tier across the overlay.
-			var lava_tier: int = clampi(GraphicsSettings.current_preset, 0, LAVA_MAX_LIGHTS.size() - 1)
-			var with_light: bool = _lava_lights_used < LAVA_MAX_LIGHTS[lava_tier]
-			model = _create_lava_pool(obj, with_light)
-			if with_light and _lava_model_ready():
-				_lava_lights_used += 1  # only the crater GLB carries a light
-			handles_own_facing = true
+			# Volcanic biome: dangerous terrain is a glowing lava crater, not a mine. Thin
+			# the dense mine layout to non-overlapping craters (max ~3-5 per field); skip
+			# slots that would overlap an already-placed crater.
+			if _crater_spot_free(rotated_x, rotated_z):
+				_crater_positions.append(Vector2(rotated_x, rotated_z))
+				model = _create_lava_pool(obj)
+				handles_own_facing = true
+			# else: model stays null -> this overlapping mine slot is skipped
 		elif object_type == "warning_sign" and volcanic_hazards:
 			# No warning signs in the volcanic lava-field biome (the lava speaks for itself).
 			model = null
@@ -3176,12 +3180,24 @@ func _create_procedural_mine() -> Node3D:
 	return root
 
 
+## True if a crater centred at (x, z) world metres is at least CRATER_MIN_SPACING from
+## every crater already kept this layout — thins the dense mine layout to non-overlapping
+## lava craters (≈3-5 per dangerous field) in the volcanic biome.
+func _crater_spot_free(x: float, z: float) -> bool:
+	var min_d := CRATER_MIN_SPACING_INCHES * INCHES_TO_METERS
+	var p := Vector2(x, z)
+	for c in _crater_positions:
+		if p.distance_to(c) < min_d:
+			return false
+	return true
+
+
 ## Glowing lava prop: the DANGEROUS-terrain prop in the volcanic biome (replaces the mine
-## disc). Best: a TRELLIS 3D crater GLB + a targeted OmniLight (`with_light`, tier-capped).
-## Until that GLB is cached it falls back to a flat alpha-keyed lava-texture quad, then to a
+## disc). Best: a TRELLIS 3D crater GLB + a targeted OmniLight for the molten glow. Until
+## that GLB is cached it falls back to a flat alpha-keyed lava-texture quad, then to a
 ## procedural dark-crust + molten-core disc. Orientation seeded from the object's identity so
 ## every client + reload matches. Decorative: dangerous terrain stays passable.
-func _create_lava_pool(obj: Dictionary, with_light: bool = false) -> Node3D:
+func _create_lava_pool(obj: Dictionary) -> Node3D:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _placed_object_seed(obj)
 
@@ -3192,20 +3208,20 @@ func _create_lava_pool(obj: Dictionary, with_light: bool = false) -> Node3D:
 
 	if _lava_model_ready():
 		# Best: the volumetric 3D crater GLB, scaled to its footprint and sitting on the
-		# table, with a targeted molten glow light (when the tier budget allows).
+		# table, with a targeted molten glow light. Kept craters are few (non-overlapping),
+		# so lighting every one keeps each dangerous field lit without flooding the scene.
 		var scene: PackedScene = _hazards_library.get_model_scene(LAVA_CRATER_MODEL)
 		if scene != null:
 			var crater := scene.instantiate() as Node3D
 			_fit_to_footprint(crater, LAVA_CRATER_DIAMETER_INCHES * INCHES_TO_METERS)
 			root.add_child(crater)
-			if with_light:
-				var light := OmniLight3D.new()
-				light.light_color = LAVA_LIGHT_COLOR
-				light.light_energy = LAVA_LIGHT_ENERGY
-				light.omni_range = LAVA_LIGHT_RANGE_M
-				light.shadow_enabled = false
-				light.position.y = LAVA_LIGHT_HEIGHT_M
-				root.add_child(light)
+			var light := OmniLight3D.new()
+			light.light_color = LAVA_LIGHT_COLOR
+			light.light_energy = LAVA_LIGHT_ENERGY
+			light.omni_range = LAVA_LIGHT_RANGE_M
+			light.shadow_enabled = false
+			light.position.y = LAVA_LIGHT_HEIGHT_M
+			root.add_child(light)
 			root.rotation.y = rng.randf() * TAU
 			return root
 
