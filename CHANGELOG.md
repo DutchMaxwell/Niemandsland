@@ -31,6 +31,9 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   panel sets + the `lava_pool` texture, plus 9 volumetric GLB flora models (3 per biome,
   TRELLIS-generated, depth-verified) so MODELS mode is 3D, not just billboards. Lava pool
   unit-tested.
+- **Denser forests.** Decoration density (`TREES_PER_CELL`) raised ~20 % (0.6 → 0.72) so
+  woods — especially the slim volcanic menhir "forests" — read as proper stands, not
+  sparse. Placement stays seeded/deterministic; existing saves keep their baked positions.
 - **Regiments — facing & front-arc display (AoF:R, display-only).** Every regiment
   movement-tray block now shows a flat cyan facing arrow ahead of its front rank, and
   an amber front-arc wedge (the forward 180° half-plane) toggled with the **F** key.
