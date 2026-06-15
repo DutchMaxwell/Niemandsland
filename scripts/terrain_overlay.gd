@@ -143,6 +143,19 @@ const LAVA_EMISSION_ENERGY := 0.7              # procedural-fallback core
 const LAVA_PANEL := "lava_pool"
 const LAVA_TEXTURE_EMISSION_ENERGY := 0.35     # textured pool (the texture is already bright)
 
+## Preferred prop: a TRELLIS 3D lava CRATER GLB (rocky bowl + molten lava, overflowing the
+## rim). Scaled to this footprint and given a targeted OmniLight for the emanating glow.
+## Falls back to the texture quad, then the procedural pool, until the GLB is cached.
+const LAVA_CRATER_MODEL := "lava_crater"
+const LAVA_CRATER_DIAMETER_INCHES := 2.4       # footprint the GLB is scaled to fit
+## Targeted glow light for the crater (the molten lava). Modest + tier-capped so a field of
+## craters doesn't flood the scene like the old flat pools did.
+const LAVA_LIGHT_COLOR := Color(1.0, 0.45, 0.13)
+const LAVA_LIGHT_RANGE_M := 0.20
+const LAVA_LIGHT_ENERGY := 0.7
+const LAVA_LIGHT_HEIGHT_M := 0.02
+const LAVA_MAX_LIGHTS: Array[int] = [0, 4, 8, 12, 12]  # per quality tier (PERFORMANCE..ULTRA)
+
 ## Textured ruins walls (first pass): the wall + corner-post props use a lit, world-
 ## triplanar stone material instead of the hologram look (other props stay holographic for
 ## now). The texture repeats every STONE_TILE_METERS in world space.
@@ -316,8 +329,12 @@ var _hazards_library: HazardsLibrary = null
 var _hazard_materials: Dictionary = {}
 var _hazard_fetch_started := false
 
-## One-time async fetch of the lava-pool texture (volcanic biome only).
+## One-time async fetches for the volcanic lava prop (texture + the 3D crater GLB).
 var _lava_fetch_started := false
+var _lava_model_fetch_started := false
+## How many lava craters got a glow OmniLight this layout (reset per update_placed_objects,
+## capped by LAVA_MAX_LIGHTS[quality tier]).
+var _lava_lights_used := 0
 
 ## Active biome prop themes (name prefixes into the panel sets).
 var _prop_theme := ""
@@ -1771,6 +1788,7 @@ func set_biome(biome_name: String) -> void:
 	_container_fetch_started = false
 	_hazard_fetch_started = false
 	_lava_fetch_started = false
+	_lava_model_fetch_started = false
 	if not _last_wall_segments.is_empty():
 		update_wall_models(_last_wall_segments, _last_wall_table_size, _last_wall_rotation)
 	if not _last_objects.is_empty():
@@ -2504,17 +2522,22 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 	var use_tree_panels := _tree_panels_ready() or _tree_models_ready()
 	var use_container_panels := _container_panels_ready()
 	var use_hazard_panels := _hazard_panels_ready()
-	# Volcanic dangerous terrain renders as lava pools (own texture fetch, no warning signs),
-	# so only non-volcanic biomes need the mine/sign hazard panel fetch.
+	# Volcanic dangerous terrain renders as lava craters/pools (own fetches, no warning
+	# signs), so only non-volcanic biomes need the mine/sign hazard panel fetch.
 	var volcanic_hazards := _prop_theme == "volcanic_"
+	_lava_lights_used = 0
 	for obj in objects:
 		var obj_type: String = obj.get("object_type", "tree")
 		if obj_type == "tree" and not (_tree_panels_ready() and _tree_models_ready()):
 			_request_tree_panels()
 		elif obj_type == "container" and not use_container_panels:
 			_request_container_panels()
-		elif obj_type == "mine" and volcanic_hazards and not _lava_panel_ready():
-			_request_lava_panel()
+		elif obj_type == "mine" and volcanic_hazards:
+			# Prefer the 3D crater GLB; fall back to the flat texture meanwhile.
+			if not _lava_model_ready():
+				_request_lava_model()
+			if not _lava_panel_ready():
+				_request_lava_panel()
 		elif (obj_type == "mine" or obj_type == "warning_sign") and not use_hazard_panels \
 				and not volcanic_hazards:
 			_request_hazard_panels()
@@ -2563,8 +2586,13 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 		elif object_type == "container" and use_container_panels:
 			model = _create_textured_container(obj)
 		elif object_type == "mine" and volcanic_hazards:
-			# Volcanic biome: dangerous terrain is a glowing lava pool, not a mine.
-			model = _create_lava_pool(obj)
+			# Volcanic biome: dangerous terrain is a glowing lava crater/pool, not a mine.
+			# The crater's targeted glow light is capped per quality tier across the overlay.
+			var lava_tier: int = clampi(GraphicsSettings.current_preset, 0, LAVA_MAX_LIGHTS.size() - 1)
+			var with_light: bool = _lava_lights_used < LAVA_MAX_LIGHTS[lava_tier]
+			model = _create_lava_pool(obj, with_light)
+			if with_light and _lava_model_ready():
+				_lava_lights_used += 1  # only the crater GLB carries a light
 			handles_own_facing = true
 		elif object_type == "warning_sign" and volcanic_hazards:
 			# No warning signs in the volcanic lava-field biome (the lava speaks for itself).
@@ -2783,6 +2811,19 @@ static func _model_space_aabb(node: Node3D) -> AABB:
 	return _merge_mesh_aabbs(node, Transform3D.IDENTITY, AABB(), true)[1]
 
 
+## Uniformly scale a runtime GLB so its widest horizontal extent fits `target_diameter_m`,
+## and drop it so its base sits on the table (y = 0). For wide-and-flat props like the
+## lava crater (scaled by footprint, not height, unlike the trees).
+func _fit_to_footprint(node: Node3D, target_diameter_m: float) -> void:
+	var aabb := _model_space_aabb(node)
+	var widest := maxf(aabb.size.x, aabb.size.z)
+	if widest < 0.0001:
+		return
+	var fit := target_diameter_m / widest
+	node.scale = Vector3(fit, fit, fit)
+	node.position.y = -aabb.position.y * fit
+
+
 static func _merge_mesh_aabbs(node: Node, xform: Transform3D, acc: AABB, first: bool) -> Array:
 	var node_xform := xform
 	if node is Node3D:
@@ -2961,6 +3002,29 @@ func _fetch_lava_panel() -> void:
 		update_placed_objects(_last_objects, _last_obj_table_size, _last_obj_rotation)
 
 
+## True once the 3D lava-crater GLB is cached (sync; no network access).
+func _lava_model_ready() -> bool:
+	return _hazards_library != null \
+			and not _hazards_library.get_cached_model_path(LAVA_CRATER_MODEL).is_empty()
+
+
+## Start the one-time async crater-GLB download; the layout rebuilds (3D) on success.
+func _request_lava_model() -> void:
+	if _lava_model_fetch_started or _hazards_library == null:
+		return
+	_lava_model_fetch_started = true
+	_fetch_lava_model()
+
+
+func _fetch_lava_model() -> void:
+	var ok: bool = await _hazards_library.ensure_model(LAVA_CRATER_MODEL)
+	if not ok:
+		_lava_model_fetch_started = false
+		return
+	if not _last_objects.is_empty():
+		update_placed_objects(_last_objects, _last_obj_table_size, _last_obj_rotation)
+
+
 ## An anti-tank mine: a flat olive-drab disc with the pressure-plate texture laid on
 ## top (keyed alpha), facing seeded from the object's identity. Decorative only —
 ## dangerous terrain stays passable (OPR: Dangerous, not Impassable).
@@ -3112,13 +3176,12 @@ func _create_procedural_mine() -> Node3D:
 	return root
 
 
-## Glowing lava pool: the DANGEROUS-terrain prop in the volcanic biome (replaces the mine
-## disc). A flat alpha-keyed quad wearing the lava texture (albedo + emission map) so the
-## molten cracks glow under the scene bloom; a dark-crust + molten-core disc is the fallback
-## until the texture is cached. Emission is kept low (no dynamic light) so the texture stays
-## readable instead of blowing to white. Orientation seeded from the object's identity so
+## Glowing lava prop: the DANGEROUS-terrain prop in the volcanic biome (replaces the mine
+## disc). Best: a TRELLIS 3D crater GLB + a targeted OmniLight (`with_light`, tier-capped).
+## Until that GLB is cached it falls back to a flat alpha-keyed lava-texture quad, then to a
+## procedural dark-crust + molten-core disc. Orientation seeded from the object's identity so
 ## every client + reload matches. Decorative: dangerous terrain stays passable.
-func _create_lava_pool(obj: Dictionary) -> Node3D:
+func _create_lava_pool(obj: Dictionary, with_light: bool = false) -> Node3D:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _placed_object_seed(obj)
 
@@ -3126,6 +3189,25 @@ func _create_lava_pool(obj: Dictionary) -> Node3D:
 	var height := LAVA_POOL_HEIGHT_INCHES * INCHES_TO_METERS
 
 	var root := Node3D.new()
+
+	if _lava_model_ready():
+		# Best: the volumetric 3D crater GLB, scaled to its footprint and sitting on the
+		# table, with a targeted molten glow light (when the tier budget allows).
+		var scene: PackedScene = _hazards_library.get_model_scene(LAVA_CRATER_MODEL)
+		if scene != null:
+			var crater := scene.instantiate() as Node3D
+			_fit_to_footprint(crater, LAVA_CRATER_DIAMETER_INCHES * INCHES_TO_METERS)
+			root.add_child(crater)
+			if with_light:
+				var light := OmniLight3D.new()
+				light.light_color = LAVA_LIGHT_COLOR
+				light.light_energy = LAVA_LIGHT_ENERGY
+				light.omni_range = LAVA_LIGHT_RANGE_M
+				light.shadow_enabled = false
+				light.position.y = LAVA_LIGHT_HEIGHT_M
+				root.add_child(light)
+			root.rotation.y = rng.randf() * TAU
+			return root
 
 	if _lava_panel_ready():
 		# Textured pool: a flat quad wearing the lava texture as albedo + emission map

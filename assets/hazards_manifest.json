@@ -16,6 +16,18 @@
       "url": "lava_pool.webp?v=9fdb85d1",
       "sha256": "9fdb85d1463d67debb3a5e8691854028f558461ea8b72f7c1114c353f7c05d71",
       "size": 695718
+    },
+    "lava_crater": {
+      "url": "lava_crater.webp?v=c7717098",
+      "sha256": "c7717098e5443b8adcdaca00f8c781390824b311d1fc3f8e3d045195afb5a4df",
+      "size": 435728
+    }
+  },
+  "models": {
+    "lava_crater": {
+      "url": "lava_crater.glb?v=55339a9d",
+      "sha256": "55339a9ddb6e3726b8e5d759571cccb28332dbb93805e04b9317689800d39ffa",
+      "size": 6705244
     }
   }
 }
