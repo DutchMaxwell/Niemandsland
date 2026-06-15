@@ -160,6 +160,15 @@ const LAVA_LIGHT_RANGE_M := 0.17
 const LAVA_LIGHT_ENERGY := 0.4   # dialed down — the craters were still radiating too hard
 const LAVA_LIGHT_HEIGHT_M := 0.02
 
+## Alien-jungle dangerous terrain: a TRELLIS 3D carnivorous-plant clump GLB. Same
+## non-overlapping thinning as the lava craters (CRATER_MIN_SPACING_INCHES, ~3-5 per field),
+## with a soft teal-green bioluminescent glow. Per-biome model picked in update_placed_objects.
+const BIOME_HAZARD_MODELS := {"volcanic_": LAVA_CRATER_MODEL, "jungle_": "carnivore_plant"}
+const CARNIVORE_MODEL := "carnivore_plant"
+const CARNIVORE_DIAMETER_INCHES := 1.8
+const CARNIVORE_LIGHT_COLOR := Color(0.30, 1.0, 0.55)  # teal-green bioluminescence
+const CARNIVORE_LIGHT_ENERGY := 0.3
+
 ## Textured ruins walls (first pass): the wall + corner-post props use a lit, world-
 ## triplanar stone material instead of the hologram look (other props stay holographic for
 ## now). The texture repeats every STONE_TILE_METERS in world space.
@@ -333,9 +342,10 @@ var _hazards_library: HazardsLibrary = null
 var _hazard_materials: Dictionary = {}
 var _hazard_fetch_started := false
 
-## One-time async fetches for the volcanic lava prop (texture + the 3D crater GLB).
+## One-time async fetches for the volcanic lava texture + the per-biome 3D hazard GLBs
+## (lava crater, carnivore plant), keyed by model name.
 var _lava_fetch_started := false
-var _lava_model_fetch_started := false
+var _hazard_model_fetch_started: Dictionary = {}
 ## XZ centres (metres) of lava craters kept this layout, so further mine slots that would
 ## overlap are skipped (reset per update_placed_objects). Keeps craters from clumping.
 var _crater_positions: Array[Vector2] = []
@@ -1792,7 +1802,7 @@ func set_biome(biome_name: String) -> void:
 	_container_fetch_started = false
 	_hazard_fetch_started = false
 	_lava_fetch_started = false
-	_lava_model_fetch_started = false
+	_hazard_model_fetch_started.clear()
 	if not _last_wall_segments.is_empty():
 		update_wall_models(_last_wall_segments, _last_wall_table_size, _last_wall_rotation)
 	if not _last_objects.is_empty():
@@ -2526,9 +2536,10 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 	var use_tree_panels := _tree_panels_ready() or _tree_models_ready()
 	var use_container_panels := _container_panels_ready()
 	var use_hazard_panels := _hazard_panels_ready()
-	# Volcanic dangerous terrain renders as lava craters/pools (own fetches, no warning
-	# signs), so only non-volcanic biomes need the mine/sign hazard panel fetch.
-	var volcanic_hazards := _prop_theme == "volcanic_"
+	# Biomes with a 3D dangerous-terrain prop (volcanic lava crater / alien-jungle carnivore
+	# plant) render their own GLB instead of mines and show NO warning signs, so they fetch
+	# the model GLB (+ the lava texture for volcanic) rather than the mine/sign panel set.
+	var hazard_model: String = BIOME_HAZARD_MODELS.get(_prop_theme, "")
 	_crater_positions.clear()
 	for obj in objects:
 		var obj_type: String = obj.get("object_type", "tree")
@@ -2536,14 +2547,14 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 			_request_tree_panels()
 		elif obj_type == "container" and not use_container_panels:
 			_request_container_panels()
-		elif obj_type == "mine" and volcanic_hazards:
-			# Prefer the 3D crater GLB; fall back to the flat texture meanwhile.
-			if not _lava_model_ready():
-				_request_lava_model()
-			if not _lava_panel_ready():
+		elif obj_type == "mine" and hazard_model != "":
+			if not _hazard_model_ready(hazard_model):
+				_request_hazard_model(hazard_model)
+			# Volcanic also fetches the flat lava texture as a fallback while the GLB loads.
+			if _prop_theme == "volcanic_" and not _lava_panel_ready():
 				_request_lava_panel()
 		elif (obj_type == "mine" or obj_type == "warning_sign") and not use_hazard_panels \
-				and not volcanic_hazards:
+				and hazard_model == "":
 			_request_hazard_panels()
 
 	if objects.is_empty():
@@ -2589,17 +2600,17 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 			handles_own_facing = true
 		elif object_type == "container" and use_container_panels:
 			model = _create_textured_container(obj)
-		elif object_type == "mine" and volcanic_hazards:
-			# Volcanic biome: dangerous terrain is a glowing lava crater, not a mine. Thin
-			# the dense mine layout to non-overlapping craters (max ~3-5 per field); skip
-			# slots that would overlap an already-placed crater.
+		elif object_type == "mine" and hazard_model != "":
+			# Biomes with a 3D hazard prop (volcanic lava crater / jungle carnivore plant):
+			# thin the dense mine layout to a non-overlapping few (~3-5 per field); skip
+			# slots that would overlap an already-placed one.
 			if _crater_spot_free(rotated_x, rotated_z):
 				_crater_positions.append(Vector2(rotated_x, rotated_z))
-				model = _create_lava_pool(obj)
+				model = _create_lava_pool(obj) if _prop_theme == "volcanic_" else _create_carnivore_plant(obj)
 				handles_own_facing = true
 			# else: model stays null -> this overlapping mine slot is skipped
-		elif object_type == "warning_sign" and volcanic_hazards:
-			# No warning signs in the volcanic lava-field biome (the lava speaks for itself).
+		elif object_type == "warning_sign" and hazard_model != "":
+			# No warning signs in biomes with a self-evident 3D hazard prop.
 			model = null
 		elif object_type == "mine" and use_hazard_panels:
 			model = _create_textured_mine(obj)
@@ -3007,23 +3018,24 @@ func _fetch_lava_panel() -> void:
 
 
 ## True once the 3D lava-crater GLB is cached (sync; no network access).
-func _lava_model_ready() -> bool:
+func _hazard_model_ready(model_name: String) -> bool:
 	return _hazards_library != null \
-			and not _hazards_library.get_cached_model_path(LAVA_CRATER_MODEL).is_empty()
+			and not _hazards_library.get_cached_model_path(model_name).is_empty()
 
 
-## Start the one-time async crater-GLB download; the layout rebuilds (3D) on success.
-func _request_lava_model() -> void:
-	if _lava_model_fetch_started or _hazards_library == null:
+## Start the one-time async hazard-GLB download (per model name); rebuilds the layout on
+## success so the prop upgrades to 3D in place.
+func _request_hazard_model(model_name: String) -> void:
+	if _hazard_model_fetch_started.get(model_name, false) or _hazards_library == null:
 		return
-	_lava_model_fetch_started = true
-	_fetch_lava_model()
+	_hazard_model_fetch_started[model_name] = true
+	_fetch_hazard_model(model_name)
 
 
-func _fetch_lava_model() -> void:
-	var ok: bool = await _hazards_library.ensure_model(LAVA_CRATER_MODEL)
+func _fetch_hazard_model(model_name: String) -> void:
+	var ok: bool = await _hazards_library.ensure_model(model_name)
 	if not ok:
-		_lava_model_fetch_started = false
+		_hazard_model_fetch_started[model_name] = false
 		return
 	if not _last_objects.is_empty():
 		update_placed_objects(_last_objects, _last_obj_table_size, _last_obj_rotation)
@@ -3206,7 +3218,7 @@ func _create_lava_pool(obj: Dictionary) -> Node3D:
 
 	var root := Node3D.new()
 
-	if _lava_model_ready():
+	if _hazard_model_ready(LAVA_CRATER_MODEL):
 		# Best: the volumetric 3D crater GLB, scaled to its footprint and sitting on the
 		# table, with a targeted molten glow light. Kept craters are few (non-overlapping),
 		# so lighting every one keeps each dangerous field lit without flooding the scene.
@@ -3273,6 +3285,33 @@ func _create_lava_pool(obj: Dictionary) -> Node3D:
 		root.add_child(core)
 
 	root.rotation.y = rng.randf() * TAU  # vary the irregular rim per pool
+	return root
+
+
+## Carnivorous-plant clump: the DANGEROUS-terrain prop in the alien_jungle biome (replaces
+## the mine disc). The TRELLIS 3D GLB scaled to its footprint + a soft teal bioluminescent
+## glow light. Returns null until the GLB is cached (the field fills in once it downloads).
+## Orientation seeded from the object's identity. Decorative: dangerous terrain stays passable.
+func _create_carnivore_plant(obj: Dictionary) -> Node3D:
+	if not _hazard_model_ready(CARNIVORE_MODEL):
+		return null
+	var scene: PackedScene = _hazards_library.get_model_scene(CARNIVORE_MODEL)
+	if scene == null:
+		return null
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _placed_object_seed(obj)
+	var root := Node3D.new()
+	var plant := scene.instantiate() as Node3D
+	_fit_to_footprint(plant, CARNIVORE_DIAMETER_INCHES * INCHES_TO_METERS)
+	root.add_child(plant)
+	var light := OmniLight3D.new()
+	light.light_color = CARNIVORE_LIGHT_COLOR
+	light.light_energy = CARNIVORE_LIGHT_ENERGY
+	light.omni_range = LAVA_LIGHT_RANGE_M
+	light.shadow_enabled = false
+	light.position.y = LAVA_LIGHT_HEIGHT_M
+	root.add_child(light)
+	root.rotation.y = rng.randf() * TAU
 	return root
 
 
