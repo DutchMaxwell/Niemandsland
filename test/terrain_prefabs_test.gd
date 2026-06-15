@@ -96,9 +96,9 @@ func test_ruins_have_no_decoration() -> void:
 
 
 func test_forest_decoration_places_trees() -> void:
-	# 9 cells * 0.6 trees/cell -> ceil(5.4) = 6 trees
+	# 9 cells * 0.72 trees/cell -> ceil(6.48) = 7 trees
 	var objects := TerrainPrefabs.decoration_for("wald_9x9", Vector2i.ZERO, _seeded_rng())
-	assert_int(objects.size()).is_equal(6)
+	assert_int(objects.size()).is_equal(7)
 	for obj in objects:
 		assert_str(obj["object_type"]).is_equal("tree")
 

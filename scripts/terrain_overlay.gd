@@ -126,28 +126,22 @@ const PROP_SURFACE_LIFT := 0.0003
 
 ## Glowing lava pool: the DANGEROUS-terrain prop in the volcanic biome (replaces the mine
 ## disc; no warning signs there — the lava is self-evident). A shallow molten disc with a
-## dark cooled-crust rim, emissive so it glows, plus a capped OmniLight per pool for the
-## emanating light. Decorative: dangerous terrain stays passable (OPR: Dangerous, not
-## Impassable). Orientation is seeded from the object's identity (deterministic -> MP/save
-## safe; never a global RNG).
+## dark cooled-crust rim, emissive so it glows under the scene's bloom. Decorative:
+## dangerous terrain stays passable (OPR: Dangerous, not Impassable). Orientation is
+## seeded from the object's identity (deterministic -> MP/save safe; never a global RNG).
 const LAVA_POOL_RADIUS_INCHES := 1.0
 const LAVA_POOL_HEIGHT_INCHES := 0.05        # very shallow molten pool
 const LAVA_POOL_SIDES := 9                     # low-poly disc -> slightly irregular rim
 const LAVA_CORE_FRAC := 0.72                   # bright molten core radius vs the crust rim
 const LAVA_CRUST_COLOR := Color(0.09, 0.05, 0.04)     # dark cooled basalt crust rim
 const LAVA_EMISSION_COLOR := Color(1.0, 0.35, 0.06)    # molten orange-red core
-const LAVA_EMISSION_ENERGY := 2.6
-## Emanating glow: one small static OmniLight per pool, capped per quality tier
-## (PERFORMANCE..ULTRA); beyond the cap a pool still glows via emission, just without a light.
-const LAVA_MAX_LIGHTS: Array[int] = [0, 4, 8, 12, 12]
-const LAVA_LIGHT_COLOR := Color(1.0, 0.45, 0.13)
-const LAVA_LIGHT_RANGE_M := 0.22
-const LAVA_LIGHT_ENERGY := 1.4
-const LAVA_LIGHT_HEIGHT_M := 0.03
+## Emission is kept LOW: the scene runs a strong bloom, so even a low multiplier reads as
+## molten glow. Higher values blow the whole pool to flat white and hide the texture.
+const LAVA_EMISSION_ENERGY := 0.7              # procedural-fallback core
 ## R2 hazard panel name for the lava-pool texture (top-down round molten pool, alpha-keyed);
 ## used as both albedo and emission map. Until cached, the pool uses the procedural fallback.
 const LAVA_PANEL := "lava_pool"
-const LAVA_TEXTURE_EMISSION_ENERGY := 1.8
+const LAVA_TEXTURE_EMISSION_ENERGY := 0.35     # textured pool (the texture is already bright)
 
 ## Textured ruins walls (first pass): the wall + corner-post props use a lit, world-
 ## triplanar stone material instead of the hologram look (other props stay holographic for
@@ -322,9 +316,6 @@ var _hazards_library: HazardsLibrary = null
 var _hazard_materials: Dictionary = {}
 var _hazard_fetch_started := false
 
-## How many volcanic lava pools have been given an OmniLight this layout (reset per
-## update_placed_objects, capped by LAVA_MAX_LIGHTS[quality tier]).
-var _lava_lights_used := 0
 ## One-time async fetch of the lava-pool texture (volcanic biome only).
 var _lava_fetch_started := false
 
@@ -2513,10 +2504,9 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 	var use_tree_panels := _tree_panels_ready() or _tree_models_ready()
 	var use_container_panels := _container_panels_ready()
 	var use_hazard_panels := _hazard_panels_ready()
-	# Volcanic dangerous terrain renders as procedural lava pools (no R2 hazard panels, no
-	# warning signs), so only non-volcanic biomes need the hazard panel fetch.
+	# Volcanic dangerous terrain renders as lava pools (own texture fetch, no warning signs),
+	# so only non-volcanic biomes need the mine/sign hazard panel fetch.
 	var volcanic_hazards := _prop_theme == "volcanic_"
-	_lava_lights_used = 0
 	for obj in objects:
 		var obj_type: String = obj.get("object_type", "tree")
 		if obj_type == "tree" and not (_tree_panels_ready() and _tree_models_ready()):
@@ -2573,13 +2563,8 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 		elif object_type == "container" and use_container_panels:
 			model = _create_textured_container(obj)
 		elif object_type == "mine" and volcanic_hazards:
-			# Volcanic biome: dangerous terrain is a glowing lava pool, not a mine. The
-			# emanating OmniLight is capped per quality tier across the whole overlay.
-			var lava_tier: int = clampi(GraphicsSettings.current_preset, 0, LAVA_MAX_LIGHTS.size() - 1)
-			var with_light: bool = _lava_lights_used < LAVA_MAX_LIGHTS[lava_tier]
-			if with_light:
-				_lava_lights_used += 1
-			model = _create_lava_pool(obj, with_light)
+			# Volcanic biome: dangerous terrain is a glowing lava pool, not a mine.
+			model = _create_lava_pool(obj)
 			handles_own_facing = true
 		elif object_type == "warning_sign" and volcanic_hazards:
 			# No warning signs in the volcanic lava-field biome (the lava speaks for itself).
@@ -3128,11 +3113,12 @@ func _create_procedural_mine() -> Node3D:
 
 
 ## Glowing lava pool: the DANGEROUS-terrain prop in the volcanic biome (replaces the mine
-## disc). A dark cooled-crust rim disc with a brighter emissive molten core, plus an
-## optional small OmniLight for the emanating glow (the caller gates `with_light` by the
-## per-overlay light budget / quality tier). Orientation seeded from the object's identity
-## so every client + reload matches. Decorative: dangerous terrain stays passable.
-func _create_lava_pool(obj: Dictionary, with_light: bool) -> Node3D:
+## disc). A flat alpha-keyed quad wearing the lava texture (albedo + emission map) so the
+## molten cracks glow under the scene bloom; a dark-crust + molten-core disc is the fallback
+## until the texture is cached. Emission is kept low (no dynamic light) so the texture stays
+## readable instead of blowing to white. Orientation seeded from the object's identity so
+## every client + reload matches. Decorative: dangerous terrain stays passable.
+func _create_lava_pool(obj: Dictionary) -> Node3D:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _placed_object_seed(obj)
 
@@ -3187,16 +3173,6 @@ func _create_lava_pool(obj: Dictionary, with_light: bool) -> Node3D:
 		core.position.y = height + PROP_SURFACE_LIFT
 		core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(core)
-
-	# Emanating glow (static; no _process). Capped by the caller.
-	if with_light:
-		var light := OmniLight3D.new()
-		light.light_color = LAVA_LIGHT_COLOR
-		light.light_energy = LAVA_LIGHT_ENERGY
-		light.omni_range = LAVA_LIGHT_RANGE_M
-		light.shadow_enabled = false
-		light.position.y = LAVA_LIGHT_HEIGHT_M
-		root.add_child(light)
 
 	root.rotation.y = rng.randf() * TAU  # vary the irregular rim per pool
 	return root
