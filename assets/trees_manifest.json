@@ -91,6 +91,96 @@
       "url": "tundra_tree_c_top.webp?v=10d19126",
       "sha256": "10d19126b0c7efdde1f425e315bce1077fb25f974f06cc9fa8fb8f580862268d",
       "size": 1494098
+    },
+    "volcanic_tree_a": {
+      "url": "volcanic_tree_a.webp?v=16b31260",
+      "sha256": "16b31260d912af4cb3ef491972f59b8e6fb66f3c261959133ccdae428ee770b6",
+      "size": 675336
+    },
+    "volcanic_tree_a_top": {
+      "url": "volcanic_tree_a_top.webp?v=1c7dd310",
+      "sha256": "1c7dd310464a844fd994315872ee207947ebc56d3d53af00d0d9a23f047d4501",
+      "size": 1042276
+    },
+    "volcanic_tree_b": {
+      "url": "volcanic_tree_b.webp?v=083c7861",
+      "sha256": "083c7861f561194382759391fbc5f09d347321773d0e5d4a05d08b140d8e2f15",
+      "size": 790072
+    },
+    "volcanic_tree_b_top": {
+      "url": "volcanic_tree_b_top.webp?v=f546db1e",
+      "sha256": "f546db1e5e610f1861c7f0b6f1c052eb25713ea6e2f2cfe9d0f39832cbf98887",
+      "size": 1182936
+    },
+    "volcanic_tree_c": {
+      "url": "volcanic_tree_c.webp?v=5a5a4bd7",
+      "sha256": "5a5a4bd71a4c6b368c3032a3ba95e082be685d519a14eb4f6253ac7af8dbc9fa",
+      "size": 532398
+    },
+    "volcanic_tree_c_top": {
+      "url": "volcanic_tree_c_top.webp?v=09e399c2",
+      "sha256": "09e399c201c71cf4eed5e0e0bae9f758b587e019c11806935a6cf7b621700bb4",
+      "size": 667082
+    },
+    "jungle_tree_a": {
+      "url": "jungle_tree_a.webp?v=7c952f7f",
+      "sha256": "7c952f7fb47fd61f7f5c650e359d5539f5468a0537cff8a73454bf0bcbc42306",
+      "size": 640340
+    },
+    "jungle_tree_a_top": {
+      "url": "jungle_tree_a_top.webp?v=ef2ffb50",
+      "sha256": "ef2ffb50dc99065e96fdc30d314fb92cc0def21f0af71c2bcae4e24eb0fd4bf8",
+      "size": 988916
+    },
+    "jungle_tree_b": {
+      "url": "jungle_tree_b.webp?v=25293389",
+      "sha256": "2529338982c585cb28ae24f5f4709570fb221bf271d449f363c193f585cfd3db",
+      "size": 810524
+    },
+    "jungle_tree_b_top": {
+      "url": "jungle_tree_b_top.webp?v=987713c9",
+      "sha256": "987713c9dfacc39af3a737ac66f9f445b653c0960400ec4ffd4713eb5589ecac",
+      "size": 1410668
+    },
+    "jungle_tree_c": {
+      "url": "jungle_tree_c.webp?v=2e5f39f3",
+      "sha256": "2e5f39f3f1e2910d69a72e12148d89db6f4d06901c46f9f9393fddc1b656a1b5",
+      "size": 577570
+    },
+    "jungle_tree_c_top": {
+      "url": "jungle_tree_c_top.webp?v=2ed984d0",
+      "sha256": "2ed984d092c77384b84c58ece3b7b6679507246a28338b04c3efc510ac58ef03",
+      "size": 839834
+    },
+    "urban_tree_a": {
+      "url": "urban_tree_a.webp?v=a88168e0",
+      "sha256": "a88168e0924e79f8107d8c03054f0c06f66535b725d810ac6cdbb0b20cd4b6d2",
+      "size": 472310
+    },
+    "urban_tree_a_top": {
+      "url": "urban_tree_a_top.webp?v=5ac90fd8",
+      "sha256": "5ac90fd8a3f279f53fac81cf7f7f4ad7e451c1fb02006699704fef4a890968f2",
+      "size": 214904
+    },
+    "urban_tree_b": {
+      "url": "urban_tree_b.webp?v=e55fa51b",
+      "sha256": "e55fa51b9f5b09b2ed4d372945c57fed901c87d8c526c074589575861727fdc2",
+      "size": 412188
+    },
+    "urban_tree_b_top": {
+      "url": "urban_tree_b_top.webp?v=189065e8",
+      "sha256": "189065e8bf2554d1e554892df99492ec599be9fa5e8efbb909964c4c9a4659e6",
+      "size": 1109082
+    },
+    "urban_tree_c": {
+      "url": "urban_tree_c.webp?v=b47e0986",
+      "sha256": "b47e098614f71f284eb022464da1a34a753b9982f96f913538a9aa716ffb51b9",
+      "size": 261014
+    },
+    "urban_tree_c_top": {
+      "url": "urban_tree_c_top.webp?v=98d99a58",
+      "sha256": "98d99a58fe7c1a7a64897875b9b8482b6563471264607dfc91098f65c1d61ccd",
+      "size": 291280
     }
   },
   "models": {
@@ -138,6 +228,51 @@
       "url": "tundra_tree_c.glb?v=dc518a04",
       "sha256": "dc518a040959ba97194d593e313270d09067bf7d15ee151a17d1df34b6eb6ecc",
       "size": 11567652
+    },
+    "volcanic_tree_a": {
+      "url": "volcanic_tree_a.glb?v=50f8a5c1",
+      "sha256": "50f8a5c1a3b990117da598c8574f48380dbd9b4a268e37abbb7e8f523f1b71dd",
+      "size": 6719788
+    },
+    "volcanic_tree_b": {
+      "url": "volcanic_tree_b.glb?v=32c091eb",
+      "sha256": "32c091eb9e165aca698b9be7e9f46d56c3c55c1be4091620d8d989c994603167",
+      "size": 5570640
+    },
+    "volcanic_tree_c": {
+      "url": "volcanic_tree_c.glb?v=39bba575",
+      "sha256": "39bba5752367086de97e4de685ac45e621cbdeb84f17228e27b49a9ea15efc34",
+      "size": 6115872
+    },
+    "jungle_tree_a": {
+      "url": "jungle_tree_a.glb?v=ac34d5ac",
+      "sha256": "ac34d5acb865a9cd69eaf8a12d99fa9851b0c037ec445c14252c1c9ac1a8f414",
+      "size": 6694424
+    },
+    "jungle_tree_b": {
+      "url": "jungle_tree_b.glb?v=e1ffab53",
+      "sha256": "e1ffab539a0f1e8f518aebc2d4fc6742d46c03d2ad04a1d70db4f85ac3994af3",
+      "size": 9563476
+    },
+    "jungle_tree_c": {
+      "url": "jungle_tree_c.glb?v=1cdd8dc9",
+      "sha256": "1cdd8dc942575ca41e7e8876ad7ce7549fc0127fb573c9b00021a2cdb4e55a52",
+      "size": 8370360
+    },
+    "urban_tree_a": {
+      "url": "urban_tree_a.glb?v=6a80e098",
+      "sha256": "6a80e098c924463bcae58e25dc97d3daa687c1f324b24a9b373f0d92ba81707b",
+      "size": 7524004
+    },
+    "urban_tree_b": {
+      "url": "urban_tree_b.glb?v=882d3bff",
+      "sha256": "882d3bff818612275590e1281c975204feae0968e59fe4e4eb79edd329a89624",
+      "size": 7999468
+    },
+    "urban_tree_c": {
+      "url": "urban_tree_c.glb?v=8b2b11d7",
+      "sha256": "8b2b11d7c47fd857b47ddd0af3ed80ab9d4f5026c7136c89edbb40dbadff99d6",
+      "size": 6617620
     }
   }
 }
