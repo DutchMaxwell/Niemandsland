@@ -63,34 +63,34 @@
       "size": 199778
     },
     "volcanic_container_blue_end": {
-      "url": "volcanic_container_blue_end.webp?v=fb8b38d7",
-      "sha256": "fb8b38d7d4cb278459e6307a4920bee6265b0a3f7ab784ab3f1a8f3e6a50989c",
-      "size": 168112
+      "url": "volcanic_container_blue_end.webp?v=b902023d",
+      "sha256": "b902023d16b6d2d7fe4d786b194e2a9d4266e85d50b9f3c2fd2f1047c1d5c3d8",
+      "size": 158704
     },
     "volcanic_container_blue_side": {
-      "url": "volcanic_container_blue_side.webp?v=9d59ba69",
-      "sha256": "9d59ba692adf0932d5c67849d395282482dea3ce0500ba40c33ade3ee18308a6",
-      "size": 81526
+      "url": "volcanic_container_blue_side.webp?v=4b6f17a5",
+      "sha256": "4b6f17a55bcd112232b07d53b127cdfa401537071264788a644ebe80434509d4",
+      "size": 68730
     },
     "volcanic_container_blue_top": {
-      "url": "volcanic_container_blue_top.webp?v=4c186934",
-      "sha256": "4c1869349d92d20ee294a2c2c851ec06229c8bc9b6142b7bf6afa8a05c06c3fe",
-      "size": 136518
+      "url": "volcanic_container_blue_top.webp?v=e68838e2",
+      "sha256": "e68838e275c3a62deca52a9ee5f235ad19ee2c3c76a81e5481ecdaf9fc237091",
+      "size": 202734
     },
     "volcanic_container_red_end": {
-      "url": "volcanic_container_red_end.webp?v=b095cd1e",
-      "sha256": "b095cd1ea351022b8de740370c39b5b76fa29314d3a07b6f914425ee6555f76a",
-      "size": 195640
+      "url": "volcanic_container_red_end.webp?v=0ee5dbcd",
+      "sha256": "0ee5dbcd015245aab03bd761369a427138b25d5a0900ed35aad3494687cd2309",
+      "size": 154748
     },
     "volcanic_container_red_side": {
-      "url": "volcanic_container_red_side.webp?v=ed6cf7f6",
-      "sha256": "ed6cf7f63b24410b2eeb69eeee0ea969e2fcd8d9a577f68a23261bd7cc8d7d17",
-      "size": 145964
+      "url": "volcanic_container_red_side.webp?v=d037f3fd",
+      "sha256": "d037f3fd887c1a3ad061f200bc3634a015b8f98b8f5f55ade4a64d2cf1f06a6d",
+      "size": 102110
     },
     "volcanic_container_red_top": {
-      "url": "volcanic_container_red_top.webp?v=5c773cfd",
-      "sha256": "5c773cfd15b119a9b15e952d7715618257eed795428a2727b18b51456e20a935",
-      "size": 59928
+      "url": "volcanic_container_red_top.webp?v=f65b650d",
+      "sha256": "f65b650d40ca4092ce980086cc5280ee9c10c10d738ceadc722ae96ea723afa2",
+      "size": 179076
     },
     "jungle_container_blue_end": {
       "url": "jungle_container_blue_end.webp?v=a475382e",

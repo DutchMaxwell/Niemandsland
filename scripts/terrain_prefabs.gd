@@ -32,8 +32,10 @@ const EDGE_WEST := 3
 ## Default segment length for an auto-placed ruin wall (one 3" grid edge).
 const WALL_SEGMENT_INCHES := 3.0
 
-## Decoration density (objects per 3" footprint cell).
-const TREES_PER_CELL := 0.6
+## Decoration density (objects per 3" footprint cell). Bumped from 0.6 → ~20 % denser so
+## the slim volcanic menhirs (and other biome forests) read as proper woods, not sparse.
+## Placement stays seeded/deterministic; existing saves keep their baked object positions.
+const TREES_PER_CELL := 0.72
 
 ## Grassland minefield: anti-tank mines per footprint cell (~15 on the 3x2 piece) with
 ## a small mutual spacing, plus warning signs at two opposite corners of the field.
