@@ -6,6 +6,15 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Added
+- **Alien-jungle dangerous terrain: carnivorous plants.** The `alien_jungle` biome's
+  dangerous terrain now spawns a TRELLIS 3D **carnivorous-plant clump** (bioluminescent
+  alien flytrap maws) — mirroring the volcanic lava crater, but with no glow light (the
+  bioluminescence is in the model's texture). The per-biome dangerous-terrain prop is
+  generalized (`BIOME_HAZARD_MODELS`:
+  volcanic → lava_crater, jungle → carnivore_plant), thinned to a non-overlapping ~3-5 per
+  field, no warning signs. GLB delivered on demand from R2 (hazards manifest `models`).
+
 ### Changed
 - **Cleaner army import loading (issue #56).** The loading overlay now names each phase
   with a counter — **LOADING ARMY → LOADING 3D MODELS n/x → PLACING ARMY n/x** — instead
