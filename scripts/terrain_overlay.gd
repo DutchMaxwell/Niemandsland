@@ -124,6 +124,23 @@ const SIGN_POST_COLOR := Color(0.35, 0.33, 0.3)   # weathered steel post
 ## Z_FIGHT_OFFSET (2 mm) is sized for walls — on a 3 mm mine disc it visibly floats.
 const PROP_SURFACE_LIFT := 0.0003
 
+## Ember-glowing crystal cluster: the DANGEROUS-terrain prop in the dwarven volcanic
+## biome (replaces the mine disc there). Emissive only — no dynamic light, no _process —
+## so it stays cheap. Decorative: dangerous terrain stays passable (OPR: Dangerous, not
+## Impassable). Shard shape/placement is seeded from the object's identity (deterministic
+## -> multiplayer + save safe; never a global RNG).
+const CRYSTAL_SHARDS_MIN := 3
+const CRYSTAL_SHARDS_MAX := 5
+const CRYSTAL_CLUSTER_RADIUS_INCHES := 0.35  # how far shards spread from the centre
+const CRYSTAL_HEIGHT_MIN_INCHES := 0.4
+const CRYSTAL_HEIGHT_MAX_INCHES := 1.0
+const CRYSTAL_RADIUS_INCHES := 0.12          # shard base half-width
+const CRYSTAL_SIDES := 5                      # angular prism faces (crystalline look)
+const CRYSTAL_TILT_MAX_DEG := 18.0
+const CRYSTAL_BASE_COLOR := Color(0.20, 0.06, 0.03)    # dark scorched crystal body
+const CRYSTAL_EMISSION_COLOR := Color(1.0, 0.42, 0.10)  # ember-orange glow
+const CRYSTAL_EMISSION_ENERGY := 2.2
+
 ## Textured ruins walls (first pass): the wall + corner-post props use a lit, world-
 ## triplanar stone material instead of the hologram look (other props stay holographic for
 ## now). The texture repeats every STONE_TILE_METERS in world space.
@@ -175,8 +192,14 @@ const _RUIN_SEED_PRIME_SIDE := 83492791
 ## (grassland = the default unprefixed set; desert = adobe walls + cacti; tundra =
 ## snowed-in stone + snow-laden conifers). Containers have their own theme map (only
 ## the tundra snows them in); minefield props are biome-agnostic.
-const BIOME_PROP_THEMES := {"arid_desert": "desert_", "frozen_tundra": "tundra_"}
-const BIOME_CONTAINER_THEMES := {"frozen_tundra": "tundra_"}
+const BIOME_PROP_THEMES := {
+	"arid_desert": "desert_", "frozen_tundra": "tundra_",
+	"volcanic_ash": "volcanic_", "alien_jungle": "jungle_", "urban_ruins": "urban_",
+}
+const BIOME_CONTAINER_THEMES := {
+	"frozen_tundra": "tundra_",
+	"volcanic_ash": "volcanic_", "alien_jungle": "jungle_", "urban_ruins": "urban_",
+}
 
 ## War-torn ruin fires: a deterministic share of wall cells carries a small FireProp
 ## (flames + smoke + flickering light). The pick derives ONLY from synced segment data
@@ -1741,6 +1764,7 @@ func set_biome(biome_name: String) -> void:
 	_ruin_fetch_started = false
 	_tree_fetch_started = false
 	_container_fetch_started = false
+	_hazard_fetch_started = false
 	if not _last_wall_segments.is_empty():
 		update_wall_models(_last_wall_segments, _last_wall_table_size, _last_wall_rotation)
 	if not _last_objects.is_empty():
@@ -2526,6 +2550,10 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 			handles_own_facing = true
 		elif object_type == "container" and use_container_panels:
 			model = _create_textured_container(obj)
+		elif object_type == "mine" and _prop_theme == "volcanic_":
+			# Dwarven volcanic biome: dangerous terrain glows as ember crystals, not mines.
+			model = _create_crystal_hazard(obj)
+			handles_own_facing = true
 		elif object_type == "mine" and use_hazard_panels:
 			model = _create_textured_mine(obj)
 			handles_own_facing = true
@@ -3020,6 +3048,50 @@ func _create_procedural_mine() -> Node3D:
 	dome.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(dome)
 
+	return root
+
+
+## Glowing ember-crystal cluster: the DANGEROUS-terrain prop in the dwarven volcanic
+## biome (replaces the mine disc). A few angular emissive shards seeded from the object's
+## identity, so every client and every reload builds the SAME cluster. Emissive only (no
+## OmniLight, no _process) -> cheap. Decorative: dangerous terrain stays passable.
+func _create_crystal_hazard(obj: Dictionary) -> Node3D:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _placed_object_seed(obj)
+
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = CRYSTAL_BASE_COLOR
+	mat.emission_enabled = true
+	mat.emission = CRYSTAL_EMISSION_COLOR
+	mat.emission_energy_multiplier = CRYSTAL_EMISSION_ENERGY
+	mat.metallic = 0.2
+	mat.roughness = 0.35
+
+	var spread := CRYSTAL_CLUSTER_RADIUS_INCHES * INCHES_TO_METERS
+	var base_r := CRYSTAL_RADIUS_INCHES * INCHES_TO_METERS
+	var shard_count := rng.randi_range(CRYSTAL_SHARDS_MIN, CRYSTAL_SHARDS_MAX)
+
+	var root := Node3D.new()
+	for _i in range(shard_count):
+		var h := rng.randf_range(CRYSTAL_HEIGHT_MIN_INCHES, CRYSTAL_HEIGHT_MAX_INCHES) * INCHES_TO_METERS
+		var shard := MeshInstance3D.new()
+		var mesh := CylinderMesh.new()
+		mesh.top_radius = base_r * 0.15  # pointed tip
+		mesh.bottom_radius = base_r * rng.randf_range(0.7, 1.0)
+		mesh.height = h
+		mesh.radial_segments = CRYSTAL_SIDES
+		shard.mesh = mesh
+		shard.material_override = mat
+		shard.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# Spread within the cluster, base on the table, tilted slightly outward.
+		var ang := rng.randf() * TAU
+		var dist := rng.randf() * spread
+		shard.position = Vector3(cos(ang) * dist, h / 2.0, sin(ang) * dist)
+		shard.rotation = Vector3(
+			deg_to_rad(rng.randf_range(-CRYSTAL_TILT_MAX_DEG, CRYSTAL_TILT_MAX_DEG)),
+			rng.randf() * TAU,
+			deg_to_rad(rng.randf_range(-CRYSTAL_TILT_MAX_DEG, CRYSTAL_TILT_MAX_DEG)))
+		root.add_child(shard)
 	return root
 
 

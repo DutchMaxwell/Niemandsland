@@ -16,6 +16,19 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   placement raycast (ground = layer 1) rests them on terrain, never on each other; there
   is no model-vs-model collision (bases may still touch for melee/tight ranks). Lays the
   groundwork for future multi-level terrain.
+- **Three new biomes get themed terrain props: volcanic (dwarven), alien jungle and
+  urban ruins.** Each biome's ruin walls, "trees"/flora and containers now have their own
+  R2-delivered texture set instead of falling back to grassland. **volcanic_ash** is
+  styled as a **dwarven hold** — dark basalt ruin walls with restrained gold/copper rune
+  inlay, monolithic standing-stone (menhir) "forests" in place of trees, riveted dwarven
+  ore-chest containers, and — as the **dangerous-terrain** prop — a procedural, emissive
+  **ember-glowing crystal cluster** (`_create_crystal_hazard`, seeded per object → MP/save
+  safe, no dynamic light) instead of mines. **alien_jungle** = overgrown stone with
+  bioluminescent flora; **urban_ruins** = cracked concrete with exposed rebar. Wired via
+  `BIOME_PROP_THEMES` / `BIOME_CONTAINER_THEMES`; the ruins/trees/containers manifests gain
+  the `volcanic_`/`jungle_`/`urban_` panel sets, plus 9 volumetric GLB flora models
+  (3 per biome, TRELLIS-generated, depth-verified) so MODELS mode is 3D, not just
+  billboards. Crystal prop unit-tested.
 - **Regiments — facing & front-arc display (AoF:R, display-only).** Every regiment
   movement-tray block now shows a flat cyan facing arrow ahead of its front rank, and
   an amber front-arc wedge (the forward 180° half-plane) toggled with the **F** key.
