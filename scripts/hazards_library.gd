@@ -74,6 +74,17 @@ func ensure_all_panels() -> bool:
 	return ok
 
 
+## Ensures a SINGLE panel is cached (downloads it if missing). Awaitable; true if the
+## panel is available afterwards. For panels OUTSIDE RUNTIME_PANELS (e.g. the volcanic
+## lava pool) that must not gate the mine/warning-sign set.
+func ensure_panel(panel: String) -> bool:
+	var entry: Dictionary = _panels.get(panel, {})
+	if entry.is_empty():
+		return false
+	var path: String = await _downloader.ensure(_resolve_url(entry), entry.get("sha256", ""))
+	return not path.is_empty()
+
+
 ## Decoded texture for a cached panel (mipmapped; decoded once, then reused).
 ## Returns null if the panel is not cached or fails to decode.
 func get_texture(panel: String) -> Texture2D:
