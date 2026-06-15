@@ -1,7 +1,8 @@
 extends GdUnitTestSuite
 ## TerrainOverlay._create_lava_pool: the glowing lava pool that is the DANGEROUS-terrain
-## prop in the volcanic biome (replaces mines). Dark crust rim + emissive molten core, an
-## optional capped OmniLight for the emanating glow. Seeded per object (MP/save safe).
+## prop in the volcanic biome (replaces mines). Textured alpha-keyed quad when the lava
+## texture is cached; a dark-crust + emissive molten-core disc is the fallback (what a bare
+## test instance builds, since no HazardsLibrary is wired). Seeded per object (MP/save safe).
 
 const TerrainOverlayScript = preload("res://scripts/terrain_overlay.gd")
 
@@ -24,36 +25,23 @@ func _emissive_core(node: Node3D) -> StandardMaterial3D:
 	return null
 
 
-func _omni(node: Node3D) -> OmniLight3D:
-	for c in node.get_children():
-		if c is OmniLight3D:
-			return c as OmniLight3D
-	return null
-
-
-func test_pool_without_light_has_no_omnilight() -> void:
-	var node: Node3D = auto_free(_overlay()._create_lava_pool(_obj(2, 3), false))
+func test_fallback_pool_has_crust_and_core_no_light() -> void:
+	# Bare instance has no HazardsLibrary -> the procedural fallback (crust + molten core).
+	var node: Node3D = auto_free(_overlay()._create_lava_pool(_obj(2, 3)))
 	assert_object(node).is_not_null()
-	assert_object(_omni(node)).is_null()
-	# Still has the crust + molten-core meshes.
 	assert_int(node.get_child_count()).is_equal(2)
-
-
-func test_pool_with_light_adds_a_capped_omnilight() -> void:
-	var node: Node3D = auto_free(_overlay()._create_lava_pool(_obj(2, 3), true))
-	var light := _omni(node)
-	assert_object(light).is_not_null()
-	assert_bool(light.shadow_enabled).is_false()  # cheap: no shadow casting
+	for c in node.get_children():
+		assert_bool(c is OmniLight3D).is_false()  # emission-only, no dynamic light
 
 
 func test_core_is_emissive_molten() -> void:
-	var mat := _emissive_core(auto_free(_overlay()._create_lava_pool(_obj(1, 1), false)))
+	var mat := _emissive_core(auto_free(_overlay()._create_lava_pool(_obj(1, 1))))
 	assert_object(mat).is_not_null()
 	assert_object(mat.emission).is_equal(TerrainOverlayScript.LAVA_EMISSION_COLOR)
 
 
 func test_is_deterministic_per_object() -> void:
 	var ov = _overlay()
-	var a: Node3D = auto_free(ov._create_lava_pool(_obj(4, 7), false))
-	var b: Node3D = auto_free(ov._create_lava_pool(_obj(4, 7), false))
+	var a: Node3D = auto_free(ov._create_lava_pool(_obj(4, 7)))
+	var b: Node3D = auto_free(ov._create_lava_pool(_obj(4, 7)))
 	assert_float(a.rotation.y).is_equal_approx(b.rotation.y, 0.0001)
