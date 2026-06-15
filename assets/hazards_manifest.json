@@ -25,9 +25,9 @@
   },
   "models": {
     "lava_crater": {
-      "url": "lava_crater.glb?v=55339a9d",
-      "sha256": "55339a9ddb6e3726b8e5d759571cccb28332dbb93805e04b9317689800d39ffa",
-      "size": 6705244
+      "url": "lava_crater.glb?v=4fbccc01",
+      "sha256": "4fbccc01d7986347bacdc90665fc8c31b6378a16df10c6ba4e765a18e7a7c0ad",
+      "size": 5599400
     }
   }
 }
