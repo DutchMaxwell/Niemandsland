@@ -161,13 +161,11 @@ const LAVA_LIGHT_ENERGY := 0.4   # dialed down — the craters were still radiat
 const LAVA_LIGHT_HEIGHT_M := 0.02
 
 ## Alien-jungle dangerous terrain: a TRELLIS 3D carnivorous-plant clump GLB. Same
-## non-overlapping thinning as the lava craters (CRATER_MIN_SPACING_INCHES, ~3-5 per field),
-## with a soft teal-green bioluminescent glow. Per-biome model picked in update_placed_objects.
+## non-overlapping thinning as the lava craters (CRATER_MIN_SPACING_INCHES, ~3-5 per field).
+## No glow light (unlike the lava crater). Per-biome model picked in update_placed_objects.
 const BIOME_HAZARD_MODELS := {"volcanic_": LAVA_CRATER_MODEL, "jungle_": "carnivore_plant"}
 const CARNIVORE_MODEL := "carnivore_plant"
 const CARNIVORE_DIAMETER_INCHES := 1.8
-const CARNIVORE_LIGHT_COLOR := Color(0.30, 1.0, 0.55)  # teal-green bioluminescence
-const CARNIVORE_LIGHT_ENERGY := 0.3
 
 ## Textured ruins walls (first pass): the wall + corner-post props use a lit, world-
 ## triplanar stone material instead of the hologram look (other props stay holographic for
@@ -3289,9 +3287,9 @@ func _create_lava_pool(obj: Dictionary) -> Node3D:
 
 
 ## Carnivorous-plant clump: the DANGEROUS-terrain prop in the alien_jungle biome (replaces
-## the mine disc). The TRELLIS 3D GLB scaled to its footprint + a soft teal bioluminescent
-## glow light. Returns null until the GLB is cached (the field fills in once it downloads).
-## Orientation seeded from the object's identity. Decorative: dangerous terrain stays passable.
+## the mine disc). Just the TRELLIS 3D GLB scaled to its footprint — NO glow light (the
+## bioluminescence is baked into the model's texture). Returns null until the GLB is cached
+## (the field fills in once it downloads). Orientation seeded from the object's identity.
 func _create_carnivore_plant(obj: Dictionary) -> Node3D:
 	if not _hazard_model_ready(CARNIVORE_MODEL):
 		return null
@@ -3304,13 +3302,6 @@ func _create_carnivore_plant(obj: Dictionary) -> Node3D:
 	var plant := scene.instantiate() as Node3D
 	_fit_to_footprint(plant, CARNIVORE_DIAMETER_INCHES * INCHES_TO_METERS)
 	root.add_child(plant)
-	var light := OmniLight3D.new()
-	light.light_color = CARNIVORE_LIGHT_COLOR
-	light.light_energy = CARNIVORE_LIGHT_ENERGY
-	light.omni_range = LAVA_LIGHT_RANGE_M
-	light.shadow_enabled = false
-	light.position.y = LAVA_LIGHT_HEIGHT_M
-	root.add_child(light)
 	root.rotation.y = rng.randf() * TAU
 	return root
 
