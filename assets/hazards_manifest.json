@@ -26,6 +26,16 @@
       "url": "carnivore_plant.webp?v=d28a05b2",
       "sha256": "d28a05b27ad6a1be09156ffc1b355a494d4955a32fcd3baf77ac6ae801c7969f",
       "size": 521650
+    },
+    "blood_stain": {
+      "url": "blood_stain.webp?v=70c77474",
+      "sha256": "70c77474038fec4b3b192d664ae4aa0087193f55db8963c4553a8523e465fa65",
+      "size": 243868
+    },
+    "oil_stain": {
+      "url": "oil_stain.webp?v=1ccd2753",
+      "sha256": "1ccd275391fbcfdfcfa38e96a4e333b54cc6280aaa3352822160bae80ce84c2a",
+      "size": 255500
     }
   },
   "models": {
