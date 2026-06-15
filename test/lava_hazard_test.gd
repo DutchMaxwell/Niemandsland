@@ -45,3 +45,19 @@ func test_is_deterministic_per_object() -> void:
 	var a: Node3D = auto_free(ov._create_lava_pool(_obj(4, 7)))
 	var b: Node3D = auto_free(ov._create_lava_pool(_obj(4, 7)))
 	assert_float(a.rotation.y).is_equal_approx(b.rotation.y, 0.0001)
+
+
+# ===== per-biome dangerous-terrain hazard model =====
+
+
+func test_biome_hazard_model_map() -> void:
+	# Volcanic -> lava crater, alien jungle -> carnivore plant; others have no 3D hazard prop.
+	assert_str(TerrainOverlayScript.BIOME_HAZARD_MODELS.get("volcanic_", "")).is_equal("lava_crater")
+	assert_str(TerrainOverlayScript.BIOME_HAZARD_MODELS.get("jungle_", "")).is_equal("carnivore_plant")
+	assert_bool(TerrainOverlayScript.BIOME_HAZARD_MODELS.has("urban_")).is_false()
+
+
+func test_carnivore_plant_null_until_model_cached() -> void:
+	# A bare instance has no HazardsLibrary -> the GLB is not cached -> no prop yet (the
+	# jungle dangerous field fills in once the carnivore GLB downloads).
+	assert_object(_overlay()._create_carnivore_plant(_obj(1, 2))).is_null()
