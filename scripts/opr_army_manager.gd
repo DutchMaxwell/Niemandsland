@@ -125,8 +125,11 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	var all_models: Array[Node3D] = []
 	var player_color = PLAYER_COLORS.get(army.player_id, Color.GRAY)
 
-	# Create army tray and get spawn position (starts elevated)
+	# Create army tray and get spawn position (starts elevated). The tray + its models stay
+	# HIDDEN through the build loop so the player never sees the army assemble stepwise — it
+	# is revealed all at once for the drop animation once every unit is built (issue #56).
 	var tray = _create_army_tray(army.player_id, army.name, player_color)
+	tray.visible = false
 	var tray_info = _get_tray_position_and_bounds(army.player_id)
 	var tray_pos = tray_info.position
 	var tray_bounds = tray_info.bounds  # Vector2 (width, depth)
@@ -186,6 +189,9 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 			current_pos.z += row_height
 
 		var unit_models = _spawn_unit(unit, current_pos, player_color, display_suffix, army.player_id, army)
+		# Keep each model hidden until the whole army is built (revealed for the drop below).
+		for model in unit_models:
+			model.visible = false
 		all_models.append_array(unit_models)
 
 		# Store mappings
@@ -203,7 +209,11 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 		spawn_progress.emit(spawned_units, total_units)
 		await get_tree().process_frame
 
-	# Animate tray and models dropping down
+	# Every unit is built: reveal the whole army at once, then drop it in as one clean
+	# deployment (no piecemeal pop-in during the build).
+	tray.visible = true
+	for model in all_models:
+		model.visible = true
 	_animate_tray_drop(tray, all_models, spawn_height)
 
 	# Wire up joined Heroes (OPR: a Hero "joined to" a unit belongs to it).
