@@ -7,7 +7,7 @@ signal save_completed(path: String)
 signal load_completed(object_count: int)
 signal load_failed(error: String)
 
-const SAVE_VERSION = "1.4"  # Added Age of Fantasy: Regiments movement-tray blocks
+const SAVE_VERSION = "1.5"  # Added free-placed sandbox terrain (ruins/forests/hazard clusters)
 const SAVE_EXTENSION = "nml"  # Niemandsland Save
 
 var object_manager: Node3D
@@ -158,6 +158,13 @@ func _serialize_object(obj: Node3D) -> Dictionary:
 		data["model_path"] = obj.get_meta("model_path", "")
 	elif obj.is_in_group("miniature"):
 		data["type"] = "miniature"
+	elif obj.is_in_group("sandbox_terrain"):
+		# Free-placed casual terrain (ruin / forest / hazard cluster). Checked BEFORE the
+		# generic "terrain" group, which it also belongs to. Cluster members rebuild
+		# deterministically from the (saved) network_id seed, so only the identity is stored.
+		data["type"] = "sandbox_terrain"
+		data["prop_id"] = obj.get_meta("prop_id", "")
+		data["prop_kind"] = obj.get_meta("prop_kind", 0)
 	elif obj.is_in_group("generated_terrain"):
 		data["type"] = "generated_terrain"
 		data["terrain_piece_id"] = obj.get_meta("terrain_piece_id", "")
@@ -509,6 +516,10 @@ func _deserialize_object(data: Dictionary) -> bool:
 			spawned_obj = object_manager.spawn_terrain(position, false, net_id)
 		"generated_terrain":
 			spawned_obj = _spawn_generated_terrain(data, position)
+		"sandbox_terrain":
+			var prop_id = data.get("prop_id", "")
+			var prop_kind = int(data.get("prop_kind", 0))
+			spawned_obj = object_manager.spawn_sandbox_terrain(prop_id, prop_kind, position, false, net_id)
 		_:
 			push_warning("Unknown object type: %s" % obj_type)
 			return false
