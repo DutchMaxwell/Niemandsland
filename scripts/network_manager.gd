@@ -352,6 +352,82 @@ func broadcast_spawn(object_type: String, pos: Vector3, object_id: int) -> void:
 	spawn_object_networked.rpc(object_type, pos.x, pos.y, pos.z, object_id)
 
 
+# === Persistent shared rulers (pinned measurements) ===
+# Mirrors the spawn/clear pattern above: each RPC is reliable and resolved on
+# /root/Main/PinnedRulers; the ruler is coloured by its OWNER on every client, so the
+# opponent sees whose it is. Session-only (never written to the .nml save).
+
+## Broadcast a pinned ruler to all peers (the owner already added it locally).
+func broadcast_ruler_pin(id: int, owner_peer: int, from_pos: Vector3, to_pos: Vector3,
+		distance_inches: float, blocked: bool) -> void:
+	if not is_multiplayer_active() or not _validate_rpc_ready("broadcast_ruler_pin"):
+		return
+	pin_ruler_networked.rpc(id, owner_peer, from_pos.x, from_pos.y, from_pos.z,
+			to_pos.x, to_pos.y, to_pos.z, distance_inches, blocked)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func pin_ruler_networked(id: int, owner_peer: int, fx: float, fy: float, fz: float,
+		tx: float, ty: float, tz: float, distance_inches: float, blocked: bool) -> void:
+	var pr := get_node_or_null("/root/Main/PinnedRulers")
+	if pr:
+		pr.add_ruler(id, owner_peer, Vector3(fx, fy, fz), Vector3(tx, ty, tz),
+				distance_inches, blocked)
+
+
+func broadcast_ruler_clear(id: int) -> void:
+	if not is_multiplayer_active() or not _validate_rpc_ready("broadcast_ruler_clear"):
+		return
+	clear_ruler_networked.rpc(id)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func clear_ruler_networked(id: int) -> void:
+	var pr := get_node_or_null("/root/Main/PinnedRulers")
+	if pr:
+		pr.remove_ruler(id)
+
+
+func broadcast_ruler_clear_owner(owner_peer: int) -> void:
+	if not is_multiplayer_active() or not _validate_rpc_ready("broadcast_ruler_clear_owner"):
+		return
+	clear_rulers_by_owner_networked.rpc(owner_peer)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func clear_rulers_by_owner_networked(owner_peer: int) -> void:
+	var pr := get_node_or_null("/root/Main/PinnedRulers")
+	if pr:
+		pr.clear_owner(owner_peer)
+
+
+func broadcast_ruler_clear_all() -> void:
+	if not is_multiplayer_active() or not _validate_rpc_ready("broadcast_ruler_clear_all"):
+		return
+	clear_all_rulers_networked.rpc()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func clear_all_rulers_networked() -> void:
+	var pr := get_node_or_null("/root/Main/PinnedRulers")
+	if pr:
+		pr.clear_all()
+
+
+## Replay the host's current rulers to one freshly-joined peer (late-joiner sync).
+func sync_rulers_to_peer(peer_id: int) -> void:
+	if not is_multiplayer_active():
+		return
+	var pr := get_node_or_null("/root/Main/PinnedRulers")
+	if pr == null:
+		return
+	for d in pr.serialize():
+		pin_ruler_networked.rpc_id(peer_id, int(d["id"]), int(d["owner"]),
+				float(d["fx"]), float(d["fy"]), float(d["fz"]),
+				float(d["tx"]), float(d["ty"]), float(d["tz"]),
+				float(d["dist"]), bool(d["blocked"]))
+
+
 ## Helper to broadcast movement to all peers
 func broadcast_move(object_id: int, pos: Vector3) -> void:
 	if not is_multiplayer_active():
