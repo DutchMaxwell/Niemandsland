@@ -1615,6 +1615,9 @@ func _on_table_size_chosen(size_feet: Vector2, dialog: Window) -> void:
 	var td := dialog as TableSizeDialog
 	if td and td.selected_biome != "" and table.has_method("set_biome"):
 		table.set_biome(td.selected_biome)
+		# Sync the biome to other players (host-authoritative, via the table-settings RPC).
+		if network_manager.is_multiplayer_active():
+			network_manager.broadcast_table_settings({"biome": td.selected_biome})
 	var content := dialog.get_child(0) as Control
 	var t := create_tween()
 	if content:
@@ -1801,6 +1804,10 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# The peer is registered and validated — hand it the full name roster so it
 	# immediately knows everyone already at the table (including the host).
 	network_manager.push_roster_to_peer(peer_id)
+	# Hand the joining peer the current biome (host-authoritative table state — the biome
+	# is not part of the serialized .nml game state, so it must be pushed separately).
+	if table != null:
+		network_manager.broadcast_table_settings({"biome": table.biome})
 
 
 ## Client: the host refused us because our game versions differ. Leave the
@@ -2331,6 +2338,10 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 			table.setup_table(size_feet)
 			_adjust_camera_for_table_size(size_feet)
 			print("[Settings] Table resized to %.1fx%.1f feet" % [size_feet.x, size_feet.y])
+
+	if settings.has("biome") and table.has_method("set_biome"):
+		table.set_biome(settings["biome"])
+		print("[Settings] Biome set to %s" % str(settings["biome"]))
 
 	if settings.has("deployment_type"):
 		var dtype = int(settings["deployment_type"])
@@ -2901,9 +2912,19 @@ func _on_remote_army_header(player_id: int, army_name: String, unit_count: int) 
 
 ## Receive a single unit + its objects from a remote peer
 func _on_remote_army_unit(unit_data: Dictionary, objects_data: Array, player_id: int) -> void:
-	var unit_name: String = unit_data.get("unit_properties", {}).get("name", "?")
+	var props: Dictionary = unit_data.get("unit_properties", {})
+	var unit_name: String = props.get("name", "?")
 	print("[ArmySync] Unit received: '%s' (%d objects, player_id=%d)" % [unit_name, objects_data.size(), player_id])
 	save_manager._deserialize_game_units([unit_data])
+
+	# The remote never ran spawn_army for this army, so its 3D models are NOT in the local
+	# R2 cache. Download them up front (like spawn_army -> _ensure_army_models_cached) BEFORE
+	# building the models, otherwise create_model_from_properties falls back to a placeholder
+	# body and the opponent's imported army shows no models.
+	var faction: String = props.get("faction_folder", "")
+	if faction != "" and unit_name != "" and opr_army_manager != null and opr_army_manager.model_library != null:
+		await opr_army_manager.model_library.ensure_models([{"faction": faction, "unit_name": unit_name}])
+
 	await save_manager._deserialize_objects(objects_data)
 
 	# Sync object counter per unit
