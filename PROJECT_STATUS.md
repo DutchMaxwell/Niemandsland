@@ -114,8 +114,9 @@ models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
 ## Planned
 
 The forward-looking plan and the feature-request pipeline now live in
-[`docs/ROADMAP.md`](docs/ROADMAP.md) (single source). Near-term: Regiments
-facing/LOS display, units-as-LOS-blockers, a UI sound bus.
+[`docs/ROADMAP.md`](docs/ROADMAP.md) (single source). Near-term: merge the casual
+sandbox terrain branch + extend forests to the other biomes, Regiments handling
+polish (frontage cycle / wheel), and the two-client multiplayer live test.
 
 ## Out of scope (by design)
 

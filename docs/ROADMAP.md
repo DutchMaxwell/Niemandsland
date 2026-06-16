@@ -22,23 +22,32 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **AoF: Regiments — verify import vs a real list** — confirm base sizes / frontage
-  from Army Forge against an actual `aofr` army. _S_
+- **Casual sandbox terrain (grid-free)** — pick terrain from a shelf and drag/rotate it
+  freely on the 3D table, no 3″-grid binding. Walkable multi-storey grassland ruins
+  (`SandboxTerrainProp`), oval tree-group forests + hazard clusters on a shared movable base
+  (`TerrainGroupBase`), and a 2D mirror of the placed terrain in the map-layouter.
+  Ruins are built from the SAME masonry wall panels as the grid ruins (RuinsLibrary, already
+  on R2) — no GLB / model-forge assets needed. **Branch-complete on `feat/sandbox-terrain`
+  (`b11f3c8` ruins + `13dcda9` forests/anti-tiling floor); engine + tests landed, awaiting
+  merge** → moves to Shipped with a PR link on merge. Follow-up: extend forests to the other
+  biomes (per-biome forest-floor textures + `biome_prefix` wiring; biome tree GLBs already on
+  R2). _M_
+- **AoF: Regiments — verify import vs a real list** — manually confirm base sizes / frontage
+  from Army Forge against an actual `aofr` army (manual QA; no automated checker planned). _S_
 
 ## 📋 Next (accepted, queued)
 - **Multiplayer — two-client live test** — confirm lobby/chat/names + the relay
-  (room browser, host reconnect) across two real clients. _S_
+  (room browser, host reconnect) across two real clients. Relay infra is deployed +
+  smoke-tested (Fly.io, `list_rooms`); only the full two-client in-game run remains. _S_
 - **Regiments — handling polish** — frontage cycle (5-wide ↔ other), wheel about the
-  front corner. _M_
-- **Units as line-of-sight blockers** — formation height + closed 1″ gaps (after the
-  terrain LOS aid). _M_
-- **UI sound bus** — a dedicated mutable "UI" audio bus + a `UiSound` autoload wiring
-  button hover/click/focus feedback. _S_
+  front corner. (`regiment_tray.gd` has `frontage`/`reform`, but no cycle/wheel yet.) _M_
 
 ## 🧊 Ideas (icebox — captured, not committed)
 
-- **Multi-level terrain** — per-cell elevation, walkable ruin floors, ramps. The
-  surface-aware placement raycast (models rest on terrain tops) is the groundwork. _L_
+- **Multi-level terrain** — per-cell elevation and ramps. (Walkable multi-storey ruin
+  floors already shipped via the sandbox terrain; this is the grid-editor / per-cell
+  elevation side.) The surface-aware placement raycast (models rest on terrain tops) is
+  the groundwork. _L_
 - Rules-reference overlays for more game systems.
 - _Community feedback from the alpha lands here first._
 
@@ -46,8 +55,12 @@ planned and where ideas go. For what already works see
 
 See [`CHANGELOG.md`](../CHANGELOG.md). Highlights: **Age of Fantasy: Regiments**
 (movement-tray blocks, square bases, casualty re-rank, save/load, **facing &
-front-arc display**), **skirmish 6″ coherency** (Firefight / AoF: Skirmish), the
-asset-CDN decoupling, and the go-public preparation.
+front-arc display**), **units as line-of-sight blockers** (`LosRules.units_block_line`,
+Asgard standard, display-only), the **UI audio bus** (`UiFeedback` autoload on a
+dedicated, independently mutable "UI" bus + hover/click/focus ticks and a volume slider
+— shipped as `UiFeedback`, not the originally-planned `UiSound`), **skirmish 6″
+coherency** (Firefight / AoF: Skirmish), the asset-CDN decoupling, and the go-public
+preparation.
 
 ---
 
