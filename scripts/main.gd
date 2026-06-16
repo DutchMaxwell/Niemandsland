@@ -253,6 +253,11 @@ const CAMERA_BROADCAST_INTERVAL: float = 0.2  # 5 Hz
 
 ## True while army batches are being sent — suppresses presence broadcasts
 var _is_army_syncing: bool = false
+## Buffers an incoming remote army between its header and complete RPCs, so all units are
+## built in ONE pass (download every model with a single ensure_models call — the download
+## manager has one shared HTTPRequest, so per-unit concurrent downloads collide). Keyed by
+## player_id -> { army_name, units: Array, objects: Array }.
+var _incoming_armies: Dictionary = {}
 
 
 func _ready() -> void:
@@ -2670,6 +2675,14 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	var unit_count = state.get("game_units", []).size()
 	print("[StateSync] Received game state from host: %d objects, %d game_units" % [obj_count, unit_count])
 
+	# Show the same loading overlay as a self-import while we rebuild the table + download models.
+	if not is_instance_valid(_army_loading_overlay):
+		_army_loading_overlay = LoadingOverlay.new()
+		_army_loading_overlay.compact = true
+		get_tree().root.add_child(_army_loading_overlay)
+		_army_loading_overlay.set_label("JOINING — LOADING TABLE")
+		_army_loading_overlay.set_indeterminate()
+
 	# Clear current objects (broadcast=false to avoid clearing host's objects)
 	object_manager.clear_all_objects(false)
 
@@ -2687,6 +2700,19 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	# Restore game units (OPR units with wounds, status, model positions)
 	save_manager._deserialize_game_units(state.get("game_units", []))
 
+	# Download every army's models up front in ONE batch (like the live army-complete path)
+	# so a late-joiner sees real 3D models, not placeholder bodies.
+	if opr_army_manager != null and opr_army_manager.model_library != null:
+		var join_specs: Array = []
+		for ud in state.get("game_units", []):
+			var jp: Dictionary = ud.get("unit_properties", {})
+			var jf: String = jp.get("faction_folder", "")
+			var jn: String = jp.get("name", "")
+			if jf != "" and jn != "":
+				join_specs.append({"faction": jf, "unit_name": jn})
+		if not join_specs.is_empty():
+			await opr_army_manager.model_library.ensure_models(join_specs)
+
 	# Deserialize objects (async for TTS downloads)
 	var objects_data = state.get("objects", [])
 	var loaded_count = await save_manager._deserialize_objects(objects_data)
@@ -2699,9 +2725,14 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	# Restore game state (round, current player)
 	save_manager._deserialize_game_state(state.get("game_state", {}))
 
-	# Restore marker visualizations (fatigue, shaken, wounds)
+	# Restore marker visualizations (fatigue, shaken, wounds) + AoF:R regiment trays.
 	save_manager._restore_hero_attachments_after_load()
 	save_manager._restore_markers_after_load()
+	save_manager._restore_regiments_after_load()
+
+	if is_instance_valid(_army_loading_overlay):
+		_army_loading_overlay.complete_and_free()
+		_army_loading_overlay = null
 
 	print("Synced %d objects from host (counter=%d)" % [loaded_count, object_manager._object_counter])
 
@@ -2893,6 +2924,12 @@ func _broadcast_army_import(army: OPRApiClient.OPRArmy, spawned_models: Array[No
 				model_positions.append(null)
 
 		unit_dict["model_positions"] = model_positions
+		# AoF:R — include the movement-tray block so the peer can rebuild the regiment
+		# (game_unit.to_dict() omits it; mirrors save_manager._serialize_game_units).
+		if opr_army_manager.regiments.has(game_unit.unit_id):
+			var reg = opr_army_manager.regiments[game_unit.unit_id]
+			if reg and is_instance_valid(reg.tray):
+				unit_dict["regiment"] = reg.to_dict()
 		units_data.append(unit_dict)
 		objects_per_unit.append(unit_objects)
 
@@ -2902,44 +2939,82 @@ func _broadcast_army_import(army: OPRApiClient.OPRArmy, spawned_models: Array[No
 	_is_army_syncing = false
 
 
-## Receive army header from a remote peer — prepare for incoming units
+## Receive an army header from a remote peer — make the tray, open the same loading overlay
+## as a self-import, and start buffering the incoming units (built all at once on complete).
 func _on_remote_army_header(player_id: int, army_name: String, unit_count: int) -> void:
 	print("[ArmySync] Header: '%s' — expecting %d units (player_id=%d)" % [army_name, unit_count, player_id])
-	# Create army tray on remote side
 	var player_color: Color = OPRArmyManager.PLAYER_COLORS.get(player_id, Color.GRAY)
 	opr_army_manager._create_army_tray(player_id, army_name, player_color)
+	_incoming_armies[player_id] = {"army_name": army_name, "units": [], "objects": []}
+	# Same overlay as a self-import, so receiving an army looks identical to loading one.
+	if not is_instance_valid(_army_loading_overlay):
+		_army_loading_overlay = LoadingOverlay.new()
+		_army_loading_overlay.compact = true
+		get_tree().root.add_child(_army_loading_overlay)
+		_army_loading_overlay.set_label("LOADING ARMY")
+		_army_loading_overlay.set_indeterminate()
 
 
-## Receive a single unit + its objects from a remote peer
+## Receive a single unit — BUFFER it. We do not download/spawn per unit: the model
+## download manager has one shared HTTPRequest, so concurrent per-unit downloads collide
+## (only the first finished, leaving the army with a single unit).
 func _on_remote_army_unit(unit_data: Dictionary, objects_data: Array, player_id: int) -> void:
-	var props: Dictionary = unit_data.get("unit_properties", {})
-	var unit_name: String = props.get("name", "?")
-	print("[ArmySync] Unit received: '%s' (%d objects, player_id=%d)" % [unit_name, objects_data.size(), player_id])
-	save_manager._deserialize_game_units([unit_data])
-
-	# The remote never ran spawn_army for this army, so its 3D models are NOT in the local
-	# R2 cache. Download them up front (like spawn_army -> _ensure_army_models_cached) BEFORE
-	# building the models, otherwise create_model_from_properties falls back to a placeholder
-	# body and the opponent's imported army shows no models.
-	var faction: String = props.get("faction_folder", "")
-	if faction != "" and unit_name != "" and opr_army_manager != null and opr_army_manager.model_library != null:
-		await opr_army_manager.model_library.ensure_models([{"faction": faction, "unit_name": unit_name}])
-
-	await save_manager._deserialize_objects(objects_data)
-
-	# Sync object counter per unit
-	for obj_data in objects_data:
-		if obj_data is Dictionary:
-			var net_id := int(obj_data.get("network_id", 0))
-			if net_id > object_manager._object_counter:
-				object_manager._object_counter = net_id
+	var buf: Dictionary = _incoming_armies.get(player_id, {})
+	if buf.is_empty():
+		buf = {"army_name": "Army", "units": [], "objects": []}
+		_incoming_armies[player_id] = buf
+	buf["units"].append(unit_data)
+	buf["objects"].append(objects_data)
 
 
-## Receive army-complete signal — all units sent, restore markers
+## All units received — build the whole army in ONE pass: rebuild the units, download every
+## model with a single ensure_models call (feeds the loading bar like a self-import), spawn
+## all model objects, then restore markers / heroes / regiment trays.
 func _on_remote_army_complete(player_id: int) -> void:
-	print("[ArmySync] Complete: all units received (player_id=%d)" % player_id)
+	var buf: Dictionary = _incoming_armies.get(player_id, {})
+	_incoming_armies.erase(player_id)
+	var units: Array = buf.get("units", [])
+	var object_groups: Array = buf.get("objects", [])
+	print("[ArmySync] Complete: building %d units (player_id=%d)" % [units.size(), player_id])
+
+	# 1. Rebuild all GameUnits at once (deserialize clears + repopulates _loaded_game_units).
+	save_manager._deserialize_game_units(units)
+
+	# 2. Download EVERY model in one batch (single shared HTTPRequest — no per-unit collision).
+	if opr_army_manager != null and opr_army_manager.model_library != null:
+		var specs: Array = []
+		for ud in units:
+			var p: Dictionary = ud.get("unit_properties", {})
+			var fac: String = p.get("faction_folder", "")
+			var un: String = p.get("name", "")
+			if fac != "" and un != "":
+				specs.append({"faction": fac, "unit_name": un})
+		if not specs.is_empty():
+			await opr_army_manager.model_library.ensure_models(specs)
+
+	# 3. Spawn all model objects (GLBs now cached -> real models, not placeholders).
+	var all_objects: Array = []
+	var max_net_id: int = object_manager._object_counter
+	for group in object_groups:
+		for obj_data in group:
+			all_objects.append(obj_data)
+			if obj_data is Dictionary:
+				var nid := int(obj_data.get("network_id", 0))
+				if nid > max_net_id:
+					max_net_id = nid
+	object_manager._object_counter = max_net_id
+	await save_manager._deserialize_objects(all_objects)
+
+	# 4. Restore markers / hero attachments / regiment trays now that the models exist.
 	save_manager._restore_hero_attachments_after_load()
 	save_manager._restore_markers_after_load()
+	save_manager._restore_regiments_after_load()
+
+	# 5. Close the loading overlay.
+	if is_instance_valid(_army_loading_overlay):
+		_army_loading_overlay.complete_and_free()
+		_army_loading_overlay = null
+	print("[ArmySync] Army built for player_id=%d (%d units)" % [player_id, units.size()])
 
 
 ## Receive TTS terrain spawn from a remote peer
