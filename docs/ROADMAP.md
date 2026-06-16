@@ -22,6 +22,12 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
+- **Casual sandbox terrain (grid-free)** — pick terrain from a shelf and drag/rotate it
+  freely on the 3D table, no 3″-grid binding. Walkable multi-storey grassland ruins
+  (`SandboxTerrainProp`), tree-group forests + hazard clusters on a shared movable base
+  (`TerrainGroupBase`), and a 2D mirror of the placed terrain in the map-layouter.
+  Ruins are built from the SAME masonry wall panels as the grid ruins (RuinsLibrary, already
+  on R2) — no GLB / model-forge assets needed. Engine + tests landed. _M_
 - **AoF: Regiments — verify import vs a real list** — confirm base sizes / frontage
   from Army Forge against an actual `aofr` army. _S_
 

@@ -1,3 +1,4 @@
+class_name ObjectManager
 extends Node3D
 ## Manages all game objects: miniatures, dice, terrain
 ## Handles spawning, selection, dragging, and rotation
@@ -98,6 +99,17 @@ const ARRANGE_COHERENCY_GAP: float = 0.022
 # Network manager reference
 var _network_manager: Node = null
 
+## Lazily-created ruin GLB/manifest resolver for free-placed sandbox terrain (the GLB scene
+## cache is static, so this instance shares parsed scenes with the terrain overlay's library).
+var _ruins_library: RuinsLibrary = null
+## Lazily-created tree GLB resolver for sandbox forest clusters (shared static scene cache).
+var _trees_library: TreesLibrary = null
+
+## Casual terrain edit mode. OFF by default: all sandbox terrain is LOCKED so players can't
+## drag or delete it by accident during play. Turning it on (via the terrain shelf) unlocks
+## the pieces for arranging; turning it off re-locks them.
+var _terrain_edit_mode: bool = false
+
 # Terrain overlay reference (for terrain hints)
 var terrain_overlay: Node3D = null
 
@@ -112,6 +124,13 @@ const MINIATURE_RADIUS: float = 0.016  # 32mm diameter base (16mm radius)
 ## NOTE: kept in sync with the same constants in opr_army_manager.gd (model wrappers).
 const GROUND_COLLISION_LAYER: int = 1
 const MINIATURE_COLLISION_LAYER: int = 2
+## Player-movable sandbox terrain (free-placed ruins/forests/hazard clusters). Props also
+## carry the ground bit so minis settle on their floors; this extra bit marks them as
+## movable terrain for selection/layouter tooling. Kept in sync with SandboxTerrainProp.
+const MOVABLE_TERRAIN_COLLISION_LAYER: int = 4
+
+## Casual-sandbox terrain categories (see SandboxTerrainProp / TerrainGroupBase).
+enum SandboxPropKind { RUIN, FOREST, HAZARD_CLUSTER }
 
 ## Surface raycast probe: cast straight down from this height to this depth (metres) at a
 ## model's base centre to find the highest ground surface beneath it (table top = 0).
@@ -408,6 +427,11 @@ func _regiment_root(node: Node) -> Node3D:
 		var tray = node.get_meta(RegimentTray.MEMBER_META)
 		if is_instance_valid(tray):
 			return tray
+	# A click on a terrain-cluster member (tree/mine) resolves to its shared movable base.
+	if node and node.has_meta(TerrainGroupBase.MEMBER_META):
+		var base = node.get_meta(TerrainGroupBase.MEMBER_META)
+		if is_instance_valid(base):
+			return base
 	return node as Node3D
 
 
@@ -759,8 +783,9 @@ func _stop_dragging() -> void:
 					target_y = obj.global_position.y - drag_lift_height
 				else:
 					# Static bodies settle onto the ground surface beneath the base
-					# (table top = 0, or a terrain prop like a container).
-					target_y = _surface_y_under(obj.global_position)
+					# (table top = 0, or a terrain prop like a container). Exclude the
+					# dragged bodies so a terrain prop doesn't settle on its own floors.
+					target_y = _surface_y_under(obj.global_position, _dragged_body_rids())
 
 				# Collect final ground-level positions for batched broadcast
 				if obj.has_meta("network_id"):
@@ -1009,7 +1034,10 @@ func _destroy_drag_line() -> void:
 ## `xz`, found by a downward physics ray on the ground layer only. Miniatures live on
 ## layer 2, so the ray ignores them — models rest on terrain, never on each other.
 ## Returns the table top (0.0) when nothing is hit. Placement aid; enforces no rule.
-func _surface_y_under(xz: Vector3) -> float:
+## `exclude` holds body RIDs to ignore — used while dragging so a movable terrain prop
+## (whose own walkable floors are on the ground layer) rests on the table or a lower prop
+## instead of climbing onto itself.
+func _surface_y_under(xz: Vector3, exclude: Array = []) -> float:
 	var space_state := get_world_3d().direct_space_state
 	if space_state == null:
 		return 0.0
@@ -1018,8 +1046,19 @@ func _surface_y_under(xz: Vector3) -> float:
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collision_mask = GROUND_COLLISION_LAYER
 	query.collide_with_bodies = true
+	query.exclude = exclude
 	var hit := space_state.intersect_ray(query)
 	return _pick_surface_y(hit, 0.0)
+
+
+## Physics RIDs of the currently-selected bodies, so a drag's surface probe ignores the
+## objects being dragged (they must not rest on themselves).
+func _dragged_body_rids() -> Array:
+	var rids: Array = []
+	for obj in _selected_objects:
+		if is_instance_valid(obj) and obj is CollisionObject3D:
+			rids.append((obj as CollisionObject3D).get_rid())
+	return rids
 
 
 ## Pure decision behind _surface_y_under: given a downward-ray hit (empty = miss), return
@@ -1062,13 +1101,15 @@ func _update_drag(screen_pos: Vector2) -> void:
 		# Move all selected objects by the same XZ delta (formation kept). Each model's
 		# Y rests on the ground surface beneath its own base (table or a terrain prop),
 		# lifted by drag_lift_height while dragging — so a unit climbs onto a container
-		# per model and settles to the surface on drop.
+		# per model and settles to the surface on drop. The dragged bodies are excluded
+		# from the probe so a movable terrain prop never climbs onto its own floors.
+		var exclude_rids := _dragged_body_rids()
 		for obj in _selected_objects:
 			if is_instance_valid(obj):
 				var obj_start = _drag_start_positions.get(obj, obj.global_position)
 				var new_x: float = obj_start.x + delta_xz.x
 				var new_z: float = obj_start.z + delta_xz.z
-				var surface_y: float = _surface_y_under(Vector3(new_x, 0.0, new_z))
+				var surface_y: float = _surface_y_under(Vector3(new_x, 0.0, new_z), exclude_rids)
 				obj.global_position = Vector3(new_x, surface_y + drag_lift_height, new_z)
 
 		# Broadcast positions throttled to ~20 Hz to avoid relay rate limit
@@ -1673,6 +1714,149 @@ func spawn_terrain(pos: Vector3, broadcast: bool = true, network_id: int = -1) -
 		_network_manager.broadcast_spawn("terrain", pos, obj_network_id)
 
 	return terrain
+
+
+## Network-ID offset for free-placed sandbox terrain (keeps ranges from colliding with the
+## miniature/terrain/custom-model offsets above).
+const SANDBOX_TERRAIN_NETWORK_OFFSET: int = 40000
+## Footprint (inches) for a sandbox piece whose catalogue entry omits one.
+const SANDBOX_DEFAULT_FOOTPRINT_INCHES: float = 3.0
+
+## Grassland ruin catalogue. Ruins are built procedurally from the SAME mossy masonry wall
+## panels as the competitive grid ruins (RuinsLibrary, already on R2) — no new GLB assets and
+## no model-forge dependency. Keyed by prop_id -> {footprint, floors (storey heights, inches),
+## label}.
+const SANDBOX_RUINS: Dictionary = {
+	"ruin_small_1f": {"footprint": Vector2(3, 3), "floors": [0.0], "label": "Ruin (small, 1 floor)"},
+	"ruin_corner_wall": {"footprint": Vector2(2, 2), "floors": [0.0], "label": "Ruin corner wall"},
+	"ruin_medium_1f": {"footprint": Vector2(6, 4), "floors": [0.0], "label": "Ruin (medium, 1 floor)"},
+	"ruin_medium_2f": {"footprint": Vector2(6, 4), "floors": [0.0, 3.0], "label": "Ruin (medium, 2 floors)"},
+	"ruin_large_2f": {"footprint": Vector2(9, 6), "floors": [0.0, 3.0], "label": "Ruin (large, 2 floors)"},
+	"ruin_large_3f": {"footprint": Vector2(9, 6), "floors": [0.0, 3.0, 6.0], "label": "Ruin (large, 3 floors)"},
+}
+
+## Tree-group / hazard-cluster catalogue (the non-ruin sandbox pieces, which reuse existing
+## tree/hazard art). Keyed by prop_id -> {kind, footprint, label}.
+const SANDBOX_GROUPS: Dictionary = {
+	"forest_small": {"kind": SandboxPropKind.FOREST, "footprint": Vector2(6, 6), "label": "Forest (small)"},
+	"forest_large": {"kind": SandboxPropKind.FOREST, "footprint": Vector2(9, 9), "label": "Forest (large)"},
+	"minefield": {"kind": SandboxPropKind.HAZARD_CLUSTER, "footprint": Vector2(6, 6), "label": "Minefield"},
+}
+
+
+## Shared ruin library for sandbox terrain, created on first use.
+func _get_ruins_library() -> RuinsLibrary:
+	if _ruins_library == null or not is_instance_valid(_ruins_library):
+		_ruins_library = RuinsLibrary.new()
+		_ruins_library.name = "SandboxRuinsLibrary"
+		add_child(_ruins_library)
+	return _ruins_library
+
+
+## Shared tree library for sandbox forest clusters, created on first use.
+func _get_trees_library() -> TreesLibrary:
+	if _trees_library == null or not is_instance_valid(_trees_library):
+		_trees_library = TreesLibrary.new()
+		_trees_library.name = "SandboxTreesLibrary"
+		add_child(_trees_library)
+	return _trees_library
+
+
+## Spawn a free-placed casual-sandbox terrain piece at `pos`. RUIN kinds become a walkable
+## multi-storey SandboxTerrainProp; FOREST/HAZARD_CLUSTER kinds become a TerrainGroupBase
+## (several tree/mine visuals on one draggable base). Either way it is a first-class
+## selectable object, so the existing drag/rotate/undo/multiplayer paths move it. Syncs to
+## peers when `broadcast` and multiplayer is active.
+func spawn_sandbox_terrain(prop_id: String, kind: int, pos: Vector3, broadcast: bool = true, network_id: int = -1) -> Node3D:
+	_object_counter += 1
+	var obj_network_id: int = network_id if network_id >= 0 else _object_counter + SANDBOX_TERRAIN_NETWORK_OFFSET
+
+	var spawned: Node3D
+	if kind == SandboxPropKind.FOREST or kind == SandboxPropKind.HAZARD_CLUSTER:
+		spawned = _build_terrain_group(prop_id, kind, obj_network_id)
+	else:
+		spawned = _build_sandbox_ruin(prop_id, kind, obj_network_id)
+
+	# Add to tree BEFORE positioning (matches the other spawners).
+	add_child(spawned)
+	spawned.global_position = Vector3(pos.x, 0.0, pos.z)
+	# Members/visuals are built after positioning so cached GLBs fit correctly.
+	if spawned is SandboxTerrainProp:
+		(spawned as SandboxTerrainProp).build_visual(_get_ruins_library())
+	elif spawned is TerrainGroupBase:
+		# Seed from the (synced) network id so every client builds an identical cluster.
+		(spawned as TerrainGroupBase).build(obj_network_id, _get_trees_library())
+
+	# Lock the fresh piece unless terrain edit mode is active (it is while the shelf is open).
+	_set_terrain_locked(spawned, not _terrain_edit_mode)
+
+	if broadcast and _network_manager and _network_manager.is_multiplayer_active():
+		_network_manager.broadcast_sandbox_terrain_spawn(prop_id, kind, spawned.global_position, obj_network_id)
+
+	return spawned
+
+
+## Enable/disable casual terrain editing. When OFF, every sandbox terrain piece is locked
+## (not selectable, draggable or deletable) so play doesn't disturb the layout; when ON they
+## are unlocked for arranging. No dimming — terrain always looks the same.
+func set_terrain_edit_mode(enabled: bool) -> void:
+	_terrain_edit_mode = enabled
+	for node in get_tree().get_nodes_in_group("sandbox_terrain"):
+		if node is Node3D and is_instance_valid(node):
+			_set_terrain_locked(node, not enabled)
+
+
+func is_terrain_edit_mode() -> bool:
+	return _terrain_edit_mode
+
+
+## Lock/unlock a terrain piece using the same "locked" meta + group the selection paths
+## already honour (is_object_locked), but without the dim overlay used for manual locks.
+func _set_terrain_locked(obj: Node3D, locked: bool) -> void:
+	obj.set_meta("locked", locked)
+	if locked:
+		if not obj.is_in_group("locked"):
+			obj.add_to_group("locked")
+	else:
+		if obj.is_in_group("locked"):
+			obj.remove_from_group("locked")
+
+
+func _build_sandbox_ruin(prop_id: String, kind: int, obj_network_id: int) -> SandboxTerrainProp:
+	var spec: Dictionary = SANDBOX_RUINS.get(prop_id, {})
+	var footprint: Vector2 = spec.get("footprint", Vector2(SANDBOX_DEFAULT_FOOTPRINT_INCHES, SANDBOX_DEFAULT_FOOTPRINT_INCHES))
+	var floors: Array = spec.get("floors", [0.0])
+	var prop := SandboxTerrainProp.new()
+	prop.name = "SandboxTerrain_%d" % _object_counter
+	prop.configure(prop_id, kind, footprint, floors)
+	prop.set_meta("network_id", obj_network_id)
+	return prop
+
+
+## Catalogue of placeable sandbox pieces for the shelf browser. Grassland (prefix "") lists
+## the ruins plus the forest/hazard groups; other biomes list only the groups for now (ruin
+## wall panels are themed, and only the grassland set ships first). Each entry is
+## {prop_id, kind, label}.
+func sandbox_catalog(biome_prefix: String = "") -> Array:
+	var entries: Array = []
+	if biome_prefix.is_empty():
+		for id in SANDBOX_RUINS.keys():
+			var ruin: Dictionary = SANDBOX_RUINS[id]
+			entries.append({"prop_id": id, "kind": SandboxPropKind.RUIN, "label": ruin.get("label", id)})
+	for id in SANDBOX_GROUPS.keys():
+		var spec: Dictionary = SANDBOX_GROUPS[id]
+		entries.append({"prop_id": id, "kind": spec.get("kind", SandboxPropKind.FOREST), "label": spec.get("label", id)})
+	return entries
+
+
+func _build_terrain_group(prop_id: String, kind: int, obj_network_id: int) -> TerrainGroupBase:
+	var spec: Dictionary = SANDBOX_GROUPS.get(prop_id, {})
+	var footprint: Vector2 = spec.get("footprint", Vector2(SANDBOX_DEFAULT_FOOTPRINT_INCHES, SANDBOX_DEFAULT_FOOTPRINT_INCHES))
+	var base := TerrainGroupBase.new()
+	base.name = "SandboxTerrainGroup_%d" % _object_counter
+	base.configure(prop_id, kind, footprint)
+	base.set_meta("network_id", obj_network_id)
+	return base
 
 
 ## Load and spawn a custom 3D model from GLB/GLTF/STL file
