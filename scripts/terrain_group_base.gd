@@ -34,14 +34,33 @@ const SELECT_COLLIDER_HEIGHT_M := 0.12
 const KIND_FOREST := 1
 const KIND_HAZARD_CLUSTER := 2
 
-const FOREST_TREE_COUNT := 6
+## Tree count scales with the oval area (~this many trees per square inch), clamped.
+const FOREST_TREE_DENSITY := 0.08
+const FOREST_TREE_MAX := 14
+## Even fill of the oval via phyllotaxis (sunflower): trees out to this radius fraction at the
+## golden angle + a little jitter, so ANY count covers the whole pad evenly without clustering.
+const FOREST_FILL_RADIUS := 0.82
+const FOREST_JITTER := 0.05
+const GOLDEN_ANGLE := 2.39996323
 const HAZARD_MINE_COUNT := 6
 const TREE_VARIANTS: Array[String] = ["tree_a", "tree_b", "tree_c"]
 
-## Target tree height (metres source = inches). Tabletop scatter trees read better small
-## next to 28 mm minis — the previous 3.4" trees dwarfed them. Applied to BOTH the R2 GLB
-## (scaled to fit) and the procedural fallback.
-const TREE_HEIGHT_INCHES := 2.0
+## A forest is an OVAL textured ground pad (the movable area-terrain base) populated with trees.
+## footprint = the oval's bounding box (long axis × widest point); trees scatter inside the
+## ellipse. The pad sits UP from the table (a thin plinth) to avoid z-fighting.
+const FOREST_FLOOR_TEX := "res://assets/sandbox_forest_floor.webp"
+## Anti-tiling shader that hides the texture's repetition on larger pads (see the .gdshader).
+const FOREST_FLOOR_SHADER := "res://shaders/forest_floor.gdshader"
+const FOREST_BASE_THICKNESS_INCHES := 0.12
+const FOREST_OVAL_SEGMENTS := 32
+## Forest-floor texture tiles every this many inches (≈ the battlefield stone scale ~3.3"), so
+## leaves/moss read at the right small size instead of one giant image stretched over the pad.
+const FOREST_FLOOR_TILE_INCHES := 3.0
+
+## Tree height range (inches) — each tree is randomly scaled within this for variety. Applied
+## to both the R2 GLB (fit to height) and the procedural fallback.
+const TREE_MIN_HEIGHT_INCHES := 4.0
+const TREE_MAX_HEIGHT_INCHES := 6.0
 const TREE_TRUNK_COLOR := Color(0.36, 0.26, 0.16)
 const TREE_FOLIAGE_COLOR := Color(0.20, 0.42, 0.18)
 const MINE_RADIUS_INCHES := 0.35
@@ -129,11 +148,113 @@ func _build_select_collider() -> void:
 	add_child(collider)
 
 
+## Tree count for this oval: scales with its area, clamped to [1, FOREST_TREE_MAX].
+func _forest_tree_count() -> int:
+	var area := PI * (footprint_inches.x * 0.5) * (footprint_inches.y * 0.5)
+	return clampi(int(round(area * FOREST_TREE_DENSITY)), 1, FOREST_TREE_MAX)
+
+
+## Fill the oval EVENLY (phyllotaxis) with a size-scaled number of trees, each randomly sized
+## and turned + a little jitter so it reads natural, not mechanical.
 func _build_forest(rng: RandomNumberGenerator, trees_lib: TreesLibrary) -> void:
-	for i in range(FOREST_TREE_COUNT):
+	var base_top := _build_forest_base()
+	var a := footprint_inches.x * INCHES_TO_METERS * 0.5
+	var b := footprint_inches.y * INCHES_TO_METERS * 0.5
+	var count := _forest_tree_count()
+	var base_off := rng.randf_range(0.0, TAU)
+	for i in range(count):
 		var variant := TREE_VARIANTS[rng.randi() % TREE_VARIANTS.size()]
-		var tree := _make_tree(variant, trees_lib)
-		_adopt_scattered(tree, rng)
+		var h := rng.randf_range(TREE_MIN_HEIGHT_INCHES, TREE_MAX_HEIGHT_INCHES) * INCHES_TO_METERS
+		var tree := _make_tree(variant, trees_lib, h)
+		add_child(tree)
+		var r := sqrt((i + 0.5) / float(count)) * FOREST_FILL_RADIUS
+		var ang := base_off + i * GOLDEN_ANGLE
+		var jx := rng.randf_range(-FOREST_JITTER, FOREST_JITTER)
+		var jz := rng.randf_range(-FOREST_JITTER, FOREST_JITTER)
+		# _make_tree already set position.y so the trunk base sits at 0; ADD the pad top + x/z
+		# (don't overwrite y, or the base would sink/float by the GLB's pivot offset).
+		tree.position += Vector3(a * (r * cos(ang) + jx), base_top, b * (r * sin(ang) + jz))
+		tree.rotation.y = rng.randf_range(0.0, TAU)
+		tree.set_meta(MEMBER_META, self)
+
+
+## The oval forest-floor pad: a thin elliptical disc (custom mesh so the floor texture tiles at
+## a real-world scale via planar UVs, not one stretched image) sitting up from the table.
+## Returns its top Y (where the trees stand).
+func _build_forest_base() -> float:
+	var a := footprint_inches.x * INCHES_TO_METERS * 0.5
+	var b := footprint_inches.y * INCHES_TO_METERS * 0.5
+	var t := FOREST_BASE_THICKNESS_INCHES * INCHES_TO_METERS
+	var tile := FOREST_FLOOR_TILE_INCHES * INCHES_TO_METERS
+	var seg := FOREST_OVAL_SEGMENTS
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(seg):
+		var a0 := TAU * i / seg
+		var a1 := TAU * (i + 1) / seg
+		var p0 := Vector3(a * cos(a0), t, b * sin(a0))
+		var p1 := Vector3(a * cos(a1), t, b * sin(a1))
+		# Top fan (planar UVs from world XZ → tiles every `tile`).
+		st.set_normal(Vector3.UP)
+		st.set_uv(Vector2(0.0, 0.0)); st.add_vertex(Vector3(0, t, 0))
+		st.set_uv(Vector2(p0.x / tile, p0.z / tile)); st.add_vertex(p0)
+		st.set_uv(Vector2(p1.x / tile, p1.z / tile)); st.add_vertex(p1)
+		# Rim down to the table, outward-facing.
+		var b0 := Vector3(p0.x, 0, p0.z)
+		var b1 := Vector3(p1.x, 0, p1.z)
+		var nrm := Vector3(cos(a0), 0, sin(a0))
+		st.set_normal(nrm)
+		st.set_uv(Vector2(0, 0)); st.add_vertex(p0)
+		st.set_uv(Vector2(0, 1)); st.add_vertex(b0)
+		st.set_uv(Vector2(1, 1)); st.add_vertex(b1)
+		st.set_uv(Vector2(0, 0)); st.add_vertex(p0)
+		st.set_uv(Vector2(1, 1)); st.add_vertex(b1)
+		st.set_uv(Vector2(1, 0)); st.add_vertex(p1)
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = _forest_floor_material()
+	add_child(mi)
+	return t
+
+
+func _forest_floor_material() -> Material:
+	var tex := _load_texture(FOREST_FLOOR_TEX)
+	if tex == null:
+		return _forest_floor_fallback_material()
+	# The anti-tiling shader breaks the texture's visible repetition on larger pads (it
+	# samples a second rotated tap and varies macro brightness per region). Fall back to a
+	# plain tiled material if the shader fails to load.
+	var shader: Shader = load(FOREST_FLOOR_SHADER) if ResourceLoader.exists(FOREST_FLOOR_SHADER) else null
+	if shader == null:
+		var plain := _forest_floor_fallback_material()
+		plain.albedo_texture = tex
+		plain.albedo_color = Color.WHITE
+		return plain
+	var mat := ShaderMaterial.new()
+	mat.shader = shader
+	mat.set_shader_parameter("albedo_tex", tex)
+	return mat
+
+
+func _forest_floor_fallback_material() -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = TREE_FOLIAGE_COLOR.darkened(0.4)
+	mat.roughness = 1.0
+	mat.metallic = 0.0
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	mat.texture_repeat = true                       # UVs tile the texture across the pad
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return mat
+
+
+static var _tex_cache: Dictionary = {}
+
+static func _load_texture(path: String) -> Texture2D:
+	if _tex_cache.has(path):
+		return _tex_cache[path]
+	var tex: Texture2D = load(path) if ResourceLoader.exists(path) else null
+	_tex_cache[path] = tex
+	return tex
 
 
 func _build_mines(rng: RandomNumberGenerator) -> void:
@@ -151,17 +272,17 @@ func _adopt_scattered(member: Node3D, rng: RandomNumberGenerator) -> void:
 	member.set_meta(MEMBER_META, self)
 
 
-## A tree member: the R2 GLB (scaled to TREE_HEIGHT_INCHES) if cached, else a procedural
-## trunk + foliage cone of the same height.
-func _make_tree(variant: String, trees_lib: TreesLibrary) -> Node3D:
+## A tree member at the given height (metres): the R2 GLB fit to height if cached, else a
+## procedural trunk + foliage cone.
+func _make_tree(variant: String, trees_lib: TreesLibrary, height_m: float) -> Node3D:
 	if trees_lib != null:
 		var scene := trees_lib.get_model_scene(variant)
 		if scene != null:
 			var inst := scene.instantiate() as Node3D
-			_fit_height(inst, TREE_HEIGHT_INCHES * INCHES_TO_METERS)
+			_fit_height(inst, height_m)
 			return inst
 	var root := Node3D.new()
-	var h := TREE_HEIGHT_INCHES * INCHES_TO_METERS
+	var h := height_m
 	var trunk_mat := StandardMaterial3D.new()
 	trunk_mat.albedo_color = TREE_TRUNK_COLOR
 	trunk_mat.roughness = 0.95
