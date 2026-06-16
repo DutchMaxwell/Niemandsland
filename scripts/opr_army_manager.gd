@@ -832,9 +832,12 @@ func create_model_from_properties(props: Dictionary) -> StaticBody3D:
 	wrapper.add_to_group("unit")
 
 	# Stamp the owner slot so the movement gate's fast key (opr_player_id meta) and slow
-	# key (game_unit.player_id) agree for restored/remote-synced models too (never the
-	# spawn path sets this, only the live-import path did). Stamped once; never rewritten.
-	wrapper.set_meta("opr_player_id", player_id)
+	# key (game_unit.player_id) agree for restored/remote-synced models too. ONLY when the
+	# source actually specifies player_id: defaulting a missing key to the host (1) would
+	# fail CLOSED — silently making a synced model host-owned and unselectable for its real
+	# owner. Absent -> leave unstamped (gate falls back to the slow key / fails open).
+	if props.has("player_id"):
+		wrapper.set_meta("opr_player_id", player_id)
 
 	return wrapper
 
