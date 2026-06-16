@@ -10,6 +10,7 @@ extends Node3D
 # PRELOADS
 # ==============================================================================
 const UnitBoundaryVisualizerScript = preload("res://scripts/unit_boundary_visualizer.gd")
+const RangeRingControllerScript = preload("res://scripts/range_ring_controller.gd")
 
 # ==============================================================================
 # CONSTANTS
@@ -230,6 +231,7 @@ var atmospheric_clouds: Node3D = null
 var radial_menu_controller: RadialMenuController = null
 var coherency_visualizer: CoherencyVisualizer = null
 var unit_boundary_visualizer: Node3D = null  # UnitBoundaryVisualizer
+var range_ring_controller: Node = null  # RangeRingController (base-anchored range auras)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
 var battlefield_stains: BattlefieldStains = null
@@ -3433,6 +3435,13 @@ func _init_radial_menu() -> void:
 	coherency_visualizer.name = "CoherencyVisualizer"
 	add_child(coherency_visualizer)
 	radial_menu_controller.coherency_visualizer = coherency_visualizer
+
+	# Base-anchored range rings ("auras"): per-model range circles toggled with G on the
+	# selection (local-only display aid). Owns the rings under /root/Main.
+	range_ring_controller = RangeRingControllerScript.new()
+	range_ring_controller.name = "RangeRingController"
+	add_child(range_ring_controller)
+	object_manager.range_ring_controller = range_ring_controller
 
 	# Create unit boundary visualizer (shows which models belong to which unit)
 	unit_boundary_visualizer = UnitBoundaryVisualizerScript.new()
