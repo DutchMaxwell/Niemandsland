@@ -601,7 +601,7 @@ func _create_mock_map_layout_editor() -> Control:
 func _create_mock_table(size: Vector2) -> Node3D:
 	## Creates a mock table node with table_size property.
 	var script = GDScript.new()
-	script.source_code = "extends Node3D\nvar table_size := Vector2(6, 4)\n"
+	script.source_code = "extends Node3D\nvar table_size := Vector2(6, 4)\nvar biome := \"temperate_grassland\"\n"
 	script.reload()
 	var t = Node3D.new()
 	t.set_script(script)

@@ -47,7 +47,8 @@ func _serialize_table() -> Dictionary:
 		return {"size_feet": [6, 4]}
 
 	var data = {
-		"size_feet": [table.table_size.x, table.table_size.y]
+		"size_feet": [table.table_size.x, table.table_size.y],
+		"biome": table.biome
 	}
 
 	# Serialize map layout data from map_layout_editor
@@ -323,6 +324,9 @@ func _deserialize_table(table_data: Dictionary) -> void:
 	if size is Array and size.size() >= 2:
 		table_size = Vector2(size[0], size[1])
 		table.setup_table(table_size)
+
+	if table_data.has("biome") and table.has_method("set_biome"):
+		table.set_biome(table_data["biome"])
 
 	# Restore map layout data
 	_deserialize_map_layout(table_data, table_size)
