@@ -80,7 +80,11 @@ func test_grassland_ruin_catalogue_has_six_storied_ruins() -> void:
 func test_forest_group_builds_tree_members() -> void:
 	var base := _group("forest_small", ObjectManager.SandboxPropKind.FOREST, Vector2(6, 6))
 	base.build(12345, null)  # null lib → procedural trees
-	assert_int(_member_count(base)).is_equal(TerrainGroupBase.FOREST_TREE_COUNT)
+	# Tree count is size-scaled (oval area × FOREST_TREE_DENSITY, clamped to
+	# [1, FOREST_TREE_MAX]) — _build_forest must create exactly that many member trees.
+	var expected := base._forest_tree_count()
+	assert_int(expected).is_between(1, TerrainGroupBase.FOREST_TREE_MAX)
+	assert_int(_member_count(base)).is_equal(expected)
 	assert_bool(base.is_in_group("sandbox_terrain")).is_true()
 	assert_int(base.collision_layer).is_equal(TerrainGroupBase.MOVABLE_TERRAIN_COLLISION_LAYER)
 
