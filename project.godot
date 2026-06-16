@@ -16,7 +16,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 config/name="Niemandsland"
 config/description="A Fan-Made Tabletop Simulator for OnePageRules Game Systems"
-config/version="0.3.3-alpha"
+config/version="0.3.4-alpha"
 run/main_scene="res://scenes/startup_menu.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
