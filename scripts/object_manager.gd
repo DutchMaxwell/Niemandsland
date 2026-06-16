@@ -89,6 +89,23 @@ var _measure_label: Label3D = null
 var _measure_los_warning: Label3D = null  # Warning icon for LOS blocking (🚫)
 var _measure_front_label: Label3D = null  # Regiment facing aid (front vs flank/rear)
 
+# Persistent shared rulers: a live measurement can be PINNED (key P) so it stays on the
+# table and replicates to all players in the owner's colour. `pinned_rulers` (the
+# PinnedRulers manager) is injected by main.gd. Right-click on a ruler removes it, K
+# clears mine, Shift+K (host) clears all. Session-only — see scripts/pinned_rulers.gd.
+var pinned_rulers: Node = null
+var _ruler_id_counter: int = 0
+## Snapshot of the live measurement so P can freeze exactly what is on screen.
+var _measure_last_from: Vector3 = Vector3.ZERO
+var _measure_last_to: Vector3 = Vector3.ZERO
+var _measure_last_distance: float = 0.0
+var _measure_last_blocked: bool = false
+var _measure_has_value: bool = false
+## Pick tolerance (metres) when right-clicking a ruler to remove it.
+const RULER_REMOVE_RADIUS_M: float = 0.02
+## Owner id used for pinned rulers in solo play (no multiplayer peer).
+const SOLO_OWNER_PEER: int = 1
+
 const METERS_TO_INCHES: float = 39.3701
 
 ## Max edge gap (meters) used when auto-arranging, so the smallest base stays
@@ -223,6 +240,10 @@ func _input(event: InputEvent) -> void:
 					# Open context menu
 					context_menu_requested.emit(mouse_event.position, _selected_objects.duplicate())
 					get_viewport().set_input_as_handled()
+				else:
+					# No object under the cursor: if a pinned ruler is there, remove it
+					# (else fall through so a right-drag still rotates the camera).
+					_try_remove_ruler_at(mouse_event.position)
 
 	elif event is InputEventMouseMotion:
 		if _is_dragging:
@@ -250,6 +271,17 @@ func _input(event: InputEvent) -> void:
 	elif event.is_action_pressed("ui_cancel"):
 		if _is_dragging:
 			_cancel_drag()
+
+	# Ruler hotkeys (gated above by _is_gui_blocking_input, so safe while chatting):
+	# P pins the live measurement; K clears my rulers; Shift+K (host) clears all.
+	elif event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_P and _is_measuring:
+			_pin_current_measurement()
+		elif event.keycode == KEY_K:
+			if event.shift_pressed:
+				_clear_all_rulers()
+			else:
+				_clear_my_rulers()
 
 
 func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> void:
@@ -1143,6 +1175,7 @@ func _start_measuring(screen_pos: Vector2) -> void:
 
 		# Create measurement line and label
 		_create_measure_line()
+		_measure_has_value = false  # nothing to pin until the first update draws a line
 
 
 ## Update measurement line while dragging
@@ -1384,6 +1417,7 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 	if length < 0.001:
 		_measure_line.visible = false
 		_measure_label.visible = false
+		_measure_has_value = false
 		return
 
 	_measure_line.visible = true
@@ -1456,6 +1490,13 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 	# Label stays white with black outline for best readability
 	_measure_label.modulate = Color.WHITE
 
+	# Snapshot the live measurement so P (pin) can freeze exactly what is shown.
+	_measure_last_from = from_pos
+	_measure_last_to = to_pos
+	_measure_last_distance = distance_inches
+	_measure_last_blocked = los_blocked
+	_measure_has_value = true
+
 
 ## Asgard Height category (1-6) of a measured endpoint's object, read from its
 ## ModelInstance meta. Table points / non-model objects default to infantry (2).
@@ -1508,6 +1549,87 @@ func _units_block_measure_line(from_pos: Vector3, to_pos: Vector3,
 	return LosRules.units_block_line(
 		Vector2(from_pos.x, from_pos.z), Vector2(to_pos.x, to_pos.z),
 		from_height, to_height, blockers, exclude_units)
+
+
+# ==============================================================================
+# PERSISTENT SHARED RULERS (pinned measurements)
+# ==============================================================================
+
+## Pin the live measurement: drop a persistent ruler in the local player's colour and
+## replicate it to all peers. Display-only — it shows distance/LoS, decides nothing.
+func _pin_current_measurement() -> void:
+	if not _measure_has_value or pinned_rulers == null:
+		return
+	var owner_peer := _local_owner_peer()
+	var ruler_id := _next_ruler_id(owner_peer)
+	pinned_rulers.add_ruler(ruler_id, owner_peer, _measure_last_from, _measure_last_to,
+			_measure_last_distance, _measure_last_blocked)
+	if _network_manager and _network_manager.has_method("broadcast_ruler_pin"):
+		_network_manager.broadcast_ruler_pin(ruler_id, owner_peer, _measure_last_from,
+				_measure_last_to, _measure_last_distance, _measure_last_blocked)
+
+
+## Right-click on a pinned ruler removes it. Each player removes only their own; the host
+## may remove anyone's. No ruler under the cursor → no-op (right-drag still moves the camera).
+func _try_remove_ruler_at(screen_pos: Vector2) -> void:
+	if pinned_rulers == null:
+		return
+	var table_pos := _get_table_position_at_screen(screen_pos)
+	if table_pos == Vector3.INF:
+		return
+	var ruler_id: int = pinned_rulers.nearest_ruler_at(
+			table_pos, RULER_REMOVE_RADIUS_M, _ruler_owner_filter())
+	if ruler_id < 0:
+		return
+	pinned_rulers.remove_ruler(ruler_id)
+	if _network_manager and _network_manager.has_method("broadcast_ruler_clear"):
+		_network_manager.broadcast_ruler_clear(ruler_id)
+	get_viewport().set_input_as_handled()
+
+
+## Clear all of the local player's rulers (key K).
+func _clear_my_rulers() -> void:
+	if pinned_rulers == null:
+		return
+	var owner_peer := _local_owner_peer()
+	pinned_rulers.clear_owner(owner_peer)
+	if _network_manager and _network_manager.has_method("broadcast_ruler_clear_owner"):
+		_network_manager.broadcast_ruler_clear_owner(owner_peer)
+
+
+## Host clears EVERYONE's rulers (Shift+K). A non-host Shift+K just clears their own.
+func _clear_all_rulers() -> void:
+	if pinned_rulers == null:
+		return
+	if _is_networked() and not multiplayer.is_server():
+		_clear_my_rulers()
+		return
+	pinned_rulers.clear_all()
+	if _network_manager and _network_manager.has_method("broadcast_ruler_clear_all"):
+		_network_manager.broadcast_ruler_clear_all()
+
+
+## Local player's peer id (1 in solo play, where rulers use a neutral colour).
+func _local_owner_peer() -> int:
+	return multiplayer.get_unique_id() if _is_networked() else SOLO_OWNER_PEER
+
+
+## In MP a non-host may only remove their own rulers; the host (and solo play) any.
+func _ruler_owner_filter() -> int:
+	if _is_networked() and not multiplayer.is_server():
+		return _local_owner_peer()
+	return -1
+
+
+## Collision-free, owner-scoped ruler id so pins from different players never clash.
+func _next_ruler_id(owner_peer: int) -> int:
+	_ruler_id_counter += 1
+	return owner_peer * 1000000 + _ruler_id_counter
+
+
+func _is_networked() -> bool:
+	return _network_manager != null and _network_manager.has_method("is_multiplayer_active") \
+			and _network_manager.is_multiplayer_active()
 
 
 ## Spawn a miniature at the given position
