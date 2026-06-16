@@ -3007,6 +3007,8 @@ func arrange_selected_in_rows(num_rows: int, cursor_pos: Vector3) -> void:
 				)
 			idx += 1
 
+	_broadcast_arrange_positions(objects)
+
 
 
 ## Arrange selected objects in arrow/wedge formation at cursor (A key)
@@ -3047,6 +3049,22 @@ func arrange_selected_arrow(cursor_pos: Vector3) -> void:
 
 		row += 1
 		row_count += 1
+
+	_broadcast_arrange_positions(objects)
+
+
+## Broadcast the post-arrange positions of every networked object in one batch,
+## so a formation snap (rows / arrow) mirrors to remote peers like a drag does.
+func _broadcast_arrange_positions(objects: Array[Node3D]) -> void:
+	if not _network_manager or not _network_manager.is_multiplayer_active():
+		return
+	var batch: Array = []
+	for obj in objects:
+		if is_instance_valid(obj) and obj.has_meta("network_id"):
+			var p: Vector3 = obj.global_position
+			batch.append_array([obj.get_meta("network_id"), p.x, p.y, p.z])
+	if batch.size() > 0:
+		_network_manager.broadcast_move_batch(batch)
 
 
 ## Copy selected objects to clipboard (Ctrl+C)
@@ -3094,10 +3112,15 @@ func paste_from_clipboard(cursor_pos: Vector3) -> void:
 		if obj.has_meta("tts_mesh_url"):
 			copy = _duplicate_tts_object(obj)
 		else:
-			# Generic duplication for other objects
+			# Generic duplication for other objects. Assign a FRESH unique
+			# network_id (duplicate() inherits the source's, which would collide
+			# in multiplayer); +50000 keeps pasted copies clear of the per-type
+			# id offsets (miniature 0, terrain 10000, custom 20000, tts 30000,
+			# generated terrain 40000).
 			copy = obj.duplicate()
 			_object_counter += 1
 			copy.name = obj.name.split("_")[0] + "_%d" % _object_counter
+			copy.set_meta("network_id", _object_counter + 50000)
 
 		if copy:
 			add_child(copy)
@@ -3107,7 +3130,26 @@ func paste_from_clipboard(cursor_pos: Vector3) -> void:
 			copy.global_position.y = obj.global_position.y  # Keep original height
 			# Select the pasted object
 			_add_to_selection(copy)
+			_broadcast_pasted_copy(copy)
 			pasted_count += 1
+
+
+## Mirror a pasted/duplicated object to remote peers by serializing it and
+## letting SaveManager._deserialize_object reconstruct it with the same
+## network_id. OPR army models are skipped (they are re-imported, not pasted,
+## and depend on per-load game-unit state that peers do not have live).
+func _broadcast_pasted_copy(copy: Node3D) -> void:
+	if not _network_manager or not _network_manager.is_multiplayer_active():
+		return
+	if copy.is_in_group("opr_unit"):
+		return
+	var main = get_node_or_null("/root/Main")
+	if main == null or main.save_manager == null:
+		return
+	var obj_data: Dictionary = main.save_manager._serialize_object(copy)
+	if obj_data.is_empty():
+		return
+	_network_manager.broadcast_object_data_spawn(obj_data)
 
 
 ## Duplicate a TTS-imported object
