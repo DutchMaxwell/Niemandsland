@@ -22,33 +22,33 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **Casual sandbox terrain (grid-free)** — pick terrain from a shelf and drag/rotate it
-  freely on the 3D table, no 3″-grid binding. Walkable multi-storey grassland ruins
-  (`SandboxTerrainProp`), oval tree-group forests + hazard clusters on a shared movable base
-  (`TerrainGroupBase`), and a 2D mirror of the placed terrain in the map-layouter.
-  Ruins are built from the SAME masonry wall panels as the grid ruins (RuinsLibrary, already
-  on R2) — no GLB / model-forge assets needed. **Branch-complete on `feat/sandbox-terrain`
-  (`b11f3c8` ruins + `13dcda9` forests/anti-tiling floor); engine + tests landed, awaiting
-  merge** → moves to Shipped with a PR link on merge. Follow-up: extend forests to the other
-  biomes (per-biome forest-floor textures + `biome_prefix` wiring; biome tree GLBs already on
-  R2). _M_
+- **Multiplayer reconnect — stable player identity (0.3.4)** — an auto-reconnect must
+  restore a player to the EXACT slot/identity they had (no phantom 3rd player, no lost
+  colour/ownership) and never abort the session on a transient drop. An 8-root-cause audit
+  is done; the safe half shipped (own-only mini movement, import-slot default, phantom +
+  abort hardening — RC2/4/5/6/7). **Remaining:** a stable per-client identity token + host-side
+  slot remap (RC1/3/8), and `network_id` namespacing by owner so two armies never collide
+  (the wire-level cause of "I move my mini and the opponent's moves too"). _L_
 - **AoF: Regiments — verify import vs a real list** — manually confirm base sizes / frontage
   from Army Forge against an actual `aofr` army (manual QA; no automated checker planned). _S_
 
 ## 📋 Next (accepted, queued)
 - **Multiplayer — two-client live test** — confirm lobby/chat/names + the relay
-  (room browser, host reconnect) across two real clients. Relay infra is deployed +
-  smoke-tested (Fly.io, `list_rooms`); only the full two-client in-game run remains. _S_
+  (room browser, host reconnect) across two real clients. Live testing is underway and has
+  driven a wave of shipped fixes (army + biome sync, paste/delete/arrange replication,
+  own-only movement, import-slot default, reconnect/abort hardening). Remaining: a clean
+  end-to-end two-client game once the reconnect identity remap (see Now) lands. _S_
 - **Regiments — handling polish** — move a unit as one block, axis-locked drag (straight),
   frontage cycle (5-wide ↔ other), and wheel/pivot about the front corner. Community-validated
   (bulk-move + wheeling is a top TTS friction). `regiment_tray.gd` has `frontage`/`reform`,
   but no block-move/cycle/wheel yet. _M_
 - **Persistent, shared rulers** — a dropped ruler that stays on the table, carries a number, is
   in inches, and is replicated to the opponent. Fixes TTS's #1 measurement gap (the ruler vanishes
-  on release and only the measurer can see it). Extends the measure tool. _M_
+  on release and only the measurer can see it). Extends the measure tool. **Branch-complete —
+  PR #64 (`feat/shared-rulers`) open.** _M_
 - **Base-anchored range rings ("auras")** — per-model coloured radii (e.g. 3″/6″/9″) from the base
   edge, click to cycle. The most-praised wargaming QoL feature on TTS. (Pin the ring set to common
-  OPR aura/weapon ranges.) _S_
+  OPR aura/weapon ranges.) **Branch-complete — PR #65 (`feat/range-rings`) open.** _S_
 - **Measure-on-pickup → snap-back** — grabbing a model starts a live measurement with a ghost
   preview; release to commit, ESC to return to the pickup point. TTS later shipped exactly this.
   Extends `object_manager` drag + the height-aware LoS measuring. _M_
@@ -59,6 +59,9 @@ planned and where ideas go. For what already works see
   `coherency_visualizer.gd`. Show, never correct. _S_
 - **Contextual control hints** — hover an object → its hotkeys appear. Tabletop Playground's
   most-praised onboarding feature; onboarding is the key UX battleground for digital wargaming. _S_
+- **Sandbox forests for the other biomes** — extend the shipped grassland forest pads to
+  desert / tundra / volcanic / jungle / urban (per-biome forest-floor textures + `biome_prefix`
+  wiring; the biome tree GLBs are already on R2). _S_
 
 ## 🧊 Ideas (icebox — captured, not committed)
 
@@ -83,7 +86,13 @@ planned and where ideas go. For what already works see
 
 ## ✅ Recently shipped
 
-See [`CHANGELOG.md`](../CHANGELOG.md). Highlights: **Age of Fantasy: Regiments**
+See [`CHANGELOG.md`](../CHANGELOG.md). Highlights (0.3.4 round-up): **casual sandbox
+terrain** (grid-free free-placed multi-storey ruins + oval tree-group forests + anti-tiling
+floor shader), **3 new factions** (blood / custodian / wolf_brothers — manifest now 527
+models, live on R2), and the **multiplayer sync + reconnect-hardening pass** (imported-army
+models + biome sync to peers and late-joiners, paste/delete/arrange replication, own-only
+mini movement, import-slot default, phantom-player + abort hardening). Earlier: **Age of
+Fantasy: Regiments**
 (movement-tray blocks, square bases, casualty re-rank, save/load, **facing &
 front-arc display**), **units as line-of-sight blockers** (`LosRules.units_block_line`,
 Asgard standard, display-only), the **UI audio bus** (`UiFeedback` autoload on a
