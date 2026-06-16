@@ -186,14 +186,30 @@ func get_my_peer_id() -> int:
 	return 0
 
 
+## The stable player slot/identity for THIS client. Color, model ownership and the
+## army-import default all key off THIS, not the raw transport peer_id. Today it
+## equals the peer id; the reconnect identity-token work will back it with a
+## token->slot map so a guest keeps its slot across a rejoin (which the relay
+## otherwise hands a fresh peer id).
+func get_my_player_slot() -> int:
+	return get_my_peer_id()
+
+
 ## Signal handlers
 func _on_peer_connected(id: int) -> void:
-	print("[Network] Player connected: Peer ID %d (total peers: %d)" % [id, connected_peers.size() + 1])
-	connected_peers.append(id)
+	# Dedup: a relay host-rehost replay re-emits peer_connected for guests that
+	# never left. Appending twice would put a phantom duplicate in connected_peers
+	# (and the roster) — keep it a set (RC2).
+	var already := connected_peers.has(id)
+	print("[Network] Player connected: Peer ID %d (total peers: %d, dup=%s)" % [id, connected_peers.size() + (0 if already else 1), already])
+	if not already:
+		connected_peers.append(id)
 	player_connected.emit(id)
 	# State sync is handled by main.gd via the player_connected signal — but only
-	# after the version handshake. Arm the grace-period kick for this peer here.
-	if multiplayer.is_server():
+	# after the version handshake. Arm the grace-period kick ONLY for a genuinely
+	# new, unvalidated peer: re-arming it for an already-validated guest on a
+	# rehost replay risks a spurious kick (RC6).
+	if multiplayer.is_server() and not already and not is_peer_validated(id):
 		get_tree().create_timer(VERSION_HANDSHAKE_TIMEOUT).timeout.connect(
 			enforce_version_handshake_timeout.bind(id))
 
@@ -880,17 +896,67 @@ func broadcast_chat_message(text: String) -> String:
 signal remote_table_settings_changed(settings: Dictionary)
 
 
-## RPC: Sync table settings (deployment type, visibility, etc.)
-@rpc("authority", "call_remote", "reliable")
+## RPC: Sync table settings (deployment type, visibility, biome, terrain layout,
+## objectives, etc.). Accepted from any peer so guest-side map-layout edits also
+## propagate — table configuration is collaborative, not host-only.
+@rpc("any_peer", "call_remote", "reliable")
 func sync_table_settings(settings: Dictionary) -> void:
 	print("[Network] Received table settings: %s" % str(settings))
 	remote_table_settings_changed.emit(settings)
 
 
-## Broadcast table settings to all peers (host only)
+## Broadcast table settings to all peers. Any participant may push table changes
+## (matches the plain-broadcast pattern used by every other object sync).
 func broadcast_table_settings(settings: Dictionary) -> void:
-	if is_multiplayer_active() and multiplayer.is_server():
+	if is_multiplayer_active():
 		sync_table_settings.rpc(settings)
+
+
+# ===== Generic Object Spawn / Visibility Synchronization =====
+
+## RPC: Reconstruct a copied/pasted object on remote peers from its serialized
+## form. Reuses SaveManager._deserialize_object so every supported object type
+## (terrain, custom model, miniature, generated terrain, TTS) round-trips with
+## the same network_id, keeping later move/delete syncs aligned.
+@rpc("any_peer", "call_remote", "reliable")
+func spawn_object_data_networked(obj_data: Dictionary) -> void:
+	var main = get_node_or_null("/root/Main")
+	if main == null or main.save_manager == null:
+		return
+	await main.save_manager._deserialize_object(obj_data)
+
+
+## Broadcast a freshly created (pasted/duplicated) object to all peers.
+func broadcast_object_data_spawn(obj_data: Dictionary) -> void:
+	if not is_multiplayer_active():
+		return
+	if not _validate_rpc_ready("broadcast_object_data_spawn"):
+		return
+	spawn_object_data_networked.rpc(obj_data)
+
+
+## RPC: Mirror a generic object's visibility (delete = hide, undo = show) by
+## network_id. OPR unit models keep using sync_model_wounds; this covers the
+## plain nodes (terrain, custom minis, TTS) that the wounds path does not.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_object_visibility(object_id: int, is_visible: bool) -> void:
+	var object_manager = get_node_or_null("/root/Main/ObjectManager")
+	if object_manager == null:
+		return
+	for child in object_manager.get_children():
+		if child.has_meta("network_id") and int(child.get_meta("network_id")) == object_id:
+			child.visible = is_visible
+			child.set_meta("deleted", not is_visible)
+			break
+
+
+## Broadcast a generic object's visibility change to all peers.
+func broadcast_object_visibility(object_id: int, is_visible: bool) -> void:
+	if not is_multiplayer_active():
+		return
+	if not _validate_rpc_ready("broadcast_object_visibility"):
+		return
+	sync_object_visibility.rpc(object_id, is_visible)
 
 
 # ===== Army Import Synchronization (Batched) =====

@@ -38,8 +38,12 @@ const HEARTBEAT_INTERVAL: float = 10.0
 ## Must exceed the relay's own 30 s heartbeat timeout to avoid false positives.
 const HEARTBEAT_TIMEOUT: float = 35.0
 
-## Give up an automatic rejoin if it hasn't succeeded within this long.
-const RECONNECT_TIMEOUT: float = 15.0
+## Give up an automatic rejoin if it hasn't succeeded within this long. MUST stay
+## comfortably above the relay's HOST_REJOIN_WINDOW_SECONDS (20s, relay_server.py)
+## plus a full TCP+TLS re-handshake — otherwise a host whose link recovers at
+## second ~18 has already torn itself down while the relay would still restore the
+## room, needlessly ending the session (RC5).
+const RECONNECT_TIMEOUT: float = 25.0
 
 ## Max WebSocket frames sent per _poll() cycle.
 ## At ~60fps this caps at ~240 msg/s, staying under the relay server limit (300).
