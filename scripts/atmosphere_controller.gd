@@ -98,8 +98,11 @@ var _transition_tween: Tween = null
 var _rng := RandomNumberGenerator.new()
 
 var _current_name := DEFAULT_PRESET
-var _fires_enabled := false
-var _war_sounds_enabled := false
+# War-torn ruin fires + distant war sounds default ON — a lived-in battlefield is the
+# intended first impression. Both persist, so toggling either off in-game sticks; this
+# default only applies to a fresh install (no saved atmosphere config).
+var _fires_enabled := true
+var _war_sounds_enabled := true
 ## Tracked mist state (atmospheric_clouds has no getters).
 var _mist_color := Color(0.95, 0.96, 0.98)
 var _mist_density := 1.0
@@ -328,8 +331,8 @@ func _load_config() -> void:
 	var config := ConfigFile.new()
 	if config.load(CONFIG_PATH) != OK:
 		return
-	_fires_enabled = config.get_value(CONFIG_SECTION, "fires_enabled", false)
-	_war_sounds_enabled = config.get_value(CONFIG_SECTION, "war_sounds_enabled", false)
+	_fires_enabled = config.get_value(CONFIG_SECTION, "fires_enabled", true)
+	_war_sounds_enabled = config.get_value(CONFIG_SECTION, "war_sounds_enabled", true)
 
 
 func _save_config() -> void:
