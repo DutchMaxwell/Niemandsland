@@ -289,6 +289,12 @@ func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> voi
 			# drag/rotate act on the whole regiment. Loose models resolve to themselves.
 			var target := _regiment_root(collider)
 
+			# Multiplayer ownership gate: a click on ANOTHER player's model must not
+			# select or drag it. Returns before _deselect_all so it doesn't even
+			# clear your own selection. (Fail-open: unowned props stay movable.)
+			if _foreign_owner_slot(target) > 0:
+				return
+
 			var already_selected = target in _selected_objects
 
 			if alt_pressed:
@@ -315,9 +321,35 @@ func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> voi
 	_start_box_selection(screen_pos, alt_pressed)
 
 
+## In multiplayer you may only select/move your OWN models. Returns the foreign
+## owner's player slot if `obj` is an OPR model owned by a DIFFERENT player, else 0.
+## Fail-open by design: outside multiplayer, and for terrain / unowned props / any
+## object whose owner can't be read, this returns 0 so nobody is ever locked out
+## of their own pieces. Owner identity uses the stable player slot, not peer_id.
+func _foreign_owner_slot(obj: Node) -> int:
+	if obj == null or not _network_manager or not _network_manager.is_multiplayer_active():
+		return 0
+	var owner := 0
+	if obj.has_meta("opr_player_id"):
+		owner = int(obj.get_meta("opr_player_id"))
+	elif obj.has_meta("game_unit"):
+		var gu = obj.get_meta("game_unit")
+		if gu != null and "unit_properties" in gu:
+			owner = int(gu.unit_properties.get("player_id", 0))
+	if owner <= 0:
+		return 0
+	var my_slot: int = _network_manager.get_my_player_slot()
+	return owner if owner != my_slot else 0
+
+
 ## Add an object to the current selection
 func _add_to_selection(obj: Node3D) -> void:
 	if obj in _selected_objects:
+		return
+
+	# Ownership gate (multiplayer): never add another player's model to the
+	# selection — covers box-select and the public select_objects() path.
+	if _foreign_owner_slot(obj) > 0:
 		return
 
 	_selected_objects.append(obj)
