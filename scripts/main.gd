@@ -1847,6 +1847,11 @@ func _on_internet_room_ready(code: String) -> void:
 
 
 func _on_internet_connected(peer_id: int) -> void:
+	# Mirror the server role onto network_manager.is_host: only the ENet host_game()
+	# set it before, so every role-gated host check read false for internet sessions
+	# (RC7). multiplayer.is_server() is backed by the relay peer (_my_peer_id == 1).
+	if network_manager:
+		network_manager.is_host = multiplayer.is_server()
 	_update_network_ui(true, false)
 	network_status_label.text = "Online (Peer %d)" % peer_id
 	network_status_label.add_theme_color_override("font_color", Color.GREEN)
@@ -2068,6 +2073,14 @@ func _on_relay_reconnect_failed(reason: String) -> void:
 	push_warning("[Network] Reconnect failed: %s" % reason)
 	network_status_label.text = "Reconnect failed (%s)" % reason
 	network_status_label.add_theme_color_override("font_color", Color.RED)
+	# Tear the dead relay peer down cleanly (RC4): close + null the socket, drop the
+	# multiplayer peer, and reset the roster dicts so a later Host/Join starts from a
+	# known-clean state instead of layering over a half-alive session.
+	if internet_lobby and internet_lobby.has_method("disconnect_internet_game"):
+		internet_lobby.disconnect_internet_game()
+	if network_manager:
+		network_manager.disconnect_game()
+		network_manager.player_names.clear()
 	_update_network_ui(false, false)
 	_cleanup_all_presence()
 
@@ -2082,6 +2095,9 @@ func _on_host_paused() -> void:
 ## The host is present again (we rejoined as host, or our host returned). The full
 ## state re-sync runs over the restored peer link; clear the warning.
 func _on_host_rejoined() -> void:
+	# We reclaimed peer id 1 — restore the host role flag for role-gated logic (RC7).
+	if network_manager:
+		network_manager.is_host = multiplayer.is_server()
 	network_status_label.text = "Reconnected"
 	network_status_label.add_theme_color_override("font_color", Color.GREEN)
 
@@ -2250,6 +2266,13 @@ func _on_remote_dice_rolled(peer_id: int, results: Array, context: Dictionary) -
 
 ## Spawn a remote cursor visualization for a peer
 func _spawn_remote_cursor(peer_id: int) -> void:
+	# Free any existing cursor for this peer first — a relay reconnect/rehost
+	# replay can re-fire peer_connected; overwriting the dict without freeing
+	# leaks an orphan node (RC2).
+	if _remote_cursors.has(peer_id):
+		if is_instance_valid(_remote_cursors[peer_id]):
+			_remote_cursors[peer_id].queue_free()
+		_remote_cursors.erase(peer_id)
 	var cursor_script = load("res://scripts/remote_cursor.gd")
 	var cursor = Node3D.new()
 	cursor.set_script(cursor_script)
@@ -2263,6 +2286,13 @@ func _spawn_remote_cursor(peer_id: int) -> void:
 
 ## Spawn a player avatar for a peer
 func _spawn_player_avatar(peer_id: int) -> void:
+	# Free any existing avatar for this peer first — a relay reconnect/rehost
+	# replay can re-fire peer_connected; overwriting the dict without freeing
+	# leaks an orphan avatar (the phantom 3rd player) in the scene (RC2).
+	if _player_avatars.has(peer_id):
+		if is_instance_valid(_player_avatars[peer_id]):
+			_player_avatars[peer_id].queue_free()
+		_player_avatars.erase(peer_id)
 	var avatar_script = load("res://scripts/player_avatar.gd")
 	var avatar = Node3D.new()
 	avatar.set_script(avatar_script)
@@ -2851,6 +2881,12 @@ func _add_hud_frame(panel: Control) -> void:
 
 ## Open OPR import dialog
 func _on_import_opr_army() -> void:
+	# Pre-select the player assignment to the slot you joined as (e.g. 2nd player
+	# -> Player 2 / red), so an imported army is owned by the right player by default.
+	var slot := 1
+	if network_manager and network_manager.is_multiplayer_active():
+		slot = maxi(1, network_manager.get_my_player_slot())
+	opr_import_dialog.set_player(slot)
 	opr_import_dialog.popup_centered()
 
 
