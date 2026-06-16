@@ -246,6 +246,7 @@ class DeleteAction extends UndoableAction:
 				_net.broadcast_model_wounds(model)
 		for node in _nodes:
 			_set_node_hidden(node, true)
+			_broadcast_node_visibility(node, false)
 
 	## Restores the pre-deletion state.
 	func undo() -> void:
@@ -259,6 +260,16 @@ class DeleteAction extends UndoableAction:
 				_net.broadcast_model_wounds(model)
 		for node in _nodes:
 			_set_node_hidden(node, false)
+			_broadcast_node_visibility(node, true)
+
+	## Mirrors a plain node's delete/undo (hide/show) to remote peers by
+	## network_id — the wounds path only covers OPR unit models.
+	func _broadcast_node_visibility(node: Node3D, is_visible: bool) -> void:
+		if _net == null or node == null or not is_instance_valid(node):
+			return
+		if not _net.is_multiplayer_active() or not node.has_meta("network_id"):
+			return
+		_net.broadcast_object_visibility(int(node.get_meta("network_id")), is_visible)
 
 	func _set_node_hidden(node: Node3D, hidden: bool) -> void:
 		if node == null or not is_instance_valid(node):
