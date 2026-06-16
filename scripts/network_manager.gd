@@ -422,15 +422,25 @@ func _resolve_slot_for_token(token: String, new_peer: int) -> int:
 	if token_to_slot.has(token):
 		var slot: int = token_to_slot[token]
 		if slot == 1 and new_peer != 1:
-			return _allocate_fresh_slot(new_peer)  # never hand the host slot to a guest
+			# Never hand the host slot to a guest; RE-HOME this token to a fresh slot so it
+			# stays stable across THIS guest's future rejoins (not refused slot 1 each time).
+			token_to_slot.erase(token)
+			return _allocate_fresh_slot(new_peer, token)
 		var old_peer: int = int(slot_to_peer.get(slot, SLOT_RESERVED_PEER))
 		slot_to_peer[slot] = new_peer
 		if old_peer != SLOT_RESERVED_PEER:
 			peer_to_slot.erase(old_peer)
 		peer_to_slot[new_peer] = slot
-		if old_peer != SLOT_RESERVED_PEER and old_peer != new_peer:
-			_rpc_remap_peer.rpc(old_peer, new_peer, slot)
-			_rpc_remap_peer(old_peer, new_peer, slot)  # apply on the host too
+		# Fire the remap whenever the transport id actually changed — INCLUDING a reclaim of
+		# a reserved-vacant slot (old_peer == SLOT_RESERVED_PEER), the primary clean-
+		# disconnect-then-rejoin path. _on_peer_remapped is the ONLY path that re-colours the
+		# avatar off the slot on every observer, so suppressing it there left the reconnected
+		# guest in its raw-peer_id colour. The handler tolerates a reserved/absent old peer;
+		# the local self-spawn is guarded in main (avatars are remote-only).
+		if old_peer != new_peer:
+			if is_multiplayer_active():
+				_rpc_remap_peer.rpc(old_peer, new_peer, slot)
+			_rpc_remap_peer(old_peer, new_peer, slot)  # apply locally (host)
 		return slot
 	return _allocate_fresh_slot(new_peer, token)
 
@@ -475,7 +485,9 @@ func _rpc_remap_peer(old_peer: int, new_peer: int, slot: int) -> void:
 		validated_peers[new_peer] = true
 		validated_peers.erase(old_peer)
 	connected_peers.erase(old_peer)
-	if not connected_peers.has(new_peer):
+	# On the RETURNING guest new_peer == self, and connected_peers must exclude self —
+	# only record the new id as a connected peer on observers (host + other guests).
+	if new_peer != get_my_peer_id() and not connected_peers.has(new_peer):
 		connected_peers.append(new_peer)
 	peer_remapped.emit(old_peer, new_peer, slot)
 

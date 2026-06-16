@@ -109,6 +109,27 @@ func test_remap_tolerates_absent_old_peer() -> void:
 	assert_int(nm.slot_to_peer[2]).is_equal(99)
 
 
+func test_remap_excludes_self_from_connected_peers() -> void:
+	# The remap broadcast reaches the returning guest too (new_peer == our own id). It must
+	# record the slot binding but NOT list us in connected_peers (presence excludes self).
+	var nm := _make_manager()
+	var me: int = nm.get_my_peer_id()  # 0 in a test (no live peer)
+	nm._rpc_remap_peer(7, me, 2)
+	assert_bool(nm.connected_peers.has(me)).is_false()
+	assert_int(nm.peer_to_slot[me]).is_equal(2)  # binding still recorded
+
+
+func test_slot_one_refusal_rehomes_token() -> void:
+	# A guest token mapped to slot 1 (e.g. a copied identity.cfg) is refused slot 1 AND
+	# re-homed to a fresh slot, so it stays stable on this guest's future rejoins.
+	var nm := _make_manager()
+	nm.token_to_slot["dup"] = 1
+	nm.slot_to_peer[1] = 1
+	var slot: int = nm._resolve_slot_for_token("dup", 8)
+	assert_int(slot).is_not_equal(1)
+	assert_int(nm.token_to_slot["dup"]).is_equal(slot)  # re-homed, not left at 1
+
+
 # ===== disconnect reserves the slot (does not recycle it) =====
 
 func test_disconnect_reserves_slot_keeps_token() -> void:
