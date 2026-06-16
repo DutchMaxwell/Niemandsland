@@ -1737,9 +1737,10 @@ const SANDBOX_RUINS: Dictionary = {
 
 ## Tree-group / hazard-cluster catalogue (the non-ruin sandbox pieces, which reuse existing
 ## tree/hazard art). Keyed by prop_id -> {kind, footprint, label}.
+## Forests are OVAL pads (footprint = bounding box: long axis × widest point).
 const SANDBOX_GROUPS: Dictionary = {
-	"forest_small": {"kind": SandboxPropKind.FOREST, "footprint": Vector2(6, 6), "label": "Forest (small)"},
-	"forest_large": {"kind": SandboxPropKind.FOREST, "footprint": Vector2(9, 9), "label": "Forest (large)"},
+	"forest_small": {"kind": SandboxPropKind.FOREST, "footprint": Vector2(6, 4), "label": "Forest (small)"},
+	"forest_large": {"kind": SandboxPropKind.FOREST, "footprint": Vector2(9, 6), "label": "Forest (large)"},
 	"minefield": {"kind": SandboxPropKind.HAZARD_CLUSTER, "footprint": Vector2(6, 6), "label": "Minefield"},
 }
 
