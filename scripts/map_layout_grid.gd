@@ -5,6 +5,16 @@ extends Control
 
 var map_layout: Control = null  # Reference to parent MapLayout
 
+## Sandbox-terrain mirror: metres-per-inch and the per-kind footprint fill/border colours
+## (ObjectManager.SandboxPropKind: 0=RUIN, 1=FOREST, 2=HAZARD_CLUSTER).
+const SANDBOX_INCH_M := 0.0254
+const SANDBOX_FILL_COLORS := {
+	0: Color(0.45, 0.55, 0.70, 0.45),  # ruin — slate blue
+	1: Color(0.25, 0.55, 0.28, 0.45),  # forest — green
+	2: Color(0.75, 0.30, 0.25, 0.45),  # hazard cluster — red
+}
+const SANDBOX_BORDER_COLOR := Color(0.95, 0.95, 0.95, 0.85)
+
 func _ready() -> void:
 	# Find MapLayout parent
 	var parent = get_parent()
@@ -225,6 +235,10 @@ func _draw() -> void:
 	# Draw deployment zones (if enabled)
 	if map_layout.show_deployment_zones:
 		_draw_deployment_zones(grid_rect)
+
+	# Mirror the free-placed 3D sandbox terrain (ruins/forests/hazard clusters) as footprints,
+	# so deployment zones and objectives can be planned around the casual table.
+	_draw_sandbox_terrain(grid_rect, pixels_per_inch_x, pixels_per_inch_y)
 
 	# Draw mission objectives (always shown if any exist)
 	if map_layout.mission_objectives.size() > 0 or map_layout.objectives_editing:
@@ -722,6 +736,57 @@ func _draw_mission_objectives(grid_rect: Rect2, pixels_per_inch_x: float, pixels
 
 	# Third pass: Draw warning lines between objectives that are too close (<9")
 	_draw_objective_distance_warnings(inch_to_screen, zoom)
+
+
+## Mirror the live 3D sandbox terrain props as 2D footprint rectangles. The 3D table is the
+## source of truth (group "sandbox_terrain"); this is a read-only overview so deployment zones
+## and objectives can be planned around the casual layout. World metres → table-centre inches
+## → screen, with each prop's own yaw plus the grid rotation applied.
+func _draw_sandbox_terrain(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch_y: float) -> void:
+	var props := get_tree().get_nodes_in_group("sandbox_terrain")
+	if props.is_empty():
+		return
+
+	var center := grid_rect.position + grid_rect.size / 2.0
+	var angle_rad := deg_to_rad(map_layout.grid_rotation_degrees)
+	var cos_a := cos(angle_rad)
+	var sin_a := sin(angle_rad)
+	var to_screen := func(inch_from_center: Vector2) -> Vector2:
+		var lx := inch_from_center.x * pixels_per_inch_x
+		var ly := inch_from_center.y * pixels_per_inch_y
+		return Vector2(lx * cos_a - ly * sin_a, lx * sin_a + ly * cos_a) + center
+
+	for node in props:
+		if not is_instance_valid(node) or not node is Node3D:
+			continue
+		var fp = node.get("footprint_inches")
+		if typeof(fp) != TYPE_VECTOR2 or fp == Vector2.ZERO:
+			continue
+		var node3d := node as Node3D
+		var center_inch := Vector2(node3d.global_position.x, node3d.global_position.z) / SANDBOX_INCH_M
+		# Godot yaw maps to a -yaw rotation in the (x, z) screen plane.
+		var prop_angle := -node3d.rotation.y
+		var pa_cos := cos(prop_angle)
+		var pa_sin := sin(prop_angle)
+		var hw: float = fp.x * 0.5
+		var hd: float = fp.y * 0.5
+		var locals := [Vector2(-hw, -hd), Vector2(hw, -hd), Vector2(hw, hd), Vector2(-hw, hd)]
+		var pts := PackedVector2Array()
+		for l in locals:
+			var r := Vector2(l.x * pa_cos - l.y * pa_sin, l.x * pa_sin + l.y * pa_cos)
+			pts.append(to_screen.call(center_inch + r))
+
+		var kind := int(node.get_meta("prop_kind", 0))
+		draw_colored_polygon(pts, SANDBOX_FILL_COLORS.get(kind, SANDBOX_FILL_COLORS[0]))
+		for i in range(4):
+			draw_line(pts[i], pts[(i + 1) % 4], SANDBOX_BORDER_COLOR, 1.5)
+
+		# Floor-count badge for multi-storey ruins.
+		var levels := int(node.get_meta("sandbox_level_count", 1))
+		if levels > 1:
+			var center_px: Vector2 = to_screen.call(center_inch)
+			draw_string(ThemeDB.fallback_font, center_px + Vector2(-4, 5), str(levels),
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 14, SANDBOX_BORDER_COLOR)
 
 
 ## Draw warning indicators between objectives that are closer than 9"
