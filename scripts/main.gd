@@ -2324,9 +2324,11 @@ func _get_player_color(peer_id: int) -> Color:
 ## Table Settings Synchronization (Phase 3)
 ## ============================================================================
 
-## Broadcast current table settings to all clients (host only)
+## Broadcast a table-settings change to all peers. Any participant may edit the
+## table (deployment, objectives, terrain layout, biome), so this is no longer
+## host-only — guest edits propagate too.
 func _broadcast_table_settings_update(setting_key: String, value) -> void:
-	if not network_manager.is_multiplayer_active() or not multiplayer.is_server():
+	if not network_manager.is_multiplayer_active():
 		return
 	var settings = {setting_key: value}
 	network_manager.broadcast_table_settings(settings)
