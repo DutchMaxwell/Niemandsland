@@ -352,6 +352,25 @@ func broadcast_spawn(object_type: String, pos: Vector3, object_id: int) -> void:
 	spawn_object_networked.rpc(object_type, pos.x, pos.y, pos.z, object_id)
 
 
+## RPC: Spawn a free-placed sandbox terrain piece on remote clients (local already spawned).
+## The object_id doubles as the cluster scatter seed, so forests/minefields build identically
+## on every peer; move/rotate then reuse the generic network-id paths.
+@rpc("any_peer", "call_remote", "reliable")
+func spawn_sandbox_terrain_networked(prop_id: String, kind: int, pos_x: float, pos_y: float, pos_z: float, object_id: int) -> void:
+	var object_manager = get_node_or_null("/root/Main/ObjectManager")
+	if object_manager:
+		object_manager.spawn_sandbox_terrain(prop_id, kind, Vector3(pos_x, pos_y, pos_z), false, object_id)
+
+
+## Helper to broadcast a sandbox terrain spawn to all peers (local spawn already happened).
+func broadcast_sandbox_terrain_spawn(prop_id: String, kind: int, pos: Vector3, object_id: int) -> void:
+	if not is_multiplayer_active():
+		return
+	if not _validate_rpc_ready("broadcast_sandbox_terrain_spawn"):
+		return
+	spawn_sandbox_terrain_networked.rpc(prop_id, kind, pos.x, pos.y, pos.z, object_id)
+
+
 ## Helper to broadcast movement to all peers
 func broadcast_move(object_id: int, pos: Vector3) -> void:
 	if not is_multiplayer_active():

@@ -188,6 +188,11 @@ var _roster_vbox: VBoxContainer = null
 @onready var terrain_category_option: OptionButton = %CategoryOption
 @onready var terrain_list: ItemList = %TerrainList
 
+## Casual sandbox terrain shelf (code-built), created in _setup_sandbox_shelf().
+var _sandbox_shelf: SandboxTerrainShelf = null
+## Toolbar toggle for terrain edit mode (unlocks terrain + opens the shelf).
+var _terrain_mode_btn: Button = null
+
 # OPR Army Integration
 @onready var import_opr_btn: Button = %ImportOPRArmy
 var opr_army_manager: OPRArmyManager = null
@@ -418,6 +423,7 @@ func _ready() -> void:
 	# Legacy TTS terrain browser: superseded by the map-editor prefab palette. Hidden
 	# (no pre-loaded library pieces) but kept wired for ad-hoc TTS terrain imports.
 	terrain_browser_btn.hide()
+	_setup_sandbox_shelf()
 	# Removed from the in-game menu (no longer needed): direct 3D model load + TTS import.
 	load_model_btn.hide()
 	import_tts_btn.hide()
@@ -2739,6 +2745,41 @@ func _on_terrain_category_selected(index: int) -> void:
 		terrain_list.add_item(display_name)
 		# Store piece ID in metadata
 		terrain_list.set_item_metadata(terrain_list.item_count - 1, piece.id)
+
+
+## Casual sandbox terrain shelf: a code-built browser window + a toolbar button to open it.
+## Spawns free-placed, draggable terrain pieces on the 3D table (grassland ruins first).
+func _setup_sandbox_shelf() -> void:
+	_sandbox_shelf = SandboxTerrainShelf.new()
+	$UI.add_child(_sandbox_shelf)
+	_sandbox_shelf.setup(object_manager)
+	_sandbox_shelf.closed.connect(_on_sandbox_shelf_closed)
+
+	# A toggle next to the terrain-browser slot: ON enters terrain edit mode (terrain
+	# unlocked + shelf open); OFF locks all terrain so play can't disturb it.
+	_terrain_mode_btn = Button.new()
+	_terrain_mode_btn.toggle_mode = true
+	_terrain_mode_btn.text = "Terrain Mode"
+	_terrain_mode_btn.toggled.connect(_on_terrain_mode_toggled)
+	var parent := terrain_browser_btn.get_parent()
+	if parent:
+		parent.add_child(_terrain_mode_btn)
+		parent.move_child(_terrain_mode_btn, terrain_browser_btn.get_index() + 1)
+
+
+func _on_terrain_mode_toggled(pressed: bool) -> void:
+	object_manager.set_terrain_edit_mode(pressed)
+	if pressed:
+		_sandbox_shelf.open()
+	else:
+		_sandbox_shelf.hide()
+
+
+## Shelf closed by the user (X / Close) → leave terrain edit mode (button reflects it, which
+## re-locks the pieces via the toggled handler).
+func _on_sandbox_shelf_closed() -> void:
+	if _terrain_mode_btn and _terrain_mode_btn.button_pressed:
+		_terrain_mode_btn.button_pressed = false
 
 
 ## Double-click on terrain item to spawn immediately
