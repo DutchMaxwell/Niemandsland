@@ -39,8 +39,26 @@ planned and where ideas go. For what already works see
 - **Multiplayer — two-client live test** — confirm lobby/chat/names + the relay
   (room browser, host reconnect) across two real clients. Relay infra is deployed +
   smoke-tested (Fly.io, `list_rooms`); only the full two-client in-game run remains. _S_
-- **Regiments — handling polish** — frontage cycle (5-wide ↔ other), wheel about the
-  front corner. (`regiment_tray.gd` has `frontage`/`reform`, but no cycle/wheel yet.) _M_
+- **Regiments — handling polish** — move a unit as one block, axis-locked drag (straight),
+  frontage cycle (5-wide ↔ other), and wheel/pivot about the front corner. Community-validated
+  (bulk-move + wheeling is a top TTS friction). `regiment_tray.gd` has `frontage`/`reform`,
+  but no block-move/cycle/wheel yet. _M_
+- **Persistent, shared rulers** — a dropped ruler that stays on the table, carries a number, is
+  in inches, and is replicated to the opponent. Fixes TTS's #1 measurement gap (the ruler vanishes
+  on release and only the measurer can see it). Extends the measure tool. _M_
+- **Base-anchored range rings ("auras")** — per-model coloured radii (e.g. 3″/6″/9″) from the base
+  edge, click to cycle. The most-praised wargaming QoL feature on TTS. (Pin the ring set to common
+  OPR aura/weapon ranges.) _S_
+- **Measure-on-pickup → snap-back** — grabbing a model starts a live measurement with a ghost
+  preview; release to commit, ESC to return to the pickup point. TTS later shipped exactly this.
+  Extends `object_manager` drag + the height-aware LoS measuring. _M_
+- **Movement reachable-area indicator** — show how far a model can move, with Advance vs
+  Rush/Charge bands (Rush = Charge range). Display only — never moves the model. _M_
+- **Coherency visualizer (sharpen)** — highlight models outside X″ of their nearest neighbour
+  (TTS doesn't solve this; guides say "ignore coherency"). Builds on `coherency_checker.gd` /
+  `coherency_visualizer.gd`. Show, never correct. _S_
+- **Contextual control hints** — hover an object → its hotkeys appear. Tabletop Playground's
+  most-praised onboarding feature; onboarding is the key UX battleground for digital wargaming. _S_
 
 ## 🧊 Ideas (icebox — captured, not committed)
 
@@ -48,6 +66,18 @@ planned and where ideas go. For what already works see
   floors already shipped via the sandbox terrain; this is the grid-editor / per-cell
   elevation side.) The surface-aware placement raycast (models rest on terrain tops) is
   the groundwork. _L_
+- **Symmetric PvP hidden info** — manual hidden deployment, per-unit hide/reveal (reveal when a
+  unit acts), and face-down secret objectives. The unowned niche: VTTs only do GM-vs-player fog;
+  symmetric PvP hidden deploy + secret missions is unclaimed. Purely human-driven (a toggle, no
+  auto-reveal engine). _L_
+- **Manual tracker widget** — VP / round / command-point / objective counters the players
+  increment themselves (optional stream overlay). State-tracking, not score automation. _M_
+- **Colorblind mode + accessibility** — patterns/labels (not colour alone), safe UI scaling, and
+  Steam Deck / controller support. Clean gaps TTS leaves to modders. _M_
+- **Camera comfort options** — fixed-speed / instant-stop camera (anti motion-sickness), a
+  top-down toggle, and snap/alignment helpers on placement. _M_
+- **Per-object physics toggle + large-army perf** — a per-object collision/clipping toggle and a
+  performance pass for high model counts (our minis are already collision-free on layer 2). _M_
 - Rules-reference overlays for more game systems.
 - _Community feedback from the alpha lands here first._
 
