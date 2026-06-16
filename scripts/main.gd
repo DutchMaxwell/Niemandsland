@@ -1836,13 +1836,11 @@ func _on_player_left(peer_id: int) -> void:
 	var player_count = network_manager.connected_peers.size()
 	if network_manager.is_host:
 		network_status_label.text = "Hosting (%d players)" % player_count
-	# Rebind-aware: skip a STALE old-socket close whose slot was already rebound to a
-	# newer peer (the reconnect already moved this player), so we don't tear down the
-	# freshly-remapped presence. Cleanup only the still-current/vacant occupant.
-	var slot: int = network_manager.slot_for_peer(peer_id)
-	var current: int = int(network_manager.slot_to_peer.get(slot, peer_id))
-	if current == peer_id or current == network_manager.SLOT_RESERVED_PEER:
-		_cleanup_peer_presence(peer_id)
+	# Always clean THIS transport id's presence. A stale late close AFTER a rebind is a
+	# no-op here, because _on_peer_remapped already freed the old id's avatar/cursor and
+	# re-keyed presence to the new id; a genuine departure is cleaned correctly. (The
+	# earlier slot-keyed guard mis-indexed slot_to_peer with a peer-id value — review MF3.)
+	_cleanup_peer_presence(peer_id)
 	_rebuild_roster()
 	print("Player %d left! Total: %d" % [peer_id, player_count])
 
@@ -2314,6 +2312,11 @@ func _spawn_remote_cursor(peer_id: int) -> void:
 
 ## Spawn a player avatar for a peer
 func _spawn_player_avatar(peer_id: int) -> void:
+	# Avatars are REMOTE players only — never one for ourselves. The remap broadcast reaches
+	# the returning guest too (new_peer == our own id); without this guard _on_peer_remapped
+	# would create a stationary self-phantom that no cleanup path ever frees (review MF1).
+	if network_manager and peer_id == network_manager.get_my_peer_id():
+		return
 	# Free any existing avatar for this peer first — a relay reconnect/rehost
 	# replay can re-fire peer_connected; overwriting the dict without freeing
 	# leaks an orphan avatar (the phantom 3rd player) in the scene (RC2).
