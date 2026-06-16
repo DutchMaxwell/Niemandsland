@@ -89,6 +89,11 @@ var _measure_label: Label3D = null
 var _measure_los_warning: Label3D = null  # Warning icon for LOS blocking (🚫)
 var _measure_front_label: Label3D = null  # Regiment facing aid (front vs flank/rear)
 
+# Base-anchored range rings ("auras"): G cycles the ring range on selected models,
+# Shift+G clears all. The RangeRingController (injected by main.gd) owns the per-model
+# rings; local-only display aid. See scripts/range_ring_controller.gd.
+var range_ring_controller: Node = null
+
 const METERS_TO_INCHES: float = 39.3701
 
 ## Max edge gap (meters) used when auto-arranging, so the smallest base stays
@@ -251,6 +256,15 @@ func _input(event: InputEvent) -> void:
 		if _is_dragging:
 			_cancel_drag()
 
+	# Range-ring hotkeys (gated above by _is_gui_blocking_input, so safe while chatting):
+	# G cycles the ring on selected models (off → 3 → 6 → … → 24 → off); Shift+G clears all.
+	elif event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_G and range_ring_controller != null:
+			if event.shift_pressed:
+				range_ring_controller.clear_all()
+			else:
+				range_ring_controller.cycle(_selected_model_nodes())
+
 
 func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> void:
 	# Skip selection if disabled (e.g., map layout mode)
@@ -364,6 +378,15 @@ func _deselect_all() -> void:
 ## Public: Get currently selected objects
 func get_selected_objects() -> Array[Node3D]:
 	return _selected_objects.duplicate()
+
+
+## Selected miniature nodes (for the range-ring hotkey). Skips objectives/terrain/trays.
+func _selected_model_nodes() -> Array:
+	var out: Array = []
+	for obj in _selected_objects:
+		if obj is Node3D and is_instance_valid(obj) and obj.is_in_group("miniature"):
+			out.append(obj)
+	return out
 
 
 ## Public: Select specific objects (replaces current selection)
