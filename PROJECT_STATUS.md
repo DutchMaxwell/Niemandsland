@@ -94,9 +94,10 @@ on demand from Cloudflare R2 (content-addressed `sha256.glb`, served from the as
 mapped by [`assets/model_manifest.json`](assets/model_manifest.json). Builds stay slim
 (GLBs are gitignored + excluded from every export preset); the editor/game fetches
 models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
-[`docs/ASSET_DELIVERY.md`](docs/ASSET_DELIVERY.md). **Live today: 113 models across
-5 factions** — Alien Hives (41), Robot Legions (29), Battle Brothers (23), Dao Union
-(19), a Dark Brothers hero. Remaining factions have 2D generated and pick-ready.
+[`docs/ASSET_DELIVERY.md`](docs/ASSET_DELIVERY.md). **Live today: 417 models across
+19 factions** (verified retrievable on R2) — from Alien Hives (41) and Robot Legions /
+Orc Marauders (29 each) down to Elven Jesters (8) and a Dark Brothers hero (1).
+Remaining factions are 2D generated and pick-ready.
 
 ## In progress
 
