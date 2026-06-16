@@ -47,7 +47,8 @@ func _serialize_table() -> Dictionary:
 		return {"size_feet": [6, 4]}
 
 	var data = {
-		"size_feet": [table.table_size.x, table.table_size.y]
+		"size_feet": [table.table_size.x, table.table_size.y],
+		"biome": table.biome
 	}
 
 	# Serialize map layout data from map_layout_editor
@@ -182,6 +183,8 @@ func _serialize_object(obj: Node3D) -> Dictionary:
 	data["network_id"] = obj.get_meta("network_id", 0)
 	data["position"] = [obj.global_position.x, obj.global_position.y, obj.global_position.z]
 	data["rotation"] = [obj.rotation_degrees.x, obj.rotation_degrees.y, obj.rotation_degrees.z]
+	# Persist a deleted (hidden) generic object so it stays deleted after reload.
+	data["visible"] = obj.visible
 
 	return data
 
@@ -330,6 +333,9 @@ func _deserialize_table(table_data: Dictionary) -> void:
 	if size is Array and size.size() >= 2:
 		table_size = Vector2(size[0], size[1])
 		table.setup_table(table_size)
+
+	if table_data.has("biome") and table.has_method("set_biome"):
+		table.set_biome(table_data["biome"])
 
 	# Restore map layout data
 	_deserialize_map_layout(table_data, table_size)
@@ -529,6 +535,10 @@ func _deserialize_object(data: Dictionary) -> bool:
 		# Preserve serialized network_id for all object types (TTS, custom models, etc.)
 		if net_id >= 0:
 			spawned_obj.set_meta("network_id", net_id)
+		# Restore a persisted delete (hidden) state for generic objects.
+		var was_visible := bool(data.get("visible", true))
+		spawned_obj.visible = was_visible
+		spawned_obj.set_meta("deleted", not was_visible)
 		return true
 
 	return false
