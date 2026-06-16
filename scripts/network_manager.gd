@@ -186,14 +186,30 @@ func get_my_peer_id() -> int:
 	return 0
 
 
+## The stable player slot/identity for THIS client. Color, model ownership and the
+## army-import default all key off THIS, not the raw transport peer_id. Today it
+## equals the peer id; the reconnect identity-token work will back it with a
+## token->slot map so a guest keeps its slot across a rejoin (which the relay
+## otherwise hands a fresh peer id).
+func get_my_player_slot() -> int:
+	return get_my_peer_id()
+
+
 ## Signal handlers
 func _on_peer_connected(id: int) -> void:
-	print("[Network] Player connected: Peer ID %d (total peers: %d)" % [id, connected_peers.size() + 1])
-	connected_peers.append(id)
+	# Dedup: a relay host-rehost replay re-emits peer_connected for guests that
+	# never left. Appending twice would put a phantom duplicate in connected_peers
+	# (and the roster) — keep it a set (RC2).
+	var already := connected_peers.has(id)
+	print("[Network] Player connected: Peer ID %d (total peers: %d, dup=%s)" % [id, connected_peers.size() + (0 if already else 1), already])
+	if not already:
+		connected_peers.append(id)
 	player_connected.emit(id)
 	# State sync is handled by main.gd via the player_connected signal — but only
-	# after the version handshake. Arm the grace-period kick for this peer here.
-	if multiplayer.is_server():
+	# after the version handshake. Arm the grace-period kick ONLY for a genuinely
+	# new, unvalidated peer: re-arming it for an already-validated guest on a
+	# rehost replay risks a spurious kick (RC6).
+	if multiplayer.is_server() and not already and not is_peer_validated(id):
 		get_tree().create_timer(VERSION_HANDSHAKE_TIMEOUT).timeout.connect(
 			enforce_version_handshake_timeout.bind(id))
 
