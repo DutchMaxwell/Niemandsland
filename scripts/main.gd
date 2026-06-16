@@ -10,6 +10,7 @@ extends Node3D
 # PRELOADS
 # ==============================================================================
 const UnitBoundaryVisualizerScript = preload("res://scripts/unit_boundary_visualizer.gd")
+const PinnedRulersScript = preload("res://scripts/pinned_rulers.gd")
 
 # ==============================================================================
 # CONSTANTS
@@ -230,6 +231,7 @@ var atmospheric_clouds: Node3D = null
 var radial_menu_controller: RadialMenuController = null
 var coherency_visualizer: CoherencyVisualizer = null
 var unit_boundary_visualizer: Node3D = null  # UnitBoundaryVisualizer
+var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
 var battlefield_stains: BattlefieldStains = null
@@ -1801,6 +1803,9 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# The peer is registered and validated — hand it the full name roster so it
 	# immediately knows everyone already at the table (including the host).
 	network_manager.push_roster_to_peer(peer_id)
+	# Replay the current pinned rulers so the late-joiner sees existing measurements
+	# (session-only state, not part of the .nml save).
+	network_manager.sync_rulers_to_peer(peer_id)
 
 
 ## Client: the host refused us because our game versions differ. Leave the
@@ -3433,6 +3438,13 @@ func _init_radial_menu() -> void:
 	coherency_visualizer.name = "CoherencyVisualizer"
 	add_child(coherency_visualizer)
 	radial_menu_controller.coherency_visualizer = coherency_visualizer
+
+	# Persistent shared rulers: pinned measurements that stay on the table and replicate
+	# to every player in the owner's colour (session-only, like remote cursors).
+	pinned_rulers = PinnedRulersScript.new()
+	pinned_rulers.name = "PinnedRulers"
+	add_child(pinned_rulers)
+	object_manager.pinned_rulers = pinned_rulers
 
 	# Create unit boundary visualizer (shows which models belong to which unit)
 	unit_boundary_visualizer = UnitBoundaryVisualizerScript.new()
