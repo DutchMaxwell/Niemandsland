@@ -349,6 +349,7 @@ func _ready() -> void:
 	network_manager.player_disconnected.connect(_on_player_left)
 	network_manager.peer_version_validated.connect(_on_peer_version_validated)
 	network_manager.version_rejected.connect(_on_version_rejected)
+	network_manager.peer_remapped.connect(_on_peer_remapped)
 
 	# Connect game state sync signals (remote wounds, activation, markers, casts, delete)
 	network_manager.remote_wounds_updated.connect(_on_remote_wounds_updated)
@@ -1835,7 +1836,13 @@ func _on_player_left(peer_id: int) -> void:
 	var player_count = network_manager.connected_peers.size()
 	if network_manager.is_host:
 		network_status_label.text = "Hosting (%d players)" % player_count
-	_cleanup_peer_presence(peer_id)
+	# Rebind-aware: skip a STALE old-socket close whose slot was already rebound to a
+	# newer peer (the reconnect already moved this player), so we don't tear down the
+	# freshly-remapped presence. Cleanup only the still-current/vacant occupant.
+	var slot: int = network_manager.slot_for_peer(peer_id)
+	var current: int = int(network_manager.slot_to_peer.get(slot, peer_id))
+	if current == peer_id or current == network_manager.SLOT_RESERVED_PEER:
+		_cleanup_peer_presence(peer_id)
 	_rebuild_roster()
 	print("Player %d left! Total: %d" % [peer_id, player_count])
 
@@ -1849,6 +1856,11 @@ func _on_internet_room_ready(code: String) -> void:
 	# Copy code to clipboard for easy sharing
 	DisplayServer.clipboard_set(code)
 	print("Room code %s copied to clipboard" % display_code)
+	# Host seeds its identity HERE: the host flow goes room_created -> room_code_ready and
+	# never reaches _on_internet_connected, so this is where the host claims slot 1.
+	if network_manager and multiplayer.is_server():
+		network_manager.is_host = multiplayer.is_server()
+		network_manager.seed_host_identity()
 	_register_local_name()
 
 
@@ -2101,9 +2113,19 @@ func _on_host_paused() -> void:
 ## The host is present again (we rejoined as host, or our host returned). The full
 ## state re-sync runs over the restored peer link; clear the warning.
 func _on_host_rejoined() -> void:
-	# We reclaimed peer id 1 — restore the host role flag for role-gated logic (RC7).
 	if network_manager:
+		# Restore the host role flag for role-gated logic (RC7).
 		network_manager.is_host = multiplayer.is_server()
+		if multiplayer.is_server():
+			# We reclaimed peer id 1: restore our own slot-1 identity binding (RC8).
+			network_manager.seed_host_identity()
+		else:
+			# Guest: re-announce token+version so the (possibly stale) rehosted host
+			# rebuilds its token->slot for us and re-issues a remap only if our peer_id
+			# actually changed; then re-register our name. Self-heals the stale-view +
+			# missing-resync gap after a host rehost.
+			network_manager.announce_version_to_host()
+			_register_local_name()
 	network_status_label.text = "Reconnected"
 	network_status_label.add_theme_color_override("font_color", Color.GREEN)
 
@@ -2304,7 +2326,8 @@ func _spawn_player_avatar(peer_id: int) -> void:
 	avatar.set_script(avatar_script)
 	avatar.name = "PlayerAvatar_%d" % peer_id
 	add_child(avatar)
-	avatar.setup(peer_id, table.table_size)
+	var slot: int = network_manager.slot_for_peer(peer_id) if network_manager else peer_id
+	avatar.setup(peer_id, slot, table.table_size)
 	# Seed the name label if this peer's name is already known (roster may arrive
 	# before or after the avatar spawns).
 	if avatar.has_method("set_player_name"):
@@ -2333,6 +2356,20 @@ func _cleanup_peer_presence(peer_id: int) -> void:
 		_player_avatars.erase(peer_id)
 
 
+## A returning identity token rebound its slot from old_peer to new_peer. EVICT BOTH the
+## stale old-id presence AND any new-id presence the relay's eager peer_connected already
+## spawned, then spawn exactly ONE avatar under new_peer (the cursor lazy-spawns on the
+## next remote-cursor packet). Order-independent + idempotent. Color resolves off the
+## slot now, so the returning player keeps its colour.
+func _on_peer_remapped(old_peer: int, new_peer: int, _slot: int) -> void:
+	if old_peer == new_peer:
+		return
+	_cleanup_peer_presence(old_peer)
+	_cleanup_peer_presence(new_peer)
+	_spawn_player_avatar(new_peer)
+	_rebuild_roster()
+
+
 ## Remove all presence nodes (on disconnect)
 func _cleanup_all_presence() -> void:
 	for cursor in _remote_cursors.values():
@@ -2345,7 +2382,10 @@ func _cleanup_all_presence() -> void:
 	_player_avatars.clear()
 
 
-## Get player color for a peer ID
+## Get a player's color from their stable SLOT (not the transport peer_id), so a
+## reconnected guest whose peer_id changed keeps its colour. Modulo wraps a high
+## monotonic slot back into the four-colour table (and slot 0 / pending -> colour 1),
+## so nobody ever flickers to WHITE.
 func _get_player_color(peer_id: int) -> Color:
 	const COLORS := {
 		1: Color(0.2, 0.4, 0.9),  # Blue
@@ -2353,7 +2393,11 @@ func _get_player_color(peer_id: int) -> Color:
 		3: Color(0.2, 0.8, 0.3),  # Green
 		4: Color(0.9, 0.7, 0.1),  # Yellow
 	}
-	return COLORS.get(peer_id, Color.WHITE)
+	var slot := peer_id
+	if network_manager:
+		slot = network_manager.slot_for_peer(peer_id)
+	var idx := (((slot - 1) % COLORS.size()) + 1) if slot > 0 else 1
+	return COLORS.get(idx, Color.WHITE)
 
 
 ## ============================================================================
@@ -2926,6 +2970,12 @@ func _on_import_opr_army() -> void:
 	# -> Player 2 / red), so an imported army is owned by the right player by default.
 	var slot := 1
 	if network_manager and network_manager.is_multiplayer_active():
+		# In an active session, NEVER stamp an army with a provisional peer_id slot:
+		# if assignment is still pending (slot 0, sub-second window after connect), wait
+		# for the host's slot assignment so the army's opr_player_id matches our durable
+		# slot. (The host is always slot 1 and never pends.)
+		if network_manager.get_my_player_slot() <= 0:
+			await network_manager.slot_assigned
 		slot = maxi(1, network_manager.get_my_player_slot())
 	opr_import_dialog.set_player(slot)
 	opr_import_dialog.popup_centered()
@@ -3072,16 +3122,20 @@ func _on_remote_army_complete(player_id: int) -> void:
 			await opr_army_manager.model_library.ensure_models(specs)
 
 	# 3. Spawn all model objects (GLBs now cached -> real models, not placeholders).
+	# Reconcile the BARE low counter, not the slot-prefixed id: OPR network_ids are
+	# slot*STRIDE + counter, so taking the raw max would poison _object_counter into a
+	# slot's namespace and break the +10000..+50000 non-OPR offset bands. Strip the slot.
 	var all_objects: Array = []
-	var max_net_id: int = object_manager._object_counter
+	var max_counter: int = object_manager._object_counter
 	for group in object_groups:
 		for obj_data in group:
 			all_objects.append(obj_data)
 			if obj_data is Dictionary:
 				var nid := int(obj_data.get("network_id", 0))
-				if nid > max_net_id:
-					max_net_id = nid
-	object_manager._object_counter = max_net_id
+				var c := (nid % OPRArmyManager.OPR_NET_ID_SLOT_STRIDE) if nid >= OPRArmyManager.OPR_NET_ID_SLOT_STRIDE else nid
+				if c > max_counter:
+					max_counter = c
+	object_manager._object_counter = max_counter
 	await save_manager._deserialize_objects(all_objects)
 
 	# 4. Restore markers / hero attachments / regiment trays now that the models exist.

@@ -358,6 +358,10 @@ func _foreign_owner_slot(obj: Node) -> int:
 	if owner <= 0:
 		return 0
 	var my_slot: int = _network_manager.get_my_player_slot()
+	# Fail open while our own slot is still pending (0, the sub-second window right after
+	# (re)connect): NEVER lock a player out of their own army because the slot hasn't landed.
+	if my_slot <= 0:
+		return 0
 	return owner if owner != my_slot else 0
 
 
