@@ -7,7 +7,6 @@ signal visualization_completed(result: CoherencyChecker.CoherencyResult)
 
 ## Colors for visualization
 const COLOR_OK := Color(0.2, 0.9, 0.2, 0.8)        # Green
-const COLOR_WARNING := Color(0.9, 0.9, 0.2, 0.8)   # Yellow
 const COLOR_ERROR := Color(0.9, 0.2, 0.2, 0.8)     # Red
 const COLOR_CHAIN := Color(0.2, 0.5, 0.9, 0.5)     # Blue (max chain)
 
@@ -340,20 +339,3 @@ func _clear_visualization() -> void:
 
 	_current_unit = null
 	visible = false
-
-
-## Shows a quick coherency check with auto-hide.
-func flash_coherency(game_unit: GameUnit, duration: float = 3.0, is_skirmish: bool = false) -> CoherencyChecker.CoherencyResult:
-	var result = show_coherency(game_unit, is_skirmish)
-
-	# Auto-hide after duration
-	await get_tree().create_timer(duration).timeout
-	hide_coherency()
-
-	return result
-
-
-## Updates visualization for current unit (call when models move).
-func update() -> void:
-	if _current_unit:
-		show_coherency(_current_unit)
