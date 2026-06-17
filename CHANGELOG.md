@@ -7,7 +7,7 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 > **Road to Alpha (`0.3.6`).** The entries below accumulate toward the first public Alpha; see
-> [`docs/ROAD_TO_ALPHA.md`](docs/ROAD_TO_ALPHA.md). Test builds `0.3.4.1`–`0.3.5.0` were handed to
+> [`docs/ROAD_TO_ALPHA.md`](docs/ROAD_TO_ALPHA.md). Test builds `0.3.4.1`–`0.3.5.2` were handed to
 > testers; the headline work of that run:
 
 ### Fixed
@@ -216,12 +216,10 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **Startup update check.** On launch, the desktop game checks the project's GitHub
   Releases for a newer build and, on a hit, offers a non-blocking "Download / Later /
   Skip this version" prompt before the menu — never blocking startup. Compares the
-  running `config/version` with SemVer precedence (prerelease-aware), skips on web/itch
-  (always the latest deploy), and fails safe when offline. Inert until releases are
+  running `config/version` with SemVer precedence (prerelease-aware), skips web builds, and fails safe when offline. Inert until releases are
   published; see [`docs/UPDATE_CHECK.md`](docs/UPDATE_CHECK.md).
-- `tools/model_forge/generate_battlemaps.py` rewritten for the new process, and
-  `tools/model_forge/publish_biomes.py` to upload battlemaps + write the manifest. Runbook:
-  `docs/runbooks/biome-r2-publish.md`.
+- Battlemap generation + R2 publishing were reworked in the private asset-pipeline repo
+  (battlemaps uploaded together with their manifest).
 - `BiomeLibrary` (+ tests). `AssetDownloadManager` generalized (configurable cache dir +
   file extension) so it serves both GLBs and WebP battlemaps.
 - **Battlefield atmosphere: one-click moods, war-torn fires and a procedural
@@ -235,7 +233,7 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   clients see the same burning walls; light/smoke counts gate by quality tier). A
   "distant war sounds" toggle plays occasional artillery/MG rumbles from random
   directions (first one 2–6 s after enabling). Audio uses real **CC0 recordings**
-  (freesound.org; sources in `tools/model_forge/fetch_ambience_audio.py`) delivered
+  (freesound.org; fetched via the private asset-pipeline repo) delivered
   from R2 (`assets/ambience_manifest.json` + `ambience_library.gd`) and hot-swapped in
   once cached, with procedural synthesis (`scripts/ambience_synth.gd`) as the
   immediate/offline fallback — all on the existing Ambience bus. Preset + toggles
@@ -358,11 +356,9 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ### Maintenance
 - The mossy-stone **ruin source-art set** (solid / top-damage / opening / crumble / Gothic
-  window + normal map + the 2 MB masonry source) is archived on **R2**
-  (`assets.akesberg.de/terrain-source/ruins/`), not bundled — only the runtime
-  `ruins_wall.webp` ships. Reproducible recipe (`tools/model_forge/generate_ruin_walls.py`),
-  a software-GL reference renderer (`tools/render_ruin_walls.gd`), and a GPU-machine handoff
-  (`docs/HANDOFF_RUIN_WALLS.md`) for the shell-wall finishing pass.
+  window + normal map + the 2 MB masonry source) is archived on **R2** (asset CDN), not
+  bundled — only the runtime `ruins_wall.webp` ships. The reproducible recipe + reference
+  renderer live in the private asset-pipeline repo.
 
 ## [0.3.1-alpha] — Alpha Release Candidate
 
@@ -375,7 +371,7 @@ Goal of this release: a playable, internet-multiplayer Alpha RC with all miniatu
   share a table. Mismatches are rejected host-side (kick) and refused client-side,
   with a clear message; a silent/old client is dropped after a grace timeout.
 - **On-demand 3D model delivery (Cloudflare R2).** Miniature GLBs are content-addressed
-  (`sha256.glb`) and fetched at runtime from `assets.akesberg.de`, mapped by
+  (`sha256.glb`) and fetched at runtime from the asset CDN, mapped by
   `assets/model_manifest.json`. Builds no longer bundle them.
 - **IP-safe faction generation overhaul** in Model Forge: positive-only prompts,
   per-faction `ip_strict` / `bio_weapons` flags, per-unit `type:` (vehicle / walker /
@@ -383,7 +379,7 @@ Goal of this release: a playable, internet-multiplayer Alpha RC with all miniatu
   best" review tool**.
 - **Factions shipped to R2:** Alien Hives (41), Battle Brothers (23) and Robot Legions
   (29), joining the earlier Dao Union (19) and a Dark Brothers hero — `model_manifest.json`
-  now resolves **113 models across 5 factions**, all verified live on `assets.akesberg.de`.
+  now resolves **113 models across 5 factions**, all verified live on the asset CDN.
 - **OPR special-rule descriptions.** Rule explanations are fetched from the army-forge
   API on import (army-book + common rules per game system, cached) and shown per rule in
   the stats tooltip, so players can read what each rule does.

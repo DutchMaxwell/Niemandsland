@@ -62,7 +62,7 @@ cd relay && python -m pytest
 
 1. Branch off `main` (`git checkout -b feat/my-change`).
 2. Keep the codebase **English** (identifiers, comments, commit messages) and match
-   the existing style — see [`.claude/AAA_CODING_STANDARDS.md`](.claude/AAA_CODING_STANDARDS.md).
+   the existing style — see [`docs/CODING_STANDARDS.md`](docs/CODING_STANDARDS.md).
 3. Use **conventional commits**: `feat:`, `fix:`, `refactor:`, `docs:`, `perf:`.
 4. Make sure the tests pass and the project imports without GDScript parse errors.
 5. Open a PR against `main` describing what changed and why. CI must be green.
