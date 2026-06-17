@@ -3666,10 +3666,6 @@ func _init_atmospheric_clouds() -> void:
 	# Add to root so clouds are above everything
 	add_child(atmospheric_clouds)
 
-	# Give reference to camera controller for zoom-based visibility
-	if camera_pivot:
-		atmospheric_clouds.camera_controller = camera_pivot
-
 	# Track the play-field extent on EVERY resize path (size dialog, save load, network
 	# sync, WGS import) — sizing the mist only in _set_table_size left it hanging past
 	# the table boundaries after loading a save. Apply the current size immediately:

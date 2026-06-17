@@ -33,11 +33,6 @@ const CLEAR_INTERVAL: float = 0.05
 ## Default fade-in duration once the table is built (seconds).
 const FADE_IN_TIME: float = 4.0
 
-# === Public references ===
-
-## Kept for compatibility (main.gd assigns it); the table-bound mist no longer follows it.
-var camera_controller: Node3D = null
-
 # === Private variables ===
 
 var _layers: Array[MeshInstance3D] = []
@@ -101,31 +96,6 @@ func set_density_scale(density_scale: float) -> void:
 			mat.set_shader_parameter("density", (BASE_DENSITY - float(i) * DENSITY_LAYER_STEP) * density_scale)
 
 
-## Set the drift direction; the passed vector scales the scroll speed per layer.
-func set_wind_direction(direction: Vector2) -> void:
-	var base: Vector2 = direction if direction.length() > 0.0001 else Vector2(0.011, 0.006)
-	for i in range(_layers.size()):
-		var mat := _layers[i].material_override as ShaderMaterial
-		if mat:
-			mat.set_shader_parameter("scroll", base.rotated(float(i) * 1.6))
-
-
-## Enable/disable the mist.
-func set_enabled(enabled: bool) -> void:
-	_enabled = enabled
-	visible = enabled
-
-
-## Shift the mist tint for the time of day (kept subtle; daylight = white).
-func set_time_of_day(hour: float) -> void:
-	var color: Color
-	if hour < 6.0 or hour > 20.0:
-		color = Color(0.74, 0.78, 0.88)    # night — cool
-	elif hour < 8.0 or hour > 18.0:
-		color = Color(0.97, 0.92, 0.86)    # dawn/dusk — warm
-	else:
-		color = MIST_COLOR                  # day — white
-	set_cloud_color(color)
 
 # === Private helpers ===
 
