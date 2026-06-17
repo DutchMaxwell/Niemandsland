@@ -2741,22 +2741,9 @@ func _request_game_state() -> void:
 
 
 ## Sync full game state to a specific peer
-## player_id -> army name, so a late-joiner can rebuild each army's tray (the platform it
-## stands on). MP-only — not part of the .nml save serialization.
-func _army_names_by_player() -> Dictionary:
-	var names := {}
-	if opr_army_manager:
-		for pid in opr_army_manager.armies:
-			var a = opr_army_manager.armies[pid]
-			if a:
-				names[pid] = a.name
-	return names
-
-
 func _sync_state_to_peer(peer_id: int) -> void:
-	var state = save_manager.serialize_game_state()
+	var state = save_manager.serialize_game_state()  # includes army_names (for tray rebuild)
 	state["_host_version"] = network_manager.get_game_version()
-	state["army_names"] = _army_names_by_player()
 	var obj_count = state.get("objects", []).size()
 	var unit_count = state.get("game_units", []).size()
 	print("[StateSync] Sending state to peer %d: %d objects, %d game_units" % [peer_id, obj_count, unit_count])
@@ -2771,9 +2758,8 @@ func _sync_loaded_state_to_clients() -> void:
 	print("Syncing loaded state to %d clients..." % network_manager.connected_peers.size())
 
 	# Get current state and broadcast to all clients
-	var state = save_manager.serialize_game_state()
+	var state = save_manager.serialize_game_state()  # includes army_names (for tray rebuild)
 	state["_host_version"] = network_manager.get_game_version()
-	state["army_names"] = _army_names_by_player()
 	_rpc_sync_game_state.rpc(state)
 
 
@@ -2848,21 +2834,10 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	save_manager._restore_markers_after_load()
 	save_manager._restore_regiments_after_load()
 
-	# Recreate each army's TRAY (the platform it stands on). The join state carries units +
+	# Recreate each army's tray (the platform it stands on) — the join state carries units +
 	# models but not the tray, so a late-joiner would otherwise see floating models with no
-	# tableau under them (bug). Built per distinct player_id from the reconstructed units.
-	var army_names: Dictionary = state.get("army_names", {})
-	var seen_army_players := {}
-	for entry in save_manager._loaded_game_units.values():
-		var gu = entry.get("game_unit")
-		if gu == null:
-			continue
-		var pid := int(gu.unit_properties.get("player_id", 0))
-		if pid > 0 and not seen_army_players.has(pid):
-			seen_army_players[pid] = true
-			var aname := str(army_names.get(pid, "Army"))
-			var acol = OPRArmyManager.PLAYER_COLORS.get(pid, Color.GRAY)
-			opr_army_manager._create_army_tray(pid, aname, acol)
+	# tableau under them (shared with the .nml-load path).
+	save_manager.restore_army_trays_after_load(state.get("army_names", {}))
 
 	if is_instance_valid(_army_loading_overlay):
 		_army_loading_overlay.complete_and_free()
