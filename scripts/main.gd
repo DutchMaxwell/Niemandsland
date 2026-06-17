@@ -20,12 +20,6 @@ const PinnedRulersScript = preload("res://scripts/pinned_rulers.gd")
 
 ## Default table dimensions
 const DEFAULT_TABLE_SIZE_FEET := Vector2(6, 4)  # 72x48 inches (landscape)
-const TABLE_SIZE_4X4_FEET := Vector2(4, 4)      # 48x48 inches (square)
-
-## UI indices for predefined table sizes
-const TABLE_SIZE_INDEX_4X4 := 0
-const TABLE_SIZE_INDEX_6X4 := 1
-const TABLE_SIZE_INDEX_CUSTOM := 2
 
 ## Graphics quality mapping (UI index matches enum directly)
 ## UI: Performance=0, Low=1, Medium=2, High=3, Ultra=4
@@ -35,8 +29,6 @@ const GROUP_ROTATION_SPEED: float = 90.0  # degrees per second
 
 ## Unit conversion constants
 const FEET_TO_METERS: float = 0.3048
-const INCHES_TO_FEET: float = 1.0 / 12.0
-const CM_TO_FEET: float = 1.0 / 30.48
 
 ## Debug mode (set to false for production builds)
 
@@ -81,14 +73,6 @@ const GROUP_ROTATION_BROADCAST_INTERVAL: float = 0.1  # 10 Hz
 # Hamburger menu
 @onready var hamburger_button: Button = %HamburgerButton
 @onready var left_panel_scroll: ScrollContainer = $UI/HUD/LeftPanelScroll
-
-# Table size UI elements
-@onready var table_size_option: OptionButton = %TableSizeOption
-@onready var custom_size_container: VBoxContainer = %CustomSizeContainer
-@onready var unit_option: OptionButton = %UnitOption
-@onready var width_input: SpinBox = %WidthInput
-@onready var length_input: SpinBox = %LengthInput
-@onready var apply_custom_btn: Button = %ApplyCustomBtn
 
 # Dice Roller Plugin UI
 @onready var dice_roller_control: DiceTray = %DiceRollerControl
@@ -287,11 +271,6 @@ func _ready() -> void:
 	settings_btn.pressed.connect(_toggle_settings_panel)
 	_update_round_button()
 
-	# Connect table size UI
-	table_size_option.item_selected.connect(_on_table_size_selected)
-	apply_custom_btn.pressed.connect(_on_apply_custom_size)
-	unit_option.item_selected.connect(_on_unit_changed)
-
 	# Connect to object manager signals
 	object_manager.distance_changed.connect(_on_distance_changed)
 	object_manager.measurement_finished.connect(_on_measurement_finished)
@@ -420,7 +399,6 @@ func _ready() -> void:
 	# Long side (72") faces the viewer (X-axis), short side (48") is depth (Z-axis)
 	table.setup_table(DEFAULT_TABLE_SIZE_FEET)
 	_adjust_camera_for_table_size(DEFAULT_TABLE_SIZE_FEET)
-	table_size_option.selected = TABLE_SIZE_INDEX_6X4
 
 	# Initialize Lighting Controller
 	lighting_controller = Node.new()
@@ -580,9 +558,7 @@ func _ready() -> void:
 
 	# Table size is chosen ONCE up front, then locked — changing it later wipes the
 	# built layout. Loads and multiplayer clients inherit the size from the saved/host
-	# data, so they skip the chooser. The in-game size panel is hidden in every case.
-	if table_size_option:
-		table_size_option.get_parent().visible = false
+	# data, so they skip the chooser.
 	var joining_client: bool = pending_internet and not ProjectSettings.get_setting("niemandsland/internet_is_host", false)
 	if pending_load.is_empty() and not joining_client:
 		# Choose the table size FIRST on a black backdrop, then dissolve into the intro —
@@ -1399,53 +1375,6 @@ func _get_random_table_position() -> Vector3:
 	var x = randf_range(-size_meters.x / 2 + margin, size_meters.x / 2 - margin)
 	var z = randf_range(-size_meters.y / 2 + margin, size_meters.y / 2 - margin)
 	return Vector3(x, 0, z)  # Spawn at table surface (y=0)
-
-
-## Handle table size preset selection
-func _on_table_size_selected(index: int) -> void:
-	match index:
-		TABLE_SIZE_INDEX_4X4:  # 48x48 inches (4x4 feet) - square
-			custom_size_container.visible = false
-			_set_table_size(TABLE_SIZE_4X4_FEET)
-		TABLE_SIZE_INDEX_6X4:  # 72x48 inches (6x4 feet) - landscape, standard wargaming
-			custom_size_container.visible = false
-			_set_table_size(DEFAULT_TABLE_SIZE_FEET)
-		TABLE_SIZE_INDEX_CUSTOM:  # Custom
-			custom_size_container.visible = true
-
-
-## Apply custom table size
-func _on_apply_custom_size() -> void:
-	# Force SpinBoxes to apply any pending text input
-	# (otherwise clicking Apply without pressing Enter first would use old values)
-	width_input.apply()
-	length_input.apply()
-
-	var width = width_input.value
-	var length = length_input.value
-
-	# Convert to feet based on selected unit
-	var size_feet: Vector2
-	if unit_option.selected == 0:  # Inches
-		size_feet = Vector2(width * INCHES_TO_FEET, length * INCHES_TO_FEET)
-	else:  # Centimeters
-		size_feet = Vector2(width * CM_TO_FEET, length * CM_TO_FEET)
-
-	_set_table_size(size_feet)
-
-
-## Update input fields when unit changes
-func _on_unit_changed(index: int) -> void:
-	if index == 0:  # Inches
-		width_input.max_value = 240.0  # 20 feet max
-		length_input.max_value = 240.0
-		width_input.suffix = " in"
-		length_input.suffix = " in"
-	else:  # Centimeters
-		width_input.max_value = 600.0  # ~20 feet max
-		length_input.max_value = 600.0
-		width_input.suffix = " cm"
-		length_input.suffix = " cm"
 
 
 ## Show the one-time table-size chooser at the start of a fresh game.
