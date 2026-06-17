@@ -6,13 +6,14 @@ Fantasy). Built in Godot.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Godot](https://img.shields.io/badge/Godot-4.6-blue.svg)](https://godotengine.org/)
-[![Status](https://img.shields.io/badge/Status-0.3.2--alpha-orange.svg)]()
+[![Status](https://img.shields.io/badge/Status-0.3.5.0--alpha-orange.svg)]()
 
-> **Status: early alpha.** The tabletop sandbox, OPR army import, multiplayer and
-> the 3D-model pipeline work; rules automation (turn/combat resolution, terrain
-> gameplay effects) is **not** implemented. See
+> **Status: alpha (on the Road to Alpha `0.3.6`).** The tabletop sandbox, OPR army
+> import, multiplayer and the 3D-model pipeline work; rules automation (turn/combat
+> resolution, terrain gameplay effects) is **not** implemented. See
 > [`PROJECT_STATUS.md`](PROJECT_STATUS.md) for the honest done / in-progress /
-> planned breakdown.
+> planned breakdown, and [`docs/ROAD_TO_ALPHA.md`](docs/ROAD_TO_ALPHA.md) for the
+> `0.3.6` release plan.
 
 ## Features
 
@@ -46,6 +47,22 @@ What the code actually does today:
 
 ## Quick start
 
+### Play (Windows / Linux)
+
+Download the latest build from the [**Releases**](../../releases) page, unzip and run it
+(`Niemandsland.exe` on Windows; the `.x86_64` next to its `.pck` on Linux) — no install. The
+start menu shows the version; the first log line is `[Boot] Niemandsland <version> build <hash>`.
+
+- **Host or join** a multiplayer game from the start menu — the host shares a room code, the guest
+  enters it. **Both players must run the same version** (the exact-match handshake won't connect
+  otherwise).
+- **Import an army** from the menu by pasting an [Army Forge](https://army-forge.onepagerules.com/)
+  list link. A faction's 3D models download on first use (cached afterwards) — internet required.
+- Honest alpha caveats are in [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md); hit **"Report a
+  problem"** in the start menu to send an anonymised bug report.
+
+### From source (developers)
+
 Requires **[Godot 4.6](https://godotengine.org/download)** (Forward+ renderer).
 
 ```bash
@@ -56,11 +73,8 @@ godot --path . --editor      # open in the editor, then F5 to run
 godot --path .
 ```
 
-Main scene: `scenes/startup_menu.tscn`.
-
-For headless build/run/test commands (incl. the Flatpak invocation used in
-development and the gdUnit4 test runner), see
-[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
+Main scene: `scenes/startup_menu.tscn`. For headless build/run/test commands (incl. the Flatpak
+invocation and the gdUnit4 test runner), see [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
 ## Controls
 
@@ -111,6 +125,9 @@ scale, **dice run in a separate scaled SubViewport** (our own MIT `dice_tray.gd`
 ## Documentation
 
 - [`PROJECT_STATUS.md`](PROJECT_STATUS.md) — current status & roadmap
+- [`docs/ROAD_TO_ALPHA.md`](docs/ROAD_TO_ALPHA.md) — the `0.3.6` Alpha release plan & checklist
+- [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) — honest alpha limitations & caveats
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — curated feature backlog (Now / Next / Ideas / Shipped)
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — systems & code map
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — build, run, test
 - [`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md) — Wargaming Simulator integration
