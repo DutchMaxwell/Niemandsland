@@ -64,7 +64,8 @@ __pycache__/
 # Fly.io (only relay/fly.toml is canonical)
 /fly.toml
 
-# Auto Claude data directory
+# Claude Code agent config + Auto Claude data (local dev tooling, not published)
+.claude/
 .auto-claude/
 .hf_token
 .gemini_key

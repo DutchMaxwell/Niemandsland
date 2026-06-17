@@ -18,9 +18,10 @@ licenses — the canonical notice for an open-source release.
 | Inter (font) | SIL OFL 1.1 | yes | `assets/ui_glassmorphism/fonts/Inter.ttf` + `Inter-LICENSE.txt` |
 | Source Code Pro (font) | SIL OFL 1.1 | yes | `assets/ui_glassmorphism/fonts/SourceCodePro.ttf` + `SourceCodePro-LICENSE.txt` (RFN "Source") |
 | Orbitron (font) | SIL OFL 1.1 | yes | `assets/ui_glassmorphism/fonts/Orbitron.ttf` + `Orbitron-LICENSE.txt` (title wordmark; RFN "Orbitron") |
-| Phosphor Icons | MIT | yes | `assets/ui_glassmorphism/icons/` + `Phosphor-LICENSE.txt` (UI icons, 256px, bold/fill) |
+| Phosphor Icons | MIT | yes | `assets/ui_glassmorphism/icons/` + `Phosphor-LICENSE.txt` (UI icons, SVG, bold style) |
 | 3D dice (own W6) | MIT | yes | `scripts/dice_tray.gd`, `scripts/dice_d6.gd` (replaced the former AGPL addon) |
 | Miniature GLBs | project-internal (AI-generated) | on-demand | see *Generated assets* below |
+| CC0 battlefield ambience | CC0 | on-demand (R2) | freesound.org recordings (e.g. "Dark Ambient Loop" by goulven); manifest `assets/ambience_manifest.json`, see `scripts/ambience_library.gd` |
 | Microsoft TRELLIS | MIT | no (dev tool) | image→3D model generation (asset-pipeline repo); GLB outputs are ours |
 | `model-viewer` (Google) | Apache-2.0 | no (dev tool) | 3D preview in the Model Forge review UI |
 | gltfpack (meshoptimizer) | MIT | no (dev tool) | GLB optimization (asset-pipeline repo) |

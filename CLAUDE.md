@@ -61,7 +61,7 @@ Miniatures (16–60 mm) are far below Godot physics' stable range (~0.1–10 m),
 
 ## Coding standards
 
-Full standards: [`.claude/AAA_CODING_STANDARDS.md`](.claude/AAA_CODING_STANDARDS.md).
+Full standards: [`docs/CODING_STANDARDS.md`](docs/CODING_STANDARDS.md).
 Essentials: no warnings, no magic numbers, no TODO/dead code; explicit types;
 defensive null-checks/early-returns; enums over strings for states; no allocations in
 `_process`; every game rule cites its OPR reference. GDScript file order:

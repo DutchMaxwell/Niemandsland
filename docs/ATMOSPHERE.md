@@ -22,8 +22,7 @@ audio fade internally; grabbing a lighting slider cancels a running blend.
 | Rain | Storm | 0.5 / 0.25 | dark grey, ×1.5 | ✓ | every 8–25 s, thunder 0.5–3 s later |
 
 Rain is one table-sized `GPUParticles3D` box (`scripts/rain_effect.gd`), resized via
-the `table_resized` flow; drop count scales with table area and quality tier (and is
-halved on web). Lightning flashes a **dedicated** `DirectionalLight3D` — never the sun,
+the `table_resized` flow; drop count scales with table area and quality tier. Lightning flashes a **dedicated** `DirectionalLight3D` — never the sun,
 so a flash cannot corrupt a running preset blend; the matching thunder plays after the
 flash-to-thunder delay, quieter the longer the delay.
 

@@ -1,9 +1,7 @@
 # Host-side reconnect (relay room preservation) — design + deploy plan
 
-**Status:** ✅ IMPLEMENTED in code + unit-tested — relay **33 pytest green**, client
-compile-check + gdUnit (255) green. ⏳ PENDING (maintainer's gate): the local
-two-instance live test, then the Fly.io deploy (`flyctl` is not installed in the dev
-sandbox). Task #43.
+**Status:** ✅ IMPLEMENTED + unit-tested (relay **38 pytest green**) and ✅ DEPLOYED to Fly.io
+(2026-06-12; smoke test passed). ⏳ PENDING (maintainer's gate): the two-client in-game live test.
 
 The server + client now match the design below: a host drop preserves the room for
 `HOST_REJOIN_WINDOW_SECONDS` and sends each guest `host_paused`; the host (or the first
@@ -67,7 +65,7 @@ First, the unit tests (already passing — run them after any further change):
 ```
 cd relay
 python3 -m venv venv && ./venv/bin/pip install -r requirements.txt pytest pytest-asyncio
-./venv/bin/python -m pytest -q                # expect 33 passed
+./venv/bin/python -m pytest -q                # expect 38 passed
 ```
 Then the manual two-instance test against a local relay:
 ```
