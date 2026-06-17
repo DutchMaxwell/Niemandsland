@@ -12,6 +12,7 @@ const MAX_NAME_LEN := 20
 const CONFIG_PATH := "user://player_identity.cfg"
 const CONFIG_SECTION := "player"
 const CONFIG_KEY_NAME := "name"
+const CONFIG_KEY_TOKEN := "client_token"
 
 # === Public (static) ===
 
@@ -58,3 +59,34 @@ static func save_name(name: String) -> void:
 	config.load(CONFIG_PATH)  # keep any other keys; ignore "not found"
 	config.set_value(CONFIG_SECTION, CONFIG_KEY_NAME, sanitize(name))
 	config.save(CONFIG_PATH)
+
+
+# === Public: stable identity token ===
+
+
+## A stable, opaque per-install identity token. Generated once and persisted to the
+## SAME user:// file as the name, so a reconnecting (or app-restarted) player resolves
+## back to the SAME multiplayer slot despite the fresh transport peer_id the relay
+## hands out on every rejoin. NOT an auth credential — the relay's room membership is
+## the only trust boundary. Never returns empty (a token-capable build must always
+## send a token, never fall back to the legacy peer-keyed path).
+static func get_or_create_client_token() -> String:
+	var config := ConfigFile.new()
+	config.load(CONFIG_PATH)  # ignore "not found"; keeps the name key intact
+	var token := str(config.get_value(CONFIG_SECTION, CONFIG_KEY_TOKEN, ""))
+	if token.is_empty():
+		token = _new_token()
+		config.set_value(CONFIG_SECTION, CONFIG_KEY_TOKEN, token)
+		config.save(CONFIG_PATH)
+	return token
+
+
+## A 128-bit random GUID (hex). Crypto-strong so two installs never collide; on the
+## rare path where Crypto is unavailable, a session-stable fallback beats an empty
+## token (which would silently drop the client onto the no-reconnect-identity path).
+static func _new_token() -> String:
+	var crypto := Crypto.new()
+	var b := crypto.generate_random_bytes(16)
+	if b.size() == 16:
+		return b.hex_encode()
+	return "sess-%d-%d" % [Time.get_ticks_usec(), randi()]
