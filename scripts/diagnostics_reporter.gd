@@ -8,6 +8,12 @@ extends RefCounted
 ## The scrub is the privacy boundary, so its pure core (scrub_text) is unit-tested.
 
 const LOG_PATH := "user://logs/niemandsland.log"
+const LOG_DIR := "user://logs"
+## The engine ROTATES niemandsland.log on every launch, so "the last game" is usually in a
+## timestamped file from a prior run, not the current (often fresh) log. Include the most recent
+## few log files so the report actually carries the session the player is reporting about.
+const RECENT_LOG_FILES := 3        # current + the 2 prior sessions
+const PER_LOG_TAIL_BYTES := 80000  # keep the END of each (where errors/crashes land)
 const USER_PLACEHOLDER := "<user>"
 const PLAYER_PLACEHOLDER := "<player>"
 const ROOM_PLACEHOLDER := "<room>"
@@ -87,12 +93,42 @@ static func export_report(stamp: String, player_names: Array = [], room_code: St
 
 # === Private ===
 
+## Read the recent log: the newest RECENT_LOG_FILES `niemandsland*.log` files (the engine rotates
+## per launch), each tailed to its last PER_LOG_TAIL_BYTES, in chronological order — so a report
+## taken from the menu after restarting still carries the previous session's game.
 static func _read_log() -> String:
-	if not FileAccess.file_exists(LOG_PATH):
-		return "(no log file yet at %s)" % LOG_PATH
-	var f := FileAccess.open(LOG_PATH, FileAccess.READ)
+	var dir := DirAccess.open(LOG_DIR)
+	if dir == null:
+		return _read_one_tail(LOG_PATH)
+	var files: Array = []
+	dir.list_dir_begin()
+	var name := dir.get_next()
+	while name != "":
+		if not dir.current_is_dir() and name.begins_with("niemandsland") and name.ends_with(".log"):
+			files.append(name)
+		name = dir.get_next()
+	dir.list_dir_end()
+	if files.is_empty():
+		return "(no log files in %s)" % LOG_DIR
+	# Newest first by modification time, then keep the most recent few.
+	files.sort_custom(func(a, b): return FileAccess.get_modified_time(LOG_DIR.path_join(a)) > FileAccess.get_modified_time(LOG_DIR.path_join(b)))
+	var selected: Array = files.slice(0, RECENT_LOG_FILES)
+	selected.reverse()  # present oldest -> newest so it reads chronologically
+	var chunks: Array[String] = []
+	for fname in selected:
+		chunks.append("----- %s -----\n%s" % [fname, _read_one_tail(LOG_DIR.path_join(fname))])
+	return "\n\n".join(chunks)
+
+
+## Read one log file, keeping only its last PER_LOG_TAIL_BYTES (the tail, where the failure is).
+static func _read_one_tail(path: String) -> String:
+	if not FileAccess.file_exists(path):
+		return "(missing %s)" % path
+	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
-		return "(could not open log)"
+		return "(could not open %s)" % path
 	var text := f.get_as_text()
 	f.close()
+	if text.length() > PER_LOG_TAIL_BYTES:
+		text = "…(earlier lines truncated)…\n" + text.substr(text.length() - PER_LOG_TAIL_BYTES)
 	return text
