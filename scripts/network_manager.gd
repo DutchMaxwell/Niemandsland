@@ -13,6 +13,12 @@ signal player_disconnected(peer_id: int)
 signal peer_version_validated(peer_id: int)
 ## Emitted on a client when the host rejected us for a version mismatch.
 signal version_rejected(host_version: String, my_version: String)
+## Emitted on every peer when a returning identity token rebinds its canonical slot
+## to a NEW transport peer_id. Consumers re-key their peer_id-keyed state old->new and
+## evict-both the stale + eager presence BEFORE respawning (see main._on_peer_remapped).
+signal peer_remapped(old_peer_id: int, new_peer_id: int, slot: int)
+## Emitted on a guest when the host assigns/confirms our canonical slot.
+signal slot_assigned(slot: int)
 
 # Signals for remote state updates (emitted when RPCs arrive)
 signal remote_wounds_updated(model: ModelInstance)
@@ -46,6 +52,10 @@ const VERSION_SETTING: String = "application/config/version"
 ## host kicks it. Covers a pre-handshake (old) client that never announces.
 const VERSION_HANDSHAKE_TIMEOUT: float = 8.0
 
+## Sentinel for slot_to_peer: the slot is RESERVED to its token but currently has no
+## live peer (the occupant dropped; a rejoin with the same token reclaims it).
+const SLOT_RESERVED_PEER: int = 0
+
 var peer: ENetMultiplayerPeer = null
 var is_host: bool = false
 var connected_peers: Array[int] = []
@@ -56,6 +66,29 @@ var validated_peers: Dictionary = {}
 ## Display names by peer id. Host-authoritative: guests announce their own name to
 ## the host, the host owns the map and pushes the full roster to everyone.
 var player_names: Dictionary = {}  # Dictionary[int, String]
+
+# ===== Stable player identity (token -> slot) =====
+# A SLOT is the durable identity (color, model ownership, network_id namespace all
+# key off the slot, NOT the transport peer_id, which the relay re-issues on every
+# guest rejoin). The host owns the authoritative maps; guests cache only their own
+# assigned slot. Slots are monotonic and never recycled within a session, so an
+# import-time opr_player_id stamp stays valid across a reconnect. A token's slot is
+# RESERVED for the whole session (kept on disconnect) and cleared only on a genuine
+# session end (disconnect_game), never on the auto-reconnect path.
+
+## This client's stable identity token (cached from PlayerIdentity at _ready).
+var _my_client_token: String = ""
+## Guest side: the slot the host assigned us (0 = not yet assigned).
+var _my_assigned_slot: int = 0
+## Host-only: token -> canonical slot (1..N). The stable identity.
+var token_to_slot: Dictionary = {}   # Dictionary[String, int]
+## Host-only: slot -> the peer_id that currently occupies it (SLOT_RESERVED_PEER = vacant).
+var slot_to_peer: Dictionary = {}    # Dictionary[int, int]
+## peer_id -> slot (host authoritative; mirrored on guests via remap). Reverse lookup
+## for disconnect handling + ownership/colour resolution.
+var peer_to_slot: Dictionary = {}    # Dictionary[int, int]
+## Host-only: next slot for a never-before-seen token. Monotonic; never recycled.
+var _next_slot: int = 2              # host is slot 1
 
 ## Connection health tracking
 var _last_connection_status: int = -1
@@ -70,6 +103,8 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
+	# Stable identity token, generated once per install and persisted (see PlayerIdentity).
+	_my_client_token = PlayerIdentity.get_or_create_client_token()
 
 
 func _process(delta: float) -> void:
@@ -147,6 +182,15 @@ func disconnect_game() -> void:
 	is_host = false
 	connected_peers.clear()
 	validated_peers.clear()
+	player_names.clear()
+	# Genuine session end (NOT the auto-reconnect path, which goes through
+	# internet_lobby.reconnect_to_room and never calls this): drop all identity maps so
+	# a brand-new session starts clean and slots restart from 2.
+	token_to_slot.clear()
+	slot_to_peer.clear()
+	peer_to_slot.clear()
+	_next_slot = 2
+	_my_assigned_slot = 0
 	_last_connection_status = -1
 	print("[Network] === DISCONNECTED ===")
 
@@ -186,13 +230,40 @@ func get_my_peer_id() -> int:
 	return 0
 
 
-## The stable player slot/identity for THIS client. Color, model ownership and the
-## army-import default all key off THIS, not the raw transport peer_id. Today it
-## equals the peer id; the reconnect identity-token work will back it with a
-## token->slot map so a guest keeps its slot across a rejoin (which the relay
-## otherwise hands a fresh peer id).
+## The stable player slot/identity for THIS client — color, model ownership and the
+## army-import default key off THIS, not the raw transport peer_id (the relay re-issues
+## a fresh peer id on every guest rejoin). The host is always slot 1; a guest returns
+## its host-assigned slot. In an ACTIVE session before the slot is assigned it returns
+## 0 (NOT the raw peer id) so callers can detect "pending" — the ownership gate fails
+## open on 0, and slot-dependent user actions (army import) await assignment. Outside
+## multiplayer (single-player) it falls back to the peer id, preserving prior behaviour.
 func get_my_player_slot() -> int:
+	if multiplayer.is_server():
+		return 1
+	if _my_assigned_slot > 0:
+		return _my_assigned_slot
+	if is_multiplayer_active():
+		return 0  # slot assignment pending
 	return get_my_peer_id()
+
+
+## The canonical slot a given transport peer currently occupies (falls back to the
+## peer id when unmapped, e.g. single-player or a pre-handshake peer).
+func slot_for_peer(peer_id: int) -> int:
+	return int(peer_to_slot.get(peer_id, peer_id))
+
+
+## Host: claim slot 1 for ourselves (idempotent — also called on a rehost to restore
+## our slot-1 binding). Keeps _next_slot past the host slot.
+func seed_host_identity() -> void:
+	if not multiplayer.is_server():
+		return
+	var host_peer := get_my_peer_id()  # 1
+	token_to_slot[_my_client_token] = 1
+	slot_to_peer[1] = host_peer
+	peer_to_slot[host_peer] = 1
+	if _next_slot < 2:
+		_next_slot = 2
 
 
 ## Signal handlers
@@ -218,7 +289,17 @@ func _on_peer_disconnected(id: int) -> void:
 	push_warning("[Network] Player disconnected: Peer ID %d (remaining peers: %d, rpc_errors=%d)" % [id, connected_peers.size() - 1, _rpc_error_count])
 	connected_peers.erase(id)
 	validated_peers.erase(id)
-	player_names.erase(id)
+	# Release the live transport binding but KEEP token_to_slot (that reservation is what
+	# lets a rejoin reclaim the slot). Guard against a late stale old-socket close that
+	# arrives AFTER a rebind already moved this slot to a newer peer — then drop nothing.
+	if peer_to_slot.has(id):
+		var slot: int = peer_to_slot[id]
+		if int(slot_to_peer.get(slot, SLOT_RESERVED_PEER)) == id:
+			slot_to_peer[slot] = SLOT_RESERVED_PEER  # vacant, still reserved to its token
+			peer_to_slot.erase(id)
+			player_names.erase(id)
+	else:
+		player_names.erase(id)
 	player_disconnected.emit(id)
 
 
@@ -271,7 +352,7 @@ func announce_version_to_host() -> void:
 		return
 	if not _validate_rpc_ready("announce_version"):
 		return
-	_rpc_announce_version.rpc_id(1, get_game_version())
+	_rpc_announce_version.rpc_id(1, get_game_version(), _my_client_token)
 
 
 ## Host: kick a peer that never announced a (matching) version within the grace
@@ -295,9 +376,13 @@ func _disconnect_peer_safe(id: int) -> void:
 		mp.disconnect_peer(id)
 
 
-## RPC (client → host): the joining peer announces its game version.
+## RPC (client → host): the joining peer announces its game version + stable identity
+## token. The version check (and reject path) is unchanged and runs FIRST; only after
+## validation do we resolve the token to a canonical slot. The client_token arg is
+## optional so a pre-token (older) client still handshakes — it gets a fresh slot and
+## is never eligible to reclaim/evict an existing one.
 @rpc("any_peer", "call_remote", "reliable")
-func _rpc_announce_version(client_version: String) -> void:
+func _rpc_announce_version(client_version: String, client_token: String = "") -> void:
 	if not multiplayer.is_server():
 		return
 	var sender := multiplayer.get_remote_sender_id()
@@ -309,7 +394,11 @@ func _rpc_announce_version(client_version: String) -> void:
 		get_tree().create_timer(0.5).timeout.connect(_disconnect_peer_safe.bind(sender))
 		return
 	validated_peers[sender] = true
-	print("[Network] Peer %d passed version handshake (%s)" % [sender, host_version])
+	# Resolve the stable slot SYNCHRONOUSLY (no await) so concurrent rejoins bind
+	# atomically, BEFORE the state-sync that main.gd runs on peer_version_validated.
+	var slot := _resolve_slot_for_token(client_token, sender)
+	_rpc_assign_slot.rpc_id(sender, slot)  # guest caches it for get_my_player_slot()
+	print("[Network] Peer %d passed handshake (%s) -> slot %d" % [sender, host_version, slot])
 	peer_version_validated.emit(sender)
 
 
@@ -318,6 +407,89 @@ func _rpc_announce_version(client_version: String) -> void:
 func _rpc_reject_version(host_version: String) -> void:
 	push_warning("[Network] Host rejected us: host=%s, we=%s" % [host_version, get_game_version()])
 	version_rejected.emit(host_version, get_game_version())
+
+
+## Host: map a client token to its canonical slot, (re)binding the transport peer_id.
+## STRICTLY SYNCHRONOUS (no await) so each announce binds atomically even when two
+## guests rejoin in the same burst. A KNOWN token REBINDS its slot to the new peer and
+## broadcasts a remap (applied on every peer incl. the host) so all peer_id-keyed
+## presence is re-keyed + evicted before the new avatar spawns. An empty/unknown token
+## gets a fresh monotonic slot and can never rebind/evict an existing one. Slot 1 is
+## the host's: a guest token (sender != 1) resolving to slot 1 is refused a fresh slot.
+func _resolve_slot_for_token(token: String, new_peer: int) -> int:
+	if token.is_empty():
+		return _allocate_fresh_slot(new_peer)  # legacy/anonymous: no reconnect identity
+	if token_to_slot.has(token):
+		var slot: int = token_to_slot[token]
+		if slot == 1 and new_peer != 1:
+			# Never hand the host slot to a guest; RE-HOME this token to a fresh slot so it
+			# stays stable across THIS guest's future rejoins (not refused slot 1 each time).
+			token_to_slot.erase(token)
+			return _allocate_fresh_slot(new_peer, token)
+		var old_peer: int = int(slot_to_peer.get(slot, SLOT_RESERVED_PEER))
+		slot_to_peer[slot] = new_peer
+		if old_peer != SLOT_RESERVED_PEER:
+			peer_to_slot.erase(old_peer)
+		peer_to_slot[new_peer] = slot
+		# Fire the remap whenever the transport id actually changed — INCLUDING a reclaim of
+		# a reserved-vacant slot (old_peer == SLOT_RESERVED_PEER), the primary clean-
+		# disconnect-then-rejoin path. _on_peer_remapped is the ONLY path that re-colours the
+		# avatar off the slot on every observer, so suppressing it there left the reconnected
+		# guest in its raw-peer_id colour. The handler tolerates a reserved/absent old peer;
+		# the local self-spawn is guarded in main (avatars are remote-only).
+		if old_peer != new_peer:
+			if is_multiplayer_active():
+				_rpc_remap_peer.rpc(old_peer, new_peer, slot)
+			_rpc_remap_peer(old_peer, new_peer, slot)  # apply locally (host)
+		return slot
+	return _allocate_fresh_slot(new_peer, token)
+
+
+## Host: hand the next monotonic slot to a never-seen (or anonymous) peer. A non-empty
+## token reserves the slot for the whole session; an empty token does not (anonymous).
+func _allocate_fresh_slot(new_peer: int, token: String = "") -> int:
+	var slot := _next_slot
+	_next_slot += 1
+	if not token.is_empty():
+		token_to_slot[token] = slot
+	slot_to_peer[slot] = new_peer
+	peer_to_slot[new_peer] = slot
+	return slot
+
+
+## RPC (host → one guest): the canonical slot the host assigned this token, cached so
+## get_my_player_slot() answers locally.
+@rpc("authority", "call_remote", "reliable")
+func _rpc_assign_slot(slot: int) -> void:
+	_my_assigned_slot = slot
+	peer_to_slot[get_my_peer_id()] = slot
+	slot_assigned.emit(slot)
+
+
+## RPC (host → all): a returning token rebound its slot from old_peer to new_peer.
+## Total + idempotent + self-healing: re-keys every peer_id-keyed dict old->new,
+## tolerates old absent (late third-guest) and new unknown (records the binding only),
+## and emits peer_remapped so main.gd evicts-both + respawns one presence.
+@rpc("authority", "call_remote", "reliable")
+func _rpc_remap_peer(old_peer: int, new_peer: int, slot: int) -> void:
+	if old_peer == new_peer:
+		return
+	# Authoritative binding, regardless of prior local knowledge.
+	peer_to_slot.erase(old_peer)
+	peer_to_slot[new_peer] = slot
+	slot_to_peer[slot] = new_peer
+	if player_names.has(old_peer):
+		player_names[new_peer] = player_names[old_peer]
+		player_names.erase(old_peer)
+	if validated_peers.has(old_peer):
+		validated_peers[new_peer] = true
+		validated_peers.erase(old_peer)
+	connected_peers.erase(old_peer)
+	# On the RETURNING guest new_peer == self, and connected_peers must exclude self —
+	# only record the new id as a connected peer on observers (host + other guests).
+	if new_peer != get_my_peer_id() and not connected_peers.has(new_peer):
+		connected_peers.append(new_peer)
+	peer_remapped.emit(old_peer, new_peer, slot)
 
 
 ## RPC: Spawn object on remote clients only (local already spawned)
