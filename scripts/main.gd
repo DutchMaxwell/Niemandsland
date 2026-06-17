@@ -262,8 +262,14 @@ var _camera_broadcast_timer: float = 0.0
 const CURSOR_BROADCAST_INTERVAL: float = 0.066  # ~15 Hz
 const CAMERA_BROADCAST_INTERVAL: float = 0.2  # 5 Hz
 
-## True while army batches are being sent — suppresses presence broadcasts
+## True while army batches are being sent OR a remote army is being received — suppresses
+## presence broadcasts so the heavy sync doesn't add to the relay message rate (the army
+## burst + 15/5 Hz cursor/camera together can trip the relay rate limit -> a drop cascade).
 var _is_army_syncing: bool = false
+## True from the moment the relay link drops until we are reconnected (or the session ends).
+## While set, presence broadcasts are paused so we don't flood a half-dead/rebuilding link
+## with RPCs that fail and log "ID X not found in cache" (which only feeds the rate limit).
+var _is_reconnecting: bool = false
 ## Buffers an incoming remote army between its header and complete RPCs, so all units are
 ## built in ONE pass (download every model with a single ensure_models call — the download
 ## manager has one shared HTTPRequest, so per-unit concurrent downloads collide). Keyed by
@@ -1872,6 +1878,7 @@ func _on_internet_room_ready(code: String) -> void:
 
 
 func _on_internet_connected(peer_id: int) -> void:
+	_is_reconnecting = false  # (re)connected — resume presence broadcasts (Fix A)
 	# Mirror the server role onto network_manager.is_host: only the ENet host_game()
 	# set it before, so every role-gated host check read false for internet sessions
 	# (RC7). multiplayer.is_server() is backed by the relay peer (_my_peer_id == 1).
@@ -2080,6 +2087,7 @@ func _on_internet_disconnected() -> void:
 ## room: the relay preserves a host-dropped room for a short window so the host can
 ## reclaim peer id 1 and re-sync state, instead of ending everyone's game on a Wi-Fi blip.
 func _on_relay_connection_lost() -> void:
+	_is_reconnecting = true  # pause presence broadcasts until we're back (Fix A)
 	var role := "host" if network_manager.is_host else "guest"
 	push_warning("[Network] Connection lost — attempting to rejoin the room (%s)…" % role)
 	network_status_label.text = "Connection lost — reconnecting…"
@@ -2088,6 +2096,7 @@ func _on_relay_connection_lost() -> void:
 
 
 func _on_relay_reconnecting() -> void:
+	_is_reconnecting = true
 	network_status_label.text = "Reconnecting…"
 	network_status_label.add_theme_color_override("font_color", Color.YELLOW)
 
@@ -2095,6 +2104,7 @@ func _on_relay_reconnecting() -> void:
 ## Rejoin failed (relay unreachable or the room is gone, e.g. host left). End the
 ## session cleanly with a clear message.
 func _on_relay_reconnect_failed(reason: String) -> void:
+	_is_reconnecting = false
 	push_warning("[Network] Reconnect failed: %s" % reason)
 	network_status_label.text = "Reconnect failed (%s)" % reason
 	network_status_label.add_theme_color_override("font_color", Color.RED)
@@ -2120,6 +2130,7 @@ func _on_host_paused() -> void:
 ## The host is present again (we rejoined as host, or our host returned). The full
 ## state re-sync runs over the restored peer link; clear the warning.
 func _on_host_rejoined() -> void:
+	_is_reconnecting = false  # link restored — resume presence broadcasts (Fix A)
 	if network_manager:
 		# Restore the host role flag for role-gated logic (RC7).
 		network_manager.is_host = multiplayer.is_server()
@@ -2234,7 +2245,7 @@ func _ensure_cache_progress_ui() -> void:
 func _broadcast_presence(delta: float) -> void:
 	if not network_manager.is_multiplayer_active():
 		return
-	if _is_army_syncing:
+	if _is_army_syncing or _is_reconnecting:
 		return
 
 	# Broadcast cursor position at ~15 Hz
@@ -3098,6 +3109,7 @@ func _broadcast_army_import(army: OPRApiClient.OPRArmy, spawned_models: Array[No
 ## Receive an army header from a remote peer — make the tray, open the same loading overlay
 ## as a self-import, and start buffering the incoming units (built all at once on complete).
 func _on_remote_army_header(player_id: int, army_name: String, unit_count: int) -> void:
+	_is_army_syncing = true  # pause our presence broadcasts while we build the incoming army (Fix A)
 	print("[ArmySync] Header: '%s' — expecting %d units (player_id=%d)" % [army_name, unit_count, player_id])
 	var player_color: Color = OPRArmyManager.PLAYER_COLORS.get(player_id, Color.GRAY)
 	opr_army_manager._create_army_tray(player_id, army_name, player_color)
@@ -3174,6 +3186,7 @@ func _on_remote_army_complete(player_id: int) -> void:
 	if is_instance_valid(_army_loading_overlay):
 		_army_loading_overlay.complete_and_free()
 		_army_loading_overlay = null
+	_is_army_syncing = false  # army built — resume presence broadcasts (Fix A)
 	print("[ArmySync] Army built for player_id=%d (%d units)" % [player_id, units.size()])
 
 
