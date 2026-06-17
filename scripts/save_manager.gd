@@ -207,12 +207,6 @@ func _serialize_object(obj: Node3D) -> Dictionary:
 		data["type"] = "sandbox_terrain"
 		data["prop_id"] = obj.get_meta("prop_id", "")
 		data["prop_kind"] = obj.get_meta("prop_kind", 0)
-	elif obj.is_in_group("generated_terrain"):
-		data["type"] = "generated_terrain"
-		data["terrain_piece_id"] = obj.get_meta("terrain_piece_id", "")
-		data["terrain_theme_key"] = obj.get_meta("terrain_theme_key", "")
-		data["terrain_type"] = obj.get_meta("terrain_type", "")
-		data["grid_footprint"] = obj.get_meta("grid_footprint", "")
 	elif obj.is_in_group("terrain"):
 		data["type"] = "terrain"
 	else:
@@ -588,8 +582,6 @@ func _deserialize_object(data: Dictionary) -> bool:
 			spawned_obj = object_manager.spawn_miniature(position, false, net_id)
 		"terrain":
 			spawned_obj = object_manager.spawn_terrain(position, false, net_id)
-		"generated_terrain":
-			spawned_obj = _spawn_generated_terrain(data, position)
 		"sandbox_terrain":
 			var prop_id = data.get("prop_id", "")
 			var prop_kind = int(data.get("prop_kind", 0))
@@ -690,32 +682,6 @@ func _spawn_tts_object(data: Dictionary, position: Vector3) -> Node3D:
 	wrapper.global_position = position
 
 	return wrapper
-
-
-## Spawn a generated terrain piece from saved data via TerrainLibrary
-func _spawn_generated_terrain(data: Dictionary, position: Vector3) -> Node3D:
-	var piece_id: String = data.get("terrain_piece_id", "")
-	if piece_id.is_empty():
-		push_warning("Generated terrain missing piece_id")
-		return null
-
-	# Find the TerrainLibrary node in the scene tree
-	var terrain_lib = get_node_or_null("/root/Main/TerrainLibrary")
-	if not terrain_lib:
-		push_warning("TerrainLibrary not found for generated terrain restore")
-		return null
-
-	var piece = terrain_lib.get_piece_by_id(piece_id)
-	if not piece:
-		push_warning("Generated terrain piece not found: %s" % piece_id)
-		return null
-
-	terrain_lib.spawn_terrain_piece(piece, position)
-	# The spawned body is the last child added to object_manager
-	var children = object_manager.get_children()
-	if children.size() > 0:
-		return children[children.size() - 1]
-	return null
 
 
 ## Helper: Convert array to Vector3
