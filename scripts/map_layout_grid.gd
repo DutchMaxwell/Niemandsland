@@ -890,7 +890,7 @@ func _draw_circle_ring(pos: Vector2, radius: float, fill_color: Color, border_co
 
 
 # ==============================================================================
-# WAND-SEGMENT-RENDERING
+# WALL-SEGMENT RENDERING
 # ==============================================================================
 
 func _draw_wall_segments(grid_rect: Rect2, cell_size: Vector2, grid_dims: Vector2i) -> void:
@@ -961,7 +961,7 @@ func _get_edge_local_points(cell: Vector2i, side: int, cell_size: Vector2, half_
 
 
 # ==============================================================================
-# PLATZIERTE OBJEKTE RENDERING
+# PLACED-OBJECTS RENDERING
 # ==============================================================================
 
 func _draw_placed_objects(grid_rect: Rect2, cell_size: Vector2, grid_dims: Vector2i) -> void:
