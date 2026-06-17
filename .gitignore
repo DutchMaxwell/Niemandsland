@@ -120,3 +120,7 @@ test/model_instance_test.gd
 # Dev-only style/source reference art (consumed by the private model-forge, not the game).
 assets/miniatures/**/_reference*
 assets/miniatures/**/*_preprocessed*
+
+# Maintainer-private notes (restored to disk, kept OUT of the public repo)
+_internal/
+/MODEL_FORGE_EXTRACTION.md
