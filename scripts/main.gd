@@ -2088,6 +2088,8 @@ func _on_internet_disconnected() -> void:
 ## reclaim peer id 1 and re-sync state, instead of ending everyone's game on a Wi-Fi blip.
 func _on_relay_connection_lost() -> void:
 	_is_reconnecting = true  # pause presence broadcasts until we're back (Fix A)
+	if save_manager:
+		save_manager.reset_restore_lock()  # a drop can strand an in-flight restore; don't deadlock the re-sync
 	var role := "host" if network_manager.is_host else "guest"
 	push_warning("[Network] Connection lost — attempting to rejoin the room (%s)…" % role)
 	network_status_label.text = "Connection lost — reconnecting…"
@@ -2798,6 +2800,10 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 		_army_loading_overlay.set_label("JOINING — LOADING TABLE")
 		_army_loading_overlay.set_indeterminate()
 
+	# Serialize against the per-army broadcast restore: both clear _loaded_game_units, and an
+	# interleave (host imports while we join) wipes it mid-restore. Released below before return.
+	await save_manager.begin_restore()
+
 	# Clear current objects (broadcast=false to avoid clearing host's objects)
 	object_manager.clear_all_objects(false)
 
@@ -2849,6 +2855,8 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	# models but not the tray, so a late-joiner would otherwise see floating models with no
 	# tableau under them (shared with the .nml-load path).
 	save_manager.restore_army_trays_after_load(state.get("army_names", {}))
+
+	save_manager.end_restore()
 
 	if is_instance_valid(_army_loading_overlay):
 		_army_loading_overlay.complete_and_free()
@@ -3145,6 +3153,9 @@ func _on_remote_army_complete(player_id: int) -> void:
 	var object_groups: Array = buf.get("objects", [])
 	print("[ArmySync] Complete: building %d units (player_id=%d)" % [units.size(), player_id])
 
+	# Serialize against the join state-sync restore: both clear _loaded_game_units. Released below.
+	await save_manager.begin_restore()
+
 	# 1. Rebuild all GameUnits at once (deserialize clears + repopulates _loaded_game_units).
 	save_manager._deserialize_game_units(units)
 
@@ -3181,6 +3192,8 @@ func _on_remote_army_complete(player_id: int) -> void:
 	save_manager._restore_hero_attachments_after_load()
 	save_manager._restore_markers_after_load()
 	save_manager._restore_regiments_after_load()
+
+	save_manager.end_restore()
 
 	# 5. Close the loading overlay.
 	if is_instance_valid(_army_loading_overlay):

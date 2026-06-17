@@ -547,9 +547,20 @@ func _deserialize_object(data: Dictionary) -> bool:
 			var game_unit_id = data.get("game_unit_id", "")
 			var model_idx = data.get("model_index", 0)
 			if army_manager and _loaded_game_units.has(game_unit_id):
+				# Idempotency: the host army is delivered via BOTH state-sync and broadcast, so a
+				# model can arrive twice. If one with this network_id already exists, rebind it
+				# instead of spawning a duplicate (restore_game_unit_state only sets metas/pos).
+				if net_id >= 0 and object_manager.has_method("find_by_network_id"):
+					var existing: Node3D = object_manager.find_by_network_id(net_id)
+					if is_instance_valid(existing):
+						restore_game_unit_state(existing, game_unit_id, model_idx)
+						return true
 				var loaded = _loaded_game_units[game_unit_id]
 				var game_unit = loaded.game_unit as GameUnit
 				var props = game_unit.unit_properties
+				# Heartbeat tick right before a possibly first-time synchronous GLTF parse.
+				if is_inside_tree():
+					await get_tree().process_frame
 				spawned_obj = army_manager.create_model_from_properties(props)
 				if spawned_obj:
 					object_manager.add_child(spawned_obj)
@@ -744,6 +755,33 @@ static func latest_save_info(dir_path: String = "") -> Dictionary:
 
 ## Temporary storage for loaded game units (used during load)
 var _loaded_game_units: Dictionary = {}  # unit_id -> GameUnit
+
+# === Restore lock (serializes concurrent network restores) ===
+## Two receive paths deserialize armies — the full state-sync on join AND the per-army broadcast
+## — and both call _deserialize_game_units() which clears _loaded_game_units. If they interleave
+## (host imports an army while a guest is joining), one path's clear() wipes the dict mid-restore
+## of the other → "Could not restore OPR unit" + missing/duplicate models. This async mutex
+## serializes them. GDScript coroutines are cooperative on the main thread, so the while/await is
+## a correct lock; each waiter re-checks the flag after the unlock signal fires.
+signal _restore_unlocked
+var _restore_in_flight: bool = false
+
+## Acquire the restore lock — await until any in-flight restore finishes, then claim it.
+func begin_restore() -> void:
+	while _restore_in_flight:
+		await _restore_unlocked
+	_restore_in_flight = true
+
+## Release the restore lock. Idempotent: safe to call on any exit path / more than once.
+func end_restore() -> void:
+	_restore_in_flight = false
+	_restore_unlocked.emit()
+
+## Force-release on a connection drop, so a restore stranded on a dead await (its coroutine
+## abandoned by the disconnect) can't block the post-reconnect re-sync forever.
+func reset_restore_lock() -> void:
+	_restore_in_flight = false
+	_restore_unlocked.emit()
 
 
 ## Deserialize GameUnits from saved data
