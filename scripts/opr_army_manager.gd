@@ -143,7 +143,6 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	var tray_bounds = tray_info.bounds  # Vector2 (width, depth)
 
 	# Default spacing values - will be adjusted per unit based on base size
-	var _default_base_diameter = 0.032  # 32mm default
 	var unit_gap = 0.08  # 8cm gap between different units
 	var row_height = 0.10  # 10cm between rows for clear separation
 	var edge_padding = 0.06  # Padding from tray edge
@@ -1027,16 +1026,6 @@ static func buff_tokens_from_rules(special_rules: Array, rule_desc: Dictionary =
 
 
 # ===== NEW: GameUnit Access Methods =====
-
-## Get GameUnit wrapper for a model
-func get_game_unit_for_model(model: Node3D) -> GameUnit:
-	return model.get_meta("game_unit", null)
-
-
-## Get ModelInstance for a model node
-func get_model_instance(model: Node3D) -> ModelInstance:
-	return model.get_meta("model_instance", null)
-
 
 ## Get GameUnit for an OPRUnit
 func get_game_unit(opr_unit: OPRApiClient.OPRUnit) -> GameUnit:

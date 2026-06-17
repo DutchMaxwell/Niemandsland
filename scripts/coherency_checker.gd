@@ -315,37 +315,3 @@ static func _get_max_spread_pair(models: Array[ModelInstance]) -> Dictionary:
 	return result
 
 
-# ===== Auto-Fix Suggestions =====
-
-## Suggests positions to fix coherency issues.
-## @param game_unit: The unit with coherency issues
-## @returns: Dictionary mapping model_index to suggested Vector3 position
-static func suggest_fixes(game_unit: GameUnit) -> Dictionary:
-	var suggestions: Dictionary = {}
-	var result = check_unit_coherency(game_unit)
-
-	if result.valid:
-		return suggestions
-
-	for issue in result.issues:
-		if issue.type == IssueType.ISOLATED and issue.model:
-			var model = issue.model as ModelInstance
-			var nearest = issue.get("nearest_model") as ModelInstance
-
-			if nearest and nearest.node and model.node:
-				# Suggest moving toward the nearest model
-				var from_pos = model.node.global_position
-				var to_pos = nearest.node.global_position
-
-				var direction = (to_pos - from_pos).normalized()
-				var target_dist = COHERENCY_DISTANCE_INCHES * INCHES_TO_METERS * 0.9  # 90% of coherency
-
-				var current_dist = from_pos.distance_to(to_pos)
-				var move_dist = current_dist - target_dist
-
-				var suggested_pos = from_pos + direction * move_dist
-				suggested_pos.y = 0  # Keep on ground
-
-				suggestions[model.model_index] = suggested_pos
-
-	return suggestions
