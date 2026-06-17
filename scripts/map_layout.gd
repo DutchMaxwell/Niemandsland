@@ -1308,7 +1308,6 @@ func _update_stats() -> void:
 	var coverage_pct = (float(terrain_cells) / total_cells) * 100.0 if total_cells > 0 else 0.0
 
 	# Blocking LOS = everything that provides cover (Ruins, Forest, Container)
-	var _blocking_cells = counts[TerrainType.RUINS] + counts[TerrainType.FOREST] + counts[TerrainType.CONTAINER]
 	var blocking_pieces = piece_counts[TerrainType.RUINS] + piece_counts[TerrainType.FOREST] + piece_counts[TerrainType.CONTAINER]
 
 	# Cover = Ruins, Forest, Container
@@ -1407,37 +1406,6 @@ func _flood_fill(start: Vector2i, terrain_type: int, visited: Dictionary) -> voi
 		for neighbor in neighbors:
 			if not visited.has(neighbor):
 				stack.append(neighbor)
-
-
-## Flood-fill that collects and returns all connected cells of the same type
-func _flood_fill_collect(start: Vector2i, terrain_type: int, visited: Dictionary) -> Array[Vector2i]:
-	var collected: Array[Vector2i] = []
-	var stack := [start]
-
-	while stack.size() > 0:
-		var current: Vector2i = stack.pop_back()
-
-		if visited.has(current):
-			continue
-		if not grid_cells.has(current):
-			continue
-		if grid_cells[current] != terrain_type:
-			continue
-
-		visited[current] = true
-		collected.append(current)
-
-		var neighbors := [
-			Vector2i(current.x + 1, current.y),
-			Vector2i(current.x - 1, current.y),
-			Vector2i(current.x, current.y + 1),
-			Vector2i(current.x, current.y - 1)
-		]
-		for neighbor in neighbors:
-			if not visited.has(neighbor):
-				stack.append(neighbor)
-
-	return collected
 
 
 func _update_recommendations() -> void:
@@ -2296,7 +2264,6 @@ func _check_extended_guidelines() -> Dictionary:
 	var results = {
 		"max_gap_ok": true,
 		"max_gap_inches": 0.0,
-		"deployment_coverage_ok": true,
 		"symmetry_ok": true,
 		"symmetry_score": 0.0
 	}
@@ -2345,45 +2312,6 @@ func _check_extended_guidelines() -> Dictionary:
 	return results
 
 
-## Get all cells including their world positions for overlay rendering
-func get_cells_for_overlay() -> Array:
-	var result := []
-	var grid_dims = _calculate_grid_dimensions()
-	var cell_size_inches = GRID_SIZE_INCHES
-
-	for cell_pos in grid_cells:
-		var terrain_type = grid_cells[cell_pos]
-		if terrain_type == TerrainType.NONE:
-			continue
-
-		# Calculate center position in inches from table center
-		var center_x = (cell_pos.x + 0.5) * cell_size_inches - (grid_dims.x * cell_size_inches / 2.0)
-		var center_y = (cell_pos.y + 0.5) * cell_size_inches - (grid_dims.y * cell_size_inches / 2.0)
-
-		result.append({
-			"cell": cell_pos,
-			"type": terrain_type,
-			"color": TERRAIN_COLORS[terrain_type],
-			"center_inches": Vector2(center_x, center_y),
-			"size_inches": cell_size_inches
-		})
-
-	return result
-
-
-## Get current layout data (for table size changes)
-func get_current_layout() -> Dictionary:
-	return {
-		"grid_cells": grid_cells.duplicate(),
-		"table_size": table_size_feet,
-		"rotation": grid_rotation_degrees,
-		"deployment_type": deployment_type,
-		"custom_zones": get_custom_zone_data(),
-		"mission_objectives": mission_objectives.duplicate()
-	}
-
-
-## Get custom zone data in a format suitable for save/load and terrain_overlay
 func get_custom_zone_data() -> Dictionary:
 	return {
 		"player1_cells": custom_zone_vertices_p1.duplicate(),
@@ -2848,12 +2776,3 @@ func remove_wall_segment(edge_cell: Vector2i, edge_side: int, sub_position: int 
 			free_walls.remove_at(i)
 			_rebuild_derived()
 			return
-
-
-## Clear all manually placed wall segments (piece walls stay with their pieces)
-func clear_wall_segments() -> void:
-	_push_undo()
-	free_walls.clear()
-	_rebuild_derived()
-
-
