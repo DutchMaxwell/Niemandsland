@@ -168,3 +168,42 @@ func test_rooms_list_with_empty_array_emits_empty() -> void:
 
 	assert_that(received.size()).is_equal(1)
 	assert_that(received[0].is_empty()).is_true()
+
+
+## Regression: _disconnect_peer MUST be overridden (the engine errors otherwise) so the
+## host's failed-handshake kick actually completes. The relay has no host-kick message, so
+## the override drops the peer locally: forget it + emit peer_disconnected for SceneMultiplayer.
+func test_disconnect_peer_emits_and_forgets() -> void:
+	var peer = RelayMultiplayerPeer.new()
+	peer._my_peer_id = 1
+	peer._known_peers[3] = true
+	var disconnected: Array = []
+	peer.peer_disconnected.connect(func(id: int) -> void: disconnected.append(id))
+
+	peer._disconnect_peer(3, false)
+
+	assert_that(disconnected).is_equal([3])
+	assert_that(peer._known_peers.has(3)).is_false()
+
+
+## Never disconnect ourselves or an invalid id — on a client, emitting peer_disconnected(1)
+## would trigger server_disconnected and tear the whole session down.
+func test_disconnect_peer_ignores_self_and_invalid() -> void:
+	var peer = RelayMultiplayerPeer.new()
+	peer._my_peer_id = 1
+	var disconnected: Array = []
+	peer.peer_disconnected.connect(func(id: int) -> void: disconnected.append(id))
+
+	peer._disconnect_peer(1, false)   # self (host id)
+	peer._disconnect_peer(0, false)   # invalid
+
+	assert_that(disconnected.is_empty()).is_true()
+
+
+## Guard: the wall-clock send budget (steady rate + a full burst) must stay under the relay
+## server's RATE_LIMIT_MESSAGES_PER_SECOND (300). A per-frame cap once scaled with fps and
+## blew past it on high-refresh displays — this invariant fails loudly if someone re-raises it.
+func test_send_rate_cap_stays_under_relay_limit() -> void:
+	var steady := RelayMultiplayerPeer.MAX_SENDS_PER_SECOND
+	var burst := RelayMultiplayerPeer.SEND_BURST_MAX
+	assert_that(steady + burst < 300.0).is_true()
