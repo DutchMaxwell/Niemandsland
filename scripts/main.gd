@@ -3062,9 +3062,38 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
 		_army_loading_overlay.complete_and_free()
 		_army_loading_overlay = null
 
+	# Auto-create buff tokens for the army's special rules (auras / re-rolls / +1-−1), synced.
+	_auto_create_buff_tokens(army)
+
 	# Sync to other peers if in multiplayer
 	if network_manager.is_multiplayer_active():
 		_broadcast_army_import(army, spawned)
+
+
+## Scan a freshly imported army's special rules and auto-define the matching buff tokens so a
+## player doesn't have to create them by hand. Only the IMPORTING peer scans + defines + broadcasts;
+## remote peers receive the definition via remote_token_defined (and a late-joiner via the synced
+## token_library), so every peer converges without double-definition. Idempotent via has().
+func _auto_create_buff_tokens(army: OPRApiClient.OPRArmy) -> void:
+	if radial_menu_controller == null or radial_menu_controller.token_library == null:
+		return
+	var lib = radial_menu_controller.token_library
+	var rules: Array = []
+	for unit in army.units:
+		for r in unit.special_rules:
+			rules.append(r)
+	var rule_desc: Dictionary = opr_army_manager.get_all_rule_descriptions() if opr_army_manager else {}
+	var tokens: Array = OPRArmyManager.buff_tokens_from_rules(rules, rule_desc)
+	var created := 0
+	for t in tokens:
+		if lib.has(t.name):
+			continue
+		lib.define(t.name, t.color, t.is_counter, t.effect)
+		created += 1
+		if network_manager and network_manager.is_multiplayer_active():
+			network_manager.broadcast_token_define(t.name, t.color, t.is_counter, t.effect)
+	if created > 0:
+		print("[Tokens] Auto-created %d buff token(s) from special rules" % created)
 
 
 ## Broadcast a newly imported army to all remote peers (batched to avoid rate limits)
