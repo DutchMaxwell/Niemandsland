@@ -8,7 +8,6 @@ extends StaticBody3D
 signal table_resized(size_feet: Vector2)
 
 @export var default_color: Color = Color(0.2, 0.35, 0.2)  # Gaming mat green
-@export var grid_color: Color = Color(0.15, 0.25, 0.15)
 @export var show_grid: bool = true
 @export var grid_size_inches: float = 1.0
 @export var default_texture_path: String = "res://assets/terrain/table_surface_default.png"
@@ -315,12 +314,3 @@ func _create_table_border(size_meters: Vector2) -> void:
 		add_child(wall)
 
 
-## Convert inches to table coordinates
-func inches_to_position(inches_x: float, inches_z: float) -> Vector3:
-	return Vector3(inches_x * INCHES_TO_METERS, 0, inches_z * INCHES_TO_METERS)
-
-
-## Check if a position is on the table
-func is_on_table(world_position: Vector3) -> bool:
-	var size_meters = table_size * FEET_TO_METERS
-	return abs(world_position.x) <= size_meters.x / 2 and abs(world_position.z) <= size_meters.y / 2

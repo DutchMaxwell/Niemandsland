@@ -39,7 +39,6 @@ const INCHES_TO_FEET: float = 1.0 / 12.0
 const CM_TO_FEET: float = 1.0 / 30.48
 
 ## Debug mode (set to false for production builds)
-const DEBUG_MODE: bool = false
 
 # ==============================================================================
 # NODE REFERENCES
