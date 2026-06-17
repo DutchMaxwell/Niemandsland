@@ -16,8 +16,3 @@ func get_current_theme() -> Theme:
 	if not current_theme:
 		current_theme = GlassmorphismTheme.get_theme()
 	return current_theme
-
-
-## Get current theme name
-func get_current_theme_name() -> String:
-	return "Glassmorphism"
