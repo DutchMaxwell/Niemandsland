@@ -6,9 +6,6 @@ class_name OPRArmyManager
 signal army_spawned(army: OPRApiClient.OPRArmy, models: Array[Node3D])
 ## Per-unit spawn progress so a loading bar can advance during the (synchronous) spawn.
 signal spawn_progress(done: int, total: int)
-# Reserved for future hover functionality
-#signal unit_hovered(unit: OPRApiClient.OPRUnit)
-#signal unit_unhovered()
 
 ## Player colors for army identification
 const PLAYER_COLORS = {
@@ -531,7 +528,7 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 			model.add_to_group("opr_unit")
 			model.add_to_group("unit")
 
-			# Store unit reference in model metadata (legacy)
+			# Store the OPRUnit on the model — still read by save_manager.gd for .nml restore
 			model.set_meta("opr_unit", unit)
 			model.set_meta("opr_player_id", player_id)
 
