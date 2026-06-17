@@ -162,17 +162,6 @@ var _chat_log_vbox: VBoxContainer = null
 var _chat_input: LineEdit = null
 var _roster_vbox: VBoxContainer = null
 
-# Model loader UI
-@onready var load_model_btn: Button = %LoadModel
-@onready var model_file_dialog: FileDialog = %ModelFileDialog
-
-# TTS Import UI
-@onready var import_tts_btn: Button = %ImportTTS
-@onready var import_tts_online_btn: Button = %ImportTTSOnline
-@onready var tts_json_dialog: FileDialog = %TTSJsonDialog
-@onready var tts_models_dialog: FileDialog = %TTSModelsDialog
-@onready var tts_images_dialog: FileDialog = %TTSImagesDialog
-
 # Save/Load UI
 @onready var save_manager: Node = %SaveManager
 @onready var save_game_btn: Button = %SaveGameBtn
@@ -248,11 +237,6 @@ var battlefield_stains: BattlefieldStains = null
 # unit-placement compliance is verified manually by the players)
 var deployment_zone_check: CheckBox = null
 
-# TTS Import state
-var _tts_json_path: String = ""
-var _tts_models_dir: String = ""
-var _tts_import_mode: String = "local"  # "local" or "online"
-
 # Player Presence System
 var _remote_cursors: Dictionary = {}  # peer_id -> RemoteCursor node
 var _player_avatars: Dictionary = {}  # peer_id -> PlayerAvatar node
@@ -297,22 +281,11 @@ func _ready() -> void:
 		end_battle_confirm_dialog.theme = get_node("/root/ThemeManager").get_current_theme()
 
 	# Connect UI buttons
-	load_model_btn.pressed.connect(_on_load_model)
-	model_file_dialog.file_selected.connect(_on_model_file_selected)
 	clear_all_btn.pressed.connect(_on_clear_all)
 	sort_table_btn.pressed.connect(_on_sort_table)
 	next_round_btn.pressed.connect(_on_next_round)
 	settings_btn.pressed.connect(_toggle_settings_panel)
 	_update_round_button()
-
-	# Connect TTS Import UI
-	import_tts_btn.pressed.connect(_on_import_tts)
-	import_tts_online_btn.pressed.connect(_on_import_tts_online)
-	tts_json_dialog.file_selected.connect(_on_tts_json_selected)
-	tts_models_dialog.dir_selected.connect(_on_tts_models_dir_selected)
-	tts_images_dialog.dir_selected.connect(_on_tts_images_dir_selected)
-	object_manager.tts_online_import_completed.connect(_on_tts_online_import_completed)
-	object_manager.tts_download_progress.connect(_on_tts_download_progress)
 
 	# Connect table size UI
 	table_size_option.item_selected.connect(_on_table_size_selected)
@@ -442,10 +415,6 @@ func _ready() -> void:
 	# (no pre-loaded library pieces) but kept wired for ad-hoc TTS terrain imports.
 	terrain_browser_btn.hide()
 	_setup_sandbox_shelf()
-	# Removed from the in-game menu (no longer needed): direct 3D model load + TTS import.
-	load_model_btn.hide()
-	import_tts_btn.hide()
-	import_tts_online_btn.hide()
 
 	# Initialize table with default size (6x4 feet = 72x48 inches, landscape)
 	# Long side (72") faces the viewer (X-axis), short side (48") is depth (Z-axis)
@@ -811,19 +780,6 @@ func _process(delta: float) -> void:
 
 	# Broadcast presence data to remote players
 	_broadcast_presence(delta)
-
-
-## Open file dialog to load a 3D model
-func _on_load_model() -> void:
-	model_file_dialog.popup_centered()
-
-
-## Handle selected model file
-func _on_model_file_selected(path: String) -> void:
-	var spawn_pos = _get_random_table_position()
-	var model = object_manager.spawn_custom_model(path, spawn_pos)
-	if not model:
-		push_error("Failed to load model: %s" % path)
 
 
 ## Shows a warning + confirmation before running a destructive table action, so a
@@ -2450,108 +2406,6 @@ func _update_network_ui(connected: bool, _is_host: bool) -> void:
 
 
 ## ============================================================================
-## TTS (Tabletop Simulator) Import Functions
-## ============================================================================
-
-## Start TTS import workflow (local cache) - first select JSON file
-func _on_import_tts() -> void:
-	_tts_json_path = ""
-	_tts_models_dir = ""
-	_tts_import_mode = "local"
-	tts_json_dialog.popup_centered()
-
-
-## Start TTS online import - only need JSON file
-func _on_import_tts_online() -> void:
-	_tts_json_path = ""
-	_tts_models_dir = ""
-	_tts_import_mode = "online"
-	tts_json_dialog.popup_centered()
-
-
-## JSON file selected - branch based on import mode
-func _on_tts_json_selected(path: String) -> void:
-	_tts_json_path = path
-
-	# Hide dialog
-	tts_json_dialog.hide()
-
-	if _tts_import_mode == "online":
-		# Online mode: Start download and import immediately
-		import_tts_online_btn.disabled = true
-		import_tts_online_btn.text = "Downloading..."
-		object_manager.import_tts_save_online(_tts_json_path)
-	else:
-		# Local mode: Continue with directory selection
-		var tts_cache_base = _detect_tts_cache_dir()
-		if not tts_cache_base.is_empty():
-			tts_models_dialog.current_dir = tts_cache_base.path_join("Models")
-			tts_images_dialog.current_dir = tts_cache_base.path_join("Images")
-		tts_models_dialog.popup_centered()
-
-
-## Handle online import completion
-func _on_tts_online_import_completed(success_count: int, fail_count: int) -> void:
-	import_tts_online_btn.disabled = false
-	import_tts_online_btn.text = "Import TTS (Online)..."
-	print("TTS Online Import finished: %d imported, %d failed" % [success_count, fail_count])
-
-
-## Handle download progress updates
-func _on_tts_download_progress(current: int, total: int, _url: String) -> void:
-	import_tts_online_btn.text = "Downloading %d/%d..." % [current, total]
-
-
-## Models directory selected - next select Images directory
-func _on_tts_models_dir_selected(path: String) -> void:
-	_tts_models_dir = path
-
-	# Hide previous dialog before opening next
-	tts_models_dialog.hide()
-
-	tts_images_dialog.popup_centered()
-
-
-## Images directory selected - now perform the import
-func _on_tts_images_dir_selected(path: String) -> void:
-	var images_dir = path
-
-	# Validate paths
-	if _tts_json_path.is_empty() or _tts_models_dir.is_empty():
-		push_error("TTS Import: Missing required paths")
-		return
-
-	# Perform import
-	object_manager.import_tts_save(_tts_json_path, _tts_models_dir, images_dir)
-
-
-## Try to detect TTS cache directory based on OS
-func _detect_tts_cache_dir() -> String:
-	var os_name = OS.get_name()
-
-	# Common TTS mod cache locations
-	var possible_paths: Array[String] = []
-
-	match os_name:
-		"macOS":
-			var home = OS.get_environment("HOME")
-			possible_paths.append(home + "/Library/Tabletop Simulator/Mods")
-		"Windows":
-			var docs = OS.get_environment("USERPROFILE") + "/Documents"
-			possible_paths.append(docs + "/My Games/Tabletop Simulator/Mods")
-		"Linux":
-			var home = OS.get_environment("HOME")
-			possible_paths.append(home + "/.local/share/Tabletop Simulator/Mods")
-
-	for path in possible_paths:
-		if DirAccess.dir_exists_absolute(path):
-			print("Auto-detected TTS cache: %s" % path)
-			return path
-
-	return ""
-
-
-## ============================================================================
 ## Save / Load Functions
 ## ============================================================================
 
@@ -2878,10 +2732,6 @@ func _apply_ui_theme() -> void:
 	_add_hud_frame($UI/HUD/DiceRollerPanel)
 
 	# Apply to all file dialogs
-	model_file_dialog.theme = current_theme
-	tts_json_dialog.theme = current_theme
-	tts_models_dialog.theme = current_theme
-	tts_images_dialog.theme = current_theme
 	save_game_dialog.theme = current_theme
 	load_game_dialog.theme = current_theme
 	terrain_browser_popup.theme = current_theme
