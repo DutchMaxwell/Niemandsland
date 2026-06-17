@@ -10,7 +10,7 @@ The integration makes it possible to exchange game states between the web-based 
 
 - **Import**: Load WGS game states into Niemandsland
 - **Export**: Export a Niemandsland game state as WGS format
-- **Server sync**: Direct query from the WGS server (planned)
+- **Server sync**: Direct query from the WGS server (implemented in `wgs_game_manager.gd`; not yet wired into the import dialog UI)
 - **Tooltips**: Unit statistics are shown on hover
 
 ## WGS data format
@@ -186,7 +186,7 @@ POST https://udos3dworld.com/WargamingSimulator/DoAction.php
 
 Form-Data:
 - ActionString: "{gameID},{action},{...params}"
-- PlayerName: "Spielername"
+- PlayerName: "PlayerName"
 - MainImageSizeValue: "1"
 - NotesText: ""
 - StdColSend: "BlanchedAlmond"

@@ -84,13 +84,13 @@ anti-tiling floor shader), **3 new factions** (blood / custodian / wolf_brothers
 527 models, live on R2), the **multiplayer sync + reconnect-hardening pass** (imported-army
 models + biome sync to peers and late-joiners, paste/delete/arrange replication, own-only
 mini movement, import-slot default, phantom-player + abort hardening), and **stable player
-identity across reconnect** (PR #66 — a per-install token → canonical slot remap so a
+identity across reconnect** ([PR #66](../../pull/66) — a per-install token → canonical slot remap so a
 reconnecting player returns to their exact slot/colour/army with no phantom; `network_id`
 namespaced by owner so two armies never collide; adversarially reviewed), **persistent
-shared rulers** (PR #64 — pin a measurement with P; it stays on the table in the owner's
+shared rulers** ([PR #64](../../pull/64) — pin a measurement with P; it stays on the table in the owner's
 colour and replicates to everyone, including late-joiners; K clears yours, Shift+K all), and
-**base-anchored range rings / auras** (PR #65 — G cycles a per-model radius 3″/6″/…/24″ from
-the base edge, Shift+G clears; local display aid), and the **movement reach indicator** (PR #67
+**base-anchored range rings / auras** ([PR #65](../../pull/65) — G cycles a per-model radius 3″/6″/…/24″ from
+the base edge, Shift+G clears; local display aid), and the **movement reach indicator** ([PR #67](../../pull/67)
 — M toggles per-model Advance + Rush/Charge bands in the player's colour, OPR Fast/Slow aware;
 display-only, local). Earlier: **Age of
 Fantasy: Regiments**

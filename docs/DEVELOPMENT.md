@@ -14,9 +14,9 @@ to the project path; the examples use `--filesystem=home` (adjust to your checko
 
 ```bash
 # Editor
-flatpak run org.godotengine.Godot --path . --editor      # then F5
+flatpak run --filesystem=home org.godotengine.Godot --path . --editor      # then F5
 # Directly (main scene = scenes/startup_menu.tscn)
-flatpak run org.godotengine.Godot --path .
+flatpak run --filesystem=home org.godotengine.Godot --path .
 ```
 
 ## Compile-check (all scripts, headless)
@@ -52,7 +52,7 @@ flatpak run --filesystem=home org.godotengine.Godot --headless --path "$PWD" \
 and exit code 0. Trailing "ObjectDB instances leaked" is harmless teardown noise.
 Reports are written to `reports/` (git-ignored).
 
-**Python** — the relay (the offline 3D asset pipeline lives in a separate private repo):
+**Python** — the relay's tests (the offline asset pipeline lives in a separate private repo and has no tests here):
 
 ```bash
 cd relay && python -m pytest                       # WebSocket relay
@@ -70,7 +70,7 @@ repository holds its own API tokens (git-ignored there).
 
 ## Conventions
 
-- Coding standards: [`.claude/AAA_CODING_STANDARDS.md`](../.claude/AAA_CODING_STANDARDS.md).
+- Coding standards: [`CODING_STANDARDS.md`](CODING_STANDARDS.md).
 - Commits: conventional (`feat:`, `fix:`, `refactor:`, `docs:`, `perf:`); branch off
   `main` and open a PR.
 - Validate (compile-check + gdUnit4) before committing.
