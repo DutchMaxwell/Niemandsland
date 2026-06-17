@@ -82,13 +82,6 @@ A regenerated manifest (`assets/*_manifest.json`) is committed to this repo only
 when going live; the game then downloads each needed asset on first use and caches
 it under `user://`.
 
-## Web / HTML5 notes
-
-- `HTTPRequest` works in-browser; the asset host must send **CORS** headers
-  (R2 is configurable).
-- `user://` in the web export is IndexedDB-backed, so the cache persists
-  per-origin (subject to the browser's storage limits).
-
 ## Terrain assets (same pattern, separate manifests)
 
 The table **biome battlemaps**, **ruin shell-wall panels**, **forest trees**,

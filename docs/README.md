@@ -11,6 +11,8 @@ Start with the repo entry points: [`../README.md`](../README.md) (project overvi
 |---|---|
 | [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md) | What works / in progress |
 | [`ROADMAP.md`](ROADMAP.md) | Prioritized plan + how feature requests flow |
+| [`ROAD_TO_ALPHA.md`](ROAD_TO_ALPHA.md) | The `0.3.6` Alpha release plan & checklist |
+| [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) | Honest alpha limitations & caveats |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Systems, scripts, data flow, networking, scaling |
 | [`DEVELOPMENT.md`](DEVELOPMENT.md) | Build, run, test (Godot 4.6 / Flatpak / gdUnit4) |
 | [`../.claude/AAA_CODING_STANDARDS.md`](../.claude/AAA_CODING_STANDARDS.md) | Coding standards |
@@ -20,13 +22,9 @@ Start with the repo entry points: [`../README.md`](../README.md) (project overvi
 | Doc | Contents | Status |
 |---|---|---|
 | [`ASSET_DELIVERY.md`](ASSET_DELIVERY.md) | On-demand 3D models + terrain via Cloudflare R2 | Live |
-| [`ASSETS.md`](ASSETS.md) | Asset sources & licenses | Reference |
 | [`ATMOSPHERE.md`](ATMOSPHERE.md) | Lighting + audio ambience | Reference |
-| [`WEB_EXPORT.md`](WEB_EXPORT.md) | Web / HTML5 + itch.io export notes | Reference |
 | [`UPDATE_CHECK.md`](UPDATE_CHECK.md) | In-app update checker | Reference |
 | [`WGS_INTEGRATION.md`](WGS_INTEGRATION.md) | Wargaming Simulator integration | Implemented |
-| [`WGS_API_REQUIREMENTS.txt`](WGS_API_REQUIREMENTS.txt) | WGS server endpoint spec | Reference |
-| [`OPR_API_RESEARCH_REPORT.md`](OPR_API_RESEARCH_REPORT.md) | Army Forge API (reverse-engineered) | Reference |
 
 ## Tools
 

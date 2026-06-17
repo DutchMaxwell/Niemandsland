@@ -1,6 +1,6 @@
 # Niemandsland — Status & Roadmap
 
-**Version:** 0.3.5.0-alpha *(Road to Alpha — the `0.3.6` release plan is in [`docs/ROAD_TO_ALPHA.md`](docs/ROAD_TO_ALPHA.md))* · **Engine:** Godot 4.6 · **Branch:** `main`
+**Version:** 0.3.5.2-alpha *(Road to Alpha — the `0.3.6` release plan is in [`docs/ROAD_TO_ALPHA.md`](docs/ROAD_TO_ALPHA.md))* · **Engine:** Godot 4.6 · **Branch:** `main`
 
 This is the single source of truth for what works, what's in progress, and what's
 planned. Architecture details live in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md);
@@ -59,9 +59,8 @@ and object shortcuts). A **version handshake** on join rejects mismatched client
 **Host-drop reconnect** (the relay preserves a dropped host's room for 20 s; the
 host rehosts and re-syncs full state) is also live; see
 [`relay/HOST_RECONNECT.md`](relay/HOST_RECONNECT.md). The relay (`list_rooms` +
-host-reconnect) was deployed to Fly.io on 2026-06-12 (`niemandsland-relay`, fra);
-a `list_rooms` smoke test against the live server passed. The full two-client
-in-game live test is the remaining manual verification.
+host-reconnect) is deployed to Fly.io (`niemandsland-relay`, fra). The reconnect /
+rate-limit / army-sync cascade was live-validated across two real clients.
 
 **Import/export** — TTS import (Steam CDN + cache), custom glTF/STL/OBJ, `.nml`
 save format with OS file association, WGS import/export
@@ -83,11 +82,9 @@ Settings window reachable in-game via left panel button or F7. **UI audio**: eve
 (one `node_added` hook, zero per-button code; variation-aware confirm/back tones) on
 a dedicated, independently mutable "UI" bus with its own persisted settings slider.
 
-**Model Forge** — Python pipeline (OPR data → image → TRELLIS mesh → GLB) with a
-Flask review UI; 38 faction design languages / 855 unit overrides with real OPR
-v3.5.x stats. IP-safe generation (positive-only prompts, per-faction `ip_strict` /
-`bio_weapons` flags, per-unit `type:` for vehicles/walkers/aircraft) and a 3-versions-
-per-unit "pick the best" review tool. The pipeline lives in a separate private repository; this repo consumes only its R2-delivered GLB outputs.
+**3D model pipeline** — the offline pipeline (OPR data → image → TRELLIS mesh → GLB)
+lives in a **separate private repository**; this repo and the shipped game consume only
+its R2-delivered outputs, mapped by [`assets/model_manifest.json`](assets/model_manifest.json).
 
 **3D model delivery (R2)** — miniature GLBs are **not bundled**; they are delivered
 on demand from Cloudflare R2 (content-addressed `sha256.glb`, served from the asset CDN),
@@ -101,16 +98,8 @@ Remaining factions are 2D generated and pick-ready.
 
 ## In progress
 
-- **Host-DROP live test**: the two-client lobby/chat/names/browser flow is
-  user-confirmed working (2026-06-12); the one untested piece is a host losing
-  connection mid-game and rejoining (relay side is deployed + unit-tested).
-- **Graphics preset switch FROM Performance hangs** — root cause is an NVIDIA
-  driver bug (the dev machine runs 580.126.18; 580.142 fixes "Vulkan swapchains stop
-  delivering frames under X11 under load"). Performance is the only sub-native tier,
-  so its switch is the only one that resizes the 3D render target — now de-bursted
-  (the `scaling_3d_scale` change is staggered onto its own frames in
-  `graphics_settings.gd`) as a portable mitigation. **Definitive fix: update the
-  NVIDIA driver to ≥ 580.142;** awaiting user retest of the mitigation + driver update.
+The forward-looking work now lives in [`docs/ROADMAP.md`](docs/ROADMAP.md); see the
+**Now / Next** sections there for what is actively being worked.
 
 ## Planned
 
@@ -147,7 +136,7 @@ and `hero_attachment_dialog.gd` never existed as separate files — that logic l
 
 ## Tests
 
-gdUnit4: **54 suites / 376 tests green** in `test/` (incl. `coherency_checker`,
+gdUnit4: **~558 tests green** in `test/` (incl. `coherency_checker`,
 `save_manager`, `startup_menu`, `internet_lobby`, `relay_multiplayer_peer`,
 `network_version_handshake`, `dice_rules`, `player_identity`). Python:
 `relay/test_relay_server.py` (38 green). How to run:

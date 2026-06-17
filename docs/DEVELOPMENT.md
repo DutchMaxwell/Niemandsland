@@ -52,7 +52,7 @@ flatpak run --filesystem=home org.godotengine.Godot --headless --path "$PWD" \
 and exit code 0. Trailing "ObjectDB instances leaked" is harmless teardown noise.
 Reports are written to `reports/` (git-ignored).
 
-**Python** — relay and Model Forge:
+**Python** — the relay (the offline 3D asset pipeline lives in a separate private repo):
 
 ```bash
 cd relay && python -m pytest                       # WebSocket relay
@@ -60,8 +60,8 @@ cd relay && python -m pytest                       # WebSocket relay
 
 ## CI
 
-`.github/workflows/build.yml` builds Web + Linux exports and runs the gdUnit4 suites
-on Godot 4.6. Keep it in sync with `project.godot`'s engine version.
+`.github/workflows/build.yml` builds Linux + Windows exports and runs the gdUnit4
+suites on Godot 4.6. Keep it in sync with `project.godot`'s engine version.
 
 ## Secrets
 
