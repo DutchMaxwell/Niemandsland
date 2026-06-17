@@ -31,6 +31,7 @@ signal remote_objective_owner_updated(index: int, owner: int)
 signal remote_token_defined(token_name: String, color: Color, is_counter: bool, effect: String)
 signal remote_token_edited(old_name: String, new_name: String, color: Color, effect: String)
 signal remote_casts_updated(game_unit: GameUnit)
+signal remote_sort_table_received
 signal remote_unit_deleted(game_unit: GameUnit)
 signal remote_round_advanced()
 
@@ -705,6 +706,21 @@ func sync_round_advance() -> void:
 	if army_manager:
 		army_manager.advance_round()
 		remote_round_advanced.emit()
+
+
+## RPC: Sync "Sort Table" (reset every unit to its import state + positions). The receiver re-runs
+## the reset LOCALLY — each model's import_position is part of the synced game-unit state, so both
+## peers land identically. A command (not a position batch) so the status/wound/marker reset
+## mirrors too. The handler runs sort_table(broadcast=false) to avoid an echo loop.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_sort_table() -> void:
+	remote_sort_table_received.emit()
+
+
+## Broadcast a Sort Table action to all peers.
+func broadcast_sort_table() -> void:
+	if is_multiplayer_active():
+		sync_sort_table.rpc()
 
 
 ## RPC: Sync model wounds
