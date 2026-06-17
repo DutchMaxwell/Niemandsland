@@ -362,11 +362,9 @@ func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> voi
 			# drag/rotate act on the whole regiment. Loose models resolve to themselves.
 			var target := _regiment_root(collider)
 
-			# Multiplayer ownership gate: a click on ANOTHER player's model must not
-			# select or drag it. Returns before _deselect_all so it doesn't even
-			# clear your own selection. (Fail-open: unowned props stay movable.)
-			if _foreign_owner_slot(target) > 0:
-				return
+			# NOTE: another player's models CAN be selected (to inspect their stats and
+			# show range/movement rings on them) — they just can't be MOVED. The own-only
+			# gate lives in the drag path (_start_dragging / _update_drag), not here.
 
 			var already_selected = target in _selected_objects
 
@@ -419,14 +417,10 @@ func _foreign_owner_slot(obj: Node) -> int:
 	return owner if owner != my_slot else 0
 
 
-## Add an object to the current selection
+## Add an object to the current selection. Another player's models may be selected (to
+## inspect / ring them); the own-only restriction is on MOVEMENT (the drag path), not here.
 func _add_to_selection(obj: Node3D) -> void:
 	if obj in _selected_objects:
-		return
-
-	# Ownership gate (multiplayer): never add another player's model to the
-	# selection — covers box-select and the public select_objects() path.
-	if _foreign_owner_slot(obj) > 0:
 		return
 
 	_selected_objects.append(obj)
@@ -830,16 +824,32 @@ func _destroy_box_select_rect() -> void:
 		_box_select_rect = null
 
 
+## The currently-selected objects this player may MOVE: own (or unowned) live objects.
+## In multiplayer another player's models can be selected (to inspect / ring) but not dragged.
+func _movable_selection() -> Array[Node3D]:
+	var out: Array[Node3D] = []
+	for obj in _selected_objects:
+		if is_instance_valid(obj) and _foreign_owner_slot(obj) <= 0:
+			out.append(obj)
+	return out
+
+
 func _start_dragging(screen_pos: Vector2) -> void:
 	if _selected_objects.is_empty():
+		return
+
+	# Only OWN (or unowned) objects are draggable; another player's models stay selected
+	# (for inspection / rings) but never move.
+	var movable := _movable_selection()
+	if movable.is_empty():
 		return
 
 	_is_dragging = true
 	_hover_glow.set_target(null)
 	_drag_start_positions.clear()
 
-	# Store start positions for all selected objects and lift them
-	for obj in _selected_objects:
+	# Store start positions for the movable objects and lift them
+	for obj in movable:
 		if is_instance_valid(obj):
 			_drag_start_positions[obj] = obj.global_position
 			# For rigid bodies, make them kinematic while dragging
@@ -848,9 +858,8 @@ func _start_dragging(screen_pos: Vector2) -> void:
 			# Lift object above the table surface
 			obj.global_position.y += drag_lift_height
 
-	# Use first selected object as anchor for distance calculation (using original position)
-	if _selected_objects.size() > 0:
-		_drag_anchor_position = _drag_start_positions[_selected_objects[0]]
+	# Anchor = first movable object (original position)
+	_drag_anchor_position = _drag_start_positions[movable[0]]
 
 	# Remember where on the table the cursor grabbed, so the unit keeps that grab offset
 	# while dragging instead of snapping its first model onto the cursor.
@@ -1202,8 +1211,10 @@ func _update_drag(screen_pos: Vector2) -> void:
 		# lifted by drag_lift_height while dragging — so a unit climbs onto a container
 		# per model and settles to the surface on drop. The dragged bodies are excluded
 		# from the probe so a movable terrain prop never climbs onto its own floors.
+		# Move only the registered movable objects (own/unowned) — _drag_start_positions was
+		# populated own-only in _start_dragging, so another player's selected models stay put.
 		var exclude_rids := _dragged_body_rids()
-		for obj in _selected_objects:
+		for obj in _drag_start_positions:
 			if is_instance_valid(obj):
 				var obj_start = _drag_start_positions.get(obj, obj.global_position)
 				var new_x: float = obj_start.x + delta_xz.x
@@ -1215,15 +1226,15 @@ func _update_drag(screen_pos: Vector2) -> void:
 		_move_broadcast_timer += get_process_delta_time()
 		if _move_broadcast_timer >= MOVE_BROADCAST_INTERVAL and _network_manager and _network_manager.is_multiplayer_active():
 			_move_broadcast_timer = 0.0
-			if _selected_objects.size() <= 1:
+			if _drag_start_positions.size() <= 1:
 				# Single object: use regular move broadcast
-				for obj in _selected_objects:
+				for obj in _drag_start_positions:
 					if is_instance_valid(obj) and obj.has_meta("network_id"):
 						_network_manager.broadcast_move(obj.get_meta("network_id"), obj.global_position)
 			else:
 				# Multiple objects: batch into a single RPC to avoid relay rate limit
 				var batch: Array = []
-				for obj in _selected_objects:
+				for obj in _drag_start_positions:
 					if is_instance_valid(obj) and obj.has_meta("network_id"):
 						batch.append(int(obj.get_meta("network_id")))
 						batch.append(obj.global_position.x)
