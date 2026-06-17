@@ -7,7 +7,6 @@ signal unit_activated(game_unit: GameUnit)
 signal unit_deactivated(game_unit: GameUnit)
 signal model_deleted(model_instance: ModelInstance)
 signal unit_deleted(game_unit: GameUnit)
-signal coherency_checked(game_unit: GameUnit, result: CoherencyChecker.CoherencyResult)
 
 ## Reference to the radial menu UI
 var radial_menu: RadialMenu = null
@@ -242,10 +241,6 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 		return
 
 	match action_id:
-		"unit_stats":
-			_show_unit_stats(context)
-		"model_stats":
-			_show_model_stats(context)
 		"select_unit":
 			_select_entire_unit(context)
 		"wounds":
@@ -260,16 +255,10 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_toggle_fatigued(context)
 		"toggle_shaken":
 			_toggle_shaken(context)
-		"check_coherency":
-			_check_coherency(context)
 		"delete_model":
 			_delete_model(context)
 		"delete_unit":
 			_delete_unit(context)
-		"terrain_info":
-			_show_terrain_info(context)
-		"toggle_los":
-			_toggle_los(context)
 		"delete_terrain":
 			_delete_terrain(context)
 		"info":
@@ -308,47 +297,6 @@ func _set_objective_owner(context: Dictionary, action_id: String) -> void:
 
 	if network_manager:
 		network_manager.broadcast_objective_owner(index, owner_id)
-
-
-func _show_unit_stats(context: Dictionary) -> void:
-	var game_unit = context.get("game_unit") as GameUnit
-	if not game_unit:
-		return
-
-	# Check if we have a stats tooltip reference
-	if not stats_tooltip:
-		print("Stats tooltip not connected")
-		return
-
-	# Get the OPRUnit from source_data (only works for OPR units)
-	if game_unit.source_type == "opr" and game_unit.source_data:
-		var opr_unit = game_unit.source_data as OPRApiClient.OPRUnit
-		if opr_unit:
-			# Get first model node for reference
-			var model_node: Node3D = null
-			if game_unit.models.size() > 0 and game_unit.models[0].node:
-				model_node = game_unit.models[0].node
-
-			# Show the tooltip immediately (bypass delay for menu action)
-			stats_tooltip.show_unit(opr_unit, model_node, true)
-	else:
-		# Fallback for non-OPR units - show basic info
-		print("Unit stats for: %s (non-OPR unit)" % game_unit.get_name())
-
-
-func _show_model_stats(context: Dictionary) -> void:
-	var model = context.get("model_instance") as ModelInstance
-	if not model:
-		return
-
-	if model_info_popup:
-		model_info_popup.open(model)
-	else:
-		# Fallback to console output
-		var lines: Array[String] = []
-		lines.append("[b]%s[/b]" % model.get_display_name())
-		lines.append("Wounds: %d/%d" % [model.wounds_current, model.wounds_max])
-		print("\n".join(lines))
 
 
 func _select_entire_unit(context: Dictionary) -> void:
@@ -465,33 +413,6 @@ func _get_game_unit_from_context(context: Dictionary) -> GameUnit:
 	return null
 
 
-func _check_coherency(context: Dictionary) -> void:
-	var game_unit = context.get("game_unit") as GameUnit
-	if not game_unit:
-		return
-
-	# Regiments form tight ranked blocks; the skirmish 1"/9" coherency rule does not
-	# apply, so there is nothing to check or visualize.
-	if game_unit.unit_properties.get("regiment_mode", false):
-		return
-
-	# Skirmish systems (Firefight / AoF: Skirmish) use 6" max spread, not 9".
-	var skirmish := CoherencyChecker.is_skirmish_system(game_unit)
-
-	# Use visualizer if available
-	if coherency_visualizer:
-		var result = coherency_visualizer.show_coherency(game_unit, skirmish)
-		coherency_checked.emit(game_unit, result)
-	else:
-		# Fallback to just checking without visualization
-		var result = CoherencyChecker.check_unit_coherency(game_unit, skirmish)
-		coherency_checked.emit(game_unit, result)
-		if result.valid:
-			print("✓ %s is in coherency" % game_unit.get_name())
-		else:
-			print("⚠ %s has coherency issues" % game_unit.get_name())
-
-
 ## Deletes (hides) a set of selected objects as one undoable action.
 ##
 ## Unit models use casualty semantics (is_alive=false, wounds=0, hidden) and sync
@@ -563,22 +484,6 @@ func _delete_unit(context: Dictionary) -> void:
 	# Broadcast unit deletion to remote peers
 	if network_manager:
 		network_manager.broadcast_unit_delete(game_unit)
-
-
-func _show_terrain_info(context: Dictionary) -> void:
-	var terrain = context.get("terrain") as Node3D
-	if terrain:
-		print("Terrain: %s" % terrain.name)
-
-
-func _toggle_los(context: Dictionary) -> void:
-	var terrain = context.get("terrain") as Node3D
-	if not terrain:
-		return
-
-	# Toggle blocks_los metadata
-	var currently_blocking = terrain.get_meta("blocks_los", true)
-	terrain.set_meta("blocks_los", not currently_blocking)
 
 
 func _delete_terrain(context: Dictionary) -> void:
