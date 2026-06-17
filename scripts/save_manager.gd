@@ -558,10 +558,15 @@ func _deserialize_object(data: Dictionary) -> bool:
 				var loaded = _loaded_game_units[game_unit_id]
 				var game_unit = loaded.game_unit as GameUnit
 				var props = game_unit.unit_properties
+				# Per-model base: pass this model's Tough so an upgraded model (weapon team) re-derives
+				# its bigger base on the remote/save side (no schema change — tough is already synced).
+				var model_tough := 0
+				if model_idx < game_unit.models.size():
+					model_tough = int(game_unit.models[model_idx].properties.get("tough", 0))
 				# Heartbeat tick right before a possibly first-time synchronous GLTF parse.
 				if is_inside_tree():
 					await get_tree().process_frame
-				spawned_obj = army_manager.create_model_from_properties(props)
+				spawned_obj = army_manager.create_model_from_properties(props, model_tough)
 				if spawned_obj:
 					object_manager.add_child(spawned_obj)
 					spawned_obj.global_position = position

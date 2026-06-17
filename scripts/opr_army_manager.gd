@@ -490,14 +490,34 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 	# Get faction folder for GLB model lookup
 	var faction_folder = army.faction_folder if army else ""
 
+	# Per-model base sizing: a weapon-team / upgrade that raises a model's Tough above the squad
+	# baseline gets a bigger base (derived from the SAME distribution distribute() applies, so the
+	# bigger base lands on the exact carrier model). Plain models keep the unit base unchanged.
+	var loadout := EquipmentDistributor.build_loadout(unit)
+	var toughs := EquipmentDistributor.per_model_toughs(unit.size, loadout, unit.special_rules)
+	var unit_base_long := int(max(unit.base_width_mm, unit.base_depth_mm)) if (unit.base_is_oval or unit.base_is_square) else unit.base_size_round
+	var model_longs: Array = []
+	var any_enlarged := false
 	for i in range(unit.size):
-		var model_pos = Vector3(
-			spawn_pos.x + i * spacing,
-			spawn_pos.y,  # Preserve Y position for animation
-			spawn_pos.z
-		)
+		var ml := model_base_long_mm(unit_base_long, int(toughs[i]))
+		model_longs.append(ml)
+		if ml > unit_base_long:
+			any_enlarged = true
 
-		var model = _create_unit_model(unit, player_color, name_suffix, faction_folder)
+	var cursor_x := spawn_pos.x
+	for i in range(unit.size):
+		var model_pos: Vector3
+		if any_enlarged:
+			# Edge-to-edge spacing so a bigger model sits clear — only when sizes actually differ.
+			if i > 0:
+				cursor_x += (int(model_longs[i - 1]) * 0.5 + int(model_longs[i]) * 0.5) * 0.001 + edge_gap
+			model_pos = Vector3(cursor_x, spawn_pos.y, spawn_pos.z)
+		else:
+			# Plain units unchanged byte-for-byte: original fixed diameter spacing.
+			model_pos = Vector3(spawn_pos.x + i * spacing, spawn_pos.y, spawn_pos.z)
+
+		var override_mm: int = int(model_longs[i]) if any_enlarged else 0
+		var model = _create_unit_model(unit, player_color, name_suffix, faction_folder, override_mm)
 		if model:
 			# Assign a slot-namespaced network_id for multiplayer position sync (no
 			# cross-army collision regardless of import order).
@@ -548,7 +568,14 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 
 
 ## Create a visual model for a unit (GLB model if available, otherwise placeholder)
-func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_suffix: String = "", faction_folder: String = "") -> StaticBody3D:
+## Per-model base long-axis (mm): enlarge to the model's Tough-derived size, never shrink. A
+## weapon-team / upgrade that raises a model's Tough above the squad baseline gets a bigger base.
+## Plain models (Tough 1 -> OPRApiClient._base_size_from_tough == 0) keep the unit base unchanged.
+static func model_base_long_mm(unit_base_long_mm: int, model_tough: int) -> int:
+	return maxi(unit_base_long_mm, OPRApiClient._base_size_from_tough(model_tough))
+
+
+func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_suffix: String = "", faction_folder: String = "", base_long_override_mm: int = 0) -> StaticBody3D:
 	var wrapper = StaticBody3D.new()
 	wrapper.collision_layer = MINIATURE_COLLISION_LAYER
 	wrapper.collision_mask = GROUND_COLLISION_LAYER
@@ -560,6 +587,20 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 	var base_width = unit.base_width_mm * 0.001  # mm to meters (perpendicular to facing)
 	var base_depth = unit.base_depth_mm * 0.001  # mm to meters (in facing direction / "north")
 	var base_radius = unit.get_base_radius_meters()  # For body scaling
+
+	# Per-model base: a weapon-team / Tough upgrade enlarges THIS model's base (never shrinks).
+	# Computed before the mesh so mesh/GLB-fit/collision all read the corrected dims.
+	var base_long_mm: int = int(max(unit.base_width_mm, unit.base_depth_mm)) if (base_is_oval or unit.base_is_square) else unit.base_size_round
+	if base_long_override_mm > base_long_mm:
+		var ratio := float(base_long_override_mm) / float(maxi(1, base_long_mm))
+		base_long_mm = base_long_override_mm
+		if base_is_oval or unit.base_is_square:
+			base_width = clampf(unit.base_width_mm * ratio, 20.0, 150.0) * 0.001
+			base_depth = clampf(unit.base_depth_mm * ratio, 20.0, 150.0) * 0.001
+		else:
+			base_radius = (base_long_override_mm / 2.0) * 0.001
+			base_width = base_long_override_mm * 0.001
+			base_depth = base_long_override_mm * 0.001
 
 	# Create base mesh
 	var base_instance = MeshInstance3D.new()
@@ -601,7 +642,6 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 	# Visual hover: Flying units, drones and hover vehicles float above the base.
 	var should_hover := _should_hover(unit.name, unit.special_rules)
-	var base_long_mm: int = max(unit.base_width_mm, unit.base_depth_mm) if (base_is_oval or unit.base_is_square) else unit.base_size_round
 	var hover_lift: float = base_long_mm * FLYING_HOVER_RATIO * 0.001 if should_hover else 0.0
 
 	# Try to load GLB model for this unit
@@ -697,7 +737,7 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 ## Create a visual model from saved unit_properties dictionary (for save/load)
 ## Uses the same visual logic as _create_unit_model() but reads from Dictionary instead of OPRUnit
-func create_model_from_properties(props: Dictionary) -> StaticBody3D:
+func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> StaticBody3D:
 	var wrapper = StaticBody3D.new()
 	wrapper.collision_layer = MINIATURE_COLLISION_LAYER
 	wrapper.collision_mask = GROUND_COLLISION_LAYER
@@ -712,6 +752,21 @@ func create_model_from_properties(props: Dictionary) -> StaticBody3D:
 	var base_depth: float = props.get("base_depth_mm", 32) * 0.001
 	var base_size_round: int = props.get("base_size_round", 32)
 	var base_radius: float = (base_size_round / 2.0) * 0.001
+
+	# Per-model base: re-derive the carrier model's bigger base from its synced per-model Tough
+	# (never shrink). model_tough travels via model.properties["tough"] over save/load + MP sync.
+	var base_long_mm: int = max(int(props.get("base_width_mm", 32)), int(props.get("base_depth_mm", 32))) if base_is_oval else base_size_round
+	var per_model_override_mm: int = model_base_long_mm(base_long_mm, model_tough)
+	if per_model_override_mm > base_long_mm:
+		var ratio := float(per_model_override_mm) / float(maxi(1, base_long_mm))
+		base_long_mm = per_model_override_mm
+		if base_is_oval:
+			base_width = clampf(int(props.get("base_width_mm", 32)) * ratio, 20.0, 150.0) * 0.001
+			base_depth = clampf(int(props.get("base_depth_mm", 32)) * ratio, 20.0, 150.0) * 0.001
+		else:
+			base_radius = (per_model_override_mm / 2.0) * 0.001
+			base_width = per_model_override_mm * 0.001
+			base_depth = per_model_override_mm * 0.001
 
 	# Get player color
 	var player_id: int = props.get("player_id", 1)
@@ -746,7 +801,6 @@ func create_model_from_properties(props: Dictionary) -> StaticBody3D:
 
 	# Visual hover: Flying units, drones and hover vehicles float above the base.
 	var should_hover := _should_hover(unit_name, props.get("special_rules", []))
-	var base_long_mm: int = max(int(props.get("base_width_mm", 32)), int(props.get("base_depth_mm", 32))) if base_is_oval else base_size_round
 	var hover_lift: float = base_long_mm * FLYING_HOVER_RATIO * 0.001 if should_hover else 0.0
 
 	# Try to load GLB model for this unit
