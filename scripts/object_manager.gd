@@ -1751,6 +1751,18 @@ func _is_networked() -> bool:
 			and _network_manager.is_multiplayer_active()
 
 
+## Find a spawned object by its network_id (unique: OPR uses slot*STRIDE + counter). Used by the
+## restore path to make a doubly-delivered model idempotent — spawn exactly once. Linear scan;
+## fine at army sizes (tens of models). Returns null if none matches.
+func find_by_network_id(net_id: int) -> Node3D:
+	if net_id < 0:
+		return null
+	for child in get_children():
+		if child is Node3D and child.has_meta("network_id") and int(child.get_meta("network_id")) == net_id:
+			return child
+	return null
+
+
 ## Spawn a miniature at the given position
 ## If broadcast is true and multiplayer is active, syncs to other clients
 func spawn_miniature(pos: Vector3, broadcast: bool = true, network_id: int = -1) -> Node3D:
