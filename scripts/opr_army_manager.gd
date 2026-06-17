@@ -1261,21 +1261,32 @@ func _should_hover(unit_name: String, rules: Array) -> bool:
 
 
 ## Orients a GLB on an OVAL base relative to the base's long axis (depth/Z when base_depth >=
-## base_width). Vehicles align ALONG the long axis (a tank runs front-to-back); walkers sit
-## CROSSWISE ("quer", cross_align=true) so a biped faces forward with its span across the base.
-## Y-only rotation, so it leaves the (rotation-invariant) uniform scale and y-offset intact.
-## No-op for round/square bases.
+## base_width). Y-only rotation, so it leaves the (rotation-invariant) uniform scale and y-offset
+## intact. No-op for round/square bases.
+##
+## Vehicles (cross_align=false): align the model's LONGER horizontal axis ALONG the base's long
+## axis (a tank runs front-to-back down its oval). This uses the AABB, which is reliable for a
+## tank-shaped hull.
+##
+## Walkers (cross_align=true): sit CROSSWISE ("quer") — DETERMINISTICALLY, ignoring the AABB. A
+## biped's footprint is near-square (e.g. 0.672 x 0.642), so the AABB "long axis" is just noise
+## that rotated identical walkers inconsistently. Instead we orient the model's default forward
+## (+Z) ACROSS the base's long axis purely from the base geometry, so every walker is consistent.
+## (Near-square means the exact facing barely shows; if it ever reads 90° off, flip the rotate.)
 func _align_to_oval_long_axis(glb: Node3D, aabb: AABB, base_is_oval: bool,
 		base_width: float, base_depth: float, cross_align: bool = false) -> void:
 	if not base_is_oval or glb == null:
 		return
 	var base_long_is_z: bool = base_depth >= base_width
+	if cross_align:
+		# Quer: turn the model's +Z forward onto the base's SHORT axis. When the long axis is Z
+		# (the usual oval), that's a 90° turn; when it's X, the model already faces the short axis.
+		if base_long_is_z:
+			glb.rotate_y(PI / 2.0)
+		return
 	var model_long_is_x: bool = aabb.size.x > aabb.size.z
-	# currently_perp: the model's long axis is perpendicular to the base's long axis.
-	var currently_perp: bool = (base_long_is_z == model_long_is_x)
-	# Vehicles want aligned (rotate when perp); walkers want crosswise (rotate when aligned).
-	var should_rotate: bool = currently_perp if not cross_align else not currently_perp
-	if should_rotate:
+	# Vehicle: rotate when the model's long axis is perpendicular to the base's long axis.
+	if base_long_is_z == model_long_is_x:
 		glb.rotate_y(PI / 2.0)
 
 

@@ -43,20 +43,28 @@ func test_round_base_never_rotates() -> void:
 	assert_float(g.rotation.y).is_equal_approx(0.0, 0.001)
 
 
-# ===== Walkers: sit CROSSWISE (quer) to the oval long axis =====
+# ===== Walkers: sit CROSSWISE (quer), DETERMINISTICALLY (AABB ignored) =====
+# A biped footprint is near-square, so the AABB long axis is noise; walker orientation depends
+# only on the base geometry, so identical walkers are always consistent.
 
-func test_walker_no_rotation_when_already_crosswise() -> void:
-	# Walker, model long X, oval long Z -> already perpendicular (quer) -> leave it.
-	var g := _glb()
-	_mgr()._align_to_oval_long_axis(g, AABB(Vector3.ZERO, Vector3(2, 1, 1)), true, 0.035, 0.06, true)
-	assert_float(g.rotation.y).is_equal_approx(0.0, 0.001)
+func test_walker_quer_is_deterministic_on_depth_long_oval() -> void:
+	# Depth-long oval (depth > width): rotate 90° to sit quer — same for ANY AABB.
+	var gx := _glb()
+	_mgr()._align_to_oval_long_axis(gx, AABB(Vector3.ZERO, Vector3(2, 1, 1)), true, 0.035, 0.06, true)
+	assert_float(absf(gx.rotation.y)).is_equal_approx(PI / 2.0, 0.001)
+	var gz := _glb()
+	_mgr()._align_to_oval_long_axis(gz, AABB(Vector3.ZERO, Vector3(1, 1, 2)), true, 0.035, 0.06, true)
+	assert_float(absf(gz.rotation.y)).is_equal_approx(PI / 2.0, 0.001)
 
 
-func test_walker_rotates_when_aligned_to_long_axis() -> void:
-	# Walker, model long Z, oval long Z -> aligned -> rotate so it sits crosswise (quer).
-	var g := _glb()
-	_mgr()._align_to_oval_long_axis(g, AABB(Vector3.ZERO, Vector3(1, 1, 2)), true, 0.035, 0.06, true)
-	assert_float(absf(g.rotation.y)).is_equal_approx(PI / 2.0, 0.001)
+func test_walker_no_rotation_on_width_long_oval() -> void:
+	# Width-long oval (width > depth): model +Z already faces the short axis -> no rotation, any AABB.
+	var gx := _glb()
+	_mgr()._align_to_oval_long_axis(gx, AABB(Vector3.ZERO, Vector3(2, 1, 1)), true, 0.06, 0.035, true)
+	assert_float(gx.rotation.y).is_equal_approx(0.0, 0.001)
+	var gz := _glb()
+	_mgr()._align_to_oval_long_axis(gz, AABB(Vector3.ZERO, Vector3(1, 1, 2)), true, 0.06, 0.035, true)
+	assert_float(gz.rotation.y).is_equal_approx(0.0, 0.001)
 
 
 func test_is_walker_name_heuristic() -> void:
