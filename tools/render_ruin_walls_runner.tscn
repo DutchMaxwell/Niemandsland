@@ -1,6 +1,0 @@
-[gd_scene load_steps=2 format=3]
-
-[ext_resource type="Script" path="res://tools/render_ruin_walls.gd" id="1_ruinwalls"]
-
-[node name="RuinWallsRenderRunner" type="Node"]
-script = ExtResource("1_ruinwalls")
