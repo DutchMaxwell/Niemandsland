@@ -881,13 +881,6 @@ func restore_game_unit_state(node: Node3D, unit_id: String, model_index: int) ->
 	return true
 
 
-## Get a loaded GameUnit by ID (for use during load process)
-func get_loaded_game_unit(unit_id: String) -> GameUnit:
-	if _loaded_game_units.has(unit_id):
-		return _loaded_game_units[unit_id].game_unit
-	return null
-
-
 ## Rebuilds hero attachment after load: to_dict() stored attached_to /
 ## attached_heroes as unit_ids (GameUnit refs are not serializable); resolve
 ## them back to live GameUnit refs now that every unit is registered.
@@ -929,8 +922,3 @@ func _restore_markers_after_load() -> void:
 		radial_menu_controller.initialize_marker_tokens_for_unit(game_unit)
 		# Special-weapon rings (derived from loadout)
 		radial_menu_controller.initialize_special_weapon_rings_for_unit(game_unit)
-
-
-## Clear loaded game units cache after load is complete
-func clear_loaded_cache() -> void:
-	_loaded_game_units.clear()
