@@ -291,11 +291,6 @@ func set_saturation(value: float) -> void:
 		current_preset.saturation = value
 
 
-## Save current settings as JSON
-func export_current_settings() -> String:
-	return JSON.stringify(current_preset, "\t")
-
-
 ## Print current settings to console
 func print_current_settings() -> void:
 	print("\n=== CURRENT LIGHTING SETTINGS ===")

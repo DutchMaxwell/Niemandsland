@@ -337,7 +337,6 @@ func _load_config() -> void:
 
 func _save_config() -> void:
 	var config := ConfigFile.new()
-	config.set_value(CONFIG_SECTION, "preset", _current_name)
 	config.set_value(CONFIG_SECTION, "fires_enabled", _fires_enabled)
 	config.set_value(CONFIG_SECTION, "war_sounds_enabled", _war_sounds_enabled)
 	config.save(CONFIG_PATH)
