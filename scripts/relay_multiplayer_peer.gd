@@ -17,8 +17,6 @@ signal room_joined(peer_id: int)
 signal room_join_failed(reason: String)
 ## The relay replied to a list_rooms request with the joinable public rooms.
 signal rooms_list_received(rooms: Array)
-signal relay_connected()
-signal relay_disconnected()
 ## The connection was lost unexpectedly (WebSocket closed or heartbeat-ack timeout).
 signal relay_connection_lost()
 ## An automatic rejoin of the same room has started.
@@ -138,9 +136,8 @@ func is_host_peer() -> bool:
 
 
 ## Called when the link dies unexpectedly (socket closed or heartbeat-ack timeout).
-## Emits relay_connection_lost so the app can notify the player + try to rejoin.
-## Does NOT emit relay_disconnected (that means "session over"); the reconnect flow
-## decides the final outcome.
+## Emits relay_connection_lost so the app can notify the player + try to rejoin;
+## the reconnect flow decides the final outcome.
 func _on_connection_lost() -> void:
 	if _is_reconnecting:
 		return  # a rejoin is already in flight; the reconnect timer governs the outcome
@@ -222,7 +219,6 @@ func _poll() -> void:
 			_last_heartbeat_ms = now_ms
 			_send_tokens = SEND_BURST_MAX  # fresh socket: reset the send budget too
 			_send_refill_ms = now_ms
-			relay_connected.emit()
 
 			# Execute pending action
 			if _pending_action == "create":
@@ -396,7 +392,6 @@ func _send_json(data: Dictionary) -> void:
 func _build_outgoing_frame(payload: PackedByteArray) -> PackedByteArray:
 	var frame = PackedByteArray()
 	frame.resize(4)
-	frame.encode_s32(0, 0)  # Will be overwritten
 	# Encode target_peer as big-endian int32
 	frame[0] = (_target_peer >> 24) & 0xFF
 	frame[1] = (_target_peer >> 16) & 0xFF

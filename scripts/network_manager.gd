@@ -40,8 +40,6 @@ signal remote_player_name_updated(peer_id: int, player_name: String)
 ## Emitted on a guest when the host sends its chat message (peer_id -> text).
 signal remote_chat_message(peer_id: int, text: String)
 
-const DEFAULT_PORT: int = 7777
-const MAX_PLAYERS: int = 8
 
 ## How often (seconds) to poll connection health
 const CONNECTION_POLL_INTERVAL: float = 2.0
@@ -135,41 +133,6 @@ func _connection_status_name(status: int) -> String:
 		MultiplayerPeer.CONNECTION_CONNECTING: return "CONNECTING"
 		MultiplayerPeer.CONNECTION_CONNECTED: return "CONNECTED"
 		_: return "UNKNOWN(%d)" % status
-
-
-## Host a new game server
-func host_game(port: int = DEFAULT_PORT) -> Error:
-	peer = ENetMultiplayerPeer.new()
-	var error = peer.create_server(port, MAX_PLAYERS)
-
-	if error != OK:
-		print("Failed to create server: ", error)
-		return error
-
-	multiplayer.multiplayer_peer = peer
-	is_host = true
-	connected_peers.append(1)  # Server is always peer ID 1
-	_last_connection_status = peer.get_connection_status()
-	_rpc_error_count = 0
-
-	return OK
-
-
-## Join an existing game
-func join_game(address: String = "localhost", port: int = DEFAULT_PORT) -> Error:
-	peer = ENetMultiplayerPeer.new()
-	var error = peer.create_client(address, port)
-
-	if error != OK:
-		print("Failed to create client: ", error)
-		return error
-
-	multiplayer.multiplayer_peer = peer
-	is_host = false
-	_last_connection_status = peer.get_connection_status()
-	_rpc_error_count = 0
-
-	return OK
 
 
 ## Disconnect from the current game
@@ -1230,9 +1193,9 @@ signal remote_army_header_received(player_id: int, army_name: String, unit_count
 signal remote_army_unit_received(unit_data: Dictionary, objects_data: Array, player_id: int)
 signal remote_army_complete_received(player_id: int, rule_descriptions: Dictionary)
 
-## Delay between unit batch RPCs to stay under relay rate limit (120 msg/s).
-## Must be high enough so that Godot's internal RPC fragmentation + this delay
-## stays well below the limit. Presence broadcasts are paused during sync.
+## Delay between unit batch RPCs to pace large armies gracefully (the relay limit is
+## 2000 msg/s, so this is comfort-pacing, not a hard requirement). The sender pauses
+## presence broadcasts during sync.
 const ARMY_BATCH_DELAY_MS: int = 250
 
 
