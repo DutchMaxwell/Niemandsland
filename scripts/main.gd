@@ -156,13 +156,6 @@ var _roster_vbox: VBoxContainer = null
 # Graphics Settings UI
 @onready var graphics_quality_option: OptionButton = %GraphicsQualityOption
 
-# Terrain Browser UI
-@onready var terrain_library: Node = %TerrainLibrary
-@onready var terrain_browser_btn: Button = %TerrainBrowser
-@onready var terrain_browser_popup: Window = %TerrainBrowserPopup
-@onready var terrain_category_option: OptionButton = %CategoryOption
-@onready var terrain_list: ItemList = %TerrainList
-
 ## Casual sandbox terrain shelf (code-built), created in _setup_sandbox_shelf().
 var _sandbox_shelf: SandboxTerrainShelf = null
 ## Toolbar toggle for terrain edit mode (unlocks terrain + opens the shelf).
@@ -376,23 +369,8 @@ func _ready() -> void:
 	# Set initial selection based on current preset (UI index matches enum directly)
 	graphics_quality_option.selected = GraphicsSettings.current_preset
 
-	# Connect Terrain Browser UI
-	terrain_library.object_manager = object_manager
-	terrain_browser_btn.pressed.connect(_on_terrain_browser_pressed)
-
-	# Terrain browser buttons are in a Window, so we need to get them differently
-	var spawn_btn = terrain_browser_popup.get_node("MarginContainer/VBox/ButtonRow/SpawnTerrainBtn")
-	var close_btn = terrain_browser_popup.get_node("MarginContainer/VBox/ButtonRow/CloseTerrainBtn")
-
-	terrain_category_option.item_selected.connect(_on_terrain_category_selected)
-	terrain_list.item_activated.connect(_on_terrain_item_activated)
-	spawn_btn.pressed.connect(_on_spawn_terrain_pressed)
-	close_btn.pressed.connect(_on_close_terrain_browser)
-	terrain_browser_popup.close_requested.connect(_on_close_terrain_browser)
-	terrain_library.library_loaded.connect(_on_terrain_library_loaded)
-	# Legacy TTS terrain browser: superseded by the map-editor prefab palette. Hidden
-	# (no pre-loaded library pieces) but kept wired for ad-hoc TTS terrain imports.
-	terrain_browser_btn.hide()
+	# Casual sandbox terrain shelf (free 3D-table terrain placement). The legacy TTS
+	# terrain browser it superseded has been removed.
 	_setup_sandbox_shelf()
 
 	# Initialize table with default size (6x4 feet = 72x48 inches, landscape)
@@ -2538,50 +2516,8 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 
 
 ## ============================================================================
-## Terrain Browser Functions
+## Casual Sandbox Terrain Shelf
 ## ============================================================================
-
-## Open terrain browser popup
-func _on_terrain_browser_pressed() -> void:
-	terrain_browser_popup.popup_centered()
-
-
-## Close terrain browser popup
-func _on_close_terrain_browser() -> void:
-	terrain_browser_popup.hide()
-
-
-## Called when terrain library finishes loading
-func _on_terrain_library_loaded(categories: Array) -> void:
-	terrain_category_option.clear()
-
-	if categories.is_empty():
-		terrain_category_option.add_item("No terrain found")
-		return
-
-	for category in categories:
-		terrain_category_option.add_item(category)
-
-	# Select first category and populate list
-	terrain_category_option.select(0)
-	_on_terrain_category_selected(0)
-
-
-## Category selection changed
-func _on_terrain_category_selected(index: int) -> void:
-	terrain_list.clear()
-
-	var category_name = terrain_category_option.get_item_text(index)
-	var pieces = terrain_library.get_pieces_in_category(category_name)
-
-	for piece in pieces:
-		var display_name = piece.name
-		if not piece.description.is_empty():
-			display_name += " - " + piece.description.left(50)
-		terrain_list.add_item(display_name)
-		# Store piece ID in metadata
-		terrain_list.set_item_metadata(terrain_list.item_count - 1, piece.id)
-
 
 ## Casual sandbox terrain shelf: a code-built browser window + a toolbar button to open it.
 ## Spawns free-placed, draggable terrain pieces on the 3D table (grassland ruins first).
@@ -2591,16 +2527,16 @@ func _setup_sandbox_shelf() -> void:
 	_sandbox_shelf.setup(object_manager)
 	_sandbox_shelf.closed.connect(_on_sandbox_shelf_closed)
 
-	# A toggle next to the terrain-browser slot: ON enters terrain edit mode (terrain
+	# A toggle next to the map-layout button: ON enters terrain edit mode (terrain
 	# unlocked + shelf open); OFF locks all terrain so play can't disturb it.
 	_terrain_mode_btn = Button.new()
 	_terrain_mode_btn.toggle_mode = true
 	_terrain_mode_btn.text = "Terrain Mode"
 	_terrain_mode_btn.toggled.connect(_on_terrain_mode_toggled)
-	var parent := terrain_browser_btn.get_parent()
+	var parent := map_layout_btn.get_parent()
 	if parent:
 		parent.add_child(_terrain_mode_btn)
-		parent.move_child(_terrain_mode_btn, terrain_browser_btn.get_index() + 1)
+		parent.move_child(_terrain_mode_btn, map_layout_btn.get_index() + 1)
 
 
 func _on_terrain_mode_toggled(pressed: bool) -> void:
@@ -2616,33 +2552,6 @@ func _on_terrain_mode_toggled(pressed: bool) -> void:
 func _on_sandbox_shelf_closed() -> void:
 	if _terrain_mode_btn and _terrain_mode_btn.button_pressed:
 		_terrain_mode_btn.button_pressed = false
-
-
-## Double-click on terrain item to spawn immediately
-func _on_terrain_item_activated(index: int) -> void:
-	_spawn_selected_terrain(index)
-
-
-## Spawn button pressed
-func _on_spawn_terrain_pressed() -> void:
-	var selected = terrain_list.get_selected_items()
-	if selected.is_empty():
-		return
-	_spawn_selected_terrain(selected[0])
-
-
-## Spawn the selected terrain piece at cursor position
-func _spawn_selected_terrain(index: int) -> void:
-	var piece_id = terrain_list.get_item_metadata(index)
-	var piece = terrain_library.get_piece_by_id(piece_id)
-
-	if not piece:
-		push_error("Terrain piece not found: %s" % piece_id)
-		return
-
-	var cursor_pos = object_manager.get_cursor_table_position()
-	terrain_library.spawn_terrain_piece(piece, cursor_pos)
-	# Keep browser open for placing multiple pieces
 
 
 ## ============================================================================
@@ -2663,7 +2572,6 @@ func _apply_ui_theme() -> void:
 	# Apply to all file dialogs
 	save_game_dialog.theme = current_theme
 	load_game_dialog.theme = current_theme
-	terrain_browser_popup.theme = current_theme
 
 
 ## Adds a corner-bracket HudFrame overlay to a HUD PanelContainer (idempotent).
