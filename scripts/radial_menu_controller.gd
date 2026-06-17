@@ -492,10 +492,13 @@ func _delete_terrain(context: Dictionary) -> void:
 		terrain.queue_free()
 
 
+## Show a minimal info popup (name + node type) for a generic table object — one
+## that is not an OPR unit/model or terrain (e.g. a directly loaded custom model).
 func _show_generic_info(context: Dictionary) -> void:
 	var obj = context.get("object") as Node3D
-	if obj:
-		print("Object: %s" % obj.name)
+	if not obj or not model_info_popup:
+		return
+	model_info_popup.open_with_content(obj.name, "Type: %s" % obj.get_class())
 
 
 func _delete_generic(context: Dictionary) -> void:
