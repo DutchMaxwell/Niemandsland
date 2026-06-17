@@ -5,8 +5,6 @@ class_name WGSGameManager
 
 signal game_imported(game: WGSClient.WGSGame)
 signal units_spawned(models: Array[Node3D])
-signal sync_started()
-signal sync_completed()
 signal sync_error(error: String)
 
 ## Reference to the object manager for spawning
@@ -215,89 +213,6 @@ func _create_model(unit: WGSClient.WGSUnit, position: Vector3) -> StaticBody3D:
 	return wrapper
 
 
-## Get current game state as WGS text (for export)
-func export_current_state() -> String:
-	if not current_game:
-		return ""
-
-	# Update unit positions from current model positions
-	_update_units_from_models()
-
-	return wgs_client.export_to_text(current_game)
-
-
-## Update WGS unit data from current model positions
-func _update_units_from_models() -> void:
-	for unit in unit_to_models:
-		var models = unit_to_models[unit]
-		if models.is_empty():
-			continue
-
-		# Use first model as unit position reference
-		var first_model: Node3D = models[0]
-		if is_instance_valid(first_model):
-			var wgs_pos = wgs_client.position_to_wgs(first_model.global_position)
-			unit.position_x = wgs_pos.x
-			unit.position_y = wgs_pos.y
-			unit.angle = wgs_client.rotation_to_wgs_angle(first_model.rotation.y)
-
-
-## Generate move action string for current state changes
-func generate_move_action() -> String:
-	if not current_game:
-		return ""
-
-	var moves: Array = []
-
-	for unit in unit_to_models:
-		var models = unit_to_models[unit]
-		if models.is_empty():
-			continue
-
-		var first_model: Node3D = models[0]
-		if is_instance_valid(first_model):
-			var wgs_pos = wgs_client.position_to_wgs(first_model.global_position)
-			moves.append({
-				"index": unit.index,
-				"x": wgs_pos.x,
-				"y": wgs_pos.y,
-				"angle": -first_model.rotation.y
-			})
-
-	return wgs_client.create_move_action(current_game.game_id, moves)
-
-
-## Get unit data for a model
-func get_unit_for_model(model: Node3D) -> WGSClient.WGSUnit:
-	return model_to_unit.get(model, null)
-
-
-## Get all models for a unit
-func get_models_for_unit(unit: WGSClient.WGSUnit) -> Array:
-	return unit_to_models.get(unit, [])
-
-
-## Clear all spawned WGS units
-func clear_all() -> void:
-	for unit in unit_to_models:
-		var models = unit_to_models[unit]
-		for model in models:
-			if is_instance_valid(model):
-				model.queue_free()
-
-	unit_to_models.clear()
-	model_to_unit.clear()
-	current_game = null
-
-
-## Get stats text for hover tooltip
-func get_unit_stats_text(model: Node3D) -> String:
-	var unit = get_unit_for_model(model)
-	if unit:
-		return unit.get_stats_text()
-	return ""
-
-
 func _on_game_loaded(game: WGSClient.WGSGame) -> void:
 	print("WGSGameManager: Game loaded: %s" % game.game_id)
 
@@ -305,37 +220,3 @@ func _on_game_loaded(game: WGSClient.WGSGame) -> void:
 func _on_import_failed(error: String) -> void:
 	push_error("WGS Import failed: %s" % error)
 	sync_error.emit(error)
-
-
-## HTTP-based sync with WGS server (for future async play support)
-## This would fetch the current game state from the WGS server
-
-var http_request: HTTPRequest
-
-func fetch_game_from_server(game_id: String, base_url: String = "https://udos3dworld.com/WargamingSimulator/") -> void:
-	sync_started.emit()
-
-	if not http_request:
-		http_request = HTTPRequest.new()
-		add_child(http_request)
-		http_request.request_completed.connect(_on_fetch_completed)
-
-	var url = "%sGetGameState.php?gameID=%s" % [base_url, game_id]
-	var error = http_request.request(url)
-
-	if error != OK:
-		sync_error.emit("HTTP request failed: %d" % error)
-
-
-func _on_fetch_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-	if result != HTTPRequest.RESULT_SUCCESS:
-		sync_error.emit("HTTP request failed with result: %d" % result)
-		return
-
-	if response_code != 200:
-		sync_error.emit("Server returned error: %d" % response_code)
-		return
-
-	var content = body.get_string_from_utf8()
-	import_from_text(content)
-	sync_completed.emit()
