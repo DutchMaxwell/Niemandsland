@@ -95,6 +95,11 @@ var _measure_front_label: Label3D = null  # Regiment facing aid (front vs flank/
 # rings; local-only display aid. See scripts/range_ring_controller.gd.
 var range_ring_controller: Node = null
 
+# Movement reach indicator: M toggles the Advance + Rush/Charge bands on selected models,
+# Shift+M clears all. The MovementRangeController (injected by main.gd) owns the per-model
+# rings; local-only display aid. See scripts/movement_range_controller.gd.
+var movement_range_controller: Node = null
+
 # Persistent shared rulers: a live measurement can be PINNED (key P) so it stays on the
 # table and replicates to all players in the owner's colour. `pinned_rulers` (the
 # PinnedRulers manager) is injected by main.gd. Right-click on a ruler removes it, K
@@ -296,15 +301,21 @@ func _input(event: InputEvent) -> void:
 		if _is_dragging:
 			_cancel_drag()
 
-	# Range-ring + ruler hotkeys (gated above by _is_gui_blocking_input, so safe while chatting):
-	# G cycles the ring on selected models (off → 3 → 6 → … → 24 → off), Shift+G clears all;
-	# P pins the live measurement; K clears my rulers, Shift+K (host) clears all.
+	# Range-ring + movement + ruler hotkeys (gated above by _is_gui_blocking_input, so safe
+	# while chatting): G cycles the range ring (off → 3 → … → 24 → off), Shift+G clears all;
+	# M toggles the Advance/Rush move bands, Shift+M clears all; P pins the live measurement;
+	# K clears my rulers, Shift+K (host) clears all.
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_G and range_ring_controller != null:
 			if event.shift_pressed:
 				range_ring_controller.clear_all()
 			else:
 				range_ring_controller.cycle(_selected_model_nodes())
+		elif event.keycode == KEY_M and movement_range_controller != null:
+			if event.shift_pressed:
+				movement_range_controller.clear_all()
+			else:
+				movement_range_controller.toggle(_selected_model_nodes())
 		elif event.keycode == KEY_P and _is_measuring:
 			_pin_current_measurement()
 		elif event.keycode == KEY_K:
