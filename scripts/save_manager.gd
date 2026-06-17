@@ -38,7 +38,39 @@ func serialize_game_state() -> Dictionary:
 	# (they carry no OPRArmy with the descriptions otherwise).
 	if army_manager and army_manager.has_method("get_all_rule_descriptions"):
 		state["rule_descriptions"] = army_manager.get_all_rule_descriptions()
+	# player_id -> army name, so a .nml load / late-joiner can rebuild each army's tray.
+	state["army_names"] = _army_names_by_player()
 	return state
+
+
+## player_id -> army name for the loaded/synced armies.
+func _army_names_by_player() -> Dictionary:
+	var names := {}
+	if army_manager:
+		for pid in army_manager.armies:
+			var a = army_manager.armies[pid]
+			if a:
+				names[pid] = a.name
+	return names
+
+
+## Recreate each army's TRAY (the platform it stands on) from the just-loaded game units.
+## .nml load AND the late-joiner state sync rebuild units + models but NOT the tray, so without
+## this an army shows as floating models with no tableau. One tray per distinct player_id.
+func restore_army_trays_after_load(army_names: Dictionary) -> void:
+	if not army_manager:
+		return
+	var seen := {}
+	for unit_id in _loaded_game_units:
+		var gu = _loaded_game_units[unit_id].get("game_unit")
+		if gu == null:
+			continue
+		var pid := int(gu.unit_properties.get("player_id", 0))
+		if pid > 0 and not seen.has(pid):
+			seen[pid] = true
+			var aname := str(army_names.get(pid, "Army"))
+			var acol = OPRArmyManager.PLAYER_COLORS.get(pid, Color.GRAY)
+			army_manager._create_army_tray(pid, aname, acol)
 
 
 ## Serialize table state including map layout (terrain, deployment, objectives)
@@ -308,6 +340,9 @@ func load_game(path: String) -> Error:
 	# Rebuild Age of Fantasy: Regiments movement-tray blocks now that the model
 	# nodes exist and are wired to their loaded GameUnits.
 	_restore_regiments_after_load()
+
+	# Recreate each army's tray (the platform it stands on) — same gap as the late-joiner sync.
+	restore_army_trays_after_load(state.get("army_names", {}))
 
 	# Restore game state
 	_deserialize_game_state(state.get("game_state", {}))
