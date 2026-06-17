@@ -83,6 +83,15 @@ var _attract_active := false
 # === Lifecycle ===
 
 func _ready() -> void:
+	# First log line of every session: the version AND the build hash baked at export time.
+	# The version string alone can be right while the packed bytecode is stale, so the hash is
+	# the only way to prove the running binary matches a given commit (defaults to "local-dev"
+	# for editor/source runs where no export-time hash was injected).
+	print("[Boot] Niemandsland %s build %s" % [
+		ProjectSettings.get_setting("application/config/version", "?"),
+		ProjectSettings.get_setting("application/config/build_hash", "local-dev"),
+	])
+
 	# Check if an .nml file was passed via command-line (e.g. double-click in file manager)
 	var file_to_open := _get_save_from_cmdline()
 	if not file_to_open.is_empty():
