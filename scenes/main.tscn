@@ -163,7 +163,7 @@ anchor_right = 1.0
 offset_left = -300.0
 offset_bottom = 100.0
 grow_horizontal = 0
-text = "Niemandsland v0.3.2-alpha
+text = "Niemandsland v0.3.4-alpha
 Controls:
 - WASD: Move Camera
 - Q/E: Rotate Camera
@@ -176,7 +176,11 @@ Controls:
 - 1-9: Arrange at cursor
 - A: Arrow at cursor
 - Ctrl+C/V/D: Copy/Paste/Dup
-- L: Lock/Unlock"
+- L: Lock/Unlock
+- G / Shift+G: Range Ring / clear
+- M / Shift+M: Move Bands / clear
+- P: Pin Ruler
+- K / Shift+K: Clear Rulers mine/all"
 
 [node name="PerformanceLabel" type="Label" parent="UI/HUD"]
 unique_name_in_owner = true

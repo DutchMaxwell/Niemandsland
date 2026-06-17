@@ -33,6 +33,9 @@ UpdateChecker="*res://scripts/update_checker.gd"
 
 gdscript/warnings/exclude_addons=true
 gdscript/warnings/treat_warnings_as_errors=true
+file_logging/enable_file_logging=true
+file_logging/log_path="user://logs/niemandsland.log"
+file_logging/max_log_files=5
 
 [display]
 
