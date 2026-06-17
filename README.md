@@ -6,7 +6,7 @@ Fantasy). Built in Godot.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Godot](https://img.shields.io/badge/Godot-4.6-blue.svg)](https://godotengine.org/)
-[![Status](https://img.shields.io/badge/Status-0.3.5.0--alpha-orange.svg)]()
+[![Status](https://img.shields.io/badge/Status-0.3.5.2--alpha-orange.svg)]()
 
 > **Status: alpha (on the Road to Alpha `0.3.6`).** The tabletop sandbox, OPR army
 > import, multiplayer and the 3D-model pipeline work; rules automation (turn/combat
@@ -131,7 +131,6 @@ scale, **dice run in a separate scaled SubViewport** (our own MIT `dice_tray.gd`
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — systems & code map
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — build, run, test
 - [`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md) — Wargaming Simulator integration
-- [`docs/OPR_API_RESEARCH_REPORT.md`](docs/OPR_API_RESEARCH_REPORT.md) — OPR Army Forge API notes
 
 ## Security note
 
@@ -156,4 +155,4 @@ conventional commits, gdUnit4 + relay tests green, then open a PR. Coding standa
 
 MIT — see [`LICENSE`](LICENSE). UI themes by [Kenney](https://kenney.nl) (CC0);
 dice are our own MIT implementation. Full third-party attributions in
-[`THIRD_PARTY.md`](THIRD_PARTY.md) and [`docs/ASSETS.md`](docs/ASSETS.md).
+[`THIRD_PARTY.md`](THIRD_PARTY.md).
