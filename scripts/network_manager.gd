@@ -1228,7 +1228,7 @@ func broadcast_object_visibility(object_id: int, is_visible: bool) -> void:
 ## Signals for batched army sync
 signal remote_army_header_received(player_id: int, army_name: String, unit_count: int)
 signal remote_army_unit_received(unit_data: Dictionary, objects_data: Array, player_id: int)
-signal remote_army_complete_received(player_id: int)
+signal remote_army_complete_received(player_id: int, rule_descriptions: Dictionary)
 
 ## Delay between unit batch RPCs to stay under relay rate limit (120 msg/s).
 ## Must be high enough so that Godot's internal RPC fragmentation + this delay
@@ -1255,10 +1255,10 @@ func sync_army_unit(unit_data: Dictionary, objects_data: Array, player_id: int) 
 
 ## RPC: Army sync complete — all units sent
 @rpc("any_peer", "call_remote", "reliable")
-func sync_army_complete(player_id: int) -> void:
+func sync_army_complete(player_id: int, rule_descriptions: Dictionary) -> void:
 	var sender := multiplayer.get_remote_sender_id()
-	print("[Network] Army complete from peer %d (player_id=%d)" % [sender, player_id])
-	remote_army_complete_received.emit(player_id)
+	print("[Network] Army complete from peer %d (player_id=%d, %d rule descriptions)" % [sender, player_id, rule_descriptions.size()])
+	remote_army_complete_received.emit(player_id, rule_descriptions)
 
 
 ## Broadcast army import in batches to all peers
@@ -1266,7 +1266,8 @@ func broadcast_army_batched(
 	units_data: Array[Dictionary],
 	objects_per_unit: Array[Array],
 	player_id: int,
-	army_name: String
+	army_name: String,
+	rule_descriptions: Dictionary
 ) -> void:
 	if not is_multiplayer_active():
 		return
@@ -1284,10 +1285,10 @@ func broadcast_army_batched(
 		var objs: Array = objects_per_unit[i] if i < objects_per_unit.size() else []
 		sync_army_unit.rpc(units_data[i], objs, player_id)
 
-	# 3. Complete
+	# 3. Complete — carries the army's rule descriptions so remote tooltips resolve.
 	await get_tree().create_timer(ARMY_BATCH_DELAY_MS / 1000.0).timeout
 	if _validate_rpc_ready("broadcast_army_complete"):
-		sync_army_complete.rpc(player_id)
+		sync_army_complete.rpc(player_id, rule_descriptions)
 
 
 # ===== TTS Terrain Synchronization =====
