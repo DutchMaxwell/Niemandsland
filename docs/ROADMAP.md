@@ -51,6 +51,11 @@ planned and where ideas go. For what already works see
 - **Sandbox forests for the other biomes** — extend the shipped grassland forest pads to
   desert / tundra / volcanic / jungle / urban (per-biome forest-floor textures + `biome_prefix`
   wiring; the biome tree GLBs are already on R2). _S_
+- **Anonymous diagnostics / bug report export** — going-public prep so alpha players can send
+  us a useful log. Enable Godot file logging + an easy-to-find "Report a problem" action that
+  writes a SCRUBBED bundle (strip the OS username from paths, player names, room codes; no
+  identity token) — version + OS/GPU/renderer + recent log + MP error counts — to a known spot
+  (Desktop / Save-dialog) and opens the folder. Lets us triage real-world bugs fast. _S_
 
 ## 🧊 Ideas (icebox — captured, not committed)
 
