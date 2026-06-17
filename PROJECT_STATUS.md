@@ -62,8 +62,8 @@ host rehosts and re-syncs full state) is also live; see
 host-reconnect) is deployed to Fly.io (`niemandsland-relay`, fra). The reconnect /
 rate-limit / army-sync cascade was live-validated across two real clients.
 
-**Import/export** — TTS import (Steam CDN + cache), custom glTF/STL/OBJ, `.nml`
-save format with OS file association, WGS import/export
+**Import/export** — Army Forge (OPR) + Wargaming Simulator (WGS) list import, `.nml`
+save format with OS file association
 ([`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md)).
 
 **Presentation** — a built-in Tactical-HUD UI theme (sleek; cyan/amber), atmosphere
