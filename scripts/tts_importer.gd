@@ -188,36 +188,3 @@ static func get_unique_models(parse_result: TTSParseResult) -> Array[TTSObject]:
 			unique.append(obj)
 
 	return unique
-
-
-## Generate a report of all models in the save
-static func generate_report(parse_result: TTSParseResult) -> String:
-	var report = "=== TTS Save Import Report ===\n"
-	report += "Save Name: %s\n" % parse_result.save_name
-	report += "Total Objects: %d\n\n" % parse_result.objects.size()
-
-	var unique = get_unique_models(parse_result)
-	report += "Unique Models: %d\n\n" % unique.size()
-
-	var with_texture = 0
-	var without_texture = 0
-
-	for obj in unique:
-		if obj.diffuse_url.is_empty():
-			without_texture += 1
-		else:
-			with_texture += 1
-
-	report += "Models with texture: %d\n" % with_texture
-	report += "Models without texture: %d\n\n" % without_texture
-
-	report += "--- Model List ---\n"
-	for i in range(mini(unique.size(), 50)):  # Show first 50
-		var obj = unique[i]
-		var tex_status = "+" if not obj.diffuse_url.is_empty() else "-"
-		report += "[%s] %s\n" % [tex_status, obj.name if not obj.name.is_empty() else "Unnamed"]
-
-	if unique.size() > 50:
-		report += "... and %d more\n" % (unique.size() - 50)
-
-	return report
