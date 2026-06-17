@@ -34,10 +34,11 @@ var _state: Dictionary = {}  # model_node (Node3D) -> index into RING_RANGES_INC
 ## size; oval bases use the averaged radius (same approximation as the special-weapon
 ## ring). Empty props → the default 32 mm base radius.
 func base_radius_for_props(props: Dictionary) -> float:
-	var oval_w: float = props.get("base_size_oval_width", 0)
-	var oval_l: float = props.get("base_size_oval_length", 0)
-	if oval_w > 0 and oval_l > 0:
-		return ((oval_w + oval_l) / 4.0) * 0.001
+	if props.get("base_is_oval", false) or props.get("base_is_square", false):
+		var w: float = float(props.get("base_width_mm", 0))
+		var d: float = float(props.get("base_depth_mm", 0))
+		if w > 0.0 and d > 0.0:
+			return ((w + d) / 4.0) * 0.001
 	if props.has("base_size_round"):
 		return (float(props["base_size_round"]) / 2.0) * 0.001
 	return DEFAULT_BASE_RADIUS_M
