@@ -3114,9 +3114,15 @@ func _broadcast_army_import(army: OPRApiClient.OPRArmy, spawned_models: Array[No
 		units_data.append(unit_dict)
 		objects_per_unit.append(unit_objects)
 
-	print("[ArmySync] Broadcasting army in batches: %d units (player_id=%d, army='%s')" % [units_data.size(), army.player_id, army.name])
+	# Ship the army's special-rule descriptions with the broadcast so remote tooltips resolve
+	# (e.g. "Bloodborn") — the late-join state-sync already carries them; this is the mid-session
+	# import path. get_all_rule_descriptions() unions the session cache + every army's rules.
+	var rule_descs: Dictionary = {}
+	if opr_army_manager and opr_army_manager.has_method("get_all_rule_descriptions"):
+		rule_descs = opr_army_manager.get_all_rule_descriptions()
+	print("[ArmySync] Broadcasting army in batches: %d units (player_id=%d, army='%s', %d rule descriptions)" % [units_data.size(), army.player_id, army.name, rule_descs.size()])
 	_is_army_syncing = true
-	await network_manager.broadcast_army_batched(units_data, objects_per_unit, army.player_id, army.name)
+	await network_manager.broadcast_army_batched(units_data, objects_per_unit, army.player_id, army.name, rule_descs)
 	_is_army_syncing = false
 
 
@@ -3152,7 +3158,10 @@ func _on_remote_army_unit(unit_data: Dictionary, objects_data: Array, player_id:
 ## All units received — build the whole army in ONE pass: rebuild the units, download every
 ## model with a single ensure_models call (feeds the loading bar like a self-import), spawn
 ## all model objects, then restore markers / heroes / regiment trays.
-func _on_remote_army_complete(player_id: int) -> void:
+func _on_remote_army_complete(player_id: int, rule_descriptions: Dictionary) -> void:
+	# Merge rule descriptions FIRST (before building units) so tooltips like "Bloodborn" resolve.
+	if opr_army_manager and opr_army_manager.has_method("merge_rule_descriptions"):
+		opr_army_manager.merge_rule_descriptions(rule_descriptions)
 	var buf: Dictionary = _incoming_armies.get(player_id, {})
 	_incoming_armies.erase(player_id)
 	var units: Array = buf.get("units", [])
