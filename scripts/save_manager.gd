@@ -12,7 +12,12 @@ const SAVE_EXTENSION = "nml"  # Niemandsland Save
 ## Yield to the main loop every N object spawns during a load/army-receive so heavy GLB
 ## instantiation never blocks the thread for seconds — a long stall starves the relay
 ## heartbeat (_poll runs in _process) and the relay drops the client, kicking off a reconnect.
-const DESERIALIZE_YIELD_EVERY := 3
+## Yield after EVERY object: a first-time GLB goes through a synchronous GLTFDocument parse
+## (~200-800ms each), and yielding every 3 let up to three parses pile into one frame (the
+## observed 7.6s freeze on a guest receiving an army). Every-1 caps a frozen frame at a single
+## parse so a heartbeat always fires between parses. Tray reveal / hero-attach / regiment-form
+## all run AFTER this loop, so finer yielding can't reveal models piecemeal or race attachment.
+const DESERIALIZE_YIELD_EVERY := 1
 
 var object_manager: Node3D
 var table: Node3D
