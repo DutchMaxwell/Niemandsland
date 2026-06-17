@@ -65,6 +65,12 @@ planned and where ideas go. For what already works see
   the matching buff tokens (`TokenLibrary.define` + `remote_token_defined` sync, so both players
   get them) from a curated OPR-rule → token map (auras / +1-−1 / situational rules; passive rules
   skipped to avoid spam). Saves manually creating tokens every game. _S_
+- **Align vehicle models to their oval base long axis** — GLBs are uniformly scaled to fit the
+  base but never rotated, so a model that is longest along X sits orthogonal on an oval base
+  whose long axis is Z (depth). Compare the model AABB's long horizontal axis to the base's long
+  axis and apply a 90° Y rotation when they disagree, in BOTH spawn paths (`_create_unit_model`
+  + `create_model_from_properties`). (Separate gap: the Tough base-size fallback makes a ROUND
+  base for API-baseless vehicles instead of an oval.) _S_
 
 ## 🧊 Ideas (icebox — captured, not committed)
 
