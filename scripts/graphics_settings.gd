@@ -9,12 +9,10 @@ enum QualityPreset {
 	LOW,
 	MEDIUM,
 	HIGH,
-	ULTRA,
-	CUSTOM
+	ULTRA
 }
 
 var current_preset: QualityPreset = QualityPreset.MEDIUM
-var custom_settings: Dictionary = {}
 
 # ===== Window / UI reachability =====
 ## Supported layout floor: the window can never shrink below this, so the left
@@ -187,10 +185,6 @@ func apply_ui_scale(factor: float) -> void:
 
 ## Apply a quality preset
 func apply_preset(preset: QualityPreset) -> void:
-	if preset == QualityPreset.CUSTOM:
-		apply_custom_settings()
-		return
-
 	var settings = PRESETS[preset]
 	current_preset = preset
 
@@ -309,22 +303,8 @@ func apply_environment_settings(settings: Dictionary) -> void:
 		env.glow_bloom = settings["glow_bloom"]
 
 
-## Apply custom settings
-func apply_custom_settings() -> void:
-	if custom_settings.is_empty():
-		# Fallback to medium
-		apply_preset(QualityPreset.MEDIUM)
-		return
-
-	apply_rendering_settings(custom_settings)
-	apply_environment_settings(custom_settings)
-	settings_applied.emit("Custom")
-
-
 ## Get current preset name
 func get_current_preset_name() -> String:
-	if current_preset == QualityPreset.CUSTOM:
-		return "Custom"
 	return PRESETS[current_preset]["name"]
 
 
@@ -332,7 +312,6 @@ func get_current_preset_name() -> String:
 func save_settings() -> void:
 	var config = ConfigFile.new()
 	config.set_value("graphics", "preset", current_preset)
-	config.set_value("graphics", "custom_settings", custom_settings)
 	config.set_value("graphics", "ui_scale", ui_scale)
 	config.set_value("graphics", "reduce_motion", reduce_motion)
 	config.set_value("graphics", "fullscreen", fullscreen)
@@ -350,7 +329,6 @@ func load_settings() -> void:
 		return
 
 	current_preset = config.get_value("graphics", "preset", QualityPreset.MEDIUM)
-	custom_settings = config.get_value("graphics", "custom_settings", {})
 	ui_scale = config.get_value("graphics", "ui_scale", 1.0)
 	reduce_motion = config.get_value("graphics", "reduce_motion", false)
 	fullscreen = config.get_value("graphics", "fullscreen", true)
