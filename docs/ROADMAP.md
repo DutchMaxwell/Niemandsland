@@ -40,13 +40,6 @@ planned and where ideas go. For what already works see
   frontage cycle (5-wide ↔ other), and wheel/pivot about the front corner. Community-validated
   (bulk-move + wheeling is a top TTS friction). `regiment_tray.gd` has `frontage`/`reform`,
   but no block-move/cycle/wheel yet. _M_
-- **Persistent, shared rulers** — a dropped ruler that stays on the table, carries a number, is
-  in inches, and is replicated to the opponent. Fixes TTS's #1 measurement gap (the ruler vanishes
-  on release and only the measurer can see it). Extends the measure tool. **Branch-complete —
-  PR #64 (`feat/shared-rulers`) open.** _M_
-- **Base-anchored range rings ("auras")** — per-model coloured radii (e.g. 3″/6″/9″) from the base
-  edge, click to cycle. The most-praised wargaming QoL feature on TTS. (Pin the ring set to common
-  OPR aura/weapon ranges.) **Branch-complete — PR #65 (`feat/range-rings`) open.** _S_
 - **Measure-on-pickup → snap-back** — grabbing a model starts a live measurement with a ghost
   preview; release to commit, ESC to return to the pickup point. TTS later shipped exactly this.
   Extends `object_manager` drag + the height-aware LoS measuring. _M_
@@ -92,7 +85,11 @@ models + biome sync to peers and late-joiners, paste/delete/arrange replication,
 mini movement, import-slot default, phantom-player + abort hardening), and **stable player
 identity across reconnect** (PR #66 — a per-install token → canonical slot remap so a
 reconnecting player returns to their exact slot/colour/army with no phantom; `network_id`
-namespaced by owner so two armies never collide; adversarially reviewed). Earlier: **Age of
+namespaced by owner so two armies never collide; adversarially reviewed), **persistent
+shared rulers** (PR #64 — pin a measurement with P; it stays on the table in the owner's
+colour and replicates to everyone, including late-joiners; K clears yours, Shift+K all), and
+**base-anchored range rings / auras** (PR #65 — G cycles a per-model radius 3″/6″/…/24″ from
+the base edge, Shift+G clears; local display aid). Earlier: **Age of
 Fantasy: Regiments**
 (movement-tray blocks, square bases, casualty re-rank, save/load, **facing &
 front-arc display**), **units as line-of-sight blockers** (`LosRules.units_block_line`,
