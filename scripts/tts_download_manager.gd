@@ -263,18 +263,6 @@ func _clear_directory_recursive(path: String) -> void:
 	dir.list_dir_end()
 
 
-## Get download statistics
-func get_stats() -> Dictionary:
-	return {
-		"pending": _pending_downloads.size(),
-		"completed": _completed_downloads.size(),
-		"failed": _failed_downloads.size(),
-		"is_downloading": _is_downloading,
-		"current": _current_download_idx,
-		"total": _total_downloads
-	}
-
-
 ## Reset state for new import
 func reset() -> void:
 	_pending_downloads.clear()
