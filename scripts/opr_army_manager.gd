@@ -661,6 +661,8 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
 			glb_instance.position.y = fit.y_offset
+			# Orient on an oval base: walkers crosswise (quer), other vehicles along the long axis.
+			_align_to_oval_long_axis(glb_instance, aabb, base_is_oval, base_width, base_depth, _is_walker(unit.name))
 
 			_brighten_trellis_materials(glb_instance)
 			wrapper.add_child(glb_instance)
@@ -820,6 +822,8 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> St
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
 			glb_instance.position.y = fit.y_offset
+			# Orient on an oval base: walkers crosswise (quer), other vehicles along the long axis.
+			_align_to_oval_long_axis(glb_instance, aabb, base_is_oval, base_width, base_depth, _is_walker(unit_name))
 
 			_brighten_trellis_materials(glb_instance)
 			wrapper.add_child(glb_instance)
@@ -1254,6 +1258,31 @@ func _should_hover(unit_name: String, rules: Array) -> bool:
 		return true
 	var lowered := unit_name.to_lower()
 	return "drone" in lowered or "hover" in lowered
+
+
+## Orients a GLB on an OVAL base relative to the base's long axis (depth/Z when base_depth >=
+## base_width). Vehicles align ALONG the long axis (a tank runs front-to-back); walkers sit
+## CROSSWISE ("quer", cross_align=true) so a biped faces forward with its span across the base.
+## Y-only rotation, so it leaves the (rotation-invariant) uniform scale and y-offset intact.
+## No-op for round/square bases.
+func _align_to_oval_long_axis(glb: Node3D, aabb: AABB, base_is_oval: bool,
+		base_width: float, base_depth: float, cross_align: bool = false) -> void:
+	if not base_is_oval or glb == null:
+		return
+	var base_long_is_z: bool = base_depth >= base_width
+	var model_long_is_x: bool = aabb.size.x > aabb.size.z
+	# currently_perp: the model's long axis is perpendicular to the base's long axis.
+	var currently_perp: bool = (base_long_is_z == model_long_is_x)
+	# Vehicles want aligned (rotate when perp); walkers want crosswise (rotate when aligned).
+	var should_rotate: bool = currently_perp if not cross_align else not currently_perp
+	if should_rotate:
+		glb.rotate_y(PI / 2.0)
+
+
+## A walker unit (named "… Walker") sits crosswise ("quer") on its oval base instead of aligned
+## to the long axis, so a biped faces forward rather than lying down the length of the base.
+func _is_walker(unit_name: String) -> bool:
+	return "walker" in unit_name.to_lower()
 
 
 ## Berechnet Skalierung + vertikalen Offset, damit ein GLB gut zur Base passt.
