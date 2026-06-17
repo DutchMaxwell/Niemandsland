@@ -66,6 +66,8 @@ var _incoming_packets: Array[IncomingPacket] = []
 var _outgoing_queue: Array[PackedByteArray] = []
 var _send_tokens: float = SEND_BURST_MAX  # wall-clock send budget (see MAX_SENDS_PER_SECOND)
 var _send_refill_ms: int = 0              # last token refill timestamp (0 = uninitialised)
+var _tx_msg_count: int = 0                # frames actually sent since the last tx-rate log
+var _tx_last_log_ms: int = 0              # last time the tx rate was logged (wall-clock ms)
 # Heartbeat / drop detection use the WALL CLOCK (Time.get_ticks_msec), NOT a per-frame
 # counter. A frame-based timer runs slow whenever the framerate drops or the main thread
 # stalls (loading GLBs, R2 downloads, scene changes), so heartbeats went out too slowly
@@ -346,6 +348,8 @@ func _close() -> void:
 	_outgoing_queue.clear()
 	_send_tokens = SEND_BURST_MAX
 	_send_refill_ms = 0
+	_tx_msg_count = 0
+	_tx_last_log_ms = 0
 	_known_peers.clear()
 	_room_code = ""
 	_ws_connected = false
@@ -548,3 +552,15 @@ func _flush_outgoing_queue() -> void:
 			push_warning("[Relay] Send failed: error=%d frame_size=%d bytes" % [err, frame.size()])
 			break
 		_send_tokens -= 1.0
+		_tx_msg_count += 1
+
+	# Diagnostic: log the REAL outgoing message rate once per second. A correct client tops out
+	# at ~220 msg/s (200 steady + 20 burst); if a live log shows tx far above the relay's limit,
+	# the running binary is NOT this source (stale bytecode) — see the boot build line.
+	if _tx_last_log_ms == 0:
+		_tx_last_log_ms = now_ms
+	elif now_ms - _tx_last_log_ms >= 1000:
+		if _tx_msg_count > 0:
+			print("[Relay] tx=%d msg/s queue=%d tokens=%.1f" % [_tx_msg_count, _outgoing_queue.size(), _send_tokens])
+		_tx_msg_count = 0
+		_tx_last_log_ms = now_ms

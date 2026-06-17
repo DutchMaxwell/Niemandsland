@@ -33,8 +33,14 @@ MAX_PEERS_PER_ROOM = 8
 ROOM_EXPIRY_SECONDS = 14400  # 4 hours
 HEARTBEAT_TIMEOUT_SECONDS = 30
 MAX_MESSAGE_SIZE = 1048576  # 1MB — game state serializations can be large
-RATE_LIMIT_MESSAGES_PER_SECOND = 300
-MAX_CONNECTIONS_PER_IP = 5
+# 300 was far too low for a 2-player game's bursty army sync (a clean client tops out at
+# ~220 msg/s, but fragmented army-unit RPCs + a high-refresh framerate can spike higher).
+# The relay stays a dumb router; the client owns pacing (token bucket). 2000 gives headroom
+# while still catching a genuinely misbehaving peer.
+RATE_LIMIT_MESSAGES_PER_SECOND = 2000
+# A legitimate reconnect storm behind one NAT (guest churns peer 3,4,5...) must not trip a
+# second 4429 ("Too many connections from this IP") and turn a transient blip into a dead room.
+MAX_CONNECTIONS_PER_IP = 10
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # 30 chars, no ambiguous 0/O/1/I/L
 CODE_LENGTH = 6  # 30^6 = 729,000,000 possibilities
 HOST_REJOIN_WINDOW_SECONDS = 20  # keep a room alive this long after the host drops, so they can rejoin
