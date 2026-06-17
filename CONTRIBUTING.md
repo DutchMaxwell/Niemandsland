@@ -10,8 +10,8 @@ useful thing you can do.
 - **[Open an issue](../../issues/new/choose)** and pick a template:
   - 🐞 **Bug report** — something broke or behaves wrong.
   - 💡 **Feedback / idea** — UX friction, suggestions, feature ideas.
-- For bugs, please include your **OS** (Windows / macOS / Linux / Web), the
-  **version** (title bar, e.g. `v0.3.2-alpha`), and **steps to reproduce**. A Godot
+- For bugs, please include your **OS** (Windows / macOS / Linux), the
+  **version** (title bar, e.g. `v0.3.5.2-alpha`), and **steps to reproduce**. A Godot
   log or screenshot helps a lot.
 - Security issues: please report privately — see [`SECURITY.md`](SECURITY.md).
 

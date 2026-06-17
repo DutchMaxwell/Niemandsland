@@ -22,11 +22,6 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **Multiplayer — two-client live test (reconnect gauntlet)** — validate the now-shipped
-  reconnect-identity + sync fixes across two real clients: a guest Wi-Fi blip returns to the
-  SAME slot/colour/army with no phantom; host rehost keeps everyone's slot; no abort on a
-  transient drop; own-only movement; army/biome/paste/delete/arrange sync. Only a real
-  2-client run can cover the RPC round-trip. _M_
 - **MP reconnect — 3+ player hardening (follow-ups)** — review-surfaced items not needed for
   the 2-player case: mirror the host's peer→slot table to guests (3+-player avatar/cursor
   colour agreement after a reconnect), a shared `slot→palette` helper so army bases match
@@ -51,26 +46,6 @@ planned and where ideas go. For what already works see
 - **Sandbox forests for the other biomes** — extend the shipped grassland forest pads to
   desert / tundra / volcanic / jungle / urban (per-biome forest-floor textures + `biome_prefix`
   wiring; the biome tree GLBs are already on R2). _S_
-- **Anonymous diagnostics / bug report export** — going-public prep so alpha players can send
-  us a useful log. Enable Godot file logging + an easy-to-find "Report a problem" action that
-  writes a SCRUBBED bundle (strip the OS username from paths, player names, room codes; no
-  identity token) — version + OS/GPU/renderer + recent log + MP error counts — to a known spot
-  (Desktop / Save-dialog) and opens the folder. Lets us triage real-world bugs fast. _S_
-- **Per-model base size from upgrades** — a weapon-team / upgrade can replace a Tough(1) model
-  with a Tough(3) one, which needs a bigger base. Per-model tough is already tracked
-  (`model.properties["tough"]` via `equipment_distributor`); derive + store a per-model base
-  size (`_base_size_from_tough`) and honour it at spawn (base disc + GLB footprint), falling
-  back to the unit base. Today base size is unit-level, so the upgraded model gets too small a base. _S_
-- **Auto buff-tokens from special rules** — on army import, scan `special_rules` and auto-create
-  the matching buff tokens (`TokenLibrary.define` + `remote_token_defined` sync, so both players
-  get them) from a curated OPR-rule → token map (auras / +1-−1 / situational rules; passive rules
-  skipped to avoid spam). Saves manually creating tokens every game. _S_
-- **Align vehicle models to their oval base long axis** — GLBs are uniformly scaled to fit the
-  base but never rotated, so a model that is longest along X sits orthogonal on an oval base
-  whose long axis is Z (depth). Compare the model AABB's long horizontal axis to the base's long
-  axis and apply a 90° Y rotation when they disagree, in BOTH spawn paths (`_create_unit_model`
-  + `create_model_from_properties`). (Separate gap: the Tough base-size fallback makes a ROUND
-  base for API-baseless vehicles instead of an oval.) _S_
 
 ## 🧊 Ideas (icebox — captured, not committed)
 
@@ -95,10 +70,18 @@ planned and where ideas go. For what already works see
 
 ## ✅ Recently shipped
 
-See [`CHANGELOG.md`](../CHANGELOG.md). Highlights (0.3.4 round-up): **casual sandbox
-terrain** (grid-free free-placed multi-storey ruins + oval tree-group forests + anti-tiling
-floor shader), **3 new factions** (blood / custodian / wolf_brothers — manifest now 527
-models, live on R2), the **multiplayer sync + reconnect-hardening pass** (imported-army
+See [`CHANGELOG.md`](../CHANGELOG.md). Highlights (0.3.5 round-up): the **multiplayer
+two-client live test passed** — the reconnect / rate-limit / army-sync cascade was
+live-validated across two real clients (wall-clock send-rate cap, host-kick fix, deserialize
+yield, restore-lock + `network_id` idempotency, Sort-Table mirror, mid-session tooltip sync);
+**anonymous diagnostics / bug-report export** (a scrubbed "Report a problem" bundle — recent
+log files, room codes/player names stripped); **auto buff-tokens from special rules** (scanned
+on import, synced to both players); **per-model base size from upgrades** (a weapon-team /
+Tough-raising model gets a bigger base than its squadmates); and **model orientation on oval
+bases** (vehicles along the long axis, walkers crosswise). Earlier (0.3.4 round-up): **casual
+sandbox terrain** (grid-free free-placed multi-storey ruins + oval tree-group forests +
+anti-tiling floor shader), **3 new factions** (blood / custodian / wolf_brothers — manifest now
+527 models, live on R2), the **multiplayer sync + reconnect-hardening pass** (imported-army
 models + biome sync to peers and late-joiners, paste/delete/arrange replication, own-only
 mini movement, import-slot default, phantom-player + abort hardening), and **stable player
 identity across reconnect** (PR #66 — a per-install token → canonical slot remap so a
@@ -123,6 +106,4 @@ preparation.
 
 <sub>Maintainer/agent note: this file is the curated backlog and the single
 forward-looking source. The agent reads it at the start of a session, implements the
-top **Now / Next** item, and moves it to **Shipped** with a PR link on merge. Internal
-release mechanics (domain move, history scrub, going-public settings) live in
-`_internal/`.</sub>
+top **Now / Next** item, and moves it to **Shipped** with a PR link on merge.</sub>
