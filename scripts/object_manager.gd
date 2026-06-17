@@ -3363,7 +3363,7 @@ func _live_objects(objs: Array) -> Array[Node3D]:
 
 ## Arrange selected objects in N rows at cursor position (keys 1-9)
 func arrange_selected_in_rows(num_rows: int, cursor_pos: Vector3) -> void:
-	var objects: Array[Node3D] = _live_objects(_selected_objects)
+	var objects: Array[Node3D] = _movable_selection()  # own-only in MP; all live in single-player
 	if objects.size() < 2:
 		return
 
@@ -3398,7 +3398,7 @@ func arrange_selected_in_rows(num_rows: int, cursor_pos: Vector3) -> void:
 
 ## Arrange selected objects in arrow/wedge formation at cursor (A key)
 func arrange_selected_arrow(cursor_pos: Vector3) -> void:
-	var objects: Array[Node3D] = _live_objects(_selected_objects)
+	var objects: Array[Node3D] = _movable_selection()  # own-only in MP; all live in single-player
 	if objects.size() < 2:
 		return
 
@@ -3726,29 +3726,23 @@ func _set_object_dimmed(obj: Node3D, dimmed: bool) -> void:
 ## Rotate selected objects as a group around the first object (Shift+R)
 ## Called continuously while Shift+R is held, so no print statements
 func rotate_selected_group(angle_degrees: float) -> void:
-	if _selected_objects.size() < 2:
-		# Single object or no selection - just rotate the object itself
-		if _selected_objects.size() == 1:
-			var obj = _selected_objects[0]
+	# Only OWN (or unowned) objects rotate; another player's selected models stay put.
+	var movable := _movable_selection()
+	if movable.size() < 2:
+		# Single object or no movable selection - just rotate the object itself
+		if movable.size() == 1:
+			var obj = movable[0]
 			if is_instance_valid(obj):
 				obj.rotate_y(deg_to_rad(angle_degrees))
 		return
 
-	# Find the first valid object as pivot point
-	var pivot_obj: Node3D = null
-	for obj in _selected_objects:
-		if is_instance_valid(obj):
-			pivot_obj = obj
-			break
-
-	if not pivot_obj:
-		return
-
+	# First movable object is the pivot (_movable_selection only returns valid nodes).
+	var pivot_obj: Node3D = movable[0]
 	var pivot_pos = pivot_obj.global_position
 	var angle_rad = deg_to_rad(angle_degrees)
 
-	# Rotate all selected objects around the pivot
-	for obj in _selected_objects:
+	# Rotate the movable objects around the pivot
+	for obj in movable:
 		if not is_instance_valid(obj):
 			continue
 
