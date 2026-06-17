@@ -16,8 +16,8 @@ A clear description of the bug.
 What you expected to happen instead.
 
 **Environment**
-- OS: (Windows / macOS / Linux / Web)
-- Version: (e.g. `v0.3.2-alpha`)
+- OS: (Windows / macOS / Linux)
+- Version: (e.g. `v0.3.5.2-alpha`)
 - Mode: (single / multiplayer host / multiplayer join)
 
 **Logs / screenshots**

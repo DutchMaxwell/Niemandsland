@@ -40,19 +40,3 @@ These are authoring tools, **not shipped** with the game (verified: not present 
 the exported `.pck`). They use TRELLIS (MIT), `model-viewer` (Apache-2.0), and image
 generation via **Google Gemini** and **HuggingFace Spaces** — whose terms of service
 govern commercial use / redistribution of generated content.
-
-## Verification still pending (before public release)
-
-- **Image-generation ToS** — researched: Gemini
-  output is user-owned + commercial-OK (use the paid tier; AI-only output may not be
-  copyrightable); TRELLIS is MIT. Final call with the lawyer.
-- ~~SVG icon provenance~~ — ✅ resolved: UI icons are **Phosphor Icons** (MIT),
-  license bundled. (Other textures, e.g. the table surface, are project-internal.)
-- **Git-history scrub** — previously-bundled OPR data and the removed AGPL addon still
-  exist in history; scrub before any public/MIT release.
-- **IP-lawyer review** — given the AI-generated and OPR-derived assets.
-- **Confirm these attribution rows before release:** the **`model-viewer`** minified
-  bundle vendors BSD/MIT deps alongside its Apache-2.0 project license, but it is
-  dev-only (not shipped), so concern is low. Verify **gdUnit4** is fully excluded from
-  the exported `.pck` (`strings build/linux/*.pck | grep -c GdUnit` should be 0; disable
-  the editor plugin for the export if not).

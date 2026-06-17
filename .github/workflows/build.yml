@@ -21,11 +21,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Guard — web renderer line present
-        run: |
-          grep -q 'renderer/rendering_method.web="gl_compatibility"' project.godot \
-            || { echo "::error::project.godot lost renderer/rendering_method.web=\"gl_compatibility\" (required for the web/itch.io export)"; exit 1; }
-
       - name: Import project (generates .godot/, compile-check)
         run: godot --headless --editor --quit --path . || true
 
@@ -34,35 +29,6 @@ jobs:
           godot --headless --path . \
             -s -d res://addons/gdUnit4/bin/GdUnitCmdTool.gd \
             --ignoreHeadlessMode -a res://test
-
-  export-web:
-    name: Web Export
-    runs-on: ubuntu-latest
-    needs: test
-    container:
-      image: barichello/godot-ci:4.6
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup
-        run: |
-          mkdir -v -p ~/.local/share/godot/export_templates/
-          mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
-
-      - name: Web Build
-        run: |
-          mkdir -v -p build/web
-          godot --headless --verbose --export-release "Web" build/web/index.html
-
-      # Best-effort: the export above is the real signal. A failed artifact upload (e.g. the
-      # account's Actions artifact-storage quota is full) must not red-fail the export job.
-      - name: Upload Web Artifact
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-build
-          path: build/web
 
   export-linux:
     name: Linux Export
