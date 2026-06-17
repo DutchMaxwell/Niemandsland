@@ -15,7 +15,7 @@ Start with the repo entry points: [`../README.md`](../README.md) (project overvi
 | [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) | Honest alpha limitations & caveats |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Systems, scripts, data flow, networking, scaling |
 | [`DEVELOPMENT.md`](DEVELOPMENT.md) | Build, run, test (Godot 4.6 / Flatpak / gdUnit4) |
-| [`../.claude/AAA_CODING_STANDARDS.md`](../.claude/AAA_CODING_STANDARDS.md) | Coding standards |
+| [`CODING_STANDARDS.md`](CODING_STANDARDS.md) | Coding standards |
 
 ## Reference
 

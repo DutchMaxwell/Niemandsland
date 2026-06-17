@@ -23,7 +23,7 @@ What the code actually does today:
 - **Object handling** — click / Alt-click / box select, drag, rotate, copy / paste /
   duplicate, formation arrangement (rows `1`–`9`, arrow `A`) with constant base-edge
   spacing across base sizes.
-- **Dice** — physics dice (D4–D100) via our own MIT dice scripts (`dice_tray.gd` /
+- **Dice** — physics D6 dice via our own MIT dice scripts (`dice_tray.gd` /
   `dice_d6.gd`), rendered in a scaled SubViewport (see [Scaling](#scaling-conventions)).
 - **Measurement** — distance measuring in inches.
 - **Map layout editor** — top-down 3″ grid, terrain pieces (ruins / forest /
@@ -42,8 +42,8 @@ What the code actually does today:
 - **Asset pipeline** — the offline pipeline that generates the 3D miniatures
   (image generation → TRELLIS mesh) lives in a separate private repository; the
   game consumes only its R2-delivered outputs.
-- **Presentation** — Kenney UI themes, lighting presets (`F1`–`F4`), graphics
-  quality presets, SSAO, glow.
+- **Presentation** — a built-in Tactical-HUD UI theme (sleek; cyan/amber), atmosphere
+  presets (Day / Sunset / Night / Overcast / Rain), graphics quality presets, SSAO, glow.
 
 ## Quick start
 
@@ -97,14 +97,14 @@ invocation and the gdUnit4 test runner), see [`docs/DEVELOPMENT.md`](docs/DEVELO
 | Other | |
 |---|---|
 | Roll dice | `Space` |
-| Lighting presets | `F1`–`F4` |
+| Range rings / movement / pin ruler | `G` / `M` / `P` |
 
 ## Project layout
 
 ```
 Niemandsland/
 ├── scenes/            # startup_menu.tscn (main), main.tscn, dialogs
-├── scripts/           # ~48 GDScript files (see docs/ARCHITECTURE.md)
+├── scripts/           # ~100 GDScript files (see docs/ARCHITECTURE.md)
 ├── addons/            # gdUnit4 (tests)
 ├── test/              # gdUnit4 test suites
 ├── assets/            # models, miniatures, terrain, UI
@@ -112,7 +112,7 @@ Niemandsland/
 └── docs/              # architecture, development, design docs
 ```
 
-Autoloads: `ThemeManager`, `GraphicsSettings`, `AudioManager`.
+Autoloads: `ThemeManager`, `GraphicsSettings`, `AudioManager`, `UiFeedback`, `UpdateChecker`.
 
 ## Scaling conventions
 
@@ -149,10 +149,11 @@ from idea to shipped).
 Want to contribute code? See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the dev
 setup, the test workflow and the PR flow. In short: Godot 4.6, branch off `main`,
 conventional commits, gdUnit4 + relay tests green, then open a PR. Coding standards:
-[`.claude/AAA_CODING_STANDARDS.md`](.claude/AAA_CODING_STANDARDS.md).
+[`docs/CODING_STANDARDS.md`](docs/CODING_STANDARDS.md).
 
 ## Credits & license
 
-MIT — see [`LICENSE`](LICENSE). UI themes by [Kenney](https://kenney.nl) (CC0);
-dice are our own MIT implementation. Full third-party attributions in
+MIT — see [`LICENSE`](LICENSE). UI fonts (Inter, Orbitron, Source Code Pro) under SIL OFL
+and [Phosphor](https://phosphoricons.com) icons (MIT); dice are our own MIT implementation.
+Full third-party attributions in
 [`THIRD_PARTY.md`](THIRD_PARTY.md).
