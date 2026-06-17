@@ -111,7 +111,6 @@ const PRESETS = {
 		"ssil": false,  # Disabled - very expensive
 		"ssr": true,
 		"sdfgi": false,  # Disabled - extremely expensive
-		"sdfgi_cascades": 4,
 		"volumetric_fog": false,
 		"fsr_scale": 1.0,
 		"glow": true,
@@ -132,7 +131,6 @@ const PRESETS = {
 		"ssil": true,
 		"ssr": true,
 		"sdfgi": false,  # Disabled by default - too expensive for most setups
-		"sdfgi_cascades": 4,
 		"volumetric_fog": false,
 		"fsr_scale": 1.0,
 		"glow": true,
@@ -356,37 +354,3 @@ func load_settings() -> void:
 	ui_scale = config.get_value("graphics", "ui_scale", 1.0)
 	reduce_motion = config.get_value("graphics", "reduce_motion", false)
 	fullscreen = config.get_value("graphics", "fullscreen", true)
-
-
-## Set resolution
-func set_resolution(width: int, height: int, use_fullscreen: bool = false) -> void:
-	var window = get_window()
-	window.size = Vector2i(width, height)
-
-	if use_fullscreen:
-		window.mode = Window.MODE_FULLSCREEN  # borderless, not EXCLUSIVE (X11/NVIDIA-safe)
-	else:
-		window.mode = Window.MODE_WINDOWED
-
-	# Center window if windowed
-	if not use_fullscreen:
-		var screen_size = DisplayServer.screen_get_size()
-		var window_pos = (screen_size - window.size) / 2
-		window.position = window_pos
-
-
-## Get available resolutions
-func get_available_resolutions() -> Array[Vector2i]:
-	return [
-		Vector2i(1280, 720),
-		Vector2i(1600, 900),
-		Vector2i(1920, 1080),
-		Vector2i(2560, 1440),
-		Vector2i(3840, 2160),
-	]
-
-
-## Toggle VSync
-func set_vsync(mode: int) -> void:
-	# 0 = Disabled, 1 = Enabled, 2 = Adaptive
-	DisplayServer.window_set_vsync_mode(mode)

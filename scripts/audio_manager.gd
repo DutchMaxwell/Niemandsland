@@ -28,7 +28,6 @@ enum SFXType {
 
 # === Signals ===
 
-signal music_changed(track_name: String)
 signal volume_changed(bus_name: String, volume_db: float)
 
 # === Private Variables ===
@@ -41,7 +40,6 @@ var _music_player_b: AudioStreamPlayer
 var _active_music_player: AudioStreamPlayer
 var _crossfade_tween: Tween
 
-var _ambience_player: AudioStreamPlayer
 
 ## SFX resource paths — populated when audio files are added to assets/audio/
 var _sfx_paths: Dictionary = {
@@ -64,7 +62,6 @@ var _sfx_cache: Dictionary = {}
 func _ready() -> void:
 	_setup_sfx_pool()
 	_setup_music_players()
-	_setup_ambience_player()
 	_load_volume_settings()
 
 
@@ -125,7 +122,6 @@ func play_music(stream: AudioStream, fade_duration: float = CROSSFADE_DURATION) 
 		_crossfade_tween.chain().tween_callback(_active_music_player.stop)
 
 	_active_music_player = next_player
-	music_changed.emit(stream.resource_path.get_file())
 
 
 ## Play music from a file path
@@ -150,21 +146,6 @@ func stop_music(fade_duration: float = CROSSFADE_DURATION) -> void:
 	_crossfade_tween.tween_callback(_active_music_player.stop)
 
 
-# === Ambience ===
-
-## Play an ambience loop
-func play_ambience(stream: AudioStream) -> void:
-	if not stream:
-		return
-	_ambience_player.stream = stream
-	_ambience_player.play()
-
-
-## Stop ambience
-func stop_ambience() -> void:
-	_ambience_player.stop()
-
-
 # === Volume Control ===
 
 ## Set volume for a bus by name (in dB)
@@ -184,22 +165,6 @@ func get_bus_volume(bus_name: String) -> float:
 	if bus_idx < 0:
 		return 0.0
 	return AudioServer.get_bus_volume_db(bus_idx)
-
-
-## Set bus mute state
-func set_bus_mute(bus_name: String, muted: bool) -> void:
-	var bus_idx := AudioServer.get_bus_index(bus_name)
-	if bus_idx < 0:
-		return
-	AudioServer.set_bus_mute(bus_idx, muted)
-
-
-## Check if bus is muted
-func is_bus_muted(bus_name: String) -> bool:
-	var bus_idx := AudioServer.get_bus_index(bus_name)
-	if bus_idx < 0:
-		return false
-	return AudioServer.is_bus_mute(bus_idx)
 
 
 # === Private Methods ===
@@ -222,12 +187,6 @@ func _setup_music_players() -> void:
 	add_child(_music_player_b)
 
 	_active_music_player = _music_player_a
-
-
-func _setup_ambience_player() -> void:
-	_ambience_player = AudioStreamPlayer.new()
-	_ambience_player.bus = BUS_AMBIENCE
-	add_child(_ambience_player)
 
 
 func _get_inactive_music_player() -> AudioStreamPlayer:
