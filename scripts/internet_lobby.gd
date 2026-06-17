@@ -61,7 +61,6 @@ func host_internet_game(url: String = "", public: bool = false) -> Error:
 
 	relay_peer = RelayMultiplayerPeer.new()
 	relay_peer.room_created.connect(_on_room_created)
-	relay_peer.relay_disconnected.connect(_on_relay_disconnected)
 	relay_peer.peer_joined.connect(_on_peer_joined)
 	relay_peer.peer_left.connect(_on_peer_left)
 	_connect_recovery_signals()
@@ -87,7 +86,6 @@ func join_internet_game(code: String, url: String = "") -> Error:
 	relay_peer = RelayMultiplayerPeer.new()
 	relay_peer.room_joined.connect(_on_room_joined)
 	relay_peer.room_join_failed.connect(_on_room_join_failed)
-	relay_peer.relay_disconnected.connect(_on_relay_disconnected)
 	relay_peer.peer_joined.connect(_on_peer_joined)
 	relay_peer.peer_left.connect(_on_peer_left)
 	_connect_recovery_signals()
@@ -181,11 +179,6 @@ func _on_room_joined(peer_id: int) -> void:
 func _on_room_join_failed(reason: String) -> void:
 	internet_connection_failed.emit(reason)
 	print("=== JOIN FAILED: %s ===" % reason)
-
-
-func _on_relay_disconnected() -> void:
-	internet_disconnected.emit()
-	print("=== RELAY DISCONNECTED ===")
 
 
 ## Wire the drop-detection / reconnect signals from the peer (host + join flows).
