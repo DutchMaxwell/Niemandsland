@@ -2796,7 +2796,7 @@ func clear_all_objects(broadcast: bool = true) -> void:
 
 ## Resets all units to their import positions and clears all markers/status
 ## Unlike clear_all_objects(), this preserves the models
-func sort_table() -> void:
+func sort_table(broadcast: bool = true) -> void:
 	# Get reference to OPR army manager via Main. Use the absolute path (matches
 	# how this manager resolves its other siblings) instead of a recursive
 	# find_child() string search.
@@ -2841,6 +2841,11 @@ func sort_table() -> void:
 				radial_controller.initialize_caster_marker_for_unit(game_unit)
 
 	print("Sort Table: Reset %d units to import positions" % all_units.size())
+
+	# Mirror the reset to remote peers (skipped when WE are applying a remote sort, to avoid an
+	# echo loop). Each peer re-runs the same reset to its synced import_positions.
+	if broadcast and _network_manager and _network_manager.is_multiplayer_active():
+		_network_manager.broadcast_sort_table()
 
 
 ## Animates every model of a unit from its current spot back to its import
