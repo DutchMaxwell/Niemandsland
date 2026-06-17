@@ -6,7 +6,6 @@ class_name WGSClient
 
 signal game_loaded(game: WGSGame)
 signal import_failed(error: String)
-signal export_ready(data: String)
 
 ## Conversion factor: 1 inch = 0.0254 meters
 const INCH_TO_METER: float = 0.0254
@@ -359,110 +358,6 @@ func _parse_unit_text(unit: WGSUnit) -> void:
 				unit.description = line
 			else:
 				unit.description += "\n" + line
-
-
-## Export game state to WGS text format
-func export_to_text(game: WGSGame) -> String:
-	var lines: Array[String] = []
-
-	# First two lines: table size
-	lines.append(str(int(game.table_width)))
-	lines.append(str(int(game.table_depth)))
-
-	# Unit lines
-	for unit in game.units:
-		lines.append(_format_unit_line(unit))
-
-	var content = "\r\n".join(lines) + "\r\n"
-	export_ready.emit(content)
-	return content
-
-
-## Format a single unit to WGS line format
-func _format_unit_line(unit: WGSUnit) -> String:
-	var size_str: String
-	if unit.is_multibase:
-		size_str = "%sx%sx%sx%sx%s" % [
-			unit.base_width, unit.base_depth,
-			unit.columns, unit.rows, unit.model_count
-		]
-	else:
-		size_str = str(unit.base_size)
-
-	# Encode special characters in text
-	var text = unit.full_text
-	if text.is_empty():
-		text = unit.name
-		if not unit.description.is_empty():
-			text += "NEWLINE" + unit.description.replace("\n\n", "BIGNEWLINE").replace("\n", "NEWLINE")
-	text = text.replace(",", "COMMA")
-
-	return "%s,%s,%s,%s,%s,%s,%s" % [
-		size_str,
-		unit.position_x,
-		unit.position_y,
-		unit.color_name,
-		unit.angle,
-		unit.image_id,
-		text
-	]
-
-
-## Convert a 3D position back to WGS coordinates (inches)
-func position_to_wgs(pos: Vector3) -> Vector2:
-	return Vector2(
-		pos.x / INCH_TO_METER,
-		pos.z / INCH_TO_METER
-	)
-
-
-## Convert rotation to WGS angle
-func rotation_to_wgs_angle(rotation_y: float) -> float:
-	# WGS uses radians, same as Godot
-	return rotation_y
-
-
-## Create a WGS action string for move action
-func create_move_action(game_id: String, moves: Array) -> String:
-	# moves is array of {index, x, y, angle}
-	var parts: Array[String] = [game_id, "3"]  # 3 = move action
-
-	for move in moves:
-		parts.append(str(move.index))
-		parts.append(str(move.x))
-		parts.append(str(move.y))
-		parts.append(str(move.angle))
-
-	return ",".join(parts)
-
-
-## Create a WGS action string for add unit action
-func create_add_action(game_id: String, unit: WGSUnit) -> String:
-	var parts: Array[String] = [
-		game_id,
-		"11",  # 11 = add without image
-		str(unit.base_size),
-		str(unit.position_x),
-		str(unit.position_y),
-		unit.color_name,
-		str(unit.angle),
-		str(unit.image_id),
-		unit.full_text.replace(",", "COMMA").replace("\n", "NEWLINE")
-	]
-	return ",".join(parts)
-
-
-## Create a WGS action string for remove action
-func create_remove_action(game_id: String, unit_indices: Array[int]) -> String:
-	var parts: Array[String] = [game_id, "4"]  # 4 = remove action
-	for idx in unit_indices:
-		parts.append(str(idx))
-	return ",".join(parts)
-
-
-## Create a WGS action string for dice roll
-func create_dice_action(game_id: String, dice_count: int, dice_type: String = "d6") -> String:
-	return "%s,7,%d,%s" % [game_id, dice_count, dice_type]
 
 
 ## Convert WGSGame to OPR-compatible army for spawning
