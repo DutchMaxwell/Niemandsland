@@ -6,7 +6,39 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+> **Road to Alpha (`0.3.6`).** The entries below accumulate toward the first public Alpha; see
+> [`docs/ROAD_TO_ALPHA.md`](docs/ROAD_TO_ALPHA.md). Test builds `0.3.4.1`–`0.3.5.0` were handed to
+> testers; the headline work of that run:
+
+### Fixed
+- **"Report a problem" now captures the actual game.** The engine rotates `niemandsland.log` on
+  every launch, so the report — which only read the current log — missed the session the player was
+  reporting (e.g. after restarting to reach the start-menu button). It now includes the most recent
+  few log files (current + prior sessions, each tailed), chronologically.
+- **Multiplayer sync overhaul** — the reconnect / rate-limit / army-sync cascade, live-validated
+  across two clients. A wall-clock send-rate cap (the old per-frame cap scaled with framerate and
+  tripped the relay's rate limit → `4429` drops on a high-refresh host); `_disconnect_peer`
+  implemented (the host kick was a no-op); the army-receive deserialize yields so a big spawn can't
+  starve the relay heartbeat; a restore-lock + `network_id` idempotency so a host army delivered via
+  **both** the join state-sync **and** the per-army broadcast no longer drops or duplicates models;
+  **Sort Table** now mirrors to the other player; and special-rule **tooltips** sync on a mid-session
+  import. The relay was redeployed with a higher rate limit (300 → 2000) and IP-connection cap (5 → 10).
+- **Model orientation on oval bases** — vehicles align **along** the oval's long axis; **walkers**
+  sit **crosswise** (deterministically — a biped's near-square footprint made the model-AABB long
+  axis unreliable, so it is derived from the base geometry).
+
 ### Added
+- **Auto buff-tokens from special rules.** On army import the special rules are scanned and the
+  matching buff tokens are auto-created (a curated map plus an aura / buff / `+1`-`-1` / re-roll
+  heuristic; passive rules skipped), synced so **both** players get them — no more creating them by
+  hand each game.
+- **Per-model base size from upgrades.** A weapon-team / Tough-raising upgrade puts that one model on
+  a **bigger base** than its squadmates (derived from the per-model Tough; plain models unchanged).
+- **Boot build identifier + send-rate diagnostics.** Every build's first log line is
+  `[Boot] Niemandsland <version> build <git-short>`, and the relay peer logs its real outgoing
+  msg/s — so a bug report pins exactly which binary ran and how fast it was sending.
+
+### Added (earlier this cycle)
 - **Battlefield stains on removal (issue #60).** Removing a model now leaves a persistent
   flat decal sized to its base: a **blood splatter** for infantry, and for **vehicles**
   (Tough 6+) an **oil slick with 1-3 small fires**. Generated splatter textures (R2,
