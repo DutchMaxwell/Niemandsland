@@ -77,6 +77,9 @@ var _is_reconnecting: bool = false
 var _reconnect_start_ms: int = 0
 ## Guest side: set when the relay reports the host paused, cleared when peer 1 returns.
 var _host_paused_seen: bool = false
+## Transport ids SceneMultiplayer currently believes are connected (so we can detect a
+## reconnect that REUSES an id and flush the stale RPC path-cache — see _emit_peer_connected).
+var _known_peers: Dictionary = {}  # Dictionary[int, bool]
 
 
 ## Stores an incoming packet with its source peer ID.
@@ -318,6 +321,7 @@ func _close() -> void:
 	_connection_status = MultiplayerPeer.CONNECTION_DISCONNECTED
 	_incoming_packets.clear()
 	_outgoing_queue.clear()
+	_known_peers.clear()
 	_room_code = ""
 	_ws_connected = false
 	_pending_action = ""
@@ -400,9 +404,9 @@ func _process_control_message(raw: String) -> void:
 			var peer_id = int(parsed.get("peer_id", 0))
 			print("[Relay] Peer %d connected — emitting peer_connected signal" % peer_id)
 			peer_joined.emit(peer_id)
-			# Notify SceneMultiplayer so it adds the peer to connected_peers.
-			# Without this, all RPCs silently fail (both send and receive).
-			emit_signal("peer_connected", peer_id)
+			# Notify SceneMultiplayer so it adds the peer (flushing a stale cache on a reused-id
+			# reconnect). Without this, all RPCs silently fail (both send and receive).
+			_emit_peer_connected(peer_id)
 			# Guest side: our paused host has returned (reclaimed peer id 1).
 			if peer_id == 1 and _host_paused_seen:
 				_host_paused_seen = false
@@ -416,6 +420,7 @@ func _process_control_message(raw: String) -> void:
 		"peer_disconnected":
 			var peer_id = int(parsed.get("peer_id", 0))
 			print("[Relay] Peer %d disconnected — emitting peer_disconnected signal" % peer_id)
+			_known_peers.erase(peer_id)
 			peer_left.emit(peer_id)
 			emit_signal("peer_disconnected", peer_id)
 
@@ -465,6 +470,20 @@ func _handle_room_rejoined_host(peer_id: int) -> void:
 	_connection_status = MultiplayerPeer.CONNECTION_CONNECTED
 	_is_reconnecting = false
 	host_rejoined.emit()
+
+
+## (Re)register a transport peer with SceneMultiplayer. If the id is ALREADY known, this is a
+## reconnect that REUSED the id, and SceneMultiplayer's RPC path-cache for it is STALE — emit
+## peer_disconnected first to purge it, then peer_connected to re-add, so RPCs route again
+## instead of failing with "ID X not found in cache of peer Y" (= nothing syncs after a
+## reconnect). NEVER flush peer 1: emitting peer_disconnected(1) on a CLIENT triggers
+## server_disconnected and tears the session down (and on the host, id 1 is us and never arrives).
+func _emit_peer_connected(peer_id: int) -> void:
+	if _known_peers.has(peer_id) and peer_id != 1:
+		print("[Relay] Peer %d reconnected (reused id) — flushing stale RPC cache" % peer_id)
+		emit_signal("peer_disconnected", peer_id)
+	_known_peers[peer_id] = true
+	emit_signal("peer_connected", peer_id)
 
 
 ## Process an incoming binary game data frame from the relay.
