@@ -111,3 +111,12 @@ assets/terrain/props/containers/
 assets/terrain/props/hazards/
 # CC0 ambience recordings are R2-delivered (terrain-source/ambience/), not bundled.
 assets/audio/ambience/*.ogg
+
+# --- Pre-public hygiene (0.3.6) ---
+# Private model-forge pipeline lives in a separate repo; never publish it here.
+tools/model_forge/
+.codegen.md
+test/model_instance_test.gd
+# Dev-only style/source reference art (consumed by the private model-forge, not the game).
+assets/miniatures/**/_reference*
+assets/miniatures/**/*_preprocessed*
