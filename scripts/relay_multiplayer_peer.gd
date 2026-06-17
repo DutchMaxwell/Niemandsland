@@ -45,9 +45,15 @@ const HEARTBEAT_TIMEOUT: float = 35.0
 ## room, needlessly ending the session (RC5).
 const RECONNECT_TIMEOUT: float = 25.0
 
-## Max WebSocket frames sent per _poll() cycle.
-## At ~60fps this caps at ~240 msg/s, staying under the relay server limit (300).
-const MAX_SENDS_PER_POLL: int = 4
+## Outgoing send rate cap — WALL-CLOCK, not per-frame. A per-_poll() cap is framerate-
+## dependent (4 sends x 165 fps on a high-refresh display = 660 msg/s), which blew past the
+## relay's 300 msg/s rolling-1s limit and tripped a 4429 "Rate limit exceeded" drop the moment
+## a burst (e.g. two joining peers each triggering a full state sync) filled the queue. A token
+## bucket refilled by real elapsed time keeps the rate constant regardless of fps.
+const MAX_SENDS_PER_SECOND: float = 200.0
+## Cap on accumulated tokens so a catch-up frame after a main-loop stall can't dump a huge burst
+## (keeps any rolling 1s window = steady 200 + burst well under the relay's 300).
+const SEND_BURST_MAX: float = 20.0
 
 var _ws: WebSocketPeer = null
 var _relay_url: String = ""
@@ -58,6 +64,8 @@ var _transfer_channel: int = 0
 var _connection_status: int = MultiplayerPeer.CONNECTION_DISCONNECTED
 var _incoming_packets: Array[IncomingPacket] = []
 var _outgoing_queue: Array[PackedByteArray] = []
+var _send_tokens: float = SEND_BURST_MAX  # wall-clock send budget (see MAX_SENDS_PER_SECOND)
+var _send_refill_ms: int = 0              # last token refill timestamp (0 = uninitialised)
 # Heartbeat / drop detection use the WALL CLOCK (Time.get_ticks_msec), NOT a per-frame
 # counter. A frame-based timer runs slow whenever the framerate drops or the main thread
 # stalls (loading GLBs, R2 downloads, scene changes), so heartbeats went out too slowly
@@ -210,6 +218,8 @@ func _poll() -> void:
 			_connection_status = MultiplayerPeer.CONNECTION_CONNECTING
 			_last_ack_ms = now_ms       # fresh socket: reset the drop-detection clock
 			_last_heartbeat_ms = now_ms
+			_send_tokens = SEND_BURST_MAX  # fresh socket: reset the send budget too
+			_send_refill_ms = now_ms
 			relay_connected.emit()
 
 			# Execute pending action
@@ -272,6 +282,19 @@ func _get_available_packet_count() -> int:
 	return _incoming_packets.size()
 
 
+## Host-initiated kick (e.g. a peer that joined but never passed the version handshake).
+## The relay protocol has NO host kick message, so we drop the peer LOCALLY: forget it and
+## surface peer_disconnected so SceneMultiplayer stops routing to it and our bookkeeping clears.
+## MUST be overridden — without it the engine errors ("_disconnect_peer must be overridden")
+## and NetworkManager's handshake-timeout kick never completes, leaving a phantom peer that
+## keeps the session in a degraded state. Never act on ourselves.
+func _disconnect_peer(p_peer: int, _p_force: bool) -> void:
+	if p_peer == _my_peer_id or p_peer <= 0:
+		return
+	_known_peers.erase(p_peer)
+	emit_signal("peer_disconnected", p_peer)
+
+
 func _get_packet_peer() -> int:
 	if _incoming_packets.is_empty():
 		return 0
@@ -321,6 +344,8 @@ func _close() -> void:
 	_connection_status = MultiplayerPeer.CONNECTION_DISCONNECTED
 	_incoming_packets.clear()
 	_outgoing_queue.clear()
+	_send_tokens = SEND_BURST_MAX
+	_send_refill_ms = 0
 	_known_peers.clear()
 	_room_code = ""
 	_ws_connected = false
@@ -502,18 +527,24 @@ func _process_incoming_binary(frame: PackedByteArray) -> void:
 	_incoming_packets.append(pkt)
 
 
-## Send queued outgoing frames, limited to MAX_SENDS_PER_POLL per cycle.
-## At ~60fps with MAX_SENDS_PER_POLL=2 this caps at ~120 msg/s,
-## matching the relay server's RATE_LIMIT_MESSAGES_PER_SECOND.
+## Send queued outgoing frames, rate-limited by a WALL-CLOCK token bucket so the effective
+## msg/s stays constant regardless of framerate (a per-frame cap scaled with fps and tripped
+## the relay's 300/s limit on high-refresh displays — see MAX_SENDS_PER_SECOND).
 func _flush_outgoing_queue() -> void:
 	if _ws == null or _ws.get_ready_state() != WebSocketPeer.STATE_OPEN:
 		return
 
-	var sent := 0
-	while not _outgoing_queue.is_empty() and sent < MAX_SENDS_PER_POLL:
+	var now_ms := Time.get_ticks_msec()
+	if _send_refill_ms == 0:
+		_send_refill_ms = now_ms
+	var elapsed_s := float(now_ms - _send_refill_ms) / 1000.0
+	_send_refill_ms = now_ms
+	_send_tokens = minf(SEND_BURST_MAX, _send_tokens + elapsed_s * MAX_SENDS_PER_SECOND)
+
+	while not _outgoing_queue.is_empty() and _send_tokens >= 1.0:
 		var frame: PackedByteArray = _outgoing_queue.pop_front()
 		var err := _ws.send(frame)
 		if err != OK:
 			push_warning("[Relay] Send failed: error=%d frame_size=%d bytes" % [err, frame.size()])
 			break
-		sent += 1
+		_send_tokens -= 1.0
