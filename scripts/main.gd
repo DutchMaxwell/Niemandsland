@@ -11,6 +11,7 @@ extends Node3D
 # ==============================================================================
 const UnitBoundaryVisualizerScript = preload("res://scripts/unit_boundary_visualizer.gd")
 const RangeRingControllerScript = preload("res://scripts/range_ring_controller.gd")
+const MovementRangeControllerScript = preload("res://scripts/movement_range_controller.gd")
 const PinnedRulersScript = preload("res://scripts/pinned_rulers.gd")
 
 # ==============================================================================
@@ -238,6 +239,7 @@ var radial_menu_controller: RadialMenuController = null
 var coherency_visualizer: CoherencyVisualizer = null
 var unit_boundary_visualizer: Node3D = null  # UnitBoundaryVisualizer
 var range_ring_controller: Node = null  # RangeRingController (base-anchored range auras)
+var movement_range_controller: Node = null  # MovementRangeController (Advance/Rush reach)
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
@@ -3679,6 +3681,13 @@ func _init_radial_menu() -> void:
 	range_ring_controller.name = "RangeRingController"
 	add_child(range_ring_controller)
 	object_manager.range_ring_controller = range_ring_controller
+
+	# Movement reach indicator: Advance + Rush/Charge bands toggled with M on the selection
+	# (local-only display aid, OPR Fast/Slow aware). Owns the rings under /root/Main.
+	movement_range_controller = MovementRangeControllerScript.new()
+	movement_range_controller.name = "MovementRangeController"
+	add_child(movement_range_controller)
+	object_manager.movement_range_controller = movement_range_controller
 
 	# Persistent shared rulers: pinned measurements that stay on the table and replicate
 	# to every player in the owner's colour (session-only, like remote cursors).
