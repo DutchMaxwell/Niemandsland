@@ -22,22 +22,20 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **Multiplayer reconnect — stable player identity (0.3.4)** — an auto-reconnect must
-  restore a player to the EXACT slot/identity they had (no phantom 3rd player, no lost
-  colour/ownership) and never abort the session on a transient drop. An 8-root-cause audit
-  is done; the safe half shipped (own-only mini movement, import-slot default, phantom +
-  abort hardening — RC2/4/5/6/7). **Remaining:** a stable per-client identity token + host-side
-  slot remap (RC1/3/8), and `network_id` namespacing by owner so two armies never collide
-  (the wire-level cause of "I move my mini and the opponent's moves too"). _L_
+- **Multiplayer — two-client live test (reconnect gauntlet)** — validate the now-shipped
+  reconnect-identity + sync fixes across two real clients: a guest Wi-Fi blip returns to the
+  SAME slot/colour/army with no phantom; host rehost keeps everyone's slot; no abort on a
+  transient drop; own-only movement; army/biome/paste/delete/arrange sync. Only a real
+  2-client run can cover the RPC round-trip. _M_
+- **MP reconnect — 3+ player hardening (follow-ups)** — review-surfaced items not needed for
+  the 2-player case: mirror the host's peer→slot table to guests (3+-player avatar/cursor
+  colour agreement after a reconnect), a shared `slot→palette` helper so army bases match
+  presence colour at slot ≥ 5, an import-await timeout, and restoring a regiment tray's
+  serialized `network_id` instead of re-allocating. _S_
 - **AoF: Regiments — verify import vs a real list** — manually confirm base sizes / frontage
   from Army Forge against an actual `aofr` army (manual QA; no automated checker planned). _S_
 
 ## 📋 Next (accepted, queued)
-- **Multiplayer — two-client live test** — confirm lobby/chat/names + the relay
-  (room browser, host reconnect) across two real clients. Live testing is underway and has
-  driven a wave of shipped fixes (army + biome sync, paste/delete/arrange replication,
-  own-only movement, import-slot default, reconnect/abort hardening). Remaining: a clean
-  end-to-end two-client game once the reconnect identity remap (see Now) lands. _S_
 - **Regiments — handling polish** — move a unit as one block, axis-locked drag (straight),
   frontage cycle (5-wide ↔ other), and wheel/pivot about the front corner. Community-validated
   (bulk-move + wheeling is a top TTS friction). `regiment_tray.gd` has `frontage`/`reform`,
@@ -89,9 +87,12 @@ planned and where ideas go. For what already works see
 See [`CHANGELOG.md`](../CHANGELOG.md). Highlights (0.3.4 round-up): **casual sandbox
 terrain** (grid-free free-placed multi-storey ruins + oval tree-group forests + anti-tiling
 floor shader), **3 new factions** (blood / custodian / wolf_brothers — manifest now 527
-models, live on R2), and the **multiplayer sync + reconnect-hardening pass** (imported-army
+models, live on R2), the **multiplayer sync + reconnect-hardening pass** (imported-army
 models + biome sync to peers and late-joiners, paste/delete/arrange replication, own-only
-mini movement, import-slot default, phantom-player + abort hardening). Earlier: **Age of
+mini movement, import-slot default, phantom-player + abort hardening), and **stable player
+identity across reconnect** (PR #66 — a per-install token → canonical slot remap so a
+reconnecting player returns to their exact slot/colour/army with no phantom; `network_id`
+namespaced by owner so two armies never collide; adversarially reviewed). Earlier: **Age of
 Fantasy: Regiments**
 (movement-tray blocks, square bases, casualty re-rank, save/load, **facing &
 front-arc display**), **units as line-of-sight blockers** (`LosRules.units_block_line`,
