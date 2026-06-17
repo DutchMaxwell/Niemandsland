@@ -3,8 +3,6 @@ extends Node3D
 ## Manages all game objects: miniatures, dice, terrain
 ## Handles spawning, selection, dragging, and rotation
 
-signal object_selected(obj: Node3D)
-signal object_deselected()
 signal selection_changed(selected_objects: Array[Node3D])
 signal distance_changed(distance_inches: float, from_pos: Vector3, to_pos: Vector3)
 signal measurement_finished(distance_inches: float)
@@ -429,7 +427,6 @@ func _add_to_selection(obj: Node3D) -> void:
 	_hover_glow.set_target(null)
 	_highlight_object(obj)
 	AudioManager.play_sfx(AudioManager.SFXType.MODEL_SELECT)
-	object_selected.emit(obj)
 	selection_changed.emit(_selected_objects)
 
 
@@ -441,8 +438,6 @@ func _remove_from_selection(obj: Node3D) -> void:
 	_selected_objects.erase(obj)
 	_unhighlight_object(obj)
 
-	if _selected_objects.is_empty():
-		object_deselected.emit()
 	selection_changed.emit(_selected_objects)
 
 
@@ -460,7 +455,6 @@ func _deselect_all() -> void:
 		if is_instance_valid(obj):
 			_unhighlight_object(obj)
 	_selected_objects.clear()
-	object_deselected.emit()
 	selection_changed.emit(_selected_objects)
 
 
