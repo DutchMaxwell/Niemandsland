@@ -98,10 +98,13 @@ func _process(delta: float) -> void:
 
 # ===== Public API =====
 
-## Initialize the avatar for a specific peer
-func setup(p_peer_id: int, _table_size_feet: Vector2) -> void:
+## Initialize the avatar for a specific peer. Colour keys off the durable SLOT (not the
+## transport peer_id, which the relay re-issues on a guest rejoin), with a modulo wrap so
+## a high monotonic slot / pending slot 0 never falls to WHITE. peer_id is kept for the label.
+func setup(p_peer_id: int, p_slot: int, _table_size_feet: Vector2) -> void:
 	peer_id = p_peer_id
-	player_color = PLAYER_COLORS.get(peer_id, Color.WHITE)
+	var idx := (((p_slot - 1) % PLAYER_COLORS.size()) + 1) if p_slot > 0 else 1
+	player_color = PLAYER_COLORS.get(idx, Color.WHITE)
 	_build_avatar()
 
 

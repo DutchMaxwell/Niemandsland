@@ -44,6 +44,14 @@ const TRAY_DROP_DURATION: float = 1.5  # Animation duration in seconds
 const GROUND_COLLISION_LAYER: int = 1
 const MINIATURE_COLLISION_LAYER: int = 2
 
+## OPR-owned objects (army models + regiment trays) namespace their network_id by owner
+## SLOT (player_id) so two players' armies never share the 1..N range and a move/delete by
+## id can't hit the wrong army — regardless of import order. _object_counter stays a PURE
+## low monotonic counter (the slot prefix is applied only at stamp time), so the
+## +10000..+50000 non-OPR id offset bands and the receiver's bare-counter reconciliation
+## stay collision-free. STRIDE caps the per-slot counter at <1e6 objects/slot (ample).
+const OPR_NET_ID_SLOT_STRIDE: int = 1_000_000
+
 ## Reference to the object manager for spawning
 var object_manager: Node3D
 
@@ -230,6 +238,13 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	return all_models
 
 
+## Allocate a globally-unique, slot-namespaced network_id for an OPR-owned object.
+## Advances the shared low counter (kept pure) and applies slot*STRIDE only here.
+func _next_owned_net_id(slot: int) -> int:
+	object_manager._object_counter += 1
+	return maxi(slot, 1) * OPR_NET_ID_SLOT_STRIDE + object_manager._object_counter
+
+
 ## Form a single Age of Fantasy: Regiments unit into a movement-tray block. Collects
 ## the unit's live model nodes, creates a RegimentTray under ObjectManager and ranks
 ## them. Returns the Regiment, or null if the unit is not a regiment / has no models.
@@ -248,8 +263,7 @@ func form_regiment(game_unit) -> Regiment:
 
 	var tray := RegimentTray.new()
 	tray.name = "Regiment_%s" % game_unit.unit_id
-	object_manager._object_counter += 1
-	tray.set_meta("network_id", object_manager._object_counter)
+	tray.set_meta("network_id", _next_owned_net_id(int(game_unit.unit_properties.get("player_id", 1))))
 	object_manager.add_child(tray)
 
 	var frontage: int = RegimentFormation.default_frontage(nodes.size())
@@ -270,8 +284,7 @@ func restore_regiment(game_unit, frontage: int, pos: Vector3, rot_y: float) -> R
 		return null
 	var tray := RegimentTray.new()
 	tray.name = "Regiment_%s" % game_unit.unit_id
-	object_manager._object_counter += 1
-	tray.set_meta("network_id", object_manager._object_counter)
+	tray.set_meta("network_id", _next_owned_net_id(int(game_unit.unit_properties.get("player_id", 1))))
 	object_manager.add_child(tray)
 	tray.frontage = maxi(frontage, 1)
 	tray.global_position = pos
@@ -486,9 +499,9 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 
 		var model = _create_unit_model(unit, player_color, name_suffix, faction_folder)
 		if model:
-			# Assign network_id for multiplayer position sync
-			object_manager._object_counter += 1
-			model.set_meta("network_id", object_manager._object_counter)
+			# Assign a slot-namespaced network_id for multiplayer position sync (no
+			# cross-army collision regardless of import order).
+			model.set_meta("network_id", _next_owned_net_id(player_id))
 
 			object_manager.add_child(model)
 			model.global_position = model_pos
@@ -817,6 +830,14 @@ func create_model_from_properties(props: Dictionary) -> StaticBody3D:
 	wrapper.add_to_group("miniature")
 	wrapper.add_to_group("opr_unit")
 	wrapper.add_to_group("unit")
+
+	# Stamp the owner slot so the movement gate's fast key (opr_player_id meta) and slow
+	# key (game_unit.player_id) agree for restored/remote-synced models too. ONLY when the
+	# source actually specifies player_id: defaulting a missing key to the host (1) would
+	# fail CLOSED — silently making a synced model host-owned and unselectable for its real
+	# owner. Absent -> leave unstamped (gate falls back to the slow key / fails open).
+	if props.has("player_id"):
+		wrapper.set_meta("opr_player_id", player_id)
 
 	return wrapper
 
