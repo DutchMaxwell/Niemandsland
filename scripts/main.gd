@@ -387,6 +387,7 @@ func _ready() -> void:
 	network_manager.remote_army_header_received.connect(_on_remote_army_header)
 	network_manager.remote_army_unit_received.connect(_on_remote_army_unit)
 	network_manager.remote_army_complete_received.connect(_on_remote_army_complete)
+	network_manager.remote_sort_table_received.connect(_on_remote_sort_table)
 	network_manager.remote_tts_terrain_spawned.connect(_on_remote_tts_terrain_spawned)
 	network_manager.remote_camera_position_updated.connect(_on_remote_camera_position_updated)
 
@@ -987,6 +988,11 @@ func _on_sort_table() -> void:
 
 func _do_sort_table() -> void:
 	object_manager.sort_table()
+
+
+## A remote peer ran Sort Table — re-run the reset locally WITHOUT re-broadcasting (no echo loop).
+func _on_remote_sort_table() -> void:
+	object_manager.sort_table(false)
 
 
 ## Advances the game round after confirmation.
