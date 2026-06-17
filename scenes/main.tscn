@@ -163,7 +163,7 @@ anchor_right = 1.0
 offset_left = -300.0
 offset_bottom = 100.0
 grow_horizontal = 0
-text = "Niemandsland v0.3.4.6-alpha
+text = "Niemandsland v0.3.4.7-alpha
 Controls:
 - WASD: Move Camera
 - Q/E: Rotate Camera
