@@ -43,8 +43,6 @@ planned and where ideas go. For what already works see
 - **Measure-on-pickup → snap-back** — grabbing a model starts a live measurement with a ghost
   preview; release to commit, ESC to return to the pickup point. TTS later shipped exactly this.
   Extends `object_manager` drag + the height-aware LoS measuring. _M_
-- **Movement reachable-area indicator** — show how far a model can move, with Advance vs
-  Rush/Charge bands (Rush = Charge range). Display only — never moves the model. _M_
 - **Coherency visualizer (sharpen)** — highlight models outside X″ of their nearest neighbour
   (TTS doesn't solve this; guides say "ignore coherency"). Builds on `coherency_checker.gd` /
   `coherency_visualizer.gd`. Show, never correct. _S_
@@ -89,7 +87,9 @@ namespaced by owner so two armies never collide; adversarially reviewed), **pers
 shared rulers** (PR #64 — pin a measurement with P; it stays on the table in the owner's
 colour and replicates to everyone, including late-joiners; K clears yours, Shift+K all), and
 **base-anchored range rings / auras** (PR #65 — G cycles a per-model radius 3″/6″/…/24″ from
-the base edge, Shift+G clears; local display aid). Earlier: **Age of
+the base edge, Shift+G clears; local display aid), and the **movement reach indicator** (PR #67
+— M toggles per-model Advance + Rush/Charge bands in the player's colour, OPR Fast/Slow aware;
+display-only, local). Earlier: **Age of
 Fantasy: Regiments**
 (movement-tray blocks, square bases, casualty re-rank, save/load, **facing &
 front-arc display**), **units as line-of-sight blockers** (`LosRules.units_block_line`,
