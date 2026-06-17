@@ -36,9 +36,8 @@ What the code actually does today:
 - **Multiplayer** — ENet over LAN, or over the internet via a WebSocket relay
   (see [`relay/`](relay/README.md)); full state sync (models, terrain, table size),
   shared dice log, player avatars/cursors, save/load.
-- **Import / export** — Tabletop Simulator import (Steam CDN + local cache),
-  custom models (glTF / STL / OBJ), `.nml` save format with OS file association,
-  Wargaming Simulator (WGS) import/export.
+- **Import / export** — Army Forge (OPR) and Wargaming Simulator (WGS) list import;
+  `.nml` save format with OS file association.
 - **Asset pipeline** — the offline pipeline that generates the 3D miniatures
   (image generation → TRELLIS mesh) lives in a separate private repository; the
   game consumes only its R2-delivered outputs.
