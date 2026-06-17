@@ -991,41 +991,6 @@ func _create_vertex_marker(pos: Vector3, number: int, color: Color = Color(0.2, 
 	return mesh_instance
 
 
-## Helper function to create circular deployment zones
-func _create_circular_deployment_zone(center: Vector3, radius: float, color: Color) -> MeshInstance3D:
-	var mesh_instance = MeshInstance3D.new()
-
-	# Create a cylinder mesh for circular zone (very flat)
-	var cylinder_mesh = CylinderMesh.new()
-	cylinder_mesh.top_radius = radius
-	cylinder_mesh.bottom_radius = radius
-	cylinder_mesh.height = 0.001  # Very thin
-	cylinder_mesh.radial_segments = 32  # Smooth circle
-
-	mesh_instance.mesh = cylinder_mesh
-	# Disc bottom rests on the deployment layer (cylinder is centre-anchored).
-	mesh_instance.position = Vector3(center.x,
-			DEPLOYMENT_ZONE_WORLD_Y - Z_FIGHT_OFFSET + cylinder_mesh.height / 2.0, center.z)
-	mesh_instance.rotation.x = 0  # Flat on table
-
-	# Create semi-transparent material
-	var material = StandardMaterial3D.new()
-	material.albedo_color = color
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-
-	mesh_instance.material_override = material
-
-	return mesh_instance
-
-
-## Create a mesh for a deployment zone
-##
-## @param pos: Center position of the deployment zone
-## @param size: Size of the deployment zone (width, depth)
-## @param color: Color of the deployment zone
-## @return: Configured MeshInstance3D
 func _create_deployment_zone_mesh(pos: Vector3, size: Vector2, color: Color) -> MeshInstance3D:
 	var mesh_instance = MeshInstance3D.new()
 
@@ -1490,34 +1455,6 @@ func _create_objective_token(pos: Vector3, number: int, fill_color: Color, borde
 	return container
 
 
-## Legacy function - kept for compatibility
-func _create_objective_pillar(pos: Vector3, color: Color) -> MeshInstance3D:
-	var mesh_instance = MeshInstance3D.new()
-
-	# Create a small cylinder as marker
-	var cylinder = CylinderMesh.new()
-	cylinder.top_radius = 0.02  # 2cm top
-	cylinder.bottom_radius = 0.03  # 3cm bottom
-	cylinder.height = 0.08  # 8cm tall
-	cylinder.radial_segments = 16
-
-	mesh_instance.mesh = cylinder
-	# Position at half height so bottom touches ground
-	mesh_instance.position = Vector3(pos.x, 0.04 + Z_FIGHT_OFFSET, pos.z)
-
-	# Create material
-	var material = StandardMaterial3D.new()
-	material.albedo_color = color
-	material.emission_enabled = true
-	material.emission = color
-	material.emission_energy_multiplier = 0.5
-
-	mesh_instance.material_override = material
-
-	return mesh_instance
-
-
-## Get objectives for AI/gameplay use
 func get_objectives() -> Array[Vector3]:
 	return mission_objectives.duplicate()
 
