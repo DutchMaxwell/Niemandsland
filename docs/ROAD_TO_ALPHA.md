@@ -53,8 +53,8 @@ Legend: ✅ done · 🔧 in `0.3.5.x` · ⬜ to do · ❓ decision needed
   builds shipped via <storage>; boot build-hash on every build.
 - ✅ Anonymous **diagnostics export** ("Report a problem") for player bug reports.
 - ✅ `UpdateChecker` autoload checks **GitHub Releases** at startup.
-- ❓ **Release channel** — GitHub Releases (desktop downloads) and/or the current direct
-  <storage> hand-off (decision 1). **itch.io / web publishing is dropped — not pursued for now.**
+- ✅ **Release channel: GitHub Releases** (desktop downloads), plus the direct <storage> hand-off
+  for `0.3.5.x` testers (decision 1). **itch.io / web publishing is dropped — not pursued for now.**
 - ⏭ **macOS** — **post-Alpha** (decision 4: Windows + Linux only). Preset exists but is
   untested/unsigned (Gatekeeper/notarisation work).
 
@@ -76,11 +76,11 @@ Legend: ✅ done · 🔧 in `0.3.5.x` · ⬜ to do · ❓ decision needed
 - ⬜ Verify the **CC-BY-SA attribution** for the models is surfaced where players can see it
   (in-app credits / about screen), not only in repo docs.
 
-### F. Go-public (only if the Alpha is a PUBLIC release — decision 2)
+### F. Go-public (decision 2 locked: this is a public release)
 - ⬜ **PR #51**: drop `tools/model_forge/` from the public repo (the pipeline now lives in the
   private `model-forge` repo). Rebase onto current `main` and merge.
-- ⬜ Verify the **git-history scrub** is complete and the **CDN domain** (`<legacy-cdn-host>`)
-  is stable for on-demand model delivery.
+- ⬜ Verify the **git-history scrub** is complete and the **asset-CDN host** (the `HOST` constant
+  in `scripts/asset_cdn.gd`) is finalised for on-demand model delivery.
 - ⬜ GitHub **issue templates** (Bug / Feedback) + `CONTRIBUTING.md` confirmed as the intake.
 - ⬜ Repo visibility flip + a published release tag.
 

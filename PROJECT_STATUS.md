@@ -66,8 +66,8 @@ rate-limit / army-sync cascade was live-validated across two real clients.
 save format with OS file association, WGS import/export
 ([`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md)).
 
-**Presentation** — 9 Kenney UI themes (persisted), lighting presets (F1–F5),
-graphics quality presets, SSAO + glow, cinematic intro. **Battlefield atmosphere**
+**Presentation** — a built-in Tactical-HUD UI theme (sleek; cyan/amber), atmosphere
+presets (Day/Sunset/Night/Overcast/Rain), graphics quality presets, SSAO + glow, cinematic intro. **Battlefield atmosphere**
 ([`docs/ATMOSPHERE.md`](docs/ATMOSPHERE.md)): one-click Day/Sunset/Night/Overcast/Rain
 presets (2 s blends, rain particles, lightning + delayed thunder), a "war-torn" toggle
 (deterministic fires at ruin walls with smoke + flicker light) and "distant war sounds"
@@ -90,7 +90,7 @@ its R2-delivered outputs, mapped by [`assets/model_manifest.json`](assets/model_
 on demand from Cloudflare R2 (content-addressed `sha256.glb`, served from the asset CDN),
 mapped by [`assets/model_manifest.json`](assets/model_manifest.json). Builds stay slim
 (GLBs are gitignored + excluded from every export preset); the editor/game fetches
-models at runtime. Re-publish via `publish_manifest.py --upload-r2`. See
+models at runtime. The publish tooling lives in the private pipeline repository. See
 [`docs/ASSET_DELIVERY.md`](docs/ASSET_DELIVERY.md). **Live today: 417 models across
 19 factions** (verified retrievable on R2) — from Alien Hives (41) and Robot Legions /
 Orc Marauders (29 each) down to Elven Jesters (8) and a Dark Brothers hero (1).
@@ -124,7 +124,7 @@ and `hero_attachment_dialog.gd` never existed as separate files — that logic l
 ## Known issues
 
 - Dice can occasionally jitter at miniature scale (mitigated by the scaled-SubViewport
-  dice approach; see [`CLAUDE.md`](CLAUDE.md)).
+  dice approach; see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#scaling)).
 - Some TTS texture-loading errors (non-fatal).
 - OPR rule descriptions resolve for freshly imported armies; loaded saves /
   remote-only armies show rule names without descriptions (persist/sync is a

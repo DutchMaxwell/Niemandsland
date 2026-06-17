@@ -7,7 +7,7 @@ Forward+ renderer. Entry scene: `scenes/startup_menu.tscn`.
 
 | Autoload | Script | Responsibility |
 |---|---|---|
-| `ThemeManager` | `theme_manager.gd` | Active Kenney UI theme, persisted |
+| `ThemeManager` | `theme_manager.gd` | Provides the built-in Tactical-HUD UI theme |
 | `GraphicsSettings` | `graphics_settings.gd` | Quality presets (shadows, SSAO, glow) |
 | `AudioManager` | `audio_manager.gd` | Audio buses / playback |
 | `UiFeedback` | `ui_feedback.gd` | Global hover/press motion + UI sound for every button |
@@ -38,6 +38,14 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
 - `table.gd` — table dimensions and collision.
 - `selectable_object.gd` — per-object selection behaviour.
 
+**Measurement & display aids** (local, display-only)
+- `los_rules.gd` — Asgard-standard line-of-sight height helpers (H1–H6); pure/static; powers
+  the units-as-LoS-blockers option.
+- `pinned_ruler.gd` / `pinned_rulers.gd` — persistent shared rulers (pin with P; replicated to
+  all clients, including late-joiners).
+- `range_ring_controller.gd` — per-model base-edge range rings (G cycles 3″–24″).
+- `movement_range_controller.gd` — per-model Advance + Rush/Charge reach bands (M; OPR Fast/Slow aware).
+
 **Unit model** (system-agnostic, OPR-aware)
 - `model_instance.gd` — one physical miniature; generic properties dictionary
   (wounds, caster, etc.).
@@ -53,6 +61,9 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
 - `unit_marker.gd` / `unit_card.gd` — status tokens (F/S/A, wounds, caster) and the
   docked info card.
 - `radial_menu.gd` / `radial_menu_controller.gd` — context pie-menu.
+- `regiment.gd` / `regiment_tray.gd` / `regiment_formation.gd` / `regiment_facing_visualizer.gd` —
+  Age of Fantasy: Regiments — movement-tray blocks, square bases, casualty re-rank,
+  frontage/reform, and the facing / front-arc display.
 
 **OPR & import**
 - `opr_api_client.gd` — Army Forge API client + unit data classes (incl. base sizes).
@@ -63,10 +74,10 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
 - `tts_importer.gd` / `tts_download_manager.gd` — Tabletop Simulator import (Steam
   CDN + local cache; glTF/STL/OBJ).
 
-> **On-demand delivery (live):** miniature GLBs are downloaded + cached (TTS-style)
-> from Cloudflare R2 so the repo/build stay lean and only an army's needed models are
-> fetched — see [`ASSET_DELIVERY.md`](ASSET_DELIVERY.md). OPR stats/data load only via
-> the Army Forge API (never bundled).
+> **On-demand delivery (live):** miniature GLBs are downloaded + cached via `asset_cdn.gd` /
+> `asset_download_manager.gd` from Cloudflare R2 so the repo/build stay lean and only an army's
+> needed models are fetched — see [`ASSET_DELIVERY.md`](ASSET_DELIVERY.md). OPR stats/data load
+> only via the Army Forge API (never bundled).
 - `wgs_client.gd` / `wgs_game_manager.gd` / `wgs_import_dialog.gd` — Wargaming
   Simulator format ([`WGS_INTEGRATION.md`](WGS_INTEGRATION.md)).
 
@@ -74,11 +85,22 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
 - `map_layout.gd` / `map_layout_grid.gd` — top-down editor + 3″ grid.
 - `terrain_library.gd` — terrain piece definitions.
 - `terrain_overlay.gd` — 3D overlay + custom deployment zones.
+- `sandbox_terrain_prop.gd` / `sandbox_terrain_shelf.gd` / `terrain_group_base.gd` /
+  `terrain_prefabs.gd` / `terrain_hologram.gd` — free-placed 3D sandbox terrain (multi-storey
+  ruins, forest pads) + biome-prefab library + hologram placement preview.
+- `hazards_library.gd` / `battlefield_stains.gd` — per-biome dangerous-terrain props and
+  blood/oil removal decals.
 
 **Presentation**
-- `lighting_controller.gd` / `lighting_panel.gd` — F1–F4 presets.
-- `atmospheric_clouds.gd`, `glassmorphism_theme.gd`, `cinematic_intro.gd`,
-  `model_info_popup.gd`, `opr_stats_tooltip.gd`.
+- `lighting_controller.gd` / `lighting_panel.gd` — light-value presets (Day/Sunset/Night/
+  Overcast/Storm), driven by the atmosphere system + the Settings lighting panel.
+- `atmosphere_controller.gd` / `rain_effect.gd` / `fire_prop.gd` / `war_ambience.gd` /
+  `ambience_synth.gd` / `ambience_library.gd` — one-click weather/mood, rain + lightning,
+  war-torn fires and CC0 battlefield ambience (see [`ATMOSPHERE.md`](ATMOSPHERE.md)).
+- `glassmorphism_theme.gd` + `hud/` (`hud_frame`, `hud_tokens`, `segmented_meter`,
+  `state_panel`, `ui_motion`) — the Tactical-HUD UI language and overlay.
+- `grass_field.gd`, `atmospheric_clouds.gd`, `cinematic_intro.gd`, `model_info_popup.gd`,
+  `opr_stats_tooltip.gd`, `selection_spill_light.gd`.
 
 ## Save format (`.nml`)
 
@@ -96,6 +118,8 @@ multiplayer load.
 - `relay/` — standalone Python WebSocket relay server (Fly.io deployable); see
   [`relay/README.md`](../relay/README.md).
 - `internet_lobby.gd`, `player_avatar.gd`, `remote_cursor.gd` — lobby + presence.
+- `player_identity.gd` — local display name + per-install client token; static helpers for
+  sanitisation and slot-stable identity across reconnects.
 
 ## Dice
 
@@ -118,6 +142,11 @@ The offline content pipeline (Python; image-gen → TRELLIS → GLB) is **not pa
 this repo or the running game** — it lives in a separate private repository and
 produces the GLBs the game imports. This repo consumes only its R2-delivered
 outputs (see [`ASSET_DELIVERY.md`](ASSET_DELIVERY.md)).
+
+## Diagnostics
+
+`diagnostics_reporter.gd` builds the anonymised "Report a problem" bundle (version, platform,
+GPU, recent log files) and scrubs room codes, file paths and player names before export.
 
 ## Tests
 
