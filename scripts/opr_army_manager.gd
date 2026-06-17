@@ -968,6 +968,64 @@ func merge_rule_descriptions(incoming: Dictionary) -> void:
 		rule_descriptions[k] = incoming[k]
 
 
+# ===== Auto buff-tokens from special rules =====
+
+## Curated OPR special-rule -> buff-token map. Only rules a player wants to TRACK on the table
+## (auras / situational / re-rolls). hex = token colour; counter = tracked number vs on/off.
+## The effect falls back to this text when the synced rule_description is missing.
+const BUFF_TOKEN_RULES := {
+	"Furious":    {"hex": "e81828", "counter": false, "effect": "Extra hits on charge"},
+	"Relentless": {"hex": "d4af37", "counter": false, "effect": "Keep shooting after activating"},
+	"Stealth":    {"hex": "1a7d4d", "counter": false, "effect": "-1 to be hit from over 12\""},
+	"Poison":     {"hex": "7030a0", "counter": false, "effect": "Re-roll wound rolls"},
+	"Resilient":  {"hex": "70ad47", "counter": false, "effect": "Re-roll failed defense"},
+	"Bloodborn":  {"hex": "8b0000", "counter": false, "effect": "Heals after kills"},
+	"Fear":       {"hex": "5b2c8a", "counter": true,  "effect": "Counts as extra models for morale"},
+}
+
+## Passive / always-on rules that should NOT spawn a token (avoid palette spam). Caster has its
+## own dedicated marker, so it is excluded here too.
+const PASSIVE_BUFF_RULES := ["Tough", "Fearless", "Fast", "Slow", "Strider", "Hero", "Flying",
+	"Hover", "Impact", "Parry", "Regeneration", "Caster", "Scout", "Ambush", "Mobile Artillery",
+	"Hold the Line"]
+
+## Pure: derive the buff tokens to auto-create from a unit/army's special_rules. A rule qualifies
+## when it is in the curated map, OR its name reads like an aura/buff, OR its description grants a
+## +1/-1/re-roll — and it is not passive. Numbered rules ("Fear(2)") collapse to their base name.
+## rule_desc supplies effect text (the synced OPR rule descriptions). Deduped by base name.
+static func buff_tokens_from_rules(special_rules: Array, rule_desc: Dictionary = {}) -> Array:
+	var out: Array = []
+	var seen := {}
+	for raw in special_rules:
+		var name := str(raw)
+		var base := name
+		var paren := base.find("(")
+		if paren > 0:
+			base = base.substr(0, paren)
+		base = base.strip_edges()
+		if base.is_empty() or seen.has(base) or base in PASSIVE_BUFF_RULES:
+			continue
+		var desc := str(rule_desc.get(base, rule_desc.get(name, "")))
+		var dlow := desc.to_lower()
+		var blow := base.to_lower()
+		var mapped: Dictionary = BUFF_TOKEN_RULES.get(base, {})
+		var qualifies := not mapped.is_empty() \
+			or "aura" in blow or "buff" in blow \
+			or "+1" in desc or "-1" in desc or "re-roll" in dlow or "reroll" in dlow
+		if not qualifies:
+			continue
+		seen[base] = true
+		var hex := str(mapped.get("hex", "c8a02a" if "aura" in blow else "8aa0b8"))
+		var effect := desc if not desc.is_empty() else str(mapped.get("effect", ""))
+		out.append({
+			"name": base,
+			"color": Color.html(hex),
+			"is_counter": bool(mapped.get("counter", false)),
+			"effect": effect,
+		})
+	return out
+
+
 # ===== NEW: GameUnit Access Methods =====
 
 ## Get GameUnit wrapper for a model
