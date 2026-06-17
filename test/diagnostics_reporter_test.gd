@@ -46,3 +46,25 @@ func test_gather_replacements_ignores_blank_room_and_names() -> void:
 		secrets.append(p[0])
 	assert_bool(secrets.has("")).is_false()
 	# (a username from the env may still be present; we only assert the blanks are gone)
+
+
+# ===== Room-code discovery (so prior-session codes in the multi-log report get scrubbed) =====
+
+func test_room_codes_discovered_dashed_and_undashed() -> void:
+	var log_text := "=== ROOM CREATED: V2K-T9S ===\n=== JOINING ONLINE room 9RVCJH ===\n[Relay] Connection lost (peer=2 room=JV5HUM): dropped"
+	var codes := Reporter._room_codes_in(log_text)
+	# the dashed code yields both forms; the undashed ones come through as-is
+	assert_array(codes).contains(["V2K-T9S", "V2KT9S", "9RVCJH", "JV5HUM"])
+
+
+func test_room_codes_ignore_lowercase_words() -> void:
+	# "Room not found" must not be mistaken for a code (the code class is uppercase-only).
+	assert_array(Reporter._room_codes_in("WARNING: Relay error: Room not found")).is_empty()
+
+
+func test_discovered_room_code_scrubs_out() -> void:
+	var log_text := "joined room 9RVCJH ok"
+	var pairs: Array = []
+	for c in Reporter._room_codes_in(log_text):
+		pairs.append([c, "<room>"])
+	assert_str(Reporter.scrub_text(log_text, pairs)).is_equal("joined room <room> ok")
