@@ -45,10 +45,11 @@ var _active: Dictionary = {}  # model_node (Node3D) -> true while its indicator 
 ## Base edge radius (metres) for a unit's props — round bases use half the round size, oval
 ## bases the averaged radius (same approximation as the range rings); empty props → 32 mm.
 func base_radius_for_props(props: Dictionary) -> float:
-	var oval_w: float = props.get("base_size_oval_width", 0)
-	var oval_l: float = props.get("base_size_oval_length", 0)
-	if oval_w > 0 and oval_l > 0:
-		return ((oval_w + oval_l) / 4.0) * 0.001
+	if props.get("base_is_oval", false) or props.get("base_is_square", false):
+		var w: float = float(props.get("base_width_mm", 0))
+		var d: float = float(props.get("base_depth_mm", 0))
+		if w > 0.0 and d > 0.0:
+			return ((w + d) / 4.0) * 0.001
 	if props.has("base_size_round"):
 		return (float(props["base_size_round"]) / 2.0) * 0.001
 	return DEFAULT_BASE_RADIUS_M

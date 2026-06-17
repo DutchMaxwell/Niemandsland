@@ -27,7 +27,7 @@ func test_base_radius_round() -> void:
 func test_base_radius_oval_average() -> void:
 	# oval 60 × 35 → (60+35)/4 mm = 23.75 mm = 0.02375 m
 	assert_float(_controller().base_radius_for_props(
-			{"base_size_oval_width": 60, "base_size_oval_length": 35})).is_equal_approx(0.02375, 0.0001)
+			{"base_is_oval": true, "base_width_mm": 60, "base_depth_mm": 35})).is_equal_approx(0.02375, 0.0001)
 
 
 func test_base_radius_default_when_empty() -> void:
