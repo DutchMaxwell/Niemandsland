@@ -9,6 +9,10 @@ signal load_failed(error: String)
 
 const SAVE_VERSION = "1.5"  # Added free-placed sandbox terrain (ruins/forests/hazard clusters)
 const SAVE_EXTENSION = "nml"  # Niemandsland Save
+## Yield to the main loop every N object spawns during a load/army-receive so heavy GLB
+## instantiation never blocks the thread for seconds — a long stall starves the relay
+## heartbeat (_poll runs in _process) and the relay drops the client, kicking off a reconnect.
+const DESERIALIZE_YIELD_EVERY := 3
 
 var object_manager: Node3D
 var table: Node3D
@@ -502,6 +506,7 @@ func _deserialize_objects(objects_data: Array) -> int:
 		return 0
 
 	var loaded_count = 0
+	var since_yield := 0
 
 	for obj_data in objects_data:
 		if not obj_data is Dictionary:
@@ -510,6 +515,13 @@ func _deserialize_objects(objects_data: Array) -> int:
 		var success = await _deserialize_object(obj_data)
 		if success:
 			loaded_count += 1
+
+		# Keep the main loop (and the relay heartbeat) alive during a big synchronous spawn.
+		since_yield += 1
+		if since_yield >= DESERIALIZE_YIELD_EVERY:
+			since_yield = 0
+			if is_inside_tree():
+				await get_tree().process_frame
 
 	return loaded_count
 
