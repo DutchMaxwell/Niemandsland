@@ -21,8 +21,7 @@ similar clients.
 Flow on launch:
 
 1. `startup_menu.gd` → `_maybe_check_for_updates()` runs **only** for the live main
-   scene (so gdUnit's `scene_runner` tests never hit the network) and **only** off the
-   web (itch/web is always the latest deploy).
+   scene (so gdUnit's `scene_runner` tests never hit the network).
 2. `UpdateChecker.check_for_updates()` GETs the project's GitHub Releases list.
 3. The newest non-draft release tag is compared against the running
    `application/config/version` (the same string the multiplayer version handshake
