@@ -239,24 +239,6 @@ layout_mode = 2
 layout_mode = 2
 text = "Import / Load:"
 
-[node name="LoadModel" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-text = "Load 3D Model..."
-
-[node name="ImportTTS" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-text = "Import TTS (Local Cache)..."
-
-[node name="ImportTTSOnline" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-text = "Import TTS (Online)..."
-
 [node name="TerrainBrowser" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -550,44 +532,6 @@ horizontal_scroll_mode = 0
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-
-[node name="ModelFileDialog" type="FileDialog" parent="UI"]
-unique_name_in_owner = true
-title = "Load 3D Model"
-initial_position = 2
-size = Vector2i(800, 500)
-ok_button_text = "Load"
-file_mode = 0
-access = 2
-filters = PackedStringArray("*.glb ; GLB Models", "*.gltf ; GLTF Models", "*.stl ; STL Models", "*.fbx ; FBX Models", "*.obj ; OBJ Models")
-
-[node name="TTSJsonDialog" type="FileDialog" parent="UI"]
-unique_name_in_owner = true
-title = "Select TTS Save File (.json)"
-initial_position = 2
-size = Vector2i(800, 500)
-ok_button_text = "Select"
-file_mode = 0
-access = 2
-filters = PackedStringArray("*.json ; TTS Save Files")
-
-[node name="TTSModelsDialog" type="FileDialog" parent="UI"]
-unique_name_in_owner = true
-title = "Select TTS Models/ Cache Directory"
-initial_position = 2
-size = Vector2i(800, 500)
-ok_button_text = "Select"
-file_mode = 2
-access = 2
-
-[node name="TTSImagesDialog" type="FileDialog" parent="UI"]
-unique_name_in_owner = true
-title = "Select TTS Images/ Cache Directory"
-initial_position = 2
-size = Vector2i(800, 500)
-ok_button_text = "Select"
-file_mode = 2
-access = 2
 
 [node name="SaveGameDialog" type="FileDialog" parent="UI"]
 unique_name_in_owner = true
