@@ -56,6 +56,15 @@ planned and where ideas go. For what already works see
   writes a SCRUBBED bundle (strip the OS username from paths, player names, room codes; no
   identity token) — version + OS/GPU/renderer + recent log + MP error counts — to a known spot
   (Desktop / Save-dialog) and opens the folder. Lets us triage real-world bugs fast. _S_
+- **Per-model base size from upgrades** — a weapon-team / upgrade can replace a Tough(1) model
+  with a Tough(3) one, which needs a bigger base. Per-model tough is already tracked
+  (`model.properties["tough"]` via `equipment_distributor`); derive + store a per-model base
+  size (`_base_size_from_tough`) and honour it at spawn (base disc + GLB footprint), falling
+  back to the unit base. Today base size is unit-level, so the upgraded model gets too small a base. _S_
+- **Auto buff-tokens from special rules** — on army import, scan `special_rules` and auto-create
+  the matching buff tokens (`TokenLibrary.define` + `remote_token_defined` sync, so both players
+  get them) from a curated OPR-rule → token map (auras / +1-−1 / situational rules; passive rules
+  skipped to avoid spam). Saves manually creating tokens every game. _S_
 
 ## 🧊 Ideas (icebox — captured, not committed)
 
