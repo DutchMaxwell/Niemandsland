@@ -110,17 +110,6 @@ func queue_download(url: String, is_model: bool) -> void:
 	})
 
 
-## Queue downloads for all objects in a TTS parse result
-func queue_tts_objects(objects: Array) -> void:
-	for obj in objects:
-		if obj is TTSImporter.TTSObject:
-			queue_download(obj.mesh_url, true)
-			if not obj.diffuse_url.is_empty():
-				queue_download(obj.diffuse_url, false)
-			if not obj.normal_url.is_empty():
-				queue_download(obj.normal_url, false)
-
-
 ## Start downloading all queued files
 func start_downloads() -> void:
 	if _is_downloading:
