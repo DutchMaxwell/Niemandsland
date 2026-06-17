@@ -14,7 +14,9 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **"Report a problem" now captures the actual game.** The engine rotates `niemandsland.log` on
   every launch, so the report — which only read the current log — missed the session the player was
   reporting (e.g. after restarting to reach the start-menu button). It now includes the most recent
-  few log files (current + prior sessions, each tailed), chronologically.
+  few log files (current + prior sessions, each tailed), chronologically. And because that pulls in
+  earlier sessions, **room codes mentioned in the log are now scrubbed too** (discovered by pattern;
+  player names never reach the log) — so the bundle stays anonymous as promised.
 - **Multiplayer sync overhaul** — the reconnect / rate-limit / army-sync cascade, live-validated
   across two clients. A wall-clock send-rate cap (the old per-frame cap scaled with framerate and
   tripped the relay's rate limit → `4429` drops on a high-refresh host); `_disconnect_peer`

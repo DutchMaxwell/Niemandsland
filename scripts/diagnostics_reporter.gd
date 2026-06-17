@@ -17,6 +17,8 @@ const PER_LOG_TAIL_BYTES := 80000  # keep the END of each (where errors/crashes 
 const USER_PLACEHOLDER := "<user>"
 const PLAYER_PLACEHOLDER := "<player>"
 const ROOM_PLACEHOLDER := "<room>"
+## Room-code alphabet (relay: no ambiguous 0/O/1/I/L). Used to discover codes mentioned in the log.
+const ROOM_CODE_CHARS := "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 ## Don't scrub very short secrets (a 1-char name would blank half the text).
 const MIN_SECRET_LEN := 2
 
@@ -52,6 +54,22 @@ static func gather_replacements(player_names: Array, room_code: String) -> Array
 		pairs.append([room_code.strip_edges(), ROOM_PLACEHOLDER])
 	return pairs
 
+
+## Discover room codes mentioned in `text` so they can be scrubbed without a live session naming
+## them. Matches the relay's log contexts — "room <CODE>", "room=<CODE>", "ROOM CREATED: <CODE>",
+## "Room code <CODE>" — with an uppercase-only code class (lowercase words like "room not found"
+## can't match). Returns both the dashed ("V2K-T9S") and undashed ("V2KT9S") forms.
+static func _room_codes_in(text: String) -> Array:
+	var found := {}
+	var re := RegEx.new()
+	if re.compile("(?i:room(?:\\s+(?:code|created))?[\\s:=]+)([%s][%s\\-]{4,6})" % [ROOM_CODE_CHARS, ROOM_CODE_CHARS]) != OK:
+		return []
+	for m in re.search_all(text):
+		var code: String = m.get_string(1)
+		found[code] = true
+		found[code.replace("-", "")] = true
+	return found.keys()
+
 # === Public: report building / export ===
 
 ## The full anonymised report text: a system header + the scrubbed recent log. `extra` lets a
@@ -67,10 +85,17 @@ static func build_report(player_names: Array = [], room_code: String = "", extra
 	for k in extra:
 		lines.append("%s: %s" % [str(k), str(extra[k])])
 	lines.append("")
+	var log_text := _read_log()
 	lines.append("=== recent log ===")
-	lines.append(_read_log())
+	lines.append(log_text)
 	var raw := "\n".join(lines)
-	return scrub_text(raw, gather_replacements(player_names, room_code))
+	# Player names never reach the log (it only ever prints "Player N" / peer ids), but ROOM CODES do
+	# — and the exporter (the start menu) has no live session to name them. Discover them from the
+	# log itself so they're scrubbed too, keeping the report's "anonymised" promise honest.
+	var replacements := gather_replacements(player_names, room_code)
+	for code in _room_codes_in(log_text):
+		replacements.append([code, ROOM_PLACEHOLDER])
+	return scrub_text(raw, replacements)
 
 
 ## Write the report to the user's Desktop and open the folder so it's trivial to attach.
