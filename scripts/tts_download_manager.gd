@@ -250,13 +250,3 @@ func _clear_directory_recursive(path: String) -> void:
 			DirAccess.remove_absolute(full_path)
 		file_name = dir.get_next()
 	dir.list_dir_end()
-
-
-## Reset state for new import
-func reset() -> void:
-	_pending_downloads.clear()
-	_completed_downloads.clear()
-	_failed_downloads.clear()
-	_current_download_idx = 0
-	_total_downloads = 0
-	_is_downloading = false
