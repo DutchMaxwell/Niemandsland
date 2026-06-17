@@ -218,15 +218,6 @@ func _apply_camera_transform() -> void:
 		_camera.look_at(_target_position, Vector3.UP)
 
 
-## Center camera on a specific world position
-func focus_on(world_position: Vector3) -> void:
-	var tween = create_tween()
-	tween.set_ease(Tween.EASE_OUT)
-	tween.set_trans(Tween.TRANS_CUBIC)
-	tween.tween_property(self, "_target_position", world_position, 0.5)
-	tween.tween_callback(_mark_dirty)
-
-
 ## Reset camera to default view
 func reset_view() -> void:
 	_target_position = Vector3.ZERO
