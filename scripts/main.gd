@@ -813,16 +813,6 @@ func _process(delta: float) -> void:
 	_broadcast_presence(delta)
 
 
-func _on_spawn_miniature() -> void:
-	var spawn_pos = _get_random_table_position()
-	object_manager.spawn_miniature(spawn_pos)
-
-
-func _on_spawn_terrain() -> void:
-	var spawn_pos = _get_random_table_position()
-	object_manager.spawn_terrain(spawn_pos)
-
-
 ## Open file dialog to load a 3D model
 func _on_load_model() -> void:
 	model_file_dialog.popup_centered()
@@ -834,112 +824,6 @@ func _on_model_file_selected(path: String) -> void:
 	var model = object_manager.spawn_custom_model(path, spawn_pos)
 	if not model:
 		push_error("Failed to load model: %s" % path)
-
-
-## Performance test: Spawn 200 miniatures in a grid
-func _on_spawn_200() -> void:
-	# Clear existing objects first
-	object_manager.clear_all_objects()
-
-	# Calculate grid layout (20 columns x 10 rows = 200)
-	var cols = 20
-	var rows = 10
-
-	# Table size in meters
-	var size_meters = table.table_size * FEET_TO_METERS  # FEET_TO_METERS
-	var margin = 0.05  # 5cm margin from edges
-
-	# Calculate spacing
-	var usable_width = size_meters.x - (margin * 2)
-	var usable_depth = size_meters.y - (margin * 2)
-	var spacing_x = usable_width / (cols - 1)
-	var spacing_z = usable_depth / (rows - 1)
-
-	# Start position (top-left corner)
-	var start_x = -size_meters.x / 2 + margin
-	var start_z = -size_meters.y / 2 + margin
-
-	# Spawn miniatures in grid
-	var count = 0
-	for row in range(rows):
-		for col in range(cols):
-			var pos = Vector3(
-				start_x + col * spacing_x,
-				0,
-				start_z + row * spacing_z
-			)
-			object_manager.spawn_miniature(pos)
-			count += 1
-
-
-## Performance test: Spawn 500 miniatures
-func _on_spawn_500() -> void:
-	_spawn_grid(500, 25, 20)
-
-
-## Performance test: Spawn 1000 miniatures
-func _on_spawn_1000() -> void:
-	_spawn_grid(1000, 40, 25)
-
-
-## Performance test: Spawn 100 complex terrain objects
-func _on_spawn_complex() -> void:
-	object_manager.clear_all_objects()
-
-	var cols = 10
-	var rows = 10
-	var size_meters = table.table_size * FEET_TO_METERS
-	var margin = 0.1
-
-	var usable_width = size_meters.x - (margin * 2)
-	var usable_depth = size_meters.y - (margin * 2)
-	var spacing_x = usable_width / (cols - 1)
-	var spacing_z = usable_depth / (rows - 1)
-
-	var start_x = -size_meters.x / 2 + margin
-	var start_z = -size_meters.y / 2 + margin
-
-	var count = 0
-	for row in range(rows):
-		for col in range(cols):
-			var pos = Vector3(
-				start_x + col * spacing_x,
-				0,
-				start_z + row * spacing_z
-			)
-			object_manager.spawn_terrain(pos)
-			count += 1
-
-
-## Helper function to spawn miniatures in a grid
-func _spawn_grid(total: int, cols: int, rows: int) -> void:
-	object_manager.clear_all_objects()
-
-	var size_meters = table.table_size * FEET_TO_METERS
-	var margin = 0.03  # Smaller margin for more objects
-
-	var usable_width = size_meters.x - (margin * 2)
-	var usable_depth = size_meters.y - (margin * 2)
-	var spacing_x = usable_width / (cols - 1)
-	var spacing_z = usable_depth / (rows - 1)
-
-	var start_x = -size_meters.x / 2 + margin
-	var start_z = -size_meters.y / 2 + margin
-
-	var count = 0
-	for row in range(rows):
-		for col in range(cols):
-			if count >= total:
-				break
-			var pos = Vector3(
-				start_x + col * spacing_x,
-				0,
-				start_z + row * spacing_z
-			)
-			object_manager.spawn_miniature(pos)
-			count += 1
-		if count >= total:
-			break
 
 
 ## Shows a warning + confirmation before running a destructive table action, so a
