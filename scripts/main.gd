@@ -2257,15 +2257,21 @@ func _broadcast_presence(delta: float) -> void:
 				network_manager.broadcast_camera_position(_cam.global_position)
 
 
-## Called when a remote player's cursor position is received
+## Called when a remote player's cursor position is received. NEVER render a "remote" cursor
+## for ourselves: after a reconnect/remap a stray self-id update would otherwise spawn a
+## cursor that tracks our OWN mouse.
 func _on_remote_cursor_updated(peer_id: int, pos_x: float, pos_z: float) -> void:
+	if network_manager and peer_id == network_manager.get_my_peer_id():
+		return
 	if not _remote_cursors.has(peer_id):
 		_spawn_remote_cursor(peer_id)
 	_remote_cursors[peer_id].update_position(pos_x, pos_z)
 
 
-## Called when a remote player's camera direction is received
+## Called when a remote player's camera direction is received (self-id ignored).
 func _on_remote_camera_updated(peer_id: int, yaw: float, pitch: float) -> void:
+	if network_manager and peer_id == network_manager.get_my_peer_id():
+		return
 	if _player_avatars.has(peer_id):
 		_player_avatars[peer_id].update_look_direction(yaw, pitch)
 
@@ -2301,6 +2307,10 @@ func _on_remote_dice_rolled(peer_id: int, results: Array, context: Dictionary) -
 
 ## Spawn a remote cursor visualization for a peer
 func _spawn_remote_cursor(peer_id: int) -> void:
+	# Remote cursors are for OTHER players only — never spawn one for our own id (a stray
+	# self-id update after a remap must not create a cursor tracking our own mouse).
+	if network_manager and peer_id == network_manager.get_my_peer_id():
+		return
 	# Free any existing cursor for this peer first — a relay reconnect/rehost
 	# replay can re-fire peer_connected; overwriting the dict without freeing
 	# leaks an orphan node (RC2).
@@ -2731,9 +2741,22 @@ func _request_game_state() -> void:
 
 
 ## Sync full game state to a specific peer
+## player_id -> army name, so a late-joiner can rebuild each army's tray (the platform it
+## stands on). MP-only — not part of the .nml save serialization.
+func _army_names_by_player() -> Dictionary:
+	var names := {}
+	if opr_army_manager:
+		for pid in opr_army_manager.armies:
+			var a = opr_army_manager.armies[pid]
+			if a:
+				names[pid] = a.name
+	return names
+
+
 func _sync_state_to_peer(peer_id: int) -> void:
 	var state = save_manager.serialize_game_state()
 	state["_host_version"] = network_manager.get_game_version()
+	state["army_names"] = _army_names_by_player()
 	var obj_count = state.get("objects", []).size()
 	var unit_count = state.get("game_units", []).size()
 	print("[StateSync] Sending state to peer %d: %d objects, %d game_units" % [peer_id, obj_count, unit_count])
@@ -2750,6 +2773,7 @@ func _sync_loaded_state_to_clients() -> void:
 	# Get current state and broadcast to all clients
 	var state = save_manager.serialize_game_state()
 	state["_host_version"] = network_manager.get_game_version()
+	state["army_names"] = _army_names_by_player()
 	_rpc_sync_game_state.rpc(state)
 
 
@@ -2823,6 +2847,22 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	save_manager._restore_hero_attachments_after_load()
 	save_manager._restore_markers_after_load()
 	save_manager._restore_regiments_after_load()
+
+	# Recreate each army's TRAY (the platform it stands on). The join state carries units +
+	# models but not the tray, so a late-joiner would otherwise see floating models with no
+	# tableau under them (bug). Built per distinct player_id from the reconstructed units.
+	var army_names: Dictionary = state.get("army_names", {})
+	var seen_army_players := {}
+	for entry in save_manager._loaded_game_units.values():
+		var gu = entry.get("game_unit")
+		if gu == null:
+			continue
+		var pid := int(gu.unit_properties.get("player_id", 0))
+		if pid > 0 and not seen_army_players.has(pid):
+			seen_army_players[pid] = true
+			var aname := str(army_names.get(pid, "Army"))
+			var acol = OPRArmyManager.PLAYER_COLORS.get(pid, Color.GRAY)
+			opr_army_manager._create_army_tray(pid, aname, acol)
 
 	if is_instance_valid(_army_loading_overlay):
 		_army_loading_overlay.complete_and_free()
@@ -3173,6 +3213,8 @@ func _on_remote_tts_terrain_spawned(mesh_url: String, diffuse_url: String,
 
 ## Receive remote camera position update
 func _on_remote_camera_position_updated(peer_id: int, pos_x: float, pos_y: float, pos_z: float) -> void:
+	if network_manager and peer_id == network_manager.get_my_peer_id():
+		return
 	if _player_avatars.has(peer_id):
 		_player_avatars[peer_id].update_position(pos_x, pos_y, pos_z)
 

@@ -26,6 +26,12 @@ const EYEBROW_SIZE := Vector3(0.025, 0.004, 0.008)
 const EYEBROW_OFFSET_Y := 0.025
 const LABEL_OFFSET_Y := 0.12
 
+## Default resting spot (before/without live camera-position packets): at this player's
+## table edge by slot, so the head is never stranded in the dead centre after a reconnect.
+const FEET_TO_METERS := 0.3048
+const DEFAULT_EDGE_MARGIN_M := 0.15
+const DEFAULT_HEIGHT_M := 0.35
+
 const BLINK_MIN_INTERVAL := 2.0
 const BLINK_MAX_INTERVAL := 6.0
 const BLINK_DURATION := 0.15
@@ -101,11 +107,27 @@ func _process(delta: float) -> void:
 ## Initialize the avatar for a specific peer. Colour keys off the durable SLOT (not the
 ## transport peer_id, which the relay re-issues on a guest rejoin), with a modulo wrap so
 ## a high monotonic slot / pending slot 0 never falls to WHITE. peer_id is kept for the label.
-func setup(p_peer_id: int, p_slot: int, _table_size_feet: Vector2) -> void:
+func setup(p_peer_id: int, p_slot: int, table_size_feet: Vector2) -> void:
 	peer_id = p_peer_id
 	var idx := (((p_slot - 1) % PLAYER_COLORS.size()) + 1) if p_slot > 0 else 1
 	player_color = PLAYER_COLORS.get(idx, Color.WHITE)
+	# Rest at this player's table edge (by slot) so the head is never stuck in the dead centre
+	# when camera-position packets are missing/delayed; snaps to the live camera on the first
+	# update_position().
+	position = _default_edge_position(p_slot, table_size_feet)
 	_build_avatar()
+
+
+## A sensible default resting position at the player's table edge, derived from their slot.
+func _default_edge_position(slot: int, table_size_feet: Vector2) -> Vector3:
+	var hx := table_size_feet.x * 0.5 * FEET_TO_METERS + DEFAULT_EDGE_MARGIN_M
+	var hz := table_size_feet.y * 0.5 * FEET_TO_METERS + DEFAULT_EDGE_MARGIN_M
+	var s := (((slot - 1) % 4) + 1) if slot > 0 else 1
+	match s:
+		2: return Vector3(hx, DEFAULT_HEIGHT_M, 0.0)    # right
+		3: return Vector3(0.0, DEFAULT_HEIGHT_M, -hz)   # front
+		4: return Vector3(0.0, DEFAULT_HEIGHT_M, hz)    # back
+		_: return Vector3(-hx, DEFAULT_HEIGHT_M, 0.0)   # left (slot 1 / default)
 
 
 ## Update the remote player's camera look direction
