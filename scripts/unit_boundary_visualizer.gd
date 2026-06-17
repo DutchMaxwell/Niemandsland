@@ -170,11 +170,15 @@ func _calculate_smooth_hull(positions: Array, radii: Array) -> PackedVector2Arra
 	return Geometry2D.convex_hull(expanded_points)
 
 
-## Base radius (metres) of a model, from its OWN unit's recommended round base.
+## Base radius (metres) of a model, from its OWN unit's recommended round base. A weapon-team /
+## Tough upgrade enlarges this model's base above the unit baseline so the boundary hugs it too
+## (plain models: tough 1 -> no change).
 func _model_base_radius(model) -> float:
 	var base_mm := 32
 	if model.unit and model.unit.unit_properties:
 		base_mm = model.unit.unit_properties.get("base_size_round", 32)
+		var model_tough := int(model.properties.get("tough", 1)) if model.properties else 1
+		base_mm = OPRArmyManager.model_base_long_mm(base_mm, model_tough)
 	return (base_mm / 2.0) * 0.001
 
 

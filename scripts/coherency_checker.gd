@@ -246,12 +246,18 @@ static func _get_edge_distance_in_direction(model: ModelInstance, dir_x: float, 
 
 	var props = game_unit.unit_properties
 
+	# Per-model base: a weapon-team / Tough upgrade enlarges THIS model's base above the unit
+	# baseline (never shrinks). Plain models have tough 1 -> scale 1.0 -> identical to before.
+	var unit_long: int = int(max(int(props.get("base_width_mm", 32)), int(props.get("base_depth_mm", 32)))) if props.get("base_is_oval", false) else int(props.get("base_size_round", 32))
+	var model_tough: int = int(model.properties.get("tough", 1)) if model.properties else 1
+	var base_scale: float = float(OPRArmyManager.model_base_long_mm(unit_long, model_tough)) / float(maxi(1, unit_long))
+
 	if props.get("base_is_oval", false):
 		# Oval base - calculate actual ellipse edge distance
 		var width_mm = props.get("base_width_mm", 32)
 		var depth_mm = props.get("base_depth_mm", 32)
-		var a = (width_mm / 2.0) * 0.001  # Semi-axis X (width/2) in meters
-		var b = (depth_mm / 2.0) * 0.001  # Semi-axis Z (depth/2) in meters
+		var a = (width_mm / 2.0) * 0.001 * base_scale  # Semi-axis X (width/2) in meters
+		var b = (depth_mm / 2.0) * 0.001 * base_scale  # Semi-axis Z (depth/2) in meters
 
 		# Distance to ellipse edge in direction (dir_x, dir_z):
 		# r = (a * b) / sqrt(b² * dir_x² + a² * dir_z²)
@@ -262,7 +268,7 @@ static func _get_edge_distance_in_direction(model: ModelInstance, dir_x: float, 
 	else:
 		# Round base - simple radius
 		var base_mm = props.get("base_size_round", 32)
-		return (base_mm / 2.0) * 0.001
+		return (base_mm / 2.0) * 0.001 * base_scale
 
 
 ## Returns the point on a model's base edge facing another world position,

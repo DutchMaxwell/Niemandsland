@@ -65,6 +65,62 @@ static func distribute(game_unit: GameUnit, loadout: Array, special_rules: Array
 			cursor += 1
 
 
+## Builds the loadout dictionaries (weapons + equipment items) that distribute() walks.
+## Shared by create_from_opr_unit AND the spawner, so per-model base sizing can derive the
+## SAME per-model Tough distribute() will later apply (one source of truth, no drift).
+static func build_loadout(opr_unit: Variant) -> Array:
+	var loadout: Array = []
+	for weapon in opr_unit.weapons:
+		loadout.append({
+			"name": weapon.name,
+			"range": weapon.range_value,
+			"attacks": weapon.attacks,
+			"count": weapon.count,
+			"specialRules": weapon.special_rules.duplicate()
+		})
+	for equip_item in opr_unit.equipment_items:
+		loadout.append({
+			"name": equip_item.get("name", ""),
+			"attacks": 0,
+			"count": equip_item.get("count", 1),
+			"specialRules": equip_item.get("rules", [])
+		})
+	return loadout
+
+
+## Returns the final per-model Tough(X) for EVERY model index (index i = model i), replicating
+## distribute()'s universal/limited cursor walk exactly. Lets the spawner pick a per-model base
+## BEFORE the GameUnit (and thus model.properties["tough"]) exists. Keep in sync with distribute().
+static func per_model_toughs(unit_size: int, loadout: Array, special_rules: Array) -> Array:
+	var base_tough := _parse_tough_rating(special_rules)
+	var toughs: Array = []
+	for _i in range(maxi(0, unit_size)):
+		toughs.append(base_tough)
+	if unit_size <= 0:
+		return toughs
+	var universal: Array = []
+	var limited: Array = []
+	for item in loadout:
+		if _get_count(item, unit_size) >= unit_size:
+			universal.append(item)
+		else:
+			limited.append(item)
+	for item in universal:
+		var it := _parse_tough_rating(_item_special_rules(item))
+		for i in range(unit_size):
+			toughs[i] = maxi(toughs[i], it)
+	var cursor := 0
+	for item in limited:
+		var count = _get_count(item, unit_size)
+		var it := _parse_tough_rating(_item_special_rules(item))
+		for _k in range(count):
+			if cursor >= unit_size:
+				cursor = 0
+			toughs[cursor] = maxi(toughs[cursor], it)
+			cursor += 1
+	return toughs
+
+
 # ===== Tough Parsing =====
 
 ## Minimum wound count: every model takes at least 1 wound to be killed (OPR core).
@@ -269,30 +325,9 @@ static func create_from_opr_unit(opr_unit: Variant, nodes: Array[Node3D], player
 		nodes[i].set_meta("game_unit", game_unit)
 		nodes[i].set_meta("model_index", i)
 
-	# Convert OPRWeapons to loadout dictionaries for distribution
-	var loadout: Array = []
-	for weapon in opr_unit.weapons:
-		loadout.append({
-			"name": weapon.name,
-			"range": weapon.range_value,
-			"attacks": weapon.attacks,
-			"count": weapon.count,
-			"specialRules": weapon.special_rules.duplicate()
-		})
-
-	# Add per-model tool/equipment upgrades (non-weapon items on a subset of models).
-	# They flow through the same count-based distribution as weapons, so each lands on
-	# specific model(s) and the base ring can label it. The item's granted "rules" ride
-	# along as specialRules so a per-model Tough(X) is applied to its carrier model only.
-	for equip_item in opr_unit.equipment_items:
-		loadout.append({
-			"name": equip_item.get("name", ""),
-			"attacks": 0,
-			"count": equip_item.get("count", 1),
-			"specialRules": equip_item.get("rules", [])
-		})
-
-	# Distribute equipment using the loadout
+	# Build the loadout (weapons + equipment) and distribute. build_loadout() is shared with the
+	# spawner's per-model base sizing, so the carrier model's elevated Tough matches its bigger base.
+	var loadout: Array = build_loadout(opr_unit)
 	distribute(game_unit, loadout, opr_unit.special_rules)
 
 	# Initialize caster points if unit has Caster rule
