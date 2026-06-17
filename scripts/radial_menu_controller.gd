@@ -782,13 +782,17 @@ func _get_active_tokens(model_node: Node3D) -> Array[String]:
 func _get_base_radius(unit: GameUnit) -> float:
 	var base_radius = 0.016  # Default 32mm base
 	if unit and unit.unit_properties:
-		var oval_width = unit.unit_properties.get("base_size_oval_width", 0)
-		var oval_length = unit.unit_properties.get("base_size_oval_length", 0)
-		if oval_width > 0 and oval_length > 0:
-			# Use average for oval bases
-			base_radius = ((oval_width + oval_length) / 4.0) * 0.001
+		var props = unit.unit_properties
+		if props.get("base_is_oval", false) or props.get("base_is_square", false):
+			var w := float(props.get("base_width_mm", 0))
+			var d := float(props.get("base_depth_mm", 0))
+			if w > 0.0 and d > 0.0:
+				# Average of width + depth for oval/square bases
+				base_radius = ((w + d) / 4.0) * 0.001
+			else:
+				base_radius = (float(props.get("base_size_round", 32)) / 2.0) * 0.001
 		else:
-			var base_mm = unit.unit_properties.get("base_size_round", 32)
+			var base_mm = props.get("base_size_round", 32)
 			base_radius = (base_mm / 2.0) * 0.001
 	return base_radius
 
