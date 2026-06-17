@@ -532,7 +532,7 @@ async def main(host: str = "0.0.0.0", port: int = 8765,
         ssl=ssl_context,
         max_size=MAX_MESSAGE_SIZE,
         ping_interval=20,
-        ping_timeout=30,   # Erhöht für GLB-Ladezeiten (blockiert Main-Thread)
+        ping_timeout=30,   # Raised for GLB load times (main thread blocks during R2 downloads)
     ) as ws_server:
         logger.info("Relay server started on %s:%d", host, port)
 
