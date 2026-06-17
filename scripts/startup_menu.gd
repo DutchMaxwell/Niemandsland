@@ -48,6 +48,7 @@ const BROWSE_TIMEOUT_S := 8.0
 @onready var join_online_btn: MenuListButton = %JoinOnlineBtn
 @onready var browse_online_btn: MenuListButton = %BrowseOnlineBtn
 @onready var load_battle_btn: MenuListButton = %LoadBattleBtn
+@onready var report_problem_btn: MenuListButton = %ReportProblemBtn
 @onready var exit_game_btn: MenuListButton = %ExitGameBtn
 @onready var ticker: MenuTicker = %Ticker
 @onready var version_label: Label = %VersionLabel
@@ -103,6 +104,7 @@ func _ready() -> void:
 	join_online_btn.pressed.connect(_on_join_online_pressed)
 	browse_online_btn.pressed.connect(_on_browse_online_pressed)
 	load_battle_btn.pressed.connect(_on_load_battle_pressed)
+	report_problem_btn.pressed.connect(_on_report_problem_pressed)
 	exit_game_btn.pressed.connect(_on_exit_pressed)
 	exit_game_btn.accent_color = HudTokens.DANGER
 	exit_game_btn.add_theme_color_override("font_color", HudTokens.DANGER)
@@ -232,6 +234,23 @@ func _on_start_battle_pressed() -> void:
 
 func _on_load_battle_pressed() -> void:
 	_open_load_battle_dialog()
+
+
+## Export an ANONYMISED diagnostics bundle (system info + scrubbed recent log) to the
+## Desktop and open the folder, so a player can review and attach it to a bug report.
+func _on_report_problem_pressed() -> void:
+	var stamp := Time.get_datetime_string_from_system().replace(":", "-")
+	var path := DiagnosticsReporter.export_report(stamp)
+	var dialog := AcceptDialog.new()
+	dialog.title = "Report a problem"
+	if path.is_empty():
+		dialog.dialog_text = "Could not write the diagnostics file.\nThe log lives at user://logs/niemandsland.log."
+	else:
+		dialog.dialog_text = "Saved an anonymised diagnostics file to:\n%s\n\nAttach it to a bug report — it carries no player names, room codes or your username." % path
+	add_child(dialog)
+	dialog.popup_centered()
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.canceled.connect(dialog.queue_free)
 
 
 func _on_exit_pressed() -> void:
