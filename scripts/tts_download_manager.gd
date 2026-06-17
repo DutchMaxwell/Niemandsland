@@ -218,35 +218,3 @@ func _get_extension_from_url(url: String, is_model: bool) -> String:
 
 	# Default based on type
 	return ".obj" if is_model else ".png"
-
-
-## Clear the cache
-func clear_cache() -> void:
-	var dir = DirAccess.open(cache_dir)
-	if dir:
-		_clear_directory_recursive(cache_dir)
-
-	# Recreate directories
-	DirAccess.make_dir_recursive_absolute(models_cache_dir)
-	DirAccess.make_dir_recursive_absolute(images_cache_dir)
-
-	_completed_downloads.clear()
-	print("TTS Download: Cache cleared")
-
-
-func _clear_directory_recursive(path: String) -> void:
-	var dir = DirAccess.open(path)
-	if not dir:
-		return
-
-	dir.list_dir_begin()
-	var file_name = dir.get_next()
-	while file_name != "":
-		var full_path = path.path_join(file_name)
-		if dir.current_is_dir():
-			_clear_directory_recursive(full_path)
-			DirAccess.remove_absolute(full_path)
-		else:
-			DirAccess.remove_absolute(full_path)
-		file_name = dir.get_next()
-	dir.list_dir_end()
