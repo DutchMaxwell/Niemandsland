@@ -36,7 +36,8 @@ Legend: ✅ done · 🔧 in `0.3.5.x` · ⬜ to do · ❓ decision needed
 - ⬜ Polish backlog (regiment block-move/wheel, measure-on-pickup → snap-back, coherency
   visualizer sharpen, contextual control hints, sandbox forests for other biomes) — **decide
   which, if any, are Alpha blockers** vs post-Alpha.
-- ❓ AoF: Regiments — manual import verify vs a real `aofr` list.
+- ✅ AoF: Regiments — manual import **verified** against a real `aofr` list (2026-06-18, current
+  state — bases/formation correct).
 
 ### B. Multiplayer stability
 - ✅ Reconnect / rate-limit / army-sync cascade fixed and live-confirmed across 2 clients
@@ -77,10 +78,17 @@ Legend: ✅ done · 🔧 in `0.3.5.x` · ⬜ to do · ❓ decision needed
   (in-app credits / about screen), not only in repo docs.
 
 ### F. Go-public (decision 2 locked: this is a public release)
+- ✅ **Repo renamed** `openTTS` → **`DutchMaxwell/Niemandsland`** (2026-06-18, lossless — GitHub
+  auto-redirects old git/web/API URLs; local remote updated). Still **private** until the visibility
+  flip. ⬜ At the **0.3.6 cut** repoint the leftover `openTTS` refs: the two `scripts/update_checker.gd`
+  URLs (Code → build) + the `README.md`/`CONTRIBUTING.md` clone URLs (doc). Redirects cover them until then.
+- ✅ **Asset-CDN domain** `assets.niemandsland.xyz` **live + verified** (2026-06-18) — R2 custom domain
+  on the **same bucket** as `assets.akesberg.de` (identical etag/size; no file migration). ⬜ Switch the
+  `HOST` constant in `scripts/asset_cdn.gd` → `https://assets.niemandsland.xyz` at the **0.3.6 cut**
+  (Code → build). ⚠️ **Keep `assets.akesberg.de` live in parallel** until every build in the wild is on 0.3.6+.
 - ⬜ **PR #51**: drop `tools/model_forge/` from the public repo (the pipeline now lives in the
   private `model-forge` repo). Rebase onto current `main` and merge.
-- ⬜ Verify the **git-history scrub** is complete and the **asset-CDN host** (the `HOST` constant
-  in `scripts/asset_cdn.gd`) is finalised for on-demand model delivery.
+- ⬜ Verify the **git-history scrub** is complete.
 - ⬜ GitHub **issue templates** (Bug / Feedback) + `CONTRIBUTING.md` confirmed as the intake.
 - ⬜ Repo visibility flip + a published release tag.
 
