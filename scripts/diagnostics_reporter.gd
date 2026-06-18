@@ -116,6 +116,33 @@ static func export_report(stamp: String, player_names: Array = [], room_code: St
 	OS.shell_open(dir)  # open the folder containing the report
 	return path
 
+
+## Like export_report, but bundles the (scrubbed) report text + a PNG screenshot into ONE zip
+## on the Desktop — used by the in-game F12 capture so a visual glitch ships WITH the report.
+## The log is anonymised exactly as in export_report. Returns the zip path ("" on failure).
+static func export_report_with_screenshot(stamp: String, screenshot: Image, player_names: Array = [], room_code: String = "", extra: Dictionary = {}) -> String:
+	var report := build_report(player_names, room_code, extra)
+	var dir := OS.get_system_dir(OS.SYSTEM_DIR_DESKTOP)
+	if dir.is_empty():
+		dir = OS.get_user_data_dir()
+	var path := dir.path_join("niemandsland-report-%s.zip" % stamp)
+	var zip := ZIPPacker.new()
+	if zip.open(path) != OK:
+		push_warning("[Diagnostics] Could not create report zip at %s" % path)
+		return ""
+	zip.start_file("diagnostics-%s.txt" % stamp)
+	zip.write_file(report.to_utf8_buffer())
+	zip.close_file()
+	if screenshot != null:
+		var png := screenshot.save_png_to_buffer()
+		if not png.is_empty():
+			zip.start_file("screenshot-%s.png" % stamp)
+			zip.write_file(png)
+			zip.close_file()
+	zip.close()
+	OS.shell_open(dir)  # open the folder containing the zip
+	return path
+
 # === Private ===
 
 ## Read the recent log: the newest RECENT_LOG_FILES `niemandsland*.log` files (the engine rotates

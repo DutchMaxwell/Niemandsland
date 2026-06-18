@@ -4,6 +4,22 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [0.3.5.4-alpha] — 2026-06-18
+
+### Added
+- **In-game bug report with screenshot (F12).** Pressing F12 grabs the current view and bundles
+  it with the anonymised recent log into a single zip on the Desktop — so visual / behavioural
+  glitches (a mini clipping terrain, wrong scale, a misplaced model) that raise no error and never
+  reach the log can finally be reported. Player names, room code and OS username are scrubbed
+  exactly as the menu's "Report a problem".
+
+### Changed
+- **New app icon** — the Niemandsland "N" monogram replaces the placeholder grid-on-green icon
+  (window/taskbar + system launcher).
+- **Window opens on the screen under the mouse cursor** (multi-monitor fix; previously always
+  centred on the primary screen).
+
+
 ## [0.3.5.3-alpha] — 2026-06-18
 
 Test-build delta over `0.3.5.2` (handed to the tester):
