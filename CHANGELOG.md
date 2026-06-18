@@ -4,6 +4,16 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [0.3.5.6-alpha] — 2026-06-18
+
+### Fixed
+- **More base-anchored elements now follow the Tough-enlarged base** (follow-up to 0.3.5.5). The
+  measuring **ruler's edge**, **status-token placement**, the **special-equipment ring**, the
+  **coherency highlight ring** and **unit line-of-sight** all read the model's *actual* (enlarged)
+  base via `effective_base_props`, not the unit-suggested size. Previously the ruler measured from —
+  and tokens sat on — the smaller original base edge *inside* the visible base.
+
+
 ## [0.3.5.5-alpha] — 2026-06-18
 
 ### Fixed
