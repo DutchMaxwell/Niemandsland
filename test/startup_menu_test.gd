@@ -30,8 +30,8 @@ func test_menu_has_expected_buttons() -> void:
 		if child is Button:
 			buttons.append(child)
 
-	# Continue/Start/Host/Join/Browse/Load/ReportProblem/Exit; CONTINUE may be hidden (no save).
-	assert_that(buttons.size()).is_equal(8)
+	# Continue/Start/Host/Join/Browse/Load/ReportProblem/Credits/Exit; CONTINUE may be hidden.
+	assert_that(buttons.size()).is_equal(9)
 
 
 func test_continue_button_hidden_without_save() -> void:
@@ -97,6 +97,14 @@ func test_exit_game_button_label() -> void:
 	var btn := _menu.find_child("ExitGameBtn", true, false) as Button
 	assert_that(btn).is_not_null()
 	assert_that(btn.text).contains("EXIT GAME")
+
+
+func test_credits_button_label_and_handler() -> void:
+	var btn := _menu.find_child("CreditsBtn", true, false) as Button
+	assert_that(btn).is_not_null()
+	assert_that(btn.text).contains("CREDITS")
+	assert_that(_menu.has_method("_on_credits_pressed")).is_true()
+	assert_that(btn.pressed.is_connected(_menu._on_credits_pressed)).is_true()
 
 
 ## ===== No Multiplayer =====

@@ -27,8 +27,8 @@ review. The docs index is [`docs/README.md`](docs/README.md).
 You need **[Godot 4.6](https://godotengine.org/download)** (Forward+ renderer).
 
 ```bash
-git clone https://github.com/DutchMaxwell/openTTS.git
-cd openTTS
+git clone https://github.com/DutchMaxwell/Niemandsland.git
+cd Niemandsland
 godot --path . --editor      # open in the editor, then F5 to run
 # or run headless / directly:
 godot --path .

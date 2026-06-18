@@ -6,7 +6,7 @@ Fantasy). Built in Godot.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Godot](https://img.shields.io/badge/Godot-4.6-blue.svg)](https://godotengine.org/)
-[![Status](https://img.shields.io/badge/Status-0.3.5.6--alpha-orange.svg)]()
+[![Status](https://img.shields.io/badge/Status-0.3.5.7--alpha-orange.svg)]()
 
 > **Status: alpha (on the Road to Alpha `0.3.6`).** The tabletop sandbox, OPR army
 > import, multiplayer and the 3D-model pipeline work; rules automation (turn/combat
@@ -65,8 +65,8 @@ start menu shows the version; the first log line is `[Boot] Niemandsland <versio
 Requires **[Godot 4.6](https://godotengine.org/download)** (Forward+ renderer).
 
 ```bash
-git clone https://github.com/DutchMaxwell/openTTS.git
-cd openTTS
+git clone https://github.com/DutchMaxwell/Niemandsland.git
+cd Niemandsland
 godot --path . --editor      # open in the editor, then F5 to run
 # or run directly:
 godot --path .
@@ -124,6 +124,7 @@ scale, **dice run in a separate scaled SubViewport** (our own MIT `dice_tray.gd`
 ## Documentation
 
 - [`PROJECT_STATUS.md`](PROJECT_STATUS.md) — current status & roadmap
+- [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) — player quickstart (install, host/join, import an army)
 - [`docs/ROAD_TO_ALPHA.md`](docs/ROAD_TO_ALPHA.md) — the `0.3.6` Alpha release plan & checklist
 - [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) — honest alpha limitations & caveats
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — curated feature backlog (Now / Next / Ideas / Shipped)
