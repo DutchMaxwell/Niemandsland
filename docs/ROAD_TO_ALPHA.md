@@ -67,30 +67,30 @@ Legend: ✅ done · 🔧 in `0.3.5.x` · ⬜ to do · ❓ decision needed
   badge, `PROJECT_STATUS.md` header, `ROADMAP.md` intro).
 - ⬜ **CHANGELOG**: fold the current `[Unreleased]` block + this session's work into versioned
   sections, and write the **`[0.3.6] — Alpha** release notes (the headline summary).
-- ⬜ **Getting Started** (player-facing): install, host/join a game, import an army, the
-  control list. README already lists controls + features; a short quickstart closes the gap.
-- ⬜ **Known Issues / limitations** — an honest, player-facing list (no rules automation;
-  guest-reconnect caveat; macOS status; etc.).
+- ✅ **Getting Started** (player-facing) — `docs/GETTING_STARTED.md` (install, host/join, import an
+  army; links to the README control list). _0.3.5.7._
+- ✅ **Known Issues / limitations** — `docs/KNOWN_ISSUES.md` (no rules automation; guest-reconnect
+  caveat; macOS status; CDN/internet need; bug-report paths). _0.3.5.7._
 - ✅ THIRD-party licensing (`THIRD_PARTY.md`), `LICENSE` (MIT code), `CONTRIBUTING.md`,
   `SECURITY.md` — mature.
 
 ### E. Legal / licensing
 - ✅ Code MIT; generated minis **CC-BY-SA**; fonts SIL OFL; **no OPR data bundled** (loaded
   at runtime via the Army Forge API). Covered by `THIRD_PARTY.md`.
-- ⬜ Verify the **CC-BY-SA attribution** for the models is surfaced where players can see it
-  (in-app credits / about screen), not only in repo docs.
+- ✅ **CC-BY-SA attribution surfaced in-app** — start-menu **"Credits & Licenses"** dialog (not only
+  repo docs); `THIRD_PARTY.md` pins generated minis / terrain / icon to CC-BY-SA 4.0. _0.3.5.7._
 
 ### F. Go-public (decision 2 locked: this is a public release)
 - ✅ **Repo renamed** `openTTS` → **`DutchMaxwell/Niemandsland`** (2026-06-18, lossless — GitHub
   auto-redirects old git/web/API URLs; local remote updated). Still **private** until the visibility
-  flip. ⬜ At the **0.3.6 cut** repoint the leftover `openTTS` refs: the two `scripts/update_checker.gd`
-  URLs (Code → build) + the `README.md`/`CONTRIBUTING.md` clone URLs (doc). Redirects cover them until then.
+  flip. ✅ Leftover `openTTS` refs repointed to `Niemandsland` — `scripts/update_checker.gd` URLs +
+  `README.md`/`CONTRIBUTING.md` clone URLs. _0.3.5.7._
 - ✅ **Asset-CDN domain** `assets.niemandsland.xyz` **live + verified** (2026-06-18) — R2 custom domain
-  on the **same bucket** as `<legacy-cdn-host>` (identical etag/size; no file migration). ⬜ Switch the
-  `HOST` constant in `scripts/asset_cdn.gd` → `https://assets.niemandsland.xyz` at the **0.3.6 cut**
-  (Code → build). ⚠️ **Keep `<legacy-cdn-host>` live in parallel** until every build in the wild is on 0.3.6+.
-- ⬜ **PR #51**: drop `tools/model_forge/` from the public repo (the pipeline now lives in the
-  private `model-forge` repo). Rebase onto current `main` and merge.
+  on the **same bucket** as `<legacy-cdn-host>` (identical etag/size; no file migration). ✅ `HOST` in
+  `scripts/asset_cdn.gd` switched → `https://assets.niemandsland.xyz` (_0.3.5.7_). ⚠️ **Keep
+  `<legacy-cdn-host>` live in parallel** until every build in the wild is on 0.3.6+.
+- ✅ **PR #51 merged** — `tools/model_forge/` dropped from the public repo (0 git-tracked files; the
+  pipeline lives in the private `model-forge` repo). The ~3.2 GB local copy is untracked working junk.
 - ⬜ Verify the **git-history scrub** is complete.
 - ⬜ GitHub **issue templates** (Bug / Feedback) + `CONTRIBUTING.md` confirmed as the intake.
 - ⬜ Repo visibility flip + a published release tag.

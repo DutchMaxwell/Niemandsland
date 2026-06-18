@@ -49,6 +49,7 @@ const BROWSE_TIMEOUT_S := 8.0
 @onready var browse_online_btn: MenuListButton = %BrowseOnlineBtn
 @onready var load_battle_btn: MenuListButton = %LoadBattleBtn
 @onready var report_problem_btn: MenuListButton = %ReportProblemBtn
+@onready var credits_btn: MenuListButton = %CreditsBtn
 @onready var exit_game_btn: MenuListButton = %ExitGameBtn
 @onready var ticker: MenuTicker = %Ticker
 @onready var version_label: Label = %VersionLabel
@@ -114,6 +115,7 @@ func _ready() -> void:
 	browse_online_btn.pressed.connect(_on_browse_online_pressed)
 	load_battle_btn.pressed.connect(_on_load_battle_pressed)
 	report_problem_btn.pressed.connect(_on_report_problem_pressed)
+	credits_btn.pressed.connect(_on_credits_pressed)
 	exit_game_btn.pressed.connect(_on_exit_pressed)
 	exit_game_btn.accent_color = HudTokens.DANGER
 	exit_game_btn.add_theme_color_override("font_color", HudTokens.DANGER)
@@ -256,6 +258,25 @@ func _on_report_problem_pressed() -> void:
 		dialog.dialog_text = "Could not write the diagnostics file.\nThe log lives at user://logs/niemandsland.log."
 	else:
 		dialog.dialog_text = "Saved an anonymised diagnostics file to:\n%s\n\nAttach it to a bug report — it carries no player names, room codes or your username." % path
+	add_child(dialog)
+	dialog.popup_centered()
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.canceled.connect(dialog.queue_free)
+
+
+## In-app credits / license summary, so the model attribution (CC-BY-SA) is visible to players,
+## not only in the repo docs. Full text lives in THIRD_PARTY.md.
+func _on_credits_pressed() -> void:
+	var dialog := AcceptDialog.new()
+	dialog.title = "Credits & Licenses"
+	dialog.dialog_text = "Niemandsland — © the Niemandsland project.\n\n" \
+		+ "Game code: MIT License.\n" \
+		+ "3D miniatures & terrain: generated project assets, CC-BY-SA 4.0.\n" \
+		+ "Fonts: SIL Open Font License.\n" \
+		+ "UI icons: Phosphor Icons (MIT).\n" \
+		+ "Engine: Godot Engine (MIT).\n\n" \
+		+ "OnePageRules army data is loaded at runtime via the Army Forge API; it is not bundled.\n\n" \
+		+ "Full details: THIRD_PARTY.md in the project repository."
 	add_child(dialog)
 	dialog.popup_centered()
 	dialog.confirmed.connect(dialog.queue_free)
