@@ -19,10 +19,10 @@ extends Node
 const VERSION_SETTING: String = "application/config/version"
 
 ## GitHub Releases REST endpoint (list form, so alpha prereleases are included).
-const RELEASES_API_URL: String = "https://api.github.com/repos/DutchMaxwell/openTTS/releases"
+const RELEASES_API_URL: String = "https://api.github.com/repos/DutchMaxwell/Niemandsland/releases"
 
 ## Human-facing releases page, used as the download target when an entry lacks a URL.
-const RELEASES_PAGE_URL: String = "https://github.com/DutchMaxwell/openTTS/releases"
+const RELEASES_PAGE_URL: String = "https://github.com/DutchMaxwell/Niemandsland/releases"
 
 ## Whether prereleases (the project's alpha/beta line) count as offerable updates.
 const INCLUDE_PRERELEASES: bool = true
