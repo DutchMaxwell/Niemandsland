@@ -49,14 +49,6 @@ planned and where ideas go. For what already works see
 
 ## 🧊 Ideas (icebox — captured, not committed)
 
-- **Screenshots + state in bug reports** — let players attach a screenshot to the "Report a
-  problem" bundle (e.g. an auto-grab at the moment they hit report, plus an optional hotkey that
-  writes the current action/state into the log). The diagnostics report today carries only the
-  scrubbed text log + system info, so it captures **crashes and load/spawn failures** — but
-  purely **visual/behavioural glitches** (a mini clipping terrain, wrong scale/orientation, a
-  misplaced model, off line-of-sight) raise no error and stay invisible to the log. For a 3D
-  sandbox a screenshot is the natural capture, and the single biggest lever for actionable
-  gameplay-bug feedback. _M_
 - **Multi-level terrain** — per-cell elevation and ramps. (Walkable multi-storey ruin
   floors already shipped via the sandbox terrain; this is the grid-editor / per-cell
   elevation side.) The surface-aware placement raycast (models rest on terrain tops) is
@@ -78,7 +70,9 @@ planned and where ideas go. For what already works see
 
 ## ✅ Recently shipped
 
-See [`CHANGELOG.md`](../CHANGELOG.md). Highlights (0.3.5 round-up): the **multiplayer
+See [`CHANGELOG.md`](../CHANGELOG.md). Highlights (0.3.5 round-up): **in-game F12 bug report
+with screenshot** (capture a visual glitch + bundle it with the anonymised log into a zip on the
+Desktop — the natural capture for the bugs the text log can't see); the **multiplayer
 two-client live test passed** — the reconnect / rate-limit / army-sync cascade was
 live-validated across two real clients (wall-clock send-rate cap, host-kick fix, deserialize
 yield, restore-lock + `network_id` idempotency, Sort-Table mirror, mid-session tooltip sync);
