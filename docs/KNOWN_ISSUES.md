@@ -48,7 +48,11 @@ not there yet and what to watch for. The full done / in-progress / planned break
 
 ## Found a bug? Send us a report
 
-Use **"Report a problem"** in the start menu. It writes an **anonymised** diagnostics bundle
-(version + build hash + OS/GPU + recent log + MP error counts — **no** username, player names or
-room codes) and opens the folder, so you can attach it to a [GitHub
-issue](../../issues/new/choose). That's the fastest way to get something fixed.
+- **In-game:** Press **`F12`** to grab a screenshot and bundle it with the anonymised log into a
+  zip on your Desktop — attach it when you file the issue. Useful for visual glitches that never
+  appear in the log.
+- **Start menu:** Use **"Report a problem"** to export an anonymised diagnostics bundle (version +
+  build hash + OS/GPU + recent log + MP error counts — **no** username, player names or room codes).
+- **GitHub:** [Open an issue](../../issues/new/choose) using the Bug report or Feedback template.
+
+That's the fastest way to get something fixed.

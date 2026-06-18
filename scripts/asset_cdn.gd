@@ -10,7 +10,7 @@ extends RefCounted
 
 ## The live asset host (scheme + authority, no trailing slash). Mirror this value
 ## in the asset-pipeline repo (cdn_config.py) so re-published manifests stay in sync.
-const HOST := "https://<legacy-cdn-host>"
+const HOST := "https://assets.niemandsland.xyz"
 
 ## Placeholder used in manifest base_urls in place of the host.
 const TOKEN := "{cdn}"

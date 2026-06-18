@@ -4,6 +4,24 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [0.3.5.7-alpha] — 2026-06-18
+
+Go-public prep pulled forward (de-risks the `0.3.6` cut by exercising the new URLs/domain early).
+
+### Added
+- **In-app "Credits & Licenses"** dialog in the start menu — surfaces the model **CC-BY-SA 4.0**
+  attribution (plus code MIT, fonts OFL, Phosphor MIT, Godot MIT) to players, not only in repo docs.
+- **Getting Started** player quickstart (`docs/GETTING_STARTED.md`) + expanded **Known Issues**.
+
+### Changed
+- **Asset CDN host → `assets.niemandsland.xyz`.** `<legacy-cdn-host>` stays live in parallel
+  (same R2 bucket) so builds already in the wild keep working.
+- **Update-checker + clone URLs → the `Niemandsland` repo** (were `openTTS`; GitHub redirects
+  covered the old name until now).
+- **THIRD_PARTY**: declared the app icon + bundled terrain textures, and pinned the generated
+  miniatures / terrain / icon to **CC-BY-SA 4.0** (closing the undeclared-asset gap).
+
+
 ## [0.3.5.6-alpha] — 2026-06-18
 
 ### Fixed
