@@ -73,7 +73,9 @@ static func model_base_radius_m(model: ModelInstance) -> float:
 	var game_unit = model.unit
 	if game_unit.unit_properties == null:
 		return DEFAULT_BASE_RADIUS_M
-	var props: Dictionary = game_unit.unit_properties
+	# Use the model's ACTUAL base (a per-model Tough upgrade enlarges it; mesh stays natural).
+	var model_tough := int(model.properties.get("tough", 0)) if model.properties else 0
+	var props: Dictionary = OPRArmyManager.effective_base_props(game_unit.unit_properties, model_tough)
 	if props.get("base_is_oval", false):
 		var width_mm: float = props.get("base_width_mm", 32)
 		var depth_mm: float = props.get("base_depth_mm", 32)
