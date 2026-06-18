@@ -232,7 +232,9 @@ func _highlight_model(model: ModelInstance, color: Color, pulse: bool = true) ->
 	if model.unit:
 		var game_unit = model.unit as GameUnit
 		if game_unit and game_unit.unit_properties:
-			var base_mm = game_unit.unit_properties.get("base_size_round", 32)
+			# Match the model's ACTUAL base (a per-model Tough upgrade enlarges it).
+			var model_tough := int(model.properties.get("tough", 0)) if model.properties else 0
+			var base_mm = OPRArmyManager.model_base_long_mm(int(game_unit.unit_properties.get("base_size_round", 32)), model_tough)
 			base_radius_m = (base_mm / 2.0) * 0.001
 
 	var highlight = Node3D.new()

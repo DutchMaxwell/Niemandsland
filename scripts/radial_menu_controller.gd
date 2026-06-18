@@ -687,10 +687,13 @@ func _get_active_tokens(model_node: Node3D) -> Array[String]:
 
 
 ## Gets the base radius for a unit (in meters).
-func _get_base_radius(unit: GameUnit) -> float:
+func _get_base_radius(unit: GameUnit, model_node: Node3D = null) -> float:
 	var base_radius = 0.016  # Default 32mm base
 	if unit and unit.unit_properties:
-		var props = unit.unit_properties
+		# Use the model's ACTUAL base when a model is given: a per-model Tough upgrade enlarges it
+		# (the mesh stays natural-sized), so tokens / equipment rings sit on the base you see.
+		var model_tough := _model_tough_of(model_node) if model_node else 0
+		var props = OPRArmyManager.effective_base_props(unit.unit_properties, model_tough)
 		if props.get("base_is_oval", false) or props.get("base_is_square", false):
 			var w := float(props.get("base_width_mm", 0))
 			var d := float(props.get("base_depth_mm", 0))
@@ -703,6 +706,15 @@ func _get_base_radius(unit: GameUnit) -> float:
 			var base_mm = props.get("base_size_round", 32)
 			base_radius = (base_mm / 2.0) * 0.001
 	return base_radius
+
+
+## The per-model Tough value (drives the enlarged base), 0 if none.
+func _model_tough_of(model_node: Node3D) -> int:
+	if model_node and model_node.has_meta("model_instance"):
+		var m = model_node.get_meta("model_instance")
+		if m is ModelInstance and m.properties != null:
+			return int(m.properties.get("tough", 0))
+	return 0
 
 
 ## Calculates positions for tokens around the base edge, centered at 9 o'clock.
@@ -764,7 +776,7 @@ func _get_best_token_side(model_node: Node3D, unit: GameUnit, base_radius: float
 			continue
 
 		var other_pos = other_model.node.global_position
-		var other_base_radius = _get_base_radius(unit)
+		var other_base_radius = _get_base_radius(unit, other_model.node)
 
 		# Check each token position on the left side
 		for angle in angles:
@@ -881,7 +893,7 @@ func _reposition_tokens_boundary(container: Node3D, unit: GameUnit, tokens: Arra
 
 ## Repositions tokens in a circle around base (for model tokens).
 func _reposition_tokens_circular(model_node: Node3D, unit: GameUnit, tokens: Array[String], new_token_name: String = "") -> void:
-	var base_radius = _get_base_radius(unit)
+	var base_radius = _get_base_radius(unit, model_node)
 
 	# Determine the best side to place tokens (avoids overlapping with other models)
 	var best_side = _get_best_token_side(model_node, unit, base_radius, tokens.size())
@@ -1421,7 +1433,7 @@ func _render_special_weapon_ring(model: ModelInstance) -> void:
 	if items.is_empty():
 		return
 
-	var base_radius := _get_base_radius(unit)
+	var base_radius := _get_base_radius(unit, model.node)
 	var ring_color := _unit_base_color(unit).lightened(0.25)
 	var ring_root := Node3D.new()
 	ring_root.name = SPECIAL_WEAPON_RING_NODE
