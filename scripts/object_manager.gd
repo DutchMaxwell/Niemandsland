@@ -2942,7 +2942,13 @@ func get_cursor_table_position() -> Vector3:
 func _base_footprint(obj: Node3D) -> Vector2:
 	var game_unit = UnitUtils.get_game_unit(obj)
 	if game_unit and game_unit.unit_properties:
-		var props: Dictionary = game_unit.unit_properties
+		# Use the model's ACTUAL base: a per-model Tough upgrade enlarges it (the mesh stays
+		# natural-sized). The per-model Tough lives on the model_instance.
+		var model_tough := 0
+		var mi = UnitUtils.get_model_instance(obj)
+		if mi and mi.properties:
+			model_tough = int(mi.properties.get("tough", 0))
+		var props: Dictionary = OPRArmyManager.effective_base_props(game_unit.unit_properties, model_tough)
 		if props.get("base_is_oval", false):
 			return Vector2(float(props.get("base_width_mm", 32)), float(props.get("base_depth_mm", 32))) * 0.001
 		var diameter := float(props.get("base_size_round", 32)) * 0.001

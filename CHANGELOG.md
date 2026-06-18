@@ -4,6 +4,19 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [0.3.5.5-alpha] — 2026-06-18
+
+### Fixed
+- **Per-model Tough base no longer scale-creeps the model.** When a model's Tough(X) warranted a
+  bigger base than the unit's suggested size, the model mesh was scaled up with it. The mesh is now
+  fitted to the model's **natural** base; only the base (ring + collision) grows. Both spawn paths
+  (import + save/MP restore).
+- **Tokens & measuring now anchor to the enlarged base.** Range rings, the movement reach indicator
+  and arrangement spacing read the model's **actual** (Tough-enlarged) base via a shared
+  `OPRArmyManager.effective_base_props` helper, instead of the unit-suggested size — so the
+  measuring edge matches the base you see. (The unit boundary outline already did this.)
+
+
 ## [0.3.5.4-alpha] — 2026-06-18
 
 ### Added
