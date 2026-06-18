@@ -53,6 +53,9 @@ Legend: ✅ done · 🔧 in `0.3.5.x` · ⬜ to do · ❓ decision needed
 - ✅ Desktop exports configured for **Linux / Windows / macOS** (`export_presets.cfg`); test
   builds shipped via Bathöhle; boot build-hash on every build.
 - ✅ Anonymous **diagnostics export** ("Report a problem") for player bug reports.
+- ✅ **In-game F12 bug report with screenshot** (0.3.5.4) — grabs the current view + bundles it
+  with the scrubbed log into a zip on the Desktop; covers the visual/behavioural glitches the
+  text log can't see (the biggest lever for actionable gameplay-bug feedback).
 - ✅ `UpdateChecker` autoload checks **GitHub Releases** at startup.
 - ✅ **Release channel: GitHub Releases** (desktop downloads), plus the direct Bathöhle hand-off
   for `0.3.5.x` testers (decision 1). **itch.io / web publishing is dropped — not pursued for now.**
@@ -119,6 +122,9 @@ Legend: ✅ done · 🔧 in `0.3.5.x` · ⬜ to do · ❓ decision needed
 5. **Feature scope: ship the current state.** No polish items are `0.3.6` blockers — the
    sandbox + multiplayer as they stand. Regiment handling, measure-on-pickup, coherency sharpen
    and contextual control hints are all **post-Alpha**. `0.3.6` work = **docs + go-public only**.
+   _Exception (maintainer-added 2026-06-18): the in-game **F12 screenshot bug report** shipped in
+   `0.3.5.4` — it directly improves alpha feedback quality and aids the soak test, so it was pulled
+   into scope despite the docs-only rule._
 
 ## Remaining `0.3.5.x` work (proposed order)
 

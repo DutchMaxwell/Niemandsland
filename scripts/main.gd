@@ -561,7 +561,48 @@ func _dismiss_transition_overlay() -> void:
 			node.fade_and_free()
 
 
+## F12 in-game: grab the current view + bundle an anonymised report (recent log + this
+## screenshot) into a zip on the Desktop. Player names / room code / OS username are scrubbed.
+## The natural capture for visual glitches (a mini clipping terrain, wrong scale, a misplaced
+## model) that raise no error and so never reach the log on their own.
+func _capture_bug_report() -> void:
+	var stamp: String = Time.get_datetime_string_from_system().replace(":", "-")
+	var tex: ViewportTexture = get_viewport().get_texture()
+	var image: Image = tex.get_image() if tex else null
+	if image != null and image.get_format() != Image.FORMAT_RGBA8:
+		image.convert(Image.FORMAT_RGBA8)  # PNG-safe (the viewport may be an HDR format)
+	var names: Array = network_manager.player_names.values() if network_manager else []
+	var room: String = internet_lobby.room_code if internet_lobby else ""
+	var path: String = DiagnosticsReporter.export_report_with_screenshot(stamp, image, names, room)
+	if path.is_empty():
+		_show_toast("⚠ Bug report could not be saved")
+	else:
+		_show_toast("📸 Bug report saved to your Desktop: %s" % path.get_file())
+
+
+## Brief, non-blocking on-screen message that auto-fades (there was no toast system before).
+func _show_toast(text: String) -> void:
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 18)
+	label.add_theme_color_override("font_color", Color(0.92, 0.96, 1.0))
+	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	label.add_theme_constant_override("outline_size", 4)
+	label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 48)
+	$UI.add_child(label)
+	var tw := create_tween()
+	tw.tween_interval(3.0)
+	tw.tween_property(label, "modulate:a", 0.0, 0.7)
+	tw.tween_callback(label.queue_free)
+
+
 func _unhandled_key_input(event: InputEvent) -> void:
+	# F12: capture a bug report (current view screenshot + scrubbed log) to the Desktop,
+	# regardless of focus, so an in-game visual glitch ships WITH the report.
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F12:
+		_capture_bug_report()
+		get_viewport().set_input_as_handled()
+		return
 	# While a text field (e.g. the chat input) is focused, no game shortcut may
 	# fire — especially Delete/Backspace (deletes objects) and the number keys.
 	if get_viewport().gui_get_focus_owner() is LineEdit:
