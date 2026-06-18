@@ -4,6 +4,24 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [0.3.5.3-alpha] — 2026-06-18
+
+Test-build delta over `0.3.5.2` (handed to the tester):
+
+### Fixed
+- **Generic-object radial "Info" now shows a popup** (object name + type) instead of only
+  printing to the log — this also wires up the previously-unused model-info popup.
+
+### Changed
+- **Dead-code cleanup** — removed the long-hidden in-game import UI (direct 3D-model load,
+  TTS save-file import), the superseded in-game table-size panel, the legacy TTS terrain
+  browser + its empty `TerrainLibrary`, and the now-orphaned TTS save-file import path +
+  parser. No user-facing feature lost (all were hidden / unreachable); the casual sandbox
+  "Terrain Mode" toggle moved next to the map-layout button.
+- **Test coverage** raised 558 → 614 (new regression suites for object_manager, OPR import,
+  network state, map-editor grid math, and radial menus).
+
+
 ## [Unreleased]
 
 > **Road to Alpha (`0.3.6`).** The entries below accumulate toward the first public Alpha; see
