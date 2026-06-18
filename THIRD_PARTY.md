@@ -20,7 +20,9 @@ licenses — the canonical notice for an open-source release.
 | Orbitron (font) | SIL OFL 1.1 | yes | `assets/ui_glassmorphism/fonts/Orbitron.ttf` + `Orbitron-LICENSE.txt` (title wordmark; RFN "Orbitron") |
 | Phosphor Icons | MIT | yes | `assets/ui_glassmorphism/icons/` + `Phosphor-LICENSE.txt` (UI icons, SVG, bold style) |
 | 3D dice (own W6) | MIT | yes | `scripts/dice_tray.gd`, `scripts/dice_d6.gd` (replaced the former AGPL addon) |
-| Miniature GLBs | project-internal (AI-generated) | on-demand | see *Generated assets* below |
+| App icon | CC-BY-SA 4.0 | yes | `icon.png` — the Niemandsland "N" monogram (project original) |
+| Bundled textures | CC-BY-SA 4.0 | yes | `assets/terrain/table_surface_default.png`, `assets/terrain/props/ruins_wall.webp` (project-generated) |
+| Miniature GLBs | CC-BY-SA 4.0 (AI-generated) | on-demand | see *Generated assets* below |
 | CC0 battlefield ambience | CC0 | on-demand (R2) | freesound.org recordings (e.g. "Dark Ambient Loop" by goulven); manifest `assets/ambience_manifest.json`, see `scripts/ambience_library.gd` |
 | Microsoft TRELLIS | MIT | no (dev tool) | image→3D model generation (asset-pipeline repo); GLB outputs are ours |
 | `model-viewer` (Google) | Apache-2.0 | no (dev tool) | 3D preview in the Model Forge review UI |
@@ -33,7 +35,8 @@ The miniature GLBs are **AI-generated** by the offline Model Forge pipeline
 (in the separate asset-pipeline repo, not part of this repo or the shipped game): image generation → **Microsoft
 TRELLIS** (MIT; outputs are ours) → optimized GLB. They are delivered **on-demand**
 from a CDN (see [`docs/ASSET_DELIVERY.md`](docs/ASSET_DELIVERY.md)), not bundled in
-the build.
+the build. These generated visual assets (miniatures, terrain textures, app icon) are
+released under **CC-BY-SA 4.0**.
 
 ## Dev-only tooling (separate asset-pipeline repo)
 
