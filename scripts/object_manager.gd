@@ -1436,7 +1436,13 @@ func _get_edge_distance_in_direction(obj: Node3D, dir_x: float, dir_z: float) ->
 	if not game_unit or not game_unit.unit_properties:
 		return MINIATURE_RADIUS
 
-	var props = game_unit.unit_properties
+	# Use the model's ACTUAL base: a per-model Tough upgrade enlarges it (the mesh stays
+	# natural-sized), so the ruler edge anchors to the base you see, not the suggested one.
+	var edge_tough := 0
+	var edge_mi = UnitUtils.get_model_instance(obj)
+	if edge_mi and edge_mi.properties:
+		edge_tough = int(edge_mi.properties.get("tough", 0))
+	var props = OPRArmyManager.effective_base_props(game_unit.unit_properties, edge_tough)
 
 	if props.get("base_is_oval", false):
 		# Oval base - calculate actual ellipse edge distance
