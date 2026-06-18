@@ -571,6 +571,30 @@ static func model_base_long_mm(unit_base_long_mm: int, model_tough: int) -> int:
 	return maxi(unit_base_long_mm, OPRApiClient._base_size_from_tough(model_tough))
 
 
+## Returns a copy of `props` with the base dimensions scaled up to the per-model Tough-enlarged
+## base (never shrinks). Tokens / measuring / range rings call this so they anchor to a model's
+## ACTUAL (enlarged) base, not the unit-suggested one — while the model MESH stays natural-sized.
+## Returns the same dict unchanged when no enlargement applies.
+static func effective_base_props(props: Dictionary, model_tough: int) -> Dictionary:
+	if model_tough <= 0 or props.is_empty():
+		return props
+	var is_oval: bool = props.get("base_is_oval", false) or props.get("base_is_square", false)
+	var natural_long: int = int(maxi(int(props.get("base_width_mm", 0)), int(props.get("base_depth_mm", 0)))) if is_oval else int(props.get("base_size_round", 0))
+	if natural_long <= 0:
+		return props
+	var effective: int = model_base_long_mm(natural_long, model_tough)
+	if effective <= natural_long:
+		return props
+	var copy: Dictionary = props.duplicate()
+	if is_oval:
+		var ratio := float(effective) / float(natural_long)
+		copy["base_width_mm"] = int(round(int(props.get("base_width_mm", 0)) * ratio))
+		copy["base_depth_mm"] = int(round(int(props.get("base_depth_mm", 0)) * ratio))
+	else:
+		copy["base_size_round"] = effective
+	return copy
+
+
 func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_suffix: String = "", faction_folder: String = "", base_long_override_mm: int = 0) -> StaticBody3D:
 	var wrapper = StaticBody3D.new()
 	wrapper.collision_layer = MINIATURE_COLLISION_LAYER
@@ -586,7 +610,12 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 	# Per-model base: a weapon-team / Tough upgrade enlarges THIS model's base (never shrinks).
 	# Computed before the mesh so mesh/GLB-fit/collision all read the corrected dims.
-	var base_long_mm: int = int(max(unit.base_width_mm, unit.base_depth_mm)) if (base_is_oval or unit.base_is_square) else unit.base_size_round
+	# Natural base = the unit's OPR-suggested size. The model mesh is fitted to THIS, never to the
+	# Tough-enlarged base — otherwise enlarging the base scale-creeps the character (the base grows,
+	# the model should not). The enlarged base only drives the ring/collision (and tokens/measuring,
+	# which re-derive it from Tough).
+	var natural_base_long_mm: int = int(max(unit.base_width_mm, unit.base_depth_mm)) if (base_is_oval or unit.base_is_square) else unit.base_size_round
+	var base_long_mm: int = natural_base_long_mm
 	if base_long_override_mm > base_long_mm:
 		var ratio := float(base_long_override_mm) / float(maxi(1, base_long_mm))
 		base_long_mm = base_long_override_mm
@@ -652,7 +681,7 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 			# Modell an die Base anpassen (Footprint-Cap gegen Scale-Creep, Flying schwebt)
 			var aabb = _get_model_aabb(glb_instance)
 			var tough = _get_tough_value(unit)
-			var fit = _compute_model_fit(aabb, base_long_mm, tough, should_hover)
+			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, should_hover)
 			var final_scale = fit.scale
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
@@ -753,7 +782,11 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> St
 
 	# Per-model base: re-derive the carrier model's bigger base from its synced per-model Tough
 	# (never shrink). model_tough travels via model.properties["tough"] over save/load + MP sync.
-	var base_long_mm: int = max(int(props.get("base_width_mm", 32)), int(props.get("base_depth_mm", 32))) if base_is_oval else base_size_round
+	# Natural base = the saved OPR-suggested size; the model mesh is fitted to THIS, not to the
+	# Tough-enlarged base (no scale creep). The enlarged base drives only ring/collision (+ tokens
+	# and measuring, which re-derive it from Tough).
+	var natural_base_long_mm: int = max(int(props.get("base_width_mm", 32)), int(props.get("base_depth_mm", 32))) if base_is_oval else base_size_round
+	var base_long_mm: int = natural_base_long_mm
 	var per_model_override_mm: int = model_base_long_mm(base_long_mm, model_tough)
 	if per_model_override_mm > base_long_mm:
 		var ratio := float(per_model_override_mm) / float(maxi(1, base_long_mm))
@@ -813,7 +846,7 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> St
 		if glb_instance:
 			var aabb = _get_model_aabb(glb_instance)
 			var tough = _get_tough_value_from_rules(props.get("special_rules", []))
-			var fit = _compute_model_fit(aabb, base_long_mm, tough, should_hover)
+			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, should_hover)
 			var final_scale = fit.scale
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)

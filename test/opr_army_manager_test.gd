@@ -110,3 +110,44 @@ func test_get_model_aabb_empty_node_is_zero() -> void:
 	var root: Node3D = auto_free(Node3D.new())
 	var aabb: AABB = m._get_model_aabb(root)
 	assert_float(aabb.size.length()).is_equal_approx(0.0, 0.0001)
+
+
+# ===== effective_base_props: per-model Tough enlarges the base for tokens/measuring =====
+# The mesh stays natural-sized (fixed in _create_unit_model/create_model_from_properties);
+# THIS is what tokens/range-rings/measuring read so they anchor to the actual enlarged base.
+
+func test_effective_base_round_enlarged_by_tough() -> void:
+	# 25 mm round + Tough(6) -> 60 mm base (max(25, 60)).
+	var out := OPRArmyManager.effective_base_props({"base_size_round": 25}, 6)
+	assert_int(out["base_size_round"]).is_equal(60)
+
+
+func test_effective_base_no_tough_is_unchanged() -> void:
+	var out := OPRArmyManager.effective_base_props({"base_size_round": 25}, 0)
+	assert_int(out["base_size_round"]).is_equal(25)
+
+
+func test_effective_base_low_tough_below_base_is_unchanged() -> void:
+	# Tough(2) -> from_tough 0 -> max(32, 0) = 32, no growth.
+	var out := OPRArmyManager.effective_base_props({"base_size_round": 32}, 2)
+	assert_int(out["base_size_round"]).is_equal(32)
+
+
+func test_effective_base_already_big_is_unchanged() -> void:
+	# 80 mm round + Tough(6) (->60) -> stays 80 (never shrink).
+	var out := OPRArmyManager.effective_base_props({"base_size_round": 80}, 6)
+	assert_int(out["base_size_round"]).is_equal(80)
+
+
+func test_effective_base_oval_scales_both_axes_by_ratio() -> void:
+	# Oval 35x60 (long=60) + Tough(12) (->120): ratio 2.0 -> 70x120.
+	var out := OPRArmyManager.effective_base_props(
+		{"base_is_oval": true, "base_width_mm": 35, "base_depth_mm": 60}, 12)
+	assert_int(int(out["base_width_mm"])).is_equal(70)
+	assert_int(int(out["base_depth_mm"])).is_equal(120)
+
+
+func test_effective_base_does_not_mutate_input() -> void:
+	var original := {"base_size_round": 25}
+	OPRArmyManager.effective_base_props(original, 6)
+	assert_int(original["base_size_round"]).is_equal(25)  # copy, not in-place

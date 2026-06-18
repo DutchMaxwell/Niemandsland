@@ -179,15 +179,29 @@ func _clear_node(model_node: Node3D) -> void:
 
 ## A model node's unit_properties (game_unit meta, or via model_instance.unit), or {}.
 func _props_of(model_node: Node3D) -> Dictionary:
+	var props: Dictionary = {}
 	if model_node.has_meta("game_unit"):
 		var gu = model_node.get_meta("game_unit")
 		if gu is GameUnit and gu.unit_properties != null:
-			return gu.unit_properties
-	if model_node.has_meta("model_instance"):
+			props = gu.unit_properties
+	if props.is_empty() and model_node.has_meta("model_instance"):
 		var m = model_node.get_meta("model_instance")
 		if m is ModelInstance and m.unit is GameUnit and m.unit.unit_properties != null:
-			return m.unit.unit_properties
-	return {}
+			props = m.unit.unit_properties
+	if props.is_empty():
+		return {}
+	# Anchor the bands to the model's ACTUAL base: a per-model Tough upgrade enlarges it (the mesh
+	# stays natural-sized, but the base — and so the measuring edge — grows).
+	return OPRArmyManager.effective_base_props(props, _model_tough_of(model_node))
+
+
+## The per-model Tough value (drives the enlarged base), 0 if none.
+func _model_tough_of(model_node: Node3D) -> int:
+	if model_node.has_meta("model_instance"):
+		var m = model_node.get_meta("model_instance")
+		if m is ModelInstance and m.properties != null:
+			return int(m.properties.get("tough", 0))
+	return 0
 
 
 ## Flat ring (annulus) mesh in the XZ plane between inner and outer radius.
