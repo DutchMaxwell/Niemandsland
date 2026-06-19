@@ -3171,6 +3171,246 @@
       "url": "62e2907f9587c37d2440e148966fc05f3ffd43c4762b6bc9e4e6cf10efbc19ab.glb",
       "sha256": "62e2907f9587c37d2440e148966fc05f3ffd43c4762b6bc9e4e6cf10efbc19ab",
       "size": 18619536
+    },
+    "change_disciples/change_apc": {
+      "url": "0427a78430c8b0b8e212b63e717d501caa3370001d0e4c62d9fd3363ef0ab669.glb",
+      "sha256": "0427a78430c8b0b8e212b63e717d501caa3370001d0e4c62d9fd3363ef0ab669",
+      "size": 18863088
+    },
+    "change_disciples/change_birdman_champion": {
+      "url": "2d674f1eed274f50b887aec8a514cc54c4df497d89cc5cca7a0dc2e8947befbb.glb",
+      "sha256": "2d674f1eed274f50b887aec8a514cc54c4df497d89cc5cca7a0dc2e8947befbb",
+      "size": 15306864
+    },
+    "change_disciples/change_birdmen": {
+      "url": "e01d11021df5c761400477c3998c40ac8a628e7442a6ff4fa0524266e88001e4.glb",
+      "sha256": "e01d11021df5c761400477c3998c40ac8a628e7442a6ff4fa0524266e88001e4",
+      "size": 13673976
+    },
+    "change_disciples/change_birdmen_disc_riders": {
+      "url": "9ad57a4f9c38d64620a2821758fea3e00e4dc6c1c3b04e0a1bcd0ac1259f2ef6.glb",
+      "sha256": "9ad57a4f9c38d64620a2821758fea3e00e4dc6c1c3b04e0a1bcd0ac1259f2ef6",
+      "size": 15340920
+    },
+    "change_disciples/change_brothers": {
+      "url": "b1a5bb652743f2881ee6770dfaf0e8d3f26d49fda2e39be4cae97e07be948bb6.glb",
+      "sha256": "b1a5bb652743f2881ee6770dfaf0e8d3f26d49fda2e39be4cae97e07be948bb6",
+      "size": 14397476
+    },
+    "change_disciples/change_champion": {
+      "url": "6ba2ca2a5904b0a65e82bc4b8a92fcc7949238b2bb6798b300d7a68fdcbc869a.glb",
+      "sha256": "6ba2ca2a5904b0a65e82bc4b8a92fcc7949238b2bb6798b300d7a68fdcbc869a",
+      "size": 15296204
+    },
+    "change_disciples/change_crab_walker": {
+      "url": "4ab2072180e0a9543aaedf20685de4b798292563a604f85bd2d97cf07ba1da27.glb",
+      "sha256": "4ab2072180e0a9543aaedf20685de4b798292563a604f85bd2d97cf07ba1da27",
+      "size": 15365148
+    },
+    "change_disciples/change_cultist_champion": {
+      "url": "1c2030b707e5902a6ed49541f1c41418ad83e194b73c34fd2628ab1b8abc5626.glb",
+      "sha256": "1c2030b707e5902a6ed49541f1c41418ad83e194b73c34fd2628ab1b8abc5626",
+      "size": 14941204
+    },
+    "change_disciples/change_cultists": {
+      "url": "169cc54843c5195696f23bedcf631aee59edc58bf39d6c87e432cb027e0f890e.glb",
+      "sha256": "169cc54843c5195696f23bedcf631aee59edc58bf39d6c87e432cb027e0f890e",
+      "size": 15735736
+    },
+    "change_disciples/change_destroyer_champion": {
+      "url": "13ddb27af0ad47e47938383cf87af142280e779e34e3b5fd49a5306da3f7b3ec.glb",
+      "sha256": "13ddb27af0ad47e47938383cf87af142280e779e34e3b5fd49a5306da3f7b3ec",
+      "size": 14462204
+    },
+    "change_disciples/change_destroyers": {
+      "url": "dd88b3ee711b586f0e8936084b7e1591a627dc6a1f23a8a62dfb5bcd6fd85cc5.glb",
+      "sha256": "dd88b3ee711b586f0e8936084b7e1591a627dc6a1f23a8a62dfb5bcd6fd85cc5",
+      "size": 14529348
+    },
+    "change_disciples/change_dragon": {
+      "url": "896befb6921215e3166e92fbc7ce156bdb241ca0cc1251d9d187424b59ae0e2c.glb",
+      "sha256": "896befb6921215e3166e92fbc7ce156bdb241ca0cc1251d9d187424b59ae0e2c",
+      "size": 16515368
+    },
+    "change_disciples/change_greater_mutated": {
+      "url": "70aaf054763f1e9265e7f296a6c07046ab30d2af3352099e5f18eda568165962.glb",
+      "sha256": "70aaf054763f1e9265e7f296a6c07046ab30d2af3352099e5f18eda568165962",
+      "size": 16198912
+    },
+    "change_disciples/change_heavy_tank": {
+      "url": "8e3948d92d83f7a4d7e3a1d376e75c824333d0180e1375bd94887e49a0e37154.glb",
+      "sha256": "8e3948d92d83f7a4d7e3a1d376e75c824333d0180e1375bd94887e49a0e37154",
+      "size": 17154496
+    },
+    "change_disciples/change_infernal_brute": {
+      "url": "8a9f48f4c5e05cc4bed769732a9d733c2f817831c41ca4f6f6bbfb6bb6b02177.glb",
+      "sha256": "8a9f48f4c5e05cc4bed769732a9d733c2f817831c41ca4f6f6bbfb6bb6b02177",
+      "size": 15670576
+    },
+    "change_disciples/change_mech_fiend": {
+      "url": "cc02bf6606bd6a006818ad040c96a165e9038cdc73ddb67154483b7e16a9d978.glb",
+      "sha256": "cc02bf6606bd6a006818ad040c96a165e9038cdc73ddb67154483b7e16a9d978",
+      "size": 16507132
+    },
+    "change_disciples/change_mutated_brothers": {
+      "url": "d895295f8add0d36be363d2716b2d3e00680781acfb4a1c54733e8c60d3f32aa.glb",
+      "sha256": "d895295f8add0d36be363d2716b2d3e00680781acfb4a1c54733e8c60d3f32aa",
+      "size": 16510184
+    },
+    "change_disciples/change_mutated_cultists": {
+      "url": "ab628fd7ba671886fce16dade72ac4bfc47e05251c76dca61e1bea8c90cf5c29.glb",
+      "sha256": "ab628fd7ba671886fce16dade72ac4bfc47e05251c76dca61e1bea8c90cf5c29",
+      "size": 15716836
+    },
+    "change_disciples/change_mutated_destroyer": {
+      "url": "14ea671c5e08e99545d1e719b0672e5b8247211b0993e01bbbb89e874ff419d6.glb",
+      "sha256": "14ea671c5e08e99545d1e719b0672e5b8247211b0993e01bbbb89e874ff419d6",
+      "size": 15501400
+    },
+    "change_disciples/change_sentinel_walker": {
+      "url": "b010158d12989103cfd2dd8644750adbf6f4446b88c566689ffd4ae80135e4fa.glb",
+      "sha256": "b010158d12989103cfd2dd8644750adbf6f4446b88c566689ffd4ae80135e4fa",
+      "size": 16228792
+    },
+    "change_disciples/change_support": {
+      "url": "5e2b1bd30efcdef356651deadd57beceb1c0b6b681b5845fddf70ab97d0dd71b.glb",
+      "sha256": "5e2b1bd30efcdef356651deadd57beceb1c0b6b681b5845fddf70ab97d0dd71b",
+      "size": 14074084
+    },
+    "change_disciples/change_tank": {
+      "url": "30807c25b4676d02e86964759a0e32a00171ebbcf9c8499895538d8f23859081.glb",
+      "sha256": "30807c25b4676d02e86964759a0e32a00171ebbcf9c8499895538d8f23859081",
+      "size": 17645100
+    },
+    "change_disciples/change_vortex_beast": {
+      "url": "fdd23ad301981e8f96ae4fd0af13fbaf8a93088f31d18cfba445aef12063ac78.glb",
+      "sha256": "fdd23ad301981e8f96ae4fd0af13fbaf8a93088f31d18cfba445aef12063ac78",
+      "size": 14407328
+    },
+    "change_disciples/chosen_change_brothers": {
+      "url": "5d5044357b8e7c2741260cbbcd258993a3adb2c3de36680915858325f7b73fc1.glb",
+      "sha256": "5d5044357b8e7c2741260cbbcd258993a3adb2c3de36680915858325f7b73fc1",
+      "size": 13975016
+    },
+    "change_disciples/chosen_change_champion": {
+      "url": "f5aec21d8223acddfc73219bbf864a5ac51afd7b70717b9c3990f9aa8560a38e.glb",
+      "sha256": "f5aec21d8223acddfc73219bbf864a5ac51afd7b70717b9c3990f9aa8560a38e",
+      "size": 15397056
+    },
+    "plague_disciples/chosen plague brothers": {
+      "url": "3f6b312e9428aa546b9585144070b3da034c5da40698001a71e8403742e993c8.glb",
+      "sha256": "3f6b312e9428aa546b9585144070b3da034c5da40698001a71e8403742e993c8",
+      "size": 14105540
+    },
+    "plague_disciples/chosen plague champion": {
+      "url": "f7c1b6496f8e75115bd654c7af57b81e4bf2295f0cd86dcc5e27990230ece94c.glb",
+      "sha256": "f7c1b6496f8e75115bd654c7af57b81e4bf2295f0cd86dcc5e27990230ece94c",
+      "size": 14887960
+    },
+    "plague_disciples/plague apc": {
+      "url": "7ac89df38119c73d952c9c49eea1fa37407944c6abb11f7facec932ee35b0b67.glb",
+      "sha256": "7ac89df38119c73d952c9c49eea1fa37407944c6abb11f7facec932ee35b0b67",
+      "size": 18754720
+    },
+    "plague_disciples/plague bikers": {
+      "url": "6c4654190295cb9aec2107c970dc1ab876835cf885c29a60e2a697cb090b1cc4.glb",
+      "sha256": "6c4654190295cb9aec2107c970dc1ab876835cf885c29a60e2a697cb090b1cc4",
+      "size": 17387248
+    },
+    "plague_disciples/plague brothers": {
+      "url": "59970b7141cd1adc546be76cc7f0341f9dc2698c45e9c7f6b576e02db8aef67e.glb",
+      "sha256": "59970b7141cd1adc546be76cc7f0341f9dc2698c45e9c7f6b576e02db8aef67e",
+      "size": 14396648
+    },
+    "plague_disciples/plague champion": {
+      "url": "ad1dbe461471a739c1557baa517ca397659a910a88bffe6c1765844a6bfa9f66.glb",
+      "sha256": "ad1dbe461471a739c1557baa517ca397659a910a88bffe6c1765844a6bfa9f66",
+      "size": 16117756
+    },
+    "plague_disciples/plague crab walker": {
+      "url": "5a141d2caad32c1ab5a9d8e215d837cea324ffc7c8ad2fcb29bf57b7703ab31b.glb",
+      "sha256": "5a141d2caad32c1ab5a9d8e215d837cea324ffc7c8ad2fcb29bf57b7703ab31b",
+      "size": 15386356
+    },
+    "plague_disciples/plague cultist champion": {
+      "url": "1da2690668be81580d518907621a2376d82fd9e9568d82ea6395119254443912.glb",
+      "sha256": "1da2690668be81580d518907621a2376d82fd9e9568d82ea6395119254443912",
+      "size": 13586012
+    },
+    "plague_disciples/plague cultists": {
+      "url": "3ca84ae27bcbfde5abc166ad4d5189cd84462eb67b2d03e552b2145ab628c998.glb",
+      "sha256": "3ca84ae27bcbfde5abc166ad4d5189cd84462eb67b2d03e552b2145ab628c998",
+      "size": 13167288
+    },
+    "plague_disciples/plague destroyer champion": {
+      "url": "bdfe7e342a21c3bbfae7f2f4134e0bae5baf357bde37fc1c5a9136876993825f.glb",
+      "sha256": "bdfe7e342a21c3bbfae7f2f4134e0bae5baf357bde37fc1c5a9136876993825f",
+      "size": 15542656
+    },
+    "plague_disciples/plague destroyers": {
+      "url": "2b2264c50442ef3df2fd8245cc288b498911ed9725d6822ee0c8e7175735f16e.glb",
+      "sha256": "2b2264c50442ef3df2fd8245cc288b498911ed9725d6822ee0c8e7175735f16e",
+      "size": 17748196
+    },
+    "plague_disciples/plague drone": {
+      "url": "0e4f36a3c934c8bd70fed5a47a67c0578b5c48ae6e2726a655c0b1f84f3983a2.glb",
+      "sha256": "0e4f36a3c934c8bd70fed5a47a67c0578b5c48ae6e2726a655c0b1f84f3983a2",
+      "size": 15202540
+    },
+    "plague_disciples/plague greater mutated": {
+      "url": "47548edbc49569f7bb96e8b41f5d89ad0bb9440ab8fdf6f12a73c7b47c9df48a.glb",
+      "sha256": "47548edbc49569f7bb96e8b41f5d89ad0bb9440ab8fdf6f12a73c7b47c9df48a",
+      "size": 13884896
+    },
+    "plague_disciples/plague hauler": {
+      "url": "9d0c82c515c287110ace81238a1ff949b2934fe29e273e20361710e3b6a7626e.glb",
+      "sha256": "9d0c82c515c287110ace81238a1ff949b2934fe29e273e20361710e3b6a7626e",
+      "size": 18400056
+    },
+    "plague_disciples/plague heavy tank": {
+      "url": "df56a8b68b38c1b9c7866ab70fa384bb30ddcb32aa9bd8a42e2feeb42f44a91d.glb",
+      "sha256": "df56a8b68b38c1b9c7866ab70fa384bb30ddcb32aa9bd8a42e2feeb42f44a91d",
+      "size": 18289724
+    },
+    "plague_disciples/plague infernal brute": {
+      "url": "e99f7cedfd2c7b3f05d4d5fecd83f6cc999bff40bc7f9f12bd8adecca436b1a7.glb",
+      "sha256": "e99f7cedfd2c7b3f05d4d5fecd83f6cc999bff40bc7f9f12bd8adecca436b1a7",
+      "size": 15471616
+    },
+    "plague_disciples/plague mech fiend": {
+      "url": "cb97b39e2e28c6eb45b676a36e19cb0cf0b63d76e4abc4024c66b257628d5ce0.glb",
+      "sha256": "cb97b39e2e28c6eb45b676a36e19cb0cf0b63d76e4abc4024c66b257628d5ce0",
+      "size": 16892804
+    },
+    "plague_disciples/plague mutated brothers": {
+      "url": "1704a5c4074d995c5e4a6a8a3e18b59d06cd8f336355bce3957cb142bd248bad.glb",
+      "sha256": "1704a5c4074d995c5e4a6a8a3e18b59d06cd8f336355bce3957cb142bd248bad",
+      "size": 14418220
+    },
+    "plague_disciples/plague mutated cultists": {
+      "url": "47ed936125393c3d514c097ef1d2e3b1df021311eb145f52afe37bd9bed960a7.glb",
+      "sha256": "47ed936125393c3d514c097ef1d2e3b1df021311eb145f52afe37bd9bed960a7",
+      "size": 12680084
+    },
+    "plague_disciples/plague mutated destroyer": {
+      "url": "8decd256908690e45c28b2a828b7dce387435b8de354ebe6b52bd56c9229e73a.glb",
+      "sha256": "8decd256908690e45c28b2a828b7dce387435b8de354ebe6b52bd56c9229e73a",
+      "size": 15571560
+    },
+    "plague_disciples/plague support": {
+      "url": "77707735464f1da7ec89a91fef75f26edabcdc7589d7d753bbb938baa59bd93d.glb",
+      "sha256": "77707735464f1da7ec89a91fef75f26edabcdc7589d7d753bbb938baa59bd93d",
+      "size": 14123028
+    },
+    "plague_disciples/plague tank": {
+      "url": "9c44f8fc7ad90127ccfe67036c11fa19dbc383c192f1a1b4da2f0179904804d1.glb",
+      "sha256": "9c44f8fc7ad90127ccfe67036c11fa19dbc383c192f1a1b4da2f0179904804d1",
+      "size": 19231940
+    },
+    "plague_disciples/plague zombies": {
+      "url": "729d3ba72d7f4a13f956f5bf6c797f5cf05bfc2bc03459d02468eeac0ef1d1e3.glb",
+      "sha256": "729d3ba72d7f4a13f956f5bf6c797f5cf05bfc2bc03459d02468eeac0ef1d1e3",
+      "size": 12769132
     }
   }
 }
