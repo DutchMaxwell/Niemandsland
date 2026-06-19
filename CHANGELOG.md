@@ -4,6 +4,20 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [0.3.5.8-alpha] — 2026-06-19
+
+### Added
+- **Low-framerate online-stability advisory.** During a multiplayer session, a sustained low
+  framerate (the regime that degrades heartbeat cadence + backs up the send queue) now raises a
+  one-shot, non-blocking banner suggesting you lower Graphics Quality, with a one-click action to
+  step it down. MP-only; shows at most once per session.
+
+### Fixed
+- **Concurrent army imports no longer lose models.** A local army import now serializes against an
+  arriving remote army (shared restore-lock), so two near-simultaneous mid-session imports can't
+  clobber each other's bookkeeping. Surfaced + guarded by the new headless MP stress soak.
+
+
 ## [0.3.5.7-alpha] — 2026-06-18
 
 Go-public prep pulled forward (de-risks the `0.3.6` cut by exercising the new URLs/domain early).
