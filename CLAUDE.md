@@ -9,7 +9,7 @@
 
 ## Project
 
-Niemandsland is a desktop **tabletop wargaming simulator** (v0.3.5.7-alpha) for
+Niemandsland is a desktop **tabletop wargaming simulator** (v0.3.5.8-alpha) for
 OnePageRules and similar miniature games.
 
 - **Engine**: Godot **4.6** (Forward+ renderer), `config_version=5`
