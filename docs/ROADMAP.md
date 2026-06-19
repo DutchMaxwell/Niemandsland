@@ -49,6 +49,26 @@ planned and where ideas go. For what already works see
 
 ## 🧊 Ideas (icebox — captured, not committed)
 
+- **MP resilience hardening (Beta) — research-backed** — post-Alpha netcode hardening from a deep-
+  research pass (the 2-player Alpha path is already validated + soak/fault-tested; these are Beta-grade,
+  NOT Alpha blockers). All must be hand-rolled: Godot's `MultiplayerSynchronizer`/`MultiplayerSpawner`
+  do **not** work over our custom WebSocket relay (verified). Each is verifiable via the headless
+  soak/fault harness (`test/mp/`). In priority order:
+  - **Periodic / on-demand authoritative full-state resync** — a host-triggered (or guest-requestable)
+    clean full snapshot as a desync-recovery net, alongside the current event sync (Source delta-vs-ACK
+    model). The army-import burst is the natural full-snapshot path. _M_
+  - **Reconnect session-token + sequence-numbered delta replay** — issue a session token (TTL ~2–5 min);
+    on reconnect replay only the events missed since the guest's last sequence number (in-memory host
+    event log — a relay restart drops everyone anyway), instead of a full restore. Closes the
+    graceful-guest-reconnect gap. _M_
+  - **Bounded retry-with-backoff reconnect** — today reconnect is a single 25 s attempt, so a transient
+    relay hiccup ends the session; add a few randomized-exponential-backoff retries within a total cap
+    (no storm risk at 2 players). _S_
+  - **Additive tag-numbered message-schema versioning** — evolve the wire protocol forward/backward-
+    compatibly (protobuf model, on Godot's `var_to_bytes`) so minor changes interoperate across builds;
+    reserve the hard exact-version refuse for genuine breaking changes. _M_
+  - **Periodic state-hash desync check** — host hashes authoritative state, guests compare + request a
+    full resync on mismatch (no Godot recipe exists; needs prototyping). _S_
 - **Multi-level terrain** — per-cell elevation and ramps. (Walkable multi-storey ruin
   floors already shipped via the sandbox terrain; this is the grid-editor / per-cell
   elevation side.) The surface-aware placement raycast (models rest on terrain tops) is
