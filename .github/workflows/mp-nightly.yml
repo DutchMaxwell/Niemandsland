@@ -53,3 +53,14 @@ jobs:
 
       - name: Fault — blip (socket drop + reconnect)
         run: python test/mp/run_soak.py --godot godot --duration 40 --fault blip
+
+      # Realistic load: a real Army Forge import (downloads GLBs from R2 + syncs to the guest).
+      # best-effort — it depends on the live Army Forge API + R2, which are outside our control,
+      # so a transient external hiccup must not red-fail the nightly (the hermetic steps above gate).
+      - name: OPR full-army soak (real import; + under framedrop)
+        continue-on-error: true
+        env:
+          ARMY: "https://army-forge.onepagerules.com/share?id=xD7I-4GTT6Za&name=Havoc_Brothers"
+        run: |
+          python test/mp/run_soak.py --godot godot --duration 150 --workload opr --army "$ARMY"
+          python test/mp/run_soak.py --godot godot --duration 150 --workload opr --army "$ARMY" --fault framedrop --target-fps 5
