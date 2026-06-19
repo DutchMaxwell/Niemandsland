@@ -23,6 +23,7 @@ var _workload := "synthetic"
 var _fault := "none"
 
 var _elapsed := 0.0
+var _start_ms := 0
 var _connected := false
 var _peer_count := 0
 var _failures: Array[String] = []
@@ -40,8 +41,16 @@ var _tick_accum := 0.0
 var _cursor_phase := 0.0
 const SPAWN_COUNT := 10
 
+# Fault injection (guest side). Applied partway through the run.
+var _fault_done := false
+var _fault_announced := false
+const FAULT_AT_FRACTION := 0.4
+const FRAMEDROP_WINDOW_S := 10.0
+const STALL_FREEZE_MS := 6000
+
 
 func _ready() -> void:
+	_start_ms = Time.get_ticks_msec()
 	_args = _parse_args(OS.get_cmdline_user_args())
 	_role = _args.get("role", "host")
 	_duration = float(_args.get("duration", "60"))
@@ -106,7 +115,9 @@ func _wire_signals() -> void:
 func _process(delta: float) -> void:
 	if _done:
 		return
-	_elapsed += delta
+	# Wall-clock elapsed: the engine clamps `delta` under heavy lag (framedrop fault), so
+	# accumulating delta would lag real time and the run would never reach its deadline.
+	_elapsed = float(Time.get_ticks_msec() - _start_ms) / 1000.0
 
 	# Connection watchdog.
 	if not _connected and _elapsed > CONNECT_TIMEOUT_S:
@@ -114,12 +125,51 @@ func _process(delta: float) -> void:
 		_finish()
 		return
 
+	# Inject the configured fault on the guest (the realistic laggy / dropping peer);
+	# the host stays healthy as the authority.
+	if _connected and _role == "guest" and _fault != "none":
+		_maybe_inject_fault()
+
 	# Drive the workload once both ends are present.
 	if _connected and (_role != "host" or _peer_count > 0) and _workload == "synthetic":
 		_drive_synthetic(delta)
 
 	if _elapsed >= _duration:
 		_finish()
+
+
+## Reproduce a sporadic-disconnect cause on demand, partway through the run.
+## stall   = one long main-loop freeze (the stall detector should fire, no drop).
+## framedrop = sustained low FPS (heartbeat cadence/send queue degrade; should survive).
+## blip    = force a socket close (the reconnect path should recover cleanly).
+func _maybe_inject_fault() -> void:
+	var start := _duration * FAULT_AT_FRACTION
+	if _elapsed < start:
+		return
+	match _fault:
+		"framedrop":
+			var fps := int(_args.get("target-fps", "5"))
+			if fps <= 0:
+				fps = 5
+			if _elapsed < start + FRAMEDROP_WINDOW_S:
+				if not _fault_announced:
+					_fault_announced = true
+					_log("FAULT framedrop ~%d fps for %.0fs" % [fps, FRAMEDROP_WINDOW_S])
+				OS.delay_msec(int(1000.0 / float(fps)))  # block the frame -> low FPS
+		"stall":
+			if not _fault_done:
+				_fault_done = true
+				_log("FAULT stall %dms freeze" % STALL_FREEZE_MS)
+				OS.delay_msec(STALL_FREEZE_MS)
+		"blip":
+			if not _fault_done:
+				_fault_done = true
+				_log("FAULT blip force-close")
+				var peer = _main.internet_lobby.relay_peer if _main else null
+				if peer and peer.has_method("debug_force_close"):
+					peer.debug_force_close()
+				else:
+					_fail("blip: relay_peer has no debug_force_close()")
 
 
 ## Synthetic workload: realistic relay traffic without needing army assets.
