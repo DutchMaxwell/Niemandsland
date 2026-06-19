@@ -1,0 +1,42 @@
+name: Setup Godot
+description: >-
+  Install a headless Godot release binary (and optionally its export templates)
+  directly on the runner. Replaces the old godot-ci container image, whose base
+  OS is too old to run the Node20 runtime that actions/checkout@v4 requires,
+  which made every job fail during container init before any step ran.
+
+inputs:
+  version:
+    description: Godot version to install, e.g. "4.6".
+    required: true
+  templates:
+    description: Also install the matching export templates (needed by export jobs).
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Install Godot (headless)
+      shell: bash
+      run: |
+        set -euo pipefail
+        ver="${{ inputs.version }}"
+        base="https://github.com/godotengine/godot/releases/download/${ver}-stable"
+        curl -fsSL -o /tmp/godot.zip "${base}/Godot_v${ver}-stable_linux.x86_64.zip"
+        unzip -q /tmp/godot.zip -d /tmp/godot
+        sudo install -m 755 "/tmp/godot/Godot_v${ver}-stable_linux.x86_64" /usr/local/bin/godot
+        godot --headless --version
+
+    - name: Install export templates
+      if: ${{ inputs.templates == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        ver="${{ inputs.version }}"
+        base="https://github.com/godotengine/godot/releases/download/${ver}-stable"
+        curl -fsSL -o /tmp/templates.tpz "${base}/Godot_v${ver}-stable_export_templates.tpz"
+        unzip -q /tmp/templates.tpz -d /tmp/templates
+        dest="${HOME}/.local/share/godot/export_templates/${ver}.stable"
+        mkdir -p "${dest}"
+        mv /tmp/templates/templates/* "${dest}/"
