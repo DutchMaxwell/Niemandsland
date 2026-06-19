@@ -1,0 +1,55 @@
+name: MP Soak (nightly)
+
+# The headless 2-client soak boots two real Godot instances + a relay and is more
+# timing-sensitive than the deterministic relay pytest (which runs on every push in
+# build.yml). To keep the push path fast and non-flaky, the soak + fault matrix run
+# nightly here, and on demand (workflow_dispatch). Run them locally any time with
+# test/mp/run_soak.py (see docs/DEVELOPMENT.md).
+
+on:
+  schedule:
+    - cron: "0 3 * * *"  # 03:00 UTC daily
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: "4.6"
+
+jobs:
+  soak:
+    name: Headless 2-client soak + fault matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: ./.github/actions/setup-godot
+        with:
+          version: ${{ env.GODOT_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install relay deps
+        run: pip install -r relay/requirements.txt
+
+      - name: Import project (generates .godot/)
+        run: godot --headless --editor --quit --path . || true
+
+      - name: Soak — synthetic happy-path (no faults)
+        run: python test/mp/run_soak.py --godot godot --duration 120 --workload synthetic
+
+      - name: Fault — stall (one long main-loop freeze)
+        run: python test/mp/run_soak.py --godot godot --duration 40 --fault stall
+
+      - name: Fault — framedrop (sustained low FPS, swept)
+        run: |
+          python test/mp/run_soak.py --godot godot --duration 40 --fault framedrop --target-fps 8
+          python test/mp/run_soak.py --godot godot --duration 40 --fault framedrop --target-fps 5
+          python test/mp/run_soak.py --godot godot --duration 40 --fault framedrop --target-fps 3
+
+      - name: Fault — blip (socket drop + reconnect)
+        run: python test/mp/run_soak.py --godot godot --duration 40 --fault blip
