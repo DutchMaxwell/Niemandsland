@@ -1,6 +1,6 @@
 # Niemandsland — Status & Roadmap
 
-**Version:** 0.3.5.9-alpha *(Road to Alpha — the `0.3.6` release plan is in [`docs/ROAD_TO_ALPHA.md`](docs/ROAD_TO_ALPHA.md))* · **Engine:** Godot 4.6 · **Branch:** `main`
+**Version:** 0.3.5.10-alpha *(Road to Alpha — the `0.3.6` release plan is in [`docs/ROAD_TO_ALPHA.md`](docs/ROAD_TO_ALPHA.md))* · **Engine:** Godot 4.6 · **Branch:** `main`
 
 This is the single source of truth for what works, what's in progress, and what's
 planned. Architecture details live in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md);
@@ -91,8 +91,8 @@ on demand from Cloudflare R2 (content-addressed `sha256.glb`, served from the as
 mapped by [`assets/model_manifest.json`](assets/model_manifest.json). Builds stay slim
 (GLBs are gitignored + excluded from every export preset); the editor/game fetches
 models at runtime. The publish tooling lives in the private pipeline repository. See
-[`docs/ASSET_DELIVERY.md`](docs/ASSET_DELIVERY.md). **Live today: 634 models across
-27 factions** (verified retrievable on R2 via `assets.niemandsland.xyz`) — from Alien Hives
+[`docs/ASSET_DELIVERY.md`](docs/ASSET_DELIVERY.md). **Live today: 682 models across
+29 factions** (verified retrievable on R2 via `assets.niemandsland.xyz`) — from Alien Hives
 (41) and Robot Legions / Orc Marauders (29 each) through the newest additions
 (havoc_brothers 26, dark_brothers 27, war_disciples 24, knight_brothers 16,
 rebel_guerrillas 15). Remaining factions are 2D generated and pick-ready.
