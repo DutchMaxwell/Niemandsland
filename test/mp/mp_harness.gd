@@ -39,6 +39,11 @@ var _spawned := false
 var _opr_imported := false
 var _army_link := ""
 var _mini_ids: Array[int] = []
+# Stress workload (both sides: army + terrain + bidirectional movement).
+var _own_ids: Array[int] = []
+var _terrain_done := false
+var _stress_imported := false
+var _move_accum := 0.0
 var _cursor_accum := 0.0
 var _tick_accum := 0.0
 var _cursor_phase := 0.0
@@ -140,6 +145,8 @@ func _process(delta: float) -> void:
 			_drive_synthetic(delta)
 		elif _workload == "opr":
 			_drive_opr(delta)
+		elif _workload == "stress":
+			_drive_stress(delta)
 
 	if _elapsed >= _duration:
 		_finish()
@@ -247,6 +254,82 @@ func _import_army() -> void:
 	# tokens + MP broadcast to the guest — identical to a player importing in a live session.
 	await _main._on_opr_army_imported(army, 1)
 	_log("opr import done; host minis=%d" % get_tree().get_nodes_in_group("miniature").size())
+
+
+## Stress workload: BOTH sides import an army (each to its own slot), the host auto-generates a
+## full terrain layout (synced), and each side continuously moves ITS OWN models — heavy
+## bidirectional traffic (two army-syncs + terrain + two-way movement) on a populated field.
+func _drive_stress(delta: float) -> void:
+	if _nm == null:
+		_nm = _main.get("network_manager")
+		_oam = _main.get("opr_army_manager")
+		_om = _main.get("object_manager")
+	if _nm == null:
+		return
+	if _role == "host" and not _terrain_done:
+		_terrain_done = true
+		_generate_terrain()
+	# Host imports first; the guest waits until the host's army has arrived (staggered, like real
+	# players) so the two mid-session imports don't race head-on at the same instant.
+	if not _stress_imported and _oam != null and _oam.get("api_client") != null:
+		var host_army_here := get_tree().get_nodes_in_group("miniature").size() > 0
+		if _role == "host" or host_army_here:
+			_stress_imported = true
+			_import_own_army()  # async coroutine; the flag guards re-entry
+	_cursor_accum += delta
+	if _cursor_accum >= 1.0 / 15.0:
+		_cursor_accum = 0.0
+		_cursor_phase += 0.1
+		_nm.broadcast_cursor_position(Vector3(sin(_cursor_phase) * 0.5, 0.0, cos(_cursor_phase) * 0.5))
+	# Move a few of our OWN models each tick (local move + broadcast = two-way movement traffic).
+	_move_accum += delta
+	if _move_accum >= 0.4 and not _own_ids.is_empty():
+		_move_accum = 0.0
+		for _i in range(mini(3, _own_ids.size())):
+			var oid: int = _own_ids[randi() % _own_ids.size()]
+			var pos := Vector3(randf_range(-0.55, 0.55), 0.0, randf_range(-0.35, 0.35))
+			if _om and _om.has_method("find_by_network_id"):
+				var node = _om.find_by_network_id(oid)
+				if node:
+					node.global_position = pos
+			_nm.broadcast_move(oid, pos)
+
+
+func _generate_terrain() -> void:
+	var ed = _main.get("map_layout_editor")
+	if ed and ed.has_method("_on_autogen_pressed") and ed.has_method("_emit_layout_update"):
+		ed._on_autogen_pressed()
+		ed._emit_layout_update()
+		_log("terrain auto-generated + synced")
+	else:
+		_log("terrain: map_layout_editor unavailable (skipped)")
+
+
+func _import_own_army() -> void:
+	if _army_link.is_empty():
+		_fail("stress workload needs --army <share-link>")
+		return
+	var slot: int = _nm.get_my_player_slot()
+	if slot <= 0:
+		slot = 1 if _role == "host" else 2
+	_log("importing army for slot %d" % slot)
+	var army = await _oam.api_client.import_from_share_link(_army_link)
+	if army == null:
+		_fail("army import failed (api / network?)")
+		return
+	# Snapshot existing models so we can identify OURS (the ones this import adds).
+	var before := {}
+	for m in get_tree().get_nodes_in_group("miniature"):
+		if m.has_meta("network_id"):
+			before[int(m.get_meta("network_id"))] = true
+	await _main._on_opr_army_imported(army, slot)
+	for m in get_tree().get_nodes_in_group("miniature"):
+		if m.has_meta("network_id"):
+			var nid := int(m.get_meta("network_id"))
+			if not before.has(nid):
+				_own_ids.append(nid)
+	_log("imported slot %d: own=%d total minis=%d" % [
+		slot, _own_ids.size(), get_tree().get_nodes_in_group("miniature").size()])
 
 
 # === Result handling ===
