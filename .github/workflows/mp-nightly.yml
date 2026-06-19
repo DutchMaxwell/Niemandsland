@@ -64,3 +64,5 @@ jobs:
         run: |
           python test/mp/run_soak.py --godot godot --duration 150 --workload opr --army "$ARMY"
           python test/mp/run_soak.py --godot godot --duration 150 --workload opr --army "$ARMY" --fault framedrop --target-fps 5
+          # Heaviest: both armies + auto-terrain + two-way movement.
+          python test/mp/run_soak.py --godot godot --duration 150 --workload stress --army "$ARMY"
