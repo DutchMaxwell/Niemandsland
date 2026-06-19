@@ -4,6 +4,15 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [0.3.5.10-alpha] — 2026-06-19
+
+### Added
+- **Two more factions of 3D models loadable: `change_disciples` (25) + `plague_disciples` (23).**
+  Their GLBs were already live on R2 but the manifest entries hadn't been committed, so the built
+  game couldn't reference them (they'd have shown as placeholders). Manifest now lists **682 models
+  across 29 factions** — all verified retrievable on R2 (HTTP 200).
+
+
 ## [0.3.5.9-alpha] — 2026-06-19
 
 ### Fixed
