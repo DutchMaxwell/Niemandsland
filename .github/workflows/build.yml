@@ -33,6 +33,24 @@ jobs:
             -s -d res://addons/gdUnit4/bin/GdUnitCmdTool.gd \
             --ignoreHeadlessMode -a res://test
 
+  relay-tests:
+    name: Relay tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install relay test deps
+        run: pip install -r relay/requirements-dev.txt
+
+      - name: Run relay tests (base + churn/soak)
+        run: cd relay && python -m pytest -q
+
   export-linux:
     name: Linux Export
     runs-on: ubuntu-latest
