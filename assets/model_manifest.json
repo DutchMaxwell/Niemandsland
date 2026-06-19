@@ -308,9 +308,9 @@
       "size": 28794344
     },
     "dark_brothers/dark battle tank": {
-      "url": "ff36c2e4c9b70e1cb4665065f8a77824e028dbd347a61b040ec853d92498a318.glb",
-      "sha256": "ff36c2e4c9b70e1cb4665065f8a77824e028dbd347a61b040ec853d92498a318",
-      "size": 26114804
+      "url": "c27aefdff9fc731416e1a10fa4794d2d7665a511cc45a7c2e02f9f266bc4e872.glb",
+      "sha256": "c27aefdff9fc731416e1a10fa4794d2d7665a511cc45a7c2e02f9f266bc4e872",
+      "size": 17020136
     },
     "battle_brothers/apc": {
       "url": "9be4dc603bb1dc3be7bbb69dea3c65ce590f4c31e6ca88c8ef4de53fb3befbbe.glb",
@@ -2636,6 +2636,541 @@
       "url": "5185618ccd1698450dd3f2517123f34fcacbe8d46b643f30f8d17be1e366dcde.glb",
       "sha256": "5185618ccd1698450dd3f2517123f34fcacbe8d46b643f30f8d17be1e366dcde",
       "size": 19119872
+    },
+    "dark_brothers/dark apc": {
+      "url": "15704b42211bed25a612dd16055e90c11fffc00623c3b44f053ac039cf167c91.glb",
+      "sha256": "15704b42211bed25a612dd16055e90c11fffc00623c3b44f053ac039cf167c91",
+      "size": 17844564
+    },
+    "dark_brothers/dark artillery gun": {
+      "url": "c7fe517d21dcca48cf995e96a6208c92e034c4e641ebddf60760440f3c785e7a.glb",
+      "sha256": "c7fe517d21dcca48cf995e96a6208c92e034c4e641ebddf60760440f3c785e7a",
+      "size": 16127180
+    },
+    "dark_brothers/dark assault brothers": {
+      "url": "4682d109b4f1f3a48061c362a9b0472d04b42c11f3fa7a79dd5a00becfebf991.glb",
+      "sha256": "4682d109b4f1f3a48061c362a9b0472d04b42c11f3fa7a79dd5a00becfebf991",
+      "size": 14531640
+    },
+    "dark_brothers/dark attack apc": {
+      "url": "6952034fc980910de4f2b7378641093703d56e0edf72df226b9eea2984688a2d.glb",
+      "sha256": "6952034fc980910de4f2b7378641093703d56e0edf72df226b9eea2984688a2d",
+      "size": 18716996
+    },
+    "dark_brothers/dark attack speeder": {
+      "url": "93ee9b1ad47566e2a728a41ae13deaccf6265e34ea8c2ed6e9f929ddef894bbe.glb",
+      "sha256": "93ee9b1ad47566e2a728a41ae13deaccf6265e34ea8c2ed6e9f929ddef894bbe",
+      "size": 16321760
+    },
+    "dark_brothers/dark battle brothers": {
+      "url": "1969bf4db747006a54705dca67bf9e31cf1cdfc589b1c3e8228d3ca635b529c9.glb",
+      "sha256": "1969bf4db747006a54705dca67bf9e31cf1cdfc589b1c3e8228d3ca635b529c9",
+      "size": 13914060
+    },
+    "dark_brothers/dark brother bikers": {
+      "url": "5406236f9cbc58145f935a56003bdab14ec8dbad501961090999d914888bca20.glb",
+      "sha256": "5406236f9cbc58145f935a56003bdab14ec8dbad501961090999d914888bca20",
+      "size": 16767580
+    },
+    "dark_brothers/dark combat walker": {
+      "url": "24389eb527ac1e02aa9d218b517a08c8686bfd6d9252332483a8cbc3cb1f69b3.glb",
+      "sha256": "24389eb527ac1e02aa9d218b517a08c8686bfd6d9252332483a8cbc3cb1f69b3",
+      "size": 13644456
+    },
+    "dark_brothers/dark destroyers": {
+      "url": "efa772f3f7207bf1004a1c23b3d3df51ced791257fcf779fcfac6b764f31bacf.glb",
+      "sha256": "efa772f3f7207bf1004a1c23b3d3df51ced791257fcf779fcfac6b764f31bacf",
+      "size": 15151112
+    },
+    "dark_brothers/dark drop pod": {
+      "url": "c76eb8a29faca31ec6fdb7564b1dd635ac0475b3bef4c9cbede0baf62b0d694b.glb",
+      "sha256": "c76eb8a29faca31ec6fdb7564b1dd635ac0475b3bef4c9cbede0baf62b0d694b",
+      "size": 17980732
+    },
+    "dark_brothers/dark elite pathfinder": {
+      "url": "ec81a582d9c84b85f47cb85ff3b37fac40ee6b9d3ca1431ed29791ee8c87c82f.glb",
+      "sha256": "ec81a582d9c84b85f47cb85ff3b37fac40ee6b9d3ca1431ed29791ee8c87c82f",
+      "size": 14991968
+    },
+    "dark_brothers/dark heavy exo suit": {
+      "url": "c8c65504dfe1537d86aab7eba66e0a5dc044e9a8d9574c149fcdd2e474fb86f0.glb",
+      "sha256": "c8c65504dfe1537d86aab7eba66e0a5dc044e9a8d9574c149fcdd2e474fb86f0",
+      "size": 13479676
+    },
+    "dark_brothers/dark heavy gunship": {
+      "url": "e0cf037886c5c5ffaa1c027cd520916a4b5bca37d3025d573fc9e28955686340.glb",
+      "sha256": "e0cf037886c5c5ffaa1c027cd520916a4b5bca37d3025d573fc9e28955686340",
+      "size": 16918792
+    },
+    "dark_brothers/dark heavy tank": {
+      "url": "51a873f9d33266614416935798dac5d882211f052f33d1c68e625938712c21bd.glb",
+      "sha256": "51a873f9d33266614416935798dac5d882211f052f33d1c68e625938712c21bd",
+      "size": 17876476
+    },
+    "dark_brothers/dark light gunship": {
+      "url": "665a2607a44f80c571395a2a257a7112d865e61f63910a28a7a6b5b0d983ac3b.glb",
+      "sha256": "665a2607a44f80c571395a2a257a7112d865e61f63910a28a7a6b5b0d983ac3b",
+      "size": 16581588
+    },
+    "dark_brothers/dark master brother": {
+      "url": "8d61198f1f69483b9b3d14a3da8ab2dbd67ed709fd1e8a1bcd1c80edb76b83fe.glb",
+      "sha256": "8d61198f1f69483b9b3d14a3da8ab2dbd67ed709fd1e8a1bcd1c80edb76b83fe",
+      "size": 14420844
+    },
+    "dark_brothers/dark master destroyer": {
+      "url": "d1a1b319dbb211a53cabeea0f5820fd34e51be0cc7fda69496f778fba4371444.glb",
+      "sha256": "d1a1b319dbb211a53cabeea0f5820fd34e51be0cc7fda69496f778fba4371444",
+      "size": 14870752
+    },
+    "dark_brothers/dark pathfinder bikers": {
+      "url": "026a760100c149fe65e072b3ffe02811f2bec50442c736eaf0f48a9fb16f9a77.glb",
+      "sha256": "026a760100c149fe65e072b3ffe02811f2bec50442c736eaf0f48a9fb16f9a77",
+      "size": 16206880
+    },
+    "dark_brothers/dark pathfinders": {
+      "url": "2f0d61f041f346b938dd4cbbdeab5e80a9d233c46f95cdf7591026b553b0dc7f.glb",
+      "sha256": "2f0d61f041f346b938dd4cbbdeab5e80a9d233c46f95cdf7591026b553b0dc7f",
+      "size": 15207856
+    },
+    "dark_brothers/dark shroud speeder": {
+      "url": "2042b3116421f49ac95a86be0e33ca0c54c6802a345f4c40f72d304d59a7ab9b.glb",
+      "sha256": "2042b3116421f49ac95a86be0e33ca0c54c6802a345f4c40f72d304d59a7ab9b",
+      "size": 17423660
+    },
+    "dark_brothers/dark support bike": {
+      "url": "15449b346c5300673b0491b8b7307540e7908d6f53bee5321183cbf52cc3b989.glb",
+      "sha256": "15449b346c5300673b0491b8b7307540e7908d6f53bee5321183cbf52cc3b989",
+      "size": 16157680
+    },
+    "dark_brothers/dark support brothers": {
+      "url": "950a1f32a50ad7c9c9c37118a2011be2582dfddd71bb7877b7695e7de4f72b95.glb",
+      "sha256": "950a1f32a50ad7c9c9c37118a2011be2582dfddd71bb7877b7695e7de4f72b95",
+      "size": 14345852
+    },
+    "dark_brothers/dark veteran assault brothers": {
+      "url": "342d53ee9f0a5c843ea2d2a64163123c7064ea34bd2142fe25b4fe4ec631b201.glb",
+      "sha256": "342d53ee9f0a5c843ea2d2a64163123c7064ea34bd2142fe25b4fe4ec631b201",
+      "size": 14172508
+    },
+    "dark_brothers/dark veteran battle brothers": {
+      "url": "d8785066e18ba59d9e9335476cc771be7a8473e1e5e5234ae092552e8d69df54.glb",
+      "sha256": "d8785066e18ba59d9e9335476cc771be7a8473e1e5e5234ae092552e8d69df54",
+      "size": 14650872
+    },
+    "dark_brothers/dark veteran combat walker": {
+      "url": "6e3b58eb96e0678a79852b4bad70902522272c7388a773629d12873201f34e4e.glb",
+      "sha256": "6e3b58eb96e0678a79852b4bad70902522272c7388a773629d12873201f34e4e",
+      "size": 13722492
+    },
+    "dark_brothers/dark veteran master brother": {
+      "url": "441791bea4cfa5a020e1df19b617a91b76f58e7367b05d7e99168e38a97b1b59.glb",
+      "sha256": "441791bea4cfa5a020e1df19b617a91b76f58e7367b05d7e99168e38a97b1b59",
+      "size": 14421760
+    },
+    "rebel_guerrillas/assault vehicle": {
+      "url": "5df22825ca1ca6eb03bc64d7a5d64be1806248adf3d0f9f7f6b7fd93ce0310fa.glb",
+      "sha256": "5df22825ca1ca6eb03bc64d7a5d64be1806248adf3d0f9f7f6b7fd93ce0310fa",
+      "size": 16865808
+    },
+    "rebel_guerrillas/bikers": {
+      "url": "14b7aa815b9cdfe335647b590dcd53ed70998f507541b6528821fc69fba8519b.glb",
+      "sha256": "14b7aa815b9cdfe335647b590dcd53ed70998f507541b6528821fc69fba8519b",
+      "size": 15905752
+    },
+    "rebel_guerrillas/chelonians": {
+      "url": "074a821339f5e888e84f8422c565df33fe68df0eb58de1deda86e9bf09cf4a19.glb",
+      "sha256": "074a821339f5e888e84f8422c565df33fe68df0eb58de1deda86e9bf09cf4a19",
+      "size": 16661204
+    },
+    "rebel_guerrillas/combat walker": {
+      "url": "7a8882344701489951a817919d6a0dd686772e5a70c7aa55256a4d9dbb767018.glb",
+      "sha256": "7a8882344701489951a817919d6a0dd686772e5a70c7aa55256a4d9dbb767018",
+      "size": 15788828
+    },
+    "rebel_guerrillas/elites": {
+      "url": "881fab72f681e951dfc3458a95d0d90ab5529771fff606c4cc4e287365870449.glb",
+      "sha256": "881fab72f681e951dfc3458a95d0d90ab5529771fff606c4cc4e287365870449",
+      "size": 14772644
+    },
+    "rebel_guerrillas/jeep": {
+      "url": "a17b184880e8aed370b53ff93a823e0719ba22d6638a53f0a7f1cbda4b1c9a69.glb",
+      "sha256": "a17b184880e8aed370b53ff93a823e0719ba22d6638a53f0a7f1cbda4b1c9a69",
+      "size": 16847408
+    },
+    "rebel_guerrillas/light dropship": {
+      "url": "f354edc55f4bc28cb2ffef9395c99080bfdca0c6afe0d3c65e10a9fc4763878f.glb",
+      "sha256": "f354edc55f4bc28cb2ffef9395c99080bfdca0c6afe0d3c65e10a9fc4763878f",
+      "size": 17372876
+    },
+    "rebel_guerrillas/pioneers": {
+      "url": "3b46b06dd54f96a1c7444059165c882cfa8dabf2554f8690a98a908537d68927.glb",
+      "sha256": "3b46b06dd54f96a1c7444059165c882cfa8dabf2554f8690a98a908537d68927",
+      "size": 15516196
+    },
+    "rebel_guerrillas/rebel leader": {
+      "url": "26d64ed8ae723b09b468e8bb0a08479c1196692d3f73306979407035c7196cec.glb",
+      "sha256": "26d64ed8ae723b09b468e8bb0a08479c1196692d3f73306979407035c7196cec",
+      "size": 15172936
+    },
+    "rebel_guerrillas/rebels": {
+      "url": "3b08fbbbb29b5f0f756b005334d9486da4b13a1ad4ad2352a1a837ecfc0c6e90.glb",
+      "sha256": "3b08fbbbb29b5f0f756b005334d9486da4b13a1ad4ad2352a1a837ecfc0c6e90",
+      "size": 16515592
+    },
+    "rebel_guerrillas/simian champion": {
+      "url": "69551b9d62fb6bc0129299431b50f9995e474aaf9ed8a649c3b5ecc816ef7e2a.glb",
+      "sha256": "69551b9d62fb6bc0129299431b50f9995e474aaf9ed8a649c3b5ecc816ef7e2a",
+      "size": 16066520
+    },
+    "rebel_guerrillas/simians": {
+      "url": "c99d1093c68df981cde5c32729d5821786ecf04ba9317cf75e35025d59a4bee5.glb",
+      "sha256": "c99d1093c68df981cde5c32729d5821786ecf04ba9317cf75e35025d59a4bee5",
+      "size": 16888568
+    },
+    "rebel_guerrillas/snipers": {
+      "url": "57eba437b255db2230e7eb154854cb1ff00b496ce22b85b2809c8cae655da87a.glb",
+      "sha256": "57eba437b255db2230e7eb154854cb1ff00b496ce22b85b2809c8cae655da87a",
+      "size": 19520268
+    },
+    "rebel_guerrillas/spotters": {
+      "url": "1f6ae0030855c6bc4267442ce81cf056395be160e09c067f044334fbc68a29e4.glb",
+      "sha256": "1f6ae0030855c6bc4267442ce81cf056395be160e09c067f044334fbc68a29e4",
+      "size": 16315880
+    },
+    "rebel_guerrillas/strikers": {
+      "url": "89cf5a218f3584529685543f4b3aadf7d30cc3f28e4cfa63c780a213e5b2a1db.glb",
+      "sha256": "89cf5a218f3584529685543f4b3aadf7d30cc3f28e4cfa63c780a213e5b2a1db",
+      "size": 15502664
+    },
+    "havoc_brothers/chosen_havoc_brothers": {
+      "url": "2af293a8bf9451fcf2debc216f6d2b6ba00fd5b6561ea704ff4e1684435d4d03.glb",
+      "sha256": "2af293a8bf9451fcf2debc216f6d2b6ba00fd5b6561ea704ff4e1684435d4d03",
+      "size": 14798896
+    },
+    "havoc_brothers/chosen_havoc_champion": {
+      "url": "9275f4c582e273e0863e641ea3d5de2d92aa9aad57f7a73b253ba404548d489d.glb",
+      "sha256": "9275f4c582e273e0863e641ea3d5de2d92aa9aad57f7a73b253ba404548d489d",
+      "size": 14908564
+    },
+    "havoc_brothers/crab_walker": {
+      "url": "335de820be12b4a4e5bdb9075dd862e8ca0f31fe1c22bde57b13a5862d7607bf.glb",
+      "sha256": "335de820be12b4a4e5bdb9075dd862e8ca0f31fe1c22bde57b13a5862d7607bf",
+      "size": 16692480
+    },
+    "havoc_brothers/cultist_champion": {
+      "url": "821d14e4fe02ec89d1f913bb61f03fc01ff586ce1e82e574ecbdb6df9ef98f92.glb",
+      "sha256": "821d14e4fe02ec89d1f913bb61f03fc01ff586ce1e82e574ecbdb6df9ef98f92",
+      "size": 15068716
+    },
+    "havoc_brothers/cultists": {
+      "url": "e8da58d45db7b4590d013b1944e385db2c2dd73b0c9f8f88e744f7a45bdf5b53.glb",
+      "sha256": "e8da58d45db7b4590d013b1944e385db2c2dd73b0c9f8f88e744f7a45bdf5b53",
+      "size": 12593904
+    },
+    "havoc_brothers/greater_mutated": {
+      "url": "48248cc62a86b59710ffee6236fb9e2e1ca31cb00000880e2120e4d678b391f0.glb",
+      "sha256": "48248cc62a86b59710ffee6236fb9e2e1ca31cb00000880e2120e4d678b391f0",
+      "size": 15193360
+    },
+    "havoc_brothers/harbinger_of_havoc": {
+      "url": "583d7b13ee29565593605551aa20aac7cfa8be656d39518cbd0f8f56b0200b14.glb",
+      "sha256": "583d7b13ee29565593605551aa20aac7cfa8be656d39518cbd0f8f56b0200b14",
+      "size": 14970968
+    },
+    "havoc_brothers/havoc_apc": {
+      "url": "dd7d656835a37ba674391170181468fed93cc3ec8c4d1f286034df05083760cb.glb",
+      "sha256": "dd7d656835a37ba674391170181468fed93cc3ec8c4d1f286034df05083760cb",
+      "size": 16174468
+    },
+    "havoc_brothers/havoc_bikers": {
+      "url": "76ba0e6a7385f36e3dceaadb44b3803c3f655d59831e68d1db5ddc4a8caa644b.glb",
+      "sha256": "76ba0e6a7385f36e3dceaadb44b3803c3f655d59831e68d1db5ddc4a8caa644b",
+      "size": 17865996
+    },
+    "havoc_brothers/havoc_brothers": {
+      "url": "71c11a047dc272507a694a9b3a9fcc6970d8ba83fecd4a02bb4965a88dc55b45.glb",
+      "sha256": "71c11a047dc272507a694a9b3a9fcc6970d8ba83fecd4a02bb4965a88dc55b45",
+      "size": 14765760
+    },
+    "havoc_brothers/havoc_champion": {
+      "url": "e4a9f72fd6d2e695bb4aaea364940782a27921ae1dfbdc6bb3b7bd88fcede266.glb",
+      "sha256": "e4a9f72fd6d2e695bb4aaea364940782a27921ae1dfbdc6bb3b7bd88fcede266",
+      "size": 13547652
+    },
+    "havoc_brothers/havoc_destroyer_champion": {
+      "url": "2e221684a0d426d1ec6ea925a848c60ad3bdca64893ac6b7facc3ecae5575ec2.glb",
+      "sha256": "2e221684a0d426d1ec6ea925a848c60ad3bdca64893ac6b7facc3ecae5575ec2",
+      "size": 14650140
+    },
+    "havoc_brothers/havoc_destroyers": {
+      "url": "0174a179170f77ff499fe82ad5b9a44b3b27164916914f237bc4375e2eb51b27.glb",
+      "sha256": "0174a179170f77ff499fe82ad5b9a44b3b27164916914f237bc4375e2eb51b27",
+      "size": 14731564
+    },
+    "havoc_brothers/havoc_dragon": {
+      "url": "e76913bd67ed14bcd1b42727b15a417b449e96b65d001e65a540f3bb7dd9508b.glb",
+      "sha256": "e76913bd67ed14bcd1b42727b15a417b449e96b65d001e65a540f3bb7dd9508b",
+      "size": 16999116
+    },
+    "havoc_brothers/havoc_heavy_tank": {
+      "url": "8658903be46e17f22bb7eef239fd349e05b10ceb455794a7fdd416af8ee65d1a.glb",
+      "sha256": "8658903be46e17f22bb7eef239fd349e05b10ceb455794a7fdd416af8ee65d1a",
+      "size": 17309680
+    },
+    "havoc_brothers/havoc_mech_fiend": {
+      "url": "73621f583abae43be070e7a0d22a4eb33ad0c8b6ab6f4b3ae2c3995e5b47fc10.glb",
+      "sha256": "73621f583abae43be070e7a0d22a4eb33ad0c8b6ab6f4b3ae2c3995e5b47fc10",
+      "size": 15295040
+    },
+    "havoc_brothers/havoc_soul_spawn": {
+      "url": "277a1d7346ce19d2ad67299500752b830bcd70024d3a03b6f862160daae9c892.glb",
+      "sha256": "277a1d7346ce19d2ad67299500752b830bcd70024d3a03b6f862160daae9c892",
+      "size": 14469272
+    },
+    "havoc_brothers/havoc_support": {
+      "url": "203afb67417a9b16f309077a0742f7f9d37cc612df91b5e9aeb60c469b35604f.glb",
+      "sha256": "203afb67417a9b16f309077a0742f7f9d37cc612df91b5e9aeb60c469b35604f",
+      "size": 14533228
+    },
+    "havoc_brothers/havoc_tank": {
+      "url": "547e28b669e000048bfce027195e7e51570c5b78097e5ab5341f2669921f0364.glb",
+      "sha256": "547e28b669e000048bfce027195e7e51570c5b78097e5ab5341f2669921f0364",
+      "size": 18944900
+    },
+    "havoc_brothers/infernal_brute": {
+      "url": "26c86191c1953e678700f89d6e43585aba3c8d34b6aea28cc82fbd02c019a4a8.glb",
+      "sha256": "26c86191c1953e678700f89d6e43585aba3c8d34b6aea28cc82fbd02c019a4a8",
+      "size": 14627456
+    },
+    "havoc_brothers/infernal_stalker": {
+      "url": "3d03aa2db10e6a25955b0555ac1054d76d6aae12deb818748695ee9432e73435.glb",
+      "sha256": "3d03aa2db10e6a25955b0555ac1054d76d6aae12deb818748695ee9432e73435",
+      "size": 16643772
+    },
+    "havoc_brothers/mutated_brothers": {
+      "url": "73f73bf11b52ffe62fff69050b5e0679fa3afa475a3c1f07f61564ce19298d0a.glb",
+      "sha256": "73f73bf11b52ffe62fff69050b5e0679fa3afa475a3c1f07f61564ce19298d0a",
+      "size": 15963424
+    },
+    "havoc_brothers/mutated_cultists": {
+      "url": "b9e2c575424815d0073e1aee7c83a272c48d074ddcf5bb3a12e894c8b1c6f87c.glb",
+      "sha256": "b9e2c575424815d0073e1aee7c83a272c48d074ddcf5bb3a12e894c8b1c6f87c",
+      "size": 13057024
+    },
+    "havoc_brothers/mutated_destroyer": {
+      "url": "871978dbad9a2f1a75235e4dd55ce7b8a587d8ff62c27b3ce313596071e07342.glb",
+      "sha256": "871978dbad9a2f1a75235e4dd55ce7b8a587d8ff62c27b3ce313596071e07342",
+      "size": 15058436
+    },
+    "havoc_brothers/spider_walker": {
+      "url": "d2a1ede7b034e52c439ca1db89280cc95b375a220e6144e14a77b56a5b2dc44d.glb",
+      "sha256": "d2a1ede7b034e52c439ca1db89280cc95b375a220e6144e14a77b56a5b2dc44d",
+      "size": 16201016
+    },
+    "havoc_brothers/talon_raptors": {
+      "url": "54aa72080801a9625ce1293af3eda19aabd6e71f3c4f88aba6db91cf7a04038b.glb",
+      "sha256": "54aa72080801a9625ce1293af3eda19aabd6e71f3c4f88aba6db91cf7a04038b",
+      "size": 14561792
+    },
+    "knight_brothers/knight apc": {
+      "url": "a15f522ed31ef13a77428c5f88fe1ef7d109deb5341210332333338bf401e5b8.glb",
+      "sha256": "a15f522ed31ef13a77428c5f88fe1ef7d109deb5341210332333338bf401e5b8",
+      "size": 23522816
+    },
+    "knight_brothers/knight artillery gun": {
+      "url": "1d9445791c4c7593aab13478a468711097ebc9a580227846ebe705d44fdb42e7.glb",
+      "sha256": "1d9445791c4c7593aab13478a468711097ebc9a580227846ebe705d44fdb42e7",
+      "size": 16183464
+    },
+    "knight_brothers/knight attack apc": {
+      "url": "3e131d8193933aa06020c4791fe56f1fad2aa066256b9606cce168790bc0a4b2.glb",
+      "sha256": "3e131d8193933aa06020c4791fe56f1fad2aa066256b9606cce168790bc0a4b2",
+      "size": 21209512
+    },
+    "knight_brothers/knight battle brothers": {
+      "url": "218ebc915b3fbf0fc73f017a0a92e101578dee0d75470d6c677ce7fc7aad0a54.glb",
+      "sha256": "218ebc915b3fbf0fc73f017a0a92e101578dee0d75470d6c677ce7fc7aad0a54",
+      "size": 14459424
+    },
+    "knight_brothers/knight combat walker": {
+      "url": "2fcda680629fd9fdbe844d8ab344b47abe0bc5ea54fba0490fcfc168ea5a10d1.glb",
+      "sha256": "2fcda680629fd9fdbe844d8ab344b47abe0bc5ea54fba0490fcfc168ea5a10d1",
+      "size": 15280104
+    },
+    "knight_brothers/knight destroyers": {
+      "url": "12d0e2ec0abfc9f26d77590dd844e61f1db850d8c47fa6fe8d39f119c5bf2908.glb",
+      "sha256": "12d0e2ec0abfc9f26d77590dd844e61f1db850d8c47fa6fe8d39f119c5bf2908",
+      "size": 15340508
+    },
+    "knight_brothers/knight heavy gunship": {
+      "url": "19a4a6a9c39bde3a71c05577d8ecd00fd781a9dbfa3fe73cd0872f02bf59ab62.glb",
+      "sha256": "19a4a6a9c39bde3a71c05577d8ecd00fd781a9dbfa3fe73cd0872f02bf59ab62",
+      "size": 19253752
+    },
+    "knight_brothers/knight heavy tank": {
+      "url": "b5b33e9109d9a6dc60fd4add9ea81910a0e978b7683c0b1b5101d4adaece2f02.glb",
+      "sha256": "b5b33e9109d9a6dc60fd4add9ea81910a0e978b7683c0b1b5101d4adaece2f02",
+      "size": 25633156
+    },
+    "knight_brothers/knight light gunship": {
+      "url": "3f7ffe222f6a5f11c9d408d2b00e68383cd313e7ed3254b253ab1dfe0d9a8645.glb",
+      "sha256": "3f7ffe222f6a5f11c9d408d2b00e68383cd313e7ed3254b253ab1dfe0d9a8645",
+      "size": 16423240
+    },
+    "knight_brothers/knight master brother": {
+      "url": "eacd8b101cc35e00244e9f14e7322c110b8b833234e617c013a588a2e5293451.glb",
+      "sha256": "eacd8b101cc35e00244e9f14e7322c110b8b833234e617c013a588a2e5293451",
+      "size": 14125652
+    },
+    "knight_brothers/knight master destroyer": {
+      "url": "0d84021fa5d306994b4ffcabebf10e320138701d18e11dc4d710d4ffc07ce7bc.glb",
+      "sha256": "0d84021fa5d306994b4ffcabebf10e320138701d18e11dc4d710d4ffc07ce7bc",
+      "size": 14027508
+    },
+    "knight_brothers/knight nemesis walker": {
+      "url": "5be98ab45799ecfe9b052cfea188ce6924273ee1d53f0612d192e49e1262824d.glb",
+      "sha256": "5be98ab45799ecfe9b052cfea188ce6924273ee1d53f0612d192e49e1262824d",
+      "size": 17912844
+    },
+    "knight_brothers/knight purgation brothers": {
+      "url": "699bfe0987410b264467af00ac9b4092d9a64ecdb01d077804f22074392d9d62.glb",
+      "sha256": "699bfe0987410b264467af00ac9b4092d9a64ecdb01d077804f22074392d9d62",
+      "size": 13883436
+    },
+    "knight_brothers/knight veteran brothers": {
+      "url": "44446e9fe91a9ded92c0c9d3c5b1898b346153515727306b4cd9fc55769dab58.glb",
+      "sha256": "44446e9fe91a9ded92c0c9d3c5b1898b346153515727306b4cd9fc55769dab58",
+      "size": 14049580
+    },
+    "knight_brothers/knight veteran combat walker": {
+      "url": "859135ff64552320852aacab381d291f83b149a35da735860c152e99157187a6.glb",
+      "sha256": "859135ff64552320852aacab381d291f83b149a35da735860c152e99157187a6",
+      "size": 16449564
+    },
+    "knight_brothers/knight veteran master brother": {
+      "url": "002f14b76399a01246f6cb98c039e7272882ec7bdf5e51bae5a1151b65f80f12.glb",
+      "sha256": "002f14b76399a01246f6cb98c039e7272882ec7bdf5e51bae5a1151b65f80f12",
+      "size": 13666176
+    },
+    "war_disciples/chosen_war_brothers": {
+      "url": "f5c14c487d5aa7ded37c04eb9cb91fca5a4da5ad011a9192f7bc1d120a976672.glb",
+      "sha256": "f5c14c487d5aa7ded37c04eb9cb91fca5a4da5ad011a9192f7bc1d120a976672",
+      "size": 13941404
+    },
+    "war_disciples/chosen_war_champion": {
+      "url": "5348f908ee3d643aefb2f67a40d73f14392568a634e890e25900a4ddd45ae1f2.glb",
+      "sha256": "5348f908ee3d643aefb2f67a40d73f14392568a634e890e25900a4ddd45ae1f2",
+      "size": 13854296
+    },
+    "war_disciples/mutated_destroyer": {
+      "url": "42fd450f787db3c7e2e200c597ee56e3ea0b6082a719d91c67e24406944e7319.glb",
+      "sha256": "42fd450f787db3c7e2e200c597ee56e3ea0b6082a719d91c67e24406944e7319",
+      "size": 14522344
+    },
+    "war_disciples/war_apc": {
+      "url": "52a838d645adc5933f7351f11edff616cffb376d2db6ea9cd284f7e31755518d.glb",
+      "sha256": "52a838d645adc5933f7351f11edff616cffb376d2db6ea9cd284f7e31755518d",
+      "size": 17258796
+    },
+    "war_disciples/war_berserkers": {
+      "url": "e266398a5e70f4c576242bd0780dea5e36d5143c4a1c86ea64e61f16bc6f4e7a.glb",
+      "sha256": "e266398a5e70f4c576242bd0780dea5e36d5143c4a1c86ea64e61f16bc6f4e7a",
+      "size": 14920468
+    },
+    "war_disciples/war_bikers": {
+      "url": "d927baf9528c808200ad7fdd3674448792bc97e807dfe771338bfbaa5b9da996.glb",
+      "sha256": "d927baf9528c808200ad7fdd3674448792bc97e807dfe771338bfbaa5b9da996",
+      "size": 15929212
+    },
+    "war_disciples/war_brothers": {
+      "url": "4ff771efe23789ced00f1d274b704d3988c2186c3e108642c970d30be599c8ea.glb",
+      "sha256": "4ff771efe23789ced00f1d274b704d3988c2186c3e108642c970d30be599c8ea",
+      "size": 13440184
+    },
+    "war_disciples/war_champion": {
+      "url": "41358bd6d77bbe195a88a9fc13c7f7497f3f20fd9b17114eab313e45068540dc.glb",
+      "sha256": "41358bd6d77bbe195a88a9fc13c7f7497f3f20fd9b17114eab313e45068540dc",
+      "size": 15001268
+    },
+    "war_disciples/war_crab_walker": {
+      "url": "81d8cf59171ca96c67c96cd03a39870c20a581f300e606a4bca508103484159b.glb",
+      "sha256": "81d8cf59171ca96c67c96cd03a39870c20a581f300e606a4bca508103484159b",
+      "size": 15801732
+    },
+    "war_disciples/war_cultist_berserkers": {
+      "url": "e7d9828b55affcbff779673574d6ab3dc550f3c3651653c6bda9fb835a5c3ffc.glb",
+      "sha256": "e7d9828b55affcbff779673574d6ab3dc550f3c3651653c6bda9fb835a5c3ffc",
+      "size": 15589180
+    },
+    "war_disciples/war_cultist_champion": {
+      "url": "c84d1a7c0e4455d226e8a60db66c1101f0cdb0d0c73adcc3ee53770e306f7c9f.glb",
+      "sha256": "c84d1a7c0e4455d226e8a60db66c1101f0cdb0d0c73adcc3ee53770e306f7c9f",
+      "size": 15616176
+    },
+    "war_disciples/war_cultists": {
+      "url": "f29ab435c8e7dc215ab74d3ed2734e7a96db54c2bb2952eaf201d57b25aa2c83.glb",
+      "sha256": "f29ab435c8e7dc215ab74d3ed2734e7a96db54c2bb2952eaf201d57b25aa2c83",
+      "size": 14703156
+    },
+    "war_disciples/war_destroyer_champion": {
+      "url": "117807e35a9de25e638993b415a04b820f9907e54a115fc70d065d6dd2e6819d.glb",
+      "sha256": "117807e35a9de25e638993b415a04b820f9907e54a115fc70d065d6dd2e6819d",
+      "size": 14118360
+    },
+    "war_disciples/war_destroyers": {
+      "url": "8320b67b51072162a1720f898dc2e957fe8a884638ff7f76f26a1c8c59db3ecc.glb",
+      "sha256": "8320b67b51072162a1720f898dc2e957fe8a884638ff7f76f26a1c8c59db3ecc",
+      "size": 14513892
+    },
+    "war_disciples/war_dragon": {
+      "url": "3c33f810a45e820a63d497af5971c3a4cff3b435b2b463188e88514b04ec178a.glb",
+      "sha256": "3c33f810a45e820a63d497af5971c3a4cff3b435b2b463188e88514b04ec178a",
+      "size": 15864508
+    },
+    "war_disciples/war_greater_mutated": {
+      "url": "4ebd66b30e8f885b30660229d8d3cec29372da8f9e0f81cc92ae51902c75675a.glb",
+      "sha256": "4ebd66b30e8f885b30660229d8d3cec29372da8f9e0f81cc92ae51902c75675a",
+      "size": 14934984
+    },
+    "war_disciples/war_heavy_tank": {
+      "url": "4c2f137b724ae35e7c26e3f705807e69ded10c97d3613dcaa273533440f09b18.glb",
+      "sha256": "4c2f137b724ae35e7c26e3f705807e69ded10c97d3613dcaa273533440f09b18",
+      "size": 18724040
+    },
+    "war_disciples/war_infernal_brute": {
+      "url": "14161cef19b70d843c11e55d1c84e3a1f099a24200a0f93f65583c0c1743c4d3.glb",
+      "sha256": "14161cef19b70d843c11e55d1c84e3a1f099a24200a0f93f65583c0c1743c4d3",
+      "size": 13843152
+    },
+    "war_disciples/war_mech_fiend": {
+      "url": "8038ca7967be81b46d7b7abc3312deaded0c8b9442153b5d950fa892b97d4599.glb",
+      "sha256": "8038ca7967be81b46d7b7abc3312deaded0c8b9442153b5d950fa892b97d4599",
+      "size": 16627816
+    },
+    "war_disciples/war_mutated_brothers": {
+      "url": "a0b2d123a0303ee11284f986f0ceb17a8a8c6d9eb774edf69f6741b5c06846c0.glb",
+      "sha256": "a0b2d123a0303ee11284f986f0ceb17a8a8c6d9eb774edf69f6741b5c06846c0",
+      "size": 15812580
+    },
+    "war_disciples/war_mutated_cultists": {
+      "url": "006f98c5ba5c294b89e304982f17a5e0deb421dd8906a3cd1eaca4e2c4e62c06.glb",
+      "sha256": "006f98c5ba5c294b89e304982f17a5e0deb421dd8906a3cd1eaca4e2c4e62c06",
+      "size": 15859316
+    },
+    "war_disciples/war_support": {
+      "url": "cbe8294e59fa2a9008342a36d3ce001bf84d509ea9cdb1c63dc2d48364df05db.glb",
+      "sha256": "cbe8294e59fa2a9008342a36d3ce001bf84d509ea9cdb1c63dc2d48364df05db",
+      "size": 13377532
+    },
+    "war_disciples/war_talon_raptors": {
+      "url": "436eb0856c19655632f7cc31f073b5ef317254e86b032028dcb38e31c6ed6b9c.glb",
+      "sha256": "436eb0856c19655632f7cc31f073b5ef317254e86b032028dcb38e31c6ed6b9c",
+      "size": 12876336
+    },
+    "war_disciples/war_tank": {
+      "url": "62e2907f9587c37d2440e148966fc05f3ffd43c4762b6bc9e4e6cf10efbc19ab.glb",
+      "sha256": "62e2907f9587c37d2440e148966fc05f3ffd43c4762b6bc9e4e6cf10efbc19ab",
+      "size": 18619536
     }
   }
 }

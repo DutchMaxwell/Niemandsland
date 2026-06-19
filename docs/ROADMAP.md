@@ -104,8 +104,10 @@ on import, synced to both players); **per-model base size from upgrades** (a wea
 Tough-raising model gets a bigger base than its squadmates); and **model orientation on oval
 bases** (vehicles along the long axis, walkers crosswise). Earlier (0.3.4 round-up): **casual
 sandbox terrain** (grid-free free-placed multi-storey ruins + oval tree-group forests +
-anti-tiling floor shader), **3 new factions** (blood / custodian / wolf_brothers — manifest now
-527 models, live on R2), the **multiplayer sync + reconnect-hardening pass** (imported-army
+anti-tiling floor shader), **3 new factions** (blood / custodian / wolf_brothers), with four more
+since (havoc_brothers / knight_brothers / rebel_guerrillas / war_disciples + dark_brothers built
+out) — the manifest is now **634 models across 27 factions**, all live on R2, the **multiplayer
+sync + reconnect-hardening pass** (imported-army
 models + biome sync to peers and late-joiners, paste/delete/arrange replication, own-only
 mini movement, import-slot default, phantom-player + abort hardening), and **stable player
 identity across reconnect** ([PR #66](../../pull/66) — a per-install token → canonical slot remap so a
