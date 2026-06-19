@@ -65,6 +65,28 @@ planned and where ideas go. For what already works see
   top-down toggle, and snap/alignment helpers on placement. _M_
 - **Per-object physics toggle + large-army perf** — a per-object collision/clipping toggle and a
   performance pass for high model counts (our minis are already collision-free on layer 2). _M_
+- **Godot 4.7 — upgrade & feature opportunities** _(prerequisite for the sub-items below)_ — bump the
+  engine from 4.6. Revalidate the scaled-SubViewport dice physics + default physics, the custom shaders
+  (anti-tiling floor, flames) and the Vulkan/NVIDIA MAILBOX swap-chain workarounds; run gdUnit4 + pytest.
+  The 4.7 BlendSpace compat-break is N/A (no AnimationTree in the project). Also de-risks the post-Alpha
+  macOS port (refactored Metal renderer). _M_
+  - **AreaLight3D mood lights** — soft rectangular area light(s) for indoor / showcase moods in the
+    ATMOSPHERE presets; today `lighting_controller.gd` is sun + fill `DirectionalLight3D` + `Environment`
+    only. A genuinely new light type → wire into the preset table + 2 s blend, gate behind the quality
+    tiers (area lights are costlier). _M_
+  - **HDR output toggle** — OLED / HDR-display output as a persisted option in `graphics_settings.gd`,
+    AgX-tonemap-aware; mind the same swap-chain-recreation caution we already document for the
+    fullscreen / MAILBOX path. _S_
+  - **Control offset transforms for HUD polish** — `offset_transform_*` animates / rotates / scales
+    container-bound Controls without the parent re-layout wiping it: the floating unit-card rule popup
+    (`unit_card.gd`) and the planned "Contextual control hints". (Not the radial menu — it is
+    immediate-mode `_draw`.) _S_
+  - **3D particle scale / rotation in the process material** — directional rain streaks + varied
+    smoke / embers via the new scale-3D / rotation-3D process params (`rain_effect.gd`, `fire_prop.gd`).
+    Minor polish. _S_
+  - **DrawableTexture2D for HUD / icon textures** — pre-bake glow / gradient textures (the radial-menu
+    glow halo is faked with three stacked arcs because `_draw` has no blur) and procedural die-face /
+    token icons, instead of per-frame `_draw`. Optional, low value. _S_
 - Rules-reference overlays for more game systems.
 - _Community feedback from the alpha lands here first._
 
