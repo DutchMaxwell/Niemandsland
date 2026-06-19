@@ -31,11 +31,6 @@ planned and where ideas go. For what already works see
   from Army Forge against an actual `aofr` army (manual QA; no automated checker planned). _S_
 
 ## 📋 Next (accepted, queued)
-- **MP — concurrent bidirectional army import** — when **both** players import an army mid-session
-  at nearly the same instant, the two cross-deliveries don't fully converge (the headless stress
-  soak saw 46/49 instead of 92/92; **staggered** imports converge fine). Likely the
-  restore-lock / army-broadcast race. Surfaced + reproducible via `test/mp/run_soak.py
-  --workload stress`. _S_
 - **Regiments — handling polish** — move a unit as one block, axis-locked drag (straight),
   frontage cycle (5-wide ↔ other), and wheel/pivot about the front corner. Community-validated
   (bulk-move + wheeling is a top TTS friction). `regiment_tray.gd` has `frontage`/`reform`,
