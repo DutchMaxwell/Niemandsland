@@ -81,9 +81,14 @@ relay/.venv/bin/python test/mp/run_soak.py \
 #   stall     = one long main-loop freeze (stall detector fires; survives)
 #   framedrop = sustained low FPS (--target-fps 8/5/3) — also fires the in-game advisory
 #   blip      = force socket close -> guest reconnects + recovers
+#   churn     = drop + reconnect repeatedly under load (asserts each recovers + state converges)
+#   chaos     = interleaved framedrop + blips under full load
 ... --fault framedrop --target-fps 3
 ... --fault stall
 ... --fault blip
+... --workload stress --army "<link>" --fault churn   # or --fault chaos
+# The stress workload also drives combat RPCs (non-lethal wounds + activation) and a node-count
+# leak watch (baseline after settle; the soak fails if nodes balloon).
 ```
 
 `run_soak.py` exits 0 (green) / 1 (a drop or state divergence) and starts the relay itself

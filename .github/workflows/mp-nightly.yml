@@ -64,5 +64,9 @@ jobs:
         run: |
           python test/mp/run_soak.py --godot godot --duration 150 --workload opr --army "$ARMY"
           python test/mp/run_soak.py --godot godot --duration 150 --workload opr --army "$ARMY" --fault framedrop --target-fps 5
-          # Heaviest: both armies + auto-terrain + two-way movement.
+          # Heaviest: both armies + auto-terrain + two-way movement + combat RPCs + leak watch.
           python test/mp/run_soak.py --godot godot --duration 150 --workload stress --army "$ARMY"
+          # Reconnect-churn under full load (guest drops + rejoins repeatedly).
+          python test/mp/run_soak.py --godot godot --duration 150 --workload stress --fault churn --army "$ARMY"
+          # Chaos: interleaved framedrop + blips under full load.
+          python test/mp/run_soak.py --godot godot --duration 150 --workload stress --fault chaos --army "$ARMY"
