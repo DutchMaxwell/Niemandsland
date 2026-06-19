@@ -4,6 +4,18 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [0.3.5.9-alpha] — 2026-06-19
+
+### Fixed
+- **The "Loading 3D model" overlay can no longer hang forever.** A model whose GLB download never
+  completes (R2 hiccup / dead connection / a not-yet-uploaded model that stalls instead of returning
+  404) used to strand the asset downloader — `HTTPRequest`'s timeout defaults to infinite — so the
+  army-load progress bar stuck on the last model while the rest of the game stayed responsive. Model
+  downloads now time out (120 s) and fail cleanly: the load finishes and the affected model falls
+  back to its placeholder. (Reported from live play: importing a second army with not-yet-uploaded
+  models hung on the last model.)
+
+
 ## [0.3.5.8-alpha] — 2026-06-19
 
 ### Added
