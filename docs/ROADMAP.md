@@ -35,6 +35,9 @@ planned and where ideas go. For what already works see
   frontage cycle (5-wide ↔ other), and wheel/pivot about the front corner. Community-validated
   (bulk-move + wheeling is a top TTS friction). `regiment_tray.gd` has `frontage`/`reform`,
   but no block-move/cycle/wheel yet. _M_
+  **⛔ Prerequisite: generate the Age of Fantasy faction 3D models first (pipeline).** Until the AoF
+  factions exist on R2 there is nothing to rank in the trays, so the handling polish is sequenced
+  AFTER AoF model generation. (Maintainer decision 2026-06-19.)
 - **Measure-on-pickup → snap-back** — grabbing a model starts a live measurement with a ghost
   preview; release to commit, ESC to return to the pickup point. TTS later shipped exactly this.
   Extends `object_manager` drag + the height-aware LoS measuring. _M_
