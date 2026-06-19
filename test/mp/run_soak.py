@@ -19,6 +19,7 @@ import argparse
 import os
 import re
 import shlex
+import signal
 import socket
 import subprocess
 import sys
@@ -42,6 +43,23 @@ def _wait_for_port(port: int, timeout: float = 15.0) -> bool:
     return False
 
 
+def _kill_group(proc) -> None:
+    """Kill a subprocess AND its children (flatpak -> bwrap -> godot-bin) via its process
+    group, so no orphan godot instance leaks after the run (proc.kill() would only reap the
+    flatpak wrapper, leaving the real godot-bin grandchild running)."""
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
+
 class Client:
     """A headless Godot harness process whose stdout is drained in a thread."""
 
@@ -51,7 +69,7 @@ class Client:
         self.code: str | None = None
         self.proc = subprocess.Popen(
             cmd, cwd=REPO, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, bufsize=1,
+            text=True, bufsize=1, start_new_session=True,  # own group -> clean tree kill
         )
         self._thread = threading.Thread(target=self._drain, daemon=True)
         self._thread.start()
@@ -78,8 +96,11 @@ class Client:
         try:
             return self.proc.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
-            self.proc.kill()
+            self.kill()
             return None
+
+    def kill(self) -> None:
+        _kill_group(self.proc)
 
     def summary(self) -> dict:
         for line in reversed(self.lines):
@@ -133,7 +154,7 @@ def main() -> int:
     relay_url = f"ws://127.0.0.1:{args.port}"
     relay = subprocess.Popen(
         [args.relay_python, os.path.join("relay", "relay_server.py"), "--port", str(args.port)],
-        cwd=REPO, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        cwd=REPO, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
     )
     failures: list[str] = []
     host = guest = None
@@ -188,9 +209,9 @@ def main() -> int:
                 failures.append("framedrop did not trigger the in-game low-FPS advisory")
     finally:
         for c in (host, guest):
-            if c and c.proc.poll() is None:
-                c.proc.kill()
-        relay.terminate()
+            if c:
+                c.kill()  # kill the whole flatpak->godot process group, no orphan godot leak
+        _kill_group(relay)
 
     print("\n===== SOAK REPORT =====")
     print("host : ", host.summary() if host else "(none)")
