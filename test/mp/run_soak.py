@@ -106,7 +106,7 @@ def _godot_cmd(godot: str, role: str, relay_url: str, args) -> list:
     ]
     if args.target_fps:
         cmd += ["--target-fps", str(args.target_fps)]
-    if args.workload == "opr" and args.army:
+    if args.workload in ("opr", "stress") and args.army:
         cmd += ["--army", args.army]
     return cmd
 
@@ -116,7 +116,7 @@ def main() -> int:
     ap.add_argument("--godot", default=os.environ.get("GODOT_CMD", "godot"),
                     help="Godot launch command (shell-split).")
     ap.add_argument("--duration", type=int, default=60)
-    ap.add_argument("--workload", default="synthetic", choices=["synthetic", "opr"])
+    ap.add_argument("--workload", default="synthetic", choices=["synthetic", "opr", "stress"])
     ap.add_argument("--fault", default="none")
     ap.add_argument("--target-fps", type=int, default=0)
     ap.add_argument("--army", default="", help="Army Forge share link / list ID (for --workload opr).")
@@ -124,8 +124,8 @@ def main() -> int:
     ap.add_argument("--relay-python", default=sys.executable,
                     help="Python used to launch the relay (needs websockets).")
     args = ap.parse_args()
-    if args.workload == "opr" and not args.army:
-        ap.error("--workload opr requires --army <share-link>")
+    if args.workload in ("opr", "stress") and not args.army:
+        ap.error("--workload %s requires --army <share-link>" % args.workload)
 
     relay_url = f"ws://127.0.0.1:{args.port}"
     relay = subprocess.Popen(
@@ -172,7 +172,7 @@ def main() -> int:
         gs = guest.summary()
         if hs and int(hs.get("peers", "0")) < 1:
             failures.append("host never saw the guest join (peers=0)")
-        if args.workload in ("synthetic", "opr") and hs and gs:
+        if args.workload in ("synthetic", "opr", "stress") and hs and gs:
             hm = int(hs.get("minis", "0"))
             gm = int(gs.get("minis", "0"))
             if hm < 1:
@@ -198,7 +198,7 @@ def main() -> int:
             print("  -", f)
         for c in (host, guest):
             if c:
-                print(f"\n--- {c.name} tail ---\n{c.tail()}")
+                print(f"\n--- {c.name} tail ---\n{c.tail(90)}")
         print("\nRESULT: FAIL")
         return 1
     print("\nRESULT: PASS")
