@@ -67,6 +67,12 @@ relay/.venv/bin/python test/mp/run_soak.py \
   --godot "flatpak run --filesystem=home --share=network org.godotengine.Godot" \
   --duration 120 --workload synthetic
 
+# realistic load: import a REAL Army Forge army (downloads its GLBs from R2 + syncs to the
+# guest = the real army-sync burst + download-stall path). Needs internet/R2.
+... --duration 120 --workload opr --army "https://army-forge.onepagerules.com/share?id=XXX"
+# nastiest real case — army import WHILE the guest framedrops:
+... --workload opr --army "<link>" --fault framedrop --target-fps 5
+
 # reproduce a sporadic-disconnect cause on demand (guest side) + assert recovery:
 #   stall     = one long main-loop freeze (stall detector fires; survives)
 #   framedrop = sustained low FPS (--target-fps 8/5/3) — also fires the in-game advisory
