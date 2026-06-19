@@ -53,9 +53,17 @@ const SPAWN_COUNT := 10
 # Fault injection (guest side). Applied partway through the run.
 var _fault_done := false
 var _fault_announced := false
+var _last_churn := 0.0
+var _last_blip := 0.0
+var _last_leak := 0.0
+var _nodes_base := 0
 const FAULT_AT_FRACTION := 0.4
 const FRAMEDROP_WINDOW_S := 10.0
 const STALL_FREEZE_MS := 6000
+const CHURN_INTERVAL_S := 30.0    # reconnect-churn: drop + rejoin this often
+const CHAOS_BLIP_INTERVAL_S := 45.0
+const LEAK_SAMPLE_S := 15.0
+const LEAK_SETTLE_S := 45.0       # capture the node-count baseline only after armies+terrain settle
 
 
 func _ready() -> void:
@@ -135,6 +143,15 @@ func _process(delta: float) -> void:
 		_finish()
 		return
 
+	# Leak watch: sample the live SceneTree node count periodically. _nodes_base is captured
+	# once the session is up (post-connect); growth from there flags a slow leak.
+	if _connected and _elapsed - _last_leak >= LEAK_SAMPLE_S:
+		_last_leak = _elapsed
+		var nc := get_tree().get_node_count()
+		if _nodes_base == 0 and _elapsed >= LEAK_SETTLE_S:
+			_nodes_base = nc  # baseline only once armies + terrain have finished spawning
+		_log("NODES %d minis %d" % [nc, get_tree().get_nodes_in_group("miniature").size()])
+
 	# Inject the configured fault on the guest (the realistic laggy / dropping peer);
 	# the host stays healthy as the authority.
 	if _connected and _role == "guest" and _fault != "none":
@@ -180,11 +197,28 @@ func _maybe_inject_fault() -> void:
 			if not _fault_done:
 				_fault_done = true
 				_log("FAULT blip force-close")
-				var peer = _main.internet_lobby.relay_peer if _main else null
-				if peer and peer.has_method("debug_force_close"):
-					peer.debug_force_close()
-				else:
-					_fail("blip: relay_peer has no debug_force_close()")
+				_force_close()
+		"churn":
+			# Repeatedly drop + reconnect while both armies are on the table.
+			if _elapsed - _last_churn >= CHURN_INTERVAL_S:
+				_last_churn = _elapsed
+				_log("FAULT churn force-close (#%d)" % (_reconnects + 1))
+				_force_close()
+		"chaos":
+			# Interleave a sustained framedrop window with periodic blips, under full load.
+			if fmod(_elapsed - start, 30.0) < 8.0:
+				OS.delay_msec(int(1000.0 / 5.0))  # ~5 fps for 8s of every 30s
+			if _elapsed - _last_blip >= CHAOS_BLIP_INTERVAL_S:
+				_last_blip = _elapsed
+				_log("FAULT chaos blip force-close")
+				_force_close()
+
+
+## Force-close the relay socket (drives the reconnect path); used by blip / churn / chaos.
+func _force_close() -> void:
+	var peer = _main.internet_lobby.relay_peer if _main else null
+	if peer and peer.has_method("debug_force_close"):
+		peer.debug_force_close()
 
 
 ## Synthetic workload: realistic relay traffic without needing army assets.
@@ -311,6 +345,18 @@ func _drive_stress(delta: float) -> void:
 				if node:
 					node.global_position = pos
 			_nm.broadcast_move(oid, pos)
+		# Combat-like state churn on one own model/unit (no count change -> convergence holds).
+		var cnode = _om.find_by_network_id(_own_ids[randi() % _own_ids.size()]) if (_om and _om.has_method("find_by_network_id")) else null
+		if cnode and cnode.has_meta("model_instance"):
+			var cmi = cnode.get_meta("model_instance")
+			if cmi != null:
+				if cmi.get("wounds_max") != null and int(cmi.wounds_max) > 1:
+					cmi.wounds_current = (int(cmi.wounds_current) - 1) if int(cmi.wounds_current) > 1 else int(cmi.wounds_max)
+					if _nm.has_method("broadcast_model_wounds"):
+						_nm.broadcast_model_wounds(cmi)
+				var cgu = cmi.get("unit")
+				if cgu != null and _nm.has_method("broadcast_unit_activation"):
+					_nm.broadcast_unit_activation(cgu)
 
 
 func _generate_terrain() -> void:
@@ -368,8 +414,9 @@ func _finish() -> void:
 	if not _connected:
 		_failures.append("never connected")
 	var minis := get_tree().get_nodes_in_group("miniature").size()
-	_log("SUMMARY role=%s ok=%s connected=%s peers=%d minis=%d reconnects=%d remaps=%d failures=%s" % [
-		_role, str(ok), str(_connected), _peer_count, minis, _reconnects, _remaps,
+	var nodes := get_tree().get_node_count()
+	_log("SUMMARY role=%s ok=%s connected=%s peers=%d minis=%d reconnects=%d remaps=%d nodes=%d nodes_base=%d failures=%s" % [
+		_role, str(ok), str(_connected), _peer_count, minis, _reconnects, _remaps, nodes, _nodes_base,
 		"|".join(_failures) if not _failures.is_empty() else "none"])
 	get_tree().quit(0 if ok else 1)
 

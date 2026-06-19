@@ -207,6 +207,15 @@ def main() -> int:
         if args.fault == "framedrop" and args.target_fps and args.target_fps < 18:
             if not any("low-framerate advisory shown" in line for line in guest.lines):
                 failures.append("framedrop did not trigger the in-game low-FPS advisory")
+        # Churn / chaos must actually have caused reconnects (else they tested nothing).
+        if args.fault in ("churn", "chaos") and gs and int(gs.get("reconnects", "0")) < 1:
+            failures.append(f"{args.fault}: guest never reconnected (reconnects=0)")
+        # Leak watch: the live node count must not balloon from its post-connect baseline.
+        for c in (host, guest):
+            s = c.summary()
+            nb, nn = int(s.get("nodes_base", "0") or 0), int(s.get("nodes", "0") or 0)
+            if nb > 0 and nn - nb > 400:
+                failures.append(f"{c.name}: node count grew {nn - nb} ({nb}->{nn}) — possible leak")
     finally:
         for c in (host, guest):
             if c:
