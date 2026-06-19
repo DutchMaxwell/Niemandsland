@@ -9,6 +9,12 @@ extends Node
 
 const DEFAULT_CACHE_DIR: String = "user://model_cache"
 const CHUNK_SIZE: int = 65536  # 64 KiB streamed to disk
+## Per-request total timeout. HTTPRequest defaults to 0 (NEVER times out): a stalled/never-
+## completing download (R2 hiccup, dead connection, missing object that hangs instead of 404)
+## would leave `request_completed` un-emitted, `_request_active` stuck true, and the serial
+## download loop — plus the army loading overlay — hung forever. Generous enough for the largest
+## GLBs (~28 MB) on a slow link; a true stall now fails cleanly and falls back to a placeholder.
+const REQUEST_TIMEOUT_SEC: float = 120.0
 
 # Cache location + file extension. The defaults suit the GLB model cache; BiomeLibrary
 # overrides them (WebP battlemap cache) before the node enters the tree.
@@ -31,6 +37,7 @@ func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(cache_dir)
 	_http = HTTPRequest.new()
 	_http.download_chunk_size = CHUNK_SIZE
+	_http.timeout = REQUEST_TIMEOUT_SEC  # never hang forever on a stalled download
 	add_child(_http)
 
 # === Public API ===
