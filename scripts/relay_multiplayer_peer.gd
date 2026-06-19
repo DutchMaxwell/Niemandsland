@@ -138,6 +138,14 @@ func is_host_peer() -> bool:
 ## Called when the link dies unexpectedly (socket closed or heartbeat-ack timeout).
 ## Emits relay_connection_lost so the app can notify the player + try to rejoin;
 ## the reconnect flow decides the final outcome.
+## Test-only: force the relay socket closed to simulate a network blip. The next _poll()
+## sees STATE_CLOSED and runs the normal reconnect path. Never called in normal play — only
+## the headless MP soak harness (test/mp/) uses it.
+func debug_force_close() -> void:
+	if _ws:
+		_ws.close()
+
+
 func _on_connection_lost() -> void:
 	if _is_reconnecting:
 		return  # a rejoin is already in flight; the reconnect timer governs the outcome
