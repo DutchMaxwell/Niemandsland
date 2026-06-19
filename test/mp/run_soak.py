@@ -174,6 +174,10 @@ def main() -> int:
                 failures.append(f"host spawned no minis (minis={hm})")
             elif hm != gm:
                 failures.append(f"state not converged: host minis={hm}, guest minis={gm}")
+        # A sustained framedrop must trigger the in-game low-FPS advisory on the guest.
+        if args.fault == "framedrop" and args.target_fps and args.target_fps < 18:
+            if not any("low-framerate advisory shown" in line for line in guest.lines):
+                failures.append("framedrop did not trigger the in-game low-FPS advisory")
     finally:
         for c in (host, guest):
             if c and c.proc.poll() is None:
