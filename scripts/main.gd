@@ -603,6 +603,70 @@ func _show_toast(text: String) -> void:
 	tw.tween_callback(label.queue_free)
 
 
+# --- Low-FPS instability advisory (multiplayer only) ---
+# A sustained low framerate degrades heartbeat cadence and backs up the send queue — a known
+# cause of online instability. When it persists during a live session, advise the player ONCE
+# to lower Graphics Quality (show, don't decide: a one-click action, never auto-applied).
+const FPS_ADVISORY_THRESHOLD := 18.0
+const FPS_ADVISORY_SUSTAIN_MS := 8000
+var _fps_advised := false
+var _fps_low_since_ms := 0
+
+
+func _check_fps_advisory() -> void:
+	if _fps_advised or not network_manager or not network_manager.is_multiplayer_active():
+		return
+	var fps := Engine.get_frames_per_second()
+	var now := Time.get_ticks_msec()
+	if fps > 0.0 and fps < FPS_ADVISORY_THRESHOLD:
+		if _fps_low_since_ms == 0:
+			_fps_low_since_ms = now
+		elif now - _fps_low_since_ms >= FPS_ADVISORY_SUSTAIN_MS:
+			_fps_advised = true
+			_show_fps_advisory()
+	else:
+		_fps_low_since_ms = 0
+
+
+## One-shot, non-blocking banner: warns that low FPS may be destabilising the online connection
+## and offers a one-click drop to the next-lower Graphics Quality tier.
+func _show_fps_advisory() -> void:
+	print("[FPS] low-framerate advisory shown")  # parseable signal for the MP soak harness
+	var panel := PanelContainer.new()
+	panel.name = "FpsAdvisory"
+	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 90)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	panel.add_child(row)
+	var label := Label.new()
+	label.text = "Low framerate may be destabilising your online connection."
+	row.add_child(label)
+	var lower := Button.new()
+	lower.text = "Lower Graphics Quality"
+	lower.pressed.connect(_on_fps_advisory_lower.bind(panel))
+	row.add_child(lower)
+	var dismiss := Button.new()
+	dismiss.text = "Dismiss"
+	dismiss.pressed.connect(_free_if_valid.bind(panel))
+	row.add_child(dismiss)
+	$UI.add_child(panel)
+	var t := create_tween()
+	t.tween_interval(20.0)
+	t.tween_callback(_free_if_valid.bind(panel))
+
+
+func _on_fps_advisory_lower(panel: Node) -> void:
+	var tier: int = GraphicsSettings.current_preset
+	GraphicsSettings.apply_preset(maxi(0, tier - 1))
+	_show_toast("Graphics Quality lowered to %s" % GraphicsSettings.get_current_preset_name())
+	_free_if_valid(panel)
+
+
+func _free_if_valid(n: Node) -> void:
+	if is_instance_valid(n):
+		n.queue_free()
+
+
 func _unhandled_key_input(event: InputEvent) -> void:
 	# F12: capture a bug report (current view screenshot + scrubbed log) to the Desktop,
 	# regardless of focus, so an in-game visual glitch ships WITH the report.
@@ -726,6 +790,7 @@ func _delete_selected_objects() -> void:
 
 
 func _process(delta: float) -> void:
+	_check_fps_advisory()
 	# Handle continuous group rotation (Shift+R held)
 	if _is_group_rotating:
 		var rotation_amount = GROUP_ROTATION_SPEED * delta
