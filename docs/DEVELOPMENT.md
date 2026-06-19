@@ -73,6 +73,10 @@ relay/.venv/bin/python test/mp/run_soak.py \
 # nastiest real case — army import WHILE the guest framedrops:
 ... --workload opr --army "<link>" --fault framedrop --target-fps 5
 
+# heaviest — BOTH sides import an army, the host auto-generates terrain, and each side moves
+# its OWN models (two army-syncs + terrain + two-way movement on a populated field):
+... --duration 150 --workload stress --army "<link>"
+
 # reproduce a sporadic-disconnect cause on demand (guest side) + assert recovery:
 #   stall     = one long main-loop freeze (stall detector fires; survives)
 #   framedrop = sustained low FPS (--target-fps 8/5/3) — also fires the in-game advisory
