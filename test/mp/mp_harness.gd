@@ -44,6 +44,7 @@ var _own_ids: Array[int] = []
 var _terrain_done := false
 var _stress_imported := false
 var _move_accum := 0.0
+var _round_accum := 0.0
 var _cursor_accum := 0.0
 var _tick_accum := 0.0
 var _cursor_phase := 0.0
@@ -291,6 +292,13 @@ func _drive_stress(delta: float) -> void:
 		_cursor_accum = 0.0
 		_cursor_phase += 0.1
 		_nm.broadcast_cursor_position(Vector3(sin(_cursor_phase) * 0.5, 0.0, cos(_cursor_phase) * 0.5))
+	# Host advances the round periodically (exercises the round-sync RPC over the long run).
+	if _role == "host":
+		_round_accum += delta
+		if _round_accum >= 5.0:
+			_round_accum = 0.0
+			if _nm.has_method("broadcast_round_advance"):
+				_nm.broadcast_round_advance()
 	# Move a few of our OWN models each tick (local move + broadcast = two-way movement traffic).
 	_move_accum += delta
 	if _move_accum >= 0.4 and not _own_ids.is_empty():
