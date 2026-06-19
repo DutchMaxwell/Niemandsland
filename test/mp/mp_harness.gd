@@ -272,8 +272,18 @@ func _drive_stress(delta: float) -> void:
 	# Host imports first; the guest waits until the host's army has arrived (staggered, like real
 	# players) so the two mid-session imports don't race head-on at the same instant.
 	if not _stress_imported and _oam != null and _oam.get("api_client") != null:
-		var host_army_here := get_tree().get_nodes_in_group("miniature").size() > 0
-		if _role == "host" or host_army_here:
+		var simul: bool = _args.get("simul", "false") == "true"
+		var do_import := false
+		if simul:
+			# True simultaneity: BOTH sides fire at the same settled time (connection RPC-ready),
+			# so this tests the concurrent-build race, not an unrealistic first-frame import.
+			do_import = _elapsed >= 10.0
+		elif _role == "host":
+			do_import = true
+		else:
+			# Staggered (realistic): the guest imports once the host's army has arrived.
+			do_import = get_tree().get_nodes_in_group("miniature").size() > 0
+		if do_import:
 			_stress_imported = true
 			_import_own_army()  # async coroutine; the flag guards re-entry
 	_cursor_accum += delta
@@ -317,6 +327,7 @@ func _import_own_army() -> void:
 	if army == null:
 		_fail("army import failed (api / network?)")
 		return
+	army.player_id = slot  # tag ownership (the import dialog sets this; we bypass it)
 	# Snapshot existing models so we can identify OURS (the ones this import adds).
 	var before := {}
 	for m in get_tree().get_nodes_in_group("miniature"):
@@ -328,8 +339,10 @@ func _import_own_army() -> void:
 			var nid := int(m.get_meta("network_id"))
 			if not before.has(nid):
 				_own_ids.append(nid)
-	_log("imported slot %d: own=%d total minis=%d" % [
-		slot, _own_ids.size(), get_tree().get_nodes_in_group("miniature").size()])
+	var lo: int = int(_own_ids.min()) if not _own_ids.is_empty() else -1
+	var hi: int = int(_own_ids.max()) if not _own_ids.is_empty() else -1
+	_log("imported slot %d: own=%d total minis=%d own_ids=[%d..%d]" % [
+		slot, _own_ids.size(), get_tree().get_nodes_in_group("miniature").size(), lo, hi])
 
 
 # === Result handling ===

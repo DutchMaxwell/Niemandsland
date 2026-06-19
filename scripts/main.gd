@@ -2738,7 +2738,13 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
 
 	# Spawn the army on tray (position determined by player ID).
 	# Awaitable: on-demand models are downloaded up front before spawning.
+	# Serialize against a concurrently-arriving REMOTE army: a local import AND an incoming army
+	# both mutate the shared object_manager._object_counter + save_manager._loaded_game_units, so
+	# two simultaneous mid-session imports would clobber each other's network_ids and lose models
+	# (the headless stress-test finding). The restore-lock makes the two builds mutually exclusive.
+	await save_manager.begin_restore()
 	var spawned = await opr_army_manager.spawn_army(army)
+	save_manager.end_restore()
 	print("Spawned %d models for army '%s' on Player %d's tray" % [spawned.size(), army.name, player_id])
 
 	if is_instance_valid(_army_loading_overlay):

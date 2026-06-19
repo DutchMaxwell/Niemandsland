@@ -108,6 +108,8 @@ def _godot_cmd(godot: str, role: str, relay_url: str, args) -> list:
         cmd += ["--target-fps", str(args.target_fps)]
     if args.workload in ("opr", "stress") and args.army:
         cmd += ["--army", args.army]
+    if args.simul:
+        cmd += ["--simul", "true"]
     return cmd
 
 
@@ -120,6 +122,7 @@ def main() -> int:
     ap.add_argument("--fault", default="none")
     ap.add_argument("--target-fps", type=int, default=0)
     ap.add_argument("--army", default="", help="Army Forge share link / list ID (for --workload opr).")
+    ap.add_argument("--simul", action="store_true", help="Force simultaneous (un-staggered) bidirectional import (stress).")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--relay-python", default=sys.executable,
                     help="Python used to launch the relay (needs websockets).")
