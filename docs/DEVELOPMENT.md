@@ -55,13 +55,36 @@ Reports are written to `reports/` (git-ignored).
 **Python** — the relay's tests (the offline asset pipeline lives in a separate private repo and has no tests here):
 
 ```bash
-cd relay && python -m pytest                       # WebSocket relay
+cd relay && python -m pytest                       # WebSocket relay (base + churn/soak)
 ```
+
+**Multiplayer stability (headless 2-client soak)** — `test/mp/` boots two real headless Godot
+clients + a local relay and asserts no drops / state convergence from parsed `MP_HARNESS` logs:
+
+```bash
+# full 2-client soak (synthetic load: spawn-sync, 15 Hz cursor, moves, dice)
+relay/.venv/bin/python test/mp/run_soak.py \
+  --godot "flatpak run --filesystem=home --share=network org.godotengine.Godot" \
+  --duration 120 --workload synthetic
+
+# reproduce a sporadic-disconnect cause on demand (guest side) + assert recovery:
+#   stall     = one long main-loop freeze (stall detector fires; survives)
+#   framedrop = sustained low FPS (--target-fps 8/5/3) — also fires the in-game advisory
+#   blip      = force socket close -> guest reconnects + recovers
+... --fault framedrop --target-fps 3
+... --fault stall
+... --fault blip
+```
+
+`run_soak.py` exits 0 (green) / 1 (a drop or state divergence) and starts the relay itself
+(needs `websockets`; `relay/.venv` has it). In CI pass `--godot godot`.
 
 ## CI
 
-`.github/workflows/build.yml` builds Linux + Windows exports and runs the gdUnit4
-suites on Godot 4.6. Keep it in sync with `project.godot`'s engine version.
+`.github/workflows/build.yml` builds Linux + Windows exports, runs the gdUnit4 suites, and runs
+the relay pytest (`relay-tests` job) on Godot 4.6 — keep it in sync with `project.godot`'s engine
+version. The timing-sensitive headless 2-client soak + fault matrix run in
+`.github/workflows/mp-nightly.yml` (nightly + on demand) to keep the push path fast and non-flaky.
 
 ## Secrets
 
