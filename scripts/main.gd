@@ -538,7 +538,14 @@ func _ready() -> void:
 	# built layout. Loads and multiplayer clients inherit the size from the saved/host
 	# data, so they skip the chooser.
 	var joining_client: bool = pending_internet and not ProjectSettings.get_setting("niemandsland/internet_is_host", false)
-	if pending_load.is_empty() and not joining_client:
+	# Headless MP test harness (test/mp/): skip the interactive table-size chooser AND the
+	# cinematic intro and drop straight onto a live, RPC-capable table. Inert in normal play.
+	var harness_mode: bool = ProjectSettings.get_setting("niemandsland/harness_mode", false)
+	if harness_mode:
+		if not joining_client:
+			_set_table_size(DEFAULT_TABLE_SIZE_FEET)
+		call_deferred("_on_intro_finished")
+	elif pending_load.is_empty() and not joining_client:
 		# Choose the table size FIRST on a black backdrop, then dissolve into the intro —
 		# the chooser must never overlap the cinematic. UI stays hidden until the intro ends.
 		$UI.visible = false
