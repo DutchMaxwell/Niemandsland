@@ -34,7 +34,10 @@ var _done := false
 # Synthetic workload state.
 var _nm = null
 var _om = null
+var _oam = null
 var _spawned := false
+var _opr_imported := false
+var _army_link := ""
 var _mini_ids: Array[int] = []
 var _cursor_accum := 0.0
 var _tick_accum := 0.0
@@ -56,6 +59,7 @@ func _ready() -> void:
 	_duration = float(_args.get("duration", "60"))
 	_workload = _args.get("workload", "synthetic")
 	_fault = _args.get("fault", "none")
+	_army_link = _args.get("army", "")
 	var relay_url: String = _args.get("relay-url", "ws://127.0.0.1:8765")
 	var code: String = _args.get("code", "")
 
@@ -131,8 +135,11 @@ func _process(delta: float) -> void:
 		_maybe_inject_fault()
 
 	# Drive the workload once both ends are present.
-	if _connected and (_role != "host" or _peer_count > 0) and _workload == "synthetic":
-		_drive_synthetic(delta)
+	if _connected and (_role != "host" or _peer_count > 0):
+		if _workload == "synthetic":
+			_drive_synthetic(delta)
+		elif _workload == "opr":
+			_drive_opr(delta)
 
 	if _elapsed >= _duration:
 		_finish()
@@ -206,6 +213,40 @@ func _drive_synthetic(delta: float) -> void:
 				var oid: int = _mini_ids[randi() % _mini_ids.size()]
 				_nm.broadcast_move(oid, Vector3(randf_range(-0.5, 0.5), 0.0, randf_range(-0.5, 0.5)))
 			_nm.broadcast_dice_roll([randi() % 6 + 1], {"context": "harness"})
+
+
+## OPR workload: the host imports a REAL Army Forge army (downloads its GLBs from R2 and syncs
+## them to the guest — the realistic army-sync burst + GLB-download stall path). Both ends stream
+## cursor presence. Requires --army <share-link>.
+func _drive_opr(delta: float) -> void:
+	if _nm == null:
+		_nm = _main.get("network_manager")
+		_oam = _main.get("opr_army_manager")
+	if _nm == null:
+		return
+	if _role == "host" and not _opr_imported and _oam != null and _oam.get("api_client") != null:
+		_opr_imported = true
+		_import_army()  # async coroutine; the flag guards re-entry
+	_cursor_accum += delta
+	if _cursor_accum >= 1.0 / 15.0:
+		_cursor_accum = 0.0
+		_cursor_phase += 0.1
+		_nm.broadcast_cursor_position(Vector3(sin(_cursor_phase) * 0.5, 0.0, cos(_cursor_phase) * 0.5))
+
+
+func _import_army() -> void:
+	if _army_link.is_empty():
+		_fail("opr workload needs --army <share-link>")
+		return
+	_log("importing army: %s" % _army_link)
+	var army = await _oam.api_client.import_from_share_link(_army_link)
+	if army == null:
+		_fail("army import failed (api / network?)")
+		return
+	# Run the REAL in-game import handler: spawn + on-demand GLB download from R2 + buff
+	# tokens + MP broadcast to the guest — identical to a player importing in a live session.
+	await _main._on_opr_army_imported(army, 1)
+	_log("opr import done; host minis=%d" % get_tree().get_nodes_in_group("miniature").size())
 
 
 # === Result handling ===
