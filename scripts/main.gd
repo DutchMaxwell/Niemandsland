@@ -303,6 +303,7 @@ func _ready() -> void:
 	network_manager.server_disconnected.connect(_on_network_disconnected)
 	network_manager.player_connected.connect(_on_player_joined)
 	network_manager.player_disconnected.connect(_on_player_left)
+	network_manager.command_received.connect(_on_network_command)
 	network_manager.peer_version_validated.connect(_on_peer_version_validated)
 	network_manager.version_rejected.connect(_on_version_rejected)
 	network_manager.peer_remapped.connect(_on_peer_remapped)
@@ -2529,6 +2530,13 @@ func _start_pending_internet_game(is_internet_host: bool, relay_url: String, roo
 		internet_lobby.join_internet_game(room_code_to_join, relay_url)
 
 
+## Dispatch for main-owned commands over the hand-rolled protocol (below @rpc, reconnect-safe).
+## network_manager handles its own former-@rpc methods; main handles the full-state push.
+func _on_network_command(type: String, payload: Variant, _from_peer: int) -> void:
+	if type == "sync_game_state" and payload is Dictionary:
+		_rpc_sync_game_state(payload.get("state", {}))
+
+
 ## Called on the host when a client requests the current game state.
 ## The client's binary packet also makes Godot's SceneMultiplayer detect
 ## the peer, which is required for all subsequent RPCs to work.
@@ -2551,7 +2559,7 @@ func _sync_state_to_peer(peer_id: int) -> void:
 	var obj_count = state.get("objects", []).size()
 	var unit_count = state.get("game_units", []).size()
 	print("[StateSync] Sending state to peer %d: %d objects, %d game_units" % [peer_id, obj_count, unit_count])
-	_rpc_sync_game_state.rpc_id(peer_id, state)
+	network_manager.send_command("sync_game_state", {"state": state}, peer_id)
 
 
 ## Sync loaded state to all connected clients
@@ -2564,7 +2572,7 @@ func _sync_loaded_state_to_clients() -> void:
 	# Get current state and broadcast to all clients
 	var state = save_manager.serialize_game_state()  # includes army_names (for tray rebuild)
 	state["_host_version"] = network_manager.get_game_version()
-	_rpc_sync_game_state.rpc(state)
+	network_manager.send_command("sync_game_state", {"state": state}, 0)
 
 
 ## RPC to sync game state to clients (mirrors save_manager.load_game() deserialization)

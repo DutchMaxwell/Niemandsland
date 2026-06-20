@@ -239,7 +239,7 @@ class RelayServer:
                 "type": "room_rejoined_host",
                 "peer_id": 1,
             }))
-            for guest in room.peers.values():
+            for guest in list(room.peers.values()):
                 if guest.peer_id == 1:
                     continue
                 # Tell the waiting guest the host is back...
@@ -302,7 +302,7 @@ class RelayServer:
         }))
 
         # Notify existing peers about the new peer
-        for existing_peer in room.peers.values():
+        for existing_peer in list(room.peers.values()):
             if existing_peer.peer_id != peer_id:
                 try:
                     await existing_peer.websocket.send(json.dumps({
@@ -313,7 +313,7 @@ class RelayServer:
                     pass
 
         # Notify joiner about existing peers
-        for existing_peer in room.peers.values():
+        for existing_peer in list(room.peers.values()):
             if existing_peer.peer_id != peer_id:
                 try:
                     await websocket.send(json.dumps({
@@ -366,7 +366,7 @@ class RelayServer:
 
         if target_peer_id == 0:
             # Broadcast to all peers except sender
-            for peer in room.peers.values():
+            for peer in list(room.peers.values()):
                 if peer.peer_id != sender.peer_id:
                     try:
                         await peer.websocket.send(forwarded)
@@ -433,7 +433,7 @@ class RelayServer:
                     "Host left room %s, preserving %ds for rejoin (%d guest(s) waiting)",
                     peer.room_code, HOST_REJOIN_WINDOW_SECONDS, len(room.peers),
                 )
-                for remaining_peer in room.peers.values():
+                for remaining_peer in list(room.peers.values()):
                     try:
                         await remaining_peer.websocket.send(json.dumps({
                             "type": "host_paused",
@@ -445,7 +445,7 @@ class RelayServer:
                 del self.rooms[peer.room_code]
         else:
             # Guest disconnected - notify remaining peers
-            for remaining_peer in room.peers.values():
+            for remaining_peer in list(room.peers.values()):
                 try:
                     await remaining_peer.websocket.send(json.dumps({
                         "type": "peer_disconnected",
