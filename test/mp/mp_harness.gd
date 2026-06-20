@@ -83,6 +83,10 @@ func _ready() -> void:
 	# Stand in for the startup menu: tell main.gd to open a relay session, headless.
 	ProjectSettings.set_setting("niemandsland/harness_mode", true)
 	ProjectSettings.set_setting("niemandsland/player_name", "Harness-%s" % _role)
+	# Distinct identity token per process: both clients share one machine's user:// (same
+	# persisted token), which would mask the real reconnect slot-remap path. Real players on
+	# separate installs have distinct tokens, so give each role its own here.
+	ProjectSettings.set_setting("niemandsland/identity_token_override", "harness-token-%s" % _role)
 	ProjectSettings.set_setting("niemandsland/pending_internet_lobby", true)
 	ProjectSettings.set_setting("niemandsland/internet_is_host", _role == "host")
 	ProjectSettings.set_setting("niemandsland/internet_relay_url", relay_url)
