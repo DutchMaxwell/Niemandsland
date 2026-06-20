@@ -44,6 +44,7 @@ MAX_CONNECTIONS_PER_IP = 10
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # 30 chars, no ambiguous 0/O/1/I/L
 CODE_LENGTH = 6  # 30^6 = 729,000,000 possibilities
 HOST_REJOIN_WINDOW_SECONDS = 20  # keep a room alive this long after the host drops, so they can rejoin
+GUEST_REJOIN_WINDOW_SECONDS = 20  # a returning guest reclaims its old peer_id within this window
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("relay")
@@ -56,6 +57,7 @@ class Peer:
     peer_id: int
     room_code: str
     ip_address: str
+    token: str = ""  # stable per-install reconnect key; lets a rejoin reclaim its old peer_id
     last_heartbeat: float = field(default_factory=time.monotonic)
     message_timestamps: list = field(default_factory=list)
 
@@ -69,6 +71,9 @@ class Room:
     next_peer_id: int = 2  # Host is always peer_id 1
     host_disconnected_at: float = 0.0  # >0 = host dropped; room preserved until rejoin or window expiry
     is_public: bool = False  # listed in the room browser; private rooms join by code only
+    # token -> (peer_id, disconnected_at): a recently-departed guest, so a rejoin within the
+    # window can reclaim its OLD peer_id (stable transport id across a drop).
+    departed: dict = field(default_factory=dict)
 
 
 class RelayServer:
@@ -159,7 +164,10 @@ class RelayServer:
             if not isinstance(code, str):
                 await self._send_error(websocket, "Invalid code format")
                 return
-            await self._handle_join_room(websocket, code, ip)
+            token = msg.get("token", "")
+            if not isinstance(token, str):
+                token = ""
+            await self._handle_join_room(websocket, code, ip, token)
         elif msg_type == "list_rooms":
             await self._handle_list_rooms(websocket)
         elif msg_type == "heartbeat":
@@ -203,7 +211,7 @@ class RelayServer:
         logger.info("Room %s created by %s", code, ip)
 
     async def _handle_join_room(
-        self, websocket: ServerConnection, code: str, ip: str
+        self, websocket: ServerConnection, code: str, ip: str, token: str = ""
     ) -> None:
         """Join an existing room by code."""
         # Check if this connection already has a room
@@ -258,14 +266,31 @@ class RelayServer:
             await self._send_error(websocket, "Room is full")
             return
 
-        peer_id = room.next_peer_id
-        room.next_peer_id += 1
+        # A returning guest reclaims its OLD peer_id (within the rejoin window) so its transport
+        # id is STABLE across the drop. With a fresh id, SceneMultiplayer's RPC routing for the new
+        # id stays stale and the host kicks the guest on the version-handshake timeout (reconnect
+        # cascade). Reuse is safe: next_peer_id only ever increments, so the old id is free.
+        reused_id = None
+        if token:
+            entry = room.departed.pop(token, None)
+            if entry is not None:
+                old_id, departed_at = entry
+                if (time.monotonic() - departed_at <= GUEST_REJOIN_WINDOW_SECONDS
+                        and old_id not in room.peers):
+                    reused_id = old_id
+        if reused_id is not None:
+            peer_id = reused_id
+            logger.info("Guest reclaimed peer_id %d in room %s (reconnect)", peer_id, code)
+        else:
+            peer_id = room.next_peer_id
+            room.next_peer_id += 1
 
         peer = Peer(
             websocket=websocket,
             peer_id=peer_id,
             room_code=code,
             ip_address=ip,
+            token=token,
         )
         room.peers[peer_id] = peer
         self.connections[websocket] = peer
@@ -391,6 +416,11 @@ class RelayServer:
             return
 
         del room.peers[peer.peer_id]
+
+        # Remember a guest's id keyed by its reconnect token so a rejoin within the window can
+        # reclaim it (stable transport id). Host (id 1) reuse is handled by the rehost path above.
+        if peer.peer_id != 1 and peer.token:
+            room.departed[peer.token] = (peer.peer_id, time.monotonic())
 
         if peer.peer_id == 1:
             # Host disconnected. Preserve the room for a short window so the host
