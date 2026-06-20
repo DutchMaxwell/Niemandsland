@@ -154,7 +154,7 @@ def main() -> int:
     relay_url = f"ws://127.0.0.1:{args.port}"
     relay = subprocess.Popen(
         [args.relay_python, os.path.join("relay", "relay_server.py"), "--port", str(args.port)],
-        cwd=REPO, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+        cwd=REPO, stdout=open("/tmp/mp_relay.log", "w"), stderr=subprocess.STDOUT, start_new_session=True,
     )
     failures: list[str] = []
     host = guest = None
