@@ -51,12 +51,7 @@ jobs:
           python test/mp/run_soak.py --godot godot --duration 40 --fault framedrop --target-fps 5
           python test/mp/run_soak.py --godot godot --duration 40 --fault framedrop --target-fps 3
 
-      # NOTE: blip/churn/chaos currently EXPOSE the open "guest reconnect with a new peer id →
-      # version-kick cascade" bug (ROADMAP, Now). The soak now asserts no-version-kick + remap-fired,
-      # so these steps fail by design until that's fixed — continue-on-error keeps the nightly's
-      # hermetic gates (synthetic/stall/framedrop) authoritative meanwhile.
-      - name: Fault — blip (socket drop + reconnect) [expected-fail: open reconnect bug]
-        continue-on-error: true
+      - name: Fault — blip (socket drop + reconnect)
         run: python test/mp/run_soak.py --godot godot --duration 40 --fault blip
 
       # Realistic load: a real Army Forge import (downloads GLBs from R2 + syncs to the guest).
