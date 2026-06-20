@@ -25,6 +25,8 @@ signal relay_reconnect_failed(reason: String)
 signal host_paused()
 ## The host is present again (we rejoined as host, or the host returned).
 signal host_rejoined()
+## Guest side: our own dropped connection was re-established (fresh peer id) — re-announce needed.
+signal relay_reconnected()
 signal peer_joined(peer_id: int)
 signal peer_left(peer_id: int)
 ## The relay returned the joinable public rooms for the room browser.
@@ -188,6 +190,7 @@ func _connect_recovery_signals() -> void:
 	relay_peer.relay_reconnect_failed.connect(_on_relay_reconnect_failed)
 	relay_peer.host_paused.connect(_on_host_paused)
 	relay_peer.host_rejoined.connect(_on_host_rejoined)
+	relay_peer.relay_reconnected.connect(_on_relay_reconnected)
 
 
 func _on_relay_connection_lost() -> void:
@@ -207,6 +210,10 @@ func _on_relay_reconnect_failed(reason: String) -> void:
 
 func _on_host_paused() -> void:
 	host_paused.emit()
+
+
+func _on_relay_reconnected() -> void:
+	relay_reconnected.emit()
 
 
 func _on_host_rejoined() -> void:

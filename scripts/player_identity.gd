@@ -71,6 +71,13 @@ static func save_name(name: String) -> void:
 ## the only trust boundary. Never returns empty (a token-capable build must always
 ## send a token, never fall back to the legacy peer-keyed path).
 static func get_or_create_client_token() -> String:
+	# Test-harness override: two headless clients on one machine share the same user://
+	# (hence the same persisted token), which would collide their reconnect identities and
+	# mask the real slot-remap path. The harness sets a distinct token per process here.
+	# Never set in shipped builds, so production always uses the persisted per-install token.
+	var override := str(ProjectSettings.get_setting("niemandsland/identity_token_override", ""))
+	if not override.is_empty():
+		return override
 	var config := ConfigFile.new()
 	config.load(CONFIG_PATH)  # ignore "not found"; keeps the name key intact
 	var token := str(config.get_value(CONFIG_SECTION, CONFIG_KEY_TOKEN, ""))
