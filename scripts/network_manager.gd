@@ -77,6 +77,10 @@ var player_names: Dictionary = {}  # Dictionary[int, String]
 
 ## This client's stable identity token (cached from PlayerIdentity at _ready).
 var _my_client_token: String = ""
+## True only during a controlled peer-1 RPC-path re-handshake on a guest reconnect: suppresses the
+## server_disconnected teardown + the peer-1 slot cleanup that the deliberate peer_disconnected(1)
+## emit would otherwise trigger. See force_host_rpc_rehandshake().
+var _reconnect_flush_active: bool = false
 ## Guest side: the slot the host assigned us (0 = not yet assigned).
 var _my_assigned_slot: int = 0
 ## Host-only: token -> canonical slot (1..N). The stable identity.
@@ -250,6 +254,8 @@ func _on_peer_connected(id: int) -> void:
 
 
 func _on_peer_disconnected(id: int) -> void:
+	if _reconnect_flush_active and id == 1:
+		return  # deliberate peer-1 cache flush on reconnect — not a real host disconnect
 	push_warning("[Network] Player disconnected: Peer ID %d (remaining peers: %d, rpc_errors=%d)" % [id, connected_peers.size() - 1, _rpc_error_count])
 	connected_peers.erase(id)
 	validated_peers.erase(id)
@@ -283,6 +289,8 @@ func _on_connection_failed() -> void:
 
 
 func _on_server_disconnected() -> void:
+	if _reconnect_flush_active:
+		return  # deliberate peer-1 cache flush on reconnect — keep the session alive
 	push_warning("[Network] === SERVER DISCONNECTED === (rpc_errors=%d, was_host=%s)" % [_rpc_error_count, is_host])
 	peer = null
 	multiplayer.multiplayer_peer = null
@@ -311,6 +319,24 @@ func is_peer_validated(id: int) -> bool:
 
 ## Client → host: announce our version right after connecting. The host replies
 ## by either validating us (state sync follows) or rejecting us.
+## Guest reconnect: the relay handed us our OLD peer_id back, but SceneMultiplayer still holds the
+## RPC path-id cache it negotiated with peer 1 (the host) over the now-dead socket. The host reset
+## its side on our rejoin, so our next RPC (the re-announce) would carry a path id the host no longer
+## knows ("ID not found in cache") and be dropped → version-kick. Force a re-negotiation by flushing
+## peer 1 (a disconnect+connect that clears its cache), with the teardown + slot cleanup suppressed.
+## Guest-only; must run right before the re-announce.
+func force_host_rpc_rehandshake() -> void:
+	if multiplayer.is_server():
+		return
+	var p = multiplayer.multiplayer_peer
+	if p == null:
+		return
+	_reconnect_flush_active = true
+	p.emit_signal("peer_disconnected", 1)
+	p.emit_signal("peer_connected", 1)
+	_reconnect_flush_active = false
+
+
 func announce_version_to_host() -> void:
 	if multiplayer.is_server():
 		return
