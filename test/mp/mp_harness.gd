@@ -316,9 +316,13 @@ func _import_army() -> void:
 ## full terrain layout (synced), and each side continuously moves ITS OWN models — heavy
 ## bidirectional traffic (two army-syncs + terrain + two-way movement) on a populated field.
 func _drive_stress(delta: float) -> void:
+	# Resolve each ref independently — _nm may already be set (the ping selftest grabs it), which
+	# must NOT skip resolving _oam/_om (that bug stopped the guest importing its army).
 	if _nm == null:
 		_nm = _main.get("network_manager")
+	if _oam == null:
 		_oam = _main.get("opr_army_manager")
+	if _om == null:
 		_om = _main.get("object_manager")
 	if _nm == null:
 		return
