@@ -599,7 +599,7 @@ func broadcast_spawn(object_type: String, pos: Vector3, object_id: int) -> void:
 		return
 	if not _validate_rpc_ready("broadcast_spawn"):
 		return
-	spawn_object_networked.rpc(object_type, pos.x, pos.y, pos.z, object_id)
+	_remote_call("spawn_object_networked", [object_type, pos.x, pos.y, pos.z, object_id], 0)
 
 
 ## RPC: Spawn a free-placed sandbox terrain piece on remote clients (local already spawned).
@@ -618,7 +618,7 @@ func broadcast_sandbox_terrain_spawn(prop_id: String, kind: int, pos: Vector3, o
 		return
 	if not _validate_rpc_ready("broadcast_sandbox_terrain_spawn"):
 		return
-	spawn_sandbox_terrain_networked.rpc(prop_id, kind, pos.x, pos.y, pos.z, object_id)
+	_remote_call("spawn_sandbox_terrain_networked", [prop_id, kind, pos.x, pos.y, pos.z, object_id], 0)
 
 
 # === Persistent shared rulers (pinned measurements) ===
@@ -631,8 +631,7 @@ func broadcast_ruler_pin(id: int, owner_peer: int, from_pos: Vector3, to_pos: Ve
 		distance_inches: float, blocked: bool) -> void:
 	if not is_multiplayer_active() or not _validate_rpc_ready("broadcast_ruler_pin"):
 		return
-	pin_ruler_networked.rpc(id, owner_peer, from_pos.x, from_pos.y, from_pos.z,
-			to_pos.x, to_pos.y, to_pos.z, distance_inches, blocked)
+	_remote_call("pin_ruler_networked", [id, owner_peer, from_pos.x, from_pos.y, from_pos.z, to_pos.x, to_pos.y, to_pos.z, distance_inches, blocked], 0)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -647,7 +646,7 @@ func pin_ruler_networked(id: int, owner_peer: int, fx: float, fy: float, fz: flo
 func broadcast_ruler_clear(id: int) -> void:
 	if not is_multiplayer_active() or not _validate_rpc_ready("broadcast_ruler_clear"):
 		return
-	clear_ruler_networked.rpc(id)
+	_remote_call("clear_ruler_networked", [id], 0)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -660,7 +659,7 @@ func clear_ruler_networked(id: int) -> void:
 func broadcast_ruler_clear_owner(owner_peer: int) -> void:
 	if not is_multiplayer_active() or not _validate_rpc_ready("broadcast_ruler_clear_owner"):
 		return
-	clear_rulers_by_owner_networked.rpc(owner_peer)
+	_remote_call("clear_rulers_by_owner_networked", [owner_peer], 0)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -673,7 +672,7 @@ func clear_rulers_by_owner_networked(owner_peer: int) -> void:
 func broadcast_ruler_clear_all() -> void:
 	if not is_multiplayer_active() or not _validate_rpc_ready("broadcast_ruler_clear_all"):
 		return
-	clear_all_rulers_networked.rpc()
+	_remote_call("clear_all_rulers_networked", [], 0)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -691,10 +690,7 @@ func sync_rulers_to_peer(peer_id: int) -> void:
 	if pr == null:
 		return
 	for d in pr.serialize():
-		pin_ruler_networked.rpc_id(peer_id, int(d["id"]), int(d["owner"]),
-				float(d["fx"]), float(d["fy"]), float(d["fz"]),
-				float(d["tx"]), float(d["ty"]), float(d["tz"]),
-				float(d["dist"]), bool(d["blocked"]))
+		_remote_call("pin_ruler_networked", [int(d["id"]), int(d["owner"]), float(d["fx"]), float(d["fy"]), float(d["fz"]), float(d["tx"]), float(d["ty"]), float(d["tz"]), float(d["dist"]), bool(d["blocked"])], peer_id)
 
 
 ## Helper to broadcast movement to all peers
@@ -703,7 +699,7 @@ func broadcast_move(object_id: int, pos: Vector3) -> void:
 		return
 	if not _validate_rpc_ready("broadcast_move"):
 		return
-	move_object_networked.rpc(object_id, pos.x, pos.y, pos.z)
+	_remote_call("move_object_networked", [object_id, pos.x, pos.y, pos.z], 0)
 
 
 ## Helper to broadcast multiple object movements in a single RPC
@@ -712,7 +708,7 @@ func broadcast_move_batch(batch: Array) -> void:
 		return
 	if not _validate_rpc_ready("broadcast_move_batch"):
 		return
-	move_objects_batch_networked.rpc(batch)
+	_remote_call("move_objects_batch_networked", [batch], 0)
 
 
 ## RPC: Move multiple objects in one message. Format: [id, x, y, z, id, x, y, z, ...]
@@ -739,7 +735,7 @@ func move_objects_batch_networked(batch: Array) -> void:
 ## Helper to broadcast clear to all peers
 func broadcast_clear() -> void:
 	if is_multiplayer_active():
-		clear_objects_networked.rpc()
+		_remote_call("clear_objects_networked", [], 0)
 
 
 # ===== GameUnit State Synchronization =====
@@ -781,7 +777,7 @@ func sync_sort_table() -> void:
 ## Broadcast a Sort Table action to all peers.
 func broadcast_sort_table() -> void:
 	if is_multiplayer_active():
-		sync_sort_table.rpc()
+		_remote_call("sync_sort_table", [], 0)
 
 
 ## RPC: Sync model wounds
@@ -966,12 +962,12 @@ func rotate_objects_batch_networked(batch: Array) -> void:
 ## Broadcast a round advancement so every peer shares the same round.
 func broadcast_round_advance() -> void:
 	if is_multiplayer_active():
-		sync_round_advance.rpc()
+		_remote_call("sync_round_advance", [], 0)
 
 
 func broadcast_unit_activation(game_unit: GameUnit) -> void:
 	if is_multiplayer_active() and game_unit:
-		sync_unit_activation.rpc(game_unit.unit_id, game_unit.is_activated, game_unit.activation_round)
+		_remote_call("sync_unit_activation", [game_unit.unit_id, game_unit.is_activated, game_unit.activation_round], 0)
 
 
 ## Broadcast model wounds change
@@ -979,7 +975,7 @@ func broadcast_model_wounds(model: ModelInstance) -> void:
 	if is_multiplayer_active() and model and model.unit:
 		var game_unit = model.unit as GameUnit
 		if game_unit:
-			sync_model_wounds.rpc(game_unit.unit_id, model.model_index, model.wounds_current, model.is_alive)
+			_remote_call("sync_model_wounds", [game_unit.unit_id, model.model_index, model.wounds_current, model.is_alive], 0)
 
 
 ## Broadcast model marker change. color carries custom-marker colors so remote
@@ -989,13 +985,13 @@ func broadcast_model_marker(model: ModelInstance, marker_name: String, add: bool
 	if is_multiplayer_active() and model and model.unit:
 		var game_unit = model.unit as GameUnit
 		if game_unit:
-			sync_model_marker.rpc(game_unit.unit_id, model.model_index, marker_name, add, color, value)
+			_remote_call("sync_model_marker", [game_unit.unit_id, model.model_index, marker_name, add, color, value], 0)
 
 
 ## Broadcast unit marker change (all models). color carries custom-marker colors.
 func broadcast_unit_marker(game_unit: GameUnit, marker_name: String, add: bool, color: Color = Color.WHITE, value: int = -1) -> void:
 	if is_multiplayer_active() and game_unit:
-		sync_unit_marker.rpc(game_unit.unit_id, marker_name, add, color, value)
+		_remote_call("sync_unit_marker", [game_unit.unit_id, marker_name, add, color, value], 0)
 
 
 ## Broadcast a counter marker's value change on a single model.
@@ -1003,43 +999,43 @@ func broadcast_model_marker_value(model: ModelInstance, marker_name: String, val
 	if is_multiplayer_active() and model and model.unit:
 		var game_unit = model.unit as GameUnit
 		if game_unit:
-			sync_model_marker_value.rpc(game_unit.unit_id, model.model_index, marker_name, value)
+			_remote_call("sync_model_marker_value", [game_unit.unit_id, model.model_index, marker_name, value], 0)
 
 
 ## Broadcast a counter marker's value change on all models of a unit.
 func broadcast_unit_marker_value(game_unit: GameUnit, marker_name: String, value: int) -> void:
 	if is_multiplayer_active() and game_unit:
-		sync_unit_marker_value.rpc(game_unit.unit_id, marker_name, value)
+		_remote_call("sync_unit_marker_value", [game_unit.unit_id, marker_name, value], 0)
 
 
 ## Broadcast a mission objective owner change (any peer may capture).
 func broadcast_objective_owner(index: int, owner_id: int) -> void:
 	if is_multiplayer_active():
-		sync_objective_owner.rpc(index, owner_id)
+		_remote_call("sync_objective_owner", [index, owner_id], 0)
 
 
 ## Broadcast a custom-token library definition (create / color / effect).
 func broadcast_token_define(token_name: String, color: Color, is_counter: bool, effect: String) -> void:
 	if is_multiplayer_active():
-		sync_token_define.rpc(token_name, color, is_counter, effect)
+		_remote_call("sync_token_define", [token_name, color, is_counter, effect], 0)
 
 
 ## Broadcast a custom-token edit (rename and/or color/effect change).
 func broadcast_token_edit(old_name: String, new_name: String, color: Color, effect: String) -> void:
 	if is_multiplayer_active():
-		sync_token_edit.rpc(old_name, new_name, color, effect)
+		_remote_call("sync_token_edit", [old_name, new_name, color, effect], 0)
 
 
 ## Broadcast unit casts change
 func broadcast_unit_casts(game_unit: GameUnit) -> void:
 	if is_multiplayer_active() and game_unit:
-		sync_unit_casts.rpc(game_unit.unit_id, game_unit.casts_current)
+		_remote_call("sync_unit_casts", [game_unit.unit_id, game_unit.casts_current], 0)
 
 
 ## Broadcast unit deletion
 func broadcast_unit_delete(game_unit: GameUnit) -> void:
 	if is_multiplayer_active() and game_unit:
-		sync_unit_delete.rpc(game_unit.unit_id)
+		_remote_call("sync_unit_delete", [game_unit.unit_id], 0)
 
 
 ## Broadcast object rotation
@@ -1048,7 +1044,7 @@ func broadcast_rotation(object_id: int, rot_y: float) -> void:
 		return
 	if not _validate_rpc_ready("broadcast_rotation"):
 		return
-	rotate_object_networked.rpc(object_id, rot_y)
+	_remote_call("rotate_object_networked", [object_id, rot_y], 0)
 
 
 ## Broadcast multiple object rotations in a single RPC
@@ -1057,14 +1053,14 @@ func broadcast_rotation_batch(batch: Array) -> void:
 		return
 	if not _validate_rpc_ready("broadcast_rotation_batch"):
 		return
-	rotate_objects_batch_networked.rpc(batch)
+	_remote_call("rotate_objects_batch_networked", [batch], 0)
 
 
 ## Broadcast hero attachment change
 func broadcast_hero_attachment(hero: GameUnit, target: GameUnit) -> void:
 	if is_multiplayer_active() and hero:
 		var target_id = target.unit_id if target else ""
-		sync_hero_attachment.rpc(hero.unit_id, target_id)
+		_remote_call("sync_hero_attachment", [hero.unit_id, target_id], 0)
 
 
 # ===== Player Presence Synchronization =====
@@ -1085,40 +1081,40 @@ signal remote_dice_rolled(peer_id: int, results: Array, context: Dictionary)
 ## RPC: Sync cursor position on table surface (high frequency, unreliable)
 @rpc("any_peer", "call_remote", "unreliable")
 func sync_cursor_position(pos_x: float, pos_z: float) -> void:
-	var sender = multiplayer.get_remote_sender_id()
+	var sender = _get_sender()
 	remote_cursor_updated.emit(sender, pos_x, pos_z)
 
 
 ## RPC: Sync camera look direction (low frequency, unreliable)
 @rpc("any_peer", "call_remote", "unreliable")
 func sync_camera_direction(yaw: float, pitch: float) -> void:
-	var sender = multiplayer.get_remote_sender_id()
+	var sender = _get_sender()
 	remote_camera_updated.emit(sender, yaw, pitch)
 
 
 ## RPC: Sync dice roll event (reliable — everyone must see the result)
 @rpc("any_peer", "call_remote", "reliable")
 func sync_dice_roll(results: Array, context: Dictionary) -> void:
-	var sender = multiplayer.get_remote_sender_id()
+	var sender = _get_sender()
 	remote_dice_rolled.emit(sender, results, context)
 
 
 ## Broadcast cursor position to all peers
 func broadcast_cursor_position(pos: Vector3) -> void:
 	if is_multiplayer_active():
-		sync_cursor_position.rpc(pos.x, pos.z)
+		_remote_call("sync_cursor_position", [pos.x, pos.z], 0)
 
 
 ## Broadcast camera direction to all peers
 func broadcast_camera_direction(yaw: float, pitch: float) -> void:
 	if is_multiplayer_active():
-		sync_camera_direction.rpc(yaw, pitch)
+		_remote_call("sync_camera_direction", [yaw, pitch], 0)
 
 
 ## Broadcast dice roll to all peers
 func broadcast_dice_roll(results: Array, context: Dictionary) -> void:
 	if is_multiplayer_active():
-		sync_dice_roll.rpc(results, context)
+		_remote_call("sync_dice_roll", [results, context], 0)
 
 
 # ===== Player names (host-authoritative roster) =====
@@ -1130,7 +1126,7 @@ func broadcast_dice_roll(results: Array, context: Dictionary) -> void:
 func sync_player_name(player_name: String) -> void:
 	if not multiplayer.is_server():
 		return
-	var sender := multiplayer.get_remote_sender_id()
+	var sender := _get_sender()
 	var clean := PlayerIdentity.sanitize(player_name)
 	player_names[sender] = clean
 	remote_player_name_updated.emit(sender, clean)
@@ -1153,7 +1149,7 @@ func sync_player_roster(roster: Dictionary) -> void:
 func broadcast_player_name(player_name: String) -> void:
 	if multiplayer.is_server() or not is_multiplayer_active():
 		return
-	sync_player_name.rpc_id(1, player_name)
+	_remote_call("sync_player_name", [player_name], 1)
 
 
 ## Host: record our own name and (if peers are present) publish the roster.
@@ -1170,14 +1166,14 @@ func set_host_name(player_name: String) -> void:
 func push_roster_to_peer(peer_id: int) -> void:
 	if not multiplayer.is_server() or not is_multiplayer_active():
 		return
-	sync_player_roster.rpc_id(peer_id, player_names)
+	_remote_call("sync_player_roster", [player_names], peer_id)
 
 
 ## Host: re-publish the whole roster to every connected peer.
 func _publish_roster() -> void:
 	if not multiplayer.is_server() or not is_multiplayer_active():
 		return
-	sync_player_roster.rpc(player_names)
+	_remote_call("sync_player_roster", [player_names], 0)
 
 
 # ===== In-game chat =====
@@ -1200,7 +1196,7 @@ static func _clean_chat(text: String) -> String:
 ## RPC: a player's chat message reaches every other peer (broadcast, reliable).
 @rpc("any_peer", "call_remote", "reliable")
 func sync_chat_message(text: String) -> void:
-	var sender = multiplayer.get_remote_sender_id()
+	var sender = _get_sender()
 	var cleaned := _clean_chat(text)
 	if not cleaned.is_empty():
 		remote_chat_message.emit(sender, cleaned)
@@ -1211,7 +1207,7 @@ func sync_chat_message(text: String) -> void:
 func broadcast_chat_message(text: String) -> String:
 	var cleaned := _clean_chat(text)
 	if not cleaned.is_empty() and is_multiplayer_active():
-		sync_chat_message.rpc(cleaned)
+		_remote_call("sync_chat_message", [cleaned], 0)
 	return cleaned
 
 
@@ -1234,7 +1230,7 @@ func sync_table_settings(settings: Dictionary) -> void:
 ## (matches the plain-broadcast pattern used by every other object sync).
 func broadcast_table_settings(settings: Dictionary) -> void:
 	if is_multiplayer_active():
-		sync_table_settings.rpc(settings)
+		_remote_call("sync_table_settings", [settings], 0)
 
 
 # ===== Generic Object Spawn / Visibility Synchronization =====
@@ -1257,7 +1253,7 @@ func broadcast_object_data_spawn(obj_data: Dictionary) -> void:
 		return
 	if not _validate_rpc_ready("broadcast_object_data_spawn"):
 		return
-	spawn_object_data_networked.rpc(obj_data)
+	_remote_call("spawn_object_data_networked", [obj_data], 0)
 
 
 ## RPC: Mirror a generic object's visibility (delete = hide, undo = show) by
@@ -1281,7 +1277,7 @@ func broadcast_object_visibility(object_id: int, is_visible: bool) -> void:
 		return
 	if not _validate_rpc_ready("broadcast_object_visibility"):
 		return
-	sync_object_visibility.rpc(object_id, is_visible)
+	_remote_call("sync_object_visibility", [object_id, is_visible], 0)
 
 
 # ===== Army Import Synchronization (Batched) =====
@@ -1300,7 +1296,7 @@ const ARMY_BATCH_DELAY_MS: int = 250
 ## RPC: Army sync header — announces incoming army import
 @rpc("any_peer", "call_remote", "reliable")
 func sync_army_header(player_id: int, army_name: String, unit_count: int) -> void:
-	var sender := multiplayer.get_remote_sender_id()
+	var sender := _get_sender()
 	print("[Network] Army header from peer %d: '%s' (%d units, player_id=%d)" % [sender, army_name, unit_count, player_id])
 	remote_army_header_received.emit(player_id, army_name, unit_count)
 
@@ -1308,7 +1304,7 @@ func sync_army_header(player_id: int, army_name: String, unit_count: int) -> voi
 ## RPC: Army sync unit — one unit + its model objects
 @rpc("any_peer", "call_remote", "reliable")
 func sync_army_unit(unit_data: Dictionary, objects_data: Array, player_id: int) -> void:
-	var sender := multiplayer.get_remote_sender_id()
+	var sender := _get_sender()
 	var unit_name: String = unit_data.get("unit_properties", {}).get("name", "?")
 	print("[Network] Army unit from peer %d: '%s' (%d objects)" % [sender, unit_name, objects_data.size()])
 	remote_army_unit_received.emit(unit_data, objects_data, player_id)
@@ -1317,7 +1313,7 @@ func sync_army_unit(unit_data: Dictionary, objects_data: Array, player_id: int) 
 ## RPC: Army sync complete — all units sent
 @rpc("any_peer", "call_remote", "reliable")
 func sync_army_complete(player_id: int, rule_descriptions: Dictionary) -> void:
-	var sender := multiplayer.get_remote_sender_id()
+	var sender := _get_sender()
 	print("[Network] Army complete from peer %d (player_id=%d, %d rule descriptions)" % [sender, player_id, rule_descriptions.size()])
 	remote_army_complete_received.emit(player_id, rule_descriptions)
 
@@ -1336,7 +1332,7 @@ func broadcast_army_batched(
 		return
 
 	# 1. Header
-	sync_army_header.rpc(player_id, army_name, units_data.size())
+	_remote_call("sync_army_header", [player_id, army_name, units_data.size()], 0)
 
 	# 2. Units with delay between each
 	for i in range(units_data.size()):
@@ -1344,12 +1340,12 @@ func broadcast_army_batched(
 		if not _validate_rpc_ready("broadcast_army_unit_%d" % i):
 			return
 		var objs: Array = objects_per_unit[i] if i < objects_per_unit.size() else []
-		sync_army_unit.rpc(units_data[i], objs, player_id)
+		_remote_call("sync_army_unit", [units_data[i], objs, player_id], 0)
 
 	# 3. Complete — carries the army's rule descriptions so remote tooltips resolve.
 	await get_tree().create_timer(ARMY_BATCH_DELAY_MS / 1000.0).timeout
 	if _validate_rpc_ready("broadcast_army_complete"):
-		sync_army_complete.rpc(player_id, rule_descriptions)
+		_remote_call("sync_army_complete", [player_id, rule_descriptions], 0)
 
 
 # ===== TTS Terrain Synchronization =====
@@ -1365,7 +1361,7 @@ signal remote_tts_terrain_spawned(mesh_url: String, diffuse_url: String,
 func sync_tts_terrain_spawn(mesh_url: String, diffuse_url: String,
 	scale_x: float, scale_y: float, scale_z: float,
 	pos_x: float, pos_y: float, pos_z: float, terrain_name: String) -> void:
-	var sender = multiplayer.get_remote_sender_id()
+	var sender = _get_sender()
 	print("[Network] Received TTS terrain spawn from peer %d: %s" % [sender, terrain_name])
 	remote_tts_terrain_spawned.emit(mesh_url, diffuse_url,
 		scale_x, scale_y, scale_z, pos_x, pos_y, pos_z, terrain_name)
@@ -1375,8 +1371,7 @@ func sync_tts_terrain_spawn(mesh_url: String, diffuse_url: String,
 func broadcast_tts_terrain_spawn(mesh_url: String, diffuse_url: String,
 	scale: Vector3, pos: Vector3, terrain_name: String) -> void:
 	if is_multiplayer_active():
-		sync_tts_terrain_spawn.rpc(mesh_url, diffuse_url,
-			scale.x, scale.y, scale.z, pos.x, pos.y, pos.z, terrain_name)
+		_remote_call("sync_tts_terrain_spawn", [mesh_url, diffuse_url, scale.x, scale.y, scale.z, pos.x, pos.y, pos.z, terrain_name], 0)
 
 
 
@@ -1389,11 +1384,11 @@ signal remote_camera_position_updated(peer_id: int, pos_x: float, pos_y: float, 
 ## RPC: Sync camera position (unreliable for performance)
 @rpc("any_peer", "call_remote", "unreliable")
 func sync_camera_position(pos_x: float, pos_y: float, pos_z: float) -> void:
-	var sender = multiplayer.get_remote_sender_id()
+	var sender = _get_sender()
 	remote_camera_position_updated.emit(sender, pos_x, pos_y, pos_z)
 
 
 ## Broadcast camera position to all peers
 func broadcast_camera_position(pos: Vector3) -> void:
 	if is_multiplayer_active():
-		sync_camera_position.rpc(pos.x, pos.y, pos.z)
+		_remote_call("sync_camera_position", [pos.x, pos.y, pos.z], 0)
