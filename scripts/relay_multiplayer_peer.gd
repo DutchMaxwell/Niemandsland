@@ -237,7 +237,10 @@ func _poll() -> void:
 			if _pending_action == "create":
 				_send_json({"type": "create_room", "public": _pending_public})
 			elif _pending_action == "join":
-				_send_json({"type": "join_room", "code": _pending_code})
+				# Send our stable identity token so the relay can hand a reconnecting guest its OLD
+				# peer id back (stable transport id across a drop -> RPC routing survives the rejoin).
+				_send_json({"type": "join_room", "code": _pending_code,
+					"token": PlayerIdentity.get_or_create_client_token()})
 			elif _pending_action == "list":
 				_send_json({"type": "list_rooms"})
 			_pending_action = ""
