@@ -49,6 +49,19 @@ planned and where ideas go. For what already works see
   fragile (pokes SceneMultiplayer internals). Regression guard: `churn`/`chaos`/`blip` soaks assert "no
   version-kick" + "remap fired" + convergence (fail until both remaining issues are fixed). Affects real
   2-player play. _M_
+- **MP netcode replatform (the proper fix for reconnect)** — deep research (2026-06-20; see memory
+  `mp-architecture-verdict`) concluded our authority model (host-authoritative + dumb relay) is CORRECT,
+  but `@rpc`/SceneMultiplayer is the wrong netcode layer over a custom relay: its path-cache assumes stable
+  peer-ids/connections, which reconnect structurally breaks (Godot has no built-in reconnect; the fake-
+  signal flush fights the engine). Fix = a targeted, incremental replatform, NOT a rewrite. **KEEP:**
+  host-authoritative, the relay, token peer-id reuse, owner-namespaced `network_id`s (= stable entity ids),
+  restore-lock, `var_to_bytes`, the soak harness. **REPLACE:** `@rpc` game messaging → a hand-rolled command
+  protocol over the relay frames (`{type,seq,payload}` via `PacketPeer.put_var`/`var_to_bytes` + dispatch
+  table → no path-cache). **ADD:** token reconnect handshake (host re-binds a returning token to its slot
+  with NO version-kick) + idempotent full-snapshot REPLACE keyed by `network_id` (upsert + delete-missing,
+  under the restore-lock) → off-by-one gone. **Phases:** 1 command-channel foundation (parallel to @rpc) ·
+  2 migrate ~20 messages off @rpc · 3 token reconnect + drop the fake-signal flush · 4 idempotent snapshot
+  REPLACE · 5 harness churn/chaos/blip green + live 2-machine test. _L_
 - **MP reconnect — 3+ player hardening (follow-ups)** — review-surfaced items not needed for
   the 2-player case: mirror the host's peer→slot table to guests (3+-player avatar/cursor
   colour agreement after a reconnect), a shared `slot→palette` helper so army bases match
