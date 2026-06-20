@@ -30,11 +30,18 @@ planned and where ideas go. For what already works see
   reaches the host because SceneMultiplayer's unique-id / RPC routing for the new id is stale → the
   host kicks the peer on the 8 s version-handshake timeout → it rejoins → kicked again (cascade). No
   phantom players are created (kicked before a slot is assigned), and the model COUNT stays converged
-  (which is why earlier count-based tests passed). Partial fix landed (re-announce — fixes the
-  REUSED-id case). **Remaining: make the new-peer-id reconnect route RPCs** (re-init SceneMultiplayer
-  for the changed unique id and/or have the relay reuse the guest's id within the rejoin window).
-  Regression guard: the `churn`/`chaos`/`blip` soaks now assert "no version-kick" + "remap fired".
-  Likely affects real 2-player play (a guest network blip), so high priority. _M_
+  (which is why earlier count-based tests passed). **Landed so far:** (1) re-announce on guest reconnect
+  (`relay_reconnected` → `_on_guest_reconnected`); (2) the **relay now reuses the guest's old peer_id**
+  within a rejoin window keyed by its identity token (client sends `token` in `join_room`), so the
+  transport id is STABLE across a drop. **TRUE remaining blocker (precisely diagnosed):** Godot's RPC
+  **path-cache** — even with a stable id the guest re-sends its announce to the host (peer 1) using the
+  path id cached on the OLD connection; the host on the new socket doesn't have it → RPC dropped ("ID not
+  found in cache") → no announce → kick. Peer 1's cache can't be flushed the normal way
+  (`peer_disconnected(1)` on a client triggers `server_disconnected` = teardown). **Next:** force the guest
+  to re-negotiate the RPC path to peer 1 on reconnect (a guarded `peer_disconnected(1)`+`peer_connected(1)`
+  that suppresses the teardown, or a controlled multiplayer-peer reset). Regression guard:
+  `churn`/`chaos`/`blip` soaks assert "no version-kick" + "remap fired" (fail by design until fixed).
+  Likely affects real 2-player play. _M_
 - **MP reconnect — 3+ player hardening (follow-ups)** — review-surfaced items not needed for
   the 2-player case: mirror the host's peer→slot table to guests (3+-player avatar/cursor
   colour agreement after a reconnect), a shared `slot→palette` helper so army bases match
