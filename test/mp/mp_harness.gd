@@ -45,6 +45,7 @@ var _terrain_done := false
 var _stress_imported := false
 var _move_accum := 0.0
 var _round_accum := 0.0
+var _cmd_selftest_sent := false
 var _cursor_accum := 0.0
 var _tick_accum := 0.0
 var _cursor_phase := 0.0
@@ -155,6 +156,16 @@ func _process(delta: float) -> void:
 		if _nodes_base == 0 and _elapsed >= LEAK_SETTLE_S:
 			_nodes_base = nc  # baseline only once armies + terrain have finished spawning
 		_log("NODES %d minis %d" % [nc, get_tree().get_nodes_in_group("miniature").size()])
+
+	# Phase-1 command-channel proof: the guest pings the host once over the channel-1 protocol;
+	# the host's built-in handler replies, the guest logs "[CMD] pong ... verified".
+	if _role == "guest" and _connected and not _cmd_selftest_sent:
+		if _nm == null:
+			_nm = _main.get("network_manager")
+		if _nm and _nm.has_method("send_command"):
+			_cmd_selftest_sent = true
+			_nm.send_command("cmd_ping", {}, 1)
+			_log("CMD selftest ping sent to host")
 
 	# Inject the configured fault on the guest (the realistic laggy / dropping peer);
 	# the host stays healthy as the authority.
