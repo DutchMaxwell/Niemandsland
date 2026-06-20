@@ -62,6 +62,14 @@ async def join_room(url: str, code: str) -> tuple:
     return ws, resp["peer_id"]
 
 
+async def join_room_token(url: str, code: str, token: str) -> tuple:
+    ws = await websockets.connect(url)
+    await ws.send(json.dumps({"type": "join_room", "code": code, "token": token}))
+    resp = json.loads(await ws.recv())
+    assert resp["type"] == "room_joined"
+    return ws, resp["peer_id"]
+
+
 async def drain(ws, timeout: float = 0.3) -> None:
     """Consume any pending messages on a socket without asserting their content."""
     try:
@@ -96,6 +104,32 @@ class TestGuestChurn:
         # Room still alive, host still present, only the host remains.
         assert code in server.rooms
         assert list(server.rooms[code].peers.keys()) == [1]
+        await host_ws.close()
+
+    async def test_returning_guest_reclaims_its_peer_id(self, relay):
+        """A guest that drops and rejoins with the SAME identity token reclaims its old
+        peer_id (stable transport id across a reconnect); a different token gets a fresh id."""
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+
+        guest_ws, first_id = await join_room_token(url, code, "tok-A")
+        await drain(host_ws)
+        await guest_ws.close()
+        await asyncio.sleep(0.05)
+        await drain(host_ws)  # relay records the departed (token -> id)
+
+        # Same token within the rejoin window -> the SAME peer_id back.
+        guest_ws2, reused_id = await join_room_token(url, code, "tok-A")
+        assert reused_id == first_id, "a returning guest must reclaim its old peer_id"
+        await drain(host_ws)
+        await guest_ws2.close()
+        await asyncio.sleep(0.05)
+        await drain(host_ws)
+
+        # A DIFFERENT token -> a fresh id (never reuse across identities).
+        guest_ws3, other_id = await join_room_token(url, code, "tok-B")
+        assert other_id != first_id, "a different token must get a fresh id"
+        await guest_ws3.close()
         await host_ws.close()
 
     async def test_simultaneous_guests_then_all_drop(self, relay):
