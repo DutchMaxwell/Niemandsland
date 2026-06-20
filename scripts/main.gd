@@ -347,6 +347,7 @@ func _ready() -> void:
 	internet_lobby.relay_reconnect_failed.connect(_on_relay_reconnect_failed)
 	internet_lobby.host_paused.connect(_on_host_paused)
 	internet_lobby.host_rejoined.connect(_on_host_rejoined)
+	internet_lobby.relay_reconnected.connect(_on_guest_reconnected)
 	# Peer join/leave for internet relay is handled through the built-in
 	# MultiplayerPeer.peer_connected signal (same path as ENet):
 	# relay emits peer_connected → network_manager._on_peer_connected → _on_player_joined
@@ -1992,6 +1993,26 @@ func _on_relay_reconnect_failed(reason: String) -> void:
 func _on_host_paused() -> void:
 	network_status_label.text = "Host disconnected — waiting for reconnect…"
 	network_status_label.add_theme_color_override("font_color", Color.YELLOW)
+
+
+## Guest side: OUR OWN connection was restored after a drop (fresh peer id). Godot's
+## connected_to_server — which normally re-announces our version+token via _on_network_connected —
+## does NOT re-fire on the reused MultiplayerPeer, so re-announce here. Without this the host never
+## receives our announce and kicks us on the version-handshake timeout, causing a reconnect cascade.
+## The announce makes the host re-validate, rebuild our token->slot (remap), and re-push full state.
+func _on_guest_reconnected() -> void:
+	_is_reconnecting = false  # link restored — resume presence broadcasts
+	# Re-announce our version+token: connected_to_server (which normally re-announces via
+	# _on_network_connected) does NOT re-fire on the reused MultiplayerPeer after our own drop.
+	# NOTE: this fixes the REUSED-peer-id reconnect; when the relay hands out a NEW peer id the
+	# RPC still doesn't route (stale SceneMultiplayer unique-id) — see ROADMAP "graceful guest
+	# reconnect". Harmless + correct on its own (idempotent announce).
+	if network_manager:
+		network_manager.is_host = multiplayer.is_server()
+		network_manager.announce_version_to_host()
+		_register_local_name()
+	network_status_label.text = "Reconnected"
+	network_status_label.add_theme_color_override("font_color", Color.GREEN)
 
 
 ## The host is present again (we rejoined as host, or our host returned). The full
