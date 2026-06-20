@@ -62,31 +62,41 @@ func test_put_packet_prepends_target_peer_header() -> void:
 	peer._target_peer = 2
 
 	var payload = PackedByteArray([10, 20, 30])
-	var result = peer._build_outgoing_frame(payload)
+	var result = peer._build_outgoing_frame(payload, RelayMultiplayerPeer.FRAME_CHANNEL_RPC, peer._target_peer)
 
-	# First 4 bytes should be target_peer_id (2) in big-endian
-	var expected_header = PackedByteArray([0, 0, 0, 2])
-	assert_that(result.slice(0, 4)).is_equal(expected_header)
-	# Rest should be the payload
-	assert_that(result.slice(4)).is_equal(payload)
+	# [target_peer: 4 bytes BE][channel: 1 byte][payload]
+	assert_that(result.slice(0, 4)).is_equal(PackedByteArray([0, 0, 0, 2]))
+	assert_that(result[4]).is_equal(RelayMultiplayerPeer.FRAME_CHANNEL_RPC)
+	assert_that(result.slice(5)).is_equal(payload)
 
 
 func test_incoming_binary_queued_as_packet() -> void:
 	var peer = RelayMultiplayerPeer.new()
 	peer._my_peer_id = 2
 
-	# Simulate receiving a binary frame from the relay
-	# Format: [source_peer_id: 4 bytes BE] [payload]
-	var source_id_bytes = PackedByteArray([0, 0, 0, 1])  # From peer 1
-	var payload = PackedByteArray([42, 43, 44])
-	var frame = source_id_bytes + payload
+	# [source_peer_id: 4 bytes BE][channel: 1 byte][payload]; channel 0 -> SceneMultiplayer queue
+	var frame = PackedByteArray([0, 0, 0, 1, RelayMultiplayerPeer.FRAME_CHANNEL_RPC, 42, 43, 44])
 
 	peer._process_incoming_binary(frame)
 
 	assert_that(peer._get_available_packet_count()).is_equal(1)
 	var packet = peer._incoming_packets[0]
 	assert_that(packet.from_peer).is_equal(1)
-	assert_that(packet.data).is_equal(payload)
+	assert_that(packet.data).is_equal(PackedByteArray([42, 43, 44]))
+
+
+func test_command_channel_frame_emits_signal_not_queued() -> void:
+	var peer = RelayMultiplayerPeer.new()
+	# [source: 4][channel = 1 (command)][payload] -> surfaced via command_received, NOT the @rpc queue
+	var frame = PackedByteArray([0, 0, 0, 1, RelayMultiplayerPeer.FRAME_CHANNEL_COMMAND, 7, 8])
+	var got := {"from": -1, "data": PackedByteArray()}
+	peer.command_received.connect(func(from_peer, data): got.from = from_peer; got.data = data)
+
+	peer._process_incoming_binary(frame)
+
+	assert_that(peer._get_available_packet_count()).is_equal(0)  # not in the @rpc path
+	assert_that(got.from).is_equal(1)
+	assert_that(got.data).is_equal(PackedByteArray([7, 8]))
 
 
 func test_get_available_packet_count() -> void:
@@ -106,11 +116,10 @@ func test_broadcast_uses_target_zero() -> void:
 	peer._target_peer = 0  # Broadcast
 
 	var payload = PackedByteArray([99])
-	var result = peer._build_outgoing_frame(payload)
+	var result = peer._build_outgoing_frame(payload, RelayMultiplayerPeer.FRAME_CHANNEL_RPC, 0)
 
 	# Target 0 = broadcast
-	var expected_header = PackedByteArray([0, 0, 0, 0])
-	assert_that(result.slice(0, 4)).is_equal(expected_header)
+	assert_that(result.slice(0, 4)).is_equal(PackedByteArray([0, 0, 0, 0]))
 
 
 func test_room_joined_stores_room_code_for_reconnect() -> void:
