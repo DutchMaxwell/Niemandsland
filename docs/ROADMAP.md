@@ -36,12 +36,19 @@ planned and where ideas go. For what already works see
   transport id is STABLE across a drop. **TRUE remaining blocker (precisely diagnosed):** Godot's RPC
   **path-cache** — even with a stable id the guest re-sends its announce to the host (peer 1) using the
   path id cached on the OLD connection; the host on the new socket doesn't have it → RPC dropped ("ID not
-  found in cache") → no announce → kick. Peer 1's cache can't be flushed the normal way
-  (`peer_disconnected(1)` on a client triggers `server_disconnected` = teardown). **Next:** force the guest
-  to re-negotiate the RPC path to peer 1 on reconnect (a guarded `peer_disconnected(1)`+`peer_connected(1)`
-  that suppresses the teardown, or a controlled multiplayer-peer reset). Regression guard:
-  `churn`/`chaos`/`blip` soaks assert "no version-kick" + "remap fired" (fail by design until fixed).
-  Likely affects real 2-player play. _M_
+  found in cache") → no announce → kick. **(3) Path-cache flush landed:** `force_host_rpc_rehandshake()`
+  fires a guarded `peer_disconnected(1)`+`peer_connected(1)` on reconnect (teardown + peer-1 slot cleanup
+  suppressed via `_reconnect_flush_active`) to force RPC-path renegotiation, then re-announces over ~5
+  frames (a synchronous announce races the renegotiation). **Result: reconnect now MOSTLY works** — the
+  announce routes, the host re-validates, the remap fires (8 handshakes passed vs all-kicked before).
+  **TWO remaining issues:** (a) an intermittent single version-kick still slips through (a race edge the
+  5-frame retry doesn't fully cover); (b) the full-state re-push on each reconnect is not perfectly
+  idempotent → guest ends up off-by-one (91 vs 92 models) — a SEPARATE re-sync bug the working reconnect
+  newly exposed (cf. mp-army-double-delivery). **Next:** harden the announce race + fix the re-sync
+  off-by-one, or move to a cleaner full-rejoin + delta-resync redesign. The whole flush approach is
+  fragile (pokes SceneMultiplayer internals). Regression guard: `churn`/`chaos`/`blip` soaks assert "no
+  version-kick" + "remap fired" + convergence (fail until both remaining issues are fixed). Affects real
+  2-player play. _M_
 - **MP reconnect — 3+ player hardening (follow-ups)** — review-surfaced items not needed for
   the 2-player case: mirror the host's peer→slot table to guests (3+-player avatar/cursor
   colour agreement after a reconnect), a shared `slot→palette` helper so army bases match
