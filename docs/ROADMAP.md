@@ -22,8 +22,10 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **🐞 BUG: guest reconnect with a NEW peer id → version-kick cascade (the sporadic-reconnect root
-  cause)** — reproduced deterministically by the `--fault churn` soak (2026-06-20). When a guest's
+- **✅ FIXED (2026-06-20, c7da3f7): guest reconnect version-kick cascade (the sporadic-reconnect root
+  cause)** — fixed by the netcode replatform below: the churn/chaos/blip soaks now converge (host 92 ==
+  guest 92, 0 kicks, 0 reconnect_failed, no duplication). Kept below for the diagnosis trail. _Original:_
+  reproduced deterministically by the `--fault churn` soak (2026-06-20). When a guest's
   own connection drops and the relay hands it a **fresh** peer id on rejoin, Godot's
   `connected_to_server` does not re-fire on the reused `MultiplayerPeer`, and even when we re-announce
   explicitly (now wired via `relay_reconnected` → `_on_guest_reconnected`), the announce RPC never
@@ -49,7 +51,11 @@ planned and where ideas go. For what already works see
   fragile (pokes SceneMultiplayer internals). Regression guard: `churn`/`chaos`/`blip` soaks assert "no
   version-kick" + "remap fired" + convergence (fail until both remaining issues are fixed). Affects real
   2-player play. _M_
-- **MP netcode replatform (the proper fix for reconnect)** — deep research (2026-06-20; see memory
+- **✅ MOSTLY DONE — MP netcode replatform (the proper fix for reconnect)** — Phases 1–4 landed
+  (2026-06-20): all game messaging is off `@rpc` on the channel-1 command protocol, the handshake +
+  state-sync run below the path-cache, and churn/chaos/blip soaks converge. Remaining = cleanup only
+  (dead flush code + @rpc decorators; flip the nightly fault gates back from expected-fail; version-bump
+  + build). Original plan: deep research (2026-06-20; see memory
   `mp-architecture-verdict`) concluded our authority model (host-authoritative + dumb relay) is CORRECT,
   but `@rpc`/SceneMultiplayer is the wrong netcode layer over a custom relay: its path-cache assumes stable
   peer-ids/connections, which reconnect structurally breaks (Godot has no built-in reconnect; the fake-
