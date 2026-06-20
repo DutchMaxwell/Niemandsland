@@ -22,6 +22,19 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
+- **🐞 BUG: guest reconnect with a NEW peer id → version-kick cascade (the sporadic-reconnect root
+  cause)** — reproduced deterministically by the `--fault churn` soak (2026-06-20). When a guest's
+  own connection drops and the relay hands it a **fresh** peer id on rejoin, Godot's
+  `connected_to_server` does not re-fire on the reused `MultiplayerPeer`, and even when we re-announce
+  explicitly (now wired via `relay_reconnected` → `_on_guest_reconnected`), the announce RPC never
+  reaches the host because SceneMultiplayer's unique-id / RPC routing for the new id is stale → the
+  host kicks the peer on the 8 s version-handshake timeout → it rejoins → kicked again (cascade). No
+  phantom players are created (kicked before a slot is assigned), and the model COUNT stays converged
+  (which is why earlier count-based tests passed). Partial fix landed (re-announce — fixes the
+  REUSED-id case). **Remaining: make the new-peer-id reconnect route RPCs** (re-init SceneMultiplayer
+  for the changed unique id and/or have the relay reuse the guest's id within the rejoin window).
+  Regression guard: the `churn`/`chaos`/`blip` soaks now assert "no version-kick" + "remap fired".
+  Likely affects real 2-player play (a guest network blip), so high priority. _M_
 - **MP reconnect — 3+ player hardening (follow-ups)** — review-surfaced items not needed for
   the 2-player case: mirror the host's peer→slot table to guests (3+-player avatar/cursor
   colour agreement after a reconnect), a shared `slot→palette` helper so army bases match

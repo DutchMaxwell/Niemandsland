@@ -29,6 +29,11 @@ signal peer_left(peer_id: int)
 signal host_paused()
 ## The host is present again: we rejoined as host, or (guest side) our host returned.
 signal host_rejoined()
+## Guest side: OUR OWN dropped connection was re-established (we rejoined the room with a fresh
+## peer id). Godot's connected_to_server does NOT re-fire on the reused MultiplayerPeer, so this
+## is the only signal that the guest reconnected — listeners must re-announce version+token, or
+## the host kicks us on the version-handshake timeout.
+signal relay_reconnected()
 
 const HEARTBEAT_INTERVAL: float = 10.0
 
@@ -487,11 +492,16 @@ func _handle_room_created(code: String, peer_id: int) -> void:
 
 
 func _handle_room_joined(peer_id: int) -> void:
+	var was_reconnecting := _is_reconnecting
 	_my_peer_id = peer_id
 	_room_code = _pending_code  # remember the code so we can rejoin after a drop
 	_connection_status = MultiplayerPeer.CONNECTION_CONNECTED
 	_is_reconnecting = false
 	room_joined.emit(peer_id)
+	if was_reconnecting:
+		# A rejoin after our own drop: connected_to_server won't re-fire, so trigger the
+		# re-announce explicitly (else the host version-handshake-timeout kicks us -> cascade).
+		relay_reconnected.emit()
 
 
 ## The relay let us reclaim the host slot (peer id 1) for a room we owned after a drop.

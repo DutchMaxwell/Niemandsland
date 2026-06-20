@@ -210,6 +210,15 @@ def main() -> int:
         # Churn / chaos must actually have caused reconnects (else they tested nothing).
         if args.fault in ("churn", "chaos") and gs and int(gs.get("reconnects", "0")) < 1:
             failures.append(f"{args.fault}: guest never reconnected (reconnects=0)")
+        # A version-handshake kick means a reconnecting peer never re-announced its version+token
+        # -> the host kicks it -> reconnect cascade. Applies to every run.
+        for c in (host, guest):
+            if any("failed version handshake" in line for line in c.lines):
+                failures.append(f"{c.name}: a peer was version-kicked (reconnect failed to re-announce)")
+        # Churn/chaos: the guest must REBIND its slot on reconnect (a remap), not get a fresh slot.
+        if args.fault in ("churn", "chaos") and gs and int(gs.get("reconnects", "0")) >= 1:
+            if hs and int(hs.get("remaps", "0")) < 1:
+                failures.append(f"{args.fault}: guest reconnected but host never remapped its slot (remaps=0 = phantom path)")
         # Leak watch: the live node count must not balloon from its post-connect baseline.
         for c in (host, guest):
             s = c.summary()
@@ -219,6 +228,11 @@ def main() -> int:
     finally:
         for c in (host, guest):
             if c:
+                try:
+                    with open(f"/tmp/mp_{c.name}.log", "w") as f:
+                        f.write("\n".join(c.lines))
+                except Exception:
+                    pass
                 c.kill()  # kill the whole flatpak->godot process group, no orphan godot leak
         _kill_group(relay)
 
