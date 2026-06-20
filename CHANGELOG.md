@@ -4,6 +4,23 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [0.3.5.11-alpha] — 2026-06-20
+
+### Fixed
+- **Multiplayer reconnect now works — the sporadic-disconnect cascade is gone.** A guest whose
+  connection blipped used to be kicked by the host on a version-handshake timeout and re-loop, often
+  losing or duplicating models. Root cause: Godot's high-level `@rpc` binds its path-cache to the
+  transport and assumes stable peer ids, which a relay reconnect breaks. The multiplayer messaging
+  was re-platformed onto a hand-rolled command protocol that runs below `@rpc` (reconnect-safe), with
+  the relay reusing a returning guest's peer id and an idempotent full-state re-sync. A 20-minute
+  headless soak with **24 guest reconnects** now stays fully converged (host 92 == guest 92), zero
+  kicks, zero crashes, no leak.
+
+### Changed
+- Relay: the binary broadcast now iterates a snapshot, fixing a crash under churn ("dictionary
+  changed size during iteration"); a returning guest reclaims its old peer id within a 20 s window.
+
+
 ## [0.3.5.10-alpha] — 2026-06-19
 
 ### Added
