@@ -2007,12 +2007,19 @@ func _on_guest_reconnected() -> void:
 	# NOTE: this fixes the REUSED-peer-id reconnect; when the relay hands out a NEW peer id the
 	# RPC still doesn't route (stale SceneMultiplayer unique-id) — see ROADMAP "graceful guest
 	# reconnect". Harmless + correct on its own (idempotent announce).
-	if network_manager:
-		network_manager.is_host = multiplayer.is_server()
-		network_manager.announce_version_to_host()
-		_register_local_name()
 	network_status_label.text = "Reconnected"
 	network_status_label.add_theme_color_override("font_color", Color.GREEN)
+	if network_manager:
+		network_manager.is_host = multiplayer.is_server()
+		# Flush the stale RPC path-cache to the host first, so the re-announce actually routes
+		# (the relay gave us our old peer id back, but SceneMultiplayer's cached paths are stale).
+		network_manager.force_host_rpc_rehandshake()
+		# Re-announce over the next few frames: sending it synchronously right after the flush
+		# races SceneMultiplayer's peer-1 path renegotiation and the host sometimes never sees it.
+		for _i in range(5):
+			await get_tree().process_frame
+			network_manager.announce_version_to_host()
+		_register_local_name()
 
 
 ## The host is present again (we rejoined as host, or our host returned). The full
