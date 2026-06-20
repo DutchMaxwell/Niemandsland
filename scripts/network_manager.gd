@@ -7,6 +7,9 @@ signal connection_failed
 signal server_disconnected
 signal player_connected(peer_id: int)
 signal player_disconnected(peer_id: int)
+## A decoded application command arrived over the hand-rolled command protocol (below @rpc, survives
+## reconnects). Phase 1 of the netcode replatform; handlers subscribe and dispatch by `type`.
+signal command_received(type: String, payload: Variant, from_peer: int)
 
 ## Emitted on the host once a joining peer has announced a matching game version.
 ## main.gd gates the full-state sync on this so mismatched peers never receive state.
@@ -81,6 +84,8 @@ var _my_client_token: String = ""
 ## server_disconnected teardown + the peer-1 slot cleanup that the deliberate peer_disconnected(1)
 ## emit would otherwise trigger. See force_host_rpc_rehandshake().
 var _reconnect_flush_active: bool = false
+## Monotonic sequence number stamped on every outgoing command (for future ack/replay).
+var _command_seq: int = 0
 ## Guest side: the slot the host assigned us (0 = not yet assigned).
 var _my_assigned_slot: int = 0
 ## Host-only: token -> canonical slot (1..N). The stable identity.
@@ -239,6 +244,7 @@ func _on_peer_connected(id: int) -> void:
 	# Dedup: a relay host-rehost replay re-emits peer_connected for guests that
 	# never left. Appending twice would put a phantom duplicate in connected_peers
 	# (and the roster) — keep it a set (RC2).
+	_bind_command_channel()  # host: bind the command stream when a peer appears
 	var already := connected_peers.has(id)
 	print("[Network] Player connected: Peer ID %d (total peers: %d, dup=%s)" % [id, connected_peers.size() + (0 if already else 1), already])
 	if not already:
@@ -275,6 +281,7 @@ func _on_peer_disconnected(id: int) -> void:
 
 func _on_connected_to_server() -> void:
 	_last_connection_status = MultiplayerPeer.CONNECTION_CONNECTED
+	_bind_command_channel()  # guest: command stream is live as soon as the transport is
 	print("[Network] === CONNECTED TO SERVER ===")
 	print("[Network] My Peer ID: %d" % multiplayer.get_unique_id())
 	connected_to_server.emit()
@@ -335,6 +342,45 @@ func force_host_rpc_rehandshake() -> void:
 	p.emit_signal("peer_disconnected", 1)
 	p.emit_signal("peer_connected", 1)
 	_reconnect_flush_active = false
+
+
+# === Command protocol (Phase 1 — below @rpc, reconnect-safe) ===
+
+## Idempotently connect to the relay peer's channel-1 command stream. Called from the connect
+## handlers (both roles) + send_command, so the channel is live whenever a session is.
+func _bind_command_channel() -> void:
+	var mp: MultiplayerPeer = multiplayer.multiplayer_peer
+	if mp and mp.has_signal("command_received") and not mp.command_received.is_connected(_on_raw_command):
+		mp.command_received.connect(_on_raw_command)
+
+
+## Send an application command to `target_peer` (0 = broadcast to all other peers in the room).
+## Routes over the relay's channel-1 frames, entirely below @rpc — no path-cache, survives a
+## reconnect. Returns false if no relay transport is active. Payload must be plain Variant data.
+func send_command(type: String, payload: Variant = {}, target_peer: int = 0) -> bool:
+	var mp: MultiplayerPeer = multiplayer.multiplayer_peer
+	if mp == null or not mp.has_method("send_command"):
+		return false
+	_bind_command_channel()
+	_command_seq += 1
+	return mp.send_command(target_peer, MPCommand.encode(type, _command_seq, payload)) == OK
+
+
+func _on_raw_command(from_peer: int, data: PackedByteArray) -> void:
+	var env: Dictionary = MPCommand.decode(data)
+	if env.is_empty():
+		return
+	var type: String = str(env.get("t", ""))
+	# Built-in connectivity self-test (Phase 1 proof that the channel round-trips alongside @rpc;
+	# harmless in production — a ping just gets a pong).
+	if type == "cmd_ping":
+		print("[CMD] ping from %d -> pong" % from_peer)
+		send_command("cmd_pong", {}, from_peer)
+		return
+	if type == "cmd_pong":
+		print("[CMD] pong from %d (command channel verified)" % from_peer)
+		return
+	command_received.emit(type, env.get("p", null), from_peer)
 
 
 func announce_version_to_host() -> void:
