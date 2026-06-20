@@ -97,14 +97,20 @@ func _ready() -> void:
 		ProjectSettings.set_setting("niemandsland/internet_room_code", code)
 
 	_main = load("res://scenes/main.tscn").instantiate()
-	add_child(_main)
-	get_tree().current_scene = _main
+	_main.name = "Main"
+	# Mount at /root/Main (NOT under the harness) so the game's hard-coded absolute node paths
+	# (e.g. /root/Main/OPRArmyManager, used by clear_all_objects on a state re-sync) resolve
+	# exactly as in real play — otherwise the army never clears and a reconnect re-sync duplicates.
+	# Deferred: the root is busy setting up children during our _ready. _wire_signals (also deferred,
+	# queued after this) then runs once main is in the tree and its internet_lobby exists.
+	get_tree().root.call_deferred("add_child", _main)
 	# internet_lobby is created synchronously in main._ready; wire it before the
 	# deferred host/join call fires next frame.
 	call_deferred("_wire_signals")
 
 
 func _wire_signals() -> void:
+	get_tree().current_scene = _main  # main is mounted by now (deferred add_child ran first)
 	var lobby = _main.get("internet_lobby") if _main else null
 	if lobby == null:
 		_fail("main has no internet_lobby")
