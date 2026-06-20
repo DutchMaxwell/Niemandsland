@@ -48,6 +48,7 @@ var _round_accum := 0.0
 var _cmd_selftest_sent := false
 var _cursor_accum := 0.0
 var _tick_accum := 0.0
+var _dice_accum := 0.0
 var _cursor_phase := 0.0
 const SPAWN_COUNT := 10
 
@@ -269,6 +270,11 @@ func _drive_synthetic(delta: float) -> void:
 			if not _mini_ids.is_empty():
 				var oid: int = _mini_ids[randi() % _mini_ids.size()]
 				_nm.broadcast_move(oid, Vector3(randf_range(-0.5, 0.5), 0.0, randf_range(-0.5, 0.5)))
+		# Dice rolls append to the in-game roll LOG, so roll at a REALISTIC cadence (~every 4s);
+		# the old 2/s rate ballooned the log and read as a node leak (it isn't — a log grows).
+		_dice_accum += delta
+		if _dice_accum >= 4.0:
+			_dice_accum = 0.0
 			_nm.broadcast_dice_roll([randi() % 6 + 1], {"context": "harness"})
 
 
