@@ -86,6 +86,10 @@ var _my_client_token: String = ""
 var _reconnect_flush_active: bool = false
 ## Monotonic sequence number stamped on every outgoing command (for future ack/replay).
 var _command_seq: int = 0
+## During a command-channel dispatch, the peer that sent it — so handlers read _get_sender()
+## instead of multiplayer.get_remote_sender_id() (which only knows about @rpc traffic). 0 = not in
+## a command dispatch (fall back to the @rpc sender).
+var _command_sender: int = 0
 ## Guest side: the slot the host assigned us (0 = not yet assigned).
 var _my_assigned_slot: int = 0
 ## Host-only: token -> canonical slot (1..N). The stable identity.
@@ -366,11 +370,33 @@ func send_command(type: String, payload: Variant = {}, target_peer: int = 0) -> 
 	return mp.send_command(target_peer, MPCommand.encode(type, _command_seq, payload)) == OK
 
 
+## Send a former-@rpc call over the command channel: `method` invoked remotely with `args`.
+## target_peer 0 = broadcast to all other peers (== @rpc call_remote); a peer id == @rpc rpc_id.
+## This is how Phase 2 moves game messaging below the path-cache without rewriting each handler body.
+func _remote_call(method: String, args: Array, target_peer: int = 0) -> void:
+	send_command("rpc", {"m": method, "a": args}, target_peer)
+
+
+## The @rpc-equivalent sender for a handler: the command sender during a command dispatch, else the
+## @rpc remote sender (so handlers work whether invoked via the command channel or legacy @rpc).
+func _get_sender() -> int:
+	return _command_sender if _command_sender != 0 else multiplayer.get_remote_sender_id()
+
+
 func _on_raw_command(from_peer: int, data: PackedByteArray) -> void:
 	var env: Dictionary = MPCommand.decode(data)
 	if env.is_empty():
 		return
 	var type: String = str(env.get("t", ""))
+	# Generic former-@rpc dispatch: run the named handler locally with the command sender set.
+	if type == "rpc":
+		var payload: Dictionary = env.get("p", {})
+		var method: String = str(payload.get("m", ""))
+		if method != "" and has_method(method):
+			_command_sender = from_peer
+			callv(method, payload.get("a", []))
+			_command_sender = 0
+		return
 	# Built-in connectivity self-test (Phase 1 proof that the channel round-trips alongside @rpc;
 	# harmless in production — a ping just gets a pong).
 	if type == "cmd_ping":
@@ -388,7 +414,7 @@ func announce_version_to_host() -> void:
 		return
 	if not _validate_rpc_ready("announce_version"):
 		return
-	_rpc_announce_version.rpc_id(1, get_game_version(), _my_client_token)
+	_remote_call("_rpc_announce_version", [get_game_version(), _my_client_token], 1)
 
 
 ## Host: kick a peer that never announced a (matching) version within the grace
@@ -421,11 +447,11 @@ func _disconnect_peer_safe(id: int) -> void:
 func _rpc_announce_version(client_version: String, client_token: String = "") -> void:
 	if not multiplayer.is_server():
 		return
-	var sender := multiplayer.get_remote_sender_id()
+	var sender := _get_sender()
 	var host_version := get_game_version()
 	if client_version != host_version:
 		push_warning("[Network] Version mismatch: host=%s, peer %d=%s — rejecting" % [host_version, sender, client_version])
-		_rpc_reject_version.rpc_id(sender, host_version)
+		_remote_call("_rpc_reject_version", [host_version], sender)
 		# Let the reject RPC flush, then drop the peer host-side.
 		get_tree().create_timer(0.5).timeout.connect(_disconnect_peer_safe.bind(sender))
 		return
@@ -433,7 +459,7 @@ func _rpc_announce_version(client_version: String, client_token: String = "") ->
 	# Resolve the stable slot SYNCHRONOUSLY (no await) so concurrent rejoins bind
 	# atomically, BEFORE the state-sync that main.gd runs on peer_version_validated.
 	var slot := _resolve_slot_for_token(client_token, sender)
-	_rpc_assign_slot.rpc_id(sender, slot)  # guest caches it for get_my_player_slot()
+	_remote_call("_rpc_assign_slot", [slot], sender)  # guest caches it for get_my_player_slot()
 	print("[Network] Peer %d passed handshake (%s) -> slot %d" % [sender, host_version, slot])
 	peer_version_validated.emit(sender)
 
@@ -475,7 +501,7 @@ func _resolve_slot_for_token(token: String, new_peer: int) -> int:
 		# the local self-spawn is guarded in main (avatars are remote-only).
 		if old_peer != new_peer:
 			if is_multiplayer_active():
-				_rpc_remap_peer.rpc(old_peer, new_peer, slot)
+				_remote_call("_rpc_remap_peer", [old_peer, new_peer, slot], 0)
 			_rpc_remap_peer(old_peer, new_peer, slot)  # apply locally (host)
 		return slot
 	return _allocate_fresh_slot(new_peer, token)
