@@ -34,6 +34,8 @@ signal host_rejoined()
 ## is the only signal that the guest reconnected — listeners must re-announce version+token, or
 ## the host kicks us on the version-handshake timeout.
 signal relay_reconnected()
+## A channel-1 command frame arrived from another peer (our hand-rolled protocol, below @rpc).
+signal command_received(from_peer: int, data: PackedByteArray)
 
 const HEARTBEAT_INTERVAL: float = 10.0
 
@@ -47,6 +49,11 @@ const HEARTBEAT_TIMEOUT: float = 35.0
 ## second ~18 has already torn itself down while the relay would still restore the
 ## room, needlessly ending the session (RC5).
 const RECONNECT_TIMEOUT: float = 25.0
+## Forwarded game frames carry a 1-byte channel marker right after the [peer_id] header so the
+## engine's @rpc traffic and our own command protocol can share the one relay connection. Channel 0
+## is fed to SceneMultiplayer (unchanged); channel 1 is surfaced via command_received (no path-cache).
+const FRAME_CHANNEL_RPC: int = 0
+const FRAME_CHANNEL_COMMAND: int = 1
 
 ## Outgoing send rate cap — WALL-CLOCK, not per-frame. A per-_poll() cap is framerate-
 ## dependent (4 sends x 165 fps on a high-refresh display = 660 msg/s), which blew past the
@@ -287,8 +294,17 @@ func _put_packet_script(p_buffer: PackedByteArray) -> Error:
 	if _ws == null or _ws.get_ready_state() != WebSocketPeer.STATE_OPEN:
 		return ERR_UNAVAILABLE
 
-	var frame := _build_outgoing_frame(p_buffer)
+	var frame := _build_outgoing_frame(p_buffer, FRAME_CHANNEL_RPC, _target_peer)
 	_outgoing_queue.append(frame)
+	return OK
+
+
+## Hand-rolled command protocol (below @rpc, no path-cache). Send a raw command payload to a peer
+## (target 0 = broadcast to everyone else in the room). The receiver gets it via command_received.
+func send_command(target_peer: int, data: PackedByteArray) -> Error:
+	if _ws == null or _ws.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		return ERR_UNAVAILABLE
+	_outgoing_queue.append(_build_outgoing_frame(data, FRAME_CHANNEL_COMMAND, target_peer))
 	return OK
 
 
@@ -405,14 +421,15 @@ func _send_json(data: Dictionary) -> void:
 
 
 ## Build the outgoing binary frame: [target_peer_id: 4B BE] [payload]
-func _build_outgoing_frame(payload: PackedByteArray) -> PackedByteArray:
+func _build_outgoing_frame(payload: PackedByteArray, channel: int, target: int) -> PackedByteArray:
 	var frame = PackedByteArray()
-	frame.resize(4)
-	# Encode target_peer as big-endian int32
-	frame[0] = (_target_peer >> 24) & 0xFF
-	frame[1] = (_target_peer >> 16) & 0xFF
-	frame[2] = (_target_peer >> 8) & 0xFF
-	frame[3] = _target_peer & 0xFF
+	frame.resize(5)
+	# [target_peer: big-endian int32][channel: 1 byte]
+	frame[0] = (target >> 24) & 0xFF
+	frame[1] = (target >> 16) & 0xFF
+	frame[2] = (target >> 8) & 0xFF
+	frame[3] = target & 0xFF
+	frame[4] = channel & 0xFF
 	frame.append_array(payload)
 	return frame
 
@@ -534,12 +551,17 @@ func _emit_peer_connected(peer_id: int) -> void:
 ## Process an incoming binary game data frame from the relay.
 ## Format: [source_peer_id: 4 bytes int32 BE] [payload]
 func _process_incoming_binary(frame: PackedByteArray) -> void:
-	if frame.size() < 4:
-		return  # Too short, ignore
+	if frame.size() < 5:
+		return  # need at least [source_peer: 4][channel: 1]
 
-	# Decode source peer ID (big-endian int32)
+	# Decode source peer ID (big-endian int32) + the channel marker.
 	var source_peer: int = (frame[0] << 24) | (frame[1] << 16) | (frame[2] << 8) | frame[3]
-	var payload = frame.slice(4)
+	var channel: int = frame[4]
+	var payload = frame.slice(5)
+
+	if channel == FRAME_CHANNEL_COMMAND:
+		command_received.emit(source_peer, payload)  # our protocol, not SceneMultiplayer
+		return
 
 	var pkt = IncomingPacket.new()
 	pkt.from_peer = source_peer
