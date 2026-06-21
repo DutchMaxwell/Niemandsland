@@ -31,6 +31,9 @@ const INCHES_TO_METERS: float = 0.0254
 const FOOTPRINT_MAX_RATIO: float = 1.25
 ## Schwebehoehe fuer Flying-Units, relativ zur Base-Langseite (40mm Base → ~14mm).
 const FLYING_HOVER_RATIO: float = 0.35
+## Aircraft (the OPR "Aircraft" rule — NOT the same as Flying) hover much higher, on a tall flight
+## stand: a fixed ~20cm above the base for ALL aircraft (1 unit = 1 m, so 0.2).
+const AIRCRAFT_HOVER_M: float = 0.2
 const TRAY_SIZE_INCHES: float = 32.0  # 32x32 inch tray
 const TRAY_MARGIN: float = 0.05  # 5cm gap from table edge
 const TRAY_DROP_HEIGHT: float = 0.5  # Start 50cm above table
@@ -674,8 +677,8 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 	wrapper.add_child(base_instance)
 
 	# Visual hover: Flying units, drones and hover vehicles float above the base.
-	var should_hover := _should_hover(unit.name, unit.special_rules)
-	var hover_lift: float = base_long_mm * FLYING_HOVER_RATIO * 0.001 if should_hover else 0.0
+	# Hover height: Aircraft on a tall stand (~20cm), Flying/drones a small base-relative float.
+	var hover_lift: float = _hover_lift_m(unit.special_rules, unit.name, natural_base_long_mm)
 
 	# Try to load GLB model for this unit (mount upgrades pick a faction mount/bike GLB instead).
 	var glb_name: String = model_name_override if not model_name_override.is_empty() else unit.name
@@ -690,7 +693,7 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 			# Modell an die Base anpassen (Footprint-Cap gegen Scale-Creep, Flying schwebt)
 			var aabb = _get_model_aabb(glb_instance)
 			var tough = _get_tough_value(unit)
-			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, should_hover)
+			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift)
 			var final_scale = fit.scale
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
@@ -840,8 +843,8 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> St
 	wrapper.add_child(base_instance)
 
 	# Visual hover: Flying units, drones and hover vehicles float above the base.
-	var should_hover := _should_hover(unit_name, props.get("special_rules", []))
-	var hover_lift: float = base_long_mm * FLYING_HOVER_RATIO * 0.001 if should_hover else 0.0
+	# Hover height: Aircraft on a tall stand (~20cm), Flying/drones a small float (matches import).
+	var hover_lift: float = _hover_lift_m(props.get("special_rules", []), unit_name, natural_base_long_mm)
 
 	# Try to load GLB model for this unit (a mounted unit re-resolves its faction mount GLB so a
 	# saved/synced Combat Bike hero keeps the bike model, matching the import path).
@@ -862,7 +865,7 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> St
 		if glb_instance:
 			var aabb = _get_model_aabb(glb_instance)
 			var tough = _get_tough_value_from_rules(props.get("special_rules", []))
-			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, should_hover)
+			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift)
 			var final_scale = fit.scale
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
@@ -1428,6 +1431,26 @@ func _is_flying_from_rules(rules: Array) -> bool:
 	return false
 
 
+## True if a unit has the OPR "Aircraft" rule. NOT the same as Flying (aircraft must move every turn,
+## can't be charged, etc.) — it drives the tall flight-stand hover, not the small Flying float.
+func _is_aircraft_from_rules(rules: Array) -> bool:
+	for r in rules:
+		if String(r).strip_edges().to_lower().begins_with("aircraft"):
+			return true
+	return false
+
+
+## Visual hover height (m): a fixed tall stand for Aircraft, a small base-relative float for Flying /
+## drones / hover vehicles, else 0 (on the table). Single source of truth for the GLB fit, the
+## procedural fallback and the save/load rebuild.
+func _hover_lift_m(rules: Array, unit_name: String, base_long_mm: int) -> float:
+	if _is_aircraft_from_rules(rules):
+		return AIRCRAFT_HOVER_M
+	if _should_hover(unit_name, rules):
+		return base_long_mm * FLYING_HOVER_RATIO * 0.001
+	return 0.0
+
+
 ## True if a unit should visually hover above its base: it has the Flying rule,
 ## or its name marks it as a drone / hover vehicle (e.g. "Gun Drones", "Hover
 ## Tank"). Hover is cosmetic only - in this sim Flying has no other effect since
@@ -1485,7 +1508,7 @@ func _is_walker(unit_name: String) -> bool:
 ## Flying-Units schweben leicht ueber der Base.
 ## base_long_mm = Base-Langseite in mm (rund: Durchmesser; oval: laengere Achse).
 ## Returns { "scale": float, "y_offset": float, "height": float }.
-func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, is_flying: bool) -> Dictionary:
+func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m: float) -> Dictionary:
 	var raw_height: float = aabb.size.y
 	var raw_footprint: float = max(aabb.size.x, aabb.size.z)
 	if raw_height <= 0.0 or raw_footprint <= 0.0:
@@ -1502,8 +1525,8 @@ func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, is_flying: bo
 
 	var final_scale: float = min(height_scale, footprint_scale)
 
-	# Fuesse auf Base-Oberkante (Base ist 3mm hoch); Flying schwebt zusaetzlich.
-	var lift: float = base_long_mm * FLYING_HOVER_RATIO * 0.001 if is_flying else 0.0
+	# Fuesse auf Base-Oberkante (Base ist 3mm hoch); Flying/Aircraft schweben zusaetzlich (caller-supplied).
+	var lift: float = hover_lift_m
 	var y_offset: float = -aabb.position.y * final_scale + 0.003 + lift
 
 	return {
