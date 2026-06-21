@@ -103,3 +103,16 @@ func test_rules_referenced_in_finds_granted_rules() -> void:
 	# No false positive on a mere substring (not a whole word), nor on a < 4-char rule name.
 	assert_bool(oam.rules_referenced_in("Shredded plating").has("Shred")).is_false()
 	assert_bool(found.has("AP")).is_false()
+
+
+func test_aircraft_hovers_high_flying_low() -> void:
+	var oam: OPRArmyManager = auto_free(OPRArmyManager.new())
+	# Aircraft (the OPR "Aircraft" rule) -> fixed tall flight stand (~20cm), base-independent.
+	assert_float(oam._hover_lift_m(["Aircraft"], "Fighter", 40)).is_equal_approx(0.2, 0.001)
+	# Flying -> small base-relative float (40mm * 0.35 / 1000 = 0.014m).
+	assert_float(oam._hover_lift_m(["Flying"], "Jetpack Squad", 40)).is_equal_approx(0.014, 0.001)
+	# Neither -> sits on the table.
+	assert_float(oam._hover_lift_m(["Fearless"], "Infantry", 40)).is_equal_approx(0.0, 0.001)
+	# The distinction the user stressed: Flying is NOT Aircraft (and vice-versa).
+	assert_bool(oam._is_aircraft_from_rules(["Flying"])).is_false()
+	assert_bool(oam._is_aircraft_from_rules(["Aircraft"])).is_true()
