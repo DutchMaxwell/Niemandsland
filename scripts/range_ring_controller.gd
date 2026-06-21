@@ -14,6 +14,11 @@ const INCHES_TO_METERS: float = 0.0254
 const RING_NODE_NAME: String = "RangeRing"
 ## The ranges the cycle steps through (inches). Index -1 = off.
 const RING_RANGES_INCHES: Array[int] = [3, 6, 9, 12, 18, 24]
+## Temporary spell-range preview ring: a SEPARATE node + colour from the persistent G rings, so
+## previewing a spell's reach on hover never touches the player's cycled rings.
+const SPELL_PREVIEW_NODE_NAME: String = "SpellRangePreview"
+const SPELL_PREVIEW_COLOR: Color = Color(0.8, 0.53, 1.0, 0.75)  # purple, matches the spell colour
+var _preview_models: Array = []  # nodes currently showing a spell preview ring
 ## Custom minis without a player_id use this neutral colour.
 const NEUTRAL_COLOR: Color = Color(0.6, 0.6, 0.65)
 const DEFAULT_BASE_RADIUS_M: float = 0.016  # 32 mm base
@@ -103,6 +108,59 @@ func active_count() -> int:
 	return _state.size()
 
 # === Private ===
+
+## Show a temporary spell-range preview ring around the given caster model nodes (purple). Replaces
+## any current preview; does NOT touch the persistent per-model G rings. range_inches <= 0 -> clears.
+func show_spell_preview(model_nodes: Array, range_inches: int) -> void:
+	clear_spell_preview()
+	if range_inches <= 0:
+		return
+	for node in model_nodes:
+		if node is Node3D and is_instance_valid(node):
+			_build_preview_ring(node, range_inches)
+			_preview_models.append(node)
+
+
+## Remove the spell-range preview ring(s).
+func clear_spell_preview() -> void:
+	for node in _preview_models:
+		if is_instance_valid(node):
+			var ex: Node = node.get_node_or_null(SPELL_PREVIEW_NODE_NAME)
+			if ex:
+				ex.free()
+	_preview_models.clear()
+
+
+func _build_preview_ring(model_node: Node3D, range_inches: int) -> void:
+	var props := _props_of(model_node)
+	var outer := ring_outer_radius_for_props(props, range_inches)
+	var inner := maxf(0.001, outer - RING_BAND_M)
+	var root := Node3D.new()
+	root.name = SPELL_PREVIEW_NODE_NAME
+	var ring := MeshInstance3D.new()
+	ring.mesh = _make_flat_ring_mesh(inner, outer, RING_SEGMENTS)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = SPELL_PREVIEW_COLOR
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.no_depth_test = true
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	ring.material_override = mat
+	ring.position = Vector3(0, RING_Y, 0)
+	root.add_child(ring)
+	var label := Label3D.new()
+	label.text = "%d\"" % range_inches
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.pixel_size = LABEL_PIXEL_SIZE
+	label.font_size = LABEL_FONT_SIZE
+	label.modulate = SPELL_PREVIEW_COLOR
+	label.outline_modulate = Color.BLACK
+	label.outline_size = LABEL_OUTLINE
+	label.position = Vector3(0, RING_Y + 0.02, outer)
+	root.add_child(label)
+	model_node.add_child(root)
+
 
 func _build_ring(model_node: Node3D, range_inches: int) -> void:
 	var props := _props_of(model_node)

@@ -47,6 +47,9 @@ func serialize_game_state() -> Dictionary:
 	# (they carry no OPRArmy with the descriptions otherwise).
 	if army_manager and army_manager.has_method("get_all_rule_descriptions"):
 		state["rule_descriptions"] = army_manager.get_all_rule_descriptions()
+	# Faction spell lists (per player) so loaded saves + remote casters can show their spells.
+	if army_manager and army_manager.has_method("get_all_player_spells"):
+		state["player_spells"] = army_manager.get_all_player_spells()
 	# player_id -> army name, so a .nml load / late-joiner can rebuild each army's tray.
 	state["army_names"] = _army_names_by_player()
 	return state

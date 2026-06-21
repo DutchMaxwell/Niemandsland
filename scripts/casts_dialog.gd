@@ -9,6 +9,9 @@ signal dialog_closed()
 ## Current unit being edited
 var _unit: GameUnit = null
 
+## Faction spell list, built lazily on first open (below the per-round line).
+var _spells_label: RichTextLabel = null
+
 ## UI references (assigned in _ready or via create_simple)
 @onready var title_label: Label = $Panel/Margin/VBox/TitleLabel
 @onready var casts_label: Label = $Panel/Margin/VBox/CastsContainer/CastsLabel
@@ -49,6 +52,7 @@ func open(unit: GameUnit) -> void:
 	_unit = unit
 	visible = true
 	_update_display()
+	_populate_spells()
 
 
 ## Closes the dialog.
@@ -56,6 +60,56 @@ func close() -> void:
 	visible = false
 	_unit = null
 	dialog_closed.emit()
+
+
+## Build (once) + populate the faction spell list below the per-round line; hidden if the unit's
+## faction has no spells. This dialog shows the full list inline (name · cost · effect) since you
+## are already in the caster context — the unit card has the compact hover version.
+func _populate_spells() -> void:
+	if per_round_label == null:
+		return
+	var vbox := per_round_label.get_parent()
+	if vbox == null:
+		return
+	if _spells_label == null:
+		_spells_label = RichTextLabel.new()
+		_spells_label.bbcode_enabled = true
+		_spells_label.fit_content = true
+		_spells_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_spells_label.custom_minimum_size = Vector2(300, 0)
+		vbox.add_child(_spells_label)
+		vbox.move_child(_spells_label, per_round_label.get_index() + 1)
+	var spells := _resolve_spells()
+	if spells.is_empty():
+		_spells_label.visible = false
+		return
+	_spells_label.visible = true
+	var am = get_node_or_null("/root/Main/OPRArmyManager")
+	var parts := PackedStringArray(["[b]SPELLS[/b]"])
+	for sp in spells:
+		var nm: String = str(sp.get("name", ""))
+		var thr: int = int(sp.get("threshold", 0))
+		var eff: String = str(sp.get("effect", ""))
+		var head: String = "[b][color=#cc88ff]%s[/color][/b]%s" % [nm, (" (%d)" % thr if thr > 0 else "")]
+		var entry: String = head + "\n[color=#aaaaaa]" + eff + "[/color]"
+		# Any special rule the spell grants → append its rule text after the spell text.
+		if am and am.has_method("rules_referenced_in") and am.has_method("get_rule_description"):
+			for r in am.rules_referenced_in(eff):
+				var desc: String = str(am.get_rule_description(r))
+				if not desc.is_empty():
+					entry += "\n[color=#888888]► [b]%s[/b]: %s[/color]" % [str(r), desc]
+		parts.append(entry)
+	_spells_label.text = "\n\n".join(parts)
+
+
+## The current unit's faction spell list, via the OPR army manager (real-game tree path).
+func _resolve_spells() -> Array:
+	if _unit == null:
+		return []
+	var am = get_node_or_null("/root/Main/OPRArmyManager")
+	if am and am.has_method("get_spells_for_unit"):
+		return am.get_spells_for_unit(_unit)
+	return []
 
 
 ## Updates the display with current unit data.
