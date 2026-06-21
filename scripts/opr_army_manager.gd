@@ -503,6 +503,9 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 		if ml > unit_base_long:
 			any_enlarged = true
 
+	# Mount/vehicle upgrade (Combat Bike, ...): fuzzy-pick a faction mount GLB once for the leader
+	# model (model 0). "" when the unit has no mount or no matching faction GLB (keeps the foot model).
+	var mount_glb: String = _find_mount_glb_name(unit.mount_name, faction_folder)
 	var cursor_x := spawn_pos.x
 	for i in range(unit.size):
 		var model_pos: Vector3
@@ -516,7 +519,9 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 			model_pos = Vector3(spawn_pos.x + i * spacing, spawn_pos.y, spawn_pos.z)
 
 		var override_mm: int = int(model_longs[i]) if any_enlarged else 0
-		var model = _create_unit_model(unit, player_color, name_suffix, faction_folder, override_mm)
+		# Mount/vehicle GLB applies to the leader model (model 0); its base is already on the unit.
+		var mglb: String = mount_glb if i == 0 else ""
+		var model = _create_unit_model(unit, player_color, name_suffix, faction_folder, override_mm, mglb)
 		if model:
 			# Assign a slot-namespaced network_id for multiplayer position sync (no
 			# cross-army collision regardless of import order).
@@ -598,7 +603,7 @@ static func effective_base_props(props: Dictionary, model_tough: int) -> Diction
 	return copy
 
 
-func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_suffix: String = "", faction_folder: String = "", base_long_override_mm: int = 0) -> StaticBody3D:
+func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_suffix: String = "", faction_folder: String = "", base_long_override_mm: int = 0, model_name_override: String = "") -> StaticBody3D:
 	var wrapper = StaticBody3D.new()
 	wrapper.collision_layer = MINIATURE_COLLISION_LAYER
 	wrapper.collision_mask = GROUND_COLLISION_LAYER
@@ -672,8 +677,9 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 	var should_hover := _should_hover(unit.name, unit.special_rules)
 	var hover_lift: float = base_long_mm * FLYING_HOVER_RATIO * 0.001 if should_hover else 0.0
 
-	# Try to load GLB model for this unit
-	var model_path = _find_model_for_unit(unit.name, faction_folder)
+	# Try to load GLB model for this unit (mount upgrades pick a faction mount/bike GLB instead).
+	var glb_name: String = model_name_override if not model_name_override.is_empty() else unit.name
+	var model_path = _find_model_for_unit(glb_name, faction_folder)
 	var model_height: float = 0.032  # Default 32mm height for collision calculation
 	var use_glb_model = false
 
@@ -837,9 +843,16 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> St
 	var should_hover := _should_hover(unit_name, props.get("special_rules", []))
 	var hover_lift: float = base_long_mm * FLYING_HOVER_RATIO * 0.001 if should_hover else 0.0
 
-	# Try to load GLB model for this unit
+	# Try to load GLB model for this unit (a mounted unit re-resolves its faction mount GLB so a
+	# saved/synced Combat Bike hero keeps the bike model, matching the import path).
 	var faction_folder: String = props.get("faction_folder", "")
-	var model_path = _find_model_for_unit(unit_name, faction_folder)
+	var glb_name: String = unit_name
+	var saved_mount: String = str(props.get("mount_name", ""))
+	if not saved_mount.is_empty():
+		var mount_glb: String = _find_mount_glb_name(saved_mount, faction_folder)
+		if not mount_glb.is_empty():
+			glb_name = mount_glb
+	var model_path = _find_model_for_unit(glb_name, faction_folder)
 	var model_height: float = 0.032
 
 	var use_glb_model = false
@@ -1288,6 +1301,11 @@ func _ensure_army_models_cached(army: OPRApiClient.OPRArmy) -> void:
 	var specs: Array = []
 	for unit: OPRApiClient.OPRUnit in army.units:
 		specs.append({"faction": faction_folder, "unit_name": unit.name})
+		# A mounted unit also needs its fuzzy-matched mount GLB pre-cached.
+		if not unit.mount_name.is_empty():
+			var mount_glb: String = _find_mount_glb_name(unit.mount_name, faction_folder)
+			if not mount_glb.is_empty():
+				specs.append({"faction": faction_folder, "unit_name": mount_glb})
 	await model_library.ensure_models(specs)
 
 
@@ -1366,6 +1384,27 @@ func _find_model_for_unit(unit_name: String, faction_folder: String) -> String:
 
 	print("OPRArmyManager: No model found for '%s' in %s" % [unit_name, faction_folder])
 	return ""
+
+
+## OPR mount/vehicle upgrades whose name carries one of these words map to a faction GLB containing
+## that word (fuzzy). Dedicated per-mount models are a Model Forge follow-up.
+const MOUNT_KEYWORDS: Array[String] = ["bike", "jetbike", "mount", "steed", "horse", "chariot",
+	"cavalry", "disc", "drake", "wyvern", "hover", "speeder", "beast", "sled", "raptor", "carnosaur",
+	"dino", "dinosaur", "lizard", "saurus", "serpent", "dragon", "monster"]
+
+
+## The faction GLB name for a unit's mount/vehicle upgrade, fuzzy-matched from the mount name's
+## recognizable words (e.g. "Combat Bike" -> a faction "*bike*" model). "" -> keep the foot model.
+func _find_mount_glb_name(mount_name: String, faction_folder: String) -> String:
+	if model_library == null or mount_name.is_empty() or faction_folder.is_empty():
+		return ""
+	var kws: Array = []
+	for w in mount_name.to_lower().split(" ", false):
+		if w in MOUNT_KEYWORDS:
+			kws.append(w)
+	if kws.is_empty():
+		return ""
+	return model_library.find_faction_model_matching(faction_folder, kws)
 
 
 ## Extract Tough value from unit's special rules

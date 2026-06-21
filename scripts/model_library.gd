@@ -68,6 +68,27 @@ func get_cached_path(faction: String, unit_name: String) -> String:
 	return _downloader.cache_path(sha) if _downloader.is_cached(sha) else ""
 
 
+## Fuzzy-find a faction model whose (normalized) name contains any of the keywords — used to pick a
+## mount/bike GLB for a hero's mount upgrade when no exact "<hero> on <mount>" model exists. Returns
+## the manifest unit-name part (resolvable via get_cached_path / ensure_model) or "" if none; prefers
+## the shortest (most specific) match.
+func find_faction_model_matching(faction: String, keywords: Array) -> String:
+	var prefix: String = faction.strip_edges().to_lower() + "/"
+	var best: String = ""
+	for key in _models:
+		var k: String = str(key)
+		if not k.begins_with(prefix):
+			continue
+		var name_part: String = k.substr(prefix.length())
+		for kw in keywords:
+			var needle: String = str(kw).strip_edges().to_lower()
+			if needle.length() >= 3 and name_part.contains(needle):
+				if best.is_empty() or name_part.length() < best.length():
+					best = name_part
+				break
+	return best
+
+
 ## Ensures the unit's model is cached (downloads if needed). Awaitable. Returns path or "".
 func ensure_model(faction: String, unit_name: String) -> String:
 	var entry: Dictionary = _entry(faction, unit_name)
