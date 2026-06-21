@@ -94,6 +94,11 @@ class OPRUnit:
 	var base_is_square: bool = false
 	var base_width_mm: int = 32  # Width in mm (perpendicular to facing)
 	var base_depth_mm: int = 32  # Depth in mm (in facing direction / "north")
+	## A mount/vehicle upgrade (e.g. a Combat Bike) brings its OWN base + model. When present:
+	## mount_base = [is_oval, width_mm, depth_mm] (overrides the foot base on the carrier model) and
+	## mount_name is the upgrade name (used to fuzzy-pick a faction mount/bike GLB).
+	var mount_base: Array = []
+	var mount_name: String = ""
 	## Game system this unit was imported for (gf/gff/aof/aofs/aofr). Drives
 	## regiment mode downstream; carried so it survives into GameUnit.unit_properties.
 	var game_system: String = ""
@@ -535,6 +540,27 @@ func _parse_tts_unit(data: Dictionary, game_system_abbrev: String = "") -> OPRUn
 			gw.count = maxi(1, item_count)
 			unit.weapons.append(gw)
 			unit.special_rules.erase(gw.name)
+
+		# A mount/vehicle upgrade (Combat Bike, Steed, ...) carries its OWN base + model. For a single-
+		# model unit — the ~universal mount case (a mounted hero) — REPLACE the unit base with the
+		# mount's, so it drives the model fit AND persists everywhere (save/load + MP) via the unit's
+		# base properties. mount_name drives a faction mount-GLB pick at spawn. (Multi-model mounts are
+		# vanishingly rare in OPR and not modelled here.)
+		var item_bases = item.get("bases", null)
+		if item_bases is Dictionary and not item_bases.is_empty():
+			# Only mount/vehicle upgrades carry a base entry -> record the name for the GLB pick.
+			unit.mount_name = item_name
+			if _is_usable_base_value(item_bases.get("round", "")):
+				# A real base (Combat Bike 60x35): for a single-model unit replace the foot base.
+				var pb := _parse_base_size(item_bases.get("round", ""), 32)
+				unit.mount_base = [bool(pb[0]), int(pb[1]), int(pb[2])]
+				if unit.size <= 1:
+					unit.base_is_oval = bool(pb[0])
+					unit.base_is_square = false
+					unit.base_width_mm = int(pb[1])
+					unit.base_depth_mm = int(pb[2])
+					unit.base_size_round = maxi(int(pb[1]), int(pb[2]))
+			# else: a base-less monster mount (round:"none") sizes from its (large) Tough below.
 
 		if per_model:
 			# Carried by a subset → pin to specific model(s) and show on the base ring.
