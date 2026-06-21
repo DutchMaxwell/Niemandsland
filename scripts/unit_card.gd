@@ -22,6 +22,11 @@ const COLOR_COST: String = "#ffcc44"
 const COLOR_BASE: String = "#cccccc"
 const COLOR_MELEE: String = "#ff8888"
 const COLOR_RULES: String = "#aaaaaa"
+## Items that GRANT a rule (Combat Shield → Shielded) are shown in this colour so they stand out
+## from plain rules; hovering one reveals the granted rule(s) + their descriptions.
+const COLOR_ITEM: String = "#ffcc44"
+## Faction spells listed on a caster's card (hover → effect); distinct from rules/items.
+const COLOR_SPELL: String = "#cc88ff"
 const COLOR_DIM: String = "#666666"
 
 # Status colours derived from HudTokens so active/alive/dead/range match the rest of the UI.
@@ -33,6 +38,9 @@ var COLOR_DEAD := "#" + HudTokens.DANGER.to_html(false)
 ## Optional reference (set by main.gd) used to resolve OPR special-rule descriptions
 ## — works for loaded saves + remote units via the session cache.
 var army_manager: OPRArmyManager = null
+## Optional reference (set by main.gd) used to preview a spell's range ring around the caster on
+## hover (purple ring, like the G range rings but temporary). Null → no preview.
+var range_ring_controller: Node = null
 
 ## Special-rule hover explanation: rules are shown underlined; hovering one for
 ## RULE_HOVER_DELAY opens a small popup with its full text.
@@ -139,6 +147,7 @@ func clear() -> void:
 		_rule_hover_timer.stop()
 	if _rule_popup:
 		_rule_popup.visible = false
+	_clear_spell_range_preview()
 	if _refresh_timer:
 		_refresh_timer.stop()
 
@@ -237,9 +246,9 @@ func _build_status_text() -> String:
 		var suffix := ""
 		if _current_unit.activation_round > 0:
 			suffix = " (R%d)" % _current_unit.activation_round
-		parts.append("[color=%s]● Aktiviert%s[/color]" % [COLOR_ACTIVE, suffix])
+		parts.append("[color=%s]● Activated%s[/color]" % [COLOR_ACTIVE, suffix])
 	else:
-		parts.append("[color=%s]○ Bereit[/color]" % COLOR_DIM)
+		parts.append("[color=%s]○ Ready[/color]" % COLOR_DIM)
 
 	parts.append(_token_text("F", _current_unit.is_fatigued, COLOR_COST))
 	parts.append(_token_text("S", _current_unit.is_shaken, COLOR_DEAD))
@@ -273,12 +282,12 @@ func _build_wounds_text() -> String:
 		if _current_unit.models.size() == 1:
 			# Single-model unit (hero/monster): show pips for its wounds.
 			var model := _current_unit.models[0]
-			text += "  •  Wunden: %s [color=%s](%d/%d)[/color]" % [
+			text += "  •  Wounds:%s [color=%s](%d/%d)[/color]" % [
 				_wound_pips(model.wounds_current, model.wounds_max),
 				COLOR_BASE, model.wounds_current, model.wounds_max
 			]
 		else:
-			text += "  •  Wunden: [color=%s]%d[/color]/%d" % [COLOR_COST, cur_total, max_total]
+			text += "  •  Wounds:[color=%s]%d[/color]/%d" % [COLOR_COST, cur_total, max_total]
 
 	return text
 
@@ -290,7 +299,7 @@ func _wound_pips(current: int, maximum: int) -> String:
 func _build_weapons_text() -> String:
 	var opr_unit := _get_opr_unit()
 	if opr_unit and opr_unit.weapons.size() > 0:
-		var lines: Array[String] = ["[b]Waffen[/b]"]
+		var lines: Array[String] = ["[b]Weapons[/b]"]
 		for weapon in opr_unit.weapons:
 			lines.append("  " + _format_opr_weapon(weapon))
 		return "\n".join(lines)
@@ -299,7 +308,7 @@ func _build_weapons_text() -> String:
 	if _current_unit.models.size() > 0:
 		var weapons: Array = _current_unit.models[0].get_weapons()
 		if not weapons.is_empty():
-			var lines: Array[String] = ["[b]Waffen[/b]"]
+			var lines: Array[String] = ["[b]Weapons[/b]"]
 			for weapon in weapons:
 				lines.append("  " + _format_dict_weapon(weapon))
 			return "\n".join(lines)
@@ -395,13 +404,44 @@ func _build_rules_text() -> String:
 			elif rule is Dictionary:
 				rules.append(str(rule.get("name", "")))
 
+	# item -> granted rules, read from unit_properties so the cascade survives save/load + MP sync
+	# (a synced/loaded unit may not carry the live OPRUnit object).
+	var item_grants := _item_grants()
+
 	if not rules.is_empty():
-		# Each rule is an underlined [url] span; hovering it ~1s opens a popup with the
-		# OPR description (see _on_rule_hover_*). Compact comma list.
+		# A rule an item GRANTS (Combat Shield → Shielded) is reached by hovering the item, not
+		# listed as a flat sibling — collect those names to hide from the top line.
+		var granted_by_item := {}
+		for it in item_grants:
+			for g in item_grants[it]:
+				granted_by_item[str(g)] = true
+		# Each entry is an underlined [url] span; hovering it ~1s opens a popup (see
+		# _on_rule_hover_*). An item that grants rules shows in the item colour; its popup lists
+		# the granted rule(s) + their descriptions instead of the item's own (often empty).
 		var rule_spans: Array[String] = []
+		var seen := {}
 		for rule_name in rules:
-			rule_spans.append("[url=%s][color=%s]%s[/color][/url]" % [rule_name, COLOR_RULES, rule_name])
-		lines.append("[b]Regeln:[/b] %s" % ", ".join(rule_spans))
+			if granted_by_item.has(rule_name):
+				continue  # revealed via its granting item's hover cascade
+			if seen.has(rule_name):
+				continue  # an item name can sit in both equipment + special_rules
+			seen[rule_name] = true
+			var col: String = COLOR_ITEM if item_grants.has(rule_name) else COLOR_RULES
+			rule_spans.append("[url=%s][color=%s]%s[/color][/url]" % [rule_name, col, rule_name])
+		lines.append("[b]Rules:[/b] %s" % ", ".join(rule_spans))
+
+	# Caster units: list the faction's spells (name + casting cost; hover → effect).
+	if _current_unit.has_method("is_caster") and _current_unit.is_caster():
+		var spell_spans: Array[String] = []
+		for sp in _faction_spells():
+			var sname: String = str(sp.get("name", ""))
+			if sname.is_empty():
+				continue
+			var thr: int = int(sp.get("threshold", 0))
+			var lbl: String = "%s (%d)" % [sname, thr] if thr > 0 else sname
+			spell_spans.append("[url=spell:%s][color=%s]%s[/color][/url]" % [sname, COLOR_SPELL, lbl])
+		if not spell_spans.is_empty():
+			lines.append("[b]Spells:[/b] %s" % ", ".join(spell_spans))
 
 	return "\n".join(lines)
 
@@ -424,6 +464,7 @@ func _setup_rule_popup() -> void:
 	_rule_popup_label.bbcode_enabled = true
 	_rule_popup_label.fit_content = true
 	_rule_popup_label.scroll_active = false
+	_rule_popup_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_rule_popup_label.custom_minimum_size = Vector2(280, 0)
 	_rule_popup_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_rule_popup_label.add_theme_font_override("bold_font", HudTokens.bold_font())
@@ -435,6 +476,10 @@ func _on_rule_hover_started(meta: Variant) -> void:
 	_hovered_rule = str(meta)
 	if _rule_hover_timer:
 		_rule_hover_timer.start()
+	# Spell with a radius → preview its reach around the caster immediately (the effect popup
+	# still follows after the hover delay).
+	if _hovered_rule.begins_with("spell:"):
+		_show_spell_range_preview(_hovered_rule.substr(6))
 
 
 func _on_rule_hover_ended(_meta: Variant) -> void:
@@ -443,17 +488,59 @@ func _on_rule_hover_ended(_meta: Variant) -> void:
 		_rule_hover_timer.stop()
 	if _rule_popup:
 		_rule_popup.visible = false
+	_clear_spell_range_preview()
+
+
+## Show a purple range ring of the spell's radius around the caster's models (no ring if the spell
+## has no range). Reuses the G-ring controller's separate spell-preview layer.
+func _show_spell_range_preview(spell_name: String) -> void:
+	if range_ring_controller == null or not range_ring_controller.has_method("show_spell_preview"):
+		return
+	var radius := OPRApiClient.spell_radius_inches(_spell_effect(spell_name))
+	if radius <= 0:
+		return
+	range_ring_controller.show_spell_preview(_caster_model_nodes(), radius)
+
+
+func _clear_spell_range_preview() -> void:
+	if range_ring_controller and range_ring_controller.has_method("clear_spell_preview"):
+		range_ring_controller.clear_spell_preview()
+
+
+## The table model nodes of the current (caster) unit — where the spell-range ring is anchored.
+func _caster_model_nodes() -> Array:
+	var nodes: Array = []
+	if _current_unit:
+		for m in _current_unit.models:
+			if m and is_instance_valid(m.node):
+				nodes.append(m.node)
+	return nodes
 
 
 func _on_rule_hover_timeout() -> void:
 	if _hovered_rule.is_empty() or not _rule_popup:
 		return
-	var desc := ""
-	if army_manager and army_manager.has_method("get_rule_description"):
-		desc = army_manager.get_rule_description(_hovered_rule)
-	if desc.is_empty():
-		desc = "[i]Keine Beschreibung verfügbar.[/i]"
-	_rule_popup_label.text = "[b][color=%s]%s[/color][/b]\n%s" % [COLOR_RULES, _hovered_rule, desc]
+	var item_grants := _item_grants()
+	var text := ""
+	if _hovered_rule.begins_with("spell:"):
+		# Faction spell → show its effect, then any special rule it grants (spell text + rule text).
+		var spell_name := _hovered_rule.substr(6)
+		var effect := _spell_effect(spell_name)
+		text = "[b][color=%s]%s[/color][/b]\n%s" % [
+			COLOR_SPELL, spell_name, effect if not effect.is_empty() else "[i]No description available.[/i]"]
+		if not effect.is_empty() and army_manager and army_manager.has_method("rules_referenced_in"):
+			for r in army_manager.rules_referenced_in(effect):
+				text += "\n\n[b][color=%s]%s[/color][/b]\n%s" % [COLOR_RULES, str(r), _resolve_rule_desc(str(r))]
+	elif item_grants.has(_hovered_rule):
+		# Item → cascade: this entry is an item; show the rule(s) it grants + each description,
+		# instead of the item's own (usually empty) description.
+		text = "[b][color=%s]%s[/color][/b]\n[i][color=%s]Grants:[/color][/i]" % [
+			COLOR_ITEM, _hovered_rule, COLOR_DIM]
+		for g in item_grants[_hovered_rule]:
+			text += "\n[b][color=%s]%s[/color][/b]\n%s" % [COLOR_RULES, str(g), _resolve_rule_desc(str(g))]
+	else:
+		text = "[b][color=%s]%s[/color][/b]\n%s" % [COLOR_RULES, _hovered_rule, _resolve_rule_desc(_hovered_rule)]
+	_rule_popup_label.text = text
 	_rule_popup.reset_size()
 	# Place near the cursor, clamped to stay on screen.
 	var pos := get_global_mouse_position() + Vector2(16, 16)
@@ -462,6 +549,40 @@ func _on_rule_hover_timeout() -> void:
 	pos.y = min(pos.y, vp.y - _rule_popup.size.y - 8)
 	_rule_popup.global_position = pos
 	_rule_popup.visible = true
+
+
+## Resolve a rule's OPR description (or a placeholder) for the hover popup.
+func _resolve_rule_desc(rule_name: String) -> String:
+	var desc := ""
+	if army_manager and army_manager.has_method("get_rule_description"):
+		desc = army_manager.get_rule_description(rule_name)
+	if desc.is_empty():
+		desc = "[i]No description available.[/i]"
+	return desc
+
+
+## The faction's spell list for the current (caster) unit, via the army manager.
+func _faction_spells() -> Array:
+	if army_manager and army_manager.has_method("get_spells_for_unit"):
+		return army_manager.get_spells_for_unit(_current_unit)
+	return []
+
+
+## The effect text of a faction spell by name (or "" if not found).
+func _spell_effect(spell_name: String) -> String:
+	for sp in _faction_spells():
+		if str(sp.get("name", "")) == spell_name:
+			return str(sp.get("effect", ""))
+	return ""
+
+
+## Item → granted-rules map for the current unit, from unit_properties (persists + MP-syncs).
+func _item_grants() -> Dictionary:
+	if _current_unit and _current_unit.unit_properties is Dictionary:
+		var g: Variant = _current_unit.unit_properties.get("item_grants", {})
+		if g is Dictionary:
+			return g
+	return {}
 
 
 ## Lists Heroes joined to this unit (name + Q/D), or "" if none.
@@ -474,7 +595,7 @@ func _build_attached_heroes_text() -> String:
 			])
 	if parts.is_empty():
 		return ""
-	return "[b]Angeschlossener Held:[/b] [color=%s]%s[/color]" % [COLOR_RULES, ", ".join(parts)]
+	return "[b]Joined Hero:[/b] [color=%s]%s[/color]" % [COLOR_RULES, ", ".join(parts)]
 
 # ===== Helpers =====
 

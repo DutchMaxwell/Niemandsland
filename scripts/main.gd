@@ -2611,6 +2611,8 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	# Adopt the host's OPR special-rule descriptions so this peer can show enemy rules.
 	if opr_army_manager and opr_army_manager.has_method("merge_rule_descriptions"):
 		opr_army_manager.merge_rule_descriptions(state.get("rule_descriptions", {}))
+	if opr_army_manager and opr_army_manager.has_method("merge_player_spells"):
+		opr_army_manager.merge_player_spells(state.get("player_spells", {}))
 
 	# Restore game units (OPR units with wounds, status, model positions)
 	save_manager._deserialize_game_units(state.get("game_units", []))
@@ -3484,6 +3486,8 @@ func _init_radial_menu() -> void:
 	range_ring_controller.name = "RangeRingController"
 	add_child(range_ring_controller)
 	object_manager.range_ring_controller = range_ring_controller
+	if unit_card:
+		unit_card.range_ring_controller = range_ring_controller  # spell-range hover preview
 
 	# Movement reach indicator: Advance + Rush/Charge bands toggled with M on the selection
 	# (local-only display aid, OPR Fast/Slow aware). Owns the rings under /root/Main.
