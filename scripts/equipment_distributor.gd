@@ -186,25 +186,22 @@ static func _item_special_rules(item: Variant) -> Array:
 ## Parses Tough(X) from special rules array.
 ## Returns the wound count, or 1 if no Tough rule found.
 static func _parse_tough_rating(rules: Array) -> int:
+	# Take the LARGEST Tough granted, not the first listed: a Tough(3) hero on a Tough(12) mount
+	# (dinosaur, large vehicle, ...) must size its base + wounds from Tough 12, not Tough 3.
+	var best: int = 0
 	for rule in rules:
-		var name = ""
-		var rating = 0
-
+		var rating: int = 0
 		if rule is String:
-			name = rule
+			var name: String = rule
 			# Parse "Tough(3)" format
 			if name.begins_with("Tough(") and name.ends_with(")"):
-				var rating_str = name.substr(6, name.length() - 7)
-				rating = rating_str.to_int()
-				if rating > 0:
-					return rating
+				rating = name.substr(6, name.length() - 7).to_int()
 		elif rule is Dictionary:
-			name = rule.get("name", "")
-			rating = rule.get("rating", 0)
-			if name == "Tough" and rating > 0:
-				return rating
-
-	return BASE_WOUNDS  # Default: every model takes at least 1 wound to be killed
+			if rule.get("name", "") == "Tough":
+				rating = int(rule.get("rating", 0))
+		if rating > best:
+			best = rating
+	return best if best > 0 else BASE_WOUNDS  # Default: at least 1 wound to be killed
 
 
 ## Converts special rules to a normalized string array.
@@ -337,6 +334,7 @@ static func create_from_opr_unit(opr_unit: Variant, nodes: Array[Node3D], player
 		"base_is_square": opr_unit.base_is_square,
 		"base_width_mm": opr_unit.base_width_mm,
 		"base_depth_mm": opr_unit.base_depth_mm,
+		"mount_name": opr_unit.mount_name,  # mount/vehicle upgrade -> re-fuzzy-match its GLB on load
 		"game_system": opr_unit.game_system,
 		"regiment_mode": opr_unit.game_system == "aofr",
 		"player_id": player_id,

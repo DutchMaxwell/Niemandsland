@@ -57,6 +57,24 @@ func test_item_granted_weapon_surfaces_as_weapon_not_rule() -> void:
 	assert_bool("HE Autocannon" in unit.special_rules).is_false()  # not a rule anymore
 
 
+func test_mount_item_records_its_own_oval_base() -> void:
+	# A mount/vehicle upgrade (Combat Bike) brings its own base — recorded so the carrier model gets
+	# that base (60x35 oval) + a mount GLB instead of the foot base/model.
+	var unit := _parse([
+		{"name": "Combat Bike", "bases": {"round": "60x35", "square": "50x25"}, "content": [
+			{"name": "Tough", "type": "ArmyBookRule", "rating": 3},
+			{"name": "Twin Heavy Rifle", "type": "ArmyBookWeapon", "range": 24, "attacks": 2},
+		]},
+	])
+	assert_array(unit.mount_base).is_equal([true, 35, 60])  # [is_oval, width_mm, depth_mm]
+	assert_str(unit.mount_name).is_equal("Combat Bike")
+	# Single-model unit: the mount base REPLACES the foot base, so it persists via unit properties
+	# (save/load + MP) and drives the model fit — not just an import-time override.
+	assert_bool(unit.base_is_oval).is_true()
+	assert_int(unit.base_width_mm).is_equal(35)
+	assert_int(unit.base_depth_mm).is_equal(60)
+
+
 func test_extract_spells_parses_faction_spell_list() -> void:
 	var api: OPRApiClient = auto_free(OPRApiClient.new())
 	var army := OPRApiClient.OPRArmy.new()

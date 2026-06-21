@@ -64,3 +64,12 @@ func test_weapon_team_enlarged_base_and_ring_on_same_model() -> void:
 		if unit.get_special_equipment_names(unit.models[i]).has("Weapon Team"):
 			team_model = i
 	assert_int(team_model).is_equal(base_model)
+
+
+func test_parse_tough_takes_the_largest_rating() -> void:
+	# A Tough(3) hero on a Tough(12) mount (dinosaur / large vehicle) must size its base + wounds from
+	# the LARGER Tough, regardless of which is listed first — not the first one found.
+	assert_int(EquipmentDistributor._parse_tough_rating(["Tough(3)", "Tough(12)"])).is_equal(12)
+	assert_int(EquipmentDistributor._parse_tough_rating(["Tough(12)", "Tough(3)"])).is_equal(12)
+	assert_int(EquipmentDistributor._parse_tough_rating([{"name": "Tough", "rating": 6}, "Tough(3)"])).is_equal(6)
+	assert_int(EquipmentDistributor._parse_tough_rating(["Fearless", "Caster(2)"])).is_equal(1)  # default
