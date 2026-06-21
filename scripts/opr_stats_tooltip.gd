@@ -216,15 +216,33 @@ func _update_content() -> void:
 	else:
 		weapons_label.visible = false
 
-	# Equipment and special rules — names only, comma-separated: the hover tooltip must
-	# stay compact (with many rules the full texts fill the screen). The rule
-	# explanations live in the unit card shown on click (see unit_card.gd).
+	# Equipment and special rules — names only, comma-separated: this hover tooltip stays compact
+	# (full rule texts live in the unit card shown on click). An item that GRANTS a rule (Combat
+	# Shield → Shielded) shows the grant inline in parens instead of listing both flat — this is a
+	# static tooltip, so no hover cascade like the unit card; the granted rule is otherwise hidden.
+	var item_grants: Dictionary = _current_unit.item_grants
+	var granted_by_item := {}
+	for it in item_grants:
+		for g in item_grants[it]:
+			granted_by_item[str(g)] = true
+
 	var all_rules: Array[String] = []
 	all_rules.append_array(_current_unit.equipment)
 	all_rules.append_array(_current_unit.special_rules)
 
-	if all_rules.size() > 0:
-		rules_label.text = "[b]Rules:[/b] [color=#aaaaaa]%s[/color]" % ", ".join(all_rules)
+	var parts: Array[String] = []
+	var seen := {}
+	for r in all_rules:
+		if granted_by_item.has(r) or seen.has(r):
+			continue  # granted rule (shown inline on its item) or a duplicate
+		seen[r] = true
+		if item_grants.has(r):
+			parts.append("%s (%s)" % [r, ", ".join(item_grants[r])])
+		else:
+			parts.append(r)
+
+	if parts.size() > 0:
+		rules_label.text = "[b]Rules:[/b] [color=#aaaaaa]%s[/color]" % ", ".join(parts)
 		rules_label.visible = true
 	else:
 		rules_label.visible = false
