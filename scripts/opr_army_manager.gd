@@ -61,6 +61,9 @@ var armies: Dictionary = {}  # player_id -> OPRArmy
 ## the multiplayer state sync. Lets loaded saves and remote-only armies (which carry no
 ## OPRArmy) still resolve rule descriptions, not just freshly imported armies.
 var rule_descriptions: Dictionary = {}
+## Faction spell lists by player_id (for guest/loaded units whose OPRArmy carries no spells —
+## the host syncs these alongside rule_descriptions). Each value: Array of spell dicts.
+var _session_spells: Dictionary = {}
 
 ## Mapping from spawned model to unit data
 var model_to_unit: Dictionary = {}  # Node3D -> OPRUnit
@@ -988,6 +991,66 @@ func get_all_rule_descriptions() -> Dictionary:
 			for k in army.rule_descriptions:
 				out[k] = army.rule_descriptions[k]
 	return out
+
+
+## The faction's spell list for a caster unit (from its army), or [] if none. Falls back to the
+## synced session cache keyed by player_id (guest/loaded units whose OPRArmy carries no spells).
+func get_spells_for_unit(game_unit) -> Array:
+	if game_unit == null or not (game_unit.unit_properties is Dictionary):
+		return []
+	var pid: int = int(game_unit.unit_properties.get("player_id", 0))
+	var army = armies.get(pid, null)
+	if army and "spells" in army and army.spells is Array and not army.spells.is_empty():
+		return army.spells
+	return _session_spells.get(pid, [])
+
+
+## Special-rule names known this session that appear as a whole word in `text` — e.g. a spell
+## whose effect grants "Shred". Lets a spell tooltip append the granted rule's full description
+## after the spell text. Case-sensitive (rule names are capitalised); names < 4 chars are skipped
+## to avoid noise (AP, etc.).
+func rules_referenced_in(text: String) -> Array:
+	var out: Array = []
+	for name in get_all_rule_descriptions():
+		var n: String = str(name)
+		if n.length() < 4 or out.has(n):
+			continue
+		if _word_in(text, n):
+			out.append(n)
+	return out
+
+
+func _word_in(haystack: String, needle: String) -> bool:
+	var idx: int = haystack.find(needle)
+	while idx >= 0:
+		var before_ok: bool = idx == 0 or not _is_word_char(haystack[idx - 1])
+		var after: int = idx + needle.length()
+		var after_ok: bool = after >= haystack.length() or not _is_word_char(haystack[after])
+		if before_ok and after_ok:
+			return true
+		idx = haystack.find(needle, idx + 1)
+	return false
+
+
+func _is_word_char(c: String) -> bool:
+	return c.to_upper() != c.to_lower() or (c >= "0" and c <= "9")
+
+
+## All players' spell lists, for the host's full-state sync to peers.
+func get_all_player_spells() -> Dictionary:
+	var out: Dictionary = _session_spells.duplicate(true)
+	for pid in armies:
+		var army = armies[pid]
+		if army and "spells" in army and army.spells is Array and not army.spells.is_empty():
+			out[pid] = army.spells
+	return out
+
+
+## Merge incoming per-player spell lists (from a save or a peer's state sync).
+func merge_player_spells(incoming: Dictionary) -> void:
+	for pid in incoming:
+		if incoming[pid] is Array and not incoming[pid].is_empty():
+			_session_spells[int(pid)] = incoming[pid]
 
 
 ## Merge incoming rule descriptions (from a loaded save or a peer's state sync) into

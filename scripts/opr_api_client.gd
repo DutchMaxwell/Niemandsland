@@ -37,6 +37,10 @@ class OPRArmy:
 	var faction_folder: String = ""  # Normalized folder name (e.g., "alien_hives")
 	var game_system_abbrev: String = ""  # Raw form: gf, gff, aof, aofs, aofr (for API calls)
 	var rule_descriptions: Dictionary = {}  # special-rule name -> description text
+	## The faction's spell list (from the army book). Each entry:
+	## { "name": String, "threshold": int (spell-token cost to cast), "effect": String }.
+	## Shown for caster units in the unit card + the casts dialog.
+	var spells: Array = []
 
 	func get_total_points() -> int:
 		var total = 0
@@ -75,6 +79,11 @@ class OPRUnit:
 	## EquipmentDistributor pins these to specific models so the base ring labels them.
 	var equipment_items: Array = []
 	var special_rules: Array[String] = []
+	## Display helper: item name -> [special-rule names it grants] (e.g. "Combat Shield" ->
+	## ["Shielded"]). The granted rules ALSO stay in special_rules (functional / rules engine);
+	## this map just lets the unit card show the item with a hover cascade instead of listing the
+	## item and the rule it grants as flat siblings.
+	var item_grants: Dictionary = {}
 	var weapons: Array[OPRWeapon] = []
 	var custom_name: String = ""  # User's nickname for the unit
 	var upgrades: Array[String] = []  # Selected upgrade names
@@ -132,6 +141,11 @@ class OPRWeapon:
 	var attacks: int = 1
 	var special_rules: Array[String] = []
 	var count: int = 1
+	## Name of the upgrade item that grants this weapon (e.g. a Weapon Team's HE Autocannon), or ""
+	## for a normal loadout weapon. Granted weapons are shown in the unit card but NOT independently
+	## distributed (build_loadout skips them) — they belong to the item's model, which already has
+	## the special-equipment ring + enlarged base.
+	var from_item: String = ""
 
 	func get_display_text() -> String:
 		var count_str = "" if count <= 1 else "%dx " % count
@@ -334,6 +348,8 @@ func _parse_tts_api_response(json_text: String) -> OPRArmy:
 			army.faction_folder = army.faction_name.to_lower().replace(" ", "_").replace("-", "_")
 			# Army-book special-rule descriptions (faction-specific take precedence).
 			_extract_rule_descriptions(army, book_data)
+			# Faction spell list (shown for caster units).
+			_extract_spells(army, book_data)
 
 	# Common/system rule descriptions (shared rules: Tough, AP, Fast, ...).
 	if not army.game_system_abbrev.is_empty():
@@ -504,6 +520,21 @@ func _parse_tts_unit(data: Dictionary, game_system_abbrev: String = "") -> OPRUn
 		var item_count: int = _safe_int(item.get("count", unit.size), unit.size)
 		var per_model: bool = unit.size > 1 and item_count > 0 and item_count < unit.size
 		var granted: Array[String] = _granted_rules_of_item(item)
+		# Remember which rules this item grants so the unit card can show the item with a hover
+		# cascade (Combat Shield -> Shielded) instead of flat siblings. Functional folding into
+		# special_rules below is unchanged.
+		if not item_name.is_empty() and not granted.is_empty():
+			unit.item_grants[item_name] = granted
+
+		# Weapons the item grants (a Weapon Team's HE Autocannon + Crew) → show in the unit card's
+		# Weapons list. Marked from_item so build_loadout does NOT distribute them again — they ride
+		# with the item's model (which already carries the special-equipment ring + enlarged base).
+		# Drop their names from the rules line (they're weapons now, not profile-less rules).
+		for gw in _granted_weapons_of_item(item):
+			gw.from_item = item_name
+			gw.count = maxi(1, item_count)
+			unit.weapons.append(gw)
+			unit.special_rules.erase(gw.name)
 
 		if per_model:
 			# Carried by a subset → pin to specific model(s) and show on the base ring.
@@ -551,6 +582,9 @@ func _granted_rules_of_item(item: Dictionary) -> Array[String]:
 		if entry is String:
 			granted = entry
 		elif entry is Dictionary:
+			if entry.get("type", "") == "ArmyBookWeapon":
+				continue  # a weapon profile (e.g. a Weapon Team's HE Autocannon) — surfaced as a
+				# weapon in the unit card, not as a (profile-less) entry in the rules line
 			var rule_name = entry.get("name", "")
 			var rule_rating = entry.get("rating", null)
 			if rule_rating != null and str(rule_rating) != "":
@@ -560,6 +594,22 @@ func _granted_rules_of_item(item: Dictionary) -> Array[String]:
 		if not granted.is_empty() and granted not in result:
 			result.append(granted)
 	return result
+
+
+## The weapons an upgrade item grants (e.g. a Weapon Team's "HE Autocannon" + "Crew"), parsed from
+## the ArmyBookWeapon entries in its "content". Real weapon profiles → surfaced in the unit card's
+## Weapons list instead of as profile-less names in the rules line.
+func _granted_weapons_of_item(item: Dictionary) -> Array:
+	var weapons: Array = []
+	var raw_content = item.get("content", [])
+	if not (raw_content is Array):
+		return weapons
+	for entry in raw_content:
+		if entry is Dictionary and entry.get("type", "") == "ArmyBookWeapon":
+			var w = _parse_tts_weapon(entry)
+			if w and w.attacks > 0:
+				weapons.append(w)
+	return weapons
 
 
 ## Parse a weapon from TTS API response
@@ -757,6 +807,36 @@ func _extract_rule_descriptions(army: OPRArmy, book_data: Dictionary) -> void:
 				var desc := str(rule.get("description", ""))
 				if not rname.is_empty() and not desc.is_empty():
 					army.rule_descriptions[rname] = desc
+
+
+## Parse the faction's spell list from the army book. Each spell carries its casting cost
+## (threshold = spell tokens to spend) + effect text; shown for caster units.
+func _extract_spells(army: OPRArmy, book_data: Dictionary) -> void:
+	var spells = book_data.get("spells", [])
+	if not (spells is Array):
+		return
+	for sp in spells:
+		if not (sp is Dictionary):
+			continue
+		var sname := str(sp.get("name", ""))
+		if sname.is_empty():
+			continue
+		army.spells.append({
+			"name": sname,
+			"threshold": int(sp.get("threshold", 0)),
+			"effect": str(sp.get("effect", "")),
+		})
+
+
+## The radius (inches) a spell projects from the caster, parsed from its effect text — the first
+## `<n>"` token (e.g. "...within 12\", which..." → 12). 0 if the spell has no range (self /
+## army-wide), in which case no preview ring is shown on hover.
+static func spell_radius_inches(effect: String) -> int:
+	var re := RegEx.new()
+	if re.compile("(\\d+)\\s*[\"”]") != OK:
+		return 0
+	var m := re.search(effect)
+	return int(m.get_string(1)) if m else 0
 
 
 ## Fetches the shared/common rule descriptions for the army's game system and merges
