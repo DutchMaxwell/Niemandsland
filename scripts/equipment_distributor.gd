@@ -54,15 +54,48 @@ static func distribute(game_unit: GameUnit, loadout: Array, special_rules: Array
 			_add_loadout_item_to_model(model, item)
 			_apply_item_tough_to_model(model, item)
 
-	var cursor := 0
+	# Limited items: slot-grouped per-model assignment (see _assign_limited_to_models). Shared with
+	# per_model_toughs() so a weapon-team model's enlarged base + its special-weapon ring agree.
+	for a in _assign_limited_to_models(limited, unit_size):
+		var model: ModelInstance = game_unit.models[a["model"]]
+		_add_loadout_item_to_model(model, a["item"])
+		_apply_item_tough_to_model(model, a["item"])
+
+
+## The slot a loadout item occupies for per-model distribution: ranged / melee / equipment get
+## SEPARATE cursors so a leader model keeps its distinct ranged + melee weapons together.
+static func _loadout_slot_key(item: Dictionary) -> String:
+	if int(item.get("attacks", 0)) <= 0:
+		return "equip"
+	return "ranged" if int(item.get("range", 0)) > 0 else "melee"
+
+
+## The (item, model-index) assignment for LIMITED (count < size) loadout items: grouped by SLOT
+## (ranged / melee / equipment), each slot filled from its OWN cursor at 0 with base (high-count)
+## weapons first, so a leader model's distinct ranged + melee weapons land on the SAME model.
+## SINGLE SOURCE OF TRUTH for both distribute() (weapons) AND per_model_toughs() (base sizing) —
+## they MUST agree, else a weapon-team model's enlarged base and its special-weapon ring split
+## onto different models. Universal across units/factions. Returns Array of { "item", "model" }.
+static func _assign_limited_to_models(limited: Array, unit_size: int) -> Array:
+	var out: Array = []
+	var by_slot: Dictionary = {}
 	for item in limited:
-		var count = _get_count(item, unit_size)
-		for _k in range(count):
-			if cursor >= unit_size:
-				cursor = 0  # safety wrap if limited counts exceed the unit size
-			_add_loadout_item_to_model(game_unit.models[cursor], item)
-			_apply_item_tough_to_model(game_unit.models[cursor], item)
-			cursor += 1
+		var key := _loadout_slot_key(item)
+		if not by_slot.has(key):
+			by_slot[key] = []
+		by_slot[key].append(item)
+	for key in by_slot:
+		var slot_items: Array = by_slot[key]
+		slot_items.sort_custom(func(a, b): return _get_count(a, unit_size) > _get_count(b, unit_size))
+		var cursor := 0
+		for item in slot_items:
+			var count = _get_count(item, unit_size)
+			for _k in range(count):
+				if cursor >= unit_size:
+					cursor = 0  # safety wrap if a slot's counts exceed the unit size
+				out.append({"item": item, "model": cursor})
+				cursor += 1
+	return out
 
 
 ## Builds the loadout dictionaries (weapons + equipment items) that distribute() walks.
@@ -71,6 +104,8 @@ static func distribute(game_unit: GameUnit, loadout: Array, special_rules: Array
 static func build_loadout(opr_unit: Variant) -> Array:
 	var loadout: Array = []
 	for weapon in opr_unit.weapons:
+		if not weapon.from_item.is_empty():
+			continue  # item-granted (e.g. Weapon Team) weapons are display-only, not distributed
 		loadout.append({
 			"name": weapon.name,
 			"range": weapon.range_value,
@@ -109,15 +144,11 @@ static func per_model_toughs(unit_size: int, loadout: Array, special_rules: Arra
 		var it := _parse_tough_rating(_item_special_rules(item))
 		for i in range(unit_size):
 			toughs[i] = maxi(toughs[i], it)
-	var cursor := 0
-	for item in limited:
-		var count = _get_count(item, unit_size)
-		var it := _parse_tough_rating(_item_special_rules(item))
-		for _k in range(count):
-			if cursor >= unit_size:
-				cursor = 0
-			toughs[cursor] = maxi(toughs[cursor], it)
-			cursor += 1
+	# SAME slot-grouped assignment distribute() uses, so the model that gets a weapon-team item's
+	# elevated Tough (→ enlarged base) is the SAME model that gets the special weapon (→ its ring).
+	for a in _assign_limited_to_models(limited, unit_size):
+		var it := _parse_tough_rating(_item_special_rules(a["item"]))
+		toughs[a["model"]] = maxi(toughs[a["model"]], it)
 	return toughs
 
 
@@ -299,6 +330,7 @@ static func create_from_opr_unit(opr_unit: Variant, nodes: Array[Node3D], player
 		"defense": opr_unit.defense,
 		"cost": opr_unit.cost,
 		"special_rules": opr_unit.special_rules.duplicate(),
+		"item_grants": opr_unit.item_grants.duplicate(true),  # item -> granted rules (unit-card cascade)
 		"base_size_round": opr_unit.base_size_round,
 		"base_size_square": opr_unit.base_size_square,
 		"base_is_oval": opr_unit.base_is_oval,
