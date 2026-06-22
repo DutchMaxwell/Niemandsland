@@ -95,6 +95,13 @@ var _pending_public: bool = false  # for "create": list this room in the browser
 var _is_reconnecting: bool = false
 ## Wall-clock time (ms) the current reconnect attempt started; aborts past RECONNECT_TIMEOUT.
 var _reconnect_start_ms: int = 0
+## Guest-side recovery: true while we keep retrying join_room because the relay lost our room (it
+## idle-stopped + restarted with empty in-memory rooms) and we're waiting for the host to re-create
+## it with the same code. Bounded by RECONNECT_TIMEOUT.
+var _awaiting_recreate: bool = false
+var _next_recreate_retry_ms: int = 0
+## How often a guest re-sends join_room while waiting for the host to re-create the lost room.
+const RECREATE_RETRY_INTERVAL: float = 2.0
 ## Guest side: set when the relay reports the host paused, cleared when peer 1 returns.
 var _host_paused_seen: bool = false
 ## Transport ids SceneMultiplayer currently believes are connected (so we can detect a
@@ -190,6 +197,7 @@ func attempt_reconnect() -> Error:
 		relay_reconnect_failed.emit("no room code")
 		return ERR_UNAVAILABLE
 	_is_reconnecting = true
+	_awaiting_recreate = false
 	_reconnect_start_ms = Time.get_ticks_msec()
 	relay_reconnecting.emit()
 	if _ws:
@@ -227,6 +235,7 @@ func _poll() -> void:
 	# Abort a stuck reconnect (relay unreachable / room gone, no response).
 	if _is_reconnecting and now_ms - _reconnect_start_ms > int(RECONNECT_TIMEOUT * 1000.0):
 		_is_reconnecting = false
+		_awaiting_recreate = false
 		relay_reconnect_failed.emit("timed out")
 
 	var state = _ws.get_ready_state()
@@ -269,6 +278,12 @@ func _poll() -> void:
 		if now_ms - _last_heartbeat_ms >= int(HEARTBEAT_INTERVAL * 1000.0):
 			_last_heartbeat_ms = now_ms
 			_send_json({"type": "heartbeat"})
+
+		# Guest recovery: re-send join_room until the host re-creates the lost room (same code).
+		if _is_reconnecting and _awaiting_recreate and now_ms >= _next_recreate_retry_ms:
+			_next_recreate_retry_ms = now_ms + int(RECREATE_RETRY_INTERVAL * 1000.0)
+			_send_json({"type": "join_room", "code": _room_code,
+				"token": PlayerIdentity.get_or_create_client_token()})
 
 		# Drop detection: the relay acks every heartbeat. No ack for HEARTBEAT_TIMEOUT
 		# means the link is dead even if the socket hasn't reported CLOSED yet.
@@ -484,8 +499,19 @@ func _process_control_message(raw: String) -> void:
 		"error":
 			var message = parsed.get("message", "Unknown error")
 			push_warning("RelayMultiplayerPeer: Relay error: %s" % message)
-			if _is_reconnecting:
-				# The room is gone (e.g. host left) — a rejoin is impossible.
+			if _is_reconnecting and message == "Room not found":
+				# The relay lost our room (it idle-stopped + restarted with empty in-memory rooms).
+				# Recover instead of ending the session: the host re-creates the room with the SAME
+				# code; guests keep retrying that code until the host is back. Stay in the reconnect
+				# state — RECONNECT_TIMEOUT in _poll bounds it and emits reconnect_failed if it can't.
+				if is_host_peer():
+					push_warning("[Relay] Room gone — re-hosting the same code %s" % _room_code)
+					_send_json({"type": "create_room", "code": _room_code, "public": _pending_public})
+				else:
+					_awaiting_recreate = true
+					_next_recreate_retry_ms = Time.get_ticks_msec() + int(RECREATE_RETRY_INTERVAL * 1000.0)
+			elif _is_reconnecting:
+				# A different error on rejoin — the room can't be recovered.
 				_is_reconnecting = false
 				relay_reconnect_failed.emit(message)
 			elif _connection_status == MultiplayerPeer.CONNECTION_CONNECTING:
@@ -504,11 +530,18 @@ func _process_control_message(raw: String) -> void:
 
 
 func _handle_room_created(code: String, peer_id: int) -> void:
+	var was_reconnecting := _is_reconnecting
 	_room_code = code
 	_my_peer_id = peer_id
 	_connection_status = MultiplayerPeer.CONNECTION_CONNECTED
 	_is_reconnecting = false
-	room_created.emit(code)
+	_awaiting_recreate = false
+	if was_reconnecting:
+		# Recovery re-create: the relay had lost our room and we re-created it with the SAME code.
+		# We're hosting again — resume + re-sync to rejoining guests, NOT a fresh room (no reset).
+		host_rejoined.emit()
+	else:
+		room_created.emit(code)
 
 
 func _handle_room_joined(peer_id: int) -> void:
@@ -517,6 +550,7 @@ func _handle_room_joined(peer_id: int) -> void:
 	_room_code = _pending_code  # remember the code so we can rejoin after a drop
 	_connection_status = MultiplayerPeer.CONNECTION_CONNECTED
 	_is_reconnecting = false
+	_awaiting_recreate = false
 	room_joined.emit(peer_id)
 	if was_reconnecting:
 		# A rejoin after our own drop: connected_to_server won't re-fire, so trigger the
