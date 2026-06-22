@@ -14,27 +14,29 @@ func _glb() -> Node3D:
 	return auto_free(Node3D.new())
 
 
-# ===== Vehicles: align ALONG the oval long axis =====
+# ===== Vehicles: run ALONG the oval long axis, DETERMINISTICALLY (AABB ignored) =====
+# A near-square hull has no reliable AABB long axis; vehicle orientation depends ONLY on the base
+# geometry (the exact opposite turn from a walker), so identical vehicles are always consistent.
 
-func test_rotates_when_model_long_x_on_oval_long_z() -> void:
-	# Oval long axis Z (depth 0.06 > width 0.035); model longest on X → rotate to run along Z.
-	var g := _glb()
-	_mgr()._align_to_oval_long_axis(g, AABB(Vector3.ZERO, Vector3(2, 1, 1)), true, 0.035, 0.06)
-	assert_float(absf(g.rotation.y)).is_equal_approx(PI / 2.0, 0.001)
+func test_vehicle_no_rotation_on_depth_long_oval() -> void:
+	# Depth-long oval (depth 0.06 >= width 0.035): the model's +Z already runs ALONG the long Z axis
+	# → no turn, regardless of the AABB.
+	var gx := _glb()
+	_mgr()._align_to_oval_long_axis(gx, AABB(Vector3.ZERO, Vector3(2, 1, 1)), true, 0.035, 0.06)
+	assert_float(gx.rotation.y).is_equal_approx(0.0, 0.001)
+	var gz := _glb()
+	_mgr()._align_to_oval_long_axis(gz, AABB(Vector3.ZERO, Vector3(1, 1, 2)), true, 0.035, 0.06)
+	assert_float(gz.rotation.y).is_equal_approx(0.0, 0.001)
 
 
-func test_no_rotation_when_already_aligned() -> void:
-	# Model longest on Z, base long axis Z → already aligned, no rotation.
-	var g := _glb()
-	_mgr()._align_to_oval_long_axis(g, AABB(Vector3.ZERO, Vector3(1, 1, 2)), true, 0.035, 0.06)
-	assert_float(g.rotation.y).is_equal_approx(0.0, 0.001)
-
-
-func test_rotates_when_base_long_x_and_model_long_z() -> void:
-	# Symmetric: base long axis X (width 0.06 > depth 0.035), model longest on Z → rotate.
-	var g := _glb()
-	_mgr()._align_to_oval_long_axis(g, AABB(Vector3.ZERO, Vector3(1, 1, 2)), true, 0.06, 0.035)
-	assert_float(absf(g.rotation.y)).is_equal_approx(PI / 2.0, 0.001)
+func test_vehicle_rotates_on_width_long_oval() -> void:
+	# Width-long oval (width 0.06 > depth 0.035): turn 90° so +Z runs ALONG the long X axis — any AABB.
+	var gx := _glb()
+	_mgr()._align_to_oval_long_axis(gx, AABB(Vector3.ZERO, Vector3(2, 1, 1)), true, 0.06, 0.035)
+	assert_float(absf(gx.rotation.y)).is_equal_approx(PI / 2.0, 0.001)
+	var gz := _glb()
+	_mgr()._align_to_oval_long_axis(gz, AABB(Vector3.ZERO, Vector3(1, 1, 2)), true, 0.06, 0.035)
+	assert_float(absf(gz.rotation.y)).is_equal_approx(PI / 2.0, 0.001)
 
 
 func test_round_base_never_rotates() -> void:
