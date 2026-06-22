@@ -29,6 +29,11 @@ const INCHES_TO_METERS: float = 0.0254
 ## Modell-Fit relativ zur Base (gegen Scale-Creep):
 ## Die groesste horizontale Ausdehnung darf max. 125% der Base-Langseite betragen.
 const FOOTPRINT_MAX_RATIO: float = 1.25
+## Oval/rectangular bases: fit the model EXACTLY within both base axes (length AND width), no
+## overhang — so a wide/square hull (vehicle) sits cleanly on its base instead of scaling to
+## base_long x 1.25 and sticking far over the narrow width. Round bases keep FOOTPRINT_MAX_RATIO
+## (organic minis may overhang their round base a little).
+const OVAL_FOOTPRINT_RATIO: float = 1.0
 ## Schwebehoehe fuer Flying-Units, relativ zur Base-Langseite (40mm Base → ~14mm).
 const FLYING_HOVER_RATIO: float = 0.35
 ## Aircraft (the OPR "Aircraft" rule — NOT the same as Flying) hover much higher, on a tall flight
@@ -626,6 +631,8 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 	# the model should not). The enlarged base only drives the ring/collision (and tokens/measuring,
 	# which re-derive it from Tough).
 	var natural_base_long_mm: int = int(max(unit.base_width_mm, unit.base_depth_mm)) if (base_is_oval or unit.base_is_square) else unit.base_size_round
+	var natural_base_short_mm: int = int(min(unit.base_width_mm, unit.base_depth_mm)) if (base_is_oval or unit.base_is_square) else unit.base_size_round
+	var fit_to_base: bool = unit.base_from_tough
 	var base_long_mm: int = natural_base_long_mm
 	if base_long_override_mm > base_long_mm:
 		var ratio := float(base_long_override_mm) / float(maxi(1, base_long_mm))
@@ -693,7 +700,7 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 			# Modell an die Base anpassen (Footprint-Cap gegen Scale-Creep, Flying schwebt)
 			var aabb = _get_model_aabb(glb_instance)
 			var tough = _get_tough_value(unit)
-			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift)
+			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift, natural_base_short_mm, fit_to_base)
 			var final_scale = fit.scale
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
@@ -798,6 +805,8 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> St
 	# Tough-enlarged base (no scale creep). The enlarged base drives only ring/collision (+ tokens
 	# and measuring, which re-derive it from Tough).
 	var natural_base_long_mm: int = max(int(props.get("base_width_mm", 32)), int(props.get("base_depth_mm", 32))) if base_is_oval else base_size_round
+	var natural_base_short_mm: int = min(int(props.get("base_width_mm", 32)), int(props.get("base_depth_mm", 32))) if base_is_oval else base_size_round
+	var fit_to_base: bool = bool(props.get("base_from_tough", false))
 	var base_long_mm: int = natural_base_long_mm
 	var per_model_override_mm: int = model_base_long_mm(base_long_mm, model_tough)
 	if per_model_override_mm > base_long_mm:
@@ -865,7 +874,7 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> St
 		if glb_instance:
 			var aabb = _get_model_aabb(glb_instance)
 			var tough = _get_tough_value_from_rules(props.get("special_rules", []))
-			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift)
+			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift, natural_base_short_mm, fit_to_base)
 			var final_scale = fit.scale
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
@@ -1475,20 +1484,18 @@ func _should_hover(unit_name: String, rules: Array) -> bool:
 ## that rotated identical walkers inconsistently. Instead we orient the model's default forward
 ## (+Z) ACROSS the base's long axis purely from the base geometry, so every walker is consistent.
 ## (Near-square means the exact facing barely shows; if it ever reads 90° off, flip the rotate.)
-func _align_to_oval_long_axis(glb: Node3D, aabb: AABB, base_is_oval: bool,
+func _align_to_oval_long_axis(glb: Node3D, _aabb: AABB, base_is_oval: bool,
 		base_width: float, base_depth: float, cross_align: bool = false) -> void:
 	if not base_is_oval or glb == null:
 		return
+	# Deterministic from the base geometry (model forward = +Z): a WALKER faces ACROSS the base's
+	# long axis (its +Z onto the SHORT side), a VEHICLE runs ALONG it (its +Z onto the LONG side) —
+	# exact opposites. The AABB is ignored on purpose: a near-square hull has no reliable long axis,
+	# and AABB-based turns rotated identical models inconsistently (same reason walkers are
+	# deterministic).
 	var base_long_is_z: bool = base_depth >= base_width
-	if cross_align:
-		# Quer: turn the model's +Z forward onto the base's SHORT axis. When the long axis is Z
-		# (the usual oval), that's a 90° turn; when it's X, the model already faces the short axis.
-		if base_long_is_z:
-			glb.rotate_y(PI / 2.0)
-		return
-	var model_long_is_x: bool = aabb.size.x > aabb.size.z
-	# Vehicle: rotate when the model's long axis is perpendicular to the base's long axis.
-	if base_long_is_z == model_long_is_x:
+	var turn: bool = base_long_is_z if cross_align else not base_long_is_z
+	if turn:
 		glb.rotate_y(PI / 2.0)
 
 
@@ -1508,7 +1515,7 @@ func _is_walker(unit_name: String) -> bool:
 ## Flying-Units schweben leicht ueber der Base.
 ## base_long_mm = Base-Langseite in mm (rund: Durchmesser; oval: laengere Achse).
 ## Returns { "scale": float, "y_offset": float, "height": float }.
-func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m: float) -> Dictionary:
+func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m: float, base_short_mm: int = -1, fit_to_base: bool = false) -> Dictionary:
 	var raw_height: float = aabb.size.y
 	var raw_footprint: float = max(aabb.size.x, aabb.size.z)
 	if raw_height <= 0.0 or raw_footprint <= 0.0:
@@ -1519,9 +1526,23 @@ func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m:
 	var target_height_m: float = height_target_mm * 0.001 * _calculate_model_scale(tough)
 	var height_scale: float = target_height_m / raw_height
 
-	# Footprint-Cap: max. 125% der Base-Langseite.
-	var footprint_cap_m: float = base_long_mm * FOOTPRINT_MAX_RATIO * 0.001
-	var footprint_scale: float = footprint_cap_m / raw_footprint
+	# Footprint cap. Round base: cap to base_long x FOOTPRINT_MAX_RATIO (organic overhang ok).
+	# Oval/rectangular base (base_short < base_long): fit WITHIN BOTH axes at OVAL_FOOTPRINT_RATIO, so
+	# a wide/square hull can't overhang the narrow side (the vehicle scale-creep). Uniform scale, so
+	# the tighter axis wins; raw_footprint = the model's longer horizontal side, raw_short the shorter.
+	var short_mm: int = base_short_mm if base_short_mm > 0 else base_long_mm
+	var footprint_scale: float
+	if short_mm < base_long_mm:
+		var raw_short: float = max(0.001, min(aabb.size.x, aabb.size.z))
+		footprint_scale = min(
+			base_long_mm * OVAL_FOOTPRINT_RATIO * 0.001 / raw_footprint,
+			short_mm * OVAL_FOOTPRINT_RATIO * 0.001 / raw_short)
+	else:
+		# Round base: organic infantry may overhang (FOOTPRINT_MAX_RATIO). A Tough-derived
+		# vehicle/monster base (fit_to_base, no Army Forge recommendation) IS the intended footprint,
+		# so fill it exactly — no overhang.
+		var round_ratio: float = 1.0 if fit_to_base else FOOTPRINT_MAX_RATIO
+		footprint_scale = base_long_mm * round_ratio * 0.001 / raw_footprint
 
 	var final_scale: float = min(height_scale, footprint_scale)
 

@@ -335,6 +335,7 @@ static func create_from_opr_unit(opr_unit: Variant, nodes: Array[Node3D], player
 		"base_width_mm": opr_unit.base_width_mm,
 		"base_depth_mm": opr_unit.base_depth_mm,
 		"mount_name": opr_unit.mount_name,  # mount/vehicle upgrade -> re-fuzzy-match its GLB on load
+		"base_from_tough": opr_unit.base_from_tough,  # Tough-derived base -> fit model exactly (no overhang)
 		"game_system": opr_unit.game_system,
 		"regiment_mode": opr_unit.game_system == "aofr",
 		"player_id": player_id,
