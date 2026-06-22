@@ -94,6 +94,10 @@ class OPRUnit:
 	var base_is_square: bool = false
 	var base_width_mm: int = 32  # Width in mm (perpendicular to facing)
 	var base_depth_mm: int = 32  # Depth in mm (in facing direction / "north")
+	## True when the base was sized from Tough (no Army Forge recommendation) — a bracketless
+	## vehicle/monster. Its base IS the intended footprint, so the model fits it exactly (no overhang),
+	## unlike a small infantry round base where organic minis may spill over.
+	var base_from_tough: bool = false
 	## A mount/vehicle upgrade (e.g. a Combat Bike) brings its OWN base + model. When present:
 	## mount_base = [is_oval, width_mm, depth_mm] (overrides the foot base on the carrier model) and
 	## mount_name is the upgrade name (used to fuzzy-pick a faction mount/bike GLB).
@@ -431,6 +435,7 @@ static func _apply_tough_base_fallback(unit: OPRUnit) -> void:
 	unit.base_size_round = estimate
 	unit.base_width_mm = estimate
 	unit.base_depth_mm = estimate
+	unit.base_from_tough = true  # fit the model to this base (no overhang) — it's a vehicle/monster
 
 
 ## Parse a unit from TTS API response

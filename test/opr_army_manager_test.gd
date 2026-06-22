@@ -73,20 +73,22 @@ func test_align_walker_turns_crosswise_on_z_long_base() -> void:
 	assert_float(glb.rotation.y).is_equal_approx(PI / 2.0, 0.0001)
 
 
-func test_align_vehicle_turns_when_model_long_axis_crosses_base() -> void:
+func test_align_vehicle_no_turn_on_depth_long_oval() -> void:
 	var m := _mgr()
 	var glb := _glb()
-	# Base long = Z; model long = X (aabb.x > aabb.z) -> perpendicular -> 90° turn.
+	# Deterministic: base long = Z (depth 0.060 >= width 0.035) -> vehicle +Z already runs ALONG it,
+	# no turn, EVEN with a model-long-X AABB (the AABB is ignored now).
 	m._align_to_oval_long_axis(glb, AABB(Vector3.ZERO, Vector3(0.3, 0.1, 0.1)), true, 0.035, 0.060, false)
-	assert_float(glb.rotation.y).is_equal_approx(PI / 2.0, 0.0001)
+	assert_float(glb.rotation.y).is_equal_approx(0.0, 0.0001)
 
 
-func test_align_vehicle_keeps_when_already_aligned() -> void:
+func test_align_vehicle_turns_on_width_long_oval() -> void:
 	var m := _mgr()
 	var glb := _glb()
-	# Base long = Z; model long = Z (aabb.z > aabb.x) -> already aligned -> no turn.
-	m._align_to_oval_long_axis(glb, AABB(Vector3.ZERO, Vector3(0.1, 0.1, 0.3)), true, 0.035, 0.060, false)
-	assert_float(glb.rotation.y).is_equal_approx(0.0, 0.0001)
+	# Base long = X (width 0.060 > depth 0.035) -> turn 90° so the vehicle's +Z runs ALONG the long X
+	# axis (the exact opposite turn from a walker); AABB ignored.
+	m._align_to_oval_long_axis(glb, AABB(Vector3.ZERO, Vector3(0.1, 0.1, 0.3)), true, 0.060, 0.035, false)
+	assert_float(absf(glb.rotation.y)).is_equal_approx(PI / 2.0, 0.0001)
 
 
 # ===== _get_model_aabb =====
