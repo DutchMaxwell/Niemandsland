@@ -158,7 +158,10 @@ class RelayServer:
         if msg_type == "create_room":
             # Only an explicit JSON boolean true makes a room public; a truthy
             # string like "false"/"0" must NOT leak the room into the browser.
-            await self._handle_create_room(websocket, ip, msg.get("public", False) is True)
+            requested = msg.get("code", "")
+            await self._handle_create_room(
+                websocket, ip, msg.get("public", False) is True,
+                requested if isinstance(requested, str) else "")
         elif msg_type == "join_room":
             code = msg.get("code", "")
             if not isinstance(code, str):
@@ -178,9 +181,16 @@ class RelayServer:
             await self._send_error(websocket, f"Unknown message type: {msg_type}")
 
     async def _handle_create_room(
-        self, websocket: ServerConnection, ip: str, is_public: bool = False
+        self, websocket: ServerConnection, ip: str, is_public: bool = False,
+        requested_code: str = ""
     ) -> None:
-        """Create a new room and assign the creator as host (peer_id=1)."""
+        """Create a new room and assign the creator as host (peer_id=1).
+
+        If requested_code is a well-formed, currently-free code, reuse it. This lets a host whose
+        relay link was lost (e.g. the machine idle-stopped and restarted with empty in-memory rooms)
+        re-create its room with the SAME code, so guests auto-rejoin the code they already hold.
+        Falls back to a fresh code if it is taken or malformed.
+        """
         # Check if this connection already has a room
         if websocket in self.connections:
             await self._send_error(websocket, "Already in a room")
@@ -191,7 +201,10 @@ class RelayServer:
             await self._send_error(websocket, "Server full, try again later")
             return
 
-        code = self.generate_room_code()
+        code = requested_code.upper().strip()
+        if not (len(code) == CODE_LENGTH and all(c in CODE_ALPHABET for c in code)
+                and code not in self.rooms):
+            code = self.generate_room_code()
         room = Room(code=code, is_public=is_public)
         peer = Peer(
             websocket=websocket,

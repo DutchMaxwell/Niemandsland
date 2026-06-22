@@ -152,6 +152,32 @@ class TestRoomManagement:
         assert peer_id == 1
         await ws.close()
 
+    async def test_create_room_reuses_free_requested_code(self, relay):
+        # Recovery: a host whose relay link was lost (machine idle-stopped + restarted with empty
+        # in-memory rooms) re-creates its room with the SAME code, so guests auto-rejoin the code
+        # they already hold. A well-formed, free requested code is reused verbatim.
+        server, url = relay
+        want = CODE_ALPHABET[0] * CODE_LENGTH  # well-formed and currently free
+        ws = await websockets.connect(url)
+        await ws.send(json.dumps({"type": "create_room", "code": want}))
+        resp = json.loads(await ws.recv())
+        assert resp["type"] == "room_created"
+        assert resp["code"] == want
+        assert want in server.rooms
+        await ws.close()
+
+    async def test_create_room_falls_back_when_requested_code_taken(self, relay):
+        # If the requested code is already taken, fall back to a fresh one (no hijacking).
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        ws2 = await websockets.connect(url)
+        await ws2.send(json.dumps({"type": "create_room", "code": code}))
+        resp = json.loads(await ws2.recv())
+        assert resp["type"] == "room_created"
+        assert resp["code"] != code
+        await host_ws.close()
+        await ws2.close()
+
     async def test_join_room_with_valid_code(self, relay):
         server, url = relay
         host_ws, code, _ = await create_room(url)
