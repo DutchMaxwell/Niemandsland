@@ -22,79 +22,32 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **✅ FIXED (2026-06-20, c7da3f7): guest reconnect version-kick cascade (the sporadic-reconnect root
-  cause)** — fixed by the netcode replatform below: the churn/chaos/blip soaks now converge (host 92 ==
-  guest 92, 0 kicks, 0 reconnect_failed, no duplication). Kept below for the diagnosis trail. _Original:_
-  reproduced deterministically by the `--fault churn` soak (2026-06-20). When a guest's
-  own connection drops and the relay hands it a **fresh** peer id on rejoin, Godot's
-  `connected_to_server` does not re-fire on the reused `MultiplayerPeer`, and even when we re-announce
-  explicitly (now wired via `relay_reconnected` → `_on_guest_reconnected`), the announce RPC never
-  reaches the host because SceneMultiplayer's unique-id / RPC routing for the new id is stale → the
-  host kicks the peer on the 8 s version-handshake timeout → it rejoins → kicked again (cascade). No
-  phantom players are created (kicked before a slot is assigned), and the model COUNT stays converged
-  (which is why earlier count-based tests passed). **Landed so far:** (1) re-announce on guest reconnect
-  (`relay_reconnected` → `_on_guest_reconnected`); (2) the **relay now reuses the guest's old peer_id**
-  within a rejoin window keyed by its identity token (client sends `token` in `join_room`), so the
-  transport id is STABLE across a drop. **TRUE remaining blocker (precisely diagnosed):** Godot's RPC
-  **path-cache** — even with a stable id the guest re-sends its announce to the host (peer 1) using the
-  path id cached on the OLD connection; the host on the new socket doesn't have it → RPC dropped ("ID not
-  found in cache") → no announce → kick. **(3) Path-cache flush landed:** `force_host_rpc_rehandshake()`
-  fires a guarded `peer_disconnected(1)`+`peer_connected(1)` on reconnect (teardown + peer-1 slot cleanup
-  suppressed via `_reconnect_flush_active`) to force RPC-path renegotiation, then re-announces over ~5
-  frames (a synchronous announce races the renegotiation). **Result: reconnect now MOSTLY works** — the
-  announce routes, the host re-validates, the remap fires (8 handshakes passed vs all-kicked before).
-  **TWO remaining issues:** (a) an intermittent single version-kick still slips through (a race edge the
-  5-frame retry doesn't fully cover); (b) the full-state re-push on each reconnect is not perfectly
-  idempotent → guest ends up off-by-one (91 vs 92 models) — a SEPARATE re-sync bug the working reconnect
-  newly exposed (cf. mp-army-double-delivery). **Next:** harden the announce race + fix the re-sync
-  off-by-one, or move to a cleaner full-rejoin + delta-resync redesign. The whole flush approach is
-  fragile (pokes SceneMultiplayer internals). Regression guard: `churn`/`chaos`/`blip` soaks assert "no
-  version-kick" + "remap fired" + convergence (fail until both remaining issues are fixed). Affects real
-  2-player play. _M_
-- **✅ MOSTLY DONE — MP netcode replatform (the proper fix for reconnect)** — Phases 1–4 landed
-  (2026-06-20): all game messaging is off `@rpc` on the channel-1 command protocol, the handshake +
-  state-sync run below the path-cache, and churn/chaos/blip soaks converge. Remaining = cleanup only
-  (dead flush code + @rpc decorators; flip the nightly fault gates back from expected-fail; version-bump
-  + build). Original plan: deep research (2026-06-20; see memory
-  `mp-architecture-verdict`) concluded our authority model (host-authoritative + dumb relay) is CORRECT,
-  but `@rpc`/SceneMultiplayer is the wrong netcode layer over a custom relay: its path-cache assumes stable
-  peer-ids/connections, which reconnect structurally breaks (Godot has no built-in reconnect; the fake-
-  signal flush fights the engine). Fix = a targeted, incremental replatform, NOT a rewrite. **KEEP:**
-  host-authoritative, the relay, token peer-id reuse, owner-namespaced `network_id`s (= stable entity ids),
-  restore-lock, `var_to_bytes`, the soak harness. **REPLACE:** `@rpc` game messaging → a hand-rolled command
-  protocol over the relay frames (`{type,seq,payload}` via `PacketPeer.put_var`/`var_to_bytes` + dispatch
-  table → no path-cache). **ADD:** token reconnect handshake (host re-binds a returning token to its slot
-  with NO version-kick) + idempotent full-snapshot REPLACE keyed by `network_id` (upsert + delete-missing,
-  under the restore-lock) → off-by-one gone. **Phases:** 1 command-channel foundation (parallel to @rpc) ·
-  2 migrate ~20 messages off @rpc · 3 token reconnect + drop the fake-signal flush · 4 idempotent snapshot
-  REPLACE · 5 harness churn/chaos/blip green + live 2-machine test. _L_
-- **MP reconnect — 3+ player hardening (follow-ups)** — review-surfaced items not needed for
-  the 2-player case: mirror the host's peer→slot table to guests (3+-player avatar/cursor
-  colour agreement after a reconnect), a shared `slot→palette` helper so army bases match
-  presence colour at slot ≥ 5, an import-await timeout, and restoring a regiment tray's
-  serialized `network_id` instead of re-allocating. _S_
-- **AoF: Regiments — verify import vs a real list** — manually confirm base sizes / frontage
-  from Army Forge against an actual `aofr` army (manual QA; no automated checker planned). _S_
+- **Alpha release `0.3.6.0`** — the build is feature-complete; the **only remaining gate is the
+  explainer / tutorial video** (currently in editing). All planned Alpha work is done — everything
+  further is driven by **alpha feedback** (see Next). Version stamped `0.3.6.0-alpha` everywhere
+  (project.godot, the in-game shortcut overlay, README / PROJECT_STATUS / CLAUDE). _S_
 
-## 📋 Next (accepted, queued)
-- **Regiments — handling polish** — move a unit as one block, axis-locked drag (straight),
-  frontage cycle (5-wide ↔ other), and wheel/pivot about the front corner. Community-validated
-  (bulk-move + wheeling is a top TTS friction). `regiment_tray.gd` has `frontage`/`reform`,
-  but no block-move/cycle/wheel yet. _M_
-  **⛔ Prerequisite: generate the Age of Fantasy faction 3D models first (pipeline).** Until the AoF
-  factions exist on R2 there is nothing to rank in the trays, so the handling polish is sequenced
-  AFTER AoF model generation. (Maintainer decision 2026-06-19.)
-- **Measure-on-pickup → snap-back** — grabbing a model starts a live measurement with a ghost
-  preview; release to commit, ESC to return to the pickup point. TTS later shipped exactly this.
-  Extends `object_manager` drag + the height-aware LoS measuring. _M_
-- **Coherency visualizer (sharpen)** — highlight models outside X″ of their nearest neighbour
-  (TTS doesn't solve this; guides say "ignore coherency"). Builds on `coherency_checker.gd` /
-  `coherency_visualizer.gd`. Show, never correct. _S_
-- **Contextual control hints** — hover an object → its hotkeys appear. Tabletop Playground's
-  most-praised onboarding feature; onboarding is the key UX battleground for digital wargaming. _S_
-- **Sandbox forests for the other biomes** — extend the shipped grassland forest pads to
-  desert / tundra / volcanic / jungle / urban (per-biome forest-floor textures + `biome_prefix`
-  wiring; the biome tree GLBs are already on R2). _S_
+## 📋 Next (post-Alpha — Beta + alpha-feedback driven)
+
+Deferred out of Alpha by maintainer decision (2026-06-23): the 2-player game is shipped + soak-
+validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
+
+- **Age of Fantasy — factions + Regiments** — generate the AoF faction 3D models via **Model Forge
+  V2** (→ R2; this also resolves the `saurians` ↔ `saurian_starhost` faction-folder mismatch). Then
+  verify Regiments import vs a real `aofr` list and add the Regiments **handling polish** (move as one
+  block, axis-locked straight drag, frontage cycle 5-wide ↔ other, wheel/pivot about the front
+  corner — `regiment_tray.gd` has `frontage`/`reform` but no block-move/cycle/wheel yet). Beta. _L_
+- **MP reconnect — 3+ player hardening** — mirror the host's peer→slot table to guests (3+-player
+  avatar/cursor colour agreement after a reconnect), a shared `slot→palette` helper (army bases match
+  presence colour at slot ≥ 5), an import-await timeout, and restoring a regiment tray's serialized
+  `network_id`. 2-player reconnect is shipped + soak-validated; this is feedback-driven. _S_
+- **Sandbox forests for the other biomes** — extend the grassland forest pads to desert / tundra /
+  volcanic / jungle / urban (per-biome forest-floor textures + `biome_prefix`; the tree GLBs are on
+  R2). On the way to Beta. _S_
+- **UX polish (feedback-driven)** — Measure-on-pickup → snap-back (live ghost preview, ESC to return)
+  · Coherency visualizer (sharpen — highlight models outside X″ of a neighbour) · contextual control
+  hints (hover an object → its hotkeys). Deeper post-Alpha resilience / accessibility / onboarding
+  items live in **Ideas**. _S–M_
 
 ## 🧊 Ideas (icebox — captured, not committed)
 
@@ -161,7 +114,18 @@ planned and where ideas go. For what already works see
 
 ## ✅ Recently shipped
 
-See [`CHANGELOG.md`](../CHANGELOG.md). Highlights (0.3.5 round-up): **in-game F12 bug report
+See [`CHANGELOG.md`](../CHANGELOG.md). **0.3.6 round-up (Alpha release):** **MP reconnect fully
+solved** — the netcode replatform moved all game messaging off `@rpc` onto a command protocol below
+the RPC path-cache (the version-kick reconnect cascade is gone), plus a **relay-restart / idle
+self-heal** (the host re-creates its room with the SAME code and guests auto-rejoin, recovering when
+the scale-to-zero relay drops its in-memory room; relay deployed v4); a big **OPR unit-card overhaul**
+(item-grant hover cascade, faction spell list + spell-range hover ring for casters, item-granted
+weapons surfaced as real weapons, fully English card); **correct per-model loadout distribution** (a
+Sergeant's gear groups on one model; a weapon-team's enlarged base aligns with its special-weapon
+ring); **mount / vehicle base + model** (a Combat Bike / dinosaur brings its own base, scaled from
+the larger Tough, plus a fuzzy-matched faction mount GLB); **aircraft flight-stand hover** (~20 cm,
+distinct from Flying); and **vehicles fit their base** (oval + Tough-derived bases fill exactly with
+no overhang, deterministic long-axis orientation). Earlier highlights (0.3.5 round-up): **in-game F12 bug report
 with screenshot** (capture a visual glitch + bundle it with the anonymised log into a zip on the
 Desktop — the natural capture for the bugs the text log can't see); the **multiplayer
 two-client live test passed** — the reconnect / rate-limit / army-sync cascade was
