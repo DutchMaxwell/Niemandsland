@@ -3411,6 +3411,1666 @@
       "url": "729d3ba72d7f4a13f956f5bf6c797f5cf05bfc2bc03459d02468eeac0ef1d1e3.glb",
       "sha256": "729d3ba72d7f4a13f956f5bf6c797f5cf05bfc2bc03459d02468eeac0ef1d1e3",
       "size": 12769132
+    },
+    "lust_disciples/chosen lust brothers": {
+      "url": "fd740a167fde6792c2b5edf08a2a3ff03c941cfa16c54a171744773bd1d5ae21.glb",
+      "sha256": "fd740a167fde6792c2b5edf08a2a3ff03c941cfa16c54a171744773bd1d5ae21",
+      "size": 13900620
+    },
+    "lust_disciples/chosen lust champion": {
+      "url": "a17f969bbe7850c6e2aaa763f0dc5a70be05d4628a5a0ea847671f8dc9c2a1ed.glb",
+      "sha256": "a17f969bbe7850c6e2aaa763f0dc5a70be05d4628a5a0ea847671f8dc9c2a1ed",
+      "size": 14597280
+    },
+    "lust_disciples/lust apc": {
+      "url": "e70d824e3b3c955975f73152b27583603f3e18095cd715def27562e38349fdf0.glb",
+      "sha256": "e70d824e3b3c955975f73152b27583603f3e18095cd715def27562e38349fdf0",
+      "size": 16631308
+    },
+    "lust_disciples/lust bikers": {
+      "url": "ee712bae23ff11577a64e26df22ecb7a09d88cd14f6ad108fe48003f8373c058.glb",
+      "sha256": "ee712bae23ff11577a64e26df22ecb7a09d88cd14f6ad108fe48003f8373c058",
+      "size": 16487516
+    },
+    "lust_disciples/lust brothers": {
+      "url": "2f75633033fb7b7d77e0c2e02e022aab0b8bf0011a0b3cc6c688b9a921b7bb7b.glb",
+      "sha256": "2f75633033fb7b7d77e0c2e02e022aab0b8bf0011a0b3cc6c688b9a921b7bb7b",
+      "size": 14425656
+    },
+    "lust_disciples/lust champion": {
+      "url": "60ab7a5f67fa2f410662e7e817c841084e09e63599292e9394b1a945fbbfe77d.glb",
+      "sha256": "60ab7a5f67fa2f410662e7e817c841084e09e63599292e9394b1a945fbbfe77d",
+      "size": 14718608
+    },
+    "lust_disciples/lust crab walker": {
+      "url": "f60fd7ad007875668c7f72b1d0f2a1cbf42a04cfec93f8f77b689366e7677f84.glb",
+      "sha256": "f60fd7ad007875668c7f72b1d0f2a1cbf42a04cfec93f8f77b689366e7677f84",
+      "size": 13494484
+    },
+    "lust_disciples/lust cultist champion": {
+      "url": "515195bee5ee59d17a882d7b1b0cd817fdc7fd86074f6f7ac6d65cf4d15ce9e1.glb",
+      "sha256": "515195bee5ee59d17a882d7b1b0cd817fdc7fd86074f6f7ac6d65cf4d15ce9e1",
+      "size": 14249664
+    },
+    "lust_disciples/lust cultists": {
+      "url": "887338cce6a9497771be699d1e15fc745b3926d3b65a50d61e32ab460338a3fd.glb",
+      "sha256": "887338cce6a9497771be699d1e15fc745b3926d3b65a50d61e32ab460338a3fd",
+      "size": 15264376
+    },
+    "lust_disciples/lust destroyer champion": {
+      "url": "5f9624536fdc210f45c630ad9d6dcc0331aad94c0b8ca6fae0c61fd4c38b3123.glb",
+      "sha256": "5f9624536fdc210f45c630ad9d6dcc0331aad94c0b8ca6fae0c61fd4c38b3123",
+      "size": 14787576
+    },
+    "lust_disciples/lust destroyers": {
+      "url": "4a598f2aa73670093f7870fad7707ec2fd1df5f3568407d2bcd34315d1e62f92.glb",
+      "sha256": "4a598f2aa73670093f7870fad7707ec2fd1df5f3568407d2bcd34315d1e62f92",
+      "size": 14360544
+    },
+    "lust_disciples/lust dragon": {
+      "url": "6fa9bf9d8bcee550a18672433ab50b948198070cbc03b9a9eb9db9e9d4ac5da3.glb",
+      "sha256": "6fa9bf9d8bcee550a18672433ab50b948198070cbc03b9a9eb9db9e9d4ac5da3",
+      "size": 16417172
+    },
+    "lust_disciples/lust greater mutated": {
+      "url": "b37949a295d3587a376d9c83db11e4c95f440960cd9f96a2d293af52ff2185fa.glb",
+      "sha256": "b37949a295d3587a376d9c83db11e4c95f440960cd9f96a2d293af52ff2185fa",
+      "size": 15821148
+    },
+    "lust_disciples/lust heavy tank": {
+      "url": "84c3d721f43d769c6212425ff66cd11f09babf9eaf9af763fd83fcc44a6b0bd2.glb",
+      "sha256": "84c3d721f43d769c6212425ff66cd11f09babf9eaf9af763fd83fcc44a6b0bd2",
+      "size": 17479104
+    },
+    "lust_disciples/lust infernal brute": {
+      "url": "8d4504180556a285d61efcbd4c7de34b96a9bced880042a6d667bf1a9fad420a.glb",
+      "sha256": "8d4504180556a285d61efcbd4c7de34b96a9bced880042a6d667bf1a9fad420a",
+      "size": 15459216
+    },
+    "lust_disciples/lust mech fiend": {
+      "url": "610b2a10d3bd3d29bd0b39e35e6210a01d68e2850125d6208fc1dab014bf5c3f.glb",
+      "sha256": "610b2a10d3bd3d29bd0b39e35e6210a01d68e2850125d6208fc1dab014bf5c3f",
+      "size": 16895980
+    },
+    "lust_disciples/lust mutated brothers": {
+      "url": "a69d8ab127c2086aa69a2934eb664438dd35f47be190ba7fc76a0e24b79c85b5.glb",
+      "sha256": "a69d8ab127c2086aa69a2934eb664438dd35f47be190ba7fc76a0e24b79c85b5",
+      "size": 14691608
+    },
+    "lust_disciples/lust mutated cultists": {
+      "url": "13cb697e48d2fdef80cfe264188a60341df4d2225447a059e40d9f9a10dca417.glb",
+      "sha256": "13cb697e48d2fdef80cfe264188a60341df4d2225447a059e40d9f9a10dca417",
+      "size": 14913152
+    },
+    "lust_disciples/lust mutated destroyer": {
+      "url": "f81eb374a96b75e12363e88e576ded4f2527775a64a1e22a2164852872af089e.glb",
+      "sha256": "f81eb374a96b75e12363e88e576ded4f2527775a64a1e22a2164852872af089e",
+      "size": 15775916
+    },
+    "lust_disciples/lust support": {
+      "url": "4f3aa49dfe5b5a7136f8341dde13d9e76f6f46b2c015e552c2d4690641fb49d3.glb",
+      "sha256": "4f3aa49dfe5b5a7136f8341dde13d9e76f6f46b2c015e552c2d4690641fb49d3",
+      "size": 14011132
+    },
+    "lust_disciples/lust talon raptors": {
+      "url": "61f241a9f079cc3b346adf20f74f687e6366018fff9e8e876fbfa143fbd7f398.glb",
+      "sha256": "61f241a9f079cc3b346adf20f74f687e6366018fff9e8e876fbfa143fbd7f398",
+      "size": 14603884
+    },
+    "lust_disciples/lust tank": {
+      "url": "ae6d40991d864a5e5dc19d4984d49ab47c24cda2d269cdb8fa4de7233cd6e7b0.glb",
+      "sha256": "ae6d40991d864a5e5dc19d4984d49ab47c24cda2d269cdb8fa4de7233cd6e7b0",
+      "size": 18575196
+    },
+    "prime_brothers/aggro_brothers": {
+      "url": "41c69e04dd8e2eda68464222429512fdfb22ad4cbaf0a636070ba96105e95da6.glb",
+      "sha256": "41c69e04dd8e2eda68464222429512fdfb22ad4cbaf0a636070ba96105e95da6",
+      "size": 16684764
+    },
+    "prime_brothers/anti_grav_apc": {
+      "url": "b6f397f858c4b977a8a74ea35420967805a0decc9c9dadb460b602e5f2c0a852.glb",
+      "sha256": "b6f397f858c4b977a8a74ea35420967805a0decc9c9dadb460b602e5f2c0a852",
+      "size": 18516492
+    },
+    "prime_brothers/anti_grav_tank": {
+      "url": "a56467d46f47afec22dd3b1bc3a52d2ef8e6529d4f9df0251de0f1d39db95ac5.glb",
+      "sha256": "a56467d46f47afec22dd3b1bc3a52d2ef8e6529d4f9df0251de0f1d39db95ac5",
+      "size": 17455780
+    },
+    "prime_brothers/assault_prime_brothers": {
+      "url": "ad8529bb0c06e26c4b8cc1d464c2ba586d62cc2789ad9b5fe019af1bd377b846.glb",
+      "sha256": "ad8529bb0c06e26c4b8cc1d464c2ba586d62cc2789ad9b5fe019af1bd377b846",
+      "size": 13987284
+    },
+    "prime_brothers/attack_speeder": {
+      "url": "628f2c598bb7c32018ddb09fee425ed370eba87ac321a27c7d540e964abc1a7d.glb",
+      "sha256": "628f2c598bb7c32018ddb09fee425ed370eba87ac321a27c7d540e964abc1a7d",
+      "size": 16458856
+    },
+    "prime_brothers/blaster_brothers": {
+      "url": "986eaaf74eb6805c33fe84651d3591c15fbef029418261be80118b36503077c3.glb",
+      "sha256": "986eaaf74eb6805c33fe84651d3591c15fbef029418261be80118b36503077c3",
+      "size": 17596416
+    },
+    "prime_brothers/combat_walker": {
+      "url": "95dd0755888fcb7af5012443731d4c63f3b7a5bd9bbbf9055ac46954edf4e13f.glb",
+      "sha256": "95dd0755888fcb7af5012443731d4c63f3b7a5bd9bbbf9055ac46954edf4e13f",
+      "size": 15724376
+    },
+    "prime_brothers/desolator_brothers": {
+      "url": "56d87546c9538506cc3e16e4c79caadadf3c46aeeddc17775b20f5c766cea041.glb",
+      "sha256": "56d87546c9538506cc3e16e4c79caadadf3c46aeeddc17775b20f5c766cea041",
+      "size": 15261616
+    },
+    "prime_brothers/elimination_brothers": {
+      "url": "dedecae436bbe3fb003a2e55c5192d539f24c4cc146ff765dd49c556b3963d95.glb",
+      "sha256": "dedecae436bbe3fb003a2e55c5192d539f24c4cc146ff765dd49c556b3963d95",
+      "size": 14687216
+    },
+    "prime_brothers/elite_raider": {
+      "url": "cc56db3297c1909dd791b62e4965d0b0f7509b14ba266cdeee7ad2df3b4b827e.glb",
+      "sha256": "cc56db3297c1909dd791b62e4965d0b0f7509b14ba266cdeee7ad2df3b4b827e",
+      "size": 14481072
+    },
+    "prime_brothers/eradication_brothers": {
+      "url": "250339100312c0695c2a076691248227c6ef99bc5c046658f4ff4b37a0c85e8c.glb",
+      "sha256": "250339100312c0695c2a076691248227c6ef99bc5c046658f4ff4b37a0c85e8c",
+      "size": 14139644
+    },
+    "prime_brothers/grave_destroyers": {
+      "url": "e0537a1ab2e8c65f82d031481c4e83f6687179be4b732101e64d72447ca445ba.glb",
+      "sha256": "e0537a1ab2e8c65f82d031481c4e83f6687179be4b732101e64d72447ca445ba",
+      "size": 15922400
+    },
+    "prime_brothers/grave_prime_master": {
+      "url": "b3cc1c197c34217d20d03b1bc15c2b608cec1abe158df87f7a22a3031c48b703.glb",
+      "sha256": "b3cc1c197c34217d20d03b1bc15c2b608cec1abe158df87f7a22a3031c48b703",
+      "size": 14974996
+    },
+    "prime_brothers/guard_brothers": {
+      "url": "f6d75159bae43110796efe788d171783b276bc22b4e0d39b5bef5cd4113ce6b0.glb",
+      "sha256": "f6d75159bae43110796efe788d171783b276bc22b4e0d39b5bef5cd4113ce6b0",
+      "size": 15577348
+    },
+    "prime_brothers/heavy_anti_grav_destroyer_tank": {
+      "url": "42ace7f5725f1cfe783f49175e5e2b4887c970ba7ebebd5933c06f5ebd471d90.glb",
+      "sha256": "42ace7f5725f1cfe783f49175e5e2b4887c970ba7ebebd5933c06f5ebd471d90",
+      "size": 17796924
+    },
+    "prime_brothers/heavy_anti_grav_transport_tank": {
+      "url": "a4c627018c47fa3ebc7b0e57f968aa0a93d9abc499e504f1e2400b4fcb8d745f.glb",
+      "sha256": "a4c627018c47fa3ebc7b0e57f968aa0a93d9abc499e504f1e2400b4fcb8d745f",
+      "size": 17408596
+    },
+    "prime_brothers/heavy_prime_brothers": {
+      "url": "5fffa3131cdd6eb926f97d7856b81fa9727a33c5522d8c168679caf42de456e0.glb",
+      "sha256": "5fffa3131cdd6eb926f97d7856b81fa9727a33c5522d8c168679caf42de456e0",
+      "size": 16222412
+    },
+    "prime_brothers/infernal_brothers": {
+      "url": "511c78b8c5dac013ad144deffdb41a9981a8a64958da46692c534cc3dfcc0d48.glb",
+      "sha256": "511c78b8c5dac013ad144deffdb41a9981a8a64958da46692c534cc3dfcc0d48",
+      "size": 14739600
+    },
+    "prime_brothers/infiltration_brothers": {
+      "url": "1c86bfb2cd99cfdb61174d8ae3ac2d6849bdec7563fb1d4f91df304d237c4b40.glb",
+      "sha256": "1c86bfb2cd99cfdb61174d8ae3ac2d6849bdec7563fb1d4f91df304d237c4b40",
+      "size": 14964388
+    },
+    "prime_brothers/jetpack_brothers": {
+      "url": "a74fcf0b30fa19dd3a62d84ae2fa950d7622ab0f992c48c05997515288bc6e00.glb",
+      "sha256": "a74fcf0b30fa19dd3a62d84ae2fa950d7622ab0f992c48c05997515288bc6e00",
+      "size": 16524068
+    },
+    "prime_brothers/light_walker": {
+      "url": "fb0ac4b48a00d70696ab219f65d2f021b5314c905cc479485c1a0576afa82ca9.glb",
+      "sha256": "fb0ac4b48a00d70696ab219f65d2f021b5314c905cc479485c1a0576afa82ca9",
+      "size": 15942432
+    },
+    "prime_brothers/prime_atv": {
+      "url": "16b7833708fa5f7639ac52c8873a65175ed3685c0b5c16039149ee6072a11c1e.glb",
+      "sha256": "16b7833708fa5f7639ac52c8873a65175ed3685c0b5c16039149ee6072a11c1e",
+      "size": 15026072
+    },
+    "prime_brothers/prime_brother_bikers": {
+      "url": "6fcd2f31eacdc7c9339ca6cce275d738b4bac290c64e5c90423cd3de53229476.glb",
+      "sha256": "6fcd2f31eacdc7c9339ca6cce275d738b4bac290c64e5c90423cd3de53229476",
+      "size": 16098956
+    },
+    "prime_brothers/prime_brothers": {
+      "url": "7fbb654cda8f76e8e43ebf6c64ba5520343c51afd920b390e89dc6da758cf3c2.glb",
+      "sha256": "7fbb654cda8f76e8e43ebf6c64ba5520343c51afd920b390e89dc6da758cf3c2",
+      "size": 15132392
+    },
+    "prime_brothers/prime_drop_pod": {
+      "url": "a171f5e19a88b25f98f8c981d5d5e92103c42233fc1903adfe923e9c7e6e8dab.glb",
+      "sha256": "a171f5e19a88b25f98f8c981d5d5e92103c42233fc1903adfe923e9c7e6e8dab",
+      "size": 15934584
+    },
+    "prime_brothers/prime_master": {
+      "url": "efc170f654f392d8d4e6cf1d97541d0919533257fc65798fd8108e9058567652.glb",
+      "sha256": "efc170f654f392d8d4e6cf1d97541d0919533257fc65798fd8108e9058567652",
+      "size": 14715444
+    },
+    "prime_brothers/raider_brothers": {
+      "url": "b5d654e07990469702a3948190a435c64a65e7839ac4fc3e168633593631ef55.glb",
+      "sha256": "b5d654e07990469702a3948190a435c64a65e7839ac4fc3e168633593631ef55",
+      "size": 15269692
+    },
+    "prime_brothers/support_turret": {
+      "url": "3b82d9cbca951a8f971ecea92aa015d1e4af7d97ff112da8bdf20f132dd5921f.glb",
+      "sha256": "3b82d9cbca951a8f971ecea92aa015d1e4af7d97ff112da8bdf20f132dd5921f",
+      "size": 15192468
+    },
+    "prime_brothers/suppression_brothers": {
+      "url": "95a59b26c7344555836600d94842192ee35734aa74e6aa013becae93d97dbc2a.glb",
+      "sha256": "95a59b26c7344555836600d94842192ee35734aa74e6aa013becae93d97dbc2a",
+      "size": 14629100
+    },
+    "prime_brothers/veteran_assault_prime_brothers": {
+      "url": "3cd73cde6f63a05a5dba824b05bc42e5e95eebe726d2a12eaaacc1050ea3786c.glb",
+      "sha256": "3cd73cde6f63a05a5dba824b05bc42e5e95eebe726d2a12eaaacc1050ea3786c",
+      "size": 14190676
+    },
+    "prime_brothers/veteran_prime_brothers": {
+      "url": "b39a605c6ef649b98a93980a98064f92a85d81f9c87a29f485753b7c7d230dcf.glb",
+      "sha256": "b39a605c6ef649b98a93980a98064f92a85d81f9c87a29f485753b7c7d230dcf",
+      "size": 13803880
+    },
+    "prime_brothers/veteran_prime_master": {
+      "url": "2532ad81a74f2e0ef9b012de6c5b10b1f4dd9a1aca3a13a1eedd4338becf8f4b.glb",
+      "sha256": "2532ad81a74f2e0ef9b012de6c5b10b1f4dd9a1aca3a13a1eedd4338becf8f4b",
+      "size": 13651492
+    },
+    "blood_prime_brothers/blood_aggro_brothers": {
+      "url": "e6b1bb8188e06f444bc4110da5bc83e935cbf2291a109476d8a5d04606aa88f2.glb",
+      "sha256": "e6b1bb8188e06f444bc4110da5bc83e935cbf2291a109476d8a5d04606aa88f2",
+      "size": 15234760
+    },
+    "blood_prime_brothers/blood_anti_grav_apc": {
+      "url": "b66785e04c199c5291a5e297b877b2e14b80553c98e041dd856c8145659e980d.glb",
+      "sha256": "b66785e04c199c5291a5e297b877b2e14b80553c98e041dd856c8145659e980d",
+      "size": 16837304
+    },
+    "blood_prime_brothers/blood_anti_grav_tank": {
+      "url": "f4919975fc961ebf2ddab21b7d51fe28faebe485cb08c34312b2f7de0e430b86.glb",
+      "sha256": "f4919975fc961ebf2ddab21b7d51fe28faebe485cb08c34312b2f7de0e430b86",
+      "size": 17800972
+    },
+    "blood_prime_brothers/blood_assault_prime_brothers": {
+      "url": "be108e02fb4e726cbaf5a6d89258e8b4be1af1b4dfa825ddb3d80e0500094085.glb",
+      "sha256": "be108e02fb4e726cbaf5a6d89258e8b4be1af1b4dfa825ddb3d80e0500094085",
+      "size": 14402308
+    },
+    "blood_prime_brothers/blood_attack_speeder": {
+      "url": "1547105226aaf8c8403d97f90e147caa44f70d06a4995b6dcd24efb6f92a9666.glb",
+      "sha256": "1547105226aaf8c8403d97f90e147caa44f70d06a4995b6dcd24efb6f92a9666",
+      "size": 15698624
+    },
+    "blood_prime_brothers/blood_blaster_brothers": {
+      "url": "ea6af5b424e53e791501b1ba4a878697cdbafb564deeae7b1295e7d4cfaab575.glb",
+      "sha256": "ea6af5b424e53e791501b1ba4a878697cdbafb564deeae7b1295e7d4cfaab575",
+      "size": 14753564
+    },
+    "blood_prime_brothers/blood_combat_walker": {
+      "url": "499b3da29e3c60ddc1faa748a25f028375ac97fdf30d2b816a5a05c68ac84b39.glb",
+      "sha256": "499b3da29e3c60ddc1faa748a25f028375ac97fdf30d2b816a5a05c68ac84b39",
+      "size": 16039196
+    },
+    "blood_prime_brothers/blood_desolator_brothers": {
+      "url": "41e8d42b8e9ffe6b35561710ca2a99628c34c7bc7e6c749171fb68fe83772182.glb",
+      "sha256": "41e8d42b8e9ffe6b35561710ca2a99628c34c7bc7e6c749171fb68fe83772182",
+      "size": 14643608
+    },
+    "blood_prime_brothers/blood_elimination_brothers": {
+      "url": "21e14a75a4dda32c390675f6f17ef59f9c38308d4c605ad0150400e17cffccaf.glb",
+      "sha256": "21e14a75a4dda32c390675f6f17ef59f9c38308d4c605ad0150400e17cffccaf",
+      "size": 14745368
+    },
+    "blood_prime_brothers/blood_elite_raider": {
+      "url": "94f9569654f2f0ca649b0a09bc072c518d36ee07dc8c5da7e06a8d29dabed9d1.glb",
+      "sha256": "94f9569654f2f0ca649b0a09bc072c518d36ee07dc8c5da7e06a8d29dabed9d1",
+      "size": 14732612
+    },
+    "blood_prime_brothers/blood_eradication_brothers": {
+      "url": "6d28e53e9c6ace4d19412184a66709fe458ab1c88139331686618ec79baa28e3.glb",
+      "sha256": "6d28e53e9c6ace4d19412184a66709fe458ab1c88139331686618ec79baa28e3",
+      "size": 14082584
+    },
+    "blood_prime_brothers/blood_grave_destroyers": {
+      "url": "a9c5e9e1074429e3e312c33043da00d1051acf45d02255ff0d317cdde4cbc5e3.glb",
+      "sha256": "a9c5e9e1074429e3e312c33043da00d1051acf45d02255ff0d317cdde4cbc5e3",
+      "size": 15061840
+    },
+    "blood_prime_brothers/blood_grave_prime_master": {
+      "url": "eaceefe846cf35e156deda8f4f677ae05582d1978a4b405c9218e233889227b3.glb",
+      "sha256": "eaceefe846cf35e156deda8f4f677ae05582d1978a4b405c9218e233889227b3",
+      "size": 15372488
+    },
+    "blood_prime_brothers/blood_guard_brothers": {
+      "url": "4588df0b3bea5c58d0a4b7e74c523c4bc530371e3e7dfd0c408ed69d54407d94.glb",
+      "sha256": "4588df0b3bea5c58d0a4b7e74c523c4bc530371e3e7dfd0c408ed69d54407d94",
+      "size": 15898652
+    },
+    "blood_prime_brothers/blood_heavy_anti_grav_destroyer_tank": {
+      "url": "92efd3ff47f3bdb29805b57f54cdb71370ed097c2bf8159be1eb028f2df9b014.glb",
+      "sha256": "92efd3ff47f3bdb29805b57f54cdb71370ed097c2bf8159be1eb028f2df9b014",
+      "size": 17474596
+    },
+    "blood_prime_brothers/blood_heavy_anti_grav_transport_tank": {
+      "url": "ba64f9635baa1905d6f954aa8c79b9b59204e3d3129fa44252f599110a854875.glb",
+      "sha256": "ba64f9635baa1905d6f954aa8c79b9b59204e3d3129fa44252f599110a854875",
+      "size": 18075668
+    },
+    "blood_prime_brothers/blood_heavy_prime_brothers": {
+      "url": "3436d87dfa1912871b0047534507d86e8bc15674321fabef03949d76129227c1.glb",
+      "sha256": "3436d87dfa1912871b0047534507d86e8bc15674321fabef03949d76129227c1",
+      "size": 14373088
+    },
+    "blood_prime_brothers/blood_infernal_brothers": {
+      "url": "b05329e23288a128c6a729df26fcc986c970713390a7d69d68b489e66a032965.glb",
+      "sha256": "b05329e23288a128c6a729df26fcc986c970713390a7d69d68b489e66a032965",
+      "size": 14885752
+    },
+    "blood_prime_brothers/blood_infiltration_brothers": {
+      "url": "804ee65d3f6e47c9ba35f48ef57a71c10a0a759cb043fa03599842d6119a0003.glb",
+      "sha256": "804ee65d3f6e47c9ba35f48ef57a71c10a0a759cb043fa03599842d6119a0003",
+      "size": 14204672
+    },
+    "blood_prime_brothers/blood_jetpack_brothers": {
+      "url": "5d3cf4f1f59266d5fd168e5e158180cb89891e113b9da68201f2b2e96b598e47.glb",
+      "sha256": "5d3cf4f1f59266d5fd168e5e158180cb89891e113b9da68201f2b2e96b598e47",
+      "size": 15382868
+    },
+    "blood_prime_brothers/blood_light_walker": {
+      "url": "49bf7275c9184fad45b531f2ec175f51526f0d9e9613f24df03434d7fa0ec91c.glb",
+      "sha256": "49bf7275c9184fad45b531f2ec175f51526f0d9e9613f24df03434d7fa0ec91c",
+      "size": 15279248
+    },
+    "blood_prime_brothers/blood_prime_atv": {
+      "url": "8055a5aa53a062f0f1ecbb689b64af9fcf11c0c361c6b433cd1b3c32dd720e5a.glb",
+      "sha256": "8055a5aa53a062f0f1ecbb689b64af9fcf11c0c361c6b433cd1b3c32dd720e5a",
+      "size": 15501456
+    },
+    "blood_prime_brothers/blood_prime_brother_bikers": {
+      "url": "04d0a4af66d4a4216e6ad44cb9cab8d2b0d79b5ea2c21cd4467e0123beda578f.glb",
+      "sha256": "04d0a4af66d4a4216e6ad44cb9cab8d2b0d79b5ea2c21cd4467e0123beda578f",
+      "size": 16396236
+    },
+    "blood_prime_brothers/blood_prime_brothers": {
+      "url": "ca4e215ff7c66c3977e5ad9a5e513bcefb360e120d040c7dc2e6343172feb2c6.glb",
+      "sha256": "ca4e215ff7c66c3977e5ad9a5e513bcefb360e120d040c7dc2e6343172feb2c6",
+      "size": 13653720
+    },
+    "blood_prime_brothers/blood_prime_drop_pod": {
+      "url": "9f11e864ede171dd92b4d7e0b42894927a5e5c9705a3591cf9034a34dc7cb6a9.glb",
+      "sha256": "9f11e864ede171dd92b4d7e0b42894927a5e5c9705a3591cf9034a34dc7cb6a9",
+      "size": 15648984
+    },
+    "blood_prime_brothers/blood_prime_master": {
+      "url": "ea8a50711f82cb6d830afa061a7afca16f5b4a39cc3024de3698103f99446ed9.glb",
+      "sha256": "ea8a50711f82cb6d830afa061a7afca16f5b4a39cc3024de3698103f99446ed9",
+      "size": 14503860
+    },
+    "blood_prime_brothers/blood_raider_brothers": {
+      "url": "bb788c35c3f23222c5ee1fa6b45cdc0e7e815fb8df1ba2e031fb7ef1429080e5.glb",
+      "sha256": "bb788c35c3f23222c5ee1fa6b45cdc0e7e815fb8df1ba2e031fb7ef1429080e5",
+      "size": 14735140
+    },
+    "blood_prime_brothers/blood_support_turret": {
+      "url": "a8c7c0d6b15730307bca99f0d2a23405875c762574020785c4504957050e44f4.glb",
+      "sha256": "a8c7c0d6b15730307bca99f0d2a23405875c762574020785c4504957050e44f4",
+      "size": 14723856
+    },
+    "blood_prime_brothers/blood_suppression_brothers": {
+      "url": "9632be6fb880861a6f32e739c7a110650a69bacf4c3e968dc353dff207ec9d68.glb",
+      "sha256": "9632be6fb880861a6f32e739c7a110650a69bacf4c3e968dc353dff207ec9d68",
+      "size": 13558564
+    },
+    "blood_prime_brothers/blood_veteran_assault_prime_brothers": {
+      "url": "ab51b68de708b3e8370e1764c26c25a239b01497656d93aa7e660c34cfa38510.glb",
+      "sha256": "ab51b68de708b3e8370e1764c26c25a239b01497656d93aa7e660c34cfa38510",
+      "size": 13964604
+    },
+    "blood_prime_brothers/blood_veteran_prime_brothers": {
+      "url": "a4ee2cc9974377352ab1ac97ecf203b24389900c8f317d8b7ee69b42e932097c.glb",
+      "sha256": "a4ee2cc9974377352ab1ac97ecf203b24389900c8f317d8b7ee69b42e932097c",
+      "size": 15268752
+    },
+    "blood_prime_brothers/blood_veteran_prime_master": {
+      "url": "2f7f5d6b1d0cf9d43f0d8217ee3f69b8f4749d8147ee8fef378144843fbcea0b.glb",
+      "sha256": "2f7f5d6b1d0cf9d43f0d8217ee3f69b8f4749d8147ee8fef378144843fbcea0b",
+      "size": 14408804
+    },
+    "machine_cult/arch fighter": {
+      "url": "32e9d1dca8af44200f4a0aced383c8adbb70aa370df2dc84099bbd8454716b6a.glb",
+      "sha256": "32e9d1dca8af44200f4a0aced383c8adbb70aa370df2dc84099bbd8454716b6a",
+      "size": 15753112
+    },
+    "machine_cult/arch gunship": {
+      "url": "3b49fd52f3fa14d82914f1784ce06b023f9dc6135d5d466b79c69295a7797ce0.glb",
+      "sha256": "3b49fd52f3fa14d82914f1784ce06b023f9dc6135d5d466b79c69295a7797ce0",
+      "size": 16208916
+    },
+    "machine_cult/attack craft": {
+      "url": "974f96ea6108a4b723429ac6af98aaf2d9a79ae4c2ef3467377f3ad4c4dfefa0.glb",
+      "sha256": "974f96ea6108a4b723429ac6af98aaf2d9a79ae4c2ef3467377f3ad4c4dfefa0",
+      "size": 13613240
+    },
+    "machine_cult/breacher cyborgs": {
+      "url": "e089ed3d2575f4688d81a7153721a7314effec7d34dc6142885a9ec474c61ab8.glb",
+      "sha256": "e089ed3d2575f4688d81a7153721a7314effec7d34dc6142885a9ec474c61ab8",
+      "size": 15816488
+    },
+    "machine_cult/combat robot": {
+      "url": "8cda5f5900070e28e3d9ac3222a981b6bd19b616b1dfc55c9428e68e1d48803b.glb",
+      "sha256": "8cda5f5900070e28e3d9ac3222a981b6bd19b616b1dfc55c9428e68e1d48803b",
+      "size": 15612476
+    },
+    "machine_cult/crawler tank": {
+      "url": "f2b953c8734662bed1ba092988ceb1fb076269bd8b2449f0a6541e15f9b759dd.glb",
+      "sha256": "f2b953c8734662bed1ba092988ceb1fb076269bd8b2449f0a6541e15f9b759dd",
+      "size": 18038792
+    },
+    "machine_cult/cult leader": {
+      "url": "6ada969e69591a5e3db90a1594c78c724f0af9b308dc578f779719f0a7696a64.glb",
+      "sha256": "6ada969e69591a5e3db90a1594c78c724f0af9b308dc578f779719f0a7696a64",
+      "size": 15801800
+    },
+    "machine_cult/cult rangers": {
+      "url": "26db21821adafaa3772b3d792a2cc651f75f4b1a5afa5cc2945360eceae5b827.glb",
+      "sha256": "26db21821adafaa3772b3d792a2cc651f75f4b1a5afa5cc2945360eceae5b827",
+      "size": 16029992
+    },
+    "machine_cult/destroyer cyborgs": {
+      "url": "300f993759a8c6268356bf34825a78f5828fb357af3cc606e88c497cd6c52749.glb",
+      "sha256": "300f993759a8c6268356bf34825a78f5828fb357af3cc606e88c497cd6c52749",
+      "size": 15957560
+    },
+    "machine_cult/dragoon walker": {
+      "url": "22e6d8ebed5a097f72f4b6cb1b7bd49307562d03a73abdd3e6d1a774bf889706.glb",
+      "sha256": "22e6d8ebed5a097f72f4b6cb1b7bd49307562d03a73abdd3e6d1a774bf889706",
+      "size": 15497128
+    },
+    "machine_cult/high priest": {
+      "url": "d1cc25bf77539938ea80a3756aabe92efc22be7a0696bd221f95625a2aaec892.glb",
+      "sha256": "d1cc25bf77539938ea80a3756aabe92efc22be7a0696bd221f95625a2aaec892",
+      "size": 15358848
+    },
+    "machine_cult/iron walker": {
+      "url": "b0d3e80c9c78fc76d7696d734c678bd9c039f483a797efb3fcae8ad236ee4524.glb",
+      "sha256": "b0d3e80c9c78fc76d7696d734c678bd9c039f483a797efb3fcae8ad236ee4524",
+      "size": 15773952
+    },
+    "machine_cult/landing craft": {
+      "url": "cef38e5416f4e5cb4850198ea1a883e2ebedd897381943905ec86852c6a35867.glb",
+      "sha256": "cef38e5416f4e5cb4850198ea1a883e2ebedd897381943905ec86852c6a35867",
+      "size": 15192788
+    },
+    "machine_cult/raider cavalry": {
+      "url": "07209a290395f3ec90dd9c63a5ec9e66b1d41f02aaf15edc9088478d2e977fb6.glb",
+      "sha256": "07209a290395f3ec90dd9c63a5ec9e66b1d41f02aaf15edc9088478d2e977fb6",
+      "size": 13814428
+    },
+    "machine_cult/sect infiltrators": {
+      "url": "18d9e950b3155dfc9cb064ff3b538d4cfc2a04ac14031d32f765ae141be971ed.glb",
+      "sha256": "18d9e950b3155dfc9cb064ff3b538d4cfc2a04ac14031d32f765ae141be971ed",
+      "size": 15790016
+    },
+    "machine_cult/sect leader": {
+      "url": "fd1455645e7c4229092705465ff5a59629eda8dd35598a5e00ce9d3a0f1b183d.glb",
+      "sha256": "fd1455645e7c4229092705465ff5a59629eda8dd35598a5e00ce9d3a0f1b183d",
+      "size": 16867992
+    },
+    "machine_cult/sect stalkers": {
+      "url": "138e6dc555b8308d3161c6c4dfb7154bbbdcd44665d5e0b227ab3e8347fbf2e0.glb",
+      "sha256": "138e6dc555b8308d3161c6c4dfb7154bbbdcd44665d5e0b227ab3e8347fbf2e0",
+      "size": 14889636
+    },
+    "machine_cult/shock priests": {
+      "url": "70c53064b43872f14fab3ae56b69fb456d3673872b345e3f5a904c6f3e735188.glb",
+      "sha256": "70c53064b43872f14fab3ae56b69fb456d3673872b345e3f5a904c6f3e735188",
+      "size": 16175768
+    },
+    "machine_cult/sky stalkers": {
+      "url": "14efbad055f72cb16b95ad4dc0a26eb6a31a048005aa81efb62b7dc15cda9a52.glb",
+      "sha256": "14efbad055f72cb16b95ad4dc0a26eb6a31a048005aa81efb62b7dc15cda9a52",
+      "size": 17030032
+    },
+    "watch_brothers/watch_apc": {
+      "url": "905b60b4677980549d702eebcc2eacc65b80ac6f1f8585c026cb64df1c36c7fb.glb",
+      "sha256": "905b60b4677980549d702eebcc2eacc65b80ac6f1f8585c026cb64df1c36c7fb",
+      "size": 17318484
+    },
+    "watch_brothers/watch_artillery_gun": {
+      "url": "e64e5951b6ff1acd1602950006d8a2139fb6db6b6d923c7ff7b81821eb218543.glb",
+      "sha256": "e64e5951b6ff1acd1602950006d8a2139fb6db6b6d923c7ff7b81821eb218543",
+      "size": 15338436
+    },
+    "watch_brothers/watch_attack_apc": {
+      "url": "ad71419abfcc3db0ad5d0055476653abc424b145f2ac9754b8761f6f0d35d80b.glb",
+      "sha256": "ad71419abfcc3db0ad5d0055476653abc424b145f2ac9754b8761f6f0d35d80b",
+      "size": 17238216
+    },
+    "watch_brothers/watch_battle_brothers": {
+      "url": "195be8fe44c81e9bdfb9ad78d3618ebc463acadb64d51f331aa4956f943ac783.glb",
+      "sha256": "195be8fe44c81e9bdfb9ad78d3618ebc463acadb64d51f331aa4956f943ac783",
+      "size": 13563072
+    },
+    "watch_brothers/watch_brother_bikers": {
+      "url": "0ce975d1f27afcaba952801d2b4a3cf15102003ad88b7a2f0e42056f08741acf.glb",
+      "sha256": "0ce975d1f27afcaba952801d2b4a3cf15102003ad88b7a2f0e42056f08741acf",
+      "size": 16785108
+    },
+    "watch_brothers/watch_captain_brother": {
+      "url": "f061d7de40fb242de578bf9601ffe18e3e6a1c8b3ba78082d8e2de6e7cafb484.glb",
+      "sha256": "f061d7de40fb242de578bf9601ffe18e3e6a1c8b3ba78082d8e2de6e7cafb484",
+      "size": 14309376
+    },
+    "watch_brothers/watch_combat_walker": {
+      "url": "b91eea643ea400f12538cfea23d254ca044d5a6fbf07bea44793c028c1dbb723.glb",
+      "sha256": "b91eea643ea400f12538cfea23d254ca044d5a6fbf07bea44793c028c1dbb723",
+      "size": 16163420
+    },
+    "watch_brothers/watch_deathstar_gunship": {
+      "url": "8de18254d488f470778ffec3cf2d6dc5c36028f14468051b2fc3c64408c5b41b.glb",
+      "sha256": "8de18254d488f470778ffec3cf2d6dc5c36028f14468051b2fc3c64408c5b41b",
+      "size": 16215916
+    },
+    "watch_brothers/watch_destroyers": {
+      "url": "6570b6c9202f3958fd0295fd0c01a8b95f83f1992b6169af8805758e032cd595.glb",
+      "sha256": "6570b6c9202f3958fd0295fd0c01a8b95f83f1992b6169af8805758e032cd595",
+      "size": 14510852
+    },
+    "watch_brothers/watch_drop_pod": {
+      "url": "f7a816124204d384dd446d5d0b9c244c0dafbdc9725ca57d3b9fbdc5c7814895.glb",
+      "sha256": "f7a816124204d384dd446d5d0b9c244c0dafbdc9725ca57d3b9fbdc5c7814895",
+      "size": 16862096
+    },
+    "watch_brothers/watch_heavy_tank": {
+      "url": "e5f00a5ce79769c9235cfe43ef84bd996e9b6a16b8c4b00b12232c0e6d1e15f7.glb",
+      "sha256": "e5f00a5ce79769c9235cfe43ef84bd996e9b6a16b8c4b00b12232c0e6d1e15f7",
+      "size": 20633308
+    },
+    "watch_brothers/watch_master_destroyer": {
+      "url": "e50cc4e6b488ddf559b5b1cce0db729efb1f6065ca74f4954558c2a02e316449.glb",
+      "sha256": "e50cc4e6b488ddf559b5b1cce0db729efb1f6065ca74f4954558c2a02e316449",
+      "size": 15609496
+    },
+    "watch_brothers/watch_vanguard": {
+      "url": "f66a853ac7e37be79fdb1af57cac65f3d0ba9710208fb895c53c95360a4d3a92.glb",
+      "sha256": "f66a853ac7e37be79fdb1af57cac65f3d0ba9710208fb895c53c95360a4d3a92",
+      "size": 20399720
+    },
+    "dark_prime_brothers/dark_aggro_brothers": {
+      "url": "5889b659f5fb86c8ca466e4df4f6f6f258ceb4697cf80f95bc7d7e36cf94fb70.glb",
+      "sha256": "5889b659f5fb86c8ca466e4df4f6f6f258ceb4697cf80f95bc7d7e36cf94fb70",
+      "size": 15201148
+    },
+    "dark_prime_brothers/dark_anti_grav_apc": {
+      "url": "25b20d0cc7aa5de72ed1b9d38c35730b101e6e337d687bbd574d70e90d4ed1de.glb",
+      "sha256": "25b20d0cc7aa5de72ed1b9d38c35730b101e6e337d687bbd574d70e90d4ed1de",
+      "size": 15295596
+    },
+    "dark_prime_brothers/dark_anti_grav_tank": {
+      "url": "4a81ca2ddea0e38b2c78eaa440c41950b08daeb228336670109161699a8d679a.glb",
+      "sha256": "4a81ca2ddea0e38b2c78eaa440c41950b08daeb228336670109161699a8d679a",
+      "size": 16709032
+    },
+    "dark_prime_brothers/dark_assault_prime_brothers": {
+      "url": "b25357e9986efc5022c97d6a57eb4e01c5f5bb3218ef1196c5ebbf2fb7d4e987.glb",
+      "sha256": "b25357e9986efc5022c97d6a57eb4e01c5f5bb3218ef1196c5ebbf2fb7d4e987",
+      "size": 14603196
+    },
+    "dark_prime_brothers/dark_attack_speeder": {
+      "url": "564d892c8da2ea02b7dcb217a673bef12c596f7c002ca46cf03a75d1154430be.glb",
+      "sha256": "564d892c8da2ea02b7dcb217a673bef12c596f7c002ca46cf03a75d1154430be",
+      "size": 17030376
+    },
+    "dark_prime_brothers/dark_blaster_brothers": {
+      "url": "e955f2ea3ed9499aab88f9b116d491b2ac4c1fb176deb166a6c4ac974d3c54ae.glb",
+      "sha256": "e955f2ea3ed9499aab88f9b116d491b2ac4c1fb176deb166a6c4ac974d3c54ae",
+      "size": 15337176
+    },
+    "dark_prime_brothers/dark_combat_walker": {
+      "url": "7b62dfdd8e2f353a09e663d4c2d8c44f23e5e3f3b13237f815aeccb089aecad7.glb",
+      "sha256": "7b62dfdd8e2f353a09e663d4c2d8c44f23e5e3f3b13237f815aeccb089aecad7",
+      "size": 16087024
+    },
+    "dark_prime_brothers/dark_desolator_brothers": {
+      "url": "a7f745daac5ca0cc34ca922297efbfd30a6cb1d7eb0f664bcfd91b781f97e3da.glb",
+      "sha256": "a7f745daac5ca0cc34ca922297efbfd30a6cb1d7eb0f664bcfd91b781f97e3da",
+      "size": 14823520
+    },
+    "dark_prime_brothers/dark_elimination_brothers": {
+      "url": "6ba282e1d2897503c182349db7b19f21bebe1842a4632ef8f8c7e1f943952b4b.glb",
+      "sha256": "6ba282e1d2897503c182349db7b19f21bebe1842a4632ef8f8c7e1f943952b4b",
+      "size": 14704148
+    },
+    "dark_prime_brothers/dark_elite_raider": {
+      "url": "77fcfc0ad8b909c331cb983e56dc8fdbaf1cac55c18d7ea186cd12a8afc2e0df.glb",
+      "sha256": "77fcfc0ad8b909c331cb983e56dc8fdbaf1cac55c18d7ea186cd12a8afc2e0df",
+      "size": 14091320
+    },
+    "dark_prime_brothers/dark_eradication_brothers": {
+      "url": "5cbe5a93d25d9b8cca1b5cc7ad269b2d6ccac2ace0dfa2e4b493dd3b02969b86.glb",
+      "sha256": "5cbe5a93d25d9b8cca1b5cc7ad269b2d6ccac2ace0dfa2e4b493dd3b02969b86",
+      "size": 13677676
+    },
+    "dark_prime_brothers/dark_grave_destroyers": {
+      "url": "eefca641532742790923bf5d8e37eb2409ad9240a01df9a3c9df5abfe8315f27.glb",
+      "sha256": "eefca641532742790923bf5d8e37eb2409ad9240a01df9a3c9df5abfe8315f27",
+      "size": 14888572
+    },
+    "dark_prime_brothers/dark_grave_prime_master": {
+      "url": "efa6d629fb5b9f295f207cd1a18a3836dade54a9178172b0ccf7d37b7435ea62.glb",
+      "sha256": "efa6d629fb5b9f295f207cd1a18a3836dade54a9178172b0ccf7d37b7435ea62",
+      "size": 15176116
+    },
+    "dark_prime_brothers/dark_guard_brothers": {
+      "url": "d7f1082f03b1a9e5a812c20865b2c803260cd9d16ca97ba7d72ddc11f60e75c4.glb",
+      "sha256": "d7f1082f03b1a9e5a812c20865b2c803260cd9d16ca97ba7d72ddc11f60e75c4",
+      "size": 15483388
+    },
+    "dark_prime_brothers/dark_heavy_anti_grav_destroyer_tank": {
+      "url": "d8148c966b3b3997ce889a02071bc28c2204fce3b13d50065d47547222ab9fa8.glb",
+      "sha256": "d8148c966b3b3997ce889a02071bc28c2204fce3b13d50065d47547222ab9fa8",
+      "size": 17461212
+    },
+    "dark_prime_brothers/dark_heavy_anti_grav_transport_tank": {
+      "url": "3474bbfb76f0143a4aec374b2772ecaabdaa088cf8df3cbe2ce6672b40afe47c.glb",
+      "sha256": "3474bbfb76f0143a4aec374b2772ecaabdaa088cf8df3cbe2ce6672b40afe47c",
+      "size": 17961388
+    },
+    "dark_prime_brothers/dark_heavy_prime_brothers": {
+      "url": "6ae9edc2ab1f4233a7d91157faf240e4e03b8b8a4091bd846752cd310a3b3ab4.glb",
+      "sha256": "6ae9edc2ab1f4233a7d91157faf240e4e03b8b8a4091bd846752cd310a3b3ab4",
+      "size": 15772464
+    },
+    "dark_prime_brothers/dark_infernal_brothers": {
+      "url": "ac64170fc328d5b9e29eaf07225710e3704ce2bfc2b10c2d1a9c3947901fc767.glb",
+      "sha256": "ac64170fc328d5b9e29eaf07225710e3704ce2bfc2b10c2d1a9c3947901fc767",
+      "size": 14913024
+    },
+    "dark_prime_brothers/dark_infiltration_brothers": {
+      "url": "08755eb4c4684bd2b102279fb2cd5ed076f9874852ec8f13e57c448de8d18568.glb",
+      "sha256": "08755eb4c4684bd2b102279fb2cd5ed076f9874852ec8f13e57c448de8d18568",
+      "size": 14184592
+    },
+    "dark_prime_brothers/dark_jetpack_brothers": {
+      "url": "779725a3055ebf2a3ac08d9e9eff95fc5c6be01470f9e73252ca12ec141a4134.glb",
+      "sha256": "779725a3055ebf2a3ac08d9e9eff95fc5c6be01470f9e73252ca12ec141a4134",
+      "size": 15765816
+    },
+    "dark_prime_brothers/dark_light_walker": {
+      "url": "2e0a60bf2f8d28f08458f2fea9a345727735db155a7e8c91d29b65acd7a0c0a8.glb",
+      "sha256": "2e0a60bf2f8d28f08458f2fea9a345727735db155a7e8c91d29b65acd7a0c0a8",
+      "size": 15414448
+    },
+    "dark_prime_brothers/dark_prime_atv": {
+      "url": "ce721e64a4748468d8d6e2a58356786ebf00861514cb2dc01cf3626bdc27c95e.glb",
+      "sha256": "ce721e64a4748468d8d6e2a58356786ebf00861514cb2dc01cf3626bdc27c95e",
+      "size": 16748448
+    },
+    "dark_prime_brothers/dark_prime_brother_bikers": {
+      "url": "04922775ab80c062e8da0271d50588acb81f8ff04743d60d3e588e4082118f78.glb",
+      "sha256": "04922775ab80c062e8da0271d50588acb81f8ff04743d60d3e588e4082118f78",
+      "size": 15968560
+    },
+    "dark_prime_brothers/dark_prime_brothers": {
+      "url": "8760bf28e1ad5cbff55f4165db270f38e96f425840be5a6799ca3b9d6fe37fea.glb",
+      "sha256": "8760bf28e1ad5cbff55f4165db270f38e96f425840be5a6799ca3b9d6fe37fea",
+      "size": 14217076
+    },
+    "dark_prime_brothers/dark_prime_drop_pod": {
+      "url": "104c73c73763b294befee85b17bf0f5119c3862e9dff30b75a21eb168f065465.glb",
+      "sha256": "104c73c73763b294befee85b17bf0f5119c3862e9dff30b75a21eb168f065465",
+      "size": 15201416
+    },
+    "dark_prime_brothers/dark_prime_master": {
+      "url": "fe6d1aa2846a0d9f5f93bb8aa551c55de07cf77ede5af8e5f8a01f6523214877.glb",
+      "sha256": "fe6d1aa2846a0d9f5f93bb8aa551c55de07cf77ede5af8e5f8a01f6523214877",
+      "size": 15278968
+    },
+    "dark_prime_brothers/dark_raider_brothers": {
+      "url": "f94123c8b041abedc33137d710bb256a6c29c35bb8d042c3aa241ee6e86f9bdc.glb",
+      "sha256": "f94123c8b041abedc33137d710bb256a6c29c35bb8d042c3aa241ee6e86f9bdc",
+      "size": 14426816
+    },
+    "dark_prime_brothers/dark_support_turret": {
+      "url": "f2f0249c7bd7fb79af66fa5ce973d9becda552f83ef11bf26b04d25b0bebe86d.glb",
+      "sha256": "f2f0249c7bd7fb79af66fa5ce973d9becda552f83ef11bf26b04d25b0bebe86d",
+      "size": 14973960
+    },
+    "dark_prime_brothers/dark_suppression_brothers": {
+      "url": "8451fc5c122cbc7aa7208abc09ab19a8fc4f00fcafdcccfe66165c323bb8b936.glb",
+      "sha256": "8451fc5c122cbc7aa7208abc09ab19a8fc4f00fcafdcccfe66165c323bb8b936",
+      "size": 13976308
+    },
+    "dark_prime_brothers/dark_veteran_assault_prime_brothers": {
+      "url": "c6fb88f3cee95f380f355123960a9102ab3aaa0002b68ee09ccb37e7502bb6d6.glb",
+      "sha256": "c6fb88f3cee95f380f355123960a9102ab3aaa0002b68ee09ccb37e7502bb6d6",
+      "size": 14396240
+    },
+    "dark_prime_brothers/dark_veteran_prime_brothers": {
+      "url": "deef0623f623f5cedcd676cf3f08587e1ec0753f6fd35d8032b0d91b54fa5c00.glb",
+      "sha256": "deef0623f623f5cedcd676cf3f08587e1ec0753f6fd35d8032b0d91b54fa5c00",
+      "size": 14423300
+    },
+    "dark_prime_brothers/dark_veteran_prime_master": {
+      "url": "2372678582f70953d2b63950d55f986ad43c894d36422e2c43731785d0814f32.glb",
+      "sha256": "2372678582f70953d2b63950d55f986ad43c894d36422e2c43731785d0814f32",
+      "size": 13847520
+    },
+    "knight_prime_brothers/knight_aggro_brothers": {
+      "url": "f873d0e22d07eada4d043c5c12c53be748a48a026bfb764b8e23859aa49fc102.glb",
+      "sha256": "f873d0e22d07eada4d043c5c12c53be748a48a026bfb764b8e23859aa49fc102",
+      "size": 22992328
+    },
+    "knight_prime_brothers/knight_anti_grav_apc": {
+      "url": "5abb7d942f75664d1a5559b0429047feed176cf1de5ab5a78d95c9ab871d9307.glb",
+      "sha256": "5abb7d942f75664d1a5559b0429047feed176cf1de5ab5a78d95c9ab871d9307",
+      "size": 20915400
+    },
+    "knight_prime_brothers/knight_anti_grav_tank": {
+      "url": "ebfae846bfbc6710b72848d7d2da3dd19fd4ffdc5439a9d80c30da907495a60e.glb",
+      "sha256": "ebfae846bfbc6710b72848d7d2da3dd19fd4ffdc5439a9d80c30da907495a60e",
+      "size": 17738264
+    },
+    "knight_prime_brothers/knight_assault_prime_brothers": {
+      "url": "211b6f8c40dbc49827681286e737ed6d001bd981d5eb2663c6051102565febbb.glb",
+      "sha256": "211b6f8c40dbc49827681286e737ed6d001bd981d5eb2663c6051102565febbb",
+      "size": 14613368
+    },
+    "knight_prime_brothers/knight_attack_speeder": {
+      "url": "6f832010bc13663c7686c59ec7d403062ab8efc96c808778878eb7752af061dc.glb",
+      "sha256": "6f832010bc13663c7686c59ec7d403062ab8efc96c808778878eb7752af061dc",
+      "size": 15825096
+    },
+    "knight_prime_brothers/knight_blaster_brothers": {
+      "url": "155aa06b75653f5a459f51d73c2bae0718e5c69077c041dd34f036eceeb76e7a.glb",
+      "sha256": "155aa06b75653f5a459f51d73c2bae0718e5c69077c041dd34f036eceeb76e7a",
+      "size": 16694096
+    },
+    "knight_prime_brothers/knight_combat_walker": {
+      "url": "c5ccb7a962e96e606d23d5cca5ddc430995ca27b7aad3d40aba3d630b016be1e.glb",
+      "sha256": "c5ccb7a962e96e606d23d5cca5ddc430995ca27b7aad3d40aba3d630b016be1e",
+      "size": 18063040
+    },
+    "knight_prime_brothers/knight_desolator_brothers": {
+      "url": "3308736e00ae4b1e87aee15ae0b86407d04e22e45df78b28b95b40a57be5b060.glb",
+      "sha256": "3308736e00ae4b1e87aee15ae0b86407d04e22e45df78b28b95b40a57be5b060",
+      "size": 15687504
+    },
+    "knight_prime_brothers/knight_elimination_brothers": {
+      "url": "6013e7af4359dbbb56f510bdeed1ff09462c0d15d1cdf3b0d73329075559d929.glb",
+      "sha256": "6013e7af4359dbbb56f510bdeed1ff09462c0d15d1cdf3b0d73329075559d929",
+      "size": 15600932
+    },
+    "knight_prime_brothers/knight_elite_raider": {
+      "url": "ae1e95e404bf3d2818378107b40d81dfffd0ba8ba59902c3104ebd9437f66ded.glb",
+      "sha256": "ae1e95e404bf3d2818378107b40d81dfffd0ba8ba59902c3104ebd9437f66ded",
+      "size": 15857208
+    },
+    "knight_prime_brothers/knight_eradication_brothers": {
+      "url": "113bbf77a9eb7a02103399495d5cc256a11095fae7aa2d53fcea776eb91b8982.glb",
+      "sha256": "113bbf77a9eb7a02103399495d5cc256a11095fae7aa2d53fcea776eb91b8982",
+      "size": 15672324
+    },
+    "knight_prime_brothers/knight_grave_destroyers": {
+      "url": "a222b82ba6adae5b9593356fdd6eedaa1e36faffe83f1cf7c28690521b29fc3d.glb",
+      "sha256": "a222b82ba6adae5b9593356fdd6eedaa1e36faffe83f1cf7c28690521b29fc3d",
+      "size": 14180352
+    },
+    "knight_prime_brothers/knight_grave_prime_master": {
+      "url": "e54dadf45a23599e6493c36d66ba3fbc14a0e0af947c3c17e6ccbbc8ee57ac69.glb",
+      "sha256": "e54dadf45a23599e6493c36d66ba3fbc14a0e0af947c3c17e6ccbbc8ee57ac69",
+      "size": 16094520
+    },
+    "knight_prime_brothers/knight_guard_brothers": {
+      "url": "998ac69ae8b2f61ab9c9836f9999bf161fdd1c8e01e6d791dba3bfbff5f6b72d.glb",
+      "sha256": "998ac69ae8b2f61ab9c9836f9999bf161fdd1c8e01e6d791dba3bfbff5f6b72d",
+      "size": 17121624
+    },
+    "knight_prime_brothers/knight_heavy_anti_grav_destroyer_tank": {
+      "url": "cfa0144ab1c29eb764a87dc0c2c682660f8dfb14bd00742dddba12efd4278530.glb",
+      "sha256": "cfa0144ab1c29eb764a87dc0c2c682660f8dfb14bd00742dddba12efd4278530",
+      "size": 16630280
+    },
+    "knight_prime_brothers/knight_heavy_anti_grav_transport_tank": {
+      "url": "1cb11207f2bf09997446b9f4f05979074dc576ca468befba1987c5d5bd44e12f.glb",
+      "sha256": "1cb11207f2bf09997446b9f4f05979074dc576ca468befba1987c5d5bd44e12f",
+      "size": 19288596
+    },
+    "knight_prime_brothers/knight_heavy_prime_brothers": {
+      "url": "2e4ea5173c59af3e8cec5446d2fbdb6750fa500bdd927b17cb10488111b767ac.glb",
+      "sha256": "2e4ea5173c59af3e8cec5446d2fbdb6750fa500bdd927b17cb10488111b767ac",
+      "size": 16492804
+    },
+    "knight_prime_brothers/knight_infernal_brothers": {
+      "url": "2d84913ad806d0fa29fb4ec869218572e991005f38cd6e15490e20b5ca307b51.glb",
+      "sha256": "2d84913ad806d0fa29fb4ec869218572e991005f38cd6e15490e20b5ca307b51",
+      "size": 15854860
+    },
+    "knight_prime_brothers/knight_infiltration_brothers": {
+      "url": "488803a25232d62931ccc6e076644abff13f080e7efaf867621ba6b3e18b79bc.glb",
+      "sha256": "488803a25232d62931ccc6e076644abff13f080e7efaf867621ba6b3e18b79bc",
+      "size": 14082112
+    },
+    "knight_prime_brothers/knight_jetpack_brothers": {
+      "url": "37df853cae1934f323acd022c18714c16b9260aec8e4ebeaf29d52124fb3fca4.glb",
+      "sha256": "37df853cae1934f323acd022c18714c16b9260aec8e4ebeaf29d52124fb3fca4",
+      "size": 16462392
+    },
+    "knight_prime_brothers/knight_light_walker": {
+      "url": "131e8f598ac55b8e3901a3636a5231af6b140d9b499bb272548413e9c91a9e9c.glb",
+      "sha256": "131e8f598ac55b8e3901a3636a5231af6b140d9b499bb272548413e9c91a9e9c",
+      "size": 18146388
+    },
+    "knight_prime_brothers/knight_prime_atv": {
+      "url": "b020e9d8b48d8c326da2e9f2ea7ce528b896ccb7f0f4652ff21a3adf44fd8a14.glb",
+      "sha256": "b020e9d8b48d8c326da2e9f2ea7ce528b896ccb7f0f4652ff21a3adf44fd8a14",
+      "size": 17222608
+    },
+    "knight_prime_brothers/knight_prime_brother_bikers": {
+      "url": "77a1883c2ab8ad125bc7da8b7dcbe38ce56cc3998af31d2498f8584febcebf6e.glb",
+      "sha256": "77a1883c2ab8ad125bc7da8b7dcbe38ce56cc3998af31d2498f8584febcebf6e",
+      "size": 16731132
+    },
+    "knight_prime_brothers/knight_prime_brothers": {
+      "url": "a1da9a77b747886fa005f978a572cbfcea2f18217520d89858295b7115cac06f.glb",
+      "sha256": "a1da9a77b747886fa005f978a572cbfcea2f18217520d89858295b7115cac06f",
+      "size": 15014084
+    },
+    "knight_prime_brothers/knight_prime_drop_pod": {
+      "url": "fef3c15f6518e0a40e3a19574afb02727336d7f2aa391cda8ffd45dc0afb795a.glb",
+      "sha256": "fef3c15f6518e0a40e3a19574afb02727336d7f2aa391cda8ffd45dc0afb795a",
+      "size": 17105168
+    },
+    "knight_prime_brothers/knight_prime_master": {
+      "url": "5e1a32f5bf40db6d217fc00a90b3a2913ce1153f5ac3016e95e252b2c778f3f3.glb",
+      "sha256": "5e1a32f5bf40db6d217fc00a90b3a2913ce1153f5ac3016e95e252b2c778f3f3",
+      "size": 15509320
+    },
+    "knight_prime_brothers/knight_raider_brothers": {
+      "url": "a3f53a903c1613fd585936de95d8bf0d406002a0d2a1b43ac7e9888146db9c80.glb",
+      "sha256": "a3f53a903c1613fd585936de95d8bf0d406002a0d2a1b43ac7e9888146db9c80",
+      "size": 16248652
+    },
+    "knight_prime_brothers/knight_support_turret": {
+      "url": "e635c68e0b36da48c0514ffeaccfda7160370d8b66e4377a5eb37d02276ae508.glb",
+      "sha256": "e635c68e0b36da48c0514ffeaccfda7160370d8b66e4377a5eb37d02276ae508",
+      "size": 18040176
+    },
+    "knight_prime_brothers/knight_suppression_brothers": {
+      "url": "23c11fea3a25f0254769fdac06415864574db5656a623c48c5baae204b88eec4.glb",
+      "sha256": "23c11fea3a25f0254769fdac06415864574db5656a623c48c5baae204b88eec4",
+      "size": 15294784
+    },
+    "knight_prime_brothers/knight_veteran_assault_prime_brothers": {
+      "url": "c0294c2734a8aef15bd6958c69d53f5c0b20ad829ddac29fb9bb89d3778ab77d.glb",
+      "sha256": "c0294c2734a8aef15bd6958c69d53f5c0b20ad829ddac29fb9bb89d3778ab77d",
+      "size": 15576664
+    },
+    "knight_prime_brothers/knight_veteran_prime_brothers": {
+      "url": "20b5a5ae8ae9583d6d9625961ea1ac2dda6cdadb0e086d97963e5387ecea8578.glb",
+      "sha256": "20b5a5ae8ae9583d6d9625961ea1ac2dda6cdadb0e086d97963e5387ecea8578",
+      "size": 15353664
+    },
+    "knight_prime_brothers/knight_veteran_prime_master": {
+      "url": "9b9287283a7a855e90255dd7a8cd645dabe9153fe04d3c5d4679ad0b0f035232.glb",
+      "sha256": "9b9287283a7a855e90255dd7a8cd645dabe9153fe04d3c5d4679ad0b0f035232",
+      "size": 15237020
+    },
+    "wolf_prime_brothers/great_hunting_wolves": {
+      "url": "a53a9981d3116a26d3b5f142da450c691020faf3f94cb3fa0e45f755b38e50d4.glb",
+      "sha256": "a53a9981d3116a26d3b5f142da450c691020faf3f94cb3fa0e45f755b38e50d4",
+      "size": 15199860
+    },
+    "wolf_prime_brothers/wolf_aggro_brothers": {
+      "url": "44511aa55a41da8d0c5e96ba2fecfdf76c8348539d7fbcd24cbfe2b4a6562a6d.glb",
+      "sha256": "44511aa55a41da8d0c5e96ba2fecfdf76c8348539d7fbcd24cbfe2b4a6562a6d",
+      "size": 15243116
+    },
+    "wolf_prime_brothers/wolf_anti_grav_apc": {
+      "url": "99a728597a2f0f83eb6986f666ca4e212d9fb06e2f6ab7c3e76a29701437c90a.glb",
+      "sha256": "99a728597a2f0f83eb6986f666ca4e212d9fb06e2f6ab7c3e76a29701437c90a",
+      "size": 17169936
+    },
+    "wolf_prime_brothers/wolf_anti_grav_tank": {
+      "url": "dab3db28a115c3b4b977b2ac5a51a5674dd45539c09a0c3ae14c42409620d49e.glb",
+      "sha256": "dab3db28a115c3b4b977b2ac5a51a5674dd45539c09a0c3ae14c42409620d49e",
+      "size": 18278728
+    },
+    "wolf_prime_brothers/wolf_assault_prime_brothers": {
+      "url": "b825ae6e7125f068eb90021e3e730dea806f27e96bbf0877d1d050873202b3a7.glb",
+      "sha256": "b825ae6e7125f068eb90021e3e730dea806f27e96bbf0877d1d050873202b3a7",
+      "size": 14585340
+    },
+    "wolf_prime_brothers/wolf_attack_speeder": {
+      "url": "0efda9092cdb44f2c02cafec84ca582d2b31eff03ce6cd5a9a3653a2f93f34c7.glb",
+      "sha256": "0efda9092cdb44f2c02cafec84ca582d2b31eff03ce6cd5a9a3653a2f93f34c7",
+      "size": 17581120
+    },
+    "wolf_prime_brothers/wolf_blaster_brothers": {
+      "url": "073c879803dd774d9a328ed84b90cf75056da24b11812c96bbeb30b5a18010e6.glb",
+      "sha256": "073c879803dd774d9a328ed84b90cf75056da24b11812c96bbeb30b5a18010e6",
+      "size": 17611884
+    },
+    "wolf_prime_brothers/wolf_combat_walker": {
+      "url": "7bd5d1bea52db547da3a6776944774e6a453b14071836ad9a57ec969c8f63f2b.glb",
+      "sha256": "7bd5d1bea52db547da3a6776944774e6a453b14071836ad9a57ec969c8f63f2b",
+      "size": 17723640
+    },
+    "wolf_prime_brothers/wolf_desolator_brothers": {
+      "url": "cabe5083a7491cfc8d78edb69d12054c7fc26feb45ad90ce0618759a92aea5ff.glb",
+      "sha256": "cabe5083a7491cfc8d78edb69d12054c7fc26feb45ad90ce0618759a92aea5ff",
+      "size": 14819576
+    },
+    "wolf_prime_brothers/wolf_elimination_brothers": {
+      "url": "c8590affc0a65ad2375a71572a93cfe1e651a17774ae3fb1bd2c307626e2e0ae.glb",
+      "sha256": "c8590affc0a65ad2375a71572a93cfe1e651a17774ae3fb1bd2c307626e2e0ae",
+      "size": 14232336
+    },
+    "wolf_prime_brothers/wolf_elite_raider": {
+      "url": "871715d5d2af8cb250b49cccf14b5590d67093deaea6bca064c1d5417e7c186a.glb",
+      "sha256": "871715d5d2af8cb250b49cccf14b5590d67093deaea6bca064c1d5417e7c186a",
+      "size": 16027592
+    },
+    "wolf_prime_brothers/wolf_eradication_brothers": {
+      "url": "b823779f51b8406a7b58bc706b969d9a7c06c471eedd0abb3da9247aae62b598.glb",
+      "sha256": "b823779f51b8406a7b58bc706b969d9a7c06c471eedd0abb3da9247aae62b598",
+      "size": 15724156
+    },
+    "wolf_prime_brothers/wolf_grave_destroyers": {
+      "url": "3b5a74d2f8ecb0cce2ff8403080f0166683c9e3b4938abb2539cff57a19213ea.glb",
+      "sha256": "3b5a74d2f8ecb0cce2ff8403080f0166683c9e3b4938abb2539cff57a19213ea",
+      "size": 15731868
+    },
+    "wolf_prime_brothers/wolf_grave_prime_master": {
+      "url": "0a95a6bdf49e9dfffe7f12a777e824a9e29034fc86f1a7a21af6e642596c5064.glb",
+      "sha256": "0a95a6bdf49e9dfffe7f12a777e824a9e29034fc86f1a7a21af6e642596c5064",
+      "size": 15036860
+    },
+    "wolf_prime_brothers/wolf_guard_brothers": {
+      "url": "05c7a996ff09792262dfafcd4c39b23b7fdd212ec91c47694b9c5a53658cfc9e.glb",
+      "sha256": "05c7a996ff09792262dfafcd4c39b23b7fdd212ec91c47694b9c5a53658cfc9e",
+      "size": 15323236
+    },
+    "wolf_prime_brothers/wolf_heavy_anti_grav_destroyer_tank": {
+      "url": "03a0addc2f22806f999688bcafeb7cbeefd1b6850323c48c9662f3c5df691d17.glb",
+      "sha256": "03a0addc2f22806f999688bcafeb7cbeefd1b6850323c48c9662f3c5df691d17",
+      "size": 16386600
+    },
+    "wolf_prime_brothers/wolf_heavy_anti_grav_transport_tank": {
+      "url": "c2e340bfc4c59ce4cb2fe2c03b132b90c1ba8740a664ef2f68a97e0f24f883bb.glb",
+      "sha256": "c2e340bfc4c59ce4cb2fe2c03b132b90c1ba8740a664ef2f68a97e0f24f883bb",
+      "size": 18049668
+    },
+    "wolf_prime_brothers/wolf_heavy_prime_brothers": {
+      "url": "fb2ef93996000bbc37b2d47b6d8d25afa2370d56e5352a45cf60f90d8cde2f21.glb",
+      "sha256": "fb2ef93996000bbc37b2d47b6d8d25afa2370d56e5352a45cf60f90d8cde2f21",
+      "size": 17795036
+    },
+    "wolf_prime_brothers/wolf_infernal_brothers": {
+      "url": "7374440fd96c9007d2b8c1e1a86a0c5f3b7b7c362c4f387593959e1dfac84e0a.glb",
+      "sha256": "7374440fd96c9007d2b8c1e1a86a0c5f3b7b7c362c4f387593959e1dfac84e0a",
+      "size": 13990432
+    },
+    "wolf_prime_brothers/wolf_infiltration_brothers": {
+      "url": "b827450f291317e2931fc9798e8c715a03b5a0b99d16447e80d984cd4f84847d.glb",
+      "sha256": "b827450f291317e2931fc9798e8c715a03b5a0b99d16447e80d984cd4f84847d",
+      "size": 14479640
+    },
+    "wolf_prime_brothers/wolf_jetpack_brothers": {
+      "url": "60777f2668db3865892fb1baf60292114b0618574a7561f80240fe47047959dc.glb",
+      "sha256": "60777f2668db3865892fb1baf60292114b0618574a7561f80240fe47047959dc",
+      "size": 15648576
+    },
+    "wolf_prime_brothers/wolf_light_walker": {
+      "url": "6696b119eed0a012d75f9a9d456b8b57dff8173d8a371b211684acaf9186e6eb.glb",
+      "sha256": "6696b119eed0a012d75f9a9d456b8b57dff8173d8a371b211684acaf9186e6eb",
+      "size": 16875232
+    },
+    "wolf_prime_brothers/wolf_prime_atv": {
+      "url": "3ef8e47dfa3a62c6b942451cd579cb8ac486db1f6bb61aeb6e6263f77564fd0c.glb",
+      "sha256": "3ef8e47dfa3a62c6b942451cd579cb8ac486db1f6bb61aeb6e6263f77564fd0c",
+      "size": 15272980
+    },
+    "wolf_prime_brothers/wolf_prime_brother_bikers": {
+      "url": "bb88ba950750e5a43d94d0c9dbfc749f12c0a3eb246fefe93c7d2528d3d53779.glb",
+      "sha256": "bb88ba950750e5a43d94d0c9dbfc749f12c0a3eb246fefe93c7d2528d3d53779",
+      "size": 15665448
+    },
+    "wolf_prime_brothers/wolf_prime_brothers": {
+      "url": "d7deb85f073b31c5ffc4f7027e2ca0e6413eca837640f90a0808ba2d710cbaba.glb",
+      "sha256": "d7deb85f073b31c5ffc4f7027e2ca0e6413eca837640f90a0808ba2d710cbaba",
+      "size": 14957372
+    },
+    "wolf_prime_brothers/wolf_prime_drop_pod": {
+      "url": "e8ebc6f15cb62115fce2958a7e4242cddc596c87e3cc111f272d5f906a0e359e.glb",
+      "sha256": "e8ebc6f15cb62115fce2958a7e4242cddc596c87e3cc111f272d5f906a0e359e",
+      "size": 16587852
+    },
+    "wolf_prime_brothers/wolf_prime_master": {
+      "url": "8f86f84b7a71e46d50416f94ff99d05338ce7162bef3b9c8f773326ad6b52b08.glb",
+      "sha256": "8f86f84b7a71e46d50416f94ff99d05338ce7162bef3b9c8f773326ad6b52b08",
+      "size": 14472012
+    },
+    "wolf_prime_brothers/wolf_raider_brothers": {
+      "url": "fa3e9370dd65e2bf92123584c2a6698dca0f7b6c06358e8e0f758f4da189437f.glb",
+      "sha256": "fa3e9370dd65e2bf92123584c2a6698dca0f7b6c06358e8e0f758f4da189437f",
+      "size": 14873496
+    },
+    "wolf_prime_brothers/wolf_support_turret": {
+      "url": "397972bce71c74d27580f754d214431e71c4495154bb97ff61e3923d30465a9a.glb",
+      "sha256": "397972bce71c74d27580f754d214431e71c4495154bb97ff61e3923d30465a9a",
+      "size": 21043500
+    },
+    "wolf_prime_brothers/wolf_suppression_brothers": {
+      "url": "814d924a8b5b13ae6342f45d11182e2e7a0a0cf091fe5d9f682f3ea7b7587e8c.glb",
+      "sha256": "814d924a8b5b13ae6342f45d11182e2e7a0a0cf091fe5d9f682f3ea7b7587e8c",
+      "size": 14619404
+    },
+    "wolf_prime_brothers/wolf_veteran_assault_prime_brothers": {
+      "url": "8a9a13c5a4dcc9cce3bef2fa76ba352fcb5b354e2f326a0fee18846a6932abc0.glb",
+      "sha256": "8a9a13c5a4dcc9cce3bef2fa76ba352fcb5b354e2f326a0fee18846a6932abc0",
+      "size": 14469688
+    },
+    "wolf_prime_brothers/wolf_veteran_prime_brothers": {
+      "url": "7696df309ed1d48eed8be7f9b19228876e731f6a1e45aa9ed2702afa782a0e28.glb",
+      "sha256": "7696df309ed1d48eed8be7f9b19228876e731f6a1e45aa9ed2702afa782a0e28",
+      "size": 15396264
+    },
+    "wolf_prime_brothers/wolf_veteran_prime_master": {
+      "url": "297c2bfd42695dc32013e6b4f3d5ed1fbf6a4c683a09755f73dc931cc251af95.glb",
+      "sha256": "297c2bfd42695dc32013e6b4f3d5ed1fbf6a4c683a09755f73dc931cc251af95",
+      "size": 14300968
+    },
+    "watch_prime_brothers/watch_aggro_brothers": {
+      "url": "f78d5b135f0d2916f429e4ea7ed79b091f0d8e81f643b1d436d2591cd5368bad.glb",
+      "sha256": "f78d5b135f0d2916f429e4ea7ed79b091f0d8e81f643b1d436d2591cd5368bad",
+      "size": 15840072
+    },
+    "watch_prime_brothers/watch_anti_grav_apc": {
+      "url": "b0e05122ee945783e322deadf81519ebd30875b06f0594f0122aed51d1c5537a.glb",
+      "sha256": "b0e05122ee945783e322deadf81519ebd30875b06f0594f0122aed51d1c5537a",
+      "size": 18194032
+    },
+    "watch_prime_brothers/watch_anti_grav_tank": {
+      "url": "79b74f1d9ed1a9b21a01c713797dfe0cf17ad7b4c7d11e820607b5602fa0b48e.glb",
+      "sha256": "79b74f1d9ed1a9b21a01c713797dfe0cf17ad7b4c7d11e820607b5602fa0b48e",
+      "size": 17189160
+    },
+    "watch_prime_brothers/watch_assault_prime_brothers": {
+      "url": "bd546ee29555ea93d5796d7621c692aaf2155804225f34b6680344c8ab50f846.glb",
+      "sha256": "bd546ee29555ea93d5796d7621c692aaf2155804225f34b6680344c8ab50f846",
+      "size": 15958608
+    },
+    "watch_prime_brothers/watch_attack_speeder": {
+      "url": "f873d2e0e630b018b315d1344afaae0373fbcf9b20d4366716ce345b65811529.glb",
+      "sha256": "f873d2e0e630b018b315d1344afaae0373fbcf9b20d4366716ce345b65811529",
+      "size": 18503008
+    },
+    "watch_prime_brothers/watch_blaster_brothers": {
+      "url": "c951adcf5b03f4ca0e0b303f1f07e8fd06489d356760aabf92bffcf4171696fa.glb",
+      "sha256": "c951adcf5b03f4ca0e0b303f1f07e8fd06489d356760aabf92bffcf4171696fa",
+      "size": 14923600
+    },
+    "watch_prime_brothers/watch_combat_walker": {
+      "url": "7555b08bfbbd552e6d2ab3b36cd96c58bfc8d6270b9e223fcca2af2ff117c7bb.glb",
+      "sha256": "7555b08bfbbd552e6d2ab3b36cd96c58bfc8d6270b9e223fcca2af2ff117c7bb",
+      "size": 16170448
+    },
+    "watch_prime_brothers/watch_desolator_brothers": {
+      "url": "f64bed87c60d8a6b1a3245e7456ed8fa34a700e22bf0dcdeafec48219a91fc37.glb",
+      "sha256": "f64bed87c60d8a6b1a3245e7456ed8fa34a700e22bf0dcdeafec48219a91fc37",
+      "size": 14487828
+    },
+    "watch_prime_brothers/watch_elimination_brothers": {
+      "url": "bdfe8aa4bc734222e7bdf89ace529f8d3a561076f4963a510b3ca2e7a1235417.glb",
+      "sha256": "bdfe8aa4bc734222e7bdf89ace529f8d3a561076f4963a510b3ca2e7a1235417",
+      "size": 14819964
+    },
+    "watch_prime_brothers/watch_elite_raider": {
+      "url": "7fa578840c6afa309528df747835d45b504b8505b76918ccf6ae563968b71b3f.glb",
+      "sha256": "7fa578840c6afa309528df747835d45b504b8505b76918ccf6ae563968b71b3f",
+      "size": 14352972
+    },
+    "watch_prime_brothers/watch_eradication_brothers": {
+      "url": "226d07531b34df29ae6421c5a0d9015e850077138ba97646123bc91fc00257f3.glb",
+      "sha256": "226d07531b34df29ae6421c5a0d9015e850077138ba97646123bc91fc00257f3",
+      "size": 15029876
+    },
+    "watch_prime_brothers/watch_grave_destroyers": {
+      "url": "70a5e301fb7e4c52929954a94dbbfd9c096afe92d86214889ecbc20d021a32c2.glb",
+      "sha256": "70a5e301fb7e4c52929954a94dbbfd9c096afe92d86214889ecbc20d021a32c2",
+      "size": 14584888
+    },
+    "watch_prime_brothers/watch_grave_prime_master": {
+      "url": "861709a33420615154d9cea032ba1fa5e36a6d4544b60e495437220f01f4558f.glb",
+      "sha256": "861709a33420615154d9cea032ba1fa5e36a6d4544b60e495437220f01f4558f",
+      "size": 14988528
+    },
+    "watch_prime_brothers/watch_guard_brothers": {
+      "url": "40fd810a066148ff8937e52abfc43103f18496cdf63511b0d281874f09da21ee.glb",
+      "sha256": "40fd810a066148ff8937e52abfc43103f18496cdf63511b0d281874f09da21ee",
+      "size": 15648516
+    },
+    "watch_prime_brothers/watch_heavy_anti_grav_destroyer_tank": {
+      "url": "b53c3f806c81eadf667e59781c927ba26b1534c6591b0214ecc4e880605d503e.glb",
+      "sha256": "b53c3f806c81eadf667e59781c927ba26b1534c6591b0214ecc4e880605d503e",
+      "size": 18278072
+    },
+    "watch_prime_brothers/watch_heavy_anti_grav_transport_tank": {
+      "url": "c400927bc626cede1117852a5a08631c6b455092bec50b0dfa587e9f36beea33.glb",
+      "sha256": "c400927bc626cede1117852a5a08631c6b455092bec50b0dfa587e9f36beea33",
+      "size": 18062276
+    },
+    "watch_prime_brothers/watch_heavy_prime_brothers": {
+      "url": "35f2931721474a2bfa8295dbd40932d6d70344499d857b9ba2f1d51acf3d8b4b.glb",
+      "sha256": "35f2931721474a2bfa8295dbd40932d6d70344499d857b9ba2f1d51acf3d8b4b",
+      "size": 14640196
+    },
+    "watch_prime_brothers/watch_infernal_brothers": {
+      "url": "b994d15c9107a41e4ee630d97176772e7830a3a192c15ce6f2e1ed24de3376dc.glb",
+      "sha256": "b994d15c9107a41e4ee630d97176772e7830a3a192c15ce6f2e1ed24de3376dc",
+      "size": 15269480
+    },
+    "watch_prime_brothers/watch_infiltration_brothers": {
+      "url": "9a2ac090719e189fda769dd9e9d1e6a22f90f027e4c8774411dd3c9f583e6393.glb",
+      "sha256": "9a2ac090719e189fda769dd9e9d1e6a22f90f027e4c8774411dd3c9f583e6393",
+      "size": 14787940
+    },
+    "watch_prime_brothers/watch_jetpack_brothers": {
+      "url": "ae31182bc10d01dbe2daceea589cdcd216f16aaae720a9f08e8c8e4b619f7c87.glb",
+      "sha256": "ae31182bc10d01dbe2daceea589cdcd216f16aaae720a9f08e8c8e4b619f7c87",
+      "size": 15828856
+    },
+    "watch_prime_brothers/watch_light_walker": {
+      "url": "08ee40d7b0cfdc22788609f2abb97cff759e3c09b9b003c9d9803558993329a0.glb",
+      "sha256": "08ee40d7b0cfdc22788609f2abb97cff759e3c09b9b003c9d9803558993329a0",
+      "size": 16018240
+    },
+    "watch_prime_brothers/watch_prime_atv": {
+      "url": "2b999b2f66a222f49319adc41c7d91236a798600e3b9a3c39a08264a83cf846c.glb",
+      "sha256": "2b999b2f66a222f49319adc41c7d91236a798600e3b9a3c39a08264a83cf846c",
+      "size": 16535676
+    },
+    "watch_prime_brothers/watch_prime_brother_bikers": {
+      "url": "7d9bc7c3427f292185a72abade9c068dd4511d237888fa647e12587014eccffa.glb",
+      "sha256": "7d9bc7c3427f292185a72abade9c068dd4511d237888fa647e12587014eccffa",
+      "size": 14974064
+    },
+    "watch_prime_brothers/watch_prime_brothers": {
+      "url": "393300d14dedd92776fdc62f01dd52a0c7d63344029dad6b09cc7af3843daeec.glb",
+      "sha256": "393300d14dedd92776fdc62f01dd52a0c7d63344029dad6b09cc7af3843daeec",
+      "size": 14070768
+    },
+    "watch_prime_brothers/watch_prime_drop_pod": {
+      "url": "85dce646314fd799293e007a75a9158974a2880334644af3827605ae1aede0d4.glb",
+      "sha256": "85dce646314fd799293e007a75a9158974a2880334644af3827605ae1aede0d4",
+      "size": 15081384
+    },
+    "watch_prime_brothers/watch_prime_master": {
+      "url": "e81d50c3c67dd6b210377455ba4c78910d86c7176dcf56ceebc926429a23f680.glb",
+      "sha256": "e81d50c3c67dd6b210377455ba4c78910d86c7176dcf56ceebc926429a23f680",
+      "size": 14242440
+    },
+    "watch_prime_brothers/watch_raider_brothers": {
+      "url": "cd1bf1a7e120338fc168a10d6e322b472300fb299c9a8a339e9b122298deb7ac.glb",
+      "sha256": "cd1bf1a7e120338fc168a10d6e322b472300fb299c9a8a339e9b122298deb7ac",
+      "size": 13926864
+    },
+    "watch_prime_brothers/watch_support_turret": {
+      "url": "65c9526d8bb95a9b315faf02c26625dd12ccd6b84b9e06d9c3818b32fd8dedd4.glb",
+      "sha256": "65c9526d8bb95a9b315faf02c26625dd12ccd6b84b9e06d9c3818b32fd8dedd4",
+      "size": 15449880
+    },
+    "watch_prime_brothers/watch_suppression_brothers": {
+      "url": "cdfb7f0dd0f2f70237bfe4ceffdd2c04d323955bf0f63ee722d7f3a3eba0afd9.glb",
+      "sha256": "cdfb7f0dd0f2f70237bfe4ceffdd2c04d323955bf0f63ee722d7f3a3eba0afd9",
+      "size": 14734940
+    },
+    "soul_snatcher_cults/acolytes": {
+      "url": "805f07c2956d0cc62847ed336d740a5dd6f9c993ff9af72dec09dab90eab9888.glb",
+      "sha256": "805f07c2956d0cc62847ed336d740a5dd6f9c993ff9af72dec09dab90eab9888",
+      "size": 14641412
+    },
+    "soul_snatcher_cults/attack vehicle": {
+      "url": "d96963072a062979721a07d6a5053d39cdeea09546ad3fae62bcb8ab876efb98.glb",
+      "sha256": "d96963072a062979721a07d6a5053d39cdeea09546ad3fae62bcb8ab876efb98",
+      "size": 16780800
+    },
+    "soul_snatcher_cults/battle tank": {
+      "url": "5d5313441579f4b4584bbddb8e9ea79abc9ebef0709404516dc477b58b1e2998.glb",
+      "sha256": "5d5313441579f4b4584bbddb8e9ea79abc9ebef0709404516dc477b58b1e2998",
+      "size": 17248612
+    },
+    "soul_snatcher_cults/brute champion": {
+      "url": "75d3da3d831e0fd753fcd45e8d3c4a41d057b3b5b59a6c4f5b70d5b9f970abfe.glb",
+      "sha256": "75d3da3d831e0fd753fcd45e8d3c4a41d057b3b5b59a6c4f5b70d5b9f970abfe",
+      "size": 14002976
+    },
+    "soul_snatcher_cults/cult hitman": {
+      "url": "c56701ee38ecb62a1df32f9d1b89ec6ac1a43824daa7323f058455370d813d1d.glb",
+      "sha256": "c56701ee38ecb62a1df32f9d1b89ec6ac1a43824daa7323f058455370d813d1d",
+      "size": 13615784
+    },
+    "soul_snatcher_cults/cult leader": {
+      "url": "3e7c83036b5f70b0f1ad84857b6d90bf715fb2d18c05c5f90e3844c0f2c9f9e8.glb",
+      "sha256": "3e7c83036b5f70b0f1ad84857b6d90bf715fb2d18c05c5f90e3844c0f2c9f9e8",
+      "size": 15759240
+    },
+    "soul_snatcher_cults/grinder truck": {
+      "url": "07b3a81645019b2ea5583eb742a55f172e16f93a3c95f6baa3223cb3d25640bd.glb",
+      "sha256": "07b3a81645019b2ea5583eb742a55f172e16f93a3c95f6baa3223cb3d25640bd",
+      "size": 18070948
+    },
+    "soul_snatcher_cults/light apc": {
+      "url": "08f0d3405b3306b359f93e2017880327646694d990cf43bcf5cfad07c90150fb.glb",
+      "sha256": "08f0d3405b3306b359f93e2017880327646694d990cf43bcf5cfad07c90150fb",
+      "size": 18147104
+    },
+    "soul_snatcher_cults/light walker": {
+      "url": "19d0ef3c58886c3bebabaa07de2794f4ba9092c02887bde8c127f9cd46df6500.glb",
+      "sha256": "19d0ef3c58886c3bebabaa07de2794f4ba9092c02887bde8c127f9cd46df6500",
+      "size": 15205644
+    },
+    "soul_snatcher_cults/mining truck": {
+      "url": "0771950b6309cb8e8157b82a294042e09b22063a5c95fda26056f61593ff21ca.glb",
+      "sha256": "0771950b6309cb8e8157b82a294042e09b22063a5c95fda26056f61593ff21ca",
+      "size": 16259240
+    },
+    "soul_snatcher_cults/minions": {
+      "url": "44823a6fe519046288d7129498e03311836037879834fe9d39f159e0b0a06bbe.glb",
+      "sha256": "44823a6fe519046288d7129498e03311836037879834fe9d39f159e0b0a06bbe",
+      "size": 13413304
+    },
+    "soul_snatcher_cults/mutant brutes": {
+      "url": "ffc7803c4ce39a18a530950925ee21641225ab860b0abb3c877fdb830c8bc625.glb",
+      "sha256": "ffc7803c4ce39a18a530950925ee21641225ab860b0abb3c877fdb830c8bc625",
+      "size": 14143028
+    },
+    "soul_snatcher_cults/mutant soul snatchers": {
+      "url": "f1e0cf81dddf5caac6484fb7529b83f467d8d81542013e4d95cabe3d079823d9.glb",
+      "sha256": "f1e0cf81dddf5caac6484fb7529b83f467d8d81542013e4d95cabe3d079823d9",
+      "size": 15365560
+    },
+    "soul_snatcher_cults/neophyte bikers": {
+      "url": "e8a2aca359ef9388c706e5f89757f2195bb64794432a6ab0d1ea7adfc1829ccf.glb",
+      "sha256": "e8a2aca359ef9388c706e5f89757f2195bb64794432a6ab0d1ea7adfc1829ccf",
+      "size": 14658784
+    },
+    "soul_snatcher_cults/neophyte quadbike": {
+      "url": "d574e3cb14dc7658762ee4a26db199f6feffb579008ca917d0820021225b60a4.glb",
+      "sha256": "d574e3cb14dc7658762ee4a26db199f6feffb579008ca917d0820021225b60a4",
+      "size": 14564008
+    },
+    "soul_snatcher_cults/neophytes": {
+      "url": "c036f06a175ce65d5575756a4c62c69f672980a71e9adeb37cfb1dd7b58ed8f6.glb",
+      "sha256": "c036f06a175ce65d5575756a4c62c69f672980a71e9adeb37cfb1dd7b58ed8f6",
+      "size": 12714588
+    },
+    "soul_snatcher_cults/soul snatchers": {
+      "url": "e61f99d79113fdc25244416310dc10bf5a87aeebf30c8a389dce6d8a98fd9349.glb",
+      "sha256": "e61f99d79113fdc25244416310dc10bf5a87aeebf30c8a389dce6d8a98fd9349",
+      "size": 15101144
+    },
+    "soul_snatcher_cults/support minions": {
+      "url": "81fec0b027a3442547f0ed04180b2ccae02d9e9414a7fafea9f44adaae7b6044.glb",
+      "sha256": "81fec0b027a3442547f0ed04180b2ccae02d9e9414a7fafea9f44adaae7b6044",
+      "size": 14700720
+    },
+    "soul_snatcher_cults/supreme leader": {
+      "url": "9ddc59dbb071aaec3b5bd59d9a921967e5f3eb5adf82287e73c67d6d0ff0ee15.glb",
+      "sha256": "9ddc59dbb071aaec3b5bd59d9a921967e5f3eb5adf82287e73c67d6d0ff0ee15",
+      "size": 15277576
+    },
+    "dark_elf_raiders/blood hounds": {
+      "url": "017aba6d927f43724570be57017d469856bc569f31a0040f20d55b7714decc29.glb",
+      "sha256": "017aba6d927f43724570be57017d469856bc569f31a0040f20d55b7714decc29",
+      "size": 14271568
+    },
+    "dark_elf_raiders/clawed beast": {
+      "url": "d747ae6221857ffae1e080d47ade42362147df02d61f88e46a0a47d41b802ec5.glb",
+      "sha256": "d747ae6221857ffae1e080d47ade42362147df02d61f88e46a0a47d41b802ec5",
+      "size": 15756480
+    },
+    "dark_elf_raiders/court henchmen": {
+      "url": "a0082df763bcc09214602fb56ebc57f999e5ed78bdb05ca7d2e68c931000a5ca.glb",
+      "sha256": "a0082df763bcc09214602fb56ebc57f999e5ed78bdb05ca7d2e68c931000a5ca",
+      "size": 15963248
+    },
+    "dark_elf_raiders/crow swarms": {
+      "url": "c125cb08487d4272bc223cd199b71542bb66479e8e93744e8359d1f9b764c668.glb",
+      "sha256": "c125cb08487d4272bc223cd199b71542bb66479e8e93744e8359d1f9b764c668",
+      "size": 13175580
+    },
+    "dark_elf_raiders/dark lord": {
+      "url": "ec71aa9851220161511483b8b3d48f24311fdb3f6f5a014219b72e6b0bf96830.glb",
+      "sha256": "ec71aa9851220161511483b8b3d48f24311fdb3f6f5a014219b72e6b0bf96830",
+      "size": 14930268
+    },
+    "dark_elf_raiders/elite raider": {
+      "url": "1d7ff3d6b076bf6fef9c4d84d9dc22476ff959b559199a8290d00d946bcfb133.glb",
+      "sha256": "1d7ff3d6b076bf6fef9c4d84d9dc22476ff959b559199a8290d00d946bcfb133",
+      "size": 15544000
+    },
+    "dark_elf_raiders/elite true raider": {
+      "url": "4742330d263088aa1895d169999f4df3858cc89c45df1f5739c4fad5df5034fa.glb",
+      "sha256": "4742330d263088aa1895d169999f4df3858cc89c45df1f5739c4fad5df5034fa",
+      "size": 14920000
+    },
+    "dark_elf_raiders/engine of suffering": {
+      "url": "cbc7c4adee7c013191f8ed4b291bb9069be30262c0e498a26e569ea4fb936ef0.glb",
+      "sha256": "cbc7c4adee7c013191f8ed4b291bb9069be30262c0e498a26e569ea4fb936ef0",
+      "size": 19398104
+    },
+    "dark_elf_raiders/gene brutes": {
+      "url": "5256686bdfba4788ad374b5892b94459d85529c1c462e7280ac40594d280a637.glb",
+      "sha256": "5256686bdfba4788ad374b5892b94459d85529c1c462e7280ac40594d280a637",
+      "size": 14687840
+    },
+    "dark_elf_raiders/gene tech master": {
+      "url": "d82be6a384d2965132ed4d2a736bc3337eb9e46bb5454661a0606655b2ab69aa.glb",
+      "sha256": "d82be6a384d2965132ed4d2a736bc3337eb9e46bb5454661a0606655b2ab69aa",
+      "size": 16933668
+    },
+    "dark_elf_raiders/gene warriors": {
+      "url": "178e994fdfd4b35f496fe5621616fa545cc435201160f63335e5e0e965821925.glb",
+      "sha256": "178e994fdfd4b35f496fe5621616fa545cc435201160f63335e5e0e965821925",
+      "size": 18769764
+    },
+    "dark_elf_raiders/heavy jetbike": {
+      "url": "77259c506a70583eebd6cb39b46a19d00d67e04f9755cf771b68ce5354a8b89e.glb",
+      "sha256": "77259c506a70583eebd6cb39b46a19d00d67e04f9755cf771b68ce5354a8b89e",
+      "size": 17344248
+    },
+    "dark_elf_raiders/heavy skimmer": {
+      "url": "09f472afef5163bbe5fdaf8b450443916fc008e233548216305614000751a8db.glb",
+      "sha256": "09f472afef5163bbe5fdaf8b450443916fc008e233548216305614000751a8db",
+      "size": 16565644
+    },
+    "dark_elf_raiders/hoverboard riders": {
+      "url": "4c46a8a1c86a4c557b93e5cb64b2f9aacddf829ccfc2169134dece0d66377c63.glb",
+      "sha256": "4c46a8a1c86a4c557b93e5cb64b2f9aacddf829ccfc2169134dece0d66377c63",
+      "size": 16296124
+    },
+    "dark_elf_raiders/jetbike riders": {
+      "url": "18a228f81f516e72ef2bec24e54dd65739f06cf8affd9da188aecb747f5ea10b.glb",
+      "sha256": "18a228f81f516e72ef2bec24e54dd65739f06cf8affd9da188aecb747f5ea10b",
+      "size": 17229760
+    },
+    "dark_elf_raiders/leech engine": {
+      "url": "097daeff369fb93f4a376f70ca102744f3c67d5f8f445af092aa4c0704569bc1.glb",
+      "sha256": "097daeff369fb93f4a376f70ca102744f3c67d5f8f445af092aa4c0704569bc1",
+      "size": 19441900
+    },
+    "dark_elf_raiders/light skimmer": {
+      "url": "1136e87fe28161a6f5af3374e614c20d8a0bac406245b7f1570db2908dcfce06.glb",
+      "sha256": "1136e87fe28161a6f5af3374e614c20d8a0bac406245b7f1570db2908dcfce06",
+      "size": 16407624
+    },
+    "dark_elf_raiders/nightmares": {
+      "url": "7c08125cc9b376f46f2ee684298f874b18476a7d3e385f8506e8511c7c093005.glb",
+      "sha256": "7c08125cc9b376f46f2ee684298f874b18476a7d3e385f8506e8511c7c093005",
+      "size": 15133888
+    },
+    "dark_elf_raiders/raven bomber": {
+      "url": "a0afe5d7aeab6a76296692fa27119617e4852f0d35f30af12a5de9fd5d05ab30.glb",
+      "sha256": "a0afe5d7aeab6a76296692fa27119617e4852f0d35f30af12a5de9fd5d05ab30",
+      "size": 17526448
+    },
+    "dark_elf_raiders/razor fighter": {
+      "url": "458400b9aafa466915f3413c9cc7ba2af1d431601f4c606afb90237c9f01bcb6.glb",
+      "sha256": "458400b9aafa466915f3413c9cc7ba2af1d431601f4c606afb90237c9f01bcb6",
+      "size": 17264104
+    },
+    "dark_elf_raiders/shadow warriors": {
+      "url": "a8c2045f548b5fa00e2546874ddbc89869ae029805030de2b15ae2e28c91846b.glb",
+      "sha256": "a8c2045f548b5fa00e2546874ddbc89869ae029805030de2b15ae2e28c91846b",
+      "size": 16450900
+    },
+    "dark_elf_raiders/true warriors": {
+      "url": "f52a0a9ddedc18a00e831b9d1db8552d1eccc369a7e56ad7e88db62be3aa28f0.glb",
+      "sha256": "f52a0a9ddedc18a00e831b9d1db8552d1eccc369a7e56ad7e88db62be3aa28f0",
+      "size": 14974888
+    },
+    "dark_elf_raiders/true witches": {
+      "url": "f6ee89a05083966973a49230f975379b3315f9cd4f2845a6e0c3080d90206105.glb",
+      "sha256": "f6ee89a05083966973a49230f975379b3315f9cd4f2845a6e0c3080d90206105",
+      "size": 15845600
+    },
+    "dark_elf_raiders/warriors": {
+      "url": "9a1975a7ec37b3499a6a4db8d18d49c897f710d819020fc9ae1a035b673081e4.glb",
+      "sha256": "9a1975a7ec37b3499a6a4db8d18d49c897f710d819020fc9ae1a035b673081e4",
+      "size": 14536440
+    },
+    "dark_elf_raiders/winged warriors": {
+      "url": "f8e3fb29e46f4a2d22e2e10f0d28aa96384777750c5590ee823f4afdff2c7597.glb",
+      "sha256": "f8e3fb29e46f4a2d22e2e10f0d28aa96384777750c5590ee823f4afdff2c7597",
+      "size": 15722056
+    },
+    "dark_elf_raiders/witches": {
+      "url": "154ca20f6eff4d7e1fd6e0d44ddcd9cbb4e04d112f3c2a3b52ca404d3d289042.glb",
+      "sha256": "154ca20f6eff4d7e1fd6e0d44ddcd9cbb4e04d112f3c2a3b52ca404d3d289042",
+      "size": 17408768
+    },
+    "infected_colonies/abomination": {
+      "url": "5104b6ccaca327ca726e9065516254fea40262aeca31b3f62932e82c80a1b49a.glb",
+      "sha256": "5104b6ccaca327ca726e9065516254fea40262aeca31b3f62932e82c80a1b49a",
+      "size": 14570812
+    },
+    "infected_colonies/attack buggy": {
+      "url": "333243ba3967ea6cc6f5be8d3fe3104b6ca298769989508bafc8657166e1232a.glb",
+      "sha256": "333243ba3967ea6cc6f5be8d3fe3104b6ca298769989508bafc8657166e1232a",
+      "size": 14548068
+    },
+    "infected_colonies/battle tank": {
+      "url": "5e0e891660881a2f37e84d6850220a14d03462c431958abe9740e6a20e5775f9.glb",
+      "sha256": "5e0e891660881a2f37e84d6850220a14d03462c431958abe9740e6a20e5775f9",
+      "size": 19289796
+    },
+    "infected_colonies/boomers": {
+      "url": "4a02580c71352b6382c634776962677d37f052cb5d6861826b2665928b28685f.glb",
+      "sha256": "4a02580c71352b6382c634776962677d37f052cb5d6861826b2665928b28685f",
+      "size": 15431316
+    },
+    "infected_colonies/combat walker": {
+      "url": "b9fd13cbce43c68be7a8b02b3b48cd91fb2d18eb402836ca1f13391a4f750011.glb",
+      "sha256": "b9fd13cbce43c68be7a8b02b3b48cd91fb2d18eb402836ca1f13391a4f750011",
+      "size": 16232440
+    },
+    "infected_colonies/corrupted beasts": {
+      "url": "c09b681dfe1945411920fe7658161c3433d357f0da74ab69fe55e02fd6f820ef.glb",
+      "sha256": "c09b681dfe1945411920fe7658161c3433d357f0da74ab69fe55e02fd6f820ef",
+      "size": 17081664
+    },
+    "infected_colonies/crazed ravens": {
+      "url": "3b45e0a0da36524b2e2b72974e483378ccfbccb5365997a865541839ec9d6435.glb",
+      "sha256": "3b45e0a0da36524b2e2b72974e483378ccfbccb5365997a865541839ec9d6435",
+      "size": 16684064
+    },
+    "infected_colonies/great beast": {
+      "url": "4bc5b6b33e7147f39101479d746ed4bbf5aeb4c466a1b970fb73eddadd4b3113.glb",
+      "sha256": "4bc5b6b33e7147f39101479d746ed4bbf5aeb4c466a1b970fb73eddadd4b3113",
+      "size": 14537344
+    },
+    "infected_colonies/great hunter": {
+      "url": "a8bb5f1faab306a3fa7fe8a31e68da0233d0f8e33dd3e8d55c3f3e06de110aee.glb",
+      "sha256": "a8bb5f1faab306a3fa7fe8a31e68da0233d0f8e33dd3e8d55c3f3e06de110aee",
+      "size": 14187124
+    },
+    "infected_colonies/hunters": {
+      "url": "f3bab6110eaf16fde47a07f58806764ba1dcae76cf55ca7bda7a32a268f7702f.glb",
+      "sha256": "f3bab6110eaf16fde47a07f58806764ba1dcae76cf55ca7bda7a32a268f7702f",
+      "size": 14566440
+    },
+    "infected_colonies/infected gunners": {
+      "url": "4a8cdeb3f874af14de31c8be99f0e15019f5b3e48a9b6544d51066c14a5aaefa.glb",
+      "sha256": "4a8cdeb3f874af14de31c8be99f0e15019f5b3e48a9b6544d51066c14a5aaefa",
+      "size": 17097152
+    },
+    "infected_colonies/infected leader": {
+      "url": "aa8b07062b0a6d479f3e19872cffdea270262019feec89dabd4653701145ada6.glb",
+      "sha256": "aa8b07062b0a6d479f3e19872cffdea270262019feec89dabd4653701145ada6",
+      "size": 14202936
+    },
+    "infected_colonies/infected runners": {
+      "url": "d268f50651b08dd28ea3afabeba8172a5c0370b99063b8e90c07aa6600a34da9.glb",
+      "sha256": "d268f50651b08dd28ea3afabeba8172a5c0370b99063b8e90c07aa6600a34da9",
+      "size": 15629700
+    },
+    "infected_colonies/infected soldiers": {
+      "url": "a3ab3f5dfbed04b7e399c84195e43c4a16767bd90bf3c837783c8014be0e36c5.glb",
+      "sha256": "a3ab3f5dfbed04b7e399c84195e43c4a16767bd90bf3c837783c8014be0e36c5",
+      "size": 14341452
+    },
+    "infected_colonies/infected vultures": {
+      "url": "40e1742504def182e5a956620f05d965b9c2e545d730722bb7529f081993987d.glb",
+      "sha256": "40e1742504def182e5a956620f05d965b9c2e545d730722bb7529f081993987d",
+      "size": 16451804
+    },
+    "infected_colonies/infected zombies": {
+      "url": "34fe0ae43c005f1fd0fa708081975701341a5517c2dd2f72785b2086cf587311.glb",
+      "sha256": "34fe0ae43c005f1fd0fa708081975701341a5517c2dd2f72785b2086cf587311",
+      "size": 14059740
+    },
+    "infected_colonies/leech swarms": {
+      "url": "c483cb670ff202caaf8c6768401833f8b903f0dd941b262354a73f8a5fd058ee.glb",
+      "sha256": "c483cb670ff202caaf8c6768401833f8b903f0dd941b262354a73f8a5fd058ee",
+      "size": 16683040
+    },
+    "infected_colonies/light dropship": {
+      "url": "2a8f194f41f98bb0dcff128c23f5c396f30068f51a1eca4d653521890da4b9e6.glb",
+      "sha256": "2a8f194f41f98bb0dcff128c23f5c396f30068f51a1eca4d653521890da4b9e6",
+      "size": 20291584
+    },
+    "infected_colonies/monstrous tyrant": {
+      "url": "d88962ff82009a9137f21e161fa10c84bf7d553d76a638289046b34bafc2c57f.glb",
+      "sha256": "d88962ff82009a9137f21e161fa10c84bf7d553d76a638289046b34bafc2c57f",
+      "size": 14463756
+    },
+    "infected_colonies/rabid dogs": {
+      "url": "b7fbb6a5f71259f6f3a3f1b6fe2ccd60c3b021b066369d12243c188033fe3f5a.glb",
+      "sha256": "b7fbb6a5f71259f6f3a3f1b6fe2ccd60c3b021b066369d12243c188033fe3f5a",
+      "size": 15198200
+    },
+    "infected_colonies/weapon teams": {
+      "url": "295cbcc49299e2541061c6d6f50a0dad1b91524ebfabda2e404a113447febb93.glb",
+      "sha256": "295cbcc49299e2541061c6d6f50a0dad1b91524ebfabda2e404a113447febb93",
+      "size": 14045340
+    },
+    "titan_lords/duke titan": {
+      "url": "e2f1dfb4340b9cb9ecf5e9ea90dbbdbf05da3b627a7ff717e0e00529c36492f9.glb",
+      "sha256": "e2f1dfb4340b9cb9ecf5e9ea90dbbdbf05da3b627a7ff717e0e00529c36492f9",
+      "size": 16135368
+    },
+    "titan_lords/errant mini titan": {
+      "url": "425785a51a7e4b6e714ed824b7f09424ae184cdb11ae86e47b4c17bee934a0ef.glb",
+      "sha256": "425785a51a7e4b6e714ed824b7f09424ae184cdb11ae86e47b4c17bee934a0ef",
+      "size": 14240348
+    },
+    "titan_lords/king heavy titan": {
+      "url": "88c2e9f157448ed03585e7973f7429e61c5b0c0924210e2b4d32d9ccea6f93fd.glb",
+      "sha256": "88c2e9f157448ed03585e7973f7429e61c5b0c0924210e2b4d32d9ccea6f93fd",
+      "size": 15917372
+    },
+    "titan_lords/knight titan": {
+      "url": "39345bdd613a6fd2b9d7551b72e69e18e16315735b516f673f2b99d793054064.glb",
+      "sha256": "39345bdd613a6fd2b9d7551b72e69e18e16315735b516f673f2b99d793054064",
+      "size": 15763256
+    },
+    "titan_lords/pilgrim mini titan": {
+      "url": "75f066391c0a9c3173906318b44af9cdf48698fe1227ba93c663bc5d34ef7f22.glb",
+      "sha256": "75f066391c0a9c3173906318b44af9cdf48698fe1227ba93c663bc5d34ef7f22",
+      "size": 16532080
+    },
+    "titan_lords/questor titan": {
+      "url": "2321e14b464cf5647aae94726816d4dac5f56243f75e2ce604c8f8620da2e8d8.glb",
+      "sha256": "2321e14b464cf5647aae94726816d4dac5f56243f75e2ce604c8f8620da2e8d8",
+      "size": 14339368
+    },
+    "titan_lords/vassal micro titan": {
+      "url": "3729e46025473c9a4593e1d936b262de1c5ea65043f24366c8d61fc6121f2dca.glb",
+      "sha256": "3729e46025473c9a4593e1d936b262de1c5ea65043f24366c8d61fc6121f2dca",
+      "size": 16815704
+    },
+    "titan_lords/yeoman mini titan": {
+      "url": "0c3ad58c5d5419b7f2ea3a474aaa6b254232ff24fd3a918522ccc3873b9c6710.glb",
+      "sha256": "0c3ad58c5d5419b7f2ea3a474aaa6b254232ff24fd3a918522ccc3873b9c6710",
+      "size": 15898516
+    },
+    "jackals/beast gunners": {
+      "url": "49b512b2bebb07ffaad965c00a16d606bf4f6528cd31a30edb377a3f844ebbdc.glb",
+      "sha256": "49b512b2bebb07ffaad965c00a16d606bf4f6528cd31a30edb377a3f844ebbdc",
+      "size": 18237172
+    },
+    "jackals/beast riders": {
+      "url": "2832ed6e07af9819041b9ab091f1b16d1414d805cc4bf84c57ca923c787f698d.glb",
+      "sha256": "2832ed6e07af9819041b9ab091f1b16d1414d805cc4bf84c57ca923c787f698d",
+      "size": 17051060
+    },
+    "jackals/elite veteran": {
+      "url": "da479edc4e860b8940a9b40dcc505f1aa910cb9b0607747dbda8beafdf86a38c.glb",
+      "sha256": "da479edc4e860b8940a9b40dcc505f1aa910cb9b0607747dbda8beafdf86a38c",
+      "size": 15675340
+    },
+    "jackals/elites": {
+      "url": "3e9c32644c2121f92a07a3879214110f067db34b229b70a152c3e41304c61f97.glb",
+      "sha256": "3e9c32644c2121f92a07a3879214110f067db34b229b70a152c3e41304c61f97",
+      "size": 15869392
+    },
+    "jackals/great beast": {
+      "url": "034f01e6e8932c614db9505c93f3de41729b558e9dc2be2b3dfb8f30b9e311eb.glb",
+      "sha256": "034f01e6e8932c614db9505c93f3de41729b558e9dc2be2b3dfb8f30b9e311eb",
+      "size": 15914944
+    },
+    "jackals/hounds": {
+      "url": "438c85c3426fa4fa2053c3a056a92782c2aa23cc03bc0ce3ca229a98803ded95.glb",
+      "sha256": "438c85c3426fa4fa2053c3a056a92782c2aa23cc03bc0ce3ca229a98803ded95",
+      "size": 15922928
+    },
+    "jackals/long neck": {
+      "url": "3afcf47eac272f95761a0b48322411d1d0d52a69c9b5746cb78117a7655e2526.glb",
+      "sha256": "3afcf47eac272f95761a0b48322411d1d0d52a69c9b5746cb78117a7655e2526",
+      "size": 16157944
+    },
+    "jackals/mastodon": {
+      "url": "29089474d906d82cb04ab5d4d1f480afd85321d1b8ef693edd45f13e97ee2a46.glb",
+      "sha256": "29089474d906d82cb04ab5d4d1f480afd85321d1b8ef693edd45f13e97ee2a46",
+      "size": 18386716
+    },
+    "jackals/nomads": {
+      "url": "4f547532852d476bc49b05c2bb3878b98b1a06fefe652b574d964639c6cf0c2d.glb",
+      "sha256": "4f547532852d476bc49b05c2bb3878b98b1a06fefe652b574d964639c6cf0c2d",
+      "size": 16238360
+    },
+    "jackals/ruyi nonga": {
+      "url": "62b0cfe1b75c3c1be068ebf0d79e6a776ab972cce9fd80d615882e775a906e1e.glb",
+      "sha256": "62b0cfe1b75c3c1be068ebf0d79e6a776ab972cce9fd80d615882e775a906e1e",
+      "size": 13473944
+    },
+    "jackals/stalkers": {
+      "url": "8f2bae7b19c4c88aee71ff05274a8bb1ea8b20902547681ab66f9dc2b8ea6e87.glb",
+      "sha256": "8f2bae7b19c4c88aee71ff05274a8bb1ea8b20902547681ab66f9dc2b8ea6e87",
+      "size": 13967972
+    },
+    "jackals/trackers": {
+      "url": "a10bb31af90d247adf177698fe3abef312755deb7801d84c495b3615593df57f.glb",
+      "sha256": "a10bb31af90d247adf177698fe3abef312755deb7801d84c495b3615593df57f",
+      "size": 16867444
+    },
+    "jackals/veteran": {
+      "url": "5880c6998b6a1ac0dd7667dd6daeb51bf4c9cf6e739974ef97a6a91facec68ce.glb",
+      "sha256": "5880c6998b6a1ac0dd7667dd6daeb51bf4c9cf6e739974ef97a6a91facec68ce",
+      "size": 17205292
+    },
+    "jackals/vultures": {
+      "url": "29cd3b8bb3b6adb7be311785e88d0704b60fa2c0b88e0c112f39e7bad73c7c35.glb",
+      "sha256": "29cd3b8bb3b6adb7be311785e88d0704b60fa2c0b88e0c112f39e7bad73c7c35",
+      "size": 16398456
     }
   }
 }
