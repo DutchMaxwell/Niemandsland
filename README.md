@@ -46,9 +46,11 @@ What the code actually does today:
 
 ## Quick start
 
+📺 **New here?** Watch the [**tutorial video**](https://makertube.net/w/cuXc5WwBWStr9C2LKZssy1) for a quick tour.
+
 ### Play (Windows / Linux)
 
-Download the latest build from the [**Releases**](../../releases) page, unzip and run it
+Download the latest build from the [**Releases**](../../releases/latest) page, unzip and run it
 (`Niemandsland.exe` on Windows; the `.x86_64` next to its `.pck` on Linux) — no install. The
 start menu shows the version; the first log line is `[Boot] Niemandsland <version> build <hash>`.
 
