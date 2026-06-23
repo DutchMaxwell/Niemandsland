@@ -280,8 +280,21 @@ class CoherencyResult:
         valid = false
 ```
 
-Other examples in the codebase: `TTSParseResult` (`tts_importer.gd`),
-`LosRules.Blocker` (`los_rules.gd`).
+Another example — `LosRules.Blocker` (`los_rules.gd`):
+
+```gdscript
+class Blocker:
+    var pos: Vector2
+    var radius: float
+    var height: int
+    var unit_key: int
+
+    func _init(p_pos: Vector2, p_radius: float, p_height: int, p_unit_key: int) -> void:
+        pos = p_pos
+        radius = p_radius
+        height = p_height
+        unit_key = p_unit_key
+```
 
 ---
 

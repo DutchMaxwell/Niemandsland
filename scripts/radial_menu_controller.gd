@@ -320,7 +320,7 @@ func _open_wounds_dialog(context: Dictionary) -> void:
 	if wounds_dialog:
 		wounds_dialog.open(model)
 	else:
-		print("Wounds dialog not available")
+		push_warning("Wounds dialog not available")
 
 
 func _open_casts_dialog(context: Dictionary) -> void:
@@ -337,12 +337,12 @@ func _open_casts_dialog(context: Dictionary) -> void:
 	if casts_dialog:
 		casts_dialog.open(game_unit)
 	else:
-		print("Casts dialog not available")
+		push_warning("Casts dialog not available")
 
 
 func _open_marker_dialog(context: Dictionary) -> void:
 	if not marker_dialog:
-		print("Marker dialog not available")
+		push_warning("Marker dialog not available")
 		return
 
 	var game_unit = context.get("game_unit") as GameUnit
