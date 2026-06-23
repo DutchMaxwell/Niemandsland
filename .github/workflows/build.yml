@@ -164,7 +164,7 @@ jobs:
         with:
           name: Niemandsland ${{ github.ref_name }}
           generate_release_notes: true
-          prerelease: true
+          prerelease: false
           files: |
             dist/Niemandsland-${{ github.ref_name }}-linux.zip
             dist/Niemandsland-${{ github.ref_name }}-windows.zip
