@@ -91,8 +91,8 @@ on demand from Cloudflare R2 (content-addressed `sha256.glb`, served from the as
 mapped by [`assets/model_manifest.json`](assets/model_manifest.json). Builds stay slim
 (GLBs are gitignored + excluded from every export preset); the editor/game fetches
 models at runtime. The publish tooling lives in the private pipeline repository. See
-[`docs/ASSET_DELIVERY.md`](docs/ASSET_DELIVERY.md). **Live today: 682 models across
-29 factions** (verified retrievable on R2 via `assets.niemandsland.xyz`) — from Alien Hives
+[`docs/ASSET_DELIVERY.md`](docs/ASSET_DELIVERY.md). **Live today: 1014 models across
+43 factions** (verified retrievable on R2 via `assets.niemandsland.xyz`) — from Alien Hives
 (41) and Robot Legions / Orc Marauders (29 each) through the newest additions
 (havoc_brothers 26, dark_brothers 27, war_disciples 24, knight_brothers 16,
 rebel_guerrillas 15). Remaining factions are 2D generated and pick-ready.
@@ -137,9 +137,9 @@ and `hero_attachment_dialog.gd` never existed as separate files — that logic l
 
 ## Tests
 
-gdUnit4: **~558 tests green** in `test/` (incl. `coherency_checker`,
+gdUnit4: **629 tests green** in `test/` (incl. `coherency_checker`,
 `save_manager`, `startup_menu`, `internet_lobby`, `relay_multiplayer_peer`,
 `network_version_handshake`, `dice_rules`, `player_identity`). Python:
-`relay/test_relay_server.py` (38 green). How to run:
+`relay/test_relay_server.py` (49 green). How to run:
 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 Coverage is still thin — most gameplay scripts are untested.
