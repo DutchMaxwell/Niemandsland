@@ -69,6 +69,9 @@ jobs:
       - name: Import project (generates .godot/)
         run: godot --headless --editor --quit --path . || true
 
+      - name: Stamp build hash
+        run: sed -i "/^config\/version=/a config/build_hash=\"${GITHUB_SHA::7}\"" project.godot
+
       - name: Linux Build
         run: |
           mkdir -v -p build/linux
@@ -99,6 +102,9 @@ jobs:
 
       - name: Import project (generates .godot/)
         run: godot --headless --editor --quit --path . || true
+
+      - name: Stamp build hash
+        run: sed -i "/^config\/version=/a config/build_hash=\"${GITHUB_SHA::7}\"" project.godot
 
       - name: Windows Build
         run: |
