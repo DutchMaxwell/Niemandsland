@@ -35,7 +35,7 @@ compromised for size: light decimation + 2048² textures, source quality intact.
   (`user://tts_cache/…`, `is_cached`/`find_cached_file`, progress signals, chunked
   HTTPRequest). This is exactly the on-demand pattern, already built for TTS imports.
 - **Runtime GLB loading** via `GLTFDocument.append_from_file()` is already used
-  (`object_manager.gd`, `terrain_library.gd`) — so downloaded GLBs load at runtime
+  (`object_manager.gd`, `terrain_overlay.gd`) — so downloaded GLBs load at runtime
   with **no build-time import** needed. (This is usually the hard part.)
 - `opr_army_manager` resolution order: **cached on-demand model → bundled
   fallback → placeholder**; `spawn_army` downloads the army's models up front.

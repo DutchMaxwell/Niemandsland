@@ -178,7 +178,7 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 	else:
 		_failed_downloads.append(url)
 		download_completed.emit(url, "", false)
-		print("    ✗ Failed: result=%d, code=%d" % [result, response_code])
+		push_warning("Download failed: result=%d, code=%d" % [result, response_code])
 
 	_current_download_idx += 1
 
