@@ -55,7 +55,7 @@ Run the tests before pushing — CI runs the same on Godot 4.6:
 godot --headless -s -d res://addons/gdUnit4/bin/GdUnitCmdTool.gd \
   --ignoreHeadlessMode -a res://test
 # relay (Python):
-cd relay && python -m pytest
+cd relay && pip install -r requirements-dev.txt && python -m pytest
 ```
 
 ### Pull request flow
@@ -66,6 +66,9 @@ cd relay && python -m pytest
 3. Use **conventional commits**: `feat:`, `fix:`, `refactor:`, `docs:`, `perf:`.
 4. Make sure the tests pass and the project imports without GDScript parse errors.
 5. Open a PR against `main` describing what changed and why. CI must be green.
+
+By submitting a pull request you agree that your contribution is licensed under
+the project's [MIT License](LICENSE).
 
 ### Scope note
 

@@ -71,8 +71,9 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
   them to the base** (height-fit vs 125 % footprint cap, whichever is smaller; Flying
   units hover). See [Scaling](#scaling).
 - `opr_import_dialog.gd` — import UI.
-- `tts_importer.gd` / `tts_download_manager.gd` — Tabletop Simulator import (Steam
-  CDN + local cache; glTF/STL/OBJ).
+- `tts_download_manager.gd` — Tabletop Simulator asset download + cache manager
+  (Steam CDN + local cache; glTF/STL/OBJ); also the template for the on-demand
+  R2 delivery pattern.
 
 > **On-demand delivery (live):** miniature GLBs are downloaded + cached via `asset_cdn.gd` /
 > `asset_download_manager.gd` from Cloudflare R2 so the repo/build stay lean and only an army's
@@ -83,7 +84,6 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
 
 **Map & terrain**
 - `map_layout.gd` / `map_layout_grid.gd` — top-down editor + 3″ grid.
-- `terrain_library.gd` — terrain piece definitions.
 - `terrain_overlay.gd` — 3D overlay + custom deployment zones.
 - `sandbox_terrain_prop.gd` / `sandbox_terrain_shelf.gd` / `terrain_group_base.gd` /
   `terrain_prefabs.gd` / `terrain_hologram.gd` — free-placed 3D sandbox terrain (multi-storey

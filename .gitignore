@@ -78,7 +78,7 @@ __pycache__/
 
 # Miniature GLBs are delivered on-demand from R2 (content-addressed, see model_manifest.json),
 # never bundled. Keep them out of git AND out of builds (export_presets exclude_filter).
-# The d6 dice model (assets/models/) is a core bundled asset and stays tracked.
+# The d6 dice are procedural (scripts/dice_d6.gd) — no model asset to track here.
 assets/miniatures/*/glb/
 # Model Forge scratch hero temp + stray backups that land in the miniatures tree.
 # (NOT the tracked per-faction _reference*.png style inputs read by hero_workflow.py.)

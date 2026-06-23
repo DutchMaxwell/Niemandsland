@@ -1246,7 +1246,7 @@ func set_table_size(size_feet: Vector2) -> void:
 	# Grid cell coordinates are ABSOLUTE and become invalid when grid dimensions change
 	if size_changed:
 		if not placed_pieces.is_empty() or not free_cells.is_empty() or not free_walls.is_empty():
-			print("  ⚠ Table size changed - clearing terrain data (grid coordinates are now invalid)")
+			push_warning("Table size changed - clearing terrain data (grid coordinates are now invalid)")
 			placed_pieces.clear()
 			free_cells.clear()
 			free_walls.clear()
@@ -1255,7 +1255,7 @@ func set_table_size(size_feet: Vector2) -> void:
 			placed_objects.clear()
 			_selected_piece_id = -1
 		if not mission_objectives.is_empty():
-			print("  ⚠ Table size changed - clearing mission objectives (coordinates are now invalid)")
+			push_warning("Table size changed - clearing mission objectives (coordinates are now invalid)")
 			mission_objectives.clear()
 
 	grid_container.queue_redraw()

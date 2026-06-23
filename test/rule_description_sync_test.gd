@@ -2,7 +2,7 @@ extends GdUnitTestSuite
 ## Special-rule descriptions (e.g. "Bloodborn") now ship with the mid-session army broadcast
 ## (0.3.4.6) — sync_army_complete carries them and _on_remote_army_complete merges them before
 ## building units. Previously only the late-join state-sync carried them, so a mid-session
-## importer's rules showed "Keine Beschreibung verfügbar" on the other client. This covers the
+## importer's rules showed "No description available" on the other client. This covers the
 ## receiver-side merge + the numbered-rule base-name fallback the whole fix relies on.
 
 const OPRArmyManagerScript = preload("res://scripts/opr_army_manager.gd")
