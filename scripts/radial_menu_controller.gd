@@ -273,15 +273,37 @@ func _create_objective_menu() -> Array[RadialMenu.RadialMenuItem]:
 	var items: Array[RadialMenu.RadialMenuItem] = []
 	items.append(RadialMenu.RadialMenuItem.new("set_owner_0", "Neutral", "N", true, "Set objective to neutral (gold)"))
 
-	if army_manager:
-		var player_ids: Array = army_manager.armies.keys()
-		player_ids.sort()
-		for pid in player_ids:
-			var pname: String = PLAYER_COLOR_NAMES.get(pid, "Player %d" % pid)
-			items.append(RadialMenu.RadialMenuItem.new(
-				"set_owner_%d" % pid, pname, str(pid), true, "Captured by %s" % pname))
+	for pid in _active_player_ids():
+		var pname: String = PLAYER_COLOR_NAMES.get(pid, "Player %d" % pid)
+		items.append(RadialMenu.RadialMenuItem.new(
+			"set_owner_%d" % pid, pname, str(pid), true, "Captured by %s" % pname))
 
 	return items
+
+
+## Distinct, sorted player ids (> 0) that currently have units on the table. Unions the
+## imported-armies dict with the live game_units, because `armies` is only populated on the
+## LOCAL import path — on a joined or RECONNECTED peer it is empty, which used to leave the
+## objective-capture menu with no players to seize for (issue #70). game_units is restored on
+## every load / state-sync / reconnect, so it is the reliable source of player ownership.
+func _active_player_ids() -> Array[int]:
+	var ids := {}
+	if army_manager:
+		for pid in army_manager.armies.keys():
+			if int(pid) > 0:
+				ids[int(pid)] = true
+		for gu in army_manager.game_units.values():
+			var unit := gu as GameUnit
+			if unit == null:
+				continue
+			var pid := int(unit.unit_properties.get("player_id", 0))
+			if pid > 0:
+				ids[pid] = true
+	var sorted_ids: Array[int] = []
+	for k in ids.keys():
+		sorted_ids.append(int(k))
+	sorted_ids.sort()
+	return sorted_ids
 
 
 ## Sets the owner of the objective in the context, recolors it, and syncs it.
