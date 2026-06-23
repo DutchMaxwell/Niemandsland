@@ -21,9 +21,9 @@ licenses — the canonical notice for an open-source release.
 | Phosphor Icons | MIT | yes | `assets/ui_glassmorphism/icons/` + `Phosphor-LICENSE.txt` (UI icons, SVG, bold style) |
 | 3D dice (own W6) | MIT | yes | `scripts/dice_tray.gd`, `scripts/dice_d6.gd` (replaced the former AGPL addon) |
 | App icon | CC-BY-SA 4.0 | yes | `icon.png` — the Niemandsland "N" monogram (project original) |
-| Bundled textures | CC-BY-SA 4.0 | yes | `assets/terrain/table_surface_default.png`, `assets/terrain/props/ruins_wall.webp` (project-generated) |
+| Bundled textures | CC-BY-SA 4.0 | yes | `assets/terrain/table_surface_default.png`, `assets/terrain/props/ruins_wall.webp`, `assets/sandbox_floor_base.webp`, `assets/sandbox_floor_platform.webp`, `assets/sandbox_forest_floor.webp` (project-generated) |
 | Miniature GLBs | CC-BY-SA 4.0 (AI-generated) | on-demand | see *Generated assets* below |
-| CC0 battlefield ambience | CC0 | on-demand (R2) | freesound.org recordings (e.g. "Dark Ambient Loop" by goulven); manifest `assets/ambience_manifest.json`, see `scripts/ambience_library.gd` |
+| CC0 battlefield ambience | CC0 | on-demand (R2) | freesound.org recordings; manifest `assets/ambience_manifest.json`, see `scripts/ambience_library.gd` |
 | Microsoft TRELLIS | MIT | no (dev tool) | image→3D model generation (asset-pipeline repo); GLB outputs are ours |
 | `model-viewer` (Google) | Apache-2.0 | no (dev tool) | 3D preview in the Model Forge review UI |
 | gltfpack (meshoptimizer) | MIT | no (dev tool) | GLB optimization (asset-pipeline repo) |

@@ -2802,12 +2802,12 @@ func sort_table(broadcast: bool = true) -> void:
 	# find_child() string search.
 	var main = get_node_or_null("/root/Main")
 	if not main:
-		print("Sort Table: Could not find Main node")
+		push_error("Sort Table: Could not find Main node")
 		return
 
 	var army_manager = main.get("opr_army_manager")
 	if not army_manager:
-		print("Sort Table: No OPR Army Manager found")
+		push_error("Sort Table: No OPR Army Manager found")
 		return
 
 	# Get all game units
@@ -2818,7 +2818,7 @@ func sort_table(broadcast: bool = true) -> void:
 		all_units = army_manager.game_units.values()
 
 	if all_units.is_empty():
-		print("Sort Table: No units to reset")
+		push_warning("Sort Table: No units to reset")
 		return
 
 	# Reset status/wounds/markers/visibility, then animate models back to their
@@ -3107,7 +3107,7 @@ func copy_to_clipboard() -> void:
 ## Paste objects from clipboard at cursor position (Ctrl+V)
 func paste_from_clipboard(cursor_pos: Vector3) -> void:
 	if _clipboard.is_empty():
-		print("Clipboard is empty")
+		push_warning("Clipboard is empty")
 		return
 
 	# Calculate center of clipboard objects

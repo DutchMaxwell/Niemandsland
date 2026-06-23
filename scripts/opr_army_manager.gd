@@ -26,15 +26,15 @@ const TRAY_SIDES = {
 
 const FEET_TO_METERS: float = 0.3048
 const INCHES_TO_METERS: float = 0.0254
-## Modell-Fit relativ zur Base (gegen Scale-Creep):
-## Die groesste horizontale Ausdehnung darf max. 125% der Base-Langseite betragen.
+## Model fit relative to the base (against scale-creep):
+## the largest horizontal extent may be at most 125% of the base's long side.
 const FOOTPRINT_MAX_RATIO: float = 1.25
 ## Oval/rectangular bases: fit the model EXACTLY within both base axes (length AND width), no
 ## overhang — so a wide/square hull (vehicle) sits cleanly on its base instead of scaling to
 ## base_long x 1.25 and sticking far over the narrow width. Round bases keep FOOTPRINT_MAX_RATIO
 ## (organic minis may overhang their round base a little).
 const OVAL_FOOTPRINT_RATIO: float = 1.0
-## Schwebehoehe fuer Flying-Units, relativ zur Base-Langseite (40mm Base → ~14mm).
+## Hover height for Flying units, relative to the base long side (40mm base -> ~14mm).
 const FLYING_HOVER_RATIO: float = 0.35
 ## Aircraft (the OPR "Aircraft" rule — NOT the same as Flying) hover much higher, on a tall flight
 ## stand: a fixed ~20cm above the base for ALL aircraft (1 unit = 1 m, so 0.2).
@@ -697,7 +697,7 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 		# Bundled res:// GLBs load via ResourceLoader; downloaded user:// GLBs via glTF.
 		var glb_instance = _instantiate_model(model_path)
 		if glb_instance:
-			# Modell an die Base anpassen (Footprint-Cap gegen Scale-Creep, Flying schwebt)
+			# Fit the model to its base (footprint cap against scale-creep; Flying hovers)
 			var aabb = _get_model_aabb(glb_instance)
 			var tough = _get_tough_value(unit)
 			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift, natural_base_short_mm, fit_to_base)
@@ -1432,7 +1432,7 @@ func _calculate_model_scale(tough: int) -> float:
 	return pow(1.05, tough / 3.0)
 
 
-## True wenn die Regeln "Flying" (oder Flying(x)) enthalten.
+## True if the rules contain "Flying" (or Flying(x)).
 func _is_flying_from_rules(rules: Array) -> bool:
 	for r in rules:
 		if String(r).strip_edges().to_lower().begins_with("flying"):
@@ -1505,15 +1505,15 @@ func _is_walker(unit_name: String) -> bool:
 	return "walker" in unit_name.to_lower()
 
 
-## Berechnet Skalierung + vertikalen Offset, damit ein GLB gut zur Base passt.
+## Computes scale + vertical offset so a GLB fits its base nicely.
 ##
-## Regel gegen Scale-Creep:
-##   - Hoehen-Ziel ~ Base-Groesse (Tough macht leicht hoeher) → schlanke Bipeds.
-##   - Footprint-Cap: groesste horizontale Ausdehnung <= 125% der Base-Langseite
-##     (bei Oval die lange Seite) → breite Fahrzeuge/Drohnen quellen nicht ueber.
-##   - Der KLEINERE der beiden Faktoren gewinnt (min), so passt beides.
-## Flying-Units schweben leicht ueber der Base.
-## base_long_mm = Base-Langseite in mm (rund: Durchmesser; oval: laengere Achse).
+## Rule against scale-creep:
+##   - height target ~ base size (Tough makes it slightly taller) -> slim bipeds.
+##   - footprint cap: largest horizontal extent <= 125% of the base long side
+##     (oval: the long axis) -> wide vehicles/drones don't spill over.
+##   - the SMALLER of the two factors wins (min), so both constraints hold.
+## Flying units hover slightly above the base.
+## base_long_mm = base long side in mm (round: diameter; oval: longer axis).
 ## Returns { "scale": float, "y_offset": float, "height": float }.
 func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m: float, base_short_mm: int = -1, fit_to_base: bool = false) -> Dictionary:
 	var raw_height: float = aabb.size.y
@@ -1521,7 +1521,7 @@ func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m:
 	if raw_height <= 0.0 or raw_footprint <= 0.0:
 		return {"scale": 0.001, "y_offset": 0.003, "height": 0.03}
 
-	# Hoehen-Ziel: 25mm-Bases bekommen +3mm, sonst = Base; Tough skaliert mild mit.
+	# Height target: 25mm bases get +3mm, otherwise = base; Tough scales it mildly.
 	var height_target_mm: float = float(base_long_mm + 3 if base_long_mm <= 25 else base_long_mm)
 	var target_height_m: float = height_target_mm * 0.001 * _calculate_model_scale(tough)
 	var height_scale: float = target_height_m / raw_height
@@ -1546,7 +1546,7 @@ func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m:
 
 	var final_scale: float = min(height_scale, footprint_scale)
 
-	# Fuesse auf Base-Oberkante (Base ist 3mm hoch); Flying/Aircraft schweben zusaetzlich (caller-supplied).
+	# Feet on the base top (the base is 3mm tall); Flying/Aircraft additionally hover (caller-supplied).
 	var lift: float = hover_lift_m
 	var y_offset: float = -aabb.position.y * final_scale + 0.003 + lift
 

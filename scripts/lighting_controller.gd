@@ -142,7 +142,7 @@ func initialize(directional_light: DirectionalLight3D, world_env: WorldEnvironme
 ## Apply a preset by name
 func apply_preset(preset_name: String) -> void:
 	if not PRESETS.has(preset_name):
-		print("Preset not found: ", preset_name)
+		push_warning("Preset not found: ", preset_name)
 		return
 
 	var preset = PRESETS[preset_name]
