@@ -18,15 +18,25 @@ const FINE_GRID_SIZE_INCHES := 1.0  # 1" grid for custom zone editing
 ## Height offset above table to prevent z-fighting (2mm)
 const Z_FIGHT_OFFSET := 0.002
 
-## Flat-overlay stacking above the TABLE SURFACE (world metres), bottom-up in fixed
-## 1 mm steps so the translucent layers never share a plane (z-fighting / shader
-## artifacts): terrain tiles lowest, deployment zones above them, mission objectives
-## (seize ring, token on top of it) highest. The overlay node itself sits at
-## Z_FIGHT_OFFSET, so child positions are derived as (WORLD_Y - Z_FIGHT_OFFSET).
+## Flat-overlay heights above the TABLE SURFACE (world metres). Draw order between these
+## near-coplanar TRANSPARENT layers is fixed by the *_RENDER_PRIORITY constants above, NOT by
+## these sub-mm Y values, so they never flip with the camera angle. The deployment zone sits
+## just above the table — BELOW the unit base bodies (which span 0–3 mm, see opr_army_manager)
+## — so it reads as printed on the table UNDER the minis instead of tinting the lower two-thirds
+## of every base (issue #71). The overlay node sits at Z_FIGHT_OFFSET, so child positions are
+## derived as (WORLD_Y - Z_FIGHT_OFFSET).
 const TERRAIN_TILE_WORLD_Y := 0.001
-const DEPLOYMENT_ZONE_WORLD_Y := 0.002
+const DEPLOYMENT_ZONE_WORLD_Y := 0.0006  # just above the table, under the base bodies (issue #71)
 const OBJECTIVE_WORLD_Y := 0.003
 const SEIZE_RING_HEIGHT := 0.002  # the 3" seize ring disc; the token sits on top of it
+
+## Render priority deterministically orders the near-coplanar TRANSPARENT overlay layers so
+## they never flip draw order as the camera orbits (issue #71). Higher = drawn on top. Opaque
+## layers (table, unit bases, objective tokens) sort by depth and need no priority; battlefield
+## blood/oil stains sit at priority 1 (see battlefield_stains.gd), between tiles and zones.
+const TERRAIN_TILE_RENDER_PRIORITY := 0
+const DEPLOYMENT_ZONE_RENDER_PRIORITY := 2
+const SEIZE_RING_RENDER_PRIORITY := 3
 
 ## Mesh size reduction factor to show grid lines between cells
 const CELL_SIZE_REDUCTION := 0.95
@@ -528,6 +538,7 @@ func _create_cell_mesh(pos: Vector3, cell_size: float, color: Color, grid_rotati
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED  # Visible from both sides
+	material.render_priority = TERRAIN_TILE_RENDER_PRIORITY  # lowest overlay layer (issue #71)
 
 	mesh_instance.material_override = material
 
@@ -591,8 +602,8 @@ func _update_deployment_zones() -> void:
 func _create_front_line_zones(table_width: float, table_depth: float) -> void:
 	var deployment_depth = 12.0 * INCHES_TO_METERS  # 12" deployment zone
 
-	# Player 1 zone (bottom, facing forward along +Z)
-	# Y=0.001 local → absolute Y=0.003 (above base plates at Y=0.002)
+	# Player 1 zone (bottom, facing forward along +Z). Absolute world Y = DEPLOYMENT_ZONE_WORLD_Y
+	# (0.0006, just under the 3 mm base bodies); draw order vs bases/tokens is fixed by render_priority (issue #71).
 	var p1_position = Vector3(0, DEPLOYMENT_ZONE_WORLD_Y - Z_FIGHT_OFFSET, -table_depth/2 + deployment_depth/2)
 	var p1_size = Vector2(table_width, deployment_depth)
 	var p1_mesh = _create_deployment_zone_mesh(p1_position, p1_size, DEPLOYMENT_COLORS["player1"])
@@ -668,6 +679,7 @@ func _create_polygon_zone_mesh(vertices: Array[Vector3], color: Color) -> MeshIn
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.render_priority = DEPLOYMENT_ZONE_RENDER_PRIORITY  # above terrain tiles + stains (issue #71)
 
 	mesh_instance.material_override = material
 
@@ -1007,6 +1019,7 @@ func _create_deployment_zone_mesh(pos: Vector3, size: Vector2, color: Color) -> 
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.render_priority = DEPLOYMENT_ZONE_RENDER_PRIORITY  # above terrain tiles + stains (issue #71)
 
 	mesh_instance.material_override = material
 
@@ -1364,6 +1377,7 @@ func _create_seize_radius_ring(pos: Vector3, radius: float, color: Color) -> Mes
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.render_priority = SEIZE_RING_RENDER_PRIORITY  # topmost overlay layer, above zones (issue #71)
 
 	mesh_instance.material_override = material
 

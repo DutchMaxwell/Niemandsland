@@ -86,3 +86,51 @@ func test_set_objective_owner_ignores_out_of_range() -> void:
 	overlay.update_objectives([Vector3(0, 0, 0)])
 	overlay.set_objective_owner(5, 2)  # no crash, no change
 	assert_int(overlay.get_objective_owner(0)).is_equal(0)
+
+
+# ===== capture menu (issue #70: must offer players on host, guest, AND after reconnect) =====
+# The owner choices are derived from RadialMenuController, which used to read only the
+# import-only `armies` dict — empty on a joined/reconnected peer, leaving "Neutral" as the
+# only option so objectives could not be seized. They now come from the restored game_units.
+
+func _controller_with_player_units(player_ids: Array, fill_armies: bool = false) -> RadialMenuController:
+	var controller := auto_free(RadialMenuController.new()) as RadialMenuController
+	var army_manager := auto_free(OPRArmyManager.new()) as OPRArmyManager
+	var i := 0
+	for pid in player_ids:
+		var unit := GameUnit.new()
+		unit.unit_id = "u%d" % i
+		unit.unit_properties = {"player_id": pid}
+		army_manager.game_units[unit.unit_id] = unit
+		if fill_armies and pid > 0:
+			army_manager.armies[pid] = null  # presence only; the menu reads keys
+		i += 1
+	controller.army_manager = army_manager
+	return controller
+
+
+func _menu_ids(controller: RadialMenuController) -> Array:
+	var ids: Array = []
+	for item in controller._create_objective_menu():
+		ids.append(item.id)
+	return ids
+
+
+func test_capture_menu_lists_players_from_game_units_when_armies_empty() -> void:
+	# Guest / reconnected peer: armies dict is empty, only game_units were restored.
+	var controller := _controller_with_player_units([1, 2])
+	assert_array(_menu_ids(controller)).is_equal(["set_owner_0", "set_owner_1", "set_owner_2"])
+
+
+func test_capture_menu_dedupes_sorts_and_skips_unassigned() -> void:
+	# Multiple units per player, out of order, plus an unassigned (player_id 0) unit.
+	var controller := _controller_with_player_units([2, 1, 2, 0])
+	assert_array(_menu_ids(controller)).is_equal(["set_owner_0", "set_owner_1", "set_owner_2"])
+	assert_array(controller._active_player_ids()).is_equal([1, 2])
+
+
+func test_capture_menu_unions_armies_and_game_units() -> void:
+	# Host: armies holds the locally-imported player, game_units add the synced opponent.
+	var controller := _controller_with_player_units([2], true)  # armies{2}, game_units{2}
+	controller.army_manager.armies[1] = null                    # armies-only player 1
+	assert_array(controller._active_player_ids()).is_equal([1, 2])

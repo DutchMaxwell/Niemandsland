@@ -15,14 +15,23 @@ const OIL_PANEL := "oil_stain"
 ## roughly base-sized while its droplets spill just past the footprint.
 const STAIN_SIZE_SCALE := 1.7
 const STAIN_MIN_RADIUS_M := 0.01
-const Z_LIFT_M := 0.0012             # sit just above the table / terrain overlays
+## The terrain overlay renders its tile layer at this absolute world Y (mirror of
+## TerrainOverlay.TERRAIN_TILE_WORLD_Y — keep in sync). The stain must clear it so it never
+## z-fights / sorts under the terrain tiles depending on camera angle (issue #72).
+const TERRAIN_TILE_TOP_Y_M := 0.001
+const STAIN_CLEARANCE_M := 0.0005    # clear the terrain tiles; the deployment zone draws on top via render_priority
+const Z_LIFT_M := TERRAIN_TILE_TOP_Y_M + STAIN_CLEARANCE_M  # = 0.0015
+## Draw the alpha-blended stain after the terrain-tile overlays (render_priority 0) so it
+## never sorts under them; deployment zones / seize rings carry higher priorities and stay
+## on top (see terrain_overlay.gd). Issue #72.
+const STAIN_RENDER_PRIORITY := 1
 const DECAL_ROUGHNESS := 0.4
 const OIL_METALLIC := 0.35           # oily sheen (blood stays matte)
 
 ## Fallback flat disc (until the decal texture is cached): plain coloured cylinder.
 const BLOOD_COLOR := Color(0.32, 0.02, 0.02)
 const OIL_COLOR := Color(0.05, 0.05, 0.06)
-const FALLBACK_HEIGHT_M := 0.002
+const FALLBACK_HEIGHT_M := 0.0004    # thin transient disc; its top stays below the deployment-zone plane
 const FALLBACK_SIDES := 16
 
 ## A destroyed vehicle gets this many small fires scattered within the oil slick.
@@ -103,6 +112,11 @@ func _decal_material(panel: String, tex: Texture2D) -> StandardMaterial3D:
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	mat.texture_repeat = false
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# Deterministic draw order for a flat alpha decal: draw after the terrain tiles and don't
+	# write depth (standard for a ground decal). Avoid no_depth_test so real 3D props/minis
+	# still occlude it correctly. Issue #72.
+	mat.render_priority = STAIN_RENDER_PRIORITY
+	mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
 	_materials[panel] = mat
 	return mat
 
