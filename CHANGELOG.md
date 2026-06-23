@@ -4,6 +4,42 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [0.3.6.0-alpha] — 2026-06-23
+
+Version consolidation for the public Alpha release. All planned Alpha work is
+complete; remaining roadmap items are driven by alpha feedback.
+
+### Added
+- **Aircraft flight-stand hover.** Flying aircraft now hover on a tall flight stand
+  (~20 cm above the table), distinct from the standard Floating offset used for
+  other Flying models.
+- **Mount / vehicle base + model for hero mounts.** A hero mounted on a Combat Bike,
+  dinosaur or similar mount inherits the mount's own base (Tough-scaled), and
+  `opr_army_manager` fuzzy-matches a faction GLB for the mount model.
+
+### Changed
+- **Version consolidated to `0.3.6.0-alpha`** across `project.godot`, the in-game
+  shortcut overlay, README, PROJECT_STATUS, and CLAUDE.md.
+- **OPR unit-card overhaul.** The unit card now shows item-grant hover cascade,
+  faction spell list + spell-range hover ring for casters, item-granted weapons
+  surfaced as real weapons, and is fully in English.
+- **Correct per-model loadout distribution.** A Sergeant's special gear groups on
+  the leader model; a weapon-team's enlarged base aligns with its special-weapon ring.
+- **Vehicles fit their base exactly.** Oval + Tough-derived vehicle bases fill the
+  base footprint with no overhang, and the long-axis orientation is deterministic.
+- **Export-presets manifest packing fix.** The built game now correctly packs the
+  asset manifests, closing a gap where manifest entries were absent in shipped builds.
+
+### Fixed
+- **MP netcode replatform — reconnect cascade eliminated.** All game messaging moved
+  off `@rpc` onto a hand-rolled command protocol below the RPC path-cache (the
+  version-kick reconnect cascade is gone). A 20-minute headless soak with 24 guest
+  reconnects stays fully converged, zero kicks, zero crashes, no leak.
+- **MP relay-restart / idle self-heal.** When the scale-to-zero relay drops its
+  in-memory room (idle stop), the host re-creates the room with the same code and
+  guests auto-rejoin, recovering the session automatically (relay deployed v4).
+
+
 ## [0.3.5.11-alpha] — 2026-06-20
 
 ### Fixed
@@ -131,11 +167,10 @@ Test-build delta over `0.3.5.2` (handed to the tester):
   network state, map-editor grid math, and radial menus).
 
 
-## [Unreleased]
+## [0.3.3-alpha – 0.3.5.2-alpha]
 
-> **Road to Alpha (`0.3.6`).** The entries below accumulate toward the first public Alpha; see
-> [`docs/ROAD_TO_ALPHA.md`](docs/ROAD_TO_ALPHA.md). Test builds `0.3.4.1`–`0.3.5.2` were handed to
-> testers; the headline work of that run:
+> Test builds `0.3.4.1`–`0.3.5.2` were handed to testers; the headline work of
+> that run:
 
 ### Fixed
 - **"Report a problem" now captures the actual game.** The engine rotates `niemandsland.log` on
