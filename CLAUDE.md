@@ -9,7 +9,7 @@
 
 ## Project
 
-Niemandsland is a desktop **tabletop wargaming simulator** (v0.3.5.11-alpha) for
+Niemandsland is a desktop **tabletop wargaming simulator** (v0.3.6.0-alpha) for
 OnePageRules and similar miniature games.
 
 - **Engine**: Godot **4.6** (Forward+ renderer), `config_version=5`
@@ -57,7 +57,8 @@ Build/run/test: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 Miniatures (16–60 mm) are far below Godot physics' stable range (~0.1–10 m), so
 **dice physics runs in a separate scaled SubViewport** (our own MIT `dice_tray.gd` /
 `dice_d6.gd`); table dice are display-only. GLB minis are scaled to their base at spawn in
-`opr_army_manager.gd` (footprint capped at 125 % of base; see ARCHITECTURE).
+`opr_army_manager.gd` (oval / Tough-derived vehicle bases fit the base exactly; round infantry
+capped at 125 %; see ARCHITECTURE).
 
 ## Coding standards
 
