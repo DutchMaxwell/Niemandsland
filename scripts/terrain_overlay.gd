@@ -29,6 +29,11 @@ const TERRAIN_TILE_WORLD_Y := 0.001
 const DEPLOYMENT_ZONE_WORLD_Y := 0.0006  # just above the table, under the base bodies (issue #71)
 const OBJECTIVE_WORLD_Y := 0.003
 const SEIZE_RING_HEIGHT := 0.002  # the 3" seize ring disc; the token sits on top of it
+## The translucent 3" seize-area ring is drawn just above the table, UNDER the unit base bodies
+## (which span 0–3 mm), so the opaque bases occlude it where they overlap — it tints the table,
+## not the bases / on-model tokens standing on the objective (issue #71). render_priority keeps it
+## above the terrain tiles + deployment zone. The objective TOKEN (opaque) stays up at OBJECTIVE_WORLD_Y.
+const SEIZE_RING_WORLD_Y := 0.0006
 
 ## Render priority deterministically orders the near-coplanar TRANSPARENT overlay layers so
 ## they never flip draw order as the camera orbits (issue #71). Higher = drawn on top. Opaque
@@ -1367,9 +1372,10 @@ func _create_seize_radius_ring(pos: Vector3, radius: float, color: Color) -> Mes
 	cylinder.radial_segments = 64
 
 	mesh_instance.mesh = cylinder
-	# Ring bottom rests on the objective layer (cylinder is centre-anchored).
+	# Sit just above the table, under the base bodies (cylinder is centre-anchored). render_priority
+	# keeps it above the other flat overlays; the opaque bases occlude it where they overlap (#71).
 	mesh_instance.position = Vector3(pos.x,
-			OBJECTIVE_WORLD_Y - Z_FIGHT_OFFSET + cylinder.height / 2.0, pos.z)
+			SEIZE_RING_WORLD_Y - Z_FIGHT_OFFSET + cylinder.height / 2.0, pos.z)
 
 	# Create transparent material
 	var material = StandardMaterial3D.new()
