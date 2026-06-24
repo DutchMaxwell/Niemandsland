@@ -528,9 +528,8 @@ func _on_rule_hover_timeout() -> void:
 		var effect := _spell_effect(spell_name)
 		text = "[b][color=%s]%s[/color][/b]\n%s" % [
 			COLOR_SPELL, spell_name, effect if not effect.is_empty() else "[i]No description available.[/i]"]
-		if not effect.is_empty() and army_manager and army_manager.has_method("rules_referenced_in"):
-			for r in army_manager.rules_referenced_in(effect):
-				text += "\n\n[b][color=%s]%s[/color][/b]\n%s" % [COLOR_RULES, str(r), _resolve_rule_desc(str(r))]
+		if not effect.is_empty():
+			text += _referenced_rules_cascade(effect, "")
 	elif item_grants.has(_hovered_rule):
 		# Item → cascade: this entry is an item; show the rule(s) it grants + each description,
 		# instead of the item's own (usually empty) description.
@@ -539,7 +538,11 @@ func _on_rule_hover_timeout() -> void:
 		for g in item_grants[_hovered_rule]:
 			text += "\n[b][color=%s]%s[/color][/b]\n%s" % [COLOR_RULES, str(g), _resolve_rule_desc(str(g))]
 	else:
-		text = "[b][color=%s]%s[/color][/b]\n%s" % [COLOR_RULES, _hovered_rule, _resolve_rule_desc(_hovered_rule)]
+		var own_desc := _resolve_rule_desc(_hovered_rule)
+		text = "[b][color=%s]%s[/color][/b]\n%s" % [COLOR_RULES, _hovered_rule, own_desc]
+		# A rule whose text grants/references another rule (e.g. a hero Aura) also shows that
+		# referenced rule's description — the "depth" rules — like the spell cascade (issue #74).
+		text += _referenced_rules_cascade(own_desc, _hovered_rule)
 	_rule_popup_label.text = text
 	_rule_popup.reset_size()
 	# Place near the cursor, clamped to stay on screen.
@@ -559,6 +562,28 @@ func _resolve_rule_desc(rule_name: String) -> String:
 	if desc.is_empty():
 		desc = "[i]No description available.[/i]"
 	return desc
+
+
+## Strip a parameter from a rule name ("Tough(3)" -> "Tough"), for de-duplication.
+func _rule_base_name(rule_name: String) -> String:
+	var paren := rule_name.find("(")
+	return rule_name.substr(0, paren).strip_edges() if paren > 0 else rule_name
+
+
+## For each OTHER known rule named in `text`, append its name + description. Lets an Aura / spell /
+## rule whose text references another rule reveal that rule's explanation too (issue #74). `exclude`
+## is the hovered entry, skipped (with its parameterless base) so it is not repeated.
+func _referenced_rules_cascade(text: String, exclude: String) -> String:
+	if not (army_manager and army_manager.has_method("rules_referenced_in")):
+		return ""
+	var base := _rule_base_name(exclude)
+	var out := ""
+	for r in army_manager.rules_referenced_in(text):
+		var rname := str(r)
+		if rname == exclude or rname == base:
+			continue
+		out += "\n\n[b][color=%s]%s[/color][/b]\n%s" % [COLOR_RULES, rname, _resolve_rule_desc(rname)]
+	return out
 
 
 ## The faction's spell list for the current (caster) unit, via the army manager.
