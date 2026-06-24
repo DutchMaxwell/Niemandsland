@@ -446,6 +446,13 @@ func to_dict() -> Dictionary:
 		"models": []
 	}
 
+	# OPR units carry a derived OPRUnit profile in source_data (the full weapon / equipment / base
+	# info the unit card shows). It is an object, not JSON-serializable, so serialize its display
+	# fields — otherwise a peer's card falls back to model 0's basic weapons and loses the special
+	# loadout (issue #73). Both the per-army broadcast and the join snapshot funnel through here.
+	if source_type == "opr" and source_data is OPRApiClient.OPRUnit:
+		data["source_data"] = (source_data as OPRApiClient.OPRUnit).to_dict()
+
 	for model in models:
 		data.models.append(model.to_dict())
 
@@ -458,6 +465,11 @@ static func from_dict(data: Dictionary) -> GameUnit:
 	var unit = GameUnit.new()
 	unit.unit_id = data.get("unit_id", "")
 	unit.source_type = data.get("source_type", "generic")
+	# Restore the OPR display profile so a synced/loaded unit's card shows the full loadout (#73);
+	# absent for old saves / non-OPR units, in which case source_data stays null (card uses the
+	# leaner per-model fallback, exactly as before).
+	if unit.source_type == "opr" and data.get("source_data") is Dictionary:
+		unit.source_data = OPRApiClient.OPRUnit.from_dict(data["source_data"])
 	unit.unit_properties = data.get("unit_properties", {}).duplicate(true)
 	unit.is_activated = data.get("is_activated", false)
 	unit.activation_round = data.get("activation_round", 0)

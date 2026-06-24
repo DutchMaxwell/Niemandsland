@@ -149,3 +149,70 @@ func test_expand_game_system() -> void:
 	assert_str(c._expand_game_system("gf")).is_equal("Grimdark Future")
 	assert_str(c._expand_game_system("aof")).is_equal("Age of Fantasy")
 	assert_str(c._expand_game_system("bogus")).is_equal("bogus")
+
+
+# ===== #73: the OPR profile survives serialization so a peer's card shows the full loadout =====
+
+func test_oprweapon_dict_round_trip() -> void:
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "HE Autocannon"
+	w.range_value = 30
+	w.attacks = 3
+	w.count = 1
+	w.from_item = "Weapon Team"
+	w.special_rules = ["AP(2)", "Blast(3)"]
+	var w2 := OPRApiClient.OPRWeapon.from_dict(w.to_dict())
+	assert_str(w2.name).is_equal("HE Autocannon")
+	assert_int(w2.range_value).is_equal(30)
+	assert_int(w2.attacks).is_equal(3)
+	assert_str(w2.from_item).is_equal("Weapon Team")
+	assert_array(w2.special_rules).is_equal(["AP(2)", "Blast(3)"])
+
+
+func test_oprunit_dict_round_trip_keeps_weapons() -> void:
+	var u := OPRApiClient.OPRUnit.new()
+	u.equipment = ["Banner"]
+	u.special_rules = ["Tough(3)", "Fearless"]
+	u.base_is_oval = true
+	u.base_width_mm = 60
+	u.base_depth_mm = 35
+	var gun := OPRApiClient.OPRWeapon.new()
+	gun.name = "Shredder Rifle"
+	gun.range_value = 24
+	gun.special_rules = ["Rending"]
+	u.weapons = [gun]
+	var u2 := OPRApiClient.OPRUnit.from_dict(u.to_dict())
+	assert_int(u2.weapons.size()).is_equal(1)
+	assert_str(u2.weapons[0].name).is_equal("Shredder Rifle")
+	assert_array(u2.weapons[0].special_rules).is_equal(["Rending"])
+	assert_array(u2.equipment).is_equal(["Banner"])
+	assert_array(u2.special_rules).is_equal(["Tough(3)", "Fearless"])
+	assert_bool(u2.base_is_oval).is_true()
+	assert_int(u2.base_width_mm).is_equal(60)
+
+
+func test_game_unit_serializes_opr_source_data() -> void:
+	# The #73 fix: a synced/loaded OPR unit must carry its OPRUnit profile so the peer's card shows
+	# the full loadout instead of falling back to model 0's basic weapons.
+	var u := OPRApiClient.OPRUnit.new()
+	var gun := OPRApiClient.OPRWeapon.new()
+	gun.name = "Plasma Rifle"
+	u.weapons = [gun]
+	var gu := GameUnit.new()
+	gu.unit_id = "u1"
+	gu.source_type = "opr"
+	gu.source_data = u
+	var restored := GameUnit.from_dict(gu.to_dict())
+	assert_bool(restored.source_data is OPRApiClient.OPRUnit).is_true()
+	var ru: OPRApiClient.OPRUnit = restored.source_data
+	assert_int(ru.weapons.size()).is_equal(1)
+	assert_str(ru.weapons[0].name).is_equal("Plasma Rifle")
+
+
+func test_game_unit_non_opr_keeps_null_source_data() -> void:
+	# Back-compat: a non-OPR (or old-save) unit round-trips with source_data null (leaner card).
+	var gu := GameUnit.new()
+	gu.unit_id = "g1"
+	gu.source_type = "generic"
+	var restored := GameUnit.from_dict(gu.to_dict())
+	assert_object(restored.source_data).is_null()

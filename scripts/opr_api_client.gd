@@ -142,6 +142,39 @@ class OPRUnit:
 
 		return "\n".join(lines)
 
+	## Serialize the display-relevant profile so a peer's unit card can show the FULL loadout
+	## (weapons, equipment, rules, base) for a remotely-synced unit — the card reads source_data via
+	## _get_opr_unit(). Only the fields the card actually reads are included (issue #73), to keep the
+	## wire/save payload lean. Round-trips through GameUnit.to_dict/from_dict.
+	func to_dict() -> Dictionary:
+		var weapon_dicts: Array = []
+		for w in weapons:
+			weapon_dicts.append(w.to_dict())
+		return {
+			"weapons": weapon_dicts,
+			"equipment": equipment.duplicate(),
+			"special_rules": special_rules.duplicate(),
+			"base_is_oval": base_is_oval,
+			"base_width_mm": base_width_mm,
+			"base_depth_mm": base_depth_mm,
+			"base_size_round": base_size_round,
+		}
+
+	static func from_dict(data: Dictionary) -> OPRUnit:
+		var u := OPRUnit.new()
+		for wd in data.get("weapons", []):
+			if wd is Dictionary:
+				u.weapons.append(OPRWeapon.from_dict(wd))
+		for e in data.get("equipment", []):
+			u.equipment.append(str(e))
+		for r in data.get("special_rules", []):
+			u.special_rules.append(str(r))
+		u.base_is_oval = bool(data.get("base_is_oval", false))
+		u.base_width_mm = int(data.get("base_width_mm", 32))
+		u.base_depth_mm = int(data.get("base_depth_mm", 32))
+		u.base_size_round = int(data.get("base_size_round", 32))
+		return u
+
 
 ## Weapon data structure
 class OPRWeapon:
@@ -163,6 +196,27 @@ class OPRWeapon:
 		if not special_rules.is_empty():
 			text += " [%s]" % ", ".join(special_rules)
 		return text
+
+	func to_dict() -> Dictionary:
+		return {
+			"name": name,
+			"range_value": range_value,
+			"attacks": attacks,
+			"special_rules": special_rules.duplicate(),
+			"count": count,
+			"from_item": from_item,
+		}
+
+	static func from_dict(data: Dictionary) -> OPRWeapon:
+		var w := OPRWeapon.new()
+		w.name = str(data.get("name", ""))
+		w.range_value = int(data.get("range_value", 0))
+		w.attacks = int(data.get("attacks", 1))
+		w.count = int(data.get("count", 1))
+		w.from_item = str(data.get("from_item", ""))
+		for rule in data.get("special_rules", []):
+			w.special_rules.append(str(rule))
+		return w
 
 
 ## Safely convert a value to int (handles string, int, float, null)
