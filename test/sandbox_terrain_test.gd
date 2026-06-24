@@ -111,6 +111,40 @@ func test_cluster_scatter_is_deterministic_for_same_seed() -> void:
 	assert_bool(_first_member_pos(a).is_equal_approx(_first_member_pos(b))).is_true()
 
 
+# === per-biome forests (biome encoded in prop_id; no save/wire signature change) ===
+
+func test_sandbox_catalog_prefixes_forests_per_biome() -> void:
+	var om: ObjectManager = auto_free(ObjectManager.new())
+	var desert: Array = []
+	for e in om.sandbox_catalog("desert_"):
+		desert.append(e.get("prop_id", ""))
+	# Forests carry their biome prefix; the procedural minefield stays unprefixed.
+	assert_bool(desert.has("desert_forest_small")).is_true()
+	assert_bool(desert.has("desert_forest_large")).is_true()
+	assert_bool(desert.has("minefield")).is_true()
+	# Grassland forests stay bare.
+	var grass: Array = []
+	for e in om.sandbox_catalog(""):
+		grass.append(e.get("prop_id", ""))
+	assert_bool(grass.has("forest_small")).is_true()
+
+
+func test_sandbox_biome_prefix_split() -> void:
+	var om: ObjectManager = auto_free(ObjectManager.new())
+	assert_array(om._split_sandbox_biome_prefix("desert_forest_small")).is_equal(["desert_", "forest_small"])
+	assert_array(om._split_sandbox_biome_prefix("volcanic_forest_large")).is_equal(["volcanic_", "forest_large"])
+	assert_array(om._split_sandbox_biome_prefix("forest_small")).is_equal(["", "forest_small"])
+	assert_array(om._split_sandbox_biome_prefix("minefield")).is_equal(["", "minefield"])
+
+
+func test_forest_group_stores_biome_and_floor_falls_back() -> void:
+	var base := _group("desert_forest_small", ObjectManager.SandboxPropKind.FOREST, Vector2(6, 4))
+	base.biome_prefix = "desert_"
+	assert_str(base.biome_prefix).is_equal("desert_")
+	# A missing per-biome floor tile must fall back to the grassland floor, never a null material.
+	assert_object(base._forest_floor_material()).is_not_null()
+
+
 func _member_count(base: TerrainGroupBase) -> int:
 	var count := 0
 	for child in base.get_children():
