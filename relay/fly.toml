@@ -4,6 +4,16 @@ primary_region = "fra"
 [build]
   dockerfile = "Dockerfile"
 
+# Anonymous usage counters survive the scale-to-zero machine stops by living on a volume.
+# One-time setup BEFORE the first deploy with this config:
+#   fly volumes create niemandsland_stats --region fra --size 1 -a niemandsland-relay
+[env]
+  RELAY_STATS_PATH = "/data/stats.json"
+
+[mounts]
+  source = "niemandsland_stats"
+  destination = "/data"
+
 [http_service]
   internal_port = 8765
   force_https = true

@@ -17,11 +17,13 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import secrets
 import ssl
 import struct
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Optional
 
 import websockets
@@ -76,6 +78,80 @@ class Room:
     departed: dict = field(default_factory=dict)
 
 
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+class Stats:
+    """Anonymous, aggregate relay-usage counters — totals + peaks only, NEVER IPs, room codes or
+    player names — so 'how much is it used' is visible without identifying anyone. Persisted to
+    `path` (a Fly volume) so the counts survive the scale-to-zero machine stops; with an empty
+    path it stays in-memory only (local/dev/test). Persistence failures degrade gracefully to
+    in-memory and never crash the relay.
+    """
+
+    FIELDS = ("rooms_created", "peer_connections", "server_starts",
+              "peak_concurrent_peers", "peak_concurrent_rooms")
+
+    def __init__(self, path: str = ""):
+        self.path = path
+        self.rooms_created = 0
+        self.peer_connections = 0
+        self.server_starts = 0
+        self.peak_concurrent_peers = 0
+        self.peak_concurrent_rooms = 0
+        self.first_seen = ""
+        self.last_updated = ""
+        self._load()
+
+    def _load(self) -> None:
+        if not self.path:
+            return
+        try:
+            with open(self.path) as f:
+                data = json.load(f)
+            for key in self.FIELDS:
+                setattr(self, key, int(data.get(key, 0)))
+            self.first_seen = str(data.get("first_seen", ""))
+        except (OSError, ValueError, TypeError):
+            pass  # first run / unreadable / corrupt -> start fresh, never crash the relay
+
+    def _save(self) -> None:
+        if not self.path:
+            return
+        self.last_updated = _utc_now_iso()
+        try:
+            tmp = self.path + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump(self.snapshot(), f)
+            os.replace(tmp, self.path)  # atomic so a crash mid-write can't corrupt the file
+        except OSError:
+            pass  # volume unavailable -> in-memory only
+
+    def boot(self) -> None:
+        """Count one server start (≈ one play session, since the relay scales to zero)."""
+        self.server_starts += 1
+        if not self.first_seen:
+            self.first_seen = _utc_now_iso()
+        self._save()
+
+    def room_created(self, rooms_open: int) -> None:
+        self.rooms_created += 1
+        self.peak_concurrent_rooms = max(self.peak_concurrent_rooms, rooms_open)
+        self._save()
+
+    def peer_connected(self, peers_connected: int) -> None:
+        self.peer_connections += 1
+        self.peak_concurrent_peers = max(self.peak_concurrent_peers, peers_connected)
+        self._save()
+
+    def snapshot(self) -> dict:
+        snap = {key: getattr(self, key) for key in self.FIELDS}
+        snap["first_seen"] = self.first_seen
+        snap["last_updated"] = self.last_updated
+        return snap
+
+
 class RelayServer:
     """WebSocket relay server for Niemandsland multiplayer."""
 
@@ -83,6 +159,7 @@ class RelayServer:
         self.rooms: dict[str, Room] = {}
         self.connections: dict[ServerConnection, Peer] = {}
         self.ip_connection_counts: dict[str, int] = {}
+        self.stats = Stats(os.environ.get("RELAY_STATS_PATH", ""))
 
     def generate_room_code(self) -> str:
         """Generate a cryptographically random room code.
@@ -173,6 +250,8 @@ class RelayServer:
             await self._handle_join_room(websocket, code, ip, token)
         elif msg_type == "list_rooms":
             await self._handle_list_rooms(websocket)
+        elif msg_type == "get_stats":
+            await self._handle_get_stats(websocket)
         elif msg_type == "heartbeat":
             if peer:
                 peer.last_heartbeat = time.monotonic()
@@ -215,6 +294,8 @@ class RelayServer:
         room.peers[1] = peer
         self.rooms[code] = room
         self.connections[websocket] = peer
+        self.stats.room_created(len(self.rooms))
+        self.stats.peer_connected(len(self.connections))
 
         await websocket.send(json.dumps({
             "type": "room_created",
@@ -248,6 +329,7 @@ class RelayServer:
             peer = Peer(websocket=websocket, peer_id=1, room_code=code, ip_address=ip)
             room.peers[1] = peer
             self.connections[websocket] = peer
+            self.stats.peer_connected(len(self.connections))
             await websocket.send(json.dumps({
                 "type": "room_rejoined_host",
                 "peer_id": 1,
@@ -307,6 +389,7 @@ class RelayServer:
         )
         room.peers[peer_id] = peer
         self.connections[websocket] = peer
+        self.stats.peer_connected(len(self.connections))
 
         # Notify the joiner
         await websocket.send(json.dumps({
@@ -354,6 +437,17 @@ class RelayServer:
             and len(room.peers) < MAX_PEERS_PER_ROOM
         ]
         await websocket.send(json.dumps({"type": "rooms_list", "rooms": rooms}))
+
+    async def _handle_get_stats(self, websocket: ServerConnection) -> None:
+        """Reply with anonymous, aggregate usage stats (NO IPs / room codes / player names) — the
+        persisted totals + peaks plus the live open-rooms / connected-peers counts. Works on a
+        connection that has not joined a room (like list_rooms)."""
+        await websocket.send(json.dumps({
+            "type": "stats",
+            "rooms_open": len(self.rooms),
+            "peers_connected": len(self.connections),
+            **self.stats.snapshot(),
+        }))
 
     async def _handle_binary_message(self, sender: Peer, data: bytes) -> None:
         """Forward a binary game data message to the target peer(s).
@@ -562,6 +656,7 @@ async def main(host: str = "0.0.0.0", port: int = 8765,
                certfile: str = None, keyfile: str = None) -> None:
     """Start the relay server."""
     server = RelayServer()
+    server.stats.boot()  # count this start (≈ one session, since the relay scales to zero)
 
     ssl_context = None
     if certfile and keyfile:
