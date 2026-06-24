@@ -220,11 +220,13 @@ func test_game_unit_non_opr_keeps_null_source_data() -> void:
 
 # ===== rule-only upgrades (Banner / Musician / Sergeant) folded from selectedUpgrades =====
 
-func test_selected_upgrade_rule_gains_folded_into_rules() -> void:
+func test_selected_upgrade_roles_become_per_model_equipment() -> void:
 	# Banner/Musician/Sergeant grant a bare ArmyBookRule on the upgrade OPTION and never appear in
-	# the resolved loadout, so the loadout parser dropped them. They must be folded into the rules.
+	# the resolved loadout. Physically ONE model carries each, so on a multi-model unit they become
+	# per-model equipment_items (a base ring on the bearer) — NOT unit-wide rules.
 	var client: OPRApiClient = auto_free(OPRApiClient.new())
 	var unit := OPRApiClient.OPRUnit.new()
+	unit.size = 5
 	var selected := [
 		{"option": {"label": "Banner", "gains": [{"name": "Banner", "type": "ArmyBookRule"}]}},
 		{"option": {"label": "Musician", "gains": [{"name": "Musician", "type": "ArmyBookRule"}]}},
@@ -234,14 +236,47 @@ func test_selected_upgrade_rule_gains_folded_into_rules() -> void:
 		{"option": {"label": "Sword", "gains": [{"name": "Sword", "type": "ArmyBookWeapon"}]}},
 	]
 	client._apply_selected_upgrade_rules(unit, selected)
-	assert_array(unit.special_rules).contains(["Banner", "Musician", "Sergeant"])
-	assert_bool("War Boon" in unit.special_rules).is_false()
-	assert_bool("Sword" in unit.special_rules).is_false()
+	var names: Array = []
+	for e in unit.equipment_items:
+		names.append(e.get("name", ""))
+	assert_array(names).contains(["Banner", "Musician", "Sergeant"])
+	assert_array(unit.equipment).contains(["Banner", "Musician", "Sergeant"])
+	# per-model roles are NOT also unit-wide rules (no card duplication); items/weapons stay out.
+	assert_bool("Banner" in unit.special_rules).is_false()
+	assert_bool("War Boon" in unit.equipment).is_false()
+	assert_bool("Sword" in unit.equipment).is_false()
+
+
+func test_selected_upgrade_role_count_equals_models_upgraded() -> void:
+	# Two Banner selections (e.g. a merged combined unit) -> one equipment_item carried by 2 models.
+	var client: OPRApiClient = auto_free(OPRApiClient.new())
+	var unit := OPRApiClient.OPRUnit.new()
+	unit.size = 10
+	client._apply_selected_upgrade_rules(unit, [
+		{"option": {"gains": [{"name": "Banner", "type": "ArmyBookRule"}]}},
+		{"option": {"gains": [{"name": "Banner", "type": "ArmyBookRule"}]}},
+	])
+	assert_int(unit.equipment_items.size()).is_equal(1)
+	assert_int(int(unit.equipment_items[0].get("count", 0))).is_equal(2)
+
+
+func test_selected_upgrade_all_models_rule_is_unit_wide() -> void:
+	# An "affects all models" rule upgrade is a unit-wide rule, not a per-model role.
+	var client: OPRApiClient = auto_free(OPRApiClient.new())
+	var unit := OPRApiClient.OPRUnit.new()
+	unit.size = 5
+	client._apply_selected_upgrade_rules(unit, [
+		{"upgrade": {"affects": {"type": "all"}}, "option": {"gains": [{"name": "Furious", "type": "ArmyBookRule"}]}},
+	])
+	assert_array(unit.special_rules).contains(["Furious"])
+	assert_bool("Furious" in unit.equipment).is_false()
 
 
 func test_selected_upgrade_rule_with_rating_formats() -> void:
+	# A rated rule on a single-model unit folds unit-wide as "Name(X)".
 	var client: OPRApiClient = auto_free(OPRApiClient.new())
 	var unit := OPRApiClient.OPRUnit.new()
+	unit.size = 1
 	client._apply_selected_upgrade_rules(unit, [
 		{"option": {"gains": [{"name": "Tough", "type": "ArmyBookRule", "rating": 3}]}},
 	])
