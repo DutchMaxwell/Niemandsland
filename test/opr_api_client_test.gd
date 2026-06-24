@@ -220,10 +220,11 @@ func test_game_unit_non_opr_keeps_null_source_data() -> void:
 
 # ===== rule-only upgrades (Banner / Musician / Sergeant) folded from selectedUpgrades =====
 
-func test_selected_upgrade_roles_become_per_model_equipment() -> void:
+func test_selected_upgrade_roles_show_on_card_and_mark_bearer() -> void:
 	# Banner/Musician/Sergeant grant a bare ArmyBookRule on the upgrade OPTION and never appear in
-	# the resolved loadout. Physically ONE model carries each, so on a multi-model unit they become
-	# per-model equipment_items (a base ring on the bearer) — NOT unit-wide rules.
+	# the resolved loadout. Their bonus is unit-relevant, so each is listed on the card as a rule
+	# (special_rules); and since a specific model carries it, each ALSO becomes a per-model
+	# equipment_item (base ring on the bearer). NOT added to `equipment` (would duplicate the card).
 	var client: OPRApiClient = auto_free(OPRApiClient.new())
 	var unit := OPRApiClient.OPRUnit.new()
 	unit.size = 5
@@ -236,15 +237,18 @@ func test_selected_upgrade_roles_become_per_model_equipment() -> void:
 		{"option": {"label": "Sword", "gains": [{"name": "Sword", "type": "ArmyBookWeapon"}]}},
 	]
 	client._apply_selected_upgrade_rules(unit, selected)
+	# On the card as rules (effect shown on hover from the fetched descriptions).
+	assert_array(unit.special_rules).contains(["Banner", "Musician", "Sergeant"])
+	# Each also a per-model equipment_item -> base ring on the bearer model.
 	var names: Array = []
 	for e in unit.equipment_items:
 		names.append(e.get("name", ""))
 	assert_array(names).contains(["Banner", "Musician", "Sergeant"])
-	assert_array(unit.equipment).contains(["Banner", "Musician", "Sergeant"])
-	# per-model roles are NOT also unit-wide rules (no card duplication); items/weapons stay out.
-	assert_bool("Banner" in unit.special_rules).is_false()
-	assert_bool("War Boon" in unit.equipment).is_false()
-	assert_bool("Sword" in unit.equipment).is_false()
+	# NOT in `equipment` (the card renders equipment + special_rules, so that would double them).
+	assert_bool("Banner" in unit.equipment).is_false()
+	# items/weapons are ignored entirely by this pass.
+	assert_bool("War Boon" in unit.special_rules).is_false()
+	assert_bool("Sword" in unit.special_rules).is_false()
 
 
 func test_selected_upgrade_role_count_equals_models_upgraded() -> void:

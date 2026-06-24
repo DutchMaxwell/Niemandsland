@@ -657,12 +657,13 @@ func _parse_tts_unit(data: Dictionary, game_system_abbrev: String = "") -> OPRUn
 
 
 ## Folds rule-only upgrade gains (ArmyBookRule entries on a selectedUpgrade option) into the unit.
-## Banner / Musician / Sergeant & co. are PER-MODEL roles ("upgrade up to N models with one") —
-## physically ONE model carries the banner / plays music / leads — so they become equipment_items,
-## which the EquipmentDistributor pins to a specific model and the base ring labels (exactly like a
-## carried item such as "Banner of War"). A gain that affects ALL models (or the whole unit) folds
-## into the unit-wide special_rules instead. Item/weapon gains are skipped: they already ride in the
-## resolved `loadout`. One selectedUpgrade entry == one upgraded model.
+## Banner / Musician / Sergeant & co. grant a bonus that is relevant to the unit (Banner "+1 to
+## morale" and Musician "+1\" move" apply to the WHOLE unit; Sergeant buffs its own attacks), so
+## EVERY such gain is listed on the unit card as a rule (its effect text comes from the army-book /
+## common-rules descriptions, shown on hover). Additionally, a role only a SUBSET of the models carry
+## ("upgrade up to N models with one") is physically a specific model, so it ALSO becomes a per-model
+## equipment_item whose base ring marks the bearer. Item/weapon gains are skipped: they already ride
+## in the resolved `loadout`. One selectedUpgrade entry == one upgraded model.
 func _apply_selected_upgrade_rules(unit, selected_upgrades: Array) -> void:
 	var role_counts: Dictionary = {}      # rule name -> number of models that carry it
 	var role_unit_wide: Dictionary = {}   # rule name -> true if any entry upgrades ALL models
@@ -691,14 +692,14 @@ func _apply_selected_upgrade_rules(unit, selected_upgrades: Array) -> void:
 				role_unit_wide[full] = true
 	for full in role_counts:
 		var count: int = int(role_counts[full])
-		# A subset of the models carry it -> per-model role (base ring on the bearer). The whole unit
-		# (count >= size, or an explicit "all models" upgrade) -> a unit-wide rule.
+		# Every role's bonus is listed on the unit card as a rule (name + effect on hover).
+		if full not in unit.special_rules:
+			unit.special_rules.append(full)
+		# A role only a SUBSET of the models carry ALSO gets a per-model equipment_item so the base
+		# ring marks the bearer model. NOT added to `equipment` (which the card also renders) — that
+		# would duplicate the rule line. A whole-unit ("all models") gain stays card-only.
 		if unit.size > 1 and not bool(role_unit_wide.get(full, false)) and count < unit.size:
 			unit.equipment_items.append({"name": full, "count": count, "rules": []})
-			if full not in unit.equipment:
-				unit.equipment.append(full)
-		elif full not in unit.special_rules:
-			unit.special_rules.append(full)
 
 
 ## The special-rule names an upgrade item GRANTS, read from both the "specialRules"
