@@ -37,10 +37,13 @@ signal relay_reconnected()
 ## A channel-1 command frame arrived from another peer (our hand-rolled protocol, below @rpc).
 signal command_received(from_peer: int, data: PackedByteArray)
 
-const HEARTBEAT_INTERVAL: float = 10.0
+# Send a heartbeat this often. Kept well below HEARTBEAT_TIMEOUT so several acks can be missed
+# before a drop — widens the margin on a briefly busy/stalled link (the liveness clock is now also
+# refreshed by any inbound game frame, so this mainly matters on an otherwise idle connection).
+const HEARTBEAT_INTERVAL: float = 5.0
 
-## If no heartbeat_ack arrives for this long the connection is treated as dead.
-## Must exceed the relay's own 30 s heartbeat timeout to avoid false positives.
+## If no inbound frame (game data OR heartbeat_ack) arrives for this long the connection is treated
+## as dead. Must exceed the relay's own 30 s heartbeat timeout to avoid false positives.
 const HEARTBEAT_TIMEOUT: float = 35.0
 
 ## Give up an automatic rejoin if it hasn't succeeded within this long. MUST stay
@@ -266,6 +269,10 @@ func _poll() -> void:
 		# every iteration or this dereferences null.
 		while _ws and _ws.get_available_packet_count() > 0:
 			var packet = _ws.get_packet()
+			# ANY inbound relay frame proves the relay->client path is alive — refresh the liveness
+			# clock, not only on heartbeat_ack. A busy game link (the host's ~20 state frames/s) is
+			# then never false-dropped just because a single heartbeat_ack was delayed/starved.
+			_last_ack_ms = now_ms
 			if _ws.was_string_packet():
 				_process_control_message(packet.get_string_from_utf8())
 			else:

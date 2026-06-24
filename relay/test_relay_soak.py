@@ -19,6 +19,8 @@ import websockets
 
 from relay_server import (
     RelayServer,
+    Room,
+    Peer,
     MAX_CONNECTIONS_PER_IP,
     MAX_MESSAGE_SIZE,
     RATE_LIMIT_MESSAGES_PER_SECOND,
@@ -342,3 +344,79 @@ class TestHeartbeatUnderLoad:
         assert got_ack, "heartbeat was not acked after a game-message burst"
         await host_ws.close()
         await guest_ws.close()
+
+
+# ============================================================================
+# Head-of-line block: a wedged slow consumer must not starve others' heartbeats
+# (the live-game collapse root cause — relay must not await fan-out sends inline)
+# ============================================================================
+
+
+class _WedgedWS:
+    """A websocket whose send() never completes — a fully back-pressured (wedged) slow consumer.
+    Reproducing real TCP backpressure on loopback is unreliable (the client library reads ahead into
+    its own queue and OS buffers are large), so we model the worst case directly: a send that parks
+    forever, exactly what drain() does when a peer stops reading."""
+
+    async def send(self, data) -> None:
+        await asyncio.Event().wait()  # never set -> parks the caller forever
+
+
+class _SinkWS:
+    """A websocket that accepts and discards sends instantly (a healthy fast consumer)."""
+
+    async def send(self, data) -> None:
+        return
+
+
+class TestSlowConsumerHeadOfLine:
+    async def test_broadcast_does_not_await_a_wedged_peer(self, relay):
+        """Fan-out must NOT block the relay's per-connection recv loop on a slow consumer's send —
+        that head-of-line block starved heartbeat_acks and collapsed a live game (a 2-PC playtest game).
+        With the per-peer send queue, _handle_binary_message enqueues and returns immediately even
+        though one peer's socket never drains; the old inline `await peer.websocket.send()` hangs here."""
+        server, _ = relay
+        room = Room(code="HOLTST")
+        host = Peer(websocket=_SinkWS(), peer_id=1, room_code="HOLTST", ip_address="h")
+        wedged = Peer(websocket=_WedgedWS(), peer_id=2, room_code="HOLTST", ip_address="w")
+        room.peers = {1: host, 2: wedged}
+        server.rooms["HOLTST"] = room
+
+        # A broadcast from the host fans out to the wedged peer. It must return promptly (the wedged
+        # peer's writer task parks alone) rather than hang the shared recv loop.
+        frame = struct.pack(">i", 0) + b"state-update"
+        await asyncio.wait_for(server._handle_binary_message(host, frame), timeout=2.0)
+
+        if wedged.writer_task is not None:
+            wedged.writer_task.cancel()
+
+
+class TestSlowConsumerLiveHeartbeat:
+    async def test_wedged_guest_does_not_starve_host_heartbeat_live(self, relay):
+        """End-to-end companion to the unit test above: with a guest whose read pump is throttled
+        (max_queue=1) and never reads, the host's heartbeat is still acked over a real socket."""
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        slow_ws = await websockets.connect(url, max_queue=1)
+        await slow_ws.send(json.dumps({"type": "join_room", "code": code}))
+        assert json.loads(await slow_ws.recv())["type"] == "room_joined"
+        await drain(host_ws)
+
+        big = b"z" * 131072
+        for i in range(40):
+            await host_ws.send(struct.pack(">i", 0) + struct.pack(">i", i) + big)
+
+        await host_ws.send(json.dumps({"type": "heartbeat"}))
+        got_ack = False
+        try:
+            for _ in range(20):
+                msg = await asyncio.wait_for(host_ws.recv(), timeout=2.0)
+                if isinstance(msg, str) and json.loads(msg).get("type") == "heartbeat_ack":
+                    got_ack = True
+                    break
+        except asyncio.TimeoutError:
+            pass
+        assert got_ack, "a wedged slow consumer starved the host's heartbeat_ack"
+
+        await host_ws.close()
+        await slow_ws.close()
