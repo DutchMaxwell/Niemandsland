@@ -129,6 +129,7 @@ var _network_manager: Node = null
 var _ruins_library: RuinsLibrary = null
 ## Lazily-created tree GLB resolver for sandbox forest clusters (shared static scene cache).
 var _trees_library: TreesLibrary = null
+var _biome_library: BiomeLibrary = null  # battlemaps cropped for non-grassland forest floors
 
 ## Casual terrain edit mode. OFF by default: all sandbox terrain is LOCKED so players can't
 ## drag or delete it by accident during play. Turning it on (via the terrain shelf) unlocks
@@ -1981,6 +1982,17 @@ func _get_trees_library() -> TreesLibrary:
 	return _trees_library
 
 
+## Shared biome-battlemap library for sandbox forest floors, created on first use. A non-grassland
+## forest crops a tile of its biome battlemap as the pad texture (shares the user:// cache the table
+## already fills, so a battlemap fetched for the table is reused on disk).
+func _get_biome_library() -> BiomeLibrary:
+	if _biome_library == null or not is_instance_valid(_biome_library):
+		_biome_library = BiomeLibrary.new()
+		_biome_library.name = "SandboxBiomeLibrary"
+		add_child(_biome_library)
+	return _biome_library
+
+
 ## Spawn a free-placed casual-sandbox terrain piece at `pos`. RUIN kinds become a walkable
 ## multi-storey SandboxTerrainProp; FOREST/HAZARD_CLUSTER kinds become a TerrainGroupBase
 ## (several tree/mine visuals on one draggable base). Either way it is a first-class
@@ -2004,7 +2016,7 @@ func spawn_sandbox_terrain(prop_id: String, kind: int, pos: Vector3, broadcast: 
 		(spawned as SandboxTerrainProp).build_visual(_get_ruins_library())
 	elif spawned is TerrainGroupBase:
 		# Seed from the (synced) network id so every client builds an identical cluster.
-		(spawned as TerrainGroupBase).build(obj_network_id, _get_trees_library())
+		(spawned as TerrainGroupBase).build(obj_network_id, _get_trees_library(), _get_biome_library())
 
 	# Lock the fresh piece unless terrain edit mode is active (it is while the shelf is open).
 	_set_terrain_locked(spawned, not _terrain_edit_mode)
@@ -2042,26 +2054,31 @@ func _set_terrain_locked(obj: Node3D, locked: bool) -> void:
 
 
 func _build_sandbox_ruin(prop_id: String, kind: int, obj_network_id: int) -> SandboxTerrainProp:
-	var spec: Dictionary = SANDBOX_RUINS.get(prop_id, {})
+	var split := _split_sandbox_biome_prefix(prop_id)
+	var biome_prefix: String = split[0]
+	var base_id: String = split[1]
+	var spec: Dictionary = SANDBOX_RUINS.get(base_id, {})
 	var footprint: Vector2 = spec.get("footprint", Vector2(SANDBOX_DEFAULT_FOOTPRINT_INCHES, SANDBOX_DEFAULT_FOOTPRINT_INCHES))
 	var floors: Array = spec.get("floors", [0.0])
 	var prop := SandboxTerrainProp.new()
 	prop.name = "SandboxTerrain_%d" % _object_counter
-	prop.configure(prop_id, kind, footprint, floors)
+	# Keep the FULL (biome-prefixed) prop_id so save/meta round-trips the biome; the prefix selects
+	# the themed RuinsLibrary wall panels (e.g. "desert_solid_a"), like a forest carries its biome.
+	prop.configure(prop_id, kind, footprint, floors, biome_prefix)
 	prop.set_meta("network_id", obj_network_id)
 	return prop
 
 
-## Catalogue of placeable sandbox pieces for the shelf browser. Grassland (prefix "") lists
-## the ruins plus the forest/hazard groups; other biomes list only the groups for now (ruin
-## wall panels are themed, and only the grassland set ships first). Each entry is
-## {prop_id, kind, label}.
+## Catalogue of placeable sandbox pieces for the shelf browser. EVERY biome lists the ruins +
+## forest/hazard groups; a ruin's wall panels and a forest's trees/floor are themed from the biome
+## prefix carried in each entry's prop_id. Each entry is {prop_id, kind, label}.
 func sandbox_catalog(biome_prefix: String = "") -> Array:
 	var entries: Array = []
-	if biome_prefix.is_empty():
-		for id in SANDBOX_RUINS.keys():
-			var ruin: Dictionary = SANDBOX_RUINS[id]
-			entries.append({"prop_id": id, "kind": SandboxPropKind.RUIN, "label": ruin.get("label", id)})
+	for id in SANDBOX_RUINS.keys():
+		var ruin: Dictionary = SANDBOX_RUINS[id]
+		# A ruin carries its biome in the prop_id (e.g. "desert_ruin_small_1f"), like a forest, so
+		# save/broadcast round-trip it via the existing prop_id field; the prefix themes its panels.
+		entries.append({"prop_id": biome_prefix + id, "kind": SandboxPropKind.RUIN, "label": ruin.get("label", id)})
 	for id in SANDBOX_GROUPS.keys():
 		var spec: Dictionary = SANDBOX_GROUPS[id]
 		var kind: int = spec.get("kind", SandboxPropKind.FOREST)

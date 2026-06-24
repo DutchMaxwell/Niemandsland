@@ -27,7 +27,6 @@ const GROUND_COLLISION_LAYER := 1
 const MOVABLE_TERRAIN_COLLISION_LAYER := 4
 
 const INCHES_TO_METERS := 0.0254
-const THEME_PREFIX := ""
 const FLOOR_THICKNESS_M := 0.01
 const WALL_THICKNESS_INCHES := 0.4         # façade shell depth (front + back panel)
 
@@ -96,15 +95,19 @@ var floor_heights_inches: Array = [0.0]
 
 var _visual_root: Node3D = null
 var _materials: Dictionary = {}  # cache key -> Material (per prop)
+## Biome theme prefix for the wall/window/normal panels (e.g. "desert_"); "" = grassland. Set in
+## configure() from the prop's biome; selects which themed RuinsLibrary panel set is downloaded + used.
+var _theme_prefix: String = ""
 
 # === Public ===
 
 ## Set the prop's identity + dimensions and build its floor colliders. Call once right
 ## after `new()`, before adding to the tree / positioning.
-func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2, p_floors: Array) -> void:
+func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2, p_floors: Array, p_theme_prefix: String = "") -> void:
 	prop_id = p_prop_id
 	prop_kind = p_kind
 	footprint_inches = p_footprint_inches
+	_theme_prefix = p_theme_prefix
 	floor_heights_inches = p_floors.duplicate() if not p_floors.is_empty() else [0.0]
 
 	add_to_group("selectable")
@@ -123,7 +126,7 @@ func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2, p_fl
 ## isn't cached yet, fetch it and rebuild when it arrives.
 func build_visual(lib: RuinsLibrary) -> void:
 	_apply_visual(lib)
-	if lib != null and not lib.all_panels_cached(THEME_PREFIX):
+	if lib != null and not lib.all_panels_cached(_theme_prefix):
 		_ensure_panels_async(lib)
 
 
@@ -197,7 +200,7 @@ func _apply_visual(lib: RuinsLibrary) -> void:
 	_visual_root = Node3D.new()
 	_visual_root.name = "Visual"
 	add_child(_visual_root)
-	if lib != null and lib.all_panels_cached(THEME_PREFIX):
+	if lib != null and lib.all_panels_cached(_theme_prefix):
 		_build_ruin(lib)
 	else:
 		_build_placeholder()
@@ -205,7 +208,7 @@ func _apply_visual(lib: RuinsLibrary) -> void:
 
 ## Download the panel set off the main thread, then rebuild if still alive. Fire-and-forget.
 func _ensure_panels_async(lib: RuinsLibrary) -> void:
-	var ok: bool = await lib.ensure_all_panels(THEME_PREFIX)
+	var ok: bool = await lib.ensure_all_panels(_theme_prefix)
 	if ok and is_instance_valid(self):
 		_apply_visual(lib)
 
@@ -410,7 +413,7 @@ func _wall_material(lib: RuinsLibrary) -> Material:
 		return _materials[key]
 	var tiles := 1.0 / (MASONRY_TILE_INCHES * INCHES_TO_METERS)
 	var mat := StandardMaterial3D.new()
-	mat.albedo_texture = lib.get_texture(THEME_PREFIX + WALL_STONE_PANEL)
+	mat.albedo_texture = lib.get_texture(_theme_prefix + WALL_STONE_PANEL)
 	mat.albedo_color = PLACEHOLDER_COLOR if mat.albedo_texture == null else Color.WHITE
 	mat.roughness = STONE_ROUGHNESS
 	mat.metallic = 0.0
@@ -420,7 +423,7 @@ func _wall_material(lib: RuinsLibrary) -> Material:
 	mat.uv1_triplanar = true
 	mat.uv1_world_triplanar = false
 	mat.uv1_scale = Vector3(tiles, tiles, tiles)
-	var ntex: Texture2D = lib.get_texture(THEME_PREFIX + NORMAL_PANEL)
+	var ntex: Texture2D = lib.get_texture(_theme_prefix + NORMAL_PANEL)
 	if ntex != null:
 		mat.normal_enabled = true
 		mat.normal_texture = ntex
@@ -435,7 +438,7 @@ func _window_material(lib: RuinsLibrary) -> Material:
 	if _materials.has("window"):
 		return _materials["window"]
 	var mat := StandardMaterial3D.new()
-	mat.albedo_texture = lib.get_texture(THEME_PREFIX + WINDOW_PANEL)
+	mat.albedo_texture = lib.get_texture(_theme_prefix + WINDOW_PANEL)
 	mat.roughness = STONE_ROUGHNESS
 	mat.metallic = 0.0
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
@@ -445,7 +448,7 @@ func _window_material(lib: RuinsLibrary) -> Material:
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 	mat.alpha_scissor_threshold = WINDOW_ALPHA_SCISSOR
-	var ntex: Texture2D = lib.get_texture(THEME_PREFIX + NORMAL_PANEL)
+	var ntex: Texture2D = lib.get_texture(_theme_prefix + NORMAL_PANEL)
 	if ntex != null:
 		mat.normal_enabled = true
 		mat.normal_texture = ntex

@@ -49,17 +49,22 @@ const TREE_VARIANTS: Array[String] = ["tree_a", "tree_b", "tree_c"]
 ## footprint = the oval's bounding box (long axis × widest point); trees scatter inside the
 ## ellipse. The pad sits UP from the table (a thin plinth) to avoid z-fighting.
 const FOREST_FLOOR_TEX_DEFAULT := "res://assets/sandbox_forest_floor.webp"
-## Per-biome forest-floor tile (planar-tiled by the anti-tiling shader). Grassland ships its
-## texture; other biomes fall back to it until their tile is delivered, so the pad is never
-## untextured. Keyed by the prop_id biome prefix ("" = grassland).
-const FOREST_FLOOR_TEX_BY_PREFIX: Dictionary = {
-	"": FOREST_FLOOR_TEX_DEFAULT,
-	"desert_": "res://assets/sandbox_forest_floor_desert.webp",
-	"tundra_": "res://assets/sandbox_forest_floor_tundra.webp",
-	"volcanic_": "res://assets/sandbox_forest_floor_volcanic.webp",
-	"jungle_": "res://assets/sandbox_forest_floor_jungle.webp",
-	"urban_": "res://assets/sandbox_forest_floor_urban.webp",
+## A non-grassland forest crops its floor from the biome's BATTLEMAP (the same R2 photo the table
+## uses) instead of shipping a per-biome tile — keyed by the prop_id biome prefix. Grassland keeps
+## its tuned bundled texture (no key). Kept in sync with ObjectManager's prefix list.
+const FOREST_FLOOR_BATTLEMAP_KEY_BY_PREFIX: Dictionary = {
+	"desert_": "arid_desert",
+	"tundra_": "frozen_tundra",
+	"volcanic_": "volcanic_ash",
+	"jungle_": "alien_jungle",
+	"urban_": "urban_ruins",
 }
+## Crop this many inches square out of the battlemap so one tile reads at roughly the same scale
+## as FOREST_FLOOR_TILE_INCHES, given the table's reference width (battlemap spans the whole table).
+const FOREST_FLOOR_CROP_INCHES := 6.0
+const BATTLEMAP_REFERENCE_WIDTH_INCHES := 72.0
+## Inset the (seeded-random) crop origin from the battlemap edges so it never samples the border.
+const FOREST_FLOOR_CROP_MARGIN := 0.08
 ## Anti-tiling shader that hides the texture's repetition on larger pads (see the .gdshader).
 const FOREST_FLOOR_SHADER := "res://shaders/forest_floor.gdshader"
 const FOREST_BASE_THICKNESS_INCHES := 0.12
@@ -91,6 +96,11 @@ var biome_prefix: String = ""
 var _seed_val: int = 0
 var _trees_lib: TreesLibrary = null
 var _tree_upgrade_started: bool = false
+## Battlemap source for the non-grassland forest-floor crop (async, one-shot). _floor_mesh is the
+## pad whose material gets swapped once the biome battlemap is cropped.
+var _biome_lib: BiomeLibrary = null
+var _floor_mesh: MeshInstance3D = null
+var _floor_upgrade_started: bool = false
 
 # === Public ===
 
@@ -115,9 +125,10 @@ func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2, p_bi
 
 ## Build and adopt the cluster's members (trees or mines) with a seeded scatter. `trees_lib`
 ## may be null (procedural trees then). Safe to call once, after adding to the tree.
-func build(seed_val: int, trees_lib: TreesLibrary) -> void:
+func build(seed_val: int, trees_lib: TreesLibrary, biome_lib: BiomeLibrary = null) -> void:
 	_seed_val = seed_val
 	_trees_lib = trees_lib
+	_biome_lib = biome_lib
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_val
 	match prop_kind:
@@ -187,6 +198,8 @@ func _build_forest(rng: RandomNumberGenerator, trees_lib: TreesLibrary) -> void:
 	_populate_forest(rng, trees_lib, base_top)
 	if trees_lib != null and not trees_lib.all_models_cached(biome_prefix):
 		_upgrade_forest_trees(base_top)
+	# A non-grassland forest swaps its grassland-fallback floor for a crop of the biome battlemap.
+	_maybe_upgrade_forest_floor()
 
 
 ## Fill the oval EVENLY (phyllotaxis) with a size-scaled number of trees, each randomly sized and
@@ -230,6 +243,51 @@ func _upgrade_forest_trees(base_top: float) -> void:
 	_populate_forest(rng, _trees_lib, base_top)
 
 
+## If this forest carries a non-grassland biome, crop a tile of that biome's battlemap and swap it
+## onto the floor pad (downloading the battlemap if the table hasn't cached it). One-shot; the pad
+## was built on the grassland fallback so it's never untextured. Grassland keeps its tuned tile.
+func _maybe_upgrade_forest_floor() -> void:
+	if _floor_upgrade_started or _biome_lib == null or not is_instance_valid(_floor_mesh):
+		return
+	var key: String = FOREST_FLOOR_BATTLEMAP_KEY_BY_PREFIX.get(biome_prefix, "")
+	if key.is_empty():
+		return  # grassland (or unknown) — keep the tuned bundled floor
+	_floor_upgrade_started = true
+	var path: String = _biome_lib.get_cached_path(key)
+	if path.is_empty():
+		path = await _biome_lib.ensure_biome(key)
+	if path.is_empty() or not is_instance_valid(self) or not is_instance_valid(_floor_mesh):
+		return  # unavailable / offline — keep the grassland fallback
+	var crop_tex := _crop_floor_tile(path)
+	if crop_tex == null:
+		return
+	_floor_mesh.material_override = _forest_floor_material_for_texture(crop_tex)
+
+
+## Bake a tile-sized square crop of the battlemap WebP at `path` into an ImageTexture. The crop
+## origin is seeded-random within an inset region, so each forest samples a different patch (no two
+## pads look identical) and the anti-tiling shader hides the crop's own repetition. Seeded from
+## _seed_val so every multiplayer client crops the identical patch.
+func _crop_floor_tile(path: String) -> Texture2D:
+	var img := Image.new()
+	if img.load(ProjectSettings.globalize_path(path)) != OK:
+		push_warning("TerrainGroupBase: failed to load battlemap %s" % path)
+		return null
+	var px_per_inch := float(img.get_width()) / BATTLEMAP_REFERENCE_WIDTH_INCHES
+	var crop_px := clampi(int(round(FOREST_FLOOR_CROP_INCHES * px_per_inch)), 1, mini(img.get_width(), img.get_height()))
+	var margin_x := int(img.get_width() * FOREST_FLOOR_CROP_MARGIN)
+	var margin_y := int(img.get_height() * FOREST_FLOOR_CROP_MARGIN)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _seed_val
+	var ox := rng.randi_range(margin_x, maxi(margin_x, img.get_width() - crop_px - margin_x))
+	var oy := rng.randi_range(margin_y, maxi(margin_y, img.get_height() - crop_px - margin_y))
+	var crop := img.get_region(Rect2i(ox, oy, crop_px, crop_px))
+	if crop.get_format() != Image.FORMAT_RGBA8:
+		crop.convert(Image.FORMAT_RGBA8)  # WebP RGB8 can corrupt on some NVIDIA GPUs (see GPU memory)
+	crop.generate_mipmaps()
+	return ImageTexture.create_from_image(crop)
+
+
 ## The oval forest-floor pad: a thin elliptical disc (custom mesh so the floor texture tiles at
 ## a real-world scale via planar UVs, not one stretched image) sitting up from the table.
 ## Returns its top Y (where the trees stand).
@@ -266,19 +324,23 @@ func _build_forest_base() -> float:
 	mi.mesh = st.commit()
 	mi.material_override = _forest_floor_material()
 	add_child(mi)
+	_floor_mesh = mi
 	return t
 
 
+## The initial floor material: every forest builds on the grassland tile; non-grassland biomes then
+## async-swap to a crop of their battlemap (see _maybe_upgrade_forest_floor).
 func _forest_floor_material() -> Material:
-	var tex_path: String = FOREST_FLOOR_TEX_BY_PREFIX.get(biome_prefix, FOREST_FLOOR_TEX_DEFAULT)
-	var tex := _load_texture(tex_path)
-	if tex == null:
-		tex = _load_texture(FOREST_FLOOR_TEX_DEFAULT)  # missing biome tile -> grassland floor
+	var tex := _load_texture(FOREST_FLOOR_TEX_DEFAULT)
 	if tex == null:
 		return _forest_floor_fallback_material()
-	# The anti-tiling shader breaks the texture's visible repetition on larger pads (it
-	# samples a second rotated tap and varies macro brightness per region). Fall back to a
-	# plain tiled material if the shader fails to load.
+	return _forest_floor_material_for_texture(tex)
+
+
+## Wrap a floor texture in the anti-tiling shader (it samples a second rotated tap + varies macro
+## brightness, hiding the repetition on larger pads); falls back to a plain tiled material if the
+## shader fails to load. Shared by the initial build and the battlemap-crop swap.
+func _forest_floor_material_for_texture(tex: Texture2D) -> Material:
 	var shader: Shader = load(FOREST_FLOOR_SHADER) if ResourceLoader.exists(FOREST_FLOOR_SHADER) else null
 	if shader == null:
 		var plain := _forest_floor_fallback_material()
