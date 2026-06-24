@@ -5,8 +5,9 @@ extends Node3D
 ## player can eyeball reach without a ruler. Display-only (shows reach, decides/enforces
 ## NOTHING — it never moves the model) and LOCAL: not synced to other players and not
 ## written to the .nml save, exactly like the base-anchored range rings whose flat-annulus +
-## base-radius + player-colour logic this reuses. Each indicator is parented to the model
-## node, so it follows the model automatically — no per-frame tracking.
+## base-radius + player-colour logic this reuses. Each indicator is WORLD-ANCHORED at the
+## model's position when shown (NOT parented to the model), so it stays put while the player
+## drags the mini toward a band edge to judge its reach — no per-frame tracking.
 ##
 ## OPR core movement (Grimdark Future / Age of Fantasy): Advance = 6", Rush/Charge = 12".
 ## The "Fast" special rule adds +2"/+4" and "Slow" subtracts -2"/-4" (Advance / Rush+Charge);
@@ -98,7 +99,6 @@ func toggle(model_nodes: Array) -> void:
 			clear(node)
 		else:
 			_build_indicator(node)
-			_active[node] = true
 
 
 func is_active(model_node: Node3D) -> bool:
@@ -106,14 +106,18 @@ func is_active(model_node: Node3D) -> bool:
 
 
 func clear(model_node: Node3D) -> void:
-	_clear_node(model_node)
-	_active.erase(model_node)
+	if _active.has(model_node):
+		var root = _active[model_node]
+		if is_instance_valid(root):
+			root.queue_free()
+		_active.erase(model_node)
 
 
 func clear_all() -> void:
 	for node in _active.keys():
-		if is_instance_valid(node):
-			_clear_node(node)
+		var root = _active[node]
+		if is_instance_valid(root):
+			root.queue_free()
 	_active.clear()
 
 
@@ -132,7 +136,13 @@ func _build_indicator(model_node: Node3D) -> void:
 	# Outer (Rush/Charge) first so the inner Advance band draws on top of it.
 	_add_band(root, props, int(bands["rush"]), base_color, RUSH_ALPHA, "Rush/Charge")
 	_add_band(root, props, int(bands["advance"]), base_color, ADVANCE_ALPHA, "Advance")
-	model_node.add_child(root)
+	# World-anchor the rings at the model's CURRENT spot instead of parenting them to the model,
+	# so they stay put while the player drags the mini toward a band edge to judge its reach.
+	add_child(root)
+	root.global_position = model_node.global_position
+	_active[model_node] = root
+	# Drop the orphaned indicator if its model is freed (e.g. table clear) while still shown.
+	model_node.tree_exiting.connect(_on_model_gone.bind(model_node), CONNECT_ONE_SHOT)
 
 
 func _add_band(root: Node3D, props: Dictionary, dist_inches: int, base_color: Color,
@@ -169,12 +179,9 @@ func _add_band(root: Node3D, props: Dictionary, dist_inches: int, base_color: Co
 	root.add_child(label)
 
 
-func _clear_node(model_node: Node3D) -> void:
-	if not is_instance_valid(model_node):
-		return
-	var existing := model_node.get_node_or_null(ROOT_NODE_NAME)
-	if existing:
-		existing.free()  # immediate, so a same-call rebuild gets a clean node
+## A shown model left the tree (e.g. table clear): drop its now-orphaned world-anchored indicator.
+func _on_model_gone(model_node: Node3D) -> void:
+	clear(model_node)
 
 
 ## A model node's unit_properties (game_unit meta, or via model_instance.unit), or {}.

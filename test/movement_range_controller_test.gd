@@ -70,10 +70,31 @@ func test_toggle_shows_then_hides() -> void:
 	c.toggle([m])
 	assert_bool(c.is_active(m)).is_true()
 	assert_int(c.active_count()).is_equal(1)
-	assert_bool(m.get_node_or_null(MovementRangeController.ROOT_NODE_NAME) != null).is_true()
+	# World-anchored: the indicator is a child of the CONTROLLER, not of the model.
+	assert_bool(c.get_node_or_null(MovementRangeController.ROOT_NODE_NAME) != null).is_true()
+	assert_bool(m.get_node_or_null(MovementRangeController.ROOT_NODE_NAME) == null).is_true()
 	c.toggle([m])
 	assert_bool(c.is_active(m)).is_false()
 	assert_int(c.active_count()).is_equal(0)
+	await get_tree().process_frame  # clear() uses queue_free (deferred) — let the node be removed
+	assert_bool(c.get_node_or_null(MovementRangeController.ROOT_NODE_NAME) == null).is_true()
+
+
+func test_indicator_stays_put_when_model_moves() -> void:
+	# The indicator anchors at the model's spot and must NOT follow it, so the player can drag
+	# the mini toward a band edge to judge reach.
+	var c := _controller()
+	var m := _model()
+	m.global_position = Vector3(0.5, 0.0, 0.3)
+	c.toggle([m])
+	var ring := c.get_node_or_null(MovementRangeController.ROOT_NODE_NAME) as Node3D
+	assert_bool(ring != null).is_true()
+	assert_float(ring.global_position.x).is_equal_approx(0.5, 0.001)
+	assert_float(ring.global_position.z).is_equal_approx(0.3, 0.001)
+	# Move the mini — the world-anchored indicator stays put.
+	m.global_position = Vector3(1.0, 0.0, 0.8)
+	assert_float(ring.global_position.x).is_equal_approx(0.5, 0.001)
+	assert_float(ring.global_position.z).is_equal_approx(0.3, 0.001)
 
 
 func test_clear_all_removes_every_indicator() -> void:
