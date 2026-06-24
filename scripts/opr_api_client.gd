@@ -644,11 +644,38 @@ func _parse_tts_unit(data: Dictionary, game_system_abbrev: String = "") -> OPRUn
 			if granted_rule not in unit.special_rules:
 				unit.special_rules.append(granted_rule)
 
+	# Rule-only upgrades (Banner, Musician, ...) grant an ArmyBookRule DIRECTLY on the selected
+	# upgrade option and are NOT mirrored into the resolved `loadout` (unlike item/weapon upgrades,
+	# which are). Fold those into the unit's rules so the Banner/Musician actually show on the card.
+	_apply_selected_upgrade_rules(unit, data.get("selectedUpgrades", []))
+
 	# No base recommendation from Army Forge → estimate from Tough (vehicles/monsters).
 	if not had_base_recommendation:
 		_apply_tough_base_fallback(unit)
 
 	return unit
+
+
+## Folds rule-only upgrade gains (Banner, Musician, Sergeant, ...) — ArmyBookRule entries on a
+## selectedUpgrade option — into the unit's special_rules. Item/weapon upgrades are SKIPPED here:
+## they already ride in the resolved `loadout`. Parametrised rules become "Name(X)".
+func _apply_selected_upgrade_rules(unit, selected_upgrades: Array) -> void:
+	for su in selected_upgrades:
+		if not (su is Dictionary):
+			continue
+		var option = su.get("option", {})
+		if not (option is Dictionary):
+			continue
+		for gain in option.get("gains", []):
+			if not (gain is Dictionary) or gain.get("type", "") != "ArmyBookRule":
+				continue
+			var rname := str(gain.get("name", gain.get("label", ""))).strip_edges()
+			if rname.is_empty():
+				continue
+			var rating = gain.get("rating", null)
+			var full := "%s(%s)" % [rname, _format_rating(rating)] if rating != null and str(rating) != "" else rname
+			if full not in unit.special_rules:
+				unit.special_rules.append(full)
 
 
 ## The special-rule names an upgrade item GRANTS, read from both the "specialRules"
