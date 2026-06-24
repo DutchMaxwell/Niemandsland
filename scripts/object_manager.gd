@@ -1956,6 +1956,12 @@ const SANDBOX_GROUPS: Dictionary = {
 	"minefield": {"kind": SandboxPropKind.HAZARD_CLUSTER, "footprint": Vector2(6, 6), "label": "Minefield"},
 }
 
+## Biome prefixes a sandbox FOREST can carry, encoded INTO its prop_id (e.g. "desert_forest_small")
+## so save + broadcast preserve the biome through the existing prop_id field — no new wire/save
+## fields. Kept in sync with SandboxTerrainShelf.BIOMES. The procedural minefield is biome-agnostic
+## and stays unprefixed.
+const SANDBOX_BIOME_PREFIXES: Array[String] = ["", "desert_", "tundra_", "volcanic_", "jungle_", "urban_"]
+
 
 ## Shared ruin library for sandbox terrain, created on first use.
 func _get_ruins_library() -> RuinsLibrary:
@@ -2058,16 +2064,33 @@ func sandbox_catalog(biome_prefix: String = "") -> Array:
 			entries.append({"prop_id": id, "kind": SandboxPropKind.RUIN, "label": ruin.get("label", id)})
 	for id in SANDBOX_GROUPS.keys():
 		var spec: Dictionary = SANDBOX_GROUPS[id]
-		entries.append({"prop_id": id, "kind": spec.get("kind", SandboxPropKind.FOREST), "label": spec.get("label", id)})
+		var kind: int = spec.get("kind", SandboxPropKind.FOREST)
+		# A forest carries its biome in the prop_id (e.g. "desert_forest_small"); the procedural
+		# minefield is biome-agnostic, so it stays unprefixed and lists once per biome as-is.
+		var entry_id: String = (biome_prefix + id) if kind == SandboxPropKind.FOREST else id
+		entries.append({"prop_id": entry_id, "kind": kind, "label": spec.get("label", id)})
 	return entries
 
 
+## Split a sandbox forest prop_id into [biome_prefix, base_id] — e.g. "desert_forest_small" ->
+## ["desert_", "forest_small"]; an unprefixed id ("forest_small" / "minefield") -> ["", id].
+func _split_sandbox_biome_prefix(prop_id: String) -> Array:
+	for prefix in SANDBOX_BIOME_PREFIXES:
+		if prefix != "" and prop_id.begins_with(prefix):
+			return [prefix, prop_id.substr(prefix.length())]
+	return ["", prop_id]
+
+
 func _build_terrain_group(prop_id: String, kind: int, obj_network_id: int) -> TerrainGroupBase:
-	var spec: Dictionary = SANDBOX_GROUPS.get(prop_id, {})
+	var split := _split_sandbox_biome_prefix(prop_id)
+	var biome_prefix: String = split[0]
+	var base_id: String = split[1]
+	var spec: Dictionary = SANDBOX_GROUPS.get(base_id, {})
 	var footprint: Vector2 = spec.get("footprint", Vector2(SANDBOX_DEFAULT_FOOTPRINT_INCHES, SANDBOX_DEFAULT_FOOTPRINT_INCHES))
 	var base := TerrainGroupBase.new()
 	base.name = "SandboxTerrainGroup_%d" % _object_counter
-	base.configure(prop_id, kind, footprint)
+	# Keep the FULL (biome-prefixed) prop_id on the base so save/meta round-trips the biome.
+	base.configure(prop_id, kind, footprint, biome_prefix)
 	base.set_meta("network_id", obj_network_id)
 	return base
 
