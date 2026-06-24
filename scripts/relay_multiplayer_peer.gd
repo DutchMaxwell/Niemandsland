@@ -254,7 +254,10 @@ func _poll() -> void:
 
 			# Execute pending action
 			if _pending_action == "create":
-				_send_json({"type": "create_room", "public": _pending_public})
+				# Send our stable identity token on create too: the relay stores it as the room's
+				# host_token, so on a host reconnect ONLY we (matching token) reclaim peer_id 1.
+				_send_json({"type": "create_room", "public": _pending_public,
+					"token": PlayerIdentity.get_or_create_client_token()})
 			elif _pending_action == "join":
 				# Send our stable identity token so the relay can hand a reconnecting guest its OLD
 				# peer id back (stable transport id across a drop -> RPC routing survives the rejoin).
@@ -513,7 +516,8 @@ func _process_control_message(raw: String) -> void:
 				# state — RECONNECT_TIMEOUT in _poll bounds it and emits reconnect_failed if it can't.
 				if is_host_peer():
 					push_warning("[Relay] Room gone — re-hosting the same code %s" % _room_code)
-					_send_json({"type": "create_room", "code": _room_code, "public": _pending_public})
+					_send_json({"type": "create_room", "code": _room_code, "public": _pending_public,
+						"token": PlayerIdentity.get_or_create_client_token()})
 				else:
 					_awaiting_recreate = true
 					_next_recreate_retry_ms = Time.get_ticks_msec() + int(RECREATE_RETRY_INTERVAL * 1000.0)
