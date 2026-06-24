@@ -242,7 +242,6 @@ class DeleteAction extends UndoableAction:
 			model.is_alive = false
 			model.wounds_current = 0
 			_set_node_hidden(model.node, true)
-			_set_stain_visible(model.node, true)
 			if _net != null:
 				_net.broadcast_model_wounds(model)
 		for node in _nodes:
@@ -257,7 +256,7 @@ class DeleteAction extends UndoableAction:
 			model.wounds_current = _prev_wounds[i]
 			var revived: bool = model.is_alive and model.wounds_current > 0
 			_set_node_hidden(model.node, not revived)
-			_set_stain_visible(model.node, false)
+			_remove_stain(model.node)
 			if _net != null:
 				_net.broadcast_model_wounds(model)
 		for node in _nodes:
@@ -279,13 +278,17 @@ class DeleteAction extends UndoableAction:
 		node.visible = not hidden
 		node.set_meta("deleted", hidden)
 
-	## Show/hide the blood/oil residue a removed model left behind. battlefield_stains.gd records
-	## the stain nodes in the model node's "stain_nodes" meta; undo hides them with the restored
-	## model, redo shows them again. No-op until the stain exists (created just after the first
-	## deletion), and stays decoupled from BattlefieldStains (this only toggles node visibility).
-	func _set_stain_visible(node: Node3D, vis: bool) -> void:
-		if node == null or not is_instance_valid(node) or not node.has_meta("stain_nodes"):
+	## Remove the blood/oil residue a removed model left behind when its deletion is UNDONE.
+	## battlefield_stains.gd records the stain nodes in the model node's "stain_nodes" meta and sets a
+	## "stained" guard; freeing the nodes + clearing both metas makes the model clean again, so a later
+	## delete (e.g. after the player moved it) stains the model's CURRENT position instead of re-showing
+	## the old stain at its previous spot (#72). Decoupled from BattlefieldStains (frees nodes + metas).
+	func _remove_stain(node: Node3D) -> void:
+		if node == null or not is_instance_valid(node):
 			return
-		for stain in node.get_meta("stain_nodes"):
-			if stain is Node3D and is_instance_valid(stain):
-				stain.visible = vis
+		if node.has_meta("stain_nodes"):
+			for stain in node.get_meta("stain_nodes"):
+				if stain is Node3D and is_instance_valid(stain):
+					stain.queue_free()
+			node.remove_meta("stain_nodes")
+		node.remove_meta("stained")
