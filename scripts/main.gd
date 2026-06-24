@@ -3594,7 +3594,7 @@ func _spawn_stain_for_model(model: ModelInstance) -> void:
 	var pos := node.global_position
 	# Deterministic seed from the (synced) table position so the fire scatter matches on peers.
 	var seed_val := int(pos.x * 1000.0) * 73856093 ^ int(pos.z * 1000.0) * 19349663
-	battlefield_stains.add_stain(pos, _stain_base_radius_m(props), _stain_is_vehicle(props), seed_val)
+	battlefield_stains.add_stain(pos, _stain_base_radius_m(props), _stain_is_vehicle(props), seed_val, node)
 
 
 ## Base radius (metres) of a removed model: half the round base, or half the oval's long axis.

@@ -112,6 +112,38 @@ func test_delete_action_hides_generic_node() -> void:
 	assert_bool(node.get_meta("deleted", true)).is_false()
 
 
+func test_delete_action_hides_then_restores_stain() -> void:
+	# Undo of a deletion must also remove the blood/oil residue the model left; redo (re-delete)
+	# brings it back. battlefield_stains records the stain nodes in the model node's "stain_nodes"
+	# meta and the DeleteAction toggles their visibility with the model.
+	var node := _make_node()
+	var model := ModelInstance.new()
+	model.node = node
+	model.wounds_max = 1
+	model.wounds_current = 1
+	model.is_alive = true
+
+	var models: Array[ModelInstance] = [model]
+	var prev_wounds: Array[int] = [1]
+	var prev_alive: Array[bool] = [true]
+	var no_nodes: Array[Node3D] = []
+	var action := UndoManager.DeleteAction.new(models, prev_wounds, prev_alive, no_nodes, null)
+	action.redo()  # delete; in the real flow the stain is created just AFTER this
+
+	# Simulate the residue battlefield_stains leaves on the removed model node.
+	var stain := Node3D.new()
+	node.add_child(stain)
+	auto_free(stain)
+	var stain_nodes: Array[Node3D] = [stain]
+	node.set_meta("stain_nodes", stain_nodes)
+
+	action.undo()  # restore the model -> hide its residue
+	assert_bool(stain.visible).is_false()
+
+	action.redo()  # re-delete -> show the residue again
+	assert_bool(stain.visible).is_true()
+
+
 func test_new_push_clears_redo_stack() -> void:
 	var mgr := _make_manager()
 	var node := _make_node()
