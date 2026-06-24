@@ -656,16 +656,28 @@ func _parse_tts_unit(data: Dictionary, game_system_abbrev: String = "") -> OPRUn
 	return unit
 
 
-## Folds rule-only upgrade gains (Banner, Musician, Sergeant, ...) — ArmyBookRule entries on a
-## selectedUpgrade option — into the unit's special_rules. Item/weapon upgrades are SKIPPED here:
-## they already ride in the resolved `loadout`. Parametrised rules become "Name(X)".
+## Folds rule-only upgrade gains (ArmyBookRule entries on a selectedUpgrade option) into the unit.
+## Banner / Musician / Sergeant & co. are PER-MODEL roles ("upgrade up to N models with one") —
+## physically ONE model carries the banner / plays music / leads — so they become equipment_items,
+## which the EquipmentDistributor pins to a specific model and the base ring labels (exactly like a
+## carried item such as "Banner of War"). A gain that affects ALL models (or the whole unit) folds
+## into the unit-wide special_rules instead. Item/weapon gains are skipped: they already ride in the
+## resolved `loadout`. One selectedUpgrade entry == one upgraded model.
 func _apply_selected_upgrade_rules(unit, selected_upgrades: Array) -> void:
+	var role_counts: Dictionary = {}      # rule name -> number of models that carry it
+	var role_unit_wide: Dictionary = {}   # rule name -> true if any entry upgrades ALL models
 	for su in selected_upgrades:
 		if not (su is Dictionary):
 			continue
 		var option = su.get("option", {})
 		if not (option is Dictionary):
 			continue
+		var affects_all := false
+		var upgrade = su.get("upgrade", {})
+		if upgrade is Dictionary:
+			var affects = upgrade.get("affects", {})
+			if affects is Dictionary and str(affects.get("type", "")) == "all":
+				affects_all = true
 		for gain in option.get("gains", []):
 			if not (gain is Dictionary) or gain.get("type", "") != "ArmyBookRule":
 				continue
@@ -674,8 +686,19 @@ func _apply_selected_upgrade_rules(unit, selected_upgrades: Array) -> void:
 				continue
 			var rating = gain.get("rating", null)
 			var full := "%s(%s)" % [rname, _format_rating(rating)] if rating != null and str(rating) != "" else rname
-			if full not in unit.special_rules:
-				unit.special_rules.append(full)
+			role_counts[full] = int(role_counts.get(full, 0)) + 1
+			if affects_all:
+				role_unit_wide[full] = true
+	for full in role_counts:
+		var count: int = int(role_counts[full])
+		# A subset of the models carry it -> per-model role (base ring on the bearer). The whole unit
+		# (count >= size, or an explicit "all models" upgrade) -> a unit-wide rule.
+		if unit.size > 1 and not bool(role_unit_wide.get(full, false)) and count < unit.size:
+			unit.equipment_items.append({"name": full, "count": count, "rules": []})
+			if full not in unit.equipment:
+				unit.equipment.append(full)
+		elif full not in unit.special_rules:
+			unit.special_rules.append(full)
 
 
 ## The special-rule names an upgrade item GRANTS, read from both the "specialRules"
