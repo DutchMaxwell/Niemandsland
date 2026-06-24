@@ -158,3 +158,41 @@ func _first_member_pos(base: TerrainGroupBase) -> Vector3:
 		if child.has_meta(TerrainGroupBase.MEMBER_META):
 			return (child as Node3D).position
 	return Vector3.ZERO
+
+
+# ===== per-biome ruins + forest-floor battlemap crop =====
+
+func test_sandbox_catalog_lists_themed_ruins_in_every_biome() -> void:
+	var om: ObjectManager = auto_free(ObjectManager.new())
+	# A ruin now appears in every biome with the biome prefix on its prop_id (themed walls).
+	var has_desert_ruin := false
+	for e in om.sandbox_catalog("desert_"):
+		if int(e.get("kind", -1)) == ObjectManager.SandboxPropKind.RUIN and str(e.get("prop_id", "")).begins_with("desert_"):
+			has_desert_ruin = true
+	assert_bool(has_desert_ruin).is_true()
+	# Grassland ruins stay unprefixed.
+	var has_grass_ruin := false
+	for e in om.sandbox_catalog(""):
+		if int(e.get("kind", -1)) == ObjectManager.SandboxPropKind.RUIN and not str(e.get("prop_id", "")).begins_with("desert_"):
+			has_grass_ruin = true
+	assert_bool(has_grass_ruin).is_true()
+
+
+func test_split_handles_prefixed_ruin_id() -> void:
+	var om: ObjectManager = auto_free(ObjectManager.new())
+	assert_array(om._split_sandbox_biome_prefix("desert_ruin_small_1f")).is_equal(["desert_", "ruin_small_1f"])
+	assert_array(om._split_sandbox_biome_prefix("ruin_small_1f")).is_equal(["", "ruin_small_1f"])
+
+
+func test_ruin_prop_stores_theme_prefix() -> void:
+	var prop: SandboxTerrainProp = auto_free(SandboxTerrainProp.new())
+	prop.configure("volcanic_ruin_small_1f", ObjectManager.SandboxPropKind.RUIN, Vector2(6, 6), [0.0], "volcanic_")
+	assert_str(prop._theme_prefix).is_equal("volcanic_")
+
+
+func test_forest_floor_battlemap_key_map() -> void:
+	var m: Dictionary = TerrainGroupBase.FOREST_FLOOR_BATTLEMAP_KEY_BY_PREFIX
+	assert_str(str(m.get("desert_", ""))).is_equal("arid_desert")
+	assert_str(str(m.get("volcanic_", ""))).is_equal("volcanic_ash")
+	# Grassland keeps its bundled tile -> no battlemap key (skips the crop upgrade).
+	assert_bool(m.has("")).is_false()
