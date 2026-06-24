@@ -85,6 +85,7 @@ class Room:
     next_peer_id: int = 2  # Host is always peer_id 1
     host_disconnected_at: float = 0.0  # >0 = host dropped; room preserved until rejoin or window expiry
     is_public: bool = False  # listed in the room browser; private rooms join by code only
+    host_token: str = ""  # the host's reconnect token; ONLY a matching token may reclaim peer_id 1
     # token -> (peer_id, disconnected_at): a recently-departed guest, so a rejoin within the
     # window can reclaim its OLD peer_id (stable transport id across a drop).
     departed: dict = field(default_factory=dict)
@@ -248,9 +249,11 @@ class RelayServer:
             # Only an explicit JSON boolean true makes a room public; a truthy
             # string like "false"/"0" must NOT leak the room into the browser.
             requested = msg.get("code", "")
+            host_token = msg.get("token", "")
             await self._handle_create_room(
                 websocket, ip, msg.get("public", False) is True,
-                requested if isinstance(requested, str) else "")
+                requested if isinstance(requested, str) else "",
+                host_token if isinstance(host_token, str) else "")
         elif msg_type == "join_room":
             code = msg.get("code", "")
             if not isinstance(code, str):
@@ -273,7 +276,7 @@ class RelayServer:
 
     async def _handle_create_room(
         self, websocket: ServerConnection, ip: str, is_public: bool = False,
-        requested_code: str = ""
+        requested_code: str = "", token: str = ""
     ) -> None:
         """Create a new room and assign the creator as host (peer_id=1).
 
@@ -296,12 +299,13 @@ class RelayServer:
         if not (len(code) == CODE_LENGTH and all(c in CODE_ALPHABET for c in code)
                 and code not in self.rooms):
             code = self.generate_room_code()
-        room = Room(code=code, is_public=is_public)
+        room = Room(code=code, is_public=is_public, host_token=token)
         peer = Peer(
             websocket=websocket,
             peer_id=1,
             room_code=code,
             ip_address=ip,
+            token=token,
         )
         room.peers[1] = peer
         self.rooms[code] = room
@@ -333,12 +337,24 @@ class RelayServer:
             await self._send_error(websocket, "Room not found")
             return
 
-        # Rehost: the host dropped but the room was preserved (HOST_RECONNECT.md).
-        # The first joiner reclaims peer_id 1 and resumes hosting; the guests were
-        # never booted, so the host re-syncs full state to them after this.
-        if room.host_disconnected_at > 0.0 and 1 not in room.peers:
+        # Rehost: the host dropped but the room was preserved (HOST_RECONNECT.md). ONLY the real host
+        # — the joiner whose reconnect token matches the room's host_token — reclaims peer_id 1 and
+        # resumes hosting. A guest reconnecting during the host's absence must NOT seize the host slot
+        # (that demoted the real host to a guest and orphaned the authoritative state = the live-game
+        # async). Any lingering old peer-1 socket (a half-open drop) is evicted so the real host
+        # reclaims id 1 without waiting for the stale socket to be reaped.
+        if room.host_disconnected_at > 0.0 and token and token == room.host_token:
             room.host_disconnected_at = 0.0
-            peer = Peer(websocket=websocket, peer_id=1, room_code=code, ip_address=ip)
+            old_host = room.peers.pop(1, None)
+            if old_host is not None:
+                self.connections.pop(old_host.websocket, None)
+                if old_host.writer_task is not None:
+                    old_host.writer_task.cancel()
+                try:
+                    await old_host.websocket.close(4000, "Replaced by host reconnect")
+                except websockets.exceptions.ConnectionClosed:
+                    pass
+            peer = Peer(websocket=websocket, peer_id=1, room_code=code, ip_address=ip, token=token)
             room.peers[1] = peer
             self.connections[websocket] = peer
             self.stats.peer_connected(len(self.connections))

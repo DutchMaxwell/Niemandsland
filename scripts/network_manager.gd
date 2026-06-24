@@ -398,6 +398,12 @@ func enforce_version_handshake_timeout(peer_id: int) -> void:
 		return
 	if not connected_peers.has(peer_id):
 		return  # already gone
+	# Slot-aware guard: never kick a SUPERSEDED transport id. If the same player rebound to a new id
+	# (a reconnect) and this id's slot now points elsewhere, this is a stale id mid-churn — kicking it
+	# was the reconnect-storm cascade that booted live players. (Belt-and-suspenders with the remap,
+	# which also erases the old id from connected_peers, in case the timer raced the remap.)
+	if peer_to_slot.has(peer_id) and int(slot_to_peer.get(peer_to_slot[peer_id], peer_id)) != peer_id:
+		return
 	push_warning("[Network] Peer %d failed version handshake (no announce in %.0fs) — kicking" % [peer_id, VERSION_HANDSHAKE_TIMEOUT])
 	_disconnect_peer_safe(peer_id)
 
