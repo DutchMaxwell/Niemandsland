@@ -216,3 +216,33 @@ func test_game_unit_non_opr_keeps_null_source_data() -> void:
 	gu.source_type = "generic"
 	var restored := GameUnit.from_dict(gu.to_dict())
 	assert_object(restored.source_data).is_null()
+
+
+# ===== rule-only upgrades (Banner / Musician / Sergeant) folded from selectedUpgrades =====
+
+func test_selected_upgrade_rule_gains_folded_into_rules() -> void:
+	# Banner/Musician/Sergeant grant a bare ArmyBookRule on the upgrade OPTION and never appear in
+	# the resolved loadout, so the loadout parser dropped them. They must be folded into the rules.
+	var client: OPRApiClient = auto_free(OPRApiClient.new())
+	var unit := OPRApiClient.OPRUnit.new()
+	var selected := [
+		{"option": {"label": "Banner", "gains": [{"name": "Banner", "type": "ArmyBookRule"}]}},
+		{"option": {"label": "Musician", "gains": [{"name": "Musician", "type": "ArmyBookRule"}]}},
+		{"option": {"label": "Sergeant", "gains": [{"name": "Sergeant", "type": "ArmyBookRule"}]}},
+		# item/weapon gains are SKIPPED here — they already ride in the loadout.
+		{"option": {"label": "War Boon", "gains": [{"name": "War Boon", "type": "ArmyBookItem", "content": []}]}},
+		{"option": {"label": "Sword", "gains": [{"name": "Sword", "type": "ArmyBookWeapon"}]}},
+	]
+	client._apply_selected_upgrade_rules(unit, selected)
+	assert_array(unit.special_rules).contains(["Banner", "Musician", "Sergeant"])
+	assert_bool("War Boon" in unit.special_rules).is_false()
+	assert_bool("Sword" in unit.special_rules).is_false()
+
+
+func test_selected_upgrade_rule_with_rating_formats() -> void:
+	var client: OPRApiClient = auto_free(OPRApiClient.new())
+	var unit := OPRApiClient.OPRUnit.new()
+	client._apply_selected_upgrade_rules(unit, [
+		{"option": {"gains": [{"name": "Tough", "type": "ArmyBookRule", "rating": 3}]}},
+	])
+	assert_array(unit.special_rules).contains(["Tough(3)"])
