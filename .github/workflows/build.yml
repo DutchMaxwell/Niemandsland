@@ -168,3 +168,25 @@ jobs:
           files: |
             dist/Niemandsland-${{ github.ref_name }}-linux.zip
             dist/Niemandsland-${{ github.ref_name }}-windows.zip
+
+      # Auto-update channel: push the desktop builds to itch.io so players who installed through the
+      # itch desktop app get automatic updates (butler does delta updates per channel). Runs AFTER the
+      # GitHub Release so that always ships first; skips cleanly until itch is configured via two repo
+      # secrets (Settings > Secrets and variables > Actions):
+      #   BUTLER_API_KEY  — an itch API key from https://itch.io/user/settings/api-keys
+      #   ITCH_TARGET     — "your-itch-username/your-game-slug" (the project's page URL slug)
+      - name: Push to itch.io (if configured)
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+          ITCH_TARGET: ${{ secrets.ITCH_TARGET }}
+        run: |
+          if [ -z "$BUTLER_API_KEY" ] || [ -z "$ITCH_TARGET" ]; then
+            echo "itch.io not configured (BUTLER_API_KEY / ITCH_TARGET secrets unset) — skipping."
+            exit 0
+          fi
+          curl -sL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q butler.zip
+          chmod +x butler
+          VERSION="${GITHUB_REF_NAME#v}"
+          ./butler push dist/linux   "$ITCH_TARGET:linux"   --userversion "$VERSION"
+          ./butler push dist/windows "$ITCH_TARGET:windows" --userversion "$VERSION"
