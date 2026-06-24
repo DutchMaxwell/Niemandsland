@@ -764,3 +764,73 @@ class TestRoomListing:
         assert len(server.rooms) == rooms_before
         assert len(server.connections) == conns_before
         await ws.close()
+
+
+# ============================================================================
+# Anonymous usage stats (Stats counters + get_stats query)
+# ============================================================================
+
+
+class TestStats:
+    """Stats: aggregate counters + peaks, persistence across restarts, and the get_stats query."""
+
+    def test_counters_start_at_zero_in_memory(self):
+        from relay_server import Stats
+        s = Stats()  # no path -> in-memory only
+        assert s.rooms_created == 0
+        assert s.peer_connections == 0
+        assert s.server_starts == 0
+        assert s.peak_concurrent_peers == 0
+
+    def test_increments_and_tracks_peaks(self):
+        from relay_server import Stats
+        s = Stats()
+        s.boot()
+        s.room_created(rooms_open=1)
+        s.peer_connected(peers_connected=1)
+        s.peer_connected(peers_connected=2)
+        s.peer_connected(peers_connected=1)  # a later dip must NOT lower the peak
+        assert s.server_starts == 1
+        assert s.rooms_created == 1
+        assert s.peer_connections == 3
+        assert s.peak_concurrent_peers == 2
+        assert s.peak_concurrent_rooms == 1
+
+    def test_persists_and_reloads_across_restart(self, tmp_path):
+        from relay_server import Stats
+        path = str(tmp_path / "stats.json")
+        s = Stats(path)
+        s.boot()
+        s.room_created(rooms_open=3)
+        s.peer_connected(peers_connected=5)
+        # A fresh instance on the same file resumes the totals/peaks (survives scale-to-zero).
+        s2 = Stats(path)
+        assert s2.rooms_created == 1
+        assert s2.peak_concurrent_rooms == 3
+        assert s2.peak_concurrent_peers == 5
+        assert s2.first_seen != ""
+        s2.boot()  # a second start increments server_starts on top of the persisted one
+        assert s2.server_starts == 2
+
+    def test_unwritable_path_degrades_without_crashing(self, tmp_path):
+        from relay_server import Stats
+        s = Stats(str(tmp_path / "missing_dir" / "stats.json"))
+        s.room_created(rooms_open=1)  # save fails silently
+        assert s.rooms_created == 1   # counter still updated in memory
+
+    async def test_get_stats_reports_rooms_and_peers(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest_ws, _ = await join_room(url, code)
+        probe = await websockets.connect(url)
+        await probe.send(json.dumps({"type": "get_stats"}))
+        reply = json.loads(await probe.recv())
+        assert reply["type"] == "stats"
+        assert reply["rooms_created"] == 1
+        assert reply["peer_connections"] == 2      # host + guest
+        assert reply["rooms_open"] == 1
+        assert reply["peers_connected"] == 2
+        assert reply["peak_concurrent_peers"] >= 2
+        await host_ws.close()
+        await guest_ws.close()
+        await probe.close()
