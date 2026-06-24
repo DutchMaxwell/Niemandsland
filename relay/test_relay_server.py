@@ -308,10 +308,13 @@ class TestRoomManagement:
         assert code not in server.rooms
 
     async def test_host_can_rejoin_and_reclaim_peer_id_one(self, relay):
-        """After a host drop, the next joiner reclaims peer_id 1 and resumes hosting;
-        the waiting guest is told the host returned."""
+        """After a host drop, the HOST (matched by its reconnect token) reclaims peer_id 1 and
+        resumes hosting; the waiting guest is told the host returned."""
         server, url = relay
-        host_ws, code, _ = await create_room(url)
+        host_token = "host-reconnect-token"
+        host_ws = await websockets.connect(url)
+        await host_ws.send(json.dumps({"type": "create_room", "token": host_token}))
+        code = json.loads(await host_ws.recv())["code"]
         guest_ws, guest_id = await join_room(url, code)
         await host_ws.recv()
         await guest_ws.recv()
@@ -320,9 +323,9 @@ class TestRoomManagement:
         await asyncio.sleep(0.1)
         assert json.loads(await guest_ws.recv())["type"] == "host_paused"
 
-        # A new connection rejoins the preserved room and becomes host again.
+        # The HOST rejoins the preserved room (matching token) and resumes hosting.
         rehost_ws = await websockets.connect(url)
-        await rehost_ws.send(json.dumps({"type": "join_room", "code": code}))
+        await rehost_ws.send(json.dumps({"type": "join_room", "code": code, "token": host_token}))
         resp = json.loads(await rehost_ws.recv())
         assert resp["type"] == "room_rejoined_host"
         assert resp["peer_id"] == 1

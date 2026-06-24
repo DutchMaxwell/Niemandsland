@@ -164,7 +164,10 @@ class TestHostRejoinCascade:
         """Host drops and a fresh connection reclaims the room (peer_id 1) over
         and over. The room must persist and never leak across cycles."""
         server, url = relay
-        host_ws, code, _ = await create_room(url)
+        host_token = "repeat-host-token"
+        host_ws = await websockets.connect(url)
+        await host_ws.send(json.dumps({"type": "create_room", "token": host_token}))
+        code = json.loads(await host_ws.recv())["code"]
         guest_ws, guest_id = await join_room(url, code)
         await drain(host_ws)
         await drain(guest_ws)
@@ -175,9 +178,9 @@ class TestHostRejoinCascade:
             # Guest is told the host paused.
             assert json.loads(await guest_ws.recv())["type"] == "host_paused"
 
-            # New connection reclaims peer_id 1.
+            # The host reclaims peer_id 1 with its matching reconnect token.
             host_ws = await websockets.connect(url)
-            await host_ws.send(json.dumps({"type": "join_room", "code": code}))
+            await host_ws.send(json.dumps({"type": "join_room", "code": code, "token": host_token}))
             resp = json.loads(await host_ws.recv())
             assert resp["type"] == "room_rejoined_host"
             assert resp["peer_id"] == 1
@@ -189,6 +192,41 @@ class TestHostRejoinCascade:
         assert 1 in server.rooms[code].peers
         await host_ws.close()
         await guest_ws.close()
+
+    async def test_non_host_token_cannot_seize_host_slot(self, relay):
+        """A connection whose token does NOT match the room's host_token must never reclaim peer_id 1
+        while the host is briefly gone — seizing it demoted the real host to a guest and orphaned the
+        authoritative state (the live-game async). The room stays held for the real host."""
+        server, url = relay
+        host_token = "the-real-host"
+        host_ws = await websockets.connect(url)
+        await host_ws.send(json.dumps({"type": "create_room", "token": host_token}))
+        code = json.loads(await host_ws.recv())["code"]
+        guest_ws, _ = await join_room_token(url, code, "a-guest-token")
+        await drain(host_ws)
+        await drain(guest_ws)
+
+        await host_ws.close()
+        await asyncio.sleep(0.1)
+        assert json.loads(await guest_ws.recv())["type"] == "host_paused"
+
+        # A non-host token joins during the host's absence — it must NOT become host.
+        intruder = await websockets.connect(url)
+        await intruder.send(json.dumps({"type": "join_room", "code": code, "token": "intruder-token"}))
+        resp = json.loads(await intruder.recv())
+        assert resp["type"] == "room_joined", "a non-host token reclaimed the host slot"
+        assert resp["peer_id"] != 1
+        assert server.rooms[code].host_disconnected_at > 0.0  # still held for the real host
+        assert 1 not in server.rooms[code].peers
+
+        # The real host returns (matching token) and reclaims peer_id 1.
+        rehost = await websockets.connect(url)
+        await rehost.send(json.dumps({"type": "join_room", "code": code, "token": host_token}))
+        assert json.loads(await rehost.recv())["type"] == "room_rejoined_host"
+        assert 1 in server.rooms[code].peers
+
+        for ws in (guest_ws, intruder, rehost):
+            await ws.close()
 
     async def test_room_dies_if_host_misses_window(self, relay):
         """If the host does not return within the rejoin window, the room is
