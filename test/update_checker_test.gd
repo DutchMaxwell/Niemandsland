@@ -117,3 +117,33 @@ func test_enabled_toggle_roundtrip() -> void:
 	assert_bool(checker.is_enabled()).is_false()
 	checker.set_enabled(true)
 	assert_bool(checker.is_enabled()).is_true()
+
+
+# ===== one-click platform download link =====
+
+func test_platform_asset_url_picks_matching_zip() -> void:
+	var checker := _make_checker()
+	var release := {
+		"html_url": "https://example.com/releases/tag/v1",
+		"assets": [
+			{"name": "Niemandsland-v1-windows.zip", "browser_download_url": "https://example.com/win.zip"},
+			{"name": "Niemandsland-v1-linux.zip", "browser_download_url": "https://example.com/lin.zip"},
+		],
+	}
+	# One-click to THIS platform's zip. Keyword depends on the test host's OS.
+	var key: String = checker._os_asset_keyword()
+	if key == "linux":
+		assert_str(checker._platform_asset_url(release)).is_equal("https://example.com/lin.zip")
+	elif key == "windows":
+		assert_str(checker._platform_asset_url(release)).is_equal("https://example.com/win.zip")
+	else:
+		assert_str(checker._platform_asset_url(release)).is_equal("https://example.com/releases/tag/v1")
+
+
+func test_platform_asset_url_falls_back_to_page_without_match() -> void:
+	var checker := _make_checker()
+	var release := {
+		"html_url": "https://example.com/releases/tag/v1",
+		"assets": [{"name": "README.txt", "browser_download_url": "https://example.com/readme"}],
+	}
+	assert_str(checker._platform_asset_url(release)).is_equal("https://example.com/releases/tag/v1")

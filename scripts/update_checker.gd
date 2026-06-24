@@ -271,9 +271,38 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 		# The player asked not to be reminded about this one.
 		up_to_date.emit(current)
 		return
-	var url := str(newest.get("html_url", RELEASES_PAGE_URL))
+	var url := _platform_asset_url(newest)
 	var notes := str(newest.get("body", ""))
 	update_available.emit(normalize_tag(latest_tag), url, notes)
+
+
+## Download target: the release asset matching THIS OS (so the in-game "Download" button is a single
+## click straight to the right zip), falling back to the release page if no matching asset is found.
+func _platform_asset_url(release: Dictionary) -> String:
+	var keyword := _os_asset_keyword()
+	if keyword != "":
+		for entry in release.get("assets", []):
+			if not (entry is Dictionary):
+				continue
+			var asset_name := str(entry.get("name", "")).to_lower()
+			if keyword in asset_name and asset_name.ends_with(".zip"):
+				var dl := str(entry.get("browser_download_url", ""))
+				if not dl.is_empty():
+					return dl
+	return str(release.get("html_url", RELEASES_PAGE_URL))
+
+
+## The release-asset filename keyword for the running OS ("" = unknown -> fall back to the page).
+func _os_asset_keyword() -> String:
+	match OS.get_name():
+		"Windows":
+			return "windows"
+		"Linux":
+			return "linux"
+		"macOS":
+			return "macos"
+		_:
+			return ""
 
 
 ## Picks the highest-versioned, non-draft release object from a GitHub releases array.

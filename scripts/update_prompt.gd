@@ -12,7 +12,9 @@ const DOWNLOAD_LABEL: String = "Download"
 const LATER_LABEL: String = "Later"
 const SKIP_LABEL: String = "Skip this version"
 const CONTENT_SEPARATION: int = 10
-const NOTES_MIN_SIZE: Vector2 = Vector2(420, 140)
+## Fixed size of the changelog box — a long changelog SCROLLS inside it instead of growing the
+## dialog past the screen (which pushed the Download/Later buttons out of reach).
+const NOTES_MIN_SIZE: Vector2 = Vector2(440, 220)
 
 # ===== Public state =====
 
@@ -49,11 +51,16 @@ func setup(current_version: String, offered_version: String, url: String, notes:
 	if not notes.strip_edges().is_empty():
 		var notes_label := RichTextLabel.new()
 		notes_label.bbcode_enabled = false
-		notes_label.fit_content = true
-		notes_label.scroll_active = true
+		notes_label.fit_content = false  # don't grow to the full changelog height — scroll instead,
+		notes_label.scroll_active = true # so the dialog stays small and its buttons stay reachable
 		notes_label.custom_minimum_size = NOTES_MIN_SIZE
 		notes_label.text = notes
 		content.add_child(notes_label)
+
+	var howto := Label.new()
+	howto.text = "Click Download to get the new version, then unzip it over your Niemandsland folder."
+	howto.autowrap_mode = TextServer.AUTOWRAP_WORD
+	content.add_child(howto)
 
 	_skip_checkbox = CheckBox.new()
 	_skip_checkbox.text = SKIP_LABEL
