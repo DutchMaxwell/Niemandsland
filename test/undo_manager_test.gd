@@ -112,10 +112,10 @@ func test_delete_action_hides_generic_node() -> void:
 	assert_bool(node.get_meta("deleted", true)).is_false()
 
 
-func test_delete_action_hides_then_restores_stain() -> void:
-	# Undo of a deletion must also remove the blood/oil residue the model left; redo (re-delete)
-	# brings it back. battlefield_stains records the stain nodes in the model node's "stain_nodes"
-	# meta and the DeleteAction toggles their visibility with the model.
+func test_delete_action_undo_removes_stain_and_guard() -> void:
+	# Undo of a deletion must REMOVE the model's blood/oil residue and clear its "stained" guard, so a
+	# later delete (e.g. after the player moves the model) stains the model's CURRENT position instead
+	# of re-showing the old stain at its previous spot (#72).
 	var node := _make_node()
 	var model := ModelInstance.new()
 	model.node = node
@@ -136,12 +136,11 @@ func test_delete_action_hides_then_restores_stain() -> void:
 	auto_free(stain)
 	var stain_nodes: Array[Node3D] = [stain]
 	node.set_meta("stain_nodes", stain_nodes)
+	node.set_meta("stained", true)
 
-	action.undo()  # restore the model -> hide its residue
-	assert_bool(stain.visible).is_false()
-
-	action.redo()  # re-delete -> show the residue again
-	assert_bool(stain.visible).is_true()
+	action.undo()  # restore the model -> remove its residue and clear the guard
+	assert_bool(node.has_meta("stain_nodes")).is_false()
+	assert_bool(node.has_meta("stained")).is_false()
 
 
 func test_new_push_clears_redo_stack() -> void:
