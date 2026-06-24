@@ -67,16 +67,26 @@ func _prefetch() -> void:
 ## Leave a stain where a model was removed. `world_pos` is the table position, `base_radius_m`
 ## its base radius (the pool matches the base), `is_vehicle` picks oil+fire vs blood, and
 ## `seed_val` makes the orientation + fire scatter deterministic (multiplayer/replay safe).
-func add_stain(world_pos: Vector3, base_radius_m: float, is_vehicle: bool, seed_val: int) -> void:
+## `owner` (the removed model's node) records the created stain nodes in its `stain_nodes` meta so
+## an undo of the deletion can hide the residue together with the restored model (see undo_manager).
+func add_stain(world_pos: Vector3, base_radius_m: float, is_vehicle: bool, seed_val: int,
+		owner: Node3D = null) -> void:
 	var radius := maxf(base_radius_m, STAIN_MIN_RADIUS_M)
 	var panel := OIL_PANEL if is_vehicle else BLOOD_PANEL
 	var tex: Texture2D = _hazards.get_texture(panel) if _hazards != null else null
+	var created: Array[Node3D] = []
 	if tex != null:
-		add_child(_make_decal(world_pos, radius, panel, tex, seed_val))
+		var decal := _make_decal(world_pos, radius, panel, tex, seed_val)
+		add_child(decal)
+		created.append(decal)
 	else:
-		add_child(_make_disc_fallback(world_pos, radius, is_vehicle))
+		var disc := _make_disc_fallback(world_pos, radius, is_vehicle)
+		add_child(disc)
+		created.append(disc)
 	if is_vehicle:
-		_add_fires(world_pos, radius, seed_val)
+		created.append_array(_add_fires(world_pos, radius, seed_val))
+	if owner != null and is_instance_valid(owner):
+		owner.set_meta("stain_nodes", created)
 
 # === Private ===
 
@@ -140,7 +150,8 @@ func _make_disc_fallback(world_pos: Vector3, radius: float, is_vehicle: bool) ->
 	return disc
 
 
-func _add_fires(world_pos: Vector3, radius: float, seed_val: int) -> void:
+func _add_fires(world_pos: Vector3, radius: float, seed_val: int) -> Array[Node3D]:
+	var fires: Array[Node3D] = []
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_val
 	var tier: int = clampi(GraphicsSettings.current_preset, 0, FIRE_MAX_LIGHTS.size() - 1)
@@ -156,3 +167,5 @@ func _add_fires(world_pos: Vector3, radius: float, seed_val: int) -> void:
 		var dist := rng.randf() * radius * FIRE_SPREAD_FRAC
 		fire.position = Vector3(world_pos.x + cos(ang) * dist, 0.0, world_pos.z + sin(ang) * dist)
 		add_child(fire)
+		fires.append(fire)
+	return fires
