@@ -33,6 +33,13 @@ from websockets.asyncio.server import ServerConnection
 MAX_ROOMS = 100
 MAX_PEERS_PER_ROOM = 8
 ROOM_EXPIRY_SECONDS = 14400  # 4 hours
+
+# Per-peer outbound queue depth. Sized to comfortably hold a legitimate burst (a join-time full
+# state sync, or the recv loop enqueuing a buffered batch before the writer task gets to run) at the
+# relay's rate ceiling, so healthy peers never lose a frame. Only a peer that stays >~1 s behind
+# (a genuine slow/stuck consumer) overflows — then frames are DROPPED rather than blocking the relay
+# (the host re-broadcasts full state, so a drop self-heals). See _enqueue / _peer_writer.
+SEND_QUEUE_MAX = 2048
 HEARTBEAT_TIMEOUT_SECONDS = 30
 MAX_MESSAGE_SIZE = 1048576  # 1MB — game state serializations can be large
 # 300 was far too low for a 2-player game's bursty army sync (a clean client tops out at
@@ -62,6 +69,11 @@ class Peer:
     token: str = ""  # stable per-install reconnect key; lets a rejoin reclaim its old peer_id
     last_heartbeat: float = field(default_factory=time.monotonic)
     message_timestamps: list = field(default_factory=list)
+    # A per-peer outbound queue drained by a single writer task (see _enqueue/_peer_writer). A slow
+    # consumer's WebSocket backpressure then parks only ITS writer, never the shared recv loop that
+    # must keep reading heartbeats — fixing the head-of-line block that false-dropped whole rooms.
+    send_queue: "asyncio.Queue" = field(default_factory=lambda: asyncio.Queue(maxsize=SEND_QUEUE_MAX))
+    writer_task: Optional[asyncio.Task] = None
 
 
 @dataclass
@@ -449,6 +461,33 @@ class RelayServer:
             **self.stats.snapshot(),
         }))
 
+    def _enqueue(self, peer: Peer, data) -> None:
+        """Queue an outbound frame for a peer WITHOUT ever awaiting its socket. A single per-peer
+        writer task (_peer_writer) drains the queue, so a slow consumer's backpressure parks only
+        that writer — never this coroutine, which must keep reading the room's heartbeats. If the
+        peer falls too far behind (queue full) the frame is DROPPED: the host re-broadcasts full
+        state continuously so a drop self-heals, whereas blocking starves heartbeat_acks and
+        false-drops the whole room (the live-game collapse root cause)."""
+        if peer.writer_task is None:
+            peer.writer_task = asyncio.create_task(self._peer_writer(peer))
+        try:
+            peer.send_queue.put_nowait(data)
+        except asyncio.QueueFull:
+            pass
+
+    async def _peer_writer(self, peer: Peer) -> None:
+        """Drain one peer's outbound queue in FIFO order (per-peer frame order preserved). Runs
+        until the peer is removed (writer_task.cancel() in _remove_connection) or its socket closes."""
+        try:
+            while True:
+                data = await peer.send_queue.get()
+                try:
+                    await peer.websocket.send(data)
+                except websockets.exceptions.ConnectionClosed:
+                    return
+        except asyncio.CancelledError:
+            return
+
     async def _handle_binary_message(self, sender: Peer, data: bytes) -> None:
         """Forward a binary game data message to the target peer(s).
 
@@ -472,21 +511,16 @@ class RelayServer:
             return
 
         if target_peer_id == 0:
-            # Broadcast to all peers except sender
+            # Broadcast to all peers except sender. ENQUEUED (never awaited here) so a slow
+            # consumer can't park this coroutine and starve the room's heartbeat acks.
             for peer in list(room.peers.values()):
                 if peer.peer_id != sender.peer_id:
-                    try:
-                        await peer.websocket.send(forwarded)
-                    except websockets.exceptions.ConnectionClosed:
-                        pass
+                    self._enqueue(peer, forwarded)
         else:
-            # Send to specific peer
+            # Send to a specific peer (same non-blocking enqueue).
             target = room.peers.get(target_peer_id)
             if target:
-                try:
-                    await target.websocket.send(forwarded)
-                except websockets.exceptions.ConnectionClosed:
-                    pass
+                self._enqueue(target, forwarded)
 
     def _check_rate_limit(self, peer: Peer) -> bool:
         """Check if a peer has exceeded the rate limit.
@@ -523,6 +557,10 @@ class RelayServer:
             return
 
         del room.peers[peer.peer_id]
+
+        # Stop the peer's outbound writer task — its socket is gone.
+        if peer.writer_task is not None:
+            peer.writer_task.cancel()
 
         # Remember a guest's id keyed by its reconnect token so a rejoin within the window can
         # reclaim it (stable transport id). Host (id 1) reuse is handled by the rehost path above.
