@@ -245,6 +245,7 @@ func _build_arm_facade(is_x: bool, ax: float, az: float, arm_len: float, p: floa
 	var windows := _window_list(arm_len, total, arm_id)
 	var n := maxi(1, int(round(arm_len / stone)))
 	var cw := arm_len / n
+	var heights: Array[float] = []  # per-column top (0 = skipped/too-short), for the side-edge caps
 	for k in range(n):
 		var uc := (k + 0.5) * cw
 		var rows := int(round(_hyp(uc, arm_len, total) / stone))
@@ -252,13 +253,24 @@ func _build_arm_facade(is_x: bool, ax: float, az: float, arm_len: float, p: floa
 			rows -= 1
 		var h := rows * stone
 		if h < stone * 0.5:
+			heights.append(0.0)
 			continue
+		heights.append(h)
 		var bands: Array = []
 		for w in windows:
 			if absf(uc - float(w["uc"])) <= float(w["half"]):
 				bands.append([float(w["vb"]), float(w["vt"])])
 		for seg in _subtract_bands(0.0, h, bands):
 			_add_wall_segment(is_x, ax, az, uc, p, outward, seg[0], seg[1], cw, depth, mat)
+		# Close the open TOP of this column so the ragged rim reads solid, not see-through (a
+		# column is otherwise only its front + back faces — issue: open wall edges).
+		_add_cap_top(is_x, ax, az, uc, p, outward, h, cw, depth, mat)
+	# Close the open SIDE reveals at the diagonal stair-steps between neighbouring columns.
+	for k in range(n - 1):
+		var lo := minf(heights[k], heights[k + 1])
+		var hi := maxf(heights[k], heights[k + 1])
+		if hi - lo >= 0.003:
+			_add_cap_side(is_x, ax, az, (k + 1) * cw, p, outward, lo, hi, depth, mat)
 	for w in windows:
 		_add_window_quad(is_x, ax, az, float(w["uc"]), p, outward, (float(w["vb"]) + float(w["vt"])) * 0.5, depth, lib)
 
@@ -332,6 +344,37 @@ func _add_quad(mat: Material, pos: Vector3, w: float, h: float, rot_y: float) ->
 	mi.position = pos
 	mi.rotation.y = rot_y
 	_visual_root.add_child(mi)
+
+
+## Close the open TOP of a wall column: a horizontal cap quad spanning the wall thickness (front
+## to back) at the column's top, so the ragged rim reads solid instead of see-through. The
+## material is CULL_DISABLED, so the up/down facing is moot.
+func _add_cap_top(is_x: bool, ax: float, az: float, uc: float, p: float, outward: float, top: float, cw: float, depth: float, mat: Material) -> void:
+	var mid := p - outward * depth * 0.5  # centre of the wall thickness
+	var mesh := QuadMesh.new()
+	var mi := MeshInstance3D.new()
+	if is_x:
+		mesh.size = Vector2(cw, depth)
+		mi.position = Vector3(ax + uc, top, mid)
+	else:
+		mesh.size = Vector2(depth, cw)
+		mi.position = Vector3(mid, top, az + uc)
+	mi.mesh = mesh
+	mi.material_override = mat
+	mi.rotation.x = -PI * 0.5  # lay the +Z-facing quad flat (faces up)
+	_visual_root.add_child(mi)
+
+
+## Close an open SIDE reveal between two neighbouring columns of differing height: a vertical cap
+## spanning the wall thickness at their shared boundary, so the diagonal stair-step rim is solid.
+func _add_cap_side(is_x: bool, ax: float, az: float, bu: float, p: float, outward: float, lo: float, hi: float, depth: float, mat: Material) -> void:
+	var mid := p - outward * depth * 0.5
+	var cy := (lo + hi) * 0.5
+	var hh := hi - lo
+	if is_x:
+		_add_quad(mat, Vector3(ax + bu, cy, mid), depth, hh, PI * 0.5)
+	else:
+		_add_quad(mat, Vector3(mid, cy, az + bu), depth, hh, 0.0)
 
 
 ## The cropped-"window" alpha-scissor tracery quad set into the cut opening, at the MID-plane of

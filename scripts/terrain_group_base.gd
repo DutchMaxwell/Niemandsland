@@ -48,7 +48,18 @@ const TREE_VARIANTS: Array[String] = ["tree_a", "tree_b", "tree_c"]
 ## A forest is an OVAL textured ground pad (the movable area-terrain base) populated with trees.
 ## footprint = the oval's bounding box (long axis × widest point); trees scatter inside the
 ## ellipse. The pad sits UP from the table (a thin plinth) to avoid z-fighting.
-const FOREST_FLOOR_TEX := "res://assets/sandbox_forest_floor.webp"
+const FOREST_FLOOR_TEX_DEFAULT := "res://assets/sandbox_forest_floor.webp"
+## Per-biome forest-floor tile (planar-tiled by the anti-tiling shader). Grassland ships its
+## texture; other biomes fall back to it until their tile is delivered, so the pad is never
+## untextured. Keyed by the prop_id biome prefix ("" = grassland).
+const FOREST_FLOOR_TEX_BY_PREFIX: Dictionary = {
+	"": FOREST_FLOOR_TEX_DEFAULT,
+	"desert_": "res://assets/sandbox_forest_floor_desert.webp",
+	"tundra_": "res://assets/sandbox_forest_floor_tundra.webp",
+	"volcanic_": "res://assets/sandbox_forest_floor_volcanic.webp",
+	"jungle_": "res://assets/sandbox_forest_floor_jungle.webp",
+	"urban_": "res://assets/sandbox_forest_floor_urban.webp",
+}
 ## Anti-tiling shader that hides the texture's repetition on larger pads (see the .gdshader).
 const FOREST_FLOOR_SHADER := "res://shaders/forest_floor.gdshader"
 const FOREST_BASE_THICKNESS_INCHES := 0.12
@@ -71,14 +82,24 @@ const MINE_COLOR := Color(0.22, 0.20, 0.18)
 var prop_id: String = ""
 var prop_kind: int = 0
 var footprint_inches: Vector2 = Vector2.ZERO
+## Biome prefix ("" = grassland) selecting the forest's tree set + floor texture.
+var biome_prefix: String = ""
+
+# === Private state ===
+
+## Stored so the async tree upgrade can rebuild the IDENTICAL seeded scatter on every client.
+var _seed_val: int = 0
+var _trees_lib: TreesLibrary = null
+var _tree_upgrade_started: bool = false
 
 # === Public ===
 
 ## Set identity + dimensions and build the selection collider. Call once after `new()`.
-func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2) -> void:
+func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2, p_biome_prefix: String = "") -> void:
 	prop_id = p_prop_id
 	prop_kind = p_kind
 	footprint_inches = p_footprint_inches
+	biome_prefix = p_biome_prefix
 
 	add_to_group("selectable")
 	add_to_group("terrain")
@@ -95,6 +116,8 @@ func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2) -> v
 ## Build and adopt the cluster's members (trees or mines) with a seeded scatter. `trees_lib`
 ## may be null (procedural trees then). Safe to call once, after adding to the tree.
 func build(seed_val: int, trees_lib: TreesLibrary) -> void:
+	_seed_val = seed_val
+	_trees_lib = trees_lib
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_val
 	match prop_kind:
@@ -158,6 +181,18 @@ func _forest_tree_count() -> int:
 ## and turned + a little jitter so it reads natural, not mechanical.
 func _build_forest(rng: RandomNumberGenerator, trees_lib: TreesLibrary) -> void:
 	var base_top := _build_forest_base()
+	# Instant pass: real GLB trees where the biome's models are already cached, procedural cones
+	# otherwise. If the biome set isn't cached yet, download it and swap the cones for real trees
+	# at the SAME seeded layout, so every client converges on identical art.
+	_populate_forest(rng, trees_lib, base_top)
+	if trees_lib != null and not trees_lib.all_models_cached(biome_prefix):
+		_upgrade_forest_trees(base_top)
+
+
+## Fill the oval EVENLY (phyllotaxis) with a size-scaled number of trees, each randomly sized and
+## turned + a little jitter so it reads natural, not mechanical. Deterministic in `rng`, so a
+## re-seeded re-run reproduces the exact scatter (used by the async GLB upgrade below).
+func _populate_forest(rng: RandomNumberGenerator, trees_lib: TreesLibrary, base_top: float) -> void:
 	var a := footprint_inches.x * INCHES_TO_METERS * 0.5
 	var b := footprint_inches.y * INCHES_TO_METERS * 0.5
 	var count := _forest_tree_count()
@@ -176,6 +211,23 @@ func _build_forest(rng: RandomNumberGenerator, trees_lib: TreesLibrary) -> void:
 		tree.position += Vector3(a * (r * cos(ang) + jx), base_top, b * (r * sin(ang) + jz))
 		tree.rotation.y = rng.randf_range(0.0, TAU)
 		tree.set_meta(MEMBER_META, self)
+
+
+## Download the biome's tree GLBs, then replace the procedural members with real trees at the
+## identical seeded layout. One-shot; the floor pad + collider are left untouched.
+func _upgrade_forest_trees(base_top: float) -> void:
+	if _tree_upgrade_started or _trees_lib == null:
+		return
+	_tree_upgrade_started = true
+	var ok: bool = await _trees_lib.ensure_all_models(biome_prefix)
+	if not ok or not is_instance_valid(self):
+		return
+	for child in get_children():
+		if child.has_meta(MEMBER_META):
+			child.queue_free()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _seed_val
+	_populate_forest(rng, _trees_lib, base_top)
 
 
 ## The oval forest-floor pad: a thin elliptical disc (custom mesh so the floor texture tiles at
@@ -218,7 +270,10 @@ func _build_forest_base() -> float:
 
 
 func _forest_floor_material() -> Material:
-	var tex := _load_texture(FOREST_FLOOR_TEX)
+	var tex_path: String = FOREST_FLOOR_TEX_BY_PREFIX.get(biome_prefix, FOREST_FLOOR_TEX_DEFAULT)
+	var tex := _load_texture(tex_path)
+	if tex == null:
+		tex = _load_texture(FOREST_FLOOR_TEX_DEFAULT)  # missing biome tile -> grassland floor
 	if tex == null:
 		return _forest_floor_fallback_material()
 	# The anti-tiling shader breaks the texture's visible repetition on larger pads (it
@@ -276,7 +331,7 @@ func _adopt_scattered(member: Node3D, rng: RandomNumberGenerator) -> void:
 ## procedural trunk + foliage cone.
 func _make_tree(variant: String, trees_lib: TreesLibrary, height_m: float) -> Node3D:
 	if trees_lib != null:
-		var scene := trees_lib.get_model_scene(variant)
+		var scene := trees_lib.get_model_scene(biome_prefix + variant)
 		if scene != null:
 			var inst := scene.instantiate() as Node3D
 			_fit_height(inst, height_m)
