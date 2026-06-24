@@ -309,6 +309,8 @@ func _on_update_available(latest_version: String, release_url: String, release_n
 	prompt.canceled.connect(_on_update_prompt_closed.bind(prompt, false))
 	add_child(prompt)
 	prompt.popup_centered()
+	# Keep the dialog (and its buttons) on screen even on small displays / long changelogs.
+	UiPolish.keep_window_reachable(prompt, Vector2i(480, 460))
 
 
 func _on_update_prompt_closed(prompt: UpdatePrompt, download: bool) -> void:
