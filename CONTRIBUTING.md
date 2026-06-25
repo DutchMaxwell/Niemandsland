@@ -11,7 +11,7 @@ useful thing you can do.
   - 🐞 **Bug report** — something broke or behaves wrong.
   - 💡 **Feedback / idea** — UX friction, suggestions, feature ideas.
 - For bugs, please include your **OS** (Windows / macOS / Linux), the
-  **version** (title bar, e.g. `v0.3.6.0-alpha`), and **steps to reproduce**. A Godot
+  **version** (title bar, e.g. `v0.3.6.1-alpha`), and **steps to reproduce**. A Godot
   log or screenshot helps a lot.
 - Security issues: please report privately — see [`SECURITY.md`](SECURITY.md).
 
