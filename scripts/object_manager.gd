@@ -186,9 +186,10 @@ func _get_network_manager() -> void:
 
 
 func _process(delta: float) -> void:
-	# Continuous rotation while R is held - rotate all selected objects
+	# Continuous rotation while R is held - rotate all selected objects (hold Ctrl to reverse)
 	if _is_rotating and _selected_objects.size() > 0:
-		var rotation_amount = deg_to_rad(rotation_speed_degrees) * delta * 60  # 60fps base
+		var rotation_dir := -1.0 if Input.is_key_pressed(KEY_CTRL) else 1.0
+		var rotation_amount = deg_to_rad(rotation_speed_degrees) * delta * 60 * rotation_dir  # 60fps base
 		for obj in _selected_objects:
 			if is_instance_valid(obj):
 				obj.rotate_y(rotation_amount)
@@ -1656,6 +1657,8 @@ func _units_block_measure_line(from_pos: Vector3, to_pos: Vector3,
 		var model := _object_model_instance(node as Node3D)
 		if model == null:
 			continue  # custom minis without an OPR profile carry no Height
+		if not model.is_alive:
+			continue  # dead models are only hidden, not freed — they must not block line of sight
 		# Models without a unit block alone, keyed by their own node id (no
 		# gap-closure partner, never excludable via a unit).
 		var unit_key: int = model.unit.get_instance_id() if model.unit else node.get_instance_id()
@@ -3042,8 +3045,8 @@ func _live_objects(objs: Array) -> Array[Node3D]:
 	return result
 
 
-## Arrange selected objects in N rows at cursor position (keys 1-9)
-func arrange_selected_in_rows(num_rows: int, cursor_pos: Vector3) -> void:
+## Arrange selected objects in N rows, centred on the unit's current centre (keys 1-9)
+func arrange_selected_in_rows(num_rows: int) -> void:
 	var objects: Array[Node3D] = _movable_selection()  # own-only in MP; all live in single-player
 	if objects.size() < 2:
 		return
@@ -3055,9 +3058,11 @@ func arrange_selected_in_rows(num_rows: int, cursor_pos: Vector3) -> void:
 	# axis (handles oval bases and a big joined-Hero base correctly).
 	var spacing := _arrange_spacing(objects)
 
-	# Start from cursor position (first object at cursor)
-	var start_x = cursor_pos.x
-	var start_z = cursor_pos.z
+	# Anchor on the unit's CURRENT centre (not the cursor) and centre the whole block on it, so
+	# re-forming tidies the unit in place instead of dropping it off to one side (playtest feedback).
+	var centre := _selection_centroid(objects)
+	var start_x = centre.x - (cols - 1) * spacing.x * 0.5
+	var start_z = centre.z - (num_rows - 1) * spacing.y * 0.5
 
 	var idx = 0
 	for row in range(num_rows):
@@ -3077,8 +3082,8 @@ func arrange_selected_in_rows(num_rows: int, cursor_pos: Vector3) -> void:
 
 
 
-## Arrange selected objects in arrow/wedge formation at cursor (A key)
-func arrange_selected_arrow(cursor_pos: Vector3) -> void:
+## Arrange selected objects in an arrow/wedge, centred on the unit's current centre (Shift+A)
+func arrange_selected_arrow() -> void:
 	var objects: Array[Node3D] = _movable_selection()  # own-only in MP; all live in single-player
 	if objects.size() < 2:
 		return
@@ -3092,14 +3097,24 @@ func arrange_selected_arrow(cursor_pos: Vector3) -> void:
 	# apex->row links) at exactly col_spacing apart - the whole wedge stays coherent.
 	var row_spacing := col_spacing * sqrt(3.0) / 2.0
 
-	# Arrow formation: 1 in front (at cursor), then 2, then 3, etc.
+	# Centre the wedge on the unit's CURRENT centre (not the cursor): count the rows the triangular
+	# layout needs, then offset Z so the wedge is centred on the unit instead of growing away from it.
+	var centre := _selection_centroid(objects)
+	var total_rows := 0
+	var capacity := 0
+	while capacity < count:
+		total_rows += 1
+		capacity += total_rows
+	var z_offset := (total_rows - 1) * row_spacing * 0.5
+
+	# Arrow formation: 1 in front, then 2, then 3, etc.
 	var row = 0
 	var idx = 0
 	var row_count = 1
 
 	while idx < count:
-		# Position objects in this row, centered on cursor X
-		var row_start_x = cursor_pos.x - (row_count - 1) * col_spacing / 2
+		# Position objects in this row, centred on the unit centre X
+		var row_start_x = centre.x - (row_count - 1) * col_spacing / 2
 
 		for col in range(row_count):
 			if idx >= count:
@@ -3109,7 +3124,7 @@ func arrange_selected_arrow(cursor_pos: Vector3) -> void:
 				obj.global_position = Vector3(
 					row_start_x + col * col_spacing,
 					obj.global_position.y,
-					cursor_pos.z + row * row_spacing
+					centre.z - z_offset + row * row_spacing
 				)
 			idx += 1
 
@@ -3117,6 +3132,14 @@ func arrange_selected_arrow(cursor_pos: Vector3) -> void:
 		row_count += 1
 
 	_broadcast_arrange_positions(objects)
+
+
+## Average (X,Z) of the selection's current positions — the anchor the arrange formations centre on.
+func _selection_centroid(objects: Array[Node3D]) -> Vector3:
+	var sum := Vector3.ZERO
+	for obj in objects:
+		sum += obj.global_position
+	return sum / float(objects.size())
 
 
 ## Broadcast the post-arrange positions of every networked object in one batch,
