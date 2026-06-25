@@ -136,3 +136,39 @@ func test_broadcast_peer_busy_records_local_flag_offline() -> void:
 	assert_bool(nm._local_busy).is_true()
 	nm.broadcast_peer_busy(false)
 	assert_bool(nm._local_busy).is_false()
+
+
+# ===== Dice cup-composition + colour-tag sync =====
+# The broadcasters are offline-safe no-ops; the RPC handlers re-emit the local-facing signals.
+# Live routing is covered by the relay suite + the manual 2-instance MP test.
+
+func test_broadcast_dice_composition_offline_is_safe() -> void:
+	var nm := _make_manager()
+	nm.broadcast_dice_composition(6, [1, 0, 2, 0, 0, 0])  # offline: must not crash
+
+
+func test_broadcast_dice_color_tag_offline_is_safe() -> void:
+	var nm := _make_manager()
+	nm.broadcast_dice_color_tag(2, 3)  # offline: must not crash
+
+
+func test_sync_dice_composition_emits_signal() -> void:
+	var nm := _make_manager()
+	var monitor := monitor_signals(nm)
+	# Sender is 0 offline (no command dispatch / @rpc context); the args are still forwarded.
+	nm.sync_dice_composition(5, [0, 1, 2, 3, 4])
+	await assert_signal(monitor).is_emitted("remote_dice_composition", [0, 5, [0, 1, 2, 3, 4]])
+
+
+func test_sync_dice_color_tag_emits_signal() -> void:
+	var nm := _make_manager()
+	var monitor := monitor_signals(nm)
+	nm.sync_dice_color_tag(1, 4)
+	await assert_signal(monitor).is_emitted("remote_dice_color_tag", [0, 1, 4])
+
+
+func test_sync_dice_roll_emits_signal_with_tags() -> void:
+	var nm := _make_manager()
+	var monitor := monitor_signals(nm)
+	nm.sync_dice_roll([4, 2], {"context": "test"}, [1, 0])
+	await assert_signal(monitor).is_emitted("remote_dice_rolled", [0, [4, 2], {"context": "test"}, [1, 0]])

@@ -1071,7 +1071,13 @@ signal remote_camera_updated(peer_id: int, yaw: float, pitch: float)
 ## value per die; `context` is the roll-context Dictionary (DiceRules.CTX_*:
 ## success target, modifier, reroll mode/count) so every client renders the
 ## same success evaluation and log entry.
-signal remote_dice_rolled(peer_id: int, results: Array, context: Dictionary)
+signal remote_dice_rolled(peer_id: int, results: Array, context: Dictionary, tags: Array)
+## A peer changed its cup composition (how many / which dice are in the tray). `tags` is the
+## per-die colour tag in die order, so the mirrored tray shows the same dice + colours live.
+signal remote_dice_composition(peer_id: int, count: int, tags: Array)
+## A peer cycled one die's colour tag. `index` is the die's position in the tray, `tag` the new
+## colour (0 = untagged, 1..4). Mirrored live so the opponent sees the colour before the roll.
+signal remote_dice_color_tag(peer_id: int, index: int, tag: int)
 
 
 ## RPC: Sync cursor position on table surface (high frequency, unreliable)
@@ -1088,11 +1094,25 @@ func sync_camera_direction(yaw: float, pitch: float) -> void:
 	remote_camera_updated.emit(sender, yaw, pitch)
 
 
-## RPC: Sync dice roll event (reliable — everyone must see the result)
+## RPC: Sync dice roll event (reliable — everyone must see the result). `tags` carries the
+## per-die colour tag so the mirrored result keeps the sender's colours. Same-version-only
+## (the handshake partitions cross-release play), so the extra arg needs no back-compat shim.
 @rpc("any_peer", "call_remote", "reliable")
-func sync_dice_roll(results: Array, context: Dictionary) -> void:
+func sync_dice_roll(results: Array, context: Dictionary, tags: Array) -> void:
 	var sender = _get_sender()
-	remote_dice_rolled.emit(sender, results, context)
+	remote_dice_rolled.emit(sender, results, context, tags)
+
+
+## RPC: Sync cup composition — the number of dice + their per-die colour tags (die order).
+@rpc("any_peer", "call_remote", "reliable")
+func sync_dice_composition(count: int, tags: Array) -> void:
+	remote_dice_composition.emit(_get_sender(), count, tags)
+
+
+## RPC: Sync one die's colour tag change (live, before/through the roll).
+@rpc("any_peer", "call_remote", "reliable")
+func sync_dice_color_tag(index: int, tag: int) -> void:
+	remote_dice_color_tag.emit(_get_sender(), index, tag)
 
 
 ## Broadcast cursor position to all peers
@@ -1107,10 +1127,22 @@ func broadcast_camera_direction(yaw: float, pitch: float) -> void:
 		_remote_call("sync_camera_direction", [yaw, pitch], 0)
 
 
-## Broadcast dice roll to all peers
-func broadcast_dice_roll(results: Array, context: Dictionary) -> void:
+## Broadcast dice roll to all peers (`tags` = per-die colour tags so the result keeps colours).
+func broadcast_dice_roll(results: Array, context: Dictionary, tags: Array) -> void:
 	if is_multiplayer_active():
-		_remote_call("sync_dice_roll", [results, context], 0)
+		_remote_call("sync_dice_roll", [results, context, tags], 0)
+
+
+## Broadcast the cup composition (dice count + per-die colour tags) so peers mirror the tray live.
+func broadcast_dice_composition(count: int, tags: Array) -> void:
+	if is_multiplayer_active():
+		_remote_call("sync_dice_composition", [count, tags], 0)
+
+
+## Broadcast a single die's colour-tag change so peers recolour the same die live.
+func broadcast_dice_color_tag(index: int, tag: int) -> void:
+	if is_multiplayer_active():
+		_remote_call("sync_dice_color_tag", [index, tag], 0)
 
 
 # ===== Peer busy/loading gate =====
