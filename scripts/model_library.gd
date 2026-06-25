@@ -17,10 +17,16 @@ signal caching_started(total: int)
 signal caching_progress(done: int, total: int)
 ## Emitted when the batch finishes (all models cached).
 signal caching_finished()
+## Emitted after the live CDN manifest is fetched + applied over the bundled fallback.
+signal manifest_refreshed(model_count: int)
 
 # === Constants ===
 
 const BUNDLED_MANIFEST_PATH: String = "res://assets/model_manifest.json"
+## Live manifest, fetched from the CDN at startup so asset fixes published AFTER this build
+## shipped appear without a re-export. Same schema as the bundled file (the offline fallback).
+const REMOTE_MANIFEST_FILE: String = "model_manifest.json"
+const REMOTE_MANIFEST_TIMEOUT_SEC: float = 15.0
 
 # === Private variables ===
 
@@ -37,6 +43,7 @@ func _ready() -> void:
 	_downloader.progress_updated.connect(func(done: int, total: int) -> void:
 		caching_progress.emit(done, total))
 	_load_bundled_manifest()
+	_refresh_remote_manifest()  # fire-and-forget; overlays the live CDN manifest when it arrives
 
 # === Public API ===
 
@@ -141,6 +148,31 @@ func _load_bundled_manifest() -> void:
 	if not FileAccess.file_exists(BUNDLED_MANIFEST_PATH):
 		return
 	apply_manifest_text(FileAccess.get_file_as_string(BUNDLED_MANIFEST_PATH))
+
+
+## Fetches the live manifest from the CDN and overlays it on the bundled fallback, so asset
+## fixes published after this build shipped appear without a re-export. Silent + offline-safe:
+## any failure (offline, 404, malformed JSON) keeps the bundled manifest loaded in _ready().
+func _refresh_remote_manifest() -> void:
+	# Unique ?t= query busts any CDN/proxy cache so a freshly published manifest is seen at once.
+	var url: String = "%s/%s?t=%d" % [AssetCDN.HOST, REMOTE_MANIFEST_FILE,
+		int(Time.get_unix_time_from_system())]
+	var http := HTTPRequest.new()
+	http.timeout = REMOTE_MANIFEST_TIMEOUT_SEC
+	add_child(http)
+	if http.request(url) != OK:
+		http.queue_free()
+		return
+	var res: Array = await http.request_completed
+	http.queue_free()
+	if int(res[0]) != HTTPRequest.RESULT_SUCCESS or int(res[1]) < 200 or int(res[1]) >= 300:
+		return
+	var text: String = (res[3] as PackedByteArray).get_string_from_utf8()
+	var data: Variant = JSON.parse_string(text)
+	if typeof(data) != TYPE_DICTIONARY or typeof((data as Dictionary).get("models")) != TYPE_DICTIONARY:
+		return  # malformed -> keep the bundled manifest
+	apply_manifest_text(text)
+	manifest_refreshed.emit(_models.size())
 
 
 ## Parses a manifest JSON string into the in-memory index (also used by tests).
