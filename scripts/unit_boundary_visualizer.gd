@@ -44,15 +44,31 @@ var _boundary_start_indices: Dictionary = {}  # GameUnit -> int
 ## Reference to army manager for player colors
 var army_manager = null  # OPRArmyManager
 
+## Reference to the object manager, used for the per-token ground raycast so each
+## boundary token rides the terrain DIRECTLY under it (not one unit-wide average),
+## and therefore never sinks under a prop taller than the models (issue: tokens
+## hidden under elevated terrain). Resolved lazily, same as army_manager.
+var object_manager = null  # ObjectManager
+
+## Small lift (metres) above the sampled ground so a token rests ON a surface
+## rather than z-fighting with it.
+const TOKEN_SURFACE_EPSILON := 0.002  # 2mm
+
+## Fallback token height when no ground surface can be sampled (no object_manager,
+## e.g. in pure unit tests): the table top.
+const TABLE_SURFACE_Y := 0.0
+
 ## Update timer for smooth updates
 var _update_timer: float = 0.0
 const UPDATE_INTERVAL := 0.1  # Update every 100ms
 
 
 func _ready() -> void:
-	# Find army manager only if not already set by parent
+	# Find managers only if not already set by parent
 	if not army_manager:
 		army_manager = get_node_or_null("/root/Main/OPRArmyManager")
+	if not object_manager:
+		object_manager = get_node_or_null("/root/Main/ObjectManager")
 
 
 func _process(delta: float) -> void:
@@ -426,10 +442,9 @@ func _calculate_token_start_index(game_unit) -> void:
 	_boundary_start_indices[game_unit] = best_index
 
 
-## Gets the anchor point on boundary at -45° from first model.
-## This is where token arrangement is centered.
-## Average ground height of the unit's living models. Boundary tokens ride this so they sit on the
-## terrain surface instead of the table plane (Y=0) — which made them sink under elevated terrain.
+## Average ground height of the unit's living models. Used as a FALLBACK token
+## height when the per-token ground ray can't run (no object_manager, e.g. in pure
+## unit tests). The live game uses the per-token sample (see _token_surface_y).
 func _unit_surface_y(game_unit) -> float:
 	var sum := 0.0
 	var n := 0
@@ -437,9 +452,25 @@ func _unit_surface_y(game_unit) -> float:
 		if model and is_instance_valid(model.node):
 			sum += model.node.global_position.y
 			n += 1
-	return (sum / n) if n > 0 else 0.0
+	return (sum / n) if n > 0 else TABLE_SURFACE_Y
 
 
+## Ground height for ONE token at world XZ: a downward ground-only ray (reusing
+## ObjectManager._surface_y_under) so a token on a raised prop rides THAT prop, not
+## the unit's average model height — which let it sink under terrain taller than the
+## models. Lifted by a small epsilon so it rests on the surface without z-fighting.
+## Falls back to the unit average when no object_manager is available.
+func _token_surface_y(world_x: float, world_z: float, fallback_y: float) -> float:
+	if object_manager == null:
+		object_manager = get_node_or_null("/root/Main/ObjectManager")
+	if object_manager and object_manager.has_method("_surface_y_under"):
+		var ground_y: float = object_manager._surface_y_under(Vector3(world_x, 0.0, world_z))
+		return ground_y + TOKEN_SURFACE_EPSILON
+	return fallback_y
+
+
+## Gets the anchor point on boundary at -45° from first model.
+## This is where token arrangement is centered.
 func get_boundary_anchor_point(game_unit) -> Vector3:
 	if game_unit not in _boundary_hull_points or game_unit not in _boundary_start_indices:
 		return Vector3.ZERO
@@ -450,7 +481,7 @@ func get_boundary_anchor_point(game_unit) -> Vector3:
 
 	var start_index = _boundary_start_indices[game_unit]
 	var point = hull_points[start_index]
-	return Vector3(point.x, _unit_surface_y(game_unit), point.y)
+	return Vector3(point.x, _token_surface_y(point.x, point.y, _unit_surface_y(game_unit)), point.y)
 
 
 ## Gets positions along the boundary for multiple tokens.
@@ -468,8 +499,8 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 
 	var start_index = _boundary_start_indices[game_unit]
 	var point_count = hull_points.size()
-	# Ride the unit's terrain height (computed once) so tokens don't sink under elevated terrain.
-	var surface_y := _unit_surface_y(game_unit)
+	# Unit-average height, used only as a fallback for the per-token ground ray below.
+	var fallback_surface_y := _unit_surface_y(game_unit)
 
 	# Token spacing along boundary (same as single model: 2*radius + gap)
 	var token_radius = 0.010  # 10mm
@@ -525,7 +556,10 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 		# Offset position along the normal (like tokens around a base edge)
 		var final_pos = pos_on_rail + outward_normal * outward_offset
 
-		positions.append(Vector3(final_pos.x, surface_y, final_pos.y))
+		# Sample the ground directly under THIS token so it rides whatever surface
+		# is beneath it (table or a raised prop), never sinking under tall terrain.
+		var token_y := _token_surface_y(final_pos.x, final_pos.y, fallback_surface_y)
+		positions.append(Vector3(final_pos.x, token_y, final_pos.y))
 
 	return positions
 
