@@ -22,18 +22,32 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **Alpha is live; `0.3.7-alpha` stability patch shipped (2026-06-25).** The public Alpha
-  (`0.3.6.0`, 2026-06-23) + explainer video are out. `0.3.7` follows with the **multiplayer
-  reconnect-storm / desync fix** (relay head-of-line block eliminated + token-based host-slot reclaim;
-  diagnosed from a real 2-PC game — see CHANGELOG), a **macOS build**, **per-biome terrain** (ruins +
-  battlemap-crop forest floors in every biome), and the Alpha bug reports (#70–74, Banner/Musician/
-  Sergeant). Everything further is **feedback-driven** toward the **MP-first Beta** (see Next). _S_
+- **`0.3.7.1-alpha` — playtest-feedback patch (built + locally verified; releasing ~2026-06-26 after a
+  2-PC MP check).** Sits on `0.3.7-alpha` (shipped 2026-06-25: the **MP reconnect-storm / desync fix** —
+  relay head-of-line block eliminated + token-based host-slot reclaim, diagnosed from a real 2-PC game;
+  the first **macOS build**; **per-biome terrain**; the Alpha bug reports #70–74 + Banner/Musician/
+  Sergeant). `0.3.7.1` folds in **playtest feedback**: formations centre on the unit (not the
+  cursor), rotation both ways (Ctrl reverses), flat-but-readable terrain labels, **per-token terrain
+  height** so status tokens don't sink under props, **per-model auto-face-on-move**, status **markers
+  hand over to the lone survivor** when a unit drops to 1 model, line of sight **ignores dead models**,
+  and a **load-gate** (the non-loading peer's move/edit is blocked while a peer imports). Plus **per-die
+  colour tagging** (click a die → 1 of 4 colours; cup + colours MP-synced + persist through the roll), a
+  **one-click in-game self-updater** (download → install → relaunch; ships dormant, first fires at the
+  next release), the **live CDN manifest** (the game fetches model SHAs from R2 at startup → asset
+  reworks reach players with **no game release**), and a self-correcting HUD version label. Everything
+  further is **feedback-driven** toward the **MP-first Beta** (see Next). _S_
 
 ## 📋 Next (post-Alpha — Beta + alpha-feedback driven)
 
 Deferred out of Alpha by maintainer decision (2026-06-23): the 2-player game is shipped + soak-
 validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
+- **Ambush / Scout deployment field** — reserve the bottom 1/3 of the deploying player's tableau, split
+  into **Ambush (left) / Scout (right)** by a thin divider line, each labelled with a flat, bird's-eye-
+  readable text plate; units carrying the Scout/Ambush rule are placed/located there on import. Today
+  Scout/Ambush are parsed only as a buff-token deny-list (`opr_army_manager.gd`) and the deployment
+  overlay is visual-only (NONE/FRONT_LINE/CUSTOM, `terrain_overlay.gd`) — it never positions units.
+  Maintainer-specified design (the playtester playtest, 2026-06-25). _L_
 - **Age of Fantasy — factions + Regiments** — generate the AoF faction 3D models via **Model Forge
   V2** (→ R2; this also resolves the `saurians` ↔ `saurian_starhost` faction-folder mismatch). Then
   verify Regiments import vs a real `aofr` list and add the Regiments **handling polish** (move as one
@@ -70,6 +84,14 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
     reserve the hard exact-version refuse for genuine breaking changes. _M_
   - **Periodic state-hash desync check** — host hashes authoritative state, guests compare + request a
     full resync on mismatch (no Godot recipe exists; needs prototyping). _S_
+- **Map packs** — bundle / share / load curated board layouts (own Niemandsland-authored first, IP-safe).
+  The editor's layout JSON currently drops biome + free-placed sandbox terrain; a pack also needs those +
+  a header + a preset picker. Deferred indefinitely (maintainer, 2026-06-25). _M_
+- **Dice tray — mid-session join sync** — a late joiner sees the current cup only after the other player
+  next changes it or rolls; add a host push of the current cup composition + colour tags on join. _S_
+- **In-game self-updater — Windows/macOS live test** — the one-click updater shipped Linux-tested (with a
+  browser-download fallback); the Win/macOS in-place swap needs a real-machine test before it first
+  activates (the release after 0.3.7.1). _S_
 - **Multi-level terrain** — per-cell elevation and ramps. (Walkable multi-storey ruin
   floors already shipped via the sandbox terrain; this is the grid-editor / per-cell
   elevation side.) The surface-aware placement raycast (models rest on terrain tops) is
@@ -113,7 +135,11 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
 ## ✅ Recently shipped
 
-See [`CHANGELOG.md`](../CHANGELOG.md). **0.3.6 round-up (Alpha release):** **MP reconnect fully
+See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.7-alpha` (2026-06-25):** the MP reconnect-storm / desync
+fix (relay head-of-line block + token host-slot reclaim, diagnosed from a real 2-PC game), the first
+**macOS build**, **per-biome terrain**, the Alpha bug reports (#70–74, Banner/Musician/Sergeant), and a
+fix to the in-game update checker (it now compares all four version fields — it had been blind to
+`0.3.6.x` patches). **0.3.6 round-up (Alpha release):** **MP reconnect fully
 solved** — the netcode replatform moved all game messaging off `@rpc` onto a command protocol below
 the RPC path-cache (the version-kick reconnect cascade is gone), plus a **relay-restart / idle
 self-heal** (the host re-creates its room with the SAME code and guests auto-rejoin, recovering when
