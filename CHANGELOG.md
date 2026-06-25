@@ -4,6 +4,16 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [0.3.7.1-alpha] — 2026-06-25
+
+### Added
+- **One-click in-game updater.** The "Update available" prompt now **downloads and installs** the
+  new version in place and restarts — no manual unzip. It stages the whole download under `user://`
+  before touching the install, and if the in-place update can't run (download error, locked files,
+  unsupported layout) it falls back to opening the download page, so it is never worse than the old
+  manual flow. Linux/macOS swap the files directly; Windows uses a small helper that swaps the
+  (locked) exe after the game exits.
+
 ## [0.3.7-alpha] — 2026-06-25
 
 Multiplayer-stability patch (the headline fix), plus a macOS build, per-biome terrain,

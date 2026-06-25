@@ -8,7 +8,7 @@ class_name UpdatePrompt
 # ===== Constants =====
 
 const DIALOG_TITLE: String = "Update available"
-const DOWNLOAD_LABEL: String = "Download"
+const DOWNLOAD_LABEL: String = "Update & Restart"
 const LATER_LABEL: String = "Later"
 const SKIP_LABEL: String = "Skip this version"
 const CONTENT_SEPARATION: int = 10
@@ -58,7 +58,7 @@ func setup(current_version: String, offered_version: String, url: String, notes:
 		content.add_child(notes_label)
 
 	var howto := Label.new()
-	howto.text = "Click Download to get the new version, then unzip it over your Niemandsland folder."
+	howto.text = "Niemandsland downloads the update and restarts itself. If that isn't possible, the download page opens instead."
 	howto.autowrap_mode = TextServer.AUTOWRAP_WORD
 	content.add_child(howto)
 
