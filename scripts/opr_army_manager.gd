@@ -554,10 +554,12 @@ func _add_ambush_scout_band(tray: Node3D, bounds: Vector2, divider_color: Color)
 	divider_instance.position = Vector3(0.0, BAND_DIVIDER_Y, band_z_mid)
 	tray.add_child(divider_instance)
 
-	# (c) Two small flat labels anchored TOP-LEFT in each half (fixed orientation, no camera-follow).
-	# "Top" = the inner (-Z) band edge; "left" = each half's -X edge (Scout's left edge is the divider).
+	# (c) Two small flat labels anchored BOTTOM-LEFT in each half (fixed orientation, no camera-follow).
+	# Bottom (the near +Z edge) so they clear the minis, which fill the band from the inner (-Z) edge.
+	# "Left" = each half's -X edge (Scout's left edge is the centre divider).
 	var label_pad: float = 0.012
-	var label_z: float = band_z_min + label_pad
+	var band_z_max: float = bounds.y / 2.0
+	var label_z: float = band_z_max - label_pad
 	_add_band_label(tray, "Ambush", Vector3(-bounds.x / 2.0 + label_pad, BAND_LABEL_Y, label_z))
 	_add_band_label(tray, "Scout", Vector3(label_pad, BAND_LABEL_Y, label_z))
 
@@ -584,7 +586,7 @@ func _add_band_tint_quad(tray: Node3D, size: Vector2, local_pos: Vector3, color:
 
 
 ## One small flat band label parented under `tray` (tray-local pos). Lies flat (billboard off, -90°
-## about X) with a FIXED orientation (no camera-follow), anchored at its top-left, with a dark outline.
+## about X) with a FIXED orientation (no camera-follow), anchored at its bottom-left, with a dark outline.
 func _add_band_label(tray: Node3D, text: String, local_pos: Vector3) -> void:
 	var label := Label3D.new()
 	label.name = "AmbushScoutLabel_%s" % text
@@ -593,7 +595,7 @@ func _add_band_label(tray: Node3D, text: String, local_pos: Vector3) -> void:
 	label.font_size = BAND_LABEL_FONT_SIZE
 	label.outline_size = BAND_LABEL_OUTLINE_SIZE
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	label.modulate = Color.WHITE
 	label.outline_modulate = BAND_LABEL_OUTLINE_COLOR
 	label.pixel_size = BAND_LABEL_PIXEL_SIZE
