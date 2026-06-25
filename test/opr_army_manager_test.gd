@@ -180,3 +180,17 @@ func test_unit_has_rule_no_match() -> void:
 
 func test_unit_has_rule_null_unit_is_false() -> void:
 	assert_bool(OPRArmyManager._unit_has_rule(null, "Scout")).is_false()
+
+
+func test_unit_rule_describes_catches_free_text_grant() -> void:
+	# Path-4 heuristic: a carried rule whose DESCRIPTION grants Scout/Ambush is detected (no structured
+	# "grants" field in ArmyForge). A direct rule is left to _unit_has_rule; this scans descriptions.
+	var mgr: OPRArmyManager = auto_free(OPRArmyManager.new())
+	var unit := _unit_with_rules(["Pathfinder"])
+	assert_bool(mgr._unit_rule_describes(unit, "Scout",
+		{"Pathfinder": "This unit counts as having the Scout special rule."})).is_true()
+	# Unrelated description → not detected.
+	assert_bool(mgr._unit_rule_describes(_unit_with_rules(["Furious"]), "Scout",
+		{"Furious": "Bonus attacks on the charge."})).is_false()
+	# Empty descriptions → not detected.
+	assert_bool(mgr._unit_rule_describes(unit, "Scout", {})).is_false()
