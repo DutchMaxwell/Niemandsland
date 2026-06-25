@@ -60,7 +60,6 @@ const BAND_DIVIDER_HEIGHT: float = 0.02  # matches the tray border height
 ## Translucent tints — amber for Ambush, cyan for Scout (alpha kept low so models stay readable).
 const BAND_AMBUSH_TINT: Color = Color(0.85, 0.55, 0.1, 0.28)  # amber
 const BAND_SCOUT_TINT: Color = Color(0.1, 0.6, 0.8, 0.28)  # cyan
-const BAND_DIVIDER_COLOR: Color = Color(0.85, 0.85, 0.9, 0.9)  # light, neutral
 ## Flat labels sized for bird's-eye readability (each half is ~0.4 m wide).
 const BAND_LABEL_FONT_SIZE: int = 48
 const BAND_LABEL_PIXEL_SIZE: float = 0.0012
@@ -180,7 +179,7 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 
 	# Ambush/Scout staging band on the near third of the tray (representation only). Parented
 	# under the tray so it inherits the build-time hide + rides the _animate_tray_drop tween.
-	_add_ambush_scout_band(tray, tray_bounds)
+	_add_ambush_scout_band(tray, tray_bounds, player_color.darkened(0.3))
 
 	# Default spacing values - will be adjusted per unit based on base size
 	var unit_gap = 0.08  # 8cm gap between different units
@@ -200,8 +199,10 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	# centre into a LEFT (Ambush) and RIGHT (Scout) half-rect. Each is an independent row-packer
 	# scoped to its half, reusing the same gap/row_height/wrap math as the main loop. Units carrying
 	# the matching rule are relocated here (representation only — Ambush wins if a unit has both).
-	var band_z_min: float = tray_pos.z - tray_bounds.y / 2
-	var band_z_max: float = band_z_min + tray_bounds.y * BAND_DEPTH_FRACTION
+	# Band sits at the near (+Z) edge — the "bottom" of the tray — so the main packer (which fills from
+	# the -Z edge) keeps the top 2/3 and the two areas don't overlap.
+	var band_z_max: float = tray_pos.z + tray_bounds.y / 2
+	var band_z_min: float = band_z_max - tray_bounds.y * BAND_DEPTH_FRACTION
 	var band_left_x_min: float = tray_pos.x - tray_bounds.x / 2 + edge_padding
 	var band_left_x_max: float = tray_pos.x - edge_padding  # stop short of the centre divider
 	var band_right_x_min: float = tray_pos.x + edge_padding  # start past the centre divider
@@ -526,13 +527,14 @@ func _add_tray_border(tray: Node3D, tray_size: Vector2, border_color: Color) -> 
 ## and two flat, bird's-eye-readable labels. All nodes are parented UNDER `tray` so they inherit
 ## its build-time hide and ride the _animate_tray_drop tween. Representation only — no rules.
 ## `bounds` is the tray's (width, depth) in metres; the tray is an axis-aligned square at origin.
-func _add_ambush_scout_band(tray: Node3D, bounds: Vector2) -> void:
+func _add_ambush_scout_band(tray: Node3D, bounds: Vector2, divider_color: Color) -> void:
 	if tray == null or not is_instance_valid(tray):
 		return
 
-	# Tray-local band geometry (tray centred at its own origin; spawn cursor starts at -X,-Z).
+	# Tray-local band geometry. Band sits at the NEAR (+Z) edge — the "bottom" of the tray — so it
+	# doesn't overlap the main packer, which fills from the -Z edge.
 	var band_depth: float = bounds.y * BAND_DEPTH_FRACTION
-	var band_z_min: float = -bounds.y / 2.0
+	var band_z_min: float = bounds.y / 2.0 - band_depth
 	var band_z_mid: float = band_z_min + band_depth / 2.0
 	var half_w: float = bounds.x / 2.0
 	var ambush_center_x: float = -bounds.x / 4.0  # LEFT half centre
@@ -548,7 +550,7 @@ func _add_ambush_scout_band(tray: Node3D, bounds: Vector2) -> void:
 	var divider_mesh := BoxMesh.new()
 	divider_mesh.size = Vector3(BAND_DIVIDER_WIDTH, BAND_DIVIDER_HEIGHT, band_depth)
 	var divider_material := StandardMaterial3D.new()
-	divider_material.albedo_color = BAND_DIVIDER_COLOR
+	divider_material.albedo_color = divider_color
 	divider_material.roughness = 0.7
 	var divider_instance := MeshInstance3D.new()
 	divider_instance.name = "AmbushScoutDivider"
