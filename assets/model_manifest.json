@@ -3,14 +3,14 @@
   "base_url": "{cdn}/",
   "models": {
     "alien_hives/hive lord": {
-      "url": "9a0d7b178c15d1b3d74de062b66cd536c9548e306aa5b6efe2a4246497ea638b.glb",
-      "sha256": "9a0d7b178c15d1b3d74de062b66cd536c9548e306aa5b6efe2a4246497ea638b",
-      "size": 15161408
+      "url": "29e762f1b684abf047d0c722c3cb41c9fd8634dc6c763e50b40b54f276290206.glb",
+      "sha256": "29e762f1b684abf047d0c722c3cb41c9fd8634dc6c763e50b40b54f276290206",
+      "size": 14663876
     },
     "alien_hives/prime warrior": {
-      "url": "7b2e84a66a1b36bb92ec2e3510777824bc62b6dd49fdc83c8722e61b9822d2e0.glb",
-      "sha256": "7b2e84a66a1b36bb92ec2e3510777824bc62b6dd49fdc83c8722e61b9822d2e0",
-      "size": 18134476
+      "url": "1d204846d2bbed970064c82719badd1354e3e3019f4c91b5679a616785e77480.glb",
+      "sha256": "1d204846d2bbed970064c82719badd1354e3e3019f4c91b5679a616785e77480",
+      "size": 17935100
     },
     "alien_hives/snatcher lord": {
       "url": "329a44403c2b3f5dee8c4853563830630446b85280e4cf6be8800107e752ed99.glb",
@@ -18,24 +18,24 @@
       "size": 15610696
     },
     "alien_hives/grunt veteran": {
-      "url": "834b1b8d107c028b82c77ae1d6d7f9389df808e28fe8e08842499cb28e4588db.glb",
-      "sha256": "834b1b8d107c028b82c77ae1d6d7f9389df808e28fe8e08842499cb28e4588db",
-      "size": 15410772
+      "url": "0c1c8bea9ec64bb94b2122b9716e56eae9990c8ee24ac31098141d18f0fd5996.glb",
+      "sha256": "0c1c8bea9ec64bb94b2122b9716e56eae9990c8ee24ac31098141d18f0fd5996",
+      "size": 13516128
     },
     "alien_hives/assault grunts": {
-      "url": "10e03717d128fb05d3e5951ab5725d737ab727bedb490c457113dc26cae06c3a.glb",
-      "sha256": "10e03717d128fb05d3e5951ab5725d737ab727bedb490c457113dc26cae06c3a",
-      "size": 14548868
+      "url": "f36f408066da6fa2e291eec2ce220794eb5e31928e278e0711becc7632f602fa.glb",
+      "sha256": "f36f408066da6fa2e291eec2ce220794eb5e31928e278e0711becc7632f602fa",
+      "size": 14404364
     },
     "alien_hives/shooter grunts": {
-      "url": "9d9706383e93e6da6666ad5988522d531aa3f2251eb88de224fedd2328180304.glb",
-      "sha256": "9d9706383e93e6da6666ad5988522d531aa3f2251eb88de224fedd2328180304",
-      "size": 15348124
+      "url": "40c5d220d97a8065e8b38e5a2a4b4a462e0a5e731a629a41d93cc6bf1cfcefcb.glb",
+      "sha256": "40c5d220d97a8065e8b38e5a2a4b4a462e0a5e731a629a41d93cc6bf1cfcefcb",
+      "size": 15191596
     },
     "alien_hives/psycho grunts": {
-      "url": "93d5a4227c80d460ba3a7cb0c1478d54eeb4ee124c33113e17f43ec581148d14.glb",
-      "sha256": "93d5a4227c80d460ba3a7cb0c1478d54eeb4ee124c33113e17f43ec581148d14",
-      "size": 13831260
+      "url": "341c741b3632fff9d09cd54baf1bb839c96237adbcd445dbefb6536a09f992bb.glb",
+      "sha256": "341c741b3632fff9d09cd54baf1bb839c96237adbcd445dbefb6536a09f992bb",
+      "size": 13587392
     },
     "alien_hives/winged grunts": {
       "url": "edf2243aeb3ab403fe385b63eb1d85c9e59d9cf37e0681460522ad44a96df33e.glb",
@@ -43,9 +43,9 @@
       "size": 16080252
     },
     "alien_hives/support grunts": {
-      "url": "cd1eccb762728d39d7715e4e6a83d714920a0aea6d443751bc9f84579360d9bc.glb",
-      "sha256": "cd1eccb762728d39d7715e4e6a83d714920a0aea6d443751bc9f84579360d9bc",
-      "size": 14647604
+      "url": "9bdddec41344d8a92975faf1fb0b931012cee94db954fbefea6d64bd3b22cc00.glb",
+      "sha256": "9bdddec41344d8a92975faf1fb0b931012cee94db954fbefea6d64bd3b22cc00",
+      "size": 14109336
     },
     "alien_hives/soul snatchers": {
       "url": "6db8556bdc649afa92057d0a36632abf8b4d66ccf24fe74682704d9ececd5b16.glb",
@@ -53,19 +53,19 @@
       "size": 14769712
     },
     "alien_hives/hive swarms": {
-      "url": "a110900d1f62d993805488625ca8a05071d9e4ae158b9044f23cd16a2ebdcb79.glb",
-      "sha256": "a110900d1f62d993805488625ca8a05071d9e4ae158b9044f23cd16a2ebdcb79",
-      "size": 17037636
+      "url": "a389deb58c479f90e099800c018709e321f37656f64fe34eeb95d3b808635516.glb",
+      "sha256": "a389deb58c479f90e099800c018709e321f37656f64fe34eeb95d3b808635516",
+      "size": 16831796
     },
     "alien_hives/hive warriors": {
-      "url": "8cf218635f55b21636c300dde1402da59d7b978ab7d021dcfabda2a494f9fdd6.glb",
-      "sha256": "8cf218635f55b21636c300dde1402da59d7b978ab7d021dcfabda2a494f9fdd6",
-      "size": 14600928
+      "url": "1b23c03ace0d67cb36b3018f96f0f45e769d520df15b5aabee9011a938000c0b.glb",
+      "sha256": "1b23c03ace0d67cb36b3018f96f0f45e769d520df15b5aabee9011a938000c0b",
+      "size": 14557116
     },
     "alien_hives/ravenous beasts": {
-      "url": "82b96b83321ec147c39e06c1143c1b00483fef87cf893c6c831204b307cb3416.glb",
-      "sha256": "82b96b83321ec147c39e06c1143c1b00483fef87cf893c6c831204b307cb3416",
-      "size": 15130844
+      "url": "7e770a8867a775da10ed983b6d8d51510718033c16dc4f375c9d530c501da302.glb",
+      "sha256": "7e770a8867a775da10ed983b6d8d51510718033c16dc4f375c9d530c501da302",
+      "size": 13858804
     },
     "alien_hives/venom beasts": {
       "url": "3de95fc96889b50a99a39dbe7a42ade50b7162a4afab868b33d50bff2b1472d7.glb",
@@ -73,9 +73,9 @@
       "size": 14696668
     },
     "alien_hives/hive guardians": {
-      "url": "6918dc4c29eb04c71d5c3493916878b52f5dac0dc600143d7eedf0cc2ed8c6ef.glb",
-      "sha256": "6918dc4c29eb04c71d5c3493916878b52f5dac0dc600143d7eedf0cc2ed8c6ef",
-      "size": 14684644
+      "url": "bf6a0ff35517f3f846c342af96c1d37caf65a71ea8a063a996ceba124943f73e.glb",
+      "sha256": "bf6a0ff35517f3f846c342af96c1d37caf65a71ea8a063a996ceba124943f73e",
+      "size": 14474148
     },
     "alien_hives/shadow leapers": {
       "url": "a8cc6fcc3e4e41b2c3d29bbe986f1dab77ef40064ec3c9d0fa6be7e64f9f94c5.glb",
@@ -88,24 +88,24 @@
       "size": 15075140
     },
     "alien_hives/spores": {
-      "url": "d6d089006f1193d5debbfada9c967724c663ee05d2078016c7d120f9cea005a2.glb",
-      "sha256": "d6d089006f1193d5debbfada9c967724c663ee05d2078016c7d120f9cea005a2",
-      "size": 15824212
+      "url": "f814485ffd0ddf202e49a46ebdab66b8fe706fdd8b4fe63b4e49a2b340bba171.glb",
+      "sha256": "f814485ffd0ddf202e49a46ebdab66b8fe706fdd8b4fe63b4e49a2b340bba171",
+      "size": 14677024
     },
     "alien_hives/massive spores": {
-      "url": "608655b5521715962310c9ad36f59ade3d3a6a09b2c67c86801ed08cb7904562.glb",
-      "sha256": "608655b5521715962310c9ad36f59ade3d3a6a09b2c67c86801ed08cb7904562",
-      "size": 15868412
+      "url": "8a85f2feff997d86c584436442abd7e6130f3dbc3adbc58b8f143150df8eb3d6.glb",
+      "sha256": "8a85f2feff997d86c584436442abd7e6130f3dbc3adbc58b8f143150df8eb3d6",
+      "size": 15581216
     },
     "alien_hives/shadow hunter": {
-      "url": "cf39874f280645498ab5dca8e83ff6b871637be47855c96aed8870dd48bda30d.glb",
-      "sha256": "cf39874f280645498ab5dca8e83ff6b871637be47855c96aed8870dd48bda30d",
-      "size": 15117224
+      "url": "3af8282a510d5bd150a669268bd2c75fe8d49ca331e7ca8fc45bf69d48f9963e.glb",
+      "sha256": "3af8282a510d5bd150a669268bd2c75fe8d49ca331e7ca8fc45bf69d48f9963e",
+      "size": 13980760
     },
     "alien_hives/mortar beast": {
-      "url": "76e13839090bc07e5c50319b02b78a8e9a352786960b8c056821320b70db7b28.glb",
-      "sha256": "76e13839090bc07e5c50319b02b78a8e9a352786960b8c056821320b70db7b28",
-      "size": 16274796
+      "url": "d6e75995efb80d04940cd2aab9b6ff3e5a36ab7a3c92a26df046fed8863708c1.glb",
+      "sha256": "d6e75995efb80d04940cd2aab9b6ff3e5a36ab7a3c92a26df046fed8863708c1",
+      "size": 15681632
     },
     "alien_hives/synapse tyrant": {
       "url": "198b6fc5c1125ea4c969e7f72b85882cdc35750e0cff3cba1a8e73f92b54d451.glb",
@@ -113,14 +113,14 @@
       "size": 16406364
     },
     "alien_hives/flamer beast": {
-      "url": "a46c3889b0d3b857f1b98ee695f393ab12e79b2dca4fcc20e6735ff0e4a7116a.glb",
-      "sha256": "a46c3889b0d3b857f1b98ee695f393ab12e79b2dca4fcc20e6735ff0e4a7116a",
-      "size": 16015992
+      "url": "62763be9d37ae6f86ad46993c6f7b02de257223947064d522e9113ee86c8053c.glb",
+      "sha256": "62763be9d37ae6f86ad46993c6f7b02de257223947064d522e9113ee86c8053c",
+      "size": 16018484
     },
     "alien_hives/invasion carrier spore": {
-      "url": "ea1cd212c5b5795899de2cba5029504b94f91ea3a277dc8ebacbed405c78b5ce.glb",
-      "sha256": "ea1cd212c5b5795899de2cba5029504b94f91ea3a277dc8ebacbed405c78b5ce",
-      "size": 16294636
+      "url": "af237d1b41c195825a85ca2492464346253397743f6c8e997180aab340a87589.glb",
+      "sha256": "af237d1b41c195825a85ca2492464346253397743f6c8e997180aab340a87589",
+      "size": 16275060
     },
     "alien_hives/carnivo rex": {
       "url": "e7c463e31caadaf1fd120cd54bd348dd92cdb275f144274360d295d07e035eac.glb",
@@ -133,19 +133,19 @@
       "size": 14366500
     },
     "alien_hives/psycho rex": {
-      "url": "f2b8b00193d49f0aeabaf81571423d2e8a8488c90e0418221fc45b59efd608c2.glb",
-      "sha256": "f2b8b00193d49f0aeabaf81571423d2e8a8488c90e0418221fc45b59efd608c2",
-      "size": 16322972
+      "url": "42d3a348df0a0f2224dd54637d8762db4e579d0d276c0c3e39442c665ae7cfc4.glb",
+      "sha256": "42d3a348df0a0f2224dd54637d8762db4e579d0d276c0c3e39442c665ae7cfc4",
+      "size": 16173820
     },
     "alien_hives/hive burrower": {
-      "url": "045404fdd62b2c7398a6dd0d86373b7e86dc06a57059669d7d962a0a932d9fe2.glb",
-      "sha256": "045404fdd62b2c7398a6dd0d86373b7e86dc06a57059669d7d962a0a932d9fe2",
-      "size": 16251932
+      "url": "bc7ff3957a5b4729602a4faed144b41459102bf6c9aedd7d2e5d3d972c215f28.glb",
+      "sha256": "bc7ff3957a5b4729602a4faed144b41459102bf6c9aedd7d2e5d3d972c215f28",
+      "size": 15775168
     },
     "alien_hives/tyrant great beast": {
-      "url": "324a92173d3a505a82854addf7a799abf7b78b1fd42b92a5bdaca6a2346ca8e7.glb",
-      "sha256": "324a92173d3a505a82854addf7a799abf7b78b1fd42b92a5bdaca6a2346ca8e7",
-      "size": 16777016
+      "url": "4dfde5cf82533d58d3c3f1ca2c3c1454cea2a39e42fa768223b02624332bb623.glb",
+      "sha256": "4dfde5cf82533d58d3c3f1ca2c3c1454cea2a39e42fa768223b02624332bb623",
+      "size": 16301880
     },
     "alien_hives/spawning great beast": {
       "url": "bcb68ead32945265320fed01615a122d84bae279ec3b8cb848bc6e9178862b68.glb",
@@ -153,9 +153,9 @@
       "size": 16522912
     },
     "alien_hives/devourer great beast": {
-      "url": "317797d58144e7bcb02a416533b7ae7cfb841e0f742d1446d0f9cf1945aac07d.glb",
-      "sha256": "317797d58144e7bcb02a416533b7ae7cfb841e0f742d1446d0f9cf1945aac07d",
-      "size": 15549256
+      "url": "b335815fd07140217038488f9f1f86217547f47d00d9373b5e3b6f5b4c51d24d.glb",
+      "sha256": "b335815fd07140217038488f9f1f86217547f47d00d9373b5e3b6f5b4c51d24d",
+      "size": 15541540
     },
     "alien_hives/artillery great beast": {
       "url": "01d982a3040c420841ef350db35e05adbc05b42acc82b386fb88b457fb735385.glb",
@@ -163,24 +163,24 @@
       "size": 12971256
     },
     "alien_hives/invasion artillery spore": {
-      "url": "b562657fff545e54caace4f6ef5c5cf3e4569ce411557234b08ce258b565fd48.glb",
-      "sha256": "b562657fff545e54caace4f6ef5c5cf3e4569ce411557234b08ce258b565fd48",
-      "size": 14933308
+      "url": "55e6da8f81ad9cbbe7b823d6c7fe8e0ec4c08ce805072c3bb2577817bc92ef12.glb",
+      "sha256": "55e6da8f81ad9cbbe7b823d6c7fe8e0ec4c08ce805072c3bb2577817bc92ef12",
+      "size": 13708364
     },
     "alien_hives/hive titan": {
-      "url": "7719e5bf9bb91c21213300245916741c506ad0a0c1460a81df1c6830d6e40223.glb",
-      "sha256": "7719e5bf9bb91c21213300245916741c506ad0a0c1460a81df1c6830d6e40223",
-      "size": 15575304
+      "url": "d1d8add5687678f6955012b25fdc96b71dc98dd28dc8cea64450e4bdf17aa18b.glb",
+      "sha256": "d1d8add5687678f6955012b25fdc96b71dc98dd28dc8cea64450e4bdf17aa18b",
+      "size": 15570480
     },
     "alien_hives/rapacious beast": {
-      "url": "e22284263f06f0e1557fc7239e112393510e5578b3ac6fcf01d9c9f1395fd312.glb",
-      "sha256": "e22284263f06f0e1557fc7239e112393510e5578b3ac6fcf01d9c9f1395fd312",
-      "size": 17662752
+      "url": "4813792911335292e7030a816ec40d49c94f50d35a153833be6be4fa20249590.glb",
+      "sha256": "4813792911335292e7030a816ec40d49c94f50d35a153833be6be4fa20249590",
+      "size": 17659700
     },
     "alien_hives/drekhor the vengeful": {
-      "url": "ff4f8078722db3a59aaafcd37b1f2d8ed3b755971c4010390186732193106f12.glb",
-      "sha256": "ff4f8078722db3a59aaafcd37b1f2d8ed3b755971c4010390186732193106f12",
-      "size": 14472180
+      "url": "6a37d55af2ba86fb773ce2dee1eecf32a662bf8f23f91f77f1b37285f7a3e9f8.glb",
+      "sha256": "6a37d55af2ba86fb773ce2dee1eecf32a662bf8f23f91f77f1b37285f7a3e9f8",
+      "size": 14159760
     },
     "alien_hives/ksiadoz smokeborn": {
       "url": "d9e1c2eda9bc27badd3f1c9b64a7d7414de3f02e2123500ff3b6b9db26c13895.glb",
@@ -198,14 +198,14 @@
       "size": 16395064
     },
     "alien_hives/nisuv": {
-      "url": "0463cd6253e95490e2fab4fdfc4cf2b610b1ab799f91c3a8bb5a2a604905ba30.glb",
-      "sha256": "0463cd6253e95490e2fab4fdfc4cf2b610b1ab799f91c3a8bb5a2a604905ba30",
-      "size": 16086440
+      "url": "d5e936bd6c9292947934e5cc956bc95a1c017e97c8d3091c6fd45a8f8762bf7b.glb",
+      "sha256": "d5e936bd6c9292947934e5cc956bc95a1c017e97c8d3091c6fd45a8f8762bf7b",
+      "size": 14396288
     },
     "alien_hives/vradhez": {
-      "url": "b07ecf782b305ca40e3a910dc4e7b0f5da7638f63b19ec22f84035b7b216caf6.glb",
-      "sha256": "b07ecf782b305ca40e3a910dc4e7b0f5da7638f63b19ec22f84035b7b216caf6",
-      "size": 15111728
+      "url": "ec8e036b2f9370fd9f7989422dbe4eb14f074262b8ed86a15be8c78f1a0b0da9.glb",
+      "sha256": "ec8e036b2f9370fd9f7989422dbe4eb14f074262b8ed86a15be8c78f1a0b0da9",
+      "size": 14102300
     },
     "battle_brothers/battle brothers": {
       "url": "6bb8f5c0390acdd1dfee6fff8d150dd4692c30faaaffd2faf2b10cd153ad0e7a.glb",
@@ -313,9 +313,9 @@
       "size": 17020136
     },
     "battle_brothers/apc": {
-      "url": "9be4dc603bb1dc3be7bbb69dea3c65ce590f4c31e6ca88c8ef4de53fb3befbbe.glb",
-      "sha256": "9be4dc603bb1dc3be7bbb69dea3c65ce590f4c31e6ca88c8ef4de53fb3befbbe",
-      "size": 15718732
+      "url": "fd1bd006f6a6ef8602b13d7302587ed4f6f00e8c79dfc29cb68dfd6504a7dafd.glb",
+      "sha256": "fd1bd006f6a6ef8602b13d7302587ed4f6f00e8c79dfc29cb68dfd6504a7dafd",
+      "size": 12082028
     },
     "battle_brothers/artillery gun": {
       "url": "c27855411f607455986062f064d2c45275b8a859d073922f05e86e39a103a2c8.glb",
@@ -348,9 +348,9 @@
       "size": 13194604
     },
     "battle_brothers/drop pod": {
-      "url": "a21d1a057a224aa947c0d3c8134db748599d1dc16f0436132cc931bc2ad03d45.glb",
-      "sha256": "a21d1a057a224aa947c0d3c8134db748599d1dc16f0436132cc931bc2ad03d45",
-      "size": 15453752
+      "url": "df4115f4cfc7c6f1812964549dfc0e0d74e38bcda476607b997b77541f4a6350.glb",
+      "sha256": "df4115f4cfc7c6f1812964549dfc0e0d74e38bcda476607b997b77541f4a6350",
+      "size": 15041736
     },
     "battle_brothers/elite pathfinder": {
       "url": "489d79eeaa0fc0daa4770759330946be12a2d1286043d0b4d47dbb199b34ed8f.glb",
@@ -373,14 +373,14 @@
       "size": 16929728
     },
     "battle_brothers/master brother": {
-      "url": "6c0ece00248be3aef15f8ee2bde1320751181351780f461939868de0e497db5d.glb",
-      "sha256": "6c0ece00248be3aef15f8ee2bde1320751181351780f461939868de0e497db5d",
-      "size": 13378424
+      "url": "6b6ca3f140f5cf21aebd0aa3f9d778eb168cb25b0480c7c953493acaf0b872ed.glb",
+      "sha256": "6b6ca3f140f5cf21aebd0aa3f9d778eb168cb25b0480c7c953493acaf0b872ed",
+      "size": 13094932
     },
     "battle_brothers/master destroyer": {
-      "url": "1bc87e2923b917d520dc5a3a9e4bb2988d2e6429ef7c746712403e60aa7f8e2c.glb",
-      "sha256": "1bc87e2923b917d520dc5a3a9e4bb2988d2e6429ef7c746712403e60aa7f8e2c",
-      "size": 13624884
+      "url": "e4515aa843b81e5e021df638f3ff80fd89e4c1d66b28dd334db63d377d1c6e70.glb",
+      "sha256": "e4515aa843b81e5e021df638f3ff80fd89e4c1d66b28dd334db63d377d1c6e70",
+      "size": 13594640
     },
     "battle_brothers/pathfinder bikers": {
       "url": "6cb3bebc3871e126e84bee47ddf165e19ce8500497f5ad8d5144894246d09555.glb",
@@ -418,9 +418,9 @@
       "size": 19037832
     },
     "battle_brothers/veteran master brother": {
-      "url": "b232084f26daf55a03cf238ee5ec960bf88b7490676b14c7cba89880f0947cd0.glb",
-      "sha256": "b232084f26daf55a03cf238ee5ec960bf88b7490676b14c7cba89880f0947cd0",
-      "size": 13406424
+      "url": "74b90d0c1b50210b2b486e2b970449115c592f9b79028241da7d864033e0248d.glb",
+      "sha256": "74b90d0c1b50210b2b486e2b970449115c592f9b79028241da7d864033e0248d",
+      "size": 13213768
     },
     "robot_legions/annihilator lord": {
       "url": "4f87466cfd1687504448a2bdeedd14cd2ae3fb6b107cf5aec9520246610d9ab7.glb",
@@ -2103,14 +2103,14 @@
       "size": 14799976
     },
     "blood_brothers/blood attack apc": {
-      "url": "96bdb62acb0539e096a7b6dae233c5e07d2127b5c8840a3763b67198251b6619.glb",
-      "sha256": "96bdb62acb0539e096a7b6dae233c5e07d2127b5c8840a3763b67198251b6619",
-      "size": 17034892
+      "url": "666a67cdd20be29c88430ec3c97615df8a84adebb15349bfeea276a36226ff68.glb",
+      "sha256": "666a67cdd20be29c88430ec3c97615df8a84adebb15349bfeea276a36226ff68",
+      "size": 16603940
     },
     "blood_brothers/blood attack speeder": {
-      "url": "c3040dd334f6d8f44a3dee9bc878920c958508fdba80d3914fa266576b442847.glb",
-      "sha256": "c3040dd334f6d8f44a3dee9bc878920c958508fdba80d3914fa266576b442847",
-      "size": 16446664
+      "url": "193f390772bc0b32956766e7b07340fba2beae69ede08a0a16c4ae1cd16a452d.glb",
+      "sha256": "193f390772bc0b32956766e7b07340fba2beae69ede08a0a16c4ae1cd16a452d",
+      "size": 15827776
     },
     "blood_brothers/blood battle brothers": {
       "url": "900c5ef1cd50695d88966853d3c515e2a072f7ed988fdb1448944d0d96b360c4.glb",
@@ -2123,9 +2123,9 @@
       "size": 17010584
     },
     "blood_brothers/blood brother bikers": {
-      "url": "44cd46096e53e59ddd03f291180957eadd9e7ba3879a2c9f4f7538c8d561de56.glb",
-      "sha256": "44cd46096e53e59ddd03f291180957eadd9e7ba3879a2c9f4f7538c8d561de56",
-      "size": 14883428
+      "url": "ed1e78f9d5280fdb9c42848427e1b8e4966dc5dd6e9c4c795137f56fa01b64df.glb",
+      "sha256": "ed1e78f9d5280fdb9c42848427e1b8e4966dc5dd6e9c4c795137f56fa01b64df",
+      "size": 14691368
     },
     "blood_brothers/blood combat walker": {
       "url": "7dc5739785adb4759fc2f7a8842e9eb04a29cda5b214434acb4167aab43dd0ef.glb",
@@ -2133,9 +2133,9 @@
       "size": 14144240
     },
     "blood_brothers/blood death brothers": {
-      "url": "6a61181f75bb461dffb07d0f79bab284759cd99578415187fa5ced998f26175a.glb",
-      "sha256": "6a61181f75bb461dffb07d0f79bab284759cd99578415187fa5ced998f26175a",
-      "size": 14233244
+      "url": "a5fab548162503b5a79b4d658c0631189eb40cae998d4375951fd8791a69d7a7.glb",
+      "sha256": "a5fab548162503b5a79b4d658c0631189eb40cae998d4375951fd8791a69d7a7",
+      "size": 14137600
     },
     "blood_brothers/blood destroyers": {
       "url": "76df0e9b48a8f8758935d60a3d9306adc34289083f13d8bc0cbbe0bab85db19e.glb",
@@ -2143,14 +2143,14 @@
       "size": 13602352
     },
     "blood_brothers/blood drop pod": {
-      "url": "398b312a8f3013514681af367bfa55afb3dbb7959349e3d005aac5ba6def6e98.glb",
-      "sha256": "398b312a8f3013514681af367bfa55afb3dbb7959349e3d005aac5ba6def6e98",
-      "size": 18728952
+      "url": "29e6eca2c893b96e98b2b85340c68c1a7529a7bfe9f8d5710212d346e5eb5e4a.glb",
+      "sha256": "29e6eca2c893b96e98b2b85340c68c1a7529a7bfe9f8d5710212d346e5eb5e4a",
+      "size": 18582932
     },
     "blood_brothers/blood elite pathfinder": {
-      "url": "3020db6534690594b6e976d6e8dad9a83d95bd7ba7a0d2d2af9f9b6a86708238.glb",
-      "sha256": "3020db6534690594b6e976d6e8dad9a83d95bd7ba7a0d2d2af9f9b6a86708238",
-      "size": 14369096
+      "url": "b7495f8cbdabe16ef858553112e951dea5402e4043f0eb65f0f34e782fcb193a.glb",
+      "sha256": "b7495f8cbdabe16ef858553112e951dea5402e4043f0eb65f0f34e782fcb193a",
+      "size": 14311040
     },
     "blood_brothers/blood guard brothers": {
       "url": "90bd8846c0d083309fe279bf3300c46515c4ac940b3e9a1d5ce371b555e16c91.glb",
@@ -2183,14 +2183,14 @@
       "size": 14362556
     },
     "blood_brothers/blood master destroyer": {
-      "url": "93e2be55f6d2cdf99b8c419345e652d5c1a6b17592936632394f6da3526051b1.glb",
-      "sha256": "93e2be55f6d2cdf99b8c419345e652d5c1a6b17592936632394f6da3526051b1",
-      "size": 13493660
+      "url": "cab2a244155ee8c2f5e9220a55c6a4ae6f3147a17a12c46509e7ac21bc91bdff.glb",
+      "sha256": "cab2a244155ee8c2f5e9220a55c6a4ae6f3147a17a12c46509e7ac21bc91bdff",
+      "size": 13484428
     },
     "blood_brothers/blood pathfinder bikers": {
-      "url": "1a7988df8c47e0e1feb86926d1be8e030e47c13ed7054f3b3413b9aa6f788665.glb",
-      "sha256": "1a7988df8c47e0e1feb86926d1be8e030e47c13ed7054f3b3413b9aa6f788665",
-      "size": 18077152
+      "url": "72a20603913982d2ac32828371621c41fce3657f4e3d2702d33df4c9c880a653.glb",
+      "sha256": "72a20603913982d2ac32828371621c41fce3657f4e3d2702d33df4c9c880a653",
+      "size": 17575088
     },
     "blood_brothers/blood pathfinders": {
       "url": "a1622271dd87f7759eb1747a41c945ee7e75cd7bdb3321127f13e160f0faa3ee.glb",
@@ -2233,9 +2233,9 @@
       "size": 17105844
     },
     "battle_brothers/combat walker": {
-      "url": "6a42dd8e2d60b90d492399ce46ca1e3da960152fd330dd6a3dfba58fc12b9884.glb",
-      "sha256": "6a42dd8e2d60b90d492399ce46ca1e3da960152fd330dd6a3dfba58fc12b9884",
-      "size": 16783636
+      "url": "643745d58eda680e0213d1896b7b359def746d338fea65c34bd6cf4b5b9c141a.glb",
+      "sha256": "643745d58eda680e0213d1896b7b359def746d338fea65c34bd6cf4b5b9c141a",
+      "size": 16326720
     },
     "battle_brothers/heavy gunship": {
       "url": "40e3f02e5a7fffacfd1714f44b559faa014f9e84afd5d00226d89a152a1db6fd.glb",
@@ -2493,9 +2493,9 @@
       "size": 15902660
     },
     "blessed_sisters/apc": {
-      "url": "af25181244f88d741dd464937fcbc6c1b5bb929b7f03357727f02f61e24d4458.glb",
-      "sha256": "af25181244f88d741dd464937fcbc6c1b5bb929b7f03357727f02f61e24d4458",
-      "size": 18303772
+      "url": "1fcb4571eb28913b639c1c10c0a4738e6852593068e80020d682f651893902b0.glb",
+      "sha256": "1fcb4571eb28913b639c1c10c0a4738e6852593068e80020d682f651893902b0",
+      "size": 18086312
     },
     "blessed_sisters/assault sisters": {
       "url": "58d46b883db233c14346f36215d67264c969c897e54d88121e1244c2814232e6.glb",
@@ -2503,24 +2503,24 @@
       "size": 16046780
     },
     "blessed_sisters/assault walker": {
-      "url": "e7c2f686020e724ffcdb922a787a18e6c1b908714affa2b5097bcbb7e603044d.glb",
-      "sha256": "e7c2f686020e724ffcdb922a787a18e6c1b908714affa2b5097bcbb7e603044d",
-      "size": 16326324
+      "url": "ec779d02b0f750c26072717d0b45ee17ab07f50870388f0e40964e6d4c4615c8.glb",
+      "sha256": "ec779d02b0f750c26072717d0b45ee17ab07f50870388f0e40964e6d4c4615c8",
+      "size": 15796392
     },
     "blessed_sisters/battle tank": {
-      "url": "668d4d856b6a16ab68a786c3f9e8590c7cfde86dbf4be628e4d5f724f397d131.glb",
-      "sha256": "668d4d856b6a16ab68a786c3f9e8590c7cfde86dbf4be628e4d5f724f397d131",
-      "size": 17500972
+      "url": "47783bd39d6be4d85cd20bcf905398b828d2ef32da7895087b88f6b95a0e2a22.glb",
+      "sha256": "47783bd39d6be4d85cd20bcf905398b828d2ef32da7895087b88f6b95a0e2a22",
+      "size": 17289580
     },
     "blessed_sisters/biker fanatics": {
-      "url": "fa2a5f954fb1a32e2583c5077a3d3954c9006483cc9608670499ccf6ea972f12.glb",
-      "sha256": "fa2a5f954fb1a32e2583c5077a3d3954c9006483cc9608670499ccf6ea972f12",
-      "size": 16892740
+      "url": "83e4ba8b9f845f7dccf3aeef8cd4e492f70dc785d6db4c4e85a023457e6918c9.glb",
+      "sha256": "83e4ba8b9f845f7dccf3aeef8cd4e492f70dc785d6db4c4e85a023457e6918c9",
+      "size": 16675632
     },
     "blessed_sisters/biker sisters": {
-      "url": "a10d632b71ab0d9379c6c1d16d5437f211f3b736a308f65848d9838658d81e31.glb",
-      "sha256": "a10d632b71ab0d9379c6c1d16d5437f211f3b736a308f65848d9838658d81e31",
-      "size": 15680656
+      "url": "0396d5377eb35c6eb1ef4591ab5cea42a58fc01cd84e7558afb4635ead9236a4.glb",
+      "sha256": "0396d5377eb35c6eb1ef4591ab5cea42a58fc01cd84e7558afb4635ead9236a4",
+      "size": 15341396
     },
     "blessed_sisters/blessed titan": {
       "url": "abcd73520c46a9164b41a80913dda9708f5521b4cf90c27a4da8152628d807fc.glb",
@@ -2538,9 +2538,9 @@
       "size": 15652008
     },
     "blessed_sisters/constance": {
-      "url": "9859c02425a89619f94ff8ccfcd86467b420fb1894e05e8fe4f6e4320599c8d2.glb",
-      "sha256": "9859c02425a89619f94ff8ccfcd86467b420fb1894e05e8fe4f6e4320599c8d2",
-      "size": 14591360
+      "url": "59d6f7732aef8595de6c61b56461d99ab6bd239aa2250d106a3da53485ae5030.glb",
+      "sha256": "59d6f7732aef8595de6c61b56461d99ab6bd239aa2250d106a3da53485ae5030",
+      "size": 14300936
     },
     "blessed_sisters/destroyer sisters": {
       "url": "5f1a9eb1a1a938e28b7fa132dcfc05c3aa94c406cccef55c2d5f933d03797af8.glb",
@@ -2548,9 +2548,9 @@
       "size": 14999044
     },
     "blessed_sisters/exo suit high sister": {
-      "url": "cd6a741613f830fc6ae41dda2fcf40c1eee262d644a46d62fdd6148acacd8b6a.glb",
-      "sha256": "cd6a741613f830fc6ae41dda2fcf40c1eee262d644a46d62fdd6148acacd8b6a",
-      "size": 16223988
+      "url": "70390f90d0ec2ddd14aec97b7d00478705fc33e032a44da61248d2be647e64d9.glb",
+      "sha256": "70390f90d0ec2ddd14aec97b7d00478705fc33e032a44da61248d2be647e64d9",
+      "size": 16236832
     },
     "blessed_sisters/exo suit": {
       "url": "5ea649cf7b09544e8b84dc0360aad8ea067fe2187357feadffe48c29192b6e5e.glb",
@@ -2558,9 +2558,9 @@
       "size": 15979028
     },
     "blessed_sisters/fanatic sisters": {
-      "url": "24e54b7b04ab8e00ad70358e9a28743ff58a47e028ce6ee444625262b280511d.glb",
-      "sha256": "24e54b7b04ab8e00ad70358e9a28743ff58a47e028ce6ee444625262b280511d",
-      "size": 16815312
+      "url": "868b770d245a32558e8f512a456b82ca0010ac2c995f81039db0c5ad840dfc33.glb",
+      "sha256": "868b770d245a32558e8f512a456b82ca0010ac2c995f81039db0c5ad840dfc33",
+      "size": 16611480
     },
     "blessed_sisters/fanatic superior": {
       "url": "9cb5bdfa41aee59233d8e23528d32dfb8a455ca05c15e4a201d2553a47e12d1f.glb",
@@ -2568,19 +2568,19 @@
       "size": 17143520
     },
     "blessed_sisters/high destroyer sister": {
-      "url": "80f68d84b8caba501a4de7daa91650215ae0b1d86743016c92b1bd1788827bc1.glb",
-      "sha256": "80f68d84b8caba501a4de7daa91650215ae0b1d86743016c92b1bd1788827bc1",
-      "size": 14345336
+      "url": "7c307b52dc8cc31c00aa796c69c60b0c40a55c716e8237dee2dcbba64fb3f392.glb",
+      "sha256": "7c307b52dc8cc31c00aa796c69c60b0c40a55c716e8237dee2dcbba64fb3f392",
+      "size": 13810136
     },
     "blessed_sisters/high sister": {
-      "url": "1d05f5297e3677988f90012768cd63e68af77b642ad6862746f04e0166162fc3.glb",
-      "sha256": "1d05f5297e3677988f90012768cd63e68af77b642ad6862746f04e0166162fc3",
-      "size": 15033352
+      "url": "3d6a4daf706ea7e83e1050fb3d247916cf192340dc5cd43e7058f02bc55363fd.glb",
+      "sha256": "3d6a4daf706ea7e83e1050fb3d247916cf192340dc5cd43e7058f02bc55363fd",
+      "size": 14913884
     },
     "blessed_sisters/infernal apc": {
-      "url": "3dda1d041533d7be35314db284e0abba36fd9b7a20adee01351b252444c19167.glb",
-      "sha256": "3dda1d041533d7be35314db284e0abba36fd9b7a20adee01351b252444c19167",
-      "size": 18736728
+      "url": "5fd014f5c40f6cfdbdc27d111ca65b410dce4d66d4174efcf6117755ddadd9ec.glb",
+      "sha256": "5fd014f5c40f6cfdbdc27d111ca65b410dce4d66d4174efcf6117755ddadd9ec",
+      "size": 16377348
     },
     "blessed_sisters/novice leader": {
       "url": "eefcb3cea310b5509666feeea9cbe551d759f9bde6f63c9a7ccafb81a90414af.glb",
@@ -2593,19 +2593,19 @@
       "size": 15044732
     },
     "blessed_sisters/organ tank": {
-      "url": "849e218c68c02f99d79a0f69bec60d3f5229cab98dd4d030c5678c1bf5eb5a82.glb",
-      "sha256": "849e218c68c02f99d79a0f69bec60d3f5229cab98dd4d030c5678c1bf5eb5a82",
-      "size": 17826596
+      "url": "686c2dfd18e4720b16a4788ed4cebdfb85ae60453472c49f9734cf2e464c3e9c.glb",
+      "sha256": "686c2dfd18e4720b16a4788ed4cebdfb85ae60453472c49f9734cf2e464c3e9c",
+      "size": 17500836
     },
     "blessed_sisters/pistoleer sisters": {
-      "url": "28c27825640f107d352c987f91e8ab7ebc202ae8d29bc1412d44deb9f697adf8.glb",
-      "sha256": "28c27825640f107d352c987f91e8ab7ebc202ae8d29bc1412d44deb9f697adf8",
-      "size": 14410920
+      "url": "218356c597d36d2ec2bb0b975454ed64cecfc2202c05e00183d0b5f91c705c96.glb",
+      "sha256": "218356c597d36d2ec2bb0b975454ed64cecfc2202c05e00183d0b5f91c705c96",
+      "size": 14233036
     },
     "blessed_sisters/procession altar": {
-      "url": "4f4acc6af1590634562afadd80034b1cfbf60cc6db4646c25e5455591febeaa1.glb",
-      "sha256": "4f4acc6af1590634562afadd80034b1cfbf60cc6db4646c25e5455591febeaa1",
-      "size": 19202508
+      "url": "19685a9cfaf120fa649359df9dd0acb0bf3d9cad8fe9e6968a7a2f3d0d76a9d1.glb",
+      "sha256": "19685a9cfaf120fa649359df9dd0acb0bf3d9cad8fe9e6968a7a2f3d0d76a9d1",
+      "size": 18613340
     },
     "blessed_sisters/protector sisters": {
       "url": "8c554ddf71cc2f8257448d867eb465d5cf570e48215365c4992421154ac4b706.glb",
@@ -2628,9 +2628,9 @@
       "size": 14110448
     },
     "blessed_sisters/warrior sisters": {
-      "url": "fb49f1d7bcf7c2c188aea9d6149b5beb22996e6be4ea8d1d4cd59d22a21f7993.glb",
-      "sha256": "fb49f1d7bcf7c2c188aea9d6149b5beb22996e6be4ea8d1d4cd59d22a21f7993",
-      "size": 14325424
+      "url": "82d5eb60d59bac14b52734949d0dfd4ea4775ccc17a4a7f251d81db4d30c5502.glb",
+      "sha256": "82d5eb60d59bac14b52734949d0dfd4ea4775ccc17a4a7f251d81db4d30c5502",
+      "size": 13159908
     },
     "custodian_brothers/custodian heavy battle tank": {
       "url": "5185618ccd1698450dd3f2517123f34fcacbe8d46b643f30f8d17be1e366dcde.glb",
