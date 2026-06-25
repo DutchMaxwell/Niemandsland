@@ -32,9 +32,19 @@ var boundary_visualizer: Node3D = null:  # UnitBoundaryVisualizer
 		if boundary_visualizer and boundary_visualizer.has_signal("boundary_updated"):
 			if boundary_visualizer.is_connected("boundary_updated", _on_boundary_updated):
 				boundary_visualizer.disconnect("boundary_updated", _on_boundary_updated)
+		if boundary_visualizer and boundary_visualizer.has_signal("boundary_lost"):
+			if boundary_visualizer.is_connected("boundary_lost", _on_boundary_lost):
+				boundary_visualizer.disconnect("boundary_lost", _on_boundary_lost)
+		if boundary_visualizer and boundary_visualizer.has_signal("boundary_gained"):
+			if boundary_visualizer.is_connected("boundary_gained", _on_boundary_gained):
+				boundary_visualizer.disconnect("boundary_gained", _on_boundary_gained)
 		boundary_visualizer = value
 		if boundary_visualizer and boundary_visualizer.has_signal("boundary_updated"):
 			boundary_visualizer.connect("boundary_updated", _on_boundary_updated)
+		if boundary_visualizer and boundary_visualizer.has_signal("boundary_lost"):
+			boundary_visualizer.connect("boundary_lost", _on_boundary_lost)
+		if boundary_visualizer and boundary_visualizer.has_signal("boundary_gained"):
+			boundary_visualizer.connect("boundary_gained", _on_boundary_gained)
 
 ## Reference to wounds dialog
 var wounds_dialog: WoundsDialog = null
@@ -611,19 +621,31 @@ func initialize_caster_marker_for_unit(game_unit: GameUnit) -> void:
 # These are unit-wide markers - placed on boundary for multi-model units
 
 ## Gets the node to attach unit-wide tokens to.
-## Returns boundary container for multi-model units, first model for single-model units.
+## Routes by the visualizer's authoritative has_boundary() (which tracks the ALIVE
+## model count), NOT the total model count — so a unit reduced to its last model
+## (boundary gone) hands its tokens to that lone survivor instead of an orphaned
+## boundary container. Falls back to the first alive model (then any model).
 func _get_unit_token_node(unit: GameUnit) -> Node3D:
-	# For multi-model units with boundary, use the boundary token container
-	if boundary_visualizer and unit.models.size() > 1:
+	# Multi-model unit that currently HAS a boundary -> use the boundary container.
+	if boundary_visualizer and boundary_visualizer.has_boundary(unit):
 		return boundary_visualizer.get_token_container(unit)
 
-	# For single-model units, use the model itself
-	if unit.models.is_empty():
-		return null
-	var model = unit.models[0]
-	if not model.node or not is_instance_valid(model.node):
+	# Single-model unit (incl. one reduced to its last model): use that model.
+	var model: ModelInstance = _lone_token_model(unit)
+	if not model or not model.node or not is_instance_valid(model.node):
 		return null
 	return model.node
+
+
+## The model a single-model unit's tokens belong to: the first ALIVE model, or the
+## first model as a fallback when none are alive (e.g. a fully wiped unit mid-cleanup).
+func _lone_token_model(unit: GameUnit) -> ModelInstance:
+	if unit.models.is_empty():
+		return null
+	for model in unit.models:
+		if model.is_alive and model.node and is_instance_valid(model.node):
+			return model
+	return unit.models[0]
 
 
 ## Updates fatigued markers for a unit.
@@ -685,6 +707,61 @@ func _on_boundary_updated(game_unit: GameUnit) -> void:
 
 	# Reposition tokens along the updated boundary
 	_reposition_tokens_boundary(container, game_unit, tokens)
+
+
+## Called when a unit drops to its last alive model: the boundary (and its token
+## rail) is gone, so migrate the unit-wide status/marker tokens from the orphaned
+## boundary container onto the lone survivor. We clear the container's tokens and
+## re-drive them from unit state — _get_unit_token_node now routes to the model
+## (has_boundary() is false), so they land in circular mode on the survivor and
+## follow it from then on. Idempotent and cheap (a handful of tokens).
+func _on_boundary_lost(game_unit: GameUnit) -> void:
+	if not boundary_visualizer or game_unit == null:
+		return
+	var container = boundary_visualizer.get_token_container(game_unit)
+	if container and is_instance_valid(container):
+		_clear_unit_status_tokens(container, game_unit)
+	_redraw_unit_tokens(game_unit)
+
+
+## Symmetric to _on_boundary_lost: a unit regained a boundary (e.g. a revive), so
+## pull the unit-wide tokens off the lone model back onto the container. We clear
+## them from every model node, then re-drive — _get_unit_token_node now routes to
+## the container (has_boundary() is true), and boundary_updated lays them out.
+func _on_boundary_gained(game_unit: GameUnit) -> void:
+	if not boundary_visualizer or game_unit == null:
+		return
+	for model in game_unit.models:
+		if model.node and is_instance_valid(model.node):
+			_clear_unit_status_tokens(model.node, game_unit)
+	_redraw_unit_tokens(game_unit)
+
+
+## Removes every active unit-wide token from a node (boundary container OR a model
+## node). Snapshots the names first: removing a token re-lays out the rest, which
+## mutates the live child list mid-iteration.
+func _clear_unit_status_tokens(node: Node3D, game_unit: GameUnit) -> void:
+	for token_name in _get_active_tokens(node):
+		_update_token(node, game_unit, token_name, false)
+
+
+## Re-draws the unit-wide tokens (built-in status + dialog/custom markers) from
+## unit state. They land on whatever node _get_unit_token_node currently resolves
+## to (boundary container or lone model), so this drives both migration directions.
+func _redraw_unit_tokens(game_unit: GameUnit) -> void:
+	# Built-in status tokens (no-ops when the flag is inactive).
+	_update_activated_markers(game_unit)
+	_update_shaken_markers(game_unit)
+	_update_fatigued_markers(game_unit)
+
+	# Dialog/custom markers the unit carries, each at its correct scope.
+	var seen: Dictionary = {}
+	for model in game_unit.models:
+		for marker_name in model.markers:
+			if seen.has(marker_name):
+				continue
+			seen[marker_name] = true
+			_render_token_for_unit_scoped(game_unit, marker_name)
 
 
 # ===== Unified Token Layout System =====
