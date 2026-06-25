@@ -37,7 +37,7 @@ const SETTLE_HOLD: float = 0.2    # seconds calm before the result is forced
 const MAX_ROLL_TIME: float = 2.5  # safety cap
 const WALL_THICKNESS: float = 1.5
 const SEPARATION_PASSES: int = 6  # relaxation iterations for the cosmetic de-overlap
-const PICK_RAY_LENGTH: float = 1000.0  # ray length when picking a clicked die (viewport units)
+const PICK_RADIUS_SCALE: float = 1.4  # accept a click within 1.4x a die's on-screen half-size
 
 # === Private variables ===
 
@@ -280,16 +280,23 @@ func _die_index_at_local_pos(local_pos: Vector2) -> int:
 	var vp_pos: Vector2 = Vector2(
 		local_pos.x / container_size.x * vp_size.x,
 		local_pos.y / container_size.y * vp_size.y)
-	var from: Vector3 = _camera.project_ray_origin(vp_pos)
-	var dir: Vector3 = _camera.project_ray_normal(vp_pos)
-	var space: PhysicsDirectSpaceState3D = _viewport.world_3d.direct_space_state
-	if space == null:
-		return -1
-	var query := PhysicsRayQueryParameters3D.create(from, from + dir * PICK_RAY_LENGTH)
-	query.collide_with_bodies = true
-	var hit: Dictionary = space.intersect_ray(query)
-	var die: DiceD6 = hit.get("collider", null) as DiceD6  # walls/floor are StaticBody3D → null
-	return _dice.find(die) if die != null else -1
+	# Pick the die whose centre projects nearest the click, within its on-screen size. Projecting
+	# is robust to physics state — resting dice are frozen, where a collider raycast was unreliable.
+	var cam_right: Vector3 = _camera.global_transform.basis.x
+	var best: int = -1
+	var best_dist: float = INF
+	for i: int in _dice.size():
+		var d: DiceD6 = _dice[i]
+		if d == null or not is_instance_valid(d):
+			continue
+		var centre: Vector2 = _camera.unproject_position(d.global_position)
+		var edge: Vector2 = _camera.unproject_position(d.global_position + cam_right * (d.size * 0.5))
+		var radius_px: float = maxf(centre.distance_to(edge), 1.0) * PICK_RADIUS_SCALE
+		var dist: float = centre.distance_to(vp_pos)
+		if dist <= radius_px and dist < best_dist:
+			best_dist = dist
+			best = i
+	return best
 
 # === Private: dice + environment ===
 
