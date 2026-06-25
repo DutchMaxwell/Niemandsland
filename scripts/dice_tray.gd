@@ -9,6 +9,9 @@ extends SubViewportContainer
 
 signal roll_started()
 signal roll_finnished(total: int)
+## A die's colour tag was changed by a click (index in the tray, new tag 0..4). main.gd
+## broadcasts this so the opponent's mirrored tray shows the same colour on the same die.
+signal color_tag_changed(index: int, tag: int)
 
 # === Exports ===
 
@@ -90,17 +93,25 @@ func _gui_input(event: InputEvent) -> void:
 	var mb := event as InputEventMouseButton
 	if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
 		return
-	var die: DiceD6 = _die_at_local_pos(mb.position)
-	if die != null:
+	var index: int = _die_index_at_local_pos(mb.position)
+	if index >= 0:
+		var die: DiceD6 = _dice[index]
 		die.cycle_color_tag()
+		color_tag_changed.emit(index, die.color_tag)
 		accept_event()
 
 # === Public API ===
 
-## Physics roll: tosses the dice and reports the result once they settle.
+## Physics roll: tosses the dice and reports the result once they settle. The colour tags the
+## player set on the resting dice are carried onto the rolled dice, so "red = Rending" survives
+## the toss and is visible on the result (matching get_color_tags() at any time during the roll).
 func roll() -> void:
+	var tags: Array[int] = get_color_tags()
 	_spawn_dice(false)
-	for d: DiceD6 in _dice:
+	for i: int in _dice.size():
+		var d: DiceD6 = _dice[i]
+		if i < tags.size():
+			d.set_color_tag(tags[i])
 		d.freeze = false
 		d.linear_velocity = Vector3(randf_range(-2, 2), randf_range(-2, 0), randf_range(-2, 2))
 		d.angular_velocity = Vector3(randf_range(-8, 8), randf_range(-8, 8), randf_range(-8, 8))
@@ -148,19 +159,46 @@ func quick_roll() -> void:
 	show_faces(faces)
 
 
-## Shows specific faces without physics (used for quick rolls + remote results).
-func show_faces(faces: Array) -> void:
+## Shows specific faces without physics (used for quick rolls + remote results). Optional
+## `tags` (one colour tag per die) recolours the dice so a SYNCED remote roll keeps the
+## sender's per-die colours through the result display.
+func show_faces(faces: Array, tags: Array = []) -> void:
 	dice_count = faces.size()
 	_spawn_dice(true)
 	var ints: Array[int] = []
 	for i: int in _dice.size():
 		var v: int = int(faces[i])
 		_dice[i].set_top_face(v)
+		if i < tags.size():
+			_dice[i].set_color_tag(int(tags[i]))
 		ints.append(v)
 	_rolling = false
 	_apply_result(ints)
 	roll_started.emit()
 	roll_finnished.emit(_total(ints))
+
+
+## The colour tag of every die currently in the tray, in die order (0 = untagged, 1..4 = a tag).
+## Used to broadcast the cup's current colouring to a peer.
+func get_color_tags() -> Array[int]:
+	var tags: Array[int] = []
+	for d: DiceD6 in _dice:
+		tags.append(d.color_tag if is_instance_valid(d) else DiceD6.DEFAULT_COLOR_TAG)
+	return tags
+
+
+## Apply a full set of colour tags (one per die, in order) to the current dice. Extra/short
+## arrays are tolerated: only the overlapping range is applied. Used to mirror a peer's cup.
+func apply_color_tags(tags: Array) -> void:
+	for i: int in mini(_dice.size(), tags.size()):
+		if is_instance_valid(_dice[i]):
+			_dice[i].set_color_tag(int(tags[i]))
+
+
+## Set one die's colour tag by index (no-op if out of range). Used to mirror a peer's click.
+func set_die_color_tag(index: int, tag: int) -> void:
+	if index >= 0 and index < _dice.size() and is_instance_valid(_dice[index]):
+		_dice[index].set_color_tag(tag)
 
 
 func per_dice_result() -> Dictionary:
@@ -227,14 +265,15 @@ func _total(faces: Array[int]) -> int:
 
 # === Private: picking ===
 
-## The die under a container-local click position, or null. Maps the click into SubViewport
-## pixels (this container stretches the viewport to fit), then raycasts in the dice world.
-func _die_at_local_pos(local_pos: Vector2) -> DiceD6:
+## Index in `_dice` of the die under a container-local click position, or -1. Maps the click
+## into SubViewport pixels (this container stretches the viewport to fit), then raycasts in the
+## dice world. Returns the index (not the node) so callers can address the same die remotely.
+func _die_index_at_local_pos(local_pos: Vector2) -> int:
 	if _viewport == null or _camera == null or _dice.is_empty():
-		return null
+		return -1
 	var container_size: Vector2 = size
 	if container_size.x <= 0.0 or container_size.y <= 0.0:
-		return null
+		return -1
 	# stretch=true scales the SubViewport to the container, so rescale the click back to
 	# viewport pixels before projecting through the camera.
 	var vp_size: Vector2 = Vector2(_viewport.size)
@@ -245,12 +284,12 @@ func _die_at_local_pos(local_pos: Vector2) -> DiceD6:
 	var dir: Vector3 = _camera.project_ray_normal(vp_pos)
 	var space: PhysicsDirectSpaceState3D = _viewport.world_3d.direct_space_state
 	if space == null:
-		return null
+		return -1
 	var query := PhysicsRayQueryParameters3D.create(from, from + dir * PICK_RAY_LENGTH)
 	query.collide_with_bodies = true
 	var hit: Dictionary = space.intersect_ray(query)
-	var collider: Object = hit.get("collider", null)
-	return collider as DiceD6  # walls/floor are StaticBody3D → cast yields null (ignored)
+	var die: DiceD6 = hit.get("collider", null) as DiceD6  # walls/floor are StaticBody3D → null
+	return _dice.find(die) if die != null else -1
 
 # === Private: dice + environment ===
 
@@ -260,10 +299,10 @@ func _show_resting_dice() -> void:
 		d.set_top_face(randi_range(1, 6))
 
 
-## Frees the current dice and spawns a fresh set. Every new roll (roll/quick_roll/show_faces)
-## goes through here, so the dice are recreated untagged — this is what RESETS the per-die
-## colour tags "until the next roll". reroll() deliberately does NOT respawn, so kept dice
-## retain their tags across a reroll (the reroll is part of the same roll).
+## Frees the current dice and spawns a fresh (untagged) set. Callers that must preserve the
+## per-die colour tags across the respawn — roll() (carry tags through the toss) and
+## show_faces(tags) (apply the sender's tags to the result) — re-apply them right after.
+## A dice_count CHANGE respawns through here without re-applying, which is what resets the cup.
 func _spawn_dice(resting: bool) -> void:
 	for d: DiceD6 in _dice:
 		if is_instance_valid(d):

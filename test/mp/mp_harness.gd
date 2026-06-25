@@ -281,7 +281,7 @@ func _drive_synthetic(delta: float) -> void:
 		_dice_accum += delta
 		if _dice_accum >= 4.0:
 			_dice_accum = 0.0
-			_nm.broadcast_dice_roll([randi() % 6 + 1], {"context": "harness"})
+			_nm.broadcast_dice_roll([randi() % 6 + 1], {"context": "harness"}, [])
 
 
 ## OPR workload: the host imports a REAL Army Forge army (downloads its GLBs from R2 and syncs
