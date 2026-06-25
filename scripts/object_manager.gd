@@ -237,6 +237,12 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mouse_event = event as InputEventMouseButton
 
+		# A click on the dice tray (a HUD SubViewportContainer) must NOT reach the 3D world: _input
+		# fires before the tray's _gui_input, so the tray can't consume it first, and a right-click
+		# falling through to the context-menu pick crashed. Guard here. Motion still passes.
+		if get_viewport().gui_get_hovered_control() is DiceTray:
+			return
+
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
 			if mouse_event.pressed:
 				# Check if we're in custom zone editing mode
