@@ -56,3 +56,41 @@ func test_settle_to_face_handles_antiparallel_face_down() -> void:
 	assert_int(d.top_face()).is_equal(6)
 	assert_bool(d.freeze).is_true()
 	assert_float(d.global_position.y).is_equal_approx(d.size * 0.5, 0.01)
+
+
+func test_color_tag_starts_untagged() -> void:
+	var d := _die()
+	assert_int(d.color_tag).is_equal(DiceD6.DEFAULT_COLOR_TAG)
+
+
+func test_cycle_color_tag_wraps_through_all_tags_and_back() -> void:
+	var d := _die()
+	# default -> 1 -> 2 -> 3 -> 4 -> default
+	for expected: int in range(1, DiceD6.TAG_COLORS.size() + 1):
+		d.cycle_color_tag()
+		assert_int(d.color_tag).is_equal(expected)
+	d.cycle_color_tag()
+	assert_int(d.color_tag).is_equal(DiceD6.DEFAULT_COLOR_TAG)
+
+
+func test_set_color_tag_clamps_out_of_range_to_default() -> void:
+	var d := _die()
+	d.set_color_tag(DiceD6.TAG_COLORS.size() + 5)
+	assert_int(d.color_tag).is_equal(DiceD6.DEFAULT_COLOR_TAG)
+	d.set_color_tag(-1)
+	assert_int(d.color_tag).is_equal(DiceD6.DEFAULT_COLOR_TAG)
+
+
+func test_clear_color_tag_restores_default() -> void:
+	var d := _die()
+	d.set_color_tag(2)
+	d.clear_color_tag()
+	assert_int(d.color_tag).is_equal(DiceD6.DEFAULT_COLOR_TAG)
+
+
+func test_body_color_for_tag_maps_tags_to_palette() -> void:
+	assert_object(DiceD6.body_color_for_tag(0)).is_equal(DiceD6.BODY_COLOR)
+	for tag: int in range(1, DiceD6.TAG_COLORS.size() + 1):
+		assert_object(DiceD6.body_color_for_tag(tag)).is_equal(DiceD6.TAG_COLORS[tag - 1])
+	# Out-of-range falls back to the default body colour.
+	assert_object(DiceD6.body_color_for_tag(99)).is_equal(DiceD6.BODY_COLOR)
