@@ -23,10 +23,37 @@ const PIP_COLOR: Color = Color(0.12, 0.12, 0.14)
 const PIP_RADIUS_FACTOR: float = 0.11
 const TEXTURE_SIZE: int = 96
 
+## Per-die colour tags the player can cycle through by clicking a die. Index 0 is the
+## default (untagged) BODY_COLOR; 1..4 are the four distinct tag colours. The interaction
+## is a simple cycle (default -> 1 -> 2 -> 3 -> 4 -> default); tags persist through a roll's
+## result display and reset when a new roll starts (DiceTray drives the reset).
+const TAG_COLORS: Array[Color] = [
+	Color(0.86, 0.20, 0.20),  # red
+	Color(0.20, 0.45, 0.90),  # blue
+	Color(0.25, 0.70, 0.30),  # green
+	Color(0.92, 0.78, 0.16),  # yellow
+]
+## Body luminance below this reads as "dark" → use light pips for contrast (and vice versa).
+const PIP_CONTRAST_LUMINANCE: float = 0.5
+## High-contrast pip colours chosen per body luminance (Rec. 709 weights).
+const PIP_COLOR_ON_DARK: Color = Color(0.95, 0.95, 0.95)
+const PIP_COLOR_ON_LIGHT: Color = Color(0.10, 0.10, 0.12)
+const DEFAULT_COLOR_TAG: int = 0
+
 # === Public variables ===
 
 ## Edge length in viewport units. Set before adding to the tree.
 var size: float = 2.0
+
+## Current colour tag: 0 = untagged (BODY_COLOR), 1..TAG_COLORS.size() = a tag colour.
+var color_tag: int = DEFAULT_COLOR_TAG
+
+# === Private variables ===
+
+## The body's material, kept so the tag colour can be re-applied at runtime.
+var _body_mat: StandardMaterial3D = null
+## One material per face value, kept so the tag colour re-fills the pip textures at runtime.
+var _face_mats: Dictionary = {}  # Dictionary[int, StandardMaterial3D]
 
 # === Lifecycle ===
 
@@ -50,15 +77,40 @@ func _ready() -> void:
 	var body := MeshInstance3D.new()
 	var box_mesh := BoxMesh.new()
 	box_mesh.size = Vector3(size, size, size)
-	var body_mat := StandardMaterial3D.new()
-	body_mat.albedo_color = BODY_COLOR
-	box_mesh.material = body_mat
+	_body_mat = StandardMaterial3D.new()
+	_body_mat.albedo_color = BODY_COLOR
+	box_mesh.material = _body_mat
 	body.mesh = box_mesh
 	add_child(body)
 
 	_add_pip_faces()
+	_apply_color_tag()
 
 # === Public API ===
+
+## Advance the colour tag one step: default -> 1 -> 2 -> 3 -> 4 -> default.
+func cycle_color_tag() -> void:
+	set_color_tag((color_tag + 1) % (TAG_COLORS.size() + 1))
+
+
+## Set the colour tag directly (0 = untagged, 1..TAG_COLORS.size() = a tag colour).
+## Out-of-range values clear the tag (defensive — keeps an untagged default).
+func set_color_tag(tag: int) -> void:
+	color_tag = tag if tag >= 0 and tag <= TAG_COLORS.size() else DEFAULT_COLOR_TAG
+	_apply_color_tag()
+
+
+## Reset to the untagged default colour.
+func clear_color_tag() -> void:
+	set_color_tag(DEFAULT_COLOR_TAG)
+
+
+## The body colour for a given tag (0 = default BODY_COLOR, 1..N = TAG_COLORS).
+static func body_color_for_tag(tag: int) -> Color:
+	if tag >= 1 and tag <= TAG_COLORS.size():
+		return TAG_COLORS[tag - 1]
+	return BODY_COLOR
+
 
 ## The face value currently pointing up (world space).
 func top_face() -> int:
@@ -115,24 +167,45 @@ func set_top_face(value: int) -> void:
 
 func _add_pip_faces() -> void:
 	var half: float = size * 0.5 + 0.001
+	_face_mats.clear()
 	for value: int in FACE_NORMALS:
 		var quad := MeshInstance3D.new()
 		var mesh := QuadMesh.new()
 		mesh.size = Vector2(size, size)
 		var mat := StandardMaterial3D.new()
-		mat.albedo_texture = _make_face_texture(value)
+		mat.albedo_texture = _make_face_texture(value, BODY_COLOR, PIP_COLOR)
 		mat.roughness = 0.85
 		mesh.material = mat
 		quad.mesh = mesh
 		quad.position = FACE_NORMALS[value] * half
 		quad.rotation_degrees = FACE_ROTATIONS[value]
 		add_child(quad)
+		_face_mats[value] = mat
 
 
-static func _make_face_texture(value: int) -> Texture2D:
+## Recolours the body + every face texture to match the current colour tag. The pip colour
+## is derived from the body luminance so the pips stay readable on light AND dark tags.
+func _apply_color_tag() -> void:
+	var body: Color = body_color_for_tag(color_tag)
+	var pip: Color = _pip_color_for_body(body)
+	if _body_mat != null:
+		_body_mat.albedo_color = body
+	for value: int in _face_mats:
+		var mat: StandardMaterial3D = _face_mats[value]
+		if mat != null:
+			mat.albedo_texture = _make_face_texture(value, body, pip)
+
+
+## Pip colour with enough contrast against the given body colour (Rec. 709 luminance).
+static func _pip_color_for_body(body: Color) -> Color:
+	var luminance: float = 0.2126 * body.r + 0.7152 * body.g + 0.0722 * body.b
+	return PIP_COLOR_ON_DARK if luminance < PIP_CONTRAST_LUMINANCE else PIP_COLOR_ON_LIGHT
+
+
+static func _make_face_texture(value: int, body: Color, pip: Color) -> Texture2D:
 	var s: int = TEXTURE_SIZE
 	var img := Image.create(s, s, false, Image.FORMAT_RGBA8)
-	img.fill(BODY_COLOR)
+	img.fill(body)
 	var r: int = int(s * PIP_RADIUS_FACTOR)
 	for cell: Vector2 in DieFaceIcon.PIP_LAYOUT[value]:
 		var cx: int = int(cell.x * s)
@@ -142,5 +215,5 @@ static func _make_face_texture(value: int) -> Texture2D:
 				var dx: int = x - cx
 				var dy: int = y - cy
 				if dx * dx + dy * dy <= r * r:
-					img.set_pixel(x, y, PIP_COLOR)
+					img.set_pixel(x, y, pip)
 	return ImageTexture.create_from_image(img)

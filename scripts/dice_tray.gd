@@ -34,6 +34,7 @@ const SETTLE_HOLD: float = 0.2    # seconds calm before the result is forced
 const MAX_ROLL_TIME: float = 2.5  # safety cap
 const WALL_THICKNESS: float = 1.5
 const SEPARATION_PASSES: int = 6  # relaxation iterations for the cosmetic de-overlap
+const PICK_RAY_LENGTH: float = 1000.0  # ray length when picking a clicked die (viewport units)
 
 # === Private variables ===
 
@@ -51,6 +52,7 @@ var _result: Dictionary = {}
 
 func _ready() -> void:
 	stretch = true
+	tooltip_text = "Click a die to tag it with a colour (cycles through 4 colours). Tags reset on the next roll."
 	_viewport = SubViewport.new()
 	_viewport.own_world_3d = true
 	_viewport.transparent_bg = true
@@ -74,6 +76,24 @@ func _physics_process(delta: float) -> void:
 	_still_time = _still_time + delta if settled else 0.0
 	if _still_time >= SETTLE_HOLD or _roll_time >= MAX_ROLL_TIME:
 		_finalize_roll()
+
+
+## Click a die to cycle its colour tag (default -> red -> blue -> green -> yellow -> default).
+## Tags persist through the result display and reset on the next roll. Disabled mid-roll so a
+## click can't recolour a tumbling die. Only consumes the event when a die is actually hit, so
+## clicks on empty tray area still fall through.
+func _gui_input(event: InputEvent) -> void:
+	if _rolling:
+		return
+	if not (event is InputEventMouseButton):
+		return
+	var mb := event as InputEventMouseButton
+	if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
+		return
+	var die: DiceD6 = _die_at_local_pos(mb.position)
+	if die != null:
+		die.cycle_color_tag()
+		accept_event()
 
 # === Public API ===
 
@@ -205,6 +225,33 @@ func _total(faces: Array[int]) -> int:
 		sum += v
 	return sum
 
+# === Private: picking ===
+
+## The die under a container-local click position, or null. Maps the click into SubViewport
+## pixels (this container stretches the viewport to fit), then raycasts in the dice world.
+func _die_at_local_pos(local_pos: Vector2) -> DiceD6:
+	if _viewport == null or _camera == null or _dice.is_empty():
+		return null
+	var container_size: Vector2 = size
+	if container_size.x <= 0.0 or container_size.y <= 0.0:
+		return null
+	# stretch=true scales the SubViewport to the container, so rescale the click back to
+	# viewport pixels before projecting through the camera.
+	var vp_size: Vector2 = Vector2(_viewport.size)
+	var vp_pos: Vector2 = Vector2(
+		local_pos.x / container_size.x * vp_size.x,
+		local_pos.y / container_size.y * vp_size.y)
+	var from: Vector3 = _camera.project_ray_origin(vp_pos)
+	var dir: Vector3 = _camera.project_ray_normal(vp_pos)
+	var space: PhysicsDirectSpaceState3D = _viewport.world_3d.direct_space_state
+	if space == null:
+		return null
+	var query := PhysicsRayQueryParameters3D.create(from, from + dir * PICK_RAY_LENGTH)
+	query.collide_with_bodies = true
+	var hit: Dictionary = space.intersect_ray(query)
+	var collider: Object = hit.get("collider", null)
+	return collider as DiceD6  # walls/floor are StaticBody3D → cast yields null (ignored)
+
 # === Private: dice + environment ===
 
 func _show_resting_dice() -> void:
@@ -213,6 +260,10 @@ func _show_resting_dice() -> void:
 		d.set_top_face(randi_range(1, 6))
 
 
+## Frees the current dice and spawns a fresh set. Every new roll (roll/quick_roll/show_faces)
+## goes through here, so the dice are recreated untagged — this is what RESETS the per-die
+## colour tags "until the next roll". reroll() deliberately does NOT respawn, so kept dice
+## retain their tags across a reroll (the reroll is part of the same roll).
 func _spawn_dice(resting: bool) -> void:
 	for d: DiceD6 in _dice:
 		if is_instance_valid(d):
