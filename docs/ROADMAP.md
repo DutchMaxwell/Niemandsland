@@ -34,16 +34,13 @@ planned and where ideas go. For what already works see
   colour tagging** (click a die → 1 of 4 colours; cup + colours MP-synced + persist through the roll), a
   **one-click in-game self-updater** (download → install → relaunch; ships dormant, first fires at the
   next release), the **live CDN manifest** (the game fetches model SHAs from R2 at startup → asset
-  reworks reach players with **no game release**), and a self-correcting HUD version label. Everything
-  further is **feedback-driven** toward the **MP-first Beta** (see Next). _S_
-- **Ambush / Scout deployment field — BUILT on `feat/ambush-scout-deploy` (2026-06-25); pending a feature
-  release (NOT in the 0.3.7.1 patch).** On the per-player army tray, the near third is reserved and split
-  **Ambush (left, amber) / Scout (right, cyan)** by a tray-border-coloured divider, each with a small flat
-  fixed plate (no camera-follow) anchored bottom-left; units carrying the Scout/Ambush rule auto-place into
-  their half on import (the top 2/3 keeps the normal packer). Detection covers direct + upgrade/equipment-
-  + per-model-granted Scout/Ambush (the parser folds them into `special_rules`) plus a free-text-description
-  heuristic. Representation only (sandbox); MP-synced for free via `import_position`. All in
-  `opr_army_manager.gd`. _L_
+  reworks reach players with **no game release**), and a self-correcting HUD version label. It also adds
+  an **Ambush / Scout deployment field**: the per-player army tray's near third is split **Ambush (left,
+  amber) / Scout (right, cyan)** with a tray-border-coloured divider + small fixed labels, and units
+  carrying the Scout/Ambush rule auto-place into their half on import (detection covers direct,
+  upgrade/equipment-, and per-model-granted, plus a free-text-description heuristic; representation only,
+  MP-synced via `import_position`). Everything further is **feedback-driven** toward the **MP-first Beta**
+  (see Next). _S_
 
 ## 📋 Next (post-Alpha — Beta + alpha-feedback driven)
 
