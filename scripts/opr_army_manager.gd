@@ -62,7 +62,7 @@ const BAND_AMBUSH_TINT: Color = Color(0.85, 0.55, 0.1, 0.28)  # amber
 const BAND_SCOUT_TINT: Color = Color(0.1, 0.6, 0.8, 0.28)  # cyan
 ## Flat labels sized for bird's-eye readability (each half is ~0.4 m wide).
 const BAND_LABEL_FONT_SIZE: int = 48
-const BAND_LABEL_PIXEL_SIZE: float = 0.0012
+const BAND_LABEL_PIXEL_SIZE: float = 0.0006  # 50% size — small fixed tag, not a big centred plate
 const BAND_LABEL_OUTLINE_SIZE: int = 5
 const BAND_LABEL_OUTLINE_COLOR: Color = Color(0.03, 0.03, 0.03, 0.95)
 
@@ -129,11 +129,6 @@ var model_library: ModelLibrary
 ## otherwise re-parsed on every spawn, so a unit of N identical models paid N full
 ## glTF parses; cached, each distinct model is parsed once and instanced cheaply.
 var _scene_cache: Dictionary = {}
-
-## Flat Ambush/Scout band labels, kept yawed flat-to-camera in _process (like terrain_overlay.gd's
-## terrain plaques). One entry per band label; pruned of freed labels each frame (a band's labels
-## ride under its tray and are freed with it on rebuild). Display only — no allocations per frame.
-var _band_labels: Array[Label3D] = []
 
 func _ready() -> void:
 	api_client = OPRApiClient.new()
@@ -559,9 +554,12 @@ func _add_ambush_scout_band(tray: Node3D, bounds: Vector2, divider_color: Color)
 	divider_instance.position = Vector3(0.0, BAND_DIVIDER_Y, band_z_mid)
 	tray.add_child(divider_instance)
 
-	# (c) Two flat labels, centred on each half (copy the terrain-plaque Label3D config, but larger).
-	_add_band_label(tray, "Ambush", Vector3(ambush_center_x, BAND_LABEL_Y, band_z_mid))
-	_add_band_label(tray, "Scout", Vector3(scout_center_x, BAND_LABEL_Y, band_z_mid))
+	# (c) Two small flat labels anchored TOP-LEFT in each half (fixed orientation, no camera-follow).
+	# "Top" = the inner (-Z) band edge; "left" = each half's -X edge (Scout's left edge is the divider).
+	var label_pad: float = 0.012
+	var label_z: float = band_z_min + label_pad
+	_add_band_label(tray, "Ambush", Vector3(-bounds.x / 2.0 + label_pad, BAND_LABEL_Y, label_z))
+	_add_band_label(tray, "Scout", Vector3(label_pad, BAND_LABEL_Y, label_z))
 
 
 ## One translucent, unshaded, double-sided band tint quad parented under `tray` (tray-local pos).
@@ -585,8 +583,8 @@ func _add_band_tint_quad(tray: Node3D, size: Vector2, local_pos: Vector3, color:
 	tray.add_child(mesh_instance)
 
 
-## One flat band label parented under `tray` (tray-local pos), registered for the camera-yaw in
-## _process. Lies flat (billboard off, -90° about X) with a dark outline; sized for bird's-eye.
+## One small flat band label parented under `tray` (tray-local pos). Lies flat (billboard off, -90°
+## about X) with a FIXED orientation (no camera-follow), anchored at its top-left, with a dark outline.
 func _add_band_label(tray: Node3D, text: String, local_pos: Vector3) -> void:
 	var label := Label3D.new()
 	label.name = "AmbushScoutLabel_%s" % text
@@ -594,47 +592,14 @@ func _add_band_label(tray: Node3D, text: String, local_pos: Vector3) -> void:
 	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED  # lie flat on the tray
 	label.font_size = BAND_LABEL_FONT_SIZE
 	label.outline_size = BAND_LABEL_OUTLINE_SIZE
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	label.modulate = Color.WHITE
 	label.outline_modulate = BAND_LABEL_OUTLINE_COLOR
 	label.pixel_size = BAND_LABEL_PIXEL_SIZE
-	label.rotation_degrees = Vector3(-90.0, 0.0, 0.0)  # flat; yawed to camera in _process
+	label.rotation_degrees = Vector3(-90.0, 0.0, 0.0)  # flat, fixed orientation (no camera-follow)
 	label.position = local_pos
 	tray.add_child(label)
-	_band_labels.append(label)
-
-
-## Keep the flat band labels yawed toward the viewer so they read from any camera angle (mirrors
-## terrain_overlay.gd's terrain plaques). Cheap — only a handful of labels, no per-frame allocations.
-## Prunes freed labels (a band rides under its tray and is freed with it on rebuild).
-func _process(_delta: float) -> void:
-	if _band_labels.is_empty():
-		return
-	var cam := get_viewport().get_camera_3d()
-	if cam == null:
-		return
-	var cam_pos := cam.global_position
-	var has_freed := false
-	for label in _band_labels:
-		if not is_instance_valid(label):
-			has_freed = true
-			continue
-		var to_cam := cam_pos - label.global_position
-		# Stay flat (-90° about X) and yaw around the table normal to face the camera horizontally.
-		label.rotation = Vector3(-PI / 2.0, atan2(to_cam.x, to_cam.z), 0.0)
-	if has_freed:
-		_prune_band_labels()
-
-
-## Drop freed labels from the registry (called when one is found invalid, so _process stops
-## touching freed nodes). Cheap — the registry holds at most a couple of labels per tray.
-func _prune_band_labels() -> void:
-	var live: Array[Label3D] = []
-	for label in _band_labels:
-		if is_instance_valid(label):
-			live.append(label)
-	_band_labels = live
 
 
 ## True if `unit` carries the literal special rule `rule` (e.g. "Scout"/"Ambush"). These rules are
@@ -1463,7 +1428,6 @@ func clear_all() -> void:
 	unit_to_game_unit.clear()
 	game_units.clear()
 	army_trays.clear()
-	_band_labels.clear()  # band labels are children of the freed trays; drop the registry
 	_scene_cache.clear()  # release parsed PackedScenes; rebuilt lazily on next spawn
 	current_round = 1
 
@@ -1489,12 +1453,10 @@ func clear_army(player_id: int) -> void:
 				model_to_unit.erase(model)
 			unit_to_models.erase(unit)
 
-	# Remove army tray for this player (its band labels go with it; defer the registry prune to
-	# _prune_band_labels once the tray's children are actually freed).
+	# Remove the army tray for this player (its band tints/divider/labels are children → freed with it).
 	if army_trays.has(player_id) and is_instance_valid(army_trays[player_id]):
 		army_trays[player_id].queue_free()
 		army_trays.erase(player_id)
-		_prune_band_labels()
 
 	armies.erase(player_id)
 
