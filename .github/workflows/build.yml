@@ -121,7 +121,7 @@ jobs:
           name: windows-build
           path: build/windows
 
-  # Tag-gated: pushing a "v*" tag (e.g. v0.3.6.1-alpha) builds both platforms and
+  # Tag-gated: pushing a "v*" tag (e.g. v0.3.7-alpha) builds both platforms and
   # publishes them as a GitHub Release with permanent, public, direct download links.
   # Self-contained (builds its own binaries) so it does NOT depend on the best-effort
   # Actions artifact upload, which can hit the account's artifact storage quota.
