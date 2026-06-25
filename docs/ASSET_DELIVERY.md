@@ -82,6 +82,28 @@ A regenerated manifest (`assets/*_manifest.json`) is committed to this repo only
 when going live; the game then downloads each needed asset on first use and caches
 it under `user://`.
 
+## Live manifest updates (no re-export)
+
+The bundled `assets/model_manifest.json` is now only the **offline / first-run
+fallback**. On startup `model_library.gd` *also* fetches the live manifest from
+the CDN (`{cdn}/model_manifest.json`, `_refresh_remote_manifest()`) and overlays
+it — so asset fixes re-published after a build shipped appear on the player's
+**next launch, with no re-export**. Offline-safe: any fetch failure (offline, 404,
+malformed) keeps the bundled fallback. A unique `?t=` query busts CDN caches; GLBs
+stay sha-verified + content-addressed.
+
+**Pipeline contract** (the separate asset-pipeline repo, enforced by its publish
+step): on every publish it must
+
+1. upload the new `<sha256>.glb`,
+2. **not delete** the old object — already-running builds still reference it until
+   they re-fetch, so deleting would 404 them mid-rollout, and
+3. deploy the updated manifest to the stable key **`model_manifest.json`** with
+   `Cache-Control: no-cache`.
+
+Re-export the game only to refresh the offline fallback (and, one-time, to ship the
+`_refresh_remote_manifest()` capability itself to already-installed builds).
+
 ## Terrain assets (same pattern, separate manifests)
 
 The table **biome battlemaps**, **ruin shell-wall panels**, **forest trees**,
