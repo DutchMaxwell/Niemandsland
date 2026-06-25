@@ -1205,6 +1205,24 @@ func _rebuild_terrain_labels() -> void:
 		_terrain_labels.append(lbl)
 
 
+## Keep the flat terrain labels yawed toward the viewer so they read from any camera angle
+## (playtest feedback: the plaques stay flat on the table but follow the viewing direction instead
+## of staying grid-aligned). Cheap — only a handful of labels, no per-frame allocations.
+func _process(_delta: float) -> void:
+	if _terrain_labels.is_empty():
+		return
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var cam_pos := cam.global_position
+	for lbl in _terrain_labels:
+		if not is_instance_valid(lbl):
+			continue
+		var to_cam := cam_pos - lbl.global_position
+		# Stay flat (-90° about X) and yaw around the table normal to face the camera horizontally.
+		lbl.rotation = Vector3(-PI / 2.0, atan2(to_cam.x, to_cam.z), 0.0)
+
+
 ## Pick a zone cell for the effect label: prefer a wall-free EDGE cell (a Randfeld), then
 ## any wall-free cell, then the first cell. Returns the candidate nearest the candidates'
 ## centroid for a stable, central placement.
