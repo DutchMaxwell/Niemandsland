@@ -153,3 +153,30 @@ func test_effective_base_does_not_mutate_input() -> void:
 	var original := {"base_size_round": 25}
 	OPRArmyManager.effective_base_props(original, 6)
 	assert_int(original["base_size_round"]).is_equal(25)  # copy, not in-place
+
+
+# ===== _unit_has_rule: Ambush/Scout band detection (base-name match, trailing "(...)" ignored) =====
+
+func _unit_with_rules(rules: Array) -> OPRApiClient.OPRUnit:
+	var unit := OPRApiClient.OPRUnit.new()
+	unit.special_rules.assign(rules)
+	return unit
+
+
+func test_unit_has_rule_matches_literal() -> void:
+	assert_bool(OPRArmyManager._unit_has_rule(_unit_with_rules(["Scout", "Tough(3)"]), "Scout")).is_true()
+	assert_bool(OPRArmyManager._unit_has_rule(_unit_with_rules(["Ambush"]), "Ambush")).is_true()
+
+
+func test_unit_has_rule_ignores_trailing_parens() -> void:
+	# Unrated rules may import with a trailing "(...)" — only the base name must match.
+	assert_bool(OPRArmyManager._unit_has_rule(_unit_with_rules(["Scout (12\")"]), "Scout")).is_true()
+
+
+func test_unit_has_rule_no_match() -> void:
+	assert_bool(OPRArmyManager._unit_has_rule(_unit_with_rules(["Fast", "Strider"]), "Scout")).is_false()
+	assert_bool(OPRArmyManager._unit_has_rule(_unit_with_rules([]), "Ambush")).is_false()
+
+
+func test_unit_has_rule_null_unit_is_false() -> void:
+	assert_bool(OPRArmyManager._unit_has_rule(null, "Scout")).is_false()
