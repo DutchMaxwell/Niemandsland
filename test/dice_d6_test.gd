@@ -94,3 +94,63 @@ func test_body_color_for_tag_maps_tags_to_palette() -> void:
 		assert_object(DiceD6.body_color_for_tag(tag)).is_equal(DiceD6.TAG_COLORS[tag - 1])
 	# Out-of-range falls back to the default body colour.
 	assert_object(DiceD6.body_color_for_tag(99)).is_equal(DiceD6.BODY_COLOR)
+
+
+# ===== DiceTray colour-tag sync surface =====
+# The composition/tag accessors the MP mirror uses (broadcast on the local side, applied on
+# the remote side). The tray spawns its dice in _ready (a SubViewport), so add_child + one
+# frame is enough; no physics needed here.
+
+func _tray(count: int) -> DiceTray:
+	var t := DiceTray.new()
+	t.dice_count = count
+	add_child(t)
+	return auto_free(t)
+
+
+func test_tray_get_color_tags_defaults_untagged() -> void:
+	var t := _tray(4)
+	await get_tree().process_frame
+	var tags := t.get_color_tags()
+	assert_int(tags.size()).is_equal(4)
+	for tag: int in tags:
+		assert_int(tag).is_equal(DiceD6.DEFAULT_COLOR_TAG)
+
+
+func test_tray_apply_color_tags_round_trips() -> void:
+	var t := _tray(4)
+	await get_tree().process_frame
+	t.apply_color_tags([1, 0, 3, 2])
+	assert_array(t.get_color_tags()).is_equal([1, 0, 3, 2])
+
+
+func test_tray_apply_color_tags_tolerates_short_array() -> void:
+	var t := _tray(4)
+	await get_tree().process_frame
+	t.apply_color_tags([2, 4])  # only the first two dice are coloured
+	assert_array(t.get_color_tags()).is_equal([2, 4, 0, 0])
+
+
+func test_tray_set_die_color_tag_addresses_one_die() -> void:
+	var t := _tray(3)
+	await get_tree().process_frame
+	t.set_die_color_tag(1, 4)
+	assert_array(t.get_color_tags()).is_equal([0, 4, 0])
+	# Out-of-range index is a no-op (no crash, no change).
+	t.set_die_color_tag(99, 2)
+	assert_array(t.get_color_tags()).is_equal([0, 4, 0])
+
+
+func test_tray_show_faces_applies_tags() -> void:
+	var t := _tray(3)
+	await get_tree().process_frame
+	t.show_faces([5, 3, 1], [2, 0, 4])
+	assert_array(t.get_color_tags()).is_equal([2, 0, 4])
+
+
+func test_tray_roll_preserves_tags_through_the_toss() -> void:
+	var t := _tray(3)
+	await get_tree().process_frame
+	t.apply_color_tags([1, 2, 3])
+	t.roll()  # respawns the dice for the physics toss — tags must carry onto the new dice
+	assert_array(t.get_color_tags()).is_equal([1, 2, 3])

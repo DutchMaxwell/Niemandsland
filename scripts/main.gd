@@ -70,6 +70,8 @@ var atmosphere_controller: AtmosphereController = null
 var _is_group_rotating: bool = false
 # Guard to prevent re-broadcasting remote dice rolls (avoids ping-pong loop)
 var _is_showing_remote_roll: bool = false
+# Guard while applying a peer's mirrored cup composition, so mirroring it doesn't re-broadcast.
+var _is_mirroring_dice: bool = false
 var _group_rotation_broadcast_timer: float = 0.0
 const GROUP_ROTATION_BROADCAST_INTERVAL: float = 0.1  # 10 Hz
 
@@ -296,6 +298,8 @@ func _ready() -> void:
 	quick_roll_button.pressed.connect(_on_quick_roll_button_pressed)
 	dice_roller_control.roll_finnished.connect(_on_roller_finished)
 	dice_roller_control.roll_started.connect(_on_roller_started)
+	# A local die-colour click → mirror it live to the opponent's tray.
+	dice_roller_control.color_tag_changed.connect(_on_local_die_color_changed)
 
 	# Build the click-based dice count selector, the success readout column and
 	# the success/reroll controls, then initialise the dice set with the default
@@ -344,6 +348,8 @@ func _ready() -> void:
 	network_manager.remote_cursor_updated.connect(_on_remote_cursor_updated)
 	network_manager.remote_camera_updated.connect(_on_remote_camera_updated)
 	network_manager.remote_dice_rolled.connect(_on_remote_dice_rolled)
+	network_manager.remote_dice_composition.connect(_on_remote_dice_composition)
+	network_manager.remote_dice_color_tag.connect(_on_remote_dice_color_tag)
 	network_manager.remote_player_name_updated.connect(_on_remote_player_name_updated)
 	network_manager.remote_chat_message.connect(_on_remote_chat_message)
 	network_manager.remote_table_settings_changed.connect(_on_remote_table_settings_changed)
@@ -1128,9 +1134,10 @@ func _on_roller_finished(_total: int) -> void:
 
 	_add_dice_log_entry("You", faces, context)
 
-	# Broadcast dice roll (faces + evaluation context) to remote players
+	# Broadcast dice roll (faces + evaluation context + per-die colour tags) to remote players,
+	# so the mirrored result keeps the sender's colours.
 	if network_manager.is_multiplayer_active():
-		network_manager.broadcast_dice_roll(faces, context)
+		network_manager.broadcast_dice_roll(faces, context, dice_roller_control.get_color_tags())
 
 	_pending_reroll_mode = DiceRules.REROLL_NONE
 	_pending_reroll_count = 0
@@ -1219,11 +1226,15 @@ func _on_dice_delta_pressed(delta: int) -> void:
 	_set_dice_count(_dice_count + delta)
 
 
-## Sets the dice count (clamped), rebuilds the dice set and refreshes the display.
+## Sets the dice count (clamped), rebuilds the dice set and refreshes the display. Changing the
+## count respawns fresh (untagged) dice, so the cup is broadcast as count + the now-empty tags;
+## the opponent's tray mirrors the same composition live. Suppressed while mirroring a peer.
 func _set_dice_count(count: int) -> void:
 	_dice_count = clampi(count, MIN_DICE, MAX_DICE)
 	_update_dice_set(_dice_count)
 	_update_dice_count_display()
+	if not _is_mirroring_dice and network_manager.is_multiplayer_active():
+		network_manager.broadcast_dice_composition(_dice_count, dice_roller_control.get_color_tags())
 
 
 ## Updates the big count label and highlights the matching preset button.
@@ -2269,8 +2280,9 @@ func _on_remote_camera_updated(peer_id: int, yaw: float, pitch: float) -> void:
 
 ## Called when a remote player rolls dice. The context carries the sender's
 ## success target/modifier and reroll info so the log and success column render
-## the roll exactly as the sender saw it.
-func _on_remote_dice_rolled(peer_id: int, results: Array, context: Dictionary) -> void:
+## the roll exactly as the sender saw it. `tags` carries the per-die colour tags so the
+## mirrored result keeps the sender's colours.
+func _on_remote_dice_rolled(peer_id: int, results: Array, context: Dictionary, tags: Array) -> void:
 	var faces: Array[int] = []
 	for v: Variant in results:
 		faces.append(int(v))
@@ -2288,12 +2300,43 @@ func _on_remote_dice_rolled(peer_id: int, results: Array, context: Dictionary) -
 	_remote_roll_context = context
 	_pending_reroll_mode = DiceRules.REROLL_NONE
 	_pending_reroll_count = 0
+	# Mirror guard: _update_dice_set → dice_count setter must not re-broadcast composition.
+	_is_mirroring_dice = true
 	_update_dice_set(faces.size())
-	dice_roller_control.show_faces(faces)
+	dice_roller_control.show_faces(faces, tags)
+	_is_mirroring_dice = false
 
 	# Play avatar dice roll animation
 	if _player_avatars.has(peer_id):
 		_player_avatars[peer_id].play_dice_roll_animation()
+
+
+## A local die was clicked to change its colour — mirror the single change to the opponent.
+func _on_local_die_color_changed(index: int, tag: int) -> void:
+	if not _is_mirroring_dice and network_manager.is_multiplayer_active():
+		network_manager.broadcast_dice_color_tag(index, tag)
+
+
+## A peer changed its cup composition (dice count + per-die colour tags): mirror it onto our
+## tray so we see the same dice + colours live. Guarded so applying it doesn't re-broadcast,
+## and so the dice_count setter / colour-tag application don't echo back.
+func _on_remote_dice_composition(peer_id: int, count: int, tags: Array) -> void:
+	if network_manager and peer_id == network_manager.get_my_peer_id():
+		return
+	_is_mirroring_dice = true
+	_set_dice_count(count)            # rebuilds the resting tray to `count` fresh dice
+	dice_roller_control.apply_color_tags(tags)
+	_update_dice_count_display()
+	_is_mirroring_dice = false
+
+
+## A peer cycled one die's colour: recolour the same die on our mirrored tray live.
+func _on_remote_dice_color_tag(peer_id: int, index: int, tag: int) -> void:
+	if network_manager and peer_id == network_manager.get_my_peer_id():
+		return
+	_is_mirroring_dice = true
+	dice_roller_control.set_die_color_tag(index, tag)
+	_is_mirroring_dice = false
 
 
 ## Spawn a remote cursor visualization for a peer
