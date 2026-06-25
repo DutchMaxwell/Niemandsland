@@ -154,3 +154,13 @@ func test_tray_roll_preserves_tags_through_the_toss() -> void:
 	t.apply_color_tags([1, 2, 3])
 	t.roll()  # respawns the dice for the physics toss — tags must carry onto the new dice
 	assert_array(t.get_color_tags()).is_equal([1, 2, 3])
+
+
+func test_tray_setting_same_dice_count_keeps_colour_tags() -> void:
+	# Regression: the roll button re-sets dice_count to the SAME value before rolling; that must NOT
+	# respawn the dice and wipe the player's pre-roll colour tags (which turned the rolled dice white).
+	var t := _tray(4)
+	await get_tree().process_frame
+	t.set_die_color_tag(1, 3)
+	t.dice_count = 4  # no-op (same count) — must keep the tag, not respawn the dice
+	assert_array(t.get_color_tags()).is_equal([0, 3, 0, 0])

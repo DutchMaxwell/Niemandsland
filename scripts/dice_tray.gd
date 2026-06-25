@@ -17,12 +17,17 @@ signal color_tag_changed(index: int, tag: int)
 
 @export var dice_count: int = 6:
 	set(value):
-		dice_count = maxi(1, value)
+		var clamped: int = maxi(1, value)
+		if clamped == dice_count:
+			return  # no-op: respawning here would drop the player's colour tags before a roll
+		dice_count = clamped
 		if is_node_ready() and not _rolling:
 			_show_resting_dice()
 
 @export var roller_size: Vector3 = Vector3(18, 15, 12):
 	set(value):
+		if value == roller_size:
+			return  # no-op: avoid an unnecessary respawn that would clear colour tags
 		roller_size = value
 		if is_node_ready():
 			_rebuild_environment()
@@ -151,12 +156,13 @@ func reroll(indices: Array[int]) -> void:
 	roll_started.emit()
 
 
-## Instant (non-physics) roll: pick random faces and show them.
+## Instant (non-physics) roll: pick random faces and show them, keeping the player's colour tags.
 func quick_roll() -> void:
+	var tags: Array[int] = get_color_tags()
 	var faces: Array[int] = []
 	for _i in maxi(1, dice_count):
 		faces.append(randi_range(1, 6))
-	show_faces(faces)
+	show_faces(faces, tags)
 
 
 ## Shows specific faces without physics (used for quick rolls + remote results). Optional
