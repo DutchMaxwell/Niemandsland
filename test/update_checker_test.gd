@@ -33,7 +33,7 @@ func test_normalize_tag_strips_v_prefix_and_whitespace() -> void:
 func test_parse_version_core_and_prerelease() -> void:
 	var parsed := UpdateCheckerScript.parse_version("0.3.1-alpha")
 	assert_bool(parsed["valid"]).is_true()
-	assert_array(Array(parsed["core"] as PackedInt64Array)).is_equal([0, 3, 1])
+	assert_array(Array(parsed["core"] as PackedInt64Array)).is_equal([0, 3, 1, 0])
 	assert_array(Array(parsed["prerelease"] as PackedStringArray)).is_equal(["alpha"])
 
 
@@ -45,7 +45,7 @@ func test_parse_version_rejects_non_numeric_core() -> void:
 
 func test_parse_version_ignores_build_metadata() -> void:
 	var parsed := UpdateCheckerScript.parse_version("0.3.1-alpha+abc1234")
-	assert_array(Array(parsed["core"] as PackedInt64Array)).is_equal([0, 3, 1])
+	assert_array(Array(parsed["core"] as PackedInt64Array)).is_equal([0, 3, 1, 0])
 	assert_array(Array(parsed["prerelease"] as PackedStringArray)).is_equal(["alpha"])
 
 
@@ -147,3 +147,16 @@ func test_platform_asset_url_falls_back_to_page_without_match() -> void:
 		"assets": [{"name": "README.txt", "browser_download_url": "https://example.com/readme"}],
 	}
 	assert_str(checker._platform_asset_url(release)).is_equal("https://example.com/releases/tag/v1")
+
+
+func test_compares_the_fourth_build_field() -> void:
+	# Regression: the 4-field scheme (MAJOR.MINOR.PATCH.BUILD) must compare ALL four fields.
+	# Comparing only three made 0.3.6.0 and 0.3.6.1 look identical -> the in-game update prompt
+	# never fired (the reason 0.3.6.0 clients saw no 0.3.6.1).
+	assert_bool(UpdateCheckerScript.is_newer("0.3.6.1-alpha", "0.3.6.0-alpha")).is_true()
+	assert_bool(UpdateCheckerScript.is_newer("0.3.7.1-alpha", "0.3.7.0-alpha")).is_true()
+	assert_bool(UpdateCheckerScript.is_newer("0.3.6.0-alpha", "0.3.6.1-alpha")).is_false()
+	# A 3-field version equals its 4-field-with-trailing-zero form, so both schemes interoperate.
+	assert_int(UpdateCheckerScript.compare_versions("0.3.7-alpha", "0.3.7.0-alpha")).is_equal(0)
+	# The 0.3.7 jump is detectable even by a plain 3-field comparison (first three fields rose).
+	assert_bool(UpdateCheckerScript.is_newer("0.3.7-alpha", "0.3.6.0-alpha")).is_true()

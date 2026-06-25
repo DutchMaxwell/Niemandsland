@@ -34,8 +34,11 @@ const REQUEST_TIMEOUT_SECONDS: float = 8.0
 ## GitHub rejects requests without a User-Agent; identify ourselves politely.
 const USER_AGENT: String = "Niemandsland-UpdateChecker"
 
-## Number of MAJOR.MINOR.PATCH fields compared in a version's numeric core.
-const CORE_FIELDS: int = 3
+## Number of numeric fields compared in a version's core. The project uses a 4-field scheme
+## (MAJOR.MINOR.PATCH.BUILD, e.g. 0.3.7.1), so all four must be compared — comparing only three
+## made 0.3.6.0 and 0.3.6.1 look identical and suppressed the in-game update prompt. A 3-field
+## version (0.3.7) parses with a trailing 0 (0.3.7.0), so both schemes work.
+const CORE_FIELDS: int = 4
 
 const HTTP_OK: int = 200
 const HTTP_NOT_FOUND: int = 404
@@ -144,11 +147,11 @@ static func normalize_tag(raw: String) -> String:
 	return text
 
 
-## Parses a SemVer-ish string into {core: PackedInt64Array(3), prerelease: PackedStringArray, valid: bool}.
+## Parses a SemVer-ish string into {core: PackedInt64Array(4), prerelease: PackedStringArray, valid: bool}.
 ## Build metadata after "+" is ignored. Non-numeric core fields make the result invalid.
 static func parse_version(raw: String) -> Dictionary:
 	var result := {
-		"core": PackedInt64Array([0, 0, 0]),
+		"core": PackedInt64Array([0, 0, 0, 0]),
 		"prerelease": PackedStringArray(),
 		"valid": false,
 	}
@@ -165,7 +168,7 @@ static func parse_version(raw: String) -> Dictionary:
 		core_text = text.substr(0, dash)
 		pre_text = text.substr(dash + 1)
 	var parts := core_text.split(".")
-	var core := PackedInt64Array([0, 0, 0])
+	var core := PackedInt64Array([0, 0, 0, 0])
 	for i in mini(parts.size(), CORE_FIELDS):
 		var token := parts[i]
 		if not token.is_valid_int():

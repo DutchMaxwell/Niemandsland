@@ -1,7 +1,7 @@
 # Host-side reconnect (relay room preservation) — design + deploy plan
 
-**Status:** ✅ IMPLEMENTED + DEPLOYED to Fly.io. **HARDENED in 0.3.6.1-alpha (2026-06-25)** after a
-real 2-PC game collapsed into a reconnect storm + desync — see the **0.3.6.1 hardening** section below,
+**Status:** ✅ IMPLEMENTED + DEPLOYED to Fly.io. **HARDENED in 0.3.7-alpha (2026-06-25)** after a
+real 2-PC game collapsed into a reconnect storm + desync — see the **0.3.7 hardening** section below,
 which **supersedes** the "first joiner reclaims" rule described in the original design.
 
 The server + client match the design below: a host drop preserves the room for
@@ -10,7 +10,7 @@ The server + client match the design below: a host drop preserves the room for
 version-handshake → `_sync_state_to_peer` path re-syncs full state to the waiting guests. An abandoned
 room is torn down past the window with "Host did not return". Both host and guest auto-rejoin on a drop.
 
-## 0.3.6.1 hardening (2026-06-25) — reconnect-storm + desync fix
+## 0.3.7 hardening (2026-06-25) — reconnect-storm + desync fix
 
 Diagnosed from both players' diagnostics dumps of a real game (relay build 56b8bba). Causal chain:
 relay head-of-line block → bilateral heartbeat false-drops → reconnect storm → host lost peer 1 → desync.

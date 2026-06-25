@@ -17,7 +17,7 @@ join with the room code.
 - **Per-peer send queues** — each broadcast fan-out is enqueued to a per-peer queue drained by one
   writer task, so a slow consumer's back-pressure never parks the shared recv loop (which must keep
   acking heartbeats). Without this, one stalled peer false-dropped the whole room (see
-  [`HOST_RECONNECT.md`](HOST_RECONNECT.md), 0.3.6.1 hardening).
+  [`HOST_RECONNECT.md`](HOST_RECONNECT.md), 0.3.7 hardening).
 - **Host reconnect** preserves the room briefly and lets ONLY the host's identity token reclaim peer 1
   (a guest can't seize the host slot); see [`HOST_RECONNECT.md`](HOST_RECONNECT.md).
 
