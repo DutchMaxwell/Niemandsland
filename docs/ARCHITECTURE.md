@@ -70,8 +70,8 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
 - `opr_army_manager.gd` — spawns imported armies onto a per-player **army tray**; loads
   per-unit GLBs and **scales them to the base** (height-fit vs 125 % footprint cap,
   whichever is smaller; Flying units hover). See [Scaling](#scaling). The tray's near
-  third is an **Ambush/Scout staging band** (`feat/ambush-scout-deploy`): split left/right
-  with a divider + flat labels, and units carrying Scout/Ambush auto-place into their half.
+  third is an **Ambush/Scout staging band**: split left/right with a divider + flat
+  labels, and units carrying Scout/Ambush auto-place into their half.
 - `opr_import_dialog.gd` — import UI.
 - `tts_download_manager.gd` — Tabletop Simulator asset download + cache manager
   (Steam CDN + local cache; glTF/STL/OBJ); also the template for the on-demand
