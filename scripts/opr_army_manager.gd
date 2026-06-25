@@ -44,6 +44,29 @@ const TRAY_MARGIN: float = 0.05  # 5cm gap from table edge
 const TRAY_DROP_HEIGHT: float = 0.5  # Start 50cm above table
 const TRAY_DROP_DURATION: float = 1.5  # Animation duration in seconds
 
+## Ambush/Scout deployment band on the army tray (representation only — no rules enforcement).
+## A staging strip across the tray's near (-Z) third, split Ambush-LEFT / Scout-RIGHT by a thin
+## divider, with two flat bird's-eye labels. Units carrying the Scout/Ambush rule auto-place into
+## their half on import (see _add_ambush_scout_band / _unit_has_rule).
+const BAND_DEPTH_FRACTION: float = 1.0 / 3.0  # near third of the tray reserved for the band
+const BAND_TINT_Y: float = 0.004  # local y of the translucent tint quads (above the ~0.01 plate)
+const BAND_DIVIDER_Y: float = 0.005  # local y of the centre divider (just above the tints)
+const BAND_LABEL_Y: float = 0.006  # local y of the flat labels (clears the divider, no z-fight)
+## Above the tray plate + border so the tints never z-flip on orbit (mirrors issue #71 precedent
+## in terrain_overlay.gd's DEPLOYMENT_ZONE_RENDER_PRIORITY).
+const BAND_RENDER_PRIORITY: int = 2
+const BAND_DIVIDER_WIDTH: float = 0.01  # 1cm thick divider, matching the tray border width
+const BAND_DIVIDER_HEIGHT: float = 0.02  # matches the tray border height
+## Translucent tints — amber for Ambush, cyan for Scout (alpha kept low so models stay readable).
+const BAND_AMBUSH_TINT: Color = Color(0.85, 0.55, 0.1, 0.28)  # amber
+const BAND_SCOUT_TINT: Color = Color(0.1, 0.6, 0.8, 0.28)  # cyan
+const BAND_DIVIDER_COLOR: Color = Color(0.85, 0.85, 0.9, 0.9)  # light, neutral
+## Flat labels sized for bird's-eye readability (each half is ~0.4 m wide).
+const BAND_LABEL_FONT_SIZE: int = 48
+const BAND_LABEL_PIXEL_SIZE: float = 0.0012
+const BAND_LABEL_OUTLINE_SIZE: int = 5
+const BAND_LABEL_OUTLINE_COLOR: Color = Color(0.03, 0.03, 0.03, 0.95)
+
 ## Physics layers (kept in sync with ObjectManager): miniatures sit on layer 2 so the
 ## placement raycast (which masks ground-only) rests them on terrain, not on each other.
 const GROUND_COLLISION_LAYER: int = 1
@@ -108,6 +131,11 @@ var model_library: ModelLibrary
 ## glTF parses; cached, each distinct model is parsed once and instanced cheaply.
 var _scene_cache: Dictionary = {}
 
+## Flat Ambush/Scout band labels, kept yawed flat-to-camera in _process (like terrain_overlay.gd's
+## terrain plaques). One entry per band label; pruned of freed labels each frame (a band's labels
+## ride under its tray and are freed with it on rebuild). Display only — no allocations per frame.
+var _band_labels: Array[Label3D] = []
+
 func _ready() -> void:
 	api_client = OPRApiClient.new()
 	add_child(api_client)
@@ -150,6 +178,10 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	var tray_pos = tray_info.position
 	var tray_bounds = tray_info.bounds  # Vector2 (width, depth)
 
+	# Ambush/Scout staging band on the near third of the tray (representation only). Parented
+	# under the tray so it inherits the build-time hide + rides the _animate_tray_drop tween.
+	_add_ambush_scout_band(tray, tray_bounds)
+
 	# Default spacing values - will be adjusted per unit based on base size
 	var unit_gap = 0.08  # 8cm gap between different units
 	var row_height = 0.10  # 10cm between rows for clear separation
@@ -163,6 +195,19 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 		tray_pos.z - tray_bounds.y / 2 + edge_padding
 	)
 	var row_max_x = tray_pos.x + tray_bounds.x / 2 - edge_padding
+
+	# Ambush/Scout band lanes (world space): the near (-Z) third of the tray, split at the tray
+	# centre into a LEFT (Ambush) and RIGHT (Scout) half-rect. Each is an independent row-packer
+	# scoped to its half, reusing the same gap/row_height/wrap math as the main loop. Units carrying
+	# the matching rule are relocated here (representation only — Ambush wins if a unit has both).
+	var band_z_min: float = tray_pos.z - tray_bounds.y / 2
+	var band_z_max: float = band_z_min + tray_bounds.y * BAND_DEPTH_FRACTION
+	var band_left_x_min: float = tray_pos.x - tray_bounds.x / 2 + edge_padding
+	var band_left_x_max: float = tray_pos.x - edge_padding  # stop short of the centre divider
+	var band_right_x_min: float = tray_pos.x + edge_padding  # start past the centre divider
+	var band_right_x_max: float = tray_pos.x + tray_bounds.x / 2 - edge_padding
+	var ambush_cursor := Vector3(band_left_x_min, spawn_height, band_z_min + edge_padding)
+	var scout_cursor := Vector3(band_right_x_min, spawn_height, band_z_min + edge_padding)
 
 	# Track unit counts for naming duplicates
 	var unit_name_counts: Dictionary = {}
@@ -198,12 +243,33 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 		# Calculate unit width before spawning to check if we need a new row
 		var unit_width = unit_base_diameter + (unit.size - 1) * model_spacing
 
-		# Check if this unit would exceed row width - if so, start new row first
-		if current_pos.x + unit_width > row_max_x and current_pos.x > tray_pos.x - tray_bounds.x / 2 + edge_padding + 0.01:
-			current_pos.x = tray_pos.x - tray_bounds.x / 2 + edge_padding
-			current_pos.z += row_height
+		# Lane selection: a unit carrying the Ambush/Scout rule is relocated into its band half
+		# (Ambush wins if both). Otherwise it stays in the main top-2/3 packer (unchanged).
+		var is_ambush := _unit_has_rule(unit, "Ambush")
+		var is_scout := _unit_has_rule(unit, "Scout")
+		var spawn_pos: Vector3
+		if is_ambush:
+			# LEFT band half — row-packer scoped to the Ambush half-rect.
+			if ambush_cursor.x + unit_width > band_left_x_max and ambush_cursor.x > band_left_x_min + 0.01:
+				ambush_cursor.x = band_left_x_min
+				ambush_cursor.z += row_height
+			spawn_pos = ambush_cursor
+			ambush_cursor.x += unit_width + unit_gap
+		elif is_scout:
+			# RIGHT band half — row-packer scoped to the Scout half-rect.
+			if scout_cursor.x + unit_width > band_right_x_max and scout_cursor.x > band_right_x_min + 0.01:
+				scout_cursor.x = band_right_x_min
+				scout_cursor.z += row_height
+			spawn_pos = scout_cursor
+			scout_cursor.x += unit_width + unit_gap
+		else:
+			# Main top-2/3 packer (unchanged): wrap to a new row when this unit overflows.
+			if current_pos.x + unit_width > row_max_x and current_pos.x > tray_pos.x - tray_bounds.x / 2 + edge_padding + 0.01:
+				current_pos.x = tray_pos.x - tray_bounds.x / 2 + edge_padding
+				current_pos.z += row_height
+			spawn_pos = current_pos
 
-		var unit_models = _spawn_unit(unit, current_pos, player_color, display_suffix, army.player_id, army)
+		var unit_models = _spawn_unit(unit, spawn_pos, player_color, display_suffix, army.player_id, army)
 		# Keep each model hidden until the whole army is built (revealed for the drop below).
 		for model in unit_models:
 			model.visible = false
@@ -215,8 +281,10 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 			model_to_unit[model] = unit
 			model.set_meta("unit_suffix", display_suffix)
 
-		# Move to next position with gap between units
-		current_pos.x += unit_width + unit_gap
+		# Move to next position with gap between units. Only the main lane advances current_pos —
+		# band units advanced their own (ambush_/scout_) cursor above.
+		if not is_ambush and not is_scout:
+			current_pos.x += unit_width + unit_gap
 
 		# Report progress and yield so the loading bar animates instead of the whole
 		# spawn blocking the main thread in one frozen frame.
@@ -451,6 +519,132 @@ func _add_tray_border(tray: Node3D, tray_size: Vector2, border_color: Color) -> 
 		border_instance.material_override = border_material
 		border_instance.position = positions[i]
 		tray.add_child(border_instance)
+
+
+## Add the Ambush/Scout deployment band to a tray. Reserves the tray's near (-Z) third, split at
+## the centre into Ambush-LEFT / Scout-RIGHT by a thin divider, with two translucent tint quads
+## and two flat, bird's-eye-readable labels. All nodes are parented UNDER `tray` so they inherit
+## its build-time hide and ride the _animate_tray_drop tween. Representation only — no rules.
+## `bounds` is the tray's (width, depth) in metres; the tray is an axis-aligned square at origin.
+func _add_ambush_scout_band(tray: Node3D, bounds: Vector2) -> void:
+	if tray == null or not is_instance_valid(tray):
+		return
+
+	# Tray-local band geometry (tray centred at its own origin; spawn cursor starts at -X,-Z).
+	var band_depth: float = bounds.y * BAND_DEPTH_FRACTION
+	var band_z_min: float = -bounds.y / 2.0
+	var band_z_mid: float = band_z_min + band_depth / 2.0
+	var half_w: float = bounds.x / 2.0
+	var ambush_center_x: float = -bounds.x / 4.0  # LEFT half centre
+	var scout_center_x: float = bounds.x / 4.0  # RIGHT half centre
+
+	# (a) Two translucent half-quads (PlaneMesh + unshaded alpha), one tint per half.
+	_add_band_tint_quad(tray, Vector2(half_w, band_depth),
+		Vector3(ambush_center_x, BAND_TINT_Y, band_z_mid), BAND_AMBUSH_TINT)
+	_add_band_tint_quad(tray, Vector2(half_w, band_depth),
+		Vector3(scout_center_x, BAND_TINT_Y, band_z_mid), BAND_SCOUT_TINT)
+
+	# (b) Thin centre divider spanning the band depth (matches the tray-border box style).
+	var divider_mesh := BoxMesh.new()
+	divider_mesh.size = Vector3(BAND_DIVIDER_WIDTH, BAND_DIVIDER_HEIGHT, band_depth)
+	var divider_material := StandardMaterial3D.new()
+	divider_material.albedo_color = BAND_DIVIDER_COLOR
+	divider_material.roughness = 0.7
+	var divider_instance := MeshInstance3D.new()
+	divider_instance.name = "AmbushScoutDivider"
+	divider_instance.mesh = divider_mesh
+	divider_instance.material_override = divider_material
+	divider_instance.position = Vector3(0.0, BAND_DIVIDER_Y, band_z_mid)
+	tray.add_child(divider_instance)
+
+	# (c) Two flat labels, centred on each half (copy the terrain-plaque Label3D config, but larger).
+	_add_band_label(tray, "Ambush", Vector3(ambush_center_x, BAND_LABEL_Y, band_z_mid))
+	_add_band_label(tray, "Scout", Vector3(scout_center_x, BAND_LABEL_Y, band_z_mid))
+
+
+## One translucent, unshaded, double-sided band tint quad parented under `tray` (tray-local pos).
+## render_priority keeps it above the tray plate/border so it never z-flips on orbit (issue #71).
+func _add_band_tint_quad(tray: Node3D, size: Vector2, local_pos: Vector3, color: Color) -> void:
+	var plane_mesh := PlaneMesh.new()
+	plane_mesh.size = size
+
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.render_priority = BAND_RENDER_PRIORITY
+
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = "AmbushScoutTint"
+	mesh_instance.mesh = plane_mesh
+	mesh_instance.material_override = material
+	mesh_instance.position = local_pos
+	tray.add_child(mesh_instance)
+
+
+## One flat band label parented under `tray` (tray-local pos), registered for the camera-yaw in
+## _process. Lies flat (billboard off, -90° about X) with a dark outline; sized for bird's-eye.
+func _add_band_label(tray: Node3D, text: String, local_pos: Vector3) -> void:
+	var label := Label3D.new()
+	label.name = "AmbushScoutLabel_%s" % text
+	label.text = text
+	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED  # lie flat on the tray
+	label.font_size = BAND_LABEL_FONT_SIZE
+	label.outline_size = BAND_LABEL_OUTLINE_SIZE
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.modulate = Color.WHITE
+	label.outline_modulate = BAND_LABEL_OUTLINE_COLOR
+	label.pixel_size = BAND_LABEL_PIXEL_SIZE
+	label.rotation_degrees = Vector3(-90.0, 0.0, 0.0)  # flat; yawed to camera in _process
+	label.position = local_pos
+	tray.add_child(label)
+	_band_labels.append(label)
+
+
+## Keep the flat band labels yawed toward the viewer so they read from any camera angle (mirrors
+## terrain_overlay.gd's terrain plaques). Cheap — only a handful of labels, no per-frame allocations.
+## Prunes freed labels (a band rides under its tray and is freed with it on rebuild).
+func _process(_delta: float) -> void:
+	if _band_labels.is_empty():
+		return
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var cam_pos := cam.global_position
+	var has_freed := false
+	for label in _band_labels:
+		if not is_instance_valid(label):
+			has_freed = true
+			continue
+		var to_cam := cam_pos - label.global_position
+		# Stay flat (-90° about X) and yaw around the table normal to face the camera horizontally.
+		label.rotation = Vector3(-PI / 2.0, atan2(to_cam.x, to_cam.z), 0.0)
+	if has_freed:
+		_prune_band_labels()
+
+
+## Drop freed labels from the registry (called when one is found invalid, so _process stops
+## touching freed nodes). Cheap — the registry holds at most a couple of labels per tray.
+func _prune_band_labels() -> void:
+	var live: Array[Label3D] = []
+	for label in _band_labels:
+		if is_instance_valid(label):
+			live.append(label)
+	_band_labels = live
+
+
+## True if `unit` carries the literal special rule `rule` (e.g. "Scout"/"Ambush"). These rules are
+## unrated, but may import with a trailing "(...)", so compare the base name only — mirroring the
+## buff_tokens_from_rules normalization. Static so callers can probe without an instance.
+static func _unit_has_rule(unit, rule: String) -> bool:
+	if unit == null:
+		return false
+	for raw in unit.special_rules:
+		if str(raw).split("(")[0].strip_edges() == rule:
+			return true
+	return false
 
 
 ## Get tray position and bounds based on player ID and table size
@@ -1267,6 +1461,7 @@ func clear_all() -> void:
 	unit_to_game_unit.clear()
 	game_units.clear()
 	army_trays.clear()
+	_band_labels.clear()  # band labels are children of the freed trays; drop the registry
 	_scene_cache.clear()  # release parsed PackedScenes; rebuilt lazily on next spawn
 	current_round = 1
 
@@ -1292,10 +1487,12 @@ func clear_army(player_id: int) -> void:
 				model_to_unit.erase(model)
 			unit_to_models.erase(unit)
 
-	# Remove army tray for this player
+	# Remove army tray for this player (its band labels go with it; defer the registry prune to
+	# _prune_band_labels once the tray's children are actually freed).
 	if army_trays.has(player_id) and is_instance_valid(army_trays[player_id]):
 		army_trays[player_id].queue_free()
 		army_trays.erase(player_id)
+		_prune_band_labels()
 
 	armies.erase(player_id)
 
