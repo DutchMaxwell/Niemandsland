@@ -22,8 +22,8 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **Alpha is live; `0.3.6.1-alpha` stability patch shipped (2026-06-25).** The public Alpha
-  (`0.3.6.0`, 2026-06-23) + explainer video are out. `0.3.6.1` follows with the **multiplayer
+- **Alpha is live; `0.3.7-alpha` stability patch shipped (2026-06-25).** The public Alpha
+  (`0.3.6.0`, 2026-06-23) + explainer video are out. `0.3.7` follows with the **multiplayer
   reconnect-storm / desync fix** (relay head-of-line block eliminated + token-based host-slot reclaim;
   diagnosed from a real 2-PC game — see CHANGELOG), a **macOS build**, **per-biome terrain** (ruins +
   battlemap-crop forest floors in every biome), and the Alpha bug reports (#70–74, Banner/Musician/

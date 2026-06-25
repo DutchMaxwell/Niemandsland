@@ -4,7 +4,7 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
-## [0.3.6.1-alpha] — 2026-06-25
+## [0.3.7-alpha] — 2026-06-25
 
 Multiplayer-stability patch (the headline fix), plus a macOS build, per-biome terrain,
 and the bug reports from the public Alpha.
@@ -42,12 +42,18 @@ and the bug reports from the public Alpha.
 - **#74** the rule hover popup now also shows depth rules granted by an aura/rule.
 - **Bug-report export** writes to the real localized Desktop again.
 - **Movement reach rings** stay world-anchored when the mini moves.
+- **In-game update prompt reaches existing players.** The update checker compared only 3
+  version fields, so `0.3.6.0` and `0.3.6.1` looked identical and no update was offered;
+  it now compares all 4 fields (`MAJOR.MINOR.PATCH.BUILD`).
 
 ### Changed
 - **In-game update prompt** scrolls long changelogs and offers a one-click,
   right-platform download — so future patches reach players faster.
-- **Version → `0.3.6.1-alpha`** across `project.godot`, README, PROJECT_STATUS, ROADMAP,
-  and CLAUDE.md.
+- **Version → `0.3.7-alpha`** (a 3-field bump) across `project.godot`, README,
+  PROJECT_STATUS, ROADMAP, and CLAUDE.md. The jump out of the `0.3.6.x` line is deliberate:
+  the already-shipped `0.3.6.0` checker only sees the first three fields, so it can detect
+  `0.3.7` but not a `0.3.6.1`. Future patches can resume the 4-field scheme (`0.3.7.1`, …),
+  which the fixed checker handles.
 
 ## [0.3.6.0-alpha] — 2026-06-23
 
