@@ -6,20 +6,44 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [0.3.7.1-alpha] — 2026-06-25
 
+A playtest-feedback patch on top of 0.3.7 (mostly from a 2-player playtest game), plus dice
+colours, an in-game self-updater, and a live asset-manifest channel.
+
 ### Added
 - **Ambush / Scout deployment field.** On a player's army tray, the near third is reserved and split
   **Ambush (left, amber) / Scout (right, cyan)** by a tray-border-coloured divider, each with a small flat
-  fixed label anchored bottom-left. Units carrying the Scout/Ambush rule are auto-placed into their half
-  on import (the top 2/3 keeps the normal layout). Detection covers the rule listed directly, granted by
-  an upgrade/equipment item, granted to a single model, or granted via another rule's free-text
-  description (heuristic). Representation only; positions persist + MP-sync via the existing
-  `import_position` path.
-- **One-click in-game updater.** The "Update available" prompt now **downloads and installs** the
-  new version in place and restarts — no manual unzip. It stages the whole download under `user://`
-  before touching the install, and if the in-place update can't run (download error, locked files,
-  unsupported layout) it falls back to opening the download page, so it is never worse than the old
-  manual flow. Linux/macOS swap the files directly; Windows uses a small helper that swaps the
-  (locked) exe after the game exits.
+  label anchored bottom-left. Units carrying the Scout/Ambush rule are auto-placed into their half on
+  import (the top 2/3 keeps the normal layout). Detection covers the rule listed directly, granted by an
+  upgrade/equipment item, granted to a single model, or granted via another rule's free-text description.
+  Representation only; positions persist + MP-sync via `import_position`.
+- **Per-die colour tagging.** Click a die in the tray to cycle it through 4 colours (e.g. "red =
+  Rending"); the colours persist through the roll. Cup composition and colours sync live, so the
+  opponent sees the same dice.
+- **One-click in-game updater.** The "Update available" prompt now **downloads and installs** the new
+  version in place and restarts — no manual unzip. It stages the download under `user://` first, and
+  falls back to opening the download page if the in-place update can't run, so it's never worse than the
+  old manual flow. (Linux/macOS swap the files directly; Windows uses a helper that swaps the locked exe
+  after exit.)
+- **Live CDN asset manifest.** The game fetches the model manifest from the asset CDN at startup, so
+  3D-model fixes published after a build reach players at their next launch — no game release needed.
+  Any fetch failure keeps the bundled manifest (offline-safe).
+- **Multiplayer load gate.** While one player imports an army, the other player's object move/edit is
+  blocked (camera, pan, zoom and chat stay free) with a "waiting for … to finish loading" banner, so a
+  move can't land mid-import.
+- **Auto-face on move.** A moved model turns to face its own movement direction when you drop it.
+
+### Fixed
+- **Line of sight** is no longer blocked by **dead** models (they are hidden, not removed).
+- **Status/activation markers** hand over to the lone survivor when a unit is reduced to one model,
+  instead of clinging to a dead model's vacated spot.
+- **Boundary status tokens** ride the terrain height per token, so they no longer sink under elevated props.
+- **Formation keys** (1–9 / Shift+A) centre the block on the unit's current centre, not the cursor.
+- **Rotation** works both ways — hold **Ctrl** while R (single) or Shift+R (group) to reverse.
+- **Terrain effect labels** stay flat on the table but face the camera, so they read from any orbit angle.
+- **Dice tray:** right-clicking it no longer crashes; clicking a die reliably colours the right one; and
+  the colours survive a roll.
+- **HUD version label** is now derived from `config/version` (it had a stale hardcoded version); the
+  on-screen control hints were refreshed.
 
 ## [0.3.7-alpha] — 2026-06-25
 
