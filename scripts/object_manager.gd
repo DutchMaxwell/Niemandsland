@@ -210,9 +210,14 @@ func _process(delta: float) -> void:
 
 
 ## Checks if a GUI element is blocking input (e.g., modal dialog or a focused text
-## field like the chat input — object shortcuts must not fire while typing).
+## field like the chat input — object shortcuts must not fire while typing). Also true
+## while a REMOTE peer is loading: object move/edit must be blocked until they finish (the
+## non-loading player is held back). Camera/pan/zoom/chat are NOT routed through this gate.
 func _is_gui_blocking_input() -> bool:
 	if get_viewport().gui_get_focus_owner() is LineEdit:
+		return true
+	# A remote peer is mid-load (importing an army / syncing state): freeze object edits.
+	if _network_manager != null and _network_manager.is_any_remote_peer_busy():
 		return true
 	# Check if any modal Control is visible and covering the viewport
 	var ui_layer = get_tree().root.find_child("UI", true, false)

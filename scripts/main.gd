@@ -27,6 +27,16 @@ const DEFAULT_TABLE_SIZE_FEET := Vector2(6, 4)  # 72x48 inches (landscape)
 ## Group rotation
 const GROUP_ROTATION_SPEED: float = 90.0  # degrees per second
 
+## Keycodes handled in _unhandled_key_input that MOVE/EDIT objects (arrange, copy/paste,
+## duplicate, lock, regiment-arc toggle, group-rotate, undo/redo, delete). These are swallowed
+## while a remote peer is loading (the non-loading player is held back). The non-edit panels
+## (F6/F7) are intentionally NOT in this set, so settings stay reachable mid-load.
+const _OBJECT_EDIT_KEYS: Array[int] = [
+	KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9,
+	KEY_A, KEY_C, KEY_V, KEY_D, KEY_L, KEY_F, KEY_R, KEY_Z, KEY_Y,
+	KEY_DELETE, KEY_BACKSPACE,
+]
+
 ## Unit conversion constants
 const FEET_TO_METERS: float = 0.3048
 
@@ -145,6 +155,9 @@ var _chat_log_scroll: ScrollContainer = null
 var _chat_log_vbox: VBoxContainer = null
 var _chat_input: LineEdit = null
 var _roster_vbox: VBoxContainer = null
+
+# Non-blocking banner shown while a remote peer is loading (their move/edit is gated).
+var _peer_busy_banner: Label = null
 
 # Save/Load UI
 @onready var save_manager: Node = %SaveManager
@@ -311,6 +324,7 @@ func _ready() -> void:
 	network_manager.peer_version_validated.connect(_on_peer_version_validated)
 	network_manager.version_rejected.connect(_on_version_rejected)
 	network_manager.peer_remapped.connect(_on_peer_remapped)
+	network_manager.session_busy_changed.connect(_on_session_busy_changed)
 
 	# Connect game state sync signals (remote wounds, activation, markers, casts, delete)
 	network_manager.remote_wounds_updated.connect(_on_remote_wounds_updated)
@@ -609,6 +623,50 @@ func _show_toast(text: String) -> void:
 	tw.tween_callback(label.queue_free)
 
 
+## A remote peer started/finished loading. While busy, show a persistent non-blocking banner
+## ("Waiting for <player> to finish loading…") and the object move/edit gate is active (handled
+## in object_manager / _unhandled_key_input). Camera/pan/zoom/chat stay usable throughout.
+func _on_session_busy_changed(busy: bool) -> void:
+	if busy:
+		_show_peer_busy_banner()
+	else:
+		_hide_peer_busy_banner()
+
+
+## The display name of the (first) remote peer that is currently loading, for the banner text.
+func _busy_peer_display_name() -> String:
+	if network_manager == null:
+		return "another player"
+	for peer_id: int in network_manager.busy_remote_peers:
+		return _peer_display_name(peer_id)
+	return "another player"
+
+
+## Show (or refresh) the persistent "waiting for load" banner at the top of the screen.
+func _show_peer_busy_banner() -> void:
+	var text := "Waiting for %s to finish loading…" % _busy_peer_display_name()
+	if is_instance_valid(_peer_busy_banner):
+		_peer_busy_banner.text = text
+		return
+	_peer_busy_banner = Label.new()
+	_peer_busy_banner.name = "PeerBusyBanner"
+	_peer_busy_banner.text = text
+	_peer_busy_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE  # never blocks clicks/camera
+	_peer_busy_banner.add_theme_font_size_override("font_size", 18)
+	_peer_busy_banner.add_theme_color_override("font_color", Color(1.0, 0.92, 0.6))
+	_peer_busy_banner.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	_peer_busy_banner.add_theme_constant_override("outline_size", 4)
+	_peer_busy_banner.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 12)
+	$UI.add_child(_peer_busy_banner)
+
+
+## Remove the "waiting for load" banner (the remote peer finished / disconnected).
+func _hide_peer_busy_banner() -> void:
+	if is_instance_valid(_peer_busy_banner):
+		_peer_busy_banner.queue_free()
+	_peer_busy_banner = null
+
+
 # --- Low-FPS instability advisory (multiplayer only) ---
 # A sustained low framerate degrades heartbeat cadence and backs up the send queue — a known
 # cause of online instability. When it persists during a live session, advise the player ONCE
@@ -704,8 +762,15 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		# Get cursor position on table for all operations
 		var cursor_pos = object_manager.get_cursor_table_position()
 
+		# While a remote peer is loading, block object move/edit shortcuts (arrange, copy/paste,
+		# duplicate, delete, lock, group-rotate, undo/redo) — but leave the non-edit panels
+		# (F6 lighting print, F7 settings) reachable below. Camera/pan/zoom/chat are unaffected.
+		var edits_locked: bool = network_manager != null and network_manager.is_any_remote_peer_busy()
+
 		# Arrangement keys (1-9) - arrange selected in N rows, centred on the unit's current centre
-		if event.keycode >= KEY_1 and event.keycode <= KEY_9:
+		if edits_locked and event.keycode in _OBJECT_EDIT_KEYS:
+			get_viewport().set_input_as_handled()  # swallow the edit key so it can't act
+		elif event.keycode >= KEY_1 and event.keycode <= KEY_9:
 			var rows = event.keycode - KEY_0
 			object_manager.arrange_selected_in_rows(rows)
 			get_viewport().set_input_as_handled()
@@ -1714,6 +1779,8 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# The peer is registered and validated — hand it the full name roster so it
 	# immediately knows everyone already at the table (including the host).
 	network_manager.push_roster_to_peer(peer_id)
+	# If anyone is CURRENTLY loading, tell the late joiner so it gates + shows the banner too.
+	network_manager.push_busy_state_to_peer(peer_id)
 	# Hand the joining peer the current biome (host-authoritative table state — the biome
 	# is not part of the serialized .nml game state, so it must be pushed separately).
 	if table != null:
@@ -1976,6 +2043,9 @@ func _on_relay_connection_lost() -> void:
 	_is_reconnecting = true  # pause presence broadcasts until we're back (Fix A)
 	if save_manager:
 		save_manager.reset_restore_lock()  # a drop can strand an in-flight restore; don't deadlock the re-sync
+	# Clear our own busy flag so a drop mid-load doesn't leave us marked busy to a late joiner
+	# after we rejoin (the re-sync sets it true→false anyway; this is belt-and-braces, offline-safe).
+	network_manager.broadcast_peer_busy(false)
 	var role := "host" if network_manager.is_host else "guest"
 	push_warning("[Network] Connection lost — attempting to rejoin the room (%s)…" % role)
 	network_status_label.text = "Connection lost — reconnecting…"
@@ -2613,6 +2683,10 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 		_army_loading_overlay.set_label("JOINING — LOADING TABLE")
 		_army_loading_overlay.set_indeterminate()
 
+	# Tell other peers we are loading so their object move/edit input is gated while we rebuild
+	# the table (mirrors begin_restore/end_restore; cleared after end_restore below).
+	network_manager.broadcast_peer_busy(true)
+
 	# Serialize against the per-army broadcast restore: both clear _loaded_game_units, and an
 	# interleave (host imports while we join) wipes it mid-restore. Released below before return.
 	await save_manager.begin_restore()
@@ -2672,6 +2746,7 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	save_manager.restore_army_trays_after_load(state.get("army_names", {}))
 
 	save_manager.end_restore()
+	network_manager.broadcast_peer_busy(false)  # join load done — release the other peers' gate
 
 	if is_instance_valid(_army_loading_overlay):
 		_army_loading_overlay.complete_and_free()
@@ -2780,6 +2855,9 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
 	get_tree().root.add_child(_army_loading_overlay)
 	_army_loading_overlay.set_label("LOADING ARMY")
 	_army_loading_overlay.set_indeterminate()
+	# Tell other peers we are loading so their object move/edit input is gated meanwhile
+	# (mirrors begin_restore/end_restore; cleared on every exit below).
+	network_manager.broadcast_peer_busy(true)
 	# Let the overlay render BEFORE the (synchronous) spawn blocks the main thread, so it
 	# is visible from the start instead of only appearing once loading is done.
 	await get_tree().process_frame
@@ -2797,6 +2875,7 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
 	await save_manager.begin_restore()
 	var spawned = await opr_army_manager.spawn_army(army)
 	save_manager.end_restore()
+	network_manager.broadcast_peer_busy(false)  # load done — release the other peer's gate
 	print("Spawned %d models for army '%s' on Player %d's tray" % [spawned.size(), army.name, player_id])
 
 	if is_instance_valid(_army_loading_overlay):
@@ -2938,6 +3017,10 @@ func _on_remote_army_complete(player_id: int, rule_descriptions: Dictionary) -> 
 	var object_groups: Array = buf.get("objects", [])
 	print("[ArmySync] Complete: building %d units (player_id=%d)" % [units.size(), player_id])
 
+	# Tell other peers we are loading so their object move/edit input is gated while we build
+	# the incoming army (mirrors begin_restore/end_restore; cleared after end_restore below).
+	network_manager.broadcast_peer_busy(true)
+
 	# Serialize against the join state-sync restore: both clear _loaded_game_units. Released below.
 	await save_manager.begin_restore()
 
@@ -2979,6 +3062,7 @@ func _on_remote_army_complete(player_id: int, rule_descriptions: Dictionary) -> 
 	save_manager._restore_regiments_after_load()
 
 	save_manager.end_restore()
+	network_manager.broadcast_peer_busy(false)  # army built — release the other peers' gate
 
 	# 5. Close the loading overlay.
 	if is_instance_valid(_army_loading_overlay):
