@@ -36,18 +36,20 @@ planned and where ideas go. For what already works see
   next release), the **live CDN manifest** (the game fetches model SHAs from R2 at startup → asset
   reworks reach players with **no game release**), and a self-correcting HUD version label. Everything
   further is **feedback-driven** toward the **MP-first Beta** (see Next). _S_
+- **Ambush / Scout deployment field — BUILT on `feat/ambush-scout-deploy` (2026-06-25); pending a feature
+  release (NOT in the 0.3.7.1 patch).** On the per-player army tray, the near third is reserved and split
+  **Ambush (left, amber) / Scout (right, cyan)** by a tray-border-coloured divider, each with a small flat
+  fixed plate (no camera-follow) anchored bottom-left; units carrying the Scout/Ambush rule auto-place into
+  their half on import (the top 2/3 keeps the normal packer). Detection covers direct + upgrade/equipment-
+  + per-model-granted Scout/Ambush (the parser folds them into `special_rules`) plus a free-text-description
+  heuristic. Representation only (sandbox); MP-synced for free via `import_position`. All in
+  `opr_army_manager.gd`. _L_
 
 ## 📋 Next (post-Alpha — Beta + alpha-feedback driven)
 
 Deferred out of Alpha by maintainer decision (2026-06-23): the 2-player game is shipped + soak-
 validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
-- **Ambush / Scout deployment field** — reserve the bottom 1/3 of the deploying player's tableau, split
-  into **Ambush (left) / Scout (right)** by a thin divider line, each labelled with a flat, bird's-eye-
-  readable text plate; units carrying the Scout/Ambush rule are placed/located there on import. Today
-  Scout/Ambush are parsed only as a buff-token deny-list (`opr_army_manager.gd`) and the deployment
-  overlay is visual-only (NONE/FRONT_LINE/CUSTOM, `terrain_overlay.gd`) — it never positions units.
-  Maintainer-specified design (the playtester playtest, 2026-06-25). _L_
 - **Age of Fantasy — factions + Regiments** — generate the AoF faction 3D models via **Model Forge
   V2** (→ R2; this also resolves the `saurians` ↔ `saurian_starhost` faction-folder mismatch). Then
   verify Regiments import vs a real `aofr` list and add the Regiments **handling polish** (move as one

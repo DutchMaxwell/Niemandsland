@@ -4,6 +4,19 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [Unreleased]
+
+Built on feature branches, not yet in a tagged release.
+
+### Added
+- **Ambush / Scout deployment field** (`feat/ambush-scout-deploy`). On a player's army tray, the near
+  third is reserved and split **Ambush (left, amber) / Scout (right, cyan)** by a tray-border-coloured
+  divider, each with a small flat fixed label anchored bottom-left. Units carrying the Scout/Ambush
+  rule are auto-placed into their half on import (the top 2/3 keeps the normal layout). Detection covers
+  the rule listed directly, granted by an upgrade/equipment item, granted to a single model, or granted
+  via another rule's free-text description (heuristic). Representation only; positions persist + MP-sync
+  via the existing `import_position` path.
+
 ## [0.3.7.1-alpha] — 2026-06-25
 
 ### Added
