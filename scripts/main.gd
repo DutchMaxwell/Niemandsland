@@ -242,6 +242,10 @@ func _ready() -> void:
 	# no banding "segments".
 	get_viewport().use_debanding = true
 
+	# Stamp the running version onto the HUD shortcuts label so it can never go stale — the version
+	# lives ONLY in application/config/version (single source of truth; see also startup_menu).
+	_apply_version_to_info_label()
+
 	# Connect hamburger menu toggle
 	hamburger_button.pressed.connect(_on_hamburger_pressed)
 
@@ -789,6 +793,20 @@ func _delete_selected_objects() -> void:
 		return
 	radial_menu_controller.delete_objects(selected.duplicate())
 	object_manager.deselect_all()
+
+
+## Replace the HUD shortcuts label's first line with "Niemandsland v<config/version>", so the
+## displayed version is derived from the single source of truth and never needs a manual edit.
+func _apply_version_to_info_label() -> void:
+	var info := get_node_or_null("UI/HUD/InfoLabel") as Label
+	if info == null:
+		return
+	var version := str(ProjectSettings.get_setting("application/config/version", "?"))
+	var lines := info.text.split("\n")
+	if lines.is_empty():
+		return
+	lines[0] = "Niemandsland v%s" % version
+	info.text = "\n".join(lines)
 
 
 func _process(delta: float) -> void:
