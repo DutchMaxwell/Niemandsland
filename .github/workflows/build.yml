@@ -121,7 +121,7 @@ jobs:
           name: windows-build
           path: build/windows
 
-  # Tag-gated: pushing a "v*" tag (e.g. v0.3.6.0-alpha) builds both platforms and
+  # Tag-gated: pushing a "v*" tag (e.g. v0.3.6.1-alpha) builds both platforms and
   # publishes them as a GitHub Release with permanent, public, direct download links.
   # Self-contained (builds its own binaries) so it does NOT depend on the best-effort
   # Actions artifact upload, which can hit the account's artifact storage quota.
@@ -148,26 +148,35 @@ jobs:
       - name: Stamp build hash
         run: sed -i "/^config\/version=/a config/build_hash=\"${GITHUB_SHA::7}\"" project.godot
 
-      - name: Build Linux + Windows
+      - name: Build Linux + Windows + macOS
         run: |
-          mkdir -p dist/linux dist/windows
+          mkdir -p dist/linux dist/windows dist/macos
           godot --headless --verbose --export-release "Linux" dist/linux/$EXPORT_NAME.x86_64
           godot --headless --verbose --export-release "Windows Desktop" dist/windows/$EXPORT_NAME.exe
+          # macOS is exported UNSIGNED (codesign disabled — no Apple account needed) as a zipped .app.
+          # Gatekeeper: users clear quarantine once with `xattr -dr com.apple.quarantine Niemandsland.app`.
+          godot --headless --verbose --export-release "macOS" dist/macos/$EXPORT_NAME.zip
 
       - name: Package per-platform zips
         run: |
           (cd dist/linux && zip -r "../Niemandsland-${GITHUB_REF_NAME}-linux.zip" .)
           (cd dist/windows && zip -r "../Niemandsland-${GITHUB_REF_NAME}-windows.zip" .)
+          # The macOS export is already a .zip of the .app bundle — just give it the release name.
+          cp "dist/macos/${EXPORT_NAME}.zip" "dist/Niemandsland-${GITHUB_REF_NAME}-macos.zip"
+
+      - name: Extract release notes (top CHANGELOG section)
+        run: awk '/^## \[/{c++} c==1{print} c==2{exit}' CHANGELOG.md > release_notes.md
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: Niemandsland ${{ github.ref_name }}
-          generate_release_notes: true
+          body_path: release_notes.md
           prerelease: false
           files: |
             dist/Niemandsland-${{ github.ref_name }}-linux.zip
             dist/Niemandsland-${{ github.ref_name }}-windows.zip
+            dist/Niemandsland-${{ github.ref_name }}-macos.zip
 
       # Auto-update channel: push the desktop builds to itch.io so players who installed through the
       # itch desktop app get automatic updates (butler does delta updates per channel). Runs AFTER the
@@ -190,3 +199,6 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           ./butler push dist/linux   "$ITCH_TARGET:linux"   --userversion "$VERSION"
           ./butler push dist/windows "$ITCH_TARGET:windows" --userversion "$VERSION"
+          # macOS: push the extracted .app bundle so the itch app launches it directly.
+          unzip -q "dist/macos/${EXPORT_NAME}.zip" -d dist/macos-app
+          ./butler push dist/macos-app "$ITCH_TARGET:mac" --userversion "$VERSION"
