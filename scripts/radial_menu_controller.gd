@@ -100,6 +100,10 @@ const TOKEN_RADIUS = 0.010  # 10mm radius = 20mm diameter disc
 const TOKEN_HEIGHT = 0.003  # 3mm thick
 const TOKEN_GAP = 0.001  # 1mm gap between tokens
 
+## Draw token discs slightly ahead of opaque geometry so a token resting on a
+## terrain surface is not z-fought by it (boundary tokens ride per-token terrain).
+const TOKEN_RENDER_PRIORITY := 1
+
 ## Token type definitions with colors and labels
 const TOKEN_TYPES = {
 	"WoundMarker": {"color": Color(0.9, 0.15, 0.15), "label": "WOUNDS", "letter": "W", "priority": 1},
@@ -1082,6 +1086,7 @@ func _create_token_disc(marker_name: String) -> Node3D:
 	var border_mat = StandardMaterial3D.new()
 	border_mat.albedo_color = Color(0.02, 0.02, 0.02)
 	border_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	border_mat.render_priority = TOKEN_RENDER_PRIORITY
 	border_mesh.material_override = border_mat
 	border_mesh.position = Vector3(0, TOKEN_HEIGHT / 2, 0)
 	marker.add_child(border_mesh)
@@ -1097,6 +1102,7 @@ func _create_token_disc(marker_name: String) -> Node3D:
 	var disc_mat = StandardMaterial3D.new()
 	disc_mat.albedo_color = color
 	disc_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	disc_mat.render_priority = TOKEN_RENDER_PRIORITY
 	disc_mesh.material_override = disc_mat
 	disc_mesh.position = Vector3(0, TOKEN_HEIGHT / 2 + 0.0001, 0)
 	marker.add_child(disc_mesh)
