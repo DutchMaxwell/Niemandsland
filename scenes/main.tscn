@@ -158,7 +158,7 @@ anchor_right = 1.0
 offset_left = -300.0
 offset_bottom = 100.0
 grow_horizontal = 0
-text = "Niemandsland v0.3.6.0-alpha
+text = "Niemandsland
 Controls:
 - WASD: Move Camera
 - Q/E: Rotate Camera
@@ -166,10 +166,10 @@ Controls:
 - Left Click: Select/Drag
 - Alt + Click: Multi-Select
 - Shift + Click: Measure
-- R (hold): Rotate Selected
-- Shift+R: Rotate Group
-- 1-9: Arrange at cursor
-- A: Arrow at cursor
+- R (hold): Rotate (Ctrl=reverse)
+- Shift+R: Rotate Group (Ctrl=rev)
+- 1-9: Arrange rows (on unit)
+- Shift+A: Arrow (on unit)
 - Ctrl+C/V/D: Copy/Paste/Dup
 - L: Lock/Unlock
 - G / Shift+G: Range Ring / clear
