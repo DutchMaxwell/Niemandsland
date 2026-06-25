@@ -910,6 +910,9 @@ func _stop_dragging() -> void:
 		if drop_batch.size() > 0 and _network_manager and _network_manager.is_multiplayer_active():
 			_network_manager.broadcast_move_batch(drop_batch)
 
+		# Turn each moved model to face its own movement direction (playtest feedback, per-model).
+		_auto_face_moved_models()
+
 		# Record the whole drag as one undoable move (reads _drag_start_positions,
 		# which is cleared further below).
 		_record_move_for_undo()
@@ -938,6 +941,26 @@ func _stop_dragging() -> void:
 
 
 ## Cancel drag and restore all objects to their original positions
+## After a drag, snap each moved model to face its own movement direction (playtest feedback, per-model).
+## Snap-on-drop (not live) keeps it calm and costs one rotation broadcast. Skipped for tiny nudges and
+## for RigidBodies (physics-driven). NOTE: the facing axis sign may need a one-line eyeball tweak.
+const AUTO_FACE_DEADZONE_M: float = 0.02  # min horizontal drag (m) before a drop implies a new facing
+func _auto_face_moved_models() -> void:
+	var rotation_batch: Array = []
+	for obj in _selected_objects:
+		if not is_instance_valid(obj) or obj is RigidBody3D or not _drag_start_positions.has(obj):
+			continue
+		var moved: Vector3 = obj.global_position - _drag_start_positions[obj]
+		if Vector2(moved.x, moved.z).length() < AUTO_FACE_DEADZONE_M:
+			continue
+		obj.rotation.y = atan2(moved.x, moved.z)
+		if obj.has_meta("network_id"):
+			rotation_batch.append(obj.get_meta("network_id"))
+			rotation_batch.append(obj.rotation.y)
+	if rotation_batch.size() > 0 and _network_manager and _network_manager.is_multiplayer_active():
+		_network_manager.broadcast_rotation_batch(rotation_batch)
+
+
 func _cancel_drag() -> void:
 	if not _is_dragging:
 		return
