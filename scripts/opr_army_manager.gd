@@ -241,8 +241,8 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 
 		# Lane selection: a unit carrying the Ambush/Scout rule is relocated into its band half
 		# (Ambush wins if both). Otherwise it stays in the main top-2/3 packer (unchanged).
-		var is_ambush := _unit_has_rule(unit, "Ambush")
-		var is_scout := _unit_has_rule(unit, "Scout")
+		var is_ambush := _unit_has_rule(unit, "Ambush") or _unit_rule_describes(unit, "Ambush", army.rule_descriptions)
+		var is_scout := _unit_has_rule(unit, "Scout") or _unit_rule_describes(unit, "Scout", army.rule_descriptions)
 		var spawn_pos: Vector3
 		if is_ambush:
 			# LEFT band half — row-packer scoped to the Ambush half-rect.
@@ -610,6 +610,24 @@ static func _unit_has_rule(unit, rule: String) -> bool:
 		return false
 	for raw in unit.special_rules:
 		if str(raw).split("(")[0].strip_edges() == rule:
+			return true
+	return false
+
+
+## Path-4 heuristic: catches `rule` (Scout/Ambush) GRANTED only in the free-text DESCRIPTION of
+## another rule the unit carries — ArmyForge exposes no structured "grants" field for that case, so we
+## whole-word-scan the descriptions of the unit's rules. Maintainer-chosen (over missing a free-text
+## grant); it can RARELY over-include a unit whose rule merely MENTIONS the word — accepted, benign for
+## a staging aid. Direct hits are already handled by _unit_has_rule. Non-static (uses _word_in).
+func _unit_rule_describes(unit, rule: String, rule_descriptions: Dictionary) -> bool:
+	if unit == null or rule_descriptions.is_empty():
+		return false
+	for raw in unit.special_rules:
+		var base: String = str(raw).split("(")[0].strip_edges()
+		if base == rule:
+			continue
+		var desc: String = str(rule_descriptions.get(base, ""))
+		if not desc.is_empty() and _word_in(desc, rule):
 			return true
 	return false
 
