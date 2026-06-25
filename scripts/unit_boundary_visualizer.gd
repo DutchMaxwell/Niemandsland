@@ -390,6 +390,18 @@ func _calculate_token_start_index(game_unit) -> void:
 
 ## Gets the anchor point on boundary at -45° from first model.
 ## This is where token arrangement is centered.
+## Average ground height of the unit's living models. Boundary tokens ride this so they sit on the
+## terrain surface instead of the table plane (Y=0) — which made them sink under elevated terrain.
+func _unit_surface_y(game_unit) -> float:
+	var sum := 0.0
+	var n := 0
+	for model in game_unit.get_alive_models_with_attached():
+		if model and is_instance_valid(model.node):
+			sum += model.node.global_position.y
+			n += 1
+	return (sum / n) if n > 0 else 0.0
+
+
 func get_boundary_anchor_point(game_unit) -> Vector3:
 	if game_unit not in _boundary_hull_points or game_unit not in _boundary_start_indices:
 		return Vector3.ZERO
@@ -400,7 +412,7 @@ func get_boundary_anchor_point(game_unit) -> Vector3:
 
 	var start_index = _boundary_start_indices[game_unit]
 	var point = hull_points[start_index]
-	return Vector3(point.x, 0.0, point.y)
+	return Vector3(point.x, _unit_surface_y(game_unit), point.y)
 
 
 ## Gets positions along the boundary for multiple tokens.
@@ -418,6 +430,8 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 
 	var start_index = _boundary_start_indices[game_unit]
 	var point_count = hull_points.size()
+	# Ride the unit's terrain height (computed once) so tokens don't sink under elevated terrain.
+	var surface_y := _unit_surface_y(game_unit)
 
 	# Token spacing along boundary (same as single model: 2*radius + gap)
 	var token_radius = 0.010  # 10mm
@@ -473,7 +487,7 @@ func get_token_positions_on_boundary(game_unit, token_count: int) -> Array[Vecto
 		# Offset position along the normal (like tokens around a base edge)
 		var final_pos = pos_on_rail + outward_normal * outward_offset
 
-		positions.append(Vector3(final_pos.x, 0.0, final_pos.y))
+		positions.append(Vector3(final_pos.x, surface_y, final_pos.y))
 
 	return positions
 
