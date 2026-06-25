@@ -316,9 +316,54 @@ func _on_update_available(latest_version: String, release_url: String, release_n
 func _on_update_prompt_closed(prompt: UpdatePrompt, download: bool) -> void:
 	if prompt.is_skip_checked():
 		UpdateChecker.set_skip_version(prompt.latest_version)
-	if download:
-		OS.shell_open(prompt.release_url)
+	var url := prompt.release_url
 	prompt.queue_free()
+	if download:
+		_start_self_update(url)
+
+
+## Download + install the update in place, then relaunch. Any failure — or a non-zip release URL
+## (e.g. the release page when no matching asset was found) — falls back to opening the URL in a
+## browser, so the in-game update is never worse than the old manual download flow.
+func _start_self_update(url: String) -> void:
+	if not url.ends_with(".zip"):
+		OS.shell_open(url)
+		return
+	var dialog := AcceptDialog.new()
+	dialog.title = "Updating Niemandsland"
+	dialog.dialog_text = "Starting…"
+	dialog.get_ok_button().hide()
+	add_child(dialog)
+	dialog.popup_centered()
+	var updater := SelfUpdater.new()
+	add_child(updater)
+	updater.progress.connect(_on_update_progress.bind(dialog))
+	updater.restarting.connect(_on_update_restarting.bind(dialog))
+	updater.update_failed.connect(_on_update_failed.bind(dialog, updater, url))
+	updater.install(url)
+
+
+func _on_update_progress(stage: String, ratio: float, dialog: AcceptDialog) -> void:
+	if is_instance_valid(dialog):
+		dialog.dialog_text = ("%s… %d%%" % [stage, int(ratio * 100.0)]) if ratio >= 0.0 else ("%s…" % stage)
+
+
+func _on_update_restarting(dialog: AcceptDialog) -> void:
+	if is_instance_valid(dialog):
+		dialog.dialog_text = "Restarting…"
+
+
+func _on_update_failed(reason: String, dialog: AcceptDialog, updater: SelfUpdater, url: String) -> void:
+	if is_instance_valid(updater):
+		updater.queue_free()
+	if is_instance_valid(dialog):
+		dialog.queue_free()
+	OS.shell_open(url)  # fallback: the player downloads + unzips manually
+	var msg := AcceptDialog.new()
+	msg.title = "Auto-update unavailable"
+	msg.dialog_text = "Couldn't auto-update (%s).\nThe download page has opened — unzip it over your Niemandsland folder." % reason
+	add_child(msg)
+	msg.popup_centered()
 
 # ===== Online Multiplayer =====
 
