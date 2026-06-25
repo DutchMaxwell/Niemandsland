@@ -3653,6 +3653,8 @@ func _init_radial_menu() -> void:
 	unit_boundary_visualizer = UnitBoundaryVisualizerScript.new()
 	unit_boundary_visualizer.name = "UnitBoundaryVisualizer"
 	unit_boundary_visualizer.army_manager = opr_army_manager
+	# Per-token ground raycast (boundary tokens ride the terrain under each token).
+	unit_boundary_visualizer.object_manager = object_manager
 	add_child(unit_boundary_visualizer)
 	radial_menu_controller.boundary_visualizer = unit_boundary_visualizer
 
