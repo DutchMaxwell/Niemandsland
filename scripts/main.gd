@@ -700,14 +700,14 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		# Get cursor position on table for all operations
 		var cursor_pos = object_manager.get_cursor_table_position()
 
-		# Arrangement keys (1-9) - arrange selected in N rows at cursor
+		# Arrangement keys (1-9) - arrange selected in N rows, centred on the unit's current centre
 		if event.keycode >= KEY_1 and event.keycode <= KEY_9:
 			var rows = event.keycode - KEY_0
-			object_manager.arrange_selected_in_rows(rows, cursor_pos)
+			object_manager.arrange_selected_in_rows(rows)
 			get_viewport().set_input_as_handled()
-		# Arrow formation (Shift+A) at cursor
+		# Arrow formation (Shift+A), centred on the unit's current centre
 		elif event.keycode == KEY_A and event.shift_pressed and not event.ctrl_pressed:
-			object_manager.arrange_selected_arrow(cursor_pos)
+			object_manager.arrange_selected_arrow()
 			get_viewport().set_input_as_handled()
 		# Copy to clipboard (Ctrl+C)
 		elif event.keycode == KEY_C and event.ctrl_pressed:
@@ -793,9 +793,10 @@ func _delete_selected_objects() -> void:
 
 func _process(delta: float) -> void:
 	_check_fps_advisory()
-	# Handle continuous group rotation (Shift+R held)
+	# Handle continuous group rotation (Shift+R held; add Ctrl to reverse)
 	if _is_group_rotating:
-		var rotation_amount = GROUP_ROTATION_SPEED * delta
+		var group_rotation_dir := -1.0 if Input.is_key_pressed(KEY_CTRL) else 1.0
+		var rotation_amount = GROUP_ROTATION_SPEED * delta * group_rotation_dir
 		object_manager.rotate_selected_group(rotation_amount)
 
 		# Throttled batch broadcast of positions + rotations to remote peers

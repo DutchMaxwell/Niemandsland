@@ -343,9 +343,12 @@ func _calculate_token_start_index(game_unit) -> void:
 	if hull_points.is_empty():
 		return
 
-	# Get model positions for distance checking
+	# Get model positions for distance checking. Use the SAME living-model source as the hull
+	# (get_alive_models_with_attached) so the activation marker doesn't anchor on a dead model's
+	# vacated spot — dead models stay valid at their last position and would otherwise win the
+	# "most free" slot and leave the token clinging to the corpse.
 	var model_positions: Array[Vector2] = []
-	for model in game_unit.models:
+	for model in game_unit.get_alive_models_with_attached():
 		if model and is_instance_valid(model.node):
 			var pos = model.node.global_position
 			model_positions.append(Vector2(pos.x, pos.z))
