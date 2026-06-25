@@ -228,6 +228,30 @@ class TestHostRejoinCascade:
         for ws in (guest_ws, intruder, rehost):
             await ws.close()
 
+    async def test_legacy_tokenless_host_rejoin_still_works(self, relay):
+        """Backward-compat: a 0.3.6.0 host that created its room WITHOUT a token (host_token == "")
+        must still reclaim peer_id 1 on rejoin via the legacy first-joiner path — so deploying the
+        token-gated relay never breaks in-flight old-client sessions."""
+        server, url = relay
+        host_ws, code, _ = await create_room(url)  # no token on create -> legacy room
+        guest_ws, _ = await join_room(url, code)
+        await drain(host_ws)
+        await drain(guest_ws)
+
+        await host_ws.close()
+        await asyncio.sleep(0.1)
+        assert json.loads(await guest_ws.recv())["type"] == "host_paused"
+
+        # A tokenless rejoin reclaims peer_id 1 (legacy first-joiner fallback).
+        rehost = await websockets.connect(url)
+        await rehost.send(json.dumps({"type": "join_room", "code": code}))
+        resp = json.loads(await rehost.recv())
+        assert resp["type"] == "room_rejoined_host"
+        assert resp["peer_id"] == 1
+
+        await guest_ws.close()
+        await rehost.close()
+
     async def test_room_dies_if_host_misses_window(self, relay):
         """If the host does not return within the rejoin window, the room is
         cleaned up and the waiting guest is told."""
