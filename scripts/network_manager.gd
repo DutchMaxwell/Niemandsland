@@ -43,6 +43,11 @@ signal remote_player_name_updated(peer_id: int, player_name: String)
 ## Emitted on a guest when the host sends its chat message (peer_id -> text).
 signal remote_chat_message(peer_id: int, text: String)
 
+## Emitted whenever the "is any REMOTE peer currently busy (loading)?" answer flips. While
+## true, the local player's object move/edit input is gated and a banner is shown. Toggling
+## is local-aggregate: it fires only on the first peer to go busy and the last to go idle.
+signal session_busy_changed(busy: bool)
+
 
 ## How often (seconds) to poll connection health
 const CONNECTION_POLL_INTERVAL: float = 2.0
@@ -64,6 +69,14 @@ var connected_peers: Array[int] = []
 
 ## Peers (by id) that announced a matching version. Host-only.
 var validated_peers: Dictionary = {}
+
+## Remote peers (by id) that announced themselves BUSY (loading — e.g. importing an army).
+## While non-empty the local player's object move/edit input is gated and a banner shows.
+## Backward-tolerant: an old client never sends sync_peer_busy, so this just stays empty.
+var busy_remote_peers: Dictionary = {}  # Dictionary[int, bool]
+## Whether WE are currently busy (loading). The host forwards this to late joiners so a
+## player who joins mid-import still sees the gate + banner.
+var _local_busy: bool = false
 
 ## Display names by peer id. Host-authoritative: guests announce their own name to
 ## the host, the host owns the map and pushes the full roster to everyone.
@@ -155,6 +168,7 @@ func disconnect_game() -> void:
 	is_host = false
 	connected_peers.clear()
 	validated_peers.clear()
+	_clear_all_busy_peers()
 	player_names.clear()
 	# Genuine session end (NOT the auto-reconnect path, which goes through
 	# internet_lobby.reconnect_to_room and never calls this): drop all identity maps so
@@ -263,6 +277,9 @@ func _on_peer_disconnected(id: int) -> void:
 	push_warning("[Network] Player disconnected: Peer ID %d (remaining peers: %d, rpc_errors=%d)" % [id, connected_peers.size() - 1, _rpc_error_count])
 	connected_peers.erase(id)
 	validated_peers.erase(id)
+	# Failsafe: a peer that crashed/dropped mid-load must not freeze the table forever.
+	# Clear its busy flag (fires session_busy_changed if it was the last busy peer).
+	_set_remote_peer_busy(id, false)
 	# Release the live transport binding but KEEP token_to_slot (that reservation is what
 	# lets a rejoin reclaim the slot). Guard against a late stale old-socket close that
 	# arrives AFTER a rebind already moved this slot to a newer peer — then drop nothing.
@@ -299,6 +316,7 @@ func _on_server_disconnected() -> void:
 	multiplayer.multiplayer_peer = null
 	is_host = false
 	connected_peers.clear()
+	_clear_all_busy_peers()
 	_last_connection_status = -1
 	server_disconnected.emit()
 
@@ -1093,6 +1111,81 @@ func broadcast_camera_direction(yaw: float, pitch: float) -> void:
 func broadcast_dice_roll(results: Array, context: Dictionary) -> void:
 	if is_multiplayer_active():
 		_remote_call("sync_dice_roll", [results, context], 0)
+
+
+# ===== Peer busy/loading gate =====
+# While one player is loading (e.g. importing an army), the OTHER player's object
+# move/edit input is blocked (camera/pan/zoom/chat stay free). A peer announces its
+# busy state over the command channel; everyone tracks the set of busy remote peers.
+
+## True while any REMOTE peer announced itself busy (loading). Drives the input gate + banner.
+func is_any_remote_peer_busy() -> bool:
+	return not busy_remote_peers.is_empty()
+
+
+## Announce that WE entered (true) or left (false) a heavy load. Broadcast to every peer.
+## No-op outside an active session (single-player imports never gate anything). The local
+## flag is recorded regardless so the host can forward it to a late joiner.
+func broadcast_peer_busy(busy: bool) -> void:
+	_local_busy = busy
+	if is_multiplayer_active():
+		_remote_call("sync_peer_busy", [busy], 0)
+
+
+## Host: tell a freshly validated peer who is CURRENTLY busy, so a player joining mid-import
+## still gates + shows the banner. Sends our own busy flag plus every remote peer the host
+## already knows is busy. Called from main.gd alongside push_roster_to_peer.
+func push_busy_state_to_peer(peer_id: int) -> void:
+	if not multiplayer.is_server() or not is_multiplayer_active():
+		return
+	if _local_busy:
+		_remote_call("sync_peer_busy", [true], peer_id)
+	for busy_id: int in busy_remote_peers:
+		# Don't echo the joiner's own id back to it, and skip the joiner itself.
+		if busy_id != peer_id:
+			_remote_call("sync_peer_busy_proxy", [busy_id, true], peer_id)
+
+
+## RPC: a remote peer announced its busy (loading) state. Track it per sender and emit the
+## aggregate signal only when the "any peer busy?" answer flips, so consumers toggle once.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_peer_busy(busy: bool) -> void:
+	var sender: int = _get_sender()
+	if sender == 0:
+		return
+	_set_remote_peer_busy(sender, busy)
+
+
+## RPC (host -> late joiner): the busy state of a THIRD peer (busy_id), forwarded by the host
+## so a player joining mid-import learns who is already loading. Host-authoritative: accept it
+## only when the sender is the host (peer id 1), so a guest cannot spoof another peer's state.
+@rpc("authority", "call_remote", "reliable")
+func sync_peer_busy_proxy(busy_id: int, busy: bool) -> void:
+	if _get_sender() != 1:
+		return
+	if busy_id == get_my_peer_id():
+		return
+	_set_remote_peer_busy(busy_id, busy)
+
+
+## Update one peer's busy flag and fire session_busy_changed if the aggregate state flipped.
+func _set_remote_peer_busy(peer_id: int, busy: bool) -> void:
+	var was_busy: bool = is_any_remote_peer_busy()
+	if busy:
+		busy_remote_peers[peer_id] = true
+	else:
+		busy_remote_peers.erase(peer_id)
+	var now_busy: bool = is_any_remote_peer_busy()
+	if now_busy != was_busy:
+		session_busy_changed.emit(now_busy)
+
+
+## Drop all busy flags on a full session end / drop. Emits one "idle" signal if any were set.
+func _clear_all_busy_peers() -> void:
+	var was_busy: bool = is_any_remote_peer_busy()
+	busy_remote_peers.clear()
+	if was_busy:
+		session_busy_changed.emit(false)
 
 
 # ===== Player names (host-authoritative roster) =====

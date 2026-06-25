@@ -81,3 +81,58 @@ func test_handshake_timeout_noop_when_peer_absent() -> void:
 	# Peer 9 never joined: must not crash, must not mark it validated.
 	nm.enforce_version_handshake_timeout(9)
 	assert_bool(nm.is_peer_validated(9)).is_false()
+
+
+# ===== Peer busy/loading gate =====
+# The set tracking + aggregate signal are pure state logic (no socket); the over-the-wire
+# broadcast/RPC paths are exercised by the relay suite + the manual MP gauntlet.
+
+func test_no_remote_peer_busy_by_default() -> void:
+	var nm := _make_manager()
+	assert_bool(nm.is_any_remote_peer_busy()).is_false()
+
+
+func test_set_remote_peer_busy_toggles_aggregate() -> void:
+	var nm := _make_manager()
+	nm._set_remote_peer_busy(7, true)
+	assert_bool(nm.is_any_remote_peer_busy()).is_true()
+	nm._set_remote_peer_busy(7, false)
+	assert_bool(nm.is_any_remote_peer_busy()).is_false()
+
+
+func test_session_busy_signal_fires_only_on_aggregate_flip() -> void:
+	var nm := _make_manager()
+	var monitor := monitor_signals(nm)
+	# First peer busy -> one "true". Second peer busy -> NO new emit (already busy).
+	nm._set_remote_peer_busy(7, true)
+	nm._set_remote_peer_busy(8, true)
+	await assert_signal(monitor).is_emitted("session_busy_changed", [true])
+	# First peer idle -> still busy (8), no "false". Last peer idle -> one "false".
+	nm._set_remote_peer_busy(7, false)
+	assert_bool(nm.is_any_remote_peer_busy()).is_true()
+	nm._set_remote_peer_busy(8, false)
+	await assert_signal(monitor).is_emitted("session_busy_changed", [false])
+
+
+func test_peer_disconnect_failsafe_clears_busy_flag() -> void:
+	var nm := _make_manager()
+	nm._set_remote_peer_busy(7, true)
+	# A peer that drops mid-load must not freeze the table forever.
+	nm._on_peer_disconnected(7)
+	assert_bool(nm.is_any_remote_peer_busy()).is_false()
+
+
+func test_disconnect_game_clears_busy_peers() -> void:
+	var nm := _make_manager()
+	nm._set_remote_peer_busy(7, true)
+	nm.disconnect_game()
+	assert_bool(nm.is_any_remote_peer_busy()).is_false()
+
+
+func test_broadcast_peer_busy_records_local_flag_offline() -> void:
+	var nm := _make_manager()
+	# Offline: no broadcast goes out, but the local flag is still tracked (for late-joiner forward).
+	nm.broadcast_peer_busy(true)
+	assert_bool(nm._local_busy).is_true()
+	nm.broadcast_peer_busy(false)
+	assert_bool(nm._local_busy).is_false()
