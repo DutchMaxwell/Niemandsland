@@ -22,10 +22,12 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **Alpha release `0.3.6.0`** — the build is feature-complete; the **only remaining gate is the
-  explainer / tutorial video** (currently in editing). All planned Alpha work is done — everything
-  further is driven by **alpha feedback** (see Next). Version stamped `0.3.6.0-alpha` everywhere
-  (project.godot, the in-game shortcut overlay, README / PROJECT_STATUS / CLAUDE). _S_
+- **Alpha is live; `0.3.6.1-alpha` stability patch shipped (2026-06-25).** The public Alpha
+  (`0.3.6.0`, 2026-06-23) + explainer video are out. `0.3.6.1` follows with the **multiplayer
+  reconnect-storm / desync fix** (relay head-of-line block eliminated + token-based host-slot reclaim;
+  diagnosed from a real 2-PC game — see CHANGELOG), a **macOS build**, **per-biome terrain** (ruins +
+  battlemap-crop forest floors in every biome), and the Alpha bug reports (#70–74, Banner/Musician/
+  Sergeant). Everything further is **feedback-driven** toward the **MP-first Beta** (see Next). _S_
 
 ## 📋 Next (post-Alpha — Beta + alpha-feedback driven)
 
@@ -41,9 +43,6 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   avatar/cursor colour agreement after a reconnect), a shared `slot→palette` helper (army bases match
   presence colour at slot ≥ 5), an import-await timeout, and restoring a regiment tray's serialized
   `network_id`. 2-player reconnect is shipped + soak-validated; this is feedback-driven. _S_
-- **Sandbox forests for the other biomes** — extend the grassland forest pads to desert / tundra /
-  volcanic / jungle / urban (per-biome forest-floor textures + `biome_prefix`; the tree GLBs are on
-  R2). On the way to Beta. _S_
 - **UX polish (feedback-driven)** — Measure-on-pickup → snap-back (live ghost preview, ESC to return)
   · Coherency visualizer (sharpen — highlight models outside X″ of a neighbour) · contextual control
   hints (hover an object → its hotkeys). Deeper post-Alpha resilience / accessibility / onboarding

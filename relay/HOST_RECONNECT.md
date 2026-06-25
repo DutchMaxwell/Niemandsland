@@ -1,14 +1,40 @@
 # Host-side reconnect (relay room preservation) — design + deploy plan
 
-**Status:** ✅ IMPLEMENTED + unit-tested (relay **38 pytest green**) and ✅ DEPLOYED to Fly.io
-(2026-06-12; smoke test passed). ⏳ PENDING (maintainer's gate): the two-client in-game live test.
+**Status:** ✅ IMPLEMENTED + DEPLOYED to Fly.io. **HARDENED in 0.3.6.1-alpha (2026-06-25)** after a
+real 2-PC game collapsed into a reconnect storm + desync — see the **0.3.6.1 hardening** section below,
+which **supersedes** the "first joiner reclaims" rule described in the original design.
 
-The server + client now match the design below: a host drop preserves the room for
-`HOST_REJOIN_WINDOW_SECONDS` and sends each guest `host_paused`; the host (or the first
-joiner) reclaims peer id 1 via `room_rejoined_host`, the relay re-announces every peer to
-the rejoined host, and the existing version-handshake → `_sync_state_to_peer` path
-re-syncs full state to the waiting guests. An abandoned room is torn down past the window
-with "Host did not return". Both host and guest now auto-rejoin on a drop.
+The server + client match the design below: a host drop preserves the room for
+`HOST_REJOIN_WINDOW_SECONDS` and sends each guest `host_paused`; the host reclaims peer id 1 via
+`room_rejoined_host`, the relay re-announces every peer to the rejoined host, and the existing
+version-handshake → `_sync_state_to_peer` path re-syncs full state to the waiting guests. An abandoned
+room is torn down past the window with "Host did not return". Both host and guest auto-rejoin on a drop.
+
+## 0.3.6.1 hardening (2026-06-25) — reconnect-storm + desync fix
+
+Diagnosed from both players' diagnostics dumps of a real game (relay build 56b8bba). Causal chain:
+relay head-of-line block → bilateral heartbeat false-drops → reconnect storm → host lost peer 1 → desync.
+
+1. **Trigger — relay head-of-line block (the big one).** The relay serviced each socket in ONE
+   coroutine that also `await`-ed every broadcast fan-out inline, so a single slow consumer's WebSocket
+   `drain()` back-pressure parked that coroutine → it stopped reading heartbeats → no `heartbeat_ack` →
+   both sides false-dropped at the 35 s timeout despite a live link. **Fix:** the fan-out now ENQUEUES
+   to a per-peer `asyncio.Queue` drained by one writer task per peer (`_enqueue` / `_peer_writer`,
+   `SEND_QUEUE_MAX`), so a slow peer parks only its own writer, never the shared recv loop. Client side:
+   `_last_ack_ms` is refreshed by ANY inbound frame, not only `heartbeat_ack`.
+2. **Host reclaim is now TOKEN-GATED (supersedes "first joiner reclaims").** The old rule let the FIRST
+   rejoiner — possibly a racing guest — seize peer 1 + the host role, demoting the real host to a guest
+   and orphaning the authoritative state = the desync. Now the host's reconnect token is stored as
+   `Room.host_token` (threaded through `create_room`), and ONLY a matching token reclaims peer 1; a
+   lingering half-open old peer-1 socket is evicted so the real host reclaims at once. A room created by
+   a **legacy 0.3.6.0 host** (no token → `host_token == ""`) falls back to the old first-joiner path, so
+   deploying this relay never breaks in-flight old-client sessions (cross-version play is already blocked
+   by the version handshake).
+3. **Version-kick guard.** `enforce_version_handshake_timeout` never kicks a SUPERSEDED peer id (its slot
+   rebound to a new id) — stopping the kick-cascade amplifier.
+
+Regression coverage: a relay head-of-line unit test (a wedged peer must not block the recv loop), a
+"non-host token cannot seize the host slot" test, and a legacy-tokenless-host-rejoin test.
 
 ## Why this is separate from the client reconnect (already shipped)
 

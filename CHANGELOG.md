@@ -4,6 +4,51 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [0.3.6.1-alpha] — 2026-06-25
+
+Multiplayer-stability patch (the headline fix), plus a macOS build, per-biome terrain,
+and the bug reports from the public Alpha.
+
+### Added
+- **macOS build.** Releases now ship an (unsigned) macOS app alongside Linux + Windows.
+  First launch: right-click → Open, or clear Gatekeeper once with
+  `xattr -dr com.apple.quarantine Niemandsland.app`.
+- **Per-biome sandbox terrain.** Ruins are placeable in *every* biome with themed wall
+  panels, and non-grassland forests crop their floor from a seed-based patch of the
+  biome battlemap (grassland keeps its tuned tile).
+- **Banner / Musician / Sergeant.** These upgrades are now imported from ArmyForge:
+  each is listed on the unit card as a rule (its effect on hover) **and** marks its
+  bearer model with a base ring.
+- **itch.io auto-update channel** + **anonymous relay usage stats** (totals/peaks, no
+  identities) queryable via `relay/relay_stats.py`.
+
+### Fixed
+- **Multiplayer reconnect storm / desync eliminated (the big one).** A live 2-player
+  game collapsed into endless reconnects and went out of sync. Root cause: the relay
+  serviced each socket in one coroutine that also awaited every broadcast inline, so a
+  single slow consumer's back-pressure starved *everyone's* heartbeats → both sides
+  false-dropped → a reconnect storm in which the host lost its authority (a guest could
+  seize the host slot) → desync. Fixes: the relay now fans out broadcasts through
+  per-peer send queues (a slow peer never blocks the shared loop); the client treats any
+  inbound frame as proof-of-life; the host deterministically reclaims peer 1 by its
+  identity token (a guest can no longer seize it); and a superseded peer id is never
+  version-kicked. Backward-compatible with 0.3.6.0 clients during the rollout.
+- **#70** reconnecting players can seize objectives again; deployment-zone/objective
+  overlay draw-order corrected.
+- **#71** deployment-zone + objective seize-ring no longer z-fight unit bases/tokens.
+- **#72** blood/oil pools no longer z-fight terrain, and undo/redo of a model deletion
+  correctly restores its stain at the current position.
+- **#73** a unit's OPR weapon loadout now syncs to the other player.
+- **#74** the rule hover popup now also shows depth rules granted by an aura/rule.
+- **Bug-report export** writes to the real localized Desktop again.
+- **Movement reach rings** stay world-anchored when the mini moves.
+
+### Changed
+- **In-game update prompt** scrolls long changelogs and offers a one-click,
+  right-platform download — so future patches reach players faster.
+- **Version → `0.3.6.1-alpha`** across `project.godot`, README, PROJECT_STATUS, ROADMAP,
+  and CLAUDE.md.
+
 ## [0.3.6.0-alpha] — 2026-06-23
 
 Version consolidation for the public Alpha release. All planned Alpha work is
