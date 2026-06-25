@@ -4,6 +4,15 @@ class_name UnitBoundaryVisualizer
 ## Shows which models belong to which unit at a glance.
 
 signal boundary_updated(game_unit)
+## Emitted when a unit that HAD a boundary drops to a single alive model, so the
+## boundary (and its token rail) is gone. Listeners migrate the unit-wide status
+## tokens onto the lone survivor (see RadialMenuController._on_boundary_lost).
+signal boundary_lost(game_unit)
+## Emitted when a unit GAINS a boundary it did not have (e.g. a revive takes it
+## from one alive model back to several). Listeners migrate the unit-wide status
+## tokens off the single model back onto the boundary rail — the symmetric case
+## of boundary_lost (see RadialMenuController._on_boundary_gained).
+signal boundary_gained(game_unit)
 
 ## Height above ground for the boundary mesh
 const BOUNDARY_HEIGHT := 0.005  # 5mm above table surface
@@ -105,9 +114,11 @@ func _update_unit_boundary(game_unit) -> void:
 		_remove_unit_boundary(game_unit)
 		return
 
-	# Skip single models - the miniature IS the unit
+	# Skip single models - the miniature IS the unit. A multi-model unit reduced to
+	# its last alive model converges to this same single-model path (boundary gone,
+	# tokens hand over to the survivor) so there is one consistent behaviour.
 	if models.size() <= 1:
-		_remove_unit_boundary(game_unit)
+		_drop_to_single_model(game_unit)
 		return
 
 	# Get player color (shared canonical source, also used for objective owners)
@@ -130,7 +141,7 @@ func _update_unit_boundary(game_unit) -> void:
 	if positions.size() < 2:
 		# Only remove if unit actually has <= 1 models total
 		if models.size() <= 1:
-			_remove_unit_boundary(game_unit)
+			_drop_to_single_model(game_unit)
 		# Otherwise keep existing boundary, just don't update the mesh
 		# Token container position uses cached hull data
 		else:
@@ -188,7 +199,8 @@ func _create_boundary_mesh(game_unit, hull_points: PackedVector2Array, color: Co
 		return
 
 	# Get or create boundary entry
-	if game_unit not in _boundaries:
+	var is_new_boundary: bool = game_unit not in _boundaries
+	if is_new_boundary:
 		var border_mesh = MeshInstance3D.new()
 		border_mesh.name = "UnitBoundary"
 		add_child(border_mesh)
@@ -204,6 +216,12 @@ func _create_boundary_mesh(game_unit, hull_points: PackedVector2Array, color: Co
 
 	# Calculate token start position on boundary (leftmost point)
 	_calculate_token_start_index(game_unit)
+
+	# A brand-new boundary means the unit just regained one (e.g. a revive): let
+	# listeners pull the unit-wide tokens off the lone model first, so the
+	# boundary_updated reposition below lays them out on the new rail.
+	if is_new_boundary:
+		boundary_gained.emit(game_unit)
 
 	# Notify that boundary was updated (for token repositioning)
 	boundary_updated.emit(game_unit)
@@ -274,6 +292,26 @@ func _remove_unit_boundary(game_unit) -> void:
 	# NOTE: We do NOT remove token containers here - they persist independently
 	# Token containers are only removed when the unit itself is deleted
 	# This prevents tokens from being deleted during temporary operations like arrangement
+
+
+## Handles a unit dropping to a single alive model: remove the boundary mesh AND
+## clear the stale hull cache so get_token_positions_on_boundary() can never return
+## the old multi-model positions. Emits boundary_lost on the genuine multi->single
+## transition so the controller migrates the unit-wide status tokens onto the lone
+## survivor (the token CONTAINER itself is kept — only the unit's truly being
+## deleted removes it, via remove_token_container).
+func _drop_to_single_model(game_unit) -> void:
+	var had_boundary: bool = game_unit in _boundaries
+	_remove_unit_boundary(game_unit)
+
+	# The hull rail no longer reflects reality; drop it so no token rides it.
+	if game_unit in _boundary_hull_points:
+		_boundary_hull_points.erase(game_unit)
+	if game_unit in _boundary_start_indices:
+		_boundary_start_indices.erase(game_unit)
+
+	if had_boundary:
+		boundary_lost.emit(game_unit)
 
 
 ## Removes token container for a unit (call when unit is truly deleted)
