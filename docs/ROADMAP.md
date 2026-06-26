@@ -23,7 +23,7 @@ planned and where ideas go. For what already works see
 ## 🔨 Now (in progress)
 
 - **Alpha is live; `0.3.7.1-alpha` shipped (2026-06-26) on all three platforms.** The playtest-feedback
-  patch on top of `0.3.7-alpha`: 8 fixes from playtest feedback (formations centre on the unit, both-way
+  patch on top of `0.3.7-alpha`: 8 playtest fixes (formations centre on the unit, both-way
   rotation, readable terrain labels, per-token terrain height, auto-face-on-move, lone-survivor markers,
   dead-model line of sight, an MP load-gate), plus **per-die colour tagging** (+ live MP sync), a
   **one-click in-game self-updater** (dormant until the next release — Win/macOS in-place swap still
