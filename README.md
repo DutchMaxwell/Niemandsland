@@ -8,12 +8,11 @@ Fantasy). Built in Godot.
 [![Godot](https://img.shields.io/badge/Godot-4.6-blue.svg)](https://godotengine.org/)
 [![Status](https://img.shields.io/badge/Status-0.3.7.1--alpha-orange.svg)]()
 
-> **Status: alpha (on the Road to Alpha `0.3.6`).** The tabletop sandbox, OPR army
-> import, multiplayer and the 3D-model pipeline work; rules automation (turn/combat
-> resolution, terrain gameplay effects) is **not** implemented. See
-> [`PROJECT_STATUS.md`](PROJECT_STATUS.md) for the honest done / in-progress /
-> planned breakdown, and [`docs/ROAD_TO_ALPHA.md`](docs/ROAD_TO_ALPHA.md) for the
-> `0.3.6` release plan.
+> **Status: public alpha (`0.3.7.1`).** The tabletop sandbox, OPR army import, multiplayer
+> and the 3D-model pipeline work; rules automation (turn/combat resolution, terrain gameplay
+> effects) is **not** implemented. See [`PROJECT_STATUS.md`](PROJECT_STATUS.md) for the honest
+> done / in-progress / planned breakdown, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for what's
+> planned next.
 
 ## Features
 
@@ -23,8 +22,9 @@ What the code actually does today:
 - **Object handling** — click / Alt-click / box select, drag, rotate, copy / paste /
   duplicate, formation arrangement (rows `1`–`9`, arrow `A`) with constant base-edge
   spacing across base sizes.
-- **Dice** — physics D6 dice via our own MIT dice scripts (`dice_tray.gd` /
-  `dice_d6.gd`), rendered in a scaled SubViewport (see [Scaling](#scaling-conventions)).
+- **Dice** — physics D6 dice via our own MIT dice scripts (`dice_tray.gd` / `dice_d6.gd`),
+  rendered in a scaled SubViewport (see [Scaling](#scaling-conventions)); click a die to colour-tag
+  it (e.g. red = Rending), with the cup composition and colours synced live in multiplayer.
 - **Measurement** — distance measuring in inches.
 - **Map layout editor** — top-down 3″ grid, terrain pieces (ruins / forest /
   container / dangerous), front-line + custom-polygon deployment zones, objectives,
@@ -48,11 +48,12 @@ What the code actually does today:
 
 📺 **New here?** Watch the [**tutorial video**](https://makertube.net/w/cuXc5WwBWStr9C2LKZssy1) for a quick tour.
 
-### Play (Windows / Linux)
+### Play (Windows / Linux / macOS)
 
 Download the latest build from the [**Releases**](../../releases/latest) page, unzip and run it
-(`Niemandsland.exe` on Windows; the `.x86_64` next to its `.pck` on Linux) — no install. The
-start menu shows the version; the first log line is `[Boot] Niemandsland <version> build <hash>`.
+(`Niemandsland.exe` on Windows; the `.x86_64` next to its `.pck` on Linux; `Niemandsland.app` on
+macOS — the build is unsigned, so first launch is right-click → **Open**) — no install. The start
+menu shows the version; the first log line is `[Boot] Niemandsland <version> build <hash>`.
 
 - **Host or join** a multiplayer game from the start menu — the host shares a room code, the guest
   enters it. **Both players must run the same version** (the exact-match handshake won't connect
@@ -127,7 +128,7 @@ scale, **dice run in a separate scaled SubViewport** (our own MIT `dice_tray.gd`
 
 - [`PROJECT_STATUS.md`](PROJECT_STATUS.md) — current status & roadmap
 - [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) — player quickstart (install, host/join, import an army)
-- [`docs/ROAD_TO_ALPHA.md`](docs/ROAD_TO_ALPHA.md) — the `0.3.6` Alpha release plan & checklist
+- [`docs/ROAD_TO_ALPHA.md`](docs/ROAD_TO_ALPHA.md) — the `0.3.6` Alpha release plan & checklist (shipped 2026-06-23 — historical)
 - [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) — honest alpha limitations & caveats
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — curated feature backlog (Now / Next / Ideas / Shipped)
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — systems & code map
