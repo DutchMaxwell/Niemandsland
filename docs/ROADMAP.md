@@ -22,25 +22,14 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **`0.3.7.1-alpha` — playtest-feedback patch (built + locally verified; releasing ~2026-06-26 after a
-  2-PC MP check).** Sits on `0.3.7-alpha` (shipped 2026-06-25: the **MP reconnect-storm / desync fix** —
-  relay head-of-line block eliminated + token-based host-slot reclaim, diagnosed from a real 2-PC game;
-  the first **macOS build**; **per-biome terrain**; the Alpha bug reports #70–74 + Banner/Musician/
-  Sergeant). `0.3.7.1` folds in **playtest feedback**: formations centre on the unit (not the
-  cursor), rotation both ways (Ctrl reverses), flat-but-readable terrain labels, **per-token terrain
-  height** so status tokens don't sink under props, **per-model auto-face-on-move**, status **markers
-  hand over to the lone survivor** when a unit drops to 1 model, line of sight **ignores dead models**,
-  and a **load-gate** (the non-loading peer's move/edit is blocked while a peer imports). Plus **per-die
-  colour tagging** (click a die → 1 of 4 colours; cup + colours MP-synced + persist through the roll), a
-  **one-click in-game self-updater** (download → install → relaunch; ships dormant, first fires at the
-  next release), the **live CDN manifest** (the game fetches model SHAs from R2 at startup → asset
-  reworks reach players with **no game release**), and a self-correcting HUD version label. It also adds
-  an **Ambush / Scout deployment field**: the per-player army tray's near third is split **Ambush (left,
-  amber) / Scout (right, cyan)** with a tray-border-coloured divider + small fixed labels, and units
-  carrying the Scout/Ambush rule auto-place into their half on import (detection covers direct,
-  upgrade/equipment-, and per-model-granted, plus a free-text-description heuristic; representation only,
-  MP-synced via `import_position`). Everything further is **feedback-driven** toward the **MP-first Beta**
-  (see Next). _S_
+- **Alpha is live; `0.3.7.1-alpha` shipped (2026-06-26) on all three platforms.** The playtest-feedback
+  patch on top of `0.3.7-alpha`: 8 fixes from playtest feedback (formations centre on the unit, both-way
+  rotation, readable terrain labels, per-token terrain height, auto-face-on-move, lone-survivor markers,
+  dead-model line of sight, an MP load-gate), plus **per-die colour tagging** (+ live MP sync), a
+  **one-click in-game self-updater** (dormant until the next release — Win/macOS in-place swap still
+  wants a real-machine test), the **live CDN asset manifest** (reworks reach players with no game
+  release), and the **Ambush / Scout deployment field**. Next work is **feedback-driven** toward the
+  **MP-first Beta** (see Next); a **Solo / Co-Op AI** (OPR's official ruleset) is being scoped. _S_
 
 ## 📋 Next (post-Alpha — Beta + alpha-feedback driven)
 
@@ -134,7 +123,10 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
 ## ✅ Recently shipped
 
-See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.7-alpha` (2026-06-25):** the MP reconnect-storm / desync
+See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.7.1-alpha` (2026-06-26):** playtest-feedback patch — 8
+playtest fixes (LoS / markers / tokens / formation / rotation / labels / auto-face / load-gate), per-die
+colour tagging + live MP sync, a one-click in-game self-updater, a live CDN asset manifest, and the
+Ambush/Scout deployment field. **`0.3.7-alpha` (2026-06-25):** the MP reconnect-storm / desync
 fix (relay head-of-line block + token host-slot reclaim, diagnosed from a real 2-PC game), the first
 **macOS build**, **per-biome terrain**, the Alpha bug reports (#70–74, Banner/Musician/Sergeant), and a
 fix to the in-game update checker (it now compares all four version fields — it had been blind to
