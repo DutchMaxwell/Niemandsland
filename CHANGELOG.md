@@ -4,6 +4,15 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [Unreleased]
+
+### Fixed
+- **Self-updater (Linux) swaps the running binary correctly.** The in-place apply copied the new files
+  over the still-running executable, which Linux refuses (`ETXTBSY`) — so the one-click update failed
+  with a misleading "permissions" message and fell back to the browser download. It now **unlinks each
+  existing target before copying** (the running process keeps its open inode), matching the macOS path.
+  Takes effect for updates starting *from* the release that carries this fix.
+
 ## [0.3.7.1-alpha] — 2026-06-25
 
 A playtest-feedback patch on top of 0.3.7 (mostly from a 2-player playtest game), plus dice
