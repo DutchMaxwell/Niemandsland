@@ -105,9 +105,8 @@ The forward-looking work now lives in [`docs/ROADMAP.md`](docs/ROADMAP.md); see 
 ## Planned
 
 The forward-looking plan and the feature-request pipeline now live in
-[`docs/ROADMAP.md`](docs/ROADMAP.md) (single source). Near-term: merge the casual
-sandbox terrain branch + extend forests to the other biomes, Regiments handling
-polish (frontage cycle / wheel), and the two-client multiplayer live test.
+[`docs/ROADMAP.md`](docs/ROADMAP.md) (single source) — see its **Next** and **Ideas**
+sections (Age of Fantasy + Regiments, MP 3+ hardening, Solo/Co-Op AI, …).
 
 ## Out of scope (by design)
 
