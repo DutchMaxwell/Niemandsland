@@ -77,9 +77,16 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   a header + a preset picker. Deferred indefinitely (maintainer, 2026-06-25). _M_
 - **Dice tray — mid-session join sync** — a late joiner sees the current cup only after the other player
   next changes it or rolls; add a host push of the current cup composition + colour tags on join. _S_
-- **In-game self-updater — Windows/macOS live test** — the one-click updater shipped Linux-tested (with a
-  browser-download fallback); the Win/macOS in-place swap needs a real-machine test before it first
-  activates (the release after 0.3.7.1). _S_
+- **In-game self-updater — write-permission handling** — the one-click updater ships with a browser-
+  download fallback, but a real Linux test (2026-06-26) showed it **fails when the install dir isn't
+  writable** (system/read-only locations would need elevation). Cheap win: detect an un-writable install
+  up front and go straight to the download page (never "fail" mid-update). A true self-update for *any*
+  location is a known-hard problem (deferred — maintainer); itch.io's butler channel already auto-updates
+  that install. Win/macOS in-place swap also still untested. _S_
+- **Repo `.git` bloat cleanup (~2.3 GB)** — the history is huge (likely the many `model_manifest.json`
+  versions over time), which slows every clone and CI checkout. A BFG / `git filter-repo` pass on the
+  large blobs would shrink it dramatically — but it's another force-push history rewrite, so do it
+  **deliberately + coordinated** (drop branch protection, re-point tags). Flagged 2026-06-26. _M_
 - **Multi-level terrain** — per-cell elevation and ramps. (Walkable multi-storey ruin
   floors already shipped via the sandbox terrain; this is the grid-editor / per-cell
   elevation side.) The surface-aware placement raycast (models rest on terrain tops) is
