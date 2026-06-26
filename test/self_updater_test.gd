@@ -32,19 +32,21 @@ func test_extract_rejects_a_corrupt_zip() -> void:
 	assert_bool(u._extract(bad, TMP.path_join("out"))).is_false()
 
 
-func test_copy_tree_overwrites_install_files() -> void:
+func test_copy_tree_replaces_install_files_including_the_binary() -> void:
 	var u: SelfUpdater = auto_free(SelfUpdater.new())
 	var src := ProjectSettings.globalize_path(TMP.path_join("src"))
 	var install := ProjectSettings.globalize_path(TMP.path_join("install"))
 	DirAccess.make_dir_recursive_absolute(src)
 	DirAccess.make_dir_recursive_absolute(install)
-	# an existing (old) file in the install must be overwritten by the new one
+	# Existing (old) install files — INCLUDING the binary — must be unlinked + replaced. In-place
+	# overwrite of a running binary fails with ETXTBSY on Linux; unlink-first is what makes the swap work.
 	_write(install.path_join("Niemandsland.pck"), "OLD")
+	_write(install.path_join("Niemandsland.x86_64"), "OLDBIN")
 	_write(src.path_join("Niemandsland.pck"), "NEW")
 	_write(src.path_join("Niemandsland.x86_64"), "BINARY")
 	assert_bool(u._copy_tree(src, install)).is_true()
 	assert_str(FileAccess.get_file_as_string(install.path_join("Niemandsland.pck"))).is_equal("NEW")
-	assert_bool(FileAccess.file_exists(install.path_join("Niemandsland.x86_64"))).is_true()
+	assert_str(FileAccess.get_file_as_string(install.path_join("Niemandsland.x86_64"))).is_equal("BINARY")
 
 
 # ===== helpers =====

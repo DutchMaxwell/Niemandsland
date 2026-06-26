@@ -187,7 +187,8 @@ func _first_app_bundle(dir: String) -> String:
 	return ""
 
 
-## Recursively copy everything in `src` into `dst` (created if missing), overwriting files.
+## Recursively copy everything in `src` into `dst` (created if missing), replacing files — each
+## existing target is unlinked first so an in-use file (the running binary, the mapped .pck) swaps cleanly.
 func _copy_tree(src: String, dst: String) -> bool:
 	if DirAccess.make_dir_recursive_absolute(dst) != OK:
 		return false
@@ -195,7 +196,13 @@ func _copy_tree(src: String, dst: String) -> bool:
 	if da == null:
 		return false
 	for f in da.get_files():
-		if da.copy(src.path_join(f), dst.path_join(f)) != OK:
+		var target := dst.path_join(f)
+		# A running executable / mapped .pck cannot be overwritten in place on Linux (ETXTBSY), but it
+		# CAN be unlinked first — the running process keeps its open inode and the fresh file appears at
+		# the freed path. (macOS already _rmrf's its bundle first; Windows swaps the locked exe post-exit.)
+		if FileAccess.file_exists(target):
+			DirAccess.remove_absolute(target)
+		if da.copy(src.path_join(f), target) != OK:
 			return false
 	for sub in da.get_directories():
 		if not _copy_tree(src.path_join(sub), dst.path_join(sub)):
