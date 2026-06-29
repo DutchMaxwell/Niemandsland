@@ -4,7 +4,7 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
-## [Unreleased]
+## [0.3.7.2-alpha] — 2026-06-29
 
 ### Added
 - **Regiments: frontage cycle, axis-locked drag, pivot snap.** Three Age of Fantasy: Regiments
