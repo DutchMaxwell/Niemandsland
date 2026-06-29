@@ -214,6 +214,83 @@ class RotateAction extends UndoableAction:
 				_net.broadcast_rotation(obj.get_meta("network_id"), obj.rotation.y)
 
 
+## Reforms a regiment movement-tray block between two frontages (models-per-rank).
+## AoF:R v3.5.1 p.6 "Unit Formations" — a player may reform to any width 1..N.
+## Captures the tray + its GameUnit + the before/after frontage; undo/redo re-rank
+## the block at the recorded width (tray transform preserved) and re-broadcast.
+class FrontageAction extends UndoableAction:
+	var _tray: RegimentTray = null
+	var _game_unit: GameUnit = null
+	var _from: int = 5
+	var _to: int = 5
+	var _net: Node = null
+
+	func _init(tray: RegimentTray, game_unit: GameUnit, from_frontage: int, to_frontage: int, network_manager: Node, owner_peer_id: int = 0) -> void:
+		_tray = tray
+		_game_unit = game_unit
+		_from = from_frontage
+		_to = to_frontage
+		_net = network_manager
+		peer_id = owner_peer_id
+		description = "Regiment frontage %d -> %d" % [from_frontage, to_frontage]
+
+	func undo() -> void:
+		_apply(_from)
+
+	func redo() -> void:
+		_apply(_to)
+
+	func _apply(frontage: int) -> void:
+		if not is_instance_valid(_tray) or _game_unit == null:
+			return
+		var members := RegimentTray.collect_members(_game_unit)
+		if members.nodes.is_empty():
+			return
+		_tray.reform(members.nodes, members.footprints, frontage)
+		# Keep the Regiment companion + unit_properties in sync (save/load reads these).
+		if _tray.has_meta("regiment"):
+			var regiment := _tray.get_meta("regiment") as Regiment
+			if regiment:
+				regiment.frontage = frontage
+		_game_unit.unit_properties["frontage"] = frontage
+		if _net != null and _net.is_multiplayer_active():
+			_net.broadcast_regiment_frontage(_game_unit.unit_id, frontage)
+
+
+## Adjusts a regiment's pooled-wound counter between two values (AoF:R v3.5.1 p.9).
+## Captures the Regiment companion + before/after wounds_taken; undo/redo re-apply
+## the counter via the OPRArmyManager (which re-ranks the block, updates the counter
+## label, and re-broadcasts). The Regiment is RefCounted so it stays alive across the
+## stack; the army_manager is a long-lived Node held by direct reference.
+class RegimentWoundAction extends UndoableAction:
+	var _regiment: Regiment = null
+	var _from: int = 0
+	var _to: int = 0
+	var _army_manager: Node = null
+	var _net: Node = null
+
+	func _init(regiment: Regiment, from_taken: int, to_taken: int, army_manager: Node, network_manager: Node, owner_peer_id: int = 0) -> void:
+		_regiment = regiment
+		_from = from_taken
+		_to = to_taken
+		_army_manager = army_manager
+		_net = network_manager
+		peer_id = owner_peer_id
+		description = "Regiment wounds %d -> %d" % [from_taken, to_taken]
+
+	func undo() -> void:
+		_apply(_from)
+
+	func redo() -> void:
+		_apply(_to)
+
+	func _apply(wounds_taken: int) -> void:
+		if _regiment == null or not is_instance_valid(_regiment.tray):
+			return
+		if _army_manager and _army_manager.has_method("apply_regiment_wounds"):
+			_army_manager.apply_regiment_wounds(_regiment, wounds_taken)
+
+
 ## Removes (hides) selected models/objects and restores them on undo.
 ##
 ## Unit models use casualty semantics (is_alive=false, wounds=0, node hidden) and

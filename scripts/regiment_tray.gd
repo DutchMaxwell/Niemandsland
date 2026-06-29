@@ -24,7 +24,7 @@ var frontage: int = 5
 
 # === Private state ===
 
-## Display-only facing aids (arrow + toggleable front-arc wedge); rebuilt on layout.
+## Display-only facing aids (arrow + toggleable arc quadrants); rebuilt on layout.
 var _facing_viz: RegimentFacingVisualizer = null
 
 # === Godot ===
@@ -61,11 +61,49 @@ func reform(models: Array, footprints: Array, new_frontage: int = -1) -> void:
 func facing_dir() -> Vector3:
 	return global_transform.basis.z.normalized()
 
+
+## Project a horizontal drag delta onto a regiment's facing axis (XZ-plane), so the
+## block moves only forward/backward along its facing when the player holds Shift
+## during a drag. AoF:R v3.5.1 p.8: Rush/Charge are forward-only, Advance allows
+## sideways/backward by up to half move — the Shift-lock gives the player the
+## forward/backward-only axis; whether the move is legal is the player's call
+## (sandbox, "show, don't decide"). `facing_xz` is the world-space facing (any
+## non-zero vector); the Y component is ignored.
+static func project_drag_onto_facing(delta_xz: Vector3, facing_xz: Vector3) -> Vector3:
+	var f := Vector3(facing_xz.x, 0.0, facing_xz.z)
+	if f.length_squared() < 0.0000001:
+		return delta_xz  # degenerate facing — fall back to unconstrained drag
+	f = f.normalized()
+	return f * delta_xz.dot(f)
+
+
+## The nearest quarter-turn (0, 90, 180, 270 degrees) to `rotation_y` (radians).
+## AoF:R v3.5.1 p.8 "Pivoting": a Hold action may pivot up to 180°, a Move action
+## up to 90° — the four cardinal facings are the natural snap targets. Used by the
+## Ctrl+R snap-to-90° shortcut so the player can quickly align a regiment to a
+## cardinal facing. Returns the snap angle in radians, in [0, 2*PI).
+static func nearest_quarter_turn(rotation_y: float) -> float:
+	const QUARTER := PI / 2.0
+	# Normalise to [0, 2*PI) before snapping so the result is deterministic.
+	var normalized := fmod(rotation_y, TAU)
+	if normalized < 0.0:
+		normalized += TAU
+	var snapped: float = round(normalized / QUARTER) * QUARTER
+	# A snap to 2*PI (e.g. -0.2 -> 6.08 -> 2*PI) is equivalent to 0; normalise the
+	# result back into [0, 2*PI) so the canonical representative is returned.
+	return fmod(snapped, TAU)
+
 ## Show or hide the front-arc wedge on this block (display only; the facing arrow
 ## stays visible). No-op until the block has been laid out at least once.
 func set_arc_visible(p_visible: bool) -> void:
 	if _facing_viz:
 		_facing_viz.set_arc_visible(p_visible)
+
+
+## Whether the 45° arc quadrants are currently shown on this block.
+func is_arc_visible() -> bool:
+	return _facing_viz != null and _facing_viz.is_arc_visible()
+
 
 ## Whether `world_point` lies within this block's forward arc (front vs flank/rear).
 ## Display aid for the measure tool — no rule is enforced.
@@ -76,6 +114,17 @@ func arc_contains(world_point: Vector3) -> bool:
 		Vector2(global_position.x, global_position.z),
 		Vector2(world_point.x, world_point.z),
 		deg_to_rad(RegimentFacingVisualizer.FRONT_ARC_HALF_DEG))
+
+
+## Which of the four arcs (front/flank-left/rear/flank-right) `world_point` lies in,
+## relative to this block's facing. AoF:R v3.5.1 p.5 "Unit Facing" — four 90° quadrants.
+## Display aid for the measure tool; no rule is enforced.
+func classify_arc(world_point: Vector3) -> RegimentFacingVisualizer.ArcQuadrant:
+	var facing := facing_dir()
+	return RegimentFacingVisualizer.classify_arc(
+		Vector2(facing.x, facing.z),
+		Vector2(global_position.x, global_position.z),
+		Vector2(world_point.x, world_point.z))
 
 ## Re-rank the regiment from its game unit's currently-alive models (used after a
 ## casualty or revive — the rear rank closes/opens). Keeps the tray transform.
