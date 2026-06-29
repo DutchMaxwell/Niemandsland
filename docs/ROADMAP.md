@@ -37,14 +37,14 @@ Deferred out of Alpha by maintainer decision (2026-06-23): the 2-player game is 
 validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
 - **Age of Fantasy — factions + Regiments** — generate the AoF faction 3D models via **Model Forge
-  V2** (→ R2; this also resolves the `saurians` ↔ `saurian_starhost` faction-folder mismatch). Then
-  verify Regiments import vs a real `aofr` list. **Regiments handling polish — SHIPPED:** auto-face-on-drop
+  V2** (→ R2; this also resolves the `saurians` ↔ `saurian_starhost` faction-folder mismatch).
+  Live Regiments import vs a real `aofr` list is **verified** (2026-06-29). **Regiments handling polish — SHIPPED:** auto-face-on-drop
   facing fix (P0); frontage cycle (Shift+F), axis-locked drag (Shift+drag), pivot snap (Ctrl+R),
   mouse-driven rotation (R-hold, AoF:R p.8 "Pivoting"); pooled-wound counter with back-rank casualty
   removal + standard WoundsDialog (p.9, Tough(1) pooled / Tough(X>1) classic), regiment radial menu,
   45° arc quadrants on the selected unit (p.5), live rotation-degrees readout, unit-card for trays.
-  **Remaining:** live import verification vs a real `aofr` list; display-only melee aids
-  (two-front-rows highlight, full-rows counter, flank/rear morale modifier hint). Beta. _L_
+  **Remaining:** display-only melee aids (two-front-rows highlight, full-rows counter,
+  flank/rear morale modifier hint) — not yet built. Beta. _L_
 - **MP reconnect — 3+ player hardening** — mirror the host's peer→slot table to guests (3+-player
   avatar/cursor colour agreement after a reconnect), a shared `slot→palette` helper (army bases match
   presence colour at slot ≥ 5), an import-await timeout, and restoring a regiment tray's serialized
@@ -87,10 +87,12 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   up front and go straight to the download page (never "fail" mid-update). A true self-update for *any*
   location is a known-hard problem (deferred — maintainer); itch.io's butler channel already auto-updates
   that install. Win/macOS in-place swap also still untested. _S_
-- **Repo `.git` bloat cleanup (~2.3 GB)** — the history is huge (likely the many `model_manifest.json`
-  versions over time), which slows every clone and CI checkout. A BFG / `git filter-repo` pass on the
-  large blobs would shrink it dramatically — but it's another force-push history rewrite, so do it
-  **deliberately + coordinated** (drop branch protection, re-point tags). Flagged 2026-06-26. _M_
+- ~~**Repo `.git` bloat cleanup (~2.3 GB)**~~ — **DONE 2026-06-29.** Diagnosis (`count-objects -vH`)
+  showed the *packed* history was only 70 MiB; the 2.22 GiB was **loose unreachable objects** (dangling
+  leftovers from the earlier filter-repo rewrites + GLB imports), not large blobs in real history. So no
+  rewrite / force-push was needed — a local `git reflog expire --expire=now --all && git gc --prune=now`
+  brought `.git` to **70 MB** (`fsck` clean, `origin` untouched). Re-bloat recurs after history rewrites
+  or large GLB imports → periodic `gc --prune=now` is the maintenance. _resolved_
 - **Multi-level terrain** — per-cell elevation and ramps. (Walkable multi-storey ruin
   floors already shipped via the sandbox terrain; this is the grid-editor / per-cell
   elevation side.) The surface-aware placement raycast (models rest on terrain tops) is
