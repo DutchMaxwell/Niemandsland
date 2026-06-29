@@ -70,6 +70,14 @@ var _drag_grab_world: Vector3 = Vector3.ZERO  # Cursor table position at grab (p
 var _drag_line: MeshInstance3D = null  # Visual line during drag
 var _drag_label: Label3D = null  # Distance label during drag
 
+# Rotation gesture: a floating label showing the cumulative degrees rotated, anchored
+# above the first selected object. Reused across both plain-R and Shift+R gestures.
+var _rotation_label: Label3D = null
+var _rotation_accumulated_deg: float = 0.0
+const ROTATION_LABEL_Y: float = 0.08  # label height above the pivot object (metres)
+## 20% of the original 22pt = ~4pt; the label is a billboard so it stays legible.
+const ROTATION_LABEL_FONT_SIZE: int = 4
+
 # Box selection (drag rectangle to select multiple objects)
 var _is_box_selecting: bool = false
 var _box_select_start: Vector2 = Vector2.ZERO
@@ -165,8 +173,11 @@ const SURFACE_PROBE_BOTTOM_Y: float = -1.0
 
 ## Regiment facing aid (measure tool): target in the front arc vs flank/rear.
 const MEASURE_FRONT_COLOR: Color = Color(0.20, 0.85, 0.95)  # cyan, matches the arrow
-const MEASURE_FLANK_COLOR: Color = Color(0.95, 0.70, 0.20)  # amber, matches the wedge
-const MEASURE_AID_FONT_SIZE: int = 28
+const MEASURE_FLANK_COLOR: Color = Color(0.95, 0.70, 0.20)  # amber, matches the flank wedges
+const MEASURE_REAR_COLOR: Color = Color(0.90, 0.25, 0.25)   # red, matches the rear wedge
+## Smaller font for the arc-quadrant label (20% of the original 18pt = ~4pt; the
+## label is a billboard so it stays legible up close without crowding the table).
+const MEASURE_AID_FONT_SIZE: int = 4
 const MEASURE_AID_Y: float = 0.06  # label height above the table
 
 
@@ -186,25 +197,32 @@ func _get_network_manager() -> void:
 
 
 func _process(delta: float) -> void:
-	# Continuous rotation while R is held - rotate all selected objects (hold Ctrl to reverse)
+	# Continuous rotation while R is held - rotate all selected objects (hold Ctrl to reverse).
+	# Regiment movement-tray blocks are an exception: they rotate by MOUSE control (the
+	# tray turns to face the cursor), not a continuous spin — see _rotate_regiments_to_cursor.
 	if _is_rotating and _selected_objects.size() > 0:
-		var rotation_dir := -1.0 if Input.is_key_pressed(KEY_CTRL) else 1.0
-		var rotation_amount = deg_to_rad(rotation_speed_degrees) * delta * 60 * rotation_dir  # 60fps base
-		for obj in _selected_objects:
-			if is_instance_valid(obj):
-				obj.rotate_y(rotation_amount)
-
-		# Broadcast rotation to remote peers (throttled at ~15 Hz, batched)
-		_rotation_broadcast_timer += delta
-		if _rotation_broadcast_timer >= ROTATION_BROADCAST_INTERVAL and _network_manager:
-			_rotation_broadcast_timer = 0.0
-			var batch: Array = []
+		if _selection_is_regiment_only():
+			_rotate_regiments_to_cursor(delta)
+		else:
+			var rotation_dir := -1.0 if Input.is_key_pressed(KEY_CTRL) else 1.0
+			var rotation_amount = deg_to_rad(rotation_speed_degrees) * delta * 60 * rotation_dir  # 60fps base
 			for obj in _selected_objects:
-				if is_instance_valid(obj) and obj.has_meta("network_id"):
-					batch.append(obj.get_meta("network_id"))
-					batch.append(obj.rotation.y)
-			if batch.size() > 0:
-				_network_manager.broadcast_rotation_batch(batch)
+				if is_instance_valid(obj):
+					obj.rotate_y(rotation_amount)
+			# Live cumulative-degrees readout (converted from the radian delta above).
+			update_rotation_label(rad_to_deg(rotation_amount))
+
+			# Broadcast rotation to remote peers (throttled at ~15 Hz, batched)
+			_rotation_broadcast_timer += delta
+			if _rotation_broadcast_timer >= ROTATION_BROADCAST_INTERVAL and _network_manager:
+				_rotation_broadcast_timer = 0.0
+				var batch: Array = []
+				for obj in _selected_objects:
+					if is_instance_valid(obj) and obj.has_meta("network_id"):
+						batch.append(obj.get_meta("network_id"))
+						batch.append(obj.rotation.y)
+				if batch.size() > 0:
+					_network_manager.broadcast_rotation_batch(batch)
 	else:
 		_rotation_broadcast_timer = 0.0
 
@@ -546,9 +564,10 @@ func _regiment_tray_of(obj: Node3D) -> RegimentTray:
 
 
 ## Regiment facing aid for the measure line: when exactly one endpoint is a regiment
-## block, label whether the OTHER endpoint lies in its front arc ("Front") or not
-## ("Flank/Rear"), anchored at the regiment endpoint. Display only — no rule enforced;
-## hidden when neither or both endpoints are regiments.
+## block, label which arc the OTHER endpoint lies in (Front / Left Flank / Rear /
+## Right Flank), anchored at the regiment endpoint. AoF:R v3.5.1 p.5 — four 90°
+## quadrants. Display only — no rule enforced; hidden when neither or both endpoints
+## are regiments.
 func _update_front_arc_aid(start_pos: Vector3, end_pos: Vector3) -> void:
 	var start_tray := _regiment_tray_of(_measure_start_object)
 	var end_tray := _regiment_tray_of(_measure_end_object)
@@ -570,7 +589,7 @@ func _update_front_arc_aid(start_pos: Vector3, end_pos: Vector3) -> void:
 			_measure_front_label.visible = false
 		return
 
-	var in_front := tray.arc_contains(target)
+	var quadrant := tray.classify_arc(target)
 	if not _measure_front_label:
 		_measure_front_label = Label3D.new()
 		_measure_front_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -578,9 +597,20 @@ func _update_front_arc_aid(start_pos: Vector3, end_pos: Vector3) -> void:
 		_measure_front_label.font_size = MEASURE_AID_FONT_SIZE
 		add_child(_measure_front_label)
 	_measure_front_label.visible = true
-	_measure_front_label.text = "▲ Front" if in_front else "◣ Flank/Rear"
-	_measure_front_label.modulate = MEASURE_FRONT_COLOR if in_front else MEASURE_FLANK_COLOR
+	_measure_front_label.text = RegimentFacingVisualizer.quadrant_label(quadrant)
+	_measure_front_label.modulate = _arc_label_color(quadrant)
 	_measure_front_label.global_position = Vector3(anchor.x, MEASURE_AID_Y, anchor.z)
+
+
+## Colour for the measure-tool arc label by quadrant (matches the wedge colours).
+static func _arc_label_color(quadrant: RegimentFacingVisualizer.ArcQuadrant) -> Color:
+	match quadrant:
+		RegimentFacingVisualizer.ArcQuadrant.FRONT:
+			return MEASURE_FRONT_COLOR
+		RegimentFacingVisualizer.ArcQuadrant.REAR:
+			return MEASURE_REAR_COLOR
+		_:
+			return MEASURE_FLANK_COLOR
 
 
 ## Updates the hover glow to the selectable currently under the cursor (or none).
@@ -951,15 +981,20 @@ func _stop_dragging() -> void:
 	_destroy_drag_line()
 
 
-## Cancel drag and restore all objects to their original positions
 ## After a drag, snap each moved model to face its own movement direction (playtest feedback, per-model).
-## Snap-on-drop (not live) keeps it calm and costs one rotation broadcast. Skipped for tiny nudges and
-## for RigidBodies (physics-driven). NOTE: the facing axis sign may need a one-line eyeball tweak.
+## Snap-on-drop (not live) keeps it calm and costs one rotation broadcast. Skipped for tiny nudges,
+## physics-driven RigidBodies, and Regiment movement-tray blocks (whose facing is set only via an
+## explicit pivot — see _should_auto_face). NOTE: the facing axis sign may need a one-line eyeball tweak.
 const AUTO_FACE_DEADZONE_M: float = 0.02  # min horizontal drag (m) before a drop implies a new facing
 func _auto_face_moved_models() -> void:
 	var rotation_batch: Array = []
 	for obj in _selected_objects:
-		if not is_instance_valid(obj) or obj is RigidBody3D or not _drag_start_positions.has(obj):
+		# is_instance_valid must guard before the typed _should_auto_face() call —
+		# a freed object cannot be passed as a Node3D arg (GDScript rejects it at the
+		# call site, before the function body runs).
+		if not is_instance_valid(obj) or not _drag_start_positions.has(obj):
+			continue
+		if not _should_auto_face(obj):
 			continue
 		var moved: Vector3 = obj.global_position - _drag_start_positions[obj]
 		if Vector2(moved.x, moved.z).length() < AUTO_FACE_DEADZONE_M:
@@ -972,6 +1007,26 @@ func _auto_face_moved_models() -> void:
 		_network_manager.broadcast_rotation_batch(rotation_batch)
 
 
+## Whether a moved object should be auto-faced to its drag direction after a drop.
+## Regiment movement-tray blocks keep their facing (Age of Fantasy: Regiments
+## v3.5.1, p.8 "Pivoting": a unit's facing only changes via an explicit pivot during
+## a move action — never implicitly from the drag direction). Rigid bodies are
+## physics-driven and ignore scripted rotation.
+##
+## Precondition: callers must is_instance_valid-check freed objects BEFORE calling
+## (a freed object is rejected by the typed Node3D param at the call site). The
+## null/is_instance_valid guard here covers the null case for direct callers.
+static func _should_auto_face(obj: Node3D) -> bool:
+	if obj == null or not is_instance_valid(obj):
+		return false
+	if obj is RigidBody3D:
+		return false
+	if obj is RegimentTray:
+		return false
+	return true
+
+
+## Cancel drag and restore all objects to their original positions
 func _cancel_drag() -> void:
 	if not _is_dragging:
 		return
@@ -1019,16 +1074,104 @@ func _record_move_for_undo() -> void:
 		undo_manager.push(UndoManager.MoveAction.new(objects, from_positions, to_positions, _network_manager, move_peer))
 
 
+## Whether the current selection is exclusively RegimentTray blocks (so R-hold uses
+## mouse-follow rotation instead of the continuous spin).
+func _selection_is_regiment_only() -> bool:
+	if _selected_objects.is_empty():
+		return false
+	for obj in _selected_objects:
+		if not (obj is RegimentTray):
+			return false
+	return true
+
+
+## Whether the current selection is exclusively RegimentTray blocks (so R-hold uses
+## mouse-follow rotation instead of the continuous spin). Public wrapper for main.gd.
+func is_selection_regiment_only() -> bool:
+	return _selection_is_regiment_only()
+
+
+## One frame of mouse-follow rotation for the selected regiment tray(s). Public
+## wrapper for main.gd's Shift+R group-rotation path.
+func step_regiment_cursor_rotation(delta: float) -> void:
+	_rotate_regiments_to_cursor(delta)
+
+
+## Rotate the selected regiment tray(s) to face the cursor (mouse-driven rotation).
+## The tray's facing (+Z) turns toward the cursor's table position; the cumulative
+## degrees rotated (vs the gesture's start) is shown in the rotation label. AoF:R
+## v3.5.1 p.8 "Pivoting" — the player decides if the resulting pivot is legal.
+func _rotate_regiments_to_cursor(delta: float) -> void:
+	var cursor := get_cursor_table_position()
+	if cursor == Vector3.ZERO:
+		return
+	var any_rotated := false
+	var first_delta_deg := 0.0
+	var found_first := false
+	for obj in _selected_objects:
+		if not (obj is RegimentTray) or not is_instance_valid(obj):
+			continue
+		var tray := obj as RegimentTray
+		var to_cursor := Vector2(cursor.x - tray.global_position.x, cursor.z - tray.global_position.z)
+		if to_cursor.length_squared() < 0.0000001:
+			continue
+		# Facing +Z = atan2(x, z); the tray's rotation.y rotates +Z, so the world
+		# facing is (sin(rot), cos(rot)). We want facing -> to_cursor, so:
+		var target_rot: float = atan2(to_cursor.x, to_cursor.y)
+		tray.rotation.y = target_rot
+		if _rotation_capture.has(tray):
+			var start_rot: float = _rotation_capture[tray]
+			var deg := rad_to_deg(target_rot - start_rot)
+			if not found_first:
+				first_delta_deg = deg
+				found_first = true
+			any_rotated = true
+	# Show the cumulative degrees on the first rotated tray (mirrors the spin label).
+	if any_rotated:
+		set_rotation_label(first_delta_deg)
+	# Throttled broadcast (same cadence as the spin path).
+	_rotation_broadcast_timer += delta
+	if _rotation_broadcast_timer >= ROTATION_BROADCAST_INTERVAL and _network_manager:
+		_rotation_broadcast_timer = 0.0
+		var batch: Array = []
+		for obj in _selected_objects:
+			if is_instance_valid(obj) and obj.has_meta("network_id"):
+				batch.append(obj.get_meta("network_id"))
+				batch.append(obj.rotation.y)
+		if batch.size() > 0 and _network_manager.is_multiplayer_active():
+			_network_manager.broadcast_rotation_batch(batch)
+
+
 ## Snapshots rotation.y of the current selection at the start of a rotate gesture.
 func begin_rotation_capture() -> void:
 	_rotation_capture.clear()
 	for obj in _selected_objects:
 		if is_instance_valid(obj):
 			_rotation_capture[obj] = obj.rotation.y
+	# Reset the cumulative-rotation counter; the label itself is shown only while a
+	# continuous rotate is in progress (update_rotation_label), not for one-shot snaps.
+	_rotation_accumulated_deg = 0.0
+
+
+## Accumulate `delta_deg` into the rotation label and reposition it above the pivot
+## (first selected object). Called each frame during a continuous rotate gesture
+## (plain R in _process, Shift+R group rotation from main.gd).
+func update_rotation_label(delta_deg: float) -> void:
+	_rotation_accumulated_deg += delta_deg
+	_show_rotation_label(_rotation_accumulated_deg)
+
+
+## Set the rotation label directly to `degrees` (no accumulation). Used by the
+## mouse-follow rotation path for regiment trays, where the degrees shown is the
+## angle between the current cursor direction and the gesture's start facing — not
+## a per-frame delta to accumulate.
+func set_rotation_label(degrees: float) -> void:
+	_show_rotation_label(degrees)
 
 
 ## Commits a rotate gesture as one undoable RotateAction. No-op if nothing rotated.
 func commit_rotation_capture() -> void:
+	_hide_rotation_label()
 	if undo_manager == null or _rotation_capture.is_empty():
 		_rotation_capture.clear()
 		return
@@ -1049,6 +1192,42 @@ func commit_rotation_capture() -> void:
 	if rotated and not objects.is_empty():
 		var rot_peer: int = _network_manager.get_my_peer_id() if _network_manager else 0
 		undo_manager.push(UndoManager.RotateAction.new(objects, from_rot, to_rot, _network_manager, rot_peer))
+
+
+## Create (if needed) and show the rotation label with `degrees` (cumulative this
+## gesture), anchored above the first selected object. No-op if nothing is selected.
+func _show_rotation_label(degrees: float) -> void:
+	if _selected_objects.is_empty():
+		return
+	var anchor: Node3D = _selected_objects[0]
+	if not is_instance_valid(anchor):
+		return
+	if _rotation_label == null:
+		_rotation_label = Label3D.new()
+		_rotation_label.name = "RotationLabel"
+		_rotation_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_rotation_label.no_depth_test = true
+		_rotation_label.font_size = ROTATION_LABEL_FONT_SIZE
+		_rotation_label.outline_size = 8
+		_rotation_label.outline_modulate = Color.BLACK
+		_rotation_label.modulate = Color.WHITE
+		add_child(_rotation_label)
+	# Normalise to (-180, 180] for a readable readout (a 270° CW turn reads as -90°).
+	var deg := fmod(degrees, 360.0)
+	if deg > 180.0:
+		deg -= 360.0
+	elif deg <= -180.0:
+		deg += 360.0
+	_rotation_label.text = "%+.0f°" % deg
+	_rotation_label.global_position = Vector3(anchor.global_position.x, ROTATION_LABEL_Y, anchor.global_position.z)
+	_rotation_label.visible = true
+
+
+## Hide the rotation label (called when the gesture ends). The node is reused on the
+## next gesture to avoid per-frame allocation churn.
+func _hide_rotation_label() -> void:
+	if _rotation_label:
+		_rotation_label.visible = false
 
 
 ## Public wrapper to clear the current selection (e.g., after deleting it).
@@ -1235,6 +1414,13 @@ func _update_drag(screen_pos: Vector2) -> void:
 		# Movement delta = how far the cursor moved since the grab, so the grabbed point
 		# stays under the cursor (the unit no longer snaps its first model to the cursor).
 		var delta_xz = Vector3(intersection.x - _drag_grab_world.x, 0, intersection.z - _drag_grab_world.z)
+
+		# AoF:R v3.5.1 p.8 — Rush/Charge are forward-only. Hold Shift while dragging a
+		# regiment tray to lock movement to its facing axis (forward/backward only, no
+		# sideways drift). The player decides whether the move is a legal Rush/Charge;
+		# this is a sandbox movement aid, not a rule enforcement.
+		if Input.is_key_pressed(KEY_SHIFT) and anchor is RegimentTray:
+			delta_xz = RegimentTray.project_drag_onto_facing(delta_xz, (anchor as RegimentTray).facing_dir())
 
 		# Move all selected objects by the same XZ delta (formation kept). Each model's
 		# Y rests on the ground surface beneath its own base (table or a terrain prop),

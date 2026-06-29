@@ -140,3 +140,89 @@ func test_cursor_table_position_without_camera_is_zero() -> void:
 	# With no active Camera3D in the test viewport the helper must fall back to
 	# Vector3.ZERO rather than crash.
 	assert_bool(_om.get_cursor_table_position() == Vector3.ZERO).is_true()
+
+
+# ===== Auto-face predicate (static, pure) =====
+## _should_auto_face decides whether a moved object is auto-faced to its drag
+## direction on drop. Regiment movement-tray blocks keep their facing (AoF:R
+## v3.5.1, p.8 "Pivoting"); RigidBodies are physics-driven. Pure/static so it
+## is testable without a camera or viewport.
+
+func test_should_auto_face_true_for_plain_node3d() -> void:
+	var node: Node3D = auto_free(Node3D.new())
+	add_child(node)
+	assert_bool(ObjectManagerScript._should_auto_face(node)).is_true()
+
+
+func test_should_auto_face_false_for_rigid_body() -> void:
+	var body: Node3D = auto_free(RigidBody3D.new())
+	add_child(body)
+	assert_bool(ObjectManagerScript._should_auto_face(body)).is_false()
+
+
+func test_should_auto_face_false_for_regiment_tray() -> void:
+	# Regression guard: a RegimentTray must NOT be auto-faced. Previously the tray
+	# was rotated to the drag direction, silently overriding its set facing.
+	var tray: Node3D = auto_free(RegimentTray.new())
+	add_child(tray)
+	assert_bool(ObjectManagerScript._should_auto_face(tray)).is_false()
+
+
+func test_should_auto_face_false_for_null() -> void:
+	assert_bool(ObjectManagerScript._should_auto_face(null)).is_false()
+
+
+# ===== Auto-face-on-drop: regiment facing preservation (integrative) =====
+
+func test_auto_face_preserves_regiment_tray_facing() -> void:
+	# A regiment movement-tray block keeps its set facing after a drag (AoF:R
+	# v3.5.1, p.8 "Pivoting": facing only changes via an explicit pivot, never
+	# implicitly from the drag direction). The tray is selected, grabbed at the
+	# origin, and dropped 1 m along +X (well past the auto-face deadzone); its
+	# facing must stay where the player set it.
+	var tray: Node3D = auto_free(RegimentTray.new())
+	add_child(tray)
+	tray.global_position = Vector3.ZERO
+	tray.rotation.y = 1.0  # arbitrary, non-zero facing (radians)
+	var facing_before: float = tray.rotation.y
+
+	_om.select_objects([tray])
+	_om._drag_start_positions[tray] = Vector3.ZERO
+	tray.global_position = Vector3(1.0, 0.0, 0.0)
+
+	_om._auto_face_moved_models()
+
+	assert_float(tray.rotation.y).is_equal_approx(facing_before, 0.0001)
+
+
+func test_auto_face_still_turns_loose_models() -> void:
+	# A loose (non-regiment) miniature is still auto-faced to its drag direction
+	# after a drop — the fix must not suppress the existing playtest behaviour.
+	var mini: Node3D = _om.spawn_miniature(Vector3.ZERO, false)
+	_om.select_objects([mini])
+	_om._drag_start_positions[mini] = Vector3.ZERO
+	# Move +Z (north). atan2(moved.x, moved.z) = atan2(0, 1) = 0 -> faces +Z.
+	mini.global_position = Vector3(0.0, 0.0, 1.0)
+
+	_om._auto_face_moved_models()
+
+	assert_float(mini.rotation.y).is_equal_approx(0.0, 0.0001)
+
+
+func test_auto_face_skips_freed_object_without_crash() -> void:
+	# A freed object in the selection (e.g. a model destroyed mid-drag) must not
+	# crash auto-face — the is_instance_valid guard at the call site short-circuits
+	# before the typed _should_auto_face call (a freed object is rejected by the
+	# Node3D param at call time). The live co-selection is still auto-faced.
+	var mini: Node3D = _om.spawn_miniature(Vector3.ZERO, false)
+	var doomed: Node3D = _om.spawn_miniature(Vector3.ZERO, false)
+	_om.select_objects([doomed, mini])
+	_om._drag_start_positions[doomed] = Vector3.ZERO
+	_om._drag_start_positions[mini] = Vector3.ZERO
+	doomed.free()  # destroy after registration — simulates a mid-drag kill
+	mini.global_position = Vector3(0.0, 0.0, 1.0)  # move the live one +Z
+
+	_om._auto_face_moved_models()  # must not error on the freed co-selection
+
+	# Live model was still auto-faced; the freed one was skipped silently.
+	assert_float(mini.rotation.y).is_equal_approx(0.0, 0.0001)
