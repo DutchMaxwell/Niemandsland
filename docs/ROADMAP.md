@@ -22,7 +22,7 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **Alpha is live; `0.3.7.2-alpha` (Age of Fantasy: Regiments handling + the Linux self-updater fix) ships on top of `0.3.7.1`.** The `0.3.7.1` playtest-feedback
+- **Alpha is live; `0.3.7.1-alpha` shipped (2026-06-26) on all three platforms.** The playtest-feedback
   patch on top of `0.3.7-alpha`: 8 playtest fixes (formations centre on the unit, both-way
   rotation, readable terrain labels, per-token terrain height, auto-face-on-move, lone-survivor markers,
   dead-model line of sight, an MP load-gate), plus **per-die colour tagging** (+ live MP sync), a
@@ -136,9 +136,7 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
 ## ✅ Recently shipped
 
-See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.7.2-alpha` (2026-06-29):** Age of Fantasy: Regiments
-handling — frontage cycle, axis-locked drag, pivot snap, pooled-wound counter, 45° arc quadrants,
-mouse-driven rotation — plus the Linux self-updater ETXTBSY fix. **`0.3.7.1-alpha` (2026-06-26):** playtest-feedback patch — 8
+See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.7.1-alpha` (2026-06-26):** playtest-feedback patch — 8
 playtest fixes (LoS / markers / tokens / formation / rotation / labels / auto-face / load-gate), per-die
 colour tagging + live MP sync, a one-click in-game self-updater, a live CDN asset manifest, and the
 Ambush/Scout deployment field. **`0.3.7-alpha` (2026-06-25):** the MP reconnect-storm / desync
