@@ -75,6 +75,12 @@ const PLAYER_COLOR_NAMES := {1: "Blue", 2: "Red", 3: "Green", 4: "Gold"}
 ## Current selection context
 var _current_selection: Array = []
 
+## Regiment wound-dialog state: when non-null, the wounds dialog is editing a
+## regiment's pooled-wound counter (not a per-model wound). Set by
+## _open_regiment_wounds_dialog; checked by _on_wounds_changed.
+var _regiment_wound_dialog_tray: Node3D = null
+var _regiment_wound_dialog_pool_max: int = 0
+
 ## Is the radial menu scene loaded
 var _menu_scene: PackedScene = null
 
@@ -144,6 +150,7 @@ func initialize(p_object_manager: Node, p_army_manager: OPRArmyManager) -> void:
 		wounds_dialog = WoundsDialog.create_simple()
 		ui_parent.add_child(wounds_dialog)
 		wounds_dialog.wounds_changed.connect(_on_wounds_changed)
+		wounds_dialog.dialog_closed.connect(_on_wounds_dialog_closed)
 
 	# Create casts dialog
 	if not casts_dialog:
@@ -198,6 +205,25 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 	if game_unit:
 		context["game_unit"] = game_unit
 		context["selection"] = selected_objects
+
+		# Age of Fantasy: Regiments — a regiment model resolves to its movement-tray
+		# block. Tough(1) units use the pooled-wound counter (back-rank casualties,
+		# AoF:R v3.5.1 p.9); Tough(X>1) units keep the classic per-model wound
+		# tracking, so they fall through to the standard model/unit menu.
+		if first_obj.has_meta(RegimentTray.MEMBER_META):
+			var tray = first_obj.get_meta(RegimentTray.MEMBER_META)
+			if tray and is_instance_valid(tray) and army_manager:
+				var regiment: Regiment = tray.get_meta("regiment") if tray.has_meta("regiment") else null
+				var toughs: Array = []
+				if regiment and regiment.game_unit:
+					for m in (regiment.game_unit as GameUnit).models:
+						toughs.append(maxi((m as ModelInstance).wounds_max, 1))
+				if Regiment.is_pooled_tough1(toughs):
+					context["regiment_tray"] = tray
+					var readout: Dictionary = army_manager.regiment_wound_readout(tray)
+					items = RadialMenu.create_regiment_menu(game_unit, int(readout["remaining"]), int(readout["pool_max"]))
+					radial_menu.open(screen_position, items, context)
+					return
 
 		# Check if entire unit is selected
 		var all_models = UnitUtils.get_all_unit_models(first_obj)
@@ -269,6 +295,10 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_toggle_fatigued(context)
 		"toggle_shaken":
 			_toggle_shaken(context)
+		"regiment_wounds":
+			_open_regiment_wounds_dialog(context)
+		"regiment_frontage":
+			_regiment_frontage(context)
 		"delete_model":
 			_delete_model(context)
 		"delete_unit":
@@ -467,6 +497,15 @@ func delete_objects(objects: Array) -> void:
 	for obj in objects:
 		if not (obj is Node3D) or not is_instance_valid(obj):
 			continue
+		# Age of Fantasy: Regiments — a selected tray deletes the WHOLE unit (mirrors
+		# the radial menu's "Delete" action); individual regiment models are never
+		# deleted on their own (casualties come from the back via the wound counter,
+		# AoF:R v3.5.1 p.9). Skip member models; expand trays to their unit.
+		if obj is RegimentTray:
+			_delete_whole_regiment(obj as RegimentTray)
+			continue
+		if obj.has_meta(RegimentTray.MEMBER_META):
+			continue
 		var model: ModelInstance = UnitUtils.get_model_instance(obj)
 		if model:
 			models.append(model)
@@ -489,6 +528,26 @@ func delete_objects(objects: Array) -> void:
 
 	if undo_manager:
 		undo_manager.push(action)
+
+
+## Delete an entire regiment unit (all its models + the tray). Mirrors `_delete_unit`
+## but resolves the GameUnit from the tray's Regiment companion. Used by the Delete
+## key when a movement-tray block is selected (left-click selects the tray).
+func _delete_whole_regiment(tray: RegimentTray) -> void:
+	var regiment: Regiment = tray.get_meta("regiment") if tray.has_meta("regiment") else null
+	var game_unit: GameUnit = regiment.game_unit if regiment else null
+	if game_unit == null:
+		tray.queue_free()
+		return
+	for model in game_unit.models:
+		model.is_alive = false
+		model.wounds_current = 0
+		if model.node and is_instance_valid(model.node):
+			model.node.queue_free()
+	if network_manager:
+		network_manager.broadcast_unit_delete(game_unit)
+	tray.queue_free()
+	unit_deleted.emit(game_unit)
 
 
 func _delete_model(context: Dictionary) -> void:
@@ -545,6 +604,22 @@ func _delete_generic(context: Dictionary) -> void:
 
 ## Called when wounds are changed via the wounds dialog.
 func _on_wounds_changed(model: ModelInstance, new_wounds: int) -> void:
+	# Regiment pooled-wound dialog: the proxy model's wounds_current tracks the
+	# remaining pool; convert to wounds_taken and apply to the regiment (removes/revives
+	# models from the back rank, AoF:R v3.5.1 p.9).
+	if _regiment_wound_dialog_tray != null and is_instance_valid(_regiment_wound_dialog_tray):
+		var regiment: Regiment = _regiment_wound_dialog_tray.get_meta("regiment") if _regiment_wound_dialog_tray.has_meta("regiment") else null
+		if regiment != null and army_manager:
+			var taken: int = _regiment_wound_dialog_pool_max - new_wounds
+			# Push one undoable action covering the full delta.
+			var from_taken: int = regiment.wounds_taken
+			if taken != from_taken and undo_manager != null:
+				var move_peer: int = network_manager.get_my_peer_id() if network_manager else 0
+				undo_manager.push(UndoManager.RegimentWoundAction.new(regiment, from_taken, taken, army_manager, network_manager, move_peer))
+			army_manager.apply_regiment_wounds(regiment, taken)
+		return
+
+	# Per-model wound path (loose models + Tough(X>1) regiments):
 	# Update visual wound marker
 	_update_wound_marker(model)
 
@@ -567,6 +642,13 @@ func _on_wounds_changed(model: ModelInstance, new_wounds: int) -> void:
 		network_manager.broadcast_model_wounds(model)
 
 
+## Called when the wounds dialog closes. Clears the regiment-pooled-wound state so
+## subsequent per-model wound edits don't get misrouted.
+func _on_wounds_dialog_closed() -> void:
+	_regiment_wound_dialog_tray = null
+	_regiment_wound_dialog_pool_max = 0
+
+
 ## If the model belongs to a regiment movement-tray block, re-rank the block so the
 ## ranks close on a casualty (or re-open on revive). No-op for loose skirmish models.
 func _reform_regiment_for_model(model: ModelInstance) -> void:
@@ -577,6 +659,53 @@ func _reform_regiment_for_model(model: ModelInstance) -> void:
 	var tray = model.node.get_meta(RegimentTray.MEMBER_META)
 	if is_instance_valid(tray) and tray.has_method("reform_from_unit"):
 		tray.reform_from_unit(model.unit)
+
+
+## Open the wounds dialog for a regiment's pooled-wound counter. Creates a proxy
+## ModelInstance whose wounds_max = pool_max and wounds_current = remaining, so the
+## standard WoundsDialog (+/- / Heal Full / Kill) works unchanged. On wounds_changed,
+## the delta is applied to the regiment pool via OPRArmyManager.apply_regiment_wounds
+## (which removes/revives models from the back rank, AoF:R v3.5.1 p.9).
+func _open_regiment_wounds_dialog(context: Dictionary) -> void:
+	var tray = context.get("regiment_tray", null)
+	if tray == null or not is_instance_valid(tray) or not army_manager:
+		return
+	var regiment: Regiment = tray.get_meta("regiment") if tray.has_meta("regiment") else null
+	if regiment == null or regiment.game_unit == null:
+		return
+	var gu := regiment.game_unit as GameUnit
+	var pool := Regiment.pool_max(_collect_toughs(gu))
+	var remaining := pool - regiment.wounds_taken
+	# Build a proxy model whose wounds represent the regiment pool.
+	var proxy := ModelInstance.new()
+	proxy.wounds_max = pool
+	proxy.wounds_current = remaining
+	proxy.is_alive = remaining > 0
+	proxy.unit = gu
+	proxy.properties["name"] = gu.get_name()
+	# Stash the tray + pool so the wounds_changed handler can resolve back to the regiment.
+	_regiment_wound_dialog_tray = tray
+	_regiment_wound_dialog_pool_max = pool
+	if wounds_dialog:
+		wounds_dialog.open(proxy)
+	else:
+		push_warning("Wounds dialog not available")
+
+
+## Collect per-model Tough values (wounds_max) for a regiment's GameUnit.
+func _collect_toughs(gu: GameUnit) -> Array:
+	var toughs: Array = []
+	for m in gu.models:
+		toughs.append(maxi((m as ModelInstance).wounds_max, 1))
+	return toughs
+
+
+## Cycle the regiment's frontage (mirrors Shift+F).
+func _regiment_frontage(context: Dictionary) -> void:
+	var tray = context.get("regiment_tray", null)
+	if tray == null or not is_instance_valid(tray) or not army_manager:
+		return
+	army_manager.cycle_selected_regiment_frontage([tray])
 
 
 ## Updates or creates a wound marker (red disc with border) next to a model.
@@ -674,6 +803,18 @@ func _update_activated_markers(unit: GameUnit) -> void:
 	if not token_node:
 		return
 	_update_token(token_node, unit, "ActivatedMarker", unit.is_activated)
+
+
+## Updates the regiment pooled-wound marker for a unit. The token sits on the unit
+## boundary (same as Fatigued/Shaken), so it reads as "this regiment has taken N
+## casualties". `wounds_taken` is the count to display on the token (counting UP, not
+## the remaining pool). AoF:R v3.5.1 p.9. Hidden when wounds_taken == 0.
+func update_regiment_wound_token(unit: GameUnit, wounds_taken: int) -> void:
+	var token_node = _get_unit_token_node(unit)
+	if not token_node:
+		return
+	var is_active: bool = wounds_taken > 0
+	_update_token(token_node, unit, "WoundMarker", is_active, wounds_taken)
 
 
 ## Public method to initialize status markers for a unit after import.

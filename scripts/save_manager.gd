@@ -798,7 +798,8 @@ func _restore_regiments_after_load() -> void:
 		var frontage = int(reg_data.get("frontage", 5))
 		var pos = _array_to_vector3(reg_data.get("tray_pos", [0, 0, 0]))
 		var rot_y = float(reg_data.get("tray_rot_y", 0.0))
-		army_manager.restore_regiment(game_unit, frontage, pos, rot_y)
+		var wounds_taken = int(reg_data.get("wounds_taken", 0))
+		army_manager.restore_regiment(game_unit, frontage, pos, rot_y, wounds_taken)
 
 
 ## Deserialize game state (round, turn, etc.)
