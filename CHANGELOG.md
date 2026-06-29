@@ -6,12 +6,53 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Added
+- **Regiments: frontage cycle, axis-locked drag, pivot snap.** Three Age of Fantasy: Regiments
+  handling aids for the movement-tray block (v3.5.1, p.6 "Unit Formations" + p.8 "Pivoting"):
+  - **Shift+F** cycles the selected regiment's frontage (models per rank) through the common
+    widths (5 → 4 → 3 → 2 → 1 → 5, skipping widths wider than the live model count). Re-ranks
+    the block in place, undoes as one action, and syncs to multiplayer peers.
+  - **Shift+drag** locks a regiment's movement to its facing axis (forward/backward only, no
+    sideways drift) — the natural input for Rush/Charge (forward-only) and a quick Advance.
+  - **Ctrl+R** snaps the selected regiment tray(s) to the nearest 90° cardinal facing, for fast
+    alignment. The player decides whether the snap is a legal pivot (Hold ≤ 180°, Move ≤ 90°).
+- **Regiments: pooled-wound counter, radial menu, arc quadrants, rotation readout.** Four more
+  AoF:R handling aids:
+  - **Pooled-wound counter (Tough(1) units).** A Tough(1) regiment is treated as a single
+    Tough(pool) entity for the wound counter (a 10-model Tough(1) unit = Tough(10)). A red
+    **WoundMarker token** (the same disc + "WOUNDS" arc + number used for per-model wounds)
+    appears on the **unit boundary** (alongside Fatigued/Shaken/Activated) and counts the
+    casualties **UP** from 0. Right-click a regiment model → radial menu offers a **W n/n**
+    item that opens the **standard WoundsDialog** (the same as for a single Tough(X) model)
+    with +/- / Heal Full / Kill — each click adjusts the pool, removing/reviving models from
+    the back rank (AoF:R v3.5.1 p.9). Undoable, MP-synced, persisted in `.nml`. Individual
+    model wounding/deletion is disabled for Tough(1) regiments. **Tough(X>1) regiments keep
+    the classic per-model wound tracking** (each model absorbs its Tough value before dying;
+    the standard wounds dialog applies per model).
+  - **Regiment radial menu.** Right-clicking a Tough(1) regiment model opens a regiment-specific
+    menu (wound counter, frontage, activate, status tokens, delete unit) instead of the per-model
+    menu. Tough(X>1) regiments keep the classic model/unit menu.
+  - **45° arc quadrants (selected unit only).** The facing display (F key) now shows the four arcs
+    — front, left flank, rear, right flank — each a 90° quadrant (±45°), per AoF:R v3.5.1 p.5
+    "Unit Facing" (was a single 180° front half-plane). Arcs render only on the SELECTED regiment
+    (not all), with a 3× larger radius (18″) and smaller labels (20% font). The measure-tool
+    label reads Front / Left Flank / Rear / Right Flank.
+  - **Mouse-driven rotation + readout.** Regiment trays rotate by MOUSE control (the tray turns to
+    face the cursor while R is held) instead of a continuous spin — the natural input for aligning
+    a ranked block. A floating label shows the angle between the current cursor direction and the
+    gesture's start facing (not a running sum), anchored above the pivot (20% font).
+
 ### Fixed
 - **Self-updater (Linux) swaps the running binary correctly.** The in-place apply copied the new files
   over the still-running executable, which Linux refuses (`ETXTBSY`) — so the one-click update failed
   with a misleading "permissions" message and fell back to the browser download. It now **unlinks each
   existing target before copying** (the running process keeps its open inode), matching the macOS path.
   Takes effect for updates starting *from* the release that carries this fix.
+- **Regiments keep their facing after a drag.** Auto-face-on-drop was rotating the movement-tray block
+  to the drag direction, silently overriding the player's set facing (front/flank/rear arcs and the
+  facing arrow drifted out of sync, and the wrong rotation was broadcast to multiplayer peers). A
+  regiment's facing now only changes via an explicit pivot — **Age of Fantasy: Regiments v3.5.1, p.8
+  "Pivoting"** — while loose models still auto-face their movement direction as before.
 
 ## [0.3.7.1-alpha] — 2026-06-25
 

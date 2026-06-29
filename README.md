@@ -91,10 +91,20 @@ invocation and the gdUnit4 test runner), see [`docs/DEVELOPMENT.md`](docs/DEVELO
 |---|---|
 | Select / multi-select | Left-click / `Alt`+Left-click |
 | Box select | Left-drag on table |
-| Move / rotate | Left-drag / `R` |
+| Move / rotate | Left-drag / `R` (live degree readout) |
+| Snap rotate to 90° (regiments) | `Ctrl`+`R` |
 | Delete | `Del` / `Backspace` |
 | Copy / paste / duplicate | `Ctrl`+`C` / `V` / `D` |
 | Arrange (multi-select) | `1`–`9` rows, `A` arrow |
+
+| Regiments (AoF:R) | |
+|---|---|
+| Toggle 45° arc quadrants (front/flank/rear) — selected unit | `F` |
+| Cycle frontage (models per rank) | `Shift`+`F` |
+| Axis-locked drag (forward/backward only) | `Shift`+drag |
+| Snap to nearest 90° facing | `Ctrl`+`R` |
+| Mouse-driven rotation (R held) | `R` (drag mouse) |
+| Take/revive casualties (pooled Tough(1)) | Right-click model → `W` |
 
 | Other | |
 |---|---|
@@ -132,6 +142,7 @@ scale, **dice run in a separate scaled SubViewport** (our own MIT `dice_tray.gd`
 - [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) — honest alpha limitations & caveats
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — curated feature backlog (Now / Next / Ideas / Shipped)
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — systems & code map
+- [`docs/REGIMENTS.md`](docs/REGIMENTS.md) — Age of Fantasy: Regiments design notes
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — build, run, test
 - [`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md) — Wargaming Simulator integration
 

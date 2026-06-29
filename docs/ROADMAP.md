@@ -38,9 +38,13 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
 - **Age of Fantasy — factions + Regiments** — generate the AoF faction 3D models via **Model Forge
   V2** (→ R2; this also resolves the `saurians` ↔ `saurian_starhost` faction-folder mismatch). Then
-  verify Regiments import vs a real `aofr` list and add the Regiments **handling polish** (move as one
-  block, axis-locked straight drag, frontage cycle 5-wide ↔ other, wheel/pivot about the front
-  corner — `regiment_tray.gd` has `frontage`/`reform` but no block-move/cycle/wheel yet). Beta. _L_
+  verify Regiments import vs a real `aofr` list. **Regiments handling polish — SHIPPED:** auto-face-on-drop
+  facing fix (P0); frontage cycle (Shift+F), axis-locked drag (Shift+drag), pivot snap (Ctrl+R),
+  mouse-driven rotation (R-hold, AoF:R p.8 "Pivoting"); pooled-wound counter with back-rank casualty
+  removal + standard WoundsDialog (p.9, Tough(1) pooled / Tough(X>1) classic), regiment radial menu,
+  45° arc quadrants on the selected unit (p.5), live rotation-degrees readout, unit-card for trays.
+  **Remaining:** live import verification vs a real `aofr` list; display-only melee aids
+  (two-front-rows highlight, full-rows counter, flank/rear morale modifier hint). Beta. _L_
 - **MP reconnect — 3+ player hardening** — mirror the host's peer→slot table to guests (3+-player
   avatar/cursor colour agreement after a reconnect), a shared `slot→palette` helper (army bases match
   presence colour at slot ≥ 5), an import-await timeout, and restoring a regiment tray's serialized
