@@ -423,6 +423,7 @@ func _ready() -> void:
 	# Initialize OPR Army Manager
 	opr_army_manager = OPRArmyManager.new()
 	opr_army_manager.object_manager = object_manager
+	opr_army_manager.network_manager = network_manager
 	# Name the node explicitly: ObjectManager.clear_all_objects() and
 	# UnitBoundaryVisualizer both resolve it via "/root/Main/OPRArmyManager".
 	# Without this, add_child() auto-names it "@Node@N" and those lookups fail.
@@ -801,16 +802,40 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_L and not event.ctrl_pressed:
 			object_manager.toggle_lock_selected()
 			get_viewport().set_input_as_handled()
-		# Toggle regiment front-arc wedges (F key) - facing display aid (AoF:R, no rule)
+		# Toggle 45° arc quadrants on the SELECTED regiment tray(s) only (F key) -
+		# facing display aid (AoF:R v3.5.1 p.5, no rule). Showing only the selection
+		# keeps the table uncluttered (was: toggle every regiment at once).
 		elif event.keycode == KEY_F and not event.ctrl_pressed and not event.shift_pressed:
 			if opr_army_manager:
-				opr_army_manager.toggle_all_regiment_arcs()
+				opr_army_manager.toggle_selected_regiment_arcs(object_manager.get_selected_objects())
+			get_viewport().set_input_as_handled()
+		# Cycle regiment frontage (Shift+F) - reform to the next width in the cycle
+		# (5 -> 4 -> 3 -> 2 -> 1 -> 5). AoF:R v3.5.1 p.6 "Unit Formations". Only
+		# selected RegimentTray blocks are affected; loose models are ignored.
+		elif event.keycode == KEY_F and event.shift_pressed and not event.ctrl_pressed:
+			if opr_army_manager:
+				opr_army_manager.cycle_selected_regiment_frontage(object_manager.get_selected_objects())
 			get_viewport().set_input_as_handled()
 		# Rotate selected group around first object (Shift+R) - continuous rotation
 		elif event.keycode == KEY_R and event.shift_pressed:
 			if not _is_group_rotating:
 				object_manager.begin_rotation_capture()
 			_is_group_rotating = true
+			get_viewport().set_input_as_handled()
+		# Snap selected regiment trays to the nearest 90° facing (Ctrl+R). AoF:R
+		# v3.5.1 p.8 "Pivoting" — the four cardinal facings are the natural snap
+		# targets (Hold may pivot up to 180°, Move actions up to 90°). The player
+		# decides whether the snap is a legal pivot; this is a quick-alignment aid.
+		elif event.keycode == KEY_R and event.ctrl_pressed and not event.shift_pressed:
+			object_manager.begin_rotation_capture()
+			var snapped: int = 0
+			for obj in object_manager.get_selected_objects():
+				if obj is RegimentTray and is_instance_valid(obj):
+					obj.rotation.y = RegimentTray.nearest_quarter_turn(obj.rotation.y)
+					snapped += 1
+			object_manager.commit_rotation_capture()
+			if snapped > 0:
+				AudioManager.play_sfx(AudioManager.SFXType.MODEL_PLACE)
 			get_viewport().set_input_as_handled()
 		# Undo (Ctrl+Z)
 		elif event.keycode == KEY_Z and event.ctrl_pressed and not event.shift_pressed:
@@ -882,11 +907,18 @@ func _apply_version_to_info_label() -> void:
 
 func _process(delta: float) -> void:
 	_check_fps_advisory()
-	# Handle continuous group rotation (Shift+R held; add Ctrl to reverse)
+	# Handle continuous group rotation (Shift+R held; add Ctrl to reverse).
+	# Regiment movement-tray blocks rotate by MOUSE control (cursor-follow), not a
+	# continuous spin — object_manager._rotate_regiments_to_cursor handles that path.
 	if _is_group_rotating:
-		var group_rotation_dir := -1.0 if Input.is_key_pressed(KEY_CTRL) else 1.0
-		var rotation_amount = GROUP_ROTATION_SPEED * delta * group_rotation_dir
-		object_manager.rotate_selected_group(rotation_amount)
+		if object_manager.is_selection_regiment_only():
+			object_manager.step_regiment_cursor_rotation(delta)
+		else:
+			var group_rotation_dir := -1.0 if Input.is_key_pressed(KEY_CTRL) else 1.0
+			var rotation_amount = GROUP_ROTATION_SPEED * delta * group_rotation_dir
+			object_manager.rotate_selected_group(rotation_amount)
+			# Live cumulative-degrees readout above the pivot object.
+			object_manager.update_rotation_label(rotation_amount)
 
 		# Throttled batch broadcast of positions + rotations to remote peers
 		_group_rotation_broadcast_timer += delta
@@ -3612,6 +3644,7 @@ func _init_radial_menu() -> void:
 	add_child(undo_manager)
 	object_manager.undo_manager = undo_manager
 	radial_menu_controller.undo_manager = undo_manager
+	opr_army_manager.undo_manager = undo_manager
 
 	# Pass stats tooltip reference for displaying unit stats
 	radial_menu_controller.stats_tooltip = opr_stats_tooltip
@@ -3657,6 +3690,7 @@ func _init_radial_menu() -> void:
 	unit_boundary_visualizer.object_manager = object_manager
 	add_child(unit_boundary_visualizer)
 	radial_menu_controller.boundary_visualizer = unit_boundary_visualizer
+	opr_army_manager.radial_menu_controller = radial_menu_controller
 
 	# Battlefield stains: leave a blood pool (or oil + fire for vehicles) where a model is
 	# removed (issue #60). Hooked off model/unit removal, local + remote.

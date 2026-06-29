@@ -85,6 +85,16 @@ var object_manager: Node3D
 ## Reference to the table for positioning
 var table: Node3D
 
+## NetworkManager reference (injected by main.gd) — used for regiment frontage sync.
+var network_manager: Node = null
+
+## UndoManager reference (injected by main.gd) — used for frontage-cycle undo.
+var undo_manager: Node = null
+
+## RadialMenuController reference (injected by main.gd) — used to drive the shared
+## unit-boundary wound token for regiments (same visual language as Fatigued/Shaken).
+var radial_menu_controller: Node = null
+
 ## Loaded armies by player
 var armies: Dictionary = {}  # player_id -> OPRArmy
 ## Session-wide special-rule name -> description, populated from save/load and from
@@ -344,13 +354,20 @@ func form_regiment(game_unit) -> Regiment:
 	tray.set_meta("regiment", regiment)
 	game_unit.unit_properties["frontage"] = frontage
 	regiments[game_unit.unit_id] = regiment
+	# Initialise the pooled-wound counter at full strength (0 wounds taken). The
+	# boundary wound token is hidden at full strength; a loaded save restores via
+	# restore_regiment -> apply_regiment_wounds.
+	regiment.wounds_taken = 0
+	game_unit.unit_properties["regiment_wounds_taken"] = 0
+	if radial_menu_controller != null and radial_menu_controller.has_method("update_regiment_wound_token"):
+		radial_menu_controller.update_regiment_wound_token(game_unit, 0)
 	return regiment
 
 
 ## Rebuild a regiment movement-tray block on load: create the tray at the saved
 ## transform and adopt the unit's already-restored model nodes (no re-layout — the
 ## exact saved arrangement, including casualty gaps, is preserved).
-func restore_regiment(game_unit, frontage: int, pos: Vector3, rot_y: float) -> Regiment:
+func restore_regiment(game_unit, frontage: int, pos: Vector3, rot_y: float, wounds_taken: int = 0) -> Regiment:
 	if game_unit == null:
 		return null
 	var tray := RegimentTray.new()
@@ -371,11 +388,37 @@ func restore_regiment(game_unit, frontage: int, pos: Vector3, rot_y: float) -> R
 	tray.set_meta("regiment", regiment)
 	game_unit.unit_properties["frontage"] = tray.frontage
 	regiments[game_unit.unit_id] = regiment
+	# The pooled-wound counter is the source of truth for regiment casualties: apply
+	# the saved value to sync model states + re-rank + show the counter label.
+	apply_regiment_wounds(regiment, wounds_taken)
 	return regiment
 
 
+## Toggle the 45° arc quadrants on the SELECTED regiment tray(s) only (display only).
+## AoF:R v3.5.1 p.5 — the arcs are a per-unit facing aid, so showing them on every
+## regiment at once clutters the table; F now toggles only the selection. Returns
+## the new visibility state, or -1 if no regiment is selected.
+func toggle_selected_regiment_arcs(selected: Array) -> int:
+	var any_tray := false
+	var visible := false
+	for obj in selected:
+		if obj is RegimentTray and is_instance_valid(obj):
+			any_tray = true
+			visible = (obj as RegimentTray).is_arc_visible()
+			break
+	if not any_tray:
+		return -1
+	# Toggle: invert the current state and apply to all selected trays.
+	var new_state := not visible
+	for obj in selected:
+		if obj is RegimentTray and is_instance_valid(obj):
+			(obj as RegimentTray).set_arc_visible(new_state)
+	return 1 if new_state else 0
+
+
 ## Toggle the front-arc wedges on every regiment block (display only). Returns the new
-## visibility state; the facing arrows stay visible regardless.
+## visibility state; the facing arrows stay visible regardless. Retained for the
+## "show all" path (e.g. a future menu action); the F key uses toggle_selected.
 func toggle_all_regiment_arcs() -> bool:
 	_regiment_arcs_visible = not _regiment_arcs_visible
 	set_all_regiment_arcs_visible(_regiment_arcs_visible)
@@ -397,6 +440,142 @@ func form_all_regiments(army) -> void:
 		var gu = unit_to_game_unit.get(unit, null)
 		if gu:
 			form_regiment(gu)
+
+
+## Cycle the frontage (models per rank) of every selected regiment tray to the next
+## value in RegimentFormation.next_frontage's cycle (5 -> 4 -> 3 -> 2 -> 1 -> 5).
+## AoF:R v3.5.1 p.6 "Unit Formations" allows a player to reform to any width 1..N.
+## Re-ranks the block in place (tray transform is preserved), pushes one undoable
+## action per regiment, and broadcasts the new frontage to multiplayer peers.
+## `selected` is the ObjectManager's current selection (Array[Node3D]); non-regiment
+## entries are ignored. Returns the number of regiments cycled.
+func cycle_selected_regiment_frontage(selected: Array) -> int:
+	var cycled: int = 0
+	var move_peer: int = network_manager.get_my_peer_id() if network_manager else 0
+	for obj in selected:
+		if not (obj is RegimentTray) or not is_instance_valid(obj):
+			continue
+		var tray := obj as RegimentTray
+		var regiment: Regiment = tray.get_meta("regiment") if tray.has_meta("regiment") else null
+		if regiment == null or regiment.game_unit == null:
+			continue
+		var gu := regiment.game_unit as GameUnit
+		var live_count := gu.get_alive_count()
+		var from_frontage: int = tray.frontage
+		var to_frontage: int = RegimentFormation.next_frontage(from_frontage, live_count)
+		if to_frontage == from_frontage:
+			continue
+		# Capture from-state for undo before mutating.
+		var members := RegimentTray.collect_members(gu)
+		tray.reform(members.nodes, members.footprints, to_frontage)
+		regiment.frontage = to_frontage
+		gu.unit_properties["frontage"] = to_frontage
+		cycled += 1
+		# Undo (one action per regiment — mirrors how rotate captures per-object).
+		if undo_manager != null:
+			undo_manager.push(UndoManager.FrontageAction.new(tray, gu, from_frontage, to_frontage, network_manager, move_peer))
+		# MP broadcast so peers re-rank to the same frontage.
+		if network_manager != null and network_manager.is_multiplayer_active():
+			network_manager.broadcast_regiment_frontage(gu.unit_id, to_frontage)
+	return cycled
+
+
+## The per-model Tough values (wounds_max) of a regiment's models, in front-to-back
+## order (index 0 = front rank). Used by the pooled-wound counter.
+func _regiment_toughs(gu: GameUnit) -> Array[int]:
+	var toughs: Array[int] = []
+	for m in gu.models:
+		toughs.append(maxi(m.wounds_max, 1))
+	return toughs
+
+
+## Apply `wounds_taken` to a regiment: recompute each model's alive/wounds state from
+## the pooled counter (back rank dies first, AoF:R v3.5.1 p.9), re-rank the block,
+## refresh the counter label, and broadcast to peers. `regiment.wounds_taken` and
+## `unit_properties["regiment_wounds_taken"]` are set to `wounds_taken`. No undo
+## (callers wrap this in a RegimentWoundAction); no clamp (caller must clamp).
+func apply_regiment_wounds(regiment: Regiment, wounds_taken: int) -> void:
+	if regiment == null or regiment.game_unit == null or not is_instance_valid(regiment.tray):
+		return
+	var gu := regiment.game_unit as GameUnit
+	var toughs := _regiment_toughs(gu)
+	var pool := Regiment.pool_max(toughs)
+	var taken := clampi(wounds_taken, 0, pool)
+	regiment.wounds_taken = taken
+	gu.unit_properties["regiment_wounds_taken"] = taken
+	var mask := Regiment.alive_mask_for_wounds(toughs, taken)
+	for i in range(gu.models.size()):
+		var m := gu.models[i]
+		var alive: bool = mask[i] if i < mask.size() else false
+		var on_model: int = Regiment.wounds_on_model(toughs, taken, i)
+		m.is_alive = alive
+		# wounds_current = tough - wounds_taken_on_this (0 when dead).
+		m.wounds_current = maxi(maxi(int(toughs[i]), 1) - on_model, 0) if alive else 0
+		if m.node and is_instance_valid(m.node):
+			m.node.visible = alive
+			if alive:
+				m.node.set_meta("deleted", false)
+			else:
+				m.node.set_meta("deleted", true)
+	# Re-rank the surviving models (ranks close from the back).
+	var members := RegimentTray.collect_members(gu)
+	if not members.nodes.is_empty():
+		regiment.tray.reform(members.nodes, members.footprints)
+	# Drive the wound token via the shared unit-boundary system (same visual language
+	# as Fatigued/Shaken): the token sits on the Einheitenrand and shows the
+	# wounds_taken count (counting UP). Hidden when taken == 0.
+	if radial_menu_controller != null and radial_menu_controller.has_method("update_regiment_wound_token"):
+		radial_menu_controller.update_regiment_wound_token(gu, taken)
+	if network_manager != null and network_manager.is_multiplayer_active():
+		network_manager.broadcast_regiment_wounds(gu.unit_id, taken)
+
+
+## Take one casualty on the selected regiment (wounds_taken += 1). Clamped to the
+## pool; no-op at full casualties. Pushes an undoable RegimentWoundAction. Called from
+## the regiment radial menu's "Casualty -" item. Returns the new wounds_taken.
+func regiment_take_casualty(tray: RegimentTray) -> int:
+	var regiment: Regiment = tray.get_meta("regiment") if tray.has_meta("regiment") else null
+	if regiment == null or regiment.game_unit == null:
+		return 0
+	var gu := regiment.game_unit as GameUnit
+	var pool := Regiment.pool_max(_regiment_toughs(gu))
+	var from_taken: int = regiment.wounds_taken
+	var to_taken: int = mini(from_taken + 1, pool)
+	if to_taken == from_taken:
+		return from_taken
+	apply_regiment_wounds(regiment, to_taken)
+	if undo_manager != null:
+		var move_peer: int = network_manager.get_my_peer_id() if network_manager else 0
+		undo_manager.push(UndoManager.RegimentWoundAction.new(regiment, from_taken, to_taken, self, network_manager, move_peer))
+	return to_taken
+
+
+## Revive one model on the selected regiment (wounds_taken -= 1). Clamped to 0;
+## no-op at full strength. Pushes an undoable RegimentWoundAction. Called from the
+## regiment radial menu's "Casualty +" item. Returns the new wounds_taken.
+func regiment_revive_casualty(tray: RegimentTray) -> int:
+	var regiment: Regiment = tray.get_meta("regiment") if tray.has_meta("regiment") else null
+	if regiment == null or regiment.game_unit == null:
+		return 0
+	var from_taken: int = regiment.wounds_taken
+	var to_taken: int = maxi(from_taken - 1, 0)
+	if to_taken == from_taken:
+		return from_taken
+	apply_regiment_wounds(regiment, to_taken)
+	if undo_manager != null:
+		var move_peer: int = network_manager.get_my_peer_id() if network_manager else 0
+		undo_manager.push(UndoManager.RegimentWoundAction.new(regiment, from_taken, to_taken, self, network_manager, move_peer))
+	return to_taken
+
+
+## The wound-pool readout for a regiment tray (remaining, pool_max), for menu labels.
+func regiment_wound_readout(tray: RegimentTray) -> Dictionary:
+	var regiment: Regiment = tray.get_meta("regiment") if tray.has_meta("regiment") else null
+	if regiment == null or regiment.game_unit == null:
+		return {"remaining": 0, "pool_max": 0}
+	var gu := regiment.game_unit as GameUnit
+	var pool := Regiment.pool_max(_regiment_toughs(gu))
+	return {"remaining": pool - regiment.wounds_taken, "pool_max": pool}
 
 
 ## Defer regiment forming until the spawn drop animation has settled.

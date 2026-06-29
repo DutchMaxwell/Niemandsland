@@ -801,6 +801,40 @@ func sync_model_wounds(unit_id: String, model_index: int, wounds: int, is_alive:
 			remote_wounds_updated.emit(model)
 
 
+## RPC: Sync a regiment frontage change (AoF:R). The peer re-ranks the block at the
+## new frontage; tray transform (position/facing) is preserved. Mirrors the casualty
+## reform path but with an explicit new frontage from the owning player.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_regiment_frontage(unit_id: String, new_frontage: int) -> void:
+	if not army_manager:
+		return
+	var regiment = army_manager.regiments.get(unit_id)
+	if regiment == null or not is_instance_valid(regiment.tray):
+		return
+	var gu = regiment.game_unit
+	if gu == null:
+		return
+	var members := RegimentTray.collect_members(gu)
+	if members.nodes.is_empty():
+		return
+	regiment.tray.reform(members.nodes, members.footprints, new_frontage)
+	regiment.frontage = new_frontage
+	gu.unit_properties["frontage"] = new_frontage
+
+
+## RPC: Sync a regiment's pooled-wound counter (AoF:R). The peer recomputes each
+## model's alive/wounds state from the counter (back rank dies first), re-ranks the
+## block, and refreshes the counter label. Mirrors the frontage sync path.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_regiment_wounds(unit_id: String, wounds_taken: int) -> void:
+	if not army_manager:
+		return
+	var regiment = army_manager.regiments.get(unit_id)
+	if regiment == null or not is_instance_valid(regiment.tray):
+		return
+	army_manager.apply_regiment_wounds(regiment, wounds_taken)
+
+
 ## RPC: Sync model marker (add or remove). value >= 0 marks a counter and seeds it.
 @rpc("any_peer", "call_remote", "reliable")
 func sync_model_marker(unit_id: String, model_index: int, marker_name: String, add: bool, color: Color, value: int) -> void:
@@ -972,6 +1006,21 @@ func broadcast_model_wounds(model: ModelInstance) -> void:
 		var game_unit = model.unit as GameUnit
 		if game_unit:
 			_remote_call("sync_model_wounds", [game_unit.unit_id, model.model_index, model.wounds_current, model.is_alive], 0)
+
+
+## Broadcast a regiment frontage (models-per-rank) change so the peer re-ranks the
+## block to the same width. AoF:R v3.5.1 p.6 "Unit Formations" — a player may reform
+## to any width 1..N; the receiver re-lays the block out at the new frontage.
+func broadcast_regiment_frontage(unit_id: String, new_frontage: int) -> void:
+	if is_multiplayer_active() and not unit_id.is_empty():
+		_remote_call("sync_regiment_frontage", [unit_id, new_frontage], 0)
+
+
+## Broadcast a regiment pooled-wound counter change so the peer recomputes the
+## model states (back rank dies first, AoF:R v3.5.1 p.9) and re-ranks the block.
+func broadcast_regiment_wounds(unit_id: String, wounds_taken: int) -> void:
+	if is_multiplayer_active() and not unit_id.is_empty():
+		_remote_call("sync_regiment_wounds", [unit_id, wounds_taken], 0)
 
 
 ## Broadcast model marker change. color carries custom-marker colors so remote

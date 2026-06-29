@@ -78,3 +78,85 @@ func test_reform_with_fewer_models_reranks() -> void:
 	var offs := RegimentFormation.local_offsets(_fps(8), 5)
 	assert_vector(survivors[7].position).is_equal_approx(offs[7], APPROX)
 	assert_int(tray.frontage).is_equal(5)
+
+
+# ===== project_drag_onto_facing (Shift-drag axis lock) =====
+
+
+func test_project_drag_aligned_with_facing_passes_through() -> void:
+	# Delta straight along +Z facing -> projected = same delta.
+	var d := RegimentTray.project_drag_onto_facing(Vector3(0, 0, 1), Vector3(0, 0, 1))
+	assert_vector(d).is_equal_approx(Vector3(0, 0, 1), APPROX)
+
+
+func test_project_drag_perpendicular_to_facing_is_zero() -> void:
+	# Delta sideways (X) onto +Z facing -> zero (no forward/back component).
+	var d := RegimentTray.project_drag_onto_facing(Vector3(1, 0, 0), Vector3(0, 0, 1))
+	assert_vector(d).is_equal_approx(Vector3.ZERO, APPROX)
+
+
+func test_project_drag_diagonal_keeps_only_facing_component() -> void:
+	# Delta (1,0,1) onto +Z facing -> (0,0,1) (the X component is dropped).
+	var d := RegimentTray.project_drag_onto_facing(Vector3(1, 0, 1), Vector3(0, 0, 1))
+	assert_vector(d).is_equal_approx(Vector3(0, 0, 1), APPROX)
+
+
+func test_project_drag_negative_delta_goes_backward() -> void:
+	# Backward drag (-Z) onto +Z facing -> -Z (allowed: player decides if it's a legal move).
+	var d := RegimentTray.project_drag_onto_facing(Vector3(0, 0, -1), Vector3(0, 0, 1))
+	assert_vector(d).is_equal_approx(Vector3(0, 0, -1), APPROX)
+
+
+func test_project_drag_rotated_facing_uses_world_axis() -> void:
+	# Facing +X: a +X delta passes, a +Z delta is dropped.
+	var d1 := RegimentTray.project_drag_onto_facing(Vector3(1, 0, 0), Vector3(1, 0, 0))
+	assert_vector(d1).is_equal_approx(Vector3(1, 0, 0), APPROX)
+	var d2 := RegimentTray.project_drag_onto_facing(Vector3(0, 0, 1), Vector3(1, 0, 0))
+	assert_vector(d2).is_equal_approx(Vector3.ZERO, APPROX)
+
+
+func test_project_drag_degenerate_facing_falls_back_to_unconstrained() -> void:
+	# A zero facing must not divide by zero — fall back to the original delta.
+	var d := RegimentTray.project_drag_onto_facing(Vector3(1, 0, 1), Vector3.ZERO)
+	assert_vector(d).is_equal_approx(Vector3(1, 0, 1), APPROX)
+
+
+func test_project_drag_ignores_y_component_of_facing() -> void:
+	# A facing with a Y component still projects on the XZ-plane only.
+	var d := RegimentTray.project_drag_onto_facing(Vector3(0, 0, 1), Vector3(0, 5, 1))
+	assert_vector(d).is_equal_approx(Vector3(0, 0, 1), APPROX)
+
+
+# ===== nearest_quarter_turn (Ctrl+R snap) =====
+
+
+func test_nearest_quarter_turn_zero_stays_zero() -> void:
+	assert_float(RegimentTray.nearest_quarter_turn(0.0)).is_equal_approx(0.0, 0.0001)
+
+
+func test_nearest_quarter_turn_near_zero_snaps_to_zero() -> void:
+	# 0.2 rad (~11°) is closer to 0 than to π/2 (~1.57).
+	assert_float(RegimentTray.nearest_quarter_turn(0.2)).is_equal_approx(0.0, 0.0001)
+
+
+func test_nearest_quarter_turn_near_90_snaps_to_90() -> void:
+	# 1.4 rad (~80°) is closer to π/2 than to 0.
+	assert_float(RegimentTray.nearest_quarter_turn(1.4)).is_equal_approx(PI / 2.0, 0.0001)
+
+
+func test_nearest_quarter_turn_near_180_snaps_to_180() -> void:
+	assert_float(RegimentTray.nearest_quarter_turn(3.0)).is_equal_approx(PI, 0.0001)
+
+
+func test_nearest_quarter_turn_near_270_snaps_to_270() -> void:
+	assert_float(RegimentTray.nearest_quarter_turn(4.8)).is_equal_approx(3.0 * PI / 2.0, 0.0001)
+
+
+func test_nearest_quarter_turn_full_circle_wraps_to_zero() -> void:
+	# 2π + small offset snaps back to 0 (normalised to [0, 2π)).
+	assert_float(RegimentTray.nearest_quarter_turn(TAU + 0.1)).is_equal_approx(0.0, 0.0001)
+
+
+func test_nearest_quarter_turn_negative_angle_normalised() -> void:
+	# -0.2 rad normalises to ~TAU-0.2, which is closer to 0 (or 2π) than to 3π/2.
+	assert_float(RegimentTray.nearest_quarter_turn(-0.2)).is_equal_approx(0.0, 0.0001)
