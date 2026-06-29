@@ -58,9 +58,17 @@ static func is_dice(obj: Node3D) -> bool:
 static func get_game_unit(obj: Node3D) -> GameUnit:
 	if not obj:
 		return null
-	if not obj.has_meta("game_unit"):
-		return null
-	return obj.get_meta("game_unit")
+	if obj.has_meta("game_unit"):
+		return obj.get_meta("game_unit")
+	# A RegimentTray carries a "regiment" meta (the Regiment companion) whose
+	# game_unit is the unit it represents. Resolve it so the unit card, measure
+	# tool, etc. work when the tray is the selection target (left-click selects
+	# the tray, not a model).
+	if obj.has_meta("regiment"):
+		var regiment = obj.get_meta("regiment")
+		if regiment and regiment.get("game_unit") != null:
+			return regiment.game_unit
+	return null
 
 
 ## Gets the ModelInstance for a model node.

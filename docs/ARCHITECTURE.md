@@ -60,10 +60,23 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
 - `unit_boundary_visualizer.gd` — convex-hull boundary for multi-model units; token rail.
 - `unit_marker.gd` / `unit_card.gd` — status tokens (F/S/A, wounds, caster) and the
   docked info card.
-- `radial_menu.gd` / `radial_menu_controller.gd` — context pie-menu.
-- `regiment.gd` / `regiment_tray.gd` / `regiment_formation.gd` / `regiment_facing_visualizer.gd` —
-  Age of Fantasy: Regiments — movement-tray blocks, square bases, casualty re-rank,
-  frontage/reform, and the facing / front-arc display.
+- `radial_menu.gd` / `radial_menu_controller.gd` — context pie-menu. The controller
+  owns the unit-boundary token engine (Fatigued/Shaken/Activated/WoundMarker tokens
+  placed on the `UnitBoundaryVisualizer` contour) and a regiment-specific menu
+  (`RadialMenu.create_regiment_menu`) for Tough(1) regiments — pooled-wound counter
+  (WoundsDialog via a proxy ModelInstance), frontage cycle, no per-model delete.
+- `regiment.gd` / `regiment_tray.gd` / `regiment_formation.gd` /
+  `regiment_facing_visualizer.gd` — Age of Fantasy: Regiments — movement-tray
+  blocks, square bases, casualty re-rank, frontage/reform, and the facing display:
+  - `RegimentFormation` — pure ranks-and-files layout + `default_frontage` /
+    `next_frontage` (cycle 5→4→3→2→1).
+  - `RegimentTray` — the rigid parent block (facing = local +Z); facing-arrow +
+    four 45° arc quadrants (`RegimentFacingVisualizer`); axis-locked drag
+    projection (`project_drag_onto_facing`); quarter-turn snap
+    (`nearest_quarter_turn`).
+  - `Regiment` — the metadata companion: `frontage`, `wounds_taken` (pooled-tough
+    counter), and the pure wound-pool logic (`pool_max`, `alive_mask_for_wounds`,
+    `wounds_on_model`, `is_pooled_tough1`). Back rank dies first (AoF:R p.9).
 
 **OPR & import**
 - `opr_api_client.gd` — Army Forge API client + unit data classes (incl. base sizes).
@@ -71,7 +84,11 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
   per-unit GLBs and **scales them to the base** (height-fit vs 125 % footprint cap,
   whichever is smaller; Flying units hover). See [Scaling](#scaling). The tray's near
   third is an **Ambush/Scout staging band**: split left/right with a divider + flat
-  labels, and units carrying Scout/Ambush auto-place into their half.
+  labels, and units carrying Scout/Ambush auto-place into their half. Owns the
+  `regiments` dictionary and the regiment handling: `form_regiment` /
+  `restore_regiment` (save/load), `cycle_selected_regiment_frontage` (Shift+F),
+  `apply_regiment_wounds` / `regiment_take_casualty` / `regiment_revive_casualty`
+  (pooled-tough counter, AoF:R p.9), and `toggle_selected_regiment_arcs` (F key).
 - `opr_import_dialog.gd` — import UI.
 - `tts_download_manager.gd` — Tabletop Simulator asset download + cache manager
   (Steam CDN + local cache; glTF/STL/OBJ); also the template for the on-demand
@@ -109,12 +126,17 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
 `save_manager.gd` serializes the full table: objects, `GameUnit`/`ModelInstance`
 state (positions, wounds, markers, activation), terrain layout, table size. Files use
 the `.nml` extension with OS file association; the same serialization feeds
-multiplayer load.
+multiplayer load. Regiment blocks persist via `Regiment.to_dict()` (frontage, tray
+transform, `wounds_taken`) and are rebuilt by `OPRArmyManager.restore_regiment`,
+which re-applies the pooled-wound counter so model alive/dead states + the boundary
+wound token are restored exactly.
 
 ## Multiplayer
 
 - `network_manager.gd` — ENet host/join, state sync, RPCs (models, terrain, rotation,
-  table size, wounds/markers/activation) with batched updates.
+  table size, wounds/markers/activation) with batched updates. Regiment-specific
+  sync: `broadcast_regiment_frontage` / `sync_regiment_frontage` (frontage cycle)
+  and `broadcast_regiment_wounds` / `sync_regiment_wounds` (pooled-tough counter).
 - `relay_multiplayer_peer.gd` — custom `MultiplayerPeer` that tunnels ENet over a
   WebSocket relay for internet play.
 - `relay/` — standalone Python WebSocket relay server (Fly.io deployable); see

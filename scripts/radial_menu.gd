@@ -397,6 +397,43 @@ static func create_unit_menu(game_unit: GameUnit) -> Array[RadialMenuItem]:
 	return items
 
 
+## Creates menu items for an Age of Fantasy: Regiments movement-tray block. Replaces
+## the per-model wounds/delete items with a pooled-wound counter (AoF:R v3.5.1 p.9
+## "Remove Casualties" — models are removed from the back rank). `remaining`/`pool_max`
+## drive the counter label; clicking "W" opens the same wounds dialog as for a single
+## Tough(X) model, adjusting the pool. Individual model wounding/deletion is disabled
+## by design. Only for Tough(1) regiments; Tough(X>1) uses the classic model menu.
+static func create_regiment_menu(game_unit: GameUnit, remaining: int, pool_max: int) -> Array[RadialMenuItem]:
+	var items: Array[RadialMenuItem] = []
+
+	# Pooled-wound counter: opens the standard wounds dialog (same as for a Tough(X)
+	# model) with a proxy model whose wounds_max = pool_max. +/- in the dialog adjusts
+	# the pool, removing/reviving models from the back rank.
+	var wounds_label = "W %d/%d" % [remaining, pool_max]
+	var can_adjust: bool = pool_max > 0
+	items.append(RadialMenuItem.new("regiment_wounds", wounds_label, "W", can_adjust, "Open the wounds dialog (AoF:R p.9 pooled-tough counter)"))
+
+	# Cycle frontage (mirrors Shift+F) — convenient from the menu.
+	items.append(RadialMenuItem.new("regiment_frontage", "Frontage", "⊧", true, "Cycle models-per-rank (5 → 4 → 3 → 2 → 1)"))
+
+	var activate_icon = "-" if game_unit.is_activated else "+"
+	var activate_tooltip = "Mark unit as not activated" if game_unit.is_activated else "Mark unit as activated this round"
+	items.append(RadialMenuItem.new("toggle_activate", "Activate", activate_icon, true, activate_tooltip))
+
+	if game_unit.is_caster():
+		var casts_label = "C %d/%d" % [game_unit.casts_current, GameUnit.CASTER_POINTS_CAP]
+		items.append(RadialMenuItem.new("casts", casts_label, "", true, "Adjust caster points for this unit"))
+
+	var fatigue_icon = "F+" if game_unit.is_fatigued else "F"
+	var shaken_icon = "S+" if game_unit.is_shaken else "S"
+	items.append(RadialMenuItem.new("toggle_fatigued", "Fatigued", fatigue_icon, true, "Mark/Remove Fatigued"))
+	items.append(RadialMenuItem.new("toggle_shaken", "Shaken", shaken_icon, true, "Mark/Remove Shaken"))
+	items.append(RadialMenuItem.new("add_marker", "Token", "T", true, "Add/adjust status & counter tokens"))
+	items.append(RadialMenuItem.new("delete_unit", "Delete", "X", true, "Remove entire unit from the table"))
+
+	return items
+
+
 ## Creates menu items for terrain.
 static func create_terrain_menu() -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []

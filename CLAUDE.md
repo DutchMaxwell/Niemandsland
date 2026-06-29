@@ -24,6 +24,7 @@ OnePageRules and similar miniature games.
   `UpdateChecker`
 
 Full system/code map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+Regiments design notes: [`docs/REGIMENTS.md`](docs/REGIMENTS.md).
 Build/run/test: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
 > There is **no AI / battle-simulation system**. It was removed; any `ai_*.gd` /
@@ -35,9 +36,10 @@ Build/run/test: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 | Domain | Scripts |
 |---|---|
 | Core | `main.gd`, `object_manager.gd`, `camera_controller.gd`, `table.gd`, `selectable_object.gd` |
-| Save/Load | `save_manager.gd` (`.nml` format) |
+| Save/Load | `save_manager.gd` (`.nml` format), `undo_manager.gd` (MoveAction / RotateAction / DeleteAction / FrontageAction / RegimentWoundAction) |
 | Units | `game_unit.gd`, `model_instance.gd`, `unit_utils.gd`, `equipment_distributor.gd`, `coherency_checker.gd`, `coherency_visualizer.gd`, `unit_card.gd`, `unit_marker.gd`, `unit_boundary_visualizer.gd`, `radial_menu*.gd` |
-| OPR / import | `opr_api_client.gd`, `opr_army_manager.gd`, `opr_import_dialog.gd`, `tts_download_manager.gd`, `wgs_*.gd` |
+| Regiments (AoF:R) | `regiment.gd` (pooled-tough logic: `pool_max`, `alive_mask_for_wounds`, `is_pooled_tough1`), `regiment_tray.gd` (rigid block + facing + axis-lock + snap), `regiment_formation.gd` (`default_frontage`/`next_frontage`), `regiment_facing_visualizer.gd` (45° arc quadrants) |
+| OPR / import | `opr_api_client.gd`, `opr_army_manager.gd` (regiment handling: form/restore/cycle/wounds), `opr_import_dialog.gd`, `tts_download_manager.gd`, `wgs_*.gd` |
 | Multiplayer | `network_manager.gd`, `relay_multiplayer_peer.gd`, `internet_lobby.gd`, `player_avatar.gd`, `remote_cursor.gd` |
 | Map / terrain | `map_layout.gd`, `map_layout_grid.gd`, `terrain_overlay.gd`, `biome_library.gd`, `trees_library.gd`, `containers_library.gd`, `hazards_library.gd`, `ruins_library.gd` |
 | Presentation | `lighting_controller.gd`, `theme_manager.gd`, `graphics_settings.gd`, `audio_manager.gd`, `cinematic_intro.gd` |
