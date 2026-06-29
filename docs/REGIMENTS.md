@@ -87,7 +87,7 @@ not high-frequency).
 
 ## What is NOT built (out of scope)
 
-Per [`AGENTS.md`](../AGENTS.md), Niemandsland does not automate combat/morale.
+Per [`CLAUDE.md`](../CLAUDE.md), Niemandsland does not automate combat/morale.
 The following are **player-applied**, not coded:
 
 - Melee resolution (Quality to-hit, AP, Defense to-wound, wounds).
@@ -96,5 +96,6 @@ The following are **player-applied**, not coded:
 - Flank/rear charge morale modifiers (the arc label shows the facing; the player
   applies the -1/-2).
 
-A future **Solo/Co-Op AI** module (see [`SOLO_AI_PLAN.md`](SOLO_AI_PLAN.md)) would
-optionally automate these behind a feature flag — separate from the sandbox.
+A future **Solo/Co-Op AI** module (the Solo/Co-Op AI item in
+[`ROADMAP.md`](ROADMAP.md)) would optionally automate these behind a feature flag —
+separate from the sandbox.
