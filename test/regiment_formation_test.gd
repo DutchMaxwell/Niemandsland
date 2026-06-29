@@ -84,3 +84,39 @@ func test_gap_widens_spacing() -> void:
 	# Two models side by side, cell = 25mm + 10mm gap = 35mm -> +/- 17.5mm.
 	assert_float(offs[0].x).is_equal_approx(-0.0175, 0.0001)
 	assert_float(offs[1].x).is_equal_approx(0.0175, 0.0001)
+
+
+# ===== next_frontage (cycle) =====
+
+
+func test_next_frontage_cycles_widest_to_narrowest() -> void:
+	# 10-model unit: 5 -> 4 -> 3 -> 2 -> 1 -> 5 (wrap).
+	assert_int(RegimentFormation.next_frontage(5, 10)).is_equal(4)
+	assert_int(RegimentFormation.next_frontage(4, 10)).is_equal(3)
+	assert_int(RegimentFormation.next_frontage(3, 10)).is_equal(2)
+	assert_int(RegimentFormation.next_frontage(2, 10)).is_equal(1)
+	assert_int(RegimentFormation.next_frontage(1, 10)).is_equal(5)
+
+
+func test_next_frontage_skips_widths_wider_than_live_count() -> void:
+	# 3-model remnant: only 3, 2, 1 fit (5/4 skipped). Cycle: 3 -> 2 -> 1 -> 3.
+	assert_int(RegimentFormation.next_frontage(3, 3)).is_equal(2)
+	assert_int(RegimentFormation.next_frontage(2, 3)).is_equal(1)
+	assert_int(RegimentFormation.next_frontage(1, 3)).is_equal(3)
+
+
+func test_next_frontage_single_model_returns_unchanged() -> void:
+	# A lone model can only form 1-wide — nothing to cycle to.
+	assert_int(RegimentFormation.next_frontage(1, 1)).is_equal(1)
+
+
+func test_next_frontage_two_models_cycles_one_and_two() -> void:
+	# 2-model unit: 2 -> 1 -> 2.
+	assert_int(RegimentFormation.next_frontage(2, 2)).is_equal(1)
+	assert_int(RegimentFormation.next_frontage(1, 2)).is_equal(2)
+
+
+func test_next_frontage_unknown_current_falls_to_widest() -> void:
+	# A custom 6-wide frontage (outside the 5..1 cycle) restarts at the widest that fits.
+	assert_int(RegimentFormation.next_frontage(6, 10)).is_equal(5)
+	assert_int(RegimentFormation.next_frontage(7, 3)).is_equal(3)

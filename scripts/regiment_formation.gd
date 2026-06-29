@@ -24,6 +24,32 @@ static func default_frontage(model_count: int) -> int:
 	return min(5, model_count)
 
 
+## The next frontage in the cycle used by the Regiments frontage-cycle hotkey.
+## AoF:R v3.5.1 p.6 "Unit Formations" defines the default (5-wide for 5/10, 3-wide
+## for 3/6), but a player may reform to any width 1..N. The cycle walks the common
+## widths from widest to narrowest, then wraps: 5 -> 4 -> 3 -> 2 -> 1 -> 5.
+## Widths wider than the live model count are skipped (a 3-model remnant can't form
+## 5-wide). Returns `current` unchanged if no other option exists (single model).
+static func next_frontage(current: int, live_model_count: int) -> int:
+	# Candidate widths in cycle order, widest first; AoF:R p.6 sets 5 and 3 as the
+	# canonical defaults, the others are valid player reforms (local_offsets clamps).
+	const CYCLE := [5, 4, 3, 2, 1]
+	var max_width := mini(5, maxi(live_model_count, 1))
+	# Build the effective cycle (widths that fit the live model count).
+	var effective: Array[int] = []
+	for w in CYCLE:
+		if w <= max_width and not effective.has(w):
+			effective.append(w)
+	if effective.size() <= 1:
+		return current
+	# Find the current width and advance; wrap from the last to the first.
+	var idx := effective.find(current)
+	if idx == -1:
+		# Current width is outside the cycle (e.g. 6-wide custom) -> start at the widest.
+		return effective[0]
+	return effective[(idx + 1) % effective.size()]
+
+
 ## Number of ranks (rows) a regiment of `model_count` forms at `frontage`.
 static func rank_count(model_count: int, frontage: int) -> int:
 	var f := maxi(frontage, 1)
