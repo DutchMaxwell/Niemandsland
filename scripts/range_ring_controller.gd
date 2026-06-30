@@ -144,6 +144,7 @@ func _build_preview_ring(model_node: Node3D, range_inches: int) -> void:
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.no_depth_test = true
+	mat.render_priority = 8  # above ground stains (1) / zones (2) / seize rings (3) — issue #82
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	ring.material_override = mat
 	ring.position = Vector3(0, RING_Y, 0)
@@ -152,6 +153,7 @@ func _build_preview_ring(model_node: Node3D, range_inches: int) -> void:
 	label.text = "%d\"" % range_inches
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true
+	label.render_priority = 9  # above ground stains (issue #82)
 	label.pixel_size = LABEL_PIXEL_SIZE
 	label.font_size = LABEL_FONT_SIZE
 	label.modulate = SPELL_PREVIEW_COLOR
@@ -180,6 +182,7 @@ func _build_ring(model_node: Node3D, range_inches: int) -> void:
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.no_depth_test = true
+	mat.render_priority = 8  # above ground stains (1) / zones (2) / seize rings (3) — issue #82
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	ring.material_override = mat
 	ring.position = Vector3(0, RING_Y, 0)
@@ -190,6 +193,7 @@ func _build_ring(model_node: Node3D, range_inches: int) -> void:
 	label.text = "%d\"" % range_inches
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED  # always readable regardless of facing
 	label.no_depth_test = true
+	label.render_priority = 9  # above ground stains (issue #82)
 	label.pixel_size = LABEL_PIXEL_SIZE
 	label.font_size = LABEL_FONT_SIZE
 	label.modulate = Color.WHITE
