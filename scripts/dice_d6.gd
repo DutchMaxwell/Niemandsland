@@ -54,6 +54,8 @@ var color_tag: int = DEFAULT_COLOR_TAG
 var _body_mat: StandardMaterial3D = null
 ## One material per face value, kept so the tag colour re-fills the pip textures at runtime.
 var _face_mats: Dictionary = {}  # Dictionary[int, StandardMaterial3D]
+## Floating "?" shown while the die has NOT yet been rolled (issue #80); lazily created.
+var _unrolled_label: Label3D = null
 
 # === Lifecycle ===
 
@@ -162,6 +164,30 @@ func set_top_face(value: int) -> void:
 		b = Basis(normal.cross(Vector3.UP).normalized(), normal.angle_to(Vector3.UP))
 	b = Basis(Vector3.UP, randf() * TAU) * b  # random yaw for variety (top face unchanged)
 	global_transform = Transform3D(b, global_position)
+	# Taking a real face clears the "not yet rolled" marker (a physics roll spawns fresh dice anyway).
+	if _unrolled_label != null and is_instance_valid(_unrolled_label):
+		_unrolled_label.visible = false
+
+
+## Mark this die as NOT YET ROLLED: a floating "?" instead of a face value, so selecting a dice
+## COUNT (which spawns resting dice) doesn't look like a roll result (issue #80). Cleared when the
+## die takes a real face (set_top_face) or a physics roll spawns a fresh die.
+func set_unrolled() -> void:
+	set_top_face(1)  # rest flat in a deterministic orientation under the marker
+	if _unrolled_label == null:
+		_unrolled_label = Label3D.new()
+		_unrolled_label.name = "UnrolledMarker"
+		_unrolled_label.text = "?"
+		_unrolled_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_unrolled_label.no_depth_test = true
+		_unrolled_label.font_size = 96
+		_unrolled_label.pixel_size = size * 0.012
+		_unrolled_label.modulate = Color.WHITE
+		_unrolled_label.outline_size = 24
+		_unrolled_label.outline_modulate = Color(0.0, 0.0, 0.0, 0.9)
+		add_child(_unrolled_label)
+	_unrolled_label.position = Vector3(0.0, size * 0.55, 0.0)
+	_unrolled_label.visible = true
 
 # === Private helpers ===
 
