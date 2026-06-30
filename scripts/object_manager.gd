@@ -181,6 +181,13 @@ const MEASURE_REAR_COLOR: Color = Color(0.90, 0.25, 0.25)   # red, matches the r
 const MEASURE_AID_FONT_SIZE: int = 4
 const MEASURE_AID_Y: float = 0.06  # label height above the table
 
+## Table-UI overlays (measure line/label, drag line/label, LOS warning) must draw ABOVE the ground
+## decals — blood/oil stains (transparent, render_priority 1), deployment zones (2), seize rings (3)
+## — so a stain never hides them (issue #82). The LINES must also join the transparent queue, since
+## an opaque material is always painted over by transparent stains regardless of no_depth_test.
+const OVERLAY_UI_RENDER_PRIORITY: int = 8
+const OVERLAY_UI_LABEL_PRIORITY: int = 9
+
 
 func _ready() -> void:
 	_drag_plane = Plane(Vector3.UP, 0)
@@ -275,6 +282,9 @@ func _input(event: InputEvent) -> void:
 				if mouse_event.shift_pressed:
 					# Shift + Left-click starts measurement
 					_start_measuring(mouse_event.position)
+				elif mouse_event.double_click and not mouse_event.alt_pressed:
+					# Double-click a unit model → select the WHOLE unit (issue #81)
+					_try_select_unit_at_mouse(mouse_event.position)
 				else:
 					# Left-click for selection
 					_try_select_at_mouse(mouse_event.position, mouse_event.alt_pressed)
@@ -353,6 +363,31 @@ func _input(event: InputEvent) -> void:
 				_clear_all_rulers()
 			else:
 				_clear_my_rulers()
+
+
+## Double-click handling: select the WHOLE unit under the cursor in one click (issue #81) — no box
+## drag or radial "select all" needed. A regiment is selected as its movement tray (it moves as one
+## block); a loose unit selects all its model nodes; a non-unit object falls back to a normal click.
+func _try_select_unit_at_mouse(screen_pos: Vector2) -> void:
+	if not selection_enabled:
+		return
+	var obj := _get_object_at_position(screen_pos)
+	if obj == null:
+		_deselect_all()
+		return
+	var tray := _regiment_tray_of(obj)
+	if tray != null:
+		_deselect_all()
+		_add_to_selection(tray)
+		return
+	var models := UnitUtils.get_all_unit_models(obj)
+	if models.size() <= 1:
+		_try_select_at_mouse(screen_pos, false)  # not a multi-model unit — normal select
+		return
+	_deselect_all()
+	for m in models:
+		if is_instance_valid(m):
+			_add_to_selection(m)
 
 
 func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> void:
@@ -595,6 +630,7 @@ func _update_front_arc_aid(start_pos: Vector3, end_pos: Vector3) -> void:
 		_measure_front_label = Label3D.new()
 		_measure_front_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		_measure_front_label.no_depth_test = true
+		_measure_front_label.render_priority = OVERLAY_UI_LABEL_PRIORITY  # above ground stains (issue #82)
 		_measure_front_label.font_size = MEASURE_AID_FONT_SIZE
 		add_child(_measure_front_label)
 	_measure_front_label.visible = true
@@ -1208,6 +1244,7 @@ func _show_rotation_label(degrees: float) -> void:
 		_rotation_label.name = "RotationLabel"
 		_rotation_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		_rotation_label.no_depth_test = true
+		_rotation_label.render_priority = OVERLAY_UI_LABEL_PRIORITY  # above ground stains (issue #82)
 		_rotation_label.font_size = ROTATION_LABEL_FONT_SIZE
 		_rotation_label.outline_size = 8
 		_rotation_label.outline_modulate = Color.BLACK
@@ -1250,6 +1287,8 @@ func _create_drag_line() -> void:
 	material.albedo_color = Color.ORANGE
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.no_depth_test = true
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA  # draw over ground stains (issue #82)
+	material.render_priority = OVERLAY_UI_RENDER_PRIORITY
 	_drag_line.material_override = material
 	_drag_line.visible = false
 	add_child(_drag_line)
@@ -1259,6 +1298,7 @@ func _create_drag_line() -> void:
 	_drag_label.name = "DragLabel"
 	_drag_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	_drag_label.no_depth_test = true
+	_drag_label.render_priority = OVERLAY_UI_LABEL_PRIORITY  # above ground stains (issue #82)
 	_drag_label.pixel_size = 0.001
 	_drag_label.font_size = 24
 	_drag_label.outline_size = 8
@@ -1727,7 +1767,11 @@ func _create_measure_line() -> void:
 	material.albedo_color = Color.YELLOW
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.no_depth_test = true  # Always visible
-	material.render_priority = 0  # Render first
+	# Join the transparent queue with a high priority so the line draws OVER ground decals (blood/oil
+	# stains): an opaque line is painted over by transparent stains regardless of no_depth_test, since
+	# transparent always renders after opaque (issue #82).
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.render_priority = OVERLAY_UI_RENDER_PRIORITY
 	_measure_line.material_override = material
 	add_child(_measure_line)
 
@@ -1737,7 +1781,7 @@ func _create_measure_line() -> void:
 	_measure_label.name = "MeasureLabel"
 	_measure_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED  # Align with line direction
 	_measure_label.no_depth_test = true
-	_measure_label.render_priority = 1  # Render after line (appears on top)
+	_measure_label.render_priority = OVERLAY_UI_LABEL_PRIORITY  # above the line + ground stains (issue #82)
 	_measure_label.pixel_size = 0.001  # 1mm per pixel
 	_measure_label.font_size = 24      # ~2.4cm text height
 	_measure_label.outline_size = 8  # Thicker outline for better contrast
@@ -1817,6 +1861,7 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 			_measure_los_warning = Label3D.new()
 			_measure_los_warning.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 			_measure_los_warning.no_depth_test = true
+			_measure_los_warning.render_priority = OVERLAY_UI_LABEL_PRIORITY  # above ground stains (issue #82)
 			_measure_los_warning.font_size = 32
 			add_child(_measure_los_warning)
 

@@ -83,7 +83,10 @@ func _build_line() -> void:
 		var line_mat := StandardMaterial3D.new()
 		line_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		line_mat.no_depth_test = true
-		line_mat.render_priority = 0
+		# Transparent + high priority so the ruler draws OVER ground decals (blood/oil stains): an
+		# opaque line is painted over by transparent stains regardless of no_depth_test (issue #82).
+		line_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		line_mat.render_priority = 8
 		_line.material_override = line_mat
 		add_child(_line)
 
@@ -117,7 +120,7 @@ func _build_label() -> void:
 		_label.name = "RulerLabel"
 		_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED  # align flat with the line
 		_label.no_depth_test = true
-		_label.render_priority = 1  # on top of the line
+		_label.render_priority = 9  # on top of the line + ground stains (issue #82)
 		_label.pixel_size = LABEL_PIXEL_SIZE
 		_label.font_size = LABEL_FONT_SIZE
 		_label.outline_size = LABEL_OUTLINE
@@ -143,6 +146,7 @@ func _build_los_marker() -> void:
 		_los_marker.name = "RulerLosMarker"
 		_los_marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		_los_marker.no_depth_test = true
+		_los_marker.render_priority = 9  # above ground stains (issue #82)
 		_los_marker.font_size = LOS_MARKER_FONT_SIZE
 		_los_marker.modulate = Color.RED
 		_los_marker.text = LOS_MARKER_TEXT

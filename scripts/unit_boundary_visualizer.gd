@@ -13,6 +13,11 @@ signal boundary_lost(game_unit)
 ## tokens off the single model back onto the boundary rail — the symmetric case
 ## of boundary_lost (see RadialMenuController._on_boundary_gained).
 signal boundary_gained(game_unit)
+## Emitted when a WIPED unit (0 alive models — deleted or last casualty) regains an alive model
+## (e.g. an undo). Listeners re-create the unit's status tokens from its persisted state, since a
+## wipe drops them (issue #78 — an Activated/Fatigued/Shaken marker must not linger on the empty
+## spot, and must come back on undo).
+signal unit_tokens_revived(game_unit)
 
 ## Height above ground for the boundary mesh
 const BOUNDARY_HEIGHT := 0.005  # 5mm above table surface
@@ -34,6 +39,10 @@ var _boundaries: Dictionary = {}  # GameUnit -> MeshInstance3D (border only)
 
 ## Cached token containers per GameUnit (for unit-wide tokens)
 var _token_containers: Dictionary = {}  # GameUnit -> Node3D
+
+## Units currently WIPED (0 alive models) whose status tokens we removed — tracked so a later
+## revive (undo) emits unit_tokens_revived exactly once (issue #78).
+var _wiped_units: Dictionary = {}  # GameUnit -> true
 
 ## Cached hull points per GameUnit (for token positioning along boundary)
 var _boundary_hull_points: Dictionary = {}  # GameUnit -> PackedVector2Array
@@ -94,6 +103,16 @@ func update_all_boundaries() -> void:
 		if game_unit:
 			existing_units.append(game_unit)
 			_update_unit_boundary(game_unit)
+			# A wiped unit (0 alive models — deleted, or its last casualty) drops its status tokens so
+			# an Activated/Fatigued/Shaken marker doesn't linger on the empty spot (issue #78). On
+			# revive (undo) we signal so the markers are re-created from the unit's persisted state.
+			if game_unit.get_alive_count() == 0:
+				if not _wiped_units.has(game_unit):
+					_wiped_units[game_unit] = true
+					remove_token_container(game_unit)
+			elif _wiped_units.has(game_unit):
+				_wiped_units.erase(game_unit)
+				unit_tokens_revived.emit(game_unit)
 
 	# Remove boundaries for units that no longer exist
 	var units_to_remove: Array = []
@@ -104,6 +123,7 @@ func update_all_boundaries() -> void:
 	for unit in units_to_remove:
 		_remove_unit_boundary(unit)
 		remove_token_container(unit)  # Also remove token container for deleted units
+		_wiped_units.erase(unit)
 
 	# Clean up token containers for units that no longer exist
 	var containers_to_remove: Array = []

@@ -3691,6 +3691,8 @@ func _init_radial_menu() -> void:
 	unit_boundary_visualizer.object_manager = object_manager
 	add_child(unit_boundary_visualizer)
 	radial_menu_controller.boundary_visualizer = unit_boundary_visualizer
+	# A wiped unit drops its status tokens; on revive (undo) re-create them from its state (issue #78).
+	unit_boundary_visualizer.unit_tokens_revived.connect(radial_menu_controller.initialize_status_markers_for_unit)
 	opr_army_manager.radial_menu_controller = radial_menu_controller
 
 	# Battlefield stains: leave a blood pool (or oil + fire for vehicles) where a model is

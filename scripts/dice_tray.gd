@@ -309,7 +309,7 @@ func _die_index_at_local_pos(local_pos: Vector2) -> int:
 func _show_resting_dice() -> void:
 	_spawn_dice(true)
 	for d: DiceD6 in _dice:
-		d.set_top_face(randi_range(1, 6))
+		d.set_unrolled()  # show "?" until rolled, not a random face that looks like a result (issue #80)
 
 
 ## Frees the current dice and spawns a fresh (untagged) set. Callers that must preserve the
