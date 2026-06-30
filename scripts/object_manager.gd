@@ -138,6 +138,7 @@ var _ruins_library: RuinsLibrary = null
 ## Lazily-created tree GLB resolver for sandbox forest clusters (shared static scene cache).
 var _trees_library: TreesLibrary = null
 var _biome_library: BiomeLibrary = null  # battlemaps cropped for non-grassland forest floors
+var _hazards_library: HazardsLibrary = null  # GLB hazard props (lava crater, carnivore plant) per biome
 
 ## Casual terrain edit mode. OFF by default: all sandbox terrain is LOCKED so players can't
 ## drag or delete it by accident during play. Turning it on (via the terrain shelf) unlocks
@@ -2177,13 +2178,16 @@ const SANDBOX_RUINS: Dictionary = {
 const SANDBOX_GROUPS: Dictionary = {
 	"forest_small": {"kind": SandboxPropKind.FOREST, "footprint": Vector2(6, 4), "label": "Forest (small)"},
 	"forest_large": {"kind": SandboxPropKind.FOREST, "footprint": Vector2(9, 6), "label": "Forest (large)"},
-	"minefield": {"kind": SandboxPropKind.HAZARD_CLUSTER, "footprint": Vector2(6, 6), "label": "Minefield"},
+	# "minefield" is the internal key (kept for save compatibility); the label + actual props read as
+	# generic dangerous terrain (per-biome props are chosen at build time). Oval footprint like the
+	# small forest (6×4), not a 6×6 circle.
+	"minefield": {"kind": SandboxPropKind.HAZARD_CLUSTER, "footprint": Vector2(6, 4), "label": "Dangerous Terrain"},
 }
 
-## Biome prefixes a sandbox FOREST can carry, encoded INTO its prop_id (e.g. "desert_forest_small")
-## so save + broadcast preserve the biome through the existing prop_id field — no new wire/save
-## fields. Kept in sync with SandboxTerrainShelf.BIOMES. The procedural minefield is biome-agnostic
-## and stays unprefixed.
+## Biome prefixes a sandbox FOREST or HAZARD field can carry, encoded INTO its prop_id (e.g.
+## "desert_forest_small", "desert_minefield") so save + broadcast preserve the biome through the
+## existing prop_id field — no new wire/save fields. Kept in sync with SandboxTerrainShelf.BIOMES.
+## The mine props themselves stay procedural; only the oval pad floor crops the biome battlemap.
 const SANDBOX_BIOME_PREFIXES: Array[String] = ["", "desert_", "tundra_", "volcanic_", "jungle_", "urban_"]
 
 
@@ -2216,6 +2220,17 @@ func _get_biome_library() -> BiomeLibrary:
 	return _biome_library
 
 
+## Shared hazard-model (GLB) resolver for sandbox dangerous-terrain clusters, created on first use.
+## Resolves the per-biome hazard props (volcanic lava crater, jungle/alien carnivore plant) from R2,
+## like the trees library does for forests; grassland/desert/tundra/urban keep procedural mines.
+func _get_hazards_library() -> HazardsLibrary:
+	if _hazards_library == null or not is_instance_valid(_hazards_library):
+		_hazards_library = HazardsLibrary.new()
+		_hazards_library.name = "SandboxHazardsLibrary"
+		add_child(_hazards_library)
+	return _hazards_library
+
+
 ## Spawn a free-placed casual-sandbox terrain piece at `pos`. RUIN kinds become a walkable
 ## multi-storey SandboxTerrainProp; FOREST/HAZARD_CLUSTER kinds become a TerrainGroupBase
 ## (several tree/mine visuals on one draggable base). Either way it is a first-class
@@ -2239,10 +2254,10 @@ func spawn_sandbox_terrain(prop_id: String, kind: int, pos: Vector3, broadcast: 
 		(spawned as SandboxTerrainProp).build_visual(_get_ruins_library())
 	elif spawned is TerrainGroupBase:
 		# Seed from the (synced) network id so every client builds an identical cluster.
-		(spawned as TerrainGroupBase).build(obj_network_id, _get_trees_library(), _get_biome_library())
+		(spawned as TerrainGroupBase).build(obj_network_id, _get_trees_library(), _get_biome_library(), _get_hazards_library())
 
-	# Lock the fresh piece unless terrain edit mode is active (it is while the shelf is open).
-	_set_terrain_locked(spawned, not _terrain_edit_mode)
+	# Freshly placed terrain stays UNLOCKED so the player can drag it into position right away; it
+	# only locks when the player manually locks it (select + L). No auto-lock tied to the shelf.
 
 	if broadcast and _network_manager and _network_manager.is_multiplayer_active():
 		_network_manager.broadcast_sandbox_terrain_spawn(prop_id, kind, spawned.global_position, obj_network_id)
@@ -2250,30 +2265,16 @@ func spawn_sandbox_terrain(prop_id: String, kind: int, pos: Vector3, broadcast: 
 	return spawned
 
 
-## Enable/disable casual terrain editing. When OFF, every sandbox terrain piece is locked
-## (not selectable, draggable or deletable) so play doesn't disturb the layout; when ON they
-## are unlocked for arranging. No dimming — terrain always looks the same.
+## Enable/disable casual terrain editing. This now ONLY tracks the shelf state — locking is manual
+## and per-piece (select + L): a freshly placed piece stays draggable until the player locks it, and
+## a locked piece stays locked regardless of the shelf. (Was: ON unlocked every terrain piece, OFF
+## locked them all — that auto-lock made a just-placed piece immovable the moment the shelf closed.)
 func set_terrain_edit_mode(enabled: bool) -> void:
 	_terrain_edit_mode = enabled
-	for node in get_tree().get_nodes_in_group("sandbox_terrain"):
-		if node is Node3D and is_instance_valid(node):
-			_set_terrain_locked(node, not enabled)
 
 
 func is_terrain_edit_mode() -> bool:
 	return _terrain_edit_mode
-
-
-## Lock/unlock a terrain piece using the same "locked" meta + group the selection paths
-## already honour (is_object_locked), but without the dim overlay used for manual locks.
-func _set_terrain_locked(obj: Node3D, locked: bool) -> void:
-	obj.set_meta("locked", locked)
-	if locked:
-		if not obj.is_in_group("locked"):
-			obj.add_to_group("locked")
-	else:
-		if obj.is_in_group("locked"):
-			obj.remove_from_group("locked")
 
 
 func _build_sandbox_ruin(prop_id: String, kind: int, obj_network_id: int) -> SandboxTerrainProp:
@@ -2305,9 +2306,10 @@ func sandbox_catalog(biome_prefix: String = "") -> Array:
 	for id in SANDBOX_GROUPS.keys():
 		var spec: Dictionary = SANDBOX_GROUPS[id]
 		var kind: int = spec.get("kind", SandboxPropKind.FOREST)
-		# A forest carries its biome in the prop_id (e.g. "desert_forest_small"); the procedural
-		# minefield is biome-agnostic, so it stays unprefixed and lists once per biome as-is.
-		var entry_id: String = (biome_prefix + id) if kind == SandboxPropKind.FOREST else id
+		# Forests AND hazard fields carry their biome in the prop_id (e.g. "desert_forest_small",
+		# "desert_minefield"), so their oval pad crops the biome battlemap like the table does, and
+		# save/broadcast round-trip the biome via the existing prop_id field.
+		var entry_id: String = (biome_prefix + id) if (kind == SandboxPropKind.FOREST or kind == SandboxPropKind.HAZARD_CLUSTER) else id
 		entries.append({"prop_id": entry_id, "kind": kind, "label": spec.get("label", id)})
 	return entries
 
