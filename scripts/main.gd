@@ -109,6 +109,7 @@ const DICE_CAPTION_FONT_SIZE: int = 12       # row captions + success tag in the
 const DICE_CAPTION_MIN_WIDTH: int = 56       # caption column width on the option rows
 const MODIFIER_VALUE_MIN_WIDTH: int = 44     # modifier value readout width
 const SUCCESS_SUMMARY_FONT_SIZE: int = 16    # "✔ N" total under the success column
+const NO_DICE_TINT := Color(0, 0, 0, 0)      # sentinel: no colour-tag tint on a result count (#77)
 var _dice_count: int = DEFAULT_DICE_COUNT
 var _dice_preset_buttons: Array[Button] = []
 var _dice_count_value_label: Label = null
@@ -1484,19 +1485,24 @@ func _add_dice_log_entry(player_name: String, faces: Array[int], context: Dictio
 	var groups: Dictionary = _faces_grouped_by_color(faces, tags)
 	var tags_present: Array[int] = _ordered_color_groups(groups.keys())
 	if tags_present.size() <= 1:
-		# Single colour (or all untagged): keep the compact inline face strip.
+		# Single colour (or all untagged): compact inline face strip, tinted if it's a tag.
+		var tint := _tint_for_tag(tags_present[0] if not tags_present.is_empty() else 0)
 		var counts: Dictionary = _count_faces(faces)
 		for face: int in [6, 5, 4, 3, 2, 1]:
 			entry.add_child(_make_success_row(face, counts.get(face, 0), DICE_LOG_ICON_SIZE,
-				DiceRules.is_success(face, target, modifier)))
+				DiceRules.is_success(face, target, modifier), tint))
 		if target != DiceRules.TARGET_NONE:
 			entry.add_child(_make_log_success_tag(DiceRules.count_successes(faces, target, modifier)))
+		_dice_log_vbox.add_child(entry)
 	else:
-		# Mixed colours: one swatch-headed group per colour, side by side (issue #77).
+		# Mixed colours: header on its own line, then ONE HORIZONTAL strip per colour stacked
+		# vertically beneath it (issue #77b). The whole entry becomes a vertical block.
+		var block := VBoxContainer.new()
+		block.add_theme_constant_override("separation", 2)
+		block.add_child(entry)  # the header row
 		for tag: int in tags_present:
-			entry.add_child(_build_color_group_column(tag, groups[tag], target, modifier, DICE_LOG_ICON_SIZE))
-
-	_dice_log_vbox.add_child(entry)
+			block.add_child(_build_color_group_row(tag, groups[tag], target, modifier, DICE_LOG_ICON_SIZE))
+		_dice_log_vbox.add_child(block)
 
 	# Auto-scroll to bottom
 	await get_tree().process_frame
@@ -1552,11 +1558,12 @@ func _populate_current_roll_column(faces: Array[int], context: Dictionary) -> vo
 	var groups: Dictionary = _faces_grouped_by_color(faces, _last_color_tags)
 	var tags_present: Array[int] = _ordered_color_groups(groups.keys())
 	if tags_present.size() <= 1:
-		# Single colour (or all untagged): keep the compact single-column readout.
+		# Single colour (or all untagged): compact single-column readout, tinted if it's a tag.
+		var tint := _tint_for_tag(tags_present[0] if not tags_present.is_empty() else 0)
 		var counts: Dictionary = _count_faces(faces)
 		for face: int in [6, 5, 4, 3, 2, 1]:
 			_current_roll_column.add_child(_make_success_row(face, counts.get(face, 0),
-				CURRENT_ROLL_ICON_SIZE, DiceRules.is_success(face, target, modifier)))
+				CURRENT_ROLL_ICON_SIZE, DiceRules.is_success(face, target, modifier), tint))
 		if target != DiceRules.TARGET_NONE:
 			_current_roll_column.add_child(_make_success_summary(
 				DiceRules.count_successes(faces, target, modifier)))
@@ -1569,9 +1576,10 @@ func _populate_current_roll_column(faces: Array[int], context: Dictionary) -> vo
 	_current_roll_column.add_child(row)
 
 
-## One "die icon + xN" row; dimmed when the count is zero, count tinted cyan
-## when the face passes the active success target.
-func _make_success_row(face: int, count: int, icon_size: int, highlight: bool) -> HBoxContainer:
+## One "die icon + xN" row; dimmed when the count is zero. The ×N count is shown in the die's
+## colour-tag colour when `tint` is set (a tagged result), else tinted cyan when the face passes
+## the active success target — so coloured dice read in their own colour (issue #77).
+func _make_success_row(face: int, count: int, icon_size: int, highlight: bool, tint: Color = NO_DICE_TINT) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 3)
 	row.modulate.a = 1.0 if count > 0 else 0.32
@@ -1587,10 +1595,18 @@ func _make_success_row(face: int, count: int, icon_size: int, highlight: bool) -
 	lbl.text = "×%d" % count
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	lbl.add_theme_font_size_override("font_size", maxi(12, icon_size - 10))
-	if highlight:
+	if tint.a > 0.0:
+		lbl.add_theme_color_override("font_color", tint)
+	elif highlight:
 		lbl.add_theme_color_override("font_color", HudTokens.CYAN)
 	row.add_child(lbl)
 	return row
+
+
+## The colour-tag tint for a result group: the die's body colour for a tagged group (1..N),
+## or NO_DICE_TINT for the untagged group (0) so it keeps the neutral/cyan styling.
+func _tint_for_tag(tag: int) -> Color:
+	return DiceD6.body_color_for_tag(tag) if tag > 0 else NO_DICE_TINT
 
 
 ## Counts how many dice show each face (1-6) from an ordered face list.
@@ -1657,14 +1673,33 @@ func _build_color_group_column(tag: int, group: Dictionary, target: int, modifie
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_theme_constant_override("separation", 2)
 	col.add_child(_make_color_swatch(tag, icon_size))
+	var tint := _tint_for_tag(tag)
 	var counts: Dictionary = group["counts"]
 	for face: int in [6, 5, 4, 3, 2, 1]:
 		col.add_child(_make_success_row(face, counts.get(face, 0), icon_size,
-			DiceRules.is_success(face, target, modifier)))
+			DiceRules.is_success(face, target, modifier), tint))
 	if target != DiceRules.TARGET_NONE:
 		var group_faces: Array[int] = group["faces"]
 		col.add_child(_make_success_summary(DiceRules.count_successes(group_faces, target, modifier)))
 	return col
+
+
+## A HORIZONTAL readout for ONE colour group, for the dice log: a leading colour swatch, the
+## per-face "icon ×N" rows laid out left→right, then that group's success count. Mixed-colour log
+## entries stack one of these per colour vertically (issue #77b).
+func _build_color_group_row(tag: int, group: Dictionary, target: int, modifier: int, icon_size: int) -> HBoxContainer:
+	var strip := HBoxContainer.new()
+	strip.add_theme_constant_override("separation", 4)
+	strip.add_child(_make_color_swatch(tag, icon_size))
+	var tint := _tint_for_tag(tag)
+	var counts: Dictionary = group["counts"]
+	for face: int in [6, 5, 4, 3, 2, 1]:
+		strip.add_child(_make_success_row(face, counts.get(face, 0), icon_size,
+			DiceRules.is_success(face, target, modifier), tint))
+	if target != DiceRules.TARGET_NONE:
+		var group_faces: Array[int] = group["faces"]
+		strip.add_child(_make_log_success_tag(DiceRules.count_successes(group_faces, target, modifier)))
+	return strip
 
 
 ## A small colour swatch marking which dice colour a result group belongs to.
