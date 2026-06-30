@@ -33,6 +33,10 @@ const BORDER_THICKNESS := 0.003  # 3mm thin border
 
 ## Border alpha
 const BORDER_ALPHA := 0.9
+## Draw the unit boundary ABOVE the ground decals (blood/oil stains = render_priority 1,
+## deployment zones = 2, seize rings = 3) so it stays visible over them, while remaining below
+## the measuring/overlay UI (8/9). See object_manager.gd for the full transparent-draw hierarchy.
+const BORDER_RENDER_PRIORITY := 4
 
 ## Cached boundary meshes per GameUnit
 var _boundaries: Dictionary = {}  # GameUnit -> MeshInstance3D (border only)
@@ -314,6 +318,7 @@ func _create_border_mesh(mesh_instance: MeshInstance3D, hull_points: PackedVecto
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.render_priority = BORDER_RENDER_PRIORITY  # above blood/oil stains (#82)
 	mesh_instance.material_override = material
 
 
