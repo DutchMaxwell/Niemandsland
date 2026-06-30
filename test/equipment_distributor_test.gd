@@ -168,3 +168,45 @@ func test_attach_and_detach_hero() -> void:
 	EquipmentDistributor.detach_hero(hero)
 	assert_bool(hero.unit_properties.get("attached_to") == null).is_true()
 	assert_int(target.unit_properties.get("attached_heroes").size()).is_equal(0)
+
+
+# ===== _effective_rule_descriptions: direct + item-granted + free-text-granted rules (#79) =====
+
+## A minimal stand-in for OPRApiClient.OPRUnit (only the two fields the helper reads).
+class FakeOPRUnit:
+	extends RefCounted
+	var special_rules: Array = []
+	var item_grants: Dictionary = {}
+
+
+func _opr_unit(rules: Array, grants: Dictionary = {}) -> FakeOPRUnit:
+	var u := FakeOPRUnit.new()
+	u.special_rules = rules
+	u.item_grants = grants
+	return u
+
+
+func test_effective_descriptions_includes_direct_rules() -> void:
+	var got := EquipmentDistributor._effective_rule_descriptions(
+		_opr_unit(["Fast", "Tough(3)"]), {"Fast": "fast text", "Tough": "tough text"})
+	assert_bool(got.has("Fast")).is_true()
+	assert_bool(got.has("Tough")).is_true()  # rating parenthetical stripped to the base name
+
+
+func test_effective_descriptions_includes_item_grants() -> void:
+	var got := EquipmentDistributor._effective_rule_descriptions(
+		_opr_unit([], {"Magic Boots": ["Swift"]}), {"Swift": "Moves +1\" when using Advance."})
+	assert_bool(got.has("Swift")).is_true()  # granted by an upgrade item, not listed directly
+
+
+func test_effective_descriptions_pulls_in_transitive_grant() -> void:
+	# "Fleetfoot" (direct) grants Swift in its text; Swift's description must be pulled in too.
+	var got := EquipmentDistributor._effective_rule_descriptions(
+		_opr_unit(["Fleetfoot"]),
+		{"Fleetfoot": "This model has the Swift special rule.", "Swift": "Moves +1\" ..."})
+	assert_bool(got.has("Fleetfoot")).is_true()
+	assert_bool(got.has("Swift")).is_true()
+
+
+func test_effective_descriptions_empty_without_army_descriptions() -> void:
+	assert_bool(EquipmentDistributor._effective_rule_descriptions(_opr_unit(["Swift"]), {}).is_empty()).is_true()
