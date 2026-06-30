@@ -917,7 +917,8 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 	if not models.is_empty():
 		var typed_models: Array[Node3D] = []
 		typed_models.assign(models)
-		var game_unit = EquipmentDistributor.create_from_opr_unit(unit, typed_models, player_id)
+		var rule_descriptions: Dictionary = army.rule_descriptions if army else {}
+		var game_unit = EquipmentDistributor.create_from_opr_unit(unit, typed_models, player_id, rule_descriptions)
 
 		# Store mappings
 		unit_to_game_unit[unit] = game_unit

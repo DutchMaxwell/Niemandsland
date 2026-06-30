@@ -312,7 +312,7 @@ static func detach_hero(hero: GameUnit) -> void:
 ## @param nodes: Array of Node3D for the spawned models
 ## @param player_id: Player ID for this unit
 ## @returns: Configured GameUnit
-static func create_from_opr_unit(opr_unit: Variant, nodes: Array[Node3D], player_id: int = 1) -> GameUnit:
+static func create_from_opr_unit(opr_unit: Variant, nodes: Array[Node3D], player_id: int = 1, rule_descriptions: Dictionary = {}) -> GameUnit:
 	var game_unit = GameUnit.new()
 	game_unit.source_data = opr_unit
 	game_unit.source_type = "opr"
@@ -327,6 +327,9 @@ static func create_from_opr_unit(opr_unit: Variant, nodes: Array[Node3D], player
 		"defense": opr_unit.defense,
 		"cost": opr_unit.cost,
 		"special_rules": opr_unit.special_rules.duplicate(),
+		# Descriptions of THIS unit's rules, so the movement-reach indicator can parse the
+		# Advance/Rush modifier of movement rules (Swift, Fast, …) from their text (issue #79).
+		"rule_descriptions": _descriptions_for_rules(opr_unit.special_rules, rule_descriptions),
 		"item_grants": opr_unit.item_grants.duplicate(true),  # item -> granted rules (unit-card cascade)
 		"base_size_round": opr_unit.base_size_round,
 		"base_size_square": opr_unit.base_size_square,
@@ -365,5 +368,19 @@ static func create_from_opr_unit(opr_unit: Variant, nodes: Array[Node3D], player
 	game_unit.initialize_caster_points()
 
 	return game_unit
+
+
+## The subset of `all_descriptions` (army rule name -> text) that applies to this unit's
+## special rules, keyed by rule base name (rating parentheticals stripped). Kept small — only
+## the unit's own rules — since it rides in unit_properties (and the .nml save). Issue #79.
+static func _descriptions_for_rules(rules: Array, all_descriptions: Dictionary) -> Dictionary:
+	var subset: Dictionary = {}
+	if all_descriptions.is_empty():
+		return subset
+	for r in rules:
+		var base: String = str(r).split("(")[0].strip_edges()
+		if not base.is_empty() and all_descriptions.has(base) and not subset.has(base):
+			subset[base] = str(all_descriptions[base])
+	return subset
 
 
