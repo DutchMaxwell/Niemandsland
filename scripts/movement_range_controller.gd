@@ -60,34 +60,35 @@ func base_radius_for_props(props: Dictionary) -> float:
 
 
 ## The Advance + Rush/Charge distances (inches) for a unit, applying every movement-modifying
-## special rule it carries (parsed from each rule's OPR description, with a Fast/Slow constant
-## fallback). Returns {"advance": int, "rush": int}, clamped at 0 so a heavy Slow can't go negative.
+## rule it effectively carries. `props["rule_descriptions"]` already holds the unit's EFFECTIVE
+## rules — direct, item-granted AND free-text-granted (e.g. an ability that grants Swift) — so
+## parsing every description here picks up indirectly-granted modifiers too (issue #79). A Fast/Slow
+## constant fallback covers a core rule listed directly but without (parseable) description text.
+## Returns {"advance": int, "rush": int}, clamped at 0 so a heavy Slow can't go negative.
 func move_bands_for_props(props: Dictionary) -> Dictionary:
 	var advance := OPR_ADVANCE_INCHES
 	var rush := OPR_RUSH_CHARGE_INCHES
-	var rules: Array = props.get("special_rules", [])
 	var descriptions: Dictionary = props.get("rule_descriptions", {})
-	for r in rules:
-		var mod := _move_modifier_for_rule(_rule_base_name(str(r)), descriptions)
-		advance += int(mod["advance"])
-		rush += int(mod["rush"])
+	var counted: Dictionary = {}  # rule base names whose modifier is already applied
+	for name in descriptions:
+		var mod := move_modifier_from_description(str(descriptions[name]))
+		if int(mod["advance"]) != 0 or int(mod["rush"]) != 0:
+			advance += int(mod["advance"])
+			rush += int(mod["rush"])
+			counted[name] = true
+	for r in props.get("special_rules", []):
+		var base := _rule_base_name(str(r))
+		if counted.has(base):
+			continue  # already applied from its description (don't double-count)
+		if base == "Fast":
+			advance += FAST_ADVANCE_BONUS
+			rush += FAST_RUSH_BONUS
+			counted[base] = true
+		elif base == "Slow":
+			advance -= FAST_ADVANCE_BONUS
+			rush -= FAST_RUSH_BONUS
+			counted[base] = true
 	return {"advance": maxi(0, advance), "rush": maxi(0, rush)}
-
-
-## The Advance / Rush movement modifier (inches) a single rule contributes: parsed from its OPR
-## description when available, else the Fast/Slow constants, else none. `rule_name` is the base
-## name (no rating parenthetical). Returns {"advance": int, "rush": int}.
-func _move_modifier_for_rule(rule_name: String, descriptions: Dictionary) -> Dictionary:
-	if descriptions.has(rule_name):
-		var parsed := move_modifier_from_description(str(descriptions[rule_name]))
-		if int(parsed["advance"]) != 0 or int(parsed["rush"]) != 0:
-			return parsed
-	# Fallback for the OPR core rules when no (or unparseable) description text is present.
-	if rule_name == "Fast":
-		return {"advance": FAST_ADVANCE_BONUS, "rush": FAST_RUSH_BONUS}
-	if rule_name == "Slow":
-		return {"advance": -FAST_ADVANCE_BONUS, "rush": -FAST_RUSH_BONUS}
-	return {"advance": 0, "rush": 0}
 
 
 ## Parses the Advance and Rush/Charge movement modifiers out of an OPR rule description, e.g.
