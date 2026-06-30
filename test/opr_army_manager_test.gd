@@ -114,6 +114,37 @@ func test_get_model_aabb_empty_node_is_zero() -> void:
 	assert_float(aabb.size.length()).is_equal_approx(0.0, 0.0001)
 
 
+# ===== _add_ambush_scout_band: the staging band is built from bounds alone (#76) =====
+# The band must be reconstructable on any tray without synced state, so it survives every
+# rebuild path (live MP receive, late-joiner sync, .nml load), not just the importer.
+
+func test_ambush_scout_band_populates_tray() -> void:
+	var m := _mgr()
+	var tray: Node3D = auto_free(Node3D.new())
+	m._add_ambush_scout_band(tray, Vector2(0.81, 0.81), Color.GRAY)
+	# Two tint quads + one divider (all MeshInstance3D) + two Label3Ds (Ambush / Scout).
+	assert_int(tray.get_child_count()).is_equal(5)
+	var mesh_count := 0
+	var label_count := 0
+	for child: Node in tray.get_children():
+		if child is MeshInstance3D:
+			mesh_count += 1
+		elif child is Label3D:
+			label_count += 1
+	assert_int(mesh_count).is_equal(3)   # 2 tint quads + 1 divider
+	assert_int(label_count).is_equal(2)  # Ambush + Scout
+	# The labels carry stable, unique names used for lookups elsewhere.
+	assert_object(tray.get_node_or_null("AmbushScoutLabel_Ambush")).is_not_null()
+	assert_object(tray.get_node_or_null("AmbushScoutLabel_Scout")).is_not_null()
+	assert_object(tray.get_node_or_null("AmbushScoutDivider")).is_not_null()
+
+
+func test_ambush_scout_band_guards_null_tray() -> void:
+	var m := _mgr()
+	# Must not crash when handed an invalid tray (defensive early-return).
+	m._add_ambush_scout_band(null, Vector2(0.81, 0.81), Color.GRAY)
+
+
 # ===== effective_base_props: per-model Tough enlarges the base for tokens/measuring =====
 # The mesh stays natural-sized (fixed in _create_unit_model/create_model_from_properties);
 # THIS is what tokens/range-rings/measuring read so they anchor to the actual enlarged base.
