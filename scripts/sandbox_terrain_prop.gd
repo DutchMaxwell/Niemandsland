@@ -45,7 +45,10 @@ const CELL_HEIGHT_INCHES := 3.0             # storey spacing (platform/collider 
 ## along a clean diagonal — the stones "break off" along the hypotenuse, no 3" stair-steps.
 const WALL_STONE_PANEL := "solid_a"
 const NORMAL_PANEL := "normal"              # masonry normal map (relief), as the grid ruins use
-const MASONRY_TILE_INCHES := 2.6            # one stone-texture tile spans this (triplanar scale)
+## One stone-texture tile spans this (triplanar scale). Deliberately COARSE so the masonry panel
+## reads as a few large courses across a wall instead of a finely repeating pattern (the earlier
+## 2.6″/3.35″ values tiled far too small). A ~9″ arm shows roughly one full panel → minimal repeat.
+const MASONRY_TILE_INCHES := 10.0
 ## Match the map-layout grid ruins' material (terrain_overlay.gd) so the stone looks the same.
 const STONE_ROUGHNESS := 0.93
 const STONE_NORMAL_STRENGTH := 1.4
@@ -80,6 +83,16 @@ const FLOOR_PLATFORM_TEX := "res://assets/sandbox_floor_platform.webp"
 ## stone tiles → a 3" span gives small ~0.6" tiles; the base cobble reads well a bit larger.
 const FLOOR_TILE_BASE_INCHES := 6.0
 const FLOOR_TILE_PLATFORM_INCHES := 3.0
+
+## Brick rubble scattered at the foot of each outer wall (mirrors the auto-generated map-layout
+## ruins, terrain_overlay.gd). One MultiMesh per ruin; box fragments wear the wall masonry via
+## OBJECT-local triplanar (so the rubble rides with the movable prop, unlike the map-layout's
+## world triplanar). Sizes/embed match terrain_overlay's RUBBLE_* constants.
+const RUBBLE_COUNT_PER_ARM := 20
+const RUBBLE_STONE_MIN_M := 0.003
+const RUBBLE_STONE_MAX_M := 0.010
+const RUBBLE_MAX_DIST_M := 0.0254          # taper ends 1" out from the wall face
+const RUBBLE_EMBED_FRAC := 0.35            # fragments sink partly into the ground
 
 ## Procedural placeholder (until the panels are cached).
 const PLACEHOLDER_COLOR := Color(0.52, 0.50, 0.46)
@@ -126,7 +139,9 @@ func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2, p_fl
 ## isn't cached yet, fetch it and rebuild when it arrives.
 func build_visual(lib: RuinsLibrary) -> void:
 	_apply_visual(lib)
-	if lib != null and not lib.all_panels_cached(_theme_prefix):
+	# Fetch the wall panels if missing, and/or the themed floor panels (optional — bundled fallback)
+	# if a biome has them but they're not cached yet, then rebuild so the floors re-theme.
+	if lib != null and (not lib.all_panels_cached(_theme_prefix) or not lib.floor_panels_cached(_theme_prefix)):
 		_ensure_panels_async(lib)
 
 
@@ -206,9 +221,14 @@ func _apply_visual(lib: RuinsLibrary) -> void:
 		_build_placeholder()
 
 
-## Download the panel set off the main thread, then rebuild if still alive. Fire-and-forget.
+## Download the wall panel set (and, best-effort, the themed floor panels) off the main thread,
+## then rebuild once if still alive. Fire-and-forget. The floor panels are optional — a biome
+## without them keeps the bundled fallback — so they never gate the wall build.
 func _ensure_panels_async(lib: RuinsLibrary) -> void:
 	var ok: bool = await lib.ensure_all_panels(_theme_prefix)
+	if not is_instance_valid(self):
+		return
+	await lib.ensure_floor_panels(_theme_prefix)
 	if ok and is_instance_valid(self):
 		_apply_visual(lib)
 
@@ -229,6 +249,8 @@ func _build_ruin(lib: RuinsLibrary) -> void:
 	for i in range(floor_heights_inches.size()):
 		var l := _l_params(i)
 		_build_platform(i, ax, az, float(l["lx"]), float(l["lz"]), float(l["arm"]), float(l["top"]), lib)
+	# Brick rubble at the foot of the two outer walls (like the auto-generated map-layout ruins).
+	_build_rubble(ax, az, fw0, fd0, lib)
 
 
 ## Linear hypotenuse height at along-corner distance `u`: full at the corner, 0 at the free end.
@@ -275,7 +297,18 @@ func _build_arm_facade(is_x: bool, ax: float, az: float, arm_len: float, p: floa
 		if hi - lo >= 0.003:
 			_add_cap_side(is_x, ax, az, (k + 1) * cw, p, outward, lo, hi, depth, mat)
 	for w in windows:
-		_add_window_quad(is_x, ax, az, float(w["uc"]), p, outward, (float(w["vb"]) + float(w["vt"])) * 0.5, depth, lib)
+		var wuc := float(w["uc"])
+		var whw := float(w["half"])  # half window width
+		var wvb := float(w["vb"])
+		var wvt := float(w["vt"])
+		# Close the window REVEAL (jamb) so the opening reads as a real recessed window through the
+		# wall thickness, not an open hole: a lintel + sill (horizontal caps) and the two side jambs
+		# (vertical caps), reusing the column-cap helpers. Stone-lined (the wall masonry material).
+		_add_cap_top(is_x, ax, az, wuc, p, outward, wvt, whw * 2.0, depth, mat)   # lintel (top)
+		_add_cap_top(is_x, ax, az, wuc, p, outward, wvb, whw * 2.0, depth, mat)   # sill (bottom)
+		_add_cap_side(is_x, ax, az, wuc - whw, p, outward, wvb, wvt, depth, mat)  # left jamb
+		_add_cap_side(is_x, ax, az, wuc + whw, p, outward, wvb, wvt, depth, mat)  # right jamb
+		_add_window_quad(is_x, ax, az, wuc, p, outward, (wvb + wvt) * 0.5, depth, lib)
 
 
 ## A stone wall segment [y0, y1] of a column: a thin front+back shell (each face lit on its side).
@@ -338,14 +371,29 @@ func _subtract_bands(lo: float, hi: float, bands: Array) -> Array:
 	return out
 
 
+## Add a flat quad to the visual, BAKING its position + Y-rotation into the mesh vertices (instead
+## of transforming the MeshInstance). This is what lets the wall's object-local triplanar masonry
+## project CONTINUOUSLY across all the separate column quads: if each quad sat at the MeshInstance
+## origin, triplanar would sample the identical texture slice on every column and read as vertical
+## stripes. Baked into the prop-local space, the projection still rides + rotates with the movable
+## prop (unlike world triplanar, which would swim on drag and skew when the ruin is rotated).
 func _add_quad(mat: Material, pos: Vector3, w: float, h: float, rot_y: float) -> void:
-	var mesh := QuadMesh.new()
-	mesh.size = Vector2(w, h)
+	var basis := Basis(Vector3.UP, rot_y)
+	var nrm := basis * Vector3(0.0, 0.0, 1.0)
+	var hw := w * 0.5
+	var hh := h * 0.5
+	var bl := pos + basis * Vector3(-hw, -hh, 0.0)
+	var br := pos + basis * Vector3(hw, -hh, 0.0)
+	var tr := pos + basis * Vector3(hw, hh, 0.0)
+	var tl := pos + basis * Vector3(-hw, hh, 0.0)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_normal(nrm)
+	st.add_vertex(bl); st.add_vertex(br); st.add_vertex(tr)
+	st.add_vertex(bl); st.add_vertex(tr); st.add_vertex(tl)
 	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
+	mi.mesh = st.commit()
 	mi.material_override = mat
-	mi.position = pos
-	mi.rotation.y = rot_y
 	_visual_root.add_child(mi)
 
 
@@ -354,17 +402,29 @@ func _add_quad(mat: Material, pos: Vector3, w: float, h: float, rot_y: float) ->
 ## material is CULL_DISABLED, so the up/down facing is moot.
 func _add_cap_top(is_x: bool, ax: float, az: float, uc: float, p: float, outward: float, top: float, cw: float, depth: float, mat: Material) -> void:
 	var mid := p - outward * depth * 0.5  # centre of the wall thickness
-	var mesh := QuadMesh.new()
-	var mi := MeshInstance3D.new()
 	if is_x:
-		mesh.size = Vector2(cw, depth)
-		mi.position = Vector3(ax + uc, top, mid)
+		_add_flat_quad(mat, Vector3(ax + uc, top, mid), cw, depth)
 	else:
-		mesh.size = Vector2(depth, cw)
-		mi.position = Vector3(mid, top, az + uc)
-	mi.mesh = mesh
+		_add_flat_quad(mat, Vector3(mid, top, az + uc), depth, cw)
+
+
+## A horizontal (XZ-plane) quad facing up, with its position baked into the vertices — same
+## continuous-triplanar reason as _add_quad (no per-cap stripe).
+func _add_flat_quad(mat: Material, center: Vector3, size_x: float, size_z: float) -> void:
+	var hx := size_x * 0.5
+	var hz := size_z * 0.5
+	var a := center + Vector3(-hx, 0.0, -hz)
+	var b := center + Vector3(hx, 0.0, -hz)
+	var c := center + Vector3(hx, 0.0, hz)
+	var d := center + Vector3(-hx, 0.0, hz)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_normal(Vector3.UP)
+	st.add_vertex(a); st.add_vertex(b); st.add_vertex(c)
+	st.add_vertex(a); st.add_vertex(c); st.add_vertex(d)
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
 	mi.material_override = mat
-	mi.rotation.x = -PI * 0.5  # lay the +Z-facing quad flat (faces up)
 	_visual_root.add_child(mi)
 
 
@@ -460,15 +520,31 @@ func _window_material(lib: RuinsLibrary) -> Material:
 ## A walkable platform at storey `i`: one clean slab per L arm, top-textured with the cobbled
 ## base floor (ground, i == 0) or the cut-flagstone platform floor (upper storeys). The base is
 ## a thick plinth; upper platforms stay thin. Top edge sits at the storey height.
-func _build_platform(i: int, ax: float, az: float, lx: float, lz: float, arm: float, top: float, _lib: RuinsLibrary) -> void:
+func _build_platform(i: int, ax: float, az: float, lx: float, lz: float, arm: float, top: float, lib: RuinsLibrary) -> void:
 	var is_base := i == 0
 	var plate_t := FLOOR_PLATE_THICKNESS_INCHES * INCHES_TO_METERS
-	var mat := _floor_material(is_base)
+	var mat := _floor_material(is_base, lib)
 	# Base = a plinth sitting ON the table (thickness UP from `top`, so its surface clears the
 	# table → no z-fighting); upper platforms hang their thin slab DOWN from the storey surface.
 	var y := (top + plate_t * 0.5) if is_base else (top - plate_t * 0.5)
-	_add_slab(Vector3(lx, plate_t, arm), Vector3(ax + lx * 0.5, y, az + arm * 0.5), mat)
-	_add_slab(Vector3(arm, plate_t, lz), Vector3(ax + arm * 0.5, y, az + lz * 0.5), mat)
+	# Two slabs form the L. The X-arm spans the full corner; the Z-arm is CLIPPED to start past the
+	# corner square so the two never overlap — coplanar slabs at the same Y z-fight (the texture
+	# overlap flickers on camera movement). A tiny ruin whose Z-arm is no longer than the corner is
+	# fully covered by the X-arm, so the Z-arm is dropped.
+	#
+	# Also INSET the slab edges that meet the two OUTER arm walls (X-arm wall at z=az, Z-arm wall at
+	# x=ax) by the wall thickness + a hair, so no slab face sits coplanar with a wall face — that
+	# coplanarity z-fights (flickers) when looking at the corner from outside. The free arm ends and
+	# the interior edge between the two slabs keep their extent. Colliders (built separately) still
+	# reach the walls, so the walkable area is unchanged.
+	var wi := WALL_THICKNESS_INCHES * INCHES_TO_METERS + 0.0005
+	var xsize := lx - wi
+	var zsize := arm - wi
+	if xsize > 0.0 and zsize > 0.0:
+		_add_slab(Vector3(xsize, plate_t, zsize), Vector3(ax + (lx + wi) * 0.5, y, az + (arm + wi) * 0.5), mat)
+	var lz_clip := lz - arm
+	if lz_clip > 0.0 and (arm - wi) > 0.0:
+		_add_slab(Vector3(arm - wi, plate_t, lz_clip), Vector3(ax + (arm + wi) * 0.5, y, az + arm + lz_clip * 0.5), mat)
 
 
 func _add_slab(size: Vector3, pos: Vector3, mat: Material) -> void:
@@ -481,13 +557,90 @@ func _add_slab(size: Vector3, pos: Vector3, mat: Material) -> void:
 	_visual_root.add_child(mi)
 
 
-## Floor material (object-local triplanar) using the generated cobbled base / flagstone platform
-## texture. Decoded from the bundled WebP once and shared across props (static cache).
-func _floor_material(is_base: bool) -> Material:
+## Brick rubble at the foot of the two outer arm walls: one MultiMesh of small box fragments wearing
+## the wall masonry (object-local triplanar so it rides with the movable prop), scattered along each
+## wall base and tapering out to 1". Mirrors the auto-generated map-layout ruins' rubble; per-instance
+## brightness jitter gives variation without the map-layout's world-triplanar swim.
+func _build_rubble(ax: float, az: float, fw0: float, fd0: float, lib: RuinsLibrary) -> void:
+	var transforms: Array[Transform3D] = []
+	var colors := PackedColorArray()
+	_rubble_along(transforms, colors, true, ax, az, fw0, 0)   # X-arm wall (faces -Z)
+	_rubble_along(transforms, colors, false, ax, az, fd0, 1)  # Z-arm wall (faces -X)
+	if transforms.is_empty():
+		return
+	var box := BoxMesh.new()
+	box.size = Vector3.ONE
+	box.material = _rubble_material(lib)
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = box
+	mm.instance_count = transforms.size()
+	for i in transforms.size():
+		mm.set_instance_transform(i, transforms[i])
+		mm.set_instance_color(i, colors[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_visual_root.add_child(mmi)
+
+
+## Scatter RUBBLE_COUNT_PER_ARM tumbled, brick-shaped box fragments along one wall's base on its
+## outward side, appending to `transforms` + `colors`. Deterministic (hashed seed) so every client
+## builds the identical rubble.
+func _rubble_along(transforms: Array, colors: PackedColorArray, is_x: bool, ax: float, az: float, arm_len: float, arm_id: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	# Vary the scatter per ruin size (footprint is identical on every client, so this stays
+	# MP-deterministic) and per arm, so neighbouring ruins don't share the exact same rubble.
+	rng.seed = _hash3(arm_id, int(footprint_inches.x * 100.0), int(footprint_inches.y * 100.0))
+	for _k in range(RUBBLE_COUNT_PER_ARM):
+		var along := rng.randf() * arm_len
+		var dist := rng.randf() * rng.randf() * RUBBLE_MAX_DIST_M  # quadratic taper outward
+		var stone := rng.randf_range(RUBBLE_STONE_MIN_M, RUBBLE_STONE_MAX_M)
+		var pos := Vector3(ax + along, stone * RUBBLE_EMBED_FRAC, az - dist) if is_x \
+			else Vector3(ax - dist, stone * RUBBLE_EMBED_FRAC, az + along)
+		var b := Basis.from_euler(Vector3(rng.randf() * TAU, rng.randf() * TAU, rng.randf() * TAU))
+		b = b.scaled(Vector3(stone * rng.randf_range(1.6, 2.4), stone, stone * rng.randf_range(1.0, 1.5)))
+		transforms.append(Transform3D(b, pos))
+		var j := rng.randf_range(0.65, 1.0)  # brightness jitter over the masonry
+		colors.append(Color(j, j, j, 1.0))
+
+
+## Masonry material for the rubble fragments: the wall stone via object-local triplanar, with
+## per-instance vertex colour enabled for the brightness jitter (the wall material has no vertex
+## colour, so the rubble needs its own).
+func _rubble_material(lib: RuinsLibrary) -> Material:
+	if _materials.has("rubble"):
+		return _materials["rubble"]
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = lib.get_texture(_theme_prefix + WALL_STONE_PANEL)
+	mat.albedo_color = PLACEHOLDER_COLOR if mat.albedo_texture == null else Color.WHITE
+	mat.vertex_color_use_as_albedo = true
+	mat.roughness = STONE_ROUGHNESS
+	mat.metallic = 0.0
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	mat.texture_repeat = true
+	if mat.albedo_texture != null:
+		var tiles := 1.0 / (MASONRY_TILE_INCHES * INCHES_TO_METERS)
+		mat.uv1_triplanar = true
+		mat.uv1_world_triplanar = false
+		mat.uv1_scale = Vector3(tiles, tiles, tiles)
+	_materials["rubble"] = mat
+	return mat
+
+
+## Floor material (object-local triplanar) for storey `i`. Prefers the BIOME-THEMED floor panel
+## (the same R2-delivered theming as the walls — `<prefix>floor_base` / `<prefix>floor_platform` in
+## RuinsLibrary), and falls back to the bundled grassland-tuned cobble/flagstone texture until the
+## themed asset is cached (or for grassland, which has no themed entry). On the async panel-arrival
+## rebuild the cache is cleared, so a ruin re-themes its floor once the asset downloads.
+func _floor_material(is_base: bool, lib: RuinsLibrary) -> Material:
 	var key := "floor_base" if is_base else "floor_platform"
 	if _materials.has(key):
 		return _materials[key]
-	var tex := _load_floor_texture(FLOOR_BASE_TEX if is_base else FLOOR_PLATFORM_TEX)
+	var tex: Texture2D = lib.get_texture(_theme_prefix + key) if lib != null else null
+	if tex == null:
+		tex = _load_floor_texture(FLOOR_BASE_TEX if is_base else FLOOR_PLATFORM_TEX)
 	var span := FLOOR_TILE_BASE_INCHES if is_base else FLOOR_TILE_PLATFORM_INCHES
 	var tiles := 1.0 / (span * INCHES_TO_METERS)
 	var mat := StandardMaterial3D.new()

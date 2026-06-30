@@ -95,6 +95,46 @@ func test_hazard_group_builds_mine_members() -> void:
 	assert_int(_member_count(base)).is_equal(TerrainGroupBase.HAZARD_MINE_COUNT)
 
 
+## A dangerous-terrain cluster now builds the SAME oval ground pad the forests use (a non-member
+## floor mesh) and lifts its mines onto the pad top — not bare props on the table.
+func test_hazard_cluster_has_ground_pad_and_mines_sit_on_it() -> void:
+	var base := _group("minefield", ObjectManager.SandboxPropKind.HAZARD_CLUSTER, Vector2(6, 6))
+	base.build(123, null)
+	var pad_count := 0
+	for child in base.get_children():
+		if child is MeshInstance3D and not child.has_meta(TerrainGroupBase.MEMBER_META):
+			pad_count += 1
+	assert_int(pad_count).is_greater(0)  # the oval ground pad
+	var pad_top := TerrainGroupBase.FOREST_BASE_THICKNESS_INCHES * TerrainGroupBase.INCHES_TO_METERS
+	for child in base.get_children():
+		if child.has_meta(TerrainGroupBase.MEMBER_META):
+			assert_float((child as Node3D).position.y).is_equal_approx(pad_top, 0.0001)
+
+
+## A GLB-prop biome (volcanic lava / jungle plant) places fewer, larger props (HAZARD_PROP_COUNT)
+## than a plain minefield (HAZARD_MINE_COUNT). The count is set by the biome, not the asset, so it
+## holds even with no hazards library (the procedural fallback fills in).
+func test_glb_hazard_biomes_place_fewer_props() -> void:
+	var v := _group("volcanic_minefield", ObjectManager.SandboxPropKind.HAZARD_CLUSTER, Vector2(6, 4))
+	v.biome_prefix = "volcanic_"
+	v.build(7, null)
+	assert_int(_member_count(v)).is_equal(TerrainGroupBase.HAZARD_PROP_COUNT)
+	assert_int(TerrainGroupBase.HAZARD_PROP_COUNT).is_less(TerrainGroupBase.HAZARD_MINE_COUNT)
+
+
+## Terrain locking is now MANUAL only: toggling terrain edit mode must NOT lock or unlock placed
+## pieces (regression guard for the old auto-lock-all that made a freshly placed piece immovable the
+## moment the shelf closed). A piece stays draggable until the player locks it (select + L).
+func test_terrain_edit_mode_toggle_does_not_lock_pieces() -> void:
+	var om: ObjectManager = auto_free(ObjectManager.new())
+	var prop := _prop("ruin_small_1f", ObjectManager.SandboxPropKind.RUIN, Vector2(3, 3), [0.0])
+	om.set_terrain_edit_mode(false)
+	assert_bool(prop.is_in_group("locked")).is_false()
+	assert_bool(prop.get_meta("locked", false)).is_false()
+	om.set_terrain_edit_mode(true)
+	assert_bool(prop.is_in_group("locked")).is_false()
+
+
 func test_group_members_carry_back_pointer_to_base() -> void:
 	var base := _group("forest_small", ObjectManager.SandboxPropKind.FOREST, Vector2(6, 6))
 	base.build(7, null)
@@ -113,20 +153,21 @@ func test_cluster_scatter_is_deterministic_for_same_seed() -> void:
 
 # === per-biome forests (biome encoded in prop_id; no save/wire signature change) ===
 
-func test_sandbox_catalog_prefixes_forests_per_biome() -> void:
+func test_sandbox_catalog_prefixes_forests_and_hazards_per_biome() -> void:
 	var om: ObjectManager = auto_free(ObjectManager.new())
 	var desert: Array = []
 	for e in om.sandbox_catalog("desert_"):
 		desert.append(e.get("prop_id", ""))
-	# Forests carry their biome prefix; the procedural minefield stays unprefixed.
+	# Forests AND hazard fields carry their biome prefix (their oval pad crops the biome battlemap).
 	assert_bool(desert.has("desert_forest_small")).is_true()
 	assert_bool(desert.has("desert_forest_large")).is_true()
-	assert_bool(desert.has("minefield")).is_true()
-	# Grassland forests stay bare.
+	assert_bool(desert.has("desert_minefield")).is_true()
+	# Grassland pieces stay bare (no prefix).
 	var grass: Array = []
 	for e in om.sandbox_catalog(""):
 		grass.append(e.get("prop_id", ""))
 	assert_bool(grass.has("forest_small")).is_true()
+	assert_bool(grass.has("minefield")).is_true()
 
 
 func test_sandbox_biome_prefix_split() -> void:
@@ -194,5 +235,15 @@ func test_forest_floor_battlemap_key_map() -> void:
 	var m: Dictionary = TerrainGroupBase.FOREST_FLOOR_BATTLEMAP_KEY_BY_PREFIX
 	assert_str(str(m.get("desert_", ""))).is_equal("arid_desert")
 	assert_str(str(m.get("volcanic_", ""))).is_equal("volcanic_ash")
-	# Grassland keeps its bundled tile -> no battlemap key (skips the crop upgrade).
-	assert_bool(m.has("")).is_false()
+	# Grassland now crops its own battlemap too (like the other biomes), not the bundled tile.
+	assert_str(str(m.get("", ""))).is_equal("temperate_grassland")
+
+
+## Dangerous terrain uses the biome's GLB prop where one exists (volcanic lava crater, jungle/alien
+## carnivore plant); other biomes have no entry and fall back to the procedural anti-tank mine.
+func test_biome_hazard_model_map() -> void:
+	var m: Dictionary = TerrainGroupBase.BIOME_HAZARD_MODEL_BY_PREFIX
+	assert_str(str(m.get("volcanic_", ""))).is_equal("lava_crater")
+	assert_str(str(m.get("jungle_", ""))).is_equal("carnivore_plant")
+	assert_bool(m.has("")).is_false()         # grassland → procedural mine
+	assert_bool(m.has("desert_")).is_false()  # desert → procedural mine

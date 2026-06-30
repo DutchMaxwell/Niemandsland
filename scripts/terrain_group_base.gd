@@ -49,10 +49,12 @@ const TREE_VARIANTS: Array[String] = ["tree_a", "tree_b", "tree_c"]
 ## footprint = the oval's bounding box (long axis × widest point); trees scatter inside the
 ## ellipse. The pad sits UP from the table (a thin plinth) to avoid z-fighting.
 const FOREST_FLOOR_TEX_DEFAULT := "res://assets/sandbox_forest_floor.webp"
-## A non-grassland forest crops its floor from the biome's BATTLEMAP (the same R2 photo the table
-## uses) instead of shipping a per-biome tile — keyed by the prop_id biome prefix. Grassland keeps
-## its tuned bundled texture (no key). Kept in sync with ObjectManager's prefix list.
+## EVERY biome (incl. grassland) crops its pad floor from that biome's BATTLEMAP (the same R2 photo
+## the table uses) so the pad matches the table ground — keyed by the prop_id biome prefix. The
+## bundled FOREST_FLOOR_TEX_DEFAULT above is only the instant fallback shown until the crop loads.
+## Kept in sync with ObjectManager's prefix list.
 const FOREST_FLOOR_BATTLEMAP_KEY_BY_PREFIX: Dictionary = {
+	"": "temperate_grassland",
 	"desert_": "arid_desert",
 	"tundra_": "frozen_tundra",
 	"volcanic_": "volcanic_ash",
@@ -82,6 +84,28 @@ const TREE_FOLIAGE_COLOR := Color(0.20, 0.42, 0.18)
 const MINE_RADIUS_INCHES := 0.35
 const MINE_COLOR := Color(0.22, 0.20, 0.18)
 
+## Per-biome dangerous-terrain GLB props, resolved from HazardsLibrary like the forest trees:
+## volcanic → lava crater, jungle/alien → carnivore plant. Biomes not listed (grassland, desert,
+## tundra, urban) keep the procedural anti-tank mine. Kept in sync with terrain_overlay.gd
+## BIOME_HAZARD_MODELS.
+const BIOME_HAZARD_MODEL_BY_PREFIX: Dictionary = {
+	"volcanic_": "lava_crater",
+	"jungle_": "carnivore_plant",
+}
+## The footprint diameter (inches) each hazard GLB is scaled to fit (matches terrain_overlay.gd).
+const HAZARD_MODEL_DIAMETER_INCHES: Dictionary = {
+	"lava_crater": 2.4,
+	"carnivore_plant": 1.8,
+}
+## GLB-prop biomes (lava crater / carnivore plant) place fewer, larger props than a minefield.
+const HAZARD_PROP_COUNT := 3
+## Textured anti-tank mine — the real R2 asset (an olive disc with the `mine_top` pressure-plate
+## texture on top), matching the map-layout minefield (terrain_overlay.gd). The procedural dome is
+## only a fallback shown while the `mine_top` panel downloads.
+const MINE_DISC_RADIUS_INCHES := 0.3
+const MINE_DISC_HEIGHT_INCHES := 0.12
+const MINE_BODY_COLOR := Color(0.25, 0.27, 0.18)
+
 # === Public state ===
 
 var prop_id: String = ""
@@ -101,6 +125,10 @@ var _tree_upgrade_started: bool = false
 var _biome_lib: BiomeLibrary = null
 var _floor_mesh: MeshInstance3D = null
 var _floor_upgrade_started: bool = false
+## Hazard-prop GLB resolver + one-shot upgrade guard (mirrors the tree upgrade), for biomes whose
+## dangerous terrain is a real prop (lava crater / carnivore plant) rather than a procedural mine.
+var _hazards_lib: HazardsLibrary = null
+var _hazard_upgrade_started: bool = false
 
 # === Public ===
 
@@ -125,15 +153,16 @@ func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2, p_bi
 
 ## Build and adopt the cluster's members (trees or mines) with a seeded scatter. `trees_lib`
 ## may be null (procedural trees then). Safe to call once, after adding to the tree.
-func build(seed_val: int, trees_lib: TreesLibrary, biome_lib: BiomeLibrary = null) -> void:
+func build(seed_val: int, trees_lib: TreesLibrary, biome_lib: BiomeLibrary = null, hazards_lib: HazardsLibrary = null) -> void:
 	_seed_val = seed_val
 	_trees_lib = trees_lib
 	_biome_lib = biome_lib
+	_hazards_lib = hazards_lib
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_val
 	match prop_kind:
 		KIND_HAZARD_CLUSTER:
-			_build_mines(rng)
+			_build_hazards(rng)
 		_:
 			_build_forest(rng, trees_lib)
 
@@ -191,7 +220,7 @@ func _forest_tree_count() -> int:
 ## Fill the oval EVENLY (phyllotaxis) with a size-scaled number of trees, each randomly sized
 ## and turned + a little jitter so it reads natural, not mechanical.
 func _build_forest(rng: RandomNumberGenerator, trees_lib: TreesLibrary) -> void:
-	var base_top := _build_forest_base()
+	var base_top := _build_ground_pad()
 	# Instant pass: real GLB trees where the biome's models are already cached, procedural cones
 	# otherwise. If the biome set isn't cached yet, download it and swap the cones for real trees
 	# at the SAME seeded layout, so every client converges on identical art.
@@ -199,7 +228,7 @@ func _build_forest(rng: RandomNumberGenerator, trees_lib: TreesLibrary) -> void:
 	if trees_lib != null and not trees_lib.all_models_cached(biome_prefix):
 		_upgrade_forest_trees(base_top)
 	# A non-grassland forest swaps its grassland-fallback floor for a crop of the biome battlemap.
-	_maybe_upgrade_forest_floor()
+	_maybe_upgrade_pad_floor()
 
 
 ## Fill the oval EVENLY (phyllotaxis) with a size-scaled number of trees, each randomly sized and
@@ -243,15 +272,16 @@ func _upgrade_forest_trees(base_top: float) -> void:
 	_populate_forest(rng, _trees_lib, base_top)
 
 
-## If this forest carries a non-grassland biome, crop a tile of that biome's battlemap and swap it
-## onto the floor pad (downloading the battlemap if the table hasn't cached it). One-shot; the pad
-## was built on the grassland fallback so it's never untextured. Grassland keeps its tuned tile.
-func _maybe_upgrade_forest_floor() -> void:
+## Crop a tile of this piece's biome battlemap (forest OR hazard, every biome incl. grassland) and
+## swap it onto the floor pad (downloading the battlemap if the table hasn't cached it). One-shot;
+## the pad was built on the bundled fallback so it's never untextured. An unknown prefix keeps the
+## fallback.
+func _maybe_upgrade_pad_floor() -> void:
 	if _floor_upgrade_started or _biome_lib == null or not is_instance_valid(_floor_mesh):
 		return
 	var key: String = FOREST_FLOOR_BATTLEMAP_KEY_BY_PREFIX.get(biome_prefix, "")
 	if key.is_empty():
-		return  # grassland (or unknown) — keep the tuned bundled floor
+		return  # unknown prefix — keep the bundled fallback
 	_floor_upgrade_started = true
 	var path: String = _biome_lib.get_cached_path(key)
 	if path.is_empty():
@@ -288,10 +318,10 @@ func _crop_floor_tile(path: String) -> Texture2D:
 	return ImageTexture.create_from_image(crop)
 
 
-## The oval forest-floor pad: a thin elliptical disc (custom mesh so the floor texture tiles at
-## a real-world scale via planar UVs, not one stretched image) sitting up from the table.
-## Returns its top Y (where the trees stand).
-func _build_forest_base() -> float:
+## The oval ground pad (shared by forests and dangerous-terrain clusters): a thin elliptical disc
+## (custom mesh so the floor texture tiles at a real-world scale via planar UVs, not one stretched
+## image) sitting up from the table. Returns its top Y (where the trees / mines stand).
+func _build_ground_pad() -> float:
 	var a := footprint_inches.x * INCHES_TO_METERS * 0.5
 	var b := footprint_inches.y * INCHES_TO_METERS * 0.5
 	var t := FOREST_BASE_THICKNESS_INCHES * INCHES_TO_METERS
@@ -329,7 +359,7 @@ func _build_forest_base() -> float:
 
 
 ## The initial floor material: every forest builds on the grassland tile; non-grassland biomes then
-## async-swap to a crop of their battlemap (see _maybe_upgrade_forest_floor).
+## async-swap to a crop of their battlemap (see _maybe_upgrade_pad_floor).
 func _forest_floor_material() -> Material:
 	var tex := _load_texture(FOREST_FLOOR_TEX_DEFAULT)
 	if tex == null:
@@ -374,17 +404,84 @@ static func _load_texture(path: String) -> Texture2D:
 	return tex
 
 
-func _build_mines(rng: RandomNumberGenerator) -> void:
-	for i in range(HAZARD_MINE_COUNT):
-		_adopt_scattered(_make_mine(), rng)
+## A dangerous-terrain cluster: the SAME oval ground pad the forests use (so dangerous terrain reads
+## as area terrain with a biome-matched base, not bare props on the table), populated with the
+## biome's hazard props sitting ON the pad — a procedural anti-tank mine by default, or the biome's
+## GLB prop (volcanic lava crater, jungle/alien carnivore plant) where one exists. The pad is
+## biome-aware via the shared battlemap-crop upgrade below.
+func _build_hazards(rng: RandomNumberGenerator) -> void:
+	var base_top := _build_ground_pad()
+	var model: String = BIOME_HAZARD_MODEL_BY_PREFIX.get(biome_prefix, "")
+	var count := HAZARD_PROP_COUNT if not model.is_empty() else HAZARD_MINE_COUNT
+	for i in range(count):
+		_adopt_scattered(_make_hazard_member(model), rng, base_top)
+	# Download the needed hazard asset (the biome's GLB prop, or the textured mine's panel) if it
+	# isn't cached, then swap the procedural fallbacks for the real art at the SAME seeded layout
+	# (mirrors the forest tree upgrade).
+	if _needs_hazard_asset(model):
+		_upgrade_hazard_props(base_top, model, count)
+	# Swap the bundled-fallback pad floor for a crop of the biome battlemap (every biome).
+	_maybe_upgrade_pad_floor()
 
 
-## Parent a member, scatter it within the footprint, give it a random facing + a back-pointer.
-func _adopt_scattered(member: Node3D, rng: RandomNumberGenerator) -> void:
+## A hazard member: the biome's GLB prop (lava crater / carnivore plant) fit to its footprint if
+## cached, else the textured anti-tank mine (or its procedural dome while the panel downloads).
+## Consumes no RNG, so the async upgrade re-scatters the identical seeded layout.
+func _make_hazard_member(model: String) -> Node3D:
+	if not model.is_empty() and _hazards_lib != null:
+		var scene := _hazards_lib.get_model_scene(model)
+		if scene != null:
+			var inst := scene.instantiate() as Node3D
+			var d: float = float(HAZARD_MODEL_DIAMETER_INCHES.get(model, 2.0)) * INCHES_TO_METERS
+			_fit_to_diameter(inst, d)
+			return inst
+	return _make_mine()
+
+
+## Whether the biome's hazard art still needs downloading (so the procedural fallback should be
+## upgraded once it lands): the GLB prop for lava/plant biomes, else the `mine_top` panel.
+func _needs_hazard_asset(model: String) -> bool:
+	if _hazards_lib == null:
+		return false
+	if not model.is_empty():
+		return _hazards_lib.get_cached_model_path(model).is_empty()
+	return _hazards_lib.get_cached_path("mine_top").is_empty()
+
+
+## Download the biome's hazard art (GLB prop, or the textured mine's panel), then replace the
+## procedural fallbacks with the real art at the identical seeded layout. One-shot; the pad + floor
+## are left untouched. Mirrors _upgrade_forest_trees.
+func _upgrade_hazard_props(base_top: float, model: String, count: int) -> void:
+	if _hazard_upgrade_started or _hazards_lib == null:
+		return
+	_hazard_upgrade_started = true
+	var ok: bool
+	if not model.is_empty():
+		ok = await _hazards_lib.ensure_model(model)
+	else:
+		ok = await _hazards_lib.ensure_panel("mine_top")
+	if not ok or not is_instance_valid(self):
+		return
+	for child in get_children():
+		if child.has_meta(MEMBER_META):
+			child.queue_free()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _seed_val
+	for i in range(count):
+		_adopt_scattered(_make_hazard_member(model), rng, base_top)
+
+
+## Parent a member, scatter it WITHIN THE OVAL PAD (the ellipse, not the bounding box, so members
+## sit on the visible pad), lift it onto the pad top, give it a random facing + a back-pointer.
+func _adopt_scattered(member: Node3D, rng: RandomNumberGenerator, base_top: float) -> void:
 	add_child(member)
-	var hw := footprint_inches.x * INCHES_TO_METERS * 0.5
-	var hd := footprint_inches.y * INCHES_TO_METERS * 0.5
-	member.position = Vector3(rng.randf_range(-hw, hw), 0.0, rng.randf_range(-hd, hd))
+	var a := footprint_inches.x * INCHES_TO_METERS * 0.5
+	var b := footprint_inches.y * INCHES_TO_METERS * 0.5
+	# Uniform-area fill of the ellipse (sqrt for even radial density), clamped to the same fill
+	# fraction the forest trees use, so mines stay clear of the pad rim.
+	var r := sqrt(rng.randf()) * FOREST_FILL_RADIUS
+	var ang := rng.randf_range(0.0, TAU)
+	member.position = Vector3(a * r * cos(ang), base_top, b * r * sin(ang))
 	member.rotation.y = rng.randf_range(0.0, TAU)
 	member.set_meta(MEMBER_META, self)
 
@@ -419,8 +516,47 @@ func _make_tree(variant: String, trees_lib: TreesLibrary, height_m: float) -> No
 	return root
 
 
-## A mine member: a low dark dome (procedural; the in-game minefield art is grassland-only).
+## A mine member: the real textured anti-tank mine (olive disc + the `mine_top` pressure-plate
+## texture) if the panel is cached, else a low procedural dome while it downloads.
 func _make_mine() -> Node3D:
+	var tex: Texture2D = _hazards_lib.get_texture("mine_top") if _hazards_lib != null else null
+	if tex != null:
+		return _make_textured_mine(tex)
+	return _make_procedural_mine()
+
+
+## The textured anti-tank mine (mirrors terrain_overlay.gd _create_textured_mine): a flat olive disc
+## with the keyed-alpha `mine_top` pressure-plate texture laid on top.
+func _make_textured_mine(top_tex: Texture2D) -> Node3D:
+	var radius := MINE_DISC_RADIUS_INCHES * INCHES_TO_METERS
+	var height := MINE_DISC_HEIGHT_INCHES * INCHES_TO_METERS
+	var root := Node3D.new()
+	var body_mat := StandardMaterial3D.new()
+	body_mat.albedo_color = MINE_BODY_COLOR
+	body_mat.roughness = 0.9
+	body_mat.metallic = 0.0
+	var disc := CylinderMesh.new()
+	disc.top_radius = radius
+	disc.bottom_radius = radius
+	disc.height = height
+	root.add_child(_mesh_node(disc, body_mat, Vector3(0, height * 0.5, 0)))
+	var top_mat := StandardMaterial3D.new()
+	top_mat.albedo_texture = top_tex
+	top_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	top_mat.alpha_scissor_threshold = 0.5
+	top_mat.roughness = 0.9
+	top_mat.metallic = 0.0
+	top_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	var top_quad := QuadMesh.new()
+	top_quad.size = Vector2(radius * 2.0, radius * 2.0)
+	var top := _mesh_node(top_quad, top_mat, Vector3(0, height + 0.001, 0))
+	top.rotation.x = -PI * 0.5
+	root.add_child(top)
+	return root
+
+
+## A low dark dome — the procedural fallback shown only while the mine texture downloads.
+func _make_procedural_mine() -> Node3D:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = MINE_COLOR
 	mat.metallic = 0.4
@@ -446,6 +582,19 @@ static func _fit_height(node: Node3D, target_h: float) -> void:
 	if aabb.size.y < 0.0001 or target_h < 0.0001:
 		return
 	var s := target_h / aabb.size.y
+	node.scale = Vector3(s, s, s)
+	node.position.y = -aabb.position.y * s
+
+
+## Uniformly scale a runtime GLB so its widest XZ footprint = target diameter (metres), base at
+## y = 0. Used for hazard props (lava crater / carnivore plant), which are sized by footprint, not
+## height (a flat crater would mis-scale if fit by height).
+static func _fit_to_diameter(node: Node3D, target_d: float) -> void:
+	var aabb: AABB = _mesh_aabb(node, Transform3D.IDENTITY, AABB(), true)[1]
+	var d := maxf(aabb.size.x, aabb.size.z)
+	if d < 0.0001 or target_d < 0.0001:
+		return
+	var s := target_d / d
 	node.scale = Vector3(s, s, s)
 	node.position.y = -aabb.position.y * s
 

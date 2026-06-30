@@ -2842,8 +2842,9 @@ func _setup_sandbox_shelf() -> void:
 	_sandbox_shelf.setup(object_manager)
 	_sandbox_shelf.closed.connect(_on_sandbox_shelf_closed)
 
-	# A toggle next to the map-layout button: ON enters terrain edit mode (terrain
-	# unlocked + shelf open); OFF locks all terrain so play can't disturb it.
+	# A toggle next to the map-layout button: it opens/closes the terrain placement shelf.
+	# Terrain locking is manual + per-piece (select a piece + L); the toggle no longer
+	# locks/unlocks terrain, so a just-placed piece stays draggable until the player locks it.
 	_terrain_mode_btn = Button.new()
 	_terrain_mode_btn.toggle_mode = true
 	_terrain_mode_btn.text = "Terrain Mode"
@@ -2862,8 +2863,8 @@ func _on_terrain_mode_toggled(pressed: bool) -> void:
 		_sandbox_shelf.hide()
 
 
-## Shelf closed by the user (X / Close) → leave terrain edit mode (button reflects it, which
-## re-locks the pieces via the toggled handler).
+## Shelf closed by the user (X / Close) → un-press the toggle so it reflects the closed shelf
+## (no terrain locking happens — placed pieces stay draggable until manually locked).
 func _on_sandbox_shelf_closed() -> void:
 	if _terrain_mode_btn and _terrain_mode_btn.button_pressed:
 		_terrain_mode_btn.button_pressed = false
