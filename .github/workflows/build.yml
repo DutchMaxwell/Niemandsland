@@ -148,14 +148,32 @@ jobs:
       - name: Stamp build hash
         run: sed -i "/^config\/version=/a config/build_hash=\"${GITHUB_SHA::7}\"" project.godot
 
+      # rcodesign (apple-codesign) ad-hoc-signs the macOS bundle on this Linux runner — no Apple
+      # account, certificate, notarization or Mac runner needed. Pinned for reproducibility.
+      - name: Install rcodesign (ad-hoc macOS signing)
+        run: |
+          RCODESIGN_URL="https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign/0.29.0/apple-codesign-0.29.0-x86_64-unknown-linux-musl.tar.gz"
+          curl -fsSL -o /tmp/rcodesign.tar.gz "$RCODESIGN_URL"
+          tar -xzf /tmp/rcodesign.tar.gz -C /tmp
+          sudo mv /tmp/apple-codesign-*-x86_64-unknown-linux-musl/rcodesign /usr/local/bin/rcodesign
+          rcodesign --version
+
       - name: Build Linux + Windows + macOS
         run: |
           mkdir -p dist/linux dist/windows dist/macos
           godot --headless --verbose --export-release "Linux" dist/linux/$EXPORT_NAME.x86_64
           godot --headless --verbose --export-release "Windows Desktop" dist/windows/$EXPORT_NAME.exe
-          # macOS is exported UNSIGNED (codesign disabled — no Apple account needed) as a zipped .app.
-          # Gatekeeper: users clear quarantine once with `xattr -dr com.apple.quarantine Niemandsland.app`.
+          # macOS: export, then AD-HOC sign with rcodesign. An unsigned arm64 bundle is KILLED by
+          # macOS on Apple Silicon ("is damaged"); an ad-hoc signature lets it run and downgrades
+          # Gatekeeper to the milder "unidentified developer" prompt (right-click -> Open). Still
+          # NOT notarized (no Apple account) — users may still need to clear quarantine once with
+          # `xattr -dr com.apple.quarantine Niemandsland.app` (documented in the README).
           godot --headless --verbose --export-release "macOS" dist/macos/$EXPORT_NAME.zip
+          unzip -q dist/macos/$EXPORT_NAME.zip -d dist/macos/bundle
+          APP_BUNDLE=$(find dist/macos/bundle -maxdepth 1 -name '*.app' | head -1)
+          rcodesign sign "$APP_BUNDLE"
+          rm dist/macos/$EXPORT_NAME.zip
+          (cd dist/macos/bundle && zip -qry "../$EXPORT_NAME.zip" .)
 
       - name: Package per-platform zips
         run: |

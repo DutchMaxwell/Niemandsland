@@ -52,8 +52,18 @@ What the code actually does today:
 
 Download the latest build from the [**Releases**](../../releases/latest) page, unzip and run it
 (`Niemandsland.exe` on Windows; the `.x86_64` next to its `.pck` on Linux; `Niemandsland.app` on
-macOS — the build is unsigned, so first launch is right-click → **Open**) — no install. The start
-menu shows the version; the first log line is `[Boot] Niemandsland <version> build <hash>`.
+macOS) — no install. The start menu shows the version; the first log line is
+`[Boot] Niemandsland <version> build <hash>`.
+
+> **macOS first launch:** the build is ad-hoc signed but **not notarized** (no Apple Developer
+> account), so macOS won't open it on a double-click. **Right-click the app → Open**, then confirm.
+> If macOS still says the app *"is damaged and can't be opened"* (older builds, or a strict
+> quarantine), clear the download flag once in **Terminal** and open it:
+> ```bash
+> xattr -dr com.apple.quarantine /path/to/Niemandsland.app
+> open /path/to/Niemandsland.app
+> ```
+> This is expected for an unnotarized app — the file is not actually damaged.
 
 - **Host or join** a multiplayer game from the start menu — the host shares a room code, the guest
   enters it. **Both players must run the same version** (the exact-match handshake won't connect
