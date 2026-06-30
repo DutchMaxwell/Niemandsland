@@ -111,6 +111,20 @@ func test_move_bands_description_overrides_constant() -> void:
 	assert_int(b["rush"]).is_equal(16)
 
 
+func test_move_bands_granted_rule_modifier_applies() -> void:
+	# A direct ability "Fleetfoot" grants Swift; spawn-time expansion puts BOTH descriptions in the
+	# dict. The granting rule carries no modifier text; Swift's does — it must still apply (#79).
+	var b := _controller().move_bands_for_props({
+		"special_rules": ["Fleetfoot"],
+		"rule_descriptions": {
+			"Fleetfoot": "This model has the Swift special rule.",
+			"Swift": "Moves +1\" when using Advance, and +2\" when using Rush/Charge.",
+		},
+	})
+	assert_int(b["advance"]).is_equal(7)   # 6 + 1
+	assert_int(b["rush"]).is_equal(14)      # 12 + 2
+
+
 func test_move_bands_clamps_at_zero() -> void:
 	# A very heavy Slow can't drive the bands negative.
 	var b := _controller().move_bands_for_props({
