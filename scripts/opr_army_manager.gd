@@ -181,10 +181,7 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	var tray_info = _get_tray_position_and_bounds(army.player_id)
 	var tray_pos = tray_info.position
 	var tray_bounds = tray_info.bounds  # Vector2 (width, depth)
-
-	# Ambush/Scout staging band on the near third of the tray (representation only). Parented
-	# under the tray so it inherits the build-time hide + rides the _animate_tray_drop tween.
-	_add_ambush_scout_band(tray, tray_bounds, player_color.darkened(0.3))
+	# The Ambush/Scout band is now built inside _create_army_tray (issue #76).
 
 	# Default spacing values - will be adjusted per unit based on base size
 	var unit_gap = 0.08  # 8cm gap between different units
@@ -640,6 +637,12 @@ func _create_army_tray(player_id: int, army_name: String, player_color: Color) -
 	# Tray border
 	var border_color = player_color.darkened(0.3)
 	_add_tray_border(tray, tray_size, border_color)
+
+	# Ambush/Scout staging band (representation only). Built here — intrinsic to every tray —
+	# so it survives ALL reconstruction paths (live MP receive, late-joiner state-sync, .nml
+	# load), not just the importer's spawn_army (issue #76). Parented under the tray, so it
+	# inherits the build-time hide and rides the _animate_tray_drop tween.
+	_add_ambush_scout_band(tray, tray_size, border_color)
 
 	# Army name label (as 3D text or just metadata for now)
 	tray.set_meta("army_name", army_name)
