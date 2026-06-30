@@ -21,6 +21,12 @@ const RUNTIME_PANELS: Array[String] = [
 	"crumble_a", "crumble_b", "crumble_steep", "window", "normal",
 ]
 
+## OPTIONAL biome-themed floor panels (cobbled base + flagstone upper platforms). Kept SEPARATE
+## from RUNTIME_PANELS so they never gate the wall build: a biome whose manifest has no floor
+## entry simply keeps the renderer's bundled fallback (`sandbox_floor_*.webp`). When the themed
+## assets land on R2 + in the manifest, SandboxTerrainProp picks them up on its next rebuild.
+const FLOOR_PANELS: Array[String] = ["floor_base", "floor_platform"]
+
 # === Private variables ===
 
 var _downloader: AssetDownloadManager = null
@@ -51,6 +57,34 @@ func all_panels_cached(theme_prefix: String = "") -> bool:
 		if get_cached_path(theme_prefix + panel).is_empty():
 			return false
 	return true
+
+
+## True when nothing themed-floor remains to fetch for this biome: every FLOOR_PANEL the manifest
+## actually declares is already cached. A panel ABSENT from the manifest counts as done (it has
+## the bundled fallback, nothing to download), so a biome with no themed floors never triggers a
+## fetch/rebuild. (sync, no network)
+func floor_panels_cached(theme_prefix: String = "") -> bool:
+	for panel in FLOOR_PANELS:
+		var panel_name := theme_prefix + panel
+		if has_panel(panel_name) and get_cached_path(panel_name).is_empty():
+			return false
+	return true
+
+
+## Best-effort fetch of this biome's themed floor panels. Panels absent from the manifest are
+## skipped (not an error — the bundled fallback covers them). Awaitable. Returns true when every
+## DECLARED floor panel is available afterwards (false on a failed download, e.g. offline), but
+## callers treat the floors as optional and never gate the wall build on this.
+func ensure_floor_panels(theme_prefix: String = "") -> bool:
+	var ok := true
+	for panel in FLOOR_PANELS:
+		var entry: Dictionary = _panels.get(theme_prefix + panel, {})
+		if entry.is_empty():
+			continue
+		var path: String = await _downloader.ensure(_resolve_url(entry), entry.get("sha256", ""))
+		if path.is_empty():
+			ok = false
+	return ok
 
 
 ## Returns the local path if the panel is already cached, else "" (sync).
