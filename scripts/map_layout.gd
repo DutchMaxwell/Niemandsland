@@ -41,6 +41,13 @@ const TERRAIN_DESCRIPTIONS := {
 const GRID_SIZE_INCHES := 3.0
 const INCHES_TO_METERS := 0.0254
 
+# Auto-deploy terrain density scales with table area. The 6x4 ft reference table
+# (24 sq ft) yields the OPR-recommended ~15-20 pieces; smaller/larger tables get
+# proportionally fewer/more so a 4x4 (16 sq ft) is not as cluttered (issue #83).
+const REFERENCE_TABLE_AREA_SQFT := 24.0  # 6x4 ft
+const TERRAIN_DENSITY_MIN_SCALE := 0.45  # floor for tiny tables
+const TERRAIN_DENSITY_MAX_SCALE := 2.0   # cap for oversized tables
+
 # Deployment zone types (must match terrain_overlay.gd)
 # NOTE: Only FRONT_LINE is from OPR free rules.
 # Other deployment types are behind OPR's paywall.
@@ -1324,8 +1331,9 @@ func _update_stats() -> void:
 	var cover_pct = (float(cover_pieces) / total_pieces) * 100.0 if total_pieces > 0 else 0.0
 	var difficult_pct = (float(difficult_pieces) / total_pieces) * 100.0 if total_pieces > 0 else 0.0
 
+	var goal := _terrain_goal_range()
 	stats_label.text = """Coverage: %.1f%% (%d/%d cells)
-Terrain Pieces: %d (goal: 15-20)
+Terrain Pieces: %d (goal: %d-%d)
 
 Pieces by type:
   Ruins: %d | Forest: %d
@@ -1336,7 +1344,7 @@ Of %d pieces:
 • Cover: %d (%.0f%%)
 • Difficult: %d (%.0f%%)""" % [
 		coverage_pct, terrain_cells, total_cells,
-		total_pieces,
+		total_pieces, goal.x, goal.y,
 		piece_counts[TerrainType.RUINS],
 		piece_counts[TerrainType.FOREST],
 		piece_counts[TerrainType.CONTAINER],
@@ -1413,15 +1421,16 @@ func _update_recommendations() -> void:
 
 
 func _update_recommendations_with_values(total_pieces: int, coverage_pct: float, blocking_pct: float, cover_pct: float, difficult_pct: float, dangerous_pieces: int) -> void:
-	# OPR Guidelines:
-	# - 15-20 terrain pieces
+	# OPR Guidelines (piece count scaled to table area — issue #83):
+	# - 15-20 terrain pieces on the 6x4 reference
 	# - At least 25% table coverage
 	# - 50% of pieces should block LOS
 	# - 33% should provide cover
 	# - 33% should be difficult
 	# - 2 dangerous pieces (1 per player)
 
-	var pieces_ok = total_pieces >= 15
+	var goal := _terrain_goal_range()
+	var pieces_ok = total_pieces >= goal.x
 	var coverage_ok = coverage_pct >= 25.0
 	var blocking_ok = blocking_pct >= 50.0
 	var cover_ok = cover_pct >= 33.0
@@ -1436,7 +1445,7 @@ func _update_recommendations_with_values(total_pieces: int, coverage_pct: float,
 
 	recommendations_label.text = """OPR Terrain Guidelines:
 
-%s 15-20 terrain pieces (have: %d)
+%s %d-%d terrain pieces (have: %d)
 %s At least 25%% table coverage (%.1f%%)
 %s 50%% should block LOS (%.0f%%)
 %s 33%% should provide cover (%.0f%%)
@@ -1448,7 +1457,7 @@ Extended Guidelines:
 %s Balanced symmetry (%.0f%%)
 
 Tip: Connected cells = 1 piece""" % [
-		check_mark if pieces_ok else cross_mark, total_pieces,
+		check_mark if pieces_ok else cross_mark, goal.x, goal.y, total_pieces,
 		check_mark if coverage_ok else cross_mark, coverage_pct,
 		check_mark if blocking_ok else cross_mark, blocking_pct,
 		check_mark if cover_ok else cross_mark, cover_pct,
@@ -1846,12 +1855,15 @@ func _try_generate_layout() -> bool:
 		]
 	}
 
-	# Target: 15-20 pieces total (OPR requirements)
+	# Target: ~15-20 pieces on the 6x4 reference table, scaled by table area so a
+	# smaller table is not over-cluttered (issue #83). DANGEROUS keeps a floor of 2
+	# (OPR requires dangerous terrain present for both players).
+	var density := _terrain_density_scale()
 	var target_pieces := {
-		TerrainType.RUINS: 5,      # ~30% of pieces
-		TerrainType.FOREST: 6,     # ~35% of pieces (provides difficult terrain)
-		TerrainType.CONTAINER: 4,  # ~25% of pieces
-		TerrainType.DANGEROUS: 2   # ~10% of pieces (minimum 2)
+		TerrainType.RUINS: maxi(1, int(round(5 * density))),      # ~30% of pieces
+		TerrainType.FOREST: maxi(1, int(round(6 * density))),     # ~35% of pieces (difficult terrain)
+		TerrainType.CONTAINER: maxi(1, int(round(4 * density))),  # ~25% of pieces
+		TerrainType.DANGEROUS: maxi(2, int(round(2 * density)))   # ~10% of pieces (minimum 2)
 	}
 
 	var tracked := []  # spacing tracker: [{pos, size, type}] (not the member placed_pieces)
@@ -1935,9 +1947,27 @@ func _try_generate_layout() -> bool:
 			continue
 		total_placed += pieces_placed_by_type[terrain_type]
 
-	# Consider it successful if we placed at least 50% of target pieces
-	var min_required = 8  # Minimum 8 pieces total (half of 15-20 range)
+	# Consider it successful if we placed at least 50% of the (area-scaled) target.
+	var target_total := 0
+	for terrain_type in target_pieces:
+		target_total += int(target_pieces[terrain_type])
+	var min_required: int = maxi(4, int(round(target_total * 0.5)))
 	return total_placed >= min_required
+
+
+## Auto-deploy density factor: table area relative to the 6x4 reference, clamped
+## so tiny/huge tables stay sensible (issue #83).
+func _terrain_density_scale() -> float:
+	var area_sqft := table_size_feet.x * table_size_feet.y
+	var scale := area_sqft / REFERENCE_TABLE_AREA_SQFT
+	return clampf(scale, TERRAIN_DENSITY_MIN_SCALE, TERRAIN_DENSITY_MAX_SCALE)
+
+
+## Area-scaled piece-count goal range (15-20 on the 6x4 reference), for the
+## stats/recommendation readouts so they match what auto-deploy actually places.
+func _terrain_goal_range() -> Vector2i:
+	var density := _terrain_density_scale()
+	return Vector2i(maxi(1, int(round(15 * density))), maxi(1, int(round(20 * density))))
 
 
 ## Mirror a position across the TABLE center (point symmetry)
