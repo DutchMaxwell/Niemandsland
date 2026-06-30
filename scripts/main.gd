@@ -121,6 +121,7 @@ var _target_buttons: Array[Button] = []
 var _modifier_value_label: Label = null
 var _reroll_buttons: Dictionary = {}  # Dictionary[DiceRules.RerollMode, Button]
 var _last_faces: Array[int] = []
+var _last_color_tags: Array[int] = []  # per-die colour tags of _last_faces (issue #77)
 var _last_roll_local: bool = false
 var _pending_reroll_mode: int = DiceRules.REROLL_NONE
 var _pending_reroll_count: int = 0
@@ -1150,7 +1151,11 @@ func _on_roller_finished(_total: int) -> void:
 	AudioManager.play_sfx(AudioManager.SFXType.DICE_IMPACT)
 
 	var faces: Array[int] = _faces_in_order(dice_roller_control.per_dice_result())
+	# Per-die colour tags ride alongside the faces so the readouts can group by colour
+	# (issue #77). For a remote roll the tray was already retagged via show_faces().
+	var color_tags: Array[int] = dice_roller_control.get_color_tags()
 	_last_faces = faces
+	_last_color_tags = color_tags
 	_last_roll_local = not _is_showing_remote_roll
 	# Always update the success column for the most recent roll (local or remote);
 	# remote rolls are evaluated under the SENDER's target/modifier context.
@@ -1164,7 +1169,7 @@ func _on_roller_finished(_total: int) -> void:
 		_is_showing_remote_roll = false
 		return
 
-	_add_dice_log_entry("You", faces, context)
+	_add_dice_log_entry("You", faces, context, color_tags)
 
 	# Broadcast dice roll (faces + evaluation context + per-die colour tags) to remote players,
 	# so the mirrored result keeps the sender's colours.
@@ -1451,8 +1456,7 @@ func _update_reroll_buttons() -> void:
 ## Adds a visual dice-roll entry to the log: a header (time, player, formula,
 ## reroll tag), a per-face icon strip (6 down to 1) and, when a success target
 ## is set, the success count.
-func _add_dice_log_entry(player_name: String, faces: Array[int], context: Dictionary) -> void:
-	var counts: Dictionary = _count_faces(faces)
+func _add_dice_log_entry(player_name: String, faces: Array[int], context: Dictionary, tags: Array[int]) -> void:
 	var target: int = context.get(DiceRules.CTX_TARGET, DiceRules.TARGET_NONE)
 	var modifier: int = context.get(DiceRules.CTX_MODIFIER, 0)
 	var reroll_mode: int = context.get(DiceRules.CTX_REROLL_MODE, DiceRules.REROLL_NONE)
@@ -1477,17 +1481,20 @@ func _add_dice_log_entry(player_name: String, faces: Array[int], context: Dictio
 	head.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	entry.add_child(head)
 
-	for face: int in [6, 5, 4, 3, 2, 1]:
-		entry.add_child(_make_success_row(face, counts.get(face, 0), DICE_LOG_ICON_SIZE,
-			DiceRules.is_success(face, target, modifier)))
-
-	if target != DiceRules.TARGET_NONE:
-		var tag := Label.new()
-		tag.text = "✔%d" % DiceRules.count_successes(faces, target, modifier)
-		tag.add_theme_font_size_override("font_size", DICE_CAPTION_FONT_SIZE)
-		tag.add_theme_color_override("font_color", HudTokens.CYAN)
-		tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		entry.add_child(tag)
+	var groups: Dictionary = _faces_grouped_by_color(faces, tags)
+	var tags_present: Array[int] = _ordered_color_groups(groups.keys())
+	if tags_present.size() <= 1:
+		# Single colour (or all untagged): keep the compact inline face strip.
+		var counts: Dictionary = _count_faces(faces)
+		for face: int in [6, 5, 4, 3, 2, 1]:
+			entry.add_child(_make_success_row(face, counts.get(face, 0), DICE_LOG_ICON_SIZE,
+				DiceRules.is_success(face, target, modifier)))
+		if target != DiceRules.TARGET_NONE:
+			entry.add_child(_make_log_success_tag(DiceRules.count_successes(faces, target, modifier)))
+	else:
+		# Mixed colours: one swatch-headed group per colour, side by side (issue #77).
+		for tag: int in tags_present:
+			entry.add_child(_build_color_group_column(tag, groups[tag], target, modifier, DICE_LOG_ICON_SIZE))
 
 	_dice_log_vbox.add_child(entry)
 
@@ -1540,19 +1547,26 @@ func _populate_current_roll_column(faces: Array[int], context: Dictionary) -> vo
 		return
 	for child: Node in _current_roll_column.get_children():
 		child.queue_free()
-	var counts: Dictionary = _count_faces(faces)
 	var target: int = context.get(DiceRules.CTX_TARGET, DiceRules.TARGET_NONE)
 	var modifier: int = context.get(DiceRules.CTX_MODIFIER, 0)
-	for face: int in [6, 5, 4, 3, 2, 1]:
-		_current_roll_column.add_child(_make_success_row(face, counts.get(face, 0),
-			CURRENT_ROLL_ICON_SIZE, DiceRules.is_success(face, target, modifier)))
-	if target != DiceRules.TARGET_NONE:
-		var summary := Label.new()
-		summary.text = "✔ %d" % DiceRules.count_successes(faces, target, modifier)
-		summary.add_theme_font_size_override("font_size", SUCCESS_SUMMARY_FONT_SIZE)
-		summary.add_theme_color_override("font_color", HudTokens.CYAN)
-		summary.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_current_roll_column.add_child(summary)
+	var groups: Dictionary = _faces_grouped_by_color(faces, _last_color_tags)
+	var tags_present: Array[int] = _ordered_color_groups(groups.keys())
+	if tags_present.size() <= 1:
+		# Single colour (or all untagged): keep the compact single-column readout.
+		var counts: Dictionary = _count_faces(faces)
+		for face: int in [6, 5, 4, 3, 2, 1]:
+			_current_roll_column.add_child(_make_success_row(face, counts.get(face, 0),
+				CURRENT_ROLL_ICON_SIZE, DiceRules.is_success(face, target, modifier)))
+		if target != DiceRules.TARGET_NONE:
+			_current_roll_column.add_child(_make_success_summary(
+				DiceRules.count_successes(faces, target, modifier)))
+		return
+	# Mixed colours: one sub-column per colour, side by side (issue #77).
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	for tag: int in tags_present:
+		row.add_child(_build_color_group_column(tag, groups[tag], target, modifier, CURRENT_ROLL_ICON_SIZE))
+	_current_roll_column.add_child(row)
 
 
 ## One "die icon + xN" row; dimmed when the count is zero, count tinted cyan
@@ -1586,6 +1600,80 @@ func _count_faces(faces: Array[int]) -> Dictionary:
 		if face in counts:
 			counts[face] += 1
 	return counts
+
+
+## Groups a roll's faces by per-die colour tag (issue #77). Returns
+## {tag: {"counts": {face:int}, "faces": Array[int]}}; untagged dice fall under tag 0.
+## `faces[i]` pairs with `tags[i]`; a missing tag (shorter array) is treated as untagged.
+func _faces_grouped_by_color(faces: Array[int], tags: Array[int]) -> Dictionary:
+	var groups: Dictionary = {}
+	for i: int in faces.size():
+		var tag: int = int(tags[i]) if i < tags.size() else DiceD6.DEFAULT_COLOR_TAG
+		if not groups.has(tag):
+			var bucket_faces: Array[int] = []
+			groups[tag] = {"counts": {6: 0, 5: 0, 4: 0, 3: 0, 2: 0, 1: 0}, "faces": bucket_faces}
+		var face: int = faces[i]
+		if face in groups[tag]["counts"]:
+			groups[tag]["counts"][face] += 1
+		groups[tag]["faces"].append(face)
+	return groups
+
+
+## Distinct colour tags present in a roll, ordered untagged-first then ascending
+## (0 = untagged/free, 1 = red, 2 = blue, …) so the grouped readout reads left→right.
+func _ordered_color_groups(present: Array) -> Array[int]:
+	var ordered: Array[int] = []
+	for t: Variant in present:
+		ordered.append(int(t))
+	ordered.sort()  # ascending; untagged (0) naturally lands first
+	return ordered
+
+
+## The "✔ N" success summary line used at the bottom of a current-roll column.
+func _make_success_summary(count: int) -> Label:
+	var summary := Label.new()
+	summary.text = "✔ %d" % count
+	summary.add_theme_font_size_override("font_size", SUCCESS_SUMMARY_FONT_SIZE)
+	summary.add_theme_color_override("font_color", HudTokens.CYAN)
+	summary.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	return summary
+
+
+## The compact "✔N" success tag used inline in a dice-log entry.
+func _make_log_success_tag(count: int) -> Label:
+	var tag := Label.new()
+	tag.text = "✔%d" % count
+	tag.add_theme_font_size_override("font_size", DICE_CAPTION_FONT_SIZE)
+	tag.add_theme_color_override("font_color", HudTokens.CYAN)
+	tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	return tag
+
+
+## A vertical readout for ONE colour group: a colour swatch header, the per-face
+## rows (6→1) and, with a success target set, that group's success count. Used when
+## a roll mixes colour tags so each colour reads as its own column (issue #77).
+func _build_color_group_column(tag: int, group: Dictionary, target: int, modifier: int, icon_size: int) -> VBoxContainer:
+	var col := VBoxContainer.new()
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_theme_constant_override("separation", 2)
+	col.add_child(_make_color_swatch(tag, icon_size))
+	var counts: Dictionary = group["counts"]
+	for face: int in [6, 5, 4, 3, 2, 1]:
+		col.add_child(_make_success_row(face, counts.get(face, 0), icon_size,
+			DiceRules.is_success(face, target, modifier)))
+	if target != DiceRules.TARGET_NONE:
+		var group_faces: Array[int] = group["faces"]
+		col.add_child(_make_success_summary(DiceRules.count_successes(group_faces, target, modifier)))
+	return col
+
+
+## A small colour swatch marking which dice colour a result group belongs to.
+func _make_color_swatch(tag: int, icon_size: int) -> Control:
+	var swatch := ColorRect.new()
+	swatch.color = DiceD6.body_color_for_tag(tag)
+	swatch.custom_minimum_size = Vector2(icon_size, maxi(4, int(icon_size * 0.28)))
+	swatch.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	return swatch
 
 
 func _get_random_table_position() -> Vector3:
@@ -2318,8 +2406,11 @@ func _on_remote_dice_rolled(peer_id: int, results: Array, context: Dictionary, t
 	var faces: Array[int] = []
 	for v: Variant in results:
 		faces.append(int(v))
+	var color_tags: Array[int] = []
+	for v: Variant in tags:
+		color_tags.append(int(v))
 
-	_add_dice_log_entry(_peer_display_name(peer_id), faces, context)
+	_add_dice_log_entry(_peer_display_name(peer_id), faces, context, color_tags)
 
 	# Show 3D dice visualization for remote roll. The 3D tray is shared between
 	# local and remote rolls, so show_faces() respawns the dice and preempts any
