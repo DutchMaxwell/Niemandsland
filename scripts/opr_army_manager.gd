@@ -487,6 +487,21 @@ func _regiment_toughs(gu: GameUnit) -> Array[int]:
 
 
 ## Apply `wounds_taken` to a regiment: recompute each model's alive/wounds state from
+## Show/hide a model node on death/revival AND toggle its collision, so a hidden (dead) model is
+## no longer hit by measuring, selection, or any other raycast-based action — a dead base left at
+## its spot (e.g. under an oil stain) must not be detected. Mirrors the visible + "deleted" meta
+## the per-model/regiment/restore paths already set, plus the collision layer. Static so every
+## hide site can share it.
+static func set_model_alive_state(node: Node3D, alive: bool) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	node.visible = alive
+	node.set_meta("deleted", not alive)
+	if node is CollisionObject3D:
+		node.collision_layer = MINIATURE_COLLISION_LAYER if alive else 0
+
+
+## Apply `wounds_taken` to a Tough(1) pooled regiment: mark casualties dead/alive, drive
 ## the pooled counter (back rank dies first, AoF:R v3.5.1 p.9), re-rank the block,
 ## refresh the counter label, and broadcast to peers. `regiment.wounds_taken` and
 ## `unit_properties["regiment_wounds_taken"]` are set to `wounds_taken`. No undo
@@ -508,12 +523,7 @@ func apply_regiment_wounds(regiment: Regiment, wounds_taken: int) -> void:
 		m.is_alive = alive
 		# wounds_current = tough - wounds_taken_on_this (0 when dead).
 		m.wounds_current = maxi(maxi(int(toughs[i]), 1) - on_model, 0) if alive else 0
-		if m.node and is_instance_valid(m.node):
-			m.node.visible = alive
-			if alive:
-				m.node.set_meta("deleted", false)
-			else:
-				m.node.set_meta("deleted", true)
+		set_model_alive_state(m.node, alive)  # visible + "deleted" meta + collision off when dead
 	# Re-rank the surviving models (ranks close from the back).
 	var members := RegimentTray.collect_members(gu)
 	if not members.nodes.is_empty():

@@ -598,10 +598,13 @@ func _deserialize_object(data: Dictionary) -> bool:
 		# Preserve serialized network_id for all object types (TTS, custom models, etc.)
 		if net_id >= 0:
 			spawned_obj.set_meta("network_id", net_id)
-		# Restore a persisted delete (hidden) state for generic objects.
+		# Restore a persisted delete (hidden) state for generic objects. A hidden/deleted object
+		# also drops its collision so it isn't measured/selected at its old spot (dead-base bug).
 		var was_visible := bool(data.get("visible", true))
 		spawned_obj.visible = was_visible
 		spawned_obj.set_meta("deleted", not was_visible)
+		if not was_visible and spawned_obj is CollisionObject3D:
+			spawned_obj.collision_layer = 0
 		return true
 
 	return false
