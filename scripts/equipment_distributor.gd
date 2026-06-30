@@ -327,9 +327,10 @@ static func create_from_opr_unit(opr_unit: Variant, nodes: Array[Node3D], player
 		"defense": opr_unit.defense,
 		"cost": opr_unit.cost,
 		"special_rules": opr_unit.special_rules.duplicate(),
-		# Descriptions of THIS unit's rules, so the movement-reach indicator can parse the
-		# Advance/Rush modifier of movement rules (Swift, Fast, …) from their text (issue #79).
-		"rule_descriptions": _descriptions_for_rules(opr_unit.special_rules, rule_descriptions),
+		# Descriptions of THIS unit's effective rules (direct + item-granted + free-text-granted),
+		# so the movement-reach indicator can parse the Advance/Rush modifier of a movement rule
+		# (Swift, Fast, …) even when it's granted indirectly (issue #79).
+		"rule_descriptions": _effective_rule_descriptions(opr_unit, rule_descriptions),
 		"item_grants": opr_unit.item_grants.duplicate(true),  # item -> granted rules (unit-card cascade)
 		"base_size_round": opr_unit.base_size_round,
 		"base_size_square": opr_unit.base_size_square,
@@ -370,17 +371,64 @@ static func create_from_opr_unit(opr_unit: Variant, nodes: Array[Node3D], player
 	return game_unit
 
 
-## The subset of `all_descriptions` (army rule name -> text) that applies to this unit's
-## special rules, keyed by rule base name (rating parentheticals stripped). Kept small — only
-## the unit's own rules — since it rides in unit_properties (and the .nml save). Issue #79.
-static func _descriptions_for_rules(rules: Array, all_descriptions: Dictionary) -> Dictionary:
+## The descriptions of the unit's EFFECTIVE rules — direct special rules, item/upgrade-granted
+## rules, AND rules named inside another included rule's description (e.g. an ability whose text
+## grants "Swift") — keyed by rule base name. This lets the movement-reach indicator pick up a
+## modifier even when the rule that carries it is granted indirectly (issue #79). Kept to the
+## unit's own effective rules since it rides in unit_properties (and the .nml save).
+static func _effective_rule_descriptions(opr_unit: Variant, all_descriptions: Dictionary) -> Dictionary:
 	var subset: Dictionary = {}
 	if all_descriptions.is_empty():
 		return subset
-	for r in rules:
-		var base: String = str(r).split("(")[0].strip_edges()
-		if not base.is_empty() and all_descriptions.has(base) and not subset.has(base):
-			subset[base] = str(all_descriptions[base])
+	# Seed the wanted set with the unit's direct rules + any item/upgrade-granted rules.
+	var wanted: Dictionary = {}
+	for r in opr_unit.special_rules:
+		wanted[_rule_base_name(str(r))] = true
+	for item_name in opr_unit.item_grants:
+		for granted in opr_unit.item_grants[item_name]:
+			wanted[_rule_base_name(str(granted))] = true
+	# Pull in descriptions, then transitively add any rule NAMED inside an included description
+	# (bounded passes; the set only grows). A rule with no description is simply skipped.
+	for _pass in range(4):
+		var added := false
+		for name: String in wanted.keys():
+			if not subset.has(name) and all_descriptions.has(name):
+				subset[name] = str(all_descriptions[name])
+				added = true
+		for name: String in subset.keys():
+			var desc: String = subset[name]
+			for other in all_descriptions.keys():
+				var other_name := str(other)
+				if not wanted.has(other_name) and _rule_word_in(desc, other_name):
+					wanted[other_name] = true
+					added = true
+		if not added:
+			break
 	return subset
+
+
+## A rule's base name without its rating parenthetical: "Swift(3)" -> "Swift".
+static func _rule_base_name(rule: String) -> String:
+	return rule.split("(")[0].strip_edges()
+
+
+## Whole-word, case-sensitive search for a rule name inside description text (rule names are
+## capitalised, so case-sensitive avoids matching common words). Mirrors OPRArmyManager._word_in.
+static func _rule_word_in(haystack: String, needle: String) -> bool:
+	if needle.is_empty():
+		return false
+	var idx: int = haystack.find(needle)
+	while idx >= 0:
+		var before_ok: bool = idx == 0 or not _is_word_char(haystack[idx - 1])
+		var after: int = idx + needle.length()
+		var after_ok: bool = after >= haystack.length() or not _is_word_char(haystack[after])
+		if before_ok and after_ok:
+			return true
+		idx = haystack.find(needle, idx + 1)
+	return false
+
+
+static func _is_word_char(c: String) -> bool:
+	return c.to_upper() != c.to_lower() or (c >= "0" and c <= "9")
 
 
