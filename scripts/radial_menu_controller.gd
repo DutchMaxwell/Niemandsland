@@ -623,16 +623,13 @@ func _on_wounds_changed(model: ModelInstance, new_wounds: int) -> void:
 	# Update visual wound marker
 	_update_wound_marker(model)
 
-	# Hide model if dead
+	# Hide model if dead (collision off too, so the dead base isn't measured/selected)
 	if new_wounds <= 0 and not model.is_alive:
-		if model.node and is_instance_valid(model.node):
-			model.node.visible = false
-			model.node.set_meta("deleted", true)
+		OPRArmyManager.set_model_alive_state(model.node, false)
 		model_deleted.emit(model)
 	# Show model if revived
-	elif new_wounds > 0 and model.node and is_instance_valid(model.node):
-		model.node.visible = true
-		model.node.set_meta("deleted", false)
+	elif new_wounds > 0:
+		OPRArmyManager.set_model_alive_state(model.node, true)
 
 	# Regiments (AoF:R): close ranks on a casualty, re-open on revive.
 	_reform_regiment_for_model(model)
