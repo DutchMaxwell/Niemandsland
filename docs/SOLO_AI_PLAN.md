@@ -18,6 +18,7 @@ Age of Fantasy PDF) so every AI behaviour cites an OPR reference, per
 | **AI brain** | **Hybrid:** official OPR decision trees as the policy; a **utility score breaks ties** instead of the rules' "roll a die" | Rule-faithful *and* less random than pure RNG on equally-valid choices. The trees are the law; utility only refines indifference. |
 | **Combat in MVP** | **Semi-manual first:** AI moves + *declares* charge/shoot (highlighted); the human rolls dice + applies wounds. Full auto-resolution lands in Phase 2 | Matches the current manual paradigm, slashes MVP size, ships a playable opponent fast. |
 | **Target system** | **Engine-agnostic foundation first** (Phase 0 system-neutral); pick GF vs AoF/AoF:R at the decision layer | The turn engine, AI-slot and move-intent API don't depend on the ruleset; commit to a system only when wiring the trees. |
+| **Turn enforcement** | **Strict:** the turn engine is authoritative; the human may only activate/move on their turn (input layer gates on `TurnManager.can_activate`) | Rule-faithful alternating activation; the AI needs to know whose turn it is, and strict gating keeps both sides honest. (Off-turn input is blocked, not silently dropped.) |
 
 ## How the official OPR AI works (v3.5.0, sourced)
 
