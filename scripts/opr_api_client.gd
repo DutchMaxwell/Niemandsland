@@ -478,18 +478,119 @@ static func _tough_from_rules(rules: Array) -> int:
 	return 0
 
 
-## Enlarge a unit's (round) base to a Tough-derived size when the current base is
-## smaller — gives bracketless vehicles / large monsters a sensible base + model
-## scale instead of defaulting to a tiny 32mm base. Never shrinks an existing base.
+## Keyword heuristics for sizing a bracketless big single model when Army Forge gives no base.
+## Matched against the lower-cased unit name. Curated — extend per faction as needed.
+const WALKER_KEYWORDS: Array[String] = ["walker", "mech", "dreadnought", "sentinel", "war-suit", "warsuit", "exo", "knight", "suit"]
+const ARTILLERY_KEYWORDS: Array[String] = ["artillery", "cannon", "mortar", "howitzer", "battery", "ballista", "catapult", "bombard"]
+const MONSTER_KEYWORDS: Array[String] = ["dragon", "beast", "monster", "wyrm", "behemoth", "daemon", "demon", "hive", "kraken", "hydra", "giant", "ogre", "troll"]
+
+
+## Walker / monster base (ROUND mm) by Tough — tall, narrow footprint, so it grows MODESTLY with
+## Tough and starts small (anchors: T6→50, T9→60, T12→80), unlike a wide vehicle.
+static func _walker_base_mm(tough: int) -> int:
+	if tough >= 18:
+		return 120
+	if tough >= 15:
+		return 100
+	if tough >= 12:
+		return 80
+	if tough >= 9:
+		return 60
+	if tough >= 6:
+		return 50
+	return 40
+
+
+## Vehicle base (OVAL [width_mm, depth_mm], depth = long/facing axis) by Tough — wide footprint, so
+## it starts larger (anchor: T6→90×52) and scales up the OPR oval ladder.
+static func _vehicle_base_mm(tough: int) -> Array:
+	if tough >= 18:
+		return [105, 170]
+	if tough >= 15:
+		return [92, 150]
+	if tough >= 12:
+		return [92, 120]
+	if tough >= 9:
+		return [70, 105]
+	if tough >= 6:
+		return [52, 90]
+	return [42, 75]
+
+
+## Artillery base (OVAL [width_mm, depth_mm]) by Tough — a gun emplacement: oval but smaller than a
+## vehicle and capped (never titan-sized).
+static func _artillery_base_mm(tough: int) -> Array:
+	if tough >= 9:
+		return [52, 90]
+	if tough >= 6:
+		return [42, 75]
+	return [35, 60]
+
+
+## Classify a bracketless big single model into walker / vehicle / artillery / monster (or "" =
+## infantry / cavalry / hero, sized by the old round ladder). Multi-model units are never a vehicle,
+## and a keyword-less single model is only a vehicle once it's clearly big (Tough >= 6) — so tough
+## heroes (Tough 3-5, no keyword) stay small round.
+static func _classify_big_model(unit: OPRUnit, tough: int) -> String:
+	if unit.size > 1:
+		return ""
+	var n := unit.name.to_lower()
+	for kw in WALKER_KEYWORDS:
+		if kw in n:
+			return "walker"
+	for kw in ARTILLERY_KEYWORDS:
+		if kw in n:
+			return "artillery"
+	for kw in MONSTER_KEYWORDS:
+		if kw in n:
+			return "monster"
+	if tough >= 6:
+		return "vehicle"
+	return ""
+
+
+## Size a unit's base when Army Forge gave no recommendation: classify the model by TYPE (keywords +
+## Tough) and assign an OPR-standard base — ROUND for walkers / monsters / infantry, OVAL for
+## vehicles / artillery. Tough drives the SIZE WITHIN a type, not the type itself (Tough is
+## durability, not footprint). Never shrinks below an existing larger base.
 static func _apply_tough_base_fallback(unit: OPRUnit) -> void:
-	var estimate := _base_size_from_tough(_tough_from_rules(unit.special_rules))
-	if estimate <= unit.base_size_round:
+	var tough := _tough_from_rules(unit.special_rules)
+	if tough < 3:
+		return  # normal infantry / heroes — keep the default base
+	match _classify_big_model(unit, tough):
+		"vehicle":
+			var v := _vehicle_base_mm(tough)
+			_set_oval_base(unit, int(v[0]), int(v[1]))
+		"artillery":
+			var a := _artillery_base_mm(tough)
+			_set_oval_base(unit, int(a[0]), int(a[1]))
+		"walker", "monster":
+			_set_round_base(unit, _walker_base_mm(tough))
+		_:
+			_set_round_base(unit, _base_size_from_tough(tough))  # large infantry / cavalry
+
+
+## Set a round base (mm), growing only (never shrink below an existing / default base).
+static func _set_round_base(unit: OPRUnit, mm: int) -> void:
+	if mm <= unit.base_size_round:
 		return
 	unit.base_is_oval = false
-	unit.base_size_round = estimate
-	unit.base_width_mm = estimate
-	unit.base_depth_mm = estimate
-	unit.base_from_tough = true  # fit the model to this base (no overhang) — it's a vehicle/monster
+	unit.base_size_round = mm
+	unit.base_width_mm = mm
+	unit.base_depth_mm = mm
+	unit.base_from_tough = true
+
+
+## Set an oval base (width = short, depth = long / facing). Grows only: skipped if its long axis is
+## no larger than the existing base's round-equivalent.
+static func _set_oval_base(unit: OPRUnit, width_mm: int, depth_mm: int) -> void:
+	if maxi(width_mm, depth_mm) <= unit.base_size_round:
+		return
+	unit.base_is_oval = true
+	unit.base_width_mm = width_mm
+	unit.base_depth_mm = depth_mm
+	unit.base_size_round = maxi(width_mm, depth_mm)  # round-equivalent for code reading base_size_round
+	unit.base_from_tough = true
 
 
 ## Parse a unit from TTS API response
