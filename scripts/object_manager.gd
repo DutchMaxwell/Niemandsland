@@ -380,7 +380,7 @@ func _try_select_unit_at_mouse(screen_pos: Vector2) -> void:
 		_deselect_all()
 		_add_to_selection(tray)
 		return
-	var models := UnitUtils.get_all_unit_models(obj)
+	var models := UnitUtils.get_combined_unit_models(obj)  # unit + attached heroes (#81)
 	if models.size() <= 1:
 		_try_select_at_mouse(screen_pos, false)  # not a multi-model unit — normal select
 		return

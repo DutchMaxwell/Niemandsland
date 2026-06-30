@@ -123,6 +123,33 @@ static func get_all_unit_models(obj: Node3D) -> Array[Node3D]:
 	return result
 
 
+## All model nodes of the unit `obj` belongs to PLUS any heroes joined to it — the whole combined
+## unit, so a double-click select grabs attached heroes too (issue #81). Works whether `obj` is a
+## model of the host unit or of an attached hero (it resolves to the host either way).
+static func get_combined_unit_models(obj: Node3D) -> Array[Node3D]:
+	var game_unit = get_game_unit(obj)
+	if not game_unit:
+		return get_all_unit_models(obj)
+	# If this unit is itself a hero attached to a host, start from the host so we collect the group.
+	var host = game_unit
+	var attached_to = game_unit.unit_properties.get("attached_to", null)
+	if attached_to and attached_to is GameUnit:
+		host = attached_to
+	var result: Array[Node3D] = []
+	_append_unit_model_nodes(host, result)
+	for hero in host.unit_properties.get("attached_heroes", []):
+		if hero is GameUnit:
+			_append_unit_model_nodes(hero, result)
+	return result
+
+
+## Append a GameUnit's live model nodes to `out`.
+static func _append_unit_model_nodes(game_unit, out: Array[Node3D]) -> void:
+	for model in game_unit.models:
+		if model.node and is_instance_valid(model.node):
+			out.append(model.node)
+
+
 ## Checks if a selection contains models from the same unit.
 static func is_same_unit(objects: Array) -> bool:
 	if objects.is_empty():
