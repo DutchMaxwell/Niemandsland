@@ -43,6 +43,84 @@ func test_move_bands_unrelated_rule_is_normal() -> void:
 	assert_int(b["rush"]).is_equal(12)
 
 
+# === movement modifiers parsed from the rule description (issue #79) ===
+
+func test_parse_modifier_fast_text() -> void:
+	var d := "This model moves +2\" when using Advance, and +4\" when using Rush/Charge."
+	var mod := MovementRangeController.move_modifier_from_description(d)
+	assert_int(mod["advance"]).is_equal(2)
+	assert_int(mod["rush"]).is_equal(4)
+
+
+func test_parse_modifier_slow_text_negative() -> void:
+	var d := "This model moves -2\" when using Advance, and -4\" when using Rush/Charge."
+	var mod := MovementRangeController.move_modifier_from_description(d)
+	assert_int(mod["advance"]).is_equal(-2)
+	assert_int(mod["rush"]).is_equal(-4)
+
+
+func test_parse_modifier_curly_quotes_and_inflections() -> void:
+	# Curly inch marks + inflected actions ("Advancing"/"Charging") must still parse.
+	var d := "Gets +1” when Advancing, and +3” when Rushing or Charging."
+	var mod := MovementRangeController.move_modifier_from_description(d)
+	assert_int(mod["advance"]).is_equal(1)
+	assert_int(mod["rush"]).is_equal(3)
+
+
+func test_parse_modifier_ignores_unsigned_distances() -> void:
+	# A plain range like 12" (no sign) is not a movement modifier.
+	var d := "Enemies within 12\" must take a test; this has nothing to do with moving."
+	var mod := MovementRangeController.move_modifier_from_description(d)
+	assert_int(mod["advance"]).is_equal(0)
+	assert_int(mod["rush"]).is_equal(0)
+
+
+func test_parse_modifier_empty_description() -> void:
+	var mod := MovementRangeController.move_modifier_from_description("")
+	assert_int(mod["advance"]).is_equal(0)
+	assert_int(mod["rush"]).is_equal(0)
+
+
+func test_move_bands_swift_from_description() -> void:
+	# "Swift" is unknown to the constants but its description carries the modifier (issue #79).
+	var b := _controller().move_bands_for_props({
+		"special_rules": ["Swift"],
+		"rule_descriptions": {"Swift": "Moves +1\" when using Advance, and +2\" when using Rush/Charge."},
+	})
+	assert_int(b["advance"]).is_equal(7)   # 6 + 1
+	assert_int(b["rush"]).is_equal(14)      # 12 + 2
+
+
+func test_move_bands_rule_rating_is_stripped() -> void:
+	# A rated rule "Swift(2)" still matches its "Swift" description key.
+	var b := _controller().move_bands_for_props({
+		"special_rules": ["Swift(2)"],
+		"rule_descriptions": {"Swift": "Moves +1\" when using Advance, and +2\" when using Rush/Charge."},
+	})
+	assert_int(b["advance"]).is_equal(7)
+	assert_int(b["rush"]).is_equal(14)
+
+
+func test_move_bands_description_overrides_constant() -> void:
+	# When Fast carries a description, the parsed value is used (not double-applied with the constant).
+	var b := _controller().move_bands_for_props({
+		"special_rules": ["Fast"],
+		"rule_descriptions": {"Fast": "Moves +2\" when using Advance, and +4\" when using Rush/Charge."},
+	})
+	assert_int(b["advance"]).is_equal(8)
+	assert_int(b["rush"]).is_equal(16)
+
+
+func test_move_bands_clamps_at_zero() -> void:
+	# A very heavy Slow can't drive the bands negative.
+	var b := _controller().move_bands_for_props({
+		"special_rules": ["Slow"],
+		"rule_descriptions": {"Slow": "Moves -9\" when using Advance, and -99\" when using Rush/Charge."},
+	})
+	assert_int(b["advance"]).is_equal(0)
+	assert_int(b["rush"]).is_equal(0)
+
+
 # === radii / colour (base-anchored, reused from the range-ring approximation) ===
 
 func test_base_radius_round() -> void:

@@ -10,8 +10,11 @@ extends Node3D
 ## drags the mini toward a band edge to judge its reach — no per-frame tracking.
 ##
 ## OPR core movement (Grimdark Future / Age of Fantasy): Advance = 6", Rush/Charge = 12".
-## The "Fast" special rule adds +2"/+4" and "Slow" subtracts -2"/-4" (Advance / Rush+Charge);
-## both are read from the unit's special_rules so the bands match the actual unit.
+## Movement-modifying special rules adjust the bands: their +N"/-N" modifiers are read from the
+## unit's imported OPR rule descriptions (props["rule_descriptions"]), so ANY such rule is picked
+## up automatically — "Swift", army-specific rules, etc. — not just a hard-coded few (issue #79).
+## "Fast" (+2"/+4") and "Slow" (-2"/-4") additionally fall back to constants when no description
+## text is present (e.g. a rule list without the army book), so they always apply.
 
 # === Constants ===
 
@@ -56,19 +59,82 @@ func base_radius_for_props(props: Dictionary) -> float:
 	return DEFAULT_BASE_RADIUS_M
 
 
-## The Advance + Rush/Charge distances (inches) for a unit, applying the OPR Fast / Slow
-## special rules. Returns {"advance": int, "rush": int}. A unit is never both Fast and Slow.
+## The Advance + Rush/Charge distances (inches) for a unit, applying every movement-modifying
+## special rule it carries (parsed from each rule's OPR description, with a Fast/Slow constant
+## fallback). Returns {"advance": int, "rush": int}, clamped at 0 so a heavy Slow can't go negative.
 func move_bands_for_props(props: Dictionary) -> Dictionary:
 	var advance := OPR_ADVANCE_INCHES
 	var rush := OPR_RUSH_CHARGE_INCHES
 	var rules: Array = props.get("special_rules", [])
-	if _has_rule(rules, "Fast"):
-		advance += FAST_ADVANCE_BONUS
-		rush += FAST_RUSH_BONUS
-	elif _has_rule(rules, "Slow"):
-		advance -= FAST_ADVANCE_BONUS
-		rush -= FAST_RUSH_BONUS
-	return {"advance": advance, "rush": rush}
+	var descriptions: Dictionary = props.get("rule_descriptions", {})
+	for r in rules:
+		var mod := _move_modifier_for_rule(_rule_base_name(str(r)), descriptions)
+		advance += int(mod["advance"])
+		rush += int(mod["rush"])
+	return {"advance": maxi(0, advance), "rush": maxi(0, rush)}
+
+
+## The Advance / Rush movement modifier (inches) a single rule contributes: parsed from its OPR
+## description when available, else the Fast/Slow constants, else none. `rule_name` is the base
+## name (no rating parenthetical). Returns {"advance": int, "rush": int}.
+func _move_modifier_for_rule(rule_name: String, descriptions: Dictionary) -> Dictionary:
+	if descriptions.has(rule_name):
+		var parsed := move_modifier_from_description(str(descriptions[rule_name]))
+		if int(parsed["advance"]) != 0 or int(parsed["rush"]) != 0:
+			return parsed
+	# Fallback for the OPR core rules when no (or unparseable) description text is present.
+	if rule_name == "Fast":
+		return {"advance": FAST_ADVANCE_BONUS, "rush": FAST_RUSH_BONUS}
+	if rule_name == "Slow":
+		return {"advance": -FAST_ADVANCE_BONUS, "rush": -FAST_RUSH_BONUS}
+	return {"advance": 0, "rush": 0}
+
+
+## Parses the Advance and Rush/Charge movement modifiers out of an OPR rule description, e.g.
+## "...moves +2\" when using Advance, and +4\" when using Rush/Charge." -> {advance:2, rush:4}.
+## Each signed inch modifier is attributed to whichever action ("advance" vs "rush"/"charge") is
+## named in the text up to the next modifier — matching OPR's "<value> when using <action>" phrasing.
+## The sign is required, so plain distances (ranges, auras) aren't mistaken for move modifiers.
+## Static + side-effect-free so it can be unit-tested directly.
+static func move_modifier_from_description(description: String) -> Dictionary:
+	var result := {"advance": 0, "rush": 0}
+	if description.is_empty():
+		return result
+	var re := RegEx.new()
+	if re.compile("([+-]\\d+)\\s*[\"”]") != OK:
+		return result
+	var matches := re.search_all(description)
+	for i in matches.size():
+		var m: RegExMatch = matches[i]
+		var value := int(m.get_string(1))
+		var win_start := m.get_end()
+		var win_end := description.length()
+		if i + 1 < matches.size():
+			win_end = matches[i + 1].get_start()
+		var window := description.substr(win_start, win_end - win_start).to_lower()
+		# Stems so inflections match too ("advancing", "charges").
+		var adv_at := window.find("advanc")
+		var rush_at := _first_index(window, ["rush", "charg"])
+		if adv_at != -1 and (rush_at == -1 or adv_at <= rush_at):
+			result["advance"] = int(result["advance"]) + value
+		elif rush_at != -1:
+			result["rush"] = int(result["rush"]) + value
+	return result
+
+
+## Lowest index at which any of `needles` occurs in `haystack`, or -1 if none do.
+static func _first_index(haystack: String, needles: Array) -> int:
+	var best := -1
+	for n in needles:
+		var idx: int = haystack.find(n)
+		if idx != -1 and (best == -1 or idx < best):
+			best = idx
+	return best
+
+
+## A rule's base name without its rating parenthetical: "Swift(3)" -> "Swift", "Fast" -> "Fast".
+func _rule_base_name(rule: String) -> String:
+	return rule.split("(")[0].strip_edges()
 
 
 ## Outer radius (metres) of a band = base edge radius + the band distance.
@@ -80,13 +146,6 @@ func color_for_props(props: Dictionary) -> Color:
 	if props.has("player_id"):
 		return OPRArmyManager.PLAYER_COLORS.get(int(props["player_id"]), NEUTRAL_COLOR)
 	return NEUTRAL_COLOR
-
-
-func _has_rule(rules: Array, rule_name: String) -> bool:
-	for r in rules:
-		if str(r) == rule_name:
-			return true
-	return false
 
 # === Public: indicator management ===
 
