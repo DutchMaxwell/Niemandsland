@@ -1589,6 +1589,11 @@ func _make_success_row(face: int, count: int, icon_size: int, highlight: bool, t
 	icon.custom_minimum_size = Vector2(icon_size, icon_size)
 	icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	# Paint the die body in its colour-tag colour (with contrast-picked pips) so the result/log
+	# dice read in the same colour as the physical dice (issue #77a).
+	if tint.a > 0.0:
+		icon.body_color = tint
+		icon.pip_color = DiceD6._pip_color_for_body(tint)
 	row.add_child(icon)
 
 	var lbl := Label.new()
