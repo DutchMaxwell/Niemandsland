@@ -32,6 +32,10 @@ planned and where ideas go. For what already works see
   dice "?" #80, token cleanup #78, double-click select #81). The **Linux self-updater ETXTBSY fix**
   and **macOS ad-hoc signing** (no more "damaged") also land. Next work is **feedback-driven** toward
   the **MP-first Beta** (see Next); a **Solo / Co-Op AI** (OPR's official ruleset) is being scoped. _S_
+- **Solo / Co-Op AI** — the maintainer's next major implementation target (2026-06-30). Follows OPR's
+  official **Solo & Co-Op Rules v3.5.0** (deterministic per-archetype decision trees, with a utility
+  tie-break; semi-manual combat first, engine-agnostic foundation). Full design + phased plan in
+  [`SOLO_AI_PLAN.md`](SOLO_AI_PLAN.md). On branch `feat/solo-ai`. _L_
 
 ## 📋 Next (post-Alpha — Beta + alpha-feedback driven)
 
