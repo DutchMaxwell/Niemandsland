@@ -186,10 +186,23 @@ func active_count() -> int:
 
 # === Private ===
 
+## TEMP diagnostic (issue #79): dumps what the move-band parser actually sees for a unit, so a
+## failing Swift-style rule can be matched against the real OPR text. Remove once #79 is confirmed.
+func _log_move_diagnostic(props: Dictionary, bands: Dictionary) -> void:
+	var rules: Array = props.get("special_rules", [])
+	var descriptions: Dictionary = props.get("rule_descriptions", {})
+	print("[MOVE #79] rules=", rules)
+	print("[MOVE #79] description_keys=", descriptions.keys())
+	for name in descriptions:
+		print("[MOVE #79]   '", name, "' -> ", str(descriptions[name]).substr(0, 140))
+	print("[MOVE #79] bands advance=", bands.get("advance"), " rush=", bands.get("rush"))
+
+
 func _build_indicator(model_node: Node3D) -> void:
 	var props := _props_of(model_node)
 	var bands := move_bands_for_props(props)
 	var base_color := color_for_props(props)
+	_log_move_diagnostic(props, bands)
 
 	var root := Node3D.new()
 	root.name = ROOT_NODE_NAME
