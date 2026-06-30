@@ -69,6 +69,44 @@ func test_template_to_prefab_dangerous_rotation() -> void:
 	assert_int(int(upright["rotation"])).is_equal(0)
 
 
+# ===== _terrain_density_scale / _terrain_goal_range: auto-deploy count scales with area (#83) =====
+
+func test_terrain_density_scale_reference_is_one() -> void:
+	var ml := _layout()
+	# The 6x4 reference table (24 sq ft) is the 1.0 baseline (~15-20 pieces).
+	ml.table_size_feet = Vector2(6, 4)
+	assert_float(ml._terrain_density_scale()).is_equal_approx(1.0, 0.001)
+
+
+func test_terrain_density_scale_smaller_table_fewer_pieces() -> void:
+	var ml := _layout()
+	# A 4x4 table (16 sq ft) is two thirds of the reference area -> fewer pieces.
+	ml.table_size_feet = Vector2(4, 4)
+	assert_float(ml._terrain_density_scale()).is_equal_approx(16.0 / 24.0, 0.001)
+	assert_float(ml._terrain_density_scale()).is_less(1.0)
+
+
+func test_terrain_density_scale_clamped() -> void:
+	var ml := _layout()
+	# Tiny table clamps to the floor; an oversized one clamps to the cap.
+	ml.table_size_feet = Vector2(2, 2)
+	assert_float(ml._terrain_density_scale()).is_equal_approx(MapLayoutScript.TERRAIN_DENSITY_MIN_SCALE, 0.001)
+	ml.table_size_feet = Vector2(12, 12)
+	assert_float(ml._terrain_density_scale()).is_equal_approx(MapLayoutScript.TERRAIN_DENSITY_MAX_SCALE, 0.001)
+
+
+func test_terrain_goal_range_scales_with_table() -> void:
+	var ml := _layout()
+	ml.table_size_feet = Vector2(6, 4)
+	assert_vector(ml._terrain_goal_range()).is_equal(Vector2i(15, 20))
+	# 4x4 -> two thirds: round(15*0.667)=10, round(20*0.667)=13.
+	ml.table_size_feet = Vector2(4, 4)
+	var goal: Vector2i = ml._terrain_goal_range()
+	assert_int(goal.x).is_equal(10)
+	assert_int(goal.y).is_equal(13)
+	assert_int(goal.x).is_less(15)  # genuinely fewer than the reference goal
+
+
 # ===== _find_objective_near_position: tolerance-based hit test =====
 
 func test_find_objective_near_position() -> void:
