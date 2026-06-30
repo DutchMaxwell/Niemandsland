@@ -53,6 +53,12 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   facing arrow drifted out of sync, and the wrong rotation was broadcast to multiplayer peers). A
   regiment's facing now only changes via an explicit pivot — **Age of Fantasy: Regiments v3.5.1, p.8
   "Pivoting"** — while loose models still auto-face their movement direction as before.
+- **macOS build is no longer reported as "damaged".** The macOS app is now **ad-hoc signed** in CI
+  (via `rcodesign` on the Linux build runner — no Apple account, certificate or notarization), so it
+  launches on Apple Silicon and Gatekeeper shows the milder "unidentified developer" prompt
+  (right-click → Open) instead of *"Niemandsland is damaged and can't be opened"*. The app is still
+  unnotarized; the README documents the one-time `xattr -dr com.apple.quarantine` fallback. Takes
+  effect for the next release.
 
 ## [0.3.7.1-alpha] — 2026-06-25
 
