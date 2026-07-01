@@ -28,8 +28,10 @@ static func load_ctex(path: String) -> Texture2D:
 
 ## Build a StandardMaterial3D from downloaded .ctex paths (normal/orm may be "" / absent):
 ## albedo → albedo_texture (BC7 sRGB); normal → normal_texture + normal_enabled (BC5, reconstruct Z);
-## orm → ao/roughness/metallic from a channel-packed texture (glTF ORM: R=AO, G=Roughness, B=Metallic).
-static func build_material(albedo_path: String, normal_path: String = "", orm_path: String = "") -> StandardMaterial3D:
+## orm → the glTF metallicRoughness texture: G→roughness, B→metallic. The R channel holds AO ONLY
+## when the asset packs it (`orm_has_ao`); otherwise R is undefined, so AO is left off (else it would
+## read roughness/metallic from an undefined channel).
+static func build_material(albedo_path: String, normal_path: String = "", orm_path: String = "", orm_has_ao: bool = false) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	var albedo := load_ctex(albedo_path)
 	if albedo != null:
@@ -40,11 +42,12 @@ static func build_material(albedo_path: String, normal_path: String = "", orm_pa
 		mat.normal_texture = normal
 	var orm := load_ctex(orm_path)
 	if orm != null:
-		mat.ao_enabled = true
-		mat.ao_texture = orm
-		mat.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
 		mat.roughness_texture = orm
 		mat.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
 		mat.metallic_texture = orm
 		mat.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
+		if orm_has_ao:
+			mat.ao_enabled = true
+			mat.ao_texture = orm
+			mat.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
 	return mat
