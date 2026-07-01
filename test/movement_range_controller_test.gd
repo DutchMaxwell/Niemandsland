@@ -150,6 +150,45 @@ func test_move_bands_negation_is_targeted() -> void:
 	assert_int(b["rush"]).is_equal(16)      # 12 + 4
 
 
+# === aura rules from combined-unit members (#79 aura) ===
+
+func test_has_aura_rule() -> void:
+	assert_bool(MovementRangeController._has_aura_rule(["Hero", "Swift Aura"])).is_true()
+	assert_bool(MovementRangeController._has_aura_rule(["Hero", "Fast"])).is_false()
+
+
+func test_merge_aura_pulls_in_aura_member_rules() -> void:
+	var own := {"Slow": "Moves -2\" when using Advance, and -4\" when using Rush/Charge."}
+	var members := [{
+		"rules": ["Hero", "Swift Aura"],
+		"descriptions": {"Swift Aura": "This model and its unit get Swift.", "Swift": "may ignore the Slow rule."},
+	}]
+	var merged := MovementRangeController.merge_aura_descriptions(own, members)
+	assert_bool(merged.has("Swift")).is_true()   # granted by the aura member
+	assert_bool(merged.has("Slow")).is_true()    # own kept
+
+
+func test_merge_aura_ignores_non_aura_member() -> void:
+	# A hero's PERSONAL Fast (no aura) must not leak to the unit.
+	var members := [{"rules": ["Hero", "Fast"], "descriptions": {"Fast": "Moves +2\"..."}}]
+	var merged := MovementRangeController.merge_aura_descriptions({}, members)
+	assert_bool(merged.has("Fast")).is_false()
+
+
+func test_aura_swift_cancels_unit_slow_end_to_end() -> void:
+	# The Dwarf case: a Slow unit with no Swift of its own gains it from the hero's Swift Aura,
+	# so the whole unit ignores Slow -> normal 6"/12" (#79 aura).
+	var own := {"Slow": "Moves -2\" when using Advance, and -4\" when using Rush/Charge."}
+	var members := [{
+		"rules": ["Hero", "Swift Aura"],
+		"descriptions": {"Swift Aura": "This model and its unit get Swift.", "Swift": "This model may ignore the Slow rule."},
+	}]
+	var merged := MovementRangeController.merge_aura_descriptions(own, members)
+	var b := _controller().move_bands_for_props({"special_rules": ["Slow"], "rule_descriptions": merged})
+	assert_int(b["advance"]).is_equal(6)
+	assert_int(b["rush"]).is_equal(12)
+
+
 func test_move_bands_granted_rule_modifier_applies() -> void:
 	# A direct ability "Fleetfoot" grants Swift; spawn-time expansion puts BOTH descriptions in the
 	# dict. The granting rule carries no modifier text; Swift's does — it must still apply (#79).
