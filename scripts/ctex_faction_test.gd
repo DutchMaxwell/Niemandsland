@@ -87,18 +87,20 @@ func _measure_unit(idx: int, short: String, entry: Dictionary) -> void:
 	var raw_root := _place(raw, -HALF_X)
 	var raw_used := await _texmem() - base
 
-	# RIGHT: .ctex — geometry GLB + CtexLoader BC7 material. Version guard: on mismatch fall back to
-	# the legacy raw GLB (confirms the guard path). This batch has no normal + ORM has no AO.
+	# RIGHT: .ctex — geometry GLB + CtexLoader textures applied onto the mesh's OWN materials (so a
+	# vehicle's procedural metallic/roughness is kept; infantry ORM drives it). Two class shapes:
+	# infantry = albedo+orm, vehicle = albedo+normal (no orm). Version guard: on mismatch fall back
+	# to the legacy raw GLB (confirms the guard path).
 	var ctex_block: Dictionary = entry.get("ctex", {})
 	var guard_ok: bool = CtexLoader.ctex_compatible(str(ctex_block.get("godot_version", "")))
 	var ctex_root: Node3D
 	if guard_ok:
 		var mesh := _load_glb(CACHE + str(ctex_block["mesh"]["url"]))
 		var tex: Dictionary = ctex_block.get("textures", {})
-		var albedo_p := CACHE + str(tex["albedo"]["url"]) if tex.has("albedo") else ""
-		var orm_p := CACHE + str(tex["orm"]["url"]) if tex.has("orm") else ""
-		var mat := CtexLoader.build_material(albedo_p, "", orm_p, false)
-		_apply_material(mesh, mat)
+		CtexLoader.apply_to_mesh(mesh,
+			CACHE + str(tex["albedo"]["url"]),
+			(CACHE + str(tex["normal"]["url"]) if tex.has("normal") else ""),
+			(CACHE + str(tex["orm"]["url"]) if tex.has("orm") else ""), false)
 		ctex_root = _place(mesh, HALF_X)
 	else:
 		ctex_root = _place(_load_glb(CACHE + str(entry["url"])), HALF_X)  # guard fallback = legacy

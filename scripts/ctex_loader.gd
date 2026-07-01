@@ -57,3 +57,40 @@ static func build_material(albedo_path: String, normal_path: String = "", orm_pa
 			mat.ao_texture = orm
 			mat.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
 	return mat
+
+
+## Apply downloaded .ctex textures onto a loaded ctex-mesh's OWN surface materials, PRESERVING each
+## material's factors — so a class that ships a procedural metallic/roughness baked into the mesh
+## (e.g. vehicles: albedo + normal, no ORM) keeps it, while a class with an ORM has metallic/roughness
+## driven by the texture. Albedo always applied; normal/orm optional. This is the real per-model entry
+## (build_material() is the from-scratch variant for a single prop).
+static func apply_to_mesh(mesh_root: Node3D, albedo_path: String, normal_path: String = "", orm_path: String = "", orm_has_ao: bool = false) -> void:
+	if mesh_root == null:
+		return
+	var albedo := load_ctex(albedo_path)
+	var normal := load_ctex(normal_path)
+	var orm := load_ctex(orm_path)
+	for node in mesh_root.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		for s in range(mi.mesh.get_surface_count()):
+			var base := mi.get_active_material(s)
+			var mat: StandardMaterial3D = (base as StandardMaterial3D).duplicate() if base is StandardMaterial3D else StandardMaterial3D.new()
+			if albedo != null:
+				mat.albedo_texture = albedo
+			if normal != null:
+				mat.normal_enabled = true
+				mat.normal_texture = normal
+			if orm != null:
+				mat.metallic = 1.0
+				mat.roughness = 1.0
+				mat.roughness_texture = orm
+				mat.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+				mat.metallic_texture = orm
+				mat.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
+				if orm_has_ao:
+					mat.ao_enabled = true
+					mat.ao_texture = orm
+					mat.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+			mi.set_surface_override_material(s, mat)

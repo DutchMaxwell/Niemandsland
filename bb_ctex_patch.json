@@ -1,0 +1,652 @@
+{
+  "battle_brothers/apc": {
+    "url": "fd1bd006f6a6ef8602b13d7302587ed4f6f00e8c79dfc29cb68dfd6504a7dafd.glb",
+    "sha256": "fd1bd006f6a6ef8602b13d7302587ed4f6f00e8c79dfc29cb68dfd6504a7dafd",
+    "size": 12082028,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "726e8f85fb31a72807a657ed1c101200b56253bd20315f14b3b7a2bb0851091b.ctex",
+          "sha256": "726e8f85fb31a72807a657ed1c101200b56253bd20315f14b3b7a2bb0851091b",
+          "size": 22369700
+        },
+        "normal": {
+          "url": "38606e622daf41169670f829e4a6cf4c09da14d093f8f2e2d8b03c5f7a41b64c.ctex",
+          "sha256": "38606e622daf41169670f829e4a6cf4c09da14d093f8f2e2d8b03c5f7a41b64c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "04a3dca6ea5ccd30f60f9e0631f97425a9043a05fea9e4172f038d697eeec91a.glb",
+        "sha256": "04a3dca6ea5ccd30f60f9e0631f97425a9043a05fea9e4172f038d697eeec91a",
+        "size": 1766952
+      }
+    }
+  },
+  "battle_brothers/artillery gun": {
+    "url": "ce2206e640dc689276f4dd525cdde7c7f4432c90990060450a824d7e23a8f2ce.glb",
+    "sha256": "ce2206e640dc689276f4dd525cdde7c7f4432c90990060450a824d7e23a8f2ce",
+    "size": 15575116,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "fcdbcd017b5803e91e1be8056bc049071016688df0c622905bd2aca23a1c8432.ctex",
+          "sha256": "fcdbcd017b5803e91e1be8056bc049071016688df0c622905bd2aca23a1c8432",
+          "size": 22369700
+        },
+        "normal": {
+          "url": "d0443290d4f79738565a466ee86a6eeb8484928554ac34009874435c681b4fbe.ctex",
+          "sha256": "d0443290d4f79738565a466ee86a6eeb8484928554ac34009874435c681b4fbe",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "268e12f7bbb4ab349f3550d001bfd2b4442dc76d61e2f1b974f18c4691d81ffb.glb",
+        "sha256": "268e12f7bbb4ab349f3550d001bfd2b4442dc76d61e2f1b974f18c4691d81ffb",
+        "size": 1260644
+      }
+    }
+  },
+  "battle_brothers/assault brothers": {
+    "url": "0674fd15f8292836f515980e8acbc633dec865042555536c5f9a935d334dc3ac.glb",
+    "sha256": "0674fd15f8292836f515980e8acbc633dec865042555536c5f9a935d334dc3ac",
+    "size": 13242476,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "770e7e6d97d0bc9f904e19e5e8f52c0767986891a375d954e05e0e3039d627ca.ctex",
+          "sha256": "770e7e6d97d0bc9f904e19e5e8f52c0767986891a375d954e05e0e3039d627ca",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3f7dda5601fa32afcb36fd3b387c33f55f8eb8b8bd330927ca809a11a3cdf599.ctex",
+          "sha256": "3f7dda5601fa32afcb36fd3b387c33f55f8eb8b8bd330927ca809a11a3cdf599",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "4e394dc3623d2b57ee03f7087c3c1524e12e8a31a185d37542cbe4a9b1de49bd.glb",
+        "sha256": "4e394dc3623d2b57ee03f7087c3c1524e12e8a31a185d37542cbe4a9b1de49bd",
+        "size": 1872340
+      }
+    }
+  },
+  "battle_brothers/attack apc": {
+    "url": "562d01dc86cce00ff25ede69998cbe3938159bb43770a6f60e241ca4718c5dbf.glb",
+    "sha256": "562d01dc86cce00ff25ede69998cbe3938159bb43770a6f60e241ca4718c5dbf",
+    "size": 17161708,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2b3ce083b8bfc5ca1cab7ed947a771a867293077ab4bf0570d6e150c875254b1.ctex",
+          "sha256": "2b3ce083b8bfc5ca1cab7ed947a771a867293077ab4bf0570d6e150c875254b1",
+          "size": 22369700
+        },
+        "normal": {
+          "url": "9391bcbf89dc842435bd527e459628c1b253e825007f9748a1326fbb690e82f5.ctex",
+          "sha256": "9391bcbf89dc842435bd527e459628c1b253e825007f9748a1326fbb690e82f5",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ec2d4c2502dcd8f1e6640fb7fd6aaba841d00c7127aedd069ca56b700a967d7a.glb",
+        "sha256": "ec2d4c2502dcd8f1e6640fb7fd6aaba841d00c7127aedd069ca56b700a967d7a",
+        "size": 2235672
+      }
+    }
+  },
+  "battle_brothers/attack speeder": {
+    "url": "b4e4ed3a2e2e128e82d99c79b6c8bf7346fde75dc0fa8fe1081cba4eb3b70bfb.glb",
+    "sha256": "b4e4ed3a2e2e128e82d99c79b6c8bf7346fde75dc0fa8fe1081cba4eb3b70bfb",
+    "size": 22108944,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7df262a94baf87ef6daee90cd7aa3d65635a5cc78670e4cb951aa53554bd0583.ctex",
+          "sha256": "7df262a94baf87ef6daee90cd7aa3d65635a5cc78670e4cb951aa53554bd0583",
+          "size": 22369700
+        },
+        "normal": {
+          "url": "c5422597042d3de2650beeb9c24aeb8c4b3092c6755c6b12a2306728cc7bc549.ctex",
+          "sha256": "c5422597042d3de2650beeb9c24aeb8c4b3092c6755c6b12a2306728cc7bc549",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "101d1ec7d41566c43c4b5164eb4d36bd2dbe9d87d505b1fd6b24e64278322ee0.glb",
+        "sha256": "101d1ec7d41566c43c4b5164eb4d36bd2dbe9d87d505b1fd6b24e64278322ee0",
+        "size": 1322632
+      }
+    }
+  },
+  "battle_brothers/battle brothers": {
+    "url": "6bb8f5c0390acdd1dfee6fff8d150dd4692c30faaaffd2faf2b10cd153ad0e7a.glb",
+    "sha256": "6bb8f5c0390acdd1dfee6fff8d150dd4692c30faaaffd2faf2b10cd153ad0e7a",
+    "size": 13734164,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "097d7382fe1c3fb964b45691c2b46508762502d89ab37f311d54b40ab976f125.ctex",
+          "sha256": "097d7382fe1c3fb964b45691c2b46508762502d89ab37f311d54b40ab976f125",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d83bd1abe645f525bf118c17e648eb9e0a3a4f528d4ee1f83331dec188de698e.ctex",
+          "sha256": "d83bd1abe645f525bf118c17e648eb9e0a3a4f528d4ee1f83331dec188de698e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b52af0f3068b0ffb5201e52184638a5e046b6c4a4ed1779841f9aac9ec2b1ad2.glb",
+        "sha256": "b52af0f3068b0ffb5201e52184638a5e046b6c4a4ed1779841f9aac9ec2b1ad2",
+        "size": 1829844
+      }
+    }
+  },
+  "battle_brothers/battle tank": {
+    "url": "089c947360f3739ef5efe79ce110d1c6f064476a7b3c356462b175687fe652ef.glb",
+    "sha256": "089c947360f3739ef5efe79ce110d1c6f064476a7b3c356462b175687fe652ef",
+    "size": 15493964,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "38c4b9cce61bde5ce8d70ccdb78f810669bfefdb40c0c84b2d78f82f52821937.ctex",
+          "sha256": "38c4b9cce61bde5ce8d70ccdb78f810669bfefdb40c0c84b2d78f82f52821937",
+          "size": 22369700
+        },
+        "normal": {
+          "url": "171b125a2920b4eadaf05f1a352eb421d7a88547fa4326e8a027a22b450c178d.ctex",
+          "sha256": "171b125a2920b4eadaf05f1a352eb421d7a88547fa4326e8a027a22b450c178d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9581af226122890c0393ea3906f94ebcee4b5b7fbb5d61b254bbe829d96063e6.glb",
+        "sha256": "9581af226122890c0393ea3906f94ebcee4b5b7fbb5d61b254bbe829d96063e6",
+        "size": 950880
+      }
+    }
+  },
+  "battle_brothers/brother bikers": {
+    "url": "c970e645f270d53bbd1beac8ec1bf361754ab146a6ec1c85e2054be5f4f31c3c.glb",
+    "sha256": "c970e645f270d53bbd1beac8ec1bf361754ab146a6ec1c85e2054be5f4f31c3c",
+    "size": 15151144,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "333e6c5a6e36651a643ede204b717ad55862f6077bbcbee68264606cdc9b3ea2.ctex",
+          "sha256": "333e6c5a6e36651a643ede204b717ad55862f6077bbcbee68264606cdc9b3ea2",
+          "size": 22369700
+        },
+        "normal": {
+          "url": "c2ac4334af1db5f5a78ea7da8f369946ba003e7e1c066aee5fe9dbcd014b9bdd.ctex",
+          "sha256": "c2ac4334af1db5f5a78ea7da8f369946ba003e7e1c066aee5fe9dbcd014b9bdd",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a017bfc02a4bfefd2a7a0c13325e491916a2429c9d32364abb3a794892ca9a94.glb",
+        "sha256": "a017bfc02a4bfefd2a7a0c13325e491916a2429c9d32364abb3a794892ca9a94",
+        "size": 1786352
+      }
+    }
+  },
+  "battle_brothers/combat walker": {
+    "url": "643745d58eda680e0213d1896b7b359def746d338fea65c34bd6cf4b5b9c141a.glb",
+    "sha256": "643745d58eda680e0213d1896b7b359def746d338fea65c34bd6cf4b5b9c141a",
+    "size": 16326720,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9dfca79c5dbb096a0725c16db51eaafec981a3c607cf03b54192d1757c419998.ctex",
+          "sha256": "9dfca79c5dbb096a0725c16db51eaafec981a3c607cf03b54192d1757c419998",
+          "size": 22369700
+        },
+        "normal": {
+          "url": "72a30686dcaaef24de0dcaff06bfa97e8f53c5ab2fb424d0289821f167502233.ctex",
+          "sha256": "72a30686dcaaef24de0dcaff06bfa97e8f53c5ab2fb424d0289821f167502233",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "add94ff64cfe40eb0e4ea8da0678de58c1e0f37f9cc58c02123537fb548d0749.glb",
+        "sha256": "add94ff64cfe40eb0e4ea8da0678de58c1e0f37f9cc58c02123537fb548d0749",
+        "size": 2533608
+      }
+    }
+  },
+  "battle_brothers/destroyers": {
+    "url": "39b0aa0c16193c554ee3064acca405e8b67174c8060b141db6640ce5467c475c.glb",
+    "sha256": "39b0aa0c16193c554ee3064acca405e8b67174c8060b141db6640ce5467c475c",
+    "size": 13194604,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f674bfc587a3ce9c2b939e2b84087298b162c3ee39529e06877459c8686a02c8.ctex",
+          "sha256": "f674bfc587a3ce9c2b939e2b84087298b162c3ee39529e06877459c8686a02c8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "87559ff8c5f4d917884e87f14763b14af6039df1e46db97ee1da13007ab0f2e1.ctex",
+          "sha256": "87559ff8c5f4d917884e87f14763b14af6039df1e46db97ee1da13007ab0f2e1",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d5435e9a562c21dcf11107878e4aca17b6e8eb7bd8ff581b32623288e8e82cdf.glb",
+        "sha256": "d5435e9a562c21dcf11107878e4aca17b6e8eb7bd8ff581b32623288e8e82cdf",
+        "size": 1746496
+      }
+    }
+  },
+  "battle_brothers/drop pod": {
+    "url": "df4115f4cfc7c6f1812964549dfc0e0d74e38bcda476607b997b77541f4a6350.glb",
+    "sha256": "df4115f4cfc7c6f1812964549dfc0e0d74e38bcda476607b997b77541f4a6350",
+    "size": 15041736,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "451b89452f521938fb82b10e5fec960bdede1c9e571b45a23b4d12408c34271b.ctex",
+          "sha256": "451b89452f521938fb82b10e5fec960bdede1c9e571b45a23b4d12408c34271b",
+          "size": 22369700
+        },
+        "normal": {
+          "url": "e21dcab76fb6108e5a172d720d422c54572152ee872634cf69e8d54d3b1e9993.ctex",
+          "sha256": "e21dcab76fb6108e5a172d720d422c54572152ee872634cf69e8d54d3b1e9993",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "492c789b45f4dd05dc8051ce719dfdb070bf0f3d3e658fa26dd0412cd37f96d8.glb",
+        "sha256": "492c789b45f4dd05dc8051ce719dfdb070bf0f3d3e658fa26dd0412cd37f96d8",
+        "size": 3262176
+      }
+    }
+  },
+  "battle_brothers/elite pathfinder": {
+    "url": "489d79eeaa0fc0daa4770759330946be12a2d1286043d0b4d47dbb199b34ed8f.glb",
+    "sha256": "489d79eeaa0fc0daa4770759330946be12a2d1286043d0b4d47dbb199b34ed8f",
+    "size": 15076820,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c27dcee322b8df1c63cca839a044de090c46c2116075643305a4f3d67285beca.ctex",
+          "sha256": "c27dcee322b8df1c63cca839a044de090c46c2116075643305a4f3d67285beca",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "842d758df76bd9dde106ca3744d610ea83ea80e8df80df03bdb47a7a808a99b9.ctex",
+          "sha256": "842d758df76bd9dde106ca3744d610ea83ea80e8df80df03bdb47a7a808a99b9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c6cc7a39a987f0e1f30a411955435b8a260996e2aee64e2bc9adc1ed43e84e1f.glb",
+        "sha256": "c6cc7a39a987f0e1f30a411955435b8a260996e2aee64e2bc9adc1ed43e84e1f",
+        "size": 1996808
+      }
+    }
+  },
+  "battle_brothers/heavy exo suit": {
+    "url": "5138116ea1a091fc76802f7c419cdd2cf28d5c058cd3a7690322d557c2ba23a4.glb",
+    "sha256": "5138116ea1a091fc76802f7c419cdd2cf28d5c058cd3a7690322d557c2ba23a4",
+    "size": 16563800,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6d8ef117082ac9a79bc3977dc4b206cfbfb5aa62dbddcd2a272a8635c09554da.ctex",
+          "sha256": "6d8ef117082ac9a79bc3977dc4b206cfbfb5aa62dbddcd2a272a8635c09554da",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ced9879a97c38cb05a5f9fe3d4edfcf1d3036b24a88f0d57e679c3dc29346ac3.ctex",
+          "sha256": "ced9879a97c38cb05a5f9fe3d4edfcf1d3036b24a88f0d57e679c3dc29346ac3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "15d4a3a7f9243410860b761cc3bc2a30db4d33ad1aad4a744d28259abc7ce0a9.glb",
+        "sha256": "15d4a3a7f9243410860b761cc3bc2a30db4d33ad1aad4a744d28259abc7ce0a9",
+        "size": 2589604
+      }
+    }
+  },
+  "battle_brothers/heavy gunship": {
+    "url": "40e3f02e5a7fffacfd1714f44b559faa014f9e84afd5d00226d89a152a1db6fd.glb",
+    "sha256": "40e3f02e5a7fffacfd1714f44b559faa014f9e84afd5d00226d89a152a1db6fd",
+    "size": 21247336,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "1d940cdf99af337e6e9efa4ea010598376d1c61b1664fd60601e610db6c7b3ed.ctex",
+          "sha256": "1d940cdf99af337e6e9efa4ea010598376d1c61b1664fd60601e610db6c7b3ed",
+          "size": 22369700
+        },
+        "normal": {
+          "url": "78abcb54b9023a8343386a6ef90f64e75b76e78073298942698882b65693e53c.ctex",
+          "sha256": "78abcb54b9023a8343386a6ef90f64e75b76e78073298942698882b65693e53c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "064ee5be4831949d34ed09314aa40da3bee781ef8174397669a820150a63774c.glb",
+        "sha256": "064ee5be4831949d34ed09314aa40da3bee781ef8174397669a820150a63774c",
+        "size": 1874676
+      }
+    }
+  },
+  "battle_brothers/heavy tank": {
+    "url": "aa4cc023033784b58922a30aead97f919992710ba899ef1a0fdbec101245cc31.glb",
+    "sha256": "aa4cc023033784b58922a30aead97f919992710ba899ef1a0fdbec101245cc31",
+    "size": 17030968,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b0c778e3a376b55e6f3a766470ffeed7a8719c2359765bc0fc2ffee921eeb68b.ctex",
+          "sha256": "b0c778e3a376b55e6f3a766470ffeed7a8719c2359765bc0fc2ffee921eeb68b",
+          "size": 22369700
+        },
+        "normal": {
+          "url": "fdfc12cf4b346f3fa64c6efa70ad9157294085a0c9c00aed04ec99420141e23a.ctex",
+          "sha256": "fdfc12cf4b346f3fa64c6efa70ad9157294085a0c9c00aed04ec99420141e23a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7afa8d56fc7a8df606b89cf4d54910383d2229207f2231e5784e62d9cbcd8a63.glb",
+        "sha256": "7afa8d56fc7a8df606b89cf4d54910383d2229207f2231e5784e62d9cbcd8a63",
+        "size": 2039536
+      }
+    }
+  },
+  "battle_brothers/light gunship": {
+    "url": "e96d685c71f50c845365bbfbf267ffd0e8b79701f20bddeb477b70132dd5d86a.glb",
+    "sha256": "e96d685c71f50c845365bbfbf267ffd0e8b79701f20bddeb477b70132dd5d86a",
+    "size": 16929728,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7111df4f7fb545899dfa24f5b61e42343e912b8cc4722f940c9fbf0d7116a438.ctex",
+          "sha256": "7111df4f7fb545899dfa24f5b61e42343e912b8cc4722f940c9fbf0d7116a438",
+          "size": 22369700
+        },
+        "normal": {
+          "url": "da221d2229a978c8dfe66236ff52cc7ab768f3ba72e61cd23b68767cc7f1bccf.ctex",
+          "sha256": "da221d2229a978c8dfe66236ff52cc7ab768f3ba72e61cd23b68767cc7f1bccf",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f24f5d061a5f1f5f3fef5b142df376b32156e7a7f0d7dc1681e17d3013333c38.glb",
+        "sha256": "f24f5d061a5f1f5f3fef5b142df376b32156e7a7f0d7dc1681e17d3013333c38",
+        "size": 968376
+      }
+    }
+  },
+  "battle_brothers/master brother": {
+    "url": "6b6ca3f140f5cf21aebd0aa3f9d778eb168cb25b0480c7c953493acaf0b872ed.glb",
+    "sha256": "6b6ca3f140f5cf21aebd0aa3f9d778eb168cb25b0480c7c953493acaf0b872ed",
+    "size": 13094932,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a4469d68b41b906442b4e8fb51d850f606e78c55a53545bc0534622a0edeae71.ctex",
+          "sha256": "a4469d68b41b906442b4e8fb51d850f606e78c55a53545bc0534622a0edeae71",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f28408fec9910f10d5bb9a46457227f52da6022f887cfb1d9bc633f5eb0db91f.ctex",
+          "sha256": "f28408fec9910f10d5bb9a46457227f52da6022f887cfb1d9bc633f5eb0db91f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "427c7638b6ec566dfefa6a8d2aaaadf2c382ca94d3588dae0c6fa581367d2308.glb",
+        "sha256": "427c7638b6ec566dfefa6a8d2aaaadf2c382ca94d3588dae0c6fa581367d2308",
+        "size": 1707680
+      }
+    }
+  },
+  "battle_brothers/master destroyer": {
+    "url": "e4515aa843b81e5e021df638f3ff80fd89e4c1d66b28dd334db63d377d1c6e70.glb",
+    "sha256": "e4515aa843b81e5e021df638f3ff80fd89e4c1d66b28dd334db63d377d1c6e70",
+    "size": 13594640,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ac2b3b25d6168bac247c29ea34ba555feb4ce82ef5c98ec465f3671f6fb240a7.ctex",
+          "sha256": "ac2b3b25d6168bac247c29ea34ba555feb4ce82ef5c98ec465f3671f6fb240a7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e0a984c0e19a3a8e78aebfcede73ccbbfe9ec315165533163596fbfa7cfd8a19.ctex",
+          "sha256": "e0a984c0e19a3a8e78aebfcede73ccbbfe9ec315165533163596fbfa7cfd8a19",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "56ee072f24909ac7c06ed74070847534658084f9325657af698d5e0c4887ac05.glb",
+        "sha256": "56ee072f24909ac7c06ed74070847534658084f9325657af698d5e0c4887ac05",
+        "size": 1748868
+      }
+    }
+  },
+  "battle_brothers/pathfinder bikers": {
+    "url": "6cb3bebc3871e126e84bee47ddf165e19ce8500497f5ad8d5144894246d09555.glb",
+    "sha256": "6cb3bebc3871e126e84bee47ddf165e19ce8500497f5ad8d5144894246d09555",
+    "size": 15658180,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "1a708dd6bbdd8330be42b19a12732e33d57bbc33908b608bc73ebc70656b7b97.ctex",
+          "sha256": "1a708dd6bbdd8330be42b19a12732e33d57bbc33908b608bc73ebc70656b7b97",
+          "size": 22369700
+        },
+        "normal": {
+          "url": "832948c094bb9e81be4aed3850dd39b561610fa0aaba0ab3715d32b7f67e827d.ctex",
+          "sha256": "832948c094bb9e81be4aed3850dd39b561610fa0aaba0ab3715d32b7f67e827d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1d31266cbecc8191dbeb7f5e17a543cd36a07c2a434cd4669676288b83216823.glb",
+        "sha256": "1d31266cbecc8191dbeb7f5e17a543cd36a07c2a434cd4669676288b83216823",
+        "size": 2018472
+      }
+    }
+  },
+  "battle_brothers/pathfinders": {
+    "url": "04c75deffd4777a5401d0c7a48ae27ef25f6206031b42176e31f6c89c64fd141.glb",
+    "sha256": "04c75deffd4777a5401d0c7a48ae27ef25f6206031b42176e31f6c89c64fd141",
+    "size": 14236908,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8d0166f02d172a925043accb08a2b3090312a58776f5e728716904b552e815aa.ctex",
+          "sha256": "8d0166f02d172a925043accb08a2b3090312a58776f5e728716904b552e815aa",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0e63dce125feefc4bd550b7e54e353ccd40e43a1a3a43b4cc4eb9606935de366.ctex",
+          "sha256": "0e63dce125feefc4bd550b7e54e353ccd40e43a1a3a43b4cc4eb9606935de366",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "12d69dc39c8e7cd3d8cbfbf361b30c517abbaadbeb55163b9d8b46ae19e20df9.glb",
+        "sha256": "12d69dc39c8e7cd3d8cbfbf361b30c517abbaadbeb55163b9d8b46ae19e20df9",
+        "size": 1932144
+      }
+    }
+  },
+  "battle_brothers/support bike": {
+    "url": "6a3c6419b1700379131876ff32e4c711a7612d3890190b074ff8d5d1556e5894.glb",
+    "sha256": "6a3c6419b1700379131876ff32e4c711a7612d3890190b074ff8d5d1556e5894",
+    "size": 14619196,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "144d7a8a25a73d142fe6a3e8521dd4cb84430f299fce5cb00c212624c49de686.ctex",
+          "sha256": "144d7a8a25a73d142fe6a3e8521dd4cb84430f299fce5cb00c212624c49de686",
+          "size": 22369700
+        },
+        "normal": {
+          "url": "050fa928ca9bf2a9b598d2f2b50b317744fc9f170a33cbe374a6cfeb8fb6ce32.ctex",
+          "sha256": "050fa928ca9bf2a9b598d2f2b50b317744fc9f170a33cbe374a6cfeb8fb6ce32",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "76cc2edc8402070fa06146019af34cc2a8ba6a5c9fe62105a750113bd4ee5d46.glb",
+        "sha256": "76cc2edc8402070fa06146019af34cc2a8ba6a5c9fe62105a750113bd4ee5d46",
+        "size": 2075472
+      }
+    }
+  },
+  "battle_brothers/support brothers": {
+    "url": "8bcb252f82f45281b66fc8607f786bf2503b461f42b9691828756b31b03e5e69.glb",
+    "sha256": "8bcb252f82f45281b66fc8607f786bf2503b461f42b9691828756b31b03e5e69",
+    "size": 13122972,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "cdd68d7b44669994264ce8b2190d5af3b971775c59d0bfd52e629f43be1965ed.ctex",
+          "sha256": "cdd68d7b44669994264ce8b2190d5af3b971775c59d0bfd52e629f43be1965ed",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8fc83daff7c56a867ad5b7ec55182150d9acfbcb785555bdacccd79b9eda3376.ctex",
+          "sha256": "8fc83daff7c56a867ad5b7ec55182150d9acfbcb785555bdacccd79b9eda3376",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "34a6008fc827ec1ee5bda8c6375dfca1bde04926133484b47c5e6d0b2e297fff.glb",
+        "sha256": "34a6008fc827ec1ee5bda8c6375dfca1bde04926133484b47c5e6d0b2e297fff",
+        "size": 1791288
+      }
+    }
+  },
+  "battle_brothers/veteran assault brothers": {
+    "url": "23c08f93040255475033b20f4f5af802e933a1e610e68a008a5fdcb38179a86f.glb",
+    "sha256": "23c08f93040255475033b20f4f5af802e933a1e610e68a008a5fdcb38179a86f",
+    "size": 14011184,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "38c7d3ec09e593fa5b06553b5a541551811c7540e0bffcc96cfcb722f8220ce5.ctex",
+          "sha256": "38c7d3ec09e593fa5b06553b5a541551811c7540e0bffcc96cfcb722f8220ce5",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "fdeebdf8e865e403f458488711f8a38b472a59905afb7e2fe213eaa6986dea08.ctex",
+          "sha256": "fdeebdf8e865e403f458488711f8a38b472a59905afb7e2fe213eaa6986dea08",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "dde3fa96da16b5ff5dba469bbe83ae60c973d2284c9d6588164087205b46f854.glb",
+        "sha256": "dde3fa96da16b5ff5dba469bbe83ae60c973d2284c9d6588164087205b46f854",
+        "size": 1753136
+      }
+    }
+  },
+  "battle_brothers/veteran battle brothers": {
+    "url": "7246ef65e73af2e546f2975bae8aae8b0897e55d2633db5bbf819d83c3427a8b.glb",
+    "sha256": "7246ef65e73af2e546f2975bae8aae8b0897e55d2633db5bbf819d83c3427a8b",
+    "size": 13526476,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "54a63382c834b0a9824d1563518d1ff599a591ad9e5dfb23da18e00a200ab715.ctex",
+          "sha256": "54a63382c834b0a9824d1563518d1ff599a591ad9e5dfb23da18e00a200ab715",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2faf427f8ca4f3869d05211a9e96fce54616ff166c5f6372abe1540a41da85f8.ctex",
+          "sha256": "2faf427f8ca4f3869d05211a9e96fce54616ff166c5f6372abe1540a41da85f8",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8d997c4f6e1667fa4add0dc421147d56cc6c564518ba7df3d1cbfdd4b5b39260.glb",
+        "sha256": "8d997c4f6e1667fa4add0dc421147d56cc6c564518ba7df3d1cbfdd4b5b39260",
+        "size": 1629152
+      }
+    }
+  },
+  "battle_brothers/veteran combat walker": {
+    "url": "c40377abe32104d3d23079e5ee011248aad1542130a5cab2c0c3629b6c4df675.glb",
+    "sha256": "c40377abe32104d3d23079e5ee011248aad1542130a5cab2c0c3629b6c4df675",
+    "size": 19037832,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "790ecf67f9b4afd39781f9efdc2d25a56f117b91aa09602ca384b6591d7217a3.ctex",
+          "sha256": "790ecf67f9b4afd39781f9efdc2d25a56f117b91aa09602ca384b6591d7217a3",
+          "size": 22369700
+        },
+        "normal": {
+          "url": "f2db08bd19b945f029d6465483fdd7788cc5c9ece54fcfb7815ea9a707dcd6aa.ctex",
+          "sha256": "f2db08bd19b945f029d6465483fdd7788cc5c9ece54fcfb7815ea9a707dcd6aa",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3061036d92824f05c5465a71499876abe4abc54cd28627fc135f645a97486d40.glb",
+        "sha256": "3061036d92824f05c5465a71499876abe4abc54cd28627fc135f645a97486d40",
+        "size": 3799264
+      }
+    }
+  },
+  "battle_brothers/veteran master brother": {
+    "url": "74b90d0c1b50210b2b486e2b970449115c592f9b79028241da7d864033e0248d.glb",
+    "sha256": "74b90d0c1b50210b2b486e2b970449115c592f9b79028241da7d864033e0248d",
+    "size": 13213768,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a7f862f6d67a7a262d55a32be4a25e06f798748ad13b8c2cd65f6f1fb620b203.ctex",
+          "sha256": "a7f862f6d67a7a262d55a32be4a25e06f798748ad13b8c2cd65f6f1fb620b203",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "88a2091b9981a2b905a56b52c0fbb299c2cd0c58b21a098eef35238b51bb74ff.ctex",
+          "sha256": "88a2091b9981a2b905a56b52c0fbb299c2cd0c58b21a098eef35238b51bb74ff",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a3b6661003663cae16904067064ea4796d83f0e77a1e4b95bb3f66d80e2ce812.glb",
+        "sha256": "a3b6661003663cae16904067064ea4796d83f0e77a1e4b95bb3f66d80e2ce812",
+        "size": 1713964
+      }
+    }
+  }
+}
