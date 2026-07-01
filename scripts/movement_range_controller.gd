@@ -161,6 +161,12 @@ func _rule_base_name(rule: String) -> String:
 	return rule.split("(")[0].strip_edges()
 
 
+## The Advance/Rush bands (inches) for a model NODE — resolves its effective props (base upgrade +
+## movement rules + auras) then computes the bands. Public entry for callers like the movement cap.
+func bands_for_model(model_node: Node3D) -> Dictionary:
+	return move_bands_for_props(_props_of(model_node))
+
+
 ## Outer radius (metres) of a band = base edge radius + the band distance.
 func band_radius_for_props(props: Dictionary, band_inches: int) -> float:
 	return base_radius_for_props(props) + float(band_inches) * INCHES_TO_METERS

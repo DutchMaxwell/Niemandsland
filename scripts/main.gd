@@ -114,6 +114,7 @@ var _dice_count: int = DEFAULT_DICE_COUNT
 var _dice_preset_buttons: Array[Button] = []
 var _dice_count_value_label: Label = null
 var _current_roll_column: VBoxContainer = null
+var _movement_cap_buttons: Dictionary = {}  # MovementCap mode -> Button (the "Movement" cap row)
 
 # Success evaluation + rerolls (display-only aids; the rules live in DiceRules).
 var _success_target: int = DiceRules.TARGET_NONE
@@ -311,6 +312,7 @@ func _ready() -> void:
 	_build_current_roll_column()
 	_build_success_controls()
 	_build_reroll_row()
+	_build_movement_cap_row()
 	_set_dice_count(DEFAULT_DICE_COUNT)
 
 	# Build the multiplayer chat + roster panel (hidden until a session is active).
@@ -1200,6 +1202,53 @@ func _current_roll_context() -> Dictionary:
 		DiceRules.CTX_REROLL_MODE: _pending_reroll_mode,
 		DiceRules.CTX_REROLL_COUNT: _pending_reroll_count,
 	}
+
+
+## Builds the "Movement" cap row above the dice interface: pick Off / Advance / Rush-Charge and
+## the selected model/unit can then only be dragged that far (enforced in ObjectManager).
+func _build_movement_cap_row() -> void:
+	var row := HBoxContainer.new()
+	row.name = "MovementCapRow"
+	row.add_theme_constant_override("separation", 4)
+
+	var label := Label.new()
+	label.text = "Movement:"
+	label.add_theme_font_size_override("font_size", DICE_CAPTION_FONT_SIZE)
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(label)
+
+	_movement_cap_buttons.clear()
+	var specs := [
+		[ObjectManager.MovementCap.OFF, "Off"],
+		[ObjectManager.MovementCap.ADVANCE, "Advance"],
+		[ObjectManager.MovementCap.RUSH, "Rush/Charge"],
+	]
+	for spec in specs:
+		var btn := Button.new()
+		btn.text = spec[1]
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.custom_minimum_size = Vector2(0, DICE_BUTTON_HEIGHT)
+		btn.pressed.connect(_on_movement_cap_pressed.bind(int(spec[0])))
+		row.add_child(btn)
+		_movement_cap_buttons[int(spec[0])] = btn
+
+	_dice_vbox.add_child(row)
+	_dice_vbox.move_child(row, 0)  # above the dice-roller title
+	_update_movement_cap_display()
+
+
+func _on_movement_cap_pressed(mode: int) -> void:
+	if object_manager and object_manager.has_method("set_movement_cap"):
+		object_manager.set_movement_cap(mode)
+	_update_movement_cap_display()
+
+
+## Highlight the active movement-cap button.
+func _update_movement_cap_display() -> void:
+	var active: int = object_manager.get("_movement_cap") if object_manager else ObjectManager.MovementCap.OFF
+	for mode in _movement_cap_buttons:
+		(_movement_cap_buttons[mode] as Button).modulate = ACTIVE_DICE_BUTTON_TINT if mode == active else Color.WHITE
 
 
 ## Builds the click-based dice count selector (preset buttons 1..N plus
