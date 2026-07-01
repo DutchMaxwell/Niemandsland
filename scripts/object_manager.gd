@@ -306,19 +306,26 @@ func _input(event: InputEvent) -> void:
 		# Right-click for context menu (radial menu)
 		elif mouse_event.button_index == MOUSE_BUTTON_RIGHT:
 			if mouse_event.pressed:
-				var clicked_object = _get_object_at_position(mouse_event.position)
-				if clicked_object:
-					# Select object if not already selected
-					if clicked_object not in _selected_objects:
-						_deselect_all()
-						_add_to_selection(clicked_object)
-					# Open context menu
-					context_menu_requested.emit(mouse_event.position, _selected_objects.duplicate())
+				# Right-clicking an army tray (empty area) opens the tray menu (e.g. return a wiped
+				# unit), without selecting/dragging it. A model on the tray is hit first → its menu.
+				var army_tray := _army_tray_at_position(mouse_event.position)
+				if army_tray != null:
+					context_menu_requested.emit(mouse_event.position, [army_tray])
 					get_viewport().set_input_as_handled()
 				else:
-					# No object under the cursor: if a pinned ruler is there, remove it
-					# (else fall through so a right-drag still rotates the camera).
-					_try_remove_ruler_at(mouse_event.position)
+					var clicked_object = _get_object_at_position(mouse_event.position)
+					if clicked_object:
+						# Select object if not already selected
+						if clicked_object not in _selected_objects:
+							_deselect_all()
+							_add_to_selection(clicked_object)
+						# Open context menu
+						context_menu_requested.emit(mouse_event.position, _selected_objects.duplicate())
+						get_viewport().set_input_as_handled()
+					else:
+						# No object under the cursor: if a pinned ruler is there, remove it
+						# (else fall through so a right-drag still rotates the camera).
+						_try_remove_ruler_at(mouse_event.position)
 
 	elif event is InputEventMouseMotion:
 		if _is_dragging:
@@ -572,6 +579,23 @@ func select_objects(objects: Array) -> void:
 
 
 ## Get the selectable object at screen position (for right-click context menu)
+## The army tray under the cursor (group "army_tray"), or null. Only when the tray is the FIRST
+## hit — a live model on the tray blocks it (so a model's own menu wins).
+func _army_tray_at_position(screen_pos: Vector2) -> Node3D:
+	var camera = get_viewport().get_camera_3d()
+	if not camera:
+		return null
+	var from = camera.project_ray_origin(screen_pos)
+	var to = from + camera.project_ray_normal(screen_pos) * 100
+	var query = PhysicsRayQueryParameters3D.create(from, to)
+	query.collision_mask = 0xFFFFFFFF
+	query.collide_with_bodies = true
+	var result = get_world_3d().direct_space_state.intersect_ray(query)
+	if result and result.collider and result.collider.is_in_group("army_tray"):
+		return result.collider
+	return null
+
+
 func _get_object_at_position(screen_pos: Vector2) -> Node3D:
 	var camera = get_viewport().get_camera_3d()
 	if not camera:
