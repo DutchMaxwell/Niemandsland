@@ -443,6 +443,19 @@ static func create_regiment_menu(game_unit: GameUnit, remaining: int, pool_max: 
 	return items
 
 
+## Menu for right-clicking an army tray: return this player's fully-destroyed units (each has no
+## clickable model of its own). `units` = [{"id": String, "name": String}]; empty → a disabled note.
+static func create_army_tray_menu(units: Array) -> Array[RadialMenuItem]:
+	var items: Array[RadialMenuItem] = []
+	if units.is_empty():
+		items.append(RadialMenuItem.new("noop", "No destroyed units", "", false, "No wiped units to return"))
+		return items
+	for u in units:
+		var uname := str(u.get("name", "Unit"))
+		items.append(RadialMenuItem.new("return_unit_%s" % str(u.get("id", "")), uname, "R", true, "Return %s to the table" % uname))
+	return items
+
+
 ## Creates menu items for terrain.
 static func create_terrain_menu() -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []
