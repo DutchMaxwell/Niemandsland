@@ -111,6 +111,17 @@ func test_move_bands_description_overrides_constant() -> void:
 	assert_int(b["rush"]).is_equal(16)
 
 
+func test_move_bands_scurry_adds_two_each() -> void:
+	# Ratmen Clans "Scurry": +2" Advance AND +2" Rush/Charge (a direct additive rule, +2/+2 —
+	# unlike Fast's +2/+4). Parsed straight from its description (issue #79).
+	var b := _controller().move_bands_for_props({
+		"special_rules": ["Scurry"],
+		"rule_descriptions": {"Scurry": "Moves +2\" when using Advance, and +2\" when using Rush/Charge."},
+	})
+	assert_int(b["advance"]).is_equal(8)   # 6 + 2
+	assert_int(b["rush"]).is_equal(14)      # 12 + 2
+
+
 func test_move_bands_swift_negates_slow() -> void:
 	# Dwarf Guilds case: the unit is Slow but gains Swift ("may ignore the Slow rule"), so Slow is
 	# cancelled -> normal 6"/12" instead of the slowed 4"/8" (issue #79).
