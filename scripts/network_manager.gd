@@ -1113,8 +1113,9 @@ func broadcast_hero_attachment(hero: GameUnit, target: GameUnit) -> void:
 ## Signal emitted when a remote player's cursor position is received
 signal remote_cursor_updated(peer_id: int, pos_x: float, pos_z: float)
 
-## Signal emitted when a remote player's camera direction is received
-signal remote_camera_updated(peer_id: int, yaw: float, pitch: float)
+## Signal emitted when a remote player's camera direction is received. `zoom` is the camera's
+## distance from the table (metres); other clients fade that player's avatar as they zoom in.
+signal remote_camera_updated(peer_id: int, yaw: float, pitch: float, zoom: float)
 
 ## Signal emitted when a remote player rolls dice. `results` carries one face
 ## value per die; `context` is the roll-context Dictionary (DiceRules.CTX_*:
@@ -1138,9 +1139,9 @@ func sync_cursor_position(pos_x: float, pos_z: float) -> void:
 
 ## RPC: Sync camera look direction (low frequency, unreliable)
 @rpc("any_peer", "call_remote", "unreliable")
-func sync_camera_direction(yaw: float, pitch: float) -> void:
+func sync_camera_direction(yaw: float, pitch: float, zoom: float) -> void:
 	var sender = _get_sender()
-	remote_camera_updated.emit(sender, yaw, pitch)
+	remote_camera_updated.emit(sender, yaw, pitch, zoom)
 
 
 ## RPC: Sync dice roll event (reliable — everyone must see the result). `tags` carries the
@@ -1171,9 +1172,9 @@ func broadcast_cursor_position(pos: Vector3) -> void:
 
 
 ## Broadcast camera direction to all peers
-func broadcast_camera_direction(yaw: float, pitch: float) -> void:
+func broadcast_camera_direction(yaw: float, pitch: float, zoom: float) -> void:
 	if is_multiplayer_active():
-		_remote_call("sync_camera_direction", [yaw, pitch], 0)
+		_remote_call("sync_camera_direction", [yaw, pitch, zoom], 0)
 
 
 ## Broadcast dice roll to all peers (`tags` = per-die colour tags so the result keeps colours).
