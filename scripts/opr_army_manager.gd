@@ -657,6 +657,9 @@ func _create_army_tray(player_id: int, army_name: String, player_color: Color) -
 	# Army name label (as 3D text or just metadata for now)
 	tray.set_meta("army_name", army_name)
 	tray.set_meta("player_id", player_id)
+	# Right-clickable (a dedicated group, NOT "selectable" so it isn't drag-selected) so the tray
+	# menu can offer "Return destroyed units" — a fully-wiped unit has no clickable model of its own.
+	tray.add_to_group("army_tray")
 
 	# Collision for tray surface
 	var collision = CollisionShape3D.new()
