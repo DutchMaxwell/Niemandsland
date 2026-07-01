@@ -365,6 +365,9 @@ static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 
 	items.append(RadialMenuItem.new("add_marker", "Token", "T", true, "Add/adjust status & counter tokens for special rules"))
 	items.append(RadialMenuItem.new("select_unit", "Select All", "A", true, "Select all models in this unit"))
+	# Revive the unit's destroyed models (reachable from a surviving model).
+	if model.unit is GameUnit and (model.unit as GameUnit).get_alive_count() < (model.unit as GameUnit).models.size():
+		items.append(RadialMenuItem.new("revive_fallen", "Revive", "R", true, "Return this unit's destroyed models to the table"))
 	items.append(RadialMenuItem.new("delete_model", "Remove", "X", true, "Remove this model from the table"))
 
 	return items
@@ -392,6 +395,9 @@ static func create_unit_menu(game_unit: GameUnit) -> Array[RadialMenuItem]:
 	items.append(RadialMenuItem.new("toggle_shaken", "Shaken", shaken_icon, true, shaken_tooltip))
 
 	items.append(RadialMenuItem.new("add_marker", "Token", "T", true, "Add/adjust status & counter tokens for special rules"))
+	# Revive destroyed models of the unit (special rules that return/revive models).
+	if game_unit.get_alive_count() < game_unit.models.size():
+		items.append(RadialMenuItem.new("revive_fallen", "Revive", "R", true, "Return this unit's destroyed models to the table"))
 	items.append(RadialMenuItem.new("delete_unit", "Delete", "X", true, "Remove entire unit from the table"))
 
 	return items
@@ -429,6 +435,9 @@ static func create_regiment_menu(game_unit: GameUnit, remaining: int, pool_max: 
 	items.append(RadialMenuItem.new("toggle_fatigued", "Fatigued", fatigue_icon, true, "Mark/Remove Fatigued"))
 	items.append(RadialMenuItem.new("toggle_shaken", "Shaken", shaken_icon, true, "Mark/Remove Shaken"))
 	items.append(RadialMenuItem.new("add_marker", "Token", "T", true, "Add/adjust status & counter tokens"))
+	# Revive back-rank casualties (reset the pooled-wound counter to full).
+	if remaining < pool_max:
+		items.append(RadialMenuItem.new("revive_fallen", "Revive", "R", true, "Return this regiment's back-rank casualties"))
 	items.append(RadialMenuItem.new("delete_unit", "Delete", "X", true, "Remove entire unit from the table"))
 
 	return items
