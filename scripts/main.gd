@@ -2417,8 +2417,9 @@ func _broadcast_presence(delta: float) -> void:
 	if _camera_broadcast_timer >= CAMERA_BROADCAST_INTERVAL:
 		_camera_broadcast_timer = 0.0
 		if camera_pivot:
+			var _zoom: float = camera_pivot.get_zoom() if camera_pivot.has_method("get_zoom") else 10.0
 			network_manager.broadcast_camera_direction(
-				camera_pivot._yaw, camera_pivot._pitch)
+				camera_pivot._yaw, camera_pivot._pitch, _zoom)
 			var _cam := camera_pivot.get_node("Camera3D") as Camera3D
 			if _cam:
 				network_manager.broadcast_camera_position(_cam.global_position)
@@ -2436,11 +2437,14 @@ func _on_remote_cursor_updated(peer_id: int, pos_x: float, pos_z: float) -> void
 
 
 ## Called when a remote player's camera direction is received (self-id ignored).
-func _on_remote_camera_updated(peer_id: int, yaw: float, pitch: float) -> void:
+func _on_remote_camera_updated(peer_id: int, yaw: float, pitch: float, zoom: float) -> void:
 	if network_manager and peer_id == network_manager.get_my_peer_id():
 		return
 	if _player_avatars.has(peer_id):
 		_player_avatars[peer_id].update_look_direction(yaw, pitch)
+		# Fade the avatar as its owner zooms in, so it stops hiding the spot they're inspecting.
+		if _player_avatars[peer_id].has_method("update_zoom"):
+			_player_avatars[peer_id].update_zoom(zoom)
 
 
 ## Called when a remote player rolls dice. The context carries the sender's

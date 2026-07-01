@@ -37,3 +37,22 @@ func test_edge_position_scales_with_table_size() -> void:
 	var small: float = a._default_edge_position(1, Vector2(4, 4)).x
 	var big: float = a._default_edge_position(1, Vector2(8, 4)).x
 	assert_float(big).is_less(small)  # more negative = further left
+
+
+# ===== zoom -> alpha fade (avatar fades as its owner zooms in) =====
+
+func test_zoomed_out_is_opaque() -> void:
+	assert_float(AvatarScript.alpha_for_zoom(AvatarScript.FADE_ZOOM_FULL)).is_equal_approx(1.0, 0.001)
+	assert_float(AvatarScript.alpha_for_zoom(25.0)).is_equal_approx(1.0, 0.001)
+
+
+func test_fully_zoomed_in_is_ghost() -> void:
+	assert_float(AvatarScript.alpha_for_zoom(AvatarScript.FADE_ZOOM_MIN)).is_equal_approx(AvatarScript.GHOST_ALPHA, 0.001)
+
+
+func test_alpha_is_monotonic_closer_is_fainter() -> void:
+	var near: float = AvatarScript.alpha_for_zoom(1.0)
+	var far: float = AvatarScript.alpha_for_zoom(4.0)
+	assert_float(near).is_less(far)
+	assert_float(near).is_greater_equal(AvatarScript.GHOST_ALPHA)
+	assert_float(far).is_less_equal(1.0)
