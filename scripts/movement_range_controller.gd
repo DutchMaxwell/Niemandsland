@@ -269,20 +269,78 @@ func _on_model_gone(model_node: Node3D) -> void:
 
 ## A model node's unit_properties (game_unit meta, or via model_instance.unit), or {}.
 func _props_of(model_node: Node3D) -> Dictionary:
-	var props: Dictionary = {}
-	if model_node.has_meta("game_unit"):
-		var gu = model_node.get_meta("game_unit")
-		if gu is GameUnit and gu.unit_properties != null:
-			props = gu.unit_properties
-	if props.is_empty() and model_node.has_meta("model_instance"):
-		var m = model_node.get_meta("model_instance")
-		if m is ModelInstance and m.unit is GameUnit and m.unit.unit_properties != null:
-			props = m.unit.unit_properties
-	if props.is_empty():
+	var game_unit := _game_unit_of(model_node)
+	if game_unit == null or game_unit.unit_properties == null:
 		return {}
 	# Anchor the bands to the model's ACTUAL base: a per-model Tough upgrade enlarges it (the mesh
 	# stays natural-sized, but the base — and so the measuring edge — grows).
-	return OPRArmyManager.effective_base_props(props, _model_tough_of(model_node))
+	var effective := OPRArmyManager.effective_base_props(game_unit.unit_properties, _model_tough_of(model_node))
+	# Fold in aura-granted movement rules from the rest of the combined unit, so a hero's "Swift
+	# Aura" (which grants Swift to the whole unit) affects every model's reach — not just the
+	# hero's (#79 aura). effective_base_props already duplicated the dict, so this is non-mutating.
+	effective["rule_descriptions"] = _combined_unit_rule_descriptions(
+		game_unit, effective.get("rule_descriptions", {}))
+	return effective
+
+
+## The GameUnit a model node belongs to (via the game_unit meta, or model_instance.unit), or null.
+func _game_unit_of(model_node: Node3D) -> GameUnit:
+	if model_node.has_meta("game_unit"):
+		var gu = model_node.get_meta("game_unit")
+		if gu is GameUnit:
+			return gu
+	if model_node.has_meta("model_instance"):
+		var m = model_node.get_meta("model_instance")
+		if m is ModelInstance and m.unit is GameUnit:
+			return m.unit
+	return null
+
+
+## `own` rule descriptions merged with the AURA-granted rules of the OTHER members of `game_unit`'s
+## combined unit (host + attached heroes). So a hero's "Swift Aura" reaches the unit's models, and
+## a unit aura reaches its hero. Non-aura members contribute nothing (a hero's personal Fast won't
+## leak to the unit). Own descriptions win on a key clash.
+func _combined_unit_rule_descriptions(game_unit: GameUnit, own: Dictionary) -> Dictionary:
+	var host: GameUnit = game_unit
+	var attached_to = game_unit.unit_properties.get("attached_to", null)
+	if attached_to is GameUnit:
+		host = attached_to
+	var members: Array = []
+	if host != game_unit:
+		members.append(host)
+	for hero in host.unit_properties.get("attached_heroes", []):
+		if hero is GameUnit and hero != game_unit:
+			members.append(hero)
+	var member_data: Array = []
+	for m: GameUnit in members:
+		member_data.append({
+			"rules": m.unit_properties.get("special_rules", []),
+			"descriptions": m.unit_properties.get("rule_descriptions", {}),
+		})
+	return merge_aura_descriptions(own, member_data)
+
+
+## Merge AURA-granted rule descriptions from combined-unit members into `own`. Each member is
+## {"rules": Array, "descriptions": Dictionary}; a member contributes its descriptions only if it
+## carries an aura rule. Own keys are never overwritten. Static + pure for unit testing.
+static func merge_aura_descriptions(own: Dictionary, members: Array) -> Dictionary:
+	var merged: Dictionary = own.duplicate()
+	for m in members:
+		if not _has_aura_rule(m.get("rules", [])):
+			continue
+		var descriptions: Dictionary = m.get("descriptions", {})
+		for key in descriptions:
+			if not merged.has(key):
+				merged[key] = descriptions[key]
+	return merged
+
+
+## True if any rule name marks an aura (name contains "aura"), e.g. "Swift Aura".
+static func _has_aura_rule(rules: Array) -> bool:
+	for r in rules:
+		if "aura" in str(r).to_lower():
+			return true
+	return false
 
 
 ## The per-model Tough value (drives the enlarged base), 0 if none.
