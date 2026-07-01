@@ -106,6 +106,12 @@ var range_ring_controller: Node = null
 # rings; local-only display aid. See scripts/movement_range_controller.gd.
 var movement_range_controller: Node = null
 
+# Movement cap: an opt-in limit so a dragged model/unit can't move further than its Advance or
+# Rush/Charge allowance. OFF = free drag (sandbox default). Set from the HUD "Movement" area.
+enum MovementCap { OFF, ADVANCE, RUSH }
+var _movement_cap: int = MovementCap.OFF
+var _movement_cap_meters: float = 0.0  # the active cap distance for the current drag (0 = no cap)
+
 # Persistent shared rulers: a live measurement can be PINNED (key P) so it stays on the
 # table and replicates to all players in the owner's colour. `pinned_rulers` (the
 # PinnedRulers manager) is injected by main.gd. Right-click on a ruler removes it, K
@@ -539,6 +545,24 @@ func _selected_model_nodes() -> Array:
 	return out
 
 
+## Set the drag movement cap (OFF / ADVANCE / RUSH). Applies to the NEXT drag.
+func set_movement_cap(mode: int) -> void:
+	_movement_cap = mode
+
+
+## The active cap distance in metres for the current selection (0 = no cap). Reads the selected
+## model's Advance/Rush allowance from the movement-range controller (Fast/Slow/Swift/aura-aware).
+func _compute_movement_cap_meters() -> float:
+	if _movement_cap == MovementCap.OFF or movement_range_controller == null:
+		return 0.0
+	var models := _selected_model_nodes()
+	if models.is_empty() or not movement_range_controller.has_method("bands_for_model"):
+		return 0.0
+	var bands: Dictionary = movement_range_controller.bands_for_model(models[0])
+	var inches: int = int(bands.get("rush", 12)) if _movement_cap == MovementCap.RUSH else int(bands.get("advance", 6))
+	return float(inches) / METERS_TO_INCHES
+
+
 ## Public: Select specific objects (replaces current selection)
 func select_objects(objects: Array) -> void:
 	_deselect_all()
@@ -934,6 +958,9 @@ func _start_dragging(screen_pos: Vector2) -> void:
 
 	# Anchor = first movable object (original position)
 	_drag_anchor_position = _drag_start_positions[movable[0]]
+
+	# Resolve the movement cap (Advance/Rush inches → metres) once for this drag.
+	_movement_cap_meters = _compute_movement_cap_meters()
 
 	# Remember where on the table the cursor grabbed, so the unit keeps that grab offset
 	# while dragging instead of snapping its first model onto the cursor.
@@ -1462,6 +1489,12 @@ func _update_drag(screen_pos: Vector2) -> void:
 		# this is a sandbox movement aid, not a rule enforcement.
 		if Input.is_key_pressed(KEY_SHIFT) and anchor is RegimentTray:
 			delta_xz = RegimentTray.project_drag_onto_facing(delta_xz, (anchor as RegimentTray).facing_dir())
+
+		# Movement cap (opt-in): don't let the drag exceed the unit's Advance/Rush allowance. Clamp
+		# the shared delta length, so the whole group is capped by the anchor's travel. Composes
+		# after the axis-lock (direction) — cap then limits the magnitude.
+		if _movement_cap_meters > 0.0 and delta_xz.length() > _movement_cap_meters:
+			delta_xz = delta_xz.normalized() * _movement_cap_meters
 
 		# Move all selected objects by the same XZ delta (formation kept). Each model's
 		# Y rests on the ground surface beneath its own base (table or a terrain prop),
