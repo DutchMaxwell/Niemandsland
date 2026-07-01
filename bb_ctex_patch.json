@@ -18,10 +18,11 @@
         }
       },
       "mesh": {
-        "url": "b161a37ef4d590f3e05f2c05d2a561975da5797e8c0f5fcaf3c17850b2b0d94e.glb",
-        "sha256": "b161a37ef4d590f3e05f2c05d2a561975da5797e8c0f5fcaf3c17850b2b0d94e",
-        "size": 9050656
-      }
+        "url": "b7404159df6dd616f06e38b6120452221f997dd5901a79ede5ba94c693f8c129.glb",
+        "sha256": "b7404159df6dd616f06e38b6120452221f997dd5901a79ede5ba94c693f8c129",
+        "size": 8144692
+      },
+      "size_class": "vehicle"
     }
   },
   "battle_brothers/artillery gun": {
@@ -43,10 +44,11 @@
         }
       },
       "mesh": {
-        "url": "e5f1f4948da280e6b9b31eb6b6b98b44f01392ddc5f638e9ad820678b7b7b087.glb",
-        "sha256": "e5f1f4948da280e6b9b31eb6b6b98b44f01392ddc5f638e9ad820678b7b7b087",
-        "size": 12247016
-      }
+        "url": "d374f9f97e8c543547328337e2b3a212b623f57cf990f443d75a0a2c31037599.glb",
+        "sha256": "d374f9f97e8c543547328337e2b3a212b623f57cf990f443d75a0a2c31037599",
+        "size": 9040360
+      },
+      "size_class": "vehicle"
     }
   },
   "battle_brothers/assault brothers": {
@@ -68,10 +70,11 @@
         }
       },
       "mesh": {
-        "url": "7fdea25118d0c255a3868936e18e5c1d9f2f49c8d9de9159ff009497419d1416.glb",
-        "sha256": "7fdea25118d0c255a3868936e18e5c1d9f2f49c8d9de9159ff009497419d1416",
-        "size": 10405588
-      }
+        "url": "28d667ad212c05b46cd92efd672d8ffba4402e93fb4ee2ddec53ed0d8b8007a2.glb",
+        "sha256": "28d667ad212c05b46cd92efd672d8ffba4402e93fb4ee2ddec53ed0d8b8007a2",
+        "size": 3920632
+      },
+      "size_class": "infantry"
     }
   },
   "battle_brothers/attack apc": {
@@ -93,10 +96,11 @@
         }
       },
       "mesh": {
-        "url": "c18ee3b80aa89e376152c4e1763e6aca094e56d473cadb128c37e7a9925f3499.glb",
-        "sha256": "c18ee3b80aa89e376152c4e1763e6aca094e56d473cadb128c37e7a9925f3499",
-        "size": 13388680
-      }
+        "url": "6f05a8ac26865a8426d1b26e61a62f1579435f108368eca16b33c906ea0be50f.glb",
+        "sha256": "6f05a8ac26865a8426d1b26e61a62f1579435f108368eca16b33c906ea0be50f",
+        "size": 9533372
+      },
+      "size_class": "vehicle"
     }
   },
   "battle_brothers/attack speeder": {
@@ -118,10 +122,11 @@
         }
       },
       "mesh": {
-        "url": "281158bce114a38e4a83d50e58cb83795a8ea46b38fa87df604f3c6a6a56afc5.glb",
-        "sha256": "281158bce114a38e4a83d50e58cb83795a8ea46b38fa87df604f3c6a6a56afc5",
-        "size": 15074688
-      }
+        "url": "acc141276637e38e14bb80c1cbc2604fe87213680b94f541306dc9284739b872.glb",
+        "sha256": "acc141276637e38e14bb80c1cbc2604fe87213680b94f541306dc9284739b872",
+        "size": 10348780
+      },
+      "size_class": "vehicle"
     }
   },
   "battle_brothers/battle brothers": {
@@ -143,10 +148,11 @@
         }
       },
       "mesh": {
-        "url": "fa8c6fc94e683c0974cecd0a50a60f1769c4dbac687c2a3afc625924c5621aea.glb",
-        "sha256": "fa8c6fc94e683c0974cecd0a50a60f1769c4dbac687c2a3afc625924c5621aea",
-        "size": 10487652
-      }
+        "url": "0c66284d9760bf7a7ee6ef751e59763e16d7b00c64aeaa3d1850972c3de597f6.glb",
+        "sha256": "0c66284d9760bf7a7ee6ef751e59763e16d7b00c64aeaa3d1850972c3de597f6",
+        "size": 3844624
+      },
+      "size_class": "infantry"
     }
   },
   "battle_brothers/battle tank": {
@@ -168,10 +174,11 @@
         }
       },
       "mesh": {
-        "url": "0ea4d56e9fe54accd24ef131b3a6828469743f613e86455b45bfbad0c6698818.glb",
-        "sha256": "0ea4d56e9fe54accd24ef131b3a6828469743f613e86455b45bfbad0c6698818",
-        "size": 12589104
-      }
+        "url": "5490c4e1ba6412a8157177f1c72ada64ed5e48d4532f78e70ff76c3a2040f6d3.glb",
+        "sha256": "5490c4e1ba6412a8157177f1c72ada64ed5e48d4532f78e70ff76c3a2040f6d3",
+        "size": 9018052
+      },
+      "size_class": "vehicle"
     }
   },
   "battle_brothers/brother bikers": {
@@ -193,10 +200,11 @@
         }
       },
       "mesh": {
-        "url": "eefa328f7d7c4862c67d6ea2d80a6e862bf15519b99887b8c67e1da6c72e6c9c.glb",
-        "sha256": "eefa328f7d7c4862c67d6ea2d80a6e862bf15519b99887b8c67e1da6c72e6c9c",
-        "size": 11463976
-      }
+        "url": "59b125c068f30373411ee2e93587592abe4392ef0fcae269d08f67b3329692a4.glb",
+        "sha256": "59b125c068f30373411ee2e93587592abe4392ef0fcae269d08f67b3329692a4",
+        "size": 8145536
+      },
+      "size_class": "vehicle"
     }
   },
   "battle_brothers/combat walker": {
@@ -218,10 +226,11 @@
         }
       },
       "mesh": {
-        "url": "fcd10ef300074b601edae7ada1ebb618de3939593a81473ec90a5dba5f00da6b.glb",
-        "sha256": "fcd10ef300074b601edae7ada1ebb618de3939593a81473ec90a5dba5f00da6b",
-        "size": 12789876
-      }
+        "url": "44afc1db5d39bb609cbac849e2226fd772db1ac6c280d0487c7f6edc0442aee0.glb",
+        "sha256": "44afc1db5d39bb609cbac849e2226fd772db1ac6c280d0487c7f6edc0442aee0",
+        "size": 9248996
+      },
+      "size_class": "vehicle"
     }
   },
   "battle_brothers/destroyers": {
@@ -243,10 +252,11 @@
         }
       },
       "mesh": {
-        "url": "5de89f2e2b9a1dd162403d2333e6a9c9ab4131fc74717242279ca867be6adfa3.glb",
-        "sha256": "5de89f2e2b9a1dd162403d2333e6a9c9ab4131fc74717242279ca867be6adfa3",
-        "size": 10064144
-      }
+        "url": "ee153d72239800dc4325dc38b97e21217b910128ed4abc5f113e7088248a6144.glb",
+        "sha256": "ee153d72239800dc4325dc38b97e21217b910128ed4abc5f113e7088248a6144",
+        "size": 3729424
+      },
+      "size_class": "infantry"
     }
   },
   "battle_brothers/drop pod": {
@@ -268,10 +278,11 @@
         }
       },
       "mesh": {
-        "url": "b1a125bebdb826ce945dc27258fa953415aad4b707469169c35d7b5cd3f20603.glb",
-        "sha256": "b1a125bebdb826ce945dc27258fa953415aad4b707469169c35d7b5cd3f20603",
-        "size": 10908604
-      }
+        "url": "811650071fc3e7011fb358285515a83e31fffd66b4844a8d32afeb4c1bfecae0.glb",
+        "sha256": "811650071fc3e7011fb358285515a83e31fffd66b4844a8d32afeb4c1bfecae0",
+        "size": 7890100
+      },
+      "size_class": "vehicle"
     }
   },
   "battle_brothers/elite pathfinder": {
@@ -293,10 +304,11 @@
         }
       },
       "mesh": {
-        "url": "d8b9dc22787bdb84a593e4541c2f75edb0bf821fdcc080b56cf234bb9d332ed3.glb",
-        "sha256": "d8b9dc22787bdb84a593e4541c2f75edb0bf821fdcc080b56cf234bb9d332ed3",
-        "size": 11136592
-      }
+        "url": "a337c245c7020f3181350fcc90bfecb92bcac923d98f5a34ffe061897b0115f1.glb",
+        "sha256": "a337c245c7020f3181350fcc90bfecb92bcac923d98f5a34ffe061897b0115f1",
+        "size": 4120048
+      },
+      "size_class": "infantry"
     }
   },
   "battle_brothers/heavy exo suit": {
@@ -318,10 +330,11 @@
         }
       },
       "mesh": {
-        "url": "76056af3ed8c837335d415b17a977cc7efb51222866e49c64674dc0afc8efc56.glb",
-        "sha256": "76056af3ed8c837335d415b17a977cc7efb51222866e49c64674dc0afc8efc56",
-        "size": 11884448
-      }
+        "url": "707a14fe739808ff0e1416b59718db37dd4468b3dcc8baa915d571d0fd790d75.glb",
+        "sha256": "707a14fe739808ff0e1416b59718db37dd4468b3dcc8baa915d571d0fd790d75",
+        "size": 11759920
+      },
+      "size_class": "large"
     }
   },
   "battle_brothers/heavy gunship": {
@@ -343,10 +356,11 @@
         }
       },
       "mesh": {
-        "url": "157e6947410dbf9bb294700dc3b40e4e59eb354b52dc3359fdcf788637519779.glb",
-        "sha256": "157e6947410dbf9bb294700dc3b40e4e59eb354b52dc3359fdcf788637519779",
-        "size": 14994204
-      }
+        "url": "d3c8a915e4045239cc62814bb6b505e213d0e7a1bf7344286a847fae9910e031.glb",
+        "sha256": "d3c8a915e4045239cc62814bb6b505e213d0e7a1bf7344286a847fae9910e031",
+        "size": 10508200
+      },
+      "size_class": "vehicle"
     }
   },
   "battle_brothers/heavy tank": {
@@ -368,10 +382,11 @@
         }
       },
       "mesh": {
-        "url": "3ded1e295614f14e961822717d995bd3c126b7eca55deeffbbc45bd937a8c65e.glb",
-        "sha256": "3ded1e295614f14e961822717d995bd3c126b7eca55deeffbbc45bd937a8c65e",
-        "size": 13056028
-      }
+        "url": "e62520588fbe0c8d06eea7b86420e67edd4bb4d52007d6559ce7ff392b981ce8.glb",
+        "sha256": "e62520588fbe0c8d06eea7b86420e67edd4bb4d52007d6559ce7ff392b981ce8",
+        "size": 9374532
+      },
+      "size_class": "vehicle"
     }
   },
   "battle_brothers/light gunship": {
@@ -393,10 +408,11 @@
         }
       },
       "mesh": {
-        "url": "f557b9ba206daf0207899aded4ce8fff259fad7a11ee2317bdb5a96533fbc071.glb",
-        "sha256": "f557b9ba206daf0207899aded4ce8fff259fad7a11ee2317bdb5a96533fbc071",
-        "size": 13217540
-      }
+        "url": "7277bf15e7a67f4e928fc39fd16e172a90cf348ba25b354807abad4a99100357.glb",
+        "sha256": "7277bf15e7a67f4e928fc39fd16e172a90cf348ba25b354807abad4a99100357",
+        "size": 9351416
+      },
+      "size_class": "vehicle"
     }
   },
   "battle_brothers/master brother": {
@@ -418,10 +434,11 @@
         }
       },
       "mesh": {
-        "url": "b4692b7e6fff23dae79aae49776caf0c731e87fdef95e7f136df70dcd6cd0b63.glb",
-        "sha256": "b4692b7e6fff23dae79aae49776caf0c731e87fdef95e7f136df70dcd6cd0b63",
-        "size": 9744664
-      }
+        "url": "f52fdb61f8eb9ec181e7860a97a2d3a7f5d14990298090a824998409392ba699.glb",
+        "sha256": "f52fdb61f8eb9ec181e7860a97a2d3a7f5d14990298090a824998409392ba699",
+        "size": 3678016
+      },
+      "size_class": "infantry"
     }
   },
   "battle_brothers/master destroyer": {
@@ -443,10 +460,11 @@
         }
       },
       "mesh": {
-        "url": "a2e55cd1192dbb64109b1088586eba4e2fa52bee3c35a443b5304c7030228c23.glb",
-        "sha256": "a2e55cd1192dbb64109b1088586eba4e2fa52bee3c35a443b5304c7030228c23",
-        "size": 10424672
-      }
+        "url": "8b866aeb7f63ba8a05a083de0df9fd8ad97856d452ce51364bacd51bd195cf00.glb",
+        "sha256": "8b866aeb7f63ba8a05a083de0df9fd8ad97856d452ce51364bacd51bd195cf00",
+        "size": 3733792
+      },
+      "size_class": "infantry"
     }
   },
   "battle_brothers/pathfinder bikers": {
@@ -468,10 +486,11 @@
         }
       },
       "mesh": {
-        "url": "a6c77faeef845eff2e577bb036be78f089d7df23596d662c96a9d89fa74b8027.glb",
-        "sha256": "a6c77faeef845eff2e577bb036be78f089d7df23596d662c96a9d89fa74b8027",
-        "size": 12402004
-      }
+        "url": "3a8636816d7516bb1098fa52145528ea9dc834e1d847ada266fc1c8aa1b9c221.glb",
+        "sha256": "3a8636816d7516bb1098fa52145528ea9dc834e1d847ada266fc1c8aa1b9c221",
+        "size": 8828416
+      },
+      "size_class": "vehicle"
     }
   },
   "battle_brothers/pathfinders": {
@@ -493,10 +512,11 @@
         }
       },
       "mesh": {
-        "url": "80a9744a3ce666328acdffddc82a2a733a8e17e34b5cb043dd59ad31f7fac5b4.glb",
-        "sha256": "80a9744a3ce666328acdffddc82a2a733a8e17e34b5cb043dd59ad31f7fac5b4",
-        "size": 10657904
-      }
+        "url": "595f52b2daf0c45f96502400cc1447ca00fff7485421395296eef57cd10e9d18.glb",
+        "sha256": "595f52b2daf0c45f96502400cc1447ca00fff7485421395296eef57cd10e9d18",
+        "size": 4002068
+      },
+      "size_class": "infantry"
     }
   },
   "battle_brothers/support bike": {
@@ -518,10 +538,11 @@
         }
       },
       "mesh": {
-        "url": "9cfb7939a66bac4869715779b0bde1abf051d068d78e4bf994eeb3d371af0d48.glb",
-        "sha256": "9cfb7939a66bac4869715779b0bde1abf051d068d78e4bf994eeb3d371af0d48",
-        "size": 12111328
-      }
+        "url": "19fa6188434fff66a68f40be1171162dcf2539cfb5dc81107d384d00069a36c1.glb",
+        "sha256": "19fa6188434fff66a68f40be1171162dcf2539cfb5dc81107d384d00069a36c1",
+        "size": 8300648
+      },
+      "size_class": "vehicle"
     }
   },
   "battle_brothers/support brothers": {
@@ -543,10 +564,11 @@
         }
       },
       "mesh": {
-        "url": "209458e69094d9e147605059138fa2a9ec83fa7577e18c553eef429e93c63bc1.glb",
-        "sha256": "209458e69094d9e147605059138fa2a9ec83fa7577e18c553eef429e93c63bc1",
-        "size": 10487392
-      }
+        "url": "7275d37a8ff5922d55b4c694647e3e62639b6f4ce755b60b1eae3b2b022c4266.glb",
+        "sha256": "7275d37a8ff5922d55b4c694647e3e62639b6f4ce755b60b1eae3b2b022c4266",
+        "size": 3827400
+      },
+      "size_class": "infantry"
     }
   },
   "battle_brothers/veteran assault brothers": {
@@ -568,10 +590,11 @@
         }
       },
       "mesh": {
-        "url": "fc3ce2b48d34514a5be2407c8c851c501217a9f09b6d90491a302a4a4feacff2.glb",
-        "sha256": "fc3ce2b48d34514a5be2407c8c851c501217a9f09b6d90491a302a4a4feacff2",
-        "size": 10147020
-      }
+        "url": "3eff4b62978707cb05b2a38512395dc70911d75c7a7743915b18aa86e84907af.glb",
+        "sha256": "3eff4b62978707cb05b2a38512395dc70911d75c7a7743915b18aa86e84907af",
+        "size": 3729876
+      },
+      "size_class": "infantry"
     }
   },
   "battle_brothers/veteran battle brothers": {
@@ -593,10 +616,11 @@
         }
       },
       "mesh": {
-        "url": "10955b07019982df6f8c6905c5f46cb577b32d94e0a8c1eb4ba5c044eb645241.glb",
-        "sha256": "10955b07019982df6f8c6905c5f46cb577b32d94e0a8c1eb4ba5c044eb645241",
-        "size": 9780040
-      }
+        "url": "fe922377e5b9e20634eb8679d95429fe8eb5d6979d1994968f2d9f4e985bc697.glb",
+        "sha256": "fe922377e5b9e20634eb8679d95429fe8eb5d6979d1994968f2d9f4e985bc697",
+        "size": 3544216
+      },
+      "size_class": "infantry"
     }
   },
   "battle_brothers/veteran combat walker": {
@@ -618,10 +642,11 @@
         }
       },
       "mesh": {
-        "url": "63333b60b8d3d4ebfc03fac9b4de57ccdb6e292386fe3cfe86d9088990dd274a.glb",
-        "sha256": "63333b60b8d3d4ebfc03fac9b4de57ccdb6e292386fe3cfe86d9088990dd274a",
-        "size": 14452192
-      }
+        "url": "8a6df11b55ce83a422de250f657520efb18af07531f12af6c94222415033c672.glb",
+        "sha256": "8a6df11b55ce83a422de250f657520efb18af07531f12af6c94222415033c672",
+        "size": 10082508
+      },
+      "size_class": "vehicle"
     }
   },
   "battle_brothers/veteran master brother": {
@@ -643,10 +668,11 @@
         }
       },
       "mesh": {
-        "url": "44d6277181b050c6b9ccd939ae809c97f09123b298a4ac78020245beabba7003.glb",
-        "sha256": "44d6277181b050c6b9ccd939ae809c97f09123b298a4ac78020245beabba7003",
-        "size": 10168240
-      }
+        "url": "353d394bb12f3ff01a38bc2e200a381286d4e96840a4f960c5731521ac4e3f5e.glb",
+        "sha256": "353d394bb12f3ff01a38bc2e200a381286d4e96840a4f960c5731521ac4e3f5e",
+        "size": 3683592
+      },
+      "size_class": "infantry"
     }
   }
 }
