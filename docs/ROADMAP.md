@@ -56,6 +56,39 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   hints (hover an object → its hotkeys). Deeper post-Alpha resilience / accessibility / onboarding
   items live in **Ideas**. _S–M_
 
+### Alpha-feedback batch (accepted 2026-07-01) — sorted Now vs soon
+
+**🔨 Now (quick, low-risk — doing directly):**
+- **Dice log live-scroll** — the latest roll sometimes doesn't scroll into view; guarantee the log
+  pins to the newest entry (recompute scroll after the entry's final layout). _S_
+- **Deployment-zone flip (colour swap)** — on an asymmetric map a player who takes the *other* table
+  edge can swap the two zone colours, so their colour matches their side. Pure colour swap. _S_
+- **MP cursor/avatar label sizes** — the cursor ring text and the avatar name label are far too big;
+  shrink + tidy them (first slice of the bigger avatar/cursor rework below). _S_
+
+**📋 Soon (medium — next):**
+- **Avatar transparency on zoom** — as a player zooms in (closer to the table), fade *their* avatar
+  for the others so it stops hiding the detail they're inspecting; at max zoom only a faint ghost
+  remains. Needs the remote camera zoom/distance synced. _M_
+- **Movement cap (opt-in enforcement)** — a "Movement" area docked ABOVE the dice interface: pick a
+  cap (Advance / Rush-Charge) and the selected model/unit can then only be dragged that far. Reuses
+  the movement-reach math (`MovementRangeController`) + the Solo-AI `MoveIntent` clamp. _M_
+- **Avatar + MP cursor rework** — beyond the label sizes: redesign the two-ring cursor + the avatar
+  presentation (the transparency-on-zoom and label-size items fold in here). _M_
+- **Background world toggle** — switch the table backdrop between the current hobby-den/starfield and
+  a **fantasy world** environment. Needs a fantasy skybox/environment asset. _M_
+
+**🧊 Larger (coming weeks — design/UI/rules):**
+- **Bottom army unit-card dock** — a small nudge tab at the screen's bottom edge; clicking it slides
+  up compact unit cards for the whole army, each showing live stats; clicking a card selects that
+  unit. The chat window relocates above the Movement area. _L_
+- **Return / revive units & models** — support the special rules that (a) bring a whole destroyed
+  unit back, and (b) revive destroyed models within a unit. Neither works today; needs a spawn/return
+  mechanic on top of the wound system. _M–L_
+- **Change Daemons death-cascade** — Change Horrors spawn a new (smaller) unit when destroyed, which
+  can itself cascade on death. Faction-specific, builds on Return/revive. Example list:
+  `army-forge.onepagerules.com/share?id=JqJOxSFl4ooA` (Wormhole — Daemons of Change). _L_
+
 ## 🧊 Ideas (icebox — captured, not committed)
 
 - **MP resilience hardening (Beta) — research-backed** — post-Alpha netcode hardening from a deep-
