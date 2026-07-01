@@ -42,6 +42,12 @@ static func build_material(albedo_path: String, normal_path: String = "", orm_pa
 		mat.normal_texture = normal
 	var orm := load_ctex(orm_path)
 	if orm != null:
+		# CRITICAL: metallic/roughness textures are MULTIPLIED by the scalar factors. A fresh
+		# StandardMaterial3D defaults metallic=0.0 → the metallic map would be nullified (the model
+		# renders fully non-metallic / too bright). Set both factors to 1.0 so the ORM channels fully
+		# drive them (matching glTF's default metallic/roughness factors of 1.0).
+		mat.metallic = 1.0
+		mat.roughness = 1.0
 		mat.roughness_texture = orm
 		mat.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
 		mat.metallic_texture = orm
