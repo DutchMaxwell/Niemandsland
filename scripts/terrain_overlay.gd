@@ -278,6 +278,9 @@ var deployment_zone_meshes: Array[MeshInstance3D] = []
 var table_size_feet := Vector2(6, 4)
 var current_deployment_type := DeploymentType.NONE
 var deployment_zones_visible := false
+## When true the two deployment-zone colours are swapped, so a player who takes the OTHER table
+## edge on an asymmetric map can make the zone colour match their side (issue: deployment flip).
+var deployment_colors_flipped := false
 var grid_cells := {}  # Dictionary[Vector2i, TerrainType] - stores terrain data
 var grid_rotation_degrees := 0.0
 
@@ -559,6 +562,28 @@ func set_visible_overlay(show_overlay: bool) -> void:
 			mesh.visible = show_overlay
 
 
+## The deployment-zone colour for a player key, swapped when the zones are flipped.
+func _zone_color(player_key: String) -> Color:
+	var key := player_key
+	if deployment_colors_flipped:
+		key = "player2" if player_key == "player1" else "player1"
+	return DEPLOYMENT_COLORS[key]
+
+
+## Swap the two deployment-zone colours (asymmetric-map side choice) and redraw. Idempotent set.
+func set_deployment_colors_flipped(flipped: bool) -> void:
+	if deployment_colors_flipped == flipped:
+		return
+	deployment_colors_flipped = flipped
+	_update_deployment_zones()
+
+
+## Toggle the deployment-zone colour swap; returns the new state.
+func toggle_deployment_colors_flipped() -> bool:
+	set_deployment_colors_flipped(not deployment_colors_flipped)
+	return deployment_colors_flipped
+
+
 ## Set deployment zone type and create visualizations
 ##
 ## @param deployment_type: Type of deployment zone to display
@@ -611,14 +636,14 @@ func _create_front_line_zones(table_width: float, table_depth: float) -> void:
 	# (0.0006, just under the 3 mm base bodies); draw order vs bases/tokens is fixed by render_priority (issue #71).
 	var p1_position = Vector3(0, DEPLOYMENT_ZONE_WORLD_Y - Z_FIGHT_OFFSET, -table_depth/2 + deployment_depth/2)
 	var p1_size = Vector2(table_width, deployment_depth)
-	var p1_mesh = _create_deployment_zone_mesh(p1_position, p1_size, DEPLOYMENT_COLORS["player1"])
+	var p1_mesh = _create_deployment_zone_mesh(p1_position, p1_size, _zone_color("player1"))
 	add_child(p1_mesh)
 	deployment_zone_meshes.append(p1_mesh)
 
 	# Player 2 zone (top, facing backward along -Z)
 	var p2_position = Vector3(0, DEPLOYMENT_ZONE_WORLD_Y - Z_FIGHT_OFFSET, table_depth/2 - deployment_depth/2)
 	var p2_size = Vector2(table_width, deployment_depth)
-	var p2_mesh = _create_deployment_zone_mesh(p2_position, p2_size, DEPLOYMENT_COLORS["player2"])
+	var p2_mesh = _create_deployment_zone_mesh(p2_position, p2_size, _zone_color("player2"))
 	add_child(p2_mesh)
 	deployment_zone_meshes.append(p2_mesh)
 
@@ -634,14 +659,14 @@ func _create_front_line_zones(table_width: float, table_depth: float) -> void:
 func _create_custom_polygon_zones() -> void:
 	# Create Player 1 zone if vertices exist
 	if custom_zone_player1.size() >= 3:
-		var p1_mesh = _create_polygon_zone_mesh(custom_zone_player1, DEPLOYMENT_COLORS["player1"])
+		var p1_mesh = _create_polygon_zone_mesh(custom_zone_player1, _zone_color("player1"))
 		add_child(p1_mesh)
 		deployment_zone_meshes.append(p1_mesh)
 		p1_mesh.visible = deployment_zones_visible
 
 	# Create Player 2 zone if vertices exist
 	if custom_zone_player2.size() >= 3:
-		var p2_mesh = _create_polygon_zone_mesh(custom_zone_player2, DEPLOYMENT_COLORS["player2"])
+		var p2_mesh = _create_polygon_zone_mesh(custom_zone_player2, _zone_color("player2"))
 		add_child(p2_mesh)
 		deployment_zone_meshes.append(p2_mesh)
 		p2_mesh.visible = deployment_zones_visible
@@ -974,7 +999,7 @@ func _update_vertex_markers() -> void:
 	if custom_zone_mode == CustomZoneMode.SYMMETRIC:
 		for i in range(custom_zone_player2.size()):
 			var v = custom_zone_player2[i]
-			var marker = _create_vertex_marker(v, i + 1, DEPLOYMENT_COLORS["player2"])
+			var marker = _create_vertex_marker(v, i + 1, _zone_color("player2"))
 			add_child(marker)
 			vertex_markers.append(marker)
 
