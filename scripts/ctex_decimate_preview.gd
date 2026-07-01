@@ -67,7 +67,7 @@ func _run() -> void:
 
 	# Tiers: full + the meshopt LOD chain (down to ~35k — its floor for this mesh, ≈ a realistic
 	# small-model target). Renders the decimation quality curve at close-up.
-	var base_tris := _base_arrays[Mesh.ARRAY_INDEX].size() / 3
+	var base_tris: int = _base_arrays[Mesh.ARRAY_INDEX].size() / 3
 	var lods := _lods(_base_arrays)               # ~143k / 71k / 35k
 	var tiers: Array = [{"tris": base_tris, "indices": _base_arrays[Mesh.ARRAY_INDEX]}]
 	tiers.append_array(lods)
