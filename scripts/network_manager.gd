@@ -789,9 +789,10 @@ func sync_model_wounds(unit_id: String, model_index: int, wounds: int, is_alive:
 			model.wounds_current = wounds
 			model.is_alive = is_alive
 
-			# Update node visibility
+			# Update node visibility AND collision (a dead model must not stay raycast-hittable /
+			# measurable on the receiver; a revived one gets its collision back).
 			if model.node and is_instance_valid(model.node):
-				model.node.visible = is_alive
+				OPRArmyManager.set_model_alive_state(model.node, is_alive)
 				# Regiments (AoF:R): close/re-open ranks to match the host.
 				if model.node.has_meta("regiment_tray"):
 					var _tray = model.node.get_meta("regiment_tray")

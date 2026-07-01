@@ -301,6 +301,8 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_regiment_frontage(context)
 		"delete_model":
 			_delete_model(context)
+		"revive_fallen":
+			_revive_fallen(context)
 		"delete_unit":
 			_delete_unit(context)
 		"delete_terrain":
@@ -600,6 +602,36 @@ func _delete_generic(context: Dictionary) -> void:
 	var obj = context.get("object") as Node3D
 	if obj:
 		obj.queue_free()
+
+
+## Revive a unit's destroyed models — special rules that return/revive fallen models. Brings the
+## hidden dead model nodes back (visible + collision + boundary) at their last position; a pooled
+## Tough(1) regiment resets its wound counter to 0 (back-rank casualties re-rank in). Manual tool.
+func _revive_fallen(context: Dictionary) -> void:
+	var game_unit = context.get("game_unit") as GameUnit
+	if game_unit == null:
+		return
+	# Pooled Tough(1) regiment: reset the pool to 0 casualties (revives + re-ranks the block).
+	var tray = context.get("regiment_tray")
+	if tray != null and is_instance_valid(tray) and army_manager:
+		var regiment: Regiment = tray.get_meta("regiment") if tray.has_meta("regiment") else null
+		if regiment != null:
+			var from_taken: int = regiment.wounds_taken
+			if from_taken != 0 and undo_manager != null:
+				var move_peer: int = network_manager.get_my_peer_id() if network_manager else 0
+				undo_manager.push(UndoManager.RegimentWoundAction.new(regiment, from_taken, 0, army_manager, network_manager, move_peer))
+			army_manager.apply_regiment_wounds(regiment, 0)
+		return
+	# Standard path (loose models + Tough(X>1) units): revive each dead model in place.
+	for model in game_unit.models:
+		if model.is_alive:
+			continue
+		model.reset_wounds()
+		OPRArmyManager.set_model_alive_state(model.node, true)
+		_update_wound_marker(model)
+		_reform_regiment_for_model(model)
+		if network_manager:
+			network_manager.broadcast_model_wounds(model)
 
 
 ## Called when wounds are changed via the wounds dialog.
