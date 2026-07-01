@@ -36,6 +36,16 @@ const BLINK_MIN_INTERVAL := 2.0
 const BLINK_MAX_INTERVAL := 6.0
 const BLINK_DURATION := 0.15
 
+# Name label: explicit pixel_size keeps it small + crisp (the default 0.005 made it ~16 cm tall).
+const NAME_LABEL_FONT_SIZE := 48
+const NAME_LABEL_PIXEL_SIZE := 0.0009  # ~4.3 cm tall
+
+# Fade the avatar as its owner zooms IN, so it stops hiding the detail they're inspecting; at max
+# zoom only a faint ghost remains. `zoom` is the camera distance from the table in metres.
+const FADE_ZOOM_MIN := 0.06   # fully zoomed in (matches camera min_zoom) -> ghost
+const FADE_ZOOM_FULL := 6.0   # at/beyond this distance the avatar is fully opaque
+const GHOST_ALPHA := 0.12     # faintest the avatar gets
+
 # ===== Variables =====
 
 var peer_id: int = 0
@@ -45,6 +55,10 @@ var _head_mesh: MeshInstance3D
 var _name_label: Label3D
 var _left_eyelid: MeshInstance3D
 var _right_eyelid: MeshInstance3D
+
+# Zoom-based transparency (issue: avatar fades as its owner zooms in).
+var _current_alpha: float = 1.0
+var _mesh_instances: Array[MeshInstance3D] = []
 
 # Smooth interpolation for head rotation
 var _target_yaw: float = 0.0
@@ -144,6 +158,31 @@ func update_position(pos_x: float, pos_y: float, pos_z: float) -> void:
 		_position_initialized = true
 
 
+## Fade the avatar based on its owner's camera zoom (distance from the table): fully opaque when
+## zoomed out, a faint ghost when fully zoomed in, so it doesn't hide the spot they're inspecting.
+func update_zoom(zoom: float) -> void:
+	_apply_alpha(alpha_for_zoom(zoom))
+
+
+## Maps a camera zoom-distance (metres) to the avatar's alpha (GHOST_ALPHA..1.0). Static + pure.
+static func alpha_for_zoom(zoom: float) -> float:
+	var t: float = clampf((zoom - FADE_ZOOM_MIN) / (FADE_ZOOM_FULL - FADE_ZOOM_MIN), 0.0, 1.0)
+	return lerpf(GHOST_ALPHA, 1.0, t)
+
+
+## Apply an alpha (0..1) to the whole avatar — every mesh via GeometryInstance3D.transparency, plus
+## the name label's modulate. Skipped when unchanged to avoid per-packet churn.
+func _apply_alpha(alpha: float) -> void:
+	if is_equal_approx(alpha, _current_alpha):
+		return
+	_current_alpha = alpha
+	for mi: MeshInstance3D in _mesh_instances:
+		if is_instance_valid(mi):
+			mi.transparency = 1.0 - alpha
+	if _name_label:
+		_name_label.modulate.a = alpha
+
+
 ## Play dice roll animation
 func play_dice_roll_animation() -> void:
 	if _head_mesh:
@@ -190,17 +229,23 @@ func _build_avatar() -> void:
 	_build_eyebrow(-1)
 	_build_eyebrow(1)
 
-	# Name label
+	# Name label — a small crisp label (explicit pixel_size, else the default 0.005 made it huge).
 	_name_label = Label3D.new()
 	_name_label.text = "Player %d" % peer_id
-	_name_label.font_size = 32
+	_name_label.font_size = NAME_LABEL_FONT_SIZE
+	_name_label.pixel_size = NAME_LABEL_PIXEL_SIZE
 	_name_label.modulate = player_color
 	_name_label.outline_modulate = Color.BLACK
-	_name_label.outline_size = 4
+	_name_label.outline_size = 6
 	_name_label.position = Vector3(0, LABEL_OFFSET_Y, 0)
 	_name_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_name_label.no_depth_test = true
 	add_child(_name_label)
+
+	# Cache every mesh instance so update_zoom() can fade the whole avatar at once.
+	_mesh_instances.clear()
+	for node in find_children("*", "MeshInstance3D", true, false):
+		_mesh_instances.append(node)
 
 	# Randomize first blink interval
 	_next_blink_at = randf_range(BLINK_MIN_INTERVAL, BLINK_MAX_INTERVAL)

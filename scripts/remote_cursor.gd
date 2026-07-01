@@ -80,14 +80,16 @@ func _build_cursor() -> void:
 	dot.mesh = dot_mesh
 	add_child(dot)
 
-	# Peer label (tiny, near cursor)
+	# Peer label — small + crisp. Without an explicit pixel_size the Label3D default (0.005) made
+	# "P1" ~10 cm tall, as big as the whole cursor ring; a smaller pixel_size shrinks it (issue #3).
 	var label = Label3D.new()
 	label.text = "P%d" % peer_id
-	label.font_size = 20
+	label.font_size = 48
+	label.pixel_size = 0.0005  # ~2.4 cm tall
 	label.modulate = player_color
 	label.outline_modulate = Color.BLACK
-	label.outline_size = 3
-	label.position = Vector3(0.08, 0.01, 0)
+	label.outline_size = 6
+	label.position = Vector3(0.055, 0.01, 0)
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true
 	add_child(label)
