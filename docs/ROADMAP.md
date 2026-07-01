@@ -58,6 +58,11 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
 ### Alpha-feedback batch (accepted 2026-07-01) — sorted Now vs soon
 
+> **✅ Shipped in `0.3.7.2-alpha`:** dice-log live-scroll, deployment-zone colour flip, cursor/avatar
+> label sizes + avatar fade-on-zoom, movement cap (opt-in), and return/revive units & models. The
+> items below remain queued (avatar/cursor full rework, background-world toggle, unit-card dock,
+> Change-Daemons cascade).
+
 **🔨 Now (quick, low-risk — doing directly):**
 - **Dice log live-scroll** — the latest roll sometimes doesn't scroll into view; guarantee the log
   pins to the newest entry (recompute scroll after the entry's final layout). _S_
@@ -176,7 +181,9 @@ handling — frontage cycle, axis-locked drag, pivot snap, pooled-wound counter,
 quadrants, mouse rotation, facing-on-drop; plus dice-by-colour (#77), Swift movement bands (#79),
 table-scaled auto-deploy terrain (#83), Ambush/Scout on every tray (#76), type-aware base sizing,
 biome dangerous terrain, playtest quick-wins (#78/#80/#81/#82), the Linux self-updater ETXTBSY fix,
-and macOS ad-hoc signing. **`0.3.7.1-alpha` (2026-06-26):** playtest-feedback patch — 8
+and macOS ad-hoc signing; plus the accepted alpha-feedback quick-wins — dice-log scroll, deployment-
+zone flip, cursor/avatar labels + avatar fade-on-zoom, movement cap, return/revive units & models,
+#79 granted-rule/aura movement, dead-model base fix. **`0.3.7.1-alpha` (2026-06-26):** playtest-feedback patch — 8
 playtest fixes (LoS / markers / tokens / formation / rotation / labels / auto-face / load-gate), per-die
 colour tagging + live MP sync, a one-click in-game self-updater, a live CDN asset manifest, and the
 Ambush/Scout deployment field. **`0.3.7-alpha` (2026-06-25):** the MP reconnect-storm / desync

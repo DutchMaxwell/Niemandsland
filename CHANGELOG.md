@@ -44,12 +44,16 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **Dice results grouped by colour.** When a roll mixes per-die colour tags, the result readouts
   split into one swatch-headed group per colour, side by side (untagged/free first, then red, blue,
   …), each with its own per-face counts and success total — in both the current-roll column and the
-  dice log. Single-colour or all-untagged rolls keep the compact single-column layout. (#77)
+  dice log. Single-colour or all-untagged rolls keep the compact single-column layout. The dice icons
+  themselves are tinted in their tag colour, and the log stacks the per-colour groups as horizontal
+  strips. (#77)
 - **Movement special rules reflected in the Shift+M reach bands.** The Advance/Rush reach indicator
   now parses each unit's imported OPR rule descriptions, so any movement rule — **Swift** and beyond
   — adjusts the bands automatically, not just the hard-coded Fast/Slow (which keep a constant
   fallback when no description text is present). Rating parentheticals are stripped, so "Swift(2)"
-  matches its "Swift" description. (#79)
+  matches its "Swift" description. Rules granted **indirectly** (an ability that grants Swift) are
+  picked up too, a rule that **cancels Slow** restores normal movement, and **unit-wide auras**
+  (e.g. a Swift Aura) extend every model's bands. (#79)
 - **Auto-deploy terrain count scales with table size.** The auto-deploy piece count (and its success
   threshold + the stats/recommendation readouts) now scales by table area relative to the 6×4 ft
   reference, clamped to [0.45, 2.0] — a 4×4 table drops from a fixed ~15-20 pieces to ~10-13, so
@@ -65,6 +69,17 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   and, where one exists, the biome's own hazard prop (volcanic lava crater, jungle/alien carnivore
   plant). Ruins gained closed window reveals (jamb/sill/lintel), wall-foot rubble, coarser masonry,
   and fixes for the L-corner / platform z-fighting and per-column triplanar striping.
+- **Return destroyed units + revive models.** The army-tray menu can **return a fully destroyed unit**
+  to the table, and a unit's **destroyed models can be revived** (rebuilt from the back rank, MP
+  kill/revive collision state synced) — groundwork for the OPR special rules that bring units/models
+  back.
+- **Movement cap (opt-in).** A selected model/unit can be limited to its Advance or Rush/Charge
+  allowance, so a drag stops at the legal distance — reuses the Shift+M reach math. Off by default.
+- **Avatar + cursor labels smaller; avatars fade on zoom.** The remote-cursor ring text and avatar
+  name labels are much smaller and tidier, and a player's avatar fades for everyone else as its owner
+  zooms in, so it stops hiding the detail they're inspecting.
+- **Deployment-zone colour flip.** A player who takes the *other* table edge can swap the two zone
+  colours so their colour matches their side.
 
 ### Fixed
 - **Self-updater (Linux) swaps the running binary correctly.** The in-place apply copied the new files
@@ -89,13 +104,20 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   every tray and survives all rebuild paths. (#76)
 - **Blood/oil stains no longer cover measure lines + UI.** Table-UI overlays (measure line, drag
   line, range rings, pinned ruler + their labels/LOS markers) now draw above the ground stains
-  instead of being painted over. (#82)
+  instead of being painted over — the selected unit's **boundary outline** draws above the stains
+  too. (#82)
 - **Selecting a dice count no longer looks like a roll.** Resting dice show a floating "?" until they
   are actually rolled, instead of showing random faces. (#80)
 - **Status tokens clear when a unit is wiped.** Activated/Fatigued/Shaken tokens are dropped once a
   unit has 0 alive models (delete, last casualty, delete-models) and re-created on undo/revive. (#78)
-- **Double-click selects the whole unit.** Double-clicking a unit model now selects the entire unit
-  (a regiment → its movement tray), skipping the box-drag / radial "select all". (#81)
+- **Double-click selects the whole unit — including attached heroes.** Double-clicking a unit model now
+  selects the entire unit (a regiment → its movement tray), and a hero attached to that unit is
+  selected along with it, skipping the box-drag / radial "select all". (#81)
+- **A dead model's base no longer blocks measuring or selection.** A removed/killed model's hidden base
+  kept its collision, so it still intercepted measure/LOS rays and clicks. Its collision is now cleared
+  when it dies, so measuring and picking pass through the empty space.
+- **Dice log scrolls to the newest roll.** The dice log now reliably pins to the latest entry (the
+  scroll is recomputed after the entry's final layout) instead of sometimes leaving it just off-screen.
 
 ### Changed
 - **Terrain locking is manual + per-piece.** Selecting Terrain Mode no longer auto-locks pieces; lock
