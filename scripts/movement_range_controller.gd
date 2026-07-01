@@ -69,8 +69,13 @@ func move_bands_for_props(props: Dictionary) -> Dictionary:
 	var advance := OPR_ADVANCE_INCHES
 	var rush := OPR_RUSH_CHARGE_INCHES
 	var descriptions: Dictionary = props.get("rule_descriptions", {})
+	# Some rules NEGATE another movement rule (e.g. "Swift": "may ignore the Slow rule"); a negated
+	# rule contributes nothing, so its modifier is skipped below (issue #79).
+	var negated: Dictionary = _negated_move_rules(descriptions)
 	var counted: Dictionary = {}  # rule base names whose modifier is already applied
 	for name in descriptions:
+		if negated.has(name):
+			continue
 		var mod := move_modifier_from_description(str(descriptions[name]))
 		if int(mod["advance"]) != 0 or int(mod["rush"]) != 0:
 			advance += int(mod["advance"])
@@ -78,8 +83,8 @@ func move_bands_for_props(props: Dictionary) -> Dictionary:
 			counted[name] = true
 	for r in props.get("special_rules", []):
 		var base := _rule_base_name(str(r))
-		if counted.has(base):
-			continue  # already applied from its description (don't double-count)
+		if counted.has(base) or negated.has(base):
+			continue  # already applied from its description, or negated by another rule
 		if base == "Fast":
 			advance += FAST_ADVANCE_BONUS
 			rush += FAST_RUSH_BONUS
@@ -89,6 +94,24 @@ func move_bands_for_props(props: Dictionary) -> Dictionary:
 			rush -= FAST_RUSH_BONUS
 			counted[base] = true
 	return {"advance": maxi(0, advance), "rush": maxi(0, rush)}
+
+
+## Movement rules that are NEGATED by another rule's text — e.g. "Swift" whose description reads
+## "This model may ignore the Slow rule" cancels Slow. Returns the set of negated rule base names.
+## Detected by an "ignore … <RuleName>" phrase where <RuleName> is another rule with a description.
+func _negated_move_rules(descriptions: Dictionary) -> Dictionary:
+	var negated: Dictionary = {}
+	for name in descriptions:
+		var text: String = str(descriptions[name]).to_lower()
+		var at: int = text.find("ignore")
+		while at != -1:
+			var window: String = text.substr(at, 48)
+			for other in descriptions:
+				var other_name: String = str(other)
+				if other_name != name and window.find(other_name.to_lower()) != -1:
+					negated[other_name] = true
+			at = text.find("ignore", at + 1)
+	return negated
 
 
 ## Parses the Advance and Rush/Charge movement modifiers out of an OPR rule description, e.g.
@@ -186,23 +209,10 @@ func active_count() -> int:
 
 # === Private ===
 
-## TEMP diagnostic (issue #79): dumps what the move-band parser actually sees for a unit, so a
-## failing Swift-style rule can be matched against the real OPR text. Remove once #79 is confirmed.
-func _log_move_diagnostic(props: Dictionary, bands: Dictionary) -> void:
-	var rules: Array = props.get("special_rules", [])
-	var descriptions: Dictionary = props.get("rule_descriptions", {})
-	print("[MOVE #79] rules=", rules)
-	print("[MOVE #79] description_keys=", descriptions.keys())
-	for name in descriptions:
-		print("[MOVE #79]   '", name, "' -> ", str(descriptions[name]).substr(0, 140))
-	print("[MOVE #79] bands advance=", bands.get("advance"), " rush=", bands.get("rush"))
-
-
 func _build_indicator(model_node: Node3D) -> void:
 	var props := _props_of(model_node)
 	var bands := move_bands_for_props(props)
 	var base_color := color_for_props(props)
-	_log_move_diagnostic(props, bands)
 
 	var root := Node3D.new()
 	root.name = ROOT_NODE_NAME

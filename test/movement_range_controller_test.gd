@@ -111,6 +111,34 @@ func test_move_bands_description_overrides_constant() -> void:
 	assert_int(b["rush"]).is_equal(16)
 
 
+func test_move_bands_swift_negates_slow() -> void:
+	# Dwarf Guilds case: the unit is Slow but gains Swift ("may ignore the Slow rule"), so Slow is
+	# cancelled -> normal 6"/12" instead of the slowed 4"/8" (issue #79).
+	var b := _controller().move_bands_for_props({
+		"special_rules": ["Slow", "Swift"],
+		"rule_descriptions": {
+			"Slow": "Moves -2\" when using Advance, and -4\" when using Rush/Charge.",
+			"Swift": "This model may ignore the Slow rule.",
+		},
+	})
+	assert_int(b["advance"]).is_equal(6)
+	assert_int(b["rush"]).is_equal(12)
+
+
+func test_move_bands_negation_is_targeted() -> void:
+	# Swift cancels Slow, but an unrelated Fast bonus still applies.
+	var b := _controller().move_bands_for_props({
+		"special_rules": ["Slow", "Swift", "Fast"],
+		"rule_descriptions": {
+			"Slow": "Moves -2\" when using Advance, and -4\" when using Rush/Charge.",
+			"Swift": "This model may ignore the Slow rule.",
+			"Fast": "Moves +2\" when using Advance, and +4\" when using Rush/Charge.",
+		},
+	})
+	assert_int(b["advance"]).is_equal(8)   # Slow negated, Fast applies: 6 + 2
+	assert_int(b["rush"]).is_equal(16)      # 12 + 4
+
+
 func test_move_bands_granted_rule_modifier_applies() -> void:
 	# A direct ability "Fleetfoot" grants Swift; spawn-time expansion puts BOTH descriptions in the
 	# dict. The granting rule carries no modifier text; Swift's does — it must still apply (#79).
