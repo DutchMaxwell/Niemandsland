@@ -230,6 +230,7 @@ var battlefield_stains: BattlefieldStains = null
 # Deployment Zones UI (visibility toggle only - editing is in Map Tool;
 # unit-placement compliance is verified manually by the players)
 var deployment_zone_check: CheckBox = null
+var deployment_flip_check: CheckBox = null
 
 # Player Presence System
 var _remote_cursors: Dictionary = {}  # peer_id -> RemoteCursor node
@@ -1504,9 +1505,13 @@ func _add_dice_log_entry(player_name: String, faces: Array[int], context: Dictio
 			block.add_child(_build_color_group_row(tag, groups[tag], target, modifier, DICE_LOG_ICON_SIZE))
 		_dice_log_vbox.add_child(block)
 
-	# Auto-scroll to bottom
+	# Auto-scroll to the newest entry. Wait TWO frames: a multi-line (multi-colour) entry needs a
+	# second layout pass before the scroll container's max_value reflects its full height, otherwise
+	# the newest roll sometimes lands just below the fold (the reported "not live-scrolled" case).
 	await get_tree().process_frame
-	_dice_log_scroll.scroll_vertical = int(_dice_log_scroll.get_v_scroll_bar().max_value)
+	await get_tree().process_frame
+	if is_instance_valid(_dice_log_scroll):
+		_dice_log_scroll.scroll_vertical = int(_dice_log_scroll.get_v_scroll_bar().max_value)
 
 
 ## Clear all entries from the dice log
@@ -2665,6 +2670,13 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 			if deployment_zone_check:
 				deployment_zone_check.button_pressed = vis
 
+	if settings.has("deployment_flipped"):
+		var flipped = bool(settings["deployment_flipped"])
+		if terrain_overlay and terrain_overlay.has_method("set_deployment_colors_flipped"):
+			terrain_overlay.set_deployment_colors_flipped(flipped)
+			if deployment_flip_check:
+				deployment_flip_check.button_pressed = flipped
+
 	if settings.has("objectives"):
 		var objectives = settings["objectives"]
 		if terrain_overlay and terrain_overlay.has_method("update_objectives"):
@@ -3667,6 +3679,14 @@ func _init_deployment_zones_ui() -> void:
 	deployment_zone_check.toggled.connect(_on_deployment_zones_visibility_toggled)
 	deployment_panel.add_child(deployment_zone_check)
 
+	# Swap the two zone colours — for an asymmetric map when a player takes the other table edge.
+	deployment_flip_check = CheckBox.new()
+	deployment_flip_check.text = "Flip Zone Colours"
+	deployment_flip_check.button_pressed = false
+	deployment_flip_check.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
+	deployment_flip_check.toggled.connect(_on_deployment_flip_toggled)
+	deployment_panel.add_child(deployment_flip_check)
+
 
 ## Handle deployment zone visibility toggle
 func _on_deployment_zones_visibility_toggled(show_zones: bool) -> void:
@@ -3677,6 +3697,14 @@ func _on_deployment_zones_visibility_toggled(show_zones: bool) -> void:
 
 	# Sync visibility to remote clients
 	_broadcast_table_settings_update("deployment_visible", show_zones)
+
+
+## Handle the deployment-zone colour flip (asymmetric-map side choice).
+func _on_deployment_flip_toggled(flipped: bool) -> void:
+	if not terrain_overlay or not terrain_overlay.has_method("set_deployment_colors_flipped"):
+		return
+	terrain_overlay.set_deployment_colors_flipped(flipped)
+	_broadcast_table_settings_update("deployment_flipped", flipped)
 
 
 ## ============================================================================
