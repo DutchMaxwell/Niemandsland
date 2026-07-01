@@ -11,8 +11,8 @@ const PATCH := "res://bb_ctex_patch.json"
 const CACHE := "user://cache/"
 const OUT := "user://ctex_fps/"
 const UNIT_TYPES := 10       # distinct unit meshes loaded (varied geo + textures)
-const TOTAL_INSTANCES := 300 # army-scale (a dense 2-army battle is ~100–300 models)
-const GRID_COLS := 24
+const TOTAL_INSTANCES := 200 # realistic worst case: 2 × a 3000-pt horde (Goblins = 103 models)
+const GRID_COLS := 20
 const SPACING := 1.3
 
 var _label: Label
