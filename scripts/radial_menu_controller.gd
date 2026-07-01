@@ -200,6 +200,15 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 		radial_menu.open(screen_position, _create_objective_menu(), context)
 		return
 
+	# Army tray: offer to return this player's fully-destroyed (casualty-wiped) units, which have
+	# no clickable model of their own. Their hidden model nodes revive at their last spot.
+	if first_obj.is_in_group("army_tray"):
+		var tray_player: int = int(first_obj.get_meta("player_id", 0))
+		radial_menu.open(screen_position,
+			RadialMenu.create_army_tray_menu(_returnable_units_for_player(tray_player)),
+			{"army_tray_player": tray_player})
+		return
+
 	var game_unit = UnitUtils.get_game_unit(first_obj)
 
 	if game_unit:
@@ -278,6 +287,11 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 	# Objective owner actions are dynamic ("set_owner_<player_id>").
 	if action_id.begins_with("set_owner_"):
 		_set_objective_owner(context, action_id)
+		return
+
+	# Return-destroyed-unit actions from the army-tray menu are dynamic ("return_unit_<unit_id>").
+	if action_id.begins_with("return_unit_"):
+		_return_destroyed_unit(action_id.trim_prefix("return_unit_"))
 		return
 
 	match action_id:
@@ -623,6 +637,11 @@ func _revive_fallen(context: Dictionary) -> void:
 			army_manager.apply_regiment_wounds(regiment, 0)
 		return
 	# Standard path (loose models + Tough(X>1) units): revive each dead model in place.
+	_revive_unit_models(game_unit)
+
+
+## Revive every dead model of a unit in place (visible + collision + boundary + wounds), broadcast.
+func _revive_unit_models(game_unit: GameUnit) -> void:
 	for model in game_unit.models:
 		if model.is_alive:
 			continue
@@ -632,6 +651,35 @@ func _revive_fallen(context: Dictionary) -> void:
 		_reform_regiment_for_model(model)
 		if network_manager:
 			network_manager.broadcast_model_wounds(model)
+
+
+## A player's fully-destroyed units that can be returned — casualty-wiped (their model nodes are
+## hidden, not freed). Returns [{"id": String, "name": String}]. A Deleted unit's nodes are gone.
+func _returnable_units_for_player(player_id: int) -> Array:
+	var out: Array = []
+	if army_manager == null:
+		return out
+	for game_unit in army_manager.get_game_units_for_player(player_id):
+		if not game_unit.is_destroyed():
+			continue
+		# Revivable only if at least one model node still exists (hidden, not queue_free'd).
+		var has_node := false
+		for model in game_unit.models:
+			if model.node != null and is_instance_valid(model.node):
+				has_node = true
+				break
+		if has_node:
+			out.append({"id": game_unit.unit_id, "name": UnitUtils.get_unit_display_name(game_unit.models[0].node) if not game_unit.models.is_empty() and game_unit.models[0].node else game_unit.get_name()})
+	return out
+
+
+## Return a fully-destroyed unit (by id) — revive all its (hidden) models at their last spot.
+func _return_destroyed_unit(unit_id: String) -> void:
+	if army_manager == null:
+		return
+	var game_unit = army_manager.get_game_unit_by_id(unit_id)
+	if game_unit != null:
+		_revive_unit_models(game_unit)
 
 
 ## Called when wounds are changed via the wounds dialog.
