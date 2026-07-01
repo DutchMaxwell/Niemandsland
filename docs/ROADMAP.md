@@ -22,14 +22,16 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **Alpha is live; `0.3.7.1-alpha` shipped (2026-06-26) on all three platforms.** The playtest-feedback
-  patch on top of `0.3.7-alpha`: 8 playtest fixes (formations centre on the unit, both-way
-  rotation, readable terrain labels, per-token terrain height, auto-face-on-move, lone-survivor markers,
-  dead-model line of sight, an MP load-gate), plus **per-die colour tagging** (+ live MP sync), a
-  **one-click in-game self-updater** (dormant until the next release — Win/macOS in-place swap still
-  wants a real-machine test), the **live CDN asset manifest** (reworks reach players with no game
-  release), and the **Ambush / Scout deployment field**. Next work is **feedback-driven** toward the
-  **MP-first Beta** (see Next); a **Solo / Co-Op AI** (OPR's official ruleset) is being scoped. _S_
+- **Alpha is live; `0.3.7.2-alpha` shipped (2026-07-01) on all three platforms.** An Age of Fantasy:
+  Regiments handling patch on top of `0.3.7.1-alpha`: regiment movement-tray aids (frontage cycle,
+  axis-locked drag, pivot snap, pooled-wound counter, radial menu, 45° arc quadrants, mouse-driven
+  rotation + readout, facing preserved on drop), plus GitHub-feedback fixes — dice results grouped by
+  colour (#77), movement special rules (Swift) in the Shift+M reach bands (#79), table-area-scaled
+  auto-deploy terrain (#83), the Ambush/Scout band on every tray (#76), type-aware vehicle/walker/
+  artillery base sizing, biome-aware dangerous terrain, and playtest quick-wins (stains order #82,
+  dice "?" #80, token cleanup #78, double-click select #81). The **Linux self-updater ETXTBSY fix**
+  and **macOS ad-hoc signing** (no more "damaged") also land. Next work is **feedback-driven** toward
+  the **MP-first Beta** (see Next); a **Solo / Co-Op AI** (OPR's official ruleset) is being scoped. _S_
 
 ## 📋 Next (post-Alpha — Beta + alpha-feedback driven)
 
@@ -136,7 +138,12 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
 ## ✅ Recently shipped
 
-See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.7.1-alpha` (2026-06-26):** playtest-feedback patch — 8
+See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.7.2-alpha` (2026-07-01):** Age of Fantasy: Regiments
+handling — frontage cycle, axis-locked drag, pivot snap, pooled-wound counter, radial menu, 45° arc
+quadrants, mouse rotation, facing-on-drop; plus dice-by-colour (#77), Swift movement bands (#79),
+table-scaled auto-deploy terrain (#83), Ambush/Scout on every tray (#76), type-aware base sizing,
+biome dangerous terrain, playtest quick-wins (#78/#80/#81/#82), the Linux self-updater ETXTBSY fix,
+and macOS ad-hoc signing. **`0.3.7.1-alpha` (2026-06-26):** playtest-feedback patch — 8
 playtest fixes (LoS / markers / tokens / formation / rotation / labels / auto-face / load-gate), per-die
 colour tagging + live MP sync, a one-click in-game self-updater, a live CDN asset manifest, and the
 Ambush/Scout deployment field. **`0.3.7-alpha` (2026-06-25):** the MP reconnect-storm / desync

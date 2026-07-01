@@ -16,7 +16,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 config/name="Niemandsland"
 config/description="A Fan-Made Tabletop Simulator for OnePageRules Game Systems"
-config/version="0.3.7.1-alpha"
+config/version="0.3.7.2-alpha"
 run/main_scene="res://scenes/startup_menu.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.png"
@@ -33,6 +33,7 @@ UpdateChecker="*res://scripts/update_checker.gd"
 
 file_logging/enable_file_logging=true
 file_logging/log_path="user://logs/niemandsland.log"
+gdscript/warnings/exclude_addons=true
 gdscript/warnings/treat_warnings_as_errors=true
 
 [display]
@@ -96,6 +97,7 @@ common/physics_interpolation=true
 
 [rendering]
 
+renderer/rendering_method.web="gl_compatibility"
 textures/vram_compression/import_s3tc_bptc=true
 textures/vram_compression/import_etc2_astc=true
 lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3

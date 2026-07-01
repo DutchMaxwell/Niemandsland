@@ -4,7 +4,7 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
-## [Unreleased]
+## [0.3.7.2-alpha] — 2026-07-01
 
 ### Added
 - **Regiments: frontage cycle, axis-locked drag, pivot snap.** Three Age of Fantasy: Regiments
@@ -41,6 +41,30 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
     face the cursor while R is held) instead of a continuous spin — the natural input for aligning
     a ranked block. A floating label shows the angle between the current cursor direction and the
     gesture's start facing (not a running sum), anchored above the pivot (20% font).
+- **Dice results grouped by colour.** When a roll mixes per-die colour tags, the result readouts
+  split into one swatch-headed group per colour, side by side (untagged/free first, then red, blue,
+  …), each with its own per-face counts and success total — in both the current-roll column and the
+  dice log. Single-colour or all-untagged rolls keep the compact single-column layout. (#77)
+- **Movement special rules reflected in the Shift+M reach bands.** The Advance/Rush reach indicator
+  now parses each unit's imported OPR rule descriptions, so any movement rule — **Swift** and beyond
+  — adjusts the bands automatically, not just the hard-coded Fast/Slow (which keep a constant
+  fallback when no description text is present). Rating parentheticals are stripped, so "Swift(2)"
+  matches its "Swift" description. (#79)
+- **Auto-deploy terrain count scales with table size.** The auto-deploy piece count (and its success
+  threshold + the stats/recommendation readouts) now scales by table area relative to the 6×4 ft
+  reference, clamped to [0.45, 2.0] — a 4×4 table drops from a fixed ~15-20 pieces to ~10-13, so
+  small tables are no longer cluttered. DANGEROUS keeps its floor of 2 pieces. (#83)
+- **Type-aware base sizing for vehicles, walkers and artillery.** When Army Forge provides no base,
+  a bracketless big single model is classified by name keywords + Tough into walker / vehicle /
+  artillery / monster and given an OPR-standard base — round for walkers/monsters/infantry, oval for
+  vehicles and artillery — instead of keying the footprint off durability (which gave a Tough(6)
+  vehicle a tiny base and a Tough(12) walker a huge one). Tough now only sizes within a type, and an
+  existing base is never shrunk.
+- **Biome-aware dangerous terrain + ruin polish.** Dangerous terrain now sits on the same oval ground
+  pad as forests, biome-cropped (incl. grassland), with the real mine asset (was a procedural disc)
+  and, where one exists, the biome's own hazard prop (volcanic lava crater, jungle/alien carnivore
+  plant). Ruins gained closed window reveals (jamb/sill/lintel), wall-foot rubble, coarser masonry,
+  and fixes for the L-corner / platform z-fighting and per-column triplanar striping.
 
 ### Fixed
 - **Self-updater (Linux) swaps the running binary correctly.** The in-place apply copied the new files
@@ -59,6 +83,23 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   (right-click → Open) instead of *"Niemandsland is damaged and can't be opened"*. The app is still
   unnotarized; the README documents the one-time `xattr -dr com.apple.quarantine` fallback. Takes
   effect for the next release.
+- **Ambush / Scout deployment field shows on every tray.** The staging band was only built by the
+  importer, so every tray-reconstruction path (live MP army-header receive, late-joiner state-sync,
+  `.nml` load) rebuilt a bandless tray and the opponent saw empty zones. The band is now intrinsic to
+  every tray and survives all rebuild paths. (#76)
+- **Blood/oil stains no longer cover measure lines + UI.** Table-UI overlays (measure line, drag
+  line, range rings, pinned ruler + their labels/LOS markers) now draw above the ground stains
+  instead of being painted over. (#82)
+- **Selecting a dice count no longer looks like a roll.** Resting dice show a floating "?" until they
+  are actually rolled, instead of showing random faces. (#80)
+- **Status tokens clear when a unit is wiped.** Activated/Fatigued/Shaken tokens are dropped once a
+  unit has 0 alive models (delete, last casualty, delete-models) and re-created on undo/revive. (#78)
+- **Double-click selects the whole unit.** Double-clicking a unit model now selects the entire unit
+  (a regiment → its movement tray), skipping the box-drag / radial "select all". (#81)
+
+### Changed
+- **Terrain locking is manual + per-piece.** Selecting Terrain Mode no longer auto-locks pieces; lock
+  a piece explicitly with **L** (select + L), so a freshly placed piece is immediately draggable.
 
 ## [0.3.7.1-alpha] — 2026-06-25
 
