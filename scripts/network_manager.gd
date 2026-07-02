@@ -800,7 +800,8 @@ func sync_model_wounds(unit_id: String, model_index: int, wounds: int, is_alive:
 					# Loose model: park on / return from the army tray, matching the host's slot so
 					# both sides show the identical desaturated casualty (T2 MP sync).
 					var pid: int = int(game_unit.unit_properties.get("player_id", 1))
-					army_manager.set_loose_model_dead(model.node, pid, not is_alive, dead_slot)
+					# unit_id groups the peer's dead block; dead_slot pins the exact host slot (G2).
+					army_manager.set_loose_model_dead(model.node, pid, not is_alive, unit_id, dead_slot)
 
 			remote_wounds_updated.emit(model)
 

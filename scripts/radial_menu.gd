@@ -403,9 +403,14 @@ static func create_unit_menu(game_unit: GameUnit) -> Array[RadialMenuItem]:
 
 ## The only menu a DEAD loose model offers: revive. Whole-unit-destroyed revives the whole unit,
 ## otherwise just this model (decided by the controller from context). No other action is allowed.
-static func create_dead_model_menu() -> Array[RadialMenuItem]:
+static func create_dead_model_menu(unit_dead_count: int = 1, selection_dead_count: int = 0) -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []
 	items.append(RadialMenuItem.new("revive_dead", "Revive", "R", true, "Bring this model back onto the table"))
+	# Multi-revive (G3): revive the whole unit's dead, or every dead model in the current selection.
+	if unit_dead_count > 1:
+		items.append(RadialMenuItem.new("revive_unit_dead", "Revive unit dead (%d)" % unit_dead_count, "U", true, "Revive all of this unit's dead models"))
+	if selection_dead_count > 1:
+		items.append(RadialMenuItem.new("revive_selected", "Revive selected (%d)" % selection_dead_count, "S", true, "Revive all selected dead models"))
 	return items
 
 

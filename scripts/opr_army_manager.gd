@@ -576,9 +576,10 @@ static func _get_dead_shader() -> Shader:
 
 ## Park a dead loose model on its owner's tray (dead=true) or return it to its stored table spot
 ## (dead=false). Keeps the node visible + raycastable; the "deleted" meta gates it to revive-only.
-## `forced_slot` >= 0 pins the parking slot (remote peers replaying the host's choice in MP); -1 picks
-## the lowest free slot locally.
-func set_loose_model_dead(node: Node3D, player_id: int, dead: bool, forced_slot: int = -1) -> void:
+## `unit_id` groups a unit's dead models into one contiguous block on the tray (G2); "" falls back to
+## the node's own identity (each model its own block). `forced_slot` >= 0 pins the parking slot (remote
+## peers replaying the host's choice in MP); -1 picks the slot locally from the unit's block.
+func set_loose_model_dead(node: Node3D, player_id: int, dead: bool, unit_id: String = "", forced_slot: int = -1) -> void:
 	if node == null or not is_instance_valid(node):
 		return
 	node.set_meta("deleted", dead)
@@ -589,7 +590,7 @@ func set_loose_model_dead(node: Node3D, player_id: int, dead: bool, forced_slot:
 		if not node.has_meta("revive_transform"):
 			node.set_meta("revive_transform", node.global_transform)
 		_desaturate_model(node)
-		var slot := _claim_dead_slot(player_id, node, forced_slot)
+		var slot := _claim_dead_slot(player_id, node, unit_id, forced_slot)
 		if slot != Vector3.ZERO:
 			node.global_position = slot
 	else:
@@ -609,7 +610,7 @@ func dead_slot_of(node: Node3D) -> int:
 ## Claim a parking slot on the player's tray for `node` and return its world position (ZERO if the
 ## tray is gone). Reveals the tray. `forced_index` >= 0 pins the slot; else the lowest free one. The
 ## slot is recorded on the node ("dead_slot") and marked occupied on the tray so revive can free it.
-func _claim_dead_slot(player_id: int, node: Node3D, forced_index: int = -1) -> Vector3:
+func _claim_dead_slot(player_id: int, node: Node3D, unit_id: String, forced_index: int = -1) -> Vector3:
 	if not army_trays.has(player_id) or not is_instance_valid(army_trays[player_id]):
 		push_warning("[DeadTray] no army tray for player %d — dead model stays in place" % player_id)
 		return Vector3.ZERO
@@ -619,48 +620,108 @@ func _claim_dead_slot(player_id: int, node: Node3D, forced_index: int = -1) -> V
 	var bounds: Vector2 = info.bounds
 	var cols: int = maxi(1, int((bounds.x - 2.0 * DEAD_SLOT_EDGE) / DEAD_SLOT_STEP))
 	var rows: int = maxi(1, int((bounds.y - 2.0 * DEAD_SLOT_EDGE) / DEAD_SLOT_STEP))
+	var key: String = unit_id if not unit_id.is_empty() else str(node.get_instance_id())
 	var occupied: Dictionary = tray.get_meta("dead_slots", {})
-	var idx := _alloc_slot_index(occupied, cols * rows, forced_index)
+	var anchors: Dictionary = tray.get_meta("dead_unit_anchors", {})
+	var idx := _alloc_unit_slot(occupied, anchors, key, cols, cols * rows, forced_index)
 	tray.set_meta("dead_slots", occupied)
+	tray.set_meta("dead_unit_anchors", anchors)
 	node.set_meta("dead_slot", idx)
+	node.set_meta("dead_unit_key", key)
 	var col: int = idx % cols
 	var row: int = idx / cols
+	# G1: fill from the FAR (−Z) edge toward the near-third Ambush/Scout band. Rows 0..(safe) sit
+	# behind the band; only a nearly full grid (rows past ~2/3 of the depth) overflows into it — the
+	# lesser evil vs. parking off the tray. See _first_free_row_start / DEAD_SLOT_* constants.
 	return Vector3(
 		info.position.x - bounds.x / 2.0 + DEAD_SLOT_EDGE + float(col) * DEAD_SLOT_STEP,
 		DEAD_SLOT_Y,
-		info.position.z + bounds.y / 2.0 - DEAD_SLOT_EDGE - float(row) * DEAD_SLOT_STEP)
+		info.position.z - bounds.y / 2.0 + DEAD_SLOT_EDGE + float(row) * DEAD_SLOT_STEP)
 
 
-## Free the slot a revived model held so it can be reused (fixes the kill→revive→kill creep).
+## Free the slot a revived model held so it can be reused (fixes the kill→revive→kill creep). When the
+## model's unit has no dead models left, releases the unit's anchor so the block can be re-packed.
 func _release_dead_slot(player_id: int, node: Node3D) -> void:
 	if node == null or not node.has_meta("dead_slot"):
 		return
 	var idx: int = int(node.get_meta("dead_slot"))
+	var key: String = str(node.get_meta("dead_unit_key", ""))
 	node.remove_meta("dead_slot")
+	if node.has_meta("dead_unit_key"):
+		node.remove_meta("dead_unit_key")
 	if army_trays.has(player_id) and is_instance_valid(army_trays[player_id]):
 		var tray: Node3D = army_trays[player_id]
 		var occupied: Dictionary = tray.get_meta("dead_slots", {})
 		_free_slot_index(occupied, idx)
 		tray.set_meta("dead_slots", occupied)
+		var anchors: Dictionary = tray.get_meta("dead_unit_anchors", {})
+		_release_unit_anchor(occupied, anchors, key)   # unit fully revived → free its block
+		tray.set_meta("dead_unit_anchors", anchors)
 
 
-## Lowest free slot index in [0, capacity), or `forced` when >= 0; wrapped into range so a parked
-## model can never land off the tray. Marks the chosen index occupied. Pure/static → unit-testable.
-static func _alloc_slot_index(occupied: Dictionary, capacity: int, forced: int = -1) -> int:
+## Allocate a slot for `unit_key`, grouping a unit's dead models into a contiguous block (G2). A new
+## unit anchors at the first fully-free row; further deaths take the lowest free index at/after the
+## anchor (row-major), so two units never interleave. `forced` >= 0 pins the slot (MP replay). Wraps to
+## the lowest free index when the unit's rows are exhausted. `occupied` maps index → owning unit_key.
+## Pure/static → unit-testable.
+static func _alloc_unit_slot(occupied: Dictionary, anchors: Dictionary, unit_key: String, cols: int, capacity: int, forced: int = -1) -> int:
 	var cap: int = maxi(capacity, 1)
-	var idx: int = forced
-	if idx < 0:
-		idx = 0
-		while occupied.has(idx) and idx < cap:
+	var idx: int
+	if forced >= 0:
+		idx = forced % cap
+		if not anchors.has(unit_key):
+			anchors[unit_key] = idx   # first pinned slot anchors the block (MP replay / save restore)
+	else:
+		var anchor: int
+		if anchors.has(unit_key):
+			anchor = int(anchors[unit_key])
+		else:
+			anchor = _first_free_row_start(occupied, cols, cap)
+			anchors[unit_key] = anchor
+		idx = anchor
+		while idx < cap and occupied.has(idx):
 			idx += 1
-	idx = idx % cap   # bounds/wrap guard — never leaves the tray
-	occupied[idx] = true
+		if idx >= cap:   # unit's rows exhausted → lowest free anywhere (overflow)
+			idx = 0
+			while idx < cap and occupied.has(idx):
+				idx += 1
+			idx = idx % cap
+	occupied[idx] = unit_key
 	return idx
 
 
-## Release a slot index (mirror of _alloc_slot_index). Pure/static → unit-testable.
+## First col-0 index of a fully-free row (so a new unit's block never overlaps another's), or the
+## lowest free index when no whole row is free (overflow toward the band). Pure/static.
+static func _first_free_row_start(occupied: Dictionary, cols: int, capacity: int) -> int:
+	var c: int = maxi(cols, 1)
+	var cap: int = maxi(capacity, 1)
+	var row: int = 0
+	while row * c < cap:
+		var start: int = row * c
+		var free: bool = true
+		for k in range(start, mini(start + c, cap)):
+			if occupied.has(k):
+				free = false
+				break
+		if free:
+			return start
+		row += 1
+	var i: int = 0
+	while i < cap and occupied.has(i):
+		i += 1
+	return i % cap
+
+
+## Release a slot index (mirror of _alloc_unit_slot). Pure/static → unit-testable.
 static func _free_slot_index(occupied: Dictionary, idx: int) -> void:
 	occupied.erase(idx)
+
+
+## Drop a unit's block anchor once none of its slots remain occupied (called on revive, so the block
+## can be re-packed from scratch next time). Pure/static → unit-testable.
+static func _release_unit_anchor(occupied: Dictionary, anchors: Dictionary, unit_key: String) -> void:
+	if not unit_key.is_empty() and anchors.has(unit_key) and not occupied.values().has(unit_key):
+		anchors.erase(unit_key)
 
 
 ## Apply `wounds_taken` to a Tough(1) pooled regiment: mark casualties dead/alive, drive
