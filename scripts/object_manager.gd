@@ -261,11 +261,19 @@ func _is_gui_blocking_input() -> bool:
 	return false
 
 
-## D6 UI-occlusion decision (pure, unit-tested): a hovered control blocks the 3D-world click when it is
-## a STOP-filter control — it will consume the GUI event, so the selection/deselection path must not also
-## act on it. IGNORE/PASS controls and empty space (null) do not block, so field-clicks still deselect.
+## D6 UI-occlusion decision (pure, unit-tested): a hovered control blocks the 3D-world click when it is a
+## genuine HUD WIDGET — a STOP-filter control that does NOT span the whole viewport. The transparent
+## full-rect HUD root (a STOP Control that merely holds the overlay) must NOT block, or every world click
+## is occluded and nothing in the 3D scene is selectable (URGENT-024). IGNORE/PASS controls and empty
+## space (null) never block, so field-clicks over the open scene still select/deselect.
 func _control_blocks_world_click(hovered: Control) -> bool:
-	return hovered != null and hovered.mouse_filter == Control.MOUSE_FILTER_STOP
+	if hovered == null or hovered.mouse_filter != Control.MOUSE_FILTER_STOP:
+		return false
+	var vp: Vector2 = hovered.get_viewport_rect().size
+	var r: Vector2 = hovered.get_global_rect().size
+	if r.x >= vp.x - 1.0 and r.y >= vp.y - 1.0:
+		return false   # full-viewport container (HUD root) — not a click target
+	return true
 
 
 func _input(event: InputEvent) -> void:
