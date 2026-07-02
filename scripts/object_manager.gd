@@ -318,7 +318,10 @@ func _input(event: InputEvent) -> void:
 						# A DEAD model (parked on the tray) allows only one action: revive. Don't
 						# select/drag it — hand it straight to the context menu, which shows a
 						# revive-only menu for a "deleted" object.
-						if bool(clicked_object.get_meta("deleted", false)):
+						# Gate on dead_slot (J3): only a tray-parked model has it, so a blood stain
+						# (collider-less — the ray falls through to a hidden delete wrapper underneath)
+						# never opens the revive menu.
+						if bool(clicked_object.get_meta("deleted", false)) and clicked_object.has_meta("dead_slot"):
 							context_menu_requested.emit(mouse_event.position, [clicked_object])
 							get_viewport().set_input_as_handled()
 						else:

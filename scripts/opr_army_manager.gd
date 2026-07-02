@@ -620,7 +620,7 @@ func _claim_dead_slot(player_id: int, node: Node3D, unit_id: String, forced_inde
 	var bounds: Vector2 = info.bounds
 	var cols: int = maxi(1, int((bounds.x - 2.0 * DEAD_SLOT_EDGE) / DEAD_SLOT_STEP))
 	var rows: int = maxi(1, int((bounds.y - 2.0 * DEAD_SLOT_EDGE) / DEAD_SLOT_STEP))
-	var key: String = unit_id if not unit_id.is_empty() else str(node.get_instance_id())
+	var key: String = _dead_group_key(unit_id, node)
 	var occupied: Dictionary = tray.get_meta("dead_slots", {})
 	var anchors: Dictionary = tray.get_meta("dead_unit_anchors", {})
 	var idx := _alloc_unit_slot(occupied, anchors, key, cols, cols * rows, forced_index)
@@ -715,6 +715,18 @@ static func _first_free_row_start(occupied: Dictionary, cols: int, capacity: int
 ## Release a slot index (mirror of _alloc_unit_slot). Pure/static → unit-testable.
 static func _free_slot_index(occupied: Dictionary, idx: int) -> void:
 	occupied.erase(idx)
+
+
+## The block key a dead model groups under: the caller's unit_id when given, else the model's OWN unit
+## (from its game_unit meta) so a whole unit always parks as one contiguous block regardless of the
+## call site (J2), else the node's instance id (a lone block). Pure/static → unit-testable.
+static func _dead_group_key(unit_id: String, node: Node3D) -> String:
+	if not unit_id.is_empty():
+		return unit_id
+	var gu := UnitUtils.get_game_unit(node)
+	if gu != null and not gu.unit_id.is_empty():
+		return gu.unit_id
+	return str(node.get_instance_id())
 
 
 ## Drop a unit's block anchor once none of its slots remain occupied (called on revive, so the block
