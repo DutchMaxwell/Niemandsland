@@ -1170,6 +1170,9 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 		var mglb: String = mount_glb if i == 0 else ""
 		if mglb.is_empty():
 			mglb = _resolve_model_variant_name(unit.name, labels_per_model[i], faction_folder)
+			# A slug was derived but no `<unit>#<slug>` key exists → base fallback (rare; logged in E6).
+			if mglb.is_empty() and model_library != null and not model_library.variant_slug(labels_per_model[i]).is_empty():
+				_variant_missing_count += 1
 		var model = _create_unit_model(unit, player_color, name_suffix, faction_folder, override_mm, mglb)
 		if model:
 			# Assign a slot-namespaced network_id for multiplayer position sync (no
@@ -1977,13 +1980,15 @@ func _ensure_army_models_cached(army: OPRApiClient.OPRArmy) -> void:
 	if faction_folder.is_empty():
 		return
 	var specs: Array = []
+	var seen: Dictionary = {}   # unit_name -> true; dedup across units (3 identical squads share keys)
 	for unit: OPRApiClient.OPRUnit in army.units:
-		specs.append({"faction": faction_folder, "unit_name": unit.name})
-		# A mounted unit also needs its fuzzy-matched mount GLB pre-cached.
-		if not unit.mount_name.is_empty():
-			var mount_glb: String = _find_mount_glb_name(unit.mount_name, faction_folder)
-			if not mount_glb.is_empty():
-				specs.append({"faction": faction_folder, "unit_name": mount_glb})
+		# Base + each model's loadout variant (009: variants MUST be prefetched, else they are derived
+		# at spawn but never downloaded → "No model found" pegs) + the mount GLB.
+		var mount_glb: String = _find_mount_glb_name(unit.mount_name, faction_folder) if not unit.mount_name.is_empty() else ""
+		for n in _collect_prefetch_names(unit.name, _unit_model_variant_names(unit, faction_folder), mount_glb):
+			if not seen.has(n):
+				seen[n] = true
+				specs.append({"faction": faction_folder, "unit_name": n})
 	await model_library.ensure_models(specs)
 
 
@@ -2038,10 +2043,37 @@ func _resolve_model_variant_name(base_name: String, labels: Array, faction_folde
 	if slug.is_empty():
 		return ""
 	var variant: String = "%s#%s" % [base_name, slug]
-	if model_library.has_model(faction_folder, variant):
-		return variant
-	_variant_missing_count += 1   # slug derived but no baked variant → fall back to the base model
-	return ""
+	return variant if model_library.has_model(faction_folder, variant) else ""
+
+
+## Per-model resolved variant model name ("" = base) for a unit — the SINGLE derivation shared by the
+## prefetch spec builder AND the spawn loop, so every variant a unit needs is DOWNLOADED, not just
+## derived at spawn (009). Length == unit.size.
+func _unit_model_variant_names(unit, faction_folder: String) -> Array:
+	var loadout := EquipmentDistributor.build_loadout(unit)
+	var labels := EquipmentDistributor.per_model_labels(unit.size, loadout)
+	var out: Array = []
+	for i in range(unit.size):
+		out.append(_resolve_model_variant_name(unit.name, labels[i], faction_folder))
+	return out
+
+
+## Deduplicated prefetch names for a unit: the base model + each distinct NON-EMPTY variant + the
+## mount. Pure/static → unit-testable (009: variants MUST be prefetched, deduped so N identical variant
+## models don't queue the same key N×). Empty entries (base-fallback models) are dropped.
+static func _collect_prefetch_names(base_name: String, variant_names: Array, mount_name: String) -> Array:
+	var candidates: Array = [base_name]
+	candidates.append_array(variant_names)
+	if not mount_name.is_empty():
+		candidates.append(mount_name)
+	var out: Array = []
+	var seen: Dictionary = {}
+	for n in candidates:
+		var s: String = str(n)
+		if not s.is_empty() and not seen.has(s):
+			seen[s] = true
+			out.append(s)
+	return out
 
 
 ## Find the GLB model for a unit. Prefers an on-demand model already cached locally
