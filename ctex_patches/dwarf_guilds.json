@@ -1,0 +1,704 @@
+{
+  "dwarf_guilds/apc": {
+    "url": "1a3adebd458bdd11db1c895cf2343b69ade02191abc58ef7c1fb886fc6014516.glb",
+    "sha256": "1a3adebd458bdd11db1c895cf2343b69ade02191abc58ef7c1fb886fc6014516",
+    "size": 17093084,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "39edc28aaaa8020d35d99f61b15ce8f33b7be4729124b6f26aa0a98cfccc5788.ctex",
+          "sha256": "39edc28aaaa8020d35d99f61b15ce8f33b7be4729124b6f26aa0a98cfccc5788",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f61368c09b46063b02beecc60dcfea8ad617db0e4981f572ae056a6962899d78.ctex",
+          "sha256": "f61368c09b46063b02beecc60dcfea8ad617db0e4981f572ae056a6962899d78",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "4b938e19fdbf60aa77bc115e007c90def147c362913f0c25a2df5187c22918ba.glb",
+        "sha256": "4b938e19fdbf60aa77bc115e007c90def147c362913f0c25a2df5187c22918ba",
+        "size": 9396632
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dwarf_guilds/artillery gun": {
+    "url": "6d413aa05b6e218ebfe099324c940b7ce81748e7f4e39b4798a9913a6649b985.glb",
+    "sha256": "6d413aa05b6e218ebfe099324c940b7ce81748e7f4e39b4798a9913a6649b985",
+    "size": 18463304,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0828e2d68b0d3fa318ed9c53e66b745f62bc1d60518a5574ac5ce732c4f69891.ctex",
+          "sha256": "0828e2d68b0d3fa318ed9c53e66b745f62bc1d60518a5574ac5ce732c4f69891",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "778bdd9b9cd5d6eba7fc6519b3b6965218df137505664850fb87ca351dececfe.ctex",
+          "sha256": "778bdd9b9cd5d6eba7fc6519b3b6965218df137505664850fb87ca351dececfe",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2f32c22dc64bd948a711a2142342307b8d6f5ba0a675d64c0c06da3b20f5e707.glb",
+        "sha256": "2f32c22dc64bd948a711a2142342307b8d6f5ba0a675d64c0c06da3b20f5e707",
+        "size": 10164260
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dwarf_guilds/assault drill": {
+    "url": "b447f6b80b59b124ae53bd8266b9dc2a33de2e72d94d7e709afa8fa9142f32d0.glb",
+    "sha256": "b447f6b80b59b124ae53bd8266b9dc2a33de2e72d94d7e709afa8fa9142f32d0",
+    "size": 16767072,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8c67dd1ade87e0cb9f6727d4aed0d3863a6d41bc30963cf0e9b112e57849f8ca.ctex",
+          "sha256": "8c67dd1ade87e0cb9f6727d4aed0d3863a6d41bc30963cf0e9b112e57849f8ca",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "75f4b6d619ba0cb54701b3210ccb5344494e66edba59c5b2be80465c14e1b129.ctex",
+          "sha256": "75f4b6d619ba0cb54701b3210ccb5344494e66edba59c5b2be80465c14e1b129",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9686fcf2f870e74c04da9fff0c15b0cf4b299e8da329393be1645db3eb0be25e.glb",
+        "sha256": "9686fcf2f870e74c04da9fff0c15b0cf4b299e8da329393be1645db3eb0be25e",
+        "size": 8717664
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dwarf_guilds/attack vehicle": {
+    "url": "6ad509d78fbc6b703c216d441ccefd2b26391ce4a5d80401c7c60931d626238d.glb",
+    "sha256": "6ad509d78fbc6b703c216d441ccefd2b26391ce4a5d80401c7c60931d626238d",
+    "size": 16783892,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ea09312d7bbe869cc444013b5e6155075a2a7a8d4d44086721fd173e4ccc9c44.ctex",
+          "sha256": "ea09312d7bbe869cc444013b5e6155075a2a7a8d4d44086721fd173e4ccc9c44",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2d42d5e40f323ec4083bcb35a727679681026c637aaf03f8b17602017c992e9b.ctex",
+          "sha256": "2d42d5e40f323ec4083bcb35a727679681026c637aaf03f8b17602017c992e9b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f977bc577fd82badf623f4be11d3d10cabc7421fe94b7a4d7a2bf99781867506.glb",
+        "sha256": "f977bc577fd82badf623f4be11d3d10cabc7421fe94b7a4d7a2bf99781867506",
+        "size": 9223212
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dwarf_guilds/battle tank": {
+    "url": "342d63b90e2efb209df987d094716f4b69d5bcfc5391a1d94a041af3fa509e88.glb",
+    "sha256": "342d63b90e2efb209df987d094716f4b69d5bcfc5391a1d94a041af3fa509e88",
+    "size": 17101884,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "354219db0270ada37b9f553d7f227e3c9d2e9e92e7ce8d06a8ff90c51c96aa8d.ctex",
+          "sha256": "354219db0270ada37b9f553d7f227e3c9d2e9e92e7ce8d06a8ff90c51c96aa8d",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "29b3f9fadcfdcd5e877423eb627366c51bca15acf13856c04aeabb091dd9d769.ctex",
+          "sha256": "29b3f9fadcfdcd5e877423eb627366c51bca15acf13856c04aeabb091dd9d769",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "907a6e0bd1f5787e31769540c77a1df14221b36cf348e84e473bfc009084a9ae.glb",
+        "sha256": "907a6e0bd1f5787e31769540c77a1df14221b36cf348e84e473bfc009084a9ae",
+        "size": 9158364
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dwarf_guilds/berserker veteran": {
+    "url": "0296399bfc50b9e7904748fa22d52cdbd23d2a342160e7de835322c5a68f2cda.glb",
+    "sha256": "0296399bfc50b9e7904748fa22d52cdbd23d2a342160e7de835322c5a68f2cda",
+    "size": 16189852,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d87fc946b1e23e142b4945ed19d6f7a9d3f837558c6bee534b6728f2eb56e960.ctex",
+          "sha256": "d87fc946b1e23e142b4945ed19d6f7a9d3f837558c6bee534b6728f2eb56e960",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "dfeac66364d156b58a6e5e8a00140c34460cf4ca3016726d21a697aa4e6de1f8.ctex",
+          "sha256": "dfeac66364d156b58a6e5e8a00140c34460cf4ca3016726d21a697aa4e6de1f8",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "cc9b579ca3958a143e33ada119f4799a6e9f65e8122442ba15112bed6733b6ec.glb",
+        "sha256": "cc9b579ca3958a143e33ada119f4799a6e9f65e8122442ba15112bed6733b6ec",
+        "size": 4488068
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dwarf_guilds/berserkers": {
+    "url": "8cd0964fdae68113b35ddf3d5a1d8bb5432fb5e9302b84949151de3faae0c894.glb",
+    "sha256": "8cd0964fdae68113b35ddf3d5a1d8bb5432fb5e9302b84949151de3faae0c894",
+    "size": 16917172,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6f4b3228aed3a2cb9a6c785594a48c4ee1b4bab70e859f032aabf6c7959b42e7.ctex",
+          "sha256": "6f4b3228aed3a2cb9a6c785594a48c4ee1b4bab70e859f032aabf6c7959b42e7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "cf6f7ec8bfa4f61dd8a41c49b80a4a7e73efeeb934f771d41e1bbca4673a8633.ctex",
+          "sha256": "cf6f7ec8bfa4f61dd8a41c49b80a4a7e73efeeb934f771d41e1bbca4673a8633",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6059f4d0ff1996c9a0c06617909f03dfd28f5f352ae15d53366e227cf2c29ff5.glb",
+        "sha256": "6059f4d0ff1996c9a0c06617909f03dfd28f5f352ae15d53366e227cf2c29ff5",
+        "size": 4750328
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dwarf_guilds/combat excavator": {
+    "url": "28b842a07908b5d2c8eb6cf1d17c60a67b0c7e308dffaf94040c40397b0c7cd7.glb",
+    "sha256": "28b842a07908b5d2c8eb6cf1d17c60a67b0c7e308dffaf94040c40397b0c7cd7",
+    "size": 17771468,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ae3ab86ffc8aa929ca23623b49967c21e9c05cdb0f2f7723cc9860252328c05e.ctex",
+          "sha256": "ae3ab86ffc8aa929ca23623b49967c21e9c05cdb0f2f7723cc9860252328c05e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "189bb32e56fb93424e61afd39035c8f04524feedd8b1936e28bfd95387fff41b.ctex",
+          "sha256": "189bb32e56fb93424e61afd39035c8f04524feedd8b1936e28bfd95387fff41b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e5e2b313c3633d321176e9420feb7fd4d5572e7ed51b1e3eb82759927bc86bb5.glb",
+        "sha256": "e5e2b313c3633d321176e9420feb7fd4d5572e7ed51b1e3eb82759927bc86bb5",
+        "size": 9696012
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dwarf_guilds/dwarf bikers": {
+    "url": "efed25df33811f325205cb0fad3fe01c5d26f26ffa0fc87daf8e31e3aae5e8b3.glb",
+    "sha256": "efed25df33811f325205cb0fad3fe01c5d26f26ffa0fc87daf8e31e3aae5e8b3",
+    "size": 14225072,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f81acf50f7f299d38d538a1f6c165f34c873d9063cd5c8bf485708ff42ef9a5b.ctex",
+          "sha256": "f81acf50f7f299d38d538a1f6c165f34c873d9063cd5c8bf485708ff42ef9a5b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d27808751bb7eb69fb26dfa715bd8564e96c4e5d85dc1fea4b48854a953f3bb5.ctex",
+          "sha256": "d27808751bb7eb69fb26dfa715bd8564e96c4e5d85dc1fea4b48854a953f3bb5",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1050cc78a2129b7e27d3fc22ec9f221ef3832d42d76664c65ad78139db4c6600.glb",
+        "sha256": "1050cc78a2129b7e27d3fc22ec9f221ef3832d42d76664c65ad78139db4c6600",
+        "size": 7354700
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dwarf_guilds/dwarf champion": {
+    "url": "f3260c92a2be2593de96180e47f29f0c3fdbfc37703db445a4cd3a83c04ef160.glb",
+    "sha256": "f3260c92a2be2593de96180e47f29f0c3fdbfc37703db445a4cd3a83c04ef160",
+    "size": 16351224,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d8891792b3081c130456b1853ca0a1d2d3e87782eb70393855823b961c5034ca.ctex",
+          "sha256": "d8891792b3081c130456b1853ca0a1d2d3e87782eb70393855823b961c5034ca",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "cde2d6383b2dbb80e04d53951addc4d2015aff824962993a333434cfe506c0b8.ctex",
+          "sha256": "cde2d6383b2dbb80e04d53951addc4d2015aff824962993a333434cfe506c0b8",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "4d22d4abc14ef34d3c80c9bcd3b950cd748dfc5b6d7865b1687d99d50de340fa.glb",
+        "sha256": "4d22d4abc14ef34d3c80c9bcd3b950cd748dfc5b6d7865b1687d99d50de340fa",
+        "size": 4788888
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dwarf_guilds/dwarf trike": {
+    "url": "46551c8122096d9139edd77083f278f26144df5277dc31a78043423cb76d4c78.glb",
+    "sha256": "46551c8122096d9139edd77083f278f26144df5277dc31a78043423cb76d4c78",
+    "size": 15951748,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a6df1a11da353f1de0cd5b2531759345127fb53b5fd9254b3d7990b145114b08.ctex",
+          "sha256": "a6df1a11da353f1de0cd5b2531759345127fb53b5fd9254b3d7990b145114b08",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "fe5339b3b0071efd0fc6912222787d9e8ceab1548c017083544628d8c1d9b623.ctex",
+          "sha256": "fe5339b3b0071efd0fc6912222787d9e8ceab1548c017083544628d8c1d9b623",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8215d8fa8e23834d384538009e70fd48ba92bcd13d162ac2d56e8d9317407a7f.glb",
+        "sha256": "8215d8fa8e23834d384538009e70fd48ba92bcd13d162ac2d56e8d9317407a7f",
+        "size": 7986352
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dwarf_guilds/dwarf walker": {
+    "url": "90fab8fb8ebbe5888c119e5073217d37e834af924413b340fcfa30616e5be2dc.glb",
+    "sha256": "90fab8fb8ebbe5888c119e5073217d37e834af924413b340fcfa30616e5be2dc",
+    "size": 16578704,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9ea25eb2461b5be34bcd25e58e32840583a70e1e06a95f9b3f229ff82334ecf6.ctex",
+          "sha256": "9ea25eb2461b5be34bcd25e58e32840583a70e1e06a95f9b3f229ff82334ecf6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "790761529018497167b7e88dad89a83a82f5eaba63e1b3369da6d971364d1828.ctex",
+          "sha256": "790761529018497167b7e88dad89a83a82f5eaba63e1b3369da6d971364d1828",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6e0cb91cda5667e69f6266223d46d1552534d75d07d316a958e509d0cc1a72ac.glb",
+        "sha256": "6e0cb91cda5667e69f6266223d46d1552534d75d07d316a958e509d0cc1a72ac",
+        "size": 8925944
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dwarf_guilds/dwarf warriors": {
+    "url": "084590af4e9cdb742c1691a21bf7309bec14ce6b227e117997b73538938bd6bb.glb",
+    "sha256": "084590af4e9cdb742c1691a21bf7309bec14ce6b227e117997b73538938bd6bb",
+    "size": 16085268,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d58fbfe1a7fec4e0e1c651ad84a8e37468501e9a4bd04e22c8d436d81c9cc135.ctex",
+          "sha256": "d58fbfe1a7fec4e0e1c651ad84a8e37468501e9a4bd04e22c8d436d81c9cc135",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "eef5e23d4a2afc1291d3fcd2c2073168500038a79686db6e32a7927d113f8cf4.ctex",
+          "sha256": "eef5e23d4a2afc1291d3fcd2c2073168500038a79686db6e32a7927d113f8cf4",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3c6eb76fd5aa498c84cb005d222059b5443c48660254d98c96f20e35099fb977.glb",
+        "sha256": "3c6eb76fd5aa498c84cb005d222059b5443c48660254d98c96f20e35099fb977",
+        "size": 4289540
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dwarf_guilds/elites": {
+    "url": "b9b50c588d445d06131c5050f9c881ecf85c4806ed15386372fe750ce50291fe.glb",
+    "sha256": "b9b50c588d445d06131c5050f9c881ecf85c4806ed15386372fe750ce50291fe",
+    "size": 17134192,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "459012b4345d5128b9a0061c0cadb5762436d4f8016608beff9c8387c501361c.ctex",
+          "sha256": "459012b4345d5128b9a0061c0cadb5762436d4f8016608beff9c8387c501361c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b4a09f0892edd223f36a135947c33b11ba550da11d9b4407747b22173b98dfdd.ctex",
+          "sha256": "b4a09f0892edd223f36a135947c33b11ba550da11d9b4407747b22173b98dfdd",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9b1877985e4bfe53e14cbe1d15a79dc62d65f130cab616690951a4e530c01c85.glb",
+        "sha256": "9b1877985e4bfe53e14cbe1d15a79dc62d65f130cab616690951a4e530c01c85",
+        "size": 4714228
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dwarf_guilds/fortress tank": {
+    "url": "1c2f673a201c401af88d580afe509bfcb530282749e9938c63ea962bced72fe7.glb",
+    "sha256": "1c2f673a201c401af88d580afe509bfcb530282749e9938c63ea962bced72fe7",
+    "size": 18194776,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8bc898be9bb771c9ffd024afcf17572c0496c80627d48d6b7fe68230a1b74844.ctex",
+          "sha256": "8bc898be9bb771c9ffd024afcf17572c0496c80627d48d6b7fe68230a1b74844",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "fdd0228085e875ffda206e584135f58b8caf4bdfc10fc3dc416f6635d49454cd.ctex",
+          "sha256": "fdd0228085e875ffda206e584135f58b8caf4bdfc10fc3dc416f6635d49454cd",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9a90598f6689bedfd1f46d8546f6764ff2fae5533de4d5da5f5a8a60ac9dbce0.glb",
+        "sha256": "9a90598f6689bedfd1f46d8546f6764ff2fae5533de4d5da5f5a8a60ac9dbce0",
+        "size": 9693892
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dwarf_guilds/guardians": {
+    "url": "a10e24a0ed591f717bae468549d3f9cabaf3edcc2e7b0a7ffa10ced9f8b62f07.glb",
+    "sha256": "a10e24a0ed591f717bae468549d3f9cabaf3edcc2e7b0a7ffa10ced9f8b62f07",
+    "size": 15914456,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4c213534c37549f826a540d80ff55fb87bad20a781a8f60cf1073fcfe71563cf.ctex",
+          "sha256": "4c213534c37549f826a540d80ff55fb87bad20a781a8f60cf1073fcfe71563cf",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9cbb8e3723b489d30871a35fb0f810b1a99870975b4d7beeae1e1af255233150.ctex",
+          "sha256": "9cbb8e3723b489d30871a35fb0f810b1a99870975b4d7beeae1e1af255233150",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "319d0b5d75300ac3f3028ed726f2d6e3d925dc97ede0c58f237c9e97f28f5669.glb",
+        "sha256": "319d0b5d75300ac3f3028ed726f2d6e3d925dc97ede0c58f237c9e97f28f5669",
+        "size": 4445536
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dwarf_guilds/hadrund oth irnwuld": {
+    "url": "cefe40898917919b9d0d212722cb0665fc73daefba38b480e4bbe262bb5abb39.glb",
+    "sha256": "cefe40898917919b9d0d212722cb0665fc73daefba38b480e4bbe262bb5abb39",
+    "size": 17007112,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "030bcca43daa6eed18114a0d08f7fe49937edded02c7418e4148606371f1f118.ctex",
+          "sha256": "030bcca43daa6eed18114a0d08f7fe49937edded02c7418e4148606371f1f118",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "247e238d24b630e71b8fa74c6de3c25e2d3722bf726c82a4d39040397162e7c5.ctex",
+          "sha256": "247e238d24b630e71b8fa74c6de3c25e2d3722bf726c82a4d39040397162e7c5",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1b5ac24ae513ced0777db8436eeec3f1de6c6364196e6a77b40fbcde8abcefaa.glb",
+        "sha256": "1b5ac24ae513ced0777db8436eeec3f1de6c6364196e6a77b40fbcde8abcefaa",
+        "size": 4785508
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dwarf_guilds/iron veterans": {
+    "url": "de8bad0bbec33b493b856e7fdaf72e3ce5e1a28367e8b5fd89946b4c368a24ad.glb",
+    "sha256": "de8bad0bbec33b493b856e7fdaf72e3ce5e1a28367e8b5fd89946b4c368a24ad",
+    "size": 15652928,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "56c285a897839db254d5d7ffe2b37f55c67abad2df0482059b2aead0bb2b4b08.ctex",
+          "sha256": "56c285a897839db254d5d7ffe2b37f55c67abad2df0482059b2aead0bb2b4b08",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8429db79b8b50c0d4a90b541a8af8313694e283f5ffefc7de654e3171b5c2e1c.ctex",
+          "sha256": "8429db79b8b50c0d4a90b541a8af8313694e283f5ffefc7de654e3171b5c2e1c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "721f73808160e7f03c9172304ef9ff2eefd491de0d7e7aa70fef23fc52dcc220.glb",
+        "sha256": "721f73808160e7f03c9172304ef9ff2eefd491de0d7e7aa70fef23fc52dcc220",
+        "size": 4363912
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dwarf_guilds/jetpack warriors": {
+    "url": "fceb27904a7f1f30b501a353f2dbece2217b16fc8a428c6da74f095b8a7b13bb.glb",
+    "sha256": "fceb27904a7f1f30b501a353f2dbece2217b16fc8a428c6da74f095b8a7b13bb",
+    "size": 14201192,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "de1facfb7b58878cf3963e858aa842cdc0bd086a175559858443f6c70e3efc01.ctex",
+          "sha256": "de1facfb7b58878cf3963e858aa842cdc0bd086a175559858443f6c70e3efc01",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9146357599d998ca2bb1c8c37fd7fbcd78dd5e38e6d02abe99e73dc2cad34bcd.ctex",
+          "sha256": "9146357599d998ca2bb1c8c37fd7fbcd78dd5e38e6d02abe99e73dc2cad34bcd",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ce209f2038a89db97da16661971c94b790c0bc7df6dcd3c7da0a0c635e73441a.glb",
+        "sha256": "ce209f2038a89db97da16661971c94b790c0bc7df6dcd3c7da0a0c635e73441a",
+        "size": 4319724
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dwarf_guilds/land train": {
+    "url": "cae9992372d7ce2fbc7032c44c9b05bcdc279e63f809941646f2b3c0bc0eaae4.glb",
+    "sha256": "cae9992372d7ce2fbc7032c44c9b05bcdc279e63f809941646f2b3c0bc0eaae4",
+    "size": 18724876,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7f4ebe3a81acd51e2dc4b340886aa91c5e737dd37551cbfd110d437a3345e44b.ctex",
+          "sha256": "7f4ebe3a81acd51e2dc4b340886aa91c5e737dd37551cbfd110d437a3345e44b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b06877e1fadce3b4abf6581455986058e8c295e55c7c461dc2a63cb93edb7e14.ctex",
+          "sha256": "b06877e1fadce3b4abf6581455986058e8c295e55c7c461dc2a63cb93edb7e14",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "587757c1d42549f051f15fff869d089633dbe7270c23ddec12c80bc8193f81e9.glb",
+        "sha256": "587757c1d42549f051f15fff869d089633dbe7270c23ddec12c80bc8193f81e9",
+        "size": 10290564
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dwarf_guilds/mine bot guard": {
+    "url": "f1a2663e740dbbe1311a61e8225523557796dbbca8b9b6846a350fb19185b43a.glb",
+    "sha256": "f1a2663e740dbbe1311a61e8225523557796dbbca8b9b6846a350fb19185b43a",
+    "size": 16829244,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "1e17d7217352f3e78260e6d586824cd4ea3eda2b4aef6dc9aa177950e59bef0f.ctex",
+          "sha256": "1e17d7217352f3e78260e6d586824cd4ea3eda2b4aef6dc9aa177950e59bef0f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "709fad96120fd32d2b41d918fddcdf595649b21ef5c17e95e5f2cec1b0ede8e7.ctex",
+          "sha256": "709fad96120fd32d2b41d918fddcdf595649b21ef5c17e95e5f2cec1b0ede8e7",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ecefbb095e3d0bc696cfe0d39c1c51940786afd436e0fc43b6ea060bd288fa53.glb",
+        "sha256": "ecefbb095e3d0bc696cfe0d39c1c51940786afd436e0fc43b6ea060bd288fa53",
+        "size": 4679616
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dwarf_guilds/miners": {
+    "url": "53a9afb1b8e77d4db6265fc34e0a158d5ce4f3700d20ff85c85cf55bbb65b4cb.glb",
+    "sha256": "53a9afb1b8e77d4db6265fc34e0a158d5ce4f3700d20ff85c85cf55bbb65b4cb",
+    "size": 15224068,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7f9ab4fd9c8df3f7b6a43976d23f902fd9142a2514fe5b246bc318ccdf66a5bd.ctex",
+          "sha256": "7f9ab4fd9c8df3f7b6a43976d23f902fd9142a2514fe5b246bc318ccdf66a5bd",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b975c6d4e7409b374055251f5526f1caf9fa63daaad01bf21b15012d18755109.ctex",
+          "sha256": "b975c6d4e7409b374055251f5526f1caf9fa63daaad01bf21b15012d18755109",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2f84cbca6b7bf3adabc5c20fb209a1e6d24b2bc0e00451357f219f1141b18809.glb",
+        "sha256": "2f84cbca6b7bf3adabc5c20fb209a1e6d24b2bc0e00451357f219f1141b18809",
+        "size": 4106384
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dwarf_guilds/mining titan": {
+    "url": "56964010ebcfa89109003f52d6abcc0469cc4215f19aa2e7f6954fae000fa324.glb",
+    "sha256": "56964010ebcfa89109003f52d6abcc0469cc4215f19aa2e7f6954fae000fa324",
+    "size": 16895844,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d005ec2ec37d96a6d4ee49f5f4089a4bcf8b8d354c32925c1d74b7a0f32b6b8e.ctex",
+          "sha256": "d005ec2ec37d96a6d4ee49f5f4089a4bcf8b8d354c32925c1d74b7a0f32b6b8e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "547b58c8f2ce7953d7758ab00800cf088cf98e6a043eb8e01712ef830f43c6c3.ctex",
+          "sha256": "547b58c8f2ce7953d7758ab00800cf088cf98e6a043eb8e01712ef830f43c6c3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "89299c02476cf7dcb7b1098b94b7d8522aebf3c641b6d4e197c214da0d220391.glb",
+        "sha256": "89299c02476cf7dcb7b1098b94b7d8522aebf3c641b6d4e197c214da0d220391",
+        "size": 13243152
+      },
+      "size_class": "large"
+    }
+  },
+  "dwarf_guilds/powersuit champion": {
+    "url": "297545f67dddb9650573502a5a9d58564c52ea2550e1271112a5e362ac38c2db.glb",
+    "sha256": "297545f67dddb9650573502a5a9d58564c52ea2550e1271112a5e362ac38c2db",
+    "size": 15360380,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ace836adddef4be5d95ad36708d26827f9ff1e5d949a084ed93ba84187b2f5c2.ctex",
+          "sha256": "ace836adddef4be5d95ad36708d26827f9ff1e5d949a084ed93ba84187b2f5c2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "36471e31e0b4cc284ff4608b1b51f903d423b998d73c78b496d547eec02e8be5.ctex",
+          "sha256": "36471e31e0b4cc284ff4608b1b51f903d423b998d73c78b496d547eec02e8be5",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "851480212fc497597bbc364d5f30c439854eccb0aed099bc127ed16e081da087.glb",
+        "sha256": "851480212fc497597bbc364d5f30c439854eccb0aed099bc127ed16e081da087",
+        "size": 4042216
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dwarf_guilds/powersuit guard": {
+    "url": "f065e2409b3c7c4915b089b10373add933b67033adf4baf2027fd0eb9182affc.glb",
+    "sha256": "f065e2409b3c7c4915b089b10373add933b67033adf4baf2027fd0eb9182affc",
+    "size": 12527624,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6a752d611cc9bdf63d753030f243b12c8ff7285420076212727256b617a63454.ctex",
+          "sha256": "6a752d611cc9bdf63d753030f243b12c8ff7285420076212727256b617a63454",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "47f7a3278d9298bdf85374d7186da361c99035a1c9cb2d584696768ade7350c2.ctex",
+          "sha256": "47f7a3278d9298bdf85374d7186da361c99035a1c9cb2d584696768ade7350c2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9cb5123fd7464b272a5b2dcd48b376d978057cb99b1ff08c06bdf7891414660d.glb",
+        "sha256": "9cb5123fd7464b272a5b2dcd48b376d978057cb99b1ff08c06bdf7891414660d",
+        "size": 3767060
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dwarf_guilds/sniper team": {
+    "url": "ee0f1aafd2c771238b2d24af5d42061035ced7bfa566baee5d36ab307ceebb8d.glb",
+    "sha256": "ee0f1aafd2c771238b2d24af5d42061035ced7bfa566baee5d36ab307ceebb8d",
+    "size": 19967664,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "67534560d96dca89de7d2136388176726a0cbe37f6c5f9e38485be508f88c379.ctex",
+          "sha256": "67534560d96dca89de7d2136388176726a0cbe37f6c5f9e38485be508f88c379",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "320140378973823a332266e45ed41a78b642ecbe3fea3d4d85ab1fda0ebcc83f.ctex",
+          "sha256": "320140378973823a332266e45ed41a78b642ecbe3fea3d4d85ab1fda0ebcc83f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "80f41971700e703901da445031d81707a33d8ab00dc966248a4b415ef00fa1b4.glb",
+        "sha256": "80f41971700e703901da445031d81707a33d8ab00dc966248a4b415ef00fa1b4",
+        "size": 5886000
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dwarf_guilds/thunder support": {
+    "url": "76c33b161139d0d17b5191ae9dac265e35e2f12ee30d8b3c9005287cd2e97dd2.glb",
+    "sha256": "76c33b161139d0d17b5191ae9dac265e35e2f12ee30d8b3c9005287cd2e97dd2",
+    "size": 15968636,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f62e16516ec7107dec59fe54526d276ac847b609c8e5a1c1562b52860d0a8624.ctex",
+          "sha256": "f62e16516ec7107dec59fe54526d276ac847b609c8e5a1c1562b52860d0a8624",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "62ebe40d485c2d4dfc6d44beecbf82bed762bcf369bb41ec0e825b8c12168641.ctex",
+          "sha256": "62ebe40d485c2d4dfc6d44beecbf82bed762bcf369bb41ec0e825b8c12168641",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "522a16d35b213cd858821cc05126fe40f1fb70b7940d723c913495f79ee47f92.glb",
+        "sha256": "522a16d35b213cd858821cc05126fe40f1fb70b7940d723c913495f79ee47f92",
+        "size": 4565156
+      },
+      "size_class": "infantry"
+    }
+  }
+}

@@ -1,0 +1,678 @@
+{
+  "eternal_dynasty/artillery titan": {
+    "url": "bf5ac8aaedba5e45a4b21a5a58a6f985e8a1e9a86c9731dd36f1d49d2489e7db.glb",
+    "sha256": "bf5ac8aaedba5e45a4b21a5a58a6f985e8a1e9a86c9731dd36f1d49d2489e7db",
+    "size": 18290488,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0a83ae9d49dd56ae4435be2d1bfa896c6fd096cca130d84e38423420d2f6f976.ctex",
+          "sha256": "0a83ae9d49dd56ae4435be2d1bfa896c6fd096cca130d84e38423420d2f6f976",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "90a16c124f31a913f5681de83ea0691806f8e51ffc0cab1933672ee6ac3d4a04.ctex",
+          "sha256": "90a16c124f31a913f5681de83ea0691806f8e51ffc0cab1933672ee6ac3d4a04",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "33a1f74984bcb401512864d3e9624e04ec9a0b98a7658e37d35bcfb8dfdb075b.glb",
+        "sha256": "33a1f74984bcb401512864d3e9624e04ec9a0b98a7658e37d35bcfb8dfdb075b",
+        "size": 9063808
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "eternal_dynasty/attack drones": {
+    "url": "21770d4b772494845720a539226c7536706bf3f76e84dd775f8183b74b068d16.glb",
+    "sha256": "21770d4b772494845720a539226c7536706bf3f76e84dd775f8183b74b068d16",
+    "size": 12262728,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f40d4dce30df01338bc0c01602d6c99c7703e094fedc6a43c88e1fb8648204e8.ctex",
+          "sha256": "f40d4dce30df01338bc0c01602d6c99c7703e094fedc6a43c88e1fb8648204e8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "49ea46b6dddd32172a33c5cff978ae77ae1823eb04d11eb1b9dab0996d590f64.ctex",
+          "sha256": "49ea46b6dddd32172a33c5cff978ae77ae1823eb04d11eb1b9dab0996d590f64",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "711d91af96ff222ee27f8f8ed734a1b3ee099ef3122e7962fd1452acaea60833.glb",
+        "sha256": "711d91af96ff222ee27f8f8ed734a1b3ee099ef3122e7962fd1452acaea60833",
+        "size": 6745936
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "eternal_dynasty/captain lyao": {
+    "url": "74646352aeeb2f7c921cf373098420127977d7edabd5ea02d8f32ff5318707ae.glb",
+    "sha256": "74646352aeeb2f7c921cf373098420127977d7edabd5ea02d8f32ff5318707ae",
+    "size": 13437216,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c62ca18a5bd181d1bf7db7c0792c2a71cea3bff644edc851593d7a1674cd6aae.ctex",
+          "sha256": "c62ca18a5bd181d1bf7db7c0792c2a71cea3bff644edc851593d7a1674cd6aae",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0588743aee4005a84e91b80dbe38d0427cf206b3859de2b563d1f8a1597d2c1c.ctex",
+          "sha256": "0588743aee4005a84e91b80dbe38d0427cf206b3859de2b563d1f8a1597d2c1c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "0641eae6ae5f5f240fbe0c2d4c96e1bca1cccda65d1a70a0432f6d878c7d3246.glb",
+        "sha256": "0641eae6ae5f5f240fbe0c2d4c96e1bca1cccda65d1a70a0432f6d878c7d3246",
+        "size": 3889072
+      },
+      "size_class": "infantry"
+    }
+  },
+  "eternal_dynasty/captain wukaon": {
+    "url": "233cab1add1df179ad4b6eadfa969e7c8ff1bd246e4b5e3b184475c2f167715e.glb",
+    "sha256": "233cab1add1df179ad4b6eadfa969e7c8ff1bd246e4b5e3b184475c2f167715e",
+    "size": 15108760,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4d1cfeea244b0b19609e2d837a15e08df82915ebbd4621e0ea6083823d6daf82.ctex",
+          "sha256": "4d1cfeea244b0b19609e2d837a15e08df82915ebbd4621e0ea6083823d6daf82",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "cb0bd30f111c7cde6bd024600df50ca5b5d4c411d974a25d37ba5de53ad587ea.ctex",
+          "sha256": "cb0bd30f111c7cde6bd024600df50ca5b5d4c411d974a25d37ba5de53ad587ea",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "be11bafbd0d2c0c36143114c3b28fd8aec2195cac99219e082c0bdbe67dc2db1.glb",
+        "sha256": "be11bafbd0d2c0c36143114c3b28fd8aec2195cac99219e082c0bdbe67dc2db1",
+        "size": 4359388
+      },
+      "size_class": "infantry"
+    }
+  },
+  "eternal_dynasty/commander xao": {
+    "url": "451d32960bf79a02f737585f808d918767ee778e85eb973aaefd69affcbb2bcf.glb",
+    "sha256": "451d32960bf79a02f737585f808d918767ee778e85eb973aaefd69affcbb2bcf",
+    "size": 14637392,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "86b9d06dff68ab26c072166d19cc785f1d9f681dbb2eb90185552086faaca7d9.ctex",
+          "sha256": "86b9d06dff68ab26c072166d19cc785f1d9f681dbb2eb90185552086faaca7d9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "92658db3bc6b7357fb4d7a55b8dd5aa466e1625d8fa02cdd3ec0f8a3b3ea9a25.ctex",
+          "sha256": "92658db3bc6b7357fb4d7a55b8dd5aa466e1625d8fa02cdd3ec0f8a3b3ea9a25",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1f74bb4fd3c4f7dc1fef6f9ed215f903edfc4889215676411825af289fa6d592.glb",
+        "sha256": "1f74bb4fd3c4f7dc1fef6f9ed215f903edfc4889215676411825af289fa6d592",
+        "size": 4309120
+      },
+      "size_class": "infantry"
+    }
+  },
+  "eternal_dynasty/cyber beast": {
+    "url": "5878832475296fc0490dec19f5a7999b41670fc0ce690785d9e262cbabeae713.glb",
+    "sha256": "5878832475296fc0490dec19f5a7999b41670fc0ce690785d9e262cbabeae713",
+    "size": 15411348,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "bae9d11ba93afb5357f235347b3e7021abc7ce3fb9166e6d3f4098dd96b37a25.ctex",
+          "sha256": "bae9d11ba93afb5357f235347b3e7021abc7ce3fb9166e6d3f4098dd96b37a25",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d35ba07768015e78251b76f1a32f3c2989db7378ad8272b0dfb90341220f9b3f.ctex",
+          "sha256": "d35ba07768015e78251b76f1a32f3c2989db7378ad8272b0dfb90341220f9b3f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "0ca91047af4f6f20088cfed1a792a0d641d2a7b23e987b7a9ca39c076154bfbe.glb",
+        "sha256": "0ca91047af4f6f20088cfed1a792a0d641d2a7b23e987b7a9ca39c076154bfbe",
+        "size": 11119132
+      },
+      "size_class": "large"
+    }
+  },
+  "eternal_dynasty/cyber bird swarms": {
+    "url": "eb3c23535ec518bddc821171e9275b056dd5a5b236bd81bdf50bd6cb89125067.glb",
+    "sha256": "eb3c23535ec518bddc821171e9275b056dd5a5b236bd81bdf50bd6cb89125067",
+    "size": 18079164,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "dc6df0072f049985de64d6cb00fc7b834dcf1bf0c74519a907b02c62aef08844.ctex",
+          "sha256": "dc6df0072f049985de64d6cb00fc7b834dcf1bf0c74519a907b02c62aef08844",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f469ccd5fc2c8f912f546756ac8de14f10cb1cbc80abeca635983001a64c02ea.ctex",
+          "sha256": "f469ccd5fc2c8f912f546756ac8de14f10cb1cbc80abeca635983001a64c02ea",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "eff06510a427ce9e8dd0deab997f24bb6f34ef91d2b43733aabfb78e30ea2765.glb",
+        "sha256": "eff06510a427ce9e8dd0deab997f24bb6f34ef91d2b43733aabfb78e30ea2765",
+        "size": 4787880
+      },
+      "size_class": "infantry"
+    }
+  },
+  "eternal_dynasty/cyber lizards": {
+    "url": "bc3f35ae68d9d5534f3a5f4a18d52203b15234b70b288ab9c775a6a73b62a80f.glb",
+    "sha256": "bc3f35ae68d9d5534f3a5f4a18d52203b15234b70b288ab9c775a6a73b62a80f",
+    "size": 14276664,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c85ce5b25848eda704855c5b9d45746ba28f8e5a412867db77c2019383afc293.ctex",
+          "sha256": "c85ce5b25848eda704855c5b9d45746ba28f8e5a412867db77c2019383afc293",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6bba4a9e62c2f5650579357f42e57444015e9412ba51a7aa890db4d5828c04f0.ctex",
+          "sha256": "6bba4a9e62c2f5650579357f42e57444015e9412ba51a7aa890db4d5828c04f0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5e74b97a0473aeac569a7010f47b6bb29368eaa6c5c48fa79cf28e8935ab50d3.glb",
+        "sha256": "5e74b97a0473aeac569a7010f47b6bb29368eaa6c5c48fa79cf28e8935ab50d3",
+        "size": 3988216
+      },
+      "size_class": "infantry"
+    }
+  },
+  "eternal_dynasty/dragon speeder": {
+    "url": "865dec96fe0c5b2eefdf5ad987fa22f3105719e662e964d0a60883b0ab7a80d5.glb",
+    "sha256": "865dec96fe0c5b2eefdf5ad987fa22f3105719e662e964d0a60883b0ab7a80d5",
+    "size": 16250260,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "98a6d70d7555df3212095f8a73381abf7be08d948b8a64e3544a976b88e147a4.ctex",
+          "sha256": "98a6d70d7555df3212095f8a73381abf7be08d948b8a64e3544a976b88e147a4",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b79e45d8cfbca3ff5da9cbe8ef84ac06f0d2c7646399ee0e39d3cc67083e1334.ctex",
+          "sha256": "b79e45d8cfbca3ff5da9cbe8ef84ac06f0d2c7646399ee0e39d3cc67083e1334",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "44a0ea27ea589b5d940fee05427cecef7c3377059751a2c6ba67cfc32b4b2421.glb",
+        "sha256": "44a0ea27ea589b5d940fee05427cecef7c3377059751a2c6ba67cfc32b4b2421",
+        "size": 8657088
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "eternal_dynasty/dragon titan": {
+    "url": "b9ee4868b57b0ad4d08b8a2b02b8894b71f9da2393f7c84f9ebc32f1f452cc62.glb",
+    "sha256": "b9ee4868b57b0ad4d08b8a2b02b8894b71f9da2393f7c84f9ebc32f1f452cc62",
+    "size": 16478336,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e483eabed166bda63bd96078b7d32135ad004ec4f3ae83271c496eb8b9ce9235.ctex",
+          "sha256": "e483eabed166bda63bd96078b7d32135ad004ec4f3ae83271c496eb8b9ce9235",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "76c4fcc3bdca331234d44d85772473f452c60feb919e830368759f0bff7f675c.ctex",
+          "sha256": "76c4fcc3bdca331234d44d85772473f452c60feb919e830368759f0bff7f675c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e451d5087e1927ddec71d9ba239e94e2de4ec86022669a33dcf40be462bd559e.glb",
+        "sha256": "e451d5087e1927ddec71d9ba239e94e2de4ec86022669a33dcf40be462bd559e",
+        "size": 12182376
+      },
+      "size_class": "large"
+    }
+  },
+  "eternal_dynasty/dynasty apc": {
+    "url": "40c1682b0b1af3a55db6cb666cbf7bbc1d365634b83f689eb4eaeca4397124de.glb",
+    "sha256": "40c1682b0b1af3a55db6cb666cbf7bbc1d365634b83f689eb4eaeca4397124de",
+    "size": 15070892,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9dc3454ea1c2c68070e04b6d7baab540d0b985311ef9f47709decf70dfc3d19d.ctex",
+          "sha256": "9dc3454ea1c2c68070e04b6d7baab540d0b985311ef9f47709decf70dfc3d19d",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f59344114c6f6caaaf79816c29b20e2fe64c2de5ed9234de3b45fb0d34fe3eaf.ctex",
+          "sha256": "f59344114c6f6caaaf79816c29b20e2fe64c2de5ed9234de3b45fb0d34fe3eaf",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6071cd7c0ec1be6a1ab12b05285f73c8e43a5bc21d585c54400ffafd6501c9d9.glb",
+        "sha256": "6071cd7c0ec1be6a1ab12b05285f73c8e43a5bc21d585c54400ffafd6501c9d9",
+        "size": 7726160
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "eternal_dynasty/dynasty leader": {
+    "url": "501f0cb1b8e12f87e5f4b57711b43e0faf45c9471c99c504e489f8761c51c188.glb",
+    "sha256": "501f0cb1b8e12f87e5f4b57711b43e0faf45c9471c99c504e489f8761c51c188",
+    "size": 15066572,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3468e06ebdd1f929f2a07213edc5b6862daf642ead9a54464d0f318210dfc632.ctex",
+          "sha256": "3468e06ebdd1f929f2a07213edc5b6862daf642ead9a54464d0f318210dfc632",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "37260fa8ff56cdb69ad037e3f357075d0649720c172734ffb173b493af922017.ctex",
+          "sha256": "37260fa8ff56cdb69ad037e3f357075d0649720c172734ffb173b493af922017",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "85c2c0637042e59ee2b9ca40a054e16b4330ceb29ff9f91a719d12b553570525.glb",
+        "sha256": "85c2c0637042e59ee2b9ca40a054e16b4330ceb29ff9f91a719d12b553570525",
+        "size": 4777068
+      },
+      "size_class": "infantry"
+    }
+  },
+  "eternal_dynasty/dynasty tank": {
+    "url": "d843a3e16784a5b0372650fc0f4231264e1fc4cb50217abbe40275b71160192e.glb",
+    "sha256": "d843a3e16784a5b0372650fc0f4231264e1fc4cb50217abbe40275b71160192e",
+    "size": 16245836,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0f61bc241a5afbb33e9c4b71cc91b9393d7a34ae980e21749e082e36ce8ac40a.ctex",
+          "sha256": "0f61bc241a5afbb33e9c4b71cc91b9393d7a34ae980e21749e082e36ce8ac40a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "86e79e348eb8018d32661526aded7848430d805bfa746a4da2ba2fbf889f08e5.ctex",
+          "sha256": "86e79e348eb8018d32661526aded7848430d805bfa746a4da2ba2fbf889f08e5",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7c96c35db917e426bbca168b5d89c3ede9d7fd08a7032680ac17b069748815c8.glb",
+        "sha256": "7c96c35db917e426bbca168b5d89c3ede9d7fd08a7032680ac17b069748815c8",
+        "size": 8096152
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "eternal_dynasty/macaque titan": {
+    "url": "7c8751c7300f7045423523d93c958ddd8c65c2b9ed425276b1ecb69ade05df08.glb",
+    "sha256": "7c8751c7300f7045423523d93c958ddd8c65c2b9ed425276b1ecb69ade05df08",
+    "size": 15379900,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "15431828a57d7a4aacc5f24bba954ced26331f3efd2f5a268072b5a74a81c45b.ctex",
+          "sha256": "15431828a57d7a4aacc5f24bba954ced26331f3efd2f5a268072b5a74a81c45b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f2c8c084103e4682c5b4a3176c2e440b0107fe36c062cb70fa563582ed859b5b.ctex",
+          "sha256": "f2c8c084103e4682c5b4a3176c2e440b0107fe36c062cb70fa563582ed859b5b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a9836b8c43fd23bd20889f090f908794bcbbe85387ea41e64bb908469b8170a1.glb",
+        "sha256": "a9836b8c43fd23bd20889f090f908794bcbbe85387ea41e64bb908469b8170a1",
+        "size": 11459748
+      },
+      "size_class": "large"
+    }
+  },
+  "eternal_dynasty/ninja": {
+    "url": "6daa26eafaad7431b32a0ca101470060e2b9a4729994795ca2939d3c078c0800.glb",
+    "sha256": "6daa26eafaad7431b32a0ca101470060e2b9a4729994795ca2939d3c078c0800",
+    "size": 15638056,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "1983da8a054e47eafc85de95ccd35973f95a311ddc18a84bdbfa251d0fac1abd.ctex",
+          "sha256": "1983da8a054e47eafc85de95ccd35973f95a311ddc18a84bdbfa251d0fac1abd",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "98fc341cb8f565b5dcbdad9ad2ee07450a1fbed68a3137a59cc44e638371fa95.ctex",
+          "sha256": "98fc341cb8f565b5dcbdad9ad2ee07450a1fbed68a3137a59cc44e638371fa95",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2e18a0b67a11eae190bafa6677e9dcc1df9d1a15e4c25e3bd3fd70c77a1b655e.glb",
+        "sha256": "2e18a0b67a11eae190bafa6677e9dcc1df9d1a15e4c25e3bd3fd70c77a1b655e",
+        "size": 4567508
+      },
+      "size_class": "infantry"
+    }
+  },
+  "eternal_dynasty/ninja walker": {
+    "url": "e6fcdfbf600198a8de0356ef2ea4bdbfa4608545367594779956dd0988e7cfca.glb",
+    "sha256": "e6fcdfbf600198a8de0356ef2ea4bdbfa4608545367594779956dd0988e7cfca",
+    "size": 15173812,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e572790ec5076e3d14e1766737d1f63dd0cb805fd1275eece79fbff675dffb6e.ctex",
+          "sha256": "e572790ec5076e3d14e1766737d1f63dd0cb805fd1275eece79fbff675dffb6e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "11406ba77b106a063c6e149843d763795d4d4887fb66ee31103b69e8be7ac7db.ctex",
+          "sha256": "11406ba77b106a063c6e149843d763795d4d4887fb66ee31103b69e8be7ac7db",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7ceabaa055f33d605c2bcaedeca19873245cf75a72eef3e79d0ef93feb63bb6e.glb",
+        "sha256": "7ceabaa055f33d605c2bcaedeca19873245cf75a72eef3e79d0ef93feb63bb6e",
+        "size": 8321240
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "eternal_dynasty/oni captain": {
+    "url": "f75e8fd2d3123b8e3e52105bf6fba264d276551d6c2bfa01402ff1dad50649e9.glb",
+    "sha256": "f75e8fd2d3123b8e3e52105bf6fba264d276551d6c2bfa01402ff1dad50649e9",
+    "size": 14383652,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "17b13061b909e40cf44d29bea2d919ef083e7510ecd6ee8d890cf05e53f5f74b.ctex",
+          "sha256": "17b13061b909e40cf44d29bea2d919ef083e7510ecd6ee8d890cf05e53f5f74b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "bdd52512f233351744d6fe64ba75aaebbe5d94b1445c241a737971719bf11094.ctex",
+          "sha256": "bdd52512f233351744d6fe64ba75aaebbe5d94b1445c241a737971719bf11094",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2130c053807c3d426d8a95737a29a8e63a8351e492b4a0755e8715c56bc72d84.glb",
+        "sha256": "2130c053807c3d426d8a95737a29a8e63a8351e492b4a0755e8715c56bc72d84",
+        "size": 4241020
+      },
+      "size_class": "infantry"
+    }
+  },
+  "eternal_dynasty/oni walker": {
+    "url": "a129a89a89307e8fa024f3e7ff387826165c5c5415c9a8f94b3ebaa4dfbb7dc2.glb",
+    "sha256": "a129a89a89307e8fa024f3e7ff387826165c5c5415c9a8f94b3ebaa4dfbb7dc2",
+    "size": 15424692,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "65838139c456bbfbf87ff4d36d3597300ecdd5e15237df16154baf15e41b991e.ctex",
+          "sha256": "65838139c456bbfbf87ff4d36d3597300ecdd5e15237df16154baf15e41b991e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "514d792440a5c71ef5c8399be8b3e4ce2856ed7db7afdac10a761b35da8318a9.ctex",
+          "sha256": "514d792440a5c71ef5c8399be8b3e4ce2856ed7db7afdac10a761b35da8318a9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "cca38efa795fd13eeba4a0ec4aa051f808501f4e248274c5ea7d0a132cb3d72a.glb",
+        "sha256": "cca38efa795fd13eeba4a0ec4aa051f808501f4e248274c5ea7d0a132cb3d72a",
+        "size": 7907236
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "eternal_dynasty/onis": {
+    "url": "1eb3cd0ee9a1d79311eb6d30a6571ee6eec4ccc3dffa79da965bd9821530c05e.glb",
+    "sha256": "1eb3cd0ee9a1d79311eb6d30a6571ee6eec4ccc3dffa79da965bd9821530c05e",
+    "size": 12663160,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3fb1b0dfe25a335d5b272f1245e4b297a17490921c97c6cdfff43e4a7ca05f6b.ctex",
+          "sha256": "3fb1b0dfe25a335d5b272f1245e4b297a17490921c97c6cdfff43e4a7ca05f6b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "bd51bcc58efb45e8c5bc3d94fa8e07df2d92cc4cd48828ee0a07cecde610ee59.ctex",
+          "sha256": "bd51bcc58efb45e8c5bc3d94fa8e07df2d92cc4cd48828ee0a07cecde610ee59",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "58097575cc49557259cb63e6c1408333726254fc2e969717782fa87f1f14eab3.glb",
+        "sha256": "58097575cc49557259cb63e6c1408333726254fc2e969717782fa87f1f14eab3",
+        "size": 3632468
+      },
+      "size_class": "infantry"
+    }
+  },
+  "eternal_dynasty/royal guard": {
+    "url": "2d01ea734cd2925bf56ca4b569836a24e93d8e50aee4ad6179a67001e95831fa.glb",
+    "sha256": "2d01ea734cd2925bf56ca4b569836a24e93d8e50aee4ad6179a67001e95831fa",
+    "size": 16184876,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2c0637c20b32af9b46e8d33c6e50a981608411946f1ea098f495a75b0dcf11a6.ctex",
+          "sha256": "2c0637c20b32af9b46e8d33c6e50a981608411946f1ea098f495a75b0dcf11a6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5cff61b430e836ee26ed6154c27839066a18b12c2736078f03d8cbe8966d201a.ctex",
+          "sha256": "5cff61b430e836ee26ed6154c27839066a18b12c2736078f03d8cbe8966d201a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2ad881152815dac4dc7dd264704c2f4223747824a6dbfddd85e88ad905309716.glb",
+        "sha256": "2ad881152815dac4dc7dd264704c2f4223747824a6dbfddd85e88ad905309716",
+        "size": 5006236
+      },
+      "size_class": "infantry"
+    }
+  },
+  "eternal_dynasty/sage myan": {
+    "url": "4cc844ac3f534079223384b5186dcbb23e5b975739764b5757160c5c68cbc201.glb",
+    "sha256": "4cc844ac3f534079223384b5186dcbb23e5b975739764b5757160c5c68cbc201",
+    "size": 16023120,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c8a859266fb401b11912250c44d6b262d4f4b72a20e2fc45f0fb55438f7ad5d1.ctex",
+          "sha256": "c8a859266fb401b11912250c44d6b262d4f4b72a20e2fc45f0fb55438f7ad5d1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8b3d0b8da1fdc9d72d2a7ef652829fab1ef56c6b65e32cde3dafd7ba9aceda72.ctex",
+          "sha256": "8b3d0b8da1fdc9d72d2a7ef652829fab1ef56c6b65e32cde3dafd7ba9aceda72",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "bc6529ac95df47593b931a80236b561bf70c4d61947b8332a66eb3acbd271d04.glb",
+        "sha256": "bc6529ac95df47593b931a80236b561bf70c4d61947b8332a66eb3acbd271d04",
+        "size": 4694652
+      },
+      "size_class": "infantry"
+    }
+  },
+  "eternal_dynasty/samurai titan": {
+    "url": "de92bb44e458f26e118580339f78eafd4877018db4efb5b61a251a67ae368c1f.glb",
+    "sha256": "de92bb44e458f26e118580339f78eafd4877018db4efb5b61a251a67ae368c1f",
+    "size": 16346004,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "52a56c89b21a40e8f269baaa3af29df663ac793674266e387a57497b4c467c8f.ctex",
+          "sha256": "52a56c89b21a40e8f269baaa3af29df663ac793674266e387a57497b4c467c8f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8cb2ee4303e3e66c55111781ce0885a00215549ac44d7d1fcebd416b812e0328.ctex",
+          "sha256": "8cb2ee4303e3e66c55111781ce0885a00215549ac44d7d1fcebd416b812e0328",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7bfdd0dd1f211cd4c6e1f2c219a2627ce01bb5f6b2cedb2372711a62647770bf.glb",
+        "sha256": "7bfdd0dd1f211cd4c6e1f2c219a2627ce01bb5f6b2cedb2372711a62647770bf",
+        "size": 12180700
+      },
+      "size_class": "large"
+    }
+  },
+  "eternal_dynasty/scouts": {
+    "url": "20342d35a5fcc1f000e3f08f7d241ec3679ff542a75de627a95263097e2e7267.glb",
+    "sha256": "20342d35a5fcc1f000e3f08f7d241ec3679ff542a75de627a95263097e2e7267",
+    "size": 14777396,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4c37eb8dbda731dc8ad181e181ad80d129aca5fee113cc685229611063154efb.ctex",
+          "sha256": "4c37eb8dbda731dc8ad181e181ad80d129aca5fee113cc685229611063154efb",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "11006952ca8087ee81378a795d309905d8c193fe05a1816c74802ab5dc071f1c.ctex",
+          "sha256": "11006952ca8087ee81378a795d309905d8c193fe05a1816c74802ab5dc071f1c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2ab35d6ef94092f5bf37e8f8923963ee009ff533f71c9fe7c2fa9271721a7f61.glb",
+        "sha256": "2ab35d6ef94092f5bf37e8f8923963ee009ff533f71c9fe7c2fa9271721a7f61",
+        "size": 4250464
+      },
+      "size_class": "infantry"
+    }
+  },
+  "eternal_dynasty/sergeant wou": {
+    "url": "7024668a53de84dfb78fe3a5db3036b1ec4572bd14ee7837d7e2c9078faa8e1a.glb",
+    "sha256": "7024668a53de84dfb78fe3a5db3036b1ec4572bd14ee7837d7e2c9078faa8e1a",
+    "size": 16356784,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2b58b35452d5591bcf6dc6bbf9140bee840264515273b90567e8df75709156c5.ctex",
+          "sha256": "2b58b35452d5591bcf6dc6bbf9140bee840264515273b90567e8df75709156c5",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "57eb4c22d0e6b86f8a9a67115558d893cf1b1f8d7ff7b9d7e14732d2c453e6ef.ctex",
+          "sha256": "57eb4c22d0e6b86f8a9a67115558d893cf1b1f8d7ff7b9d7e14732d2c453e6ef",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b3ed519abe8c4db57ff2a8ec808e2cb1100abda4ef82ca82796776992906825c.glb",
+        "sha256": "b3ed519abe8c4db57ff2a8ec808e2cb1100abda4ef82ca82796776992906825c",
+        "size": 5230948
+      },
+      "size_class": "infantry"
+    }
+  },
+  "eternal_dynasty/syen and xaotyan": {
+    "url": "89254b910423424da44dae3bbcc84158d6d8ee0aa171b61691924fe0671cfdfc.glb",
+    "sha256": "89254b910423424da44dae3bbcc84158d6d8ee0aa171b61691924fe0671cfdfc",
+    "size": 16688628,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c138adbe71027f2bbc508730ef2af6bcbcd5bc2050c8417f50bd0957b738f21f.ctex",
+          "sha256": "c138adbe71027f2bbc508730ef2af6bcbcd5bc2050c8417f50bd0957b738f21f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3b815b76a0f3e28a865dec0a8c3bac010ef28628efd3767dd7aba16dba1a2f5b.ctex",
+          "sha256": "3b815b76a0f3e28a865dec0a8c3bac010ef28628efd3767dd7aba16dba1a2f5b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d749413d83ce152915bed1427c9e462d66b6b7da436c16f3903f7a219782b2d5.glb",
+        "sha256": "d749413d83ce152915bed1427c9e462d66b6b7da436c16f3903f7a219782b2d5",
+        "size": 4477012
+      },
+      "size_class": "infantry"
+    }
+  },
+  "eternal_dynasty/warriors": {
+    "url": "5b75f8e10f59a19e69935f5d3fee13776a5c717068ce1c96de52c41fdeac79de.glb",
+    "sha256": "5b75f8e10f59a19e69935f5d3fee13776a5c717068ce1c96de52c41fdeac79de",
+    "size": 15405040,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9d95d7ddbe8e609cf2e100b097e616baf7dc678a3e5c103cd008e5a571a6b8b0.ctex",
+          "sha256": "9d95d7ddbe8e609cf2e100b097e616baf7dc678a3e5c103cd008e5a571a6b8b0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4dd4aa62ff44e39bb87aa28f644a5017838062db081758949d2de51c8ae9b1b1.ctex",
+          "sha256": "4dd4aa62ff44e39bb87aa28f644a5017838062db081758949d2de51c8ae9b1b1",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3935fef7a53c860815811311e5c7b162893b2f9bae00304108b900c4f5629710.glb",
+        "sha256": "3935fef7a53c860815811311e5c7b162893b2f9bae00304108b900c4f5629710",
+        "size": 4370992
+      },
+      "size_class": "infantry"
+    }
+  }
+}

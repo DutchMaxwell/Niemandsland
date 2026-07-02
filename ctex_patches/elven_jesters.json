@@ -1,0 +1,210 @@
+{
+  "elven_jesters/fool champion": {
+    "url": "753d7080fb9ca499cb964d41c2d31e537db491f02046c23cc2bbe348961b28ca.glb",
+    "sha256": "753d7080fb9ca499cb964d41c2d31e537db491f02046c23cc2bbe348961b28ca",
+    "size": 17974436,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0bd5d775ff365f3c52ee78c74c00431f46f280682ff0fdd69633e1bdaff44173.ctex",
+          "sha256": "0bd5d775ff365f3c52ee78c74c00431f46f280682ff0fdd69633e1bdaff44173",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f65b02b3dc7167884c87e2e8ffb8a0bcb74dd47aebd4c83fd9df6b71439b587d.ctex",
+          "sha256": "f65b02b3dc7167884c87e2e8ffb8a0bcb74dd47aebd4c83fd9df6b71439b587d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "836c22e4036ba63b46a640d987e3b47285fec9212307ab4d0e821d74799fd5c0.glb",
+        "sha256": "836c22e4036ba63b46a640d987e3b47285fec9212307ab4d0e821d74799fd5c0",
+        "size": 4594528
+      },
+      "size_class": "infantry"
+    }
+  },
+  "elven_jesters/fools": {
+    "url": "ab0a92d17822fb2612c629db9ac20876727c44b327e03c4e8b041d27d9afe71b.glb",
+    "sha256": "ab0a92d17822fb2612c629db9ac20876727c44b327e03c4e8b041d27d9afe71b",
+    "size": 16086840,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "cc2cef1a097df6f1f151ae71b7beb13f71f110859eb4cfb17f921ab76936d170.ctex",
+          "sha256": "cc2cef1a097df6f1f151ae71b7beb13f71f110859eb4cfb17f921ab76936d170",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a0463d04a8c06ff2b926fca83cbe30e8892b4f981e7fe20c7decd340f5294811.ctex",
+          "sha256": "a0463d04a8c06ff2b926fca83cbe30e8892b4f981e7fe20c7decd340f5294811",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3550cb3e4373433458c909fcaea41f1a9ab91fcd5ec3321f7e5396f93029211e.glb",
+        "sha256": "3550cb3e4373433458c909fcaea41f1a9ab91fcd5ec3321f7e5396f93029211e",
+        "size": 4232148
+      },
+      "size_class": "infantry"
+    }
+  },
+  "elven_jesters/heavy jetbike": {
+    "url": "4672941438b532ac3fea6e993d5d4703b58fc3a6422bffbe0ce4da84d9ace7dd.glb",
+    "sha256": "4672941438b532ac3fea6e993d5d4703b58fc3a6422bffbe0ce4da84d9ace7dd",
+    "size": 18721488,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d5e2831e0449e61b95ae66654910b28a99d34909e2fcb002c549e75ac359e74a.ctex",
+          "sha256": "d5e2831e0449e61b95ae66654910b28a99d34909e2fcb002c549e75ac359e74a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f668ba367af7f2a4044ab0859278a95c4dd175a4f85216c439ab2c89fef400b1.ctex",
+          "sha256": "f668ba367af7f2a4044ab0859278a95c4dd175a4f85216c439ab2c89fef400b1",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "669533d12ab9256936cd2ee3ea6f39d04e5cc0f4f13974c9b282762a322ca073.glb",
+        "sha256": "669533d12ab9256936cd2ee3ea6f39d04e5cc0f4f13974c9b282762a322ca073",
+        "size": 9409504
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "elven_jesters/jesters": {
+    "url": "bdb5505e4e2f70ab98331c4eb6e89bccbf8eb687be14b0fc2f52def0155eb2a8.glb",
+    "sha256": "bdb5505e4e2f70ab98331c4eb6e89bccbf8eb687be14b0fc2f52def0155eb2a8",
+    "size": 22230128,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "11694317bbfa41d9f90ec8c015bcb2f1b42db1a51cc19912d3509d05230dc3ff.ctex",
+          "sha256": "11694317bbfa41d9f90ec8c015bcb2f1b42db1a51cc19912d3509d05230dc3ff",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c984a4fbc97eacaf0b119ec19b4acac0d11ff465cfccf754ec244512e59f5941.ctex",
+          "sha256": "c984a4fbc97eacaf0b119ec19b4acac0d11ff465cfccf754ec244512e59f5941",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b3a651d43f438d32b42a0a6d81d7ad8815359e29a5605f62b721dbcd68524d9f.glb",
+        "sha256": "b3a651d43f438d32b42a0a6d81d7ad8815359e29a5605f62b721dbcd68524d9f",
+        "size": 4796120
+      },
+      "size_class": "infantry"
+    }
+  },
+  "elven_jesters/jetbikes": {
+    "url": "5c8e22e559001c6ff6378f1b7a41fabf23842b3af811b5031baab74a669458f1.glb",
+    "sha256": "5c8e22e559001c6ff6378f1b7a41fabf23842b3af811b5031baab74a669458f1",
+    "size": 17819340,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "43478991a4e7b380e3030c302f9769e52632eea704289ac650e3393b30e33079.ctex",
+          "sha256": "43478991a4e7b380e3030c302f9769e52632eea704289ac650e3393b30e33079",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "72fd86b2446d02f5fa2f3a1f53557388eb66c34239b1c0fe45fe2ad310e32066.ctex",
+          "sha256": "72fd86b2446d02f5fa2f3a1f53557388eb66c34239b1c0fe45fe2ad310e32066",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "748f5f64fee4017766c660a50f47b3694b0863ff2d72b589c531feec5cc8736a.glb",
+        "sha256": "748f5f64fee4017766c660a50f47b3694b0863ff2d72b589c531feec5cc8736a",
+        "size": 9458524
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "elven_jesters/jokers": {
+    "url": "dda1c480be8f01a26abc5d2d1ff6e5cea5bac14ab70c3b19bb3dea50a2a2dba8.glb",
+    "sha256": "dda1c480be8f01a26abc5d2d1ff6e5cea5bac14ab70c3b19bb3dea50a2a2dba8",
+    "size": 21838476,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4ea94e17ceaa0c87a34da0ad7ce010b9212465f9d01e5bc1a3e49e87e47113db.ctex",
+          "sha256": "4ea94e17ceaa0c87a34da0ad7ce010b9212465f9d01e5bc1a3e49e87e47113db",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d2e67470ec0719c56e7ace1d2f1b2d668d1d2aeaf720e045efc55a4fa21d4908.ctex",
+          "sha256": "d2e67470ec0719c56e7ace1d2f1b2d668d1d2aeaf720e045efc55a4fa21d4908",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f71034011ba27a401ba1fce7d4c981da3088eaec33134558a3fb58ff84c97bcd.glb",
+        "sha256": "f71034011ba27a401ba1fce7d4c981da3088eaec33134558a3fb58ff84c97bcd",
+        "size": 4807388
+      },
+      "size_class": "infantry"
+    }
+  },
+  "elven_jesters/master jester": {
+    "url": "b1dd9bc06b6d01c782f5b42de732e388aa1f789321f44e56235509e913a39cd2.glb",
+    "sha256": "b1dd9bc06b6d01c782f5b42de732e388aa1f789321f44e56235509e913a39cd2",
+    "size": 21228820,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "70117e618370826244664433041362752d90530b860026d3c4d176adb23b1f7e.ctex",
+          "sha256": "70117e618370826244664433041362752d90530b860026d3c4d176adb23b1f7e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "cabcc396e6332475b0c7414df303129e3738a3074211fa3f8c91ee08442fad8b.ctex",
+          "sha256": "cabcc396e6332475b0c7414df303129e3738a3074211fa3f8c91ee08442fad8b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b1d4cd0c73f051749ac16ebf0be5876c60bcbcb0bb5e1abb93f23f8f9404d5b1.glb",
+        "sha256": "b1d4cd0c73f051749ac16ebf0be5876c60bcbcb0bb5e1abb93f23f8f9404d5b1",
+        "size": 4626604
+      },
+      "size_class": "infantry"
+    }
+  },
+  "elven_jesters/pranksters": {
+    "url": "6d1859931c0133a31b851950c9b8e414eeb2365a426a9598ecc09458f3f70359.glb",
+    "sha256": "6d1859931c0133a31b851950c9b8e414eeb2365a426a9598ecc09458f3f70359",
+    "size": 21415476,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "51638c95871f427a8fdf88e6954e397982e0723daba1155c368928be3c5f5a96.ctex",
+          "sha256": "51638c95871f427a8fdf88e6954e397982e0723daba1155c368928be3c5f5a96",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ae0a977f4360b913864fe2a1091128202c304886bdcba8327f94f10af4702839.ctex",
+          "sha256": "ae0a977f4360b913864fe2a1091128202c304886bdcba8327f94f10af4702839",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "912d9c250c85c7c848eab5b1131ccf33a24af8d4d87fe7035c90786ed75213e7.glb",
+        "sha256": "912d9c250c85c7c848eab5b1131ccf33a24af8d4d87fe7035c90786ed75213e7",
+        "size": 4709124
+      },
+      "size_class": "infantry"
+    }
+  }
+}

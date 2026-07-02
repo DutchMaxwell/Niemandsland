@@ -1,0 +1,678 @@
+{
+  "battle_brothers/apc": {
+    "url": "fd1bd006f6a6ef8602b13d7302587ed4f6f00e8c79dfc29cb68dfd6504a7dafd.glb",
+    "sha256": "fd1bd006f6a6ef8602b13d7302587ed4f6f00e8c79dfc29cb68dfd6504a7dafd",
+    "size": 12082028,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3d344842ad6d2666339921873405899437c253ba8436c28e2fb853e156bcdb04.ctex",
+          "sha256": "3d344842ad6d2666339921873405899437c253ba8436c28e2fb853e156bcdb04",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1b7ee96d2b187ceea3352773d8528c574c5c3086114ee2c0f7487d7bcfd80e75.ctex",
+          "sha256": "1b7ee96d2b187ceea3352773d8528c574c5c3086114ee2c0f7487d7bcfd80e75",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b7404159df6dd616f06e38b6120452221f997dd5901a79ede5ba94c693f8c129.glb",
+        "sha256": "b7404159df6dd616f06e38b6120452221f997dd5901a79ede5ba94c693f8c129",
+        "size": 8144692
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "battle_brothers/artillery gun": {
+    "url": "ce2206e640dc689276f4dd525cdde7c7f4432c90990060450a824d7e23a8f2ce.glb",
+    "sha256": "ce2206e640dc689276f4dd525cdde7c7f4432c90990060450a824d7e23a8f2ce",
+    "size": 15575116,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6e97324f09ca5a3fa8bc673c5475981364df8ac38da7e75086f20eea14a34c3b.ctex",
+          "sha256": "6e97324f09ca5a3fa8bc673c5475981364df8ac38da7e75086f20eea14a34c3b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2b2c3c78a3b784ff46ff62431389b34593e18e696579b2f5f9f8817c2d988dbf.ctex",
+          "sha256": "2b2c3c78a3b784ff46ff62431389b34593e18e696579b2f5f9f8817c2d988dbf",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d374f9f97e8c543547328337e2b3a212b623f57cf990f443d75a0a2c31037599.glb",
+        "sha256": "d374f9f97e8c543547328337e2b3a212b623f57cf990f443d75a0a2c31037599",
+        "size": 9040360
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "battle_brothers/assault brothers": {
+    "url": "0674fd15f8292836f515980e8acbc633dec865042555536c5f9a935d334dc3ac.glb",
+    "sha256": "0674fd15f8292836f515980e8acbc633dec865042555536c5f9a935d334dc3ac",
+    "size": 13242476,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "770e7e6d97d0bc9f904e19e5e8f52c0767986891a375d954e05e0e3039d627ca.ctex",
+          "sha256": "770e7e6d97d0bc9f904e19e5e8f52c0767986891a375d954e05e0e3039d627ca",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3f7dda5601fa32afcb36fd3b387c33f55f8eb8b8bd330927ca809a11a3cdf599.ctex",
+          "sha256": "3f7dda5601fa32afcb36fd3b387c33f55f8eb8b8bd330927ca809a11a3cdf599",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "28d667ad212c05b46cd92efd672d8ffba4402e93fb4ee2ddec53ed0d8b8007a2.glb",
+        "sha256": "28d667ad212c05b46cd92efd672d8ffba4402e93fb4ee2ddec53ed0d8b8007a2",
+        "size": 3920632
+      },
+      "size_class": "infantry"
+    }
+  },
+  "battle_brothers/attack apc": {
+    "url": "562d01dc86cce00ff25ede69998cbe3938159bb43770a6f60e241ca4718c5dbf.glb",
+    "sha256": "562d01dc86cce00ff25ede69998cbe3938159bb43770a6f60e241ca4718c5dbf",
+    "size": 17161708,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "53bae5412d2eb725cd2d276334d44cbf087dc03497e55fc4e316e4855f47f315.ctex",
+          "sha256": "53bae5412d2eb725cd2d276334d44cbf087dc03497e55fc4e316e4855f47f315",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "35b61254ff20c70e43a7bb95956855b4ef019e0d854fd2a9070e978854dbdf0f.ctex",
+          "sha256": "35b61254ff20c70e43a7bb95956855b4ef019e0d854fd2a9070e978854dbdf0f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6f05a8ac26865a8426d1b26e61a62f1579435f108368eca16b33c906ea0be50f.glb",
+        "sha256": "6f05a8ac26865a8426d1b26e61a62f1579435f108368eca16b33c906ea0be50f",
+        "size": 9533372
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "battle_brothers/attack speeder": {
+    "url": "b4e4ed3a2e2e128e82d99c79b6c8bf7346fde75dc0fa8fe1081cba4eb3b70bfb.glb",
+    "sha256": "b4e4ed3a2e2e128e82d99c79b6c8bf7346fde75dc0fa8fe1081cba4eb3b70bfb",
+    "size": 22108944,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3c290525750f82a7ec8dffb5f0d0b7d6d9f995d12e59692abeb5af889b7295cb.ctex",
+          "sha256": "3c290525750f82a7ec8dffb5f0d0b7d6d9f995d12e59692abeb5af889b7295cb",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0f28289e8e54f0b39913f57d3baf90e0bbfa55f2798a7f09d76671886141a275.ctex",
+          "sha256": "0f28289e8e54f0b39913f57d3baf90e0bbfa55f2798a7f09d76671886141a275",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "acc141276637e38e14bb80c1cbc2604fe87213680b94f541306dc9284739b872.glb",
+        "sha256": "acc141276637e38e14bb80c1cbc2604fe87213680b94f541306dc9284739b872",
+        "size": 10348780
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "battle_brothers/battle brothers": {
+    "url": "6bb8f5c0390acdd1dfee6fff8d150dd4692c30faaaffd2faf2b10cd153ad0e7a.glb",
+    "sha256": "6bb8f5c0390acdd1dfee6fff8d150dd4692c30faaaffd2faf2b10cd153ad0e7a",
+    "size": 13734164,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "097d7382fe1c3fb964b45691c2b46508762502d89ab37f311d54b40ab976f125.ctex",
+          "sha256": "097d7382fe1c3fb964b45691c2b46508762502d89ab37f311d54b40ab976f125",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d83bd1abe645f525bf118c17e648eb9e0a3a4f528d4ee1f83331dec188de698e.ctex",
+          "sha256": "d83bd1abe645f525bf118c17e648eb9e0a3a4f528d4ee1f83331dec188de698e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "0c66284d9760bf7a7ee6ef751e59763e16d7b00c64aeaa3d1850972c3de597f6.glb",
+        "sha256": "0c66284d9760bf7a7ee6ef751e59763e16d7b00c64aeaa3d1850972c3de597f6",
+        "size": 3844624
+      },
+      "size_class": "infantry"
+    }
+  },
+  "battle_brothers/battle tank": {
+    "url": "089c947360f3739ef5efe79ce110d1c6f064476a7b3c356462b175687fe652ef.glb",
+    "sha256": "089c947360f3739ef5efe79ce110d1c6f064476a7b3c356462b175687fe652ef",
+    "size": 15493964,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "30646b2485da7b922665adff2886d8801eed262382a901cff5a06a9d58c9c68b.ctex",
+          "sha256": "30646b2485da7b922665adff2886d8801eed262382a901cff5a06a9d58c9c68b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "bf7a12052e17fb59e810d938c35489ea6857009c46dc6a11cbcaaa824974a3f1.ctex",
+          "sha256": "bf7a12052e17fb59e810d938c35489ea6857009c46dc6a11cbcaaa824974a3f1",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5490c4e1ba6412a8157177f1c72ada64ed5e48d4532f78e70ff76c3a2040f6d3.glb",
+        "sha256": "5490c4e1ba6412a8157177f1c72ada64ed5e48d4532f78e70ff76c3a2040f6d3",
+        "size": 9018052
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "battle_brothers/brother bikers": {
+    "url": "c970e645f270d53bbd1beac8ec1bf361754ab146a6ec1c85e2054be5f4f31c3c.glb",
+    "sha256": "c970e645f270d53bbd1beac8ec1bf361754ab146a6ec1c85e2054be5f4f31c3c",
+    "size": 15151144,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "14c1162a9acdbeaf0199e6f884e2c7ef95d3ed15b29d5deb0bc47ecd5ca85f2b.ctex",
+          "sha256": "14c1162a9acdbeaf0199e6f884e2c7ef95d3ed15b29d5deb0bc47ecd5ca85f2b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7317cb15c55e91837a0983036679d80dccc01156c9706df9ec316102cc64340b.ctex",
+          "sha256": "7317cb15c55e91837a0983036679d80dccc01156c9706df9ec316102cc64340b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "59b125c068f30373411ee2e93587592abe4392ef0fcae269d08f67b3329692a4.glb",
+        "sha256": "59b125c068f30373411ee2e93587592abe4392ef0fcae269d08f67b3329692a4",
+        "size": 8145536
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "battle_brothers/combat walker": {
+    "url": "643745d58eda680e0213d1896b7b359def746d338fea65c34bd6cf4b5b9c141a.glb",
+    "sha256": "643745d58eda680e0213d1896b7b359def746d338fea65c34bd6cf4b5b9c141a",
+    "size": 16326720,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "db6fb766989cb6a99a94da37e30cb6a5155818751524b7a117621d0d44d8fcf9.ctex",
+          "sha256": "db6fb766989cb6a99a94da37e30cb6a5155818751524b7a117621d0d44d8fcf9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1bdc6e9eea9215347c276c18095fc301af81cbf844f2377339107e5238ecfa5a.ctex",
+          "sha256": "1bdc6e9eea9215347c276c18095fc301af81cbf844f2377339107e5238ecfa5a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "44afc1db5d39bb609cbac849e2226fd772db1ac6c280d0487c7f6edc0442aee0.glb",
+        "sha256": "44afc1db5d39bb609cbac849e2226fd772db1ac6c280d0487c7f6edc0442aee0",
+        "size": 9248996
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "battle_brothers/destroyers": {
+    "url": "39b0aa0c16193c554ee3064acca405e8b67174c8060b141db6640ce5467c475c.glb",
+    "sha256": "39b0aa0c16193c554ee3064acca405e8b67174c8060b141db6640ce5467c475c",
+    "size": 13194604,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f674bfc587a3ce9c2b939e2b84087298b162c3ee39529e06877459c8686a02c8.ctex",
+          "sha256": "f674bfc587a3ce9c2b939e2b84087298b162c3ee39529e06877459c8686a02c8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "87559ff8c5f4d917884e87f14763b14af6039df1e46db97ee1da13007ab0f2e1.ctex",
+          "sha256": "87559ff8c5f4d917884e87f14763b14af6039df1e46db97ee1da13007ab0f2e1",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ee153d72239800dc4325dc38b97e21217b910128ed4abc5f113e7088248a6144.glb",
+        "sha256": "ee153d72239800dc4325dc38b97e21217b910128ed4abc5f113e7088248a6144",
+        "size": 3729424
+      },
+      "size_class": "infantry"
+    }
+  },
+  "battle_brothers/drop pod": {
+    "url": "df4115f4cfc7c6f1812964549dfc0e0d74e38bcda476607b997b77541f4a6350.glb",
+    "sha256": "df4115f4cfc7c6f1812964549dfc0e0d74e38bcda476607b997b77541f4a6350",
+    "size": 15041736,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e00d6f6beb7aee3189663529ed56527aa872dff7d91be0cc3d8cca91f2fa3229.ctex",
+          "sha256": "e00d6f6beb7aee3189663529ed56527aa872dff7d91be0cc3d8cca91f2fa3229",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1e8b186ad83d22ebdd6ac64c1477afaec83a164b06d394a0fa01a98bd885f09f.ctex",
+          "sha256": "1e8b186ad83d22ebdd6ac64c1477afaec83a164b06d394a0fa01a98bd885f09f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "811650071fc3e7011fb358285515a83e31fffd66b4844a8d32afeb4c1bfecae0.glb",
+        "sha256": "811650071fc3e7011fb358285515a83e31fffd66b4844a8d32afeb4c1bfecae0",
+        "size": 7890100
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "battle_brothers/elite pathfinder": {
+    "url": "489d79eeaa0fc0daa4770759330946be12a2d1286043d0b4d47dbb199b34ed8f.glb",
+    "sha256": "489d79eeaa0fc0daa4770759330946be12a2d1286043d0b4d47dbb199b34ed8f",
+    "size": 15076820,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c27dcee322b8df1c63cca839a044de090c46c2116075643305a4f3d67285beca.ctex",
+          "sha256": "c27dcee322b8df1c63cca839a044de090c46c2116075643305a4f3d67285beca",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "842d758df76bd9dde106ca3744d610ea83ea80e8df80df03bdb47a7a808a99b9.ctex",
+          "sha256": "842d758df76bd9dde106ca3744d610ea83ea80e8df80df03bdb47a7a808a99b9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a337c245c7020f3181350fcc90bfecb92bcac923d98f5a34ffe061897b0115f1.glb",
+        "sha256": "a337c245c7020f3181350fcc90bfecb92bcac923d98f5a34ffe061897b0115f1",
+        "size": 4120048
+      },
+      "size_class": "infantry"
+    }
+  },
+  "battle_brothers/heavy exo suit": {
+    "url": "5138116ea1a091fc76802f7c419cdd2cf28d5c058cd3a7690322d557c2ba23a4.glb",
+    "sha256": "5138116ea1a091fc76802f7c419cdd2cf28d5c058cd3a7690322d557c2ba23a4",
+    "size": 16563800,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6d8ef117082ac9a79bc3977dc4b206cfbfb5aa62dbddcd2a272a8635c09554da.ctex",
+          "sha256": "6d8ef117082ac9a79bc3977dc4b206cfbfb5aa62dbddcd2a272a8635c09554da",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ced9879a97c38cb05a5f9fe3d4edfcf1d3036b24a88f0d57e679c3dc29346ac3.ctex",
+          "sha256": "ced9879a97c38cb05a5f9fe3d4edfcf1d3036b24a88f0d57e679c3dc29346ac3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "707a14fe739808ff0e1416b59718db37dd4468b3dcc8baa915d571d0fd790d75.glb",
+        "sha256": "707a14fe739808ff0e1416b59718db37dd4468b3dcc8baa915d571d0fd790d75",
+        "size": 11759920
+      },
+      "size_class": "large"
+    }
+  },
+  "battle_brothers/heavy gunship": {
+    "url": "40e3f02e5a7fffacfd1714f44b559faa014f9e84afd5d00226d89a152a1db6fd.glb",
+    "sha256": "40e3f02e5a7fffacfd1714f44b559faa014f9e84afd5d00226d89a152a1db6fd",
+    "size": 21247336,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5c390d6f3bff6402afbb5f7f67e44b499977494e441e7f86f4293def1ae24ecd.ctex",
+          "sha256": "5c390d6f3bff6402afbb5f7f67e44b499977494e441e7f86f4293def1ae24ecd",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f6fbdab85df69750fd42f0f5c47531861429b398174f9c6afcfc2433f687c924.ctex",
+          "sha256": "f6fbdab85df69750fd42f0f5c47531861429b398174f9c6afcfc2433f687c924",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d3c8a915e4045239cc62814bb6b505e213d0e7a1bf7344286a847fae9910e031.glb",
+        "sha256": "d3c8a915e4045239cc62814bb6b505e213d0e7a1bf7344286a847fae9910e031",
+        "size": 10508200
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "battle_brothers/heavy tank": {
+    "url": "aa4cc023033784b58922a30aead97f919992710ba899ef1a0fdbec101245cc31.glb",
+    "sha256": "aa4cc023033784b58922a30aead97f919992710ba899ef1a0fdbec101245cc31",
+    "size": 17030968,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5b7c3c33cb3a14171fc638a3e335f7f6c195ff583fb9f80a7cff245e34384a31.ctex",
+          "sha256": "5b7c3c33cb3a14171fc638a3e335f7f6c195ff583fb9f80a7cff245e34384a31",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ec9b1cb8ff3c70a9dbe816002169fdfa15926eeef1865b1361494cd79425f45b.ctex",
+          "sha256": "ec9b1cb8ff3c70a9dbe816002169fdfa15926eeef1865b1361494cd79425f45b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e62520588fbe0c8d06eea7b86420e67edd4bb4d52007d6559ce7ff392b981ce8.glb",
+        "sha256": "e62520588fbe0c8d06eea7b86420e67edd4bb4d52007d6559ce7ff392b981ce8",
+        "size": 9374532
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "battle_brothers/light gunship": {
+    "url": "e96d685c71f50c845365bbfbf267ffd0e8b79701f20bddeb477b70132dd5d86a.glb",
+    "sha256": "e96d685c71f50c845365bbfbf267ffd0e8b79701f20bddeb477b70132dd5d86a",
+    "size": 16929728,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "91b658dfda8078358c33dfb3337f8dbc66d2ed56a46b08920f76ebb7ffa68bdd.ctex",
+          "sha256": "91b658dfda8078358c33dfb3337f8dbc66d2ed56a46b08920f76ebb7ffa68bdd",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "34b785cd95b557c71c3a4bc9003486f4beff27c4d92db27d87da16f880f68019.ctex",
+          "sha256": "34b785cd95b557c71c3a4bc9003486f4beff27c4d92db27d87da16f880f68019",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7277bf15e7a67f4e928fc39fd16e172a90cf348ba25b354807abad4a99100357.glb",
+        "sha256": "7277bf15e7a67f4e928fc39fd16e172a90cf348ba25b354807abad4a99100357",
+        "size": 9351416
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "battle_brothers/master brother": {
+    "url": "6b6ca3f140f5cf21aebd0aa3f9d778eb168cb25b0480c7c953493acaf0b872ed.glb",
+    "sha256": "6b6ca3f140f5cf21aebd0aa3f9d778eb168cb25b0480c7c953493acaf0b872ed",
+    "size": 13094932,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a4469d68b41b906442b4e8fb51d850f606e78c55a53545bc0534622a0edeae71.ctex",
+          "sha256": "a4469d68b41b906442b4e8fb51d850f606e78c55a53545bc0534622a0edeae71",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f28408fec9910f10d5bb9a46457227f52da6022f887cfb1d9bc633f5eb0db91f.ctex",
+          "sha256": "f28408fec9910f10d5bb9a46457227f52da6022f887cfb1d9bc633f5eb0db91f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f52fdb61f8eb9ec181e7860a97a2d3a7f5d14990298090a824998409392ba699.glb",
+        "sha256": "f52fdb61f8eb9ec181e7860a97a2d3a7f5d14990298090a824998409392ba699",
+        "size": 3678016
+      },
+      "size_class": "infantry"
+    }
+  },
+  "battle_brothers/master destroyer": {
+    "url": "e4515aa843b81e5e021df638f3ff80fd89e4c1d66b28dd334db63d377d1c6e70.glb",
+    "sha256": "e4515aa843b81e5e021df638f3ff80fd89e4c1d66b28dd334db63d377d1c6e70",
+    "size": 13594640,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ac2b3b25d6168bac247c29ea34ba555feb4ce82ef5c98ec465f3671f6fb240a7.ctex",
+          "sha256": "ac2b3b25d6168bac247c29ea34ba555feb4ce82ef5c98ec465f3671f6fb240a7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e0a984c0e19a3a8e78aebfcede73ccbbfe9ec315165533163596fbfa7cfd8a19.ctex",
+          "sha256": "e0a984c0e19a3a8e78aebfcede73ccbbfe9ec315165533163596fbfa7cfd8a19",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8b866aeb7f63ba8a05a083de0df9fd8ad97856d452ce51364bacd51bd195cf00.glb",
+        "sha256": "8b866aeb7f63ba8a05a083de0df9fd8ad97856d452ce51364bacd51bd195cf00",
+        "size": 3733792
+      },
+      "size_class": "infantry"
+    }
+  },
+  "battle_brothers/pathfinder bikers": {
+    "url": "6cb3bebc3871e126e84bee47ddf165e19ce8500497f5ad8d5144894246d09555.glb",
+    "sha256": "6cb3bebc3871e126e84bee47ddf165e19ce8500497f5ad8d5144894246d09555",
+    "size": 15658180,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "22afb73f30013b1228d173ce0231ae92ba0bf8d0834b71ab378a894f80d8597e.ctex",
+          "sha256": "22afb73f30013b1228d173ce0231ae92ba0bf8d0834b71ab378a894f80d8597e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "67900186be998248aad95e0d5752c3fbe2df4c7ff155331d02132a3764aa1503.ctex",
+          "sha256": "67900186be998248aad95e0d5752c3fbe2df4c7ff155331d02132a3764aa1503",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3a8636816d7516bb1098fa52145528ea9dc834e1d847ada266fc1c8aa1b9c221.glb",
+        "sha256": "3a8636816d7516bb1098fa52145528ea9dc834e1d847ada266fc1c8aa1b9c221",
+        "size": 8828416
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "battle_brothers/pathfinders": {
+    "url": "04c75deffd4777a5401d0c7a48ae27ef25f6206031b42176e31f6c89c64fd141.glb",
+    "sha256": "04c75deffd4777a5401d0c7a48ae27ef25f6206031b42176e31f6c89c64fd141",
+    "size": 14236908,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8d0166f02d172a925043accb08a2b3090312a58776f5e728716904b552e815aa.ctex",
+          "sha256": "8d0166f02d172a925043accb08a2b3090312a58776f5e728716904b552e815aa",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0e63dce125feefc4bd550b7e54e353ccd40e43a1a3a43b4cc4eb9606935de366.ctex",
+          "sha256": "0e63dce125feefc4bd550b7e54e353ccd40e43a1a3a43b4cc4eb9606935de366",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "595f52b2daf0c45f96502400cc1447ca00fff7485421395296eef57cd10e9d18.glb",
+        "sha256": "595f52b2daf0c45f96502400cc1447ca00fff7485421395296eef57cd10e9d18",
+        "size": 4002068
+      },
+      "size_class": "infantry"
+    }
+  },
+  "battle_brothers/support bike": {
+    "url": "6a3c6419b1700379131876ff32e4c711a7612d3890190b074ff8d5d1556e5894.glb",
+    "sha256": "6a3c6419b1700379131876ff32e4c711a7612d3890190b074ff8d5d1556e5894",
+    "size": 14619196,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "78094d7862c33f3f04d9858015660fc668626195f2fc52488bd82bd95ce27045.ctex",
+          "sha256": "78094d7862c33f3f04d9858015660fc668626195f2fc52488bd82bd95ce27045",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9216bb33b59ec3f5e40a49e238ec21a44dd8b5894063588ec4f52997c1b02ba1.ctex",
+          "sha256": "9216bb33b59ec3f5e40a49e238ec21a44dd8b5894063588ec4f52997c1b02ba1",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "19fa6188434fff66a68f40be1171162dcf2539cfb5dc81107d384d00069a36c1.glb",
+        "sha256": "19fa6188434fff66a68f40be1171162dcf2539cfb5dc81107d384d00069a36c1",
+        "size": 8300648
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "battle_brothers/support brothers": {
+    "url": "8bcb252f82f45281b66fc8607f786bf2503b461f42b9691828756b31b03e5e69.glb",
+    "sha256": "8bcb252f82f45281b66fc8607f786bf2503b461f42b9691828756b31b03e5e69",
+    "size": 13122972,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "cdd68d7b44669994264ce8b2190d5af3b971775c59d0bfd52e629f43be1965ed.ctex",
+          "sha256": "cdd68d7b44669994264ce8b2190d5af3b971775c59d0bfd52e629f43be1965ed",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8fc83daff7c56a867ad5b7ec55182150d9acfbcb785555bdacccd79b9eda3376.ctex",
+          "sha256": "8fc83daff7c56a867ad5b7ec55182150d9acfbcb785555bdacccd79b9eda3376",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7275d37a8ff5922d55b4c694647e3e62639b6f4ce755b60b1eae3b2b022c4266.glb",
+        "sha256": "7275d37a8ff5922d55b4c694647e3e62639b6f4ce755b60b1eae3b2b022c4266",
+        "size": 3827400
+      },
+      "size_class": "infantry"
+    }
+  },
+  "battle_brothers/veteran assault brothers": {
+    "url": "23c08f93040255475033b20f4f5af802e933a1e610e68a008a5fdcb38179a86f.glb",
+    "sha256": "23c08f93040255475033b20f4f5af802e933a1e610e68a008a5fdcb38179a86f",
+    "size": 14011184,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "38c7d3ec09e593fa5b06553b5a541551811c7540e0bffcc96cfcb722f8220ce5.ctex",
+          "sha256": "38c7d3ec09e593fa5b06553b5a541551811c7540e0bffcc96cfcb722f8220ce5",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "fdeebdf8e865e403f458488711f8a38b472a59905afb7e2fe213eaa6986dea08.ctex",
+          "sha256": "fdeebdf8e865e403f458488711f8a38b472a59905afb7e2fe213eaa6986dea08",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3eff4b62978707cb05b2a38512395dc70911d75c7a7743915b18aa86e84907af.glb",
+        "sha256": "3eff4b62978707cb05b2a38512395dc70911d75c7a7743915b18aa86e84907af",
+        "size": 3729876
+      },
+      "size_class": "infantry"
+    }
+  },
+  "battle_brothers/veteran battle brothers": {
+    "url": "7246ef65e73af2e546f2975bae8aae8b0897e55d2633db5bbf819d83c3427a8b.glb",
+    "sha256": "7246ef65e73af2e546f2975bae8aae8b0897e55d2633db5bbf819d83c3427a8b",
+    "size": 13526476,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "54a63382c834b0a9824d1563518d1ff599a591ad9e5dfb23da18e00a200ab715.ctex",
+          "sha256": "54a63382c834b0a9824d1563518d1ff599a591ad9e5dfb23da18e00a200ab715",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2faf427f8ca4f3869d05211a9e96fce54616ff166c5f6372abe1540a41da85f8.ctex",
+          "sha256": "2faf427f8ca4f3869d05211a9e96fce54616ff166c5f6372abe1540a41da85f8",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "fe922377e5b9e20634eb8679d95429fe8eb5d6979d1994968f2d9f4e985bc697.glb",
+        "sha256": "fe922377e5b9e20634eb8679d95429fe8eb5d6979d1994968f2d9f4e985bc697",
+        "size": 3544216
+      },
+      "size_class": "infantry"
+    }
+  },
+  "battle_brothers/veteran combat walker": {
+    "url": "c40377abe32104d3d23079e5ee011248aad1542130a5cab2c0c3629b6c4df675.glb",
+    "sha256": "c40377abe32104d3d23079e5ee011248aad1542130a5cab2c0c3629b6c4df675",
+    "size": 19037832,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c8652ddd24b23dff3ade7d8644bd410e986962ecc5c5d0100bfb2414672b09ac.ctex",
+          "sha256": "c8652ddd24b23dff3ade7d8644bd410e986962ecc5c5d0100bfb2414672b09ac",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "371a0604052d86bba65a8c2e6d409ead88c2e0456dce33d2433215fa913c6d4d.ctex",
+          "sha256": "371a0604052d86bba65a8c2e6d409ead88c2e0456dce33d2433215fa913c6d4d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8a6df11b55ce83a422de250f657520efb18af07531f12af6c94222415033c672.glb",
+        "sha256": "8a6df11b55ce83a422de250f657520efb18af07531f12af6c94222415033c672",
+        "size": 10082508
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "battle_brothers/veteran master brother": {
+    "url": "74b90d0c1b50210b2b486e2b970449115c592f9b79028241da7d864033e0248d.glb",
+    "sha256": "74b90d0c1b50210b2b486e2b970449115c592f9b79028241da7d864033e0248d",
+    "size": 13213768,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a7f862f6d67a7a262d55a32be4a25e06f798748ad13b8c2cd65f6f1fb620b203.ctex",
+          "sha256": "a7f862f6d67a7a262d55a32be4a25e06f798748ad13b8c2cd65f6f1fb620b203",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "88a2091b9981a2b905a56b52c0fbb299c2cd0c58b21a098eef35238b51bb74ff.ctex",
+          "sha256": "88a2091b9981a2b905a56b52c0fbb299c2cd0c58b21a098eef35238b51bb74ff",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "353d394bb12f3ff01a38bc2e200a381286d4e96840a4f960c5731521ac4e3f5e.glb",
+        "sha256": "353d394bb12f3ff01a38bc2e200a381286d4e96840a4f960c5731521ac4e3f5e",
+        "size": 3683592
+      },
+      "size_class": "infantry"
+    }
+  }
+}

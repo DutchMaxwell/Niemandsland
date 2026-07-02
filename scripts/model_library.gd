@@ -31,7 +31,10 @@ const REMOTE_MANIFEST_TIMEOUT_SEC: float = 15.0
 # === Private variables ===
 
 var _downloader: AssetDownloadManager = null
-var _models: Dictionary = {}   # key -> { url, sha256, size }
+## Separate cache for ctex textures — they MUST keep the .ctex extension so ResourceLoader resolves
+## CompressedTexture2D (the shared _downloader stores everything as .glb). Meshes still use _downloader.
+var _ctex_tex: AssetDownloadManager = null
+var _models: Dictionary = {}   # key -> { url, sha256, size, ctex? }
 var _base_url: String = ""     # optional prefix for relative entry URLs
 
 # === Lifecycle ===
@@ -42,6 +45,10 @@ func _ready() -> void:
 	add_child(_downloader)
 	_downloader.progress_updated.connect(func(done: int, total: int) -> void:
 		caching_progress.emit(done, total))
+	_ctex_tex = AssetDownloadManager.new()
+	_ctex_tex.name = "CtexTextureDownloader"
+	_ctex_tex.file_extension = "ctex"   # keep .ctex so it loads as CompressedTexture2D
+	add_child(_ctex_tex)
 	_load_bundled_manifest()
 	_refresh_remote_manifest()  # fire-and-forget; overlays the live CDN manifest when it arrives
 
@@ -110,24 +117,117 @@ func ensure_model(faction: String, unit_name: String) -> String:
 func ensure_models(unit_specs: Array) -> void:
 	if _models.is_empty():
 		return
-	var seen: Dictionary = {}
-	var batch: Array = []
+	# Per unit: prefetch the ctex assets (decimated mesh via the .glb cache + textures via the .ctex
+	# cache) when a compatible ctex block exists — that is the path the spawn uses — else the legacy
+	# raw GLB. De-duplicated by sha across the army.
+	var glb: Dictionary = {}    # sha -> url (meshes + legacy GLBs, .glb cache)
+	var ctex: Dictionary = {}   # sha -> url (ctex textures, .ctex cache)
 	for spec: Dictionary in unit_specs:
-		var entry: Dictionary = _entry(spec.get("faction", ""), spec.get("unit_name", ""))
-		if entry.is_empty():
-			continue
-		var sha: String = entry.get("sha256", "")
-		if sha.is_empty() or seen.has(sha):
-			continue
-		seen[sha] = true
-		batch.append({"url": _resolve_url(entry), "sha256": sha})
-	# Only the not-yet-cached models are downloaded; if everything is already on disk
-	# the batch is empty and no progress UI is shown (instant on the 2nd+ time).
-	var to_fetch: Array = batch.filter(func(e): return not _downloader.is_cached(e.get("sha256", "")))
-	if not to_fetch.is_empty():
-		caching_started.emit(to_fetch.size())
-		await _downloader.ensure_batch(to_fetch)
-		caching_finished.emit()
+		var faction: String = spec.get("faction", "")
+		var unit_name: String = spec.get("unit_name", "")
+		var block: Dictionary = get_ctex_entry(faction, unit_name)
+		if not block.is_empty():
+			var mesh: Dictionary = block.get("mesh", {})
+			var msha: String = str(mesh.get("sha256", ""))
+			if not msha.is_empty():
+				glb[msha] = _blob_url(mesh)
+			var textures: Dictionary = block.get("textures", {})
+			for role in ["albedo", "normal", "orm"]:
+				if textures.has(role):
+					var b: Dictionary = textures[role]
+					var s: String = str(b.get("sha256", ""))
+					if not s.is_empty():
+						ctex[s] = _blob_url(b)
+		else:
+			var entry: Dictionary = _entry(faction, unit_name)
+			var sha: String = str(entry.get("sha256", ""))
+			if not entry.is_empty() and not sha.is_empty():
+				glb[sha] = _resolve_url(entry)
+	# Only not-yet-cached blobs; instant on the 2nd+ import.
+	var glb_todo: Array = []
+	for sha in glb:
+		if not _downloader.is_cached(sha):
+			glb_todo.append({"url": glb[sha], "sha256": sha})
+	var ctex_todo: Array = []
+	for sha in ctex:
+		if not _ctex_tex.is_cached(sha):
+			ctex_todo.append({"url": ctex[sha], "sha256": sha})
+	var total: int = glb_todo.size() + ctex_todo.size()
+	if total == 0:
+		return
+	caching_started.emit(total)
+	var done: int = 0
+	for e: Dictionary in glb_todo:
+		await _downloader.ensure(e["url"], e["sha256"])
+		done += 1
+		caching_progress.emit(done, total)
+	for e: Dictionary in ctex_todo:
+		await _ctex_tex.ensure(e["url"], e["sha256"])
+		done += 1
+		caching_progress.emit(done, total)
+	caching_finished.emit()
+
+# === ctex (compressed-texture) delivery ===
+
+## A unit's ctex block IF present AND baked for this engine version (guard), else {}. On mismatch the
+## caller uses the legacy raw-GLB url — .ctex is engine-version-coupled (see CtexLoader).
+func get_ctex_entry(faction: String, unit_name: String) -> Dictionary:
+	var ctex: Dictionary = _entry(faction, unit_name).get("ctex", {})
+	if ctex.is_empty() or not CtexLoader.ctex_compatible(str(ctex.get("godot_version", ""))):
+		return {}
+	return ctex
+
+
+## Local cache paths for a unit's ctex assets IF all are already downloaded, else {} (sync). Keys:
+## "mesh", "albedo", and "orm"/"normal" when present. Empty result → caller falls back to legacy GLB.
+func ctex_cached_paths(faction: String, unit_name: String) -> Dictionary:
+	return _ctex_paths_if_cached(get_ctex_entry(faction, unit_name))
+
+
+## Ensure a unit's ctex mesh + textures are cached (downloads if missing). Awaitable → paths or {}.
+func ensure_ctex(faction: String, unit_name: String) -> Dictionary:
+	var ctex: Dictionary = get_ctex_entry(faction, unit_name)
+	if ctex.is_empty():
+		return {}
+	var mesh: Dictionary = ctex.get("mesh", {})
+	await _downloader.ensure(_blob_url(mesh), str(mesh.get("sha256", "")))
+	var textures: Dictionary = ctex.get("textures", {})
+	for role in ["albedo", "normal", "orm"]:
+		if textures.has(role):
+			var blob: Dictionary = textures[role]
+			await _ctex_tex.ensure(_blob_url(blob), str(blob.get("sha256", "")))
+	return _ctex_paths_if_cached(ctex)
+
+
+## Paths for a ctex block iff every referenced blob is cached (mesh via the .glb cache, textures via
+## the .ctex cache); {} if the block is empty or any blob is missing (→ legacy fallback, never partial).
+func _ctex_paths_if_cached(ctex: Dictionary) -> Dictionary:
+	if ctex.is_empty():
+		return {}
+	var mesh_sha: String = str(ctex.get("mesh", {}).get("sha256", ""))
+	if mesh_sha.is_empty() or not _downloader.is_cached(mesh_sha):
+		return {}
+	var out: Dictionary = {"mesh": _downloader.cache_path(mesh_sha)}
+	var textures: Dictionary = ctex.get("textures", {})
+	for role in ["albedo", "normal", "orm"]:
+		if textures.has(role):
+			var sha: String = str(textures[role].get("sha256", ""))
+			if sha.is_empty() or not _ctex_tex.is_cached(sha):
+				return {}
+			out[role] = _ctex_tex.cache_path(sha)
+	if not out.has("albedo"):
+		return {}   # albedo is mandatory for a usable material
+	return out
+
+
+func _blob_url(blob: Dictionary) -> String:
+	var url: String = str(blob.get("url", ""))
+	if url.begins_with("http://") or url.begins_with("https://"):
+		return url
+	if not _base_url.is_empty():
+		return _base_url.path_join(url)
+	return url
+
 
 # === Private helpers ===
 
@@ -154,9 +254,28 @@ func _load_bundled_manifest() -> void:
 ## fixes published after this build shipped appear without a re-export. Silent + offline-safe:
 ## any failure (offline, 404, malformed JSON) keeps the bundled manifest loaded in _ready().
 func _refresh_remote_manifest() -> void:
+	# Dev/QA manifest override (T4) — consulted BEFORE the live CDN root and loudly logged, so the
+	# maintainer can point a client at a STAGED manifest before it goes live. Two forms:
+	#   • user://manifest_override.json holding a full manifest ({"models":...}) → applied offline;
+	#   • the NML_MANIFEST_URL env var, or that file holding {"url": "..."} → fetched instead of root.
+	var override_path: String = "user://manifest_override.json"
+	if FileAccess.file_exists(override_path):
+		var otext: String = FileAccess.get_file_as_string(override_path)
+		var od: Variant = JSON.parse_string(otext)
+		if typeof(od) == TYPE_DICTIONARY and typeof((od as Dictionary).get("models")) == TYPE_DICTIONARY:
+			push_warning("[ModelLibrary] MANIFEST OVERRIDE — applying local user://manifest_override.json (staged, offline)")
+			apply_manifest_text(otext)
+			manifest_refreshed.emit(_models.size())
+			return
 	# Unique ?t= query busts any CDN/proxy cache so a freshly published manifest is seen at once.
-	var url: String = "%s/%s?t=%d" % [AssetCDN.HOST, REMOTE_MANIFEST_FILE,
-		int(Time.get_unix_time_from_system())]
+	var override_url: String = _manifest_override_url()
+	var url: String
+	if not override_url.is_empty():
+		push_warning("[ModelLibrary] MANIFEST OVERRIDE — fetching staged manifest from %s" % override_url)
+		var sep: String = "&" if override_url.contains("?") else "?"
+		url = "%s%st=%d" % [override_url, sep, int(Time.get_unix_time_from_system())]
+	else:
+		url = "%s/%s?t=%d" % [AssetCDN.HOST, REMOTE_MANIFEST_FILE, int(Time.get_unix_time_from_system())]
 	var http := HTTPRequest.new()
 	http.timeout = REMOTE_MANIFEST_TIMEOUT_SEC
 	add_child(http)
@@ -173,6 +292,20 @@ func _refresh_remote_manifest() -> void:
 		return  # malformed -> keep the bundled manifest
 	apply_manifest_text(text)
 	manifest_refreshed.emit(_models.size())
+
+
+## A manifest-override URL from the NML_MANIFEST_URL env var, or a user://manifest_override.json
+## carrying {"url": "..."}; else "" (use the live CDN root). Dev/QA only (T4).
+func _manifest_override_url() -> String:
+	var env: String = OS.get_environment("NML_MANIFEST_URL").strip_edges()
+	if not env.is_empty():
+		return env
+	var f: String = "user://manifest_override.json"
+	if FileAccess.file_exists(f):
+		var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(f))
+		if typeof(d) == TYPE_DICTIONARY and (d as Dictionary).has("url"):
+			return str((d as Dictionary)["url"])
+	return ""
 
 
 ## Parses a manifest JSON string into the in-memory index (also used by tests).

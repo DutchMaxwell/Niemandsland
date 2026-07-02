@@ -1,0 +1,1068 @@
+{
+  "alien_hives/artillery great beast": {
+    "url": "01d982a3040c420841ef350db35e05adbc05b42acc82b386fb88b457fb735385.glb",
+    "sha256": "01d982a3040c420841ef350db35e05adbc05b42acc82b386fb88b457fb735385",
+    "size": 12971256,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "76835f98047f87a5bbc275aeb7a4e8aa090d3c0bdc1d93bbd63016061cbfab60.ctex",
+          "sha256": "76835f98047f87a5bbc275aeb7a4e8aa090d3c0bdc1d93bbd63016061cbfab60",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "aa3b656ffe6dd329ad3ae333e45fd65fed88d4dc87a3ab015f529b463c7c2935.ctex",
+          "sha256": "aa3b656ffe6dd329ad3ae333e45fd65fed88d4dc87a3ab015f529b463c7c2935",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "380e14ff61dd89f8570fa330cfec2c9f2947d4c70e3386b611dabaf3a7c43233.glb",
+        "sha256": "380e14ff61dd89f8570fa330cfec2c9f2947d4c70e3386b611dabaf3a7c43233",
+        "size": 6828024
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "alien_hives/assault grunts": {
+    "url": "f36f408066da6fa2e291eec2ce220794eb5e31928e278e0711becc7632f602fa.glb",
+    "sha256": "f36f408066da6fa2e291eec2ce220794eb5e31928e278e0711becc7632f602fa",
+    "size": 14404364,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a7320f8395a59a1f582d3adf89a54d82afd8dd3c35d8917212b059e2600f94ec.ctex",
+          "sha256": "a7320f8395a59a1f582d3adf89a54d82afd8dd3c35d8917212b059e2600f94ec",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "46ca33753c0796eca6f79f5febbac4516d8fea0b294071874d2a569da884b809.ctex",
+          "sha256": "46ca33753c0796eca6f79f5febbac4516d8fea0b294071874d2a569da884b809",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1f544b70df2ced094942c950cc961ecf6416c151745c0057b069370f3f119f1d.glb",
+        "sha256": "1f544b70df2ced094942c950cc961ecf6416c151745c0057b069370f3f119f1d",
+        "size": 4267564
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/carnivo rex": {
+    "url": "e7c463e31caadaf1fd120cd54bd348dd92cdb275f144274360d295d07e035eac.glb",
+    "sha256": "e7c463e31caadaf1fd120cd54bd348dd92cdb275f144274360d295d07e035eac",
+    "size": 13575088,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "37019ed5ae88353070beeb932a1eb6b836b32102991a6ec9541aee73e7037210.ctex",
+          "sha256": "37019ed5ae88353070beeb932a1eb6b836b32102991a6ec9541aee73e7037210",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6d7e3c3e6a06ace0b7c5a71a456fd0af8a7159ff0a7910fc573d7e37e83f9a0e.ctex",
+          "sha256": "6d7e3c3e6a06ace0b7c5a71a456fd0af8a7159ff0a7910fc573d7e37e83f9a0e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "4f464dae25b79b373a80ae677db327bb63c234c15118faa5642d17a66580fbc3.glb",
+        "sha256": "4f464dae25b79b373a80ae677db327bb63c234c15118faa5642d17a66580fbc3",
+        "size": 3697952
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/devourer great beast": {
+    "url": "b335815fd07140217038488f9f1f86217547f47d00d9373b5e3b6f5b4c51d24d.glb",
+    "sha256": "b335815fd07140217038488f9f1f86217547f47d00d9373b5e3b6f5b4c51d24d",
+    "size": 15541540,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "09f127e340584b5733bd61ade25eb15a24d1a8dbcc655d9b3ddc9f07457d78bb.ctex",
+          "sha256": "09f127e340584b5733bd61ade25eb15a24d1a8dbcc655d9b3ddc9f07457d78bb",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "828a96945d4ff580358a155b572f878e09d10f49c7cab62bee2c7014f96d768c.ctex",
+          "sha256": "828a96945d4ff580358a155b572f878e09d10f49c7cab62bee2c7014f96d768c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "188622d1334bd7fa113208ca910cdb7fb2eddc35692c93c6ca162b94c599d02c.glb",
+        "sha256": "188622d1334bd7fa113208ca910cdb7fb2eddc35692c93c6ca162b94c599d02c",
+        "size": 11735220
+      },
+      "size_class": "large"
+    }
+  },
+  "alien_hives/drekhor the vengeful": {
+    "url": "6a37d55af2ba86fb773ce2dee1eecf32a662bf8f23f91f77f1b37285f7a3e9f8.glb",
+    "sha256": "6a37d55af2ba86fb773ce2dee1eecf32a662bf8f23f91f77f1b37285f7a3e9f8",
+    "size": 14159760,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "84f4c47aaed5de30b9f1b9f549a8479b0ac636bd22dec72332cab831aaf9940a.ctex",
+          "sha256": "84f4c47aaed5de30b9f1b9f549a8479b0ac636bd22dec72332cab831aaf9940a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "77f911357247b9d1ff19a433302693df8244234a043c17dc25cd207e4690f2eb.ctex",
+          "sha256": "77f911357247b9d1ff19a433302693df8244234a043c17dc25cd207e4690f2eb",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "37a445d3eca081f73afdf2c2edfbaff8ad2fb17a4b3d96304f4b43976f443dc2.glb",
+        "sha256": "37a445d3eca081f73afdf2c2edfbaff8ad2fb17a4b3d96304f4b43976f443dc2",
+        "size": 3840648
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/druzhak": {
+    "url": "a4e2ffb0f3de573149fb80b205edb304fca45bca1d02292931ca07a999dd9a0c.glb",
+    "sha256": "a4e2ffb0f3de573149fb80b205edb304fca45bca1d02292931ca07a999dd9a0c",
+    "size": 14736796,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "da59c7a9a7cf8ae56bf0f6effac590886b701d5ceec70c48d9784f1dd73292a8.ctex",
+          "sha256": "da59c7a9a7cf8ae56bf0f6effac590886b701d5ceec70c48d9784f1dd73292a8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "23398e1cf2b0fedb4ddd273af5e68a061298366ffa5e7c10c9b75912e50028fc.ctex",
+          "sha256": "23398e1cf2b0fedb4ddd273af5e68a061298366ffa5e7c10c9b75912e50028fc",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "048138be03d749795a3a34b553791936045d5b25333ed182b85b74d749723470.glb",
+        "sha256": "048138be03d749795a3a34b553791936045d5b25333ed182b85b74d749723470",
+        "size": 4185144
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/flamer beast": {
+    "url": "62763be9d37ae6f86ad46993c6f7b02de257223947064d522e9113ee86c8053c.glb",
+    "sha256": "62763be9d37ae6f86ad46993c6f7b02de257223947064d522e9113ee86c8053c",
+    "size": 16018484,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7e32fca40e42abfe8cf89f80100a25cf3040cfea3b1b6f2bb9228b48976ab59e.ctex",
+          "sha256": "7e32fca40e42abfe8cf89f80100a25cf3040cfea3b1b6f2bb9228b48976ab59e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "55b683123edca894e05071ce0760224cd8aad2f7f8b5b778ffd107c4fa09c136.ctex",
+          "sha256": "55b683123edca894e05071ce0760224cd8aad2f7f8b5b778ffd107c4fa09c136",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f0f76f4e40a5035e04a2a2ddda55c6209ff9479919ebdf7a6971155db3a6dfd7.glb",
+        "sha256": "f0f76f4e40a5035e04a2a2ddda55c6209ff9479919ebdf7a6971155db3a6dfd7",
+        "size": 11335220
+      },
+      "size_class": "large"
+    }
+  },
+  "alien_hives/grunt veteran": {
+    "url": "0c1c8bea9ec64bb94b2122b9716e56eae9990c8ee24ac31098141d18f0fd5996.glb",
+    "sha256": "0c1c8bea9ec64bb94b2122b9716e56eae9990c8ee24ac31098141d18f0fd5996",
+    "size": 13516128,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "85e5b0f940824fb896761f0e8a699ce1f75f1fa1a2f27864e90f2657b8289404.ctex",
+          "sha256": "85e5b0f940824fb896761f0e8a699ce1f75f1fa1a2f27864e90f2657b8289404",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d18b7214fa211d6232ffb29e3adcd860a4e93533310f1474a5d9005950b4bcd1.ctex",
+          "sha256": "d18b7214fa211d6232ffb29e3adcd860a4e93533310f1474a5d9005950b4bcd1",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ede959da3f6e4485a129ea106385ab22e0bba72758d75fdb12079993f3686e0c.glb",
+        "sha256": "ede959da3f6e4485a129ea106385ab22e0bba72758d75fdb12079993f3686e0c",
+        "size": 3948856
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/hive burrower": {
+    "url": "bc7ff3957a5b4729602a4faed144b41459102bf6c9aedd7d2e5d3d972c215f28.glb",
+    "sha256": "bc7ff3957a5b4729602a4faed144b41459102bf6c9aedd7d2e5d3d972c215f28",
+    "size": 15775168,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "bfac13549db71d40c61f33a974500005f9b55d2272e53fb6441f49bcbedd6998.ctex",
+          "sha256": "bfac13549db71d40c61f33a974500005f9b55d2272e53fb6441f49bcbedd6998",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d7c10a5750dc1f725a63810dcdcd1db17e938fa4a6b654b7ee2a4d8111aaea27.ctex",
+          "sha256": "d7c10a5750dc1f725a63810dcdcd1db17e938fa4a6b654b7ee2a4d8111aaea27",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "309f086562546e69b0a40fe5d417a16be6be34ca8d45e8c3a9f4ef3a6f60afab.glb",
+        "sha256": "309f086562546e69b0a40fe5d417a16be6be34ca8d45e8c3a9f4ef3a6f60afab",
+        "size": 4407136
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/hive guardians": {
+    "url": "bf6a0ff35517f3f846c342af96c1d37caf65a71ea8a063a996ceba124943f73e.glb",
+    "sha256": "bf6a0ff35517f3f846c342af96c1d37caf65a71ea8a063a996ceba124943f73e",
+    "size": 14474148,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ee02aebe18c19a56511ab566458223d6fc73794be54699b8d092553182648634.ctex",
+          "sha256": "ee02aebe18c19a56511ab566458223d6fc73794be54699b8d092553182648634",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "77fb1f077170a02f9bc7368a89dda1225df0d1b53fb6437829ea3cb6a50f3bd2.ctex",
+          "sha256": "77fb1f077170a02f9bc7368a89dda1225df0d1b53fb6437829ea3cb6a50f3bd2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b4737a4b33e0a77af78999645bf39692fcd2c87ecabb6142f70a18e2f4719068.glb",
+        "sha256": "b4737a4b33e0a77af78999645bf39692fcd2c87ecabb6142f70a18e2f4719068",
+        "size": 3974880
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/hive lord": {
+    "url": "29e762f1b684abf047d0c722c3cb41c9fd8634dc6c763e50b40b54f276290206.glb",
+    "sha256": "29e762f1b684abf047d0c722c3cb41c9fd8634dc6c763e50b40b54f276290206",
+    "size": 14663876,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e53f057bff6c82d0947ddb14ac884db3c4a1635b626fe24ab497cf2e9cd9813f.ctex",
+          "sha256": "e53f057bff6c82d0947ddb14ac884db3c4a1635b626fe24ab497cf2e9cd9813f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "16caaa91d6380d1b5c5c7880ee02bf0b1280106cd75e3b729c8778ac1947dbbe.ctex",
+          "sha256": "16caaa91d6380d1b5c5c7880ee02bf0b1280106cd75e3b729c8778ac1947dbbe",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "0207c4ead39f3222af78fbe5e767499e4d4255bb010468e128eda1bfd3a5c864.glb",
+        "sha256": "0207c4ead39f3222af78fbe5e767499e4d4255bb010468e128eda1bfd3a5c864",
+        "size": 10871264
+      },
+      "size_class": "large"
+    }
+  },
+  "alien_hives/hive swarms": {
+    "url": "a389deb58c479f90e099800c018709e321f37656f64fe34eeb95d3b808635516.glb",
+    "sha256": "a389deb58c479f90e099800c018709e321f37656f64fe34eeb95d3b808635516",
+    "size": 16831796,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "43504f6380e318692f162d5e92ccd89b7c1ef2f445db2048c60a94b909aaf0eb.ctex",
+          "sha256": "43504f6380e318692f162d5e92ccd89b7c1ef2f445db2048c60a94b909aaf0eb",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2e2c4f8bd7bfe08c29ff9275e51a11cae3d969ef45dabe345c0861b7ce62a3ad.ctex",
+          "sha256": "2e2c4f8bd7bfe08c29ff9275e51a11cae3d969ef45dabe345c0861b7ce62a3ad",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "77c866003b944150f840e07d4e3ad43860476c14e9a6d553dd40cf8141bb48c7.glb",
+        "sha256": "77c866003b944150f840e07d4e3ad43860476c14e9a6d553dd40cf8141bb48c7",
+        "size": 4857668
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/hive titan": {
+    "url": "d1d8add5687678f6955012b25fdc96b71dc98dd28dc8cea64450e4bdf17aa18b.glb",
+    "sha256": "d1d8add5687678f6955012b25fdc96b71dc98dd28dc8cea64450e4bdf17aa18b",
+    "size": 15570480,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2e33179d4af9cebfced1d57aa62b23b11536f5f252be7a12eeb1263c6c1add65.ctex",
+          "sha256": "2e33179d4af9cebfced1d57aa62b23b11536f5f252be7a12eeb1263c6c1add65",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4c8e790768072ec97cadaa6bf7380989b08afdbb34084c597503e3d6860bf584.ctex",
+          "sha256": "4c8e790768072ec97cadaa6bf7380989b08afdbb34084c597503e3d6860bf584",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "91986758b77fd77b4a053dff74aebab7219275c6029d1e2995f7d3bc84914224.glb",
+        "sha256": "91986758b77fd77b4a053dff74aebab7219275c6029d1e2995f7d3bc84914224",
+        "size": 11426816
+      },
+      "size_class": "large"
+    }
+  },
+  "alien_hives/hive warriors": {
+    "url": "1b23c03ace0d67cb36b3018f96f0f45e769d520df15b5aabee9011a938000c0b.glb",
+    "sha256": "1b23c03ace0d67cb36b3018f96f0f45e769d520df15b5aabee9011a938000c0b",
+    "size": 14557116,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c4fef839f97489891abf2c38f7d043c06d1b6297492ce1aa6cd35fac46431595.ctex",
+          "sha256": "c4fef839f97489891abf2c38f7d043c06d1b6297492ce1aa6cd35fac46431595",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d4dd8f81b7cff8730eeb40a9d680cfe46f41412e51943505389c1149e39d8f15.ctex",
+          "sha256": "d4dd8f81b7cff8730eeb40a9d680cfe46f41412e51943505389c1149e39d8f15",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "756df6ae445873408826a57bcff92a957a3c6ba27b090c10fa550462e6208b78.glb",
+        "sha256": "756df6ae445873408826a57bcff92a957a3c6ba27b090c10fa550462e6208b78",
+        "size": 4117808
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/invasion artillery spore": {
+    "url": "55e6da8f81ad9cbbe7b823d6c7fe8e0ec4c08ce805072c3bb2577817bc92ef12.glb",
+    "sha256": "55e6da8f81ad9cbbe7b823d6c7fe8e0ec4c08ce805072c3bb2577817bc92ef12",
+    "size": 13708364,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "85f223e5643b8935294ec5f54e741b458d9a8f0a82b1f8919ba8bc43360a553c.ctex",
+          "sha256": "85f223e5643b8935294ec5f54e741b458d9a8f0a82b1f8919ba8bc43360a553c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "982254fbcb30e26a4ef869e4a0e02628d204712345e83f90862419ca505159eb.ctex",
+          "sha256": "982254fbcb30e26a4ef869e4a0e02628d204712345e83f90862419ca505159eb",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1d421be9b173b4cc7bc804d06db019118c4fc6a669bce6024400cbfeae0f5f77.glb",
+        "sha256": "1d421be9b173b4cc7bc804d06db019118c4fc6a669bce6024400cbfeae0f5f77",
+        "size": 8061336
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "alien_hives/invasion carrier spore": {
+    "url": "af237d1b41c195825a85ca2492464346253397743f6c8e997180aab340a87589.glb",
+    "sha256": "af237d1b41c195825a85ca2492464346253397743f6c8e997180aab340a87589",
+    "size": 16275060,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3aaa668e904e6bb935f63a440d93019a73345c08f0ae3577e075da250c5e8da5.ctex",
+          "sha256": "3aaa668e904e6bb935f63a440d93019a73345c08f0ae3577e075da250c5e8da5",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "760852e5bd3e09a48874367fef14d5bf0a61e096b88311ab1ec5ba527bf39e1c.ctex",
+          "sha256": "760852e5bd3e09a48874367fef14d5bf0a61e096b88311ab1ec5ba527bf39e1c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c91452f58f2cd0769b8ca8b2481cd5c801397c15b68eb77cbfea1c946e7dff29.glb",
+        "sha256": "c91452f58f2cd0769b8ca8b2481cd5c801397c15b68eb77cbfea1c946e7dff29",
+        "size": 3885608
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/ksiadoz smokeborn": {
+    "url": "d9e1c2eda9bc27badd3f1c9b64a7d7414de3f02e2123500ff3b6b9db26c13895.glb",
+    "sha256": "d9e1c2eda9bc27badd3f1c9b64a7d7414de3f02e2123500ff3b6b9db26c13895",
+    "size": 15770416,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6e83076bb83a77f1d3d3cb1f3e232794290291d1a0a3e948a65cf4359754e025.ctex",
+          "sha256": "6e83076bb83a77f1d3d3cb1f3e232794290291d1a0a3e948a65cf4359754e025",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0100da5332700d412bd84649b12e2ff853b23eb27ae1c490e7890c7716dd00ca.ctex",
+          "sha256": "0100da5332700d412bd84649b12e2ff853b23eb27ae1c490e7890c7716dd00ca",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7a6bd33679f517ec14eb1dccc7dbfb3efaac2b2cfa45efed12bfe338b8f78c33.glb",
+        "sha256": "7a6bd33679f517ec14eb1dccc7dbfb3efaac2b2cfa45efed12bfe338b8f78c33",
+        "size": 4666316
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/massive spores": {
+    "url": "8a85f2feff997d86c584436442abd7e6130f3dbc3adbc58b8f143150df8eb3d6.glb",
+    "sha256": "8a85f2feff997d86c584436442abd7e6130f3dbc3adbc58b8f143150df8eb3d6",
+    "size": 15581216,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "40805cb72c099e5a3e47ecfb957f0b1aeb3ae2315bbc6296bc759684e97d135a.ctex",
+          "sha256": "40805cb72c099e5a3e47ecfb957f0b1aeb3ae2315bbc6296bc759684e97d135a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a0efa166427e208b47268705ba55137d36cd44453b305b9a41086d7600d835ed.ctex",
+          "sha256": "a0efa166427e208b47268705ba55137d36cd44453b305b9a41086d7600d835ed",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b7afa049a904646d681883fc863e21d5038add1611aeb3c9afb26deb69ebd33a.glb",
+        "sha256": "b7afa049a904646d681883fc863e21d5038add1611aeb3c9afb26deb69ebd33a",
+        "size": 4427324
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/mortar beast": {
+    "url": "d6e75995efb80d04940cd2aab9b6ff3e5a36ab7a3c92a26df046fed8863708c1.glb",
+    "sha256": "d6e75995efb80d04940cd2aab9b6ff3e5a36ab7a3c92a26df046fed8863708c1",
+    "size": 15681632,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0d7d642e26561c6b770c8987848f8526ab5f6977b93f2c112d56c25357f3dc13.ctex",
+          "sha256": "0d7d642e26561c6b770c8987848f8526ab5f6977b93f2c112d56c25357f3dc13",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "77bf789d74735356f76cef6581450cf9cdd2be174051304b382acd397313a819.ctex",
+          "sha256": "77bf789d74735356f76cef6581450cf9cdd2be174051304b382acd397313a819",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ad828f1f06db74ce46cf599ba16f178e8672cef85edeed757ee2ccf52c0ee977.glb",
+        "sha256": "ad828f1f06db74ce46cf599ba16f178e8672cef85edeed757ee2ccf52c0ee977",
+        "size": 10944524
+      },
+      "size_class": "large"
+    }
+  },
+  "alien_hives/nisuv": {
+    "url": "d5e936bd6c9292947934e5cc956bc95a1c017e97c8d3091c6fd45a8f8762bf7b.glb",
+    "sha256": "d5e936bd6c9292947934e5cc956bc95a1c017e97c8d3091c6fd45a8f8762bf7b",
+    "size": 14396288,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "36b7ca620f5673b5fe13ea9d5e2675e6f4a9af29889a2d65152c1afb9edc499f.ctex",
+          "sha256": "36b7ca620f5673b5fe13ea9d5e2675e6f4a9af29889a2d65152c1afb9edc499f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "938b30924b253a83fd433e9ec037ee33f6d79071f468174c2c41b0ef62540545.ctex",
+          "sha256": "938b30924b253a83fd433e9ec037ee33f6d79071f468174c2c41b0ef62540545",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6db6081af93956b84eccf0397827262ceffb38aa51f769659149b6d26a011ff6.glb",
+        "sha256": "6db6081af93956b84eccf0397827262ceffb38aa51f769659149b6d26a011ff6",
+        "size": 3990892
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/prime warrior": {
+    "url": "1d204846d2bbed970064c82719badd1354e3e3019f4c91b5679a616785e77480.glb",
+    "sha256": "1d204846d2bbed970064c82719badd1354e3e3019f4c91b5679a616785e77480",
+    "size": 17935100,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a2b3a43d86551c771c4b3faeec9cfae4278403eefac9373a1a776f8d55756eb9.ctex",
+          "sha256": "a2b3a43d86551c771c4b3faeec9cfae4278403eefac9373a1a776f8d55756eb9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a07205fba058c04d491abad223c968223beee57ee7f6f7c0dd5d9cd315ece090.ctex",
+          "sha256": "a07205fba058c04d491abad223c968223beee57ee7f6f7c0dd5d9cd315ece090",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "50f564314a8c0e39e89e09fd5153b6610a6636ee0a1bb13b9f85a3dbf4e4166e.glb",
+        "sha256": "50f564314a8c0e39e89e09fd5153b6610a6636ee0a1bb13b9f85a3dbf4e4166e",
+        "size": 5168424
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/psycho grunts": {
+    "url": "341c741b3632fff9d09cd54baf1bb839c96237adbcd445dbefb6536a09f992bb.glb",
+    "sha256": "341c741b3632fff9d09cd54baf1bb839c96237adbcd445dbefb6536a09f992bb",
+    "size": 13587392,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "abe84b58fa40c82ae3aeedb4184924a41a6ef9a1f6bc1b1a0f24b6435d4a6e1f.ctex",
+          "sha256": "abe84b58fa40c82ae3aeedb4184924a41a6ef9a1f6bc1b1a0f24b6435d4a6e1f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9df819e9bdff79ab2dac5e0ac01280e40b05ad93790e246af8f996f10ea09714.ctex",
+          "sha256": "9df819e9bdff79ab2dac5e0ac01280e40b05ad93790e246af8f996f10ea09714",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "19dbd091984212c80b93e6773de68eb5bc23dcdbe580090598808f28b3f7e5f4.glb",
+        "sha256": "19dbd091984212c80b93e6773de68eb5bc23dcdbe580090598808f28b3f7e5f4",
+        "size": 3774832
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/psycho rex": {
+    "url": "42d3a348df0a0f2224dd54637d8762db4e579d0d276c0c3e39442c665ae7cfc4.glb",
+    "sha256": "42d3a348df0a0f2224dd54637d8762db4e579d0d276c0c3e39442c665ae7cfc4",
+    "size": 16173820,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "905672ad1226c1dbea831482dcce2c342d7dd638bcb0297b3fa8f070e82fa9d4.ctex",
+          "sha256": "905672ad1226c1dbea831482dcce2c342d7dd638bcb0297b3fa8f070e82fa9d4",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3f92c94c17409eca4c07ad3e37a0dd239a071b8253f3e1a837faf61a611c437e.ctex",
+          "sha256": "3f92c94c17409eca4c07ad3e37a0dd239a071b8253f3e1a837faf61a611c437e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e45dcbfae6e35e35853df71ca4046b117f2e70aee0adef98b22d4c3b703a0b25.glb",
+        "sha256": "e45dcbfae6e35e35853df71ca4046b117f2e70aee0adef98b22d4c3b703a0b25",
+        "size": 4670032
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/rapacious beast": {
+    "url": "4813792911335292e7030a816ec40d49c94f50d35a153833be6be4fa20249590.glb",
+    "sha256": "4813792911335292e7030a816ec40d49c94f50d35a153833be6be4fa20249590",
+    "size": 17659700,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2cbccab5dd79f21978e4bf4d694f3b1238199d8aa2407819a5336fa26f3b840d.ctex",
+          "sha256": "2cbccab5dd79f21978e4bf4d694f3b1238199d8aa2407819a5336fa26f3b840d",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5c3be2aafc16f290232b13c38e0f1f2d019d0932c126775a1d410b2b17cb3820.ctex",
+          "sha256": "5c3be2aafc16f290232b13c38e0f1f2d019d0932c126775a1d410b2b17cb3820",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "236b0478197b00d0e7fe0a35c6ed331d17e8038ab17c8de20f99e8880700f37b.glb",
+        "sha256": "236b0478197b00d0e7fe0a35c6ed331d17e8038ab17c8de20f99e8880700f37b",
+        "size": 12566032
+      },
+      "size_class": "large"
+    }
+  },
+  "alien_hives/ravenous beasts": {
+    "url": "7e770a8867a775da10ed983b6d8d51510718033c16dc4f375c9d530c501da302.glb",
+    "sha256": "7e770a8867a775da10ed983b6d8d51510718033c16dc4f375c9d530c501da302",
+    "size": 13858804,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2b0f550b8cc95788ca7b4b81e8d4f0359d91669353b5eebffe414a433c39ef38.ctex",
+          "sha256": "2b0f550b8cc95788ca7b4b81e8d4f0359d91669353b5eebffe414a433c39ef38",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "bfa62927a199d752e57fbe69afb86f2f81f75a764ad4586b48f6c438c42549bf.ctex",
+          "sha256": "bfa62927a199d752e57fbe69afb86f2f81f75a764ad4586b48f6c438c42549bf",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ab33dbc8b3c7d42a8ea7b11cd9b6002ec1b57fe2216d14937804c75f7c0bc0ca.glb",
+        "sha256": "ab33dbc8b3c7d42a8ea7b11cd9b6002ec1b57fe2216d14937804c75f7c0bc0ca",
+        "size": 9283952
+      },
+      "size_class": "large"
+    }
+  },
+  "alien_hives/shadow hunter": {
+    "url": "3af8282a510d5bd150a669268bd2c75fe8d49ca331e7ca8fc45bf69d48f9963e.glb",
+    "sha256": "3af8282a510d5bd150a669268bd2c75fe8d49ca331e7ca8fc45bf69d48f9963e",
+    "size": 13980760,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b20ce434bf6c528e9cb40f361b704a999100bde36a0667dd3676c1c373c3c162.ctex",
+          "sha256": "b20ce434bf6c528e9cb40f361b704a999100bde36a0667dd3676c1c373c3c162",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0430e4e62f2f4742ea8ec36962e1d1058bc7fb580124ff2a68db5f89357bd32c.ctex",
+          "sha256": "0430e4e62f2f4742ea8ec36962e1d1058bc7fb580124ff2a68db5f89357bd32c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f52dd9da27a0ec42d4611d67d644b5bd9c8fee9d84e622c90c4843cb31699c6d.glb",
+        "sha256": "f52dd9da27a0ec42d4611d67d644b5bd9c8fee9d84e622c90c4843cb31699c6d",
+        "size": 4252780
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/shadow leapers": {
+    "url": "a8cc6fcc3e4e41b2c3d29bbe986f1dab77ef40064ec3c9d0fa6be7e64f9f94c5.glb",
+    "sha256": "a8cc6fcc3e4e41b2c3d29bbe986f1dab77ef40064ec3c9d0fa6be7e64f9f94c5",
+    "size": 14653028,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b72c62d256217bc3ee01a5516694cb35ff7eafd264e96520a47f0849a5d8c75a.ctex",
+          "sha256": "b72c62d256217bc3ee01a5516694cb35ff7eafd264e96520a47f0849a5d8c75a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "116ee1213f716cc067bccb6af67adbc8763aa0098b218371fcddfb0edb7b7f6f.ctex",
+          "sha256": "116ee1213f716cc067bccb6af67adbc8763aa0098b218371fcddfb0edb7b7f6f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5548eb2e493425bb14eef681ea06a1c6a9f0ff4b6ee904123d11a6b97be72f85.glb",
+        "sha256": "5548eb2e493425bb14eef681ea06a1c6a9f0ff4b6ee904123d11a6b97be72f85",
+        "size": 4172584
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/shooter grunts": {
+    "url": "40c5d220d97a8065e8b38e5a2a4b4a462e0a5e731a629a41d93cc6bf1cfcefcb.glb",
+    "sha256": "40c5d220d97a8065e8b38e5a2a4b4a462e0a5e731a629a41d93cc6bf1cfcefcb",
+    "size": 15191596,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9c607dd0d5a664f218f9b8ec1bd81edf9c02053dc5dd9189dd258f9fd3f7c0c0.ctex",
+          "sha256": "9c607dd0d5a664f218f9b8ec1bd81edf9c02053dc5dd9189dd258f9fd3f7c0c0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e562107ea2dd8b1b43a0e7e4d12d60bb35022dea951ca430db6194b4dd79f6e6.ctex",
+          "sha256": "e562107ea2dd8b1b43a0e7e4d12d60bb35022dea951ca430db6194b4dd79f6e6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a18750dc7472043063f4b3f844b93b897e3a2d6839b964811f0294932edb55c2.glb",
+        "sha256": "a18750dc7472043063f4b3f844b93b897e3a2d6839b964811f0294932edb55c2",
+        "size": 4295748
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/snatcher lord": {
+    "url": "329a44403c2b3f5dee8c4853563830630446b85280e4cf6be8800107e752ed99.glb",
+    "sha256": "329a44403c2b3f5dee8c4853563830630446b85280e4cf6be8800107e752ed99",
+    "size": 15610696,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6c9a1eb3c7909c029281f04216948b1437b300581b8472625fd516aaa7d6f793.ctex",
+          "sha256": "6c9a1eb3c7909c029281f04216948b1437b300581b8472625fd516aaa7d6f793",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7703d4456c2bd794a0bc0b98672b6b146167156acb0ea39307947e20bb88fd0d.ctex",
+          "sha256": "7703d4456c2bd794a0bc0b98672b6b146167156acb0ea39307947e20bb88fd0d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "df1e11c9cff4ad5dcd483912b29cf124c7fc1c3044803d631b6df6cff3ac311e.glb",
+        "sha256": "df1e11c9cff4ad5dcd483912b29cf124c7fc1c3044803d631b6df6cff3ac311e",
+        "size": 11633844
+      },
+      "size_class": "large"
+    }
+  },
+  "alien_hives/soul snatchers": {
+    "url": "6db8556bdc649afa92057d0a36632abf8b4d66ccf24fe74682704d9ececd5b16.glb",
+    "sha256": "6db8556bdc649afa92057d0a36632abf8b4d66ccf24fe74682704d9ececd5b16",
+    "size": 14769712,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c82109ca6d6f0649f788a140fed73cdf4f6cf41c9f2784c44213bda3dab5f3cd.ctex",
+          "sha256": "c82109ca6d6f0649f788a140fed73cdf4f6cf41c9f2784c44213bda3dab5f3cd",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d7c19a3f0f49fc0d5902f1d6dc685192d48e6aed0a9b974c3989e6905f064e29.ctex",
+          "sha256": "d7c19a3f0f49fc0d5902f1d6dc685192d48e6aed0a9b974c3989e6905f064e29",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "18fc3e8914a4a425c28be303ccb0de2c86148e3651c975c8022b777ae4a8c664.glb",
+        "sha256": "18fc3e8914a4a425c28be303ccb0de2c86148e3651c975c8022b777ae4a8c664",
+        "size": 3912232
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/spawning great beast": {
+    "url": "bcb68ead32945265320fed01615a122d84bae279ec3b8cb848bc6e9178862b68.glb",
+    "sha256": "bcb68ead32945265320fed01615a122d84bae279ec3b8cb848bc6e9178862b68",
+    "size": 16522912,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8ba57c7b4a2957a5d2f2161c710e0ae9464f958e550a3b6356ea045749837d16.ctex",
+          "sha256": "8ba57c7b4a2957a5d2f2161c710e0ae9464f958e550a3b6356ea045749837d16",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c074a855804d76b37cbe9a4711fa598ddd96b61ece550ead58715e3ee31b2cd0.ctex",
+          "sha256": "c074a855804d76b37cbe9a4711fa598ddd96b61ece550ead58715e3ee31b2cd0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7cb017870e6dc60f2031d6f0f6c5aedea296fefdd4115f2a734d5607608ab65a.glb",
+        "sha256": "7cb017870e6dc60f2031d6f0f6c5aedea296fefdd4115f2a734d5607608ab65a",
+        "size": 12692940
+      },
+      "size_class": "large"
+    }
+  },
+  "alien_hives/spores": {
+    "url": "f814485ffd0ddf202e49a46ebdab66b8fe706fdd8b4fe63b4e49a2b340bba171.glb",
+    "sha256": "f814485ffd0ddf202e49a46ebdab66b8fe706fdd8b4fe63b4e49a2b340bba171",
+    "size": 14677024,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2748a62fe330f3e2f29a593e99f53be6051c555b1d5e162c8f1496b2c9517144.ctex",
+          "sha256": "2748a62fe330f3e2f29a593e99f53be6051c555b1d5e162c8f1496b2c9517144",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "024e42413158f711e7a3133813d6257fc23218311a7a014c079005c5e29183e3.ctex",
+          "sha256": "024e42413158f711e7a3133813d6257fc23218311a7a014c079005c5e29183e3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "577a85b145c2d0800c4036347b4cab79cd534403ce0e8db6c36e1da47fc72197.glb",
+        "sha256": "577a85b145c2d0800c4036347b4cab79cd534403ce0e8db6c36e1da47fc72197",
+        "size": 3985260
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/support grunts": {
+    "url": "9bdddec41344d8a92975faf1fb0b931012cee94db954fbefea6d64bd3b22cc00.glb",
+    "sha256": "9bdddec41344d8a92975faf1fb0b931012cee94db954fbefea6d64bd3b22cc00",
+    "size": 14109336,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "af9c3b5ab1f2c360cc106385030eff7a16ee53f7e9fade9de55af60a13ae0133.ctex",
+          "sha256": "af9c3b5ab1f2c360cc106385030eff7a16ee53f7e9fade9de55af60a13ae0133",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c397a1beb38b837206d76082e0f92431c62c0ea067b6e73ee1af00fd7b452407.ctex",
+          "sha256": "c397a1beb38b837206d76082e0f92431c62c0ea067b6e73ee1af00fd7b452407",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9cd7bafc04c256ddfa78fadd37163b784c1f55a2f372510615635769155ca1c2.glb",
+        "sha256": "9cd7bafc04c256ddfa78fadd37163b784c1f55a2f372510615635769155ca1c2",
+        "size": 4264676
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/synapse beasts": {
+    "url": "561c0518993ac138b0ce02271851b28a7b6162a23c94ec346fadb2f31c00419c.glb",
+    "sha256": "561c0518993ac138b0ce02271851b28a7b6162a23c94ec346fadb2f31c00419c",
+    "size": 15075140,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "57b4ea152896571bffd60cbfc10504f7b95150a9e26a5d803adfe2dd3d22a1d7.ctex",
+          "sha256": "57b4ea152896571bffd60cbfc10504f7b95150a9e26a5d803adfe2dd3d22a1d7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4bb913a83ebb5543bb23a5527a3edd568683a59c87bac0f4c409e124a2705967.ctex",
+          "sha256": "4bb913a83ebb5543bb23a5527a3edd568683a59c87bac0f4c409e124a2705967",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "745214e3aed6197fa40930b3065fe67bdb0422a4879d061e2afa9099cf0eb204.glb",
+        "sha256": "745214e3aed6197fa40930b3065fe67bdb0422a4879d061e2afa9099cf0eb204",
+        "size": 11110340
+      },
+      "size_class": "large"
+    }
+  },
+  "alien_hives/synapse tyrant": {
+    "url": "198b6fc5c1125ea4c969e7f72b85882cdc35750e0cff3cba1a8e73f92b54d451.glb",
+    "sha256": "198b6fc5c1125ea4c969e7f72b85882cdc35750e0cff3cba1a8e73f92b54d451",
+    "size": 16406364,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "698d44e55048d9155cfa3b8e13947d0ec989e2167033d04e7318d8bf6271a4b9.ctex",
+          "sha256": "698d44e55048d9155cfa3b8e13947d0ec989e2167033d04e7318d8bf6271a4b9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7278a744f2a51449eb792b8b7319624bf50511a901214e87f27db01424aed028.ctex",
+          "sha256": "7278a744f2a51449eb792b8b7319624bf50511a901214e87f27db01424aed028",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "536958bdacbc31e4497fbfc86a377db05ef940c8f390dd1adb5fa597330d700d.glb",
+        "sha256": "536958bdacbc31e4497fbfc86a377db05ef940c8f390dd1adb5fa597330d700d",
+        "size": 4235728
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/toxico rex": {
+    "url": "eb81549a433647267ecda7b6f18d1f9f6be6c30390f90558a74b67c5f1e80303.glb",
+    "sha256": "eb81549a433647267ecda7b6f18d1f9f6be6c30390f90558a74b67c5f1e80303",
+    "size": 14366500,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f229061633de4e022191943bf83fe1c120458290013fb84e9c64bae6afe804fd.ctex",
+          "sha256": "f229061633de4e022191943bf83fe1c120458290013fb84e9c64bae6afe804fd",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3d950094f004e29eff102774babb1fb888f1d43917411f40400886628a223607.ctex",
+          "sha256": "3d950094f004e29eff102774babb1fb888f1d43917411f40400886628a223607",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2e12b05c709657e91ba2b0ac333bd20e6ce5050b2305d7b672a8beba3241773b.glb",
+        "sha256": "2e12b05c709657e91ba2b0ac333bd20e6ce5050b2305d7b672a8beba3241773b",
+        "size": 3924656
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/troseis": {
+    "url": "61f02a3d6d02b41e3f16f92805729048002c478de3afc112f219c5b584b9034f.glb",
+    "sha256": "61f02a3d6d02b41e3f16f92805729048002c478de3afc112f219c5b584b9034f",
+    "size": 16207808,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0d9460745c5a24f578437ff1de24324322976f0446bffccf7f74ab3605ad7816.ctex",
+          "sha256": "0d9460745c5a24f578437ff1de24324322976f0446bffccf7f74ab3605ad7816",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "47452f30ee74dd64f3fbc9e21c48b1ca43900900bcb5c56dac22a03c23590a4a.ctex",
+          "sha256": "47452f30ee74dd64f3fbc9e21c48b1ca43900900bcb5c56dac22a03c23590a4a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9999e112f0ef04e671bb92abde702f7390ac407f394fa09ff8c39bc15346c67e.glb",
+        "sha256": "9999e112f0ef04e671bb92abde702f7390ac407f394fa09ff8c39bc15346c67e",
+        "size": 4200644
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/tyrant great beast": {
+    "url": "4dfde5cf82533d58d3c3f1ca2c3c1454cea2a39e42fa768223b02624332bb623.glb",
+    "sha256": "4dfde5cf82533d58d3c3f1ca2c3c1454cea2a39e42fa768223b02624332bb623",
+    "size": 16301880,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2dc39c121f4945d64459fa531389bf343282dc2c00daae46275f8670ee105e53.ctex",
+          "sha256": "2dc39c121f4945d64459fa531389bf343282dc2c00daae46275f8670ee105e53",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "fd6281f7362536e4acb68272baf5ffdaa82e629163b069d973e597a0fbc9014f.ctex",
+          "sha256": "fd6281f7362536e4acb68272baf5ffdaa82e629163b069d973e597a0fbc9014f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a2861d8f2fb594e4bb6f62c45883f08648ae56da695fe559e5fb974d4b766f35.glb",
+        "sha256": "a2861d8f2fb594e4bb6f62c45883f08648ae56da695fe559e5fb974d4b766f35",
+        "size": 11218432
+      },
+      "size_class": "large"
+    }
+  },
+  "alien_hives/venom beasts": {
+    "url": "3de95fc96889b50a99a39dbe7a42ade50b7162a4afab868b33d50bff2b1472d7.glb",
+    "sha256": "3de95fc96889b50a99a39dbe7a42ade50b7162a4afab868b33d50bff2b1472d7",
+    "size": 14696668,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2530294ab55934e19829380b7a01afc324bf38478cc2c366c926788895e24527.ctex",
+          "sha256": "2530294ab55934e19829380b7a01afc324bf38478cc2c366c926788895e24527",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "917251b2bf776f71c498118e5dd200587c47242990fb11c607a24482b93dbb9b.ctex",
+          "sha256": "917251b2bf776f71c498118e5dd200587c47242990fb11c607a24482b93dbb9b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "bbf18ac07013c2b6540799a430658feb8bbede40a3387fce9c735ae01c2a423f.glb",
+        "sha256": "bbf18ac07013c2b6540799a430658feb8bbede40a3387fce9c735ae01c2a423f",
+        "size": 10805440
+      },
+      "size_class": "large"
+    }
+  },
+  "alien_hives/vradhez": {
+    "url": "ec8e036b2f9370fd9f7989422dbe4eb14f074262b8ed86a15be8c78f1a0b0da9.glb",
+    "sha256": "ec8e036b2f9370fd9f7989422dbe4eb14f074262b8ed86a15be8c78f1a0b0da9",
+    "size": 14102300,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "15ce1350b4d9b3c46e8f3d27b675a4ca72eb1e62c62c54d81860729e0f43cf11.ctex",
+          "sha256": "15ce1350b4d9b3c46e8f3d27b675a4ca72eb1e62c62c54d81860729e0f43cf11",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c7e0e9106ee4903c27136dc56dfd522b47f4e7dbf9c32d147a3831e86318d0cf.ctex",
+          "sha256": "c7e0e9106ee4903c27136dc56dfd522b47f4e7dbf9c32d147a3831e86318d0cf",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "0e62e190f9135b0367c1c2811dbdced365ab45de6cf275e74618e1bfabcb41a7.glb",
+        "sha256": "0e62e190f9135b0367c1c2811dbdced365ab45de6cf275e74618e1bfabcb41a7",
+        "size": 4341196
+      },
+      "size_class": "infantry"
+    }
+  },
+  "alien_hives/winged grunts": {
+    "url": "edf2243aeb3ab403fe385b63eb1d85c9e59d9cf37e0681460522ad44a96df33e.glb",
+    "sha256": "edf2243aeb3ab403fe385b63eb1d85c9e59d9cf37e0681460522ad44a96df33e",
+    "size": 16080252,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "81e1941bc3dbdd0403f3788393994e3efdcf371da7187a515c704dad7556bd3f.ctex",
+          "sha256": "81e1941bc3dbdd0403f3788393994e3efdcf371da7187a515c704dad7556bd3f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "122acade834d92ace6fa95bae072d948606289f61875d6df014111b3e971e8c7.ctex",
+          "sha256": "122acade834d92ace6fa95bae072d948606289f61875d6df014111b3e971e8c7",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "58431cc52cf464dd537776a994d0cbbe16b0c422292c818c338d28170c79788f.glb",
+        "sha256": "58431cc52cf464dd537776a994d0cbbe16b0c422292c818c338d28170c79788f",
+        "size": 4474980
+      },
+      "size_class": "infantry"
+    }
+  }
+}

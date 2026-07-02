@@ -1,0 +1,496 @@
+{
+  "machine_cult/arch fighter": {
+    "url": "32e9d1dca8af44200f4a0aced383c8adbb70aa370df2dc84099bbd8454716b6a.glb",
+    "sha256": "32e9d1dca8af44200f4a0aced383c8adbb70aa370df2dc84099bbd8454716b6a",
+    "size": 15753112,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "cac2eb1071c9c44d13855d7ada9ed4ed9bb9239711eea20a5d2b2e7d50f119e7.ctex",
+          "sha256": "cac2eb1071c9c44d13855d7ada9ed4ed9bb9239711eea20a5d2b2e7d50f119e7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "60350fd89cc82a00c7d74dbb8982f3459ff0d0229bda5c99f6ef3011663ca8b7.ctex",
+          "sha256": "60350fd89cc82a00c7d74dbb8982f3459ff0d0229bda5c99f6ef3011663ca8b7",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8329cfe542b4047496cae8ebf5bee048e38877c202fd44c8dfec972cf39f9817.glb",
+        "sha256": "8329cfe542b4047496cae8ebf5bee048e38877c202fd44c8dfec972cf39f9817",
+        "size": 8165276
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "machine_cult/arch gunship": {
+    "url": "3b49fd52f3fa14d82914f1784ce06b023f9dc6135d5d466b79c69295a7797ce0.glb",
+    "sha256": "3b49fd52f3fa14d82914f1784ce06b023f9dc6135d5d466b79c69295a7797ce0",
+    "size": 16208916,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "1bb8ae21d49a0720606afcec366bc18f54c8181758160a7280d20d40b771671f.ctex",
+          "sha256": "1bb8ae21d49a0720606afcec366bc18f54c8181758160a7280d20d40b771671f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ea68cc856ffb542f92f72a1bcdb0c953814feff55db96c8a441c7bb9116df7e2.ctex",
+          "sha256": "ea68cc856ffb542f92f72a1bcdb0c953814feff55db96c8a441c7bb9116df7e2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6f1c9fed5b3a2bf78b015bdfea49e9334394c572faa143c240785ec1127d8000.glb",
+        "sha256": "6f1c9fed5b3a2bf78b015bdfea49e9334394c572faa143c240785ec1127d8000",
+        "size": 8456560
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "machine_cult/attack craft": {
+    "url": "974f96ea6108a4b723429ac6af98aaf2d9a79ae4c2ef3467377f3ad4c4dfefa0.glb",
+    "sha256": "974f96ea6108a4b723429ac6af98aaf2d9a79ae4c2ef3467377f3ad4c4dfefa0",
+    "size": 13613240,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a26adfbb2b6545fbb549979cac5b36cdebed4f2fd12c6fd6dbbad3396f16a674.ctex",
+          "sha256": "a26adfbb2b6545fbb549979cac5b36cdebed4f2fd12c6fd6dbbad3396f16a674",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0ca7e36fddf53b8b6f8c78ae21600de51c2c092349239f7dd7a8b55c457000fb.ctex",
+          "sha256": "0ca7e36fddf53b8b6f8c78ae21600de51c2c092349239f7dd7a8b55c457000fb",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "515d2bba82c88706bc0fa18707ae30e88603e37161056bfd5b42bed5b8638ed0.glb",
+        "sha256": "515d2bba82c88706bc0fa18707ae30e88603e37161056bfd5b42bed5b8638ed0",
+        "size": 3846044
+      },
+      "size_class": "infantry"
+    }
+  },
+  "machine_cult/breacher cyborgs": {
+    "url": "e089ed3d2575f4688d81a7153721a7314effec7d34dc6142885a9ec474c61ab8.glb",
+    "sha256": "e089ed3d2575f4688d81a7153721a7314effec7d34dc6142885a9ec474c61ab8",
+    "size": 15816488,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "db11f666c0324c8d38f14ff5e549393a21ab5598caaa358df6d82260f2b0f86a.ctex",
+          "sha256": "db11f666c0324c8d38f14ff5e549393a21ab5598caaa358df6d82260f2b0f86a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ef2229bd0d9b5e9d066de99a5d6df3a3646d58a4d8eeddd38597f5876c684741.ctex",
+          "sha256": "ef2229bd0d9b5e9d066de99a5d6df3a3646d58a4d8eeddd38597f5876c684741",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "98ec50709f44390b0eb9b4a6ab6ee76e63c1b1c4fbb189781f52ff5d31d8f21a.glb",
+        "sha256": "98ec50709f44390b0eb9b4a6ab6ee76e63c1b1c4fbb189781f52ff5d31d8f21a",
+        "size": 4429324
+      },
+      "size_class": "infantry"
+    }
+  },
+  "machine_cult/combat robot": {
+    "url": "8cda5f5900070e28e3d9ac3222a981b6bd19b616b1dfc55c9428e68e1d48803b.glb",
+    "sha256": "8cda5f5900070e28e3d9ac3222a981b6bd19b616b1dfc55c9428e68e1d48803b",
+    "size": 15612476,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c64fe0406360666a7e464ef6b92e743134763f393e0b23585198f9190bbc72f7.ctex",
+          "sha256": "c64fe0406360666a7e464ef6b92e743134763f393e0b23585198f9190bbc72f7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3f8af61b400462b7241dce11c18fc9d73e8800312751cdee56fc16f4541669ec.ctex",
+          "sha256": "3f8af61b400462b7241dce11c18fc9d73e8800312751cdee56fc16f4541669ec",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "bd62a314494680a89fc7541e5f8fbea92aa8bf1036b796e618d7948d83de2b4d.glb",
+        "sha256": "bd62a314494680a89fc7541e5f8fbea92aa8bf1036b796e618d7948d83de2b4d",
+        "size": 4398680
+      },
+      "size_class": "infantry"
+    }
+  },
+  "machine_cult/crawler tank": {
+    "url": "f2b953c8734662bed1ba092988ceb1fb076269bd8b2449f0a6541e15f9b759dd.glb",
+    "sha256": "f2b953c8734662bed1ba092988ceb1fb076269bd8b2449f0a6541e15f9b759dd",
+    "size": 18038792,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e0161c3fa6e2895c8d6ab896c2c4a133f50e513095259c79046b71eb11466df2.ctex",
+          "sha256": "e0161c3fa6e2895c8d6ab896c2c4a133f50e513095259c79046b71eb11466df2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5590969582b8ffa666e0f62143e9e52eb6a768c920eaba5a255d22b7251f0a85.ctex",
+          "sha256": "5590969582b8ffa666e0f62143e9e52eb6a768c920eaba5a255d22b7251f0a85",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f0cc30274697f3114c31d900e7cb15e8bf03f07b60f8fd9594d603a58f1be5dd.glb",
+        "sha256": "f0cc30274697f3114c31d900e7cb15e8bf03f07b60f8fd9594d603a58f1be5dd",
+        "size": 9630768
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "machine_cult/cult leader": {
+    "url": "6ada969e69591a5e3db90a1594c78c724f0af9b308dc578f779719f0a7696a64.glb",
+    "sha256": "6ada969e69591a5e3db90a1594c78c724f0af9b308dc578f779719f0a7696a64",
+    "size": 15801800,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "49cf917dcc12fe19566995ae7fc2df56a64ca5e87e436b647ac7be9c07ef6691.ctex",
+          "sha256": "49cf917dcc12fe19566995ae7fc2df56a64ca5e87e436b647ac7be9c07ef6691",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5972fb0fccf0ec7ecbec6ab2ad4ad1a863151ed747cf0ad006f03d6aa55cd849.ctex",
+          "sha256": "5972fb0fccf0ec7ecbec6ab2ad4ad1a863151ed747cf0ad006f03d6aa55cd849",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e68f0c4652798103da46881fe804b057a63a5a6f7d955ec4e4b69c79c9ad4914.glb",
+        "sha256": "e68f0c4652798103da46881fe804b057a63a5a6f7d955ec4e4b69c79c9ad4914",
+        "size": 4511040
+      },
+      "size_class": "infantry"
+    }
+  },
+  "machine_cult/cult rangers": {
+    "url": "26db21821adafaa3772b3d792a2cc651f75f4b1a5afa5cc2945360eceae5b827.glb",
+    "sha256": "26db21821adafaa3772b3d792a2cc651f75f4b1a5afa5cc2945360eceae5b827",
+    "size": 16029992,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2d0d911a428d3e17a9e5ca9bfbbd8ee7c1bb37764f3efef55c8c4e76da17a7df.ctex",
+          "sha256": "2d0d911a428d3e17a9e5ca9bfbbd8ee7c1bb37764f3efef55c8c4e76da17a7df",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c3db1f2e7e3ba883df19205605b4b39518249726c165763ade31393c1c400780.ctex",
+          "sha256": "c3db1f2e7e3ba883df19205605b4b39518249726c165763ade31393c1c400780",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "dfd577fcd2299ac74b4c56ae0cc9ca26bd6ee83cc0b14256fe668c76cda6c66a.glb",
+        "sha256": "dfd577fcd2299ac74b4c56ae0cc9ca26bd6ee83cc0b14256fe668c76cda6c66a",
+        "size": 4417704
+      },
+      "size_class": "infantry"
+    }
+  },
+  "machine_cult/destroyer cyborgs": {
+    "url": "300f993759a8c6268356bf34825a78f5828fb357af3cc606e88c497cd6c52749.glb",
+    "sha256": "300f993759a8c6268356bf34825a78f5828fb357af3cc606e88c497cd6c52749",
+    "size": 15957560,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "67e321be9b1a59d9bd85ac50e5f86cd48cfe574f668daee574dfb1bdbf6cecbf.ctex",
+          "sha256": "67e321be9b1a59d9bd85ac50e5f86cd48cfe574f668daee574dfb1bdbf6cecbf",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e3e93257590ba26dcf9a4cfcfcec29b36f0e975bba9bd98dd4ad7bdadb241c87.ctex",
+          "sha256": "e3e93257590ba26dcf9a4cfcfcec29b36f0e975bba9bd98dd4ad7bdadb241c87",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8305646551ea699b93cb30cbff532324e0c6e5116e44b0e96951f8eef611b5a0.glb",
+        "sha256": "8305646551ea699b93cb30cbff532324e0c6e5116e44b0e96951f8eef611b5a0",
+        "size": 4591596
+      },
+      "size_class": "infantry"
+    }
+  },
+  "machine_cult/dragoon walker": {
+    "url": "22e6d8ebed5a097f72f4b6cb1b7bd49307562d03a73abdd3e6d1a774bf889706.glb",
+    "sha256": "22e6d8ebed5a097f72f4b6cb1b7bd49307562d03a73abdd3e6d1a774bf889706",
+    "size": 15497128,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8022b92843f361ebeffb53eba51462a1381b6eb66a97b0fe98b652b9144e726a.ctex",
+          "sha256": "8022b92843f361ebeffb53eba51462a1381b6eb66a97b0fe98b652b9144e726a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "87b4698bd20a5137d0e7304fda5bd5e50f40de03d486892a683c9c6367d6b664.ctex",
+          "sha256": "87b4698bd20a5137d0e7304fda5bd5e50f40de03d486892a683c9c6367d6b664",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "21fac86354392980bbeea3c66fc1e7ddce0fe6498a0605aadb1582d58d7a7504.glb",
+        "sha256": "21fac86354392980bbeea3c66fc1e7ddce0fe6498a0605aadb1582d58d7a7504",
+        "size": 8412200
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "machine_cult/high priest": {
+    "url": "d1cc25bf77539938ea80a3756aabe92efc22be7a0696bd221f95625a2aaec892.glb",
+    "sha256": "d1cc25bf77539938ea80a3756aabe92efc22be7a0696bd221f95625a2aaec892",
+    "size": 15358848,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9d41488d2edf2ca04c89767d7a4c50cb393723a510b553559035a51c0a06dedb.ctex",
+          "sha256": "9d41488d2edf2ca04c89767d7a4c50cb393723a510b553559035a51c0a06dedb",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a7bc31fb53057a1010cb644fd94ab030c6ef337d1ac122a0f0e8eb88bbaa87d1.ctex",
+          "sha256": "a7bc31fb53057a1010cb644fd94ab030c6ef337d1ac122a0f0e8eb88bbaa87d1",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5fde37d800b63b86333557577e46b8a21818321d078386f0ba2dada19d122aa7.glb",
+        "sha256": "5fde37d800b63b86333557577e46b8a21818321d078386f0ba2dada19d122aa7",
+        "size": 4372396
+      },
+      "size_class": "infantry"
+    }
+  },
+  "machine_cult/iron walker": {
+    "url": "b0d3e80c9c78fc76d7696d734c678bd9c039f483a797efb3fcae8ad236ee4524.glb",
+    "sha256": "b0d3e80c9c78fc76d7696d734c678bd9c039f483a797efb3fcae8ad236ee4524",
+    "size": 15773952,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f8ecddbae7498c1c10740eaf7123cafe1e450e44c3835d096e839f4842fb6579.ctex",
+          "sha256": "f8ecddbae7498c1c10740eaf7123cafe1e450e44c3835d096e839f4842fb6579",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5b587f0acad23ee0edba02fb700990f64fe019e867442397e1de71285e2812ea.ctex",
+          "sha256": "5b587f0acad23ee0edba02fb700990f64fe019e867442397e1de71285e2812ea",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8e0027c940fbf5bd670d76c123967518b749fb91d9f8b242e5489c669060906f.glb",
+        "sha256": "8e0027c940fbf5bd670d76c123967518b749fb91d9f8b242e5489c669060906f",
+        "size": 8496828
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "machine_cult/landing craft": {
+    "url": "cef38e5416f4e5cb4850198ea1a883e2ebedd897381943905ec86852c6a35867.glb",
+    "sha256": "cef38e5416f4e5cb4850198ea1a883e2ebedd897381943905ec86852c6a35867",
+    "size": 15192788,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "80f2b3fc417f1f1ebc70be48a0b49c0e9b4294d30db67e67ee6f27e37096d7aa.ctex",
+          "sha256": "80f2b3fc417f1f1ebc70be48a0b49c0e9b4294d30db67e67ee6f27e37096d7aa",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ad148a090bf2495cc1670f35c0769b6f5a7d62c640b02bd03fb2d0e04eafb5bc.ctex",
+          "sha256": "ad148a090bf2495cc1670f35c0769b6f5a7d62c640b02bd03fb2d0e04eafb5bc",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "14bdf0df9ee2b875e3fb46cd9ec0379d9d86e2031db27d93329a0d6658c3cbbc.glb",
+        "sha256": "14bdf0df9ee2b875e3fb46cd9ec0379d9d86e2031db27d93329a0d6658c3cbbc",
+        "size": 4578192
+      },
+      "size_class": "infantry"
+    }
+  },
+  "machine_cult/raider cavalry": {
+    "url": "07209a290395f3ec90dd9c63a5ec9e66b1d41f02aaf15edc9088478d2e977fb6.glb",
+    "sha256": "07209a290395f3ec90dd9c63a5ec9e66b1d41f02aaf15edc9088478d2e977fb6",
+    "size": 13814428,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "685cac2d3e4e1055ad9ba99c7fdfc6866e6cd2c70a3775f6a9ada9c7fad0e65b.ctex",
+          "sha256": "685cac2d3e4e1055ad9ba99c7fdfc6866e6cd2c70a3775f6a9ada9c7fad0e65b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "28ceb23fe122ec05b08a3ed0f83b738ec46daa46728f4b9a7d5e88916c7b26cc.ctex",
+          "sha256": "28ceb23fe122ec05b08a3ed0f83b738ec46daa46728f4b9a7d5e88916c7b26cc",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b35dcbc09262ba314f67a492da0f88f918bcc9dbb6575bb4fc31dbde4c5f7f0e.glb",
+        "sha256": "b35dcbc09262ba314f67a492da0f88f918bcc9dbb6575bb4fc31dbde4c5f7f0e",
+        "size": 3834544
+      },
+      "size_class": "infantry"
+    }
+  },
+  "machine_cult/sect infiltrators": {
+    "url": "18d9e950b3155dfc9cb064ff3b538d4cfc2a04ac14031d32f765ae141be971ed.glb",
+    "sha256": "18d9e950b3155dfc9cb064ff3b538d4cfc2a04ac14031d32f765ae141be971ed",
+    "size": 15790016,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a991a93d8f2e81396fe0b6e4d4cddadd11ede7e520f9d80788ee5f3f894203be.ctex",
+          "sha256": "a991a93d8f2e81396fe0b6e4d4cddadd11ede7e520f9d80788ee5f3f894203be",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "668f5b48236cd701aca8f7a756b43235f1465487447bf6d0a4a8f06b97ad3cfe.ctex",
+          "sha256": "668f5b48236cd701aca8f7a756b43235f1465487447bf6d0a4a8f06b97ad3cfe",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2bf93d7833c10352303253d4f66dec99cd59b6af0c6bd85b10c97f609c644502.glb",
+        "sha256": "2bf93d7833c10352303253d4f66dec99cd59b6af0c6bd85b10c97f609c644502",
+        "size": 4460952
+      },
+      "size_class": "infantry"
+    }
+  },
+  "machine_cult/sect leader": {
+    "url": "fd1455645e7c4229092705465ff5a59629eda8dd35598a5e00ce9d3a0f1b183d.glb",
+    "sha256": "fd1455645e7c4229092705465ff5a59629eda8dd35598a5e00ce9d3a0f1b183d",
+    "size": 16867992,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "968b13a5181686ba9ec3f28895cb7e4e6a49bc3fefc21a2925910a8cdd269bcd.ctex",
+          "sha256": "968b13a5181686ba9ec3f28895cb7e4e6a49bc3fefc21a2925910a8cdd269bcd",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4641555c6b01f32d2caba3a8b6d3a0648d87244d125076c96d9ebb803a6edb86.ctex",
+          "sha256": "4641555c6b01f32d2caba3a8b6d3a0648d87244d125076c96d9ebb803a6edb86",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e432d34df1076720f362a3f788cc5002bdb9dfb4177533b1492c6355308a99e6.glb",
+        "sha256": "e432d34df1076720f362a3f788cc5002bdb9dfb4177533b1492c6355308a99e6",
+        "size": 4847640
+      },
+      "size_class": "infantry"
+    }
+  },
+  "machine_cult/sect stalkers": {
+    "url": "138e6dc555b8308d3161c6c4dfb7154bbbdcd44665d5e0b227ab3e8347fbf2e0.glb",
+    "sha256": "138e6dc555b8308d3161c6c4dfb7154bbbdcd44665d5e0b227ab3e8347fbf2e0",
+    "size": 14889636,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "628b30858dd4e6a34745655710abd184fda195c29a81ce816d2a514669bbd9a3.ctex",
+          "sha256": "628b30858dd4e6a34745655710abd184fda195c29a81ce816d2a514669bbd9a3",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "915ba346fac332bdc475a1d0a74c200cb0c14bb12b6c3a413f1fec8b0ef29c66.ctex",
+          "sha256": "915ba346fac332bdc475a1d0a74c200cb0c14bb12b6c3a413f1fec8b0ef29c66",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6adf63b30eb7d74ac790ddfef47c3175dab53f7d92f2d2a6294b7d5325e00107.glb",
+        "sha256": "6adf63b30eb7d74ac790ddfef47c3175dab53f7d92f2d2a6294b7d5325e00107",
+        "size": 3770416
+      },
+      "size_class": "infantry"
+    }
+  },
+  "machine_cult/shock priests": {
+    "url": "70c53064b43872f14fab3ae56b69fb456d3673872b345e3f5a904c6f3e735188.glb",
+    "sha256": "70c53064b43872f14fab3ae56b69fb456d3673872b345e3f5a904c6f3e735188",
+    "size": 16175768,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4700afeea8a6a0637547f2597db88d92ce50d66e1157e4c625ec628b2ff09afa.ctex",
+          "sha256": "4700afeea8a6a0637547f2597db88d92ce50d66e1157e4c625ec628b2ff09afa",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "41e57e1cb8b8a6b5c0f37e91eed07b93d3c43d684c7e1be3228f9d740036535c.ctex",
+          "sha256": "41e57e1cb8b8a6b5c0f37e91eed07b93d3c43d684c7e1be3228f9d740036535c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8ce72443049b677366ae4636911f484e39dea23d38f51d135edd60bc33edf282.glb",
+        "sha256": "8ce72443049b677366ae4636911f484e39dea23d38f51d135edd60bc33edf282",
+        "size": 4450844
+      },
+      "size_class": "infantry"
+    }
+  },
+  "machine_cult/sky stalkers": {
+    "url": "14efbad055f72cb16b95ad4dc0a26eb6a31a048005aa81efb62b7dc15cda9a52.glb",
+    "sha256": "14efbad055f72cb16b95ad4dc0a26eb6a31a048005aa81efb62b7dc15cda9a52",
+    "size": 17030032,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b49134b982926a0fba8f40e4768f6c56bcfbf2d73b7a0e9b38c48795941d2e55.ctex",
+          "sha256": "b49134b982926a0fba8f40e4768f6c56bcfbf2d73b7a0e9b38c48795941d2e55",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1f9049b5bba20bb34f6df702f5f5b97744813be91a2799d5ac67c014daac52d2.ctex",
+          "sha256": "1f9049b5bba20bb34f6df702f5f5b97744813be91a2799d5ac67c014daac52d2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2745cb54899432d4954e70391e3dc1593ddc76b761bd8f6f71646f3752d81e20.glb",
+        "sha256": "2745cb54899432d4954e70391e3dc1593ddc76b761bd8f6f71646f3752d81e20",
+        "size": 4853672
+      },
+      "size_class": "infantry"
+    }
+  }
+}

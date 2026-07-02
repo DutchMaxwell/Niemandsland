@@ -1,0 +1,210 @@
+{
+  "titan_lords/duke titan": {
+    "url": "e2f1dfb4340b9cb9ecf5e9ea90dbbdbf05da3b627a7ff717e0e00529c36492f9.glb",
+    "sha256": "e2f1dfb4340b9cb9ecf5e9ea90dbbdbf05da3b627a7ff717e0e00529c36492f9",
+    "size": 16135368,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6667cfdf96d763ac8871d08696914f368bc69e9e6ebc17207607f2809683b581.ctex",
+          "sha256": "6667cfdf96d763ac8871d08696914f368bc69e9e6ebc17207607f2809683b581",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "78cdf9d8aaa067a3f133e2b16028eb2152219eb5cb121bcbacc1bcc020df40fb.ctex",
+          "sha256": "78cdf9d8aaa067a3f133e2b16028eb2152219eb5cb121bcbacc1bcc020df40fb",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3d9bcdd166bd0aa849d34936b2ca344dcbaa39df20c68fd8f8e99228c493a57a.glb",
+        "sha256": "3d9bcdd166bd0aa849d34936b2ca344dcbaa39df20c68fd8f8e99228c493a57a",
+        "size": 11872512
+      },
+      "size_class": "large"
+    }
+  },
+  "titan_lords/errant mini titan": {
+    "url": "425785a51a7e4b6e714ed824b7f09424ae184cdb11ae86e47b4c17bee934a0ef.glb",
+    "sha256": "425785a51a7e4b6e714ed824b7f09424ae184cdb11ae86e47b4c17bee934a0ef",
+    "size": 14240348,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "bbca457e87894c6960bd5bfab7784dfe9aa0f214ae498e6056db68f20bf0690b.ctex",
+          "sha256": "bbca457e87894c6960bd5bfab7784dfe9aa0f214ae498e6056db68f20bf0690b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c8db2828989671f43383d481c4152ed09508a563f72dbf427e9a1c9f5cc4ef7a.ctex",
+          "sha256": "c8db2828989671f43383d481c4152ed09508a563f72dbf427e9a1c9f5cc4ef7a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "777640c50e62cf9bc450930786b7773b6e8dd626743d5dd2226f3c7f0a56ba04.glb",
+        "sha256": "777640c50e62cf9bc450930786b7773b6e8dd626743d5dd2226f3c7f0a56ba04",
+        "size": 10734364
+      },
+      "size_class": "large"
+    }
+  },
+  "titan_lords/king heavy titan": {
+    "url": "88c2e9f157448ed03585e7973f7429e61c5b0c0924210e2b4d32d9ccea6f93fd.glb",
+    "sha256": "88c2e9f157448ed03585e7973f7429e61c5b0c0924210e2b4d32d9ccea6f93fd",
+    "size": 15917372,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "541bf1717c6929da8eb2bab8fc5e4b85389cdade43f21d3158425dd7e856b01d.ctex",
+          "sha256": "541bf1717c6929da8eb2bab8fc5e4b85389cdade43f21d3158425dd7e856b01d",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "34e9ca2cad7d90c73024f1ba1d33da8a35ac871fde915a5704539005d06681e3.ctex",
+          "sha256": "34e9ca2cad7d90c73024f1ba1d33da8a35ac871fde915a5704539005d06681e3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "af76e82af3c9d652df0849078391376a38440ee2d2f73650a2fc5e8d5cca98a4.glb",
+        "sha256": "af76e82af3c9d652df0849078391376a38440ee2d2f73650a2fc5e8d5cca98a4",
+        "size": 12308800
+      },
+      "size_class": "large"
+    }
+  },
+  "titan_lords/knight titan": {
+    "url": "39345bdd613a6fd2b9d7551b72e69e18e16315735b516f673f2b99d793054064.glb",
+    "sha256": "39345bdd613a6fd2b9d7551b72e69e18e16315735b516f673f2b99d793054064",
+    "size": 15763256,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ff4e5d75736bcc0686d3bb9d16db9f531acc927ac55e2415e3c85306888941a0.ctex",
+          "sha256": "ff4e5d75736bcc0686d3bb9d16db9f531acc927ac55e2415e3c85306888941a0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3ec899e0aaff3c1250f1e0113a096ec68e08ef2eeb1b4d2d9fd56f917010ee4f.ctex",
+          "sha256": "3ec899e0aaff3c1250f1e0113a096ec68e08ef2eeb1b4d2d9fd56f917010ee4f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3070343639de7dc6e813a3e94decff945e11846c8cc699a3bcfc8a8db5e9165a.glb",
+        "sha256": "3070343639de7dc6e813a3e94decff945e11846c8cc699a3bcfc8a8db5e9165a",
+        "size": 11226436
+      },
+      "size_class": "large"
+    }
+  },
+  "titan_lords/pilgrim mini titan": {
+    "url": "75f066391c0a9c3173906318b44af9cdf48698fe1227ba93c663bc5d34ef7f22.glb",
+    "sha256": "75f066391c0a9c3173906318b44af9cdf48698fe1227ba93c663bc5d34ef7f22",
+    "size": 16532080,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "dce93e67cf2695785ca1b2a7f133046184c61b5a6a11712d0e21f603d1c878e8.ctex",
+          "sha256": "dce93e67cf2695785ca1b2a7f133046184c61b5a6a11712d0e21f603d1c878e8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7b9c8e8981166f729825b2e6dbe1a4df0098a9eba3d3a3a53b5248bc1e064689.ctex",
+          "sha256": "7b9c8e8981166f729825b2e6dbe1a4df0098a9eba3d3a3a53b5248bc1e064689",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "85da1ecf5d73736517c78480112a30244444decbeeb60aa07a6ed3a6f613b2c7.glb",
+        "sha256": "85da1ecf5d73736517c78480112a30244444decbeeb60aa07a6ed3a6f613b2c7",
+        "size": 12707484
+      },
+      "size_class": "large"
+    }
+  },
+  "titan_lords/questor titan": {
+    "url": "2321e14b464cf5647aae94726816d4dac5f56243f75e2ce604c8f8620da2e8d8.glb",
+    "sha256": "2321e14b464cf5647aae94726816d4dac5f56243f75e2ce604c8f8620da2e8d8",
+    "size": 14339368,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a6c201c377a075585259d82333f751cb6793a3551447903b80d2e88e1fa5d0cd.ctex",
+          "sha256": "a6c201c377a075585259d82333f751cb6793a3551447903b80d2e88e1fa5d0cd",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "033e312754a065c0984a6a5840b57061611b31011deba6c3c44874d05424dc84.ctex",
+          "sha256": "033e312754a065c0984a6a5840b57061611b31011deba6c3c44874d05424dc84",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "427b55fc699248fe2f4efbeaa5b83768adb4a7c9718bd76f97f14d70789ffa15.glb",
+        "sha256": "427b55fc699248fe2f4efbeaa5b83768adb4a7c9718bd76f97f14d70789ffa15",
+        "size": 10770112
+      },
+      "size_class": "large"
+    }
+  },
+  "titan_lords/vassal micro titan": {
+    "url": "3729e46025473c9a4593e1d936b262de1c5ea65043f24366c8d61fc6121f2dca.glb",
+    "sha256": "3729e46025473c9a4593e1d936b262de1c5ea65043f24366c8d61fc6121f2dca",
+    "size": 16815704,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "bdc4954172d5190ddf3795b7963305194d6a54194994d41745d8681d1f32a8b0.ctex",
+          "sha256": "bdc4954172d5190ddf3795b7963305194d6a54194994d41745d8681d1f32a8b0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ec4e9bd7499a3a130e68e2a31296369fe8aeeb0f0ffb1f913930bde0082be805.ctex",
+          "sha256": "ec4e9bd7499a3a130e68e2a31296369fe8aeeb0f0ffb1f913930bde0082be805",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "278ccb28f70b5c095723a3903ab6d60b6ab57e1bc1a5d502b41109cc968536fe.glb",
+        "sha256": "278ccb28f70b5c095723a3903ab6d60b6ab57e1bc1a5d502b41109cc968536fe",
+        "size": 13023416
+      },
+      "size_class": "large"
+    }
+  },
+  "titan_lords/yeoman mini titan": {
+    "url": "0c3ad58c5d5419b7f2ea3a474aaa6b254232ff24fd3a918522ccc3873b9c6710.glb",
+    "sha256": "0c3ad58c5d5419b7f2ea3a474aaa6b254232ff24fd3a918522ccc3873b9c6710",
+    "size": 15898516,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8c42436846f6af8ddf393aee066a471203ba57a2935b7540c1c2c298a8a8d67a.ctex",
+          "sha256": "8c42436846f6af8ddf393aee066a471203ba57a2935b7540c1c2c298a8a8d67a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "71410ce5522cc4eb1a02d9b2bc3225160d031d7f2ab42bedef5248feac8f9e3e.ctex",
+          "sha256": "71410ce5522cc4eb1a02d9b2bc3225160d031d7f2ab42bedef5248feac8f9e3e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e7c4fe04dc999862cace796d154b25934055799323f1b5b4dcdde14cb2a4a24e.glb",
+        "sha256": "e7c4fe04dc999862cace796d154b25934055799323f1b5b4dcdde14cb2a4a24e",
+        "size": 12341372
+      },
+      "size_class": "large"
+    }
+  }
+}

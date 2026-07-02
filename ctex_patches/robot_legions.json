@@ -1,0 +1,756 @@
+{
+  "robot_legions/annihilator lord": {
+    "url": "4f87466cfd1687504448a2bdeedd14cd2ae3fb6b107cf5aec9520246610d9ab7.glb",
+    "sha256": "4f87466cfd1687504448a2bdeedd14cd2ae3fb6b107cf5aec9520246610d9ab7",
+    "size": 15156372,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0903845f9d77d17782dea1b33a29f840847f2274f87521c166e72571a98ad15e.ctex",
+          "sha256": "0903845f9d77d17782dea1b33a29f840847f2274f87521c166e72571a98ad15e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0c698c26a082c404859eeb9e77f650970e5faa13eeacf18d7ad428ec2eef068b.ctex",
+          "sha256": "0c698c26a082c404859eeb9e77f650970e5faa13eeacf18d7ad428ec2eef068b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b4bb980042e724621e5bb07fe8072669e67ddff5b165750c649713b5b39bd8e8.glb",
+        "sha256": "b4bb980042e724621e5bb07fe8072669e67ddff5b165750c649713b5b39bd8e8",
+        "size": 10966544
+      },
+      "size_class": "large"
+    }
+  },
+  "robot_legions/annihilators": {
+    "url": "a09a3c3365d5d33e5bcc52efebe236a33f1bbfaeec648bd42dd0de5f09e1eb61.glb",
+    "sha256": "a09a3c3365d5d33e5bcc52efebe236a33f1bbfaeec648bd42dd0de5f09e1eb61",
+    "size": 15399020,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "21d91884c1c77571214be1aee3d1e61eb0ad6017ec0e1044c3b07d5cd7353759.ctex",
+          "sha256": "21d91884c1c77571214be1aee3d1e61eb0ad6017ec0e1044c3b07d5cd7353759",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9808c06be87772b3d47895bba55b3cd48b3c7aed108c3ab722c5c90671669c9a.ctex",
+          "sha256": "9808c06be87772b3d47895bba55b3cd48b3c7aed108c3ab722c5c90671669c9a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "082e640dbfae3736ccfcbfef8fbb77542b3a1aa9bf4ca6572c880dc15cc70bd6.glb",
+        "sha256": "082e640dbfae3736ccfcbfef8fbb77542b3a1aa9bf4ca6572c880dc15cc70bd6",
+        "size": 4532476
+      },
+      "size_class": "infantry"
+    }
+  },
+  "robot_legions/bot swarms": {
+    "url": "923aff5045bd6efb220a384478499e502e19a94b731e4da771cc7b653d90efbf.glb",
+    "sha256": "923aff5045bd6efb220a384478499e502e19a94b731e4da771cc7b653d90efbf",
+    "size": 15799624,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "917f20d1bfe5be8530f90ef6b583c06ac7b8053f07775e46a04f9132e46d5cb1.ctex",
+          "sha256": "917f20d1bfe5be8530f90ef6b583c06ac7b8053f07775e46a04f9132e46d5cb1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3e72b775ea68a09ae34415889390aa429e3c1e1bf924a4bdb48ee7b0ea3b401b.ctex",
+          "sha256": "3e72b775ea68a09ae34415889390aa429e3c1e1bf924a4bdb48ee7b0ea3b401b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2506b67bd7584a8b3cb36fa45b5383b63529f28e73486da0bbde2a11a144ccf0.glb",
+        "sha256": "2506b67bd7584a8b3cb36fa45b5383b63529f28e73486da0bbde2a11a144ccf0",
+        "size": 4824104
+      },
+      "size_class": "infantry"
+    }
+  },
+  "robot_legions/death fortress": {
+    "url": "d64e52d8ae427865e95cc4683c36f364d3df3d82ed36dac07956e5929df188e7.glb",
+    "sha256": "d64e52d8ae427865e95cc4683c36f364d3df3d82ed36dac07956e5929df188e7",
+    "size": 17474696,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4c65030d1131b50afdc304869f84a09ac990c344d8a3d83b0a32f2ca31c48bb1.ctex",
+          "sha256": "4c65030d1131b50afdc304869f84a09ac990c344d8a3d83b0a32f2ca31c48bb1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d1a0fe349907ec47a97674f0e7c73048c9ebbae2dd478b0523820b0535ee3d3b.ctex",
+          "sha256": "d1a0fe349907ec47a97674f0e7c73048c9ebbae2dd478b0523820b0535ee3d3b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d3594da3849c27e687887bef6af89ed18c210ebadc4a831f5b2377d64dea5220.glb",
+        "sha256": "d3594da3849c27e687887bef6af89ed18c210ebadc4a831f5b2377d64dea5220",
+        "size": 5402544
+      },
+      "size_class": "infantry"
+    }
+  },
+  "robot_legions/destroyer snakes": {
+    "url": "de03e6f4dd2d9356e77e76848346f66836bd7acff3df14f27dd605be35b1d3f7.glb",
+    "sha256": "de03e6f4dd2d9356e77e76848346f66836bd7acff3df14f27dd605be35b1d3f7",
+    "size": 14336212,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d7af14b037ee60572033899d526c7c1b8e5aa5260e649d6f08b44f0621ac4ad2.ctex",
+          "sha256": "d7af14b037ee60572033899d526c7c1b8e5aa5260e649d6f08b44f0621ac4ad2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9ddcc4d9cf930cb893b726d5fb1288ea329ffe9d3a9080c58156711a92db92f7.ctex",
+          "sha256": "9ddcc4d9cf930cb893b726d5fb1288ea329ffe9d3a9080c58156711a92db92f7",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1bb1f289dd7287756d6c3adca7f40929fd7a182a00c9823e42a6bc9e36de3763.glb",
+        "sha256": "1bb1f289dd7287756d6c3adca7f40929fd7a182a00c9823e42a6bc9e36de3763",
+        "size": 4212352
+      },
+      "size_class": "infantry"
+    }
+  },
+  "robot_legions/doom fighter": {
+    "url": "36d610f63a9ded343d500ea358526c208d7248cb7502e6963007fd355e8fdd6c.glb",
+    "sha256": "36d610f63a9ded343d500ea358526c208d7248cb7502e6963007fd355e8fdd6c",
+    "size": 17243304,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e605b0ff4747814ac54fd9fff658141b123febf0291eb11e7722653ca94afe82.ctex",
+          "sha256": "e605b0ff4747814ac54fd9fff658141b123febf0291eb11e7722653ca94afe82",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a386b21b58b62440bdc63945a366cf937d5e452782f238dcd7da75d90d91d294.ctex",
+          "sha256": "a386b21b58b62440bdc63945a366cf937d5e452782f238dcd7da75d90d91d294",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "678f13c798c22d2123c1bd20b841546e65ccc88b07f173e0138d3afb4e015ea8.glb",
+        "sha256": "678f13c798c22d2123c1bd20b841546e65ccc88b07f173e0138d3afb4e015ea8",
+        "size": 8924028
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "robot_legions/doom tank": {
+    "url": "de24cb6b3fca919e81527e518f24cbd38bfbe490b64b24a754f356f138f639f2.glb",
+    "sha256": "de24cb6b3fca919e81527e518f24cbd38bfbe490b64b24a754f356f138f639f2",
+    "size": 17617656,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "988e0ef2b6376bd249ac1316fe6733583c59fd1ec66d507dbf83169aad8b932d.ctex",
+          "sha256": "988e0ef2b6376bd249ac1316fe6733583c59fd1ec66d507dbf83169aad8b932d",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "95c2513ccb03ed78155c82aab625b8f3090eb87a07a5c35e4df110bfa33779f6.ctex",
+          "sha256": "95c2513ccb03ed78155c82aab625b8f3090eb87a07a5c35e4df110bfa33779f6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "cc552b4a21bea249e742d9b33d111ff385c33ec8daf4e06178ff057566589ee4.glb",
+        "sha256": "cc552b4a21bea249e742d9b33d111ff385c33ec8daf4e06178ff057566589ee4",
+        "size": 9554816
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "robot_legions/echo 3g01": {
+    "url": "e3dca3c5827dd4498ba25f85ac6280e19803f0316168d6b4fb5cd3089ce0d781.glb",
+    "sha256": "e3dca3c5827dd4498ba25f85ac6280e19803f0316168d6b4fb5cd3089ce0d781",
+    "size": 14263748,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "71a068673257149276d6dd3c26c51650243d906c43cf87cc108ec8a41354a92c.ctex",
+          "sha256": "71a068673257149276d6dd3c26c51650243d906c43cf87cc108ec8a41354a92c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "953bf0597c9c15bcc0632587279fdd359223407f051ecbb2d4fc78c9655efa69.ctex",
+          "sha256": "953bf0597c9c15bcc0632587279fdd359223407f051ecbb2d4fc78c9655efa69",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1de81b2d01ae0501c12ea24c6e5d1d9a5b6cd8ebde2656ae7ac31060d81bca63.glb",
+        "sha256": "1de81b2d01ae0501c12ea24c6e5d1d9a5b6cd8ebde2656ae7ac31060d81bca63",
+        "size": 3917116
+      },
+      "size_class": "infantry"
+    }
+  },
+  "robot_legions/eternals": {
+    "url": "05e3f09deb00ebade8192ffdc2b880307eef75bb03095da0b067f5b939d5ad02.glb",
+    "sha256": "05e3f09deb00ebade8192ffdc2b880307eef75bb03095da0b067f5b939d5ad02",
+    "size": 15859536,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "219d8c1d9344497ee86f80472c5ad605a4d4be99157fbde46f19a18c0a269b3f.ctex",
+          "sha256": "219d8c1d9344497ee86f80472c5ad605a4d4be99157fbde46f19a18c0a269b3f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0ffd2f98ffbd9b3d5155e8c799b36f82c2fa403c8e09740f4196f20cccb997eb.ctex",
+          "sha256": "0ffd2f98ffbd9b3d5155e8c799b36f82c2fa403c8e09740f4196f20cccb997eb",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7194ff123f3f6332dd5ab9afbb5e2f630dc56f7bc6d911d4adfd2d20d449962e.glb",
+        "sha256": "7194ff123f3f6332dd5ab9afbb5e2f630dc56f7bc6d911d4adfd2d20d449962e",
+        "size": 4255540
+      },
+      "size_class": "infantry"
+    }
+  },
+  "robot_legions/flesh eaters": {
+    "url": "6831430bb2c634ebd34491911119ce11c089a06d839924fa88d1321afa30ee42.glb",
+    "sha256": "6831430bb2c634ebd34491911119ce11c089a06d839924fa88d1321afa30ee42",
+    "size": 14102232,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e67a7df5eea76ec10c32ff49e89762143c4fed827c8d06130fdf3cb62f58410a.ctex",
+          "sha256": "e67a7df5eea76ec10c32ff49e89762143c4fed827c8d06130fdf3cb62f58410a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "642b4e10c6a6a20d67229ed30507311e246ef4ed0e7d70ac0d80dd12e8e0f870.ctex",
+          "sha256": "642b4e10c6a6a20d67229ed30507311e246ef4ed0e7d70ac0d80dd12e8e0f870",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9456ca6d6c43306f35a153d4135417e9fe0cb04fa10b746d5303d6f39b53c952.glb",
+        "sha256": "9456ca6d6c43306f35a153d4135417e9fe0cb04fa10b746d5303d6f39b53c952",
+        "size": 3692848
+      },
+      "size_class": "infantry"
+    }
+  },
+  "robot_legions/forge spider": {
+    "url": "d8d6a8c1363d4b3905f6e41175c45cb68477b8240c929f39d46be653714d4ab0.glb",
+    "sha256": "d8d6a8c1363d4b3905f6e41175c45cb68477b8240c929f39d46be653714d4ab0",
+    "size": 16904628,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f40180f4603db39007f5749b204fed676a0c4d530070dde40c86e2296c7d606e.ctex",
+          "sha256": "f40180f4603db39007f5749b204fed676a0c4d530070dde40c86e2296c7d606e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "af1530cb481b236eb136ef09a6e0592b9cf8bfc87b2f04f8ba7edb64950faca2.ctex",
+          "sha256": "af1530cb481b236eb136ef09a6e0592b9cf8bfc87b2f04f8ba7edb64950faca2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "85c5b9084746d57933ad1d8d711bac14cf49228d04ad2c09757d4fbf85ca1b7c.glb",
+        "sha256": "85c5b9084746d57933ad1d8d711bac14cf49228d04ad2c09757d4fbf85ca1b7c",
+        "size": 9198328
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "robot_legions/great monolith": {
+    "url": "3527f08e6e341c6899ec08426ee17978c026ac1d092d05b2c08826c66193d51c.glb",
+    "sha256": "3527f08e6e341c6899ec08426ee17978c026ac1d092d05b2c08826c66193d51c",
+    "size": 16698712,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "cce00f4daafaf8b2a46fbcd22723b5a62da2a9d2b01ea82e13a906f74350aa12.ctex",
+          "sha256": "cce00f4daafaf8b2a46fbcd22723b5a62da2a9d2b01ea82e13a906f74350aa12",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9a486ee6261466cba90abe5b4f8985463154c12b169899558b2f8ff4d5e75dad.ctex",
+          "sha256": "9a486ee6261466cba90abe5b4f8985463154c12b169899558b2f8ff4d5e75dad",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "852f2f8e56dbe119564c99adef1bcd48c05ae4d1843af6d37ae879aa9bce9f90.glb",
+        "sha256": "852f2f8e56dbe119564c99adef1bcd48c05ae4d1843af6d37ae879aa9bce9f90",
+        "size": 12592200
+      },
+      "size_class": "large"
+    }
+  },
+  "robot_legions/great wraith shard": {
+    "url": "8f7605f6728e59e3e50660adaa874963681326faec84ddee44dc2c3cec1684a1.glb",
+    "sha256": "8f7605f6728e59e3e50660adaa874963681326faec84ddee44dc2c3cec1684a1",
+    "size": 17695700,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3959b8b497b19c35ba77c5df3b39d8b9bf9b1297b599953529f47f7a8bfb2953.ctex",
+          "sha256": "3959b8b497b19c35ba77c5df3b39d8b9bf9b1297b599953529f47f7a8bfb2953",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a91cb2893c0e909a49feca7d02186a303c3ab3331127f5025a3b15c651de5736.ctex",
+          "sha256": "a91cb2893c0e909a49feca7d02186a303c3ab3331127f5025a3b15c651de5736",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "93a013ad8eaee1361e358680a3ea6dc721afc1ad1f194b8d76e520d74f9da174.glb",
+        "sha256": "93a013ad8eaee1361e358680a3ea6dc721afc1ad1f194b8d76e520d74f9da174",
+        "size": 12673664
+      },
+      "size_class": "large"
+    }
+  },
+  "robot_legions/guardians": {
+    "url": "18f6a23b43d3806d066664b2432b15ca3c039a231a5f61c31307be900a923785.glb",
+    "sha256": "18f6a23b43d3806d066664b2432b15ca3c039a231a5f61c31307be900a923785",
+    "size": 15763236,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "672004d0575ce42704dc8932ac6b1a0baf2eaa19c06bef07c1df05550eda6489.ctex",
+          "sha256": "672004d0575ce42704dc8932ac6b1a0baf2eaa19c06bef07c1df05550eda6489",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7e6031c93be72abf97d915fd86a573bf44c886ae19d9fa6c0a25a3cceaa2efbd.ctex",
+          "sha256": "7e6031c93be72abf97d915fd86a573bf44c886ae19d9fa6c0a25a3cceaa2efbd",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d96eb20cf0533dd9238af85f8a1be990d7a02c23bd00d74d1f5f2f78c1afd704.glb",
+        "sha256": "d96eb20cf0533dd9238af85f8a1be990d7a02c23bd00d74d1f5f2f78c1afd704",
+        "size": 4196180
+      },
+      "size_class": "infantry"
+    }
+  },
+  "robot_legions/heavy annihilator": {
+    "url": "09a4f861ffb6bfc759315321719803ea4d938d3d89ce59c9ce0724a22dad4924.glb",
+    "sha256": "09a4f861ffb6bfc759315321719803ea4d938d3d89ce59c9ce0724a22dad4924",
+    "size": 15029960,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "626e6f7ce6b6d0439fce83737742386ab3c46d056e7ceb971f0314f667536053.ctex",
+          "sha256": "626e6f7ce6b6d0439fce83737742386ab3c46d056e7ceb971f0314f667536053",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7ddabdbc774c0e075c3854c8abb9b8cbbe73f1e6e988ba407561d6f68b9e2b83.ctex",
+          "sha256": "7ddabdbc774c0e075c3854c8abb9b8cbbe73f1e6e988ba407561d6f68b9e2b83",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ef736bfd087b21dbf54fba671dc196134ae2a0c3703e8c8441cf4b0433f59c3b.glb",
+        "sha256": "ef736bfd087b21dbf54fba671dc196134ae2a0c3703e8c8441cf4b0433f59c3b",
+        "size": 11729432
+      },
+      "size_class": "large"
+    }
+  },
+  "robot_legions/hover bikes": {
+    "url": "60a6222becd9e8b629f62fa571e07e79b23d32c25ef6725ee41a00fb7050e57f.glb",
+    "sha256": "60a6222becd9e8b629f62fa571e07e79b23d32c25ef6725ee41a00fb7050e57f",
+    "size": 15789680,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "28a5abdf7cfd81ea477b2644beb3bca63c5798a6c3ac3432f73a6475c8c136c7.ctex",
+          "sha256": "28a5abdf7cfd81ea477b2644beb3bca63c5798a6c3ac3432f73a6475c8c136c7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "054aa243fa946a699ff743f283fd7ed8d0f3d2f1a67690102cb8eaf064a20098.ctex",
+          "sha256": "054aa243fa946a699ff743f283fd7ed8d0f3d2f1a67690102cb8eaf064a20098",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "bb6756efca06b4081b24f55a442e286c1b99de02f48768d9bed03c58f31a4864.glb",
+        "sha256": "bb6756efca06b4081b24f55a442e286c1b99de02f48768d9bed03c58f31a4864",
+        "size": 8578568
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "robot_legions/night transport": {
+    "url": "4c0c7127d140ea0c22ae421222e86c650fd99b93cc49173c011113bdc38fb414.glb",
+    "sha256": "4c0c7127d140ea0c22ae421222e86c650fd99b93cc49173c011113bdc38fb414",
+    "size": 19452100,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c55245f9eb15adcf8bab1366ff972e7d8b2ed8e47ec32cdb25ab1857d5ba987f.ctex",
+          "sha256": "c55245f9eb15adcf8bab1366ff972e7d8b2ed8e47ec32cdb25ab1857d5ba987f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "08cd8795b218c381a8f7a6765ec66772463c9e600ca768d28ce490fa757e2b06.ctex",
+          "sha256": "08cd8795b218c381a8f7a6765ec66772463c9e600ca768d28ce490fa757e2b06",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a6d75bd51c354990148b78b8a8d25542003e28283460027ddcb886a5e6d66cbc.glb",
+        "sha256": "a6d75bd51c354990148b78b8a8d25542003e28283460027ddcb886a5e6d66cbc",
+        "size": 9393072
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "robot_legions/robot lord": {
+    "url": "f702cc77127bf0117eae4447b1daf22b782b98e9134c7e61deb28e4c974fa25d.glb",
+    "sha256": "f702cc77127bf0117eae4447b1daf22b782b98e9134c7e61deb28e4c974fa25d",
+    "size": 15777212,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9fea444ecf80bab010b1ba3dab7c0ea6d72745247509f9c72b20f05820b3f12a.ctex",
+          "sha256": "9fea444ecf80bab010b1ba3dab7c0ea6d72745247509f9c72b20f05820b3f12a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7eb8f49db5a732ca3dcbb04752d8954778a93e83dfce63897c509cd156a968cb.ctex",
+          "sha256": "7eb8f49db5a732ca3dcbb04752d8954778a93e83dfce63897c509cd156a968cb",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "98f9f6fa337a3de209bd6ae6e56e321ef12c0fc0a493c5841de30359394d74b1.glb",
+        "sha256": "98f9f6fa337a3de209bd6ae6e56e321ef12c0fc0a493c5841de30359394d74b1",
+        "size": 11384256
+      },
+      "size_class": "large"
+    }
+  },
+  "robot_legions/robot snakes": {
+    "url": "d88b66bc0c428bafb21e014670fa122d1657bac0581151c0483a7c980b70d8c2.glb",
+    "sha256": "d88b66bc0c428bafb21e014670fa122d1657bac0581151c0483a7c980b70d8c2",
+    "size": 12098708,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e923041b8346d5dbecc8f2e2a5cc27ec214c7b39ab7de81c2d91e020a8c98ce5.ctex",
+          "sha256": "e923041b8346d5dbecc8f2e2a5cc27ec214c7b39ab7de81c2d91e020a8c98ce5",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a777b54508dbc176517f18a08990c7ff246d639ab7ef01972a3cd1ed6ba99766.ctex",
+          "sha256": "a777b54508dbc176517f18a08990c7ff246d639ab7ef01972a3cd1ed6ba99766",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ee6f7a502091f13c6e9dc8d230d2120d6b54b0ddc779b3e6936843f1950b5a47.glb",
+        "sha256": "ee6f7a502091f13c6e9dc8d230d2120d6b54b0ddc779b3e6936843f1950b5a47",
+        "size": 3748856
+      },
+      "size_class": "infantry"
+    }
+  },
+  "robot_legions/snipers": {
+    "url": "b983a3a90e5bc70bbcb0460806cd3dacc6b836bc31b6edc5ebd694b1e3ad57a6.glb",
+    "sha256": "b983a3a90e5bc70bbcb0460806cd3dacc6b836bc31b6edc5ebd694b1e3ad57a6",
+    "size": 15800552,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "09249c18aafca1ebcf8077d6a2715b6e4c335bd0519ddbe5c8d1380757b2fb60.ctex",
+          "sha256": "09249c18aafca1ebcf8077d6a2715b6e4c335bd0519ddbe5c8d1380757b2fb60",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1a1e6b6aa86a1212f0cf4d504519d2813624fc1f27d101e8def389528752814d.ctex",
+          "sha256": "1a1e6b6aa86a1212f0cf4d504519d2813624fc1f27d101e8def389528752814d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f921b6cac644942bce733105610e7056da44beb044401b609ac1078790ef04c7.glb",
+        "sha256": "f921b6cac644942bce733105610e7056da44beb044401b609ac1078790ef04c7",
+        "size": 4519452
+      },
+      "size_class": "infantry"
+    }
+  },
+  "robot_legions/spider walker": {
+    "url": "43a5086a47ce0049fa3a3da69796ed4689b1101e87d71a5372b5f61823054470.glb",
+    "sha256": "43a5086a47ce0049fa3a3da69796ed4689b1101e87d71a5372b5f61823054470",
+    "size": 16422204,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "cffeb5fa9923c60c560d166a1d059bec8be61db2f4e06e49667a1a36f8e51138.ctex",
+          "sha256": "cffeb5fa9923c60c560d166a1d059bec8be61db2f4e06e49667a1a36f8e51138",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "47fe23ea307f81dd2d02d8d7e98d9d868ea6c68ed33931e0fc8114af41ff7ae9.ctex",
+          "sha256": "47fe23ea307f81dd2d02d8d7e98d9d868ea6c68ed33931e0fc8114af41ff7ae9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9ac4eca04601be046fa03076237ade6cecfb91a3094607dbe9e3ec7e42ab1a0b.glb",
+        "sha256": "9ac4eca04601be046fa03076237ade6cecfb91a3094607dbe9e3ec7e42ab1a0b",
+        "size": 9217168
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "robot_legions/support platform": {
+    "url": "c1150bfdae775f235ab5c466ce3d8fc752cca7cfb4f44e411e2dc41ef1f78bbc.glb",
+    "sha256": "c1150bfdae775f235ab5c466ce3d8fc752cca7cfb4f44e411e2dc41ef1f78bbc",
+    "size": 16957244,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6aeea72d030a85e69ab51cc88c26c9eaccb10257be2b9c8e7f3c46ee0af6403a.ctex",
+          "sha256": "6aeea72d030a85e69ab51cc88c26c9eaccb10257be2b9c8e7f3c46ee0af6403a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9d6cc1225a52b7464c38fbae5a06a28fb5d42ebd8f057e4b00b3d054172fdcba.ctex",
+          "sha256": "9d6cc1225a52b7464c38fbae5a06a28fb5d42ebd8f057e4b00b3d054172fdcba",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "01183efa791c4022a2fb4836971375d8c79d09646f61b6602caa3c242e1ac014.glb",
+        "sha256": "01183efa791c4022a2fb4836971375d8c79d09646f61b6602caa3c242e1ac014",
+        "size": 8581064
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "robot_legions/transport tank": {
+    "url": "9d65379a2331b7db76cf6fceccfb0c4b5a7d098dc137be05d94500e383df26a1.glb",
+    "sha256": "9d65379a2331b7db76cf6fceccfb0c4b5a7d098dc137be05d94500e383df26a1",
+    "size": 18330324,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ca7bcfbec5390fb2489c64f8da7e66404a74f2fb4d6c3ffbfe8b768f6d73d586.ctex",
+          "sha256": "ca7bcfbec5390fb2489c64f8da7e66404a74f2fb4d6c3ffbfe8b768f6d73d586",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e984f13ed23900d590b2de1296c2526a997e33156e8cb4066c5e05c6b3fb7917.ctex",
+          "sha256": "e984f13ed23900d590b2de1296c2526a997e33156e8cb4066c5e05c6b3fb7917",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "60f120a46108d595f4e1de4dbdcf46c5a4ad324290d477a03f74916f1977b3f1.glb",
+        "sha256": "60f120a46108d595f4e1de4dbdcf46c5a4ad324290d477a03f74916f1977b3f1",
+        "size": 9588360
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "robot_legions/tri scorpion lord": {
+    "url": "db8deb85cdcd17c4bdcb66ec679c6d880b55eacd259b9e363d72b9aca343c9d3.glb",
+    "sha256": "db8deb85cdcd17c4bdcb66ec679c6d880b55eacd259b9e363d72b9aca343c9d3",
+    "size": 18219484,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "53767a68cb487861f327724e03f0cf11f29e4eab7cb27b0ca489a1fd2cc5f1b1.ctex",
+          "sha256": "53767a68cb487861f327724e03f0cf11f29e4eab7cb27b0ca489a1fd2cc5f1b1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "75bf7694fcaa8b0371706c95ddbd95e6bac87bc0feb5c498308b5479d50883a6.ctex",
+          "sha256": "75bf7694fcaa8b0371706c95ddbd95e6bac87bc0feb5c498308b5479d50883a6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "fec87a80e8932fae4fddbc227d849a12608177d1c5788071ccdee6f10cc9ab48.glb",
+        "sha256": "fec87a80e8932fae4fddbc227d849a12608177d1c5788071ccdee6f10cc9ab48",
+        "size": 13333124
+      },
+      "size_class": "large"
+    }
+  },
+  "robot_legions/tri scorpion pistoleer": {
+    "url": "afc86b220d5c3af6d888ea65100ef7f1882a01bb87a56acf4c6500390ce1f52c.glb",
+    "sha256": "afc86b220d5c3af6d888ea65100ef7f1882a01bb87a56acf4c6500390ce1f52c",
+    "size": 18714640,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "fdfc803994a27168a2eb9beb86c2d6cf6ff468398c0d1945115c81ba9136ed89.ctex",
+          "sha256": "fdfc803994a27168a2eb9beb86c2d6cf6ff468398c0d1945115c81ba9136ed89",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c4f324f00cb21b6f0b3cd7016a4367d1afe29971dcf42c17a95989a31d96c455.ctex",
+          "sha256": "c4f324f00cb21b6f0b3cd7016a4367d1afe29971dcf42c17a95989a31d96c455",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5e9128a1ea7dc2421588f95248f1348df12600106d7d94829301740aa1b10549.glb",
+        "sha256": "5e9128a1ea7dc2421588f95248f1348df12600106d7d94829301740aa1b10549",
+        "size": 5075660
+      },
+      "size_class": "infantry"
+    }
+  },
+  "robot_legions/tri scorpions": {
+    "url": "6b0600b1ece5b2c4d8d991a8373c66344e5f9b9a16ceaf095abc9c55d8dff1eb.glb",
+    "sha256": "6b0600b1ece5b2c4d8d991a8373c66344e5f9b9a16ceaf095abc9c55d8dff1eb",
+    "size": 17753376,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "df1dd0a17a56daae71337391ffc2f2bc0f6bc5ce25f353f2ec83715fc4536f4d.ctex",
+          "sha256": "df1dd0a17a56daae71337391ffc2f2bc0f6bc5ce25f353f2ec83715fc4536f4d",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ea2ff6dcbf65db98d02a763c15ad88224707b6314ffb0a0d4d2ebb95769ccd4d.ctex",
+          "sha256": "ea2ff6dcbf65db98d02a763c15ad88224707b6314ffb0a0d4d2ebb95769ccd4d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3408ed5fb13253f7347f3c5df908716096dc12b778fd1464012720d947892a24.glb",
+        "sha256": "3408ed5fb13253f7347f3c5df908716096dc12b778fd1464012720d947892a24",
+        "size": 5464892
+      },
+      "size_class": "infantry"
+    }
+  },
+  "robot_legions/tripod walker": {
+    "url": "e294a89fa4830d58547161e1cceb3442d90987840cd954f2d2acb5b163f1202f.glb",
+    "sha256": "e294a89fa4830d58547161e1cceb3442d90987840cd954f2d2acb5b163f1202f",
+    "size": 18008616,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "bb6c1e217d68f45f77d008ed6258ed985be82eeaf8bd580419b8881225153c77.ctex",
+          "sha256": "bb6c1e217d68f45f77d008ed6258ed985be82eeaf8bd580419b8881225153c77",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0933714fd82d106e9c5fb731bdb51f19985298eec579941f6454ea915b4f0fbe.ctex",
+          "sha256": "0933714fd82d106e9c5fb731bdb51f19985298eec579941f6454ea915b4f0fbe",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6ec97598fe2d40c1a60de1addf60cf21ae608081a56ed6ce60138f5f43747ab2.glb",
+        "sha256": "6ec97598fe2d40c1a60de1addf60cf21ae608081a56ed6ce60138f5f43747ab2",
+        "size": 9384676
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "robot_legions/warriors": {
+    "url": "96739df0fe36ee4c42f8816f5d602386edf10ceb2455ee1b18ea3540e7688e3d.glb",
+    "sha256": "96739df0fe36ee4c42f8816f5d602386edf10ceb2455ee1b18ea3540e7688e3d",
+    "size": 15118868,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "39be1c4450fda2c3dcb703cf97301301190f59349cd6d0982d4edb6a5fd57f82.ctex",
+          "sha256": "39be1c4450fda2c3dcb703cf97301301190f59349cd6d0982d4edb6a5fd57f82",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3030398e2da5dc204d54ce3c463140ac319eb390688eb497b740a06bc29ee2b6.ctex",
+          "sha256": "3030398e2da5dc204d54ce3c463140ac319eb390688eb497b740a06bc29ee2b6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c7b03f9d6f7a9f8dcd5af5d1fbe3cb6605b393c7bd27af2bde9e953eed781b4b.glb",
+        "sha256": "c7b03f9d6f7a9f8dcd5af5d1fbe3cb6605b393c7bd27af2bde9e953eed781b4b",
+        "size": 4069088
+      },
+      "size_class": "infantry"
+    }
+  },
+  "robot_legions/wraith shard": {
+    "url": "4c3df37e9ccfcd9c653260da2019c160f0f4f67a6a33d496284b1a0461b2a52f.glb",
+    "sha256": "4c3df37e9ccfcd9c653260da2019c160f0f4f67a6a33d496284b1a0461b2a52f",
+    "size": 15238992,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "aabfac70705e562aec16ab5d37837888d41501bbafcd23284ab92ab184eeb70c.ctex",
+          "sha256": "aabfac70705e562aec16ab5d37837888d41501bbafcd23284ab92ab184eeb70c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b42766c73afa4cc00eb8cb02dde2fecb59ac4d49bbc3246d198bbe84a7800d54.ctex",
+          "sha256": "b42766c73afa4cc00eb8cb02dde2fecb59ac4d49bbc3246d198bbe84a7800d54",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8d5df43d88fc75e3bd907f3a0111b30dbc41addd2182b6788a80130c347540cb.glb",
+        "sha256": "8d5df43d88fc75e3bd907f3a0111b30dbc41addd2182b6788a80130c347540cb",
+        "size": 4479508
+      },
+      "size_class": "infantry"
+    }
+  }
+}

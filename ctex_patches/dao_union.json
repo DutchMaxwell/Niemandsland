@@ -1,0 +1,496 @@
+{
+  "dao_union/battle suit elite": {
+    "url": "cf32e7b077f397d71dbebb84da800f5e09e71b2fd0ba26a10963877f521754e6.glb",
+    "sha256": "cf32e7b077f397d71dbebb84da800f5e09e71b2fd0ba26a10963877f521754e6",
+    "size": 4452452,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9de5dc3af820e8a918beceb30fc273df49fad0c3f5be67dd63714bcb2af51e31.ctex",
+          "sha256": "9de5dc3af820e8a918beceb30fc273df49fad0c3f5be67dd63714bcb2af51e31",
+          "size": 1398180
+        },
+        "orm": {
+          "url": "a6f146d21fdf0d5bf0318f53a179c23d4d1fd4fbb341236285317e379881e0af.ctex",
+          "sha256": "a6f146d21fdf0d5bf0318f53a179c23d4d1fd4fbb341236285317e379881e0af",
+          "size": 1398180
+        }
+      },
+      "mesh": {
+        "url": "6e13c54c13a010283a246b28d76b2494c790a4235909e61d26eff42c130c4004.glb",
+        "sha256": "6e13c54c13a010283a246b28d76b2494c790a4235909e61d26eff42c130c4004",
+        "size": 3699568
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dao_union/battle suits": {
+    "url": "ffd3f971890e42948d511966482db07df5fabfcfb6c1741762ec7262203c54b3.glb",
+    "sha256": "ffd3f971890e42948d511966482db07df5fabfcfb6c1741762ec7262203c54b3",
+    "size": 2441544,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "45192a5b1a4f0e6c34f8e512189913bd58d5e01a8ca1eb92938e14f7242112e4.ctex",
+          "sha256": "45192a5b1a4f0e6c34f8e512189913bd58d5e01a8ca1eb92938e14f7242112e4",
+          "size": 1398180
+        },
+        "orm": {
+          "url": "5296d641f90fa562bd2a1c18465de995289b3ec7ce966c3db84294f9a8262c08.ctex",
+          "sha256": "5296d641f90fa562bd2a1c18465de995289b3ec7ce966c3db84294f9a8262c08",
+          "size": 1398180
+        }
+      },
+      "mesh": {
+        "url": "a7ab803883aedfdc842fe77b1443c61b2ad77fbe0fb9b04a7b0cb2cccb40c8d3.glb",
+        "sha256": "a7ab803883aedfdc842fe77b1443c61b2ad77fbe0fb9b04a7b0cb2cccb40c8d3",
+        "size": 1966780
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dao_union/grunt leader": {
+    "url": "f0e2527fe04a68b5e47a8580b32891f8a5efe9883c668d39d62caecbeea7144a.glb",
+    "sha256": "f0e2527fe04a68b5e47a8580b32891f8a5efe9883c668d39d62caecbeea7144a",
+    "size": 1991560,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b037ba85e58bdb97aac7f97d0b77031e8ee7ae38b573e2547eaff95ac15476fe.ctex",
+          "sha256": "b037ba85e58bdb97aac7f97d0b77031e8ee7ae38b573e2547eaff95ac15476fe",
+          "size": 1398180
+        },
+        "orm": {
+          "url": "5b3af59d612ec6333f7b9f2e51f4e4b965f92ec34ab085fe27c0a7566668fab6.ctex",
+          "sha256": "5b3af59d612ec6333f7b9f2e51f4e4b965f92ec34ab085fe27c0a7566668fab6",
+          "size": 1398180
+        }
+      },
+      "mesh": {
+        "url": "16b887c2258629acb12b7b4cb172225a6ff0fcb390077d9ca463446f2bf7d6fc.glb",
+        "sha256": "16b887c2258629acb12b7b4cb172225a6ff0fcb390077d9ca463446f2bf7d6fc",
+        "size": 1533596
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dao_union/gun drones": {
+    "url": "10984fa493dfb7313f65e5c4364fcd968a7bff7cdb13f261565d1a604697b6ac.glb",
+    "sha256": "10984fa493dfb7313f65e5c4364fcd968a7bff7cdb13f261565d1a604697b6ac",
+    "size": 2801328,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "43e8ec3a6cdef6cfecdb94d64a7214a24772942d08bcd4142a454fb59f1dff0b.ctex",
+          "sha256": "43e8ec3a6cdef6cfecdb94d64a7214a24772942d08bcd4142a454fb59f1dff0b",
+          "size": 1398180
+        },
+        "orm": {
+          "url": "c67988aa0a6a1f2e8107c29c971bcffe7d69b3701716d8ba82cd2f436bc803b6.ctex",
+          "sha256": "c67988aa0a6a1f2e8107c29c971bcffe7d69b3701716d8ba82cd2f436bc803b6",
+          "size": 1398180
+        }
+      },
+      "mesh": {
+        "url": "cbd18c52e0fff0592a6da8bd3c02ae553318fc9ca676e4523a3bb02c550ca0f4.glb",
+        "sha256": "cbd18c52e0fff0592a6da8bd3c02ae553318fc9ca676e4523a3bb02c550ca0f4",
+        "size": 2251176
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dao_union/heavy battle suit": {
+    "url": "4c286ad07103e2593b7ba2d4dc4b113b574f08035dde92355be37e2ed8a59d1c.glb",
+    "sha256": "4c286ad07103e2593b7ba2d4dc4b113b574f08035dde92355be37e2ed8a59d1c",
+    "size": 1916988,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ef5522dd8050b70e487da0d768fceba1efe28fc5f0627eb4efdd47da9e096d44.ctex",
+          "sha256": "ef5522dd8050b70e487da0d768fceba1efe28fc5f0627eb4efdd47da9e096d44",
+          "size": 1398180
+        },
+        "orm": {
+          "url": "e8f0a6161328939069503f357171672f9012d07a8c36d1ae14c36aa329e14667.ctex",
+          "sha256": "e8f0a6161328939069503f357171672f9012d07a8c36d1ae14c36aa329e14667",
+          "size": 1398180
+        }
+      },
+      "mesh": {
+        "url": "5ffbe11daaf927ee664fcaaf779ca416de6878380f7e8ee614e477e1b88eb177.glb",
+        "sha256": "5ffbe11daaf927ee664fcaaf779ca416de6878380f7e8ee614e477e1b88eb177",
+        "size": 1519488
+      },
+      "size_class": "large"
+    }
+  },
+  "dao_union/heavy stealth suit": {
+    "url": "620e0c899a3654f35b5607ea957b23f7c512a0375e55397526b13d044d7d65af.glb",
+    "sha256": "620e0c899a3654f35b5607ea957b23f7c512a0375e55397526b13d044d7d65af",
+    "size": 2704328,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9a4588cdd044c349866c38d2326ca6c5886918e23fa4353995465a5eba8523ab.ctex",
+          "sha256": "9a4588cdd044c349866c38d2326ca6c5886918e23fa4353995465a5eba8523ab",
+          "size": 1398180
+        },
+        "orm": {
+          "url": "9fb9c6486f38823bdd8028dd512eb05eef105d29a06bd0c990edbb711ed88f13.ctex",
+          "sha256": "9fb9c6486f38823bdd8028dd512eb05eef105d29a06bd0c990edbb711ed88f13",
+          "size": 1398180
+        }
+      },
+      "mesh": {
+        "url": "929748ab0876ff46aa6176a2472cf22a0434954d8ecad2f7c00441589287a197.glb",
+        "sha256": "929748ab0876ff46aa6176a2472cf22a0434954d8ecad2f7c00441589287a197",
+        "size": 2135696
+      },
+      "size_class": "large"
+    }
+  },
+  "dao_union/hover attack bike": {
+    "url": "c261deab4f25613fec0e7c0f53a79efec86685b3e366cfdf00ef9d048163c91e.glb",
+    "sha256": "c261deab4f25613fec0e7c0f53a79efec86685b3e366cfdf00ef9d048163c91e",
+    "size": 2869748,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9bff969e12242cbb175389b3c3b1d41c929604b378826d3242b5b4551934cfaa.ctex",
+          "sha256": "9bff969e12242cbb175389b3c3b1d41c929604b378826d3242b5b4551934cfaa",
+          "size": 1398180
+        },
+        "orm": {
+          "url": "ef8fef58dcb5bfabfabe41586e90a86ab6a1f0404dc8172294a275310381937b.ctex",
+          "sha256": "ef8fef58dcb5bfabfabe41586e90a86ab6a1f0404dc8172294a275310381937b",
+          "size": 1398180
+        }
+      },
+      "mesh": {
+        "url": "9a1fd0b95ae37bdda298edf5f89d5c487250f355431293ea7b18d1ea880448a3.glb",
+        "sha256": "9a1fd0b95ae37bdda298edf5f89d5c487250f355431293ea7b18d1ea880448a3",
+        "size": 2327884
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dao_union/hover tank": {
+    "url": "80dbf44b7241f83da23b6e212c9c81fe412d8b6ae06f7173e5b851c1ee204474.glb",
+    "sha256": "80dbf44b7241f83da23b6e212c9c81fe412d8b6ae06f7173e5b851c1ee204474",
+    "size": 5326428,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "865c67cb45981193169eccbc3a1042b64169a3dacbe8f97ca5aa5eac52f97c41.ctex",
+          "sha256": "865c67cb45981193169eccbc3a1042b64169a3dacbe8f97ca5aa5eac52f97c41",
+          "size": 1398180
+        },
+        "orm": {
+          "url": "130f50cd449276bcf4b1642b49269c79eefc1560a0ea339b06ac4d067acbf5a8.ctex",
+          "sha256": "130f50cd449276bcf4b1642b49269c79eefc1560a0ea339b06ac4d067acbf5a8",
+          "size": 1398180
+        }
+      },
+      "mesh": {
+        "url": "68f748461ff05f883002e23ccea15b14ee1b0721cc03d0a6996a1917306e0897.glb",
+        "sha256": "68f748461ff05f883002e23ccea15b14ee1b0721cc03d0a6996a1917306e0897",
+        "size": 4391244
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dao_union/hover transport": {
+    "url": "17fa25261ab36aae6a487a0eec1b6e8a65b6b7d179bb0e9d55c816a8d6f28d76.glb",
+    "sha256": "17fa25261ab36aae6a487a0eec1b6e8a65b6b7d179bb0e9d55c816a8d6f28d76",
+    "size": 4767144,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "808d64a335ba58d0a7dc551c0d34044a639661ec00008ccd0f61ed9d0843e531.ctex",
+          "sha256": "808d64a335ba58d0a7dc551c0d34044a639661ec00008ccd0f61ed9d0843e531",
+          "size": 1398180
+        },
+        "orm": {
+          "url": "2f7b3a7dcef26e513c22bb3d2643d1fa3a184da37fd69f671defd6b757c4470e.ctex",
+          "sha256": "2f7b3a7dcef26e513c22bb3d2643d1fa3a184da37fd69f671defd6b757c4470e",
+          "size": 1398180
+        }
+      },
+      "mesh": {
+        "url": "137ae3cd29f76d5968a97cb61a64293092175bad3a2c2ed201cccd498098787e.glb",
+        "sha256": "137ae3cd29f76d5968a97cb61a64293092175bad3a2c2ed201cccd498098787e",
+        "size": 4026192
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dao_union/hover_tank": {
+    "url": "ac23eca9382841b23711ced529fd08511b703d87fcf62ca5d28f4fe6ebccfea8.glb",
+    "sha256": "ac23eca9382841b23711ced529fd08511b703d87fcf62ca5d28f4fe6ebccfea8",
+    "size": 28794344,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a5bc8bcabb63c3e499b65e1f429fd094ed5df9ae79bd4e8ae64a0d1f5f5618df.ctex",
+          "sha256": "a5bc8bcabb63c3e499b65e1f429fd094ed5df9ae79bd4e8ae64a0d1f5f5618df",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f1ac5fa6098f500eb3c77c6900b727a680ec39bb74835d5450d81ade4b107ca8.ctex",
+          "sha256": "f1ac5fa6098f500eb3c77c6900b727a680ec39bb74835d5450d81ade4b107ca8",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "853ef1598b88f09c3bce60ac7177f8acf8d81f56a97a60b2c6282e4730449396.glb",
+        "sha256": "853ef1598b88f09c3bce60ac7177f8acf8d81f56a97a60b2c6282e4730449396",
+        "size": 11707904
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dao_union/razor fighter": {
+    "url": "09358d79f0280e0221a418d0a0c00f9ffac209b41867bbb59898bff8afb6e579.glb",
+    "sha256": "09358d79f0280e0221a418d0a0c00f9ffac209b41867bbb59898bff8afb6e579",
+    "size": 2311104,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c541d36fa59ff5c94e689ce020cc22458fbe39258391a75d2482f8ae77494b21.ctex",
+          "sha256": "c541d36fa59ff5c94e689ce020cc22458fbe39258391a75d2482f8ae77494b21",
+          "size": 1398180
+        },
+        "orm": {
+          "url": "17da55f1e442f384427b325843f81d5dbd3e6e8e1064c3755581c34221a42fff.ctex",
+          "sha256": "17da55f1e442f384427b325843f81d5dbd3e6e8e1064c3755581c34221a42fff",
+          "size": 1398180
+        }
+      },
+      "mesh": {
+        "url": "3337df1e340613331bf4f4ab94b3b056983713eaa7e00fb3d01c35d8a6134bc1.glb",
+        "sha256": "3337df1e340613331bf4f4ab94b3b056983713eaa7e00fb3d01c35d8a6134bc1",
+        "size": 1902736
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dao_union/security grunts": {
+    "url": "04cb8d4ad6b98622721be2fdf614253e29d7d37bb0dfc870ee0c0488b11044e9.glb",
+    "sha256": "04cb8d4ad6b98622721be2fdf614253e29d7d37bb0dfc870ee0c0488b11044e9",
+    "size": 1780612,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "578f17ea5cabc817f17456ff28346ff1111e5d7cdb115926c77a923964fb7afb.ctex",
+          "sha256": "578f17ea5cabc817f17456ff28346ff1111e5d7cdb115926c77a923964fb7afb",
+          "size": 1398180
+        },
+        "orm": {
+          "url": "e31ad831bec075d951d70f2a4565e6bd95fce4da184d332d4fb0ab957ee4f61c.ctex",
+          "sha256": "e31ad831bec075d951d70f2a4565e6bd95fce4da184d332d4fb0ab957ee4f61c",
+          "size": 1398180
+        }
+      },
+      "mesh": {
+        "url": "1424cec3772a01199b879e4d72380fd3a4a0a43391c13a430828040090189a53.glb",
+        "sha256": "1424cec3772a01199b879e4d72380fd3a4a0a43391c13a430828040090189a53",
+        "size": 1389468
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dao_union/sniper drones": {
+    "url": "5b2f509d923b87a4eb52094ecc033960d3cda2e9702783c967777aca2fbaa57c.glb",
+    "sha256": "5b2f509d923b87a4eb52094ecc033960d3cda2e9702783c967777aca2fbaa57c",
+    "size": 1310616,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "62e5a6559c72270ebc262f14c373b1b8404aa749c1cd18ca18ff9c625b1f6e6d.ctex",
+          "sha256": "62e5a6559c72270ebc262f14c373b1b8404aa749c1cd18ca18ff9c625b1f6e6d",
+          "size": 1398180
+        },
+        "orm": {
+          "url": "5353fb325eaf08baf339047f4d1efc472f8c78afad8edf6e9d6f18c5fad23387.ctex",
+          "sha256": "5353fb325eaf08baf339047f4d1efc472f8c78afad8edf6e9d6f18c5fad23387",
+          "size": 1398180
+        }
+      },
+      "mesh": {
+        "url": "82623665535a2f2c200fbc92de569219c0159d1881c6a43aef03bd99e271ce24.glb",
+        "sha256": "82623665535a2f2c200fbc92de569219c0159d1881c6a43aef03bd99e271ce24",
+        "size": 945860
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dao_union/spotter squad": {
+    "url": "8c773cb548a32e7410f65e81a09ca02e5b25250ce1bc419eac572aaac98015ca.glb",
+    "sha256": "8c773cb548a32e7410f65e81a09ca02e5b25250ce1bc419eac572aaac98015ca",
+    "size": 1911780,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "aa607ba8974bbcfe6fde15ff76456fb4d23d8730a5b4ef3b6f161eea71902055.ctex",
+          "sha256": "aa607ba8974bbcfe6fde15ff76456fb4d23d8730a5b4ef3b6f161eea71902055",
+          "size": 1398180
+        },
+        "orm": {
+          "url": "b595927a31f530b63fb1fe71609346c25cbd20a88bc5bb0b7836afb6165197c6.ctex",
+          "sha256": "b595927a31f530b63fb1fe71609346c25cbd20a88bc5bb0b7836afb6165197c6",
+          "size": 1398180
+        }
+      },
+      "mesh": {
+        "url": "d039b626bf7ff7623818c92a60912f4696414bcae747cae5c23cc63c04631b5f.glb",
+        "sha256": "d039b626bf7ff7623818c92a60912f4696414bcae747cae5c23cc63c04631b5f",
+        "size": 1437684
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dao_union/stealth suits": {
+    "url": "771cd856633490a568331d10a340e0227b94d270063b9521753bb4576975ce75.glb",
+    "sha256": "771cd856633490a568331d10a340e0227b94d270063b9521753bb4576975ce75",
+    "size": 2291204,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ee7d8fbfacdc386fcf5ae6fb2cd199f095ca2774120e5b147b8e97ec01e17608.ctex",
+          "sha256": "ee7d8fbfacdc386fcf5ae6fb2cd199f095ca2774120e5b147b8e97ec01e17608",
+          "size": 1398180
+        },
+        "orm": {
+          "url": "29ec18ab3ec090931e6fe9ff2d42ec8fd05aee7bc828470b6887604d7aa3b7b3.ctex",
+          "sha256": "29ec18ab3ec090931e6fe9ff2d42ec8fd05aee7bc828470b6887604d7aa3b7b3",
+          "size": 1398180
+        }
+      },
+      "mesh": {
+        "url": "689b6d77726cfc29fe78f3e0a3b6e58a309cc414bbccea8fe07760c5c1fef552.glb",
+        "sha256": "689b6d77726cfc29fe78f3e0a3b6e58a309cc414bbccea8fe07760c5c1fef552",
+        "size": 1759072
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dao_union/sun bomber": {
+    "url": "b5004164ef3bb055e5d979f4b21d343c6b5c2b42ef6b645263cd4cda1ba870eb.glb",
+    "sha256": "b5004164ef3bb055e5d979f4b21d343c6b5c2b42ef6b645263cd4cda1ba870eb",
+    "size": 2698980,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c37fb338d375f3f163a0fd619c0f3fab9472e0d22c7ba4238a15143c3428c565.ctex",
+          "sha256": "c37fb338d375f3f163a0fd619c0f3fab9472e0d22c7ba4238a15143c3428c565",
+          "size": 1398180
+        },
+        "orm": {
+          "url": "6697e17b5d11d9f0550f01058ee422175c0159f6ac04d9108a2b76a4e28bcc13.ctex",
+          "sha256": "6697e17b5d11d9f0550f01058ee422175c0159f6ac04d9108a2b76a4e28bcc13",
+          "size": 1398180
+        }
+      },
+      "mesh": {
+        "url": "b4a1d608489b7d013deec0c3367cec6f29372a847441e50727298957237c14e3.glb",
+        "sha256": "b4a1d608489b7d013deec0c3367cec6f29372a847441e50727298957237c14e3",
+        "size": 2230456
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dao_union/surge titan": {
+    "url": "cf5a74202b67744fa877e347b106ba06e05265883c871d63f876681011bd52ad.glb",
+    "sha256": "cf5a74202b67744fa877e347b106ba06e05265883c871d63f876681011bd52ad",
+    "size": 7601560,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6c40cfa7eaa9a5bf8933cf990a9d1f982628b85fcb60d843209d09ce7c7e0185.ctex",
+          "sha256": "6c40cfa7eaa9a5bf8933cf990a9d1f982628b85fcb60d843209d09ce7c7e0185",
+          "size": 1398180
+        },
+        "orm": {
+          "url": "dfb92fb0dc3caefbb95021f3faae3fd871dbe44072c9c44a921b8dd450df41e4.ctex",
+          "sha256": "dfb92fb0dc3caefbb95021f3faae3fd871dbe44072c9c44a921b8dd450df41e4",
+          "size": 1398180
+        }
+      },
+      "mesh": {
+        "url": "abaf4572b54762a80db8add9e3bc65ac12707049ee457c76fc15a8a2e02246c3.glb",
+        "sha256": "abaf4572b54762a80db8add9e3bc65ac12707049ee457c76fc15a8a2e02246c3",
+        "size": 7084080
+      },
+      "size_class": "large"
+    }
+  },
+  "dao_union/tactical grunts": {
+    "url": "ffc5276369d480cfba8a54484797d2b3dc78df2cc4473b26c20cf49a93c1306a.glb",
+    "sha256": "ffc5276369d480cfba8a54484797d2b3dc78df2cc4473b26c20cf49a93c1306a",
+    "size": 2117700,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3db81d77b131570beb4525e20c9abf3c595273a82bc61bd02639ba689cb952b9.ctex",
+          "sha256": "3db81d77b131570beb4525e20c9abf3c595273a82bc61bd02639ba689cb952b9",
+          "size": 1398180
+        },
+        "orm": {
+          "url": "6d93eb1f8574cf7189b04fb60286b27528fdcac55e3c3db93629ceb9aadd4de2.ctex",
+          "sha256": "6d93eb1f8574cf7189b04fb60286b27528fdcac55e3c3db93629ceb9aadd4de2",
+          "size": 1398180
+        }
+      },
+      "mesh": {
+        "url": "db4aa6a3d633a939fcc6f6881b5341a456e3df92e23b6adaa342f7ca49ea2637.glb",
+        "sha256": "db4aa6a3d633a939fcc6f6881b5341a456e3df92e23b6adaa342f7ca49ea2637",
+        "size": 1680868
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dao_union/tide titan": {
+    "url": "b13d1b080b2fafa9c6e419db945ebed60309a56ded4e1fc296e70071501ac797.glb",
+    "sha256": "b13d1b080b2fafa9c6e419db945ebed60309a56ded4e1fc296e70071501ac797",
+    "size": 5960172,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5ca61ca41212971bb72d1eac41a6109e1faa3afaa38f87754ed93a794ea71300.ctex",
+          "sha256": "5ca61ca41212971bb72d1eac41a6109e1faa3afaa38f87754ed93a794ea71300",
+          "size": 1398180
+        },
+        "orm": {
+          "url": "7137024ef504cada53ae263ddecd206de0240556218b5f64952ea3440a7fe8dd.ctex",
+          "sha256": "7137024ef504cada53ae263ddecd206de0240556218b5f64952ea3440a7fe8dd",
+          "size": 1398180
+        }
+      },
+      "mesh": {
+        "url": "df9e36f907e4da519a3b8bc518fcdd14ea5649c9cc365ec5bc381824428a8160.glb",
+        "sha256": "df9e36f907e4da519a3b8bc518fcdd14ea5649c9cc365ec5bc381824428a8160",
+        "size": 5531104
+      },
+      "size_class": "large"
+    }
+  }
+}

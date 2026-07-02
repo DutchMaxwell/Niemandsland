@@ -1,0 +1,600 @@
+{
+  "saurian_starhost/ankylosaurus": {
+    "url": "0d759fdfea26f180975f8bd5d655455439fe026157fa9da5b4734d7a678f7c9d.glb",
+    "sha256": "0d759fdfea26f180975f8bd5d655455439fe026157fa9da5b4734d7a678f7c9d",
+    "size": 15993556,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f03da6a047d2ea70bdd91abd2f586ace3422c24c1621b9562d3f234fb40187d1.ctex",
+          "sha256": "f03da6a047d2ea70bdd91abd2f586ace3422c24c1621b9562d3f234fb40187d1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1a58f87dbdb0e5f5c1b59ba3947fd3ab10662d214f93195ebef77b24227eb62b.ctex",
+          "sha256": "1a58f87dbdb0e5f5c1b59ba3947fd3ab10662d214f93195ebef77b24227eb62b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "33c9c09a64c8663b398a3083e7f611e351fcae69127281b3b6e55d9738931612.glb",
+        "sha256": "33c9c09a64c8663b398a3083e7f611e351fcae69127281b3b6e55d9738931612",
+        "size": 4459028
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/chameleons": {
+    "url": "27a18f79c35b580116f0ffd818b7f0225870016095c1205f63911ef65883ae6b.glb",
+    "sha256": "27a18f79c35b580116f0ffd818b7f0225870016095c1205f63911ef65883ae6b",
+    "size": 14510532,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c66abfe83f08356232a6c596e6c62c9b9f5840e106b6edbac93ac8fe3f3c2218.ctex",
+          "sha256": "c66abfe83f08356232a6c596e6c62c9b9f5840e106b6edbac93ac8fe3f3c2218",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7f52894739fdb5d6d2059fbe939d6df232b50d11e190bb9f284e9654810ab54a.ctex",
+          "sha256": "7f52894739fdb5d6d2059fbe939d6df232b50d11e190bb9f284e9654810ab54a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "709ca6fd249debd8a11792e1716b1adb1cbc3706f3b2c261668c50890f69e146.glb",
+        "sha256": "709ca6fd249debd8a11792e1716b1adb1cbc3706f3b2c261668c50890f69e146",
+        "size": 4436964
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/cyber swarms": {
+    "url": "82e3599c398bbdad895810e36e4e529ca52412f7b08951d8fc8b3f45a4adf84a.glb",
+    "sha256": "82e3599c398bbdad895810e36e4e529ca52412f7b08951d8fc8b3f45a4adf84a",
+    "size": 16597924,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "52c1f16d8aef5806ffaf0fb6eddb0d2f1ed1ccaac43315a6edaca8149a3c00a1.ctex",
+          "sha256": "52c1f16d8aef5806ffaf0fb6eddb0d2f1ed1ccaac43315a6edaca8149a3c00a1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ace43371a2ee9f0bc85e18278fb6544e98b52e89b4f8fc2aaa48b3fcd1fd0d6a.ctex",
+          "sha256": "ace43371a2ee9f0bc85e18278fb6544e98b52e89b4f8fc2aaa48b3fcd1fd0d6a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "03e3c81e388daabadf41f6e4181bba1efefed765a3fe293258b8036c1407985a.glb",
+        "sha256": "03e3c81e388daabadf41f6e4181bba1efefed765a3fe293258b8036c1407985a",
+        "size": 4783572
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/deinonychus riders": {
+    "url": "c1282925f8d932f2ee0835d530f4eae0fa10de02d1844eefef318591cd90d11f.glb",
+    "sha256": "c1282925f8d932f2ee0835d530f4eae0fa10de02d1844eefef318591cd90d11f",
+    "size": 16528500,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6267849d9f7d231f56ab5b572506f33777563f2243a4e34efe0a88926000a0ae.ctex",
+          "sha256": "6267849d9f7d231f56ab5b572506f33777563f2243a4e34efe0a88926000a0ae",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7e9d0e79ae280144ce020a789b3498ed1e07ed8ddc5b2fc255c3fe2aba020f81.ctex",
+          "sha256": "7e9d0e79ae280144ce020a789b3498ed1e07ed8ddc5b2fc255c3fe2aba020f81",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "be8b454d64efb3c89d7876cc38f0a60f0c29fd6a4ec81603ddceb20810863025.glb",
+        "sha256": "be8b454d64efb3c89d7876cc38f0a60f0c29fd6a4ec81603ddceb20810863025",
+        "size": 4698096
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/dragon lizard": {
+    "url": "cdac1ac52c1d790dc2216b3b67aa505a1f6aa6b13f71c6f183f9abdd03761cbc.glb",
+    "sha256": "cdac1ac52c1d790dc2216b3b67aa505a1f6aa6b13f71c6f183f9abdd03761cbc",
+    "size": 17368140,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d5eb901cacefb8375fb0d4b22d34837cf110794bac747cd63d106acf1732cd2a.ctex",
+          "sha256": "d5eb901cacefb8375fb0d4b22d34837cf110794bac747cd63d106acf1732cd2a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7313a887a01a1a9bc7c1d88045071781fe8261c410920f4e1ae4b712e346b051.ctex",
+          "sha256": "7313a887a01a1a9bc7c1d88045071781fe8261c410920f4e1ae4b712e346b051",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "0174183fa765f48cf5a56912918cb3b90843d5d827bb72d95521d37fc50902d7.glb",
+        "sha256": "0174183fa765f48cf5a56912918cb3b90843d5d827bb72d95521d37fc50902d7",
+        "size": 12214136
+      },
+      "size_class": "large"
+    }
+  },
+  "saurian_starhost/dread titan": {
+    "url": "76726aaa1070502f8c8f93b75ca043a8ee25c179b37a1af2b71e6733de9716ae.glb",
+    "sha256": "76726aaa1070502f8c8f93b75ca043a8ee25c179b37a1af2b71e6733de9716ae",
+    "size": 16303856,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f9bd102a30e807fe4109380336ed67529f319e66d04349416f5f4e9497ed1316.ctex",
+          "sha256": "f9bd102a30e807fe4109380336ed67529f319e66d04349416f5f4e9497ed1316",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4a5ae3ec7675ef7dbca904a3623fe719d4945aaae37b35f88ac1b82097baae19.ctex",
+          "sha256": "4a5ae3ec7675ef7dbca904a3623fe719d4945aaae37b35f88ac1b82097baae19",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3bb3a5ce847a145d5671e5bf520681675a46b81cf5031113e8697e3c00e20ade.glb",
+        "sha256": "3bb3a5ce847a145d5671e5bf520681675a46b81cf5031113e8697e3c00e20ade",
+        "size": 11445064
+      },
+      "size_class": "large"
+    }
+  },
+  "saurian_starhost/frog mage": {
+    "url": "77728077903bd0de6b1976ee07e40c858b6f44cd4df19ed005a1a5cd9fe425c7.glb",
+    "sha256": "77728077903bd0de6b1976ee07e40c858b6f44cd4df19ed005a1a5cd9fe425c7",
+    "size": 16065284,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d6dc4ce753aaa286b4dca710b2d6eafdc0a73223d599682ffbf4a96e2a338c19.ctex",
+          "sha256": "d6dc4ce753aaa286b4dca710b2d6eafdc0a73223d599682ffbf4a96e2a338c19",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "bc5fc434435909c2f9bfbe1ff8bf1852cf919c6fc996c384798b2c5e38225746.ctex",
+          "sha256": "bc5fc434435909c2f9bfbe1ff8bf1852cf919c6fc996c384798b2c5e38225746",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "968d2f6887d503927e84be515a655c32dd21e58940021cd46502b03616169d9b.glb",
+        "sha256": "968d2f6887d503927e84be515a655c32dd21e58940021cd46502b03616169d9b",
+        "size": 4127228
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/gator veteran": {
+    "url": "6c1adb1b2fdc63eed756025ad9ff2ec84e5bae52652cb0b17d2bd40a13e126ec.glb",
+    "sha256": "6c1adb1b2fdc63eed756025ad9ff2ec84e5bae52652cb0b17d2bd40a13e126ec",
+    "size": 15752124,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7d61d4ace13ff93aeba81d09a1d5aeed736a1d2d75eca35272830f38eb86492f.ctex",
+          "sha256": "7d61d4ace13ff93aeba81d09a1d5aeed736a1d2d75eca35272830f38eb86492f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1e4f7a8151a1b104403c18f1d1c427e0e4f6148f1f305a0bbcfc46f30c0c5dd3.ctex",
+          "sha256": "1e4f7a8151a1b104403c18f1d1c427e0e4f6148f1f305a0bbcfc46f30c0c5dd3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "67a6f9a2f1bb42432e3e1961294842ae965e797732622adb45d646c9ad05d29f.glb",
+        "sha256": "67a6f9a2f1bb42432e3e1961294842ae965e797732622adb45d646c9ad05d29f",
+        "size": 4498156
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/gators": {
+    "url": "064659325189092979b9bd9c801a52e9bbf794440e171cd71d047311d448e746.glb",
+    "sha256": "064659325189092979b9bd9c801a52e9bbf794440e171cd71d047311d448e746",
+    "size": 15194228,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6c8307e8da5754385cb7b614b335a18cb13381f163d43e45d52028066ddf5802.ctex",
+          "sha256": "6c8307e8da5754385cb7b614b335a18cb13381f163d43e45d52028066ddf5802",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6c3d584988224203d33edc5cda9a367fb49cf72fba8a952c8009de200fe1c513.ctex",
+          "sha256": "6c3d584988224203d33edc5cda9a367fb49cf72fba8a952c8009de200fe1c513",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "21e8502e33d3ebe2867ab4e5710360f03d05ba0e350fcc96b5833cae0d464603.glb",
+        "sha256": "21e8502e33d3ebe2867ab4e5710360f03d05ba0e350fcc96b5833cae0d464603",
+        "size": 3992568
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/gecko champion": {
+    "url": "48eb8d3bfc02f259d54e790d780ae57d4636f285048788baad7221aceeca38f8.glb",
+    "sha256": "48eb8d3bfc02f259d54e790d780ae57d4636f285048788baad7221aceeca38f8",
+    "size": 16079488,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9c23f3a68c3c5a4a8a92d51a2b1d8533695f5f4cfba7e791753b13351b42c3de.ctex",
+          "sha256": "9c23f3a68c3c5a4a8a92d51a2b1d8533695f5f4cfba7e791753b13351b42c3de",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ac01f8f618c47a23ff9bf42be2326f1d40fbec03a3c56dae5a7416b12ac3e545.ctex",
+          "sha256": "ac01f8f618c47a23ff9bf42be2326f1d40fbec03a3c56dae5a7416b12ac3e545",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b110b067369f4a112715d2577df59ca60f9d4bc97abdc324f0fc84ae50110f66.glb",
+        "sha256": "b110b067369f4a112715d2577df59ca60f9d4bc97abdc324f0fc84ae50110f66",
+        "size": 4357516
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/gecko cohort": {
+    "url": "4a411c8f0d5d26d57af0f93bf867e749527cd95e6191397cb3706d03913035c5.glb",
+    "sha256": "4a411c8f0d5d26d57af0f93bf867e749527cd95e6191397cb3706d03913035c5",
+    "size": 16385500,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ecb8043259086aa0b2ab94c6f311499bd0196becd4fed75dbbc082435f642226.ctex",
+          "sha256": "ecb8043259086aa0b2ab94c6f311499bd0196becd4fed75dbbc082435f642226",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ae800f2e66edad2e4e9037d01e48328f9196f0c84a3497e62ed798fa65b16500.ctex",
+          "sha256": "ae800f2e66edad2e4e9037d01e48328f9196f0c84a3497e62ed798fa65b16500",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "12895679a7043ab1b0bc7a42629f71881bb994b7ec64c9b6724f6c5d62986d24.glb",
+        "sha256": "12895679a7043ab1b0bc7a42629f71881bb994b7ec64c9b6724f6c5d62986d24",
+        "size": 4301732
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/gecko snipers": {
+    "url": "d00bd071d5d006bb3ab1319a8ffaee190799045639da64c884e64204ca5f1300.glb",
+    "sha256": "d00bd071d5d006bb3ab1319a8ffaee190799045639da64c884e64204ca5f1300",
+    "size": 17238272,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7bd6d7785099a7b4ea86d9e6769b2413a5ee8bfaea6d7a4739aba66df6b7f0fd.ctex",
+          "sha256": "7bd6d7785099a7b4ea86d9e6769b2413a5ee8bfaea6d7a4739aba66df6b7f0fd",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "639777550e3b54237a11d2b63f0a2b4f27ec215a3ecd5fd369837a9c860fece8.ctex",
+          "sha256": "639777550e3b54237a11d2b63f0a2b4f27ec215a3ecd5fd369837a9c860fece8",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "0b464c782b0d836f53ecbe97a866dff1cb1bdacc450fdfdf5e1338987439bd5e.glb",
+        "sha256": "0b464c782b0d836f53ecbe97a866dff1cb1bdacc450fdfdf5e1338987439bd5e",
+        "size": 4284000
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/pterodactyl riders": {
+    "url": "1ef81c290f368c4ce3eee627ddbc89ac2b37170f1939df2126083fa21f956e05.glb",
+    "sha256": "1ef81c290f368c4ce3eee627ddbc89ac2b37170f1939df2126083fa21f956e05",
+    "size": 15125400,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2513ea69ee74ba83e7d7d7df7ba03e6c671933a815cf7812cdb6ae93c6fac36d.ctex",
+          "sha256": "2513ea69ee74ba83e7d7d7df7ba03e6c671933a815cf7812cdb6ae93c6fac36d",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "88fc5a04494e4f52e001666ddfe98e337d909d1975da4b6265bcd8cc8074b03d.ctex",
+          "sha256": "88fc5a04494e4f52e001666ddfe98e337d909d1975da4b6265bcd8cc8074b03d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a01752fe34388539165e96a774f776d015093dac168d7d5abbf97cac858629af.glb",
+        "sha256": "a01752fe34388539165e96a774f776d015093dac168d7d5abbf97cac858629af",
+        "size": 4385108
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/raptor riders": {
+    "url": "7e225181df324fb9c793810e30e4067c3804a697fd04a8175d92f9e70d2fc49c.glb",
+    "sha256": "7e225181df324fb9c793810e30e4067c3804a697fd04a8175d92f9e70d2fc49c",
+    "size": 15037040,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2c40b8f298fb717151d509e1b88b0569561cb5652a2d2125dc40d2aa22d57164.ctex",
+          "sha256": "2c40b8f298fb717151d509e1b88b0569561cb5652a2d2125dc40d2aa22d57164",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7a23e432d17d656b237b6a54a99dbe9543d6a3e8dccca4064adf7e38bf0a9707.ctex",
+          "sha256": "7a23e432d17d656b237b6a54a99dbe9543d6a3e8dccca4064adf7e38bf0a9707",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "11e1d1a7cf76dbbfc2e2ee757efb34737bd7a9488592ddb8eb6dc5bbecb747fc.glb",
+        "sha256": "11e1d1a7cf76dbbfc2e2ee757efb34737bd7a9488592ddb8eb6dc5bbecb747fc",
+        "size": 4115032
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/ripjawdactyl riders": {
+    "url": "c12b6c7e35ec88c8c953586a855129a6ece16f62744d92ea34e436ffa5ba4910.glb",
+    "sha256": "c12b6c7e35ec88c8c953586a855129a6ece16f62744d92ea34e436ffa5ba4910",
+    "size": 16190812,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b53d907dc8abd6ea57d9d83db0889372006561c05075899244cf0da221436394.ctex",
+          "sha256": "b53d907dc8abd6ea57d9d83db0889372006561c05075899244cf0da221436394",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "aea72efa1ac93e861dc526f1493ea1b320f28202c80c6ba9c2c5d6b71b8c6d27.ctex",
+          "sha256": "aea72efa1ac93e861dc526f1493ea1b320f28202c80c6ba9c2c5d6b71b8c6d27",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d6ff8c202720e0c71f790885b58bd9e048ef13b3d53fe8cfac647d68ba6f834d.glb",
+        "sha256": "d6ff8c202720e0c71f790885b58bd9e048ef13b3d53fe8cfac647d68ba6f834d",
+        "size": 4666532
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/saurian guardians": {
+    "url": "809428db7e4905e7f40b1979c0906d4f5c9d505149f8c7b6ab678768efd17f08.glb",
+    "sha256": "809428db7e4905e7f40b1979c0906d4f5c9d505149f8c7b6ab678768efd17f08",
+    "size": 19743220,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "fe255188a92ffd91ab6a4309e684c58c2e86f98b6dd0b9eff564cf4ae38f7234.ctex",
+          "sha256": "fe255188a92ffd91ab6a4309e684c58c2e86f98b6dd0b9eff564cf4ae38f7234",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f01cf490c7528c6ccdd6fa4a3cff9086800ac23bb3a7dea304e221ba6bdc064f.ctex",
+          "sha256": "f01cf490c7528c6ccdd6fa4a3cff9086800ac23bb3a7dea304e221ba6bdc064f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a232d81ec8de6075ba3fa96ea223ba37274d8da15ff1e1455cd0436b63e65371.glb",
+        "sha256": "a232d81ec8de6075ba3fa96ea223ba37274d8da15ff1e1455cd0436b63e65371",
+        "size": 5177508
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/saurian veteran": {
+    "url": "c65f42a8ae86102b1d0127502f5cb275a796b461e9d841fadefce160e38921dc.glb",
+    "sha256": "c65f42a8ae86102b1d0127502f5cb275a796b461e9d841fadefce160e38921dc",
+    "size": 14796288,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "332a4dcd7e2ff71932899c027ac5923753d851f4063ffd1bbb1fa7007868cb3e.ctex",
+          "sha256": "332a4dcd7e2ff71932899c027ac5923753d851f4063ffd1bbb1fa7007868cb3e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c659cbd3bee4f73b7251e8f8f6a9e718ca50cabcc17b3f25d92306bc380df8de.ctex",
+          "sha256": "c659cbd3bee4f73b7251e8f8f6a9e718ca50cabcc17b3f25d92306bc380df8de",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "dfa144900443a4b8112551620d229110e22ca6c62f7622f4096d93b46c769335.glb",
+        "sha256": "dfa144900443a4b8112551620d229110e22ca6c62f7622f4096d93b46c769335",
+        "size": 4218476
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/saurian warriors": {
+    "url": "c483a481402615302646cd08c01b91bec7b67b0ec72c76f1a4784a7084de63d0.glb",
+    "sha256": "c483a481402615302646cd08c01b91bec7b67b0ec72c76f1a4784a7084de63d0",
+    "size": 15229372,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c209a96122806aa94ddbf20dfa50738e40a89571ee7bc1833a6f790a65f24b79.ctex",
+          "sha256": "c209a96122806aa94ddbf20dfa50738e40a89571ee7bc1833a6f790a65f24b79",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2e1a45815ed0cbc26f2e7e12ec9b48a929fbd01c024289e9a4c830edcefbaa0c.ctex",
+          "sha256": "2e1a45815ed0cbc26f2e7e12ec9b48a929fbd01c024289e9a4c830edcefbaa0c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f5bfb366a7b2bc4d346eedf37f1865e71bfca56894f76f8917da34c2d37b7ca9.glb",
+        "sha256": "f5bfb366a7b2bc4d346eedf37f1865e71bfca56894f76f8917da34c2d37b7ca9",
+        "size": 4055884
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/spiked lizard": {
+    "url": "c1492b5482d1e16ed9f4a9c8d04e3f882f6a7701e8513a311c5e1c165433f1e0.glb",
+    "sha256": "c1492b5482d1e16ed9f4a9c8d04e3f882f6a7701e8513a311c5e1c165433f1e0",
+    "size": 16460200,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "45dddb2492991586ce8cec450dec610bbb9bc00e9e92b21dcd8f3b660518962b.ctex",
+          "sha256": "45dddb2492991586ce8cec450dec610bbb9bc00e9e92b21dcd8f3b660518962b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7e7887dd4e79708a5b8223b19ba7b06484dcc8a04487eab55662b898e83d8034.ctex",
+          "sha256": "7e7887dd4e79708a5b8223b19ba7b06484dcc8a04487eab55662b898e83d8034",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "932a7ef0901703e7f72e861aecf71027870a6549f00b99aacce5ad9bf55c8c28.glb",
+        "sha256": "932a7ef0901703e7f72e861aecf71027870a6549f00b99aacce5ad9bf55c8c28",
+        "size": 4450264
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/spinosaurus": {
+    "url": "0804dc715e31caf261d091f328fd93fc788c59b644bd6769a11bd9e1bb99c24f.glb",
+    "sha256": "0804dc715e31caf261d091f328fd93fc788c59b644bd6769a11bd9e1bb99c24f",
+    "size": 16559028,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ba1b3f2b4983cb3bf0a48e2b62f3836162ff89b73ef44b881a3d411a302cb3b2.ctex",
+          "sha256": "ba1b3f2b4983cb3bf0a48e2b62f3836162ff89b73ef44b881a3d411a302cb3b2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "25ef8d6435494d3ee3966c966ffa400f2c8790ca065e65e819ab9b6e14e6b571.ctex",
+          "sha256": "25ef8d6435494d3ee3966c966ffa400f2c8790ca065e65e819ab9b6e14e6b571",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6b9bdcd1e0217a1e1d492225688b2ebdcd5310635f8f1dbe01ce3cd6770b0ca0.glb",
+        "sha256": "6b9bdcd1e0217a1e1d492225688b2ebdcd5310635f8f1dbe01ce3cd6770b0ca0",
+        "size": 4367944
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/tehaxi": {
+    "url": "fa42f88a68e3baa69bccdcf9aa54c45816d8183b007f0ea4ef803ba8d2b720b7.glb",
+    "sha256": "fa42f88a68e3baa69bccdcf9aa54c45816d8183b007f0ea4ef803ba8d2b720b7",
+    "size": 16578196,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f3a506b651196d23407b156d8d8879a0acdd745fab8b796a003023c6762f7d9a.ctex",
+          "sha256": "f3a506b651196d23407b156d8d8879a0acdd745fab8b796a003023c6762f7d9a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4d2810dd352a373e3bc93752ee471b7386854febd2b8386d0c60a00a4f6cd176.ctex",
+          "sha256": "4d2810dd352a373e3bc93752ee471b7386854febd2b8386d0c60a00a4f6cd176",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "593b90871a6f58df9eff54b7d3e1d72a3edd8d587183358c0e1b54c661614707.glb",
+        "sha256": "593b90871a6f58df9eff54b7d3e1d72a3edd8d587183358c0e1b54c661614707",
+        "size": 4530380
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/triceratops": {
+    "url": "0198672800dc13444ffb3e67eba77ee98b8bca37056a5feec7bec2507e506e81.glb",
+    "sha256": "0198672800dc13444ffb3e67eba77ee98b8bca37056a5feec7bec2507e506e81",
+    "size": 16678856,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b221a9174430028e0e969812053ec8b5581234b6f85db9ab6f4dd89b443a6bc1.ctex",
+          "sha256": "b221a9174430028e0e969812053ec8b5581234b6f85db9ab6f4dd89b443a6bc1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3b759e8a98f642209e35786d3a48d30982e4714dcc2ca3c4295e28aeafc37ba7.ctex",
+          "sha256": "3b759e8a98f642209e35786d3a48d30982e4714dcc2ca3c4295e28aeafc37ba7",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5287205555cba51324d0d1765ab798aa71facadbcf0372ee380e48c2b6427c71.glb",
+        "sha256": "5287205555cba51324d0d1765ab798aa71facadbcf0372ee380e48c2b6427c71",
+        "size": 4594968
+      },
+      "size_class": "infantry"
+    }
+  },
+  "saurian_starhost/vulturedactyls": {
+    "url": "6241c0c9b5ec9193281c38d6af2d93b329d02da0f9b544df641a40b2a13bad25.glb",
+    "sha256": "6241c0c9b5ec9193281c38d6af2d93b329d02da0f9b544df641a40b2a13bad25",
+    "size": 14595248,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5f3e937a42779f8b0c39d8597b19ab3cf3ea22dc0c90f844c189f2bcf4b6dc0f.ctex",
+          "sha256": "5f3e937a42779f8b0c39d8597b19ab3cf3ea22dc0c90f844c189f2bcf4b6dc0f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "46bb5487811e6e7b598f8ed5584ff7de11df3479ca1dc367aab980d28c683fd4.ctex",
+          "sha256": "46bb5487811e6e7b598f8ed5584ff7de11df3479ca1dc367aab980d28c683fd4",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5e47cb9e25d45432a92e0e865eb3dc237042bd7d8f03c32dc33b793cd6ad799f.glb",
+        "sha256": "5e47cb9e25d45432a92e0e865eb3dc237042bd7d8f03c32dc33b793cd6ad799f",
+        "size": 4180380
+      },
+      "size_class": "infantry"
+    }
+  }
+}
