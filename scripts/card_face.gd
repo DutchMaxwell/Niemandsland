@@ -14,6 +14,7 @@ const NAVY := Color(0.10, 0.13, 0.19)
 const NAVY_HI := Color(0.16, 0.20, 0.28)
 const CYAN := Color(0.36, 0.80, 0.92)
 const AMBER := Color(0.96, 0.62, 0.18)
+const RED := Color(0.95, 0.36, 0.31)
 const TEXT := Color(0.90, 0.93, 0.97)
 const TEXT_DIM := Color(0.58, 0.64, 0.72)
 const CHIP_OFF := Color(0.22, 0.26, 0.33)
@@ -28,11 +29,10 @@ static func build_presented(data: Dictionary) -> Control:
 	col.add_theme_constant_override("separation", 8)
 	margin.add_child(col)
 
-	# Header band: name (accent-underlined) + points.
+	# Header band: name (auto-fit + ellipsize so long names never truncate mid-word) + points.
 	var header := HBoxContainer.new()
-	var name_lbl := _label(str(data.get("name", "Unit")), 20, TEXT)
+	var name_lbl := _fit_name(str(data.get("name", "Unit")), 19, 15, 20)
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_lbl.clip_text = true
 	header.add_child(name_lbl)
 	header.add_child(_label("%d pts" % int(data.get("points", 0)), 14, TEXT_DIM))
 	col.add_child(header)
@@ -48,7 +48,13 @@ static func build_presented(data: Dictionary) -> Control:
 	stats.add_child(spacer)
 	var alive := int(data.get("alive", 0))
 	var total := int(data.get("total", 0))
-	stats.add_child(_label("%d/%d" % [alive, total], 18, (AMBER if alive < total else TEXT)))
+	# Counter: red when destroyed, amber when wounded, else normal.
+	var counter_color := TEXT
+	if bool(data.get("dead", false)) or alive == 0:
+		counter_color = RED
+	elif alive < total:
+		counter_color = AMBER
+	stats.add_child(_label("%d/%d" % [alive, total], 18, counter_color))
 	col.add_child(stats)
 
 	# Status strip: lit/unlit chips.
@@ -65,6 +71,25 @@ static func build_presented(data: Dictionary) -> Control:
 	if not bool(data.get("coherent", true)) and not bool(data.get("dead", false)):
 		col.add_child(_warning_strip("⚠  Out of coherency"))
 
+	var pad := Control.new()
+	pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(pad)
+
+	# Action bar — part of the design; the dock wires these to the real card_* actions in D8.
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 4)
+	if bool(data.get("dead", false)):
+		actions.add_child(_action_btn("↺", "Revive"))
+	else:
+		actions.add_child(_action_btn("▶", "Act"))
+		actions.add_child(_action_btn("~", "Fat"))
+		actions.add_child(_action_btn("!", "Shk"))
+		if bool(data.get("caster", false)):
+			actions.add_child(_action_btn("✦", "Cast"))
+		actions.add_child(_action_btn("✚", "Wnd"))
+		actions.add_child(_action_btn("ⓘ", "Info"))
+	col.add_child(actions)
+
 	return margin
 
 
@@ -76,8 +101,8 @@ static func build_strip(data: Dictionary) -> Control:
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 4)
 	margin.add_child(col)
-	var nm := _label(str(data.get("name", "Unit")), 14, TEXT)
-	nm.clip_text = true
+	var nm := _fit_name(str(data.get("name", "Unit")), 13, 11, 13)
+	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	col.add_child(nm)
 	var stats := HBoxContainer.new()
 	stats.add_theme_constant_override("separation", 5)
@@ -105,6 +130,32 @@ static func _label(text: String, size: int, color: Color) -> Label:
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
 	return l
+
+
+## A unit-name label that never truncates mid-word: drop a font step when the name is long, then let
+## the label ellipsize if it still overflows the available width.
+static func _fit_name(text: String, size_big: int, size_small: int, max_chars: int) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", size_big if text.length() <= max_chars else size_small)
+	l.add_theme_color_override("font_color", TEXT)
+	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	l.clip_text = true
+	return l
+
+
+## Compact icon+label action button with hover state (chip-styled), part of the presented-card design.
+static func _action_btn(icon: String, label: String) -> Button:
+	var b := Button.new()
+	b.text = "%s %s" % [icon, label]
+	b.focus_mode = Control.FOCUS_NONE
+	b.add_theme_font_size_override("font_size", 11)
+	b.add_theme_color_override("font_color", TEXT)
+	b.add_theme_color_override("font_hover_color", CYAN)
+	b.add_theme_stylebox_override("normal", _chip_style(NAVY_HI, CYAN))
+	b.add_theme_stylebox_override("hover", _chip_style(Color(CYAN.r, CYAN.g, CYAN.b, 0.22), CYAN))
+	b.add_theme_stylebox_override("pressed", _chip_style(NAVY, CYAN))
+	return b
 
 
 static func _rule(color: Color) -> Control:
