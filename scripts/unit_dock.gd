@@ -314,6 +314,50 @@ func _is_coherent(unit: GameUnit) -> bool:
 	return res.valid if res != null else true
 
 
+## Builds the plain data Dictionary CardFace renders (D8 bridge). Reuses the dock's existing accessors
+## and the unit's OWN OPR source data for weapons/rules — the same aggregation the old UnitCard reads,
+## NOT re-derived. Pure: no UI side effects.
+func _card_data(unit: GameUnit) -> Dictionary:
+	var alive: int = unit.get_alive_count()
+	var data: Dictionary = {
+		"name": unit.get_name(),
+		"points": unit.get_cost(),
+		"quality": unit.get_quality(),
+		"defense": unit.get_defense(),
+		"alive": alive,
+		"total": unit.models.size(),
+		"activated": unit.is_activated,
+		"fatigued": unit.is_fatigued,
+		"shaken": unit.is_shaken,
+		"caster": unit.is_caster(),
+		"coherent": _is_coherent(unit),
+		"dead": alive == 0,
+		"weapons": [],
+		"rules": "",
+	}
+	var opr: OPRApiClient.OPRUnit = null
+	if unit.source_type == "opr" and unit.source_data:
+		opr = unit.source_data as OPRApiClient.OPRUnit
+	if opr != null:
+		for w: OPRApiClient.OPRWeapon in opr.weapons:
+			data["weapons"].append(_weapon_entry(w))
+	var rules: Array = unit.get_special_rules()
+	if not rules.is_empty():
+		data["rules"] = " · ".join(rules)
+	return data
+
+
+## One distinct weapon → CardFace's {name, meta, rules} shape (name+count, RNG/ATK, special rules).
+func _weapon_entry(w: OPRApiClient.OPRWeapon) -> Dictionary:
+	var count_str: String = "%dx " % w.count if w.count > 1 else ""
+	var range_str: String = "Melee" if w.range_value == 0 else "%d\"" % w.range_value
+	return {
+		"name": count_str + w.name,
+		"meta": "%s A%d" % [range_str, w.attacks],
+		"rules": ", ".join(w.special_rules),
+	}
+
+
 # === Presented card ===
 
 func present_unit(unit: GameUnit) -> void:
