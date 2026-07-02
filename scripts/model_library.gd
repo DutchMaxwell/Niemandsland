@@ -32,6 +32,9 @@ const REMOTE_MANIFEST_TIMEOUT_SEC: float = 15.0
 ## reflection probes) and this batch's ORM has no AO, so the ORM texture (~5.6 MB/unit) is dead weight.
 ## Re-enable in one line — add "orm" here — once a PBR/reflection render path revalidates the channel.
 const CTEX_ACTIVE_TEXTURE_ROLES: Array[String] = ["albedo", "normal"]
+## AF option-label → part-slug map for loadout→variant model resolution (Handover I2). Data file so
+## Model Forge and the game share one vocabulary; see variant_slug().
+const VARIANT_SLUG_MAP_PATH: String = "res://assets/label_slug_map.json"
 
 # === Private variables ===
 
@@ -40,6 +43,7 @@ var _downloader: AssetDownloadManager = null
 ## CompressedTexture2D (the shared _downloader stores everything as .glb). Meshes still use _downloader.
 var _ctex_tex: AssetDownloadManager = null
 var _models: Dictionary = {}   # key -> { url, sha256, size, ctex? }
+var _label_slug: Dictionary = {}   # lowercased AF option label -> part-slug (I2)
 var _base_url: String = ""     # optional prefix for relative entry URLs
 
 # === Lifecycle ===
@@ -54,8 +58,38 @@ func _ready() -> void:
 	_ctex_tex.name = "CtexTextureDownloader"
 	_ctex_tex.file_extension = "ctex"   # keep .ctex so it loads as CompressedTexture2D
 	add_child(_ctex_tex)
+	_load_label_slug_map()
 	_load_bundled_manifest()
 	_refresh_remote_manifest()  # fire-and-forget; overlays the live CDN manifest when it arrives
+
+
+## Loads the AF option-label → part-slug map (I2). Keys starting with "_" (e.g. "_comment") are skipped.
+func _load_label_slug_map() -> void:
+	if not FileAccess.file_exists(VARIANT_SLUG_MAP_PATH):
+		return
+	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(VARIANT_SLUG_MAP_PATH))
+	if typeof(data) != TYPE_DICTIONARY:
+		return
+	for k in data:
+		var key: String = str(k).strip_edges().to_lower()
+		if key.is_empty() or key.begins_with("_"):
+			continue
+		_label_slug[key] = str(data[k])
+
+
+## The variant slug for a model from its loadout labels (I2): map each label to a part-slug via the
+## data file, then the slug is the SORTED, de-duplicated set of matched slugs joined by "+". Returns ""
+## when no label maps (→ caller uses the base model). THE single documented derivation — Model Forge
+## reproduces exactly this when naming a variant bake `<baseKey>#<slug>`.
+func variant_slug(labels: Array) -> String:
+	var slugs: Dictionary = {}
+	for label in labels:
+		var slug: String = str(_label_slug.get(str(label).strip_edges().to_lower(), ""))
+		if not slug.is_empty():
+			slugs[slug] = true
+	var arr: Array = slugs.keys()
+	arr.sort()
+	return "+".join(arr)
 
 # === Public API ===
 
@@ -136,13 +170,10 @@ func ensure_models(unit_specs: Array) -> void:
 			var msha: String = str(mesh.get("sha256", ""))
 			if not msha.is_empty():
 				glb[msha] = _blob_url(mesh)
-			var textures: Dictionary = block.get("textures", {})
-			for role in CTEX_ACTIVE_TEXTURE_ROLES:
-				if textures.has(role):
-					var b: Dictionary = textures[role]
-					var s: String = str(b.get("sha256", ""))
-					if not s.is_empty():
-						ctex[s] = _blob_url(b)
+			for b in _ctex_texture_blobs(block):
+				var s: String = str((b as Dictionary).get("sha256", ""))
+				if not s.is_empty():
+					ctex[s] = _blob_url(b)
 		else:
 			var entry: Dictionary = _entry(faction, unit_name)
 			var sha: String = str(entry.get("sha256", ""))
@@ -180,12 +211,44 @@ func get_ctex_entry(faction: String, unit_name: String) -> Dictionary:
 	return ctex
 
 
-## True if a ctex block has the mesh + albedo this loader can actually download and apply (the
-## textures.albedo form). Any other shape → false → legacy fallback. Pure/static → unit-testable.
+## True if a ctex block has the mesh + a downloadable albedo this loader can apply, in EITHER supported
+## form: the single-material `textures.albedo` form (the 1014 live units) OR the contract-v1 multi-
+## material `materials: [{surface, albedo, normal?}]` form (I1). Any other shape → false → legacy
+## fallback (never nothing — J0). Pure/static → unit-testable.
 static func _ctex_block_usable(ctex: Dictionary) -> bool:
-	var mesh_sha: String = str(ctex.get("mesh", {}).get("sha256", ""))
-	var albedo_sha: String = str(ctex.get("textures", {}).get("albedo", {}).get("sha256", ""))
-	return not mesh_sha.is_empty() and not albedo_sha.is_empty()
+	if str(ctex.get("mesh", {}).get("sha256", "")).is_empty():
+		return false
+	# Single-material form.
+	if not str(ctex.get("textures", {}).get("albedo", {}).get("sha256", "")).is_empty():
+		return true
+	# Multi-material form: a non-empty materials ARRAY with a downloadable albedo per surface. Any other
+	# shape (e.g. a dict, or missing albedo) is an unsupported form → false → legacy (J0 forward-compat).
+	var materials: Variant = ctex.get("materials", [])
+	if not (materials is Array) or (materials as Array).is_empty():
+		return false
+	for m in materials:
+		if not (m is Dictionary) or str((m as Dictionary).get("albedo", {}).get("sha256", "")).is_empty():
+			return false
+	return true
+
+
+## Every ctex texture blob to fetch for a block, spanning BOTH forms: the single `textures` map and
+## each `materials[]` surface (albedo + normal, per CTEX_ACTIVE_TEXTURE_ROLES). Pure/static.
+static func _ctex_texture_blobs(ctex: Dictionary) -> Array:
+	var blobs: Array = []
+	var textures: Dictionary = ctex.get("textures", {})
+	for role in CTEX_ACTIVE_TEXTURE_ROLES:
+		if textures.has(role):
+			blobs.append(textures[role])
+	var materials: Variant = ctex.get("materials", [])
+	if materials is Array:
+		for m in materials:
+			if not (m is Dictionary):
+				continue
+			for role in CTEX_ACTIVE_TEXTURE_ROLES:
+				if (m as Dictionary).has(role):
+					blobs.append((m as Dictionary)[role])
+	return blobs
 
 
 ## Local cache paths for a unit's ctex assets IF all are already downloaded, else {} (sync). Keys:
@@ -201,11 +264,9 @@ func ensure_ctex(faction: String, unit_name: String) -> Dictionary:
 		return {}
 	var mesh: Dictionary = ctex.get("mesh", {})
 	await _downloader.ensure(_blob_url(mesh), str(mesh.get("sha256", "")))
-	var textures: Dictionary = ctex.get("textures", {})
-	for role in CTEX_ACTIVE_TEXTURE_ROLES:
-		if textures.has(role):
-			var blob: Dictionary = textures[role]
-			await _ctex_tex.ensure(_blob_url(blob), str(blob.get("sha256", "")))
+	for blob in _ctex_texture_blobs(ctex):
+		var b: Dictionary = blob
+		await _ctex_tex.ensure(_blob_url(b), str(b.get("sha256", "")))
 	return _ctex_paths_if_cached(ctex)
 
 
@@ -219,14 +280,35 @@ func _ctex_paths_if_cached(ctex: Dictionary) -> Dictionary:
 		return {}
 	var out: Dictionary = {"mesh": _downloader.cache_path(mesh_sha)}
 	var textures: Dictionary = ctex.get("textures", {})
-	for role in CTEX_ACTIVE_TEXTURE_ROLES:
-		if textures.has(role):
-			var sha: String = str(textures[role].get("sha256", ""))
-			if sha.is_empty() or not _ctex_tex.is_cached(sha):
-				return {}
-			out[role] = _ctex_tex.cache_path(sha)
-	if not out.has("albedo"):
-		return {}   # albedo is mandatory for a usable material
+	if not textures.is_empty():
+		# Single-material form → {mesh, albedo, normal?}.
+		for role in CTEX_ACTIVE_TEXTURE_ROLES:
+			if textures.has(role):
+				var sha: String = str(textures[role].get("sha256", ""))
+				if sha.is_empty() or not _ctex_tex.is_cached(sha):
+					return {}
+				out[role] = _ctex_tex.cache_path(sha)
+		if not out.has("albedo"):
+			return {}   # albedo is mandatory for a usable material
+		return out
+	# Multi-material form → {mesh, materials: [{surface, albedo, normal?}, ...]} (I1).
+	var mats: Variant = ctex.get("materials", [])
+	if not (mats is Array) or (mats as Array).is_empty():
+		return {}
+	var surfaces: Array = []
+	for m in mats:
+		var mat: Dictionary = m
+		var surf: Dictionary = {"surface": int(mat.get("surface", surfaces.size()))}
+		for role in CTEX_ACTIVE_TEXTURE_ROLES:
+			if mat.has(role):
+				var s: String = str(mat[role].get("sha256", ""))
+				if s.is_empty() or not _ctex_tex.is_cached(s):
+					return {}
+				surf[role] = _ctex_tex.cache_path(s)
+		if not surf.has("albedo"):
+			return {}
+		surfaces.append(surf)
+	out["materials"] = surfaces
 	return out
 
 
