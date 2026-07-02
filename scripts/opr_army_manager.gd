@@ -135,6 +135,10 @@ var api_client: OPRApiClient
 ## On-demand model delivery (manifest + CDN cache); see docs/ASSET_DELIVERY.md
 var model_library: ModelLibrary
 
+# E6: per-import ctex-vs-legacy delivery tally (reset each spawn_army, logged at its end).
+var _ctex_used_count: int = 0
+var _legacy_used_reasons: Dictionary = {}
+
 ## Parsed-model cache: model path -> PackedScene. Runtime glTF models (user://) are
 ## otherwise re-parsed on every spawn, so a unit of N identical models paid N full
 ## glTF parses; cached, each distinct model is parsed once and instanced cheaply.
@@ -165,6 +169,10 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	if not object_manager:
 		push_error("OPRArmyManager: No object_manager set")
 		return []
+
+	# Reset the E6 per-import ctex/legacy delivery tally.
+	_ctex_used_count = 0
+	_legacy_used_reasons = {}
 
 	# Fetch on-demand models this army needs (no-op when the manifest is empty or
 	# everything is cached); the spawn loop below then resolves them locally.
@@ -312,6 +320,14 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	# drop animation has settled (deferred so it does not fight the drop tween).
 	if army.game_system_abbrev == "aofr":
 		_form_regiments_after_drop(army)
+
+	# E6: log which delivery path each model resolved to (Output + session log; QA observability).
+	var legacy_total: int = 0
+	for r in _legacy_used_reasons:
+		legacy_total += int(_legacy_used_reasons[r])
+	print("[Ctex] army '%s': %d model(s) via ctex, %d via legacy fallback%s" % [
+		army.name, _ctex_used_count, legacy_total,
+		("  (reasons: %s)" % str(_legacy_used_reasons)) if legacy_total > 0 else ""])
 
 	return all_models
 
@@ -1217,6 +1233,12 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 	var ctex_paths: Dictionary = model_library.ctex_cached_paths(faction_folder, glb_name) if model_library != null else {}
 	var use_ctex: bool = not ctex_paths.is_empty()
 	var model_path: String = str(ctex_paths.get("mesh", "")) if use_ctex else _find_model_for_unit(glb_name, faction_folder)
+	# E6: tally the delivery path (ctex vs legacy fallback + reason) — summarised at spawn_army end.
+	if use_ctex:
+		_ctex_used_count += 1
+	else:
+		var reason: String = "not-cached" if (model_library != null and not model_library.get_ctex_entry(faction_folder, glb_name).is_empty()) else "no-compatible-ctex"
+		_legacy_used_reasons[reason] = int(_legacy_used_reasons.get(reason, 0)) + 1
 	var model_height: float = 0.032  # Default 32mm height for collision calculation
 	var use_glb_model = false
 
@@ -1236,11 +1258,12 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 			_align_to_oval_long_axis(glb_instance, aabb, base_is_oval, base_width, base_depth, _is_walker(unit.name))
 
 			if use_ctex:
-				# Apply the offline-baked BC7 material onto the (texture-stripped) ctex mesh. Its .ctex
-				# textures already carry mipmaps, so no runtime mipmap regen / brighten pass is needed
-				# (that pass reads the mesh's own materials, which the ctex mesh does not have).
+				# Apply the offline-baked BC7 albedo onto the (texture-stripped) ctex mesh, then match
+				# the legacy display treatment so ctex and legacy render identically (see
+				# _brighten_ctex_materials): flat non-metallic diffuse + anisotropic filtering.
 				CtexLoader.apply_to_mesh(glb_instance, str(ctex_paths.get("albedo", "")),
 					str(ctex_paths.get("normal", "")), str(ctex_paths.get("orm", "")), false)
+				_brighten_ctex_materials(glb_instance)
 			else:
 				_brighten_trellis_materials(glb_instance)
 			wrapper.add_child(glb_instance)
@@ -2147,6 +2170,28 @@ func _brighten_trellis_materials(node: Node) -> void:
 					adjusted_mat.emission_texture = _ensure_texture_mipmaps(adjusted_mat.emission_texture)
 					adjusted_mat.ao_texture = _ensure_texture_mipmaps(adjusted_mat.ao_texture)
 					mesh_instance.mesh.surface_set_material(surface_idx, adjusted_mat)
+
+
+## Match the legacy _brighten_trellis_materials look on a ctex model (E1/E2). The game renders the
+## TRELLIS-baked albedo as FLAT DIFFUSE (metallic 0, roughness 0.7) — there are no reflection probes,
+## so an ORM-driven metallic surface renders dark, and this batch's ORM metal channel additionally
+## produced black hull blotches on vehicles. So we force the same non-metallic diffuse the legacy path
+## uses and drop the ORM metallic/roughness textures, plus anisotropic filtering for crisp small minis.
+## Operates only on the surface OVERRIDE materials CtexLoader.apply_to_mesh set — never the .ctex data.
+func _brighten_ctex_materials(node: Node) -> void:
+	for child in node.find_children("*", "MeshInstance3D", true, false):
+		var mi := child as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		for surface_idx in range(mi.mesh.get_surface_count()):
+			var mat := mi.get_surface_override_material(surface_idx) as StandardMaterial3D
+			if mat == null:
+				continue
+			mat.metallic = 0.0
+			mat.metallic_texture = null
+			mat.roughness = 0.7
+			mat.roughness_texture = null
+			mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 
 
 ## Returns a copy of [param tex] with a generated mipmap chain, for runtime GLTF
