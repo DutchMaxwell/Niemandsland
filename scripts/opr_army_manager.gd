@@ -501,6 +501,152 @@ static func set_model_alive_state(node: Node3D, alive: bool) -> void:
 		node.collision_layer = MINIATURE_COLLISION_LAYER if alive else 0
 
 
+# === Loose-unit casualty → army tray (desaturated, revive-only) =============================
+# A dead LOOSE model is not hidden: it is desaturated and parked on its owner's army tray, still
+# raycastable so it can be right-clicked to revive (the "deleted" meta blocks every other action).
+# Regiment models never use this — they keep AoF:R rank-removal in the block.
+
+const DEAD_SLOT_STEP := 0.08          # spacing between parked dead models on the tray (m)
+const DEAD_SLOT_EDGE := 0.06          # padding from the tray edge (m)
+const DEAD_SLOT_Y := 0.02             # rest height on the tray surface (m)
+
+static var _dead_shader: Shader = null   # shared greyscale shader for dead models
+
+## Desaturate every surface of a model (dead look), keeping texture detail via a greyscale shader.
+## The pre-death surface overrides are stashed under a meta so revive can restore them exactly.
+func _desaturate_model(node: Node3D) -> void:
+	for child in node.find_children("*", "MeshInstance3D", true, false):
+		var mi := child as MeshInstance3D
+		if mi.mesh == null or mi.has_meta("dead_orig_override"):
+			continue
+		var origs: Array = []
+		for s in range(mi.mesh.get_surface_count()):
+			origs.append(mi.get_surface_override_material(s))
+			var base := mi.get_active_material(s)
+			var sm := ShaderMaterial.new()
+			sm.shader = _get_dead_shader()
+			if base is BaseMaterial3D and (base as BaseMaterial3D).albedo_texture != null:
+				sm.set_shader_parameter("albedo_tex", (base as BaseMaterial3D).albedo_texture)
+			mi.set_surface_override_material(s, sm)
+		mi.set_meta("dead_orig_override", origs)
+
+
+## Restore a revived model's original per-surface materials.
+func _restore_model_material(node: Node3D) -> void:
+	for child in node.find_children("*", "MeshInstance3D", true, false):
+		var mi := child as MeshInstance3D
+		if not mi.has_meta("dead_orig_override"):
+			continue
+		var origs: Array = mi.get_meta("dead_orig_override")
+		for s in range(mi.mesh.get_surface_count()):
+			mi.set_surface_override_material(s, origs[s] if s < origs.size() else null)
+		mi.remove_meta("dead_orig_override")
+
+
+static func _get_dead_shader() -> Shader:
+	if _dead_shader == null:
+		_dead_shader = Shader.new()
+		_dead_shader.code = "shader_type spatial;\n" \
+			+ "uniform sampler2D albedo_tex : source_color, hint_default_white;\n" \
+			+ "uniform float strength = 0.85;\n" \
+			+ "void fragment() {\n" \
+			+ "  vec3 c = texture(albedo_tex, UV).rgb;\n" \
+			+ "  float g = dot(c, vec3(0.299, 0.587, 0.114));\n" \
+			+ "  ALBEDO = mix(c, vec3(g), strength) * 0.65;\n" \
+			+ "  ROUGHNESS = 0.95; METALLIC = 0.0;\n" \
+			+ "}\n"
+	return _dead_shader
+
+
+## Park a dead loose model on its owner's tray (dead=true) or return it to its stored table spot
+## (dead=false). Keeps the node visible + raycastable; the "deleted" meta gates it to revive-only.
+## `forced_slot` >= 0 pins the parking slot (remote peers replaying the host's choice in MP); -1 picks
+## the lowest free slot locally.
+func set_loose_model_dead(node: Node3D, player_id: int, dead: bool, forced_slot: int = -1) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	node.set_meta("deleted", dead)
+	node.visible = true
+	if node is CollisionObject3D:
+		node.collision_layer = MINIATURE_COLLISION_LAYER  # stays clickable for revive
+	if dead:
+		if not node.has_meta("revive_transform"):
+			node.set_meta("revive_transform", node.global_transform)
+		_desaturate_model(node)
+		var slot := _claim_dead_slot(player_id, node, forced_slot)
+		if slot != Vector3.ZERO:
+			node.global_position = slot
+	else:
+		_restore_model_material(node)
+		_release_dead_slot(player_id, node)
+		if node.has_meta("revive_transform"):
+			node.global_transform = node.get_meta("revive_transform")
+			node.remove_meta("revive_transform")
+
+
+## The slot a parked model occupies (set by the last set_loose_model_dead call), or -1. Lets the MP
+## sender tell peers which slot to reuse so both sides park identically.
+func dead_slot_of(node: Node3D) -> int:
+	return int(node.get_meta("dead_slot", -1)) if node != null and is_instance_valid(node) else -1
+
+
+## Claim a parking slot on the player's tray for `node` and return its world position (ZERO if the
+## tray is gone). Reveals the tray. `forced_index` >= 0 pins the slot; else the lowest free one. The
+## slot is recorded on the node ("dead_slot") and marked occupied on the tray so revive can free it.
+func _claim_dead_slot(player_id: int, node: Node3D, forced_index: int = -1) -> Vector3:
+	if not army_trays.has(player_id) or not is_instance_valid(army_trays[player_id]):
+		push_warning("[DeadTray] no army tray for player %d — dead model stays in place" % player_id)
+		return Vector3.ZERO
+	var tray: Node3D = army_trays[player_id]
+	tray.visible = true
+	var info := _get_tray_position_and_bounds(player_id)
+	var bounds: Vector2 = info.bounds
+	var cols: int = maxi(1, int((bounds.x - 2.0 * DEAD_SLOT_EDGE) / DEAD_SLOT_STEP))
+	var rows: int = maxi(1, int((bounds.y - 2.0 * DEAD_SLOT_EDGE) / DEAD_SLOT_STEP))
+	var occupied: Dictionary = tray.get_meta("dead_slots", {})
+	var idx := _alloc_slot_index(occupied, cols * rows, forced_index)
+	tray.set_meta("dead_slots", occupied)
+	node.set_meta("dead_slot", idx)
+	var col: int = idx % cols
+	var row: int = idx / cols
+	return Vector3(
+		info.position.x - bounds.x / 2.0 + DEAD_SLOT_EDGE + float(col) * DEAD_SLOT_STEP,
+		DEAD_SLOT_Y,
+		info.position.z + bounds.y / 2.0 - DEAD_SLOT_EDGE - float(row) * DEAD_SLOT_STEP)
+
+
+## Free the slot a revived model held so it can be reused (fixes the kill→revive→kill creep).
+func _release_dead_slot(player_id: int, node: Node3D) -> void:
+	if node == null or not node.has_meta("dead_slot"):
+		return
+	var idx: int = int(node.get_meta("dead_slot"))
+	node.remove_meta("dead_slot")
+	if army_trays.has(player_id) and is_instance_valid(army_trays[player_id]):
+		var tray: Node3D = army_trays[player_id]
+		var occupied: Dictionary = tray.get_meta("dead_slots", {})
+		_free_slot_index(occupied, idx)
+		tray.set_meta("dead_slots", occupied)
+
+
+## Lowest free slot index in [0, capacity), or `forced` when >= 0; wrapped into range so a parked
+## model can never land off the tray. Marks the chosen index occupied. Pure/static → unit-testable.
+static func _alloc_slot_index(occupied: Dictionary, capacity: int, forced: int = -1) -> int:
+	var cap: int = maxi(capacity, 1)
+	var idx: int = forced
+	if idx < 0:
+		idx = 0
+		while occupied.has(idx) and idx < cap:
+			idx += 1
+	idx = idx % cap   # bounds/wrap guard — never leaves the tray
+	occupied[idx] = true
+	return idx
+
+
+## Release a slot index (mirror of _alloc_slot_index). Pure/static → unit-testable.
+static func _free_slot_index(occupied: Dictionary, idx: int) -> void:
+	occupied.erase(idx)
+
+
 ## Apply `wounds_taken` to a Tough(1) pooled regiment: mark casualties dead/alive, drive
 ## the pooled counter (back rank dies first, AoF:R v3.5.1 p.9), re-rank the block,
 ## refresh the counter label, and broadcast to peers. `regiment.wounds_taken` and
