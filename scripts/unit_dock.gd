@@ -372,8 +372,18 @@ func _animate_card_out() -> void:
 
 func _card_action(kind: String) -> void:
 	var unit := _presented_unit
+	# D6: log every dispatch so live QA can SEE that a button press arrives here and where it routes
+	# (a silent log on click = the press never reached the button → an input/overlay issue, not routing).
+	print("[UnitDock] card action '%s' → unit=%s, controller=%s" % [
+		kind, (unit.get_name() if unit != null else "<none>"), str(radial_menu_controller != null)])
 	if unit == null:
 		return
+	# Defensive (D6): if the controller ref was never set or was dropped, resolve it from the scene so
+	# the action still dispatches instead of silently no-op'ing.
+	if radial_menu_controller == null:
+		radial_menu_controller = get_tree().root.get_node_or_null("Main/RadialMenuController")
+		if radial_menu_controller == null:
+			push_warning("[UnitDock] no radial controller — card action '%s' dropped" % kind)
 	match kind:
 		"details":
 			if unit_card_detail != null and unit_card_detail.has_method("show_unit"):
