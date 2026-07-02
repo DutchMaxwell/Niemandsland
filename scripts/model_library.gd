@@ -143,28 +143,20 @@ func ensure_models(unit_specs: Array) -> void:
 			var sha: String = str(entry.get("sha256", ""))
 			if not entry.is_empty() and not sha.is_empty():
 				glb[sha] = _resolve_url(entry)
-	# Only not-yet-cached blobs; instant on the 2nd+ import.
-	var glb_todo: Array = []
+	# Only not-yet-cached blobs (instant on the 2nd+ import), each with its explicit cache path so the
+	# .glb meshes and .ctex textures download in ONE bounded-parallel batch (E5) with per-item retry.
+	var entries: Array = []
 	for sha in glb:
 		if not _downloader.is_cached(sha):
-			glb_todo.append({"url": glb[sha], "sha256": sha})
-	var ctex_todo: Array = []
+			entries.append({"url": glb[sha], "sha256": sha, "path": _downloader.cache_path(sha)})
 	for sha in ctex:
 		if not _ctex_tex.is_cached(sha):
-			ctex_todo.append({"url": ctex[sha], "sha256": sha})
-	var total: int = glb_todo.size() + ctex_todo.size()
-	if total == 0:
+			entries.append({"url": ctex[sha], "sha256": sha, "path": _ctex_tex.cache_path(sha)})
+	if entries.is_empty():
 		return
-	caching_started.emit(total)
-	var done: int = 0
-	for e: Dictionary in glb_todo:
-		await _downloader.ensure(e["url"], e["sha256"])
-		done += 1
-		caching_progress.emit(done, total)
-	for e: Dictionary in ctex_todo:
-		await _ctex_tex.ensure(e["url"], e["sha256"])
-		done += 1
-		caching_progress.emit(done, total)
+	# progress_updated → caching_progress is wired in _ready(), so the loading bar advances per blob.
+	caching_started.emit(entries.size())
+	await _downloader.ensure_batch_parallel(entries)
 	caching_finished.emit()
 
 # === ctex (compressed-texture) delivery ===
@@ -263,6 +255,7 @@ func _refresh_remote_manifest() -> void:
 		var otext: String = FileAccess.get_file_as_string(override_path)
 		var od: Variant = JSON.parse_string(otext)
 		if typeof(od) == TYPE_DICTIONARY and typeof((od as Dictionary).get("models")) == TYPE_DICTIONARY:
+			print("[ModelLibrary] MANIFEST OVERRIDE — applying local user://manifest_override.json (staged, offline)")
 			push_warning("[ModelLibrary] MANIFEST OVERRIDE — applying local user://manifest_override.json (staged, offline)")
 			apply_manifest_text(otext)
 			manifest_refreshed.emit(_models.size())
@@ -271,6 +264,7 @@ func _refresh_remote_manifest() -> void:
 	var override_url: String = _manifest_override_url()
 	var url: String
 	if not override_url.is_empty():
+		print("[ModelLibrary] MANIFEST OVERRIDE — fetching staged manifest from %s" % override_url)
 		push_warning("[ModelLibrary] MANIFEST OVERRIDE — fetching staged manifest from %s" % override_url)
 		var sep: String = "&" if override_url.contains("?") else "?"
 		url = "%s%st=%d" % [override_url, sep, int(Time.get_unix_time_from_system())]

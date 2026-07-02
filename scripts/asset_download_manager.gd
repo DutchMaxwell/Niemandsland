@@ -77,6 +77,64 @@ func ensure_batch(entries: Array) -> Dictionary:
 		progress_updated.emit(done, total)
 	return result
 
+## Download a batch with BOUNDED PARALLELISM (a small pool of its own HTTPRequests, so the shared
+## serial _http path is untouched) + per-item bounded retry. Each entry writes to its EXPLICIT
+## `path`, so a caller can mix .glb meshes and .ctex textures in one batch. entries:
+## [{url, sha256, path}]. Emits progress_updated(done, total) as items finish. Awaitable.
+func ensure_batch_parallel(entries: Array, max_concurrent: int = 5, retries: int = 2) -> void:
+	var total: int = entries.size()
+	if total == 0:
+		return
+	var state: Dictionary = {"next": 0, "done": 0}
+	var pool: int = clampi(max_concurrent, 1, total)
+	for _i in range(pool):
+		_batch_worker(entries, state, total, retries)   # fire concurrent workers (no await here)
+	while int(state["done"]) < total:
+		await get_tree().process_frame
+
+
+## One worker: pulls entries off the shared cursor and downloads them on its OWN HTTPRequest until the
+## batch is exhausted. Multiple run concurrently (they interleave at each request await).
+func _batch_worker(entries: Array, state: Dictionary, total: int, retries: int) -> void:
+	var http := HTTPRequest.new()
+	http.download_chunk_size = CHUNK_SIZE
+	http.timeout = REQUEST_TIMEOUT_SEC
+	add_child(http)
+	while int(state["next"]) < entries.size():
+		var my: int = int(state["next"])
+		state["next"] = my + 1
+		var e: Dictionary = entries[my]
+		await _download_to(http, str(e.get("url", "")), str(e.get("sha256", "")), str(e.get("path", "")), retries)
+		state["done"] = int(state["done"]) + 1
+		progress_updated.emit(int(state["done"]), total)
+	http.queue_free()
+
+
+## Download url → path on the given HTTPRequest, sha-verified, up to retries+1 attempts. True on success.
+func _download_to(http: HTTPRequest, url: String, sha256: String, path: String, retries: int) -> bool:
+	if url.is_empty() or sha256.is_empty() or path.is_empty():
+		return false
+	if FileAccess.file_exists(path):
+		return true
+	var tmp: String = path + ".part"
+	for _attempt in range(maxi(retries, 0) + 1):
+		http.download_file = tmp
+		if http.request(url) != OK:
+			await get_tree().process_frame
+			continue
+		var res: Array = await http.request_completed
+		var okc: bool = int(res[0]) == HTTPRequest.RESULT_SUCCESS and int(res[1]) >= 200 and int(res[1]) < 300
+		if okc and FileAccess.get_sha256(tmp).to_lower() == sha256.to_lower():
+			DirAccess.rename_absolute(tmp, path)
+			download_completed.emit(sha256, path, true)
+			return true
+		if FileAccess.file_exists(tmp):
+			DirAccess.remove_absolute(tmp)
+	push_warning("AssetDownloadManager: '%s' failed after %d attempt(s)" % [url, maxi(retries, 0) + 1])
+	download_completed.emit(sha256, "", false)
+	return false
+
+
 # === Private helpers ===
 
 ## Serialises access to the single shared HTTPRequest: one node can only serve one
