@@ -212,7 +212,9 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 	# A DEAD loose model parked on the tray: the ONLY action is revive. Whole-unit-destroyed →
 	# revive the whole unit; otherwise revive just this model. (Regiment casualties never reach
 	# here — they stay in the block, not parked as clickable dead models.)
-	if bool(first_obj.get_meta("deleted", false)):
+	# Gate on dead_slot (J3): revive is offered ONLY on a genuinely tray-parked model, never on a
+	# delete-hidden wrapper or a blood stain that raycast through to one.
+	if bool(first_obj.get_meta("deleted", false)) and first_obj.has_meta("dead_slot"):
 		var dead_unit = UnitUtils.get_game_unit(first_obj)
 		if dead_unit != null:
 			context["revive_unit"] = dead_unit
@@ -532,10 +534,8 @@ func delete_objects(objects: Array) -> void:
 	if objects.is_empty():
 		return
 
-	var models: Array[ModelInstance] = []
-	var prev_wounds: Array[int] = []
-	var prev_alive: Array[bool] = []
-	var nodes: Array[Node3D] = []
+	var park_targets: Array = []   # loose OPR unit models → parked on the tray (J1)
+	var nodes: Array[Node3D] = []  # non-unit objects (terrain, props, tokens) → hard delete
 
 	for obj in objects:
 		if not (obj is Node3D) or not is_instance_valid(obj):
@@ -550,24 +550,29 @@ func delete_objects(objects: Array) -> void:
 		if obj.has_meta(RegimentTray.MEMBER_META):
 			continue
 		var model: ModelInstance = UnitUtils.get_model_instance(obj)
-		if model:
-			models.append(model)
-			prev_wounds.append(model.wounds_current)
-			prev_alive.append(model.is_alive)
+		var game_unit: GameUnit = UnitUtils.get_game_unit(obj)
+		if model != null and game_unit != null:
+			park_targets.append({"model": model, "unit": game_unit})
 		else:
 			nodes.append(obj)
 
-	if models.is_empty() and nodes.is_empty():
+	# J1: the Delete key parks loose OPR unit models exactly like the radial "Remove" (grey-out, tray
+	# slot, death-spot stain, MP broadcast). Recovery is via right-click Revive — the park IS the
+	# recoverable state, consistent with radial Remove (there is no separate Ctrl+Z for parked models).
+	for t in park_targets:
+		_kill_loose_to_tray(t["model"] as ModelInstance, t["unit"] as GameUnit)
+
+	if nodes.is_empty():
 		return
 
-	# DeleteAction.redo() performs the initial deletion (hide + broadcast), so the
-	# deletion logic lives in exactly one place.
+	# Non-unit objects keep the hard delete + Ctrl+Z undo. DeleteAction.redo() performs the initial
+	# deletion (hide + broadcast), so the deletion logic lives in exactly one place.
 	var del_peer: int = network_manager.get_my_peer_id() if network_manager else 0
-	var action := UndoManager.DeleteAction.new(models, prev_wounds, prev_alive, nodes, network_manager, del_peer)
+	var no_models: Array[ModelInstance] = []
+	var no_wounds: Array[int] = []
+	var no_alive: Array[bool] = []
+	var action := UndoManager.DeleteAction.new(no_models, no_wounds, no_alive, nodes, network_manager, del_peer)
 	action.redo()
-
-	for model in models:
-		model_deleted.emit(model)
 
 	if undo_manager:
 		undo_manager.push(action)
@@ -623,7 +628,9 @@ func _kill_loose_to_tray(model: ModelInstance, game_unit: GameUnit) -> void:
 	var pid: int = int(game_unit.unit_properties.get("player_id", 1))
 	if army_manager != null:
 		army_manager.set_loose_model_dead(model.node, pid, true, game_unit.unit_id)
-	_update_wound_marker(model)
+	# J4: a parked model must not carry its wound/status tokens onto the tray (they are children of the
+	# node and would ride along). Clear them all; revive re-derives them (_redraw_unit_tokens).
+	_clear_unit_status_tokens(model.node, game_unit)
 	# (No _reform_regiment_for_model here — this path only runs for LOOSE models; it would be a no-op.)
 	model_deleted.emit(model)
 	if network_manager:
@@ -718,6 +725,8 @@ func _revive_unit_models(game_unit: GameUnit) -> void:
 		_reform_regiment_for_model(model)
 		if network_manager:
 			network_manager.broadcast_model_wounds(model)
+	# J4: restore the unit's status/caster/custom tokens that were cleared when its models parked.
+	_redraw_unit_tokens(game_unit)
 
 
 ## Revive from a right-click on a dead loose model — the ONLY action a dead model allows. A fully
@@ -766,6 +775,7 @@ func _revive_single_model(model: ModelInstance, game_unit: GameUnit) -> void:
 	elif army_manager != null:
 		army_manager.set_loose_model_dead(model.node, pid, false)
 	_update_wound_marker(model)
+	_redraw_unit_tokens(game_unit)   # J4: restore status/caster/custom tokens cleared on park
 	_reform_regiment_for_model(model)
 	if network_manager:
 		network_manager.broadcast_model_wounds(model)
@@ -889,6 +899,7 @@ func _on_wounds_changed(model: ModelInstance, new_wounds: int) -> void:
 			OPRArmyManager.set_model_alive_state(model.node, false)
 		elif army_manager != null:
 			army_manager.set_loose_model_dead(model.node, pid, true, model.unit.unit_id if model.unit != null else "")
+			_clear_unit_status_tokens(model.node, model.unit)   # J4: don't drag tokens onto the tray
 		model_deleted.emit(model)
 	# Show model if revived
 	elif new_wounds > 0:
@@ -896,6 +907,7 @@ func _on_wounds_changed(model: ModelInstance, new_wounds: int) -> void:
 			OPRArmyManager.set_model_alive_state(model.node, true)
 		elif army_manager != null:
 			army_manager.set_loose_model_dead(model.node, pid, false)
+			_redraw_unit_tokens(model.unit)   # J4: restore status/caster/custom tokens on revive
 
 	# Regiments (AoF:R): close ranks on a casualty, re-open on revive.
 	_reform_regiment_for_model(model)
