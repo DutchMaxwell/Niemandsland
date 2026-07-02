@@ -67,6 +67,33 @@ static func build_presented(data: Dictionary) -> Control:
 		strip.add_child(_status_chip("Caster", true, CYAN))
 	col.add_child(strip)
 
+	# Weapons block — one line per distinct weapon (name+count · RNG A· AP·), special rules on a small
+	# second line. data.weapons = [{name, meta, rules}] built by the caller from the SAME distributed-
+	# loadout aggregation the old UnitCard uses (D8 reuse), NOT re-derived here.
+	var weapons: Array = data.get("weapons", [])
+	if not weapons.is_empty() and not bool(data.get("dead", false)):
+		col.add_child(_rule(NAVY_HI))
+		for w in weapons:
+			var row := HBoxContainer.new()
+			var nm := _label(str((w as Dictionary).get("name", "")), 12, TEXT)
+			nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+			nm.clip_text = true
+			row.add_child(nm)
+			row.add_child(_label(str((w as Dictionary).get("meta", "")), 12, TEXT_DIM))
+			col.add_child(row)
+			var wr := str((w as Dictionary).get("rules", ""))
+			if not wr.is_empty():
+				col.add_child(_label("    " + wr, 10, CYAN))
+
+	# Rules line — the unit's special rules, abbreviated + ellipsized (full text behind Info).
+	var rules_line := str(data.get("rules", ""))
+	if not rules_line.is_empty() and not bool(data.get("dead", false)):
+		var rl := _label(rules_line, 11, TEXT_DIM)
+		rl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		rl.clip_text = true
+		col.add_child(rl)
+
 	# Amber coherency strip (only when out of coherency and not dead).
 	if not bool(data.get("coherent", true)) and not bool(data.get("dead", false)):
 		col.add_child(_warning_strip("⚠  Out of coherency"))
