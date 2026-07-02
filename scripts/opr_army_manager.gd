@@ -248,7 +248,7 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 
 		# Use unit's actual base size for spacing calculations
 		var unit_base_diameter = unit.get_base_diameter_meters()
-		var edge_gap = 0.008  # 8mm constant gap between base edges
+		var edge_gap = BASE_EDGE_GAP_M
 		var model_spacing = unit_base_diameter + edge_gap  # diameter + constant edge gap
 
 		# Calculate unit width before spawning to check if we need a new row
@@ -522,9 +522,15 @@ static func set_model_alive_state(node: Node3D, alive: bool) -> void:
 # raycastable so it can be right-clicked to revive (the "deleted" meta blocks every other action).
 # Regiment models never use this — they keep AoF:R rank-removal in the block.
 
-const DEAD_SLOT_STEP := 0.08          # spacing between parked dead models on the tray (m)
+## Constant gap between adjacent model base edges — the same value the army-spawn layout uses so a
+## parked casualty sits at the standard tight spacing, not spread out (J7). Shared by both paths.
+const BASE_EDGE_GAP_M := 0.008
+## Parked-model grid spacing = a ~1" base + the standard edge gap (matches a spawned unit's spacing).
+const DEAD_SLOT_STEP := INCHES_TO_METERS + BASE_EDGE_GAP_M
 const DEAD_SLOT_EDGE := 0.06          # padding from the tray edge (m)
-const DEAD_SLOT_Y := 0.02             # rest height on the tray surface (m)
+## Rest exactly on the tray surface like a spawned model (_animate_tray_drop settles models at y=0.0),
+## not floating above it (J7).
+const DEAD_SLOT_Y := 0.0
 
 static var _dead_shader: Shader = null   # shared greyscale shader for dead models
 
@@ -1102,7 +1108,7 @@ func _get_tray_position_and_bounds(player_id: int) -> Dictionary:
 func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: Color, name_suffix: String = "", player_id: int = 1, army: OPRApiClient.OPRArmy = null) -> Array[Node3D]:
 	var models: Array[Node3D] = []
 	# Use unit's base diameter + constant edge gap for spacing (prevents overlap)
-	var edge_gap = 0.008  # 8mm constant gap between base edges
+	var edge_gap = BASE_EDGE_GAP_M
 	var spacing = unit.get_base_diameter_meters() + edge_gap
 
 	# Get faction folder for GLB model lookup
