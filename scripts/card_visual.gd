@@ -78,11 +78,11 @@ func _build_layers() -> void:
 	_face = Panel.new()
 	_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_face.add_theme_stylebox_override("panel", _face_style())
-	_mat = ShaderMaterial.new()
-	_mat.shader = load("res://assets/shaders/card_tilt.gdshader")
-	_mat.set_shader_parameter("fov", TILT_FOV_DEG)
-	_mat.set_shader_parameter("sheen_strength", SHEEN_STRENGTH)
-	_face.material = _mat
+	# NOTE (D2 render fix, found via a real GPU render): the canvas_item perspective tilt shader mangles
+	# a Panel's StyleBox primitives (they are NOT a single textured quad) → the card drew nothing. So the
+	# shader is NOT applied to the Panel; the tactile hover TILT now comes from a light Control transform
+	# (see _process). The shader file (assets/shaders/card_tilt.gdshader) stays for the D7 design rework,
+	# where the card face becomes a single quad / baked frame texture that a vertex shader CAN transform.
 	add_child(_face)
 	# Content holder above the face (labels/stats set by the owner).
 	_content_holder = Control.new()
@@ -95,8 +95,6 @@ func _on_resized() -> void:
 	pivot_offset = size * 0.5
 	if _face:
 		_face.size = size
-		if _mat:
-			_mat.set_shader_parameter("rect_size", size)
 	if _content_holder:
 		_content_holder.size = size
 	_layout_shadow(1.0)
@@ -159,9 +157,8 @@ func _process(delta: float) -> void:
 	# Tilt aim from the cursor when hovered (D2), toward 0 otherwise; spring-eased so it never snaps.
 	if _hovered:
 		var local: Vector2 = get_local_mouse_position()
-		var n: Vector2 = (local / maxf(size.x, 1.0) - Vector2(0.5, size.y / maxf(size.x, 1.0) * 0.5))
-		var off: Vector2 = ((local / size) - Vector2(0.5, 0.5)) * 2.0
-		_tilt_aim = Vector2(-off.y, off.x) * TILT_MAX_DEG   # vertical→rot_x, horizontal→rot_y
+		var off: Vector2 = ((local / size) - Vector2(0.5, 0.5)) * 2.0   # -1..1 from card centre
+		_tilt_aim = Vector2(-off.y, off.x) * TILT_MAX_DEG   # x = pitch (from vertical), y = yaw (horizontal)
 	var target_scale_eff: float = _target_scale * (HOVER_LIFT_SCALE if _hovered else 1.0)
 
 	var moving: bool = false
@@ -178,8 +175,6 @@ func _process(delta: float) -> void:
 	_tilt = _tilt.lerp(_tilt_aim, clampf(delta * 12.0, 0.0, 1.0))
 
 	_apply_transform()
-	_mat.set_shader_parameter("rot_x", _tilt.x)
-	_mat.set_shader_parameter("rot_y", _tilt.y)
 	_layout_shadow(HOVER_SHADOW_GROW if _hovered else 1.0)
 
 	# Early-out (D3): stop processing once everything has settled and no hover tilt remains.
@@ -192,9 +187,12 @@ func _process(delta: float) -> void:
 
 func _apply_transform() -> void:
 	position = _cur_pos
-	rotation_degrees = _cur_rot
 	pivot_offset = size * 0.5
-	scale = Vector2(_cur_scale, _cur_scale)
+	# Base spring rotation + a subtle hover LEAN toward the cursor (a light transform-based fake of the
+	# perspective tilt — the true shader tilt returns in D7 on a single-quad face). _tilt = (pitch, yaw)°.
+	rotation_degrees = _cur_rot + _tilt.y * 0.5
+	# Foreshorten a touch on pitch for a hint of depth; horizontal lean is the rotation above.
+	scale = Vector2(_cur_scale, _cur_scale * (1.0 - absf(_tilt.x) * 0.004))
 
 
 # One damped-spring step for a scalar. Returns Vector2(new_value, new_velocity) so the caller keeps the
