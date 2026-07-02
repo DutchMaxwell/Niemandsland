@@ -3022,6 +3022,10 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	# tableau under them (shared with the .nml-load path).
 	save_manager.restore_army_trays_after_load(state.get("army_names", {}))
 
+	# Re-park loose models the host had killed (needs the trays above), so a late-joiner sees the
+	# same greyed casualties on the tray, not live draggable models (G4).
+	save_manager._restore_dead_parking_after_load()
+
 	save_manager.end_restore()
 	network_manager.broadcast_peer_busy(false)  # join load done — release the other peers' gate
 
