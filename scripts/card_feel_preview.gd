@@ -1,45 +1,52 @@
 extends Control
-## DEV-ONLY tuning harness for the unit-dock card feel (Handover D). F6 this scene, hover the cards and
-## watch the Balatro-style tilt, hover-lift, spring-into-place, deal-in overshoot and hand-fan. Every
-## knob lives in scripts/card_visual.gd (CardVisual's tunable constants). NOT shipped in game — remove
-## or keep clearly marked dev before merge.
+## DEV-ONLY tuning harness for the unit-dock card feel + design (Handover D). F6 this scene: the top row
+## shows PRESENTED-card faces (Tactical-HUD design, CardFace) in each state — default, wounded,
+## out-of-coherency, destroyed; the bottom shows the compact STRIP-card variant, dealt into a hand-fan.
+## Hover to feel the tilt/lift/spring. Tunables: scripts/card_visual.gd; design: scripts/card_face.gd.
+## NOT shipped in game.
 
-const N: int = 8
-const CARD_SIZE: Vector2 = Vector2(152, 210)
+const PCARD: Vector2 = Vector2(300, 200)
+const SCARD: Vector2 = Vector2(150, 108)
 
 
 func _ready() -> void:
 	var hint := Label.new()
-	hint.text = "CardVisual tuning preview (dev) — hover the cards. Tunables: scripts/card_visual.gd"
-	hint.position = Vector2(24, 20)
+	hint.text = "Card design/feel preview (dev) — hover the cards. Design: card_face.gd · Feel: card_visual.gd"
+	hint.position = Vector2(24, 18)
 	add_child(hint)
 
-	var row_y: float = 360.0
-	var spacing: float = 172.0
-	var x0: float = 220.0
-	for i in range(N):
+	var states: Array = [
+		{"name": "Assault Brothers", "points": 215, "quality": 3, "defense": 3, "alive": 10, "total": 10,
+			"activated": true, "coherent": true},
+		{"name": "Skeleton Warriors", "points": 130, "quality": 4, "defense": 4, "alive": 6, "total": 10,
+			"fatigued": true, "coherent": true},
+		{"name": "Royal Guard", "points": 180, "quality": 3, "defense": 2, "alive": 4, "total": 5,
+			"shaken": true, "coherent": false},
+		{"name": "Gun Drones", "points": 90, "quality": 5, "defense": 5, "alive": 0, "total": 3,
+			"dead": true, "coherent": true},
+	]
+
+	# Top row: presented-card faces, one per state.
+	var px0: float = 200.0
+	for i in range(states.size()):
 		var card := CardVisual.new()
-		card.size = CARD_SIZE
+		card.size = PCARD
 		add_child(card)
-		card.set_content_node(_demo_content(i))
-		# Start small + below the row, then deal into place with the spring's overshoot/settle.
-		card.snap_to(Vector2(x0 + i * spacing, row_y + 220.0), 0.0, 0.6)
-		var fan: float = (float(i) - float(N - 1) / 2.0) * CardVisual.FAN_DEG_PER_CARD
+		card.set_content_node(CardFace.build_presented(states[i]))
+		var pos := Vector2(px0 + i * (PCARD.x + 60.0), 120.0)
+		card.snap_to(pos + Vector2(0, 180), 0.0, 0.7)
+		card.spring_to(pos, 0.0, 1.0)
+
+	# Bottom row: compact strip cards dealt into a slight hand-fan.
+	var n := 8
+	var sx0: float = 220.0
+	var row_y: float = 470.0
+	for i in range(n):
+		var card := CardVisual.new()
+		card.size = SCARD
+		add_child(card)
+		card.set_content_node(CardFace.build_strip(states[i % states.size()]))
+		card.snap_to(Vector2(sx0 + i * (SCARD.x + 18.0), row_y + 160.0), 0.0, 0.6)
+		var fan: float = (float(i) - float(n - 1) / 2.0) * CardVisual.FAN_DEG_PER_CARD
 		card.set_fan(fan)
-		card.spring_to(Vector2(x0 + i * spacing, row_y), fan, 1.0)
-
-
-func _demo_content(i: int) -> Control:
-	var v := VBoxContainer.new()
-	v.custom_minimum_size = CARD_SIZE
-	v.add_theme_constant_override("separation", 6)
-	var title := Label.new()
-	title.text = "Unit %d" % (i + 1)
-	v.add_child(title)
-	var stats := Label.new()
-	stats.text = "Q 4+   D 3+"
-	v.add_child(stats)
-	var models := Label.new()
-	models.text = "%d models" % (5 + i)
-	v.add_child(models)
-	return v
+		card.spring_to(Vector2(sx0 + i * (SCARD.x + 18.0), row_y), fan, 1.0)
