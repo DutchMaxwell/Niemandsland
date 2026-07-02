@@ -778,7 +778,7 @@ func broadcast_sort_table() -> void:
 
 ## RPC: Sync model wounds
 @rpc("any_peer", "call_remote", "reliable")
-func sync_model_wounds(unit_id: String, model_index: int, wounds: int, is_alive: bool) -> void:
+func sync_model_wounds(unit_id: String, model_index: int, wounds: int, is_alive: bool, dead_slot: int = -1) -> void:
 	if not army_manager:
 		return
 
@@ -789,15 +789,18 @@ func sync_model_wounds(unit_id: String, model_index: int, wounds: int, is_alive:
 			model.wounds_current = wounds
 			model.is_alive = is_alive
 
-			# Update node visibility AND collision (a dead model must not stay raycast-hittable /
-			# measurable on the receiver; a revived one gets its collision back).
 			if model.node and is_instance_valid(model.node):
-				OPRArmyManager.set_model_alive_state(model.node, is_alive)
-				# Regiments (AoF:R): close/re-open ranks to match the host.
 				if model.node.has_meta("regiment_tray"):
+					# Regiments (AoF:R): hide + close/re-open ranks to match the host.
+					OPRArmyManager.set_model_alive_state(model.node, is_alive)
 					var _tray = model.node.get_meta("regiment_tray")
 					if is_instance_valid(_tray) and _tray.has_method("reform_from_unit"):
 						_tray.reform_from_unit(game_unit)
+				else:
+					# Loose model: park on / return from the army tray, matching the host's slot so
+					# both sides show the identical desaturated casualty (T2 MP sync).
+					var pid: int = int(game_unit.unit_properties.get("player_id", 1))
+					army_manager.set_loose_model_dead(model.node, pid, not is_alive, dead_slot)
 
 			remote_wounds_updated.emit(model)
 
@@ -1006,7 +1009,13 @@ func broadcast_model_wounds(model: ModelInstance) -> void:
 	if is_multiplayer_active() and model and model.unit:
 		var game_unit = model.unit as GameUnit
 		if game_unit:
-			_remote_call("sync_model_wounds", [game_unit.unit_id, model.model_index, model.wounds_current, model.is_alive], 0)
+			# Loose casualties park on the army tray; send the parking slot so the peer parks on the
+			# SAME slot (regiments carry -1 — they re-rank in the block, they don't tray-park).
+			var dead_slot: int = -1
+			if army_manager != null and model.node != null and is_instance_valid(model.node) \
+					and not model.node.has_meta("regiment_tray"):
+				dead_slot = army_manager.dead_slot_of(model.node)
+			_remote_call("sync_model_wounds", [game_unit.unit_id, model.model_index, model.wounds_current, model.is_alive, dead_slot], 0)
 
 
 ## Broadcast a regiment frontage (models-per-rank) change so the peer re-ranks the

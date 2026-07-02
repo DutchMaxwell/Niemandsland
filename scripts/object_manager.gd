@@ -315,13 +315,20 @@ func _input(event: InputEvent) -> void:
 				else:
 					var clicked_object = _get_object_at_position(mouse_event.position)
 					if clicked_object:
-						# Select object if not already selected
-						if clicked_object not in _selected_objects:
-							_deselect_all()
-							_add_to_selection(clicked_object)
-						# Open context menu
-						context_menu_requested.emit(mouse_event.position, _selected_objects.duplicate())
-						get_viewport().set_input_as_handled()
+						# A DEAD model (parked on the tray) allows only one action: revive. Don't
+						# select/drag it — hand it straight to the context menu, which shows a
+						# revive-only menu for a "deleted" object.
+						if bool(clicked_object.get_meta("deleted", false)):
+							context_menu_requested.emit(mouse_event.position, [clicked_object])
+							get_viewport().set_input_as_handled()
+						else:
+							# Select object if not already selected
+							if clicked_object not in _selected_objects:
+								_deselect_all()
+								_add_to_selection(clicked_object)
+							# Open context menu
+							context_menu_requested.emit(mouse_event.position, _selected_objects.duplicate())
+							get_viewport().set_input_as_handled()
 					else:
 						# No object under the cursor: if a pinned ruler is there, remove it
 						# (else fall through so a right-drag still rotates the camera).
@@ -696,6 +703,11 @@ static func _arc_label_color(quadrant: RegimentFacingVisualizer.ArcQuadrant) -> 
 			return MEASURE_REAR_COLOR
 		_:
 			return MEASURE_FLANK_COLOR
+
+
+## Public wrapper so external UI (the unit-card dock) can drive the hover glow from a card hover.
+func set_hover_target(node: Node3D) -> void:
+	_hover_glow.set_target(node)
 
 
 ## Updates the hover glow to the selectable currently under the cursor (or none).

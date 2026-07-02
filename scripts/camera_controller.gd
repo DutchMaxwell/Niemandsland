@@ -87,6 +87,12 @@ func _mark_dirty() -> void:
 	_transform_dirty = true
 
 
+## Centre the orbit pivot on a world position (e.g. a unit centroid from the unit-card dock).
+func focus_on(world_pos: Vector3) -> void:
+	_target_position = world_pos
+	_mark_dirty()
+
+
 ## Check if mouse is over a scrollable UI element (to prevent zoom when scrolling menus)
 func _is_mouse_over_scrollable_ui() -> bool:
 	var mouse_pos = get_viewport().get_mouse_position()

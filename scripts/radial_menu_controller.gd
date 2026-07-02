@@ -209,6 +209,17 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 			{"army_tray_player": tray_player})
 		return
 
+	# A DEAD loose model parked on the tray: the ONLY action is revive. Whole-unit-destroyed →
+	# revive the whole unit; otherwise revive just this model. (Regiment casualties never reach
+	# here — they stay in the block, not parked as clickable dead models.)
+	if bool(first_obj.get_meta("deleted", false)):
+		var dead_unit = UnitUtils.get_game_unit(first_obj)
+		if dead_unit != null:
+			context["revive_unit"] = dead_unit
+			context["revive_model"] = UnitUtils.get_model_instance(first_obj)
+			radial_menu.open(screen_position, RadialMenu.create_dead_model_menu(), context)
+		return
+
 	var game_unit = UnitUtils.get_game_unit(first_obj)
 
 	if game_unit:
@@ -317,6 +328,8 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_delete_model(context)
 		"revive_fallen":
 			_revive_fallen(context)
+		"revive_dead":
+			_revive_dead(context)
 		"delete_unit":
 			_delete_unit(context)
 		"delete_terrain":
@@ -570,12 +583,37 @@ func _delete_model(context: Dictionary) -> void:
 	var model = context.get("model_instance") as ModelInstance
 	if not model or not model.node:
 		return
-	# Delete the whole current selection (not just the clicked model) so deleting a
-	# multi-selection removes all of them; falls back to the single clicked model.
+	# "Remove" a killed model → it does NOT vanish: a LOOSE army model is parked (desaturated) on
+	# its owner's tray, revivable by right-click. Non-model objects (terrain, rulers) still delete.
+	# Applies to the whole current selection; falls back to the single clicked model.
 	var targets: Array = _current_selection.duplicate() if not _current_selection.is_empty() else [model.node]
-	delete_objects(targets)
+	var to_delete: Array = []
+	for node in targets:
+		var mi := UnitUtils.get_model_instance(node) if node != null else null
+		var gu := UnitUtils.get_game_unit(node) if node != null else null
+		if mi != null and gu != null and not node.has_meta(RegimentTray.MEMBER_META):
+			_kill_loose_to_tray(mi, gu)
+		else:
+			to_delete.append(node)
+	if not to_delete.is_empty():
+		delete_objects(to_delete)
 	if object_manager and object_manager.has_method("deselect_all"):
 		object_manager.deselect_all()
+
+
+## Mark a loose model dead and park it (desaturated) on its owner's army tray — the shared path for
+## both "Remove" and a Wounds-dialog kill. Revive brings it back (right-click on the tray model).
+func _kill_loose_to_tray(model: ModelInstance, game_unit: GameUnit) -> void:
+	model.is_alive = false
+	model.wounds_current = 0
+	var pid: int = int(game_unit.unit_properties.get("player_id", 1))
+	if army_manager != null:
+		army_manager.set_loose_model_dead(model.node, pid, true)
+	_update_wound_marker(model)
+	# (No _reform_regiment_for_model here — this path only runs for LOOSE models; it would be a no-op.)
+	model_deleted.emit(model)
+	if network_manager:
+		network_manager.broadcast_model_wounds(model)
 
 
 func _delete_unit(context: Dictionary) -> void:
@@ -583,7 +621,17 @@ func _delete_unit(context: Dictionary) -> void:
 	if not game_unit:
 		return
 
-	# Delete all models
+	# A LOOSE unit is not destroyed permanently: every model is parked (desaturated) on the tray,
+	# revivable as a whole by right-clicking any of them. A regiment keeps the old permanent delete.
+	var is_regiment: bool = not game_unit.models.is_empty() and game_unit.models[0].node != null \
+		and game_unit.models[0].node.has_meta(RegimentTray.MEMBER_META)
+	if not is_regiment:
+		for model in game_unit.models:
+			if model.node != null and is_instance_valid(model.node):
+				_kill_loose_to_tray(model, game_unit)
+		return
+
+	# Regiment / fallback: permanent delete.
 	for model in game_unit.models:
 		model.is_alive = false
 		model.wounds_current = 0
@@ -642,15 +690,102 @@ func _revive_fallen(context: Dictionary) -> void:
 
 ## Revive every dead model of a unit in place (visible + collision + boundary + wounds), broadcast.
 func _revive_unit_models(game_unit: GameUnit) -> void:
+	var pid: int = int(game_unit.unit_properties.get("player_id", 1))
 	for model in game_unit.models:
 		if model.is_alive:
 			continue
 		model.reset_wounds()
-		OPRArmyManager.set_model_alive_state(model.node, true)
+		# Loose models come back from the tray (restore material + spot); regiment models un-hide.
+		if model.node != null and model.node.has_meta(RegimentTray.MEMBER_META):
+			OPRArmyManager.set_model_alive_state(model.node, true)
+		elif army_manager != null:
+			army_manager.set_loose_model_dead(model.node, pid, false)
 		_update_wound_marker(model)
 		_reform_regiment_for_model(model)
 		if network_manager:
 			network_manager.broadcast_model_wounds(model)
+
+
+## Revive from a right-click on a dead loose model — the ONLY action a dead model allows. A fully
+## destroyed unit revives whole; otherwise just the clicked model comes back from the tray.
+func _revive_dead(context: Dictionary) -> void:
+	var unit = context.get("revive_unit")
+	if unit == null or not (unit is GameUnit):
+		return
+	if (unit as GameUnit).is_destroyed():
+		_revive_unit_models(unit)
+		return
+	var model = context.get("revive_model")
+	if model != null and model is ModelInstance and not (model as ModelInstance).is_alive:
+		_revive_single_model(model as ModelInstance, unit as GameUnit)
+
+
+## Revive one dead loose model (partial-casualty case): reset wounds, un-park from the tray
+## (material + spot restored), refresh marker/coherency, and broadcast.
+func _revive_single_model(model: ModelInstance, game_unit: GameUnit) -> void:
+	var pid: int = int(game_unit.unit_properties.get("player_id", 1))
+	model.reset_wounds()
+	if model.node != null and model.node.has_meta(RegimentTray.MEMBER_META):
+		OPRArmyManager.set_model_alive_state(model.node, true)
+	elif army_manager != null:
+		army_manager.set_loose_model_dead(model.node, pid, false)
+	_update_wound_marker(model)
+	_reform_regiment_for_model(model)
+	if network_manager:
+		network_manager.broadcast_model_wounds(model)
+
+
+# === Public entry points for the unit-card dock — mirror the radial-menu actions (markers + MP) ===
+
+func card_toggle_activation(unit: GameUnit) -> void:
+	if unit != null:
+		_toggle_activation({"game_unit": unit})
+
+
+func card_toggle_fatigued(unit: GameUnit) -> void:
+	if unit != null:
+		_toggle_fatigued({"game_unit": unit})
+
+
+func card_toggle_shaken(unit: GameUnit) -> void:
+	if unit != null:
+		_toggle_shaken({"game_unit": unit})
+
+
+func card_open_casts(unit: GameUnit) -> void:
+	if unit != null:
+		_open_casts_dialog({"game_unit": unit})
+
+
+func card_revive(unit: GameUnit) -> void:
+	if unit != null:
+		var m0 = unit.models[0] if not unit.models.is_empty() else null
+		_revive_dead({"revive_unit": unit, "revive_model": m0})
+
+
+## Open the wounds control for a unit's card: the pooled counter for a regiment, else the per-model
+## dialog on the first alive model.
+func card_open_wounds(unit: GameUnit) -> void:
+	if unit == null or unit.models.is_empty():
+		return
+	var anchor: Node3D = null
+	for m in unit.models:
+		if m.node != null and is_instance_valid(m.node):
+			anchor = m.node
+			break
+	if anchor != null and anchor.has_meta(RegimentTray.MEMBER_META):
+		var tray = anchor.get_meta(RegimentTray.MEMBER_META)
+		if is_instance_valid(tray):
+			_open_regiment_wounds_dialog({"regiment_tray": tray})
+			return
+	var target: ModelInstance = null
+	for m in unit.models:
+		if m.is_alive:
+			target = m
+			break
+	if target == null:
+		target = unit.models[0]
+	_open_wounds_dialog({"game_unit": unit, "model_instance": target})
 
 
 ## A player's fully-destroyed units that can be returned — casualty-wiped (their model nodes are
@@ -703,13 +838,22 @@ func _on_wounds_changed(model: ModelInstance, new_wounds: int) -> void:
 	# Update visual wound marker
 	_update_wound_marker(model)
 
-	# Hide model if dead (collision off too, so the dead base isn't measured/selected)
+	# On death/revive: a REGIMENT model keeps AoF:R rank-removal in the block (hidden + reform); a
+	# LOOSE model is parked desaturated on its owner's army tray (revive-only) instead of hidden.
+	var in_regiment: bool = model.node != null and model.node.has_meta(RegimentTray.MEMBER_META)
+	var pid: int = int(model.unit.unit_properties.get("player_id", 1)) if model.unit != null else 1
 	if new_wounds <= 0 and not model.is_alive:
-		OPRArmyManager.set_model_alive_state(model.node, false)
+		if in_regiment:
+			OPRArmyManager.set_model_alive_state(model.node, false)
+		elif army_manager != null:
+			army_manager.set_loose_model_dead(model.node, pid, true)
 		model_deleted.emit(model)
 	# Show model if revived
 	elif new_wounds > 0:
-		OPRArmyManager.set_model_alive_state(model.node, true)
+		if in_regiment:
+			OPRArmyManager.set_model_alive_state(model.node, true)
+		elif army_manager != null:
+			army_manager.set_loose_model_dead(model.node, pid, false)
 
 	# Regiments (AoF:R): close ranks on a casualty, re-open on revive.
 	_reform_regiment_for_model(model)
