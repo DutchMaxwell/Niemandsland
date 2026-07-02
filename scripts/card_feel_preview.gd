@@ -5,8 +5,8 @@ extends Control
 ## Hover to feel the tilt/lift/spring. Tunables: scripts/card_visual.gd; design: scripts/card_face.gd.
 ## NOT shipped in game.
 
-const PCARD: Vector2 = Vector2(300, 200)
-const SCARD: Vector2 = Vector2(150, 108)
+const PCARD: Vector2 = Vector2(300, 244)
+const SCARD: Vector2 = Vector2(150, 82)
 
 
 func _ready() -> void:
@@ -24,17 +24,22 @@ func _ready() -> void:
 			"shaken": true, "coherent": false},
 		{"name": "Gun Drones", "points": 90, "quality": 5, "defense": 5, "alive": 0, "total": 3,
 			"dead": true, "coherent": true},
+		{"name": "Wormhole Daemons of Change", "points": 305, "quality": 3, "defense": 4, "alive": 8,
+			"total": 8, "caster": true, "coherent": true},
 	]
 
-	# Top row: presented-card faces, one per state.
-	var px0: float = 200.0
+	# Top row: presented-card faces, one per state (last = longest real name).
+	var px0: float = 120.0
 	for i in range(states.size()):
 		var card := CardVisual.new()
 		card.size = PCARD
 		add_child(card)
 		card.set_content_node(CardFace.build_presented(states[i]))
-		var pos := Vector2(px0 + i * (PCARD.x + 60.0), 120.0)
-		card.snap_to(pos + Vector2(0, 180), 0.0, 0.7)
+		# Destroyed unit: desaturate the whole card to the tray-parking grey language.
+		if bool(states[i].get("dead", false)):
+			card.modulate = Color(0.60, 0.60, 0.64)
+		var pos := Vector2(px0 + i * (PCARD.x + 40.0), 110.0)
+		card.snap_to(pos + Vector2(0, 200), 0.0, 0.7)
 		card.spring_to(pos, 0.0, 1.0)
 
 	# Bottom row: compact strip cards dealt into a slight hand-fan.
