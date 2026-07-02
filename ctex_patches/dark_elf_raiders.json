@@ -1,0 +1,678 @@
+{
+  "dark_elf_raiders/blood hounds": {
+    "url": "017aba6d927f43724570be57017d469856bc569f31a0040f20d55b7714decc29.glb",
+    "sha256": "017aba6d927f43724570be57017d469856bc569f31a0040f20d55b7714decc29",
+    "size": 14271568,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "00c660c8cb69fdc935d0d2368184ce142bdf018cdda9791cdadc31a492ddd729.ctex",
+          "sha256": "00c660c8cb69fdc935d0d2368184ce142bdf018cdda9791cdadc31a492ddd729",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5dbf6863e88e4ac580f68abf7c24764c1b30487e624eaf2a7a001d1a8f94558a.ctex",
+          "sha256": "5dbf6863e88e4ac580f68abf7c24764c1b30487e624eaf2a7a001d1a8f94558a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6e72ba9f44195c5c830005f29888f8c5e3a707f0057b2b8e88d5f76c27995c3f.glb",
+        "sha256": "6e72ba9f44195c5c830005f29888f8c5e3a707f0057b2b8e88d5f76c27995c3f",
+        "size": 4001244
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_elf_raiders/clawed beast": {
+    "url": "d747ae6221857ffae1e080d47ade42362147df02d61f88e46a0a47d41b802ec5.glb",
+    "sha256": "d747ae6221857ffae1e080d47ade42362147df02d61f88e46a0a47d41b802ec5",
+    "size": 15756480,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f0f9ab501d34ce3fbfe84e5d70de570c910300326075c9bc4e5fd929e48cdaa9.ctex",
+          "sha256": "f0f9ab501d34ce3fbfe84e5d70de570c910300326075c9bc4e5fd929e48cdaa9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8a0f1235b26bc53b7c4184516562814e09cdf385a174f71ebc5525ecfc4e1d73.ctex",
+          "sha256": "8a0f1235b26bc53b7c4184516562814e09cdf385a174f71ebc5525ecfc4e1d73",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2fe8496244480db5c7ada4a6fced93907ab56798a1006c756ebbe3094fd73477.glb",
+        "sha256": "2fe8496244480db5c7ada4a6fced93907ab56798a1006c756ebbe3094fd73477",
+        "size": 11771484
+      },
+      "size_class": "large"
+    }
+  },
+  "dark_elf_raiders/court henchmen": {
+    "url": "a0082df763bcc09214602fb56ebc57f999e5ed78bdb05ca7d2e68c931000a5ca.glb",
+    "sha256": "a0082df763bcc09214602fb56ebc57f999e5ed78bdb05ca7d2e68c931000a5ca",
+    "size": 15963248,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8db3ec31c5af4e5f5faeaf3986521ccdc8be6e899558501b4e6c6c8c8bc7ecde.ctex",
+          "sha256": "8db3ec31c5af4e5f5faeaf3986521ccdc8be6e899558501b4e6c6c8c8bc7ecde",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5ecda16b68be430bf4c21f608af6189a3472c6bc98e153cd301754073200a923.ctex",
+          "sha256": "5ecda16b68be430bf4c21f608af6189a3472c6bc98e153cd301754073200a923",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "00b65bb003f3d861b0279a9116d008bf6c3ef9ce27105865025a6cf816c467f6.glb",
+        "sha256": "00b65bb003f3d861b0279a9116d008bf6c3ef9ce27105865025a6cf816c467f6",
+        "size": 4337248
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_elf_raiders/crow swarms": {
+    "url": "c125cb08487d4272bc223cd199b71542bb66479e8e93744e8359d1f9b764c668.glb",
+    "sha256": "c125cb08487d4272bc223cd199b71542bb66479e8e93744e8359d1f9b764c668",
+    "size": 13175580,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c7a950146c86cbb249fb9233bf846a570da23251cfe8c5bcb082849fdb3c2feb.ctex",
+          "sha256": "c7a950146c86cbb249fb9233bf846a570da23251cfe8c5bcb082849fdb3c2feb",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c8440a02561c0b2e7d9c3b719c2786a01402a5f86b5bd8907d4224d849022fbf.ctex",
+          "sha256": "c8440a02561c0b2e7d9c3b719c2786a01402a5f86b5bd8907d4224d849022fbf",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e097e840f5060fb548d827e5d20a5ce95fbf2f6cb61823c19cc2f663555c1379.glb",
+        "sha256": "e097e840f5060fb548d827e5d20a5ce95fbf2f6cb61823c19cc2f663555c1379",
+        "size": 4254352
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_elf_raiders/dark lord": {
+    "url": "ec71aa9851220161511483b8b3d48f24311fdb3f6f5a014219b72e6b0bf96830.glb",
+    "sha256": "ec71aa9851220161511483b8b3d48f24311fdb3f6f5a014219b72e6b0bf96830",
+    "size": 14930268,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4f0f089251ae1536321772be290b1cb88a602fe954465a2d7b9cca74ec2d3202.ctex",
+          "sha256": "4f0f089251ae1536321772be290b1cb88a602fe954465a2d7b9cca74ec2d3202",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "28bb8a8a038bc5e4ba590b645d0347218e05320ea25179f64bafa2b69849fc87.ctex",
+          "sha256": "28bb8a8a038bc5e4ba590b645d0347218e05320ea25179f64bafa2b69849fc87",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1891996826dd2ef434a98d0dd77d81002f7279002281556e599f6f492a03fa4c.glb",
+        "sha256": "1891996826dd2ef434a98d0dd77d81002f7279002281556e599f6f492a03fa4c",
+        "size": 11666936
+      },
+      "size_class": "large"
+    }
+  },
+  "dark_elf_raiders/elite raider": {
+    "url": "1d7ff3d6b076bf6fef9c4d84d9dc22476ff959b559199a8290d00d946bcfb133.glb",
+    "sha256": "1d7ff3d6b076bf6fef9c4d84d9dc22476ff959b559199a8290d00d946bcfb133",
+    "size": 15544000,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "dc3fa900247e90cce3b2711e173ba37d2d705c9387daa44799c966b5fa9925c3.ctex",
+          "sha256": "dc3fa900247e90cce3b2711e173ba37d2d705c9387daa44799c966b5fa9925c3",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8d28736cd226b176af07d9b110327a7d09287a1f83d13f697500ea192998e71a.ctex",
+          "sha256": "8d28736cd226b176af07d9b110327a7d09287a1f83d13f697500ea192998e71a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ffaaddb999acd9d09c29dd091bb819fb8dad82cfc798386ef958254cbd77f065.glb",
+        "sha256": "ffaaddb999acd9d09c29dd091bb819fb8dad82cfc798386ef958254cbd77f065",
+        "size": 4384560
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_elf_raiders/elite true raider": {
+    "url": "4742330d263088aa1895d169999f4df3858cc89c45df1f5739c4fad5df5034fa.glb",
+    "sha256": "4742330d263088aa1895d169999f4df3858cc89c45df1f5739c4fad5df5034fa",
+    "size": 14920000,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2a0aad129afff98c0d65642df67d22df9781ab047bce550262e7186453bb349f.ctex",
+          "sha256": "2a0aad129afff98c0d65642df67d22df9781ab047bce550262e7186453bb349f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "efb027c8bbcd5fcc253e45cbfe2fd6162a9a6231f336413c98ceaa89ed18af30.ctex",
+          "sha256": "efb027c8bbcd5fcc253e45cbfe2fd6162a9a6231f336413c98ceaa89ed18af30",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "036fe902fa1cf97fc3a7c645e20d3ad44f38d31c7d68921cb2c3d588543148bd.glb",
+        "sha256": "036fe902fa1cf97fc3a7c645e20d3ad44f38d31c7d68921cb2c3d588543148bd",
+        "size": 4296776
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_elf_raiders/engine of suffering": {
+    "url": "fc7b2c0bba5f86d8dc3c477a8a0da4c067235884a8816705528b4d2843b08e89.glb",
+    "sha256": "fc7b2c0bba5f86d8dc3c477a8a0da4c067235884a8816705528b4d2843b08e89",
+    "size": 17851456,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "998e3d694ce09c317e2634483a87ede1a749366faf9a1d3ed572e5b70903a4c8.ctex",
+          "sha256": "998e3d694ce09c317e2634483a87ede1a749366faf9a1d3ed572e5b70903a4c8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "fbed451cb9027b1292e580f00c80634f461cf6ddcf7db38c8f78168a2792feec.ctex",
+          "sha256": "fbed451cb9027b1292e580f00c80634f461cf6ddcf7db38c8f78168a2792feec",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a0540ddd5151a68a08b4e2051dcf0e3aad7e055e57cf80d9c9600e516cbf145a.glb",
+        "sha256": "a0540ddd5151a68a08b4e2051dcf0e3aad7e055e57cf80d9c9600e516cbf145a",
+        "size": 6122672
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_elf_raiders/gene brutes": {
+    "url": "b27011549412762a328a3ddf1e2acbc47410020f0a1ffaafc0e77c3f02a277cc.glb",
+    "sha256": "b27011549412762a328a3ddf1e2acbc47410020f0a1ffaafc0e77c3f02a277cc",
+    "size": 14547900,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8660101142f3fe36531abf7d29050a45f70205140019dc371c673e43b5115e81.ctex",
+          "sha256": "8660101142f3fe36531abf7d29050a45f70205140019dc371c673e43b5115e81",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4dbf20d8acf03b2c1c4cf56e4c47afe4838c26275943e10861b22bf7e5531044.ctex",
+          "sha256": "4dbf20d8acf03b2c1c4cf56e4c47afe4838c26275943e10861b22bf7e5531044",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "213fc0f7e43c485802b94f09c0efbda74d18c58fd31225a6bd5dbe183019d98b.glb",
+        "sha256": "213fc0f7e43c485802b94f09c0efbda74d18c58fd31225a6bd5dbe183019d98b",
+        "size": 10916304
+      },
+      "size_class": "large"
+    }
+  },
+  "dark_elf_raiders/gene tech master": {
+    "url": "d82be6a384d2965132ed4d2a736bc3337eb9e46bb5454661a0606655b2ab69aa.glb",
+    "sha256": "d82be6a384d2965132ed4d2a736bc3337eb9e46bb5454661a0606655b2ab69aa",
+    "size": 16933668,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "60450c21d1be3b2706b6c5b8ecc079c69852149d5c692a7442fa12af0e1db7b4.ctex",
+          "sha256": "60450c21d1be3b2706b6c5b8ecc079c69852149d5c692a7442fa12af0e1db7b4",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d44cf1020d3591949eabd367951efdf4e3f5c1e73dac1fe32b76cbd7961e653c.ctex",
+          "sha256": "d44cf1020d3591949eabd367951efdf4e3f5c1e73dac1fe32b76cbd7961e653c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d47bd4dc3aacc0620bbb08b605567797c2d12d6501f5993bba08ff1568e696c1.glb",
+        "sha256": "d47bd4dc3aacc0620bbb08b605567797c2d12d6501f5993bba08ff1568e696c1",
+        "size": 4751928
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_elf_raiders/gene warriors": {
+    "url": "178e994fdfd4b35f496fe5621616fa545cc435201160f63335e5e0e965821925.glb",
+    "sha256": "178e994fdfd4b35f496fe5621616fa545cc435201160f63335e5e0e965821925",
+    "size": 18769764,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "24e255529b5c0b3cc01adf791f2b0fca14dc914b8b308a85177bd911dd4aad20.ctex",
+          "sha256": "24e255529b5c0b3cc01adf791f2b0fca14dc914b8b308a85177bd911dd4aad20",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d7976bd2a406086ce8d1be24df047a8acf3a2bad9235c1ca5ade6fd301681448.ctex",
+          "sha256": "d7976bd2a406086ce8d1be24df047a8acf3a2bad9235c1ca5ade6fd301681448",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "93b91dce6adddafba129b186b7cd5e9bc558aa01f91c7a5bd60b6bdc42f2b003.glb",
+        "sha256": "93b91dce6adddafba129b186b7cd5e9bc558aa01f91c7a5bd60b6bdc42f2b003",
+        "size": 4847220
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_elf_raiders/heavy jetbike": {
+    "url": "77259c506a70583eebd6cb39b46a19d00d67e04f9755cf771b68ce5354a8b89e.glb",
+    "sha256": "77259c506a70583eebd6cb39b46a19d00d67e04f9755cf771b68ce5354a8b89e",
+    "size": 17344248,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "448a9ecefe9d239cd7d77dbc42045d226f1f08445db294b9b80bb18b6a88de38.ctex",
+          "sha256": "448a9ecefe9d239cd7d77dbc42045d226f1f08445db294b9b80bb18b6a88de38",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "cd1d1f06ef6d3fd78929f54d8069a361b010ec0914083146812849c83b83b548.ctex",
+          "sha256": "cd1d1f06ef6d3fd78929f54d8069a361b010ec0914083146812849c83b83b548",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "44e81678efe495df76ea207ac41a4b6829802800c465d9539f3bc6e074f8035e.glb",
+        "sha256": "44e81678efe495df76ea207ac41a4b6829802800c465d9539f3bc6e074f8035e",
+        "size": 9275348
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dark_elf_raiders/heavy skimmer": {
+    "url": "9ec948e89469a2e81b1a834433687dd80c44044a0bf3d01611118d2714e4f611.glb",
+    "sha256": "9ec948e89469a2e81b1a834433687dd80c44044a0bf3d01611118d2714e4f611",
+    "size": 16412584,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3697fb0c5f9eedc017e1a5ec11d76f1310d064fb804c08141874c45885f73662.ctex",
+          "sha256": "3697fb0c5f9eedc017e1a5ec11d76f1310d064fb804c08141874c45885f73662",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8a1552bb92651888059b90b6d41ff07fec3640ca8288790e7098f206d657bc2a.ctex",
+          "sha256": "8a1552bb92651888059b90b6d41ff07fec3640ca8288790e7098f206d657bc2a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "10b0b096a947478e385a69568f40cda551627ca6abffc15ce5a3d73f48f6d513.glb",
+        "sha256": "10b0b096a947478e385a69568f40cda551627ca6abffc15ce5a3d73f48f6d513",
+        "size": 12445912
+      },
+      "size_class": "large"
+    }
+  },
+  "dark_elf_raiders/hoverboard riders": {
+    "url": "4c46a8a1c86a4c557b93e5cb64b2f9aacddf829ccfc2169134dece0d66377c63.glb",
+    "sha256": "4c46a8a1c86a4c557b93e5cb64b2f9aacddf829ccfc2169134dece0d66377c63",
+    "size": 16296124,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9ad0427073f1071e87f41ca5575152b66929f77dfbbe6a055f78e4221aee6f64.ctex",
+          "sha256": "9ad0427073f1071e87f41ca5575152b66929f77dfbbe6a055f78e4221aee6f64",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "21dc1a37b2b80888636fd7363a8f991e83c414822c266922ad41ed169bab7da8.ctex",
+          "sha256": "21dc1a37b2b80888636fd7363a8f991e83c414822c266922ad41ed169bab7da8",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7fe985467ba4028f5ea36ed5dbd2c35bb9a02cfdb5c1242f8f0f34242c30bb79.glb",
+        "sha256": "7fe985467ba4028f5ea36ed5dbd2c35bb9a02cfdb5c1242f8f0f34242c30bb79",
+        "size": 8874820
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dark_elf_raiders/jetbike riders": {
+    "url": "bb2f86fbb8d4cd3c4eda0afe1444b8e59476dc81686c2c828688115b7aba15b3.glb",
+    "sha256": "bb2f86fbb8d4cd3c4eda0afe1444b8e59476dc81686c2c828688115b7aba15b3",
+    "size": 17215364,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ea05ce00f376448fcfb226cadb29c729abc4a85be8ee1feb4eabcec19ddac6a7.ctex",
+          "sha256": "ea05ce00f376448fcfb226cadb29c729abc4a85be8ee1feb4eabcec19ddac6a7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "79f330609652ea22718e223997674d9b762cd38b70aa57a50eef884bd1a974ac.ctex",
+          "sha256": "79f330609652ea22718e223997674d9b762cd38b70aa57a50eef884bd1a974ac",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7b79f83579a97210a6f5befe068ebd728f62c047beb468f1273b5934cf0a4ad8.glb",
+        "sha256": "7b79f83579a97210a6f5befe068ebd728f62c047beb468f1273b5934cf0a4ad8",
+        "size": 9215800
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dark_elf_raiders/leech engine": {
+    "url": "097daeff369fb93f4a376f70ca102744f3c67d5f8f445af092aa4c0704569bc1.glb",
+    "sha256": "097daeff369fb93f4a376f70ca102744f3c67d5f8f445af092aa4c0704569bc1",
+    "size": 19441900,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4d9630c05c8aba05a52b65535ac04b289cec95079878e312a027173f5c7dc954.ctex",
+          "sha256": "4d9630c05c8aba05a52b65535ac04b289cec95079878e312a027173f5c7dc954",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "054fefb27c07f853933f23bb97605b5007eae8592be2ae74b54598465337dc5f.ctex",
+          "sha256": "054fefb27c07f853933f23bb97605b5007eae8592be2ae74b54598465337dc5f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c5377887ad5522a590d9c36b39dbdb7428e70c1b67d86b64513fd4af5812dad3.glb",
+        "sha256": "c5377887ad5522a590d9c36b39dbdb7428e70c1b67d86b64513fd4af5812dad3",
+        "size": 6089892
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_elf_raiders/light skimmer": {
+    "url": "e0c54d3d1db56695e3f1091482854213ba687bf68a100735b2cae8481640a726.glb",
+    "sha256": "e0c54d3d1db56695e3f1091482854213ba687bf68a100735b2cae8481640a726",
+    "size": 16273460,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6d20ec77f40316507532fa15d70d6393c7b270a969e105538269d8976fdd8ce8.ctex",
+          "sha256": "6d20ec77f40316507532fa15d70d6393c7b270a969e105538269d8976fdd8ce8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7ba1b7de4ca03f65b356801ff81bec11241d714f3f793b243a701f9c855cf4cd.ctex",
+          "sha256": "7ba1b7de4ca03f65b356801ff81bec11241d714f3f793b243a701f9c855cf4cd",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "681c19243cc8a555b2f8bd3bc485edd79a0d26ca29cdbc19e6ab19ede1a6158d.glb",
+        "sha256": "681c19243cc8a555b2f8bd3bc485edd79a0d26ca29cdbc19e6ab19ede1a6158d",
+        "size": 4992608
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_elf_raiders/nightmares": {
+    "url": "6ca5e7f36915f04d6b849c7f1362eeef88889d304793823c3dd98f505b38e615.glb",
+    "sha256": "6ca5e7f36915f04d6b849c7f1362eeef88889d304793823c3dd98f505b38e615",
+    "size": 14831832,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0a0a9cf34c6c781ff422784d7c8001024c703165401b9ed6b08901820d70bcf2.ctex",
+          "sha256": "0a0a9cf34c6c781ff422784d7c8001024c703165401b9ed6b08901820d70bcf2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "409ce78dce808e71428b36e25e439d0c5e5c4e0a744e5584cdd834619e9a300b.ctex",
+          "sha256": "409ce78dce808e71428b36e25e439d0c5e5c4e0a744e5584cdd834619e9a300b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "fd1f215928e691c380f9304812d80b54b41a5671e25e3518301f6b7c2d03c186.glb",
+        "sha256": "fd1f215928e691c380f9304812d80b54b41a5671e25e3518301f6b7c2d03c186",
+        "size": 4400232
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_elf_raiders/raven bomber": {
+    "url": "a0afe5d7aeab6a76296692fa27119617e4852f0d35f30af12a5de9fd5d05ab30.glb",
+    "sha256": "a0afe5d7aeab6a76296692fa27119617e4852f0d35f30af12a5de9fd5d05ab30",
+    "size": 17526448,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2dda91b45c52bbcb780256dd9b2c50948a032bf2146856f46474a8030225bf2e.ctex",
+          "sha256": "2dda91b45c52bbcb780256dd9b2c50948a032bf2146856f46474a8030225bf2e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e49a37c42f2dad8e789c2ec36b197c3f59cf4320139868a89cc394a98ef3c954.ctex",
+          "sha256": "e49a37c42f2dad8e789c2ec36b197c3f59cf4320139868a89cc394a98ef3c954",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "04199c4826dd1544a83efd096fa4af33903dd9c3e7d69c4e7357327830aa4531.glb",
+        "sha256": "04199c4826dd1544a83efd096fa4af33903dd9c3e7d69c4e7357327830aa4531",
+        "size": 8958408
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dark_elf_raiders/razor fighter": {
+    "url": "458400b9aafa466915f3413c9cc7ba2af1d431601f4c606afb90237c9f01bcb6.glb",
+    "sha256": "458400b9aafa466915f3413c9cc7ba2af1d431601f4c606afb90237c9f01bcb6",
+    "size": 17264104,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "307a7c9c03925920f5df703a2d2f8fa3205d7e7c6ec8313249222878290703bd.ctex",
+          "sha256": "307a7c9c03925920f5df703a2d2f8fa3205d7e7c6ec8313249222878290703bd",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9b7625595105cac2bcbd1cbf68cc2a391463e58974f62d37b42e898da4da2b37.ctex",
+          "sha256": "9b7625595105cac2bcbd1cbf68cc2a391463e58974f62d37b42e898da4da2b37",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "bc400039f264fc6c928367c363ff59f000ee9868c785f9c8e221f9b8612cb7a2.glb",
+        "sha256": "bc400039f264fc6c928367c363ff59f000ee9868c785f9c8e221f9b8612cb7a2",
+        "size": 9142964
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dark_elf_raiders/shadow warriors": {
+    "url": "a8c2045f548b5fa00e2546874ddbc89869ae029805030de2b15ae2e28c91846b.glb",
+    "sha256": "a8c2045f548b5fa00e2546874ddbc89869ae029805030de2b15ae2e28c91846b",
+    "size": 16450900,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9df320fb8166050e1d5d88da88fec252754a334cac731c49866dbf2e895bfe04.ctex",
+          "sha256": "9df320fb8166050e1d5d88da88fec252754a334cac731c49866dbf2e895bfe04",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3b450707b4f285c5e7c90a6153b0350e82d6fc8ff30ead7030f02a8d7e441e76.ctex",
+          "sha256": "3b450707b4f285c5e7c90a6153b0350e82d6fc8ff30ead7030f02a8d7e441e76",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "65072dc576029c030d1aa088ad7e5039177db6e400f6cf4102d53a2fa9eb322c.glb",
+        "sha256": "65072dc576029c030d1aa088ad7e5039177db6e400f6cf4102d53a2fa9eb322c",
+        "size": 4641768
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_elf_raiders/true warriors": {
+    "url": "f52a0a9ddedc18a00e831b9d1db8552d1eccc369a7e56ad7e88db62be3aa28f0.glb",
+    "sha256": "f52a0a9ddedc18a00e831b9d1db8552d1eccc369a7e56ad7e88db62be3aa28f0",
+    "size": 14974888,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f4ac6d3f21039a27fc4a60c3931f09cc35508327a4348a8fe36ca47f1fee7f86.ctex",
+          "sha256": "f4ac6d3f21039a27fc4a60c3931f09cc35508327a4348a8fe36ca47f1fee7f86",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a234396e5f52f1600cf37165f6c3a93d7f532bca4f9dabce15f972d58bd95006.ctex",
+          "sha256": "a234396e5f52f1600cf37165f6c3a93d7f532bca4f9dabce15f972d58bd95006",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "faa093d928fadcf2e5e8ced4779144773772cf7a052e4b6b218f4d79eb31d39c.glb",
+        "sha256": "faa093d928fadcf2e5e8ced4779144773772cf7a052e4b6b218f4d79eb31d39c",
+        "size": 4462504
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_elf_raiders/true witches": {
+    "url": "f6ee89a05083966973a49230f975379b3315f9cd4f2845a6e0c3080d90206105.glb",
+    "sha256": "f6ee89a05083966973a49230f975379b3315f9cd4f2845a6e0c3080d90206105",
+    "size": 15845600,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6c00e89d968d328c119e647bf81e83ac5310684714b38ef5ef6c7c4807a74b76.ctex",
+          "sha256": "6c00e89d968d328c119e647bf81e83ac5310684714b38ef5ef6c7c4807a74b76",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c2985f19c55cdf525c09cf81ae8348bfcaf008390c2512e901ff5715d782d2cf.ctex",
+          "sha256": "c2985f19c55cdf525c09cf81ae8348bfcaf008390c2512e901ff5715d782d2cf",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "0830e3e38731554757eddb225c63dd46dcf310e48434b49e43f57e93a0e2d055.glb",
+        "sha256": "0830e3e38731554757eddb225c63dd46dcf310e48434b49e43f57e93a0e2d055",
+        "size": 4452584
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_elf_raiders/warriors": {
+    "url": "9a1975a7ec37b3499a6a4db8d18d49c897f710d819020fc9ae1a035b673081e4.glb",
+    "sha256": "9a1975a7ec37b3499a6a4db8d18d49c897f710d819020fc9ae1a035b673081e4",
+    "size": 14536440,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9e1837648722bd97c9171350d709853ef79f57b92d148dfd05230f9408a3da7b.ctex",
+          "sha256": "9e1837648722bd97c9171350d709853ef79f57b92d148dfd05230f9408a3da7b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7704ddac58d96dc9267c9bc2fdddc684e3fb9c2b137a3dcea24764247970a6f8.ctex",
+          "sha256": "7704ddac58d96dc9267c9bc2fdddc684e3fb9c2b137a3dcea24764247970a6f8",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "35a1e6386055e9a3b4c9d90e2cd2a8f8732ea000ea1cb5f716d4eb6196c172c6.glb",
+        "sha256": "35a1e6386055e9a3b4c9d90e2cd2a8f8732ea000ea1cb5f716d4eb6196c172c6",
+        "size": 4190632
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_elf_raiders/winged warriors": {
+    "url": "f8e3fb29e46f4a2d22e2e10f0d28aa96384777750c5590ee823f4afdff2c7597.glb",
+    "sha256": "f8e3fb29e46f4a2d22e2e10f0d28aa96384777750c5590ee823f4afdff2c7597",
+    "size": 15722056,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "04bf8f17b20b766b22a72f526612dfd8f6c98e4ff81a7a9859e88ae3e5874af6.ctex",
+          "sha256": "04bf8f17b20b766b22a72f526612dfd8f6c98e4ff81a7a9859e88ae3e5874af6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "dbf8cb7fe0c7b78729889dfd1775da1ed0140ddd48639000e7a221d281b7bba0.ctex",
+          "sha256": "dbf8cb7fe0c7b78729889dfd1775da1ed0140ddd48639000e7a221d281b7bba0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9ad5bd8b2cdab4e414082f08c7facb9cd81b1d4364839f09432fcbeaf534c4da.glb",
+        "sha256": "9ad5bd8b2cdab4e414082f08c7facb9cd81b1d4364839f09432fcbeaf534c4da",
+        "size": 4604580
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_elf_raiders/witches": {
+    "url": "154ca20f6eff4d7e1fd6e0d44ddcd9cbb4e04d112f3c2a3b52ca404d3d289042.glb",
+    "sha256": "154ca20f6eff4d7e1fd6e0d44ddcd9cbb4e04d112f3c2a3b52ca404d3d289042",
+    "size": 17408768,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c9a5ab3e40bdb1a75c56efd5fbe060ecca7cf4a3cf56f79693e2af9ef83f6c58.ctex",
+          "sha256": "c9a5ab3e40bdb1a75c56efd5fbe060ecca7cf4a3cf56f79693e2af9ef83f6c58",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3810e05f654a27fb99041aa8d89d594265fdb59a1ba1de751672da659786ce58.ctex",
+          "sha256": "3810e05f654a27fb99041aa8d89d594265fdb59a1ba1de751672da659786ce58",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "34506ca4a19b0f352a4806eb8512576d57c0ca33c73aa5654c9225c33d93a79b.glb",
+        "sha256": "34506ca4a19b0f352a4806eb8512576d57c0ca33c73aa5654c9225c33d93a79b",
+        "size": 4832828
+      },
+      "size_class": "infantry"
+    }
+  }
+}

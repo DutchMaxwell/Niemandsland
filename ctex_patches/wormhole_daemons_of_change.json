@@ -1,0 +1,548 @@
+{
+  "wormhole_daemons_of_change/ascended harbinger of change": {
+    "url": "c5ad8f17ad5139ec5c28c4e116dd4c95d6eb0b512ba3c9289b67471ebd36d3c7.glb",
+    "sha256": "c5ad8f17ad5139ec5c28c4e116dd4c95d6eb0b512ba3c9289b67471ebd36d3c7",
+    "size": 17308220,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "da5f0ba7c9d716f80e7802d0ea26c01580be34a23ef097c22a2eff92c56f0efb.ctex",
+          "sha256": "da5f0ba7c9d716f80e7802d0ea26c01580be34a23ef097c22a2eff92c56f0efb",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ff7bde06cec41276b30dbdaf81d5ec4253caa9df0116b3dfe9c68d5600d4e908.ctex",
+          "sha256": "ff7bde06cec41276b30dbdaf81d5ec4253caa9df0116b3dfe9c68d5600d4e908",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "dcad59d1d7b493e499d84d2770d5c0ce621ca6b232955319cd447b0511915e0f.glb",
+        "sha256": "dcad59d1d7b493e499d84d2770d5c0ce621ca6b232955319cd447b0511915e0f",
+        "size": 4911056
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_change/avatar of change": {
+    "url": "46b2189fa7ec5d8128b13bd782cf40c5d3afdf8dacc9749572fb87350fe5a63c.glb",
+    "sha256": "46b2189fa7ec5d8128b13bd782cf40c5d3afdf8dacc9749572fb87350fe5a63c",
+    "size": 16114884,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c24d075c02d64b7430fba0db6588c207ac4adb5608bbfc88d41f8c324bbeaf26.ctex",
+          "sha256": "c24d075c02d64b7430fba0db6588c207ac4adb5608bbfc88d41f8c324bbeaf26",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b8a6fc8b3ec3d72732cf91c1361016e6ad8f0da6633c5c778d7a323229ad35d3.ctex",
+          "sha256": "b8a6fc8b3ec3d72732cf91c1361016e6ad8f0da6633c5c778d7a323229ad35d3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "dc1bb5ed72950c47ea074da251d01481dbe9bbec310ad0ab5045f4369b3bce11.glb",
+        "sha256": "dc1bb5ed72950c47ea074da251d01481dbe9bbec310ad0ab5045f4369b3bce11",
+        "size": 11435852
+      },
+      "size_class": "large"
+    }
+  },
+  "wormhole_daemons_of_change/champion of change": {
+    "url": "a38cf9f227bf3f8f433e56f2dd1eb3d2ed015a8413b3f01cecf053b02c2d6262.glb",
+    "sha256": "a38cf9f227bf3f8f433e56f2dd1eb3d2ed015a8413b3f01cecf053b02c2d6262",
+    "size": 15275348,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "173ec2ae48ded164ea887e21311260821be27b832bd52ecedc6b66e24447189e.ctex",
+          "sha256": "173ec2ae48ded164ea887e21311260821be27b832bd52ecedc6b66e24447189e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "323dbb6f4b440ffd2868f5c9b26a6b8fbaf09f3277fb956bdd953b5d38463b7e.ctex",
+          "sha256": "323dbb6f4b440ffd2868f5c9b26a6b8fbaf09f3277fb956bdd953b5d38463b7e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "763d95ab516bfcf760d10766e1d1b5598e50245858eb2d7d6ada8408e4e54af3.glb",
+        "sha256": "763d95ab516bfcf760d10766e1d1b5598e50245858eb2d7d6ada8408e4e54af3",
+        "size": 4360028
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_change/change furies": {
+    "url": "861c5dcfd34b4e384e1df99796a7c8dee54b7c3fbb89a0aa57e81458a0487600.glb",
+    "sha256": "861c5dcfd34b4e384e1df99796a7c8dee54b7c3fbb89a0aa57e81458a0487600",
+    "size": 14756112,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "94ced42f5a8ac214e06414d9d1cf602f5da3bf8749ae26c50ffb01b65ce467c7.ctex",
+          "sha256": "94ced42f5a8ac214e06414d9d1cf602f5da3bf8749ae26c50ffb01b65ce467c7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7019d9f38e5c956910133d40db983fcf99e57d40862fa4dd6a6a50cc0f9de74c.ctex",
+          "sha256": "7019d9f38e5c956910133d40db983fcf99e57d40862fa4dd6a6a50cc0f9de74c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d38f1f0546263e4763b7202929db3aa8b08930677da2c33668e33def72c713cc.glb",
+        "sha256": "d38f1f0546263e4763b7202929db3aa8b08930677da2c33668e33def72c713cc",
+        "size": 3691032
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_change/change hexers": {
+    "url": "91472764e14397d20f40be9f1df0281465b8de2dc6c150c24cbf3b4443008fff.glb",
+    "sha256": "91472764e14397d20f40be9f1df0281465b8de2dc6c150c24cbf3b4443008fff",
+    "size": 17631388,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e04de85daa9e5dc25e35fcbb83472339f4d1a2183d156eaaab03c7c4db755845.ctex",
+          "sha256": "e04de85daa9e5dc25e35fcbb83472339f4d1a2183d156eaaab03c7c4db755845",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "36c5217f44c56eb1f587a61a02e458fe199b952e51754ca6f12569191ec580c6.ctex",
+          "sha256": "36c5217f44c56eb1f587a61a02e458fe199b952e51754ca6f12569191ec580c6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7e53c8b8a129d6f05c3ee8c3c2ab8e7eba058bce0832d1629d5126e07c0bc21a.glb",
+        "sha256": "7e53c8b8a129d6f05c3ee8c3c2ab8e7eba058bce0832d1629d5126e07c0bc21a",
+        "size": 5099140
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_change/change horrors": {
+    "url": "c0e391e885b74283595d5a741d2d6d831f4245f99c7b670503dd087617d5f7d7.glb",
+    "sha256": "c0e391e885b74283595d5a741d2d6d831f4245f99c7b670503dd087617d5f7d7",
+    "size": 16654784,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e158a265287fd950c33061fc05509af48d69f46a70a9d526c07c00efb955744b.ctex",
+          "sha256": "e158a265287fd950c33061fc05509af48d69f46a70a9d526c07c00efb955744b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d3486e9fe5a6bfe0b9360f9ab976a8025d9ad596c51879f25dcd9d9d8b723d12.ctex",
+          "sha256": "d3486e9fe5a6bfe0b9360f9ab976a8025d9ad596c51879f25dcd9d9d8b723d12",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "0a37493431f101c8a98ea9ba7ba4b95b7fa3b514d0d312998349601d8360085a.glb",
+        "sha256": "0a37493431f101c8a98ea9ba7ba4b95b7fa3b514d0d312998349601d8360085a",
+        "size": 4794112
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_change/change soul spawns": {
+    "url": "365d3ef2291cf111b127e6a712fe6ca0d075ea26f10babb1460997bc4c4a0b36.glb",
+    "sha256": "365d3ef2291cf111b127e6a712fe6ca0d075ea26f10babb1460997bc4c4a0b36",
+    "size": 16131144,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b9d945c4c9fb6b42bd695c637a309cf9443a293b9e40be0f79a9d97634c7721b.ctex",
+          "sha256": "b9d945c4c9fb6b42bd695c637a309cf9443a293b9e40be0f79a9d97634c7721b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1f8e9e73a51827bcd99f4e3e16ef20088d9bf22d6899d9f732caefec1ab0e9d9.ctex",
+          "sha256": "1f8e9e73a51827bcd99f4e3e16ef20088d9bf22d6899d9f732caefec1ab0e9d9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "29c05af3da5b46f316edfc9ee3b224aedbeff1d4b4499a5a79a3bea06f9facad.glb",
+        "sha256": "29c05af3da5b46f316edfc9ee3b224aedbeff1d4b4499a5a79a3bea06f9facad",
+        "size": 4276532
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_change/change warriors": {
+    "url": "fbe10447ee094072a750dd0c43f57ab441bbcef9cc8efcb8d73edbbf29b3b140.glb",
+    "sha256": "fbe10447ee094072a750dd0c43f57ab441bbcef9cc8efcb8d73edbbf29b3b140",
+    "size": 15965684,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "bd9103a2f444d3b9544655d54b92bf229fc33ad2c06c9ae371fbfab6c0e9e167.ctex",
+          "sha256": "bd9103a2f444d3b9544655d54b92bf229fc33ad2c06c9ae371fbfab6c0e9e167",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "19a5054b7b315e1538a216f8e632d55a7d1babb691fe870092d47e965660a066.ctex",
+          "sha256": "19a5054b7b315e1538a216f8e632d55a7d1babb691fe870092d47e965660a066",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "769df64751301374fb6d9729816d15f98a39a70e1404c8eaeb381a0104df1131.glb",
+        "sha256": "769df64751301374fb6d9729816d15f98a39a70e1404c8eaeb381a0104df1131",
+        "size": 4126344
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_change/changelings": {
+    "url": "4d6cc9003e63e3e66eeb9c6f03ac08d6a71e81a3e0be8aec552a09741d2100db.glb",
+    "sha256": "4d6cc9003e63e3e66eeb9c6f03ac08d6a71e81a3e0be8aec552a09741d2100db",
+    "size": 12990884,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "61a646e14191b361ecd1d090723112fe15b564b1c8b91cbe20795a7e74d7dbc8.ctex",
+          "sha256": "61a646e14191b361ecd1d090723112fe15b564b1c8b91cbe20795a7e74d7dbc8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8f8b6471597cc5e5469ae55439a7066afc336537db2498928f1db0b6f665319e.ctex",
+          "sha256": "8f8b6471597cc5e5469ae55439a7066afc336537db2498928f1db0b6f665319e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a333454a92d3b733155a74637b1ad1e323d202a0a860c22a3ec7c50dbfc4c297.glb",
+        "sha256": "a333454a92d3b733155a74637b1ad1e323d202a0a860c22a3ec7c50dbfc4c297",
+        "size": 3360440
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_change/eonflux": {
+    "url": "3f384cf00a03f10de13b0b1e1de1cea3440ef9f4ef5b9564b96a8c23c4e8a6e7.glb",
+    "sha256": "3f384cf00a03f10de13b0b1e1de1cea3440ef9f4ef5b9564b96a8c23c4e8a6e7",
+    "size": 17900804,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "029100f2e9c3f7bf268b29c73b3a04aee698650a8cbc05ef741aa33d68cfdcf6.ctex",
+          "sha256": "029100f2e9c3f7bf268b29c73b3a04aee698650a8cbc05ef741aa33d68cfdcf6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "53b12148db59b3b26667e05c47eb452984a8a9e793e4bade756287c7e84fd09e.ctex",
+          "sha256": "53b12148db59b3b26667e05c47eb452984a8a9e793e4bade756287c7e84fd09e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "149811c6a2b2f79a196f3bea0ae49289fcc7485d5abd86f8d4bdba78f5fa266c.glb",
+        "sha256": "149811c6a2b2f79a196f3bea0ae49289fcc7485d5abd86f8d4bdba78f5fa266c",
+        "size": 5168008
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_change/fury champion of change": {
+    "url": "a362bd7a473f8f4f175ec5a22b10b524b6459943f07aee6f5dfdb22f44520d92.glb",
+    "sha256": "a362bd7a473f8f4f175ec5a22b10b524b6459943f07aee6f5dfdb22f44520d92",
+    "size": 16378812,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "1fad372dfa536452bd148019e0eed65b8839d920cfe5775c96635f07fafee82c.ctex",
+          "sha256": "1fad372dfa536452bd148019e0eed65b8839d920cfe5775c96635f07fafee82c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4e12b63963d5a7c49bd5f8bdb72d539ea262aeb0ebc51bbd0f2515cdfa122617.ctex",
+          "sha256": "4e12b63963d5a7c49bd5f8bdb72d539ea262aeb0ebc51bbd0f2515cdfa122617",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1ef8a7f8f50305dc34d8e7d5cfec418f1770edef9c067a2702de37e57ac5e3e5.glb",
+        "sha256": "1ef8a7f8f50305dc34d8e7d5cfec418f1770edef9c067a2702de37e57ac5e3e5",
+        "size": 4342488
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_change/great scorcher": {
+    "url": "f3ee7556f33acbf678e7c275316636921fc6428372764975a551aa94b7a3f5b6.glb",
+    "sha256": "f3ee7556f33acbf678e7c275316636921fc6428372764975a551aa94b7a3f5b6",
+    "size": 16156184,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ca0002f1b8d1b362cb33fa84080b3928dd0b01b79ad0057ceb9c921bc27c83e5.ctex",
+          "sha256": "ca0002f1b8d1b362cb33fa84080b3928dd0b01b79ad0057ceb9c921bc27c83e5",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5aef220d7fe8078e097e31c63d5a02744e125188fbc01104f4d8a8729b888956.ctex",
+          "sha256": "5aef220d7fe8078e097e31c63d5a02744e125188fbc01104f4d8a8729b888956",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7f280cb4286a46cb4155952db3a77a56d18a423089b39e8a60256d8b0390ffb1.glb",
+        "sha256": "7f280cb4286a46cb4155952db3a77a56d18a423089b39e8a60256d8b0390ffb1",
+        "size": 11535964
+      },
+      "size_class": "large"
+    }
+  },
+  "wormhole_daemons_of_change/harbinger of change": {
+    "url": "18ef0a1ee8a27bb441846bfe05ade5877756ad1654336bb5a8e43ea9b58b6244.glb",
+    "sha256": "18ef0a1ee8a27bb441846bfe05ade5877756ad1654336bb5a8e43ea9b58b6244",
+    "size": 14424720,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9b92dfd1ab4294da72e72dadbbbe2002902240a121133d93e2106ebe15fc1185.ctex",
+          "sha256": "9b92dfd1ab4294da72e72dadbbbe2002902240a121133d93e2106ebe15fc1185",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7157ccfef5ecfcdbe63e2962f1ed401b0cb5726546d6fcc8dec976f3699a008c.ctex",
+          "sha256": "7157ccfef5ecfcdbe63e2962f1ed401b0cb5726546d6fcc8dec976f3699a008c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f8f5f7bc92fd5577352467959b463110805a89288116d0d73a5b098af1a8524f.glb",
+        "sha256": "f8f5f7bc92fd5577352467959b463110805a89288116d0d73a5b098af1a8524f",
+        "size": 3977832
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_change/hex furies": {
+    "url": "3b3dd543c74eb7440a041be65e3457051e66ec215782d1347d426f286a12fc24.glb",
+    "sha256": "3b3dd543c74eb7440a041be65e3457051e66ec215782d1347d426f286a12fc24",
+    "size": 15037356,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "04f07bacdde152c9abcac14dcd73ad59150212f92fdf047caa6859d987651a8a.ctex",
+          "sha256": "04f07bacdde152c9abcac14dcd73ad59150212f92fdf047caa6859d987651a8a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2c4a1d2bdc1d105efdc231229663081633c71bd9f5a34184046865a3122ac9a0.ctex",
+          "sha256": "2c4a1d2bdc1d105efdc231229663081633c71bd9f5a34184046865a3122ac9a0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "59c0c0d5c86a450546cef226eb08caff45090559074e1c4821177c01d3208277.glb",
+        "sha256": "59c0c0d5c86a450546cef226eb08caff45090559074e1c4821177c01d3208277",
+        "size": 4100372
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_change/horror champion of change": {
+    "url": "b332e6ef4214fcfdfdba6d1d8f15cde4daaf70d99cc88730716fff0ca488d894.glb",
+    "sha256": "b332e6ef4214fcfdfdba6d1d8f15cde4daaf70d99cc88730716fff0ca488d894",
+    "size": 16222768,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "313d373dd808b22d3469e61f3282973245d904fa9bc9862fce738ed22a4bb944.ctex",
+          "sha256": "313d373dd808b22d3469e61f3282973245d904fa9bc9862fce738ed22a4bb944",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2ea9a4c33a012a47d75a106a73e43ab2679e199bd3580f8ebec0f30609be5c55.ctex",
+          "sha256": "2ea9a4c33a012a47d75a106a73e43ab2679e199bd3580f8ebec0f30609be5c55",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7775d8393e068ae83123bdf18b4ae29a340bb89fd9844af5320d6bfe0d0c2b3d.glb",
+        "sha256": "7775d8393e068ae83123bdf18b4ae29a340bb89fd9844af5320d6bfe0d0c2b3d",
+        "size": 4469196
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_change/lesser change horrors": {
+    "url": "c77ccb872867ca3d962716abc5a9e7ba3fe58b4da88b868edeb932b24db617a2.glb",
+    "sha256": "c77ccb872867ca3d962716abc5a9e7ba3fe58b4da88b868edeb932b24db617a2",
+    "size": 15538844,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f9e78c8aac4f16d76b346c457d19741dadf4853225a887ccd0bfb32fc63684fa.ctex",
+          "sha256": "f9e78c8aac4f16d76b346c457d19741dadf4853225a887ccd0bfb32fc63684fa",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3a963c45c052a6f0c7c36ea4a7a6a995efb9d8e61abada6f25ef63107e4ef01e.ctex",
+          "sha256": "3a963c45c052a6f0c7c36ea4a7a6a995efb9d8e61abada6f25ef63107e4ef01e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f3c8dce340e5f58a45862cfa44ffa75ca8da69089ed0d0c63c051318727f1851.glb",
+        "sha256": "f3c8dce340e5f58a45862cfa44ffa75ca8da69089ed0d0c63c051318727f1851",
+        "size": 4192872
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_change/scorchers": {
+    "url": "07adae674afa86e2e51ba68081e883abeba33c1af8040a0ec367d055016708a2.glb",
+    "sha256": "07adae674afa86e2e51ba68081e883abeba33c1af8040a0ec367d055016708a2",
+    "size": 17028804,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "303df1c080152d4f0cc3753005c2c6186c321d0d90b23784a13a677176e496ad.ctex",
+          "sha256": "303df1c080152d4f0cc3753005c2c6186c321d0d90b23784a13a677176e496ad",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "db6e929981edeeac0867e08c2526626df6b383891cf126743911f8195600f517.ctex",
+          "sha256": "db6e929981edeeac0867e08c2526626df6b383891cf126743911f8195600f517",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "885e1546d9889e75ddbf75a5e58ba712545acec7b76a0237028fe3e523a9ce3e.glb",
+        "sha256": "885e1546d9889e75ddbf75a5e58ba712545acec7b76a0237028fe3e523a9ce3e",
+        "size": 4773580
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_change/screecher chariot": {
+    "url": "16d15a06088c6b01ca098db6caffca6cdfd05ff489e21f790deca7eea17be5c4.glb",
+    "sha256": "16d15a06088c6b01ca098db6caffca6cdfd05ff489e21f790deca7eea17be5c4",
+    "size": 15864032,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "be47833a3a47258d39c71518df34daae246efbd3c387673174e2ff89c6770e09.ctex",
+          "sha256": "be47833a3a47258d39c71518df34daae246efbd3c387673174e2ff89c6770e09",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f4db6c8c405e075fbd35b6df90fe4148f02af5dae9a5d4b2ac6874cfc9e5ebed.ctex",
+          "sha256": "f4db6c8c405e075fbd35b6df90fe4148f02af5dae9a5d4b2ac6874cfc9e5ebed",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "94d521d6c4cd86c3b4aa5174f6d8be59c959ae37cdcf0e039043a6f472bff76f.glb",
+        "sha256": "94d521d6c4cd86c3b4aa5174f6d8be59c959ae37cdcf0e039043a6f472bff76f",
+        "size": 8430664
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "wormhole_daemons_of_change/screechers": {
+    "url": "4861a6653fe351737eeb1ba176266740f280a9c5138e190d997ee6a6b03eb21d.glb",
+    "sha256": "4861a6653fe351737eeb1ba176266740f280a9c5138e190d997ee6a6b03eb21d",
+    "size": 14731352,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "163700a0e0d0ee74ce835904451d5aa202eb20c1ab856788c322222612d55636.ctex",
+          "sha256": "163700a0e0d0ee74ce835904451d5aa202eb20c1ab856788c322222612d55636",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "dd40d196a2ec9a5a8fe2551525b7dca4b6d3f933aff0be5b6075fbf3300b8b98.ctex",
+          "sha256": "dd40d196a2ec9a5a8fe2551525b7dca4b6d3f933aff0be5b6075fbf3300b8b98",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c13c2e7ee6e1abb6afc719c28cf42a55050afa39932667fea93572c01f269c93.glb",
+        "sha256": "c13c2e7ee6e1abb6afc719c28cf42a55050afa39932667fea93572c01f269c93",
+        "size": 3947756
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_change/soul daemon of change": {
+    "url": "cf00d900400aa438b0058657b5cdbeaf3dab0feeb3dee1d6b464b496c61680df.glb",
+    "sha256": "cf00d900400aa438b0058657b5cdbeaf3dab0feeb3dee1d6b464b496c61680df",
+    "size": 15869212,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "24178b92cd2e97993598320bc95802ae5c683a73ae92f4a4f95c6ce1d78ae725.ctex",
+          "sha256": "24178b92cd2e97993598320bc95802ae5c683a73ae92f4a4f95c6ce1d78ae725",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "332dd7a305b425f3378f044418018977980f503e577bbe2f8ffa2dad3382ace6.ctex",
+          "sha256": "332dd7a305b425f3378f044418018977980f503e577bbe2f8ffa2dad3382ace6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5bb21e2ae0ac9e1419973950cdf00a0e19b1a32212d10da38ba3eeb53b9aa3c1.glb",
+        "sha256": "5bb21e2ae0ac9e1419973950cdf00a0e19b1a32212d10da38ba3eeb53b9aa3c1",
+        "size": 4723636
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_change/swiftclaw": {
+    "url": "7da58a2be0631bada5fcd8847ed09a56982ebfd8b1e665a4cebf7d39f3e33f7b.glb",
+    "sha256": "7da58a2be0631bada5fcd8847ed09a56982ebfd8b1e665a4cebf7d39f3e33f7b",
+    "size": 20820440,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9f86d8d44817872d707a68a1137bfed50c1e2e1bd66a0b35b75d24e8946a6f30.ctex",
+          "sha256": "9f86d8d44817872d707a68a1137bfed50c1e2e1bd66a0b35b75d24e8946a6f30",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "75e90d44fd1f5576eff69da49c76afe619d2ea046fa8a497c7cf1532cda2c871.ctex",
+          "sha256": "75e90d44fd1f5576eff69da49c76afe619d2ea046fa8a497c7cf1532cda2c871",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "93c42ce65248c3ff61583dfdd69e363094e7e10c9af345f23f1c533c7a60581b.glb",
+        "sha256": "93c42ce65248c3ff61583dfdd69e363094e7e10c9af345f23f1c533c7a60581b",
+        "size": 4868732
+      },
+      "size_class": "infantry"
+    }
+  }
+}

@@ -1,0 +1,652 @@
+{
+  "change_disciples/change_apc": {
+    "url": "0427a78430c8b0b8e212b63e717d501caa3370001d0e4c62d9fd3363ef0ab669.glb",
+    "sha256": "0427a78430c8b0b8e212b63e717d501caa3370001d0e4c62d9fd3363ef0ab669",
+    "size": 18863088,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "42ae18ac4da1bb62ac1ee5aac0b8ca16c0dc1602f1dfc53f374a62651ff10a34.ctex",
+          "sha256": "42ae18ac4da1bb62ac1ee5aac0b8ca16c0dc1602f1dfc53f374a62651ff10a34",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f3fadc636371839df1cdb2565b1fde5079d1101528816081a2f37cf3d3cd2ca4.ctex",
+          "sha256": "f3fadc636371839df1cdb2565b1fde5079d1101528816081a2f37cf3d3cd2ca4",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "4863e3c8d7e6c2cccec055499930e4f763074aa28d5b86f7c9af12c3f1f45cac.glb",
+        "sha256": "4863e3c8d7e6c2cccec055499930e4f763074aa28d5b86f7c9af12c3f1f45cac",
+        "size": 10432688
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "change_disciples/change_birdman_champion": {
+    "url": "5bd012462e779935b9497f4bfdbddd4e01d683883e66a6aaac4b22853695dd09.glb",
+    "sha256": "5bd012462e779935b9497f4bfdbddd4e01d683883e66a6aaac4b22853695dd09",
+    "size": 14532172,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "efba1a5b68d2f6b3474accfb817686e633f1657f83e4f3e3d54fc1477df7151b.ctex",
+          "sha256": "efba1a5b68d2f6b3474accfb817686e633f1657f83e4f3e3d54fc1477df7151b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8494d5c75a52505244a5c9f994ce52e14654ee66c8ee4ac9a817d3bd8424668f.ctex",
+          "sha256": "8494d5c75a52505244a5c9f994ce52e14654ee66c8ee4ac9a817d3bd8424668f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "eb3737e81ac73deda23508f02d86271a4f933799697e8a2527a6a4a299e57bbc.glb",
+        "sha256": "eb3737e81ac73deda23508f02d86271a4f933799697e8a2527a6a4a299e57bbc",
+        "size": 4227396
+      },
+      "size_class": "infantry"
+    }
+  },
+  "change_disciples/change_birdmen": {
+    "url": "e01d11021df5c761400477c3998c40ac8a628e7442a6ff4fa0524266e88001e4.glb",
+    "sha256": "e01d11021df5c761400477c3998c40ac8a628e7442a6ff4fa0524266e88001e4",
+    "size": 13673976,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4e0c6ffbc0c1d84f62e534c98ef9d50427d452eb556a17004d7e313d8c71f75f.ctex",
+          "sha256": "4e0c6ffbc0c1d84f62e534c98ef9d50427d452eb556a17004d7e313d8c71f75f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f410e6550bed146936164f190a8112806a33e659cd88c0d895772cb950055db7.ctex",
+          "sha256": "f410e6550bed146936164f190a8112806a33e659cd88c0d895772cb950055db7",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5da8b6ec506c2fdcc629ae531b9dc8a6a2e8c620c505b8b180e06a3718952a3f.glb",
+        "sha256": "5da8b6ec506c2fdcc629ae531b9dc8a6a2e8c620c505b8b180e06a3718952a3f",
+        "size": 3876236
+      },
+      "size_class": "infantry"
+    }
+  },
+  "change_disciples/change_birdmen_disc_riders": {
+    "url": "9854fba51e536535579770e896945ecdf7588764212dd3d119790b5e7dbe6615.glb",
+    "sha256": "9854fba51e536535579770e896945ecdf7588764212dd3d119790b5e7dbe6615",
+    "size": 15601252,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7ea41aeff3f6ce1db1d25a34c580553bc398f5093b91477474f8949fc3a994c8.ctex",
+          "sha256": "7ea41aeff3f6ce1db1d25a34c580553bc398f5093b91477474f8949fc3a994c8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a255e17201685786b6c5a987cdde6f5a39f6a0775a0097ef6969c2e42c163a6d.ctex",
+          "sha256": "a255e17201685786b6c5a987cdde6f5a39f6a0775a0097ef6969c2e42c163a6d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "47e4070e2dfec1adc2d4d77c74af7e5de8745eac176a14a068c05380669fdc95.glb",
+        "sha256": "47e4070e2dfec1adc2d4d77c74af7e5de8745eac176a14a068c05380669fdc95",
+        "size": 4099632
+      },
+      "size_class": "infantry"
+    }
+  },
+  "change_disciples/change_brothers": {
+    "url": "b1a5bb652743f2881ee6770dfaf0e8d3f26d49fda2e39be4cae97e07be948bb6.glb",
+    "sha256": "b1a5bb652743f2881ee6770dfaf0e8d3f26d49fda2e39be4cae97e07be948bb6",
+    "size": 14397476,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6ec998c820d236d27c807f81f91dd4354efd38afd5c1cc2cd95d86095c98b721.ctex",
+          "sha256": "6ec998c820d236d27c807f81f91dd4354efd38afd5c1cc2cd95d86095c98b721",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ebccd8b3cb94c8089b0c5e9ec5f5fc7f87afcec540eb91252bca347799f3ad05.ctex",
+          "sha256": "ebccd8b3cb94c8089b0c5e9ec5f5fc7f87afcec540eb91252bca347799f3ad05",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ede2b2bbbadaa6287c8bb6a546c829356d04ccdb995b8b8c7747150aed1a8cde.glb",
+        "sha256": "ede2b2bbbadaa6287c8bb6a546c829356d04ccdb995b8b8c7747150aed1a8cde",
+        "size": 4104212
+      },
+      "size_class": "infantry"
+    }
+  },
+  "change_disciples/change_champion": {
+    "url": "6ba2ca2a5904b0a65e82bc4b8a92fcc7949238b2bb6798b300d7a68fdcbc869a.glb",
+    "sha256": "6ba2ca2a5904b0a65e82bc4b8a92fcc7949238b2bb6798b300d7a68fdcbc869a",
+    "size": 15296204,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ddd7da65d2fb6a55847e0d1da8b6c100b1b3deaffab95516d2292a4f48ce0509.ctex",
+          "sha256": "ddd7da65d2fb6a55847e0d1da8b6c100b1b3deaffab95516d2292a4f48ce0509",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ffc655356264a21d4e6ad5c881d41d2cf23e3fd5cabbd5c7ea8b19ec0c71219b.ctex",
+          "sha256": "ffc655356264a21d4e6ad5c881d41d2cf23e3fd5cabbd5c7ea8b19ec0c71219b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "23cbd99a5a7e7712df06a034c40f79ef47e65d269d08354ce0e36095ab0974e8.glb",
+        "sha256": "23cbd99a5a7e7712df06a034c40f79ef47e65d269d08354ce0e36095ab0974e8",
+        "size": 4526284
+      },
+      "size_class": "infantry"
+    }
+  },
+  "change_disciples/change_crab_walker": {
+    "url": "4ab2072180e0a9543aaedf20685de4b798292563a604f85bd2d97cf07ba1da27.glb",
+    "sha256": "4ab2072180e0a9543aaedf20685de4b798292563a604f85bd2d97cf07ba1da27",
+    "size": 15365148,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9530fe06d4a8b8194d66d383ee16d2bf9c0bae18ef57f6f7ea43f48678e11983.ctex",
+          "sha256": "9530fe06d4a8b8194d66d383ee16d2bf9c0bae18ef57f6f7ea43f48678e11983",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "223a0ef694fde9da36aec8f3867d0ecacbeaf67268cd0858ad785f5a25242728.ctex",
+          "sha256": "223a0ef694fde9da36aec8f3867d0ecacbeaf67268cd0858ad785f5a25242728",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1e66a76fa32f18ca20b09a11be4955807db2dac3ec43b303800706d5b309c76b.glb",
+        "sha256": "1e66a76fa32f18ca20b09a11be4955807db2dac3ec43b303800706d5b309c76b",
+        "size": 8426908
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "change_disciples/change_cultist_champion": {
+    "url": "1c2030b707e5902a6ed49541f1c41418ad83e194b73c34fd2628ab1b8abc5626.glb",
+    "sha256": "1c2030b707e5902a6ed49541f1c41418ad83e194b73c34fd2628ab1b8abc5626",
+    "size": 14941204,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "053176256a4458ce8c93a107f9fdec6f2cf49171867672f5acdf28b813124a80.ctex",
+          "sha256": "053176256a4458ce8c93a107f9fdec6f2cf49171867672f5acdf28b813124a80",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "eaa60db127753d02b3da3b25eef9015fe6324faccf0fc38b1b794761bfbbd644.ctex",
+          "sha256": "eaa60db127753d02b3da3b25eef9015fe6324faccf0fc38b1b794761bfbbd644",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ef337e0f907475422cec2e6c3c2b524dff16a6533a44657495018ed2910fa544.glb",
+        "sha256": "ef337e0f907475422cec2e6c3c2b524dff16a6533a44657495018ed2910fa544",
+        "size": 4402800
+      },
+      "size_class": "infantry"
+    }
+  },
+  "change_disciples/change_cultists": {
+    "url": "169cc54843c5195696f23bedcf631aee59edc58bf39d6c87e432cb027e0f890e.glb",
+    "sha256": "169cc54843c5195696f23bedcf631aee59edc58bf39d6c87e432cb027e0f890e",
+    "size": 15735736,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "fa5faf20b27c77c2a2e918ed7eb0b501591a3f3ad3126104ccf852b71d2bfcf6.ctex",
+          "sha256": "fa5faf20b27c77c2a2e918ed7eb0b501591a3f3ad3126104ccf852b71d2bfcf6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "30fcebf5dcc70a6ab2585db9a5706d8f19a182309270bdc4675c8e82606ff471.ctex",
+          "sha256": "30fcebf5dcc70a6ab2585db9a5706d8f19a182309270bdc4675c8e82606ff471",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "127037dbdf2de9c9f033fe9c55ce1a00009b3ad1e64342a631c0d625226ad570.glb",
+        "sha256": "127037dbdf2de9c9f033fe9c55ce1a00009b3ad1e64342a631c0d625226ad570",
+        "size": 4715736
+      },
+      "size_class": "infantry"
+    }
+  },
+  "change_disciples/change_destroyer_champion": {
+    "url": "13ddb27af0ad47e47938383cf87af142280e779e34e3b5fd49a5306da3f7b3ec.glb",
+    "sha256": "13ddb27af0ad47e47938383cf87af142280e779e34e3b5fd49a5306da3f7b3ec",
+    "size": 14462204,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0015ac44b34e532135742bda4904752412b705e39cd83d51a8b742aa835ec557.ctex",
+          "sha256": "0015ac44b34e532135742bda4904752412b705e39cd83d51a8b742aa835ec557",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a3bcac4f2a1eed41ed9490551c51bc0eb94fa5c69ae1c5008875554fcf097d9b.ctex",
+          "sha256": "a3bcac4f2a1eed41ed9490551c51bc0eb94fa5c69ae1c5008875554fcf097d9b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "41c66b91a465cf7cf443691c3de995b48f43de4d143b6d436d85310c92ebf533.glb",
+        "sha256": "41c66b91a465cf7cf443691c3de995b48f43de4d143b6d436d85310c92ebf533",
+        "size": 4102740
+      },
+      "size_class": "infantry"
+    }
+  },
+  "change_disciples/change_destroyers": {
+    "url": "dd88b3ee711b586f0e8936084b7e1591a627dc6a1f23a8a62dfb5bcd6fd85cc5.glb",
+    "sha256": "dd88b3ee711b586f0e8936084b7e1591a627dc6a1f23a8a62dfb5bcd6fd85cc5",
+    "size": 14529348,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "78f3e7dbe14e84554ab20aacd25e7f48821805130590ca9bd914489962d22483.ctex",
+          "sha256": "78f3e7dbe14e84554ab20aacd25e7f48821805130590ca9bd914489962d22483",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2b916aabd2c77f7a9107d012c269a566b3a8a29ee3b67b9c3d182b6f0ad6c319.ctex",
+          "sha256": "2b916aabd2c77f7a9107d012c269a566b3a8a29ee3b67b9c3d182b6f0ad6c319",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "da987207b934cc1606e16469aedd93f2ae26d87a2ba39b796723c4e276cd1341.glb",
+        "sha256": "da987207b934cc1606e16469aedd93f2ae26d87a2ba39b796723c4e276cd1341",
+        "size": 4095860
+      },
+      "size_class": "infantry"
+    }
+  },
+  "change_disciples/change_dragon": {
+    "url": "896befb6921215e3166e92fbc7ce156bdb241ca0cc1251d9d187424b59ae0e2c.glb",
+    "sha256": "896befb6921215e3166e92fbc7ce156bdb241ca0cc1251d9d187424b59ae0e2c",
+    "size": 16515368,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7a8c67bdf93ed03b2ec992a38b0d8b1e076962094cd4229e8be16ece49d7209b.ctex",
+          "sha256": "7a8c67bdf93ed03b2ec992a38b0d8b1e076962094cd4229e8be16ece49d7209b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2ab8d95f8dd380aca627d6a216b2f9ca5a06d6b89f11c1ab14522e1d8d0c626b.ctex",
+          "sha256": "2ab8d95f8dd380aca627d6a216b2f9ca5a06d6b89f11c1ab14522e1d8d0c626b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b4a6731f6ca68b8d9e69b4d7ba8aea7b3d79c6e2dbf2c0aa6ffbf69235610a38.glb",
+        "sha256": "b4a6731f6ca68b8d9e69b4d7ba8aea7b3d79c6e2dbf2c0aa6ffbf69235610a38",
+        "size": 11723820
+      },
+      "size_class": "large"
+    }
+  },
+  "change_disciples/change_greater_mutated": {
+    "url": "70aaf054763f1e9265e7f296a6c07046ab30d2af3352099e5f18eda568165962.glb",
+    "sha256": "70aaf054763f1e9265e7f296a6c07046ab30d2af3352099e5f18eda568165962",
+    "size": 16198912,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "949bd4611176de99e721b8525a35c0447a6b686a3f1dd553f8e390c9184ea8ff.ctex",
+          "sha256": "949bd4611176de99e721b8525a35c0447a6b686a3f1dd553f8e390c9184ea8ff",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "88aa0c9b609b6dbf88aa56390617f001b9e29d6e2462a1e145f9d12cc724e4f6.ctex",
+          "sha256": "88aa0c9b609b6dbf88aa56390617f001b9e29d6e2462a1e145f9d12cc724e4f6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "fb249d51e0500ba6ec0115ad178966fb47737e263054369807197a23044dad50.glb",
+        "sha256": "fb249d51e0500ba6ec0115ad178966fb47737e263054369807197a23044dad50",
+        "size": 12021172
+      },
+      "size_class": "large"
+    }
+  },
+  "change_disciples/change_heavy_tank": {
+    "url": "c0fc9316553a46c4afc6f95d98a4235eaa658c789b2454b9e6884d06b973b0c0.glb",
+    "sha256": "c0fc9316553a46c4afc6f95d98a4235eaa658c789b2454b9e6884d06b973b0c0",
+    "size": 16120600,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "51f6d93d8520e74ffd8cf14fcdd21af28bdab8b09b03d8f6b29285a0a0e647d3.ctex",
+          "sha256": "51f6d93d8520e74ffd8cf14fcdd21af28bdab8b09b03d8f6b29285a0a0e647d3",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e2621c6da96223e392ca0732904634169aa6c78d5e9da0a84fcef2bc5347466d.ctex",
+          "sha256": "e2621c6da96223e392ca0732904634169aa6c78d5e9da0a84fcef2bc5347466d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9fdf3ddadd0dbb67b393dba007751bd06032927c8f8d12234916a88c46c4adfa.glb",
+        "sha256": "9fdf3ddadd0dbb67b393dba007751bd06032927c8f8d12234916a88c46c4adfa",
+        "size": 9154016
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "change_disciples/change_infernal_brute": {
+    "url": "8a9f48f4c5e05cc4bed769732a9d733c2f817831c41ca4f6f6bbfb6bb6b02177.glb",
+    "sha256": "8a9f48f4c5e05cc4bed769732a9d733c2f817831c41ca4f6f6bbfb6bb6b02177",
+    "size": 15670576,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "df15bb6faf19c1154886387894ce1aecd1f7a8b36376b25c598d76a71e61658a.ctex",
+          "sha256": "df15bb6faf19c1154886387894ce1aecd1f7a8b36376b25c598d76a71e61658a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "107605601a6cfa3b8689ce07ae42a627cd8684ae8ca9b707ef70f8057acc2be0.ctex",
+          "sha256": "107605601a6cfa3b8689ce07ae42a627cd8684ae8ca9b707ef70f8057acc2be0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b84e65d4eadc6d09d93e4ced663bca8b44ded3c291ad3484eb0882199d571ce1.glb",
+        "sha256": "b84e65d4eadc6d09d93e4ced663bca8b44ded3c291ad3484eb0882199d571ce1",
+        "size": 12121764
+      },
+      "size_class": "large"
+    }
+  },
+  "change_disciples/change_mech_fiend": {
+    "url": "312366f0554fc4cebc6532e113ab24e74f1b44537d83843a1cc0b80156ff1965.glb",
+    "sha256": "312366f0554fc4cebc6532e113ab24e74f1b44537d83843a1cc0b80156ff1965",
+    "size": 15729440,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "29624a8b8413e7aa30823ac9922ee1d86c084f8b95743bc78e92201e287fc293.ctex",
+          "sha256": "29624a8b8413e7aa30823ac9922ee1d86c084f8b95743bc78e92201e287fc293",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a6cbaed17da4151af3d739fac903acdc32bf7b11224a0d1fcfee83351ccdd322.ctex",
+          "sha256": "a6cbaed17da4151af3d739fac903acdc32bf7b11224a0d1fcfee83351ccdd322",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a139493e5015e76325bf4b2babd7e9acb1061dce5475a0278aa1d2b1ac8fe4b0.glb",
+        "sha256": "a139493e5015e76325bf4b2babd7e9acb1061dce5475a0278aa1d2b1ac8fe4b0",
+        "size": 11403748
+      },
+      "size_class": "large"
+    }
+  },
+  "change_disciples/change_mutated_brothers": {
+    "url": "d895295f8add0d36be363d2716b2d3e00680781acfb4a1c54733e8c60d3f32aa.glb",
+    "sha256": "d895295f8add0d36be363d2716b2d3e00680781acfb4a1c54733e8c60d3f32aa",
+    "size": 16510184,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "291526da5976ec958ff40ef74c06796d83c60d1573276064cde389e28b95c1af.ctex",
+          "sha256": "291526da5976ec958ff40ef74c06796d83c60d1573276064cde389e28b95c1af",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f92fdb37bf9d8fc87e6a27b21b94b8040b40974bc14eafd39a9124e7bf202165.ctex",
+          "sha256": "f92fdb37bf9d8fc87e6a27b21b94b8040b40974bc14eafd39a9124e7bf202165",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "be602d1e4ebdb3cef828310a5b3f6617ab3b0029a89786256edec6ec62363c42.glb",
+        "sha256": "be602d1e4ebdb3cef828310a5b3f6617ab3b0029a89786256edec6ec62363c42",
+        "size": 4809008
+      },
+      "size_class": "infantry"
+    }
+  },
+  "change_disciples/change_mutated_cultists": {
+    "url": "ab628fd7ba671886fce16dade72ac4bfc47e05251c76dca61e1bea8c90cf5c29.glb",
+    "sha256": "ab628fd7ba671886fce16dade72ac4bfc47e05251c76dca61e1bea8c90cf5c29",
+    "size": 15716836,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9df855ce90514cd9723836de04a037ddbf1edc45da62b07a2685f048c99bd514.ctex",
+          "sha256": "9df855ce90514cd9723836de04a037ddbf1edc45da62b07a2685f048c99bd514",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0ff87aee2624f422e51546ce887b782fdbd56182225175738f9782d642a77536.ctex",
+          "sha256": "0ff87aee2624f422e51546ce887b782fdbd56182225175738f9782d642a77536",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a9b56bff2e896996be56e516b416843b9111309c59289f004fd21aa05423fc6f.glb",
+        "sha256": "a9b56bff2e896996be56e516b416843b9111309c59289f004fd21aa05423fc6f",
+        "size": 4581532
+      },
+      "size_class": "infantry"
+    }
+  },
+  "change_disciples/change_mutated_destroyer": {
+    "url": "14ea671c5e08e99545d1e719b0672e5b8247211b0993e01bbbb89e874ff419d6.glb",
+    "sha256": "14ea671c5e08e99545d1e719b0672e5b8247211b0993e01bbbb89e874ff419d6",
+    "size": 15501400,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f1cf544f46072fd0f75ad927de78c36a480c260e0531a069c262089e2d17aad2.ctex",
+          "sha256": "f1cf544f46072fd0f75ad927de78c36a480c260e0531a069c262089e2d17aad2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "715c2f3ac3a9f8bd3a106e88f050cbe81aa1b161abb716929fbb593536c5ffac.ctex",
+          "sha256": "715c2f3ac3a9f8bd3a106e88f050cbe81aa1b161abb716929fbb593536c5ffac",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6cfbba638800c39c848a9abfe0091c1524a1095ce892b657f2fb9553a1eb698e.glb",
+        "sha256": "6cfbba638800c39c848a9abfe0091c1524a1095ce892b657f2fb9553a1eb698e",
+        "size": 4443088
+      },
+      "size_class": "infantry"
+    }
+  },
+  "change_disciples/change_sentinel_walker": {
+    "url": "b010158d12989103cfd2dd8644750adbf6f4446b88c566689ffd4ae80135e4fa.glb",
+    "sha256": "b010158d12989103cfd2dd8644750adbf6f4446b88c566689ffd4ae80135e4fa",
+    "size": 16228792,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2202abcfa46327b5e8af26bdc7cb595ccbfeed886a9e0f609a7a612a233c77c5.ctex",
+          "sha256": "2202abcfa46327b5e8af26bdc7cb595ccbfeed886a9e0f609a7a612a233c77c5",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "03ac7d777644b336d959c3e72ec000cfde563c1cddc9223eb73acc9a0861a89a.ctex",
+          "sha256": "03ac7d777644b336d959c3e72ec000cfde563c1cddc9223eb73acc9a0861a89a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b95b106eb04e83ed97f55b0c51d99787d61de54651f7bb4a62f79068f0bc2201.glb",
+        "sha256": "b95b106eb04e83ed97f55b0c51d99787d61de54651f7bb4a62f79068f0bc2201",
+        "size": 8780392
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "change_disciples/change_support": {
+    "url": "5e2b1bd30efcdef356651deadd57beceb1c0b6b681b5845fddf70ab97d0dd71b.glb",
+    "sha256": "5e2b1bd30efcdef356651deadd57beceb1c0b6b681b5845fddf70ab97d0dd71b",
+    "size": 14074084,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9bec8b2d52484120c93be500d6954d71d2deca2a0195bce4dd7612fde20e9c28.ctex",
+          "sha256": "9bec8b2d52484120c93be500d6954d71d2deca2a0195bce4dd7612fde20e9c28",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1ca93fadec83ddcf2d7ccb1b45c0290a7a89cd889257c9433eafbefe82c796a0.ctex",
+          "sha256": "1ca93fadec83ddcf2d7ccb1b45c0290a7a89cd889257c9433eafbefe82c796a0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f09a211585115cb59a2bd8c44aee0c3fad36b884b24347ab1cfc6f12b7f94d0c.glb",
+        "sha256": "f09a211585115cb59a2bd8c44aee0c3fad36b884b24347ab1cfc6f12b7f94d0c",
+        "size": 4139972
+      },
+      "size_class": "infantry"
+    }
+  },
+  "change_disciples/change_tank": {
+    "url": "30807c25b4676d02e86964759a0e32a00171ebbcf9c8499895538d8f23859081.glb",
+    "sha256": "30807c25b4676d02e86964759a0e32a00171ebbcf9c8499895538d8f23859081",
+    "size": 17645100,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "11b49a9e95635f96c07106c2e4f487c712b903c2cdc9880961c770aabbc28d6f.ctex",
+          "sha256": "11b49a9e95635f96c07106c2e4f487c712b903c2cdc9880961c770aabbc28d6f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "815c5a7cc6653e597b218408de06a19dc443baffca5a2523c42f2dc6e40fa80c.ctex",
+          "sha256": "815c5a7cc6653e597b218408de06a19dc443baffca5a2523c42f2dc6e40fa80c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c6161c1bf1399f6cab09442d43bfeed9b2b0251405164b30e67a283df7a6a662.glb",
+        "sha256": "c6161c1bf1399f6cab09442d43bfeed9b2b0251405164b30e67a283df7a6a662",
+        "size": 9603712
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "change_disciples/change_vortex_beast": {
+    "url": "2066bdb1dd9a21a269bd15d064962e7409cb8031adc8dc3a259537656287f819.glb",
+    "sha256": "2066bdb1dd9a21a269bd15d064962e7409cb8031adc8dc3a259537656287f819",
+    "size": 13773968,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2da0249aae2682545bb8b6d4560a04db8adab2ecfa162a9c70a4f7e203e7d567.ctex",
+          "sha256": "2da0249aae2682545bb8b6d4560a04db8adab2ecfa162a9c70a4f7e203e7d567",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e77a53df367f8d548438a142191282fbef0309dc3fb76873786936e838068af5.ctex",
+          "sha256": "e77a53df367f8d548438a142191282fbef0309dc3fb76873786936e838068af5",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b2bb7f217a95421a75751b28c155dd34147ab2844f5215ba2796dfedb5126655.glb",
+        "sha256": "b2bb7f217a95421a75751b28c155dd34147ab2844f5215ba2796dfedb5126655",
+        "size": 10308052
+      },
+      "size_class": "large"
+    }
+  },
+  "change_disciples/chosen_change_brothers": {
+    "url": "5d5044357b8e7c2741260cbbcd258993a3adb2c3de36680915858325f7b73fc1.glb",
+    "sha256": "5d5044357b8e7c2741260cbbcd258993a3adb2c3de36680915858325f7b73fc1",
+    "size": 13975016,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e1ef5d6309d51d95e116def3c867c65a9d514adf1b4b528ca2278402d45684c0.ctex",
+          "sha256": "e1ef5d6309d51d95e116def3c867c65a9d514adf1b4b528ca2278402d45684c0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e65e1bf2fd85dc8f0647b260e821dc1a48e0fe9325f21bac9a490d7bd4634fdb.ctex",
+          "sha256": "e65e1bf2fd85dc8f0647b260e821dc1a48e0fe9325f21bac9a490d7bd4634fdb",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8ebb51c75a21626f250d3502eee685b974f61afbdfdd8109db2a3a6a1c79eaa2.glb",
+        "sha256": "8ebb51c75a21626f250d3502eee685b974f61afbdfdd8109db2a3a6a1c79eaa2",
+        "size": 4056360
+      },
+      "size_class": "infantry"
+    }
+  },
+  "change_disciples/chosen_change_champion": {
+    "url": "f5aec21d8223acddfc73219bbf864a5ac51afd7b70717b9c3990f9aa8560a38e.glb",
+    "sha256": "f5aec21d8223acddfc73219bbf864a5ac51afd7b70717b9c3990f9aa8560a38e",
+    "size": 15397056,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d2ac96031ddfe0fc8b30161788434e8857281064485c9ffedc5e221f4518d366.ctex",
+          "sha256": "d2ac96031ddfe0fc8b30161788434e8857281064485c9ffedc5e221f4518d366",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6da0fd9bf88a662e40b22fc5a7d262ba4d123c386e072b93806d5c9065d89ca6.ctex",
+          "sha256": "6da0fd9bf88a662e40b22fc5a7d262ba4d123c386e072b93806d5c9065d89ca6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b9b39de46e8606916061b12ad7548f72a8f259195adfef0e53939e91de68e700.glb",
+        "sha256": "b9b39de46e8606916061b12ad7548f72a8f259195adfef0e53939e91de68e700",
+        "size": 4575172
+      },
+      "size_class": "infantry"
+    }
+  }
+}
