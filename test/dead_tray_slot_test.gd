@@ -100,3 +100,34 @@ func test_fill_order_keeps_early_rows_out_of_the_band() -> void:
 	for _i in range(48):
 		var idx: int = OPRArmyManager._alloc_unit_slot(occ, anc, "big", COLS, CAP)
 		assert_int(idx / COLS).is_less(6)   # stays in the far-two-thirds safe rows
+
+
+func test_dead_group_key_derives_unit_from_meta_when_id_empty() -> void:
+	# J2: with an empty caller id, the block key is derived from the model's own game_unit, so a whole
+	# unit parks as one block no matter which call site removed it.
+	var gu := GameUnit.new()
+	gu.unit_id = "U1"
+	var n1: Node3D = auto_free(Node3D.new())
+	var n2: Node3D = auto_free(Node3D.new())
+	n1.set_meta("game_unit", gu)
+	n2.set_meta("game_unit", gu)
+	assert_str(OPRArmyManager._dead_group_key("", n1)).is_equal("U1")
+	assert_str(OPRArmyManager._dead_group_key("", n2)).is_equal("U1")
+	assert_str(OPRArmyManager._dead_group_key("X", n1)).is_equal("X")   # explicit id always wins
+	var n3: Node3D = auto_free(Node3D.new())
+	assert_str(OPRArmyManager._dead_group_key("", n3)).is_not_equal("U1")   # no unit → lone key
+
+
+func test_multikill_one_unit_empty_id_forms_one_contiguous_block() -> void:
+	# 4 simultaneous removals from ONE unit via the public entry with an EMPTY unit_id: the derived key
+	# is identical, so the slots pack into ONE contiguous block instead of scattering (J2 regression).
+	var gu := GameUnit.new()
+	gu.unit_id = "squad"
+	var occ := {}
+	var anc := {}
+	var slots: Array[int] = []
+	for _i in range(4):
+		var n: Node3D = auto_free(Node3D.new())
+		n.set_meta("game_unit", gu)
+		slots.append(OPRArmyManager._alloc_unit_slot(occ, anc, OPRArmyManager._dead_group_key("", n), COLS, CAP))
+	assert_array(slots).is_equal([0, 1, 2, 3])   # contiguous, not scattered across rows
