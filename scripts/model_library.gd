@@ -166,13 +166,26 @@ func ensure_models(unit_specs: Array) -> void:
 
 # === ctex (compressed-texture) delivery ===
 
-## A unit's ctex block IF present AND baked for this engine version (guard), else {}. On mismatch the
-## caller uses the legacy raw-GLB url — .ctex is engine-version-coupled (see CtexLoader).
+## A unit's ctex block IF it is USABLE by this loader, else {} (→ caller uses the legacy raw-GLB url).
+## Usable := baked for this engine version (.ctex is engine-version-coupled) AND a downloadable albedo
+## in the form this loader supports (today: textures.albedo). This ONE guard gates both decision
+## points (prefetch + spawn), so an unknown/unsupported ctex shape (e.g. the contract-v1 `materials`
+## form) degrades to the legacy path — NEVER to nothing. Keep it as forward-compat.
 func get_ctex_entry(faction: String, unit_name: String) -> Dictionary:
 	var ctex: Dictionary = _entry(faction, unit_name).get("ctex", {})
 	if ctex.is_empty() or not CtexLoader.ctex_compatible(str(ctex.get("godot_version", ""))):
 		return {}
+	if not _ctex_block_usable(ctex):
+		return {}
 	return ctex
+
+
+## True if a ctex block has the mesh + albedo this loader can actually download and apply (the
+## textures.albedo form). Any other shape → false → legacy fallback. Pure/static → unit-testable.
+static func _ctex_block_usable(ctex: Dictionary) -> bool:
+	var mesh_sha: String = str(ctex.get("mesh", {}).get("sha256", ""))
+	var albedo_sha: String = str(ctex.get("textures", {}).get("albedo", {}).get("sha256", ""))
+	return not mesh_sha.is_empty() and not albedo_sha.is_empty()
 
 
 ## Local cache paths for a unit's ctex assets IF all are already downloaded, else {} (sync). Keys:
