@@ -1357,7 +1357,7 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 			# Fit the model to its base (footprint cap against scale-creep; Flying hovers)
 			var aabb = _get_model_aabb(glb_instance)
 			var tough = _get_tough_value(unit)
-			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift, natural_base_short_mm, fit_to_base)
+			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift, natural_base_short_mm, fit_to_base, _get_body_aabb(glb_instance))
 			var final_scale = fit.scale
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
@@ -1543,7 +1543,7 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> St
 		if glb_instance:
 			var aabb = _get_model_aabb(glb_instance)
 			var tough = _get_tough_value_from_rules(props.get("special_rules", []))
-			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift, natural_base_short_mm, fit_to_base)
+			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift, natural_base_short_mm, fit_to_base, _get_body_aabb(glb_instance))
 			var final_scale = fit.scale
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
@@ -2229,8 +2229,13 @@ func _is_walker(unit_name: String) -> bool:
 ## Flying units hover slightly above the base.
 ## base_long_mm = base long side in mm (round: diameter; oval: longer axis).
 ## Returns { "scale": float, "y_offset": float, "height": float }.
-func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m: float, base_short_mm: int = -1, fit_to_base: bool = false) -> Dictionary:
-	var raw_height: float = aabb.size.y
+func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m: float, base_short_mm: int = -1, fit_to_base: bool = false, body_aabb: AABB = AABB()) -> Dictionary:
+	# Contract v1.2: when the GLB carries a named `body` node, HEIGHT and GROUNDING measure that node's
+	# box (body_aabb) so composed parts (a banner pole, a downward-held bow) can't shrink the body or lift
+	# it off the base; the COMBINED aabb still drives the horizontal footprint/base-fit cap. Empty
+	# body_aabb (legacy single-mesh models) → measure everything from the combined aabb, unchanged.
+	var fit_aabb: AABB = body_aabb if body_aabb.size.y > 0.0 else aabb
+	var raw_height: float = fit_aabb.size.y
 	var raw_footprint: float = max(aabb.size.x, aabb.size.z)
 	if raw_height <= 0.0 or raw_footprint <= 0.0:
 		return {"scale": 0.001, "y_offset": 0.003, "height": 0.03}
@@ -2261,8 +2266,9 @@ func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m:
 	var final_scale: float = min(height_scale, footprint_scale)
 
 	# Feet on the base top (the base is 3mm tall); Flying/Aircraft additionally hover (caller-supplied).
+	# Ground on the BODY's minimum-y (fit_aabb) so a below-feet part can't float the model.
 	var lift: float = hover_lift_m
-	var y_offset: float = -aabb.position.y * final_scale + 0.003 + lift
+	var y_offset: float = -fit_aabb.position.y * final_scale + 0.003 + lift
 
 	return {
 		"scale": final_scale,
@@ -2295,6 +2301,53 @@ func _get_model_aabb(node: Node3D) -> AABB:
 					combined_aabb = combined_aabb.merge(transformed_aabb)
 
 	return combined_aabb
+
+
+## The AABB of the named `body` node (contract v1.2), in `node`'s local space, or an EMPTY AABB when the
+## GLB has no body node (the 1014 legacy single-mesh models — caller then measures the combined aabb).
+## Model Forge re-bakes composed units with a `body` node so height + grounding ignore attached parts.
+func _get_body_aabb(node: Node3D) -> AABB:
+	var body := _find_body_node(node)
+	if body == null:
+		return AABB()
+	var combined := AABB()
+	var first := true
+	var stack: Array[Node] = [body]
+	while not stack.is_empty():
+		var current = stack.pop_back()
+		stack.append_array(current.get_children())
+		if current is MeshInstance3D and (current as MeshInstance3D).mesh:
+			var mi := current as MeshInstance3D
+			var box: AABB = _relative_transform(mi, node) * mi.mesh.get_aabb()
+			if first:
+				combined = box
+				first = false
+			else:
+				combined = combined.merge(box)
+	return combined
+
+
+## First descendant Node3D named "body" (case-insensitive), or null.
+func _find_body_node(node: Node) -> Node3D:
+	if node is Node3D and node.name.to_lower() == "body":
+		return node
+	for child in node.get_children():
+		var found := _find_body_node(child)
+		if found != null:
+			return found
+	return null
+
+
+## Transform composing local transforms from `from_node` up to (excluding) `ancestor`, so a mesh nested
+## under the body node is expressed in the model root's space without needing valid global transforms.
+func _relative_transform(from_node: Node3D, ancestor: Node3D) -> Transform3D:
+	var xf := Transform3D.IDENTITY
+	var n: Node = from_node
+	while n != null and n != ancestor:
+		if n is Node3D:
+			xf = (n as Node3D).transform * xf
+		n = n.get_parent()
+	return xf
 
 
 ## Adjust Trellis-generated GLB materials for better visibility
