@@ -93,13 +93,22 @@ func test_forced_index_is_honoured_and_anchors_the_block() -> void:
 
 
 func test_fill_order_keeps_early_rows_out_of_the_band() -> void:
-	# The near-third band starts at row ~6 of 8 (center + bounds.y/6). Row-major fill means the first
-	# 48 slots (rows 0–5) are claimed before any band row — dead minis park behind the band (G1).
+	# Derived from the REAL parked-grid geometry (J7 shrank the step to the spawn spacing): the
+	# near-third band starts at center + bounds/6, so with far→near row-major fill the first `safe_rows`
+	# rows sit BEHIND the band (G1). Recomputed from the constants so a spacing change can't silently
+	# push slots into the band.
+	var bounds: float = OPRArmyManager.TRAY_SIZE_INCHES * OPRArmyManager.INCHES_TO_METERS
+	var step: float = OPRArmyManager.DEAD_SLOT_STEP
+	var edge: float = OPRArmyManager.DEAD_SLOT_EDGE
+	var cols: int = maxi(1, int((bounds - 2.0 * edge) / step))
+	var rows: int = maxi(1, int((bounds - 2.0 * edge) / step))
+	var safe_rows: int = int((bounds * 2.0 / 3.0 - edge) / step)
+	assert_int(safe_rows).is_greater_equal(6)   # ample band-free parking behind the band
 	var occ := {}
 	var anc := {}
-	for _i in range(48):
-		var idx: int = OPRArmyManager._alloc_unit_slot(occ, anc, "big", COLS, CAP)
-		assert_int(idx / COLS).is_less(6)   # stays in the far-two-thirds safe rows
+	for _i in range(safe_rows * cols):
+		var idx: int = OPRArmyManager._alloc_unit_slot(occ, anc, "big", cols, cols * rows)
+		assert_int(idx / cols).is_less(safe_rows)
 
 
 func test_dead_group_key_derives_unit_from_meta_when_id_empty() -> void:

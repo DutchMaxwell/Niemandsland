@@ -404,13 +404,20 @@ func _try_select_unit_at_mouse(screen_pos: Vector2) -> void:
 		_add_to_selection(tray)
 		return
 	var models := UnitUtils.get_combined_unit_models(obj)  # unit + attached heroes (#81)
-	if models.size() <= 1:
-		_try_select_at_mouse(screen_pos, false)  # not a multi-model unit — normal select
+	# J6: a select action yields ONLY the type (alive/dead) of the model it started on — double-clicking
+	# an alive model grabs the unit's ALIVE models; a parked casualty grabs that unit's DEAD models. So
+	# a battlefield double-click never drags parked casualties in, and tray revive-select stays clean.
+	var want_dead := bool(obj.get_meta("deleted", false))
+	var typed: Array[Node3D] = []
+	for m in models:
+		if is_instance_valid(m) and bool(m.get_meta("deleted", false)) == want_dead:
+			typed.append(m)
+	if typed.size() <= 1:
+		_try_select_at_mouse(screen_pos, false)  # single model of this type — normal select
 		return
 	_deselect_all()
-	for m in models:
-		if is_instance_valid(m):
-			_add_to_selection(m)
+	for m in typed:
+		_add_to_selection(m)
 
 
 func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> void:
@@ -881,23 +888,31 @@ func _finish_box_selection(alt_pressed: bool) -> void:
 	var camera = get_viewport().get_camera_3d()
 
 	if camera:
-		# Check all selectable objects
+		# Gather the band's hits first (objects behind the camera unproject MIRRORED — skip them, else
+		# a shallow-angle box would grab minis behind you).
+		var hits: Array[Node3D] = []
 		for child in get_children():
 			if child.is_in_group("selectable"):
-				# Objects behind the camera unproject MIRRORED onto the screen — at
-				# shallow view angles the box would silently grab minis behind you.
 				if camera.is_position_behind(child.global_position):
 					continue
-				# Project object position to screen space
-				var screen_pos = camera.unproject_position(child.global_position)
-
-				# Check if within selection rectangle
-				if rect.has_point(screen_pos):
-					if alt_pressed and child in _selected_objects:
-						# Alt + box select: toggle off if already selected
-						_remove_from_selection(child)
-					elif child not in _selected_objects:
-						_add_to_selection(child)
+				if rect.has_point(camera.unproject_position(child.global_position)):
+					hits.append(child)
+		# J6: keep only ONE type. If the band holds ANY alive model, select alive only — a battlefield
+		# band never grabs parked casualties. A band of exclusively dead models (on the tray) selects
+		# those, so tray band-multi-revive keeps working.
+		var has_alive := false
+		for h in hits:
+			if not bool(h.get_meta("deleted", false)):
+				has_alive = true
+				break
+		for child in hits:
+			if has_alive and bool(child.get_meta("deleted", false)):
+				continue
+			if alt_pressed and child in _selected_objects:
+				# Alt + box select: toggle off if already selected
+				_remove_from_selection(child)
+			elif child not in _selected_objects:
+				_add_to_selection(child)
 
 	# Clean up
 	_is_box_selecting = false
