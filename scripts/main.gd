@@ -185,6 +185,7 @@ var opr_army_manager: OPRArmyManager = null
 var opr_import_dialog: OPRImportDialog = null
 var opr_stats_tooltip: OPRStatsTooltip = null
 var unit_card: UnitCard = null
+var unit_dock: UnitDock = null
 var _hovered_model: Node3D = null
 
 # WGS (Wargaming Simulator) Integration
@@ -467,6 +468,11 @@ func _ready() -> void:
 	unit_card = unit_card_scene.instantiate()
 	unit_card.army_manager = opr_army_manager
 	$UI.add_child(unit_card)
+
+	# Bottom-edge unit-card dock (whole-army overview + quick selector).
+	unit_dock = UnitDock.new()
+	$UI/HUD.add_child(unit_dock)
+	unit_dock.setup(opr_army_manager, object_manager, network_manager, camera_pivot, unit_card)
 
 	# Connect OPR import button
 	import_opr_btn.pressed.connect(_on_import_opr_army)
@@ -3403,18 +3409,21 @@ func _clear_opr_hover() -> void:
 
 
 ## Update the docked unit card when the selection changes.
-## Shows the first selected unit's card; hides it for empty/non-unit selections.
+## Presents the first selected unit's card via the new animated dock card (replacing the old detail
+## UnitCard); clears it for empty/non-unit selections.
 func _on_selection_changed_update_card(selected_objects: Array[Node3D]) -> void:
-	if not unit_card:
+	if unit_card:
+		unit_card.clear()   # retired as the on-selection readout — the dock card presents it now
+	if unit_dock == null:
 		return
 
 	if selected_objects.is_empty():
-		unit_card.clear()
+		unit_dock.present_unit(null)
 		return
 
 	var units := UnitUtils.get_unique_units(selected_objects)
 	if units.is_empty():
-		unit_card.clear()
+		unit_dock.present_unit(null)
 		return
 
 	# Prefer a host unit (not a joined Hero) as the card subject, so its attached
@@ -3425,17 +3434,7 @@ func _on_selection_changed_update_card(selected_objects: Array[Node3D]) -> void:
 			primary = unit
 			break
 
-	# Count other distinct units, excluding Heroes that are attached to the primary
-	# (those are shown as part of it).
-	var extra_units := 0
-	for unit in units:
-		if unit == primary:
-			continue
-		if unit.is_attached() and unit.get_attached_to() == primary:
-			continue
-		extra_units += 1
-
-	unit_card.show_unit(primary, extra_units)
+	unit_dock.present_unit(primary)
 
 
 ## ============================================================================
@@ -3906,6 +3905,8 @@ func _init_radial_menu() -> void:
 	# A wiped unit drops its status tokens; on revive (undo) re-create them from its state (issue #78).
 	unit_boundary_visualizer.unit_tokens_revived.connect(radial_menu_controller.initialize_status_markers_for_unit)
 	opr_army_manager.radial_menu_controller = radial_menu_controller
+	if unit_dock != null:
+		unit_dock.set_radial_controller(radial_menu_controller)
 
 	# Battlefield stains: leave a blood pool (or oil + fire for vehicles) where a model is
 	# removed (issue #60). Hooked off model/unit removal, local + remote.
@@ -3945,6 +3946,10 @@ func _on_army_spawned_init_caster_markers(army: OPRApiClient.OPRArmy, _models: A
 			radial_menu_controller.initialize_caster_marker_for_unit(game_unit)
 			radial_menu_controller.initialize_status_markers_for_unit(game_unit)
 			radial_menu_controller.initialize_special_weapon_rings_for_unit(game_unit)
+
+	# Refresh the bottom unit-card dock with the newly spawned army.
+	if unit_dock != null:
+		unit_dock.rebuild()
 
 
 ## ============================================================================
@@ -3988,7 +3993,12 @@ func _spawn_stain_for_model(model: ModelInstance) -> void:
 		return
 	node.set_meta("stained", true)
 	var props: Dictionary = model.unit.unit_properties if model.unit else {}
+	# A dead LOOSE model is parked on the army tray, so its node has already moved there — stain the
+	# spot where it FELL (its stored pre-park transform), not the tray. revive_transform is set on
+	# both host and guest from the same synced position, so the stain + its seed match on peers.
 	var pos := node.global_position
+	if node.has_meta("revive_transform"):
+		pos = (node.get_meta("revive_transform") as Transform3D).origin
 	# Deterministic seed from the (synced) table position so the fire scatter matches on peers.
 	var seed_val := int(pos.x * 1000.0) * 73856093 ^ int(pos.z * 1000.0) * 19349663
 	battlefield_stains.add_stain(pos, _stain_base_radius_m(props), _stain_is_vehicle(props), seed_val, node)
