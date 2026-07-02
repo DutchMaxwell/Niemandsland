@@ -152,6 +152,31 @@ static func per_model_toughs(unit_size: int, loadout: Array, special_rules: Arra
 	return toughs
 
 
+## Per-model loadout LABELS (option/weapon names), distributed EXACTLY as per_model_toughs distributes
+## Tough — universal items on every model, limited items slot-cursor-assigned — so a model's variant
+## slug is derived from the same parts that land on it (I2). Returns an Array (one entry per model) of
+## Array[String] labels.
+static func per_model_labels(unit_size: int, loadout: Array) -> Array:
+	var labels: Array = []
+	for _i in range(maxi(0, unit_size)):
+		labels.append([])
+	if unit_size <= 0:
+		return labels
+	var universal: Array = []
+	var limited: Array = []
+	for item in loadout:
+		if _get_count(item, unit_size) >= unit_size:
+			universal.append(item)
+		else:
+			limited.append(item)
+	for item in universal:
+		for i in range(unit_size):
+			(labels[i] as Array).append(str(item.get("name", "")))
+	for a in _assign_limited_to_models(limited, unit_size):
+		(labels[a["model"]] as Array).append(str(a["item"].get("name", "")))
+	return labels
+
+
 # ===== Tough Parsing =====
 
 ## Minimum wound count: every model takes at least 1 wound to be killed (OPR core).
