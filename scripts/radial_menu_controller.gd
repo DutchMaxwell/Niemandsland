@@ -217,7 +217,17 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 		if dead_unit != null:
 			context["revive_unit"] = dead_unit
 			context["revive_model"] = UnitUtils.get_model_instance(first_obj)
-			radial_menu.open(screen_position, RadialMenu.create_dead_model_menu(), context)
+			# Multi-revive (G3): offer "revive this unit's N dead" and "revive N selected dead".
+			var unit_dead: int = 0
+			for m in (dead_unit as GameUnit).models:
+				if not m.is_alive:
+					unit_dead += 1
+			var sel_dead: Array = []
+			for o in selected_objects:
+				if is_instance_valid(o) and bool(o.get_meta("deleted", false)):
+					sel_dead.append(o)
+			context["selection_dead"] = sel_dead
+			radial_menu.open(screen_position, RadialMenu.create_dead_model_menu(unit_dead, sel_dead.size()), context)
 		return
 
 	var game_unit = UnitUtils.get_game_unit(first_obj)
@@ -330,6 +340,10 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_revive_fallen(context)
 		"revive_dead":
 			_revive_dead(context)
+		"revive_unit_dead":
+			_revive_unit_dead(context)
+		"revive_selected":
+			_revive_selected_dead(context)
 		"delete_unit":
 			_delete_unit(context)
 		"delete_terrain":
@@ -608,7 +622,7 @@ func _kill_loose_to_tray(model: ModelInstance, game_unit: GameUnit) -> void:
 	model.wounds_current = 0
 	var pid: int = int(game_unit.unit_properties.get("player_id", 1))
 	if army_manager != null:
-		army_manager.set_loose_model_dead(model.node, pid, true)
+		army_manager.set_loose_model_dead(model.node, pid, true, game_unit.unit_id)
 	_update_wound_marker(model)
 	# (No _reform_regiment_for_model here — this path only runs for LOOSE models; it would be a no-op.)
 	model_deleted.emit(model)
@@ -720,6 +734,28 @@ func _revive_dead(context: Dictionary) -> void:
 		_revive_single_model(model as ModelInstance, unit as GameUnit)
 
 
+## Revive ALL of a unit's dead models at once (partial-casualty multi-revive from the dead menu, G3).
+func _revive_unit_dead(context: Dictionary) -> void:
+	var unit = context.get("revive_unit")
+	if unit != null and unit is GameUnit:
+		_revive_unit_models(unit as GameUnit)
+
+
+## Revive every dead model in the current box-selection (may span several units), G3. Each
+## _revive_single_model broadcasts, so MP needs no new RPC.
+func _revive_selected_dead(context: Dictionary) -> void:
+	var sel = context.get("selection_dead", [])
+	if not (sel is Array):
+		return
+	for node in sel:
+		if not is_instance_valid(node) or not bool(node.get_meta("deleted", false)):
+			continue
+		var gu = UnitUtils.get_game_unit(node)
+		var mi = UnitUtils.get_model_instance(node)
+		if gu is GameUnit and mi is ModelInstance and not (mi as ModelInstance).is_alive:
+			_revive_single_model(mi as ModelInstance, gu as GameUnit)
+
+
 ## Revive one dead loose model (partial-casualty case): reset wounds, un-park from the tray
 ## (material + spot restored), refresh marker/coherency, and broadcast.
 func _revive_single_model(model: ModelInstance, game_unit: GameUnit) -> void:
@@ -795,16 +831,22 @@ func _returnable_units_for_player(player_id: int) -> Array:
 	if army_manager == null:
 		return out
 	for game_unit in army_manager.get_game_units_for_player(player_id):
-		if not game_unit.is_destroyed():
-			continue
-		# Revivable only if at least one model node still exists (hidden, not queue_free'd).
+		# Revivable if at least one model node still exists (hidden/parked, not queue_free'd) AND at
+		# least one model is dead. Fully-destroyed units revive whole; partially-destroyed units are
+		# ALSO listed and revive just their dead models (G3).
 		var has_node := false
+		var dead_count := 0
 		for model in game_unit.models:
 			if model.node != null and is_instance_valid(model.node):
 				has_node = true
-				break
-		if has_node:
-			out.append({"id": game_unit.unit_id, "name": UnitUtils.get_unit_display_name(game_unit.models[0].node) if not game_unit.models.is_empty() and game_unit.models[0].node else game_unit.get_name()})
+				if not model.is_alive:
+					dead_count += 1
+		if not has_node or dead_count == 0:
+			continue
+		var uname: String = UnitUtils.get_unit_display_name(game_unit.models[0].node) if not game_unit.models.is_empty() and game_unit.models[0].node else game_unit.get_name()
+		if not game_unit.is_destroyed():
+			uname = "%s — revive %d dead" % [uname, dead_count]
+		out.append({"id": game_unit.unit_id, "name": uname})
 	return out
 
 
@@ -846,7 +888,7 @@ func _on_wounds_changed(model: ModelInstance, new_wounds: int) -> void:
 		if in_regiment:
 			OPRArmyManager.set_model_alive_state(model.node, false)
 		elif army_manager != null:
-			army_manager.set_loose_model_dead(model.node, pid, true)
+			army_manager.set_loose_model_dead(model.node, pid, true, model.unit.unit_id if model.unit != null else "")
 		model_deleted.emit(model)
 	# Show model if revived
 	elif new_wounds > 0:

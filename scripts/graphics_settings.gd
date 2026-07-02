@@ -244,7 +244,11 @@ func _apply_scaling_3d_staggered(scale: float) -> void:
 func apply_environment_settings(settings: Dictionary) -> void:
 	var world_env = get_tree().root.get_node_or_null("Main/WorldEnvironment")
 	if not world_env:
-		push_warning("WorldEnvironment not found")
+		# The Main scene isn't loaded at the startup menu, so environment settings simply don't apply
+		# there — that is expected, not an error. Only warn if Main IS loaded but has no
+		# WorldEnvironment (a genuinely broken scene). Fixes the spurious boot warning (G5).
+		if get_tree().root.get_node_or_null("Main") != null:
+			push_warning("WorldEnvironment not found under Main")
 		return
 
 	var env = world_env.environment

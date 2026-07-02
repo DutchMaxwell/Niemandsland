@@ -1,47 +1,102 @@
 extends GdUnitTestSuite
-## Regression (T1): a parked dead loose model's army-tray slot must be RECLAIMED on revive, so a
-## kill→revive→kill cycle reuses the freed slot instead of creeping outward forever. Also guards that
-## a slot index never leaves the tray (wraps into [0, capacity)). Tests the pure slot bookkeeping
-## helpers in OPRArmyManager (_alloc_slot_index / _free_slot_index) — no army/tray nodes needed.
+## Slot bookkeeping for parked dead loose models (G1/G2). Exercises the pure static helpers in
+## OPRArmyManager (_alloc_unit_slot / _first_free_row_start / _free_slot_index / _release_unit_anchor)
+## — no army/tray nodes needed. Guarantees:
+##  • a unit's dead models group into a CONTIGUOUS block, two units never interleave (G2);
+##  • kill→revive→kill within a unit reuses its block; a fully-revived unit's block is released (G2);
+##  • a revived slot is reclaimed — no kill→revive→kill creep (the original T1 regression);
+##  • a full tray wraps in-range (never off-tray); MP forced slots are honoured;
+##  • fill order is row-major from row 0, so the first rows sit in the FAR two-thirds, out of the
+##    near-third Ambush/Scout band (G1) — the band starts at center + bounds.y/6 ≈ row 6 of 8.
+
+const COLS := 8
+const CAP := 64   # 8×8 tray (matches the ~0.81 m square army tray)
 
 
-func test_first_allocations_are_sequential() -> void:
+func test_single_unit_fills_sequentially_from_its_anchor() -> void:
 	var occ := {}
-	assert_int(OPRArmyManager._alloc_slot_index(occ, 8)).is_equal(0)
-	assert_int(OPRArmyManager._alloc_slot_index(occ, 8)).is_equal(1)
-	assert_int(OPRArmyManager._alloc_slot_index(occ, 8)).is_equal(2)
+	var anc := {}
+	assert_int(OPRArmyManager._alloc_unit_slot(occ, anc, "u1", COLS, CAP)).is_equal(0)
+	assert_int(OPRArmyManager._alloc_unit_slot(occ, anc, "u1", COLS, CAP)).is_equal(1)
+	assert_int(OPRArmyManager._alloc_unit_slot(occ, anc, "u1", COLS, CAP)).is_equal(2)
 
 
-func test_revive_frees_slot_and_next_kill_reuses_it() -> void:
+func test_two_interleaved_units_stay_in_separate_contiguous_blocks() -> void:
 	var occ := {}
-	var a: int = OPRArmyManager._alloc_slot_index(occ, 8)   # 0
-	var b: int = OPRArmyManager._alloc_slot_index(occ, 8)   # 1
-	OPRArmyManager._free_slot_index(occ, a)                 # revive the first-parked model
-	var c: int = OPRArmyManager._alloc_slot_index(occ, 8)   # must REUSE 0, not creep to 2
-	assert_int(c).is_equal(0)
-	assert_int(b).is_equal(1)
+	var anc := {}
+	var a0 := OPRArmyManager._alloc_unit_slot(occ, anc, "A", COLS, CAP)   # A anchors row 0 → 0
+	var b0 := OPRArmyManager._alloc_unit_slot(occ, anc, "B", COLS, CAP)   # B first fully-free row → 8
+	var a1 := OPRArmyManager._alloc_unit_slot(occ, anc, "A", COLS, CAP)   # A extends → 1
+	var b1 := OPRArmyManager._alloc_unit_slot(occ, anc, "B", COLS, CAP)   # B extends → 9
+	assert_int(a0).is_equal(0)
+	assert_int(a1).is_equal(1)             # A block contiguous: 0,1 (row 0)
+	assert_int(b0).is_equal(COLS)          # B on its own row
+	assert_int(b1).is_equal(COLS + 1)      # B block contiguous: 8,9 (row 1)
+	assert_int(a1 / COLS).is_equal(0)      # blocks on different rows → never interleaved
+	assert_int(b1 / COLS).is_equal(1)
+
+
+func test_kill_revive_kill_within_a_unit_reuses_its_block() -> void:
+	var occ := {}
+	var anc := {}
+	var a0 := OPRArmyManager._alloc_unit_slot(occ, anc, "A", COLS, CAP)   # 0
+	var a1 := OPRArmyManager._alloc_unit_slot(occ, anc, "A", COLS, CAP)   # 1
+	OPRArmyManager._free_slot_index(occ, a1)                             # revive the 2nd model
+	OPRArmyManager._release_unit_anchor(occ, anc, "A")                   # still has slot 0 → anchor kept
+	var a1b := OPRArmyManager._alloc_unit_slot(occ, anc, "A", COLS, CAP)  # re-kill → reuse slot 1
+	assert_int(a0).is_equal(0)
+	assert_int(a1b).is_equal(1)
+	assert_bool(anc.has("A")).is_true()
+
+
+func test_fully_revived_unit_releases_its_block_for_repacking() -> void:
+	var occ := {}
+	var anc := {}
+	OPRArmyManager._alloc_unit_slot(occ, anc, "A", COLS, CAP)             # 0
+	OPRArmyManager._alloc_unit_slot(occ, anc, "A", COLS, CAP)             # 1
+	OPRArmyManager._free_slot_index(occ, 0)
+	OPRArmyManager._free_slot_index(occ, 1)
+	OPRArmyManager._release_unit_anchor(occ, anc, "A")                   # no slots left → anchor dropped
+	assert_bool(anc.has("A")).is_false()
+	# a new unit re-packs the freed row 0 instead of creeping outward
+	assert_int(OPRArmyManager._alloc_unit_slot(occ, anc, "B", COLS, CAP)).is_equal(0)
 
 
 func test_kill_revive_kill_cycle_stays_bounded_and_fully_reclaims() -> void:
 	var occ := {}
-	for _i in range(20):
-		var idx: int = OPRArmyManager._alloc_slot_index(occ, 4)
+	var anc := {}
+	for _i in range(40):
+		var idx: int = OPRArmyManager._alloc_unit_slot(occ, anc, "A", COLS, 4)
 		assert_int(idx).is_greater_equal(0)
 		assert_int(idx).is_less(4)          # never leaves the 4-slot tray
 		OPRArmyManager._free_slot_index(occ, idx)
+		OPRArmyManager._release_unit_anchor(occ, anc, "A")
 	assert_int(occ.size()).is_equal(0)      # every slot reclaimed — no leak
 
 
 func test_overflowing_a_full_tray_wraps_into_range() -> void:
 	var occ := {}
-	for _i in range(4):
-		OPRArmyManager._alloc_slot_index(occ, 4)            # 0..3 all occupied
-	var idx: int = OPRArmyManager._alloc_slot_index(occ, 4) # overflow → must wrap, not go off-tray
+	var anc := {}
+	for i in range(4):
+		OPRArmyManager._alloc_unit_slot(occ, anc, "u%d" % i, 2, 4)   # fill all 4 slots
+	var idx: int = OPRArmyManager._alloc_unit_slot(occ, anc, "x", 2, 4)  # overflow → wraps in-range
 	assert_int(idx).is_greater_equal(0)
 	assert_int(idx).is_less(4)
 
 
-func test_forced_index_is_honoured_for_mp_replay() -> void:
+func test_forced_index_is_honoured_and_anchors_the_block() -> void:
 	var occ := {}
-	assert_int(OPRArmyManager._alloc_slot_index(occ, 8, 5)).is_equal(5)
+	var anc := {}
+	assert_int(OPRArmyManager._alloc_unit_slot(occ, anc, "A", COLS, CAP, 5)).is_equal(5)
 	assert_bool(occ.has(5)).is_true()
+	assert_int(int(anc["A"])).is_equal(5)   # pinned slot becomes the block anchor (MP replay/restore)
+
+
+func test_fill_order_keeps_early_rows_out_of_the_band() -> void:
+	# The near-third band starts at row ~6 of 8 (center + bounds.y/6). Row-major fill means the first
+	# 48 slots (rows 0–5) are claimed before any band row — dead minis park behind the band (G1).
+	var occ := {}
+	var anc := {}
+	for _i in range(48):
+		var idx: int = OPRArmyManager._alloc_unit_slot(occ, anc, "big", COLS, CAP)
+		assert_int(idx / COLS).is_less(6)   # stays in the far-two-thirds safe rows
