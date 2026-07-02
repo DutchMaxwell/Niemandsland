@@ -15,6 +15,7 @@ const STRIP_H := 100
 const CARD_W := 152
 const PCARD_W := 320
 const PCARD_H := 188
+const PCARD_MAX_H := 348          # presented card auto-grows to fit weapons, capped here
 const GAP_ABOVE_TAB := 12
 const REFRESH_INTERVAL := 0.4
 
@@ -32,14 +33,7 @@ var _strip_panel: PanelContainer = null
 var _scroll: ScrollContainer = null
 var _strip: HBoxContainer = null
 var _cards: Dictionary = {}            # unit_id -> {card, name, stats, status}
-var _presented: PanelContainer = null
-var _p_name: Label = null
-var _p_stats: Label = null
-var _p_status: Label = null
-var _p_coherency: Label = null
-var _p_actions: HBoxContainer = null
-var _btn_cast: Button = null
-var _btn_revive: Button = null
+var _presented: CardVisual = null      # the presented card is a CardVisual (feel) holding CardFace content
 var _presented_unit: GameUnit = null
 var _refresh_timer: Timer = null
 
@@ -102,62 +96,13 @@ func _build_strip() -> void:
 
 
 func _build_presented() -> void:
-	_presented = PanelContainer.new()
-	_presented.custom_minimum_size = Vector2(PCARD_W, PCARD_H)
+	_presented = CardVisual.new()
 	_presented.size = Vector2(PCARD_W, PCARD_H)
-	_presented.pivot_offset = Vector2(PCARD_W / 2.0, PCARD_H / 2.0)
-	_presented.add_theme_stylebox_override("panel", _card_face_style(Color(0.55, 0.78, 0.95)))
-	_presented.mouse_filter = Control.MOUSE_FILTER_STOP
 	_presented.visible = false
-	var mc := MarginContainer.new()
-	for side in ["left", "right", "top", "bottom"]:
-		mc.add_theme_constant_override("margin_" + side, 12)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 5)
-	_p_name = Label.new()
-	_p_name.add_theme_font_size_override("font_size", 21)
-	_p_name.clip_text = true
-	_p_stats = Label.new()
-	_p_stats.add_theme_font_size_override("font_size", 16)
-	_p_status = Label.new()
-	_p_status.add_theme_font_size_override("font_size", 14)
-	_p_coherency = Label.new()
-	_p_coherency.add_theme_font_size_override("font_size", 13)
-	_p_coherency.add_theme_color_override("font_color", Color(1.0, 0.5, 0.35))
-	box.add_child(_p_name)
-	box.add_child(_p_stats)
-	box.add_child(_p_status)
-	box.add_child(_p_coherency)
-	box.add_child(_build_actions())
-	mc.add_child(box)
-	_presented.add_child(mc)
-	add_child(_presented)
+	# Clicks on the card BODY (not an action chip) still select/locate the unit; chips are on top and
+	# route through CardFace → _card_action first.
 	_presented.gui_input.connect(_on_presented_input)
-
-
-func _build_actions() -> HBoxContainer:
-	_p_actions = HBoxContainer.new()
-	_p_actions.add_theme_constant_override("separation", 4)
-	_p_actions.mouse_filter = Control.MOUSE_FILTER_STOP
-	_add_action("Act", func(): _card_action("activation"))
-	_add_action("Fat", func(): _card_action("fatigued"))
-	_add_action("Shk", func(): _card_action("shaken"))
-	_btn_cast = _add_action("Cast", func(): _card_action("casts"))
-	_add_action("Wnd", func(): _card_action("wounds"))
-	_add_action("Info", func(): _card_action("details"))
-	_btn_revive = _add_action("Revive", func(): _card_action("revive"))
-	return _p_actions
-
-
-func _add_action(label: String, cb: Callable) -> Button:
-	var b := Button.new()
-	b.text = label
-	b.focus_mode = Control.FOCUS_NONE
-	b.add_theme_font_size_override("font_size", 12)
-	b.mouse_filter = Control.MOUSE_FILTER_STOP
-	b.pressed.connect(cb)
-	_p_actions.add_child(b)
-	return b
+	add_child(_presented)
 
 
 # === Layout ===
@@ -170,7 +115,7 @@ func _layout() -> void:
 		_strip_panel.size = Vector2(vp.x, STRIP_H)
 		_strip_panel.position = Vector2(0, _strip_target_y(_dock_open))
 	if _presented != null and _presented.visible:
-		_presented.position = _presented_rest_pos()
+		_presented.snap_to(_presented_rest_pos(), 0.0, 1.0)
 
 
 func _strip_target_y(open: bool) -> float:
@@ -180,7 +125,8 @@ func _strip_target_y(open: bool) -> float:
 
 func _presented_rest_pos() -> Vector2:
 	var vp := get_viewport_rect().size
-	return Vector2(vp.x / 2.0 - PCARD_W / 2.0, vp.y - PCARD_H - TAB_H - GAP_ABOVE_TAB)
+	var h: float = _presented.size.y if _presented != null else float(PCARD_H)
+	return Vector2(vp.x / 2.0 - PCARD_W / 2.0, vp.y - h - TAB_H - GAP_ABOVE_TAB)
 
 
 # === Strip show/hide ===
@@ -377,39 +323,31 @@ func present_unit(unit: GameUnit) -> void:
 
 
 func _fill_presented(unit: GameUnit) -> void:
-	_p_name.text = unit.get_name()
-	_p_stats.text = _stat_line(unit)
-	_p_status.text = _status_line(unit)
-	var dead: bool = unit.get_alive_count() == 0
-	_p_coherency.visible = (not dead) and (not _is_coherent(unit))
-	_p_coherency.text = "⚠ Unit out of coherency"
-	_btn_cast.visible = unit.is_caster()
-	_btn_revive.visible = dead
-	_presented.add_theme_stylebox_override("panel", _card_face_style(_unit_color(unit)))
+	# Rebuild the CardFace content each time so live status/wounds are reflected; the action chips route
+	# back through _card_action (the dispatch proven by card_action_dispatch_test).
+	var content := CardFace.build_presented(_card_data(unit), _card_action)
+	_presented.set_content_node(content)
+	var h: float = clampf(content.get_combined_minimum_size().y, float(PCARD_H), float(PCARD_MAX_H))
+	_presented.size = Vector2(PCARD_W, h)
 
 
 func _animate_card_in() -> void:
+	# CardVisual carries the deal-in feel: snap below with a slight tilt, then spring up to rest.
 	var rest := _presented_rest_pos()
+	_presented.modulate.a = 1.0
 	_presented.visible = true
-	_presented.position = rest + Vector2(46, 250)
-	_presented.rotation = deg_to_rad(7.0)
-	_presented.scale = Vector2(0.82, 0.82)
-	_presented.modulate.a = 0.0
-	var tw := create_tween().set_parallel(true)
-	tw.tween_property(_presented, "position", rest, 0.34).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(_presented, "rotation", 0.0, 0.34).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tw.tween_property(_presented, "scale", Vector2.ONE, 0.34).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(_presented, "modulate:a", 1.0, 0.18)
+	_presented.snap_to(rest + Vector2(40, 240), 7.0, 0.82)
+	_presented.spring_to(rest, 0.0, 1.0)
 
 
 func _animate_card_out() -> void:
 	if _presented == null or not _presented.visible:
 		return
-	var tw := create_tween().set_parallel(true)
-	tw.tween_property(_presented, "position:y", _presented.position.y + 210, 0.2).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-	tw.tween_property(_presented, "modulate:a", 0.0, 0.18)
-	tw.set_parallel(false)
-	tw.tween_callback(func() -> void: _presented.visible = false)
+	_presented.spring_to(_presented_rest_pos() + Vector2(0, 230), 5.0, 0.85)
+	var t := get_tree().create_timer(0.22)
+	t.timeout.connect(func() -> void:
+		if _presented != null and _presented_unit == null:
+			_presented.visible = false)
 
 
 # === Card actions (⑤⑥⑦⑧) ===
@@ -565,17 +503,4 @@ func _card_style(selected: bool, accent: Color) -> StyleBoxFlat:
 	sb.border_width_bottom = 2 if selected else 1
 	# One border colour per box: the player accent normally, cyan when selected.
 	sb.border_color = Color(0.35, 0.85, 1.0, 1.0) if selected else accent
-	return sb
-
-
-func _card_face_style(accent: Color) -> StyleBoxFlat:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.14, 0.16, 0.20, 0.98)
-	sb.set_corner_radius_all(10)
-	sb.set_border_width_all(2)
-	sb.border_width_left = 6
-	sb.border_color = accent
-	sb.shadow_color = Color(0, 0, 0, 0.5)
-	sb.shadow_size = 12
-	sb.shadow_offset = Vector2(0, 6)
 	return sb

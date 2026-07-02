@@ -20,8 +20,10 @@ const TEXT_DIM := Color(0.58, 0.64, 0.72)
 const CHIP_OFF := Color(0.22, 0.26, 0.33)
 
 
-## Presented card content (the big card).
-static func build_presented(data: Dictionary) -> Control:
+## Presented card content (the big card). `on_action` (optional) is called with the action kind string
+## ("activation"/"fatigued"/"shaken"/"casts"/"wounds"/"details"/"revive") when an action chip is pressed;
+## the dock connects it to _card_action. Left empty in the dev preview so the chips are inert.
+static func build_presented(data: Dictionary, on_action: Callable = Callable()) -> Control:
 	var margin := MarginContainer.new()
 	for s in ["left", "right", "top", "bottom"]:
 		margin.add_theme_constant_override("margin_" + s, 12)
@@ -106,15 +108,15 @@ static func build_presented(data: Dictionary) -> Control:
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 4)
 	if bool(data.get("dead", false)):
-		actions.add_child(_action_btn("↺", "Revive"))
+		actions.add_child(_action_btn("↺", "Revive", "revive", on_action))
 	else:
-		actions.add_child(_action_btn("▶", "Act"))
-		actions.add_child(_action_btn("~", "Fat"))
-		actions.add_child(_action_btn("!", "Shk"))
+		actions.add_child(_action_btn("▶", "Act", "activation", on_action))
+		actions.add_child(_action_btn("~", "Fat", "fatigued", on_action))
+		actions.add_child(_action_btn("!", "Shk", "shaken", on_action))
 		if bool(data.get("caster", false)):
-			actions.add_child(_action_btn("✦", "Cast"))
-		actions.add_child(_action_btn("✚", "Wnd"))
-		actions.add_child(_action_btn("ⓘ", "Info"))
+			actions.add_child(_action_btn("✦", "Cast", "casts", on_action))
+		actions.add_child(_action_btn("✚", "Wnd", "wounds", on_action))
+		actions.add_child(_action_btn("ⓘ", "Info", "details", on_action))
 	col.add_child(actions)
 
 	return margin
@@ -172,16 +174,20 @@ static func _fit_name(text: String, size_big: int, size_small: int, max_chars: i
 
 
 ## Compact icon+label action button with hover state (chip-styled), part of the presented-card design.
-static func _action_btn(icon: String, label: String) -> Button:
+## When pressed, calls `on_action.call(kind)` (if valid) so the dock routes it to _card_action.
+static func _action_btn(icon: String, label: String, kind: String, on_action: Callable) -> Button:
 	var b := Button.new()
 	b.text = "%s %s" % [icon, label]
 	b.focus_mode = Control.FOCUS_NONE
+	b.mouse_filter = Control.MOUSE_FILTER_STOP
 	b.add_theme_font_size_override("font_size", 11)
 	b.add_theme_color_override("font_color", TEXT)
 	b.add_theme_color_override("font_hover_color", CYAN)
 	b.add_theme_stylebox_override("normal", _chip_style(NAVY_HI, CYAN))
 	b.add_theme_stylebox_override("hover", _chip_style(Color(CYAN.r, CYAN.g, CYAN.b, 0.22), CYAN))
 	b.add_theme_stylebox_override("pressed", _chip_style(NAVY, CYAN))
+	if on_action.is_valid():
+		b.pressed.connect(func() -> void: on_action.call(kind))
 	return b
 
 
