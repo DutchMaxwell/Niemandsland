@@ -142,6 +142,8 @@ var model_library: ModelLibrary
 # E6: per-import ctex-vs-legacy delivery tally (reset each spawn_army, logged at its end).
 var _ctex_used_count: int = 0
 var _legacy_used_reasons: Dictionary = {}
+var _variant_used_count: int = 0   # I2: models resolved to a pre-baked loadout variant (`<unit>#<slug>`)
+var _variant_missing_count: int = 0   # I2: a slug was derived but no `<unit>#<slug>` key exists → base
 
 ## Parsed-model cache: model path -> PackedScene. Runtime glTF models (user://) are
 ## otherwise re-parsed on every spawn, so a unit of N identical models paid N full
@@ -177,6 +179,8 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	# Reset the E6 per-import ctex/legacy delivery tally.
 	_ctex_used_count = 0
 	_legacy_used_reasons = {}
+	_variant_used_count = 0
+	_variant_missing_count = 0
 
 	# Fetch on-demand models this army needs (no-op when the manifest is empty or
 	# everything is cached); the spawn loop below then resolves them locally.
@@ -329,9 +333,17 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	var legacy_total: int = 0
 	for r in _legacy_used_reasons:
 		legacy_total += int(_legacy_used_reasons[r])
-	print("[Ctex] army '%s': %d model(s) via ctex, %d via legacy fallback%s" % [
+	# I2: variant hits + slug-derived-but-unknown-key fallbacks to base.
+	var variant_note: String = ""
+	if _variant_used_count > 0 or _variant_missing_count > 0:
+		variant_note = "  (%d via loadout variant" % _variant_used_count
+		if _variant_missing_count > 0:
+			variant_note += ", %d slug→base fallback(s)" % _variant_missing_count
+		variant_note += ")"
+	print("[Ctex] army '%s': %d model(s) via ctex, %d via legacy fallback%s%s" % [
 		army.name, _ctex_used_count, legacy_total,
-		("  (reasons: %s)" % str(_legacy_used_reasons)) if legacy_total > 0 else ""])
+		("  (reasons: %s)" % str(_legacy_used_reasons)) if legacy_total > 0 else "",
+		variant_note])
 
 	return all_models
 
@@ -1126,6 +1138,8 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 	# bigger base lands on the exact carrier model). Plain models keep the unit base unchanged.
 	var loadout := EquipmentDistributor.build_loadout(unit)
 	var toughs := EquipmentDistributor.per_model_toughs(unit.size, loadout, unit.special_rules)
+	# Per-model loadout labels → pre-baked variant model resolution (I2).
+	var labels_per_model := EquipmentDistributor.per_model_labels(unit.size, loadout)
 	var unit_base_long := int(max(unit.base_width_mm, unit.base_depth_mm)) if (unit.base_is_oval or unit.base_is_square) else unit.base_size_round
 	var model_longs: Array = []
 	var any_enlarged := false
@@ -1152,7 +1166,10 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 
 		var override_mm: int = int(model_longs[i]) if any_enlarged else 0
 		# Mount/vehicle GLB applies to the leader model (model 0); its base is already on the unit.
+		# Otherwise resolve a pre-baked loadout variant (`<unit>#<slug>`), falling back to the base (I2).
 		var mglb: String = mount_glb if i == 0 else ""
+		if mglb.is_empty():
+			mglb = _resolve_model_variant_name(unit.name, labels_per_model[i], faction_folder)
 		var model = _create_unit_model(unit, player_color, name_suffix, faction_folder, override_mm, mglb)
 		if model:
 			# Assign a slot-namespaced network_id for multiplayer position sync (no
@@ -1319,6 +1336,8 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 	var ctex_paths: Dictionary = model_library.ctex_cached_paths(faction_folder, glb_name) if model_library != null else {}
 	var use_ctex: bool = not ctex_paths.is_empty()
 	var model_path: String = str(ctex_paths.get("mesh", "")) if use_ctex else _find_model_for_unit(glb_name, faction_folder)
+	if glb_name.contains("#"):
+		_variant_used_count += 1   # I2: a pre-baked loadout variant was resolved for this model
 	# E6: tally the delivery path (ctex vs legacy fallback + reason) — summarised at spawn_army end.
 	if use_ctex:
 		_ctex_used_count += 1
@@ -1346,9 +1365,13 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 			if use_ctex:
 				# Apply the offline-baked BC7 albedo onto the (texture-stripped) ctex mesh, then match
 				# the legacy display treatment so ctex and legacy render identically (see
-				# _brighten_ctex_materials): flat non-metallic diffuse + anisotropic filtering.
-				CtexLoader.apply_to_mesh(glb_instance, str(ctex_paths.get("albedo", "")),
-					str(ctex_paths.get("normal", "")), str(ctex_paths.get("orm", "")), false)
+				# _brighten_ctex_materials): flat non-metallic diffuse + anisotropic filtering. The
+				# multi-material form (I1) assigns per-surface albedo by index; both share the brighten.
+				if ctex_paths.has("materials"):
+					CtexLoader.apply_materials_to_mesh(glb_instance, ctex_paths["materials"])
+				else:
+					CtexLoader.apply_to_mesh(glb_instance, str(ctex_paths.get("albedo", "")),
+						str(ctex_paths.get("normal", "")), str(ctex_paths.get("orm", "")), false)
 				_brighten_ctex_materials(glb_instance)
 			else:
 				_brighten_trellis_materials(glb_instance)
@@ -2003,6 +2026,22 @@ func _set_owner_recursive(node: Node, scene_owner: Node) -> void:
 	for child: Node in node.get_children():
 		child.owner = scene_owner
 		_set_owner_recursive(child, scene_owner)
+
+
+## Resolve a model's pre-baked loadout variant name `<base>#<slug>` from its distributed loadout
+## labels (I2), or "" to use the base model. Returns the variant ONLY when the manifest actually has
+## that key — otherwise "" so the caller falls back to the base unit model (never a missing lookup).
+func _resolve_model_variant_name(base_name: String, labels: Array, faction_folder: String) -> String:
+	if model_library == null:
+		return ""
+	var slug: String = model_library.variant_slug(labels)
+	if slug.is_empty():
+		return ""
+	var variant: String = "%s#%s" % [base_name, slug]
+	if model_library.has_model(faction_folder, variant):
+		return variant
+	_variant_missing_count += 1   # slug derived but no baked variant → fall back to the base model
+	return ""
 
 
 ## Find the GLB model for a unit. Prefers an on-demand model already cached locally
