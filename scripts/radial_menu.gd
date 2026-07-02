@@ -365,9 +365,8 @@ static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 
 	items.append(RadialMenuItem.new("add_marker", "Token", "T", true, "Add/adjust status & counter tokens for special rules"))
 	items.append(RadialMenuItem.new("select_unit", "Select All", "A", true, "Select all models in this unit"))
-	# Revive the unit's destroyed models (reachable from a surviving model).
-	if model.unit is GameUnit and (model.unit as GameUnit).get_alive_count() < (model.unit as GameUnit).models.size():
-		items.append(RadialMenuItem.new("revive_fallen", "Revive", "R", true, "Return this unit's destroyed models to the table"))
+	# NOTE: no "Revive" here by design — a dead loose model is revived by RIGHT-CLICKING it on the
+	# army tray (see create_dead_model_menu), not from a living model's menu.
 	items.append(RadialMenuItem.new("delete_model", "Remove", "X", true, "Remove this model from the table"))
 
 	return items
@@ -395,11 +394,18 @@ static func create_unit_menu(game_unit: GameUnit) -> Array[RadialMenuItem]:
 	items.append(RadialMenuItem.new("toggle_shaken", "Shaken", shaken_icon, true, shaken_tooltip))
 
 	items.append(RadialMenuItem.new("add_marker", "Token", "T", true, "Add/adjust status & counter tokens for special rules"))
-	# Revive destroyed models of the unit (special rules that return/revive models).
-	if game_unit.get_alive_count() < game_unit.models.size():
-		items.append(RadialMenuItem.new("revive_fallen", "Revive", "R", true, "Return this unit's destroyed models to the table"))
+	# NOTE: no "Revive" here by design — dead loose models are revived by RIGHT-CLICKING them on
+	# the army tray (see create_dead_model_menu).
 	items.append(RadialMenuItem.new("delete_unit", "Delete", "X", true, "Remove entire unit from the table"))
 
+	return items
+
+
+## The only menu a DEAD loose model offers: revive. Whole-unit-destroyed revives the whole unit,
+## otherwise just this model (decided by the controller from context). No other action is allowed.
+static func create_dead_model_menu() -> Array[RadialMenuItem]:
+	var items: Array[RadialMenuItem] = []
+	items.append(RadialMenuItem.new("revive_dead", "Revive", "R", true, "Bring this model back onto the table"))
 	return items
 
 
