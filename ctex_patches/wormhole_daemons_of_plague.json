@@ -1,0 +1,470 @@
+{
+  "wormhole_daemons_of_plague/ascended harbinger of plague": {
+    "url": "ee3103c0e6eb446e12b44244739549819e08cadf319a78dfd7b55c2bd46d8500.glb",
+    "sha256": "ee3103c0e6eb446e12b44244739549819e08cadf319a78dfd7b55c2bd46d8500",
+    "size": 18207348,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7d9e8db3178851ff6cf0d605c33b0081f4d9fa6059cbe26aa874d34d8eea50cf.ctex",
+          "sha256": "7d9e8db3178851ff6cf0d605c33b0081f4d9fa6059cbe26aa874d34d8eea50cf",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "62b7ce7435179866c8b14cb4ad1308b3771c5edaa49fc58b5c3a40a9192a1b25.ctex",
+          "sha256": "62b7ce7435179866c8b14cb4ad1308b3771c5edaa49fc58b5c3a40a9192a1b25",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b44e03a600ada31ea3896cf66569692eee8da6a89245859a5cbaf09a36a23c52.glb",
+        "sha256": "b44e03a600ada31ea3896cf66569692eee8da6a89245859a5cbaf09a36a23c52",
+        "size": 4634172
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_plague/avatar of plague": {
+    "url": "3b0ad3e31cc0e3b5fdffdaa8df10307c9d0f8a9e66fff46bf2800c31630ab8d9.glb",
+    "sha256": "3b0ad3e31cc0e3b5fdffdaa8df10307c9d0f8a9e66fff46bf2800c31630ab8d9",
+    "size": 14743680,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a2bbcd291b170eb77a35f40abc010ced52e60c6089c6a2df3fde5b75b674f0f2.ctex",
+          "sha256": "a2bbcd291b170eb77a35f40abc010ced52e60c6089c6a2df3fde5b75b674f0f2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "daa0a12b1aa641ab445aae4635c6b67b69e274f8d40b41b2359dc69fe2cbf186.ctex",
+          "sha256": "daa0a12b1aa641ab445aae4635c6b67b69e274f8d40b41b2359dc69fe2cbf186",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1a6dd75849d29175d60da1aa8eb15836f897e0fea3af1ff8fd541f64a197f383.glb",
+        "sha256": "1a6dd75849d29175d60da1aa8eb15836f897e0fea3af1ff8fd541f64a197f383",
+        "size": 10834508
+      },
+      "size_class": "large"
+    }
+  },
+  "wormhole_daemons_of_plague/champion of plague": {
+    "url": "1698bb9ef18414eace79b899112e81b0ee627fcc0eef5b407fcfb263594ddd09.glb",
+    "sha256": "1698bb9ef18414eace79b899112e81b0ee627fcc0eef5b407fcfb263594ddd09",
+    "size": 15623860,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "88439555cc9240e0962c5f9b5f55e61c212e82bb868a0b4a59926fb3aab054fb.ctex",
+          "sha256": "88439555cc9240e0962c5f9b5f55e61c212e82bb868a0b4a59926fb3aab054fb",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9f369e2ab60880a5b791aa4049412cd0d39c7d94f89e1fc14d99bfe55c50eaec.ctex",
+          "sha256": "9f369e2ab60880a5b791aa4049412cd0d39c7d94f89e1fc14d99bfe55c50eaec",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "40bfc57d305783f32c089a90cf1783c4288acf4e8124f61adcd897602bbeb693.glb",
+        "sha256": "40bfc57d305783f32c089a90cf1783c4288acf4e8124f61adcd897602bbeb693",
+        "size": 3991008
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_plague/fungusfester": {
+    "url": "60affc7619d4fdbb106a497c1d7e1d24d4a6c2924fa273e24f2ca12494ff4b71.glb",
+    "sha256": "60affc7619d4fdbb106a497c1d7e1d24d4a6c2924fa273e24f2ca12494ff4b71",
+    "size": 12159504,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "36f348b2073977545b90dca2efa0f64b3b01b68d90f8a74eb957d79825491602.ctex",
+          "sha256": "36f348b2073977545b90dca2efa0f64b3b01b68d90f8a74eb957d79825491602",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7a22e6c5c03467ff5c84bd6181c67ca81d1d217cda5fa54efc5b30de82ae9c95.ctex",
+          "sha256": "7a22e6c5c03467ff5c84bd6181c67ca81d1d217cda5fa54efc5b30de82ae9c95",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "70d0cf2d158aff60457c20f63ff5ba1964f48efbf9e8d0951577597962465356.glb",
+        "sha256": "70d0cf2d158aff60457c20f63ff5ba1964f48efbf9e8d0951577597962465356",
+        "size": 3484036
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_plague/fury champion of plague": {
+    "url": "1aa438e36729f81f0b446879121d61eb8ee1a74f35ea4c876ed2d5f5d99658b6.glb",
+    "sha256": "1aa438e36729f81f0b446879121d61eb8ee1a74f35ea4c876ed2d5f5d99658b6",
+    "size": 15175112,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4dd28016f8aa0ae1dcbc1dbd5351fd219d1a2166d1fabec7417175cec8d0eb35.ctex",
+          "sha256": "4dd28016f8aa0ae1dcbc1dbd5351fd219d1a2166d1fabec7417175cec8d0eb35",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "174ea70e81e22a930c8014b40b9152c271f9b1fe62c6bc7713b1b9cc41ef18ac.ctex",
+          "sha256": "174ea70e81e22a930c8014b40b9152c271f9b1fe62c6bc7713b1b9cc41ef18ac",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8336bda3f8f8ae436addf016b25446185add789c734f1fe99253201f79629af6.glb",
+        "sha256": "8336bda3f8f8ae436addf016b25446185add789c734f1fe99253201f79629af6",
+        "size": 3679952
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_plague/giant slug": {
+    "url": "65775c5d185ed7fd1f7544ac2cc2d573fdd9296337f6cbe75835db054c42a58e.glb",
+    "sha256": "65775c5d185ed7fd1f7544ac2cc2d573fdd9296337f6cbe75835db054c42a58e",
+    "size": 17033196,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b16e224305b703f612bf7eb8dd585b1400bbad9a6c0523e952530313b0fc481f.ctex",
+          "sha256": "b16e224305b703f612bf7eb8dd585b1400bbad9a6c0523e952530313b0fc481f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e417facf739ae40de1850f9fd4dea07b4d38af23bd7ee02cd60ffff14eba0a8d.ctex",
+          "sha256": "e417facf739ae40de1850f9fd4dea07b4d38af23bd7ee02cd60ffff14eba0a8d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5659ab465a59726a0baa69c4dee46ea483fe7d54fd262ec19213f56172f2cbf2.glb",
+        "sha256": "5659ab465a59726a0baa69c4dee46ea483fe7d54fd262ec19213f56172f2cbf2",
+        "size": 12263008
+      },
+      "size_class": "large"
+    }
+  },
+  "wormhole_daemons_of_plague/harbinger of plague": {
+    "url": "025dce8e2effaa5315c632d35f5ee5e6cc5555dbf0e608e2362d4c84ff7f1678.glb",
+    "sha256": "025dce8e2effaa5315c632d35f5ee5e6cc5555dbf0e608e2362d4c84ff7f1678",
+    "size": 14986864,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "cbea09a3f97fcf37fdb68e8557603af67bdb765245339a4171db4ee9d7169fa4.ctex",
+          "sha256": "cbea09a3f97fcf37fdb68e8557603af67bdb765245339a4171db4ee9d7169fa4",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e340e4cdc450a5a0a998fbb8e5d57f8a13c3038abe4b61eef7dcfa0b5194dadd.ctex",
+          "sha256": "e340e4cdc450a5a0a998fbb8e5d57f8a13c3038abe4b61eef7dcfa0b5194dadd",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "18145f7d846df4806fe0e6d0632ea63beb546ea77ad5c3831997e3a96d85f237.glb",
+        "sha256": "18145f7d846df4806fe0e6d0632ea63beb546ea77ad5c3831997e3a96d85f237",
+        "size": 4355408
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_plague/plague beast": {
+    "url": "5bdd387e83a2bb766b7f4b127d8c6b75c31f0675a6a7d546a4730dc291e78f03.glb",
+    "sha256": "5bdd387e83a2bb766b7f4b127d8c6b75c31f0675a6a7d546a4730dc291e78f03",
+    "size": 14772464,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6e811ff48eb1356dc6bb0cb7d3d425e2067d26a526d892b8a6d730a5c0ca8db4.ctex",
+          "sha256": "6e811ff48eb1356dc6bb0cb7d3d425e2067d26a526d892b8a6d730a5c0ca8db4",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "36dfc978d6f9f41b9e744c446ab4ec3bd3de196a6328baf28a63ca379c279f22.ctex",
+          "sha256": "36dfc978d6f9f41b9e744c446ab4ec3bd3de196a6328baf28a63ca379c279f22",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "0f468e91cc113060eabe42d3f102449337261759660a94a5921c8c63b9860823.glb",
+        "sha256": "0f468e91cc113060eabe42d3f102449337261759660a94a5921c8c63b9860823",
+        "size": 10413056
+      },
+      "size_class": "large"
+    }
+  },
+  "wormhole_daemons_of_plague/plague fly riders": {
+    "url": "f4e6524cfea282530bfa17f8f8487f46239b5b35dcf977fd535844382cf4c047.glb",
+    "sha256": "f4e6524cfea282530bfa17f8f8487f46239b5b35dcf977fd535844382cf4c047",
+    "size": 16839256,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9a10e1a4aea6f9960abf90867acee4b2b8cd0e7ca215da568386d1b1ae473578.ctex",
+          "sha256": "9a10e1a4aea6f9960abf90867acee4b2b8cd0e7ca215da568386d1b1ae473578",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0aab44584cd904f5f809c3342597dc41dc7c030ba8209e089d156eda44d00330.ctex",
+          "sha256": "0aab44584cd904f5f809c3342597dc41dc7c030ba8209e089d156eda44d00330",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5a7909f6cab247a2dbe229997cab1523925991bf3f89c4a8eced91ef52f3f1b2.glb",
+        "sha256": "5a7909f6cab247a2dbe229997cab1523925991bf3f89c4a8eced91ef52f3f1b2",
+        "size": 4337932
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_plague/plague furies": {
+    "url": "2daac8d2daa7bf88671aac1a94431061cdb0364b85358a83971124a3cc077b90.glb",
+    "sha256": "2daac8d2daa7bf88671aac1a94431061cdb0364b85358a83971124a3cc077b90",
+    "size": 13762848,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0af63aebc5445c04241b8a3efaa388c8fa9388e514c161c60fea1a2fdb9ba845.ctex",
+          "sha256": "0af63aebc5445c04241b8a3efaa388c8fa9388e514c161c60fea1a2fdb9ba845",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "bee400c67285fc111f249ef6b57d5b75e38ec9281e34d37d4aa22e86faa8bd46.ctex",
+          "sha256": "bee400c67285fc111f249ef6b57d5b75e38ec9281e34d37d4aa22e86faa8bd46",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ff1945d1aa9145059fb7095126912dfe2eed8cd49970be96bfb09d795152e7ce.glb",
+        "sha256": "ff1945d1aa9145059fb7095126912dfe2eed8cd49970be96bfb09d795152e7ce",
+        "size": 3747548
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_plague/plague harvester": {
+    "url": "1f26459d5e6fde8e1791dc14698b8b02d52e7f4cb19b3134180eceb33c48f58a.glb",
+    "sha256": "1f26459d5e6fde8e1791dc14698b8b02d52e7f4cb19b3134180eceb33c48f58a",
+    "size": 16657372,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5b8990779464121662c759c59c3f5a634ea8787bf29429475d752f2d8f4ee146.ctex",
+          "sha256": "5b8990779464121662c759c59c3f5a634ea8787bf29429475d752f2d8f4ee146",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "26d2391e16771d6ab6bef8a03c67c1548cb9534974099e9a0f7d31d9a2a78d67.ctex",
+          "sha256": "26d2391e16771d6ab6bef8a03c67c1548cb9534974099e9a0f7d31d9a2a78d67",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "814728c19094b0c0c4a4d7b30845ecfcc43e2b7c93a195026a32a590af03d85f.glb",
+        "sha256": "814728c19094b0c0c4a4d7b30845ecfcc43e2b7c93a195026a32a590af03d85f",
+        "size": 4313908
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_plague/plague slingers": {
+    "url": "959e7d014927f0338ce4439d2bf903d40a4c05362d1279fe3619e45cb38bfc93.glb",
+    "sha256": "959e7d014927f0338ce4439d2bf903d40a4c05362d1279fe3619e45cb38bfc93",
+    "size": 17535960,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0a931fbfc614412a14f616a560f74a4e6569669be6c74bb0b3757988064af8ea.ctex",
+          "sha256": "0a931fbfc614412a14f616a560f74a4e6569669be6c74bb0b3757988064af8ea",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "24759e96609d704921527da388602667d1796f4a1481ccd05a411f18ca6d90f3.ctex",
+          "sha256": "24759e96609d704921527da388602667d1796f4a1481ccd05a411f18ca6d90f3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "86005ab25d580f38d22689a7048c1926cffadaf65422c96ef5ec9a64040ba7a6.glb",
+        "sha256": "86005ab25d580f38d22689a7048c1926cffadaf65422c96ef5ec9a64040ba7a6",
+        "size": 5160776
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_plague/plague soul spawns": {
+    "url": "54ecddc6f9d5df0d4c01f9ffa1afde7a2391764586f91cd8a2e41aa1d064e207.glb",
+    "sha256": "54ecddc6f9d5df0d4c01f9ffa1afde7a2391764586f91cd8a2e41aa1d064e207",
+    "size": 15361764,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "49c18026909eb214cc882868ea861583e5a44ac339c1d23ead6b08770473f5e0.ctex",
+          "sha256": "49c18026909eb214cc882868ea861583e5a44ac339c1d23ead6b08770473f5e0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "81f231ee09b97797ded1238181f8b37a43de88995c05730bd5741205a72459f7.ctex",
+          "sha256": "81f231ee09b97797ded1238181f8b37a43de88995c05730bd5741205a72459f7",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8a70af1a5898d6027a6b4b74b8e95835d711838722ecf0707240d82b551c96dd.glb",
+        "sha256": "8a70af1a5898d6027a6b4b74b8e95835d711838722ecf0707240d82b551c96dd",
+        "size": 4161868
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_plague/plague swarms": {
+    "url": "bf035f77c89affcbce6275cd0bd8a61872bbfac0b8d2c612ec03878432fe548b.glb",
+    "sha256": "bf035f77c89affcbce6275cd0bd8a61872bbfac0b8d2c612ec03878432fe548b",
+    "size": 19056572,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2cab62b35fa1067f4636ad5e1c410d936c46f4ff427feba61ca384bb2332e6cf.ctex",
+          "sha256": "2cab62b35fa1067f4636ad5e1c410d936c46f4ff427feba61ca384bb2332e6cf",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ed8e9df61651da25223874ec1ca1a29fff40ce6bf57ff080c7cca156f52c1af2.ctex",
+          "sha256": "ed8e9df61651da25223874ec1ca1a29fff40ce6bf57ff080c7cca156f52c1af2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ba9d2a33c8538776778646f6148c645db69e3624f51d0c106bccdba030bee60d.glb",
+        "sha256": "ba9d2a33c8538776778646f6148c645db69e3624f51d0c106bccdba030bee60d",
+        "size": 5082192
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_plague/plague warriors": {
+    "url": "bf4102dfa8f8e7450cbcb2b6dcbcd6a54306d2991ca93ebc4cf62fbd2f603952.glb",
+    "sha256": "bf4102dfa8f8e7450cbcb2b6dcbcd6a54306d2991ca93ebc4cf62fbd2f603952",
+    "size": 15722104,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "81fa0ebb88314669a5fe99a1ae92d6558148e94daffa778c487cd0c10c726d5f.ctex",
+          "sha256": "81fa0ebb88314669a5fe99a1ae92d6558148e94daffa778c487cd0c10c726d5f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5c926a6da97aa0b796da291944f9f446f4ea4051bdd1d434cea0bc634fc4cd45.ctex",
+          "sha256": "5c926a6da97aa0b796da291944f9f446f4ea4051bdd1d434cea0bc634fc4cd45",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "72a13fa0d712cebf6278ad3163ffbdf9e65a1f3fdb048ae0833f30e9856e3426.glb",
+        "sha256": "72a13fa0d712cebf6278ad3163ffbdf9e65a1f3fdb048ae0833f30e9856e3426",
+        "size": 4144472
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_plague/poisonzeal": {
+    "url": "8396d54a6074e12100890e955a3a7001068bff4c50b517bd8c8daffa405b2899.glb",
+    "sha256": "8396d54a6074e12100890e955a3a7001068bff4c50b517bd8c8daffa405b2899",
+    "size": 16411992,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "271e3707c114cdf9c673c9cdc64a2613d67e2d34f62e71067b459ccddf76b2d2.ctex",
+          "sha256": "271e3707c114cdf9c673c9cdc64a2613d67e2d34f62e71067b459ccddf76b2d2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "bda02b462424b59c4234b0b73f870c54f99eb4a23b76ec1755f3484e64f7ad79.ctex",
+          "sha256": "bda02b462424b59c4234b0b73f870c54f99eb4a23b76ec1755f3484e64f7ad79",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e1ad4a5629ba01c0b94943b47e6a7132bf58afd2fb05fe410332a53d47592651.glb",
+        "sha256": "e1ad4a5629ba01c0b94943b47e6a7132bf58afd2fb05fe410332a53d47592651",
+        "size": 4422612
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_plague/sling furies": {
+    "url": "7c8aca1ff81421cbc0f89b38727ec4bd7d2618276ba007672e62d08f3595f8a9.glb",
+    "sha256": "7c8aca1ff81421cbc0f89b38727ec4bd7d2618276ba007672e62d08f3595f8a9",
+    "size": 16369044,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "cc5b9972b2e48dd9a9263c6532b70bd08362af7576ba32df2fe8519182423f04.ctex",
+          "sha256": "cc5b9972b2e48dd9a9263c6532b70bd08362af7576ba32df2fe8519182423f04",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "03a2348589a25357499b51eb9f77514dcba40c9e02e9dca133747abceb506ccc.ctex",
+          "sha256": "03a2348589a25357499b51eb9f77514dcba40c9e02e9dca133747abceb506ccc",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7af6416cb13c6361e14527f48f6062a63f7934640aff27df029472e4ad63fd2d.glb",
+        "sha256": "7af6416cb13c6361e14527f48f6062a63f7934640aff27df029472e4ad63fd2d",
+        "size": 4917772
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_plague/soul daemon of plague": {
+    "url": "aa00aa51ad8cd039b49efe51c4e92379790bed52da78c3219934593e1e853b9d.glb",
+    "sha256": "aa00aa51ad8cd039b49efe51c4e92379790bed52da78c3219934593e1e853b9d",
+    "size": 17874880,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "60dfe578684217ecd86fbad05e9e5b75a299f50a1e434336a616ab6c9c4a7134.ctex",
+          "sha256": "60dfe578684217ecd86fbad05e9e5b75a299f50a1e434336a616ab6c9c4a7134",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "75ec91e3ff1f6edff79351b0b9d2dc62faeb4a5677716d4b65d93b627c74ea61.ctex",
+          "sha256": "75ec91e3ff1f6edff79351b0b9d2dc62faeb4a5677716d4b65d93b627c74ea61",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5055a02803f5d41f5849932db3a46fa147f9e5b9872a82130de7549be5690cc0.glb",
+        "sha256": "5055a02803f5d41f5849932db3a46fa147f9e5b9872a82130de7549be5690cc0",
+        "size": 4662704
+      },
+      "size_class": "infantry"
+    }
+  }
+}

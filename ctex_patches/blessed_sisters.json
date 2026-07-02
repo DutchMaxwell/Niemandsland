@@ -1,0 +1,730 @@
+{
+  "blessed_sisters/apc": {
+    "url": "1fcb4571eb28913b639c1c10c0a4738e6852593068e80020d682f651893902b0.glb",
+    "sha256": "1fcb4571eb28913b639c1c10c0a4738e6852593068e80020d682f651893902b0",
+    "size": 18086312,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "895fcdc0d6547353bbc59ccb2fc39813f8b83cd8a4c88edd7fdeb47a84f81ac9.ctex",
+          "sha256": "895fcdc0d6547353bbc59ccb2fc39813f8b83cd8a4c88edd7fdeb47a84f81ac9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "735b9bc258fc7ec3cc3bae2a05ff657b37214b172fda28820bf675265de961f9.ctex",
+          "sha256": "735b9bc258fc7ec3cc3bae2a05ff657b37214b172fda28820bf675265de961f9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f0b7072064eccf4e08035ea66e918402805d7563faadff2076a72e7d352afacd.glb",
+        "sha256": "f0b7072064eccf4e08035ea66e918402805d7563faadff2076a72e7d352afacd",
+        "size": 9741756
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "blessed_sisters/assault sisters": {
+    "url": "58d46b883db233c14346f36215d67264c969c897e54d88121e1244c2814232e6.glb",
+    "sha256": "58d46b883db233c14346f36215d67264c969c897e54d88121e1244c2814232e6",
+    "size": 16046780,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "55c5575f4bddbbe2a646955358e2250c464ca6b9d7dbd0293a6f7e2e45047314.ctex",
+          "sha256": "55c5575f4bddbbe2a646955358e2250c464ca6b9d7dbd0293a6f7e2e45047314",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "506e7a6add5f7ea8d8111014cfc47811248249afd835822a58dd97d484f1d2b8.ctex",
+          "sha256": "506e7a6add5f7ea8d8111014cfc47811248249afd835822a58dd97d484f1d2b8",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "fc952ff03d9d82f44c6b98289c82731e1a466db0734902d5dbe02c41e856ae33.glb",
+        "sha256": "fc952ff03d9d82f44c6b98289c82731e1a466db0734902d5dbe02c41e856ae33",
+        "size": 4738908
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blessed_sisters/assault walker": {
+    "url": "ec779d02b0f750c26072717d0b45ee17ab07f50870388f0e40964e6d4c4615c8.glb",
+    "sha256": "ec779d02b0f750c26072717d0b45ee17ab07f50870388f0e40964e6d4c4615c8",
+    "size": 15796392,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "36d4bb914f5cdb291f5591077231e1626fa5a6a7a272019c73ee7466827d993e.ctex",
+          "sha256": "36d4bb914f5cdb291f5591077231e1626fa5a6a7a272019c73ee7466827d993e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "14e9e9435e042d61904c9889cb6984333a4c414b8d4503031602ada5e31035e7.ctex",
+          "sha256": "14e9e9435e042d61904c9889cb6984333a4c414b8d4503031602ada5e31035e7",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9980897dfe69b3b27d6f6106bdb898e1ee8187cd04f8d33ba0e66a0145653626.glb",
+        "sha256": "9980897dfe69b3b27d6f6106bdb898e1ee8187cd04f8d33ba0e66a0145653626",
+        "size": 8872612
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "blessed_sisters/battle tank": {
+    "url": "47783bd39d6be4d85cd20bcf905398b828d2ef32da7895087b88f6b95a0e2a22.glb",
+    "sha256": "47783bd39d6be4d85cd20bcf905398b828d2ef32da7895087b88f6b95a0e2a22",
+    "size": 17289580,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5ec0b67305f7f26a4070b0fec1cef8ad0d1f0796f68eb70e04460267c2de122b.ctex",
+          "sha256": "5ec0b67305f7f26a4070b0fec1cef8ad0d1f0796f68eb70e04460267c2de122b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b481c7b1466d4923bab3790f843ab6c7beb06dca21f1648ce5d9302ce1afef5e.ctex",
+          "sha256": "b481c7b1466d4923bab3790f843ab6c7beb06dca21f1648ce5d9302ce1afef5e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d5a1cc81c8a6528f5761de7a388ca4e3a3d7bffdf21bf1e4b2aacc510d3ba962.glb",
+        "sha256": "d5a1cc81c8a6528f5761de7a388ca4e3a3d7bffdf21bf1e4b2aacc510d3ba962",
+        "size": 9406460
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "blessed_sisters/biker fanatics": {
+    "url": "83e4ba8b9f845f7dccf3aeef8cd4e492f70dc785d6db4c4e85a023457e6918c9.glb",
+    "sha256": "83e4ba8b9f845f7dccf3aeef8cd4e492f70dc785d6db4c4e85a023457e6918c9",
+    "size": 16675632,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b8b568828c5e202ea59f7dc12545b48c43ff579ff088a1c61fc01d213e15c022.ctex",
+          "sha256": "b8b568828c5e202ea59f7dc12545b48c43ff579ff088a1c61fc01d213e15c022",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e27acf5c1b7681bcfcfa153cf9a77e75f5858e5c906ab0d957b9a04013827e9e.ctex",
+          "sha256": "e27acf5c1b7681bcfcfa153cf9a77e75f5858e5c906ab0d957b9a04013827e9e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8e1bd4cf9a81c86560d07075b4de7a11e4b326d5b3f0788bb7b28d09fdcb8d57.glb",
+        "sha256": "8e1bd4cf9a81c86560d07075b4de7a11e4b326d5b3f0788bb7b28d09fdcb8d57",
+        "size": 8980060
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "blessed_sisters/biker sisters": {
+    "url": "0396d5377eb35c6eb1ef4591ab5cea42a58fc01cd84e7558afb4635ead9236a4.glb",
+    "sha256": "0396d5377eb35c6eb1ef4591ab5cea42a58fc01cd84e7558afb4635ead9236a4",
+    "size": 15341396,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5f5c092a9e852a50206d8de40678dc96fd0e93e726d366df0bb4bb68409203b8.ctex",
+          "sha256": "5f5c092a9e852a50206d8de40678dc96fd0e93e726d366df0bb4bb68409203b8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "883ad89b48278dcd4795ec2d725bd997a11fc090dd9caf7478776d0743de7cd2.ctex",
+          "sha256": "883ad89b48278dcd4795ec2d725bd997a11fc090dd9caf7478776d0743de7cd2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d448da82081f13cebc1ad2ac48184f3021acdfc2174d52f4ddfbeddc2aaa25f6.glb",
+        "sha256": "d448da82081f13cebc1ad2ac48184f3021acdfc2174d52f4ddfbeddc2aaa25f6",
+        "size": 8299700
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "blessed_sisters/blessed titan": {
+    "url": "abcd73520c46a9164b41a80913dda9708f5521b4cf90c27a4da8152628d807fc.glb",
+    "sha256": "abcd73520c46a9164b41a80913dda9708f5521b4cf90c27a4da8152628d807fc",
+    "size": 17745508,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8b5a19a37d3933fe02c570dcda04aa8bb39fac498d0216bf872d872874cb9efb.ctex",
+          "sha256": "8b5a19a37d3933fe02c570dcda04aa8bb39fac498d0216bf872d872874cb9efb",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b8b3fa11ac032d63b3d4b2abf4fd5da7de0041643d601c62c9a7691f388f617a.ctex",
+          "sha256": "b8b3fa11ac032d63b3d4b2abf4fd5da7de0041643d601c62c9a7691f388f617a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7d18dc1285e3ba30db4c855e98f4f2aea355d846d7d1464abd856971416dffb9.glb",
+        "sha256": "7d18dc1285e3ba30db4c855e98f4f2aea355d846d7d1464abd856971416dffb9",
+        "size": 13145596
+      },
+      "size_class": "large"
+    }
+  },
+  "blessed_sisters/celestial high sister": {
+    "url": "f903143b4be87888c24bf048200ea5d4bc1c55c08d3e9a045a9e76c6f950da64.glb",
+    "sha256": "f903143b4be87888c24bf048200ea5d4bc1c55c08d3e9a045a9e76c6f950da64",
+    "size": 15542620,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "dfd24f906022f7918ac30979bf328cfebaefd6757f1b7dda485fd2beb3b1bd8c.ctex",
+          "sha256": "dfd24f906022f7918ac30979bf328cfebaefd6757f1b7dda485fd2beb3b1bd8c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ab92830724c91a4600429e891a2f69f03044ff5f8d04d1bce6d309d2b5184976.ctex",
+          "sha256": "ab92830724c91a4600429e891a2f69f03044ff5f8d04d1bce6d309d2b5184976",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5f4ce378ae8a0de47478080ba0b222cb89126b29c80c142da936cb7acd35fb3c.glb",
+        "sha256": "5f4ce378ae8a0de47478080ba0b222cb89126b29c80c142da936cb7acd35fb3c",
+        "size": 4779180
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blessed_sisters/celestial warrior sisters": {
+    "url": "116fd4b3163b89d5169f98eac188f5fbf1263d28e62e615c9929a85704fa8b75.glb",
+    "sha256": "116fd4b3163b89d5169f98eac188f5fbf1263d28e62e615c9929a85704fa8b75",
+    "size": 15652008,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "07ec84f4f9c0f301a4d096f8d53b402d4d2ad270aa518c1fd9dd021c88152ffd.ctex",
+          "sha256": "07ec84f4f9c0f301a4d096f8d53b402d4d2ad270aa518c1fd9dd021c88152ffd",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "00b9ead4139b78c9e8dfbb887f192e3e46d0ecc33d10d0da4837dd995e325e4b.ctex",
+          "sha256": "00b9ead4139b78c9e8dfbb887f192e3e46d0ecc33d10d0da4837dd995e325e4b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7910095a0c44a6ef071f280702ea94ea482b7187888fe65dddff485a0d7c4619.glb",
+        "sha256": "7910095a0c44a6ef071f280702ea94ea482b7187888fe65dddff485a0d7c4619",
+        "size": 4419412
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blessed_sisters/constance": {
+    "url": "59d6f7732aef8595de6c61b56461d99ab6bd239aa2250d106a3da53485ae5030.glb",
+    "sha256": "59d6f7732aef8595de6c61b56461d99ab6bd239aa2250d106a3da53485ae5030",
+    "size": 14300936,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "14ad2a87ceafc6cda4c0eba4345b842d08bb07dde09b817b42684dda604d6974.ctex",
+          "sha256": "14ad2a87ceafc6cda4c0eba4345b842d08bb07dde09b817b42684dda604d6974",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1111c2c668370c5d069f6fdcb3bbd169f961e27397c3ff15b1aa5d02ac67fd5a.ctex",
+          "sha256": "1111c2c668370c5d069f6fdcb3bbd169f961e27397c3ff15b1aa5d02ac67fd5a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a8840429db9969ff5a844898259f52328aba8eb9bffe0fdc0212e15c3ef8ee5c.glb",
+        "sha256": "a8840429db9969ff5a844898259f52328aba8eb9bffe0fdc0212e15c3ef8ee5c",
+        "size": 3745836
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blessed_sisters/destroyer sisters": {
+    "url": "30a5a2673ac0771151e5b5db2c3226041484fcc5cda86ff1e969489b0903e1af.glb",
+    "sha256": "30a5a2673ac0771151e5b5db2c3226041484fcc5cda86ff1e969489b0903e1af",
+    "size": 14531172,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e8684075254953a0464fbcc0e6cdcddb11a3bf86ccb22108cf788b5c78e29586.ctex",
+          "sha256": "e8684075254953a0464fbcc0e6cdcddb11a3bf86ccb22108cf788b5c78e29586",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9e2b22b1f57ef94123f9810031a7ae4d73768a6914fdf69f78848f65b07b56e0.ctex",
+          "sha256": "9e2b22b1f57ef94123f9810031a7ae4d73768a6914fdf69f78848f65b07b56e0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c2cb9b4726e6f670d74d0aac7fb091022513244360dc839d6cc50f1a579abd12.glb",
+        "sha256": "c2cb9b4726e6f670d74d0aac7fb091022513244360dc839d6cc50f1a579abd12",
+        "size": 4203920
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blessed_sisters/exo suit": {
+    "url": "5ea649cf7b09544e8b84dc0360aad8ea067fe2187357feadffe48c29192b6e5e.glb",
+    "sha256": "5ea649cf7b09544e8b84dc0360aad8ea067fe2187357feadffe48c29192b6e5e",
+    "size": 15979028,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "403eb44805e163ad89eecdb58d83d6f899428235caf8387e404076b168ad682f.ctex",
+          "sha256": "403eb44805e163ad89eecdb58d83d6f899428235caf8387e404076b168ad682f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "513d07ac9d750e5f6e80fd0ca19598015f58bd78a1989a89a0ef4da77ef57b4d.ctex",
+          "sha256": "513d07ac9d750e5f6e80fd0ca19598015f58bd78a1989a89a0ef4da77ef57b4d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2f15f30bb7e28ee935499d75a8ee49d49d16e738e0a0e08ad8268a5285b92731.glb",
+        "sha256": "2f15f30bb7e28ee935499d75a8ee49d49d16e738e0a0e08ad8268a5285b92731",
+        "size": 4899832
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blessed_sisters/exo suit high sister": {
+    "url": "70390f90d0ec2ddd14aec97b7d00478705fc33e032a44da61248d2be647e64d9.glb",
+    "sha256": "70390f90d0ec2ddd14aec97b7d00478705fc33e032a44da61248d2be647e64d9",
+    "size": 16236832,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "29c01563643539ffb86757afb2486ced442da802c37eeec9e934640a32026a8b.ctex",
+          "sha256": "29c01563643539ffb86757afb2486ced442da802c37eeec9e934640a32026a8b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "da5689bc9a946188f3061f38620b0f5798b78790750226b67eed1541e24f0b21.ctex",
+          "sha256": "da5689bc9a946188f3061f38620b0f5798b78790750226b67eed1541e24f0b21",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "86d71973d0317d2f9484fca3537f3f7c128ef587d4e02ba2d141511a8421f8f7.glb",
+        "sha256": "86d71973d0317d2f9484fca3537f3f7c128ef587d4e02ba2d141511a8421f8f7",
+        "size": 4612540
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blessed_sisters/fanatic sisters": {
+    "url": "868b770d245a32558e8f512a456b82ca0010ac2c995f81039db0c5ad840dfc33.glb",
+    "sha256": "868b770d245a32558e8f512a456b82ca0010ac2c995f81039db0c5ad840dfc33",
+    "size": 16611480,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "68ea8e66efa31d2e2615f13b9c4aa35733c3ba80351d8dc6298d2c361e342d65.ctex",
+          "sha256": "68ea8e66efa31d2e2615f13b9c4aa35733c3ba80351d8dc6298d2c361e342d65",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "468597b4d6446895212eb23c6a721882aa8cbb585193e81495cdc6469bbce2d9.ctex",
+          "sha256": "468597b4d6446895212eb23c6a721882aa8cbb585193e81495cdc6469bbce2d9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "967f9ff8ee7079fcdc157198f1e1dd26f0e0f4c2a03d37951497323d8f90e7df.glb",
+        "sha256": "967f9ff8ee7079fcdc157198f1e1dd26f0e0f4c2a03d37951497323d8f90e7df",
+        "size": 4647376
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blessed_sisters/fanatic superior": {
+    "url": "9cb5bdfa41aee59233d8e23528d32dfb8a455ca05c15e4a201d2553a47e12d1f.glb",
+    "sha256": "9cb5bdfa41aee59233d8e23528d32dfb8a455ca05c15e4a201d2553a47e12d1f",
+    "size": 17143520,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2aa9d7855531fd5ca6fee4d81ef98258ccaba69a5745a1424d327e0dab9f79f4.ctex",
+          "sha256": "2aa9d7855531fd5ca6fee4d81ef98258ccaba69a5745a1424d327e0dab9f79f4",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c73c531e222cd62301f54b7f6a3481190bbfe94d330c0bb4e169e559f0739d52.ctex",
+          "sha256": "c73c531e222cd62301f54b7f6a3481190bbfe94d330c0bb4e169e559f0739d52",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "08794ae8af5e0671767a5f2a4aba524e14d81dc1cebc2d47cc93cf5ab6c3e17a.glb",
+        "sha256": "08794ae8af5e0671767a5f2a4aba524e14d81dc1cebc2d47cc93cf5ab6c3e17a",
+        "size": 4819568
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blessed_sisters/high destroyer sister": {
+    "url": "7c307b52dc8cc31c00aa796c69c60b0c40a55c716e8237dee2dcbba64fb3f392.glb",
+    "sha256": "7c307b52dc8cc31c00aa796c69c60b0c40a55c716e8237dee2dcbba64fb3f392",
+    "size": 13810136,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "647f24d6422d59405f7d27dd574750f365745cba3a7a0f66ba0052bc4605fa44.ctex",
+          "sha256": "647f24d6422d59405f7d27dd574750f365745cba3a7a0f66ba0052bc4605fa44",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5f7e54d857a8f9a3b091b72c03abadb21227ee440bac112830a683d3cf5ce9aa.ctex",
+          "sha256": "5f7e54d857a8f9a3b091b72c03abadb21227ee440bac112830a683d3cf5ce9aa",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "4632dbac6e79d1d82a8c9be6ca8115e69dba07f56cc8c0c8b2fe4baa0a0699c9.glb",
+        "sha256": "4632dbac6e79d1d82a8c9be6ca8115e69dba07f56cc8c0c8b2fe4baa0a0699c9",
+        "size": 4186660
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blessed_sisters/high sister": {
+    "url": "3d6a4daf706ea7e83e1050fb3d247916cf192340dc5cd43e7058f02bc55363fd.glb",
+    "sha256": "3d6a4daf706ea7e83e1050fb3d247916cf192340dc5cd43e7058f02bc55363fd",
+    "size": 14913884,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "58989fe9503eae791ec0b0dc6c5898889c730223958c7c2ea1087517901c8d45.ctex",
+          "sha256": "58989fe9503eae791ec0b0dc6c5898889c730223958c7c2ea1087517901c8d45",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "00f8f686361dd5f6ee82765ce64d7e8d02bba1be0599247ea0e9f02bc6e5300c.ctex",
+          "sha256": "00f8f686361dd5f6ee82765ce64d7e8d02bba1be0599247ea0e9f02bc6e5300c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1604fc9bc424d4f65d08c4b6834d2262f9d797820a370a5e3495a9b0a7bd6375.glb",
+        "sha256": "1604fc9bc424d4f65d08c4b6834d2262f9d797820a370a5e3495a9b0a7bd6375",
+        "size": 4209740
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blessed_sisters/infernal apc": {
+    "url": "5fd014f5c40f6cfdbdc27d111ca65b410dce4d66d4174efcf6117755ddadd9ec.glb",
+    "sha256": "5fd014f5c40f6cfdbdc27d111ca65b410dce4d66d4174efcf6117755ddadd9ec",
+    "size": 16377348,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3e3aff20b6186b0fc2a58960da511ebab85603fab68a48412032d5b0ae0f4ee6.ctex",
+          "sha256": "3e3aff20b6186b0fc2a58960da511ebab85603fab68a48412032d5b0ae0f4ee6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ee63f4e6bf35d9fd93d460cc90c21819555c1facb5348b5b8fc1031b247220b2.ctex",
+          "sha256": "ee63f4e6bf35d9fd93d460cc90c21819555c1facb5348b5b8fc1031b247220b2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b27373d205a6ea3b611d1f9168bcb1f94f98858967ce5182b79548e65fb38c34.glb",
+        "sha256": "b27373d205a6ea3b611d1f9168bcb1f94f98858967ce5182b79548e65fb38c34",
+        "size": 9314924
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "blessed_sisters/novice leader": {
+    "url": "eefcb3cea310b5509666feeea9cbe551d759f9bde6f63c9a7ccafb81a90414af.glb",
+    "sha256": "eefcb3cea310b5509666feeea9cbe551d759f9bde6f63c9a7ccafb81a90414af",
+    "size": 14493256,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "53b1969ea8cb52915b83e3cc7e0bbdbbbc70f7966b8748320611e43950cca330.ctex",
+          "sha256": "53b1969ea8cb52915b83e3cc7e0bbdbbbc70f7966b8748320611e43950cca330",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "eb2b45030488e2d41e169c9daf8de65d77f43690d3d7a508aa3f4b88b767782f.ctex",
+          "sha256": "eb2b45030488e2d41e169c9daf8de65d77f43690d3d7a508aa3f4b88b767782f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d7a340588007720733856e757ea9fd67f14bc68fd9f2ee5fd5bcb7704bf5c564.glb",
+        "sha256": "d7a340588007720733856e757ea9fd67f14bc68fd9f2ee5fd5bcb7704bf5c564",
+        "size": 3965488
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blessed_sisters/novice sisters": {
+    "url": "4604e16f52c79c586c9a4687122b780456b5d96168406bec3dcc415b904c5c5f.glb",
+    "sha256": "4604e16f52c79c586c9a4687122b780456b5d96168406bec3dcc415b904c5c5f",
+    "size": 15044732,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9a0e9c5b1d8c041c373e8142d757e61e3f4206105de8586dac1eb07c021b4c23.ctex",
+          "sha256": "9a0e9c5b1d8c041c373e8142d757e61e3f4206105de8586dac1eb07c021b4c23",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "bfc46bd8b12b7daf1f6e2c4f6a0ee60235aa4d0a4f02aacb350377200b10ffb9.ctex",
+          "sha256": "bfc46bd8b12b7daf1f6e2c4f6a0ee60235aa4d0a4f02aacb350377200b10ffb9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "959f33615a3446b008fe7e81d5fe9352983e4096755117a3e1de5c23dfa55a6b.glb",
+        "sha256": "959f33615a3446b008fe7e81d5fe9352983e4096755117a3e1de5c23dfa55a6b",
+        "size": 4456196
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blessed_sisters/organ tank": {
+    "url": "686c2dfd18e4720b16a4788ed4cebdfb85ae60453472c49f9734cf2e464c3e9c.glb",
+    "sha256": "686c2dfd18e4720b16a4788ed4cebdfb85ae60453472c49f9734cf2e464c3e9c",
+    "size": 17500836,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2d47b3b3335586bb9b1b26708ace0cafd6148c6e8ebc2fe4b4329547e4b292c3.ctex",
+          "sha256": "2d47b3b3335586bb9b1b26708ace0cafd6148c6e8ebc2fe4b4329547e4b292c3",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "14f0da5c966cc865446914fd9dd6e270bb03e32694fa7d2cab44440d9aaf6d7e.ctex",
+          "sha256": "14f0da5c966cc865446914fd9dd6e270bb03e32694fa7d2cab44440d9aaf6d7e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "31404b19474bc42eabf2110a120ec553accb58300d980620fa2ac3c711ad44d9.glb",
+        "sha256": "31404b19474bc42eabf2110a120ec553accb58300d980620fa2ac3c711ad44d9",
+        "size": 9225504
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "blessed_sisters/pistoleer sisters": {
+    "url": "218356c597d36d2ec2bb0b975454ed64cecfc2202c05e00183d0b5f91c705c96.glb",
+    "sha256": "218356c597d36d2ec2bb0b975454ed64cecfc2202c05e00183d0b5f91c705c96",
+    "size": 14233036,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e5998eee309a5a8dae6e750497cc1aed72cb73a95a568902456ba2eb818a2ff2.ctex",
+          "sha256": "e5998eee309a5a8dae6e750497cc1aed72cb73a95a568902456ba2eb818a2ff2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "091e3459bf555decfd0989cb20a9e70eaa94831a1f4fa6243c0543aad390f227.ctex",
+          "sha256": "091e3459bf555decfd0989cb20a9e70eaa94831a1f4fa6243c0543aad390f227",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "face1c2f7e2f461228d82afc7412b49f2b3a31128fdbdf90e5be8ab1c7d38b0a.glb",
+        "sha256": "face1c2f7e2f461228d82afc7412b49f2b3a31128fdbdf90e5be8ab1c7d38b0a",
+        "size": 4292088
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blessed_sisters/procession altar": {
+    "url": "19685a9cfaf120fa649359df9dd0acb0bf3d9cad8fe9e6968a7a2f3d0d76a9d1.glb",
+    "sha256": "19685a9cfaf120fa649359df9dd0acb0bf3d9cad8fe9e6968a7a2f3d0d76a9d1",
+    "size": 18613340,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "89ef01d6c4c7da8fb5d4e2e732c368d395d027c571988a11f9cefe55fd0a0953.ctex",
+          "sha256": "89ef01d6c4c7da8fb5d4e2e732c368d395d027c571988a11f9cefe55fd0a0953",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "dcef1367e01c27a908510e08608f013dfc32910e0f97aae9e16cffdef709d591.ctex",
+          "sha256": "dcef1367e01c27a908510e08608f013dfc32910e0f97aae9e16cffdef709d591",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e95195df5c0a0c7fcbc7337fdc98892b1d6333f361c16cebb5a0781b47bd6284.glb",
+        "sha256": "e95195df5c0a0c7fcbc7337fdc98892b1d6333f361c16cebb5a0781b47bd6284",
+        "size": 5413336
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blessed_sisters/protector sisters": {
+    "url": "8c554ddf71cc2f8257448d867eb465d5cf570e48215365c4992421154ac4b706.glb",
+    "sha256": "8c554ddf71cc2f8257448d867eb465d5cf570e48215365c4992421154ac4b706",
+    "size": 15034912,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5d0e823edbef6d10b75120953e512aacce6b26153c04bc437376bf3231b5cc6a.ctex",
+          "sha256": "5d0e823edbef6d10b75120953e512aacce6b26153c04bc437376bf3231b5cc6a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "973d5b72d7badb9c2a7159419faa44e6907721ccb1342ea3fff973dd5bf9ff56.ctex",
+          "sha256": "973d5b72d7badb9c2a7159419faa44e6907721ccb1342ea3fff973dd5bf9ff56",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "99537f3acf8d5a08119c3525fd09c59a7ea4acc48c7d7d16edd5617efe8eb98e.glb",
+        "sha256": "99537f3acf8d5a08119c3525fd09c59a7ea4acc48c7d7d16edd5617efe8eb98e",
+        "size": 4188096
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blessed_sisters/support sisters": {
+    "url": "9f4a32f780586faa0ce52a17d455695437ed90d0aa5a97e287a68391ab3b9631.glb",
+    "sha256": "9f4a32f780586faa0ce52a17d455695437ed90d0aa5a97e287a68391ab3b9631",
+    "size": 14633960,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ad83c85bf55e269f96de33e0597725fc4d24e8eb53c78e1e8869fed4c5ee242a.ctex",
+          "sha256": "ad83c85bf55e269f96de33e0597725fc4d24e8eb53c78e1e8869fed4c5ee242a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7e2c864c9ede10fa6959de6176d63db8055eda348260e11b249853ca05742f20.ctex",
+          "sha256": "7e2c864c9ede10fa6959de6176d63db8055eda348260e11b249853ca05742f20",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8ec576de38eddc363b354c10850a163c5566070ffc0816179c4b9bee65e77df5.glb",
+        "sha256": "8ec576de38eddc363b354c10850a163c5566070ffc0816179c4b9bee65e77df5",
+        "size": 4206636
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blessed_sisters/support walker": {
+    "url": "0c77869200dde7c950c0425b15940f5a4973c2ded8240016babf3bab6299c9a2.glb",
+    "sha256": "0c77869200dde7c950c0425b15940f5a4973c2ded8240016babf3bab6299c9a2",
+    "size": 16511160,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b5962f7295ad52d38c04b1968193799df0e8192f7ba5cc8ee588cf8ed7bb5d63.ctex",
+          "sha256": "b5962f7295ad52d38c04b1968193799df0e8192f7ba5cc8ee588cf8ed7bb5d63",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "975f168b0ceaadb30d475bf003c746e78b8f396fa3b7e9bb65f196ba91642d1a.ctex",
+          "sha256": "975f168b0ceaadb30d475bf003c746e78b8f396fa3b7e9bb65f196ba91642d1a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c20f1550a5b375268b4f63986db6a6864ac01a4b553b1c60e9a523f9417023e9.glb",
+        "sha256": "c20f1550a5b375268b4f63986db6a6864ac01a4b553b1c60e9a523f9417023e9",
+        "size": 8756884
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "blessed_sisters/vanguard sisters": {
+    "url": "bcbbca8ca8fd3ca26edc0a6a3eeb3f7f9997f605552e7d95c49aba30499f309c.glb",
+    "sha256": "bcbbca8ca8fd3ca26edc0a6a3eeb3f7f9997f605552e7d95c49aba30499f309c",
+    "size": 14110448,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d6f074c7ead448cd8afc2692dd69dc8498c4d2e3cc5f95982c808f681813f385.ctex",
+          "sha256": "d6f074c7ead448cd8afc2692dd69dc8498c4d2e3cc5f95982c808f681813f385",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1bfbd7073790e3cfa4d6faee333eee20a6176f6ac5216b5cc4bbd43e67ad1e20.ctex",
+          "sha256": "1bfbd7073790e3cfa4d6faee333eee20a6176f6ac5216b5cc4bbd43e67ad1e20",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "04312219edd38799b371799c4d4722242fb7a92eee3f8d682165068067376e31.glb",
+        "sha256": "04312219edd38799b371799c4d4722242fb7a92eee3f8d682165068067376e31",
+        "size": 3920868
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blessed_sisters/warrior sisters": {
+    "url": "82d5eb60d59bac14b52734949d0dfd4ea4775ccc17a4a7f251d81db4d30c5502.glb",
+    "sha256": "82d5eb60d59bac14b52734949d0dfd4ea4775ccc17a4a7f251d81db4d30c5502",
+    "size": 13159908,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ace62e16f5269c4db9970b54272ef4e3799c03d4858390bf8c91f2382b5ec5d5.ctex",
+          "sha256": "ace62e16f5269c4db9970b54272ef4e3799c03d4858390bf8c91f2382b5ec5d5",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f55c119e4a6192188ce70da90f12593c36dcaa25e49754b9a794f2266a10dd4f.ctex",
+          "sha256": "f55c119e4a6192188ce70da90f12593c36dcaa25e49754b9a794f2266a10dd4f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "97c2e719b584e93151a8b3c74d07cf2aba4076117ea79e1580112bb0f4611d61.glb",
+        "sha256": "97c2e719b584e93151a8b3c74d07cf2aba4076117ea79e1580112bb0f4611d61",
+        "size": 4052628
+      },
+      "size_class": "infantry"
+    }
+  }
+}

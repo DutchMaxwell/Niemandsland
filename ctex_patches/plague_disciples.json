@@ -1,0 +1,600 @@
+{
+  "plague_disciples/chosen plague brothers": {
+    "url": "3f6b312e9428aa546b9585144070b3da034c5da40698001a71e8403742e993c8.glb",
+    "sha256": "3f6b312e9428aa546b9585144070b3da034c5da40698001a71e8403742e993c8",
+    "size": 14105540,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f09b402ec26cbaba3e9f1b5f8d8a1a843a008bc748126d4645538f1fc2a7b881.ctex",
+          "sha256": "f09b402ec26cbaba3e9f1b5f8d8a1a843a008bc748126d4645538f1fc2a7b881",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "32f170cd5d3e04f54599bb826166e9f14660901275e4f241a3341f7b70c7d1a6.ctex",
+          "sha256": "32f170cd5d3e04f54599bb826166e9f14660901275e4f241a3341f7b70c7d1a6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "09f1ae8670f3f10cd096bed0240b4c3d5c7e6c8b7441f6ca09455d0cf47a1417.glb",
+        "sha256": "09f1ae8670f3f10cd096bed0240b4c3d5c7e6c8b7441f6ca09455d0cf47a1417",
+        "size": 4030644
+      },
+      "size_class": "infantry"
+    }
+  },
+  "plague_disciples/chosen plague champion": {
+    "url": "f7c1b6496f8e75115bd654c7af57b81e4bf2295f0cd86dcc5e27990230ece94c.glb",
+    "sha256": "f7c1b6496f8e75115bd654c7af57b81e4bf2295f0cd86dcc5e27990230ece94c",
+    "size": 14887960,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "578e68b3c1d04eb53bee2b62e0885899170492945dae404f82abe8d9d06e20eb.ctex",
+          "sha256": "578e68b3c1d04eb53bee2b62e0885899170492945dae404f82abe8d9d06e20eb",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "56e1d4a070cc203209bc48bafe57abe103b3c0021a73e8de536b814a7547beab.ctex",
+          "sha256": "56e1d4a070cc203209bc48bafe57abe103b3c0021a73e8de536b814a7547beab",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ac1c800fec05c3029b95100f43ef592d0161809c2c09b4a96b82dae4dcf6aff1.glb",
+        "sha256": "ac1c800fec05c3029b95100f43ef592d0161809c2c09b4a96b82dae4dcf6aff1",
+        "size": 4332144
+      },
+      "size_class": "infantry"
+    }
+  },
+  "plague_disciples/plague apc": {
+    "url": "7ac89df38119c73d952c9c49eea1fa37407944c6abb11f7facec932ee35b0b67.glb",
+    "sha256": "7ac89df38119c73d952c9c49eea1fa37407944c6abb11f7facec932ee35b0b67",
+    "size": 18754720,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "55415e66646f5ebb8b567db0baebbf8b9aaba3c85e575d559086a17d1af79304.ctex",
+          "sha256": "55415e66646f5ebb8b567db0baebbf8b9aaba3c85e575d559086a17d1af79304",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2c59aa9e551d2d18666cc7aad3e0472879b5ca345d940853175768a6466cc1c8.ctex",
+          "sha256": "2c59aa9e551d2d18666cc7aad3e0472879b5ca345d940853175768a6466cc1c8",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "4af8354c0a6443b1dc42f330cb51cd83b9e0e659a8c2e6a521c80b954f9cb004.glb",
+        "sha256": "4af8354c0a6443b1dc42f330cb51cd83b9e0e659a8c2e6a521c80b954f9cb004",
+        "size": 9908252
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "plague_disciples/plague bikers": {
+    "url": "6c4654190295cb9aec2107c970dc1ab876835cf885c29a60e2a697cb090b1cc4.glb",
+    "sha256": "6c4654190295cb9aec2107c970dc1ab876835cf885c29a60e2a697cb090b1cc4",
+    "size": 17387248,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "489ea112090bd6364e7e4096fc8769a5d51f083d45c18f3d9163775999d4d5b4.ctex",
+          "sha256": "489ea112090bd6364e7e4096fc8769a5d51f083d45c18f3d9163775999d4d5b4",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4537582168e213d4cb9582aaa9e95b9a6b07c96286831d933f956f871e5c4927.ctex",
+          "sha256": "4537582168e213d4cb9582aaa9e95b9a6b07c96286831d933f956f871e5c4927",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c2db89554a41dc074997fe1138feaaa7d729712d1aff5b08f12e644224506e9d.glb",
+        "sha256": "c2db89554a41dc074997fe1138feaaa7d729712d1aff5b08f12e644224506e9d",
+        "size": 9380740
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "plague_disciples/plague brothers": {
+    "url": "59970b7141cd1adc546be76cc7f0341f9dc2698c45e9c7f6b576e02db8aef67e.glb",
+    "sha256": "59970b7141cd1adc546be76cc7f0341f9dc2698c45e9c7f6b576e02db8aef67e",
+    "size": 14396648,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "1f2c8971d62c473fb53f20c67091b31e636fe14b339a7e3922a2072f77908181.ctex",
+          "sha256": "1f2c8971d62c473fb53f20c67091b31e636fe14b339a7e3922a2072f77908181",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3e9899bdcbb4be9d50b37864773ab755a51cff17a297290801c0307b7811c8ae.ctex",
+          "sha256": "3e9899bdcbb4be9d50b37864773ab755a51cff17a297290801c0307b7811c8ae",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6c8d1efff8b61b96dc1657a7942f255f8653b854e61acd4a585cb28d7ae5f28d.glb",
+        "sha256": "6c8d1efff8b61b96dc1657a7942f255f8653b854e61acd4a585cb28d7ae5f28d",
+        "size": 4110592
+      },
+      "size_class": "infantry"
+    }
+  },
+  "plague_disciples/plague champion": {
+    "url": "ad1dbe461471a739c1557baa517ca397659a910a88bffe6c1765844a6bfa9f66.glb",
+    "sha256": "ad1dbe461471a739c1557baa517ca397659a910a88bffe6c1765844a6bfa9f66",
+    "size": 16117756,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "285fc647ad221cad612de85529fc7c1aa3023f629b79c1eb40ce913c2fd7f90e.ctex",
+          "sha256": "285fc647ad221cad612de85529fc7c1aa3023f629b79c1eb40ce913c2fd7f90e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8b13f0045398036109e7fc0240c6ac7b36d6aad47f13793bea9a3dcb0db2bcee.ctex",
+          "sha256": "8b13f0045398036109e7fc0240c6ac7b36d6aad47f13793bea9a3dcb0db2bcee",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a415ac11de4235ca9fabc7f366ff6324b1003463122c7e8e83963053ef0d3827.glb",
+        "sha256": "a415ac11de4235ca9fabc7f366ff6324b1003463122c7e8e83963053ef0d3827",
+        "size": 4140652
+      },
+      "size_class": "infantry"
+    }
+  },
+  "plague_disciples/plague crab walker": {
+    "url": "5a141d2caad32c1ab5a9d8e215d837cea324ffc7c8ad2fcb29bf57b7703ab31b.glb",
+    "sha256": "5a141d2caad32c1ab5a9d8e215d837cea324ffc7c8ad2fcb29bf57b7703ab31b",
+    "size": 15386356,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4611e6d3d57318d627216a3d9b62306676e94390f5b0a5774978ba9aa7292515.ctex",
+          "sha256": "4611e6d3d57318d627216a3d9b62306676e94390f5b0a5774978ba9aa7292515",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3d84b124b4bf6b7c8c9cdac8eb32da82ca757360aef22c2f7e87518a198eb361.ctex",
+          "sha256": "3d84b124b4bf6b7c8c9cdac8eb32da82ca757360aef22c2f7e87518a198eb361",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6df0470a77e78684812af84ca48c055a42f64374c0ea5a184a94d8f069ccc524.glb",
+        "sha256": "6df0470a77e78684812af84ca48c055a42f64374c0ea5a184a94d8f069ccc524",
+        "size": 7276324
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "plague_disciples/plague cultist champion": {
+    "url": "1da2690668be81580d518907621a2376d82fd9e9568d82ea6395119254443912.glb",
+    "sha256": "1da2690668be81580d518907621a2376d82fd9e9568d82ea6395119254443912",
+    "size": 13586012,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2e1792ac866a98e5986ac6169719eef92faebaf626bf882645c2ca87cfa833f8.ctex",
+          "sha256": "2e1792ac866a98e5986ac6169719eef92faebaf626bf882645c2ca87cfa833f8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "cd07f3898ef1ed04cb8ef8e88540bef40319f0c3cddfe9dcbf126297e834dfd6.ctex",
+          "sha256": "cd07f3898ef1ed04cb8ef8e88540bef40319f0c3cddfe9dcbf126297e834dfd6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5a074aeff9beca3196d2eb1407d177fd1fee3c93df41a841632cceac227c4cd3.glb",
+        "sha256": "5a074aeff9beca3196d2eb1407d177fd1fee3c93df41a841632cceac227c4cd3",
+        "size": 3495844
+      },
+      "size_class": "infantry"
+    }
+  },
+  "plague_disciples/plague cultists": {
+    "url": "3ca84ae27bcbfde5abc166ad4d5189cd84462eb67b2d03e552b2145ab628c998.glb",
+    "sha256": "3ca84ae27bcbfde5abc166ad4d5189cd84462eb67b2d03e552b2145ab628c998",
+    "size": 13167288,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "be292ebdf44d33dd17860709022572fb1924db30dc2be15ac32cfd7b99b974e9.ctex",
+          "sha256": "be292ebdf44d33dd17860709022572fb1924db30dc2be15ac32cfd7b99b974e9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "66465cecf5b7962577ff6a137e3441856e32b7ab1b0f3a6ec0b823821badbced.ctex",
+          "sha256": "66465cecf5b7962577ff6a137e3441856e32b7ab1b0f3a6ec0b823821badbced",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "928c69c2244b755f69c4d39bc6e00aae6ea410a46c3e9b61db4096bbc6ca0d90.glb",
+        "sha256": "928c69c2244b755f69c4d39bc6e00aae6ea410a46c3e9b61db4096bbc6ca0d90",
+        "size": 3533668
+      },
+      "size_class": "infantry"
+    }
+  },
+  "plague_disciples/plague destroyer champion": {
+    "url": "bdfe7e342a21c3bbfae7f2f4134e0bae5baf357bde37fc1c5a9136876993825f.glb",
+    "sha256": "bdfe7e342a21c3bbfae7f2f4134e0bae5baf357bde37fc1c5a9136876993825f",
+    "size": 15542656,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "396e8be98eba560d4a16d3d59efcfe4b6e14870ee1f59723d1f18b0a15d220c8.ctex",
+          "sha256": "396e8be98eba560d4a16d3d59efcfe4b6e14870ee1f59723d1f18b0a15d220c8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "12ce4ef9638560d981a6e402a41777c548bb45f0a5020ff283424c93e4562529.ctex",
+          "sha256": "12ce4ef9638560d981a6e402a41777c548bb45f0a5020ff283424c93e4562529",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e724ed9af4bbd382063d72288d90d9d593e21d30774a225da7b46d8c0af4b2ff.glb",
+        "sha256": "e724ed9af4bbd382063d72288d90d9d593e21d30774a225da7b46d8c0af4b2ff",
+        "size": 4272248
+      },
+      "size_class": "infantry"
+    }
+  },
+  "plague_disciples/plague destroyers": {
+    "url": "2b2264c50442ef3df2fd8245cc288b498911ed9725d6822ee0c8e7175735f16e.glb",
+    "sha256": "2b2264c50442ef3df2fd8245cc288b498911ed9725d6822ee0c8e7175735f16e",
+    "size": 17748196,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "83b82c14749d8fd5a0a3e8dc5a54e83279e8b4d24e31a56d35da1d6a96111e0a.ctex",
+          "sha256": "83b82c14749d8fd5a0a3e8dc5a54e83279e8b4d24e31a56d35da1d6a96111e0a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7cb7c853e078c4ca1738ff9f427e28bd8ccb731842c401548f445305c450b599.ctex",
+          "sha256": "7cb7c853e078c4ca1738ff9f427e28bd8ccb731842c401548f445305c450b599",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "233af37e6bf2680f39a5aa3934be5d0c9b352aa138a2b0769b9e9f90dfcdc82c.glb",
+        "sha256": "233af37e6bf2680f39a5aa3934be5d0c9b352aa138a2b0769b9e9f90dfcdc82c",
+        "size": 4595400
+      },
+      "size_class": "infantry"
+    }
+  },
+  "plague_disciples/plague drone": {
+    "url": "0e4f36a3c934c8bd70fed5a47a67c0578b5c48ae6e2726a655c0b1f84f3983a2.glb",
+    "sha256": "0e4f36a3c934c8bd70fed5a47a67c0578b5c48ae6e2726a655c0b1f84f3983a2",
+    "size": 15202540,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8be5b47da1b94925d3bb1b33f774aba75ac8e3a473b2a55f2dc1ddc3bdf5c5ac.ctex",
+          "sha256": "8be5b47da1b94925d3bb1b33f774aba75ac8e3a473b2a55f2dc1ddc3bdf5c5ac",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "130966ce82e3bd9b057e5e4c30a8333cdf70650f62934269635e06094bb062e6.ctex",
+          "sha256": "130966ce82e3bd9b057e5e4c30a8333cdf70650f62934269635e06094bb062e6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1280c9606d78b2d9169b8dc6b6504b71d98b64c42488136c19dd991d534d68dd.glb",
+        "sha256": "1280c9606d78b2d9169b8dc6b6504b71d98b64c42488136c19dd991d534d68dd",
+        "size": 7471656
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "plague_disciples/plague greater mutated": {
+    "url": "47548edbc49569f7bb96e8b41f5d89ad0bb9440ab8fdf6f12a73c7b47c9df48a.glb",
+    "sha256": "47548edbc49569f7bb96e8b41f5d89ad0bb9440ab8fdf6f12a73c7b47c9df48a",
+    "size": 13884896,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e89362eaa944f9acf2da092bba33e8f4a0ef608f9ab6b81febbdebbd7b3db659.ctex",
+          "sha256": "e89362eaa944f9acf2da092bba33e8f4a0ef608f9ab6b81febbdebbd7b3db659",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "87ee3ca7c8b80ce48e7b0b59f99eea7ae3eb98e9c407a19c35cca23bcde377c6.ctex",
+          "sha256": "87ee3ca7c8b80ce48e7b0b59f99eea7ae3eb98e9c407a19c35cca23bcde377c6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5cd8bf75cb3aaf0df8d8ee14f210bc45e576e95decfa0b7d28bd85734c3ef523.glb",
+        "sha256": "5cd8bf75cb3aaf0df8d8ee14f210bc45e576e95decfa0b7d28bd85734c3ef523",
+        "size": 11048648
+      },
+      "size_class": "large"
+    }
+  },
+  "plague_disciples/plague hauler": {
+    "url": "9d0c82c515c287110ace81238a1ff949b2934fe29e273e20361710e3b6a7626e.glb",
+    "sha256": "9d0c82c515c287110ace81238a1ff949b2934fe29e273e20361710e3b6a7626e",
+    "size": 18400056,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3bea7b218191a5b190a78e89c4803cd2acdb1a25da7a02a132516648aa2973ea.ctex",
+          "sha256": "3bea7b218191a5b190a78e89c4803cd2acdb1a25da7a02a132516648aa2973ea",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c58921efc3c318b6c0ca86d0249465a39d64b79fb8c5757df2ae3ce0f4854149.ctex",
+          "sha256": "c58921efc3c318b6c0ca86d0249465a39d64b79fb8c5757df2ae3ce0f4854149",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ca0a066f65a1472e1417cc1f0712492a5af0adf55dd049d5ec1afcc16a7cd5e1.glb",
+        "sha256": "ca0a066f65a1472e1417cc1f0712492a5af0adf55dd049d5ec1afcc16a7cd5e1",
+        "size": 5392400
+      },
+      "size_class": "infantry"
+    }
+  },
+  "plague_disciples/plague heavy tank": {
+    "url": "df56a8b68b38c1b9c7866ab70fa384bb30ddcb32aa9bd8a42e2feeb42f44a91d.glb",
+    "sha256": "df56a8b68b38c1b9c7866ab70fa384bb30ddcb32aa9bd8a42e2feeb42f44a91d",
+    "size": 18289724,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "973e9f36c4ebef658499bce59409a6bda42ccc9b2eb42ff9ae125360e1ba5704.ctex",
+          "sha256": "973e9f36c4ebef658499bce59409a6bda42ccc9b2eb42ff9ae125360e1ba5704",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6a621ba0a285cd0dd17bd66c744d1f7e7dd47dae211386f4da92259d53e9e6da.ctex",
+          "sha256": "6a621ba0a285cd0dd17bd66c744d1f7e7dd47dae211386f4da92259d53e9e6da",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "db66f496b1a56fc1e25f1f09b4bbff71606ee16330a4adad3dbf8b62fdf900b1.glb",
+        "sha256": "db66f496b1a56fc1e25f1f09b4bbff71606ee16330a4adad3dbf8b62fdf900b1",
+        "size": 10061464
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "plague_disciples/plague infernal brute": {
+    "url": "e99f7cedfd2c7b3f05d4d5fecd83f6cc999bff40bc7f9f12bd8adecca436b1a7.glb",
+    "sha256": "e99f7cedfd2c7b3f05d4d5fecd83f6cc999bff40bc7f9f12bd8adecca436b1a7",
+    "size": 15471616,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0f88952434a9feabaf06b78b17101d06085f66c710774e6c58e1a3eef7552976.ctex",
+          "sha256": "0f88952434a9feabaf06b78b17101d06085f66c710774e6c58e1a3eef7552976",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e0baa88dc714ffd6cf3d5f66a63ffae10ad5ecfbf918655b316fa2c79caae114.ctex",
+          "sha256": "e0baa88dc714ffd6cf3d5f66a63ffae10ad5ecfbf918655b316fa2c79caae114",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b68ff2c75822c526c48dc540a619ef277eef135e4622ca452bb86c55596ad171.glb",
+        "sha256": "b68ff2c75822c526c48dc540a619ef277eef135e4622ca452bb86c55596ad171",
+        "size": 11264376
+      },
+      "size_class": "large"
+    }
+  },
+  "plague_disciples/plague mech fiend": {
+    "url": "cb97b39e2e28c6eb45b676a36e19cb0cf0b63d76e4abc4024c66b257628d5ce0.glb",
+    "sha256": "cb97b39e2e28c6eb45b676a36e19cb0cf0b63d76e4abc4024c66b257628d5ce0",
+    "size": 16892804,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c70ad34ed7ef9ad802b2ba3389811620887252fedc6ac7851d88fa16af354a9b.ctex",
+          "sha256": "c70ad34ed7ef9ad802b2ba3389811620887252fedc6ac7851d88fa16af354a9b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f1f3f0102d2b8943826b7e5c1ab19ba57e732e025a9da81a7602f2b1b3ddf46b.ctex",
+          "sha256": "f1f3f0102d2b8943826b7e5c1ab19ba57e732e025a9da81a7602f2b1b3ddf46b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "95fbf7013a0c7d51b2a136fa80289d063eab0a7a13148736b43e2adf40ab4602.glb",
+        "sha256": "95fbf7013a0c7d51b2a136fa80289d063eab0a7a13148736b43e2adf40ab4602",
+        "size": 11626368
+      },
+      "size_class": "large"
+    }
+  },
+  "plague_disciples/plague mutated brothers": {
+    "url": "1704a5c4074d995c5e4a6a8a3e18b59d06cd8f336355bce3957cb142bd248bad.glb",
+    "sha256": "1704a5c4074d995c5e4a6a8a3e18b59d06cd8f336355bce3957cb142bd248bad",
+    "size": 14418220,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d00e6ddc0bdcc479edc20a95f90abd05fcb05bae23ab948039daa57af0e85fd0.ctex",
+          "sha256": "d00e6ddc0bdcc479edc20a95f90abd05fcb05bae23ab948039daa57af0e85fd0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "82759c0ea4b564b8cd392dc7c17b083d7f880f1edf5c1970ee89bc08d9485d2f.ctex",
+          "sha256": "82759c0ea4b564b8cd392dc7c17b083d7f880f1edf5c1970ee89bc08d9485d2f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1b19a3ec4cb687a94753115ddc9e954f075017ee17edbdea603e6fc05eebb431.glb",
+        "sha256": "1b19a3ec4cb687a94753115ddc9e954f075017ee17edbdea603e6fc05eebb431",
+        "size": 4201000
+      },
+      "size_class": "infantry"
+    }
+  },
+  "plague_disciples/plague mutated cultists": {
+    "url": "47ed936125393c3d514c097ef1d2e3b1df021311eb145f52afe37bd9bed960a7.glb",
+    "sha256": "47ed936125393c3d514c097ef1d2e3b1df021311eb145f52afe37bd9bed960a7",
+    "size": 12680084,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d8f4b1d28f9d2f77e8badd69c3808deccea5c18ba7209c199f5647361bc4cad2.ctex",
+          "sha256": "d8f4b1d28f9d2f77e8badd69c3808deccea5c18ba7209c199f5647361bc4cad2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "614edad1c84ef2a15b70c5b0b027da5e90971db368f6597414bbb3cde98c40da.ctex",
+          "sha256": "614edad1c84ef2a15b70c5b0b027da5e90971db368f6597414bbb3cde98c40da",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8407de1d5c0171842c6d0fa017d6a18f4e05c71bed2faf662b0623dca1ce6d90.glb",
+        "sha256": "8407de1d5c0171842c6d0fa017d6a18f4e05c71bed2faf662b0623dca1ce6d90",
+        "size": 3458128
+      },
+      "size_class": "infantry"
+    }
+  },
+  "plague_disciples/plague mutated destroyer": {
+    "url": "8decd256908690e45c28b2a828b7dce387435b8de354ebe6b52bd56c9229e73a.glb",
+    "sha256": "8decd256908690e45c28b2a828b7dce387435b8de354ebe6b52bd56c9229e73a",
+    "size": 15571560,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3820387d928d1b8a5154242b516ad4cf6644e97048082784c01169250e4f26fa.ctex",
+          "sha256": "3820387d928d1b8a5154242b516ad4cf6644e97048082784c01169250e4f26fa",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9754239ddc84b8c0c455f232bec095f6201da68bcaea7b4ebc301f566c8dc8ae.ctex",
+          "sha256": "9754239ddc84b8c0c455f232bec095f6201da68bcaea7b4ebc301f566c8dc8ae",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "38d399a54c9bb0147dc270b52ef5c462c704bf34460262f86169d26e3273d2a5.glb",
+        "sha256": "38d399a54c9bb0147dc270b52ef5c462c704bf34460262f86169d26e3273d2a5",
+        "size": 4184332
+      },
+      "size_class": "infantry"
+    }
+  },
+  "plague_disciples/plague support": {
+    "url": "77707735464f1da7ec89a91fef75f26edabcdc7589d7d753bbb938baa59bd93d.glb",
+    "sha256": "77707735464f1da7ec89a91fef75f26edabcdc7589d7d753bbb938baa59bd93d",
+    "size": 14123028,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6bef80873652993c824f1d66f4b189cca9c66e9b9360d4fbc50609f1a3f046ba.ctex",
+          "sha256": "6bef80873652993c824f1d66f4b189cca9c66e9b9360d4fbc50609f1a3f046ba",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5fc9d05d745bd9cd7af5bb5842a316b694c5e028d5699c8e7365c0224fc1c0e7.ctex",
+          "sha256": "5fc9d05d745bd9cd7af5bb5842a316b694c5e028d5699c8e7365c0224fc1c0e7",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "47105b9cfd43fe353596e1895a3bb16afc3311a8e6bdab9b8c75939683c1ec3d.glb",
+        "sha256": "47105b9cfd43fe353596e1895a3bb16afc3311a8e6bdab9b8c75939683c1ec3d",
+        "size": 4252708
+      },
+      "size_class": "infantry"
+    }
+  },
+  "plague_disciples/plague tank": {
+    "url": "9c44f8fc7ad90127ccfe67036c11fa19dbc383c192f1a1b4da2f0179904804d1.glb",
+    "sha256": "9c44f8fc7ad90127ccfe67036c11fa19dbc383c192f1a1b4da2f0179904804d1",
+    "size": 19231940,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "612c7cfe0b96d0c75ba326f8b7a091f0e64bb39aee58e17031101f330756ff5d.ctex",
+          "sha256": "612c7cfe0b96d0c75ba326f8b7a091f0e64bb39aee58e17031101f330756ff5d",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "03e6b01a5f9ebfcbe2101acda60ee2c13bea3eb161713053a6dd3291c3bf6727.ctex",
+          "sha256": "03e6b01a5f9ebfcbe2101acda60ee2c13bea3eb161713053a6dd3291c3bf6727",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ae2ec8994e0a8a0150e5fc2bbe330baaf55abc17c9bbb73b7fbecc9061f3edf6.glb",
+        "sha256": "ae2ec8994e0a8a0150e5fc2bbe330baaf55abc17c9bbb73b7fbecc9061f3edf6",
+        "size": 10581756
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "plague_disciples/plague zombies": {
+    "url": "729d3ba72d7f4a13f956f5bf6c797f5cf05bfc2bc03459d02468eeac0ef1d1e3.glb",
+    "sha256": "729d3ba72d7f4a13f956f5bf6c797f5cf05bfc2bc03459d02468eeac0ef1d1e3",
+    "size": 12769132,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3b53144bfd672e4e22de4eb8d642b383a1efbfeaa9aca44818df2a7b2f30181b.ctex",
+          "sha256": "3b53144bfd672e4e22de4eb8d642b383a1efbfeaa9aca44818df2a7b2f30181b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a23bf7f0d25e6a8d758288ef34685269a78c1103e638602152496166422539aa.ctex",
+          "sha256": "a23bf7f0d25e6a8d758288ef34685269a78c1103e638602152496166422539aa",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1ff7e1807c4192ff1249ecf83f9af99ee6925af2014bce424d16db0b6ad8796b.glb",
+        "sha256": "1ff7e1807c4192ff1249ecf83f9af99ee6925af2014bce424d16db0b6ad8796b",
+        "size": 3414372
+      },
+      "size_class": "infantry"
+    }
+  }
+}

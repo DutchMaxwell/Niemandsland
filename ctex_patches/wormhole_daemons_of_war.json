@@ -1,0 +1,418 @@
+{
+  "wormhole_daemons_of_war/ascended harbinger of war": {
+    "url": "f23b173b70c3b04fe36d3cef71411aa089d7639d729dbc0ae08cd1b2a3fc6c36.glb",
+    "sha256": "f23b173b70c3b04fe36d3cef71411aa089d7639d729dbc0ae08cd1b2a3fc6c36",
+    "size": 16002636,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e00d585d97ddc871cc07e24d3775b523c98a2b7449c0191894c16c2382144c05.ctex",
+          "sha256": "e00d585d97ddc871cc07e24d3775b523c98a2b7449c0191894c16c2382144c05",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "21a1bfb14452d00780b29b4e8fc57d6d27fe13ad8ec46b6b58d4dde055619dad.ctex",
+          "sha256": "21a1bfb14452d00780b29b4e8fc57d6d27fe13ad8ec46b6b58d4dde055619dad",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d0fa475bd67e17c55ed982c4a2693bee6e7c2a6beec6d740e2943d3700ce7d68.glb",
+        "sha256": "d0fa475bd67e17c55ed982c4a2693bee6e7c2a6beec6d740e2943d3700ce7d68",
+        "size": 4239656
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_war/avatar of war": {
+    "url": "ff96cd6ef67d84f5a07334b7f79359f3f2f56fe038cfdc9d040e3e07f93dc5d3.glb",
+    "sha256": "ff96cd6ef67d84f5a07334b7f79359f3f2f56fe038cfdc9d040e3e07f93dc5d3",
+    "size": 15299232,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f1664eb8997bd9a68391258b18db80a03fa7c7495be1c0f428aff256f6b4b2ae.ctex",
+          "sha256": "f1664eb8997bd9a68391258b18db80a03fa7c7495be1c0f428aff256f6b4b2ae",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "12369b9b1c3d9e4b6b0522dbc304114cc0a386f3e8ec93c043fcf18d77b0441d.ctex",
+          "sha256": "12369b9b1c3d9e4b6b0522dbc304114cc0a386f3e8ec93c043fcf18d77b0441d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c1be530a030f3421fd092f755b9438eb0dde5a02ca77045098592ef1cc41ec2c.glb",
+        "sha256": "c1be530a030f3421fd092f755b9438eb0dde5a02ca77045098592ef1cc41ec2c",
+        "size": 11902972
+      },
+      "size_class": "large"
+    }
+  },
+  "wormhole_daemons_of_war/beast riders": {
+    "url": "e7024e3e47a381aae8b5c490c926fd4e359d210661224301e1d697cb55c26cff.glb",
+    "sha256": "e7024e3e47a381aae8b5c490c926fd4e359d210661224301e1d697cb55c26cff",
+    "size": 15345176,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "90e937bb9b554c5f7bb2bca852dc273001932d68bb08844f2c574c02a31f2d7b.ctex",
+          "sha256": "90e937bb9b554c5f7bb2bca852dc273001932d68bb08844f2c574c02a31f2d7b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2a9e95a0fd49d24d91903efe55986cfcfb25f04120fe6b5663e100e297e386de.ctex",
+          "sha256": "2a9e95a0fd49d24d91903efe55986cfcfb25f04120fe6b5663e100e297e386de",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "978ae26ad9a0bc0971cd57bb5b5d3e2fd26768bd563e86f8ccdce6d111e095ca.glb",
+        "sha256": "978ae26ad9a0bc0971cd57bb5b5d3e2fd26768bd563e86f8ccdce6d111e095ca",
+        "size": 11234840
+      },
+      "size_class": "large"
+    }
+  },
+  "wormhole_daemons_of_war/blood hounds": {
+    "url": "ef1c0071f6561ca3527b77e78e7b6c43d9c44ee11e1f4a2ad2382daed86eb756.glb",
+    "sha256": "ef1c0071f6561ca3527b77e78e7b6c43d9c44ee11e1f4a2ad2382daed86eb756",
+    "size": 14305804,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4e704e27fdde5627f7836b8df70648e9dc03f87afeb6a3cb5895292470cbfba4.ctex",
+          "sha256": "4e704e27fdde5627f7836b8df70648e9dc03f87afeb6a3cb5895292470cbfba4",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "08f55abe16bd5c4d2d30d7909f500c4b92df688436c267c53740342a0edf87a0.ctex",
+          "sha256": "08f55abe16bd5c4d2d30d7909f500c4b92df688436c267c53740342a0edf87a0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7c77b0ea39d0ab6577a3349c2e4c4122c8bab62f9c1576f535c5418449a5ba73.glb",
+        "sha256": "7c77b0ea39d0ab6577a3349c2e4c4122c8bab62f9c1576f535c5418449a5ba73",
+        "size": 3854116
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_war/blood warriors": {
+    "url": "0340639277d2f90ff62e32b537d21cb45beef55fd0d077824178d3c2568dcfe3.glb",
+    "sha256": "0340639277d2f90ff62e32b537d21cb45beef55fd0d077824178d3c2568dcfe3",
+    "size": 13056148,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9baf42b887b5102fa10b8bb9cfe8a46d74f8654d80c114d5b488e13b73b3bdf6.ctex",
+          "sha256": "9baf42b887b5102fa10b8bb9cfe8a46d74f8654d80c114d5b488e13b73b3bdf6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c657543f892042f1911fe71140d27778394d37c159bdf933d3802aec84882ef5.ctex",
+          "sha256": "c657543f892042f1911fe71140d27778394d37c159bdf933d3802aec84882ef5",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2d3d751a07bf9999db794d5e291605e2ad40e7b7470b04590b4a4d7459b78860.glb",
+        "sha256": "2d3d751a07bf9999db794d5e291605e2ad40e7b7470b04590b4a4d7459b78860",
+        "size": 3668916
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_war/blood whippers": {
+    "url": "a86147f117dffb45d9cfe240b8db22e71c0e00c5f23d9d8e48b4ce9c75bb3e01.glb",
+    "sha256": "a86147f117dffb45d9cfe240b8db22e71c0e00c5f23d9d8e48b4ce9c75bb3e01",
+    "size": 15153248,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "733ac3e61323ebf03be42290c3d9b750eae11ff9eee345a3c5e06dfa99d351b7.ctex",
+          "sha256": "733ac3e61323ebf03be42290c3d9b750eae11ff9eee345a3c5e06dfa99d351b7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b713726079b1f9d41ab14a5a5d90850e6c254f925a8138bc0565ee9c09fb4a0c.ctex",
+          "sha256": "b713726079b1f9d41ab14a5a5d90850e6c254f925a8138bc0565ee9c09fb4a0c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "307d2988387217eed5d6af5aaa305717e66e9163533c8b38431895a3430372a3.glb",
+        "sha256": "307d2988387217eed5d6af5aaa305717e66e9163533c8b38431895a3430372a3",
+        "size": 4360292
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_war/cannon chariot": {
+    "url": "9e40afb76b1a114f0f46000d1b066c13f50c5ca661338f514c38104667ee107c.glb",
+    "sha256": "9e40afb76b1a114f0f46000d1b066c13f50c5ca661338f514c38104667ee107c",
+    "size": 14400132,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ef4fe420e775e1e89f7abc694c3b6e7af97950d5efd72046f0c528b94da0d39a.ctex",
+          "sha256": "ef4fe420e775e1e89f7abc694c3b6e7af97950d5efd72046f0c528b94da0d39a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a6e5651f4498e9235635ab2869ef8b43efd5f2c6a4212bf1f3fc73613e92c035.ctex",
+          "sha256": "a6e5651f4498e9235635ab2869ef8b43efd5f2c6a4212bf1f3fc73613e92c035",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "4a4914e60a6eb441be0ab107cc12af21a2f688738a72cba2e967e3574106409d.glb",
+        "sha256": "4a4914e60a6eb441be0ab107cc12af21a2f688738a72cba2e967e3574106409d",
+        "size": 7613100
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "wormhole_daemons_of_war/champion of war": {
+    "url": "7b9b906db98163e8151d2706c9c36c7c5e620725a839473479cba2c59bcc7b0f.glb",
+    "sha256": "7b9b906db98163e8151d2706c9c36c7c5e620725a839473479cba2c59bcc7b0f",
+    "size": 14050576,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "41759b97170292e82ca8edfa723260038fa3022a6a741cf782c3f2e92b3492a6.ctex",
+          "sha256": "41759b97170292e82ca8edfa723260038fa3022a6a741cf782c3f2e92b3492a6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6e7858f20b8a59288019c100588a83fe57fb0edafde6b16b24917748a68da0a9.ctex",
+          "sha256": "6e7858f20b8a59288019c100588a83fe57fb0edafde6b16b24917748a68da0a9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "24855350d8acde480a7c1079cb7a71c0c6e69d40fd36e7bee4e196967ad8c669.glb",
+        "sha256": "24855350d8acde480a7c1079cb7a71c0c6e69d40fd36e7bee4e196967ad8c669",
+        "size": 3942240
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_war/fury champion of war": {
+    "url": "148383da1004aa5c567875ef567055df077d94363e6d5d1a942d14a88d5a16c1.glb",
+    "sha256": "148383da1004aa5c567875ef567055df077d94363e6d5d1a942d14a88d5a16c1",
+    "size": 14491636,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e71403617036fb30fc84b0694a338313601a9f6e86087f6e1cf1c99668e8e265.ctex",
+          "sha256": "e71403617036fb30fc84b0694a338313601a9f6e86087f6e1cf1c99668e8e265",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "11794ceebef00248f18d56dae4460e2ea0578642381c95605d8c0ff38f2cba35.ctex",
+          "sha256": "11794ceebef00248f18d56dae4460e2ea0578642381c95605d8c0ff38f2cba35",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f577a106151adff8bb55171c8ab44b494749deb8034b32eb34a7660770544d98.glb",
+        "sha256": "f577a106151adff8bb55171c8ab44b494749deb8034b32eb34a7660770544d98",
+        "size": 4087956
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_war/giant tri hound": {
+    "url": "96493139f2af41f0037a1404d6c8ee0014c708f5d5b6f02c9e911743a9a2dbf5.glb",
+    "sha256": "96493139f2af41f0037a1404d6c8ee0014c708f5d5b6f02c9e911743a9a2dbf5",
+    "size": 15018832,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "746aa0de63b2c4428d8334f0802da12a33801326dcfeeeaa2d975549904bca7a.ctex",
+          "sha256": "746aa0de63b2c4428d8334f0802da12a33801326dcfeeeaa2d975549904bca7a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0456d0a5912dda2c5bd3c98872697fd33e92c2ef7525b2b6cb531396a6eb45af.ctex",
+          "sha256": "0456d0a5912dda2c5bd3c98872697fd33e92c2ef7525b2b6cb531396a6eb45af",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f12d21708cb02826f7b20f73a6e196d64ab7a189842a66ee57665780e737964b.glb",
+        "sha256": "f12d21708cb02826f7b20f73a6e196d64ab7a189842a66ee57665780e737964b",
+        "size": 11562704
+      },
+      "size_class": "large"
+    }
+  },
+  "wormhole_daemons_of_war/harbinger of war": {
+    "url": "41168f52bdba01221bd8e2cd2aac3a0d91957ced9744cd80f3cae4a5caa98b75.glb",
+    "sha256": "41168f52bdba01221bd8e2cd2aac3a0d91957ced9744cd80f3cae4a5caa98b75",
+    "size": 16345656,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a52d0dac5cd767cbaee0197f0e09ee8a2bf43a0422268095046c35fe652004f8.ctex",
+          "sha256": "a52d0dac5cd767cbaee0197f0e09ee8a2bf43a0422268095046c35fe652004f8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "bdd4ed2b987fbdd6b9f962143655345075d7a47973d8140a3f247f20b934f29f.ctex",
+          "sha256": "bdd4ed2b987fbdd6b9f962143655345075d7a47973d8140a3f247f20b934f29f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9a82e235484438feaded7c310fba0b75e33e9b60736751ce60ad146101763b19.glb",
+        "sha256": "9a82e235484438feaded7c310fba0b75e33e9b60736751ce60ad146101763b19",
+        "size": 4668148
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_war/soul daemon of war": {
+    "url": "e16af7e0d3820e5c6f2f861d5d779b0b5d57d9baa818b511e73a9b5cedd0f1d3.glb",
+    "sha256": "e16af7e0d3820e5c6f2f861d5d779b0b5d57d9baa818b511e73a9b5cedd0f1d3",
+    "size": 13509348,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e9804de13a21d83b68f3ca20486e24f6bfd94b8b121ab6a55edfd6f6f990d550.ctex",
+          "sha256": "e9804de13a21d83b68f3ca20486e24f6bfd94b8b121ab6a55edfd6f6f990d550",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "24ed3a73d2868eb90d6d8fcb33dab9ed6b8f155740d2c75c0c449824b2c5146d.ctex",
+          "sha256": "24ed3a73d2868eb90d6d8fcb33dab9ed6b8f155740d2c75c0c449824b2c5146d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "57692d6f1882a247c7c2f5bb64c90fba3ebf74c35394b899256cf1c5bf52aa34.glb",
+        "sha256": "57692d6f1882a247c7c2f5bb64c90fba3ebf74c35394b899256cf1c5bf52aa34",
+        "size": 3804656
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_war/tri hound champion": {
+    "url": "9131ccf8c43481b4de848e10be4af7b3c3a17331b419f850b1992ccc80e8debe.glb",
+    "sha256": "9131ccf8c43481b4de848e10be4af7b3c3a17331b419f850b1992ccc80e8debe",
+    "size": 15089760,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "25f37b77dd2794ae468fbfcdc5bf72f9081bf3c115c11cf8ea6a32bfdd2f090f.ctex",
+          "sha256": "25f37b77dd2794ae468fbfcdc5bf72f9081bf3c115c11cf8ea6a32bfdd2f090f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6a7f73f39f25683dc57ae55be061eb512da1c495a176fe5ba75d634d70351d21.ctex",
+          "sha256": "6a7f73f39f25683dc57ae55be061eb512da1c495a176fe5ba75d634d70351d21",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3728d6e64ec66712ebf849424c7579bd17d891edd144860c122980011794997e.glb",
+        "sha256": "3728d6e64ec66712ebf849424c7579bd17d891edd144860c122980011794997e",
+        "size": 4160192
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_war/war furies": {
+    "url": "7e94872a8c3c7960652768987c893e2a1410407e0cb0dffef8aa251f93f77f61.glb",
+    "sha256": "7e94872a8c3c7960652768987c893e2a1410407e0cb0dffef8aa251f93f77f61",
+    "size": 13169416,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ab539e15c81f714da208cb33165fd7562eacb62790c5c12cf5dd0229ca6b55a5.ctex",
+          "sha256": "ab539e15c81f714da208cb33165fd7562eacb62790c5c12cf5dd0229ca6b55a5",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "883471975023ddd5d9c72d84db839b85c9b127470688eda124da5018c2c82cbb.ctex",
+          "sha256": "883471975023ddd5d9c72d84db839b85c9b127470688eda124da5018c2c82cbb",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e55716562536d4ac460615575481cc20caab6034bcbaf4ac94f4e3e00401e849.glb",
+        "sha256": "e55716562536d4ac460615575481cc20caab6034bcbaf4ac94f4e3e00401e849",
+        "size": 3792564
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_war/war soul spawns": {
+    "url": "1829cc60cff3178a671df96af33b23cb450464446ead8f894d9f2230317aec0e.glb",
+    "sha256": "1829cc60cff3178a671df96af33b23cb450464446ead8f894d9f2230317aec0e",
+    "size": 11961048,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d0dc3e66f4c73fd17b954500794bf5538f5980ff22b2d7e510d0eeee186b4543.ctex",
+          "sha256": "d0dc3e66f4c73fd17b954500794bf5538f5980ff22b2d7e510d0eeee186b4543",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0cbf9603fe8704d7626e2a6f5fd3e856d48a5b23b7a5b472150a1340bac61391.ctex",
+          "sha256": "0cbf9603fe8704d7626e2a6f5fd3e856d48a5b23b7a5b472150a1340bac61391",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e47f873163aa4746700b84318b69f8d283ba078fc155ab8fce18e5ee4a8feb6d.glb",
+        "sha256": "e47f873163aa4746700b84318b69f8d283ba078fc155ab8fce18e5ee4a8feb6d",
+        "size": 3680608
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_war/whip furies": {
+    "url": "37229b8811b61ac4b0455a7828ff86a42f32c76d1637c3e5a20d5189eee400c1.glb",
+    "sha256": "37229b8811b61ac4b0455a7828ff86a42f32c76d1637c3e5a20d5189eee400c1",
+    "size": 15988512,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c982a4e437c5f57edb07a53edc0986c136c64a57d4a807e553aa5ed3dffbb128.ctex",
+          "sha256": "c982a4e437c5f57edb07a53edc0986c136c64a57d4a807e553aa5ed3dffbb128",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9e838556764bf437f6f2f6f6711152c4a837b1dae81ac10b5336193295ba8f50.ctex",
+          "sha256": "9e838556764bf437f6f2f6f6711152c4a837b1dae81ac10b5336193295ba8f50",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c7478c454b21e3191563c364a7a3c158bd1d2d6959565df10716b2eec9444926.glb",
+        "sha256": "c7478c454b21e3191563c364a7a3c158bd1d2d6959565df10716b2eec9444926",
+        "size": 5043864
+      },
+      "size_class": "infantry"
+    }
+  }
+}

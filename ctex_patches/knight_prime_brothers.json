@@ -1,0 +1,834 @@
+{
+  "knight_prime_brothers/knight_aggro_brothers": {
+    "url": "f873d0e22d07eada4d043c5c12c53be748a48a026bfb764b8e23859aa49fc102.glb",
+    "sha256": "f873d0e22d07eada4d043c5c12c53be748a48a026bfb764b8e23859aa49fc102",
+    "size": 22992328,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6aef2e46f73069c7d9c354efa1212628d56a91f6980d8082777e534d1b2b4f12.ctex",
+          "sha256": "6aef2e46f73069c7d9c354efa1212628d56a91f6980d8082777e534d1b2b4f12",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9dd03103c023b66c06dc532acf07e39a0d391432e00684440253d31d95137382.ctex",
+          "sha256": "9dd03103c023b66c06dc532acf07e39a0d391432e00684440253d31d95137382",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "189462804dc79ae9a860c763420c0eeb74de97e1ad96364700726b10d523b111.glb",
+        "sha256": "189462804dc79ae9a860c763420c0eeb74de97e1ad96364700726b10d523b111",
+        "size": 5003608
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_anti_grav_apc": {
+    "url": "5abb7d942f75664d1a5559b0429047feed176cf1de5ab5a78d95c9ab871d9307.glb",
+    "sha256": "5abb7d942f75664d1a5559b0429047feed176cf1de5ab5a78d95c9ab871d9307",
+    "size": 20915400,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "fb2cd52024f6aafdff5c857966deb9d8ae87a61175d0be65c61a65e64ab61e66.ctex",
+          "sha256": "fb2cd52024f6aafdff5c857966deb9d8ae87a61175d0be65c61a65e64ab61e66",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "981afb1a560f0ae4c13132c2f5b04f4a38fdcb2393e9dabe30d62ff8b8080066.ctex",
+          "sha256": "981afb1a560f0ae4c13132c2f5b04f4a38fdcb2393e9dabe30d62ff8b8080066",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "eb0a7034a5d7c08a8190d5f3b89b996b2367edc28f58d12fd4204e3bdbf0b5d8.glb",
+        "sha256": "eb0a7034a5d7c08a8190d5f3b89b996b2367edc28f58d12fd4204e3bdbf0b5d8",
+        "size": 8872896
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "knight_prime_brothers/knight_anti_grav_tank": {
+    "url": "1bb5a1a6f0896f5682e66b46c116b0effa82b2119257f3ae80564a5c6e4d566c.glb",
+    "sha256": "1bb5a1a6f0896f5682e66b46c116b0effa82b2119257f3ae80564a5c6e4d566c",
+    "size": 17396984,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "cedb8358d63bfbcf169554a29218f044b97b1acecd3be0a70a3b863bd1938a73.ctex",
+          "sha256": "cedb8358d63bfbcf169554a29218f044b97b1acecd3be0a70a3b863bd1938a73",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d682dd210bbbf5a8577542bd70585614c7d7574c3252e333840e854dcd7dba1f.ctex",
+          "sha256": "d682dd210bbbf5a8577542bd70585614c7d7574c3252e333840e854dcd7dba1f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "74bd831c68452baabc939b5009baae44dd5bdb9486ee994974d593e828730952.glb",
+        "sha256": "74bd831c68452baabc939b5009baae44dd5bdb9486ee994974d593e828730952",
+        "size": 8835060
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "knight_prime_brothers/knight_assault_prime_brothers": {
+    "url": "8a069e40dd8e06f91b8df17b0b4dbc5cc00439b4b4239a509a43a5c81bae69f8.glb",
+    "sha256": "8a069e40dd8e06f91b8df17b0b4dbc5cc00439b4b4239a509a43a5c81bae69f8",
+    "size": 12996976,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a9aca58066a68c020d6b93ed75b0279c9ff64c382d6e20db545f98b4610ec566.ctex",
+          "sha256": "a9aca58066a68c020d6b93ed75b0279c9ff64c382d6e20db545f98b4610ec566",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c5c14836676da85b18e2f6dd57e5f9f940739327947e9337e152beafa7544293.ctex",
+          "sha256": "c5c14836676da85b18e2f6dd57e5f9f940739327947e9337e152beafa7544293",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e440d8d429155cfd5d951e802ae4372b01eb61056db01b11deadac358c70e840.glb",
+        "sha256": "e440d8d429155cfd5d951e802ae4372b01eb61056db01b11deadac358c70e840",
+        "size": 3799276
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_attack_speeder": {
+    "url": "6f832010bc13663c7686c59ec7d403062ab8efc96c808778878eb7752af061dc.glb",
+    "sha256": "6f832010bc13663c7686c59ec7d403062ab8efc96c808778878eb7752af061dc",
+    "size": 15825096,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0af01b162e0bbb46376dbf6e734c935d4a7a00f0f1cad0979d41b11c166f0379.ctex",
+          "sha256": "0af01b162e0bbb46376dbf6e734c935d4a7a00f0f1cad0979d41b11c166f0379",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "77e421edc8dcfc968a4ce490650776cda34c4dec137eced5e8a923c446f9eaa0.ctex",
+          "sha256": "77e421edc8dcfc968a4ce490650776cda34c4dec137eced5e8a923c446f9eaa0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ec52a52734b3a7cca8634dca88a4d85c28575fcd72d5ad673228717bea7de2d7.glb",
+        "sha256": "ec52a52734b3a7cca8634dca88a4d85c28575fcd72d5ad673228717bea7de2d7",
+        "size": 8443444
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "knight_prime_brothers/knight_blaster_brothers": {
+    "url": "155aa06b75653f5a459f51d73c2bae0718e5c69077c041dd34f036eceeb76e7a.glb",
+    "sha256": "155aa06b75653f5a459f51d73c2bae0718e5c69077c041dd34f036eceeb76e7a",
+    "size": 16694096,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d60d3218b73e9fefd5ce4a767d28ed808c56f941c4e8ddc01064854ed18d9c23.ctex",
+          "sha256": "d60d3218b73e9fefd5ce4a767d28ed808c56f941c4e8ddc01064854ed18d9c23",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3648660bdd54282728cbe72cb71cfc4af383de791481b865271d32fde9dd7d30.ctex",
+          "sha256": "3648660bdd54282728cbe72cb71cfc4af383de791481b865271d32fde9dd7d30",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ff345ec62ef286cdc85cc9bedadc47647fad39578ec5893c4d50cd7e85e3ce53.glb",
+        "sha256": "ff345ec62ef286cdc85cc9bedadc47647fad39578ec5893c4d50cd7e85e3ce53",
+        "size": 4521568
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_combat_walker": {
+    "url": "c5ccb7a962e96e606d23d5cca5ddc430995ca27b7aad3d40aba3d630b016be1e.glb",
+    "sha256": "c5ccb7a962e96e606d23d5cca5ddc430995ca27b7aad3d40aba3d630b016be1e",
+    "size": 18063040,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8c775015c4d95d8a0cfb84e8bb210cc936be091b9eacb10c381aaf0f71838a11.ctex",
+          "sha256": "8c775015c4d95d8a0cfb84e8bb210cc936be091b9eacb10c381aaf0f71838a11",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f2c9935c555b68c94f78bc09f8815563b9aeae06a55c937bdbf406ac503f315f.ctex",
+          "sha256": "f2c9935c555b68c94f78bc09f8815563b9aeae06a55c937bdbf406ac503f315f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e07457a7e503424850d95c9a3b87a912f6f26450b6c42303b1cdfbd7b297bc9b.glb",
+        "sha256": "e07457a7e503424850d95c9a3b87a912f6f26450b6c42303b1cdfbd7b297bc9b",
+        "size": 9312916
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "knight_prime_brothers/knight_desolator_brothers": {
+    "url": "3308736e00ae4b1e87aee15ae0b86407d04e22e45df78b28b95b40a57be5b060.glb",
+    "sha256": "3308736e00ae4b1e87aee15ae0b86407d04e22e45df78b28b95b40a57be5b060",
+    "size": 15687504,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f74159eea424744b23b9c1ee38682bd5fc587c5455b6b62bd15d096ef33b1207.ctex",
+          "sha256": "f74159eea424744b23b9c1ee38682bd5fc587c5455b6b62bd15d096ef33b1207",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0f0fd6a3972922020c1d89ebe89bd4e12ae72fce2ab64bb3130b13e49f6cff57.ctex",
+          "sha256": "0f0fd6a3972922020c1d89ebe89bd4e12ae72fce2ab64bb3130b13e49f6cff57",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ff80c333249374975e12b471a58e65bfae78b5d8912b9307346ff7e029366352.glb",
+        "sha256": "ff80c333249374975e12b471a58e65bfae78b5d8912b9307346ff7e029366352",
+        "size": 4270096
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_elimination_brothers": {
+    "url": "6013e7af4359dbbb56f510bdeed1ff09462c0d15d1cdf3b0d73329075559d929.glb",
+    "sha256": "6013e7af4359dbbb56f510bdeed1ff09462c0d15d1cdf3b0d73329075559d929",
+    "size": 15600932,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "029d5b9144df10703da7e83001e195115e98c3868ea947578f5a9175d76d8ac0.ctex",
+          "sha256": "029d5b9144df10703da7e83001e195115e98c3868ea947578f5a9175d76d8ac0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4fc66b86102df7f31fe347dc9a005ac6b5daeed19b7539cf9a06c13f0ea72ae9.ctex",
+          "sha256": "4fc66b86102df7f31fe347dc9a005ac6b5daeed19b7539cf9a06c13f0ea72ae9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "198c8d4e263738668b262ed665d47a12b3f5e8776c5c1ba08b24783a5415b9b5.glb",
+        "sha256": "198c8d4e263738668b262ed665d47a12b3f5e8776c5c1ba08b24783a5415b9b5",
+        "size": 4156348
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_elite_raider": {
+    "url": "ae1e95e404bf3d2818378107b40d81dfffd0ba8ba59902c3104ebd9437f66ded.glb",
+    "sha256": "ae1e95e404bf3d2818378107b40d81dfffd0ba8ba59902c3104ebd9437f66ded",
+    "size": 15857208,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3392a8a3a44ad732bd1d253a0c7635f7541cf7ed50de5759a03bcc0f0c00ee2c.ctex",
+          "sha256": "3392a8a3a44ad732bd1d253a0c7635f7541cf7ed50de5759a03bcc0f0c00ee2c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3a8af46845af0d316b6b22739a17cd294aed08e18aa363a693ed2424933f3c52.ctex",
+          "sha256": "3a8af46845af0d316b6b22739a17cd294aed08e18aa363a693ed2424933f3c52",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3c6d2b81af4d97471a1d0e8dbd750bea7b5c3f0a72b46c7928e9fa5fd8be4876.glb",
+        "sha256": "3c6d2b81af4d97471a1d0e8dbd750bea7b5c3f0a72b46c7928e9fa5fd8be4876",
+        "size": 4083944
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_eradication_brothers": {
+    "url": "113bbf77a9eb7a02103399495d5cc256a11095fae7aa2d53fcea776eb91b8982.glb",
+    "sha256": "113bbf77a9eb7a02103399495d5cc256a11095fae7aa2d53fcea776eb91b8982",
+    "size": 15672324,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "22f804dbcc92b49416e1feb589df302eea237adb51f8633ae300dfacdf8901be.ctex",
+          "sha256": "22f804dbcc92b49416e1feb589df302eea237adb51f8633ae300dfacdf8901be",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c43ac595b6d9f8d0a6e0d445b0663c519c67c9847112fce99b96d94cc6e91353.ctex",
+          "sha256": "c43ac595b6d9f8d0a6e0d445b0663c519c67c9847112fce99b96d94cc6e91353",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b2773eef42334f3d510c5eac1560c5f47087e1c0cedcd1d38125e0a7a1cecd04.glb",
+        "sha256": "b2773eef42334f3d510c5eac1560c5f47087e1c0cedcd1d38125e0a7a1cecd04",
+        "size": 4218100
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_grave_destroyers": {
+    "url": "a222b82ba6adae5b9593356fdd6eedaa1e36faffe83f1cf7c28690521b29fc3d.glb",
+    "sha256": "a222b82ba6adae5b9593356fdd6eedaa1e36faffe83f1cf7c28690521b29fc3d",
+    "size": 14180352,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "992e6bf25e4dc88211151e1d5c4b8a57966d87069dc4986428db9d4de34472e2.ctex",
+          "sha256": "992e6bf25e4dc88211151e1d5c4b8a57966d87069dc4986428db9d4de34472e2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "928acc88889e53df6428216e861c3f8e47e953076218be3062a84704e19d2455.ctex",
+          "sha256": "928acc88889e53df6428216e861c3f8e47e953076218be3062a84704e19d2455",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5104195a54e6f4525fb38bba5c219e7431e145c210a405aaab6e2d9a7920aeec.glb",
+        "sha256": "5104195a54e6f4525fb38bba5c219e7431e145c210a405aaab6e2d9a7920aeec",
+        "size": 4085460
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_grave_prime_master": {
+    "url": "e54dadf45a23599e6493c36d66ba3fbc14a0e0af947c3c17e6ccbbc8ee57ac69.glb",
+    "sha256": "e54dadf45a23599e6493c36d66ba3fbc14a0e0af947c3c17e6ccbbc8ee57ac69",
+    "size": 16094520,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "216acdfba090f1e834659019c49dcdde357d60037533a7f7f6caee8600f37a8b.ctex",
+          "sha256": "216acdfba090f1e834659019c49dcdde357d60037533a7f7f6caee8600f37a8b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ecd6fbae58053941903544682c6a94ea0ecc8e0cc8cb5912e67280cf9775cb18.ctex",
+          "sha256": "ecd6fbae58053941903544682c6a94ea0ecc8e0cc8cb5912e67280cf9775cb18",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1f61227466c743b525a80d0171c5733763904c17a5402cec9dfa14874baf2545.glb",
+        "sha256": "1f61227466c743b525a80d0171c5733763904c17a5402cec9dfa14874baf2545",
+        "size": 4258548
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_guard_brothers": {
+    "url": "998ac69ae8b2f61ab9c9836f9999bf161fdd1c8e01e6d791dba3bfbff5f6b72d.glb",
+    "sha256": "998ac69ae8b2f61ab9c9836f9999bf161fdd1c8e01e6d791dba3bfbff5f6b72d",
+    "size": 17121624,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b3bcdc8bfff5ffba2012ea520023b4756d8dade57e7dc87726221dea1dcf9304.ctex",
+          "sha256": "b3bcdc8bfff5ffba2012ea520023b4756d8dade57e7dc87726221dea1dcf9304",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a940899d47b5a67796075202d22a76da1f4a426b82f51b23d9bf948db991faca.ctex",
+          "sha256": "a940899d47b5a67796075202d22a76da1f4a426b82f51b23d9bf948db991faca",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "36a89a89851628a3cc091626b191e9883a9e128fc114c635a8a9a0a2c80d909c.glb",
+        "sha256": "36a89a89851628a3cc091626b191e9883a9e128fc114c635a8a9a0a2c80d909c",
+        "size": 4560660
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_heavy_anti_grav_destroyer_tank": {
+    "url": "10cb1b52036edf6d593edacb8a2da4c952cd297f38c0777574f5da9b03b4bc68.glb",
+    "sha256": "10cb1b52036edf6d593edacb8a2da4c952cd297f38c0777574f5da9b03b4bc68",
+    "size": 15644216,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5f4d3ecaa7fb549e9d47867de06321a4b3571ce3f5bccadc2c812af81df44615.ctex",
+          "sha256": "5f4d3ecaa7fb549e9d47867de06321a4b3571ce3f5bccadc2c812af81df44615",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6e46cdc7e433e681fcfd64f4c4bb8601a3734995e87af3586f4a4a54f6a687b8.ctex",
+          "sha256": "6e46cdc7e433e681fcfd64f4c4bb8601a3734995e87af3586f4a4a54f6a687b8",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9e4329be87bc5facc747b996f70e843f4d0e0189ee3d7a3238da2c6e9786cca4.glb",
+        "sha256": "9e4329be87bc5facc747b996f70e843f4d0e0189ee3d7a3238da2c6e9786cca4",
+        "size": 8340760
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "knight_prime_brothers/knight_heavy_anti_grav_transport_tank": {
+    "url": "047566bf867fa23ffe68772b51586b0f6733b7dd99b9ccd9c1eba7bc3e43f0c1.glb",
+    "sha256": "047566bf867fa23ffe68772b51586b0f6733b7dd99b9ccd9c1eba7bc3e43f0c1",
+    "size": 16580176,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4d766eb1db546e9b711fd7567264e8aa7711e48320447edf0b73675d13996377.ctex",
+          "sha256": "4d766eb1db546e9b711fd7567264e8aa7711e48320447edf0b73675d13996377",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "82ecbbfc0c353ca736fc37de195864cc0373b29d7d145b778dc5902934bad2cb.ctex",
+          "sha256": "82ecbbfc0c353ca736fc37de195864cc0373b29d7d145b778dc5902934bad2cb",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e2d84e89dd2c4f62e6374b6482f8e08acee0a52a65f727efb57bcb0168910b9c.glb",
+        "sha256": "e2d84e89dd2c4f62e6374b6482f8e08acee0a52a65f727efb57bcb0168910b9c",
+        "size": 8755596
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "knight_prime_brothers/knight_heavy_prime_brothers": {
+    "url": "2e4ea5173c59af3e8cec5446d2fbdb6750fa500bdd927b17cb10488111b767ac.glb",
+    "sha256": "2e4ea5173c59af3e8cec5446d2fbdb6750fa500bdd927b17cb10488111b767ac",
+    "size": 16492804,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "109e6d7e31fd6e53ecea8acd78b449e68b9f63f6b54189dc2ba6556f237e30d1.ctex",
+          "sha256": "109e6d7e31fd6e53ecea8acd78b449e68b9f63f6b54189dc2ba6556f237e30d1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8aae023af32664e8436b9c4acbf6d37ff9ac92a79540cfc9451e8254e878facc.ctex",
+          "sha256": "8aae023af32664e8436b9c4acbf6d37ff9ac92a79540cfc9451e8254e878facc",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "fdd0ca4eea95e602167467148f2517238b9333c9c8a8eb7d4f9e94a7f61fe7bc.glb",
+        "sha256": "fdd0ca4eea95e602167467148f2517238b9333c9c8a8eb7d4f9e94a7f61fe7bc",
+        "size": 11722100
+      },
+      "size_class": "large"
+    }
+  },
+  "knight_prime_brothers/knight_infernal_brothers": {
+    "url": "2d84913ad806d0fa29fb4ec869218572e991005f38cd6e15490e20b5ca307b51.glb",
+    "sha256": "2d84913ad806d0fa29fb4ec869218572e991005f38cd6e15490e20b5ca307b51",
+    "size": 15854860,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "aff3e9d3494c5cf37cb744314e1733854f117004aee8454d36784b5019a9465f.ctex",
+          "sha256": "aff3e9d3494c5cf37cb744314e1733854f117004aee8454d36784b5019a9465f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4105d9762c74a8fd37022a35f44de5a3b4b4a1564a5c74bcdde2bfa1770e3ffb.ctex",
+          "sha256": "4105d9762c74a8fd37022a35f44de5a3b4b4a1564a5c74bcdde2bfa1770e3ffb",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "286032fd0e91a4578345820ca06ca413f7ccafc98185858a91c9f87b3ee398ee.glb",
+        "sha256": "286032fd0e91a4578345820ca06ca413f7ccafc98185858a91c9f87b3ee398ee",
+        "size": 4216668
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_infiltration_brothers": {
+    "url": "488803a25232d62931ccc6e076644abff13f080e7efaf867621ba6b3e18b79bc.glb",
+    "sha256": "488803a25232d62931ccc6e076644abff13f080e7efaf867621ba6b3e18b79bc",
+    "size": 14082112,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "02d92f3380177b440f0a3f6e8e8ce5506059b16020dc1ddff508cd03a2e1032e.ctex",
+          "sha256": "02d92f3380177b440f0a3f6e8e8ce5506059b16020dc1ddff508cd03a2e1032e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7c979c39d9f30da20f2d8aaf0a6dc94b0aea04bf132b19c3962bb456d504528e.ctex",
+          "sha256": "7c979c39d9f30da20f2d8aaf0a6dc94b0aea04bf132b19c3962bb456d504528e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8f047676827587985f95a886f63cb30e8e2ad4e40a75068f4eabaf6b5ae73c29.glb",
+        "sha256": "8f047676827587985f95a886f63cb30e8e2ad4e40a75068f4eabaf6b5ae73c29",
+        "size": 3833852
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_jetpack_brothers": {
+    "url": "37df853cae1934f323acd022c18714c16b9260aec8e4ebeaf29d52124fb3fca4.glb",
+    "sha256": "37df853cae1934f323acd022c18714c16b9260aec8e4ebeaf29d52124fb3fca4",
+    "size": 16462392,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ea82d13b6678917483a8d08ff112af6dd7bb318f88bb78c1e691fb0c10fa5268.ctex",
+          "sha256": "ea82d13b6678917483a8d08ff112af6dd7bb318f88bb78c1e691fb0c10fa5268",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a7e991a1ed09f927b39bf203ab3d3401acdffc37c64892d39bfb15995dd9aeb0.ctex",
+          "sha256": "a7e991a1ed09f927b39bf203ab3d3401acdffc37c64892d39bfb15995dd9aeb0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9b0e65b348d303d97e025e96229b362054160cae0704d0a47382073371ba2da6.glb",
+        "sha256": "9b0e65b348d303d97e025e96229b362054160cae0704d0a47382073371ba2da6",
+        "size": 4693060
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_light_walker": {
+    "url": "131e8f598ac55b8e3901a3636a5231af6b140d9b499bb272548413e9c91a9e9c.glb",
+    "sha256": "131e8f598ac55b8e3901a3636a5231af6b140d9b499bb272548413e9c91a9e9c",
+    "size": 18146388,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "549999c52797c453e05a71a29eeaca50c36a3701b087425313c63e67d73bb74f.ctex",
+          "sha256": "549999c52797c453e05a71a29eeaca50c36a3701b087425313c63e67d73bb74f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f954b1a1269c26591ad6606e42bdb2b3d8da55be670b8c72d09a9277ad4bd42c.ctex",
+          "sha256": "f954b1a1269c26591ad6606e42bdb2b3d8da55be670b8c72d09a9277ad4bd42c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6932ea40225c31e98158237f6cc213b5ee4a0f0db61aed1f4fe1cbfb6fd346f2.glb",
+        "sha256": "6932ea40225c31e98158237f6cc213b5ee4a0f0db61aed1f4fe1cbfb6fd346f2",
+        "size": 9027108
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "knight_prime_brothers/knight_prime_atv": {
+    "url": "b020e9d8b48d8c326da2e9f2ea7ce528b896ccb7f0f4652ff21a3adf44fd8a14.glb",
+    "sha256": "b020e9d8b48d8c326da2e9f2ea7ce528b896ccb7f0f4652ff21a3adf44fd8a14",
+    "size": 17222608,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "51e8e1dc7e94dfb7fcc0e28c6444a5c32f950c3a0a95e1fad65605aff7c9cd04.ctex",
+          "sha256": "51e8e1dc7e94dfb7fcc0e28c6444a5c32f950c3a0a95e1fad65605aff7c9cd04",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "17eeaad49fdb8aba23e34229cde7dbf2c3f2f8d0d650d52eeff28b1c633ab05f.ctex",
+          "sha256": "17eeaad49fdb8aba23e34229cde7dbf2c3f2f8d0d650d52eeff28b1c633ab05f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "35d00e71eec28c12361431225844b5997cc6a8f26b5cab9b77e948550b1d4f0a.glb",
+        "sha256": "35d00e71eec28c12361431225844b5997cc6a8f26b5cab9b77e948550b1d4f0a",
+        "size": 5159604
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_prime_brother_bikers": {
+    "url": "0451c41bc47aa50e1ae3cdae687bdecf4459d93bddbc8c12f003fb927c373c71.glb",
+    "sha256": "0451c41bc47aa50e1ae3cdae687bdecf4459d93bddbc8c12f003fb927c373c71",
+    "size": 16071032,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "da709f31a7a5825f2814a535c71423e69fe73618a42e5679e9f9e6f70951d23c.ctex",
+          "sha256": "da709f31a7a5825f2814a535c71423e69fe73618a42e5679e9f9e6f70951d23c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "629dbc5fe38e1bd3faeef3fb61a1ee8c2d653e7b58800dbafce8d49cd1bbc8f3.ctex",
+          "sha256": "629dbc5fe38e1bd3faeef3fb61a1ee8c2d653e7b58800dbafce8d49cd1bbc8f3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6e0ab30d304ba6f0f562c101b4506308dc54eeebd89577a00b83553be1206233.glb",
+        "sha256": "6e0ab30d304ba6f0f562c101b4506308dc54eeebd89577a00b83553be1206233",
+        "size": 7896732
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "knight_prime_brothers/knight_prime_brothers": {
+    "url": "a1da9a77b747886fa005f978a572cbfcea2f18217520d89858295b7115cac06f.glb",
+    "sha256": "a1da9a77b747886fa005f978a572cbfcea2f18217520d89858295b7115cac06f",
+    "size": 15014084,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6b3ecd390a7b314c07246f5baa39f85733b6f004ee62e231f52ce4fc0e71c557.ctex",
+          "sha256": "6b3ecd390a7b314c07246f5baa39f85733b6f004ee62e231f52ce4fc0e71c557",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5cbdbb0d567c895e69d00b91657ea220b706924b375604e7fabdd52b4d885328.ctex",
+          "sha256": "5cbdbb0d567c895e69d00b91657ea220b706924b375604e7fabdd52b4d885328",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ddfdd422e791a708ea9a22c7fb21c1288aa3c69a1d5fb14ba83b4e0542d58a8b.glb",
+        "sha256": "ddfdd422e791a708ea9a22c7fb21c1288aa3c69a1d5fb14ba83b4e0542d58a8b",
+        "size": 3879388
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_prime_drop_pod": {
+    "url": "fef3c15f6518e0a40e3a19574afb02727336d7f2aa391cda8ffd45dc0afb795a.glb",
+    "sha256": "fef3c15f6518e0a40e3a19574afb02727336d7f2aa391cda8ffd45dc0afb795a",
+    "size": 17105168,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5f2f33796f89cb0046891a284817de4c394ead8dd3454307f6a6f7a415ea9f99.ctex",
+          "sha256": "5f2f33796f89cb0046891a284817de4c394ead8dd3454307f6a6f7a415ea9f99",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7ee6c0eb73d96a60149b1abb2ab79f661dc7c058e07b1591e5c1ad99aaca2fdd.ctex",
+          "sha256": "7ee6c0eb73d96a60149b1abb2ab79f661dc7c058e07b1591e5c1ad99aaca2fdd",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "95e24d02a20dedec1935b06f7def54ea2406e154e9b4abdaab6db21887d9f688.glb",
+        "sha256": "95e24d02a20dedec1935b06f7def54ea2406e154e9b4abdaab6db21887d9f688",
+        "size": 8596508
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "knight_prime_brothers/knight_prime_master": {
+    "url": "a81848a49dc6e660652df7c7ba0943c0c36e5293d2e29bef74c03336d9f28724.glb",
+    "sha256": "a81848a49dc6e660652df7c7ba0943c0c36e5293d2e29bef74c03336d9f28724",
+    "size": 14575608,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c7aa9ae39cfeeb07ab24014bfa47290a41b90274f892b99c75017bf8079e4d82.ctex",
+          "sha256": "c7aa9ae39cfeeb07ab24014bfa47290a41b90274f892b99c75017bf8079e4d82",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a1ca8600404fde7608c45ad1f959396ac8d38a69327c22d51e558117bddcae2e.ctex",
+          "sha256": "a1ca8600404fde7608c45ad1f959396ac8d38a69327c22d51e558117bddcae2e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "71462ab3a6665fa6e18c952e1685fff341301837566b930da3df05dea822e790.glb",
+        "sha256": "71462ab3a6665fa6e18c952e1685fff341301837566b930da3df05dea822e790",
+        "size": 3948212
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_raider_brothers": {
+    "url": "a3f53a903c1613fd585936de95d8bf0d406002a0d2a1b43ac7e9888146db9c80.glb",
+    "sha256": "a3f53a903c1613fd585936de95d8bf0d406002a0d2a1b43ac7e9888146db9c80",
+    "size": 16248652,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "1fef13ba0bfbbbd1de9c0a4e3ecd60bd20b0c98933ecdffea0da5640497eea18.ctex",
+          "sha256": "1fef13ba0bfbbbd1de9c0a4e3ecd60bd20b0c98933ecdffea0da5640497eea18",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0135335026bc4b5d7059eba4307be0c595b7c6f89b8314c190d7070581e1b99a.ctex",
+          "sha256": "0135335026bc4b5d7059eba4307be0c595b7c6f89b8314c190d7070581e1b99a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "19c07cd77af647dc1c48bd5ce72d2a39f1c6a6560e84aa1945611c20658c885b.glb",
+        "sha256": "19c07cd77af647dc1c48bd5ce72d2a39f1c6a6560e84aa1945611c20658c885b",
+        "size": 4229540
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_support_turret": {
+    "url": "e635c68e0b36da48c0514ffeaccfda7160370d8b66e4377a5eb37d02276ae508.glb",
+    "sha256": "e635c68e0b36da48c0514ffeaccfda7160370d8b66e4377a5eb37d02276ae508",
+    "size": 18040176,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "868e9eea662b0ec882a4091cfe4a1d3a19f1da14256a584246343599327cedef.ctex",
+          "sha256": "868e9eea662b0ec882a4091cfe4a1d3a19f1da14256a584246343599327cedef",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b11ee3f885b01b282c0f40724c457313dd10f97faf524107034a948c6dbe9d63.ctex",
+          "sha256": "b11ee3f885b01b282c0f40724c457313dd10f97faf524107034a948c6dbe9d63",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "728ad86ca8c0c9c7287887a02e279efe6329ac7cfb39297bd09240e43d5bd7ce.glb",
+        "sha256": "728ad86ca8c0c9c7287887a02e279efe6329ac7cfb39297bd09240e43d5bd7ce",
+        "size": 4757412
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_suppression_brothers": {
+    "url": "23c11fea3a25f0254769fdac06415864574db5656a623c48c5baae204b88eec4.glb",
+    "sha256": "23c11fea3a25f0254769fdac06415864574db5656a623c48c5baae204b88eec4",
+    "size": 15294784,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b4930b3ed58e20dfc8619bda461c764cdd1e87c0babc5a9c4e1b413f9c8d93c7.ctex",
+          "sha256": "b4930b3ed58e20dfc8619bda461c764cdd1e87c0babc5a9c4e1b413f9c8d93c7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1ce036726c5a04f64e441a85efdbc13c43920ec5a260fa4bbbe9dab22e5851ee.ctex",
+          "sha256": "1ce036726c5a04f64e441a85efdbc13c43920ec5a260fa4bbbe9dab22e5851ee",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "77d380432cb56b7c69a83cd515f22f12fb946c5904f90856d68645ccc3c92035.glb",
+        "sha256": "77d380432cb56b7c69a83cd515f22f12fb946c5904f90856d68645ccc3c92035",
+        "size": 4264036
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_veteran_assault_prime_brothers": {
+    "url": "c0294c2734a8aef15bd6958c69d53f5c0b20ad829ddac29fb9bb89d3778ab77d.glb",
+    "sha256": "c0294c2734a8aef15bd6958c69d53f5c0b20ad829ddac29fb9bb89d3778ab77d",
+    "size": 15576664,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0e26bc859787b31ee91fc4f8356bcb4da256bfc1d112524f8713f50afad8adf3.ctex",
+          "sha256": "0e26bc859787b31ee91fc4f8356bcb4da256bfc1d112524f8713f50afad8adf3",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c8b36777e56e72f01fa5a3d74c18c77a5fcb7efe313602ec41d07adfc841f7dd.ctex",
+          "sha256": "c8b36777e56e72f01fa5a3d74c18c77a5fcb7efe313602ec41d07adfc841f7dd",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7430b75c2c3cf18906567c5f2c7be9382d55d32ec18e4167120a75b02f4a2817.glb",
+        "sha256": "7430b75c2c3cf18906567c5f2c7be9382d55d32ec18e4167120a75b02f4a2817",
+        "size": 4259204
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_veteran_prime_brothers": {
+    "url": "20b5a5ae8ae9583d6d9625961ea1ac2dda6cdadb0e086d97963e5387ecea8578.glb",
+    "sha256": "20b5a5ae8ae9583d6d9625961ea1ac2dda6cdadb0e086d97963e5387ecea8578",
+    "size": 15353664,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6432cbe4611334f3d2659ab90aa47273b19daf55a32eb418f2433bd9528d97cb.ctex",
+          "sha256": "6432cbe4611334f3d2659ab90aa47273b19daf55a32eb418f2433bd9528d97cb",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "22b37932201f70bd7b843fd419cab4d2cd9f5e28d5bfdc3f006665c10bcaae7a.ctex",
+          "sha256": "22b37932201f70bd7b843fd419cab4d2cd9f5e28d5bfdc3f006665c10bcaae7a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "91be45796d9822b09279309aaefdfeac0a9ea75b58f6941ea0f3c2bd16ef3a21.glb",
+        "sha256": "91be45796d9822b09279309aaefdfeac0a9ea75b58f6941ea0f3c2bd16ef3a21",
+        "size": 4007168
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_prime_brothers/knight_veteran_prime_master": {
+    "url": "9b9287283a7a855e90255dd7a8cd645dabe9153fe04d3c5d4679ad0b0f035232.glb",
+    "sha256": "9b9287283a7a855e90255dd7a8cd645dabe9153fe04d3c5d4679ad0b0f035232",
+    "size": 15237020,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5e455cef0b81cb9ccbee2ae3c10ea2afc9de2adec73878fce73579f726094bf3.ctex",
+          "sha256": "5e455cef0b81cb9ccbee2ae3c10ea2afc9de2adec73878fce73579f726094bf3",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "32053f56d58941c1b1e64ed470ed9ce606c3f9c6b19d5e6334ec3886bad09d6f.ctex",
+          "sha256": "32053f56d58941c1b1e64ed470ed9ce606c3f9c6b19d5e6334ec3886bad09d6f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f7c1ef2294d8ad78bc3e92a4b27de05164c9dbfcafee608e5b893e28bd6a9fec.glb",
+        "sha256": "f7c1ef2294d8ad78bc3e92a4b27de05164c9dbfcafee608e5b893e28bd6a9fec",
+        "size": 4235848
+      },
+      "size_class": "infantry"
+    }
+  }
+}

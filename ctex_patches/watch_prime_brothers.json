@@ -1,0 +1,756 @@
+{
+  "watch_prime_brothers/watch_aggro_brothers": {
+    "url": "f78d5b135f0d2916f429e4ea7ed79b091f0d8e81f643b1d436d2591cd5368bad.glb",
+    "sha256": "f78d5b135f0d2916f429e4ea7ed79b091f0d8e81f643b1d436d2591cd5368bad",
+    "size": 15840072,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "1854026828520db880f62e44a2f8534fd6cb85b6b7a13b95765b1fced64ca6e7.ctex",
+          "sha256": "1854026828520db880f62e44a2f8534fd6cb85b6b7a13b95765b1fced64ca6e7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "98c6fd9b4da37a7ddc82bc2e011bcb69a3301f2dbda9453a92b6b9cfcbadbc8e.ctex",
+          "sha256": "98c6fd9b4da37a7ddc82bc2e011bcb69a3301f2dbda9453a92b6b9cfcbadbc8e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "23b3648afe013470fcf4ec13444b7383601f0bc7e8e3b2fe0c2b5319156979a8.glb",
+        "sha256": "23b3648afe013470fcf4ec13444b7383601f0bc7e8e3b2fe0c2b5319156979a8",
+        "size": 4578204
+      },
+      "size_class": "infantry"
+    }
+  },
+  "watch_prime_brothers/watch_anti_grav_apc": {
+    "url": "b0e05122ee945783e322deadf81519ebd30875b06f0594f0122aed51d1c5537a.glb",
+    "sha256": "b0e05122ee945783e322deadf81519ebd30875b06f0594f0122aed51d1c5537a",
+    "size": 18194032,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "45db24922cd1a1cf5619e4370576e6802eb7c7cadd08a5904a087c31808beb61.ctex",
+          "sha256": "45db24922cd1a1cf5619e4370576e6802eb7c7cadd08a5904a087c31808beb61",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0ae6fe91cffd9114f834527dc663eff47401307350098c622fd3648afa0cb66c.ctex",
+          "sha256": "0ae6fe91cffd9114f834527dc663eff47401307350098c622fd3648afa0cb66c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e466c50205edc46198ecedb3d6e57fcdb86580eb715b1d3d6311adba6e741950.glb",
+        "sha256": "e466c50205edc46198ecedb3d6e57fcdb86580eb715b1d3d6311adba6e741950",
+        "size": 10340620
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "watch_prime_brothers/watch_anti_grav_tank": {
+    "url": "79b74f1d9ed1a9b21a01c713797dfe0cf17ad7b4c7d11e820607b5602fa0b48e.glb",
+    "sha256": "79b74f1d9ed1a9b21a01c713797dfe0cf17ad7b4c7d11e820607b5602fa0b48e",
+    "size": 17189160,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "cd6a84e6817f333566a72b478076f80df54b03d473a5e92f017fe2c102f1fd11.ctex",
+          "sha256": "cd6a84e6817f333566a72b478076f80df54b03d473a5e92f017fe2c102f1fd11",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4eeadc19c36dcfb300c16e087a9ce9a6dcfddbc7efa9b2acc7a3b010ad6ac52a.ctex",
+          "sha256": "4eeadc19c36dcfb300c16e087a9ce9a6dcfddbc7efa9b2acc7a3b010ad6ac52a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "325577de36079f185e951434f9a73d70aeb827836a99c38d2163e87e67538630.glb",
+        "sha256": "325577de36079f185e951434f9a73d70aeb827836a99c38d2163e87e67538630",
+        "size": 8963156
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "watch_prime_brothers/watch_assault_prime_brothers": {
+    "url": "bd546ee29555ea93d5796d7621c692aaf2155804225f34b6680344c8ab50f846.glb",
+    "sha256": "bd546ee29555ea93d5796d7621c692aaf2155804225f34b6680344c8ab50f846",
+    "size": 15958608,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "35d66f3a589d455c4dd0c7e0afda5023dfddfc738fc52629ba8ed7900bf317a7.ctex",
+          "sha256": "35d66f3a589d455c4dd0c7e0afda5023dfddfc738fc52629ba8ed7900bf317a7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "924aeaad46c84ed9ae1d4c25d44f37af09f87e5ca58a8dcfda02e43ffbf204c4.ctex",
+          "sha256": "924aeaad46c84ed9ae1d4c25d44f37af09f87e5ca58a8dcfda02e43ffbf204c4",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7b64c6a4715c83b87e5c12e9d54f4ed9c8ba16bd9a2f80064634068b356d3c10.glb",
+        "sha256": "7b64c6a4715c83b87e5c12e9d54f4ed9c8ba16bd9a2f80064634068b356d3c10",
+        "size": 4410440
+      },
+      "size_class": "infantry"
+    }
+  },
+  "watch_prime_brothers/watch_attack_speeder": {
+    "url": "f873d2e0e630b018b315d1344afaae0373fbcf9b20d4366716ce345b65811529.glb",
+    "sha256": "f873d2e0e630b018b315d1344afaae0373fbcf9b20d4366716ce345b65811529",
+    "size": 18503008,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e75edbed9d27c4f4133ab6acca739002276f884db2afecd3ae0c724400fbf6cb.ctex",
+          "sha256": "e75edbed9d27c4f4133ab6acca739002276f884db2afecd3ae0c724400fbf6cb",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "169df440dad65387a6a5e564c8737eae994c7cba149a0ecf66b83160e5233a1a.ctex",
+          "sha256": "169df440dad65387a6a5e564c8737eae994c7cba149a0ecf66b83160e5233a1a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "371dded653b37e3ae817a0cf476ea35a60ee56d97666aad1fe4e23e1221ec2b7.glb",
+        "sha256": "371dded653b37e3ae817a0cf476ea35a60ee56d97666aad1fe4e23e1221ec2b7",
+        "size": 10028896
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "watch_prime_brothers/watch_blaster_brothers": {
+    "url": "c951adcf5b03f4ca0e0b303f1f07e8fd06489d356760aabf92bffcf4171696fa.glb",
+    "sha256": "c951adcf5b03f4ca0e0b303f1f07e8fd06489d356760aabf92bffcf4171696fa",
+    "size": 14923600,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8efdb7abaf2d34586c44df6d42c9c32a8797bc14bd043bd8cf9019683be93b46.ctex",
+          "sha256": "8efdb7abaf2d34586c44df6d42c9c32a8797bc14bd043bd8cf9019683be93b46",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "24885b0a8f196abc344f7ce680920d062c2cbf6ad1133a8cc469bbe8bc734f5e.ctex",
+          "sha256": "24885b0a8f196abc344f7ce680920d062c2cbf6ad1133a8cc469bbe8bc734f5e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ef96052b7f1ec23bc7f3abc445b3d60a5c52a99a07bcda9ffedec6e53fa26f3d.glb",
+        "sha256": "ef96052b7f1ec23bc7f3abc445b3d60a5c52a99a07bcda9ffedec6e53fa26f3d",
+        "size": 4143160
+      },
+      "size_class": "infantry"
+    }
+  },
+  "watch_prime_brothers/watch_combat_walker": {
+    "url": "7555b08bfbbd552e6d2ab3b36cd96c58bfc8d6270b9e223fcca2af2ff117c7bb.glb",
+    "sha256": "7555b08bfbbd552e6d2ab3b36cd96c58bfc8d6270b9e223fcca2af2ff117c7bb",
+    "size": 16170448,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "679264399838f6f94019a721696bb4509a7bb0872ac62972960d9dfcdaea6ead.ctex",
+          "sha256": "679264399838f6f94019a721696bb4509a7bb0872ac62972960d9dfcdaea6ead",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "dbbe181ea0af2c464034094e4af6004bab36981c6ffe6426974ade21b9c88924.ctex",
+          "sha256": "dbbe181ea0af2c464034094e4af6004bab36981c6ffe6426974ade21b9c88924",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "53b5c1c8e5f06443bb81b4c322a3ada1804201e12c80131b633504d214cc881a.glb",
+        "sha256": "53b5c1c8e5f06443bb81b4c322a3ada1804201e12c80131b633504d214cc881a",
+        "size": 8721268
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "watch_prime_brothers/watch_desolator_brothers": {
+    "url": "f64bed87c60d8a6b1a3245e7456ed8fa34a700e22bf0dcdeafec48219a91fc37.glb",
+    "sha256": "f64bed87c60d8a6b1a3245e7456ed8fa34a700e22bf0dcdeafec48219a91fc37",
+    "size": 14487828,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "583c9896606dcd939cb3593afa491143079f2e55e35535d5a4c7556fda767a82.ctex",
+          "sha256": "583c9896606dcd939cb3593afa491143079f2e55e35535d5a4c7556fda767a82",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "22f9dcd96b8506cebb9c4d4ebc04c971a7701a476530010248e1133c00e0881a.ctex",
+          "sha256": "22f9dcd96b8506cebb9c4d4ebc04c971a7701a476530010248e1133c00e0881a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "207249f88ab9df62648586288107df058415adbb9d34ac47a273810a735fb72d.glb",
+        "sha256": "207249f88ab9df62648586288107df058415adbb9d34ac47a273810a735fb72d",
+        "size": 4151316
+      },
+      "size_class": "infantry"
+    }
+  },
+  "watch_prime_brothers/watch_elimination_brothers": {
+    "url": "bdfe8aa4bc734222e7bdf89ace529f8d3a561076f4963a510b3ca2e7a1235417.glb",
+    "sha256": "bdfe8aa4bc734222e7bdf89ace529f8d3a561076f4963a510b3ca2e7a1235417",
+    "size": 14819964,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9607a28332618dcac650df8f18a524a2d1c36093f3f9ef2aee3953047ae79031.ctex",
+          "sha256": "9607a28332618dcac650df8f18a524a2d1c36093f3f9ef2aee3953047ae79031",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f427d6fabdbb8714a0e1c5c706d4516aca6003151166f124ece04e1c5ee411c0.ctex",
+          "sha256": "f427d6fabdbb8714a0e1c5c706d4516aca6003151166f124ece04e1c5ee411c0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "50d9d88427e641bb8b44ba8811e33cec7cf38df9ad51b8e3ea1a532e6160818e.glb",
+        "sha256": "50d9d88427e641bb8b44ba8811e33cec7cf38df9ad51b8e3ea1a532e6160818e",
+        "size": 4178792
+      },
+      "size_class": "infantry"
+    }
+  },
+  "watch_prime_brothers/watch_elite_raider": {
+    "url": "7fa578840c6afa309528df747835d45b504b8505b76918ccf6ae563968b71b3f.glb",
+    "sha256": "7fa578840c6afa309528df747835d45b504b8505b76918ccf6ae563968b71b3f",
+    "size": 14352972,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3df3d0fc58d92dd79d6d8c34bce56b11cf3cb7db5d83223ac6844f1c284418d0.ctex",
+          "sha256": "3df3d0fc58d92dd79d6d8c34bce56b11cf3cb7db5d83223ac6844f1c284418d0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5fe4e0fa91817c4e5ce6c14c394087e3fe0ea2a0df424f1672727ca798d06a27.ctex",
+          "sha256": "5fe4e0fa91817c4e5ce6c14c394087e3fe0ea2a0df424f1672727ca798d06a27",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "084ed59b7b210f1d0172e0f4d335b1e3918e5489935ddb528495b7fd07cfffda.glb",
+        "sha256": "084ed59b7b210f1d0172e0f4d335b1e3918e5489935ddb528495b7fd07cfffda",
+        "size": 3824868
+      },
+      "size_class": "infantry"
+    }
+  },
+  "watch_prime_brothers/watch_eradication_brothers": {
+    "url": "226d07531b34df29ae6421c5a0d9015e850077138ba97646123bc91fc00257f3.glb",
+    "sha256": "226d07531b34df29ae6421c5a0d9015e850077138ba97646123bc91fc00257f3",
+    "size": 15029876,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "cd3e9c663d851257df52a17aafaea26a094f8b472cbd4d5f7fb576f94601bcb0.ctex",
+          "sha256": "cd3e9c663d851257df52a17aafaea26a094f8b472cbd4d5f7fb576f94601bcb0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d10d4e2c35ba36db9c8af6890db8477697ca21d0ebfda308f9ac2b97c69e54da.ctex",
+          "sha256": "d10d4e2c35ba36db9c8af6890db8477697ca21d0ebfda308f9ac2b97c69e54da",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "98c99a0d4ec56b3a0b08e3b5fefecc43091c569976cd3855a2ca35cb85efdcea.glb",
+        "sha256": "98c99a0d4ec56b3a0b08e3b5fefecc43091c569976cd3855a2ca35cb85efdcea",
+        "size": 4126420
+      },
+      "size_class": "infantry"
+    }
+  },
+  "watch_prime_brothers/watch_grave_destroyers": {
+    "url": "70a5e301fb7e4c52929954a94dbbfd9c096afe92d86214889ecbc20d021a32c2.glb",
+    "sha256": "70a5e301fb7e4c52929954a94dbbfd9c096afe92d86214889ecbc20d021a32c2",
+    "size": 14584888,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b225954b471c2d43b1a403b25896e8ed0087825d53b88b94894fb5bb66b24249.ctex",
+          "sha256": "b225954b471c2d43b1a403b25896e8ed0087825d53b88b94894fb5bb66b24249",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5f10cfd69db2ebb4821dff3eb1265a84d2fc6abf40bd12945570b0313a44b05e.ctex",
+          "sha256": "5f10cfd69db2ebb4821dff3eb1265a84d2fc6abf40bd12945570b0313a44b05e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5c0547b3069c2d805cfd82b6a945e4dea0e63eaec509a8860134deef42ac99a6.glb",
+        "sha256": "5c0547b3069c2d805cfd82b6a945e4dea0e63eaec509a8860134deef42ac99a6",
+        "size": 4260728
+      },
+      "size_class": "infantry"
+    }
+  },
+  "watch_prime_brothers/watch_grave_prime_master": {
+    "url": "861709a33420615154d9cea032ba1fa5e36a6d4544b60e495437220f01f4558f.glb",
+    "sha256": "861709a33420615154d9cea032ba1fa5e36a6d4544b60e495437220f01f4558f",
+    "size": 14988528,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5e6834159897cfbb27cd2d8595e8fa4b092c20f231b30c51b719c4cccc201b47.ctex",
+          "sha256": "5e6834159897cfbb27cd2d8595e8fa4b092c20f231b30c51b719c4cccc201b47",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a1c64ab72b5f93ad8ade4180e9cff45dcc5f496abc151767abc9104cc1f635c4.ctex",
+          "sha256": "a1c64ab72b5f93ad8ade4180e9cff45dcc5f496abc151767abc9104cc1f635c4",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e97d503072ea4e556e7b5fc2c083c56d13301629ebe08cd9e8c2912f00dd5807.glb",
+        "sha256": "e97d503072ea4e556e7b5fc2c083c56d13301629ebe08cd9e8c2912f00dd5807",
+        "size": 4224940
+      },
+      "size_class": "infantry"
+    }
+  },
+  "watch_prime_brothers/watch_guard_brothers": {
+    "url": "40fd810a066148ff8937e52abfc43103f18496cdf63511b0d281874f09da21ee.glb",
+    "sha256": "40fd810a066148ff8937e52abfc43103f18496cdf63511b0d281874f09da21ee",
+    "size": 15648516,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d6169a3bd159f9389a1dc2378e8d96441ce0704e8d67882d2ecff3ed2860d7f3.ctex",
+          "sha256": "d6169a3bd159f9389a1dc2378e8d96441ce0704e8d67882d2ecff3ed2860d7f3",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "fb69477f5ff372b4f34afebf6c1568a7f7c61ef8575f920f20f3d85d6d97be3a.ctex",
+          "sha256": "fb69477f5ff372b4f34afebf6c1568a7f7c61ef8575f920f20f3d85d6d97be3a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e5ced660a0e20da124c29c4b7136a5538ac1e094cbd52bc39621863dfa6c1620.glb",
+        "sha256": "e5ced660a0e20da124c29c4b7136a5538ac1e094cbd52bc39621863dfa6c1620",
+        "size": 4428948
+      },
+      "size_class": "infantry"
+    }
+  },
+  "watch_prime_brothers/watch_heavy_anti_grav_destroyer_tank": {
+    "url": "b53c3f806c81eadf667e59781c927ba26b1534c6591b0214ecc4e880605d503e.glb",
+    "sha256": "b53c3f806c81eadf667e59781c927ba26b1534c6591b0214ecc4e880605d503e",
+    "size": 18278072,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c2cf6961be6e7ef328ee7b810f0c7e6fc3f6480809fa9ccbc7be1fff847e0643.ctex",
+          "sha256": "c2cf6961be6e7ef328ee7b810f0c7e6fc3f6480809fa9ccbc7be1fff847e0643",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "38bf098f834f5d59104c562fc38011eb385256e171083b5a90afbf9de843c3fc.ctex",
+          "sha256": "38bf098f834f5d59104c562fc38011eb385256e171083b5a90afbf9de843c3fc",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ed6b30564c68830e217729d31096e989e2605485431c8609ac994d323bb694aa.glb",
+        "sha256": "ed6b30564c68830e217729d31096e989e2605485431c8609ac994d323bb694aa",
+        "size": 9601772
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "watch_prime_brothers/watch_heavy_anti_grav_transport_tank": {
+    "url": "c400927bc626cede1117852a5a08631c6b455092bec50b0dfa587e9f36beea33.glb",
+    "sha256": "c400927bc626cede1117852a5a08631c6b455092bec50b0dfa587e9f36beea33",
+    "size": 18062276,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d0429e9c8f49107d5982b824012b7b3f9eb2156c0d52b831cd51e7c7954bc22a.ctex",
+          "sha256": "d0429e9c8f49107d5982b824012b7b3f9eb2156c0d52b831cd51e7c7954bc22a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d1bfd45d4df4b9d763da5f1d19395a3b04884c16f22ee28e716ec0125bb09681.ctex",
+          "sha256": "d1bfd45d4df4b9d763da5f1d19395a3b04884c16f22ee28e716ec0125bb09681",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "07920ccbf10d44bbfcedfecd6c2796a184a5c4ea638768a23c50631baa824522.glb",
+        "sha256": "07920ccbf10d44bbfcedfecd6c2796a184a5c4ea638768a23c50631baa824522",
+        "size": 9584948
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "watch_prime_brothers/watch_heavy_prime_brothers": {
+    "url": "35f2931721474a2bfa8295dbd40932d6d70344499d857b9ba2f1d51acf3d8b4b.glb",
+    "sha256": "35f2931721474a2bfa8295dbd40932d6d70344499d857b9ba2f1d51acf3d8b4b",
+    "size": 14640196,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2cd85d0cb6b1f5921881db94d8a9617c1d1ade567bc6962f54676b47e5ea15f2.ctex",
+          "sha256": "2cd85d0cb6b1f5921881db94d8a9617c1d1ade567bc6962f54676b47e5ea15f2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "dee91114af7e69bf473b205c2405e0b72ffc706db637f5f233386038c92e2645.ctex",
+          "sha256": "dee91114af7e69bf473b205c2405e0b72ffc706db637f5f233386038c92e2645",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "4c39575d7f5dbe863a94032031121cbca8635bdc83387f68da5d45d88b525f88.glb",
+        "sha256": "4c39575d7f5dbe863a94032031121cbca8635bdc83387f68da5d45d88b525f88",
+        "size": 11773824
+      },
+      "size_class": "large"
+    }
+  },
+  "watch_prime_brothers/watch_infernal_brothers": {
+    "url": "b994d15c9107a41e4ee630d97176772e7830a3a192c15ce6f2e1ed24de3376dc.glb",
+    "sha256": "b994d15c9107a41e4ee630d97176772e7830a3a192c15ce6f2e1ed24de3376dc",
+    "size": 15269480,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "cb4472e4a63d2dcbf9849635d40586f7f134f5c52087726270dd58ab924c27df.ctex",
+          "sha256": "cb4472e4a63d2dcbf9849635d40586f7f134f5c52087726270dd58ab924c27df",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0ed7ecd4c6685dc35df019cd8097d5b0c04e86ec23241ce0734686e1dca87f11.ctex",
+          "sha256": "0ed7ecd4c6685dc35df019cd8097d5b0c04e86ec23241ce0734686e1dca87f11",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ab5e473c207b0ac2b52b6aac20da58cf26990fbab4d51bf026fa1f22da2b36fc.glb",
+        "sha256": "ab5e473c207b0ac2b52b6aac20da58cf26990fbab4d51bf026fa1f22da2b36fc",
+        "size": 4156764
+      },
+      "size_class": "infantry"
+    }
+  },
+  "watch_prime_brothers/watch_infiltration_brothers": {
+    "url": "9a2ac090719e189fda769dd9e9d1e6a22f90f027e4c8774411dd3c9f583e6393.glb",
+    "sha256": "9a2ac090719e189fda769dd9e9d1e6a22f90f027e4c8774411dd3c9f583e6393",
+    "size": 14787940,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8d05d21cc7fcb584486d44ac9d2892b956d26a467174fb600e732253b2115c29.ctex",
+          "sha256": "8d05d21cc7fcb584486d44ac9d2892b956d26a467174fb600e732253b2115c29",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "fad898dfdaefe2cbd38baa651e11de5715e6aa5fc185f505f0fbbca21e42dab7.ctex",
+          "sha256": "fad898dfdaefe2cbd38baa651e11de5715e6aa5fc185f505f0fbbca21e42dab7",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e39b664fa5db4c50320ae36cac00c5ab73aff016f95e5cdb9a92a3f8b5beb44e.glb",
+        "sha256": "e39b664fa5db4c50320ae36cac00c5ab73aff016f95e5cdb9a92a3f8b5beb44e",
+        "size": 3997088
+      },
+      "size_class": "infantry"
+    }
+  },
+  "watch_prime_brothers/watch_jetpack_brothers": {
+    "url": "ae31182bc10d01dbe2daceea589cdcd216f16aaae720a9f08e8c8e4b619f7c87.glb",
+    "sha256": "ae31182bc10d01dbe2daceea589cdcd216f16aaae720a9f08e8c8e4b619f7c87",
+    "size": 15828856,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9b357dbd98b26c34cb287fde0a49a0237d1307a094e94bfa53e3390c84ca23a2.ctex",
+          "sha256": "9b357dbd98b26c34cb287fde0a49a0237d1307a094e94bfa53e3390c84ca23a2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "70ecc8e90cc63c99188ac558cbe324835f4da4896cd8b9550b05f4d6b1d3b0d2.ctex",
+          "sha256": "70ecc8e90cc63c99188ac558cbe324835f4da4896cd8b9550b05f4d6b1d3b0d2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "aad6a051b7c899d2b4efc4d25e1b23673379fccb6a037cca59ce2ffb2404253e.glb",
+        "sha256": "aad6a051b7c899d2b4efc4d25e1b23673379fccb6a037cca59ce2ffb2404253e",
+        "size": 4487404
+      },
+      "size_class": "infantry"
+    }
+  },
+  "watch_prime_brothers/watch_light_walker": {
+    "url": "08ee40d7b0cfdc22788609f2abb97cff759e3c09b9b003c9d9803558993329a0.glb",
+    "sha256": "08ee40d7b0cfdc22788609f2abb97cff759e3c09b9b003c9d9803558993329a0",
+    "size": 16018240,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b1c3e0d82c98f6be61e779512e3460cf012de5aac51c689897810cdf7cf9fd5a.ctex",
+          "sha256": "b1c3e0d82c98f6be61e779512e3460cf012de5aac51c689897810cdf7cf9fd5a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1e38acd228eadec275adca372f43dda6b3f5e561ae39a966337b38635ee534e5.ctex",
+          "sha256": "1e38acd228eadec275adca372f43dda6b3f5e561ae39a966337b38635ee534e5",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "322e8c860ccb4b4924be79dbbc11141e18aeb88ce3a7ed6f32ae9724ce28751c.glb",
+        "sha256": "322e8c860ccb4b4924be79dbbc11141e18aeb88ce3a7ed6f32ae9724ce28751c",
+        "size": 8104032
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "watch_prime_brothers/watch_prime_atv": {
+    "url": "2b999b2f66a222f49319adc41c7d91236a798600e3b9a3c39a08264a83cf846c.glb",
+    "sha256": "2b999b2f66a222f49319adc41c7d91236a798600e3b9a3c39a08264a83cf846c",
+    "size": 16535676,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c9d3b3bb9a7aff20400e8c2238cbd8ed68a04805afb689bb4f501b1eca0690f3.ctex",
+          "sha256": "c9d3b3bb9a7aff20400e8c2238cbd8ed68a04805afb689bb4f501b1eca0690f3",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6e260651d9c2bf578914ce00da02386cdb19f2e9323cc9186c7e26ffe4909ac7.ctex",
+          "sha256": "6e260651d9c2bf578914ce00da02386cdb19f2e9323cc9186c7e26ffe4909ac7",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "13df0a25909203c6a93f6cad44bebc359bd1ac915c263752442bbc17cc17507a.glb",
+        "sha256": "13df0a25909203c6a93f6cad44bebc359bd1ac915c263752442bbc17cc17507a",
+        "size": 4550472
+      },
+      "size_class": "infantry"
+    }
+  },
+  "watch_prime_brothers/watch_prime_brother_bikers": {
+    "url": "7d9bc7c3427f292185a72abade9c068dd4511d237888fa647e12587014eccffa.glb",
+    "sha256": "7d9bc7c3427f292185a72abade9c068dd4511d237888fa647e12587014eccffa",
+    "size": 14974064,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "75540d7a1925aee6eb4ca24960190bc73ceeadf1f1326e007fb0d93dfc5e9917.ctex",
+          "sha256": "75540d7a1925aee6eb4ca24960190bc73ceeadf1f1326e007fb0d93dfc5e9917",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "61c9aeee321f69595f8a67974d702cc1d474fcd55877a3ad4c45674f94097ceb.ctex",
+          "sha256": "61c9aeee321f69595f8a67974d702cc1d474fcd55877a3ad4c45674f94097ceb",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f03ac65aa1b3f0b3a89394751eae1591727923bc71a82cdf8acaf6e98fe17258.glb",
+        "sha256": "f03ac65aa1b3f0b3a89394751eae1591727923bc71a82cdf8acaf6e98fe17258",
+        "size": 8157908
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "watch_prime_brothers/watch_prime_brothers": {
+    "url": "393300d14dedd92776fdc62f01dd52a0c7d63344029dad6b09cc7af3843daeec.glb",
+    "sha256": "393300d14dedd92776fdc62f01dd52a0c7d63344029dad6b09cc7af3843daeec",
+    "size": 14070768,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "199425d80b1131bcaf5c24c41f1ff2f9c32a2e14710fe6aca04de967cc74ece2.ctex",
+          "sha256": "199425d80b1131bcaf5c24c41f1ff2f9c32a2e14710fe6aca04de967cc74ece2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "86ac2efb73ff71a7bda31b03f65dc0bef51b3f7349186fdf755b61d83c201c94.ctex",
+          "sha256": "86ac2efb73ff71a7bda31b03f65dc0bef51b3f7349186fdf755b61d83c201c94",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "03e3de94149b00508ca305203a6d344c8e6cddc82af6f95741f02f708e30abc4.glb",
+        "sha256": "03e3de94149b00508ca305203a6d344c8e6cddc82af6f95741f02f708e30abc4",
+        "size": 3984092
+      },
+      "size_class": "infantry"
+    }
+  },
+  "watch_prime_brothers/watch_prime_drop_pod": {
+    "url": "85dce646314fd799293e007a75a9158974a2880334644af3827605ae1aede0d4.glb",
+    "sha256": "85dce646314fd799293e007a75a9158974a2880334644af3827605ae1aede0d4",
+    "size": 15081384,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "445bad256f6e1be8abe5af71a81db0e5518e1ae8b1c2ee9f2d5013d89fa3a9f1.ctex",
+          "sha256": "445bad256f6e1be8abe5af71a81db0e5518e1ae8b1c2ee9f2d5013d89fa3a9f1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d87fca1e2f0e3a5cfc74cb139b70ae9d06e114888c192b4984cdc8a2b53b7a0a.ctex",
+          "sha256": "d87fca1e2f0e3a5cfc74cb139b70ae9d06e114888c192b4984cdc8a2b53b7a0a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "47e96b72209cbe11cb11e69a49215e89be7e56e3051708d9c5edb33182453525.glb",
+        "sha256": "47e96b72209cbe11cb11e69a49215e89be7e56e3051708d9c5edb33182453525",
+        "size": 8388348
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "watch_prime_brothers/watch_prime_master": {
+    "url": "e81d50c3c67dd6b210377455ba4c78910d86c7176dcf56ceebc926429a23f680.glb",
+    "sha256": "e81d50c3c67dd6b210377455ba4c78910d86c7176dcf56ceebc926429a23f680",
+    "size": 14242440,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "776d4f4573064c834cbc11c9d6ae23ba5de94796562e7f08c84e23490663896c.ctex",
+          "sha256": "776d4f4573064c834cbc11c9d6ae23ba5de94796562e7f08c84e23490663896c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "317a3328cefbf74368d143ad7de184db95a4c993fd2045373d1d84206bc394c2.ctex",
+          "sha256": "317a3328cefbf74368d143ad7de184db95a4c993fd2045373d1d84206bc394c2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "4290e64214e37f9635af86e329678d955b1071a1446991e4f3a64948d1e1b926.glb",
+        "sha256": "4290e64214e37f9635af86e329678d955b1071a1446991e4f3a64948d1e1b926",
+        "size": 4244172
+      },
+      "size_class": "infantry"
+    }
+  },
+  "watch_prime_brothers/watch_raider_brothers": {
+    "url": "cd1bf1a7e120338fc168a10d6e322b472300fb299c9a8a339e9b122298deb7ac.glb",
+    "sha256": "cd1bf1a7e120338fc168a10d6e322b472300fb299c9a8a339e9b122298deb7ac",
+    "size": 13926864,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0ef6eb4711530993372bfdac1b3a4d51ca907ae8a804b2614d3966e85c73e8ca.ctex",
+          "sha256": "0ef6eb4711530993372bfdac1b3a4d51ca907ae8a804b2614d3966e85c73e8ca",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1793c4409a389829434d3f847a0b81547ca8a5d1424ffaaf17db1ce5723d0f26.ctex",
+          "sha256": "1793c4409a389829434d3f847a0b81547ca8a5d1424ffaaf17db1ce5723d0f26",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1cd37ffe27312d9bf43f0596b21764f9d355d6533abccc3ac18d3696a80daa05.glb",
+        "sha256": "1cd37ffe27312d9bf43f0596b21764f9d355d6533abccc3ac18d3696a80daa05",
+        "size": 4100952
+      },
+      "size_class": "infantry"
+    }
+  },
+  "watch_prime_brothers/watch_support_turret": {
+    "url": "65c9526d8bb95a9b315faf02c26625dd12ccd6b84b9e06d9c3818b32fd8dedd4.glb",
+    "sha256": "65c9526d8bb95a9b315faf02c26625dd12ccd6b84b9e06d9c3818b32fd8dedd4",
+    "size": 15449880,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7604b8641facbb50b17c2d5f7b2539336f2f3155bedf01fdd2a7da305a91e6c8.ctex",
+          "sha256": "7604b8641facbb50b17c2d5f7b2539336f2f3155bedf01fdd2a7da305a91e6c8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e273e7203587dd414239e93fa1f524d653346f08877289d9e8d3591df536bdd9.ctex",
+          "sha256": "e273e7203587dd414239e93fa1f524d653346f08877289d9e8d3591df536bdd9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "04cba92cef53ccb04703f7d5c61b2e3ee595247486b56e08bff278e80e2d4ba5.glb",
+        "sha256": "04cba92cef53ccb04703f7d5c61b2e3ee595247486b56e08bff278e80e2d4ba5",
+        "size": 4371932
+      },
+      "size_class": "infantry"
+    }
+  },
+  "watch_prime_brothers/watch_suppression_brothers": {
+    "url": "cdfb7f0dd0f2f70237bfe4ceffdd2c04d323955bf0f63ee722d7f3a3eba0afd9.glb",
+    "sha256": "cdfb7f0dd0f2f70237bfe4ceffdd2c04d323955bf0f63ee722d7f3a3eba0afd9",
+    "size": 14734940,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ff5b87b0dc087e41e1af568271a87aa3e178d97fcc7b33dee49aacddc925919d.ctex",
+          "sha256": "ff5b87b0dc087e41e1af568271a87aa3e178d97fcc7b33dee49aacddc925919d",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "06e4d33b33f020fcd5e051a4f114dfc9ff41b644b6e6f06820f5980569c5a27d.ctex",
+          "sha256": "06e4d33b33f020fcd5e051a4f114dfc9ff41b644b6e6f06820f5980569c5a27d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d6fcfeaafdb05623b55f4e42a79fc96895cde7fb4bc8b29f016e041b00e0faeb.glb",
+        "sha256": "d6fcfeaafdb05623b55f4e42a79fc96895cde7fb4bc8b29f016e041b00e0faeb",
+        "size": 4272636
+      },
+      "size_class": "infantry"
+    }
+  }
+}

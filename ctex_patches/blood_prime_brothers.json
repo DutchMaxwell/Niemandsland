@@ -1,0 +1,834 @@
+{
+  "blood_prime_brothers/blood_aggro_brothers": {
+    "url": "7946d42898f2e8ca38ebafc5456922df6717dd9623e63fca7af9995fd29cd0d5.glb",
+    "sha256": "7946d42898f2e8ca38ebafc5456922df6717dd9623e63fca7af9995fd29cd0d5",
+    "size": 15181492,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b3dd027e398fee5282ca191354c0d3fce9be9e93426288a00394a5b4137938cf.ctex",
+          "sha256": "b3dd027e398fee5282ca191354c0d3fce9be9e93426288a00394a5b4137938cf",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "93c58280e4d2d87eb0d32724f5a1ade70980e57b5d0ca3504c1d8ee94bdd3e9b.ctex",
+          "sha256": "93c58280e4d2d87eb0d32724f5a1ade70980e57b5d0ca3504c1d8ee94bdd3e9b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "23bbb132e2617622279a2abd0a8c03dd660732e03f53f7b487fe3f991b2e7277.glb",
+        "sha256": "23bbb132e2617622279a2abd0a8c03dd660732e03f53f7b487fe3f991b2e7277",
+        "size": 4346872
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_anti_grav_apc": {
+    "url": "70c077b1051047980ee3a14e71f28b5d9bae3337d83db507c4acda1699eb720d.glb",
+    "sha256": "70c077b1051047980ee3a14e71f28b5d9bae3337d83db507c4acda1699eb720d",
+    "size": 15964668,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6d77d3f3eac4a4527e296f4be1a6b352d2bcbb085af966ce5df4990d9621f1e0.ctex",
+          "sha256": "6d77d3f3eac4a4527e296f4be1a6b352d2bcbb085af966ce5df4990d9621f1e0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9463d9bd2b1bfea6c6bda8d4961b81529958cf3834f0a77255100ae08d42acb8.ctex",
+          "sha256": "9463d9bd2b1bfea6c6bda8d4961b81529958cf3834f0a77255100ae08d42acb8",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ffa52af1f1c150d48ae4db35401ad240414f31ee6a374ac938ac1bdace2b8fc3.glb",
+        "sha256": "ffa52af1f1c150d48ae4db35401ad240414f31ee6a374ac938ac1bdace2b8fc3",
+        "size": 9491388
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "blood_prime_brothers/blood_anti_grav_tank": {
+    "url": "5d857cc532ae2d8149c4286607b10ad77a8a8c29338e4c030cbd4862012f7ab4.glb",
+    "sha256": "5d857cc532ae2d8149c4286607b10ad77a8a8c29338e4c030cbd4862012f7ab4",
+    "size": 17406180,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4b3b5af1c2da9c9e3d8fa1a02e1130712e120085b67c46cfbb7e418e4330f9eb.ctex",
+          "sha256": "4b3b5af1c2da9c9e3d8fa1a02e1130712e120085b67c46cfbb7e418e4330f9eb",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1a0a2e1adc5918de1de9bbdffacb5335ec22a46a749df9742d2d6e41ee67b253.ctex",
+          "sha256": "1a0a2e1adc5918de1de9bbdffacb5335ec22a46a749df9742d2d6e41ee67b253",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1bac9c820a2714558918c1568afa91e9f36b158d33e51e73d4cc60fa25cbe0d2.glb",
+        "sha256": "1bac9c820a2714558918c1568afa91e9f36b158d33e51e73d4cc60fa25cbe0d2",
+        "size": 9082144
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "blood_prime_brothers/blood_assault_prime_brothers": {
+    "url": "be108e02fb4e726cbaf5a6d89258e8b4be1af1b4dfa825ddb3d80e0500094085.glb",
+    "sha256": "be108e02fb4e726cbaf5a6d89258e8b4be1af1b4dfa825ddb3d80e0500094085",
+    "size": 14402308,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e8a62e998faaa137a82e929a2e45b0d0d2aa907fc3be580b3f05df1be1e09ad4.ctex",
+          "sha256": "e8a62e998faaa137a82e929a2e45b0d0d2aa907fc3be580b3f05df1be1e09ad4",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4bb51b3a6535fe1dd43db4424faef89deddce0ec28aad886a97ac1322abf73dd.ctex",
+          "sha256": "4bb51b3a6535fe1dd43db4424faef89deddce0ec28aad886a97ac1322abf73dd",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8f73a6a9e926e53f5152dec9cadd9a0a5266a012295598cc8777704bb0d18020.glb",
+        "sha256": "8f73a6a9e926e53f5152dec9cadd9a0a5266a012295598cc8777704bb0d18020",
+        "size": 4028620
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_attack_speeder": {
+    "url": "1547105226aaf8c8403d97f90e147caa44f70d06a4995b6dcd24efb6f92a9666.glb",
+    "sha256": "1547105226aaf8c8403d97f90e147caa44f70d06a4995b6dcd24efb6f92a9666",
+    "size": 15698624,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2b9ac102a952d8d9d4014e7dfca61566254746d8d870338974f90a1098bc0d35.ctex",
+          "sha256": "2b9ac102a952d8d9d4014e7dfca61566254746d8d870338974f90a1098bc0d35",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "cd0ed9261d2018e1b9556398eac06f5ac0b094464cb245ecc7a499fc936fc176.ctex",
+          "sha256": "cd0ed9261d2018e1b9556398eac06f5ac0b094464cb245ecc7a499fc936fc176",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e63ff25c0a6d8e965de3f764e8eb7433a85ffffae651444a1293111ebdf097a2.glb",
+        "sha256": "e63ff25c0a6d8e965de3f764e8eb7433a85ffffae651444a1293111ebdf097a2",
+        "size": 8902180
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "blood_prime_brothers/blood_blaster_brothers": {
+    "url": "ea6af5b424e53e791501b1ba4a878697cdbafb564deeae7b1295e7d4cfaab575.glb",
+    "sha256": "ea6af5b424e53e791501b1ba4a878697cdbafb564deeae7b1295e7d4cfaab575",
+    "size": 14753564,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d9f299c8c78dd3078858d7d61e6f9fa637d0c38181edf4486563469e80ba8d95.ctex",
+          "sha256": "d9f299c8c78dd3078858d7d61e6f9fa637d0c38181edf4486563469e80ba8d95",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "81e57e154f771f682a57a6c39ffec0babdb5d8b106314a7680406f15358a8e93.ctex",
+          "sha256": "81e57e154f771f682a57a6c39ffec0babdb5d8b106314a7680406f15358a8e93",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "306a18231896a679470aa51f9a75ce263c7c61c4b3b62c8aefecd5120c6a9281.glb",
+        "sha256": "306a18231896a679470aa51f9a75ce263c7c61c4b3b62c8aefecd5120c6a9281",
+        "size": 3979976
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_combat_walker": {
+    "url": "499b3da29e3c60ddc1faa748a25f028375ac97fdf30d2b816a5a05c68ac84b39.glb",
+    "sha256": "499b3da29e3c60ddc1faa748a25f028375ac97fdf30d2b816a5a05c68ac84b39",
+    "size": 16039196,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2d6bfe7d2420293e38477a0c3990ec9658a6624e35baffc4b6114cfcadf8577f.ctex",
+          "sha256": "2d6bfe7d2420293e38477a0c3990ec9658a6624e35baffc4b6114cfcadf8577f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "51c7102027a9c8b8ed460f48deb4d589ce60dd9b18f2fddeaceca1f0d783857f.ctex",
+          "sha256": "51c7102027a9c8b8ed460f48deb4d589ce60dd9b18f2fddeaceca1f0d783857f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "dc454c59d62746a382fdba41d34e277f8b6d40cc18324611eccf4f017d12947a.glb",
+        "sha256": "dc454c59d62746a382fdba41d34e277f8b6d40cc18324611eccf4f017d12947a",
+        "size": 8508452
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "blood_prime_brothers/blood_desolator_brothers": {
+    "url": "41e8d42b8e9ffe6b35561710ca2a99628c34c7bc7e6c749171fb68fe83772182.glb",
+    "sha256": "41e8d42b8e9ffe6b35561710ca2a99628c34c7bc7e6c749171fb68fe83772182",
+    "size": 14643608,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3f8c4b2f59b93244c2208856247bed41f3231e69edb8be9e294bf6aad18f3489.ctex",
+          "sha256": "3f8c4b2f59b93244c2208856247bed41f3231e69edb8be9e294bf6aad18f3489",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "62f7e1c344a6c9f0949b95ced1aebdb4a5d85f8f1b22a0c82cce349a935468ab.ctex",
+          "sha256": "62f7e1c344a6c9f0949b95ced1aebdb4a5d85f8f1b22a0c82cce349a935468ab",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5acc4b974278ea451237b9faec903926d0a1f20cc29dc6543a4486148e9c4659.glb",
+        "sha256": "5acc4b974278ea451237b9faec903926d0a1f20cc29dc6543a4486148e9c4659",
+        "size": 4227856
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_elimination_brothers": {
+    "url": "21e14a75a4dda32c390675f6f17ef59f9c38308d4c605ad0150400e17cffccaf.glb",
+    "sha256": "21e14a75a4dda32c390675f6f17ef59f9c38308d4c605ad0150400e17cffccaf",
+    "size": 14745368,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9424c6d964fc2fd9f357f924c0b7bdf9e2556f3c8cd0b55997ea6d5acb46c754.ctex",
+          "sha256": "9424c6d964fc2fd9f357f924c0b7bdf9e2556f3c8cd0b55997ea6d5acb46c754",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "787d6255671df03f7bdc21a7080c527559bc356ab33f9969deb30a05adf10511.ctex",
+          "sha256": "787d6255671df03f7bdc21a7080c527559bc356ab33f9969deb30a05adf10511",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a85d0fd511096066bfae1f2f9f16268cbd17fb8f1d2e219423e5dfa152d06249.glb",
+        "sha256": "a85d0fd511096066bfae1f2f9f16268cbd17fb8f1d2e219423e5dfa152d06249",
+        "size": 3991624
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_elite_raider": {
+    "url": "94f9569654f2f0ca649b0a09bc072c518d36ee07dc8c5da7e06a8d29dabed9d1.glb",
+    "sha256": "94f9569654f2f0ca649b0a09bc072c518d36ee07dc8c5da7e06a8d29dabed9d1",
+    "size": 14732612,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a46f1c453757b7d9df0eb4609a972a180509684f125d8d35b067f1c0a9449553.ctex",
+          "sha256": "a46f1c453757b7d9df0eb4609a972a180509684f125d8d35b067f1c0a9449553",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9ff7820ea1dffc07c0471a1a02fc1204b945a1fe1e9acf2d0930e8be7f71cda1.ctex",
+          "sha256": "9ff7820ea1dffc07c0471a1a02fc1204b945a1fe1e9acf2d0930e8be7f71cda1",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "fda3e29ed3ae778cdf2cbd06c24cc9626158eb4e232e69328280d4d9323b4bfb.glb",
+        "sha256": "fda3e29ed3ae778cdf2cbd06c24cc9626158eb4e232e69328280d4d9323b4bfb",
+        "size": 3999936
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_eradication_brothers": {
+    "url": "6d28e53e9c6ace4d19412184a66709fe458ab1c88139331686618ec79baa28e3.glb",
+    "sha256": "6d28e53e9c6ace4d19412184a66709fe458ab1c88139331686618ec79baa28e3",
+    "size": 14082584,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b74a84d10b26fdc0de94d610b10a99c0381a2134e05450d477e11e3654961799.ctex",
+          "sha256": "b74a84d10b26fdc0de94d610b10a99c0381a2134e05450d477e11e3654961799",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b134ad5fdd202169281265af5c0a40c95f756355f87e8ba5c257fe861d5f47bc.ctex",
+          "sha256": "b134ad5fdd202169281265af5c0a40c95f756355f87e8ba5c257fe861d5f47bc",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "bd62abbdae2c2762e0262da721029ef065d6d9cbd791b09f6cfe7d613b04a43b.glb",
+        "sha256": "bd62abbdae2c2762e0262da721029ef065d6d9cbd791b09f6cfe7d613b04a43b",
+        "size": 3963624
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_grave_destroyers": {
+    "url": "a9c5e9e1074429e3e312c33043da00d1051acf45d02255ff0d317cdde4cbc5e3.glb",
+    "sha256": "a9c5e9e1074429e3e312c33043da00d1051acf45d02255ff0d317cdde4cbc5e3",
+    "size": 15061840,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "77f76733f031548378f2e067ac52d6945860ae67cb7548096e2cf34d00a0e16c.ctex",
+          "sha256": "77f76733f031548378f2e067ac52d6945860ae67cb7548096e2cf34d00a0e16c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1180b98c8da210d819ed21ff2b52b999141aac64e9135904ae2f5df6723b769d.ctex",
+          "sha256": "1180b98c8da210d819ed21ff2b52b999141aac64e9135904ae2f5df6723b769d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "508e9c74a01c8b5072083f49d742a450bfb07a41de5af33208dbebab61d2d215.glb",
+        "sha256": "508e9c74a01c8b5072083f49d742a450bfb07a41de5af33208dbebab61d2d215",
+        "size": 4216008
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_grave_prime_master": {
+    "url": "b8f478405239c0aa52c9a37a97aefa2d8f635dc8ffd30e12c19397b772a2fe19.glb",
+    "sha256": "b8f478405239c0aa52c9a37a97aefa2d8f635dc8ffd30e12c19397b772a2fe19",
+    "size": 14035200,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "01a0f0715421fd769a003aeada3dabe8f8401297a1409237132220bf6d42bcbe.ctex",
+          "sha256": "01a0f0715421fd769a003aeada3dabe8f8401297a1409237132220bf6d42bcbe",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "04911affd1bbc7448d23a224ab81a60748e585ae515e4219a7d0657f250d674a.ctex",
+          "sha256": "04911affd1bbc7448d23a224ab81a60748e585ae515e4219a7d0657f250d674a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9f065c6e8551b36242844e2c9f17cd20fcba7252655e696a098e46a9f870a654.glb",
+        "sha256": "9f065c6e8551b36242844e2c9f17cd20fcba7252655e696a098e46a9f870a654",
+        "size": 4178720
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_guard_brothers": {
+    "url": "4588df0b3bea5c58d0a4b7e74c523c4bc530371e3e7dfd0c408ed69d54407d94.glb",
+    "sha256": "4588df0b3bea5c58d0a4b7e74c523c4bc530371e3e7dfd0c408ed69d54407d94",
+    "size": 15898652,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "feaa942b691a1d1c9e2b9774d7fc619b8b812aa377974b5bcd1146894168fec1.ctex",
+          "sha256": "feaa942b691a1d1c9e2b9774d7fc619b8b812aa377974b5bcd1146894168fec1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "06e7c45d4cb283856b5fb5afaefa61c35b54963117bbe7def57f436a5cc45634.ctex",
+          "sha256": "06e7c45d4cb283856b5fb5afaefa61c35b54963117bbe7def57f436a5cc45634",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "41439570b5cf35ba58e52cc9f3c5f2a993f324f96175fc18d6aa575159922171.glb",
+        "sha256": "41439570b5cf35ba58e52cc9f3c5f2a993f324f96175fc18d6aa575159922171",
+        "size": 4435812
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_heavy_anti_grav_destroyer_tank": {
+    "url": "21f6e720467ff73f2013956ebb6f8d5a088e6342f583ac40a9d4cb3f3be8b695.glb",
+    "sha256": "21f6e720467ff73f2013956ebb6f8d5a088e6342f583ac40a9d4cb3f3be8b695",
+    "size": 16602860,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f2bbd2d0d9f770669af6c803d268c6a51af1c663a990b731427c85ab90e53801.ctex",
+          "sha256": "f2bbd2d0d9f770669af6c803d268c6a51af1c663a990b731427c85ab90e53801",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "77641066a0a085b65c9666e3f1c5526d5a9d197d875d40623767b7107aec15a9.ctex",
+          "sha256": "77641066a0a085b65c9666e3f1c5526d5a9d197d875d40623767b7107aec15a9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9ae834b9bce6d4d3bb72ab71bf12f1a14abb906b21f125ab3fbc9b21a1fdee98.glb",
+        "sha256": "9ae834b9bce6d4d3bb72ab71bf12f1a14abb906b21f125ab3fbc9b21a1fdee98",
+        "size": 8808980
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "blood_prime_brothers/blood_heavy_anti_grav_transport_tank": {
+    "url": "ba64f9635baa1905d6f954aa8c79b9b59204e3d3129fa44252f599110a854875.glb",
+    "sha256": "ba64f9635baa1905d6f954aa8c79b9b59204e3d3129fa44252f599110a854875",
+    "size": 18075668,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6a95d2bb9df52bf196cbd26c93cdc679ae02a6a91c698556e62e58d89a82ed61.ctex",
+          "sha256": "6a95d2bb9df52bf196cbd26c93cdc679ae02a6a91c698556e62e58d89a82ed61",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0567560ea311da805204df9b1124222ae3d1a1803a4db7ed938e8f21045554fd.ctex",
+          "sha256": "0567560ea311da805204df9b1124222ae3d1a1803a4db7ed938e8f21045554fd",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "383b87da80636c16d3893df9a5a63e6fac5681c270d6a0ec30981c959752a330.glb",
+        "sha256": "383b87da80636c16d3893df9a5a63e6fac5681c270d6a0ec30981c959752a330",
+        "size": 9522760
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "blood_prime_brothers/blood_heavy_prime_brothers": {
+    "url": "3436d87dfa1912871b0047534507d86e8bc15674321fabef03949d76129227c1.glb",
+    "sha256": "3436d87dfa1912871b0047534507d86e8bc15674321fabef03949d76129227c1",
+    "size": 14373088,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "cd896294ebddb6c6fa3c0e586bb34d233ff9d128ed8b6e452a3005c996e80af9.ctex",
+          "sha256": "cd896294ebddb6c6fa3c0e586bb34d233ff9d128ed8b6e452a3005c996e80af9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5fa2e4028ecb2eeae5331f30fcac8eb22ac5409946bdb4cdefe5393909a13433.ctex",
+          "sha256": "5fa2e4028ecb2eeae5331f30fcac8eb22ac5409946bdb4cdefe5393909a13433",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "705dbfe86ac912680069a5824108bac9928520072cd1c7ac592b1f648d07cc31.glb",
+        "sha256": "705dbfe86ac912680069a5824108bac9928520072cd1c7ac592b1f648d07cc31",
+        "size": 10813804
+      },
+      "size_class": "large"
+    }
+  },
+  "blood_prime_brothers/blood_infernal_brothers": {
+    "url": "b05329e23288a128c6a729df26fcc986c970713390a7d69d68b489e66a032965.glb",
+    "sha256": "b05329e23288a128c6a729df26fcc986c970713390a7d69d68b489e66a032965",
+    "size": 14885752,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "075b74ff9e4fc03e5c676995ade44bad51c1f9d9dc32edbd308e30a02cbabec9.ctex",
+          "sha256": "075b74ff9e4fc03e5c676995ade44bad51c1f9d9dc32edbd308e30a02cbabec9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2f924ca237d86381f71e0cf1588a12cb5168d7c120b76c14e7bde740cb16193b.ctex",
+          "sha256": "2f924ca237d86381f71e0cf1588a12cb5168d7c120b76c14e7bde740cb16193b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c18ff87ae14c98565b724e59a31b08b3c8cefccbaacdfa033f94805bef6e04d6.glb",
+        "sha256": "c18ff87ae14c98565b724e59a31b08b3c8cefccbaacdfa033f94805bef6e04d6",
+        "size": 4023212
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_infiltration_brothers": {
+    "url": "804ee65d3f6e47c9ba35f48ef57a71c10a0a759cb043fa03599842d6119a0003.glb",
+    "sha256": "804ee65d3f6e47c9ba35f48ef57a71c10a0a759cb043fa03599842d6119a0003",
+    "size": 14204672,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4313107211e50b9a74683141219542d0ed4bfa9053bf41a4504dd9a01bd6f6bc.ctex",
+          "sha256": "4313107211e50b9a74683141219542d0ed4bfa9053bf41a4504dd9a01bd6f6bc",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "98b38aff6ee12f64a39696e087481f6e3ba3deec6abc8b5038ffd1ffb32bbea9.ctex",
+          "sha256": "98b38aff6ee12f64a39696e087481f6e3ba3deec6abc8b5038ffd1ffb32bbea9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ce8842650a2a200a0c1bcfc2e56b3a4abc64fb984b2307cbaf71d66bf9e1fa92.glb",
+        "sha256": "ce8842650a2a200a0c1bcfc2e56b3a4abc64fb984b2307cbaf71d66bf9e1fa92",
+        "size": 3909816
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_jetpack_brothers": {
+    "url": "5d3cf4f1f59266d5fd168e5e158180cb89891e113b9da68201f2b2e96b598e47.glb",
+    "sha256": "5d3cf4f1f59266d5fd168e5e158180cb89891e113b9da68201f2b2e96b598e47",
+    "size": 15382868,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2b1a82af5264c290e9967df495bbb5277d53f6dff8446dd91b44445c7e26d222.ctex",
+          "sha256": "2b1a82af5264c290e9967df495bbb5277d53f6dff8446dd91b44445c7e26d222",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7c0eda77b389e35114be126beff41ad142879d9e49b71fa935bc098f006fcec0.ctex",
+          "sha256": "7c0eda77b389e35114be126beff41ad142879d9e49b71fa935bc098f006fcec0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "28a2ef3f12b4578bf7e30f5b6eca3a4b5609c670040c7707af606982c9a2db77.glb",
+        "sha256": "28a2ef3f12b4578bf7e30f5b6eca3a4b5609c670040c7707af606982c9a2db77",
+        "size": 4445452
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_light_walker": {
+    "url": "49bf7275c9184fad45b531f2ec175f51526f0d9e9613f24df03434d7fa0ec91c.glb",
+    "sha256": "49bf7275c9184fad45b531f2ec175f51526f0d9e9613f24df03434d7fa0ec91c",
+    "size": 15279248,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2e7fccd77c61b2f5e1c9c512c176d9bf021eced63dcfc4973442dbe4ee77b589.ctex",
+          "sha256": "2e7fccd77c61b2f5e1c9c512c176d9bf021eced63dcfc4973442dbe4ee77b589",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a82e2329866e93bccf5dfc05ad7b0ca993501e4a04bbd20d5a2e974862623021.ctex",
+          "sha256": "a82e2329866e93bccf5dfc05ad7b0ca993501e4a04bbd20d5a2e974862623021",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "934c95ea7eab33bad914efdb2e29e6cf4ee0db4fead1fb2d5f49c64de40b3013.glb",
+        "sha256": "934c95ea7eab33bad914efdb2e29e6cf4ee0db4fead1fb2d5f49c64de40b3013",
+        "size": 8190460
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "blood_prime_brothers/blood_prime_atv": {
+    "url": "8055a5aa53a062f0f1ecbb689b64af9fcf11c0c361c6b433cd1b3c32dd720e5a.glb",
+    "sha256": "8055a5aa53a062f0f1ecbb689b64af9fcf11c0c361c6b433cd1b3c32dd720e5a",
+    "size": 15501456,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "28bbcfa4f4b61b029ef2d59415ac9fde979a71895a77858b8d0dca83b339a30d.ctex",
+          "sha256": "28bbcfa4f4b61b029ef2d59415ac9fde979a71895a77858b8d0dca83b339a30d",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8a9b911d795b0c549eddd58965358ff0c40d936d8165bbc277b6b8fb459dae9c.ctex",
+          "sha256": "8a9b911d795b0c549eddd58965358ff0c40d936d8165bbc277b6b8fb459dae9c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "484a2c12577396d670ad72a90698c5771485428d3d41f6e51efcbc04e13c20c0.glb",
+        "sha256": "484a2c12577396d670ad72a90698c5771485428d3d41f6e51efcbc04e13c20c0",
+        "size": 4500832
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_prime_brother_bikers": {
+    "url": "04d0a4af66d4a4216e6ad44cb9cab8d2b0d79b5ea2c21cd4467e0123beda578f.glb",
+    "sha256": "04d0a4af66d4a4216e6ad44cb9cab8d2b0d79b5ea2c21cd4467e0123beda578f",
+    "size": 16396236,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ef5f3b4081121372d4b96e581716e7317df4de0183f416e346d938062aefbd14.ctex",
+          "sha256": "ef5f3b4081121372d4b96e581716e7317df4de0183f416e346d938062aefbd14",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6a30e4f5b25ee75848afaf86f0e15f2dc4662a5dfdd92653cf5b1c02839eff2c.ctex",
+          "sha256": "6a30e4f5b25ee75848afaf86f0e15f2dc4662a5dfdd92653cf5b1c02839eff2c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1958247a21c1b5a525326e114b2c5dfa3e1ac6c0a42db7f0c10a7553dcb959b9.glb",
+        "sha256": "1958247a21c1b5a525326e114b2c5dfa3e1ac6c0a42db7f0c10a7553dcb959b9",
+        "size": 9212820
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "blood_prime_brothers/blood_prime_brothers": {
+    "url": "ca4e215ff7c66c3977e5ad9a5e513bcefb360e120d040c7dc2e6343172feb2c6.glb",
+    "sha256": "ca4e215ff7c66c3977e5ad9a5e513bcefb360e120d040c7dc2e6343172feb2c6",
+    "size": 13653720,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e6319d6c530743f66fc1c1875129031364340435f3abbfad6bde8d9d64fc9356.ctex",
+          "sha256": "e6319d6c530743f66fc1c1875129031364340435f3abbfad6bde8d9d64fc9356",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "55fc19f293aa0d99aaeead32e379b8701545befc6ca6f0a0a13f88c40e6f8684.ctex",
+          "sha256": "55fc19f293aa0d99aaeead32e379b8701545befc6ca6f0a0a13f88c40e6f8684",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e47c5e3c33989ab9a4cdd913e9a3a54831da34afccc3ff6e98d7076313cbfca5.glb",
+        "sha256": "e47c5e3c33989ab9a4cdd913e9a3a54831da34afccc3ff6e98d7076313cbfca5",
+        "size": 3762104
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_prime_drop_pod": {
+    "url": "9f11e864ede171dd92b4d7e0b42894927a5e5c9705a3591cf9034a34dc7cb6a9.glb",
+    "sha256": "9f11e864ede171dd92b4d7e0b42894927a5e5c9705a3591cf9034a34dc7cb6a9",
+    "size": 15648984,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "df0c4e8462b525c55e75b421f90dde724e5eff56fdac8d72de3a455408388233.ctex",
+          "sha256": "df0c4e8462b525c55e75b421f90dde724e5eff56fdac8d72de3a455408388233",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6858af41b2a75931deac4e88b79951a6a36d52b6c80700c2648cd5410b896a53.ctex",
+          "sha256": "6858af41b2a75931deac4e88b79951a6a36d52b6c80700c2648cd5410b896a53",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "564525a71c9a2aca3e534990d749d669170610da6b71fd93837d6d304260ae5e.glb",
+        "sha256": "564525a71c9a2aca3e534990d749d669170610da6b71fd93837d6d304260ae5e",
+        "size": 8797664
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "blood_prime_brothers/blood_prime_master": {
+    "url": "f37a71f05e9493b59447c9df3a5d893f3bfdd8b7a4edb09efc0e2f025d0defb7.glb",
+    "sha256": "f37a71f05e9493b59447c9df3a5d893f3bfdd8b7a4edb09efc0e2f025d0defb7",
+    "size": 14430620,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0a2740c0755dd255601d43db652f8ebb33deca0271c7d9d86126ae65d4306403.ctex",
+          "sha256": "0a2740c0755dd255601d43db652f8ebb33deca0271c7d9d86126ae65d4306403",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3df05b9dfc78d3574a79c7f4406d176b3d5d8ab4b4b9da0b28aa8158aefd6916.ctex",
+          "sha256": "3df05b9dfc78d3574a79c7f4406d176b3d5d8ab4b4b9da0b28aa8158aefd6916",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "86eb76f8f92de23d37ebde0f3d2eb86289351b8a0b461d98552e1606e3ff4f76.glb",
+        "sha256": "86eb76f8f92de23d37ebde0f3d2eb86289351b8a0b461d98552e1606e3ff4f76",
+        "size": 3969672
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_raider_brothers": {
+    "url": "bb788c35c3f23222c5ee1fa6b45cdc0e7e815fb8df1ba2e031fb7ef1429080e5.glb",
+    "sha256": "bb788c35c3f23222c5ee1fa6b45cdc0e7e815fb8df1ba2e031fb7ef1429080e5",
+    "size": 14735140,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "788cca451d0911c1e1fe4a01b7e1ce257d20d551c63031777fc0d5803290344d.ctex",
+          "sha256": "788cca451d0911c1e1fe4a01b7e1ce257d20d551c63031777fc0d5803290344d",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "fcb1a0fb73ede390d928b49b05ced065470d2a82d4e65ca4ab8bc52dbb9630e3.ctex",
+          "sha256": "fcb1a0fb73ede390d928b49b05ced065470d2a82d4e65ca4ab8bc52dbb9630e3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f508585e363bc7e6dbfcdf0e85021f14ba2903f0ab0d6a78a16e2ca0c14f5e79.glb",
+        "sha256": "f508585e363bc7e6dbfcdf0e85021f14ba2903f0ab0d6a78a16e2ca0c14f5e79",
+        "size": 4051008
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_support_turret": {
+    "url": "37cdd1ed722deb1d52d23f005ae73784af06c528a0827d54fabdfb6ed8daff36.glb",
+    "sha256": "37cdd1ed722deb1d52d23f005ae73784af06c528a0827d54fabdfb6ed8daff36",
+    "size": 13506596,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4d472cd70a118ca75d133ac4319a736409c15b7fb0e5e9c0618b05bce3ff9b63.ctex",
+          "sha256": "4d472cd70a118ca75d133ac4319a736409c15b7fb0e5e9c0618b05bce3ff9b63",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "52bdbab7d144d39fade2983c5f02a645921b5fafe433f8408770f7c1f630cb8d.ctex",
+          "sha256": "52bdbab7d144d39fade2983c5f02a645921b5fafe433f8408770f7c1f630cb8d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d354a26c9c3790c010ecfbc3d43443220e13f260029ea9cef58f84bd86e8865f.glb",
+        "sha256": "d354a26c9c3790c010ecfbc3d43443220e13f260029ea9cef58f84bd86e8865f",
+        "size": 4168556
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_suppression_brothers": {
+    "url": "9632be6fb880861a6f32e739c7a110650a69bacf4c3e968dc353dff207ec9d68.glb",
+    "sha256": "9632be6fb880861a6f32e739c7a110650a69bacf4c3e968dc353dff207ec9d68",
+    "size": 13558564,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ab145502ba1e8f022b2978710e409f8e4f7d2574e45b9cf65bf894044e881c40.ctex",
+          "sha256": "ab145502ba1e8f022b2978710e409f8e4f7d2574e45b9cf65bf894044e881c40",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "46580f56b2cdcdf3f8e1df865b4d34790647bbf615cae8c582b967d7b5973666.ctex",
+          "sha256": "46580f56b2cdcdf3f8e1df865b4d34790647bbf615cae8c582b967d7b5973666",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "946b74139daa7fd0b0da3ccbf84b80809d6de497208c757faf59adb8de305f02.glb",
+        "sha256": "946b74139daa7fd0b0da3ccbf84b80809d6de497208c757faf59adb8de305f02",
+        "size": 3798576
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_veteran_assault_prime_brothers": {
+    "url": "ab51b68de708b3e8370e1764c26c25a239b01497656d93aa7e660c34cfa38510.glb",
+    "sha256": "ab51b68de708b3e8370e1764c26c25a239b01497656d93aa7e660c34cfa38510",
+    "size": 13964604,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4c863a54f6699eda086320fd942db4f9e0a50dfc2122b2998dbfad57646460cf.ctex",
+          "sha256": "4c863a54f6699eda086320fd942db4f9e0a50dfc2122b2998dbfad57646460cf",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "dc255dc27717263cbef5f220f9051bfcd95b83ecb75bdbbc305c9a5712fca494.ctex",
+          "sha256": "dc255dc27717263cbef5f220f9051bfcd95b83ecb75bdbbc305c9a5712fca494",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a836d8ab8c1ad8eed905e6c948c3ea7fa7754002290cd7126ff2d1592474b883.glb",
+        "sha256": "a836d8ab8c1ad8eed905e6c948c3ea7fa7754002290cd7126ff2d1592474b883",
+        "size": 3936884
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_veteran_prime_brothers": {
+    "url": "a4ee2cc9974377352ab1ac97ecf203b24389900c8f317d8b7ee69b42e932097c.glb",
+    "sha256": "a4ee2cc9974377352ab1ac97ecf203b24389900c8f317d8b7ee69b42e932097c",
+    "size": 15268752,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e46108809e6e2381b26b1a6caa30168faa5539d271550832154c34465cc9f62e.ctex",
+          "sha256": "e46108809e6e2381b26b1a6caa30168faa5539d271550832154c34465cc9f62e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "dc36773a13035ddf187fadb897627a3c05c946356177eb00a843edf52d33a690.ctex",
+          "sha256": "dc36773a13035ddf187fadb897627a3c05c946356177eb00a843edf52d33a690",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b78f010c9433707288b2a2f102d49a172d8f1a76447cc2315ec5dabaaa2bdd04.glb",
+        "sha256": "b78f010c9433707288b2a2f102d49a172d8f1a76447cc2315ec5dabaaa2bdd04",
+        "size": 4230816
+      },
+      "size_class": "infantry"
+    }
+  },
+  "blood_prime_brothers/blood_veteran_prime_master": {
+    "url": "2f7f5d6b1d0cf9d43f0d8217ee3f69b8f4749d8147ee8fef378144843fbcea0b.glb",
+    "sha256": "2f7f5d6b1d0cf9d43f0d8217ee3f69b8f4749d8147ee8fef378144843fbcea0b",
+    "size": 14408804,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c1591893753c5cf998961d845e92980aa6e992a23c3956cefbd6046562bf4fca.ctex",
+          "sha256": "c1591893753c5cf998961d845e92980aa6e992a23c3956cefbd6046562bf4fca",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "aed78a0e0e3e103f8bfde0da98d3d23f1336cc9a5219ae8c1db0df443d39d800.ctex",
+          "sha256": "aed78a0e0e3e103f8bfde0da98d3d23f1336cc9a5219ae8c1db0df443d39d800",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "fc5817d29ba74ac4f25b4780aeff7fb361db10581961a67398efa2d47add294a.glb",
+        "sha256": "fc5817d29ba74ac4f25b4780aeff7fb361db10581961a67398efa2d47add294a",
+        "size": 3999144
+      },
+      "size_class": "infantry"
+    }
+  }
+}

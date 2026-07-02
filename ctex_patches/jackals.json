@@ -1,0 +1,366 @@
+{
+  "jackals/beast gunners": {
+    "url": "49b512b2bebb07ffaad965c00a16d606bf4f6528cd31a30edb377a3f844ebbdc.glb",
+    "sha256": "49b512b2bebb07ffaad965c00a16d606bf4f6528cd31a30edb377a3f844ebbdc",
+    "size": 18237172,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f7ca9ef7c2b9cc639db7e93b739645da27635cee83ce140f2108265a00005547.ctex",
+          "sha256": "f7ca9ef7c2b9cc639db7e93b739645da27635cee83ce140f2108265a00005547",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ed181063c3613573716440975796655a408d98a603e605fdbc8a5d1aab2bbaa9.ctex",
+          "sha256": "ed181063c3613573716440975796655a408d98a603e605fdbc8a5d1aab2bbaa9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "33aba3be8f484dde372b49f901e197d6e2ff4c613b900e79869d2188e4941906.glb",
+        "sha256": "33aba3be8f484dde372b49f901e197d6e2ff4c613b900e79869d2188e4941906",
+        "size": 12861500
+      },
+      "size_class": "large"
+    }
+  },
+  "jackals/beast riders": {
+    "url": "a62fe806aa67115776562632fb061d5bbd62f0868b67d06b3c395c399d6c3676.glb",
+    "sha256": "a62fe806aa67115776562632fb061d5bbd62f0868b67d06b3c395c399d6c3676",
+    "size": 16846440,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "33727d8c4a7dcdebaebb6866ac869f4b1c27377898befdb1029b25346d3e0dd1.ctex",
+          "sha256": "33727d8c4a7dcdebaebb6866ac869f4b1c27377898befdb1029b25346d3e0dd1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3f2a6a6c418ce785f767e0265130c47ace8bcba9a9cfa90bd2f6f4d2c6f93647.ctex",
+          "sha256": "3f2a6a6c418ce785f767e0265130c47ace8bcba9a9cfa90bd2f6f4d2c6f93647",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e18ff6089fdbbeb108b5166a86c381c7274d024439adef238ca39f2c9afc84cc.glb",
+        "sha256": "e18ff6089fdbbeb108b5166a86c381c7274d024439adef238ca39f2c9afc84cc",
+        "size": 11761636
+      },
+      "size_class": "large"
+    }
+  },
+  "jackals/elite veteran": {
+    "url": "005ac4534e1211533c355d6790da988cfcbb3ce6aefd9118802a0537e5ef2a9d.glb",
+    "sha256": "005ac4534e1211533c355d6790da988cfcbb3ce6aefd9118802a0537e5ef2a9d",
+    "size": 15358664,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "aa904cbd98ae55af88e17d3289ec34b49f4c57af09645fcf16f020a5a053b5b5.ctex",
+          "sha256": "aa904cbd98ae55af88e17d3289ec34b49f4c57af09645fcf16f020a5a053b5b5",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1ea762d62c14b06a44bd1888171e0a539726824d88c6a0645616946484facab9.ctex",
+          "sha256": "1ea762d62c14b06a44bd1888171e0a539726824d88c6a0645616946484facab9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9857ecebe548d0f57c9b2f56c54bc9bb5656c9469df637fbb5041a79a3e40f47.glb",
+        "sha256": "9857ecebe548d0f57c9b2f56c54bc9bb5656c9469df637fbb5041a79a3e40f47",
+        "size": 4410976
+      },
+      "size_class": "infantry"
+    }
+  },
+  "jackals/elites": {
+    "url": "1fa14189b0b9224aef80858093dd2172fa61bed764a84ac8b7cbf2bf0d2a60e7.glb",
+    "sha256": "1fa14189b0b9224aef80858093dd2172fa61bed764a84ac8b7cbf2bf0d2a60e7",
+    "size": 15039860,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d00d28745b24ef256ef9472ddf301e5736010e60c3cdecc7cef006f16333cff9.ctex",
+          "sha256": "d00d28745b24ef256ef9472ddf301e5736010e60c3cdecc7cef006f16333cff9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6a0adefff141a9b46743abb66d805ff2e1c0487bbf728dc023345bc52b82d8fb.ctex",
+          "sha256": "6a0adefff141a9b46743abb66d805ff2e1c0487bbf728dc023345bc52b82d8fb",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e883e3bc71165f74c35c4a7770b404d0cd388a08cecaa2856fdb6736a3bf3c14.glb",
+        "sha256": "e883e3bc71165f74c35c4a7770b404d0cd388a08cecaa2856fdb6736a3bf3c14",
+        "size": 4349328
+      },
+      "size_class": "infantry"
+    }
+  },
+  "jackals/great beast": {
+    "url": "034f01e6e8932c614db9505c93f3de41729b558e9dc2be2b3dfb8f30b9e311eb.glb",
+    "sha256": "034f01e6e8932c614db9505c93f3de41729b558e9dc2be2b3dfb8f30b9e311eb",
+    "size": 15914944,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3205ce74aff54937106e7033772d8eb9bbc4eeeb160302c9def56c73f6c54034.ctex",
+          "sha256": "3205ce74aff54937106e7033772d8eb9bbc4eeeb160302c9def56c73f6c54034",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "08e4261764465987f5c2a7f0c14c2d743cbf8ff6b320d89bb00c7f9514b9121f.ctex",
+          "sha256": "08e4261764465987f5c2a7f0c14c2d743cbf8ff6b320d89bb00c7f9514b9121f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3b57d5d4cd3fd56ab6b4c3115940d51187a96a889ae2ea22ecd7591d022c0607.glb",
+        "sha256": "3b57d5d4cd3fd56ab6b4c3115940d51187a96a889ae2ea22ecd7591d022c0607",
+        "size": 11407360
+      },
+      "size_class": "large"
+    }
+  },
+  "jackals/hounds": {
+    "url": "438c85c3426fa4fa2053c3a056a92782c2aa23cc03bc0ce3ca229a98803ded95.glb",
+    "sha256": "438c85c3426fa4fa2053c3a056a92782c2aa23cc03bc0ce3ca229a98803ded95",
+    "size": 15922928,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3704c0acba88045235c8af12be8e02a139f8305d316d152906aad8b01981b8ea.ctex",
+          "sha256": "3704c0acba88045235c8af12be8e02a139f8305d316d152906aad8b01981b8ea",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a4844d007ace03be7e2317d2d4635e89f36beb9135f5cbdf9687c64d135a534f.ctex",
+          "sha256": "a4844d007ace03be7e2317d2d4635e89f36beb9135f5cbdf9687c64d135a534f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "65ebcb1a0c6c47a658d1247c2bc5d3bc389f782e030b311d3312e87339e11314.glb",
+        "sha256": "65ebcb1a0c6c47a658d1247c2bc5d3bc389f782e030b311d3312e87339e11314",
+        "size": 4204644
+      },
+      "size_class": "infantry"
+    }
+  },
+  "jackals/long neck": {
+    "url": "f894ecf132489ac7658eec3379103131403dbc63da24e6672ceae123dfbc0c1a.glb",
+    "sha256": "f894ecf132489ac7658eec3379103131403dbc63da24e6672ceae123dfbc0c1a",
+    "size": 16072584,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2977d030c9a86e4b98789b1c06dc8967a76e7e73735f7ef7fe4ea42e0e365091.ctex",
+          "sha256": "2977d030c9a86e4b98789b1c06dc8967a76e7e73735f7ef7fe4ea42e0e365091",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "26fe40c8ca02f6b3a1c2cdba1dc5448bb0e415497403f2d20139c3bb366c89c0.ctex",
+          "sha256": "26fe40c8ca02f6b3a1c2cdba1dc5448bb0e415497403f2d20139c3bb366c89c0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b28f76496a438343bfabe0671e5c00daf1eefc0f2fa444fb3977e493be614172.glb",
+        "sha256": "b28f76496a438343bfabe0671e5c00daf1eefc0f2fa444fb3977e493be614172",
+        "size": 4858828
+      },
+      "size_class": "infantry"
+    }
+  },
+  "jackals/mastodon": {
+    "url": "4bf72cd3c342e3ee10add3436d98631194b2140e55c4e28edd73e7dbdd647d7b.glb",
+    "sha256": "4bf72cd3c342e3ee10add3436d98631194b2140e55c4e28edd73e7dbdd647d7b",
+    "size": 18171236,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "11d8e49bb4a21b2581fce415714f1af687ee628029701eb3d2a5f908a4b92670.ctex",
+          "sha256": "11d8e49bb4a21b2581fce415714f1af687ee628029701eb3d2a5f908a4b92670",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "fdfc78e5a6c1f9dda98b7b8aabd4fe74b0d703528c8fd21e82746dde7c9e664b.ctex",
+          "sha256": "fdfc78e5a6c1f9dda98b7b8aabd4fe74b0d703528c8fd21e82746dde7c9e664b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "cc47a2996166523dcf8b00b769b0d94904a033aa0bf19bc86c62bc336ce8fba2.glb",
+        "sha256": "cc47a2996166523dcf8b00b769b0d94904a033aa0bf19bc86c62bc336ce8fba2",
+        "size": 5097416
+      },
+      "size_class": "infantry"
+    }
+  },
+  "jackals/nomads": {
+    "url": "4ab3349bbab8ff91b9a9a71074af0847c3eb2959a61d98fa06e1b6af4f51fb11.glb",
+    "sha256": "4ab3349bbab8ff91b9a9a71074af0847c3eb2959a61d98fa06e1b6af4f51fb11",
+    "size": 16186144,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7d3df75c96f69a69dba3bfe11f415e2dd30f1aac219bd86f3592b840eacff0c6.ctex",
+          "sha256": "7d3df75c96f69a69dba3bfe11f415e2dd30f1aac219bd86f3592b840eacff0c6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3b69dd8c2096ba8cc004a6133aa968e964f1de3aa3613c2b1094c5c7eaafb98a.ctex",
+          "sha256": "3b69dd8c2096ba8cc004a6133aa968e964f1de3aa3613c2b1094c5c7eaafb98a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c114989857ae4636bb85941b76b289504acd73badfdc17dccef358a10c840844.glb",
+        "sha256": "c114989857ae4636bb85941b76b289504acd73badfdc17dccef358a10c840844",
+        "size": 4530016
+      },
+      "size_class": "infantry"
+    }
+  },
+  "jackals/ruyi nonga": {
+    "url": "8c9c6a2d70e20cd1e2c67f246e2eaa14a7eb7e21c4e55ddd94e93fb67fe62344.glb",
+    "sha256": "8c9c6a2d70e20cd1e2c67f246e2eaa14a7eb7e21c4e55ddd94e93fb67fe62344",
+    "size": 11973360,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "1766594d9a0d801bc8808a1c37c6b24ed9d5d95d69fa0a0ab93e29242f540511.ctex",
+          "sha256": "1766594d9a0d801bc8808a1c37c6b24ed9d5d95d69fa0a0ab93e29242f540511",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "53aad5767dfcdac008dc1b19341ba61ef95d680ece8b1faae56d5a7527ce5e35.ctex",
+          "sha256": "53aad5767dfcdac008dc1b19341ba61ef95d680ece8b1faae56d5a7527ce5e35",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "902e38733ee95e706a7807977b05fda95a9e1cacec5f875c7cb61be01ab24abf.glb",
+        "sha256": "902e38733ee95e706a7807977b05fda95a9e1cacec5f875c7cb61be01ab24abf",
+        "size": 3726012
+      },
+      "size_class": "infantry"
+    }
+  },
+  "jackals/stalkers": {
+    "url": "8f2bae7b19c4c88aee71ff05274a8bb1ea8b20902547681ab66f9dc2b8ea6e87.glb",
+    "sha256": "8f2bae7b19c4c88aee71ff05274a8bb1ea8b20902547681ab66f9dc2b8ea6e87",
+    "size": 13967972,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "61c69dc2283a37e2d6579d27d9577f6f4f5b74ac3a31884ffd5b44823cdf7795.ctex",
+          "sha256": "61c69dc2283a37e2d6579d27d9577f6f4f5b74ac3a31884ffd5b44823cdf7795",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "fbf3009652c9cfdc1f234c92308010eca49c301dc77aceae4d1b606940dca286.ctex",
+          "sha256": "fbf3009652c9cfdc1f234c92308010eca49c301dc77aceae4d1b606940dca286",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a4a6134cccd0ff8821c8adfa3fc1975152adec113114783457e3eb17f16c23df.glb",
+        "sha256": "a4a6134cccd0ff8821c8adfa3fc1975152adec113114783457e3eb17f16c23df",
+        "size": 3879592
+      },
+      "size_class": "infantry"
+    }
+  },
+  "jackals/trackers": {
+    "url": "dc55bfa9bc97e7eac753e07a4b426b8375965c71fb6b331724356b57014e0e8b.glb",
+    "sha256": "dc55bfa9bc97e7eac753e07a4b426b8375965c71fb6b331724356b57014e0e8b",
+    "size": 16177100,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e6caae77c4ad07dd90c6ffa7390184a7cbf1ad3ce71b31923adc1745c5e52fb8.ctex",
+          "sha256": "e6caae77c4ad07dd90c6ffa7390184a7cbf1ad3ce71b31923adc1745c5e52fb8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "668653920516663cb22e6aa0fa460fad20a216c83c26fd1d0549e1db4d132dd2.ctex",
+          "sha256": "668653920516663cb22e6aa0fa460fad20a216c83c26fd1d0549e1db4d132dd2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b04b9e6926b798d6ddd460995b4ddb0ed1071ae1ff9aa0ab2f2ab70246eb5528.glb",
+        "sha256": "b04b9e6926b798d6ddd460995b4ddb0ed1071ae1ff9aa0ab2f2ab70246eb5528",
+        "size": 4453228
+      },
+      "size_class": "infantry"
+    }
+  },
+  "jackals/veteran": {
+    "url": "58347e05958f8e5a3b7bedc374bd9dc127853dfa0b5fcf3d6b7c6c6905773e47.glb",
+    "sha256": "58347e05958f8e5a3b7bedc374bd9dc127853dfa0b5fcf3d6b7c6c6905773e47",
+    "size": 17181312,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ea716c1122c859f126e82b5b9378ff05823d97e26d96e6b8a9b54654f65ee97f.ctex",
+          "sha256": "ea716c1122c859f126e82b5b9378ff05823d97e26d96e6b8a9b54654f65ee97f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1688525d5958bc60e384263cf5080486aa631c091f2d6381896c76720a33e2da.ctex",
+          "sha256": "1688525d5958bc60e384263cf5080486aa631c091f2d6381896c76720a33e2da",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "13bbd6eb1f6da57306e3d0e5211c11723b930127287b503d24a18417466ed7d1.glb",
+        "sha256": "13bbd6eb1f6da57306e3d0e5211c11723b930127287b503d24a18417466ed7d1",
+        "size": 4611804
+      },
+      "size_class": "infantry"
+    }
+  },
+  "jackals/vultures": {
+    "url": "29cd3b8bb3b6adb7be311785e88d0704b60fa2c0b88e0c112f39e7bad73c7c35.glb",
+    "sha256": "29cd3b8bb3b6adb7be311785e88d0704b60fa2c0b88e0c112f39e7bad73c7c35",
+    "size": 16398456,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "1d9d5bad960a53fbc92f1dc494bca94f61a6473bd23248aaef606e3ec7efc77a.ctex",
+          "sha256": "1d9d5bad960a53fbc92f1dc494bca94f61a6473bd23248aaef606e3ec7efc77a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4bbd3ef05de7cec207bb1ae5e61d792bd8fab496a81eb2b9b1d97e06dd19edc2.ctex",
+          "sha256": "4bbd3ef05de7cec207bb1ae5e61d792bd8fab496a81eb2b9b1d97e06dd19edc2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ad91c7ea4677c21e076bf92c75dca7f17971c40d8a38e176536fd40c5ca577dc.glb",
+        "sha256": "ad91c7ea4677c21e076bf92c75dca7f17971c40d8a38e176536fd40c5ca577dc",
+        "size": 4422928
+      },
+      "size_class": "infantry"
+    }
+  }
+}

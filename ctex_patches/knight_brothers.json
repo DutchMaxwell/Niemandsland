@@ -1,0 +1,418 @@
+{
+  "knight_brothers/knight apc": {
+    "url": "a15f522ed31ef13a77428c5f88fe1ef7d109deb5341210332333338bf401e5b8.glb",
+    "sha256": "a15f522ed31ef13a77428c5f88fe1ef7d109deb5341210332333338bf401e5b8",
+    "size": 23522816,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2502f7a2f824a7075d4d4f7e99387f3609b90ff4acea067b57c6fe6f96fbe044.ctex",
+          "sha256": "2502f7a2f824a7075d4d4f7e99387f3609b90ff4acea067b57c6fe6f96fbe044",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "bf341d42ee30adb10622b7c76afcc2b00dd39b93477b177adce495a1efe39f12.ctex",
+          "sha256": "bf341d42ee30adb10622b7c76afcc2b00dd39b93477b177adce495a1efe39f12",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b59e91d37fb2ade895e5906f36d68892169c47113b32bf463066af9ca46075e3.glb",
+        "sha256": "b59e91d37fb2ade895e5906f36d68892169c47113b32bf463066af9ca46075e3",
+        "size": 10617452
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "knight_brothers/knight artillery gun": {
+    "url": "5bb881d54f425ce64d67661055a93ed168e33fbb80b5a78db7491ca71680d81e.glb",
+    "sha256": "5bb881d54f425ce64d67661055a93ed168e33fbb80b5a78db7491ca71680d81e",
+    "size": 15939904,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5d500b1ee97c67272da75461c06d3140817adca0336f7ff1357fc6d6af143e14.ctex",
+          "sha256": "5d500b1ee97c67272da75461c06d3140817adca0336f7ff1357fc6d6af143e14",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "16040cc2c74c3d29a29fec2aabb6f388327cc840f42352cac8f9b1861b0f254b.ctex",
+          "sha256": "16040cc2c74c3d29a29fec2aabb6f388327cc840f42352cac8f9b1861b0f254b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "209836bcc4ef157be978c75ae9e71916ebe1cb0b715431ef030d41808846130f.glb",
+        "sha256": "209836bcc4ef157be978c75ae9e71916ebe1cb0b715431ef030d41808846130f",
+        "size": 8919304
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "knight_brothers/knight attack apc": {
+    "url": "55c5eae754839061e97a61cf21a9c6124d77eb7ffbff57fa3f0f6be91db1ae3d.glb",
+    "sha256": "55c5eae754839061e97a61cf21a9c6124d77eb7ffbff57fa3f0f6be91db1ae3d",
+    "size": 20958144,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "dd43041e93ec33fe87a21e7f1563c04fa758fc1884a3042985897da33230de96.ctex",
+          "sha256": "dd43041e93ec33fe87a21e7f1563c04fa758fc1884a3042985897da33230de96",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "99e1dde512db3827ad38486dfb7d65f292220526a294a8e50b23104ce5d387a4.ctex",
+          "sha256": "99e1dde512db3827ad38486dfb7d65f292220526a294a8e50b23104ce5d387a4",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6a78b55aec8dfe7c687b9400cde43b6fd475ae884249c69398ecc5a45e989ae8.glb",
+        "sha256": "6a78b55aec8dfe7c687b9400cde43b6fd475ae884249c69398ecc5a45e989ae8",
+        "size": 9852304
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "knight_brothers/knight battle brothers": {
+    "url": "218ebc915b3fbf0fc73f017a0a92e101578dee0d75470d6c677ce7fc7aad0a54.glb",
+    "sha256": "218ebc915b3fbf0fc73f017a0a92e101578dee0d75470d6c677ce7fc7aad0a54",
+    "size": 14459424,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e55425ff497cad0235bb2959d118f9f1d20beb86b0e6fecd02fb670e1f76f96d.ctex",
+          "sha256": "e55425ff497cad0235bb2959d118f9f1d20beb86b0e6fecd02fb670e1f76f96d",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "db85b18e9806874f9e705b324a8d6f036c08ac6e7eb4287e13947908882f5e3d.ctex",
+          "sha256": "db85b18e9806874f9e705b324a8d6f036c08ac6e7eb4287e13947908882f5e3d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "86424e61c7c14291bde2f3b2171b69f0709e24f6ee264fdc3f4a893e5d9ddfe6.glb",
+        "sha256": "86424e61c7c14291bde2f3b2171b69f0709e24f6ee264fdc3f4a893e5d9ddfe6",
+        "size": 3905888
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_brothers/knight combat walker": {
+    "url": "2fcda680629fd9fdbe844d8ab344b47abe0bc5ea54fba0490fcfc168ea5a10d1.glb",
+    "sha256": "2fcda680629fd9fdbe844d8ab344b47abe0bc5ea54fba0490fcfc168ea5a10d1",
+    "size": 15280104,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "218d7dfa91c5e6934187159344cb0de040ca2a12104ac5ccca81fc13a549a941.ctex",
+          "sha256": "218d7dfa91c5e6934187159344cb0de040ca2a12104ac5ccca81fc13a549a941",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e18e2831ed5a6da31fb163877b2f771036f9f107789654862d0c7295981d2119.ctex",
+          "sha256": "e18e2831ed5a6da31fb163877b2f771036f9f107789654862d0c7295981d2119",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "537655f6c487b091927c578c9d36e77694dae0fd0e2fa46f77a1a7cc0f4dfb98.glb",
+        "sha256": "537655f6c487b091927c578c9d36e77694dae0fd0e2fa46f77a1a7cc0f4dfb98",
+        "size": 7657516
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "knight_brothers/knight destroyers": {
+    "url": "12d0e2ec0abfc9f26d77590dd844e61f1db850d8c47fa6fe8d39f119c5bf2908.glb",
+    "sha256": "12d0e2ec0abfc9f26d77590dd844e61f1db850d8c47fa6fe8d39f119c5bf2908",
+    "size": 15340508,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0ae77c7de3d89d47721d5196a158d1bfd4a18e682fe810d133286dd782dbc624.ctex",
+          "sha256": "0ae77c7de3d89d47721d5196a158d1bfd4a18e682fe810d133286dd782dbc624",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e011627e2600c034b326eb2e7b626c63cfdc18ccee28a1fd9d8c4144b0018f8a.ctex",
+          "sha256": "e011627e2600c034b326eb2e7b626c63cfdc18ccee28a1fd9d8c4144b0018f8a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "78c09ebbfd00517aac63e1910f67546ea358369cbaf6a50f4c302d1780e146a3.glb",
+        "sha256": "78c09ebbfd00517aac63e1910f67546ea358369cbaf6a50f4c302d1780e146a3",
+        "size": 4253212
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_brothers/knight heavy gunship": {
+    "url": "19a4a6a9c39bde3a71c05577d8ecd00fd781a9dbfa3fe73cd0872f02bf59ab62.glb",
+    "sha256": "19a4a6a9c39bde3a71c05577d8ecd00fd781a9dbfa3fe73cd0872f02bf59ab62",
+    "size": 19253752,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0922edf884ca86ad294f2f794bebf313d5d49891ca5cdd33c4855696d10f0d14.ctex",
+          "sha256": "0922edf884ca86ad294f2f794bebf313d5d49891ca5cdd33c4855696d10f0d14",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0ccdaa71bf8efeb5e60f356afb5c69b7d9cf78cdf67fccec6c56f81459eeba08.ctex",
+          "sha256": "0ccdaa71bf8efeb5e60f356afb5c69b7d9cf78cdf67fccec6c56f81459eeba08",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2fc059e00fce5b77c7920c17224d40c11c2e95c338297e92f82a1a8a62ab230c.glb",
+        "sha256": "2fc059e00fce5b77c7920c17224d40c11c2e95c338297e92f82a1a8a62ab230c",
+        "size": 10139468
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "knight_brothers/knight heavy tank": {
+    "url": "b5b33e9109d9a6dc60fd4add9ea81910a0e978b7683c0b1b5101d4adaece2f02.glb",
+    "sha256": "b5b33e9109d9a6dc60fd4add9ea81910a0e978b7683c0b1b5101d4adaece2f02",
+    "size": 25633156,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "22bbf0257cfce355c8a7a4ea7ed1744735d5daf583a626abbd368e0b5a6cc6d2.ctex",
+          "sha256": "22bbf0257cfce355c8a7a4ea7ed1744735d5daf583a626abbd368e0b5a6cc6d2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "076e4cbccc612913133f8f57e6f55f7523161a04c678a31af5f937d119464a5a.ctex",
+          "sha256": "076e4cbccc612913133f8f57e6f55f7523161a04c678a31af5f937d119464a5a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "768db6aa75f15622478a50d5476ba062747bcac5575d38e360edf039a85cc266.glb",
+        "sha256": "768db6aa75f15622478a50d5476ba062747bcac5575d38e360edf039a85cc266",
+        "size": 10528080
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "knight_brothers/knight light gunship": {
+    "url": "3f7ffe222f6a5f11c9d408d2b00e68383cd313e7ed3254b253ab1dfe0d9a8645.glb",
+    "sha256": "3f7ffe222f6a5f11c9d408d2b00e68383cd313e7ed3254b253ab1dfe0d9a8645",
+    "size": 16423240,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9fa34ad24d2980633f971744fcc206e275f7c187dc240f2569cf0a91b3e6a2d8.ctex",
+          "sha256": "9fa34ad24d2980633f971744fcc206e275f7c187dc240f2569cf0a91b3e6a2d8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3c95d18cbb3dc2c45381f6b8583f646bb1aa726adc1fc37a7b22a67d241650c4.ctex",
+          "sha256": "3c95d18cbb3dc2c45381f6b8583f646bb1aa726adc1fc37a7b22a67d241650c4",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "48cc635728496393b8460b73b80acc4790fd1dfb865cad1345abe01e796d713f.glb",
+        "sha256": "48cc635728496393b8460b73b80acc4790fd1dfb865cad1345abe01e796d713f",
+        "size": 8227152
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "knight_brothers/knight master brother": {
+    "url": "fcdad3424f550178100789e6767ee04f40a7d6f1f53131c0cc34772ad6650597.glb",
+    "sha256": "fcdad3424f550178100789e6767ee04f40a7d6f1f53131c0cc34772ad6650597",
+    "size": 13671424,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "29d015f23248b5d1402fde0d9b19d6f05c53b03bc55ff67dcd35f17db8674914.ctex",
+          "sha256": "29d015f23248b5d1402fde0d9b19d6f05c53b03bc55ff67dcd35f17db8674914",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ed9d22807ea28d8814b3f00d253e326f81155ea9e55b3af4aa517526833da2aa.ctex",
+          "sha256": "ed9d22807ea28d8814b3f00d253e326f81155ea9e55b3af4aa517526833da2aa",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "919bacedd9e19788b0b180875a73cc60cbcf8ad279aec5069ba726035b91b99b.glb",
+        "sha256": "919bacedd9e19788b0b180875a73cc60cbcf8ad279aec5069ba726035b91b99b",
+        "size": 3769556
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_brothers/knight master destroyer": {
+    "url": "f40071d6df8d4ab6c1ad8c4454b666eb274c1840b1e1edf6398bca45b2d66394.glb",
+    "sha256": "f40071d6df8d4ab6c1ad8c4454b666eb274c1840b1e1edf6398bca45b2d66394",
+    "size": 13823868,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "1c3f2928f0bc02e0a6040bde23f6d6503f018baefa3cafeea4877d4e02d211ba.ctex",
+          "sha256": "1c3f2928f0bc02e0a6040bde23f6d6503f018baefa3cafeea4877d4e02d211ba",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "093bc6549c4869c16b165076b668be627db8f70cf9bdc62a2cedf70145f6da95.ctex",
+          "sha256": "093bc6549c4869c16b165076b668be627db8f70cf9bdc62a2cedf70145f6da95",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f8157869d1425bb581ed9c58756166b849177e06827ec706af9bdc437145ed5a.glb",
+        "sha256": "f8157869d1425bb581ed9c58756166b849177e06827ec706af9bdc437145ed5a",
+        "size": 3877132
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_brothers/knight nemesis walker": {
+    "url": "5be98ab45799ecfe9b052cfea188ce6924273ee1d53f0612d192e49e1262824d.glb",
+    "sha256": "5be98ab45799ecfe9b052cfea188ce6924273ee1d53f0612d192e49e1262824d",
+    "size": 17912844,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3d3084c44aed4c0150fd8a098b5b91fbb4c2a7cffb1f9d40127f800371ac1749.ctex",
+          "sha256": "3d3084c44aed4c0150fd8a098b5b91fbb4c2a7cffb1f9d40127f800371ac1749",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f8dc6c5b95208516d9a02602c4aa65aabda3eae3ced6dbed205044548198f4e9.ctex",
+          "sha256": "f8dc6c5b95208516d9a02602c4aa65aabda3eae3ced6dbed205044548198f4e9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "93342957635b938fc24e4fd9075a9921cefb8da4efef7c1bfdd34f1ebf41eceb.glb",
+        "sha256": "93342957635b938fc24e4fd9075a9921cefb8da4efef7c1bfdd34f1ebf41eceb",
+        "size": 9677384
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "knight_brothers/knight purgation brothers": {
+    "url": "699bfe0987410b264467af00ac9b4092d9a64ecdb01d077804f22074392d9d62.glb",
+    "sha256": "699bfe0987410b264467af00ac9b4092d9a64ecdb01d077804f22074392d9d62",
+    "size": 13883436,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2ecf21b9bc09402f941f62298feffae223476dfb7125154d04258f34305001c8.ctex",
+          "sha256": "2ecf21b9bc09402f941f62298feffae223476dfb7125154d04258f34305001c8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c83e399bfded5acb836082125ca1e742f7f6d8c74d85e08d8da84d9dd14c428b.ctex",
+          "sha256": "c83e399bfded5acb836082125ca1e742f7f6d8c74d85e08d8da84d9dd14c428b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ea4ef2ddeb83463801e11d93c270c4c4ad37ab554d1bfd8f95f8af44881ca63a.glb",
+        "sha256": "ea4ef2ddeb83463801e11d93c270c4c4ad37ab554d1bfd8f95f8af44881ca63a",
+        "size": 3853060
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_brothers/knight veteran brothers": {
+    "url": "44446e9fe91a9ded92c0c9d3c5b1898b346153515727306b4cd9fc55769dab58.glb",
+    "sha256": "44446e9fe91a9ded92c0c9d3c5b1898b346153515727306b4cd9fc55769dab58",
+    "size": 14049580,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "87ad71b0735d2afe74ab03604b125e5d27e487572a298b20aa60c24239004d0e.ctex",
+          "sha256": "87ad71b0735d2afe74ab03604b125e5d27e487572a298b20aa60c24239004d0e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9059449b898fc2e0e9f4579a8f3796499cef98ec8747d4308e11064b657561a6.ctex",
+          "sha256": "9059449b898fc2e0e9f4579a8f3796499cef98ec8747d4308e11064b657561a6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "202a0f88fb170e4cfab8fbacd105ca0a524d2dc6e474b35709881d60145809fa.glb",
+        "sha256": "202a0f88fb170e4cfab8fbacd105ca0a524d2dc6e474b35709881d60145809fa",
+        "size": 3669500
+      },
+      "size_class": "infantry"
+    }
+  },
+  "knight_brothers/knight veteran combat walker": {
+    "url": "859135ff64552320852aacab381d291f83b149a35da735860c152e99157187a6.glb",
+    "sha256": "859135ff64552320852aacab381d291f83b149a35da735860c152e99157187a6",
+    "size": 16449564,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "713c0a2eb0c6aaf46648fe36b9ade32071ce0e47335b687513d8a923e08ef3c2.ctex",
+          "sha256": "713c0a2eb0c6aaf46648fe36b9ade32071ce0e47335b687513d8a923e08ef3c2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b4ff726410d77398a3bd63cf0efff26ca73b6ee60522a66fa5e7160249714b5c.ctex",
+          "sha256": "b4ff726410d77398a3bd63cf0efff26ca73b6ee60522a66fa5e7160249714b5c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "4d31495491f9304fe03a23d40bdfc9ab5118cd6297b10f8ed9d735cd8aa98404.glb",
+        "sha256": "4d31495491f9304fe03a23d40bdfc9ab5118cd6297b10f8ed9d735cd8aa98404",
+        "size": 8572040
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "knight_brothers/knight veteran master brother": {
+    "url": "002f14b76399a01246f6cb98c039e7272882ec7bdf5e51bae5a1151b65f80f12.glb",
+    "sha256": "002f14b76399a01246f6cb98c039e7272882ec7bdf5e51bae5a1151b65f80f12",
+    "size": 13666176,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "24bcf1fac123cae3d6215d6a948974f758ca55a9a027e0370eb5c2d876b76c0e.ctex",
+          "sha256": "24bcf1fac123cae3d6215d6a948974f758ca55a9a027e0370eb5c2d876b76c0e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6ffb1d7595e04650e3a7fc3db6473eb6f0aefce709e74f8d339a7fbd0dedbcbc.ctex",
+          "sha256": "6ffb1d7595e04650e3a7fc3db6473eb6f0aefce709e74f8d339a7fbd0dedbcbc",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "841929d88ca70fa314f07a3d1b4792060eb748a8805d2ca80435213783f13d2b.glb",
+        "sha256": "841929d88ca70fa314f07a3d1b4792060eb748a8805d2ca80435213783f13d2b",
+        "size": 3842632
+      },
+      "size_class": "infantry"
+    }
+  }
+}

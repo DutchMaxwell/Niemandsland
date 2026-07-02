@@ -1,0 +1,392 @@
+{
+  "rebel_guerrillas/assault vehicle": {
+    "url": "5df22825ca1ca6eb03bc64d7a5d64be1806248adf3d0f9f7f6b7fd93ce0310fa.glb",
+    "sha256": "5df22825ca1ca6eb03bc64d7a5d64be1806248adf3d0f9f7f6b7fd93ce0310fa",
+    "size": 16865808,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "26c3b1423fa5c273520567f205ff1bdf055b7149691253d28c44085661cfa5c9.ctex",
+          "sha256": "26c3b1423fa5c273520567f205ff1bdf055b7149691253d28c44085661cfa5c9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "710dcf6f005b03e1759bbb5f27b7ed5459a3fd04f3aa738c890a97773d7759ae.ctex",
+          "sha256": "710dcf6f005b03e1759bbb5f27b7ed5459a3fd04f3aa738c890a97773d7759ae",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "fae6d0e460420df09b97b18995fd1ce0cfa5c653c89ecdfcfa4b9db41bd3fe27.glb",
+        "sha256": "fae6d0e460420df09b97b18995fd1ce0cfa5c653c89ecdfcfa4b9db41bd3fe27",
+        "size": 9196056
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "rebel_guerrillas/bikers": {
+    "url": "14b7aa815b9cdfe335647b590dcd53ed70998f507541b6528821fc69fba8519b.glb",
+    "sha256": "14b7aa815b9cdfe335647b590dcd53ed70998f507541b6528821fc69fba8519b",
+    "size": 15905752,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e8e3540f0f8143f0810dc0a962381dc4f776d2d95268430b7ed00e855a11b893.ctex",
+          "sha256": "e8e3540f0f8143f0810dc0a962381dc4f776d2d95268430b7ed00e855a11b893",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9594483adac4555397935dc1c70faafa6bd84d232d8cae9af4c1cd5eb661b464.ctex",
+          "sha256": "9594483adac4555397935dc1c70faafa6bd84d232d8cae9af4c1cd5eb661b464",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ebfd2b96ce5f8fcb04bb83f5094a8e906ac8159609d71a54e6c4ff6e54acf2d6.glb",
+        "sha256": "ebfd2b96ce5f8fcb04bb83f5094a8e906ac8159609d71a54e6c4ff6e54acf2d6",
+        "size": 8494096
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "rebel_guerrillas/chelonians": {
+    "url": "074a821339f5e888e84f8422c565df33fe68df0eb58de1deda86e9bf09cf4a19.glb",
+    "sha256": "074a821339f5e888e84f8422c565df33fe68df0eb58de1deda86e9bf09cf4a19",
+    "size": 16661204,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "52539b7236a595d01218f04b49574665cd561914d6586fb626c433d649d29461.ctex",
+          "sha256": "52539b7236a595d01218f04b49574665cd561914d6586fb626c433d649d29461",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "363a47aeb3b137bd4a326867ea605a9e9382e4c0da67346944a9e8b51d112b2b.ctex",
+          "sha256": "363a47aeb3b137bd4a326867ea605a9e9382e4c0da67346944a9e8b51d112b2b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "38621b45ac2363ba7aab107020a0d7f6dc73fd5ab449c7b53e883b40be18dbf2.glb",
+        "sha256": "38621b45ac2363ba7aab107020a0d7f6dc73fd5ab449c7b53e883b40be18dbf2",
+        "size": 4678408
+      },
+      "size_class": "infantry"
+    }
+  },
+  "rebel_guerrillas/combat walker": {
+    "url": "7a8882344701489951a817919d6a0dd686772e5a70c7aa55256a4d9dbb767018.glb",
+    "sha256": "7a8882344701489951a817919d6a0dd686772e5a70c7aa55256a4d9dbb767018",
+    "size": 15788828,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "fb9a876f7f81071f6a3ef57161dda2fb945301950d465c68548e19a46f3b739b.ctex",
+          "sha256": "fb9a876f7f81071f6a3ef57161dda2fb945301950d465c68548e19a46f3b739b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8cd4d0804265947aef83a9f47648dd29f43490858abcec8285c2341bf7323717.ctex",
+          "sha256": "8cd4d0804265947aef83a9f47648dd29f43490858abcec8285c2341bf7323717",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "0a9ca2d9c86f1423e64860b3fdfd430577ae78df3755b23b38991c2f6bb4fc62.glb",
+        "sha256": "0a9ca2d9c86f1423e64860b3fdfd430577ae78df3755b23b38991c2f6bb4fc62",
+        "size": 8440716
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "rebel_guerrillas/elites": {
+    "url": "881fab72f681e951dfc3458a95d0d90ab5529771fff606c4cc4e287365870449.glb",
+    "sha256": "881fab72f681e951dfc3458a95d0d90ab5529771fff606c4cc4e287365870449",
+    "size": 14772644,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "90699825bfa3b6cf03940dbe5f06da0a5e7bac85abd510d3d02614d6ef4298bc.ctex",
+          "sha256": "90699825bfa3b6cf03940dbe5f06da0a5e7bac85abd510d3d02614d6ef4298bc",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "cc5ac750d4a9bb7e502f276d3ab5489ff93aceb6f33c89961745654227ee0241.ctex",
+          "sha256": "cc5ac750d4a9bb7e502f276d3ab5489ff93aceb6f33c89961745654227ee0241",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ff2e522580889654822d428554425fa8c5c7a35c39bdc8c35be5aeac45eebaff.glb",
+        "sha256": "ff2e522580889654822d428554425fa8c5c7a35c39bdc8c35be5aeac45eebaff",
+        "size": 4103720
+      },
+      "size_class": "infantry"
+    }
+  },
+  "rebel_guerrillas/jeep": {
+    "url": "a17b184880e8aed370b53ff93a823e0719ba22d6638a53f0a7f1cbda4b1c9a69.glb",
+    "sha256": "a17b184880e8aed370b53ff93a823e0719ba22d6638a53f0a7f1cbda4b1c9a69",
+    "size": 16847408,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "cac0293265da9d296eaf81da3c7dd26550c5c243bb76162302208aa2200ddb47.ctex",
+          "sha256": "cac0293265da9d296eaf81da3c7dd26550c5c243bb76162302208aa2200ddb47",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d99afda0695b5fdd1a95112e3a85295284e92851db7661d6718a8920f96c1fd3.ctex",
+          "sha256": "d99afda0695b5fdd1a95112e3a85295284e92851db7661d6718a8920f96c1fd3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f5e4e1a2947fafe1bb3dd1440e94a1a36a9855ec4c7e90b1db2a15a4c767e7f3.glb",
+        "sha256": "f5e4e1a2947fafe1bb3dd1440e94a1a36a9855ec4c7e90b1db2a15a4c767e7f3",
+        "size": 4737364
+      },
+      "size_class": "infantry"
+    }
+  },
+  "rebel_guerrillas/light dropship": {
+    "url": "f354edc55f4bc28cb2ffef9395c99080bfdca0c6afe0d3c65e10a9fc4763878f.glb",
+    "sha256": "f354edc55f4bc28cb2ffef9395c99080bfdca0c6afe0d3c65e10a9fc4763878f",
+    "size": 17372876,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c1992d46aa78bbc898589ef45c8fb99715f4c2f0c41ae15118ddfe7d844f2ac3.ctex",
+          "sha256": "c1992d46aa78bbc898589ef45c8fb99715f4c2f0c41ae15118ddfe7d844f2ac3",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5654da0a0b3de9a3cb5881b188844f8d86205f8f9de4457a83a722f5cb2908fe.ctex",
+          "sha256": "5654da0a0b3de9a3cb5881b188844f8d86205f8f9de4457a83a722f5cb2908fe",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d64d314f1c44691f251da339f9a0b5ab81c1f69a0895112f57cfe457c15cb61c.glb",
+        "sha256": "d64d314f1c44691f251da339f9a0b5ab81c1f69a0895112f57cfe457c15cb61c",
+        "size": 4820868
+      },
+      "size_class": "infantry"
+    }
+  },
+  "rebel_guerrillas/pioneers": {
+    "url": "3b46b06dd54f96a1c7444059165c882cfa8dabf2554f8690a98a908537d68927.glb",
+    "sha256": "3b46b06dd54f96a1c7444059165c882cfa8dabf2554f8690a98a908537d68927",
+    "size": 15516196,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "31a5c0c32028d181966a9d861079e0229a98e0976a886b3279302861d7c0701c.ctex",
+          "sha256": "31a5c0c32028d181966a9d861079e0229a98e0976a886b3279302861d7c0701c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "eed58c7c4425081bb9bbf302e961989fa943ef8c5d544c196370c275cbd00a57.ctex",
+          "sha256": "eed58c7c4425081bb9bbf302e961989fa943ef8c5d544c196370c275cbd00a57",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "829357a32e89cc0b3a535f28fec738034f1d0d9844ac0971fe6f64eacff7d1eb.glb",
+        "sha256": "829357a32e89cc0b3a535f28fec738034f1d0d9844ac0971fe6f64eacff7d1eb",
+        "size": 4223600
+      },
+      "size_class": "infantry"
+    }
+  },
+  "rebel_guerrillas/rebel leader": {
+    "url": "26d64ed8ae723b09b468e8bb0a08479c1196692d3f73306979407035c7196cec.glb",
+    "sha256": "26d64ed8ae723b09b468e8bb0a08479c1196692d3f73306979407035c7196cec",
+    "size": 15172936,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5d5a201c48cd86df67a746ddc897585ccf5469eea083f35530b9a595aadbee19.ctex",
+          "sha256": "5d5a201c48cd86df67a746ddc897585ccf5469eea083f35530b9a595aadbee19",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c1903427d6ed95ecee6b2a48b617b15c9666836428a9190d61c5c400f15242b9.ctex",
+          "sha256": "c1903427d6ed95ecee6b2a48b617b15c9666836428a9190d61c5c400f15242b9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6872228f3d5e1bc42f97678cd92f2a8cb140571e962b034d08274b09c8ff85e0.glb",
+        "sha256": "6872228f3d5e1bc42f97678cd92f2a8cb140571e962b034d08274b09c8ff85e0",
+        "size": 4470092
+      },
+      "size_class": "infantry"
+    }
+  },
+  "rebel_guerrillas/rebels": {
+    "url": "3b08fbbbb29b5f0f756b005334d9486da4b13a1ad4ad2352a1a837ecfc0c6e90.glb",
+    "sha256": "3b08fbbbb29b5f0f756b005334d9486da4b13a1ad4ad2352a1a837ecfc0c6e90",
+    "size": 16515592,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a5a6cb9ef4a105562b1d6518c3ecca59731e6bb7306089d9b26baf51d5072cec.ctex",
+          "sha256": "a5a6cb9ef4a105562b1d6518c3ecca59731e6bb7306089d9b26baf51d5072cec",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9764d9851c005ae22e2812485f92ad6187d9fac870dc03e71218fe8e3dca817e.ctex",
+          "sha256": "9764d9851c005ae22e2812485f92ad6187d9fac870dc03e71218fe8e3dca817e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b5c8a030e2f38e9cf19edfda912c6451033e7772769b18cc19475598f3c047b4.glb",
+        "sha256": "b5c8a030e2f38e9cf19edfda912c6451033e7772769b18cc19475598f3c047b4",
+        "size": 4577496
+      },
+      "size_class": "infantry"
+    }
+  },
+  "rebel_guerrillas/simian champion": {
+    "url": "69551b9d62fb6bc0129299431b50f9995e474aaf9ed8a649c3b5ecc816ef7e2a.glb",
+    "sha256": "69551b9d62fb6bc0129299431b50f9995e474aaf9ed8a649c3b5ecc816ef7e2a",
+    "size": 16066520,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "85c55799c1cfbc296e14b231c03473ba2bf309081a415b00c91f93baaa29f2c2.ctex",
+          "sha256": "85c55799c1cfbc296e14b231c03473ba2bf309081a415b00c91f93baaa29f2c2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f216a89cdae6c97b0937adf8820a00882b45a7938f9f4d48f4fe5b64defb5a35.ctex",
+          "sha256": "f216a89cdae6c97b0937adf8820a00882b45a7938f9f4d48f4fe5b64defb5a35",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f22eee0ccc285f33ddfbb620bf17f3c02d3d09a22afd1b07ca7dfbdccfcd6e9d.glb",
+        "sha256": "f22eee0ccc285f33ddfbb620bf17f3c02d3d09a22afd1b07ca7dfbdccfcd6e9d",
+        "size": 4734596
+      },
+      "size_class": "infantry"
+    }
+  },
+  "rebel_guerrillas/simians": {
+    "url": "c99d1093c68df981cde5c32729d5821786ecf04ba9317cf75e35025d59a4bee5.glb",
+    "sha256": "c99d1093c68df981cde5c32729d5821786ecf04ba9317cf75e35025d59a4bee5",
+    "size": 16888568,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9a1e8b0de1ed3615d78e1ce8e598d7b037de21844b329c201b5f8891ea666609.ctex",
+          "sha256": "9a1e8b0de1ed3615d78e1ce8e598d7b037de21844b329c201b5f8891ea666609",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "976304efe1afcb4bdd9b2bc1202f1a08e347b0e004a11ca4869e891a4ad29816.ctex",
+          "sha256": "976304efe1afcb4bdd9b2bc1202f1a08e347b0e004a11ca4869e891a4ad29816",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "386ee742acf34ee91e48b49ce8c6f42a19ce98d92575ead5a0a9c042014323da.glb",
+        "sha256": "386ee742acf34ee91e48b49ce8c6f42a19ce98d92575ead5a0a9c042014323da",
+        "size": 4729432
+      },
+      "size_class": "infantry"
+    }
+  },
+  "rebel_guerrillas/snipers": {
+    "url": "57eba437b255db2230e7eb154854cb1ff00b496ce22b85b2809c8cae655da87a.glb",
+    "sha256": "57eba437b255db2230e7eb154854cb1ff00b496ce22b85b2809c8cae655da87a",
+    "size": 19520268,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ab12012fd1c42cc0596c83ff3b34bc83aa6116b3009c077dd07ec792017d717b.ctex",
+          "sha256": "ab12012fd1c42cc0596c83ff3b34bc83aa6116b3009c077dd07ec792017d717b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2c76b4ac26c0d8d7def87404bc066cba39e48e9460efd241eef573e132711de2.ctex",
+          "sha256": "2c76b4ac26c0d8d7def87404bc066cba39e48e9460efd241eef573e132711de2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "febe02ec7660c73f037475e1fda9eeaec4b662ca8e147de0cfc82d22d9db9db2.glb",
+        "sha256": "febe02ec7660c73f037475e1fda9eeaec4b662ca8e147de0cfc82d22d9db9db2",
+        "size": 8222428
+      },
+      "size_class": "infantry"
+    }
+  },
+  "rebel_guerrillas/spotters": {
+    "url": "1f6ae0030855c6bc4267442ce81cf056395be160e09c067f044334fbc68a29e4.glb",
+    "sha256": "1f6ae0030855c6bc4267442ce81cf056395be160e09c067f044334fbc68a29e4",
+    "size": 16315880,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d29e3e2060e0933fbbb875492ed9d50a4e692aabb22f1c0337f4d02901fb762b.ctex",
+          "sha256": "d29e3e2060e0933fbbb875492ed9d50a4e692aabb22f1c0337f4d02901fb762b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ac0e63bf76d5055ef7fc3be0bdcc274d7ce23d2757f305fce563c9413444049f.ctex",
+          "sha256": "ac0e63bf76d5055ef7fc3be0bdcc274d7ce23d2757f305fce563c9413444049f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "aa01b6e78d200724b5d53e2f93212f9a4c220c7c22b8b13491bdaab187b953ee.glb",
+        "sha256": "aa01b6e78d200724b5d53e2f93212f9a4c220c7c22b8b13491bdaab187b953ee",
+        "size": 4488860
+      },
+      "size_class": "infantry"
+    }
+  },
+  "rebel_guerrillas/strikers": {
+    "url": "89cf5a218f3584529685543f4b3aadf7d30cc3f28e4cfa63c780a213e5b2a1db.glb",
+    "sha256": "89cf5a218f3584529685543f4b3aadf7d30cc3f28e4cfa63c780a213e5b2a1db",
+    "size": 15502664,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "acb7fa556e208cb24314190539173d167e2436c0fa5b336163f27a480f57b306.ctex",
+          "sha256": "acb7fa556e208cb24314190539173d167e2436c0fa5b336163f27a480f57b306",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b866be601d6d7dc3e49c6e206fe62e6fe449793679acebb4221c6c5845756ba2.ctex",
+          "sha256": "b866be601d6d7dc3e49c6e206fe62e6fe449793679acebb4221c6c5845756ba2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "fba601af81e8f6e2c2f018a1edfc300809e1e1c3e09143b02027dca556cafece.glb",
+        "sha256": "fba601af81e8f6e2c2f018a1edfc300809e1e1c3e09143b02027dca556cafece",
+        "size": 7941132
+      },
+      "size_class": "vehicle"
+    }
+  }
+}

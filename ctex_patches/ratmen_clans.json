@@ -1,0 +1,652 @@
+{
+  "ratmen_clans/artillery gun": {
+    "url": "5cff8b9ec04074f85b72760ccd9490c14c9a523ca1afe299b43b74dc06c4d02c.glb",
+    "sha256": "5cff8b9ec04074f85b72760ccd9490c14c9a523ca1afe299b43b74dc06c4d02c",
+    "size": 17478376,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9b334a8f9f25318d7afd0e31210d2a65debc8a6eef5235c2b791084602c2cfa7.ctex",
+          "sha256": "9b334a8f9f25318d7afd0e31210d2a65debc8a6eef5235c2b791084602c2cfa7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "52b5868ae78aa8a133b667f89fc657afdd7f2feaffe571904bef4d17b9db2641.ctex",
+          "sha256": "52b5868ae78aa8a133b667f89fc657afdd7f2feaffe571904bef4d17b9db2641",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f6bf544a949b41cea3a81b84921007555f998074a952b54db13f4ad21ffc49c2.glb",
+        "sha256": "f6bf544a949b41cea3a81b84921007555f998074a952b54db13f4ad21ffc49c2",
+        "size": 9053864
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "ratmen_clans/burrower tank": {
+    "url": "535c42583abc4ac4269cecb0f5c5e9056c40597a9443e2602016ec9a6cdc563a.glb",
+    "sha256": "535c42583abc4ac4269cecb0f5c5e9056c40597a9443e2602016ec9a6cdc563a",
+    "size": 16953816,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4d9520fd647b2aca1df67272ce867aa422f1ad1f54dd091d99d5ad2f4e11b8d5.ctex",
+          "sha256": "4d9520fd647b2aca1df67272ce867aa422f1ad1f54dd091d99d5ad2f4e11b8d5",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2b8aefb38c500477a9e34ca1b3ce4577a31a7d18131b80b7d6082dd0d79b37a4.ctex",
+          "sha256": "2b8aefb38c500477a9e34ca1b3ce4577a31a7d18131b80b7d6082dd0d79b37a4",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2fd786f8f10c3fcaa2d09e7877209d6713dce31ad1fa838ede36ee50face5f3f.glb",
+        "sha256": "2fd786f8f10c3fcaa2d09e7877209d6713dce31ad1fa838ede36ee50face5f3f",
+        "size": 9020052
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "ratmen_clans/clan handler": {
+    "url": "0b8420d2193e14696ca5ae6d08f11c10d08b81f59af027b15e7042dc2a137346.glb",
+    "sha256": "0b8420d2193e14696ca5ae6d08f11c10d08b81f59af027b15e7042dc2a137346",
+    "size": 17970956,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5e10c1a573f098d63a523b16bf6c565b98c367fe2584cddcddecf68d802e3bf1.ctex",
+          "sha256": "5e10c1a573f098d63a523b16bf6c565b98c367fe2584cddcddecf68d802e3bf1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "96aa3a7f715d0f3884c0ca2efd9f90f9365f5bbca482d8120b5d64a6a61c5572.ctex",
+          "sha256": "96aa3a7f715d0f3884c0ca2efd9f90f9365f5bbca482d8120b5d64a6a61c5572",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f49892dd1eb9058e56810706722bf26af0f5c72c74af7c8da077ab98db7a410d.glb",
+        "sha256": "f49892dd1eb9058e56810706722bf26af0f5c72c74af7c8da077ab98db7a410d",
+        "size": 4868476
+      },
+      "size_class": "infantry"
+    }
+  },
+  "ratmen_clans/combat tank": {
+    "url": "4fc26feb95e58c6d97c7e9320df2032a6765761e2760021df2a0531d81dc3ce9.glb",
+    "sha256": "4fc26feb95e58c6d97c7e9320df2032a6765761e2760021df2a0531d81dc3ce9",
+    "size": 17286720,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "fb27a341cf8f1cd3cdfea03d91ee00bf45a86aee1f71de566bc141e8509e71a2.ctex",
+          "sha256": "fb27a341cf8f1cd3cdfea03d91ee00bf45a86aee1f71de566bc141e8509e71a2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c67434c154eafadb8148759e94e283edd88f621a5a426ccdad5e60c53d0a7cf2.ctex",
+          "sha256": "c67434c154eafadb8148759e94e283edd88f621a5a426ccdad5e60c53d0a7cf2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "68c64af405383981ef295198a288c47507e3ebfd278699d0e9b59c768bf02d79.glb",
+        "sha256": "68c64af405383981ef295198a288c47507e3ebfd278699d0e9b59c768bf02d79",
+        "size": 8982812
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "ratmen_clans/elite handler": {
+    "url": "0e7eb5868c6009382cfc9069d0400f223a391e5d0c352c33ca38ce0ab526a321.glb",
+    "sha256": "0e7eb5868c6009382cfc9069d0400f223a391e5d0c352c33ca38ce0ab526a321",
+    "size": 15644624,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "be5ae2566f13d9681f934b521a17c334bc4f81eb683e82566f2d9b8f37119784.ctex",
+          "sha256": "be5ae2566f13d9681f934b521a17c334bc4f81eb683e82566f2d9b8f37119784",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "094c14bedefe49aa37e268987d912eb388842d7149572b7fd19c50d20a8c0d8b.ctex",
+          "sha256": "094c14bedefe49aa37e268987d912eb388842d7149572b7fd19c50d20a8c0d8b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "cf4195f28ff5eb0030d036caf2aae80901d206544a59fad0bc993b80cb23a47c.glb",
+        "sha256": "cf4195f28ff5eb0030d036caf2aae80901d206544a59fad0bc993b80cb23a47c",
+        "size": 4446044
+      },
+      "size_class": "infantry"
+    }
+  },
+  "ratmen_clans/elite operators": {
+    "url": "3e9cb099092428694f859314d5b3c21fb82833c7482d794fd7d857e071e3bace.glb",
+    "sha256": "3e9cb099092428694f859314d5b3c21fb82833c7482d794fd7d857e071e3bace",
+    "size": 17080932,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b45dae353e636e6f9993ce22f296d22e6bf81c410c101ae425bf575e4257e72b.ctex",
+          "sha256": "b45dae353e636e6f9993ce22f296d22e6bf81c410c101ae425bf575e4257e72b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "83fe951b603ab451ad6b91ae3de3d53aa98dfe1420bd53b1823edbda5bf3af8a.ctex",
+          "sha256": "83fe951b603ab451ad6b91ae3de3d53aa98dfe1420bd53b1823edbda5bf3af8a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "73664574022be11d03725143faa7473343ad5bd18157e81c69c59ee65e94db9d.glb",
+        "sha256": "73664574022be11d03725143faa7473343ad5bd18157e81c69c59ee65e94db9d",
+        "size": 4495464
+      },
+      "size_class": "infantry"
+    }
+  },
+  "ratmen_clans/giant rats": {
+    "url": "9267d73c92c1a5d7424c16353cc76bac1f5be5a3a21fee2fa8b1abe9d4b5d31f.glb",
+    "sha256": "9267d73c92c1a5d7424c16353cc76bac1f5be5a3a21fee2fa8b1abe9d4b5d31f",
+    "size": 17701204,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "40cab0b58534a5218a3fdd37f7280e48d79a391d314f1dc5dabcb71fe6894a17.ctex",
+          "sha256": "40cab0b58534a5218a3fdd37f7280e48d79a391d314f1dc5dabcb71fe6894a17",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "54ad33c10ecbd7f0237592df3d1fc87e87d4d984868c94bec1c38e0e7a325eb2.ctex",
+          "sha256": "54ad33c10ecbd7f0237592df3d1fc87e87d4d984868c94bec1c38e0e7a325eb2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "40324c51908eb5808c42ad7face2f6d8e5983a5716484c4fd8232856e7f39edb.glb",
+        "sha256": "40324c51908eb5808c42ad7face2f6d8e5983a5716484c4fd8232856e7f39edb",
+        "size": 12538532
+      },
+      "size_class": "large"
+    }
+  },
+  "ratmen_clans/great death wheel": {
+    "url": "6f7e6e9d06e550d0c1fe7cc68a4d2211fedea0a2184c1acad8db7d5c77e50207.glb",
+    "sha256": "6f7e6e9d06e550d0c1fe7cc68a4d2211fedea0a2184c1acad8db7d5c77e50207",
+    "size": 18671732,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0372f5093c8cc06c2f4f796209a8219f3264f0541df583d0716f86684a3e2518.ctex",
+          "sha256": "0372f5093c8cc06c2f4f796209a8219f3264f0541df583d0716f86684a3e2518",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f24977339633e183c9371935ceda65805c216d79d721e573b8c4234fc6a6e78d.ctex",
+          "sha256": "f24977339633e183c9371935ceda65805c216d79d721e573b8c4234fc6a6e78d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e9054d8777e6133bee8b6e007ea7b5167bc3e52e351fd68adac3533b078bd05b.glb",
+        "sha256": "e9054d8777e6133bee8b6e007ea7b5167bc3e52e351fd68adac3533b078bd05b",
+        "size": 9441328
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "ratmen_clans/great mecha beast": {
+    "url": "bc2b7f4deb4cd5ead19a4b8a905eb0f3ff63a48f04a5252111f6735fec454177.glb",
+    "sha256": "bc2b7f4deb4cd5ead19a4b8a905eb0f3ff63a48f04a5252111f6735fec454177",
+    "size": 17973576,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a43efe0898bba96105d2ad555493563517200ef99c1a71d3eb19dd6e36cedccb.ctex",
+          "sha256": "a43efe0898bba96105d2ad555493563517200ef99c1a71d3eb19dd6e36cedccb",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7ee908ff2ff12f01cd5706f143025ce366618f7a4297854811e42610285b6a4b.ctex",
+          "sha256": "7ee908ff2ff12f01cd5706f143025ce366618f7a4297854811e42610285b6a4b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "fa2ca3bb611373c7c08a0fe98a90b876bd79eb777276530c3940ee90a8a2606c.glb",
+        "sha256": "fa2ca3bb611373c7c08a0fe98a90b876bd79eb777276530c3940ee90a8a2606c",
+        "size": 12164300
+      },
+      "size_class": "large"
+    }
+  },
+  "ratmen_clans/infiltrators": {
+    "url": "e750952d8e0ff872f57bcd76c810e23ec07c23da25eb1d45a77e9ef688d6e502.glb",
+    "sha256": "e750952d8e0ff872f57bcd76c810e23ec07c23da25eb1d45a77e9ef688d6e502",
+    "size": 14511604,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f5a857f1dabbce9a289a405c596be517e2b16d455f062502bd8947cc3b86df75.ctex",
+          "sha256": "f5a857f1dabbce9a289a405c596be517e2b16d455f062502bd8947cc3b86df75",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4dab28e9c70a1eed78f22f49fd355fd42600a70d6dc9b81052c52c2818162e16.ctex",
+          "sha256": "4dab28e9c70a1eed78f22f49fd355fd42600a70d6dc9b81052c52c2818162e16",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1ec736348b7fc8be1279334f8b6af619adb0a65cb04f9e82ca5ff5f62eefd143.glb",
+        "sha256": "1ec736348b7fc8be1279334f8b6af619adb0a65cb04f9e82ca5ff5f62eefd143",
+        "size": 4125396
+      },
+      "size_class": "infantry"
+    }
+  },
+  "ratmen_clans/light mecha walker": {
+    "url": "07f8817799d094e433215b48071b854911dd5e4b4b43f8614faf7857efc857ca.glb",
+    "sha256": "07f8817799d094e433215b48071b854911dd5e4b4b43f8614faf7857efc857ca",
+    "size": 17510828,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "525e892a7656aeacc67260bf203bcf696748884f3087c5d447beca9b4677e9b0.ctex",
+          "sha256": "525e892a7656aeacc67260bf203bcf696748884f3087c5d447beca9b4677e9b0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e3696860c2c39e5a5c5498767c59092593798601861c8c83119274660a62ccd0.ctex",
+          "sha256": "e3696860c2c39e5a5c5498767c59092593798601861c8c83119274660a62ccd0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "fc32c3857bbfe5c62c2ac9b5e1794f7507dd0947fa5ce4ed813acff17b32e688.glb",
+        "sha256": "fc32c3857bbfe5c62c2ac9b5e1794f7507dd0947fa5ce4ed813acff17b32e688",
+        "size": 9060316
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "ratmen_clans/mecha beast riders": {
+    "url": "68504e76845e33a5211600c6e549b479723807dee23f8d3684efbde164b776f0.glb",
+    "sha256": "68504e76845e33a5211600c6e549b479723807dee23f8d3684efbde164b776f0",
+    "size": 16882816,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "399b3e8b1f5df7ca6ab386f9e85ff188af93f50ef335cff530141706dc2e3b18.ctex",
+          "sha256": "399b3e8b1f5df7ca6ab386f9e85ff188af93f50ef335cff530141706dc2e3b18",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "67b810bedf4948cd46d6a22a343ea290c90179e315e0228bcbaa2abe08719c89.ctex",
+          "sha256": "67b810bedf4948cd46d6a22a343ea290c90179e315e0228bcbaa2abe08719c89",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e272ddf3f8df2ab667a020e404900d2162ccae7654d7126990eb7991a51e4cc4.glb",
+        "sha256": "e272ddf3f8df2ab667a020e404900d2162ccae7654d7126990eb7991a51e4cc4",
+        "size": 12038364
+      },
+      "size_class": "large"
+    }
+  },
+  "ratmen_clans/mecha ogre": {
+    "url": "1d2a1eef249b914aab06f8a78ca4d7fe9586dd2fe6112d80fcf79f3a2e931347.glb",
+    "sha256": "1d2a1eef249b914aab06f8a78ca4d7fe9586dd2fe6112d80fcf79f3a2e931347",
+    "size": 15475200,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b5dc18e2c7a896d766d31c9af095321a5e21ddf71dda01b8c587ab06ce1838ef.ctex",
+          "sha256": "b5dc18e2c7a896d766d31c9af095321a5e21ddf71dda01b8c587ab06ce1838ef",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "52f930d36c4f8219cf379d12edbb320425e55226986b1ca34ac7552c6b7e5b9d.ctex",
+          "sha256": "52f930d36c4f8219cf379d12edbb320425e55226986b1ca34ac7552c6b7e5b9d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "50e650c7596c70cd675643527435bf8b0ae40d8b1556e26ab70a7ad0e1fc20e6.glb",
+        "sha256": "50e650c7596c70cd675643527435bf8b0ae40d8b1556e26ab70a7ad0e1fc20e6",
+        "size": 4485408
+      },
+      "size_class": "infantry"
+    }
+  },
+  "ratmen_clans/mecha walker titan": {
+    "url": "2ea61f59a2e6b773560ddb0cbf451adc8e910e9566593176e555064671bd1486.glb",
+    "sha256": "2ea61f59a2e6b773560ddb0cbf451adc8e910e9566593176e555064671bd1486",
+    "size": 19119040,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "10df3a6641d2ad4d30c0c7bb2221c0f0fac76d326f4810e1eae76618b0326d26.ctex",
+          "sha256": "10df3a6641d2ad4d30c0c7bb2221c0f0fac76d326f4810e1eae76618b0326d26",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f3780688d8286004902832b234658fbd92dc6655d5ecffda6fcff321741a362e.ctex",
+          "sha256": "f3780688d8286004902832b234658fbd92dc6655d5ecffda6fcff321741a362e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ed55341f12c5933ed6ecdd6056ccddf1e525125dcc772132eb57202c27bf73cb.glb",
+        "sha256": "ed55341f12c5933ed6ecdd6056ccddf1e525125dcc772132eb57202c27bf73cb",
+        "size": 9393456
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "ratmen_clans/mine drones": {
+    "url": "1da679246b3bdf40fb976adac95dfdae10e3e271cc477be679432eb963f9130b.glb",
+    "sha256": "1da679246b3bdf40fb976adac95dfdae10e3e271cc477be679432eb963f9130b",
+    "size": 16823688,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "43013bace7b78a3ba62fe935513737cbb676346cd09b655e07da1219ccda3d83.ctex",
+          "sha256": "43013bace7b78a3ba62fe935513737cbb676346cd09b655e07da1219ccda3d83",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d6219eafb272c1ea4bf25274388c65be2100b2aba45e4288515c7c3eca92e51d.ctex",
+          "sha256": "d6219eafb272c1ea4bf25274388c65be2100b2aba45e4288515c7c3eca92e51d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9034ab3e80842e84b3b2fb2acc2320d2904375cefd5ddaba280c2e0b2ee5881d.glb",
+        "sha256": "9034ab3e80842e84b3b2fb2acc2320d2904375cefd5ddaba280c2e0b2ee5881d",
+        "size": 8451780
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "ratmen_clans/operators": {
+    "url": "59da94dcd4cd83e8b65a907a092e72a59e337e0ae5c597ffeb7201418bc14f2a.glb",
+    "sha256": "59da94dcd4cd83e8b65a907a092e72a59e337e0ae5c597ffeb7201418bc14f2a",
+    "size": 14704716,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2e1c8a9635c16bd8a29dc88e0c30a5c3ea153e11a87169856cf9558ab34451c6.ctex",
+          "sha256": "2e1c8a9635c16bd8a29dc88e0c30a5c3ea153e11a87169856cf9558ab34451c6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5c28b091aae2aa11e606061ecac53655fa623e3e1211fc288a155281c5ae80b0.ctex",
+          "sha256": "5c28b091aae2aa11e606061ecac53655fa623e3e1211fc288a155281c5ae80b0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a3872c5eb4d148b40156e591cafd3cf134a435b557347ce9ddc6d1349958ea5c.glb",
+        "sha256": "a3872c5eb4d148b40156e591cafd3cf134a435b557347ce9ddc6d1349958ea5c",
+        "size": 4542188
+      },
+      "size_class": "infantry"
+    }
+  },
+  "ratmen_clans/rat ogre agents": {
+    "url": "b98828c8ec737065775c05c04a76473cc8db4067108a00b6db56ef7d7151ee8b.glb",
+    "sha256": "b98828c8ec737065775c05c04a76473cc8db4067108a00b6db56ef7d7151ee8b",
+    "size": 17097792,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d55f8b05f1d5610ae5156022a9f3a7ed376886193c4972a75a0778f1e4d61957.ctex",
+          "sha256": "d55f8b05f1d5610ae5156022a9f3a7ed376886193c4972a75a0778f1e4d61957",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "434b8769a3bdc54d2dff1145eea1cb6ff1274885eb6592d22b2233699fb7327f.ctex",
+          "sha256": "434b8769a3bdc54d2dff1145eea1cb6ff1274885eb6592d22b2233699fb7327f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "17da6032b2210bcde6219a5f78b7d5274b9b81226577a63edf446df2c3b83d0f.glb",
+        "sha256": "17da6032b2210bcde6219a5f78b7d5274b9b81226577a63edf446df2c3b83d0f",
+        "size": 4549720
+      },
+      "size_class": "infantry"
+    }
+  },
+  "ratmen_clans/rat ogre bodyguards": {
+    "url": "f33e7c7ef71ae161c6e1421feeed43d831e486088ca0360175ba6c5c5e5cac97.glb",
+    "sha256": "f33e7c7ef71ae161c6e1421feeed43d831e486088ca0360175ba6c5c5e5cac97",
+    "size": 16957820,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "bcfa81d6e54789b8ff0401934bf9df4c94a6844cbba6d174c3af68dd418a66f1.ctex",
+          "sha256": "bcfa81d6e54789b8ff0401934bf9df4c94a6844cbba6d174c3af68dd418a66f1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "88e2da68727402d6994ed0353ae1d48665cdb22e85202398700ebe5a755ec934.ctex",
+          "sha256": "88e2da68727402d6994ed0353ae1d48665cdb22e85202398700ebe5a755ec934",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "72899591ed73155964c7072924ea1a9aeb2fd6234d4ac37b0794917bf1c807d2.glb",
+        "sha256": "72899591ed73155964c7072924ea1a9aeb2fd6234d4ac37b0794917bf1c807d2",
+        "size": 4521264
+      },
+      "size_class": "infantry"
+    }
+  },
+  "ratmen_clans/rat ogre handler": {
+    "url": "6e4a5599256d777f5ad122d35265c044533f1e4512e28ad794f76568b0aed519.glb",
+    "sha256": "6e4a5599256d777f5ad122d35265c044533f1e4512e28ad794f76568b0aed519",
+    "size": 17254016,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a086856a0a4006a7b6c774b8b17360cb6b736d2c75cbde06c04610883547b305.ctex",
+          "sha256": "a086856a0a4006a7b6c774b8b17360cb6b736d2c75cbde06c04610883547b305",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b7ff5f3a3b41ae64e6e0cdb43243d8f885db5970de02600f8375c453d4d6c882.ctex",
+          "sha256": "b7ff5f3a3b41ae64e6e0cdb43243d8f885db5970de02600f8375c453d4d6c882",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3ed88e3322bf878c2f2feefdfdc6700ce577cee32819e9dde3737c6522698112.glb",
+        "sha256": "3ed88e3322bf878c2f2feefdfdc6700ce577cee32819e9dde3737c6522698112",
+        "size": 4926684
+      },
+      "size_class": "infantry"
+    }
+  },
+  "ratmen_clans/rat swarms": {
+    "url": "82677158b9c88204f83a84d9758d2c7462941c6ac3226a674722fa9dd1724092.glb",
+    "sha256": "82677158b9c88204f83a84d9758d2c7462941c6ac3226a674722fa9dd1724092",
+    "size": 18486216,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8356628146c44bec22d718b65f4233232fbd018334bf7c9e1928097b3c2205a3.ctex",
+          "sha256": "8356628146c44bec22d718b65f4233232fbd018334bf7c9e1928097b3c2205a3",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2cfd42ac09ee11c2591ff4ea7ad348654181627a0f91b82beef88aa2817c7e59.ctex",
+          "sha256": "2cfd42ac09ee11c2591ff4ea7ad348654181627a0f91b82beef88aa2817c7e59",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "77f4549ff2b8b04a0d46832ceb32962f1c6e080681f79e83b0cda9173934d5b8.glb",
+        "sha256": "77f4549ff2b8b04a0d46832ceb32962f1c6e080681f79e83b0cda9173934d5b8",
+        "size": 5001712
+      },
+      "size_class": "infantry"
+    }
+  },
+  "ratmen_clans/saboteurs": {
+    "url": "2b92b7216497815829018a1dfd8d072a28058a5ce27b9772b82f7e34f9197448.glb",
+    "sha256": "2b92b7216497815829018a1dfd8d072a28058a5ce27b9772b82f7e34f9197448",
+    "size": 16116556,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e3b70dba75962264fd537b645dae33282da3bff9f09565af0beed09f5e3d0f02.ctex",
+          "sha256": "e3b70dba75962264fd537b645dae33282da3bff9f09565af0beed09f5e3d0f02",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "53d34d7ec7667495e1c3d79b0864b10d2581ce592dcf44230ecd5ce24bbb74a3.ctex",
+          "sha256": "53d34d7ec7667495e1c3d79b0864b10d2581ce592dcf44230ecd5ce24bbb74a3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b124be123557230ccaff18c4d3c564d3b6c0406f863975978a5c54e9f51afaa3.glb",
+        "sha256": "b124be123557230ccaff18c4d3c564d3b6c0406f863975978a5c54e9f51afaa3",
+        "size": 4408904
+      },
+      "size_class": "infantry"
+    }
+  },
+  "ratmen_clans/sharpshooters": {
+    "url": "c67bb456dc9242896de80f5b07113ddf7caa7ceb5b141a1ad5f64d54f39531cd.glb",
+    "sha256": "c67bb456dc9242896de80f5b07113ddf7caa7ceb5b141a1ad5f64d54f39531cd",
+    "size": 17771196,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d7f68e66b0c90d96b39eb60e4e4de9984fb3ac9b64701144535d054047728e0c.ctex",
+          "sha256": "d7f68e66b0c90d96b39eb60e4e4de9984fb3ac9b64701144535d054047728e0c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2ad8011072af62698fd15bb68a68486a80d92378e178c28b474e63ed7d75d99c.ctex",
+          "sha256": "2ad8011072af62698fd15bb68a68486a80d92378e178c28b474e63ed7d75d99c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7fc4302a024f696cb19ebd968ed56da8a82e3709c1f31e0f936d6a7baef142c2.glb",
+        "sha256": "7fc4302a024f696cb19ebd968ed56da8a82e3709c1f31e0f936d6a7baef142c2",
+        "size": 5064316
+      },
+      "size_class": "infantry"
+    }
+  },
+  "ratmen_clans/stalkers": {
+    "url": "1da50fcb769b1b1c0eb22d98190f99946c2d0d20df8fb0b3cf0206238dbf19fe.glb",
+    "sha256": "1da50fcb769b1b1c0eb22d98190f99946c2d0d20df8fb0b3cf0206238dbf19fe",
+    "size": 17854140,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5a86239ee9d339be01f74adbacfc0b6d1d8ed4217ce7643e5968aef3e4f76be9.ctex",
+          "sha256": "5a86239ee9d339be01f74adbacfc0b6d1d8ed4217ce7643e5968aef3e4f76be9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f5a0b0ae3d414e49575fed25c1baf071081621d8ca89e6f350a3a51dd55ca343.ctex",
+          "sha256": "f5a0b0ae3d414e49575fed25c1baf071081621d8ca89e6f350a3a51dd55ca343",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "feeddff7c4e2ed776b9c09577fc12a2a4f6924a4c9a3b77c487a52ba2f5a3197.glb",
+        "sha256": "feeddff7c4e2ed776b9c09577fc12a2a4f6924a4c9a3b77c487a52ba2f5a3197",
+        "size": 5059336
+      },
+      "size_class": "infantry"
+    }
+  },
+  "ratmen_clans/titan mecha beast": {
+    "url": "8d0fd4e5e5d80d886e888cf4f6eda5f3ce32c2f984e3e22fd3345909adb90baf.glb",
+    "sha256": "8d0fd4e5e5d80d886e888cf4f6eda5f3ce32c2f984e3e22fd3345909adb90baf",
+    "size": 17192032,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8368ae688f20be5514ccdbe269c8f59258374b75988067b2a94275dad573567d.ctex",
+          "sha256": "8368ae688f20be5514ccdbe269c8f59258374b75988067b2a94275dad573567d",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "14f9641780c8c33a2d3744d96585f0af965b04ca45098048f5e5e873d177f882.ctex",
+          "sha256": "14f9641780c8c33a2d3744d96585f0af965b04ca45098048f5e5e873d177f882",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7f2a7bbf1cb9c58be7ddcc3b6d219b9cb970bfe2124a6d87818a250ac0de67fb.glb",
+        "sha256": "7f2a7bbf1cb9c58be7ddcc3b6d219b9cb970bfe2124a6d87818a250ac0de67fb",
+        "size": 12744012
+      },
+      "size_class": "large"
+    }
+  },
+  "ratmen_clans/weapon experts": {
+    "url": "7e071ce9675c9377b73f76ca3f2662c09742f5f8468a9512e562dfdf9235e31b.glb",
+    "sha256": "7e071ce9675c9377b73f76ca3f2662c09742f5f8468a9512e562dfdf9235e31b",
+    "size": 16549712,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "855209f9f6537210df86c443dfa39d756d8242eb6f6932e7a82865e43d7e2aa1.ctex",
+          "sha256": "855209f9f6537210df86c443dfa39d756d8242eb6f6932e7a82865e43d7e2aa1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a091944a30e8ce85c4d932f1a791c5aee8304aa8889995f73bd5158105feddbe.ctex",
+          "sha256": "a091944a30e8ce85c4d932f1a791c5aee8304aa8889995f73bd5158105feddbe",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "57e3c8b8636e09b9afd6f8d7f99e2504bb3324e6ddf229f61ba18207c175638a.glb",
+        "sha256": "57e3c8b8636e09b9afd6f8d7f99e2504bb3324e6ddf229f61ba18207c175638a",
+        "size": 4218708
+      },
+      "size_class": "infantry"
+    }
+  }
+}
