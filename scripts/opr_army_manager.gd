@@ -1212,7 +1212,11 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 
 	# Try to load GLB model for this unit (mount upgrades pick a faction mount/bike GLB instead).
 	var glb_name: String = model_name_override if not model_name_override.is_empty() else unit.name
-	var model_path = _find_model_for_unit(glb_name, faction_folder)
+	# Prefer the ctex path (decimated mesh + BC7 material) when its blobs are cached (the army prefetch
+	# fetches them for a compatible engine); otherwise fall back to the legacy raw-GLB path.
+	var ctex_paths: Dictionary = model_library.ctex_cached_paths(faction_folder, glb_name) if model_library != null else {}
+	var use_ctex: bool = not ctex_paths.is_empty()
+	var model_path: String = str(ctex_paths.get("mesh", "")) if use_ctex else _find_model_for_unit(glb_name, faction_folder)
 	var model_height: float = 0.032  # Default 32mm height for collision calculation
 	var use_glb_model = false
 
@@ -1231,7 +1235,14 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 			# Orient on an oval base: walkers crosswise (quer), other vehicles along the long axis.
 			_align_to_oval_long_axis(glb_instance, aabb, base_is_oval, base_width, base_depth, _is_walker(unit.name))
 
-			_brighten_trellis_materials(glb_instance)
+			if use_ctex:
+				# Apply the offline-baked BC7 material onto the (texture-stripped) ctex mesh. Its .ctex
+				# textures already carry mipmaps, so no runtime mipmap regen / brighten pass is needed
+				# (that pass reads the mesh's own materials, which the ctex mesh does not have).
+				CtexLoader.apply_to_mesh(glb_instance, str(ctex_paths.get("albedo", "")),
+					str(ctex_paths.get("normal", "")), str(ctex_paths.get("orm", "")), false)
+			else:
+				_brighten_trellis_materials(glb_instance)
 			wrapper.add_child(glb_instance)
 			use_glb_model = true
 			model_height = fit.height
