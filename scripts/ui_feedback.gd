@@ -15,6 +15,7 @@ var _snd_confirm: AudioStreamWAV
 var _snd_back: AudioStreamWAV
 var _snd_hover: AudioStreamWAV
 var _snd_focus: AudioStreamWAV
+var _snd_card: AudioStreamWAV
 
 
 func _ready() -> void:
@@ -40,6 +41,15 @@ func _setup_audio() -> void:
 	_snd_back = _tone([440.0], 0.05, 0.15)
 	_snd_hover = _tone([1600.0], 0.02, 0.05)
 	_snd_focus = _tone([1000.0], 0.025, 0.07)
+	# Card deal-in: a soft low two-tone swish for the unit-dock present (D5).
+	_snd_card = _tone([420.0, 630.0], 0.09, 0.13)
+
+
+## Plays the unit-card deal-in cue (the dock calls this on present). Procedural, on the UI bus, and
+## naturally quiet so a rapid selection sweep never machine-guns. Action chips already sound via the
+## global BaseButton hook, so no extra wiring is needed there.
+func play_card_deal() -> void:
+	_play(_snd_card)
 
 
 func _play(stream: AudioStream) -> void:

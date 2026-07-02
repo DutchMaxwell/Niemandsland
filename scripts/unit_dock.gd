@@ -305,6 +305,7 @@ func _animate_card_in() -> void:
 	_presented.visible = true
 	_presented.snap_to(rest + Vector2(40, 240), 7.0, 0.82)
 	_presented.spring_to(rest, 0.0, 1.0)
+	UiFeedback.play_card_deal()   # D5: soft deal-in cue (chips already sound via the global button hook)
 
 
 func _animate_card_out() -> void:
