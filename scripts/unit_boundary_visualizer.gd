@@ -38,8 +38,17 @@ const BORDER_ALPHA := 0.9
 ## the measuring/overlay UI (8/9). See object_manager.gd for the full transparent-draw hierarchy.
 const BORDER_RENDER_PRIORITY := 4
 
+## Neutral grey outline for a PARKED dead-unit block (J8) — fits the desaturated casualty look and does
+## not compete with the amber/cyan Ambush/Scout band tints.
+const DEAD_BOUNDARY_COLOR := Color(0.62, 0.62, 0.62)
+
 ## Cached boundary meshes per GameUnit
 var _boundaries: Dictionary = {}  # GameUnit -> MeshInstance3D (border only)
+
+## J8: grey outline around a unit's PARKED dead models on the tray (a visual grouping aid). Kept
+## separate from _boundaries so a partially-parked unit can show BOTH its live boundary (player colour,
+## on the battlefield) and this grey one (on the tray).
+var _dead_boundaries: Dictionary = {}  # GameUnit -> MeshInstance3D
 
 ## Cached token containers per GameUnit (for unit-wide tokens)
 var _token_containers: Dictionary = {}  # GameUnit -> Node3D
@@ -107,6 +116,7 @@ func update_all_boundaries() -> void:
 		if game_unit:
 			existing_units.append(game_unit)
 			_update_unit_boundary(game_unit)
+			_update_dead_boundary(game_unit)   # J8: grey outline around this unit's parked casualties
 			# A wiped unit (0 alive models — deleted, or its last casualty) drops its status tokens so
 			# an Activated/Fatigued/Shaken marker doesn't linger on the empty spot (issue #78). On
 			# revive (undo) we signal so the markers are re-created from the unit's persisted state.
@@ -126,6 +136,7 @@ func update_all_boundaries() -> void:
 
 	for unit in units_to_remove:
 		_remove_unit_boundary(unit)
+		_remove_dead_boundary(unit)   # J8
 		remove_token_container(unit)  # Also remove token container for deleted units
 		_wiped_units.erase(unit)
 
@@ -335,6 +346,46 @@ func _remove_unit_boundary(game_unit) -> void:
 	# This prevents tokens from being deleted during temporary operations like arrangement
 
 
+## J8: draw/update a subtle grey outline around a unit's PARKED dead models on the tray. A lone (or
+## empty) casualty block gets none, matching the single-model rule. Polled from update_all_boundaries,
+## so it appears/updates/disappears as models park or revive — and rebuilds after save-load / late-join
+## once set_loose_model_dead re-marks the parked state (no extra hook needed). Local visual only.
+func _update_dead_boundary(game_unit) -> void:
+	var positions: Array = []
+	var radii: Array = []
+	for model in game_unit.models:
+		var n = model.node
+		if n != null and is_instance_valid(n) and n.is_inside_tree() \
+				and n.has_meta("dead_slot") and bool(n.get_meta("deleted", false)):
+			positions.append(Vector2(n.global_position.x, n.global_position.z))
+			radii.append(_model_base_radius(model))
+	if positions.size() < 2:
+		_remove_dead_boundary(game_unit)
+		return
+	var hull_points = _calculate_smooth_hull(positions, radii)
+	if hull_points.size() < 3:
+		_remove_dead_boundary(game_unit)
+		return
+	var mesh_instance: MeshInstance3D
+	if game_unit in _dead_boundaries:
+		mesh_instance = _dead_boundaries[game_unit]
+	else:
+		mesh_instance = MeshInstance3D.new()
+		mesh_instance.name = "DeadUnitBoundary"
+		add_child(mesh_instance)
+		_dead_boundaries[game_unit] = mesh_instance
+	_create_border_mesh(mesh_instance, hull_points, DEAD_BOUNDARY_COLOR)
+
+
+## Remove a parked unit's grey outline (its block emptied / it revived / the unit was deleted).
+func _remove_dead_boundary(game_unit) -> void:
+	if game_unit in _dead_boundaries:
+		var mesh = _dead_boundaries[game_unit]
+		if mesh and is_instance_valid(mesh):
+			mesh.queue_free()
+		_dead_boundaries.erase(game_unit)
+
+
 ## Handles a unit dropping to a single alive model: remove the boundary mesh AND
 ## clear the stale hull cache so get_token_positions_on_boundary() can never return
 ## the old multi-model positions. Emits boundary_lost on the genuine multi->single
@@ -374,6 +425,10 @@ func clear_all() -> void:
 		_remove_unit_boundary(game_unit)
 	_boundaries.clear()
 
+	for game_unit in _dead_boundaries.keys():
+		_remove_dead_boundary(game_unit)   # J8
+	_dead_boundaries.clear()
+
 	# Also clear all token containers
 	for game_unit in _token_containers.keys():
 		var container = _token_containers[game_unit]
@@ -387,6 +442,9 @@ func clear_all() -> void:
 ## Toggles visibility of all boundaries
 func set_boundaries_visible(visible_flag: bool) -> void:
 	for mesh in _boundaries.values():
+		if mesh and is_instance_valid(mesh):
+			mesh.visible = visible_flag
+	for mesh in _dead_boundaries.values():   # J8
 		if mesh and is_instance_valid(mesh):
 			mesh.visible = visible_flag
 
