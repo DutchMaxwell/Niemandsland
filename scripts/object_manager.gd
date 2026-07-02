@@ -261,6 +261,13 @@ func _is_gui_blocking_input() -> bool:
 	return false
 
 
+## D6 UI-occlusion decision (pure, unit-tested): a hovered control blocks the 3D-world click when it is
+## a STOP-filter control — it will consume the GUI event, so the selection/deselection path must not also
+## act on it. IGNORE/PASS controls and empty space (null) do not block, so field-clicks still deselect.
+func _control_blocks_world_click(hovered: Control) -> bool:
+	return hovered != null and hovered.mouse_filter == Control.MOUSE_FILTER_STOP
+
+
 func _input(event: InputEvent) -> void:
 	# Skip if GUI is handling input (dialog open, etc.)
 	if _is_gui_blocking_input():
@@ -269,10 +276,13 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mouse_event = event as InputEventMouseButton
 
-		# A click on the dice tray (a HUD SubViewportContainer) must NOT reach the 3D world: _input
-		# fires before the tray's _gui_input, so the tray can't consume it first, and a right-click
-		# falling through to the context-menu pick crashed. Guard here. Motion still passes.
-		if get_viewport().gui_get_hovered_control() is DiceTray:
+		# A click over ANY interactive HUD control (dice tray, unit-dock card/strip/tab, panels) must
+		# NOT reach the 3D world: _input fires before the control's _gui_input, so the control can't
+		# consume it first. Without this, a click over the dock falls through, the selection raycast
+		# finds nothing behind the UI, deselects the unit, hides the dock card, and nulls the action
+		# target (the D6 dead-button + vanishing-card bug). Generalises the former dice-tray-only guard.
+		# Motion still passes so camera drag over UI keeps working.
+		if _control_blocks_world_click(get_viewport().gui_get_hovered_control()):
 			return
 
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
