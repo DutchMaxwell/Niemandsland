@@ -73,5 +73,22 @@ func test_ten_model_skeleton_warriors_resolves_v11_fixture() -> void:
 
 func test_hash_survives_key_normalization() -> void:
 	# Variant keys `<base>#<slug>` must survive make_key / _normalize_unit intact (contract v1).
-	assert_str(ModelLibrary.make_key("mummified_undead", "Skeleton Warriors#banner+shield")) \
-		.is_equal("mummified_undead/skeleton warriors#banner+shield")
+	assert_str(ModelLibrary.make_key("mummified_undead", "Skeleton Warriors#banner+spear")) \
+		.is_equal("mummified_undead/skeleton warriors#banner+spear")
+
+
+func test_prefetch_names_include_deduped_variants() -> void:
+	# 009: the army prefetch set = base + each DISTINCT non-empty variant (+ mount), so variant models
+	# are actually DOWNLOADED (not just derived at spawn). Empty entries (base-fallback models) drop;
+	# identical variants dedup so N copies of one variant don't queue the key N times.
+	var variants: Array = ["u#spear", "u#crest+spear", "u#spear", "u#spear", "", "",
+		"u#banner+spear", "u#horn+spear", "u#spear", "u#spear"]
+	var names: Array = OPRArmyManager._collect_prefetch_names("u", variants, "")
+	assert_int(names.size()).is_equal(5)   # u + 4 distinct variants (u#spear deduped from 5 → 1)
+	for expected in ["u", "u#spear", "u#crest+spear", "u#banner+spear", "u#horn+spear"]:
+		assert_bool(names.has(expected)).is_true()
+
+
+func test_prefetch_names_base_only_and_mount() -> void:
+	assert_array(OPRArmyManager._collect_prefetch_names("u", ["", "", ""], "")).is_equal(["u"])
+	assert_array(OPRArmyManager._collect_prefetch_names("u", [], "u_on_bike")).is_equal(["u", "u_on_bike"])
