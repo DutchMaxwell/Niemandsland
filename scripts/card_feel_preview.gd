@@ -5,7 +5,7 @@ extends Control
 ## Hover to feel the tilt/lift/spring. Tunables: scripts/card_visual.gd; design: scripts/card_face.gd.
 ## NOT shipped in game.
 
-const PCARD: Vector2 = Vector2(300, 244)
+const PCARD: Vector2 = Vector2(300, 300)
 const SCARD: Vector2 = Vector2(150, 82)
 
 
@@ -17,15 +17,23 @@ func _ready() -> void:
 
 	var states: Array = [
 		{"name": "Assault Brothers", "points": 215, "quality": 3, "defense": 3, "alive": 10, "total": 10,
-			"activated": true, "coherent": true},
+			"activated": true, "coherent": true, "rules": "Fearless · Relentless",
+			"weapons": [{"name": "CCW", "meta": "A2"}, {"name": "Heavy Rifle", "meta": "30\" A1 AP1"}]},
 		{"name": "Skeleton Warriors", "points": 130, "quality": 4, "defense": 4, "alive": 6, "total": 10,
-			"fatigued": true, "coherent": true},
+			"fatigued": true, "coherent": true, "rules": "Undead · Banner · Fearless",
+			"weapons": [{"name": "Hand Weapon", "meta": "A1"},
+				{"name": "2x Spear", "meta": "A1", "rules": "Counter"}]},
 		{"name": "Royal Guard", "points": 180, "quality": 3, "defense": 2, "alive": 4, "total": 5,
-			"shaken": true, "coherent": false},
+			"shaken": true, "coherent": false, "rules": "Undead · Fear",
+			"weapons": [{"name": "Great Weapon", "meta": "A2 AP2", "rules": "Rending"}]},
 		{"name": "Gun Drones", "points": 90, "quality": 5, "defense": 5, "alive": 0, "total": 3,
 			"dead": true, "coherent": true},
 		{"name": "Wormhole Daemons of Change", "points": 305, "quality": 3, "defense": 4, "alive": 8,
-			"total": 8, "caster": true, "coherent": true},
+			"total": 8, "caster": true, "coherent": true,
+			"rules": "Caster(2) · Flying · Fear · Tough(6) · Strider",
+			"weapons": [{"name": "Warp Blade", "meta": "A3 AP2", "rules": "Rending"},
+				{"name": "Bolt Pistol", "meta": "12\" A2 AP1"}, {"name": "Chaos Icon", "meta": "A1"},
+				{"name": "Daemon Claws", "meta": "A4 AP1", "rules": "Counter, Deadly(2)"}]},
 	]
 
 	# Top row: presented-card faces, one per state (last = longest real name).
