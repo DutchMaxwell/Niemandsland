@@ -94,3 +94,37 @@ static func apply_to_mesh(mesh_root: Node3D, albedo_path: String, normal_path: S
 					mat.ao_texture = orm
 					mat.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
 			mi.set_surface_override_material(s, mat)
+
+
+## Apply PER-SURFACE ctex materials (contract-v1 multi-material form, I1). `surfaces` = array of
+## {surface: int, albedo: path, normal?: path}. Matched to Godot surfaces by index, verified equal to
+## the glTF primitive index (Godot imports one surface per primitive, in order). Surfaces with no
+## entry keep their base material. Brightness parity is applied afterwards by the caller
+## (opr_army_manager._brighten_ctex_materials), same as the single-material path.
+static func apply_materials_to_mesh(mesh_root: Node3D, surfaces: Array) -> void:
+	if mesh_root == null:
+		return
+	var by_index: Dictionary = {}   # surface index -> {albedo: Texture2D, normal: Texture2D?}
+	for s in surfaces:
+		var entry: Dictionary = s
+		var tex: Dictionary = {"albedo": load_ctex(str(entry.get("albedo", "")))}
+		if entry.has("normal"):
+			tex["normal"] = load_ctex(str(entry.get("normal", "")))
+		by_index[int(entry.get("surface", -1))] = tex
+	var global_index: int = 0
+	for node in mesh_root.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		for s in range(mi.mesh.get_surface_count()):
+			if by_index.has(global_index):
+				var tex: Dictionary = by_index[global_index]
+				var base := mi.get_active_material(s)
+				var mat: StandardMaterial3D = (base as StandardMaterial3D).duplicate() if base is StandardMaterial3D else StandardMaterial3D.new()
+				if tex.get("albedo") != null:
+					mat.albedo_texture = tex["albedo"]
+				if tex.get("normal") != null:
+					mat.normal_enabled = true
+					mat.normal_texture = tex["normal"]
+				mi.set_surface_override_material(s, mat)
+			global_index += 1
