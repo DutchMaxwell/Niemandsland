@@ -191,29 +191,14 @@ func _add_card(unit: GameUnit) -> void:
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
 	card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	card.add_theme_stylebox_override("panel", _card_style(false, _unit_color(unit)))
-	var mc := MarginContainer.new()
-	for side in ["left", "right", "top", "bottom"]:
-		mc.add_theme_constant_override("margin_" + side, 6)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 2)
-	var name_lbl := Label.new()
-	name_lbl.text = unit.get_name()
-	name_lbl.clip_text = true
-	name_lbl.add_theme_font_size_override("font_size", 13)
-	var stats_lbl := Label.new()
-	stats_lbl.add_theme_font_size_override("font_size", 12)
-	var status_lbl := Label.new()
-	status_lbl.add_theme_font_size_override("font_size", 12)
-	box.add_child(name_lbl)
-	box.add_child(stats_lbl)
-	box.add_child(status_lbl)
-	mc.add_child(box)
-	card.add_child(mc)
+	# Compact CardFace strip content (rebuilt on refresh for live status). The PanelContainer keeps the
+	# HBox layout, click/hover and player-colour accent; CardFace supplies the Tactical-HUD design.
+	card.add_child(CardFace.build_strip(_card_data(unit)))
 	card.gui_input.connect(_on_card_input.bind(unit))
 	card.mouse_entered.connect(_on_card_hover.bind(unit, true))
 	card.mouse_exited.connect(_on_card_hover.bind(unit, false))
 	_strip.add_child(card)
-	_cards[unit.unit_id] = {"card": card, "name": name_lbl, "stats": stats_lbl, "status": status_lbl, "accent": _unit_color(unit)}
+	_cards[unit.unit_id] = {"card": card, "accent": _unit_color(unit)}
 
 
 # === Live status ===
@@ -223,34 +208,16 @@ func _refresh_status() -> void:
 		var entry = _cards.get(unit.unit_id)
 		if entry == null:
 			continue
-		(entry["stats"] as Label).text = _stat_line(unit)
-		(entry["status"] as Label).text = _status_line(unit)
 		var card := entry["card"] as PanelContainer
+		# Rebuild the compact CardFace content so live stats/status/wounds show.
+		for c in card.get_children():
+			card.remove_child(c)
+			c.queue_free()
+		card.add_child(CardFace.build_strip(_card_data(unit)))
 		var dim: bool = unit.is_activated or unit.get_alive_count() == 0
 		card.modulate = Color(1, 1, 1, 0.45) if dim else Color(1, 1, 1, 1)
 	if _presented_unit != null and _presented.visible:
 		_fill_presented(_presented_unit)
-
-
-func _stat_line(unit: GameUnit) -> String:
-	return "Q%d+  D%d+   %d/%d" % [unit.get_quality(), unit.get_defense(), unit.get_alive_count(), unit.models.size()]
-
-
-func _status_line(unit: GameUnit) -> String:
-	var parts: Array[String] = []
-	if unit.is_activated:
-		parts.append("✓ Act")
-	if unit.is_fatigued:
-		parts.append("Fatigued")
-	if unit.is_shaken:
-		parts.append("Shaken")
-	if unit.is_caster():
-		parts.append("Cast %d" % unit.casts_current)
-	if unit.get_alive_count() == 0:
-		parts.append("† dead")
-	elif not _is_coherent(unit):
-		parts.append("⚠ Coherency")
-	return "   ".join(parts) if not parts.is_empty() else "ready"
 
 
 func _is_coherent(unit: GameUnit) -> bool:
