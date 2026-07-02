@@ -241,11 +241,21 @@ func _serialize_game_units() -> Array:
 		var model_positions: Array = []
 		for model in game_unit.models:
 			if model.node and is_instance_valid(model.node):
-				model_positions.append({
-					"position": [model.node.global_position.x, model.node.global_position.y, model.node.global_position.z],
+				# A parked dead loose model is saved at its REVIVE spot (its original table position),
+				# not the tray slot — restore places it there and the post-load hook re-parks it (G4).
+				var is_dead: bool = bool(model.node.get_meta("deleted", false))
+				var pos: Vector3 = model.node.global_position
+				if is_dead and model.node.has_meta("revive_transform"):
+					pos = (model.node.get_meta("revive_transform") as Transform3D).origin
+				var entry: Dictionary = {
+					"position": [pos.x, pos.y, pos.z],
 					"rotation": [model.node.rotation_degrees.x, model.node.rotation_degrees.y, model.node.rotation_degrees.z],
 					"visible": model.node.visible
-				})
+				}
+				if is_dead:
+					entry["deleted"] = true
+					entry["dead_slot"] = int(model.node.get_meta("dead_slot", -1))
+				model_positions.append(entry)
 			else:
 				model_positions.append(null)
 
@@ -349,6 +359,9 @@ func load_game(path: String) -> Error:
 
 	# Recreate each army's tray (the platform it stands on) — same gap as the late-joiner sync.
 	restore_army_trays_after_load(state.get("army_names", {}))
+
+	# Re-park loose models saved dead (needs the trays above to exist so slots can be claimed).
+	_restore_dead_parking_after_load()
 
 	# Restore game state
 	_deserialize_game_state(state.get("game_state", {}))
@@ -803,6 +816,36 @@ func _restore_regiments_after_load() -> void:
 		var rot_y = float(reg_data.get("tray_rot_y", 0.0))
 		var wounds_taken = int(reg_data.get("wounds_taken", 0))
 		army_manager.restore_regiment(game_unit, frontage, pos, rot_y, wounds_taken)
+
+
+## Re-park loose models that were saved dead (G4). Their nodes were restored at their revive spot
+## (see _serialize_game_units), so routing through set_loose_model_dead rebuilds the greyscale look,
+## the "deleted" interaction gate, and the exact tray slot (forced from the save). Runs after
+## regiments so regiment casualties (handled by the regiment restore) are skipped here. Older saves
+## without the "deleted" field leave the model alive — backwards-compatible.
+func _restore_dead_parking_after_load() -> void:
+	if not army_manager:
+		return
+	for unit_id in _loaded_game_units:
+		var entry = _loaded_game_units[unit_id]
+		var game_unit = entry.game_unit as GameUnit
+		if game_unit == null:
+			continue
+		var model_positions: Array = entry.get("model_positions", [])
+		var pid: int = int(game_unit.unit_properties.get("player_id", 1))
+		for i in range(game_unit.models.size()):
+			if i >= model_positions.size() or model_positions[i] == null:
+				continue
+			if not bool((model_positions[i] as Dictionary).get("deleted", false)):
+				continue
+			var model = game_unit.models[i]
+			if model.node == null or not is_instance_valid(model.node):
+				continue
+			if model.node.has_meta("regiment_tray"):
+				continue   # regiment casualties are restored by the regiment path, not parked loose
+			model.is_alive = false
+			var forced_slot: int = int((model_positions[i] as Dictionary).get("dead_slot", -1))
+			army_manager.set_loose_model_dead(model.node, pid, true, game_unit.unit_id, forced_slot)
 
 
 ## Deserialize game state (round, turn, etc.)
