@@ -27,6 +27,11 @@ const BUNDLED_MANIFEST_PATH: String = "res://assets/model_manifest.json"
 ## shipped appear without a re-export. Same schema as the bundled file (the offline fallback).
 const REMOTE_MANIFEST_FILE: String = "model_manifest.json"
 const REMOTE_MANIFEST_TIMEOUT_SEC: float = 15.0
+## ctex texture roles the game actually FETCHES + uses. "orm" is intentionally omitted: the material
+## path (opr_army_manager._brighten_ctex_materials) drops metallic/roughness (the game has no
+## reflection probes) and this batch's ORM has no AO, so the ORM texture (~5.6 MB/unit) is dead weight.
+## Re-enable in one line — add "orm" here — once a PBR/reflection render path revalidates the channel.
+const CTEX_ACTIVE_TEXTURE_ROLES: Array[String] = ["albedo", "normal"]
 
 # === Private variables ===
 
@@ -132,7 +137,7 @@ func ensure_models(unit_specs: Array) -> void:
 			if not msha.is_empty():
 				glb[msha] = _blob_url(mesh)
 			var textures: Dictionary = block.get("textures", {})
-			for role in ["albedo", "normal", "orm"]:
+			for role in CTEX_ACTIVE_TEXTURE_ROLES:
 				if textures.has(role):
 					var b: Dictionary = textures[role]
 					var s: String = str(b.get("sha256", ""))
@@ -184,7 +189,7 @@ func ensure_ctex(faction: String, unit_name: String) -> Dictionary:
 	var mesh: Dictionary = ctex.get("mesh", {})
 	await _downloader.ensure(_blob_url(mesh), str(mesh.get("sha256", "")))
 	var textures: Dictionary = ctex.get("textures", {})
-	for role in ["albedo", "normal", "orm"]:
+	for role in CTEX_ACTIVE_TEXTURE_ROLES:
 		if textures.has(role):
 			var blob: Dictionary = textures[role]
 			await _ctex_tex.ensure(_blob_url(blob), str(blob.get("sha256", "")))
@@ -201,7 +206,7 @@ func _ctex_paths_if_cached(ctex: Dictionary) -> Dictionary:
 		return {}
 	var out: Dictionary = {"mesh": _downloader.cache_path(mesh_sha)}
 	var textures: Dictionary = ctex.get("textures", {})
-	for role in ["albedo", "normal", "orm"]:
+	for role in CTEX_ACTIVE_TEXTURE_ROLES:
 		if textures.has(role):
 			var sha: String = str(textures[role].get("sha256", ""))
 			if sha.is_empty() or not _ctex_tex.is_cached(sha):
