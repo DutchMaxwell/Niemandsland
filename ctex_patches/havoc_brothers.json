@@ -1,0 +1,678 @@
+{
+  "havoc_brothers/chosen_havoc_brothers": {
+    "url": "2af293a8bf9451fcf2debc216f6d2b6ba00fd5b6561ea704ff4e1684435d4d03.glb",
+    "sha256": "2af293a8bf9451fcf2debc216f6d2b6ba00fd5b6561ea704ff4e1684435d4d03",
+    "size": 14798896,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "caf94b02a1f473c5d2879d5b8e09cc503afdff5b5d7e56a5e3897e562949e4e7.ctex",
+          "sha256": "caf94b02a1f473c5d2879d5b8e09cc503afdff5b5d7e56a5e3897e562949e4e7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f019e029fc1f4216ab217424e376be24596dc6c71493377b134c593a2e43a8ad.ctex",
+          "sha256": "f019e029fc1f4216ab217424e376be24596dc6c71493377b134c593a2e43a8ad",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "0c2fb07e07d11a65b0165fe87d8ab7a8ab1d87bf2a560c091d55d4b1e3db20e3.glb",
+        "sha256": "0c2fb07e07d11a65b0165fe87d8ab7a8ab1d87bf2a560c091d55d4b1e3db20e3",
+        "size": 4323288
+      },
+      "size_class": "infantry"
+    }
+  },
+  "havoc_brothers/chosen_havoc_champion": {
+    "url": "9275f4c582e273e0863e641ea3d5de2d92aa9aad57f7a73b253ba404548d489d.glb",
+    "sha256": "9275f4c582e273e0863e641ea3d5de2d92aa9aad57f7a73b253ba404548d489d",
+    "size": 14908564,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ed2fed997353bdb73dd3a075e8f9cbcada901fe7540dc0a5ecbc0f9690531b71.ctex",
+          "sha256": "ed2fed997353bdb73dd3a075e8f9cbcada901fe7540dc0a5ecbc0f9690531b71",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4e87e695dfee8ee6073394dd3724c6cd1ad9ae61c1b55ffa708ddda0656dd08b.ctex",
+          "sha256": "4e87e695dfee8ee6073394dd3724c6cd1ad9ae61c1b55ffa708ddda0656dd08b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a47886c0ae666b8837d3f7c2eca19bf86f51a9f4d66676693acedc454be0752a.glb",
+        "sha256": "a47886c0ae666b8837d3f7c2eca19bf86f51a9f4d66676693acedc454be0752a",
+        "size": 4527456
+      },
+      "size_class": "infantry"
+    }
+  },
+  "havoc_brothers/crab_walker": {
+    "url": "b50eae6ca30ee9aa29bf81592cb59abede1a9014eb00e7aa6fac3b3fb7362d78.glb",
+    "sha256": "b50eae6ca30ee9aa29bf81592cb59abede1a9014eb00e7aa6fac3b3fb7362d78",
+    "size": 16626084,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b76ac65e43bbccba2b09689f29369bf423da803722a103efab44e1ab9387c7f3.ctex",
+          "sha256": "b76ac65e43bbccba2b09689f29369bf423da803722a103efab44e1ab9387c7f3",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "367ea83faaf400034e6fcf949640abe202634ec25c3c5140cb13ded67dadb5de.ctex",
+          "sha256": "367ea83faaf400034e6fcf949640abe202634ec25c3c5140cb13ded67dadb5de",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "4fe9f86e2b10d837823f7d7f91fdb47c8772c428ba82763b84ab902ea7587286.glb",
+        "sha256": "4fe9f86e2b10d837823f7d7f91fdb47c8772c428ba82763b84ab902ea7587286",
+        "size": 8841320
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "havoc_brothers/cultist_champion": {
+    "url": "72dc65049dfdc107aaad3564ef081a9f5778e5c80f752cb3ea2d2f6072b50ac6.glb",
+    "sha256": "72dc65049dfdc107aaad3564ef081a9f5778e5c80f752cb3ea2d2f6072b50ac6",
+    "size": 14905112,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "228dc25bebde5eface98ee735a1e1b042385e6a6e6128e6173a394d0ed4b31d1.ctex",
+          "sha256": "228dc25bebde5eface98ee735a1e1b042385e6a6e6128e6173a394d0ed4b31d1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "09074a3e618de2be2bfd29af752bf4e39a9ecc7f57d01a6cce506e80a050f9a2.ctex",
+          "sha256": "09074a3e618de2be2bfd29af752bf4e39a9ecc7f57d01a6cce506e80a050f9a2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6bde09fe9662a6258ac459f222866434112813491908bc3ade82fac244406f36.glb",
+        "sha256": "6bde09fe9662a6258ac459f222866434112813491908bc3ade82fac244406f36",
+        "size": 4119480
+      },
+      "size_class": "infantry"
+    }
+  },
+  "havoc_brothers/cultists": {
+    "url": "e8da58d45db7b4590d013b1944e385db2c2dd73b0c9f8f88e744f7a45bdf5b53.glb",
+    "sha256": "e8da58d45db7b4590d013b1944e385db2c2dd73b0c9f8f88e744f7a45bdf5b53",
+    "size": 12593904,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "06a5b2480b0bd4800b525662e4d33ef8380a122c0845732e52cdc9a94178d75c.ctex",
+          "sha256": "06a5b2480b0bd4800b525662e4d33ef8380a122c0845732e52cdc9a94178d75c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "59c1d0a1d6bfa84055ed1193fccfb70009c3c22c6b2ac4712dbe5df2b5a1e954.ctex",
+          "sha256": "59c1d0a1d6bfa84055ed1193fccfb70009c3c22c6b2ac4712dbe5df2b5a1e954",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ace3d5c442de77bd745bb268d72bc2ead7b4d271a066599bbd7dc4cc00d50886.glb",
+        "sha256": "ace3d5c442de77bd745bb268d72bc2ead7b4d271a066599bbd7dc4cc00d50886",
+        "size": 3488452
+      },
+      "size_class": "infantry"
+    }
+  },
+  "havoc_brothers/greater_mutated": {
+    "url": "ee5178369ea0c8dd58f67c8a9be32501944fde0df2d76a2c6c7c455f3d0d57cf.glb",
+    "sha256": "ee5178369ea0c8dd58f67c8a9be32501944fde0df2d76a2c6c7c455f3d0d57cf",
+    "size": 15118880,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "16ca1d793231d903ee7ebc4608d610260c050bf2a854fc2d14ad52830187dd0c.ctex",
+          "sha256": "16ca1d793231d903ee7ebc4608d610260c050bf2a854fc2d14ad52830187dd0c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ce267ebe1c9b84e87213933a054e5c92659a249925a65c6d1f93ef6ea2c36c8a.ctex",
+          "sha256": "ce267ebe1c9b84e87213933a054e5c92659a249925a65c6d1f93ef6ea2c36c8a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "12131416011717ec103f740a5fb9b51ae532e4d16f231e905869c78b19bdc329.glb",
+        "sha256": "12131416011717ec103f740a5fb9b51ae532e4d16f231e905869c78b19bdc329",
+        "size": 11074428
+      },
+      "size_class": "large"
+    }
+  },
+  "havoc_brothers/harbinger_of_havoc": {
+    "url": "e9bf69fc09362d334d95dd149237762b161cfc5cf2333a32d4b0e51d9cb4c75d.glb",
+    "sha256": "e9bf69fc09362d334d95dd149237762b161cfc5cf2333a32d4b0e51d9cb4c75d",
+    "size": 14838740,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3cbf4155b1bb9d63a4620e6ba729280087e12629adb8f0ef5dd0855d83480a84.ctex",
+          "sha256": "3cbf4155b1bb9d63a4620e6ba729280087e12629adb8f0ef5dd0855d83480a84",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e2c62943a557a26d014039bb385f84404638e3a9b17198ee8f3f1483a99dec82.ctex",
+          "sha256": "e2c62943a557a26d014039bb385f84404638e3a9b17198ee8f3f1483a99dec82",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e81a3f8e4656f75172f05af864c89602d45a296028d5412717d2fcbc12dd281e.glb",
+        "sha256": "e81a3f8e4656f75172f05af864c89602d45a296028d5412717d2fcbc12dd281e",
+        "size": 4102532
+      },
+      "size_class": "infantry"
+    }
+  },
+  "havoc_brothers/havoc_apc": {
+    "url": "dd7d656835a37ba674391170181468fed93cc3ec8c4d1f286034df05083760cb.glb",
+    "sha256": "dd7d656835a37ba674391170181468fed93cc3ec8c4d1f286034df05083760cb",
+    "size": 16174468,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "606f4b39369d3c50cde7fc827a29a9b12309facc17d9b2db78dba69898cc64c6.ctex",
+          "sha256": "606f4b39369d3c50cde7fc827a29a9b12309facc17d9b2db78dba69898cc64c6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "bccd521eab7d9748c3197c48f18d11e6a76e39c37e1480fa3241defa1c53d596.ctex",
+          "sha256": "bccd521eab7d9748c3197c48f18d11e6a76e39c37e1480fa3241defa1c53d596",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3fefad1e2d899bcfaa450d993cef8841c73ed831c7352594eef0586033bad3a1.glb",
+        "sha256": "3fefad1e2d899bcfaa450d993cef8841c73ed831c7352594eef0586033bad3a1",
+        "size": 9068224
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "havoc_brothers/havoc_bikers": {
+    "url": "76ba0e6a7385f36e3dceaadb44b3803c3f655d59831e68d1db5ddc4a8caa644b.glb",
+    "sha256": "76ba0e6a7385f36e3dceaadb44b3803c3f655d59831e68d1db5ddc4a8caa644b",
+    "size": 17865996,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4c01dc235a9ab497aa97810a585282da14383aa409194cd847c5836259e45200.ctex",
+          "sha256": "4c01dc235a9ab497aa97810a585282da14383aa409194cd847c5836259e45200",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "91823245b13232889f80df4d771397aa2e15aec6d4aab12432e2bbdad88c861c.ctex",
+          "sha256": "91823245b13232889f80df4d771397aa2e15aec6d4aab12432e2bbdad88c861c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "21b54d6c69a3cae6dbfd0c2b2693de7115b20ea27bc3d32595bb07b4153a65e5.glb",
+        "sha256": "21b54d6c69a3cae6dbfd0c2b2693de7115b20ea27bc3d32595bb07b4153a65e5",
+        "size": 9860976
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "havoc_brothers/havoc_brothers": {
+    "url": "71c11a047dc272507a694a9b3a9fcc6970d8ba83fecd4a02bb4965a88dc55b45.glb",
+    "sha256": "71c11a047dc272507a694a9b3a9fcc6970d8ba83fecd4a02bb4965a88dc55b45",
+    "size": 14765760,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f5ae050f5a2115cd3f6f08833f2c7c351595c0616e10d4dbec3bd372ae10e370.ctex",
+          "sha256": "f5ae050f5a2115cd3f6f08833f2c7c351595c0616e10d4dbec3bd372ae10e370",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "469bef01e1a4253d86397a28818747c4667b819e3614af0d79ffa51d0c7e3348.ctex",
+          "sha256": "469bef01e1a4253d86397a28818747c4667b819e3614af0d79ffa51d0c7e3348",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "bd93c9e4ef7c2423c58333592d5ff0d207b1e0d4b12cad22a90be4e79a22331f.glb",
+        "sha256": "bd93c9e4ef7c2423c58333592d5ff0d207b1e0d4b12cad22a90be4e79a22331f",
+        "size": 4275804
+      },
+      "size_class": "infantry"
+    }
+  },
+  "havoc_brothers/havoc_champion": {
+    "url": "e4a9f72fd6d2e695bb4aaea364940782a27921ae1dfbdc6bb3b7bd88fcede266.glb",
+    "sha256": "e4a9f72fd6d2e695bb4aaea364940782a27921ae1dfbdc6bb3b7bd88fcede266",
+    "size": 13547652,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9b2b113948ac4393c0a3f92bed95d69ffaa34651b8ce0ea4a7a0339c363d92cf.ctex",
+          "sha256": "9b2b113948ac4393c0a3f92bed95d69ffaa34651b8ce0ea4a7a0339c363d92cf",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "fe4225d2f4cd8e4808a2112cb5d27fef6e9f3ff36d18658b933b2c9751979ced.ctex",
+          "sha256": "fe4225d2f4cd8e4808a2112cb5d27fef6e9f3ff36d18658b933b2c9751979ced",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "718c115fc5755cac11821c9e44231d2e25a89b839fc7b292a9c8516f9f3e5156.glb",
+        "sha256": "718c115fc5755cac11821c9e44231d2e25a89b839fc7b292a9c8516f9f3e5156",
+        "size": 3924436
+      },
+      "size_class": "infantry"
+    }
+  },
+  "havoc_brothers/havoc_destroyer_champion": {
+    "url": "2e221684a0d426d1ec6ea925a848c60ad3bdca64893ac6b7facc3ecae5575ec2.glb",
+    "sha256": "2e221684a0d426d1ec6ea925a848c60ad3bdca64893ac6b7facc3ecae5575ec2",
+    "size": 14650140,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "1cd9c55768b24cd0d37289204a06a352f495f6f981140fc9a21a14598b82d45a.ctex",
+          "sha256": "1cd9c55768b24cd0d37289204a06a352f495f6f981140fc9a21a14598b82d45a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6817f529b3950d27253faeab2bf90241433dce6ccdff4155ef86a95fd663d671.ctex",
+          "sha256": "6817f529b3950d27253faeab2bf90241433dce6ccdff4155ef86a95fd663d671",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f47ea3a0312a2066e2d1c1c71bebe0d8fce3c3dfac7f50cd0fbe9c47db85dafc.glb",
+        "sha256": "f47ea3a0312a2066e2d1c1c71bebe0d8fce3c3dfac7f50cd0fbe9c47db85dafc",
+        "size": 4068536
+      },
+      "size_class": "infantry"
+    }
+  },
+  "havoc_brothers/havoc_destroyers": {
+    "url": "0174a179170f77ff499fe82ad5b9a44b3b27164916914f237bc4375e2eb51b27.glb",
+    "sha256": "0174a179170f77ff499fe82ad5b9a44b3b27164916914f237bc4375e2eb51b27",
+    "size": 14731564,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "19655a4ed7ef62807f985a30dab1971667059f731c6cdc846cc62b17ec28ea3b.ctex",
+          "sha256": "19655a4ed7ef62807f985a30dab1971667059f731c6cdc846cc62b17ec28ea3b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "75198b8089921b1c3900c993ffdd2bfcf71beba2ad0fd18994927c92aca39850.ctex",
+          "sha256": "75198b8089921b1c3900c993ffdd2bfcf71beba2ad0fd18994927c92aca39850",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "827ee8bd0945759e7c5124069737661b5768e3e560706ec836d129fa84263947.glb",
+        "sha256": "827ee8bd0945759e7c5124069737661b5768e3e560706ec836d129fa84263947",
+        "size": 4165124
+      },
+      "size_class": "infantry"
+    }
+  },
+  "havoc_brothers/havoc_dragon": {
+    "url": "e76913bd67ed14bcd1b42727b15a417b449e96b65d001e65a540f3bb7dd9508b.glb",
+    "sha256": "e76913bd67ed14bcd1b42727b15a417b449e96b65d001e65a540f3bb7dd9508b",
+    "size": 16999116,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b2cc609a1dc01ddc06ad5b0c7431939ecbaf8037ba416e6c2533ca5f5700e5d0.ctex",
+          "sha256": "b2cc609a1dc01ddc06ad5b0c7431939ecbaf8037ba416e6c2533ca5f5700e5d0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e0e00d562e0132babc5443e6d2fba029e71cf052d9df99d42d583c3cb1d361cc.ctex",
+          "sha256": "e0e00d562e0132babc5443e6d2fba029e71cf052d9df99d42d583c3cb1d361cc",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b113d86145a3061cbbb008b0012a17fac390ed0b15030d6e9545dae8291e44ba.glb",
+        "sha256": "b113d86145a3061cbbb008b0012a17fac390ed0b15030d6e9545dae8291e44ba",
+        "size": 11512028
+      },
+      "size_class": "large"
+    }
+  },
+  "havoc_brothers/havoc_heavy_tank": {
+    "url": "8658903be46e17f22bb7eef239fd349e05b10ceb455794a7fdd416af8ee65d1a.glb",
+    "sha256": "8658903be46e17f22bb7eef239fd349e05b10ceb455794a7fdd416af8ee65d1a",
+    "size": 17309680,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "23789dcb6c05dc93c9b063009e97ee9d85fcb00a92a8ab82295c44cddf5564bf.ctex",
+          "sha256": "23789dcb6c05dc93c9b063009e97ee9d85fcb00a92a8ab82295c44cddf5564bf",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "aab44a89620528149f4cb42e2f2ede3afcd8596af63515d7af2feb4d21c1fb24.ctex",
+          "sha256": "aab44a89620528149f4cb42e2f2ede3afcd8596af63515d7af2feb4d21c1fb24",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6cedee1f4d9840c395d6ff3df84ea033704a8c85abd55f3c0c451eae0e0a7798.glb",
+        "sha256": "6cedee1f4d9840c395d6ff3df84ea033704a8c85abd55f3c0c451eae0e0a7798",
+        "size": 9139432
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "havoc_brothers/havoc_mech_fiend": {
+    "url": "3c21a0a852203b3d52c1a7e049420272867162497b8889b84f1c08da632bdc71.glb",
+    "sha256": "3c21a0a852203b3d52c1a7e049420272867162497b8889b84f1c08da632bdc71",
+    "size": 14040456,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8d5d7255ef0c16f096d6e019895c8d3636148f4f99b29a67e93fc8de55844e45.ctex",
+          "sha256": "8d5d7255ef0c16f096d6e019895c8d3636148f4f99b29a67e93fc8de55844e45",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "66cc6c241eef29df7b7f07496b0d8137c61d0b6315d7870e184ac878c3c3be41.ctex",
+          "sha256": "66cc6c241eef29df7b7f07496b0d8137c61d0b6315d7870e184ac878c3c3be41",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d0eaf93bee13ea3669d8759123ec6301efe6443f1f963c5287bd2e3564360681.glb",
+        "sha256": "d0eaf93bee13ea3669d8759123ec6301efe6443f1f963c5287bd2e3564360681",
+        "size": 9802792
+      },
+      "size_class": "large"
+    }
+  },
+  "havoc_brothers/havoc_soul_spawn": {
+    "url": "277a1d7346ce19d2ad67299500752b830bcd70024d3a03b6f862160daae9c892.glb",
+    "sha256": "277a1d7346ce19d2ad67299500752b830bcd70024d3a03b6f862160daae9c892",
+    "size": 14469272,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "78b14f628512f3bc8caa2275ca9d05ce7b378a447eb84efd28366244aaadc136.ctex",
+          "sha256": "78b14f628512f3bc8caa2275ca9d05ce7b378a447eb84efd28366244aaadc136",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e22237a8e1743c63cbf871145fe522df774c560048dbd01c2d21ed644a3f3845.ctex",
+          "sha256": "e22237a8e1743c63cbf871145fe522df774c560048dbd01c2d21ed644a3f3845",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d1bc30444f6142e2c2bf0402009459e3b392e660d61f31714938cc7c19dbf95e.glb",
+        "sha256": "d1bc30444f6142e2c2bf0402009459e3b392e660d61f31714938cc7c19dbf95e",
+        "size": 4079816
+      },
+      "size_class": "infantry"
+    }
+  },
+  "havoc_brothers/havoc_support": {
+    "url": "203afb67417a9b16f309077a0742f7f9d37cc612df91b5e9aeb60c469b35604f.glb",
+    "sha256": "203afb67417a9b16f309077a0742f7f9d37cc612df91b5e9aeb60c469b35604f",
+    "size": 14533228,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "99237f3d0d657400c216130cae2a3eca4e71329e953e954d6d6f40d02b17a096.ctex",
+          "sha256": "99237f3d0d657400c216130cae2a3eca4e71329e953e954d6d6f40d02b17a096",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d89ac3c85756c60cda802d5b4bf6db3bac3a6cd75a5aa510c9664a9781d43603.ctex",
+          "sha256": "d89ac3c85756c60cda802d5b4bf6db3bac3a6cd75a5aa510c9664a9781d43603",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "109c3fed5c681273c986b1cb5940f873170cbe6616f2183fff596b06d2754001.glb",
+        "sha256": "109c3fed5c681273c986b1cb5940f873170cbe6616f2183fff596b06d2754001",
+        "size": 4077644
+      },
+      "size_class": "infantry"
+    }
+  },
+  "havoc_brothers/havoc_tank": {
+    "url": "547e28b669e000048bfce027195e7e51570c5b78097e5ab5341f2669921f0364.glb",
+    "sha256": "547e28b669e000048bfce027195e7e51570c5b78097e5ab5341f2669921f0364",
+    "size": 18944900,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3cf33b50d6affd2e6aed6ee4c0f6e8d893edb006ee598820d4cec6a5fe7dd5e8.ctex",
+          "sha256": "3cf33b50d6affd2e6aed6ee4c0f6e8d893edb006ee598820d4cec6a5fe7dd5e8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "99dca917e4e8f41e91f402a0e76cb1b001a9aef2ee0de5be39cd125fffa08ade.ctex",
+          "sha256": "99dca917e4e8f41e91f402a0e76cb1b001a9aef2ee0de5be39cd125fffa08ade",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "36a35bc6bb59f64c784d9d456ace95b69948e9e982e497db514282bef8da1c14.glb",
+        "sha256": "36a35bc6bb59f64c784d9d456ace95b69948e9e982e497db514282bef8da1c14",
+        "size": 10396748
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "havoc_brothers/infernal_brute": {
+    "url": "26c86191c1953e678700f89d6e43585aba3c8d34b6aea28cc82fbd02c019a4a8.glb",
+    "sha256": "26c86191c1953e678700f89d6e43585aba3c8d34b6aea28cc82fbd02c019a4a8",
+    "size": 14627456,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "762573daf0c415a34384e14c3f480ef4bb2904161f17ac665963d6a900faf5ad.ctex",
+          "sha256": "762573daf0c415a34384e14c3f480ef4bb2904161f17ac665963d6a900faf5ad",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f19f7fe0d79042bc68289e913923173c2352282b246522536184a8d3a07398fc.ctex",
+          "sha256": "f19f7fe0d79042bc68289e913923173c2352282b246522536184a8d3a07398fc",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8c9e18e5533ba73375cd33da24dc24c72bb138e6a8d73e68c2d35f47ad124dd0.glb",
+        "sha256": "8c9e18e5533ba73375cd33da24dc24c72bb138e6a8d73e68c2d35f47ad124dd0",
+        "size": 11412796
+      },
+      "size_class": "large"
+    }
+  },
+  "havoc_brothers/infernal_stalker": {
+    "url": "3d03aa2db10e6a25955b0555ac1054d76d6aae12deb818748695ee9432e73435.glb",
+    "sha256": "3d03aa2db10e6a25955b0555ac1054d76d6aae12deb818748695ee9432e73435",
+    "size": 16643772,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c08e80d0d9f9714633f2c317d5c0bea890d2e540524fcd0d15386523a7aced3e.ctex",
+          "sha256": "c08e80d0d9f9714633f2c317d5c0bea890d2e540524fcd0d15386523a7aced3e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "90f7b539eaa07afbfaf15de44668a65ddf2f9933ce4a4d15aeb0516adc8a0cc0.ctex",
+          "sha256": "90f7b539eaa07afbfaf15de44668a65ddf2f9933ce4a4d15aeb0516adc8a0cc0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "798af17131e4c6afa7d207012a25bfcad0710d7dd011aab456ab0ca523303086.glb",
+        "sha256": "798af17131e4c6afa7d207012a25bfcad0710d7dd011aab456ab0ca523303086",
+        "size": 5049316
+      },
+      "size_class": "infantry"
+    }
+  },
+  "havoc_brothers/mutated_brothers": {
+    "url": "73f73bf11b52ffe62fff69050b5e0679fa3afa475a3c1f07f61564ce19298d0a.glb",
+    "sha256": "73f73bf11b52ffe62fff69050b5e0679fa3afa475a3c1f07f61564ce19298d0a",
+    "size": 15963424,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "de80604868d840f8ce5b6409862f564cacc49e00c71e11add2d62743724b28cd.ctex",
+          "sha256": "de80604868d840f8ce5b6409862f564cacc49e00c71e11add2d62743724b28cd",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "20618c8eaad09f444c6bd07662cf089b45fff5acb77cd79d152e540903a2a1c4.ctex",
+          "sha256": "20618c8eaad09f444c6bd07662cf089b45fff5acb77cd79d152e540903a2a1c4",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ceef56758e8e293e5d0b8d5a49e4d93266b5cab6d0dac43938a12b10fde464a2.glb",
+        "sha256": "ceef56758e8e293e5d0b8d5a49e4d93266b5cab6d0dac43938a12b10fde464a2",
+        "size": 4851124
+      },
+      "size_class": "infantry"
+    }
+  },
+  "havoc_brothers/mutated_cultists": {
+    "url": "b9e2c575424815d0073e1aee7c83a272c48d074ddcf5bb3a12e894c8b1c6f87c.glb",
+    "sha256": "b9e2c575424815d0073e1aee7c83a272c48d074ddcf5bb3a12e894c8b1c6f87c",
+    "size": 13057024,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5bbec06b8a2a8cd1e4f9b2b66ac1302a8e3a6769d200c991d3ad7a771b5fd76c.ctex",
+          "sha256": "5bbec06b8a2a8cd1e4f9b2b66ac1302a8e3a6769d200c991d3ad7a771b5fd76c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5d1480d15e96dc5c00037b25cb9c6d58e83d3f60ad3078aa2f0caf2427b68dae.ctex",
+          "sha256": "5d1480d15e96dc5c00037b25cb9c6d58e83d3f60ad3078aa2f0caf2427b68dae",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "bd7d4da42379a89b0a70e54eebb91b779821acd30eb802de8bef69b814ea5b94.glb",
+        "sha256": "bd7d4da42379a89b0a70e54eebb91b779821acd30eb802de8bef69b814ea5b94",
+        "size": 3358220
+      },
+      "size_class": "infantry"
+    }
+  },
+  "havoc_brothers/mutated_destroyer": {
+    "url": "871978dbad9a2f1a75235e4dd55ce7b8a587d8ff62c27b3ce313596071e07342.glb",
+    "sha256": "871978dbad9a2f1a75235e4dd55ce7b8a587d8ff62c27b3ce313596071e07342",
+    "size": 15058436,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e1c7d04cfd73de9815f828eba764b3996a4c7ad22f6b596e496ed57513181e30.ctex",
+          "sha256": "e1c7d04cfd73de9815f828eba764b3996a4c7ad22f6b596e496ed57513181e30",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e84d64f9cca00336b9a7d3a056bba5703cca9a528466af5e1c7d81402d7480bb.ctex",
+          "sha256": "e84d64f9cca00336b9a7d3a056bba5703cca9a528466af5e1c7d81402d7480bb",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "91fb40905904b163ea86c912cd3749dd8db53172bc559dd64ea5fb5118a3ea0d.glb",
+        "sha256": "91fb40905904b163ea86c912cd3749dd8db53172bc559dd64ea5fb5118a3ea0d",
+        "size": 4493792
+      },
+      "size_class": "infantry"
+    }
+  },
+  "havoc_brothers/spider_walker": {
+    "url": "39397d22afa972838be5ffeb356c10ce1de698f23eefa025d44cd75d32418cff.glb",
+    "sha256": "39397d22afa972838be5ffeb356c10ce1de698f23eefa025d44cd75d32418cff",
+    "size": 16118948,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4e360fb169af071c1521b0293448356f714fc6e4ff81a8a747e0322e8106924d.ctex",
+          "sha256": "4e360fb169af071c1521b0293448356f714fc6e4ff81a8a747e0322e8106924d",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7a125109b77fc7b3d0a1cdfa8b254c97ef2ce7844d13b7bbfb916cf5422c2197.ctex",
+          "sha256": "7a125109b77fc7b3d0a1cdfa8b254c97ef2ce7844d13b7bbfb916cf5422c2197",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e8444d9f1508fcf4f99943e08276c63899faa4285ca6fd05c9737e2c362a0790.glb",
+        "sha256": "e8444d9f1508fcf4f99943e08276c63899faa4285ca6fd05c9737e2c362a0790",
+        "size": 8391724
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "havoc_brothers/talon_raptors": {
+    "url": "54aa72080801a9625ce1293af3eda19aabd6e71f3c4f88aba6db91cf7a04038b.glb",
+    "sha256": "54aa72080801a9625ce1293af3eda19aabd6e71f3c4f88aba6db91cf7a04038b",
+    "size": 14561792,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7384419824a21eb1db921126ada4fd57e9b453354f5bda9730e9a634a5578e2b.ctex",
+          "sha256": "7384419824a21eb1db921126ada4fd57e9b453354f5bda9730e9a634a5578e2b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "dc4361f7c923e178be5610e942775ee5c1c4fafd5a0942830573bd17388c31bd.ctex",
+          "sha256": "dc4361f7c923e178be5610e942775ee5c1c4fafd5a0942830573bd17388c31bd",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9f1a26b45cd499f27298033c1162e5b83cc72bc3ee12ccc35809de2737563a75.glb",
+        "sha256": "9f1a26b45cd499f27298033c1162e5b83cc72bc3ee12ccc35809de2737563a75",
+        "size": 4224184
+      },
+      "size_class": "infantry"
+    }
+  }
+}

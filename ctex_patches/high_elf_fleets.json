@@ -1,0 +1,730 @@
+{
+  "high_elf_fleets/acolytes": {
+    "url": "549e00cc3dff4f73d48e0a2925390a00eddd31da930f9021ff39bca81872c438.glb",
+    "sha256": "549e00cc3dff4f73d48e0a2925390a00eddd31da930f9021ff39bca81872c438",
+    "size": 16688076,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "97b0ab884940ed72e8166eafc6c97fbda07e9c06c41f2e4315af9879b4f67687.ctex",
+          "sha256": "97b0ab884940ed72e8166eafc6c97fbda07e9c06c41f2e4315af9879b4f67687",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9e2242b1724bf1bcf299b1e5323f4dadc37d149801535180e6d6d1495695b518.ctex",
+          "sha256": "9e2242b1724bf1bcf299b1e5323f4dadc37d149801535180e6d6d1495695b518",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d15c5be1f5794c82fdecff93f5390b5f725224d88bf94f22a54843f30273f91f.glb",
+        "sha256": "d15c5be1f5794c82fdecff93f5390b5f725224d88bf94f22a54843f30273f91f",
+        "size": 4797516
+      },
+      "size_class": "infantry"
+    }
+  },
+  "high_elf_fleets/anti gravity apc": {
+    "url": "9dba5ce85ee5d4f374e5cd4e5861d34fe05c64aa07803a3d466157aaae787016.glb",
+    "sha256": "9dba5ce85ee5d4f374e5cd4e5861d34fe05c64aa07803a3d466157aaae787016",
+    "size": 19521060,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8a5afc0098092a0229b448000dd3b6cea9d1a0ecbe96ba67c0f8ab1eab6ab2de.ctex",
+          "sha256": "8a5afc0098092a0229b448000dd3b6cea9d1a0ecbe96ba67c0f8ab1eab6ab2de",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "aaae0b04d3608a63d1df91737f40ead4296515f7a28dec70726934b5bb9b6d52.ctex",
+          "sha256": "aaae0b04d3608a63d1df91737f40ead4296515f7a28dec70726934b5bb9b6d52",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "230d61c52776114cf1443aadf8d765a89fa20110f7d98df1940688c15583a1d9.glb",
+        "sha256": "230d61c52776114cf1443aadf8d765a89fa20110f7d98df1940688c15583a1d9",
+        "size": 9402056
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "high_elf_fleets/anti gravity tank": {
+    "url": "d8f972c2c2931c874a3dd069a78998ec447ad6edcfab2070c688eb375cf3cfd0.glb",
+    "sha256": "d8f972c2c2931c874a3dd069a78998ec447ad6edcfab2070c688eb375cf3cfd0",
+    "size": 17311656,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "42f1f33102afb35e6ed1aa19ef2d882195e6dd981d41569e60030457a88027e6.ctex",
+          "sha256": "42f1f33102afb35e6ed1aa19ef2d882195e6dd981d41569e60030457a88027e6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4ba7e7709d52ee48f5bcc9858a5658d50fe03bac13014403410d219618e954f1.ctex",
+          "sha256": "4ba7e7709d52ee48f5bcc9858a5658d50fe03bac13014403410d219618e954f1",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "cb01fda7673461d659325e632c228d779ccf18a10881084fd6680714ee5ab17c.glb",
+        "sha256": "cb01fda7673461d659325e632c228d779ccf18a10881084fd6680714ee5ab17c",
+        "size": 8922752
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "high_elf_fleets/combat walker": {
+    "url": "f029ea726a454bc1427acf1a13f463f070bc2a4a45ee43b63aafc9f92db62c56.glb",
+    "sha256": "f029ea726a454bc1427acf1a13f463f070bc2a4a45ee43b63aafc9f92db62c56",
+    "size": 14379092,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e65908c8096fa31a56f7b7c7ff67493adbe01f3e73bac6c366149a4c8e5f3a5a.ctex",
+          "sha256": "e65908c8096fa31a56f7b7c7ff67493adbe01f3e73bac6c366149a4c8e5f3a5a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "24cabd0815ab3fec899b1c797d5dcf9d072625b6ce48183a6e7af57f92cc1079.ctex",
+          "sha256": "24cabd0815ab3fec899b1c797d5dcf9d072625b6ce48183a6e7af57f92cc1079",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "fc59d3b7511960e39c1cb206e3bf6b4b31bd9317e74de3d4b9f231236bd4ab3c.glb",
+        "sha256": "fc59d3b7511960e39c1cb206e3bf6b4b31bd9317e74de3d4b9f231236bd4ab3c",
+        "size": 6546496
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "high_elf_fleets/elemental avatar": {
+    "url": "9bb0b9b59bc20a9d62395193f6e390b15488fb15059e6cfaaebc76674e8497ea.glb",
+    "sha256": "9bb0b9b59bc20a9d62395193f6e390b15488fb15059e6cfaaebc76674e8497ea",
+    "size": 20607568,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "39f95d18c54d18dcf20b1468881c39befcdfdacf8c37741eac980d62440d7e53.ctex",
+          "sha256": "39f95d18c54d18dcf20b1468881c39befcdfdacf8c37741eac980d62440d7e53",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1ecfe1bb7101efb9975cd43a84ca107d19524736705ed41ef0e6cb2d8a87ccc9.ctex",
+          "sha256": "1ecfe1bb7101efb9975cd43a84ca107d19524736705ed41ef0e6cb2d8a87ccc9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b9102faac01a6d9e4b618e79350b5da0ff6e87c7b6e363cc9e71488ed48c9c21.glb",
+        "sha256": "b9102faac01a6d9e4b618e79350b5da0ff6e87c7b6e363cc9e71488ed48c9c21",
+        "size": 12840308
+      },
+      "size_class": "large"
+    }
+  },
+  "high_elf_fleets/elemental protectors": {
+    "url": "cbadd0a46c23fc5bd06fd4f1702311f8fe0753c97b1f2ffb76af83ce63db373b.glb",
+    "sha256": "cbadd0a46c23fc5bd06fd4f1702311f8fe0753c97b1f2ffb76af83ce63db373b",
+    "size": 19893732,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "492882a6b9bf3ad5018ac861ffb1a1eb0d6f53b93287f5b42225824cc62a8e21.ctex",
+          "sha256": "492882a6b9bf3ad5018ac861ffb1a1eb0d6f53b93287f5b42225824cc62a8e21",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2351e1e598dbe5e8f4dd96dba410a8448f639fbf251a4e98acc82a5b3577bd01.ctex",
+          "sha256": "2351e1e598dbe5e8f4dd96dba410a8448f639fbf251a4e98acc82a5b3577bd01",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "333e38bfcfae21fc97284175b4a7b4bb83b0505b965c0de4886b0316a11f360f.glb",
+        "sha256": "333e38bfcfae21fc97284175b4a7b4bb83b0505b965c0de4886b0316a11f360f",
+        "size": 4867436
+      },
+      "size_class": "infantry"
+    }
+  },
+  "high_elf_fleets/elemental strikers": {
+    "url": "0c92afdc9db41f06eec70fcd77909342534ef1415218620405d48fcc3b806338.glb",
+    "sha256": "0c92afdc9db41f06eec70fcd77909342534ef1415218620405d48fcc3b806338",
+    "size": 15573244,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "1089389a78f75ebb5a649d6c443e3654c2968a58f63c393b1294f2d6fba0f8e0.ctex",
+          "sha256": "1089389a78f75ebb5a649d6c443e3654c2968a58f63c393b1294f2d6fba0f8e0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9eafade92ab87ff3bcf12ff360875664bb9c764a38f26b94a7d468fe5b452439.ctex",
+          "sha256": "9eafade92ab87ff3bcf12ff360875664bb9c764a38f26b94a7d468fe5b452439",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1d36010af0ece804506fc582a5c73c689ae152530d9d25ed276bcee54e3e09ba.glb",
+        "sha256": "1d36010af0ece804506fc582a5c73c689ae152530d9d25ed276bcee54e3e09ba",
+        "size": 8205152
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "high_elf_fleets/elite protector": {
+    "url": "618b325740e4d7b90219c193a7454cd2b311872c34a69f9e84472dda3eb61f19.glb",
+    "sha256": "618b325740e4d7b90219c193a7454cd2b311872c34a69f9e84472dda3eb61f19",
+    "size": 15091356,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6ac68c9ef6543265d9545fe198fd23014e01cfe9575562f62eafb48f812e04cb.ctex",
+          "sha256": "6ac68c9ef6543265d9545fe198fd23014e01cfe9575562f62eafb48f812e04cb",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "cb809ec31188b5a38af437ea8f4202cd4d4709312af125cea0a8e9410eb04da8.ctex",
+          "sha256": "cb809ec31188b5a38af437ea8f4202cd4d4709312af125cea0a8e9410eb04da8",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "da2a22722f09f7bca714c1d75d7f2d68a88df3c8e5cd9c9bed34af8a7974e38c.glb",
+        "sha256": "da2a22722f09f7bca714c1d75d7f2d68a88df3c8e5cd9c9bed34af8a7974e38c",
+        "size": 4193412
+      },
+      "size_class": "infantry"
+    }
+  },
+  "high_elf_fleets/elven noble": {
+    "url": "c065979292453d28e58ae84e78446a1f35b5d57461fa968863a542169db802a6.glb",
+    "sha256": "c065979292453d28e58ae84e78446a1f35b5d57461fa968863a542169db802a6",
+    "size": 13302984,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "504ed422da619471d36412d3bdad89ff60a046328861866b09c6e26b8965e2c7.ctex",
+          "sha256": "504ed422da619471d36412d3bdad89ff60a046328861866b09c6e26b8965e2c7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b7cfd7e9310cd9abdcf97ab21e0bde34730441c04b3c530993994c725ed1774f.ctex",
+          "sha256": "b7cfd7e9310cd9abdcf97ab21e0bde34730441c04b3c530993994c725ed1774f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1aae2f6256213d1b89a5ea05aae386549683db453b58eb8545492637162cc1b4.glb",
+        "sha256": "1aae2f6256213d1b89a5ea05aae386549683db453b58eb8545492637162cc1b4",
+        "size": 3391164
+      },
+      "size_class": "infantry"
+    }
+  },
+  "high_elf_fleets/gliders": {
+    "url": "bb0c21349f22cb710e549ca40f81c57ff44775922d862ba948726f46b9da2817.glb",
+    "sha256": "bb0c21349f22cb710e549ca40f81c57ff44775922d862ba948726f46b9da2817",
+    "size": 18033520,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "62e1e89d4a9aebde16524b13c7e7d17667c2fafec7a9e1f14a74aef8ff29c613.ctex",
+          "sha256": "62e1e89d4a9aebde16524b13c7e7d17667c2fafec7a9e1f14a74aef8ff29c613",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0f1bf61e82a4af2f6135762ec98d776406f9a1ba8d950cbdd994fd201a05749f.ctex",
+          "sha256": "0f1bf61e82a4af2f6135762ec98d776406f9a1ba8d950cbdd994fd201a05749f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c527520f204370b86b1d7e07ed994b39929b0ea814d17d70a1eebbfd2801403a.glb",
+        "sha256": "c527520f204370b86b1d7e07ed994b39929b0ea814d17d70a1eebbfd2801403a",
+        "size": 9489152
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "high_elf_fleets/great elemental": {
+    "url": "0e2bf071cc14dfffa5590c5bb7cdf19ea4b48f5bc9daa1869982ba8fad9498a9.glb",
+    "sha256": "0e2bf071cc14dfffa5590c5bb7cdf19ea4b48f5bc9daa1869982ba8fad9498a9",
+    "size": 12606844,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0c210dc405f9771a334fb11f4034ab9f7c3983350c8c48288ade51f1fdb3ed51.ctex",
+          "sha256": "0c210dc405f9771a334fb11f4034ab9f7c3983350c8c48288ade51f1fdb3ed51",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f6b8cc9a61c88bebd3e5054045be7da1f2264c84c4ab72b3055f2b797801ec89.ctex",
+          "sha256": "f6b8cc9a61c88bebd3e5054045be7da1f2264c84c4ab72b3055f2b797801ec89",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "edb0661ef1dbfb7fd5258c35fc9d3dc9ab1d1cc55c960df6dbcc557e9f795583.glb",
+        "sha256": "edb0661ef1dbfb7fd5258c35fc9d3dc9ab1d1cc55c960df6dbcc557e9f795583",
+        "size": 7043632
+      },
+      "size_class": "large"
+    }
+  },
+  "high_elf_fleets/heavy jetbike": {
+    "url": "490700ffd0d7a9f4f807f47083ab9c6b7c8a084e8cf36f383851bd404d565b90.glb",
+    "sha256": "490700ffd0d7a9f4f807f47083ab9c6b7c8a084e8cf36f383851bd404d565b90",
+    "size": 15594692,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e2a583c71b6309c534ed98be28ffdcdac431cbfd571617bdfc2b596bb58e114c.ctex",
+          "sha256": "e2a583c71b6309c534ed98be28ffdcdac431cbfd571617bdfc2b596bb58e114c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6509e310d8541126d1f60ef82f67444b7f227bacc8e0e6a6e9330a5cc4b35d1a.ctex",
+          "sha256": "6509e310d8541126d1f60ef82f67444b7f227bacc8e0e6a6e9330a5cc4b35d1a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6566948a1a081e8f72da90ebd859f8a0505ac72376d715b4f7d2c8bdd7658e93.glb",
+        "sha256": "6566948a1a081e8f72da90ebd859f8a0505ac72376d715b4f7d2c8bdd7658e93",
+        "size": 7676776
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "high_elf_fleets/jetbike protectors": {
+    "url": "a0f7a37bdffdeeaa01c895004078c7e6670acfda50bbbd38708b5c5f1daf4e08.glb",
+    "sha256": "a0f7a37bdffdeeaa01c895004078c7e6670acfda50bbbd38708b5c5f1daf4e08",
+    "size": 17276672,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8bb0d07e9d2a0251bc715f4f3974f7ec93bca97d682134926d368601a684bc6a.ctex",
+          "sha256": "8bb0d07e9d2a0251bc715f4f3974f7ec93bca97d682134926d368601a684bc6a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "704320706595e780cc5940935185a72179dba5de83fc12d9bcedaf68ac4a3c7f.ctex",
+          "sha256": "704320706595e780cc5940935185a72179dba5de83fc12d9bcedaf68ac4a3c7f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "20ed9653378efffc95d42d8e9594bb539cc04fc109abeb76d8c4d4e3ed685104.glb",
+        "sha256": "20ed9653378efffc95d42d8e9594bb539cc04fc109abeb76d8c4d4e3ed685104",
+        "size": 8537724
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "high_elf_fleets/jetbike strikers": {
+    "url": "783bea2f87739aedd0c5e80915dece6217974fa34facb62f5e3306730d89a372.glb",
+    "sha256": "783bea2f87739aedd0c5e80915dece6217974fa34facb62f5e3306730d89a372",
+    "size": 16096748,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "028adff76795caac41954cf1ff8517a97eabcfa81bf095fdb2304c3a968d0207.ctex",
+          "sha256": "028adff76795caac41954cf1ff8517a97eabcfa81bf095fdb2304c3a968d0207",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5c1bbe088f37e4e3072df14971e285ec3f08c9f3fb2259f47f780b499b0547de.ctex",
+          "sha256": "5c1bbe088f37e4e3072df14971e285ec3f08c9f3fb2259f47f780b499b0547de",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7343db76e0316c745fa84be845f2fcd3e8c9d70b5f754c46478205549fd85ab9.glb",
+        "sha256": "7343db76e0316c745fa84be845f2fcd3e8c9d70b5f754c46478205549fd85ab9",
+        "size": 7148844
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "high_elf_fleets/protectors": {
+    "url": "b524cc28946ac5fa2fd97e1693301330b075723917d48289070b9da1d141db09.glb",
+    "sha256": "b524cc28946ac5fa2fd97e1693301330b075723917d48289070b9da1d141db09",
+    "size": 14293860,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6c7e3968cca0a1b7912e370262aee47aeefec8e2ede6fb3e774a8072a4e5b5f7.ctex",
+          "sha256": "6c7e3968cca0a1b7912e370262aee47aeefec8e2ede6fb3e774a8072a4e5b5f7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "36334428f6b9aec684732063f347f0c37fbb79375dc12c38fd15b0c832ce9094.ctex",
+          "sha256": "36334428f6b9aec684732063f347f0c37fbb79375dc12c38fd15b0c832ce9094",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "15e8a590f06a241a0616a475b9650902a83c4283f02d40296df3badf3378d2f6.glb",
+        "sha256": "15e8a590f06a241a0616a475b9650902a83c4283f02d40296df3badf3378d2f6",
+        "size": 3696332
+      },
+      "size_class": "infantry"
+    }
+  },
+  "high_elf_fleets/retributors": {
+    "url": "fc40e912fc92b4623e262f9f0d21a0f40db57ed221cdeb22f79d36df55424fd2.glb",
+    "sha256": "fc40e912fc92b4623e262f9f0d21a0f40db57ed221cdeb22f79d36df55424fd2",
+    "size": 15542768,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "79b2a07e6a8a3f5c4195ecd4344f3a8a5f08c1f8770a668a64f0d45a4974d80e.ctex",
+          "sha256": "79b2a07e6a8a3f5c4195ecd4344f3a8a5f08c1f8770a668a64f0d45a4974d80e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6814218ee5b8050caad0ac45008b0959ddc3178ed37e0a734b218a45885ed90c.ctex",
+          "sha256": "6814218ee5b8050caad0ac45008b0959ddc3178ed37e0a734b218a45885ed90c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "00e1fb78794cc6d9bf08c17617a27bbacc8f822c09e3a8629ef96e5fcb0180d1.glb",
+        "sha256": "00e1fb78794cc6d9bf08c17617a27bbacc8f822c09e3a8629ef96e5fcb0180d1",
+        "size": 4228252
+      },
+      "size_class": "infantry"
+    }
+  },
+  "high_elf_fleets/revenants": {
+    "url": "ed906c642577c4f97ac75803e4375cfc078f227712fc7b59820aa1ba302969cf.glb",
+    "sha256": "ed906c642577c4f97ac75803e4375cfc078f227712fc7b59820aa1ba302969cf",
+    "size": 16077732,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9bc639974e4549c34cea82b1e4f2cb122cb16573a1068ed3256439b13c4d36f6.ctex",
+          "sha256": "9bc639974e4549c34cea82b1e4f2cb122cb16573a1068ed3256439b13c4d36f6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4d599dcb9d4263ac0ef789dee5873caed2889b1cce676adcf0152c3c0e542707.ctex",
+          "sha256": "4d599dcb9d4263ac0ef789dee5873caed2889b1cce676adcf0152c3c0e542707",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e1e99a1d876bd2cf34aa6219268dae6818e27e6612c26300887c4d97f72ec1cd.glb",
+        "sha256": "e1e99a1d876bd2cf34aa6219268dae6818e27e6612c26300887c4d97f72ec1cd",
+        "size": 4423508
+      },
+      "size_class": "infantry"
+    }
+  },
+  "high_elf_fleets/scorchers": {
+    "url": "3b1eb7d48f59e160b0f31868cf691678482b6aa231f154816915eb57a5e24ea7.glb",
+    "sha256": "3b1eb7d48f59e160b0f31868cf691678482b6aa231f154816915eb57a5e24ea7",
+    "size": 16408032,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ce8f569e269c1b2ad88e0054c0ad98675f554cda698eb615f1b4aae5b70d126f.ctex",
+          "sha256": "ce8f569e269c1b2ad88e0054c0ad98675f554cda698eb615f1b4aae5b70d126f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "74868612aaaa7d8d2f454e32c67d00df34a1bc33477117cc0170ec2cbdb242db.ctex",
+          "sha256": "74868612aaaa7d8d2f454e32c67d00df34a1bc33477117cc0170ec2cbdb242db",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "976b5cc9a222ad911bbc0b11a9a11c139863a57a132e60ed9fd29f1b1e4af8e1.glb",
+        "sha256": "976b5cc9a222ad911bbc0b11a9a11c139863a57a132e60ed9fd29f1b1e4af8e1",
+        "size": 4289056
+      },
+      "size_class": "infantry"
+    }
+  },
+  "high_elf_fleets/seer plane": {
+    "url": "86b1f112d2ef31b93d1ee64f2b708e8a866edfd82c7bb7dc8d729dadb9137052.glb",
+    "sha256": "86b1f112d2ef31b93d1ee64f2b708e8a866edfd82c7bb7dc8d729dadb9137052",
+    "size": 20265696,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "53a73dae9fe7bf3b48a03b016e4230800f69d6ab27a54c0fe9806119b3ce4ed2.ctex",
+          "sha256": "53a73dae9fe7bf3b48a03b016e4230800f69d6ab27a54c0fe9806119b3ce4ed2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "21c831ec5c0fcf65eae1366162e9e21ff98f016a2af705ef5c6b98c71854ea8d.ctex",
+          "sha256": "21c831ec5c0fcf65eae1366162e9e21ff98f016a2af705ef5c6b98c71854ea8d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "83959b0bd52697125e86f0a619f2e1f457206d5e2e6414eccc6effcfcf17e763.glb",
+        "sha256": "83959b0bd52697125e86f0a619f2e1f457206d5e2e6414eccc6effcfcf17e763",
+        "size": 9504536
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "high_elf_fleets/shifters": {
+    "url": "ff21898b1042904a88d263444e35393cfabfc33f75d91164032d2a376db34db2.glb",
+    "sha256": "ff21898b1042904a88d263444e35393cfabfc33f75d91164032d2a376db34db2",
+    "size": 16556652,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "736995d8d04f94400ac08d2429783fa17570d734b97f5cc2edde024a6eaea419.ctex",
+          "sha256": "736995d8d04f94400ac08d2429783fa17570d734b97f5cc2edde024a6eaea419",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1cdf4a5b2e3f8084e78b6a59ef63696b549f6d7e2e4a7a36b3670a5a87676861.ctex",
+          "sha256": "1cdf4a5b2e3f8084e78b6a59ef63696b549f6d7e2e4a7a36b3670a5a87676861",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "09e6bf4a231f6f8ae354005ae363c804288a6f7675356a54cc15261c32c068be.glb",
+        "sha256": "09e6bf4a231f6f8ae354005ae363c804288a6f7675356a54cc15261c32c068be",
+        "size": 4310800
+      },
+      "size_class": "infantry"
+    }
+  },
+  "high_elf_fleets/snipers": {
+    "url": "08b7a688e108dff2c732c59a076541d444014bf5eb5308a29ba760bacbf404e3.glb",
+    "sha256": "08b7a688e108dff2c732c59a076541d444014bf5eb5308a29ba760bacbf404e3",
+    "size": 14342344,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "624df7785f42c538f05470c11c288ddcadd1440f2770ef938f18af55e9d6ac40.ctex",
+          "sha256": "624df7785f42c538f05470c11c288ddcadd1440f2770ef938f18af55e9d6ac40",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f1f16ba7e63bedc5120a3b1d665c7038bd18506e78acd103665fb7d14c73c0ff.ctex",
+          "sha256": "f1f16ba7e63bedc5120a3b1d665c7038bd18506e78acd103665fb7d14c73c0ff",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d9469c80331ecb53d68e12924a035bd33deb1dc47b5727c51ffdd90c16e4978d.glb",
+        "sha256": "d9469c80331ecb53d68e12924a035bd33deb1dc47b5727c51ffdd90c16e4978d",
+        "size": 3665084
+      },
+      "size_class": "infantry"
+    }
+  },
+  "high_elf_fleets/stingers": {
+    "url": "8675cfc7e9a75ff9946262cd5b69984c276a876019e569b4ba19218647c3e0b0.glb",
+    "sha256": "8675cfc7e9a75ff9946262cd5b69984c276a876019e569b4ba19218647c3e0b0",
+    "size": 13433332,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b98084a9ab4030c0002dbd92beefc735c076079e17ee8777a63c8a9bcc97219b.ctex",
+          "sha256": "b98084a9ab4030c0002dbd92beefc735c076079e17ee8777a63c8a9bcc97219b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "688269addf09cd8f0946097d76d0e395d9d6ffff8feaadfb4508940dde0d20be.ctex",
+          "sha256": "688269addf09cd8f0946097d76d0e395d9d6ffff8feaadfb4508940dde0d20be",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a08b6a08c8bb73668954ea237e999b4cff7bf0a31de9c5badc1f6fcfdc4295f7.glb",
+        "sha256": "a08b6a08c8bb73668954ea237e999b4cff7bf0a31de9c5badc1f6fcfdc4295f7",
+        "size": 3789708
+      },
+      "size_class": "infantry"
+    }
+  },
+  "high_elf_fleets/strikers": {
+    "url": "576c936df39a83d9b4b48a0124bddda80ef22f45d671b60045ae3c82a938813b.glb",
+    "sha256": "576c936df39a83d9b4b48a0124bddda80ef22f45d671b60045ae3c82a938813b",
+    "size": 18398840,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d1e7b9a77757e03b331c701f8841b5bfc2960417d2eab6f3baf9fbe9d448dfab.ctex",
+          "sha256": "d1e7b9a77757e03b331c701f8841b5bfc2960417d2eab6f3baf9fbe9d448dfab",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9c7fb93c978d8ed43a49bb4fa06b227dbc9667c2e044d017299a0e6b8d405898.ctex",
+          "sha256": "9c7fb93c978d8ed43a49bb4fa06b227dbc9667c2e044d017299a0e6b8d405898",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7c3bb1ac99c4f8b1c8f36a846c629c94b8f4989996891288d893dc56b874eab1.glb",
+        "sha256": "7c3bb1ac99c4f8b1c8f36a846c629c94b8f4989996891288d893dc56b874eab1",
+        "size": 8561172
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "high_elf_fleets/support artillery": {
+    "url": "f9a7a8179de28f26513f06a6d8f5469eba3f500cd64de3937be5bfc17f675890.glb",
+    "sha256": "f9a7a8179de28f26513f06a6d8f5469eba3f500cd64de3937be5bfc17f675890",
+    "size": 17664772,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9158a3267c444d7f02c2b69d802074611b73e77d09263224aa7be37284ccf831.ctex",
+          "sha256": "9158a3267c444d7f02c2b69d802074611b73e77d09263224aa7be37284ccf831",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "06a69858562923cf6661a6150555a5bd3f4234d1207580a92cfb6e372799f793.ctex",
+          "sha256": "06a69858562923cf6661a6150555a5bd3f4234d1207580a92cfb6e372799f793",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "070920718cb977cb69da590526680a2b272d62339945374e92b13a17b0ac581c.glb",
+        "sha256": "070920718cb977cb69da590526680a2b272d62339945374e92b13a17b0ac581c",
+        "size": 8353728
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "high_elf_fleets/titan elemental": {
+    "url": "5f487923f005ef36f4692e92846a5dccef79eb6459266be4489462a58954bf27.glb",
+    "sha256": "5f487923f005ef36f4692e92846a5dccef79eb6459266be4489462a58954bf27",
+    "size": 15590768,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "435fdb13a8d1d78abff21ef276600b920e899acfb153f026ee58c166b2920858.ctex",
+          "sha256": "435fdb13a8d1d78abff21ef276600b920e899acfb153f026ee58c166b2920858",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "26393909f5777b7bd318f8cdd69e566285d352ae600bdf5bc4605611c004ad7f.ctex",
+          "sha256": "26393909f5777b7bd318f8cdd69e566285d352ae600bdf5bc4605611c004ad7f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b24a9533cea34e84ec483d80862ec4ad4dcbee8abd7b62f3389526eaf50f7cac.glb",
+        "sha256": "b24a9533cea34e84ec483d80862ec4ad4dcbee8abd7b62f3389526eaf50f7cac",
+        "size": 10785936
+      },
+      "size_class": "large"
+    }
+  },
+  "high_elf_fleets/trasara ioncrinius": {
+    "url": "cefdaf079e9140f6364dbba713581d81d6891a91bd8ad1fae7d9494ff022b6cd.glb",
+    "sha256": "cefdaf079e9140f6364dbba713581d81d6891a91bd8ad1fae7d9494ff022b6cd",
+    "size": 13654992,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "985b0136263f0f26d1104cda930275a881a0315bd7aa4929741054759c087077.ctex",
+          "sha256": "985b0136263f0f26d1104cda930275a881a0315bd7aa4929741054759c087077",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "36a6a9de0801db9700d8739c5fc284b88234a4aba8d564b7f7b8de9977ad9fb5.ctex",
+          "sha256": "36a6a9de0801db9700d8739c5fc284b88234a4aba8d564b7f7b8de9977ad9fb5",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "96bc8bfbd98d817606bc6916e78b25337c05bf65583520ac3070c1cd20f0aa26.glb",
+        "sha256": "96bc8bfbd98d817606bc6916e78b25337c05bf65583520ac3070c1cd20f0aa26",
+        "size": 4069160
+      },
+      "size_class": "infantry"
+    }
+  },
+  "high_elf_fleets/vanquishers": {
+    "url": "2f0c7fa10f7b99360386c567e964d365b75fdcf2a1a94cfc527a5c789eb88f2a.glb",
+    "sha256": "2f0c7fa10f7b99360386c567e964d365b75fdcf2a1a94cfc527a5c789eb88f2a",
+    "size": 16665044,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ab89e7fd3678595fcd869143b379538ff9549a14709fb85ef0e0cb5655e88f0d.ctex",
+          "sha256": "ab89e7fd3678595fcd869143b379538ff9549a14709fb85ef0e0cb5655e88f0d",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3c96a5cf03f28a4f33f04185fcc31c1c7c6760d314f4e9ad3896a8719553792d.ctex",
+          "sha256": "3c96a5cf03f28a4f33f04185fcc31c1c7c6760d314f4e9ad3896a8719553792d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "af61344cf99181ef26c89c22e569ea5c84c38497173efef1303a96512d44a0b5.glb",
+        "sha256": "af61344cf99181ef26c89c22e569ea5c84c38497173efef1303a96512d44a0b5",
+        "size": 4693904
+      },
+      "size_class": "infantry"
+    }
+  },
+  "high_elf_fleets/venator plane": {
+    "url": "b0f0bffc846746db136b3a3e981c2bacb97d28aa7f6cc2712b0c9505fa08187e.glb",
+    "sha256": "b0f0bffc846746db136b3a3e981c2bacb97d28aa7f6cc2712b0c9505fa08187e",
+    "size": 21638812,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7befcd9a5abefdc1734ff4a03ca282ed022b93ded54c0f409f46b7973bfcf7de.ctex",
+          "sha256": "7befcd9a5abefdc1734ff4a03ca282ed022b93ded54c0f409f46b7973bfcf7de",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "fb0e8f02c3d095011a0f7a46f1326a992d214a1fb97d8f94b87d2d2aaf70575e.ctex",
+          "sha256": "fb0e8f02c3d095011a0f7a46f1326a992d214a1fb97d8f94b87d2d2aaf70575e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "bc2e5b9f33a3cd6c0e3ef309a1f0845724fc749144dbb825ff11288a5dadfe65.glb",
+        "sha256": "bc2e5b9f33a3cd6c0e3ef309a1f0845724fc749144dbb825ff11288a5dadfe65",
+        "size": 9113260
+      },
+      "size_class": "vehicle"
+    }
+  }
+}

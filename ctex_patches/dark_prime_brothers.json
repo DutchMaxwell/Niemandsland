@@ -1,0 +1,834 @@
+{
+  "dark_prime_brothers/dark_aggro_brothers": {
+    "url": "84a50f3162f3d8b986b32cba0ed384edc0f0ee437c6d1cb15e756040089d25a4.glb",
+    "sha256": "84a50f3162f3d8b986b32cba0ed384edc0f0ee437c6d1cb15e756040089d25a4",
+    "size": 15109300,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "999476ccc48d685453bee5fb2a53b3154896ec4557f09e7b2ff6552e2ff4e5e9.ctex",
+          "sha256": "999476ccc48d685453bee5fb2a53b3154896ec4557f09e7b2ff6552e2ff4e5e9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e57efd905e2ad16891719883f8830e7dd72ce7148a2302e5db3615130005bc41.ctex",
+          "sha256": "e57efd905e2ad16891719883f8830e7dd72ce7148a2302e5db3615130005bc41",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d7df722d1df46cd7f9cb9629c7a8456770880fcf9c4631d50cb299c5de3b4db6.glb",
+        "sha256": "d7df722d1df46cd7f9cb9629c7a8456770880fcf9c4631d50cb299c5de3b4db6",
+        "size": 4514832
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_anti_grav_apc": {
+    "url": "25b20d0cc7aa5de72ed1b9d38c35730b101e6e337d687bbd574d70e90d4ed1de.glb",
+    "sha256": "25b20d0cc7aa5de72ed1b9d38c35730b101e6e337d687bbd574d70e90d4ed1de",
+    "size": 15295596,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0526b76ef886a39cc1df6b1e5195dea82d100a9a72a47aca0a9ab9757d3975cf.ctex",
+          "sha256": "0526b76ef886a39cc1df6b1e5195dea82d100a9a72a47aca0a9ab9757d3975cf",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "100f387aff69f6f55988c71cd91e9b2d6751cd212eff5a682693ed31a888ccbf.ctex",
+          "sha256": "100f387aff69f6f55988c71cd91e9b2d6751cd212eff5a682693ed31a888ccbf",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "cf4eb3878fb1f55efbd855a09059dbe1e618cb5d296481aab9cad2f0e1a42303.glb",
+        "sha256": "cf4eb3878fb1f55efbd855a09059dbe1e618cb5d296481aab9cad2f0e1a42303",
+        "size": 7902076
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dark_prime_brothers/dark_anti_grav_tank": {
+    "url": "49736735f46130d2875f917becdcc8582f96e9fd2a473e693c7ad737ab29f767.glb",
+    "sha256": "49736735f46130d2875f917becdcc8582f96e9fd2a473e693c7ad737ab29f767",
+    "size": 16094332,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9378cf3c074b3b212c16fc723efb6c348bde4211d67542ddc2b2f2505600ec69.ctex",
+          "sha256": "9378cf3c074b3b212c16fc723efb6c348bde4211d67542ddc2b2f2505600ec69",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e749018257eef0e19f9657116d891119d6d18725d5f06eac98eecb35385e5d5e.ctex",
+          "sha256": "e749018257eef0e19f9657116d891119d6d18725d5f06eac98eecb35385e5d5e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d7adfeb0a9731ba7a90aefdaeec5aaf8ba8f17d4fe6dc9c442d0aa073b8e035c.glb",
+        "sha256": "d7adfeb0a9731ba7a90aefdaeec5aaf8ba8f17d4fe6dc9c442d0aa073b8e035c",
+        "size": 9010904
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dark_prime_brothers/dark_assault_prime_brothers": {
+    "url": "b25357e9986efc5022c97d6a57eb4e01c5f5bb3218ef1196c5ebbf2fb7d4e987.glb",
+    "sha256": "b25357e9986efc5022c97d6a57eb4e01c5f5bb3218ef1196c5ebbf2fb7d4e987",
+    "size": 14603196,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b08bb8283504b764db4e9eeb26e6054c684e26f674ab57b642d6c5f77b7125c4.ctex",
+          "sha256": "b08bb8283504b764db4e9eeb26e6054c684e26f674ab57b642d6c5f77b7125c4",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "620b9f93ad613d6d6633d89ff2eea3fc1223bc568f1161f24f0800df79dc98bc.ctex",
+          "sha256": "620b9f93ad613d6d6633d89ff2eea3fc1223bc568f1161f24f0800df79dc98bc",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2a3c34a0e9888408448aab9236937a860fa4d38e9e59ac2cef29986af996ba96.glb",
+        "sha256": "2a3c34a0e9888408448aab9236937a860fa4d38e9e59ac2cef29986af996ba96",
+        "size": 4082968
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_attack_speeder": {
+    "url": "564d892c8da2ea02b7dcb217a673bef12c596f7c002ca46cf03a75d1154430be.glb",
+    "sha256": "564d892c8da2ea02b7dcb217a673bef12c596f7c002ca46cf03a75d1154430be",
+    "size": 17030376,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b5f78749595a6ff37159d66c082c62193633b67b6a7fb4bc7b37ac9107d81949.ctex",
+          "sha256": "b5f78749595a6ff37159d66c082c62193633b67b6a7fb4bc7b37ac9107d81949",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9eaeabf72f68f358a804e6ead3b215a49194f04fad4fa72d3dde1cd27d3ca183.ctex",
+          "sha256": "9eaeabf72f68f358a804e6ead3b215a49194f04fad4fa72d3dde1cd27d3ca183",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c28cf2022c3d9db807bd4ed039e2fad6fcd330796c2eb62e683ee03febab49ae.glb",
+        "sha256": "c28cf2022c3d9db807bd4ed039e2fad6fcd330796c2eb62e683ee03febab49ae",
+        "size": 9253996
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dark_prime_brothers/dark_blaster_brothers": {
+    "url": "e955f2ea3ed9499aab88f9b116d491b2ac4c1fb176deb166a6c4ac974d3c54ae.glb",
+    "sha256": "e955f2ea3ed9499aab88f9b116d491b2ac4c1fb176deb166a6c4ac974d3c54ae",
+    "size": 15337176,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4d055886208e57736baf69520168162fa13c7067012e13502fbabb0b19707416.ctex",
+          "sha256": "4d055886208e57736baf69520168162fa13c7067012e13502fbabb0b19707416",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a981da9bb9696a8721dbd8249803ff210779e8f47ccf551114edbf8fdb874232.ctex",
+          "sha256": "a981da9bb9696a8721dbd8249803ff210779e8f47ccf551114edbf8fdb874232",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1c3f0b79dfac9a04f5b25401d0f966b7bf9670869f4e922d37252a654755cd8c.glb",
+        "sha256": "1c3f0b79dfac9a04f5b25401d0f966b7bf9670869f4e922d37252a654755cd8c",
+        "size": 4178448
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_combat_walker": {
+    "url": "7b62dfdd8e2f353a09e663d4c2d8c44f23e5e3f3b13237f815aeccb089aecad7.glb",
+    "sha256": "7b62dfdd8e2f353a09e663d4c2d8c44f23e5e3f3b13237f815aeccb089aecad7",
+    "size": 16087024,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3473f72cafe46322320afcc63aaaafbf2fdaa634d5067d327f7c2c600533464d.ctex",
+          "sha256": "3473f72cafe46322320afcc63aaaafbf2fdaa634d5067d327f7c2c600533464d",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "35eb7829e55b7adf930d4049d5a52f5032a53a2fdd5397e90044d34d71edd8ef.ctex",
+          "sha256": "35eb7829e55b7adf930d4049d5a52f5032a53a2fdd5397e90044d34d71edd8ef",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "29bcd0a23b4aba6e5f260f88ffe280ea992dc4f7a4df719418a647164b59e2c6.glb",
+        "sha256": "29bcd0a23b4aba6e5f260f88ffe280ea992dc4f7a4df719418a647164b59e2c6",
+        "size": 8581288
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dark_prime_brothers/dark_desolator_brothers": {
+    "url": "a7f745daac5ca0cc34ca922297efbfd30a6cb1d7eb0f664bcfd91b781f97e3da.glb",
+    "sha256": "a7f745daac5ca0cc34ca922297efbfd30a6cb1d7eb0f664bcfd91b781f97e3da",
+    "size": 14823520,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d44a5e0211c3f1445a93a2700f38727a3911a3845a7169bd82f70fbcef8fedce.ctex",
+          "sha256": "d44a5e0211c3f1445a93a2700f38727a3911a3845a7169bd82f70fbcef8fedce",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2d39bfd289fe902440d03e463d80d2ff1373d92c4029666efb3ec0c5d10f85d8.ctex",
+          "sha256": "2d39bfd289fe902440d03e463d80d2ff1373d92c4029666efb3ec0c5d10f85d8",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "872042ade61d2cf5d625db6892e8f9bdd7b1a7e8de43a09f50ffca4c1df7a9ab.glb",
+        "sha256": "872042ade61d2cf5d625db6892e8f9bdd7b1a7e8de43a09f50ffca4c1df7a9ab",
+        "size": 4259400
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_elimination_brothers": {
+    "url": "6ba282e1d2897503c182349db7b19f21bebe1842a4632ef8f8c7e1f943952b4b.glb",
+    "sha256": "6ba282e1d2897503c182349db7b19f21bebe1842a4632ef8f8c7e1f943952b4b",
+    "size": 14704148,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "05b813a4512b2f0303fbe07ab4a0ed454b657d3c831d46d36e5d21d6a30e8e93.ctex",
+          "sha256": "05b813a4512b2f0303fbe07ab4a0ed454b657d3c831d46d36e5d21d6a30e8e93",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8a69289b13d9fbb871bb0142fe20955bbf88641c76a050f37bc21b9ec4f3d53c.ctex",
+          "sha256": "8a69289b13d9fbb871bb0142fe20955bbf88641c76a050f37bc21b9ec4f3d53c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "dccb35f7481d2e1eafe20473e7dc4de223999241c5fa073d21dec8cd3bdd5414.glb",
+        "sha256": "dccb35f7481d2e1eafe20473e7dc4de223999241c5fa073d21dec8cd3bdd5414",
+        "size": 3967480
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_elite_raider": {
+    "url": "77fcfc0ad8b909c331cb983e56dc8fdbaf1cac55c18d7ea186cd12a8afc2e0df.glb",
+    "sha256": "77fcfc0ad8b909c331cb983e56dc8fdbaf1cac55c18d7ea186cd12a8afc2e0df",
+    "size": 14091320,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "13103f93e67324aef687d4c100a9bb4b344d95a0ddcb36353226f0ec6f4531f8.ctex",
+          "sha256": "13103f93e67324aef687d4c100a9bb4b344d95a0ddcb36353226f0ec6f4531f8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "946632ee916691591ab4c888f9f555d202d66533609cd0d193bd06cb8b9dd495.ctex",
+          "sha256": "946632ee916691591ab4c888f9f555d202d66533609cd0d193bd06cb8b9dd495",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "cce4d505c5044fb87db1a62d69201df5ec752ab31c9bfe28bc0a6b02e6f1ad6b.glb",
+        "sha256": "cce4d505c5044fb87db1a62d69201df5ec752ab31c9bfe28bc0a6b02e6f1ad6b",
+        "size": 4030072
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_eradication_brothers": {
+    "url": "5cbe5a93d25d9b8cca1b5cc7ad269b2d6ccac2ace0dfa2e4b493dd3b02969b86.glb",
+    "sha256": "5cbe5a93d25d9b8cca1b5cc7ad269b2d6ccac2ace0dfa2e4b493dd3b02969b86",
+    "size": 13677676,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "bbf39e25d60b603e239887c7bbeb42179912bf3ac92c5f18098757a9c8b80925.ctex",
+          "sha256": "bbf39e25d60b603e239887c7bbeb42179912bf3ac92c5f18098757a9c8b80925",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "aa9272c933955e3485b1545463ed5f41979aae5d74ac1bbdbe6788df40e336cf.ctex",
+          "sha256": "aa9272c933955e3485b1545463ed5f41979aae5d74ac1bbdbe6788df40e336cf",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3d5e769d9c85896fbe46eeadd1436585d6947354519cfd0639a19b1ef7aab791.glb",
+        "sha256": "3d5e769d9c85896fbe46eeadd1436585d6947354519cfd0639a19b1ef7aab791",
+        "size": 3803304
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_grave_destroyers": {
+    "url": "d5c8ebaaacdb90372be672b4b4f013b1863646d05d603476b169e3e06ead34ec.glb",
+    "sha256": "d5c8ebaaacdb90372be672b4b4f013b1863646d05d603476b169e3e06ead34ec",
+    "size": 14839168,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7f5606d31e16f3aeb32d56ac3a59f9bc38548267cd571a94ddfe6dbe9803e57f.ctex",
+          "sha256": "7f5606d31e16f3aeb32d56ac3a59f9bc38548267cd571a94ddfe6dbe9803e57f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b1a9e4ef3d23e4681fe764121904709b1f9849fa45577f3de73b4b141475ff06.ctex",
+          "sha256": "b1a9e4ef3d23e4681fe764121904709b1f9849fa45577f3de73b4b141475ff06",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5f62e21a8326de2b16fca1fd12759d59f0496854a531bb503e5b1908098cfc19.glb",
+        "sha256": "5f62e21a8326de2b16fca1fd12759d59f0496854a531bb503e5b1908098cfc19",
+        "size": 4228208
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_grave_prime_master": {
+    "url": "efa6d629fb5b9f295f207cd1a18a3836dade54a9178172b0ccf7d37b7435ea62.glb",
+    "sha256": "efa6d629fb5b9f295f207cd1a18a3836dade54a9178172b0ccf7d37b7435ea62",
+    "size": 15176116,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "eea4ddb953c1f66e64f12de5f73aac17c13d020e92e58173f6b12b4fa7d87a3c.ctex",
+          "sha256": "eea4ddb953c1f66e64f12de5f73aac17c13d020e92e58173f6b12b4fa7d87a3c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e9377e41f5fedd533bce2c403a86b3471bcf4be0c96a50ed532c091f17e91758.ctex",
+          "sha256": "e9377e41f5fedd533bce2c403a86b3471bcf4be0c96a50ed532c091f17e91758",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "80b51c5476370922d7320548158cf63b761f8079d7776b559b596eda355b8286.glb",
+        "sha256": "80b51c5476370922d7320548158cf63b761f8079d7776b559b596eda355b8286",
+        "size": 4197536
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_guard_brothers": {
+    "url": "d7f1082f03b1a9e5a812c20865b2c803260cd9d16ca97ba7d72ddc11f60e75c4.glb",
+    "sha256": "d7f1082f03b1a9e5a812c20865b2c803260cd9d16ca97ba7d72ddc11f60e75c4",
+    "size": 15483388,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5a21c05f30cce4dea33911e393b69fa292b3d2617d7022f46664ddb0dace6e85.ctex",
+          "sha256": "5a21c05f30cce4dea33911e393b69fa292b3d2617d7022f46664ddb0dace6e85",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "db4a6a8ae027c668f1ff6c52a2e279206585df1e936f01723944d300e998f84a.ctex",
+          "sha256": "db4a6a8ae027c668f1ff6c52a2e279206585df1e936f01723944d300e998f84a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "70943f3169946d718f5dc34b0fff645fc9b005fe816bb3e6f0bcce1d2236935a.glb",
+        "sha256": "70943f3169946d718f5dc34b0fff645fc9b005fe816bb3e6f0bcce1d2236935a",
+        "size": 4701680
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_heavy_anti_grav_destroyer_tank": {
+    "url": "ec81b1f934462af8c5d7c6a9f9616f1d39fbcede3d7993c2754e05d97d0f9df2.glb",
+    "sha256": "ec81b1f934462af8c5d7c6a9f9616f1d39fbcede3d7993c2754e05d97d0f9df2",
+    "size": 17020796,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4991ca21efa5fa46b1de7df5283abadf28cf96e5611a7737401bece75e9aa50b.ctex",
+          "sha256": "4991ca21efa5fa46b1de7df5283abadf28cf96e5611a7737401bece75e9aa50b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5664c9170b2c7ccefbd143400ea3852b763b9a0e99aafac1f5a4d6d1c62f450a.ctex",
+          "sha256": "5664c9170b2c7ccefbd143400ea3852b763b9a0e99aafac1f5a4d6d1c62f450a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6c9e6b0227aeecb6eeffc6cbf7bda6a8b9f3d283a44c980a2b02548effeac17b.glb",
+        "sha256": "6c9e6b0227aeecb6eeffc6cbf7bda6a8b9f3d283a44c980a2b02548effeac17b",
+        "size": 8706188
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dark_prime_brothers/dark_heavy_anti_grav_transport_tank": {
+    "url": "3474bbfb76f0143a4aec374b2772ecaabdaa088cf8df3cbe2ce6672b40afe47c.glb",
+    "sha256": "3474bbfb76f0143a4aec374b2772ecaabdaa088cf8df3cbe2ce6672b40afe47c",
+    "size": 17961388,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e17db1cc39a0fb08998596c4ea4bc39a91390555f448a796584311b0f51da79e.ctex",
+          "sha256": "e17db1cc39a0fb08998596c4ea4bc39a91390555f448a796584311b0f51da79e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d1208ff6fd0cae6c113a050f046e09ec9cd96e3372a0b9157bc62decee46e84b.ctex",
+          "sha256": "d1208ff6fd0cae6c113a050f046e09ec9cd96e3372a0b9157bc62decee46e84b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "48ad097e4b7958eabaa41e39e7b9fa587150d87c654fea4c08e9ba36f561ab23.glb",
+        "sha256": "48ad097e4b7958eabaa41e39e7b9fa587150d87c654fea4c08e9ba36f561ab23",
+        "size": 9505504
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dark_prime_brothers/dark_heavy_prime_brothers": {
+    "url": "6ae9edc2ab1f4233a7d91157faf240e4e03b8b8a4091bd846752cd310a3b3ab4.glb",
+    "sha256": "6ae9edc2ab1f4233a7d91157faf240e4e03b8b8a4091bd846752cd310a3b3ab4",
+    "size": 15772464,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b618af0d844c1aff2f02728e537e80806a2c6c4b94976a674c6e3a9e97c317bf.ctex",
+          "sha256": "b618af0d844c1aff2f02728e537e80806a2c6c4b94976a674c6e3a9e97c317bf",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e69ceda02092b97757b01222d0083f0be550489805e138e30f5ea7009e9e04af.ctex",
+          "sha256": "e69ceda02092b97757b01222d0083f0be550489805e138e30f5ea7009e9e04af",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "59b7ae3c585b66adaaff5bcc9b941cea7a862ba6ecce58cdca928199851b1412.glb",
+        "sha256": "59b7ae3c585b66adaaff5bcc9b941cea7a862ba6ecce58cdca928199851b1412",
+        "size": 11235868
+      },
+      "size_class": "large"
+    }
+  },
+  "dark_prime_brothers/dark_infernal_brothers": {
+    "url": "ac64170fc328d5b9e29eaf07225710e3704ce2bfc2b10c2d1a9c3947901fc767.glb",
+    "sha256": "ac64170fc328d5b9e29eaf07225710e3704ce2bfc2b10c2d1a9c3947901fc767",
+    "size": 14913024,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a22ce7a8ac1806ea32d9273be786e94f832980014d2ac362758a07596c1118bf.ctex",
+          "sha256": "a22ce7a8ac1806ea32d9273be786e94f832980014d2ac362758a07596c1118bf",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "01013d6342b0e988b877cecf62e9ca4a61b0c7a8e1eba0abec8afe50107d05ee.ctex",
+          "sha256": "01013d6342b0e988b877cecf62e9ca4a61b0c7a8e1eba0abec8afe50107d05ee",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c5e343fe804de73782e2baedfe0aa98c17f5306a8fe4b07e6bf72f2e533989ad.glb",
+        "sha256": "c5e343fe804de73782e2baedfe0aa98c17f5306a8fe4b07e6bf72f2e533989ad",
+        "size": 3944800
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_infiltration_brothers": {
+    "url": "08755eb4c4684bd2b102279fb2cd5ed076f9874852ec8f13e57c448de8d18568.glb",
+    "sha256": "08755eb4c4684bd2b102279fb2cd5ed076f9874852ec8f13e57c448de8d18568",
+    "size": 14184592,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6c35d6ff4b6f66507a3e7b70099b9029bb3b39c5cdaf4137dfec20af0cdca671.ctex",
+          "sha256": "6c35d6ff4b6f66507a3e7b70099b9029bb3b39c5cdaf4137dfec20af0cdca671",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "60401bd80f3651082c4c4654c71d8601c719d567f3d705ac92c27e429d01a4b0.ctex",
+          "sha256": "60401bd80f3651082c4c4654c71d8601c719d567f3d705ac92c27e429d01a4b0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "08f979be5e9ec86a19dd67eb6eba880d00f17892f63d1e1709c73aa0b34240ba.glb",
+        "sha256": "08f979be5e9ec86a19dd67eb6eba880d00f17892f63d1e1709c73aa0b34240ba",
+        "size": 4134764
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_jetpack_brothers": {
+    "url": "779725a3055ebf2a3ac08d9e9eff95fc5c6be01470f9e73252ca12ec141a4134.glb",
+    "sha256": "779725a3055ebf2a3ac08d9e9eff95fc5c6be01470f9e73252ca12ec141a4134",
+    "size": 15765816,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9a2dabf2708a1788e01ec2cb79180360a94d339149a36abfc6bfbf5ba7a7c3d0.ctex",
+          "sha256": "9a2dabf2708a1788e01ec2cb79180360a94d339149a36abfc6bfbf5ba7a7c3d0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "100418236849d23bedfc3bcac7a4e2ff6a18f946745807814214d17f67ada584.ctex",
+          "sha256": "100418236849d23bedfc3bcac7a4e2ff6a18f946745807814214d17f67ada584",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5909c158aeb6490af75e6d82899f505bbeaa7104365977eb3ceab62384cfe78f.glb",
+        "sha256": "5909c158aeb6490af75e6d82899f505bbeaa7104365977eb3ceab62384cfe78f",
+        "size": 4403468
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_light_walker": {
+    "url": "2e0a60bf2f8d28f08458f2fea9a345727735db155a7e8c91d29b65acd7a0c0a8.glb",
+    "sha256": "2e0a60bf2f8d28f08458f2fea9a345727735db155a7e8c91d29b65acd7a0c0a8",
+    "size": 15414448,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b3e9cf48798c9ae40d4f9850edcd06a0ec1941b6ed48b4356bb7efc24f1f786b.ctex",
+          "sha256": "b3e9cf48798c9ae40d4f9850edcd06a0ec1941b6ed48b4356bb7efc24f1f786b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "601b1a14fff74101485e43671d86ffad3af7914bedbaee2ecd4a5e1b331cf342.ctex",
+          "sha256": "601b1a14fff74101485e43671d86ffad3af7914bedbaee2ecd4a5e1b331cf342",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1ccd0f59f8c4c1d2bb23006773e84eabd7cefb0dc4aa5e967144c57e7b6e7b86.glb",
+        "sha256": "1ccd0f59f8c4c1d2bb23006773e84eabd7cefb0dc4aa5e967144c57e7b6e7b86",
+        "size": 8377480
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dark_prime_brothers/dark_prime_atv": {
+    "url": "ce721e64a4748468d8d6e2a58356786ebf00861514cb2dc01cf3626bdc27c95e.glb",
+    "sha256": "ce721e64a4748468d8d6e2a58356786ebf00861514cb2dc01cf3626bdc27c95e",
+    "size": 16748448,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "34095d63f832d2778fdbf3dc8a84420b9d253456b06d17bd01aa72a410db60b5.ctex",
+          "sha256": "34095d63f832d2778fdbf3dc8a84420b9d253456b06d17bd01aa72a410db60b5",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5fb50592db03d639c85c3f9130afa5342454c3c8267833589dd239f163fc8677.ctex",
+          "sha256": "5fb50592db03d639c85c3f9130afa5342454c3c8267833589dd239f163fc8677",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9b535c519afa202adee2a80f5092123e3bedd6e4153fbc8924a0ed95eda9ee35.glb",
+        "sha256": "9b535c519afa202adee2a80f5092123e3bedd6e4153fbc8924a0ed95eda9ee35",
+        "size": 4778484
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_prime_brother_bikers": {
+    "url": "04922775ab80c062e8da0271d50588acb81f8ff04743d60d3e588e4082118f78.glb",
+    "sha256": "04922775ab80c062e8da0271d50588acb81f8ff04743d60d3e588e4082118f78",
+    "size": 15968560,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "beff63c791c6f3b58043f0ffcd64efb9891544e35dc8650219f74403dff2f351.ctex",
+          "sha256": "beff63c791c6f3b58043f0ffcd64efb9891544e35dc8650219f74403dff2f351",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5c87f5a1dea0005aa9c53ecdb859d4fe42d7af3178feb53bdd643ad9d89893b8.ctex",
+          "sha256": "5c87f5a1dea0005aa9c53ecdb859d4fe42d7af3178feb53bdd643ad9d89893b8",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a2e63fc9498c15ccd7b6147c7847b7b99a071e413a43140f3b7e4c4244203098.glb",
+        "sha256": "a2e63fc9498c15ccd7b6147c7847b7b99a071e413a43140f3b7e4c4244203098",
+        "size": 8488120
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dark_prime_brothers/dark_prime_brothers": {
+    "url": "8760bf28e1ad5cbff55f4165db270f38e96f425840be5a6799ca3b9d6fe37fea.glb",
+    "sha256": "8760bf28e1ad5cbff55f4165db270f38e96f425840be5a6799ca3b9d6fe37fea",
+    "size": 14217076,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "62a6b267d6e5bccf5ecaed6ca7fb904aec19c88b8a63b05d8ac69b39d3a4d15e.ctex",
+          "sha256": "62a6b267d6e5bccf5ecaed6ca7fb904aec19c88b8a63b05d8ac69b39d3a4d15e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6779e51f64ad650e68177d78c0db095b47a6a8edb59b538bacd0b8b0fa012602.ctex",
+          "sha256": "6779e51f64ad650e68177d78c0db095b47a6a8edb59b538bacd0b8b0fa012602",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "43adb8cdca73d70e6415ff15273409144cb7b9b4c1385de99e8341ca3ab4c4d7.glb",
+        "sha256": "43adb8cdca73d70e6415ff15273409144cb7b9b4c1385de99e8341ca3ab4c4d7",
+        "size": 3913956
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_prime_drop_pod": {
+    "url": "d53cf4132671bc588cc5e2b5f719bd041a663bf2706e90b685e88d5bb7c5125f.glb",
+    "sha256": "d53cf4132671bc588cc5e2b5f719bd041a663bf2706e90b685e88d5bb7c5125f",
+    "size": 14413836,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c51b2d6e0dc0e1393f419135d55f1496f5d38072c195f6ef74332c282657e7a9.ctex",
+          "sha256": "c51b2d6e0dc0e1393f419135d55f1496f5d38072c195f6ef74332c282657e7a9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "cb0b8adb5964c018b6c223ca72a2127d0f1352476921d8764e31528b013c8514.ctex",
+          "sha256": "cb0b8adb5964c018b6c223ca72a2127d0f1352476921d8764e31528b013c8514",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1b1d7952643fb062cae3560d9a776e097959ad9a89779d32ce96b8792bd32e38.glb",
+        "sha256": "1b1d7952643fb062cae3560d9a776e097959ad9a89779d32ce96b8792bd32e38",
+        "size": 8152884
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "dark_prime_brothers/dark_prime_master": {
+    "url": "e5425e91ca3c40d98bb10896d1d03a98d8b486dee27fc5c5ae08682ab33fd0ae.glb",
+    "sha256": "e5425e91ca3c40d98bb10896d1d03a98d8b486dee27fc5c5ae08682ab33fd0ae",
+    "size": 14961532,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7c9a0bb9665b78140510fe484c98cad736337086c2fd88dc18eb01a674a99b57.ctex",
+          "sha256": "7c9a0bb9665b78140510fe484c98cad736337086c2fd88dc18eb01a674a99b57",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "bd2ea9a10c1acd2d4b9e7e13b05da6f22f29e970586f26f25242a1dd1fc040a3.ctex",
+          "sha256": "bd2ea9a10c1acd2d4b9e7e13b05da6f22f29e970586f26f25242a1dd1fc040a3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "0806b321fd4d94c920d9edf2f23164569ab1cf51925f53793d037d0d1ea1885a.glb",
+        "sha256": "0806b321fd4d94c920d9edf2f23164569ab1cf51925f53793d037d0d1ea1885a",
+        "size": 4167100
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_raider_brothers": {
+    "url": "f94123c8b041abedc33137d710bb256a6c29c35bb8d042c3aa241ee6e86f9bdc.glb",
+    "sha256": "f94123c8b041abedc33137d710bb256a6c29c35bb8d042c3aa241ee6e86f9bdc",
+    "size": 14426816,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "015b667359b8d7e7870e7b4738921ace5efeae7d482aa2e7158f001aecec3cf6.ctex",
+          "sha256": "015b667359b8d7e7870e7b4738921ace5efeae7d482aa2e7158f001aecec3cf6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "23b674d36db06d3146f1a89a708f314b1b1a129e8f2638f476c0ef4da37b930a.ctex",
+          "sha256": "23b674d36db06d3146f1a89a708f314b1b1a129e8f2638f476c0ef4da37b930a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "4fd977af1b4df2dcd4eb33b65df28d01a92521f2b3e5ea1ae1d1de181f0dc6c4.glb",
+        "sha256": "4fd977af1b4df2dcd4eb33b65df28d01a92521f2b3e5ea1ae1d1de181f0dc6c4",
+        "size": 4238080
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_support_turret": {
+    "url": "6d467b5352d94938625db0950f932b72c1b8cba5fe8d2e349f03b95b2eaadacc.glb",
+    "sha256": "6d467b5352d94938625db0950f932b72c1b8cba5fe8d2e349f03b95b2eaadacc",
+    "size": 14469420,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4fa9e363ea6cf02159db18b777be8848877ec23c569c6fba1e450d0881f8a106.ctex",
+          "sha256": "4fa9e363ea6cf02159db18b777be8848877ec23c569c6fba1e450d0881f8a106",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d5ccc906792257fb57d2226ce4a041de8bb61d44530da222da997cf680d73d0c.ctex",
+          "sha256": "d5ccc906792257fb57d2226ce4a041de8bb61d44530da222da997cf680d73d0c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c2810180b4bc4c7d4e96beae4c883495f2a4e9e01f62f4b28d310ac91a5a6324.glb",
+        "sha256": "c2810180b4bc4c7d4e96beae4c883495f2a4e9e01f62f4b28d310ac91a5a6324",
+        "size": 4246652
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_suppression_brothers": {
+    "url": "8451fc5c122cbc7aa7208abc09ab19a8fc4f00fcafdcccfe66165c323bb8b936.glb",
+    "sha256": "8451fc5c122cbc7aa7208abc09ab19a8fc4f00fcafdcccfe66165c323bb8b936",
+    "size": 13976308,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0f06e73a11e2950202987a95b41b4dad6288fdb1138a59a8bdb3b112896f9871.ctex",
+          "sha256": "0f06e73a11e2950202987a95b41b4dad6288fdb1138a59a8bdb3b112896f9871",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "fb61f5640ee551bd6ec142b792cf3aa61d0c249d0bc9f15d4d84415e06e4a4a0.ctex",
+          "sha256": "fb61f5640ee551bd6ec142b792cf3aa61d0c249d0bc9f15d4d84415e06e4a4a0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8b74cfb009e61f52e9101d7594a0e714e5e0af0592c936a17ad76c5879a6e0b1.glb",
+        "sha256": "8b74cfb009e61f52e9101d7594a0e714e5e0af0592c936a17ad76c5879a6e0b1",
+        "size": 3921272
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_veteran_assault_prime_brothers": {
+    "url": "c6fb88f3cee95f380f355123960a9102ab3aaa0002b68ee09ccb37e7502bb6d6.glb",
+    "sha256": "c6fb88f3cee95f380f355123960a9102ab3aaa0002b68ee09ccb37e7502bb6d6",
+    "size": 14396240,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b9341c0d67f9804259fc967738e9eaca152f510589683f070097681a7fc569f6.ctex",
+          "sha256": "b9341c0d67f9804259fc967738e9eaca152f510589683f070097681a7fc569f6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2d7fb6b303cb78d72a67155cba0973b8dca19c601289cc51556b2876c7b1a8ce.ctex",
+          "sha256": "2d7fb6b303cb78d72a67155cba0973b8dca19c601289cc51556b2876c7b1a8ce",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "63a72b439805965ff1e73fd5eacfa1f827fbaf3f280b65333b43d4af933b308b.glb",
+        "sha256": "63a72b439805965ff1e73fd5eacfa1f827fbaf3f280b65333b43d4af933b308b",
+        "size": 3963464
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_veteran_prime_brothers": {
+    "url": "deef0623f623f5cedcd676cf3f08587e1ec0753f6fd35d8032b0d91b54fa5c00.glb",
+    "sha256": "deef0623f623f5cedcd676cf3f08587e1ec0753f6fd35d8032b0d91b54fa5c00",
+    "size": 14423300,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0c9dc6cb123d72a7c3109bf231f7a03c096c9528272943f87c3204de8909cd87.ctex",
+          "sha256": "0c9dc6cb123d72a7c3109bf231f7a03c096c9528272943f87c3204de8909cd87",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d00e90f33a26e81574dfbc87bc3ad710bea0b4b95bb5b691a711d7e7767c3a69.ctex",
+          "sha256": "d00e90f33a26e81574dfbc87bc3ad710bea0b4b95bb5b691a711d7e7767c3a69",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3086530f8be50c886bc07b776faba4b627210408bea7b2a726b1d475ef595097.glb",
+        "sha256": "3086530f8be50c886bc07b776faba4b627210408bea7b2a726b1d475ef595097",
+        "size": 4096320
+      },
+      "size_class": "infantry"
+    }
+  },
+  "dark_prime_brothers/dark_veteran_prime_master": {
+    "url": "2372678582f70953d2b63950d55f986ad43c894d36422e2c43731785d0814f32.glb",
+    "sha256": "2372678582f70953d2b63950d55f986ad43c894d36422e2c43731785d0814f32",
+    "size": 13847520,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ab85d35cad70da40aca4a5b825ec13a0ed04c7c7d12f2b063e577fbbc32a96ac.ctex",
+          "sha256": "ab85d35cad70da40aca4a5b825ec13a0ed04c7c7d12f2b063e577fbbc32a96ac",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c1f77fed5a4adf68cb67979925a6b958af4831f592cb40aaead6295b592cde0c.ctex",
+          "sha256": "c1f77fed5a4adf68cb67979925a6b958af4831f592cb40aaead6295b592cde0c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "42fe38a38800874c98faff74009f5be789e5976d12936b8483aafae26c948834.glb",
+        "sha256": "42fe38a38800874c98faff74009f5be789e5976d12936b8483aafae26c948834",
+        "size": 3805328
+      },
+      "size_class": "infantry"
+    }
+  }
+}

@@ -1,0 +1,574 @@
+{
+  "lust_disciples/chosen lust brothers": {
+    "url": "fd740a167fde6792c2b5edf08a2a3ff03c941cfa16c54a171744773bd1d5ae21.glb",
+    "sha256": "fd740a167fde6792c2b5edf08a2a3ff03c941cfa16c54a171744773bd1d5ae21",
+    "size": 13900620,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5afca3a0a41baac1180ea7d16392ef79531a6376b99d08e0957e3524eda57971.ctex",
+          "sha256": "5afca3a0a41baac1180ea7d16392ef79531a6376b99d08e0957e3524eda57971",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0e8f1bb3f192abd4e5d2e2fec6dbfc1466f07f609d0cd65436e8bda7999095d0.ctex",
+          "sha256": "0e8f1bb3f192abd4e5d2e2fec6dbfc1466f07f609d0cd65436e8bda7999095d0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "80643d6e58d3bb20823303fda1db1e306292d363033a278d2bbff468909c971d.glb",
+        "sha256": "80643d6e58d3bb20823303fda1db1e306292d363033a278d2bbff468909c971d",
+        "size": 3883868
+      },
+      "size_class": "infantry"
+    }
+  },
+  "lust_disciples/chosen lust champion": {
+    "url": "2aa212698ed4d8c291b4f93b5e6379a0d92b7eb1bd107c49649d6dead690667f.glb",
+    "sha256": "2aa212698ed4d8c291b4f93b5e6379a0d92b7eb1bd107c49649d6dead690667f",
+    "size": 14409128,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "1a45f16b8739041da813433c7e5ee90e96d686c7e034bd7c7870016be083a61f.ctex",
+          "sha256": "1a45f16b8739041da813433c7e5ee90e96d686c7e034bd7c7870016be083a61f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1a984492603683375a5819ba3139c8b9277920129b037281afc6a94f5a81fbef.ctex",
+          "sha256": "1a984492603683375a5819ba3139c8b9277920129b037281afc6a94f5a81fbef",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "486c9016360e10dd59408d199ca051c73906f2ef26dd5d47af849feecb8f7cfd.glb",
+        "sha256": "486c9016360e10dd59408d199ca051c73906f2ef26dd5d47af849feecb8f7cfd",
+        "size": 4120164
+      },
+      "size_class": "infantry"
+    }
+  },
+  "lust_disciples/lust apc": {
+    "url": "9d870f17b0f9472944b79b8193d228b4fe0cad08e06e827e33432519cac4fc68.glb",
+    "sha256": "9d870f17b0f9472944b79b8193d228b4fe0cad08e06e827e33432519cac4fc68",
+    "size": 16114448,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6f13d0fce2dccc48b59ca2a10deaa054ee283b5cd7d5890cbfc15d647a2484ae.ctex",
+          "sha256": "6f13d0fce2dccc48b59ca2a10deaa054ee283b5cd7d5890cbfc15d647a2484ae",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8a35af96807e5b35f1b3f957c0489e6a42d8221ceedcc06250fb539e7de665b1.ctex",
+          "sha256": "8a35af96807e5b35f1b3f957c0489e6a42d8221ceedcc06250fb539e7de665b1",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "51fc98c1f89ce170d913a086a5ddce455d40bddd7b9308c8d1dd097fd1a778b0.glb",
+        "sha256": "51fc98c1f89ce170d913a086a5ddce455d40bddd7b9308c8d1dd097fd1a778b0",
+        "size": 9293936
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "lust_disciples/lust bikers": {
+    "url": "1825652ee1899d4a3c2a74ff7af94716a3c33575a3df4fb37b4f2458524615b9.glb",
+    "sha256": "1825652ee1899d4a3c2a74ff7af94716a3c33575a3df4fb37b4f2458524615b9",
+    "size": 16144196,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "63e27831c2333104df0d4f160d2222e315e45c188d2c31df56656c5ea2201b57.ctex",
+          "sha256": "63e27831c2333104df0d4f160d2222e315e45c188d2c31df56656c5ea2201b57",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e935ff3af26bd9c9c726177c273ccb4f116a69c143c18abc3009c144890a4c37.ctex",
+          "sha256": "e935ff3af26bd9c9c726177c273ccb4f116a69c143c18abc3009c144890a4c37",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "168e7c5ec1bea0159c7a644639fc918359ba5fa36653223caa96ff328657ea92.glb",
+        "sha256": "168e7c5ec1bea0159c7a644639fc918359ba5fa36653223caa96ff328657ea92",
+        "size": 8621024
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "lust_disciples/lust brothers": {
+    "url": "2f75633033fb7b7d77e0c2e02e022aab0b8bf0011a0b3cc6c688b9a921b7bb7b.glb",
+    "sha256": "2f75633033fb7b7d77e0c2e02e022aab0b8bf0011a0b3cc6c688b9a921b7bb7b",
+    "size": 14425656,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b89501f250470fc9466259e7d1b77c4fc62b58251101d500ef7f19bf02dfb778.ctex",
+          "sha256": "b89501f250470fc9466259e7d1b77c4fc62b58251101d500ef7f19bf02dfb778",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2748cf5cb8604cebdd7d727eb1f79a3dd7554aba08999be54c477a4e85344235.ctex",
+          "sha256": "2748cf5cb8604cebdd7d727eb1f79a3dd7554aba08999be54c477a4e85344235",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "4707ea675de12708b8b946cd711c3b34d782297a12cee53b2052eb68510fd9b4.glb",
+        "sha256": "4707ea675de12708b8b946cd711c3b34d782297a12cee53b2052eb68510fd9b4",
+        "size": 4012456
+      },
+      "size_class": "infantry"
+    }
+  },
+  "lust_disciples/lust champion": {
+    "url": "60ab7a5f67fa2f410662e7e817c841084e09e63599292e9394b1a945fbbfe77d.glb",
+    "sha256": "60ab7a5f67fa2f410662e7e817c841084e09e63599292e9394b1a945fbbfe77d",
+    "size": 14718608,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "966f5378f90d54957df7231686b04fd183348a56efb1070b70243389e713bea1.ctex",
+          "sha256": "966f5378f90d54957df7231686b04fd183348a56efb1070b70243389e713bea1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4bad95a157f6bbb5a9027bfa210be23078db32af4617ff98f769f036ff2f35df.ctex",
+          "sha256": "4bad95a157f6bbb5a9027bfa210be23078db32af4617ff98f769f036ff2f35df",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7f0914cb3807b686658de33c9e4da7b89de7f232dea82788b17be1cde7a6bc4a.glb",
+        "sha256": "7f0914cb3807b686658de33c9e4da7b89de7f232dea82788b17be1cde7a6bc4a",
+        "size": 4065728
+      },
+      "size_class": "infantry"
+    }
+  },
+  "lust_disciples/lust crab walker": {
+    "url": "f60fd7ad007875668c7f72b1d0f2a1cbf42a04cfec93f8f77b689366e7677f84.glb",
+    "sha256": "f60fd7ad007875668c7f72b1d0f2a1cbf42a04cfec93f8f77b689366e7677f84",
+    "size": 13494484,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "62827bc223bdee7d3abf08aefbf08b2560979ee742932e270590e667a0627a5d.ctex",
+          "sha256": "62827bc223bdee7d3abf08aefbf08b2560979ee742932e270590e667a0627a5d",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4447b7cabb97b44746862262fcdcb8dfc1cefc550371a29bb853b7b94c7b9bed.ctex",
+          "sha256": "4447b7cabb97b44746862262fcdcb8dfc1cefc550371a29bb853b7b94c7b9bed",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a998b54b2e3ccc943e9a4a4d0039a901c7e045d6397fb453399f698d3e8366b6.glb",
+        "sha256": "a998b54b2e3ccc943e9a4a4d0039a901c7e045d6397fb453399f698d3e8366b6",
+        "size": 7406040
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "lust_disciples/lust cultist champion": {
+    "url": "515195bee5ee59d17a882d7b1b0cd817fdc7fd86074f6f7ac6d65cf4d15ce9e1.glb",
+    "sha256": "515195bee5ee59d17a882d7b1b0cd817fdc7fd86074f6f7ac6d65cf4d15ce9e1",
+    "size": 14249664,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d18c1be7d8a7542f4295f618310f246e53fb5571757bb8a11d7cc370be512c6a.ctex",
+          "sha256": "d18c1be7d8a7542f4295f618310f246e53fb5571757bb8a11d7cc370be512c6a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "52f5a3348ada26dc2cd8a1a3f585665ea061e7b9d2678a1f483a2bcc5089ea7b.ctex",
+          "sha256": "52f5a3348ada26dc2cd8a1a3f585665ea061e7b9d2678a1f483a2bcc5089ea7b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c564c8ae8f5a7e39066583ed20b666897f955bc922fc1dd2b248be651aae9106.glb",
+        "sha256": "c564c8ae8f5a7e39066583ed20b666897f955bc922fc1dd2b248be651aae9106",
+        "size": 4112476
+      },
+      "size_class": "infantry"
+    }
+  },
+  "lust_disciples/lust cultists": {
+    "url": "887338cce6a9497771be699d1e15fc745b3926d3b65a50d61e32ab460338a3fd.glb",
+    "sha256": "887338cce6a9497771be699d1e15fc745b3926d3b65a50d61e32ab460338a3fd",
+    "size": 15264376,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "238cc0ceca051baaf4c7b4ba68705e0105921f8d379bf2cf42a64822b8d6d23c.ctex",
+          "sha256": "238cc0ceca051baaf4c7b4ba68705e0105921f8d379bf2cf42a64822b8d6d23c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "461615badd3df83d394954dc86c6afbce3dc11f91fad37bb31b0d405b17683b4.ctex",
+          "sha256": "461615badd3df83d394954dc86c6afbce3dc11f91fad37bb31b0d405b17683b4",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "db85953a9b729535c7b0385e97e1c59e734e6ab01a3aa3191b0123d5cd6c11ba.glb",
+        "sha256": "db85953a9b729535c7b0385e97e1c59e734e6ab01a3aa3191b0123d5cd6c11ba",
+        "size": 4231128
+      },
+      "size_class": "infantry"
+    }
+  },
+  "lust_disciples/lust destroyer champion": {
+    "url": "5f9624536fdc210f45c630ad9d6dcc0331aad94c0b8ca6fae0c61fd4c38b3123.glb",
+    "sha256": "5f9624536fdc210f45c630ad9d6dcc0331aad94c0b8ca6fae0c61fd4c38b3123",
+    "size": 14787576,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c94da86cdcca645e617f544eb809043199eb42c8a1285c8195a1cd46584c0937.ctex",
+          "sha256": "c94da86cdcca645e617f544eb809043199eb42c8a1285c8195a1cd46584c0937",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "29fa344ef855b0d91c04530d4d1ea3e6e67c5f4f1dc456cc2e33d0eeebf99ddf.ctex",
+          "sha256": "29fa344ef855b0d91c04530d4d1ea3e6e67c5f4f1dc456cc2e33d0eeebf99ddf",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "4ffe52f6aee4a1fceb8a2b6a9b268ba4374e50be173d12565649b17228ad29e5.glb",
+        "sha256": "4ffe52f6aee4a1fceb8a2b6a9b268ba4374e50be173d12565649b17228ad29e5",
+        "size": 4185124
+      },
+      "size_class": "infantry"
+    }
+  },
+  "lust_disciples/lust destroyers": {
+    "url": "4a598f2aa73670093f7870fad7707ec2fd1df5f3568407d2bcd34315d1e62f92.glb",
+    "sha256": "4a598f2aa73670093f7870fad7707ec2fd1df5f3568407d2bcd34315d1e62f92",
+    "size": 14360544,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "059366f6731107aaaa2b1b21cb63e00e7b4b67d763ae68383a9455106f1f4d6c.ctex",
+          "sha256": "059366f6731107aaaa2b1b21cb63e00e7b4b67d763ae68383a9455106f1f4d6c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "22129a8f4db39e4caf5b67011668330128a9da24455e546543a94280c252b494.ctex",
+          "sha256": "22129a8f4db39e4caf5b67011668330128a9da24455e546543a94280c252b494",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "daae8a6ca03d556cd0b3fc3d80da20e4f5dd204c5960f7a92deefb0737aeb18c.glb",
+        "sha256": "daae8a6ca03d556cd0b3fc3d80da20e4f5dd204c5960f7a92deefb0737aeb18c",
+        "size": 4101764
+      },
+      "size_class": "infantry"
+    }
+  },
+  "lust_disciples/lust dragon": {
+    "url": "6fa9bf9d8bcee550a18672433ab50b948198070cbc03b9a9eb9db9e9d4ac5da3.glb",
+    "sha256": "6fa9bf9d8bcee550a18672433ab50b948198070cbc03b9a9eb9db9e9d4ac5da3",
+    "size": 16417172,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "862d5c3e4413de74ad6790019853ddbb909cf31dbec60a53ae03bedb042c02bd.ctex",
+          "sha256": "862d5c3e4413de74ad6790019853ddbb909cf31dbec60a53ae03bedb042c02bd",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0aba639cb39e0f819ae117bc36a99ad46e354782a0fa34b95f97c17de8675f62.ctex",
+          "sha256": "0aba639cb39e0f819ae117bc36a99ad46e354782a0fa34b95f97c17de8675f62",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "daf012498610a00215adf73809761063512fba4b11c2ec7111c7140fb09ca0e5.glb",
+        "sha256": "daf012498610a00215adf73809761063512fba4b11c2ec7111c7140fb09ca0e5",
+        "size": 11371492
+      },
+      "size_class": "large"
+    }
+  },
+  "lust_disciples/lust greater mutated": {
+    "url": "b37949a295d3587a376d9c83db11e4c95f440960cd9f96a2d293af52ff2185fa.glb",
+    "sha256": "b37949a295d3587a376d9c83db11e4c95f440960cd9f96a2d293af52ff2185fa",
+    "size": 15821148,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6f45988b9ece35de74bc653dfad6f2ad2f7911525e6ffdd64aaf219919120bfa.ctex",
+          "sha256": "6f45988b9ece35de74bc653dfad6f2ad2f7911525e6ffdd64aaf219919120bfa",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8d84240212b642188228b2795c2aa876990ac0edb48fa6ac0cfcf63ad863ddf0.ctex",
+          "sha256": "8d84240212b642188228b2795c2aa876990ac0edb48fa6ac0cfcf63ad863ddf0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5f63c531299cc84f90ee6e84daf3d18f5f16250ba71579ff94c7cc22977721a6.glb",
+        "sha256": "5f63c531299cc84f90ee6e84daf3d18f5f16250ba71579ff94c7cc22977721a6",
+        "size": 12528276
+      },
+      "size_class": "large"
+    }
+  },
+  "lust_disciples/lust heavy tank": {
+    "url": "84c3d721f43d769c6212425ff66cd11f09babf9eaf9af763fd83fcc44a6b0bd2.glb",
+    "sha256": "84c3d721f43d769c6212425ff66cd11f09babf9eaf9af763fd83fcc44a6b0bd2",
+    "size": 17479104,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9e4a20326656f84806d71363dbfcee4052e0f6d89ac422a87b63c0824fa842a6.ctex",
+          "sha256": "9e4a20326656f84806d71363dbfcee4052e0f6d89ac422a87b63c0824fa842a6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9779c3936a68fff1333dccc4f05ca0918d9a67226fad1801cca361d0fe318940.ctex",
+          "sha256": "9779c3936a68fff1333dccc4f05ca0918d9a67226fad1801cca361d0fe318940",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "782e518e6e9e56de1701d81effddf6d70384f91042e763dc16b8b6fba1a2851c.glb",
+        "sha256": "782e518e6e9e56de1701d81effddf6d70384f91042e763dc16b8b6fba1a2851c",
+        "size": 9490788
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "lust_disciples/lust infernal brute": {
+    "url": "8d4504180556a285d61efcbd4c7de34b96a9bced880042a6d667bf1a9fad420a.glb",
+    "sha256": "8d4504180556a285d61efcbd4c7de34b96a9bced880042a6d667bf1a9fad420a",
+    "size": 15459216,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "41058519d348d6df7461c871980da92f981efab0d343bd6a13de59f4654b7967.ctex",
+          "sha256": "41058519d348d6df7461c871980da92f981efab0d343bd6a13de59f4654b7967",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c13b20c1b094988645bf450950af9ea6034db4f3dfe355128c6da57f0760117f.ctex",
+          "sha256": "c13b20c1b094988645bf450950af9ea6034db4f3dfe355128c6da57f0760117f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2c33dad58c63a28a7c0277047f83d8912c80242f4fcb75850968a21995ce16b6.glb",
+        "sha256": "2c33dad58c63a28a7c0277047f83d8912c80242f4fcb75850968a21995ce16b6",
+        "size": 11243544
+      },
+      "size_class": "large"
+    }
+  },
+  "lust_disciples/lust mech fiend": {
+    "url": "610b2a10d3bd3d29bd0b39e35e6210a01d68e2850125d6208fc1dab014bf5c3f.glb",
+    "sha256": "610b2a10d3bd3d29bd0b39e35e6210a01d68e2850125d6208fc1dab014bf5c3f",
+    "size": 16895980,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "46b6c8bdd4a2d56fbc34c3ea3414142d44cb1b74f7139f3db4074e4911165613.ctex",
+          "sha256": "46b6c8bdd4a2d56fbc34c3ea3414142d44cb1b74f7139f3db4074e4911165613",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7d2877d530994897aba39f3eb047156363009988f50ebda2e2ab9d01f138e812.ctex",
+          "sha256": "7d2877d530994897aba39f3eb047156363009988f50ebda2e2ab9d01f138e812",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d3fe6b71f4c3cd1dbc3e8c51e23149d8da918f3aa83e9457b19a5db1c0395f28.glb",
+        "sha256": "d3fe6b71f4c3cd1dbc3e8c51e23149d8da918f3aa83e9457b19a5db1c0395f28",
+        "size": 12102492
+      },
+      "size_class": "large"
+    }
+  },
+  "lust_disciples/lust mutated brothers": {
+    "url": "a69d8ab127c2086aa69a2934eb664438dd35f47be190ba7fc76a0e24b79c85b5.glb",
+    "sha256": "a69d8ab127c2086aa69a2934eb664438dd35f47be190ba7fc76a0e24b79c85b5",
+    "size": 14691608,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5841b8ad1cefc583720945aeef07e3363e390f55b2fa0b2853fb6e10862ce624.ctex",
+          "sha256": "5841b8ad1cefc583720945aeef07e3363e390f55b2fa0b2853fb6e10862ce624",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "52c797fa44a727bf1487826f726fb1974a795b1469ab1c64727889e746fbf670.ctex",
+          "sha256": "52c797fa44a727bf1487826f726fb1974a795b1469ab1c64727889e746fbf670",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ddb288c11083f53b6a58c15567385c02b5770a8809523eb27de3eecc476ab6a2.glb",
+        "sha256": "ddb288c11083f53b6a58c15567385c02b5770a8809523eb27de3eecc476ab6a2",
+        "size": 4121196
+      },
+      "size_class": "infantry"
+    }
+  },
+  "lust_disciples/lust mutated cultists": {
+    "url": "13cb697e48d2fdef80cfe264188a60341df4d2225447a059e40d9f9a10dca417.glb",
+    "sha256": "13cb697e48d2fdef80cfe264188a60341df4d2225447a059e40d9f9a10dca417",
+    "size": 14913152,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8fc847d273a4bd8845b7bcddf11e6e7e9002f0e4e3a2f339e400bdda9acfcf48.ctex",
+          "sha256": "8fc847d273a4bd8845b7bcddf11e6e7e9002f0e4e3a2f339e400bdda9acfcf48",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7d6b09a3d70b82c4cfb474ca201464495b12301a89696bf6b19ce063317fa933.ctex",
+          "sha256": "7d6b09a3d70b82c4cfb474ca201464495b12301a89696bf6b19ce063317fa933",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8b09a570a821f21344f7d5de268923b2889f6b90d79b0b75551cc4dcbb099e4d.glb",
+        "sha256": "8b09a570a821f21344f7d5de268923b2889f6b90d79b0b75551cc4dcbb099e4d",
+        "size": 4145564
+      },
+      "size_class": "infantry"
+    }
+  },
+  "lust_disciples/lust mutated destroyer": {
+    "url": "f81eb374a96b75e12363e88e576ded4f2527775a64a1e22a2164852872af089e.glb",
+    "sha256": "f81eb374a96b75e12363e88e576ded4f2527775a64a1e22a2164852872af089e",
+    "size": 15775916,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d3b1d1b1ebc6af7f42e4b30d26f50344d97764e7c5ac99c0800559488af8f50f.ctex",
+          "sha256": "d3b1d1b1ebc6af7f42e4b30d26f50344d97764e7c5ac99c0800559488af8f50f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8b3725c0f467ed141bcb82f8f530d5ecd90a4c81c0172651721bbf30ea6269a3.ctex",
+          "sha256": "8b3725c0f467ed141bcb82f8f530d5ecd90a4c81c0172651721bbf30ea6269a3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "696f0a2379ddaebf1ca8e6d266ff63035c5ab0871db53b1959333e9e9f5c60d2.glb",
+        "sha256": "696f0a2379ddaebf1ca8e6d266ff63035c5ab0871db53b1959333e9e9f5c60d2",
+        "size": 4376328
+      },
+      "size_class": "infantry"
+    }
+  },
+  "lust_disciples/lust support": {
+    "url": "4f3aa49dfe5b5a7136f8341dde13d9e76f6f46b2c015e552c2d4690641fb49d3.glb",
+    "sha256": "4f3aa49dfe5b5a7136f8341dde13d9e76f6f46b2c015e552c2d4690641fb49d3",
+    "size": 14011132,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ccf5fe4401c32e8090a669fd65e4dba0a1fca3b977b1411b6eb6b5bb769a6125.ctex",
+          "sha256": "ccf5fe4401c32e8090a669fd65e4dba0a1fca3b977b1411b6eb6b5bb769a6125",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "74168bb79df8cbdaa241128e76fcc8d027696e46c896a4a456c4040113be43d4.ctex",
+          "sha256": "74168bb79df8cbdaa241128e76fcc8d027696e46c896a4a456c4040113be43d4",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "aadc37d3dd14c07c8c14888fb52ceb230643a9e0933205b370e44998476dd2ac.glb",
+        "sha256": "aadc37d3dd14c07c8c14888fb52ceb230643a9e0933205b370e44998476dd2ac",
+        "size": 3804268
+      },
+      "size_class": "infantry"
+    }
+  },
+  "lust_disciples/lust talon raptors": {
+    "url": "61f241a9f079cc3b346adf20f74f687e6366018fff9e8e876fbfa143fbd7f398.glb",
+    "sha256": "61f241a9f079cc3b346adf20f74f687e6366018fff9e8e876fbfa143fbd7f398",
+    "size": 14603884,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c063e96e8c028aad97ab5a291303a08c50347e8d1e60d980b11b307d0ace69e6.ctex",
+          "sha256": "c063e96e8c028aad97ab5a291303a08c50347e8d1e60d980b11b307d0ace69e6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1b9cb1a85740781cfdbc1cd0b74a026502bc3257bae613e1b410baf75ae0512b.ctex",
+          "sha256": "1b9cb1a85740781cfdbc1cd0b74a026502bc3257bae613e1b410baf75ae0512b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e500aecf61166e84daa7357199cbd9169af8d6cab1489130b5637b9d2782f7c2.glb",
+        "sha256": "e500aecf61166e84daa7357199cbd9169af8d6cab1489130b5637b9d2782f7c2",
+        "size": 4114028
+      },
+      "size_class": "infantry"
+    }
+  },
+  "lust_disciples/lust tank": {
+    "url": "ae6d40991d864a5e5dc19d4984d49ab47c24cda2d269cdb8fa4de7233cd6e7b0.glb",
+    "sha256": "ae6d40991d864a5e5dc19d4984d49ab47c24cda2d269cdb8fa4de7233cd6e7b0",
+    "size": 18575196,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "80c8f234db0dd063667ce0dd587c4302173e2750c1bef6ec45ed2890216b22f2.ctex",
+          "sha256": "80c8f234db0dd063667ce0dd587c4302173e2750c1bef6ec45ed2890216b22f2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5ec0e7802751b1bd32347094ae24614409db57d021ccb2f9c2d33f2599cff697.ctex",
+          "sha256": "5ec0e7802751b1bd32347094ae24614409db57d021ccb2f9c2d33f2599cff697",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "12acc1e06d49ed0ffe31f4e4e98bec0217dc32092e7bd9642caa4994efd3ff3e.glb",
+        "sha256": "12acc1e06d49ed0ffe31f4e4e98bec0217dc32092e7bd9642caa4994efd3ff3e",
+        "size": 9667484
+      },
+      "size_class": "vehicle"
+    }
+  }
+}

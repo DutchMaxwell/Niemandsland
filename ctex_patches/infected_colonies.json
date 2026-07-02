@@ -1,0 +1,548 @@
+{
+  "infected_colonies/abomination": {
+    "url": "e946d6286f816a9320e680cde6fad40fadcd1fc1dcfef2d7685df80770bc5f1b.glb",
+    "sha256": "e946d6286f816a9320e680cde6fad40fadcd1fc1dcfef2d7685df80770bc5f1b",
+    "size": 14462392,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d107011630c68a453901f03536d8bf60c24014d19cc145fb10296d295b983d3b.ctex",
+          "sha256": "d107011630c68a453901f03536d8bf60c24014d19cc145fb10296d295b983d3b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e272a17c3591c31a691c88c05fc2f4538cdddd5b1205a72aa8f51b03ca66afe3.ctex",
+          "sha256": "e272a17c3591c31a691c88c05fc2f4538cdddd5b1205a72aa8f51b03ca66afe3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "fb3b730eeebe7790bd14b11ea417438d9e6d7700f22ad73d5fb95e169534b241.glb",
+        "sha256": "fb3b730eeebe7790bd14b11ea417438d9e6d7700f22ad73d5fb95e169534b241",
+        "size": 4017104
+      },
+      "size_class": "infantry"
+    }
+  },
+  "infected_colonies/attack buggy": {
+    "url": "f0f4b85d5f3e6f4f6b3da83189530f397d4b4fb2c623348e2d84311f0cc3f122.glb",
+    "sha256": "f0f4b85d5f3e6f4f6b3da83189530f397d4b4fb2c623348e2d84311f0cc3f122",
+    "size": 14233608,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "194d517c3bf40925bcd8592a60bccc59b805914daa7e76e4cc36ae0929346260.ctex",
+          "sha256": "194d517c3bf40925bcd8592a60bccc59b805914daa7e76e4cc36ae0929346260",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a50202bf275e9033119325e09d0638c2354751514c313750f89ae78d80faf816.ctex",
+          "sha256": "a50202bf275e9033119325e09d0638c2354751514c313750f89ae78d80faf816",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "17f8b6394e02ae93b74ac46fb4f303027955f4a35b44077784d21cbad1984f75.glb",
+        "sha256": "17f8b6394e02ae93b74ac46fb4f303027955f4a35b44077784d21cbad1984f75",
+        "size": 7118116
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "infected_colonies/battle tank": {
+    "url": "5e0e891660881a2f37e84d6850220a14d03462c431958abe9740e6a20e5775f9.glb",
+    "sha256": "5e0e891660881a2f37e84d6850220a14d03462c431958abe9740e6a20e5775f9",
+    "size": 19289796,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f7475370511e34eb8b92d73a14f4e8085cf5c774209b7b5ed88caab614caca04.ctex",
+          "sha256": "f7475370511e34eb8b92d73a14f4e8085cf5c774209b7b5ed88caab614caca04",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "faf60fa220acc15b0267fc42be74c269a388b0738146e9ab82c355f45a3c6192.ctex",
+          "sha256": "faf60fa220acc15b0267fc42be74c269a388b0738146e9ab82c355f45a3c6192",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9a3e7c7d6dea92829a0fa726a9895eb650acc720141953d42e5823715743a714.glb",
+        "sha256": "9a3e7c7d6dea92829a0fa726a9895eb650acc720141953d42e5823715743a714",
+        "size": 9985308
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "infected_colonies/boomers": {
+    "url": "2bc1d4dd07aacc67aac24865d837352a75bc2f6a958430167a6114f75c84b96d.glb",
+    "sha256": "2bc1d4dd07aacc67aac24865d837352a75bc2f6a958430167a6114f75c84b96d",
+    "size": 15031740,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "20398e9cae095a21eadddb20d0e4c2a3b29923a8beaf0214f0bdc2af5729b9ad.ctex",
+          "sha256": "20398e9cae095a21eadddb20d0e4c2a3b29923a8beaf0214f0bdc2af5729b9ad",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "bf591171d4beedce7c2ec6233cf5762bb5b7de32463ab539b7d2982338d411d6.ctex",
+          "sha256": "bf591171d4beedce7c2ec6233cf5762bb5b7de32463ab539b7d2982338d411d6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "43246148ed55cee3908724b5c313a2e390c40d761c60c12eac67856204996e35.glb",
+        "sha256": "43246148ed55cee3908724b5c313a2e390c40d761c60c12eac67856204996e35",
+        "size": 3969488
+      },
+      "size_class": "infantry"
+    }
+  },
+  "infected_colonies/combat walker": {
+    "url": "b9fd13cbce43c68be7a8b02b3b48cd91fb2d18eb402836ca1f13391a4f750011.glb",
+    "sha256": "b9fd13cbce43c68be7a8b02b3b48cd91fb2d18eb402836ca1f13391a4f750011",
+    "size": 16232440,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7eb99aada02bcd2f0b189a14ed30f675ec7906359f8ad1c350a1c045f0384a38.ctex",
+          "sha256": "7eb99aada02bcd2f0b189a14ed30f675ec7906359f8ad1c350a1c045f0384a38",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8c942bea8158d01605d22f8b99e12446d26109c0be0bd7f70ea5694eaa14e4b0.ctex",
+          "sha256": "8c942bea8158d01605d22f8b99e12446d26109c0be0bd7f70ea5694eaa14e4b0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "37dfaff9d8818e090f8708d5f37ee2f81d1e3989bc5a77ce180600e925dc0c11.glb",
+        "sha256": "37dfaff9d8818e090f8708d5f37ee2f81d1e3989bc5a77ce180600e925dc0c11",
+        "size": 8842080
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "infected_colonies/corrupted beasts": {
+    "url": "4f0bd2826f52fa1cea46d00c1bbc5dba2bca99f5294134bf0eece9c1b73865af.glb",
+    "sha256": "4f0bd2826f52fa1cea46d00c1bbc5dba2bca99f5294134bf0eece9c1b73865af",
+    "size": 16772140,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6daa34ba73d60273ca914808523f28563fe465c4ee6f7aa590b316c1a376396f.ctex",
+          "sha256": "6daa34ba73d60273ca914808523f28563fe465c4ee6f7aa590b316c1a376396f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8b626d37d45be34f6c189bd0561e2379628235fe1afd4465b51231f91560d8a3.ctex",
+          "sha256": "8b626d37d45be34f6c189bd0561e2379628235fe1afd4465b51231f91560d8a3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "08187b4c5e290bd532b036f9c59a742aca71a6379222e3d09204b1e445ffb8a5.glb",
+        "sha256": "08187b4c5e290bd532b036f9c59a742aca71a6379222e3d09204b1e445ffb8a5",
+        "size": 11576876
+      },
+      "size_class": "large"
+    }
+  },
+  "infected_colonies/crazed ravens": {
+    "url": "3b45e0a0da36524b2e2b72974e483378ccfbccb5365997a865541839ec9d6435.glb",
+    "sha256": "3b45e0a0da36524b2e2b72974e483378ccfbccb5365997a865541839ec9d6435",
+    "size": 16684064,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e53732cdb2614c0f1d007ebaa3e2623e9c23dc88cc4f1999ebbad6816487c279.ctex",
+          "sha256": "e53732cdb2614c0f1d007ebaa3e2623e9c23dc88cc4f1999ebbad6816487c279",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "53ac7eadfec07d8d74c408074205bfa48097a79b847c922d708148754c0a1f3e.ctex",
+          "sha256": "53ac7eadfec07d8d74c408074205bfa48097a79b847c922d708148754c0a1f3e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7c8cdb36116fa9b2f76ceed3796c0b51178f5b6680216e62e1acc78187092ee7.glb",
+        "sha256": "7c8cdb36116fa9b2f76ceed3796c0b51178f5b6680216e62e1acc78187092ee7",
+        "size": 4984344
+      },
+      "size_class": "infantry"
+    }
+  },
+  "infected_colonies/great beast": {
+    "url": "5e2e3c0ffb856bf107d5080c70c351f7aef3e505967390cf2e50600a9e3062cc.glb",
+    "sha256": "5e2e3c0ffb856bf107d5080c70c351f7aef3e505967390cf2e50600a9e3062cc",
+    "size": 13662616,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5c1b3c7acc86b90c2f7dcdbeff90426be1cc948a9318ccb1e476f73b4ec341b7.ctex",
+          "sha256": "5c1b3c7acc86b90c2f7dcdbeff90426be1cc948a9318ccb1e476f73b4ec341b7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "02b941c428b4f5850f8f15683f45e8cfdb9d797b9a6b5202a8a38413bbd983b4.ctex",
+          "sha256": "02b941c428b4f5850f8f15683f45e8cfdb9d797b9a6b5202a8a38413bbd983b4",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "93208d832b8cb20ea130f11aa9059f5b5ff51855bac7a18efa9de2943d7a1f34.glb",
+        "sha256": "93208d832b8cb20ea130f11aa9059f5b5ff51855bac7a18efa9de2943d7a1f34",
+        "size": 9540904
+      },
+      "size_class": "large"
+    }
+  },
+  "infected_colonies/great hunter": {
+    "url": "4686b191ba56c977dd5f094eb57d0e6af74e24a6681a1b3b02eacffe60bf0bd8.glb",
+    "sha256": "4686b191ba56c977dd5f094eb57d0e6af74e24a6681a1b3b02eacffe60bf0bd8",
+    "size": 13953820,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "35906d25b4c73e9e110416c648f99b6d29afe6a487ab80beb386126ec1e3c35c.ctex",
+          "sha256": "35906d25b4c73e9e110416c648f99b6d29afe6a487ab80beb386126ec1e3c35c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "447439a5ce96a9015d04453b1fc834c9b6d8eef295f3f2aa01b615a7ba09f7e8.ctex",
+          "sha256": "447439a5ce96a9015d04453b1fc834c9b6d8eef295f3f2aa01b615a7ba09f7e8",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5014635c6bc6af3941c36849b7b39eac1cbf2c5b77aa2c6ac9ae0909316bf2c4.glb",
+        "sha256": "5014635c6bc6af3941c36849b7b39eac1cbf2c5b77aa2c6ac9ae0909316bf2c4",
+        "size": 10457636
+      },
+      "size_class": "large"
+    }
+  },
+  "infected_colonies/hunters": {
+    "url": "044b00cdbef5d906d451fffa532045a51fbd3460470636593e3526e17b49f94e.glb",
+    "sha256": "044b00cdbef5d906d451fffa532045a51fbd3460470636593e3526e17b49f94e",
+    "size": 13304708,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f4b2c754459b6dee0bb466c646d68c6467d78b830b8836f7671435d639b497e5.ctex",
+          "sha256": "f4b2c754459b6dee0bb466c646d68c6467d78b830b8836f7671435d639b497e5",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d8568059a9932b471ae638d8e45f01bff9dcd129aad46d5d8469e900ebf48b34.ctex",
+          "sha256": "d8568059a9932b471ae638d8e45f01bff9dcd129aad46d5d8469e900ebf48b34",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b1e16bb656488898bdda06e754d932864dc90ae2a99d08e92f9ad30839918fdc.glb",
+        "sha256": "b1e16bb656488898bdda06e754d932864dc90ae2a99d08e92f9ad30839918fdc",
+        "size": 3953664
+      },
+      "size_class": "infantry"
+    }
+  },
+  "infected_colonies/infected gunners": {
+    "url": "1e030a5972eadb9b031e61622d8277c5f8842c3ec19fd5ed1c3305504e064ccd.glb",
+    "sha256": "1e030a5972eadb9b031e61622d8277c5f8842c3ec19fd5ed1c3305504e064ccd",
+    "size": 17001424,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "831d7877e1c0a9ce65df3dd3b429a7d8f6ce71b194e2827af2f4da8d0f331e50.ctex",
+          "sha256": "831d7877e1c0a9ce65df3dd3b429a7d8f6ce71b194e2827af2f4da8d0f331e50",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d5929e8b49418c21ef092ae556d82a1e001d2f35fdb5d131aa9a791f981a33bd.ctex",
+          "sha256": "d5929e8b49418c21ef092ae556d82a1e001d2f35fdb5d131aa9a791f981a33bd",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3050c784db7e0f831c802c97ad9ced8b7e848302aba3ace0c32da2dbdfec18a2.glb",
+        "sha256": "3050c784db7e0f831c802c97ad9ced8b7e848302aba3ace0c32da2dbdfec18a2",
+        "size": 4643172
+      },
+      "size_class": "infantry"
+    }
+  },
+  "infected_colonies/infected leader": {
+    "url": "feaafdd7844945f02a319eacdebcca3bd456794b8495a1ddb64bbe9bb3a136fa.glb",
+    "sha256": "feaafdd7844945f02a319eacdebcca3bd456794b8495a1ddb64bbe9bb3a136fa",
+    "size": 13987544,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4fdbac5b93adfdfed3f07f974c6859a0e1a8a0c09b55b97bc4bfe4e504e9f315.ctex",
+          "sha256": "4fdbac5b93adfdfed3f07f974c6859a0e1a8a0c09b55b97bc4bfe4e504e9f315",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a85e70463d9863aa7513ab4f6c684375064c2284f1a0d3afaa4fddbaf380a2db.ctex",
+          "sha256": "a85e70463d9863aa7513ab4f6c684375064c2284f1a0d3afaa4fddbaf380a2db",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "374756cf7a3f1b7bd459720e69ee1ce4ba85a6d1ba1a06f25b4790bcd26b6377.glb",
+        "sha256": "374756cf7a3f1b7bd459720e69ee1ce4ba85a6d1ba1a06f25b4790bcd26b6377",
+        "size": 3925192
+      },
+      "size_class": "infantry"
+    }
+  },
+  "infected_colonies/infected runners": {
+    "url": "2562d7f1851692b5ff00788648491027f0fb83bc834d698cf23144fc539af2fd.glb",
+    "sha256": "2562d7f1851692b5ff00788648491027f0fb83bc834d698cf23144fc539af2fd",
+    "size": 15083032,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a936f6a32d8287e32d4cd5677786c2869d60271db67f140032be03cba69152ae.ctex",
+          "sha256": "a936f6a32d8287e32d4cd5677786c2869d60271db67f140032be03cba69152ae",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "610bdb46bacda331960cf97d8b4ca7690eb90fd5eb201e4646c41ccaa3646e38.ctex",
+          "sha256": "610bdb46bacda331960cf97d8b4ca7690eb90fd5eb201e4646c41ccaa3646e38",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e31e9aa864fc7bede28ac77bdf1f9a0d81593578cd07ae7c4ebbfc5508d5dec0.glb",
+        "sha256": "e31e9aa864fc7bede28ac77bdf1f9a0d81593578cd07ae7c4ebbfc5508d5dec0",
+        "size": 3942720
+      },
+      "size_class": "infantry"
+    }
+  },
+  "infected_colonies/infected soldiers": {
+    "url": "95cf82d12a01cfa0348f7b2be180d60e3ad9c1ef3cfb3f37533c2b2e12e31d3c.glb",
+    "sha256": "95cf82d12a01cfa0348f7b2be180d60e3ad9c1ef3cfb3f37533c2b2e12e31d3c",
+    "size": 14232360,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d14541b17e997f34c612adfb44075adac032d8b02b9989efbaeba11beab2e43f.ctex",
+          "sha256": "d14541b17e997f34c612adfb44075adac032d8b02b9989efbaeba11beab2e43f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9bd329cd5c343a89070ee73fa7715debd887d8b95810b267b86ff746e790c62e.ctex",
+          "sha256": "9bd329cd5c343a89070ee73fa7715debd887d8b95810b267b86ff746e790c62e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "bd5e7196506edcda13402f219e28ac4090e8ff30c58ead5ce2bbc485401fc914.glb",
+        "sha256": "bd5e7196506edcda13402f219e28ac4090e8ff30c58ead5ce2bbc485401fc914",
+        "size": 4092808
+      },
+      "size_class": "infantry"
+    }
+  },
+  "infected_colonies/infected vultures": {
+    "url": "c44a0861e24f36ba3af3cde781f9cebb1eec62f8896d1a15e9a8d6601d7c1b7d.glb",
+    "sha256": "c44a0861e24f36ba3af3cde781f9cebb1eec62f8896d1a15e9a8d6601d7c1b7d",
+    "size": 16355316,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "968578254408741035f68e73069ab3bd3465cbc5a35f28eef19171c2225032e3.ctex",
+          "sha256": "968578254408741035f68e73069ab3bd3465cbc5a35f28eef19171c2225032e3",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2efe595278860ae186304c19307bf63b413635f3fbf7446ddf943d006356caee.ctex",
+          "sha256": "2efe595278860ae186304c19307bf63b413635f3fbf7446ddf943d006356caee",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3eaa8afd7347ab59771689eaef1a2734df3fe1f3ad3a8ed0b7015ce7829290a0.glb",
+        "sha256": "3eaa8afd7347ab59771689eaef1a2734df3fe1f3ad3a8ed0b7015ce7829290a0",
+        "size": 4266096
+      },
+      "size_class": "infantry"
+    }
+  },
+  "infected_colonies/infected zombies": {
+    "url": "34fe0ae43c005f1fd0fa708081975701341a5517c2dd2f72785b2086cf587311.glb",
+    "sha256": "34fe0ae43c005f1fd0fa708081975701341a5517c2dd2f72785b2086cf587311",
+    "size": 14059740,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b1098bc16434a5b3c14a11c82d6cd6609c2c789e04284aea455350ce884862fc.ctex",
+          "sha256": "b1098bc16434a5b3c14a11c82d6cd6609c2c789e04284aea455350ce884862fc",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "68e4381677d2fea36db70dfd616a61f12ecd2374825d4217b8cb2ae65b9115ee.ctex",
+          "sha256": "68e4381677d2fea36db70dfd616a61f12ecd2374825d4217b8cb2ae65b9115ee",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e6f65493b5e3523a5f0a7ca59eb8cc28339c1d03b85f219edbaea040db54b10f.glb",
+        "sha256": "e6f65493b5e3523a5f0a7ca59eb8cc28339c1d03b85f219edbaea040db54b10f",
+        "size": 3252004
+      },
+      "size_class": "infantry"
+    }
+  },
+  "infected_colonies/leech swarms": {
+    "url": "c483cb670ff202caaf8c6768401833f8b903f0dd941b262354a73f8a5fd058ee.glb",
+    "sha256": "c483cb670ff202caaf8c6768401833f8b903f0dd941b262354a73f8a5fd058ee",
+    "size": 16683040,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5cd8ded182fb83e06a9c67eb9ec5387db8c78e97ca12e0200238f66deba1e21b.ctex",
+          "sha256": "5cd8ded182fb83e06a9c67eb9ec5387db8c78e97ca12e0200238f66deba1e21b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "eaf4b09bc4028909c4cf15a362a51d3b77c5233e47aca762ab9e17d4a620994c.ctex",
+          "sha256": "eaf4b09bc4028909c4cf15a362a51d3b77c5233e47aca762ab9e17d4a620994c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "97039eb35b55bdbf0c9fac2dbc23912adee62c8200aebff8ef5b7dab67fe0473.glb",
+        "sha256": "97039eb35b55bdbf0c9fac2dbc23912adee62c8200aebff8ef5b7dab67fe0473",
+        "size": 4702132
+      },
+      "size_class": "infantry"
+    }
+  },
+  "infected_colonies/light dropship": {
+    "url": "2a8f194f41f98bb0dcff128c23f5c396f30068f51a1eca4d653521890da4b9e6.glb",
+    "sha256": "2a8f194f41f98bb0dcff128c23f5c396f30068f51a1eca4d653521890da4b9e6",
+    "size": 20291584,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d1ee8709e40ebf0910bc1528b65d8b745230abc84ee3405de57e7e2d4d509ca1.ctex",
+          "sha256": "d1ee8709e40ebf0910bc1528b65d8b745230abc84ee3405de57e7e2d4d509ca1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ba8e47d20bd4cef7cb4655e103716784c2ae5d367b76dbc3a81fb541233501ce.ctex",
+          "sha256": "ba8e47d20bd4cef7cb4655e103716784c2ae5d367b76dbc3a81fb541233501ce",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f12c43fdaf2e88d1d0a704a1289e415bce6637f8a7cd873b8e9cce4a525250ae.glb",
+        "sha256": "f12c43fdaf2e88d1d0a704a1289e415bce6637f8a7cd873b8e9cce4a525250ae",
+        "size": 5754436
+      },
+      "size_class": "infantry"
+    }
+  },
+  "infected_colonies/monstrous tyrant": {
+    "url": "fc6b1d94b86b4c09fc57474d5e1e7a7d15960f7700ab65cb31b8c7bd6cc1eb59.glb",
+    "sha256": "fc6b1d94b86b4c09fc57474d5e1e7a7d15960f7700ab65cb31b8c7bd6cc1eb59",
+    "size": 13506644,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4362646dae73cb2bae09ec4d0116d8af714476cdb87b10ad2cc64cec8917ad72.ctex",
+          "sha256": "4362646dae73cb2bae09ec4d0116d8af714476cdb87b10ad2cc64cec8917ad72",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "535743a42ecc270c1a1c2a2c7beccb558fce83c6ee26bae959aed1e72f6746e2.ctex",
+          "sha256": "535743a42ecc270c1a1c2a2c7beccb558fce83c6ee26bae959aed1e72f6746e2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6173da11b19046295c197f7039012039a43a9c8b43b7065d91a95930a3cd596c.glb",
+        "sha256": "6173da11b19046295c197f7039012039a43a9c8b43b7065d91a95930a3cd596c",
+        "size": 4069696
+      },
+      "size_class": "infantry"
+    }
+  },
+  "infected_colonies/rabid dogs": {
+    "url": "4fde8eaceefcf7420b82b90121a7f712b999fe0d4f4d7d807bc56b9745735dfb.glb",
+    "sha256": "4fde8eaceefcf7420b82b90121a7f712b999fe0d4f4d7d807bc56b9745735dfb",
+    "size": 14287460,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7743d85a26f7ef279aa177ac0e6c18b547d924d41ae3b982a29f4fb625f42384.ctex",
+          "sha256": "7743d85a26f7ef279aa177ac0e6c18b547d924d41ae3b982a29f4fb625f42384",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c111f8375fbcb2a81a191a66de77f9c3f6c17645e8835f1b21ee877a36667804.ctex",
+          "sha256": "c111f8375fbcb2a81a191a66de77f9c3f6c17645e8835f1b21ee877a36667804",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9d1ddce3b185e3e24d3f19fb6806051dc2d716fce27ca13042b18fd74b673f6f.glb",
+        "sha256": "9d1ddce3b185e3e24d3f19fb6806051dc2d716fce27ca13042b18fd74b673f6f",
+        "size": 4068836
+      },
+      "size_class": "infantry"
+    }
+  },
+  "infected_colonies/weapon teams": {
+    "url": "3e0a9b520e1d63333d500b875a7ee368f731c49f3b64c4664472eb3473a8a6bd.glb",
+    "sha256": "3e0a9b520e1d63333d500b875a7ee368f731c49f3b64c4664472eb3473a8a6bd",
+    "size": 13807468,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "527d432c52e5fcc9d550f5320dc6ef7bfd2fef6bbed41b99d87a9cc0f75835b2.ctex",
+          "sha256": "527d432c52e5fcc9d550f5320dc6ef7bfd2fef6bbed41b99d87a9cc0f75835b2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8ae121bbbad7e23262f865f5885b8d3a7ad1331db43e42a9dc5229e6cac7a842.ctex",
+          "sha256": "8ae121bbbad7e23262f865f5885b8d3a7ad1331db43e42a9dc5229e6cac7a842",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "64bd98c73bf45e6f6fb1f40f75f013c6871228e44c9a182454f676b4f0735c75.glb",
+        "sha256": "64bd98c73bf45e6f6fb1f40f75f013c6871228e44c9a182454f676b4f0735c75",
+        "size": 3825144
+      },
+      "size_class": "infantry"
+    }
+  }
+}

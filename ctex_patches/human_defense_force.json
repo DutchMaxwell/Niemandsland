@@ -1,0 +1,730 @@
+{
+  "human_defense_force/armored truck": {
+    "url": "99c8cf8b0bb9130606703ce17c2dbfb28a9d71df5cdf97bf9a7cf2b576518cb0.glb",
+    "sha256": "99c8cf8b0bb9130606703ce17c2dbfb28a9d71df5cdf97bf9a7cf2b576518cb0",
+    "size": 15908908,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "af8ae6cb8f78c6c2e88244e1b8fbc7b02fbee77423457ef5a381a238021bb587.ctex",
+          "sha256": "af8ae6cb8f78c6c2e88244e1b8fbc7b02fbee77423457ef5a381a238021bb587",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1cc048cbeff5c67643ad777f43734312a707dc4af5e93e592af01c4db2b14f08.ctex",
+          "sha256": "1cc048cbeff5c67643ad777f43734312a707dc4af5e93e592af01c4db2b14f08",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b6f9da681f3f81be9831a1db70f2110f200502e6fb24423a9589d3106e4b41b4.glb",
+        "sha256": "b6f9da681f3f81be9831a1db70f2110f200502e6fb24423a9589d3106e4b41b4",
+        "size": 8619140
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "human_defense_force/attack vehicle": {
+    "url": "5b36bd38de18ca560bb75b8014359feb1696852e065073905af0a5ed50e855b9.glb",
+    "sha256": "5b36bd38de18ca560bb75b8014359feb1696852e065073905af0a5ed50e855b9",
+    "size": 16891684,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "29e766f4b086aa4d8635077a8c18befff653f94a88c4a98c28491c58a9a42d9c.ctex",
+          "sha256": "29e766f4b086aa4d8635077a8c18befff653f94a88c4a98c28491c58a9a42d9c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9729fdc65eac4ed27d38bdd9acb8eb4c84d2ca263352e412d872172af645279f.ctex",
+          "sha256": "9729fdc65eac4ed27d38bdd9acb8eb4c84d2ca263352e412d872172af645279f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e91cb8e9f8d7661caa1e9a2d38a55af948524badc35765ced1b1655a198ef528.glb",
+        "sha256": "e91cb8e9f8d7661caa1e9a2d38a55af948524badc35765ced1b1655a198ef528",
+        "size": 9211704
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "human_defense_force/battle tank": {
+    "url": "817e85a5975875cfa3acb31a0f3d4bd143a1932a9ee36fe37bd94854de525f49.glb",
+    "sha256": "817e85a5975875cfa3acb31a0f3d4bd143a1932a9ee36fe37bd94854de525f49",
+    "size": 16363540,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "55e843c5e1ec3474d1e835333211d70c28eb9c8afe741014f386288248d7a6a6.ctex",
+          "sha256": "55e843c5e1ec3474d1e835333211d70c28eb9c8afe741014f386288248d7a6a6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "cdea346d6dbc7f3581390b2ddbf7c76f5ba88906666319a0dc6b85d14574ace7.ctex",
+          "sha256": "cdea346d6dbc7f3581390b2ddbf7c76f5ba88906666319a0dc6b85d14574ace7",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "272ecd42b5ae40262a083cc792f576eec288f488cf6ceaacbd66b349a945ddd6.glb",
+        "sha256": "272ecd42b5ae40262a083cc792f576eec288f488cf6ceaacbd66b349a945ddd6",
+        "size": 9254164
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "human_defense_force/colonel rixxon": {
+    "url": "0781c9931c203378318ab4e30b23b70096b164a909fa7030e9aac33824a4ef40.glb",
+    "sha256": "0781c9931c203378318ab4e30b23b70096b164a909fa7030e9aac33824a4ef40",
+    "size": 15151744,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0388f4f04834cf1c7160b1ce22e11324bfc9265c6e0d0a5917fd2889b038cdb9.ctex",
+          "sha256": "0388f4f04834cf1c7160b1ce22e11324bfc9265c6e0d0a5917fd2889b038cdb9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "68e506c1f4a8b9b768e82da69f8a9799fc416024b4532bcf1beb5b177fac106a.ctex",
+          "sha256": "68e506c1f4a8b9b768e82da69f8a9799fc416024b4532bcf1beb5b177fac106a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "79bb837e7a8d4da703cb0c2dd0b523cb140b9b2e81f283540a0c271c3dd84abf.glb",
+        "sha256": "79bb837e7a8d4da703cb0c2dd0b523cb140b9b2e81f283540a0c271c3dd84abf",
+        "size": 4310708
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_defense_force/combat bikers": {
+    "url": "30fb909464858fcb8da7cb4a6bd80d5d01a3efc3c414741d1fd3789eb38ea705.glb",
+    "sha256": "30fb909464858fcb8da7cb4a6bd80d5d01a3efc3c414741d1fd3789eb38ea705",
+    "size": 17058212,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "13c09ed7352897cee93d2c1247c10b75273d42acfe71455ebbf259560c3e1f25.ctex",
+          "sha256": "13c09ed7352897cee93d2c1247c10b75273d42acfe71455ebbf259560c3e1f25",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "178e9231667d9b159db69ca6c220ca77f31a4380e9c13d55c5fc60c380a007b5.ctex",
+          "sha256": "178e9231667d9b159db69ca6c220ca77f31a4380e9c13d55c5fc60c380a007b5",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "75f0375f64984129f40a85d562ae92d1e9b98bc0cf360995b97955b35f85b46a.glb",
+        "sha256": "75f0375f64984129f40a85d562ae92d1e9b98bc0cf360995b97955b35f85b46a",
+        "size": 9354180
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "human_defense_force/combat walker": {
+    "url": "e1ed0a7155fb85f7d5ee0b540e925a4de096ac351bcad80468f4e365f70459e1.glb",
+    "sha256": "e1ed0a7155fb85f7d5ee0b540e925a4de096ac351bcad80468f4e365f70459e1",
+    "size": 16828464,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "062d889591b79ea854904625d293494def9f6143507de7b7296da1eb1394fd98.ctex",
+          "sha256": "062d889591b79ea854904625d293494def9f6143507de7b7296da1eb1394fd98",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7e3d3a0597acfc0a91462fb7683e8e7a3d3d0982e50f8b1e77febdd00c5d5925.ctex",
+          "sha256": "7e3d3a0597acfc0a91462fb7683e8e7a3d3d0982e50f8b1e77febdd00c5d5925",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f8671e8d1f7f2c0c2ae50e327ece05bc5297307084562d16b8448fd9fee7889b.glb",
+        "sha256": "f8671e8d1f7f2c0c2ae50e327ece05bc5297307084562d16b8448fd9fee7889b",
+        "size": 8668152
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "human_defense_force/company leader": {
+    "url": "3e20c249b7dfb40d2ae3b8aba1b1f4ead13beb49986637d5fa2ad4fb02a20e33.glb",
+    "sha256": "3e20c249b7dfb40d2ae3b8aba1b1f4ead13beb49986637d5fa2ad4fb02a20e33",
+    "size": 15383104,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "674e1dd2fc800595498859e82999f4b00b8b98ab92e9d3b5a1d98f1dd15d9e79.ctex",
+          "sha256": "674e1dd2fc800595498859e82999f4b00b8b98ab92e9d3b5a1d98f1dd15d9e79",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "de86d7a40686b6ca31aac776607372888c81df090f0b616a30166847ecb05ea8.ctex",
+          "sha256": "de86d7a40686b6ca31aac776607372888c81df090f0b616a30166847ecb05ea8",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a6b14c140a15533c405ebed5f6175541b6cbdf919e7e45c30f1187fbfa781f33.glb",
+        "sha256": "a6b14c140a15533c405ebed5f6175541b6cbdf919e7e45c30f1187fbfa781f33",
+        "size": 4329492
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_defense_force/field artillery": {
+    "url": "72cbd139a6f8dc33ece8702ef11d9669d7d85c01de65f12129e374193bf907ef.glb",
+    "sha256": "72cbd139a6f8dc33ece8702ef11d9669d7d85c01de65f12129e374193bf907ef",
+    "size": 16400884,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "40aac4036ce5bdcd44df15277ac87dade81bed28c7fa1b801734cf60e5c0e665.ctex",
+          "sha256": "40aac4036ce5bdcd44df15277ac87dade81bed28c7fa1b801734cf60e5c0e665",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b2daf2439950009f107d566396adbd483c947f2fca45a1488a512bec7af81dd0.ctex",
+          "sha256": "b2daf2439950009f107d566396adbd483c947f2fca45a1488a512bec7af81dd0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8121e7947901760fa90251bac1d9025b8f8ee11f8e449e8d45e22a1131bb934a.glb",
+        "sha256": "8121e7947901760fa90251bac1d9025b8f8ee11f8e449e8d45e22a1131bb934a",
+        "size": 9137240
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "human_defense_force/grunt robots": {
+    "url": "92efa6aa99e287e92d7c4b196d48af13c7e01ff87417b0a23118e824c29e585e.glb",
+    "sha256": "92efa6aa99e287e92d7c4b196d48af13c7e01ff87417b0a23118e824c29e585e",
+    "size": 15205392,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0a5c450165c34956d845347649efa047ba4b7aa6c75e6a65deef3d3cd416074d.ctex",
+          "sha256": "0a5c450165c34956d845347649efa047ba4b7aa6c75e6a65deef3d3cd416074d",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4f101edac930c1a6dd2130d9e13bc69b02b303a6ee9172ad75c3a5cf7c1b247e.ctex",
+          "sha256": "4f101edac930c1a6dd2130d9e13bc69b02b303a6ee9172ad75c3a5cf7c1b247e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "cc2c73bbce952f97818d208dfec7f7dc75e2b934b3a0aba98069b0c46d728a82.glb",
+        "sha256": "cc2c73bbce952f97818d208dfec7f7dc75e2b934b3a0aba98069b0c46d728a82",
+        "size": 4507056
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_defense_force/heavy battle tank": {
+    "url": "917b7b3e429eca4cfafa6e99e95483e7daf244d0d8a51c3d69000e7ed1a7a9f4.glb",
+    "sha256": "917b7b3e429eca4cfafa6e99e95483e7daf244d0d8a51c3d69000e7ed1a7a9f4",
+    "size": 16643552,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5576cd487739749c1068edc92a5ae0d2542c0fd33d47857c88950e4a3d98658f.ctex",
+          "sha256": "5576cd487739749c1068edc92a5ae0d2542c0fd33d47857c88950e4a3d98658f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6ba82b6c326c80f7a57103ea22e1d14490e60953999543c5401e2d1860739e56.ctex",
+          "sha256": "6ba82b6c326c80f7a57103ea22e1d14490e60953999543c5401e2d1860739e56",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b1ff263884f974c950725a981c7367657baf58bffb15c1de8e702bc502c5bb5c.glb",
+        "sha256": "b1ff263884f974c950725a981c7367657baf58bffb15c1de8e702bc502c5bb5c",
+        "size": 9005032
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "human_defense_force/heavy gunship": {
+    "url": "7bb179e92da1f302d68b06ce41fc6f7a00f8778e26df903a76d595fd5ac08f89.glb",
+    "sha256": "7bb179e92da1f302d68b06ce41fc6f7a00f8778e26df903a76d595fd5ac08f89",
+    "size": 17623124,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "dab246e94c1d62b119bb7023f2c14702b6e659b5c9b4ee2fb807ec4e20e280ff.ctex",
+          "sha256": "dab246e94c1d62b119bb7023f2c14702b6e659b5c9b4ee2fb807ec4e20e280ff",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d3e215de91fd93639a0ea0ba843fb35c9059a974c5e61ec81df3f355813b63ba.ctex",
+          "sha256": "d3e215de91fd93639a0ea0ba843fb35c9059a974c5e61ec81df3f355813b63ba",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6e5c5df466cae699dc8ba0ce1556158d26643b13e9ade37ad7730ccd10198c66.glb",
+        "sha256": "6e5c5df466cae699dc8ba0ce1556158d26643b13e9ade37ad7730ccd10198c66",
+        "size": 9542668
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "human_defense_force/infantry squad": {
+    "url": "9b5180dba54bbbcb014494cbfee96086a43dd21d5b396a3ca29eac01aa748021.glb",
+    "sha256": "9b5180dba54bbbcb014494cbfee96086a43dd21d5b396a3ca29eac01aa748021",
+    "size": 13943292,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "329e4bf67c2ada8fc5538265de35133a09b36eae6143b980e5a5f7777fc39b42.ctex",
+          "sha256": "329e4bf67c2ada8fc5538265de35133a09b36eae6143b980e5a5f7777fc39b42",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "717f6e1aac6c09fa368b5192645fa72c7629a1b70923f76ab8182f90eff35b3e.ctex",
+          "sha256": "717f6e1aac6c09fa368b5192645fa72c7629a1b70923f76ab8182f90eff35b3e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2218d654415febe5688e9817b1d666133ad1c92b3778d6adcdc1415f358f07a7.glb",
+        "sha256": "2218d654415febe5688e9817b1d666133ad1c92b3778d6adcdc1415f358f07a7",
+        "size": 4168048
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_defense_force/light apc": {
+    "url": "c70a7389ee45f50cef62c8dfef1119ec67a1a82b6de1fecf29fe2bd22107ed7f.glb",
+    "sha256": "c70a7389ee45f50cef62c8dfef1119ec67a1a82b6de1fecf29fe2bd22107ed7f",
+    "size": 15857116,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ac342973df5a6bf5f9d542f1b39dcab4bb4b08b3a50a64e8ad7e4f34dcdd2f77.ctex",
+          "sha256": "ac342973df5a6bf5f9d542f1b39dcab4bb4b08b3a50a64e8ad7e4f34dcdd2f77",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "57235a8c00464f9004e1b193ea931558f3b86772eed24107b1dd86273e2f2d6b.ctex",
+          "sha256": "57235a8c00464f9004e1b193ea931558f3b86772eed24107b1dd86273e2f2d6b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f1e78f3bb03ea4d9cb960ee5c7b38e5a431629b7ef41ffb05d66fcbccf6ad909.glb",
+        "sha256": "f1e78f3bb03ea4d9cb960ee5c7b38e5a431629b7ef41ffb05d66fcbccf6ad909",
+        "size": 9105452
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "human_defense_force/light gunship": {
+    "url": "8a07b88d10342e4b2c7d243e0e57a4355f34f30f8fcfcdff5263fbd78137c9b1.glb",
+    "sha256": "8a07b88d10342e4b2c7d243e0e57a4355f34f30f8fcfcdff5263fbd78137c9b1",
+    "size": 16985104,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "839cbc50dbd6b678736bdd98672ae666e7bf6c44cb513253b4a344420903b7c2.ctex",
+          "sha256": "839cbc50dbd6b678736bdd98672ae666e7bf6c44cb513253b4a344420903b7c2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "36525dd98b9f648797143712e2599bac22c281890435aed864880ce6d19ebc10.ctex",
+          "sha256": "36525dd98b9f648797143712e2599bac22c281890435aed864880ce6d19ebc10",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "557db2c2c09b5e48a3b70f2f2fbd11bd9fea0042ba78339b02b9f1da3b67642f.glb",
+        "sha256": "557db2c2c09b5e48a3b70f2f2fbd11bd9fea0042ba78339b02b9f1da3b67642f",
+        "size": 9145740
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "human_defense_force/light walker": {
+    "url": "163ca47aef0f2bd343f0de73bd394ae26457b5a750e12e2a32d256cb624dd98d.glb",
+    "sha256": "163ca47aef0f2bd343f0de73bd394ae26457b5a750e12e2a32d256cb624dd98d",
+    "size": 16268572,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c4bf6501f30b231088c9e8bbd5bb2716908168322d5cce5a97edd213c8bd1164.ctex",
+          "sha256": "c4bf6501f30b231088c9e8bbd5bb2716908168322d5cce5a97edd213c8bd1164",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d2b7ec89d5d1d344fa2ef54b14aba7e5eecc3361d154ca37216f14eab4107e46.ctex",
+          "sha256": "d2b7ec89d5d1d344fa2ef54b14aba7e5eecc3361d154ca37216f14eab4107e46",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e9244b41ab085f7a17dd459843440c4f522de0f017a80e6b1769952e3816c387.glb",
+        "sha256": "e9244b41ab085f7a17dd459843440c4f522de0f017a80e6b1769952e3816c387",
+        "size": 8916400
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "human_defense_force/ogre robots": {
+    "url": "c42952defd607c7fbcb333e96a1cd9d72a79e6e8ea17e5a38e16095454686892.glb",
+    "sha256": "c42952defd607c7fbcb333e96a1cd9d72a79e6e8ea17e5a38e16095454686892",
+    "size": 15335276,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "862fbbcd81ece547764a579116384393fba379ab779c5cd0c39c3c7c603554d9.ctex",
+          "sha256": "862fbbcd81ece547764a579116384393fba379ab779c5cd0c39c3c7c603554d9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3c7b6d85fdfdf8604ff3c11eb3955830e7479719d7b95393a12db4a6d9ec5f76.ctex",
+          "sha256": "3c7b6d85fdfdf8604ff3c11eb3955830e7479719d7b95393a12db4a6d9ec5f76",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "92c05b266e4c9b970623e600da78052647b31a7e4ca4ce734c23a457d5531f8a.glb",
+        "sha256": "92c05b266e4c9b970623e600da78052647b31a7e4ca4ce734c23a457d5531f8a",
+        "size": 4559204
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_defense_force/recruits": {
+    "url": "79f4e2ad1326bab768c5c6dad081c72074f679c5df7367bad002c2d7a69a6376.glb",
+    "sha256": "79f4e2ad1326bab768c5c6dad081c72074f679c5df7367bad002c2d7a69a6376",
+    "size": 14406752,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "21597eb12c2fd2952618386a8a30fa5bf5066712c524c05c031aad3e702ddedb.ctex",
+          "sha256": "21597eb12c2fd2952618386a8a30fa5bf5066712c524c05c031aad3e702ddedb",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d906ed54fe79558c66f949bddc858f90c1d53a60e5ed0ce3e393863d47fd3e38.ctex",
+          "sha256": "d906ed54fe79558c66f949bddc858f90c1d53a60e5ed0ce3e393863d47fd3e38",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "32f7b0dbedd59f0430524879def0b4ea689c4af98f06a41b652fc517a7fafcd8.glb",
+        "sha256": "32f7b0dbedd59f0430524879def0b4ea689c4af98f06a41b652fc517a7fafcd8",
+        "size": 4573816
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_defense_force/sappers": {
+    "url": "3411b8bb00c4f7d7a31b9948ca0b444f7fb7d87f75e66194dd9c6ace8bae6b38.glb",
+    "sha256": "3411b8bb00c4f7d7a31b9948ca0b444f7fb7d87f75e66194dd9c6ace8bae6b38",
+    "size": 15236724,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "28e1f44a384ee8031203109d5bcab1c41f7a4cdad67f2184ab91bfe78a35210c.ctex",
+          "sha256": "28e1f44a384ee8031203109d5bcab1c41f7a4cdad67f2184ab91bfe78a35210c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "624461ffe1d4300a04145dae6b9928f67a3b73a7388ffd5cc042c19e0f29bf18.ctex",
+          "sha256": "624461ffe1d4300a04145dae6b9928f67a3b73a7388ffd5cc042c19e0f29bf18",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "14906601c43a863309a16aafde770d2976b25443ed0d36b2f6b9b65fa57454cb.glb",
+        "sha256": "14906601c43a863309a16aafde770d2976b25443ed0d36b2f6b9b65fa57454cb",
+        "size": 4665296
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_defense_force/snipers": {
+    "url": "4932c9dd0dd6ac51f544dcb1605898a491648ca87dc51fcacad649a4853dcd1c.glb",
+    "sha256": "4932c9dd0dd6ac51f544dcb1605898a491648ca87dc51fcacad649a4853dcd1c",
+    "size": 17320908,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e26ed0ad81582b7b9baf1a8b6d7e3e11972d30e750b30812c6f87cc950a43538.ctex",
+          "sha256": "e26ed0ad81582b7b9baf1a8b6d7e3e11972d30e750b30812c6f87cc950a43538",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b11f396c6fa7164c9ee7ecc366923f0cb16605cd5130767ed69f38b919c82912.ctex",
+          "sha256": "b11f396c6fa7164c9ee7ecc366923f0cb16605cd5130767ed69f38b919c82912",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "756852c33aba04547e60a191af20dd3c2d254a99ea748be5c163dce86f9b8397.glb",
+        "sha256": "756852c33aba04547e60a191af20dd3c2d254a99ea748be5c163dce86f9b8397",
+        "size": 4901680
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_defense_force/storm leader": {
+    "url": "9e2a5f2fbac5c5831fd27f62c4275bd8af14a1f19e2e2db3803afa8b45f626e2.glb",
+    "sha256": "9e2a5f2fbac5c5831fd27f62c4275bd8af14a1f19e2e2db3803afa8b45f626e2",
+    "size": 16613752,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a591543ac8f8653f14fa0574ad8a46e274da53a007202ca7295d531b9bb97e46.ctex",
+          "sha256": "a591543ac8f8653f14fa0574ad8a46e274da53a007202ca7295d531b9bb97e46",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "352ca9ba70fb8ed0331b04c54945df1029921a21323371a2d12171f6a3a51944.ctex",
+          "sha256": "352ca9ba70fb8ed0331b04c54945df1029921a21323371a2d12171f6a3a51944",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5c74cfe477a8f666263615da92515614863c2916549d189057912165580b0c0d.glb",
+        "sha256": "5c74cfe477a8f666263615da92515614863c2916549d189057912165580b0c0d",
+        "size": 5058212
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_defense_force/storm troopers": {
+    "url": "214874daa7a202af0a9f92dd431f31adb25015a2b57fbd1f712e0c64f331b3e2.glb",
+    "sha256": "214874daa7a202af0a9f92dd431f31adb25015a2b57fbd1f712e0c64f331b3e2",
+    "size": 15859852,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "181166eefef104b82acfa7c71a2f0a21e17b329269cf57fe66524e5b59879c35.ctex",
+          "sha256": "181166eefef104b82acfa7c71a2f0a21e17b329269cf57fe66524e5b59879c35",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "793a41b09b578aaa15cdcc373d41ec05485def8849a45ace59cb2bba2d43f1b2.ctex",
+          "sha256": "793a41b09b578aaa15cdcc373d41ec05485def8849a45ace59cb2bba2d43f1b2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "4544f56ed8b56c6b764871a56324cff91a1cdbec1f75dc9d6a8328475b444eed.glb",
+        "sha256": "4544f56ed8b56c6b764871a56324cff91a1cdbec1f75dc9d6a8328475b444eed",
+        "size": 4395328
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_defense_force/super heavy battle tank": {
+    "url": "94f86b211111969a7eae23fc91782b0cd064a8ef9e42be4a6ce29aef8ea63a0e.glb",
+    "sha256": "94f86b211111969a7eae23fc91782b0cd064a8ef9e42be4a6ce29aef8ea63a0e",
+    "size": 19643408,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "60e45fb6258ea53da6b6500a94f1ec6139b169fc2524eb0e75d38fc2419b958a.ctex",
+          "sha256": "60e45fb6258ea53da6b6500a94f1ec6139b169fc2524eb0e75d38fc2419b958a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "76a038df8a6930cfed86653a69159d0f5030991435f7ac78d848846904ff169b.ctex",
+          "sha256": "76a038df8a6930cfed86653a69159d0f5030991435f7ac78d848846904ff169b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d50cadb3aceb54d7ff78a68f67c4e0f3ce3c3ae0b6b4a664842d7be839fe40a1.glb",
+        "sha256": "d50cadb3aceb54d7ff78a68f67c4e0f3ce3c3ae0b6b4a664842d7be839fe40a1",
+        "size": 10223640
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "human_defense_force/support vehicle": {
+    "url": "2175a72b0607ab34d19fad5fb7e6fcd59a24ac748ab29caa3775e1dff1699ee4.glb",
+    "sha256": "2175a72b0607ab34d19fad5fb7e6fcd59a24ac748ab29caa3775e1dff1699ee4",
+    "size": 17997152,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "305bf2f5ec1eef410e80016ca9fc86fa1b9d887ea6fd83b6a8e12d0e834e96bf.ctex",
+          "sha256": "305bf2f5ec1eef410e80016ca9fc86fa1b9d887ea6fd83b6a8e12d0e834e96bf",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "afacb025c150f074e6dd279590e9bd795a7ce83424eac3911c7d59697b1035d5.ctex",
+          "sha256": "afacb025c150f074e6dd279590e9bd795a7ce83424eac3911c7d59697b1035d5",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d4015dfaafbabc4bd88c7eb93b46413455286857ab503190e224feb6552cb601.glb",
+        "sha256": "d4015dfaafbabc4bd88c7eb93b46413455286857ab503190e224feb6552cb601",
+        "size": 9746024
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "human_defense_force/tactical titan": {
+    "url": "4101a716b8d3b451f637276708b9546c8828c980b078e640116b41c3748f3c48.glb",
+    "sha256": "4101a716b8d3b451f637276708b9546c8828c980b078e640116b41c3748f3c48",
+    "size": 17323900,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2bf18a21a723a3fdfa26b728363ea3c0b9fbae6b38acce147110d9d8f53337ad.ctex",
+          "sha256": "2bf18a21a723a3fdfa26b728363ea3c0b9fbae6b38acce147110d9d8f53337ad",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e5c85d4084b85e8706c5cda1a1620de0962b082a6db853bdd029d9bb8c842eb9.ctex",
+          "sha256": "e5c85d4084b85e8706c5cda1a1620de0962b082a6db853bdd029d9bb8c842eb9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b3ed8619cda324ba9b74f264e7aa8dae72bc2b89d5bf0bbc2e1aa81f42d15e19.glb",
+        "sha256": "b3ed8619cda324ba9b74f264e7aa8dae72bc2b89d5bf0bbc2e1aa81f42d15e19",
+        "size": 12519576
+      },
+      "size_class": "large"
+    }
+  },
+  "human_defense_force/tactical walker": {
+    "url": "40e939ad1a32cc613dc5b3a42439254815911623e0f027005a3f069e869a9b47.glb",
+    "sha256": "40e939ad1a32cc613dc5b3a42439254815911623e0f027005a3f069e869a9b47",
+    "size": 17446368,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7f0f2c2f0016ab332a5d322e5d4ebc9745112ba4cc07fa3793dc52ccf7962906.ctex",
+          "sha256": "7f0f2c2f0016ab332a5d322e5d4ebc9745112ba4cc07fa3793dc52ccf7962906",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ccc04e637c1f886209d548ed4a998cc2ec3e582842a841c35820114b4347474a.ctex",
+          "sha256": "ccc04e637c1f886209d548ed4a998cc2ec3e582842a841c35820114b4347474a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "49e0d392fb1f741086791d31c64e4d88c9608761a7924e9220d8d730225a35c1.glb",
+        "sha256": "49e0d392fb1f741086791d31c64e4d88c9608761a7924e9220d8d730225a35c1",
+        "size": 8081620
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "human_defense_force/tank company leader": {
+    "url": "c17659038d4bd3994985dbe78df1f0d03fe5c388bf1cd9e9280e6ea108d25e25.glb",
+    "sha256": "c17659038d4bd3994985dbe78df1f0d03fe5c388bf1cd9e9280e6ea108d25e25",
+    "size": 16660632,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "19d4f1f424b16d4e7583c5d13932383299f6257563cc0a8e8fe6459ccf2ef6ec.ctex",
+          "sha256": "19d4f1f424b16d4e7583c5d13932383299f6257563cc0a8e8fe6459ccf2ef6ec",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d2e11100ba409d5be67887ee1fd42c4ad0c44902fdc9d6a63269bc8abd89ff46.ctex",
+          "sha256": "d2e11100ba409d5be67887ee1fd42c4ad0c44902fdc9d6a63269bc8abd89ff46",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "6cd43ccd6952d1f293e8b85b7af58635f9ab284bb4debc2a47f1538476f411b8.glb",
+        "sha256": "6cd43ccd6952d1f293e8b85b7af58635f9ab284bb4debc2a47f1538476f411b8",
+        "size": 9577724
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "human_defense_force/veterans": {
+    "url": "eb1385de944c1cff4bd00440836e18a8e14145ee6003d53753c01e04f1b6b81e.glb",
+    "sha256": "eb1385de944c1cff4bd00440836e18a8e14145ee6003d53753c01e04f1b6b81e",
+    "size": 15892296,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f87367021be3e4f949a2ee51889617a657afc37ac65e857ca23983916371fbf4.ctex",
+          "sha256": "f87367021be3e4f949a2ee51889617a657afc37ac65e857ca23983916371fbf4",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "f7a00fef1faf01da113bc814773bddb1dd10bbbc48f943d9550420cfd3501bc1.ctex",
+          "sha256": "f7a00fef1faf01da113bc814773bddb1dd10bbbc48f943d9550420cfd3501bc1",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "822001aa493347fa2812fc9025110b1bc111941b5309eb1bd85f25dc56cffe1e.glb",
+        "sha256": "822001aa493347fa2812fc9025110b1bc111941b5309eb1bd85f25dc56cffe1e",
+        "size": 4603572
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_defense_force/weapon teams": {
+    "url": "b2f2f85c4877193e1357faeb5130ab336f47b7b6765d20dcae47b408076210d4.glb",
+    "sha256": "b2f2f85c4877193e1357faeb5130ab336f47b7b6765d20dcae47b408076210d4",
+    "size": 13871660,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "abba39e3bfba74057333758f92e413ccb7f2f5886da734c521b253888ec375c6.ctex",
+          "sha256": "abba39e3bfba74057333758f92e413ccb7f2f5886da734c521b253888ec375c6",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "09cb124b0d199b09f6660da8db7e24a58e99d70c85bac5a5d1ad8175a0e99f27.ctex",
+          "sha256": "09cb124b0d199b09f6660da8db7e24a58e99d70c85bac5a5d1ad8175a0e99f27",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "880a7a5608931ee9255187f28d83ea8d2cc9012bc1c5868f6cb334ee67ec13a2.glb",
+        "sha256": "880a7a5608931ee9255187f28d83ea8d2cc9012bc1c5868f6cb334ee67ec13a2",
+        "size": 4240620
+      },
+      "size_class": "infantry"
+    }
+  }
+}

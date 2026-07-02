@@ -1,0 +1,444 @@
+{
+  "wormhole_daemons_of_lust/ascended harbinger of lust": {
+    "url": "a99d702b102932a9f997086a91352ec7761375b706ae7dfcf7640aef193fa52e.glb",
+    "sha256": "a99d702b102932a9f997086a91352ec7761375b706ae7dfcf7640aef193fa52e",
+    "size": 14644500,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "cfdc56be5249347d1a7b751ed7f70740412d63e7f1bbf78c6458f364cc55ac93.ctex",
+          "sha256": "cfdc56be5249347d1a7b751ed7f70740412d63e7f1bbf78c6458f364cc55ac93",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "edbe076969ebb3010424271a75aafd964841a00da3be42477ffcc21a98c1dea2.ctex",
+          "sha256": "edbe076969ebb3010424271a75aafd964841a00da3be42477ffcc21a98c1dea2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "52b182835e6c9b535f473c2013ee51d3d3fea29436ef78ea340931bab28940fe.glb",
+        "sha256": "52b182835e6c9b535f473c2013ee51d3d3fea29436ef78ea340931bab28940fe",
+        "size": 4053400
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_lust/avatar of lust": {
+    "url": "ff51e0c36e7c46b12ef1537a1084ee79a397ef76a7c638203a65ce21a58ea45b.glb",
+    "sha256": "ff51e0c36e7c46b12ef1537a1084ee79a397ef76a7c638203a65ce21a58ea45b",
+    "size": 16941424,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f8410c0e0e72258250cfaf181bc9ba0da20eab4d1beeb97b66944656f6103c5b.ctex",
+          "sha256": "f8410c0e0e72258250cfaf181bc9ba0da20eab4d1beeb97b66944656f6103c5b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "249949358a79041c4eace9f32da31a83a58de156fc640bade7d030c102f40657.ctex",
+          "sha256": "249949358a79041c4eace9f32da31a83a58de156fc640bade7d030c102f40657",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "bae24980298cbcb6dd60aeb430c4b449940b629a5f4c7ed8b8e7f236f5bd96d5.glb",
+        "sha256": "bae24980298cbcb6dd60aeb430c4b449940b629a5f4c7ed8b8e7f236f5bd96d5",
+        "size": 12102984
+      },
+      "size_class": "large"
+    }
+  },
+  "wormhole_daemons_of_lust/champion of lust": {
+    "url": "84507644208fbf829b895fccbc6749fe34cd4ce1c43cbeb2ee06e1a11fde6773.glb",
+    "sha256": "84507644208fbf829b895fccbc6749fe34cd4ce1c43cbeb2ee06e1a11fde6773",
+    "size": 16099044,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3597d9e22c3d3747acbfe0775ca55195293e223f10008e5498167938e209258f.ctex",
+          "sha256": "3597d9e22c3d3747acbfe0775ca55195293e223f10008e5498167938e209258f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b2022fbc2c3a4c5822b6d09928b089bba521e221e235aee4b85330c3ce307dd9.ctex",
+          "sha256": "b2022fbc2c3a4c5822b6d09928b089bba521e221e235aee4b85330c3ce307dd9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "cdb4f800b071d4afa6d137311a0adeec23ed991d7d9f2f65cd1d1522ce041a89.glb",
+        "sha256": "cdb4f800b071d4afa6d137311a0adeec23ed991d7d9f2f65cd1d1522ce041a89",
+        "size": 4188856
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_lust/fury champion of lust": {
+    "url": "a3c8dc1d9badf8b78068474e58e418fa8c88203884c16a19e14fdca7568ba3da.glb",
+    "sha256": "a3c8dc1d9badf8b78068474e58e418fa8c88203884c16a19e14fdca7568ba3da",
+    "size": 15625188,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "05727c45db0ed2e173e75772b2597950b7a20cdf9fc91e4881a6b9785f1b474c.ctex",
+          "sha256": "05727c45db0ed2e173e75772b2597950b7a20cdf9fc91e4881a6b9785f1b474c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d5960473c079d68085cd1c2515ac3640b2fc26d62acc5f773d00a61d83654d9c.ctex",
+          "sha256": "d5960473c079d68085cd1c2515ac3640b2fc26d62acc5f773d00a61d83654d9c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "62b161dc2565d87b4df21466ee806e587676f1c117927a8ba184d91f77716495.glb",
+        "sha256": "62b161dc2565d87b4df21466ee806e587676f1c117927a8ba184d91f77716495",
+        "size": 4517436
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_lust/harbinger of lust": {
+    "url": "046c0658a1ae55ea42d5c18c5aef7dfb5f89bc151f51bac43b9ba48ba5d91e53.glb",
+    "sha256": "046c0658a1ae55ea42d5c18c5aef7dfb5f89bc151f51bac43b9ba48ba5d91e53",
+    "size": 15780204,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "93ad47d43951088eeb6fab6c6be626e77f5ad433346e73ff28802096161c691e.ctex",
+          "sha256": "93ad47d43951088eeb6fab6c6be626e77f5ad433346e73ff28802096161c691e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2a3bbbc7bf925e68df34f14dec144de53a6ae4ecd04de4f3c4bbd1f4c9e711c7.ctex",
+          "sha256": "2a3bbbc7bf925e68df34f14dec144de53a6ae4ecd04de4f3c4bbd1f4c9e711c7",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2ffcc74ebec570e6cc471c7b558c89dfb474f2402a5d4f1bed951c9666a34dfa.glb",
+        "sha256": "2ffcc74ebec570e6cc471c7b558c89dfb474f2402a5d4f1bed951c9666a34dfa",
+        "size": 4419936
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_lust/infernal siren": {
+    "url": "21afe22464d2aa57181995d4a5e1c5f09c3790ef073547d9e7cbc063c12eb0bc.glb",
+    "sha256": "21afe22464d2aa57181995d4a5e1c5f09c3790ef073547d9e7cbc063c12eb0bc",
+    "size": 15277008,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d8b551cd25633a6e99e7999895975d62c61e39f9104afc1acbaa351b2350c6b8.ctex",
+          "sha256": "d8b551cd25633a6e99e7999895975d62c61e39f9104afc1acbaa351b2350c6b8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "7f43d0f1bd45db478fb5968ff0339f9ae21e318128529b2ae38ca6d4d98e6d58.ctex",
+          "sha256": "7f43d0f1bd45db478fb5968ff0339f9ae21e318128529b2ae38ca6d4d98e6d58",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "664eac99dad4644455caef35defc4f09588692baa6f1a63dd899ae5520fc8610.glb",
+        "sha256": "664eac99dad4644455caef35defc4f09588692baa6f1a63dd899ae5520fc8610",
+        "size": 4202712
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_lust/lust beast riders": {
+    "url": "8e0c27973d33ba3108bbfb618ebafed2640dfc4a5dcf65985ff48cd7bc30a3e3.glb",
+    "sha256": "8e0c27973d33ba3108bbfb618ebafed2640dfc4a5dcf65985ff48cd7bc30a3e3",
+    "size": 14869320,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "da92709f4202504090e4a02194899a95d4c2124d17b35675a22a5dd3af26d054.ctex",
+          "sha256": "da92709f4202504090e4a02194899a95d4c2124d17b35675a22a5dd3af26d054",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "40bc6cb8d11bbde788b80a8e3f94762143031bf9650794a9490bfe5cb9cc72ff.ctex",
+          "sha256": "40bc6cb8d11bbde788b80a8e3f94762143031bf9650794a9490bfe5cb9cc72ff",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9ec11258a326fd7e0d54b5e0e61e0cb1dc3468ee34044317bf60db7acf120de4.glb",
+        "sha256": "9ec11258a326fd7e0d54b5e0e61e0cb1dc3468ee34044317bf60db7acf120de4",
+        "size": 11672732
+      },
+      "size_class": "large"
+    }
+  },
+  "wormhole_daemons_of_lust/lust fiend": {
+    "url": "e33feb278c8d1685e6629c1ee64a550bb0a0f9dddf90e6f8fe6673d7db3da265.glb",
+    "sha256": "e33feb278c8d1685e6629c1ee64a550bb0a0f9dddf90e6f8fe6673d7db3da265",
+    "size": 16137784,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "303c9b419a8c53f1c497fbfb390be3e0a43fcfe95d5d83bc627e5ce94c4260e4.ctex",
+          "sha256": "303c9b419a8c53f1c497fbfb390be3e0a43fcfe95d5d83bc627e5ce94c4260e4",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1d9833e0717ee9b66e0b4878675d212b0e78c3a900f0b684af3bbf102284257a.ctex",
+          "sha256": "1d9833e0717ee9b66e0b4878675d212b0e78c3a900f0b684af3bbf102284257a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d61ede1cecd9b112208d403b4a9b9e5c7b653036bad762a42c078092324d3853.glb",
+        "sha256": "d61ede1cecd9b112208d403b4a9b9e5c7b653036bad762a42c078092324d3853",
+        "size": 12050132
+      },
+      "size_class": "large"
+    }
+  },
+  "wormhole_daemons_of_lust/lust furies": {
+    "url": "bafae9e2500ebcbd0223d86c7d24b411b7468defb83d3510180104a394405604.glb",
+    "sha256": "bafae9e2500ebcbd0223d86c7d24b411b7468defb83d3510180104a394405604",
+    "size": 15532032,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c8a5a74ac92e6169a0274d99c69b460ac0f3a85bf4411a53ef2dd1da09afafbd.ctex",
+          "sha256": "c8a5a74ac92e6169a0274d99c69b460ac0f3a85bf4411a53ef2dd1da09afafbd",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c3bc772daacd178c83500e972a94b0af2c38203ee58663fb76a41f343317999b.ctex",
+          "sha256": "c3bc772daacd178c83500e972a94b0af2c38203ee58663fb76a41f343317999b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8f2ba9cba8f2928e9c1790a70a9bb5845e29207a83f6804969fa6bc22e92d059.glb",
+        "sha256": "8f2ba9cba8f2928e9c1790a70a9bb5845e29207a83f6804969fa6bc22e92d059",
+        "size": 4262108
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_lust/lust shooters": {
+    "url": "4324402ce160bcd4df1a553946cbe2b33d1aeff16b13fc5804dac26c328ee236.glb",
+    "sha256": "4324402ce160bcd4df1a553946cbe2b33d1aeff16b13fc5804dac26c328ee236",
+    "size": 18683196,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "918ceffeb20b0e3d4b1793d6bd4a9e459cd2c2309f7426f94a5504801184a99f.ctex",
+          "sha256": "918ceffeb20b0e3d4b1793d6bd4a9e459cd2c2309f7426f94a5504801184a99f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b714c1fc7f74d6c1a12c9fecb9225c41f4a2a10fc57b2ce53c5c7e14346f743f.ctex",
+          "sha256": "b714c1fc7f74d6c1a12c9fecb9225c41f4a2a10fc57b2ce53c5c7e14346f743f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "501460c063c4280c345c80be1aeecabb719072d063523abaa87e204f2501035a.glb",
+        "sha256": "501460c063c4280c345c80be1aeecabb719072d063523abaa87e204f2501035a",
+        "size": 5277256
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_lust/lust soul spawns": {
+    "url": "94f7f82494f4afbf628f61f2855e51bf7e1e30d091c05253547d861a9d75b9b6.glb",
+    "sha256": "94f7f82494f4afbf628f61f2855e51bf7e1e30d091c05253547d861a9d75b9b6",
+    "size": 14729748,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4abfd5faab08f25fa84addb959219dfd7793edd7363c7520b314986005b28405.ctex",
+          "sha256": "4abfd5faab08f25fa84addb959219dfd7793edd7363c7520b314986005b28405",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "713bc1b990bf3008ec3be81a2d5c0ff377d93351791e93451fc6635ddff4bb7c.ctex",
+          "sha256": "713bc1b990bf3008ec3be81a2d5c0ff377d93351791e93451fc6635ddff4bb7c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "336624cecaf74b2492101dee98e7d47ec98b0c3b37ebbb996df02905e9df0b9b.glb",
+        "sha256": "336624cecaf74b2492101dee98e7d47ec98b0c3b37ebbb996df02905e9df0b9b",
+        "size": 4093736
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_lust/lust warriors": {
+    "url": "8507efb488267257507c465773dc35413309d96c6fb414736b1b924707c1906b.glb",
+    "sha256": "8507efb488267257507c465773dc35413309d96c6fb414736b1b924707c1906b",
+    "size": 13453876,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "30e0e4d04c9ac6639e9f35893daaf464888435fc49a6ea06754f9237e1cd4854.ctex",
+          "sha256": "30e0e4d04c9ac6639e9f35893daaf464888435fc49a6ea06754f9237e1cd4854",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ebd9119ec991ab526fcab365558e2ff8a80425035dc0be5258adbbc3b31c8672.ctex",
+          "sha256": "ebd9119ec991ab526fcab365558e2ff8a80425035dc0be5258adbbc3b31c8672",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f994cbc9bf6d604c85e206ad1dd4cdd85af4f115ab897e662c9c8a2cba1281a0.glb",
+        "sha256": "f994cbc9bf6d604c85e206ad1dd4cdd85af4f115ab897e662c9c8a2cba1281a0",
+        "size": 3478308
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_lust/razor flail chariot": {
+    "url": "d628e97530577de53b7b674553631f9f49f4c6d0e2edf17992fc6ba3c4964a97.glb",
+    "sha256": "d628e97530577de53b7b674553631f9f49f4c6d0e2edf17992fc6ba3c4964a97",
+    "size": 17691308,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ff5559c5a897b3c9d8bd5ce73b15d3dad2ec322f9e100c4f99e9e64c4a5c41b9.ctex",
+          "sha256": "ff5559c5a897b3c9d8bd5ce73b15d3dad2ec322f9e100c4f99e9e64c4a5c41b9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e8afdcc35aae4aa343a45fbe78f22b7c3496efae5e7b708a24f682c87f1eb0b6.ctex",
+          "sha256": "e8afdcc35aae4aa343a45fbe78f22b7c3496efae5e7b708a24f682c87f1eb0b6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "13119b00fc098ac6664f2094be3d4d1261301a904f9ca57adaeabc19d4dae11a.glb",
+        "sha256": "13119b00fc098ac6664f2094be3d4d1261301a904f9ca57adaeabc19d4dae11a",
+        "size": 8677744
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "wormhole_daemons_of_lust/sacred mirror": {
+    "url": "2088b3ef759f399ac57045cc35c9216f9c0aba2d9914f0a4793f9a4aacce2490.glb",
+    "sha256": "2088b3ef759f399ac57045cc35c9216f9c0aba2d9914f0a4793f9a4aacce2490",
+    "size": 17142404,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d5591323f7da9ac2df53b8c6076dc806680fae2032cd868d6b7ee98be83af749.ctex",
+          "sha256": "d5591323f7da9ac2df53b8c6076dc806680fae2032cd868d6b7ee98be83af749",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5f226a5e047ddc0646d3cc5327f885bf7d8b339570278522863c630bc4cb37d1.ctex",
+          "sha256": "5f226a5e047ddc0646d3cc5327f885bf7d8b339570278522863c630bc4cb37d1",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "793ae1a2ed3046b6bc43ef3e1ad49518009d89211ab18888c2597428c4e2c415.glb",
+        "sha256": "793ae1a2ed3046b6bc43ef3e1ad49518009d89211ab18888c2597428c4e2c415",
+        "size": 4785872
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_lust/shooter furies": {
+    "url": "5e033ed42cba4d8fd799fa9afe7a5b6603e97a6ffe6e256fd59250f86a3b83dc.glb",
+    "sha256": "5e033ed42cba4d8fd799fa9afe7a5b6603e97a6ffe6e256fd59250f86a3b83dc",
+    "size": 15834148,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "67aac4f721d1542d8fdd558d7a1a591278d415c872f87535961d44fc8110d9af.ctex",
+          "sha256": "67aac4f721d1542d8fdd558d7a1a591278d415c872f87535961d44fc8110d9af",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "33e81e817c87f8c4056dfdebed411980bad9fc66a0951ed7897d3934b135c11e.ctex",
+          "sha256": "33e81e817c87f8c4056dfdebed411980bad9fc66a0951ed7897d3934b135c11e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c6ff350e9755a6d3a9075383712935e1fd1530c449f221c94e4e43cc2656e490.glb",
+        "sha256": "c6ff350e9755a6d3a9075383712935e1fd1530c449f221c94e4e43cc2656e490",
+        "size": 4407092
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_lust/snake swarms": {
+    "url": "f2e3735a816bfa8a57b4c9fecf2514e42cb9bea68418a7a0fd0085ddde00a523.glb",
+    "sha256": "f2e3735a816bfa8a57b4c9fecf2514e42cb9bea68418a7a0fd0085ddde00a523",
+    "size": 14955712,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3c63f1dc9a03a15def1fc61491f1d4cde4e449d89c140993937218bdb7aeabb9.ctex",
+          "sha256": "3c63f1dc9a03a15def1fc61491f1d4cde4e449d89c140993937218bdb7aeabb9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9878c86f5c2a6997fe3d73fa2af1e31904f7c66d16383f0d58de8432b1b21bb1.ctex",
+          "sha256": "9878c86f5c2a6997fe3d73fa2af1e31904f7c66d16383f0d58de8432b1b21bb1",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "edc2b69e2481b4311e7f8e25f5c91a234a3870882e44e6a23fbf5b8810b1487d.glb",
+        "sha256": "edc2b69e2481b4311e7f8e25f5c91a234a3870882e44e6a23fbf5b8810b1487d",
+        "size": 4065604
+      },
+      "size_class": "infantry"
+    }
+  },
+  "wormhole_daemons_of_lust/soul daemon of lust": {
+    "url": "d12208c8097cecb3611ccea0be23107af5137ce0da339a6bf4d56067e714db1b.glb",
+    "sha256": "d12208c8097cecb3611ccea0be23107af5137ce0da339a6bf4d56067e714db1b",
+    "size": 17431252,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2a6f870edec71ab48e2fdd39d86053a06aef5693cde6dabea5046ed600f6e011.ctex",
+          "sha256": "2a6f870edec71ab48e2fdd39d86053a06aef5693cde6dabea5046ed600f6e011",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ecdb046f850090e99e7ff0c5c8c2a848c8a02d1f7ea79b495bef654c5864691f.ctex",
+          "sha256": "ecdb046f850090e99e7ff0c5c8c2a848c8a02d1f7ea79b495bef654c5864691f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e612c2ada3739caff8931f8061e794ccff4af431fb228c6ff9edfd8dc8aab729.glb",
+        "sha256": "e612c2ada3739caff8931f8061e794ccff4af431fb228c6ff9edfd8dc8aab729",
+        "size": 5006952
+      },
+      "size_class": "infantry"
+    }
+  }
+}

@@ -1,0 +1,756 @@
+{
+  "orc_marauders/assault buggy": {
+    "url": "695c8638c8700e58145d48f0bd3746a4e8d9947445471884f09511ff37af8e8f.glb",
+    "sha256": "695c8638c8700e58145d48f0bd3746a4e8d9947445471884f09511ff37af8e8f",
+    "size": 17300788,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "44ddc96e2778aea6516d331eb5b6f40bc1c7d410b54a243bd7989588ccc0fe3a.ctex",
+          "sha256": "44ddc96e2778aea6516d331eb5b6f40bc1c7d410b54a243bd7989588ccc0fe3a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c8e6fc4d9116643f0abefd66b8ee8d23f407ee4bc066533695a1a3a53f6a363f.ctex",
+          "sha256": "c8e6fc4d9116643f0abefd66b8ee8d23f407ee4bc066533695a1a3a53f6a363f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "49012e88cc640271afe7458f321f3423603fafa95763d90a4f982f76b6e54765.glb",
+        "sha256": "49012e88cc640271afe7458f321f3423603fafa95763d90a4f982f76b6e54765",
+        "size": 8908196
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "orc_marauders/attack plane": {
+    "url": "bbe193b586a263dd294e21efbdae9a5fc12dcdf5da37913666514e48472119c5.glb",
+    "sha256": "bbe193b586a263dd294e21efbdae9a5fc12dcdf5da37913666514e48472119c5",
+    "size": 21328404,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "16f982cd1231ae56e55238b78b7776373bd319a7b09f81d951a7f93f4a7c3ccd.ctex",
+          "sha256": "16f982cd1231ae56e55238b78b7776373bd319a7b09f81d951a7f93f4a7c3ccd",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ff77f20059b244529108c8edd33a7a209904b0381247adf917704c3cb03ef933.ctex",
+          "sha256": "ff77f20059b244529108c8edd33a7a209904b0381247adf917704c3cb03ef933",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a75cce4e60cd2df10145508a0069518649dfb42c1026b76b24386b8b1850da41.glb",
+        "sha256": "a75cce4e60cd2df10145508a0069518649dfb42c1026b76b24386b8b1850da41",
+        "size": 9257208
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "orc_marauders/battle truck": {
+    "url": "a6245988254da59c1ee2fcea2862bdaeb8f0d29c74a740af3862db51945b78df.glb",
+    "sha256": "a6245988254da59c1ee2fcea2862bdaeb8f0d29c74a740af3862db51945b78df",
+    "size": 19698568,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f5dbc7e9c2106e09816bff6cebc2c205ecfeee9fc2ae7eb87e52f31a9f4a53e5.ctex",
+          "sha256": "f5dbc7e9c2106e09816bff6cebc2c205ecfeee9fc2ae7eb87e52f31a9f4a53e5",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9fc95e3ead4ac44f65d5aa0b662a3c79f7f8cb1f5ec275357f033f6a7a94dfd9.ctex",
+          "sha256": "9fc95e3ead4ac44f65d5aa0b662a3c79f7f8cb1f5ec275357f033f6a7a94dfd9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "001920245a773c3380f24a0d7cf1d2e719e45f5e58d6ce95886d1908b6ca578e.glb",
+        "sha256": "001920245a773c3380f24a0d7cf1d2e719e45f5e58d6ce95886d1908b6ca578e",
+        "size": 9120584
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "orc_marauders/beast titan": {
+    "url": "a1c7779f3749e867b8af7fae42e1fe7a421896fa40813f0dad0a72095af880d1.glb",
+    "sha256": "a1c7779f3749e867b8af7fae42e1fe7a421896fa40813f0dad0a72095af880d1",
+    "size": 17735080,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a01067d50b924200c1327abcf25d164a8c7d1e99dd326c8fbe554ed96075abb9.ctex",
+          "sha256": "a01067d50b924200c1327abcf25d164a8c7d1e99dd326c8fbe554ed96075abb9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "add95c91c276531e767728a03bce0e95768a0391769653f3faa067e34091a309.ctex",
+          "sha256": "add95c91c276531e767728a03bce0e95768a0391769653f3faa067e34091a309",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "89d92f625e93edb34894e5c3fbe92621719ba39b368a301ad19c1c0b18e689da.glb",
+        "sha256": "89d92f625e93edb34894e5c3fbe92621719ba39b368a301ad19c1c0b18e689da",
+        "size": 13179440
+      },
+      "size_class": "large"
+    }
+  },
+  "orc_marauders/berserker beast riders": {
+    "url": "eb6ddb3966f9db2a96ec1911bd65c4fab1eb61afb1c7e7781702ea78f1005dab.glb",
+    "sha256": "eb6ddb3966f9db2a96ec1911bd65c4fab1eb61afb1c7e7781702ea78f1005dab",
+    "size": 15508612,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0f3c6e7156bc44132f5ea826fe0339ae0f18571bf0634457e7a5544ee5dd5ac1.ctex",
+          "sha256": "0f3c6e7156bc44132f5ea826fe0339ae0f18571bf0634457e7a5544ee5dd5ac1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "cda48bbe32ba857e2029bd60fdb12d8c917388d394fbb8ac39b568fba1e72e47.ctex",
+          "sha256": "cda48bbe32ba857e2029bd60fdb12d8c917388d394fbb8ac39b568fba1e72e47",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2f9989fe6052a6c7186d0645ddeac3dcf2b64deeed74649e6e8c5f9bc684edb1.glb",
+        "sha256": "2f9989fe6052a6c7186d0645ddeac3dcf2b64deeed74649e6e8c5f9bc684edb1",
+        "size": 12338336
+      },
+      "size_class": "large"
+    }
+  },
+  "orc_marauders/berserker leader": {
+    "url": "c56feb256600ebd27e414a06d83e60d0fc43737372610e7cdc81b3f33a67e810.glb",
+    "sha256": "c56feb256600ebd27e414a06d83e60d0fc43737372610e7cdc81b3f33a67e810",
+    "size": 14748536,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e196426ada91066b0cdb7733fb6a29f699eeb9df16296c3f9693e5437fd5ec40.ctex",
+          "sha256": "e196426ada91066b0cdb7733fb6a29f699eeb9df16296c3f9693e5437fd5ec40",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "bb6eb8eefc0e619b96f41b6b31408291dc27f0df0de1897fb6d12a231f33d0c3.ctex",
+          "sha256": "bb6eb8eefc0e619b96f41b6b31408291dc27f0df0de1897fb6d12a231f33d0c3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ce6bdc5cc09cb46c96f6cf00e613aef2894fa52ca4f098120d04b283236d18f7.glb",
+        "sha256": "ce6bdc5cc09cb46c96f6cf00e613aef2894fa52ca4f098120d04b283236d18f7",
+        "size": 4066896
+      },
+      "size_class": "infantry"
+    }
+  },
+  "orc_marauders/berserkers": {
+    "url": "ad3eaefa17990d5446d6b09cd351397df02a4d887818136dde5244419f3a3575.glb",
+    "sha256": "ad3eaefa17990d5446d6b09cd351397df02a4d887818136dde5244419f3a3575",
+    "size": 15614964,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "45cb86a26c661a5f715ae137e6b3c9a34b89826588c2d9764a2edd00c8ea3186.ctex",
+          "sha256": "45cb86a26c661a5f715ae137e6b3c9a34b89826588c2d9764a2edd00c8ea3186",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "120275cb468a6b9f1e47b48c9b0890b7090629bc12c54eb705b306c55dbb7c9c.ctex",
+          "sha256": "120275cb468a6b9f1e47b48c9b0890b7090629bc12c54eb705b306c55dbb7c9c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e5c9777e61a2206562a6e53a351c7ebfdceba5622b1695f3b6438d680394d487.glb",
+        "sha256": "e5c9777e61a2206562a6e53a351c7ebfdceba5622b1695f3b6438d680394d487",
+        "size": 4030972
+      },
+      "size_class": "infantry"
+    }
+  },
+  "orc_marauders/bomber plane": {
+    "url": "fd89c3cd55e079bd76b4986848a9a02def3ad82db0dceaad4f106d481f0f2448.glb",
+    "sha256": "fd89c3cd55e079bd76b4986848a9a02def3ad82db0dceaad4f106d481f0f2448",
+    "size": 18229400,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e08a31eafbe0ef5346418abd638b69849530b945112fd1f49e45f58f46b2a038.ctex",
+          "sha256": "e08a31eafbe0ef5346418abd638b69849530b945112fd1f49e45f58f46b2a038",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4e218714beaa4dd51b787c0f73b5742ed92c82e7e9a674f1af22a80b529f1980.ctex",
+          "sha256": "4e218714beaa4dd51b787c0f73b5742ed92c82e7e9a674f1af22a80b529f1980",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "4eacda32c68e2d6bcc1daceab81579b5d804301af18437d2cce79d64e0a0d716.glb",
+        "sha256": "4eacda32c68e2d6bcc1daceab81579b5d804301af18437d2cce79d64e0a0d716",
+        "size": 8705928
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "orc_marauders/combat beast": {
+    "url": "b711bf5dc63b6e60a1c8c53b9be162a5ea8c49525646f13f39dd7e42ecea6f9e.glb",
+    "sha256": "b711bf5dc63b6e60a1c8c53b9be162a5ea8c49525646f13f39dd7e42ecea6f9e",
+    "size": 17407580,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6b0d28003e7a45153964d3026cb2433f9d2ea97be3f51fe9bd5b68a719693b75.ctex",
+          "sha256": "6b0d28003e7a45153964d3026cb2433f9d2ea97be3f51fe9bd5b68a719693b75",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8543452db986b258a0761413e9d9035e1bc97f25bb6a63eb62ba375bada3ac68.ctex",
+          "sha256": "8543452db986b258a0761413e9d9035e1bc97f25bb6a63eb62ba375bada3ac68",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "25020e47dfa8ebab4e85be60b982271cbce45d2e9c165a8b90350bb401e84c14.glb",
+        "sha256": "25020e47dfa8ebab4e85be60b982271cbce45d2e9c165a8b90350bb401e84c14",
+        "size": 12975548
+      },
+      "size_class": "large"
+    }
+  },
+  "orc_marauders/great battle truck": {
+    "url": "f7d278e6c1c5fc1d73e8454a09a6a80f238d42aececc7d61f42b057ca5344f34.glb",
+    "sha256": "f7d278e6c1c5fc1d73e8454a09a6a80f238d42aececc7d61f42b057ca5344f34",
+    "size": 19902260,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "213002fe911022a39366b3a1b63ef74ab36eaa7c0b623ba46e0f66b30a2afdee.ctex",
+          "sha256": "213002fe911022a39366b3a1b63ef74ab36eaa7c0b623ba46e0f66b30a2afdee",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2b5f295b4c441b51c0b452dc037593718f850f7cbf3e0e4140a64c801b6bb354.ctex",
+          "sha256": "2b5f295b4c441b51c0b452dc037593718f850f7cbf3e0e4140a64c801b6bb354",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7c06ebba5562ec95ec1267d244ace083cfdece192070ffc5fe8ba2555eb5883b.glb",
+        "sha256": "7c06ebba5562ec95ec1267d244ace083cfdece192070ffc5fe8ba2555eb5883b",
+        "size": 9805924
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "orc_marauders/great walker": {
+    "url": "a655b3ff0ad4e6e3d78b1852013308f394a2db8e41d9de6a8ade73d569753934.glb",
+    "sha256": "a655b3ff0ad4e6e3d78b1852013308f394a2db8e41d9de6a8ade73d569753934",
+    "size": 18105944,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "eb9da0c3321865fc876dbcf0fd44716b0eb5ed2eeb4d569515634bebff9e9e5c.ctex",
+          "sha256": "eb9da0c3321865fc876dbcf0fd44716b0eb5ed2eeb4d569515634bebff9e9e5c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1b588220cd28dbe0e8c96c45f20d4d7a9d5fe6eb9dc20c5e08ea32e261419dc9.ctex",
+          "sha256": "1b588220cd28dbe0e8c96c45f20d4d7a9d5fe6eb9dc20c5e08ea32e261419dc9",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b2d84a2bfbf17bf964620721d95e4931e229abb9b3746c0251d702a87c2fb3b6.glb",
+        "sha256": "b2d84a2bfbf17bf964620721d95e4931e229abb9b3746c0251d702a87c2fb3b6",
+        "size": 9407360
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "orc_marauders/hover bikers": {
+    "url": "ed411056c24993b1ea0ad2eb3f6cb8c1784c9858e6805d168570eaf8f750f4f9.glb",
+    "sha256": "ed411056c24993b1ea0ad2eb3f6cb8c1784c9858e6805d168570eaf8f750f4f9",
+    "size": 18034780,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f83084bfd46e304b3bcd200af641a9426b6952a6fccfe9fe0befbe82f3b38ef4.ctex",
+          "sha256": "f83084bfd46e304b3bcd200af641a9426b6952a6fccfe9fe0befbe82f3b38ef4",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3e20efe7fd2627916a2d3a5185942c1aec76515cf99fe2304d770f11a17c7560.ctex",
+          "sha256": "3e20efe7fd2627916a2d3a5185942c1aec76515cf99fe2304d770f11a17c7560",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "bceff1c50cc5a11df2fda3e40b653c458631ffb9af4fe0edc92ff8f2a2dc6d38.glb",
+        "sha256": "bceff1c50cc5a11df2fda3e40b653c458631ffb9af4fe0edc92ff8f2a2dc6d38",
+        "size": 8585976
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "orc_marauders/infiltrators": {
+    "url": "72ca20d7689c49305270179a2baed797b51929b43d0b0a04bbcffe19fa858a07.glb",
+    "sha256": "72ca20d7689c49305270179a2baed797b51929b43d0b0a04bbcffe19fa858a07",
+    "size": 14226852,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "bf63d528f8cd2a1fa3201a56fded9fe3a5ab75b8e6a47d55c4d85292617e866a.ctex",
+          "sha256": "bf63d528f8cd2a1fa3201a56fded9fe3a5ab75b8e6a47d55c4d85292617e866a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5330b638b95282f70b427169363f4e3f1048e5272054a541b9e82001c4cd633e.ctex",
+          "sha256": "5330b638b95282f70b427169363f4e3f1048e5272054a541b9e82001c4cd633e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "71ad40d9cafae3dd0a346728eec4532cc4ac43e03751b8eb5aa81f8903c93cdb.glb",
+        "sha256": "71ad40d9cafae3dd0a346728eec4532cc4ac43e03751b8eb5aa81f8903c93cdb",
+        "size": 3687076
+      },
+      "size_class": "infantry"
+    }
+  },
+  "orc_marauders/jump pack orcs": {
+    "url": "66fa4808bc4912c5a6b0738ecfef9fc9aa6bfc25f7be19fc3edc8ecb9294368c.glb",
+    "sha256": "66fa4808bc4912c5a6b0738ecfef9fc9aa6bfc25f7be19fc3edc8ecb9294368c",
+    "size": 14839712,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b4df3596d3158714f544ec5d71fcb88d2764801c7de9c5c1f658d56e40fe409c.ctex",
+          "sha256": "b4df3596d3158714f544ec5d71fcb88d2764801c7de9c5c1f658d56e40fe409c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9d3cea5f49bcd0437c69d1fa2475ddb9a28b13e0369c29c1a5f337e1e413a087.ctex",
+          "sha256": "9d3cea5f49bcd0437c69d1fa2475ddb9a28b13e0369c29c1a5f337e1e413a087",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "112c46a5abb0e7a2b8828129c5e2fe8ca38b3f6a0f19caa4f1d1aae3aae42330.glb",
+        "sha256": "112c46a5abb0e7a2b8828129c5e2fe8ca38b3f6a0f19caa4f1d1aae3aae42330",
+        "size": 3671248
+      },
+      "size_class": "infantry"
+    }
+  },
+  "orc_marauders/melee walker": {
+    "url": "a344e986997495d22a5169f29ca850d301e80be4bb3bc4e2a95f1037bf1b3540.glb",
+    "sha256": "a344e986997495d22a5169f29ca850d301e80be4bb3bc4e2a95f1037bf1b3540",
+    "size": 17428024,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9d1bbd5e215329d48559106da47665f44f7b8571a1fa54d20bac1daae0e9354a.ctex",
+          "sha256": "9d1bbd5e215329d48559106da47665f44f7b8571a1fa54d20bac1daae0e9354a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1ea7bacd4e5f76d318e980ab171dc28369e156b8abc80163b1ba19b0c38abb69.ctex",
+          "sha256": "1ea7bacd4e5f76d318e980ab171dc28369e156b8abc80163b1ba19b0c38abb69",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "afa446e631a0705cfd537cc167f1a310b10c1eea72430b28c1ea2d0e3e13403e.glb",
+        "sha256": "afa446e631a0705cfd537cc167f1a310b10c1eea72430b28c1ea2d0e3e13403e",
+        "size": 8551736
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "orc_marauders/orc bikers": {
+    "url": "f0fa4878cde808d98b9fcdefddfa0281fd54eefcbd398ee48e0713713c1ce4c2.glb",
+    "sha256": "f0fa4878cde808d98b9fcdefddfa0281fd54eefcbd398ee48e0713713c1ce4c2",
+    "size": 13015664,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "cdcb9592cc4fde3d9d40b441a775c6b6bc684179f2b4db0ae34c2f5c1476d310.ctex",
+          "sha256": "cdcb9592cc4fde3d9d40b441a775c6b6bc684179f2b4db0ae34c2f5c1476d310",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9f7d7e92913b19036006f33b666da7ee0b784755cde4933a22a5e9aeafaa7c9a.ctex",
+          "sha256": "9f7d7e92913b19036006f33b666da7ee0b784755cde4933a22a5e9aeafaa7c9a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "845e1a89dc3c5422d87941566b8df351b23ce2049ad5b0ce8e206969528b476c.glb",
+        "sha256": "845e1a89dc3c5422d87941566b8df351b23ce2049ad5b0ce8e206969528b476c",
+        "size": 7065704
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "orc_marauders/orc leader": {
+    "url": "991be8cbd5329028c9d8ce9a80cbb7b2346de9a305b21b7f1d5525a8caf25aa6.glb",
+    "sha256": "991be8cbd5329028c9d8ce9a80cbb7b2346de9a305b21b7f1d5525a8caf25aa6",
+    "size": 16568452,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d59de12bc1ca114c219815bd4e6d2c114e4e7acbc42bef0176db9eb710672968.ctex",
+          "sha256": "d59de12bc1ca114c219815bd4e6d2c114e4e7acbc42bef0176db9eb710672968",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0f0bf9a4210f47f876c2558b6677bc91a60abe35cdea8c49f6780752735bb932.ctex",
+          "sha256": "0f0bf9a4210f47f876c2558b6677bc91a60abe35cdea8c49f6780752735bb932",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "fcd7b4a2ad4d06d8000558c458a5f852de8f866fc4db8fec8422d87e434a603e.glb",
+        "sha256": "fcd7b4a2ad4d06d8000558c458a5f852de8f866fc4db8fec8422d87e434a603e",
+        "size": 4790428
+      },
+      "size_class": "infantry"
+    }
+  },
+  "orc_marauders/orc warriors": {
+    "url": "0eb2beabb523f81a117f5b5bc99674d7046fd314859ae96256378244cd589d91.glb",
+    "sha256": "0eb2beabb523f81a117f5b5bc99674d7046fd314859ae96256378244cd589d91",
+    "size": 14746520,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3c2e72d4f2e775d00d7d0f33f21f22d2b3ad90a7a7f6a2a9e1f911132b01c425.ctex",
+          "sha256": "3c2e72d4f2e775d00d7d0f33f21f22d2b3ad90a7a7f6a2a9e1f911132b01c425",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "70440b9588f144b0127ae10065beb6b9d9160d2b10f8f2772222a3e905eb3429.ctex",
+          "sha256": "70440b9588f144b0127ae10065beb6b9d9160d2b10f8f2772222a3e905eb3429",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d457ec0aa9a0fc3c76117f9e3af42390610506ba8fc2a8d3c7e02c912bc9e5a6.glb",
+        "sha256": "d457ec0aa9a0fc3c76117f9e3af42390610506ba8fc2a8d3c7e02c912bc9e5a6",
+        "size": 4270272
+      },
+      "size_class": "infantry"
+    }
+  },
+  "orc_marauders/ranged walker": {
+    "url": "9176007339308f61f183617d00f233032cf8a2b95ae2e35d91f7b1b219f1c6a5.glb",
+    "sha256": "9176007339308f61f183617d00f233032cf8a2b95ae2e35d91f7b1b219f1c6a5",
+    "size": 17683364,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e61579e8013b7df453979753a27eab45722ae67ccbb9650b94abdbfa6330a561.ctex",
+          "sha256": "e61579e8013b7df453979753a27eab45722ae67ccbb9650b94abdbfa6330a561",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "de302668c10e92f366eb7b56e73ebc06df422c2f62cdb93aafc68574ed8b684b.ctex",
+          "sha256": "de302668c10e92f366eb7b56e73ebc06df422c2f62cdb93aafc68574ed8b684b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "816e1bf2c378fe6b13e6880ab5000bbe0947860502592f3ddf77061c0ad40ba2.glb",
+        "sha256": "816e1bf2c378fe6b13e6880ab5000bbe0947860502592f3ddf77061c0ad40ba2",
+        "size": 8842464
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "orc_marauders/rurthdeg": {
+    "url": "16c537ce7b87bc0837ed8b7c60b3e062e714bb19e12b50cb4866a11a907efb38.glb",
+    "sha256": "16c537ce7b87bc0837ed8b7c60b3e062e714bb19e12b50cb4866a11a907efb38",
+    "size": 13960564,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "00b615389fc92c4f16c722e2ff5e67aca24e0fd1de128e65dd0eb1daf088404e.ctex",
+          "sha256": "00b615389fc92c4f16c722e2ff5e67aca24e0fd1de128e65dd0eb1daf088404e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "15ddb0135cef42b7fc1ed6786533e43adbcf7529993449b7b8af8ec869272cd6.ctex",
+          "sha256": "15ddb0135cef42b7fc1ed6786533e43adbcf7529993449b7b8af8ec869272cd6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "002f88887b43cb6a2f68da8d057591f42da3b8c5e66a9390a444fb703ca6fa7c.glb",
+        "sha256": "002f88887b43cb6a2f68da8d057591f42da3b8c5e66a9390a444fb703ca6fa7c",
+        "size": 3560476
+      },
+      "size_class": "infantry"
+    }
+  },
+  "orc_marauders/specialists": {
+    "url": "751aab50132baad94f70ec17a2b0736d3c24edfe72c7900b54fd3e76cf202526.glb",
+    "sha256": "751aab50132baad94f70ec17a2b0736d3c24edfe72c7900b54fd3e76cf202526",
+    "size": 13979104,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f73de0cb130c82bf87929ac1863e724a6144f605b3f814a0036eb154099ff8fd.ctex",
+          "sha256": "f73de0cb130c82bf87929ac1863e724a6144f605b3f814a0036eb154099ff8fd",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1ec21ca40c7b933c362529b975311252cafdb8530bc880580148eb8827955389.ctex",
+          "sha256": "1ec21ca40c7b933c362529b975311252cafdb8530bc880580148eb8827955389",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7815d2eda4ee1b0c25000908d2f976188e308a99b74000a2b53f443170fdc012.glb",
+        "sha256": "7815d2eda4ee1b0c25000908d2f976188e308a99b74000a2b53f443170fdc012",
+        "size": 3546172
+      },
+      "size_class": "infantry"
+    }
+  },
+  "orc_marauders/trike": {
+    "url": "4b8a0268d88ee6480959b0ae3467a5951680cbbac3df71bb110493929c269d42.glb",
+    "sha256": "4b8a0268d88ee6480959b0ae3467a5951680cbbac3df71bb110493929c269d42",
+    "size": 17961512,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f8211ca6868ac7e5a8c814ee51e943631e5806cef8053579d4f795a23fb6cda5.ctex",
+          "sha256": "f8211ca6868ac7e5a8c814ee51e943631e5806cef8053579d4f795a23fb6cda5",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e1e9f90d749cf2334766f49bac0882aae0dba6dc003120d842e3e330d5af4662.ctex",
+          "sha256": "e1e9f90d749cf2334766f49bac0882aae0dba6dc003120d842e3e330d5af4662",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "023a4c7f0fc4698002949ecdbc661a31df1b9e9575ef7d372a95fbd0b3747235.glb",
+        "sha256": "023a4c7f0fc4698002949ecdbc661a31df1b9e9575ef7d372a95fbd0b3747235",
+        "size": 8772092
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "orc_marauders/truck": {
+    "url": "72e45b617a46b7b1ffd51b15bae8eaf2373efdfcef1912a6f613be7b79ccf373.glb",
+    "sha256": "72e45b617a46b7b1ffd51b15bae8eaf2373efdfcef1912a6f613be7b79ccf373",
+    "size": 18315216,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "652f2916823dc9241cad73fc7b34a5296309dad5f4435550bd286c2290607b32.ctex",
+          "sha256": "652f2916823dc9241cad73fc7b34a5296309dad5f4435550bd286c2290607b32",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "63bedfd31b2fbac5fe9c0da0f5c321c98e3fffe372141750c84319142b054ad6.ctex",
+          "sha256": "63bedfd31b2fbac5fe9c0da0f5c321c98e3fffe372141750c84319142b054ad6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "016553a4305e260ac85e658fdc12e41de7bf5524649ff8a01cfa8d9b36a3c32c.glb",
+        "sha256": "016553a4305e260ac85e658fdc12e41de7bf5524649ff8a01cfa8d9b36a3c32c",
+        "size": 9176848
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "orc_marauders/ultra veteran leader": {
+    "url": "91a3345f5153fc425aff0f5b1974bda98c0ae3981eef97d04bf2ad581c749ac5.glb",
+    "sha256": "91a3345f5153fc425aff0f5b1974bda98c0ae3981eef97d04bf2ad581c749ac5",
+    "size": 15215688,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2e5357e4e53e05ed607c0048f5e4f2e7613fa5e25ce54c0bda4755cfd8e68a65.ctex",
+          "sha256": "2e5357e4e53e05ed607c0048f5e4f2e7613fa5e25ce54c0bda4755cfd8e68a65",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "996ef8cb8cb466bff482f12d0cddfb316e2245d7b63959830857f2366ccfb78b.ctex",
+          "sha256": "996ef8cb8cb466bff482f12d0cddfb316e2245d7b63959830857f2366ccfb78b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3b2f7b1c56590673dbcf8dd763ffd893b23bddd08e6f39a13a96d94afbb6f771.glb",
+        "sha256": "3b2f7b1c56590673dbcf8dd763ffd893b23bddd08e6f39a13a96d94afbb6f771",
+        "size": 4268292
+      },
+      "size_class": "infantry"
+    }
+  },
+  "orc_marauders/ultra veterans": {
+    "url": "55ebf3dc90d60450097876e63026cef008fd2877da615dbb9c92e79efa80a933.glb",
+    "sha256": "55ebf3dc90d60450097876e63026cef008fd2877da615dbb9c92e79efa80a933",
+    "size": 14691060,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8e802ed237a6b8d55485c45b9706be75d5d4821aaae75cbb47fb61b28e0a822b.ctex",
+          "sha256": "8e802ed237a6b8d55485c45b9706be75d5d4821aaae75cbb47fb61b28e0a822b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ff15a238d97f9f084e78471fd98a86cf5b7f3655aa7933af31f3a42f16e74c08.ctex",
+          "sha256": "ff15a238d97f9f084e78471fd98a86cf5b7f3655aa7933af31f3a42f16e74c08",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "54054a6cd3a4ac23318cc447ccac2247c1cbccad5d580ed8da7d1c0759b54438.glb",
+        "sha256": "54054a6cd3a4ac23318cc447ccac2247c1cbccad5d580ed8da7d1c0759b54438",
+        "size": 4131372
+      },
+      "size_class": "infantry"
+    }
+  },
+  "orc_marauders/veteran bikers": {
+    "url": "4f8c6456bbf59bd0969f5250db804e62881ac51c6947b90ed1e7d3a0023229c9.glb",
+    "sha256": "4f8c6456bbf59bd0969f5250db804e62881ac51c6947b90ed1e7d3a0023229c9",
+    "size": 17271536,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0237eb674a6a808ad95c0328301fb3667f6335f7dcaf785a51ee65b745391db0.ctex",
+          "sha256": "0237eb674a6a808ad95c0328301fb3667f6335f7dcaf785a51ee65b745391db0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "faa5ec5b536464311aa2d3bb51cd1893c0ee81d8b589b1efb38bbc0452dd24c6.ctex",
+          "sha256": "faa5ec5b536464311aa2d3bb51cd1893c0ee81d8b589b1efb38bbc0452dd24c6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5174550ae30fe4169fbed766f2b8a4c0b31eb79917fef8335c544c1ffe4c5391.glb",
+        "sha256": "5174550ae30fe4169fbed766f2b8a4c0b31eb79917fef8335c544c1ffe4c5391",
+        "size": 8848852
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "orc_marauders/veteran leader": {
+    "url": "0a73a2f47af6d01968422a46eeb90cab9296f4aab3ee0ab26e734b96a5062d6b.glb",
+    "sha256": "0a73a2f47af6d01968422a46eeb90cab9296f4aab3ee0ab26e734b96a5062d6b",
+    "size": 15901976,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "67f8a212bf59cda42e7743430438701d8d3a28f1a5bdbf05db63176f141f57fc.ctex",
+          "sha256": "67f8a212bf59cda42e7743430438701d8d3a28f1a5bdbf05db63176f141f57fc",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e13a3ca76f2e29a2f57b391379ca88bef165e8148397116bcb4a7de4105c533d.ctex",
+          "sha256": "e13a3ca76f2e29a2f57b391379ca88bef165e8148397116bcb4a7de4105c533d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9ea2bb1894b00605fde3e01530c4af1c4eceafd2ae36a7b664d658d1f7b50c29.glb",
+        "sha256": "9ea2bb1894b00605fde3e01530c4af1c4eceafd2ae36a7b664d658d1f7b50c29",
+        "size": 4699404
+      },
+      "size_class": "infantry"
+    }
+  },
+  "orc_marauders/veteran specialists": {
+    "url": "98c639b44bcee3063cbc7c419ba7761a97c2d64fee03fcbf95230a91d24cf496.glb",
+    "sha256": "98c639b44bcee3063cbc7c419ba7761a97c2d64fee03fcbf95230a91d24cf496",
+    "size": 14304052,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6902b73a157f623178acd69cec8576e2c534c613738d715566c3ec46d9454260.ctex",
+          "sha256": "6902b73a157f623178acd69cec8576e2c534c613738d715566c3ec46d9454260",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "b2b9fdea93b22495fa243ed5b363506e8031330edacc00ba2be287e29338490a.ctex",
+          "sha256": "b2b9fdea93b22495fa243ed5b363506e8031330edacc00ba2be287e29338490a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "42344be5553708ad895a2ebf3b9b81703058b47777900a29677dd1444f522719.glb",
+        "sha256": "42344be5553708ad895a2ebf3b9b81703058b47777900a29677dd1444f522719",
+        "size": 3844620
+      },
+      "size_class": "infantry"
+    }
+  },
+  "orc_marauders/veterans": {
+    "url": "33088685e8708e2cc6d0554d13c629116e1473c43863913239f7853bc3f98960.glb",
+    "sha256": "33088685e8708e2cc6d0554d13c629116e1473c43863913239f7853bc3f98960",
+    "size": 15796444,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "08a55387fa4131e6cdf6b2b759d30e0e165a359ee9cec81984d223a2040a4aec.ctex",
+          "sha256": "08a55387fa4131e6cdf6b2b759d30e0e165a359ee9cec81984d223a2040a4aec",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "26ec87a89d0d7eabd40895fce2774921e76bc1b12c16907741dd06b96fd7a4a4.ctex",
+          "sha256": "26ec87a89d0d7eabd40895fce2774921e76bc1b12c16907741dd06b96fd7a4a4",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d0603f24bc745d128525e1462887ee28bb9d85c1098cdbf0a27f45c75a7b8e49.glb",
+        "sha256": "d0603f24bc745d128525e1462887ee28bb9d85c1098cdbf0a27f45c75a7b8e49",
+        "size": 4201812
+      },
+      "size_class": "infantry"
+    }
+  }
+}

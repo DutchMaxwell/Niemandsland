@@ -1,0 +1,522 @@
+{
+  "human_inquisition/acolyte henchmen": {
+    "url": "00b8951a81ffe61a8367ee718faef6ff7dcd62d550fe09c55395ed5dfd5bb393.glb",
+    "sha256": "00b8951a81ffe61a8367ee718faef6ff7dcd62d550fe09c55395ed5dfd5bb393",
+    "size": 13193724,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e33b2727dad0731db229ba8ccde24e5d359955f1498c4f7e4bfd8a05e62b0707.ctex",
+          "sha256": "e33b2727dad0731db229ba8ccde24e5d359955f1498c4f7e4bfd8a05e62b0707",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "eb883282b7d0a7120caee72de90cf7652baf1497ede8187d29409914e63263fc.ctex",
+          "sha256": "eb883282b7d0a7120caee72de90cf7652baf1497ede8187d29409914e63263fc",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ecc5931cae59e8c31ef97419fca419f384af6a719320fa8add37c8c464d3c5e2.glb",
+        "sha256": "ecc5931cae59e8c31ef97419fca419f384af6a719320fa8add37c8c464d3c5e2",
+        "size": 4043184
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_inquisition/assassin henchmen": {
+    "url": "ed80500d8ad53ab427a63bf3fa0ff1e0abc6d05f5c1f2192cf4e2dff0b9a6503.glb",
+    "sha256": "ed80500d8ad53ab427a63bf3fa0ff1e0abc6d05f5c1f2192cf4e2dff0b9a6503",
+    "size": 18037704,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c3f1b2e1d0cd040cd110a9bbd9648100ad4a875b3f57a9e563d6e19e58e40296.ctex",
+          "sha256": "c3f1b2e1d0cd040cd110a9bbd9648100ad4a875b3f57a9e563d6e19e58e40296",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c09224214e702d70c62697cde6dc120865c53acb78365921db001ce930ffb9c6.ctex",
+          "sha256": "c09224214e702d70c62697cde6dc120865c53acb78365921db001ce930ffb9c6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "31d93c44013cc8350844b5971fae6f989dc21464a1e48b381c70642413d0e50d.glb",
+        "sha256": "31d93c44013cc8350844b5971fae6f989dc21464a1e48b381c70642413d0e50d",
+        "size": 4726160
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_inquisition/breacher guard": {
+    "url": "10fba439bb637d1edf710abf3c52047ba8a23d4f64d0068bf9bdaf421dfa33c7.glb",
+    "sha256": "10fba439bb637d1edf710abf3c52047ba8a23d4f64d0068bf9bdaf421dfa33c7",
+    "size": 14023648,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "468250ebcf14fa79c8971e192ff183ec49437744acf7574de38046db9ffe964b.ctex",
+          "sha256": "468250ebcf14fa79c8971e192ff183ec49437744acf7574de38046db9ffe964b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4143412b1ea5cf0a7251a1cbde049a659275209417fc837197f986084520458f.ctex",
+          "sha256": "4143412b1ea5cf0a7251a1cbde049a659275209417fc837197f986084520458f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7d26f55761f675f093d89b164781990d7efabcc64047a3417aa4e31a199148f0.glb",
+        "sha256": "7d26f55761f675f093d89b164781990d7efabcc64047a3417aa4e31a199148f0",
+        "size": 4504408
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_inquisition/combat vehicle": {
+    "url": "3f0b20635b4c46646946796ec61303add681610661a37c218f9048af9121b906.glb",
+    "sha256": "3f0b20635b4c46646946796ec61303add681610661a37c218f9048af9121b906",
+    "size": 17433244,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d1bfae59869f2a2970d6501e3bbfc79aa00793784967ff59bea865bb9c297ccb.ctex",
+          "sha256": "d1bfae59869f2a2970d6501e3bbfc79aa00793784967ff59bea865bb9c297ccb",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8cd0419417baf93e367cb4fa2004cf1bf0e1376f157353e35fecb862c3b5eded.ctex",
+          "sha256": "8cd0419417baf93e367cb4fa2004cf1bf0e1376f157353e35fecb862c3b5eded",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d50540d0f39d0e74d8010d2b6e6ee5647436b2820de6d69d611cfacd17ca84f5.glb",
+        "sha256": "d50540d0f39d0e74d8010d2b6e6ee5647436b2820de6d69d611cfacd17ca84f5",
+        "size": 9197044
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "human_inquisition/crusader henchmen": {
+    "url": "4633fc9e9e76c67eb04216471d71017a098e473cdb14597dfd1b9d0e3f9f993c.glb",
+    "sha256": "4633fc9e9e76c67eb04216471d71017a098e473cdb14597dfd1b9d0e3f9f993c",
+    "size": 15613552,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7e00f42a7a1e4bdb8bb05b55be0f197352b25ef54aa890810b1b3fbed1d58499.ctex",
+          "sha256": "7e00f42a7a1e4bdb8bb05b55be0f197352b25ef54aa890810b1b3fbed1d58499",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "8525baf976f2f386af440e1ecbcb036ecc28cf400d18b52ca22aaeea894d8b6e.ctex",
+          "sha256": "8525baf976f2f386af440e1ecbcb036ecc28cf400d18b52ca22aaeea894d8b6e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "e380b9b81bbd89a96e2b764783fcdcd7e9cd27357cef528ed9f1cc219561f68b.glb",
+        "sha256": "e380b9b81bbd89a96e2b764783fcdcd7e9cd27357cef528ed9f1cc219561f68b",
+        "size": 4719312
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_inquisition/cyborg henchmen": {
+    "url": "de2e2b6593376507e28efef9b49a68577efd29e5eb72d8173fd55b28adfa9ee7.glb",
+    "sha256": "de2e2b6593376507e28efef9b49a68577efd29e5eb72d8173fd55b28adfa9ee7",
+    "size": 13816020,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "80d36f4c9795684ea08bc981dfbfb1b8f983e040e4098d92b042fb7174d26d62.ctex",
+          "sha256": "80d36f4c9795684ea08bc981dfbfb1b8f983e040e4098d92b042fb7174d26d62",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "376246457d33acb45cada38f8a9a6f6b1633e5767e22e5f9275967959a592b2d.ctex",
+          "sha256": "376246457d33acb45cada38f8a9a6f6b1633e5767e22e5f9275967959a592b2d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "20bf76a8f3a3dc1ab3d6a177ce4cdf77343533f4c5b95bb2a7eca55df605321b.glb",
+        "sha256": "20bf76a8f3a3dc1ab3d6a177ce4cdf77343533f4c5b95bb2a7eca55df605321b",
+        "size": 4029648
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_inquisition/espionage ministry assassin": {
+    "url": "50fbc3f556af9622e70655b05e3310db38e17144ea4eac2a6190e7dc74a218f4.glb",
+    "sha256": "50fbc3f556af9622e70655b05e3310db38e17144ea4eac2a6190e7dc74a218f4",
+    "size": 13895964,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f2a18c02a0ff59e860d0dd87d7200995c96e46a5bf2233a3ed3d7b8119e3b4b8.ctex",
+          "sha256": "f2a18c02a0ff59e860d0dd87d7200995c96e46a5bf2233a3ed3d7b8119e3b4b8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9aaf177a4adb981a0533a298d668243798358d53b23b262230795d2ae1aa16e7.ctex",
+          "sha256": "9aaf177a4adb981a0533a298d668243798358d53b23b262230795d2ae1aa16e7",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "bfac1590cbb6aa1fcf15ac5ea136b62ebc08bde0aa7a722aada256b5f5593aeb.glb",
+        "sha256": "bfac1590cbb6aa1fcf15ac5ea136b62ebc08bde0aa7a722aada256b5f5593aeb",
+        "size": 4101016
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_inquisition/gunsmith henchmen": {
+    "url": "9a98b74c66d411a1aab0f0908e25962020f5f4e13b2cf2abc9f39b1f4661e07b.glb",
+    "sha256": "9a98b74c66d411a1aab0f0908e25962020f5f4e13b2cf2abc9f39b1f4661e07b",
+    "size": 13937652,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a65eceab330451ed0f8772a098453ea8452e3f34f28218fe7cdbea6038a28781.ctex",
+          "sha256": "a65eceab330451ed0f8772a098453ea8452e3f34f28218fe7cdbea6038a28781",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "87adabf9ad72017532f78538229eaf85ceffb782a338344a51a9290d3626233f.ctex",
+          "sha256": "87adabf9ad72017532f78538229eaf85ceffb782a338344a51a9290d3626233f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "d1d16d1efe7507365cbdf6ce3baef9cfe69573bed74d60511df242c8c056c85a.glb",
+        "sha256": "d1d16d1efe7507365cbdf6ce3baef9cfe69573bed74d60511df242c8c056c85a",
+        "size": 4305620
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_inquisition/inquisitor": {
+    "url": "37ce8ad68a25e32c17c6da6b18629f1ce644cbfb2449accd2e46044cd2567c7d.glb",
+    "sha256": "37ce8ad68a25e32c17c6da6b18629f1ce644cbfb2449accd2e46044cd2567c7d",
+    "size": 14635752,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a477f5822b9a01733992d6690f871239d6da9d93838295d33ed8750dcd12665e.ctex",
+          "sha256": "a477f5822b9a01733992d6690f871239d6da9d93838295d33ed8750dcd12665e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0624c72c82131236d211d3708678839fdce515b4b00052234294d77f392fb23f.ctex",
+          "sha256": "0624c72c82131236d211d3708678839fdce515b4b00052234294d77f392fb23f",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "db6701c3be883dd7636319f66732d15d7d100ec547a971b0872467aecfaefcb2.glb",
+        "sha256": "db6701c3be883dd7636319f66732d15d7d100ec547a971b0872467aecfaefcb2",
+        "size": 4136212
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_inquisition/inquisitorial officer": {
+    "url": "b8a23781f5befedbf3917d460d1bd85c21822fced3a86b3949507b3bb0cc1a63.glb",
+    "sha256": "b8a23781f5befedbf3917d460d1bd85c21822fced3a86b3949507b3bb0cc1a63",
+    "size": 14138420,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "12d8494b2433463771e1691a1fefb1623dfe0842b4d61f8decf71da0e0281589.ctex",
+          "sha256": "12d8494b2433463771e1691a1fefb1623dfe0842b4d61f8decf71da0e0281589",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2341eb8f8b5c70a865f1bd3ab03f8195c114ba249d993f509f18a5c6a85b8a33.ctex",
+          "sha256": "2341eb8f8b5c70a865f1bd3ab03f8195c114ba249d993f509f18a5c6a85b8a33",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a80cf94ca8658a122e5eee998d625cbe5d078c2bee1816ddcf7bae760e679a4d.glb",
+        "sha256": "a80cf94ca8658a122e5eee998d625cbe5d078c2bee1816ddcf7bae760e679a4d",
+        "size": 4188372
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_inquisition/missionary henchmen": {
+    "url": "fbc4ed366ef19bb793f84af6c698a7b47fd44f0d89fe5f14a429c283bfe179ab.glb",
+    "sha256": "fbc4ed366ef19bb793f84af6c698a7b47fd44f0d89fe5f14a429c283bfe179ab",
+    "size": 13541904,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d7f3de103a2001c9e9b9033c78ccc316378eeda2fa36e2f82f45d49ad6c11312.ctex",
+          "sha256": "d7f3de103a2001c9e9b9033c78ccc316378eeda2fa36e2f82f45d49ad6c11312",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "67397b116c8a61e6be88b0b4dbf619da74d1c7eb9cb926e85920d644dded9ce0.ctex",
+          "sha256": "67397b116c8a61e6be88b0b4dbf619da74d1c7eb9cb926e85920d644dded9ce0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "2aed973631b1e0d92f2341846dd7cbef989c05b91898e4fbad93fd92770bdee1.glb",
+        "sha256": "2aed973631b1e0d92f2341846dd7cbef989c05b91898e4fbad93fd92770bdee1",
+        "size": 3807012
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_inquisition/mystic henchmen": {
+    "url": "c621fa460400edd76540a5f752077e8b39e066f56acd6f807c18f5aa6a41d30c.glb",
+    "sha256": "c621fa460400edd76540a5f752077e8b39e066f56acd6f807c18f5aa6a41d30c",
+    "size": 16784844,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "c7bcdb62957f432f840e3e238bfa1f4042c04e4f037b1b418946ebfe0ee92ac1.ctex",
+          "sha256": "c7bcdb62957f432f840e3e238bfa1f4042c04e4f037b1b418946ebfe0ee92ac1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "90d510325ce664888b7e35cc0df6c3793111d06ca5f42c9a89439a58179b2b86.ctex",
+          "sha256": "90d510325ce664888b7e35cc0df6c3793111d06ca5f42c9a89439a58179b2b86",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "99a18d974337f664772c8b5f04f0e771677d6618bc681647000d421163a9c9f5.glb",
+        "sha256": "99a18d974337f664772c8b5f04f0e771677d6618bc681647000d421163a9c9f5",
+        "size": 5231844
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_inquisition/possessed henchmen": {
+    "url": "94cf1dd61a6f69ce77f12be9e283141c73acffdb5503b4fe9701a982ca4c9dd4.glb",
+    "sha256": "94cf1dd61a6f69ce77f12be9e283141c73acffdb5503b4fe9701a982ca4c9dd4",
+    "size": 14358952,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "26984c03bdb61854d6498e0cee364d4611302089c9676dbd633ad508ed6e9cb0.ctex",
+          "sha256": "26984c03bdb61854d6498e0cee364d4611302089c9676dbd633ad508ed6e9cb0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ccb154c7e99fb183481cf69cd767c6cf7a4036cb10d445a508e32b2add35fbc8.ctex",
+          "sha256": "ccb154c7e99fb183481cf69cd767c6cf7a4036cb10d445a508e32b2add35fbc8",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1254def15233f4e3b9dac8520d17e25a17fb57878a5bfb009b602ed6b55fe165.glb",
+        "sha256": "1254def15233f4e3b9dac8520d17e25a17fb57878a5bfb009b602ed6b55fe165",
+        "size": 4149692
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_inquisition/psychic henchmen": {
+    "url": "0ea6587eb1d9d2788347a8f332fd650071844881f14aa2b63e9d58bfa03a326a.glb",
+    "sha256": "0ea6587eb1d9d2788347a8f332fd650071844881f14aa2b63e9d58bfa03a326a",
+    "size": 12460520,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "036ecff9ce9aa32549241244560079505a5688f68a953098f63458bc4537b0e0.ctex",
+          "sha256": "036ecff9ce9aa32549241244560079505a5688f68a953098f63458bc4537b0e0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0ea058b225fa2ef5a1fa41f2ad81d4afb4d977b48ffd467b76de1b5fe449b25a.ctex",
+          "sha256": "0ea058b225fa2ef5a1fa41f2ad81d4afb4d977b48ffd467b76de1b5fe449b25a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "50c878176acca42653257932094a604443a86e95a00cb7287aba6bd1c4a9f20d.glb",
+        "sha256": "50c878176acca42653257932094a604443a86e95a00cb7287aba6bd1c4a9f20d",
+        "size": 3937048
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_inquisition/repenting henchmen": {
+    "url": "2b028b0991a9fd2b0477388fab8df0be686ab27c0ab56c7a29e0907023cc46c3.glb",
+    "sha256": "2b028b0991a9fd2b0477388fab8df0be686ab27c0ab56c7a29e0907023cc46c3",
+    "size": 17402824,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3d1e363789ba65eedcddb4a728e6abdbbd13c4229c2e246d61594036c84a021e.ctex",
+          "sha256": "3d1e363789ba65eedcddb4a728e6abdbbd13c4229c2e246d61594036c84a021e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "bb34f5960e69c429df0f1d848c4d14ec9d6be90ae74b35dbec3928e1a574a176.ctex",
+          "sha256": "bb34f5960e69c429df0f1d848c4d14ec9d6be90ae74b35dbec3928e1a574a176",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f8c7141782fa183547253e4cfd052bf42eef1fe89fa4ca49718bd4f3f03156fa.glb",
+        "sha256": "f8c7141782fa183547253e4cfd052bf42eef1fe89fa4ca49718bd4f3f03156fa",
+        "size": 5090624
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_inquisition/riot judges": {
+    "url": "58bca897d84badd302d7efb9d874a4db0646784dde405678a9b0a144879eb4da.glb",
+    "sha256": "58bca897d84badd302d7efb9d874a4db0646784dde405678a9b0a144879eb4da",
+    "size": 15473548,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7449e8209ce14ecfeeaf51e57a22ebf7df55bede7c4e2090b1fda97292c17bc3.ctex",
+          "sha256": "7449e8209ce14ecfeeaf51e57a22ebf7df55bede7c4e2090b1fda97292c17bc3",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "107c9e35a1ae2d369ed539b19a9d0728154f5b2e1a843c32143215c10aa3ec5d.ctex",
+          "sha256": "107c9e35a1ae2d369ed539b19a9d0728154f5b2e1a843c32143215c10aa3ec5d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c9b72cecae88d4128b070a70edd0929b628576e8590d98ed7c26e4bd20623a86.glb",
+        "sha256": "c9b72cecae88d4128b070a70edd0929b628576e8590d98ed7c26e4bd20623a86",
+        "size": 4767716
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_inquisition/surveillance ministry assassin": {
+    "url": "1281e2bd2fdfd28219ae2c26412618b81b9aa38a0a1ee9fdaf8fa636db4d00c5.glb",
+    "sha256": "1281e2bd2fdfd28219ae2c26412618b81b9aa38a0a1ee9fdaf8fa636db4d00c5",
+    "size": 15516076,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "6226d71c975252603d49dd175216a55ae5572b74f276331e24a00ed7e9a9f5ab.ctex",
+          "sha256": "6226d71c975252603d49dd175216a55ae5572b74f276331e24a00ed7e9a9f5ab",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "871f0b7635447283f3fd1ea425e0273f22ef270f5ceec0a5651cc82ed1b45dd5.ctex",
+          "sha256": "871f0b7635447283f3fd1ea425e0273f22ef270f5ceec0a5651cc82ed1b45dd5",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "26abb7d80944d28969bcd0172c87938754d3bd501b15db72ffcbcb3d8f632519.glb",
+        "sha256": "26abb7d80944d28969bcd0172c87938754d3bd501b15db72ffcbcb3d8f632519",
+        "size": 4636988
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_inquisition/terrorism ministry assassin": {
+    "url": "3a1255310c15256034c8f1e3805e4b04e3b49e97969b29f861ee2613b647bb83.glb",
+    "sha256": "3a1255310c15256034c8f1e3805e4b04e3b49e97969b29f861ee2613b647bb83",
+    "size": 18561904,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "dbab5e89710966ba36439f50a75afa47c867da4ce1249b0049b67a814cc377dd.ctex",
+          "sha256": "dbab5e89710966ba36439f50a75afa47c867da4ce1249b0049b67a814cc377dd",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2d86ebb7821195d1d6fbef5b0d360f6a7d6a5b80576c206001ce0d574c415394.ctex",
+          "sha256": "2d86ebb7821195d1d6fbef5b0d360f6a7d6a5b80576c206001ce0d574c415394",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "90addf81bf60c01b935650b1721c0f9e0f18afc4038f81811dcb81fb1c8dbb1a.glb",
+        "sha256": "90addf81bf60c01b935650b1721c0f9e0f18afc4038f81811dcb81fb1c8dbb1a",
+        "size": 4297864
+      },
+      "size_class": "infantry"
+    }
+  },
+  "human_inquisition/transport vehicle": {
+    "url": "0e606b8760d7f187300e9aff6bb668a9e6de8cf8a984068c6589b0a7af901b6c.glb",
+    "sha256": "0e606b8760d7f187300e9aff6bb668a9e6de8cf8a984068c6589b0a7af901b6c",
+    "size": 16288160,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5badfc4b5d2564fcb900fa098f0ff49db860dce07c1d355eadfd6bf98712ee35.ctex",
+          "sha256": "5badfc4b5d2564fcb900fa098f0ff49db860dce07c1d355eadfd6bf98712ee35",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "a94e1679cfa48a3e12c85e931d4ce50bd8465d69e07f76e44d16a7ebf5f912d2.ctex",
+          "sha256": "a94e1679cfa48a3e12c85e931d4ce50bd8465d69e07f76e44d16a7ebf5f912d2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ee0e7167862dce37b3f02c638209cc373ad83ab5e66963faf4ab29735a7b327f.glb",
+        "sha256": "ee0e7167862dce37b3f02c638209cc373ad83ab5e66963faf4ab29735a7b327f",
+        "size": 8999340
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "human_inquisition/warfare ministry assassin": {
+    "url": "0c95e5b4278bd7269594891a9a0a64b16aafb11ffb0fdf952b557520d4a56ddd.glb",
+    "sha256": "0c95e5b4278bd7269594891a9a0a64b16aafb11ffb0fdf952b557520d4a56ddd",
+    "size": 14123456,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "331961a611d06287add9e5f4457b2e87bb93c6533476a1bad79a270f283cb56b.ctex",
+          "sha256": "331961a611d06287add9e5f4457b2e87bb93c6533476a1bad79a270f283cb56b",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "841336b0dddb23203cb1c4ebf17be60c98ed1ba1cc2b9d3be43d3ebe5e812e16.ctex",
+          "sha256": "841336b0dddb23203cb1c4ebf17be60c98ed1ba1cc2b9d3be43d3ebe5e812e16",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a358130d860121ca0afa09db5f10bdfda3a27efadd67d6d8fd0d5dc863f86582.glb",
+        "sha256": "a358130d860121ca0afa09db5f10bdfda3a27efadd67d6d8fd0d5dc863f86582",
+        "size": 4148312
+      },
+      "size_class": "infantry"
+    }
+  }
+}

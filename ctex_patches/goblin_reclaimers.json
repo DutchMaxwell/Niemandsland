@@ -1,0 +1,470 @@
+{
+  "goblin_reclaimers/artillery gun": {
+    "url": "e376627981a9dce6ca27c5f9f0cc342225b65230bd7a3eb24d76c334b21ebef4.glb",
+    "sha256": "e376627981a9dce6ca27c5f9f0cc342225b65230bd7a3eb24d76c334b21ebef4",
+    "size": 15515708,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "572f9ff413f20af69f440877b98654eb4eb42dead37eaba654df4ab14fef4f31.ctex",
+          "sha256": "572f9ff413f20af69f440877b98654eb4eb42dead37eaba654df4ab14fef4f31",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d3b3543254615c03dab8d3c9886445fa6c6fddaf3b0616496e79142332e722e7.ctex",
+          "sha256": "d3b3543254615c03dab8d3c9886445fa6c6fddaf3b0616496e79142332e722e7",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "00e21bf62302611f35b8b30b30a494513b59193c3b1331e235b3401192970898.glb",
+        "sha256": "00e21bf62302611f35b8b30b30a494513b59193c3b1331e235b3401192970898",
+        "size": 7776408
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "goblin_reclaimers/big bug": {
+    "url": "77e23ddb17510e2d0cae332b0fc25de56ff10fda31053668605183fa50d9c499.glb",
+    "sha256": "77e23ddb17510e2d0cae332b0fc25de56ff10fda31053668605183fa50d9c499",
+    "size": 15042624,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "3929149ba53d3a0c04dd690ea04ab4138fc0e5ec08620be1a2e7649fa4bed3e2.ctex",
+          "sha256": "3929149ba53d3a0c04dd690ea04ab4138fc0e5ec08620be1a2e7649fa4bed3e2",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "92c766cf6ddda300c3224efa3038b1f209b7bc84795ee6aa5a30e6dcb2cc4180.ctex",
+          "sha256": "92c766cf6ddda300c3224efa3038b1f209b7bc84795ee6aa5a30e6dcb2cc4180",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "93e329bab287b25eac08aebfad49373a569178b9623590f9a228ba5a10835e5c.glb",
+        "sha256": "93e329bab287b25eac08aebfad49373a569178b9623590f9a228ba5a10835e5c",
+        "size": 4452700
+      },
+      "size_class": "infantry"
+    }
+  },
+  "goblin_reclaimers/boss champ": {
+    "url": "676a0582a162bfd49f85bceb35b10a7b38e4c1e40382dd9c781e132106088f5b.glb",
+    "sha256": "676a0582a162bfd49f85bceb35b10a7b38e4c1e40382dd9c781e132106088f5b",
+    "size": 14947728,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "a2c6cd888cdcf06de775cdb55005c899d9907cbd0c6c58ab897953491b274773.ctex",
+          "sha256": "a2c6cd888cdcf06de775cdb55005c899d9907cbd0c6c58ab897953491b274773",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "706ae0b4734c3141bbc3f93a413e672edd268a8385fe9927e8b40c917ce7936d.ctex",
+          "sha256": "706ae0b4734c3141bbc3f93a413e672edd268a8385fe9927e8b40c917ce7936d",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3a8813998a4ddd0f4e8dd5f8e6d8a2c80b9ac8b1138fe054fb4bd7459dbf75b5.glb",
+        "sha256": "3a8813998a4ddd0f4e8dd5f8e6d8a2c80b9ac8b1138fe054fb4bd7459dbf75b5",
+        "size": 4002880
+      },
+      "size_class": "infantry"
+    }
+  },
+  "goblin_reclaimers/boss mob": {
+    "url": "88634ce9646c45cf65c520e248a456801d973fe29022fb945fae1bc8448821d2.glb",
+    "sha256": "88634ce9646c45cf65c520e248a456801d973fe29022fb945fae1bc8448821d2",
+    "size": 16667668,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2c7a563bda7a12191f317d413e5ef9d2794ab6086cd6c266ca6c5428978619a3.ctex",
+          "sha256": "2c7a563bda7a12191f317d413e5ef9d2794ab6086cd6c266ca6c5428978619a3",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5fb1acd9bb329aa627897a1705cc002abe48273182a318ca7381ca7729b3bca0.ctex",
+          "sha256": "5fb1acd9bb329aa627897a1705cc002abe48273182a318ca7381ca7729b3bca0",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "01e34b9999fef745187c635e1401f2714eee62d300934febbd5708a148657e76.glb",
+        "sha256": "01e34b9999fef745187c635e1401f2714eee62d300934febbd5708a148657e76",
+        "size": 4218692
+      },
+      "size_class": "infantry"
+    }
+  },
+  "goblin_reclaimers/bug riders": {
+    "url": "997cb5ad8c420c6e55082e4a8410f4ebf2ff0f3ce37f0c240148714e6afb8cae.glb",
+    "sha256": "997cb5ad8c420c6e55082e4a8410f4ebf2ff0f3ce37f0c240148714e6afb8cae",
+    "size": 17341692,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2985d37ca3e91841c5ba689775bb364fd0ae548984065823bfe4c2647ef07410.ctex",
+          "sha256": "2985d37ca3e91841c5ba689775bb364fd0ae548984065823bfe4c2647ef07410",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2bad14bb11c354e79aee44726a1f4c57d51f2f06a8086bb0c51050e25cd14654.ctex",
+          "sha256": "2bad14bb11c354e79aee44726a1f4c57d51f2f06a8086bb0c51050e25cd14654",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "8c001870f718883636990fb5b810599e6e2ed5ad66eecd1ab25f36a531803497.glb",
+        "sha256": "8c001870f718883636990fb5b810599e6e2ed5ad66eecd1ab25f36a531803497",
+        "size": 4688008
+      },
+      "size_class": "infantry"
+    }
+  },
+  "goblin_reclaimers/champ": {
+    "url": "203882462286446887dbb91446516708dcdb32e139d7053770c0b7a9d0dda990.glb",
+    "sha256": "203882462286446887dbb91446516708dcdb32e139d7053770c0b7a9d0dda990",
+    "size": 15091068,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "30bea3677e3a58c0f52a162eb47e1298b4eb22ac07049d6c7e2d687266089e82.ctex",
+          "sha256": "30bea3677e3a58c0f52a162eb47e1298b4eb22ac07049d6c7e2d687266089e82",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0b114c69f9aad30efd6fac10a7fbf5706bf705fe236ec42546afa76473bcd3cf.ctex",
+          "sha256": "0b114c69f9aad30efd6fac10a7fbf5706bf705fe236ec42546afa76473bcd3cf",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "903b5f1531a302ad0b24653b5bc8c52c927a3e562de9381689ecf3b6fe330de5.glb",
+        "sha256": "903b5f1531a302ad0b24653b5bc8c52c927a3e562de9381689ecf3b6fe330de5",
+        "size": 4282620
+      },
+      "size_class": "infantry"
+    }
+  },
+  "goblin_reclaimers/commandos": {
+    "url": "5c1d88a4ff174d53dbe7fda791c128c7a83c9ac976ce80a3d311546f073eac03.glb",
+    "sha256": "5c1d88a4ff174d53dbe7fda791c128c7a83c9ac976ce80a3d311546f073eac03",
+    "size": 15088460,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "fa847f5707b78ed12afa139bbfb647f1957f8247d61b2f84a396c1966cb60326.ctex",
+          "sha256": "fa847f5707b78ed12afa139bbfb647f1957f8247d61b2f84a396c1966cb60326",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5a6e55c27f6769e18271999b104cd06a7e0544265ccda608c725ca90ece8a5e3.ctex",
+          "sha256": "5a6e55c27f6769e18271999b104cd06a7e0544265ccda608c725ca90ece8a5e3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "47cf9230c43d995b794b952dfed41fbc4736750eb1fb93c91f8edccb05d30b55.glb",
+        "sha256": "47cf9230c43d995b794b952dfed41fbc4736750eb1fb93c91f8edccb05d30b55",
+        "size": 3845428
+      },
+      "size_class": "infantry"
+    }
+  },
+  "goblin_reclaimers/death walker champ": {
+    "url": "a990995a3a4810ef979cb66339642c2b08ba5a00983ed9f085b3fa4a8c4649a5.glb",
+    "sha256": "a990995a3a4810ef979cb66339642c2b08ba5a00983ed9f085b3fa4a8c4649a5",
+    "size": 16608092,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d1f13295a0a842329cddce1305c9faabef625046b8551681fbddf84bcffb90c3.ctex",
+          "sha256": "d1f13295a0a842329cddce1305c9faabef625046b8551681fbddf84bcffb90c3",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "4e38490cd98ccdf4fc638372e6fb421610799d9ddc820be9f83137d9b36758d2.ctex",
+          "sha256": "4e38490cd98ccdf4fc638372e6fb421610799d9ddc820be9f83137d9b36758d2",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "262b5b2414f653059f70a7e0546fdba9fdce9c27b167db7f1409215cde9dffd1.glb",
+        "sha256": "262b5b2414f653059f70a7e0546fdba9fdce9c27b167db7f1409215cde9dffd1",
+        "size": 8399352
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "goblin_reclaimers/death walkers": {
+    "url": "822b947868d824fe59abf9aea50a6fbe3e7af89b8063439a28066cd600632385.glb",
+    "sha256": "822b947868d824fe59abf9aea50a6fbe3e7af89b8063439a28066cd600632385",
+    "size": 15963180,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "667a6eb999c6498af55e74bd0eb612c9f491a0288c772dda3ed8496c8a927205.ctex",
+          "sha256": "667a6eb999c6498af55e74bd0eb612c9f491a0288c772dda3ed8496c8a927205",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "0c251b6d6de1465aa13a2fa2ff9c38330bf8f1236eea4eac8052746dfe99ff8c.ctex",
+          "sha256": "0c251b6d6de1465aa13a2fa2ff9c38330bf8f1236eea4eac8052746dfe99ff8c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5f9cbc5d81f1bf5e71d4bccffc602266dc816ddca6f68bd2be302400acd14b66.glb",
+        "sha256": "5f9cbc5d81f1bf5e71d4bccffc602266dc816ddca6f68bd2be302400acd14b66",
+        "size": 8709588
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "goblin_reclaimers/freaks": {
+    "url": "a3cd9ca9175f19581044404ce046ec4169400ed82db7263c64336b7f0099d491.glb",
+    "sha256": "a3cd9ca9175f19581044404ce046ec4169400ed82db7263c64336b7f0099d491",
+    "size": 14297824,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "ec809dcdca942381eaac3472be02708ace1bfb43468ca09319c917ca15d97834.ctex",
+          "sha256": "ec809dcdca942381eaac3472be02708ace1bfb43468ca09319c917ca15d97834",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "bf231310f8a22e62ad7eef945ae7dd67a5cf66cda5314d628342014982566a94.ctex",
+          "sha256": "bf231310f8a22e62ad7eef945ae7dd67a5cf66cda5314d628342014982566a94",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ad07be2f5bbed34214b61f67746a52baca357514ef8b7f58570633ebb92a70d2.glb",
+        "sha256": "ad07be2f5bbed34214b61f67746a52baca357514ef8b7f58570633ebb92a70d2",
+        "size": 4025328
+      },
+      "size_class": "infantry"
+    }
+  },
+  "goblin_reclaimers/killer tank champ": {
+    "url": "18b19f9f8a87a9d50f7732f4fb8cd3434fcea8c1c70f21b65b4ff7ee6dc7d11a.glb",
+    "sha256": "18b19f9f8a87a9d50f7732f4fb8cd3434fcea8c1c70f21b65b4ff7ee6dc7d11a",
+    "size": 17870304,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "b676dfd39a5125c0fe29f2c431ab7e830bf3c10f5beb9b465e35cb43a925bd51.ctex",
+          "sha256": "b676dfd39a5125c0fe29f2c431ab7e830bf3c10f5beb9b465e35cb43a925bd51",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "2cf20829b3788d7b483de12c59c9d25ac029c1963e9c07e78d81c722e302583c.ctex",
+          "sha256": "2cf20829b3788d7b483de12c59c9d25ac029c1963e9c07e78d81c722e302583c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "ecfa677ef91a27b073db4244951cdd29e293b289f5fe0834af9990065e9af803.glb",
+        "sha256": "ecfa677ef91a27b073db4244951cdd29e293b289f5fe0834af9990065e9af803",
+        "size": 9418380
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "goblin_reclaimers/killer tanks": {
+    "url": "447a1b37e6a5863470d77264e96235af3b9fc2dde294089b6f2be5ec061799cb.glb",
+    "sha256": "447a1b37e6a5863470d77264e96235af3b9fc2dde294089b6f2be5ec061799cb",
+    "size": 18350448,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "79299b30ecc798e4dc7062190692ce635afdaeb91f04bb9b77364ffabb81f7a9.ctex",
+          "sha256": "79299b30ecc798e4dc7062190692ce635afdaeb91f04bb9b77364ffabb81f7a9",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "00110c44f783533b55111e6f6fc4a5e29bb01f8770455012cd0b8756c855b2f5.ctex",
+          "sha256": "00110c44f783533b55111e6f6fc4a5e29bb01f8770455012cd0b8756c855b2f5",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3544a188248ed6ecdd0ee46c74d9739dcd310b8783827e9f5c50fee4cd2ad25a.glb",
+        "sha256": "3544a188248ed6ecdd0ee46c74d9739dcd310b8783827e9f5c50fee4cd2ad25a",
+        "size": 9208892
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "goblin_reclaimers/looters": {
+    "url": "5be78b08e65acef9951c2f692b7481b4058299a2d66713162b03d48d888d32cb.glb",
+    "sha256": "5be78b08e65acef9951c2f692b7481b4058299a2d66713162b03d48d888d32cb",
+    "size": 15772728,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "cd917d2edfb039cce449296744f50b3bd6d222cdd303704920162dc29804d1f4.ctex",
+          "sha256": "cd917d2edfb039cce449296744f50b3bd6d222cdd303704920162dc29804d1f4",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "1f7e269b9ab9f5d5b394f266a09bd49cbf25ce8bf17528daca2707fc34e3ceda.ctex",
+          "sha256": "1f7e269b9ab9f5d5b394f266a09bd49cbf25ce8bf17528daca2707fc34e3ceda",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "4103781be9e74f6bf89d9c22a5435c8cc9cde6dd78980e86d222cff6e98cbac4.glb",
+        "sha256": "4103781be9e74f6bf89d9c22a5435c8cc9cde6dd78980e86d222cff6e98cbac4",
+        "size": 4235896
+      },
+      "size_class": "infantry"
+    }
+  },
+  "goblin_reclaimers/scout bikers": {
+    "url": "01bb67a7cab4bf6f376bf3234ae0c7f2f84a7548d00c71336e8a13bb8ac73c80.glb",
+    "sha256": "01bb67a7cab4bf6f376bf3234ae0c7f2f84a7548d00c71336e8a13bb8ac73c80",
+    "size": 14331764,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "958e3d748c4cca83a19e8042f1597e4a8484edb3fdf7bee7a16813c4d6662c18.ctex",
+          "sha256": "958e3d748c4cca83a19e8042f1597e4a8484edb3fdf7bee7a16813c4d6662c18",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "13d40630225bd02682ea8b9ad9ff98b02b12dc286aba6a2c4861b26e280ab96e.ctex",
+          "sha256": "13d40630225bd02682ea8b9ad9ff98b02b12dc286aba6a2c4861b26e280ab96e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5fc8539a5343e5bca5f57e6a21f931dcd8003fa76972cd1abdbdf0bd512d8c15.glb",
+        "sha256": "5fc8539a5343e5bca5f57e6a21f931dcd8003fa76972cd1abdbdf0bd512d8c15",
+        "size": 7529380
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "goblin_reclaimers/shooter mob": {
+    "url": "84bc3525b8e0ec9ce5b050656c7bc3b5451d56c1128fe2965273ab20458947f3.glb",
+    "sha256": "84bc3525b8e0ec9ce5b050656c7bc3b5451d56c1128fe2965273ab20458947f3",
+    "size": 15227160,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d2545d23e565eaab35f5c688379197999e42f9acaa0cefdd6a6116c440c53016.ctex",
+          "sha256": "d2545d23e565eaab35f5c688379197999e42f9acaa0cefdd6a6116c440c53016",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5bdc60c28226798c53ecf807e835ab1af73553e95b5510f48674392f2ef13b50.ctex",
+          "sha256": "5bdc60c28226798c53ecf807e835ab1af73553e95b5510f48674392f2ef13b50",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "112672e1591688e6fa95a6516a2187fb303c5f200845b7606a8a6a1d69fbf847.glb",
+        "sha256": "112672e1591688e6fa95a6516a2187fb303c5f200845b7606a8a6a1d69fbf847",
+        "size": 4451420
+      },
+      "size_class": "infantry"
+    }
+  },
+  "goblin_reclaimers/storm mob": {
+    "url": "c7a04bbc038a3095760549d05075910f5841e37fdfae16afcd3b996ffad058b0.glb",
+    "sha256": "c7a04bbc038a3095760549d05075910f5841e37fdfae16afcd3b996ffad058b0",
+    "size": 14016608,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4bb9fe0c212575637258bbb13a7c3130577d3450d1582d01fd5163c5c14e41e1.ctex",
+          "sha256": "4bb9fe0c212575637258bbb13a7c3130577d3450d1582d01fd5163c5c14e41e1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c7867159ba9a35689786bd65fd7adc8c3b791a537d9abc15027bafd0f3b86494.ctex",
+          "sha256": "c7867159ba9a35689786bd65fd7adc8c3b791a537d9abc15027bafd0f3b86494",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "786190389d27e31c4fc39b802ae8ea8e00fd723a86fbcabf2e50308c088deddd.glb",
+        "sha256": "786190389d27e31c4fc39b802ae8ea8e00fd723a86fbcabf2e50308c088deddd",
+        "size": 3848660
+      },
+      "size_class": "infantry"
+    }
+  },
+  "goblin_reclaimers/super tank": {
+    "url": "2e433031d4e0079a524b9d93332c0882215f9008b3aae01c801a824125d9f800.glb",
+    "sha256": "2e433031d4e0079a524b9d93332c0882215f9008b3aae01c801a824125d9f800",
+    "size": 17487644,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e4fa5b35c21365bd43f8e1a7f986f88a4737d92d0d0b6461fac8001d5490b4bf.ctex",
+          "sha256": "e4fa5b35c21365bd43f8e1a7f986f88a4737d92d0d0b6461fac8001d5490b4bf",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "5122dfe1e0cfd73e8382143c96bf32f560fb23f6fa65af14ec68c9f5d721a8ec.ctex",
+          "sha256": "5122dfe1e0cfd73e8382143c96bf32f560fb23f6fa65af14ec68c9f5d721a8ec",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "42953498cc9b070e342833760bf4c8fce7a8c7f638aec6a3ac613ac24036d1f2.glb",
+        "sha256": "42953498cc9b070e342833760bf4c8fce7a8c7f638aec6a3ac613ac24036d1f2",
+        "size": 8840164
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "goblin_reclaimers/waskatsin": {
+    "url": "3bef7545e131ba88a1dccf2fa5baaff7c6816d9a935f18fbb9803863b74d994f.glb",
+    "sha256": "3bef7545e131ba88a1dccf2fa5baaff7c6816d9a935f18fbb9803863b74d994f",
+    "size": 15127872,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "994b226c64d8cfec9f9dffa0ae3369c0cc0c509366aa7922da6004bc21283e92.ctex",
+          "sha256": "994b226c64d8cfec9f9dffa0ae3369c0cc0c509366aa7922da6004bc21283e92",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "93844bf2af102c8bdc1eaf2b89bce21fbeda194be0ae1cf5861ab205f4f10ace.ctex",
+          "sha256": "93844bf2af102c8bdc1eaf2b89bce21fbeda194be0ae1cf5861ab205f4f10ace",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a46cfa676073847e5e5af91433d5f4a08070686ed8223bfc76bfc848017f4f1d.glb",
+        "sha256": "a46cfa676073847e5e5af91433d5f4a08070686ed8223bfc76bfc848017f4f1d",
+        "size": 4388808
+      },
+      "size_class": "infantry"
+    }
+  }
+}

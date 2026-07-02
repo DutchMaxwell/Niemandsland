@@ -1,0 +1,496 @@
+{
+  "soul_snatcher_cults/acolytes": {
+    "url": "805f07c2956d0cc62847ed336d740a5dd6f9c993ff9af72dec09dab90eab9888.glb",
+    "sha256": "805f07c2956d0cc62847ed336d740a5dd6f9c993ff9af72dec09dab90eab9888",
+    "size": 14641412,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0cca95f9b81fad576c0483623627b79fec11b739e80c07b1f868cce4ef7850cf.ctex",
+          "sha256": "0cca95f9b81fad576c0483623627b79fec11b739e80c07b1f868cce4ef7850cf",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "c1b21f91898bc6a9e55aac14845f44c3cad512f78cd0b1a71f648a593af1415c.ctex",
+          "sha256": "c1b21f91898bc6a9e55aac14845f44c3cad512f78cd0b1a71f648a593af1415c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "3b4299f4f4ce8ed4cf7662c4f13bae9e0471f3285abcf94a57e0421f5f8dd8ec.glb",
+        "sha256": "3b4299f4f4ce8ed4cf7662c4f13bae9e0471f3285abcf94a57e0421f5f8dd8ec",
+        "size": 3847108
+      },
+      "size_class": "infantry"
+    }
+  },
+  "soul_snatcher_cults/attack vehicle": {
+    "url": "d96963072a062979721a07d6a5053d39cdeea09546ad3fae62bcb8ab876efb98.glb",
+    "sha256": "d96963072a062979721a07d6a5053d39cdeea09546ad3fae62bcb8ab876efb98",
+    "size": 16780800,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "7e451913f496b5c81e207010bc44e17c65fe0eebeb45cf880d679a0b4e413bf7.ctex",
+          "sha256": "7e451913f496b5c81e207010bc44e17c65fe0eebeb45cf880d679a0b4e413bf7",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "81b5eaa7d12208bc2fd4db1c57513b94be0ca18bd6d5a850302e0b32763b38a3.ctex",
+          "sha256": "81b5eaa7d12208bc2fd4db1c57513b94be0ca18bd6d5a850302e0b32763b38a3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "a8c4299cb70da892b92c0583a9937edbcc4a69718af7ce97c28ee84873d2a832.glb",
+        "sha256": "a8c4299cb70da892b92c0583a9937edbcc4a69718af7ce97c28ee84873d2a832",
+        "size": 8688152
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "soul_snatcher_cults/battle tank": {
+    "url": "5d5313441579f4b4584bbddb8e9ea79abc9ebef0709404516dc477b58b1e2998.glb",
+    "sha256": "5d5313441579f4b4584bbddb8e9ea79abc9ebef0709404516dc477b58b1e2998",
+    "size": 17248612,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8988419612e7ab2ca307fa2a27e04690ce236cc7046c1420621613791a70efdb.ctex",
+          "sha256": "8988419612e7ab2ca307fa2a27e04690ce236cc7046c1420621613791a70efdb",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "6c6140dae11cb772798d24155b2b052a06c163619054ccb6c51875c44fd2e588.ctex",
+          "sha256": "6c6140dae11cb772798d24155b2b052a06c163619054ccb6c51875c44fd2e588",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "953d7960f9836bea6a9325c609622264cd52f92da9161da919f7ec3c9f3c57f7.glb",
+        "sha256": "953d7960f9836bea6a9325c609622264cd52f92da9161da919f7ec3c9f3c57f7",
+        "size": 7966272
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "soul_snatcher_cults/brute champion": {
+    "url": "75d3da3d831e0fd753fcd45e8d3c4a41d057b3b5b59a6c4f5b70d5b9f970abfe.glb",
+    "sha256": "75d3da3d831e0fd753fcd45e8d3c4a41d057b3b5b59a6c4f5b70d5b9f970abfe",
+    "size": 14002976,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "1835d06e71f952f120e7f1e2d5d14149db8cdf35197b71b0067ba1ebf421376e.ctex",
+          "sha256": "1835d06e71f952f120e7f1e2d5d14149db8cdf35197b71b0067ba1ebf421376e",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "d86c2e42f1d563aa21747bc94dbd1ce68161a429da73f41d420b3f24c4d1335b.ctex",
+          "sha256": "d86c2e42f1d563aa21747bc94dbd1ce68161a429da73f41d420b3f24c4d1335b",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "23472303c3b1b11962048eebb6e346931bec0f7a8b5451e390eb08075b1d3de3.glb",
+        "sha256": "23472303c3b1b11962048eebb6e346931bec0f7a8b5451e390eb08075b1d3de3",
+        "size": 10114324
+      },
+      "size_class": "large"
+    }
+  },
+  "soul_snatcher_cults/cult hitman": {
+    "url": "c56701ee38ecb62a1df32f9d1b89ec6ac1a43824daa7323f058455370d813d1d.glb",
+    "sha256": "c56701ee38ecb62a1df32f9d1b89ec6ac1a43824daa7323f058455370d813d1d",
+    "size": 13615784,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "fbf45535c7eceb6f10b5cfc3a3cb253276cff22187c19beefc8888d5ea85eeb3.ctex",
+          "sha256": "fbf45535c7eceb6f10b5cfc3a3cb253276cff22187c19beefc8888d5ea85eeb3",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "e2b92f31f7193e843cd25213e5390d71a8c27578e7f24a6897a6e2d4729865bb.ctex",
+          "sha256": "e2b92f31f7193e843cd25213e5390d71a8c27578e7f24a6897a6e2d4729865bb",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "c7764d988be92165c7425919b42f68881c793ed3cdefbfe7eae3145513723b2f.glb",
+        "sha256": "c7764d988be92165c7425919b42f68881c793ed3cdefbfe7eae3145513723b2f",
+        "size": 3739280
+      },
+      "size_class": "infantry"
+    }
+  },
+  "soul_snatcher_cults/cult leader": {
+    "url": "3e7c83036b5f70b0f1ad84857b6d90bf715fb2d18c05c5f90e3844c0f2c9f9e8.glb",
+    "sha256": "3e7c83036b5f70b0f1ad84857b6d90bf715fb2d18c05c5f90e3844c0f2c9f9e8",
+    "size": 15759240,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "8874497b4911871c4ea1c708f6a280b3fa77b41bc9de4141f32cb63b290e9d1f.ctex",
+          "sha256": "8874497b4911871c4ea1c708f6a280b3fa77b41bc9de4141f32cb63b290e9d1f",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "63e92ccdc17c3c5f8e07da3d650db688d3198c240724d0feff8d9d3e13c2dbf3.ctex",
+          "sha256": "63e92ccdc17c3c5f8e07da3d650db688d3198c240724d0feff8d9d3e13c2dbf3",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "cb1662e84c3493e648a7b349e0c8c338f576f7185a63971f6b5f0f4d19c9aaaa.glb",
+        "sha256": "cb1662e84c3493e648a7b349e0c8c338f576f7185a63971f6b5f0f4d19c9aaaa",
+        "size": 4348684
+      },
+      "size_class": "infantry"
+    }
+  },
+  "soul_snatcher_cults/grinder truck": {
+    "url": "07b3a81645019b2ea5583eb742a55f172e16f93a3c95f6baa3223cb3d25640bd.glb",
+    "sha256": "07b3a81645019b2ea5583eb742a55f172e16f93a3c95f6baa3223cb3d25640bd",
+    "size": 18070948,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d0727d532de012edff5d32a77085c715645bb397a28e186ea9501104e801fdc1.ctex",
+          "sha256": "d0727d532de012edff5d32a77085c715645bb397a28e186ea9501104e801fdc1",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "27bbb8d9d851a8b429990ccf8e4e7273c17aacc203d423d0f965634e3d736218.ctex",
+          "sha256": "27bbb8d9d851a8b429990ccf8e4e7273c17aacc203d423d0f965634e3d736218",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "9161fd30a778dfc21c40168440c5c8bc8d35c50598086ac52fc0615fa6534124.glb",
+        "sha256": "9161fd30a778dfc21c40168440c5c8bc8d35c50598086ac52fc0615fa6534124",
+        "size": 9501720
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "soul_snatcher_cults/light apc": {
+    "url": "08f0d3405b3306b359f93e2017880327646694d990cf43bcf5cfad07c90150fb.glb",
+    "sha256": "08f0d3405b3306b359f93e2017880327646694d990cf43bcf5cfad07c90150fb",
+    "size": 18147104,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f0047ed7d563379970cf9e6db28444e7503eaa7a539d0dcd1d847b8c346f52d0.ctex",
+          "sha256": "f0047ed7d563379970cf9e6db28444e7503eaa7a539d0dcd1d847b8c346f52d0",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3a67b6a36cb7cd044fe1f8c5f2d65acfd318ce8e65b21eeb99c19d1b19220fbd.ctex",
+          "sha256": "3a67b6a36cb7cd044fe1f8c5f2d65acfd318ce8e65b21eeb99c19d1b19220fbd",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "5356b001057c87a0c76447a77521e191c437d00fc3059fe6d12cc22406558126.glb",
+        "sha256": "5356b001057c87a0c76447a77521e191c437d00fc3059fe6d12cc22406558126",
+        "size": 8791204
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "soul_snatcher_cults/light walker": {
+    "url": "19d0ef3c58886c3bebabaa07de2794f4ba9092c02887bde8c127f9cd46df6500.glb",
+    "sha256": "19d0ef3c58886c3bebabaa07de2794f4ba9092c02887bde8c127f9cd46df6500",
+    "size": 15205644,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e8f6166ef0834070152ad31146a010fe38405e47abf68809638f86ac0567aa25.ctex",
+          "sha256": "e8f6166ef0834070152ad31146a010fe38405e47abf68809638f86ac0567aa25",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "3eedb7a3157ba179738186abc9ab31d3e3f8c11055cf413be77358e53d4d2f25.ctex",
+          "sha256": "3eedb7a3157ba179738186abc9ab31d3e3f8c11055cf413be77358e53d4d2f25",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "74322532ec10134d94e3f1bb57cb86111c4d733a54c990030b5d405848cc6d7f.glb",
+        "sha256": "74322532ec10134d94e3f1bb57cb86111c4d733a54c990030b5d405848cc6d7f",
+        "size": 7105904
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "soul_snatcher_cults/mining truck": {
+    "url": "0771950b6309cb8e8157b82a294042e09b22063a5c95fda26056f61593ff21ca.glb",
+    "sha256": "0771950b6309cb8e8157b82a294042e09b22063a5c95fda26056f61593ff21ca",
+    "size": 16259240,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "2df050c6998ea3fce8cf50dd5b0de9185347ae4153d21b71a37789f1a62d2fb4.ctex",
+          "sha256": "2df050c6998ea3fce8cf50dd5b0de9185347ae4153d21b71a37789f1a62d2fb4",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "978177b9b93d1bd5a2de636be4fa9844d83a59817f7f265201ab54282a29ad2e.ctex",
+          "sha256": "978177b9b93d1bd5a2de636be4fa9844d83a59817f7f265201ab54282a29ad2e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "470fd93a44412a031cbcee0d32d4dac89a8399a9cb8463945beb5a26a03b5252.glb",
+        "sha256": "470fd93a44412a031cbcee0d32d4dac89a8399a9cb8463945beb5a26a03b5252",
+        "size": 8587416
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "soul_snatcher_cults/minions": {
+    "url": "44823a6fe519046288d7129498e03311836037879834fe9d39f159e0b0a06bbe.glb",
+    "sha256": "44823a6fe519046288d7129498e03311836037879834fe9d39f159e0b0a06bbe",
+    "size": 13413304,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "d080ddf57ad100b409ec6be86a7633363c224b978c7dd19859953e33f7e05761.ctex",
+          "sha256": "d080ddf57ad100b409ec6be86a7633363c224b978c7dd19859953e33f7e05761",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "56bf65083bcc98b9e15beb70d3220fd6cc98c53c53826158ed14ca30f9029e4a.ctex",
+          "sha256": "56bf65083bcc98b9e15beb70d3220fd6cc98c53c53826158ed14ca30f9029e4a",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b72afebfb0e32115809f32613f82599109b8fd7daa9c32ef5258fe6a47ef6c1b.glb",
+        "sha256": "b72afebfb0e32115809f32613f82599109b8fd7daa9c32ef5258fe6a47ef6c1b",
+        "size": 3472516
+      },
+      "size_class": "infantry"
+    }
+  },
+  "soul_snatcher_cults/mutant brutes": {
+    "url": "ffc7803c4ce39a18a530950925ee21641225ab860b0abb3c877fdb830c8bc625.glb",
+    "sha256": "ffc7803c4ce39a18a530950925ee21641225ab860b0abb3c877fdb830c8bc625",
+    "size": 14143028,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "0a763caaf09e26f962b85b9d1c4383d5ab3f69994ea074db6e888c2bad4b88fa.ctex",
+          "sha256": "0a763caaf09e26f962b85b9d1c4383d5ab3f69994ea074db6e888c2bad4b88fa",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "ba9cf9172ac8c7a93d761d8fc08c8979a4cee7c817d134d6836260bd42ce9354.ctex",
+          "sha256": "ba9cf9172ac8c7a93d761d8fc08c8979a4cee7c817d134d6836260bd42ce9354",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f6870ea855bea329037317c0b0ae126e36854d2104abf48f99a8dd3f9646f22f.glb",
+        "sha256": "f6870ea855bea329037317c0b0ae126e36854d2104abf48f99a8dd3f9646f22f",
+        "size": 10619856
+      },
+      "size_class": "large"
+    }
+  },
+  "soul_snatcher_cults/mutant soul snatchers": {
+    "url": "f1e0cf81dddf5caac6484fb7529b83f467d8d81542013e4d95cabe3d079823d9.glb",
+    "sha256": "f1e0cf81dddf5caac6484fb7529b83f467d8d81542013e4d95cabe3d079823d9",
+    "size": 15365560,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "f4b372132808b5354d70a3fd875426bc26c35799b1dc66f3da3fe3b43fb046b8.ctex",
+          "sha256": "f4b372132808b5354d70a3fd875426bc26c35799b1dc66f3da3fe3b43fb046b8",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "41a83baa2f5d33f9c20b00d3fbf0e28c59223e3a8de43d3ce1b25183b2ca9d0c.ctex",
+          "sha256": "41a83baa2f5d33f9c20b00d3fbf0e28c59223e3a8de43d3ce1b25183b2ca9d0c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "f9ba450021f01f3e487ae313a8b66c6d06c53254f67155bf95a35b1967961217.glb",
+        "sha256": "f9ba450021f01f3e487ae313a8b66c6d06c53254f67155bf95a35b1967961217",
+        "size": 4282488
+      },
+      "size_class": "infantry"
+    }
+  },
+  "soul_snatcher_cults/neophyte bikers": {
+    "url": "e8a2aca359ef9388c706e5f89757f2195bb64794432a6ab0d1ea7adfc1829ccf.glb",
+    "sha256": "e8a2aca359ef9388c706e5f89757f2195bb64794432a6ab0d1ea7adfc1829ccf",
+    "size": 14658784,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "e263ce15e43c69b65f698962516711b2d1ffa5f32a463c7e217306fd754cdf8c.ctex",
+          "sha256": "e263ce15e43c69b65f698962516711b2d1ffa5f32a463c7e217306fd754cdf8c",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "145397bf992e39fb66a69c36d6c77d558429096c9ea331f7be3cec5afb9c1a6e.ctex",
+          "sha256": "145397bf992e39fb66a69c36d6c77d558429096c9ea331f7be3cec5afb9c1a6e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "bdc6a62695be14aca05799155234c517e76feb61fb57aa65a79ca9444a9e7dd3.glb",
+        "sha256": "bdc6a62695be14aca05799155234c517e76feb61fb57aa65a79ca9444a9e7dd3",
+        "size": 7609324
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "soul_snatcher_cults/neophyte quadbike": {
+    "url": "d574e3cb14dc7658762ee4a26db199f6feffb579008ca917d0820021225b60a4.glb",
+    "sha256": "d574e3cb14dc7658762ee4a26db199f6feffb579008ca917d0820021225b60a4",
+    "size": 14564008,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4ff3edf5a2681018947e9c39c8773e76197503916c3db7ca8f1ac694751c9f38.ctex",
+          "sha256": "4ff3edf5a2681018947e9c39c8773e76197503916c3db7ca8f1ac694751c9f38",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "9cccc002e3e33bd9305dfee1e04edc38e2edc271f1acb007e6792dfea2885d78.ctex",
+          "sha256": "9cccc002e3e33bd9305dfee1e04edc38e2edc271f1acb007e6792dfea2885d78",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "fdcc3550645e87d7775b52f590eb3cb580fe7ac1a3b7750e092a9ec42c305387.glb",
+        "sha256": "fdcc3550645e87d7775b52f590eb3cb580fe7ac1a3b7750e092a9ec42c305387",
+        "size": 7127576
+      },
+      "size_class": "vehicle"
+    }
+  },
+  "soul_snatcher_cults/neophytes": {
+    "url": "c036f06a175ce65d5575756a4c62c69f672980a71e9adeb37cfb1dd7b58ed8f6.glb",
+    "sha256": "c036f06a175ce65d5575756a4c62c69f672980a71e9adeb37cfb1dd7b58ed8f6",
+    "size": 12714588,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "eec54f22dabfc931c820d460b3127d7347e76b41b049ae4e9c5dde6b641d4d0a.ctex",
+          "sha256": "eec54f22dabfc931c820d460b3127d7347e76b41b049ae4e9c5dde6b641d4d0a",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "57a9eeb127f8a37322799962b0eb75ca6d7c817f8d8bc45bbe1ee49f34a72e7e.ctex",
+          "sha256": "57a9eeb127f8a37322799962b0eb75ca6d7c817f8d8bc45bbe1ee49f34a72e7e",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "1cd45d91e9ccbbb1b56272f76e1a4f9257b84a1de2f35e3231be13012aaf7313.glb",
+        "sha256": "1cd45d91e9ccbbb1b56272f76e1a4f9257b84a1de2f35e3231be13012aaf7313",
+        "size": 3409976
+      },
+      "size_class": "infantry"
+    }
+  },
+  "soul_snatcher_cults/soul snatchers": {
+    "url": "e61f99d79113fdc25244416310dc10bf5a87aeebf30c8a389dce6d8a98fd9349.glb",
+    "sha256": "e61f99d79113fdc25244416310dc10bf5a87aeebf30c8a389dce6d8a98fd9349",
+    "size": 15101144,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "5b171210977fe352d49616512271bc0e0d4c505c0d3878b6d32184de07e13f84.ctex",
+          "sha256": "5b171210977fe352d49616512271bc0e0d4c505c0d3878b6d32184de07e13f84",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "64794e4af396fb4dfecb0bacc508e8cd190cb70ce84d332095a33cce962ca13c.ctex",
+          "sha256": "64794e4af396fb4dfecb0bacc508e8cd190cb70ce84d332095a33cce962ca13c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "77e6ef1a112a4b5df7b47d1747bda30f399a9cdbe6a58479a74c1d80c91ce166.glb",
+        "sha256": "77e6ef1a112a4b5df7b47d1747bda30f399a9cdbe6a58479a74c1d80c91ce166",
+        "size": 3538828
+      },
+      "size_class": "infantry"
+    }
+  },
+  "soul_snatcher_cults/support minions": {
+    "url": "81fec0b027a3442547f0ed04180b2ccae02d9e9414a7fafea9f44adaae7b6044.glb",
+    "sha256": "81fec0b027a3442547f0ed04180b2ccae02d9e9414a7fafea9f44adaae7b6044",
+    "size": 14700720,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "9658c49048ddce1dc3d3cec0fa2189ada93f7adab103712e51e054d285538a86.ctex",
+          "sha256": "9658c49048ddce1dc3d3cec0fa2189ada93f7adab103712e51e054d285538a86",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "bca6815e8379d3a5721fc07701d433d21529eda53d569ab2d189e12a095660d6.ctex",
+          "sha256": "bca6815e8379d3a5721fc07701d433d21529eda53d569ab2d189e12a095660d6",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "7063c41432cd8b711fc715f57a54e1bcdb5ebf9c68d79e8faecb46733be061c9.glb",
+        "sha256": "7063c41432cd8b711fc715f57a54e1bcdb5ebf9c68d79e8faecb46733be061c9",
+        "size": 3905836
+      },
+      "size_class": "infantry"
+    }
+  },
+  "soul_snatcher_cults/supreme leader": {
+    "url": "9ddc59dbb071aaec3b5bd59d9a921967e5f3eb5adf82287e73c67d6d0ff0ee15.glb",
+    "sha256": "9ddc59dbb071aaec3b5bd59d9a921967e5f3eb5adf82287e73c67d6d0ff0ee15",
+    "size": 15277576,
+    "ctex": {
+      "godot_version": "4.6",
+      "textures": {
+        "albedo": {
+          "url": "4d29243ccf10bce4a9f18cf33fd32b25500f232d0a2af27340d33cd1cd653178.ctex",
+          "sha256": "4d29243ccf10bce4a9f18cf33fd32b25500f232d0a2af27340d33cd1cd653178",
+          "size": 22369700
+        },
+        "orm": {
+          "url": "14a9763bac71f9b2407e19837711c309fcbca3add512f953605e2c9cfa97971c.ctex",
+          "sha256": "14a9763bac71f9b2407e19837711c309fcbca3add512f953605e2c9cfa97971c",
+          "size": 5592484
+        }
+      },
+      "mesh": {
+        "url": "b145d77579b7aa810379a89cfa07df0e3cd2a7e761962f509048b8cec21501ff.glb",
+        "sha256": "b145d77579b7aa810379a89cfa07df0e3cd2a7e761962f509048b8cec21501ff",
+        "size": 4499304
+      },
+      "size_class": "infantry"
+    }
+  }
+}
