@@ -135,6 +135,11 @@ func initialize(p_object_manager: Node, p_army_manager: OPRArmyManager) -> void:
 	object_manager = p_object_manager
 	army_manager = p_army_manager
 
+	# J9: parked-model token cleanup runs off ONE choke-point signal (see _on_loose_model_dead_changed),
+	# so the MP receive path + save/late-join restore get it too — not just the local call sites.
+	if army_manager and not army_manager.loose_model_dead_changed.is_connected(_on_loose_model_dead_changed):
+		army_manager.loose_model_dead_changed.connect(_on_loose_model_dead_changed)
+
 	# Create radial menu instance if not exists
 	# Get UI CanvasLayer (node is named "UI")
 	var ui_layer = get_tree().root.find_child("UI", true, false)
@@ -628,9 +633,7 @@ func _kill_loose_to_tray(model: ModelInstance, game_unit: GameUnit) -> void:
 	var pid: int = int(game_unit.unit_properties.get("player_id", 1))
 	if army_manager != null:
 		army_manager.set_loose_model_dead(model.node, pid, true, game_unit.unit_id)
-	# J4: a parked model must not carry its wound/status tokens onto the tray (they are children of the
-	# node and would ride along). Clear them all; revive re-derives them (_redraw_unit_tokens).
-	_clear_unit_status_tokens(model.node, game_unit)
+	# Token cleanup on park now runs off the set_loose_model_dead choke-point signal (J9).
 	# (No _reform_regiment_for_model here — this path only runs for LOOSE models; it would be a no-op.)
 	model_deleted.emit(model)
 	if network_manager:
@@ -725,8 +728,7 @@ func _revive_unit_models(game_unit: GameUnit) -> void:
 		_reform_regiment_for_model(model)
 		if network_manager:
 			network_manager.broadcast_model_wounds(model)
-	# J4: restore the unit's status/caster/custom tokens that were cleared when its models parked.
-	_redraw_unit_tokens(game_unit)
+	# Token re-derivation on revive now runs off the set_loose_model_dead choke-point signal (J9).
 
 
 ## Revive from a right-click on a dead loose model — the ONLY action a dead model allows. A fully
@@ -775,7 +777,6 @@ func _revive_single_model(model: ModelInstance, game_unit: GameUnit) -> void:
 	elif army_manager != null:
 		army_manager.set_loose_model_dead(model.node, pid, false)
 	_update_wound_marker(model)
-	_redraw_unit_tokens(game_unit)   # J4: restore status/caster/custom tokens cleared on park
 	_reform_regiment_for_model(model)
 	if network_manager:
 		network_manager.broadcast_model_wounds(model)
@@ -899,7 +900,6 @@ func _on_wounds_changed(model: ModelInstance, new_wounds: int) -> void:
 			OPRArmyManager.set_model_alive_state(model.node, false)
 		elif army_manager != null:
 			army_manager.set_loose_model_dead(model.node, pid, true, model.unit.unit_id if model.unit != null else "")
-			_clear_unit_status_tokens(model.node, model.unit)   # J4: don't drag tokens onto the tray
 		model_deleted.emit(model)
 	# Show model if revived
 	elif new_wounds > 0:
@@ -907,7 +907,7 @@ func _on_wounds_changed(model: ModelInstance, new_wounds: int) -> void:
 			OPRArmyManager.set_model_alive_state(model.node, true)
 		elif army_manager != null:
 			army_manager.set_loose_model_dead(model.node, pid, false)
-			_redraw_unit_tokens(model.unit)   # J4: restore status/caster/custom tokens on revive
+		# (Token park/revive cleanup runs off the set_loose_model_dead choke-point signal — J9.)
 
 	# Regiments (AoF:R): close ranks on a casualty, re-open on revive.
 	_reform_regiment_for_model(model)
@@ -984,15 +984,40 @@ func _regiment_frontage(context: Dictionary) -> void:
 
 
 ## Updates or creates a wound marker (red disc with border) next to a model.
+## Choke point for parked-model tokens (J9): fired by OPRArmyManager.set_loose_model_dead on EVERY
+## path — local remove/Delete/wounds dialog, the MP receive path (sync_model_wounds), and the
+## save-load / late-join restore. On park, clear this model's wound/status/caster/custom tokens so
+## none linger on the tray; on revive, re-derive the unit's tokens from its state.
+func _on_loose_model_dead_changed(node: Node3D, dead: bool) -> void:
+	var gu := UnitUtils.get_game_unit(node)
+	if gu == null:
+		return
+	if dead:
+		_clear_unit_status_tokens(node, gu)
+	else:
+		_redraw_unit_tokens(gu)
+
+
 func _update_wound_marker(model: ModelInstance) -> void:
 	if not model.node or not is_instance_valid(model.node):
 		return
 
 	var wounds_taken = model.wounds_max - model.wounds_current
-	var is_active = wounds_taken > 0
+	# A parked casualty shows no wound token; otherwise ANY _update_wound_marker caller would re-draw
+	# the red marker onto the tray — notably the MP receive path via _on_remote_wounds_updated (J9).
+	var is_active = _wound_token_active(wounds_taken, model.node)
 
 	var unit = model.unit as GameUnit if model.unit else null
 	_update_token(model.node, unit, "WoundMarker", is_active, wounds_taken)
+
+
+## A wound token shows only for a wounded, NON-parked model — a model parked on the tray (deleted +
+## dead_slot) never shows one, so no caller re-draws it onto the tray (J9). Pure/static → testable.
+static func _wound_token_active(wounds_taken: int, node: Node3D) -> bool:
+	if node == null:
+		return wounds_taken > 0
+	var parked: bool = node.has_meta("dead_slot") and bool(node.get_meta("deleted", false))
+	return wounds_taken > 0 and not parked
 
 
 ## Called when casts are changed via the casts dialog.

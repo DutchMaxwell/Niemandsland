@@ -6,6 +6,10 @@ class_name OPRArmyManager
 signal army_spawned(army: OPRApiClient.OPRArmy, models: Array[Node3D])
 ## Per-unit spawn progress so a loading bar can advance during the (synchronous) spawn.
 signal spawn_progress(done: int, total: int)
+## A loose model was parked (dead=true) or un-parked (dead=false). The single choke point for parked-
+## model token cleanup/re-derivation — fired on EVERY path (local, MP receive, save/late-join restore)
+## so listeners never have to hook each call site (J9).
+signal loose_model_dead_changed(node: Node3D, dead: bool)
 
 ## Player colors for army identification
 const PLAYER_COLORS = {
@@ -605,6 +609,9 @@ func set_loose_model_dead(node: Node3D, player_id: int, dead: bool, unit_id: Str
 		if node.has_meta("revive_transform"):
 			node.global_transform = node.get_meta("revive_transform")
 			node.remove_meta("revive_transform")
+	# Choke point (J9): every path that parks/un-parks a loose model runs through here, so token
+	# cleanup/re-derivation is driven once from this signal instead of at each call site.
+	loose_model_dead_changed.emit(node, dead)
 
 
 ## The slot a parked model occupies (set by the last set_loose_model_dead call), or -1. Lets the MP
