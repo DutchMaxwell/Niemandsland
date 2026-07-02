@@ -13,6 +13,7 @@ const TAB_W := 168
 const TAB_H := 28
 const STRIP_H := 100
 const CARD_W := 152
+const STRIP_CARD_H := 84
 const PCARD_W := 320
 const PCARD_H := 188
 const PCARD_MAX_H := 348          # presented card auto-grows to fit weapons, capped here
@@ -186,19 +187,24 @@ func _local_units() -> Array:
 func _add_card(unit: GameUnit) -> void:
 	if unit == null:
 		return
-	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(CARD_W, 0)
-	card.mouse_filter = Control.MOUSE_FILTER_STOP
-	card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	card.add_theme_stylebox_override("panel", _card_style(false, _unit_color(unit)))
-	# Compact CardFace strip content (rebuilt on refresh for live status). The PanelContainer keeps the
-	# HBox layout, click/hover and player-colour accent; CardFace supplies the Tactical-HUD design.
-	card.add_child(CardFace.build_strip(_card_data(unit)))
-	card.gui_input.connect(_on_card_input.bind(unit))
-	card.mouse_entered.connect(_on_card_hover.bind(unit, true))
-	card.mouse_exited.connect(_on_card_hover.bind(unit, false))
-	_strip.add_child(card)
-	_cards[unit.unit_id] = {"card": card, "accent": _unit_color(unit)}
+	# The HBox positions this inert SLOT; the CardVisual sits at local 0 inside it, so its own
+	# self-positioning never fights the container while still giving the approved CardFace design —
+	# dark-navy rounded face, bevel, drop shadow, hover lift/tilt — with NO legacy blue panel frame.
+	var slot := Control.new()
+	slot.custom_minimum_size = Vector2(CARD_W, STRIP_CARD_H)
+	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var cv := CardVisual.new()
+	cv.size = Vector2(CARD_W, STRIP_CARD_H)
+	cv.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	cv.gui_input.connect(_on_card_input.bind(unit))
+	cv.mouse_entered.connect(_on_card_hover.bind(unit, true))
+	cv.mouse_exited.connect(_on_card_hover.bind(unit, false))
+	slot.add_child(cv)
+	_strip.add_child(slot)
+	# Content only after the card is in the tree, so CardVisual._ready has built its content holder.
+	cv.set_content_node(CardFace.build_strip(_card_data(unit)))
+	cv.snap_to(Vector2.ZERO, 0.0, 1.0)
+	_cards[unit.unit_id] = {"card": cv}
 
 
 # === Live status ===
@@ -208,12 +214,9 @@ func _refresh_status() -> void:
 		var entry = _cards.get(unit.unit_id)
 		if entry == null:
 			continue
-		var card := entry["card"] as PanelContainer
+		var card := entry["card"] as CardVisual
 		# Rebuild the compact CardFace content so live stats/status/wounds show.
-		for c in card.get_children():
-			card.remove_child(c)
-			c.queue_free()
-		card.add_child(CardFace.build_strip(_card_data(unit)))
+		card.set_content_node(CardFace.build_strip(_card_data(unit)))
 		var dim: bool = unit.is_activated or unit.get_alive_count() == 0
 		card.modulate = Color(1, 1, 1, 0.45) if dim else Color(1, 1, 1, 1)
 	if _presented_unit != null and _presented.visible:
@@ -432,11 +435,6 @@ func _unit_centre(unit: GameUnit) -> Vector3:
 	return sum / float(n)
 
 
-func _unit_color(unit: GameUnit) -> Color:
-	var pid: int = int(unit.unit_properties.get("player_id", 1))
-	return OPRArmyManager.PLAYER_COLORS.get(pid, Color(0.5, 0.55, 0.6))
-
-
 # === Table → card sync ===
 
 func _on_table_selection_changed(selected_objects: Array) -> void:
@@ -445,9 +443,9 @@ func _on_table_selection_changed(selected_objects: Array) -> void:
 		if u != null:
 			selected_ids[(u as GameUnit).unit_id] = true
 	for uid in _cards:
-		var card := (_cards[uid]["card"]) as PanelContainer
-		var accent: Color = _cards[uid].get("accent", Color(0.4, 0.44, 0.5))
-		card.add_theme_stylebox_override("panel", _card_style(selected_ids.has(uid), accent))
+		var card := (_cards[uid]["card"]) as CardVisual
+		if card != null:
+			card.set_selected(selected_ids.has(uid))
 
 
 # === Styles ===
@@ -461,14 +459,3 @@ func _panel_style() -> StyleBoxFlat:
 	return sb
 
 
-func _card_style(selected: bool, accent: Color) -> StyleBoxFlat:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.16, 0.18, 0.22, 0.95)
-	sb.set_corner_radius_all(5)
-	sb.border_width_left = 6   # player-colour accent stripe
-	sb.border_width_top = 2 if selected else 1
-	sb.border_width_right = 2 if selected else 1
-	sb.border_width_bottom = 2 if selected else 1
-	# One border colour per box: the player accent normally, cyan when selected.
-	sb.border_color = Color(0.35, 0.85, 1.0, 1.0) if selected else accent
-	return sb
