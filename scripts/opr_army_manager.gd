@@ -139,6 +139,7 @@ var model_library: ModelLibrary
 var _ctex_used_count: int = 0
 var _legacy_used_reasons: Dictionary = {}
 var _variant_used_count: int = 0   # I2: models resolved to a pre-baked loadout variant (`<unit>#<slug>`)
+var _variant_missing_count: int = 0   # I2: a slug was derived but no `<unit>#<slug>` key exists → base
 
 ## Parsed-model cache: model path -> PackedScene. Runtime glTF models (user://) are
 ## otherwise re-parsed on every spawn, so a unit of N identical models paid N full
@@ -175,6 +176,7 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	_ctex_used_count = 0
 	_legacy_used_reasons = {}
 	_variant_used_count = 0
+	_variant_missing_count = 0
 
 	# Fetch on-demand models this army needs (no-op when the manifest is empty or
 	# everything is cached); the spawn loop below then resolves them locally.
@@ -327,10 +329,17 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	var legacy_total: int = 0
 	for r in _legacy_used_reasons:
 		legacy_total += int(_legacy_used_reasons[r])
+	# I2: variant hits + slug-derived-but-unknown-key fallbacks to base.
+	var variant_note: String = ""
+	if _variant_used_count > 0 or _variant_missing_count > 0:
+		variant_note = "  (%d via loadout variant" % _variant_used_count
+		if _variant_missing_count > 0:
+			variant_note += ", %d slug→base fallback(s)" % _variant_missing_count
+		variant_note += ")"
 	print("[Ctex] army '%s': %d model(s) via ctex, %d via legacy fallback%s%s" % [
 		army.name, _ctex_used_count, legacy_total,
 		("  (reasons: %s)" % str(_legacy_used_reasons)) if legacy_total > 0 else "",
-		("  (%d via loadout variant)" % _variant_used_count) if _variant_used_count > 0 else ""])
+		variant_note])
 
 	return all_models
 
@@ -2022,7 +2031,10 @@ func _resolve_model_variant_name(base_name: String, labels: Array, faction_folde
 	if slug.is_empty():
 		return ""
 	var variant: String = "%s#%s" % [base_name, slug]
-	return variant if model_library.has_model(faction_folder, variant) else ""
+	if model_library.has_model(faction_folder, variant):
+		return variant
+	_variant_missing_count += 1   # slug derived but no baked variant → fall back to the base model
+	return ""
 
 
 ## Find the GLB model for a unit. Prefers an on-demand model already cached locally

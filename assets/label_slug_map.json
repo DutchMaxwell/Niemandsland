@@ -1,17 +1,13 @@
 {
-  "_comment": "AF option/weapon label -> part-slug, for loadout->variant model resolution (Handover I2). Values are Model Forge's baked-variant vocabulary (verbatim); Model Forge reproduces ModelLibrary.variant_slug (sorted, de-duplicated slugs joined by '+') when naming a variant bake '<baseKey>#<slug>'. Keys are matched case-insensitively against a model's distributed loadout labels.",
-  "khopesh": "khopesh",
+  "_comment": "AF option GAIN name -> part-slug, for loadout->variant model resolution (Handover I2, rules v1.1). Match on the option's GAIN name (weapon or rule), NOT the Army-Forge display label (labels carry stats text that changes). Only API-recognizable, NON-default choices are slugs: a replaced weapon (Spear/Halberd/...) and a per-model role (Sergeant/Banner/Musician). The default hand weapon, shields (visual dressing), and Combined-Unit (size only) produce NO slug. Values are Model Forge's baked-variant vocabulary; Model Forge reproduces ModelLibrary.variant_slug (sorted, de-duplicated slugs joined by '+') when naming a variant bake '<baseKey>#<slug>'. Keys matched case-insensitively against a model's distributed loadout item names (= the gain names post-parse).",
   "spear": "spear",
   "halberd": "halberd",
   "sword": "sword",
-  "great weapon": "sword",
+  "khopesh": "khopesh",
   "bow": "bow",
   "royal bow": "royalbow",
   "royalbow": "royalbow",
-  "shield": "shield",
-  "combat shield": "shield",
+  "sergeant": "crest",
   "banner": "banner",
-  "horn": "horn",
-  "musician": "horn",
-  "crest": "crest"
+  "musician": "horn"
 }
