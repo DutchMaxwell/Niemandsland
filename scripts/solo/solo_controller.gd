@@ -111,22 +111,29 @@ func eligible_ai_units() -> Array:
 	return out
 
 
-## Nearest alive human unit to `ai_unit` (centre-to-centre), or null.
+## Nearest valid human unit to `ai_unit` (centre-to-centre), PREFERRING not-yet-activated targets — the
+## OPR Solo & Co-Op v3.5.0 targeting rule (nearest valid enemy, prefer un-activated). Falls back to the
+## nearest activated unit if every human unit has already acted. Null if none alive.
 func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 	if army_manager == null:
 		return null
 	var from := unit_centre(ai_unit)
-	var best: GameUnit = null
-	var best_d := INF
+	var best_fresh: GameUnit = null
+	var best_fresh_d := INF
+	var best_any: GameUnit = null
+	var best_any_d := INF
 	for h in army_manager.get_game_units_for_player(human_slot):
 		var hu := h as GameUnit
 		if hu == null or hu.is_destroyed():
 			continue
 		var d := MoveIntent.distance_inches(from, unit_centre(hu))
-		if d < best_d:
-			best_d = d
-			best = hu
-	return best
+		if d < best_any_d:
+			best_any_d = d
+			best_any = hu
+		if not hu.is_activated and d < best_fresh_d:
+			best_fresh_d = d
+			best_fresh = hu
+	return best_fresh if best_fresh != null else best_any
 
 
 func _advance_toward_nearest_human(unit: GameUnit) -> void:

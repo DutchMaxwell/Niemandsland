@@ -54,6 +54,26 @@ func test_ai_unit_advances_toward_nearest_human_and_activates() -> void:
 	assert_object(solo.activate_next_ai_unit()).is_null()
 
 
+func test_targeting_prefers_a_not_yet_activated_human_over_a_nearer_activated_one() -> void:
+	# OPR Solo v3.5.0: nearest valid enemy, but prefer not-yet-activated.
+	var near_active := _unit(1, [Vector3(0.35, 0, 0)])   # closer, but already acted
+	near_active.is_activated = true
+	near_active.unit_id = "human_active"
+	var far_fresh := _unit(1, [Vector3(0.1, 0, 0)])      # farther from the AI, not yet activated
+	far_fresh.unit_id = "human_fresh"
+	var ai := _unit(2, [Vector3(0.5, 0, 0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {near_active.unit_id: near_active, far_fresh.unit_id: far_fresh, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	assert_object(solo.nearest_human_unit(ai)).is_equal(far_fresh)
+	# If ALL humans are activated, fall back to the nearest.
+	far_fresh.is_activated = true
+	assert_object(solo.nearest_human_unit(ai)).is_equal(near_active)
+
+
 func test_run_ai_turn_activates_every_eligible_ai_unit() -> void:
 	var human := _unit(1, [Vector3(0, 0, 0)])
 	var ai1 := _unit(2, [Vector3(0.4, 0, 0)])
