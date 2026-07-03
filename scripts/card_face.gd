@@ -97,7 +97,7 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 				col.add_child(row)
 				var wr := str((w as Dictionary).get("rules", ""))
 				if not wr.is_empty():
-					col.add_child(_label("    " + wr, 10, CYAN))
+					col.add_child(_weapon_rules_list(wr.split(", ", false)))
 
 	# Rules + Spells list — each name is a hover target (the dock wires meta_hover to the description
 	# tooltip + spell-range ring, bus 033). This absorbs the old detail Info card; there is no Info button.
@@ -163,6 +163,28 @@ static func _rules_list(data: Dictionary) -> RichTextLabel:
 			sp.append("[url=spell:%s]%s (%d+)[/url]" % [str(sd.get("name", "")), str(sd.get("name", "")), int(sd.get("threshold", 0))])
 		lines.append("[color=%s]Spells[/color]  %s" % [CYAN.to_html(false), "  ".join(sp)])
 	rt.text = "\n".join(lines)
+	return rt
+
+
+## A weapon's named special rules as hover targets (underlined [url] spans), same mechanism as the unit
+## rules list so the dock wires meta_hover → description tooltip for them too (maintainer #5). Named
+## "RulesList" so _wire_rules_hover picks it up alongside the unit rules.
+static func _weapon_rules_list(names: PackedStringArray) -> RichTextLabel:
+	var rt := RichTextLabel.new()
+	rt.name = "RulesList"
+	rt.bbcode_enabled = true
+	rt.fit_content = true
+	rt.scroll_active = false
+	rt.meta_underlined = true
+	rt.mouse_filter = Control.MOUSE_FILTER_STOP
+	rt.add_theme_font_size_override("normal_font_size", 10)
+	rt.add_theme_color_override("default_color", CYAN)
+	var spans: Array[String] = []
+	for nm in names:
+		var t := nm.strip_edges()
+		if not t.is_empty():
+			spans.append("[url=%s]%s[/url]" % [t, t])
+	rt.text = "    " + "  ".join(spans)
 	return rt
 
 

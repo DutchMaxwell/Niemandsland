@@ -10,12 +10,10 @@ extends Control
 ## state. Give it content via set_content_node().
 
 # === Feel tunables (D1: EVERY knob lives here so tuning is trivial) =========================
-# Hover is a subtle lift + shadow only — the perspective tilt/sheen/sway were removed (bus 033: wobble).
-const HOVER_LIFT_SCALE: float = 1.08     # scale when hovered (D2 lift)
-const HOVER_SHADOW_GROW: float = 1.6     # shadow spread multiplier when lifted
-const SELECTED_LIFT_SCALE: float = 1.05  # persistent lift for the selected strip card (D8 selection)
-const SHADOW_SPREAD_PX: float = 6.0      # resting drop-shadow spread
-const SHADOW_OFFSET_PX: float = 4.0      # resting drop-shadow downward offset
+# Cards are RIGID once dealt in: NO hover lift/scale, NO shadow grow (maintainer: "bewegt sich zu viel").
+# The only motion is the deal-in / deal-out spring; selection is a static cyan border (set_selected).
+const SHADOW_SPREAD_PX: float = 6.0      # drop-shadow spread
+const SHADOW_OFFSET_PX: float = 4.0      # drop-shadow downward offset
 const CORNER_RADIUS_PX: int = 10         # rounded corners
 const BEVEL_ALPHA: float = 0.16          # subtle top bevel highlight
 
@@ -36,7 +34,6 @@ const FAN_DEG_PER_CARD: float = 1.5      # slight arc; must stay scannable
 var _shadow: Panel = null
 var _face: Panel = null
 var _content_holder: Control = null
-var _hovered: bool = false
 var _selected: bool = false
 
 # spring state: current + velocity for position (Vector2), rotation (deg), scale (float)
@@ -58,8 +55,6 @@ func _ready() -> void:
 	pivot_offset = size * 0.5
 	_build_layers()
 	set_process(false)   # only run the spring while something is actually moving (D3 early-out)
-	mouse_entered.connect(func() -> void: _hovered = true; _wake())
-	mouse_exited.connect(func() -> void: _hovered = false; _wake())
 	resized.connect(_on_resized)
 
 
@@ -154,12 +149,8 @@ func _wake() -> void:
 
 
 func _process(delta: float) -> void:
-	# Hover feedback is a subtle LIFT + shadow only — NO tilt/rotation on hover (bus 033: the wobble was
-	# "supernervig"). The deal-in spring (position/rotation/scale) and the persistent fan/selected state
-	# are unchanged.
-	var lift: float = HOVER_LIFT_SCALE if _hovered else (SELECTED_LIFT_SCALE if _selected else 1.0)
-	var target_scale_eff: float = _target_scale * lift
-
+	# ONLY the deal-in / deal-out spring moves the card (position / rotation / scale toward the target).
+	# No hover lift, no shadow grow — cards stay rigid once settled (maintainer: "bewegt sich zu viel").
 	var sx: Vector2 = _spring_step(_cur_pos.x, _target_pos.x, _vel_pos.x, POS_STIFFNESS, POS_DAMPING, delta)
 	var sy: Vector2 = _spring_step(_cur_pos.y, _target_pos.y, _vel_pos.y, POS_STIFFNESS, POS_DAMPING, delta)
 	_cur_pos = Vector2(sx.x, sy.x)
@@ -167,17 +158,19 @@ func _process(delta: float) -> void:
 	var sr: Vector2 = _spring_step(_cur_rot, _target_rot + _fan_rot, _vel_rot, ROT_STIFFNESS, ROT_DAMPING, delta)
 	_cur_rot = sr.x
 	_vel_rot = sr.y
-	var ss: Vector2 = _spring_step(_cur_scale, target_scale_eff, _vel_scale, SCALE_STIFFNESS, SCALE_DAMPING, delta)
+	var ss: Vector2 = _spring_step(_cur_scale, _target_scale, _vel_scale, SCALE_STIFFNESS, SCALE_DAMPING, delta)
 	_cur_scale = ss.x
 	_vel_scale = ss.y
 
 	_apply_transform()
-	_layout_shadow(HOVER_SHADOW_GROW if _hovered else 1.0)
+	_layout_shadow(1.0)
 
-	# Early-out: stop processing once the springs have settled (hover keeps it awake for the lift).
+	# Early-out: stop only once BOTH velocity AND distance-to-target have settled on every axis — checking
+	# position distance alone let the scale/rotation freeze mid-deal (cards settling at e.g. scale 0.66).
 	var moving: bool = _vel_pos.length() > SETTLE_EPSILON or absf(_vel_rot) > SETTLE_EPSILON \
 		or absf(_vel_scale) > SETTLE_EPSILON or _cur_pos.distance_to(_target_pos) > SETTLE_EPSILON \
-		or _hovered
+		or absf(_cur_rot - (_target_rot + _fan_rot)) > SETTLE_EPSILON \
+		or absf(_cur_scale - _target_scale) > SETTLE_EPSILON
 	if not moving:
 		set_process(false)
 

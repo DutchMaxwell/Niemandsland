@@ -20,6 +20,7 @@ const STRIP_FAN_DEG_PER_CARD := 1.5   # gentle fan (full faces need to stay read
 const STRIP_FAN_MAX_DEG := 8.0
 const STRIP_OVERLAP_PX := 6           # near-touching so each full face stays fully legible (no right clip)
 const STRIP_FAN_ARC_PX := 6.0         # shallow vertical arc
+const STRIP_SIDE_MARGIN := 14         # the strip background hugs the fan + this margin (grows w/ card count)
 const PCARD_W := 320
 const PCARD_H := 188
 const PCARD_MAX_H := 348          # presented card auto-grows to fit weapons, capped here
@@ -123,9 +124,9 @@ func _layout() -> void:
 	if _tab != null:
 		_tab.position = Vector2(vp.x / 2.0 - TAB_W / 2.0, _tab_target_y(_dock_open))
 	if _strip_panel != null:
-		_strip_panel.size = Vector2(vp.x, STRIP_H)
-		_strip_panel.position = Vector2(0, _strip_target_y(_dock_open))
-		_layout_fan()
+		_strip_panel.size.y = STRIP_H
+		_strip_panel.position.y = _strip_target_y(_dock_open)
+		_layout_fan()   # sizes the panel WIDTH to hug the fan + centres it horizontally
 	if _presented != null and _presented.visible:
 		_presented.snap_to(_presented_rest_pos(), 0.0, 1.0)
 
@@ -190,14 +191,21 @@ func _layout_fan() -> void:
 	var n := cards.size()
 	if n == 0:
 		return
-	var panel_w: float = _strip_panel.size.x if _strip_panel != null else get_viewport_rect().size.x
+	var vp := get_viewport_rect().size
 	var step: float = float(CARD_W - STRIP_OVERLAP_PX)
 	var natural_w: float = float(CARD_W) + float(n - 1) * step
-	var avail: float = panel_w * 0.94
+	# The fan may not exceed most of the screen; tighten overlap if it would (many units).
+	var avail: float = vp.x * 0.94 - 2.0 * float(STRIP_SIDE_MARGIN)
 	if natural_w > avail and n > 1:
 		step = maxf(16.0, (avail - float(CARD_W)) / float(n - 1))
 		natural_w = float(CARD_W) + float(n - 1) * step
-	var start_x: float = (panel_w - natural_w) * 0.5
+	# The background hugs the fan (+ a small side margin) and is centred, so it grows with the card count
+	# instead of spanning the whole screen (maintainer #1).
+	var panel_w: float = natural_w + 2.0 * float(STRIP_SIDE_MARGIN)
+	if _strip_panel != null:
+		_strip_panel.size.x = panel_w
+		_strip_panel.position.x = (vp.x - panel_w) * 0.5
+	var start_x: float = float(STRIP_SIDE_MARGIN)
 	var mid: float = float(n - 1) * 0.5
 	for i in n:
 		var cv := cards[i] as CardVisual
@@ -388,15 +396,15 @@ func set_range_ring_controller(rrc: Node) -> void:
 	range_ring_controller = rrc
 
 
-## The card's "RulesList" RichTextLabel exposes each rule/spell as a [url] span; connect its meta hover
-## to the description popup + spell-range ring (ported from the old UnitCard).
+## Each "RulesList" RichTextLabel (the unit rules/spells line AND every weapon's rules line) exposes its
+## names as [url] spans; connect their meta hover to the description popup + spell-range ring so hovering
+## any rule — unit or weapon — shows its info box (maintainer #3 + #5).
 func _wire_rules_hover(content: Control) -> void:
-	var rt := content.find_child("RulesList", true, false) as RichTextLabel
-	if rt == null:
-		return
-	if not rt.meta_hover_started.is_connected(_on_rule_hover_started):
-		rt.meta_hover_started.connect(_on_rule_hover_started)
-		rt.meta_hover_ended.connect(_on_rule_hover_ended)
+	for node in content.find_children("RulesList", "RichTextLabel", true, false):
+		var rt := node as RichTextLabel
+		if rt != null and not rt.meta_hover_started.is_connected(_on_rule_hover_started):
+			rt.meta_hover_started.connect(_on_rule_hover_started)
+			rt.meta_hover_ended.connect(_on_rule_hover_ended)
 
 
 func _on_rule_hover_started(meta: Variant) -> void:
@@ -486,11 +494,13 @@ func _setup_rule_popup() -> void:
 
 
 func _animate_card_in() -> void:
-	# CardVisual carries the deal-in feel: snap below with a slight tilt, then spring up to rest.
+	# Deal-in feel WITHOUT scaling: snap below with a slight tilt, then spring up to rest at scale 1.0.
+	# Scaling the card broke mouse input to its nested RichText rules list (Godot picks scaled children
+	# unreliably) — keeping scale fixed at 1.0 makes the rule-hover tooltips work (maintainer #3).
 	var rest := _presented_rest_pos()
 	_presented.modulate.a = 1.0
 	_presented.visible = true
-	_presented.snap_to(rest + Vector2(40, 240), 7.0, 0.82)
+	_presented.snap_to(rest + Vector2(40, 240), 7.0, 1.0)
 	_presented.spring_to(rest, 0.0, 1.0)
 	UiFeedback.play_card_deal()   # D5: soft deal-in cue (chips already sound via the global button hook)
 
@@ -546,15 +556,15 @@ func _card_action(kind: String) -> void:
 # === Interaction ===
 
 func _on_card_input(event: InputEvent, unit: GameUnit) -> void:
-	_handle_card_click(event, unit)
+	_handle_card_click(event, unit, true)
 
 
 func _on_presented_input(event: InputEvent) -> void:
 	if _presented_unit != null:
-		_handle_card_click(event, _presented_unit)
+		_handle_card_click(event, _presented_unit, false)
 
 
-func _handle_card_click(event: InputEvent, unit: GameUnit) -> void:
+func _handle_card_click(event: InputEvent, unit: GameUnit, from_strip: bool) -> void:
 	if not (event is InputEventMouseButton):
 		return
 	var mb := event as InputEventMouseButton
@@ -564,6 +574,19 @@ func _handle_card_click(event: InputEvent, unit: GameUnit) -> void:
 		_focus_camera_on(unit)
 	else:
 		_select_unit(unit)
+		# Clicking a strip card pops the detail card for that unit, as if the model was clicked: collapse
+		# the strip and present it (present_unit is suppressed while the dock is open) — maintainer #2.
+		if from_strip and _dock_open:
+			_collapse_dock_and_present(unit)
+
+
+func _collapse_dock_and_present(unit: GameUnit) -> void:
+	_dock_open = false
+	_tab.text = "▲  Units"
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(_strip_panel, "position:y", _strip_target_y(false), 0.2).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(_tab, "position:y", _tab_target_y(false), 0.2).set_trans(Tween.TRANS_CUBIC)
+	present_unit(unit)
 
 
 func _on_card_hover(unit: GameUnit, entered: bool) -> void:
