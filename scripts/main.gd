@@ -463,16 +463,14 @@ func _ready() -> void:
 	opr_stats_tooltip = tooltip_scene.instantiate()
 	$UI.add_child(opr_stats_tooltip)
 
-	# Initialize Unit Card (docked, live battle state for the selected unit)
-	var unit_card_scene = load("res://scenes/unit_card.tscn")
-	unit_card = unit_card_scene.instantiate()
-	unit_card.army_manager = opr_army_manager
-	$UI.add_child(unit_card)
+	# The old detail UnitCard is RETIRED (bus 033): the dock's presented card now carries its rules/spell
+	# hover tooltips + spell-range ring, so there is no Info button and no separate detail card. The
+	# UnitCard script is kept only for its unit test; `unit_card` stays null.
 
-	# Bottom-edge unit-card dock (whole-army overview + quick selector).
+	# Bottom-edge unit-card dock (whole-army overview + quick selector + the presented focus card).
 	unit_dock = UnitDock.new()
 	$UI/HUD.add_child(unit_dock)
-	unit_dock.setup(opr_army_manager, object_manager, network_manager, camera_pivot, unit_card)
+	unit_dock.setup(opr_army_manager, object_manager, network_manager, camera_pivot, null)
 
 	# Connect OPR import button
 	import_opr_btn.pressed.connect(_on_import_opr_army)
@@ -3881,8 +3879,8 @@ func _init_radial_menu() -> void:
 	range_ring_controller.name = "RangeRingController"
 	add_child(range_ring_controller)
 	object_manager.range_ring_controller = range_ring_controller
-	if unit_card:
-		unit_card.range_ring_controller = range_ring_controller  # spell-range hover preview
+	if unit_dock:
+		unit_dock.set_range_ring_controller(range_ring_controller)  # spell-range hover preview on the card
 
 	# Movement reach indicator: Advance + Rush/Charge bands toggled with M on the selection
 	# (local-only display aid, OPR Fast/Slow aware). Owns the rings under /root/Main.

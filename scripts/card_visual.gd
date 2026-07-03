@@ -2,17 +2,15 @@ class_name CardVisual
 extends Control
 ## Reusable card presentation for the unit dock (Handover D / D1). ONE component for both the dock-strip
 ## cards and the presented card: a layered face (base > subtle bevel > content) with rounded corners and
-## a drop-shadow pass, a Balatro-style perspective tilt on hover (assets/shaders/card_tilt.gdshader),
-## and damped-spring dynamics for position / rotation / scale so cards spring into place, lift on hover,
-## and settle with a little wobble instead of a linear tween.
+## a drop-shadow pass, plus damped-spring dynamics for position / rotation / scale so cards deal into
+## place (fan arrangement + overshoot) instead of a linear tween. Hover feedback is a subtle LIFT +
+## shadow only — the perspective tilt/sheen/scroll-sway were removed (bus 033: the wobble was too much).
 ##
-## No true 3D, no SubViewport — pure 2D Control + a canvas_item tilt shader + springs.
-## Presentation only: it never changes game state. Give it content via set_content_node().
+## No true 3D, no SubViewport — pure 2D Control + springs. Presentation only: it never changes game
+## state. Give it content via set_content_node().
 
 # === Feel tunables (D1: EVERY knob lives here so tuning is trivial) =========================
-const TILT_MAX_DEG: float = 8.0          # max perspective tilt toward the cursor (D2)
-const TILT_FOV_DEG: float = 55.0         # virtual camera FOV for the tilt shader
-const SHEEN_STRENGTH: float = 0.10       # specular sheen that shifts with the tilt (0 = off)
+# Hover is a subtle lift + shadow only — the perspective tilt/sheen/sway were removed (bus 033: wobble).
 const HOVER_LIFT_SCALE: float = 1.08     # scale when hovered (D2 lift)
 const HOVER_SHADOW_GROW: float = 1.6     # shadow spread multiplier when lifted
 const SELECTED_LIFT_SCALE: float = 1.05  # persistent lift for the selected strip card (D8 selection)
@@ -28,8 +26,6 @@ const ROT_STIFFNESS: float = 180.0
 const ROT_DAMPING: float = 0.85
 const SCALE_STIFFNESS: float = 260.0
 const SCALE_DAMPING: float = 0.82
-const SWAY_PER_VELOCITY: float = 0.010   # Hearthstone pendulum: rad of sway per px/s of strip velocity
-const SWAY_MAX_DEG: float = 7.0
 const SETTLE_EPSILON: float = 0.05       # below this (px / deg / %) the spring is "settled" → early-out
 
 # Hand-fan (D4: one constant; maintainer can zero it out). Applied by the dock via set_fan().
@@ -37,7 +33,6 @@ const FAN_ENABLED: bool = true
 const FAN_DEG_PER_CARD: float = 1.5      # slight arc; must stay scannable
 
 # === State ===
-var _mat: ShaderMaterial = null
 var _shadow: Panel = null
 var _face: Panel = null
 var _content_holder: Control = null
@@ -54,9 +49,7 @@ var _vel_rot: float = 0.0
 var _target_scale: float = 1.0
 var _cur_scale: float = 1.0
 var _vel_scale: float = 0.0
-var _tilt: Vector2 = Vector2.ZERO        # current (rot_x, rot_y) deg, spring-eased toward the hover aim
-var _tilt_aim: Vector2 = Vector2.ZERO
-var _fan_rot: float = 0.0                # extra fan rotation from the dock
+var _fan_rot: float = 0.0                # extra fan rotation from the dock (static arrangement, not hover)
 
 # === Lifecycle ===
 
@@ -66,7 +59,7 @@ func _ready() -> void:
 	_build_layers()
 	set_process(false)   # only run the spring while something is actually moving (D3 early-out)
 	mouse_entered.connect(func() -> void: _hovered = true; _wake())
-	mouse_exited.connect(func() -> void: _hovered = false; _tilt_aim = Vector2.ZERO; _wake())
+	mouse_exited.connect(func() -> void: _hovered = false; _wake())
 	resized.connect(_on_resized)
 
 
@@ -80,11 +73,7 @@ func _build_layers() -> void:
 	_face = Panel.new()
 	_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_face.add_theme_stylebox_override("panel", _face_style())
-	# NOTE (D2 render fix, found via a real GPU render): the canvas_item perspective tilt shader mangles
-	# a Panel's StyleBox primitives (they are NOT a single textured quad) → the card drew nothing. So the
-	# shader is NOT applied to the Panel; the tactile hover TILT now comes from a light Control transform
-	# (see _process). The shader file (assets/shaders/card_tilt.gdshader) stays for the D7 design rework,
-	# where the card face becomes a single quad / baked frame texture that a vertex shader CAN transform.
+	# The face is a plain StyleBox Panel — no shader (hover is a lift + shadow, no tilt; bus 033).
 	add_child(_face)
 	# Content holder above the face (labels/stats set by the owner).
 	_content_holder = Control.new()
@@ -153,12 +142,6 @@ func set_fan(fan_degrees: float) -> void:
 	_wake()
 
 
-## Horizontal strip velocity (px/s) → pendulum sway while scrolling/dragging (D3 Hearthstone sway).
-func set_strip_velocity(vx: float) -> void:
-	var sway: float = clampf(vx * SWAY_PER_VELOCITY, -SWAY_MAX_DEG, SWAY_MAX_DEG)
-	_target_rot = _fan_rot + sway
-	_wake()
-
 # === Spring integration ===
 
 func _wake() -> void:
@@ -167,15 +150,12 @@ func _wake() -> void:
 
 
 func _process(delta: float) -> void:
-	# Tilt aim from the cursor when hovered (D2), toward 0 otherwise; spring-eased so it never snaps.
-	if _hovered:
-		var local: Vector2 = get_local_mouse_position()
-		var off: Vector2 = ((local / size) - Vector2(0.5, 0.5)) * 2.0   # -1..1 from card centre
-		_tilt_aim = Vector2(-off.y, off.x) * TILT_MAX_DEG   # x = pitch (from vertical), y = yaw (horizontal)
+	# Hover feedback is a subtle LIFT + shadow only — NO tilt/rotation on hover (bus 033: the wobble was
+	# "supernervig"). The deal-in spring (position/rotation/scale) and the persistent fan/selected state
+	# are unchanged.
 	var lift: float = HOVER_LIFT_SCALE if _hovered else (SELECTED_LIFT_SCALE if _selected else 1.0)
 	var target_scale_eff: float = _target_scale * lift
 
-	var moving: bool = false
 	var sx: Vector2 = _spring_step(_cur_pos.x, _target_pos.x, _vel_pos.x, POS_STIFFNESS, POS_DAMPING, delta)
 	var sy: Vector2 = _spring_step(_cur_pos.y, _target_pos.y, _vel_pos.y, POS_STIFFNESS, POS_DAMPING, delta)
 	_cur_pos = Vector2(sx.x, sy.x)
@@ -186,15 +166,14 @@ func _process(delta: float) -> void:
 	var ss: Vector2 = _spring_step(_cur_scale, target_scale_eff, _vel_scale, SCALE_STIFFNESS, SCALE_DAMPING, delta)
 	_cur_scale = ss.x
 	_vel_scale = ss.y
-	_tilt = _tilt.lerp(_tilt_aim, clampf(delta * 12.0, 0.0, 1.0))
 
 	_apply_transform()
 	_layout_shadow(HOVER_SHADOW_GROW if _hovered else 1.0)
 
-	# Early-out (D3): stop processing once everything has settled and no hover tilt remains.
-	moving = _vel_pos.length() > SETTLE_EPSILON or absf(_vel_rot) > SETTLE_EPSILON \
+	# Early-out: stop processing once the springs have settled (hover keeps it awake for the lift).
+	var moving: bool = _vel_pos.length() > SETTLE_EPSILON or absf(_vel_rot) > SETTLE_EPSILON \
 		or absf(_vel_scale) > SETTLE_EPSILON or _cur_pos.distance_to(_target_pos) > SETTLE_EPSILON \
-		or _tilt.distance_to(_tilt_aim) > SETTLE_EPSILON or _hovered
+		or _hovered
 	if not moving:
 		set_process(false)
 
@@ -202,11 +181,8 @@ func _process(delta: float) -> void:
 func _apply_transform() -> void:
 	position = _cur_pos
 	pivot_offset = size * 0.5
-	# Base spring rotation + a subtle hover LEAN toward the cursor (a light transform-based fake of the
-	# perspective tilt — the true shader tilt returns in D7 on a single-quad face). _tilt = (pitch, yaw)°.
-	rotation_degrees = _cur_rot + _tilt.y * 0.5
-	# Foreshorten a touch on pitch for a hint of depth; horizontal lean is the rotation above.
-	scale = Vector2(_cur_scale, _cur_scale * (1.0 - absf(_tilt.x) * 0.004))
+	rotation_degrees = _cur_rot          # spring rotation only (fan/deal-in) — no hover lean
+	scale = Vector2(_cur_scale, _cur_scale)
 
 
 # One damped-spring step for a scalar. Returns Vector2(new_value, new_velocity) so the caller keeps the

@@ -23,7 +23,7 @@ const CHIP_OFF := Color(0.22, 0.26, 0.33)
 ## Presented card content (the big card). `on_action` (optional) is called with the action kind string
 ## ("activation"/"fatigued"/"shaken"/"casts"/"wounds"/"details"/"revive") when an action chip is pressed;
 ## the dock connects it to _card_action. Left empty in the dev preview so the chips are inert.
-static func build_presented(data: Dictionary, on_action: Callable = Callable()) -> Control:
+static func build_presented(data: Dictionary, on_action: Callable = Callable(), include_actions: bool = true, collapse_weapons: bool = false) -> Control:
 	var margin := MarginContainer.new()
 	for s in ["left", "right", "top", "bottom"]:
 		margin.add_theme_constant_override("margin_" + s, 12)
@@ -75,80 +75,96 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable()) 
 	var weapons: Array = data.get("weapons", [])
 	if not weapons.is_empty() and not bool(data.get("dead", false)):
 		col.add_child(_rule(NAVY_HI))
-		for w in weapons:
-			var row := HBoxContainer.new()
-			var nm := _label(str((w as Dictionary).get("name", "")), 12, TEXT)
-			nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-			nm.clip_text = true
-			row.add_child(nm)
-			row.add_child(_label(str((w as Dictionary).get("meta", "")), 12, TEXT_DIM))
-			col.add_child(row)
-			var wr := str((w as Dictionary).get("rules", ""))
-			if not wr.is_empty():
-				col.add_child(_label("    " + wr, 10, CYAN))
+		if collapse_weapons:
+			# Strip-size fallback (bus 033): a one-line weapon summary instead of the full block, so a
+			# dense strip stays legible. The full block shows on the focus card / on hover.
+			var names: Array[String] = []
+			for w in weapons:
+				names.append(str((w as Dictionary).get("name", "")))
+			var summary := _label("⚔ " + ", ".join(names), 11, TEXT_DIM)
+			summary.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+			summary.clip_text = true
+			col.add_child(summary)
+		else:
+			for w in weapons:
+				var row := HBoxContainer.new()
+				var nm := _label(str((w as Dictionary).get("name", "")), 12, TEXT)
+				nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+				nm.clip_text = true
+				row.add_child(nm)
+				row.add_child(_label(str((w as Dictionary).get("meta", "")), 12, TEXT_DIM))
+				col.add_child(row)
+				var wr := str((w as Dictionary).get("rules", ""))
+				if not wr.is_empty():
+					col.add_child(_label("    " + wr, 10, CYAN))
 
-	# Rules line — the unit's special rules, abbreviated + ellipsized (full text behind Info).
-	var rules_line := str(data.get("rules", ""))
-	if not rules_line.is_empty() and not bool(data.get("dead", false)):
-		var rl := _label(rules_line, 11, TEXT_DIM)
-		rl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		rl.clip_text = true
-		col.add_child(rl)
+	# Rules + Spells list — each name is a hover target (the dock wires meta_hover to the description
+	# tooltip + spell-range ring, bus 033). This absorbs the old detail Info card; there is no Info button.
+	if not bool(data.get("dead", false)):
+		var rules_rt := _rules_list(data)
+		if rules_rt != null:
+			col.add_child(rules_rt)
 
 	# Amber coherency strip (only when out of coherency and not dead).
 	if not bool(data.get("coherent", true)) and not bool(data.get("dead", false)):
 		col.add_child(_warning_strip("⚠  Out of coherency"))
 
-	var pad := Control.new()
-	pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_child(pad)
-
-	# Action bar — part of the design; the dock wires these to the real card_* actions in D8.
-	var actions := HBoxContainer.new()
-	actions.add_theme_constant_override("separation", 4)
-	if bool(data.get("dead", false)):
-		actions.add_child(_action_btn("↺", "Revive", "revive", on_action))
-	else:
-		actions.add_child(_action_btn("▶", "Act", "activation", on_action))
-		actions.add_child(_action_btn("~", "Fat", "fatigued", on_action))
-		actions.add_child(_action_btn("!", "Shk", "shaken", on_action))
-		if bool(data.get("caster", false)):
-			actions.add_child(_action_btn("✦", "Cast", "casts", on_action))
-		actions.add_child(_action_btn("✚", "Wnd", "wounds", on_action))
-		actions.add_child(_action_btn("ⓘ", "Info", "details", on_action))
-	col.add_child(actions)
+	# Action bar — presented/focus card only (strip cards omit it via include_actions=false). No Info
+	# button: the rules list above replaces the old detail card.
+	if include_actions:
+		var pad := Control.new()
+		pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		col.add_child(pad)
+		var actions := HBoxContainer.new()
+		actions.add_theme_constant_override("separation", 4)
+		if bool(data.get("dead", false)):
+			actions.add_child(_action_btn("↺", "Revive", "revive", on_action))
+		else:
+			actions.add_child(_action_btn("▶", "Act", "activation", on_action))
+			actions.add_child(_action_btn("~", "Fat", "fatigued", on_action))
+			actions.add_child(_action_btn("!", "Shk", "shaken", on_action))
+			if bool(data.get("caster", false)):
+				actions.add_child(_action_btn("✦", "Cast", "casts", on_action))
+			actions.add_child(_action_btn("✚", "Wnd", "wounds", on_action))
+		col.add_child(actions)
 
 	return margin
 
 
-## Compact strip card content.
-static func build_strip(data: Dictionary) -> Control:
-	var margin := MarginContainer.new()
-	for s in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + s, 8)
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 4)
-	margin.add_child(col)
-	var nm := _fit_name(str(data.get("name", "Unit")), 13, 11, 13)
-	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col.add_child(nm)
-	var stats := HBoxContainer.new()
-	stats.add_theme_constant_override("separation", 5)
-	stats.add_child(_label("Q%d+" % int(data.get("quality", 0)), 12, TEXT_DIM))
-	stats.add_child(_label("D%d+" % int(data.get("defense", 0)), 12, TEXT_DIM))
-	col.add_child(stats)
-	var alive := int(data.get("alive", 0))
-	var total := int(data.get("total", 0))
-	col.add_child(_label("%d/%d" % [alive, total], 13, (AMBER if alive < total else TEXT)))
-	# One-row status dots.
-	var dots := HBoxContainer.new()
-	dots.add_theme_constant_override("separation", 4)
-	if bool(data.get("activated", false)): dots.add_child(_dot(CYAN))
-	if bool(data.get("fatigued", false)): dots.add_child(_dot(AMBER))
-	if bool(data.get("shaken", false)): dots.add_child(_dot(AMBER))
-	col.add_child(dots)
-	return margin
+## The hoverable Rules (+ Spells) list as a RichTextLabel of [url] spans, named "RulesList" so the dock
+## can wire meta_hover_started/ended to descriptions + the spell-range ring. data.rules_list = Array of
+## rule-name Strings; data.spells = Array of {name, threshold}. Returns null when there is nothing to
+## show. Spell spans are keyed "spell:<name>".
+static func _rules_list(data: Dictionary) -> RichTextLabel:
+	var rule_names: Array = data.get("rules_list", [])
+	var spells: Array = data.get("spells", []) if bool(data.get("caster", false)) else []
+	if rule_names.is_empty() and spells.is_empty():
+		return null
+	var rt := RichTextLabel.new()
+	rt.name = "RulesList"
+	rt.bbcode_enabled = true
+	rt.fit_content = true
+	rt.scroll_active = false
+	rt.meta_underlined = true
+	rt.mouse_filter = Control.MOUSE_FILTER_STOP
+	rt.add_theme_font_size_override("normal_font_size", 11)
+	rt.add_theme_color_override("default_color", TEXT_DIM)
+	var lines: Array[String] = []
+	if not rule_names.is_empty():
+		var spans: Array[String] = []
+		for r in rule_names:
+			spans.append("[url=%s]%s[/url]" % [str(r), str(r)])
+		lines.append("[color=%s]Rules[/color]  %s" % [TEXT_DIM.to_html(false), "  ".join(spans)])
+	if not spells.is_empty():
+		var sp: Array[String] = []
+		for s in spells:
+			var sd := s as Dictionary
+			sp.append("[url=spell:%s]%s (%d+)[/url]" % [str(sd.get("name", "")), str(sd.get("name", "")), int(sd.get("threshold", 0))])
+		lines.append("[color=%s]Spells[/color]  %s" % [CYAN.to_html(false), "  ".join(sp)])
+	rt.text = "\n".join(lines)
+	return rt
+
 
 
 # === Pieces ===
@@ -219,12 +235,6 @@ static func _status_chip(text: String, lit: bool, lit_color: Color) -> Control:
 	box.add_child(l)
 	return box
 
-
-static func _dot(color: Color) -> Control:
-	var d := PanelContainer.new()
-	d.custom_minimum_size = Vector2(9, 9)
-	d.add_theme_stylebox_override("panel", _chip_style(color, color))
-	return d
 
 
 static func _warning_strip(text: String) -> Control:
