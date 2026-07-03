@@ -263,15 +263,40 @@ func _card_data(unit: GameUnit) -> Dictionary:
 	return data
 
 
-## One distinct weapon → CardFace's {name, meta, rules} shape (name+count, RNG/ATK, special rules).
+## One distinct weapon → CardFace's {name, meta, rules} shape, in the APPROVED format (bus 027):
+## the stat column is range (OMITTED for melee) + attacks + AP INLINE ("30\" A1 AP1", "A2"); AP is a
+## stat, not a named rule. The cyan sub-line (rules) carries ONLY named special rules (Counter, Rending,
+## Deadly(2), …).
 func _weapon_entry(w: OPRApiClient.OPRWeapon) -> Dictionary:
 	var count_str: String = "%dx " % w.count if w.count > 1 else ""
-	var range_str: String = "Melee" if w.range_value == 0 else "%d\"" % w.range_value
+	var parts: Array[String] = []
+	if w.range_value > 0:
+		parts.append("%d\"" % w.range_value)   # no "Melee" token for melee weapons
+	parts.append("A%d" % w.attacks)
+	var named: Array[String] = []
+	for r: String in w.special_rules:
+		var ap := _ap_value(r)
+		if ap != "":
+			parts.append("AP%s" % ap)           # AP inline in the stat column, no parentheses
+		else:
+			named.append(r)
 	return {
 		"name": count_str + w.name,
-		"meta": "%s A%d" % [range_str, w.attacks],
-		"rules": ", ".join(w.special_rules),
+		"meta": " ".join(parts),
+		"rules": ", ".join(named),
 	}
+
+
+## The numeric value of an OPR armour-piercing rule "AP(X)" → "X", or "" if the rule is not AP.
+func _ap_value(rule: String) -> String:
+	var r := rule.strip_edges()
+	if not r.begins_with("AP("):
+		return ""
+	var num := ""
+	for i in range(3, r.length()):
+		if r[i] >= "0" and r[i] <= "9":
+			num += r[i]
+	return num
 
 
 # === Presented card ===

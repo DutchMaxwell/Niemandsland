@@ -38,7 +38,7 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable()) 
 	header.add_child(name_lbl)
 	header.add_child(_label("%d pts" % int(data.get("points", 0)), 14, TEXT_DIM))
 	col.add_child(header)
-	col.add_child(_rule(CYAN))
+	col.add_child(_rule(CYAN, 0.28, 1.0))   # subtle header divider (bus 027)
 
 	# Stat row: Q + D die-chips, alive counter pushed right.
 	var stats := HBoxContainer.new()
@@ -191,10 +191,10 @@ static func _action_btn(icon: String, label: String, kind: String, on_action: Ca
 	return b
 
 
-static func _rule(color: Color) -> Control:
+static func _rule(color: Color, alpha: float = 0.55, height: float = 2.0) -> Control:
 	var r := ColorRect.new()
-	r.color = Color(color.r, color.g, color.b, 0.55)
-	r.custom_minimum_size = Vector2(0, 2)
+	r.color = Color(color.r, color.g, color.b, alpha)
+	r.custom_minimum_size = Vector2(0, height)
 	return r
 
 

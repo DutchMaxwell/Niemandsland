@@ -43,7 +43,7 @@ func test_card_data_reuses_accessors_and_opr_weapons() -> void:
 	assert_int(weapons.size()).is_equal(1)
 	var w: Dictionary = weapons[0]
 	assert_str(str(w["name"])).is_equal("2x Spear")
-	assert_str(str(w["meta"])).is_equal("Melee A1")
+	assert_str(str(w["meta"])).is_equal("A1")   # melee → no range token (bus 027)
 	assert_str(str(w["rules"])).is_equal("Counter")
 
 
@@ -60,15 +60,38 @@ func test_card_data_without_opr_source_has_no_weapons_or_rules() -> void:
 	assert_bool(bool(d["dead"])).is_false()
 
 
-func test_card_data_ranged_weapon_meta() -> void:
-	var dock: UnitDock = auto_free(UnitDock.new())
+func _weapon(nm: String, rng: int, atk: int, count: int, rules: Array) -> OPRApiClient.OPRWeapon:
 	var w := OPRApiClient.OPRWeapon.new()
-	w.name = "Heavy Rifle"
-	w.range_value = 30
-	w.attacks = 1
-	w.count = 1
-	w.special_rules = ["AP(1)"]
-	var e: Dictionary = dock._weapon_entry(w)
-	assert_str(str(e["name"])).is_equal("Heavy Rifle")
-	assert_str(str(e["meta"])).is_equal("30\" A1")
-	assert_str(str(e["rules"])).is_equal("AP(1)")
+	w.name = nm
+	w.range_value = rng
+	w.attacks = atk
+	w.count = count
+	w.special_rules.assign(rules)
+	return w
+
+
+## Pins the APPROVED weapon stat-string format (bus 027): no "Melee" token, AP inline in the stat
+## column (no parens), the cyan sub-line only for named rules.
+func test_weapon_entry_format_melee_ranged_ap_and_named_rules() -> void:
+	var dock: UnitDock = auto_free(UnitDock.new())
+
+	# Plain melee → attacks only, no range token, no rules.
+	var melee: Dictionary = dock._weapon_entry(_weapon("CCW", 0, 2, 1, []))
+	assert_str(str(melee["name"])).is_equal("CCW")
+	assert_str(str(melee["meta"])).is_equal("A2")
+	assert_str(str(melee["rules"])).is_equal("")
+
+	# Ranged + AP → range, attacks, AP inline; rules empty (AP is a stat, not a named rule).
+	var ranged: Dictionary = dock._weapon_entry(_weapon("Heavy Rifle", 30, 1, 1, ["AP(1)"]))
+	assert_str(str(ranged["meta"])).is_equal("30\" A1 AP1")
+	assert_str(str(ranged["rules"])).is_equal("")
+
+	# Melee + AP → no range, attacks, AP inline.
+	var melee_ap: Dictionary = dock._weapon_entry(_weapon("Great Weapon", 0, 2, 1, ["AP(2)"]))
+	assert_str(str(melee_ap["meta"])).is_equal("A2 AP2")
+
+	# Count prefix + AP inline + named rules split onto the cyan sub-line, AP excluded.
+	var multi: Dictionary = dock._weapon_entry(_weapon("Daemon Claws", 0, 4, 2, ["AP(1)", "Counter", "Deadly(2)"]))
+	assert_str(str(multi["name"])).is_equal("2x Daemon Claws")
+	assert_str(str(multi["meta"])).is_equal("A4 AP1")
+	assert_str(str(multi["rules"])).is_equal("Counter, Deadly(2)")
