@@ -10,6 +10,9 @@ signal spawn_progress(done: int, total: int)
 ## model token cleanup/re-derivation — fired on EVERY path (local, MP receive, save/late-join restore)
 ## so listeners never have to hook each call site (J9).
 signal loose_model_dead_changed(node: Node3D, dead: bool)
+## Fired when the round counter advances (single seam for the Battle Log — both the local Next-Round path
+## via advance_round() and the remote round-advance apply via set_current_round() go through here).
+signal round_advanced(round_number: int)
 
 ## Player colors for army identification
 const PLAYER_COLORS = {
@@ -1907,6 +1910,7 @@ func advance_round() -> void:
 		if game_unit:
 			game_unit.reset_activation()
 			game_unit.add_round_caster_points()
+	round_advanced.emit(current_round)
 
 
 ## Sets the current round (used by save/load restore).
