@@ -15,7 +15,7 @@ const ENTRY_FONT := 12
 const MAX_VISIBLE := 200
 
 var _log: BattleLog = null
-var _open := true
+var _open := false   # starts collapsed to a top-centre tab; click the header to expand downward
 var _filter := BattleLog.Filter.ALL
 
 var _header: Button = null
@@ -27,13 +27,13 @@ var _list: VBoxContainer = null
 
 func _ready() -> void:
 	add_theme_stylebox_override("panel", _panel_style())
-	custom_minimum_size = Vector2(340, 240)
+	custom_minimum_size = Vector2(340, 0)   # width only — the panel shrinks to the header when collapsed
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 4)
 	add_child(col)
 
 	_header = Button.new()
-	_header.text = "▼  Battle Log"
+	_header.text = "▼  Battle Log"   # collapsed by default (▼ = click to expand downward)
 	_header.focus_mode = Control.FOCUS_NONE
 	_header.add_theme_font_size_override("font_size", 13)
 	_header.add_theme_color_override("font_color", CYAN)
@@ -58,6 +58,7 @@ func _ready() -> void:
 	_body.add_child(_filter_opt)
 
 	_scroll = ScrollContainer.new()
+	_scroll.custom_minimum_size = Vector2(0, 220)   # log height when expanded
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_body.add_child(_scroll)
@@ -65,6 +66,8 @@ func _ready() -> void:
 	_list.add_theme_constant_override("separation", 2)
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.add_child(_list)
+
+	_body.visible = _open   # start collapsed (just the header tab)
 
 
 ## Attach a BattleLog: render its current entries and follow new ones.
@@ -141,7 +144,9 @@ func _entry_label(entry: Dictionary) -> Label:
 func _toggle() -> void:
 	_open = not _open
 	_body.visible = _open
-	_header.text = ("▼  Battle Log" if _open else "▲  Battle Log")
+	# Top-edge panel: ▲ collapses up (open), ▼ expands down (collapsed).
+	_header.text = ("▲  Battle Log" if _open else "▼  Battle Log")
+	reset_size()
 
 
 func _panel_style() -> StyleBoxFlat:
