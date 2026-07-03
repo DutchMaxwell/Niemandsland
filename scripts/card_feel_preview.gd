@@ -58,7 +58,7 @@ func _ready() -> void:
 		var card := CardVisual.new()
 		card.size = SCARD
 		add_child(card)
-		card.set_content_node(CardFace.build_strip(states[i % states.size()]))
+		card.set_content_node(CardFace.build_presented(states[i % states.size()], Callable(), false))
 		card.snap_to(Vector2(sx0 + i * (SCARD.x + 18.0), row_y + 160.0), 0.0, 0.6)
 		var fan: float = (float(i) - float(n - 1) / 2.0) * CardVisual.FAN_DEG_PER_CARD
 		card.set_fan(fan)
