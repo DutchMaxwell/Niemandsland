@@ -4,6 +4,33 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [Unreleased]
+
+Batching on `main` since 0.3.7.2-alpha (no tag yet).
+
+### Added
+- **Bottom army unit-card dock (D-series).** A bottom "Units" tab slides up a playing-card FAN of
+  compact unit cards for the whole army — dark-navy CardVisual faces with hover lift/tilt, a cyan
+  selection glow, and a procedural deal-in sound. Selecting a unit flies in a presented card carrying
+  the Tactical-HUD face: Q/D die-chips, alive counter, status chips, a weapons block (per distinct
+  weapon — range/attacks/AP inline, named special rules on a sub-line), an abbreviated rules line, and
+  action chips (activate / fatigue / shaken / casts / wounds / details / revive). (#84, #94, #95, #97)
+- **ctex runtime asset integration.** On-demand minis load decimated meshes + BC7 (`.ctex`) textures,
+  with multi-material support and loadout→variant model resolution; an unusable ctex block degrades to
+  the legacy mesh, never to "no model". (#85, #86, #88, #92, #93)
+- **Dead-model parking rework.** Casualties park on the army tray as per-unit blocks with grey
+  parked-boundary tokens; multi-model revive, a "return a fully destroyed unit" tray action, and MP
+  kill/revive collision sync. (#87, #89, #90, #91)
+
+### Fixed
+- **Dock clicks no longer deselect the unit.** A click over the dock UI fell through to the 3D
+  selection pipeline (deselecting the unit, hiding the card, no-oping the action buttons); interactive
+  HUD widgets are now occluded from the world-selection path. (#97)
+- **Model fit measures the `body` node.** Composed minis (banner pole, crest, downward-held weapon) no
+  longer shrink or float — height + grounding measure the named `body` node's AABB; the combined AABB
+  still drives the horizontal footprint. Legacy single-mesh models unchanged. (#96)
+
+
 ## [0.3.7.2-alpha] — 2026-07-01
 
 ### Added
