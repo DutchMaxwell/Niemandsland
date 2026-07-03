@@ -38,7 +38,7 @@ func test_card_data_reuses_accessors_and_opr_weapons() -> void:
 	assert_bool(bool(d["activated"])).is_true()
 	assert_bool(bool(d["dead"])).is_false()
 	assert_bool(bool(d["coherent"])).is_true()
-	assert_str(str(d["rules"])).is_equal("Fearless · Relentless")
+	assert_array(d["rules_list"]).contains_exactly(["Fearless", "Relentless"])   # hoverable rules list (033)
 	var weapons: Array = d["weapons"]
 	assert_int(weapons.size()).is_equal(1)
 	var w: Dictionary = weapons[0]
@@ -56,7 +56,7 @@ func test_card_data_without_opr_source_has_no_weapons_or_rules() -> void:
 	u.models = [m]
 	var d: Dictionary = dock._card_data(u)
 	assert_array(d["weapons"]).is_empty()
-	assert_str(str(d["rules"])).is_equal("")
+	assert_array(d["rules_list"]).is_empty()
 	assert_bool(bool(d["dead"])).is_false()
 
 
