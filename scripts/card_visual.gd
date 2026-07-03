@@ -15,6 +15,7 @@ const TILT_FOV_DEG: float = 55.0         # virtual camera FOV for the tilt shade
 const SHEEN_STRENGTH: float = 0.10       # specular sheen that shifts with the tilt (0 = off)
 const HOVER_LIFT_SCALE: float = 1.08     # scale when hovered (D2 lift)
 const HOVER_SHADOW_GROW: float = 1.6     # shadow spread multiplier when lifted
+const SELECTED_LIFT_SCALE: float = 1.05  # persistent lift for the selected strip card (D8 selection)
 const SHADOW_SPREAD_PX: float = 6.0      # resting drop-shadow spread
 const SHADOW_OFFSET_PX: float = 4.0      # resting drop-shadow downward offset
 const CORNER_RADIUS_PX: int = 10         # rounded corners
@@ -41,6 +42,7 @@ var _shadow: Panel = null
 var _face: Panel = null
 var _content_holder: Control = null
 var _hovered: bool = false
+var _selected: bool = false
 
 # spring state: current + velocity for position (Vector2), rotation (deg), scale (float)
 var _target_pos: Vector2 = Vector2.ZERO
@@ -134,6 +136,17 @@ func snap_to(target_position: Vector2, target_rotation_deg: float = 0.0, target_
 	_apply_transform()
 
 
+## Selected state (D8): a persistent lift + a cyan Tactical-HUD accent border on the face — the approved
+## selection language for the strip (replaces the legacy blue panel frame).
+func set_selected(sel: bool) -> void:
+	if _selected == sel:
+		return
+	_selected = sel
+	if _face:
+		_face.add_theme_stylebox_override("panel", _face_style_selected() if sel else _face_style())
+	_wake()
+
+
 ## Fan rotation from the dock (D4): index-based slight arc. No-op when FAN_ENABLED is false.
 func set_fan(fan_degrees: float) -> void:
 	_fan_rot = fan_degrees if FAN_ENABLED else 0.0
@@ -159,7 +172,8 @@ func _process(delta: float) -> void:
 		var local: Vector2 = get_local_mouse_position()
 		var off: Vector2 = ((local / size) - Vector2(0.5, 0.5)) * 2.0   # -1..1 from card centre
 		_tilt_aim = Vector2(-off.y, off.x) * TILT_MAX_DEG   # x = pitch (from vertical), y = yaw (horizontal)
-	var target_scale_eff: float = _target_scale * (HOVER_LIFT_SCALE if _hovered else 1.0)
+	var lift: float = HOVER_LIFT_SCALE if _hovered else (SELECTED_LIFT_SCALE if _selected else 1.0)
+	var target_scale_eff: float = _target_scale * lift
 
 	var moving: bool = false
 	var sx: Vector2 = _spring_step(_cur_pos.x, _target_pos.x, _vel_pos.x, POS_STIFFNESS, POS_DAMPING, delta)
@@ -220,6 +234,14 @@ func _face_style() -> StyleBoxFlat:
 	s.set_corner_radius_all(CORNER_RADIUS_PX)
 	s.border_width_top = 1
 	s.border_color = Color(1, 1, 1, BEVEL_ALPHA)   # subtle top bevel highlight
+	return s
+
+
+## Face with a cyan accent border for the selected strip card (Tactical-HUD selection glow).
+func _face_style_selected() -> StyleBoxFlat:
+	var s := _face_style()
+	s.set_border_width_all(2)
+	s.border_color = Color(0.36, 0.80, 0.92, 0.9)
 	return s
 
 
