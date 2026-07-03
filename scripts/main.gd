@@ -186,6 +186,8 @@ var opr_import_dialog: OPRImportDialog = null
 var opr_stats_tooltip: OPRStatsTooltip = null
 var unit_card: UnitCard = null
 var unit_dock: UnitDock = null
+var battle_log: BattleLog = null              # narrative event log (collector)
+var battle_log_panel: BattleLogPanel = null   # its collapsible HUD panel (top-left)
 var _hovered_model: Node3D = null
 
 # WGS (Wargaming Simulator) Integration
@@ -545,6 +547,9 @@ func _ready() -> void:
 	save_manager.map_layout_editor = map_layout_editor
 	save_manager.terrain_overlay = terrain_overlay
 	save_manager.radial_menu_controller = radial_menu_controller
+
+	# Battle Log — after the managers + radial controller exist, wire the collector to the central seams.
+	_setup_battle_log()
 
 	# The intro is started AFTER the table size is chosen (on dialog confirm, see below),
 	# so the size chooser never overlaps the cinematic. Loaded/joined games skip the
@@ -1510,10 +1515,76 @@ func _update_reroll_buttons() -> void:
 			or DiceRules.reroll_indices(_last_faces, mode, _success_target, _success_modifier).is_empty()
 
 
+## Battle Log (M1): create the collector + its top-left HUD panel and wire it to the CENTRAL seams —
+## one source of truth, local + remote, no call-site sprinkling. Solo-AI (a separate branch) emits its
+## own lines into battle_log.on_unit_moved(..., ai=true) / on_unit_activated(..., ai=true) later.
+func _setup_battle_log() -> void:
+	battle_log = BattleLog.new()
+	battle_log.name = "BattleLog"
+	add_child(battle_log)
+	if opr_army_manager != null:
+		battle_log.current_round = opr_army_manager.current_round
+	battle_log_panel = BattleLogPanel.new()
+	$UI/HUD.add_child(battle_log_panel)
+	battle_log_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	battle_log_panel.position = Vector2(12, 92)   # top-left, below the hamburger button
+	battle_log_panel.bind(battle_log)
+	battle_log.on_game_started()
+	# Central seams (fewest hooks that cover local + remote):
+	if opr_army_manager != null:
+		opr_army_manager.round_advanced.connect(battle_log.on_round_advanced)
+		opr_army_manager.loose_model_dead_changed.connect(_on_battle_log_dead)
+	if network_manager != null:
+		if network_manager.has_signal("remote_round_advanced"):
+			network_manager.remote_round_advanced.connect(
+				func() -> void: battle_log.on_round_advanced(opr_army_manager.current_round))
+		if network_manager.has_signal("remote_activation_updated"):
+			network_manager.remote_activation_updated.connect(func(gu) -> void: _log_battle_activation(gu, true))
+		if network_manager.has_signal("remote_dice_rolled"):
+			network_manager.remote_dice_rolled.connect(_on_battle_log_remote_dice)
+	if radial_menu_controller != null and radial_menu_controller.has_signal("unit_activated"):
+		radial_menu_controller.unit_activated.connect(func(gu) -> void: _log_battle_activation(gu, false))
+
+
+func _log_battle_activation(gu, _remote: bool) -> void:
+	if battle_log == null or gu == null:
+		return
+	var pid: int = int(gu.unit_properties.get("player_id", 0))
+	var is_ai: bool = pid == 2   # M1: player 2 is the Solo-AI slot
+	battle_log.on_unit_activated(gu.get_name(), ("AI" if is_ai else "you"), is_ai)
+
+
+func _on_battle_log_dead(_node, dead: bool) -> void:
+	if battle_log == null:
+		return
+	if dead:
+		battle_log.log_event(BattleLog.Category.COMBAT, "A unit was wiped out")
+	else:
+		battle_log.log_event(BattleLog.Category.GENERAL, "A wiped unit returns to the battle")
+
+
+func _on_battle_log_remote_dice(_peer, results, context, _tags) -> void:
+	var faces: Array[int] = []
+	for r in results:
+		faces.append(int(r))
+	_log_battle_dice(faces, context)
+
+
+func _log_battle_dice(faces: Array, context: Dictionary) -> void:
+	if battle_log == null or faces.is_empty():
+		return
+	var target: int = int(context.get(DiceRules.CTX_TARGET, DiceRules.TARGET_NONE))
+	if target == DiceRules.TARGET_NONE or target <= 0:
+		return   # only log to-hit rolls (a success target is set), not raw rolls
+	var modifier: int = int(context.get(DiceRules.CTX_MODIFIER, 0))
+	battle_log.on_dice_rolled(faces.size(), DiceRules.count_successes(faces, target, modifier), target)
+
+
 ## Adds a visual dice-roll entry to the log: a header (time, player, formula,
 ## reroll tag), a per-face icon strip (6 down to 1) and, when a success target
 ## is set, the success count.
 func _add_dice_log_entry(player_name: String, faces: Array[int], context: Dictionary, tags: Array[int]) -> void:
+	_log_battle_dice(faces, context)   # Battle Log: local to-hit summary
 	var target: int = context.get(DiceRules.CTX_TARGET, DiceRules.TARGET_NONE)
 	var modifier: int = context.get(DiceRules.CTX_MODIFIER, 0)
 	var reroll_mode: int = context.get(DiceRules.CTX_REROLL_MODE, DiceRules.REROLL_NONE)
