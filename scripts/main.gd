@@ -224,6 +224,7 @@ var coherency_visualizer: CoherencyVisualizer = null
 var unit_boundary_visualizer: Node3D = null  # UnitBoundaryVisualizer
 var range_ring_controller: Node = null  # RangeRingController (base-anchored range auras)
 var movement_range_controller: Node = null  # MovementRangeController (Advance/Rush reach)
+var solo_controller: SoloController = null   # Solo/AI M1 (F11) — AI army advances toward the human
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
@@ -610,6 +611,21 @@ func _dismiss_transition_overlay() -> void:
 ## screenshot) into a zip on the Desktop. Player names / room code / OS username are scrubbed.
 ## The natural capture for visual glitches (a mini clipping terrain, wrong scale, a misplaced
 ## model) that raise no error and so never reach the log on their own.
+## Solo/AI M1 (F11): lazily wire the SoloController and run one AI turn — player 2's army is treated as
+## the AI; each of its un-activated, non-destroyed units advances toward the nearest player-1 unit by its
+## Advance distance and is marked activated. Movement only (no combat). Full solo-game setup UI is later.
+func _run_solo_ai_turn() -> void:
+	if opr_army_manager == null or movement_range_controller == null:
+		push_warning("[Solo/AI] not ready — import an army for player 2 first")
+		return
+	if solo_controller == null:
+		solo_controller = SoloController.new()
+		add_child(solo_controller)
+		solo_controller.setup(opr_army_manager, network_manager, movement_range_controller, 1, 2)
+	var moved: int = solo_controller.run_ai_turn()
+	print("[Solo/AI] player-2 AI turn: %d unit(s) advanced toward the nearest player-1 unit" % moved)
+
+
 func _capture_bug_report() -> void:
 	var stamp: String = Time.get_datetime_string_from_system().replace(":", "-")
 	var tex: ViewportTexture = get_viewport().get_texture()
@@ -754,6 +770,13 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	# regardless of focus, so an in-game visual glitch ships WITH the report.
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F12:
 		_capture_bug_report()
+		get_viewport().set_input_as_handled()
+		return
+	# F11 (Solo/AI M1 debug trigger): treat player 2's army as AI-controlled and run its turn — each of
+	# its un-activated units advances toward the nearest player-1 unit and is marked activated. Movement
+	# only (no combat yet). This is the M1 walking-skeleton entry point until the solo-game setup UI lands.
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F11:
+		_run_solo_ai_turn()
 		get_viewport().set_input_as_handled()
 		return
 	# While a text field (e.g. the chat input) is focused, no game shortcut may
