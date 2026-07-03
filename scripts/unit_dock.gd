@@ -14,6 +14,12 @@ const TAB_H := 28
 const STRIP_H := 100
 const CARD_W := 152
 const STRIP_CARD_H := 84
+# Strip hand-fan tunables (bus 028): per-card rotation, edge cap, and horizontal overlap. Overlap
+# tightens automatically when the fan would exceed the panel width (many units).
+const STRIP_FAN_DEG_PER_CARD := 4.0
+const STRIP_FAN_MAX_DEG := 14.0
+const STRIP_OVERLAP_PX := 46
+const STRIP_FAN_ARC_PX := 10.0        # shallow vertical arc so edge cards dip like a held hand
 const PCARD_W := 320
 const PCARD_H := 188
 const PCARD_MAX_H := 348          # presented card auto-grows to fit weapons, capped here
@@ -31,9 +37,8 @@ var unit_card_detail = null            # the old full UnitCard, reused for the "
 var _dock_open := false
 var _tab: Button = null
 var _strip_panel: PanelContainer = null
-var _scroll: ScrollContainer = null
-var _strip: HBoxContainer = null
-var _cards: Dictionary = {}            # unit_id -> {card, name, stats, status}
+var _strip: Control = null             # fan holder — cards are placed manually (CardVisual self-positions)
+var _cards: Dictionary = {}            # unit_id -> {card}
 var _presented: CardVisual = null      # the presented card is a CardVisual (feel) holding CardFace content
 var _presented_unit: GameUnit = null
 var _refresh_timer: Timer = null
@@ -85,14 +90,12 @@ func _build_strip() -> void:
 	_strip_panel = PanelContainer.new()
 	_strip_panel.add_theme_stylebox_override("panel", _panel_style())
 	_strip_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	_scroll = ScrollContainer.new()
-	_scroll.custom_minimum_size = Vector2(0, STRIP_H)
-	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_strip_panel.add_child(_scroll)
-	_strip = HBoxContainer.new()
-	_strip.add_theme_constant_override("separation", 6)
-	_scroll.add_child(_strip)
+	# Plain holder: cards are laid out in a playing-card FAN (rotation + overlap) by _layout_fan, each
+	# CardVisual springing to its slot; no container forces a flat row.
+	_strip = Control.new()
+	_strip.custom_minimum_size = Vector2(0, STRIP_H)
+	_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_strip_panel.add_child(_strip)
 	add_child(_strip_panel)
 
 
@@ -115,6 +118,7 @@ func _layout() -> void:
 	if _strip_panel != null:
 		_strip_panel.size = Vector2(vp.x, STRIP_H)
 		_strip_panel.position = Vector2(0, _strip_target_y(_dock_open))
+		_layout_fan()
 	if _presented != null and _presented.visible:
 		_presented.snap_to(_presented_rest_pos(), 0.0, 1.0)
 
@@ -158,6 +162,36 @@ func rebuild() -> void:
 	for unit in units:
 		_add_card(unit)
 	_refresh_status()
+	_layout_fan()
+
+
+## Arrange the strip cards as a playing-card hand: a slight per-card rotation arc and horizontal overlap,
+## centred in the panel. Overlap tightens automatically so 12+ cards still fit (names stay readable);
+## the fan angle is capped at the edges. Each CardVisual springs to its slot.
+func _layout_fan() -> void:
+	if _strip == null:
+		return
+	var cards := _strip.get_children()
+	var n := cards.size()
+	if n == 0:
+		return
+	var panel_w: float = _strip_panel.size.x if _strip_panel != null else get_viewport_rect().size.x
+	var step: float = float(CARD_W - STRIP_OVERLAP_PX)
+	var natural_w: float = float(CARD_W) + float(n - 1) * step
+	var avail: float = panel_w * 0.94
+	if natural_w > avail and n > 1:
+		step = maxf(16.0, (avail - float(CARD_W)) / float(n - 1))
+		natural_w = float(CARD_W) + float(n - 1) * step
+	var start_x: float = (panel_w - natural_w) * 0.5
+	var mid: float = float(n - 1) * 0.5
+	for i in n:
+		var cv := cards[i] as CardVisual
+		if cv == null:
+			continue
+		var rot: float = clampf((float(i) - mid) * STRIP_FAN_DEG_PER_CARD, -STRIP_FAN_MAX_DEG, STRIP_FAN_MAX_DEG)
+		var t: float = (float(i) - mid) / maxf(mid, 1.0)   # -1..1 across the fan
+		var y: float = (STRIP_H - STRIP_CARD_H) * 0.5 + t * t * STRIP_FAN_ARC_PX
+		cv.spring_to(Vector2(start_x + float(i) * step, y), rot, 1.0)
 
 
 func _sort_units(a, b) -> bool:
@@ -187,23 +221,18 @@ func _local_units() -> Array:
 func _add_card(unit: GameUnit) -> void:
 	if unit == null:
 		return
-	# The HBox positions this inert SLOT; the CardVisual sits at local 0 inside it, so its own
-	# self-positioning never fights the container while still giving the approved CardFace design —
-	# dark-navy rounded face, bevel, drop shadow, hover lift/tilt — with NO legacy blue panel frame.
-	var slot := Control.new()
-	slot.custom_minimum_size = Vector2(CARD_W, STRIP_CARD_H)
-	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# A CardVisual placed directly in the fan holder — it self-positions (spring), so _layout_fan gives
+	# it a rotated, overlapping hand-of-cards slot. The approved CardFace design (dark-navy rounded face,
+	# bevel, drop shadow, hover lift/tilt); NO legacy blue panel frame.
 	var cv := CardVisual.new()
 	cv.size = Vector2(CARD_W, STRIP_CARD_H)
 	cv.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	cv.gui_input.connect(_on_card_input.bind(unit))
 	cv.mouse_entered.connect(_on_card_hover.bind(unit, true))
 	cv.mouse_exited.connect(_on_card_hover.bind(unit, false))
-	slot.add_child(cv)
-	_strip.add_child(slot)
+	_strip.add_child(cv)
 	# Content only after the card is in the tree, so CardVisual._ready has built its content holder.
 	cv.set_content_node(CardFace.build_strip(_card_data(unit)))
-	cv.snap_to(Vector2.ZERO, 0.0, 1.0)
 	_cards[unit.unit_id] = {"card": cv}
 
 
@@ -412,6 +441,13 @@ func _handle_card_click(event: InputEvent, unit: GameUnit) -> void:
 
 
 func _on_card_hover(unit: GameUnit, entered: bool) -> void:
+	# Pull the hovered card ABOVE its neighbours in the fan (like lifting a card from a hand); on exit it
+	# drops back, unless it is the selected card, which stays raised.
+	var entry = _cards.get(unit.unit_id)
+	if entry != null:
+		var cv := entry["card"] as CardVisual
+		if cv != null:
+			cv.z_index = 2 if entered else (1 if cv._selected else 0)
 	if object_manager == null or not object_manager.has_method("set_hover_target"):
 		return
 	object_manager.set_hover_target(_unit_anchor_node(unit) if entered else null)
@@ -470,7 +506,9 @@ func _on_table_selection_changed(selected_objects: Array) -> void:
 	for uid in _cards:
 		var card := (_cards[uid]["card"]) as CardVisual
 		if card != null:
-			card.set_selected(selected_ids.has(uid))
+			var sel: bool = selected_ids.has(uid)
+			card.set_selected(sel)
+			card.z_index = 1 if sel else 0   # a selected card stays raised above the fan
 
 
 # === Styles ===
