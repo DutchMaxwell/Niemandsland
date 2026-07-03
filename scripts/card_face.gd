@@ -182,10 +182,12 @@ static func _label(text: String, size: int, color: Color) -> Label:
 static func _fit_name(text: String, size_big: int, size_small: int, max_chars: int) -> Label:
 	var l := Label.new()
 	l.text = text
+	# Auto-shrink a step past the char budget, THEN ellipsize only if it still overflows the label's
+	# width (bus 034: ~24 chars must fit; do not clip short names). clip_text=false so an expand-filled
+	# label uses its full allotted width before the ellipsis kicks in.
 	l.add_theme_font_size_override("font_size", size_big if text.length() <= max_chars else size_small)
 	l.add_theme_color_override("font_color", TEXT)
 	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	l.clip_text = true
 	return l
 
 

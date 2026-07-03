@@ -101,6 +101,10 @@ func set_content_node(node: Control) -> void:
 		c.queue_free()
 	node.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_content_holder.add_child(node)
+	# Fill the card so the content lays out at the CARD width (not its own min width) — otherwise the
+	# header name label is starved of width and ellipsizes even short names (bus 034). Anchors AND
+	# offsets so the content tracks the card size exactly.
+	node.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 
 ## Spring the card toward a slot transform (the dock calls this on layout / rebuild / present).
