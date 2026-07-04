@@ -137,6 +137,20 @@ func _strip_target_y(open: bool) -> float:
 	return (vp.y - STRIP_H - TAB_H) if open else vp.y
 
 
+## True if a screen point is over one of the dock's interactive surfaces (tab, open strip, presented
+## card). object_manager consults this to reject a world click by ACTUAL position — the cached
+## gui_get_hovered_control() goes stale the instant a card click collapses the strip, which otherwise let
+## the click fall through to the table and open a box-select rubber-band (maintainer bug).
+func occludes_point(gpos: Vector2) -> bool:
+	if _tab != null and _tab.visible and _tab.get_global_rect().has_point(gpos):
+		return true
+	if _strip_panel != null and _dock_open and _strip_panel.get_global_rect().has_point(gpos):
+		return true
+	if _presented != null and _presented.visible and _presented.get_global_rect().has_point(gpos):
+		return true
+	return false
+
+
 ## Where the ▲/▼ Units tab sits: at the screen bottom when closed, but ABOVE the open strip so the full-
 ## face cards can never cover the collapse button (maintainer feedback).
 func _tab_target_y(open: bool) -> float:

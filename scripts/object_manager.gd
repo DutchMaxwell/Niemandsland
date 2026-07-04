@@ -293,6 +293,14 @@ func _input(event: InputEvent) -> void:
 		if _control_blocks_world_click(get_viewport().gui_get_hovered_control()):
 			return
 
+		# Also reject by the ACTUAL click position over the unit dock: the cached hover above goes stale the
+		# instant a card click collapses the strip, which otherwise let the click fall through to the table
+		# and open a box-select rubber-band (maintainer bug).
+		var main_node := get_node_or_null("/root/Main")
+		var dock_node = main_node.get("unit_dock") if main_node != null else null
+		if dock_node != null and dock_node.has_method("occludes_point") and dock_node.occludes_point(mouse_event.position):
+			return
+
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
 			if mouse_event.pressed:
 				# Check if we're in custom zone editing mode
