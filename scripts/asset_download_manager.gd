@@ -119,7 +119,7 @@ func _download_to(http: HTTPRequest, url: String, sha256: String, path: String, 
 	var tmp: String = path + ".part"
 	for _attempt in range(maxi(retries, 0) + 1):
 		http.download_file = tmp
-		if http.request(url) != OK:
+		if http.request(url, AssetCDN.headers()) != OK:   # honest product UA (bus 037)
 			await get_tree().process_frame
 			continue
 		var res: Array = await http.request_completed
@@ -155,7 +155,7 @@ func _download(url: String, sha256: String) -> bool:
 func _perform_request(url: String, sha256: String) -> bool:
 	var tmp: String = cache_path(sha256) + ".part"
 	_http.download_file = tmp
-	if _http.request(url) != OK:
+	if _http.request(url, AssetCDN.headers()) != OK:   # honest product UA (bus 037)
 		download_completed.emit(sha256, "", false)
 		return false
 

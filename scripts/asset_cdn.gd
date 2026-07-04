@@ -22,3 +22,21 @@ const TOKEN := "{cdn}"
 ## test fixtures and any absolute manifests keep working.
 static func expand(base_url: String) -> String:
 	return base_url.replace(TOKEN, HOST)
+
+
+## An HONEST product User-Agent for CDN requests. Cloudflare bot-scoring challenges empty/default library
+## UAs (Godot sends none) for low-reputation IPs — a challenge the game can't solve, so faction models
+## silently fail to load; an honest product UA passes and also gives us server-side analytics. Version is
+## the single source (application/config/version); OS.get_name() → "Windows"/"Linux"/"macOS" (bus 037).
+static func user_agent() -> String:
+	var ver: String = str(ProjectSettings.get_setting("application/config/version", "0.0.0"))
+	return "Niemandsland/%s (%s; Godot 4.6)" % [ver, OS.get_name()]
+
+
+## Request headers for every CDN call: the product UA + an Accept type (application/json for the manifest,
+## */* for binaries). Returned as a PackedStringArray ready for HTTPRequest.request(url, headers).
+static func headers(accept: String = "*/*") -> PackedStringArray:
+	return PackedStringArray([
+		"User-Agent: %s" % user_agent(),
+		"Accept: %s" % accept,
+	])
