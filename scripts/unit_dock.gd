@@ -11,15 +11,15 @@ extends Control
 
 const TAB_W := 168
 const TAB_H := 28
-const STRIP_H := 100
-const CARD_W := 152
-const STRIP_CARD_H := 84
+const STRIP_H := 232           # taller: the strip shows the full CardFace now (bus 033)
+const CARD_W := 196            # wider so the full face is legible in the strip
+const STRIP_CARD_H := 200      # min full-face card height in the strip (cards auto-grow to content)
 # Strip hand-fan tunables (bus 028): per-card rotation, edge cap, and horizontal overlap. Overlap
 # tightens automatically when the fan would exceed the panel width (many units).
-const STRIP_FAN_DEG_PER_CARD := 4.0
-const STRIP_FAN_MAX_DEG := 14.0
-const STRIP_OVERLAP_PX := 46
-const STRIP_FAN_ARC_PX := 10.0        # shallow vertical arc so edge cards dip like a held hand
+const STRIP_FAN_DEG_PER_CARD := 1.5   # gentle fan (full faces need to stay readable, not a tight hand)
+const STRIP_FAN_MAX_DEG := 8.0
+const STRIP_OVERLAP_PX := 6           # near-touching so each full face stays fully legible (no right clip)
+const STRIP_FAN_ARC_PX := 6.0         # shallow vertical arc
 const PCARD_W := 320
 const PCARD_H := 188
 const PCARD_MAX_H := 348          # presented card auto-grows to fit weapons, capped here
@@ -32,7 +32,12 @@ var object_manager = null
 var network_manager = null
 var camera_controller = null
 var radial_menu_controller = null
-var unit_card_detail = null            # the old full UnitCard, reused for the "Details" expansion
+var unit_card_detail = null            # deprecated old detail card (retired; kept as an unused ctor arg)
+var range_ring_controller: Node = null # injected by main.gd — spell-range ring on spell hover (bus 033)
+var _rule_popup: PanelContainer = null
+var _rule_popup_label: RichTextLabel = null
+var _rule_hover_timer: Timer = null
+var _hovered_meta: String = ""
 
 var _dock_open := false
 var _tab: Button = null
@@ -49,6 +54,7 @@ func _ready() -> void:
 	_build_tab()
 	_build_strip()
 	_build_presented()
+	_setup_rule_popup()
 	resized.connect(_layout)
 	_layout()
 	_refresh_timer = Timer.new()
@@ -190,7 +196,7 @@ func _layout_fan() -> void:
 			continue
 		var rot: float = clampf((float(i) - mid) * STRIP_FAN_DEG_PER_CARD, -STRIP_FAN_MAX_DEG, STRIP_FAN_MAX_DEG)
 		var t: float = (float(i) - mid) / maxf(mid, 1.0)   # -1..1 across the fan
-		var y: float = (STRIP_H - STRIP_CARD_H) * 0.5 + t * t * STRIP_FAN_ARC_PX
+		var y: float = 6.0 + t * t * STRIP_FAN_ARC_PX      # top-aligned (cards vary in height)
 		cv.spring_to(Vector2(start_x + float(i) * step, y), rot, 1.0)
 
 
@@ -232,7 +238,12 @@ func _add_card(unit: GameUnit) -> void:
 	cv.mouse_exited.connect(_on_card_hover.bind(unit, false))
 	_strip.add_child(cv)
 	# Content only after the card is in the tree, so CardVisual._ready has built its content holder.
-	cv.set_content_node(CardFace.build_strip(_card_data(unit)))
+	# ONE card design (bus 033): the strip shows the SAME full CardFace as the focus card, minus the
+	# action bar (include_actions=false). Weapons block stays full here — collapse_weapons is the
+	# strip-density fallback if the maintainer finds it illegible.
+	var content := CardFace.build_presented(_card_data(unit), Callable(), false)
+	cv.set_content_node(content)
+	cv.size = Vector2(CARD_W, clampf(content.get_combined_minimum_size().y, float(STRIP_CARD_H), 240.0))
 	_cards[unit.unit_id] = {"card": cv}
 
 
@@ -244,8 +255,10 @@ func _refresh_status() -> void:
 		if entry == null:
 			continue
 		var card := entry["card"] as CardVisual
-		# Rebuild the compact CardFace content so live stats/status/wounds show.
-		card.set_content_node(CardFace.build_strip(_card_data(unit)))
+		# Rebuild the full CardFace content (no action bar) so live stats/status/wounds show.
+		var content := CardFace.build_presented(_card_data(unit), Callable(), false)
+		card.set_content_node(content)
+		card.size = Vector2(CARD_W, clampf(content.get_combined_minimum_size().y, float(STRIP_CARD_H), 240.0))
 		var dim: bool = unit.is_activated or unit.get_alive_count() == 0
 		card.modulate = Color(1, 1, 1, 0.45) if dim else Color(1, 1, 1, 1)
 	if _presented_unit != null and _presented.visible:
@@ -278,7 +291,8 @@ func _card_data(unit: GameUnit) -> Dictionary:
 		"coherent": _is_coherent(unit),
 		"dead": alive == 0,
 		"weapons": [],
-		"rules": "",
+		"rules_list": [],
+		"spells": [],
 	}
 	var opr: OPRApiClient.OPRUnit = null
 	if unit.source_type == "opr" and unit.source_data:
@@ -286,9 +300,14 @@ func _card_data(unit: GameUnit) -> Dictionary:
 	if opr != null:
 		for w: OPRApiClient.OPRWeapon in opr.weapons:
 			data["weapons"].append(_weapon_entry(w))
-	var rules: Array = unit.get_special_rules()
-	if not rules.is_empty():
-		data["rules"] = " · ".join(rules)
+	# rules_list: normalized special-rule names — each is a hover target on the card (bus 033).
+	for r in unit.get_special_rules():
+		var nm: String = str(r.get("name", "")) if r is Dictionary else str(r)
+		if not nm.is_empty():
+			data["rules_list"].append(nm)
+	# spells (casters): {name, threshold, effect} from the army glossary, for the hoverable spell list.
+	if unit.is_caster() and army_manager != null and army_manager.has_method("get_spells_for_unit"):
+		data["spells"] = army_manager.get_spells_for_unit(unit)
 	return data
 
 
@@ -351,8 +370,110 @@ func _fill_presented(unit: GameUnit) -> void:
 	# back through _card_action (the dispatch proven by card_action_dispatch_test).
 	var content := CardFace.build_presented(_card_data(unit), _card_action)
 	_presented.set_content_node(content)
+	_wire_rules_hover(content)   # bus 033: the focus card absorbs the old Info card's rule/spell tooltips
 	var h: float = clampf(content.get_combined_minimum_size().y, float(PCARD_H), float(PCARD_MAX_H))
 	_presented.size = Vector2(PCARD_W, h)
+
+
+func set_range_ring_controller(rrc: Node) -> void:
+	range_ring_controller = rrc
+
+
+## The card's "RulesList" RichTextLabel exposes each rule/spell as a [url] span; connect its meta hover
+## to the description popup + spell-range ring (ported from the old UnitCard).
+func _wire_rules_hover(content: Control) -> void:
+	var rt := content.find_child("RulesList", true, false) as RichTextLabel
+	if rt == null:
+		return
+	if not rt.meta_hover_started.is_connected(_on_rule_hover_started):
+		rt.meta_hover_started.connect(_on_rule_hover_started)
+		rt.meta_hover_ended.connect(_on_rule_hover_ended)
+
+
+func _on_rule_hover_started(meta: Variant) -> void:
+	_hovered_meta = str(meta)
+	if _hovered_meta.begins_with("spell:"):
+		_show_spell_ring(_hovered_meta.substr(6))
+	if _rule_hover_timer != null:
+		_rule_hover_timer.start()
+
+
+func _on_rule_hover_ended(_meta: Variant) -> void:
+	_hovered_meta = ""
+	if _rule_popup != null:
+		_rule_popup.visible = false
+	if _rule_hover_timer != null:
+		_rule_hover_timer.stop()
+	_clear_spell_ring()
+
+
+func _on_rule_hover_timeout() -> void:
+	if _hovered_meta.is_empty() or army_manager == null:
+		return
+	var title := _hovered_meta.trim_prefix("spell:")
+	var desc: String = _spell_effect(title) if _hovered_meta.begins_with("spell:") else str(army_manager.get_rule_description(_hovered_meta))
+	if desc.strip_edges().is_empty():
+		desc = "(no description)"
+	_rule_popup_label.text = "[b]%s[/b]\n%s" % [title, desc]
+	_rule_popup.reset_size()
+	_rule_popup.global_position = get_global_mouse_position() + Vector2(14, 14)
+	_rule_popup.visible = true
+
+
+func _spell_effect(spell_name: String) -> String:
+	if _presented_unit == null or army_manager == null or not army_manager.has_method("get_spells_for_unit"):
+		return ""
+	for s in army_manager.get_spells_for_unit(_presented_unit):
+		if str((s as Dictionary).get("name", "")) == spell_name:
+			return str((s as Dictionary).get("effect", ""))
+	return ""
+
+
+func _show_spell_ring(spell_name: String) -> void:
+	if range_ring_controller == null or not range_ring_controller.has_method("show_spell_preview"):
+		return
+	range_ring_controller.show_spell_preview(_presented_model_nodes(), OPRApiClient.spell_radius_inches(_spell_effect(spell_name)))
+
+
+func _clear_spell_ring() -> void:
+	if range_ring_controller != null and range_ring_controller.has_method("clear_spell_preview"):
+		range_ring_controller.clear_spell_preview()
+
+
+func _presented_model_nodes() -> Array:
+	var out: Array = []
+	if _presented_unit != null:
+		for m in _presented_unit.models:
+			if m.node != null and is_instance_valid(m.node):
+				out.append(m.node)
+	return out
+
+
+func _setup_rule_popup() -> void:
+	_rule_popup = PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.10, 0.14, 0.98)
+	sb.set_corner_radius_all(5)
+	sb.set_border_width_all(1)
+	sb.border_color = Color(0.36, 0.80, 0.92, 0.5)
+	sb.set_content_margin_all(8)
+	_rule_popup.add_theme_stylebox_override("panel", sb)
+	_rule_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_rule_popup.top_level = true
+	_rule_popup.z_index = 200
+	_rule_popup.visible = false
+	_rule_popup_label = RichTextLabel.new()
+	_rule_popup_label.bbcode_enabled = true
+	_rule_popup_label.fit_content = true
+	_rule_popup_label.custom_minimum_size = Vector2(300, 0)
+	_rule_popup_label.add_theme_font_size_override("normal_font_size", 12)
+	_rule_popup.add_child(_rule_popup_label)
+	add_child(_rule_popup)
+	_rule_hover_timer = Timer.new()
+	_rule_hover_timer.one_shot = true
+	_rule_hover_timer.wait_time = 0.6
+	_rule_hover_timer.timeout.connect(_on_rule_hover_timeout)
+	add_child(_rule_hover_timer)
 
 
 func _animate_card_in() -> void:
@@ -392,10 +513,6 @@ func _card_action(kind: String) -> void:
 		if radial_menu_controller == null:
 			push_warning("[UnitDock] no radial controller — card action '%s' dropped" % kind)
 	match kind:
-		"details":
-			if unit_card_detail != null and unit_card_detail.has_method("show_unit"):
-				unit_card_detail.show_unit(unit, 0)
-			return
 		"revive":
 			if radial_menu_controller != null:
 				radial_menu_controller.card_revive(unit)

@@ -63,9 +63,9 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 ### Alpha-feedback batch (accepted 2026-07-01) — sorted Now vs soon
 
 > **✅ Shipped in `0.3.7.2-alpha`:** dice-log live-scroll, deployment-zone colour flip, cursor/avatar
-> label sizes + avatar fade-on-zoom, movement cap (opt-in), and return/revive units & models. The
-> items below remain queued (avatar/cursor full rework, background-world toggle, unit-card dock,
-> Change-Daemons cascade).
+> label sizes + avatar fade-on-zoom, movement cap (opt-in), and return/revive units & models.
+> **✅ Shipped on `main` (unreleased, batching):** the bottom army unit-card dock (D-series). The
+> items below remain queued (avatar/cursor full rework, background-world toggle, Change-Daemons cascade).
 
 **🔨 Now (quick, low-risk — doing directly):**
 - **Dice log live-scroll** — the latest roll sometimes doesn't scroll into view; guarantee the log
@@ -88,12 +88,13 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   a **fantasy world** environment. Needs a fantasy skybox/environment asset. _M_
 
 **🧊 Larger (coming weeks — design/UI/rules):**
-- **Bottom army unit-card dock** — a small nudge tab at the screen's bottom edge; clicking it slides
-  up compact unit cards for the whole army, each showing live stats; clicking a card selects that
-  unit. The chat window relocates above the Movement area. _L_
-- **Return / revive units & models** — support the special rules that (a) bring a whole destroyed
-  unit back, and (b) revive destroyed models within a unit. Neither works today; needs a spawn/return
-  mechanic on top of the wound system. _M–L_
+- **Bottom army unit-card dock — ✅ SHIPPED** (#84 tab/strip foundation · D-series #94 card-feel + #95
+  click instrumentation + #97 CardVisual/CardFace design): a bottom tab slides up a playing-card fan of
+  compact unit cards (live stats, hover/select haptics, deal-in sound); a presented card flies in on
+  selection, carrying the Tactical-HUD face (stats, weapons block, rules, actions). UI-click occlusion
+  fixed so dock clicks no longer fall through to table deselection.
+- **Return / revive units & models — ✅ SHIPPED** (#87–#91): revive a whole destroyed unit or individual
+  destroyed models, on top of tray-parking (grey parked-boundary tokens) + MP kill/revive sync.
 - **Change Daemons death-cascade** — Change Horrors spawn a new (smaller) unit when destroyed, which
   can itself cascade on death. Faction-specific, builds on Return/revive. Example list:
   `army-forge.onepagerules.com/share?id=JqJOxSFl4ooA` (Wormhole — Daemons of Change). _L_
