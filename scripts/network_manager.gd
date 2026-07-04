@@ -22,6 +22,8 @@ signal version_rejected(host_version: String, my_version: String)
 signal peer_remapped(old_peer_id: int, new_peer_id: int, slot: int)
 ## Emitted on a guest when the host assigns/confirms our canonical slot.
 signal slot_assigned(slot: int)
+## Emitted on a guest after it adopts the host's full peer→slot table (bus 036 — 3+-player colour agreement).
+signal slot_table_synced
 
 # Signals for remote state updates (emitted when RPCs arrive)
 signal remote_wounds_updated(model: ModelInstance)
@@ -1338,6 +1340,25 @@ func _publish_roster() -> void:
 	if not multiplayer.is_server() or not is_multiplayer_active():
 		return
 	_remote_call("sync_player_roster", [player_names], 0)
+
+
+## Host: hand one freshly validated peer the WHOLE peer→slot table (called from main.gd on
+## peer_version_validated, alongside the roster). Without this a 3+-player late joiner only knows the
+## slots it happened to witness in a live _rpc_remap_peer broadcast, so the other guests fall back to
+## their raw peer_id → wrong colour, and any reconnect changes that id → colour disagreement (bus 036).
+func push_slot_table_to_peer(peer_id: int) -> void:
+	if not multiplayer.is_server() or not is_multiplayer_active():
+		return
+	_remote_call("sync_slot_table", [peer_to_slot], peer_id)
+
+
+## RPC (host → guest, authority): adopt the host's authoritative peer→slot map, then signal so presence
+## visuals recolour. Keys survive the transport as ints but are coerced defensively.
+@rpc("authority", "call_remote", "reliable")
+func sync_slot_table(table: Dictionary) -> void:
+	for k in table:
+		peer_to_slot[int(k)] = int(table[k])
+	slot_table_synced.emit()
 
 
 # ===== In-game chat =====

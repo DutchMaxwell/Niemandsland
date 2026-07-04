@@ -14,13 +14,24 @@ signal loose_model_dead_changed(node: Node3D, dead: bool)
 ## via advance_round() and the remote round-advance apply via set_current_round() go through here).
 signal round_advanced(round_number: int)
 
-## Player colors for army identification
+## Player colors for army identification. Values mirror PlayerPalette (the single source shared with
+## presence) so a player's army matches their avatar/cursor; use army_color() below to also WRAP past
+## slot 4 like presence does — the bare dict falls back to neutral for unknown/0 (bus 036).
 const PLAYER_COLORS = {
-	1: Color(0.2, 0.4, 0.8),   # Blue
-	2: Color(0.8, 0.2, 0.2),   # Red
-	3: Color(0.2, 0.7, 0.2),   # Green
-	4: Color(0.7, 0.5, 0.1),   # Orange/Gold
+	1: Color(0.20, 0.40, 0.90),  # Blue
+	2: Color(0.90, 0.20, 0.20),  # Red
+	3: Color(0.20, 0.80, 0.30),  # Green
+	4: Color(0.90, 0.70, 0.10),  # Yellow
 }
+
+
+## The army-base colour for a player slot: the shared wrapping palette for a real slot (>= 1), else the
+## caller's neutral (unowned / player 0). This makes army bases agree with presence at slot >= 5, where
+## the old bare dict returned grey while avatars/cursors wrapped (bus 036).
+static func army_color(player_id: int, neutral: Color = Color.GRAY) -> Color:
+	if player_id < 1:
+		return neutral
+	return PlayerPalette.color_for_slot(player_id)
 
 ## Tray positions relative to table (player_id -> side)
 ## Player 1: left, Player 2: right, Player 3: front, Player 4: back
@@ -190,7 +201,7 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	await _ensure_army_models_cached(army)
 
 	var all_models: Array[Node3D] = []
-	var player_color = PLAYER_COLORS.get(army.player_id, Color.GRAY)
+	var player_color = OPRArmyManager.army_color(army.player_id, Color.GRAY)
 
 	# Create army tray and get spawn position (starts elevated). The tray + its models stay
 	# HIDDEN through the build loop so the player never sees the army assemble stepwise — it
@@ -399,12 +410,17 @@ func form_regiment(game_unit) -> Regiment:
 ## Rebuild a regiment movement-tray block on load: create the tray at the saved
 ## transform and adopt the unit's already-restored model nodes (no re-layout — the
 ## exact saved arrangement, including casualty gaps, is preserved).
-func restore_regiment(game_unit, frontage: int, pos: Vector3, rot_y: float, wounds_taken: int = 0) -> Regiment:
+func restore_regiment(game_unit, frontage: int, pos: Vector3, rot_y: float, wounds_taken: int = 0, saved_net_id: int = -1) -> Regiment:
 	if game_unit == null:
 		return null
 	var tray := RegimentTray.new()
 	tray.name = "Regiment_%s" % game_unit.unit_id
-	tray.set_meta("network_id", _next_owned_net_id(int(game_unit.unit_properties.get("player_id", 1))))
+	# Keep the tray's serialized MP identity so it survives save/load; only mint a fresh id for older
+	# saves that never stored one (bus 036 — trays previously lost identity across load in MP).
+	if saved_net_id >= 0:
+		tray.set_meta("network_id", saved_net_id)
+	else:
+		tray.set_meta("network_id", _next_owned_net_id(int(game_unit.unit_properties.get("player_id", 1))))
 	object_manager.add_child(tray)
 	tray.frontage = maxi(frontage, 1)
 	tray.global_position = pos
@@ -1494,7 +1510,7 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> St
 
 	# Get player color
 	var player_id: int = props.get("player_id", 1)
-	var player_color: Color = PLAYER_COLORS.get(player_id, Color.GRAY)
+	var player_color: Color = OPRArmyManager.army_color(player_id, Color.GRAY)
 
 	# Create base mesh
 	var base_instance = MeshInstance3D.new()

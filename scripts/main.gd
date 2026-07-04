@@ -336,6 +336,7 @@ func _ready() -> void:
 	network_manager.peer_version_validated.connect(_on_peer_version_validated)
 	network_manager.version_rejected.connect(_on_version_rejected)
 	network_manager.peer_remapped.connect(_on_peer_remapped)
+	network_manager.slot_table_synced.connect(_on_slot_table_synced)
 	network_manager.session_busy_changed.connect(_on_session_busy_changed)
 
 	# Connect game state sync signals (remote wounds, activation, markers, casts, delete)
@@ -2087,6 +2088,9 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# The peer is registered and validated — hand it the full name roster so it
 	# immediately knows everyone already at the table (including the host).
 	network_manager.push_roster_to_peer(peer_id)
+	# Hand it the whole peer→slot table too, so in a 3+-player game it agrees on everyone's slot (hence
+	# colour) immediately, without needing to have witnessed each incremental remap broadcast (bus 036).
+	network_manager.push_slot_table_to_peer(peer_id)
 	# If anyone is CURRENTLY loading, tell the late joiner so it gates + shows the banner too.
 	network_manager.push_busy_state_to_peer(peer_id)
 	# Hand the joining peer the current biome (host-authoritative table state — the biome
@@ -2730,6 +2734,20 @@ func _on_peer_remapped(old_peer: int, new_peer: int, _slot: int) -> void:
 	_rebuild_roster()
 
 
+## A guest just adopted the host's full peer→slot table (bus 036): recolour every existing avatar +
+## cursor, since some may have been spawned with a stale slot (their raw peer_id) before the table
+## arrived, giving the wrong colour in a 3+-player game.
+func _on_slot_table_synced() -> void:
+	for pid in _player_avatars:
+		var av = _player_avatars[pid]
+		if is_instance_valid(av) and av.has_method("set_player_color"):
+			av.set_player_color(_get_player_color(pid))
+	for pid in _remote_cursors:
+		var cur = _remote_cursors[pid]
+		if is_instance_valid(cur) and cur.has_method("set_player_color"):
+			cur.set_player_color(_get_player_color(pid))
+
+
 ## Remove all presence nodes (on disconnect)
 func _cleanup_all_presence() -> void:
 	for cursor in _remote_cursors.values():
@@ -2747,17 +2765,10 @@ func _cleanup_all_presence() -> void:
 ## monotonic slot back into the four-colour table (and slot 0 / pending -> colour 1),
 ## so nobody ever flickers to WHITE.
 func _get_player_color(peer_id: int) -> Color:
-	const COLORS := {
-		1: Color(0.2, 0.4, 0.9),  # Blue
-		2: Color(0.9, 0.2, 0.2),  # Red
-		3: Color(0.2, 0.8, 0.3),  # Green
-		4: Color(0.9, 0.7, 0.1),  # Yellow
-	}
 	var slot := peer_id
 	if network_manager:
 		slot = network_manager.slot_for_peer(peer_id)
-	var idx := (((slot - 1) % COLORS.size()) + 1) if slot > 0 else 1
-	return COLORS.get(idx, Color.WHITE)
+	return PlayerPalette.color_for_slot(slot)   # shared slot→palette (matches army bases, bus 036)
 
 
 ## ============================================================================
@@ -3339,7 +3350,7 @@ func _broadcast_army_import(army: OPRApiClient.OPRArmy, spawned_models: Array[No
 func _on_remote_army_header(player_id: int, army_name: String, unit_count: int) -> void:
 	_is_army_syncing = true  # pause our presence broadcasts while we build the incoming army (Fix A)
 	print("[ArmySync] Header: '%s' — expecting %d units (player_id=%d)" % [army_name, unit_count, player_id])
-	var player_color: Color = OPRArmyManager.PLAYER_COLORS.get(player_id, Color.GRAY)
+	var player_color: Color = OPRArmyManager.army_color(player_id, Color.GRAY)
 	opr_army_manager._create_army_tray(player_id, army_name, player_color)
 	_incoming_armies[player_id] = {"army_name": army_name, "units": [], "objects": []}
 	# Same overlay as a self-import, so receiving an army looks identical to loading one.

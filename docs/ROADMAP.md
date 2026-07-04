@@ -63,14 +63,6 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 > **✅ Shipped on `main` (unreleased, batching):** the bottom army unit-card dock (D-series). The
 > items below remain queued (avatar/cursor full rework, background-world toggle, Change-Daemons cascade).
 
-**🔨 Now (quick, low-risk — doing directly):**
-- **Dice log live-scroll** — the latest roll sometimes doesn't scroll into view; guarantee the log
-  pins to the newest entry (recompute scroll after the entry's final layout). _S_
-- **Deployment-zone flip (colour swap)** — on an asymmetric map a player who takes the *other* table
-  edge can swap the two zone colours, so their colour matches their side. Pure colour swap. _S_
-- **MP cursor/avatar label sizes** — the cursor ring text and the avatar name label are far too big;
-  shrink + tidy them (first slice of the bigger avatar/cursor rework below). _S_
-
 **📋 Soon (medium — next):**
 - **Avatar transparency on zoom** — as a player zooms in (closer to the table), fade *their* avatar
   for the others so it stops hiding the detail they're inspecting; at max zoom only a faint ghost
