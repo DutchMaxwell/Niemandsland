@@ -39,6 +39,7 @@ var _rule_popup: PanelContainer = null
 var _rule_popup_label: RichTextLabel = null
 var _rule_hover_timer: Timer = null
 var _hovered_meta: String = ""
+var _rule_hover_anchor: LinkButton = null   # the rule/spell link currently hovered (popup anchor)
 
 var _dock_open := false
 var _tab: Button = null
@@ -396,27 +397,33 @@ func set_range_ring_controller(rrc: Node) -> void:
 	range_ring_controller = rrc
 
 
-## Each "RulesList" RichTextLabel (the unit rules/spells line AND every weapon's rules line) exposes its
-## names as [url] spans; connect their meta hover to the description popup + spell-range ring so hovering
-## any rule — unit or weapon — shows its info box (maintainer #3 + #5).
+## Every LinkButton inside a "RulesList" container (unit rules/spells AND each weapon's rules) is a hover/
+## click target; connect mouse_entered/exited/pressed to the description popup + spell-range ring so
+## hovering OR clicking any rule — unit or weapon — shows its info box (maintainer #3 + #5). LinkButtons
+## are reliably picked; the old nested RichTextLabel meta_hover never fired in-game.
 func _wire_rules_hover(content: Control) -> void:
-	for node in content.find_children("RulesList", "RichTextLabel", true, false):
-		var rt := node as RichTextLabel
-		if rt != null and not rt.meta_hover_started.is_connected(_on_rule_hover_started):
-			rt.meta_hover_started.connect(_on_rule_hover_started)
-			rt.meta_hover_ended.connect(_on_rule_hover_ended)
+	for node in content.find_children("*", "LinkButton", true, false):
+		var lb := node as LinkButton
+		if lb == null or not lb.has_meta("rule_meta"):
+			continue
+		if not lb.mouse_entered.is_connected(_on_rule_link_entered):
+			lb.mouse_entered.connect(_on_rule_link_entered.bind(lb))
+			lb.mouse_exited.connect(_on_rule_link_exited)
+			lb.pressed.connect(_show_rule_popup_for.bind(lb))
 
 
-func _on_rule_hover_started(meta: Variant) -> void:
-	_hovered_meta = str(meta)
+func _on_rule_link_entered(lb: LinkButton) -> void:
+	_hovered_meta = str(lb.get_meta("rule_meta", ""))
+	_rule_hover_anchor = lb
 	if _hovered_meta.begins_with("spell:"):
 		_show_spell_ring(_hovered_meta.substr(6))
 	if _rule_hover_timer != null:
 		_rule_hover_timer.start()
 
 
-func _on_rule_hover_ended(_meta: Variant) -> void:
+func _on_rule_link_exited() -> void:
 	_hovered_meta = ""
+	_rule_hover_anchor = null
 	if _rule_popup != null:
 		_rule_popup.visible = false
 	if _rule_hover_timer != null:
@@ -424,16 +431,26 @@ func _on_rule_hover_ended(_meta: Variant) -> void:
 	_clear_spell_ring()
 
 
+## Timer fired after a short hover → show the popup for the currently-hovered link.
 func _on_rule_hover_timeout() -> void:
-	if _hovered_meta.is_empty() or army_manager == null:
+	_show_rule_popup_for(_rule_hover_anchor)
+
+
+## Show the description popup for a rule/spell LinkButton (used by hover-timer AND click).
+func _show_rule_popup_for(lb: LinkButton) -> void:
+	if lb == null or not is_instance_valid(lb) or army_manager == null:
 		return
-	var title := _hovered_meta.trim_prefix("spell:")
-	var desc: String = _spell_effect(title) if _hovered_meta.begins_with("spell:") else str(army_manager.get_rule_description(_hovered_meta))
+	var meta_key := str(lb.get_meta("rule_meta", ""))
+	if meta_key.is_empty():
+		return
+	var title := meta_key.trim_prefix("spell:")
+	var desc: String = _spell_effect(title) if meta_key.begins_with("spell:") else str(army_manager.get_rule_description(meta_key))
 	if desc.strip_edges().is_empty():
 		desc = "(no description)"
 	_rule_popup_label.text = "[b]%s[/b]\n%s" % [title, desc]
 	_rule_popup.reset_size()
-	_rule_popup.global_position = get_global_mouse_position() + Vector2(14, 14)
+	# Anchor the popup just above the hovered link so it never sits under the cursor.
+	_rule_popup.global_position = lb.global_position + Vector2(0, -_rule_popup.size.y - 6)
 	_rule_popup.visible = true
 
 

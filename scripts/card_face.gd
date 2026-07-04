@@ -136,56 +136,57 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 ## can wire meta_hover_started/ended to descriptions + the spell-range ring. data.rules_list = Array of
 ## rule-name Strings; data.spells = Array of {name, threshold}. Returns null when there is nothing to
 ## show. Spell spans are keyed "spell:<name>".
-static func _rules_list(data: Dictionary) -> RichTextLabel:
+## One hover/click target for a rule or spell name: an underlined LinkButton carrying its lookup key in
+## meta "rule_meta". The dock connects mouse_entered/exited/pressed to the description tooltip. LinkButtons
+## are reliably picked (unlike the previous nested RichTextLabel meta_hover, which never fired in-game —
+## Godot routes input to a scaled Control's nested RichText unreliably). Maintainer: hover must work.
+static func _rule_link(label: String, meta_key: String, color: Color, font_px: int) -> LinkButton:
+	var lb := LinkButton.new()
+	lb.text = label
+	lb.underline = LinkButton.UNDERLINE_MODE_ALWAYS
+	lb.focus_mode = Control.FOCUS_NONE
+	lb.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	lb.add_theme_font_size_override("font_size", font_px)
+	lb.add_theme_color_override("font_color", color)
+	lb.add_theme_color_override("font_hover_color", Color(0.9, 0.95, 1.0))
+	lb.set_meta("rule_meta", meta_key)
+	return lb
+
+
+## Unit rules + spells as a row of hover/click targets. Container named "RulesList" so the dock finds and
+## wires every LinkButton inside it.
+static func _rules_list(data: Dictionary) -> Control:
 	var rule_names: Array = data.get("rules_list", [])
 	var spells: Array = data.get("spells", []) if bool(data.get("caster", false)) else []
 	if rule_names.is_empty() and spells.is_empty():
 		return null
-	var rt := RichTextLabel.new()
-	rt.name = "RulesList"
-	rt.bbcode_enabled = true
-	rt.fit_content = true
-	rt.scroll_active = false
-	rt.meta_underlined = true
-	rt.mouse_filter = Control.MOUSE_FILTER_STOP
-	rt.add_theme_font_size_override("normal_font_size", 11)
-	rt.add_theme_color_override("default_color", TEXT_DIM)
-	var lines: Array[String] = []
+	var flow := HFlowContainer.new()
+	flow.name = "RulesList"
+	flow.add_theme_constant_override("h_separation", 6)
+	flow.add_theme_constant_override("v_separation", 2)
 	if not rule_names.is_empty():
-		var spans: Array[String] = []
+		flow.add_child(_label("Rules", 11, TEXT_DIM))
 		for r in rule_names:
-			spans.append("[url=%s]%s[/url]" % [str(r), str(r)])
-		lines.append("[color=%s]Rules[/color]  %s" % [TEXT_DIM.to_html(false), "  ".join(spans)])
+			flow.add_child(_rule_link(str(r), str(r), TEXT_DIM, 11))
 	if not spells.is_empty():
-		var sp: Array[String] = []
+		flow.add_child(_label("Spells", 11, CYAN))
 		for s in spells:
 			var sd := s as Dictionary
-			sp.append("[url=spell:%s]%s (%d+)[/url]" % [str(sd.get("name", "")), str(sd.get("name", "")), int(sd.get("threshold", 0))])
-		lines.append("[color=%s]Spells[/color]  %s" % [CYAN.to_html(false), "  ".join(sp)])
-	rt.text = "\n".join(lines)
-	return rt
+			flow.add_child(_rule_link("%s (%d+)" % [str(sd.get("name", "")), int(sd.get("threshold", 0))], "spell:" + str(sd.get("name", "")), CYAN, 11))
+	return flow
 
 
-## A weapon's named special rules as hover targets (underlined [url] spans), same mechanism as the unit
-## rules list so the dock wires meta_hover → description tooltip for them too (maintainer #5). Named
-## "RulesList" so _wire_rules_hover picks it up alongside the unit rules.
-static func _weapon_rules_list(names: PackedStringArray) -> RichTextLabel:
-	var rt := RichTextLabel.new()
-	rt.name = "RulesList"
-	rt.bbcode_enabled = true
-	rt.fit_content = true
-	rt.scroll_active = false
-	rt.meta_underlined = true
-	rt.mouse_filter = Control.MOUSE_FILTER_STOP
-	rt.add_theme_font_size_override("normal_font_size", 10)
-	rt.add_theme_color_override("default_color", CYAN)
-	var spans: Array[String] = []
+## A weapon's named special rules as hover/click targets (maintainer #5). Same "RulesList" container so
+## the dock wires them alongside the unit rules.
+static func _weapon_rules_list(names: PackedStringArray) -> Control:
+	var flow := HFlowContainer.new()
+	flow.name = "RulesList"
+	flow.add_theme_constant_override("h_separation", 6)
 	for nm in names:
 		var t := nm.strip_edges()
 		if not t.is_empty():
-			spans.append("[url=%s]%s[/url]" % [t, t])
-	rt.text = "    " + "  ".join(spans)
-	return rt
+			flow.add_child(_rule_link(t, t, CYAN, 10))
+	return flow
 
 
 
