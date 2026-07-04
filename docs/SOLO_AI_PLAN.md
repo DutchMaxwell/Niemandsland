@@ -1,7 +1,12 @@
 # Solo / Co-Op AI — Implementation Plan
 
-> **Status:** scoping / design (2026-06-30). No code yet. This is the living design
-> doc for the Solo/AI opponent feature. Branch: `feat/solo-ai`.
+> **Status:** M1 (Phase 0) shipped on `feat/solo-ai`; M2 (Phase 1) in progress. M2 slice 1 —
+> the pure combat "brain" — landed: `AiArchetype` (Melee/Shooting/Hybrid classifier), `AiDecision`
+> (per-archetype hold/advance/rush/charge tree) and `AiCombatMath` (OPR to-hit / AP-save / wounds /
+> morale), all gdUnit-tested. M2 slice 2 (integration: AI rolls real tray dice, shooting → human-save
+> prompt → wounds, charge/melee/strike-back/fatigue, morale tests, AI-army toggle UI, battle-log lines,
+> render evidence of a full AI turn) is the next step. NOT merge-ready until the maintainer field-tests
+> via F11. Branch: `feat/solo-ai`.
 > See [`ROADMAP.md`](ROADMAP.md) for where this sits in the backlog and
 > [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) for the system map.
 
