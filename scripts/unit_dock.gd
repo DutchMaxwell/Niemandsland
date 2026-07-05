@@ -35,11 +35,8 @@ var camera_controller = null
 var radial_menu_controller = null
 var unit_card_detail = null            # deprecated old detail card (retired; kept as an unused ctor arg)
 var range_ring_controller: Node = null # injected by main.gd — spell-range ring on spell hover (bus 033)
-var _rule_popup: PanelContainer = null
+var _rule_popup: PanelContainer = null       # styled description panel shown on a rule CLICK
 var _rule_popup_label: RichTextLabel = null
-var _rule_hover_timer: Timer = null
-var _hovered_meta: String = ""
-var _rule_hover_anchor: LinkButton = null   # the rule/spell link currently hovered (popup anchor)
 
 var _dock_open := false
 var _tab: Button = null
@@ -411,46 +408,34 @@ func set_range_ring_controller(rrc: Node) -> void:
 	range_ring_controller = rrc
 
 
-## Every LinkButton inside a "RulesList" container (unit rules/spells AND each weapon's rules) is a hover/
-## click target; connect mouse_entered/exited/pressed to the description popup + spell-range ring so
-## hovering OR clicking any rule — unit or weapon — shows its info box (maintainer #3 + #5). LinkButtons
-## are reliably picked; the old nested RichTextLabel meta_hover never fired in-game.
+## Wire hover + click for every rule/spell/weapon-rule LinkButton in the presented card. The description
+## uses Godot's BUILT-IN tooltip (tooltip_text) — reliable through the card's nested content, unlike the
+## custom mouse_entered popup which fired erratically / not at all for weapon rules (maintainer). Spells
+## additionally show the range ring on hover; a click still pops the styled description panel.
 func _wire_rules_hover(content: Control) -> void:
 	for node in content.find_children("*", "LinkButton", true, false):
 		var lb := node as LinkButton
 		if lb == null or not lb.has_meta("rule_meta"):
 			continue
-		if not lb.mouse_entered.is_connected(_on_rule_link_entered):
-			lb.mouse_entered.connect(_on_rule_link_entered.bind(lb))
-			lb.mouse_exited.connect(_on_rule_link_exited)
-			lb.pressed.connect(_show_rule_popup_for.bind(lb))
+		var meta_key := str(lb.get_meta("rule_meta", ""))
+		lb.tooltip_text = _rule_description(meta_key)
+		if meta_key.begins_with("spell:"):
+			lb.mouse_entered.connect(_show_spell_ring.bind(meta_key.substr(6)))
+			lb.mouse_exited.connect(_clear_spell_ring)
+		lb.pressed.connect(_show_rule_popup_for.bind(lb))
 
 
-func _on_rule_link_entered(lb: LinkButton) -> void:
-	_hovered_meta = str(lb.get_meta("rule_meta", ""))
-	_rule_hover_anchor = lb
-	if _hovered_meta.begins_with("spell:"):
-		_show_spell_ring(_hovered_meta.substr(6))
-	if _rule_hover_timer != null:
-		_rule_hover_timer.start()
+## Plain-text rule/spell description for a LinkButton's built-in tooltip ("Fearless — When taking a …").
+func _rule_description(meta_key: String) -> String:
+	var title := meta_key.trim_prefix("spell:")
+	if army_manager == null:
+		return title
+	var desc: String = _spell_effect(title) if meta_key.begins_with("spell:") else str(army_manager.get_rule_description(meta_key))
+	desc = desc.strip_edges()
+	return "%s — %s" % [title, desc] if not desc.is_empty() else title
 
 
-func _on_rule_link_exited() -> void:
-	_hovered_meta = ""
-	_rule_hover_anchor = null
-	if _rule_popup != null:
-		_rule_popup.visible = false
-	if _rule_hover_timer != null:
-		_rule_hover_timer.stop()
-	_clear_spell_ring()
-
-
-## Timer fired after a short hover → show the popup for the currently-hovered link.
-func _on_rule_hover_timeout() -> void:
-	_show_rule_popup_for(_rule_hover_anchor)
-
-
-## Show the description popup for a rule/spell LinkButton (used by hover-timer AND click).
+## Show the styled description panel for a rule/spell LinkButton (on click).
 func _show_rule_popup_for(lb: LinkButton) -> void:
 	if lb == null or not is_instance_valid(lb) or army_manager == null:
 		return
@@ -517,11 +502,6 @@ func _setup_rule_popup() -> void:
 	_rule_popup_label.add_theme_font_size_override("normal_font_size", 12)
 	_rule_popup.add_child(_rule_popup_label)
 	add_child(_rule_popup)
-	_rule_hover_timer = Timer.new()
-	_rule_hover_timer.one_shot = true
-	_rule_hover_timer.wait_time = 0.6
-	_rule_hover_timer.timeout.connect(_on_rule_hover_timeout)
-	add_child(_rule_hover_timer)
 
 
 func _animate_card_in() -> void:

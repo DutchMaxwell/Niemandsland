@@ -70,9 +70,11 @@ func _build_layers() -> void:
 	_face.add_theme_stylebox_override("panel", _face_style())
 	# The face is a plain StyleBox Panel — no shader (hover is a lift + shadow, no tilt; bus 033).
 	add_child(_face)
-	# Content holder above the face (labels/stats set by the owner).
+	# Content holder above the face (labels/stats set by the owner). PASS (not IGNORE) so the mouse can
+	# reach interactive children like rule LinkButtons reliably, while non-interactive gaps still fall
+	# through to the CardVisual body for select/locate (bus: rule hover was flaky through IGNORE).
 	_content_holder = Control.new()
-	_content_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_content_holder.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(_content_holder)
 	_on_resized()
 
@@ -94,7 +96,9 @@ func set_content_node(node: Control) -> void:
 		return
 	for c in _content_holder.get_children():
 		c.queue_free()
-	node.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# PASS (not IGNORE): the content forwards mouse events to the card body after its own interactive
+	# children (rule LinkButtons) get first pick, so rule tooltips/clicks fire reliably (bus feedback).
+	node.mouse_filter = Control.MOUSE_FILTER_PASS
 	_content_holder.add_child(node)
 	# Fill the card so the content lays out at the CARD width (not its own min width) — otherwise the
 	# header name label is starved of width and ellipsizes even short names (bus 034). Anchors AND
