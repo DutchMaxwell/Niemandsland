@@ -165,6 +165,13 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
     glow halo is faked with three stacked arcs because `_draw` has no blur) and procedural die-face /
     token icons, instead of per-frame `_draw`. Optional, low value. _S_
 - Rules-reference overlays for more game systems.
+- **Variant-aware mounting** — a mounted leader currently swaps to the mount GLB and loses his weapon-
+  variant visual (`opr_army_manager` replaces model 0); a later game-side change could resolve composed
+  `<unit>#<mount>+<slug>` variants instead. _M, after the mounts chapter ships_
+- **Persistent room / async play** — a long-running hosted table (or a turn-based save-file relay flow)
+  so players take turns asynchronously; today's answer is save-file exchange + the battle log. We are
+  host-authoritative with a dumb relay, so a "persistent room" means either a headless host client or
+  relay-side state — both heavy. Community-requested (DE Discord, 2026-07-05). _XL, far future_
 - _Community feedback from the alpha lands here first._
 
 ## ✅ Recently shipped
