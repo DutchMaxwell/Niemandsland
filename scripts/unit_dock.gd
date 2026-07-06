@@ -38,6 +38,7 @@ var range_ring_controller: Node = null # injected by main.gd — spell-range rin
 var _presented_sig: int = 0            # hash of the presented card's last-built data; skip rebuild if unchanged
 var _pending_click_unit: GameUnit = null   # strip-card single-click waiting out the double-click window
 var _click_defer_timer: Timer = null       # so a double-click never fires the single-click collapse first
+var _null_present_queued := false          # transient empty-selection debounce (see present_unit)
 
 var _dock_open := false
 var _tab: Button = null
@@ -423,9 +424,16 @@ func _ap_value(rule: String) -> String:
 func present_unit(unit: GameUnit) -> void:
 	_clear_spell_ring()   # never let a spell-range ring outlive the card it was hovered from (maintainer)
 	if unit == null:
-		_presented_unit = null
-		_animate_card_out()
+		# select_objects re-selects via _deselect_all + _add_to_selection, EACH emitting
+		# selection_changed — so every re-select of an already-shown unit sends a transient empty
+		# selection first. Acting on it immediately nulled _presented_unit and the follow-up present
+		# re-dealt the whole card (the down/up wobble on every click — maintainer). Defer the card-out
+		# to end of frame; a real present arriving in the same frame cancels it.
+		if not _null_present_queued:
+			_null_present_queued = true
+			_apply_null_present.call_deferred()
 		return
+	_null_present_queued = false   # a re-present in the same frame cancels the pending card-out
 	var same: bool = unit == _presented_unit
 	_presented_unit = unit
 	# Re-presenting the SAME unit with unchanged data is a no-op (clicking the card re-selects the unit →
@@ -440,6 +448,15 @@ func present_unit(unit: GameUnit) -> void:
 	if same and _presented.visible:
 		return
 	_animate_card_in()
+
+
+## Deferred card-out (see present_unit): only fires if no re-present cancelled it within the frame.
+func _apply_null_present() -> void:
+	if not _null_present_queued:
+		return
+	_null_present_queued = false
+	_presented_unit = null
+	_animate_card_out()
 
 
 func _fill_presented(unit: GameUnit) -> void:
@@ -660,11 +677,11 @@ func _handle_card_click(event: InputEvent, unit: GameUnit, from_strip: bool) -> 
 	if not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
 		return
 	if not from_strip:
-		# Presented/detail card: no strip to collapse, so act immediately.
+		# Presented/detail card: its unit is by definition already selected, so a single click does
+		# NOTHING (re-selecting re-dealt the card and played N select sounds — maintainer: "entfernen").
+		# Only a double-click acts: solid camera focus on the unit.
 		if mb.double_click:
 			_focus_camera_on(unit)
-		else:
-			_select_unit(unit)
 		return
 	# Strip card: select IMMEDIATELY (instant cyan feedback in the fan) but DEFER the collapse+present
 	# past the double-click window, so the strip never collapses between the two clicks of a double-click
