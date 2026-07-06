@@ -26,6 +26,24 @@ static func profiles_in_range(weapons: Array, dist_in: float) -> Array:
 	return out
 
 
+## MELEE weapon profiles (range 0) — same shape as profiles_in_range, for the P4 melee resolution
+## (each profile rolls as one batch; the defender saves at Defense + that profile's AP).
+static func melee_profiles(weapons: Array) -> Array:
+	var out: Array = []
+	for w in weapons:
+		if _field_i(w, "range_value", 0) > 0:
+			continue
+		var attacks: int = maxi(_field_i(w, "attacks", 1), 0) * maxi(_field_i(w, "count", 1), 1)
+		if attacks <= 0:
+			continue
+		out.append({
+			"name": _field_s(w, "name", "Weapon"),
+			"attacks": attacks,
+			"ap": _ap_of(w),
+		})
+	return out
+
+
 ## Total dice a shooting activation would roll (quick eligibility check for the decision tree).
 static func total_attacks(profiles: Array) -> int:
 	var n := 0

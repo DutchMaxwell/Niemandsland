@@ -29,6 +29,14 @@ func test_boundary_range_counts_as_in_range() -> void:
 	assert_int(AiShooting.profiles_in_range([_w("Rifle", 24, 1, 1, [])], 24.01).size()).is_equal(0)
 
 
+func test_melee_profiles_take_only_range_zero_weapons() -> void:
+	var weapons: Array = [_w("CCW", 0, 2, 5, []), _w("Claws", 0, 3, 1, ["AP(1)"]), _w("Rifle", 24, 1, 5, [])]
+	var profiles := AiShooting.melee_profiles(weapons)
+	assert_int(profiles.size()).is_equal(2)
+	assert_int(int(profiles[0]["attacks"])).is_equal(10)   # 2 × 5
+	assert_int(int(profiles[1]["ap"])).is_equal(1)
+
+
 func test_total_attacks_sums_profiles() -> void:
 	var profiles := AiShooting.profiles_in_range([_w("Rifle", 24, 1, 5, []), _w("Cannon", 30, 3, 1, ["AP(2)"])], 20.0)
 	assert_int(AiShooting.total_attacks(profiles)).is_equal(8)

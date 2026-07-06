@@ -650,6 +650,8 @@ func _run_solo_ai_turn() -> void:
 			unit.get_name(), AiDecision.action_name(int(report.get("action", 0))), target.get_name()], true)
 	if bool(report.get("can_shoot", false)):
 		await _run_ai_shooting(report)
+	elif int(report.get("action", 0)) == AiDecision.Action.CHARGE:
+		await _run_ai_melee(report)
 
 
 ## The slot the Solo AI plays: the first designated army, else player 2 (M1 default).
@@ -784,6 +786,110 @@ func _solo_prompt_saves(attacker: GameUnit, target: GameUnit, weapon_name: Strin
 	await dlg.confirmed
 	dlg.queue_free()
 	return await _solo_tray_roll(hits, defense + ap, "You")
+
+
+## Resolve a landed AI charge (goal 001 P4): the AI strikes with its melee profiles (real tray dice,
+## fatigued units hit only on 6s), the human saves per profile; then the human may STRIKE BACK (prompt,
+## their attacks auto-roll, the AI saves in the tray); both sides that struck become Fatigued (OPR: first
+## melee each round); the side that took MORE wounds tests morale (fail → Shaken; at/below half → Routs).
+func _run_ai_melee(report: Dictionary) -> void:
+	var unit: GameUnit = report.get("unit")
+	var target: GameUnit = report.get("target")
+	if unit == null or target == null or dice_roller_control == null:
+		return
+	# The charge must actually reach combat: within ~2" after the move counts as contact (M1 movement
+	# has no base-to-base snapping yet — documented default).
+	var dist_in: float = MoveIntent.distance_inches(solo_controller.unit_centre(unit), solo_controller.unit_centre(target))
+	if dist_in > 2.0:
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s's charge falls short (%.0f\")" % [unit.get_name(), dist_in], true)
+		return
+	var ai_dealt := 0
+	var human_dealt := 0
+	# — AI strikes —
+	var ai_weapons: Array = []
+	if unit.source_type == "opr" and unit.source_data is OPRApiClient.OPRUnit:
+		ai_weapons = (unit.source_data as OPRApiClient.OPRUnit).weapons
+	for p in AiShooting.melee_profiles(ai_weapons):
+		var profile := p as Dictionary
+		var to_hit: int = 6 if unit.is_fatigued else unit.get_quality()
+		var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "AI (%s)" % unit.get_name())
+		var hits: int = AiCombatMath.count_hits(faces, to_hit)
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s strikes with %s — %d hit%s" % [
+				unit.get_name(), str(profile.get("name", "?")), hits, ("" if hits == 1 else "s")], true)
+		if hits <= 0:
+			continue
+		var save_faces: Array = await _solo_prompt_saves(unit, target, str(profile.get("name", "?")), hits, target.get_defense(), int(profile.get("ap", 0)))
+		ai_dealt += AiCombatMath.wounds(hits, save_faces, target.get_defense(), int(profile.get("ap", 0)))
+	if ai_dealt > 0:
+		_solo_apply_wounds(target, ai_dealt)
+	_solo_set_fatigued(unit)
+	# — Strike back (the human's choice; OPR lets the defender strike back) —
+	if target.get_alive_count() > 0:
+		var target_weapons: Array = []
+		if target.source_type == "opr" and target.source_data is OPRApiClient.OPRUnit:
+			target_weapons = (target.source_data as OPRApiClient.OPRUnit).weapons
+		var back_profiles := AiShooting.melee_profiles(target_weapons)
+		if not back_profiles.is_empty():
+			var dlg := ConfirmationDialog.new()
+			dlg.title = "Strike back?"
+			dlg.dialog_text = "%s is in melee with %s.\nStrike back?" % [target.get_name(), unit.get_name()]
+			dlg.ok_button_text = "Strike back"
+			dlg.get_cancel_button().text = "Hold"
+			add_child(dlg)
+			dlg.popup_centered()
+			var strike := false
+			dlg.confirmed.connect(func() -> void: strike = true)
+			await dlg.visibility_changed   # closes on either button
+			dlg.queue_free()
+			if strike:
+				for p in back_profiles:
+					var profile := p as Dictionary
+					var to_hit: int = 6 if target.is_fatigued else target.get_quality()
+					var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You")
+					var hits: int = AiCombatMath.count_hits(faces, to_hit)
+					if hits <= 0:
+						continue
+					var save_faces: Array = await _solo_tray_roll(hits, unit.get_defense() + int(profile.get("ap", 0)), "AI (%s)" % unit.get_name())
+					human_dealt += AiCombatMath.wounds(hits, save_faces, unit.get_defense(), int(profile.get("ap", 0)))
+				if human_dealt > 0:
+					_solo_apply_wounds(unit, human_dealt)
+				_solo_set_fatigued(target)
+	# — Morale: the side that took MORE wounds tests (tie = nobody) —
+	if ai_dealt > human_dealt and target.get_alive_count() > 0:
+		await _solo_morale_test(target, "You")
+	elif human_dealt > ai_dealt and unit.get_alive_count() > 0:
+		await _solo_morale_test(unit, "AI (%s)" % unit.get_name())
+
+
+## One OPR morale test with a real tray die: >= Quality passes; fail → Shaken, at/below half → Routs
+## (the unit is destroyed through the existing kill flows).
+func _solo_morale_test(unit: GameUnit, owner: String) -> void:
+	var faces: Array = await _solo_tray_roll(1, unit.get_quality(), owner)
+	if faces.is_empty():
+		return
+	var below_half := AiCombatMath.at_or_below_half(unit.get_alive_count(), unit.models.size())
+	var result: int = AiCombatMath.morale_result(int(faces[0]), unit.get_quality(), below_half)
+	match result:
+		AiCombatMath.Morale.PASSED:
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s passes morale" % unit.get_name())
+		AiCombatMath.Morale.SHAKEN:
+			if not unit.is_shaken and radial_menu_controller != null:
+				radial_menu_controller.card_toggle_shaken(unit)   # state + marker + MP broadcast
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s fails morale — Shaken" % unit.get_name())
+		AiCombatMath.Morale.ROUT:
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s fails morale at half strength — ROUTS" % unit.get_name())
+			_solo_apply_wounds(unit, unit.models.size() * 12)   # overkill wipes the unit via the normal flows
+
+
+## Mark a unit Fatigued after its first melee this round (state + marker + broadcast via the radial seam).
+func _solo_set_fatigued(unit: GameUnit) -> void:
+	if unit != null and not unit.is_fatigued and radial_menu_controller != null:
+		radial_menu_controller.card_toggle_fatigued(unit)
 
 
 ## Apply shooting wounds through the EXISTING flows so parking, battle log and MP sync keep working:
