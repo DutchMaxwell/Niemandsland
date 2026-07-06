@@ -60,6 +60,35 @@ func test_card_data_without_opr_source_has_no_weapons_or_rules() -> void:
 	assert_bool(bool(d["dead"])).is_false()
 
 
+## The old UnitCard's tooltip cascades, ported to the dock (issue #74): a spell/rule that references
+## another known rule reveals it, an item shows what it grants, and granted rules are hidden from the
+## flat rules list (reached through the item's tooltip instead).
+func test_rule_tooltip_cascades_referenced_rules_and_item_grants() -> void:
+	var dock: UnitDock = auto_free(UnitDock.new())
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.rule_descriptions = {"Blast": "Ignores cover.", "Shielded": "Gets +1 to defense rolls."}
+	dock.army_manager = army
+	var u := GameUnit.new()
+	u.unit_properties = {"name": "Mage", "cost": 50, "quality": 4, "defense": 4, "player_id": 1,
+		"special_rules": ["Caster(2)", "Combat Shield", "Shielded"],
+		"item_grants": {"Combat Shield": ["Shielded"]}}
+	army._session_spells[1] = [{"name": "Fireball", "threshold": 2, "effect": "Target takes 6 hits with Blast(3)."}]
+	dock._presented_unit = u
+	# Spell tooltip reveals the referenced Blast rule.
+	var spell_tip := dock._rule_description("spell:Fireball")
+	assert_bool(spell_tip.contains("Blast — Ignores cover.")).is_true()
+	# Item tooltip lists what it grants instead of its own (empty) description.
+	var item_tip := dock._rule_description("Combat Shield")
+	assert_bool(item_tip.contains("grants:")).is_true()
+	assert_bool(item_tip.contains("Shielded — Gets +1 to defense rolls.")).is_true()
+	# The granted rule is hidden from the flat rules list.
+	var m := ModelInstance.new()
+	m.is_alive = true
+	u.models = [m]
+	var d: Dictionary = dock._card_data(u)
+	assert_array(d["rules_list"]).contains_exactly(["Caster(2)", "Combat Shield"])
+
+
 func _weapon(nm: String, rng: int, atk: int, count: int, rules: Array) -> OPRApiClient.OPRWeapon:
 	var w := OPRApiClient.OPRWeapon.new()
 	w.name = nm
@@ -81,17 +110,18 @@ func test_weapon_entry_format_melee_ranged_ap_and_named_rules() -> void:
 	assert_str(str(melee["meta"])).is_equal("A2")
 	assert_str(str(melee["rules"])).is_equal("")
 
-	# Ranged + AP → range, attacks, AP inline; rules empty (AP is a stat, not a named rule).
+	# Ranged + AP → range, attacks, AP inline in the stat AND listed as a hoverable rule (bus feedback).
 	var ranged: Dictionary = dock._weapon_entry(_weapon("Heavy Rifle", 30, 1, 1, ["AP(1)"]))
 	assert_str(str(ranged["meta"])).is_equal("30\" A1 AP1")
-	assert_str(str(ranged["rules"])).is_equal("")
+	assert_str(str(ranged["rules"])).is_equal("AP(1)")
 
 	# Melee + AP → no range, attacks, AP inline.
 	var melee_ap: Dictionary = dock._weapon_entry(_weapon("Great Weapon", 0, 2, 1, ["AP(2)"]))
 	assert_str(str(melee_ap["meta"])).is_equal("A2 AP2")
+	assert_str(str(melee_ap["rules"])).is_equal("AP(2)")
 
-	# Count prefix + AP inline + named rules split onto the cyan sub-line, AP excluded.
+	# Count prefix + AP inline in the stat + every rule (incl. AP) on the hoverable rule line.
 	var multi: Dictionary = dock._weapon_entry(_weapon("Daemon Claws", 0, 4, 2, ["AP(1)", "Counter", "Deadly(2)"]))
 	assert_str(str(multi["name"])).is_equal("2x Daemon Claws")
 	assert_str(str(multi["meta"])).is_equal("A4 AP1")
-	assert_str(str(multi["rules"])).is_equal("Counter, Deadly(2)")
+	assert_str(str(multi["rules"])).is_equal("AP(1), Counter, Deadly(2)")
