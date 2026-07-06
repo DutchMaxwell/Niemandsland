@@ -226,7 +226,9 @@ var coherency_visualizer: CoherencyVisualizer = null
 var unit_boundary_visualizer: Node3D = null  # UnitBoundaryVisualizer
 var range_ring_controller: Node = null  # RangeRingController (base-anchored range auras)
 var movement_range_controller: Node = null  # MovementRangeController (Advance/Rush reach)
-var solo_controller: SoloController = null   # Solo/AI M1 (F11) — AI army advances toward the human
+var solo_controller: SoloController = null   # Solo/AI (F11) — drives the designated AI army
+var solo_ai_slots: Dictionary = {}           # player_id -> true: armies the Solo AI controls (goal 001)
+var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-army AI toggles)
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
@@ -539,6 +541,9 @@ func _ready() -> void:
 	# Initialize Deployment Zones UI
 	_init_deployment_zones_ui()
 
+	# Solo section (goal 001): per-army AI toggles; refreshed on every army import.
+	_init_solo_panel()
+
 	# Initialize Radial Menu
 	_init_radial_menu()
 
@@ -614,19 +619,44 @@ func _dismiss_transition_overlay() -> void:
 ## screenshot) into a zip on the Desktop. Player names / room code / OS username are scrubbed.
 ## The natural capture for visual glitches (a mini clipping terrain, wrong scale, a misplaced
 ## model) that raise no error and so never reach the log on their own.
-## Solo/AI M1 (F11): lazily wire the SoloController and run one AI turn — player 2's army is treated as
-## the AI; each of its un-activated, non-destroyed units advances toward the nearest player-1 unit by its
-## Advance distance and is marked activated. Movement only (no combat). Full solo-game setup UI is later.
+## Solo/AI (F11): run ONE AI activation per press (goal 001, F1) — the next eligible unit of the
+## designated AI army acts (M1: advances toward the nearest human unit) and the camera follows it.
+## The AI army is whichever slot is marked in solo_ai_slots (import checkbox / Solo panel); with no
+## designation it falls back to player 2 (M1 behaviour). When every AI unit has acted, F11 reports the
+## turn as complete until the next round resets activations.
 func _run_solo_ai_turn() -> void:
 	if opr_army_manager == null or movement_range_controller == null:
-		push_warning("[Solo/AI] not ready — import an army for player 2 first")
+		push_warning("[Solo/AI] not ready — import armies first")
 		return
+	var ai_slot := _solo_ai_slot()
+	# (Re)build the controller when the designated slot changed — setup() wires TurnManager once.
+	if solo_controller != null and solo_controller.ai_slot != ai_slot:
+		solo_controller.queue_free()
+		solo_controller = null
 	if solo_controller == null:
 		solo_controller = SoloController.new()
 		add_child(solo_controller)
-		solo_controller.setup(opr_army_manager, network_manager, movement_range_controller, 1, 2)
-	var moved: int = solo_controller.run_ai_turn()
-	print("[Solo/AI] player-2 AI turn: %d unit(s) advanced toward the nearest player-1 unit" % moved)
+		var human_slot: int = 1 if ai_slot != 1 else 2
+		solo_controller.setup(opr_army_manager, network_manager, movement_range_controller, human_slot, ai_slot)
+	var unit: GameUnit = solo_controller.activate_next_ai_unit()
+	if unit == null:
+		print("[Solo/AI] AI turn complete — all player-%d units activated (advance the round to reset)" % ai_slot)
+		return
+	# Camera follows the acting unit so each activation is watchable (goal 001, F1).
+	if camera_pivot != null and camera_pivot.has_method("focus_on"):
+		var positions: Array = []
+		for m in unit.models:
+			if m.is_alive and m.node != null and is_instance_valid(m.node):
+				positions.append((m.node as Node3D).global_position)
+		if not positions.is_empty():
+			camera_pivot.focus_on(MoveIntent.anchor_of(positions))
+
+
+## The slot the Solo AI plays: the first designated army, else player 2 (M1 default).
+func _solo_ai_slot() -> int:
+	for slot in solo_ai_slots:
+		return int(slot)
+	return 2
 
 
 func _capture_bug_report() -> void:
@@ -3302,8 +3332,15 @@ func _on_import_opr_army() -> void:
 
 
 ## Handle army imported from dialog
-func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int) -> void:
-	print("Importing army '%s' for Player %d" % [army.name, player_id])
+func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int, ai_controlled: bool = false) -> void:
+	print("Importing army '%s' for Player %d%s" % [army.name, player_id, " (AI-controlled)" if ai_controlled else ""])
+	# Solo (goal 001): remember the designation; the Solo panel + F11 read it. Re-importing the slot
+	# without the checkbox clears a stale designation.
+	if ai_controlled:
+		solo_ai_slots[player_id] = true
+	else:
+		solo_ai_slots.erase(player_id)
+	_refresh_solo_panel.call_deferred()   # deferred: the synchronous army spawn below blocks first
 
 	# Full-screen loading overlay for the whole import — visible above the (now hidden)
 	# import window and present even when the models are already cached. Model caching,
@@ -3874,6 +3911,52 @@ func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2,
 ## ============================================================================
 ## Deployment Zones (Visibility Only - Editing is in Map Tool)
 ## ============================================================================
+
+## Solo section in the left panel (goal 001, F3): one AI toggle per imported army, so the designation
+## can be changed after import (the import dialog's checkbox sets it up front). F11 plays the marked army.
+func _init_solo_panel() -> void:
+	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
+	if not left_panel_vbox:
+		return
+	solo_panel_box = VBoxContainer.new()
+	solo_panel_box.name = "SoloPanel"
+	left_panel_vbox.add_child(solo_panel_box)
+	_refresh_solo_panel()
+
+
+## Rebuild the Solo section: a header + one "AI plays P<n> — <army>" CheckButton per imported army.
+## Hidden entirely while no armies are imported.
+func _refresh_solo_panel() -> void:
+	if solo_panel_box == null or opr_army_manager == null:
+		return
+	for c in solo_panel_box.get_children():
+		c.queue_free()
+	var pids: Array = opr_army_manager.armies.keys()
+	pids.sort()
+	solo_panel_box.visible = not pids.is_empty()
+	if pids.is_empty():
+		return
+	var label := Label.new()
+	label.text = "Solo AI (F11):"
+	label.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
+	solo_panel_box.add_child(label)
+	for pid in pids:
+		var army = opr_army_manager.armies[pid]
+		var cb := CheckButton.new()
+		cb.text = "AI plays P%d — %s" % [int(pid), (str(army.name) if army != null else "Army")]
+		cb.button_pressed = solo_ai_slots.has(int(pid))
+		cb.focus_mode = Control.FOCUS_NONE
+		cb.add_theme_font_size_override("font_size", 12)
+		cb.toggled.connect(_on_solo_ai_toggled.bind(int(pid)))
+		solo_panel_box.add_child(cb)
+
+
+func _on_solo_ai_toggled(pressed: bool, player_id: int) -> void:
+	if pressed:
+		solo_ai_slots[player_id] = true
+	else:
+		solo_ai_slots.erase(player_id)
+
 
 ## Initialize deployment zones UI (simplified - only visibility toggle)
 ## NOTE: Deployment zone type selection and custom zone editing is now in Map Tool.
