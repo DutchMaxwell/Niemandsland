@@ -7,6 +7,11 @@ signal selection_changed(selected_objects: Array[Node3D])
 signal distance_changed(distance_inches: float, from_pos: Vector3, to_pos: Vector3)
 signal measurement_finished(distance_inches: float)
 signal drag_ended()
+## A drag actually MOVED objects (> 0.1"): one entry per moved object with its exact table positions —
+## {node: Node3D, from: Vector3, to: Vector3, inches: float}. Battle-Log seam today (main groups the
+## entries per unit for the log line); deliberately REPLAY-GRADE (from→to coordinates) so a future event
+## journal can record and play back full games (see ROADMAP: Game replay).
+signal selection_dropped(moves: Array)
 ## Emitted (throttled) while dragging, so listeners can refresh live feedback
 ## such as unit coherency without waiting for the drag to finish.
 signal drag_updated()
@@ -291,6 +296,14 @@ func _input(event: InputEvent) -> void:
 		# target (the D6 dead-button + vanishing-card bug). Generalises the former dice-tray-only guard.
 		# Motion still passes so camera drag over UI keeps working.
 		if _control_blocks_world_click(get_viewport().gui_get_hovered_control()):
+			return
+
+		# Also reject by the ACTUAL click position over the unit dock: the cached hover above goes stale the
+		# instant a card click collapses the strip, which otherwise let the click fall through to the table
+		# and open a box-select rubber-band (maintainer bug).
+		var main_node := get_node_or_null("/root/Main")
+		var dock_node = main_node.get("unit_dock") if main_node != null else null
+		if dock_node != null and dock_node.has_method("occludes_point") and dock_node.occludes_point(mouse_event.position):
 			return
 
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
@@ -1105,6 +1118,22 @@ func _stop_dragging() -> void:
 				var distance_inches = distance_m * METERS_TO_INCHES
 				if distance_inches > 0.1:  # Only emit if actually moved
 					distance_changed.emit(distance_inches, _drag_anchor_position, final_pos)
+
+		# Battle-Log / replay seam: every object that actually moved, with exact from→to table positions
+		# (y flattened to the table plane). Read from _drag_start_positions BEFORE it is cleared below.
+		var moves: Array = []
+		for obj in _selected_objects:
+			if not is_instance_valid(obj) or not _drag_start_positions.has(obj):
+				continue
+			var start: Vector3 = _drag_start_positions[obj]
+			var end: Vector3 = obj.global_position
+			start.y = 0.0
+			end.y = 0.0
+			var inches: float = start.distance_to(end) * METERS_TO_INCHES
+			if inches > 0.1:
+				moves.append({"node": obj, "from": start, "to": end, "inches": inches})
+		if not moves.is_empty():
+			selection_dropped.emit(moves)
 
 		drag_ended.emit()
 		AudioManager.play_sfx(AudioManager.SFXType.MODEL_PLACE)

@@ -373,7 +373,7 @@ func _refresh_remote_manifest() -> void:
 	var http := HTTPRequest.new()
 	http.timeout = REMOTE_MANIFEST_TIMEOUT_SEC
 	add_child(http)
-	if http.request(url) != OK:
+	if http.request(url, AssetCDN.headers("application/json")) != OK:   # honest product UA (bus 037)
 		http.queue_free()
 		return
 	var res: Array = await http.request_completed
