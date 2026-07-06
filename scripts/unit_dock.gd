@@ -23,7 +23,7 @@ const STRIP_FAN_ARC_PX := 6.0         # shallow vertical arc
 const STRIP_SIDE_MARGIN := 14         # the strip background hugs the fan + this margin (grows w/ card count)
 const PCARD_W := 320
 const PCARD_H := 188
-const PCARD_MAX_H := 460          # presented card auto-grows to fit weapons + a caster's spell list
+const PCARD_MAX_H := 640          # presented card auto-grows to fit weapons + a full caster spell list
 const GAP_ABOVE_TAB := 12
 const REFRESH_INTERVAL := 0.4
 
@@ -86,6 +86,9 @@ func _build_tab() -> void:
 	_tab.focus_mode = Control.FOCUS_NONE
 	_tab.mouse_filter = Control.MOUSE_FILTER_STOP
 	_tab.z_index = 20   # always above the strip cards so it stays clickable to collapse the dock
+	# Dark-grey panel like the other HUD boxes (was the transparent default theme — maintainer).
+	for state in ["normal", "hover", "pressed", "focus"]:
+		_tab.add_theme_stylebox_override(state, _panel_style())
 	_tab.pressed.connect(_toggle_dock)
 	add_child(_tab)
 
@@ -361,8 +364,7 @@ func _weapon_entry(w: OPRApiClient.OPRWeapon) -> Dictionary:
 		var ap := _ap_value(r)
 		if ap != "":
 			parts.append("AP%s" % ap)           # AP inline in the stat column, no parentheses
-		else:
-			named.append(r)
+		named.append(r)                          # AND list every rule (incl. AP) as a hoverable link (feedback)
 	return {
 		"name": count_str + w.name,
 		"meta": " ".join(parts),
@@ -413,7 +415,7 @@ func _fill_presented(unit: GameUnit) -> void:
 	_wire_rules_hover(content)   # bus 033: the focus card absorbs the old Info card's rule/spell tooltips
 	# Grow to fit the content (weapons + a caster's spell list), capped so it never runs off the top of
 	# the screen — a spell-heavy caster overran the old fixed cap and its spells spilled below the card.
-	var cap: float = minf(float(PCARD_MAX_H), get_viewport_rect().size.y * 0.72)
+	var cap: float = minf(float(PCARD_MAX_H), get_viewport_rect().size.y * 0.82)
 	var h: float = clampf(content.get_combined_minimum_size().y, float(PCARD_H), cap)
 	_presented.size = Vector2(PCARD_W, h)
 

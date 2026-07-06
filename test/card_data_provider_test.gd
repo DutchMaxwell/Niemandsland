@@ -81,17 +81,18 @@ func test_weapon_entry_format_melee_ranged_ap_and_named_rules() -> void:
 	assert_str(str(melee["meta"])).is_equal("A2")
 	assert_str(str(melee["rules"])).is_equal("")
 
-	# Ranged + AP → range, attacks, AP inline; rules empty (AP is a stat, not a named rule).
+	# Ranged + AP → range, attacks, AP inline in the stat AND listed as a hoverable rule (bus feedback).
 	var ranged: Dictionary = dock._weapon_entry(_weapon("Heavy Rifle", 30, 1, 1, ["AP(1)"]))
 	assert_str(str(ranged["meta"])).is_equal("30\" A1 AP1")
-	assert_str(str(ranged["rules"])).is_equal("")
+	assert_str(str(ranged["rules"])).is_equal("AP(1)")
 
 	# Melee + AP → no range, attacks, AP inline.
 	var melee_ap: Dictionary = dock._weapon_entry(_weapon("Great Weapon", 0, 2, 1, ["AP(2)"]))
 	assert_str(str(melee_ap["meta"])).is_equal("A2 AP2")
+	assert_str(str(melee_ap["rules"])).is_equal("AP(2)")
 
-	# Count prefix + AP inline + named rules split onto the cyan sub-line, AP excluded.
+	# Count prefix + AP inline in the stat + every rule (incl. AP) on the hoverable rule line.
 	var multi: Dictionary = dock._weapon_entry(_weapon("Daemon Claws", 0, 4, 2, ["AP(1)", "Counter", "Deadly(2)"]))
 	assert_str(str(multi["name"])).is_equal("2x Daemon Claws")
 	assert_str(str(multi["meta"])).is_equal("A4 AP1")
-	assert_str(str(multi["rules"])).is_equal("Counter, Deadly(2)")
+	assert_str(str(multi["rules"])).is_equal("AP(1), Counter, Deadly(2)")

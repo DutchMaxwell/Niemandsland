@@ -141,7 +141,7 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 ## are reliably picked (unlike the previous nested RichTextLabel meta_hover, which never fired in-game —
 ## Godot routes input to a scaled Control's nested RichText unreliably). Maintainer: hover must work.
 static func _rule_link(label: String, meta_key: String, color: Color, font_px: int) -> LinkButton:
-	var lb := LinkButton.new()
+	var lb := RuleLink.new()   # LinkButton subclass with a WORD-WRAPPING tooltip (bus feedback)
 	lb.text = label
 	lb.underline = LinkButton.UNDERLINE_MODE_ALWAYS
 	lb.focus_mode = Control.FOCUS_NONE
