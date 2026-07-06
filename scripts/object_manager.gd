@@ -7,9 +7,11 @@ signal selection_changed(selected_objects: Array[Node3D])
 signal distance_changed(distance_inches: float, from_pos: Vector3, to_pos: Vector3)
 signal measurement_finished(distance_inches: float)
 signal drag_ended()
-## A drag actually MOVED the selection (> 0.1"): the anchor object + the distance it travelled.
-## Battle-Log seam — main resolves the anchor to a unit name and logs the move.
-signal selection_dropped(anchor: Node3D, distance_inches: float)
+## A drag actually MOVED objects (> 0.1"): one entry per moved object with its exact table positions —
+## {node: Node3D, from: Vector3, to: Vector3, inches: float}. Battle-Log seam today (main groups the
+## entries per unit for the log line); deliberately REPLAY-GRADE (from→to coordinates) so a future event
+## journal can record and play back full games (see ROADMAP: Game replay).
+signal selection_dropped(moves: Array)
 ## Emitted (throttled) while dragging, so listeners can refresh live feedback
 ## such as unit coherency without waiting for the drag to finish.
 signal drag_updated()
@@ -1116,7 +1118,22 @@ func _stop_dragging() -> void:
 				var distance_inches = distance_m * METERS_TO_INCHES
 				if distance_inches > 0.1:  # Only emit if actually moved
 					distance_changed.emit(distance_inches, _drag_anchor_position, final_pos)
-					selection_dropped.emit(anchor, distance_inches)
+
+		# Battle-Log / replay seam: every object that actually moved, with exact from→to table positions
+		# (y flattened to the table plane). Read from _drag_start_positions BEFORE it is cleared below.
+		var moves: Array = []
+		for obj in _selected_objects:
+			if not is_instance_valid(obj) or not _drag_start_positions.has(obj):
+				continue
+			var start: Vector3 = _drag_start_positions[obj]
+			var end: Vector3 = obj.global_position
+			start.y = 0.0
+			end.y = 0.0
+			var inches: float = start.distance_to(end) * METERS_TO_INCHES
+			if inches > 0.1:
+				moves.append({"node": obj, "from": start, "to": end, "inches": inches})
+		if not moves.is_empty():
+			selection_dropped.emit(moves)
 
 		drag_ended.emit()
 		AudioManager.play_sfx(AudioManager.SFXType.MODEL_PLACE)

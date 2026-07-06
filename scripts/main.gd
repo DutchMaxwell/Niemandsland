@@ -1594,14 +1594,44 @@ func _on_battle_log_regiment_wounds(unit_name: String, delta: int, remaining: in
 		battle_log.log_event(BattleLog.Category.GENERAL, "%s heals %d wound%s (%d/%d)" % [unit_name, -delta, ("" if delta == -1 else "s"), remaining, pool])
 
 
-## A drag actually moved the selection: log it as a unit move when the anchor belongs to a unit
-## (models carry meta "game_unit"; a regiment moves as its tray). Terrain/props stay unlogged.
-func _on_battle_log_dropped(anchor: Node3D, distance_inches: float) -> void:
+## A drag moved objects: log ONE line per unit — the whole unit ("X moves 5\"") or, when only part of it
+## moved, which share ("X: 2 of 10 models move 3\"") — so multi-unit drags and single-model nudges read
+## correctly (maintainer). A regiment moves as its tray = always the whole unit. Terrain/props stay
+## unlogged. The seam's from→to coordinates are not displayed (noise) — they exist for the future
+## replay journal (ROADMAP: Game replay).
+func _on_battle_log_dropped(moves: Array) -> void:
 	if battle_log == null:
 		return
-	var unit_name := _battle_log_unit_name(anchor)
-	if not unit_name.is_empty():
-		battle_log.on_unit_moved(unit_name, distance_inches)
+	var per_unit := {}   # unit name -> {count, max_in, alive, whole}
+	for mv in moves:
+		var node: Node3D = mv.get("node")
+		var unit_name := _battle_log_unit_name(node)
+		if unit_name.is_empty():
+			continue
+		if not per_unit.has(unit_name):
+			per_unit[unit_name] = {"count": 0, "max_in": 0.0, "alive": _battle_log_unit_alive(node), "whole": false}
+		var e: Dictionary = per_unit[unit_name]
+		e["count"] = int(e["count"]) + 1
+		e["max_in"] = maxf(float(e["max_in"]), float(mv.get("inches", 0.0)))
+		if node is RegimentTray:
+			e["whole"] = true
+	for unit_name in per_unit:
+		var e: Dictionary = per_unit[unit_name]
+		var alive: int = int(e["alive"])
+		if bool(e["whole"]) or int(e["count"]) >= alive or alive <= 1:
+			battle_log.on_unit_moved(unit_name, float(e["max_in"]))
+		else:
+			battle_log.log_event(BattleLog.Category.MOVEMENT,
+				"%s: %d of %d models move %.0f\"" % [unit_name, int(e["count"]), alive, float(e["max_in"])])
+
+
+## Alive model count of the unit a node belongs to (denominator for partial-move lines).
+func _battle_log_unit_alive(node: Node3D) -> int:
+	if node != null and node.has_meta("game_unit"):
+		var gu = node.get_meta("game_unit")
+		if gu != null:
+			return gu.get_alive_count()
+	return 1
 
 
 func _battle_log_unit_name(node: Node3D) -> String:
