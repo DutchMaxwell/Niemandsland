@@ -11,7 +11,7 @@ extends Control
 
 const TAB_W := 168
 const TAB_H := 28
-const STRIP_H := 232           # taller: the strip shows the full CardFace now (bus 033)
+const STRIP_H := 256           # fits the tallest full-face card (240) so cards don't spill onto the tab
 const CARD_W := 196            # wider so the full face is legible in the strip
 const STRIP_CARD_H := 200      # min full-face card height in the strip (cards auto-grow to content)
 # Strip hand-fan tunables (bus 028): per-card rotation, edge cap, and horizontal overlap. Overlap
@@ -88,6 +88,7 @@ func _build_tab() -> void:
 	_tab.text = "▲  Units"
 	_tab.focus_mode = Control.FOCUS_NONE
 	_tab.mouse_filter = Control.MOUSE_FILTER_STOP
+	_tab.z_index = 20   # always above the strip cards so it stays clickable to collapse the dock
 	_tab.pressed.connect(_toggle_dock)
 	add_child(_tab)
 
@@ -120,7 +121,7 @@ func _build_presented() -> void:
 func _layout() -> void:
 	var vp := get_viewport_rect().size
 	if _tab != null:
-		_tab.position = Vector2(vp.x / 2.0 - TAB_W / 2.0, vp.y - TAB_H)
+		_tab.position = Vector2(vp.x / 2.0 - TAB_W / 2.0, _tab_target_y(_dock_open))
 	if _strip_panel != null:
 		_strip_panel.size = Vector2(vp.x, STRIP_H)
 		_strip_panel.position = Vector2(0, _strip_target_y(_dock_open))
@@ -134,6 +135,13 @@ func _strip_target_y(open: bool) -> float:
 	return (vp.y - STRIP_H - TAB_H) if open else vp.y
 
 
+## Where the ▲/▼ Units tab sits: at the screen bottom when closed, but ABOVE the open strip so the full-
+## face cards can never cover the collapse button (maintainer feedback).
+func _tab_target_y(open: bool) -> float:
+	var vp := get_viewport_rect().size
+	return (_strip_target_y(true) - TAB_H) if open else (vp.y - TAB_H)
+
+
 func _presented_rest_pos() -> Vector2:
 	var vp := get_viewport_rect().size
 	var h: float = _presented.size.y if _presented != null else float(PCARD_H)
@@ -145,8 +153,9 @@ func _presented_rest_pos() -> Vector2:
 func _toggle_dock() -> void:
 	_dock_open = not _dock_open
 	_tab.text = ("▼  Units" if _dock_open else "▲  Units")
-	var tw := create_tween()
+	var tw := create_tween().set_parallel(true)
 	tw.tween_property(_strip_panel, "position:y", _strip_target_y(_dock_open), 0.2).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(_tab, "position:y", _tab_target_y(_dock_open), 0.2).set_trans(Tween.TRANS_CUBIC)
 	if _dock_open:
 		_presented.visible = false
 	elif _presented_unit != null:
