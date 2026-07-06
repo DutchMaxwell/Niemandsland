@@ -56,7 +56,11 @@ func _ready() -> void:
 	_build_presented()
 	_click_defer_timer = Timer.new()
 	_click_defer_timer.one_shot = true
-	_click_defer_timer.wait_time = 0.25   # the double-click window; a lone single fires the present after it
+	# Must be LONGER than the OS double-click interval (~0.4 s): with a shorter window the single-click
+	# collapse fired BETWEEN the two clicks of a slow double-click — the second click then hit the table,
+	# deselected the unit and the card "jumped away" (maintainer). Selection itself is instant; only the
+	# collapse+present waits this window out.
+	_click_defer_timer.wait_time = 0.45
 	_click_defer_timer.timeout.connect(_on_click_defer_timeout)
 	add_child(_click_defer_timer)
 	resized.connect(_layout)
@@ -149,7 +153,10 @@ func _strip_target_y(open: bool) -> float:
 func occludes_point(gpos: Vector2) -> bool:
 	if _tab != null and _tab.visible and _tab.get_global_rect().has_point(gpos):
 		return true
-	if _strip_panel != null and _dock_open and _strip_panel.get_global_rect().has_point(gpos):
+	# Actual rect, NOT gated on _dock_open: while the strip tweens closed it is still on screen and must
+	# keep blocking table clicks — the second click of a double-click otherwise landed on the table and
+	# deselected the unit (the "card vanishes" gamble). Closed = fully offscreen = never contains a point.
+	if _strip_panel != null and _strip_panel.get_global_rect().has_point(gpos):
 		return true
 	if _presented != null and _presented.visible and _presented.get_global_rect().has_point(gpos):
 		return true
@@ -431,11 +438,26 @@ func _fill_presented(unit: GameUnit) -> void:
 	var content := CardFace.build_presented(data, _card_action)
 	_presented.set_content_node(content)
 	_wire_rules_hover(content)   # bus 033: the focus card absorbs the old Info card's rule/spell tooltips
-	# Grow to fit the content (weapons + a caster's spell list), capped so it never runs off the top of
-	# the screen — a spell-heavy caster overran the old fixed cap and its spells spilled below the card.
+	_resize_presented_to_fit(content)
+
+
+## Size the presented card to its content, bottom-anchored above the tab. The chip/rule/spell rows are
+## FLOW containers and the tooltip labels wrap, so their true height is only known AFTER laying out at
+## the card's width — a single pre-layout measure assumed one row and casters/heavily-equipped units
+## spilled out of the card (maintainer). Measure once for a rough fit, let the layout settle two frames,
+## then re-measure and re-seat the card.
+func _resize_presented_to_fit(content: Control) -> void:
 	var cap: float = minf(float(PCARD_MAX_H), get_viewport_rect().size.y * 0.82)
+	_presented.size = Vector2(PCARD_W, clampf(content.get_combined_minimum_size().y, float(PCARD_H), cap))
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if not is_instance_valid(content) or not content.is_inside_tree():
+		return   # card was rebuilt meanwhile — the newer pass sizes itself
 	var h: float = clampf(content.get_combined_minimum_size().y, float(PCARD_H), cap)
-	_presented.size = Vector2(PCARD_W, h)
+	if absf(h - _presented.size.y) > 1.0:
+		_presented.size = Vector2(PCARD_W, h)
+		if _presented.visible:
+			_presented.spring_to(_presented_rest_pos(), 0.0, 1.0)   # re-seat smoothly (no snap-jump mid-deal)
 
 
 func set_range_ring_controller(rrc: Node) -> void:
@@ -582,15 +604,16 @@ func _handle_card_click(event: InputEvent, unit: GameUnit, from_strip: bool) -> 
 		else:
 			_select_unit(unit)
 		return
-	# Strip card: DEFER the single-click so a double-click never fires the collapse first (the collapse
-	# used to expose the table between the two clicks, so the second click deselected and the card
-	# "disappeared" — maintainer). A double-click selects + focuses in one shot; a lone single presents
-	# after the double-click window.
+	# Strip card: select IMMEDIATELY (instant cyan feedback in the fan) but DEFER the collapse+present
+	# past the double-click window, so the strip never collapses between the two clicks of a double-click
+	# (that collapse exposed the table, the second click deselected, and the card "jumped away").
+	# A double-click cancels the pending single and does select + present + camera-focus in one shot.
 	if mb.double_click:
 		_click_defer_timer.stop()
 		_pending_click_unit = null
 		_activate_strip_card(unit, true)
 	else:
+		_select_unit(unit)
 		_pending_click_unit = unit
 		_click_defer_timer.start()
 
