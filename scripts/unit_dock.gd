@@ -313,6 +313,16 @@ func _is_coherent(unit: GameUnit) -> bool:
 ## Builds the plain data Dictionary CardFace renders (D8 bridge). Reuses the dock's existing accessors
 ## and the unit's OWN OPR source data for weapons/rules — the same aggregation the old UnitCard reads,
 ## NOT re-derived. Pure: no UI side effects.
+## True if the unit carries a Tough(X) rule (a single Tough model still tracks wounds → the wound window
+## is relevant even at one model).
+func _has_tough_rule(unit: GameUnit) -> bool:
+	for r in unit.get_special_rules():
+		var nm: String = str(r.get("name", "")) if r is Dictionary else str(r)
+		if nm.begins_with("Tough"):
+			return true
+	return false
+
+
 func _card_data(unit: GameUnit) -> Dictionary:
 	var alive: int = unit.get_alive_count()
 	var data: Dictionary = {
@@ -328,6 +338,7 @@ func _card_data(unit: GameUnit) -> Dictionary:
 		"caster": unit.is_caster(),
 		"coherent": _is_coherent(unit),
 		"dead": alive == 0,
+		"woundable": unit.models.size() > 1 or _has_tough_rule(unit),   # wound window applies (bus feedback)
 		"weapons": [],
 		"rules_list": [],
 		"spells": [],

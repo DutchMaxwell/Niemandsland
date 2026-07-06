@@ -23,7 +23,7 @@ const CHIP_OFF := Color(0.22, 0.26, 0.33)
 ## Presented card content (the big card). `on_action` (optional) is called with the action kind string
 ## ("activation"/"fatigued"/"shaken"/"casts"/"wounds"/"details"/"revive") when an action chip is pressed;
 ## the dock connects it to _card_action. Left empty in the dev preview so the chips are inert.
-static func build_presented(data: Dictionary, on_action: Callable = Callable(), include_actions: bool = true, collapse_weapons: bool = false) -> Control:
+static func build_presented(data: Dictionary, on_action: Callable = Callable(), collapse_weapons: bool = false) -> Control:
 	var margin := MarginContainer.new()
 	for s in ["left", "right", "top", "bottom"]:
 		margin.add_theme_constant_override("margin_" + s, 12)
@@ -59,14 +59,22 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 	stats.add_child(_label("%d/%d" % [alive, total], 18, counter_color))
 	col.add_child(stats)
 
-	# Status strip: lit/unlit chips.
-	var strip := HBoxContainer.new()
-	strip.add_theme_constant_override("separation", 6)
-	strip.add_child(_status_chip("Activated", bool(data.get("activated", false)), CYAN))
-	strip.add_child(_status_chip("Fatigued", bool(data.get("fatigued", false)), AMBER))
-	strip.add_child(_status_chip("Shaken", bool(data.get("shaken", false)), AMBER))
-	if bool(data.get("caster", false)):
-		strip.add_child(_status_chip("Caster", true, CYAN))
+	# Status strip: the chips ARE the controls now (the old ▶Act/~Fat/!Shk/✚Wnd bar is gone). On the
+	# presented card (on_action wired) a click toggles the state / opens the wound or cast window; strip
+	# cards get plain display chips. HFlow so extra chips wrap instead of overflowing the card width.
+	var strip := HFlowContainer.new()
+	strip.add_theme_constant_override("h_separation", 6)
+	strip.add_theme_constant_override("v_separation", 4)
+	if bool(data.get("dead", false)):
+		strip.add_child(_status_chip("↺ Revive", false, CYAN, on_action, "revive"))
+	else:
+		strip.add_child(_status_chip("Activated", bool(data.get("activated", false)), CYAN, on_action, "activation"))
+		strip.add_child(_status_chip("Fatigued", bool(data.get("fatigued", false)), AMBER, on_action, "fatigued"))
+		strip.add_child(_status_chip("Shaken", bool(data.get("shaken", false)), AMBER, on_action, "shaken"))
+		if bool(data.get("caster", false)):
+			strip.add_child(_status_chip("Caster", true, CYAN, on_action, "casts"))
+		if bool(data.get("woundable", false)):
+			strip.add_child(_status_chip("✚ Wounds", false, AMBER, on_action, "wounds"))
 	col.add_child(strip)
 
 	# Weapons block — one line per distinct weapon (name+count · RNG A· AP·), special rules on a small
@@ -110,24 +118,7 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 	if not bool(data.get("coherent", true)) and not bool(data.get("dead", false)):
 		col.add_child(_warning_strip("⚠  Out of coherency"))
 
-	# Action bar — presented/focus card only (strip cards omit it via include_actions=false). No Info
-	# button: the rules list above replaces the old detail card.
-	if include_actions:
-		var pad := Control.new()
-		pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		col.add_child(pad)
-		var actions := HBoxContainer.new()
-		actions.add_theme_constant_override("separation", 4)
-		if bool(data.get("dead", false)):
-			actions.add_child(_action_btn("↺", "Revive", "revive", on_action))
-		else:
-			actions.add_child(_action_btn("▶", "Act", "activation", on_action))
-			actions.add_child(_action_btn("~", "Fat", "fatigued", on_action))
-			actions.add_child(_action_btn("!", "Shk", "shaken", on_action))
-			if bool(data.get("caster", false)):
-				actions.add_child(_action_btn("✦", "Cast", "casts", on_action))
-			actions.add_child(_action_btn("✚", "Wnd", "wounds", on_action))
-		col.add_child(actions)
+	# (The old action bar is gone — its controls moved onto the interactive status chips above.)
 
 	return margin
 
@@ -216,22 +207,6 @@ static func _fit_name(text: String, size_big: int, size_small: int, max_chars: i
 
 ## Compact icon+label action button with hover state (chip-styled), part of the presented-card design.
 ## When pressed, calls `on_action.call(kind)` (if valid) so the dock routes it to _card_action.
-static func _action_btn(icon: String, label: String, kind: String, on_action: Callable) -> Button:
-	var b := Button.new()
-	b.text = "%s %s" % [icon, label]
-	b.focus_mode = Control.FOCUS_NONE
-	b.mouse_filter = Control.MOUSE_FILTER_STOP
-	b.add_theme_font_size_override("font_size", 11)
-	b.add_theme_color_override("font_color", TEXT)
-	b.add_theme_color_override("font_hover_color", CYAN)
-	b.add_theme_stylebox_override("normal", _chip_style(NAVY_HI, CYAN))
-	b.add_theme_stylebox_override("hover", _chip_style(Color(CYAN.r, CYAN.g, CYAN.b, 0.22), CYAN))
-	b.add_theme_stylebox_override("pressed", _chip_style(NAVY, CYAN))
-	if on_action.is_valid():
-		b.pressed.connect(func() -> void: on_action.call(kind))
-	return b
-
-
 static func _rule(color: Color, alpha: float = 0.55, height: float = 2.0) -> Control:
 	var r := ColorRect.new()
 	r.color = Color(color.r, color.g, color.b, alpha)
@@ -253,12 +228,28 @@ static func _die_chip(glyph: String, value: String) -> Control:
 	return box
 
 
-static func _status_chip(text: String, lit: bool, lit_color: Color) -> Control:
-	var box := PanelContainer.new()
-	box.add_theme_stylebox_override("panel", _chip_style(NAVY_HI if lit else NAVY, lit_color if lit else CHIP_OFF))
-	var l := _label(text, 11, (lit_color if lit else TEXT_DIM))
-	box.add_child(l)
-	return box
+## A status chip. On the presented card it is CLICKABLE (on_action wired + a kind): clicking toggles the
+## state / opens the wound or cast window — the chips ARE the controls now, the old action bar is gone
+## (maintainer). On strip cards (no on_action) it is a plain lit/unlit display chip.
+static func _status_chip(text: String, lit: bool, lit_color: Color, on_action: Callable = Callable(), kind: String = "") -> Control:
+	if not (on_action.is_valid() and not kind.is_empty()):
+		var box := PanelContainer.new()
+		box.add_theme_stylebox_override("panel", _chip_style(NAVY_HI if lit else NAVY, lit_color if lit else CHIP_OFF))
+		box.add_child(_label(text, 11, (lit_color if lit else TEXT_DIM)))
+		return box
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	b.add_theme_font_size_override("font_size", 11)
+	b.add_theme_color_override("font_color", lit_color if lit else TEXT_DIM)
+	b.add_theme_color_override("font_hover_color", lit_color)
+	b.add_theme_color_override("font_pressed_color", lit_color)
+	b.add_theme_stylebox_override("normal", _chip_style(NAVY_HI if lit else NAVY, lit_color if lit else CHIP_OFF))
+	b.add_theme_stylebox_override("hover", _chip_style(Color(lit_color.r, lit_color.g, lit_color.b, 0.22), lit_color))
+	b.add_theme_stylebox_override("pressed", _chip_style(NAVY, lit_color))
+	b.pressed.connect(func() -> void: on_action.call(kind))
+	return b
 
 
 
