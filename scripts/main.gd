@@ -119,6 +119,7 @@ var _movement_cap_buttons: Dictionary = {}  # MovementCap mode -> Button (the "M
 # Success evaluation + rerolls (display-only aids; the rules live in DiceRules).
 var _success_target: int = DiceRules.TARGET_NONE
 var _success_modifier: int = 0
+var _next_roll_owner: String = ""   # attribution for the next tray roll ("AI (…)"); empty = "You" (goal 001)
 var _target_buttons: Array[Button] = []
 var _modifier_value_label: Label = null
 var _reroll_buttons: Dictionary = {}  # Dictionary[DiceRules.RerollMode, Button]
@@ -641,6 +642,14 @@ func _run_solo_ai_turn() -> void:
 				positions.append((m.node as Node3D).global_position)
 		if not positions.is_empty():
 			camera_pivot.focus_on(MoveIntent.anchor_of(positions))
+	# Narrate the decision + resolve shooting (goal 001 P3).
+	var report: Dictionary = solo_controller.last_report
+	var target: GameUnit = report.get("target")
+	if battle_log != null and target != null:
+		battle_log.log_event(BattleLog.Category.MOVEMENT, "%s %s (→ %s)" % [
+			unit.get_name(), AiDecision.action_name(int(report.get("action", 0))), target.get_name()], true)
+	if bool(report.get("can_shoot", false)):
+		await _run_ai_shooting(report)
 
 
 ## The slot the Solo AI plays: the first designated army, else player 2 (M1 default).
@@ -661,6 +670,11 @@ func _ensure_solo_controller() -> void:
 		add_child(solo_controller)
 		var human_slot: int = 1 if ai_slot != 1 else 2
 		solo_controller.setup(opr_army_manager, network_manager, movement_range_controller, human_slot, ai_slot)
+		# Terrain line of sight for the shooting decision (unit-blocking LoS is a later refinement).
+		solo_controller.los_checker = func(from_pos: Vector3, to_pos: Vector3) -> bool:
+			if terrain_overlay == null or not terrain_overlay.has_method("has_line_of_sight"):
+				return true
+			return terrain_overlay.has_line_of_sight(from_pos, to_pos, 1, 1)
 
 
 ## "Deploy AI army" (goal 001 P2b): run the official OPR AI deployment for the designated army — the
@@ -698,6 +712,106 @@ func _on_solo_deploy_pressed() -> void:
 	if battle_log != null:
 		var reserve_note: String = (" (%d in reserve)" % int(res.reserved)) if int(res.reserved) > 0 else ""
 		battle_log.log_event(BattleLog.Category.GENERAL, "AI deploys %d units%s [seed %d]" % [int(res.deployed), reserve_note, seed_value], true)
+
+
+## Resolve the AI's shooting (goal 001 P3): per ranged profile in range the AI rolls REAL to-hit dice in
+## the tray (locked decision — visible physical rolls, logged as the AI); the HUMAN then rolls saves via
+## a prompt with an auto-roll button; wounds go through the existing wound/kill flows.
+func _run_ai_shooting(report: Dictionary) -> void:
+	var unit: GameUnit = report.get("unit")
+	var target: GameUnit = report.get("target")
+	if unit == null or target == null or dice_roller_control == null:
+		return
+	var weapons: Array = []
+	if unit.source_type == "opr" and unit.source_data is OPRApiClient.OPRUnit:
+		weapons = (unit.source_data as OPRApiClient.OPRUnit).weapons
+	var profiles: Array = AiShooting.profiles_in_range(weapons, float(report.get("dist_in", INF)))
+	if profiles.is_empty():
+		return
+	var quality: int = unit.get_quality()
+	var defense: int = target.get_defense()
+	var total_wounds := 0
+	for p in profiles:
+		var profile := p as Dictionary
+		var attacks: int = int(profile.get("attacks", 0))
+		var ap: int = int(profile.get("ap", 0))
+		var faces: Array = await _solo_tray_roll(attacks, quality, "AI (%s)" % unit.get_name())
+		var hits: int = AiCombatMath.count_hits(faces, quality)
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s — %d hit%s" % [
+				unit.get_name(), str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")], true)
+		if hits <= 0:
+			continue
+		var save_faces: Array = await _solo_prompt_saves(unit, target, str(profile.get("name", "?")), hits, defense, ap)
+		total_wounds += AiCombatMath.wounds(hits, save_faces, defense, ap)
+	if total_wounds > 0:
+		_solo_apply_wounds(target, total_wounds)
+
+
+## One attributed roll in the real dice tray: set count + success target, roll, await, read the faces,
+## then restore the player's previous tray settings.
+func _solo_tray_roll(count: int, success_target: int, owner: String) -> Array:
+	var prev_count := _dice_count
+	var prev_target := _success_target
+	var prev_modifier := _success_modifier
+	_dice_count = count
+	_update_dice_set(count)
+	_success_target = success_target
+	_success_modifier = 0
+	_next_roll_owner = owner
+	dice_roller_control.roll()
+	await dice_roller_control.roll_finnished
+	var faces: Array = _faces_in_order(dice_roller_control.per_dice_result())
+	_dice_count = prev_count
+	_update_dice_set(prev_count)
+	_success_target = prev_target
+	_success_modifier = prev_modifier
+	return faces
+
+
+## Save prompt (locked decision: prompt + auto-roll for speed): the human confirms and their save dice
+## roll in the tray, attributed to "You". Returns the rolled faces.
+func _solo_prompt_saves(attacker: GameUnit, target: GameUnit, weapon_name: String, hits: int, defense: int, ap: int) -> Array:
+	var dlg := ConfirmationDialog.new()
+	dlg.title = "Incoming fire!"
+	var ap_note: String = (" (AP %d → save on %d+)" % [ap, defense + ap]) if ap > 0 else " (save on %d+)" % defense
+	dlg.dialog_text = "%s hits %s %d time%s with %s.\nRoll your defense saves%s." % [
+		attacker.get_name(), target.get_name(), hits, ("" if hits == 1 else "s"), weapon_name, ap_note]
+	dlg.ok_button_text = "Roll %d save%s" % [hits, ("" if hits == 1 else "s")]
+	dlg.get_cancel_button().hide()   # saves are not optional — one clear action
+	add_child(dlg)
+	dlg.popup_centered()
+	await dlg.confirmed
+	dlg.queue_free()
+	return await _solo_tray_roll(hits, defense + ap, "You")
+
+
+## Apply shooting wounds through the EXISTING flows so parking, battle log and MP sync keep working:
+## regiments take pooled wounds; loose units lose whole models back-rank-first (defender-optimal
+## default), Tough models absorb wounds before dying.
+func _solo_apply_wounds(target: GameUnit, wounds: int) -> void:
+	if wounds <= 0 or opr_army_manager == null:
+		return
+	if opr_army_manager.regiments.has(target.unit_id):
+		var reg = opr_army_manager.regiments[target.unit_id]
+		if reg != null:
+			opr_army_manager.apply_regiment_wounds(reg, reg.wounds_taken + wounds)
+			return
+	var pid: int = int(target.unit_properties.get("player_id", 1))
+	var remaining := wounds
+	for i in range(target.models.size() - 1, -1, -1):
+		if remaining <= 0:
+			break
+		var m: ModelInstance = target.models[i]
+		if m == null or not m.is_alive:
+			continue
+		while remaining > 0 and m.is_alive:
+			var died: bool = m.apply_damage(1)
+			remaining -= 1
+			if died and m.node != null and is_instance_valid(m.node):
+				opr_army_manager.set_loose_model_dead(m.node, pid, true, target.unit_id)
+	if battle_log != null:
+		battle_log.on_wounds(target.get_name(), wounds, target.get_alive_count(), target.models.size())
 
 
 func _capture_bug_report() -> void:
@@ -1276,7 +1390,10 @@ func _on_roller_finished(_total: int) -> void:
 		_is_showing_remote_roll = false
 		return
 
-	_add_dice_log_entry("You", faces, context, color_tags)
+	# Solo (goal 001): an AI-triggered tray roll is attributed to the AI in the logs, not to "You".
+	var roller_name := _next_roll_owner if not _next_roll_owner.is_empty() else "You"
+	_next_roll_owner = ""
+	_add_dice_log_entry(roller_name, faces, context, color_tags)
 
 	# Broadcast dice roll (faces + evaluation context + per-die colour tags) to remote players,
 	# so the mirrored result keeps the sender's colours.
