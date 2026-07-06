@@ -363,10 +363,19 @@ func _card_data(unit: GameUnit) -> Dictionary:
 	if opr != null:
 		for w: OPRApiClient.OPRWeapon in opr.weapons:
 			data["weapons"].append(_weapon_entry(w))
-	# rules_list: normalized special-rule names — each is a hover target on the card (bus 033).
+	# rules_list: normalized special-rule names — each is a hover target on the card (bus 033). A rule an
+	# item GRANTS (Combat Shield → Shielded) is reached through the item's tooltip cascade, not listed as
+	# a flat sibling; duplicates are collapsed (an item name can sit in both equipment + special_rules).
+	var unit_grants := _item_grants_of(unit)
+	var granted_by_item := {}
+	for it in unit_grants:
+		for g in unit_grants[it]:
+			granted_by_item[str(g)] = true
+	var seen_rules := {}
 	for r in unit.get_special_rules():
 		var nm: String = str(r.get("name", "")) if r is Dictionary else str(r)
-		if not nm.is_empty():
+		if not nm.is_empty() and not granted_by_item.has(nm) and not seen_rules.has(nm):
+			seen_rules[nm] = true
 			data["rules_list"].append(nm)
 	# spells (casters): {name, threshold, effect} from the army glossary, for the hoverable spell list.
 	if unit.is_caster() and army_manager != null and army_manager.has_method("get_spells_for_unit"):
@@ -481,14 +490,59 @@ func _wire_rules_hover(content: Control) -> void:
 			lb.mouse_exited.connect(_clear_spell_ring)
 
 
-## Plain-text rule/spell description for a LinkButton's built-in tooltip ("Fearless — When taking a …").
+## Plain-text rule/spell description for a link's wrapping tooltip, WITH the old UnitCard's cascades
+## (ported, issue #74): a spell/rule whose text references another known rule (e.g. a spell granting
+## Blast(3)) appends that rule's description too, and an ITEM entry shows the rule(s) it grants instead
+## of its own (usually empty) description.
 func _rule_description(meta_key: String) -> String:
 	var title := meta_key.trim_prefix("spell:")
 	if army_manager == null:
 		return title
-	var desc: String = _spell_effect(title) if meta_key.begins_with("spell:") else str(army_manager.get_rule_description(meta_key))
-	desc = desc.strip_edges()
-	return "%s — %s" % [title, desc] if not desc.is_empty() else title
+	var grants := _item_grants_of(_presented_unit)
+	var out: String
+	if meta_key.begins_with("spell:"):
+		var effect := _spell_effect(title).strip_edges()
+		out = "%s — %s" % [title, effect] if not effect.is_empty() else title
+		out += _referenced_rules_text(effect, "")
+	elif grants.has(title):
+		out = "%s — grants:" % title
+		for g in grants[title]:
+			var gd := str(army_manager.get_rule_description(str(g))).strip_edges()
+			out += "\n\n%s — %s" % [str(g), gd if not gd.is_empty() else "(no description)"]
+	else:
+		var desc := str(army_manager.get_rule_description(meta_key)).strip_edges()
+		out = "%s — %s" % [title, desc] if not desc.is_empty() else title
+		out += _referenced_rules_text(desc, title)
+	return out
+
+
+## For each OTHER known rule named in `text`, append its name + description — so an Aura / spell / rule
+## that references another rule (Blast, Poison, …) reveals that rule's explanation in the same tooltip.
+## `exclude` (and its parameterless base) is the hovered entry itself, skipped so it is not repeated.
+func _referenced_rules_text(text: String, exclude: String) -> String:
+	if text.is_empty() or not army_manager.has_method("rules_referenced_in"):
+		return ""
+	var paren := exclude.find("(")
+	var base := exclude.substr(0, paren).strip_edges() if paren > 0 else exclude
+	var out := ""
+	for r in army_manager.rules_referenced_in(text):
+		var rname := str(r)
+		if rname == exclude or rname == base:
+			continue
+		var d := str(army_manager.get_rule_description(rname)).strip_edges()
+		if not d.is_empty():
+			out += "\n\n%s — %s" % [rname, d]
+	return out
+
+
+## item → granted rules for a unit, read from unit_properties so the cascade survives save/load + MP
+## sync (a synced unit may not carry the live OPRUnit object). Ported from the old card.
+func _item_grants_of(unit: GameUnit) -> Dictionary:
+	if unit != null and unit.unit_properties is Dictionary:
+		var g: Variant = unit.unit_properties.get("item_grants", {})
+		if g is Dictionary:
+			return g
+	return {}
 
 
 func _spell_effect(spell_name: String) -> String:
