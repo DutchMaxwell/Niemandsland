@@ -13,6 +13,9 @@ signal loose_model_dead_changed(node: Node3D, dead: bool)
 ## Fired when the round counter advances (single seam for the Battle Log — both the local Next-Round path
 ## via advance_round() and the remote round-advance apply via set_current_round() go through here).
 signal round_advanced(round_number: int)
+## Pooled regiment wounds changed (single Battle-Log seam — local radial/card edits AND the remote apply
+## both run through apply_regiment_wounds). delta is negative when wounds were healed.
+signal regiment_wounds_applied(unit_name: String, delta: int, remaining: int, pool: int)
 
 ## Player colors for army identification
 const PLAYER_COLORS = {
@@ -776,6 +779,7 @@ func apply_regiment_wounds(regiment: Regiment, wounds_taken: int) -> void:
 	var toughs := _regiment_toughs(gu)
 	var pool := Regiment.pool_max(toughs)
 	var taken := clampi(wounds_taken, 0, pool)
+	var taken_before := regiment.wounds_taken
 	regiment.wounds_taken = taken
 	gu.unit_properties["regiment_wounds_taken"] = taken
 	var mask := Regiment.alive_mask_for_wounds(toughs, taken)
@@ -798,6 +802,8 @@ func apply_regiment_wounds(regiment: Regiment, wounds_taken: int) -> void:
 		radial_menu_controller.update_regiment_wound_token(gu, taken)
 	if network_manager != null and network_manager.is_multiplayer_active():
 		network_manager.broadcast_regiment_wounds(gu.unit_id, taken)
+	if taken != taken_before:
+		regiment_wounds_applied.emit(gu.get_name(), taken - taken_before, pool - taken, pool)
 
 
 ## Take one casualty on the selected regiment (wounds_taken += 1). Clamped to the
