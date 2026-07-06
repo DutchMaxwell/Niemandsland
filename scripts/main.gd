@@ -747,30 +747,60 @@ func _run_ai_shooting(report: Dictionary) -> void:
 	var target: GameUnit = report.get("target")
 	if unit == null or target == null or dice_roller_control == null:
 		return
-	var weapons: Array = []
-	if unit.source_type == "opr" and unit.source_data is OPRApiClient.OPRUnit:
-		weapons = (unit.source_data as OPRApiClient.OPRUnit).weapons
-	var profiles: Array = AiShooting.profiles_in_range(weapons, float(report.get("dist_in", INF)))
-	if profiles.is_empty():
+	var groups: Array = _solo_attack_groups(unit, float(report.get("dist_in", INF)), false)
+	if groups.is_empty():
 		return
-	var quality: int = unit.get_quality()
-	var defense: int = target.get_defense()
+	var defense: int = target.get_defense()   # majority defense v1 (documented; per-model saves later)
 	var total_wounds := 0
-	for p in profiles:
-		var profile := p as Dictionary
-		var attacks: int = int(profile.get("attacks", 0))
-		var ap: int = int(profile.get("ap", 0))
-		var faces: Array = await _solo_tray_roll(attacks, quality, "AI (%s)" % unit.get_name())
-		var hits: int = AiCombatMath.count_hits(faces, quality)
-		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s — %d hit%s" % [
-				unit.get_name(), str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")], true)
-		if hits <= 0:
-			continue
-		var save_faces: Array = await _solo_prompt_saves(unit, target, str(profile.get("name", "?")), hits, defense, ap)
-		total_wounds += AiCombatMath.wounds(hits, save_faces, defense, ap)
+	for grp in groups:
+		var group := grp as Dictionary
+		var quality: int = int(group.get("quality", 4))
+		for p in group.get("profiles", []):
+			var profile := p as Dictionary
+			var attacks: int = int(profile.get("attacks", 0))
+			var ap: int = int(profile.get("ap", 0))
+			var faces: Array = await _solo_tray_roll(attacks, quality, "AI (%s)" % str(group.get("name", "?")))
+			var hits: int = AiCombatMath.count_hits(faces, quality)
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s — %d hit%s" % [
+					str(group.get("name", "?")), str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")], true)
+			if hits <= 0:
+				continue
+			var save_faces: Array = await _solo_prompt_saves(unit, target, str(profile.get("name", "?")), hits, defense, ap)
+			total_wounds += AiCombatMath.wounds(hits, save_faces, defense, ap)
 	if total_wounds > 0:
 		_solo_apply_wounds(target, total_wounds)
+
+
+## Weapon groups for a combat activation: the unit's own profiles at its Quality PLUS each attached
+## hero's profiles at the hero's Quality — a joined hero fights WITH its unit (field-test lock).
+func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool) -> Array:
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	var groups: Array = []
+	for m in members:
+		var member := m as GameUnit
+		if member == null or member.get_alive_count() == 0:
+			continue
+		var weapons: Array = []
+		if member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
+			weapons = (member.source_data as OPRApiClient.OPRUnit).weapons
+		var profiles: Array = AiShooting.melee_profiles(weapons) if melee else AiShooting.profiles_in_range(weapons, dist_in)
+		if not profiles.is_empty():
+			groups.append({"name": member.get_name(), "quality": member.get_quality(),
+				"fatigued": member.is_fatigued, "profiles": profiles})
+	return groups
+
+
+## Alive models of the unit INCLUDING its attached heroes (a unit is destroyed only when both are gone).
+func _solo_combined_alive(unit: GameUnit) -> int:
+	var n: int = unit.get_alive_count()
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			if h != null:
+				n += h.get_alive_count()
+	return n
 
 
 ## One attributed roll in the real dice tray: set count + success target, roll, await, read the faces,
@@ -829,32 +859,28 @@ func _run_ai_melee(report: Dictionary) -> void:
 		return
 	var ai_dealt := 0
 	var human_dealt := 0
-	# — AI strikes —
-	var ai_weapons: Array = []
-	if unit.source_type == "opr" and unit.source_data is OPRApiClient.OPRUnit:
-		ai_weapons = (unit.source_data as OPRApiClient.OPRUnit).weapons
-	for p in AiShooting.melee_profiles(ai_weapons):
-		var profile := p as Dictionary
-		var to_hit: int = 6 if unit.is_fatigued else unit.get_quality()
-		var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "AI (%s)" % unit.get_name())
-		var hits: int = AiCombatMath.count_hits(faces, to_hit)
-		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s strikes with %s — %d hit%s" % [
-				unit.get_name(), str(profile.get("name", "?")), hits, ("" if hits == 1 else "s")], true)
-		if hits <= 0:
-			continue
-		var save_faces: Array = await _solo_prompt_saves(unit, target, str(profile.get("name", "?")), hits, target.get_defense(), int(profile.get("ap", 0)))
-		ai_dealt += AiCombatMath.wounds(hits, save_faces, target.get_defense(), int(profile.get("ap", 0)))
+	# — AI strikes (unit + attached heroes, each at its own Quality/fatigue) —
+	for grp in _solo_attack_groups(unit, 0.0, true):
+		var group := grp as Dictionary
+		var to_hit: int = 6 if bool(group.get("fatigued", false)) else int(group.get("quality", 4))
+		for p in group.get("profiles", []):
+			var profile := p as Dictionary
+			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "AI (%s)" % str(group.get("name", "?")))
+			var hits: int = AiCombatMath.count_hits(faces, to_hit)
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s strikes with %s — %d hit%s" % [
+					str(group.get("name", "?")), str(profile.get("name", "?")), hits, ("" if hits == 1 else "s")], true)
+			if hits <= 0:
+				continue
+			var save_faces: Array = await _solo_prompt_saves(unit, target, str(profile.get("name", "?")), hits, target.get_defense(), int(profile.get("ap", 0)))
+			ai_dealt += AiCombatMath.wounds(hits, save_faces, target.get_defense(), int(profile.get("ap", 0)))
 	if ai_dealt > 0:
 		_solo_apply_wounds(target, ai_dealt)
 	_solo_set_fatigued(unit)
-	# — Strike back (the human's choice; OPR lets the defender strike back) —
-	if target.get_alive_count() > 0:
-		var target_weapons: Array = []
-		if target.source_type == "opr" and target.source_data is OPRApiClient.OPRUnit:
-			target_weapons = (target.source_data as OPRApiClient.OPRUnit).weapons
-		var back_profiles := AiShooting.melee_profiles(target_weapons)
-		if not back_profiles.is_empty():
+	# — Strike back (the human's choice; OPR lets the defender strike back — unit + attached heroes) —
+	if _solo_combined_alive(target) > 0:
+		var back_groups := _solo_attack_groups(target, 0.0, true)
+		if not back_groups.is_empty():
 			var dlg := ConfirmationDialog.new()
 			dlg.title = "Strike back?"
 			dlg.dialog_text = "%s is in melee with %s.\nStrike back?" % [target.get_name(), unit.get_name()]
@@ -867,22 +893,24 @@ func _run_ai_melee(report: Dictionary) -> void:
 			await dlg.visibility_changed   # closes on either button
 			dlg.queue_free()
 			if strike:
-				for p in back_profiles:
-					var profile := p as Dictionary
-					var to_hit: int = 6 if target.is_fatigued else target.get_quality()
-					var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You")
-					var hits: int = AiCombatMath.count_hits(faces, to_hit)
-					if hits <= 0:
-						continue
-					var save_faces: Array = await _solo_tray_roll(hits, unit.get_defense() + int(profile.get("ap", 0)), "AI (%s)" % unit.get_name())
-					human_dealt += AiCombatMath.wounds(hits, save_faces, unit.get_defense(), int(profile.get("ap", 0)))
+				for bgrp in back_groups:
+					var bgroup := bgrp as Dictionary
+					var to_hit: int = 6 if bool(bgroup.get("fatigued", false)) else int(bgroup.get("quality", 4))
+					for p in bgroup.get("profiles", []):
+						var profile := p as Dictionary
+						var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You")
+						var hits: int = AiCombatMath.count_hits(faces, to_hit)
+						if hits <= 0:
+							continue
+						var save_faces: Array = await _solo_tray_roll(hits, unit.get_defense() + int(profile.get("ap", 0)), "AI (%s)" % unit.get_name())
+						human_dealt += AiCombatMath.wounds(hits, save_faces, unit.get_defense(), int(profile.get("ap", 0)))
 				if human_dealt > 0:
 					_solo_apply_wounds(unit, human_dealt)
 				_solo_set_fatigued(target)
 	# — Morale: the side that took MORE wounds tests (tie = nobody) —
-	if ai_dealt > human_dealt and target.get_alive_count() > 0:
+	if ai_dealt > human_dealt and _solo_combined_alive(target) > 0:
 		await _solo_morale_test(target, "You")
-	elif human_dealt > ai_dealt and unit.get_alive_count() > 0:
+	elif human_dealt > ai_dealt and _solo_combined_alive(unit) > 0:
 		await _solo_morale_test(unit, "AI (%s)" % unit.get_name())
 
 
@@ -909,10 +937,17 @@ func _solo_morale_test(unit: GameUnit, owner: String) -> void:
 			_solo_apply_wounds(unit, unit.models.size() * 12)   # overkill wipes the unit via the normal flows
 
 
-## Mark a unit Fatigued after its first melee this round (state + marker + broadcast via the radial seam).
+## Mark a unit (and its attached heroes — they fought too) Fatigued after its first melee this round
+## (state + marker + broadcast via the radial seam).
 func _solo_set_fatigued(unit: GameUnit) -> void:
-	if unit != null and not unit.is_fatigued and radial_menu_controller != null:
+	if unit == null or radial_menu_controller == null:
+		return
+	if not unit.is_fatigued:
 		radial_menu_controller.card_toggle_fatigued(unit)
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			if h != null and not h.is_fatigued:
+				radial_menu_controller.card_toggle_fatigued(h)
 
 
 ## Apply shooting wounds through the EXISTING flows so parking, battle log and MP sync keep working:
@@ -927,20 +962,34 @@ func _solo_apply_wounds(target: GameUnit, wounds: int) -> void:
 			opr_army_manager.apply_regiment_wounds(reg, reg.wounds_taken + wounds)
 			return
 	var pid: int = int(target.unit_properties.get("player_id", 1))
+	var remaining := _solo_wound_models(target, wounds, pid)
+	# A joined hero is part of the unit and takes wounds LAST (defender-optimal, field-test lock).
+	if remaining > 0 and target.has_method("get_attached_heroes"):
+		for h in target.get_attached_heroes():
+			if remaining <= 0:
+				break
+			if h != null:
+				remaining = _solo_wound_models(h, remaining, pid)
+	if battle_log != null:
+		battle_log.on_wounds(target.get_name(), wounds, _solo_combined_alive(target), target.models.size())
+
+
+## Apply up to `wounds` to a unit's models back-rank-first (Tough absorbs before dying); returns the
+## wounds left over (spill into an attached hero handled by the caller).
+func _solo_wound_models(unit: GameUnit, wounds: int, pid: int) -> int:
 	var remaining := wounds
-	for i in range(target.models.size() - 1, -1, -1):
+	for i in range(unit.models.size() - 1, -1, -1):
 		if remaining <= 0:
 			break
-		var m: ModelInstance = target.models[i]
+		var m: ModelInstance = unit.models[i]
 		if m == null or not m.is_alive:
 			continue
 		while remaining > 0 and m.is_alive:
 			var died: bool = m.apply_damage(1)
 			remaining -= 1
 			if died and m.node != null and is_instance_valid(m.node):
-				opr_army_manager.set_loose_model_dead(m.node, pid, true, target.unit_id)
-	if battle_log != null:
-		battle_log.on_wounds(target.get_name(), wounds, target.get_alive_count(), target.models.size())
+				opr_army_manager.set_loose_model_dead(m.node, pid, true, unit.unit_id)
+	return remaining
 
 
 func _capture_bug_report() -> void:
