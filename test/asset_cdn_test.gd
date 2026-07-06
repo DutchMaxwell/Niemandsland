@@ -29,6 +29,29 @@ func test_host_carries_no_trailing_slash() -> void:
 	assert_bool(AssetCDN.HOST.ends_with("/")).is_false()
 
 
+# ===== request headers (bus 037: honest product UA so Cloudflare doesn't bot-challenge us) =====
+
+
+func test_user_agent_is_honest_product_string() -> void:
+	var ua := AssetCDN.user_agent()
+	# Product UA — NOT a fake Mozilla string; carries the real version + OS + engine.
+	assert_str(ua).starts_with("Niemandsland/")
+	assert_bool(ua.contains(OS.get_name())).is_true()
+	assert_bool(ua.contains("Godot 4.6")).is_true()
+	assert_bool(ua.to_lower().contains("mozilla")).is_false()
+
+
+func test_headers_carry_ua_and_accept() -> void:
+	var h := AssetCDN.headers("application/json")
+	assert_int(h.size()).is_equal(2)
+	assert_str(h[0]).starts_with("User-Agent: Niemandsland/")
+	assert_str(h[1]).is_equal("Accept: application/json")
+
+
+func test_headers_default_accept_is_wildcard() -> void:
+	assert_str(AssetCDN.headers()[1]).is_equal("Accept: */*")
+
+
 # ===== end-to-end through a library =====
 
 

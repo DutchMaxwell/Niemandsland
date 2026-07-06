@@ -187,7 +187,7 @@ var opr_stats_tooltip: OPRStatsTooltip = null
 var unit_card: UnitCard = null
 var unit_dock: UnitDock = null
 var battle_log: BattleLog = null              # narrative event log (collector)
-var battle_log_panel: BattleLogPanel = null   # its collapsible HUD panel (top-left)
+var battle_log_panel: BattleLogPanel = null   # collapsible HUD panel (top-centre, collapsed by default)
 var _hovered_model: Node3D = null
 
 # WGS (Wargaming Simulator) Integration
@@ -1524,8 +1524,16 @@ func _setup_battle_log() -> void:
 		battle_log.current_round = opr_army_manager.current_round
 	battle_log_panel = BattleLogPanel.new()
 	$UI/HUD.add_child(battle_log_panel)
-	battle_log_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	battle_log_panel.position = Vector2(12, 92)   # top-left, below the hamburger button
+	# Top-CENTRE, hugging the top edge; collapsed to a tab by default, expands downward (maintainer req).
+	battle_log_panel.anchor_left = 0.5
+	battle_log_panel.anchor_right = 0.5
+	battle_log_panel.anchor_top = 0.0
+	battle_log_panel.anchor_bottom = 0.0
+	battle_log_panel.offset_left = -170.0
+	battle_log_panel.offset_right = 170.0
+	battle_log_panel.offset_top = 6.0
+	battle_log_panel.offset_bottom = 6.0
+	battle_log_panel.grow_vertical = Control.GROW_DIRECTION_END
 	battle_log_panel.bind(battle_log)
 	battle_log.on_game_started()
 	# Central seams (fewest hooks that cover local + remote):
