@@ -428,7 +428,12 @@ func present_unit(unit: GameUnit) -> void:
 		return
 	var same: bool = unit == _presented_unit
 	_presented_unit = unit
-	_fill_presented(unit)
+	# Re-presenting the SAME unit with unchanged data is a no-op (clicking the card re-selects the unit →
+	# selection_changed → present_unit again): rebuilding here re-measured the card rough-then-exact and
+	# made it bob up/down on every click, fighting the double-click focus (maintainer). Only rebuild when
+	# the unit or its data actually changed.
+	if not (same and _presented.visible and _card_data(unit).hash() == _presented_sig):
+		_fill_presented(unit)
 	if _dock_open:
 		_presented.visible = false
 		return
@@ -457,7 +462,10 @@ func _fill_presented(unit: GameUnit) -> void:
 ## then re-measure and re-seat the card.
 func _resize_presented_to_fit(content: Control) -> void:
 	var cap: float = minf(float(PCARD_MAX_H), get_viewport_rect().size.y * 0.82)
-	_presented.size = Vector2(PCARD_W, clampf(content.get_combined_minimum_size().y, float(PCARD_H), cap))
+	# Rough pre-layout size only while hidden (first present): applying it to a visible card shrank it
+	# for two frames before the exact measure grew it back — a visible bob on every rebuild.
+	if not _presented.visible:
+		_presented.size = Vector2(PCARD_W, clampf(content.get_combined_minimum_size().y, float(PCARD_H), cap))
 	await get_tree().process_frame
 	await get_tree().process_frame
 	if not is_instance_valid(content) or not content.is_inside_tree():
