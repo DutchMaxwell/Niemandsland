@@ -7,6 +7,9 @@ signal selection_changed(selected_objects: Array[Node3D])
 signal distance_changed(distance_inches: float, from_pos: Vector3, to_pos: Vector3)
 signal measurement_finished(distance_inches: float)
 signal drag_ended()
+## A drag actually MOVED the selection (> 0.1"): the anchor object + the distance it travelled.
+## Battle-Log seam — main resolves the anchor to a unit name and logs the move.
+signal selection_dropped(anchor: Node3D, distance_inches: float)
 ## Emitted (throttled) while dragging, so listeners can refresh live feedback
 ## such as unit coherency without waiting for the drag to finish.
 signal drag_updated()
@@ -1113,6 +1116,7 @@ func _stop_dragging() -> void:
 				var distance_inches = distance_m * METERS_TO_INCHES
 				if distance_inches > 0.1:  # Only emit if actually moved
 					distance_changed.emit(distance_inches, _drag_anchor_position, final_pos)
+					selection_dropped.emit(anchor, distance_inches)
 
 		drag_ended.emit()
 		AudioManager.play_sfx(AudioManager.SFXType.MODEL_PLACE)

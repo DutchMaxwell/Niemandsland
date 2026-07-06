@@ -1540,6 +1540,9 @@ func _setup_battle_log() -> void:
 	if opr_army_manager != null:
 		opr_army_manager.round_advanced.connect(battle_log.on_round_advanced)
 		opr_army_manager.loose_model_dead_changed.connect(_on_battle_log_dead)
+		opr_army_manager.regiment_wounds_applied.connect(_on_battle_log_regiment_wounds)
+	if object_manager != null:
+		object_manager.selection_dropped.connect(_on_battle_log_dropped)
 	if network_manager != null:
 		if network_manager.has_signal("remote_round_advanced"):
 			network_manager.remote_round_advanced.connect(
@@ -1560,13 +1563,59 @@ func _log_battle_activation(gu, _remote: bool) -> void:
 	battle_log.on_unit_activated(gu.get_name(), ("AI" if is_ai else "you"), is_ai)
 
 
-func _on_battle_log_dead(_node, dead: bool) -> void:
+func _on_battle_log_dead(node, dead: bool) -> void:
 	if battle_log == null:
 		return
+	# Resolve the model's unit for a real line ("X loses a model (7/10)" / "X destroyed") instead of the
+	# old generic "a unit was wiped out" that fired for EVERY single model kill.
+	var gu: GameUnit = node.get_meta("game_unit", null) if (node != null and node.has_meta("game_unit")) else null
+	if gu == null:
+		battle_log.log_event(BattleLog.Category.COMBAT if dead else BattleLog.Category.GENERAL,
+			"A model was killed" if dead else "A model returns")
+		return
+	var alive: int = gu.get_alive_count()
+	var total: int = gu.models.size()
 	if dead:
-		battle_log.log_event(BattleLog.Category.COMBAT, "A unit was wiped out")
+		if alive == 0:
+			battle_log.on_unit_destroyed(gu.get_name())
+		else:
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s loses a model (%d/%d)" % [gu.get_name(), alive, total])
 	else:
-		battle_log.log_event(BattleLog.Category.GENERAL, "A wiped unit returns to the battle")
+		battle_log.on_unit_revived(gu.get_name())
+
+
+## Pooled regiment wounds (single seam in apply_regiment_wounds — covers radial, card and remote edits).
+func _on_battle_log_regiment_wounds(unit_name: String, delta: int, remaining: int, pool: int) -> void:
+	if battle_log == null:
+		return
+	if delta > 0:
+		battle_log.on_wounds(unit_name, delta, remaining, pool)
+	else:
+		battle_log.log_event(BattleLog.Category.GENERAL, "%s heals %d wound%s (%d/%d)" % [unit_name, -delta, ("" if delta == -1 else "s"), remaining, pool])
+
+
+## A drag actually moved the selection: log it as a unit move when the anchor belongs to a unit
+## (models carry meta "game_unit"; a regiment moves as its tray). Terrain/props stay unlogged.
+func _on_battle_log_dropped(anchor: Node3D, distance_inches: float) -> void:
+	if battle_log == null:
+		return
+	var unit_name := _battle_log_unit_name(anchor)
+	if not unit_name.is_empty():
+		battle_log.on_unit_moved(unit_name, distance_inches)
+
+
+func _battle_log_unit_name(node: Node3D) -> String:
+	if node == null or not is_instance_valid(node):
+		return ""
+	if node.has_meta("game_unit"):
+		var gu = node.get_meta("game_unit")
+		if gu != null:
+			return gu.get_name()
+	if node is RegimentTray and opr_army_manager != null:
+		for reg in opr_army_manager.regiments.values():
+			if reg != null and reg.tray == node and reg.game_unit != null:
+				return reg.game_unit.get_name()
+	return ""
 
 
 func _on_battle_log_remote_dice(_peer, results, context, _tags) -> void:
@@ -1579,9 +1628,12 @@ func _on_battle_log_remote_dice(_peer, results, context, _tags) -> void:
 func _log_battle_dice(faces: Array, context: Dictionary) -> void:
 	if battle_log == null or faces.is_empty():
 		return
+	# Rolls WITHOUT a success target log too ("N dice rolled") — dropping them made the log look empty
+	# during normal play, since most casual rolls carry no target (maintainer).
 	var target: int = int(context.get(DiceRules.CTX_TARGET, DiceRules.TARGET_NONE))
 	if target == DiceRules.TARGET_NONE or target <= 0:
-		return   # only log to-hit rolls (a success target is set), not raw rolls
+		battle_log.on_dice_rolled(faces.size(), 0, 0)
+		return
 	var modifier: int = int(context.get(DiceRules.CTX_MODIFIER, 0))
 	battle_log.on_dice_rolled(faces.size(), DiceRules.count_successes(faces, target, modifier), target)
 

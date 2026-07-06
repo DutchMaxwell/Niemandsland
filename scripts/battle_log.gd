@@ -95,6 +95,11 @@ func on_unit_moved(unit_name: String, distance_inches: float, ai: bool = false) 
 
 
 func on_dice_rolled(count: int, hits: int, target: int) -> void:
+	# No success target set → still log the roll itself (most casual rolls carry no target; they were
+	# silently dropped before, so the log looked empty during normal play).
+	if target <= 0:
+		log_event(Category.COMBAT, "%d dice rolled" % count)
+		return
 	var plural := "" if hits == 1 else "s"
 	log_event(Category.COMBAT, "%d dice → %d hit%s (%d+)" % [count, hits, plural, target])
 

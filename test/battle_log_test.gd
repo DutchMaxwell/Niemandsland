@@ -14,6 +14,16 @@ func test_log_event_records_round_prefixed_entry_and_emits() -> void:
 	assert_int(captured.size()).is_equal(1)   # entry_added fired for the panel
 
 
+func test_dice_roll_without_success_target_still_logs() -> void:
+	# Most casual rolls carry no success target; they were silently dropped and the log looked empty.
+	var log_node: BattleLog = auto_free(BattleLog.new())
+	log_node.on_dice_rolled(6, 0, 0)
+	assert_int(log_node.size()).is_equal(1)
+	assert_str(str(log_node.entries()[0]["text"])).is_equal("6 dice rolled")
+	log_node.on_dice_rolled(6, 3, 3)
+	assert_str(str(log_node.entries()[1]["text"])).is_equal("6 dice → 3 hits (3+)")
+
+
 func test_ring_buffer_caps_and_drops_oldest() -> void:
 	var log_node: BattleLog = auto_free(BattleLog.new())
 	for i in range(BattleLog.CAP + 50):
