@@ -94,14 +94,32 @@ func on_unit_moved(unit_name: String, distance_inches: float, ai: bool = false) 
 	log_event(Category.MOVEMENT, "%s %s %.0f\"" % [unit_name, verb, distance_inches], ai)
 
 
-func on_dice_rolled(count: int, hits: int, target: int) -> void:
-	# No success target set → still log the roll itself (most casual rolls carry no target; they were
-	# silently dropped before, so the log looked empty during normal play).
-	if target <= 0:
-		log_event(Category.COMBAT, "%d dice rolled" % count)
+func on_dice_rolled(count: int, hits: int, target: int, player: String = "", faces: Array = []) -> void:
+	# WHO rolled + the FACE RESULTS, not just a count (maintainer): "You: 6 4 2 1 → 2 hits (3+)" /
+	# "Alice: 5 3 1". Faces sort high→low (same convention as the dice-log icon strip). Callers without
+	# faces (e.g. Solo-AI summaries) fall back to the count-only lines; no-target rolls log too.
+	var prefix := (player + ": ") if not player.is_empty() else ""
+	if not faces.is_empty():
+		var sorted_faces := faces.duplicate()
+		sorted_faces.sort()
+		sorted_faces.reverse()
+		var parts: Array[String] = []
+		for f in sorted_faces:
+			parts.append(str(int(f)))
+		var faces_str := " ".join(parts)
+		if target > 0:
+			var plural := "" if hits == 1 else "s"
+			log_event(Category.COMBAT, "%s%s → %d hit%s (%d+)" % [prefix, faces_str, hits, plural, target])
+		elif prefix.is_empty():
+			log_event(Category.COMBAT, "%d dice: %s" % [count, faces_str])
+		else:
+			log_event(Category.COMBAT, "%s%s" % [prefix, faces_str])
 		return
-	var plural := "" if hits == 1 else "s"
-	log_event(Category.COMBAT, "%d dice → %d hit%s (%d+)" % [count, hits, plural, target])
+	if target <= 0:
+		log_event(Category.COMBAT, "%s%d dice rolled" % [prefix, count])
+		return
+	var plural2 := "" if hits == 1 else "s"
+	log_event(Category.COMBAT, "%s%d dice → %d hit%s (%d+)" % [prefix, count, hits, plural2, target])
 
 
 func on_wounds(unit_name: String, lost: int, alive: int, total: int) -> void:

@@ -1549,8 +1549,8 @@ func _setup_battle_log() -> void:
 				func() -> void: battle_log.on_round_advanced(opr_army_manager.current_round))
 		if network_manager.has_signal("remote_activation_updated"):
 			network_manager.remote_activation_updated.connect(func(gu) -> void: _log_battle_activation(gu, true))
-		if network_manager.has_signal("remote_dice_rolled"):
-			network_manager.remote_dice_rolled.connect(_on_battle_log_remote_dice)
+		# NOTE: no remote_dice_rolled hook here — remote rolls reach _add_dice_log_entry (with the peer's
+		# display name) via _on_remote_dice_rolled, which feeds _log_battle_dice; a second hook double-logged.
 	if radial_menu_controller != null and radial_menu_controller.has_signal("unit_activated"):
 		radial_menu_controller.unit_activated.connect(func(gu) -> void: _log_battle_activation(gu, false))
 
@@ -1648,31 +1648,25 @@ func _battle_log_unit_name(node: Node3D) -> String:
 	return ""
 
 
-func _on_battle_log_remote_dice(_peer, results, context, _tags) -> void:
-	var faces: Array[int] = []
-	for r in results:
-		faces.append(int(r))
-	_log_battle_dice(faces, context)
-
-
-func _log_battle_dice(faces: Array, context: Dictionary) -> void:
+## Battle-Log line for a roll: WHO + the face results (+ hits when a success target is set). Local and
+## remote both funnel through _add_dice_log_entry, which carries the right player name ("You" locally,
+## the peer's display name remotely) — so this is the single dice-log seam.
+func _log_battle_dice(player_name: String, faces: Array, context: Dictionary) -> void:
 	if battle_log == null or faces.is_empty():
 		return
-	# Rolls WITHOUT a success target log too ("N dice rolled") — dropping them made the log look empty
-	# during normal play, since most casual rolls carry no target (maintainer).
 	var target: int = int(context.get(DiceRules.CTX_TARGET, DiceRules.TARGET_NONE))
 	if target == DiceRules.TARGET_NONE or target <= 0:
-		battle_log.on_dice_rolled(faces.size(), 0, 0)
+		battle_log.on_dice_rolled(faces.size(), 0, 0, player_name, faces)
 		return
 	var modifier: int = int(context.get(DiceRules.CTX_MODIFIER, 0))
-	battle_log.on_dice_rolled(faces.size(), DiceRules.count_successes(faces, target, modifier), target)
+	battle_log.on_dice_rolled(faces.size(), DiceRules.count_successes(faces, target, modifier), target, player_name, faces)
 
 
 ## Adds a visual dice-roll entry to the log: a header (time, player, formula,
 ## reroll tag), a per-face icon strip (6 down to 1) and, when a success target
 ## is set, the success count.
 func _add_dice_log_entry(player_name: String, faces: Array[int], context: Dictionary, tags: Array[int]) -> void:
-	_log_battle_dice(faces, context)   # Battle Log: local to-hit summary
+	_log_battle_dice(player_name, faces, context)   # Battle Log: who + faces (+ hits) — local AND remote
 	var target: int = context.get(DiceRules.CTX_TARGET, DiceRules.TARGET_NONE)
 	var modifier: int = context.get(DiceRules.CTX_MODIFIER, 0)
 	var reroll_mode: int = context.get(DiceRules.CTX_REROLL_MODE, DiceRules.REROLL_NONE)
