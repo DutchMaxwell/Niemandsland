@@ -22,6 +22,11 @@ var ai_slot: int = 2
 ## Units held back by their Ambush rule during deploy_army — they arrive at the start of round 2
 ## following the same deployment rules (goal 001 P2; the arrival itself is wired in a later phase).
 var ambush_reserve: Array = []
+## What the last activate_next_ai_unit did: {unit, target, action, can_shoot, dist_in} — main reads it
+## to resolve shooting (P3) and the charge melee (P4).
+var last_report: Dictionary = {}
+## Injected by main: Callable(from: Vector3, to: Vector3) -> bool for terrain line of sight.
+var los_checker: Callable = Callable()
 
 var turn_manager: TurnManager = null
 var _selector: ActivationSelector = null
@@ -94,7 +99,7 @@ func activate_next_ai_unit() -> GameUnit:
 	var unit := _selector.select(eligible, _rng) as GameUnit
 	if unit == null:
 		return null
-	_advance_toward_nearest_human(unit)
+	last_report = _act(unit)
 	mark_activated(unit)
 	if network_manager != null and network_manager.has_method("broadcast_unit_activation"):
 		network_manager.broadcast_unit_activation(unit)
@@ -139,20 +144,71 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 	return best_fresh if best_fresh != null else best_any
 
 
-func _advance_toward_nearest_human(unit: GameUnit) -> void:
+## One activation by the official decision tree (goal 001 P3): classify the archetype, decide the
+## action (charge/advance/rush/kite), execute the move, and report what happened so main can resolve
+## shooting (and, in P4, the charge melee). CHARGE degrades to its move-only part until P4 lands.
+func _act(unit: GameUnit) -> Dictionary:
+	var report := {"unit": unit, "target": null, "action": AiDecision.Action.HOLD, "can_shoot": false, "dist_in": INF}
 	var target_unit := nearest_human_unit(unit)
-	if target_unit == null:
+	if target_unit == null or alive_positions(unit).is_empty():
+		return report
+	report["target"] = target_unit
+	var weapons := _unit_weapons(unit)
+	var bands: Dictionary = {"advance": 6, "rush": 12}
+	if movement_range != null:
+		bands = movement_range.move_bands_for_props(unit.unit_properties)
+	var dist := MoveIntent.distance_inches(unit_centre(unit), unit_centre(target_unit))
+	var shoot_range := AiArchetype.max_range_inches(weapons)
+	var in_range_los: bool = shoot_range > 0 and dist <= float(shoot_range) and _has_los(unit, target_unit)
+	var action := AiDecision.decide(AiArchetype.classify(weapons), dist, float(bands.get("advance", 6)),
+		float(bands.get("rush", 12)), float(shoot_range), in_range_los)
+	report["action"] = action
+	match action:
+		AiDecision.Action.ADVANCE:
+			_move_relative(unit, target_unit, float(bands.get("advance", 6)))
+		AiDecision.Action.RUSH, AiDecision.Action.CHARGE:
+			_move_relative(unit, target_unit, float(bands.get("rush", 12)))
+		AiDecision.Action.KITE:
+			# Fall back just far enough to stay in range: never further than (range - dist) leaves room.
+			var room: float = maxf(float(shoot_range) - dist, 0.0)
+			_move_relative(unit, target_unit, -minf(float(bands.get("advance", 6)), room))
+		_:
+			pass   # HOLD: no move (M3 overlays)
+	# Shooting eligibility AFTER the move — Rush/Charge cannot shoot (charge resolves in melee, P4).
+	if action == AiDecision.Action.ADVANCE or action == AiDecision.Action.KITE or action == AiDecision.Action.HOLD:
+		var d2 := MoveIntent.distance_inches(unit_centre(unit), unit_centre(target_unit))
+		report["dist_in"] = d2
+		report["can_shoot"] = shoot_range > 0 and d2 <= float(shoot_range) and _has_los(unit, target_unit)
+	return report
+
+
+## Rigid move toward (positive inches) or away from (negative inches) the target unit, table-clamped.
+func _move_relative(unit: GameUnit, target_unit: GameUnit, inches: float) -> void:
+	if is_zero_approx(inches):
 		return
 	var positions := alive_positions(unit)
 	if positions.is_empty():
 		return
-	var advance_inches := 6
-	if movement_range != null:
-		advance_inches = int(movement_range.move_bands_for_props(unit.unit_properties).get("advance", 6))
-	var target := _clamp_to_bounds(unit_centre(target_unit))
-	var delta := MoveIntent.plan_unit_move(positions, target, float(advance_inches))
+	var centre := unit_centre(unit)
+	var toward := _clamp_to_bounds(unit_centre(target_unit))
+	var goal := toward if inches > 0.0 else centre + (centre - toward)
+	var delta := MoveIntent.plan_unit_move(positions, _clamp_to_bounds(goal), absf(inches))
 	delta = _clamp_delta_to_bounds(positions, delta)
 	_apply_delta(unit, delta)
+
+
+## The unit's OPR weapons (empty when it has no OPR source — counts as melee-only).
+func _unit_weapons(unit: GameUnit) -> Array:
+	if unit.source_type == "opr" and unit.source_data is OPRApiClient.OPRUnit:
+		return (unit.source_data as OPRApiClient.OPRUnit).weapons
+	return []
+
+
+## Line of sight between two units via the injected checker (main wires terrain LOS); no checker = clear.
+func _has_los(unit: GameUnit, target_unit: GameUnit) -> bool:
+	if not los_checker.is_valid():
+		return true
+	return bool(los_checker.call(unit_centre(unit), unit_centre(target_unit)))
 
 
 ## Apply a rigid world-space delta to every alive model node (Y preserved) + broadcast the batch.

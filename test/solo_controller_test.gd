@@ -48,8 +48,10 @@ func test_ai_unit_advances_toward_nearest_human_and_activates() -> void:
 	var moved := solo.activate_next_ai_unit()
 	assert_object(moved).is_equal(ai)
 	assert_bool(ai.is_activated).is_true()
-	# Advance = 6" = 0.1524 m toward the human at x=0 → x drops from 0.5 to ~0.3476.
-	assert_float(ai.models[0].node.global_position.x).is_equal_approx(0.3476, 0.004)
+	# A weaponless unit counts as MELEE; at 0.5 m (~19.7") the enemy is beyond charge range (12") — the
+	# official v3.5.0 tree RUSHES 12" = 0.3048 m toward the human at x=0 → x drops from 0.5 to ~0.1952.
+	assert_float(ai.models[0].node.global_position.x).is_equal_approx(0.1952, 0.004)
+	assert_int(int(solo.last_report["action"])).is_equal(AiDecision.Action.RUSH)
 	# A second call finds no more eligible AI units.
 	assert_object(solo.activate_next_ai_unit()).is_null()
 
