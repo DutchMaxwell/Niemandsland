@@ -71,7 +71,7 @@ static func placement_order(units: Array, rng: RandomNumberGenerator) -> Array:
 ## possible to the nearest objective"). `occupied` = [{pos: Vector2, radius: float}] already-placed
 ## footprints; `blocked` = Callable(Vector2) -> bool for difficult/dangerous terrain (pass an invalid
 ## Callable for units with Strider/Flying, which ignore it). Returns Vector2.INF when nothing fits.
-static func best_spot(section: Rect2, objectives: Array, occupied: Array, radius: float, blocked: Callable, step: float = 0.05) -> Vector2:
+static func best_spot(section: Rect2, objectives: Array, occupied: Array, radius: float, blocked: Callable, step: float = 0.05, probe_radius: float = 0.0) -> Vector2:
 	var best := Vector2.INF
 	var best_score := INF
 	var y := section.position.y + radius
@@ -79,7 +79,7 @@ static func best_spot(section: Rect2, objectives: Array, occupied: Array, radius
 		var x := section.position.x + radius
 		while x <= section.end.x - radius + 0.0001:
 			var p := Vector2(x, y)
-			if _spot_free(p, radius, occupied) and not (blocked.is_valid() and bool(blocked.call(p))):
+			if _spot_free(p, radius, occupied) and not _blocked_at(p, blocked, probe_radius):
 				var score := _nearest_objective_distance(p, objectives, section)
 				if score < best_score:
 					best_score = score
@@ -87,6 +87,21 @@ static func best_spot(section: Rect2, objectives: Array, occupied: Array, radius
 			x += step
 		y += step
 	return best
+
+
+## Terrain check over the unit's FOOTPRINT, not just its centre: with probe_radius > 0 the four cardinal
+## edge points are sampled too — a centre-only check let edge models land inside walls (field test).
+static func _blocked_at(p: Vector2, blocked: Callable, probe_radius: float) -> bool:
+	if not blocked.is_valid():
+		return false
+	if bool(blocked.call(p)):
+		return true
+	if probe_radius <= 0.0:
+		return false
+	for off in [Vector2(probe_radius, 0), Vector2(-probe_radius, 0), Vector2(0, probe_radius), Vector2(0, -probe_radius)]:
+		if bool(blocked.call(p + off)):
+			return true
+	return false
 
 
 # === Private ===

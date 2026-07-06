@@ -697,16 +697,39 @@ func _on_solo_deploy_pressed() -> void:
 	if terrain_overlay != null:
 		for o in terrain_overlay.get_objectives():
 			objectives.append(Vector2(o.x, o.z))
+	# Physics probe against SOLID props (walls, containers, trees, free-placed sandbox ruins — those are
+	# NOT in the map grid): a small sphere hovering above base height; anything tall it touches that is
+	# not a miniature blocks the spot (field test: models deployed inside walls).
+	var space := terrain_overlay.get_world_3d().direct_space_state if terrain_overlay != null else null
+	var probe := PhysicsShapeQueryParameters3D.new()
+	var probe_shape := SphereShape3D.new()
+	probe_shape.radius = 0.02
+	probe.shape = probe_shape
+	probe.collide_with_areas = false
+	var hits_prop := func(p: Vector2) -> bool:
+		if space == null:
+			return false
+		probe.transform = Transform3D(Basis.IDENTITY, Vector3(p.x, 0.07, p.y))
+		for hit in space.intersect_shape(probe, 6):
+			var col: Object = hit.get("collider")
+			if col is Node3D and not (col as Node3D).is_in_group("miniature"):
+				return true
+		return false
 	var blocked_normal := func(p: Vector2) -> bool:
+		if hits_prop.call(p):
+			return true
 		if terrain_overlay == null:
 			return false
 		var t: int = terrain_overlay.get_terrain_at_world_position(Vector3(p.x, 0.0, p.y))
 		return t == terrain_overlay.TerrainType.FOREST or t == terrain_overlay.TerrainType.DANGEROUS \
-			or t == terrain_overlay.TerrainType.CONTAINER
+			or t == terrain_overlay.TerrainType.CONTAINER or t == terrain_overlay.TerrainType.RUINS
 	var blocked_flying := func(p: Vector2) -> bool:
+		if hits_prop.call(p):
+			return true
 		if terrain_overlay == null:
 			return false
-		return terrain_overlay.get_terrain_at_world_position(Vector3(p.x, 0.0, p.y)) == terrain_overlay.TerrainType.CONTAINER
+		var t: int = terrain_overlay.get_terrain_at_world_position(Vector3(p.x, 0.0, p.y))
+		return t == terrain_overlay.TerrainType.CONTAINER or t == terrain_overlay.TerrainType.RUINS
 	# Seeded for reproducibility (solo convention); the seed lands in the console + battle log.
 	var seed_value: int = int(Time.get_unix_time_from_system()) % 100000
 	var res: Dictionary = solo_controller.deploy_army(zone, objectives, blocked_normal, blocked_flying, seed_value)

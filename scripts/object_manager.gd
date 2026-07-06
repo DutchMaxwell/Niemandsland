@@ -535,6 +535,12 @@ func _foreign_owner_slot(obj: Node) -> int:
 			owner = int(gu.unit_properties.get("player_id", 0))
 	if owner <= 0:
 		return 0
+	# Solo (goal 001): a designated AI army is never "foreign" — the human owns the physical table and
+	# may always adjust the AI's models (this is also the future co-op path: the AI army has no peer).
+	var main_node := get_node_or_null("/root/Main")
+	if main_node != null and main_node.get("solo_ai_slots") is Dictionary \
+			and (main_node.get("solo_ai_slots") as Dictionary).has(owner):
+		return 0
 	var my_slot: int = _network_manager.get_my_player_slot()
 	# Fail open while our own slot is still pending (0, the sub-second window right after
 	# (re)connect): NEVER lock a player out of their own army because the slot hasn't landed.

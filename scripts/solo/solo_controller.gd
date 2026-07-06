@@ -305,7 +305,8 @@ func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, block
 	rng.seed = seed_value
 	var all_units: Array = []
 	for u in army_manager.get_game_units_for_player(ai_slot):
-		if u != null and u.get_alive_count() > 0:
+		# Attached heroes deploy WITH their host unit (coherency!), never as their own drop.
+		if u != null and u.get_alive_count() > 0 and not (u.has_method("is_attached") and u.is_attached()):
 			all_units.append(u)
 	if all_units.is_empty():
 		return {"deployed": 0, "reserved": 0, "seed": seed_value}
@@ -335,9 +336,9 @@ func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, block
 		var radius := _deploy_footprint_radius(unit)
 		var ignores_terrain: bool = unit.has_special_rule("Strider") or unit.has_special_rule("Flying")
 		var blocked := blocked_flying if ignores_terrain else blocked_normal
-		var spot := AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025)
+		var spot := AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius)
 		if spot == Vector2.INF:
-			spot = AiDeployment.best_spot(zone, objectives, occupied, radius, blocked, 0.025)
+			spot = AiDeployment.best_spot(zone, objectives, occupied, radius, blocked, 0.025, radius)
 		if spot == Vector2.INF:
 			# The army MUST deploy (rule) — worst case the unit forms up at its section centre even if
 			# that crowds neighbours; never silently skip a unit again.
@@ -352,9 +353,20 @@ const DEPLOY_SPACING_M := 0.04   # compact deployment grid: model-centre spacing
 const DEPLOY_COLS := 5           # models per rank in the deployment grid
 
 
+## The models a deployment drop places: the unit's own alive models PLUS its attached heroes' — heroes
+## deploy with their unit, in the same grid (coherency).
+func _deploy_models(unit: GameUnit) -> Array:
+	var out: Array = unit.get_alive_models()
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			if h != null:
+				out = out + h.get_alive_models()
+	return out
+
+
 ## Footprint radius of the COMPACT grid the unit takes at deployment (not its staging formation).
 func _deploy_footprint_radius(unit: GameUnit) -> float:
-	var n: int = maxi(unit.get_alive_count(), 1)
+	var n: int = maxi(_deploy_models(unit).size(), 1)
 	var cols: int = mini(n, DEPLOY_COLS)
 	var rows: int = int(ceil(float(n) / float(DEPLOY_COLS)))
 	var half_w: float = float(cols - 1) * DEPLOY_SPACING_M * 0.5
@@ -370,9 +382,21 @@ func _place_unit_at(unit: GameUnit, spot: Vector2) -> void:
 		if reg != null and is_instance_valid(reg.tray):
 			reg.tray.global_position = Vector3(spot.x, reg.tray.global_position.y, spot.y)
 			reg.tray.reform_from_unit(unit)
+			# Heroes attached to the regiment stand directly behind the block (coherency).
+			var back := 0.08 if spot.y > 0.0 else -0.08
+			var hi := 0
+			if unit.has_method("get_attached_heroes"):
+				for h in unit.get_attached_heroes():
+					if h == null:
+						continue
+					for m in h.get_alive_models():
+						var hnode: Node3D = (m as ModelInstance).node
+						if hnode != null and is_instance_valid(hnode):
+							hnode.global_position = Vector3(spot.x + float(hi) * DEPLOY_SPACING_M, hnode.global_position.y, spot.y + back)
+							hi += 1
 			_broadcast_positions(unit)
 			return
-	var alive: Array = unit.get_alive_models()
+	var alive: Array = _deploy_models(unit)   # incl. attached heroes — they drop with their unit
 	var n: int = alive.size()
 	if n == 0:
 		return
@@ -391,12 +415,12 @@ func _place_unit_at(unit: GameUnit, spot: Vector2) -> void:
 	_broadcast_positions(unit)
 
 
-## Broadcast the unit's CURRENT model positions as one move batch (MP mirror of a deploy placement).
+## Broadcast the unit's CURRENT model positions (incl. attached heroes) as one move batch (MP mirror).
 func _broadcast_positions(unit: GameUnit) -> void:
 	if network_manager == null or not network_manager.has_method("broadcast_move_batch"):
 		return
 	var batch: Array = []
-	for m in unit.get_alive_models():
+	for m in _deploy_models(unit):
 		var node: Node3D = (m as ModelInstance).node
 		if node != null and is_instance_valid(node) and node.has_meta("network_id"):
 			batch.append(node.get_meta("network_id"))
