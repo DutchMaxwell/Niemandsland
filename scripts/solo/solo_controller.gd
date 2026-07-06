@@ -19,6 +19,9 @@ var network_manager: Node = null
 var movement_range: MovementRangeController = null
 var human_slot: int = 1
 var ai_slot: int = 2
+## Units held back by their Ambush rule during deploy_army — they arrive at the start of round 2
+## following the same deployment rules (goal 001 P2; the arrival itself is wired in a later phase).
+var ambush_reserve: Array = []
 
 var turn_manager: TurnManager = null
 var _selector: ActivationSelector = null
@@ -231,3 +234,65 @@ static func _axis_scale(start: float, d: float, limit: float) -> float:
 		return 1.0
 	var bound := limit if dest > 0.0 else -limit
 	return clampf((bound - start) / d, 0.0, 1.0)
+
+
+# === AI deployment (goal 001 P2 — OPR Solo & Co-Op v3.5.0) ===
+
+## Deploy the whole AI army by the official rules via the pure AiDeployment core: random 3-way group
+## split, D3 section per group (all-same re-roll), then one random unit at a time placed in its section
+## as close as possible to the nearest objective — Scouts last, Ambush units into ambush_reserve.
+## `zone` = the AI deployment zone in table XZ; `objectives` = XZ points; `blocked_normal` /
+## `blocked_flying` classify terrain for ground vs Strider/Flying units. Seeded → reproducible.
+## Returns {deployed, reserved, seed}.
+func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, blocked_flying: Callable, seed_value: int) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var all_units: Array = []
+	for u in army_manager.get_game_units_for_player(ai_slot):
+		if u != null and u.get_alive_count() > 0:
+			all_units.append(u)
+	if all_units.is_empty():
+		return {"deployed": 0, "reserved": 0, "seed": seed_value}
+	var groups := AiDeployment.split_into_groups(all_units.size(), rng)
+	var sections := AiDeployment.assign_sections(groups.size(), rng)
+	var section_of := {}
+	for g in range(groups.size()):
+		for i in groups[g]:
+			section_of[int(i)] = int(sections[g])
+	var flags: Array = []
+	ambush_reserve.clear()
+	for i in range(all_units.size()):
+		var u: GameUnit = all_units[i]
+		var is_ambush: bool = u.has_special_rule("Ambush")
+		flags.append({"id": i, "scout": u.has_special_rule("Scout"), "ambush": is_ambush})
+		if is_ambush:
+			ambush_reserve.append(u)
+	var order := AiDeployment.placement_order(flags, rng)
+	var occupied: Array = []
+	var deployed := 0
+	for id in order:
+		var unit: GameUnit = all_units[int(id)]
+		var sec := AiDeployment.section_rect(zone, int(section_of.get(int(id), 2)))
+		var radius := _footprint_radius(unit)
+		var ignores_terrain: bool = unit.has_special_rule("Strider") or unit.has_special_rule("Flying")
+		var blocked := blocked_flying if ignores_terrain else blocked_normal
+		var spot := AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025)
+		if spot == Vector2.INF:
+			# Section full for this footprint → fall back to the whole zone (the army must deploy).
+			spot = AiDeployment.best_spot(zone, objectives, occupied, radius, blocked, 0.025)
+		if spot == Vector2.INF:
+			continue
+		var anchor := unit_centre(unit)
+		_apply_delta(unit, Vector3(spot.x - anchor.x, 0.0, spot.y - anchor.z))
+		occupied.append({"pos": spot, "radius": radius})
+		deployed += 1
+	return {"deployed": deployed, "reserved": ambush_reserve.size(), "seed": seed_value}
+
+
+## The unit's current rigid footprint as a disc: max model distance from the anchor + a base margin.
+func _footprint_radius(unit: GameUnit) -> float:
+	var anchor := unit_centre(unit)
+	var r := 0.0
+	for p in alive_positions(unit):
+		r = maxf(r, Vector2(p.x - anchor.x, p.z - anchor.z).length())
+	return r + 0.03

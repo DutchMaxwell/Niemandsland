@@ -628,16 +628,7 @@ func _run_solo_ai_turn() -> void:
 	if opr_army_manager == null or movement_range_controller == null:
 		push_warning("[Solo/AI] not ready — import armies first")
 		return
-	var ai_slot := _solo_ai_slot()
-	# (Re)build the controller when the designated slot changed — setup() wires TurnManager once.
-	if solo_controller != null and solo_controller.ai_slot != ai_slot:
-		solo_controller.queue_free()
-		solo_controller = null
-	if solo_controller == null:
-		solo_controller = SoloController.new()
-		add_child(solo_controller)
-		var human_slot: int = 1 if ai_slot != 1 else 2
-		solo_controller.setup(opr_army_manager, network_manager, movement_range_controller, human_slot, ai_slot)
+	_ensure_solo_controller()
 	var unit: GameUnit = solo_controller.activate_next_ai_unit()
 	if unit == null:
 		print("[Solo/AI] AI turn complete — all player-%d units activated (advance the round to reset)" % ai_slot)
@@ -657,6 +648,56 @@ func _solo_ai_slot() -> int:
 	for slot in solo_ai_slots:
 		return int(slot)
 	return 2
+
+
+## (Re)build the SoloController for the currently designated AI slot (setup wires TurnManager once).
+func _ensure_solo_controller() -> void:
+	var ai_slot := _solo_ai_slot()
+	if solo_controller != null and solo_controller.ai_slot != ai_slot:
+		solo_controller.queue_free()
+		solo_controller = null
+	if solo_controller == null:
+		solo_controller = SoloController.new()
+		add_child(solo_controller)
+		var human_slot: int = 1 if ai_slot != 1 else 2
+		solo_controller.setup(opr_army_manager, network_manager, movement_range_controller, human_slot, ai_slot)
+
+
+## "Deploy AI army" (goal 001 P2b): run the official OPR AI deployment for the designated army — the
+## 12" front-line zone on the AI's table edge, objectives from the overlay, terrain classified per the
+## solo rules (Forest=Difficult, Dangerous, Container=Impassable; Strider/Flying ignore the first two).
+func _on_solo_deploy_pressed() -> void:
+	if opr_army_manager == null or table == null:
+		return
+	_ensure_solo_controller()
+	var w: float = table.table_size.x * 0.3048
+	var d: float = table.table_size.y * 0.3048
+	var depth: float = 12.0 * 0.0254
+	var ai_slot := _solo_ai_slot()
+	# Front-line zones: player 1 owns the -Z edge, everyone else the +Z edge (terrain_overlay layout).
+	var zmin: float = (-d / 2.0) if ai_slot == 1 else (d / 2.0 - depth)
+	var zone := Rect2(Vector2(-w / 2.0, zmin), Vector2(w, depth))
+	var objectives: Array = []
+	if terrain_overlay != null:
+		for o in terrain_overlay.get_objectives():
+			objectives.append(Vector2(o.x, o.z))
+	var blocked_normal := func(p: Vector2) -> bool:
+		if terrain_overlay == null:
+			return false
+		var t: int = terrain_overlay.get_terrain_at_world_position(Vector3(p.x, 0.0, p.y))
+		return t == terrain_overlay.TerrainType.FOREST or t == terrain_overlay.TerrainType.DANGEROUS \
+			or t == terrain_overlay.TerrainType.CONTAINER
+	var blocked_flying := func(p: Vector2) -> bool:
+		if terrain_overlay == null:
+			return false
+		return terrain_overlay.get_terrain_at_world_position(Vector3(p.x, 0.0, p.y)) == terrain_overlay.TerrainType.CONTAINER
+	# Seeded for reproducibility (solo convention); the seed lands in the console + battle log.
+	var seed_value: int = int(Time.get_unix_time_from_system()) % 100000
+	var res: Dictionary = solo_controller.deploy_army(zone, objectives, blocked_normal, blocked_flying, seed_value)
+	print("[Solo/AI] deployment: %d unit(s) placed, %d in ambush reserve (seed %d)" % [int(res.deployed), int(res.reserved), seed_value])
+	if battle_log != null:
+		var reserve_note: String = (" (%d in reserve)" % int(res.reserved)) if int(res.reserved) > 0 else ""
+		battle_log.log_event(BattleLog.Category.GENERAL, "AI deploys %d units%s [seed %d]" % [int(res.deployed), reserve_note, seed_value], true)
 
 
 func _capture_bug_report() -> void:
@@ -3949,6 +3990,12 @@ func _refresh_solo_panel() -> void:
 		cb.add_theme_font_size_override("font_size", 12)
 		cb.toggled.connect(_on_solo_ai_toggled.bind(int(pid)))
 		solo_panel_box.add_child(cb)
+	var deploy_btn := Button.new()
+	deploy_btn.text = "Deploy AI army"
+	deploy_btn.tooltip_text = "OPR AI deployment: 3 random groups, D3 sections, placed toward the nearest objective (F11 then runs the activations)."
+	deploy_btn.focus_mode = Control.FOCUS_NONE
+	deploy_btn.pressed.connect(_on_solo_deploy_pressed)
+	solo_panel_box.add_child(deploy_btn)
 
 
 func _on_solo_ai_toggled(pressed: bool, player_id: int) -> void:
