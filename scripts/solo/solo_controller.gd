@@ -329,26 +329,79 @@ func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, block
 	for id in order:
 		var unit: GameUnit = all_units[int(id)]
 		var sec := AiDeployment.section_rect(zone, int(section_of.get(int(id), 2)))
-		var radius := _footprint_radius(unit)
+		# Deployment REFORMS the unit into a compact grid at its spot — measuring the staging import
+		# rows made wide units never fit their section and they were skipped silently (field test:
+		# "only a few miniatures deploy"). The footprint is the grid the unit WILL take.
+		var radius := _deploy_footprint_radius(unit)
 		var ignores_terrain: bool = unit.has_special_rule("Strider") or unit.has_special_rule("Flying")
 		var blocked := blocked_flying if ignores_terrain else blocked_normal
 		var spot := AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025)
 		if spot == Vector2.INF:
-			# Section full for this footprint → fall back to the whole zone (the army must deploy).
 			spot = AiDeployment.best_spot(zone, objectives, occupied, radius, blocked, 0.025)
 		if spot == Vector2.INF:
-			continue
-		var anchor := unit_centre(unit)
-		_apply_delta(unit, Vector3(spot.x - anchor.x, 0.0, spot.y - anchor.z))
+			# The army MUST deploy (rule) — worst case the unit forms up at its section centre even if
+			# that crowds neighbours; never silently skip a unit again.
+			spot = sec.get_center()
+		_place_unit_at(unit, spot)
 		occupied.append({"pos": spot, "radius": radius})
 		deployed += 1
 	return {"deployed": deployed, "reserved": ambush_reserve.size(), "seed": seed_value}
 
 
-## The unit's current rigid footprint as a disc: max model distance from the anchor + a base margin.
-func _footprint_radius(unit: GameUnit) -> float:
-	var anchor := unit_centre(unit)
-	var r := 0.0
-	for p in alive_positions(unit):
-		r = maxf(r, Vector2(p.x - anchor.x, p.z - anchor.z).length())
-	return r + 0.03
+const DEPLOY_SPACING_M := 0.04   # compact deployment grid: model-centre spacing (~1.6", coherent)
+const DEPLOY_COLS := 5           # models per rank in the deployment grid
+
+
+## Footprint radius of the COMPACT grid the unit takes at deployment (not its staging formation).
+func _deploy_footprint_radius(unit: GameUnit) -> float:
+	var n: int = maxi(unit.get_alive_count(), 1)
+	var cols: int = mini(n, DEPLOY_COLS)
+	var rows: int = int(ceil(float(n) / float(DEPLOY_COLS)))
+	var half_w: float = float(cols - 1) * DEPLOY_SPACING_M * 0.5
+	var half_d: float = float(rows - 1) * DEPLOY_SPACING_M * 0.5
+	return sqrt(half_w * half_w + half_d * half_d) + 0.03
+
+
+## Put the unit AT the spot: a regiment moves as its tray and reforms its block there; a loose unit's
+## models form a compact grid (ranks of DEPLOY_COLS). Positions broadcast so MP mirrors stay in sync.
+func _place_unit_at(unit: GameUnit, spot: Vector2) -> void:
+	if army_manager != null and army_manager.regiments is Dictionary and army_manager.regiments.has(unit.unit_id):
+		var reg = army_manager.regiments[unit.unit_id]
+		if reg != null and is_instance_valid(reg.tray):
+			reg.tray.global_position = Vector3(spot.x, reg.tray.global_position.y, spot.y)
+			reg.tray.reform_from_unit(unit)
+			_broadcast_positions(unit)
+			return
+	var alive: Array = unit.get_alive_models()
+	var n: int = alive.size()
+	if n == 0:
+		return
+	var cols: int = mini(n, DEPLOY_COLS)
+	var rows: int = int(ceil(float(n) / float(DEPLOY_COLS)))
+	for i in range(n):
+		var node: Node3D = (alive[i] as ModelInstance).node
+		if node == null or not is_instance_valid(node):
+			continue
+		var col: int = i % DEPLOY_COLS
+		var row: int = i / DEPLOY_COLS
+		node.global_position = Vector3(
+			spot.x + (float(col) - float(cols - 1) * 0.5) * DEPLOY_SPACING_M,
+			node.global_position.y,
+			spot.y + (float(row) - float(rows - 1) * 0.5) * DEPLOY_SPACING_M)
+	_broadcast_positions(unit)
+
+
+## Broadcast the unit's CURRENT model positions as one move batch (MP mirror of a deploy placement).
+func _broadcast_positions(unit: GameUnit) -> void:
+	if network_manager == null or not network_manager.has_method("broadcast_move_batch"):
+		return
+	var batch: Array = []
+	for m in unit.get_alive_models():
+		var node: Node3D = (m as ModelInstance).node
+		if node != null and is_instance_valid(node) and node.has_meta("network_id"):
+			batch.append(node.get_meta("network_id"))
+			batch.append(node.global_position.x)
+			batch.append(node.global_position.y)
+			batch.append(node.global_position.z)
+	if not batch.is_empty():
+		network_manager.broadcast_move_batch(batch)
