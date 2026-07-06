@@ -36,6 +36,8 @@ var radial_menu_controller = null
 var unit_card_detail = null            # deprecated old detail card (retired; kept as an unused ctor arg)
 var range_ring_controller: Node = null # injected by main.gd — spell-range ring on spell hover (bus 033)
 var _presented_sig: int = 0            # hash of the presented card's last-built data; skip rebuild if unchanged
+var _pending_click_unit: GameUnit = null   # strip-card single-click waiting out the double-click window
+var _click_defer_timer: Timer = null       # so a double-click never fires the single-click collapse first
 
 var _dock_open := false
 var _tab: Button = null
@@ -52,6 +54,11 @@ func _ready() -> void:
 	_build_tab()
 	_build_strip()
 	_build_presented()
+	_click_defer_timer = Timer.new()
+	_click_defer_timer.one_shot = true
+	_click_defer_timer.wait_time = 0.25   # the double-click window; a lone single fires the present after it
+	_click_defer_timer.timeout.connect(_on_click_defer_timeout)
+	add_child(_click_defer_timer)
 	resized.connect(_layout)
 	_layout()
 	_refresh_timer = Timer.new()
@@ -568,14 +575,41 @@ func _handle_card_click(event: InputEvent, unit: GameUnit, from_strip: bool) -> 
 	var mb := event as InputEventMouseButton
 	if not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
 		return
+	if not from_strip:
+		# Presented/detail card: no strip to collapse, so act immediately.
+		if mb.double_click:
+			_focus_camera_on(unit)
+		else:
+			_select_unit(unit)
+		return
+	# Strip card: DEFER the single-click so a double-click never fires the collapse first (the collapse
+	# used to expose the table between the two clicks, so the second click deselected and the card
+	# "disappeared" — maintainer). A double-click selects + focuses in one shot; a lone single presents
+	# after the double-click window.
 	if mb.double_click:
-		_focus_camera_on(unit)
+		_click_defer_timer.stop()
+		_pending_click_unit = null
+		_activate_strip_card(unit, true)
 	else:
-		_select_unit(unit)
-		# Clicking a strip card pops the detail card for that unit, as if the model was clicked: collapse
-		# the strip and present it (present_unit is suppressed while the dock is open) — maintainer #2.
-		if from_strip and _dock_open:
-			_collapse_dock_and_present(unit)
+		_pending_click_unit = unit
+		_click_defer_timer.start()
+
+
+func _on_click_defer_timeout() -> void:
+	if _pending_click_unit != null:
+		var u := _pending_click_unit
+		_pending_click_unit = null
+		_activate_strip_card(u, false)
+
+
+## Select the unit, collapse the strip to present its detail card, and (on a double-click) focus the
+## camera on it — as one clean action so the card deals in exactly once.
+func _activate_strip_card(unit: GameUnit, do_focus: bool) -> void:
+	_select_unit(unit)
+	if _dock_open:
+		_collapse_dock_and_present(unit)
+	if do_focus:
+		_focus_camera_on(unit)
 
 
 func _collapse_dock_and_present(unit: GameUnit) -> void:
