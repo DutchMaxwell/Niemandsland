@@ -632,7 +632,7 @@ func _run_solo_ai_turn() -> void:
 	_ensure_solo_controller()
 	var unit: GameUnit = solo_controller.activate_next_ai_unit()
 	if unit == null:
-		print("[Solo/AI] AI turn complete — all player-%d units activated (advance the round to reset)" % ai_slot)
+		print("[Solo/AI] AI turn complete — all player-%d units activated (advance the round to reset)" % _solo_ai_slot())
 		return
 	# Camera follows the acting unit so each activation is watchable (goal 001, F1).
 	if camera_pivot != null and camera_pivot.has_method("focus_on"):
