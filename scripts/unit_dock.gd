@@ -23,7 +23,7 @@ const STRIP_FAN_ARC_PX := 6.0         # shallow vertical arc
 const STRIP_SIDE_MARGIN := 14         # the strip background hugs the fan + this margin (grows w/ card count)
 const PCARD_W := 320
 const PCARD_H := 188
-const PCARD_MAX_H := 348          # presented card auto-grows to fit weapons, capped here
+const PCARD_MAX_H := 460          # presented card auto-grows to fit weapons + a caster's spell list
 const GAP_ABOVE_TAB := 12
 const REFRESH_INTERVAL := 0.4
 
@@ -35,8 +35,7 @@ var camera_controller = null
 var radial_menu_controller = null
 var unit_card_detail = null            # deprecated old detail card (retired; kept as an unused ctor arg)
 var range_ring_controller: Node = null # injected by main.gd — spell-range ring on spell hover (bus 033)
-var _rule_popup: PanelContainer = null       # styled description panel shown on a rule CLICK
-var _rule_popup_label: RichTextLabel = null
+var _presented_sig: int = 0            # hash of the presented card's last-built data; skip rebuild if unchanged
 
 var _dock_open := false
 var _tab: Button = null
@@ -53,7 +52,6 @@ func _ready() -> void:
 	_build_tab()
 	_build_strip()
 	_build_presented()
-	_setup_rule_popup()
 	resized.connect(_layout)
 	_layout()
 	_refresh_timer = Timer.new()
@@ -270,10 +268,11 @@ func _add_card(unit: GameUnit) -> void:
 	# ONE card design (bus 033): the strip shows the SAME full CardFace as the focus card, minus the
 	# action bar (include_actions=false). Weapons block stays full here — collapse_weapons is the
 	# strip-density fallback if the maintainer finds it illegible.
-	var content := CardFace.build_presented(_card_data(unit), Callable(), false)
+	var data := _card_data(unit)
+	var content := CardFace.build_presented(data, Callable(), false)
 	cv.set_content_node(content)
 	cv.size = Vector2(CARD_W, clampf(content.get_combined_minimum_size().y, float(STRIP_CARD_H), 240.0))
-	_cards[unit.unit_id] = {"card": cv}
+	_cards[unit.unit_id] = {"card": cv, "sig": data.hash()}
 
 
 # === Live status ===
@@ -284,13 +283,20 @@ func _refresh_status() -> void:
 		if entry == null:
 			continue
 		var card := entry["card"] as CardVisual
-		# Rebuild the full CardFace content (no action bar) so live stats/status/wounds show.
-		var content := CardFace.build_presented(_card_data(unit), Callable(), false)
-		card.set_content_node(content)
-		card.size = Vector2(CARD_W, clampf(content.get_combined_minimum_size().y, float(STRIP_CARD_H), 240.0))
 		var dim: bool = unit.is_activated or unit.get_alive_count() == 0
 		card.modulate = Color(1, 1, 1, 0.45) if dim else Color(1, 1, 1, 1)
-	if _presented_unit != null and _presented.visible:
+		# Rebuild the full CardFace ONLY when the unit's data actually changed — a blind 0.4 s rebuild
+		# churned the fan + destroyed any hovered rule button (maintainer "keine Ruhe").
+		var data := _card_data(unit)
+		var sig: int = data.hash()
+		if int(entry.get("sig", 0)) == sig:
+			continue
+		entry["sig"] = sig
+		var content := CardFace.build_presented(data, Callable(), false)
+		card.set_content_node(content)
+		card.size = Vector2(CARD_W, clampf(content.get_combined_minimum_size().y, float(STRIP_CARD_H), 240.0))
+	# Presented card: same change-gate so the rule/spell hover is never interrupted under the cursor.
+	if _presented_unit != null and _presented.visible and _card_data(_presented_unit).hash() != _presented_sig:
 		_fill_presented(_presented_unit)
 
 
@@ -379,6 +385,7 @@ func _ap_value(rule: String) -> String:
 # === Presented card ===
 
 func present_unit(unit: GameUnit) -> void:
+	_clear_spell_ring()   # never let a spell-range ring outlive the card it was hovered from (maintainer)
 	if unit == null:
 		_presented_unit = null
 		_animate_card_out()
@@ -395,12 +402,19 @@ func present_unit(unit: GameUnit) -> void:
 
 
 func _fill_presented(unit: GameUnit) -> void:
-	# Rebuild the CardFace content each time so live status/wounds are reflected; the action chips route
-	# back through _card_action (the dispatch proven by card_action_dispatch_test).
-	var content := CardFace.build_presented(_card_data(unit), _card_action)
+	# Rebuild the CardFace content; the action chips route back through _card_action (dispatch proven by
+	# card_action_dispatch_test). Record the data signature so _refresh_status only rebuilds on a real
+	# change — rebuilding under the cursor destroyed the rule LinkButtons mid-hover (tooltip never settled,
+	# spell ring flickered — maintainer "keine Ruhe").
+	var data := _card_data(unit)
+	_presented_sig = data.hash()
+	var content := CardFace.build_presented(data, _card_action)
 	_presented.set_content_node(content)
 	_wire_rules_hover(content)   # bus 033: the focus card absorbs the old Info card's rule/spell tooltips
-	var h: float = clampf(content.get_combined_minimum_size().y, float(PCARD_H), float(PCARD_MAX_H))
+	# Grow to fit the content (weapons + a caster's spell list), capped so it never runs off the top of
+	# the screen — a spell-heavy caster overran the old fixed cap and its spells spilled below the card.
+	var cap: float = minf(float(PCARD_MAX_H), get_viewport_rect().size.y * 0.72)
+	var h: float = clampf(content.get_combined_minimum_size().y, float(PCARD_H), cap)
 	_presented.size = Vector2(PCARD_W, h)
 
 
@@ -410,8 +424,9 @@ func set_range_ring_controller(rrc: Node) -> void:
 
 ## Wire hover + click for every rule/spell/weapon-rule LinkButton in the presented card. The description
 ## uses Godot's BUILT-IN tooltip (tooltip_text) — reliable through the card's nested content, unlike the
-## custom mouse_entered popup which fired erratically / not at all for weapon rules (maintainer). Spells
-## additionally show the range ring on hover; a click still pops the styled description panel.
+## custom mouse_entered popup which fired erratically for weapon rules (maintainer). Spells additionally
+## show the range ring on hover. No click popup — the card no longer rebuilds under the cursor (see
+## _refresh_status), so the hover tooltip is stable on its own.
 func _wire_rules_hover(content: Control) -> void:
 	for node in content.find_children("*", "LinkButton", true, false):
 		var lb := node as LinkButton
@@ -422,7 +437,6 @@ func _wire_rules_hover(content: Control) -> void:
 		if meta_key.begins_with("spell:"):
 			lb.mouse_entered.connect(_show_spell_ring.bind(meta_key.substr(6)))
 			lb.mouse_exited.connect(_clear_spell_ring)
-		lb.pressed.connect(_show_rule_popup_for.bind(lb))
 
 
 ## Plain-text rule/spell description for a LinkButton's built-in tooltip ("Fearless — When taking a …").
@@ -433,24 +447,6 @@ func _rule_description(meta_key: String) -> String:
 	var desc: String = _spell_effect(title) if meta_key.begins_with("spell:") else str(army_manager.get_rule_description(meta_key))
 	desc = desc.strip_edges()
 	return "%s — %s" % [title, desc] if not desc.is_empty() else title
-
-
-## Show the styled description panel for a rule/spell LinkButton (on click).
-func _show_rule_popup_for(lb: LinkButton) -> void:
-	if lb == null or not is_instance_valid(lb) or army_manager == null:
-		return
-	var meta_key := str(lb.get_meta("rule_meta", ""))
-	if meta_key.is_empty():
-		return
-	var title := meta_key.trim_prefix("spell:")
-	var desc: String = _spell_effect(title) if meta_key.begins_with("spell:") else str(army_manager.get_rule_description(meta_key))
-	if desc.strip_edges().is_empty():
-		desc = "(no description)"
-	_rule_popup_label.text = "[b]%s[/b]\n%s" % [title, desc]
-	_rule_popup.reset_size()
-	# Anchor the popup just above the hovered link so it never sits under the cursor.
-	_rule_popup.global_position = lb.global_position + Vector2(0, -_rule_popup.size.y - 6)
-	_rule_popup.visible = true
 
 
 func _spell_effect(spell_name: String) -> String:
@@ -480,28 +476,6 @@ func _presented_model_nodes() -> Array:
 			if m.node != null and is_instance_valid(m.node):
 				out.append(m.node)
 	return out
-
-
-func _setup_rule_popup() -> void:
-	_rule_popup = PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.08, 0.10, 0.14, 0.98)
-	sb.set_corner_radius_all(5)
-	sb.set_border_width_all(1)
-	sb.border_color = Color(0.36, 0.80, 0.92, 0.5)
-	sb.set_content_margin_all(8)
-	_rule_popup.add_theme_stylebox_override("panel", sb)
-	_rule_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_rule_popup.top_level = true
-	_rule_popup.z_index = 200
-	_rule_popup.visible = false
-	_rule_popup_label = RichTextLabel.new()
-	_rule_popup_label.bbcode_enabled = true
-	_rule_popup_label.fit_content = true
-	_rule_popup_label.custom_minimum_size = Vector2(300, 0)
-	_rule_popup_label.add_theme_font_size_override("normal_font_size", 12)
-	_rule_popup.add_child(_rule_popup_label)
-	add_child(_rule_popup)
 
 
 func _animate_card_in() -> void:
