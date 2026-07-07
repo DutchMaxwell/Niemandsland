@@ -518,6 +518,12 @@ func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> voi
 	_start_box_selection(screen_pos, alt_pressed)
 
 
+## Host free-move (community feedback): the HOST may lift the ownership lock and handle EVERY model on
+## the table — essential for fully solo / self-refereed games run from a hosted session. Toggled from
+## the left panel; guests are unaffected (is_server() is false for them, so their lock stays).
+var host_free_move: bool = false
+
+
 ## In multiplayer you may only select/move your OWN models. Returns the foreign
 ## owner's player slot if `obj` is an OPR model owned by a DIFFERENT player, else 0.
 ## Fail-open by design: outside multiplayer, and for terrain / unowned props / any
@@ -525,6 +531,8 @@ func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> voi
 ## of their own pieces. Owner identity uses the stable player slot, not peer_id.
 func _foreign_owner_slot(obj: Node) -> int:
 	if obj == null or not _network_manager or not _network_manager.is_multiplayer_active():
+		return 0
+	if host_free_move and multiplayer.is_server():
 		return 0
 	var owner := 0
 	if obj.has_meta("opr_player_id"):

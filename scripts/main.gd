@@ -538,6 +538,9 @@ func _ready() -> void:
 	# Initialize Deployment Zones UI
 	_init_deployment_zones_ui()
 
+	# Host tools: the free-move toggle (lift the ownership lock — community feedback for solo play).
+	_init_host_tools_ui()
+
 	# Initialize Radial Menu
 	_init_radial_menu()
 
@@ -3855,6 +3858,36 @@ func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2,
 ## Initialize deployment zones UI (simplified - only visibility toggle)
 ## NOTE: Deployment zone type selection and custom zone editing is now in Map Tool.
 ## This ensures a single point of truth for deployment zone configuration.
+## Host tools (community feedback): a left-panel toggle that lets the HOST move ALL models — lifts the
+## MP ownership lock for fully solo / self-refereed games run from a hosted session. Guests never see an
+## effect (the lock check is host-gated); the toggle logs to the battle log for transparency.
+func _init_host_tools_ui() -> void:
+	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
+	if not left_panel_vbox:
+		return
+	var box := VBoxContainer.new()
+	box.name = "HostToolsPanel"
+	left_panel_vbox.add_child(box)
+	var label := Label.new()
+	label.text = "Host tools:"
+	label.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
+	box.add_child(label)
+	var cb := CheckButton.new()
+	cb.text = "Move all models"
+	cb.tooltip_text = "Lift the ownership lock: the host may move every player's models (solo / refereeing). Guests keep their normal lock."
+	cb.focus_mode = Control.FOCUS_NONE
+	cb.add_theme_font_size_override("font_size", 12)
+	cb.toggled.connect(_on_host_free_move_toggled)
+	box.add_child(cb)
+
+
+func _on_host_free_move_toggled(pressed: bool) -> void:
+	if object_manager != null:
+		object_manager.host_free_move = pressed
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "Host free-move %s" % ("enabled" if pressed else "disabled"))
+
+
 func _init_deployment_zones_ui() -> void:
 	# Get the left panel VBox to add UI elements
 	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
