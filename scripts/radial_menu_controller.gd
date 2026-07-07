@@ -289,9 +289,10 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 			# Single model or partial selection - show model menu (includes wounds)
 			context["model_instance"] = model_instance
 			items = RadialMenu.create_model_menu(model_instance)
-			# Solo P8: a single-model unit (lone hero) attacks through its model menu — the unit menu
-			# only shows for multi-model selections, so Shoot/Fight must ride here too.
-			if is_single_model_unit and _solo_combat_available(game_unit):
+			# Solo P8: attacking is a UNIT action — offer Shoot/Fight on ANY selection shape that lands
+			# here (single model clicked, partial selection, lone hero), not only the full-unit menu.
+			# The resolution always fights with the whole unit + its attached heroes anyway.
+			if game_unit != null and _solo_combat_available(game_unit):
 				var solo_items := RadialMenu.solo_combat_items()
 				for si in range(solo_items.size()):
 					items.insert(si, solo_items[si])
