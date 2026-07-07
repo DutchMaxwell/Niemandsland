@@ -259,6 +259,10 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 					context["regiment_tray"] = tray
 					var readout: Dictionary = army_manager.regiment_wound_readout(tray)
 					items = RadialMenu.create_regiment_menu(game_unit, int(readout["remaining"]), int(readout["pool_max"]))
+					if _solo_combat_available(game_unit):
+						var solo_items := RadialMenu.solo_combat_items()
+						for si in range(solo_items.size()):
+							items.insert(si, solo_items[si])
 					radial_menu.open(screen_position, items, context)
 					return
 
@@ -280,7 +284,7 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 
 		if is_full_unit and not is_single_model_unit:
 			# Multi-model unit fully selected - show unit menu
-			items = RadialMenu.create_unit_menu(game_unit)
+			items = RadialMenu.create_unit_menu(game_unit, _solo_combat_available(game_unit))
 		elif model_instance:
 			# Single model or partial selection - show model menu (includes wounds)
 			context["model_instance"] = model_instance
@@ -323,6 +327,10 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 		return
 
 	match action_id:
+		"solo_shoot":
+			_solo_begin_targeting(context, false)
+		"solo_fight":
+			_solo_begin_targeting(context, true)
 		"select_unit":
 			_select_entire_unit(context)
 		"wounds":
@@ -516,6 +524,22 @@ func _toggle_shaken(context: Dictionary) -> void:
 
 
 ## Helper to get GameUnit from context (supports both unit and model selection)
+## Solo (goal 001 P8): Shoot/Fight appear on a unit's menu when a Solo-AI opponent exists and the unit
+## is NOT the AI's own — main owns the targeting mode + resolution.
+func _solo_combat_available(game_unit: GameUnit) -> bool:
+	var main_node := get_node_or_null("/root/Main")
+	if main_node == null or game_unit == null:
+		return false
+	return bool(main_node.call("solo_combat_available", game_unit)) if main_node.has_method("solo_combat_available") else false
+
+
+func _solo_begin_targeting(context: Dictionary, melee: bool) -> void:
+	var unit := _get_game_unit_from_context(context)
+	var main_node := get_node_or_null("/root/Main")
+	if unit != null and main_node != null and main_node.has_method("solo_begin_targeting"):
+		main_node.call("solo_begin_targeting", unit, melee)
+
+
 func _get_game_unit_from_context(context: Dictionary) -> GameUnit:
 	var game_unit = context.get("game_unit") as GameUnit
 	if game_unit:

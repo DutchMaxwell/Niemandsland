@@ -373,8 +373,20 @@ static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 
 
 ## Creates menu items for a full unit selection.
-static func create_unit_menu(game_unit: GameUnit) -> Array[RadialMenuItem]:
+## Solo (goal 001 P8): declare an attack on the AI — enters targeting mode (line of sight shown), then
+## the whole exchange resolves with real tray dice, mirroring the AI's own combat flow.
+static func solo_combat_items() -> Array[RadialMenuItem]:
+	var out: Array[RadialMenuItem] = []
+	out.append(RadialMenuItem.new("solo_shoot", "Shoot", "»", true, "Shoot at an AI unit — pick a target with line of sight"))
+	out.append(RadialMenuItem.new("solo_fight", "Fight", "⚔", true, "Strike an AI unit in melee contact"))
+	return out
+
+
+static func create_unit_menu(game_unit: GameUnit, solo_combat: bool = false) -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []
+
+	if solo_combat:
+		items.append_array(solo_combat_items())
 
 	var activate_icon = "-" if game_unit.is_activated else "+"
 	var activate_tooltip = "Mark unit as not activated" if game_unit.is_activated else "Mark unit as activated this round"

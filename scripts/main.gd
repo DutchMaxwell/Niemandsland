@@ -230,6 +230,8 @@ var movement_range_controller: Node = null  # MovementRangeController (Advance/R
 var solo_controller: SoloController = null   # Solo/AI (F11) — drives the designated AI army
 var solo_ai_slots: Dictionary = {}           # player_id -> true: armies the Solo AI controls (goal 001)
 var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-army AI toggles)
+var _solo_target_mode: Dictionary = {}       # {unit, melee} while the player picks an attack target (P8)
+var _solo_los_line: MeshInstance3D = null    # live line to the hovered target: green = clear, red = blocked
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
@@ -937,6 +939,226 @@ func _solo_morale_test(unit: GameUnit, owner: String) -> void:
 			_solo_apply_wounds(unit, unit.models.size() * 12)   # overkill wipes the unit via the normal flows
 
 
+# === Solo P8: the player's own attack flow (radial "Shoot"/"Fight" → targeting mode → tray dice) ===
+
+## Radial gate: Shoot/Fight show on units that are NOT the AI's while an AI opponent with living units
+## exists (goal 001 P8).
+func solo_combat_available(unit: GameUnit) -> bool:
+	if unit == null or opr_army_manager == null or _solo_is_ai_unit(unit):
+		return false
+	for u in opr_army_manager.get_game_units_for_player(_solo_ai_slot()):
+		if u != null and u.get_alive_count() > 0:
+			return true
+	return false
+
+
+func _solo_is_ai_unit(unit: GameUnit) -> bool:
+	var pid: int = int(unit.unit_properties.get("player_id", 0))
+	return solo_ai_slots.has(pid) or (solo_ai_slots.is_empty() and pid == _solo_ai_slot())
+
+
+## Enter targeting mode (P8): the weapon range shows as a ring, the line of sight to the hovered enemy
+## draws live (green = clear, red = blocked); LMB on a valid AI unit resolves the attack, RMB/ESC cancels.
+func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
+	if unit == null:
+		return
+	_ensure_solo_controller()
+	_solo_target_mode = {"unit": unit, "melee": melee}
+	if not melee and range_ring_controller != null and range_ring_controller.has_method("show_spell_preview"):
+		var weapons: Array = _solo_all_weapons(unit)
+		var rng_in: int = AiArchetype.max_range_inches(weapons)
+		if rng_in > 0:
+			range_ring_controller.show_spell_preview(_solo_unit_nodes(unit), rng_in)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "%s: pick a target (%s) — right-click cancels" % [unit.get_name(), ("melee" if melee else "shooting")])
+
+
+func _solo_end_targeting() -> void:
+	_solo_target_mode = {}
+	if range_ring_controller != null and range_ring_controller.has_method("clear_spell_preview"):
+		range_ring_controller.clear_spell_preview()
+	if _solo_los_line != null and is_instance_valid(_solo_los_line):
+		_solo_los_line.queue_free()
+	_solo_los_line = null
+
+
+## Targeting-mode input (runs from _input BEFORE the world handlers; object_manager skips while active).
+func _solo_targeting_input(event: InputEvent) -> bool:
+	if _solo_target_mode.is_empty():
+		return false
+	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		_solo_end_targeting()
+		return true
+	if event is InputEventMouseMotion:
+		_solo_update_los_line(event.position)
+		return false   # motion may pass (camera etc.)
+	if event is InputEventMouseButton and event.pressed:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_RIGHT:
+			_solo_end_targeting()
+			return true
+		if mb.button_index == MOUSE_BUTTON_LEFT:
+			var target := _solo_pick_unit_at(mb.position)
+			var attacker: GameUnit = _solo_target_mode.get("unit")
+			var melee: bool = bool(_solo_target_mode.get("melee", false))
+			if target == null or not _solo_is_ai_unit(target) or _solo_combined_alive(target) <= 0:
+				return true   # swallow the click; stay in targeting mode
+			var verdict := _solo_validate_target(attacker, target, melee)
+			if verdict != "":
+				if battle_log != null:
+					battle_log.log_event(BattleLog.Category.GENERAL, "%s: %s" % [target.get_name(), verdict])
+				return true
+			_solo_end_targeting()
+			_run_human_attack(attacker, target, melee)
+			return true
+	return false
+
+
+## "" when the target is attackable, else the human-readable reason.
+func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) -> String:
+	var dist := MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
+	if melee:
+		return "" if dist <= 2.0 else "not in melee contact (%.0f\")" % dist
+	var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
+	if rng_in <= 0:
+		return "no ranged weapons"
+	if dist > float(rng_in):
+		return "out of range (%.0f\" > %d\")" % [dist, rng_in]
+	if not _solo_has_los(attacker, target):
+		return "no line of sight"
+	return ""
+
+
+func _solo_has_los(a: GameUnit, b: GameUnit) -> bool:
+	if terrain_overlay == null or not terrain_overlay.has_method("has_line_of_sight"):
+		return true
+	return terrain_overlay.has_line_of_sight(solo_controller.unit_centre(a), solo_controller.unit_centre(b), 1, 1)
+
+
+## The unit's weapons incl. attached heroes' (range ring + validation read the combined reach).
+func _solo_all_weapons(unit: GameUnit) -> Array:
+	var weapons: Array = []
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	for m in members:
+		var member := m as GameUnit
+		if member != null and member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
+			weapons = weapons + (member.source_data as OPRApiClient.OPRUnit).weapons
+	return weapons
+
+
+func _solo_unit_nodes(unit: GameUnit) -> Array:
+	var out: Array = []
+	for m in unit.get_alive_models():
+		var node: Node3D = (m as ModelInstance).node
+		if node != null and is_instance_valid(node):
+			out.append(node)
+	return out
+
+
+## Ray-pick the unit under the cursor (models carry meta "game_unit"; trays resolve via their regiment).
+func _solo_pick_unit_at(screen_pos: Vector2) -> GameUnit:
+	var camera := get_viewport().get_camera_3d()
+	if camera == null:
+		return null
+	var query := PhysicsRayQueryParameters3D.create(
+		camera.project_ray_origin(screen_pos),
+		camera.project_ray_origin(screen_pos) + camera.project_ray_normal(screen_pos) * 100.0)
+	var hit: Dictionary = get_viewport().world_3d.direct_space_state.intersect_ray(query)
+	var col: Object = hit.get("collider")
+	if col is Node and (col as Node).has_meta("game_unit"):
+		return (col as Node).get_meta("game_unit") as GameUnit
+	if col is RegimentTray and opr_army_manager != null:
+		for reg in opr_army_manager.regiments.values():
+			if reg != null and reg.tray == col and reg.game_unit != null:
+				return reg.game_unit as GameUnit
+	return null
+
+
+## Live line of sight to the hovered enemy: green = clear, red = blocked (goal 001 P8 lock).
+func _solo_update_los_line(screen_pos: Vector2) -> void:
+	var attacker: GameUnit = _solo_target_mode.get("unit")
+	var hovered := _solo_pick_unit_at(screen_pos)
+	if attacker == null or hovered == null or not _solo_is_ai_unit(hovered):
+		if _solo_los_line != null and is_instance_valid(_solo_los_line):
+			_solo_los_line.visible = false
+		return
+	if _solo_los_line == null or not is_instance_valid(_solo_los_line):
+		_solo_los_line = MeshInstance3D.new()
+		_solo_los_line.mesh = ImmediateMesh.new()
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.vertex_color_use_as_albedo = true
+		mat.no_depth_test = true
+		_solo_los_line.material_override = mat
+		add_child(_solo_los_line)
+	var clear := _solo_has_los(attacker, hovered)
+	var color := Color(0.2, 0.9, 0.3) if clear else Color(0.95, 0.25, 0.2)
+	var im := _solo_los_line.mesh as ImmediateMesh
+	im.clear_surfaces()
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	im.surface_set_color(color)
+	im.surface_add_vertex(solo_controller.unit_centre(attacker) + Vector3(0, 0.04, 0))
+	im.surface_set_color(color)
+	im.surface_add_vertex(solo_controller.unit_centre(hovered) + Vector3(0, 0.04, 0))
+	im.surface_end()
+	_solo_los_line.visible = true
+
+
+## Resolve the player's declared attack — the mirror of the AI flow: your groups (unit + heroes, own
+## Quality) roll REAL to-hit dice in the tray, the AI saves in the tray, wounds run through the flows.
+## Melee: the AI ALWAYS strikes back (official rule) — you save via the prompt; loser tests morale.
+func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> void:
+	if attacker == null or target == null or dice_roller_control == null:
+		return
+	var dist := MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
+	var human_dealt := 0
+	var ai_dealt := 0
+	for grp in _solo_attack_groups(attacker, dist, melee):
+		var group := grp as Dictionary
+		var to_hit: int = int(group.get("quality", 4))
+		if melee and bool(group.get("fatigued", false)):
+			to_hit = 6
+		for p in group.get("profiles", []):
+			var profile := p as Dictionary
+			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You")
+			var hits: int = AiCombatMath.count_hits(faces, to_hit)
+			if battle_log != null:
+				var verb := "strikes with" if melee else "fires"
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s %s %s at %s — %d hit%s" % [
+					str(group.get("name", "?")), verb, str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")])
+			if hits <= 0:
+				continue
+			var save_faces: Array = await _solo_tray_roll(hits, target.get_defense() + int(profile.get("ap", 0)), "AI (%s)" % target.get_name())
+			human_dealt += AiCombatMath.wounds(hits, save_faces, target.get_defense(), int(profile.get("ap", 0)))
+	if human_dealt > 0:
+		_solo_apply_wounds(target, human_dealt)
+	if melee:
+		_solo_set_fatigued(attacker)
+		# The AI must always strike back (official rule) — no prompt on its side.
+		if _solo_combined_alive(target) > 0:
+			for grp in _solo_attack_groups(target, 0.0, true):
+				var group := grp as Dictionary
+				var to_hit: int = 6 if bool(group.get("fatigued", false)) else int(group.get("quality", 4))
+				for p in group.get("profiles", []):
+					var profile := p as Dictionary
+					var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "AI (%s)" % str(group.get("name", "?")))
+					var hits: int = AiCombatMath.count_hits(faces, to_hit)
+					if hits <= 0:
+						continue
+					var save_faces: Array = await _solo_prompt_saves(target, attacker, str(profile.get("name", "?")), hits, attacker.get_defense(), int(profile.get("ap", 0)))
+					ai_dealt += AiCombatMath.wounds(hits, save_faces, attacker.get_defense(), int(profile.get("ap", 0)))
+			if ai_dealt > 0:
+				_solo_apply_wounds(attacker, ai_dealt)
+			_solo_set_fatigued(target)
+		# Morale: the side that took MORE wounds tests.
+		if human_dealt > ai_dealt and _solo_combined_alive(target) > 0:
+			await _solo_morale_test(target, "AI (%s)" % target.get_name())
+		elif ai_dealt > human_dealt and _solo_combined_alive(attacker) > 0:
+			await _solo_morale_test(attacker, "You")
+
+
 ## Mark a unit (and its attached heroes — they fought too) Fatigued after its first melee this round
 ## (state + marker + broadcast via the radial seam).
 func _solo_set_fatigued(unit: GameUnit) -> void:
@@ -1136,6 +1358,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	# regardless of focus, so an in-game visual glitch ships WITH the report.
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F12:
 		_capture_bug_report()
+		get_viewport().set_input_as_handled()
+		return
+	# Solo P8: while the player is picking an attack target, targeting input eats the relevant events.
+	if not _solo_target_mode.is_empty() and _solo_targeting_input(event):
 		get_viewport().set_input_as_handled()
 		return
 	# F11 (Solo/AI M1 debug trigger): treat player 2's army as AI-controlled and run its turn — each of

@@ -305,6 +305,11 @@ func _input(event: InputEvent) -> void:
 		var dock_node = main_node.get("unit_dock") if main_node != null else null
 		if dock_node != null and dock_node.has_method("occludes_point") and dock_node.occludes_point(mouse_event.position):
 			return
+		# Solo P8: while the player is picking an attack target, main's targeting mode owns the mouse —
+		# no selection/box-select underneath.
+		if main_node != null and main_node.get("_solo_target_mode") is Dictionary \
+				and not (main_node.get("_solo_target_mode") as Dictionary).is_empty():
+			return
 
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
 			if mouse_event.pressed:
