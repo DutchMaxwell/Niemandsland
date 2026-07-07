@@ -518,9 +518,10 @@ func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> voi
 	_start_box_selection(screen_pos, alt_pressed)
 
 
-## Host free-move (community feedback): the HOST may lift the ownership lock and handle EVERY model on
-## the table — essential for fully solo / self-refereed games run from a hosted session. Toggled from
-## the left panel; guests are unaffected (is_server() is false for them, so their lock stays).
+## Free-move (community feedback): the ownership lock is lifted for EVERYONE at the table — anyone may
+## move any model (fully solo / self-refereed games). SESSION state: only the HOST's toggle sets it, the
+## value syncs to every peer through the table-settings broadcast, so guests may move the host's army
+## too — they just cannot operate the toggle.
 var host_free_move: bool = false
 
 
@@ -532,7 +533,7 @@ var host_free_move: bool = false
 func _foreign_owner_slot(obj: Node) -> int:
 	if obj == null or not _network_manager or not _network_manager.is_multiplayer_active():
 		return 0
-	if host_free_move and multiplayer.is_server():
+	if host_free_move:
 		return 0
 	var owner := 0
 	if obj.has_meta("opr_player_id"):

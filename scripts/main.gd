@@ -188,6 +188,7 @@ var unit_card: UnitCard = null
 var unit_dock: UnitDock = null
 var battle_log: BattleLog = null              # narrative event log (collector)
 var battle_log_panel: BattleLogPanel = null   # collapsible HUD panel (top-centre, collapsed by default)
+var _host_free_move_check: CheckButton = null   # "Move all models" — host-operated, session-wide
 var _hovered_model: Node3D = null
 
 # WGS (Wargaming Simulator) Integration
@@ -2172,6 +2173,9 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# is not part of the serialized .nml game state, so it must be pushed separately).
 	if table != null:
 		network_manager.broadcast_table_settings({"biome": table.biome})
+	# Late joiners also need the session's free-move state (host-operated, applies to everyone).
+	if object_manager != null and object_manager.host_free_move:
+		network_manager.broadcast_table_settings({"free_move": true})
 	# Replay the current pinned rulers so the late-joiner sees existing measurements
 	# (session-only state, not part of the .nml save).
 	network_manager.sync_rulers_to_peer(peer_id)
@@ -2856,6 +2860,10 @@ func _broadcast_table_settings_update(setting_key: String, value) -> void:
 ## Receive table settings from host (client only)
 func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 	print("[Settings] Received table settings: %s" % str(settings))
+
+	# Session-wide free-move (host-operated): apply + mirror into the (read-only for guests) checkbox.
+	if settings.has("free_move"):
+		_apply_free_move(bool(settings["free_move"]))
 
 	if settings.has("table_size"):
 		var ts = settings["table_size"]
@@ -3872,20 +3880,33 @@ func _init_host_tools_ui() -> void:
 	label.text = "Host tools:"
 	label.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
 	box.add_child(label)
-	var cb := CheckButton.new()
-	cb.text = "Move all models"
-	cb.tooltip_text = "Lift the ownership lock: the host may move every player's models (solo / refereeing). Guests keep their normal lock."
-	cb.focus_mode = Control.FOCUS_NONE
-	cb.add_theme_font_size_override("font_size", 12)
-	cb.toggled.connect(_on_host_free_move_toggled)
-	box.add_child(cb)
+	_host_free_move_check = CheckButton.new()
+	_host_free_move_check.text = "Move all models"
+	_host_free_move_check.tooltip_text = "Lift the ownership lock for EVERYONE at the table (solo / refereeing). Only the host can switch this."
+	_host_free_move_check.focus_mode = Control.FOCUS_NONE
+	_host_free_move_check.add_theme_font_size_override("font_size", 12)
+	_host_free_move_check.toggled.connect(_on_host_free_move_toggled)
+	box.add_child(_host_free_move_check)
 
 
+## Session-wide free-move: HOST-operated, applies to everyone (guests may then move the host's army too
+## — they just cannot flip the switch themselves).
 func _on_host_free_move_toggled(pressed: bool) -> void:
+	if network_manager != null and network_manager.is_multiplayer_active() and not network_manager.is_host:
+		# A guest flipped the switch: revert silently — the state belongs to the host.
+		_host_free_move_check.set_pressed_no_signal(object_manager.host_free_move if object_manager != null else false)
+		return
+	_apply_free_move(pressed)
+	_broadcast_table_settings_update("free_move", pressed)
+
+
+func _apply_free_move(enabled: bool) -> void:
 	if object_manager != null:
-		object_manager.host_free_move = pressed
+		object_manager.host_free_move = enabled
+	if _host_free_move_check != null:
+		_host_free_move_check.set_pressed_no_signal(enabled)
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL, "Host free-move %s" % ("enabled" if pressed else "disabled"))
+		battle_log.log_event(BattleLog.Category.GENERAL, "Free-move %s (everyone may move all models)" % ("enabled" if enabled else "disabled"))
 
 
 func _init_deployment_zones_ui() -> void:
