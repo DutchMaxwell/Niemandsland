@@ -6,26 +6,47 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
-Batching on `main` since 0.3.7.2-alpha (no tag yet).
+Batching on `main` for **0.3.8-alpha**.
 
 ### Added
-- **Bottom army unit-card dock (D-series).** A bottom "Units" tab slides up a playing-card FAN of
-  compact unit cards for the whole army — dark-navy CardVisual faces with hover lift/tilt, a cyan
-  selection glow, and a procedural deal-in sound. Selecting a unit flies in a presented card carrying
-  the Tactical-HUD face: Q/D die-chips, alive counter, status chips, a weapons block (per distinct
-  weapon — range/attacks/AP inline, named special rules on a sub-line), an abbreviated rules line, and
-  action chips (activate / fatigue / shaken / casts / wounds / details / revive). (#84, #94, #95, #97)
+- **Bottom army unit-card dock.** A bottom "Units" tab slides up a fan of FULL unit cards for the whole
+  army — the strip and the focus card share one design. Selecting a unit (or clicking its strip card)
+  presents a focus card: Q/D die-chips, alive counter, per-weapon block (range/attacks/AP inline), and a
+  hoverable rules + spells list with wrapping tooltips including rule cascades (an item names what it
+  grants, a spell reveals the rules it references, AP is hoverable too) and the spell-range ring on
+  hover. The status chips ARE the controls (activate / fatigue / shaken / casts / wounds / revive) — no
+  separate action bar and no Info button; the old detail card is retired. Cards are rigid (the deal-in
+  animation is the only motion), a double-click solidly selects and focuses the camera, and the strip
+  background hugs the cards. (#84, #94, #95, #97, #100, #102, #103)
+- **Battle Log.** A collapsible top-centre event log that narrates the game: unit moves (per unit, with
+  "2 of 10 models" partial moves), dice rolls with WHO rolled and the face results, regiment wounds,
+  model kills / revives / unit destruction, and round changes — with All/Combat/Movement/AI filters.
+  Movement events carry exact from→to coordinates at the seam: groundwork for a future replay. (#99,
+  #101, #106)
 - **ctex runtime asset integration.** On-demand minis load decimated meshes + BC7 (`.ctex`) textures,
   with multi-material support and loadout→variant model resolution; an unusable ctex block degrades to
   the legacy mesh, never to "no model". (#85, #86, #88, #92, #93)
 - **Dead-model parking rework.** Casualties park on the army tray as per-unit blocks with grey
   parked-boundary tokens; multi-model revive, a "return a fully destroyed unit" tray action, and MP
   kill/revive collision sync. (#87, #89, #90, #91)
+- **Multiplayer: 3+-player reconnect hardening.** The host mirrors its peer→slot table to every guest
+  (avatar/cursor colours survive reconnects in 3+-player games), presence and army bases share ONE
+  wrapping player palette (armies no longer turned grey at slot ≥ 5), and regiment trays keep their
+  network identity across save/load. (#105)
+- **Host free-move toggle.** "Host tools → Move all models" lets the HOST lift the ownership lock and
+  handle every model on the table (fully solo or refereed games from a hosted session); guests keep
+  their normal lock, and the toggle logs to the battle log. (#107)
 
 ### Fixed
+- **Faction models failing to load for some players.** Every CDN asset request now sends an honest
+  product User-Agent — Cloudflare's bot scoring challenged the engine's default empty UA on
+  low-reputation connections (reported by an Australian tester: meeples loaded, zero models). (#104)
+- **Singleplayer counted as an active multiplayer session.** The engine's default offline peer reports
+  CONNECTED, so a second locally imported army could not be moved (ownership lock) and a phantom host
+  slot was granted. (#108)
 - **Dock clicks no longer deselect the unit.** A click over the dock UI fell through to the 3D
-  selection pipeline (deselecting the unit, hiding the card, no-oping the action buttons); interactive
-  HUD widgets are now occluded from the world-selection path. (#97)
+  selection pipeline; interactive HUD widgets are now occluded from the world-selection path, including
+  while the strip is closing (double-clicks never leak to the table). (#97, #103)
 - **Model fit measures the `body` node.** Composed minis (banner pole, crest, downward-held weapon) no
   longer shrink or float — height + grounding measure the named `body` node's AABB; the combined AABB
   still drives the horizontal footprint. Legacy single-mesh models unchanged. (#96)
