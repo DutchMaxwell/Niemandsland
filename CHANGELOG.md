@@ -6,7 +6,9 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
-Batching on `main` for **0.3.8-alpha**.
+_Nothing yet — next batch starts here._
+
+## [0.3.8.0-alpha] — 2026-07-08
 
 ### Added
 - **Bottom army unit-card dock.** A bottom "Units" tab slides up a fan of FULL unit cards for the whole
@@ -33,9 +35,10 @@ Batching on `main` for **0.3.8-alpha**.
   (avatar/cursor colours survive reconnects in 3+-player games), presence and army bases share ONE
   wrapping player palette (armies no longer turned grey at slot ≥ 5), and regiment trays keep their
   network identity across save/load. (#105)
-- **Host free-move toggle.** "Host tools → Move all models" lets the HOST lift the ownership lock and
-  handle every model on the table (fully solo or refereed games from a hosted session); guests keep
-  their normal lock, and the toggle logs to the battle log. (#107)
+- **Free-move toggle (session-wide).** "Host tools → Move all models" lifts the ownership lock for
+  EVERYONE at the table — guests may then move the host's army too (fully solo or refereed games).
+  Only the host can operate the switch; the state syncs to every peer (late joiners included) and is
+  announced in the battle log. (#107)
 
 ### Fixed
 - **Faction models failing to load for some players.** Every CDN asset request now sends an honest
