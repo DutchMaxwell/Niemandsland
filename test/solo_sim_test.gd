@@ -194,3 +194,14 @@ func test_same_weapon_types_combine_into_one_group() -> void:
 	var hmgs := weapons.filter(func(w): return str(w["name"]) == "Heavy Machinegun")
 	assert_int(hmgs.size()).is_equal(1)
 	assert_int(int(hmgs[0]["count"])).is_equal(2)   # both HMGs summed → rolled together
+
+
+func test_dead_models_do_not_attack() -> void:
+	# A 10-model CCW unit (10 attacks at full strength) reduced to 4 alive rolls ~4 attacks, not 10.
+	var u: Dictionary = SoloSim.make_unit("Squad", 0, 4, 4, 10, [{"name": "CCW", "range_value": 0, "attacks": 1, "count": 10, "special_rules": []}])
+	assert_int(SoloSim._effective_attacks(u, 10)).is_equal(10)   # full strength
+	u["wounds_pool"] = 6                                          # 6 dead → 4 alive
+	assert_int(SoloSim.alive_models(u)).is_equal(4)
+	assert_int(SoloSim._effective_attacks(u, 10)).is_equal(4)    # only the 4 living models attack
+	u["wounds_pool"] = 9                                          # 1 alive
+	assert_int(SoloSim._effective_attacks(u, 10)).is_equal(1)

@@ -363,7 +363,7 @@ static func _resolve_shooting(attacker: Dictionary, target: Dictionary, dist: fl
 	var total := 0
 	for p in profiles:
 		var profile := p as Dictionary
-		var faces := _roll(rng, int(profile["attacks"]))
+		var faces := _roll(rng, _effective_attacks(attacker, int(profile["attacks"])))
 		var hits := AiCombatMath.count_hits(faces, quality)
 		var save_faces: Array = [] if hits <= 0 else _roll(rng, hits)
 		var w: int = 0 if hits <= 0 else AiCombatMath.wounds(hits, save_faces, defense, int(profile["ap"]))
@@ -407,7 +407,7 @@ static func _strike(striker: Dictionary, defender: Dictionary, rng: RandomNumber
 	var total := 0
 	for p in profiles:
 		var profile := p as Dictionary
-		var faces := _roll(rng, int(profile["attacks"]))
+		var faces := _roll(rng, _effective_attacks(striker, int(profile["attacks"])))
 		var hits := AiCombatMath.count_hits(faces, to_hit)
 		var save_faces: Array = [] if hits <= 0 else _roll(rng, hits)
 		var w: int = 0 if hits <= 0 else AiCombatMath.wounds(hits, save_faces, int(defender["defense"]), int(profile["ap"]))
@@ -471,6 +471,16 @@ static func _seize_objectives(units: Array, objectives: Array, obj_owner: Array,
 			obj_owner[i] = 1
 			log_lines.append("Objective %d seized by Army 1" % i)
 		# nobody near → owner unchanged (persistent)
+
+
+## OPR "Determine Attacks": only the weapons of models that are still ALIVE count. Our weapon `count` is
+## the starting model count, so scale a group's attacks by the surviving fraction — otherwise dead models
+## keep attacking (maintainer found this in melee). Rounds to the nearest whole die.
+static func _effective_attacks(unit: Dictionary, base_attacks: int) -> int:
+	var mx: int = int(unit["max_models"])
+	if mx <= 0:
+		return base_attacks
+	return maxi(0, int(round(float(base_attacks) * float(alive_models(unit)) / float(mx))))
 
 
 static func _apply_wounds(unit: Dictionary, w: int) -> void:
