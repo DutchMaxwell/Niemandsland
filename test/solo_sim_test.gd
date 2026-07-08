@@ -86,16 +86,38 @@ func test_default_objectives_are_two_symmetric_centre_markers() -> void:
 	assert_float((objs[0] as Vector2).x + (objs[1] as Vector2).x).is_equal_approx(48.0, 0.001)
 
 
-func test_objective_control_3_inch_uncontested_and_contested() -> void:
+func test_objective_seize_persists_contests_and_shaken_cannot_seize() -> void:
 	var objs := [Vector2(24, 24)]
+	var owner := [-1]
 	var mine: Dictionary = SoloSim.make_unit("A", 0, 4, 4, 5, [])
 	mine["pos"] = Vector2(24, 24)     # sitting on the objective
 	var foe: Dictionary = SoloSim.make_unit("B", 1, 4, 4, 5, [])
 	foe["pos"] = Vector2(0, 0)        # far away
-	# Uncontested → player 0 holds it, player 1 does not.
-	assert_int(SoloSim._side_objectives([mine, foe], objs, 0)).is_equal(1)
-	assert_int(SoloSim._side_objectives([mine, foe], objs, 1)).is_equal(0)
-	# Enemy steps within 3" → contested → nobody holds it.
+	# Uncontested → player 0 seizes.
+	SoloSim._seize_objectives([mine, foe], objs, owner, [])
+	assert_int(int(owner[0])).is_equal(0)
+	# STAYS seized after the unit walks away (persistent).
+	mine["pos"] = Vector2(0, 47)
+	SoloSim._seize_objectives([mine, foe], objs, owner, [])
+	assert_int(int(owner[0])).is_equal(0)
+	# Both sides within 3" → contested → neutral.
+	mine["pos"] = Vector2(24, 24)
 	foe["pos"] = Vector2(25, 24)
-	assert_int(SoloSim._side_objectives([mine, foe], objs, 0)).is_equal(0)
-	assert_int(SoloSim._side_objectives([mine, foe], objs, 1)).is_equal(0)
+	SoloSim._seize_objectives([mine, foe], objs, owner, [])
+	assert_int(int(owner[0])).is_equal(-1)
+	# A Shaken unit cannot seize: only a Shaken player-0 unit present → stays neutral.
+	foe["pos"] = Vector2(0, 0)
+	mine["shaken"] = true
+	SoloSim._seize_objectives([mine, foe], objs, owner, [])
+	assert_int(int(owner[0])).is_equal(-1)
+
+
+func test_shaken_penalties_worsen_quality_and_defense_and_halve_move() -> void:
+	var u: Dictionary = SoloSim.make_unit("U", 0, 4, 4, 5, [])
+	assert_int(SoloSim._eff_quality(u)).is_equal(4)
+	assert_int(SoloSim._eff_defense(u)).is_equal(4)
+	assert_float(SoloSim._move_scale(u)).is_equal_approx(1.0, 0.001)
+	u["shaken"] = true
+	assert_int(SoloSim._eff_quality(u)).is_equal(5)   # −1 to Quality rolls → target one worse
+	assert_int(SoloSim._eff_defense(u)).is_equal(5)   # −1 to Defense rolls
+	assert_float(SoloSim._move_scale(u)).is_equal_approx(0.5, 0.001)   # half movement
