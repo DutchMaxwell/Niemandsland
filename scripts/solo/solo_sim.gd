@@ -244,16 +244,19 @@ static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator
 	var action: int = int(dec["action"])
 	var to_obj: bool = int(dec["toward"]) == AiDecision.Toward.OBJECTIVE and has_obj
 	var goal: Vector2 = obj_pos if to_obj else tpos
-	var gdir: Vector2 = (goal - upos).normalized() if upos.distance_to(goal) > 0.0001 else Vector2.ZERO
+	var goal_dist: float = upos.distance_to(goal)
+	var gdir: Vector2 = (goal - upos).normalized() if goal_dist > 0.0001 else Vector2.ZERO
 	var edir: Vector2 = (tpos - upos).normalized() if enemy_dist > 0.0001 else Vector2.ZERO
 	match action:
 		AiDecision.Action.RUSH:
-			_move(unit, gdir * rush)
+			# STOP AT the objective, never march past it (p.58: seize within 3", "as close as possible").
+			# The maintainer's finding: units overshot the marker and abandoned it.
+			_move(unit, gdir * (minf(rush, goal_dist) if to_obj else rush))
 		AiDecision.Action.CHARGE:
 			_move(unit, edir * minf(rush, maxf(enemy_dist - CONTACT_IN, 0.0)))
 		AiDecision.Action.ADVANCE:
 			if to_obj:
-				_move(unit, gdir * advance)
+				_move(unit, gdir * minf(advance, goal_dist))   # stop on the objective, don't overshoot
 			else:
 				# "Advancing" rule (p.58): a shooter advancing on the enemy stays as FAR as possible while
 				# still in range — step back to the range edge if already inside it, else close to get in

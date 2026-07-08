@@ -150,3 +150,16 @@ func test_pick_target_prefers_not_yet_activated() -> void:
 	# Range limit: only the far one is un-activated but it's out of a 6" range → the near (activated) one.
 	far_fresh["activated"] = false
 	assert_str((SoloSim._pick_target(me, units, 6.0) as Dictionary)["name"]).is_equal("NearDone")
+
+
+func test_unit_stops_on_objective_and_does_not_overshoot() -> void:
+	# A shooter 4" south of an uncontrolled objective, enemy far away → it moves TO the marker and stays
+	# within 3" (secures it), instead of marching the full move distance past it (the maintainer's bug).
+	var objs := [Vector2(24, 24)]
+	var owner := [-1]
+	var u: Dictionary = SoloSim.make_unit("Sh", 0, 4, 4, 5, [{"name": "Rifle", "range_value": 24, "attacks": 1, "count": 5, "special_rules": []}])
+	u["pos"] = Vector2(24, 20)
+	var foe: Dictionary = SoloSim.make_unit("F", 1, 4, 4, 5, [])
+	foe["pos"] = Vector2(2, 44)   # >30" away so it Rushes to the objective rather than advance+shoot
+	SoloSim._activate(u, [u, foe], RandomNumberGenerator.new(), [], 1, owner, objs, [])
+	assert_float((u["pos"] as Vector2).distance_to(Vector2(24, 24))).is_less_equal(3.0)
