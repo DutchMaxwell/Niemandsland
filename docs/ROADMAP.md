@@ -63,14 +63,6 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 > **✅ Shipped on `main` (unreleased, batching):** the bottom army unit-card dock (D-series). The
 > items below remain queued (avatar/cursor full rework, background-world toggle, Change-Daemons cascade).
 
-**🔨 Now (quick, low-risk — doing directly):**
-- **Dice log live-scroll** — the latest roll sometimes doesn't scroll into view; guarantee the log
-  pins to the newest entry (recompute scroll after the entry's final layout). _S_
-- **Deployment-zone flip (colour swap)** — on an asymmetric map a player who takes the *other* table
-  edge can swap the two zone colours, so their colour matches their side. Pure colour swap. _S_
-- **MP cursor/avatar label sizes** — the cursor ring text and the avatar name label are far too big;
-  shrink + tidy them (first slice of the bigger avatar/cursor rework below). _S_
-
 **📋 Soon (medium — next):**
 - **Avatar transparency on zoom** — as a player zooms in (closer to the table), fade *their* avatar
   for the others so it stops hiding the detail they're inspecting; at max zoom only a faint ghost
@@ -181,6 +173,13 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   ring buffer). MP-safe: both clients observe the same central events. (Maintainer, 2026-07-06.) _L_
   - **Cinematic replay** (far future) — a camera director on top of the journal: framing the active unit,
     dice moments, charges — instead of the static top view. _XL, after the base replay_
+- **Variant-aware mounting** — a mounted leader currently swaps to the mount GLB and loses his weapon-
+  variant visual (`opr_army_manager` replaces model 0); a later game-side change could resolve composed
+  `<unit>#<mount>+<slug>` variants instead. _M, after the mounts chapter ships_
+- **Persistent room / async play** — a long-running hosted table (or a turn-based save-file relay flow)
+  so players take turns asynchronously; today's answer is save-file exchange + the battle log. We are
+  host-authoritative with a dumb relay, so a "persistent room" means either a headless host client or
+  relay-side state — both heavy. Community-requested (DE Discord, 2026-07-05). _XL, far future_
 - _Community feedback from the alpha lands here first._
 
 ## ✅ Recently shipped

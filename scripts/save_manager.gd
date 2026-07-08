@@ -81,7 +81,7 @@ func restore_army_trays_after_load(army_names: Dictionary) -> void:
 		if pid > 0 and not seen.has(pid):
 			seen[pid] = true
 			var aname := str(army_names.get(pid, "Army"))
-			var acol = OPRArmyManager.PLAYER_COLORS.get(pid, Color.GRAY)
+			var acol = OPRArmyManager.army_color(pid, Color.GRAY)
 			army_manager._create_army_tray(pid, aname, acol)
 
 
@@ -815,7 +815,8 @@ func _restore_regiments_after_load() -> void:
 		var pos = _array_to_vector3(reg_data.get("tray_pos", [0, 0, 0]))
 		var rot_y = float(reg_data.get("tray_rot_y", 0.0))
 		var wounds_taken = int(reg_data.get("wounds_taken", 0))
-		army_manager.restore_regiment(game_unit, frontage, pos, rot_y, wounds_taken)
+		var saved_net_id = int(reg_data.get("network_id", -1))   # keep tray MP identity (bus 036)
+		army_manager.restore_regiment(game_unit, frontage, pos, rot_y, wounds_taken, saved_net_id)
 
 
 ## Re-park loose models that were saved dead (G4). Their nodes were restored at their revive spot
