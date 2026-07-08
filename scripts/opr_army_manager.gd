@@ -17,13 +17,24 @@ signal round_advanced(round_number: int)
 ## both run through apply_regiment_wounds). delta is negative when wounds were healed.
 signal regiment_wounds_applied(unit_name: String, delta: int, remaining: int, pool: int)
 
-## Player colors for army identification
+## Player colors for army identification. Values mirror PlayerPalette (the single source shared with
+## presence) so a player's army matches their avatar/cursor; use army_color() below to also WRAP past
+## slot 4 like presence does — the bare dict falls back to neutral for unknown/0 (bus 036).
 const PLAYER_COLORS = {
-	1: Color(0.2, 0.4, 0.8),   # Blue
-	2: Color(0.8, 0.2, 0.2),   # Red
-	3: Color(0.2, 0.7, 0.2),   # Green
-	4: Color(0.7, 0.5, 0.1),   # Orange/Gold
+	1: Color(0.20, 0.40, 0.90),  # Blue
+	2: Color(0.90, 0.20, 0.20),  # Red
+	3: Color(0.20, 0.80, 0.30),  # Green
+	4: Color(0.90, 0.70, 0.10),  # Yellow
 }
+
+
+## The army-base colour for a player slot: the shared wrapping palette for a real slot (>= 1), else the
+## caller's neutral (unowned / player 0). This makes army bases agree with presence at slot >= 5, where
+## the old bare dict returned grey while avatars/cursors wrapped (bus 036).
+static func army_color(player_id: int, neutral: Color = Color.GRAY) -> Color:
+	if player_id < 1:
+		return neutral
+	return PlayerPalette.color_for_slot(player_id)
 
 ## Tray positions relative to table (player_id -> side)
 ## Player 1: left, Player 2: right, Player 3: front, Player 4: back
@@ -193,7 +204,7 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	await _ensure_army_models_cached(army)
 
 	var all_models: Array[Node3D] = []
-	var player_color = PLAYER_COLORS.get(army.player_id, Color.GRAY)
+	var player_color = OPRArmyManager.army_color(army.player_id, Color.GRAY)
 
 	# Create army tray and get spawn position (starts elevated). The tray + its models stay
 	# HIDDEN through the build loop so the player never sees the army assemble stepwise — it
@@ -402,12 +413,17 @@ func form_regiment(game_unit) -> Regiment:
 ## Rebuild a regiment movement-tray block on load: create the tray at the saved
 ## transform and adopt the unit's already-restored model nodes (no re-layout — the
 ## exact saved arrangement, including casualty gaps, is preserved).
-func restore_regiment(game_unit, frontage: int, pos: Vector3, rot_y: float, wounds_taken: int = 0) -> Regiment:
+func restore_regiment(game_unit, frontage: int, pos: Vector3, rot_y: float, wounds_taken: int = 0, saved_net_id: int = -1) -> Regiment:
 	if game_unit == null:
 		return null
 	var tray := RegimentTray.new()
 	tray.name = "Regiment_%s" % game_unit.unit_id
-	tray.set_meta("network_id", _next_owned_net_id(int(game_unit.unit_properties.get("player_id", 1))))
+	# Keep the tray's serialized MP identity so it survives save/load; only mint a fresh id for older
+	# saves that never stored one (bus 036 — trays previously lost identity across load in MP).
+	if saved_net_id >= 0:
+		tray.set_meta("network_id", saved_net_id)
+	else:
+		tray.set_meta("network_id", _next_owned_net_id(int(game_unit.unit_properties.get("player_id", 1))))
 	object_manager.add_child(tray)
 	tray.frontage = maxi(frontage, 1)
 	tray.global_position = pos
@@ -1456,12 +1472,16 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 	# Add script for selection
 	wrapper.set_script(load("res://scripts/selectable_object.gd"))
 
+	# Record the RESOLVED model key (loadout variant / mount): save + MP sync carry it so the
+	# restore path re-resolves the exact same model instead of guessing from the unit name.
+	wrapper.set_meta("glb_name", glb_name)
+
 	return wrapper
 
 
 ## Create a visual model from saved unit_properties dictionary (for save/load)
 ## Uses the same visual logic as _create_unit_model() but reads from Dictionary instead of OPRUnit
-func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> StaticBody3D:
+func create_model_from_properties(props: Dictionary, model_tough: int = 0, glb_name_override: String = "") -> StaticBody3D:
 	var wrapper = StaticBody3D.new()
 	wrapper.collision_layer = MINIATURE_COLLISION_LAYER
 	wrapper.collision_mask = GROUND_COLLISION_LAYER
@@ -1500,7 +1520,7 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> St
 
 	# Get player color
 	var player_id: int = props.get("player_id", 1)
-	var player_color: Color = PLAYER_COLORS.get(player_id, Color.GRAY)
+	var player_color: Color = OPRArmyManager.army_color(player_id, Color.GRAY)
 
 	# Create base mesh
 	var base_instance = MeshInstance3D.new()
@@ -1542,7 +1562,14 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> St
 		var mount_glb: String = _find_mount_glb_name(saved_mount, faction_folder)
 		if not mount_glb.is_empty():
 			glb_name = mount_glb
-	var model_path = _find_model_for_unit(glb_name, faction_folder)
+	# The serialized RESOLVED key (loadout variant / mount) wins: the unit name alone cannot find
+	# variant-only manifest entries (reworked factions), which meeple'd synced + loaded armies.
+	if not glb_name_override.is_empty():
+		glb_name = glb_name_override
+	# Mirror the import path: prefer the ctex delivery (decimated mesh + BC7 materials) when cached.
+	var ctex_paths: Dictionary = model_library.ctex_cached_paths(faction_folder, glb_name) if model_library != null else {}
+	var use_ctex: bool = not ctex_paths.is_empty()
+	var model_path: String = str(ctex_paths.get("mesh", "")) if use_ctex else _find_model_for_unit(glb_name, faction_folder)
 	var model_height: float = 0.032
 
 	var use_glb_model = false
@@ -1560,7 +1587,16 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> St
 			# Orient on an oval base: walkers crosswise (quer), other vehicles along the long axis.
 			_align_to_oval_long_axis(glb_instance, aabb, base_is_oval, base_width, base_depth, _is_walker(unit_name))
 
-			_brighten_trellis_materials(glb_instance)
+			if use_ctex:
+				# Same treatment as the import path so ctex and legacy render identically.
+				if ctex_paths.has("materials"):
+					CtexLoader.apply_materials_to_mesh(glb_instance, ctex_paths["materials"])
+				else:
+					CtexLoader.apply_to_mesh(glb_instance, str(ctex_paths.get("albedo", "")),
+						str(ctex_paths.get("normal", "")), str(ctex_paths.get("orm", "")), false)
+				_brighten_ctex_materials(glb_instance)
+			else:
+				_brighten_trellis_materials(glb_instance)
 			wrapper.add_child(glb_instance)
 			use_glb_model = true
 			model_height = fit.height
@@ -1619,6 +1655,10 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> St
 
 	# Add script for selection and groups
 	wrapper.set_script(load("res://scripts/selectable_object.gd"))
+
+	# Record the RESOLVED model key (loadout variant / mount): save + MP sync carry it so the
+	# restore path re-resolves the exact same model instead of guessing from the unit name.
+	wrapper.set_meta("glb_name", glb_name)
 	wrapper.add_to_group("selectable")
 	wrapper.add_to_group("miniature")
 	wrapper.add_to_group("opr_unit")

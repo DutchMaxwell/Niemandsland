@@ -22,16 +22,14 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **Alpha is live; `0.3.7.2-alpha` shipped (2026-07-01) on all three platforms.** An Age of Fantasy:
-  Regiments handling patch on top of `0.3.7.1-alpha`: regiment movement-tray aids (frontage cycle,
-  axis-locked drag, pivot snap, pooled-wound counter, radial menu, 45° arc quadrants, mouse-driven
-  rotation + readout, facing preserved on drop), plus GitHub-feedback fixes — dice results grouped by
-  colour (#77), movement special rules (Swift) in the Shift+M reach bands (#79), table-area-scaled
-  auto-deploy terrain (#83), the Ambush/Scout band on every tray (#76), type-aware vehicle/walker/
-  artillery base sizing, biome-aware dangerous terrain, and playtest quick-wins (stains order #82,
-  dice "?" #80, token cleanup #78, double-click select #81). The **Linux self-updater ETXTBSY fix**
-  and **macOS ad-hoc signing** (no more "damaged") also land. Next work is **feedback-driven** toward
-  the **MP-first Beta** (see Next); a **Solo / Co-Op AI** (OPR's official ruleset) is being scoped. _S_
+- **`0.3.8.0-alpha` shipped (2026-07-08) — the "cards, logs & fair play" release.** The whole July
+  wave in one tag: the reworked unit-card dock, the Battle Log (now recording BOTH sides' moves and
+  every roll with faces), ctex runtime assets, dead-model parking, MP 3+ colour/reconnect hardening
+  (#105), the session-wide free-move toggle (#107), the permanent room-code readout (#110), and the
+  restore-path variant/ctex fix — synced and loaded armies no longer degrade to meeples (#111). A
+  27-check two-instance release test drove out five real bugs before tagging. Next: **feedback-driven**
+  toward the **MP-first Beta** (see Next); the **Solo / Co-Op AI** (OPR's official ruleset) is in
+  field-testing on `feat/solo-ai`; **autosave + save-migration** is the set 0.3.9 candidate. _S_
 - **Solo / Co-Op AI** — the maintainer's next major implementation target (2026-06-30). Follows OPR's
   official **Solo & Co-Op Rules v3.5.0** (deterministic per-archetype decision trees, with a utility
   tie-break; semi-manual combat first, engine-agnostic foundation). Full design + phased plan in
@@ -64,16 +62,8 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
 > **✅ Shipped in `0.3.7.2-alpha`:** dice-log live-scroll, deployment-zone colour flip, cursor/avatar
 > label sizes + avatar fade-on-zoom, movement cap (opt-in), and return/revive units & models.
-> **✅ Shipped on `main` (unreleased, batching):** the bottom army unit-card dock (D-series). The
+> **✅ Shipped in `0.3.8.0-alpha`:** the bottom army unit-card dock (D-series + card-UX rounds). The
 > items below remain queued (avatar/cursor full rework, background-world toggle, Change-Daemons cascade).
-
-**🔨 Now (quick, low-risk — doing directly):**
-- **Dice log live-scroll** — the latest roll sometimes doesn't scroll into view; guarantee the log
-  pins to the newest entry (recompute scroll after the entry's final layout). _S_
-- **Deployment-zone flip (colour swap)** — on an asymmetric map a player who takes the *other* table
-  edge can swap the two zone colours, so their colour matches their side. Pure colour swap. _S_
-- **MP cursor/avatar label sizes** — the cursor ring text and the avatar name label are far too big;
-  shrink + tidy them (first slice of the bigger avatar/cursor rework below). _S_
 
 **📋 Soon (medium — next):**
 - **Avatar transparency on zoom** — as a player zooms in (closer to the table), fade *their* avatar
@@ -185,11 +175,24 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   ring buffer). MP-safe: both clients observe the same central events. (Maintainer, 2026-07-06.) _L_
   - **Cinematic replay** (far future) — a camera director on top of the journal: framing the active unit,
     dice moments, charges — instead of the static top view. _XL, after the base replay_
+- **Variant-aware mounting** — a mounted leader currently swaps to the mount GLB and loses his weapon-
+  variant visual (`opr_army_manager` replaces model 0); a later game-side change could resolve composed
+  `<unit>#<mount>+<slug>` variants instead. _M, after the mounts chapter ships_
+- **Persistent room / async play** — a long-running hosted table (or a turn-based save-file relay flow)
+  so players take turns asynchronously; today's answer is save-file exchange + the battle log. We are
+  host-authoritative with a dumb relay, so a "persistent room" means either a headless host client or
+  relay-side state — both heavy. Community-requested (DE Discord, 2026-07-05). _XL, far future_
 - _Community feedback from the alpha lands here first._
 
 ## ✅ Recently shipped
 
-See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.7.2-alpha` (2026-07-01):** Age of Fantasy: Regiments
+See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.8.0-alpha` (2026-07-08):** unit-card dock rework
+(#84–#103), Battle Log incl. remote moves (#99/#101/#106/#112), ctex runtime assets (#85–#93),
+dead-model parking (#87–#91), MP 3+ hardening + shared palette (#105), session-wide free-move (#107),
+offline-peer singleplayer fix (#108), permanent room-code readout (#110), variant/ctex restore fix
+(#111), CDN honest UA (#104), body-AABB model fit (#96).
+
+**`0.3.7.2-alpha` (2026-07-01):** Age of Fantasy: Regiments
 handling — frontage cycle, axis-locked drag, pivot snap, pooled-wound counter, radial menu, 45° arc
 quadrants, mouse rotation, facing-on-drop; plus dice-by-colour (#77), Swift movement bands (#79),
 table-scaled auto-deploy terrain (#83), Ambush/Scout on every tray (#76), type-aware base sizing,

@@ -1329,7 +1329,7 @@ func update_objectives(objectives: Array, owners: Array = []) -> void:
 func _objective_owner_color(owner_id: int) -> Color:
 	if owner_id <= 0:
 		return Color(1.0, 0.85, 0.2, 1.0)  # Neutral gold/yellow
-	var c: Color = OPRArmyManager.PLAYER_COLORS.get(owner_id, Color(1.0, 0.85, 0.2, 1.0))
+	var c: Color = OPRArmyManager.army_color(owner_id, Color(1.0, 0.85, 0.2, 1.0))
 	return Color(c.r, c.g, c.b, 1.0)
 
 

@@ -8,6 +8,7 @@ var peer_id: int = 0
 var player_color: Color = Color.RED
 
 var _ring_mesh: MeshInstance3D
+var _label: Label3D = null
 var _last_update_time: float = 0.0
 var _target_pos: Vector3 = Vector3.ZERO
 var _fade_delay: float = 3.0  # Seconds of inactivity before fading
@@ -82,14 +83,25 @@ func _build_cursor() -> void:
 
 	# Peer label — small + crisp. Without an explicit pixel_size the Label3D default (0.005) made
 	# "P1" ~10 cm tall, as big as the whole cursor ring; a smaller pixel_size shrinks it (issue #3).
-	var label = Label3D.new()
-	label.text = "P%d" % peer_id
-	label.font_size = 48
-	label.pixel_size = 0.0005  # ~2.4 cm tall
-	label.modulate = player_color
-	label.outline_modulate = Color.BLACK
-	label.outline_size = 6
-	label.position = Vector3(0.055, 0.01, 0)
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = true
-	add_child(label)
+	_label = Label3D.new()
+	_label.text = "P%d" % peer_id
+	_label.font_size = 48
+	_label.pixel_size = 0.0005  # ~2.4 cm tall
+	_label.modulate = player_color
+	_label.outline_modulate = Color.BLACK
+	_label.outline_size = 6
+	_label.position = Vector3(0.055, 0.01, 0)
+	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_label.no_depth_test = true
+	add_child(_label)
+
+
+## Recolour the cursor (ring/dot material + label) when a slot-table sync corrects this peer's colour on
+## a guest that had spawned it with a stale slot (bus 036).
+func set_player_color(color: Color) -> void:
+	player_color = color
+	if _material:
+		_material.albedo_color = Color(color.r, color.g, color.b, _material.albedo_color.a)
+		_material.emission = color
+	if _label:
+		_label.modulate = color

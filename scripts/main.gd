@@ -189,6 +189,9 @@ var unit_card: UnitCard = null
 var unit_dock: UnitDock = null
 var battle_log: BattleLog = null              # narrative event log (collector)
 var battle_log_panel: BattleLogPanel = null   # collapsible HUD panel (top-centre, collapsed by default)
+var _host_free_move_check: CheckButton = null   # "Move all models" — host-operated, session-wide
+var _room_code_button: Button = null          # permanent room-code display in the left bar (click = copy)
+var _session_room_code: String = ""
 var _hovered_model: Node3D = null
 
 # WGS (Wargaming Simulator) Integration
@@ -342,6 +345,7 @@ func _ready() -> void:
 	network_manager.peer_version_validated.connect(_on_peer_version_validated)
 	network_manager.version_rejected.connect(_on_version_rejected)
 	network_manager.peer_remapped.connect(_on_peer_remapped)
+	network_manager.slot_table_synced.connect(_on_slot_table_synced)
 	network_manager.session_busy_changed.connect(_on_session_busy_changed)
 
 	# Connect game state sync signals (remote wounds, activation, markers, casts, delete)
@@ -546,6 +550,13 @@ func _ready() -> void:
 
 	# Solo section (goal 001): per-army AI toggles; refreshed on every army import.
 	_init_solo_panel()
+
+	# Host tools: the free-move toggle (lift the ownership lock — community feedback for solo play).
+	_init_host_tools_ui()
+
+	# Room-code display (maintainer): the code must stay visible for the whole session — players could
+	# not rejoin because it was shown only once and every status update overwrote it.
+	_init_room_code_display()
 
 	# Initialize Radial Menu
 	_init_radial_menu()
@@ -2159,6 +2170,8 @@ func _setup_battle_log() -> void:
 	if object_manager != null:
 		object_manager.selection_dropped.connect(_on_battle_log_dropped)
 	if network_manager != null:
+		if network_manager.has_signal("remote_move_log_received"):
+			network_manager.remote_move_log_received.connect(_log_move_summaries)
 		if network_manager.has_signal("remote_round_advanced"):
 			network_manager.remote_round_advanced.connect(
 				func() -> void: battle_log.on_round_advanced(opr_army_manager.current_round))
@@ -2230,14 +2243,38 @@ func _on_battle_log_dropped(moves: Array) -> void:
 		e["max_in"] = maxf(float(e["max_in"]), float(mv.get("inches", 0.0)))
 		if node is RegimentTray:
 			e["whole"] = true
+	var summaries: Array = []
 	for unit_name in per_unit:
 		var e: Dictionary = per_unit[unit_name]
-		var alive: int = int(e["alive"])
-		if bool(e["whole"]) or int(e["count"]) >= alive or alive <= 1:
-			battle_log.on_unit_moved(unit_name, float(e["max_in"]))
+		summaries.append({"unit": unit_name, "count": int(e["count"]), "alive": int(e["alive"]),
+			"max_in": float(e["max_in"]), "whole": bool(e["whole"])})
+	_log_move_summaries(summaries)
+	# The move STREAM is unreliable + continuous (drag), so the other side cannot know when a drop
+	# happened — ship the finished per-unit summary reliably; every peer logs identical lines
+	# (release-test finding C3: only own movements were logged).
+	if network_manager != null and network_manager.is_multiplayer_active():
+		network_manager.broadcast_move_log(summaries)
+
+
+## Write per-unit movement summaries into the battle log — same lines for local and remote movers.
+func _log_move_summaries(summaries: Array) -> void:
+	if battle_log == null:
+		return
+	for entry in summaries:
+		var e: Dictionary = entry as Dictionary
+		if e == null or e.is_empty():
+			continue
+		var unit_name: String = str(e.get("unit", ""))
+		if unit_name.is_empty():
+			continue
+		var alive: int = int(e.get("alive", 0))
+		var count: int = int(e.get("count", 0))
+		var max_in: float = float(e.get("max_in", 0.0))
+		if bool(e.get("whole", false)) or count >= alive or alive <= 1:
+			battle_log.on_unit_moved(unit_name, max_in)
 		else:
 			battle_log.log_event(BattleLog.Category.MOVEMENT,
-				"%s: %d of %d models move %.0f\"" % [unit_name, int(e["count"]), alive, float(e["max_in"])])
+				"%s: %d of %d models move %.0f\"" % [unit_name, count, alive, max_in])
 
 
 ## Alive model count of the unit a node belongs to (denominator for partial-move lines).
@@ -2778,12 +2815,18 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# The peer is registered and validated — hand it the full name roster so it
 	# immediately knows everyone already at the table (including the host).
 	network_manager.push_roster_to_peer(peer_id)
+	# Hand it the whole peer→slot table too, so in a 3+-player game it agrees on everyone's slot (hence
+	# colour) immediately, without needing to have witnessed each incremental remap broadcast (bus 036).
+	network_manager.push_slot_table_to_peer(peer_id)
 	# If anyone is CURRENTLY loading, tell the late joiner so it gates + shows the banner too.
 	network_manager.push_busy_state_to_peer(peer_id)
 	# Hand the joining peer the current biome (host-authoritative table state — the biome
 	# is not part of the serialized .nml game state, so it must be pushed separately).
 	if table != null:
 		network_manager.broadcast_table_settings({"biome": table.biome})
+	# Late joiners also need the session's free-move state (host-operated, applies to everyone).
+	if object_manager != null and object_manager.host_free_move:
+		network_manager.broadcast_table_settings({"free_move": true})
 	# Replay the current pinned rulers so the late-joiner sees existing measurements
 	# (session-only state, not part of the .nml save).
 	network_manager.sync_rulers_to_peer(peer_id)
@@ -2821,6 +2864,7 @@ func _on_internet_room_ready(code: String) -> void:
 	# Copy code to clipboard for easy sharing
 	DisplayServer.clipboard_set(code)
 	print("Room code %s copied to clipboard" % display_code)
+	_set_room_code_display(code)   # permanent readout in the left bar + battle-log line
 	# Host seeds its identity HERE: the host flow goes room_created -> room_code_ready and
 	# never reaches _on_internet_connected, so this is where the host claims slot 1.
 	if network_manager and multiplayer.is_server():
@@ -2839,6 +2883,9 @@ func _on_internet_connected(peer_id: int) -> void:
 	_update_network_ui(true, false)
 	network_status_label.text = "Online (Peer %d)" % peer_id
 	network_status_label.add_theme_color_override("font_color", Color.GREEN)
+	# The guest keeps the room code visible too (it typed it once, then it was gone — no rejoin).
+	if internet_lobby != null and not internet_lobby.room_code.is_empty():
+		_set_room_code_display(internet_lobby.room_code)
 	# Announce our version to the host; on a match the host pushes full state
 	# (gated on the handshake) once SceneMultiplayer has registered the peer.
 	network_manager.announce_version_to_host()
@@ -3421,6 +3468,20 @@ func _on_peer_remapped(old_peer: int, new_peer: int, _slot: int) -> void:
 	_rebuild_roster()
 
 
+## A guest just adopted the host's full peer→slot table (bus 036): recolour every existing avatar +
+## cursor, since some may have been spawned with a stale slot (their raw peer_id) before the table
+## arrived, giving the wrong colour in a 3+-player game.
+func _on_slot_table_synced() -> void:
+	for pid in _player_avatars:
+		var av = _player_avatars[pid]
+		if is_instance_valid(av) and av.has_method("set_player_color"):
+			av.set_player_color(_get_player_color(pid))
+	for pid in _remote_cursors:
+		var cur = _remote_cursors[pid]
+		if is_instance_valid(cur) and cur.has_method("set_player_color"):
+			cur.set_player_color(_get_player_color(pid))
+
+
 ## Remove all presence nodes (on disconnect)
 func _cleanup_all_presence() -> void:
 	for cursor in _remote_cursors.values():
@@ -3438,17 +3499,10 @@ func _cleanup_all_presence() -> void:
 ## monotonic slot back into the four-colour table (and slot 0 / pending -> colour 1),
 ## so nobody ever flickers to WHITE.
 func _get_player_color(peer_id: int) -> Color:
-	const COLORS := {
-		1: Color(0.2, 0.4, 0.9),  # Blue
-		2: Color(0.9, 0.2, 0.2),  # Red
-		3: Color(0.2, 0.8, 0.3),  # Green
-		4: Color(0.9, 0.7, 0.1),  # Yellow
-	}
 	var slot := peer_id
 	if network_manager:
 		slot = network_manager.slot_for_peer(peer_id)
-	var idx := (((slot - 1) % COLORS.size()) + 1) if slot > 0 else 1
-	return COLORS.get(idx, Color.WHITE)
+	return PlayerPalette.color_for_slot(slot)   # shared slot→palette (matches army bases, bus 036)
 
 
 ## ============================================================================
@@ -3468,6 +3522,10 @@ func _broadcast_table_settings_update(setting_key: String, value) -> void:
 ## Receive table settings from host (client only)
 func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 	print("[Settings] Received table settings: %s" % str(settings))
+
+	# Session-wide free-move (host-operated): apply + mirror into the (read-only for guests) checkbox.
+	if settings.has("free_move"):
+		_apply_free_move(bool(settings["free_move"]))
 
 	if settings.has("table_size"):
 		var ts = settings["table_size"]
@@ -3572,7 +3630,44 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 
 
 ## Update network UI visibility based on connection state
+## Permanent room-code readout at the TOP of the left bar (maintainer: without it nobody can rejoin —
+## the code was shown once and every status update overwrote it). Click copies the code; also logged to
+## the battle log on host/join so it survives in the session record.
+func _init_room_code_display() -> void:
+	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
+	if not left_panel_vbox:
+		return
+	_room_code_button = Button.new()
+	_room_code_button.visible = false
+	_room_code_button.focus_mode = Control.FOCUS_NONE
+	_room_code_button.tooltip_text = "The session's room code — click to copy"
+	_room_code_button.add_theme_color_override("font_color", Color(0.4, 0.95, 0.55))
+	_room_code_button.pressed.connect(func() -> void:
+		if not _session_room_code.is_empty():
+			DisplayServer.clipboard_set(_session_room_code)
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL, "Room code copied to clipboard"))
+	left_panel_vbox.add_child(_room_code_button)
+	left_panel_vbox.move_child(_room_code_button, 0)
+
+
+## Show/refresh (non-empty code) or hide (empty) the permanent room-code readout + log it once.
+func _set_room_code_display(code: String) -> void:
+	_session_room_code = code
+	if _room_code_button == null:
+		return
+	if code.is_empty():
+		_room_code_button.visible = false
+		return
+	_room_code_button.text = "Room: %s" % InternetLobby._format_code(code)
+	_room_code_button.visible = true
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "Room code: %s" % InternetLobby._format_code(code))
+
+
 func _update_network_ui(connected: bool, _is_host: bool) -> void:
+	if not connected:
+		_set_room_code_display("")   # session over — hide the room-code readout
 	host_button.visible = !connected
 	host_button.disabled = false
 	join_button.visible = !connected
@@ -4037,7 +4132,7 @@ func _broadcast_army_import(army: OPRApiClient.OPRArmy, spawned_models: Array[No
 func _on_remote_army_header(player_id: int, army_name: String, unit_count: int) -> void:
 	_is_army_syncing = true  # pause our presence broadcasts while we build the incoming army (Fix A)
 	print("[ArmySync] Header: '%s' — expecting %d units (player_id=%d)" % [army_name, unit_count, player_id])
-	var player_color: Color = OPRArmyManager.PLAYER_COLORS.get(player_id, Color.GRAY)
+	var player_color: Color = OPRArmyManager.army_color(player_id, Color.GRAY)
 	opr_army_manager._create_army_tray(player_id, army_name, player_color)
 	_incoming_armies[player_id] = {"army_name": army_name, "units": [], "objects": []}
 	# Same overlay as a self-import, so receiving an army looks identical to loading one.
@@ -4087,12 +4182,28 @@ func _on_remote_army_complete(player_id: int, rule_descriptions: Dictionary) -> 
 	# 2. Download EVERY model in one batch (single shared HTTPRequest — no per-unit collision).
 	if opr_army_manager != null and opr_army_manager.model_library != null:
 		var specs: Array = []
+		var seen_keys: Dictionary = {}
+		var unit_faction: Dictionary = {}   # game_unit_id -> faction (for per-object variant keys)
 		for ud in units:
 			var p: Dictionary = ud.get("unit_properties", {})
 			var fac: String = p.get("faction_folder", "")
 			var un: String = p.get("name", "")
-			if fac != "" and un != "":
+			unit_faction[str(ud.get("unit_id", ""))] = fac
+			if fac != "" and un != "" and not seen_keys.has(fac + "/" + un):
+				seen_keys[fac + "/" + un] = true
 				specs.append({"faction": fac, "unit_name": un})
+		# Variant-reworked factions have VARIANT-ONLY manifest entries: the per-object RESOLVED
+		# keys (loadout variant / mount, stamped at import) must download too, or the models
+		# fall back to placeholders (RC3 field-test bug).
+		for group in object_groups:
+			for od in group:
+				if od is Dictionary and (od as Dictionary).has("glb_name"):
+					var od_d: Dictionary = od as Dictionary
+					var fac2: String = str(unit_faction.get(str(od_d.get("game_unit_id", "")), ""))
+					var key: String = str(od_d.get("glb_name", ""))
+					if fac2 != "" and key != "" and not seen_keys.has(fac2 + "/" + key):
+						seen_keys[fac2 + "/" + key] = true
+						specs.append({"faction": fac2, "unit_name": key})
 		if not specs.is_empty():
 			await opr_army_manager.model_library.ensure_models(specs)
 
@@ -4529,6 +4640,49 @@ func _on_solo_ai_toggled(pressed: bool, player_id: int) -> void:
 ## Initialize deployment zones UI (simplified - only visibility toggle)
 ## NOTE: Deployment zone type selection and custom zone editing is now in Map Tool.
 ## This ensures a single point of truth for deployment zone configuration.
+## Host tools (community feedback): a left-panel toggle that lets the HOST move ALL models — lifts the
+## MP ownership lock for fully solo / self-refereed games run from a hosted session. Guests never see an
+## effect (the lock check is host-gated); the toggle logs to the battle log for transparency.
+func _init_host_tools_ui() -> void:
+	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
+	if not left_panel_vbox:
+		return
+	var box := VBoxContainer.new()
+	box.name = "HostToolsPanel"
+	left_panel_vbox.add_child(box)
+	var label := Label.new()
+	label.text = "Host tools:"
+	label.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
+	box.add_child(label)
+	_host_free_move_check = CheckButton.new()
+	_host_free_move_check.text = "Move all models"
+	_host_free_move_check.tooltip_text = "Lift the ownership lock for EVERYONE at the table (solo / refereeing). Only the host can switch this."
+	_host_free_move_check.focus_mode = Control.FOCUS_NONE
+	_host_free_move_check.add_theme_font_size_override("font_size", 12)
+	_host_free_move_check.toggled.connect(_on_host_free_move_toggled)
+	box.add_child(_host_free_move_check)
+
+
+## Session-wide free-move: HOST-operated, applies to everyone (guests may then move the host's army too
+## — they just cannot flip the switch themselves).
+func _on_host_free_move_toggled(pressed: bool) -> void:
+	if network_manager != null and network_manager.is_multiplayer_active() and not network_manager.is_host:
+		# A guest flipped the switch: revert silently — the state belongs to the host.
+		_host_free_move_check.set_pressed_no_signal(object_manager.host_free_move if object_manager != null else false)
+		return
+	_apply_free_move(pressed)
+	_broadcast_table_settings_update("free_move", pressed)
+
+
+func _apply_free_move(enabled: bool) -> void:
+	if object_manager != null:
+		object_manager.host_free_move = enabled
+	if _host_free_move_check != null:
+		_host_free_move_check.set_pressed_no_signal(enabled)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "Free-move %s (everyone may move all models)" % ("enabled" if enabled else "disabled"))
+
+
 func _init_deployment_zones_ui() -> void:
 	# Get the left panel VBox to add UI elements
 	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
