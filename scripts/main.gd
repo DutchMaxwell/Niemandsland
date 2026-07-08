@@ -1555,6 +1555,8 @@ func _setup_battle_log() -> void:
 	if object_manager != null:
 		object_manager.selection_dropped.connect(_on_battle_log_dropped)
 	if network_manager != null:
+		if network_manager.has_signal("remote_move_log_received"):
+			network_manager.remote_move_log_received.connect(_log_move_summaries)
 		if network_manager.has_signal("remote_round_advanced"):
 			network_manager.remote_round_advanced.connect(
 				func() -> void: battle_log.on_round_advanced(opr_army_manager.current_round))
@@ -1626,14 +1628,38 @@ func _on_battle_log_dropped(moves: Array) -> void:
 		e["max_in"] = maxf(float(e["max_in"]), float(mv.get("inches", 0.0)))
 		if node is RegimentTray:
 			e["whole"] = true
+	var summaries: Array = []
 	for unit_name in per_unit:
 		var e: Dictionary = per_unit[unit_name]
-		var alive: int = int(e["alive"])
-		if bool(e["whole"]) or int(e["count"]) >= alive or alive <= 1:
-			battle_log.on_unit_moved(unit_name, float(e["max_in"]))
+		summaries.append({"unit": unit_name, "count": int(e["count"]), "alive": int(e["alive"]),
+			"max_in": float(e["max_in"]), "whole": bool(e["whole"])})
+	_log_move_summaries(summaries)
+	# The move STREAM is unreliable + continuous (drag), so the other side cannot know when a drop
+	# happened — ship the finished per-unit summary reliably; every peer logs identical lines
+	# (release-test finding C3: only own movements were logged).
+	if network_manager != null and network_manager.is_multiplayer_active():
+		network_manager.broadcast_move_log(summaries)
+
+
+## Write per-unit movement summaries into the battle log — same lines for local and remote movers.
+func _log_move_summaries(summaries: Array) -> void:
+	if battle_log == null:
+		return
+	for entry in summaries:
+		var e: Dictionary = entry as Dictionary
+		if e == null or e.is_empty():
+			continue
+		var unit_name: String = str(e.get("unit", ""))
+		if unit_name.is_empty():
+			continue
+		var alive: int = int(e.get("alive", 0))
+		var count: int = int(e.get("count", 0))
+		var max_in: float = float(e.get("max_in", 0.0))
+		if bool(e.get("whole", false)) or count >= alive or alive <= 1:
+			battle_log.on_unit_moved(unit_name, max_in)
 		else:
 			battle_log.log_event(BattleLog.Category.MOVEMENT,
-				"%s: %d of %d models move %.0f\"" % [unit_name, int(e["count"]), alive, float(e["max_in"])])
+				"%s: %d of %d models move %.0f\"" % [unit_name, count, alive, max_in])
 
 
 ## Alive model count of the unit a node belongs to (denominator for partial-move lines).
