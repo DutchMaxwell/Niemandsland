@@ -132,8 +132,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	var mp = multiplayer.multiplayer_peer
-	if not mp or not mp is MultiplayerPeer:
-		return
+	if not mp or not mp is MultiplayerPeer or mp is OfflineMultiplayerPeer:
+		return   # the engine's default offline peer reports CONNECTED — nothing to watch in singleplayer
 
 	_poll_timer += delta
 	if _poll_timer < CONNECTION_POLL_INTERVAL:
@@ -206,10 +206,15 @@ func _validate_rpc_ready(context: String = "") -> bool:
 	return true
 
 
-## Check if we're currently in a multiplayer session (works for ENet and Relay)
+## Check if we're currently in a multiplayer session (works for ENet and Relay).
+## NOT the engine's default OfflineMultiplayerPeer: it reports CONNECTED, so pure singleplayer counted
+## as an active MP session — the ownership guard then locked "foreign" armies (a second local army could
+## not be moved) and is_server() granted a phantom host slot.
 func is_multiplayer_active() -> bool:
 	var mp = multiplayer.multiplayer_peer
-	return mp != null and mp is MultiplayerPeer and mp.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
+	if mp == null or mp is OfflineMultiplayerPeer:
+		return false
+	return mp is MultiplayerPeer and mp.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
 
 
 ## Get our peer ID
