@@ -7,29 +7,44 @@ extends RefCounted
 
 enum Type { MELEE, SHOOTING, HYBRID }
 
-## Ratio at/above which one attack pool "dominates" the other → that single archetype instead of Hybrid.
-const DOMINANCE := 2.0
 
-
-## Classify from an array of weapons — each either an OPRWeapon or a {range_value, attacks} dict.
+## Classify from an array of weapons per the OPR Solo & Co-Op rules (p.1 "Unit Types"): MELEE = no ranged
+## weapon at all; otherwise HYBRID if the best MELEE weapon is "better than" the best RANGED weapon, else
+## SHOOTING. "Better than" is left undefined by the rules — we score a weapon by attacks × (1 + AP), taking
+## the strongest weapon on each side; a tie goes to SHOOTING (a ranged weapon also has reach). This fixes
+## the old attack-VOLUME heuristic that wrongly called a rifle-and-basic-CCW squad "Hybrid".
 static func classify(weapons: Array) -> Type:
-	var melee_attacks: int = 0
-	var ranged_attacks: int = 0
+	var best_ranged: float = -1.0
+	var best_melee: float = -1.0
 	for w in weapons:
-		var atk: int = maxi(_attacks(w), 0)
-		if _range(w) <= 0:
-			melee_attacks += atk
+		var s: float = _weapon_strength(w)
+		if _range(w) > 0:
+			best_ranged = maxf(best_ranged, s)
 		else:
-			ranged_attacks += atk
-	if ranged_attacks <= 0:
-		return Type.MELEE
-	if melee_attacks <= 0:
-		return Type.SHOOTING
-	if float(ranged_attacks) >= float(melee_attacks) * DOMINANCE:
-		return Type.SHOOTING
-	if float(melee_attacks) >= float(ranged_attacks) * DOMINANCE:
-		return Type.MELEE
-	return Type.HYBRID
+			best_melee = maxf(best_melee, s)
+	if best_ranged < 0.0:
+		return Type.MELEE          # no ranged weapon
+	if best_melee < 0.0:
+		return Type.SHOOTING       # no melee weapon
+	return Type.HYBRID if best_melee > best_ranged else Type.SHOOTING
+
+
+## A weapon's "better than" score: attacks × (1 + AP). Higher AP and more attacks = stronger.
+static func _weapon_strength(w: Variant) -> float:
+	return float(maxi(_attacks(w), 0)) * (1.0 + float(_ap(w)))
+
+
+static func _ap(w: Variant) -> int:
+	var rules: Array = []
+	if w is Object and (w as Object).get("special_rules") != null:
+		rules = (w as Object).special_rules
+	elif w is Dictionary:
+		rules = (w as Dictionary).get("special_rules", [])
+	for r in rules:
+		var s := str(r).strip_edges()
+		if s.begins_with("AP(") and s.ends_with(")"):
+			return int(s.substr(3, s.length() - 4).replace("+", ""))
+	return 0
 
 
 ## Whether the unit has at least one ranged weapon (used by the decision tree to know it CAN shoot).
