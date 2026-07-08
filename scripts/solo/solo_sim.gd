@@ -101,7 +101,28 @@ static func units_from_opr_json(data: Dictionary, player: int) -> Array:
 		if bool(p["merged"]):
 			continue
 		out.append(make_unit(str(p["name"]), player, int(p["quality"]), int(p["defense"]),
-			int(p["size"]), p["weapons"], int(p["tough"]), p["rules"]))
+			int(p["size"]), _merge_weapon_types(p["weapons"]), int(p["tough"]), p["rules"]))
+	return out
+
+
+## OPR shooting (rulebook p.8 "Multiple Weapon Types" / "Determine Attacks"): weapons of the SAME type
+## are one group and roll together at one target. Combine identical profiles (name + range + AP) by
+## summing their model counts, so e.g. two Heavy Machineguns become one 2×-count group rolled at once,
+## instead of two separate rolls (maintainer finding). Different types stay separate.
+static func _merge_weapon_types(weapons: Array) -> Array:
+	var groups: Dictionary = {}
+	var order: Array = []
+	for w in weapons:
+		var wd := w as Dictionary
+		var key := "%s|%d|%d|%s" % [str(wd["name"]), int(wd["range_value"]), int(wd["attacks"]), str(wd["special_rules"])]
+		if groups.has(key):
+			groups[key]["count"] = int(groups[key]["count"]) + int(wd["count"])
+		else:
+			groups[key] = wd.duplicate(true)
+			order.append(key)
+	var out: Array = []
+	for k in order:
+		out.append(groups[k])
 	return out
 
 

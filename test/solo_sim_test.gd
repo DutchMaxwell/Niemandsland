@@ -163,3 +163,19 @@ func test_unit_stops_on_objective_and_does_not_overshoot() -> void:
 	foe["pos"] = Vector2(2, 44)   # >30" away so it Rushes to the objective rather than advance+shoot
 	SoloSim._activate(u, [u, foe], RandomNumberGenerator.new(), [], 1, owner, objs, [])
 	assert_float((u["pos"] as Vector2).distance_to(Vector2(24, 24))).is_less_equal(3.0)
+
+
+func test_same_weapon_types_combine_into_one_group() -> void:
+	# OPR p.8: two Heavy Machineguns (same type) become ONE group rolled together, not two separate rolls.
+	var data := {"units": [{"name": "Support", "size": 3, "quality": 3, "defense": 3, "rules": [],
+		"loadout": [
+			{"name": "Heavy Machinegun", "range": 30, "attacks": 3, "count": 1, "specialRules": [{"name": "AP", "rating": 1}]},
+			{"name": "Heavy Machinegun", "range": 30, "attacks": 3, "count": 1, "specialRules": [{"name": "AP", "rating": 1}]},
+			{"name": "CCW", "range": 0, "attacks": 1, "count": 3, "specialRules": []},
+		]}]}
+	var u: Dictionary = SoloSim.units_from_opr_json(data, 0)[0]
+	var weapons: Array = u["weapons"]
+	# One HMG group (count 2) + one CCW group — not two HMG entries.
+	var hmgs := weapons.filter(func(w): return str(w["name"]) == "Heavy Machinegun")
+	assert_int(hmgs.size()).is_equal(1)
+	assert_int(int(hmgs[0]["count"])).is_equal(2)   # both HMGs summed → rolled together
