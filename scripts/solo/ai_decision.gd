@@ -50,3 +50,52 @@ static func action_name(action: int) -> String:
 		Action.CHARGE: return "charges"
 		Action.KITE: return "falls back"
 	return "?"
+
+
+enum Toward { ENEMY, OBJECTIVE }
+
+## The FULL official Solo & Co-Op decision trees (GF/AoF Advanced Rules v3.5.1, p.57) — objective-driven,
+## which the legacy `decide` above is not. There is NO kite/retreat in the official rules: the AI always
+## Advances/Rushes/Charges toward an objective (if any uncontrolled one exists) or else the enemy. Pure +
+## deterministic. Returns {"action": Action, "toward": Toward, "shoot": bool}.
+##   ctx keys (all bool unless noted):
+##     arch                : AiArchetype.Type (int)
+##     objective           : an uncontrolled objective exists
+##     in_way              : enemies are in the way to that objective (within 6" of the path)
+##     obj_in_advance      : the objective is reachable with an Advance move
+##     obj_in_rush         : the objective is reachable with a Rush move
+##     enemy_in_charge     : an enemy is in Charge range
+##     shoot_after_advance : after an Advance, an enemy would be in shooting range
+static func decide_solo(ctx: Dictionary) -> Dictionary:
+	var arch: int = int(ctx.get("arch", AiArchetype.Type.MELEE))
+	var obj: bool = bool(ctx.get("objective", false))
+	var in_way: bool = bool(ctx.get("in_way", false))
+	var enemy_charge: bool = bool(ctx.get("enemy_in_charge", false))
+	var shoot_adv: bool = bool(ctx.get("shoot_after_advance", false))
+	match arch:
+		AiArchetype.Type.MELEE:
+			if obj:
+				if in_way and enemy_charge:
+					return _r(Action.CHARGE, Toward.ENEMY, false)
+				return _r(Action.RUSH, Toward.OBJECTIVE, false)
+			return _r(Action.CHARGE, Toward.ENEMY, false) if enemy_charge else _r(Action.RUSH, Toward.ENEMY, false)
+		AiArchetype.Type.SHOOTING:
+			if obj:
+				return _r(Action.ADVANCE, Toward.OBJECTIVE, true) if shoot_adv else _r(Action.RUSH, Toward.OBJECTIVE, false)
+			return _r(Action.ADVANCE, Toward.ENEMY, true) if shoot_adv else _r(Action.RUSH, Toward.ENEMY, false)
+		_:  # HYBRID
+			if obj:
+				if in_way:
+					if enemy_charge:
+						return _r(Action.CHARGE, Toward.ENEMY, false)
+					return _r(Action.ADVANCE, Toward.OBJECTIVE, true) if shoot_adv else _r(Action.RUSH, Toward.OBJECTIVE, false)
+				if bool(ctx.get("obj_in_rush", false)) and not bool(ctx.get("obj_in_advance", false)):
+					return _r(Action.RUSH, Toward.OBJECTIVE, false)
+				return _r(Action.ADVANCE, Toward.OBJECTIVE, true) if shoot_adv else _r(Action.RUSH, Toward.OBJECTIVE, false)
+			if enemy_charge:
+				return _r(Action.CHARGE, Toward.ENEMY, false)
+			return _r(Action.ADVANCE, Toward.ENEMY, true) if shoot_adv else _r(Action.RUSH, Toward.ENEMY, false)
+
+
+static func _r(action: int, toward: int, shoot: bool) -> Dictionary:
+	return {"action": action, "toward": toward, "shoot": shoot}

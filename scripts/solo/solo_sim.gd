@@ -150,7 +150,7 @@ static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rou
 				var actor: Variant = _next_unactivated(units, side)
 				if actor != null:
 					activations += 1
-					_activate(actor, units, rng, log_lines, r, obj_owner, trace)
+					_activate(actor, units, rng, log_lines, r, obj_owner, objs, trace)
 			side = 1 - side
 		# End of round: fatigue clears; then objectives are (re)seized.
 		for u in units:
@@ -194,7 +194,7 @@ static func _deploy(units: Array) -> void:
 # === Activation (mirrors SoloController._act on the 2D board) ===
 
 static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator, log_lines: Array,
-		round_no: int = 0, obj_owner: Array = [], trace: Array = []) -> void:
+		round_no: int = 0, obj_owner: Array = [], objectives: Array = [], trace: Array = []) -> void:
 	unit["activated"] = true
 	var rolls: Array = []   # dice detail recorded for the visual trace
 	# OPR (p.10): a Shaken unit spends its activation idle, which clears Shaken at the end of it.
@@ -213,33 +213,92 @@ static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator
 	var shoot_range: int = AiArchetype.max_range_inches(weapons)
 	var advance: float = float(unit["advance_in"])
 	var rush: float = float(unit["rush_in"])
-	var dist: float = upos.distance_to(tpos)
-	var dist0: float = dist   # distance at decision time (before the move)
-	var in_range: bool = shoot_range > 0 and dist <= float(shoot_range)   # open field: LOS always clear
-	var action: int = AiDecision.decide(archetype, dist, advance, rush, float(shoot_range), in_range)
-	var why := {"arch": ["MELEE", "SHOOTING", "HYBRID"][archetype], "range": shoot_range,
-		"in_range": in_range, "dist0": snappedf(dist0, 0.1)}
-	log_lines.append("%s: %s (%.0f\" to %s)" % [unit["name"], AiDecision.action_name(action), dist, target["name"]])
-	var dir: Vector2 = (tpos - upos).normalized() if dist > 0.0001 else Vector2.ZERO
+	var enemy_dist: float = upos.distance_to(tpos)
+	# Nearest objective NOT under this side's control (persistent owner). The official trees pivot on it.
+	var side: int = int(unit["player"])
+	var obj_pos: Vector2 = Vector2.INF
+	var obj_dist: float = INF
+	for oi in range(objectives.size()):
+		if oi < obj_owner.size() and int(obj_owner[oi]) == side:
+			continue   # already ours → controlled
+		var d: float = upos.distance_to(objectives[oi])
+		if d < obj_dist:
+			obj_dist = d
+			obj_pos = objectives[oi]
+	var has_obj: bool = obj_pos != Vector2.INF
+	# Enemies "in the way" to the objective: within 6" of the unit→objective path (p.58).
+	var in_way: bool = false
+	if has_obj:
+		for e in units:
+			if e["player"] != side and is_alive(e) and _seg_dist(upos, obj_pos, e["pos"]) <= 6.0:
+				in_way = true
+				break
+	var ctx := {
+		"arch": archetype, "objective": has_obj, "in_way": in_way,
+		"obj_in_advance": obj_dist <= advance + OBJECTIVE_CONTROL_IN,
+		"obj_in_rush": obj_dist <= rush + OBJECTIVE_CONTROL_IN,
+		"enemy_in_charge": enemy_dist <= rush,
+		"shoot_after_advance": shoot_range > 0 and (enemy_dist - advance) <= float(shoot_range),
+	}
+	var dec: Dictionary = AiDecision.decide_solo(ctx)
+	var action: int = int(dec["action"])
+	var to_obj: bool = int(dec["toward"]) == AiDecision.Toward.OBJECTIVE and has_obj
+	var goal: Vector2 = obj_pos if to_obj else tpos
+	var gdir: Vector2 = (goal - upos).normalized() if upos.distance_to(goal) > 0.0001 else Vector2.ZERO
+	var edir: Vector2 = (tpos - upos).normalized() if enemy_dist > 0.0001 else Vector2.ZERO
 	match action:
-		AiDecision.Action.ADVANCE:
-			_move(unit, dir * advance)
 		AiDecision.Action.RUSH:
-			_move(unit, dir * rush)
+			_move(unit, gdir * rush)
 		AiDecision.Action.CHARGE:
-			_move(unit, dir * minf(rush, maxf(dist - CONTACT_IN, 0.0)))
-		AiDecision.Action.KITE:
-			var room: float = maxf(float(shoot_range) - dist, 0.0)
-			_move(unit, -dir * minf(advance, room))
+			_move(unit, edir * minf(rush, maxf(enemy_dist - CONTACT_IN, 0.0)))
+		AiDecision.Action.ADVANCE:
+			if to_obj:
+				_move(unit, gdir * advance)
+			else:
+				# "Advancing" rule (p.58): a shooter advancing on the enemy stays as FAR as possible while
+				# still in range — step back to the range edge if already inside it, else close to get in
+				# range. It never flees off-board and always shoots (no kiting).
+				if enemy_dist <= float(shoot_range):
+					_move(unit, -edir * minf(advance, float(shoot_range) - enemy_dist))
+				else:
+					_move(unit, edir * advance)
 		_:
 			pass   # HOLD
-	dist = (unit["pos"] as Vector2).distance_to(tpos)
+	var dist: float = (unit["pos"] as Vector2).distance_to(tpos)
+	var label: String = _decision_label(action, to_obj, bool(dec["shoot"]))
+	var why := {"arch": ["MELEE", "SHOOTING", "HYBRID"][archetype], "range": shoot_range,
+		"objective": has_obj, "obj_dist": (snappedf(obj_dist, 0.1) if has_obj else -1.0),
+		"toward": ("objective" if to_obj else "enemy"), "in_way": in_way, "dist0": snappedf(enemy_dist, 0.1)}
+	log_lines.append("%s: %s (%.0f\" to %s)" % [unit["name"], label, enemy_dist, target["name"]])
 	if action == AiDecision.Action.CHARGE and dist <= CONTACT_IN + 0.001:
 		_resolve_melee(unit, target, rng, log_lines, rolls)
-	elif action in [AiDecision.Action.ADVANCE, AiDecision.Action.KITE, AiDecision.Action.HOLD] \
-			and shoot_range > 0 and dist <= float(shoot_range):
+	elif bool(dec["shoot"]) and shoot_range > 0 and dist <= float(shoot_range):
 		_resolve_shooting(unit, target, dist, rng, log_lines, rolls)
-	_trace_activation(trace, unit, round_no, AiDecision.action_name(action), target, dist, rolls, units, obj_owner, why)
+	_trace_activation(trace, unit, round_no, label, target, dist, rolls, units, obj_owner, why)
+
+
+## Human-readable decision label for the log + replay.
+static func _decision_label(action: int, to_obj: bool, shoot: bool) -> String:
+	var t: String = " (objective)" if to_obj else " (enemy)"
+	match action:
+		AiDecision.Action.CHARGE:
+			return "charges"
+		AiDecision.Action.RUSH:
+			return "rushes" + t
+		AiDecision.Action.ADVANCE:
+			return ("advances+shoots" if shoot else "advances") + t
+		_:
+			return "holds"
+
+
+## Distance from point p to the segment a→b (for the "enemies in the way" 6" path check).
+static func _seg_dist(a: Vector2, b: Vector2, p: Vector2) -> float:
+	var ab: Vector2 = b - a
+	var len2: float = ab.length_squared()
+	if len2 < 0.0001:
+		return p.distance_to(a)
+	var t: float = clampf((p - a).dot(ab) / len2, 0.0, 1.0)
+	return p.distance_to(a + ab * t)
 
 
 # === Combat resolution (uses AiShooting + AiCombatMath, dice from the seeded RNG) ===
