@@ -439,6 +439,7 @@ static func _trace_activation(trace: Array, unit: Dictionary, round_no: int, act
 		"type": "activation", "round": round_no, "unit_id": int(unit.get("_id", -1)), "unit": str(unit["name"]),
 		"player": int(unit["player"]), "action": action,
 		"target": (str(target["name"]) if target != null else ""),
+		"target_id": (int(target.get("_id", -1)) if target != null else -1),
 		"dist": snappedf(dist, 0.1), "rolls": rolls,
 		"board": _snapshot(units, obj_owner),
 	})
