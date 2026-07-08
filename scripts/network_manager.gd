@@ -714,6 +714,24 @@ func broadcast_move_batch(batch: Array) -> void:
 	_remote_call("move_objects_batch_networked", [batch], 0)
 
 
+## A finished (dropped) move as per-unit log summaries — RELIABLE, unlike the drag stream above,
+## so every peer's battle log records the same movement lines (release-test C3).
+signal remote_move_log_received(summaries: Array)
+
+
+func broadcast_move_log(summaries: Array) -> void:
+	if not is_multiplayer_active():
+		return
+	if not _validate_rpc_ready("broadcast_move_log"):
+		return
+	_remote_call("sync_move_log", [summaries], 0)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func sync_move_log(summaries: Array) -> void:
+	remote_move_log_received.emit(summaries)
+
+
 ## RPC: Move multiple objects in one message. Format: [id, x, y, z, id, x, y, z, ...]
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func move_objects_batch_networked(batch: Array) -> void:
