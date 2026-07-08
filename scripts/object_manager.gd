@@ -18,7 +18,6 @@ signal drag_updated()
 signal context_menu_requested(screen_pos: Vector2, selected_objects: Array)
 
 @export var drag_height: float = 0.5  # Drag height in meters
-@export var rotation_speed_degrees: float = 2.0  # Degrees per second while R held
 @export var min_drag_height: float = 0.01  # Minimum height above table when dragging
 @export var drag_lift_height: float = 0.05  # Lift height when dragging (5cm)
 
@@ -216,32 +215,15 @@ func _get_network_manager() -> void:
 
 
 func _process(delta: float) -> void:
-	# Continuous rotation while R is held - rotate all selected objects (hold Ctrl to reverse).
-	# Regiment movement-tray blocks are an exception: they rotate by MOUSE control (the
-	# tray turns to face the cursor), not a continuous spin — see _rotate_regiments_to_cursor.
+	# Rotation while R is held: every selected piece turns to FACE THE MOUSE CURSOR (aim, don't
+	# guess — community feedback). Regiment trays pivot the whole block around the tray centre; loose
+	# models each pivot in place around their OWN base, so a multi-model selection all "looks" the
+	# same way at once. The cumulative degrees from the gesture's start facing show next to the piece.
 	if _is_rotating and _selected_objects.size() > 0:
 		if _selection_is_regiment_only():
 			_rotate_regiments_to_cursor(delta)
 		else:
-			var rotation_dir := -1.0 if Input.is_key_pressed(KEY_CTRL) else 1.0
-			var rotation_amount = deg_to_rad(rotation_speed_degrees) * delta * 60 * rotation_dir  # 60fps base
-			for obj in _selected_objects:
-				if is_instance_valid(obj):
-					obj.rotate_y(rotation_amount)
-			# Live cumulative-degrees readout (converted from the radian delta above).
-			update_rotation_label(rad_to_deg(rotation_amount))
-
-			# Broadcast rotation to remote peers (throttled at ~15 Hz, batched)
-			_rotation_broadcast_timer += delta
-			if _rotation_broadcast_timer >= ROTATION_BROADCAST_INTERVAL and _network_manager:
-				_rotation_broadcast_timer = 0.0
-				var batch: Array = []
-				for obj in _selected_objects:
-					if is_instance_valid(obj) and obj.has_meta("network_id"):
-						batch.append(obj.get_meta("network_id"))
-						batch.append(obj.rotation.y)
-				if batch.size() > 0:
-					_network_manager.broadcast_rotation_batch(batch)
+			_rotate_loose_to_cursor(delta)
 	else:
 		_rotation_broadcast_timer = 0.0
 
@@ -1289,9 +1271,7 @@ func _rotate_regiments_to_cursor(delta: float) -> void:
 		var to_cursor := Vector2(cursor.x - tray.global_position.x, cursor.z - tray.global_position.z)
 		if to_cursor.length_squared() < 0.0000001:
 			continue
-		# Facing +Z = atan2(x, z); the tray's rotation.y rotates +Z, so the world
-		# facing is (sin(rot), cos(rot)). We want facing -> to_cursor, so:
-		var target_rot: float = atan2(to_cursor.x, to_cursor.y)
+		var target_rot: float = facing_rotation_to(tray.global_position.x, tray.global_position.z, cursor.x, cursor.z)
 		tray.rotation.y = target_rot
 		if _rotation_capture.has(tray):
 			var start_rot: float = _rotation_capture[tray]
@@ -1312,6 +1292,55 @@ func _rotate_regiments_to_cursor(delta: float) -> void:
 			if is_instance_valid(obj) and obj.has_meta("network_id"):
 				batch.append(obj.get_meta("network_id"))
 				batch.append(obj.rotation.y)
+		if batch.size() > 0 and _network_manager.is_multiplayer_active():
+			_network_manager.broadcast_rotation_batch(batch)
+
+
+## Pure facing math shared by both cursor-follow rotation paths: the rotation.y (radians) that aims a
+## piece's +Z forward from (from_x, from_z) at (target_x, target_z). World facing = (sin(rot), cos(rot)),
+## so aiming +Z at the target is atan2(dx, dz).
+static func facing_rotation_to(from_x: float, from_z: float, target_x: float, target_z: float) -> float:
+	return atan2(target_x - from_x, target_z - from_z)
+
+
+## Loose (non-regiment) rotation: each selected model turns in place around ITS OWN base to face the
+## cursor (community feedback — aim instead of guess-and-release). A multi-model selection all faces the
+## same cursor direction independently (NOT a rigid group spin). Mirrors the regiment-tray path; a mixed
+## selection rotates the loose models and leaves any trays for the regiment-only path.
+func _rotate_loose_to_cursor(delta: float) -> void:
+	var cursor := get_cursor_table_position()
+	if cursor == Vector3.ZERO:
+		return
+	var any_rotated := false
+	var first_delta_deg := 0.0
+	var found_first := false
+	for obj in _selected_objects:
+		if obj is RegimentTray or not is_instance_valid(obj):
+			continue
+		var to_cursor := Vector2(cursor.x - obj.global_position.x, cursor.z - obj.global_position.z)
+		if to_cursor.length_squared() < 0.0000001:
+			continue
+		var target_rot: float = facing_rotation_to(obj.global_position.x, obj.global_position.z, cursor.x, cursor.z)
+		obj.rotation.y = target_rot
+		if _rotation_capture.has(obj):
+			var start_rot: float = _rotation_capture[obj]
+			if not found_first:
+				first_delta_deg = rad_to_deg(target_rot - start_rot)
+				found_first = true
+		any_rotated = true
+	# Cumulative degrees on the first rotated model (mirrors the tray label).
+	if any_rotated:
+		set_rotation_label(first_delta_deg)
+	# Throttled broadcast (same cadence as the tray + former spin path).
+	_rotation_broadcast_timer += delta
+	if _rotation_broadcast_timer >= ROTATION_BROADCAST_INTERVAL and _network_manager:
+		_rotation_broadcast_timer = 0.0
+		var batch: Array = []
+		for obj in _selected_objects:
+			if obj is RegimentTray or not is_instance_valid(obj) or not obj.has_meta("network_id"):
+				continue
+			batch.append(obj.get_meta("network_id"))
+			batch.append(obj.rotation.y)
 		if batch.size() > 0 and _network_manager.is_multiplayer_active():
 			_network_manager.broadcast_rotation_batch(batch)
 

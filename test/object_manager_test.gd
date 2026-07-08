@@ -226,3 +226,29 @@ func test_auto_face_skips_freed_object_without_crash() -> void:
 
 	# Live model was still auto-faced; the freed one was skipped silently.
 	assert_float(mini.rotation.y).is_equal_approx(0.0, 0.0001)
+
+
+# ===== Cursor-follow facing math (static, pure) =====
+## facing_rotation_to returns the rotation.y that aims a piece's +Z forward at a target — the shared
+## core of the R-to-cursor rotation (loose models + regiment trays). Convention: +Z faces +Z (rot 0),
+## +X faces +X (rot +90°). Pure/static so it needs no camera or viewport.
+
+func test_facing_rotation_target_ahead_is_zero() -> void:
+	# Target straight ahead (+Z) → no turn.
+	assert_float(ObjectManagerScript.facing_rotation_to(0.0, 0.0, 0.0, 1.0)).is_equal_approx(0.0, 0.0001)
+
+
+func test_facing_rotation_target_right_is_quarter_turn() -> void:
+	# Target to the +X side → +90° (π/2).
+	assert_float(ObjectManagerScript.facing_rotation_to(0.0, 0.0, 1.0, 0.0)).is_equal_approx(PI / 2.0, 0.0001)
+
+
+func test_facing_rotation_target_behind_is_half_turn() -> void:
+	# Target directly behind (−Z) → ±180° (π).
+	assert_float(absf(ObjectManagerScript.facing_rotation_to(0.0, 0.0, 0.0, -1.0))).is_equal_approx(PI, 0.0001)
+
+
+func test_facing_rotation_is_relative_to_own_position() -> void:
+	# A loose model at (5, 5) with the target at (5, 8) faces straight +Z, independent of world origin
+	# (each model pivots around its OWN base, not a shared centre).
+	assert_float(ObjectManagerScript.facing_rotation_to(5.0, 5.0, 5.0, 8.0)).is_equal_approx(0.0, 0.0001)
