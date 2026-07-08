@@ -3,14 +3,8 @@ extends Node3D
 ##
 ## The head follows the remote player's exact 3D camera position and rotates
 ## to match their look direction. Features animated eyelids (blink) and
-## eyebrows for expressiveness.
-
-const PLAYER_COLORS := {
-	1: Color(0.2, 0.4, 0.9),  # Blue (host)
-	2: Color(0.9, 0.2, 0.2),  # Red (guest 1)
-	3: Color(0.2, 0.8, 0.3),  # Green (guest 2)
-	4: Color(0.9, 0.7, 0.1),  # Yellow (guest 3)
-}
+## eyebrows for expressiveness. Per-player colour comes from the shared PlayerPalette (bus 036) so the
+## avatar always matches the player's army bases + cursor.
 
 # ===== Constants =====
 
@@ -123,8 +117,7 @@ func _process(delta: float) -> void:
 ## a high monotonic slot / pending slot 0 never falls to WHITE. peer_id is kept for the label.
 func setup(p_peer_id: int, p_slot: int, table_size_feet: Vector2) -> void:
 	peer_id = p_peer_id
-	var idx := (((p_slot - 1) % PLAYER_COLORS.size()) + 1) if p_slot > 0 else 1
-	player_color = PLAYER_COLORS.get(idx, Color.WHITE)
+	player_color = PlayerPalette.color_for_slot(p_slot)   # shared slot→palette (matches army bases, bus 036)
 	# Rest at this player's table edge (by slot) so the head is never stuck in the dead centre
 	# when camera-position packets are missing/delayed; snaps to the live camera on the first
 	# update_position().
@@ -195,6 +188,16 @@ func play_dice_roll_animation() -> void:
 func set_player_name(display_name: String) -> void:
 	if _name_label:
 		_name_label.text = display_name
+
+
+## Recolour the avatar (name label + head) when a slot-table sync corrects this peer's colour on a guest
+## that had spawned it with a stale slot (bus 036).
+func set_player_color(color: Color) -> void:
+	player_color = color
+	if _name_label:
+		_name_label.modulate = color
+	if is_instance_valid(_head_mesh) and _head_mesh.mesh and _head_mesh.mesh.material is StandardMaterial3D:
+		(_head_mesh.mesh.material as StandardMaterial3D).albedo_color = color
 
 
 # ===== Avatar Construction =====

@@ -94,4 +94,5 @@ func to_dict() -> Dictionary:
 	if is_instance_valid(tray):
 		d["tray_pos"] = [tray.global_position.x, tray.global_position.y, tray.global_position.z]
 		d["tray_rot_y"] = tray.rotation.y
+		d["network_id"] = tray.get_meta("network_id", 0)   # keep MP identity across save/load (bus 036)
 	return d

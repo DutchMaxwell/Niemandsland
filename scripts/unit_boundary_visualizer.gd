@@ -174,7 +174,7 @@ func _update_unit_boundary(game_unit) -> void:
 
 	# Get player color (shared canonical source, also used for objective owners)
 	var player_id = game_unit.unit_properties.get("player_id", 1)
-	var player_color = OPRArmyManager.PLAYER_COLORS.get(player_id, Color.GRAY)
+	var player_color = OPRArmyManager.army_color(player_id, Color.GRAY)
 
 	# Get model positions and per-model base radii. A joined Hero can sit on a
 	# larger base than the troops, so each point is expanded by ITS OWN base.

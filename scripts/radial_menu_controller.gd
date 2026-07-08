@@ -2036,7 +2036,7 @@ func _make_flat_ring_mesh(inner: float, outer: float, segments: int) -> ArrayMes
 ## Colour of a unit's bases (player colour), used so the ring matches the base.
 func _unit_base_color(unit: GameUnit) -> Color:
 	var pid: int = unit.unit_properties.get("player_id", 1)
-	return OPRArmyManager.PLAYER_COLORS.get(pid, Color(0.5, 0.5, 0.5))
+	return OPRArmyManager.army_color(pid, Color(0.5, 0.5, 0.5))
 
 
 ## Writes one item's name as flat, curved text centered on its segment. Sizes the
