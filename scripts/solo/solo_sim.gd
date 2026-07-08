@@ -203,7 +203,7 @@ static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator
 		log_lines.append("%s spends its activation idle — recovers from Shaken" % unit["name"])
 		_trace_activation(trace, unit, round_no, "IDLE (recover Shaken)", null, 0.0, rolls, units, obj_owner)
 		return
-	var target: Variant = _nearest_enemy(unit, units)
+	var target: Variant = _pick_target(unit, units, INF)   # nearest, PREFERRING not-yet-activated (p.2)
 	if target == null:
 		return
 	var upos: Vector2 = unit["pos"]
@@ -266,15 +266,22 @@ static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator
 			pass   # HOLD
 	var dist: float = (unit["pos"] as Vector2).distance_to(tpos)
 	var label: String = _decision_label(action, to_obj, bool(dec["shoot"]))
-	var why := {"arch": ["MELEE", "SHOOTING", "HYBRID"][archetype], "range": shoot_range,
-		"objective": has_obj, "obj_dist": (snappedf(obj_dist, 0.1) if has_obj else -1.0),
-		"toward": ("objective" if to_obj else "enemy"), "in_way": in_way, "dist0": snappedf(enemy_dist, 0.1)}
-	log_lines.append("%s: %s (%.0f\" to %s)" % [unit["name"], label, enemy_dist, target["name"]])
+	# Resolve combat against the priority target (p.2 "prioritise units that haven't activated yet"):
+	# melee hits whoever we charged; shooting re-picks the nearest un-activated enemy that is IN RANGE.
+	var combat_target: Variant = target
 	if action == AiDecision.Action.CHARGE and dist <= CONTACT_IN + 0.001:
 		_resolve_melee(unit, target, rng, log_lines, rolls)
-	elif bool(dec["shoot"]) and shoot_range > 0 and dist <= float(shoot_range):
-		_resolve_shooting(unit, target, dist, rng, log_lines, rolls)
-	_trace_activation(trace, unit, round_no, label, target, dist, rolls, units, obj_owner, why)
+	elif bool(dec["shoot"]) and shoot_range > 0:
+		var st: Variant = _pick_target(unit, units, float(shoot_range))
+		if st != null:
+			combat_target = st
+			_resolve_shooting(unit, st, (unit["pos"] as Vector2).distance_to(st["pos"]), rng, log_lines, rolls)
+	var why := {"arch": ["MELEE", "SHOOTING", "HYBRID"][archetype], "range": shoot_range,
+		"objective": has_obj, "obj_dist": (snappedf(obj_dist, 0.1) if has_obj else -1.0),
+		"toward": ("objective" if to_obj else "enemy"), "in_way": in_way, "dist0": snappedf(enemy_dist, 0.1),
+		"target_fresh": (combat_target != null and not bool(combat_target["activated"]))}
+	log_lines.append("%s: %s (%.0f\" to %s)" % [unit["name"], label, enemy_dist, target["name"]])
+	_trace_activation(trace, unit, round_no, label, combat_target, dist, rolls, units, obj_owner, why)
 
 
 ## Human-readable decision label for the log + replay.
@@ -436,17 +443,30 @@ static func _move(unit: Dictionary, delta: Vector2) -> void:
 	unit["pos"] = Vector2(clampf(p.x, 0.0, BOARD_IN), clampf(p.y, 0.0, BOARD_IN))
 
 
-static func _nearest_enemy(unit: Dictionary, units: Array) -> Variant:
-	var best: Variant = null
-	var best_d := INF
-	for u in units:
-		if u["player"] == unit["player"] or not is_alive(u):
+## Target selection (Solo & Co-Op rules p.2): the NEAREST valid enemy, but ALWAYS prioritising units that
+## haven't activated this round — it only falls back to the nearest already-activated enemy when no
+## un-activated one is reachable. `max_range` limits to reachable/in-range targets (INF = any). null if
+## there is no valid target.
+static func _pick_target(unit: Dictionary, units: Array, max_range: float) -> Variant:
+	var side: int = int(unit["player"])
+	var up: Vector2 = unit["pos"]
+	var best_any: Variant = null
+	var best_any_d: float = INF
+	var best_fresh: Variant = null      # nearest NOT-yet-activated
+	var best_fresh_d: float = INF
+	for e in units:
+		if e["player"] == side or not is_alive(e):
 			continue
-		var d: float = (unit["pos"] as Vector2).distance_to(u["pos"])
-		if d < best_d:
-			best_d = d
-			best = u
-	return best
+		var d: float = up.distance_to(e["pos"])
+		if d > max_range:
+			continue
+		if d < best_any_d:
+			best_any_d = d
+			best_any = e
+		if not bool(e["activated"]) and d < best_fresh_d:
+			best_fresh_d = d
+			best_fresh = e
+	return best_fresh if best_fresh != null else best_any
 
 
 static func _side_models(units: Array, player: int) -> int:

@@ -131,3 +131,22 @@ func test_shaken_unit_spends_activation_idle_and_recovers() -> void:
 	shaken["shaken"] = true
 	SoloSim._seize_objectives([shaken, foe], objs, owner, [])
 	assert_int(int(owner[0])).is_equal(-1)
+
+
+func test_pick_target_prefers_not_yet_activated() -> void:
+	var me: Dictionary = SoloSim.make_unit("Me", 0, 4, 4, 5, [])
+	me["pos"] = Vector2(24, 24)
+	# A CLOSE already-activated enemy and a FARTHER un-activated one.
+	var near_done: Dictionary = SoloSim.make_unit("NearDone", 1, 4, 4, 5, [])
+	near_done["pos"] = Vector2(24, 27); near_done["activated"] = true
+	var far_fresh: Dictionary = SoloSim.make_unit("FarFresh", 1, 4, 4, 5, [])
+	far_fresh["pos"] = Vector2(24, 34); far_fresh["activated"] = false
+	var units := [me, near_done, far_fresh]
+	# Priority: the FARTHER un-activated unit wins over the closer activated one.
+	assert_str((SoloSim._pick_target(me, units, INF) as Dictionary)["name"]).is_equal("FarFresh")
+	# If every enemy has activated, fall back to the nearest.
+	far_fresh["activated"] = true
+	assert_str((SoloSim._pick_target(me, units, INF) as Dictionary)["name"]).is_equal("NearDone")
+	# Range limit: only the far one is un-activated but it's out of a 6" range → the near (activated) one.
+	far_fresh["activated"] = false
+	assert_str((SoloSim._pick_target(me, units, 6.0) as Dictionary)["name"]).is_equal("NearDone")
