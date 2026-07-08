@@ -46,3 +46,31 @@ func test_wipe_ends_the_game_early() -> void:
 	var r: Dictionary = SoloSim.simulate_game(weak, strong, 5, 4)
 	assert_int(int(r["winner"])).is_equal(1)
 	assert_int(int(r["a_alive"])).is_equal(0)
+
+
+func test_units_from_opr_json_parses_stats_weapons_and_tough() -> void:
+	var data := {
+		"name": "Test List",
+		"units": [{
+			"name": "Squad", "size": 5, "quality": 3, "defense": 3,
+			"rules": [{"name": "Tough", "rating": 3}, {"name": "Fearless"}],
+			"loadout": [
+				{"name": "Rifle", "range": 24, "attacks": 1, "count": 4, "specialRules": [{"name": "AP", "rating": 1}]},
+				{"name": "CCW", "range": 0, "attacks": 1, "count": 5, "specialRules": []},
+				{"name": "Backpack", "specialRules": []},   # wargear (no attacks) → skipped
+			],
+		}],
+	}
+	var units: Array = SoloSim.units_from_opr_json(data, 0)
+	assert_int(units.size()).is_equal(1)
+	var u: Dictionary = units[0]
+	assert_int(int(u["quality"])).is_equal(3)
+	assert_int(int(u["defense"])).is_equal(3)
+	assert_int(int(u["tough"])).is_equal(3)
+	assert_int(int(u["max_models"])).is_equal(5)
+	# Two weapons (the wargear entry with no attacks is skipped).
+	assert_int((u["weapons"] as Array).size()).is_equal(2)
+	var rifle: Dictionary = (u["weapons"] as Array)[0]
+	assert_int(int(rifle["count"])).is_equal(4)              # per-weapon model count
+	assert_int(int(rifle["range_value"])).is_equal(24)
+	assert_array(rifle["special_rules"]).contains(["AP(1)"])

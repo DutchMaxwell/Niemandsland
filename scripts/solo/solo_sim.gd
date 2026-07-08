@@ -29,6 +29,42 @@ static func make_unit(name: String, player: int, quality: int, defense: int, mod
 	}
 
 
+## Build sim units from an OPR TTS-API list (the same JSON the game imports via opr_api_client — GET
+## api/tts?id=…). Reads each unit's size/quality/defense, Tough(X) from its rules, and every weapon in
+## its `loadout` with the correct per-weapon count + AP. This is the self-play "feed REAL armies" path
+## (goal 003 stage 1) — it removes the hand-typed-data risk the first sample armies exposed.
+static func units_from_opr_json(data: Dictionary, player: int) -> Array:
+	var out: Array = []
+	for u in data.get("units", []):
+		var unit := u as Dictionary
+		var rule_names: Array = []
+		var tough := 1
+		for r in unit.get("rules", []):
+			var rn := str((r as Dictionary).get("name", ""))
+			rule_names.append(rn)
+			if rn == "Tough":
+				tough = maxi(int((r as Dictionary).get("rating", 1)), 1)
+		var weapons: Array = []
+		for w in unit.get("loadout", []):
+			var wd := w as Dictionary
+			if not wd.has("attacks"):
+				continue   # wargear / non-weapon item
+			var ap := 0
+			for sr in wd.get("specialRules", []):
+				if str((sr as Dictionary).get("name", "")) == "AP":
+					ap = int((sr as Dictionary).get("rating", 0))
+			weapons.append({
+				"name": str(wd.get("name", "Weapon")),
+				"range_value": int(wd.get("range", 0)),
+				"attacks": int(wd.get("attacks", 1)),
+				"count": maxi(int(wd.get("count", 1)), 1),
+				"special_rules": (["AP(%d)" % ap] if ap > 0 else []),
+			})
+		out.append(make_unit(str(unit.get("name", "Unit")), player, int(unit.get("quality", 4)),
+			int(unit.get("defense", 4)), maxi(int(unit.get("size", 1)), 1), weapons, tough, rule_names))
+	return out
+
+
 static func alive_models(u: Dictionary) -> int:
 	return maxi(0, int(u["max_models"]) - int(u["wounds_pool"]) / int(u["tough"]))
 
