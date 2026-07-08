@@ -155,7 +155,12 @@ func _apply_window_constraints() -> void:
 	apply_ui_scale(ui_scale)
 	# Apply the persisted fullscreen choice (default on). Driven here rather than at the
 	# engine level so unticking it actually persists to a windowed start (needed for OBS).
-	apply_fullscreen(fullscreen)
+	# An explicit `--windowed` launch (side-by-side test instances, capture setups) wins over the
+	# persisted preference for THIS run — the engine already opened windowed; don't re-fullscreen.
+	if OS.get_cmdline_args().has("--windowed"):
+		apply_fullscreen(false)
+	else:
+		apply_fullscreen(fullscreen)
 
 
 ## Toggle borderless fullscreen (safe MODE_FULLSCREEN, never EXCLUSIVE). Persisted.

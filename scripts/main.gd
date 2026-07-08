@@ -3465,12 +3465,28 @@ func _on_remote_army_complete(player_id: int, rule_descriptions: Dictionary) -> 
 	# 2. Download EVERY model in one batch (single shared HTTPRequest — no per-unit collision).
 	if opr_army_manager != null and opr_army_manager.model_library != null:
 		var specs: Array = []
+		var seen_keys: Dictionary = {}
+		var unit_faction: Dictionary = {}   # game_unit_id -> faction (for per-object variant keys)
 		for ud in units:
 			var p: Dictionary = ud.get("unit_properties", {})
 			var fac: String = p.get("faction_folder", "")
 			var un: String = p.get("name", "")
-			if fac != "" and un != "":
+			unit_faction[str(ud.get("unit_id", ""))] = fac
+			if fac != "" and un != "" and not seen_keys.has(fac + "/" + un):
+				seen_keys[fac + "/" + un] = true
 				specs.append({"faction": fac, "unit_name": un})
+		# Variant-reworked factions have VARIANT-ONLY manifest entries: the per-object RESOLVED
+		# keys (loadout variant / mount, stamped at import) must download too, or the models
+		# fall back to placeholders (RC3 field-test bug).
+		for group in object_groups:
+			for od in group:
+				if od is Dictionary and (od as Dictionary).has("glb_name"):
+					var od_d: Dictionary = od as Dictionary
+					var fac2: String = str(unit_faction.get(str(od_d.get("game_unit_id", "")), ""))
+					var key: String = str(od_d.get("glb_name", ""))
+					if fac2 != "" and key != "" and not seen_keys.has(fac2 + "/" + key):
+						seen_keys[fac2 + "/" + key] = true
+						specs.append({"faction": fac2, "unit_name": key})
 		if not specs.is_empty():
 			await opr_army_manager.model_library.ensure_models(specs)
 
