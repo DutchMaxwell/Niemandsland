@@ -63,6 +63,19 @@
   .mres{font-family:var(--mono);font-size:12px;margin-left:8px}
   .mres.pass{color:var(--good)} .mres.shaken{color:var(--p0)} .mres.rout{color:var(--wound)}
 
+  .fb{display:flex;gap:10px;margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+  .fb button{flex:1;height:48px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);
+    color:var(--ink);font-size:15px;font-family:var(--sans);cursor:pointer;display:flex;align-items:center;
+    justify-content:center;gap:8px}
+  .fb button.good.on{background:rgba(103,209,122,.18);border-color:var(--good);color:var(--good)}
+  .fb button.bad.on{background:rgba(255,90,82,.18);border-color:var(--wound);color:var(--wound)}
+  .fbhint{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:6px}
+  .export{margin-top:14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:12px}
+  .export button{width:100%;height:44px;border-radius:10px;border:1px solid var(--p0);background:rgba(56,201,214,.12);
+    color:var(--p0);font-size:13px;font-family:var(--sans);letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
+  .export .count{font-family:var(--mono);font-size:12px;color:var(--dim);margin-bottom:8px}
+  textarea{width:100%;height:120px;margin-top:10px;background:var(--bg);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;font-family:var(--mono);font-size:11px;padding:8px;display:none}
   .why{font-family:var(--mono);font-size:12px;color:var(--p0);margin:4px 0 2px}
   .idle{font-family:var(--mono);font-size:13px;color:var(--dim);margin-top:6px}
   .seize{font-family:var(--mono);font-size:13px;color:var(--gold);margin-top:6px}
@@ -100,6 +113,12 @@
   <div class="readout" id="readout"></div>
 
   <div class="legend" id="legend"></div>
+
+  <div class="export">
+    <div class="count" id="fbcount">Noch kein Feedback gegeben.</div>
+    <button id="exportBtn">Feedback kopieren → an Claude schicken</button>
+    <textarea id="fbout" readonly></textarea>
+  </div>
 
   <div class="foot" id="foot"></div>
 </div>
@@ -255,7 +274,19 @@ const TRACE = {"armies":{"0":"Battle Brothers · Cyan","1":"Battle Brothers · A
     });
     if((step.rolls||[]).length===0 && step.action.indexOf('IDLE')<0)
       html+=`<div class="narr">◦ Nur Bewegung — kein Kampf, also keine Würfel in diesem Schritt.</div>`;
+    // Daumen hoch/runter für diesen Schritt
+    const v=fb[i];
+    html+=`<div class="fb">
+        <button class="good ${v==='good'?'on':''}" data-fb="good">👍 gute Aktion</button>
+        <button class="bad ${v==='bad'?'on':''}" data-fb="bad">👎 falsch / unrealistisch</button>
+      </div>
+      <div class="fbhint">Tippe 👍 wenn die Entscheidung regelkonform/sinnvoll war, 👎 wenn nicht. Am Ende „Feedback kopieren".</div>`;
     el.innerHTML=html;
+    el.querySelectorAll('.fb button').forEach(b=>b.onclick=()=>{
+      const val=b.getAttribute('data-fb');
+      fb[i] = (fb[i]===val)? null : val;   // nochmal tippen = zurücknehmen
+      saveFb(); render();
+    });
   }
 
   // ---- legend / roster ----
@@ -273,6 +304,32 @@ const TRACE = {"armies":{"0":"Battle Brothers · Cyan","1":"Battle Brothers · A
 
   document.getElementById('foot').textContent =
     `Seed ${T.seed} · reiner Sim-Trace (GF v3.5.1-Regeln) · Positionen in Zoll, 48"×48" Tisch · Würfel wie gewürfelt.`;
+
+  // ---- Feedback (localStorage, pro Seed) ----
+  const FBKEY='nml_fb_'+T.seed;
+  let fb={};
+  try{ fb=JSON.parse(localStorage.getItem(FBKEY)||'{}'); }catch(e){ fb={}; }
+  function saveFb(){ try{ localStorage.setItem(FBKEY,JSON.stringify(fb)); }catch(e){} updateFbCount(); }
+  function updateFbCount(){
+    const n=Object.values(fb).filter(Boolean).length;
+    const g=Object.values(fb).filter(v=>v==='good').length, b=n-g;
+    document.getElementById('fbcount').textContent = n? `${n} bewertet — 👍 ${g} · 👎 ${b}` : 'Noch kein Feedback gegeben.';
+  }
+  function buildExport(){
+    let out=`FEEDBACK seed=${T.seed} · ${ARM['0']} vs ${ARM['1']}\n`;
+    steps.forEach((s,ix)=>{
+      if(!fb[ix]||s.type!=='activation') return;
+      const mark=fb[ix]==='good'?'👍':'👎';
+      out+=`${mark} #${ix} R${s.round} ${s.unit} → ${s.action}${s.target?' → '+s.target:''}\n`;
+    });
+    return out;
+  }
+  document.getElementById('exportBtn').onclick=()=>{
+    const txt=buildExport();
+    const ta=document.getElementById('fbout'); ta.style.display='block'; ta.value=txt; ta.select();
+    try{ navigator.clipboard.writeText(txt); }catch(e){}
+  };
+  updateFbCount();
 
   function render(){
     const step=steps[i];
