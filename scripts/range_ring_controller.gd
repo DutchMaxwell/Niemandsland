@@ -55,7 +55,7 @@ func ring_outer_radius_for_props(props: Dictionary, range_inches: int) -> float:
 
 func color_for_props(props: Dictionary) -> Color:
 	if props.has("player_id"):
-		return OPRArmyManager.PLAYER_COLORS.get(int(props["player_id"]), NEUTRAL_COLOR)
+		return OPRArmyManager.army_color(int(props["player_id"]), NEUTRAL_COLOR)
 	return NEUTRAL_COLOR
 
 
