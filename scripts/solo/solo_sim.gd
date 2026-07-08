@@ -88,7 +88,7 @@ static func is_alive(u: Dictionary) -> bool:
 
 
 static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rounds: int = DEFAULT_ROUNDS,
-		log_lines: Array = [], objectives: Array = []) -> Dictionary:
+		log_lines: Array = [], objectives: Array = [], trace: Array = []) -> Dictionary:
 	var objs: Array = objectives if not objectives.is_empty() else default_objectives()
 	var obj_owner: Array = []
 	for _o in objs:
@@ -100,7 +100,11 @@ static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rou
 		units.append((u as Dictionary).duplicate(true))
 	for u in army_b:
 		units.append((u as Dictionary).duplicate(true))
+	for i in range(units.size()):
+		units[i]["_id"] = i   # stable id for the visual trace
 	_deploy(units)
+	if trace != null:
+		trace.append({"type": "deploy", "board": _snapshot(units, obj_owner)})
 	var a_start := _side_models(units, 0)
 	var b_start := _side_models(units, 1)
 	var activations := 0
@@ -120,12 +124,14 @@ static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rou
 				var actor: Variant = _next_unactivated(units, side)
 				if actor != null:
 					activations += 1
-					_activate(actor, units, rng, log_lines)
+					_activate(actor, units, rng, log_lines, r, obj_owner, trace)
 			side = 1 - side
 		# End of round: fatigue clears; then objectives are (re)seized.
 		for u in units:
 			u["fatigued"] = false
 		_seize_objectives(units, objs, obj_owner, log_lines)
+		if trace != null:
+			trace.append({"type": "seize", "round": r, "board": _snapshot(units, obj_owner)})
 		if _side_models(units, 0) == 0 or _side_models(units, 1) == 0:
 			end_reason = "wipe"
 			break
@@ -161,12 +167,15 @@ static func _deploy(units: Array) -> void:
 
 # === Activation (mirrors SoloController._act on the 2D board) ===
 
-static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator, log_lines: Array) -> void:
+static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator, log_lines: Array,
+		round_no: int = 0, obj_owner: Array = [], trace: Array = []) -> void:
 	unit["activated"] = true
+	var rolls: Array = []   # dice detail recorded for the visual trace
 	# OPR (p.10): a Shaken unit spends its activation idle, which clears Shaken at the end of it.
 	if unit["shaken"]:
 		unit["shaken"] = false
 		log_lines.append("%s spends its activation idle — recovers from Shaken" % unit["name"])
+		_trace_activation(trace, unit, round_no, "IDLE (recover Shaken)", null, 0.0, rolls, units, obj_owner)
 		return
 	var target: Variant = _nearest_enemy(unit, units)
 	if target == null:
@@ -197,16 +206,17 @@ static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator
 			pass   # HOLD
 	dist = (unit["pos"] as Vector2).distance_to(tpos)
 	if action == AiDecision.Action.CHARGE and dist <= CONTACT_IN + 0.001:
-		_resolve_melee(unit, target, rng, log_lines)
+		_resolve_melee(unit, target, rng, log_lines, rolls)
 	elif action in [AiDecision.Action.ADVANCE, AiDecision.Action.KITE, AiDecision.Action.HOLD] \
 			and shoot_range > 0 and dist <= float(shoot_range):
-		_resolve_shooting(unit, target, dist, rng, log_lines)
+		_resolve_shooting(unit, target, dist, rng, log_lines, rolls)
+	_trace_activation(trace, unit, round_no, AiDecision.action_name(action), target, dist, rolls, units, obj_owner)
 
 
 # === Combat resolution (uses AiShooting + AiCombatMath, dice from the seeded RNG) ===
 
 static func _resolve_shooting(attacker: Dictionary, target: Dictionary, dist: float,
-		rng: RandomNumberGenerator, log_lines: Array) -> void:
+		rng: RandomNumberGenerator, log_lines: Array, rolls: Array = []) -> void:
 	var profiles: Array = AiShooting.profiles_in_range(attacker["weapons"], dist)
 	if profiles.is_empty():
 		return
@@ -218,27 +228,28 @@ static func _resolve_shooting(attacker: Dictionary, target: Dictionary, dist: fl
 		var profile := p as Dictionary
 		var faces := _roll(rng, int(profile["attacks"]))
 		var hits := AiCombatMath.count_hits(faces, quality)
-		if hits <= 0:
-			continue
-		var save_faces := _roll(rng, hits)
-		total += AiCombatMath.wounds(hits, save_faces, defense, int(profile["ap"]))
+		var save_faces: Array = [] if hits <= 0 else _roll(rng, hits)
+		var w: int = 0 if hits <= 0 else AiCombatMath.wounds(hits, save_faces, defense, int(profile["ap"]))
+		total += w
+		_trace_roll(rolls, "shoot", attacker["name"], target["name"], str(profile["name"]),
+			faces, quality, hits, save_faces, defense + int(profile["ap"]), w)
 	if total > 0:
 		_apply_wounds(target, total)
 		log_lines.append("%s shoots %s → %d wound(s)" % [attacker["name"], target["name"], total])
 	# General morale (p.10): a unit left at half or less by the wounds it just took must test.
 	if AiCombatMath.should_test_shooting_morale(alive_before, alive_models(target), int(target["max_models"])):
-		_morale(target, rng, log_lines)
+		_morale(target, rng, log_lines, rolls)
 
 
 static func _resolve_melee(attacker: Dictionary, target: Dictionary, rng: RandomNumberGenerator,
-		log_lines: Array) -> void:
-	var dealt := _strike(attacker, target, rng)
+		log_lines: Array, rolls: Array = []) -> void:
+	var dealt := _strike(attacker, target, rng, log_lines, rolls, "charge")
 	if dealt > 0:
 		_apply_wounds(target, dealt)
 	# The defender MAY strike back (Shaken units strike back as fatigued — handled in _strike).
 	var struck_back := 0
 	if is_alive(target):
-		struck_back = _strike(target, attacker, rng)
+		struck_back = _strike(target, attacker, rng, log_lines, rolls, "strike back")
 		if struck_back > 0:
 			_apply_wounds(attacker, struck_back)
 	attacker["fatigued"] = true
@@ -246,13 +257,14 @@ static func _resolve_melee(attacker: Dictionary, target: Dictionary, rng: Random
 	log_lines.append("%s charges %s → %d dealt, %d back" % [attacker["name"], target["name"], dealt, struck_back])
 	# Melee morale (p.10): only the loser (more wounds taken) tests.
 	if dealt > struck_back and is_alive(target):
-		_morale(target, rng, log_lines)
+		_morale(target, rng, log_lines, rolls)
 	elif struck_back > dealt and is_alive(attacker):
-		_morale(attacker, rng, log_lines)
+		_morale(attacker, rng, log_lines, rolls)
 
 
 ## One striker's melee output. Fatigued OR Shaken → hits only on unmodified 6s; else its Quality.
-static func _strike(striker: Dictionary, defender: Dictionary, rng: RandomNumberGenerator) -> int:
+static func _strike(striker: Dictionary, defender: Dictionary, rng: RandomNumberGenerator,
+		_log_lines: Array = [], rolls: Array = [], kind: String = "melee") -> int:
 	var profiles: Array = AiShooting.melee_profiles(striker["weapons"])
 	var to_hit: int = 6 if (bool(striker["fatigued"]) or bool(striker["shaken"])) else int(striker["quality"])
 	var total := 0
@@ -260,28 +272,33 @@ static func _strike(striker: Dictionary, defender: Dictionary, rng: RandomNumber
 		var profile := p as Dictionary
 		var faces := _roll(rng, int(profile["attacks"]))
 		var hits := AiCombatMath.count_hits(faces, to_hit)
-		if hits <= 0:
-			continue
-		var save_faces := _roll(rng, hits)
-		total += AiCombatMath.wounds(hits, save_faces, int(defender["defense"]), int(profile["ap"]))
+		var save_faces: Array = [] if hits <= 0 else _roll(rng, hits)
+		var w: int = 0 if hits <= 0 else AiCombatMath.wounds(hits, save_faces, int(defender["defense"]), int(profile["ap"]))
+		total += w
+		_trace_roll(rolls, kind, striker["name"], defender["name"], str(profile["name"]),
+			faces, to_hit, hits, save_faces, int(defender["defense"]) + int(profile["ap"]), w)
 	return total
 
 
 ## OPR morale (p.10): roll 1 die vs Quality (a Shaken unit ALWAYS fails). Fail + ≤ half size → Rout
 ## (destroyed), else the unit becomes Shaken.
-static func _morale(unit: Dictionary, rng: RandomNumberGenerator, log_lines: Array) -> void:
+static func _morale(unit: Dictionary, rng: RandomNumberGenerator, log_lines: Array, rolls: Array = []) -> void:
 	var passed := false
+	var face: int = -1
 	if not bool(unit["shaken"]):
-		var face: int = int(_roll(rng, 1)[0])
+		face = int(_roll(rng, 1)[0])
 		passed = DiceRules.is_success(face, int(unit["quality"]), 0)
 	if passed:
 		log_lines.append("%s passes morale" % unit["name"])
+		_trace_morale(rolls, unit["name"], face, int(unit["quality"]), "pass")
 		return
 	if AiCombatMath.at_or_below_half(alive_models(unit), int(unit["max_models"])):
 		unit["wounds_pool"] = int(unit["max_models"]) * int(unit["tough"])   # wiped
 		log_lines.append("%s ROUTS (destroyed)" % unit["name"])
+		_trace_morale(rolls, unit["name"], face, int(unit["quality"]), "rout")
 	else:
 		unit["shaken"] = true
+		_trace_morale(rolls, unit["name"], face, int(unit["quality"]), "shaken")
 		log_lines.append("%s is Shaken" % unit["name"])
 
 
@@ -364,3 +381,64 @@ static func _next_unactivated(units: Array, player: int) -> Variant:
 		if u["player"] == player and is_alive(u) and not bool(u["activated"]):
 			return u
 	return null
+
+
+# === Visual trace (pure observation — records what happened for the HTML replay viewer) ===
+
+## Roster of static per-unit facts the viewer needs once (id aligns with the snapshot arrays).
+static func roster(army_a: Array, army_b: Array) -> Array:
+	var out: Array = []
+	var idx := 0
+	for src in [army_a, army_b]:
+		for u in src:
+			var unit := u as Dictionary
+			out.append({
+				"id": idx, "name": str(unit["name"]), "player": int(unit["player"]),
+				"max_models": int(unit["max_models"]), "quality": int(unit["quality"]),
+				"defense": int(unit["defense"]), "tough": int(unit["tough"]),
+			})
+			idx += 1
+	return out
+
+
+## A complete board state after a step (arrays indexed by unit id) — makes the viewer trivial.
+static func _snapshot(units: Array, obj_owner: Array) -> Dictionary:
+	var pos: Array = []
+	var alive: Array = []
+	var shaken: Array = []
+	for u in units:
+		var p: Vector2 = u["pos"]
+		pos.append([snappedf(p.x, 0.1), snappedf(p.y, 0.1)])
+		alive.append(alive_models(u))
+		shaken.append(bool(u["shaken"]))
+	return {"pos": pos, "alive": alive, "shaken": shaken, "owners": obj_owner.duplicate()}
+
+
+static func _trace_roll(rolls: Array, kind: String, actor: String, target: String, weapon: String,
+		hit_faces: Array, hit_target: int, hits: int, save_faces: Array, save_target: int, wounds: int) -> void:
+	if rolls == null:
+		return
+	rolls.append({
+		"kind": kind, "actor": actor, "target": target, "weapon": weapon,
+		"hit_faces": hit_faces.duplicate(), "hit_target": hit_target, "hits": hits,
+		"save_faces": save_faces.duplicate(), "save_target": save_target, "wounds": wounds,
+	})
+
+
+static func _trace_morale(rolls: Array, unit: String, face: int, quality: int, result: String) -> void:
+	if rolls == null:
+		return
+	rolls.append({"kind": "morale", "actor": unit, "face": face, "quality": quality, "result": result})
+
+
+static func _trace_activation(trace: Array, unit: Dictionary, round_no: int, action: String,
+		target: Variant, dist: float, rolls: Array, units: Array, obj_owner: Array) -> void:
+	if trace == null:
+		return
+	trace.append({
+		"type": "activation", "round": round_no, "unit_id": int(unit.get("_id", -1)), "unit": str(unit["name"]),
+		"player": int(unit["player"]), "action": action,
+		"target": (str(target["name"]) if target != null else ""),
+		"dist": snappedf(dist, 0.1), "rolls": rolls,
+		"board": _snapshot(units, obj_owner),
+	})

@@ -1,0 +1,276 @@
+<title>Solo-KI Kampf-Replay</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0b0f14; --panel:#121a23; --panel2:#18222d; --line:#28333f;
+    --ink:#e2eaf2; --dim:#8a97a6; --faint:#5a6673;
+    --p0:#38c9d6; --p1:#f5a623; --gold:#e8c96a; --wound:#ff5a52; --good:#67d17a;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;line-height:1.5}
+  .wrap{max-width:560px;margin:0 auto;padding:14px 14px 40px}
+  header{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+  h1{font-size:15px;margin:0;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:600}
+  .match{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-family:var(--mono);font-size:13px}
+  .team{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .p0{color:var(--p0)} .p1{color:var(--p1)}
+  .bg0{background:var(--p0)} .bg1{background:var(--p1)}
+  .vs{color:var(--faint)}
+  .result{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--dim)}
+
+  .boardwrap{position:relative;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;overflow:hidden}
+  svg{display:block;width:100%;height:auto}
+
+  .transport{display:flex;align-items:center;gap:8px;margin:12px 0 4px}
+  button.nav{flex:0 0 auto;background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+    font-size:20px;width:52px;height:44px;border-radius:10px;cursor:pointer;font-family:var(--mono)}
+  button.nav:active{background:#22303d}
+  button.nav:disabled{opacity:.35;cursor:default}
+  button.play{width:auto;padding:0 16px;font-size:13px;letter-spacing:.05em;text-transform:uppercase}
+  .counter{flex:1;text-align:center;font-family:var(--mono);font-size:13px;color:var(--dim)}
+  .counter b{color:var(--ink)}
+  input[type=range]{width:100%;margin:6px 0 2px;accent-color:var(--p0)}
+  .rounds{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;
+    color:var(--faint);letter-spacing:.05em;padding:0 2px}
+
+  .readout{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    margin-top:12px;padding:14px}
+  .rhead{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:2px}
+  .rround{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.08em;text-transform:uppercase}
+  .ractor{font-weight:700;font-size:16px}
+  .raction{font-family:var(--mono);font-size:13px;color:var(--gold);text-transform:uppercase;letter-spacing:.06em}
+  .rtarget{font-family:var(--mono);font-size:12px;color:var(--dim)}
+  .narr{font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:2px}
+
+  .roll{border-top:1px solid var(--line);margin-top:12px;padding-top:12px}
+  .rollhead{font-family:var(--mono);font-size:12px;color:var(--ink);margin-bottom:8px}
+  .rollhead .w{color:var(--wound);font-weight:700}
+  .dice{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px}
+  .dielabel{font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.06em;
+    text-transform:uppercase;margin:6px 0 4px}
+  .die{width:26px;height:26px;border-radius:6px;display:grid;place-items:center;font-family:var(--mono);
+    font-size:13px;font-weight:700;background:var(--panel2);border:1px solid var(--line);color:var(--dim)}
+  .die.hit{background:rgba(103,209,122,.16);border-color:var(--good);color:var(--good)}
+  .die.block{background:rgba(56,201,214,.14);border-color:var(--p0);color:var(--p0)}
+  .die.six{box-shadow:0 0 0 1px var(--good) inset}
+  .morale .die.pass{background:rgba(103,209,122,.16);border-color:var(--good);color:var(--good)}
+  .morale .die.fail{background:rgba(255,90,82,.16);border-color:var(--wound);color:var(--wound)}
+  .mres{font-family:var(--mono);font-size:12px;margin-left:8px}
+  .mres.pass{color:var(--good)} .mres.shaken{color:var(--p0)} .mres.rout{color:var(--wound)}
+
+  .idle{font-family:var(--mono);font-size:13px;color:var(--dim);margin-top:6px}
+  .seize{font-family:var(--mono);font-size:13px;color:var(--gold);margin-top:6px}
+
+  .legend{margin-top:14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
+  .legrow{display:grid;grid-template-columns:14px 1fr auto auto;gap:8px;align-items:center;
+    padding:7px 12px;font-family:var(--mono);font-size:12px;border-top:1px solid var(--line)}
+  .legrow:first-child{border-top:0}
+  .legname{color:var(--ink)} .legstat{color:var(--faint)}
+  .legalive{color:var(--dim);font-variant-numeric:tabular-nums}
+  .legrow.dead .legname{color:var(--faint);text-decoration:line-through}
+  .tag{font-size:9px;letter-spacing:.06em;text-transform:uppercase;padding:1px 5px;border-radius:4px}
+  .tag.shaken{background:rgba(56,201,214,.15);color:var(--p0)}
+  .foot{margin-top:16px;font-family:var(--mono);font-size:11px;color:var(--faint);line-height:1.6}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Solo-KI · Kampf-Replay</h1>
+    <div class="match" id="match"></div>
+  </header>
+
+  <div class="boardwrap"><svg id="board" viewBox="0 0 480 480" aria-label="Schlachtfeld"></svg></div>
+
+  <div class="transport">
+    <button class="nav" id="prev" aria-label="Zurück">◀</button>
+    <div class="counter">Schritt <b id="cur">0</b> / <span id="tot">0</span></div>
+    <button class="nav play" id="play">▶ Play</button>
+    <button class="nav" id="next" aria-label="Vor">▶</button>
+  </div>
+  <input type="range" id="scrub" min="0" value="0" step="1">
+  <div class="rounds" id="rounds"></div>
+
+  <div class="readout" id="readout"></div>
+
+  <div class="legend" id="legend"></div>
+
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+const TRACE = {"armies":{"0":"Steel Vanguard","1":"Blood Horde"},"board":48.0,"objectives":[[16.0,24.0],[32.0,24.0]],"result":{"a_alive":6,"a_losses":15,"a_objectives":0,"a_start":21,"activations":29,"b_alive":11,"b_losses":15,"b_objectives":1,"b_start":26,"end_reason":"round_limit","rounds":4,"winner":1},"roster":[{"defense":4,"id":0,"max_models":5,"name":"Rifles A","player":0,"quality":4,"tough":1},{"defense":4,"id":1,"max_models":5,"name":"Rifles B","player":0,"quality":4,"tough":1},{"defense":4,"id":2,"max_models":1,"name":"Heavy Gun","player":0,"quality":4,"tough":1},{"defense":3,"id":3,"max_models":10,"name":"Guard Squad","player":0,"quality":4,"tough":1},{"defense":4,"id":4,"max_models":10,"name":"Assault A","player":1,"quality":4,"tough":1},{"defense":4,"id":5,"max_models":10,"name":"Assault B","player":1,"quality":4,"tough":1},{"defense":4,"id":6,"max_models":5,"name":"Skirmishers","player":1,"quality":5,"tough":1},{"defense":3,"id":7,"max_models":1,"name":"Bruiser","player":1,"quality":3,"tough":3}],"seed":1003,"steps":[{"board":{"alive":[5,5,1,10,10,10,5,1],"owners":[-1,-1],"pos":[[9.6,6.0],[19.2,6.0],[28.8,6.0],[38.4,6.0],[9.6,42.0],[19.2,42.0],[28.8,42.0],[38.4,42.0]],"shaken":[false,false,false,false,false,false,false,false]},"type":"deploy"},{"action":"rushes","board":{"alive":[5,5,1,10,10,10,5,1],"owners":[-1,-1],"pos":[[9.6,18.0],[19.2,6.0],[28.8,6.0],[38.4,6.0],[9.6,42.0],[19.2,42.0],[28.8,42.0],[38.4,42.0]],"shaken":[false,false,false,false,false,false,false,false]},"dist":24.0,"player":0,"rolls":[],"round":1,"target":"Assault A","type":"activation","unit":"Rifles A","unit_id":0},{"action":"rushes","board":{"alive":[5,5,1,10,10,10,5,1],"owners":[-1,-1],"pos":[[9.6,18.0],[19.2,6.0],[28.8,6.0],[38.4,6.0],[9.6,30.0],[19.2,42.0],[28.8,42.0],[38.4,42.0]],"shaken":[false,false,false,false,false,false,false,false]},"dist":12.0,"player":1,"rolls":[],"round":1,"target":"Rifles A","type":"activation","unit":"Assault A","unit_id":4},{"action":"advances","board":{"alive":[5,5,1,10,9,10,5,1],"owners":[-1,-1],"pos":[[9.6,18.0],[17.0,11.6],[28.8,6.0],[38.4,6.0],[9.6,30.0],[19.2,42.0],[28.8,42.0],[38.4,42.0]],"shaken":[false,false,false,false,false,false,false,false]},"dist":19.8,"player":0,"rolls":[{"actor":"Rifles B","hit_faces":[1,2,4,6,2],"hit_target":4,"hits":2,"kind":"shoot","save_faces":[3,6],"save_target":4,"target":"Assault A","weapon":"Rifle","wounds":1}],"round":1,"target":"Assault A","type":"activation","unit":"Rifles B","unit_id":1},{"action":"rushes","board":{"alive":[5,5,1,10,9,10,5,1],"owners":[-1,-1],"pos":[[9.6,18.0],[17.0,11.6],[28.8,6.0],[38.4,6.0],[9.6,30.0],[14.7,30.9],[28.8,42.0],[38.4,42.0]],"shaken":[false,false,false,false,false,false,false,false]},"dist":13.8,"player":1,"rolls":[],"round":1,"target":"Rifles A","type":"activation","unit":"Assault B","unit_id":5},{"action":"falls back","board":{"alive":[5,5,1,10,9,9,5,1],"owners":[-1,-1],"pos":[[9.6,18.0],[17.0,11.6],[29.5,4.7],[38.4,6.0],[9.6,30.0],[14.7,30.9],[28.8,42.0],[38.4,42.0]],"shaken":[false,false,false,false,false,false,false,false]},"dist":30.0,"player":0,"rolls":[{"actor":"Heavy Gun","hit_faces":[2,4,1],"hit_target":4,"hits":1,"kind":"shoot","save_faces":[4],"save_target":5,"target":"Assault B","weapon":"Autocannon","wounds":1}],"round":1,"target":"Assault B","type":"activation","unit":"Heavy Gun","unit_id":2},{"action":"rushes","board":{"alive":[5,5,1,10,9,9,5,1],"owners":[-1,-1],"pos":[[9.6,18.0],[17.0,11.6],[29.5,4.7],[38.4,6.0],[9.6,30.0],[14.7,30.9],[21.3,32.6],[38.4,42.0]],"shaken":[false,false,false,false,false,false,false,false]},"dist":18.7,"player":1,"rolls":[],"round":1,"target":"Rifles A","type":"activation","unit":"Skirmishers","unit_id":6},{"action":"rushes","board":{"alive":[5,5,1,10,9,9,5,1],"owners":[-1,-1],"pos":[[9.6,18.0],[17.0,11.6],[29.5,4.7],[31.9,16.1],[9.6,30.0],[14.7,30.9],[21.3,32.6],[38.4,42.0]],"shaken":[false,false,false,false,false,false,false,false]},"dist":19.6,"player":0,"rolls":[],"round":1,"target":"Skirmishers","type":"activation","unit":"Guard Squad","unit_id":3},{"action":"rushes","board":{"alive":[5,5,1,10,9,9,5,1],"owners":[-1,-1],"pos":[[9.6,18.0],[17.0,11.6],[29.5,4.7],[31.9,16.1],[9.6,30.0],[14.7,30.9],[21.3,32.6],[35.5,30.4]],"shaken":[false,false,false,false,false,false,false,false]},"dist":14.7,"player":1,"rolls":[],"round":1,"target":"Guard Squad","type":"activation","unit":"Bruiser","unit_id":7},{"board":{"alive":[5,5,1,10,9,9,5,1],"owners":[-1,-1],"pos":[[9.6,18.0],[17.0,11.6],[29.5,4.7],[31.9,16.1],[9.6,30.0],[14.7,30.9],[21.3,32.6],[35.5,30.4]],"shaken":[false,false,false,false,false,false,false,false]},"round":1,"type":"seize"},{"action":"falls back","board":{"alive":[5,5,1,10,8,9,5,1],"owners":[-1,-1],"pos":[[9.6,12.0],[17.0,11.6],[29.5,4.7],[31.9,16.1],[9.6,30.0],[14.7,30.9],[21.3,32.6],[35.5,30.4]],"shaken":[false,false,false,false,false,false,false,false]},"dist":18.0,"player":0,"rolls":[{"actor":"Rifles A","hit_faces":[3,6,3,5,1],"hit_target":4,"hits":2,"kind":"shoot","save_faces":[6,1],"save_target":4,"target":"Assault A","weapon":"Rifle","wounds":1}],"round":2,"target":"Assault A","type":"activation","unit":"Rifles A","unit_id":0},{"action":"rushes","board":{"alive":[5,5,1,10,8,9,5,1],"owners":[-1,-1],"pos":[[9.6,12.0],[17.0,11.6],[29.5,4.7],[31.9,16.1],[9.6,18.0],[14.7,30.9],[21.3,32.6],[35.5,30.4]],"shaken":[false,false,false,false,false,false,false,false]},"dist":6.0,"player":1,"rolls":[],"round":2,"target":"Rifles A","type":"activation","unit":"Assault A","unit_id":4},{"action":"falls back","board":{"alive":[5,5,1,10,6,9,5,1],"owners":[-1,-1],"pos":[[9.6,12.0],[21.5,7.6],[29.5,4.7],[31.9,16.1],[9.6,18.0],[14.7,30.9],[21.3,32.6],[35.5,30.4]],"shaken":[false,false,false,false,false,false,false,false]},"dist":15.8,"player":0,"rolls":[{"actor":"Rifles B","hit_faces":[3,2,1,5,5],"hit_target":4,"hits":2,"kind":"shoot","save_faces":[2,3],"save_target":4,"target":"Assault A","weapon":"Rifle","wounds":2}],"round":2,"target":"Assault A","type":"activation","unit":"Rifles B","unit_id":1},{"action":"rushes","board":{"alive":[5,5,1,10,6,9,5,1],"owners":[-1,-1],"pos":[[9.6,12.0],[21.5,7.6],[29.5,4.7],[31.9,16.1],[9.6,18.0],[11.6,19.3],[21.3,32.6],[35.5,30.4]],"shaken":[false,false,false,false,false,false,false,false]},"dist":7.5,"player":1,"rolls":[],"round":2,"target":"Rifles A","type":"activation","unit":"Assault B","unit_id":5},{"action":"falls back","board":{"alive":[5,5,1,10,6,7,5,1],"owners":[-1,-1],"pos":[[9.6,12.0],[21.5,7.6],[34.2,1.0],[31.9,16.1],[9.6,18.0],[11.6,19.3],[21.3,32.6],[35.5,30.4]],"shaken":[false,false,false,false,false,false,false,false]},"dist":29.1,"player":0,"rolls":[{"actor":"Heavy Gun","hit_faces":[4,6,4],"hit_target":4,"hits":3,"kind":"shoot","save_faces":[6,4,1],"save_target":5,"target":"Assault B","weapon":"Autocannon","wounds":2}],"round":2,"target":"Assault B","type":"activation","unit":"Heavy Gun","unit_id":2},{"action":"rushes","board":{"alive":[5,5,1,10,6,7,5,1],"owners":[-1,-1],"pos":[[9.6,12.0],[21.5,7.6],[34.2,1.0],[31.9,16.1],[9.6,18.0],[11.6,19.3],[27.8,22.5],[35.5,30.4]],"shaken":[false,false,false,false,false,false,false,false]},"dist":7.6,"player":1,"rolls":[],"round":2,"target":"Guard Squad","type":"activation","unit":"Skirmishers","unit_id":6},{"action":"charges","board":{"alive":[5,5,1,10,6,7,5,1],"owners":[-1,-1],"pos":[[9.6,12.0],[21.5,7.6],[34.2,1.0],[28.9,20.8],[9.6,18.0],[11.6,19.3],[27.8,22.5],[35.5,30.4]],"shaken":[false,false,false,false,false,false,false,false]},"dist":2.0,"player":0,"rolls":[{"actor":"Guard Squad","hit_faces":[1,6,3,4,3,1,4,2,2,5],"hit_target":4,"hits":4,"kind":"charge","save_faces":[6,6,6,5],"save_target":4,"target":"Skirmishers","weapon":"CCW","wounds":0}],"round":2,"target":"Skirmishers","type":"activation","unit":"Guard Squad","unit_id":3},{"action":"charges","board":{"alive":[5,5,1,8,6,7,5,1],"owners":[-1,-1],"pos":[[9.6,12.0],[21.5,7.6],[34.2,1.0],[28.9,20.8],[9.6,18.0],[11.6,19.3],[27.8,22.5],[30.0,22.5]],"shaken":[false,false,false,false,false,false,false,false]},"dist":2.0,"player":1,"rolls":[{"actor":"Bruiser","hit_faces":[5,5,5,1],"hit_target":3,"hits":3,"kind":"charge","save_faces":[5,2,3],"save_target":5,"target":"Guard Squad","weapon":"Great Axe","wounds":2},{"actor":"Guard Squad","hit_faces":[3,5,6,4,3,3,6,5,2,4],"hit_target":6,"hits":2,"kind":"strike back","save_faces":[6,3],"save_target":3,"target":"Bruiser","weapon":"CCW","wounds":0},{"actor":"Guard Squad","face":4,"kind":"morale","quality":4,"result":"pass"}],"round":2,"target":"Guard Squad","type":"activation","unit":"Bruiser","unit_id":7},{"board":{"alive":[5,5,1,8,6,7,5,1],"owners":[-1,1],"pos":[[9.6,12.0],[21.5,7.6],[34.2,1.0],[28.9,20.8],[9.6,18.0],[11.6,19.3],[27.8,22.5],[30.0,22.5]],"shaken":[false,false,false,false,false,false,false,false]},"round":2,"type":"seize"},{"action":"charges","board":{"alive":[0,5,1,8,6,7,5,1],"owners":[-1,1],"pos":[[9.6,12.0],[21.5,7.6],[34.2,1.0],[28.9,20.8],[9.6,14.0],[11.6,19.3],[27.8,22.5],[30.0,22.5]],"shaken":[false,false,false,false,false,false,false,false]},"dist":2.0,"player":1,"rolls":[{"actor":"Assault A","hit_faces":[2,3,4,2,3,5,6,5,2,5,6,1,3,3,1,5,6,2,1,1],"hit_target":4,"hits":8,"kind":"charge","save_faces":[6,5,1,3,1,4,6,5],"save_target":4,"target":"Rifles A","weapon":"CCW","wounds":3},{"actor":"Rifles A","face":2,"kind":"morale","quality":4,"result":"rout"}],"round":3,"target":"Rifles A","type":"activation","unit":"Assault A","unit_id":4},{"action":"falls back","board":{"alive":[0,5,1,8,4,7,5,1],"owners":[-1,1],"pos":[[9.6,12.0],[26.8,4.8],[34.2,1.0],[28.9,20.8],[9.6,14.0],[11.6,19.3],[27.8,22.5],[30.0,22.5]],"shaken":[false,false,false,false,false,false,false,false]},"dist":19.5,"player":0,"rolls":[{"actor":"Rifles B","hit_faces":[1,4,1,1,5],"hit_target":4,"hits":2,"kind":"shoot","save_faces":[1,1],"save_target":4,"target":"Assault A","weapon":"Rifle","wounds":2},{"actor":"Assault A","face":5,"kind":"morale","quality":4,"result":"pass"}],"round":3,"target":"Assault A","type":"activation","unit":"Rifles B","unit_id":1},{"action":"rushes","board":{"alive":[0,5,1,8,4,7,5,1],"owners":[-1,1],"pos":[[9.6,12.0],[26.8,4.8],[34.2,1.0],[28.9,20.8],[9.6,14.0],[23.5,20.4],[27.8,22.5],[30.0,22.5]],"shaken":[false,false,false,false,false,false,false,false]},"dist":5.4,"player":1,"rolls":[],"round":3,"target":"Guard Squad","type":"activation","unit":"Assault B","unit_id":5},{"action":"falls back","board":{"alive":[0,5,1,8,4,7,5,1],"owners":[-1,1],"pos":[[9.6,12.0],[26.8,4.8],[35.3,0.0],[28.9,20.8],[9.6,14.0],[23.5,20.4],[27.8,22.5],[30.0,22.5]],"shaken":[false,false,false,false,false,false,false,false]},"dist":23.1,"player":0,"rolls":[{"actor":"Heavy Gun","hit_faces":[1,3,2],"hit_target":4,"hits":0,"kind":"shoot","save_faces":[],"save_target":4,"target":"Bruiser","weapon":"Autocannon","wounds":0}],"round":3,"target":"Bruiser","type":"activation","unit":"Heavy Gun","unit_id":2},{"action":"falls back","board":{"alive":[0,5,1,8,4,7,5,1],"owners":[-1,1],"pos":[[9.6,12.0],[26.8,4.8],[35.3,0.0],[28.9,20.8],[9.6,14.0],[23.5,20.4],[24.5,27.6],[30.0,22.5]],"shaken":[false,false,false,false,false,false,false,false]},"dist":8.0,"player":1,"rolls":[{"actor":"Skirmishers","hit_faces":[5,3,5,5,2],"hit_target":5,"hits":3,"kind":"shoot","save_faces":[3,3,5],"save_target":3,"target":"Guard Squad","weapon":"Pistol","wounds":0}],"round":3,"target":"Guard Squad","type":"activation","unit":"Skirmishers","unit_id":6},{"action":"charges","board":{"alive":[0,5,1,6,4,7,5,1],"owners":[-1,1],"pos":[[9.6,12.0],[26.8,4.8],[35.3,0.0],[28.9,20.8],[9.6,14.0],[23.5,20.4],[24.5,27.6],[30.0,22.5]],"shaken":[false,false,false,false,false,false,false,false]},"dist":2.0,"player":0,"rolls":[{"actor":"Guard Squad","hit_faces":[1,1,6,6,6,3,2,6,6,4],"hit_target":4,"hits":6,"kind":"charge","save_faces":[3,3,4,5,4,3],"save_target":3,"target":"Bruiser","weapon":"CCW","wounds":0},{"actor":"Bruiser","hit_faces":[1,6,3,1],"hit_target":3,"hits":2,"kind":"strike back","save_faces":[4,2],"save_target":5,"target":"Guard Squad","weapon":"Great Axe","wounds":2},{"actor":"Guard Squad","face":5,"kind":"morale","quality":4,"result":"pass"}],"round":3,"target":"Bruiser","type":"activation","unit":"Guard Squad","unit_id":3},{"action":"charges","board":{"alive":[0,5,1,0,4,7,5,1],"owners":[-1,1],"pos":[[9.6,12.0],[26.8,4.8],[35.3,0.0],[28.9,20.8],[9.6,14.0],[23.5,20.4],[24.5,27.6],[30.0,22.5]],"shaken":[false,false,false,false,false,false,false,false]},"dist":2.0,"player":1,"rolls":[{"actor":"Bruiser","hit_faces":[5,4,6,5],"hit_target":6,"hits":1,"kind":"charge","save_faces":[4],"save_target":5,"target":"Guard Squad","weapon":"Great Axe","wounds":1},{"actor":"Guard Squad","hit_faces":[4,2,5,6,2,5,4,5,2,4],"hit_target":6,"hits":1,"kind":"strike back","save_faces":[3],"save_target":3,"target":"Bruiser","weapon":"CCW","wounds":0},{"actor":"Guard Squad","face":1,"kind":"morale","quality":4,"result":"rout"}],"round":3,"target":"Guard Squad","type":"activation","unit":"Bruiser","unit_id":7},{"board":{"alive":[0,5,1,0,4,7,5,1],"owners":[-1,1],"pos":[[9.6,12.0],[26.8,4.8],[35.3,0.0],[28.9,20.8],[9.6,14.0],[23.5,20.4],[24.5,27.6],[30.0,22.5]],"shaken":[false,false,false,false,false,false,false,false]},"round":3,"type":"seize"},{"action":"rushes","board":{"alive":[0,5,1,0,4,7,5,1],"owners":[-1,1],"pos":[[9.6,12.0],[26.8,4.8],[35.3,0.0],[28.9,20.8],[20.2,8.3],[23.5,20.4],[24.5,27.6],[30.0,22.5]],"shaken":[false,false,false,false,false,false,false,false]},"dist":7.5,"player":1,"rolls":[],"round":4,"target":"Rifles B","type":"activation","unit":"Assault A","unit_id":4},{"action":"falls back","board":{"alive":[0,5,1,0,0,7,5,1],"owners":[-1,1],"pos":[[9.6,12.0],[32.1,2.0],[35.3,0.0],[28.9,20.8],[20.2,8.3],[23.5,20.4],[24.5,27.6],[30.0,22.5]],"shaken":[false,false,false,false,false,false,false,false]},"dist":13.5,"player":0,"rolls":[{"actor":"Rifles B","hit_faces":[5,3,6,5,5],"hit_target":4,"hits":4,"kind":"shoot","save_faces":[1,3,3,1],"save_target":4,"target":"Assault A","weapon":"Rifle","wounds":4}],"round":4,"target":"Assault A","type":"activation","unit":"Rifles B","unit_id":1},{"action":"rushes","board":{"alive":[0,5,1,0,0,7,5,1],"owners":[-1,1],"pos":[[9.6,12.0],[32.1,2.0],[35.3,0.0],[28.9,20.8],[20.2,8.3],[28.6,9.5],[24.5,27.6],[30.0,22.5]],"shaken":[false,false,false,false,false,false,false,false]},"dist":8.3,"player":1,"rolls":[],"round":4,"target":"Rifles B","type":"activation","unit":"Assault B","unit_id":5},{"action":"falls back","board":{"alive":[0,5,1,0,0,5,5,1],"owners":[-1,1],"pos":[[9.6,12.0],[32.1,2.0],[38.8,0.0],[28.9,20.8],[20.2,8.3],[28.6,9.5],[24.5,27.6],[30.0,22.5]],"shaken":[false,false,false,false,false,false,false,false]},"dist":13.9,"player":0,"rolls":[{"actor":"Heavy Gun","hit_faces":[4,6,1],"hit_target":4,"hits":2,"kind":"shoot","save_faces":[4,4],"save_target":5,"target":"Assault B","weapon":"Autocannon","wounds":2},{"actor":"Assault B","face":6,"kind":"morale","quality":4,"result":"pass"}],"round":4,"target":"Assault B","type":"activation","unit":"Heavy Gun","unit_id":2},{"action":"rushes","board":{"alive":[0,5,1,0,0,5,5,1],"owners":[-1,1],"pos":[[9.6,12.0],[32.1,2.0],[38.8,0.0],[28.9,20.8],[20.2,8.3],[28.6,9.5],[27.9,16.1],[30.0,22.5]],"shaken":[false,false,false,false,false,false,false,false]},"dist":14.7,"player":1,"rolls":[],"round":4,"target":"Rifles B","type":"activation","unit":"Skirmishers","unit_id":6},{"action":"rushes","board":{"alive":[0,5,1,0,0,5,5,1],"owners":[-1,1],"pos":[[9.6,12.0],[32.1,2.0],[38.8,0.0],[28.9,20.8],[20.2,8.3],[28.6,9.5],[27.9,16.1],[31.2,10.6]],"shaken":[false,false,false,false,false,false,false,false]},"dist":8.6,"player":1,"rolls":[],"round":4,"target":"Rifles B","type":"activation","unit":"Bruiser","unit_id":7},{"board":{"alive":[0,5,1,0,0,5,5,1],"owners":[-1,1],"pos":[[9.6,12.0],[32.1,2.0],[38.8,0.0],[28.9,20.8],[20.2,8.3],[28.6,9.5],[27.9,16.1],[31.2,10.6]],"shaken":[false,false,false,false,false,false,false,false]},"round":4,"type":"seize"}]};
+</script>
+<script>
+(function(){
+  const T = TRACE, B = T.board, R = T.roster, OBJ = T.objectives, ARM = T.armies;
+  const steps = T.steps;
+  const SVGNS="http://www.w3.org/2000/svg", SC=480/B; // board units → px
+  const board = document.getElementById('board');
+  let i = 0, playing=false, timer=null;
+
+  // ---- header ----
+  document.getElementById('match').innerHTML =
+    `<span class="team p0"><span class="dot bg0"></span>${ARM['0']}</span>`+
+    `<span class="vs">vs</span>`+
+    `<span class="team p1"><span class="dot bg1"></span>${ARM['1']}</span>`+
+    `<span class="result">${resultText()}</span>`;
+  function resultText(){
+    const r=T.result, w=r.winner;
+    const who = w===0?ARM['0']:(w===1?ARM['1']:'Unentschieden');
+    return `Sieger: ${who} · Marker ${r.a_objectives}–${r.b_objectives} · R${r.rounds}`;
+  }
+
+  // ---- round markers under scrubber ----
+  const scrub=document.getElementById('scrub');
+  scrub.max = steps.length-1;
+  document.getElementById('tot').textContent = steps.length;
+  (function(){
+    const rd=document.getElementById('rounds'); const seen={};
+    steps.forEach(s=>{ if(s.round && !seen[s.round]){seen[s.round]=1;} });
+    rd.innerHTML = Object.keys(seen).map(r=>`<span>R${r}</span>`).join('');
+  })();
+
+  // ---- board ----
+  function clear(el){while(el.firstChild)el.removeChild(el.firstChild);}
+  function mk(tag,attrs){const e=document.createElementNS(SVGNS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);return e;}
+  function nameToId(nm){const r=R.find(u=>u.name===nm);return r?r.id:-1;}
+
+  function drawBoard(step){
+    clear(board);
+    // ground
+    board.appendChild(mk('rect',{x:0,y:0,width:480,height:480,fill:'#0e1620'}));
+    // deploy zones (player 0 top / low-z, player 1 bottom)
+    board.appendChild(mk('rect',{x:0,y:0,width:480,height:12*SC,fill:'#38c9d6',opacity:.06}));
+    board.appendChild(mk('rect',{x:0,y:480-12*SC,width:480,height:12*SC,fill:'#f5a623',opacity:.06}));
+    // grid every 12"
+    for(let g=12; g<B; g+=12){
+      board.appendChild(mk('line',{x1:g*SC,y1:0,x2:g*SC,y2:480,stroke:'#1c2733',"stroke-width":1}));
+      board.appendChild(mk('line',{x1:0,y1:g*SC,x2:480,y2:g*SC,stroke:'#1c2733',"stroke-width":1}));
+    }
+    // objectives
+    const owners = step.board.owners;
+    OBJ.forEach((o,idx)=>{
+      const cx=o[0]*SC, cy=o[1]*SC, own=owners[idx];
+      const col = own===0?'#38c9d6':(own===1?'#f5a623':'#e8c96a');
+      // 3" control ring
+      board.appendChild(mk('circle',{cx,cy,r:3*SC,fill:'none',stroke:col,"stroke-width":1,"stroke-dasharray":"3 3",opacity:.5}));
+      const d=7;
+      board.appendChild(mk('rect',{x:cx-d,y:cy-d,width:d*2,height:d*2,transform:`rotate(45 ${cx} ${cy})`,
+        fill:own<0?'none':col,stroke:col,"stroke-width":2,opacity:own<0?.9:1}));
+    });
+    // units
+    const actId = step.type==='activation'? step.unit_id : -1;
+    const tgtId = step.type==='activation'? nameToId(step.target) : -1;
+    step.board.pos.forEach((p,id)=>{
+      const alive=step.board.alive[id]; const info=R[id];
+      const cx=p[0]*SC, cy=p[1]*SC;
+      const col = info.player===0?'#38c9d6':'#f5a623';
+      if(alive<=0){ // casualty marker
+        const x=mk('g',{opacity:.35});
+        x.appendChild(mk('line',{x1:cx-5,y1:cy-5,x2:cx+5,y2:cy+5,stroke:col,"stroke-width":2}));
+        x.appendChild(mk('line',{x1:cx-5,y1:cy+5,x2:cx+5,y2:cy-5,stroke:col,"stroke-width":2}));
+        board.appendChild(x); return;
+      }
+      const rad = 7 + 9*Math.sqrt(alive/info.max_models);
+      if(id===actId) board.appendChild(mk('circle',{cx,cy,r:rad+5,fill:'none',stroke:'#fff',"stroke-width":2,opacity:.9}));
+      if(id===tgtId) board.appendChild(mk('circle',{cx,cy,r:rad+5,fill:'none',stroke:'#ff5a52',"stroke-width":2,"stroke-dasharray":"4 3"}));
+      board.appendChild(mk('circle',{cx,cy,r:rad,fill:col,opacity:step.board.shaken[id]?.35:.85,
+        stroke:col,"stroke-width":1}));
+      const t=mk('text',{x:cx,y:cy+4,"text-anchor":"middle","font-size":11,"font-family":"var(--mono)",
+        fill:'#0b0f14',"font-weight":700});
+      t.textContent=alive; board.appendChild(t);
+      if(step.board.shaken[id]){
+        const s=mk('text',{x:cx,y:cy-rad-4,"text-anchor":"middle","font-size":9,fill:'#38c9d6',
+          "font-family":"var(--mono)"}); s.textContent='SHAKEN'; board.appendChild(s);
+      }
+    });
+  }
+
+  // ---- readout ----
+  const die=(n,cls)=>`<div class="die ${cls}${n===6?' six':''}">${n<0?'—':n}</div>`;
+  function hitDice(faces,target){return faces.map(f=>die(f,(f===6||(f>=target&&f!==1))?'hit':'')).join('');}
+  function saveDice(faces,target){return faces.map(f=>die(f,(f===6||(f>=target&&f!==1))?'block':'')).join('');}
+
+  function renderReadout(step){
+    const el=document.getElementById('readout');
+    if(step.type==='deploy'){el.innerHTML=`<div class="rround">Aufstellung</div>
+      <div class="narr">Beide Armeen in ihren 12"-Zonen. Zwei Missionsziele auf der Mittellinie.</div>`;return;}
+    if(step.type==='seize'){
+      const own=step.board.owners.map((o,ix)=>`Ziel ${ix+1}: ${o===0?ARM['0']:(o===1?ARM['1']:'neutral')}`).join(' · ');
+      el.innerHTML=`<div class="rround">Rundenende ${step.round} · Ziele eingenommen</div>
+        <div class="seize">${own}</div>`;return;}
+    // activation
+    const info=R[step.unit_id]||{player:0};
+    const pcls=info.player===0?'p0':'p1';
+    let html=`<div class="rhead">
+        <span class="rround">Runde ${step.round}</span>
+        <span class="ractor ${pcls}">${step.unit}</span>
+        <span class="raction">${step.action}</span>
+        ${step.target?`<span class="rtarget">→ ${step.target} (${step.dist}")</span>`:''}
+      </div>`;
+    if(step.action.indexOf('IDLE')>=0) html+=`<div class="idle">Bleibt untätig — verliert dadurch „Shaken".</div>`;
+    (step.rolls||[]).forEach(r=>{
+      if(r.kind==='morale'){
+        const pass=r.result==='pass';
+        html+=`<div class="roll morale"><div class="rollhead">${r.actor} · Moraltest (Quality ${r.quality}+)</div>
+          <div class="dice">${r.face<0?'<span class="mres shaken">bereits Shaken → scheitert automatisch</span>':die(r.face,pass?'pass':'fail')}
+          <span class="mres ${r.result}">${r.result==='pass'?'bestanden':(r.result==='shaken'?'→ Shaken':'→ ROUT (zerstört)')}</span></div></div>`;
+      } else {
+        const verb=r.kind==='shoot'?'Beschuss':(r.kind==='strike back'?'Rückschlag':'Nahkampf');
+        html+=`<div class="roll"><div class="rollhead">${verb} · ${r.weapon} → ${r.target}
+            ${r.wounds>0?`· <span class="w">${r.wounds} Wunde${r.wounds>1?'n':''}</span>`:'· 0 Wunden'}</div>`;
+        html+=`<div class="dielabel">Treffer — ${r.hit_faces.length} Würfel auf ${r.hit_target}+ → ${r.hits} Treffer</div>
+          <div class="dice">${hitDice(r.hit_faces,r.hit_target)}</div>`;
+        if(r.hits>0) html+=`<div class="dielabel">Rettung (Gegner) — ${r.save_faces.length} auf ${r.save_target}+ → ${r.hits-r.wounds} geblockt</div>
+          <div class="dice">${saveDice(r.save_faces,r.save_target)}</div>`;
+        html+=`</div>`;
+      }
+    });
+    if((step.rolls||[]).length===0 && step.action.indexOf('IDLE')<0)
+      html+=`<div class="narr">Bewegung, kein Kampf in dieser Aktivierung.</div>`;
+    el.innerHTML=html;
+  }
+
+  // ---- legend / roster ----
+  function renderLegend(step){
+    const el=document.getElementById('legend');
+    el.innerHTML=R.map(u=>{
+      const alive=step.board.alive[u.id], dead=alive<=0, sh=step.board.shaken[u.id];
+      return `<div class="legrow ${dead?'dead':''}">
+        <span class="dot bg${u.player}"></span>
+        <span class="legname">${u.name}</span>
+        <span class="legstat">Q${u.quality}+ D${u.defense}+${u.tough>1?' T'+u.tough:''}</span>
+        <span class="legalive">${sh?'<span class="tag shaken">shaken</span> ':''}${alive}/${u.max_models}</span>
+      </div>`;}).join('');
+  }
+
+  document.getElementById('foot').textContent =
+    `Seed ${T.seed} · reiner Sim-Trace (GF v3.5.1-Regeln) · Positionen in Zoll, 48"×48" Tisch · Würfel wie gewürfelt.`;
+
+  function render(){
+    const step=steps[i];
+    document.getElementById('cur').textContent=i;
+    scrub.value=i;
+    document.getElementById('prev').disabled=(i===0);
+    document.getElementById('next').disabled=(i===steps.length-1);
+    drawBoard(step); renderReadout(step); renderLegend(step);
+  }
+  function go(n){i=Math.max(0,Math.min(steps.length-1,n));render();}
+  document.getElementById('prev').onclick=()=>go(i-1);
+  document.getElementById('next').onclick=()=>go(i+1);
+  scrub.oninput=e=>go(+e.target.value);
+  const playBtn=document.getElementById('play');
+  playBtn.onclick=()=>{
+    playing=!playing; playBtn.textContent=playing?'❚❚ Pause':'▶ Play';
+    if(playing){timer=setInterval(()=>{ if(i>=steps.length-1){playing=false;playBtn.textContent='▶ Play';clearInterval(timer);return;} go(i+1);},1100);}
+    else clearInterval(timer);
+  };
+  render();
+})();
+</script>
