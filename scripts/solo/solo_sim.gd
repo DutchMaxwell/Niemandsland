@@ -48,9 +48,12 @@ static func make_unit(name: String, player: int, quality: int, defense: int, mod
 
 
 static func units_from_opr_json(data: Dictionary, player: int) -> Array:
-	var out: Array = []
+	# Parse every raw unit into a temp record keyed by its selectionId.
+	var parsed: Dictionary = {}
+	var order: Array = []
 	for u in data.get("units", []):
 		var unit := u as Dictionary
+		var sel := str(unit.get("selectionId", str(order.size())))
 		var rule_names: Array = []
 		var tough := 1
 		for r in unit.get("rules", []):
@@ -74,8 +77,31 @@ static func units_from_opr_json(data: Dictionary, player: int) -> Array:
 				"count": maxi(int(wd.get("count", 1)), 1),
 				"special_rules": (["AP(%d)" % ap] if ap > 0 else []),
 			})
-		out.append(make_unit(str(unit.get("name", "Unit")), player, int(unit.get("quality", 4)),
-			int(unit.get("defense", 4)), maxi(int(unit.get("size", 1)), 1), weapons, tough, rule_names))
+		parsed[sel] = {
+			"name": str(unit.get("name", "Unit")), "quality": int(unit.get("quality", 4)),
+			"defense": int(unit.get("defense", 4)), "size": maxi(int(unit.get("size", 1)), 1),
+			"weapons": weapons, "tough": tough, "rules": rule_names,
+			"join_to": str(unit.get("joinToUnit", "")), "merged": false,
+		}
+		order.append(sel)
+	# Merge joiners (combined-unit halves + joined heroes) INTO their target: models + weapons add up, so
+	# a combined pair (2×5) becomes one unit of 10 — matching how the game imports them.
+	for sel in order:
+		var p: Dictionary = parsed[sel]
+		var jt: String = p["join_to"]
+		if jt != "" and parsed.has(jt):
+			var tgt: Dictionary = parsed[jt]
+			tgt["size"] = int(tgt["size"]) + int(p["size"])
+			tgt["weapons"] = (tgt["weapons"] as Array) + (p["weapons"] as Array)
+			tgt["tough"] = maxi(int(tgt["tough"]), int(p["tough"]))
+			p["merged"] = true
+	var out: Array = []
+	for sel in order:
+		var p: Dictionary = parsed[sel]
+		if bool(p["merged"]):
+			continue
+		out.append(make_unit(str(p["name"]), player, int(p["quality"]), int(p["defense"]),
+			int(p["size"]), p["weapons"], int(p["tough"]), p["rules"]))
 	return out
 
 
@@ -188,8 +214,11 @@ static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator
 	var advance: float = float(unit["advance_in"])
 	var rush: float = float(unit["rush_in"])
 	var dist: float = upos.distance_to(tpos)
+	var dist0: float = dist   # distance at decision time (before the move)
 	var in_range: bool = shoot_range > 0 and dist <= float(shoot_range)   # open field: LOS always clear
 	var action: int = AiDecision.decide(archetype, dist, advance, rush, float(shoot_range), in_range)
+	var why := {"arch": ["MELEE", "SHOOTING", "HYBRID"][archetype], "range": shoot_range,
+		"in_range": in_range, "dist0": snappedf(dist0, 0.1)}
 	log_lines.append("%s: %s (%.0f\" to %s)" % [unit["name"], AiDecision.action_name(action), dist, target["name"]])
 	var dir: Vector2 = (tpos - upos).normalized() if dist > 0.0001 else Vector2.ZERO
 	match action:
@@ -210,7 +239,7 @@ static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator
 	elif action in [AiDecision.Action.ADVANCE, AiDecision.Action.KITE, AiDecision.Action.HOLD] \
 			and shoot_range > 0 and dist <= float(shoot_range):
 		_resolve_shooting(unit, target, dist, rng, log_lines, rolls)
-	_trace_activation(trace, unit, round_no, AiDecision.action_name(action), target, dist, rolls, units, obj_owner)
+	_trace_activation(trace, unit, round_no, AiDecision.action_name(action), target, dist, rolls, units, obj_owner, why)
 
 
 # === Combat resolution (uses AiShooting + AiCombatMath, dice from the seeded RNG) ===
@@ -432,7 +461,7 @@ static func _trace_morale(rolls: Array, unit: String, face: int, quality: int, r
 
 
 static func _trace_activation(trace: Array, unit: Dictionary, round_no: int, action: String,
-		target: Variant, dist: float, rolls: Array, units: Array, obj_owner: Array) -> void:
+		target: Variant, dist: float, rolls: Array, units: Array, obj_owner: Array, why: Dictionary = {}) -> void:
 	if trace == null:
 		return
 	trace.append({
@@ -440,6 +469,6 @@ static func _trace_activation(trace: Array, unit: Dictionary, round_no: int, act
 		"player": int(unit["player"]), "action": action,
 		"target": (str(target["name"]) if target != null else ""),
 		"target_id": (int(target.get("_id", -1)) if target != null else -1),
-		"dist": snappedf(dist, 0.1), "rolls": rolls,
+		"dist": snappedf(dist, 0.1), "rolls": rolls, "why": why,
 		"board": _snapshot(units, obj_owner),
 	})
