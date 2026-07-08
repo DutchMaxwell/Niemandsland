@@ -1472,12 +1472,16 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 	# Add script for selection
 	wrapper.set_script(load("res://scripts/selectable_object.gd"))
 
+	# Record the RESOLVED model key (loadout variant / mount): save + MP sync carry it so the
+	# restore path re-resolves the exact same model instead of guessing from the unit name.
+	wrapper.set_meta("glb_name", glb_name)
+
 	return wrapper
 
 
 ## Create a visual model from saved unit_properties dictionary (for save/load)
 ## Uses the same visual logic as _create_unit_model() but reads from Dictionary instead of OPRUnit
-func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> StaticBody3D:
+func create_model_from_properties(props: Dictionary, model_tough: int = 0, glb_name_override: String = "") -> StaticBody3D:
 	var wrapper = StaticBody3D.new()
 	wrapper.collision_layer = MINIATURE_COLLISION_LAYER
 	wrapper.collision_mask = GROUND_COLLISION_LAYER
@@ -1558,7 +1562,14 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> St
 		var mount_glb: String = _find_mount_glb_name(saved_mount, faction_folder)
 		if not mount_glb.is_empty():
 			glb_name = mount_glb
-	var model_path = _find_model_for_unit(glb_name, faction_folder)
+	# The serialized RESOLVED key (loadout variant / mount) wins: the unit name alone cannot find
+	# variant-only manifest entries (reworked factions), which meeple'd synced + loaded armies.
+	if not glb_name_override.is_empty():
+		glb_name = glb_name_override
+	# Mirror the import path: prefer the ctex delivery (decimated mesh + BC7 materials) when cached.
+	var ctex_paths: Dictionary = model_library.ctex_cached_paths(faction_folder, glb_name) if model_library != null else {}
+	var use_ctex: bool = not ctex_paths.is_empty()
+	var model_path: String = str(ctex_paths.get("mesh", "")) if use_ctex else _find_model_for_unit(glb_name, faction_folder)
 	var model_height: float = 0.032
 
 	var use_glb_model = false
@@ -1576,7 +1587,16 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> St
 			# Orient on an oval base: walkers crosswise (quer), other vehicles along the long axis.
 			_align_to_oval_long_axis(glb_instance, aabb, base_is_oval, base_width, base_depth, _is_walker(unit_name))
 
-			_brighten_trellis_materials(glb_instance)
+			if use_ctex:
+				# Same treatment as the import path so ctex and legacy render identically.
+				if ctex_paths.has("materials"):
+					CtexLoader.apply_materials_to_mesh(glb_instance, ctex_paths["materials"])
+				else:
+					CtexLoader.apply_to_mesh(glb_instance, str(ctex_paths.get("albedo", "")),
+						str(ctex_paths.get("normal", "")), str(ctex_paths.get("orm", "")), false)
+				_brighten_ctex_materials(glb_instance)
+			else:
+				_brighten_trellis_materials(glb_instance)
 			wrapper.add_child(glb_instance)
 			use_glb_model = true
 			model_height = fit.height
@@ -1635,6 +1655,10 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0) -> St
 
 	# Add script for selection and groups
 	wrapper.set_script(load("res://scripts/selectable_object.gd"))
+
+	# Record the RESOLVED model key (loadout variant / mount): save + MP sync carry it so the
+	# restore path re-resolves the exact same model instead of guessing from the unit name.
+	wrapper.set_meta("glb_name", glb_name)
 	wrapper.add_to_group("selectable")
 	wrapper.add_to_group("miniature")
 	wrapper.add_to_group("opr_unit")

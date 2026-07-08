@@ -194,6 +194,11 @@ func _serialize_object(obj: Node3D) -> Dictionary:
 		if game_unit:
 			data["game_unit_id"] = game_unit.unit_id
 			data["model_index"] = obj.get_meta("model_index", 0)
+			# The RESOLVED model key (loadout variant / mount) - restore re-resolves the exact model;
+			# absent on pre-0.3.8 saves (falls back to the unit name, the old behavior).
+			var stamped_glb: String = str(obj.get_meta("glb_name", ""))
+			if not stamped_glb.is_empty():
+				data["glb_name"] = stamped_glb
 	elif obj.is_in_group("tts_import"):
 		data["type"] = "tts_import"
 		data["tts_mesh_url"] = obj.get_meta("tts_mesh_url", "")
@@ -576,7 +581,7 @@ func _deserialize_object(data: Dictionary) -> bool:
 				# Heartbeat tick right before a possibly first-time synchronous GLTF parse.
 				if is_inside_tree():
 					await get_tree().process_frame
-				spawned_obj = army_manager.create_model_from_properties(props, model_tough)
+				spawned_obj = army_manager.create_model_from_properties(props, model_tough, str(data.get("glb_name", "")))
 				if spawned_obj:
 					object_manager.add_child(spawned_obj)
 					spawned_obj.global_position = position
