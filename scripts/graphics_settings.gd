@@ -155,7 +155,18 @@ func _apply_window_constraints() -> void:
 	apply_ui_scale(ui_scale)
 	# Apply the persisted fullscreen choice (default on). Driven here rather than at the
 	# engine level so unticking it actually persists to a windowed start (needed for OBS).
-	apply_fullscreen(fullscreen)
+	# An explicit windowed launch (side-by-side test instances, capture setups) wins over the
+	# persisted preference for THIS run. Godot CONSUMES its own `--windowed` before scripts can
+	# see it (it is not in get_cmdline_args — verified on 4.6), so the supported forms are the
+	# user arg `-- --windowed` and the env var NML_WINDOWED=1; the plain engine arg is checked
+	# too in case a future Godot passes it through.
+	var launch_args: PackedStringArray = OS.get_cmdline_args() + OS.get_cmdline_user_args()
+	var wants_windowed: bool = launch_args.has("--windowed") or OS.get_environment("NML_WINDOWED") == "1"
+	if wants_windowed:
+		print("[Graphics] windowed launch requested — skipping fullscreen restore")
+		apply_fullscreen(false)
+	else:
+		apply_fullscreen(fullscreen)
 
 
 ## Toggle borderless fullscreen (safe MODE_FULLSCREEN, never EXCLUSIVE). Persisted.
