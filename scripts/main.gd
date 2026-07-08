@@ -188,6 +188,7 @@ var unit_card: UnitCard = null
 var unit_dock: UnitDock = null
 var battle_log: BattleLog = null              # narrative event log (collector)
 var battle_log_panel: BattleLogPanel = null   # collapsible HUD panel (top-centre, collapsed by default)
+var _host_free_move_check: CheckButton = null   # "Move all models" — host-operated, session-wide
 var _room_code_button: Button = null          # permanent room-code display in the left bar (click = copy)
 var _session_room_code: String = ""
 var _hovered_model: Node3D = null
@@ -338,6 +339,7 @@ func _ready() -> void:
 	network_manager.peer_version_validated.connect(_on_peer_version_validated)
 	network_manager.version_rejected.connect(_on_version_rejected)
 	network_manager.peer_remapped.connect(_on_peer_remapped)
+	network_manager.slot_table_synced.connect(_on_slot_table_synced)
 	network_manager.session_busy_changed.connect(_on_session_busy_changed)
 
 	# Connect game state sync signals (remote wounds, activation, markers, casts, delete)
@@ -539,6 +541,9 @@ func _ready() -> void:
 
 	# Initialize Deployment Zones UI
 	_init_deployment_zones_ui()
+
+	# Host tools: the free-move toggle (lift the ownership lock — community feedback for solo play).
+	_init_host_tools_ui()
 
 	# Room-code display (maintainer): the code must stay visible for the whole session — players could
 	# not rejoin because it was shown only once and every status update overwrote it.
@@ -2169,12 +2174,18 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# The peer is registered and validated — hand it the full name roster so it
 	# immediately knows everyone already at the table (including the host).
 	network_manager.push_roster_to_peer(peer_id)
+	# Hand it the whole peer→slot table too, so in a 3+-player game it agrees on everyone's slot (hence
+	# colour) immediately, without needing to have witnessed each incremental remap broadcast (bus 036).
+	network_manager.push_slot_table_to_peer(peer_id)
 	# If anyone is CURRENTLY loading, tell the late joiner so it gates + shows the banner too.
 	network_manager.push_busy_state_to_peer(peer_id)
 	# Hand the joining peer the current biome (host-authoritative table state — the biome
 	# is not part of the serialized .nml game state, so it must be pushed separately).
 	if table != null:
 		network_manager.broadcast_table_settings({"biome": table.biome})
+	# Late joiners also need the session's free-move state (host-operated, applies to everyone).
+	if object_manager != null and object_manager.host_free_move:
+		network_manager.broadcast_table_settings({"free_move": true})
 	# Replay the current pinned rulers so the late-joiner sees existing measurements
 	# (session-only state, not part of the .nml save).
 	network_manager.sync_rulers_to_peer(peer_id)
@@ -2816,6 +2827,20 @@ func _on_peer_remapped(old_peer: int, new_peer: int, _slot: int) -> void:
 	_rebuild_roster()
 
 
+## A guest just adopted the host's full peer→slot table (bus 036): recolour every existing avatar +
+## cursor, since some may have been spawned with a stale slot (their raw peer_id) before the table
+## arrived, giving the wrong colour in a 3+-player game.
+func _on_slot_table_synced() -> void:
+	for pid in _player_avatars:
+		var av = _player_avatars[pid]
+		if is_instance_valid(av) and av.has_method("set_player_color"):
+			av.set_player_color(_get_player_color(pid))
+	for pid in _remote_cursors:
+		var cur = _remote_cursors[pid]
+		if is_instance_valid(cur) and cur.has_method("set_player_color"):
+			cur.set_player_color(_get_player_color(pid))
+
+
 ## Remove all presence nodes (on disconnect)
 func _cleanup_all_presence() -> void:
 	for cursor in _remote_cursors.values():
@@ -2833,17 +2858,10 @@ func _cleanup_all_presence() -> void:
 ## monotonic slot back into the four-colour table (and slot 0 / pending -> colour 1),
 ## so nobody ever flickers to WHITE.
 func _get_player_color(peer_id: int) -> Color:
-	const COLORS := {
-		1: Color(0.2, 0.4, 0.9),  # Blue
-		2: Color(0.9, 0.2, 0.2),  # Red
-		3: Color(0.2, 0.8, 0.3),  # Green
-		4: Color(0.9, 0.7, 0.1),  # Yellow
-	}
 	var slot := peer_id
 	if network_manager:
 		slot = network_manager.slot_for_peer(peer_id)
-	var idx := (((slot - 1) % COLORS.size()) + 1) if slot > 0 else 1
-	return COLORS.get(idx, Color.WHITE)
+	return PlayerPalette.color_for_slot(slot)   # shared slot→palette (matches army bases, bus 036)
 
 
 ## ============================================================================
@@ -2863,6 +2881,10 @@ func _broadcast_table_settings_update(setting_key: String, value) -> void:
 ## Receive table settings from host (client only)
 func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 	print("[Settings] Received table settings: %s" % str(settings))
+
+	# Session-wide free-move (host-operated): apply + mirror into the (read-only for guests) checkbox.
+	if settings.has("free_move"):
+		_apply_free_move(bool(settings["free_move"]))
 
 	if settings.has("table_size"):
 		var ts = settings["table_size"]
@@ -3462,7 +3484,7 @@ func _broadcast_army_import(army: OPRApiClient.OPRArmy, spawned_models: Array[No
 func _on_remote_army_header(player_id: int, army_name: String, unit_count: int) -> void:
 	_is_army_syncing = true  # pause our presence broadcasts while we build the incoming army (Fix A)
 	print("[ArmySync] Header: '%s' — expecting %d units (player_id=%d)" % [army_name, unit_count, player_id])
-	var player_color: Color = OPRArmyManager.PLAYER_COLORS.get(player_id, Color.GRAY)
+	var player_color: Color = OPRArmyManager.army_color(player_id, Color.GRAY)
 	opr_army_manager._create_army_tray(player_id, army_name, player_color)
 	_incoming_armies[player_id] = {"army_name": army_name, "units": [], "objects": []}
 	# Same overlay as a self-import, so receiving an army looks identical to loading one.
@@ -3902,6 +3924,49 @@ func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2,
 ## Initialize deployment zones UI (simplified - only visibility toggle)
 ## NOTE: Deployment zone type selection and custom zone editing is now in Map Tool.
 ## This ensures a single point of truth for deployment zone configuration.
+## Host tools (community feedback): a left-panel toggle that lets the HOST move ALL models — lifts the
+## MP ownership lock for fully solo / self-refereed games run from a hosted session. Guests never see an
+## effect (the lock check is host-gated); the toggle logs to the battle log for transparency.
+func _init_host_tools_ui() -> void:
+	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
+	if not left_panel_vbox:
+		return
+	var box := VBoxContainer.new()
+	box.name = "HostToolsPanel"
+	left_panel_vbox.add_child(box)
+	var label := Label.new()
+	label.text = "Host tools:"
+	label.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
+	box.add_child(label)
+	_host_free_move_check = CheckButton.new()
+	_host_free_move_check.text = "Move all models"
+	_host_free_move_check.tooltip_text = "Lift the ownership lock for EVERYONE at the table (solo / refereeing). Only the host can switch this."
+	_host_free_move_check.focus_mode = Control.FOCUS_NONE
+	_host_free_move_check.add_theme_font_size_override("font_size", 12)
+	_host_free_move_check.toggled.connect(_on_host_free_move_toggled)
+	box.add_child(_host_free_move_check)
+
+
+## Session-wide free-move: HOST-operated, applies to everyone (guests may then move the host's army too
+## — they just cannot flip the switch themselves).
+func _on_host_free_move_toggled(pressed: bool) -> void:
+	if network_manager != null and network_manager.is_multiplayer_active() and not network_manager.is_host:
+		# A guest flipped the switch: revert silently — the state belongs to the host.
+		_host_free_move_check.set_pressed_no_signal(object_manager.host_free_move if object_manager != null else false)
+		return
+	_apply_free_move(pressed)
+	_broadcast_table_settings_update("free_move", pressed)
+
+
+func _apply_free_move(enabled: bool) -> void:
+	if object_manager != null:
+		object_manager.host_free_move = enabled
+	if _host_free_move_check != null:
+		_host_free_move_check.set_pressed_no_signal(enabled)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "Free-move %s (everyone may move all models)" % ("enabled" if enabled else "disabled"))
+
+
 func _init_deployment_zones_ui() -> void:
 	# Get the left panel VBox to add UI elements
 	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
