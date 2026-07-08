@@ -50,6 +50,15 @@ static func at_or_below_half(alive: int, total: int) -> bool:
 	return alive * 2 <= total
 
 
+## OPR rule gap (goal 003 P1): a unit tests morale after SHOOTING only if it took casualties this volley
+## AND is now at half strength or less. Pure predicate behind the solo shooting-morale trigger. A wiped
+## unit (alive_now <= 0) is gone, not routed here; no casualties (alive_now unchanged) → no test.
+static func should_test_shooting_morale(alive_before: int, alive_now: int, total: int) -> bool:
+	if alive_now <= 0 or alive_now >= alive_before:
+		return false
+	return at_or_below_half(alive_now, total)
+
+
 ## Resolve a morale test from the single rolled face. at_or_below_half decides Shaken vs Rout on a fail.
 static func morale_result(face: int, quality: int, is_at_or_below_half: bool) -> Morale:
 	if DiceRules.is_success(face, quality, 0):

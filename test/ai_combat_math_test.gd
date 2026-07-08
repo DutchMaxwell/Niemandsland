@@ -39,3 +39,16 @@ func test_morale_pass_shaken_rout() -> void:
 	assert_int(AiCombatMath.morale_result(2, 3, false)).is_equal(AiCombatMath.Morale.SHAKEN)
 	# A 2 fails; at/below half → Rout.
 	assert_int(AiCombatMath.morale_result(2, 3, true)).is_equal(AiCombatMath.Morale.ROUT)
+
+
+func test_should_test_shooting_morale() -> void:
+	# Took casualties (10 -> 4 of 10) and now at/below half → test.
+	assert_bool(AiCombatMath.should_test_shooting_morale(10, 4, 10)).is_true()
+	# Took casualties but still above half (10 -> 6 of 10) → no test.
+	assert_bool(AiCombatMath.should_test_shooting_morale(10, 6, 10)).is_false()
+	# No casualties this volley (unchanged) → no test, even at half.
+	assert_bool(AiCombatMath.should_test_shooting_morale(5, 5, 10)).is_false()
+	# Wiped out (alive_now 0) → gone, not routed via a morale test.
+	assert_bool(AiCombatMath.should_test_shooting_morale(3, 0, 10)).is_false()
+	# Exactly half after casualties (10 -> 5 of 10) → test.
+	assert_bool(AiCombatMath.should_test_shooting_morale(10, 5, 10)).is_true()

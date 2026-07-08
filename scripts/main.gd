@@ -764,6 +764,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 	if groups.is_empty():
 		return
 	var defense: int = target.get_defense()   # majority defense v1 (documented; per-model saves later)
+	var target_alive_before: int = target.get_alive_count()   # post-shooting morale (goal 003 P1)
 	var total_wounds := 0
 	for grp in groups:
 		var group := grp as Dictionary
@@ -783,6 +784,8 @@ func _run_ai_shooting(report: Dictionary) -> void:
 			total_wounds += AiCombatMath.wounds(hits, save_faces, defense, ap)
 	if total_wounds > 0:
 		_solo_apply_wounds(target, total_wounds)
+		# The human's unit tests morale if the volley dropped it to half strength or less (goal 003 P1).
+		await _solo_shooting_morale(target, target_alive_before, "You")
 
 
 ## Weapon groups for a combat activation: the unit's own profiles at its Quality PLUS each attached
@@ -929,6 +932,17 @@ func _run_ai_melee(report: Dictionary) -> void:
 
 ## One OPR morale test with a real tray die: >= Quality passes; fail → Shaken, at/below half → Routs
 ## (the unit is destroyed through the existing kill flows).
+## OPR rule gap (goal 003 P1): a unit that takes CASUALTIES FROM SHOOTING and is now at half strength or
+## less must test morale — this trigger was missing entirely (morale only ran after melee). Compares the
+## unit's own alive count before vs after the volley; `owner` attributes the tray roll (the AI rolls for
+## its own units, "You" for the human's). No-op if the unit was wiped or took no casualties.
+func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String) -> void:
+	if unit == null:
+		return
+	if AiCombatMath.should_test_shooting_morale(alive_before, unit.get_alive_count(), unit.models.size()):
+		await _solo_morale_test(unit, owner)
+
+
 func _solo_morale_test(unit: GameUnit, owner: String) -> void:
 	var faces: Array = await _solo_tray_roll(1, unit.get_quality(), owner)
 	if faces.is_empty():
@@ -1124,6 +1138,7 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 	if attacker == null or target == null or dice_roller_control == null:
 		return
 	var dist := MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
+	var target_alive_before: int = target.get_alive_count()   # post-shooting morale (goal 003 P1)
 	var human_dealt := 0
 	var ai_dealt := 0
 	for grp in _solo_attack_groups(attacker, dist, melee):
@@ -1145,6 +1160,9 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 			human_dealt += AiCombatMath.wounds(hits, save_faces, target.get_defense(), int(profile.get("ap", 0)))
 	if human_dealt > 0:
 		_solo_apply_wounds(target, human_dealt)
+	if not melee:
+		# The AI's unit tests morale if your volley dropped it to half strength or less (goal 003 P1).
+		await _solo_shooting_morale(target, target_alive_before, "AI (%s)" % target.get_name())
 	if melee:
 		_solo_set_fatigued(attacker)
 		# The AI must always strike back (official rule) — no prompt on its side.
@@ -1181,6 +1199,29 @@ func _solo_set_fatigued(unit: GameUnit) -> void:
 		for h in unit.get_attached_heroes():
 			if h != null and not h.is_fatigued:
 				radial_menu_controller.card_toggle_fatigued(h)
+
+
+## Solo auto-game round change (goal 003 P1). Gated on an active Solo AI so manual/MP games keep managing
+## their own markers by hand. Fires with the NEW round number.
+func _on_solo_round_advanced(round_number: int) -> void:
+	if solo_ai_slots.is_empty():
+		return
+	_solo_reset_all_fatigue()
+
+
+## OPR: Fatigue lasts only until the end of the round — clear it from EVERY unit (both sides, heroes
+## included, since get_all_game_units returns joined heroes too) at each round change. This reset was
+## missing (fatigue accumulated forever). Uses the radial seam so state + marker + MP sync stay in step.
+func _solo_reset_all_fatigue() -> void:
+	if opr_army_manager == null or radial_menu_controller == null:
+		return
+	var cleared := 0
+	for u in opr_army_manager.get_all_game_units():
+		if u != null and u.is_fatigued:
+			radial_menu_controller.card_toggle_fatigued(u)
+			cleared += 1
+	if cleared > 0 and battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "Fatigue clears — new round")
 
 
 ## Apply shooting wounds through the EXISTING flows so parking, battle log and MP sync keep working:
@@ -2165,6 +2206,7 @@ func _setup_battle_log() -> void:
 	# Central seams (fewest hooks that cover local + remote):
 	if opr_army_manager != null:
 		opr_army_manager.round_advanced.connect(battle_log.on_round_advanced)
+		opr_army_manager.round_advanced.connect(_on_solo_round_advanced)   # goal 003 P1: fatigue reset + ambush
 		opr_army_manager.loose_model_dead_changed.connect(_on_battle_log_dead)
 		opr_army_manager.regiment_wounds_applied.connect(_on_battle_log_regiment_wounds)
 	if object_manager != null:
