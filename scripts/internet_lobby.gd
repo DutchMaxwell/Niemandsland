@@ -174,6 +174,11 @@ func _on_room_created(code: String) -> void:
 func _on_room_joined(peer_id: int) -> void:
 	# Set as multiplayer peer - this activates RPCs
 	multiplayer.multiplayer_peer = relay_peer
+	# The GUEST keeps the room code too (relay-normalized) — only the host path set it before, so
+	# the guest's permanent readout + battle-log line stayed empty (release-test finding G2). It
+	# must be set BEFORE internet_connected fires: main reads it in that handler.
+	if relay_peer != null:
+		room_code = relay_peer.get_room_code()
 	internet_connected.emit(peer_id)
 	print("=== JOINED ROOM as Peer %d ===" % peer_id)
 

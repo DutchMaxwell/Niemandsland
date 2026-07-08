@@ -189,6 +189,8 @@ var unit_dock: UnitDock = null
 var battle_log: BattleLog = null              # narrative event log (collector)
 var battle_log_panel: BattleLogPanel = null   # collapsible HUD panel (top-centre, collapsed by default)
 var _host_free_move_check: CheckButton = null   # "Move all models" — host-operated, session-wide
+var _room_code_button: Button = null          # permanent room-code display in the left bar (click = copy)
+var _session_room_code: String = ""
 var _hovered_model: Node3D = null
 
 # WGS (Wargaming Simulator) Integration
@@ -542,6 +544,10 @@ func _ready() -> void:
 
 	# Host tools: the free-move toggle (lift the ownership lock — community feedback for solo play).
 	_init_host_tools_ui()
+
+	# Room-code display (maintainer): the code must stay visible for the whole session — players could
+	# not rejoin because it was shown only once and every status update overwrote it.
+	_init_room_code_display()
 
 	# Initialize Radial Menu
 	_init_radial_menu()
@@ -2217,6 +2223,7 @@ func _on_internet_room_ready(code: String) -> void:
 	# Copy code to clipboard for easy sharing
 	DisplayServer.clipboard_set(code)
 	print("Room code %s copied to clipboard" % display_code)
+	_set_room_code_display(code)   # permanent readout in the left bar + battle-log line
 	# Host seeds its identity HERE: the host flow goes room_created -> room_code_ready and
 	# never reaches _on_internet_connected, so this is where the host claims slot 1.
 	if network_manager and multiplayer.is_server():
@@ -2235,6 +2242,9 @@ func _on_internet_connected(peer_id: int) -> void:
 	_update_network_ui(true, false)
 	network_status_label.text = "Online (Peer %d)" % peer_id
 	network_status_label.add_theme_color_override("font_color", Color.GREEN)
+	# The guest keeps the room code visible too (it typed it once, then it was gone — no rejoin).
+	if internet_lobby != null and not internet_lobby.room_code.is_empty():
+		_set_room_code_display(internet_lobby.room_code)
 	# Announce our version to the host; on a match the host pushes full state
 	# (gated on the handshake) once SceneMultiplayer has registered the peer.
 	network_manager.announce_version_to_host()
@@ -2979,7 +2989,44 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 
 
 ## Update network UI visibility based on connection state
+## Permanent room-code readout at the TOP of the left bar (maintainer: without it nobody can rejoin —
+## the code was shown once and every status update overwrote it). Click copies the code; also logged to
+## the battle log on host/join so it survives in the session record.
+func _init_room_code_display() -> void:
+	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
+	if not left_panel_vbox:
+		return
+	_room_code_button = Button.new()
+	_room_code_button.visible = false
+	_room_code_button.focus_mode = Control.FOCUS_NONE
+	_room_code_button.tooltip_text = "The session's room code — click to copy"
+	_room_code_button.add_theme_color_override("font_color", Color(0.4, 0.95, 0.55))
+	_room_code_button.pressed.connect(func() -> void:
+		if not _session_room_code.is_empty():
+			DisplayServer.clipboard_set(_session_room_code)
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL, "Room code copied to clipboard"))
+	left_panel_vbox.add_child(_room_code_button)
+	left_panel_vbox.move_child(_room_code_button, 0)
+
+
+## Show/refresh (non-empty code) or hide (empty) the permanent room-code readout + log it once.
+func _set_room_code_display(code: String) -> void:
+	_session_room_code = code
+	if _room_code_button == null:
+		return
+	if code.is_empty():
+		_room_code_button.visible = false
+		return
+	_room_code_button.text = "Room: %s" % InternetLobby._format_code(code)
+	_room_code_button.visible = true
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "Room code: %s" % InternetLobby._format_code(code))
+
+
 func _update_network_ui(connected: bool, _is_host: bool) -> void:
+	if not connected:
+		_set_room_code_display("")   # session over — hide the room-code readout
 	host_button.visible = !connected
 	host_button.disabled = false
 	join_button.visible = !connected
