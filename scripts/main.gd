@@ -1207,6 +1207,28 @@ func _on_solo_round_advanced(round_number: int) -> void:
 	if solo_ai_slots.is_empty():
 		return
 	_solo_reset_all_fatigue()
+	if round_number == 2:
+		_solo_arrive_ambush()
+
+
+## OPR Ambush (goal 003 P1): the AI's reserved units arrive at the start of round 2, placed >9" from your
+## units and near the nearest objective via the stashed deploy context. The human's own ambush is manual.
+func _solo_arrive_ambush() -> void:
+	if solo_controller == null or solo_controller.ambush_reserve.is_empty() or table == null or opr_army_manager == null:
+		return
+	var w: float = table.table_size.x * 0.3048
+	var d: float = table.table_size.y * 0.3048
+	var arrival_zone := Rect2(Vector2(-w / 2.0, -d / 2.0), Vector2(w, d))
+	var enemy_positions: Array = []
+	for u in opr_army_manager.get_game_units_for_player(solo_controller.human_slot):
+		if u != null and u.get_alive_count() > 0:
+			var c := solo_controller.unit_centre(u)
+			enemy_positions.append(Vector2(c.x, c.z))
+	var res: Dictionary = solo_controller.arrive_ambush_reserve(arrival_zone, enemy_positions)
+	if int(res.get("arrived", 0)) > 0 and battle_log != null:
+		var held: int = int(res.get("still_reserved", 0))
+		var held_note: String = (" (%d held back — no clear spot)" % held) if held > 0 else ""
+		battle_log.log_event(BattleLog.Category.GENERAL, "AI ambush: %d unit(s) arrive%s" % [int(res.get("arrived", 0)), held_note], true)
 
 
 ## OPR: Fatigue lasts only until the end of the round — clear it from EVERY unit (both sides, heroes

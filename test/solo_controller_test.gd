@@ -92,3 +92,33 @@ func test_run_ai_turn_activates_every_eligible_ai_unit() -> void:
 	assert_int(solo.run_ai_turn()).is_equal(2)
 	assert_bool(ai1.is_activated).is_true()
 	assert_bool(ai2.is_activated).is_true()
+
+
+func test_ambush_reserve_arrives_round_two_and_empties() -> void:
+	var enemy := _unit(1, [Vector3(0, 0, 0)])           # human unit at the table centre
+	var ambusher := _unit(2, [Vector3(3, 0, 3)])        # held in reserve (staging position)
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {enemy.unit_id: enemy, ambusher.unit_id: ambusher}
+
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.ambush_reserve = [ambusher]
+	solo._deploy_objectives = [Vector2(0.4, 0.4)]        # an objective attractor
+
+	# 4ft table; the enemy sits at the origin — the ambusher must land MORE THAN 9" (0.2286 m) away.
+	var zone := Rect2(Vector2(-0.61, -0.61), Vector2(1.22, 1.22))
+	var res: Dictionary = solo.arrive_ambush_reserve(zone, [Vector2(0, 0)])
+
+	assert_int(int(res["arrived"])).is_equal(1)
+	assert_int(solo.ambush_reserve.size()).is_equal(0)   # reserve emptied
+	var c := solo.unit_centre(ambusher)
+	assert_float(Vector2(c.x, c.z).length()).is_greater(0.2286)   # >9" from the enemy
+
+
+func test_ambush_arrival_is_noop_with_empty_reserve() -> void:
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(auto_free(OPRArmyManager.new()), null, null, 1, 2)
+	var res: Dictionary = solo.arrive_ambush_reserve(Rect2(0, 0, 1, 1), [])
+	assert_int(int(res["arrived"])).is_equal(0)

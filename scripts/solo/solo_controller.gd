@@ -20,8 +20,13 @@ var movement_range: MovementRangeController = null
 var human_slot: int = 1
 var ai_slot: int = 2
 ## Units held back by their Ambush rule during deploy_army — they arrive at the start of round 2
-## following the same deployment rules (goal 001 P2; the arrival itself is wired in a later phase).
+## following the same deployment rules (goal 003 P1: arrive_ambush_reserve wires the arrival).
 var ambush_reserve: Array = []
+## Deploy context stashed by deploy_army so the round-2 ambush arrival reuses the same objectives +
+## terrain classification (goal 003 P1).
+var _deploy_objectives: Array = []
+var _deploy_blocked_normal: Callable = Callable()
+var _deploy_blocked_flying: Callable = Callable()
 ## What the last activate_next_ai_unit did: {unit, target, action, can_shoot, dist_in} — main reads it
 ## to resolve shooting (P3) and the charge melee (P4).
 var last_report: Dictionary = {}
@@ -303,6 +308,10 @@ static func _axis_scale(start: float, d: float, limit: float) -> float:
 func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, blocked_flying: Callable, seed_value: int) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
+	# Stash the context so the round-2 ambush arrival reuses the same objectives + terrain rules.
+	_deploy_objectives = objectives
+	_deploy_blocked_normal = blocked_normal
+	_deploy_blocked_flying = blocked_flying
 	var all_units: Array = []
 	for u in army_manager.get_game_units_for_player(ai_slot):
 		# Attached heroes deploy WITH their host unit (coherency!), never as their own drop.
@@ -347,6 +356,43 @@ func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, block
 		occupied.append({"pos": spot, "radius": radius})
 		deployed += 1
 	return {"deployed": deployed, "reserved": ambush_reserve.size(), "seed": seed_value}
+
+
+const AMBUSH_MIN_ENEMY_DIST_M := 0.2286   # OPR: Ambush arrivals deploy MORE THAN 9" from enemy units
+
+
+## OPR Ambush (goal 003 P1): reserved units arrive at the start of round 2, placed by the same deploy
+## rules (near the nearest objective, avoiding blocked terrain, reusing the context stashed by
+## deploy_army) but strictly MORE THAN 9" from any enemy. `arrival_zone` is the whole table (ambush may
+## arrive anywhere); `enemy_positions` are enemy unit centres in table XZ. A unit with no legal spot on a
+## crowded table stays in reserve for a later round. Returns {arrived, still_reserved}.
+func arrive_ambush_reserve(arrival_zone: Rect2, enemy_positions: Array) -> Dictionary:
+	if ambush_reserve.is_empty():
+		return {"arrived": 0, "still_reserved": 0}
+	var no_block := func(_p: Vector2) -> bool: return false
+	var occupied: Array = []
+	for e in enemy_positions:
+		occupied.append({"pos": e, "radius": AMBUSH_MIN_ENEMY_DIST_M})
+	var arrived := 0
+	var still: Array = []
+	for u in ambush_reserve:
+		var unit: GameUnit = u
+		if unit == null or unit.get_alive_count() <= 0:
+			continue   # a reserve unit destroyed before arrival is simply gone
+		var ignores_terrain: bool = unit.has_special_rule("Strider") or unit.has_special_rule("Flying")
+		var blocked: Callable = _deploy_blocked_flying if ignores_terrain else _deploy_blocked_normal
+		if not blocked.is_valid():
+			blocked = no_block
+		var radius := _deploy_footprint_radius(unit)
+		var spot := AiDeployment.best_spot(arrival_zone, _deploy_objectives, occupied, radius, blocked, 0.025, radius)
+		if spot == Vector2.INF:
+			still.append(unit)
+			continue
+		_place_unit_at(unit, spot)
+		occupied.append({"pos": spot, "radius": radius})
+		arrived += 1
+	ambush_reserve = still
+	return {"arrived": arrived, "still_reserved": still.size()}
 
 
 const DEPLOY_SPACING_M := 0.04   # compact deployment grid: model-centre spacing (~1.6", coherent)
