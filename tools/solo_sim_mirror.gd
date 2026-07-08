@@ -44,6 +44,7 @@ func _init() -> void:
 	var p1 := 0
 	var draws := 0
 	var round_sum := 0
+	var obj_decided := 0
 	for i in range(n):
 		var res: Dictionary = SoloSim.simulate_game(army_a, army_b, 1000 + i, 4)
 		match int(res["winner"]):
@@ -51,6 +52,8 @@ func _init() -> void:
 			1: p1 += 1
 			_: draws += 1
 		round_sum += int(res["rounds"])
+		if int(res["a_objectives"]) != int(res["b_objectives"]):
+			obj_decided += 1
 
 	print("")
 	print("=== %d mirror game(s): %s ===" % [n, list_name])
@@ -58,5 +61,6 @@ func _init() -> void:
 	print("  Player 1 wins         : %d (%.1f%%)" % [p1, 100.0 * p1 / n])
 	print("  Draws                 : %d (%.1f%%)" % [draws, 100.0 * draws / n])
 	print("  Avg rounds            : %.2f" % (float(round_sum) / n))
+	print("  Decided by objectives : %d (%.1f%%)  [rest by model-count tiebreak]" % [obj_decided, 100.0 * obj_decided / n])
 	print("  → FAIR if ~50/50; a skew toward Player 0 = first-activation advantage.")
 	quit()

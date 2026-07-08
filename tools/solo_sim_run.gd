@@ -59,9 +59,9 @@ func _init() -> void:
 			print("=== FIRST GAME (seed 1000) — full log ===")
 			for line in log_lines:
 				print("  ", line)
-			print("--- result: winner=%s rounds=%d end=%s | Vanguard %d/%d alive, Horde %d/%d alive ---" % [
+			print("--- result: winner=%s rounds=%d end=%s | objectives %d-%d | Vanguard %d/%d alive, Horde %d/%d alive ---" % [
 				("Vanguard" if int(res["winner"]) == 0 else ("Horde" if int(res["winner"]) == 1 else "draw")),
-				int(res["rounds"]), res["end_reason"],
+				int(res["rounds"]), res["end_reason"], int(res["a_objectives"]), int(res["b_objectives"]),
 				int(res["a_alive"]), int(res["a_start"]), int(res["b_alive"]), int(res["b_start"])])
 
 	print("")

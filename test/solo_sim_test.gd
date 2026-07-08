@@ -74,3 +74,28 @@ func test_units_from_opr_json_parses_stats_weapons_and_tough() -> void:
 	assert_int(int(rifle["count"])).is_equal(4)              # per-weapon model count
 	assert_int(int(rifle["range_value"])).is_equal(24)
 	assert_array(rifle["special_rules"]).contains(["AP(1)"])
+
+
+func test_default_objectives_are_two_symmetric_centre_markers() -> void:
+	var objs: Array = SoloSim.default_objectives()
+	assert_int(objs.size()).is_equal(2)
+	# Both on the centre line (z = 24 on a 48" table) → equidistant from both 12" deploy edges.
+	assert_float((objs[0] as Vector2).y).is_equal_approx(24.0, 0.001)
+	assert_float((objs[1] as Vector2).y).is_equal_approx(24.0, 0.001)
+	# Mirror-symmetric in x about the board centre.
+	assert_float((objs[0] as Vector2).x + (objs[1] as Vector2).x).is_equal_approx(48.0, 0.001)
+
+
+func test_objective_control_3_inch_uncontested_and_contested() -> void:
+	var objs := [Vector2(24, 24)]
+	var mine: Dictionary = SoloSim.make_unit("A", 0, 4, 4, 5, [])
+	mine["pos"] = Vector2(24, 24)     # sitting on the objective
+	var foe: Dictionary = SoloSim.make_unit("B", 1, 4, 4, 5, [])
+	foe["pos"] = Vector2(0, 0)        # far away
+	# Uncontested → player 0 holds it, player 1 does not.
+	assert_int(SoloSim._side_objectives([mine, foe], objs, 0)).is_equal(1)
+	assert_int(SoloSim._side_objectives([mine, foe], objs, 1)).is_equal(0)
+	# Enemy steps within 3" → contested → nobody holds it.
+	foe["pos"] = Vector2(25, 24)
+	assert_int(SoloSim._side_objectives([mine, foe], objs, 0)).is_equal(0)
+	assert_int(SoloSim._side_objectives([mine, foe], objs, 1)).is_equal(0)

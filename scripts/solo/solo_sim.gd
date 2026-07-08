@@ -1,29 +1,40 @@
 class_name SoloSim
 extends RefCounted
-## Headless AI-vs-AI game simulator (goal 003 — self-play stage 0). Plays a whole game with NO UI: no
-## dice tray, no prompts, no camera — dice come from a SEEDED RNG and every combat/decision uses the SAME
-## pure modules the real game uses (AiArchetype, AiDecision, AiShooting, AiCombatMath). That shared logic
-## IS the correctness link to the real game: given the same board + the same dice faces, the outcome is
-## identical (the modules are unit-tested). What differs is only the dice SOURCE (RNG vs physics tray) and
-## the board model — v1 is 1D (an open approach axis), no terrain/objectives yet (those drive stage 2+).
+## Headless AI-vs-AI game simulator (goal 003 — self-play). Plays a whole game with NO UI: no dice tray,
+## no prompts, no camera — dice come from a SEEDED RNG and every combat/decision uses the SAME pure
+## modules the real game uses (AiArchetype, AiDecision, AiShooting, AiCombatMath). That shared logic IS
+## the correctness link to the real game: given the same board + the same dice faces, the outcome is
+## identical (the modules are unit-tested). What differs is only the dice SOURCE (RNG vs physics tray).
+##
+## Board: 2D 4×4 ft table with 12"-deep deployment zones on opposite edges and two mission objectives.
+## Still NO terrain (open field — no cover, no dangerous ground, LOS always clear); terrain is the next
+## stage. Winner = objectives controlled (OPR 3" rule), surviving models as tiebreak.
 ##
 ## A unit is a plain Dictionary (see make_unit). Deterministic: same seed → same game.
 
-const TABLE_IN := 48.0        # 4 ft approach axis
-const DEPLOY_IN := 12.0       # deploy zones sit 12" from each edge
-const CONTACT_IN := 2.0       # melee contact tolerance (matches the game's charge contact)
-const DEFAULT_ROUNDS := 4     # OPR standard game length
+const BOARD_IN := 48.0          # 4 ft square table (both axes)
+const DEPLOY_IN := 12.0         # deploy zones sit 12" from each edge
+const CONTACT_IN := 2.0         # melee contact tolerance (matches the game's charge contact)
+const OBJECTIVE_CONTROL_IN := 3.0   # OPR: a unit within 3" (uncontested) controls an objective
+const DEFAULT_ROUNDS := 4       # OPR standard game length
+
+
+## Two symmetric mission objectives on the table centre line — equidistant from both deploy edges, so a
+## mirror match stays fair.
+static func default_objectives() -> Array:
+	return [Vector2(BOARD_IN / 3.0, BOARD_IN / 2.0), Vector2(BOARD_IN * 2.0 / 3.0, BOARD_IN / 2.0)]
 
 
 ## Build a sim unit. weapons: Array of dicts shaped like OPR weapons
 ## ({name, range_value, attacks, count, special_rules:["AP(1)"]}). Melee weapons use range_value 0.
+## pos is set by _deploy() at game start.
 static func make_unit(name: String, player: int, quality: int, defense: int, models: int, weapons: Array,
 		tough: int = 1, rules: Array = [], advance_in: float = 6.0, rush_in: float = 12.0) -> Dictionary:
 	return {
 		"name": name, "player": player, "quality": quality, "defense": defense,
 		"tough": maxi(tough, 1), "max_models": models, "wounds_pool": 0,
 		"weapons": weapons, "rules": rules,
-		"pos": DEPLOY_IN if player == 0 else (TABLE_IN - DEPLOY_IN),
+		"pos": Vector2.ZERO,
 		"advance_in": advance_in, "rush_in": rush_in,
 		"activated": false, "shaken": false, "fatigued": false,
 	}
@@ -31,8 +42,8 @@ static func make_unit(name: String, player: int, quality: int, defense: int, mod
 
 ## Build sim units from an OPR TTS-API list (the same JSON the game imports via opr_api_client — GET
 ## api/tts?id=…). Reads each unit's size/quality/defense, Tough(X) from its rules, and every weapon in
-## its `loadout` with the correct per-weapon count + AP. This is the self-play "feed REAL armies" path
-## (goal 003 stage 1) — it removes the hand-typed-data risk the first sample armies exposed.
+## its `loadout` with the correct per-weapon count + AP. This is the self-play "feed REAL armies" path —
+## it removes the hand-typed-data risk the first sample armies exposed.
 static func units_from_opr_json(data: Dictionary, player: int) -> Array:
 	var out: Array = []
 	for u in data.get("units", []):
@@ -74,9 +85,10 @@ static func is_alive(u: Dictionary) -> bool:
 
 
 ## Play one full game. Returns a result Dictionary; if `log_lines` is given, human-readable events are
-## appended to it (used by the runner). Deterministic in `seed_value`.
+## appended to it. `objectives` defaults to the two symmetric centre-line markers. Deterministic in seed.
 static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rounds: int = DEFAULT_ROUNDS,
-		log_lines: Array = []) -> Dictionary:
+		log_lines: Array = [], objectives: Array = []) -> Dictionary:
+	var objs: Array = objectives if not objectives.is_empty() else default_objectives()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var units: Array = []
@@ -84,6 +96,7 @@ static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rou
 		units.append((u as Dictionary).duplicate(true))
 	for u in army_b:
 		units.append((u as Dictionary).duplicate(true))
+	_deploy(units)
 	var a_start := _side_models(units, 0)
 	var b_start := _side_models(units, 1)
 	var activations := 0
@@ -94,8 +107,10 @@ static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rou
 		for u in units:
 			u["activated"] = false
 		log_lines.append("── Round %d ──" % r)
-		# Alternating activations: side 0 acts one unit, then side 1, … until both are out of units.
-		var side := 0
+		# OPR: initiative is rolled off each round, then activations alternate. A FIXED first player was a
+		# systematic bias — with out-of-range deploys the side that moves SECOND reaps the first volley (the
+		# mirror-match test caught an 80/20 skew). A per-round coin flip removes it.
+		var side := rng.randi_range(0, 1)
 		while _has_unactivated(units, 0) or _has_unactivated(units, 1):
 			if _has_unactivated(units, side):
 				var actor: Variant = _next_unactivated(units, side)
@@ -111,19 +126,37 @@ static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rou
 			break
 	var a_alive := _side_models(units, 0)
 	var b_alive := _side_models(units, 1)
+	var a_obj := _side_objectives(units, objs, 0)
+	var b_obj := _side_objectives(units, objs, 1)
+	# Mission first (objectives control), surviving models as the tiebreak.
 	var winner := -1
-	if a_alive > b_alive:
-		winner = 0
-	elif b_alive > a_alive:
-		winner = 1
+	if a_obj != b_obj:
+		winner = 0 if a_obj > b_obj else 1
+	elif a_alive != b_alive:
+		winner = 0 if a_alive > b_alive else 1
 	return {
 		"winner": winner, "rounds": round_no, "end_reason": end_reason,
 		"a_alive": a_alive, "b_alive": b_alive, "a_start": a_start, "b_start": b_start,
 		"a_losses": a_start - a_alive, "b_losses": b_start - b_alive, "activations": activations,
+		"a_objectives": a_obj, "b_objectives": b_obj,
 	}
 
 
-# === Activation (mirrors SoloController._act on a 1D board) ===
+## Spread each side across its 12"-deep deployment zone: player 0 along the low-Z edge, player 1 the
+## high-Z edge, units fanned out across the board width. No terrain to avoid yet — open 2D field.
+static func _deploy(units: Array) -> void:
+	for player in [0, 1]:
+		var side: Array = []
+		for u in units:
+			if u["player"] == player:
+				side.append(u)
+		var z: float = DEPLOY_IN * 0.5 if player == 0 else (BOARD_IN - DEPLOY_IN * 0.5)
+		for i in range(side.size()):
+			var x: float = BOARD_IN * float(i + 1) / float(side.size() + 1)
+			side[i]["pos"] = Vector2(x, z)
+
+
+# === Activation (mirrors SoloController._act on the 2D board) ===
 
 static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator, log_lines: Array) -> void:
 	unit["activated"] = true
@@ -135,15 +168,17 @@ static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator
 	var target: Variant = _nearest_enemy(unit, units)
 	if target == null:
 		return
+	var upos: Vector2 = unit["pos"]
+	var tpos: Vector2 = target["pos"]
 	var weapons: Array = unit["weapons"]
 	var archetype: int = AiArchetype.classify(weapons)
 	var shoot_range: int = AiArchetype.max_range_inches(weapons)
-	var dist: float = absf(float(unit["pos"]) - float(target["pos"]))
-	var in_range: bool = shoot_range > 0 and dist <= float(shoot_range)   # 1D open field: LOS always clear
+	var dist: float = upos.distance_to(tpos)
+	var in_range: bool = shoot_range > 0 and dist <= float(shoot_range)   # open field: LOS always clear
 	var action: int = AiDecision.decide(archetype, dist, float(unit["advance_in"]),
 		float(unit["rush_in"]), float(shoot_range), in_range)
 	log_lines.append("%s: %s (%.0f\" to %s)" % [unit["name"], AiDecision.action_name(action), dist, target["name"]])
-	var dir: float = signf(float(target["pos"]) - float(unit["pos"]))
+	var dir: Vector2 = (tpos - upos).normalized() if dist > 0.0001 else Vector2.ZERO
 	match action:
 		AiDecision.Action.ADVANCE:
 			_move(unit, dir * float(unit["advance_in"]))
@@ -157,7 +192,7 @@ static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator
 			_move(unit, -dir * minf(float(unit["advance_in"]), room))
 		_:
 			pass   # HOLD
-	dist = absf(float(unit["pos"]) - float(target["pos"]))
+	dist = (unit["pos"] as Vector2).distance_to(tpos)
 	if action == AiDecision.Action.CHARGE and dist <= CONTACT_IN + 0.001:
 		_resolve_melee(unit, target, rng, log_lines)
 	elif action in [AiDecision.Action.ADVANCE, AiDecision.Action.KITE, AiDecision.Action.HOLD] \
@@ -255,8 +290,9 @@ static func _roll(rng: RandomNumberGenerator, n: int) -> Array:
 	return faces
 
 
-static func _move(unit: Dictionary, delta_in: float) -> void:
-	unit["pos"] = clampf(float(unit["pos"]) + delta_in, 0.0, TABLE_IN)
+static func _move(unit: Dictionary, delta: Vector2) -> void:
+	var p: Vector2 = (unit["pos"] as Vector2) + delta
+	unit["pos"] = Vector2(clampf(p.x, 0.0, BOARD_IN), clampf(p.y, 0.0, BOARD_IN))
 
 
 static func _nearest_enemy(unit: Dictionary, units: Array) -> Variant:
@@ -265,11 +301,31 @@ static func _nearest_enemy(unit: Dictionary, units: Array) -> Variant:
 	for u in units:
 		if u["player"] == unit["player"] or not is_alive(u):
 			continue
-		var d: float = absf(float(unit["pos"]) - float(u["pos"]))
+		var d: float = (unit["pos"] as Vector2).distance_to(u["pos"])
 		if d < best_d:
 			best_d = d
 			best = u
 	return best
+
+
+## Objectives a side controls (OPR 3" rule): at least one of its alive units within 3", and NO enemy
+## unit within 3" (a contested objective is held by no one).
+static func _side_objectives(units: Array, objectives: Array, player: int) -> int:
+	var held := 0
+	for obj in objectives:
+		var mine := false
+		var foe := false
+		for u in units:
+			if not is_alive(u):
+				continue
+			if (u["pos"] as Vector2).distance_to(obj) <= OBJECTIVE_CONTROL_IN:
+				if u["player"] == player:
+					mine = true
+				else:
+					foe = true
+		if mine and not foe:
+			held += 1
+	return held
 
 
 static func _side_models(units: Array, player: int) -> int:
