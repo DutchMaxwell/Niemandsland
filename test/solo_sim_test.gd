@@ -112,12 +112,22 @@ func test_objective_seize_persists_contests_and_shaken_cannot_seize() -> void:
 	assert_int(int(owner[0])).is_equal(-1)
 
 
-func test_shaken_penalties_worsen_quality_and_defense_and_halve_move() -> void:
-	var u: Dictionary = SoloSim.make_unit("U", 0, 4, 4, 5, [])
-	assert_int(SoloSim._eff_quality(u)).is_equal(4)
-	assert_int(SoloSim._eff_defense(u)).is_equal(4)
-	assert_float(SoloSim._move_scale(u)).is_equal_approx(1.0, 0.001)
-	u["shaken"] = true
-	assert_int(SoloSim._eff_quality(u)).is_equal(5)   # −1 to Quality rolls → target one worse
-	assert_int(SoloSim._eff_defense(u)).is_equal(5)   # −1 to Defense rolls
-	assert_float(SoloSim._move_scale(u)).is_equal_approx(0.5, 0.001)   # half movement
+func test_shaken_unit_spends_activation_idle_and_recovers() -> void:
+	# OPR v3.5.1 p.10: a Shaken unit that activates stays idle and clears Shaken at the end — it does NOT
+	# move or shoot. Placed on an objective while Shaken, it must not seize it either.
+	var objs := [Vector2(24, 24)]
+	var owner := [-1]
+	var shaken: Dictionary = SoloSim.make_unit("S", 0, 4, 4, 5, [{"name": "Rifle", "range_value": 24, "attacks": 1, "count": 5, "special_rules": []}])
+	shaken["shaken"] = true
+	shaken["pos"] = Vector2(24, 24)
+	var foe: Dictionary = SoloSim.make_unit("F", 1, 4, 4, 5, [])
+	foe["pos"] = Vector2(24, 12)   # 12" away — in rifle range, but the Shaken unit won't shoot
+	var start_pos: Vector2 = shaken["pos"]
+	SoloSim._activate(shaken, [shaken, foe], RandomNumberGenerator.new(), [])
+	assert_bool(bool(shaken["shaken"])).is_false()               # recovered
+	assert_vector(shaken["pos"] as Vector2).is_equal(start_pos)   # did not move
+	assert_int(int(foe["wounds_pool"])).is_equal(0)              # did not shoot
+	# And while it was Shaken it could not have seized the objective it stands on.
+	shaken["shaken"] = true
+	SoloSim._seize_objectives([shaken, foe], objs, owner, [])
+	assert_int(int(owner[0])).is_equal(-1)

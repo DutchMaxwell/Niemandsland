@@ -6,15 +6,21 @@ extends RefCounted
 ## the correctness link to the real game.
 ##
 ## Board: 2D 4×4 ft table, 12" deployment zones, two mission objectives. NO terrain yet (open field, LOS
-## always clear). Rules match OPR GF/AoF core v3.x (re-audited 2026-07-08):
-##  • Shaken (post-Apr-2024): a Shaken unit still acts, but at −1 Quality and −1 Defense, HALF movement,
-##    and it CANNOT seize objectives. (It could choose to idle-recover; the sim does not model that yet.)
-##  • Objectives: seized at the END OF EACH ROUND by a non-Shaken unit within 3" with no enemy within 3";
-##    a seized marker STAYS seized after the unit leaves; both sides within 3" → neutral again.
-##  • Morale: the melee loser tests; a unit reduced to ≤ half by shooting tests; AND at each round end, an
-##    army at ≤ half its starting UNIT count tests morale army-wide. Fail + (≤ half size OR already
-##    Shaken) → Rout (destroyed), else Shaken.
-##  • Winner: most objectives controlled after 4 rounds; surviving models as tiebreak.
+## always clear). Rules verified against the official GF Advanced Rules v3.5.1 rulebook (2026-07-08):
+##  • Actions (p.7): Hold (no move, may shoot) / Advance (6", may shoot) / Rush (12", no shoot) /
+##    Charge (12" into melee).
+##  • Shooting (p.8) & Melee (p.9): sum attacks of models in range → roll to hit at Quality → defender
+##    rolls to block at Defense → unblocked = wounds. Melee: defender may strike back; the loser (more
+##    wounds taken) tests morale (p.10). Fatigue (p.9): after its first melee in a round a unit hits only
+##    on unmodified 6s in melee.
+##  • Shaken (p.10): a Shaken unit stays IDLE when activated (recovering at the end of that activation);
+##    it may strike back COUNTING AS FATIGUED, ALWAYS fails morale tests, and can't seize or contest
+##    objectives. (No stat penalty — an earlier web-sourced "-1 Q/D, half move" reading was wrong.)
+##  • Morale (p.10): test at the end of an activation where wounds leave a unit at ≤ half; the melee loser
+##    tests. Fail + ≤ half size → Rout (destroyed), else Shaken. There is NO end-of-round army morale.
+##  • Mission (p.6): seize a marker at the END OF EACH ROUND with a unit within 3" and no enemy within 3";
+##    a seized marker STAYS seized when the unit leaves; both sides within 3" → neutral. After 4 rounds
+##    the player controlling most markers wins (you never win purely by wiping the enemy).
 ##
 ## A unit is a plain Dictionary (see make_unit). Deterministic: same seed → same game.
 
@@ -81,20 +87,6 @@ static func is_alive(u: Dictionary) -> bool:
 	return alive_models(u) > 0
 
 
-## Shaken penalties (OPR post-Apr-2024): −1 to Quality and Defense rolls → the effective TARGET is one
-## worse (a 4+ becomes a 5+). Half movement. Pure helpers so the effect is applied consistently.
-static func _eff_quality(u: Dictionary) -> int:
-	return int(u["quality"]) + (1 if bool(u["shaken"]) else 0)
-
-
-static func _eff_defense(u: Dictionary) -> int:
-	return int(u["defense"]) + (1 if bool(u["shaken"]) else 0)
-
-
-static func _move_scale(u: Dictionary) -> float:
-	return 0.5 if bool(u["shaken"]) else 1.0
-
-
 static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rounds: int = DEFAULT_ROUNDS,
 		log_lines: Array = [], objectives: Array = []) -> Dictionary:
 	var objs: Array = objectives if not objectives.is_empty() else default_objectives()
@@ -111,8 +103,6 @@ static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rou
 	_deploy(units)
 	var a_start := _side_models(units, 0)
 	var b_start := _side_models(units, 1)
-	var a_start_units := _side_units(units, 0)
-	var b_start_units := _side_units(units, 1)
 	var activations := 0
 	var end_reason := "round_limit"
 	var round_no := 0
@@ -121,8 +111,9 @@ static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rou
 		for u in units:
 			u["activated"] = false
 		log_lines.append("── Round %d ──" % r)
-		# OPR: initiative is rolled off each round, then activations alternate (a fixed first player was a
-		# systematic bias — the mirror test caught it).
+		# OPR: the deployment roll-off winner goes first on round 1, then the player who finished first
+		# activates first each round. We roll off each round (a fixed first player was a systematic bias
+		# the mirror test caught).
 		var side := rng.randi_range(0, 1)
 		while _has_unactivated(units, 0) or _has_unactivated(units, 1):
 			if _has_unactivated(units, side):
@@ -131,12 +122,9 @@ static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rou
 					activations += 1
 					_activate(actor, units, rng, log_lines)
 			side = 1 - side
-		# End of round: fatigue clears; army-wide morale if an army is at half its starting units; then
-		# objectives are (re)seized.
+		# End of round: fatigue clears; then objectives are (re)seized.
 		for u in units:
 			u["fatigued"] = false
-		_army_morale(units, 0, a_start_units, rng, log_lines)
-		_army_morale(units, 1, b_start_units, rng, log_lines)
 		_seize_objectives(units, objs, obj_owner, log_lines)
 		if _side_models(units, 0) == 0 or _side_models(units, 1) == 0:
 			end_reason = "wipe"
@@ -145,6 +133,7 @@ static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rou
 	var b_alive := _side_models(units, 1)
 	var a_obj := obj_owner.count(0)
 	var b_obj := obj_owner.count(1)
+	# Mission decides the winner (you never win purely by wiping); surviving models as the tiebreak.
 	var winner := -1
 	if a_obj != b_obj:
 		winner = 0 if a_obj > b_obj else 1
@@ -174,6 +163,11 @@ static func _deploy(units: Array) -> void:
 
 static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator, log_lines: Array) -> void:
 	unit["activated"] = true
+	# OPR (p.10): a Shaken unit spends its activation idle, which clears Shaken at the end of it.
+	if unit["shaken"]:
+		unit["shaken"] = false
+		log_lines.append("%s spends its activation idle — recovers from Shaken" % unit["name"])
+		return
 	var target: Variant = _nearest_enemy(unit, units)
 	if target == null:
 		return
@@ -182,14 +176,12 @@ static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator
 	var weapons: Array = unit["weapons"]
 	var archetype: int = AiArchetype.classify(weapons)
 	var shoot_range: int = AiArchetype.max_range_inches(weapons)
-	var move_scale: float = _move_scale(unit)   # Shaken → half movement
-	var advance: float = float(unit["advance_in"]) * move_scale
-	var rush: float = float(unit["rush_in"]) * move_scale
+	var advance: float = float(unit["advance_in"])
+	var rush: float = float(unit["rush_in"])
 	var dist: float = upos.distance_to(tpos)
 	var in_range: bool = shoot_range > 0 and dist <= float(shoot_range)   # open field: LOS always clear
 	var action: int = AiDecision.decide(archetype, dist, advance, rush, float(shoot_range), in_range)
-	log_lines.append("%s%s: %s (%.0f\" to %s)" % [unit["name"], (" [Shaken]" if bool(unit["shaken"]) else ""),
-		AiDecision.action_name(action), dist, target["name"]])
+	log_lines.append("%s: %s (%.0f\" to %s)" % [unit["name"], AiDecision.action_name(action), dist, target["name"]])
 	var dir: Vector2 = (tpos - upos).normalized() if dist > 0.0001 else Vector2.ZERO
 	match action:
 		AiDecision.Action.ADVANCE:
@@ -219,8 +211,8 @@ static func _resolve_shooting(attacker: Dictionary, target: Dictionary, dist: fl
 	if profiles.is_empty():
 		return
 	var alive_before := alive_models(target)
-	var quality := _eff_quality(attacker)
-	var defense := _eff_defense(target)
+	var quality: int = int(attacker["quality"])
+	var defense: int = int(target["defense"])
 	var total := 0
 	for p in profiles:
 		var profile := p as Dictionary
@@ -233,6 +225,7 @@ static func _resolve_shooting(attacker: Dictionary, target: Dictionary, dist: fl
 	if total > 0:
 		_apply_wounds(target, total)
 		log_lines.append("%s shoots %s → %d wound(s)" % [attacker["name"], target["name"], total])
+	# General morale (p.10): a unit left at half or less by the wounds it just took must test.
 	if AiCombatMath.should_test_shooting_morale(alive_before, alive_models(target), int(target["max_models"])):
 		_morale(target, rng, log_lines)
 
@@ -242,6 +235,7 @@ static func _resolve_melee(attacker: Dictionary, target: Dictionary, rng: Random
 	var dealt := _strike(attacker, target, rng)
 	if dealt > 0:
 		_apply_wounds(target, dealt)
+	# The defender MAY strike back (Shaken units strike back as fatigued — handled in _strike).
 	var struck_back := 0
 	if is_alive(target):
 		struck_back = _strike(target, attacker, rng)
@@ -250,18 +244,17 @@ static func _resolve_melee(attacker: Dictionary, target: Dictionary, rng: Random
 	attacker["fatigued"] = true
 	target["fatigued"] = true
 	log_lines.append("%s charges %s → %d dealt, %d back" % [attacker["name"], target["name"], dealt, struck_back])
+	# Melee morale (p.10): only the loser (more wounds taken) tests.
 	if dealt > struck_back and is_alive(target):
 		_morale(target, rng, log_lines)
 	elif struck_back > dealt and is_alive(attacker):
 		_morale(attacker, rng, log_lines)
 
 
-## One striker's melee output. Fatigued → hits only on 6s; else effective Quality (Shaken = −1). The
-## defender saves at its effective Defense (Shaken = −1).
+## One striker's melee output. Fatigued OR Shaken → hits only on unmodified 6s; else its Quality.
 static func _strike(striker: Dictionary, defender: Dictionary, rng: RandomNumberGenerator) -> int:
 	var profiles: Array = AiShooting.melee_profiles(striker["weapons"])
-	var to_hit: int = 6 if bool(striker["fatigued"]) else _eff_quality(striker)
-	var defense := _eff_defense(defender)
+	var to_hit: int = 6 if (bool(striker["fatigued"]) or bool(striker["shaken"])) else int(striker["quality"])
 	var total := 0
 	for p in profiles:
 		var profile := p as Dictionary
@@ -270,19 +263,21 @@ static func _strike(striker: Dictionary, defender: Dictionary, rng: RandomNumber
 		if hits <= 0:
 			continue
 		var save_faces := _roll(rng, hits)
-		total += AiCombatMath.wounds(hits, save_faces, defense, int(profile["ap"]))
+		total += AiCombatMath.wounds(hits, save_faces, int(defender["defense"]), int(profile["ap"]))
 	return total
 
 
-## OPR morale: roll 1 die vs Quality. Fail + (≤ half size OR ALREADY Shaken) → Rout (destroyed); else
-## becomes Shaken. (An already-Shaken unit that fails is removed — that is how Shaken units die off.)
+## OPR morale (p.10): roll 1 die vs Quality (a Shaken unit ALWAYS fails). Fail + ≤ half size → Rout
+## (destroyed), else the unit becomes Shaken.
 static func _morale(unit: Dictionary, rng: RandomNumberGenerator, log_lines: Array) -> void:
-	var face: int = int(_roll(rng, 1)[0])
-	if DiceRules.is_success(face, int(unit["quality"]), 0):
+	var passed := false
+	if not bool(unit["shaken"]):
+		var face: int = int(_roll(rng, 1)[0])
+		passed = DiceRules.is_success(face, int(unit["quality"]), 0)
+	if passed:
 		log_lines.append("%s passes morale" % unit["name"])
 		return
-	var below := AiCombatMath.at_or_below_half(alive_models(unit), int(unit["max_models"]))
-	if below or bool(unit["shaken"]):
+	if AiCombatMath.at_or_below_half(alive_models(unit), int(unit["max_models"])):
 		unit["wounds_pool"] = int(unit["max_models"]) * int(unit["tough"])   # wiped
 		log_lines.append("%s ROUTS (destroyed)" % unit["name"])
 	else:
@@ -290,30 +285,16 @@ static func _morale(unit: Dictionary, rng: RandomNumberGenerator, log_lines: Arr
 		log_lines.append("%s is Shaken" % unit["name"])
 
 
-## OPR end-of-round army morale: if a side is at half or LESS of its starting UNIT count, every one of
-## its still-alive units must test morale.
-static func _army_morale(units: Array, player: int, start_units: int, rng: RandomNumberGenerator,
-		log_lines: Array) -> void:
-	if start_units <= 0:
-		return
-	if _side_units(units, player) * 2 > start_units:
-		return   # still above half strength as an army
-	log_lines.append("Army %d is at half strength — army-wide morale" % player)
-	for u in units:
-		if u["player"] == player and is_alive(u):
-			_morale(u, rng, log_lines)
-
-
-## Seize objectives at round end (OPR): a marker is taken by the side with a NON-Shaken unit within 3"
+## Seize objectives at round end (p.6): a marker is taken by the side with a non-Shaken unit within 3"
 ## and no enemy within 3". A seized marker STAYS with its owner if nobody is near; both sides near → it
-## goes neutral. Mutates obj_owner in place.
+## goes neutral. Shaken units can neither seize NOR contest. Mutates obj_owner in place.
 static func _seize_objectives(units: Array, objectives: Array, obj_owner: Array, log_lines: Array) -> void:
 	for i in range(objectives.size()):
 		var near0 := false
 		var near1 := false
 		for u in units:
 			if not is_alive(u) or bool(u["shaken"]):
-				continue   # Shaken units cannot seize
+				continue   # Shaken units can't seize or contest
 			if (u["pos"] as Vector2).distance_to(objectives[i]) <= OBJECTIVE_CONTROL_IN:
 				if u["player"] == 0:
 					near0 = true
@@ -368,14 +349,6 @@ static func _side_models(units: Array, player: int) -> int:
 	for u in units:
 		if u["player"] == player:
 			n += alive_models(u)
-	return n
-
-
-static func _side_units(units: Array, player: int) -> int:
-	var n := 0
-	for u in units:
-		if u["player"] == player and is_alive(u):
-			n += 1
 	return n
 
 
