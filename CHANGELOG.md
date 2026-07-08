@@ -39,6 +39,12 @@ _Nothing yet — next batch starts here._
   EVERYONE at the table — guests may then move the host's army too (fully solo or refereed games).
   Only the host can operate the switch; the state syncs to every peer (late joiners included) and is
   announced in the battle log. (#107)
+- **Permanent room-code readout.** The session's room code sits at the top of the left bar for the
+  WHOLE session — host and guest alike (the join path never stored it before) — click to copy, plus a
+  battle-log line on host/join, so rejoining after a drop no longer depends on remembering the code.
+  (#110)
+- **Windowed launch flag.** `-- --windowed` (or `NML_WINDOWED=1`) starts the game windowed without
+  touching the persisted fullscreen preference — for side-by-side instances and capture setups. (#111)
 
 ### Fixed
 - **Faction models failing to load for some players.** Every CDN asset request now sends an honest
@@ -47,6 +53,14 @@ _Nothing yet — next batch starts here._
 - **Singleplayer counted as an active multiplayer session.** The engine's default offline peer reports
   CONNECTED, so a second locally imported army could not be moved (ownership lock) and a phantom host
   slot was granted. (#108)
+- **Synced and loaded armies no longer degrade to placeholder meeples.** The restore path (MP army
+  sync AND save/load) resolved base unit names only, which fails on variant-reworked factions whose
+  manifest carries per-loadout variant keys; models now stamp their RESOLVED key, save/sync carry it,
+  and restored models come back as the exact variant — via the ctex delivery, like a fresh import.
+  (#111)
+- **The battle log records the OTHER side's movements too.** The position stream peers receive is
+  deliberately unreliable (drag), so a finished move was never logged remotely; the dropping client
+  now ships its per-unit summary reliably and every peer writes identical movement lines. (#112)
 - **Dock clicks no longer deselect the unit.** A click over the dock UI fell through to the 3D
   selection pipeline; interactive HUD widgets are now occluded from the world-selection path, including
   while the strip is closing (double-clicks never leak to the table). (#97, #103)
