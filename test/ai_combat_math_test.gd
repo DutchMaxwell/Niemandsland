@@ -52,3 +52,24 @@ func test_should_test_shooting_morale() -> void:
 	assert_bool(AiCombatMath.should_test_shooting_morale(3, 0, 10)).is_false()
 	# Exactly half after casualties (10 -> 5 of 10) → test.
 	assert_bool(AiCombatMath.should_test_shooting_morale(10, 5, 10)).is_true()
+
+
+func test_success_chance_bounds_and_values() -> void:
+	# 2+ → 5/6, 4+ → 3/6, 6+ → 1/6 (a 6 always hits).
+	assert_float(AiCombatMath.success_chance(2)).is_equal_approx(5.0 / 6.0, 0.0001)
+	assert_float(AiCombatMath.success_chance(4)).is_equal_approx(3.0 / 6.0, 0.0001)
+	assert_float(AiCombatMath.success_chance(6)).is_equal_approx(1.0 / 6.0, 0.0001)
+	# Clamped: target <= 1 caps at 5/6 (a 1 always fails); target >= 7 floors at 1/6 (a 6 always saves).
+	assert_float(AiCombatMath.success_chance(1)).is_equal_approx(5.0 / 6.0, 0.0001)
+	assert_float(AiCombatMath.success_chance(9)).is_equal_approx(1.0 / 6.0, 0.0001)
+
+
+func test_expected_wounds() -> void:
+	# 6 attacks, hit on 4+ (1/2), target Def 4+ save fails on 1/2 → 6 × 0.5 × 0.5 = 1.5.
+	assert_float(AiCombatMath.expected_wounds(6, 4, 4, 0)).is_equal_approx(1.5, 0.0001)
+	# AP2 pushes the save to 6+ (through-chance 5/6): 6 × 0.5 × 5/6 = 2.5.
+	assert_float(AiCombatMath.expected_wounds(6, 4, 4, 2)).is_equal_approx(2.5, 0.0001)
+	# No attacks → no damage.
+	assert_float(AiCombatMath.expected_wounds(0, 3, 5, 0)).is_equal_approx(0.0, 0.0001)
+	# Higher AP never lowers expected damage (more wounds get through).
+	assert_bool(AiCombatMath.expected_wounds(4, 3, 4, 3) >= AiCombatMath.expected_wounds(4, 3, 4, 0)).is_true()

@@ -42,6 +42,26 @@ static func wounds(hit_count: int, save_faces: Array, defense: int, armor_pierci
 	return maxi(0, hit_count - count_blocks(save_faces, defense, armor_piercing))
 
 
+## Probability a single d6 meets a success target (goal 003 P2 — the "expected damage" AI metric). OPR:
+## a face >= target succeeds, but a 6 ALWAYS succeeds and a 1 ALWAYS fails, so the chance is bounded to
+## [1/6, 5/6]: target <= 2 → 5/6 (only a 1 fails), target >= 6 → 1/6 (only a 6 saves the impossible-looking
+## roll). = (7 - clamp(target, 2, 6)) / 6.
+static func success_chance(target: int) -> float:
+	return float(7 - clampi(target, 2, 6)) / 6.0
+
+
+## Expected wounds one weapon profile deals to a target (goal 003 P2 metric): attacks × P(hit at Quality)
+## × P(the save at Defense+AP fails). Deterministic, no dice — the AI sums this across its profiles per
+## candidate target and picks the target that maximises it (the officially-undefined "better than" step,
+## locked to expected damage).
+static func expected_wounds(attacks: int, quality: int, defense: int, armor_piercing: int) -> float:
+	if attacks <= 0:
+		return 0.0
+	var p_hit := success_chance(quality)
+	var p_through := 1.0 - success_chance(save_target(defense, armor_piercing))
+	return float(attacks) * p_hit * p_through
+
+
 ## A unit is "at or below half" when its alive count has dropped to <= half its starting size (the OPR
 ## morale trigger threshold). Guards a zero/empty start.
 static func at_or_below_half(alive: int, total: int) -> bool:
