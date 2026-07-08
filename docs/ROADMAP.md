@@ -165,6 +165,14 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
     glow halo is faked with three stacked arcs because `_draw` has no blur) and procedural die-face /
     token icons, instead of per-frame `_draw`. Optional, low value. _S_
 - Rules-reference overlays for more game systems.
+- **Game replay (event journal → auto playback)** — record a session as an initial `.nml` snapshot plus a
+  timestamped EVENT JOURNAL (unit/model moves with exact from→to table coordinates, dice results, wounds,
+  activations, rounds) and play it back automatically — "watch this game" files. The central Battle-Log
+  seams are already replay-grade: `object_manager.selection_dropped` carries per-model from→to positions
+  (#106); the journal is a separate persistent recorder on those seams (the display log stays a capped
+  ring buffer). MP-safe: both clients observe the same central events. (Maintainer, 2026-07-06.) _L_
+  - **Cinematic replay** (far future) — a camera director on top of the journal: framing the active unit,
+    dice moments, charges — instead of the static top view. _XL, after the base replay_
 - **Variant-aware mounting** — a mounted leader currently swaps to the mount GLB and loses his weapon-
   variant visual (`opr_army_manager` replaces model 0); a later game-side change could resolve composed
   `<unit>#<mount>+<slug>` variants instead. _M, after the mounts chapter ships_

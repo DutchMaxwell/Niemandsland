@@ -11,7 +11,7 @@ extends Control
 
 const TAB_W := 168
 const TAB_H := 28
-const STRIP_H := 232           # taller: the strip shows the full CardFace now (bus 033)
+const STRIP_H := 256           # fits the tallest full-face card (240) so cards don't spill onto the tab
 const CARD_W := 196            # wider so the full face is legible in the strip
 const STRIP_CARD_H := 200      # min full-face card height in the strip (cards auto-grow to content)
 # Strip hand-fan tunables (bus 028): per-card rotation, edge cap, and horizontal overlap. Overlap
@@ -20,9 +20,10 @@ const STRIP_FAN_DEG_PER_CARD := 1.5   # gentle fan (full faces need to stay read
 const STRIP_FAN_MAX_DEG := 8.0
 const STRIP_OVERLAP_PX := 6           # near-touching so each full face stays fully legible (no right clip)
 const STRIP_FAN_ARC_PX := 6.0         # shallow vertical arc
+const STRIP_SIDE_MARGIN := 14         # the strip background hugs the fan + this margin (grows w/ card count)
 const PCARD_W := 320
 const PCARD_H := 188
-const PCARD_MAX_H := 348          # presented card auto-grows to fit weapons, capped here
+const PCARD_MAX_H := 640          # presented card auto-grows to fit weapons + a full caster spell list
 const GAP_ABOVE_TAB := 12
 const REFRESH_INTERVAL := 0.4
 
@@ -34,10 +35,10 @@ var camera_controller = null
 var radial_menu_controller = null
 var unit_card_detail = null            # deprecated old detail card (retired; kept as an unused ctor arg)
 var range_ring_controller: Node = null # injected by main.gd — spell-range ring on spell hover (bus 033)
-var _rule_popup: PanelContainer = null
-var _rule_popup_label: RichTextLabel = null
-var _rule_hover_timer: Timer = null
-var _hovered_meta: String = ""
+var _presented_sig: int = 0            # hash of the presented card's last-built data; skip rebuild if unchanged
+var _pending_click_unit: GameUnit = null   # strip-card single-click waiting out the double-click window
+var _click_defer_timer: Timer = null       # so a double-click never fires the single-click collapse first
+var _null_present_queued := false          # transient empty-selection debounce (see present_unit)
 
 var _dock_open := false
 var _tab: Button = null
@@ -54,7 +55,15 @@ func _ready() -> void:
 	_build_tab()
 	_build_strip()
 	_build_presented()
-	_setup_rule_popup()
+	_click_defer_timer = Timer.new()
+	_click_defer_timer.one_shot = true
+	# Must be LONGER than the OS double-click interval (~0.4 s): with a shorter window the single-click
+	# collapse fired BETWEEN the two clicks of a slow double-click — the second click then hit the table,
+	# deselected the unit and the card "jumped away" (maintainer). Selection itself is instant; only the
+	# collapse+present waits this window out.
+	_click_defer_timer.wait_time = 0.45
+	_click_defer_timer.timeout.connect(_on_click_defer_timeout)
+	add_child(_click_defer_timer)
 	resized.connect(_layout)
 	_layout()
 	_refresh_timer = Timer.new()
@@ -88,6 +97,10 @@ func _build_tab() -> void:
 	_tab.text = "▲  Units"
 	_tab.focus_mode = Control.FOCUS_NONE
 	_tab.mouse_filter = Control.MOUSE_FILTER_STOP
+	_tab.z_index = 20   # always above the strip cards so it stays clickable to collapse the dock
+	# Dark-grey panel like the other HUD boxes (was the transparent default theme — maintainer).
+	for state in ["normal", "hover", "pressed", "focus"]:
+		_tab.add_theme_stylebox_override(state, _panel_style())
 	_tab.pressed.connect(_toggle_dock)
 	add_child(_tab)
 
@@ -120,11 +133,11 @@ func _build_presented() -> void:
 func _layout() -> void:
 	var vp := get_viewport_rect().size
 	if _tab != null:
-		_tab.position = Vector2(vp.x / 2.0 - TAB_W / 2.0, vp.y - TAB_H)
+		_tab.position = Vector2(vp.x / 2.0 - TAB_W / 2.0, _tab_target_y(_dock_open))
 	if _strip_panel != null:
-		_strip_panel.size = Vector2(vp.x, STRIP_H)
-		_strip_panel.position = Vector2(0, _strip_target_y(_dock_open))
-		_layout_fan()
+		_strip_panel.size.y = STRIP_H
+		_strip_panel.position.y = _strip_target_y(_dock_open)
+		_layout_fan()   # sizes the panel WIDTH to hug the fan + centres it horizontally
 	if _presented != null and _presented.visible:
 		_presented.snap_to(_presented_rest_pos(), 0.0, 1.0)
 
@@ -132,6 +145,30 @@ func _layout() -> void:
 func _strip_target_y(open: bool) -> float:
 	var vp := get_viewport_rect().size
 	return (vp.y - STRIP_H - TAB_H) if open else vp.y
+
+
+## True if a screen point is over one of the dock's interactive surfaces (tab, open strip, presented
+## card). object_manager consults this to reject a world click by ACTUAL position — the cached
+## gui_get_hovered_control() goes stale the instant a card click collapses the strip, which otherwise let
+## the click fall through to the table and open a box-select rubber-band (maintainer bug).
+func occludes_point(gpos: Vector2) -> bool:
+	if _tab != null and _tab.visible and _tab.get_global_rect().has_point(gpos):
+		return true
+	# Actual rect, NOT gated on _dock_open: while the strip tweens closed it is still on screen and must
+	# keep blocking table clicks — the second click of a double-click otherwise landed on the table and
+	# deselected the unit (the "card vanishes" gamble). Closed = fully offscreen = never contains a point.
+	if _strip_panel != null and _strip_panel.get_global_rect().has_point(gpos):
+		return true
+	if _presented != null and _presented.visible and _presented.get_global_rect().has_point(gpos):
+		return true
+	return false
+
+
+## Where the ▲/▼ Units tab sits: at the screen bottom when closed, but ABOVE the open strip so the full-
+## face cards can never cover the collapse button (maintainer feedback).
+func _tab_target_y(open: bool) -> float:
+	var vp := get_viewport_rect().size
+	return (_strip_target_y(true) - TAB_H) if open else (vp.y - TAB_H)
 
 
 func _presented_rest_pos() -> Vector2:
@@ -145,8 +182,9 @@ func _presented_rest_pos() -> Vector2:
 func _toggle_dock() -> void:
 	_dock_open = not _dock_open
 	_tab.text = ("▼  Units" if _dock_open else "▲  Units")
-	var tw := create_tween()
+	var tw := create_tween().set_parallel(true)
 	tw.tween_property(_strip_panel, "position:y", _strip_target_y(_dock_open), 0.2).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(_tab, "position:y", _tab_target_y(_dock_open), 0.2).set_trans(Tween.TRANS_CUBIC)
 	if _dock_open:
 		_presented.visible = false
 	elif _presented_unit != null:
@@ -181,14 +219,21 @@ func _layout_fan() -> void:
 	var n := cards.size()
 	if n == 0:
 		return
-	var panel_w: float = _strip_panel.size.x if _strip_panel != null else get_viewport_rect().size.x
+	var vp := get_viewport_rect().size
 	var step: float = float(CARD_W - STRIP_OVERLAP_PX)
 	var natural_w: float = float(CARD_W) + float(n - 1) * step
-	var avail: float = panel_w * 0.94
+	# The fan may not exceed most of the screen; tighten overlap if it would (many units).
+	var avail: float = vp.x * 0.94 - 2.0 * float(STRIP_SIDE_MARGIN)
 	if natural_w > avail and n > 1:
 		step = maxf(16.0, (avail - float(CARD_W)) / float(n - 1))
 		natural_w = float(CARD_W) + float(n - 1) * step
-	var start_x: float = (panel_w - natural_w) * 0.5
+	# The background hugs the fan (+ a small side margin) and is centred, so it grows with the card count
+	# instead of spanning the whole screen (maintainer #1).
+	var panel_w: float = natural_w + 2.0 * float(STRIP_SIDE_MARGIN)
+	if _strip_panel != null:
+		_strip_panel.size.x = panel_w
+		_strip_panel.position.x = (vp.x - panel_w) * 0.5
+	var start_x: float = float(STRIP_SIDE_MARGIN)
 	var mid: float = float(n - 1) * 0.5
 	for i in n:
 		var cv := cards[i] as CardVisual
@@ -241,10 +286,11 @@ func _add_card(unit: GameUnit) -> void:
 	# ONE card design (bus 033): the strip shows the SAME full CardFace as the focus card, minus the
 	# action bar (include_actions=false). Weapons block stays full here — collapse_weapons is the
 	# strip-density fallback if the maintainer finds it illegible.
-	var content := CardFace.build_presented(_card_data(unit), Callable(), false)
+	var data := _card_data(unit)
+	var content := CardFace.build_presented(data, Callable(), false)
 	cv.set_content_node(content)
 	cv.size = Vector2(CARD_W, clampf(content.get_combined_minimum_size().y, float(STRIP_CARD_H), 240.0))
-	_cards[unit.unit_id] = {"card": cv}
+	_cards[unit.unit_id] = {"card": cv, "sig": data.hash()}
 
 
 # === Live status ===
@@ -255,13 +301,20 @@ func _refresh_status() -> void:
 		if entry == null:
 			continue
 		var card := entry["card"] as CardVisual
-		# Rebuild the full CardFace content (no action bar) so live stats/status/wounds show.
-		var content := CardFace.build_presented(_card_data(unit), Callable(), false)
-		card.set_content_node(content)
-		card.size = Vector2(CARD_W, clampf(content.get_combined_minimum_size().y, float(STRIP_CARD_H), 240.0))
 		var dim: bool = unit.is_activated or unit.get_alive_count() == 0
 		card.modulate = Color(1, 1, 1, 0.45) if dim else Color(1, 1, 1, 1)
-	if _presented_unit != null and _presented.visible:
+		# Rebuild the full CardFace ONLY when the unit's data actually changed — a blind 0.4 s rebuild
+		# churned the fan + destroyed any hovered rule button (maintainer "keine Ruhe").
+		var data := _card_data(unit)
+		var sig: int = data.hash()
+		if int(entry.get("sig", 0)) == sig:
+			continue
+		entry["sig"] = sig
+		var content := CardFace.build_presented(data, Callable(), false)
+		card.set_content_node(content)
+		card.size = Vector2(CARD_W, clampf(content.get_combined_minimum_size().y, float(STRIP_CARD_H), 240.0))
+	# Presented card: same change-gate so the rule/spell hover is never interrupted under the cursor.
+	if _presented_unit != null and _presented.visible and _card_data(_presented_unit).hash() != _presented_sig:
 		_fill_presented(_presented_unit)
 
 
@@ -275,6 +328,16 @@ func _is_coherent(unit: GameUnit) -> bool:
 ## Builds the plain data Dictionary CardFace renders (D8 bridge). Reuses the dock's existing accessors
 ## and the unit's OWN OPR source data for weapons/rules — the same aggregation the old UnitCard reads,
 ## NOT re-derived. Pure: no UI side effects.
+## True if the unit carries a Tough(X) rule (a single Tough model still tracks wounds → the wound window
+## is relevant even at one model).
+func _has_tough_rule(unit: GameUnit) -> bool:
+	for r in unit.get_special_rules():
+		var nm: String = str(r.get("name", "")) if r is Dictionary else str(r)
+		if nm.begins_with("Tough"):
+			return true
+	return false
+
+
 func _card_data(unit: GameUnit) -> Dictionary:
 	var alive: int = unit.get_alive_count()
 	var data: Dictionary = {
@@ -290,6 +353,7 @@ func _card_data(unit: GameUnit) -> Dictionary:
 		"caster": unit.is_caster(),
 		"coherent": _is_coherent(unit),
 		"dead": alive == 0,
+		"woundable": unit.models.size() > 1 or _has_tough_rule(unit),   # wound window applies (bus feedback)
 		"weapons": [],
 		"rules_list": [],
 		"spells": [],
@@ -300,10 +364,19 @@ func _card_data(unit: GameUnit) -> Dictionary:
 	if opr != null:
 		for w: OPRApiClient.OPRWeapon in opr.weapons:
 			data["weapons"].append(_weapon_entry(w))
-	# rules_list: normalized special-rule names — each is a hover target on the card (bus 033).
+	# rules_list: normalized special-rule names — each is a hover target on the card (bus 033). A rule an
+	# item GRANTS (Combat Shield → Shielded) is reached through the item's tooltip cascade, not listed as
+	# a flat sibling; duplicates are collapsed (an item name can sit in both equipment + special_rules).
+	var unit_grants := _item_grants_of(unit)
+	var granted_by_item := {}
+	for it in unit_grants:
+		for g in unit_grants[it]:
+			granted_by_item[str(g)] = true
+	var seen_rules := {}
 	for r in unit.get_special_rules():
 		var nm: String = str(r.get("name", "")) if r is Dictionary else str(r)
-		if not nm.is_empty():
+		if not nm.is_empty() and not granted_by_item.has(nm) and not seen_rules.has(nm):
+			seen_rules[nm] = true
 			data["rules_list"].append(nm)
 	# spells (casters): {name, threshold, effect} from the army glossary, for the hoverable spell list.
 	if unit.is_caster() and army_manager != null and army_manager.has_method("get_spells_for_unit"):
@@ -326,8 +399,7 @@ func _weapon_entry(w: OPRApiClient.OPRWeapon) -> Dictionary:
 		var ap := _ap_value(r)
 		if ap != "":
 			parts.append("AP%s" % ap)           # AP inline in the stat column, no parentheses
-		else:
-			named.append(r)
+		named.append(r)                          # AND list every rule (incl. AP) as a hoverable link (feedback)
 	return {
 		"name": count_str + w.name,
 		"meta": " ".join(parts),
@@ -350,13 +422,26 @@ func _ap_value(rule: String) -> String:
 # === Presented card ===
 
 func present_unit(unit: GameUnit) -> void:
+	_clear_spell_ring()   # never let a spell-range ring outlive the card it was hovered from (maintainer)
 	if unit == null:
-		_presented_unit = null
-		_animate_card_out()
+		# select_objects re-selects via _deselect_all + _add_to_selection, EACH emitting
+		# selection_changed — so every re-select of an already-shown unit sends a transient empty
+		# selection first. Acting on it immediately nulled _presented_unit and the follow-up present
+		# re-dealt the whole card (the down/up wobble on every click — maintainer). Defer the card-out
+		# to end of frame; a real present arriving in the same frame cancels it.
+		if not _null_present_queued:
+			_null_present_queued = true
+			_apply_null_present.call_deferred()
 		return
+	_null_present_queued = false   # a re-present in the same frame cancels the pending card-out
 	var same: bool = unit == _presented_unit
 	_presented_unit = unit
-	_fill_presented(unit)
+	# Re-presenting the SAME unit with unchanged data is a no-op (clicking the card re-selects the unit →
+	# selection_changed → present_unit again): rebuilding here re-measured the card rough-then-exact and
+	# made it bob up/down on every click, fighting the double-click focus (maintainer). Only rebuild when
+	# the unit or its data actually changed.
+	if not (same and _presented.visible and _card_data(unit).hash() == _presented_sig):
+		_fill_presented(unit)
 	if _dock_open:
 		_presented.visible = false
 		return
@@ -365,59 +450,124 @@ func present_unit(unit: GameUnit) -> void:
 	_animate_card_in()
 
 
+## Deferred card-out (see present_unit): only fires if no re-present cancelled it within the frame.
+func _apply_null_present() -> void:
+	if not _null_present_queued:
+		return
+	_null_present_queued = false
+	_presented_unit = null
+	_animate_card_out()
+
+
 func _fill_presented(unit: GameUnit) -> void:
-	# Rebuild the CardFace content each time so live status/wounds are reflected; the action chips route
-	# back through _card_action (the dispatch proven by card_action_dispatch_test).
-	var content := CardFace.build_presented(_card_data(unit), _card_action)
+	# Rebuild the CardFace content; the action chips route back through _card_action (dispatch proven by
+	# card_action_dispatch_test). Record the data signature so _refresh_status only rebuilds on a real
+	# change — rebuilding under the cursor destroyed the rule LinkButtons mid-hover (tooltip never settled,
+	# spell ring flickered — maintainer "keine Ruhe").
+	var data := _card_data(unit)
+	_presented_sig = data.hash()
+	var content := CardFace.build_presented(data, _card_action)
 	_presented.set_content_node(content)
 	_wire_rules_hover(content)   # bus 033: the focus card absorbs the old Info card's rule/spell tooltips
-	var h: float = clampf(content.get_combined_minimum_size().y, float(PCARD_H), float(PCARD_MAX_H))
-	_presented.size = Vector2(PCARD_W, h)
+	_resize_presented_to_fit(content)
+
+
+## Size the presented card to its content, bottom-anchored above the tab. The chip/rule/spell rows are
+## FLOW containers and the tooltip labels wrap, so their true height is only known AFTER laying out at
+## the card's width — a single pre-layout measure assumed one row and casters/heavily-equipped units
+## spilled out of the card (maintainer). Measure once for a rough fit, let the layout settle two frames,
+## then re-measure and re-seat the card.
+func _resize_presented_to_fit(content: Control) -> void:
+	var cap: float = minf(float(PCARD_MAX_H), get_viewport_rect().size.y * 0.82)
+	# Rough pre-layout size only while hidden (first present): applying it to a visible card shrank it
+	# for two frames before the exact measure grew it back — a visible bob on every rebuild.
+	if not _presented.visible:
+		_presented.size = Vector2(PCARD_W, clampf(content.get_combined_minimum_size().y, float(PCARD_H), cap))
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if not is_instance_valid(content) or not content.is_inside_tree():
+		return   # card was rebuilt meanwhile — the newer pass sizes itself
+	var h: float = clampf(content.get_combined_minimum_size().y, float(PCARD_H), cap)
+	if absf(h - _presented.size.y) > 1.0:
+		_presented.size = Vector2(PCARD_W, h)
+		if _presented.visible:
+			_presented.spring_to(_presented_rest_pos(), 0.0, 1.0)   # re-seat smoothly (no snap-jump mid-deal)
 
 
 func set_range_ring_controller(rrc: Node) -> void:
 	range_ring_controller = rrc
 
 
-## The card's "RulesList" RichTextLabel exposes each rule/spell as a [url] span; connect its meta hover
-## to the description popup + spell-range ring (ported from the old UnitCard).
+## Wire hover + click for every rule/spell/weapon-rule LinkButton in the presented card. The description
+## uses Godot's BUILT-IN tooltip (tooltip_text) — reliable through the card's nested content, unlike the
+## custom mouse_entered popup which fired erratically for weapon rules (maintainer). Spells additionally
+## show the range ring on hover. No click popup — the card no longer rebuilds under the cursor (see
+## _refresh_status), so the hover tooltip is stable on its own.
 func _wire_rules_hover(content: Control) -> void:
-	var rt := content.find_child("RulesList", true, false) as RichTextLabel
-	if rt == null:
-		return
-	if not rt.meta_hover_started.is_connected(_on_rule_hover_started):
-		rt.meta_hover_started.connect(_on_rule_hover_started)
-		rt.meta_hover_ended.connect(_on_rule_hover_ended)
+	for node in content.find_children("*", "LinkButton", true, false):
+		var lb := node as LinkButton
+		if lb == null or not lb.has_meta("rule_meta"):
+			continue
+		var meta_key := str(lb.get_meta("rule_meta", ""))
+		lb.tooltip_text = _rule_description(meta_key)
+		if meta_key.begins_with("spell:"):
+			lb.mouse_entered.connect(_show_spell_ring.bind(meta_key.substr(6)))
+			lb.mouse_exited.connect(_clear_spell_ring)
 
 
-func _on_rule_hover_started(meta: Variant) -> void:
-	_hovered_meta = str(meta)
-	if _hovered_meta.begins_with("spell:"):
-		_show_spell_ring(_hovered_meta.substr(6))
-	if _rule_hover_timer != null:
-		_rule_hover_timer.start()
+## Plain-text rule/spell description for a link's wrapping tooltip, WITH the old UnitCard's cascades
+## (ported, issue #74): a spell/rule whose text references another known rule (e.g. a spell granting
+## Blast(3)) appends that rule's description too, and an ITEM entry shows the rule(s) it grants instead
+## of its own (usually empty) description.
+func _rule_description(meta_key: String) -> String:
+	var title := meta_key.trim_prefix("spell:")
+	if army_manager == null:
+		return title
+	var grants := _item_grants_of(_presented_unit)
+	var out: String
+	if meta_key.begins_with("spell:"):
+		var effect := _spell_effect(title).strip_edges()
+		out = "%s — %s" % [title, effect] if not effect.is_empty() else title
+		out += _referenced_rules_text(effect, "")
+	elif grants.has(title):
+		out = "%s — grants:" % title
+		for g in grants[title]:
+			var gd := str(army_manager.get_rule_description(str(g))).strip_edges()
+			out += "\n\n%s — %s" % [str(g), gd if not gd.is_empty() else "(no description)"]
+	else:
+		var desc := str(army_manager.get_rule_description(meta_key)).strip_edges()
+		out = "%s — %s" % [title, desc] if not desc.is_empty() else title
+		out += _referenced_rules_text(desc, title)
+	return out
 
 
-func _on_rule_hover_ended(_meta: Variant) -> void:
-	_hovered_meta = ""
-	if _rule_popup != null:
-		_rule_popup.visible = false
-	if _rule_hover_timer != null:
-		_rule_hover_timer.stop()
-	_clear_spell_ring()
+## For each OTHER known rule named in `text`, append its name + description — so an Aura / spell / rule
+## that references another rule (Blast, Poison, …) reveals that rule's explanation in the same tooltip.
+## `exclude` (and its parameterless base) is the hovered entry itself, skipped so it is not repeated.
+func _referenced_rules_text(text: String, exclude: String) -> String:
+	if text.is_empty() or not army_manager.has_method("rules_referenced_in"):
+		return ""
+	var paren := exclude.find("(")
+	var base := exclude.substr(0, paren).strip_edges() if paren > 0 else exclude
+	var out := ""
+	for r in army_manager.rules_referenced_in(text):
+		var rname := str(r)
+		if rname == exclude or rname == base:
+			continue
+		var d := str(army_manager.get_rule_description(rname)).strip_edges()
+		if not d.is_empty():
+			out += "\n\n%s — %s" % [rname, d]
+	return out
 
 
-func _on_rule_hover_timeout() -> void:
-	if _hovered_meta.is_empty() or army_manager == null:
-		return
-	var title := _hovered_meta.trim_prefix("spell:")
-	var desc: String = _spell_effect(title) if _hovered_meta.begins_with("spell:") else str(army_manager.get_rule_description(_hovered_meta))
-	if desc.strip_edges().is_empty():
-		desc = "(no description)"
-	_rule_popup_label.text = "[b]%s[/b]\n%s" % [title, desc]
-	_rule_popup.reset_size()
-	_rule_popup.global_position = get_global_mouse_position() + Vector2(14, 14)
-	_rule_popup.visible = true
+## item → granted rules for a unit, read from unit_properties so the cascade survives save/load + MP
+## sync (a synced unit may not carry the live OPRUnit object). Ported from the old card.
+func _item_grants_of(unit: GameUnit) -> Dictionary:
+	if unit != null and unit.unit_properties is Dictionary:
+		var g: Variant = unit.unit_properties.get("item_grants", {})
+		if g is Dictionary:
+			return g
+	return {}
 
 
 func _spell_effect(spell_name: String) -> String:
@@ -449,39 +599,14 @@ func _presented_model_nodes() -> Array:
 	return out
 
 
-func _setup_rule_popup() -> void:
-	_rule_popup = PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.08, 0.10, 0.14, 0.98)
-	sb.set_corner_radius_all(5)
-	sb.set_border_width_all(1)
-	sb.border_color = Color(0.36, 0.80, 0.92, 0.5)
-	sb.set_content_margin_all(8)
-	_rule_popup.add_theme_stylebox_override("panel", sb)
-	_rule_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_rule_popup.top_level = true
-	_rule_popup.z_index = 200
-	_rule_popup.visible = false
-	_rule_popup_label = RichTextLabel.new()
-	_rule_popup_label.bbcode_enabled = true
-	_rule_popup_label.fit_content = true
-	_rule_popup_label.custom_minimum_size = Vector2(300, 0)
-	_rule_popup_label.add_theme_font_size_override("normal_font_size", 12)
-	_rule_popup.add_child(_rule_popup_label)
-	add_child(_rule_popup)
-	_rule_hover_timer = Timer.new()
-	_rule_hover_timer.one_shot = true
-	_rule_hover_timer.wait_time = 0.6
-	_rule_hover_timer.timeout.connect(_on_rule_hover_timeout)
-	add_child(_rule_hover_timer)
-
-
 func _animate_card_in() -> void:
-	# CardVisual carries the deal-in feel: snap below with a slight tilt, then spring up to rest.
+	# Deal-in feel WITHOUT scaling: snap below with a slight tilt, then spring up to rest at scale 1.0.
+	# Scaling the card broke mouse input to its nested RichText rules list (Godot picks scaled children
+	# unreliably) — keeping scale fixed at 1.0 makes the rule-hover tooltips work (maintainer #3).
 	var rest := _presented_rest_pos()
 	_presented.modulate.a = 1.0
 	_presented.visible = true
-	_presented.snap_to(rest + Vector2(40, 240), 7.0, 0.82)
+	_presented.snap_to(rest + Vector2(40, 240), 7.0, 1.0)
 	_presented.spring_to(rest, 0.0, 1.0)
 	UiFeedback.play_card_deal()   # D5: soft deal-in cue (chips already sound via the global button hook)
 
@@ -537,24 +662,65 @@ func _card_action(kind: String) -> void:
 # === Interaction ===
 
 func _on_card_input(event: InputEvent, unit: GameUnit) -> void:
-	_handle_card_click(event, unit)
+	_handle_card_click(event, unit, true)
 
 
 func _on_presented_input(event: InputEvent) -> void:
 	if _presented_unit != null:
-		_handle_card_click(event, _presented_unit)
+		_handle_card_click(event, _presented_unit, false)
 
 
-func _handle_card_click(event: InputEvent, unit: GameUnit) -> void:
+func _handle_card_click(event: InputEvent, unit: GameUnit, from_strip: bool) -> void:
 	if not (event is InputEventMouseButton):
 		return
 	var mb := event as InputEventMouseButton
 	if not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
 		return
+	if not from_strip:
+		# Presented/detail card: its unit is by definition already selected, so a single click does
+		# NOTHING (re-selecting re-dealt the card and played N select sounds — maintainer: "entfernen").
+		# Only a double-click acts: solid camera focus on the unit.
+		if mb.double_click:
+			_focus_camera_on(unit)
+		return
+	# Strip card: select IMMEDIATELY (instant cyan feedback in the fan) but DEFER the collapse+present
+	# past the double-click window, so the strip never collapses between the two clicks of a double-click
+	# (that collapse exposed the table, the second click deselected, and the card "jumped away").
+	# A double-click cancels the pending single and does select + present + camera-focus in one shot.
 	if mb.double_click:
-		_focus_camera_on(unit)
+		_click_defer_timer.stop()
+		_pending_click_unit = null
+		_activate_strip_card(unit, true)
 	else:
 		_select_unit(unit)
+		_pending_click_unit = unit
+		_click_defer_timer.start()
+
+
+func _on_click_defer_timeout() -> void:
+	if _pending_click_unit != null:
+		var u := _pending_click_unit
+		_pending_click_unit = null
+		_activate_strip_card(u, false)
+
+
+## Select the unit, collapse the strip to present its detail card, and (on a double-click) focus the
+## camera on it — as one clean action so the card deals in exactly once.
+func _activate_strip_card(unit: GameUnit, do_focus: bool) -> void:
+	_select_unit(unit)
+	if _dock_open:
+		_collapse_dock_and_present(unit)
+	if do_focus:
+		_focus_camera_on(unit)
+
+
+func _collapse_dock_and_present(unit: GameUnit) -> void:
+	_dock_open = false
+	_tab.text = "▲  Units"
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(_strip_panel, "position:y", _strip_target_y(false), 0.2).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(_tab, "position:y", _tab_target_y(false), 0.2).set_trans(Tween.TRANS_CUBIC)
+	present_unit(unit)
 
 
 func _on_card_hover(unit: GameUnit, entered: bool) -> void:

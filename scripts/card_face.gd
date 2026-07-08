@@ -23,7 +23,7 @@ const CHIP_OFF := Color(0.22, 0.26, 0.33)
 ## Presented card content (the big card). `on_action` (optional) is called with the action kind string
 ## ("activation"/"fatigued"/"shaken"/"casts"/"wounds"/"details"/"revive") when an action chip is pressed;
 ## the dock connects it to _card_action. Left empty in the dev preview so the chips are inert.
-static func build_presented(data: Dictionary, on_action: Callable = Callable(), include_actions: bool = true, collapse_weapons: bool = false) -> Control:
+static func build_presented(data: Dictionary, on_action: Callable = Callable(), collapse_weapons: bool = false) -> Control:
 	var margin := MarginContainer.new()
 	for s in ["left", "right", "top", "bottom"]:
 		margin.add_theme_constant_override("margin_" + s, 12)
@@ -59,14 +59,22 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 	stats.add_child(_label("%d/%d" % [alive, total], 18, counter_color))
 	col.add_child(stats)
 
-	# Status strip: lit/unlit chips.
-	var strip := HBoxContainer.new()
-	strip.add_theme_constant_override("separation", 6)
-	strip.add_child(_status_chip("Activated", bool(data.get("activated", false)), CYAN))
-	strip.add_child(_status_chip("Fatigued", bool(data.get("fatigued", false)), AMBER))
-	strip.add_child(_status_chip("Shaken", bool(data.get("shaken", false)), AMBER))
-	if bool(data.get("caster", false)):
-		strip.add_child(_status_chip("Caster", true, CYAN))
+	# Status strip: the chips ARE the controls now (the old ▶Act/~Fat/!Shk/✚Wnd bar is gone). On the
+	# presented card (on_action wired) a click toggles the state / opens the wound or cast window; strip
+	# cards get plain display chips. HFlow so extra chips wrap instead of overflowing the card width.
+	var strip := HFlowContainer.new()
+	strip.add_theme_constant_override("h_separation", 6)
+	strip.add_theme_constant_override("v_separation", 4)
+	if bool(data.get("dead", false)):
+		strip.add_child(_status_chip("↺ Revive", false, CYAN, on_action, "revive"))
+	else:
+		strip.add_child(_status_chip("Activated", bool(data.get("activated", false)), CYAN, on_action, "activation"))
+		strip.add_child(_status_chip("Fatigued", bool(data.get("fatigued", false)), AMBER, on_action, "fatigued"))
+		strip.add_child(_status_chip("Shaken", bool(data.get("shaken", false)), AMBER, on_action, "shaken"))
+		if bool(data.get("caster", false)):
+			strip.add_child(_status_chip("Caster", true, CYAN, on_action, "casts"))
+		if bool(data.get("woundable", false)):
+			strip.add_child(_status_chip("✚ Wounds", false, AMBER, on_action, "wounds"))
 	col.add_child(strip)
 
 	# Weapons block — one line per distinct weapon (name+count · RNG A· AP·), special rules on a small
@@ -97,7 +105,7 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 				col.add_child(row)
 				var wr := str((w as Dictionary).get("rules", ""))
 				if not wr.is_empty():
-					col.add_child(_label("    " + wr, 10, CYAN))
+					col.add_child(_weapon_rules_list(wr.split(", ", false)))
 
 	# Rules + Spells list — each name is a hover target (the dock wires meta_hover to the description
 	# tooltip + spell-range ring, bus 033). This absorbs the old detail Info card; there is no Info button.
@@ -110,24 +118,7 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 	if not bool(data.get("coherent", true)) and not bool(data.get("dead", false)):
 		col.add_child(_warning_strip("⚠  Out of coherency"))
 
-	# Action bar — presented/focus card only (strip cards omit it via include_actions=false). No Info
-	# button: the rules list above replaces the old detail card.
-	if include_actions:
-		var pad := Control.new()
-		pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		col.add_child(pad)
-		var actions := HBoxContainer.new()
-		actions.add_theme_constant_override("separation", 4)
-		if bool(data.get("dead", false)):
-			actions.add_child(_action_btn("↺", "Revive", "revive", on_action))
-		else:
-			actions.add_child(_action_btn("▶", "Act", "activation", on_action))
-			actions.add_child(_action_btn("~", "Fat", "fatigued", on_action))
-			actions.add_child(_action_btn("!", "Shk", "shaken", on_action))
-			if bool(data.get("caster", false)):
-				actions.add_child(_action_btn("✦", "Cast", "casts", on_action))
-			actions.add_child(_action_btn("✚", "Wnd", "wounds", on_action))
-		col.add_child(actions)
+	# (The old action bar is gone — its controls moved onto the interactive status chips above.)
 
 	return margin
 
@@ -136,34 +127,57 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 ## can wire meta_hover_started/ended to descriptions + the spell-range ring. data.rules_list = Array of
 ## rule-name Strings; data.spells = Array of {name, threshold}. Returns null when there is nothing to
 ## show. Spell spans are keyed "spell:<name>".
-static func _rules_list(data: Dictionary) -> RichTextLabel:
+## One hover/click target for a rule or spell name: an underlined LinkButton carrying its lookup key in
+## meta "rule_meta". The dock connects mouse_entered/exited/pressed to the description tooltip. LinkButtons
+## are reliably picked (unlike the previous nested RichTextLabel meta_hover, which never fired in-game —
+## Godot routes input to a scaled Control's nested RichText unreliably). Maintainer: hover must work.
+static func _rule_link(label: String, meta_key: String, color: Color, font_px: int) -> LinkButton:
+	var lb := RuleLink.new()   # LinkButton subclass with a WORD-WRAPPING tooltip (bus feedback)
+	lb.text = label
+	lb.underline = LinkButton.UNDERLINE_MODE_ALWAYS
+	lb.focus_mode = Control.FOCUS_NONE
+	lb.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	lb.add_theme_font_size_override("font_size", font_px)
+	lb.add_theme_color_override("font_color", color)
+	lb.add_theme_color_override("font_hover_color", Color(0.9, 0.95, 1.0))
+	lb.set_meta("rule_meta", meta_key)
+	return lb
+
+
+## Unit rules + spells as a row of hover/click targets. Container named "RulesList" so the dock finds and
+## wires every LinkButton inside it.
+static func _rules_list(data: Dictionary) -> Control:
 	var rule_names: Array = data.get("rules_list", [])
 	var spells: Array = data.get("spells", []) if bool(data.get("caster", false)) else []
 	if rule_names.is_empty() and spells.is_empty():
 		return null
-	var rt := RichTextLabel.new()
-	rt.name = "RulesList"
-	rt.bbcode_enabled = true
-	rt.fit_content = true
-	rt.scroll_active = false
-	rt.meta_underlined = true
-	rt.mouse_filter = Control.MOUSE_FILTER_STOP
-	rt.add_theme_font_size_override("normal_font_size", 11)
-	rt.add_theme_color_override("default_color", TEXT_DIM)
-	var lines: Array[String] = []
+	var flow := HFlowContainer.new()
+	flow.name = "RulesList"
+	flow.add_theme_constant_override("h_separation", 6)
+	flow.add_theme_constant_override("v_separation", 2)
 	if not rule_names.is_empty():
-		var spans: Array[String] = []
+		flow.add_child(_label("Rules", 11, TEXT_DIM))
 		for r in rule_names:
-			spans.append("[url=%s]%s[/url]" % [str(r), str(r)])
-		lines.append("[color=%s]Rules[/color]  %s" % [TEXT_DIM.to_html(false), "  ".join(spans)])
+			flow.add_child(_rule_link(str(r), str(r), TEXT_DIM, 11))
 	if not spells.is_empty():
-		var sp: Array[String] = []
+		flow.add_child(_label("Spells", 11, CYAN))
 		for s in spells:
 			var sd := s as Dictionary
-			sp.append("[url=spell:%s]%s (%d+)[/url]" % [str(sd.get("name", "")), str(sd.get("name", "")), int(sd.get("threshold", 0))])
-		lines.append("[color=%s]Spells[/color]  %s" % [CYAN.to_html(false), "  ".join(sp)])
-	rt.text = "\n".join(lines)
-	return rt
+			flow.add_child(_rule_link("%s (%d+)" % [str(sd.get("name", "")), int(sd.get("threshold", 0))], "spell:" + str(sd.get("name", "")), CYAN, 11))
+	return flow
+
+
+## A weapon's named special rules as hover/click targets (maintainer #5). Same "RulesList" container so
+## the dock wires them alongside the unit rules.
+static func _weapon_rules_list(names: PackedStringArray) -> Control:
+	var flow := HFlowContainer.new()
+	flow.name = "RulesList"
+	flow.add_theme_constant_override("h_separation", 6)
+	for nm in names:
+		var t := nm.strip_edges()
+		if not t.is_empty():
+			flow.add_child(_rule_link(t, t, CYAN, 10))
+	return flow
 
 
 
@@ -193,22 +207,6 @@ static func _fit_name(text: String, size_big: int, size_small: int, max_chars: i
 
 ## Compact icon+label action button with hover state (chip-styled), part of the presented-card design.
 ## When pressed, calls `on_action.call(kind)` (if valid) so the dock routes it to _card_action.
-static func _action_btn(icon: String, label: String, kind: String, on_action: Callable) -> Button:
-	var b := Button.new()
-	b.text = "%s %s" % [icon, label]
-	b.focus_mode = Control.FOCUS_NONE
-	b.mouse_filter = Control.MOUSE_FILTER_STOP
-	b.add_theme_font_size_override("font_size", 11)
-	b.add_theme_color_override("font_color", TEXT)
-	b.add_theme_color_override("font_hover_color", CYAN)
-	b.add_theme_stylebox_override("normal", _chip_style(NAVY_HI, CYAN))
-	b.add_theme_stylebox_override("hover", _chip_style(Color(CYAN.r, CYAN.g, CYAN.b, 0.22), CYAN))
-	b.add_theme_stylebox_override("pressed", _chip_style(NAVY, CYAN))
-	if on_action.is_valid():
-		b.pressed.connect(func() -> void: on_action.call(kind))
-	return b
-
-
 static func _rule(color: Color, alpha: float = 0.55, height: float = 2.0) -> Control:
 	var r := ColorRect.new()
 	r.color = Color(color.r, color.g, color.b, alpha)
@@ -230,12 +228,28 @@ static func _die_chip(glyph: String, value: String) -> Control:
 	return box
 
 
-static func _status_chip(text: String, lit: bool, lit_color: Color) -> Control:
-	var box := PanelContainer.new()
-	box.add_theme_stylebox_override("panel", _chip_style(NAVY_HI if lit else NAVY, lit_color if lit else CHIP_OFF))
-	var l := _label(text, 11, (lit_color if lit else TEXT_DIM))
-	box.add_child(l)
-	return box
+## A status chip. On the presented card it is CLICKABLE (on_action wired + a kind): clicking toggles the
+## state / opens the wound or cast window — the chips ARE the controls now, the old action bar is gone
+## (maintainer). On strip cards (no on_action) it is a plain lit/unlit display chip.
+static func _status_chip(text: String, lit: bool, lit_color: Color, on_action: Callable = Callable(), kind: String = "") -> Control:
+	if not (on_action.is_valid() and not kind.is_empty()):
+		var box := PanelContainer.new()
+		box.add_theme_stylebox_override("panel", _chip_style(NAVY_HI if lit else NAVY, lit_color if lit else CHIP_OFF))
+		box.add_child(_label(text, 11, (lit_color if lit else TEXT_DIM)))
+		return box
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	b.add_theme_font_size_override("font_size", 11)
+	b.add_theme_color_override("font_color", lit_color if lit else TEXT_DIM)
+	b.add_theme_color_override("font_hover_color", lit_color)
+	b.add_theme_color_override("font_pressed_color", lit_color)
+	b.add_theme_stylebox_override("normal", _chip_style(NAVY_HI if lit else NAVY, lit_color if lit else CHIP_OFF))
+	b.add_theme_stylebox_override("hover", _chip_style(Color(lit_color.r, lit_color.g, lit_color.b, 0.22), lit_color))
+	b.add_theme_stylebox_override("pressed", _chip_style(NAVY, lit_color))
+	b.pressed.connect(func() -> void: on_action.call(kind))
+	return b
 
 
 
