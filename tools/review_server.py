@@ -145,12 +145,16 @@ function board(step){
     svg.appendChild(mk('circle',{cx,cy,r:3*SC,fill:'none',stroke:c,'stroke-dasharray':'3 3',opacity:.5}));
     const g=mk('rect',{x:cx-7,y:cy-7,width:14,height:14,transform:`rotate(45 ${cx} ${cy})`,fill:ow<0?'none':c,stroke:c,'stroke-width':2});svg.appendChild(g);});
   const act=step.type==='activation'?step.unit_id:-1,tgt=step.type==='activation'?(step.target_id):-2;
-  bd.pos.forEach((p,id)=>{const al=bd.alive[id],info=R[id],cx=p[0]*SC,cy=p[1]*SC,c=info.player===0?'#38c9d6':'#f5a623';
+  bd.pos.forEach((p,id)=>{const al=bd.alive[id],info=R[id],c=info.player===0?'#38c9d6':'#f5a623';
+    const mps=(bd.models&&bd.models[id])?bd.models[id]:[];   // real per-model positions
+    const cx=p[0]*SC,cy=p[1]*SC;
     if(al<=0){const x=mk('g',{opacity:.35});x.appendChild(mk('line',{x1:cx-5,y1:cy-5,x2:cx+5,y2:cy+5,stroke:c,'stroke-width':2}));x.appendChild(mk('line',{x1:cx-5,y1:cy+5,x2:cx+5,y2:cy-5,stroke:c,'stroke-width':2}));svg.appendChild(x);return;}
-    const cols=Math.ceil(Math.sqrt(al)),rows=Math.ceil(al/cols),sp=6,w=(cols-1)*sp,h=(rows-1)*sp,rr=Math.max(w,h)/2+8;
+    // draw each model at its OWN position
+    mps.forEach(m=>svg.appendChild(mk('circle',{cx:m[0]*SC,cy:m[1]*SC,r:2.4,fill:c,opacity:bd.shaken[id]?.4:.95})));
+    // ring + label around the formation centre
+    const rr=10;
     if(id===act)svg.appendChild(mk('circle',{cx,cy,r:rr,fill:'none',stroke:'#fff','stroke-width':1.5}));
     if(id===tgt)svg.appendChild(mk('circle',{cx,cy,r:rr,fill:'none',stroke:'#ff5a52','stroke-width':1.5,'stroke-dasharray':'4 3'}));
-    for(let k=0;k<al;k++){svg.appendChild(mk('circle',{cx:cx+(k%cols)*sp-w/2,cy:cy+Math.floor(k/cols)*sp-h/2,r:2.4,fill:c,opacity:bd.shaken[id]?.4:.95}));}
     const t=mk('text',{x:cx,y:cy+rr+9,'text-anchor':'middle','font-size':8,fill:c,'font-family':'monospace',opacity:.85});t.textContent=al;svg.appendChild(t);
     if(bd.shaken[id]){const s=mk('text',{x:cx,y:cy-rr-3,'text-anchor':'middle','font-size':8,fill:'#38c9d6','font-family':'monospace'});s.textContent='SHAKEN';svg.appendChild(s);}
   });

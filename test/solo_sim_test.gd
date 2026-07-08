@@ -90,26 +90,39 @@ func test_objective_seize_persists_contests_and_shaken_cannot_seize() -> void:
 	var objs := [Vector2(24, 24)]
 	var owner := [-1]
 	var mine: Dictionary = SoloSim.make_unit("A", 0, 4, 4, 5, [])
-	mine["pos"] = Vector2(24, 24)     # sitting on the objective
+	mine["model_pos"] = [Vector2(24, 24)]     # one model sitting on the objective
 	var foe: Dictionary = SoloSim.make_unit("B", 1, 4, 4, 5, [])
-	foe["pos"] = Vector2(0, 0)        # far away
+	foe["model_pos"] = [Vector2(0, 0)]        # far away
 	# Uncontested → player 0 seizes.
 	SoloSim._seize_objectives([mine, foe], objs, owner, [])
 	assert_int(int(owner[0])).is_equal(0)
 	# STAYS seized after the unit walks away (persistent).
-	mine["pos"] = Vector2(0, 47)
+	mine["model_pos"] = [Vector2(0, 47)]
 	SoloSim._seize_objectives([mine, foe], objs, owner, [])
 	assert_int(int(owner[0])).is_equal(0)
 	# Both sides within 3" → contested → neutral.
-	mine["pos"] = Vector2(24, 24)
-	foe["pos"] = Vector2(25, 24)
+	mine["model_pos"] = [Vector2(24, 24)]
+	foe["model_pos"] = [Vector2(25, 24)]
 	SoloSim._seize_objectives([mine, foe], objs, owner, [])
 	assert_int(int(owner[0])).is_equal(-1)
 	# A Shaken unit cannot seize: only a Shaken player-0 unit present → stays neutral.
-	foe["pos"] = Vector2(0, 0)
+	foe["model_pos"] = [Vector2(0, 0)]
 	mine["shaken"] = true
 	SoloSim._seize_objectives([mine, foe], objs, owner, [])
 	assert_int(int(owner[0])).is_equal(-1)
+
+
+func test_a_single_edge_model_holds_the_objective_even_if_centre_is_far() -> void:
+	# Per-model control: the formation centre is 5" from the marker (out of 3"), but a front model reaches it.
+	var objs := [Vector2(24, 24)]
+	var owner := [-1]
+	var u: Dictionary = SoloSim.make_unit("Edge", 0, 4, 4, 5, [])
+	u["pos"] = Vector2(24, 19)
+	u["model_pos"] = [Vector2(24, 19), Vector2(24, 24)]   # front model ON the marker
+	var foe: Dictionary = SoloSim.make_unit("F", 1, 4, 4, 5, [])
+	foe["model_pos"] = [Vector2(0, 0)]
+	SoloSim._seize_objectives([u, foe], objs, owner, [])
+	assert_int(int(owner[0])).is_equal(0)
 
 
 func test_shaken_unit_spends_activation_idle_and_recovers() -> void:
@@ -120,8 +133,10 @@ func test_shaken_unit_spends_activation_idle_and_recovers() -> void:
 	var shaken: Dictionary = SoloSim.make_unit("S", 0, 4, 4, 5, [{"name": "Rifle", "range_value": 24, "attacks": 1, "count": 5, "special_rules": []}])
 	shaken["shaken"] = true
 	shaken["pos"] = Vector2(24, 24)
+	shaken["model_pos"] = [Vector2(24, 24)]
 	var foe: Dictionary = SoloSim.make_unit("F", 1, 4, 4, 5, [])
 	foe["pos"] = Vector2(24, 12)   # 12" away — in rifle range, but the Shaken unit won't shoot
+	foe["model_pos"] = [Vector2(24, 12)]
 	var start_pos: Vector2 = shaken["pos"]
 	SoloSim._activate(shaken, [shaken, foe], RandomNumberGenerator.new(), [])
 	assert_bool(bool(shaken["shaken"])).is_false()               # recovered

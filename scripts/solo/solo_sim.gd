@@ -41,7 +41,8 @@ static func make_unit(name: String, player: int, quality: int, defense: int, mod
 		"name": name, "player": player, "quality": quality, "defense": defense,
 		"tough": maxi(tough, 1), "max_models": models, "wounds_pool": 0,
 		"weapons": weapons, "rules": rules,
-		"pos": Vector2.ZERO,
+		"pos": Vector2.ZERO,       # formation centre (for the high-level decision/movement)
+		"model_pos": [],           # per-model positions (set at deploy) — the unit moves as a formation
 		"advance_in": advance_in, "rush_in": rush_in,
 		"activated": false, "shaken": false, "fatigued": false,
 	}
@@ -210,6 +211,23 @@ static func _deploy(units: Array) -> void:
 		for i in range(side.size()):
 			var x: float = BOARD_IN * float(i + 1) / float(side.size() + 1)
 			side[i]["pos"] = Vector2(x, z)
+			side[i]["model_pos"] = _formation(Vector2(x, z), alive_models(side[i]))
+
+
+## Lay out `n` individual models in a compact grid around `centre` (~1.5" spacing) — the unit's starting
+## formation. Each model has its own position from here on; the unit moves as a rigid formation.
+static func _formation(centre: Vector2, n: int) -> Array:
+	var out: Array = []
+	if n <= 0:
+		return out
+	var cols: int = int(ceil(sqrt(float(n))))
+	var sp := 1.5
+	var w: float = float(cols - 1) * sp
+	for k in range(n):
+		var col: int = k % cols
+		var row: int = k / cols
+		out.append(Vector2(centre.x + float(col) * sp - w / 2.0, centre.y + float(row) * sp - w / 2.0))
+	return out
 
 
 # === Activation (mirrors SoloController._act on the 2D board) ===
@@ -431,7 +449,13 @@ static func _seize_objectives(units: Array, objectives: Array, obj_owner: Array,
 		for u in units:
 			if not is_alive(u) or bool(u["shaken"]):
 				continue   # Shaken units can't seize or contest
-			if (u["pos"] as Vector2).distance_to(objectives[i]) <= OBJECTIVE_CONTROL_IN:
+			# A SINGLE model within 3" holds the objective (per-model now, not the formation centre).
+			var holds := false
+			for m in u["model_pos"]:
+				if (m as Vector2).distance_to(objectives[i]) <= OBJECTIVE_CONTROL_IN:
+					holds = true
+					break
+			if holds:
 				if u["player"] == 0:
 					near0 = true
 				else:
@@ -451,6 +475,10 @@ static func _seize_objectives(units: Array, objectives: Array, obj_owner: Array,
 
 static func _apply_wounds(unit: Dictionary, w: int) -> void:
 	unit["wounds_pool"] = int(unit["wounds_pool"]) + maxi(w, 0)
+	# Remove dead models from the formation, back rank first (defender-optimal, matches the game).
+	var mp: Array = unit["model_pos"]
+	while mp.size() > alive_models(unit):
+		mp.pop_back()
 
 
 # === Helpers ===
@@ -463,8 +491,13 @@ static func _roll(rng: RandomNumberGenerator, n: int) -> Array:
 
 
 static func _move(unit: Dictionary, delta: Vector2) -> void:
-	var p: Vector2 = (unit["pos"] as Vector2) + delta
-	unit["pos"] = Vector2(clampf(p.x, 0.0, BOARD_IN), clampf(p.y, 0.0, BOARD_IN))
+	var old: Vector2 = unit["pos"]
+	var np := Vector2(clampf(old.x + delta.x, 0.0, BOARD_IN), clampf(old.y + delta.y, 0.0, BOARD_IN))
+	var applied: Vector2 = np - old   # the centre is board-clamped; shift the whole formation by the same
+	unit["pos"] = np
+	var mp: Array = unit["model_pos"]
+	for k in range(mp.size()):
+		mp[k] = (mp[k] as Vector2) + applied
 
 
 ## Target selection (Solo & Co-Op rules p.2): the NEAREST valid enemy, but ALWAYS prioritising units that
@@ -536,14 +569,19 @@ static func roster(army_a: Array, army_b: Array) -> Array:
 ## A complete board state after a step (arrays indexed by unit id) — makes the viewer trivial.
 static func _snapshot(units: Array, obj_owner: Array) -> Dictionary:
 	var pos: Array = []
+	var models: Array = []
 	var alive: Array = []
 	var shaken: Array = []
 	for u in units:
 		var p: Vector2 = u["pos"]
 		pos.append([snappedf(p.x, 0.1), snappedf(p.y, 0.1)])
+		var mps: Array = []
+		for m in u["model_pos"]:
+			mps.append([snappedf((m as Vector2).x, 0.1), snappedf((m as Vector2).y, 0.1)])
+		models.append(mps)   # individual model positions for the review
 		alive.append(alive_models(u))
 		shaken.append(bool(u["shaken"]))
-	return {"pos": pos, "alive": alive, "shaken": shaken, "owners": obj_owner.duplicate()}
+	return {"pos": pos, "models": models, "alive": alive, "shaken": shaken, "owners": obj_owner.duplicate()}
 
 
 static func _trace_roll(rolls: Array, kind: String, actor: String, target: String, weapon: String,
