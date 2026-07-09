@@ -123,11 +123,11 @@ PAGE = r"""<!doctype html><html lang="de"><head>
 </div>
 <script>
 const SVGNS="http://www.w3.org/2000/svg";
-let T=null,steps=[],R=[],OBJ=[],ARM={},B=48,SC=10,i=0,votes={};
+let T=null,steps=[],R=[],OBJ=[],ARM={},B=48,SC=10,i=0,votes={},TER=[],CELL=3;
 const $=id=>document.getElementById(id);
 function mk(t,a){const e=document.createElementNS(SVGNS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
 fetch('/trace.json').then(r=>r.json()).then(d=>{
-  T=d;steps=d.steps;R=d.roster;OBJ=d.objectives;ARM=d.armies;B=d.board;SC=480/B;
+  T=d;steps=d.steps;R=d.roster;OBJ=d.objectives;ARM=d.armies;B=d.board;SC=480/B;TER=d.terrain||[];CELL=d.cell_in||3;
   $('match').textContent=`${ARM['0']}  vs  ${ARM['1']}  ·  Seed ${d.seed}`;
   // erste unbewertete Aktivierung
   i=steps.findIndex(s=>s.type==='activation'); if(i<0)i=0;
@@ -140,6 +140,12 @@ function board(step){
   svg.appendChild(mk('rect',{x:0,y:480-12*SC,width:480,height:12*SC,fill:'#f5a623',opacity:.06}));
   for(let g=12;g<B;g+=12){svg.appendChild(mk('line',{x1:g*SC,y1:0,x2:g*SC,y2:480,stroke:'#1c2733','stroke-width':1}));
     svg.appendChild(mk('line',{x1:0,y1:g*SC,x2:480,y2:g*SC,stroke:'#1c2733','stroke-width':1}));}
+  // terrain: typed 3" cells — the same grid model as the game's terrain_overlay (Ruins/Forest/Container/Dangerous)
+  const TC={1:'#4d7bc4',2:'#3a9d4a',3:'#a5763a',4:'#c94a4a'};
+  TER.forEach(c=>{const cx=c[0],cy=c[1],ty=c[2],x=cx*CELL*SC,y=cy*CELL*SC,s=CELL*SC;
+    svg.appendChild(mk('rect',{x,y,width:s,height:s,fill:TC[ty]||'#888',opacity:ty===4?.20:.28,stroke:TC[ty]||'#888','stroke-opacity':.55,'stroke-width':1}));
+    if(ty===4)svg.appendChild(mk('line',{x1:x,y1:y,x2:x+s,y2:y+s,stroke:TC[4],'stroke-width':1,opacity:.6}));
+  });
   const bd=step.board,own=bd.owners;
   OBJ.forEach((o,ix)=>{const cx=o[0]*SC,cy=o[1]*SC,ow=own[ix],c=ow===0?'#38c9d6':(ow===1?'#f5a623':'#e8c96a');
     svg.appendChild(mk('circle',{cx,cy,r:3*SC,fill:'none',stroke:c,'stroke-dasharray':'3 3',opacity:.5}));
@@ -164,7 +170,8 @@ const hd=(f,t)=>f.map(x=>die(x,(x===6||(x>=t&&x!==1))?'hit':'')).join('');
 const sd=(f,t)=>f.map(x=>die(x,(x===6||(x>=t&&x!==1))?'blk':'')).join('');
 function read(step){
   const el=$('read');
-  if(step.type==='deploy'){el.innerHTML='<div class="r1"><span class="rd">Aufstellung</span></div><div class="narr">Beide Armeen in ihren 12"-Zonen; zwei Missionsziele.</div>';return;}
+  if(step.type==='deploy'){const lg='<span style="color:#3a9d4a">■</span> Wald (Deckung+schwierig) · <span style="color:#4d7bc4">■</span> Ruine (Deckung) · <span style="color:#a5763a">■</span> Container (blockt Sicht) · <span style="color:#c94a4a">■</span> gefährlich';
+    el.innerHTML='<div class="r1"><span class="rd">Aufstellung</span></div><div class="narr">Beide Armeen in ihren 12"-Zonen; zwei Missionsziele.</div><div class="narr" style="margin-top:6px">'+lg+'</div>';return;}
   if(step.type==='seize'){const o=step.board.owners.map((v,ix)=>`Ziel ${ix+1}: ${v===0?ARM['0']:(v===1?ARM['1']:'neutral')}`).join(' · ');
     el.innerHTML=`<div class="r1"><span class="rd">Rundenende ${step.round}</span></div><div class="why">${o}</div>`;return;}
   const wy=step.why||{},arch={MELEE:'Nahkämpfer',SHOOTING:'Schütze',HYBRID:'Hybrid'}[wy.arch]||'?';
@@ -179,9 +186,11 @@ function read(step){
   (step.rolls||[]).forEach(r=>{
     if(r.kind==='morale'){const res=r.result==='pass'?'bestanden':(r.result==='shaken'?'→ Shaken':'→ ROUT');
       h+=`<div class="lbl">Moral</div><div class="dice">${r.face<0?'<span class="narr">auto-fail (Shaken)</span>':die(r.face,r.result==='pass'?'hit':'blk')}<span class="narr" style="margin-left:8px">${res}</span></div>`;
+    }else if(r.kind==='dangerous'){
+      h+=`<div class="lbl">Gefährliches Gelände</div><div class="dice">${die(r.face,r.wound?'blk':'')}<span class="narr" style="margin-left:8px">${r.wound?'→ 1 Wunde':'sicher'}</span></div>`;
     }else{const v=r.kind==='shoot'?'Beschuss':(r.kind==='strike back'?'Rückschlag':'Nahkampf');
       h+=`<div class="lbl">${v} · ${r.weapon} → ${r.wounds} Wunde(n)</div><div class="dice">${hd(r.hit_faces,r.hit_target)}</div>`;
-      if(r.hits>0)h+=`<div class="lbl">Rettung ${r.save_target}+</div><div class="dice">${sd(r.save_faces,r.save_target)}</div>`;}
+      if(r.hits>0)h+=`<div class="lbl">Rettung ${r.save_target}+${r.cover?' · Ziel in Deckung':''}</div><div class="dice">${sd(r.save_faces,r.save_target)}</div>`;}
   });
   if((step.rolls||[]).length===0&&step.action.indexOf('IDLE')<0)h+=`<div class="narr">◦ nur Bewegung — keine Würfel.</div>`;
   el.innerHTML=h;

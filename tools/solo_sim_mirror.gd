@@ -33,9 +33,10 @@ func _init() -> void:
 	var army_b := SoloSim.units_from_opr_json(data, 1)
 	print("Mirror: %s vs %s — %d unit(s)/side, %d games" % [list_name, list_name, army_a.size(), n])
 
-	# One verbose game to eyeball the play, then the aggregate.
+	# One verbose game to eyeball the play, then the aggregate. Each game runs on its own seeded terrain
+	# layout — reflection-symmetric, so a fair mirror stays fair (both sides get equivalent cover).
 	var log_lines: Array = []
-	SoloSim.simulate_game(army_a, army_b, 1000, 4, log_lines)
+	SoloSim.simulate_game(army_a, army_b, 1000, 4, log_lines, [], [], SoloSim.default_terrain(1000))
 	print("=== FIRST GAME (seed 1000) — full log ===")
 	for line in log_lines:
 		print("  ", line)
@@ -46,7 +47,7 @@ func _init() -> void:
 	var round_sum := 0
 	var obj_decided := 0
 	for i in range(n):
-		var res: Dictionary = SoloSim.simulate_game(army_a, army_b, 1000 + i, 4)
+		var res: Dictionary = SoloSim.simulate_game(army_a, army_b, 1000 + i, 4, [], [], [], SoloSim.default_terrain(1000 + i))
 		match int(res["winner"]):
 			0: p0 += 1
 			1: p1 += 1

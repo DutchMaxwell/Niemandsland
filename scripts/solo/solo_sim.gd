@@ -5,8 +5,9 @@ extends RefCounted
 ## modules the real game uses (AiArchetype, AiDecision, AiShooting, AiCombatMath). That shared logic IS
 ## the correctness link to the real game.
 ##
-## Board: 2D 4×4 ft table, 12" deployment zones, two mission objectives. NO terrain yet (open field, LOS
-## always clear). Rules verified against the official GF Advanced Rules v3.5.1 rulebook (2026-07-08):
+## Board: 2D 4×4 ft table, 12" deployment zones, two mission objectives, and optional terrain (a grid of
+## typed 3" cells — the SAME model as the game's terrain_overlay.gd; see TerrainRules). Rules verified
+## against the official GF Advanced Rules v3.5.1 rulebook (2026-07-08):
 ##  • Actions (p.7): Hold (no move, may shoot) / Advance (6", may shoot) / Rush (12", no shoot) /
 ##    Charge (12" into melee).
 ##  • Shooting (p.8) & Melee (p.9): sum attacks of models in range → roll to hit at Quality → defender
@@ -21,6 +22,10 @@ extends RefCounted
 ##  • Mission (p.6): seize a marker at the END OF EACH ROUND with a unit within 3" and no enemy within 3";
 ##    a seized marker STAYS seized when the unit leaves; both sides within 3" → neutral. After 4 rounds
 ##    the player controlling most markers wins (you never win purely by wiping the enemy).
+##  • Terrain (p.11-12, TerrainRules — shared with terrain_overlay.gd): a shot needs clear LOS (Ruins/
+##    Forest/Container block it); a unit with the majority of its models in Cover (Ruins/Forest) is +1
+##    Defense vs shooting; Difficult (Forest) halves a move crossing it; Dangerous rolls one die per model
+##    crossing it (a 1 = one wound). Passing no terrain (default) = open field, every rule inert.
 ##
 ## A unit is a plain Dictionary (see make_unit). Deterministic: same seed → same game.
 
@@ -29,10 +34,47 @@ const DEPLOY_IN := 12.0
 const CONTACT_IN := 2.0
 const OBJECTIVE_CONTROL_IN := 3.0
 const DEFAULT_ROUNDS := 4
+const MODEL_HEIGHT := 1   # every sim model is ground infantry (Height 1); tall/vehicle heights are a follow-up
 
 
 static func default_objectives() -> Array:
 	return [Vector2(BOARD_IN / 3.0, BOARD_IN / 2.0), Vector2(BOARD_IN * 2.0 / 3.0, BOARD_IN / 2.0)]
+
+
+## A seeded, reflection-symmetric (across the board mid-line, y = 24") terrain layout on the 3" grid — the
+## exact grid_cells model terrain_overlay.gd uses. Symmetry keeps the mirror-match fairness oracle intact
+## (both deployment zones get equivalent cover) and matches how balanced OPR tables are laid out. Blobs sit
+## in the bottom half and are mirrored to the top; the mid-line row (where the objectives sit) stays clear.
+static func default_terrain(seed_value: int) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var cells := {}
+	var n: int = int(BOARD_IN / TerrainRules.CELL_IN)   # 16 cells per axis
+	var pieces := [
+		{"type": TerrainRules.TerrainType.FOREST, "w": 2, "h": 2},
+		{"type": TerrainRules.TerrainType.RUINS, "w": 2, "h": 2},
+		{"type": TerrainRules.TerrainType.CONTAINER, "w": 1, "h": 2},
+		{"type": TerrainRules.TerrainType.DANGEROUS, "w": 2, "h": 1},
+	]
+	for piece in pieces:
+		var pw: int = int(piece["w"])
+		var ph: int = int(piece["h"])
+		var cx: int = rng.randi_range(1, n - pw - 1)
+		var cy: int = rng.randi_range(1, n / 2 - ph - 1)   # bottom half only (mid-line stays clear)
+		for dx in range(pw):
+			for dy in range(ph):
+				var c := Vector2i(cx + dx, cy + dy)
+				cells[c] = int(piece["type"])
+				cells[Vector2i(c.x, n - 1 - c.y)] = int(piece["type"])   # mirror across the mid-line
+	return cells
+
+
+## Terrain grid as JSON-friendly [cx, cy, type] triples for the replay viewer (cell = 3", board = 48").
+static func _terrain_cells_json(terrain: Dictionary) -> Array:
+	var out: Array = []
+	for c in terrain:
+		out.append([(c as Vector2i).x, (c as Vector2i).y, int(terrain[c])])
+	return out
 
 
 static func make_unit(name: String, player: int, quality: int, defense: int, models: int, weapons: Array,
@@ -136,7 +178,7 @@ static func is_alive(u: Dictionary) -> bool:
 
 
 static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rounds: int = DEFAULT_ROUNDS,
-		log_lines: Array = [], objectives: Array = [], trace: Array = []) -> Dictionary:
+		log_lines: Array = [], objectives: Array = [], trace: Array = [], terrain: Dictionary = {}) -> Dictionary:
 	var objs: Array = objectives if not objectives.is_empty() else default_objectives()
 	var obj_owner: Array = []
 	for _o in objs:
@@ -172,7 +214,7 @@ static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rou
 				var actor: Variant = _next_unactivated(units, side)
 				if actor != null:
 					activations += 1
-					_activate(actor, units, rng, log_lines, r, obj_owner, objs, trace)
+					_activate(actor, units, rng, log_lines, r, obj_owner, objs, trace, terrain)
 			side = 1 - side
 		# End of round: fatigue clears; then objectives are (re)seized.
 		for u in units:
@@ -197,7 +239,7 @@ static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rou
 		"winner": winner, "rounds": round_no, "end_reason": end_reason,
 		"a_alive": a_alive, "b_alive": b_alive, "a_start": a_start, "b_start": b_start,
 		"a_losses": a_start - a_alive, "b_losses": b_start - b_alive, "activations": activations,
-		"a_objectives": a_obj, "b_objectives": b_obj,
+		"a_objectives": a_obj, "b_objectives": b_obj, "terrain": _terrain_cells_json(terrain),
 	}
 
 
@@ -233,7 +275,8 @@ static func _formation(centre: Vector2, n: int) -> Array:
 # === Activation (mirrors SoloController._act on the 2D board) ===
 
 static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator, log_lines: Array,
-		round_no: int = 0, obj_owner: Array = [], objectives: Array = [], trace: Array = []) -> void:
+		round_no: int = 0, obj_owner: Array = [], objectives: Array = [], trace: Array = [],
+		terrain: Dictionary = {}) -> void:
 	unit["activated"] = true
 	var rolls: Array = []   # dice detail recorded for the visual trace
 	# OPR (p.10): a Shaken unit spends its activation idle, which clears Shaken at the end of it.
@@ -290,20 +333,21 @@ static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator
 		AiDecision.Action.RUSH:
 			# STOP AT the objective, never march past it (p.58: seize within 3", "as close as possible").
 			# The maintainer's finding: units overshot the marker and abandoned it.
-			_move(unit, gdir * (minf(rush, goal_dist) if to_obj else rush))
+			_terrain_move(unit, gdir * (minf(rush, goal_dist) if to_obj else rush), terrain, rng, log_lines, rolls)
 		AiDecision.Action.CHARGE:
-			_move(unit, edir * minf(rush, maxf(enemy_dist - CONTACT_IN, 0.0)))
+			_terrain_move(unit, edir * minf(rush, maxf(enemy_dist - CONTACT_IN, 0.0)), terrain, rng, log_lines, rolls)
 		AiDecision.Action.ADVANCE:
 			if to_obj:
-				_move(unit, gdir * minf(advance, goal_dist))   # stop on the objective, don't overshoot
+				# stop on the objective, don't overshoot
+				_terrain_move(unit, gdir * minf(advance, goal_dist), terrain, rng, log_lines, rolls)
 			else:
 				# "Advancing" rule (p.58): a shooter advancing on the enemy stays as FAR as possible while
 				# still in range — step back to the range edge if already inside it, else close to get in
 				# range. It never flees off-board and always shoots (no kiting).
 				if enemy_dist <= float(shoot_range):
-					_move(unit, -edir * minf(advance, float(shoot_range) - enemy_dist))
+					_terrain_move(unit, -edir * minf(advance, float(shoot_range) - enemy_dist), terrain, rng, log_lines, rolls)
 				else:
-					_move(unit, edir * advance)
+					_terrain_move(unit, edir * advance, terrain, rng, log_lines, rolls)
 		_:
 			pass   # HOLD
 	var dist: float = (unit["pos"] as Vector2).distance_to(tpos)
@@ -314,10 +358,11 @@ static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator
 	if action == AiDecision.Action.CHARGE and dist <= CONTACT_IN + 0.001:
 		_resolve_melee(unit, target, rng, log_lines, rolls)
 	elif bool(dec["shoot"]) and shoot_range > 0:
-		var st: Variant = _pick_target(unit, units, float(shoot_range))
+		# Valid shooting target = nearest un-activated enemy IN RANGE and with clear LOS (terrain blocks it).
+		var st: Variant = _pick_target(unit, units, float(shoot_range), terrain, true)
 		if st != null:
 			combat_target = st
-			_resolve_shooting(unit, st, (unit["pos"] as Vector2).distance_to(st["pos"]), rng, log_lines, rolls)
+			_resolve_shooting(unit, st, (unit["pos"] as Vector2).distance_to(st["pos"]), rng, log_lines, rolls, terrain)
 	var why := {"arch": ["MELEE", "SHOOTING", "HYBRID"][archetype], "range": shoot_range,
 		"objective": has_obj, "obj_dist": (snappedf(obj_dist, 0.1) if has_obj else -1.0),
 		"toward": ("objective" if to_obj else "enemy"), "in_way": in_way, "dist0": snappedf(enemy_dist, 0.1),
@@ -353,13 +398,19 @@ static func _seg_dist(a: Vector2, b: Vector2, p: Vector2) -> float:
 # === Combat resolution (uses AiShooting + AiCombatMath, dice from the seeded RNG) ===
 
 static func _resolve_shooting(attacker: Dictionary, target: Dictionary, dist: float,
-		rng: RandomNumberGenerator, log_lines: Array, rolls: Array = []) -> void:
+		rng: RandomNumberGenerator, log_lines: Array, rolls: Array = [], terrain: Dictionary = {}) -> void:
 	var profiles: Array = AiShooting.profiles_in_range(attacker["weapons"], dist)
 	if profiles.is_empty():
 		return
 	var alive_before := alive_models(target)
 	var quality: int = int(attacker["quality"])
 	var defense: int = int(target["defense"])
+	# Cover (p.11): a target with the majority of its models in cover gets +1 to block rolls — modelled as a
+	# better (lower) save target, floored at 2+ (a 1 always fails). Applies to shooting only.
+	var in_cover: bool = not terrain.is_empty() and TerrainRules.majority_in_cover(target["model_pos"], terrain)
+	if in_cover:
+		defense = maxi(2, defense - 1)
+		log_lines.append("%s is in cover (+1 Defense)" % target["name"])
 	var total := 0
 	for p in profiles:
 		var profile := p as Dictionary
@@ -369,7 +420,7 @@ static func _resolve_shooting(attacker: Dictionary, target: Dictionary, dist: fl
 		var w: int = 0 if hits <= 0 else AiCombatMath.wounds(hits, save_faces, defense, int(profile["ap"]))
 		total += w
 		_trace_roll(rolls, "shoot", attacker["name"], target["name"], str(profile["name"]),
-			faces, quality, hits, save_faces, defense + int(profile["ap"]), w)
+			faces, quality, hits, save_faces, defense + int(profile["ap"]), w, in_cover)
 	if total > 0:
 		_apply_wounds(target, total)
 		log_lines.append("%s shoots %s → %d wound(s)" % [attacker["name"], target["name"], total])
@@ -510,11 +561,53 @@ static func _move(unit: Dictionary, delta: Vector2) -> void:
 		mp[k] = (mp[k] as Vector2) + applied
 
 
+## Terrain-aware movement: Difficult terrain (p.11) crossed by the path halves the move; then the rigid
+## formation translates (board-clamped in _move); then each model that crossed Dangerous terrain (p.12)
+## tests. Empty terrain (open field) → a plain _move.
+static func _terrain_move(unit: Dictionary, delta: Vector2, terrain: Dictionary,
+		rng: RandomNumberGenerator, log_lines: Array, rolls: Array = []) -> void:
+	if terrain.is_empty() or delta == Vector2.ZERO:
+		_move(unit, delta)
+		return
+	var start: Vector2 = unit["pos"]
+	var mv := delta
+	if TerrainRules.path_crosses(terrain, start, start + mv, TerrainRules.PathCheck.DIFFICULT):
+		mv *= 0.5   # Difficult: halve a move that passes through it (a shorter step, may fall short of the goal)
+		log_lines.append("%s slowed by difficult terrain (half move)" % unit["name"])
+	_move(unit, mv)
+	_dangerous_test(unit, (unit["pos"] as Vector2) - start, terrain, rng, log_lines, rolls)
+
+
+## Dangerous terrain (p.12): each ALIVE model whose own path crossed a Dangerous cell rolls one die; a 1 is
+## one wound to the unit. Models share the applied delta (rigid formation), so a model's segment is
+## (current - applied) -> current. Wounds that drop the unit to <= half trigger a morale test.
+static func _dangerous_test(unit: Dictionary, applied: Vector2, terrain: Dictionary,
+		rng: RandomNumberGenerator, log_lines: Array, rolls: Array = []) -> void:
+	if applied == Vector2.ZERO:
+		return
+	var before := alive_models(unit)
+	var wounds := 0
+	for m in unit["model_pos"]:
+		var post: Vector2 = m
+		if TerrainRules.path_crosses(terrain, post - applied, post, TerrainRules.PathCheck.DANGEROUS):
+			var face: int = rng.randi_range(1, 6)
+			var hurt: bool = face == 1
+			if hurt:
+				wounds += 1
+			_trace_terrain(rolls, str(unit["name"]), face, hurt)
+	if wounds > 0:
+		_apply_wounds(unit, wounds)
+		log_lines.append("%s takes %d wound(s) from dangerous terrain" % [unit["name"], wounds])
+		if AiCombatMath.should_test_shooting_morale(before, alive_models(unit), int(unit["max_models"])):
+			_morale(unit, rng, log_lines, rolls)
+
+
 ## Target selection (Solo & Co-Op rules p.2): the NEAREST valid enemy, but ALWAYS prioritising units that
 ## haven't activated this round — it only falls back to the nearest already-activated enemy when no
 ## un-activated one is reachable. `max_range` limits to reachable/in-range targets (INF = any). null if
 ## there is no valid target.
-static func _pick_target(unit: Dictionary, units: Array, max_range: float) -> Variant:
+static func _pick_target(unit: Dictionary, units: Array, max_range: float,
+		terrain: Dictionary = {}, require_los: bool = false) -> Variant:
 	var side: int = int(unit["player"])
 	var up: Vector2 = unit["pos"]
 	var best_any: Variant = null
@@ -527,6 +620,9 @@ static func _pick_target(unit: Dictionary, units: Array, max_range: float) -> Va
 		var d: float = up.distance_to(e["pos"])
 		if d > max_range:
 			continue
+		if require_los and not terrain.is_empty() \
+				and not TerrainRules.has_line_of_sight(terrain, up, e["pos"], MODEL_HEIGHT, MODEL_HEIGHT):
+			continue   # a shot needs clear line of sight (Ruins/Forest/Container block it)
 		if d < best_any_d:
 			best_any_d = d
 			best_any = e
@@ -595,13 +691,14 @@ static func _snapshot(units: Array, obj_owner: Array) -> Dictionary:
 
 
 static func _trace_roll(rolls: Array, kind: String, actor: String, target: String, weapon: String,
-		hit_faces: Array, hit_target: int, hits: int, save_faces: Array, save_target: int, wounds: int) -> void:
+		hit_faces: Array, hit_target: int, hits: int, save_faces: Array, save_target: int, wounds: int,
+		cover: bool = false) -> void:
 	if rolls == null:
 		return
 	rolls.append({
 		"kind": kind, "actor": actor, "target": target, "weapon": weapon,
 		"hit_faces": hit_faces.duplicate(), "hit_target": hit_target, "hits": hits,
-		"save_faces": save_faces.duplicate(), "save_target": save_target, "wounds": wounds,
+		"save_faces": save_faces.duplicate(), "save_target": save_target, "wounds": wounds, "cover": cover,
 	})
 
 
@@ -609,6 +706,12 @@ static func _trace_morale(rolls: Array, unit: String, face: int, quality: int, r
 	if rolls == null:
 		return
 	rolls.append({"kind": "morale", "actor": unit, "face": face, "quality": quality, "result": result})
+
+
+static func _trace_terrain(rolls: Array, unit: String, face: int, wounded: bool) -> void:
+	if rolls == null:
+		return
+	rolls.append({"kind": "dangerous", "actor": unit, "face": face, "wound": wounded})
 
 
 static func _trace_activation(trace: Array, unit: Dictionary, round_no: int, action: String,

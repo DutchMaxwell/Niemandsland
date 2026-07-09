@@ -205,3 +205,71 @@ func test_dead_models_do_not_attack() -> void:
 	assert_int(SoloSim._effective_attacks(u, 10)).is_equal(4)    # only the 4 living models attack
 	u["wounds_pool"] = 9                                          # 1 alive
 	assert_int(SoloSim._effective_attacks(u, 10)).is_equal(1)
+
+
+# === Terrain (reuses TerrainRules — the game's terrain model) ===
+
+func test_default_terrain_is_reflection_symmetric() -> void:
+	# The generated layout must mirror across the board mid-line, or the mirror-match fairness oracle breaks.
+	var terrain: Dictionary = SoloSim.default_terrain(1234)
+	assert_int(terrain.size()).is_greater(0)
+	var n: int = int(SoloSim.BOARD_IN / TerrainRules.CELL_IN)
+	for cell in terrain:
+		var mirror := Vector2i((cell as Vector2i).x, n - 1 - (cell as Vector2i).y)
+		assert_bool(terrain.has(mirror)).is_true()
+		assert_int(int(terrain[mirror])).is_equal(int(terrain[cell]))
+
+
+func test_line_of_sight_gates_shooting_target() -> void:
+	# Shooter and enemy face each other across the mid-line; a container on the line blocks the shot.
+	var shooter: Dictionary = SoloSim.make_unit("Gunners", 0, 4, 4, 1, [{"name": "Rifle", "range_value": 48, "attacks": 1, "count": 1, "special_rules": []}])
+	shooter["pos"] = Vector2(5, 24)
+	var enemy: Dictionary = SoloSim.make_unit("Foe", 1, 4, 4, 1, [{"name": "Rifle", "range_value": 48, "attacks": 1, "count": 1, "special_rules": []}])
+	enemy["pos"] = Vector2(43, 24)
+	var units := [shooter, enemy]
+	var wall := {Vector2i(8, 8): TerrainRules.TerrainType.CONTAINER}   # sits on the line y=24 between them
+	assert_object(SoloSim._pick_target(shooter, units, 100.0, wall, true)).is_null()          # LOS blocked
+	assert_object(SoloSim._pick_target(shooter, units, 100.0, {}, true)).is_same(enemy)       # open field: seen
+	assert_object(SoloSim._pick_target(shooter, units, 100.0, wall, false)).is_same(enemy)    # LOS not required
+
+
+func test_cover_improves_the_targets_save() -> void:
+	# The save target recorded for a volley drops by 1 when the majority of the target sits in cover.
+	var attacker: Dictionary = SoloSim.make_unit("Rifles", 0, 4, 4, 1, [{"name": "Rifle", "range_value": 24, "attacks": 1, "count": 1, "special_rules": []}])
+	var target: Dictionary = SoloSim.make_unit("Cover Squad", 1, 4, 4, 5, [{"name": "Rifle", "range_value": 24, "attacks": 1, "count": 5, "special_rules": []}])
+	target["model_pos"] = [Vector2(16, 16), Vector2(16.5, 16.5), Vector2(17, 17), Vector2(30, 30), Vector2(31, 31)]
+	var forest := {Vector2i(5, 5): TerrainRules.TerrainType.FOREST}   # cell (5,5) holds the first 3 models
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	var open_rolls: Array = []
+	SoloSim._resolve_shooting(attacker, target.duplicate(true), 10.0, rng, [], open_rolls, {})
+	var cover_rolls: Array = []
+	SoloSim._resolve_shooting(attacker, target.duplicate(true), 10.0, rng, [], cover_rolls, forest)
+	assert_int(int(open_rolls[0]["save_target"])).is_equal(4)     # Defense 4, no cover
+	assert_int(int(cover_rolls[0]["save_target"])).is_equal(3)    # +1 to block = a 3+ save
+
+
+func test_difficult_terrain_halves_the_move() -> void:
+	var u: Dictionary = SoloSim.make_unit("Walkers", 0, 4, 4, 1, [{"name": "CCW", "range_value": 0, "attacks": 1, "count": 1, "special_rules": []}])
+	u["pos"] = Vector2(16.5, 20.0)
+	u["model_pos"] = [Vector2(16.5, 20.0)]
+	var forest := {Vector2i(5, 5): TerrainRules.TerrainType.FOREST}   # inches [15,18) on both axes
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1
+	SoloSim._terrain_move(u, Vector2(0.0, -6.0), forest, rng, [])   # a 6" move through the forest
+	assert_float((u["pos"] as Vector2).y).is_equal_approx(17.0, 0.001)   # halved to 3" (20 → 17), not 14
+
+
+func test_dangerous_terrain_can_wound() -> void:
+	# 60 models all cross a dangerous cell; at 1-in-6 per model the unit is virtually certain to take wounds.
+	var u: Dictionary = SoloSim.make_unit("Chargers", 0, 4, 4, 60, [{"name": "CCW", "range_value": 0, "attacks": 1, "count": 60, "special_rules": []}])
+	u["pos"] = Vector2(16.5, 20.0)
+	var mp: Array = []
+	for i in range(60):
+		mp.append(Vector2(16.5, 20.0))
+	u["model_pos"] = mp
+	var danger := {Vector2i(5, 5): TerrainRules.TerrainType.DANGEROUS}
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	SoloSim._terrain_move(u, Vector2(0.0, -6.0), danger, rng, [])   # move through the dangerous cell
+	assert_int(SoloSim.alive_models(u)).is_less(60)                 # some models rolled a 1 and died
