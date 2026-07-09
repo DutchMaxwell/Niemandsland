@@ -1,12 +1,10 @@
 # Solo / Co-Op AI — Implementation Plan
 
-> **Status:** M1 (Phase 0) shipped on `feat/solo-ai`; M2 (Phase 1) in progress. M2 slice 1 —
-> the pure combat "brain" — landed: `AiArchetype` (Melee/Shooting/Hybrid classifier), `AiDecision`
-> (per-archetype hold/advance/rush/charge tree) and `AiCombatMath` (OPR to-hit / AP-save / wounds /
-> morale), all gdUnit-tested. M2 slice 2 (integration: AI rolls real tray dice, shooting → human-save
-> prompt → wounds, charge/melee/strike-back/fatigue, morale tests, AI-army toggle UI, battle-log lines,
-> render evidence of a full AI turn) is the next step. NOT merge-ready until the maintainer field-tests
-> via F11. Branch: `feat/solo-ai`.
+> **Status:** playable Solo v1 assembled on `feat/solo-ai` — M1 skeleton, M2 combat brain, the headless
+> self-play sim (goal 003) with terrain/walls/movement + mirror-fairness proof, **P3** (the sim's pure
+> modules wired into the real game — see the P3 section) and **P2** (in-game auto-game: alternating
+> activation, objective auto-seize, 4-round match + scoring — see the P2 section). NOT merge-ready until
+> the maintainer field-tests the assembled flow. Branch: `feat/solo-ai`.
 > See [`ROADMAP.md`](ROADMAP.md) for where this sits in the backlog and
 > [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) for the system map.
 
@@ -198,10 +196,40 @@ seams). Wired:
   (`test/solo_controller_test.gd`); the full solo suite stays green (117) and the sim is untouched (its fairness
   proof stands). Field-tested headless on the real Battle Brothers list via `tools/solo_field_test.gd`.
 - **Remaining / stubbed** (honest gaps): the 1" enemy-spacing clamp is NOT applied on the real table yet (the
-  sim's point-fold spacing does not map cleanly to real base geometry); objective auto-seize at round end is not
-  wired (owners come from the manual radial pick), so `decide_solo` treats every non-AI-owned marker as
-  uncontrolled; the in-game shooting/melee dice + human saves are interactive (the visual tray + save prompts),
-  so the headless field test resolves the identical modules on a seeded RNG rather than the live tray.
+  sim's point-fold spacing does not map cleanly to real base geometry); the in-game shooting/melee dice + human
+  saves are interactive (the visual tray + save prompts), so the headless field test resolves the identical
+  modules on a seeded RNG rather than the live tray.
+
+## P2 — the in-game auto-game (shipped): alternating activation, auto-seize, scoring
+
+The last brick for "playable solo v1". A solo game now RUNS ITSELF once an army is marked for the AI:
+
+- **Alternating activation** (OPR-faithful): each time the human activates a unit via the radial menu
+  (`unit_activated` seam), the AI answers with exactly ONE activation. An exhausted side lets the other
+  finish (the OPR tail); re-entrant human activations queue as pending replies. The AI's unit pick is the
+  official D6 2-section roll (west/east half, rotate on empty, random within — seeded) with **Shaken last**;
+  a Shaken AI unit spends its activation idle and recovers (state via the radial seam). **F11 is now the
+  debug fallback**: it runs the whole remaining AI side at once.
+- **Round flow**: when both sides are out of eligible units the round ends automatically — objectives
+  seize/contest, then the round advances (same bookkeeping/broadcast as the Next-Round button, which stays a
+  manual override). OPR's alternating opener: the AI opens the even rounds (round parity, stateless).
+- **Objective auto-seize** (closes the P3 gap above): at every round end each marker goes to the single side
+  with a non-Shaken model within 3" (persistent owner; both sides → contested/neutral; Shaken can neither
+  seize nor contest). Pure logic in `SoloController.seize_objectives` (boundary-tested, inclusive 3"); owners
+  write through the SAME overlay + MP-broadcast seam as the manual radial pick, which therefore remains an
+  override. Battle-log lines per seize/contest.
+- **Match length + scoring**: `SOLO_GAME_ROUNDS = 4` (OPR standard). After round 4 the game ends with a
+  battle-log summary block + a results dialog (objectives held per side → "You win" / "The AI wins" / Draw;
+  with no markers on the table, surviving models break the tie — documented fallback, not an OPR mission).
+- **AI-army toggle** (maintainer's locked decision): the left-panel Solo section (one CheckButton per
+  imported army + "Deploy AI army") designates the AI's army; with no designation the AI defaults to
+  player 2 (backward compat). Pre-dated P2; the label/tooltip now explains the alternation and F11's debug
+  role.
+- **Tests**: the pure alternation machine (`test/turn_manager_test.gd`, 7 cases), seize logic incl. the 3"
+  boundary + Shaken exclusion, Shaken-idle activation and Shaken-last ordering (`test/solo_controller_test.gd`);
+  full solo suite green (140 cases across 14 suites). Field-tested headless: a COMPLETE 4-round auto-game on the
+  real Battle Brothers list (`tools/solo_field_test.gd -- <list> <seed> autogame`) showing alternation, the AI
+  opening rounds 2/4, seizes, and the final scoring.
 
 ## Architecture
 

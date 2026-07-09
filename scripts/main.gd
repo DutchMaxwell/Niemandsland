@@ -230,11 +230,16 @@ var coherency_visualizer: CoherencyVisualizer = null
 var unit_boundary_visualizer: Node3D = null  # UnitBoundaryVisualizer
 var range_ring_controller: Node = null  # RangeRingController (base-anchored range auras)
 var movement_range_controller: Node = null  # MovementRangeController (Advance/Rush reach)
-var solo_controller: SoloController = null   # Solo/AI (F11) — drives the designated AI army
+var solo_controller: SoloController = null   # Solo/AI — drives the designated AI army (F11 = whole side)
 var solo_ai_slots: Dictionary = {}           # player_id -> true: armies the Solo AI controls (goal 001)
 var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-army AI toggles)
 var _solo_target_mode: Dictionary = {}       # {unit, melee} while the player picks an attack target (P8)
 var _solo_los_line: MeshInstance3D = null    # live line to the hovered target: green = clear, red = blocked
+# Solo P2 auto-game state (goal 003 P2): alternation queue + match end.
+const SOLO_GAME_ROUNDS := 4                  # OPR standard match length (rounds)
+var _solo_pending_replies: int = 0           # human activations still owed one AI answer (alternation)
+var _solo_ai_busy: bool = false              # an AI activation chain is running (guards re-entry)
+var _solo_game_finished: bool = false        # summary shown after SOLO_GAME_ROUNDS — no further auto-advance
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
@@ -633,20 +638,38 @@ func _dismiss_transition_overlay() -> void:
 ## screenshot) into a zip on the Desktop. Player names / room code / OS username are scrubbed.
 ## The natural capture for visual glitches (a mini clipping terrain, wrong scale, a misplaced
 ## model) that raise no error and so never reach the log on their own.
-## Solo/AI (F11): run ONE AI activation per press (goal 001, F1) — the next eligible unit of the
-## designated AI army acts (M1: advances toward the nearest human unit) and the camera follows it.
-## The AI army is whichever slot is marked in solo_ai_slots (import checkbox / Solo panel); with no
-## designation it falls back to player 2 (M1 behaviour). When every AI unit has acted, F11 reports the
-## turn as complete until the next round resets activations.
+## Solo/AI (F11, debug fallback): run the WHOLE remaining AI side — every eligible unit of the designated
+## AI army activates in sequence (goal 003 P2; the normal flow is alternating activation via
+## _on_solo_human_activated). The AI army is whichever slot is marked in solo_ai_slots (import checkbox /
+## Solo panel); with no designation it falls back to player 2 (backward compat).
 func _run_solo_ai_turn() -> void:
 	if opr_army_manager == null or movement_range_controller == null:
 		push_warning("[Solo/AI] not ready — import armies first")
 		return
 	_ensure_solo_controller()
+	if _solo_ai_busy:
+		return
+	_solo_ai_busy = true
+	var moved := 0
+	while true:
+		var unit: GameUnit = await _solo_activate_one_ai()
+		if unit == null:
+			break
+		moved += 1
+	_solo_ai_busy = false
+	if moved == 0:
+		print("[Solo/AI] AI turn complete — all player-%d units activated" % _solo_ai_slot())
+	await _solo_after_activation()
+
+
+## ONE full AI activation (the shared runner behind F11 and the alternating flow): pick + move via the
+## SoloController (official decision tree, terrain, walls), follow with the camera, narrate to the battle
+## log, then resolve Dangerous tests / shooting / melee with real tray dice. A Shaken unit idles and
+## recovers instead (OPR p.10). Returns the activated unit, or null when the AI side is done.
+func _solo_activate_one_ai() -> GameUnit:
 	var unit: GameUnit = solo_controller.activate_next_ai_unit()
 	if unit == null:
-		print("[Solo/AI] AI turn complete — all player-%d units activated (advance the round to reset)" % _solo_ai_slot())
-		return
+		return null
 	# Camera follows the acting unit so each activation is watchable (goal 001, F1).
 	if camera_pivot != null and camera_pivot.has_method("focus_on"):
 		var positions: Array = []
@@ -655,8 +678,17 @@ func _run_solo_ai_turn() -> void:
 				positions.append((m.node as Node3D).global_position)
 		if not positions.is_empty():
 			camera_pivot.focus_on(MoveIntent.anchor_of(positions))
-	# Narrate the decision + resolve shooting (goal 001 P3).
+	if radial_menu_controller != null:
+		radial_menu_controller._update_activated_markers(unit)
 	var report: Dictionary = solo_controller.last_report
+	# Shaken idle (OPR p.10): the unit spends its activation idle and recovers — clear via the radial seam
+	# (state + marker + MP broadcast) and skip movement narration / combat entirely.
+	if bool(report.get("idle_shaken", false)):
+		if unit.is_shaken and radial_menu_controller != null:
+			radial_menu_controller.card_toggle_shaken(unit)
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, "%s spends its activation idle — recovers from Shaken" % unit.get_name(), true)
+		return unit
 	var target: GameUnit = report.get("target")
 	if battle_log != null and target != null:
 		battle_log.log_event(BattleLog.Category.MOVEMENT, "%s %s (→ %s)" % [
@@ -666,11 +698,196 @@ func _run_solo_ai_turn() -> void:
 	if dangerous_models > 0:
 		await _run_ai_dangerous(unit, dangerous_models)
 	if unit.is_destroyed():
-		return
+		return unit
 	if bool(report.get("can_shoot", false)):
 		await _run_ai_shooting(report)
 	elif int(report.get("action", 0)) == AiDecision.Action.CHARGE:
 		await _run_ai_melee(report)
+	return unit
+
+
+# === Solo P2 — alternating activation + auto-game (goal 003 P2) ===
+
+## OPR alternating activation: each time the HUMAN activates a unit (via the radial menu), the AI answers
+## with exactly ONE activation. When the human side is exhausted, the AI keeps activating until its side is
+## done (OPR: the other side keeps going). Re-entry-safe: activations during a running AI chain queue as
+## pending replies. Inert while no solo game is engaged (no Solo toggle and no F11 yet).
+func _on_solo_human_activated(gu: GameUnit) -> void:
+	if not _solo_alternation_ready(gu):
+		return
+	_solo_pending_replies += 1
+	if _solo_ai_busy:
+		return
+	_solo_ai_busy = true
+	while _solo_pending_replies > 0:
+		_solo_pending_replies -= 1
+		if await _solo_activate_one_ai() == null:
+			_solo_pending_replies = 0   # AI side exhausted — no more replies owed this round
+			break
+	# Human side exhausted → the AI finishes its remaining activations (OPR alternation tail).
+	if solo_controller.eligible_units_for(solo_controller.human_slot).is_empty():
+		while await _solo_activate_one_ai() != null:
+			pass
+	_solo_ai_busy = false
+	await _solo_after_activation()
+
+
+## Whether a solo game is engaged (an army is marked for the AI, or F11 already built the controller).
+func _solo_alternation_active() -> bool:
+	return solo_controller != null or not solo_ai_slots.is_empty()
+
+
+## Gate for the alternation trigger: solo engaged, managers ready, and the activated unit is the HUMAN's.
+func _solo_alternation_ready(gu: GameUnit) -> bool:
+	if opr_army_manager == null or movement_range_controller == null:
+		return false
+	if not _solo_alternation_active():
+		return false
+	if gu == null or _solo_is_ai_unit(gu):
+		return false
+	_ensure_solo_controller()
+	return true
+
+
+## After any activation chain: when BOTH sides are out of eligible units the round is over — auto-seize
+## objectives, then advance the round (or end the game after SOLO_GAME_ROUNDS).
+func _solo_after_activation() -> void:
+	if solo_controller == null or _solo_ai_busy or not _solo_alternation_active():
+		return
+	if not solo_controller.eligible_units_for(solo_controller.human_slot).is_empty():
+		return
+	if not solo_controller.eligible_ai_units().is_empty():
+		return
+	await _solo_end_round()
+
+
+## Round end in a solo game: objectives seize/contest at round end (official rule), then either the
+## end-of-game summary (after SOLO_GAME_ROUNDS — the OPR standard match length) or the round advances
+## exactly like the manual Next-Round button (bookkeeping + visuals + MP broadcast). OPR alternates which
+## side OPENS a round: the AI opens the even rounds (round parity — stateless and save/load-proof).
+func _solo_end_round() -> void:
+	_solo_auto_seize()
+	if opr_army_manager.current_round >= SOLO_GAME_ROUNDS:
+		if not _solo_game_finished:
+			_solo_game_finished = true
+			_solo_show_game_summary()
+		return
+	opr_army_manager.advance_round()
+	_refresh_round_visuals()
+	if network_manager != null:
+		network_manager.broadcast_round_advance()
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "Round %d begins" % opr_army_manager.current_round, true)
+	if opr_army_manager.current_round % 2 == 0:
+		# The AI opens this round with one activation (and drains an already-empty human side).
+		_solo_ai_busy = true
+		await _solo_activate_one_ai()
+		if solo_controller.eligible_units_for(solo_controller.human_slot).is_empty():
+			while await _solo_activate_one_ai() != null:
+				pass
+		_solo_ai_busy = false
+		await _solo_after_activation()
+
+
+## Objective control at round end (goal 003 P2, official rule): every marker with exactly ONE side's
+## non-Shaken models within 3" is seized by (or stays with) that side; both sides near → contested/neutral;
+## nobody near → the owner persists. Pure logic in SoloController.seize_objectives; owners write through the
+## SAME seam as the manual radial pick (overlay + MP broadcast), which therefore stays a manual override.
+func _solo_auto_seize() -> void:
+	if terrain_overlay == null or opr_army_manager == null or solo_controller == null:
+		return
+	var objectives: Array = terrain_overlay.get_objectives()
+	if objectives.is_empty():
+		return
+	var owners: Array = []
+	for i in range(objectives.size()):
+		owners.append(terrain_overlay.get_objective_owner(i))
+	var infos: Array = []
+	for u in opr_army_manager.get_all_game_units():
+		var gu := u as GameUnit
+		if gu == null or gu.get_alive_count() <= 0:
+			continue
+		infos.append({"player": int(gu.unit_properties.get("player_id", 0)), "shaken": gu.is_shaken,
+			"positions": solo_controller.alive_positions(gu)})
+	var res: Dictionary = SoloController.seize_objectives(infos, objectives, owners)
+	for c in res.get("changes", []):
+		var idx: int = int((c as Dictionary).get("index", -1))
+		var owner: int = int((c as Dictionary).get("owner", 0))
+		terrain_overlay.set_objective_owner(idx, owner)
+		if network_manager != null:
+			network_manager.broadcast_objective_owner(idx, owner)
+		if battle_log != null:
+			if owner == 0:
+				battle_log.log_event(BattleLog.Category.GENERAL, "Objective %d contested — goes neutral" % (idx + 1), true)
+			else:
+				battle_log.log_event(BattleLog.Category.GENERAL, "Objective %d seized by %s" % [idx + 1, _solo_player_label(owner)], true)
+
+
+## Player label for logs/summary: "P<n> (<army>)" when the slot has an imported army, else "P<n>".
+func _solo_player_label(pid: int) -> String:
+	if opr_army_manager != null and opr_army_manager.armies.has(pid):
+		var army = opr_army_manager.armies[pid]
+		if army != null:
+			return "P%d (%s)" % [pid, str(army.name)]
+	return "P%d" % pid
+
+
+## End-of-game summary (goal 003 P2): after SOLO_GAME_ROUNDS the match ends — objectives held per side
+## decide the winner (OPR standard missions; with no markers on the table, surviving models break the tie).
+## A battle-log block + a results dialog; the table stays as-is (the Next-Round button still works for
+## anyone playing on).
+func _solo_show_game_summary() -> void:
+	var objectives: Array = terrain_overlay.get_objectives() if terrain_overlay != null else []
+	var ai_slot := _solo_ai_slot()
+	var ai_held := 0
+	var human_held := 0
+	var neutral := 0
+	for i in range(objectives.size()):
+		var o: int = terrain_overlay.get_objective_owner(i)
+		if o == 0:
+			neutral += 1
+		elif o == ai_slot:
+			ai_held += 1
+		else:
+			human_held += 1
+	var verdict: String
+	if objectives.is_empty():
+		# No markers on the table: fall back to surviving models (documented tie-break, not an OPR mission).
+		var ai_alive := _solo_side_alive(ai_slot)
+		var human_alive := _solo_total_alive() - ai_alive
+		verdict = "You win" if human_alive > ai_alive else ("The AI wins" if ai_alive > human_alive else "Draw")
+	else:
+		verdict = "You win" if human_held > ai_held else ("The AI wins" if ai_held > human_held else "Draw")
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "=== GAME OVER — %d rounds played ===" % SOLO_GAME_ROUNDS, true)
+		if not objectives.is_empty():
+			battle_log.log_event(BattleLog.Category.GENERAL, "Objectives — you: %d · AI: %d · neutral: %d" % [human_held, ai_held, neutral], true)
+		battle_log.log_event(BattleLog.Category.GENERAL, verdict, true)
+	var dlg := AcceptDialog.new()
+	dlg.title = "Game over"
+	var obj_block: String = ("Objectives held:\n  You: %d\n  AI: %d\n  Neutral: %d\n\n" % [human_held, ai_held, neutral]) \
+		if not objectives.is_empty() else "No objective markers were on the table.\n\n"
+	dlg.dialog_text = "%d rounds played.\n\n%s%s" % [SOLO_GAME_ROUNDS, obj_block, verdict]
+	dlg.confirmed.connect(dlg.queue_free)
+	dlg.canceled.connect(dlg.queue_free)
+	add_child(dlg)
+	dlg.popup_centered()
+
+
+func _solo_side_alive(pid: int) -> int:
+	var n := 0
+	for u in opr_army_manager.get_game_units_for_player(pid):
+		if u != null:
+			n += u.get_alive_count()
+	return n
+
+
+func _solo_total_alive() -> int:
+	var n := 0
+	for u in opr_army_manager.get_all_game_units():
+		if u != null:
+			n += u.get_alive_count()
+	return n
 
 
 ## The slot the Solo AI plays: the first designated army, else player 2 (M1 default).
@@ -689,6 +906,8 @@ func _ensure_solo_controller() -> void:
 	if solo_controller == null:
 		solo_controller = SoloController.new()
 		add_child(solo_controller)
+		_solo_pending_replies = 0
+		_solo_game_finished = false
 		var human_slot: int = 1 if ai_slot != 1 else 2
 		solo_controller.setup(opr_army_manager, network_manager, movement_range_controller, human_slot, ai_slot)
 		# Terrain line of sight for the shooting decision (unit-blocking LoS is a later refinement).
@@ -1960,8 +2179,13 @@ func _on_next_round() -> void:
 
 
 ## Advances the game round (OPR bookkeeping; clears all activations), refreshes
-## visuals, and syncs to remote peers so everyone shares the same round.
+## visuals, and syncs to remote peers so everyone shares the same round. In a solo
+## game the end-of-round objective seize runs first (goal 003 P2) — the manual
+## button stays a full override of the auto-advance.
 func _do_next_round() -> void:
+	if _solo_alternation_active():
+		_ensure_solo_controller()
+		_solo_auto_seize()
 	if opr_army_manager:
 		opr_army_manager.advance_round()
 	_refresh_round_visuals()
@@ -2471,6 +2695,8 @@ func _setup_battle_log() -> void:
 		# display name) via _on_remote_dice_rolled, which feeds _log_battle_dice; a second hook double-logged.
 	if radial_menu_controller != null and radial_menu_controller.has_signal("unit_activated"):
 		radial_menu_controller.unit_activated.connect(func(gu) -> void: _log_battle_activation(gu, false))
+		# Solo P2 alternating activation: the human's radial activation triggers ONE AI answer (goal 003 P2).
+		radial_menu_controller.unit_activated.connect(_on_solo_human_activated)
 
 
 func _log_battle_activation(gu, _remote: bool) -> void:
@@ -4900,7 +5126,9 @@ func _refresh_solo_panel() -> void:
 	if pids.is_empty():
 		return
 	var label := Label.new()
-	label.text = "Solo AI (F11):"
+	label.text = "Solo AI:"
+	label.tooltip_text = "Mark the army the AI controls. The AI answers each of your activations with one of its own (alternating activation); after %d rounds the game is scored. F11 runs the whole remaining AI side at once (debug)." % SOLO_GAME_ROUNDS
+	label.mouse_filter = Control.MOUSE_FILTER_STOP   # labels ignore the mouse by default — needed for the tooltip
 	label.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
 	solo_panel_box.add_child(label)
 	for pid in pids:
@@ -4923,6 +5151,7 @@ func _refresh_solo_panel() -> void:
 func _on_solo_ai_toggled(pressed: bool, player_id: int) -> void:
 	if pressed:
 		solo_ai_slots[player_id] = true
+		_solo_game_finished = false   # (re)designating an AI army starts a fresh solo match
 	else:
 		solo_ai_slots.erase(player_id)
 

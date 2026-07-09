@@ -30,6 +30,7 @@ func _run() -> void:
 		return
 	var mode := str(args[2]) if args.size() > 2 else "objectives"
 	var close := mode == "melee"
+	var autogame := mode == "autogame"
 	var data: Dictionary = JSON.parse_string(FileAccess.open(list_path, FileAccess.READ).get_as_text())
 	var specs := _parse_units(data)
 	print("=== SOLO-AI FIELD TEST — %s (%d units/side, seed %d, mode=%s) ===" % [str(data.get("name", "army")), specs.size(), seed_value, mode])
@@ -50,8 +51,11 @@ func _run() -> void:
 	root.add_child(solo)
 	solo.setup(army, null, null, 1, 2)
 	var objectives: Array = [] if close else [Vector3(-0.2, 0.0, 0.0), Vector3(0.2, 0.0, 0.0)]
+	var owners: Array = []
+	for _o in objectives:
+		owners.append(0)
 	solo.objectives_provider = func() -> Array: return objectives
-	solo.objective_owner_of = func(_i: int) -> int: return 0   # neutral → uncontrolled
+	solo.objective_owner_of = func(i: int) -> int: return int(owners[i]) if i < owners.size() else 0
 	solo.terrain_type_at = Callable(self, "_terrain_at")
 	solo.los_checker = func(_a: Vector3, _b: Vector3) -> bool: return true
 	# One midfield wall so a loose unit's straight rush is blocked → MovementPlanner steers around it.
@@ -60,6 +64,10 @@ func _run() -> void:
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
+
+	if autogame:
+		_run_autogame(solo, army, human, ai, objectives, owners, rng)
+		return
 
 	for round_no in range(1, 4):
 		army.current_round = round_no
@@ -79,6 +87,111 @@ func _run() -> void:
 
 	print("\n=== FIELD TEST COMPLETE — objectives held by AI: %d/%d ===" % [_ai_held(ai, human, objectives), objectives.size()])
 	quit(0)
+
+
+# ===================================================================================================
+# AUTOGAME (goal 003 P2): a COMPLETE 4-round match — the human side is simulated by scripted
+# activations (each human unit walks toward its nearest objective, mirroring a simple player), the AI
+# answers each with ONE activation (the in-game alternation contract), Shaken units idle-recover, the
+# exhausted side lets the other finish, objectives seize/contest at round end via the SAME pure
+# SoloController.seize_objectives main.gd runs, and the match is scored after round 4.
+# ===================================================================================================
+
+const AUTOGAME_ROUNDS := 4   # == main.gd SOLO_GAME_ROUNDS (OPR standard match length)
+
+
+func _run_autogame(solo: SoloController, army: OPRArmyManager, human: Array, ai: Array,
+		objectives: Array, owners: Array, rng: RandomNumberGenerator) -> void:
+	for round_no in range(1, AUTOGAME_ROUNDS + 1):
+		army.current_round = round_no
+		var ai_opens: bool = round_no % 2 == 0   # OPR: the opening side alternates (AI opens even rounds)
+		print("\n===== ROUND %d (%s opens) =====" % [round_no, "AI" if ai_opens else "You"])
+		if ai_opens:
+			_autogame_ai_step(solo, rng)
+		var guard := 0
+		while guard < 64:
+			guard += 1
+			var h := _autogame_human_step(solo, army, objectives)
+			var a := _autogame_ai_step(solo, rng)
+			if h == null and a == null:
+				break   # both sides exhausted — the round is over
+		# Round end: the SAME pure seize main.gd runs, against the real model positions.
+		var infos: Array = []
+		for u in (human + ai):
+			var gu := u as GameUnit
+			if gu.get_alive_count() <= 0:
+				continue
+			infos.append({"player": int(gu.unit_properties.get("player_id", 0)),
+				"shaken": gu.is_shaken, "positions": solo.alive_positions(gu)})
+		var res: Dictionary = SoloController.seize_objectives(infos, objectives, owners)
+		for i in range((res["owners"] as Array).size()):
+			owners[i] = (res["owners"] as Array)[i]
+		for c in res.get("changes", []):
+			var idx: int = int((c as Dictionary)["index"])
+			var owner: int = int((c as Dictionary)["owner"])
+			print("  ► Objective %d %s" % [idx + 1,
+				("contested — goes neutral" if owner == 0 else "seized by P%d" % owner)])
+		# Fatigue clears at round end (OPR); activations reset for the new round.
+		for u in (human + ai):
+			(u as GameUnit).is_activated = false
+			(u as GameUnit).is_fatigued = false
+	# Scoring (== main.gd _solo_show_game_summary): objectives held per side decide the winner.
+	var ai_held := 0
+	var human_held := 0
+	var neutral := 0
+	for o in owners:
+		match int(o):
+			0: neutral += 1
+			2: ai_held += 1
+			_: human_held += 1
+	var verdict := "You win" if human_held > ai_held else ("The AI wins" if ai_held > human_held else "Draw")
+	print("\n=== GAME OVER — %d rounds played ===" % AUTOGAME_ROUNDS)
+	print("Objectives — you: %d · AI: %d · neutral: %d" % [human_held, ai_held, neutral])
+	print(verdict)
+	quit(0)
+
+
+## One scripted HUMAN activation: the next eligible human unit advances 6" toward its nearest objective
+## (a simple stand-in player). Shaken human units idle-recover. Returns the unit or null when exhausted.
+func _autogame_human_step(solo: SoloController, army: OPRArmyManager, objectives: Array) -> GameUnit:
+	var eligible: Array = solo.eligible_units_for(solo.human_slot)
+	if eligible.is_empty():
+		return null
+	var unit := eligible[0] as GameUnit
+	unit.activate(army.current_round)
+	if unit.is_shaken:
+		unit.is_shaken = false
+		print("  • [You] %s idles — recovers from Shaken" % unit.get_name())
+		return unit
+	var centre := solo.unit_centre(unit)
+	var goal := centre
+	var best := INF
+	for o in objectives:
+		var d := MoveIntent.distance_inches(centre, o)
+		if d < best:
+			best = d
+			goal = o
+	var delta := MoveIntent.plan_unit_move(solo.alive_positions(unit), goal, 6.0)
+	for m in unit.get_alive_models():
+		var node: Node3D = (m as ModelInstance).node
+		if node != null:
+			node.global_position += delta
+	var c2 := solo.unit_centre(unit)
+	print("  • [You] %s advances toward the objective — now at (%.2f, %.2f)" % [unit.get_name(), c2.x, c2.z])
+	return unit
+
+
+## One AI activation via the real controller (alternation answer), traced. Null when the AI is exhausted.
+func _autogame_ai_step(solo: SoloController, rng: RandomNumberGenerator) -> GameUnit:
+	var unit: GameUnit = solo.activate_next_ai_unit()
+	if unit == null:
+		return null
+	if bool(solo.last_report.get("idle_shaken", false)):
+		unit.is_shaken = false   # main clears this via the radial seam; the harness clears it directly
+		print("  • [AI]  %s idles — recovers from Shaken" % unit.get_name())
+		return unit
+	_print_activation(solo, unit, rng)
+	return unit
 
 
 # ===================================================================================================

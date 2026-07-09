@@ -1,14 +1,15 @@
 class_name SoloController
 extends Node
-## Solo/AI Milestone 1 — the "walking skeleton". Drives one army (the AI slot) through the shared
-## TurnManager: on the AI's activation it picks an un-activated, non-destroyed unit, finds the nearest
-## alive human unit, and rigidly advances the whole unit toward it by its OPR Advance distance (clamped
-## to the movement allowance AND the table bounds), then marks it activated and hands the turn back.
+## Solo/AI controller — the in-game brain of the AI army (goal 001 + goal 003 P3). Each activation runs
+## the OFFICIAL OPR Solo & Co-Op v3.5.0 flow through the SAME pure modules the headless self-play sim
+## proved: the D6-section unit pick (Shaken last), AiArchetype + the objective-driven AiDecision.decide_solo
+## tree, terrain-aware movement (TerrainRules Difficult/Dangerous on real overlay data; MovementPlanner
+## steering around real walls for loose units), and a report main.gd resolves with REAL tray dice
+## (split fire / overlays / melee). Deployment + ambush arrival follow the official rules (AiDeployment).
 ##
-## M1 is MOVEMENT ONLY — no shooting / charging / dice / morale / behaviour tables / pathfinding
-## (deferred to M2+). It REUSES: MoveIntent (pure rigid-move planning), MovementRangeController (Advance
-## inches), ActivationSelector (which unit), TurnManager (alternating-activation engine), GameUnit /
-## OPRArmyManager (state), and NetworkManager.broadcast_move_batch / broadcast_unit_activation (sync).
+## It REUSES: MoveIntent (rigid-move planning), MovementRangeController (move bands), TurnManager
+## (alternating-activation engine), GameUnit / OPRArmyManager (state), and NetworkManager
+## broadcast_move_batch / broadcast_unit_activation (MP sync).
 
 signal ai_unit_activated(unit: GameUnit)   # emitted after the AI moves + activates a unit (for UI/log)
 
@@ -51,7 +52,6 @@ var objectives_provider: Callable = Callable()
 var objective_owner_of: Callable = Callable()
 
 var turn_manager: TurnManager = null
-var _selector: ActivationSelector = null
 var _rng := RandomNumberGenerator.new()
 
 
@@ -62,7 +62,6 @@ func setup(p_army_manager: OPRArmyManager, p_network_manager: Node, p_movement_r
 	movement_range = p_movement_range
 	human_slot = p_human_slot
 	ai_slot = p_ai_slot
-	_selector = ActivationSelector.new()
 	turn_manager = TurnManager.new()
 	add_child(turn_manager)
 	turn_manager.configure(human_slot, ai_slot, self)
@@ -112,16 +111,25 @@ func run_ai_turn() -> int:
 	return moved
 
 
-## Move + activate the next eligible AI unit (nearest human target, Advance distance). Returns the unit,
-## or null when the AI has no eligible units left.
+## Move + activate the next eligible AI unit. Selection is the official OPR Solo & Co-Op v3.5.0 pick:
+## D6 → table section (1–3 = west half, 4–6 = east half; empty section → the other), a random eligible
+## unit within it — with SHAKEN units always LAST (they activate last and stay idle to recover, p.2).
+## A Shaken unit's activation is an IDLE (no move/attack) reported as {"idle_shaken": true}; the caller
+## clears the Shaken state through its marker/broadcast seam. Returns the unit, or null when none left.
 func activate_next_ai_unit() -> GameUnit:
 	var eligible := eligible_ai_units()
 	if eligible.is_empty():
 		return null
-	var unit := _selector.select(eligible, _rng) as GameUnit
+	var unit := _select_ai_unit(eligible)
 	if unit == null:
 		return null
-	last_report = _act(unit)
+	if unit.is_shaken:
+		# OPR (p.10): a Shaken unit spends its activation idle, which lets it recover.
+		last_report = {"unit": unit, "target": null, "action": AiDecision.Action.HOLD,
+			"toward": AiDecision.Toward.ENEMY, "shoot": false, "can_shoot": false,
+			"dist_in": INF, "dangerous_models": 0, "idle_shaken": true}
+	else:
+		last_report = _act(unit)
 	mark_activated(unit)
 	if network_manager != null and network_manager.has_method("broadcast_unit_activation"):
 		network_manager.broadcast_unit_activation(unit)
@@ -132,13 +140,46 @@ func activate_next_ai_unit() -> GameUnit:
 
 
 func eligible_ai_units() -> Array:
+	return eligible_units_for(ai_slot)
+
+
+## Eligible (alive, not-yet-activated) units of any player slot — the round-over check reads both sides.
+func eligible_units_for(slot: int) -> Array:
 	var out: Array = []
 	if army_manager == null:
 		return out
-	for u in army_manager.get_game_units_for_player(ai_slot):
+	for u in army_manager.get_game_units_for_player(slot):
 		if is_eligible(u):
 			out.append(u)
 	return out
+
+
+## The official unit pick: Shaken last; then D6 → 2 table sections split along the AI's deployment edge
+## (west/east half by centre X), rotating to the other section when the rolled one has no eligible unit;
+## then a random eligible unit in that section (seeded _rng → reproducible).
+func _select_ai_unit(eligible: Array) -> GameUnit:
+	var fresh: Array = []
+	var shaken: Array = []
+	for u in eligible:
+		if (u as GameUnit).is_shaken:
+			shaken.append(u)
+		else:
+			fresh.append(u)
+	var pool: Array = fresh if not fresh.is_empty() else shaken
+	if pool.size() == 1:
+		return pool[0]
+	var west: Array = []
+	var east: Array = []
+	for u in pool:
+		if unit_centre(u).x < 0.0:
+			west.append(u)
+		else:
+			east.append(u)
+	var roll_west: bool = _rng.randi_range(1, 6) <= 3
+	var section: Array = west if roll_west else east
+	if section.is_empty():
+		section = east if roll_west else west   # rotate to the other section (rule: no eligible unit there)
+	return section[_rng.randi_range(0, section.size() - 1)]
 
 
 ## Nearest valid human unit to `ai_unit` (centre-to-centre), PREFERRING not-yet-activated targets — the
@@ -476,6 +517,46 @@ static func effective_attacks(base_attacks: int, alive: int, max_models: int) ->
 	if max_models <= 0:
 		return base_attacks
 	return maxi(0, int(round(float(base_attacks) * float(alive) / float(max_models))))
+
+
+## OPR objective control at ROUND END (Solo & Co-Op v3.5.0 p.6, mirrors SoloSim._seize_objectives): a marker
+## is seized by the ONE player with a non-Shaken unit model within 3"; models of two (or more) players within
+## 3" contest it → neutral (0); nobody near → the owner PERSISTS. Shaken units can neither seize nor contest.
+## Pure + deterministic (goal 003 P2 — the auto-seize the manual radial pick can still override).
+##   unit_infos : Array of {player: int, shaken: bool, positions: Array[Vector3] (alive models, metres)}
+##   objectives : Array[Vector3] marker world positions
+##   owners     : Array[int] current owner player ids (0 = neutral), same length as objectives
+## Returns {"owners": Array[int], "changes": Array of {index: int, owner: int}} (changes only where the
+## owner actually flipped — the caller logs + broadcasts exactly those).
+static func seize_objectives(unit_infos: Array, objectives: Array, owners: Array) -> Dictionary:
+	var new_owners: Array = []
+	var changes: Array = []
+	for i in range(objectives.size()):
+		var current: int = int(owners[i]) if i < owners.size() else 0
+		var near_players := {}
+		for info in unit_infos:
+			var d := info as Dictionary
+			if bool(d.get("shaken", false)):
+				continue   # Shaken units can neither seize nor contest
+			var pid: int = int(d.get("player", 0))
+			if near_players.has(pid):
+				continue
+			for p in d.get("positions", []):
+				# Inclusive 3" with a hair of float tolerance (~0.025 mm) so a model measured EXACTLY on the
+				# ring still counts — the metre→inch conversion is one ulp off at the boundary otherwise.
+				if MoveIntent.distance_inches(p, objectives[i]) <= OBJECTIVE_CONTROL_IN + 0.001:
+					near_players[pid] = true
+					break
+		var next: int = current
+		if near_players.size() == 1:
+			next = int(near_players.keys()[0])   # seized (or held) by the only side near
+		elif near_players.size() > 1:
+			next = 0                             # contested → neutral
+		# nobody near → owner persists
+		new_owners.append(next)
+		if next != current:
+			changes.append({"index": i, "owner": next})
+	return {"owners": new_owners, "changes": changes}
 
 
 ## OPR "Who Can Strike" (GF Advanced Rules v3.5.1 p.9, mirrors SoloSim._striking_models): count the striker's

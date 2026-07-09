@@ -166,3 +166,94 @@ func test_ai_rushes_toward_an_uncontrolled_objective_over_the_enemy() -> void:
 	# It rushes north onto the objective (clamped at the marker), NOT south toward the enemy.
 	assert_float(ai.models[0].node.global_position.z).is_equal_approx(0.3, 0.01)
 	assert_float(ai.models[0].node.global_position.x).is_equal_approx(0.5, 0.01)
+
+
+func test_shaken_ai_unit_idles_recovers_and_moves_nothing() -> void:
+	# OPR p.10 (goal 003 P2): a Shaken unit spends its activation idle. The controller reports idle_shaken
+	# (main clears the state via the radial seam), the unit does not move, and it counts as activated.
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	var ai := _unit(2, [Vector3(0.5, 0, 0)])
+	ai.is_shaken = true
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+
+	var moved := solo.activate_next_ai_unit()
+	assert_object(moved).is_equal(ai)
+	assert_bool(bool(solo.last_report.get("idle_shaken", false))).is_true()
+	assert_bool(ai.is_activated).is_true()
+	assert_float(ai.models[0].node.global_position.x).is_equal_approx(0.5, 0.0001)   # did not move
+
+
+func test_non_shaken_units_activate_before_shaken_ones() -> void:
+	# OPR Solo p.2: Shaken units activate LAST. With one fresh and one Shaken AI unit, the fresh one goes first.
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	var fresh := _unit(2, [Vector3(0.4, 0, 0)])
+	fresh.unit_id = "ai_fresh"
+	var shaken := _unit(2, [Vector3(0.3, 0, 0)])
+	shaken.unit_id = "ai_shaken"
+	shaken.is_shaken = true
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, fresh.unit_id: fresh, shaken.unit_id: shaken}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	assert_object(solo.activate_next_ai_unit()).is_equal(fresh)
+	assert_object(solo.activate_next_ai_unit()).is_equal(shaken)
+
+
+# === Objective auto-seize (goal 003 P2 — pure SoloController.seize_objectives) ===
+
+const IN3 := 3.0 * 0.0254   # the 3" control radius in metres
+
+
+func _info(player: int, positions: Array, shaken: bool = false) -> Dictionary:
+	return {"player": player, "shaken": shaken, "positions": positions}
+
+
+func test_seize_single_side_takes_the_marker() -> void:
+	var res := SoloController.seize_objectives(
+		[_info(1, [Vector3(0.02, 0, 0)])], [Vector3(0, 0, 0)], [0])
+	assert_array(res["owners"]).is_equal([1])
+	assert_int((res["changes"] as Array).size()).is_equal(1)
+
+
+func test_seize_respects_the_3in_boundary() -> void:
+	# Exactly 3" counts; just beyond does not (owner persists at neutral, no change entry).
+	var on_edge := SoloController.seize_objectives(
+		[_info(2, [Vector3(IN3, 0, 0)])], [Vector3(0, 0, 0)], [0])
+	assert_array(on_edge["owners"]).is_equal([2])
+	var beyond := SoloController.seize_objectives(
+		[_info(2, [Vector3(IN3 + 0.003, 0, 0)])], [Vector3(0, 0, 0)], [0])
+	assert_array(beyond["owners"]).is_equal([0])
+	assert_int((beyond["changes"] as Array).size()).is_equal(0)
+
+
+func test_seize_both_sides_near_contests_to_neutral() -> void:
+	var res := SoloController.seize_objectives(
+		[_info(1, [Vector3(0.02, 0, 0)]), _info(2, [Vector3(-0.02, 0, 0)])],
+		[Vector3(0, 0, 0)], [1])
+	assert_array(res["owners"]).is_equal([0])
+	assert_int((res["changes"] as Array).size()).is_equal(1)
+
+
+func test_seize_owner_persists_when_nobody_is_near() -> void:
+	var res := SoloController.seize_objectives(
+		[_info(1, [Vector3(1.0, 0, 0)])], [Vector3(0, 0, 0)], [2])
+	assert_array(res["owners"]).is_equal([2])
+	assert_int((res["changes"] as Array).size()).is_equal(0)
+
+
+func test_seize_shaken_units_neither_seize_nor_contest() -> void:
+	# A Shaken unit alone cannot seize; and it cannot contest the other side's seize either.
+	var alone := SoloController.seize_objectives(
+		[_info(1, [Vector3(0.02, 0, 0)], true)], [Vector3(0, 0, 0)], [0])
+	assert_array(alone["owners"]).is_equal([0])
+	var vs := SoloController.seize_objectives(
+		[_info(1, [Vector3(0.02, 0, 0)], true), _info(2, [Vector3(-0.02, 0, 0)])],
+		[Vector3(0, 0, 0)], [0])
+	assert_array(vs["owners"]).is_equal([2])
