@@ -207,7 +207,8 @@ The last brick for "playable solo v1". A solo game now RUNS ITSELF once an army 
 - **Alternating activation** (OPR-faithful): each time the human activates a unit via the radial menu
   (`unit_activated` seam), the AI answers with exactly ONE activation. An exhausted side lets the other
   finish (the OPR tail); re-entrant human activations queue as pending replies. The AI's unit pick is the
-  official D6 2-section roll (west/east half, rotate on empty, random within — seeded) with **Shaken last**;
+  official D6 2-section roll (west/east half, rotate on empty, random within — seedable; the field-test
+  harness seeds it for reproducible traces) with **Shaken last**;
   a Shaken AI unit spends its activation idle and recovers (state via the radial seam). **F11 is now the
   debug fallback**: it runs the whole remaining AI side at once.
 - **Round flow**: when both sides are out of eligible units the round ends automatically — objectives

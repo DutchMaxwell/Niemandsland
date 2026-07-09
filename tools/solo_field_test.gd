@@ -50,6 +50,7 @@ func _run() -> void:
 	var solo: SoloController = SoloController.new()
 	root.add_child(solo)
 	solo.setup(army, null, null, 1, 2)
+	solo._rng.seed = seed_value   # seed the D6-section unit pick so a trace is reproducible per seed
 	var objectives: Array = [] if close else [Vector3(-0.2, 0.0, 0.0), Vector3(0.2, 0.0, 0.0)]
 	var owners: Array = []
 	for _o in objectives:
