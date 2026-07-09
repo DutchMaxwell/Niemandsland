@@ -110,7 +110,9 @@ Before tagging:
   in-game version label and update checker derive from it (never hardcode versions in UI).
 - Move the `[Unreleased]` block in `CHANGELOG.md` under the new version heading and
   leave `[Unreleased]` empty.
-- **Bump the README status badge + status line** (`README.md`, top) to the new version.
+- **Bump the README status badge + status line** (`README.md`, top) and the
+  `**Version:**` line in `PROJECT_STATUS.md` to the new version (the two manual
+  version spots outside `project.godot`).
 - Update `docs/ROADMAP.md` — move shipped items to **Recently shipped** with PR links.
 - Sweep `docs/KNOWN_ISSUES.md` for entries the release fixed.
 
