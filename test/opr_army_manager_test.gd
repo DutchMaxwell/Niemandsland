@@ -1,9 +1,9 @@
 extends GdUnitTestSuite
-## Pure-logic tests for OPRArmyManager's model-building math: tough/scale, flying &
-## walker detection, oval long-axis orientation, and AABB measurement. The spawn /
-## tray / regiment-forming paths need the SceneTree + ObjectManager and are out of
-## scope. Already covered elsewhere: _compute_model_fit, model_base_long_mm,
-## round bookkeeping, _should_hover, buff_tokens_from_rules.
+## Pure-logic tests for OPRArmyManager's model-building math: tough/scale, walker /
+## mount detection, oval long-axis orientation, mount-vs-fuzzy model resolution,
+## Aircraft-only hover, and AABB measurement. The spawn / tray / regiment-forming
+## paths need the SceneTree + ObjectManager and are out of scope. Already covered
+## elsewhere: _compute_model_fit, model_base_long_mm, round bookkeeping, buff_tokens_from_rules.
 
 
 func _mgr() -> OPRArmyManager:
@@ -21,14 +21,13 @@ func test_calculate_model_scale() -> void:
 	assert_float(m._calculate_model_scale(12)).is_equal_approx(1.2155, 0.001)
 
 
-# ===== _is_flying_from_rules =====
+# ===== hover: only Aircraft lifts; Flying stands on its base (go-live) =====
 
-func test_is_flying_from_rules() -> void:
+func test_only_aircraft_lifts() -> void:
 	var m := _mgr()
-	assert_bool(m._is_flying_from_rules(["Flying", "Tough(3)"])).is_true()
-	assert_bool(m._is_flying_from_rules(["Flying(6)"])).is_true()
-	assert_bool(m._is_flying_from_rules(["Fast", "Strider"])).is_false()
-	assert_bool(m._is_flying_from_rules([])).is_false()
+	assert_float(m._hover_lift_m(["Aircraft"])).is_equal_approx(OPRArmyManager.AIRCRAFT_HOVER_M, 0.001)
+	assert_float(m._hover_lift_m(["Flying", "Tough(18)"])).is_equal_approx(0.0, 0.001)  # Flying no longer floats
+	assert_float(m._hover_lift_m(["Fast"])).is_equal_approx(0.0, 0.001)
 
 
 # ===== _is_walker (case-insensitive substring) =====
@@ -38,6 +37,18 @@ func test_is_walker() -> void:
 	assert_bool(m._is_walker("Battle Walker")).is_true()
 	assert_bool(m._is_walker("WALKER PRIME")).is_true()
 	assert_bool(m._is_walker("Battle Brothers")).is_false()
+
+
+# ===== _model_faces_crosswise: a MOUNT is never crosswise (sits lengthwise like a vehicle) =====
+
+func test_mount_faces_lengthwise_not_crosswise() -> void:
+	var m := _mgr()
+	# A foot walker faces crosswise (quer); a non-walker foot model runs lengthwise (vehicle-style).
+	assert_bool(m._model_faces_crosswise("Battle Walker", false)).is_true()
+	assert_bool(m._model_faces_crosswise("Royal Champion", false)).is_false()
+	# A MOUNT overrides the walker heuristic → never crosswise, so a snake / chariot sits lengthwise.
+	assert_bool(m._model_faces_crosswise("Royal Champion", true)).is_false()
+	assert_bool(m._model_faces_crosswise("Battle Walker", true)).is_false()
 
 
 # ===== _get_tough_value_from_rules (string + dict entries) =====
@@ -287,3 +298,78 @@ func test_find_mount_glb_no_keyword_stays_on_foot() -> void:
 func test_find_mount_glb_null_library_is_empty() -> void:
 	var m: OPRArmyManager = auto_free(OPRArmyManager.new())  # no model_library wired
 	assert_str(m._find_mount_glb_name("Skeleton Beast", "mummified_undead")).is_equal("")
+
+
+# ===== _labels_with_mount + _resolve_carrier_model: mount is VARIANT-resolved, fuzzy is the fallback =====
+# Go-live: a mount upgrade contributes a slug like any weapon (folded into the carrier model 0), so a
+# composed mount bake `<hero>#<weapon>+<mountslug>` resolves via the variant path. The fuzzy faction-mount
+# GLB is used ONLY when no variant key matches (keeps GF bikes + factions without composed bakes working).
+
+# Composed mount bakes present: the Royal Champion#greatweapon+steed variant exists AND the fuzzy steed.
+const _VARIANT_LIB: String = """{
+	"version": 1, "base_url": "",
+	"models": {
+		"mummified_undead/royal champion": {"url": "a.glb", "sha256": "a", "size": 1},
+		"mummified_undead/royal champion#greatweapon+steed": {"url": "b.glb", "sha256": "b", "size": 1},
+		"mummified_undead/skeletal steed": {"url": "c.glb", "sha256": "c", "size": 1}
+	}
+}"""
+
+# No composed bakes: only the base hero + the fuzzy steed mount (a faction without composed mount bakes).
+const _NO_VARIANT_LIB: String = """{
+	"version": 1, "base_url": "",
+	"models": {
+		"mummified_undead/royal champion": {"url": "a.glb", "sha256": "a", "size": 1},
+		"mummified_undead/skeletal steed": {"url": "c.glb", "sha256": "c", "size": 1}
+	}
+}"""
+
+
+func _mgr_with_variant_lib(manifest: String) -> OPRArmyManager:
+	# The ModelLibrary must be in the tree so _ready() loads the SHIPPED label_slug_map.json (which maps
+	# "skeletal steed" -> steed); apply_manifest_text then replaces the model index with the synthetic set.
+	var m: OPRArmyManager = auto_free(OPRArmyManager.new())
+	var lib: ModelLibrary = ModelLibrary.new()
+	add_child(lib)
+	auto_free(lib)
+	lib.apply_manifest_text(manifest)
+	m.model_library = lib
+	return m
+
+
+func test_labels_with_mount_folds_into_carrier_only() -> void:
+	var per: Array = [["Great Weapon"], ["Hand Weapon"]]
+	var out: Array = OPRArmyManager._labels_with_mount(per, "Skeletal Steed")
+	assert_array(out[0]).contains(["Skeletal Steed"])   # carrier (model 0) gains the mount slug source
+	assert_array(out[1]).is_equal(["Hand Weapon"])       # other models untouched
+	assert_array(per[0]).is_equal(["Great Weapon"])      # input array is not mutated
+	# Mountless: a no-op, byte-unchanged.
+	assert_array(OPRArmyManager._labels_with_mount(per, "")).is_equal(per)
+
+
+func test_carrier_variant_wins_over_fuzzy_mount() -> void:
+	var m := _mgr_with_variant_lib(_VARIANT_LIB)
+	# Royal Champion (Great Weapon) on a Skeletal Steed: the mount folds into the carrier labels, so the
+	# composed bake resolves and WINS over the (also-present) fuzzy steed mount.
+	var labels: Array = OPRArmyManager._labels_with_mount([["Great Weapon"]], "Skeletal Steed")
+	var fuzzy: String = m._find_mount_glb_name("Skeletal Steed", "mummified_undead")
+	assert_str(fuzzy).is_equal("skeletal steed")  # the fuzzy fallback is available…
+	assert_str(m._resolve_carrier_model("Royal Champion", labels[0], "mummified_undead", fuzzy)) \
+		.is_equal("Royal Champion#greatweapon+steed")  # …but the composed variant wins
+
+
+func test_carrier_missing_variant_falls_back_to_fuzzy() -> void:
+	var m := _mgr_with_variant_lib(_NO_VARIANT_LIB)
+	# Same list, faction WITHOUT the composed bake → no variant key matches → the fuzzy steed mount is used.
+	var labels: Array = OPRArmyManager._labels_with_mount([["Great Weapon"]], "Skeletal Steed")
+	var fuzzy: String = m._find_mount_glb_name("Skeletal Steed", "mummified_undead")
+	assert_str(m._resolve_carrier_model("Royal Champion", labels[0], "mummified_undead", fuzzy)) \
+		.is_equal("skeletal steed")
+
+
+func test_no_mount_carrier_resolution_unaffected() -> void:
+	var m := _mgr_with_variant_lib(_VARIANT_LIB)
+	# A mountless model (carrier_mount_glb ""): folding is a no-op and, with no `#greatweapon` bake, the
+	# weapon-only variant misses → "" (base model). The mount path never touches an unmounted unit.
+	var labels: Array = OPRArmyManager._labels_with_mount([["Great Weapon"]], "")
+	assert_str(m._resolve_carrier_model("Royal Champion", labels[0], "mummified_undead", "")).is_equal("")

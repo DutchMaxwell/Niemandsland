@@ -98,6 +98,20 @@ func test_variant_slug_default_weapon_yields_no_slug() -> void:
 	assert_str(lib.variant_slug([])).is_equal("")
 
 
+func test_variant_slug_mummified_mount_lines() -> void:
+	# Mount GAIN names (AF book uid t-sIke2snonFSL6Q v3.5.3) each contribute a mount slug, so a mounted
+	# hero resolves to a composed bake `<hero>#<weapon>+<mountslug>` via the same variant path as a weapon.
+	var lib := _lib()
+	assert_str(lib.variant_slug(["Royal Beast"])).is_equal("beast")
+	assert_str(lib.variant_slug(["Skeletal Steed"])).is_equal("steed")
+	assert_str(lib.variant_slug(["Royal Snake"])).is_equal("snake")
+	assert_str(lib.variant_slug(["Royal Chariot"])).is_equal("chariot")
+	assert_str(lib.variant_slug(["War Sphinx"])).is_equal("sphinx")
+	assert_str(lib.variant_slug(["Skeleton Beast"])).is_equal("flyingbeast")
+	# Weapon + mount fold into one sorted key (matches the composed bake naming).
+	assert_str(lib.variant_slug(["Great Weapon", "Skeletal Steed"])).is_equal("greatweapon+steed")
+
+
 # ===== find_faction_model_matching: mount-model specificity (synthetic manifests) =====
 
 const _MOUNT_MANIFEST: String = """{
