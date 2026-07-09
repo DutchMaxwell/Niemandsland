@@ -30,10 +30,19 @@ planned and where ideas go. For what already works see
   27-check two-instance release test drove out five real bugs before tagging. Next: **feedback-driven**
   toward the **MP-first Beta** (see Next); the **Solo / Co-Op AI** (OPR's official ruleset) is in
   field-testing on `feat/solo-ai`; **autosave + save-migration** is the set 0.3.9 candidate. _S_
-- **Solo / Co-Op AI** — the maintainer's next major implementation target (2026-06-30). Follows OPR's
+- **Solo / Co-Op AI** — the maintainer's major implementation target (2026-06-30), following OPR's
   official **Solo & Co-Op Rules v3.5.0** (deterministic per-archetype decision trees, with a utility
-  tie-break; semi-manual combat first, engine-agnostic foundation). Full design + phased plan in
-  [`SOLO_AI_PLAN.md`](SOLO_AI_PLAN.md). On branch `feat/solo-ai`. _L_
+  tie-break). **Playable Solo v1 is assembled** on `feat/solo-ai` (PR [#122](../../pull/122)): the
+  fairness-proven sim brain wired into the real game, alternating activation, objective auto-seize and
+  4-round scoring — maintainer field test pending before merge. Full design + phased plan in
+  [`SOLO_AI_PLAN.md`](SOLO_AI_PLAN.md). _L_
+- **Post-tag on `main` (unreleased):** the loose-model **rotate-to-face-cursor** community fix (Zach H.,
+  Discord) — holding R now aims each selected loose model at the cursor instead of the old
+  hold-and-spin-until-release — landed after the tag ([#114](../../pull/114)) and ships with the next
+  release. _S_
+- **Mummified Undead modular-sockets pilot — go-live pending.** The offline producer side is **done**
+  (114 pilot socket keys generated on the Model-Forge pipeline); the **game-side integration + a
+  maintainer QA pass** remain before it goes live on R2. _M_
 
 ## 📋 Next (post-Alpha — Beta + alpha-feedback driven)
 
@@ -49,14 +58,28 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   45° arc quadrants on the selected unit (p.5), live rotation-degrees readout, unit-card for trays.
   **Remaining:** display-only melee aids (two-front-rows highlight, full-rows counter,
   flank/rear morale modifier hint) — not yet built. Beta. _L_
-- **MP reconnect — 3+ player hardening** — mirror the host's peer→slot table to guests (3+-player
-  avatar/cursor colour agreement after a reconnect), a shared `slot→palette` helper (army bases match
-  presence colour at slot ≥ 5), an import-await timeout, and restoring a regiment tray's serialized
-  `network_id`. 2-player reconnect is shipped + soak-validated; this is feedback-driven. _S_
+- **MP reconnect — 3+ player hardening** — **mostly shipped in `0.3.8.0-alpha`
+  ([#105](../../pull/105)):** the host peer→slot-table mirror (3+-player avatar/cursor colour agreement
+  after a reconnect), the shared wrapping `slot→palette` helper (army bases match presence colour at
+  slot ≥ 5), and the regiment tray's serialized `network_id` all landed. **Remaining:** an
+  import-await timeout. 2-player reconnect is shipped + soak-validated; this is feedback-driven. _S_
 - **UX polish (feedback-driven)** — Measure-on-pickup → snap-back (live ghost preview, ESC to return)
   · Coherency visualizer (sharpen — highlight models outside X″ of a neighbour) · contextual control
   hints (hover an object → its hotkeys). Deeper post-Alpha resilience / accessibility / onboarding
   items live in **Ideas**. _S–M_
+- **Solo / Co-Op AI — to merge-ready (`feat/solo-ai`)** — the in-game `SoloController` and the headless
+  self-play sim share OPR's official ruleset; remaining rule/wiring work before merge: melee "only
+  models **within 2″** strike"; **split-fire** + the weapon-rule overlays (**AP** → target the best
+  Defense, **Deadly**, **Takedown**, **Relentless**) + **Medics**; **P3** — wire the sim's
+  `AiDecision` / `TerrainRules` / 1″-spacing modules into the real `SoloController` (and fix the
+  `_solo_attack_groups` dead-models-still-attack bug there — already fixed in the sim); **P2** in-game
+  auto-game (in-game alternation + scoring). **Objective re-allocation** (units re-target when the
+  holders of a second objective die) is a **difficulty/tuning layer**, not a correctness fix. _L_
+- **Solo movement overhaul (design pending — planned with the coordinator)** — (a) treat walls as
+  **Impassable movement blockers**, reusing `terrain_overlay.gd`'s wall segments (`_wall_cells` /
+  `_last_wall_segments`); (b) replace the rigid-grid formation move with **individual models moving in
+  coherency**, reusing `coherency_checker.gd` (1″ / 9″). Approach (steering-first vs full grid-A*)
+  undecided. _L_
 
 ### Alpha-feedback batch (accepted 2026-07-01) — sorted Now vs soon
 
@@ -78,16 +101,12 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   a **fantasy world** environment. Needs a fantasy skybox/environment asset. _M_
 
 **🧊 Larger (coming weeks — design/UI/rules):**
-- **Bottom army unit-card dock — ✅ SHIPPED** (#84 tab/strip foundation · D-series #94 card-feel + #95
-  click instrumentation + #97 CardVisual/CardFace design): a bottom tab slides up a playing-card fan of
-  compact unit cards (live stats, hover/select haptics, deal-in sound); a presented card flies in on
-  selection, carrying the Tactical-HUD face (stats, weapons block, rules, actions). UI-click occlusion
-  fixed so dock clicks no longer fall through to table deselection.
-- **Return / revive units & models — ✅ SHIPPED** (#87–#91): revive a whole destroyed unit or individual
-  destroyed models, on top of tray-parking (grey parked-boundary tokens) + MP kill/revive sync.
 - **Change Daemons death-cascade** — Change Horrors spawn a new (smaller) unit when destroyed, which
-  can itself cascade on death. Faction-specific, builds on Return/revive. Example list:
-  `army-forge.onepagerules.com/share?id=JqJOxSFl4ooA` (Wormhole — Daemons of Change). _L_
+  can itself cascade on death. Faction-specific, builds on the shipped Return/revive (#87–#91). Example
+  list: `army-forge.onepagerules.com/share?id=JqJOxSFl4ooA` (Wormhole — Daemons of Change). _L_
+
+> _(The **bottom army unit-card dock** (#84–#103) and **Return / revive units & models** (#87–#91)
+> that used to head this list shipped in `0.3.8.0-alpha` — see **Recently shipped**.)_
 
 ## 🧊 Ideas (icebox — captured, not committed)
 
@@ -182,6 +201,13 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   so players take turns asynchronously; today's answer is save-file exchange + the battle log. We are
   host-authoritative with a dumb relay, so a "persistent room" means either a headless host client or
   relay-side state — both heavy. Community-requested (DE Discord, 2026-07-05). _XL, far future_
+- **"Bake-Ladder" — high→low bake + normal-map re-optimization (experiment)** — bake each on-table
+  GLB's high-poly detail into a low-poly mesh + normal map: a candidate **3–4× on-table geometry
+  reduction** with no visible quality loss. Pipeline-side (Model-Forge) experiment, not yet validated. _M_
+- **Runtime LOD for CDN-loaded GLBs** — Godot's automatic mesh LOD is generated at *import* time, so it
+  does **not** apply to GLBs loaded at runtime from the CDN; a hand-rolled distance-based LOD (or a
+  pre-baked LOD chain carried in the manifest) would cut the draw cost of large armies. Depends on the
+  asset pipeline emitting the LOD levels. _M_
 - _Community feedback from the alpha lands here first._
 
 ## ✅ Recently shipped
