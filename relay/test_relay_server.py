@@ -36,12 +36,33 @@ async def relay():
         "127.0.0.1",
         0,  # Random available port
         max_size=MAX_MESSAGE_SIZE,
+        process_request=server.process_request,  # serve GET /stats like production
     )
     port = ws_server.sockets[0].getsockname()[1]
     url = f"ws://127.0.0.1:{port}"
     yield server, url
     ws_server.close()
     await ws_server.wait_closed()
+
+
+async def http_get(url: str, path: str = "/stats") -> tuple:
+    """Minimal HTTP/1.1 GET against the relay's port (the same listener serves WS + /stats).
+
+    Returns (status_line, headers_text, body_text). Dependency-free: raw asyncio streams.
+    """
+    host_port = url.split("://", 1)[1]
+    host, port = host_port.split(":")
+    reader, writer = await asyncio.open_connection(host, int(port))
+    writer.write(
+        f"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n".encode()
+    )
+    await writer.drain()
+    raw = await asyncio.wait_for(reader.read(), timeout=2.0)
+    writer.close()
+    head, _, body = raw.partition(b"\r\n\r\n")
+    head_text = head.decode("utf-8", "replace")
+    status_line, _, headers_text = head_text.partition("\r\n")
+    return status_line, headers_text, body.decode("utf-8", "replace")
 
 
 async def create_room(url: str) -> tuple:
@@ -837,3 +858,267 @@ class TestStats:
         await host_ws.close()
         await guest_ws.close()
         await probe.close()
+
+
+# ============================================================================
+# Extended aggregate stats: games, join failures, lifetimes, /stats, log line
+# ============================================================================
+
+
+class TestAggregateStats:
+    """The added aggregates: games (>=2 peers), join-failure reasons, room-lifetime + peers-per-room
+    histograms, the GET /stats HTTP endpoint, and the periodic STATS log line."""
+
+    def test_new_counters_and_dicts_start_empty(self):
+        from relay_server import Stats, JOIN_FAILURE_REASONS, ROOM_LIFETIME_BUCKETS
+        s = Stats()
+        assert s.games_played == 0
+        assert s.join_failures == {r: 0 for r in JOIN_FAILURE_REASONS}
+        assert s.room_lifetime_buckets == {b: 0 for b in ROOM_LIFETIME_BUCKETS}
+        assert set(s.peers_per_room) == {str(n) for n in range(1, MAX_PEERS_PER_ROOM + 1)}
+        assert all(v == 0 for v in s.peers_per_room.values())
+
+    def test_join_failed_ignores_unknown_reason(self):
+        from relay_server import Stats
+        s = Stats()
+        s.join_failed("room_full")
+        s.join_failed("not-a-real-reason")  # must be dropped, never trusted into the dict
+        assert s.join_failures["room_full"] == 1
+        assert "not-a-real-reason" not in s.join_failures
+
+    def test_room_closed_buckets_lifetime_and_peak_peers(self):
+        from relay_server import Stats
+        s = Stats()
+        s.room_closed(5 * 60, peak_peers=2)        # <10min
+        s.room_closed(30 * 60, peak_peers=4)       # 10-45min
+        s.room_closed(200 * 60, peak_peers=99)     # >120min, peak clamped to MAX
+        assert s.room_lifetime_buckets["lt_10min"] == 1
+        assert s.room_lifetime_buckets["10_45min"] == 1
+        assert s.room_lifetime_buckets["gt_120min"] == 1
+        assert s.peers_per_room["2"] == 1
+        assert s.peers_per_room["4"] == 1
+        assert s.peers_per_room[str(MAX_PEERS_PER_ROOM)] == 1
+
+    def test_dict_histograms_persist_across_restart(self, tmp_path):
+        from relay_server import Stats
+        path = str(tmp_path / "stats.json")
+        s = Stats(path)
+        s.join_failed("room_not_found")
+        s.room_closed(90 * 60, peak_peers=3)  # 45-120min
+        s2 = Stats(path)
+        assert s2.join_failures["room_not_found"] == 1
+        assert s2.room_lifetime_buckets["45_120min"] == 1
+        assert s2.peers_per_room["3"] == 1
+
+    async def test_game_counted_once_when_room_reaches_two_peers(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        assert server.stats.games_played == 0  # solo room is not a game yet
+        guest_ws, _ = await join_room(url, code)
+        await host_ws.recv()
+        assert server.stats.games_played == 1  # reached 2 peers
+        guest2_ws, _ = await join_room(url, code)
+        await host_ws.recv()
+        await guest_ws.recv()
+        assert server.stats.games_played == 1  # a third peer must NOT re-count the same game
+        await host_ws.close()
+        await guest_ws.close()
+        await guest2_ws.close()
+
+    async def test_join_failure_room_not_found_counted(self, relay):
+        server, url = relay
+        ws = await websockets.connect(url)
+        await ws.send(json.dumps({"type": "join_room", "code": "ZZZZZZ"}))
+        resp = json.loads(await ws.recv())
+        assert resp["type"] == "error"
+        assert server.stats.join_failures["room_not_found"] == 1
+        await ws.close()
+
+    async def test_join_failure_room_full_counted(self, relay):
+        server, url = relay
+        import relay_server
+        old = relay_server.MAX_PEERS_PER_ROOM
+        relay_server.MAX_PEERS_PER_ROOM = 1  # host alone already fills the room
+        try:
+            host_ws, code, _ = await create_room(url)
+            ws = await websockets.connect(url)
+            await ws.send(json.dumps({"type": "join_room", "code": code}))
+            resp = json.loads(await ws.recv())
+            assert resp["type"] == "error"
+            assert "full" in resp["message"].lower()
+            assert server.stats.join_failures["room_full"] == 1
+            await ws.close()
+            await host_ws.close()
+        finally:
+            relay_server.MAX_PEERS_PER_ROOM = old
+
+    async def test_join_failure_server_full_counted(self, relay):
+        server, url = relay
+        import relay_server
+        old = relay_server.MAX_ROOMS
+        relay_server.MAX_ROOMS = 1
+        try:
+            host_ws, _, _ = await create_room(url)
+            ws = await websockets.connect(url)
+            await ws.send(json.dumps({"type": "create_room"}))
+            resp = json.loads(await ws.recv())
+            assert resp["type"] == "error"
+            assert server.stats.join_failures["server_full"] == 1
+            await ws.close()
+            await host_ws.close()
+        finally:
+            relay_server.MAX_ROOMS = old
+
+    async def test_room_close_records_lifetime_and_peers_histogram(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest_ws, _ = await join_room(url, code)  # peak peers = 2
+        await host_ws.recv()
+        await guest_ws.recv()
+        # Guest leaves (room preserved, host remains), then host leaves with no guests -> room closed.
+        await guest_ws.close()
+        await asyncio.sleep(0.05)
+        await host_ws.recv()  # peer_disconnected
+        await host_ws.close()
+        await asyncio.sleep(0.1)
+        assert code not in server.rooms
+        assert server.stats.room_lifetime_buckets["lt_10min"] == 1  # short-lived test room
+        assert server.stats.peers_per_room["2"] == 1                # peaked at 2 peers
+
+    async def test_get_stats_includes_new_aggregates(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest_ws, _ = await join_room(url, code)
+        probe = await websockets.connect(url)
+        await probe.send(json.dumps({"type": "get_stats"}))
+        reply = json.loads(await probe.recv())
+        assert reply["games_played"] == 1
+        assert isinstance(reply["join_failures"], dict)
+        assert isinstance(reply["room_lifetime_buckets"], dict)
+        assert isinstance(reply["peers_per_room"], dict)
+        await host_ws.close()
+        await guest_ws.close()
+        await probe.close()
+
+    async def test_http_stats_endpoint_returns_aggregate_json(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest_ws, _ = await join_room(url, code)
+        status, headers, body = await http_get(url, "/stats")
+        assert "200" in status
+        assert "application/json" in headers.lower()
+        data = json.loads(body)
+        assert data["rooms_created"] == 1
+        assert data["games_played"] == 1
+        assert data["rooms_open"] == 1
+        assert data["peers_connected"] == 2
+        assert "join_failures" in data and "peers_per_room" in data
+        # No PII leaks: the payload is only the known aggregate keys (no ip/code/token/name).
+        safe_keys = {
+            "rooms_open", "peers_connected", "rooms_created", "peer_connections",
+            "server_starts", "games_played", "peak_concurrent_peers", "peak_concurrent_rooms",
+            "join_failures", "room_lifetime_buckets", "peers_per_room", "first_seen", "last_updated",
+        }
+        assert set(data) <= safe_keys
+        await host_ws.close()
+        await guest_ws.close()
+
+    async def test_http_stats_matches_get_stats_ws(self, relay):
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        _status, _headers, body = await http_get(url, "/stats")
+        http_data = json.loads(body)
+        probe = await websockets.connect(url)
+        await probe.send(json.dumps({"type": "get_stats"}))
+        ws_reply = json.loads(await probe.recv())
+        ws_reply.pop("type")
+        # last_updated is a wall-clock field that can differ by a save between the two reads.
+        http_data.pop("last_updated", None)
+        ws_reply.pop("last_updated", None)
+        assert http_data == ws_reply
+        await host_ws.close()
+        await probe.close()
+
+    async def test_http_non_stats_path_does_not_serve_stats(self, relay):
+        server, url = relay
+        status, _headers, _body = await http_get(url, "/")
+        # A bare GET / is not a WS upgrade and is not /stats: it must NOT return our 200 JSON.
+        assert "200" not in status
+
+    def test_log_stats_line_emits_parseable_stats(self, caplog):
+        import logging
+        import stats_digest
+        server = RelayServer()
+        server.stats.boot()
+        with caplog.at_level(logging.INFO, logger="relay"):
+            server.log_stats_line()
+        stats_lines = [
+            r.getMessage() for r in caplog.records if r.getMessage().startswith("STATS ")
+        ]
+        assert len(stats_lines) == 1
+        records = list(stats_digest.iter_stats_records(stats_lines))
+        assert len(records) == 1
+        assert records[0]["server_starts"] == 1
+        assert "ts" in records[0]
+
+
+# ============================================================================
+# stats_digest: parse captured STATS log lines into a weekly digest
+# ============================================================================
+
+
+def _stats_log_line(ts, **counters):
+    """Build a relay-style STATS log line (timestamp/level prefix + JSON) for digest tests."""
+    payload = {"ts": ts, "last_updated": ts, "first_seen": "2026-06-20T10:00:00+00:00", **counters}
+    return f"2026-07-05 06:00:00,000 INFO STATS {json.dumps(payload, sort_keys=True)}"
+
+
+class TestStatsDigest:
+    """stats_digest parses only well-formed STATS lines and renders weekly totals/peaks/trends."""
+
+    def test_iter_skips_non_stats_and_malformed_lines(self):
+        import stats_digest
+        lines = [
+            "2026-07-05 INFO Room ABCDEF created by 1.2.3.4",   # ordinary log, no marker
+            "2026-07-05 INFO STATS not-json",                   # marker but no JSON
+            "2026-07-05 INFO STATS {\"no\": \"timestamp\"}",   # JSON but no ts/last_updated
+            _stats_log_line("2026-07-02T09:00:00+00:00", rooms_created=5),
+        ]
+        records = list(stats_digest.iter_stats_records(lines))
+        assert len(records) == 1
+        assert records[0]["rooms_created"] == 5
+
+    def test_render_groups_by_week_with_totals_and_deltas(self):
+        import stats_digest
+        lines = [
+            _stats_log_line(
+                "2026-06-30T09:00:00+00:00", rooms_created=10, games_played=6,
+                peer_connections=30, server_starts=3,
+                peak_concurrent_rooms=3, peak_concurrent_peers=5,
+                join_failures={"room_full": 1, "room_not_found": 2},
+                room_lifetime_buckets={"lt_10min": 3, "10_45min": 3},
+                peers_per_room={"2": 4, "3": 2},
+            ),
+            _stats_log_line(
+                "2026-07-06T18:00:00+00:00", rooms_created=25, games_played=17,
+                peer_connections=70, server_starts=4,
+                peak_concurrent_rooms=4, peak_concurrent_peers=7,
+                join_failures={"room_full": 3, "room_not_found": 5},
+                room_lifetime_buckets={"lt_10min": 6, "10_45min": 8},
+                peers_per_room={"2": 9, "3": 5},
+            ),
+        ]
+        records = list(stats_digest.iter_stats_records(lines))
+        out = stats_digest.render_digest(records, source="relay.log")
+        assert "2026-W27" in out      # week of 2026-06-30
+        assert "2026-W28" in out      # week of 2026-07-06
+        assert "+15" in out           # rooms created delta 25-10 in the second week
+        assert "+11" in out           # games played delta 17-6
+        assert "total 25" in out
+        assert "Totals (latest snapshot)" in out
+        assert "peak rooms / peers : 4 / 7" in out
+
+    def test_render_empty_is_safe(self):
+        import stats_digest
+        out = stats_digest.render_digest([], source="empty.log")
+        assert "No STATS records found." in out
