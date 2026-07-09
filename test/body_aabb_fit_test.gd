@@ -103,6 +103,38 @@ func test_get_model_aabb_flat_model_unchanged() -> void:
 	assert_float(aabb.size.y).is_equal_approx(3.0, 0.001)
 
 
+# Rider-constant mount fit (contract v1.2): a composed mount carries the RIDER as the `body` node.
+# HEIGHT scales by the rider (like infantry) but GROUNDING is on the MOUNT's feet (the combined min-y,
+# below the rider), so the mount stands on its base instead of the rider being buried down onto it.
+func test_mount_scales_by_rider_but_grounds_on_mount_feet() -> void:
+	var mgr := _mgr()
+	# Combined y in [-2.0, 3.0]: the mount's feet at -2.0, the rider's head at 3.0. Rider `body` node y in
+	# [1.0, 2.0] (it sits on the mount). Tiny x/z so the rider HEIGHT (not the footprint) binds the scale.
+	var combined := AABB(Vector3(-0.0005, -2.0, -0.0005), Vector3(0.001, 5.0, 0.001))
+	var rider := AABB(Vector3(-0.0005, 1.0, -0.0005), Vector3(0.001, 1.0, 0.001))
+	var fit: Dictionary = mgr._compute_model_fit(combined, 40, 0, 0.0, -1, false, rider, true)
+	var scale: float = float(fit["scale"])
+	# HEIGHT scales by the RIDER (1.0u) toward the 40mm target, like infantry → rider ≈ 40mm tall.
+	assert_float(rider.size.y * scale).is_equal_approx(0.040, 0.002)
+	# GROUNDING on the MOUNT's feet (combined min-y -2.0), NOT the rider body min-y (1.0): the whole
+	# model's lowest point sits on the base top (0.003). Grounding on the rider would bury the mount.
+	assert_float(float(fit["y_offset"]) + combined.position.y * scale).is_equal_approx(0.003, 0.0005)
+	# The rider does NOT touch the base (its min-y sits well above the base top).
+	assert_bool(float(fit["y_offset"]) + rider.position.y * scale > 0.003).is_true()
+
+
+# Contrast: the SAME combined+rider as INFANTRY (is_mount=false) grounds on the body's feet (rider min-y),
+# so a mount flag is what flips grounding from body-feet to mount-feet.
+func test_infantry_body_grounding_differs_from_mount() -> void:
+	var mgr := _mgr()
+	var combined := AABB(Vector3(-0.0005, -2.0, -0.0005), Vector3(0.001, 5.0, 0.001))
+	var body := AABB(Vector3(-0.0005, 1.0, -0.0005), Vector3(0.001, 1.0, 0.001))
+	var fit: Dictionary = mgr._compute_model_fit(combined, 40, 0, 0.0, -1, false, body, false)
+	var scale: float = float(fit["scale"])
+	# Infantry grounds on the BODY min-y (1.0) → the body's feet sit on the base top.
+	assert_float(float(fit["y_offset"]) + body.position.y * scale).is_equal_approx(0.003, 0.0005)
+
+
 # Pure fit math: an OVERSIZED mount (5.8u, like the skeleton beast) is scaled DOWN to fit its oval base
 # exactly (tighter/short axis binds at OVAL_FOOTPRINT_RATIO), and its feet are grounded on the base top.
 func test_oversized_mount_fits_base_and_is_grounded() -> void:

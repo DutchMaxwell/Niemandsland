@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## Tests for OPRArmyManager._compute_model_fit - scales a GLB so it fits its base:
 ## height target ~ base long side, footprint capped at 125% of the base long
-## side, the smaller factor wins; Flying units get an extra vertical lift.
+## side, the smaller factor wins; Aircraft get a caller-supplied flight-stand lift.
 
 
 func _mgr() -> OPRArmyManager:
@@ -32,16 +32,18 @@ func test_height_target_for_tall_thin_models() -> void:
 	assert_float(aabb.size.y * fit.scale).is_equal_approx(0.032, 0.0005)
 
 
-func test_flying_adds_lift() -> void:
+func test_caller_supplied_lift_adds_offset() -> void:
+	# A caller-supplied lift (Aircraft flight stand) shifts the y_offset and reported height by exactly
+	# that lift. Flying no longer produces a lift — the caller passes 0 for it (see opr_item_grants_test).
 	var mgr := _mgr()
 	var aabb := AABB(Vector3(-0.05, 0.0, -0.05), Vector3(0.1, 0.1, 0.1))
 	var base_long_mm := 40
-	var expected_lift: float = base_long_mm * OPRArmyManager.FLYING_HOVER_RATIO * 0.001
+	var expected_lift: float = OPRArmyManager.AIRCRAFT_HOVER_M
 	var grounded = mgr._compute_model_fit(aabb, base_long_mm, 0, 0.0)
-	var flying = mgr._compute_model_fit(aabb, base_long_mm, 0, expected_lift)  # caller-supplied lift
+	var lifted = mgr._compute_model_fit(aabb, base_long_mm, 0, expected_lift)  # caller-supplied lift
 
-	assert_float(flying.y_offset - grounded.y_offset).is_equal_approx(expected_lift, 0.0001)
-	assert_float(flying.height - grounded.height).is_equal_approx(expected_lift, 0.0001)
+	assert_float(lifted.y_offset - grounded.y_offset).is_equal_approx(expected_lift, 0.0001)
+	assert_float(lifted.height - grounded.height).is_equal_approx(expected_lift, 0.0001)
 
 
 func test_degenerate_aabb_returns_fallback() -> void:
