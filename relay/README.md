@@ -21,6 +21,31 @@ join with the room code.
 - **Host reconnect** preserves the room briefly and lets ONLY the host's identity token reclaim peer 1
   (a guest can't seize the host slot); see [`HOST_RECONNECT.md`](HOST_RECONNECT.md).
 
+## Usage stats (aggregate, no PII)
+
+The relay counts how much it is used — the project keeps **no client telemetry**, so the relay's own
+room metadata is the only usage signal. Everything is **anonymous and aggregate**: totals, peaks and
+coarse histograms only — **never** IPs, room codes or player identities.
+
+Counters (in `Stats`): rooms created, games played (rooms that reached ≥2 peers), peer connections,
+server starts, join failures by reason (`room_full` / `room_not_found` / `server_full` /
+`already_in_room` / `bad_code_format`), peak concurrent rooms & peers, a room-lifetime histogram
+(`<10m` / `10–45m` / `45–120m` / `>120m`) and a peak-peers-per-room histogram. They persist to the
+Fly volume (`RELAY_STATS_PATH`) so they survive scale-to-zero.
+
+Three ways to read them, all returning the same blob:
+
+- **`GET /stats`** — public JSON over HTTPS (same listener as the WebSocket; no auth, like
+  `list_rooms`): `curl https://niemandsland-relay.fly.dev/stats`.
+- **`get_stats`** WebSocket control message — used by `relay_stats.py` (`python relay_stats.py`).
+- **Hourly `STATS` log line** — one JSON line at INFO, prefixed `STATS`, captured by Fly's log
+  stream so history survives restarts. `stats_digest.py` turns a captured log into a weekly digest:
+
+  ```bash
+  fly logs -a niemandsland-relay > relay.log
+  python stats_digest.py relay.log
+  ```
+
 ## Run locally
 
 ```bash
@@ -55,7 +80,9 @@ fly deploy
 
 | File | Purpose |
 |---|---|
-| `relay_server.py` | The relay (asyncio + `websockets`) |
+| `relay_server.py` | The relay (asyncio + `websockets`) — routing, rooms, `Stats`, `/stats` |
+| `relay_stats.py` | CLI: query a relay's aggregate stats over WebSocket and print them |
+| `stats_digest.py` | Parse captured `STATS` log lines into a weekly usage digest |
 | `requirements.txt` | `websockets>=12.0` |
 | `Dockerfile` | `python:3.11-slim`, runs `relay_server.py --port 8765` |
 | `fly.toml` | Fly.io deployment config |

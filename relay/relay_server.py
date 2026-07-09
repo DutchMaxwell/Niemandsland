@@ -15,6 +15,8 @@ Security features:
 
 import argparse
 import asyncio
+import email.utils
+import http
 import json
 import logging
 import os
@@ -28,6 +30,8 @@ from typing import Optional
 
 import websockets
 from websockets.asyncio.server import ServerConnection
+from websockets.datastructures import Headers
+from websockets.http11 import Request, Response
 
 # --- Configuration ---
 MAX_ROOMS = 100
@@ -55,8 +59,40 @@ CODE_LENGTH = 6  # 30^6 = 729,000,000 possibilities
 HOST_REJOIN_WINDOW_SECONDS = 20  # keep a room alive this long after the host drops, so they can rejoin
 GUEST_REJOIN_WINDOW_SECONDS = 20  # a returning guest reclaims its old peer_id within this window
 
+# How often to emit the aggregate STATS log line (one JSON line, prefixed "STATS", at INFO). Fly's
+# log stream persists these across scale-to-zero restarts, so `stats_digest.py` can reconstruct a
+# usage history from captured logs alone — no database, no PII. Hourly keeps the log volume tiny.
+STATS_LOG_INTERVAL_SECONDS = 3600
+
+# The only join/create reject reasons the relay itself can raise (there is NO version handshake here —
+# cross-version play is blocked client-side; see _handle_join_room). Each is an anonymous bucket in
+# Stats.join_failures — a count of "why couldn't a player get into a game", never who or which room.
+JOIN_FAILURE_REASONS = (
+    "room_full",        # room already at MAX_PEERS_PER_ROOM
+    "room_not_found",   # code did not match any live room
+    "server_full",      # relay already at MAX_ROOMS
+    "already_in_room",  # a connection tried to create/join twice
+    "bad_code_format",  # join code was not a string
+)
+
+# Room-lifetime histogram buckets (minutes): a short-lived room is a mis-click or a failed connect;
+# a long one is a real game. Aggregate-only — a duration, never a start/end timestamp of any player.
+ROOM_LIFETIME_BUCKETS = ("lt_10min", "10_45min", "45_120min", "gt_120min")
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("relay")
+
+
+def _lifetime_bucket(seconds: float) -> str:
+    """Classify a room's total lifetime into a coarse duration bucket (see ROOM_LIFETIME_BUCKETS)."""
+    minutes = seconds / 60.0
+    if minutes < 10.0:
+        return "lt_10min"
+    if minutes < 45.0:
+        return "10_45min"
+    if minutes < 120.0:
+        return "45_120min"
+    return "gt_120min"
 
 
 @dataclass
@@ -89,6 +125,10 @@ class Room:
     # token -> (peer_id, disconnected_at): a recently-departed guest, so a rejoin within the
     # window can reclaim its OLD peer_id (stable transport id across a drop).
     departed: dict = field(default_factory=dict)
+    # Aggregate-stats bookkeeping (no PII): the most peers ever concurrently in this room, and
+    # whether it has already been counted as a "game" (reached >=2 peers). Both feed Stats at close.
+    peak_peers: int = 1
+    counted_as_game: bool = False
 
 
 def _utc_now_iso() -> str:
@@ -96,23 +136,31 @@ def _utc_now_iso() -> str:
 
 
 class Stats:
-    """Anonymous, aggregate relay-usage counters — totals + peaks only, NEVER IPs, room codes or
-    player names — so 'how much is it used' is visible without identifying anyone. Persisted to
-    `path` (a Fly volume) so the counts survive the scale-to-zero machine stops; with an empty
-    path it stays in-memory only (local/dev/test). Persistence failures degrade gracefully to
+    """Anonymous, aggregate relay-usage counters — totals, peaks and coarse histograms only, NEVER
+    IPs, room codes or player names — so 'how much is it used' is visible without identifying anyone.
+    Persisted to `path` (a Fly volume) so the counts survive the scale-to-zero machine stops; with an
+    empty path it stays in-memory only (local/dev/test). Persistence failures degrade gracefully to
     in-memory and never crash the relay.
     """
 
-    FIELDS = ("rooms_created", "peer_connections", "server_starts",
-              "peak_concurrent_peers", "peak_concurrent_rooms")
+    # Scalar running totals / peaks.
+    SCALAR_FIELDS = ("rooms_created", "peer_connections", "server_starts", "games_played",
+                     "peak_concurrent_peers", "peak_concurrent_rooms")
+    # Bucketed histograms (dict of fixed, non-identifying keys -> count).
+    DICT_FIELDS = ("join_failures", "room_lifetime_buckets", "peers_per_room")
 
     def __init__(self, path: str = ""):
         self.path = path
         self.rooms_created = 0
         self.peer_connections = 0
         self.server_starts = 0
+        self.games_played = 0  # rooms that reached >=2 peers (someone actually played)
         self.peak_concurrent_peers = 0
         self.peak_concurrent_rooms = 0
+        self.join_failures = {reason: 0 for reason in JOIN_FAILURE_REASONS}
+        self.room_lifetime_buckets = {bucket: 0 for bucket in ROOM_LIFETIME_BUCKETS}
+        # Peak-concurrent-peers per closed room, keyed "1".."MAX_PEERS_PER_ROOM".
+        self.peers_per_room = {str(n): 0 for n in range(1, MAX_PEERS_PER_ROOM + 1)}
         self.first_seen = ""
         self.last_updated = ""
         self._load()
@@ -123,8 +171,19 @@ class Stats:
         try:
             with open(self.path) as f:
                 data = json.load(f)
-            for key in self.FIELDS:
+            for key in self.SCALAR_FIELDS:
                 setattr(self, key, int(data.get(key, 0)))
+            for key in self.DICT_FIELDS:
+                saved = data.get(key, {})
+                if not isinstance(saved, dict):
+                    continue
+                target = getattr(self, key)
+                for bucket, count in saved.items():
+                    if bucket in target:  # only known buckets — ignore anything unexpected
+                        try:
+                            target[bucket] = int(count)
+                        except (ValueError, TypeError):
+                            pass
             self.first_seen = str(data.get("first_seen", ""))
         except (OSError, ValueError, TypeError):
             pass  # first run / unreadable / corrupt -> start fresh, never crash the relay
@@ -158,8 +217,29 @@ class Stats:
         self.peak_concurrent_peers = max(self.peak_concurrent_peers, peers_connected)
         self._save()
 
+    def game_started(self) -> None:
+        """Count a room the first time it reaches >=2 peers (a real, played game)."""
+        self.games_played += 1
+        self._save()
+
+    def join_failed(self, reason: str) -> None:
+        """Count a create/join rejection by reason (see JOIN_FAILURE_REASONS). Unknown reasons are
+        ignored rather than trusted into the dict, so no caller can smuggle a free-form string in."""
+        if reason in self.join_failures:
+            self.join_failures[reason] += 1
+            self._save()
+
+    def room_closed(self, lifetime_seconds: float, peak_peers: int) -> None:
+        """Record a torn-down room's lifetime bucket + its peak-concurrent-peers histogram entry."""
+        self.room_lifetime_buckets[_lifetime_bucket(lifetime_seconds)] += 1
+        key = str(max(1, min(peak_peers, MAX_PEERS_PER_ROOM)))
+        self.peers_per_room[key] += 1
+        self._save()
+
     def snapshot(self) -> dict:
-        snap = {key: getattr(self, key) for key in self.FIELDS}
+        snap = {key: getattr(self, key) for key in self.SCALAR_FIELDS}
+        for key in self.DICT_FIELDS:
+            snap[key] = dict(getattr(self, key))
         snap["first_seen"] = self.first_seen
         snap["last_updated"] = self.last_updated
         return snap
@@ -257,6 +337,7 @@ class RelayServer:
         elif msg_type == "join_room":
             code = msg.get("code", "")
             if not isinstance(code, str):
+                self.stats.join_failed("bad_code_format")
                 await self._send_error(websocket, "Invalid code format")
                 return
             token = msg.get("token", "")
@@ -287,11 +368,13 @@ class RelayServer:
         """
         # Check if this connection already has a room
         if websocket in self.connections:
+            self.stats.join_failed("already_in_room")
             await self._send_error(websocket, "Already in a room")
             return
 
         # Check room limit
         if len(self.rooms) >= MAX_ROOMS:
+            self.stats.join_failed("server_full")
             await self._send_error(websocket, "Server full, try again later")
             return
 
@@ -326,6 +409,7 @@ class RelayServer:
         """Join an existing room by code."""
         # Check if this connection already has a room
         if websocket in self.connections:
+            self.stats.join_failed("already_in_room")
             await self._send_error(websocket, "Already in a room")
             return
 
@@ -334,6 +418,7 @@ class RelayServer:
 
         room = self.rooms.get(code)
         if not room:
+            self.stats.join_failed("room_not_found")
             await self._send_error(websocket, "Room not found")
             return
 
@@ -364,6 +449,7 @@ class RelayServer:
             room.peers[1] = peer
             self.connections[websocket] = peer
             self.stats.peer_connected(len(self.connections))
+            self._note_room_membership(room)
             await websocket.send(json.dumps({
                 "type": "room_rejoined_host",
                 "peer_id": 1,
@@ -392,6 +478,7 @@ class RelayServer:
             return
 
         if len(room.peers) >= MAX_PEERS_PER_ROOM:
+            self.stats.join_failed("room_full")
             await self._send_error(websocket, "Room is full")
             return
 
@@ -424,6 +511,7 @@ class RelayServer:
         room.peers[peer_id] = peer
         self.connections[websocket] = peer
         self.stats.peer_connected(len(self.connections))
+        self._note_room_membership(room)
 
         # Notify the joiner
         await websocket.send(json.dumps({
@@ -476,12 +564,60 @@ class RelayServer:
         """Reply with anonymous, aggregate usage stats (NO IPs / room codes / player names) — the
         persisted totals + peaks plus the live open-rooms / connected-peers counts. Works on a
         connection that has not joined a room (like list_rooms)."""
-        await websocket.send(json.dumps({
-            "type": "stats",
+        await websocket.send(json.dumps({"type": "stats", **self._stats_payload()}))
+
+    def _stats_payload(self) -> dict:
+        """The public aggregate-stats blob (NO PII) shared by the get_stats WS reply, the GET /stats
+        HTTP endpoint and the periodic STATS log line: the persisted totals / peaks / histograms plus
+        the live open-rooms and connected-peers counts."""
+        return {
             "rooms_open": len(self.rooms),
             "peers_connected": len(self.connections),
             **self.stats.snapshot(),
-        }))
+        }
+
+    def _note_room_membership(self, room: Room) -> None:
+        """Track a room's peak concurrent peers and count it as a 'game' the first time it reaches
+        >=2 peers — i.e. someone actually played, not just an abandoned solo room."""
+        count = len(room.peers)
+        if count > room.peak_peers:
+            room.peak_peers = count
+        if count >= 2 and not room.counted_as_game:
+            room.counted_as_game = True
+            self.stats.game_started()
+
+    def _record_room_closed(self, room: Room) -> None:
+        """Fold a torn-down room into the lifetime + peers-per-room histograms (aggregate, no PII)."""
+        self.stats.room_closed(time.monotonic() - room.created_at, room.peak_peers)
+
+    def process_request(self, connection: ServerConnection, request: Request) -> Optional[Response]:
+        """Serve GET /stats as public aggregate JSON; every other path falls through to the normal
+        WebSocket handshake (return None). No auth — exactly like the list_rooms / get_stats control
+        messages, the payload is anonymous aggregates that are safe to expose."""
+        path = request.path.split("?", 1)[0].rstrip("/")
+        if path != "/stats":
+            return None
+        body = (json.dumps(self._stats_payload(), sort_keys=True) + "\n").encode()
+        headers = Headers([
+            ("Date", email.utils.formatdate(usegmt=True)),
+            ("Connection", "close"),
+            ("Content-Length", str(len(body))),
+            ("Content-Type", "application/json"),
+        ])
+        return Response(http.HTTPStatus.OK.value, http.HTTPStatus.OK.phrase, headers, body)
+
+    def log_stats_line(self) -> None:
+        """Emit the aggregate stats as one INFO line prefixed 'STATS' + a compact JSON object with a
+        UTC timestamp. Fly persists these across scale-to-zero restarts, so stats_digest.py can
+        reconstruct a usage history from captured logs alone. Aggregate-only — never any PII."""
+        payload = {"ts": _utc_now_iso(), **self._stats_payload()}
+        logger.info("STATS %s", json.dumps(payload, sort_keys=True))
+
+    async def log_stats_periodically(self) -> None:
+        """Background task: emit the STATS log line every STATS_LOG_INTERVAL_SECONDS."""
+        while True:
+            await asyncio.sleep(STATS_LOG_INTERVAL_SECONDS)
+            self.log_stats_line()
 
     def _enqueue(self, peer: Peer, data) -> None:
         """Queue an outbound frame for a peer WITHOUT ever awaiting its socket. A single per-peer
@@ -609,6 +745,7 @@ class RelayServer:
                         pass
             else:
                 logger.info("Host left room %s, no guests waiting, closing room", peer.room_code)
+                self._record_room_closed(room)
                 del self.rooms[peer.room_code]
         else:
             # Guest disconnected - notify remaining peers
@@ -623,6 +760,7 @@ class RelayServer:
 
             # If room is empty, clean it up
             if not room.peers:
+                self._record_room_closed(room)
                 del self.rooms[peer.room_code]
 
         logger.info("Peer %d disconnected from room %s", peer.peer_id, peer.room_code)
@@ -660,6 +798,7 @@ class RelayServer:
                             await peer.websocket.close(4408, "Room expired")
                         except websockets.exceptions.ConnectionClosed:
                             pass
+                    self._record_room_closed(room)
                     del self.rooms[code]
 
     async def check_heartbeats(self) -> None:
@@ -708,6 +847,7 @@ class RelayServer:
                     await guest.websocket.close(4000, "Host did not return")
                 except websockets.exceptions.ConnectionClosed:
                     pass
+            self._record_room_closed(room)
             del self.rooms[code]
         return abandoned
 
@@ -717,6 +857,7 @@ async def main(host: str = "0.0.0.0", port: int = 8765,
     """Start the relay server."""
     server = RelayServer()
     server.stats.boot()  # count this start (≈ one session, since the relay scales to zero)
+    server.log_stats_line()  # baseline STATS line, so a fresh machine has one record immediately
 
     ssl_context = None
     if certfile and keyfile:
@@ -731,18 +872,21 @@ async def main(host: str = "0.0.0.0", port: int = 8765,
         max_size=MAX_MESSAGE_SIZE,
         ping_interval=20,
         ping_timeout=30,   # Raised for GLB load times (main thread blocks during R2 downloads)
+        process_request=server.process_request,  # serve GET /stats as public aggregate JSON
     ) as ws_server:
         logger.info("Relay server started on %s:%d", host, port)
 
         # Start background tasks
         cleanup_task = asyncio.create_task(server.cleanup_expired_rooms())
         heartbeat_task = asyncio.create_task(server.check_heartbeats())
+        stats_log_task = asyncio.create_task(server.log_stats_periodically())
 
         try:
             await asyncio.Future()  # Run forever
         finally:
             cleanup_task.cancel()
             heartbeat_task.cancel()
+            stats_log_task.cancel()
 
 
 if __name__ == "__main__":
