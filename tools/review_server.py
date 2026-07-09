@@ -17,6 +17,13 @@ VOTES_PATH = os.path.expanduser("~/agent-bus/solo-review-votes.jsonl")
 app = Flask(__name__)
 
 
+@app.after_request
+def _no_store(resp):
+    # The page and trace change between review rounds; never let a phone serve a stale cached copy.
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 @app.route("/trace.json")
 def trace():
     with open(TRACE_PATH) as f:
