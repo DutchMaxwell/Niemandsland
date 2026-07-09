@@ -832,12 +832,12 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array)
 		var attacks: int = SoloController.effective_attacks(int(profile.get("attacks", 0)), int(shot["alive"]), int(shot["max"]))
 		if attacks <= 0:
 			continue
-		var name: String = (shot["member"] as GameUnit).get_name()
-		var faces: Array = await _solo_tray_roll(attacks, quality, "AI (%s)" % name)
+		var shooter_name: String = (shot["member"] as GameUnit).get_name()
+		var faces: Array = await _solo_tray_roll(attacks, quality, "AI (%s)" % shooter_name)
 		var hits: int = _solo_hits(faces, quality, profile, dist_in)
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s — %d hit%s" % [
-				name, str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")], true)
+				shooter_name, str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")], true)
 		if hits <= 0:
 			continue
 		var save_faces: Array = await _solo_prompt_saves(attacker, target, str(profile.get("name", "?")), hits, defense, int(profile.get("ap", 0)))
