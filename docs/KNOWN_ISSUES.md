@@ -32,9 +32,10 @@ not there yet and what to watch for. The full done / in-progress / planned break
 
 ## Platforms
 
-- **Windows and Linux** are the supported Alpha targets.
-- **macOS and the in-browser (web) build are post-Alpha.** A macOS export preset exists but is
-  untested/unsigned (expect Gatekeeper friction); the web build is parked.
+- **Windows, Linux and macOS** builds ship with every release.
+- **macOS is ad-hoc signed but not notarized** (no Apple Developer account): first launch needs
+  **right-click → Open**, or the one-time `xattr -dr com.apple.quarantine` fallback — see the
+  README's macOS note. The in-browser (web) build is parked (post-Alpha).
 
 ## Smaller things to know
 

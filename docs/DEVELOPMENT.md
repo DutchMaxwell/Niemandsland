@@ -101,6 +101,21 @@ the relay pytest (`relay-tests` job) on Godot 4.6 — keep it in sync with `proj
 version. The timing-sensitive headless 2-client soak + fault matrix run in
 `.github/workflows/mp-nightly.yml` (nightly + on demand) to keep the push path fast and non-flaky.
 
+## Release checklist
+
+A release is cut by pushing a `v*` tag (the CI release job builds + publishes it).
+Before tagging:
+
+- Bump `application/config/version` in `project.godot` — the **single source**; the
+  in-game version label and update checker derive from it (never hardcode versions in UI).
+- Move the `[Unreleased]` block in `CHANGELOG.md` under the new version heading and
+  leave `[Unreleased]` empty.
+- **Bump the README status badge + status line** (`README.md`, top) and the
+  `**Version:**` line in `PROJECT_STATUS.md` to the new version (the two manual
+  version spots outside `project.godot`).
+- Update `docs/ROADMAP.md` — move shipped items to **Recently shipped** with PR links.
+- Sweep `docs/KNOWN_ISSUES.md` for entries the release fixed.
+
 ## Secrets
 
 This repo contains no secrets or hardcoded credentials. The separate asset-pipeline
