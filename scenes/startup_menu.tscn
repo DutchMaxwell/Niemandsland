@@ -96,6 +96,12 @@ layout_mode = 2
 text = "START NEW BATTLE"
 script = ExtResource("3_listbtn")
 
+[node name="TutorialBtn" type="Button" parent="SafeArea/Columns/LeftColumn/MenuButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "TUTORIAL"
+script = ExtResource("3_listbtn")
+
 [node name="HostOnlineBtn" type="Button" parent="SafeArea/Columns/LeftColumn/MenuButtons"]
 unique_name_in_owner = true
 layout_mode = 2

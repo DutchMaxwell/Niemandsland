@@ -44,6 +44,7 @@ const BROWSE_TIMEOUT_S := 8.0
 @onready var menu_buttons: VBoxContainer = %MenuButtons
 @onready var continue_btn: MenuListButton = %ContinueBtn
 @onready var start_battle_btn: MenuListButton = %StartBattleBtn
+@onready var tutorial_btn: MenuListButton = %TutorialBtn
 @onready var host_online_btn: MenuListButton = %HostOnlineBtn
 @onready var join_online_btn: MenuListButton = %JoinOnlineBtn
 @onready var browse_online_btn: MenuListButton = %BrowseOnlineBtn
@@ -110,6 +111,7 @@ func _ready() -> void:
 
 	continue_btn.pressed.connect(_on_continue_pressed)
 	start_battle_btn.pressed.connect(_on_start_battle_pressed)
+	tutorial_btn.pressed.connect(_on_tutorial_pressed)
 	host_online_btn.pressed.connect(_on_host_online_pressed)
 	join_online_btn.pressed.connect(_on_join_online_pressed)
 	browse_online_btn.pressed.connect(_on_browse_online_pressed)
@@ -240,6 +242,13 @@ func _on_continue_pressed() -> void:
 
 
 func _on_start_battle_pressed() -> void:
+	_transition_to_game()
+
+
+## Launch the guided T0 tutorial: set the runtime-only flag (read-and-cleared in main.gd,
+## never persisted to project.godot, mirroring harness_mode) and open the prepared table.
+func _on_tutorial_pressed() -> void:
+	ProjectSettings.set_setting("niemandsland/tutorial_mode", true)
 	_transition_to_game()
 
 

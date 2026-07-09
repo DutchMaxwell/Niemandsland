@@ -188,6 +188,8 @@ var unit_card: UnitCard = null
 var unit_dock: UnitDock = null
 var battle_log: BattleLog = null              # narrative event log (collector)
 var battle_log_panel: BattleLogPanel = null   # collapsible HUD panel (top-centre, collapsed by default)
+var _tutorial_mode: bool = false              # T0 guided tutorial: set from the startup-menu flag, drives _start_tutorial
+var _tutorial_director: TutorialDirector = null
 var _host_free_move_check: CheckButton = null   # "Move all models" — host-operated, session-wide
 var _room_code_button: Button = null          # permanent room-code display in the left bar (click = copy)
 var _session_room_code: String = ""
@@ -593,7 +595,15 @@ func _ready() -> void:
 	# Headless MP test harness (test/mp/): skip the interactive table-size chooser AND the
 	# cinematic intro and drop straight onto a live, RPC-capable table. Inert in normal play.
 	var harness_mode: bool = ProjectSettings.get_setting("niemandsland/harness_mode", false)
-	if harness_mode:
+	# Guided tutorial (startup menu -> "Tutorial"): reuse the harness seam — skip the chooser
+	# and intro and open a prepared table — then run the TutorialDirector once the UI is up.
+	# Read-and-clear so a later "Start New Battle" in the same process is unaffected. The flag
+	# is set at runtime only (never persisted to project.godot), exactly like harness_mode.
+	var tutorial_mode: bool = ProjectSettings.get_setting("niemandsland/tutorial_mode", false)
+	if tutorial_mode:
+		ProjectSettings.set_setting("niemandsland/tutorial_mode", false)
+		_tutorial_mode = true
+	if harness_mode or tutorial_mode:
 		if not joining_client:
 			_set_table_size(DEFAULT_TABLE_SIZE_FEET)
 		call_deferred("_on_intro_finished")
@@ -3793,6 +3803,45 @@ func _on_intro_finished() -> void:
 		if is_instance_valid(cinematic_intro):
 			cinematic_intro.queue_free()
 			cinematic_intro = null
+
+	# Guided tutorial: the UI is now revealed, so start the director on the live table.
+	if _tutorial_mode:
+		call_deferred("_start_tutorial")
+
+
+## ============================================================================
+## Guided Tutorial (T0 walking skeleton)
+## ============================================================================
+
+## Place one small unit on the prepared table and hand control to the TutorialDirector,
+## which runs the event-gated select -> move -> roll flow. Only called in tutorial mode.
+func _start_tutorial() -> void:
+	if is_instance_valid(_tutorial_director):
+		return  # already running (guard against a double call_deferred)
+	if object_manager == null:
+		return
+	# One simple selectable miniature near the middle of the table (no MP broadcast — solo).
+	# object_manager is typed Node3D here, so annotate the return type explicitly.
+	var unit: Node3D = object_manager.spawn_miniature(Vector3.ZERO, false)
+	var dice_panel := $UI/HUD/DiceRollerPanel as Control
+	_tutorial_director = TutorialDirector.new()
+	_tutorial_director.name = "TutorialDirector"
+	add_child(_tutorial_director)
+	_tutorial_director.tutorial_finished.connect(_on_tutorial_finished)
+	_tutorial_director.setup(object_manager, camera_pivot, unit, dice_roller_control, dice_panel)
+	_tutorial_director.begin()
+
+
+## The tutorial ended (completed all three steps, or the player skipped). Celebrate on a
+## clean finish, then free the director (which frees its overlay) — the player stays on the
+## live table either way.
+func _on_tutorial_finished(completed: bool) -> void:
+	if completed:
+		_show_toast("🎉 Tutorial complete — the table is yours. Play on!")
+	_tutorial_mode = false
+	if is_instance_valid(_tutorial_director):
+		_tutorial_director.queue_free()
+	_tutorial_director = null
 
 
 ## ============================================================================
