@@ -68,9 +68,11 @@ func _init() -> void:
 		name_b = str(sample[3])
 
 	var trace: Array = []
-	# Play on a seeded, reflection-symmetric terrain layout (grid of typed 3" cells — the game's model).
+	# Play on a seeded, reflection-symmetric terrain layout (grid of typed 3" cells — the game's model), plus a
+	# symmetric layer of thin IMPASSABLE walls the AI must steer its individual models around (MovementPlanner).
 	var terrain: Dictionary = SoloSim.default_terrain(seed_value)
-	var res: Dictionary = SoloSim.simulate_game(army_a, army_b, seed_value, 4, [], [], trace, terrain)
+	var walls: Array = SoloSim.default_walls(seed_value)
+	var res: Dictionary = SoloSim.simulate_game(army_a, army_b, seed_value, 4, [], [], trace, terrain, walls)
 	var objs: Array = []
 	for o in SoloSim.default_objectives():
 		objs.append([(o as Vector2).x, (o as Vector2).y])
@@ -79,6 +81,7 @@ func _init() -> void:
 		"board": SoloSim.BOARD_IN,
 		"objectives": objs,
 		"terrain": res.get("terrain", []),
+		"walls": res.get("walls", []),
 		"cell_in": TerrainRules.CELL_IN,
 		"armies": {"0": name_a, "1": name_b},
 		"roster": SoloSim.roster(army_a, army_b),

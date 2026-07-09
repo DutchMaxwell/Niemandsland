@@ -80,6 +80,33 @@ static func _terrain_cells_json(terrain: Dictionary) -> Array:
 	return out
 
 
+## A reflection-symmetric (across the mid-line, y = 24") layer of thin IMPASSABLE wall segments — the sim's
+## mirror of terrain_overlay's wall layer (`_last_wall_segments`), separate from the 3" terrain grid. Each
+## segment is an [a, b] pair in inches. A short barrier sits just short of every objective (and its mirror),
+## so a unit marching onto the marker must steer AROUND the wall's open ends — the individual-model movement
+## the MovementPlanner adds. Symmetric both axes → the mirror-match fairness oracle stays balanced. Empty by
+## default in the fairness oracle; used by the trace + tests to exercise wall avoidance.
+static func default_walls(_seed_value: int = 0) -> Array:
+	var mid: float = BOARD_IN / 2.0
+	var out: Array = []
+	for ox in [BOARD_IN / 3.0, BOARD_IN * 2.0 / 3.0]:   # one barrier per objective (x = 16", 32")
+		var off := 4.0     # barrier sits 4" short of the marker on the approaching side
+		var half := 3.0    # half-width of the barrier (6" wide — narrower than a marching frontage)
+		out.append([Vector2(ox - half, mid - off), Vector2(ox + half, mid - off)])   # south of the marker
+		out.append([Vector2(ox - half, mid + off), Vector2(ox + half, mid + off)])   # mirror, north of it
+	return out
+
+
+## Wall segments as JSON-friendly [[ax, ay], [bx, by]] pairs for the replay viewer.
+static func _walls_json(walls: Array) -> Array:
+	var out: Array = []
+	for w in walls:
+		var a: Vector2 = w[0]
+		var b: Vector2 = w[1]
+		out.append([[snappedf(a.x, 0.1), snappedf(a.y, 0.1)], [snappedf(b.x, 0.1), snappedf(b.y, 0.1)]])
+	return out
+
+
 static func make_unit(name: String, player: int, quality: int, defense: int, models: int, weapons: Array,
 		tough: int = 1, rules: Array = [], advance_in: float = 6.0, rush_in: float = 12.0) -> Dictionary:
 	return {
@@ -181,7 +208,8 @@ static func is_alive(u: Dictionary) -> bool:
 
 
 static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rounds: int = DEFAULT_ROUNDS,
-		log_lines: Array = [], objectives: Array = [], trace: Array = [], terrain: Dictionary = {}) -> Dictionary:
+		log_lines: Array = [], objectives: Array = [], trace: Array = [], terrain: Dictionary = {},
+		walls: Array = []) -> Dictionary:
 	var objs: Array = objectives if not objectives.is_empty() else default_objectives()
 	var obj_owner: Array = []
 	for _o in objs:
@@ -217,7 +245,7 @@ static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rou
 				var actor: Variant = _next_unactivated(units, side)
 				if actor != null:
 					activations += 1
-					_activate(actor, units, rng, log_lines, r, obj_owner, objs, trace, terrain)
+					_activate(actor, units, rng, log_lines, r, obj_owner, objs, trace, terrain, walls)
 			side = 1 - side
 		# End of round: fatigue clears; then objectives are (re)seized.
 		for u in units:
@@ -243,6 +271,7 @@ static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rou
 		"a_alive": a_alive, "b_alive": b_alive, "a_start": a_start, "b_start": b_start,
 		"a_losses": a_start - a_alive, "b_losses": b_start - b_alive, "activations": activations,
 		"a_objectives": a_obj, "b_objectives": b_obj, "terrain": _terrain_cells_json(terrain),
+		"walls": _walls_json(walls),
 	}
 
 
@@ -279,7 +308,7 @@ static func _formation(centre: Vector2, n: int) -> Array:
 
 static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator, log_lines: Array,
 		round_no: int = 0, obj_owner: Array = [], objectives: Array = [], trace: Array = [],
-		terrain: Dictionary = {}) -> void:
+		terrain: Dictionary = {}, walls: Array = []) -> void:
 	unit["activated"] = true
 	var rolls: Array = []   # dice detail recorded for the visual trace
 	# OPR (p.10): a Shaken unit spends its activation idle, which clears Shaken at the end of it.
@@ -336,22 +365,22 @@ static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator
 		AiDecision.Action.RUSH:
 			# STOP AT the objective, never march past it (p.58: seize within 3", "as close as possible").
 			# The maintainer's finding: units overshot the marker and abandoned it.
-			_terrain_move(unit, gdir * (minf(rush, goal_dist) if to_obj else rush), terrain, rng, log_lines, rolls, units)
+			_terrain_move(unit, gdir * (minf(rush, goal_dist) if to_obj else rush), terrain, rng, log_lines, rolls, units, false, walls)
 		AiDecision.Action.CHARGE:
 			# Charge is the ONE action exempt from the 1" spacing rule — it closes to base contact.
-			_terrain_move(unit, edir * minf(rush, maxf(enemy_dist - CONTACT_IN, 0.0)), terrain, rng, log_lines, rolls, units, true)
+			_terrain_move(unit, edir * minf(rush, maxf(enemy_dist - CONTACT_IN, 0.0)), terrain, rng, log_lines, rolls, units, true, walls)
 		AiDecision.Action.ADVANCE:
 			if to_obj:
 				# stop on the objective, don't overshoot
-				_terrain_move(unit, gdir * minf(advance, goal_dist), terrain, rng, log_lines, rolls, units)
+				_terrain_move(unit, gdir * minf(advance, goal_dist), terrain, rng, log_lines, rolls, units, false, walls)
 			else:
 				# "Advancing" rule (p.58): a shooter advancing on the enemy stays as FAR as possible while
 				# still in range — step back to the range edge if already inside it, else close to get in
 				# range. It never flees off-board and always shoots (no kiting).
 				if enemy_dist <= float(shoot_range):
-					_terrain_move(unit, -edir * minf(advance, float(shoot_range) - enemy_dist), terrain, rng, log_lines, rolls, units)
+					_terrain_move(unit, -edir * minf(advance, float(shoot_range) - enemy_dist), terrain, rng, log_lines, rolls, units, false, walls)
 				else:
-					_terrain_move(unit, edir * advance, terrain, rng, log_lines, rolls, units)
+					_terrain_move(unit, edir * advance, terrain, rng, log_lines, rolls, units, false, walls)
 		_:
 			pass   # HOLD
 	var dist: float = (unit["pos"] as Vector2).distance_to(tpos)
@@ -572,7 +601,7 @@ static func _move(unit: Dictionary, delta: Vector2) -> void:
 ## to base contact. Empty terrain + empty units (open field, no neighbours) → a plain _move.
 static func _terrain_move(unit: Dictionary, delta: Vector2, terrain: Dictionary,
 		rng: RandomNumberGenerator, log_lines: Array, rolls: Array = [],
-		units: Array = [], allow_contact: bool = false) -> void:
+		units: Array = [], allow_contact: bool = false, walls: Array = []) -> void:
 	var mv := delta
 	# 1" spacing (p.7): a non-charge move stops over 1" clear of any other unit — no walking through/into them.
 	if not allow_contact and not units.is_empty() and mv != Vector2.ZERO:
@@ -581,15 +610,52 @@ static func _terrain_move(unit: Dictionary, delta: Vector2, terrain: Dictionary,
 		if allowed < reqd - 0.001:
 			mv = (mv / reqd) * allowed
 			log_lines.append("%s stops clear of another unit (1\" spacing)" % unit["name"])
-	if terrain.is_empty() or mv == Vector2.ZERO:
-		_move(unit, mv)
+	if (terrain.is_empty() and walls.is_empty()) or mv == Vector2.ZERO:
+		_planner_move(unit, mv, terrain, walls, allow_contact, log_lines)
 		return
 	var start: Vector2 = unit["pos"]
 	if TerrainRules.path_crosses(terrain, start, start + mv, TerrainRules.PathCheck.DIFFICULT):
 		mv *= 0.5   # Difficult: halve a move that passes through it (a shorter step, may fall short of the goal)
 		log_lines.append("%s slowed by difficult terrain (half move)" % unit["name"])
-	_move(unit, mv)
+	_planner_move(unit, mv, terrain, walls, allow_contact, log_lines)
 	_dangerous_test(unit, (unit["pos"] as Vector2) - start, terrain, rng, log_lines, rolls)
+
+
+## Apply the (spacing/Difficult-clamped) translation `mv` to the unit's individual models. With no wall in the
+## path this is the exact rigid slide (fast path, identical to the pre-planner _move — so open-field play and
+## the mirror oracle are unchanged); when a wall blocks it, MovementPlanner steers each model around it while
+## keeping the unit in coherency (A* rescue if boxed in), and the formation centre follows the models.
+static func _planner_move(unit: Dictionary, mv: Vector2, terrain: Dictionary, walls: Array,
+		allow_contact: bool, log_lines: Array = []) -> void:
+	if mv == Vector2.ZERO:
+		return
+	if walls.is_empty() or not MovementPlanner.rigid_blocked(unit["model_pos"], mv, walls):
+		_move(unit, mv)
+		return
+	var planned: Array = MovementPlanner.plan_unit_step(unit["model_pos"], mv, walls, terrain, allow_contact, BOARD_IN)
+	var mp: Array = unit["model_pos"]
+	var old_c: Vector2 = _model_centroid(mp)
+	var new_c := Vector2.ZERO
+	for k in range(mini(planned.size(), mp.size())):
+		var p: Vector2 = planned[k]
+		var cp := Vector2(clampf(p.x, 0.0, BOARD_IN), clampf(p.y, 0.0, BOARD_IN))
+		mp[k] = cp
+		new_c += cp
+	if not planned.is_empty():
+		new_c /= float(planned.size())
+		unit["pos"] = (unit["pos"] as Vector2) + (new_c - old_c)   # centre follows the models' mean shift
+	if log_lines != null:
+		log_lines.append("%s steers its models around a wall" % unit["name"])
+
+
+## Mean of a set of model positions (Vector2) — the formation's current centroid.
+static func _model_centroid(model_pos: Array) -> Vector2:
+	if model_pos.is_empty():
+		return Vector2.ZERO
+	var s := Vector2.ZERO
+	for m in model_pos:
+		s += m as Vector2
+	return s / float(model_pos.size())
 
 
 ## OPR General Movement (GF v3.5.1 p.7): "Models may never be within 1” of models from other units [...]

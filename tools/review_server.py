@@ -130,11 +130,11 @@ PAGE = r"""<!doctype html><html lang="de"><head>
 </div>
 <script>
 const SVGNS="http://www.w3.org/2000/svg";
-let T=null,steps=[],R=[],OBJ=[],ARM={},B=48,SC=10,i=0,votes={},TER=[],CELL=3;
+let T=null,steps=[],R=[],OBJ=[],ARM={},B=48,SC=10,i=0,votes={},TER=[],CELL=3,WALLS=[];
 const $=id=>document.getElementById(id);
 function mk(t,a){const e=document.createElementNS(SVGNS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
 fetch('/trace.json').then(r=>r.json()).then(d=>{
-  T=d;steps=d.steps;R=d.roster;OBJ=d.objectives;ARM=d.armies;B=d.board;SC=480/B;TER=d.terrain||[];CELL=d.cell_in||3;
+  T=d;steps=d.steps;R=d.roster;OBJ=d.objectives;ARM=d.armies;B=d.board;SC=480/B;TER=d.terrain||[];CELL=d.cell_in||3;WALLS=d.walls||[];
   $('match').textContent=`${ARM['0']}  vs  ${ARM['1']}  ·  Seed ${d.seed}`;
   // erste unbewertete Aktivierung
   i=steps.findIndex(s=>s.type==='activation'); if(i<0)i=0;
@@ -153,6 +153,9 @@ function board(step){
     svg.appendChild(mk('rect',{x,y,width:s,height:s,fill:TC[ty]||'#888',opacity:ty===4?.20:.28,stroke:TC[ty]||'#888','stroke-opacity':.55,'stroke-width':1}));
     if(ty===4)svg.appendChild(mk('line',{x1:x,y1:y,x2:x+s,y2:y+s,stroke:TC[4],'stroke-width':1,opacity:.6}));
   });
+  // impassable walls (thin segments the AI steers its models around)
+  WALLS.forEach(w=>svg.appendChild(mk('line',{x1:w[0][0]*SC,y1:w[0][1]*SC,x2:w[1][0]*SC,y2:w[1][1]*SC,
+    stroke:'#d8dee6','stroke-width':3,'stroke-linecap':'round',opacity:.9})));
   const bd=step.board,own=bd.owners;
   OBJ.forEach((o,ix)=>{const cx=o[0]*SC,cy=o[1]*SC,ow=own[ix],c=ow===0?'#38c9d6':(ow===1?'#f5a623':'#e8c96a');
     svg.appendChild(mk('circle',{cx,cy,r:3*SC,fill:'none',stroke:c,'stroke-dasharray':'3 3',opacity:.5}));
@@ -177,7 +180,7 @@ const hd=(f,t)=>f.map(x=>die(x,(x===6||(x>=t&&x!==1))?'hit':'')).join('');
 const sd=(f,t)=>f.map(x=>die(x,(x===6||(x>=t&&x!==1))?'blk':'')).join('');
 function read(step){
   const el=$('read');
-  if(step.type==='deploy'){const lg='<span style="color:#3a9d4a">■</span> Wald (Deckung+schwierig) · <span style="color:#4d7bc4">■</span> Ruine (Deckung) · <span style="color:#a5763a">■</span> Container (blockt Sicht) · <span style="color:#c94a4a">■</span> gefährlich';
+  if(step.type==='deploy'){const lg='<span style="color:#3a9d4a">■</span> Wald (Deckung+schwierig) · <span style="color:#4d7bc4">■</span> Ruine (Deckung) · <span style="color:#a5763a">■</span> Container (blockt Sicht) · <span style="color:#c94a4a">■</span> gefährlich · <span style="color:#d8dee6">▬</span> Mauer (unpassierbar)';
     el.innerHTML='<div class="r1"><span class="rd">Aufstellung</span></div><div class="narr">Beide Armeen in ihren 12"-Zonen; zwei Missionsziele.</div><div class="narr" style="margin-top:6px">'+lg+'</div>';return;}
   if(step.type==='seize'){const o=step.board.owners.map((v,ix)=>`Ziel ${ix+1}: ${v===0?ARM['0']:(v===1?ARM['1']:'neutral')}`).join(' · ');
     el.innerHTML=`<div class="r1"><span class="rd">Rundenende ${step.round}</span></div><div class="why">${o}</div>`;return;}

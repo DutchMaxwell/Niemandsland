@@ -101,6 +101,41 @@ regiment; any deeper rank-and-flank AI would be homebrew (deferred).
 - This keeps us rule-faithful (the OPR tree decides Hold/Advance/Rush/Charge and the target
   *class*) while playing smarter than pure RNG on the indifferent choices.
 
+## Movement — `MovementPlanner` (steering-first + local A* fallback)
+
+**Design decision (maintainer, 2026-07-10):** *steering-first with a local A* fallback*, built as a **shared,
+pure `MovementPlanner` module** (`scripts/solo/movement_planner.gd`) in the same family as `AiDecision` /
+`TerrainRules` (static, no scene deps, deterministic, sim-shareable). Wired into the **headless sim first**
+(AI moves); the real game's move-enforcement may reuse it later. It **replaces the rigid-block formation
+slide** for AI moves.
+
+**What shipped (in the sim):**
+- **Individual-model steering.** Each model steers toward its own rigid target (`model + delta`); the unit is
+  kept **in coherency**. The coherency predicate mirrors `coherency_checker.gd` (1" model-to-model link, 9"
+  max spread) — since sim models are points, a nominal base allowance (`BASE_CONTACT_IN`, the sim's
+  base-contact centre distance) is folded into centre-to-centre thresholds, so the 1"/9" numbers are *not*
+  forked. After sliding, a monotonic wall-checked pull restores coherency.
+- **Walls = Impassable.** A thin wall-segment layer (the sim's mirror of `terrain_overlay.gd`
+  `_last_wall_segments`, a list of `[a, b]` pairs) blocks paths via segment-vs-path intersection; models
+  **slide/steer around** locally. `SoloSim.default_walls()` adds a symmetric demo layer (a short barrier
+  short of each objective, mirrored) that the trace/tests exercise.
+- **Allowance clamp + 1" enemy spacing preserved.** No model travels past its move allowance (path-length
+  bounded). The shipped 1" non-charge spacing clamp and Difficult/Dangerous handling stay in `SoloSim`
+  (unchanged); a **Charge** is exempt from spacing. When **no wall is in the path the planner returns the
+  exact rigid translation** — so open-field play, and the mirror-match fairness oracle, are byte-identical to
+  the pre-planner behaviour.
+- **Stuck → local A* rescue.** When walls stop the steering from making real progress toward the goal, a
+  local **A\*** on the existing 3" sim grid (walls as blocked cell-edges, `CONTAINER` cells impassable) finds
+  a corridor; the unit then **resumes steering** toward the farthest visible corridor waypoint (string-pull).
+  A\* is the **rescue**, not the default.
+
+**Fairness:** the mandatory mirror oracle (no walls) is **unchanged vs baseline** (byte-identical fast path).
+A bonus mirror *with* the symmetric wall layer showed the walls **amplify a pre-existing second-player skew**
+(the oracle already sat well off 50/50 on HEAD before this work), independent of the steering — so walls are
+deliberately kept **out of the fairness oracle** and live only in the trace + tests. Tests:
+`test/movement_planner_test.gd` (geometry incl. corners/gaps, coherency, fast-path exactness, wall
+avoidance, allowance clamp, U-pocket A* rescue). **Not yet** wired into the real game (that is P3).
+
 ## Architecture
 
 An **`SoloAIController`** that owns a `player_id` **slot locally** (not a faked network peer)
@@ -130,7 +165,7 @@ layer so a watching MP guest still sees the AI's moves. Layers:
 | Low-level "set position + sync" | **EXISTS** | `object_manager.gd:arrange_*` + `_broadcast_arrange_positions`, `undo_manager.gd:MoveAction` |
 | **Turn/activation ENGINE** | **MISSING** | — |
 | **Automated combat (hit/wound/AP/morale)** | **MISSING** | dice are display-only (`dice_rules.gd`) |
-| **Move-intent API / pathfinding** | **MISSING** | only drag + centroid `arrange_*`; no AStar/Navigation |
+| **Move-intent API / pathfinding** | **SIM (shared, pure)** | `move_intent.gd` (rigid clamp) + `movement_planner.gd` (individual steering, walls, local A*) — sim-wired; game-wired at P3 |
 | **Auto-seize / objective control rule** | **MISSING** | capture is a manual radial-menu pick |
 
 ## Phased roadmap
@@ -146,8 +181,9 @@ layer so a watching MP guest still sees the AI's moves. Layers:
   Defense, wounds via `apply_damage`), morale/Shaken, fully hands-off. *Deliverable: hands-off
   solo game.*
 - **Phase 3 — Polish.** Challenge Bonus, cover/kiting refinements, AP/Deadly target overrides,
-  Caster behaviour, randomised setup (army/objective/deployment), terrain-grid pathfinding,
-  Co-Op (AI runs all enemy units for 2+ humans), Horde Mode scoring.
+  Caster behaviour, randomised setup (army/objective/deployment), **terrain-grid pathfinding — the
+  `MovementPlanner` steering + local A* now exists and is proven in the sim; Phase 3 wires it into the real
+  game's move-enforcement**, Co-Op (AI runs all enemy units for 2+ humans), Horde Mode scoring.
 
 ## Open questions / risks
 - **Movement legality vs simulation freedom** — the sandbox doesn't enforce ranges/terrain
