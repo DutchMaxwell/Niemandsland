@@ -166,7 +166,7 @@ Controls:
 - Left Click: Select/Drag
 - Alt + Click: Multi-Select
 - Shift + Click: Measure
-- R (hold): Rotate (Ctrl=reverse)
+- R (hold): Rotate to face cursor
 - Shift+R: Rotate Group (Ctrl=rev)
 - 1-9: Arrange rows (on unit)
 - Shift+A: Arrow (on unit)
