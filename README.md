@@ -6,9 +6,9 @@ Fantasy). Built in Godot.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Godot](https://img.shields.io/badge/Godot-4.6-blue.svg)](https://godotengine.org/)
-[![Status](https://img.shields.io/badge/Status-0.3.7.2--alpha-orange.svg)]()
+[![Status](https://img.shields.io/badge/Status-0.3.8.0--alpha-orange.svg)]()
 
-> **Status: public alpha (`0.3.7.2`).** The tabletop sandbox, OPR army import, multiplayer
+> **Status: public alpha (`0.3.8.0`).** The tabletop sandbox, OPR army import, multiplayer
 > and the 3D-model pipeline work; rules automation (turn/combat resolution, terrain gameplay
 > effects) is **not** implemented. See [`PROJECT_STATUS.md`](PROJECT_STATUS.md) for the honest
 > done / in-progress / planned breakdown, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for what's
@@ -31,8 +31,9 @@ What the code actually does today:
   auto-generate, 3D overlay, save/load layouts. (Terrain is currently visual; it has
   **no** gameplay effect yet.)
 - **OPR units** — import Army Forge lists via the OPR API, per-model wounds, caster
-  points, unit coherency check + visualizer, radial context menu, docked unit info
-  card, unit-wide status tokens (Fatigue / Shaken / Activated).
+  points, unit coherency check + visualizer, radial context menu, a bottom unit-card
+  dock (the whole army as live stat cards) plus an in-game battle log, unit-wide
+  status tokens (Fatigue / Shaken / Activated).
 - **Multiplayer** — ENet over LAN, or over the internet via a WebSocket relay
   (see [`relay/`](relay/README.md)); full state sync (models, terrain, table size),
   shared dice log, player avatars/cursors, save/load.
