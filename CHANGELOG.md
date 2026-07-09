@@ -6,7 +6,11 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
-_Nothing yet — next batch starts here._
+### Changed
+- **Model rotation aims at the cursor.** Holding R now turns every selected loose model in place to
+  FACE the mouse cursor (the degrees from its start facing shown next to it, release to commit),
+  replacing the old hold-and-spin-until-you-release gesture — each model in a multi-selection faces the
+  cursor independently, matching how regiment movement-trays already rotate. (community feedback, #114)
 
 ## [0.3.8.0-alpha] — 2026-07-08
 
