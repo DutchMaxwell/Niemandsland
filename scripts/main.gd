@@ -661,6 +661,12 @@ func _run_solo_ai_turn() -> void:
 	if battle_log != null and target != null:
 		battle_log.log_event(BattleLog.Category.MOVEMENT, "%s %s (→ %s)" % [
 			unit.get_name(), AiDecision.action_name(int(report.get("action", 0))), target.get_name()], true)
+	# Dangerous terrain crossed during the move (goal 003 P3): each such model rolls a real tray die, a 1 wounds.
+	var dangerous_models: int = int(report.get("dangerous_models", 0))
+	if dangerous_models > 0:
+		await _run_ai_dangerous(unit, dangerous_models)
+	if unit.is_destroyed():
+		return
 	if bool(report.get("can_shoot", false)):
 		await _run_ai_shooting(report)
 	elif int(report.get("action", 0)) == AiDecision.Action.CHARGE:
@@ -690,6 +696,16 @@ func _ensure_solo_controller() -> void:
 			if terrain_overlay == null or not terrain_overlay.has_method("has_line_of_sight"):
 				return true
 			return terrain_overlay.has_line_of_sight(from_pos, to_pos, 1, 1)
+		# Real terrain / walls / objectives feed the shared pure modules (decide_solo, MovementPlanner,
+		# TerrainRules) — goal 003 P3. Each is a graceful no-op when the overlay is absent.
+		solo_controller.terrain_type_at = func(p: Vector3) -> int:
+			return terrain_overlay.get_terrain_at_world_position(p) if terrain_overlay != null else int(TerrainRules.TerrainType.NONE)
+		solo_controller.walls_provider = func() -> Array:
+			return terrain_overlay.get_wall_segments_world() if terrain_overlay != null and terrain_overlay.has_method("get_wall_segments_world") else []
+		solo_controller.objectives_provider = func() -> Array:
+			return terrain_overlay.get_objectives() if terrain_overlay != null else []
+		solo_controller.objective_owner_of = func(index: int) -> int:
+			return terrain_overlay.get_objective_owner(index) if terrain_overlay != null else 0
 
 
 ## "Deploy AI army" (goal 001 P2b): run the official OPR AI deployment for the designated army — the
@@ -752,48 +768,122 @@ func _on_solo_deploy_pressed() -> void:
 		battle_log.log_event(BattleLog.Category.GENERAL, "AI deploys %d units%s [seed %d]" % [int(res.deployed), reserve_note, seed_value], true)
 
 
-## Resolve the AI's shooting (goal 001 P3): per ranged profile in range the AI rolls REAL to-hit dice in
-## the tray (locked decision — visible physical rolls, logged as the AI); the HUMAN then rolls saves via
-## a prompt with an auto-roll button; wounds go through the existing wound/kill flows.
+## Resolve the AI's shooting (goal 003 P3 — the sim's brain, real dice). SPLIT FIRE (OPR core p.8): each
+## ranged weapon TYPE independently picks its own target under its targeting overlay (AiTargeting: AP→best
+## Defense, Deadly→Tough, Takedown→hero, else nearest not-activated in the open); weapons aimed at the same
+## target roll as one volley. Per volley: Cover (+1 Defense majority-in-cover), dead-model attack scaling,
+## Relentless (>9" 6s add hits), Deadly (Tough-capped wound multiply), the human's saves, and the target's
+## Regeneration medic — all via the shared pure modules, dice on the REAL tray.
 func _run_ai_shooting(report: Dictionary) -> void:
 	var unit: GameUnit = report.get("unit")
-	var target: GameUnit = report.get("target")
-	if unit == null or target == null or dice_roller_control == null:
+	if unit == null or dice_roller_control == null:
 		return
-	var groups: Array = _solo_attack_groups(unit, float(report.get("dist_in", INF)), false)
-	if groups.is_empty():
-		return
-	var defense: int = target.get_defense()   # majority defense v1 (documented; per-model saves later)
-	var target_alive_before: int = target.get_alive_count()   # post-shooting morale (goal 003 P1)
-	var total_wounds := 0
-	for grp in groups:
-		var group := grp as Dictionary
-		var quality: int = int(group.get("quality", 4))
-		for p in group.get("profiles", []):
-			var profile := p as Dictionary
-			var attacks: int = int(profile.get("attacks", 0))
-			var ap: int = int(profile.get("ap", 0))
-			var faces: Array = await _solo_tray_roll(attacks, quality, "AI (%s)" % str(group.get("name", "?")))
-			var hits: int = AiCombatMath.count_hits(faces, quality)
-			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s — %d hit%s" % [
-					str(group.get("name", "?")), str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")], true)
-			if hits <= 0:
-				continue
-			var save_faces: Array = await _solo_prompt_saves(unit, target, str(profile.get("name", "?")), hits, defense, ap)
-			total_wounds += AiCombatMath.wounds(hits, save_faces, defense, ap)
-	if total_wounds > 0:
-		_solo_apply_wounds(target, total_wounds)
-		# The human's unit tests morale if the volley dropped it to half strength or less (goal 003 P1).
-		await _solo_shooting_morale(target, target_alive_before, "You")
-
-
-## Weapon groups for a combat activation: the unit's own profiles at its Quality PLUS each attached
-## hero's profiles at the hero's Quality — a joined hero fights WITH its unit (field-test lock).
-func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool) -> Array:
+	# Build a shot per ranged weapon of the unit + attached heroes (each keeps its member's Quality + alive/max).
+	var shots: Array = []
 	var members: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
+	for m in members:
+		var member := m as GameUnit
+		if member == null or member.get_alive_count() == 0:
+			continue
+		var weapons: Array = []
+		if member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
+			weapons = (member.source_data as OPRApiClient.OPRUnit).weapons
+		for w in weapons:
+			var reach: int = int(w.range_value) if (w is Object and w.get("range_value") != null) else 0
+			if reach <= 0:
+				continue   # melee weapon
+			var prof_list: Array = AiShooting.profiles_in_range([w], float(reach))
+			if prof_list.is_empty():
+				continue
+			shots.append({"member": member, "quality": member.get_quality(),
+				"alive": member.get_alive_count(), "max": member.models.size(),
+				"reach": reach, "profile": prof_list[0]})
+	if shots.is_empty():
+		return
+	# Split fire: assign each shot the best target under its weapon overlay, then group shots by target.
+	var groups: Dictionary = {}   # target unit_id -> {"target": GameUnit, "shots": Array}
+	var order: Array = []
+	for shot in shots:
+		var overlay: int = AiTargeting.weapon_overlay((shot["profile"] as Dictionary).get("rules", []))
+		var tgt: GameUnit = _solo_pick_overlay_target(unit, overlay, float(shot["reach"]))
+		if tgt == null:
+			continue
+		if not groups.has(tgt.unit_id):
+			groups[tgt.unit_id] = {"target": tgt, "shots": []}
+			order.append(tgt.unit_id)
+		(groups[tgt.unit_id]["shots"] as Array).append(shot)
+	for id in order:
+		var g := groups[id] as Dictionary
+		await _solo_resolve_ai_volley(unit, g["target"], g["shots"])
+
+
+## Resolve one split-fire volley (all `shots` aimed at `target`) with real tray dice + the human's saves.
+func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array) -> void:
+	var alive_before: int = target.get_alive_count()
+	var defense: int = _solo_cover_defense(target, target.get_defense())   # +1 Defense if majority in cover
+	var dist_in: float = MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
+	var caused := 0
+	for s in shots:
+		var shot := s as Dictionary
+		var profile := shot["profile"] as Dictionary
+		var quality: int = int(shot["quality"])
+		var attacks: int = SoloController.effective_attacks(int(profile.get("attacks", 0)), int(shot["alive"]), int(shot["max"]))
+		if attacks <= 0:
+			continue
+		var name: String = (shot["member"] as GameUnit).get_name()
+		var faces: Array = await _solo_tray_roll(attacks, quality, "AI (%s)" % name)
+		var hits: int = _solo_hits(faces, quality, profile, dist_in)
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s — %d hit%s" % [
+				name, str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")], true)
+		if hits <= 0:
+			continue
+		var save_faces: Array = await _solo_prompt_saves(attacker, target, str(profile.get("name", "?")), hits, defense, int(profile.get("ap", 0)))
+		caused += _solo_wounds(hits, save_faces, defense, profile, target)
+	var landed: int = await _solo_apply_regeneration(target, caused)   # the target's medic ignores wounds on 5+
+	if landed > 0:
+		_solo_apply_wounds(target, landed)
+		await _solo_shooting_morale(target, alive_before, _solo_owner_label(target))
+
+
+## Pick the AI's shooting target for a weapon overlay (goal 003 P3): every alive HUMAN unit in range with a
+## clear line of sight, ranked by AiTargeting under `overlay`. Null when nothing is valid.
+func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: float) -> GameUnit:
+	if opr_army_manager == null or solo_controller == null:
+		return null
+	var from := solo_controller.unit_centre(attacker)
+	var cands: Array = []
+	var refs: Array = []
+	for h in opr_army_manager.get_game_units_for_player(solo_controller.human_slot):
+		var hu := h as GameUnit
+		if hu == null or _solo_combined_alive(hu) <= 0:
+			continue
+		var dist := MoveIntent.distance_inches(from, solo_controller.unit_centre(hu))
+		if dist > max_range or not _solo_has_los(attacker, hu):
+			continue
+		var tough: int = _solo_unit_tough(hu)
+		cands.append({
+			"dist": dist, "activated": hu.is_activated, "in_cover": _solo_majority_in_cover(hu),
+			"defense": hu.get_defense(), "is_hero": hu.is_hero(), "has_upgrade": false, "upgrade_cost": 0,
+			"single_tough": hu.models.size() == 1 and tough > 1, "has_tough": tough > 1,
+			"remaining_tough": hu.get_alive_count() * tough,
+		})
+		refs.append(hu)
+	var idx: int = AiTargeting.best_index(cands, overlay)
+	return refs[idx] if idx >= 0 else null
+
+
+## Weapon groups for a combat activation: the unit's own profiles at its Quality PLUS each attached hero's
+## profiles at the hero's Quality — a joined hero fights WITH its unit (field-test lock). Each profile's
+## attack count is SCALED so dead models no longer attack (goal 003 P3, mirrors the sim fix): shooting scales
+## by alive/max; melee (with `enemy`) scales by the models within 2" of an enemy model ("Who Can Strike", p.9).
+func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: GameUnit = null) -> Array:
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	var enemy_positions: Array = solo_controller.alive_positions(enemy) if (melee and enemy != null and solo_controller != null) else []
 	var groups: Array = []
 	for m in members:
 		var member := m as GameUnit
@@ -803,10 +893,132 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool) -> Array:
 		if member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
 			weapons = (member.source_data as OPRApiClient.OPRUnit).weapons
 		var profiles: Array = AiShooting.melee_profiles(weapons) if melee else AiShooting.profiles_in_range(weapons, dist_in)
-		if not profiles.is_empty():
-			groups.append({"name": member.get_name(), "quality": member.get_quality(),
-				"fatigued": member.is_fatigued, "profiles": profiles})
+		if profiles.is_empty():
+			continue
+		var max_models: int = member.models.size()
+		var count: int = member.get_alive_count()
+		if melee and enemy != null and solo_controller != null:
+			count = SoloController.striking_models(solo_controller.alive_positions(member), enemy_positions)
+		var scaled: Array = []
+		for p in profiles:
+			var prof := (p as Dictionary).duplicate()
+			prof["attacks"] = SoloController.effective_attacks(int(prof.get("attacks", 0)), count, max_models)
+			scaled.append(prof)
+		groups.append({"name": member.get_name(), "quality": member.get_quality(),
+			"fatigued": member.is_fatigued, "profiles": scaled})
 	return groups
+
+
+# === Solo combat facets (goal 003 P3 — shared pure-module math: cover / hits / wounds / regen / tough) ===
+
+## The defender's save target after Cover (GF Advanced Rules v3.5.1 p.11): the majority of a target's models
+## in cover terrain gives +1 Defense (a better, lower save target), floored at 2+. Shooting only.
+func _solo_cover_defense(target: GameUnit, base_defense: int) -> int:
+	return maxi(2, base_defense - 1) if _solo_majority_in_cover(target) else base_defense
+
+
+## Hits from a to-hit roll, plus Relentless (>9" shooting: each unmodified 6 adds a hit; `dist_in`=0 in melee
+## naturally yields no bonus). Uses the shared AiCombatMath.
+func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float) -> int:
+	var hits: int = AiCombatMath.count_hits(faces, to_hit)
+	if bool(profile.get("relentless", false)):
+		hits += AiCombatMath.relentless_bonus_hits(faces, dist_in)
+	return hits
+
+
+## Wounds from the defender's saves, with Deadly(X) multiplying each unsaved wound (Tough-capped). Shared math.
+func _solo_wounds(hits: int, save_faces: Array, defense: int, profile: Dictionary, target: GameUnit) -> int:
+	var w: int = AiCombatMath.wounds(hits, save_faces, defense, int(profile.get("ap", 0)))
+	var deadly: int = int(profile.get("deadly", 0))
+	if w > 0 and deadly > 0:
+		w *= AiCombatMath.deadly_multiplier(deadly, _solo_unit_tough(target))
+	return w
+
+
+## The target's Regeneration / medic (GF Advanced Rules v3.5.1 p.13; the Battle Brothers "Medical Training"
+## item grants Regeneration Aura): roll one REAL tray die per incoming wound, each 5+ ignores it. Returns the
+## wounds that actually land. Units without the rule take full wounds (no roll).
+func _solo_apply_regeneration(target: GameUnit, wounds: int) -> int:
+	if wounds <= 0 or not _solo_has_regeneration(target):
+		return maxi(wounds, 0)
+	var faces: Array = await _solo_tray_roll(wounds, 5, _solo_owner_label(target))
+	var ignored := 0
+	for f in faces:
+		if int(f) >= 5:
+			ignored += 1
+	if ignored > 0 and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s regenerates %d wound%s (medic)" % [
+			target.get_name(), ignored, ("" if ignored == 1 else "s")])
+	return maxi(wounds - ignored, 0)
+
+
+## The unit's per-model Tough value (majority) parsed from its special rules; 1 when it has no Tough.
+func _solo_unit_tough(unit: GameUnit) -> int:
+	for r in unit.get_special_rules():
+		var s := str(r).strip_edges()
+		if s.begins_with("Tough(") and s.ends_with(")"):
+			return maxi(int(s.substr(6, s.length() - 7).replace("+", "")), 1)
+	return 1
+
+
+## Whether a unit (or an attached hero) carries a Regeneration-style rule (Regeneration / Regeneration Aura /
+## the Medical Training medic item that grants it).
+func _solo_has_regeneration(unit: GameUnit) -> bool:
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	for m in members:
+		var member := m as GameUnit
+		if member == null:
+			continue
+		for r in member.get_special_rules():
+			var s := str(r).strip_edges()
+			if s.begins_with("Regeneration") or s.begins_with("Medical Training"):
+				return true
+	return false
+
+
+## True when the majority of a unit's alive models sit in cover terrain (TerrainRules predicate on the real
+## overlay data) — the OPR +1 Defense trigger.
+func _solo_majority_in_cover(unit: GameUnit) -> bool:
+	if terrain_overlay == null or not terrain_overlay.has_method("get_terrain_at_world_position"):
+		return false
+	var models: Array = unit.get_alive_models()
+	if models.is_empty():
+		return false
+	var n := 0
+	for m in models:
+		var node: Node3D = (m as ModelInstance).node
+		if node == null or not is_instance_valid(node):
+			continue
+		if TerrainRules.gives_cover(terrain_overlay.get_terrain_at_world_position(node.global_position)):
+			n += 1
+	return n * 2 > models.size()
+
+
+## Battle-log / dice-owner label for a unit: "AI (name)" for an AI-controlled unit, else "You".
+func _solo_owner_label(unit: GameUnit) -> String:
+	return ("AI (%s)" % unit.get_name()) if _solo_is_ai_unit(unit) else "You"
+
+
+## Dangerous terrain (GF Advanced Rules v3.5.1 p.12): each model that crossed a Dangerous cell rolls one REAL
+## tray die; a 1 is a wound to the unit. A drop to half strength or less then tests morale (goal 003 P3).
+func _run_ai_dangerous(unit: GameUnit, model_count: int) -> void:
+	if unit == null or dice_roller_control == null or model_count <= 0:
+		return
+	var faces: Array = await _solo_tray_roll(model_count, 6, "AI (%s)" % unit.get_name())
+	var wounds := 0
+	for f in faces:
+		if int(f) == 1:
+			wounds += 1
+	if wounds <= 0:
+		return
+	var before: int = unit.get_alive_count()
+	_solo_apply_wounds(unit, wounds)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s takes %d wound%s from dangerous terrain" % [
+			unit.get_name(), wounds, ("" if wounds == 1 else "s")], true)
+	await _solo_shooting_morale(unit, before, "AI (%s)" % unit.get_name())
 
 
 ## Alive models of the unit INCLUDING its attached heroes (a unit is destroyed only when both are gone).
@@ -873,29 +1085,32 @@ func _run_ai_melee(report: Dictionary) -> void:
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s's charge falls short (%.0f\")" % [unit.get_name(), dist_in], true)
 		return
-	var ai_dealt := 0
-	var human_dealt := 0
-	# — AI strikes (unit + attached heroes, each at its own Quality/fatigue) —
-	for grp in _solo_attack_groups(unit, 0.0, true):
+	var ai_caused := 0
+	var human_caused := 0
+	# — AI strikes (unit + attached heroes; only models within 2" strike; Deadly multiplies wounds) —
+	for grp in _solo_attack_groups(unit, 0.0, true, target):
 		var group := grp as Dictionary
 		var to_hit: int = 6 if bool(group.get("fatigued", false)) else int(group.get("quality", 4))
 		for p in group.get("profiles", []):
 			var profile := p as Dictionary
+			if int(profile.get("attacks", 0)) <= 0:
+				continue
 			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "AI (%s)" % str(group.get("name", "?")))
-			var hits: int = AiCombatMath.count_hits(faces, to_hit)
+			var hits: int = _solo_hits(faces, to_hit, profile, 0.0)
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s strikes with %s — %d hit%s" % [
 					str(group.get("name", "?")), str(profile.get("name", "?")), hits, ("" if hits == 1 else "s")], true)
 			if hits <= 0:
 				continue
 			var save_faces: Array = await _solo_prompt_saves(unit, target, str(profile.get("name", "?")), hits, target.get_defense(), int(profile.get("ap", 0)))
-			ai_dealt += AiCombatMath.wounds(hits, save_faces, target.get_defense(), int(profile.get("ap", 0)))
-	if ai_dealt > 0:
-		_solo_apply_wounds(target, ai_dealt)
+			ai_caused += _solo_wounds(hits, save_faces, target.get_defense(), profile, target)
+	var ai_landed: int = await _solo_apply_regeneration(target, ai_caused)   # the target's medic ignores 5+
+	if ai_landed > 0:
+		_solo_apply_wounds(target, ai_landed)
 	_solo_set_fatigued(unit)
 	# — Strike back (the human's choice; OPR lets the defender strike back — unit + attached heroes) —
 	if _solo_combined_alive(target) > 0:
-		var back_groups := _solo_attack_groups(target, 0.0, true)
+		var back_groups := _solo_attack_groups(target, 0.0, true, unit)
 		if not back_groups.is_empty():
 			var dlg := ConfirmationDialog.new()
 			dlg.title = "Strike back?"
@@ -914,19 +1129,22 @@ func _run_ai_melee(report: Dictionary) -> void:
 					var to_hit: int = 6 if bool(bgroup.get("fatigued", false)) else int(bgroup.get("quality", 4))
 					for p in bgroup.get("profiles", []):
 						var profile := p as Dictionary
+						if int(profile.get("attacks", 0)) <= 0:
+							continue
 						var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You")
-						var hits: int = AiCombatMath.count_hits(faces, to_hit)
+						var hits: int = _solo_hits(faces, to_hit, profile, 0.0)
 						if hits <= 0:
 							continue
 						var save_faces: Array = await _solo_tray_roll(hits, unit.get_defense() + int(profile.get("ap", 0)), "AI (%s)" % unit.get_name())
-						human_dealt += AiCombatMath.wounds(hits, save_faces, unit.get_defense(), int(profile.get("ap", 0)))
-				if human_dealt > 0:
-					_solo_apply_wounds(unit, human_dealt)
+						human_caused += _solo_wounds(hits, save_faces, unit.get_defense(), profile, unit)
+				var human_landed: int = await _solo_apply_regeneration(unit, human_caused)
+				if human_landed > 0:
+					_solo_apply_wounds(unit, human_landed)
 				_solo_set_fatigued(target)
-	# — Morale: the side that took MORE wounds tests (tie = nobody) —
-	if ai_dealt > human_dealt and _solo_combined_alive(target) > 0:
+	# — Morale: the side that CAUSED more wounds wins; the loser tests (tie = nobody) —
+	if ai_caused > human_caused and _solo_combined_alive(target) > 0:
 		await _solo_morale_test(target, "You")
-	elif human_dealt > ai_dealt and _solo_combined_alive(unit) > 0:
+	elif human_caused > ai_caused and _solo_combined_alive(unit) > 0:
 		await _solo_morale_test(unit, "AI (%s)" % unit.get_name())
 
 
@@ -1139,27 +1357,32 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 		return
 	var dist := MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
 	var target_alive_before: int = target.get_alive_count()   # post-shooting morale (goal 003 P1)
-	var human_dealt := 0
-	var ai_dealt := 0
-	for grp in _solo_attack_groups(attacker, dist, melee):
+	var human_caused := 0
+	var ai_caused := 0
+	# Cover raises the AI's Defense against your shooting (majority-in-cover +1); melee ignores cover.
+	var defense: int = _solo_cover_defense(target, target.get_defense()) if not melee else target.get_defense()
+	for grp in _solo_attack_groups(attacker, dist, melee, target if melee else null):
 		var group := grp as Dictionary
 		var to_hit: int = int(group.get("quality", 4))
 		if melee and bool(group.get("fatigued", false)):
 			to_hit = 6
 		for p in group.get("profiles", []):
 			var profile := p as Dictionary
+			if int(profile.get("attacks", 0)) <= 0:
+				continue
 			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You")
-			var hits: int = AiCombatMath.count_hits(faces, to_hit)
+			var hits: int = _solo_hits(faces, to_hit, profile, (0.0 if melee else dist))
 			if battle_log != null:
 				var verb := "strikes with" if melee else "fires"
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s %s %s at %s — %d hit%s" % [
 					str(group.get("name", "?")), verb, str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")])
 			if hits <= 0:
 				continue
-			var save_faces: Array = await _solo_tray_roll(hits, target.get_defense() + int(profile.get("ap", 0)), "AI (%s)" % target.get_name())
-			human_dealt += AiCombatMath.wounds(hits, save_faces, target.get_defense(), int(profile.get("ap", 0)))
-	if human_dealt > 0:
-		_solo_apply_wounds(target, human_dealt)
+			var save_faces: Array = await _solo_tray_roll(hits, defense + int(profile.get("ap", 0)), "AI (%s)" % target.get_name())
+			human_caused += _solo_wounds(hits, save_faces, defense, profile, target)
+	var human_landed: int = await _solo_apply_regeneration(target, human_caused)
+	if human_landed > 0:
+		_solo_apply_wounds(target, human_landed)
 	if not melee:
 		# The AI's unit tests morale if your volley dropped it to half strength or less (goal 003 P1).
 		await _solo_shooting_morale(target, target_alive_before, "AI (%s)" % target.get_name())
@@ -1167,24 +1390,27 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 		_solo_set_fatigued(attacker)
 		# The AI must always strike back (official rule) — no prompt on its side.
 		if _solo_combined_alive(target) > 0:
-			for grp in _solo_attack_groups(target, 0.0, true):
+			for grp in _solo_attack_groups(target, 0.0, true, attacker):
 				var group := grp as Dictionary
 				var to_hit: int = 6 if bool(group.get("fatigued", false)) else int(group.get("quality", 4))
 				for p in group.get("profiles", []):
 					var profile := p as Dictionary
+					if int(profile.get("attacks", 0)) <= 0:
+						continue
 					var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "AI (%s)" % str(group.get("name", "?")))
-					var hits: int = AiCombatMath.count_hits(faces, to_hit)
+					var hits: int = _solo_hits(faces, to_hit, profile, 0.0)
 					if hits <= 0:
 						continue
 					var save_faces: Array = await _solo_prompt_saves(target, attacker, str(profile.get("name", "?")), hits, attacker.get_defense(), int(profile.get("ap", 0)))
-					ai_dealt += AiCombatMath.wounds(hits, save_faces, attacker.get_defense(), int(profile.get("ap", 0)))
-			if ai_dealt > 0:
-				_solo_apply_wounds(attacker, ai_dealt)
+					ai_caused += _solo_wounds(hits, save_faces, attacker.get_defense(), profile, attacker)
+			var ai_landed: int = await _solo_apply_regeneration(attacker, ai_caused)
+			if ai_landed > 0:
+				_solo_apply_wounds(attacker, ai_landed)
 			_solo_set_fatigued(target)
-		# Morale: the side that took MORE wounds tests.
-		if human_dealt > ai_dealt and _solo_combined_alive(target) > 0:
+		# Morale: the side that CAUSED more wounds wins; the loser tests.
+		if human_caused > ai_caused and _solo_combined_alive(target) > 0:
 			await _solo_morale_test(target, "AI (%s)" % target.get_name())
-		elif ai_dealt > human_dealt and _solo_combined_alive(attacker) > 0:
+		elif ai_caused > human_caused and _solo_combined_alive(attacker) > 0:
 			await _solo_morale_test(attacker, "You")
 
 

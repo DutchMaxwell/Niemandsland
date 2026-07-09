@@ -172,7 +172,36 @@ exposed it). Fix: remove the **rear-most** model (nearest the unit's own deploym
 The bonus mirror *with* the symmetric wall layer still shows walls amplify any residual imbalance, so walls
 stay **out of the fairness oracle** and live only in the trace + tests. Tests: `test/movement_planner_test.gd`
 (geometry incl. corners/gaps, coherency, fast-path exactness, wall avoidance, allowance clamp, U-pocket A*
-rescue). **Not yet** wired into the real game (that is P3).
+rescue).
+
+## P3 — the sim's brain wired into the real game (shipped)
+
+The real in-game Solo AI (F11 → `SoloController` + `main.gd`) now runs the SAME pure modules the headless sim
+proved, instead of the old ad-hoc logic. Real table state feeds the modules; module outputs drive real game
+actions (moves on the real broadcast paths, dice on the REAL visible tray, battle-log lines on the existing
+seams). Wired:
+
+- **Decision**: `SoloController._act` uses the full objective-driven `AiDecision.decide_solo` (was the legacy
+  enemy-only `decide`) + the Relentless Hold-and-shoot overlay. Real objectives + owners come from
+  `terrain_overlay` (`get_objectives` / `get_objective_owner`); the AI heads for the nearest objective it does
+  not control, else the enemy.
+- **Movement/terrain**: loose units steer around real walls via `MovementPlanner` (walls from a new
+  `terrain_overlay.get_wall_segments_world()`, run in the planner's inch frame); regiments keep the rigid block
+  slide. Difficult (Forest) halves the move and Dangerous is tested on the real tray — both via `TerrainRules`
+  predicates against real overlay data.
+- **Combat** (`main.gd`, shared pure-module helpers): **dead models no longer attack** (attacks scale by
+  alive/max — the maintainer's melee bug, previously fixed only in the sim at `22e86d4`); **2" "Who Can Strike"**
+  reach scales melee attacks; **split fire** (each weapon type picks its own target via `AiTargeting` overlays:
+  AP→best Defense, Deadly→Tough, Takedown→hero); **Cover** (+1 Defense), **Relentless** (>9" 6s add hits),
+  **Deadly(X)** (Tough-capped multiply) and the **Regeneration/Medic** save all resolve on the real tray.
+- **Tests**: `SoloController.effective_attacks` / `striking_models` + an objective-decision integration case
+  (`test/solo_controller_test.gd`); the full solo suite stays green (117) and the sim is untouched (its fairness
+  proof stands). Field-tested headless on the real Battle Brothers list via `tools/solo_field_test.gd`.
+- **Remaining / stubbed** (honest gaps): the 1" enemy-spacing clamp is NOT applied on the real table yet (the
+  sim's point-fold spacing does not map cleanly to real base geometry); objective auto-seize at round end is not
+  wired (owners come from the manual radial pick), so `decide_solo` treats every non-AI-owned marker as
+  uncontrolled; the in-game shooting/melee dice + human saves are interactive (the visual tray + save prompts),
+  so the headless field test resolves the identical modules on a seeded RNG rather than the live tray.
 
 ## Architecture
 

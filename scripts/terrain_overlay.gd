@@ -1522,6 +1522,38 @@ func get_objectives() -> Array[Vector3]:
 	return mission_objectives.duplicate()
 
 
+## World-space wall segments as [Vector2 a, Vector2 b] pairs in the table XZ plane (metres) — the SAME
+## geometry the physical wall bodies use (via _segment_world_placement's already-rotated along_dir). For
+## the Solo-AI MovementPlanner, which treats walls as impassable barriers to steer around (goal 003 P3).
+## Empty when the current layout has no walls. Read-only; does not touch rendering state.
+func get_wall_segments_world() -> Array:
+	var out: Array = []
+	if _last_wall_segments.is_empty():
+		return out
+	var t_size: Vector2 = _last_wall_table_size
+	var rot_deg: float = _last_wall_rotation
+	var cell_size_meters := GRID_SIZE_INCHES * INCHES_TO_METERS
+	var width_inches := t_size.x * 12.0
+	var height_inches := t_size.y * 12.0
+	var diagonal := sqrt(width_inches * width_inches + height_inches * height_inches)
+	var grid_size := int(ceil(diagonal / GRID_SIZE_INCHES))
+	if grid_size % 2 != 0:
+		grid_size += 1
+	var grid_dims := Vector2i(grid_size, grid_size)
+	var rotation_rad := deg_to_rad(rot_deg)
+	for segment in _last_wall_segments:
+		var placement := _segment_world_placement(segment, grid_dims, cell_size_meters, rotation_rad, rot_deg, t_size)
+		if placement.is_empty():
+			continue
+		var pos: Vector3 = placement["position"]
+		var along: Vector3 = placement["along_dir"]
+		var half_m: float = float(segment.get("length_inches", GRID_SIZE_INCHES)) * INCHES_TO_METERS * 0.5
+		var a := Vector2(pos.x - along.x * half_m, pos.z - along.z * half_m)
+		var b := Vector2(pos.x + along.x * half_m, pos.z + along.z * half_m)
+		out.append([a, b])
+	return out
+
+
 # ==============================================================================
 # OVERLAY MODE
 # ==============================================================================

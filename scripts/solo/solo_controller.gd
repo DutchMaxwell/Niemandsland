@@ -13,6 +13,13 @@ extends Node
 signal ai_unit_activated(unit: GameUnit)   # emitted after the AI moves + activates a unit (for UI/log)
 
 const BOUNDS_MARGIN_M := 0.02   # keep models a hair inside the table edge
+const INCHES_TO_METERS := 0.0254
+const OBJECTIVE_CONTROL_IN := 3.0   # OPR objective seize/hold radius (Solo & Co-Op v3.5.0 p.6)
+const CONTACT_IN := 2.0             # centre-to-centre "in melee" distance a charge closes to
+const MELEE_REACH_IN := 2.0         # OPR "Who Can Strike" (GF Advanced Rules v3.5.1 p.9): only models within 2" strike
+const BASE_CONTACT_IN := 1.0        # nominal centre-to-centre gap of two standard ~25 mm bases at contact (~1")
+const IN_THE_WAY_IN := 6.0          # OPR: an enemy within 6" of the unit→objective line is "in the way" (p.58)
+const NO_OBJECTIVE := Vector3(INF, INF, INF)   # _nearest_uncontrolled_objective sentinel: no uncontrolled objective
 
 var army_manager: OPRArmyManager = null
 var network_manager: Node = null
@@ -32,6 +39,16 @@ var _deploy_blocked_flying: Callable = Callable()
 var last_report: Dictionary = {}
 ## Injected by main: Callable(from: Vector3, to: Vector3) -> bool for terrain line of sight.
 var los_checker: Callable = Callable()
+## Injected by main (goal 003 P3 — real terrain feeds the shared pure modules):
+##   terrain_type_at    : Callable(world: Vector3) -> int   (TerrainRules/overlay TerrainType at a point)
+##   walls_provider     : Callable() -> Array               (world-space [Vector2 a, Vector2 b] wall segments, metres)
+##   objectives_provider: Callable() -> Array               (objective world positions, Array[Vector3])
+##   objective_owner_of : Callable(index: int) -> int       (owner player_id, 0 = neutral)
+## All optional; an invalid Callable degrades gracefully (no terrain / no walls / no objectives).
+var terrain_type_at: Callable = Callable()
+var walls_provider: Callable = Callable()
+var objectives_provider: Callable = Callable()
+var objective_owner_of: Callable = Callable()
 
 var turn_manager: TurnManager = null
 var _selector: ActivationSelector = null
@@ -149,11 +166,15 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 	return best_fresh if best_fresh != null else best_any
 
 
-## One activation by the official decision tree (goal 001 P3): classify the archetype, decide the
-## action (charge/advance/rush/kite), execute the move, and report what happened so main can resolve
-## shooting (and, in P4, the charge melee). CHARGE degrades to its move-only part until P4 lands.
+## One activation by the FULL official OPR Solo & Co-Op v3.5.0 decision tree (goal 003 P3 — the sim's brain
+## wired into the real game). Classify the archetype, pick the nearest un-activated enemy AND the nearest
+## objective this side does not control, build the tree context, resolve the action toward the objective or
+## the enemy, and execute a terrain-aware move (Difficult halves, walls are steered around, Dangerous is
+## surfaced for main to roll on the real dice tray). Reports {unit, target, action, toward, shoot, can_shoot,
+## dist_in, dangerous_models} so main resolves shooting / the charge melee / the Dangerous test with real dice.
 func _act(unit: GameUnit) -> Dictionary:
-	var report := {"unit": unit, "target": null, "action": AiDecision.Action.HOLD, "can_shoot": false, "dist_in": INF}
+	var report := {"unit": unit, "target": null, "action": AiDecision.Action.HOLD,
+		"toward": AiDecision.Toward.ENEMY, "shoot": false, "can_shoot": false, "dist_in": INF, "dangerous_models": 0}
 	var target_unit := nearest_human_unit(unit)
 	if target_unit == null or alive_positions(unit).is_empty():
 		return report
@@ -162,44 +183,100 @@ func _act(unit: GameUnit) -> Dictionary:
 	var bands: Dictionary = {"advance": 6, "rush": 12}
 	if movement_range != null:
 		bands = movement_range.move_bands_for_props(unit.unit_properties)
-	var dist := MoveIntent.distance_inches(unit_centre(unit), unit_centre(target_unit))
+	var advance := float(bands.get("advance", 6))
+	var rush := float(bands.get("rush", 12))
+	var centre := unit_centre(unit)
+	var tcentre := unit_centre(target_unit)
+	var enemy_dist := MoveIntent.distance_inches(centre, tcentre)
 	var shoot_range := AiArchetype.max_range_inches(weapons)
-	var in_range_los: bool = shoot_range > 0 and dist <= float(shoot_range) and _has_los(unit, target_unit)
-	var action := AiDecision.decide(AiArchetype.classify(weapons), dist, float(bands.get("advance", 6)),
-		float(bands.get("rush", 12)), float(shoot_range), in_range_los)
+	var archetype := AiArchetype.classify(weapons)
+	# Nearest objective NOT controlled by this AI side — the official trees pivot on it.
+	var obj_pos := _nearest_uncontrolled_objective(centre)
+	var has_obj: bool = obj_pos != NO_OBJECTIVE
+	var obj_dist: float = MoveIntent.distance_inches(centre, obj_pos) if has_obj else INF
+	var ctx := {
+		"arch": archetype, "objective": has_obj, "in_way": has_obj and _enemy_in_way(centre, obj_pos),
+		"obj_in_advance": obj_dist <= advance + OBJECTIVE_CONTROL_IN,
+		"obj_in_rush": obj_dist <= rush + OBJECTIVE_CONTROL_IN,
+		"enemy_in_charge": enemy_dist <= rush,
+		"shoot_after_advance": shoot_range > 0 and (enemy_dist - advance) <= float(shoot_range),
+	}
+	var dec := AiDecision.decide_solo(ctx)
+	var action: int = int(dec["action"])
+	var do_shoot: bool = bool(dec["shoot"])
+	# Relentless overlay (Solo & Co-Op Rules v3.5.0 p.2): a Relentless ranged weapon in range → Hold and shoot.
+	if _forces_hold_and_shoot(weapons, shoot_range > 0 and enemy_dist <= float(shoot_range)):
+		action = AiDecision.Action.HOLD
+		do_shoot = true
 	report["action"] = action
+	report["shoot"] = do_shoot
+	report["toward"] = int(dec["toward"])
+	var to_obj: bool = int(dec["toward"]) == AiDecision.Toward.OBJECTIVE and has_obj
+	var goal: Vector3 = obj_pos if to_obj else tcentre
+	var goal_dist := MoveIntent.distance_inches(centre, goal)
+	var dang := 0
 	match action:
+		AiDecision.Action.RUSH:
+			dang = _move_toward(unit, goal, (minf(rush, goal_dist) if to_obj else rush), false)
+		AiDecision.Action.CHARGE:
+			# Close toward the enemy (lands on/near contact; the real melee gate confirms reach). Charge is
+			# the one action exempt from steering easing — allow_contact skips the coherency slack.
+			dang = _move_toward(unit, tcentre, rush, true)
 		AiDecision.Action.ADVANCE:
-			_move_relative(unit, target_unit, float(bands.get("advance", 6)))
-		AiDecision.Action.RUSH, AiDecision.Action.CHARGE:
-			_move_relative(unit, target_unit, float(bands.get("rush", 12)))
-		AiDecision.Action.KITE:
-			# Fall back just far enough to stay in range: never further than (range - dist) leaves room.
-			var room: float = maxf(float(shoot_range) - dist, 0.0)
-			_move_relative(unit, target_unit, -minf(float(bands.get("advance", 6)), room))
+			if to_obj:
+				dang = _move_toward(unit, goal, minf(advance, goal_dist), false)
+			elif enemy_dist <= float(shoot_range):
+				# "Advancing" (p.58): a shooter already in range steps BACK to the range edge, still shooting.
+				dang = _move_away(unit, tcentre, minf(advance, float(shoot_range) - enemy_dist))
+			else:
+				dang = _move_toward(unit, tcentre, advance, false)
 		_:
-			pass   # HOLD: no move (M3 overlays)
-	# Shooting eligibility AFTER the move — Rush/Charge cannot shoot (charge resolves in melee, P4).
-	if action == AiDecision.Action.ADVANCE or action == AiDecision.Action.KITE or action == AiDecision.Action.HOLD:
-		var d2 := MoveIntent.distance_inches(unit_centre(unit), unit_centre(target_unit))
-		report["dist_in"] = d2
-		report["can_shoot"] = shoot_range > 0 and d2 <= float(shoot_range) and _has_los(unit, target_unit)
+			pass   # HOLD
+	report["dangerous_models"] = dang
+	# Shooting eligibility is measured AFTER the move; only actions the tree marked shoot=true actually fire.
+	var d2 := MoveIntent.distance_inches(unit_centre(unit), unit_centre(target_unit))
+	report["dist_in"] = d2
+	report["can_shoot"] = do_shoot and shoot_range > 0 and d2 <= float(shoot_range) and _has_los(unit, target_unit)
 	return report
 
 
-## Rigid move toward (positive inches) or away from (negative inches) the target unit, table-clamped.
-func _move_relative(unit: GameUnit, target_unit: GameUnit, inches: float) -> void:
+## Rigid move toward `goal_world`, capped at `inches`, table-clamped; Difficult terrain on the straight path
+## halves it. Loose units steer around walls via MovementPlanner (regiments keep the rigid block slide).
+## Returns the number of alive models whose path crossed Dangerous terrain (main rolls the real tests).
+func _move_toward(unit: GameUnit, goal_world: Vector3, inches: float, allow_contact: bool) -> int:
 	if is_zero_approx(inches):
-		return
+		return 0
+	return _execute_move(unit, _clamp_to_bounds(goal_world), inches, allow_contact)
+
+
+## Rigid move directly AWAY from `from_world` by `inches` (the shooter "stay at range edge" step), clamped.
+func _move_away(unit: GameUnit, from_world: Vector3, inches: float) -> int:
+	if is_zero_approx(inches):
+		return 0
+	var centre := unit_centre(unit)
+	var goal := centre + (centre - _clamp_to_bounds(from_world))
+	return _execute_move(unit, _clamp_to_bounds(goal), inches, false)
+
+
+## Shared move executor: Difficult-halve, rigid clamp, wall-aware planning (loose units), apply + broadcast,
+## and count Dangerous crossings. Returns that Dangerous-crossing model count.
+func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: bool) -> int:
 	var positions := alive_positions(unit)
 	if positions.is_empty():
-		return
+		return 0
 	var centre := unit_centre(unit)
-	var toward := _clamp_to_bounds(unit_centre(target_unit))
-	var goal := toward if inches > 0.0 else centre + (centre - toward)
-	var delta := MoveIntent.plan_unit_move(positions, _clamp_to_bounds(goal), absf(inches))
+	# Difficult terrain (GF Advanced Rules v3.5.1 p.11): a move whose straight path crosses it is halved.
+	var reach := inches
+	if _path_crosses_terrain(centre, goal, TerrainRules.PathCheck.DIFFICULT):
+		reach = inches * 0.5
+	var delta := MoveIntent.plan_unit_move(positions, goal, reach)
 	delta = _clamp_delta_to_bounds(positions, delta)
-	_apply_delta(unit, delta)
+	if delta == Vector3.ZERO:
+		return 0
+	var new_positions := _plan_positions(unit, positions, delta, allow_contact)
+	var dang := _count_dangerous(positions, new_positions)
+	_apply_model_positions(unit, new_positions)
+	return dang
 
 
 ## The unit's OPR weapons (empty when it has no OPR source — counts as melee-only).
@@ -216,16 +293,17 @@ func _has_los(unit: GameUnit, target_unit: GameUnit) -> bool:
 	return bool(los_checker.call(unit_centre(unit), unit_centre(target_unit)))
 
 
-## Apply a rigid world-space delta to every alive model node (Y preserved) + broadcast the batch.
-func _apply_delta(unit: GameUnit, delta: Vector3) -> void:
-	if delta == Vector3.ZERO:
-		return
+## Set each alive model node to its planned world position (Y preserved) + broadcast the batch. The planned
+## array is aligned to get_alive_models() order (same order alive_positions() produced it in).
+func _apply_model_positions(unit: GameUnit, new_positions: Array) -> void:
 	var batch: Array = []
-	for m in unit.get_alive_models():
-		var node := (m as ModelInstance).node
+	var models := unit.get_alive_models()
+	for i in range(mini(models.size(), new_positions.size())):
+		var node := (models[i] as ModelInstance).node
 		if node == null or not is_instance_valid(node):
 			continue
-		node.global_position += delta
+		var np: Vector3 = new_positions[i]
+		node.global_position = Vector3(np.x, node.global_position.y, np.z)
 		if node.has_meta("network_id"):
 			batch.append(node.get_meta("network_id"))
 			batch.append(node.global_position.x)
@@ -233,6 +311,189 @@ func _apply_delta(unit: GameUnit, delta: Vector3) -> void:
 			batch.append(node.global_position.z)
 	if network_manager != null and not batch.is_empty() and network_manager.has_method("broadcast_move_batch"):
 		network_manager.broadcast_move_batch(batch)
+
+
+## Plan the per-model destination positions for a move by rigid `delta`. Fast path (no walls, a regiment, or
+## no wall in the path) = the exact rigid slide (byte-identical to the old block move). A LOOSE unit whose
+## rigid path crosses a wall steers each model around it in coherency via the shared MovementPlanner (run in
+## the planner's 0-origin inch frame, then mapped back to world metres).
+func _plan_positions(unit: GameUnit, positions: Array, delta: Vector3, allow_contact: bool) -> Array:
+	var rigid: Array = []
+	for p in positions:
+		rigid.append((p as Vector3) + delta)
+	if _is_regiment(unit):
+		return rigid   # a regiment moves as its rigid tray block — no individual steering
+	var walls_world: Array = _walls_world()
+	if walls_world.is_empty():
+		return rigid
+	# Map world XZ (metres, centred at 0) into the planner's non-negative inch frame: shift by the table
+	# half-extents, then divide by the inch scale. board_in is the larger table extent in inches.
+	var half := _table_half_extents()
+	var off := Vector2(half.x, half.y)
+	var board_in: float = (maxf(half.x, half.y) * 2.0) / INCHES_TO_METERS
+	var mpos: Array = []
+	for p in positions:
+		mpos.append((Vector2((p as Vector3).x, (p as Vector3).z) + off) / INCHES_TO_METERS)
+	var mdelta := Vector2(delta.x, delta.z) / INCHES_TO_METERS
+	var walls_in: Array = []
+	for w in walls_world:
+		var wa: Vector2 = w[0]
+		var wb: Vector2 = w[1]
+		walls_in.append([(wa + off) / INCHES_TO_METERS, (wb + off) / INCHES_TO_METERS])
+	if not MovementPlanner.rigid_blocked(mpos, mdelta, walls_in):
+		return rigid
+	var planned: Array = MovementPlanner.plan_unit_step(mpos, mdelta, walls_in, {}, allow_contact, board_in)
+	var out: Array = []
+	for i in range(positions.size()):
+		var pi: Vector2 = mpos[i]
+		if i < planned.size():
+			pi = planned[i]
+		var world := (pi * INCHES_TO_METERS) - off
+		var src: Vector3 = positions[i]
+		out.append(Vector3(world.x, src.y, world.y))
+	return out
+
+
+## Count alive models whose path (old → new position) crossed Dangerous terrain (main rolls the real tests).
+func _count_dangerous(old_positions: Array, new_positions: Array) -> int:
+	var n := 0
+	for i in range(mini(old_positions.size(), new_positions.size())):
+		if _path_crosses_terrain(old_positions[i], new_positions[i], TerrainRules.PathCheck.DANGEROUS):
+			n += 1
+	return n
+
+
+## True when the straight world path a→b crosses a terrain cell matching `check` (TerrainRules.PathCheck),
+## sampled against the REAL overlay via the injected terrain_type_at, with TerrainRules as the predicate.
+func _path_crosses_terrain(a: Vector3, b: Vector3, check: int) -> bool:
+	if not terrain_type_at.is_valid():
+		return false
+	var span := Vector2(b.x - a.x, b.z - a.z).length()
+	var cell_m := TerrainRules.CELL_IN * INCHES_TO_METERS
+	var steps := maxi(1, int(ceil(span / (cell_m * 0.5))))
+	for i in range(steps + 1):
+		var p := a.lerp(b, float(i) / float(steps))
+		if _terrain_matches(int(terrain_type_at.call(p)), check):
+			return true
+	return false
+
+
+static func _terrain_matches(t: int, check: int) -> bool:
+	match check:
+		TerrainRules.PathCheck.DIFFICULT:
+			return TerrainRules.is_difficult(t)
+		TerrainRules.PathCheck.DANGEROUS:
+			return TerrainRules.is_dangerous(t)
+		TerrainRules.PathCheck.IMPASSABLE:
+			return TerrainRules.is_impassable(t)
+	return false
+
+
+## Whether the unit is a regiment (rigid tray) — those keep the block slide, not individual steering.
+func _is_regiment(unit: GameUnit) -> bool:
+	return army_manager != null and army_manager.regiments is Dictionary and army_manager.regiments.has(unit.unit_id)
+
+
+## World-space wall segments ([Vector2 a, Vector2 b], metres) from the injected provider, or empty.
+func _walls_world() -> Array:
+	if not walls_provider.is_valid():
+		return []
+	var w: Variant = walls_provider.call()
+	if w is Array:
+		var arr: Array = w
+		return arr
+	return []
+
+
+## Nearest objective this AI side does NOT control (owner != ai_slot). NO_OBJECTIVE when none / no provider.
+func _nearest_uncontrolled_objective(from: Vector3) -> Vector3:
+	if not objectives_provider.is_valid():
+		return NO_OBJECTIVE
+	var objs: Variant = objectives_provider.call()
+	if not (objs is Array):
+		return NO_OBJECTIVE
+	var arr: Array = objs
+	var best := NO_OBJECTIVE
+	var best_d := INF
+	for i in range(arr.size()):
+		var owner: int = int(objective_owner_of.call(i)) if objective_owner_of.is_valid() else 0
+		if owner == ai_slot:
+			continue   # already ours → controlled
+		var o: Vector3 = arr[i]
+		var d := MoveIntent.distance_inches(from, o)
+		if d < best_d:
+			best_d = d
+			best = o
+	return best
+
+
+## Any living enemy within 6" of the straight unit→objective line ("in the way", p.58). Inch-space segment test.
+func _enemy_in_way(from: Vector3, obj: Vector3) -> bool:
+	if army_manager == null:
+		return false
+	var a := Vector2(from.x, from.z)
+	var b := Vector2(obj.x, obj.z)
+	var reach_m := IN_THE_WAY_IN * INCHES_TO_METERS
+	for h in army_manager.get_game_units_for_player(human_slot):
+		var hu := h as GameUnit
+		if hu == null or hu.is_destroyed():
+			continue
+		var c := unit_centre(hu)
+		if _seg_dist(a, b, Vector2(c.x, c.z)) <= reach_m:
+			return true
+	return false
+
+
+## Distance (metres) from point p to segment a→b in the table plane. Pure.
+static func _seg_dist(a: Vector2, b: Vector2, p: Vector2) -> float:
+	var ab := b - a
+	var len2 := ab.length_squared()
+	if len2 < 0.0000001:
+		return p.distance_to(a)
+	var t := clampf((p - a).dot(ab) / len2, 0.0, 1.0)
+	return p.distance_to(a + ab * t)
+
+
+## Relentless "Hold and shoot" overlay (Solo & Co-Op Rules v3.5.0 p.2): a ranged weapon with Relentless and
+## an enemy in range forces a Hold-and-shoot activation instead of manoeuvring.
+static func _forces_hold_and_shoot(weapons: Array, enemy_in_range: bool) -> bool:
+	if not enemy_in_range:
+		return false
+	for w in weapons:
+		var rng_in: int = int((w as Object).range_value) if (w is Object and (w as Object).get("range_value") != null) else 0
+		if rng_in <= 0:
+			continue
+		var rules: Array = (w as Object).special_rules if (w is Object and (w as Object).get("special_rules") != null) else []
+		for r in rules:
+			if str(r).strip_edges().begins_with("Relentless"):
+				return true
+	return false
+
+
+## OPR "Determine Attacks" (mirrors SoloSim._effective_attacks): only living models' weapons count, so scale
+## a weapon group's attacks by alive/max. Pure — used by the real combat path to stop dead models attacking.
+static func effective_attacks(base_attacks: int, alive: int, max_models: int) -> int:
+	if max_models <= 0:
+		return base_attacks
+	return maxi(0, int(round(float(base_attacks) * float(alive) / float(max_models))))
+
+
+## OPR "Who Can Strike" (GF Advanced Rules v3.5.1 p.9, mirrors SoloSim._striking_models): count the striker's
+## alive models within 2" (base contact folded in) of ANY enemy model. World positions in METRES. Falls back
+## to the whole living set when either side has no positions (a focused test).
+static func striking_models(striker_positions: Array, enemy_positions: Array) -> int:
+	if striker_positions.is_empty() or enemy_positions.is_empty():
+		return striker_positions.size()
+	var reach := (BASE_CONTACT_IN + MELEE_REACH_IN) * INCHES_TO_METERS
+	var reach2 := reach * reach
+	var n := 0
+	for s in striker_positions:
+		var sp := Vector2((s as Vector3).x, (s as Vector3).z)
+		for e in enemy_positions:
+			if sp.distance_squared_to(Vector2((e as Vector3).x, (e as Vector3).z)) <= reach2:
+				n += 1
+				break
+	return n
 
 
 # === Geometry helpers (pure where possible) ===
