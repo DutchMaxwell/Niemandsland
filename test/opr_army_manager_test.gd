@@ -225,3 +225,65 @@ func test_unit_rule_describes_catches_free_text_grant() -> void:
 		{"Furious": "Bonus attacks on the charge."})).is_false()
 	# Empty descriptions → not detected.
 	assert_bool(mgr._unit_rule_describes(unit, "Scout", {})).is_false()
+
+
+# ===== _find_mount_glb_name: MOUNT_KEYWORDS + specificity (synthetic model library) =====
+# Mummified Undead go-live: a hero's mount upgrade resolves to a faction mount GLB by keyword, and the
+# most specific candidate wins (the "beast" collision must not steal the flying mount).
+
+const _MOUNT_LIB_MANIFEST: String = """{
+	"version": 1, "base_url": "",
+	"models": {
+		"mummified_undead/skeleton beast": {"url": "a.glb", "sha256": "a", "size": 1},
+		"mummified_undead/beast riders": {"url": "b.glb", "sha256": "b", "size": 1},
+		"mummified_undead/hunting beasts": {"url": "c.glb", "sha256": "c", "size": 1},
+		"mummified_undead/war sphinx": {"url": "d.glb", "sha256": "d", "size": 1},
+		"mummified_undead/war sphinx mount": {"url": "e.glb", "sha256": "e", "size": 1},
+		"mummified_undead/snake riders": {"url": "f.glb", "sha256": "f", "size": 1},
+		"mummified_undead/great snakes": {"url": "g.glb", "sha256": "g", "size": 1},
+		"mummified_undead/skeletal steed": {"url": "h.glb", "sha256": "h", "size": 1}
+	}
+}"""
+
+
+func _mgr_with_models() -> OPRArmyManager:
+	# _ready() is skipped (not in the tree), so wire a model library by hand. apply_manifest_text
+	# populates the index without any network/_ready dependency.
+	var m: OPRArmyManager = auto_free(OPRArmyManager.new())
+	var lib: ModelLibrary = auto_free(ModelLibrary.new())
+	lib.apply_manifest_text(_MOUNT_LIB_MANIFEST)
+	m.model_library = lib
+	return m
+
+
+func test_find_mount_glb_beast_collision_resolves_flying_mount() -> void:
+	var m := _mgr_with_models()
+	# "Skeleton Beast" (champion mount upgrade) must pick `skeleton beast`, NOT the shorter
+	# `beast riders`/`hunting beasts` unit models it collides with on the bare "beast" keyword.
+	assert_str(m._find_mount_glb_name("Skeleton Beast", "mummified_undead")).is_equal("skeleton beast")
+
+
+func test_find_mount_glb_snake_keyword_matches() -> void:
+	var m := _mgr_with_models()
+	# "snake" is a MOUNT_KEYWORD now → the Royal Snake upgrade resolves to the best snake model
+	# (was "" before, leaving the hero on foot). {royal, snake} overlaps `snake riders` (1) not
+	# `great snakes` (0, "snakes" is not the whole token "snake").
+	assert_str(m._find_mount_glb_name("Royal Snake", "mummified_undead")).is_equal("snake riders")
+
+
+func test_find_mount_glb_sphinx_keyword_exact_name_wins() -> void:
+	var m := _mgr_with_models()
+	# "sphinx" is a MOUNT_KEYWORD now → "War Sphinx" resolves; exact-name `war sphinx` beats the
+	# longer `war sphinx mount` on the tie-break.
+	assert_str(m._find_mount_glb_name("War Sphinx", "mummified_undead")).is_equal("war sphinx")
+
+
+func test_find_mount_glb_no_keyword_stays_on_foot() -> void:
+	var m := _mgr_with_models()
+	# A non-mount upgrade (no MOUNT_KEYWORD token) yields "" → the model keeps its foot pose.
+	assert_str(m._find_mount_glb_name("Master Priest", "mummified_undead")).is_equal("")
+
+
+func test_find_mount_glb_null_library_is_empty() -> void:
+	var m: OPRArmyManager = auto_free(OPRArmyManager.new())  # no model_library wired
+	assert_str(m._find_mount_glb_name("Skeleton Beast", "mummified_undead")).is_equal("")

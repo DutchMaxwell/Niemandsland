@@ -2166,7 +2166,7 @@ func _find_model_for_unit(unit_name: String, faction_folder: String) -> String:
 ## that word (fuzzy). Dedicated per-mount models are a Model Forge follow-up.
 const MOUNT_KEYWORDS: Array[String] = ["bike", "jetbike", "mount", "steed", "horse", "chariot",
 	"cavalry", "disc", "drake", "wyvern", "hover", "speeder", "beast", "sled", "raptor", "carnosaur",
-	"dino", "dinosaur", "lizard", "saurus", "serpent", "dragon", "monster"]
+	"dino", "dinosaur", "lizard", "saurus", "serpent", "snake", "sphinx", "dragon", "monster"]
 
 
 ## The faction GLB name for a unit's mount/vehicle upgrade, fuzzy-matched from the mount name's
@@ -2180,7 +2180,9 @@ func _find_mount_glb_name(mount_name: String, faction_folder: String) -> String:
 			kws.append(w)
 	if kws.is_empty():
 		return ""
-	return model_library.find_faction_model_matching(faction_folder, kws)
+	# Pass the FULL mount name so the library can score by whole-token overlap and resolve a specific
+	# mount ("Skeleton Beast" -> `skeleton beast`) instead of a single-"beast" keyword collision.
+	return model_library.find_faction_model_matching(faction_folder, kws, mount_name)
 
 
 ## Extract Tough value from unit's special rules

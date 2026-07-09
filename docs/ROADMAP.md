@@ -34,9 +34,10 @@ planned and where ideas go. For what already works see
   Discord) — holding R now aims each selected loose model at the cursor instead of the old
   hold-and-spin-until-release — landed after the tag ([#114](../../pull/114)) and ships with the next
   release. _S_
-- **Mummified Undead modular-sockets pilot — go-live pending.** The offline producer side is **done**
-  (114 pilot socket keys generated on the Model-Forge pipeline); the **game-side integration + a
-  maintainer QA pass** remain before it goes live on R2. _M_
+- **Mummified Undead modular-sockets pilot — game-side landed, awaiting maintainer QA + root flip.**
+  The offline producer side is **done** (114 pilot socket keys); the **game-side integration** (17 slug-map
+  lines, `snake`/`sphinx` mount keywords + beast-collision specificity) is now merged — remaining is the
+  **maintainer QA pass via manifest override** and the **root-manifest flip** to go live on R2. _M_
 
 ## 📋 Next (post-Alpha — Beta + alpha-feedback driven)
 

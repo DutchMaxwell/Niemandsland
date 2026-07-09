@@ -122,25 +122,61 @@ func get_cached_path(faction: String, unit_name: String) -> String:
 	return _downloader.cache_path(sha) if _downloader.is_cached(sha) else ""
 
 
+## The minimum keyword length that may match a model name — shorter needles match far too loosely.
+const MIN_MATCH_KEYWORD_LEN: int = 3
+
 ## Fuzzy-find a faction model whose (normalized) name contains any of the keywords — used to pick a
-## mount/bike GLB for a hero's mount upgrade when no exact "<hero> on <mount>" model exists. Returns
-## the manifest unit-name part (resolvable via get_cached_path / ensure_model) or "" if none; prefers
-## the shortest (most specific) match.
-func find_faction_model_matching(faction: String, keywords: Array) -> String:
+## mount/bike GLB for a hero's mount upgrade when no exact "<hero> on <mount>" model exists. A model
+## QUALIFIES when its name contains at least one keyword (>= MIN_MATCH_KEYWORD_LEN, substring); among
+## the qualifiers the most SPECIFIC one wins: it shares the most WHOLE tokens with the mount's full name
+## (so "Skeleton Beast" resolves to the `skeleton beast` mount, not a single-"beast" collision with
+## `beast riders`/`hunting beasts`), then the most keyword hits, then the shortest name. An exact-name
+## match therefore always beats a single-keyword one. `full_name` is the mount's full display name that
+## drives the token scoring; when omitted the keywords themselves form the token set (legacy behaviour).
+## Returns the manifest unit-name part (resolvable via get_cached_path / ensure_model) or "" if none.
+func find_faction_model_matching(faction: String, keywords: Array, full_name: String = "") -> String:
 	var prefix: String = faction.strip_edges().to_lower() + "/"
+	var want_tokens: PackedStringArray = _name_tokens(full_name if not full_name.is_empty() else " ".join(keywords))
 	var best: String = ""
+	var best_overlap: int = -1
+	var best_hits: int = -1
 	for key in _models:
 		var k: String = str(key)
 		if not k.begins_with(prefix):
 			continue
 		var name_part: String = k.substr(prefix.length())
+		var hits: int = 0
 		for kw in keywords:
 			var needle: String = str(kw).strip_edges().to_lower()
-			if needle.length() >= 3 and name_part.contains(needle):
-				if best.is_empty() or name_part.length() < best.length():
-					best = name_part
-				break
+			if needle.length() >= MIN_MATCH_KEYWORD_LEN and name_part.contains(needle):
+				hits += 1
+		if hits == 0:
+			continue
+		var overlap: int = _token_overlap(name_part, want_tokens)
+		if best.is_empty() \
+				or overlap > best_overlap \
+				or (overlap == best_overlap and hits > best_hits) \
+				or (overlap == best_overlap and hits == best_hits and name_part.length() < best.length()):
+			best = name_part
+			best_overlap = overlap
+			best_hits = hits
 	return best
+
+
+## Whole space-separated tokens of a name, lowercased, blanks dropped — the unit of specificity scoring.
+static func _name_tokens(s: String) -> PackedStringArray:
+	return s.strip_edges().to_lower().split(" ", false)
+
+
+## How many of `want_tokens` appear as a WHOLE token in `name_part` — the specificity score that makes an
+## exact/superset name (e.g. `skeleton beast` for mount "Skeleton Beast") beat a single-keyword collision.
+static func _token_overlap(name_part: String, want_tokens: PackedStringArray) -> int:
+	var have: PackedStringArray = _name_tokens(name_part)
+	var count: int = 0
+	for t in want_tokens:
+		if t in have:
+			count += 1
+	return count
 
 
 ## Ensures the unit's model is cached (downloads if needed). Awaitable. Returns path or "".
