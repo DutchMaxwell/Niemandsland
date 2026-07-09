@@ -103,24 +103,71 @@ func test_get_model_aabb_flat_model_unchanged() -> void:
 	assert_float(aabb.size.y).is_equal_approx(3.0, 0.001)
 
 
-# Rider-constant mount fit (contract v1.2): a composed mount carries the RIDER as the `body` node.
-# HEIGHT scales by the rider (like infantry) but GROUNDING is on the MOUNT's feet (the combined min-y,
+# Rider-constant mount fit (contract v1.2, QA r3 HARD RULE): a composed mount carries the RIDER as the
+# `body` node. The scale makes the rider EXACTLY as tall as a standard 25mm foot trooper (28mm target),
+# independent of the mount's base and Tough; GROUNDING is on the MOUNT's feet (the combined min-y,
 # below the rider), so the mount stands on its base instead of the rider being buried down onto it.
 func test_mount_scales_by_rider_but_grounds_on_mount_feet() -> void:
 	var mgr := _mgr()
 	# Combined y in [-2.0, 3.0]: the mount's feet at -2.0, the rider's head at 3.0. Rider `body` node y in
-	# [1.0, 2.0] (it sits on the mount). Tiny x/z so the rider HEIGHT (not the footprint) binds the scale.
+	# [1.0, 2.0] (it sits on the mount).
 	var combined := AABB(Vector3(-0.0005, -2.0, -0.0005), Vector3(0.001, 5.0, 0.001))
 	var rider := AABB(Vector3(-0.0005, 1.0, -0.0005), Vector3(0.001, 1.0, 0.001))
 	var fit: Dictionary = mgr._compute_model_fit(combined, 40, 0, 0.0, -1, false, rider, true)
 	var scale: float = float(fit["scale"])
-	# HEIGHT scales by the RIDER (1.0u) toward the 40mm target, like infantry → rider ≈ 40mm tall.
-	assert_float(rider.size.y * scale).is_equal_approx(0.040, 0.002)
+	# The RIDER (1.0u) lands at the standard 25mm-trooper height target (28mm), NOT the 40mm base target.
+	assert_float(rider.size.y * scale).is_equal_approx(0.028, 0.0005)
 	# GROUNDING on the MOUNT's feet (combined min-y -2.0), NOT the rider body min-y (1.0): the whole
 	# model's lowest point sits on the base top (0.003). Grounding on the rider would bury the mount.
 	assert_float(float(fit["y_offset"]) + combined.position.y * scale).is_equal_approx(0.003, 0.0005)
 	# The rider does NOT touch the base (its min-y sits well above the base top).
 	assert_bool(float(fit["y_offset"]) + rider.position.y * scale > 0.003).is_true()
+
+
+# QA r3 HARD RULE: the rider-constant scale is independent of the mount's BASE SIZE and of TOUGH, and
+# equals the scale a foot trooper body of the same raw height gets — so rider world height == foot
+# trooper world height, for every mount from the 60x35 steed to the 160x122 flying beast.
+func test_rider_scale_is_base_and_tough_invariant_and_matches_foot_trooper() -> void:
+	var mgr := _mgr()
+	var raw_rider_h: float = 1.5
+	var combined := AABB(Vector3(-1.0, -1.0, -1.5), Vector3(2.0, 4.0, 3.0))
+	var rider := AABB(Vector3(-0.1, 1.5, -0.1), Vector3(0.2, raw_rider_h, 0.2))
+	# Same fit for steed-sized (60x35, Tough 3) and flyingbeast-sized (160x122, Tough 18) mounts.
+	var fit_steed: Dictionary = mgr._compute_model_fit(combined, 60, 3, 0.0, 35, false, rider, true)
+	var fit_beast: Dictionary = mgr._compute_model_fit(combined, 160, 18, 0.0, 122, false, rider, true)
+	assert_float(float(fit_beast["scale"])).is_equal_approx(float(fit_steed["scale"]), 0.00001)
+	# And Tough alone changes nothing either (Tough 0 vs 18 on the same mount).
+	var fit_t0: Dictionary = mgr._compute_model_fit(combined, 160, 0, 0.0, 122, false, rider, true)
+	assert_float(float(fit_t0["scale"])).is_equal_approx(float(fit_beast["scale"]), 0.00001)
+	# The rider's world height equals a foot trooper's: a 25mm-based, Tough-0 body of the SAME raw height
+	# (tall/thin so its height binds) fits to the identical world height.
+	var foot_body := AABB(Vector3(-0.0005, 0.0, -0.0005), Vector3(0.001, raw_rider_h, 0.001))
+	var fit_foot: Dictionary = mgr._compute_model_fit(foot_body, 25, 0, 0.0, -1, false, AABB(), false)
+	var rider_world_h: float = raw_rider_h * float(fit_steed["scale"])
+	var foot_world_h: float = raw_rider_h * float(fit_foot["scale"])
+	assert_float(rider_world_h).is_equal_approx(foot_world_h, 0.0005)
+
+
+# QA r3: the rider-constant scale is EXACT — the footprint cap must NOT shrink it (a wide mount follows
+# the model's own proportions; the defensive warning is the only footprint guard).
+func test_rider_scale_not_footprint_capped() -> void:
+	var mgr := _mgr()
+	# A very WIDE mount (10u footprint) on a small 60x35 base: the old min(height, footprint) would crush
+	# the scale far below rider-constant; rider mode must keep the exact rider-height scale.
+	var combined := AABB(Vector3(-5.0, -1.0, -2.0), Vector3(10.0, 4.0, 4.0))
+	var rider := AABB(Vector3(-0.1, 1.5, -0.1), Vector3(0.2, 1.5, 0.2))
+	var fit: Dictionary = mgr._compute_model_fit(combined, 60, 3, 0.0, 35, false, rider, true)
+	assert_float(rider.size.y * float(fit["scale"])).is_equal_approx(0.028, 0.0005)
+
+
+# A fuzzy legacy mount GLB (is_mount but NO rider `body` node — e.g. a GF combat bike) keeps the
+# base-driven fit: height target from the mount base (with Tough), min'd with the footprint cap.
+func test_fuzzy_mount_without_body_keeps_base_driven_fit() -> void:
+	var mgr := _mgr()
+	# Tall/thin so height binds: a 2.0u bike on a 60x35 base, Tough 3 → target 60mm * 1.05 = 63mm.
+	var combined := AABB(Vector3(-0.0005, 0.0, -0.0005), Vector3(0.001, 2.0, 0.001))
+	var fit: Dictionary = mgr._compute_model_fit(combined, 60, 3, 0.0, 35, false, AABB(), true)
+	assert_float(combined.size.y * float(fit["scale"])).is_equal_approx(0.063, 0.001)
 
 
 # Contrast: the SAME combined+rider as INFANTRY (is_mount=false) grounds on the body's feet (rider min-y),
