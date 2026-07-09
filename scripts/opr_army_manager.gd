@@ -59,6 +59,13 @@ const OVAL_FOOTPRINT_RATIO: float = 1.0
 ## aircraft (1 unit = 1 m, so 0.2). Flying is NOT Aircraft and no longer hovers — every Flying model
 ## (and its mount) stands on its base.
 const AIRCRAFT_HOVER_M: float = 0.2
+## Rider-constant mount scale (QA round 3, HARD RULE): a mounted rider's height must EQUAL the foot
+## infantry model's height. Composed mount bakes are rider-normalized (producer contract v1.2: the rider
+## `body` node at scale 1 has trooper proportions), so a mounted model scales by the STANDARD 25mm-based
+## trooper height target applied to its rider body — independent of the mount's (much larger) base AND of
+## the unit's Tough (Tough 3–18 belongs to the mount's stats, not the rider's anatomy). The mount's size
+## then follows from the model's own proportions.
+const RIDER_ANATOMY_BASE_MM: int = 25
 const TRAY_SIZE_INCHES: float = 32.0  # 32x32 inch tray
 const TRAY_MARGIN: float = 0.05  # 5cm gap from table edge
 const TRAY_DROP_HEIGHT: float = 0.5  # Start 50cm above table
@@ -2233,6 +2240,13 @@ func _calculate_model_scale(tough: int) -> float:
 	return pow(1.05, tough / 3.0)
 
 
+## The base-driven height target (mm, before the Tough factor): 25mm bases get +3mm, otherwise = the
+## base long side. Single source for the infantry fit AND the rider-constant mount fit (which applies it
+## to RIDER_ANATOMY_BASE_MM so a mounted rider matches a foot trooper).
+static func _height_target_mm(base_long_mm: int) -> float:
+	return float(base_long_mm + 3 if base_long_mm <= 25 else base_long_mm)
+
+
 ## True if a unit has the OPR "Aircraft" rule. Aircraft sit on a tall flight stand (they must move
 ## every turn, can't be charged, etc.). Flying is a DIFFERENT rule and does NOT hover — a Flying model
 ## stands on its base like everything else.
@@ -2300,15 +2314,20 @@ func _model_faces_crosswise(unit_name: String, is_mount: bool) -> bool:
 ##   - the SMALLER of the two factors wins (min), so both constraints hold.
 ## Aircraft additionally sit on a caller-supplied flight-stand lift; every other model stands on its base.
 ## base_long_mm = base long side in mm (round: diameter; oval: longer axis).
-## is_mount: a composed mount GLB carries the RIDER as the `body` node — scale by the rider's height like
-## infantry (rider-constant across mounts), but GROUND on the whole model's lowest point (the mount's
-## feet, BELOW the rider) so the mount stands on its base instead of the rider being buried onto it.
+## is_mount + a rider `body` node (composed mount bake): RIDER-CONSTANT scale — the scale is exactly the
+## standard 25mm-trooper height target applied to the rider body (RIDER_ANATOMY_BASE_MM), independent of
+## the mount's base AND of Tough, and NOT footprint-capped (the mount's size follows the model's own
+## proportions; the >2.5x warning below guards mis-authored comps). Grounding is on the whole model's
+## lowest point (the mount's feet, BELOW the rider) so the mount stands on its base instead of the rider
+## being buried onto it. is_mount WITHOUT a body node (legacy fuzzy mount GLBs, e.g. GF bikes) keeps the
+## base-driven fit unchanged.
 ## Returns { "scale": float, "y_offset": float, "height": float }.
 func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m: float, base_short_mm: int = -1, fit_to_base: bool = false, body_aabb: AABB = AABB(), is_mount: bool = false) -> Dictionary:
 	# Contract v1.2: when the GLB carries a named `body` node, HEIGHT measures that node's box (body_aabb)
 	# so composed parts (a banner pole, a downward-held bow, or — on a mount — the whole beast) can't
 	# shrink the body; the COMBINED aabb always drives the horizontal footprint/base-fit cap. Empty
 	# body_aabb (legacy single-mesh models) → measure everything from the combined aabb, unchanged.
+	var rider_mode: bool = is_mount and body_aabb.size.y > 0.0
 	var height_aabb: AABB = body_aabb if body_aabb.size.y > 0.0 else aabb
 	# GROUNDING: infantry ground on the body's feet (a below-feet bow must not float the model). A MOUNT
 	# grounds on the COMBINED lowest point (the mount's feet sit below the rider `body` node), so the
@@ -2319,10 +2338,16 @@ func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m:
 	if raw_height <= 0.0 or raw_footprint <= 0.0:
 		return {"scale": 0.001, "y_offset": 0.003, "height": 0.03}
 
-	# Height target: 25mm bases get +3mm, otherwise = base; Tough scales it mildly.
-	var height_target_mm: float = float(base_long_mm + 3 if base_long_mm <= 25 else base_long_mm)
-	var target_height_m: float = height_target_mm * 0.001 * _calculate_model_scale(tough)
-	var height_scale: float = target_height_m / raw_height
+	# Height target. Rider mode (HARD RULE, QA r3): the mounted rider's height must EQUAL the foot
+	# infantry model's — the standard 25mm-trooper target on the rider body, NO Tough factor (Tough 3–18
+	# is the mount's stat, not the rider's anatomy) and NO base-size influence (the mount's 60–160mm base
+	# must not inflate the rider). Otherwise: 25mm bases get +3mm, else = base; Tough scales it mildly.
+	var height_scale: float
+	if rider_mode:
+		height_scale = _height_target_mm(RIDER_ANATOMY_BASE_MM) * 0.001 / raw_height
+	else:
+		var target_height_m: float = _height_target_mm(base_long_mm) * 0.001 * _calculate_model_scale(tough)
+		height_scale = target_height_m / raw_height
 
 	# Footprint cap. Round base: cap to base_long x FOOTPRINT_MAX_RATIO (organic overhang ok).
 	# Oval/rectangular base (base_short < base_long): fit WITHIN BOTH axes at OVAL_FOOTPRINT_RATIO, so
@@ -2342,13 +2367,15 @@ func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m:
 		var round_ratio: float = 1.0 if fit_to_base else FOOTPRINT_MAX_RATIO
 		footprint_scale = base_long_mm * round_ratio * 0.001 / raw_footprint
 
-	var final_scale: float = min(height_scale, footprint_scale)
+	# Rider mode: the rider-constant scale is EXACT — the footprint never caps it (the mount's size
+	# follows the model's own proportions); the >2.5x warning below is the only footprint guard.
+	var final_scale: float = height_scale if rider_mode else min(height_scale, footprint_scale)
 
-	# Defensive: a mount is meant to fill its base (footprint binds). If the RIDER height bound the scale
-	# instead (a mis-authored / oversized rider), the combined footprint can spill well over the base —
-	# the table-filling regression. Warn rather than silently ship it.
+	# Defensive: a composed mount is rider-normalized, so its footprint should land near its base. If the
+	# rider-constant scale still spills the combined footprint far over the base (a mis-authored /
+	# non-normalized comp), warn rather than silently ship a table-filling regression.
 	if is_mount and raw_footprint * final_scale > base_long_mm * 0.001 * 2.5:
-		push_warning("OPRArmyManager: mounted model footprint %.3fm exceeds base %dmm by >2.5x (rider-height fit)" % [raw_footprint * final_scale, base_long_mm])
+		push_warning("OPRArmyManager: mounted model footprint %.3fm exceeds base %dmm by >2.5x (rider-constant fit)" % [raw_footprint * final_scale, base_long_mm])
 
 	# Feet on the base top (the base is 3mm tall); Aircraft additionally sit on a flight stand (lift).
 	# Ground on ground_aabb's minimum-y: the body's feet for infantry, the mount's feet for a mount.
