@@ -2329,7 +2329,14 @@ func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m:
 	}
 
 
-## Calculate the combined AABB (bounding box) of a 3D model and all its children
+## Calculate the combined AABB (bounding box) of a 3D model and all its children, expressed in
+## `node`'s local space. Each mesh's box is composed through EVERY ancestor transform up to `node`
+## (via _relative_transform) — NOT just the mesh's own local transform. A composed / re-exported GLB
+## can carry its scale on an ANCESTOR node instead of the mesh node (e.g. the mummified "skeleton
+## beast" mount: mesh accessor ~1u, a parent node scales it ~5.8x); reading only the mesh's local
+## transform under-measures the model and the base-fit then scales it grossly too large (the
+## table-filling-mount bug). Flat single-mesh models (the mesh is a direct child of `node`) are
+## unaffected — the composed transform equals the mesh's own transform there.
 func _get_model_aabb(node: Node3D) -> AABB:
 	var combined_aabb = AABB()
 	var first = true
@@ -2344,8 +2351,9 @@ func _get_model_aabb(node: Node3D) -> AABB:
 			var mesh_instance = current as MeshInstance3D
 			if mesh_instance.mesh:
 				var mesh_aabb = mesh_instance.mesh.get_aabb()
-				# Transform AABB to node's local space
-				var transformed_aabb = mesh_instance.transform * mesh_aabb
+				# Express the mesh box in `node`'s space via the full ancestor chain, not just the
+				# mesh's own transform, so scale carried on a parent node is not dropped.
+				var transformed_aabb = _relative_transform(mesh_instance, node) * mesh_aabb
 				if first:
 					combined_aabb = transformed_aabb
 					first = false
