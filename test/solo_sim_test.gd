@@ -308,3 +308,139 @@ func test_charge_ignores_spacing_and_closes_to_contact() -> void:
 	var charge_gap: float = (charge["model_pos"][0] as Vector2).distance_to(Vector2(24, 20))
 	assert_float(walk_gap).is_greater_equal(SoloSim.CONTACT_IN + SoloSim.SPACING_IN - 0.01)   # walk kept clear
 	assert_float(charge_gap).is_less(walk_gap)                                                # charge closed nearer
+
+
+# === M2 combat rules: melee 2" reach · split fire · overlays · Deadly · Relentless · Medic ===
+
+func _rng(s: int) -> RandomNumberGenerator:
+	var r := RandomNumberGenerator.new()
+	r.seed = s
+	return r
+
+
+func test_only_models_within_2in_strike_in_melee() -> void:
+	# OPR p.9 "Who Can Strike": only models within 2" of an enemy model attack. A 10-model unit with a
+	# 5-model front rank in reach and a 5-model rear rank out of reach fights with just 5 models' attacks.
+	var striker: Dictionary = SoloSim.make_unit("Mob", 0, 4, 4, 10, [{"name": "CCW", "range_value": 0, "attacks": 1, "count": 10, "special_rules": []}])
+	var defender: Dictionary = SoloSim.make_unit("Foe", 1, 4, 4, 5, [])
+	defender["model_pos"] = [Vector2(20, 22), Vector2(22, 22), Vector2(24, 22), Vector2(26, 22), Vector2(28, 22)]
+	var sm: Array = []
+	for i in range(5):
+		sm.append(Vector2(20 + 2 * i, 20))   # front rank ~2" from a defender model → in reach
+	for i in range(5):
+		sm.append(Vector2(20 + 2 * i, 10))   # rear rank ~12" away → out of reach
+	striker["model_pos"] = sm
+	assert_int(SoloSim._striking_models(striker, defender)).is_equal(5)
+	assert_int(SoloSim._effective_melee_attacks(striker, defender, 10)).is_equal(5)   # 10 × 5/10
+	# Boundary: a rear model dragged to exactly the reach edge (CONTACT + 2") now also strikes.
+	sm[5] = Vector2(20, 22.0 - (SoloSim.CONTACT_IN + SoloSim.MELEE_REACH_IN))
+	striker["model_pos"] = sm
+	assert_int(SoloSim._striking_models(striker, defender)).is_equal(6)
+	# Missing model positions (a focused unit test) → the whole living unit strikes (no crash).
+	striker["model_pos"] = []
+	assert_int(SoloSim._striking_models(striker, defender)).is_equal(10)
+
+
+func test_split_fire_sends_weapon_types_to_their_overlay_targets() -> void:
+	# Two weapon TYPES split onto two targets: a plain rifle at the nearest soft unit, an AP cannon at the
+	# highest-Defense unit (AP overlay), per OPR split-fire (p.8) + Solo overlays (p.2).
+	var atk: Dictionary = SoloSim.make_unit("Gunline", 0, 3, 4, 5, [
+		{"name": "Rifle", "range_value": 30, "attacks": 2, "count": 5, "special_rules": []},
+		{"name": "AP Cannon", "range_value": 30, "attacks": 2, "count": 1, "special_rules": ["AP(3)"]},
+	])
+	atk["pos"] = Vector2(24, 10); atk["model_pos"] = [Vector2(24, 10)]; atk["_id"] = 0
+	var soft: Dictionary = SoloSim.make_unit("Soft", 1, 4, 3, 5, [])    # near, low Defense → rifle's target
+	soft["pos"] = Vector2(24, 14); soft["model_pos"] = [Vector2(24, 14)]; soft["_id"] = 1
+	var tanky: Dictionary = SoloSim.make_unit("Tanky", 1, 4, 6, 5, [])  # far, high Defense → AP cannon's target
+	tanky["pos"] = Vector2(24, 20); tanky["model_pos"] = [Vector2(24, 20)]; tanky["_id"] = 2
+	var rolls: Array = []
+	SoloSim._resolve_shooting_split(atk, [atk, soft, tanky], _rng(1), [], rolls, {})
+	var shot: Dictionary = {}
+	for r in rolls:
+		if str((r as Dictionary).get("kind", "")) == "shoot":
+			shot[str((r as Dictionary)["target"])] = true
+	assert_bool(shot.has("Soft")).is_true()    # rifle → nearest
+	assert_bool(shot.has("Tanky")).is_true()   # AP cannon → highest Defense (split fire)
+
+
+func test_deadly_multiplies_applied_wounds_against_tough_target() -> void:
+	# Same dice (same seed, same attack count) with and without Deadly(3) vs a Tough(3) target: Deadly triples
+	# each unsaved wound (Tough-capped), so it lands exactly 3× the pool damage.
+	var plain_w := {"name": "Gun", "range_value": 24, "attacks": 6, "count": 1, "special_rules": []}
+	var deadly_w := {"name": "Gun", "range_value": 24, "attacks": 6, "count": 1, "special_rules": ["Deadly(3)"]}
+	var tgt_plain: Dictionary = SoloSim.make_unit("T", 1, 4, 5, 10, [], 3)   # Tough(3), Defense 5
+	tgt_plain["model_pos"] = [Vector2.ZERO]
+	var tgt_deadly: Dictionary = tgt_plain.duplicate(true)
+	var atk_plain: Dictionary = SoloSim.make_unit("A", 0, 2, 4, 1, [plain_w])   # Quality 2+ → reliable hits
+	var atk_deadly: Dictionary = SoloSim.make_unit("A", 0, 2, 4, 1, [deadly_w])
+	SoloSim._resolve_volley(atk_plain, tgt_plain, AiShooting.profiles_in_range([plain_w], 10.0), 10.0, _rng(4), [], [], {})
+	SoloSim._resolve_volley(atk_deadly, tgt_deadly, AiShooting.profiles_in_range([deadly_w], 10.0), 10.0, _rng(4), [], [], {})
+	assert_int(int(tgt_plain["wounds_pool"])).is_greater(0)
+	assert_int(int(tgt_deadly["wounds_pool"])).is_equal(int(tgt_plain["wounds_pool"]) * 3)
+
+
+func test_regeneration_medic_ignores_wounds_on_5plus() -> void:
+	# Regeneration (the Battle Brothers Medical Training / Regeneration Aura, GF p.13): each wound is ignored
+	# on a 5+. Every incoming wound rolls one die; survivors = wounds − the 5s/6s.
+	var medic: Dictionary = SoloSim.make_unit("Medics", 1, 4, 4, 10, [], 1, ["Regeneration Aura"])
+	var rolls: Array = []
+	var survived: int = SoloSim._apply_regeneration(medic, 6, _rng(2), [], rolls)
+	assert_int(rolls.size()).is_equal(6)   # one regen die per incoming wound
+	var ignored := 0
+	for r in rolls:
+		if int((r as Dictionary)["face"]) >= 5:
+			ignored += 1
+	assert_int(survived).is_equal(6 - ignored)
+	assert_int(survived).is_between(0, 6)
+	# A unit without the rule takes every wound and rolls nothing.
+	var plain: Dictionary = SoloSim.make_unit("Grunts", 1, 4, 4, 10, [])
+	var r2: Array = []
+	assert_int(SoloSim._apply_regeneration(plain, 6, _rng(2), [], r2)).is_equal(6)
+	assert_int(r2.size()).is_equal(0)
+
+
+func test_relentless_unit_holds_and_shoots_when_enemy_in_range() -> void:
+	# Relentless overlay (Solo rules p.2): with an enemy in range the unit Holds and shoots instead of
+	# manoeuvring — so it does NOT move (a plain shooter here would kite backward).
+	var relent: Dictionary = SoloSim.make_unit("Gun Team", 0, 3, 4, 3, [{"name": "HMG", "range_value": 30, "attacks": 3, "count": 3, "special_rules": ["Relentless"]}])
+	relent["pos"] = Vector2(24, 10); relent["model_pos"] = SoloSim._formation(Vector2(24, 10), 3); relent["_id"] = 0
+	var foe: Dictionary = SoloSim.make_unit("Foe", 1, 4, 4, 5, [])
+	foe["pos"] = Vector2(24, 20); foe["model_pos"] = [Vector2(24, 20)]; foe["_id"] = 1
+	var trace: Array = []
+	SoloSim._activate(relent, [relent, foe], _rng(3), [], 1, [], [], trace)
+	assert_vector(relent["pos"] as Vector2).is_equal(Vector2(24, 10))   # Held — did not kite
+	assert_str(str((trace[trace.size() - 1] as Dictionary)["action"])).contains("holds+shoots")
+
+
+func test_unmodeled_special_rules_are_logged_once_per_game() -> void:
+	# Any rule the combat math doesn't model is logged once (deduped); modelled rules are not flagged.
+	var a: Array = [SoloSim.make_unit("A", 0, 4, 4, 3, [{"name": "CCW", "range_value": 0, "attacks": 1, "count": 3, "special_rules": []}], 1, ["Fearless", "Regeneration Aura"])]
+	var b: Array = [SoloSim.make_unit("B", 1, 4, 4, 3, [{"name": "CCW", "range_value": 0, "attacks": 1, "count": 3, "special_rules": []}], 1, ["Fearless"])]
+	var log: Array = []
+	SoloSim.simulate_game(a, b, 11, 1, log)
+	var fearless := 0
+	var regen := 0
+	for line in log:
+		if str(line).contains("unmodeled") and str(line).contains("Fearless"):
+			fearless += 1
+		if str(line).contains("unmodeled") and str(line).contains("Regeneration"):
+			regen += 1
+	assert_int(fearless).is_equal(1)   # logged once across both units/sides
+	assert_int(regen).is_equal(0)      # Regeneration is modelled → never flagged
+
+
+func test_units_from_opr_json_collects_nested_item_rules_and_weapon_deadly() -> void:
+	# The rule footprint must include upgrade/item-granted rules (AF nests them), so the medic's Regeneration
+	# Aura and the sniper's Deadly/AP are seen — not just the top-level `rules` list.
+	var data := {"units": [{
+		"name": "Squad", "size": 5, "quality": 3, "defense": 3, "rules": [{"name": "Fearless"}],
+		"selectedUpgrades": [{"option": {"gains": [{"name": "Medical Training", "content": [{"name": "Regeneration Aura"}]}]}}],
+		"loadout": [
+			{"name": "Sniper", "range": 30, "attacks": 1, "count": 1, "specialRules": [{"name": "Deadly", "rating": 3}, {"name": "AP", "rating": 1}]},
+		],
+	}]}
+	var u: Dictionary = SoloSim.units_from_opr_json(data, 0)[0]
+	assert_bool(SoloSim._has_regeneration(u)).is_true()
+	assert_array(u["rules"]).contains(["Fearless"])
+	var sniper: Dictionary = (u["weapons"] as Array).filter(func(w): return str(w["name"]) == "Sniper")[0]
+	assert_array(sniper["special_rules"]).contains(["Deadly(3)", "AP(1)"])

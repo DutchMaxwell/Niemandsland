@@ -35,9 +35,15 @@ const BOARD_IN := 48.0
 const DEPLOY_IN := 12.0
 const CONTACT_IN := 2.0
 const SPACING_IN := 1.0   # OPR (p.7): non-charging models must stay over 1" from any OTHER unit's models
+const MELEE_REACH_IN := 2.0   # OPR melee (p.9 "Who Can Strike"): only models within 2" of an enemy model strike
 const OBJECTIVE_CONTROL_IN := 3.0
 const DEFAULT_ROUNDS := 4
 const MODEL_HEIGHT := 1   # every sim model is ground infantry (Height 1); tall/vehicle heights are a follow-up
+
+## Substrings of special-rule names the COMBAT MATH actually models. Any rule a unit carries that matches
+## none of these is logged once per game (unknown-rule visibility) — see docs/SOLO_AI_RULES_COVERAGE.md.
+## "Medical Training" is the Battle Brothers medic item, which grants Regeneration Aura (modelled below).
+const KNOWN_RULES: Array = ["AP", "Tough", "Regeneration", "Deadly", "Takedown", "Relentless", "Medical Training"]
 
 
 static func default_objectives() -> Array:
@@ -127,28 +133,24 @@ static func units_from_opr_json(data: Dictionary, player: int) -> Array:
 	for u in data.get("units", []):
 		var unit := u as Dictionary
 		var sel := str(unit.get("selectionId", str(order.size())))
-		var rule_names: Array = []
+		# Full special-rule footprint: unit rules + upgrade/item gains + weapon rules. Needed for
+		# Regeneration/Hero detection and the unknown-rule log (AF nests granted rules under items).
+		var rule_names: Array = _collect_rules(unit)
 		var tough := 1
 		for r in unit.get("rules", []):
-			var rn := str((r as Dictionary).get("name", ""))
-			rule_names.append(rn)
-			if rn == "Tough":
+			if str((r as Dictionary).get("name", "")) == "Tough":
 				tough = maxi(int((r as Dictionary).get("rating", 1)), 1)
 		var weapons: Array = []
 		for w in unit.get("loadout", []):
 			var wd := w as Dictionary
 			if not wd.has("attacks"):
 				continue
-			var ap := 0
-			for sr in wd.get("specialRules", []):
-				if str((sr as Dictionary).get("name", "")) == "AP":
-					ap = int((sr as Dictionary).get("rating", 0))
 			weapons.append({
 				"name": str(wd.get("name", "Weapon")),
 				"range_value": int(wd.get("range", 0)),
 				"attacks": int(wd.get("attacks", 1)),
 				"count": maxi(int(wd.get("count", 1)), 1),
-				"special_rules": (["AP(%d)" % ap] if ap > 0 else []),
+				"special_rules": _weapon_rule_strings(wd.get("specialRules", [])),
 			})
 		parsed[sel] = {
 			"name": str(unit.get("name", "Unit")), "quality": int(unit.get("quality", 4)),
@@ -167,6 +169,7 @@ static func units_from_opr_json(data: Dictionary, player: int) -> Array:
 			tgt["size"] = int(tgt["size"]) + int(p["size"])
 			tgt["weapons"] = (tgt["weapons"] as Array) + (p["weapons"] as Array)
 			tgt["tough"] = maxi(int(tgt["tough"]), int(p["tough"]))
+			tgt["rules"] = _union_rules(tgt["rules"], p["rules"])   # a joined medic/hero brings its rules along
 			p["merged"] = true
 	var out: Array = []
 	for sel in order:
@@ -199,6 +202,125 @@ static func _merge_weapon_types(weapons: Array) -> Array:
 	return out
 
 
+## Translate a weapon's raw AF specialRules into the modelled rule strings the combat/targeting layers read:
+## AP(X), Deadly(X), Takedown, Relentless. Other weapon rules are intentionally dropped from the combat
+## profile (and surface via the unknown-rule log instead of silently changing math).
+static func _weapon_rule_strings(special_rules: Variant) -> Array:
+	var out: Array = []
+	if not (special_rules is Array):
+		return out
+	for sr in special_rules:
+		if not (sr is Dictionary):
+			continue
+		var name := str((sr as Dictionary).get("name", ""))
+		var rating := int((sr as Dictionary).get("rating", 0))
+		match name:
+			"AP":
+				if rating > 0:
+					out.append("AP(%d)" % rating)
+			"Deadly":
+				out.append("Deadly(%d)" % maxi(rating, 1))
+			"Takedown":
+				out.append("Takedown")
+			"Relentless":
+				out.append("Relentless")
+			_:
+				pass   # not modelled — flagged by the unknown-rule log
+	return out
+
+
+## Every special-rule NAME a unit effectively carries: its own rules, the rules granted by its selected
+## upgrades and loadout items (AF nests these under `content`), and its weapons' special rules. Used for
+## Regeneration/Hero detection and the unknown-rule visibility log — never for the combat profile itself.
+static func _collect_rules(unit: Dictionary) -> Array:
+	var names: Dictionary = {}
+	_gather_rule_names(unit.get("rules", []), names)
+	for up in unit.get("selectedUpgrades", []):
+		if up is Dictionary:
+			_gather_rule_names(((up as Dictionary).get("option", {}) as Dictionary).get("gains", []), names)
+	for w in unit.get("loadout", []):
+		if not (w is Dictionary):
+			continue
+		var wd := w as Dictionary
+		if str(wd.get("type", "")) == "ArmyBookItem":
+			_gather_rule_names(wd.get("content", []), names)   # rules the item grants (skip the item name)
+		_gather_rule_names(wd.get("specialRules", []), names)
+	return names.keys()
+
+
+## Recursively collect rule names from a list of AF rule/item nodes into `names` (nodes may nest `content`).
+## Only RULE nodes contribute their name; ArmyBookItem nodes (weapons/gear like "Plasma Rifle") are
+## containers — their name is skipped and only the rules they grant (their `content`) are collected.
+static func _gather_rule_names(list: Variant, names: Dictionary) -> void:
+	if not (list is Array):
+		return
+	for e in list:
+		if not (e is Dictionary):
+			continue
+		var node := e as Dictionary
+		# Only rule nodes contribute a name; weapons (ArmyBookWeapon / anything with attacks) and item
+		# containers (ArmyBookItem) do not — we still recurse their granted rules.
+		var node_type := str(node.get("type", ""))
+		var is_container: bool = node.has("attacks") or node_type == "ArmyBookWeapon" or node_type == "ArmyBookItem"
+		if not is_container:
+			var nm := str(node.get("name", ""))
+			if nm != "":
+				names[nm] = true
+		_gather_rule_names(node.get("content", []), names)
+
+
+static func _union_rules(a: Variant, b: Variant) -> Array:
+	var names: Dictionary = {}
+	for r in (a if a is Array else []):
+		names[str(r)] = true
+	for r in (b if b is Array else []):
+		names[str(r)] = true
+	return names.keys()
+
+
+## True if `rule_name` matches any rule the combat math models (substring test — "Regeneration Aura"
+## matches "Regeneration"). Everything else is logged once per game.
+static func _is_modeled_rule(rule_name: String) -> bool:
+	for known in KNOWN_RULES:
+		if rule_name.contains(str(known)):
+			return true
+	return false
+
+
+## Case-sensitive substring test over a unit's collected rule names (e.g. "Regeneration", "Hero").
+static func _unit_has_rule(u: Dictionary, needle: String) -> bool:
+	for r in u.get("rules", []):
+		if str(r).contains(needle):
+			return true
+	return false
+
+
+## Medic behaviour: the Battle Brothers "Medical Training" item grants Regeneration Aura (GF Advanced Rules
+## v3.5.1, p.13): each wound a unit with Regeneration takes is ignored on a 5+. Detected by substring so
+## "Regeneration" and "Regeneration Aura" both count.
+static func _has_regeneration(u: Dictionary) -> bool:
+	return _unit_has_rule(u, "Regeneration")
+
+
+static func _is_hero(u: Dictionary) -> bool:
+	return _unit_has_rule(u, "Hero")
+
+
+## Once per game, log every special rule present on any unit that the combat math does not model, so field
+## tests and the review app SHOW the gaps instead of hiding them (M2/M3 backlog driver). Deduped by name.
+static func _log_unmodeled_rules(units: Array, log_lines: Array) -> void:
+	if log_lines == null:
+		return
+	var seen: Dictionary = {}
+	for u in units:
+		for r in u.get("rules", []):
+			var name := str(r)
+			if name == "" or seen.has(name) or _is_modeled_rule(name):
+				continue
+			seen[name] = true
+			log_lines.append("⚠ unmodeled special rule: %s — not in the combat math (see docs/SOLO_AI_RULES_COVERAGE.md)" % name)
+
+
 static func alive_models(u: Dictionary) -> int:
 	return maxi(0, int(u["max_models"]) - int(u["wounds_pool"]) / int(u["tough"]))
 
@@ -226,6 +348,7 @@ static func simulate_game(army_a: Array, army_b: Array, seed_value: int, max_rou
 	_deploy(units)
 	if trace != null:
 		trace.append({"type": "deploy", "board": _snapshot(units, obj_owner)})
+	_log_unmodeled_rules(units, log_lines)   # loud visibility of any special rule the combat math ignores
 	var a_start := _side_models(units, 0)
 	var b_start := _side_models(units, 1)
 	var activations := 0
@@ -356,6 +479,13 @@ static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator
 	}
 	var dec: Dictionary = AiDecision.decide_solo(ctx)
 	var action: int = int(dec["action"])
+	var do_shoot: bool = bool(dec["shoot"])
+	# Relentless overlay (Solo & Co-Op Rules v3.5.0, p.2): a unit with a Relentless weapon in range of
+	# enemies always uses Hold and shoot instead of manoeuvring. (Indirect/Artillery share this pattern —
+	# tracked as follow-ups in docs/SOLO_AI_RULES_COVERAGE.md.)
+	if _forces_hold_and_shoot(unit, shoot_range > 0 and enemy_dist <= float(shoot_range)):
+		action = AiDecision.Action.HOLD
+		do_shoot = true
 	var to_obj: bool = int(dec["toward"]) == AiDecision.Toward.OBJECTIVE and has_obj
 	var goal: Vector2 = obj_pos if to_obj else tpos
 	var goal_dist: float = upos.distance_to(goal)
@@ -384,18 +514,17 @@ static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator
 		_:
 			pass   # HOLD
 	var dist: float = (unit["pos"] as Vector2).distance_to(tpos)
-	var label: String = _decision_label(action, to_obj, bool(dec["shoot"]))
-	# Resolve combat against the priority target (p.2 "prioritise units that haven't activated yet"):
-	# melee hits whoever we charged; shooting re-picks the nearest un-activated enemy that is IN RANGE.
+	var label: String = _decision_label(action, to_obj, do_shoot)
+	# Resolve combat (p.2 "prioritise units that haven't activated yet"): melee hits whoever we charged;
+	# shooting SPLITS each weapon type onto its own overlay-chosen target (AP→best Defense, Deadly→Tough,
+	# Takedown→hero) and rolls each group, per OPR split-fire (p.8).
 	var combat_target: Variant = target
 	if action == AiDecision.Action.CHARGE and dist <= CONTACT_IN + 0.001:
 		_resolve_melee(unit, target, rng, log_lines, rolls)
-	elif bool(dec["shoot"]) and shoot_range > 0:
-		# Valid shooting target = nearest un-activated enemy IN RANGE and with clear LOS (terrain blocks it).
-		var st: Variant = _pick_target(unit, units, float(shoot_range), terrain, true)
+	elif do_shoot and shoot_range > 0:
+		var st: Variant = _resolve_shooting_split(unit, units, rng, log_lines, rolls, terrain)
 		if st != null:
 			combat_target = st
-			_resolve_shooting(unit, st, (unit["pos"] as Vector2).distance_to(st["pos"]), rng, log_lines, rolls, terrain)
 	var why := {"arch": ["MELEE", "SHOOTING", "HYBRID"][archetype], "range": shoot_range,
 		"objective": has_obj, "obj_dist": (snappedf(obj_dist, 0.1) if has_obj else -1.0),
 		"toward": ("objective" if to_obj else "enemy"), "in_way": in_way, "dist0": snappedf(enemy_dist, 0.1),
@@ -415,7 +544,7 @@ static func _decision_label(action: int, to_obj: bool, shoot: bool) -> String:
 		AiDecision.Action.ADVANCE:
 			return ("advances+shoots" if shoot else "advances") + t
 		_:
-			return "holds"
+			return "holds+shoots" if shoot else "holds"
 
 
 ## Distance from point p to the segment a→b (for the "enemies in the way" 6" path check).
@@ -430,9 +559,47 @@ static func _seg_dist(a: Vector2, b: Vector2, p: Vector2) -> float:
 
 # === Combat resolution (uses AiShooting + AiCombatMath, dice from the seeded RNG) ===
 
-static func _resolve_shooting(attacker: Dictionary, target: Dictionary, dist: float,
+## SPLIT-FIRE shooting (OPR p.8 "you may split a unit's attacks by weapon type"): each ranged weapon TYPE
+## independently picks its best target under its own targeting overlay (AiTargeting: AP→best Defense,
+## Deadly→single-model Tough, Takedown→hero, else nearest not-activated in the open), then every weapon
+## aimed at the same target is rolled as one volley. Returns the PRIMARY target (first group) for the trace
+## headline, or null if nothing can fire.
+static func _resolve_shooting_split(attacker: Dictionary, units: Array, rng: RandomNumberGenerator,
+		log_lines: Array, rolls: Array = [], terrain: Dictionary = {}) -> Variant:
+	var groups: Dictionary = {}   # target _id -> {"target": unit, "profiles": Array}
+	var order: Array = []
+	for w in attacker["weapons"]:
+		var reach: int = int((w as Dictionary).get("range_value", 0))
+		if reach <= 0:
+			continue   # melee weapon
+		var prof: Array = AiShooting.profiles_in_range([w], float(reach))
+		if prof.is_empty():
+			continue
+		var overlay: int = AiTargeting.weapon_overlay((w as Dictionary).get("special_rules", []))
+		var tgt: Variant = _pick_overlay_target(attacker, units, float(reach), terrain, overlay)
+		if tgt == null:
+			continue
+		var id: int = int((tgt as Dictionary).get("_id", -1))
+		if not groups.has(id):
+			groups[id] = {"target": tgt, "profiles": []}
+			order.append(id)
+		(groups[id]["profiles"] as Array).append(prof[0])
+	var primary: Variant = null
+	for id in order:
+		var g: Dictionary = groups[id]
+		var tgt: Dictionary = g["target"]
+		if primary == null:
+			primary = tgt
+		var d: float = (attacker["pos"] as Vector2).distance_to(tgt["pos"])
+		_resolve_volley(attacker, tgt, g["profiles"], d, rng, log_lines, rolls, terrain)
+	return primary
+
+
+## Resolve ONE volley: the given ranged `profiles` (already grouped on `target`) fired at range `dist`.
+## Handles cover, Relentless (>9" extra hits on 6s), Deadly (wound multiply, Tough-capped), Regeneration
+## (the target's medic ignores wounds on a 5+), and the post-volley morale test.
+static func _resolve_volley(attacker: Dictionary, target: Dictionary, profiles: Array, dist: float,
 		rng: RandomNumberGenerator, log_lines: Array, rolls: Array = [], terrain: Dictionary = {}) -> void:
-	var profiles: Array = AiShooting.profiles_in_range(attacker["weapons"], dist)
 	if profiles.is_empty():
 		return
 	var alive_before := alive_models(target)
@@ -449,11 +616,17 @@ static func _resolve_shooting(attacker: Dictionary, target: Dictionary, dist: fl
 		var profile := p as Dictionary
 		var faces := _roll(rng, _effective_attacks(attacker, int(profile["attacks"])))
 		var hits := AiCombatMath.count_hits(faces, quality)
+		if bool(profile.get("relentless", false)):
+			hits += AiCombatMath.relentless_bonus_hits(faces, dist)   # >9": each unmodified 6 adds a hit
 		var save_faces: Array = [] if hits <= 0 else _roll(rng, hits)
 		var w: int = 0 if hits <= 0 else AiCombatMath.wounds(hits, save_faces, defense, int(profile["ap"]))
+		var deadly: int = int(profile.get("deadly", 0))
+		if w > 0 and deadly > 0:
+			w *= AiCombatMath.deadly_multiplier(deadly, int(target["tough"]))
 		total += w
 		_trace_roll(rolls, "shoot", attacker["name"], target["name"], str(profile["name"]),
 			faces, quality, hits, save_faces, defense + int(profile["ap"]), w, in_cover)
+	total = _apply_regeneration(target, total, rng, log_lines, rolls)   # medic negates some wounds first
 	if total > 0:
 		_apply_wounds(target, total)
 		log_lines.append("%s shoots %s → %d wound(s)" % [attacker["name"], target["name"], total])
@@ -462,17 +635,103 @@ static func _resolve_shooting(attacker: Dictionary, target: Dictionary, dist: fl
 		_morale(target, rng, log_lines, rolls)
 
 
+## Back-compat single-target shooting (all in-range profiles at one target) — used by focused tests and any
+## caller that already chose a target. Split-fire (above) is the activation path.
+static func _resolve_shooting(attacker: Dictionary, target: Dictionary, dist: float,
+		rng: RandomNumberGenerator, log_lines: Array, rolls: Array = [], terrain: Dictionary = {}) -> void:
+	_resolve_volley(attacker, target, AiShooting.profiles_in_range(attacker["weapons"], dist),
+		dist, rng, log_lines, rolls, terrain)
+
+
+## Whether a unit is forced to Hold-and-shoot this activation: it has a Relentless ranged weapon and an
+## enemy is in range (Solo & Co-Op Rules v3.5.0, p.2). Indirect/Artillery share this overlay but also carry
+## damage/deployment facets not yet modelled — see the coverage doc — so only Relentless triggers it here.
+static func _forces_hold_and_shoot(unit: Dictionary, enemy_in_range: bool) -> bool:
+	if not enemy_in_range:
+		return false
+	for w in unit["weapons"]:
+		if int((w as Dictionary).get("range_value", 0)) <= 0:
+			continue
+		for r in (w as Dictionary).get("special_rules", []):
+			if str(r).begins_with("Relentless"):
+				return true
+	return false
+
+
+## Pick a shooting target under a weapon's overlay: gather every valid enemy (alive, in range, clear LOS),
+## build a descriptor for each, and let AiTargeting rank them. null if none is valid.
+static func _pick_overlay_target(unit: Dictionary, units: Array, max_range: float, terrain: Dictionary,
+		overlay: int) -> Variant:
+	var side: int = int(unit["player"])
+	var up: Vector2 = unit["pos"]
+	var cands: Array = []
+	var refs: Array = []
+	for e in units:
+		if e["player"] == side or not is_alive(e):
+			continue
+		var d: float = up.distance_to(e["pos"])
+		if d > max_range:
+			continue
+		if not terrain.is_empty() \
+				and not TerrainRules.has_line_of_sight(terrain, up, e["pos"], MODEL_HEIGHT, MODEL_HEIGHT):
+			continue
+		cands.append(_target_descriptor(e, d, terrain))
+		refs.append(e)
+	var idx: int = AiTargeting.best_index(cands, overlay)
+	return refs[idx] if idx >= 0 else null
+
+
+## Descriptor of a candidate target for AiTargeting (see its best_index docs). "has_upgrade"/"upgrade_cost"
+## are absent from the point-sim (no per-unit upgrade cost) so Takedown only honours 'heroes first'.
+static func _target_descriptor(e: Dictionary, dist: float, terrain: Dictionary) -> Dictionary:
+	return {
+		"dist": dist,
+		"activated": bool(e["activated"]),
+		"in_cover": not terrain.is_empty() and TerrainRules.majority_in_cover(e["model_pos"], terrain),
+		"defense": int(e["defense"]),
+		"is_hero": _is_hero(e),
+		"has_upgrade": false,
+		"upgrade_cost": 0,
+		"single_tough": int(e["max_models"]) == 1 and int(e["tough"]) > 1,
+		"has_tough": int(e["tough"]) > 1,
+		"remaining_tough": int(e["max_models"]) * int(e["tough"]) - int(e["wounds_pool"]),
+	}
+
+
+## Regeneration / Medic (GF Advanced Rules v3.5.1, p.13): a unit that has the rule rolls one die per wound
+## it would take; each 5+ ignores that wound. Returns the wounds that actually land. Records a "regen" trace
+## roll per die so the review app shows the medic working. Units without the rule take full wounds.
+static func _apply_regeneration(unit: Dictionary, wounds: int, rng: RandomNumberGenerator,
+		log_lines: Array, rolls: Array = []) -> int:
+	if wounds <= 0 or not _has_regeneration(unit):
+		return maxi(wounds, 0)
+	var ignored := 0
+	for _i in range(wounds):
+		var face: int = rng.randi_range(1, 6)
+		var saved: bool = face >= 5
+		if saved:
+			ignored += 1
+		_trace_regen(rolls, str(unit["name"]), face, saved)
+	if ignored > 0:
+		log_lines.append("%s regenerates %d wound(s) (medic)" % [unit["name"], ignored])
+	return wounds - ignored
+
+
 static func _resolve_melee(attacker: Dictionary, target: Dictionary, rng: RandomNumberGenerator,
 		log_lines: Array, rolls: Array = []) -> void:
+	# Wounds CAUSED (post-save) decide who won the melee (p.10); Regeneration only reduces what actually
+	# lands, so we compare caused wounds but apply the post-regeneration amount.
 	var dealt := _strike(attacker, target, rng, log_lines, rolls, "charge")
-	if dealt > 0:
-		_apply_wounds(target, dealt)
+	var dealt_applied := _apply_regeneration(target, dealt, rng, log_lines, rolls)
+	if dealt_applied > 0:
+		_apply_wounds(target, dealt_applied)
 	# The defender MAY strike back (Shaken units strike back as fatigued — handled in _strike).
 	var struck_back := 0
 	if is_alive(target):
 		struck_back = _strike(target, attacker, rng, log_lines, rolls, "strike back")
-		if struck_back > 0:
-			_apply_wounds(attacker, struck_back)
+		var back_applied := _apply_regeneration(attacker, struck_back, rng, log_lines, rolls)
+		if back_applied > 0:
+			_apply_wounds(attacker, back_applied)
 	attacker["fatigued"] = true
 	target["fatigued"] = true
 	log_lines.append("%s charges %s → %d dealt, %d back" % [attacker["name"], target["name"], dealt, struck_back])
@@ -483,7 +742,9 @@ static func _resolve_melee(attacker: Dictionary, target: Dictionary, rng: Random
 		_morale(attacker, rng, log_lines, rolls)
 
 
-## One striker's melee output. Fatigued OR Shaken → hits only on unmodified 6s; else its Quality.
+## One striker's melee output. Fatigued OR Shaken → hits only on unmodified 6s; else its Quality. Only the
+## models WITHIN 2" of an enemy model strike (p.9 "Who Can Strike"), so each weapon's attacks scale by the
+## in-reach model count, not the whole unit. Deadly multiplies unsaved wounds (Tough-capped).
 static func _strike(striker: Dictionary, defender: Dictionary, rng: RandomNumberGenerator,
 		_log_lines: Array = [], rolls: Array = [], kind: String = "melee") -> int:
 	var profiles: Array = AiShooting.melee_profiles(striker["weapons"])
@@ -491,14 +752,46 @@ static func _strike(striker: Dictionary, defender: Dictionary, rng: RandomNumber
 	var total := 0
 	for p in profiles:
 		var profile := p as Dictionary
-		var faces := _roll(rng, _effective_attacks(striker, int(profile["attacks"])))
+		var faces := _roll(rng, _effective_melee_attacks(striker, defender, int(profile["attacks"])))
 		var hits := AiCombatMath.count_hits(faces, to_hit)
 		var save_faces: Array = [] if hits <= 0 else _roll(rng, hits)
 		var w: int = 0 if hits <= 0 else AiCombatMath.wounds(hits, save_faces, int(defender["defense"]), int(profile["ap"]))
+		var deadly: int = int(profile.get("deadly", 0))
+		if w > 0 and deadly > 0:
+			w *= AiCombatMath.deadly_multiplier(deadly, int(defender["tough"]))
 		total += w
 		_trace_roll(rolls, kind, striker["name"], defender["name"], str(profile["name"]),
 			faces, to_hit, hits, save_faces, int(defender["defense"]) + int(profile["ap"]), w)
 	return total
+
+
+## OPR "Who Can Strike" (p.9): a striker's models count toward its melee attacks only if they are within 2"
+## of an enemy model. Sim models are points, so the base-contact centre distance (CONTACT_IN) is folded into
+## the 2" reach — the same base allowance the movement/coherency layers use — giving a centre-to-centre reach
+## of CONTACT_IN + MELEE_REACH_IN. Falls back to the whole living unit when either side's model positions are
+## unset (e.g. a focused unit test that doesn't place models).
+static func _striking_models(striker: Dictionary, defender: Dictionary) -> int:
+	var sm: Array = striker["model_pos"]
+	var dm: Array = defender["model_pos"]
+	if sm.is_empty() or dm.is_empty():
+		return alive_models(striker)
+	var reach2: float = (CONTACT_IN + MELEE_REACH_IN) * (CONTACT_IN + MELEE_REACH_IN)
+	var n := 0
+	for m in sm:
+		for e in dm:
+			if (m as Vector2).distance_squared_to(e as Vector2) <= reach2:
+				n += 1
+				break
+	return mini(n, alive_models(striker))
+
+
+## Melee attacks after the 2" strike rule: scale a weapon group's attacks by the fraction of the unit's
+## models actually in reach of the enemy (vs the alive-fraction scaling shooting uses). Rounds to whole dice.
+static func _effective_melee_attacks(striker: Dictionary, defender: Dictionary, base_attacks: int) -> int:
+	var mx: int = int(striker["max_models"])
+	if mx <= 0:
+		return base_attacks
+	return maxi(0, int(round(float(base_attacks) * float(_striking_models(striker, defender)) / float(mx))))
 
 
 ## OPR morale (p.10): roll 1 die vs Quality (a Shaken unit ALWAYS fails). Fail + ≤ half size → Rout
@@ -843,6 +1136,12 @@ static func _trace_terrain(rolls: Array, unit: String, face: int, wounded: bool)
 	if rolls == null:
 		return
 	rolls.append({"kind": "dangerous", "actor": unit, "face": face, "wound": wounded})
+
+
+static func _trace_regen(rolls: Array, unit: String, face: int, saved: bool) -> void:
+	if rolls == null:
+		return
+	rolls.append({"kind": "regen", "actor": unit, "face": face, "saved": saved})
 
 
 static func _trace_activation(trace: Array, unit: Dictionary, round_no: int, action: String,

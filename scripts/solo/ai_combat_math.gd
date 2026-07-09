@@ -62,6 +62,29 @@ static func expected_wounds(attacks: int, quality: int, defense: int, armor_pier
 	return float(attacks) * p_hit * p_through
 
 
+## Extra hits Relentless adds (GF Advanced Rules v3.5.1, p.14): "When this model shoots at enemies over 9"
+## away, unmodified results of 6 to hit deal 1 extra hit." So each unmodified 6 among the to-hit faces adds
+## one hit — but only when the shot is over 9". Returns 0 at 9" or closer. (Shooting only; not melee.)
+static func relentless_bonus_hits(faces: Array, dist_in: float) -> int:
+	if dist_in <= 9.0:
+		return 0
+	var sixes := 0
+	for f in faces:
+		if int(f) == 6:
+			sixes += 1
+	return sixes
+
+
+## Damage multiplier for a Deadly(X) weapon against a target (GF Advanced Rules v3.5.1, p.13 + the "Deadly
+## Weapons" clarification, p.10): each unsaved wound is multiplied by X and assigned to one model, but a
+## Deadly weapon "may only deal up to as many wounds as the Tough value of the majority of models in the
+## unit; if the majority don't have Tough, it only deals 1 wound." In the pooled sim every model of a unit
+## shares one Tough, so the cap is that Tough (or 1 for a non-Tough unit). Returns >= 1.
+static func deadly_multiplier(deadly_x: int, target_tough: int) -> int:
+	var cap: int = maxi(target_tough, 1)
+	return clampi(deadly_x, 1, cap)
+
+
 ## A unit is "at or below half" when its alive count has dropped to <= half its starting size (the OPR
 ## morale trigger threshold). Guards a zero/empty start.
 static func at_or_below_half(alive: int, total: int) -> bool:

@@ -198,7 +198,9 @@ function read(step){
       h+=`<div class="lbl">Moral</div><div class="dice">${r.face<0?'<span class="narr">auto-fail (Shaken)</span>':die(r.face,r.result==='pass'?'hit':'blk')}<span class="narr" style="margin-left:8px">${res}</span></div>`;
     }else if(r.kind==='dangerous'){
       h+=`<div class="lbl">Gefährliches Gelände</div><div class="dice">${die(r.face,r.wound?'blk':'')}<span class="narr" style="margin-left:8px">${r.wound?'→ 1 Wunde':'sicher'}</span></div>`;
-    }else{const v=r.kind==='shoot'?'Beschuss':(r.kind==='strike back'?'Rückschlag':'Nahkampf');
+    }else if(r.kind==='regen'){
+      h+=`<div class="lbl">Regeneration / Medic — Wunde ignoriert auf 5+</div><div class="dice">${die(r.face,r.saved?'hit':'blk')}<span class="narr" style="margin-left:8px">${r.saved?'Wunde geheilt':'Wunde bleibt'}</span></div>`;
+    }else if(r.hit_faces){const v=r.kind==='shoot'?'Beschuss':(r.kind==='strike back'?'Rückschlag':'Nahkampf');
       h+=`<div class="lbl">${v} · ${r.weapon} → ${r.wounds} Wunde(n)</div><div class="dice">${hd(r.hit_faces,r.hit_target)}</div>`;
       if(r.hits>0)h+=`<div class="lbl">Rettung ${r.save_target}+${r.cover?' · Ziel in Deckung':''}</div><div class="dice">${sd(r.save_faces,r.save_target)}</div>`;}
   });

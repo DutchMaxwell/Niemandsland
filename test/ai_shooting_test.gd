@@ -24,6 +24,18 @@ func test_profiles_carry_ap() -> void:
 	assert_int(int(profiles[0]["attacks"])).is_equal(3)
 
 
+func test_profiles_carry_deadly_relentless_and_range() -> void:
+	var profiles := AiShooting.profiles_in_range([_w("Sniper", 30, 1, 2, ["AP(1)", "Deadly(3)", "Relentless"])], 20.0)
+	assert_int(int(profiles[0]["deadly"])).is_equal(3)
+	assert_bool(bool(profiles[0]["relentless"])).is_true()
+	assert_int(int(profiles[0]["range"])).is_equal(30)
+	assert_int(int(profiles[0]["ap"])).is_equal(1)
+	# A plain weapon carries the neutral defaults.
+	var plain := AiShooting.profiles_in_range([_w("Rifle", 24, 1, 5, [])], 10.0)
+	assert_int(int(plain[0]["deadly"])).is_equal(0)
+	assert_bool(bool(plain[0]["relentless"])).is_false()
+
+
 func test_boundary_range_counts_as_in_range() -> void:
 	assert_int(AiShooting.profiles_in_range([_w("Rifle", 24, 1, 1, [])], 24.0).size()).is_equal(1)
 	assert_int(AiShooting.profiles_in_range([_w("Rifle", 24, 1, 1, [])], 24.01).size()).is_equal(0)

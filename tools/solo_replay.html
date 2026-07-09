@@ -261,13 +261,24 @@ const TRACE = {"armies":{"0":"Battle Brothers · Cyan","1":"Battle Brothers · A
         html+=`<div class="roll morale"><div class="rollhead">${r.actor} · Moraltest (Quality ${r.quality}+)</div>
           <div class="dice">${r.face<0?'<span class="mres shaken">bereits Shaken → scheitert automatisch</span>':die(r.face,pass?'pass':'fail')}
           <span class="mres ${r.result}">${r.result==='pass'?'bestanden':(r.result==='shaken'?'→ Shaken':'→ ROUT (zerstört)')}</span></div></div>`;
-      } else {
+      } else if(r.kind==='regen'){
+        // Medic / Regeneration: one die per incoming wound, ignored on a 5+.
+        html+=`<div class="roll morale"><div class="rollhead">${r.actor} · Regeneration / Medic (Wunde ignoriert auf 5+)</div>
+          <div class="dice">${die(r.face,r.saved?'pass':'fail')}
+          <span class="mres ${r.saved?'pass':'fail'}">${r.saved?'Wunde geheilt':'Wunde bleibt'}</span></div></div>`;
+      } else if(r.kind==='dangerous'){
+        html+=`<div class="roll morale"><div class="rollhead">${r.actor} · Gefährliches Gelände (Wunde auf 1)</div>
+          <div class="dice">${die(r.face,r.wound?'fail':'pass')}
+          <span class="mres ${r.wound?'fail':'pass'}">${r.wound?'→ 1 Wunde':'sicher'}</span></div></div>`;
+      } else if(r.hit_faces){
+        // Attack (shoot / strike back / charge). Blocked count floored at 0 (Deadly can push wounds > hits).
         const verb=r.kind==='shoot'?'Beschuss':(r.kind==='strike back'?'Rückschlag':'Nahkampf');
+        const blocked=Math.max(0,r.hits-r.wounds);
         html+=`<div class="roll"><div class="rollhead">${verb} · ${r.weapon} → ${r.target}
             ${r.wounds>0?`· <span class="w">${r.wounds} Wunde${r.wounds>1?'n':''}</span>`:'· 0 Wunden'}</div>`;
         html+=`<div class="dielabel">Treffer — ${r.hit_faces.length} Würfel auf ${r.hit_target}+ → ${r.hits} Treffer</div>
           <div class="dice">${hitDice(r.hit_faces,r.hit_target)}</div>`;
-        if(r.hits>0) html+=`<div class="dielabel">Rettung (Gegner) — ${r.save_faces.length} auf ${r.save_target}+ → ${r.hits-r.wounds} geblockt</div>
+        if(r.hits>0) html+=`<div class="dielabel">Rettung (Gegner) — ${r.save_faces.length} auf ${r.save_target}+ → ${blocked} geblockt</div>
           <div class="dice">${saveDice(r.save_faces,r.save_target)}</div>`;
         html+=`</div>`;
       }

@@ -129,6 +129,36 @@ slide** for AI moves.
   a corridor; the unit then **resumes steering** toward the farthest visible corridor waypoint (string-pull).
   A\* is the **rescue**, not the default.
 
+## M2 combat rules — the next sim chunk (shipped)
+
+On top of movement, the sim's combat resolution now models the OPR core melee/shooting special rules the
+Battle Brothers list actually fields, each verified against the GF Advanced Rules v3.5.1 + Solo & Co-Op
+Rules v3.5.0 PDFs (see [`SOLO_AI_RULES_COVERAGE.md`](SOLO_AI_RULES_COVERAGE.md) for the full per-rule matrix):
+
+- **Melee "only models within 2" strike"** (p.9): a unit's melee attacks scale by the models actually in
+  reach of an enemy, not the whole unit — `SoloSim._striking_models` (base contact folded into centre
+  distance, as coherency/movement already do).
+- **Split fire** (p.8): each ranged weapon **type** picks its own target and rolls as its own volley —
+  `SoloSim._resolve_shooting_split`.
+- **Weapon target overlays** (Solo rules p.2), a new pure `AiTargeting` module: **AP** → highest-Defense
+  target, **Deadly** → single-model Tough then lowest-remaining-Tough, **Takedown** → heroes first
+  (upgrade-cost tier flagged as not representable), plus base nearest / not-activated / open-over-cover.
+- **Deadly(X)** damage (p.13 + p.10 clarification): each unsaved wound ×X, Tough-capped, assigned to one
+  model — `AiCombatMath.deadly_multiplier`.
+- **Relentless** (p.14 + Solo p.2): the AI Holds-and-shoots when in range, and >9" shooting turns each
+  unmodified 6-to-hit into an extra hit — `_forces_hold_and_shoot` + `AiCombatMath.relentless_bonus_hits`.
+- **Medic** = the Battle Brothers **Medical Training** item, which grants **Regeneration Aura**: each wound
+  a unit takes is ignored on a 5+ — `SoloSim._apply_regeneration` (visible in the review app as regen dice).
+- **Unknown-rule visibility**: any special rule a unit carries that the combat math does not model is now
+  **logged once per game** (`_log_unmodeled_rules`) — the M2/M3 backlog driver. Current test-army gaps:
+  Fearless, Battleborn, Blast, Reliable (all tracked in the coverage matrix).
+
+Tests: `test/ai_targeting_test.gd` (overlays) + new cases across `solo_sim_test`, `ai_combat_math_test`,
+`ai_shooting_test` (2" reach, split fire, Deadly, Regeneration, Relentless-hold, unknown-rule log, nested-
+rule import). Full solo suite green (117 cases). **Mandatory fairness re-run** (combat change): Battle
+Brothers mirror **47.0% / 51.6% / 1.4% draw** over 2000 games (inside 55/45) — all changes are
+reflection-symmetric; combat is simply less lethal / more objective-decided (~67% decided on objectives).
+
 **Fairness:** the mandatory mirror oracle (no walls) is **unchanged vs baseline** (byte-identical fast path),
 and now sits at **P0 48.7% / P1 49.6% / 1.7% draw** over 1000 games (Battle Brothers mirror, seeds 1000–1999).
 The "second-player skew" flagged during the MovementPlanner work (the oracle sat at ~42/57 on HEAD, well off

@@ -64,6 +64,27 @@ func test_success_chance_bounds_and_values() -> void:
 	assert_float(AiCombatMath.success_chance(9)).is_equal_approx(1.0 / 6.0, 0.0001)
 
 
+func test_relentless_bonus_hits_only_beyond_9_inches() -> void:
+	# Over 9": each unmodified 6 adds a hit.
+	assert_int(AiCombatMath.relentless_bonus_hits([6, 6, 3, 1], 12.0)).is_equal(2)
+	# At exactly 9" or closer: no bonus (the rule is "over 9").
+	assert_int(AiCombatMath.relentless_bonus_hits([6, 6, 3, 1], 9.0)).is_equal(0)
+	assert_int(AiCombatMath.relentless_bonus_hits([6, 6, 3, 1], 5.0)).is_equal(0)
+	# No 6s → no bonus even at long range.
+	assert_int(AiCombatMath.relentless_bonus_hits([5, 4, 3], 24.0)).is_equal(0)
+
+
+func test_deadly_multiplier_is_tough_capped() -> void:
+	# Deadly(3) vs a Tough(3) model → each unsaved wound counts triple.
+	assert_int(AiCombatMath.deadly_multiplier(3, 3)).is_equal(3)
+	# Deadly(6) vs Tough(3) → capped at the model's Tough (overkill lost).
+	assert_int(AiCombatMath.deadly_multiplier(6, 3)).is_equal(3)
+	# Deadly(2) vs Tough(3) → the full X (below the cap).
+	assert_int(AiCombatMath.deadly_multiplier(2, 3)).is_equal(2)
+	# Against a non-Tough unit (Tough 1) Deadly deals only 1 (per the p.10 clarification).
+	assert_int(AiCombatMath.deadly_multiplier(3, 1)).is_equal(1)
+
+
 func test_expected_wounds() -> void:
 	# 6 attacks, hit on 4+ (1/2), target Def 4+ save fails on 1/2 → 6 × 0.5 × 0.5 = 1.5.
 	assert_float(AiCombatMath.expected_wounds(6, 4, 4, 0)).is_equal_approx(1.5, 0.0001)
