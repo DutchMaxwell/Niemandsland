@@ -9,7 +9,9 @@ extends RefCounted
 ## typed 3" cells — the SAME model as the game's terrain_overlay.gd; see TerrainRules). Rules verified
 ## against the official GF Advanced Rules v3.5.1 rulebook (2026-07-08):
 ##  • Actions (p.7): Hold (no move, may shoot) / Advance (6", may shoot) / Rush (12", no shoot) /
-##    Charge (12" into melee).
+##    Charge (12" into melee). Movement (p.7): a non-charge move keeps every model over 1" from models of
+##    ANY other unit (friendly or enemy) — the rigid formation stops clear instead of intermingling; only a
+##    Charge may close inside that 1".
 ##  • Shooting (p.8) & Melee (p.9): sum attacks of models in range → roll to hit at Quality → defender
 ##    rolls to block at Defense → unblocked = wounds. Melee: defender may strike back; the loser (more
 ##    wounds taken) tests morale (p.10). Fatigue (p.9): after its first melee in a round a unit hits only
@@ -32,6 +34,7 @@ extends RefCounted
 const BOARD_IN := 48.0
 const DEPLOY_IN := 12.0
 const CONTACT_IN := 2.0
+const SPACING_IN := 1.0   # OPR (p.7): non-charging models must stay over 1" from any OTHER unit's models
 const OBJECTIVE_CONTROL_IN := 3.0
 const DEFAULT_ROUNDS := 4
 const MODEL_HEIGHT := 1   # every sim model is ground infantry (Height 1); tall/vehicle heights are a follow-up
@@ -333,21 +336,22 @@ static func _activate(unit: Dictionary, units: Array, rng: RandomNumberGenerator
 		AiDecision.Action.RUSH:
 			# STOP AT the objective, never march past it (p.58: seize within 3", "as close as possible").
 			# The maintainer's finding: units overshot the marker and abandoned it.
-			_terrain_move(unit, gdir * (minf(rush, goal_dist) if to_obj else rush), terrain, rng, log_lines, rolls)
+			_terrain_move(unit, gdir * (minf(rush, goal_dist) if to_obj else rush), terrain, rng, log_lines, rolls, units)
 		AiDecision.Action.CHARGE:
-			_terrain_move(unit, edir * minf(rush, maxf(enemy_dist - CONTACT_IN, 0.0)), terrain, rng, log_lines, rolls)
+			# Charge is the ONE action exempt from the 1" spacing rule — it closes to base contact.
+			_terrain_move(unit, edir * minf(rush, maxf(enemy_dist - CONTACT_IN, 0.0)), terrain, rng, log_lines, rolls, units, true)
 		AiDecision.Action.ADVANCE:
 			if to_obj:
 				# stop on the objective, don't overshoot
-				_terrain_move(unit, gdir * minf(advance, goal_dist), terrain, rng, log_lines, rolls)
+				_terrain_move(unit, gdir * minf(advance, goal_dist), terrain, rng, log_lines, rolls, units)
 			else:
 				# "Advancing" rule (p.58): a shooter advancing on the enemy stays as FAR as possible while
 				# still in range — step back to the range edge if already inside it, else close to get in
 				# range. It never flees off-board and always shoots (no kiting).
 				if enemy_dist <= float(shoot_range):
-					_terrain_move(unit, -edir * minf(advance, float(shoot_range) - enemy_dist), terrain, rng, log_lines, rolls)
+					_terrain_move(unit, -edir * minf(advance, float(shoot_range) - enemy_dist), terrain, rng, log_lines, rolls, units)
 				else:
-					_terrain_move(unit, edir * advance, terrain, rng, log_lines, rolls)
+					_terrain_move(unit, edir * advance, terrain, rng, log_lines, rolls, units)
 		_:
 			pass   # HOLD
 	var dist: float = (unit["pos"] as Vector2).distance_to(tpos)
@@ -561,21 +565,68 @@ static func _move(unit: Dictionary, delta: Vector2) -> void:
 		mp[k] = (mp[k] as Vector2) + applied
 
 
-## Terrain-aware movement: Difficult terrain (p.11) crossed by the path halves the move; then the rigid
-## formation translates (board-clamped in _move); then each model that crossed Dangerous terrain (p.12)
-## tests. Empty terrain (open field) → a plain _move.
+## Terrain- and spacing-aware movement. First the 1" spacing clamp (p.7) shortens a non-charge move so the
+## rigid formation stops clear of other units; then Difficult terrain (p.11) crossed by the path halves it;
+## then the formation translates (board-clamped in _move); then each model that crossed Dangerous terrain
+## (p.12) tests. `units` (all units) drives spacing; a Charge passes allow_contact=true to skip it and close
+## to base contact. Empty terrain + empty units (open field, no neighbours) → a plain _move.
 static func _terrain_move(unit: Dictionary, delta: Vector2, terrain: Dictionary,
-		rng: RandomNumberGenerator, log_lines: Array, rolls: Array = []) -> void:
-	if terrain.is_empty() or delta == Vector2.ZERO:
-		_move(unit, delta)
+		rng: RandomNumberGenerator, log_lines: Array, rolls: Array = [],
+		units: Array = [], allow_contact: bool = false) -> void:
+	var mv := delta
+	# 1" spacing (p.7): a non-charge move stops over 1" clear of any other unit — no walking through/into them.
+	if not allow_contact and not units.is_empty() and mv != Vector2.ZERO:
+		var reqd: float = mv.length()
+		var allowed: float = _spacing_limit(unit, mv / reqd, reqd, units)
+		if allowed < reqd - 0.001:
+			mv = (mv / reqd) * allowed
+			log_lines.append("%s stops clear of another unit (1\" spacing)" % unit["name"])
+	if terrain.is_empty() or mv == Vector2.ZERO:
+		_move(unit, mv)
 		return
 	var start: Vector2 = unit["pos"]
-	var mv := delta
 	if TerrainRules.path_crosses(terrain, start, start + mv, TerrainRules.PathCheck.DIFFICULT):
 		mv *= 0.5   # Difficult: halve a move that passes through it (a shorter step, may fall short of the goal)
 		log_lines.append("%s slowed by difficult terrain (half move)" % unit["name"])
 	_move(unit, mv)
 	_dangerous_test(unit, (unit["pos"] as Vector2) - start, terrain, rng, log_lines, rolls)
+
+
+## OPR General Movement (GF v3.5.1 p.7): "Models may never be within 1” of models from other units [...]
+## unless they are taking a Charge action." Clamps a non-charge translation so the rigid formation stops at
+## the separation threshold. Returns the greatest distance (≤ `dist`) the unit may travel along unit-vector
+## `dir`. `sep` is the min centre-to-centre gap: base contact (CONTACT_IN) plus the rule's 1". A pair already
+## inside `sep` (e.g. post-melee contact) doesn't restrict — only genuinely separated units are kept apart,
+## which is exactly the intermingling the maintainer flagged. Applies to friendly AND enemy units alike.
+static func _spacing_limit(unit: Dictionary, dir: Vector2, dist: float, units: Array,
+		sep: float = CONTACT_IN + SPACING_IN) -> float:
+	var my_models: Array = unit["model_pos"]
+	if my_models.is_empty() or dir == Vector2.ZERO or dist <= 0.0:
+		return dist
+	var sep2: float = sep * sep
+	var reach: float = dist + sep + 24.0   # coarse prune: units farther than this can't be reached this move
+	var origin: Vector2 = unit["pos"]
+	var limit: float = dist
+	for other in units:
+		if is_same(other, unit) or not is_alive(other):
+			continue
+		if origin.distance_to(other["pos"]) > reach:
+			continue
+		for o in other["model_pos"]:
+			var op: Vector2 = o
+			for m in my_models:
+				var rel: Vector2 = (m as Vector2) - op
+				var c: float = rel.length_squared() - sep2
+				if c <= 0.0:
+					continue   # already within sep (contact/exception) → this pair doesn't clamp
+				var b: float = rel.dot(dir)
+				if b >= 0.0:
+					continue   # moving away or parallel → never enters the sep disk
+				var disc: float = b * b - c
+				if disc < 0.0:
+					continue   # closest approach still outside sep → never enters
+				limit = minf(limit, maxf(-b - sqrt(disc), 0.0))   # stop where centre distance first hits sep
+	return limit
 
 
 ## Dangerous terrain (p.12): each ALIVE model whose own path crossed a Dangerous cell rolls one die; a 1 is

@@ -273,3 +273,38 @@ func test_dangerous_terrain_can_wound() -> void:
 	rng.seed = 5
 	SoloSim._terrain_move(u, Vector2(0.0, -6.0), danger, rng, [])   # move through the dangerous cell
 	assert_int(SoloSim.alive_models(u)).is_less(60)                 # some models rolled a 1 and died
+
+
+# === Movement spacing (GF v3.5.1 p.7: stay over 1" from other units, except when charging) ===
+
+func test_non_charge_move_stops_clear_of_another_unit() -> void:
+	# A unit advancing straight at a stationary unit 10" away must stop at the separation threshold
+	# (base contact CONTACT_IN + the 1" rule), never intermingling — this is the maintainer's overlap bug.
+	var mover: Dictionary = SoloSim.make_unit("Mover", 0, 4, 4, 1, [{"name": "CCW", "range_value": 0, "attacks": 1, "count": 1, "special_rules": []}])
+	mover["pos"] = Vector2(24, 10)
+	mover["model_pos"] = [Vector2(24, 10)]
+	var block: Dictionary = SoloSim.make_unit("Block", 1, 4, 4, 1, [])
+	block["pos"] = Vector2(24, 20)
+	block["model_pos"] = [Vector2(24, 20)]
+	# Request a 12" step north (toward the blocker) → clamp so the model stops at the 3" separation.
+	SoloSim._terrain_move(mover, Vector2(0, 12), {}, RandomNumberGenerator.new(), [], [], [mover, block])
+	var gap: float = (mover["model_pos"][0] as Vector2).distance_to(Vector2(24, 20))
+	assert_float(gap).is_equal_approx(SoloSim.CONTACT_IN + SoloSim.SPACING_IN, 0.05)   # stopped exactly clear
+
+
+func test_charge_ignores_spacing_and_closes_to_contact() -> void:
+	# The SAME approach taken as a Charge (allow_contact) is exempt from the 1" rule — it closes inside it to
+	# base contact, so it ends nearer than the spacing-limited non-charge move.
+	var walk: Dictionary = SoloSim.make_unit("Walk", 0, 4, 4, 1, [{"name": "CCW", "range_value": 0, "attacks": 1, "count": 1, "special_rules": []}])
+	walk["pos"] = Vector2(24, 10); walk["model_pos"] = [Vector2(24, 10)]
+	var charge: Dictionary = SoloSim.make_unit("Charge", 0, 4, 4, 1, [{"name": "CCW", "range_value": 0, "attacks": 1, "count": 1, "special_rules": []}])
+	charge["pos"] = Vector2(24, 10); charge["model_pos"] = [Vector2(24, 10)]
+	var block: Dictionary = SoloSim.make_unit("Block", 1, 4, 4, 1, [])
+	block["pos"] = Vector2(24, 20); block["model_pos"] = [Vector2(24, 20)]
+	var rng := RandomNumberGenerator.new()
+	SoloSim._terrain_move(walk, Vector2(0, 9), {}, rng, [], [], [walk, block], false)     # non-charge → clamped
+	SoloSim._terrain_move(charge, Vector2(0, 9), {}, rng, [], [], [charge, block], true)  # charge → exempt
+	var walk_gap: float = (walk["model_pos"][0] as Vector2).distance_to(Vector2(24, 20))
+	var charge_gap: float = (charge["model_pos"][0] as Vector2).distance_to(Vector2(24, 20))
+	assert_float(walk_gap).is_greater_equal(SoloSim.CONTACT_IN + SoloSim.SPACING_IN - 0.01)   # walk kept clear
+	assert_float(charge_gap).is_less(walk_gap)                                                # charge closed nearer
