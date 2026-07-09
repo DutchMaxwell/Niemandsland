@@ -569,10 +569,24 @@ static func _effective_attacks(unit: Dictionary, base_attacks: int) -> int:
 
 static func _apply_wounds(unit: Dictionary, w: int) -> void:
 	unit["wounds_pool"] = int(unit["wounds_pool"]) + maxi(w, 0)
-	# Remove dead models from the formation, back rank first (defender-optimal, matches the game).
+	# OPR casualty removal (p.9): the controlling player removes its own dead, and a player pulls them from
+	# the REAR — keeping the front rank (objective-holders, models in the fight) in place. "Rear" is the side
+	# toward this unit's OWN deployment edge (player 0 → y = 0, player 1 → y = BOARD_IN), so removal is
+	# mirror-symmetric between the two sides. (A plain pop_back removed the highest-index — geometrically the
+	# northern-most — model for BOTH players: that strips player 0's enemy-facing FRONT rank but player 1's
+	# rear, a mirror asymmetry that handed player 1 a systematic objective-control edge once 1" spacing made
+	# objective grip position-sensitive — the mirror-oracle skew.)
 	var mp: Array = unit["model_pos"]
+	var owns_low_edge: bool = int(unit["player"]) == 0
 	while mp.size() > alive_models(unit):
-		mp.pop_back()
+		var rear_idx: int = 0
+		var rear_y: float = (mp[0] as Vector2).y
+		for k in range(1, mp.size()):
+			var y: float = (mp[k] as Vector2).y
+			if (owns_low_edge and y < rear_y) or (not owns_low_edge and y > rear_y):
+				rear_y = y
+				rear_idx = k
+		mp.remove_at(rear_idx)
 
 
 # === Helpers ===

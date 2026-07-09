@@ -129,12 +129,20 @@ slide** for AI moves.
   a corridor; the unit then **resumes steering** toward the farthest visible corridor waypoint (string-pull).
   A\* is the **rescue**, not the default.
 
-**Fairness:** the mandatory mirror oracle (no walls) is **unchanged vs baseline** (byte-identical fast path).
-A bonus mirror *with* the symmetric wall layer showed the walls **amplify a pre-existing second-player skew**
-(the oracle already sat well off 50/50 on HEAD before this work), independent of the steering — so walls are
-deliberately kept **out of the fairness oracle** and live only in the trace + tests. Tests:
-`test/movement_planner_test.gd` (geometry incl. corners/gaps, coherency, fast-path exactness, wall
-avoidance, allowance clamp, U-pocket A* rescue). **Not yet** wired into the real game (that is P3).
+**Fairness:** the mandatory mirror oracle (no walls) is **unchanged vs baseline** (byte-identical fast path),
+and now sits at **P0 48.7% / P1 49.6% / 1.7% draw** over 1000 games (Battle Brothers mirror, seeds 1000–1999).
+The "second-player skew" flagged during the MovementPlanner work (the oracle sat at ~42/57 on HEAD, well off
+50/50) was **root-caused and fixed** — it was **not** rules-faithful and **not** the steering. It was
+introduced by the 1" spacing commit (`d601e38`): casualty removal (`_apply_wounds`) used `pop_back`, dropping
+the highest-index model, which is geometrically the **northern-most** model for **both** players. That strips
+player 0's enemy-facing **front** rank (player 0 faces +y) but player 1's **rear** rank (player 1 faces −y) —
+a mirror asymmetry. It stayed invisible until 1" spacing made objective grip position-sensitive, at which
+point it handed player 1 a systematic objective-control edge (fewer wipes, more objective-decided games
+exposed it). Fix: remove the **rear-most** model (nearest the unit's own deployment edge), symmetric per side.
+The bonus mirror *with* the symmetric wall layer still shows walls amplify any residual imbalance, so walls
+stay **out of the fairness oracle** and live only in the trace + tests. Tests: `test/movement_planner_test.gd`
+(geometry incl. corners/gaps, coherency, fast-path exactness, wall avoidance, allowance clamp, U-pocket A*
+rescue). **Not yet** wired into the real game (that is P3).
 
 ## Architecture
 
