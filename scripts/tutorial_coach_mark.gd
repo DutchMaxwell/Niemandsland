@@ -27,6 +27,10 @@ const BUTTON_W := 150.0
 # ===== Signals =====
 signal skip_lesson_pressed()
 signal end_pressed()
+## Concept-card acknowledgement ("GOT IT") — only shown for steps with no on-board action
+## to detect (e.g. the R2 regiments card on a Grimdark Future board). Action steps never
+## show this button; they advance on real gameplay signals.
+signal continue_pressed()
 
 # ===== Private state =====
 var _target_rect: Rect2 = Rect2()
@@ -38,6 +42,7 @@ var _progress_label: Label = null
 var _label: Label = null
 var _skip_lesson_btn: Button = null
 var _end_btn: Button = null
+var _continue_btn: Button = null
 
 
 # ===== Lifecycle =====
@@ -96,6 +101,14 @@ func set_target_rect(target_rect: Rect2) -> void:
 	_has_target = true
 
 
+## Show or hide the "GOT IT" concept-card acknowledgement button. Set true only for steps
+## that have no on-board action to detect; action steps keep it hidden and advance on real
+## gameplay signals (never a generic Next button).
+func set_continue_visible(show_continue: bool) -> void:
+	if _continue_btn != null:
+		_continue_btn.visible = show_continue
+
+
 ## Hide the whole overlay (tutorial ended / skipped).
 func hide_overlay() -> void:
 	visible = false
@@ -145,6 +158,26 @@ func _build() -> void:
 	_end_btn = _build_button("END TUTORIAL", CARD_MARGIN + HudTokens.BUTTON_HEIGHT + HudTokens.SPACE_8)
 	_end_btn.pressed.connect(func() -> void: end_pressed.emit())
 	add_child(_end_btn)
+
+	# Concept-card acknowledgement, bottom-centre, hidden until a step requests it.
+	_continue_btn = Button.new()
+	_continue_btn.text = "GOT IT"
+	_continue_btn.focus_mode = Control.FOCUS_NONE
+	_continue_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	var amber := HudTokens.amber_button()
+	_continue_btn.add_theme_stylebox_override("normal", amber["normal"])
+	_continue_btn.add_theme_stylebox_override("hover", amber["hover"])
+	_continue_btn.add_theme_stylebox_override("pressed", amber["pressed"])
+	_continue_btn.add_theme_color_override("font_color", HudTokens.TEXT)
+	_continue_btn.add_theme_font_size_override("font_size", 14)
+	_continue_btn.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_continue_btn.offset_left = -BUTTON_W * 0.5
+	_continue_btn.offset_right = BUTTON_W * 0.5
+	_continue_btn.offset_top = -(HudTokens.BUTTON_HEIGHT + CARD_MARGIN)
+	_continue_btn.offset_bottom = -CARD_MARGIN
+	_continue_btn.visible = false
+	_continue_btn.pressed.connect(func() -> void: continue_pressed.emit())
+	add_child(_continue_btn)
 
 
 func _build_button(text: String, top: float) -> Button:

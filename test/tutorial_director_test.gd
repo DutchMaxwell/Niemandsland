@@ -35,6 +35,16 @@ func _new_director(lesson: String) -> TutorialDirector:
 	return director
 
 
+## As above but over the FULL track (tool + rule), so R1-R3 lessons are reachable.
+func _new_full_director(lesson: String) -> TutorialDirector:
+	var director := auto_free(Director.new()) as TutorialDirector
+	director.flow = Flow.new(Flow.build_full_track())
+	director.flow.start_at(lesson)
+	director.progress = Progress.new(TEST_CFG)
+	director.progress.load_from_disk()
+	return director
+
+
 ## A minimal real GameUnit (player 1) whose models wrap auto-freed Node3Ds.
 func _new_unit(model_count: int) -> GameUnit:
 	var unit := GameUnit.new()
@@ -167,3 +177,64 @@ func test_skip_lesson_marks_completed_and_moves_on() -> void:
 	assert_array(completions).is_equal(["W4"])
 	assert_bool(director.progress.is_lesson_completed("W4")).is_true()
 	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("W5")
+
+
+## ===== T2 rule track: R1 activation rhythm =====
+
+func test_r1_activate_then_round_advances() -> void:
+	var director := _new_full_director("R1")
+	var unit := _new_unit(1)
+	# Activating a unit advances activate -> round.
+	director._on_unit_activated(unit)
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("round")
+	# Advancing the round completes R1 and moves to R2.
+	var completions: Array = []
+	director.lesson_completed.connect(func(id: String) -> void: completions.append(id))
+	director._on_round_advanced(2)
+	assert_array(completions).is_equal(["R1"])
+	assert_bool(director.progress.is_lesson_completed("R1")).is_true()
+	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("R2")
+
+
+## ===== T2 rule track: R2 regiments concept card (ACK) =====
+
+func test_r2_concept_card_completes_on_continue() -> void:
+	var director := _new_full_director("R2")
+	var completions: Array = []
+	director.lesson_completed.connect(func(id: String) -> void: completions.append(id))
+	# A non-ack event must not advance the concept card.
+	director._on_roll_finnished(4)
+	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("R2")
+	# The coach "GOT IT" button (continue) completes it and moves to R3.
+	director._on_continue()
+	assert_array(completions).is_equal(["R2"])
+	assert_bool(director.progress.is_lesson_completed("R2")).is_true()
+	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("R3")
+
+
+## ===== T2 rule track: R3 coherency broken -> restored =====
+
+func _coherency_result(valid: bool) -> CoherencyChecker.CoherencyResult:
+	var result := CoherencyChecker.CoherencyResult.new()
+	result.valid = valid
+	return result
+
+
+func test_r3_coherency_broken_then_restored_finishes_track() -> void:
+	var director := _new_full_director("R3")
+	var finished := [null]
+	director.tutorial_finished.connect(func(completed: bool) -> void: finished[0] = completed)
+
+	# A coherent-first report must NOT satisfy the restore step (nothing broke yet).
+	director._on_coherency_visualized(_coherency_result(true))
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("spread")
+
+	# Breaking coherency advances spread -> restore.
+	director._on_coherency_visualized(_coherency_result(false))
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("restore")
+
+	# Restoring coherency completes R3 and finishes the whole track.
+	director._on_coherency_visualized(_coherency_result(true))
+	assert_bool(director.flow.finished).is_true()
+	assert_bool(finished[0]).is_true()
+	assert_bool(director.progress.is_lesson_completed("R3")).is_true()

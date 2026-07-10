@@ -1,6 +1,6 @@
 class_name TutorialDirector
 extends Node
-## Runs the guided tutorial (T1 tool track W1-W6) on the REAL table inside main.tscn.
+## Runs the guided tutorial (tool track W1-W6 + rule track R1-R3) on the REAL table inside main.tscn.
 ## Owns the pure pieces — a TutorialFlow cursor over the lesson track and a
 ## TutorialProgress cfg — and does the scene work around them: it translates the real
 ## gameplay seams into TutorialFlow.Events, resolves each step's spotlight target
@@ -14,9 +14,11 @@ extends Node
 ##   measurement_finished                                        (object_manager)
 ##   roll_finnished                                              (dice tray)
 ##   unit_activated                                              (radial controller)
-##   loose_model_dead_changed                                    (army manager)
+##   loose_model_dead_changed / round_advanced                   (army manager)
+##   visualization_completed                                     (coherency visualizer, R3)
 ## plus polled state edges for camera deltas, menu/import-dialog visibility, dock
-## open/presented and movement-band activity.
+## open/presented and movement-band activity. Concept-only steps (R2 on a GF board)
+## advance via the coach "GOT IT" button, never a generic Next.
 
 # ===== Constants =====
 const BOARD_PATH := "res://assets/tutorial/tutorial_board.nml"
@@ -48,6 +50,7 @@ var _unit_dock: Node = null
 var _radial_controller: Node = null
 var _army_manager: Node = null
 var _undo_manager: Node = null
+var _coherency_visualizer: Node = null
 
 # ===== Private state =====
 var _coach: TutorialCoachMark = null
@@ -70,6 +73,9 @@ var _prev_dock_open: bool = false
 var _prev_presented: bool = false
 var _prev_bands_active: bool = false
 var _assessment_dialog: ConfirmationDialog = null
+# R3: latch a broken-coherency edge so the follow-up "restored" step only fires after the
+# unit was actually seen out of coherency first (never on the initial coherent snapshot).
+var _coherency_broken: bool = false
 # Chapter-picker launch: play forward from the chosen lesson WITHOUT skipping lessons
 # that are already completed (replaying is the point). Resume launches skip them.
 var _replay_mode: bool = false
@@ -103,6 +109,7 @@ func setup(refs: Dictionary) -> void:
 	_radial_controller = refs.get("radial_controller", null)
 	_army_manager = refs.get("army_manager", null)
 	_undo_manager = refs.get("undo_manager", null)
+	_coherency_visualizer = refs.get("coherency_visualizer", null)
 	if _camera_pivot != null:
 		_camera = _camera_pivot.get_node_or_null("Camera3D") as Camera3D
 
@@ -112,13 +119,14 @@ func setup(refs: Dictionary) -> void:
 ## picker): jump straight there, no assessment.
 func begin(p_progress: TutorialProgress, start_lesson: String = "") -> void:
 	progress = p_progress
-	flow = TutorialFlow.new(TutorialFlow.build_tool_track())
+	flow = TutorialFlow.new(TutorialFlow.build_full_track())
 
 	_coach = TutorialCoachMark.new()
 	_coach.name = "TutorialCoachMark"
 	add_child(_coach)
 	_coach.skip_lesson_pressed.connect(_on_skip_lesson)
 	_coach.end_pressed.connect(func() -> void: _finish(false))
+	_coach.continue_pressed.connect(_on_continue)
 
 	_connect_seams()
 	_init_ui_edges()
@@ -170,8 +178,13 @@ func _connect_seams() -> void:
 		_dice_tray.roll_finnished.connect(_on_roll_finnished)
 	if _radial_controller != null and _radial_controller.has_signal("unit_activated"):
 		_radial_controller.unit_activated.connect(_on_unit_activated)
-	if _army_manager != null and _army_manager.has_signal("loose_model_dead_changed"):
-		_army_manager.loose_model_dead_changed.connect(_on_loose_model_dead_changed)
+	if _army_manager != null:
+		if _army_manager.has_signal("loose_model_dead_changed"):
+			_army_manager.loose_model_dead_changed.connect(_on_loose_model_dead_changed)
+		if _army_manager.has_signal("round_advanced"):
+			_army_manager.round_advanced.connect(_on_round_advanced)
+	if _coherency_visualizer != null and _coherency_visualizer.has_signal("visualization_completed"):
+		_coherency_visualizer.visualization_completed.connect(_on_coherency_visualized)
 
 
 func _disconnect_seams() -> void:
@@ -188,6 +201,9 @@ func _disconnect_seams() -> void:
 		_disconnect_if(_radial_controller, "unit_activated", _on_unit_activated)
 	if _army_manager != null:
 		_disconnect_if(_army_manager, "loose_model_dead_changed", _on_loose_model_dead_changed)
+		_disconnect_if(_army_manager, "round_advanced", _on_round_advanced)
+	if _coherency_visualizer != null:
+		_disconnect_if(_coherency_visualizer, "visualization_completed", _on_coherency_visualized)
 
 
 func _disconnect_if(source: Object, signal_name: String, callable: Callable) -> void:
@@ -234,6 +250,38 @@ func _on_loose_model_dead_changed(node: Node3D, dead: bool) -> void:
 		_on_event(TutorialFlow.Event.MODEL_KILLED)
 	else:
 		_on_event(TutorialFlow.Event.MODEL_REVIVED)
+
+
+## R1: a game round was advanced (all activation markers cleared).
+func _on_round_advanced(_round_number: int) -> void:
+	_on_event(TutorialFlow.Event.ROUND_ADVANCED)
+
+
+## R3: the live coherency check reported a unit's state (fires while a selected unit is
+## dragged/moved). Edge-detect broken -> restored: a unit must be seen OUT of coherency
+## before the "restored" step can fire, so the initial coherent snapshot never satisfies
+## the second step by accident. `result.valid` is the checker's in-coherency verdict.
+func _on_coherency_visualized(result: CoherencyChecker.CoherencyResult) -> void:
+	if result == null:
+		return
+	var in_coherency := bool(result.valid)
+	if not in_coherency:
+		_coherency_broken = true
+		_on_event(TutorialFlow.Event.COHERENCY_BROKEN)
+	elif _coherency_broken:
+		_coherency_broken = false
+		_on_event(TutorialFlow.Event.COHERENCY_RESTORED)
+
+
+## R2: the player acknowledged a concept card via the coach "GOT IT" button. Only ack
+## steps advance this way; action steps still gate on their real gameplay signal.
+func _on_continue() -> void:
+	if flow == null or flow.finished:
+		return
+	var step := flow.current_step()
+	if not bool(step.get("ack", false)):
+		return
+	_on_event(int(step.get("event", TutorialFlow.Event.NONE)) as TutorialFlow.Event)
 
 
 func _on_skip_lesson() -> void:
@@ -304,6 +352,10 @@ func _enter_step() -> void:
 
 	if _is_camera_event(event):
 		_reset_camera_baselines()
+	# R3: the "must break coherency first" latch is armed fresh at the spread step so a
+	# stale latch from an earlier run/replay can never pre-satisfy the restore step.
+	if event == TutorialFlow.Event.COHERENCY_BROKEN:
+		_coherency_broken = false
 	if target == TutorialFlow.TARGET_UNIT:
 		_resolve_target_unit()
 		if event == TutorialFlow.Event.UNIT_SELECTED:
@@ -322,6 +374,9 @@ func _enter_step() -> void:
 			_coach.show_banner(String(step.get("text", "")))
 		else:
 			_coach.show_step(String(step.get("text", "")), rect, mask)
+		# Concept cards (no on-board action to detect, e.g. R2 on a GF board) advance via
+		# an explicit "GOT IT" button; action steps never show it (they gate on real signals).
+		_coach.set_continue_visible(bool(step.get("ack", false)))
 
 	step_changed.emit(String(flow.current_lesson().get("id", "")), String(step.get("id", "")))
 	# UI-state events may already be satisfied when the step starts (e.g. the menu is
@@ -381,14 +436,14 @@ func _on_assessment_answered(knows_rules: bool, used_sim: bool) -> void:
 	if progress != null:
 		progress.set_assessment(knows_rules, used_sim)
 		progress.save_to_disk()
-	var offer := TutorialProgress.skip_offer_lessons(used_sim)
+	var offer := TutorialProgress.skip_offer_lessons(used_sim, knows_rules)
 	if offer.is_empty():
 		_start_from_progress()
 		return
 	var skip_dialog := ConfirmationDialog.new()
-	skip_dialog.title = "Skip the basics?"
-	skip_dialog.dialog_text = "You already know your way around a simulator.\nSkip the camera and select/move basics and start with importing armies?"
-	skip_dialog.ok_button_text = "SKIP THE BASICS"
+	skip_dialog.title = "Skip what you know?"
+	skip_dialog.dialog_text = _skip_offer_text(used_sim, knows_rules)
+	skip_dialog.ok_button_text = "SKIP THOSE"
 	skip_dialog.cancel_button_text = "PLAY EVERYTHING"
 	skip_dialog.confirmed.connect(func() -> void:
 		if progress != null:
@@ -399,6 +454,19 @@ func _on_assessment_answered(knows_rules: bool, used_sim: bool) -> void:
 	skip_dialog.canceled.connect(func() -> void: _start_from_progress())
 	add_child(skip_dialog)
 	skip_dialog.popup_centered()
+
+
+## Copy for the skip offer, tailored to which self-assessment axes qualified: the
+## simulator axis skips the tool basics (camera + select/move), the rules axis skips the
+## OPR rule track. Kept pure (no scene access) so the wording is unit-checkable.
+static func _skip_offer_text(used_sim: bool, knows_rules: bool) -> String:
+	var parts: Array[String] = []
+	if used_sim:
+		parts.append("the camera and select/move basics")
+	if knows_rules:
+		parts.append("the OnePageRules rule track")
+	var what := parts[0] if parts.size() == 1 else "%s and %s" % [parts[0], parts[1]]
+	return "You told us you already know your way around.\nSkip %s? You can still replay any chapter later from the tutorial menu." % what
 
 
 # ===== Camera delta detection (W1) =====

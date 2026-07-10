@@ -193,6 +193,7 @@ var _tutorial_director: TutorialDirector = null
 var _tutorial_start_lesson: String = ""       # chapter-picker lesson id ("" = assessment/resume flow)
 var _tutorial_board_pending: bool = false     # the bundled tutorial board was queued on the pending-load path
 var _tutorial_board_loaded: bool = false      # its load finished (load_completed/load_failed fired)
+var _tutorial_tips: TutorialTips = null        # T2 one-time contextual tips + MP guest intro (always-on in-game)
 var _host_free_move_check: CheckButton = null   # "Move all models" — host-operated, session-wide
 var _room_code_button: Button = null          # permanent room-code display in the left bar (click = copy)
 var _session_room_code: String = ""
@@ -2189,6 +2190,10 @@ func _on_network_connected() -> void:
 	# the full state (gated on the handshake). No explicit state request needed.
 	network_manager.announce_version_to_host()
 	_register_local_name()
+	# First join as a GUEST: play the client-side guest short track (camera · cursor · dice)
+	# once ever. This path only runs on a connecting client, never the host.
+	if is_instance_valid(_tutorial_tips):
+		_tutorial_tips.show_guest_intro()
 
 
 func _on_network_failed() -> void:
@@ -3821,6 +3826,11 @@ func _on_intro_finished() -> void:
 			cinematic_intro.queue_free()
 			cinematic_intro = null
 
+	# T2 contextual first-time tips + MP guest intro: always-on in-game (independent of the
+	# guided tutorial), so a player who skipped the tutorial still gets one-shot hints the
+	# first time they touch an advanced feature. Suppressed while a tutorial chapter runs.
+	_init_tutorial_tips()
+
 	# Guided tutorial: the UI is now revealed, so start the director on the live table.
 	if _tutorial_mode:
 		call_deferred("_start_tutorial")
@@ -3835,8 +3845,23 @@ func _on_intro_finished() -> void:
 ## first tutorial launch may download both factions' models (54 minis) from the CDN.
 const TUTORIAL_BOARD_TIMEOUT_S := 120.0
 
+## Create the always-on contextual-tips manager (T2) and wire it to the live seams. It runs
+## for every in-game session — tutorial or not — and self-suppresses while a chapter is active.
+func _init_tutorial_tips() -> void:
+	if is_instance_valid(_tutorial_tips):
+		return
+	_tutorial_tips = TutorialTips.new()
+	_tutorial_tips.name = "TutorialTips"
+	add_child(_tutorial_tips)
+	_tutorial_tips.setup({
+		"object_manager": object_manager,
+		"dice_tray": dice_roller_control,
+		"undo_manager": undo_manager,
+	})
+
+
 ## Wait for the bundled board (queued on the pending-load path), then hand control to
-## the TutorialDirector, which runs the event-gated W1-W6 tool track on the live table.
+## the TutorialDirector, which runs the event-gated W1-W6 + R1-R3 track on the live table.
 func _start_tutorial() -> void:
 	if is_instance_valid(_tutorial_director):
 		return  # already running (guard against a double call_deferred)
@@ -3870,7 +3895,11 @@ func _start_tutorial() -> void:
 		"radial_controller": radial_menu_controller,
 		"army_manager": opr_army_manager,
 		"undo_manager": undo_manager,
+		"coherency_visualizer": coherency_visualizer,
 	})
+	# Suppress the always-on contextual tips while the guided chapter runs (they resume when it ends).
+	if is_instance_valid(_tutorial_tips):
+		_tutorial_tips.set_tutorial_active(true)
 	_tutorial_director.begin(progress, _tutorial_start_lesson)
 
 
@@ -3889,6 +3918,9 @@ func _on_tutorial_finished(completed: bool) -> void:
 	if is_instance_valid(_tutorial_director):
 		_tutorial_director.queue_free()
 	_tutorial_director = null
+	# Contextual tips resume now that no chapter is running.
+	if is_instance_valid(_tutorial_tips):
+		_tutorial_tips.set_tutorial_active(false)
 
 
 ## ============================================================================

@@ -250,7 +250,7 @@ func _on_start_battle_pressed() -> void:
 func _on_tutorial_pressed() -> void:
 	var progress := TutorialProgress.new()
 	progress.load_from_disk()
-	var track := TutorialFlow.build_tool_track()
+	var track := TutorialFlow.build_full_track()
 	if not progress.any_completed(TutorialFlow.ids(track)):
 		_launch_tutorial("")
 		return

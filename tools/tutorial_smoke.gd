@@ -1,5 +1,6 @@
 extends SceneTree
-## Launch-smoke + evidence harness for the guided tutorial (T1). Boots the REAL main.tscn
+## Launch-smoke + evidence harness for the guided tutorial (T1 tool track + T2 rule track).
+## Boots the REAL main.tscn
 ## with the runtime tutorial flags (the same path the TUTORIAL menu button takes, chapter
 ## "W1" so the whole track plays in order), verifies the bundled board produced real units,
 ## then walks EVERY lesson step: logs the live instruction, spotlight target key, mask flag
@@ -91,13 +92,13 @@ func _drive() -> void:
 	# The walk marks every lesson completed — verify persistence, then restore the player's file.
 	var check := TutorialProgress.new()
 	check.load_from_disk()
-	var all_done := check.first_incomplete(TutorialFlow.ids(TutorialFlow.build_tool_track())).is_empty()
+	var all_done := check.first_incomplete(TutorialFlow.ids(TutorialFlow.build_full_track())).is_empty()
 	_restore_cfg()
 	if not all_done:
 		printerr("SMOKE-FAIL: walk ended but tutorial.cfg does not show all lessons completed")
 		quit(1)
 		return
-	printerr("SMOKE-OK: walked %d steps across W1-W6 on the live main.tscn; overlay + spotlight per step; cfg persisted + restored" % steps_walked)
+	printerr("SMOKE-OK: walked %d steps across W1-W6 + R1-R3 on the live main.tscn; overlay + spotlight per step; cfg persisted + restored" % steps_walked)
 	quit(0)
 
 

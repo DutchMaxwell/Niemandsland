@@ -28,6 +28,11 @@ enum Event {
 	UNIT_ACTIVATED,   # radial_menu_controller.unit_activated (card chip or radial)
 	MODEL_KILLED,     # loose_model_dead_changed dead=true (casualty parked)
 	MODEL_REVIVED,    # loose_model_dead_changed dead=false (parked model revived)
+	# --- T2 rule track (R1-R3) ---
+	ROUND_ADVANCED,       # opr_army_manager.round_advanced (all activations cleared) — R1
+	ACK,                  # player acknowledged a concept card via the coach "GOT IT" button — R2
+	COHERENCY_BROKEN,     # a unit's coherency visualization reported it out of coherency — R3
+	COHERENCY_RESTORED,   # a previously-broken unit is back in 1" coherency — R3
 }
 
 # ===== Spotlight target keys (resolved to rects by the director) =====
@@ -108,6 +113,48 @@ static func build_tool_track() -> Array:
 				"event": Event.MODEL_REVIVED, "target": TARGET_PARKED_MODEL, "mask": false},
 		]},
 	]
+
+
+## The T2 rule track (Tutorial_Plan lessons R1-R3), event-gated on the same real GF
+## tutorial board. Rule text verified against the OPR Advanced Rules v3.5.1 PDFs:
+##   R1 GF "Game Structure" / "Activating Units" (alternating activations; one action:
+##      Hold / Advance / Rush / Charge; round ends when every unit has activated).
+##   R2 AoF:R "Unit Facing" / "Unit Formations" (regiments are an Age of Fantasy feature —
+##      a single movement tray in ranks with a 45° front arc). The GF tutorial board has
+##      no regiments (reloading to a different board mid-tutorial is the "Scythe error"
+##      the design forbids), so R2 is a concept card acknowledged with the coach "GOT IT"
+##      button; the hands-on controls are taught in context by TutorialTips the first time
+##      the player touches a real tray in an AoF:R game.
+##   R3 GF "Unit Coherency" (every model within 1" of a neighbour, ≤ 9" across the unit,
+##      forming an uninterrupted chain).
+static func build_rule_track() -> Array:
+	return [
+		{"id": "R1", "title": "Activation rhythm", "steps": [
+			{"id": "activate", "text": "OnePageRules is played in alternating activations: activate ONE of your units and it takes its whole turn — one action (Hold, Advance, Rush or Charge). Activate a unit now.",
+				"event": Event.UNIT_ACTIVATED, "target": TARGET_UNIT, "mask": false},
+			{"id": "round", "text": "Then it is your opponent's turn to activate one unit, and so on. When every unit on both sides has activated, the round ends — advance to the next round to clear all activation markers.",
+				"event": Event.ROUND_ADVANCED, "target": TARGET_NONE, "mask": false},
+		]},
+		{"id": "R2", "title": "Regiments (Age of Fantasy)", "steps": [
+			{"id": "concept", "text": "In Age of Fantasy: Regiments a unit forms a single movement tray, ranked up (5 or 3 models wide) with a 45° front arc. This Grimdark Future board has no regiments — when you play an AoF:R army, press F to show a tray's arcs and Shift+F to change its frontage. We'll point these out the first time you use them.",
+				"event": Event.ACK, "target": TARGET_NONE, "mask": false, "ack": true},
+		]},
+		{"id": "R3", "title": "Coherency & spacing", "steps": [
+			{"id": "spread", "text": "Every model in a unit must stay within 1\" of a neighbour, forming an unbroken chain. Select your highlighted unit and drag one model far away — the coherency warning appears.",
+				"event": Event.COHERENCY_BROKEN, "target": TARGET_UNIT, "mask": false},
+			{"id": "restore", "text": "Now drag that model back until every model is within 1\" of a neighbour again — the warning clears once the unit is back in coherency.",
+				"event": Event.COHERENCY_RESTORED, "target": TARGET_UNIT, "mask": false},
+		]},
+	]
+
+
+## The full guided tutorial in track order: the tool track (W1-W6) followed by the rule
+## track (R1-R3). This is what the director runs and the chapter picker lists; the two
+## sub-track builders stay separate so each can be reasoned about (and tested) on its own.
+static func build_full_track() -> Array:
+	var full: Array = build_tool_track()
+	full.append_array(build_rule_track())
+	return full
 
 
 ## Lesson ids in track order.
