@@ -278,3 +278,29 @@ func test_default_opts_keep_legacy_wall_behaviour() -> void:
 	assert_bool(MovementPlanner.step_blocked(Vector2(15, 20.2), Vector2(15, 21), walls, {})).is_false()
 	assert_bool(MovementPlanner.rigid_blocked([Vector2(15, 19)], Vector2(0, 2), walls)).is_true()
 	assert_bool(MovementPlanner.rigid_blocked([Vector2(5, 19)], Vector2(0, 2), walls)).is_false()
+
+
+# === Finding 2: no model left behind (real-game opts path only) ===
+
+func test_gather_laggards_pulls_a_parked_model_up_to_the_formation() -> void:
+	# Models 0 and 1 advanced +8" north; model 2 was left parked at its start — the "only half the unit
+	# moved" state. The gather pass (opts present) must pull the parked model up toward the moved pair.
+	var before: Array = [Vector2(10, 10), Vector2(11, 10), Vector2(12, 10)]
+	var result: Array = [Vector2(10, 18), Vector2(11, 18), Vector2(12, 10)]
+	var out := MovementPlanner._gather_laggards(before, result, Vector2(0, 8), [], 48.0, {"clearance": 0.5})
+	assert_float((out[2] as Vector2).y).is_greater(12.0)                                   # advanced north
+	assert_float((out[2] as Vector2).distance_to(out[1] as Vector2)).is_less(MovementPlanner.SPREAD_IN)
+
+
+func test_plan_unit_step_leaves_no_model_behind_around_a_zone() -> void:
+	# A no-go zone squarely on the left column's northward path. A naive per-model steer would strand the
+	# blocked models while the right column advances; with opts, EVERY model must advance and the unit
+	# must stay coherent at the destination — within the 8" allowance (distance truth).
+	var pos: Array = [Vector2(10, 10), Vector2(11.5, 10), Vector2(10, 11.5), Vector2(11.5, 11.5)]
+	var opts := {"clearance": 0.4, "zones": [{"c": Vector2(10, 15), "r": 2.5}]}
+	var trails: Array = []
+	var out := MovementPlanner.plan_unit_step(pos, Vector2(0, 8), [], {}, false, 48.0, trails, opts)
+	for i in range(pos.size()):
+		assert_float((out[i] as Vector2).distance_to(pos[i])).is_greater(1.5)
+		assert_float((out[i] as Vector2).distance_to(pos[i])).is_less_equal(8.0 + 0.01)
+	assert_bool(MovementPlanner.is_coherent(out)).is_true()

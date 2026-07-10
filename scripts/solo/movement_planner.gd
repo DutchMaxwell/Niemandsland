@@ -35,6 +35,11 @@ const STEP_IN := 0.75                       # per-substep travel: fine enough to
 const STUCK_FRACTION := 0.25                # steering that advances the anchor < this fraction of the intended move = stuck → A*
 const COH_PULL_IN := 1.0                    # per-pass inward pull when restoring coherency
 const COH_PASSES := 8                       # max coherency-restore passes (bounds the pull to COH_PASSES × COH_PULL_IN)
+# Laggard gather (real-game opts path only — the field-test "only half the unit moved" fix): a model that
+# advanced along the goal by less than LAG_FRACTION of the unit's BEST forward progress is pulled up toward
+# the moved formation so no model is left parked while the rest advance. Bounded, obstacle-checked, monotonic.
+const LAG_FRACTION := 0.5
+const GATHER_PASSES := 16                    # a fully-parked model may need to travel further than a coherency nudge
 # Deflection fan for wall-sliding: straight first, then widening turns to either side (degrees).
 const SLIDE_ANGLES: Array[float] = [0.0, 20.0, -20.0, 45.0, -45.0, 70.0, -70.0, 90.0, -90.0]
 
@@ -372,7 +377,11 @@ static func plan_unit_step(model_pos: Array, delta: Vector2, walls: Array, grid:
 				wtargets.append((m as Vector2) + wdelta)
 			trails.clear()   # the rescue replaces the stuck first attempt — its trail too
 			result = _steer(model_pos, wtargets, allowance, walls, board_in, trails, opts)
-	var eased := _enforce_coherency(result, walls, board_in, opts)
+	# Real-game path (opts present): before the coherency ease, pull up any model the obstacle-steering
+	# left behind so EVERY model advances with the unit (field-test finding 2: only half the unit moved).
+	# The SIM passes no opts and keeps the pure coherency ease, so its planned positions are byte-identical.
+	var gathered := _gather_laggards(model_pos, result, delta, walls, board_in, opts) if not opts.is_empty() else result
+	var eased := _enforce_coherency(gathered, walls, board_in, opts)
 	_append_trail_finals(trails, eased)
 	return eased
 
@@ -499,6 +508,46 @@ static func _enforce_coherency(result: Array, walls: Array, board_in: float, opt
 			# clip a wall or drag a model into an enemy 1" zone).
 			if not step_blocked(out[i], cand, walls, opts):
 				out[i] = cand
+	return out
+
+
+## Pull up the models the obstacle-steering left behind (field-test finding 2: "only half the unit moved").
+## A model whose forward progress along the goal is below LAG_FRACTION of the unit's BEST progress is a
+## laggard — it steered into an obstacle and stalled while its neighbours advanced. Each pass moves every
+## current laggard one COH_PULL_IN step toward the moved formation's centroid (which sits AHEAD of the
+## laggards once the rest advanced), obstacle-checked and monotonic, so it can never clip a wall, enter an
+## enemy zone or overshoot. Real-game path only (the caller gates on non-empty opts). The distance-truth
+## trim in the caller still caps every model's arc at its allowance, so a gathered model never moves too far.
+static func _gather_laggards(before: Array, result: Array, delta: Vector2, walls: Array,
+		board_in: float, opts: Dictionary) -> Array:
+	var out := result.duplicate()
+	if out.size() <= 1 or delta.length() < EPS:
+		return out
+	var dir := delta / delta.length()
+	var best_prog := 0.0
+	for i in range(out.size()):
+		best_prog = maxf(best_prog, ((out[i] as Vector2) - (before[i] as Vector2)).dot(dir))
+	if best_prog < EPS:
+		return out   # the WHOLE unit stalled (genuinely boxed in) — nothing to catch up to
+	var lag_target := LAG_FRACTION * best_prog
+	for _pass in range(GATHER_PASSES):
+		var c := _centroid(out)
+		var moved := false
+		for i in range(out.size()):
+			if ((out[i] as Vector2) - (before[i] as Vector2)).dot(dir) >= lag_target:
+				continue   # this model kept up with the unit's advance
+			var to_c := c - (out[i] as Vector2)
+			var d := to_c.length()
+			if d < EPS:
+				continue
+			var cand: Vector2 = (out[i] as Vector2) + to_c / d * minf(COH_PULL_IN, d)
+			if cand.x < -EPS or cand.x > board_in + EPS or cand.y < -EPS or cand.y > board_in + EPS:
+				continue
+			if not step_blocked(out[i], cand, walls, opts):
+				out[i] = cand
+				moved = true
+		if not moved:
+			break
 	return out
 
 
