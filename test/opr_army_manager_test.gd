@@ -495,3 +495,35 @@ func test_sergeant_with_weapon_swap_resolves_combined_variant() -> void:
 	# Role + a whole-unit weapon swap ("Heavy Great Weapon" -> slug `sword`) -> sorted combined key.
 	assert_str(m._resolve_model_variant_name("Royal Guard", ["Heavy Great Weapon", "Sergeant"], "mummified_undead")) \
 		.is_equal("Royal Guard#crest+sword")
+
+
+# ===== _find_body_node vs the staged blob structures (QA r6) =====
+
+func test_find_body_node_champion_comp_structure_found() -> void:
+	# The champion comps nest the rider as `reiter (Node3D) -> body (MeshInstance3D)` — found.
+	var m := _mgr()
+	var root: Node3D = auto_free(Node3D.new())
+	var reiter := Node3D.new()
+	reiter.name = "reiter"
+	root.add_child(reiter)
+	var body := MeshInstance3D.new()
+	body.name = "body"
+	reiter.add_child(body)
+	assert_bool(m._find_body_node(root) == body).is_true()
+
+
+func test_find_body_node_chariot_unit_structure_missing() -> void:
+	# The staged Skeleton Chariot UNIT blobs (rolefix wave) name the crew group `lenker` but its mesh
+	# `mesh` — NO node named `body` exists, so the rider fit CANNOT engage (contract v1.2 violation;
+	# producer defect, verified on all three unit keys). The game must detect nothing here rather than
+	# guess from localized group names.
+	var m := _mgr()
+	var root: Node3D = auto_free(Node3D.new())
+	for group_name in ["cart", "steed_l", "steed_r", "lenker"]:
+		var group := Node3D.new()
+		group.name = group_name
+		root.add_child(group)
+		var mesh := MeshInstance3D.new()
+		mesh.name = "mesh"
+		group.add_child(mesh)
+	assert_bool(m._find_body_node(root) == null).is_true()
