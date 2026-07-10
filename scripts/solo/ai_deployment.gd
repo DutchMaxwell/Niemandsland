@@ -98,7 +98,11 @@ static func _blocked_at(p: Vector2, blocked: Callable, probe_radius: float) -> b
 		return true
 	if probe_radius <= 0.0:
 		return false
-	for off in [Vector2(probe_radius, 0), Vector2(-probe_radius, 0), Vector2(0, probe_radius), Vector2(0, -probe_radius)]:
+	# Sample the footprint's cardinal AND diagonal edge points (8): a centre-plus-cardinals check let a
+	# unit's grid CORNER overlap blocking terrain between the cardinal samples (field-test finding 3).
+	var diag := probe_radius * 0.70710678   # cos 45° — the corner offset at `probe_radius`
+	for off in [Vector2(probe_radius, 0), Vector2(-probe_radius, 0), Vector2(0, probe_radius), Vector2(0, -probe_radius),
+			Vector2(diag, diag), Vector2(diag, -diag), Vector2(-diag, diag), Vector2(-diag, -diag)]:
 		if bool(blocked.call(p + off)):
 			return true
 	return false

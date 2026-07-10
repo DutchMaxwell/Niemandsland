@@ -84,3 +84,19 @@ func test_best_spot_respects_terrain_callback() -> void:
 	# A Strider/Flying unit (no callback) ignores it and gets the closer southern spot.
 	var free_spot := AiDeployment.best_spot(section, objective, [], 0.05, Callable(), 0.05)
 	assert_float(free_spot.y).is_greater(0.5)
+
+
+## Field-test finding 3: a unit's FOOTPRINT (not just its centre) must clear blocking terrain — the check
+## samples the footprint's diagonal CORNERS, so a spot whose corner dips into a wall/forest is rejected
+## even when its centre and cardinal edges are clear.
+func test_best_spot_rejects_footprint_corner_in_blocking_terrain() -> void:
+	var section := Rect2(Vector2(0, 0), Vector2(1, 1))
+	var objective := [Vector2(1.0, 1.0)]   # SE corner — pulls placement toward the blocked wedge
+	var probe := 0.1
+	# A blocking wedge in the far SE: reachable only by a footprint whose NE/SE corner overlaps it.
+	var blocked := func(p: Vector2) -> bool: return p.x > 0.82 and p.y > 0.82
+	var spot := AiDeployment.best_spot(section, objective, [], 0.05, blocked, 0.05, probe)
+	assert_bool(spot != Vector2.INF).is_true()
+	# The centre is clear AND no sampled footprint point (incl. the diagonal corners) lands in the wedge.
+	assert_bool(bool(blocked.call(spot))).is_false()
+	assert_bool(AiDeployment._blocked_at(spot, blocked, probe)).is_false()
