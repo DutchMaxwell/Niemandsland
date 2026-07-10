@@ -1444,22 +1444,21 @@ func _solo_end_targeting() -> void:
 	_solo_los_line = null
 
 
-## Targeting-mode input (runs from _input BEFORE the world handlers; object_manager skips while active).
+## Targeting-mode input, driven by the pure SoloController.targeting_route router. Mouse events reach it
+## via main._input below (object_manager defers the mouse while targeting); ESC arrives via
+## _unhandled_key_input. Returns true when the event was consumed.
 func _solo_targeting_input(event: InputEvent) -> bool:
 	if _solo_target_mode.is_empty():
 		return false
-	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-		_solo_end_targeting()
-		return true
-	if event is InputEventMouseMotion:
-		_solo_update_los_line(event.position)
-		return false   # motion may pass (camera etc.)
-	if event is InputEventMouseButton and event.pressed:
-		var mb := event as InputEventMouseButton
-		if mb.button_index == MOUSE_BUTTON_RIGHT:
+	match SoloController.targeting_route(event, _solo_over_blocking_ui()):
+		SoloController.TargetingRoute.CANCEL:
 			_solo_end_targeting()
 			return true
-		if mb.button_index == MOUSE_BUTTON_LEFT:
+		SoloController.TargetingRoute.TRACK:
+			_solo_update_los_line((event as InputEventMouseMotion).position)
+			return false   # motion may pass (camera etc.)
+		SoloController.TargetingRoute.PICK:
+			var mb := event as InputEventMouseButton
 			var target := _solo_pick_unit_at(mb.position)
 			var attacker: GameUnit = _solo_target_mode.get("unit")
 			var melee: bool = bool(_solo_target_mode.get("melee", false))
@@ -1474,6 +1473,28 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 			_run_human_attack(attacker, target, melee)
 			return true
 	return false
+
+
+## True when the mouse hovers an interactive HUD control that must keep receiving its own clicks while
+## targeting (same heuristic as object_manager._control_blocks_world_click — reused, not forked).
+func _solo_over_blocking_ui() -> bool:
+	if object_manager == null or not object_manager.has_method("_control_blocks_world_click"):
+		return false
+	return object_manager._control_blocks_world_click(get_viewport().gui_get_hovered_control())
+
+
+## Solo P8 targeting owns the MOUSE while active — and this hook MUST live in _input:
+## _unhandled_key_input only ever receives KEY events in Godot 4, so the original P8 wiring left the
+## enemy click unreachable (maintainer field-test bug: clicking a target did nothing — object_manager's
+## _input defers all mouse handling while targeting is active, and nobody else picked the click up).
+## Keys (ESC) keep flowing through _unhandled_key_input; only mouse events are handled here.
+func _input(event: InputEvent) -> void:
+	if _solo_target_mode.is_empty():
+		return
+	if not (event is InputEventMouseButton or event is InputEventMouseMotion):
+		return
+	if _solo_targeting_input(event):
+		get_viewport().set_input_as_handled()
 
 
 ## "" when the target is attackable, else the human-readable reason.
@@ -1879,7 +1900,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_capture_bug_report()
 		get_viewport().set_input_as_handled()
 		return
-	# Solo P8: while the player is picking an attack target, targeting input eats the relevant events.
+	# Solo P8: while the player is picking an attack target, ESC cancels the mode. (KEY events only ever
+	# reach _unhandled_key_input — the mouse side of targeting is hooked in _input above.)
 	if not _solo_target_mode.is_empty() and _solo_targeting_input(event):
 		get_viewport().set_input_as_handled()
 		return

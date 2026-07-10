@@ -519,6 +519,35 @@ static func effective_attacks(base_attacks: int, alive: int, max_models: int) ->
 	return maxi(0, int(round(float(base_attacks) * float(alive) / float(max_models))))
 
 
+## What the P8 targeting mode does with one input event (pure, testable — the event→action resolution).
+## The mode owns the MOUSE while active: LMB picks the hovered enemy, RMB/ESC cancels, motion tracks the
+## live LOS line. A click over an interactive HUD control is IGNOREd so the GUI keeps working underneath.
+## REGRESSION GUARD (maintainer field-test bug): the original P8 wiring fed the handler only from
+## _unhandled_key_input, which never receives mouse events in Godot 4 — the enemy click landed nowhere
+## (object_manager defers the mouse while targeting). Mouse events MUST be first-class targeting input;
+## main._input forwards them through this router.
+enum TargetingRoute { IGNORE, CANCEL, PICK, TRACK }
+
+
+static func targeting_route(event: InputEvent, over_blocking_ui: bool) -> TargetingRoute:
+	if event is InputEventKey:
+		var k := event as InputEventKey
+		if k.pressed and k.keycode == KEY_ESCAPE:
+			return TargetingRoute.CANCEL
+		return TargetingRoute.IGNORE
+	if event is InputEventMouseMotion:
+		return TargetingRoute.TRACK
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if not mb.pressed:
+			return TargetingRoute.IGNORE
+		if mb.button_index == MOUSE_BUTTON_RIGHT:
+			return TargetingRoute.CANCEL
+		if mb.button_index == MOUSE_BUTTON_LEFT:
+			return TargetingRoute.IGNORE if over_blocking_ui else TargetingRoute.PICK
+	return TargetingRoute.IGNORE
+
+
 ## OPR objective control at ROUND END (Solo & Co-Op v3.5.0 p.6, mirrors SoloSim._seize_objectives): a marker
 ## is seized by the ONE player with a non-Shaken unit model within 3"; models of two (or more) players within
 ## 3" contest it → neutral (0); nobody near → the owner PERSISTS. Shaken units can neither seize nor contest.

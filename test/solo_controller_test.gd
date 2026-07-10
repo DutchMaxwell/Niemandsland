@@ -257,3 +257,46 @@ func test_seize_shaken_units_neither_seize_nor_contest() -> void:
 		[_info(1, [Vector3(0.02, 0, 0)], true), _info(2, [Vector3(-0.02, 0, 0)])],
 		[Vector3(0, 0, 0)], [0])
 	assert_array(vs["owners"]).is_equal([2])
+
+
+# === P8 targeting-input routing (pure SoloController.targeting_route) ===
+# REGRESSION (maintainer field-test): the enemy click in Shoot/Fight targeting did nothing — the handler
+# was fed only from _unhandled_key_input, which never receives mouse events in Godot 4. These tests pin
+# the contract that MOUSE events are first-class targeting input: LMB picks, RMB cancels, motion tracks.
+
+func _lmb(pressed: bool = true) -> InputEventMouseButton:
+	var e := InputEventMouseButton.new()
+	e.button_index = MOUSE_BUTTON_LEFT
+	e.pressed = pressed
+	return e
+
+
+func test_targeting_route_left_click_picks_the_target() -> void:
+	assert_int(SoloController.targeting_route(_lmb(), false)).is_equal(SoloController.TargetingRoute.PICK)
+	# Release is not a pick (only the press resolves the target).
+	assert_int(SoloController.targeting_route(_lmb(false), false)).is_equal(SoloController.TargetingRoute.IGNORE)
+
+
+func test_targeting_route_click_over_hud_control_is_ignored() -> void:
+	# A click on an interactive HUD widget (dock, dice tray) keeps working during targeting.
+	assert_int(SoloController.targeting_route(_lmb(), true)).is_equal(SoloController.TargetingRoute.IGNORE)
+
+
+func test_targeting_route_right_click_and_escape_cancel() -> void:
+	var rmb := InputEventMouseButton.new()
+	rmb.button_index = MOUSE_BUTTON_RIGHT
+	rmb.pressed = true
+	assert_int(SoloController.targeting_route(rmb, false)).is_equal(SoloController.TargetingRoute.CANCEL)
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.pressed = true
+	assert_int(SoloController.targeting_route(esc, false)).is_equal(SoloController.TargetingRoute.CANCEL)
+	# Any other key passes through untouched.
+	var other := InputEventKey.new()
+	other.keycode = KEY_A
+	other.pressed = true
+	assert_int(SoloController.targeting_route(other, false)).is_equal(SoloController.TargetingRoute.IGNORE)
+
+
+func test_targeting_route_mouse_motion_tracks_the_los_line() -> void:
+	assert_int(SoloController.targeting_route(InputEventMouseMotion.new(), false)).is_equal(SoloController.TargetingRoute.TRACK)
