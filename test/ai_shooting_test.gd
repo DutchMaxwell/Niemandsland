@@ -82,3 +82,15 @@ func test_melee_profiles_carry_counter_facet() -> void:
 	var profiles := AiShooting.melee_profiles([_w("Spear", 0, 1, 5, ["Counter"]), _w("Fists", 0, 2, 5, [])])
 	assert_bool(bool(profiles[0]["counter"])).is_true()
 	assert_bool(bool(profiles[1]["counter"])).is_false()
+
+
+# === Wave-4: Destructive weapon flag (army-book — Robot Legions / Mummified Undead) ===
+
+func test_destructive_flag_is_parsed_onto_the_profile() -> void:
+	# "Destructive" (unmodified-6-to-hit → AP(+4)) is pre-parsed like the wave-1..3 facets.
+	var d := AiShooting.profiles_in_range([_w("Rail Cannon", 36, 2, 1, ["AP(2)", "Destructive"])], 20.0)
+	assert_int(d.size()).is_equal(1)
+	assert_bool(bool((d[0] as Dictionary)["destructive"])).is_true()
+	# A plain weapon does not carry it.
+	var plain := AiShooting.profiles_in_range([_w("Rifle", 24, 1, 5, [])], 10.0)
+	assert_bool(bool((plain[0] as Dictionary)["destructive"])).is_false()

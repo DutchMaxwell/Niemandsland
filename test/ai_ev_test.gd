@@ -139,3 +139,27 @@ func test_ev_is_deterministic() -> void:
 	var d := {"defense": 5, "tough": 3, "models": 4, "stealth": true, "in_cover": true}
 	assert_float(AiEv.profile_ev(w, ATT, d, 14.0, false)).is_equal_approx(
 		AiEv.profile_ev(w, ATT, d, 14.0, false), 0.000001)
+
+
+# === Wave-4: Destructive and Self-Repair flow through the EV ===
+
+func test_destructive_raises_ev_like_rending_via_ap4_on_sixes() -> void:
+	# Destructive upgrades the expected unmodified-6 hits to AP(+4) — more expected wounds than a plain
+	# weapon, matching Rending's EV effect (same AP(+4)-on-6 math).
+	var plain := AiEv.profile_ev(_rprof(), ATT, DEF_PLAIN, 12.0, false)
+	var destructive := AiEv.profile_ev(_rprof({"destructive": true}), ATT, DEF_PLAIN, 12.0, false)
+	var rending := AiEv.profile_ev(_rprof({"rending": true}), ATT, DEF_PLAIN, 12.0, false)
+	assert_bool(destructive > plain).is_true()
+	assert_float(destructive).is_equal_approx(rending, 0.0001)
+
+
+func test_self_repair_regen_target_is_six_and_devalues_shooting() -> void:
+	# Self-Repair (6+ ignore) is worth less than Regeneration (5+) to the shooter, and both devalue vs a
+	# plain defender — the EV sees the wound-ignore rate, per unit rule.
+	var self_repair := {"defense": 4, "tough": 1, "models": 5, "regeneration": true, "regen_target": 6}
+	var regen5 := {"defense": 4, "tough": 1, "models": 5, "regeneration": true, "regen_target": 5}
+	var plain_ev := AiEv.profile_ev(_rprof(), ATT, DEF_PLAIN, 12.0, false)
+	var sr_ev := AiEv.profile_ev(_rprof(), ATT, self_repair, 12.0, false)
+	var rg_ev := AiEv.profile_ev(_rprof(), ATT, regen5, 12.0, false)
+	assert_bool(sr_ev < plain_ev).is_true()      # 6+ ignore reduces wounds
+	assert_bool(sr_ev > rg_ev).is_true()          # but less reduction than a 5+ regen

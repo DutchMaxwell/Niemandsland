@@ -229,3 +229,25 @@ func test_impact_total_dice_counter_reduction() -> void:
 	assert_int(AiCombatMath.impact_total_dice(3, 2, 0)).is_equal(6)
 	# The reduction is "-1 TOTAL Impact rolls per model with Counter" and never goes negative.
 	assert_int(AiCombatMath.impact_total_dice(1, 1, 5)).is_equal(0)
+
+
+# === Wave-4 army-book rules (Robot Legions / Battle Brothers / Mummified Undead) ===
+
+func test_battleborn_recovers_on_4plus() -> void:
+	# Round-start Shaken recovery (army-book text): 4+ clears Shaken, 1-3 does not.
+	assert_bool(AiCombatMath.battleborn_recovers(4)).is_true()
+	assert_bool(AiCombatMath.battleborn_recovers(6)).is_true()
+	assert_bool(AiCombatMath.battleborn_recovers(3)).is_false()
+	assert_bool(AiCombatMath.battleborn_recovers(1)).is_false()
+
+
+func test_unpredictable_fighter_effect_split() -> void:
+	# 1-3 → AP(+1); 4-6 → +1 to hit (exactly one facet each).
+	for f in [1, 2, 3]:
+		var lo := AiCombatMath.unpredictable_fighter_effect(f)
+		assert_int(int(lo["ap"])).is_equal(1)
+		assert_int(int(lo["hit"])).is_equal(0)
+	for f in [4, 5, 6]:
+		var hi := AiCombatMath.unpredictable_fighter_effect(f)
+		assert_int(int(hi["ap"])).is_equal(0)
+		assert_int(int(hi["hit"])).is_equal(1)

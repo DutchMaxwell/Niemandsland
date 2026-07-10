@@ -36,6 +36,10 @@ const NEUTRAL_DEFENDER := {"defense": 4, "tough": 1, "models": 5}
 ## pass-through factor is 1 − P(5+) = 2/3.
 const REGENERATION_TARGET := 5
 
+## Self-Repair ignore target (wave-4 army-book rule, Robot Legions — official Army Forge text: each wound
+## ignored on a 6+) — expected pass-through factor 1 − P(6+) = 5/6. All models must carry the rule.
+const SELF_REPAIR_TARGET := 6
+
 
 # ===== Context builders (GameUnit → EV context; the readers main.gd's resolution delegates to) =====
 
@@ -85,8 +89,20 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"shielded": rule_on_all_models(unit, "Shielded"),
 		"in_cover": in_cover,
 		"counter_models": counter_models,
-		"regeneration": unit.has_special_rule("Regeneration") or unit.has_special_rule("Medical Training"),
+		"regeneration": _regen_target(unit) > 0,
+		"regen_target": _regen_target(unit),
 	}
+
+
+## The Regeneration-family wound-ignore roll target for a unit (0 = none): Regeneration / Medical Training
+## → 5+ (any bearing model), else Self-Repair (wave-4 army-book, all models) → 6+. Mirrors main's
+## _solo_regen_target so the EV metric and the dice resolution ignore wounds at the SAME rate.
+static func _regen_target(unit: GameUnit) -> int:
+	if unit.has_special_rule("Regeneration") or unit.has_special_rule("Medical Training"):
+		return REGENERATION_TARGET
+	if rule_on_all_models(unit, "Self-Repair"):
+		return SELF_REPAIR_TARGET
+	return 0
 
 
 # ===== Core expected value (one weapon profile) =====
@@ -119,9 +135,9 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 		hits += attacks * SIX_P
 	if melee and charging and (bool(profile.get("furious", false)) or bool(att.get("furious", false))):
 		hits += attacks * SIX_P
-	# — Rending: the expected unmodified-6 hits save at AP(+4); NOT Blast-multiplied (matches the
-	#   resolution's rending_ap_hits cap convention) —
-	var six_hits: float = attacks * SIX_P if bool(profile.get("rending", false)) else 0.0
+	# — Rending / Destructive (wave 4): the expected unmodified-6 hits save at AP(+4); NOT Blast-multiplied
+	#   (matches the resolution's rending_ap_hits cap convention). Same AP(+4) math for both rules —
+	var six_hits: float = attacks * SIX_P if (bool(profile.get("rending", false)) or bool(profile.get("destructive", false))) else 0.0
 	# — Blast (GF v3.5.1: each hit ×min(X, models in target), after other rules) —
 	var blast := int(profile.get("blast", 0))
 	if blast > 1:
@@ -139,9 +155,10 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	var deadly := int(profile.get("deadly", 0))
 	if deadly > 0:
 		unsaved *= float(AiCombatMath.deadly_multiplier(deadly, maxi(int(def_ctx.get("tough", 1)), 1)))
-	# — Regeneration (5+ ignores; Bane/Rending wounds bypass it — the wave-1 _solo_ignores_regen rule) —
+	# — Regeneration family (5+ Regeneration / 6+ Self-Repair ignores; only Bane/Rending bypass it — the
+	#   _solo_ignores_regen rule. Destructive does NOT bypass, so its wounds are reduced here too) —
 	if bool(def_ctx.get("regeneration", false)) and not (bane or bool(profile.get("rending", false))):
-		unsaved *= 1.0 - AiCombatMath.success_chance(REGENERATION_TARGET)
+		unsaved *= 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target", REGENERATION_TARGET)))
 	return unsaved
 
 
@@ -192,7 +209,7 @@ static func impact_ev(att: Dictionary, def_ctx: Dictionary) -> float:
 	var defense := AiCombatMath.shielded_defense(int(def_ctx.get("defense", 4)), bool(def_ctx.get("shielded", false)))
 	var wounds := hits * (1.0 - block_chance(defense, 0, false))
 	if bool(def_ctx.get("regeneration", false)):
-		wounds *= 1.0 - AiCombatMath.success_chance(REGENERATION_TARGET)
+		wounds *= 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target", REGENERATION_TARGET)))
 	return wounds
 
 

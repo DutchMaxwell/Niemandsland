@@ -59,6 +59,10 @@ static func _profile(w: Variant, attacks: int, range_in: int) -> Dictionary:
 		# Wave-3 (GF/AoF v3.5.1 p.13): Counter — the weapon strikes first when its bearer is charged and
 		# reduces the charger's Impact rolls; drives the strike-first phase + the Counter-last activation.
 		"counter": _has_rule(w, "Counter"),
+		# Wave-4 army-book weapon rule (Robot Legions / Mummified Undead — official Army Forge text:
+		# "On unmodified results of 6 to hit, those hits get AP(+4)."). Identical to Rending's AP(+4) facet
+		# but WITHOUT Rending's Regeneration-bypass — so Destructive wounds stay Regeneration-able.
+		"destructive": _has_rule(w, "Destructive"),
 		"range": range_in,
 		"rules": _rules_of(w),
 	}

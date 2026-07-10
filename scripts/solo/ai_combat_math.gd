@@ -28,6 +28,12 @@ const IMPACT_HIT_TARGET: int = 2
 ## rule fails a morale test, roll one die. On a 4+ it counts as passed instead."
 const FEARLESS_RECOVER_TARGET: int = 4
 
+## Battleborn round-start Shaken recovery target (wave-4 army-book rule, Battle Brothers — official Army
+## Forge text: "If a unit where all models have this rule is Shaken at the beginning of the round, roll one
+## die. On a 4+, it stops being Shaken."). Distinct from Fearless (which rescues a FAILED morale test); this
+## fires at ROUND START and does not consume the unit's activation.
+const BATTLEBORN_RECOVER_TARGET: int = 4
+
 ## Rending armour-piercing bonus (GF/AoF Advanced Rules v3.5.1, p.14): "on unmodified results of 6 to hit,
 ## those hits get AP(+4)."
 const RENDING_AP_BONUS: int = 4
@@ -234,6 +240,12 @@ static func fearless_recovers(reroll_face: int) -> bool:
 	return DiceRules.is_success(reroll_face, FEARLESS_RECOVER_TARGET, 0)
 
 
+## Whether a Battleborn round-start die (wave-4 army-book rule) clears Shaken: true on a 4+ ("On a 4+, it
+## stops being Shaken.").
+static func battleborn_recovers(die_face: int) -> bool:
+	return DiceRules.is_success(die_face, BATTLEBORN_RECOVER_TARGET, 0)
+
+
 ## Fear(X) adjusted wound total for the who-won-melee check ONLY (GF/AoF Advanced Rules v3.5.1, p.13: "This
 ## model counts as having dealt +X wounds when checking who won melee."). Never changes the wounds actually
 ## applied — only the winner comparison. Returns caused + X (X floored at 0).
@@ -280,6 +292,14 @@ static func blast_hits(hit_count: int, blast_x: int, target_models: int) -> int:
 ## Reliable to-hit quality (GF Advanced Rules v3.5.1: the weapon "shoots at Quality 2+").
 static func reliable_quality(quality: int, is_reliable: bool) -> int:
 	return mini(quality, 2) if is_reliable else quality
+
+
+## Unpredictable Fighter (wave-4 army-book rule, Mummified Undead — official Army Forge text: "When in
+## melee, roll one die and apply one effect to all models with this rule: on a 1-3 they get AP(+1), and on
+## a 4-6 they get +1 to hit rolls instead."). One die per melee; returns {"ap": int, "hit": int} — exactly
+## one of the two is 1. 1-3 → AP(+1) melee; 4-6 → +1 to hit.
+static func unpredictable_fighter_effect(die_face: int) -> Dictionary:
+	return {"ap": 1, "hit": 0} if die_face <= 3 else {"ap": 0, "hit": 1}
 
 
 ## Damage multiplier for a Deadly(X) weapon against a target (GF Advanced Rules v3.5.1, p.13 + the "Deadly
