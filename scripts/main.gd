@@ -1094,7 +1094,11 @@ func _run_ai_shooting(report: Dictionary) -> void:
 func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array) -> void:
 	var alive_before: int = target.get_alive_count()
 	var models_before: int = _solo_combined_alive(target)
-	var base_defense: int = target.get_defense()
+	# Shielded (+1 Defense, army-book rule) covers every hit; Cover (GF v3.5.1 p.11) is ignored by Blast.
+	var base_defense: int = _solo_shielded_defense(target)
+	if base_defense != target.get_defense() and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s is Shielded: +1 Defense (saves on %d+)" % [
+			target.get_name(), base_defense], true)
 	var covered_defense: int = _solo_cover_defense(target, base_defense)   # +1 Defense if majority in cover
 	var dist_in: float = MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
 	# ANNOUNCE: who shoots at whom — highlights + attack line + toast, held before any die is thrown.
@@ -1108,8 +1112,12 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array)
 		var shot := s as Dictionary
 		var profile := shot["profile"] as Dictionary
 		var member := shot["member"] as GameUnit
-		# Reliable (GF v3.5.1): the weapon shoots at Quality 2+ regardless of the shooter's own Quality.
-		var to_hit: int = AiCombatMath.reliable_quality(int(shot["quality"]), bool(profile.get("reliable", false)))
+		# Reliable (GF v3.5.1) sets the Quality (2+); the to-hit roll modifiers (Stealth / Artillery /
+		# Evasive) then apply on top ("Reliable only changes the Quality value", p.14).
+		var mod_info: Dictionary = _solo_hit_mod_info(member, target, dist_in, false)
+		var to_hit: int = AiCombatMath.modified_hit_target(
+			AiCombatMath.reliable_quality(int(shot["quality"]), bool(profile.get("reliable", false))), int(mod_info.get("mod", 0)))
+		_solo_log_hit_mod(mod_info, target, to_hit)
 		var sighted: int = _solo_sighted_count(member, target, int(shot["reach"]))
 		var attacks: int = SoloController.effective_attacks(int(profile.get("attacks", 0)), sighted, int(shot["max"]))
 		if attacks <= 0:
@@ -1232,6 +1240,10 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 			# onto each melee profile; _solo_hits reads it alongside the weapon's own Surge/Rending facets.
 			if melee:
 				prof["furious"] = member.has_special_rule("Furious")
+				# Counter (p.13) is usually a weapon rule (parsed by AiShooting) but can be granted
+				# unit-wide — fold the member's unit rule onto every melee profile for the strike filter.
+				if member.has_special_rule("Counter"):
+					prof["counter"] = true
 			# Per-model shooting (GF v3.5.1 p.8): a ranged profile fires with the member's models that
 			# have range + LOS at ITS OWN range; melee scales by the models within 2" strike reach (p.9).
 			var count: int = melee_count
@@ -1301,18 +1313,213 @@ func _solo_thrust_profile(profile: Dictionary, charging: bool) -> Dictionary:
 	return eff
 
 
+## Wave-3 melee strike-phase filter (Counter, GF/AoF v3.5.1 p.13: "Strikes first with this weapon when
+## charged"): a charged defender's Counter weapons resolve as a phase BEFORE the charger's attacks; its
+## remaining weapons strike in the normal strike-back slot.
+enum SoloStrike { ALL, COUNTER_ONLY, NON_COUNTER }
+
+
+## Whether ALL models of a unit carry `rule` — the trigger form of Stealth / Evasive / Shielded ("units
+## where all models have this rule"). A unit-level rule covers all its own models (Army Forge semantics);
+## every attached hero must carry it too, since a joined hero is a model of the unit (GF v3.5.1 "Hero").
+func _solo_rule_on_all_models(unit: GameUnit, rule: String) -> bool:
+	if unit == null or not unit.has_special_rule(rule):
+		return false
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			var hero := h as GameUnit
+			if hero != null and hero.get_alive_count() > 0 and not hero.has_special_rule(rule):
+				return false
+	return true
+
+
+## The defender's Defense value after Shielded (army-book rule: "+1 to defense rolls against hits that are
+## not from spells" — the solo automation has no spells, so every hit qualifies). Shared by every save site
+## so the prompts/logs show the modified value.
+func _solo_shielded_defense(target: GameUnit) -> int:
+	return AiCombatMath.shielded_defense(target.get_defense(), _solo_rule_on_all_models(target, "Shielded"))
+
+
+## Net to-hit roll modifier for one attack + its reasons (for the battle log): Stealth (−1, shot >9"),
+## Artillery (+1 shooting >9" / −2 shot at >9") and Evasive (−1, any attack) — GF/AoF v3.5.1 p.13/14 +
+## the army-book Evasive text. Returns {"mod": int, "note": String}; the math is the tested
+## AiCombatMath.shooting_hit_modifier / melee_hit_modifier.
+func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: float, melee: bool) -> Dictionary:
+	var evasive: bool = _solo_rule_on_all_models(target, "Evasive")
+	if melee:
+		var mm: int = AiCombatMath.melee_hit_modifier(evasive)
+		return {"mod": mm, "note": "Evasive -1" if mm != 0 else ""}
+	var attacker_artillery: bool = shooter_member != null and shooter_member.has_special_rule("Artillery")
+	var stealth: bool = _solo_rule_on_all_models(target, "Stealth")
+	var target_artillery: bool = target.has_special_rule("Artillery")
+	var mod: int = AiCombatMath.shooting_hit_modifier(dist_in, attacker_artillery, stealth, target_artillery, evasive)
+	var notes: PackedStringArray = []
+	var over_nine: bool = dist_in > AiCombatMath.LONG_RANGE_IN
+	if attacker_artillery and over_nine:
+		notes.append("Artillery +1")
+	if stealth and over_nine:
+		notes.append("Stealth -1")
+	if target_artillery and over_nine:
+		notes.append("Artillery target -2")
+	if evasive:
+		notes.append("Evasive -1")
+	return {"mod": mod, "note": ", ".join(notes)}
+
+
+## Battle-log line naming an applied to-hit modifier and the resulting threshold (transparency: the tray
+## shows the modified target, this line explains WHY). Silent when the net modifier is zero.
+func _solo_log_hit_mod(info: Dictionary, target: GameUnit, to_hit: int) -> void:
+	if int(info.get("mod", 0)) == 0 or battle_log == null:
+		return
+	battle_log.log_event(BattleLog.Category.COMBAT, "To-hit vs %s: %s → hits on %d+" % [
+		target.get_name(), str(info.get("note", "")), to_hit], true)
+
+
+## Whether a unit (incl. attached heroes) fights with Counter (GF/AoF v3.5.1 p.13) — a Counter melee
+## weapon or the rule granted unit-wide. Gates the strike-first phase.
+func _solo_has_counter(unit: GameUnit) -> bool:
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	for m in members:
+		var member := m as GameUnit
+		if member == null or member.get_alive_count() == 0:
+			continue
+		var weapons: Array = []
+		if member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
+			weapons = (member.source_data as OPRApiClient.OPRUnit).weapons
+		if SoloController.has_counter(AiShooting.melee_profiles(weapons), member.get_special_rules()):
+			return true
+	return false
+
+
+## Alive models of a unit (incl. attached heroes) that fight with Counter — the charger's Impact reduction
+## input (GF/AoF v3.5.1 p.13: "-1 total Impact rolls per model with Counter"). A unit-wide Counter rule
+## counts every alive model; otherwise the count of Counter melee-weapon copies, capped at the member's
+## alive models (dead models' weapons no longer counter, mirroring dead-models-don't-attack).
+func _solo_counter_models(unit: GameUnit) -> int:
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	var total := 0
+	for m in members:
+		var member := m as GameUnit
+		if member == null:
+			continue
+		var alive: int = member.get_alive_count()
+		if alive <= 0:
+			continue
+		if member.has_special_rule("Counter"):
+			total += alive
+			continue
+		var weapons: Array = []
+		if member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
+			weapons = (member.source_data as OPRApiClient.OPRUnit).weapons
+		var bearers := 0
+		for w in weapons:
+			if not (w is Object) or (w as Object).get("range_value") == null or int((w as Object).range_value) > 0:
+				continue   # Counter strikes "with this weapon" — a melee-weapon rule
+			var rules: Array = (w as Object).special_rules if (w as Object).get("special_rules") != null else []
+			for r in rules:
+				if str(r).strip_edges().begins_with("Counter"):
+					bearers += maxi(int((w as Object).count) if (w as Object).get("count") != null else 1, 1)
+					break
+		total += mini(bearers, alive)
+	return total
+
+
+## Resolve one side's melee strikes against `defender` and LAND the wounds (Regeneration-bucketed): the
+## striker's groups (unit + attached heroes; attacks pre-scaled by the 2" reach) roll real to-hit dice,
+## saves resolve via _solo_resolve_saves (prompted when the human defends, AI auto-saves otherwise).
+## `charging` applies the Furious / Thrust charge bonuses; Evasive (−1 to hit) and Shielded (+1 Defense)
+## modify per the defender's rules; `filter` (SoloStrike) scopes the phase for Counter strike-first.
+## Fatigue (unmodified-6-only) overrides all to-hit modifiers. Returns wounds caused (melee-winner tally).
+func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: bool, filter: int) -> int:
+	var human_defends: bool = not _solo_is_ai_unit(defender)
+	var defense: int = _solo_shielded_defense(defender)
+	if defense != defender.get_defense() and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s is Shielded: +1 Defense (saves on %d+)" % [
+			defender.get_name(), defense], true)
+	var mod_info: Dictionary = _solo_hit_mod_info(striker, defender, 0.0, true)
+	var caused := 0
+	var regenable := 0
+	var regen_proof := 0
+	for grp in _solo_attack_groups(striker, 0.0, true, defender):
+		var group := grp as Dictionary
+		var base_quality: int = int(group.get("quality", 4))
+		var fatigued: bool = bool(group.get("fatigued", false))
+		for p in group.get("profiles", []):
+			var profile := p as Dictionary
+			if int(profile.get("attacks", 0)) <= 0:
+				continue
+			if filter == SoloStrike.COUNTER_ONLY and not bool(profile.get("counter", false)):
+				continue
+			if filter == SoloStrike.NON_COUNTER and bool(profile.get("counter", false)):
+				continue
+			# Thrust (+1 to hit on a charge) and Evasive (−1) compose on the quality; fatigue overrides.
+			var to_hit: int = 6 if fatigued else AiCombatMath.modified_hit_target(
+				AiCombatMath.thrust_to_hit(base_quality, bool(profile.get("thrust", false))), int(mod_info.get("mod", 0)))
+			if not fatigued:
+				_solo_log_hit_mod(mod_info, defender, to_hit)
+			var roll_owner: String = ("AI (%s)" % str(group.get("name", "?"))) if _solo_is_ai_unit(striker) else "You"
+			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, roll_owner)
+			var hits: int = _solo_hits(faces, to_hit, profile, 0.0, defender, charging)
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s strikes with %s at %s — %d hit%s" % [
+					str(group.get("name", "?")), str(profile.get("name", "?")), defender.get_name(), hits, ("" if hits == 1 else "s")], true)
+			if hits <= 0:
+				continue
+			var eff: Dictionary = _solo_thrust_profile(profile, charging)   # AP(+1) on charge
+			var w: int = await _solo_resolve_saves(group.get("member"), defender, str(profile.get("name", "?")), faces, hits, defense, eff, human_defends, true)
+			caused += w
+			if _solo_ignores_regen(group.get("member"), eff):
+				regen_proof += w
+			else:
+				regenable += w
+	if regenable + regen_proof > 0:
+		await _solo_land_wounds(defender, regenable, regen_proof)
+	return caused
+
+
+## The defender's strike-back choice dialog. With `counter_first` the prompt explains that Counter weapons
+## strike BEFORE the charger (GF/AoF v3.5.1 p.13); one choice covers the whole melee (Counter phase now,
+## remaining weapons in the normal slot).
+func _solo_confirm_strike_back(defender: GameUnit, charger: GameUnit, counter_first: bool) -> bool:
+	var dlg := ConfirmationDialog.new()
+	dlg.title = "Strike back?"
+	if counter_first:
+		dlg.dialog_text = "%s charges %s.\n%s has Counter — its Counter weapons strike FIRST.\nStrike back?" % [
+			charger.get_name(), defender.get_name(), defender.get_name()]
+	else:
+		dlg.dialog_text = "%s is in melee with %s.\nStrike back?" % [defender.get_name(), charger.get_name()]
+	dlg.ok_button_text = "Strike back"
+	dlg.get_cancel_button().text = "Hold"
+	add_child(dlg)
+	dlg.popup_centered()
+	var strike := false
+	dlg.confirmed.connect(func() -> void: strike = true)
+	await dlg.visibility_changed   # closes on either button
+	dlg.queue_free()
+	return strike
+
+
 ## Impact(X) auto-hits on a charge (GF/AoF v3.5.1 p.13: "Roll X dice when attacking after charging, unless
 ## fatigued. For each 2+ the target takes one hit."). Impact is a per-model rule, so `charger` rolls X per
-## alive model; the hits carry no AP/Deadly (Impact is not a weapon) and save at plain Defense. Wounds are
-## APPLIED here (Regeneration-bucketed by the charger's Unstoppable) and RETURNED for the melee-winner
-## tally. Skipped when the charger is fatigued or has no Impact. human_defends: the human rolls saves.
+## alive model, MINUS one roll per defender model with Counter (p.13 Counter); the hits carry no AP/Deadly
+## (Impact is not a weapon) and save at the defender's (Shielded-adjusted) Defense. Wounds are APPLIED here
+## (Regeneration-bucketed by the charger's Unstoppable) and RETURNED for the melee-winner tally. Skipped
+## when the charger is fatigued or has no Impact. human_defends: the human rolls saves.
 func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: bool) -> int:
 	if charger == null or defender == null:
 		return 0
 	var x: int = _solo_unit_rating(charger, "Impact")
 	if x <= 0 or charger.is_fatigued:
 		return 0
-	var dice: int = x * charger.get_alive_count()
+	var counter_models: int = _solo_counter_models(defender)
+	var dice: int = AiCombatMath.impact_total_dice(x, charger.get_alive_count(), counter_models)
+	if counter_models > 0 and battle_log != null and x * charger.get_alive_count() > 0:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Counter: %s loses %d Impact roll%s" % [
+			charger.get_name(), counter_models, ("" if counter_models == 1 else "s")], true)
 	if dice <= 0:
 		return 0
 	var faces: Array = await _solo_tray_roll(dice, AiCombatMath.IMPACT_HIT_TARGET, _solo_owner_label(charger))
@@ -1323,7 +1530,7 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 	if hits <= 0 or _solo_combined_alive(defender) <= 0:
 		return 0
 	var profile: Dictionary = {"name": "Impact", "ap": 0, "deadly": 0, "rules": []}
-	var w: int = await _solo_resolve_saves(charger, defender, "Impact", [], hits, defender.get_defense(), profile, human_defends, true)
+	var w: int = await _solo_resolve_saves(charger, defender, "Impact", [], hits, _solo_shielded_defense(defender), profile, human_defends, true)
 	if w > 0:
 		if _solo_ignores_regen(charger, profile):
 			await _solo_land_wounds(defender, 0, w)
@@ -1781,7 +1988,10 @@ const SOLO_MODELED_RULES: Array = ["AP", "Tough", "Deadly", "Takedown", "Relentl
 	"Ambush", "Scout", "Strider", "Flying", "Fatigue",
 	# Wave-2 combat special rules (GF/AoF Advanced Rules v3.5.1): "Fear" prefix-covers both Fearless (morale
 	# re-roll) and Fear(X) (melee-winner bonus).
-	"Surge", "Furious", "Impact", "Thrust", "Fearless", "Fear"]
+	"Surge", "Furious", "Impact", "Thrust", "Fearless", "Fear",
+	# Wave-3: target-side modifiers (Stealth / Evasive / Shielded / Artillery), Counter (strike-first +
+	# Impact reduction + activation order) and the Hold-only rules (Immobile / Artillery).
+	"Stealth", "Evasive", "Shielded", "Counter", "Artillery", "Immobile"]
 
 
 func _solo_log_unmodeled_rules(unit: GameUnit) -> void:
@@ -1805,10 +2015,11 @@ func _solo_log_unmodeled_rules(unit: GameUnit) -> void:
 			battle_log.log_event(BattleLog.Category.GENERAL, "Note: \"%s\" is not automated in solo — apply it manually" % rule_name, true)
 
 
-## Resolve a landed AI charge (goal 001 P4): the AI strikes with its melee profiles (real tray dice,
-## fatigued units hit only on 6s), the human saves per profile; then the human may STRIKE BACK (prompt,
-## their attacks auto-roll, the AI saves in the tray); both sides that struck become Fatigued (OPR: first
-## melee each round); the side that took MORE wounds tests morale (fail → Shaken; at/below half → Routs).
+## Resolve a landed AI charge (goal 001 P4): the human defender's Counter weapons strike FIRST (one
+## strike-back choice covers the whole melee), then Impact (Counter-reduced), then the AI's strikes
+## (fatigued units hit only on 6s; the human saves per profile), then the human's remaining strike-back;
+## both sides that struck become Fatigued (OPR: first melee each round); the Fear-adjusted loser tests
+## morale (fail → Shaken; at/below half → Routs).
 func _run_ai_melee(report: Dictionary) -> void:
 	var unit: GameUnit = report.get("unit")
 	var target: GameUnit = report.get("target")
@@ -1823,81 +2034,40 @@ func _run_ai_melee(report: Dictionary) -> void:
 		return
 	var ai_caused := 0
 	var human_caused := 0
-	var ai_regenable := 0
-	var ai_regen_proof := 0
 	var target_models_before: int = _solo_combined_alive(target)
 	# ANNOUNCE: who charges whom — highlights + line + toast, held before the first strike.
 	var announce := _solo_show_attack_announce(unit, target, "charges")
 	await _solo_pace_hold(SoloController.Pace.ANNOUNCE)
-	# — Impact(X) auto-hits fire BEFORE the normal strikes (GF/AoF v3.5.1 p.13); applied + tallied inside —
-	ai_caused += await _solo_charge_impact(unit, target, true)
+	# — Counter (GF/AoF v3.5.1 p.13: "Strikes first with this weapon when charged"): the human defender's
+	#   Counter weapons resolve BEFORE the charger's attacks (incl. Impact — Counter's Impact reduction
+	#   presumes the counter-attack precedes it; the PDF pins no finer order). One strike-back choice
+	#   covers the whole melee: Counter weapons now, remaining weapons in the normal slot, or neither. —
+	var strike_back := -1   # -1 = not yet asked, 0 = declined, 1 = strikes
+	var counter_first: bool = _solo_has_counter(target)
+	if counter_first and _solo_combined_alive(target) > 0:
+		strike_back = 1 if await _solo_confirm_strike_back(target, unit, true) else 0
+		if strike_back == 1:
+			human_caused += await _solo_melee_strike_phase(target, unit, false, SoloStrike.COUNTER_ONLY)
+	# — Impact(X) auto-hits fire BEFORE the normal strikes (GF/AoF v3.5.1 p.13; reduced by Counter models);
+	#   applied + tallied inside. The charger may already be wiped by Counter — nothing left to roll then. —
+	if _solo_combined_alive(unit) > 0:
+		ai_caused += await _solo_charge_impact(unit, target, true)
 	# — AI strikes (unit + attached heroes; only models within 2" strike; Deadly multiplies wounds). The AI
 	#   is the charger here, so Furious/Thrust charge bonuses apply (charging = true) —
-	for grp in _solo_attack_groups(unit, 0.0, true, target):
-		var group := grp as Dictionary
-		var base_quality: int = int(group.get("quality", 4))
-		var fatigued: bool = bool(group.get("fatigued", false))
-		for p in group.get("profiles", []):
-			var profile := p as Dictionary
-			if int(profile.get("attacks", 0)) <= 0:
-				continue
-			# Thrust (GF/AoF v3.5.1 p.14): +1 to hit when charging; fatigue (unmodified-6-only) overrides it.
-			var to_hit: int = 6 if fatigued else AiCombatMath.thrust_to_hit(base_quality, bool(profile.get("thrust", false)))
-			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "AI (%s)" % str(group.get("name", "?")))
-			var hits: int = _solo_hits(faces, to_hit, profile, 0.0, target, true)
-			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT, "%s strikes with %s — %d hit%s" % [
-					str(group.get("name", "?")), str(profile.get("name", "?")), hits, ("" if hits == 1 else "s")], true)
-			if hits <= 0:
-				continue
-			var eff: Dictionary = _solo_thrust_profile(profile, true)   # AP(+1) on charge
-			var w: int = await _solo_resolve_saves(group.get("member"), target, str(profile.get("name", "?")), faces, hits, target.get_defense(), eff, true, true)
-			ai_caused += w
-			if _solo_ignores_regen(group.get("member"), eff):
-				ai_regen_proof += w
-			else:
-				ai_regenable += w
-	await _solo_land_wounds(target, ai_regenable, ai_regen_proof)
+	if _solo_combined_alive(unit) > 0:
+		ai_caused += await _solo_melee_strike_phase(unit, target, true, SoloStrike.ALL)
+		_solo_set_fatigued(unit)
 	_solo_clear_announce(announce)
-	_solo_set_fatigued(unit)
-	# — Strike back (the human's choice; OPR lets the defender strike back — unit + attached heroes) —
-	if _solo_combined_alive(target) > 0:
-		var back_groups := _solo_attack_groups(target, 0.0, true, unit)
-		if not back_groups.is_empty():
-			var dlg := ConfirmationDialog.new()
-			dlg.title = "Strike back?"
-			dlg.dialog_text = "%s is in melee with %s.\nStrike back?" % [target.get_name(), unit.get_name()]
-			dlg.ok_button_text = "Strike back"
-			dlg.get_cancel_button().text = "Hold"
-			add_child(dlg)
-			dlg.popup_centered()
-			var strike := false
-			dlg.confirmed.connect(func() -> void: strike = true)
-			await dlg.visibility_changed   # closes on either button
-			dlg.queue_free()
-			if strike:
-				var back_regenable := 0
-				var back_regen_proof := 0
-				for bgrp in back_groups:
-					var bgroup := bgrp as Dictionary
-					var to_hit: int = 6 if bool(bgroup.get("fatigued", false)) else int(bgroup.get("quality", 4))
-					for p in bgroup.get("profiles", []):
-						var profile := p as Dictionary
-						if int(profile.get("attacks", 0)) <= 0:
-							continue
-						var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You")
-						var hits: int = _solo_hits(faces, to_hit, profile, 0.0, unit)   # strike-back: not a charge
-						if hits <= 0:
-							continue
-						# AI defends; a striking-back weapon's Rending/Bane still bite (charging = false).
-						var w: int = await _solo_resolve_saves(bgroup.get("member"), unit, str(profile.get("name", "?")), faces, hits, unit.get_defense(), profile, false, true)
-						human_caused += w
-						if _solo_ignores_regen(bgroup.get("member"), profile):
-							back_regen_proof += w
-						else:
-							back_regenable += w
-				await _solo_land_wounds(unit, back_regenable, back_regen_proof)
-				_solo_set_fatigued(target)
+	# — Strike back (the human's choice; OPR lets the defender strike back — unit + attached heroes). With
+	#   Counter the choice was already made; only the NON-Counter weapons remain for this slot. —
+	if _solo_combined_alive(target) > 0 and _solo_combined_alive(unit) > 0:
+		if strike_back == -1:
+			strike_back = 1 if await _solo_confirm_strike_back(target, unit, false) else 0
+		if strike_back == 1:
+			human_caused += await _solo_melee_strike_phase(target, unit, false,
+				SoloStrike.NON_COUNTER if counter_first else SoloStrike.ALL)
+	if strike_back == 1:
+		_solo_set_fatigued(target)
 	# — Morale: the side that CAUSED more wounds wins; the loser tests (tie = nobody). Fear(X) (GF/AoF
 	#   v3.5.1 p.13) counts as +X dealt wounds for THIS comparison only (never changes wounds applied) —
 	var ai_score: int = AiCombatMath.fear_adjusted_wounds(ai_caused, _solo_unit_rating(unit, "Fear"))
@@ -2202,99 +2372,109 @@ func _solo_update_los_line(screen_pos: Vector2) -> void:
 func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> void:
 	if attacker == null or target == null or dice_roller_control == null:
 		return
-	var dist := MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
-	var target_alive_before: int = target.get_alive_count()   # post-shooting morale (goal 003 P1)
-	var human_caused := 0
-	var ai_caused := 0
-	var human_regenable := 0
-	var human_regen_proof := 0
-	# Cover raises the AI's Defense against your shooting (majority-in-cover +1); melee ignores cover.
-	var defense: int = _solo_cover_defense(target, target.get_defense()) if not melee else target.get_defense()
 	_solo_log_unmodeled_rules(attacker)
 	_solo_log_unmodeled_rules(target)
+	if melee:
+		await _run_human_melee(attacker, target)
+	else:
+		await _run_human_shooting(attacker, target)
+	# The AI's strike-back can destroy the human's LAST eligible unit — re-check the alternation
+	# state so the AI's remaining activations auto-continue (goal 003 P2 auto-tail).
+	await _solo_pump()
+
+
+## The player's shooting volley (goal 001 P8): per-model attack scaling, Reliable composed with the to-hit
+## modifiers (Stealth / Artillery / Evasive — GF/AoF v3.5.1 p.13/14 + army-book text), Cover + Shielded on
+## the AI's saves (Blast ignores cover but NOT Shielded), Rending/Bane in the save resolver, then the
+## post-shooting morale trigger.
+func _run_human_shooting(attacker: GameUnit, target: GameUnit) -> void:
+	var dist := MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
+	var target_alive_before: int = target.get_alive_count()   # post-shooting morale (goal 003 P1)
+	var regenable := 0
+	var regen_proof := 0
+	# Shielded (+1 Defense, army-book rule) covers every hit; Cover (+1 Defense majority-in-cover,
+	# GF v3.5.1 p.11) is shooting-only and ignored by Blast.
+	var shielded_def: int = _solo_shielded_defense(target)
+	if shielded_def != target.get_defense() and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s is Shielded: +1 Defense (saves on %d+)" % [
+			target.get_name(), shielded_def], true)
+	var covered_def: int = _solo_cover_defense(target, shielded_def)
 	# Per-model shooting transparency (GF v3.5.1 p.8): tell the player how many models actually fire.
-	if not melee and battle_log != null:
+	if battle_log != null:
 		var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
 		var total := _solo_combined_alive(attacker)
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d/%d model%s with line of sight + range" % [
 			attacker.get_name(), _solo_sighted_count(attacker, target, rng_in), total, ("" if total == 1 else "s")], true)
-	# Impact(X) auto-hits on your charge fire before the normal strikes (GF/AoF v3.5.1 p.13); melee only.
-	if melee:
-		human_caused += await _solo_charge_impact(attacker, target, false)
-	# The target is passed for BOTH modes: ranged profiles scale by models with range+LOS, melee by 2" reach.
-	for grp in _solo_attack_groups(attacker, dist, melee, target):
+	for grp in _solo_attack_groups(attacker, dist, false, target):
 		var group := grp as Dictionary
 		var base_quality: int = int(group.get("quality", 4))
-		var fatigued: bool = bool(group.get("fatigued", false))
+		var mod_info: Dictionary = _solo_hit_mod_info(group.get("member"), target, dist, false)
 		for p in group.get("profiles", []):
 			var profile := p as Dictionary
 			if int(profile.get("attacks", 0)) <= 0:
 				continue
-			# Melee: Thrust (+1 to hit on charge, fatigue overrides). Ranged: Reliable (shoots at Quality 2+).
-			var to_hit: int
-			if melee:
-				to_hit = 6 if fatigued else AiCombatMath.thrust_to_hit(base_quality, bool(profile.get("thrust", false)))
-			else:
-				to_hit = AiCombatMath.reliable_quality(base_quality, bool(profile.get("reliable", false)))
+			# Reliable sets the Quality (2+), THEN the roll modifiers apply (GF v3.5.1 p.14: "Reliable only
+			# changes the Quality value, so the roll can still be modified").
+			var to_hit: int = AiCombatMath.modified_hit_target(
+				AiCombatMath.reliable_quality(base_quality, bool(profile.get("reliable", false))), int(mod_info.get("mod", 0)))
+			_solo_log_hit_mod(mod_info, target, to_hit)
 			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You")
-			var hits: int = _solo_hits(faces, to_hit, profile, (0.0 if melee else dist), target, melee)
+			var hits: int = _solo_hits(faces, to_hit, profile, dist, target)
 			if battle_log != null:
-				var verb := "strikes with" if melee else "fires"
-				battle_log.log_event(BattleLog.Category.COMBAT, "%s %s %s at %s — %d hit%s" % [
-					str(group.get("name", "?")), verb, str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")])
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s — %d hit%s" % [
+					str(group.get("name", "?")), str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")])
 			if hits <= 0:
 				continue
-			# Blast ignores cover (GF v3.5.1) — its saves roll against the UNCOVERED Defense. Thrust folds
-			# AP(+1) on a melee charge; Rending/Bane resolve inside _solo_resolve_saves (AI is the defender).
-			var save_def: int = target.get_defense() if (not melee and int(profile.get("blast", 0)) > 1) else defense
-			var eff: Dictionary = _solo_thrust_profile(profile, melee)
-			var w: int = await _solo_resolve_saves(group.get("member"), target, str(profile.get("name", "?")), faces, hits, save_def, eff, false, melee)
-			human_caused += w
-			if _solo_ignores_regen(group.get("member"), eff):
-				human_regen_proof += w
+			# Blast ignores cover (GF v3.5.1) — its saves roll against the Shielded (uncovered) Defense.
+			var save_def: int = shielded_def if int(profile.get("blast", 0)) > 1 else covered_def
+			var w: int = await _solo_resolve_saves(group.get("member"), target, str(profile.get("name", "?")), faces, hits, save_def, profile, false, false)
+			if _solo_ignores_regen(group.get("member"), profile):
+				regen_proof += w
 			else:
-				human_regenable += w
-	await _solo_land_wounds(target, human_regenable, human_regen_proof)
-	if not melee:
-		# The AI's unit tests morale if your volley dropped it to half strength or less (goal 003 P1).
-		await _solo_shooting_morale(target, target_alive_before, "AI (%s)" % target.get_name())
-	if melee:
+				regenable += w
+	await _solo_land_wounds(target, regenable, regen_proof)
+	# The AI's unit tests morale if your volley dropped it to half strength or less (goal 003 P1).
+	await _solo_shooting_morale(target, target_alive_before, "AI (%s)" % target.get_name())
+
+
+## The player's melee charge (goal 001 P8): the AI defender's Counter weapons strike FIRST (it must always
+## strike back — solo rules p.57 — so no prompt), Impact (Counter-reduced), your strikes (charging:
+## Furious/Thrust; the AI's Evasive/Shielded apply), the AI's remaining strike-back, then the Fear-adjusted
+## melee-winner morale (GF/AoF v3.5.1 p.13).
+func _run_human_melee(attacker: GameUnit, target: GameUnit) -> void:
+	var human_caused := 0
+	var ai_caused := 0
+	# — Counter (GF/AoF v3.5.1 p.13 "Strikes first with this weapon when charged"): before your attacks,
+	#   including Impact (Counter's Impact reduction presumes the counter-strike precedes it) —
+	var ai_counter: bool = _solo_has_counter(target)
+	if ai_counter:
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "Counter: %s strikes first" % target.get_name(), true)
+		ai_caused += await _solo_melee_strike_phase(target, attacker, false, SoloStrike.COUNTER_ONLY)
+	# — Impact(X) auto-hits on your charge (GF/AoF v3.5.1 p.13; reduced by the AI's Counter models). The
+	#   counter-strike may already have wiped your unit — nothing left to roll then. —
+	if _solo_combined_alive(attacker) > 0:
+		human_caused += await _solo_charge_impact(attacker, target, false)
+	# — Your strikes (unit + attached heroes; only models within 2" strike; charging bonuses apply) —
+	if _solo_combined_alive(attacker) > 0:
+		human_caused += await _solo_melee_strike_phase(attacker, target, true, SoloStrike.ALL)
 		_solo_set_fatigued(attacker)
-		# The AI must always strike back (official rule) — no prompt on its side.
-		if _solo_combined_alive(target) > 0:
-			var ai_regenable := 0
-			var ai_regen_proof := 0
-			for grp in _solo_attack_groups(target, 0.0, true, attacker):
-				var group := grp as Dictionary
-				var to_hit: int = 6 if bool(group.get("fatigued", false)) else int(group.get("quality", 4))
-				for p in group.get("profiles", []):
-					var profile := p as Dictionary
-					if int(profile.get("attacks", 0)) <= 0:
-						continue
-					var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "AI (%s)" % str(group.get("name", "?")))
-					var hits: int = _solo_hits(faces, to_hit, profile, 0.0, attacker)   # strike-back: not a charge
-					if hits <= 0:
-						continue
-					# Human defends; the AI's striking-back weapon's Rending/Bane still bite.
-					var w: int = await _solo_resolve_saves(group.get("member"), attacker, str(profile.get("name", "?")), faces, hits, attacker.get_defense(), profile, true, true)
-					ai_caused += w
-					if _solo_ignores_regen(group.get("member"), profile):
-						ai_regen_proof += w
-					else:
-						ai_regenable += w
-			await _solo_land_wounds(attacker, ai_regenable, ai_regen_proof)
-			_solo_set_fatigued(target)
-		# Morale: the side that CAUSED more wounds wins; the loser tests. Fear(X) (GF/AoF v3.5.1 p.13) adds
-		# +X to the bearer's tally for THIS comparison only.
-		var human_score: int = AiCombatMath.fear_adjusted_wounds(human_caused, _solo_unit_rating(attacker, "Fear"))
-		var ai_score: int = AiCombatMath.fear_adjusted_wounds(ai_caused, _solo_unit_rating(target, "Fear"))
-		if human_score > ai_score and _solo_combined_alive(target) > 0:
-			await _solo_morale_test(target, "AI (%s)" % target.get_name())
-		elif ai_score > human_score and _solo_combined_alive(attacker) > 0:
-			await _solo_morale_test(attacker, "You")
-	# The AI's strike-back can destroy the human's LAST eligible unit — re-check the alternation
-	# state so the AI's remaining activations auto-continue (goal 003 P2 auto-tail).
-	await _solo_pump()
+	# — The AI's strike-back with its remaining (non-Counter) weapons — mandatory (solo rules p.57) —
+	var ai_struck: bool = ai_counter
+	if _solo_combined_alive(target) > 0 and _solo_combined_alive(attacker) > 0:
+		ai_caused += await _solo_melee_strike_phase(target, attacker, false,
+			SoloStrike.NON_COUNTER if ai_counter else SoloStrike.ALL)
+		ai_struck = true
+	if ai_struck and _solo_combined_alive(target) > 0:
+		_solo_set_fatigued(target)
+	# — Morale: the side that CAUSED more wounds wins; the loser tests. Fear(X) (GF/AoF v3.5.1 p.13) adds
+	#   +X to the bearer's tally for THIS comparison only. —
+	var human_score: int = AiCombatMath.fear_adjusted_wounds(human_caused, _solo_unit_rating(attacker, "Fear"))
+	var ai_score: int = AiCombatMath.fear_adjusted_wounds(ai_caused, _solo_unit_rating(target, "Fear"))
+	if human_score > ai_score and _solo_combined_alive(target) > 0:
+		await _solo_morale_test(target, "AI (%s)" % target.get_name())
+	elif ai_score > human_score and _solo_combined_alive(attacker) > 0:
+		await _solo_morale_test(attacker, "You")
 
 
 ## Mark a unit (and its attached heroes — they fought too) Fatigued after its first melee this round

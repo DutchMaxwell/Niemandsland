@@ -168,7 +168,8 @@ func eligible_units_for(slot: int) -> Array:
 
 ## The official unit pick: Shaken last; then D6 → 2 table sections split along the AI's deployment edge
 ## (west/east half by centre X), rotating to the other section when the rolled one has no eligible unit;
-## then a random eligible unit in that section (seeded _rng → reproducible).
+## then a random eligible unit in that section (seeded _rng → reproducible), with the section's Counter
+## units activated only after its non-Counter units (the official Counter overlay).
 func _select_ai_unit(eligible: Array) -> GameUnit:
 	var fresh: Array = []
 	var shaken: Array = []
@@ -191,6 +192,15 @@ func _select_ai_unit(eligible: Array) -> GameUnit:
 	var section: Array = west if roll_west else east
 	if section.is_empty():
 		section = east if roll_west else west   # rotate to the other section (rule: no eligible unit there)
+	# Counter overlay (GF/AoF v3.5.1 solo rules p.57: "AI units with Counter are always activated after all
+	# other friendly non-Counter units in their section have been activated") — pick among the section's
+	# non-Counter units first; Counter units only when none remain.
+	var non_counter: Array = []
+	for u in section:
+		if not has_counter(AiShooting.melee_profiles(_unit_weapons(u)), (u as GameUnit).get_special_rules()):
+			non_counter.append(u)
+	if not non_counter.is_empty():
+		section = non_counter
 	return section[_rng.randi_range(0, section.size() - 1)]
 
 
@@ -263,6 +273,12 @@ func _act(unit: GameUnit) -> Dictionary:
 	if _forces_hold_and_shoot(weapons, shoot_range > 0 and enemy_dist <= float(shoot_range)):
 		action = AiDecision.Action.HOLD
 		do_shoot = true
+	# Immobile / Artillery (GF/AoF v3.5.1 p.13): "may only use Hold actions" — the tree's move is overridden
+	# to HOLD unconditionally; the unit still shoots when a target is in range (Artillery solo overlay p.57:
+	# "If they are in range of enemies, they always use Hold and shoot"; can_shoot re-gates on range + LOS).
+	if forces_hold(unit.get_special_rules()):
+		action = AiDecision.Action.HOLD
+		do_shoot = shoot_range > 0
 	report["action"] = action
 	report["shoot"] = do_shoot
 	report["toward"] = int(dec["toward"])
@@ -323,9 +339,14 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	if positions.is_empty():
 		return 0
 	var centre := unit_centre(unit)
-	# Difficult terrain (GF Advanced Rules v3.5.1 p.11): a move whose straight path crosses it is halved.
+	# Difficult terrain (GF Advanced Rules v3.5.1 p.11): a move whose straight path crosses it is halved —
+	# unless the unit ignores it: Strider (p.14 "may ignore the effects of difficult terrain when moving")
+	# or Flying (p.13 "ignore terrain effects whilst moving"); the solo overlay (p.57) confirms both treat
+	# difficult terrain as open when choosing where to move.
 	var reach := inches
-	if _path_crosses_terrain(centre, goal, TerrainRules.PathCheck.DIFFICULT):
+	var flying: bool = unit.has_special_rule("Flying")
+	var ignores_difficult: bool = flying or unit.has_special_rule("Strider")
+	if not ignores_difficult and _path_crosses_terrain(centre, goal, TerrainRules.PathCheck.DIFFICULT):
 		reach = inches * 0.5
 	var delta := MoveIntent.plan_unit_move(positions, goal, reach)
 	delta = _clamp_delta_to_bounds(positions, delta)
@@ -333,7 +354,8 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		return 0
 	var trails: Array = []
 	var new_positions := _plan_positions(unit, positions, delta, allow_contact, trails)
-	var dang := _count_dangerous(positions, new_positions)
+	# Flying ignores terrain effects whilst moving (p.13) — no Dangerous tests for its crossings.
+	var dang := 0 if flying else _count_dangerous(positions, new_positions)
 	_apply_model_positions(models, new_positions)
 	# Publish the per-model routes for the presentation layer (animate + trail ribbons) — the STATE is
 	# already final (applied + broadcast above); the animation is a local visual replay.
@@ -576,6 +598,32 @@ static func _forces_hold_and_shoot(weapons: Array, enemy_in_range: bool) -> bool
 		for r in rules:
 			if str(r).strip_edges().begins_with("Relentless"):
 				return true
+	return false
+
+
+## Hold-only unit rules (GF/AoF Advanced Rules v3.5.1 p.13): Immobile — "may only use Hold actions";
+## Artillery — "May only use Hold actions." (its solo overlay p.57 adds "If they are in range of enemies,
+## they always use Hold and shoot", which the caller honours by keeping the shoot flag). Pure predicate on
+## the unit's special-rule strings.
+static func forces_hold(unit_rules: Array) -> bool:
+	for r in unit_rules:
+		var s := str(r).strip_edges()
+		if s.begins_with("Immobile") or s.begins_with("Artillery"):
+			return true
+	return false
+
+
+## Whether a unit fights with Counter (GF/AoF v3.5.1 p.13) — a Counter melee weapon among `melee_profiles`
+## (AiShooting.melee_profiles output), or the rule granted unit-wide in `unit_rules`. Input to the official
+## Counter activation-order overlay (solo rules p.57: Counter units activate after all other friendly
+## non-Counter units in their section) and to the strike-first melee phase.
+static func has_counter(melee_profiles: Array, unit_rules: Array) -> bool:
+	for r in unit_rules:
+		if str(r).strip_edges().begins_with("Counter"):
+			return true
+	for p in melee_profiles:
+		if bool((p as Dictionary).get("counter", false)):
+			return true
 	return false
 
 

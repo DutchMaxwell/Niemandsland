@@ -175,3 +175,57 @@ func test_expected_wounds() -> void:
 	assert_float(AiCombatMath.expected_wounds(0, 3, 5, 0)).is_equal_approx(0.0, 0.0001)
 	# Higher AP never lowers expected damage (more wounds get through).
 	assert_bool(AiCombatMath.expected_wounds(4, 3, 4, 3) >= AiCombatMath.expected_wounds(4, 3, 4, 0)).is_true()
+
+
+func test_modified_hit_target_applies_roll_modifiers_bounded() -> void:
+	# A +1 to-hit roll bonus lowers the needed face; a −1 raises it.
+	assert_int(AiCombatMath.modified_hit_target(4, 1)).is_equal(3)
+	assert_int(AiCombatMath.modified_hit_target(4, -1)).is_equal(5)
+	assert_int(AiCombatMath.modified_hit_target(4, 0)).is_equal(4)
+	# Bounded to [2, 6]: a natural 1 always fails, a natural 6 always succeeds (core p.1 "Modifiers").
+	assert_int(AiCombatMath.modified_hit_target(2, 3)).is_equal(2)
+	assert_int(AiCombatMath.modified_hit_target(5, -2)).is_equal(6)
+
+
+func test_shooting_hit_modifier_over_nine_inches_rules() -> void:
+	# Stealth (p.14): −1 to hit only when shot from OVER 9" (exactly 9" is not over).
+	assert_int(AiCombatMath.shooting_hit_modifier(12.0, false, true, false, false)).is_equal(-1)
+	assert_int(AiCombatMath.shooting_hit_modifier(9.0, false, true, false, false)).is_equal(0)
+	# Artillery target (p.13): −2 to hit from over 9".
+	assert_int(AiCombatMath.shooting_hit_modifier(12.0, false, false, true, false)).is_equal(-2)
+	assert_int(AiCombatMath.shooting_hit_modifier(6.0, false, false, true, false)).is_equal(0)
+	# Artillery shooter (p.13): +1 to hit at over 9".
+	assert_int(AiCombatMath.shooting_hit_modifier(12.0, true, false, false, false)).is_equal(1)
+	assert_int(AiCombatMath.shooting_hit_modifier(8.0, true, false, false, false)).is_equal(0)
+
+
+func test_shooting_hit_modifier_evasive_any_range_and_stacking() -> void:
+	# Evasive (army-book rule): −1 to hit at ANY range.
+	assert_int(AiCombatMath.shooting_hit_modifier(3.0, false, false, false, true)).is_equal(-1)
+	assert_int(AiCombatMath.shooting_hit_modifier(20.0, false, false, false, true)).is_equal(-1)
+	# Different rules stack (core "Rules Priority & Stacking"): Artillery +1, Stealth −1, Evasive −1 → −1.
+	assert_int(AiCombatMath.shooting_hit_modifier(12.0, true, true, false, true)).is_equal(-1)
+	# No rules → no modifier.
+	assert_int(AiCombatMath.shooting_hit_modifier(12.0, false, false, false, false)).is_equal(0)
+
+
+func test_melee_hit_modifier_only_evasive_applies() -> void:
+	assert_int(AiCombatMath.melee_hit_modifier(true)).is_equal(-1)
+	assert_int(AiCombatMath.melee_hit_modifier(false)).is_equal(0)
+
+
+func test_shielded_defense_improves_the_save_by_one() -> void:
+	# Shielded (army-book rule): +1 to Defense rolls = a save target one better.
+	assert_int(AiCombatMath.shielded_defense(4, true)).is_equal(3)
+	assert_int(AiCombatMath.shielded_defense(4, false)).is_equal(4)
+	# Floored at 2+ (a natural 1 always fails).
+	assert_int(AiCombatMath.shielded_defense(2, true)).is_equal(2)
+
+
+func test_impact_total_dice_counter_reduction() -> void:
+	# The rulebook example (p.13 Counter): Impact(3), one charging model, one Counter model → 2 rolls.
+	assert_int(AiCombatMath.impact_total_dice(3, 1, 1)).is_equal(2)
+	# No Counter → X per charging model.
+	assert_int(AiCombatMath.impact_total_dice(3, 2, 0)).is_equal(6)
+	# The reduction is "-1 TOTAL Impact rolls per model with Counter" and never goes negative.
+	assert_int(AiCombatMath.impact_total_dice(1, 1, 5)).is_equal(0)

@@ -472,3 +472,22 @@ func test_shooting_profile_threads_blast_reliable_and_deadly() -> void:
 	assert_bool(bool(prof["reliable"])).is_true()
 	assert_int(int(prof["deadly"])).is_equal(3)
 	assert_int(int(prof["ap"])).is_equal(1)
+
+
+func test_forces_hold_for_immobile_and_artillery() -> void:
+	# GF/AoF v3.5.1 p.13: Immobile / Artillery "may only use Hold actions".
+	assert_bool(SoloController.forces_hold(["Immobile"])).is_true()
+	assert_bool(SoloController.forces_hold(["Artillery"])).is_true()
+	assert_bool(SoloController.forces_hold(["Fearless", "Tough(3)"])).is_false()
+	assert_bool(SoloController.forces_hold([])).is_false()
+
+
+func test_has_counter_from_weapon_or_unit_rule() -> void:
+	# Counter as a melee-weapon rule (the usual shape) or granted unit-wide; ranged Counter never counts
+	# (melee_profiles drops ranged weapons).
+	var counter_melee := AiShooting.melee_profiles([{"name": "Spear", "range_value": 0, "attacks": 1, "count": 5, "special_rules": ["Counter"]}])
+	var plain_melee := AiShooting.melee_profiles([{"name": "Fists", "range_value": 0, "attacks": 1, "count": 5, "special_rules": []}])
+	assert_bool(SoloController.has_counter(counter_melee, [])).is_true()
+	assert_bool(SoloController.has_counter(plain_melee, [])).is_false()
+	assert_bool(SoloController.has_counter(plain_melee, ["Counter"])).is_true()
+	assert_bool(SoloController.has_counter([], [])).is_false()

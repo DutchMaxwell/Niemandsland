@@ -75,3 +75,10 @@ func test_total_attacks_sums_profiles() -> void:
 	var profiles := AiShooting.profiles_in_range([_w("Rifle", 24, 1, 5, []), _w("Cannon", 30, 3, 1, ["AP(2)"])], 20.0)
 	assert_int(AiShooting.total_attacks(profiles)).is_equal(8)
 	assert_int(AiShooting.total_attacks([])).is_equal(0)
+
+
+func test_melee_profiles_carry_counter_facet() -> void:
+	# Counter (GF/AoF v3.5.1 p.13) is pre-parsed onto the profile for the strike-first phase.
+	var profiles := AiShooting.melee_profiles([_w("Spear", 0, 1, 5, ["Counter"]), _w("Fists", 0, 2, 5, [])])
+	assert_bool(bool(profiles[0]["counter"])).is_true()
+	assert_bool(bool(profiles[1]["counter"])).is_false()

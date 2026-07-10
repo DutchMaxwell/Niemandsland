@@ -43,6 +43,32 @@ const THRUST_TO_HIT_BONUS: int = 1
 ## (GF/AoF Advanced Rules v3.5.1, p.1 "Modifiers": "rolls of 1 always fail").
 const BEST_HIT_TARGET: int = 2
 
+## The "over 9 inches" range threshold several shooting rules share (GF/AoF Advanced Rules v3.5.1:
+## Relentless p.14, Stealth p.14, Artillery p.13 — each reads "over 9\" away", so exactly 9" is NOT over).
+const LONG_RANGE_IN: float = 9.0
+
+## Stealth to-hit penalty (GF/AoF Advanced Rules v3.5.1, p.14): "When units where all models have this rule
+## are shot from over 9\" away, enemy units get -1 to hit rolls."
+const STEALTH_HIT_PENALTY: int = 1
+
+## Artillery attacker bonus (GF/AoF Advanced Rules v3.5.1, p.13): "When this model shoots at enemies over
+## 9\" away, it gets +1 to hit rolls."
+const ARTILLERY_SHOOTER_HIT_BONUS: int = 1
+
+## Artillery defensive penalty (GF/AoF Advanced Rules v3.5.1, p.13): "When enemy units shoot at this model
+## from over 9\" away, they get -2 to hit rolls."
+const ARTILLERY_TARGET_HIT_PENALTY: int = 2
+
+## Evasive to-hit penalty (OPR army-book rule; official Army Forge rule text, verified from the field-test
+## list: "Enemies get -1 to hit rolls when attacking units where all models have this rule."). Applies to
+## ANY attack (shooting and melee), with no range condition. Not in the core v3.5.1 PDF — army-book rule.
+const EVASIVE_HIT_PENALTY: int = 1
+
+## Shielded Defense-roll bonus (OPR army-book rule; official Army Forge rule text, verified from the
+## field-test list: "Units where all models have this rule get +1 to defense rolls against hits that are
+## not from spells."). The solo automation has no spell damage, so every hit qualifies.
+const SHIELDED_DEFENSE_BONUS: int = 1
+
 
 ## Hits from the attacker's to-hit roll: faces >= Quality (Quality is "better is lower", e.g. 3+).
 static func count_hits(faces: Array, quality: int) -> int:
@@ -96,7 +122,7 @@ static func expected_wounds(attacks: int, quality: int, defense: int, armor_pier
 ## away, unmodified results of 6 to hit deal 1 extra hit." So each unmodified 6 among the to-hit faces adds
 ## one hit — but only when the shot is over 9". Returns 0 at 9" or closer. (Shooting only; not melee.)
 static func relentless_bonus_hits(faces: Array, dist_in: float) -> int:
-	if dist_in <= 9.0:
+	if dist_in <= LONG_RANGE_IN:
 		return 0
 	var sixes := 0
 	for f in faces:
@@ -148,6 +174,51 @@ static func impact_hits(faces: Array) -> int:
 ## Thrust's modifier does not apply then).
 static func thrust_to_hit(quality: int, is_charging: bool) -> int:
 	return maxi(BEST_HIT_TARGET, quality - THRUST_TO_HIT_BONUS) if is_charging else quality
+
+
+## A to-hit target under a net ROLL modifier (`+1 to hit` = roll_mod +1, which lowers the needed face by
+## one). Bounded to [2, 6]: a natural 1 always fails and a natural 6 always succeeds (GF/AoF Advanced Rules
+## v3.5.1, p.1 "Modifiers"), so any target beyond 6 is equivalent to 6 on a d6 and 2 is the best possible.
+static func modified_hit_target(base_target: int, roll_mod: int) -> int:
+	return clampi(base_target - roll_mod, BEST_HIT_TARGET, UNMODIFIED_SIX)
+
+
+## Net to-hit ROLL modifier for a SHOOTING attack from the attacker-/target-side special rules (stacking —
+## GF/AoF v3.5.1 "Rules Priority & Stacking": different rules stack). Inputs are the pre-evaluated rule
+## conditions; `dist_in` gates the over-9" rules (Artillery both sides p.13, Stealth p.14; exactly 9" is
+## not "over"). Evasive (army-book rule) has no range condition. Negative = harder to hit.
+static func shooting_hit_modifier(dist_in: float, attacker_artillery: bool, target_stealth: bool,
+		target_artillery: bool, target_evasive: bool) -> int:
+	var mod := 0
+	if dist_in > LONG_RANGE_IN:
+		if attacker_artillery:
+			mod += ARTILLERY_SHOOTER_HIT_BONUS
+		if target_stealth:
+			mod -= STEALTH_HIT_PENALTY
+		if target_artillery:
+			mod -= ARTILLERY_TARGET_HIT_PENALTY
+	if target_evasive:
+		mod -= EVASIVE_HIT_PENALTY
+	return mod
+
+
+## Net to-hit ROLL modifier for a MELEE strike: of the target-side rules only Evasive (army-book rule:
+## "when attacking", any range) applies — Stealth/Artillery are shooting-only.
+static func melee_hit_modifier(target_evasive: bool) -> int:
+	return -EVASIVE_HIT_PENALTY if target_evasive else 0
+
+
+## The defender's Defense value after Shielded (army-book rule: +1 to Defense rolls = a save target one
+## better), floored at 2+ (a natural 1 always fails a Defense roll too — core p.1 "Modifiers").
+static func shielded_defense(defense: int, is_shielded: bool) -> int:
+	return maxi(BEST_HIT_TARGET, defense - SHIELDED_DEFENSE_BONUS) if is_shielded else defense
+
+
+## Total Impact dice of a charge (GF/AoF Advanced Rules v3.5.1, p.13): X dice per charging model, minus
+## the Counter reduction (p.13 Counter: "the charging unit gets -1 total Impact rolls per model with
+## Counter" — the rulebook example: Impact(3), one charger, one Counter model → 2 rolls). Never negative.
+static func impact_total_dice(impact_x: int, charging_models: int, counter_models: int) -> int:
+	return maxi(0, maxi(impact_x, 0) * maxi(charging_models, 0) - maxi(counter_models, 0))
 
 
 ## Whether a Fearless re-roll rescues a FAILED morale test (GF/AoF Advanced Rules v3.5.1, p.13: on a failed

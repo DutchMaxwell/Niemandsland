@@ -56,6 +56,9 @@ static func _profile(w: Variant, attacks: int, range_in: int) -> Dictionary:
 		"rending": _has_rule(w, "Rending"),
 		"bane": _has_rule(w, "Bane"),
 		"thrust": _has_rule(w, "Thrust"),
+		# Wave-3 (GF/AoF v3.5.1 p.13): Counter — the weapon strikes first when its bearer is charged and
+		# reduces the charger's Impact rolls; drives the strike-first phase + the Counter-last activation.
+		"counter": _has_rule(w, "Counter"),
 		"range": range_in,
 		"rules": _rules_of(w),
 	}

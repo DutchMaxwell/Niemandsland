@@ -217,9 +217,19 @@ seams). Wired:
   **Bane** (defender re-rolls Defense 6s), **Impact(X)** (charge auto-hits), **Thrust** (charge +1 hit &
   AP(+1)), **Fear(X)** (melee-winner bonus). Wired into `main.gd` only (the SIM is untouched, so the
   mirror-fairness oracle is unchanged and needs no re-run, per the wave-1 Blast/Reliable precedent).
-  Deferred + still logged: Counter (interactive strike-first reorder), Stealth/Evasive/Shielded, Caster,
-  Mend, Indirect/Artillery deploy facets, and army-specific non-core rules. Tests: 14 new `AiCombatMath`
-  cases + 2 `AiShooting` facet cases; full solo suite green.
+  Tests: 14 new `AiCombatMath` cases + 2 `AiShooting` facet cases; full solo suite green.
+- **Wave-3 rules sweep (2026-07-10)** — closes the core-PDF combat backlog for the real game (see
+  [`SOLO_AI_RULES_COVERAGE.md`](SOLO_AI_RULES_COVERAGE.md) §Wave 3): **to-hit modifiers** both directions
+  (Stealth −1 >9", Artillery +1/−2 >9", Evasive −1 any attack — composed on Reliable via
+  `AiCombatMath.modified_hit_target`, tray + battle log show the modified target); **Shielded** (+1
+  Defense) on every save site; **Counter** — strike-first as a pre-phase of the existing melee flow
+  (`_solo_melee_strike_phase` with a Counter/non-Counter filter; the four inline strike loops were unified
+  into that one helper), Impact-roll reduction, and the Counter-last activation overlay in the unit pick;
+  **Immobile/Artillery Hold-only** (`SoloController.forces_hold`); **Strider/Flying** terrain-exempt AI
+  movement. Still out (logged): Caster/spells, Mend, Indirect damage facets, Artillery deploy-high,
+  Aircraft, Limited, Takedown snipe damage, army-specific non-core rules. Tests: 6 new `AiCombatMath`
+  cases (incl. the Counter-Impact rulebook example), an `AiShooting` counter-facet case, 2
+  `SoloController` cases (forces_hold, has_counter); full suite green.
 
 ## P2 — the in-game auto-game (shipped): alternating activation, auto-seize, scoring
 
