@@ -39,6 +39,11 @@ const MELEE_SEPARATION_IN := 1.0
 ## Safety margin added to the moving base's radius when inflating obstacles (inches) — guards float
 ## shaving at wall corners; not a rule value.
 const CLEARANCE_EPS_IN := 0.1
+## Target candidates within the same 1" distance band count as "equally near" — tabletop measuring
+## precision for the official nearest-target key. A GENUINE tie is where the official rules would roll a
+## die; the hybrid policy (docs/SOLO_AI_PLAN.md) ranks it by the EV metric instead. A documented
+## convention, not an official value.
+const TARGET_TIE_BAND_IN := 1.0
 
 var army_manager: OPRArmyManager = null
 var network_manager: Node = null
@@ -64,6 +69,19 @@ var last_move_paths: Array = []
 ## Move budget (inches) actually granted to the last AI move (band, difficult-capped when the route
 ## entered difficult terrain) — the denominator of the corridor's distance label.
 var last_move_budget_in: float = 0.0
+## Structured AI decision records (the developer-mode lane + the foundation for future introspection-
+## driven AI). Each record is a typed Dictionary built AT DECISION TIME — cheap fields only, no string
+## formatting (rendering happens in render_decision, and only when the dev toggle is on):
+##   kind       : String — "deploy" | "pick" | "action" | "target" | "move" | "separate"
+##   unit       : String — acting unit's name
+##   rule       : String — the official tree node / rule that fired, with its citation (a literal)
+##   candidates : Array of {name: String, ev: float, key: Array} — the option list with EV scores
+##   chosen     : String — the picked option
+##   why        : String — decisive key / tie-break reason (a literal, no formatting)
+##   data       : Dictionary — kind-specific numbers (distances, bands, rolls)
+## Ring-buffered at DECISION_LOG_CAP (drop-oldest) so an undrained log never grows unbounded.
+var decision_log: Array = []
+const DECISION_LOG_CAP := 200
 ## Injected by main: Callable(from: Vector3, to: Vector3) -> bool for terrain line of sight.
 var los_checker: Callable = Callable()
 ## Injected by main (goal 003 P3 — real terrain feeds the shared pure modules):
@@ -221,22 +239,29 @@ func _select_ai_unit(eligible: Array) -> GameUnit:
 	for u in section:
 		if not has_counter(AiShooting.melee_profiles(_unit_weapons(u)), (u as GameUnit).get_special_rules()):
 			non_counter.append(u)
+	var counter_deferred: bool = not non_counter.is_empty() and non_counter.size() < section.size()
 	if not non_counter.is_empty():
 		section = non_counter
-	return section[_rng.randi_range(0, section.size() - 1)]
+	var picked: GameUnit = section[_rng.randi_range(0, section.size() - 1)]
+	record_decision({"kind": "pick", "unit": picked.get_name(),
+		"rule": "Solo v3.5.0: D6 section roll, random eligible; Shaken last; Counter last in section (p.57)",
+		"candidates": [], "chosen": picked.get_name(),
+		"why": ("counter units deferred" if counter_deferred else ("shaken pool" if fresh.is_empty() else "section roll")),
+		"data": {"west": west.size(), "east": east.size(), "rolled_west": roll_west, "eligible": eligible.size()}})
+	return picked
 
 
-## Nearest valid human unit to `ai_unit` (centre-to-centre), PREFERRING not-yet-activated targets — the
-## OPR Solo & Co-Op v3.5.0 targeting rule (nearest valid enemy, prefer un-activated). Falls back to the
-## nearest activated unit if every human unit has already acted. Null if none alive.
+## The move/charge target for an AI unit — the OPR Solo & Co-Op v3.5.0 targeting rule (p.2 / p.57):
+## the NEAREST valid enemy, preferring not-yet-activated targets. Distances are compared in 1" bands
+## (TARGET_TIE_BAND_IN); a GENUINE tie — where the official rules would roll a die — is ranked by the EV
+## metric instead (hybrid policy): the charge matchup score for a unit with melee weapons (Furious /
+## Thrust / Impact in; the defender's Counter reduces it; our Fearless raises risk tolerance), else the
+## shooting EV at that distance. Deterministic; the decision is recorded for the dev-mode lane.
 func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 	if army_manager == null:
 		return null
 	var from := unit_centre(ai_unit)
-	var best_fresh: GameUnit = null
-	var best_fresh_d := INF
-	var best_any: GameUnit = null
-	var best_any_d := INF
+	var cands: Array = []
 	for h in army_manager.get_game_units_for_player(human_slot):
 		var hu := h as GameUnit
 		if hu == null or hu.is_destroyed():
@@ -244,13 +269,57 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 		if hu.has_method("is_attached") and hu.is_attached():
 			continue   # a joined hero is PART of its host unit — you target the unit, never the hero alone
 		var d := MoveIntent.distance_inches(from, unit_centre(hu))
-		if d < best_any_d:
-			best_any_d = d
-			best_any = hu
-		if not hu.is_activated and d < best_fresh_d:
-			best_fresh_d = d
-			best_fresh = hu
-	return best_fresh if best_fresh != null else best_any
+		cands.append({"unit": hu, "d": d, "band": int(floorf(d / TARGET_TIE_BAND_IN)),
+			"activated": hu.is_activated, "ev": 0.0})
+	if cands.is_empty():
+		return null
+	# Official key: not-yet-activated first, then nearest (banded).
+	var tied: Array = [cands[0]]
+	for i in range(1, cands.size()):
+		var cmp := _target_key_compare(cands[i], tied[0])
+		if cmp < 0:
+			tied = [cands[i]]
+		elif cmp == 0:
+			tied.append(cands[i])
+	var why := "official: nearest, not-activated first"
+	var chosen: Dictionary = tied[0]
+	if tied.size() > 1:
+		# A genuine tie: rank by EV (utility instead of the rules' die roll — hybrid policy).
+		var our_weapons := _unit_weapons(ai_unit)
+		var our_melee := AiShooting.melee_profiles(our_weapons)
+		var us := AiEv.ctx_for(ai_unit, false, counter_models_of(ai_unit))
+		for t in tied:
+			var td := t as Dictionary
+			var hu := td["unit"] as GameUnit
+			var them := AiEv.ctx_for(hu, false, counter_models_of(hu))
+			if our_melee.is_empty():
+				td["ev"] = AiEv.shoot_ev(AiShooting.profiles_in_range(our_weapons, 0.0), us, them, float(td["d"]))
+			else:
+				td["ev"] = AiEv.charge_score(our_melee, us, AiShooting.melee_profiles(_unit_weapons(hu)), them)
+		for t in tied:
+			if float((t as Dictionary)["ev"]) > float(chosen["ev"]):
+				chosen = t
+		why = "ev tie-break"
+	var rec_cands: Array = []
+	for t in tied:
+		var td := t as Dictionary
+		rec_cands.append({"name": (td["unit"] as GameUnit).get_name(), "ev": float(td["ev"]),
+			"key": [td["activated"], td["band"]]})
+	record_decision({"kind": "target", "unit": ai_unit.get_name(),
+		"rule": "Solo v3.5.0 p.2: nearest valid target, not-activated first",
+		"candidates": rec_cands, "chosen": (chosen["unit"] as GameUnit).get_name(), "why": why,
+		"data": {"considered": cands.size(), "dist_in": float(chosen["d"])}})
+	return chosen["unit"] as GameUnit
+
+
+## Official target ordering: not-yet-activated before activated, then the nearer 1" distance band.
+## Returns <0 when `a` outranks `b`, 0 on a genuine tie, >0 otherwise.
+static func _target_key_compare(a: Dictionary, b: Dictionary) -> int:
+	var aa := 1 if bool(a.get("activated", false)) else 0
+	var bb := 1 if bool(b.get("activated", false)) else 0
+	if aa != bb:
+		return aa - bb
+	return int(a.get("band", 0)) - int(b.get("band", 0))
 
 
 ## One activation by the FULL official OPR Solo & Co-Op v3.5.0 decision tree (goal 003 P3 — the sim's brain
@@ -276,7 +345,10 @@ func _act(unit: GameUnit) -> Dictionary:
 	var tcentre := unit_centre(target_unit)
 	var enemy_dist := MoveIntent.distance_inches(centre, tcentre)
 	var shoot_range := AiArchetype.max_range_inches(weapons)
-	var archetype := AiArchetype.classify(weapons)
+	# The archetype's "better than" (Solo & Co-Op v3.5.0 p.1) is filled with the EV metric in the REAL
+	# game (AiEv.classify — Furious/Thrust/Impact weigh the melee side); the sim keeps the frozen
+	# AiArchetype.classify heuristic, so its fairness oracle is untouched.
+	var archetype := AiEv.classify(weapons, AiEv.ctx_for(unit, false, 0))
 	# Nearest objective NOT controlled by this AI side — the official trees pivot on it.
 	var obj_pos := _nearest_uncontrolled_objective(centre)
 	var has_obj: bool = obj_pos != NO_OBJECTIVE
@@ -291,16 +363,25 @@ func _act(unit: GameUnit) -> Dictionary:
 	var dec := AiDecision.decide_solo(ctx)
 	var action: int = int(dec["action"])
 	var do_shoot: bool = bool(dec["shoot"])
+	var action_why := "decision tree"
 	# Relentless overlay (Solo & Co-Op Rules v3.5.0 p.2): a Relentless ranged weapon in range → Hold and shoot.
 	if _forces_hold_and_shoot(weapons, shoot_range > 0 and enemy_dist <= float(shoot_range)):
 		action = AiDecision.Action.HOLD
 		do_shoot = true
+		action_why = "Relentless hold-and-shoot overlay"
 	# Immobile / Artillery (GF/AoF v3.5.1 p.13): "may only use Hold actions" — the tree's move is overridden
 	# to HOLD unconditionally; the unit still shoots when a target is in range (Artillery solo overlay p.57:
 	# "If they are in range of enemies, they always use Hold and shoot"; can_shoot re-gates on range + LOS).
 	if forces_hold(unit.get_special_rules()):
 		action = AiDecision.Action.HOLD
 		do_shoot = shoot_range > 0
+		action_why = "Immobile/Artillery hold-only"
+	record_decision({"kind": "action", "unit": unit.get_name(),
+		"rule": "Solo v3.5.0 decision tree (archetype branch; EV fills the p.1 'better than')",
+		"candidates": [], "chosen": AiDecision.action_name(action), "why": action_why,
+		"data": {"arch": archetype, "objective": bool(ctx["objective"]), "in_way": bool(ctx["in_way"]),
+			"enemy_in_charge": bool(ctx["enemy_in_charge"]), "shoot_after_advance": bool(ctx["shoot_after_advance"]),
+			"enemy_dist_in": enemy_dist, "toward_objective": int(dec["toward"]) == AiDecision.Toward.OBJECTIVE}})
 	report["action"] = action
 	report["shoot"] = do_shoot
 	report["toward"] = int(dec["toward"])
@@ -423,9 +504,17 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	last_move_budget_in = reach
 	var radii := _model_radius_map(models)
 	last_move_paths = []
+	var longest_arc_m := 0.0
 	for i in range(mini(models.size(), trails.size())):
+		longest_arc_m = maxf(longest_arc_m, MovementPlanner.polyline_length(trails[i] as Array))
 		last_move_paths.append({"model": models[i], "path": trails[i],
 			"radius_m": float(radii.get(models[i], SeparationChecker.DEFAULT_BASE_RADIUS_M))})
+	record_decision({"kind": "move", "unit": unit.get_name(),
+		"rule": "GF v3.5.1 p.7 move bands; p.11 difficult 6\" cap; p.57 move around difficult",
+		"candidates": [], "chosen": "",
+		"why": ("difficult cap" if reach < inches else ("around difficult" if avoid else "direct")),
+		"data": {"band_in": inches, "budget_in": reach, "arc_in": longest_arc_m / INCHES_TO_METERS,
+			"dangerous_models": dang}})
 	return dang
 
 
@@ -835,6 +924,123 @@ static func has_counter(melee_profiles: Array, unit_rules: Array) -> bool:
 	return false
 
 
+## Alive models of a unit (incl. attached heroes) that fight with Counter — the Impact-reduction /
+## charge-EV input (GF/AoF v3.5.1 p.13: "-1 total Impact rolls per model with Counter"). A unit-wide
+## Counter rule counts every alive model; otherwise the count of Counter melee-weapon copies, capped at
+## the member's alive models (dead models' weapons no longer counter).
+static func counter_models_of(unit: GameUnit) -> int:
+	if unit == null:
+		return 0
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	var total := 0
+	for m in members:
+		var member := m as GameUnit
+		if member == null:
+			continue
+		var alive: int = member.get_alive_count()
+		if alive <= 0:
+			continue
+		if member.has_special_rule("Counter"):
+			total += alive
+			continue
+		var weapons: Array = []
+		if member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
+			weapons = (member.source_data as OPRApiClient.OPRUnit).weapons
+		var bearers := 0
+		for w in weapons:
+			if not (w is Object) or (w as Object).get("range_value") == null or int((w as Object).range_value) > 0:
+				continue   # Counter strikes "with this weapon" — a melee-weapon rule
+			var rules: Array = (w as Object).special_rules if (w as Object).get("special_rules") != null else []
+			for r in rules:
+				if str(r).strip_edges().begins_with("Counter"):
+					bearers += maxi(int((w as Object).count) if (w as Object).get("count") != null else 1, 1)
+					break
+		total += mini(bearers, alive)
+	return total
+
+
+# ===== AI decision records (developer mode — introspection first, then intelligence) =====
+
+## Append one structured decision record (see decision_log). Ring-buffered: the oldest record is
+## dropped past DECISION_LOG_CAP, so an undrained buffer stays bounded in long games.
+func record_decision(rec: Dictionary) -> void:
+	decision_log.append(rec)
+	if decision_log.size() > DECISION_LOG_CAP:
+		decision_log.pop_front()
+
+
+## Hand the pending records to the renderer and clear the buffer. The caller (main) renders them into
+## the battle log when the dev toggle is ON, or discards them (records stay cheap either way).
+func drain_decisions() -> Array:
+	var out := decision_log
+	decision_log = []
+	return out
+
+
+## Render one decision record as a battle-log line — the ONLY place record fields become formatted
+## strings (zero formatting cost while the dev toggle is off). Pure + static (testable).
+static func render_decision(rec: Dictionary) -> String:
+	var parts: PackedStringArray = ["AI [%s] %s" % [str(rec.get("kind", "?")), str(rec.get("unit", "?"))]]
+	var rule := str(rec.get("rule", ""))
+	if not rule.is_empty():
+		parts.append("rule: %s" % rule)
+	var cands: Array = rec.get("candidates", [])
+	if not cands.is_empty():
+		var listed: PackedStringArray = []
+		for c in cands:
+			var cd := c as Dictionary
+			listed.append("%s EV %.2f" % [str(cd.get("name", "?")), float(cd.get("ev", 0.0))])
+		parts.append("options: " + ", ".join(listed))
+	var chosen := str(rec.get("chosen", ""))
+	if not chosen.is_empty():
+		parts.append("chose %s" % chosen)
+	var why := str(rec.get("why", ""))
+	if not why.is_empty():
+		parts.append("(%s)" % why)
+	var data: Dictionary = rec.get("data", {})
+	if not data.is_empty():
+		var kv: PackedStringArray = []
+		for k in data:
+			var v: Variant = data[k]
+			kv.append("%s=%s" % [str(k), ("%.1f" % float(v)) if (v is float) else str(v)])
+		parts.append("[" + ", ".join(kv) + "]")
+	return " — ".join(parts)
+
+
+# ===== Army rule inventory (the AI-handoff transparency scan) =====
+
+## Classify an army's special-rule occurrences into the three transparency classes the maintainer asked
+## for: "resolved" (mechanically implemented — the caller passes main's SOLO_MODELED_RULES, no second
+## hand-maintained list), of which the "decision" subset ALSO steers behaviour choices (targeting
+## overlays / EV inputs / activation order / movement), and "unknown" (kept in the once-per-session
+## un-automated battle-log flow). `rule_names` may repeat (one entry per bearing unit/weapon) — the
+## values are occurrence counts. Matching is prefix-based, mirroring _solo_log_unmodeled_rules.
+static func classify_rule_inventory(rule_names: Array, modeled: Array, decision_relevant: Array) -> Dictionary:
+	var resolved := {}
+	var decision := {}
+	var unknown := {}
+	for r in rule_names:
+		var name := str(r).strip_edges().get_slice("(", 0)
+		if name.is_empty():
+			continue
+		var is_modeled := false
+		for known in modeled:
+			if name.begins_with(str(known)):
+				is_modeled = true
+				break
+		if not is_modeled:
+			unknown[name] = int(unknown.get(name, 0)) + 1
+			continue
+		resolved[name] = int(resolved.get(name, 0)) + 1
+		for d in decision_relevant:
+			if name.begins_with(str(d)):
+				decision[name] = int(decision.get(name, 0)) + 1
+				break
+	return {"resolved": resolved, "decision": decision, "unknown": unknown}
+
+
 ## OPR "Determine Attacks" (mirrors SoloSim._effective_attacks): only living models' weapons count, so scale
 ## a weapon group's attacks by alive/max. Pure — used by the real combat path to stop dead models attacking.
 static func effective_attacks(base_attacks: int, alive: int, max_models: int) -> int:
@@ -1149,13 +1355,20 @@ func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, block
 		var ignores_terrain: bool = unit.has_special_rule("Strider") or unit.has_special_rule("Flying")
 		var blocked := blocked_flying if ignores_terrain else blocked_normal
 		var spot := AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius)
+		var spot_why := "best legal spot toward nearest objective (section)"
 		if spot == Vector2.INF:
 			spot = AiDeployment.best_spot(zone, objectives, occupied, radius, blocked, 0.025, radius)
+			spot_why = "section full — whole-zone fallback"
 		if spot == Vector2.INF:
 			# The army MUST deploy (rule) — worst case the unit forms up at its section centre even if
 			# that crowds neighbours; never silently skip a unit again.
 			spot = sec.get_center()
+			spot_why = "zone full — section centre (must deploy)"
 		_place_unit_at(unit, spot)
+		record_decision({"kind": "deploy", "unit": unit.get_name(),
+			"rule": "Solo v3.5.0 AI deployment: objective-near spot in the unit's section; Scout/Ambush overlays",
+			"candidates": [], "chosen": "", "why": spot_why,
+			"data": {"section": int(section_of.get(int(id), 2)), "x_m": spot.x, "z_m": spot.y}})
 		occupied.append({"pos": spot, "radius": radius})
 		deployed += 1
 	return {"deployed": deployed, "reserved": ambush_reserve.size(), "seed": seed_value}

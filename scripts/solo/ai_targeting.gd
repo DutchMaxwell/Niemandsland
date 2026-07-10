@@ -71,6 +71,22 @@ static func best_index(candidates: Array, overlay: int) -> int:
 	return best
 
 
+## Indices of every candidate whose official sort key EQUALS the best one's — a GENUINE tie, where the
+## official rules would roll a die; the caller may rank the tied set by a utility metric instead (the
+## hybrid policy, docs/SOLO_AI_PLAN.md). Additive API: best_index and the key ordering are unchanged
+## (the sim's behaviour is untouched).
+static func tied_with_best(candidates: Array, overlay: int, best_i: int) -> Array:
+	if best_i < 0 or best_i >= candidates.size():
+		return []
+	var best_key: Array = _key(candidates[best_i] as Dictionary, overlay)
+	var out: Array = []
+	for i in range(candidates.size()):
+		var k: Array = _key(candidates[i] as Dictionary, overlay)
+		if not _less(k, best_key) and not _less(best_key, k):
+			out.append(i)
+	return out
+
+
 ## Sort key (an array of numbers, lower is better, compared lexicographically) for one candidate under an
 ## overlay. The last three entries are always the base tie-break: not-activated, in-the-open, then nearest.
 static func _key(c: Dictionary, overlay: int) -> Array:

@@ -241,8 +241,18 @@ seams). Wired:
   Base sizes come from the shared `SeparationChecker` module (feat/proximity-hint, taken verbatim). All
   planner extensions are opt-in (`MovementPlanner` opts) — the SIM passes none, so the fairness oracle
   stays byte-identical. Tests: 10 planner geometry cases (clearance/zones/avoid-cells/escape/trim/
-  arc-budget/charge-vs-friendly) + a shared-fallback radius case + the module's own 26-case suite; full
-  suite green.
+  arc-budget/charge-vs-friendly) + a shared-fallback radius case + the module's own suite (bumped to the
+  34-case feat/proximity-hint head); full suite green.
+- **Capstone — inventory, EV decisions, developer mode (2026-07-10)**: the AI-army handoff battle-logs a
+  three-class rule inventory (resolved / decision-aware / not-automated — derived from
+  SOLO_MODELED_RULES, no second list); `AiEv` fills the officially-undefined "better than" (archetype)
+  and ranks genuine targeting ties by expected wounds from the SAME AiCombatMath helpers as resolution
+  (Counter lowers / Fearless raises the charge tie-break score; SIM untouched — it keeps the frozen
+  AiArchetype heuristic); and an "AI reasoning (dev)" toggle renders the structured per-decision records
+  (deploy/pick/action/target/move/separate — ring-capped, formatted only while on) into the battle log,
+  the introspection foundation for future smarter AI. See the coverage doc §Capstone for the record
+  schema + a sample lane. Tests: 11 AiEv cases + inventory/records/render/order cases + a targeting
+  tied-set case; full suite green.
 
 ## P2 — the in-game auto-game (shipped): alternating activation, auto-seize, scoring
 

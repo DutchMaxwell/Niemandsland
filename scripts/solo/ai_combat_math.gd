@@ -214,6 +214,13 @@ static func shielded_defense(defense: int, is_shielded: bool) -> int:
 	return maxi(BEST_HIT_TARGET, defense - SHIELDED_DEFENSE_BONUS) if is_shielded else defense
 
 
+## The defender's Defense value after Cover (GF Advanced Rules v3.5.1 p.11: the majority of the target's
+## models in cover terrain → +1 Defense against shooting), floored at 2+ — the one arithmetic both the
+## dice resolution (main._solo_cover_defense) and the EV metric (AiEv) share.
+static func covered_defense(defense: int, in_cover: bool) -> int:
+	return maxi(BEST_HIT_TARGET, defense - 1) if in_cover else defense
+
+
 ## Total Impact dice of a charge (GF/AoF Advanced Rules v3.5.1, p.13): X dice per charging model, minus
 ## the Counter reduction (p.13 Counter: "the charging unit gets -1 total Impact rolls per model with
 ## Counter" — the rulebook example: Impact(3), one charger, one Counter model → 2 rolls). Never negative.

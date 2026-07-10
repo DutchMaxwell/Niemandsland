@@ -245,6 +245,7 @@ var _solo_ai_busy: bool = false              # an AI activation chain is running
 var _solo_game_finished: bool = false        # summary shown after SOLO_GAME_ROUNDS — no further auto-advance
 var _solo_ai_banner: Label = null            # non-blocking "AI is taking its turn…" banner during the tail
 var _solo_fast: bool = false                 # fast-forward: shrink pacing holds + skip move animation
+var _solo_dev: bool = false                  # developer mode: render the AI's decision records into the battle log
 var _solo_toast: Label = null                # transient AI-action attribution/outcome toast
 var _solo_unmodeled_logged: Dictionary = {}  # rule name -> true: once-per-session unmodeled-rule notes
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
@@ -660,6 +661,7 @@ func _run_solo_ai_turn() -> void:
 	var moved := 0
 	while true:
 		var unit: GameUnit = await _solo_activate_one_ai()
+		_solo_flush_dev()
 		if unit == null:
 			break
 		moved += 1
@@ -747,14 +749,18 @@ func _solo_pump() -> void:
 			solo_controller.eligible_ai_units().size())
 		if step == SoloController.AltStep.REPLY:
 			_solo_pending_replies -= 1
-			if await _solo_activate_one_ai() == null:
+			var replied: GameUnit = await _solo_activate_one_ai()
+			_solo_flush_dev()
+			if replied == null:
 				_solo_pending_replies = 0   # AI side exhausted — no more replies owed this round
 		elif step == SoloController.AltStep.TAIL:
 			_show_solo_ai_banner()
 			if tail_count > 0:
 				await get_tree().create_timer(SOLO_AI_TAIL_DELAY_S).timeout
 			tail_count += 1
-			if await _solo_activate_one_ai() == null:
+			var tailed: GameUnit = await _solo_activate_one_ai()
+			_solo_flush_dev()
+			if tailed == null:
 				break   # defensive: eligible flipped mid-activation
 		else:
 			break   # WAIT for the human, or END_ROUND (handled below)
@@ -1034,6 +1040,7 @@ func _on_solo_deploy_pressed() -> void:
 	if battle_log != null:
 		var reserve_note: String = (" (%d in reserve)" % int(res.reserved)) if int(res.reserved) > 0 else ""
 		battle_log.log_event(BattleLog.Category.GENERAL, "AI deploys %d units%s [seed %d]" % [int(res.deployed), reserve_note, seed_value], true)
+	_solo_flush_dev()   # render the per-unit deployment records when the dev toggle is on
 
 
 ## Resolve the AI's shooting (goal 003 P3 — the sim's brain, real dice). SPLIT FIRE (OPR core p.8): each
@@ -1076,7 +1083,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 	var order: Array = []
 	for shot in shots:
 		var overlay: int = AiTargeting.weapon_overlay((shot["profile"] as Dictionary).get("rules", []))
-		var tgt: GameUnit = _solo_pick_overlay_target(shot["member"], overlay, float(shot["reach"]))
+		var tgt: GameUnit = _solo_pick_overlay_target(shot["member"], overlay, float(shot["reach"]), shot["profile"] as Dictionary)
 		if tgt == null:
 			continue
 		if not groups.has(tgt.unit_id):
@@ -1157,12 +1164,15 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array)
 ## target is valid when at least one of the shooting member's models has range + LOS to one of its
 ## models); attached heroes are never separate targets (they are part of their host unit). Null when
 ## nothing is valid.
-func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: float) -> GameUnit:
+func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: float, profile: Dictionary = {}) -> GameUnit:
 	if opr_army_manager == null or solo_controller == null:
 		return null
 	var from := solo_controller.unit_centre(attacker)
+	var att_ctx: Dictionary = AiEv.ctx_for(attacker)
 	var cands: Array = []
 	var refs: Array = []
+	var evs: Array = []
+	var dists: Array = []
 	for h in opr_army_manager.get_game_units_for_player(solo_controller.human_slot):
 		var hu := h as GameUnit
 		if hu == null or _solo_combined_alive(hu) <= 0:
@@ -1172,16 +1182,43 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 		if _solo_sighted_count(attacker, hu, int(max_range)) <= 0:
 			continue   # no model of the shooter has range + LOS → not a valid target (p.8)
 		var dist := MoveIntent.distance_inches(from, solo_controller.unit_centre(hu))
+		var in_cover := _solo_majority_in_cover(hu)
 		var tough: int = _solo_unit_tough(hu)
+		# The official key's "nearest" compares in 1" bands (SoloController.TARGET_TIE_BAND_IN — tabletop
+		# measuring precision); a genuine tie is where the rules would roll a die, resolved by EV below.
 		cands.append({
-			"dist": dist, "activated": hu.is_activated, "in_cover": _solo_majority_in_cover(hu),
+			"dist": floorf(dist / SoloController.TARGET_TIE_BAND_IN), "activated": hu.is_activated,
+			"in_cover": in_cover,
 			"defense": hu.get_defense(), "is_hero": hu.is_hero(), "has_upgrade": false, "upgrade_cost": 0,
 			"single_tough": hu.models.size() == 1 and tough > 1, "has_tough": tough > 1,
 			"remaining_tough": hu.get_alive_count() * tough,
 		})
 		refs.append(hu)
+		dists.append(dist)
+		# Expected wounds of THIS weapon profile vs THIS defender — every wave-1..3 rule flows through
+		# the shared AiEv/AiCombatMath math (Deadly→Tough, Blast→big units, >9" Stealth devalued, …).
+		evs.append(AiEv.profile_ev(profile, att_ctx, AiEv.ctx_for(hu, in_cover, 0), dist, false) if not profile.is_empty() else 0.0)
 	var idx: int = AiTargeting.best_index(cands, overlay)
-	return refs[idx] if idx >= 0 else null
+	if idx < 0:
+		return null
+	var why := "official overlay key"
+	# Genuine ties under the FULL official key (overlay tier + not-activated + open + banded nearest) —
+	# the hybrid policy ranks them by EV instead of the rules' die roll.
+	var tied: Array = AiTargeting.tied_with_best(cands, overlay, idx)
+	if tied.size() > 1 and not profile.is_empty():
+		for j in tied:
+			if float(evs[int(j)]) > float(evs[idx]):
+				idx = int(j)
+		why = "ev tie-break"
+	var rec_cands: Array = []
+	for i in range(refs.size()):
+		rec_cands.append({"name": (refs[i] as GameUnit).get_name(), "ev": float(evs[i]),
+			"key": [bool(cands[i]["activated"]), bool(cands[i]["in_cover"]), float(dists[i])]})
+	solo_controller.record_decision({"kind": "target", "unit": attacker.get_name(),
+		"rule": "Solo v3.5.0 p.2: nearest/not-activated/open + weapon overlay",
+		"candidates": rec_cands, "chosen": (refs[idx] as GameUnit).get_name(), "why": why,
+		"data": {"overlay": overlay, "weapon": str(profile.get("name", "")), "considered": refs.size()}})
+	return refs[idx]
 
 
 ## Models of `shooter` with BOTH range and line of sight to at least one model of `target` (per-model
@@ -1259,9 +1296,10 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 # === Solo combat facets (goal 003 P3 — shared pure-module math: cover / hits / wounds / regen / tough) ===
 
 ## The defender's save target after Cover (GF Advanced Rules v3.5.1 p.11): the majority of a target's models
-## in cover terrain gives +1 Defense (a better, lower save target), floored at 2+. Shooting only.
+## in cover terrain gives +1 Defense (a better, lower save target), floored at 2+. Shooting only. The
+## arithmetic is the shared AiCombatMath.covered_defense (one truth with the EV metric).
 func _solo_cover_defense(target: GameUnit, base_defense: int) -> int:
-	return maxi(2, base_defense - 1) if _solo_majority_in_cover(target) else base_defense
+	return AiCombatMath.covered_defense(base_defense, _solo_majority_in_cover(target))
 
 
 ## Hits from a to-hit roll, plus the "on an unmodified 6" bonus-hit rules and Blast. Relentless (>9"
@@ -1288,17 +1326,10 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 	return hits
 
 
-## Rating X of a unit-level "Name(X)" special rule (0 if absent), e.g. Impact(3) / Fear(2). Type-safe via
-## the same string form the importer uses (wave-1 _rule_to_string lesson — a label-only shape must not crash).
+## Rating X of a unit-level "Name(X)" special rule (0 if absent), e.g. Impact(3) / Fear(2) — the shared
+## AiEv.unit_rating reader (one truth between the dice resolution and the EV metric).
 func _solo_unit_rating(unit: GameUnit, rule_name: String) -> int:
-	if unit == null:
-		return 0
-	var prefix := rule_name + "("
-	for r in unit.get_special_rules():
-		var s := str(r).strip_edges()
-		if s.begins_with(prefix) and s.ends_with(")"):
-			return maxi(int(s.substr(prefix.length(), s.length() - prefix.length() - 1).replace("+", "")), 0)
-	return 0
+	return AiEv.unit_rating(unit, rule_name)
 
 
 ## A weapon profile with Thrust's charge AP bonus folded in (GF/AoF v3.5.1 p.14: "+1 to hit rolls and
@@ -1319,18 +1350,10 @@ func _solo_thrust_profile(profile: Dictionary, charging: bool) -> Dictionary:
 enum SoloStrike { ALL, COUNTER_ONLY, NON_COUNTER }
 
 
-## Whether ALL models of a unit carry `rule` — the trigger form of Stealth / Evasive / Shielded ("units
-## where all models have this rule"). A unit-level rule covers all its own models (Army Forge semantics);
-## every attached hero must carry it too, since a joined hero is a model of the unit (GF v3.5.1 "Hero").
+## Whether ALL models of a unit carry `rule` — the trigger form of Stealth / Evasive / Shielded. The
+## shared AiEv.rule_on_all_models reader (one truth between the dice resolution and the EV metric).
 func _solo_rule_on_all_models(unit: GameUnit, rule: String) -> bool:
-	if unit == null or not unit.has_special_rule(rule):
-		return false
-	if unit.has_method("get_attached_heroes"):
-		for h in unit.get_attached_heroes():
-			var hero := h as GameUnit
-			if hero != null and hero.get_alive_count() > 0 and not hero.has_special_rule(rule):
-				return false
-	return true
+	return AiEv.rule_on_all_models(unit, rule)
 
 
 ## The defender's Defense value after Shielded (army-book rule: "+1 to defense rolls against hits that are
@@ -1393,39 +1416,10 @@ func _solo_has_counter(unit: GameUnit) -> bool:
 	return false
 
 
-## Alive models of a unit (incl. attached heroes) that fight with Counter — the charger's Impact reduction
-## input (GF/AoF v3.5.1 p.13: "-1 total Impact rolls per model with Counter"). A unit-wide Counter rule
-## counts every alive model; otherwise the count of Counter melee-weapon copies, capped at the member's
-## alive models (dead models' weapons no longer counter, mirroring dead-models-don't-attack).
+## Alive models of a unit (incl. attached heroes) that fight with Counter — the shared
+## SoloController.counter_models_of walk (one truth between the dice resolution and the EV metric).
 func _solo_counter_models(unit: GameUnit) -> int:
-	var members: Array = [unit]
-	if unit.has_method("get_attached_heroes"):
-		members = members + unit.get_attached_heroes()
-	var total := 0
-	for m in members:
-		var member := m as GameUnit
-		if member == null:
-			continue
-		var alive: int = member.get_alive_count()
-		if alive <= 0:
-			continue
-		if member.has_special_rule("Counter"):
-			total += alive
-			continue
-		var weapons: Array = []
-		if member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
-			weapons = (member.source_data as OPRApiClient.OPRUnit).weapons
-		var bearers := 0
-		for w in weapons:
-			if not (w is Object) or (w as Object).get("range_value") == null or int((w as Object).range_value) > 0:
-				continue   # Counter strikes "with this weapon" — a melee-weapon rule
-			var rules: Array = (w as Object).special_rules if (w as Object).get("special_rules") != null else []
-			for r in rules:
-				if str(r).strip_edges().begins_with("Counter"):
-					bearers += maxi(int((w as Object).count) if (w as Object).get("count") != null else 1, 1)
-					break
-		total += mini(bearers, alive)
-	return total
+	return SoloController.counter_models_of(unit)
 
 
 ## Resolve one side's melee strikes against `defender` and LAND the wounds (Regeneration-bucketed): the
@@ -2100,6 +2094,61 @@ const SOLO_MODELED_RULES: Array = ["AP", "Tough", "Deadly", "Takedown", "Relentl
 	# Impact reduction + activation order) and the Hold-only rules (Immobile / Artillery).
 	"Stealth", "Evasive", "Shielded", "Counter", "Artillery", "Immobile"]
 
+## The SOLO_MODELED_RULES subset that ALSO steers the AI's behaviour choices (not only the dice math):
+## targeting overlays (AP/Deadly/Takedown — Solo v3.5.0 p.2), Hold overlays (Relentless/Artillery/
+## Immobile), activation order (Counter), movement (Fast/Slow bands, Strider/Flying terrain, Ambush/
+## Scout deployment) and every EV input of the tie-break metric (AiEv). Drives the inventory's
+## "decision-aware" marker — a classification aid, not a second rule list.
+const SOLO_DECISION_RULES: Array = ["AP", "Deadly", "Takedown", "Relentless", "Artillery", "Immobile",
+	"Counter", "Fast", "Slow", "Strider", "Flying", "Ambush", "Scout", "Tough", "Blast", "Reliable",
+	"Rending", "Bane", "Stealth", "Evasive", "Shielded", "Fear", "Furious", "Impact", "Thrust", "Hero"]
+
+
+## Battle-log the AI's rule inventory at army handoff (the maintainer's no-blackbox mandate): every
+## special rule the designated army carries, classified RESOLVED (mechanically implemented — derived
+## from SOLO_MODELED_RULES), marked "decision-aware" when it also steers choices, or UN-AUTOMATED
+## (which additionally keeps flowing through the once-per-session manual-note mechanism).
+func _solo_log_rule_inventory(player_id: int) -> void:
+	if battle_log == null or opr_army_manager == null:
+		return
+	var names: Array = []
+	for u in opr_army_manager.get_game_units_for_player(player_id):
+		var gu := u as GameUnit
+		if gu == null:
+			continue
+		names.append_array(gu.get_special_rules())
+		for w in _solo_all_weapons(gu):
+			if w is Object and (w as Object).get("special_rules") != null:
+				names.append_array((w as Object).special_rules)
+	var inv := SoloController.classify_rule_inventory(names, SOLO_MODELED_RULES, SOLO_DECISION_RULES)
+	battle_log.log_event(BattleLog.Category.GENERAL, "AI rule inventory (P%d): %s | decision-aware: %s | NOT automated (apply manually): %s" % [
+		player_id, _solo_inventory_list(inv["resolved"]), _solo_inventory_list(inv["decision"]),
+		_solo_inventory_list(inv["unknown"])], true)
+
+
+## "AP x23, Tough x4, …" — one inventory class as a compact, alphabetical count list ("none" when empty).
+static func _solo_inventory_list(counts: Dictionary) -> String:
+	if counts.is_empty():
+		return "none"
+	var keys := counts.keys()
+	keys.sort()
+	var parts: PackedStringArray = []
+	for k in keys:
+		parts.append("%s x%d" % [str(k), int(counts[k])])
+	return ", ".join(parts)
+
+
+## Drain the AI's structured decision records; render them into the battle log only while the dev
+## toggle is on (off = the records are discarded unformatted — zero string cost).
+func _solo_flush_dev() -> void:
+	if solo_controller == null:
+		return
+	var records: Array = solo_controller.drain_decisions()
+	if not _solo_dev or battle_log == null:
+		return
+	for rec in records:
+		battle_log.log_event(BattleLog.Category.GENERAL, SoloController.render_decision(rec as Dictionary))
+
 
 func _solo_log_unmodeled_rules(unit: GameUnit) -> void:
 	if unit == null or battle_log == null:
@@ -2203,11 +2252,15 @@ func _solo_separate_after_melee(charger: GameUnit, defender: GameUnit) -> void:
 	if solo_controller == null or _solo_combined_alive(charger) <= 0 or _solo_combined_alive(defender) <= 0:
 		return
 	var dang: int = solo_controller.separate_from_melee(charger, solo_controller.unit_centre(defender))
+	solo_controller.record_decision({"kind": "separate", "unit": charger.get_name(),
+		"rule": "GF v3.5.1 p.9 consolidation: the charger moves back 1\" when neither unit was destroyed",
+		"candidates": [], "chosen": "", "why": "mandatory separation", "data": {"back_in": 1.0}})
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s moves back 1\" (consolidation — GF v3.5.1 p.9)" % charger.get_name(), true)
 	await _solo_animate_move(solo_controller.last_move_paths)
 	if dang > 0:
 		await _run_ai_dangerous(charger, dang)
+	_solo_flush_dev()
 
 
 ## One OPR morale test with a real tray die: >= Quality passes; fail → Shaken, at/below half → Routs
@@ -6117,6 +6170,14 @@ func _refresh_solo_panel() -> void:
 	fast_cb.add_theme_font_size_override("font_size", 12)
 	fast_cb.toggled.connect(func(pressed: bool) -> void: _solo_fast = pressed)
 	solo_panel_box.add_child(fast_cb)
+	var dev_cb := CheckButton.new()
+	dev_cb.text = "AI reasoning (dev)"
+	dev_cb.tooltip_text = "Log WHY the AI decides: deployment spots, activation picks, tree branches, target EV scores, move budgets. Off = zero rendering cost."
+	dev_cb.button_pressed = _solo_dev
+	dev_cb.focus_mode = Control.FOCUS_NONE
+	dev_cb.add_theme_font_size_override("font_size", 12)
+	dev_cb.toggled.connect(func(pressed: bool) -> void: _solo_dev = pressed)
+	solo_panel_box.add_child(dev_cb)
 	for pid in pids:
 		var army = opr_army_manager.armies[pid]
 		var cb := CheckButton.new()
@@ -6138,6 +6199,7 @@ func _on_solo_ai_toggled(pressed: bool, player_id: int) -> void:
 	if pressed:
 		solo_ai_slots[player_id] = true
 		_solo_game_finished = false   # (re)designating an AI army starts a fresh solo match
+		_solo_log_rule_inventory(player_id)   # handoff transparency: what the AI understands, black on white
 	else:
 		solo_ai_slots.erase(player_id)
 

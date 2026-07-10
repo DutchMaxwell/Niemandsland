@@ -498,3 +498,55 @@ func test_model_base_radius_falls_back_without_a_shape() -> void:
 	# (one radius truth between the proximity hint and the AI planner).
 	var m := ModelInstance.new()
 	assert_float(SoloController.model_base_radius_m(m)).is_equal_approx(SeparationChecker.DEFAULT_BASE_RADIUS_M, 0.0001)
+
+
+func test_classify_rule_inventory_three_classes_with_counts() -> void:
+	# RESOLVED (modeled), of which the decision-relevant subset is ALSO marked, and UNKNOWN — prefix
+	# matched ("AP(1)" → "AP"); occurrence counting per bearing entry.
+	var inv := SoloController.classify_rule_inventory(
+		["AP(1)", "AP(2)", "Fearless", "Battleborn", "Deadly(3)", "Weird Aura"],
+		["AP", "Fearless", "Deadly"], ["AP", "Deadly"])
+	assert_int(int((inv["resolved"] as Dictionary).get("AP", 0))).is_equal(2)
+	assert_int(int((inv["resolved"] as Dictionary).get("Fearless", 0))).is_equal(1)
+	assert_int(int((inv["decision"] as Dictionary).get("AP", 0))).is_equal(2)
+	assert_bool((inv["decision"] as Dictionary).has("Fearless")).is_false()
+	assert_int(int((inv["unknown"] as Dictionary).get("Battleborn", 0))).is_equal(1)
+	assert_int(int((inv["unknown"] as Dictionary).get("Weird Aura", 0))).is_equal(1)
+	assert_bool((inv["resolved"] as Dictionary).has("Battleborn")).is_false()
+
+
+func test_decision_log_records_cap_and_drain() -> void:
+	var sc: SoloController = auto_free(SoloController.new())
+	for i in range(SoloController.DECISION_LOG_CAP + 25):
+		sc.record_decision({"kind": "action", "unit": "U%d" % i, "rule": "", "candidates": [],
+			"chosen": "", "why": "", "data": {}})
+	# Ring: bounded at the cap, oldest dropped.
+	assert_int(sc.decision_log.size()).is_equal(SoloController.DECISION_LOG_CAP)
+	assert_str(str((sc.decision_log[0] as Dictionary)["unit"])).is_equal("U25")
+	# Drain empties the buffer and returns everything pending.
+	var drained := sc.drain_decisions()
+	assert_int(drained.size()).is_equal(SoloController.DECISION_LOG_CAP)
+	assert_int(sc.decision_log.size()).is_equal(0)
+
+
+func test_render_decision_formats_candidates_and_reason() -> void:
+	# Rendering is the ONLY formatting step (dev-off = records stay raw dictionaries).
+	var line := SoloController.render_decision({"kind": "target", "unit": "Squad A",
+		"rule": "Solo v3.5.0 p.2", "candidates": [{"name": "B", "ev": 2.4}, {"name": "C", "ev": 1.1}],
+		"chosen": "B", "why": "ev tie-break", "data": {"dist_in": 9.4}})
+	assert_bool(line.contains("Squad A")).is_true()
+	assert_bool(line.contains("B EV 2.40")).is_true()
+	assert_bool(line.contains("chose B")).is_true()
+	assert_bool(line.contains("ev tie-break")).is_true()
+	# A minimal record renders without optional sections.
+	assert_bool(SoloController.render_decision({"kind": "move", "unit": "X"}).contains("X")).is_true()
+
+
+func test_target_key_compare_official_order() -> void:
+	# Not-yet-activated beats activated regardless of band; then the nearer band; equal = genuine tie.
+	var fresh_far := {"activated": false, "band": 20}
+	var done_near := {"activated": true, "band": 2}
+	var fresh_near := {"activated": false, "band": 2}
+	assert_bool(SoloController._target_key_compare(fresh_far, done_near) < 0).is_true()
+	assert_bool(SoloController._target_key_compare(fresh_near, fresh_far) < 0).is_true()
+	assert_int(SoloController._target_key_compare(fresh_near, {"activated": false, "band": 2})).is_equal(0)

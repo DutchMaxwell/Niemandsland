@@ -197,6 +197,41 @@ for a future non-circular zone shape.
 the winner's OPTIONAL "may move by up to 3”" consolidation (p.9) is not automated; oval/rect bases sweep
 their circumscribed circle in zones and corridors (conservative, never permissive).
 
+## Capstone — rule inventory, EV decisions, developer mode (real game, 2026-07-10)
+
+- **Army rule inventory at handoff**: designating an AI army battle-logs every special rule it carries,
+  classified RESOLVED (derived from `main.gd SOLO_MODELED_RULES` — no second hand-maintained list),
+  marked *decision-aware* (`SOLO_DECISION_RULES`: overlays, Hold/activation-order/movement rules and
+  every EV input) or NOT AUTOMATED (which keeps flowing through the once-per-session manual notes).
+  Pure classifier: `SoloController.classify_rule_inventory` (prefix-matched, occurrence counts).
+- **The EV metric** (`scripts/solo/ai_ev.gd`): expected wounds computed from the SAME `AiCombatMath`
+  helpers as the dice resolution — one math, no second truth. Fills exactly the undefined points:
+  (a) the archetype "better than" (Solo v3.5.0 p.1: `AiEv.classify` vs a documented neutral reference
+  defender; the SIM keeps the frozen `AiArchetype.classify`, its fairness oracle untouched), and
+  (b) GENUINE ties in the official targeting keys — distances compare in 1" bands (tabletop measuring
+  precision, a documented convention), and a tie is ranked by EV instead of the rules' die roll (the
+  shipped hybrid policy). AP/Blast/Deadly/Reliable/Rending/Bane/Relentless/Surge/Furious/Thrust/Impact/
+  Stealth/Evasive/Shielded/Cover/Regeneration flow through automatically; the charge tie-break score
+  weighs Furious/Thrust/Impact in, the defender's Counter down (strike-first attrition + Impact
+  reduction) and halves the taken-wounds weight for a Fearless attacker (p.13 morale re-roll —
+  advisory heuristic, tie-breaks only). Deterministic: probabilities, never dice.
+- **Developer mode** ("AI reasoning (dev)" toggle beside Fast AI, default off): every AI decision builds
+  a STRUCTURED record at decision time (`SoloController.decision_log`, ring-capped at 200 — kind/unit/
+  rule-citation/candidates-with-EV/chosen/why/data) covering deployment spots, the D6-section activation
+  pick (Shaken/Counter ordering), the tree action (incl. Hold-overlay overrides), target selection with
+  all candidate EVs, the move (band/difficult-cap/actual arc) and post-melee separation. Rendering
+  (`SoloController.render_decision`) happens ONLY while the toggle is on — off costs no string
+  formatting. The records are the introspection foundation for future smarter AI.
+
+Example rendered lane (dev toggle on):
+
+```
+AI [pick] HDF Storm Troopers — rule: Solo v3.5.0: D6 section roll, random eligible; … — chose HDF Storm Troopers — (section roll) — [west=2, east=1, rolled_west=true, eligible=3]
+AI [action] HDF Storm Troopers — rule: Solo v3.5.0 decision tree (archetype branch; EV fills the p.1 'better than') — chose advances — (decision tree) — [arch=1, objective=true, …]
+AI [target] HDF Storm Troopers — rule: Solo v3.5.0 p.2: nearest/not-activated/open + weapon overlay — options: Squad B EV 2.40, Squad A EV 1.10 — chose Squad B — (ev tie-break) — [overlay=1, weapon=Heavy Rifle, considered=2]
+AI [move] HDF Storm Troopers — rule: GF v3.5.1 p.7 move bands; p.11 difficult 6" cap; … — (around difficult) — [band_in=6.0, budget_in=6.0, arc_in=5.8, dangerous_models=0]
+```
+
 ## Real-game visibility of the gaps
 
 The REAL game now mirrors the sim's unknown-rule logging (2026-07-10): the first time a unit acts in solo

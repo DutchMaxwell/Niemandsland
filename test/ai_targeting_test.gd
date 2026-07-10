@@ -87,3 +87,16 @@ func test_takedown_targets_heroes_first() -> void:
 	assert_int(AiTargeting.best_index([grunt_near, hero_far], AiTargeting.Overlay.TAKEDOWN)).is_equal(1)
 	# No hero present → base tie-break (nearest).
 	assert_int(AiTargeting.best_index([_cand({"dist": 8.0}), _cand({"dist": 4.0})], AiTargeting.Overlay.TAKEDOWN)).is_equal(1)
+
+
+func test_tied_with_best_returns_the_genuine_ties() -> void:
+	# Two candidates share the full official key (a genuine tie the hybrid policy ranks by EV);
+	# the third loses on distance and is not in the tied set.
+	var a := _cand({"dist": 5.0})
+	var b := _cand({"dist": 5.0})
+	var c := _cand({"dist": 9.0})
+	var best := AiTargeting.best_index([a, b, c], AiTargeting.Overlay.NONE)
+	var tied := AiTargeting.tied_with_best([a, b, c], AiTargeting.Overlay.NONE, best)
+	assert_int(tied.size()).is_equal(2)
+	assert_bool(tied.has(0) and tied.has(1)).is_true()
+	assert_int(AiTargeting.tied_with_best([], AiTargeting.Overlay.NONE, -1).size()).is_equal(0)
