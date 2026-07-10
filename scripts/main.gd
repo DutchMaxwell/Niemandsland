@@ -680,13 +680,7 @@ func _solo_activate_one_ai() -> GameUnit:
 	if unit == null:
 		return null
 	# Camera follows the acting unit so each activation is watchable (goal 001, F1).
-	if camera_pivot != null and camera_pivot.has_method("focus_on"):
-		var positions: Array = []
-		for m in unit.models:
-			if m.is_alive and m.node != null and is_instance_valid(m.node):
-				positions.append((m.node as Node3D).global_position)
-		if not positions.is_empty():
-			camera_pivot.focus_on(MoveIntent.anchor_of(positions))
+	_solo_focus_on_unit(unit)
 	if radial_menu_controller != null:
 		radial_menu_controller._update_activated_markers(unit)
 	var report: Dictionary = solo_controller.last_report
@@ -705,9 +699,18 @@ func _solo_activate_one_ai() -> GameUnit:
 	_solo_log_unmodeled_rules(unit)   # once-per-session visibility of rules the automation skips
 	if target != null:
 		_solo_log_unmodeled_rules(target)
-	# EXECUTE: replay the models along their REAL planner routes (walls visibly walked around, not
-	# through) with fading trail ribbons — the state was applied + broadcast before this visual replay.
+	# ACTIVATION CHOREOGRAPHY (field-test finding 7 — the maintainer's explicit staging): the camera has
+	# focused the unit (a); hold an attention beat (b); _solo_animate_move then shows the plotted corridors
+	# (c), holds a beat (d) and glides the models along them (e); a final beat (f) precedes the attack/
+	# ability resolution (g). Every beat is the named PACE_ATTENTION_S, Fast-AI-compressed.
+	var has_move: bool = not solo_controller.last_move_paths.is_empty()
+	if has_move:
+		await _solo_pace_attention()   # (b)
+	# EXECUTE: replay the models along their REAL planner routes (walls visibly walked around, not through)
+	# — corridors appear, an attention beat, then the models glide; the state was applied + broadcast first.
 	await _solo_animate_move(solo_controller.last_move_paths)
+	if has_move:
+		await _solo_pace_attention()   # (f) before attacks resolve
 	# Dangerous terrain crossed during the move (goal 003 P3): each such model rolls a real tray die, a 1 wounds.
 	var dangerous_models: int = int(report.get("dangerous_models", 0))
 	if dangerous_models > 0:
@@ -857,13 +860,16 @@ func _solo_auto_seize() -> void:
 	var owners: Array = []
 	for i in range(objectives.size()):
 		owners.append(terrain_overlay.get_objective_owner(i))
+	var round_no: int = opr_army_manager.current_round
 	var infos: Array = []
 	for u in opr_army_manager.get_all_game_units():
 		var gu := u as GameUnit
 		if gu == null or gu.get_alive_count() <= 0:
 			continue
+		# A unit that arrived from Ambush THIS round can neither seize nor contest (GF/AoF v3.5.1 p.13).
+		var ambush_locked: bool = int(gu.unit_properties.get("ambush_arrived_round", -1)) == round_no
 		infos.append({"player": int(gu.unit_properties.get("player_id", 0)), "shaken": gu.is_shaken,
-			"positions": solo_controller.alive_positions(gu)})
+			"ambush_locked": ambush_locked, "positions": solo_controller.alive_positions(gu)})
 	var res: Dictionary = SoloController.seize_objectives(infos, objectives, owners)
 	for c in res.get("changes", []):
 		var idx: int = int((c as Dictionary).get("index", -1))
@@ -1065,16 +1071,19 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		var weapons: Array = []
 		if member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
 			weapons = (member.source_data as OPRApiClient.OPRUnit).weapons
+		var range_bonus: int = SoloController.shooting_range_bonus(member)   # Royal Legion +4" (wave 4)
 		for w in weapons:
-			var reach: int = int(w.range_value) if (w is Object and w.get("range_value") != null) else 0
-			if reach <= 0:
+			var base_range: int = int(w.range_value) if (w is Object and w.get("range_value") != null) else 0
+			if base_range <= 0:
 				continue   # melee weapon
-			var prof_list: Array = AiShooting.profiles_in_range([w], float(reach))
+			var prof_list: Array = AiShooting.profiles_in_range([w], float(base_range))
 			if prof_list.is_empty():
 				continue
+			# `reach` (target validity + per-model sighting) includes the unit's range bonus, so a Royal
+			# Legion unit shoots targets up to +4" beyond the weapon's printed range.
 			shots.append({"member": member, "quality": member.get_quality(),
 				"alive": member.get_alive_count(), "max": member.models.size(),
-				"reach": reach, "profile": prof_list[0]})
+				"reach": base_range + range_bonus, "profile": prof_list[0]})
 	if shots.is_empty():
 		return
 	# Split fire: assign each shot the best target under its weapon overlay, then group shots by target.
@@ -1435,6 +1444,20 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s is Shielded: +1 Defense (saves on %d+)" % [
 			defender.get_name(), defense], true)
 	var mod_info: Dictionary = _solo_hit_mod_info(striker, defender, 0.0, true)
+	# Wave-4 Unpredictable Fighter (Mummified Undead army-book rule): ONE die per melee for the whole unit —
+	# 1-3 → AP(+1) on its melee weapons, 4-6 → +1 to hit (fatigue's unmodified-6-only overrides the +1).
+	var uf_ap := 0
+	var uf_hit := 0
+	if _solo_rule_on_all_models(striker, "Unpredictable Fighter"):
+		var uf_owner: String = ("AI (%s)" % striker.get_name()) if _solo_is_ai_unit(striker) else "You"
+		var uf_face: Array = await _solo_tray_roll(1, AiCombatMath.BEST_HIT_TARGET, uf_owner)
+		if not uf_face.is_empty():
+			var uf_eff: Dictionary = AiCombatMath.unpredictable_fighter_effect(int(uf_face[0]))
+			uf_ap = int(uf_eff["ap"])
+			uf_hit = int(uf_eff["hit"])
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "Unpredictable Fighter: %s rolls %d → %s" % [
+					striker.get_name(), int(uf_face[0]), ("AP(+1)" if uf_ap > 0 else "+1 to hit")], true)
 	var caused := 0
 	var regenable := 0
 	var regen_proof := 0
@@ -1450,9 +1473,10 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				continue
 			if filter == SoloStrike.NON_COUNTER and bool(profile.get("counter", false)):
 				continue
-			# Thrust (+1 to hit on a charge) and Evasive (−1) compose on the quality; fatigue overrides.
+			# Thrust (+1 to hit on a charge), Evasive (−1) and Unpredictable Fighter's +1 compose on the
+			# quality; fatigue (unmodified-6-only) overrides every to-hit modifier.
 			var to_hit: int = 6 if fatigued else AiCombatMath.modified_hit_target(
-				AiCombatMath.thrust_to_hit(base_quality, bool(profile.get("thrust", false))), int(mod_info.get("mod", 0)))
+				AiCombatMath.thrust_to_hit(base_quality, bool(profile.get("thrust", false))), int(mod_info.get("mod", 0)) + uf_hit)
 			if not fatigued:
 				_solo_log_hit_mod(mod_info, defender, to_hit)
 			var roll_owner: String = ("AI (%s)" % str(group.get("name", "?"))) if _solo_is_ai_unit(striker) else "You"
@@ -1464,6 +1488,9 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			if hits <= 0:
 				continue
 			var eff: Dictionary = _solo_thrust_profile(profile, charging)   # AP(+1) on charge
+			if uf_ap > 0:   # Unpredictable Fighter 1-3 → AP(+1) melee (never mutate the source profile)
+				eff = eff.duplicate()
+				eff["ap"] = int(eff.get("ap", 0)) + uf_ap
 			var w: int = await _solo_resolve_saves(group.get("member"), defender, str(profile.get("name", "?")), faces, hits, defense, eff, human_defends, true)
 			caused += w
 			if _solo_ignores_regen(group.get("member"), eff):
@@ -1560,18 +1587,25 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 	if hits <= 0:
 		return 0
 	var ap: int = int(profile.get("ap", 0))
-	var rending: int = AiCombatMath.rending_ap_hits(to_hit_faces, hits) if bool(profile.get("rending", false)) else 0
+	# Rending (GF/AoF v3.5.1 p.14) AND the army-book Destructive (wave 4) BOTH upgrade the unmodified-6-to-
+	# hit hits to AP(+4); they share AiCombatMath.rending_ap_hits (one math). The only difference is
+	# downstream: Rending bypasses Regeneration (via _solo_ignores_regen), Destructive does not.
+	var ap4_label := ""
+	if bool(profile.get("rending", false)):
+		ap4_label = "Rending"
+	elif bool(profile.get("destructive", false)):
+		ap4_label = "Destructive"
+	var ap4_hits: int = AiCombatMath.rending_ap_hits(to_hit_faces, hits) if not ap4_label.is_empty() else 0
 	var bane: bool = _solo_striker_has_bane(striker, profile, melee)
 	var total := 0
-	# Rending sub-volley first (GF/AoF v3.5.1 p.14: those 6-to-hit hits get AP(+4)); a Blast-multiplied
-	# hit-count can only shrink `rending` via the cap, never invent Rending hits.
-	if rending > 0:
+	# AP(+4)-on-6 sub-volley first; a Blast-multiplied hit-count can only shrink the count via the cap.
+	if ap4_hits > 0:
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "Rending: %d hit%s on a 6 → AP(+%d)" % [
-				rending, ("" if rending == 1 else "s"), AiCombatMath.RENDING_AP_BONUS], true)
-		total += await _solo_save_batch(striker, defender, "%s (Rending)" % weapon_name, rending,
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d hit%s on a 6 → AP(+%d)" % [
+				ap4_label, ap4_hits, ("" if ap4_hits == 1 else "s"), AiCombatMath.RENDING_AP_BONUS], true)
+		total += await _solo_save_batch(striker, defender, "%s (%s)" % [weapon_name, ap4_label], ap4_hits,
 			base_defense, ap + AiCombatMath.RENDING_AP_BONUS, profile, human_defends, bane)
-	var normal: int = hits - rending
+	var normal: int = hits - ap4_hits
 	if normal > 0:
 		total += await _solo_save_batch(striker, defender, weapon_name, normal, base_defense, ap, profile, human_defends, bane)
 	return total
@@ -1636,17 +1670,34 @@ func _solo_striker_has_bane(striker: GameUnit, profile: Dictionary, melee: bool)
 ## outcome ("rolls N regeneration dice — M ignored"), so a 0-ignore roll is still visible. Returns the
 ## wounds that actually land; units without the rule take full wounds (no roll).
 func _solo_apply_regeneration(target: GameUnit, wounds: int) -> int:
-	if wounds <= 0 or not _solo_has_regeneration(target):
+	var regen_target: int = _solo_regen_target(target)
+	if wounds <= 0 or regen_target <= 0:
 		return maxi(wounds, 0)
-	var faces: Array = await _solo_tray_roll(wounds, 5, _solo_owner_label(target))
+	var faces: Array = await _solo_tray_roll(wounds, regen_target, _solo_owner_label(target))
 	var ignored := 0
 	for f in faces:
-		if int(f) >= 5:
+		if int(f) >= regen_target:
 			ignored += 1
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT, "%s rolls %d regeneration di%s (5+) — %d wound%s ignored" % [
-			target.get_name(), wounds, ("e" if wounds == 1 else "ce"), ignored, ("" if ignored == 1 else "s")], true)
+		var rule_name: String = "regeneration" if regen_target == 5 else "self-repair"
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s rolls %d %s di%s (%d+) — %d wound%s ignored" % [
+			target.get_name(), wounds, rule_name, ("e" if wounds == 1 else "ce"), regen_target, ignored, ("" if ignored == 1 else "s")], true)
 	return maxi(wounds - ignored, 0)
+
+
+## The wound-ignore ROLL TARGET for a unit's Regeneration-family rule, or 0 when it has none:
+##   • Regeneration / Medical Training (Regeneration Aura) — ignore each wound on a 5+ (GF v3.5.1),
+##     triggered by ANY bearing model (incl. a per-model medic item);
+##   • Self-Repair (wave-4 army-book rule, Robot Legions — official Army Forge text: "When a unit where
+##     all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.") — 6+, and
+##     ALL models must carry it.
+## Regeneration wins when both are present (the lower, more generous target). One truth with AiEv.ctx_for.
+func _solo_regen_target(target: GameUnit) -> int:
+	if _solo_has_regeneration(target):
+		return 5
+	if _solo_rule_on_all_models(target, "Self-Repair"):
+		return 6
+	return 0
 
 
 ## Apply a resolved wound pair to the defender: Regeneration rolls only against the regen-able bucket
@@ -1826,6 +1877,28 @@ func _solo_pace_hold(phase: int) -> void:
 		await get_tree().create_timer(secs).timeout
 
 
+## The activation-choreography attention beat (SoloController.PACE_ATTENTION_S, Fast-AI-compressed) — the
+## named ~2s pause the maintainer asked for between focus → corridors → glide → attacks (finding 7). A
+## zero (never, at these constants) simply doesn't await, keeping the auto-tail responsive.
+func _solo_pace_attention() -> void:
+	var secs: float = SoloController.pace_attention_seconds(_solo_fast)
+	if secs > 0.0:
+		await get_tree().create_timer(secs).timeout
+
+
+## Point the camera at a unit's live model centroid (shared by every AI activation + the ambush arrivals,
+## so each is watchable). No-op when there is no focusable camera or the unit has no live models.
+func _solo_focus_on_unit(unit: GameUnit) -> void:
+	if camera_pivot == null or not camera_pivot.has_method("focus_on") or unit == null:
+		return
+	var positions: Array = []
+	for m in unit.models:
+		if m.is_alive and m.node != null and is_instance_valid(m.node):
+			positions.append((m.node as Node3D).global_position)
+	if not positions.is_empty():
+		camera_pivot.focus_on(MoveIntent.anchor_of(positions))
+
+
 ## Attack attribution: pulse rings under the shooter (amber) and the target (red), an attack line
 ## between them, and a toast naming both. Returns the created nodes; free via _solo_clear_announce.
 func _solo_show_attack_announce(shooter: GameUnit, target: GameUnit, verb: String) -> Array:
@@ -1919,9 +1992,34 @@ func _solo_animate_move(move_paths: Array) -> void:
 	if move_paths.is_empty():
 		return
 	var speed: float = SoloController.PACE_MOVE_SPEED_M_S / (SoloController.PACE_FAST_SCALE if _solo_fast else 1.0)
-	var longest := 0.0
+	# (c) Draw every model's corridor (persistent — they stay lit through the beat + the glide) and snap
+	# each model back to its route START, so the attention beat shows the plotted paths with the models
+	# still at their staging positions before they move.
+	var corridors: Array = []
 	var longest_path: Array = []
 	var longest_len := 0.0
+	for entry in move_paths:
+		var model := (entry as Dictionary).get("model") as ModelInstance
+		var path: Array = (entry as Dictionary).get("path", [])
+		if model == null or model.node == null or not is_instance_valid(model.node) or path.size() < 2:
+			continue
+		var node := model.node
+		var y := node.global_position.y
+		var body := _solo_spawn_move_corridor(path, y, float((entry as Dictionary).get("radius_m", 0.0125)), true)
+		if body != null:
+			corridors.append(body)
+		var arc: float = MovementPlanner.polyline_length(path)
+		if arc > longest_len:
+			longest_len = arc
+			longest_path = path
+		node.global_position = Vector3((path[0] as Vector3).x, y, (path[0] as Vector3).z)
+	# Distance-truth label: longest actual arc vs the granted budget, at that corridor's midpoint.
+	if not longest_path.is_empty() and solo_controller != null:
+		_solo_spawn_move_label(longest_path, longest_len, solo_controller.last_move_budget_in)
+	# (d) Attention beat: corridors drawn, models poised at the start.
+	await _solo_pace_attention()
+	# (e) Glide every model along its corridor.
+	var longest := 0.0
 	var tweens: Array = []
 	for entry in move_paths:
 		var model := (entry as Dictionary).get("model") as ModelInstance
@@ -1930,12 +2028,6 @@ func _solo_animate_move(move_paths: Array) -> void:
 			continue
 		var node := model.node
 		var y := node.global_position.y
-		_solo_spawn_move_corridor(path, y, float((entry as Dictionary).get("radius_m", 0.0125)))
-		var arc: float = MovementPlanner.polyline_length(path)
-		if arc > longest_len:
-			longest_len = arc
-			longest_path = path
-		node.global_position = Vector3((path[0] as Vector3).x, y, (path[0] as Vector3).z)
 		var tw := node.create_tween()
 		var total := 0.0
 		for i in range(1, path.size()):
@@ -1949,9 +2041,6 @@ func _solo_animate_move(move_paths: Array) -> void:
 			total += dur
 		longest = maxf(longest, total)
 		tweens.append(tw)
-	# Distance-truth label: longest actual arc vs the granted budget, at that corridor's midpoint.
-	if not longest_path.is_empty() and solo_controller != null:
-		_solo_spawn_move_label(longest_path, longest_len, solo_controller.last_move_budget_in)
 	if longest > 0.0:
 		await get_tree().create_timer(longest).timeout
 	for t in tweens:
@@ -1964,6 +2053,9 @@ func _solo_animate_move(move_paths: Array) -> void:
 		if model != null and model.node != null and is_instance_valid(model.node) and not path.is_empty():
 			var fin := path.back() as Vector3
 			model.node.global_position = Vector3(fin.x, model.node.global_position.y, fin.z)
+	# The corridors fade now that the glide is complete (persisted corridors are faded here, not on spawn).
+	for body in corridors:
+		_solo_fade_corridor(body as MeshInstance3D)
 
 
 ## Height offsets keeping the corridor visuals just above the table without z-fighting (metres).
@@ -1979,7 +2071,10 @@ const SOLO_CORRIDOR_MITER_MIN := 0.35
 ## EDGES dragged along the path — where the corridor is, the base physically travelled). One mesh, five
 ## surfaces: a translucent stadium fill (band + two semicircle end caps) and two brighter edge lines at
 ## ±radius. Fades out over PACE_TRAIL_FADE_S, then frees itself.
-func _solo_spawn_move_corridor(path: Array, y: float, radius_m: float) -> void:
+## `persist`: when true the corridor is NOT auto-faded — the choreography (finding 7) draws corridors,
+## holds the attention beat, glides the models, THEN fades them via _solo_fade_corridor. Returns the mesh
+## (null if degenerate) so the caller can fade it on its own schedule.
+func _solo_spawn_move_corridor(path: Array, y: float, radius_m: float, persist: bool = false) -> MeshInstance3D:
 	# Deduplicate near-identical waypoints (zero legs break the perpendicular math).
 	var pts: Array = []
 	for wp in path:
@@ -1987,7 +2082,7 @@ func _solo_spawn_move_corridor(path: Array, y: float, radius_m: float) -> void:
 		if pts.is_empty() or (pts.back() as Vector2).distance_to(v) > 0.0008:
 			pts.append(v)
 	if pts.size() < 2 or radius_m <= 0.0:
-		return
+		return null
 	# Per-waypoint mitred left/right offsets: the averaged perpendicular of adjacent legs, widened by
 	# 1/dot (clamped) so the corridor keeps its base width through corners.
 	var lefts: Array = []
@@ -2034,6 +2129,20 @@ func _solo_spawn_move_corridor(path: Array, y: float, radius_m: float) -> void:
 			im.surface_add_vertex(Vector3((v as Vector2).x, y + SOLO_CORRIDOR_EDGE_Y_M, (v as Vector2).y))
 		im.surface_end()
 	add_child(body)
+	if not persist:
+		_solo_fade_corridor(body)
+	return body
+
+
+## Fade a persisted corridor out over PACE_TRAIL_FADE_S, then free it — called after the models finish
+## gliding along it (the choreography keeps the corridor visible through the glide, then dissolves it).
+func _solo_fade_corridor(body: MeshInstance3D) -> void:
+	if not is_instance_valid(body):
+		return
+	var mat := body.material_override as StandardMaterial3D
+	if mat == null:
+		body.queue_free()
+		return
 	var tw := body.create_tween()
 	tw.tween_property(mat, "albedo_color:a", 0.0, SoloController.PACE_TRAIL_FADE_S)
 	tw.tween_callback(body.queue_free)
@@ -2092,7 +2201,13 @@ const SOLO_MODELED_RULES: Array = ["AP", "Tough", "Deadly", "Takedown", "Relentl
 	"Surge", "Furious", "Impact", "Thrust", "Fearless", "Fear",
 	# Wave-3: target-side modifiers (Stealth / Evasive / Shielded / Artillery), Counter (strike-first +
 	# Impact reduction + activation order) and the Hold-only rules (Immobile / Artillery).
-	"Stealth", "Evasive", "Shielded", "Counter", "Artillery", "Immobile"]
+	"Stealth", "Evasive", "Shielded", "Counter", "Artillery", "Immobile",
+	# Wave-4 army-book rules (official Army Forge text; the three 0.3.9 field books — Robot Legions,
+	# Battle Brothers, Mummified Undead): Destructive (weapon: unmodified-6→AP(+4), no regen bypass),
+	# Self-Repair (6+ wound-ignore, all models), Battleborn (round-start Shaken recovery on 4+),
+	# Unpredictable Fighter (melee: 1-3 AP(+1) / 4-6 +1 to hit), Royal Legion (+4" shooting range + 2"
+	# Charge via the move bands). See docs/SOLO_AI_RULES_COVERAGE.md for the per-army coverage table.
+	"Destructive", "Self-Repair", "Battleborn", "Unpredictable Fighter", "Royal Legion"]
 
 ## The SOLO_MODELED_RULES subset that ALSO steers the AI's behaviour choices (not only the dice math):
 ## targeting overlays (AP/Deadly/Takedown — Solo v3.5.0 p.2), Hold overlays (Relentless/Artillery/
@@ -2101,7 +2216,9 @@ const SOLO_MODELED_RULES: Array = ["AP", "Tough", "Deadly", "Takedown", "Relentl
 ## "decision-aware" marker — a classification aid, not a second rule list.
 const SOLO_DECISION_RULES: Array = ["AP", "Deadly", "Takedown", "Relentless", "Artillery", "Immobile",
 	"Counter", "Fast", "Slow", "Strider", "Flying", "Ambush", "Scout", "Tough", "Blast", "Reliable",
-	"Rending", "Bane", "Stealth", "Evasive", "Shielded", "Fear", "Furious", "Impact", "Thrust", "Hero"]
+	"Rending", "Bane", "Stealth", "Evasive", "Shielded", "Fear", "Furious", "Impact", "Thrust", "Hero",
+	# Wave-4: Destructive/Self-Repair shape the EV, Royal Legion the shoot decision + move bands.
+	"Destructive", "Self-Repair", "Royal Legion"]
 
 
 ## Battle-log the AI's rule inventory at army handoff (the maintainer's no-blackbox mandate): every
@@ -2334,7 +2451,7 @@ func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
 	_solo_target_mode = {"unit": unit, "melee": melee}
 	if not melee and range_ring_controller != null and range_ring_controller.has_method("show_spell_preview"):
 		var weapons: Array = _solo_all_weapons(unit)
-		var rng_in: int = AiArchetype.max_range_inches(weapons)
+		var rng_in: int = AiArchetype.max_range_inches(weapons) + SoloController.shooting_range_bonus(unit)   # Royal Legion +4"
 		if rng_in > 0:
 			range_ring_controller.show_spell_preview(_solo_unit_nodes(unit), rng_in)
 	if battle_log != null:
@@ -2413,7 +2530,7 @@ func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) ->
 	var dist := MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
 	if melee:
 		return "" if dist <= 2.0 else "not in melee contact (%.0f\")" % dist
-	var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
+	var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker)) + SoloController.shooting_range_bonus(attacker)
 	if rng_in <= 0:
 		return "no ranged weapons"
 	if _solo_sighted_count(attacker, target, rng_in) <= 0:
@@ -2681,12 +2798,43 @@ func _on_solo_round_advanced(round_number: int) -> void:
 	if solo_ai_slots.is_empty():
 		return
 	_solo_reset_all_fatigue()
-	if round_number == 2:
-		_solo_arrive_ambush()
+	await _solo_battleborn_recovery()   # wave-4: round-start Shaken recovery (Battleborn), before activations
+	# Ambush arrivals happen at the start of ANY round after the first (GF/AoF v3.5.1 p.13), so a unit
+	# with no clear spot in round 2 gets another chance later.
+	if round_number >= 2:
+		await _solo_arrive_ambush()
 
 
-## OPR Ambush (goal 003 P1): the AI's reserved units arrive at the start of round 2, placed >9" from your
-## units and near the nearest objective via the stashed deploy context. The human's own ambush is manual.
+## Wave-4 Battleborn (army-book rule, Battle Brothers — "If a unit where all models have this rule is
+## Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken."): at round start,
+## every AI Shaken Battleborn unit rolls one real tray die and recovers on a 4+ (NOT spending its
+## activation). The human's own Battleborn units are surfaced as a reminder (the automation never touches
+## the player's markers).
+func _solo_battleborn_recovery() -> void:
+	if opr_army_manager == null:
+		return
+	for u in opr_army_manager.get_all_game_units():
+		var gu := u as GameUnit
+		if gu == null or not gu.is_shaken or not _solo_rule_on_all_models(gu, "Battleborn"):
+			continue
+		if _solo_is_ai_unit(gu):
+			var face: Array = await _solo_tray_roll(1, AiCombatMath.BATTLEBORN_RECOVER_TARGET, "AI (%s)" % gu.get_name())
+			var recovered: bool = not face.is_empty() and AiCombatMath.battleborn_recovers(int(face[0]))
+			if recovered and radial_menu_controller != null:
+				radial_menu_controller.card_toggle_shaken(gu)   # clears Shaken via the state+marker+MP seam
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "Battleborn: %s %s" % [
+					gu.get_name(), ("recovers from Shaken (4+)" if recovered else "stays Shaken")], true)
+		elif battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT,
+				"Battleborn: roll for %s to recover from Shaken (4+)" % gu.get_name(), true)
+
+
+## OPR Ambush (GF/AoF v3.5.1 p.13; field-test findings 4 + 5): the AI's reserved units arrive at the start
+## of a round after the first, >9" from your units and near the nearest objective. Each arrival is its OWN
+## PACED, ANNOUNCED beat — camera attention, a battle-log line and a hold — placed ONE at a time (finding 4:
+## they used to appear simultaneously and silently). Arriving does NOT consume the unit's activation
+## (finding 5): its reserve flag clears, so it is eligible to act this same round.
 func _solo_arrive_ambush() -> void:
 	if solo_controller == null or solo_controller.ambush_reserve.is_empty() or table == null or opr_army_manager == null:
 		return
@@ -2698,11 +2846,25 @@ func _solo_arrive_ambush() -> void:
 		if u != null and u.get_alive_count() > 0:
 			var c := solo_controller.unit_centre(u)
 			enemy_positions.append(Vector2(c.x, c.z))
-	var res: Dictionary = solo_controller.arrive_ambush_reserve(arrival_zone, enemy_positions)
-	if int(res.get("arrived", 0)) > 0 and battle_log != null:
-		var held: int = int(res.get("still_reserved", 0))
-		var held_note: String = (" (%d held back — no clear spot)" % held) if held > 0 else ""
-		battle_log.log_event(BattleLog.Category.GENERAL, "AI ambush: %d unit(s) arrive%s" % [int(res.get("arrived", 0)), held_note], true)
+	var occupied: Array = []
+	var round_no: int = opr_army_manager.current_round
+	while true:
+		var unit: GameUnit = solo_controller.arrive_one_ambush_unit(arrival_zone, enemy_positions, occupied, round_no)
+		if unit == null:
+			break
+		# A paced, announced arrival, like every other AI action: focus the unit, name it, hold a beat.
+		_solo_focus_on_unit(unit)
+		_solo_show_toast("%s ambushes in from reserve" % unit.get_name())
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"AI Ambush: %s arrives from reserve (>9\" from your units) — it may still act this round" % unit.get_name(), true)
+		await _solo_pace_attention()
+	if is_instance_valid(_solo_toast):
+		_solo_toast.visible = false
+	var held: int = solo_controller.ambush_reserve.size()
+	if held > 0 and battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "AI Ambush: %d unit(s) held back — no clear spot (may arrive a later round)" % held, true)
+	_solo_flush_dev()
 
 
 ## OPR: Fatigue lasts only until the end of the round — clear it from EVERY unit (both sides, heroes

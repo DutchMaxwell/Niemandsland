@@ -249,3 +249,77 @@ Mirror oracle, Battle Brothers vs itself, symmetric terrain, no walls:
 
 All changes are reflection-symmetric, so the mirror stays fair; combat is simply **less lethal / more
 objective-decided** now (2" melee + Regeneration → ~67% of games decided on objectives). No tuning applied.
+
+## Field-test round 2 — seven fixes (real game, 2026-07-10)
+
+The maintainer's second field test surfaced seven issues; each is fixed in the solo layer (SIM untouched,
+fairness oracle byte-identical) and cited against the PDFs:
+
+1. **Slow ignored** (GF/AoF v3.5.1 p.13 — Slow: "-2" Advance, -4" Rush/Charge"): the AI band computation
+   fell back to a hardcoded 6"/12" whenever no `MovementRangeController` was injected (e.g. the field
+   harness), silently dropping Fast/Slow. Now the AI reads bands from the SAME source as the human's reach
+   rings — `SoloController.move_bands_for_unit` → `bands_for_model` (aura/base-aware) or the STATIC
+   `MovementRangeController.move_bands_for_props` (Fast/Slow-aware) — never a hardcoded default. A Slow unit
+   advances ≤ 4". (`move_bands_for_props` and its helpers are now `static`.)
+3. **Deployment inside blocking terrain** (deployment placement): the last-resort "must deploy" fallback
+   bypassed the terrain check; it now relaxes only the 1" spacing while STILL rejecting blocking/impassable
+   terrain, and the footprint check samples the unit's diagonal corners (not just cardinals). Blocking
+   terrain is rejected for the whole footprint; the section-centre placement is a true last resort only when
+   no legal cell exists anywhere.
+5. **Ambush = deployment, not activation** (GF/AoF v3.5.1 p.13 — "May be set aside before deployment. At
+   the start of any round after the first, may be deployed anywhere over 9" away from enemy units … Units
+   that deploy via Ambush can't seize or contest objectives on the round they deploy."): reserve units are
+   now flagged off-table and are NOT activatable while held (they used to be eligible in round 1); arriving
+   clears the flag WITHOUT marking the unit activated (it may still act that round) and stamps the arrival
+   round so `seize_objectives` skips it for objective seize/contest that round. Arrival is retried at the
+   start of ANY round after the first (not only round 2). Arrival stays > 9" from enemies.
+6. **Forest cover** (GF/AoF v3.5.1 p.11 — "If the majority of models in a unit are fully inside a piece of
+   cover terrain … they get +1 to Defense rolls when blocking hits from shooting attacks."; Forests =
+   Difficult + Cover): the damage resolution already applied cover both directions via
+   `AiCombatMath.covered_defense` + `_solo_majority_in_cover` (Forests/Ruins via `TerrainRules.gives_cover`,
+   which is the cover — not the LOS — classifier). The remaining gap was the EV: `nearest_human_unit`'s
+   tie-break passed a constant `false`. It now reads real terrain via `SoloController.majority_in_cover`, so
+   the EV devalues a defender whose majority sits in woods/ruins.
+
+(Findings 2 movement-gather, 4 ambush pacing and 7 activation choreography are presentation/planner fixes
+without rule-coverage claims; see the commit series and `docs/SOLO_AI_PLAN.md`.)
+
+## Wave 4 — army-book weapon/unit rules IMPLEMENTED (real game, 2026-07-10)
+
+Every special rule across the three 0.3.9 field books is now mechanically applied, not just inventoried
+(the maintainer's directive: "ALL rules the unit has … the AI must notice AND apply"). Source of truth is
+the official Army Forge rule TEXT embedded in each book's `specialRules` (the wave-3 precedent); core-PDF
+rules are verified against the PDFs. Same discipline as waves 1–3 — a pure `AiCombatMath`/profile helper,
+both combat directions, human prompts show the modified values, the EV picks it up, a unit test + citation.
+
+| Rule (source) | Effect (official AF text) | Where | Test |
+|---|---|---|---|
+| **Destructive** (weapon; Robot Legions, Mummified) | "On unmodified results of 6 to hit, those hits get AP(+4)." (= Rending's AP(+4), but NO Regeneration bypass) | `AiShooting._profile` flag → `main._solo_resolve_saves` AP(+4)-on-6 sub-batch (shared `rending_ap_hits`); `AiEv.profile_ev` | `test_destructive_flag_is_parsed_onto_the_profile`, `test_destructive_raises_ev_like_rending_via_ap4_on_sixes` |
+| **Self-Repair** (unit; Robot Legions) | "When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored." (Regeneration-family, 6+, all models) | `main._solo_regen_target`/`_solo_apply_regeneration`; `AiEv._regen_target`/`profile_ev`/`impact_ev` | `test_self_repair_regen_target_is_six_and_devalues_shooting` |
+| **Battleborn** (unit; Battle Brothers) | "If a unit where all models have this rule is Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken." | `AiCombatMath.battleborn_recovers`; `main._solo_battleborn_recovery` (round start, AI rolls, human reminded) | `test_battleborn_recovers_on_4plus` |
+| **Unpredictable Fighter** (unit; Mummified) | "When in melee, roll one die … on a 1-3 they get AP(+1), and on a 4-6 they get +1 to hit rolls instead." | `AiCombatMath.unpredictable_fighter_effect`; `main._solo_melee_strike_phase` (one roll/melee, both directions) | `test_unpredictable_fighter_effect_split` |
+| **Royal Legion** (unit; Mummified) | "This model gets +4" range when shooting and moves +2" when using Charge actions." | +4" range: `SoloController.shooting_range_bonus` → AI shoot decision + reach, human validate + preview. +2" Charge: `MovementRangeController.move_bands_for_props` (Rush/Charge band) | `test_royal_legion_shooting_range_bonus`, `test_move_bands_royal_legion_charge_bonus_only` |
+
+**Left un-automated (justified, one sentence each):**
+
+- **Caster(X)** (Mummified) — grants spell tokens to cast random spells; the solo automation has no
+  spell/magic subsystem, so casting stays a manual, once-per-session-logged action.
+- **Unique** (Robot Legions, Mummified) — a list-building constraint ("may only be taken once per army"),
+  not an in-game combat/AI rule, so there is nothing to apply at play time.
+
+### Per-army rule coverage (distinct rule types), before → after wave 4
+
+| Book | Before | After | Remainder |
+|---|---|---|---|
+| **Battle Brothers** | 5/6 (Battleborn missing) | **6/6 = 100%** | — |
+| **Robot Legions** | 8/10 (Self-Repair, Destructive missing; Slow buggy) | **10/10 = 100%** | — |
+| **Mummified Undead** | 11/16 | **14/16 — 100% of combat/AI rules** | Caster (spells) + Unique (list-building) — neither a play-time combat rule |
+
+The inventory reclassifies these automatically because `SOLO_MODELED_RULES` is derived, not hand-listed;
+the once-per-session un-automated log now only flags Caster/Unique (and truly unknown army rules).
+
+## Fairness (wave-4 + round-2 fixes)
+
+All engine-behaviour changes live in the solo layers / the planner's opt-in `opts` path; the SIM passes no
+opts and calls `plan_unit_step` only in walled scenarios (the mirror oracle is wall-free), so `SoloSim` and
+the mirror-fairness oracle are byte-identical to before — no re-run required (same precedent as waves 1–3).

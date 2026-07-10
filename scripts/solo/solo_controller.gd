@@ -137,6 +137,12 @@ func is_eligible(unit) -> bool:
 	var u := unit as GameUnit
 	if u == null or u.is_activated or u.is_destroyed():
 		return false
+	# A unit still HELD in Ambush reserve is off the table and cannot be activated until it arrives
+	# (GF/AoF Advanced Rules v3.5.1 p.13: "May be set aside before deployment. At the start of any round
+	# after the first, may be deployed…"). Field-test finding 5: reserve units were eligible in round 1
+	# (the AI activated a not-yet-arrived unit); arrival then read as if it had already spent its turn.
+	if bool(u.unit_properties.get("ambush_reserve", false)):
+		return false
 	return not (u.has_method("is_attached") and u.is_attached())
 
 
@@ -287,11 +293,13 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 		# A genuine tie: rank by EV (utility instead of the rules' die roll — hybrid policy).
 		var our_weapons := _unit_weapons(ai_unit)
 		var our_melee := AiShooting.melee_profiles(our_weapons)
-		var us := AiEv.ctx_for(ai_unit, false, counter_models_of(ai_unit))
+		var us := AiEv.ctx_for(ai_unit, majority_in_cover(ai_unit), counter_models_of(ai_unit))
 		for t in tied:
 			var td := t as Dictionary
 			var hu := td["unit"] as GameUnit
-			var them := AiEv.ctx_for(hu, false, counter_models_of(hu))
+			# Real terrain cover feeds the EV (field-test finding 6): a defender whose majority sits in
+			# woods/ruins is worth less to shoot — the EV must see it, not a hardcoded false.
+			var them := AiEv.ctx_for(hu, majority_in_cover(hu), counter_models_of(hu))
 			if our_melee.is_empty():
 				td["ev"] = AiEv.shoot_ev(AiShooting.profiles_in_range(our_weapons, 0.0), us, them, float(td["d"]))
 			else:
@@ -336,15 +344,13 @@ func _act(unit: GameUnit) -> Dictionary:
 		return report
 	report["target"] = target_unit
 	var weapons := _unit_weapons(unit)
-	var bands: Dictionary = {"advance": 6, "rush": 12}
-	if movement_range != null:
-		bands = movement_range.move_bands_for_props(unit.unit_properties)
+	var bands: Dictionary = move_bands_for_unit(unit, movement_range)
 	var advance := float(bands.get("advance", 6))
 	var rush := float(bands.get("rush", 12))
 	var centre := unit_centre(unit)
 	var tcentre := unit_centre(target_unit)
 	var enemy_dist := MoveIntent.distance_inches(centre, tcentre)
-	var shoot_range := AiArchetype.max_range_inches(weapons)
+	var shoot_range := AiArchetype.max_range_inches(weapons) + shooting_range_bonus(unit)   # +Royal Legion (wave 4)
 	# The archetype's "better than" (Solo & Co-Op v3.5.0 p.1) is filled with the EV metric in the REAL
 	# game (AiEv.classify — Furious/Thrust/Impact weigh the melee side); the sim keeps the frozen
 	# AiArchetype.classify heuristic, so its fairness oracle is untouched.
@@ -668,6 +674,34 @@ func _unit_weapons(unit: GameUnit) -> Array:
 	if unit.source_type == "opr" and unit.source_data is OPRApiClient.OPRUnit:
 		return (unit.source_data as OPRApiClient.OPRUnit).weapons
 	return []
+
+
+## The unit's Advance/Rush move bands from the SAME source as the human player's reach rings
+## (Fast/Slow/Swift + aura- and base-upgrade-aware — GF/AoF Advanced Rules v3.5.1 p.13 Fast +2"/+4",
+## Slow -2"/-4"). With a MovementRangeController wired, use its per-model resolution (bands_for_model —
+## picks up aura-granted movement rules and per-model base upgrades, exactly the human's rings); without
+## one, fall back to the STATIC pure band computation on the unit's own props. NEVER a hardcoded 6"/12":
+## the old fallback silently dropped Slow when no controller was injected (field-test finding 1 — a
+## Robot Legions Slow unit advanced the full 6"). Static so it is unit-testable without a scene.
+static func move_bands_for_unit(unit: GameUnit, mrc: MovementRangeController) -> Dictionary:
+	if unit == null:
+		return {"advance": 6, "rush": 12}
+	if mrc != null:
+		for m in unit.get_alive_models():
+			var node := (m as ModelInstance).node
+			if node != null and is_instance_valid(node):
+				return mrc.bands_for_model(node)
+	return MovementRangeController.move_bands_for_props(unit.unit_properties)
+
+
+## Shooting-range bonus (inches) a unit's special rules grant its ranged weapons — the wave-4 army-book
+## "Royal Legion" (Mummified Undead; official Army Forge text: "This model gets +4" range when shooting and
+## moves +2" when using Charge actions." — the +2" Charge flows through move_bands_for_props). Applied to
+## the AI's shoot decision + reach AND the human's target validity/preview, so both directions honour it.
+## Static + pure (unit-testable).
+const ROYAL_LEGION_RANGE_BONUS_IN := 4
+static func shooting_range_bonus(unit: GameUnit) -> int:
+	return ROYAL_LEGION_RANGE_BONUS_IN if unit != null and unit.has_special_rule("Royal Legion") else 0
 
 
 ## Line of sight between two units via the injected checker (main wires terrain LOS); no checker = clear.
@@ -1164,6 +1198,11 @@ const PACE_DICE_SETTLE_BUFFER_S := 0.6  # extra beat after the tray reports phys
 const PACE_MOVE_SPEED_M_S := 0.20       # animated model speed (~8"/s — readable, not sluggish)
 const PACE_TRAIL_FADE_S := 2.0          # movement trail ribbons fade out over this long
 const PACE_FAST_SCALE := 0.15           # fast-forward multiplier on every fixed hold
+## Activation-choreography attention beat (maintainer's explicit staging, field-test finding 7): the fixed
+## pause held between each stage of an AI activation — camera focus → (beat) → movement corridors appear →
+## (beat) → models glide → (beat) → attacks/abilities resolve. Fast-AI compresses it by PACE_FAST_SCALE
+## like every other fixed hold, and it is fully skipped when a pace is 0 (auto-tail stays responsive).
+const PACE_ATTENTION_S := 2.0
 
 
 static func pace_next(phase: int) -> Pace:
@@ -1186,6 +1225,13 @@ static func pace_seconds(phase: int, fast: bool) -> float:
 	return base * (PACE_FAST_SCALE if fast else 1.0)
 
 
+## The activation-choreography attention beat in seconds (PACE_ATTENTION_S), Fast-AI-compressed by
+## PACE_FAST_SCALE — the named 2s pause the maintainer asked for between focus → corridors → glide →
+## attacks. Static + pure so the staging is unit-testable and the Fast-AI compression is provable.
+static func pace_attention_seconds(fast: bool) -> float:
+	return PACE_ATTENTION_S * (PACE_FAST_SCALE if fast else 1.0)
+
+
 ## OPR objective control at ROUND END (Solo & Co-Op v3.5.0 p.6, mirrors SoloSim._seize_objectives): a marker
 ## is seized by the ONE player with a non-Shaken unit model within 3"; models of two (or more) players within
 ## 3" contest it → neutral (0); nobody near → the owner PERSISTS. Shaken units can neither seize nor contest.
@@ -1205,6 +1251,8 @@ static func seize_objectives(unit_infos: Array, objectives: Array, owners: Array
 			var d := info as Dictionary
 			if bool(d.get("shaken", false)):
 				continue   # Shaken units can neither seize nor contest
+			if bool(d.get("ambush_locked", false)):
+				continue   # arrived from Ambush THIS round → can't seize or contest (GF/AoF v3.5.1 p.13)
 			var pid: int = int(d.get("player", 0))
 			if near_players.has(pid):
 				continue
@@ -1248,6 +1296,26 @@ static func striking_models(striker_positions: Array, enemy_positions: Array) ->
 
 func unit_centre(unit: GameUnit) -> Vector3:
 	return MoveIntent.anchor_of(alive_positions(unit))
+
+
+## Whether the MAJORITY of a unit's alive models sit in cover terrain (GF/AoF Advanced Rules v3.5.1 p.11:
+## "If the majority of models in a unit are fully inside a piece of cover terrain … they get +1 to Defense
+## rolls when blocking hits from shooting attacks."). Reads the REAL overlay via the injected
+## terrain_type_at (the TerrainRules.gives_cover predicate — Forests + Ruins), so the EV metric sees true
+## terrain instead of a constant (field-test finding 6). False when no terrain callback is wired.
+func majority_in_cover(unit: GameUnit) -> bool:
+	if unit == null or not terrain_type_at.is_valid():
+		return false
+	var models := unit.get_alive_models()
+	if models.is_empty():
+		return false
+	var n := 0
+	for m in models:
+		var node := (m as ModelInstance).node
+		if node != null and is_instance_valid(node) \
+				and TerrainRules.gives_cover(int(terrain_type_at.call((node as Node3D).global_position))):
+			n += 1
+	return n * 2 > models.size()   # strict majority (p.11)
 
 
 func alive_positions(unit: GameUnit) -> Array:
@@ -1341,6 +1409,7 @@ func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, block
 		var is_ambush: bool = u.has_special_rule("Ambush")
 		flags.append({"id": i, "scout": u.has_special_rule("Scout"), "ambush": is_ambush})
 		if is_ambush:
+			u.unit_properties["ambush_reserve"] = true   # held off-table → not activatable until it arrives
 			ambush_reserve.append(u)
 	var order := AiDeployment.placement_order(flags, rng)
 	var occupied: Array = []
@@ -1360,10 +1429,16 @@ func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, block
 			spot = AiDeployment.best_spot(zone, objectives, occupied, radius, blocked, 0.025, radius)
 			spot_why = "section full — whole-zone fallback"
 		if spot == Vector2.INF:
-			# The army MUST deploy (rule) — worst case the unit forms up at its section centre even if
-			# that crowds neighbours; never silently skip a unit again.
+			# Crowded out of every spaced spot: relax the 1" spacing (allow neighbours to bunch) but STILL
+			# reject blocking/impassable terrain — the army MUST deploy, yet a legal footprint always beats
+			# a spot inside a wall/forest (field-test finding 3: units deployed inside blocking terrain).
+			spot = AiDeployment.best_spot(zone, objectives, [], radius, blocked, 0.025, radius)
+			spot_why = "crowded — nearest legal (non-terrain) spot, spacing relaxed"
+		if spot == Vector2.INF:
+			# Truly no non-blocking cell in the whole zone (a terrain-choked table) — only now, as an
+			# unavoidable last resort, place at the section centre so a unit is never silently skipped.
 			spot = sec.get_center()
-			spot_why = "zone full — section centre (must deploy)"
+			spot_why = "no legal terrain spot anywhere — section centre (must deploy)"
 		_place_unit_at(unit, spot)
 		record_decision({"kind": "deploy", "unit": unit.get_name(),
 			"rule": "Solo v3.5.0 AI deployment: objective-near spot in the unit's section; Scout/Ambush overlays",
@@ -1377,24 +1452,50 @@ func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, block
 const AMBUSH_MIN_ENEMY_DIST_M := 0.2286   # OPR: Ambush arrivals deploy MORE THAN 9" from enemy units
 
 
-## OPR Ambush (goal 003 P1): reserved units arrive at the start of round 2, placed by the same deploy
-## rules (near the nearest objective, avoiding blocked terrain, reusing the context stashed by
-## deploy_army) but strictly MORE THAN 9" from any enemy. `arrival_zone` is the whole table (ambush may
-## arrive anywhere); `enemy_positions` are enemy unit centres in table XZ. A unit with no legal spot on a
-## crowded table stays in reserve for a later round. Returns {arrived, still_reserved}.
+## OPR Ambush (GF/AoF Advanced Rules v3.5.1 p.13): reserved units arrive at the start of ANY round after
+## the first, placed by the same deploy rules (near the nearest objective, avoiding blocked terrain,
+## reusing the context stashed by deploy_army) but strictly MORE THAN 9" from any enemy. A unit with no
+## legal spot on a crowded table stays in reserve for a LATER round (the p.13 "any round after the first").
+## Batch form (kept for headless tests): loops the paced per-unit arrival. `arrival_zone` is the whole
+## table; `enemy_positions` are enemy unit centres in table XZ. Returns {arrived (count), arrived_units,
+## still_reserved}.
 func arrive_ambush_reserve(arrival_zone: Rect2, enemy_positions: Array) -> Dictionary:
-	if ambush_reserve.is_empty():
-		return {"arrived": 0, "still_reserved": 0}
-	var no_block := func(_p: Vector2) -> bool: return false
 	var occupied: Array = []
-	for e in enemy_positions:
-		occupied.append({"pos": e, "radius": AMBUSH_MIN_ENEMY_DIST_M})
-	var arrived := 0
-	var still: Array = []
+	var round_no: int = army_manager.current_round if army_manager != null else 1
+	var arrived: Array = []
+	while true:
+		var u := arrive_one_ambush_unit(arrival_zone, enemy_positions, occupied, round_no)
+		if u == null:
+			break
+		arrived.append(u)
+	return {"arrived": arrived.size(), "arrived_units": arrived, "still_reserved": ambush_reserve.size()}
+
+
+## Bring in the NEXT reserve Ambush unit that has a legal spot — the PACED arrival step (field-test
+## finding 4: arrival must be its own announced, camera-focused, paused beat, one unit at a time, not a
+## silent simultaneous drop). Places the unit >9" from every enemy (AMBUSH_MIN_ENEMY_DIST_M), near an
+## objective, out of blocking terrain (reusing the deploy context), then:
+##   • clears its `ambush_reserve` flag so it becomes ACTIVATABLE this same round — arriving from Ambush is
+##     DEPLOYMENT, NOT an activation (GF/AoF v3.5.1 p.13; field-test finding 5: the unit could act again);
+##   • stamps `ambush_arrived_round` so seize_objectives can honour "Units that deploy via Ambush can't
+##     seize or contest objectives on the round they deploy" (p.13).
+## `occupied` accumulates placed footprints across calls (seeded once with the enemies' 9" no-go rings), so
+## successive arrivals don't stack. Returns the arrived unit, or null when no remaining reserve unit fits
+## right now (those stay reserved for a later round).
+func arrive_one_ambush_unit(arrival_zone: Rect2, enemy_positions: Array, occupied: Array, round_no: int) -> GameUnit:
+	if occupied.is_empty():
+		for e in enemy_positions:
+			occupied.append({"pos": e, "radius": AMBUSH_MIN_ENEMY_DIST_M})
+	var no_block := func(_p: Vector2) -> bool: return false
+	var remaining: Array = []
+	var arrived: GameUnit = null
 	for u in ambush_reserve:
 		var unit: GameUnit = u
 		if unit == null or unit.get_alive_count() <= 0:
 			continue   # a reserve unit destroyed before arrival is simply gone
+		if arrived != null:
+			remaining.append(unit)
+			continue   # one arrival per call (the caller paces each) — keep the rest reserved
 		var ignores_terrain: bool = unit.has_special_rule("Strider") or unit.has_special_rule("Flying")
 		var blocked: Callable = _deploy_blocked_flying if ignores_terrain else _deploy_blocked_normal
 		if not blocked.is_valid():
@@ -1402,13 +1503,19 @@ func arrive_ambush_reserve(arrival_zone: Rect2, enemy_positions: Array) -> Dicti
 		var radius := _deploy_footprint_radius(unit)
 		var spot := AiDeployment.best_spot(arrival_zone, _deploy_objectives, occupied, radius, blocked, 0.025, radius)
 		if spot == Vector2.INF:
-			still.append(unit)
+			remaining.append(unit)   # no legal spot this round — hold for a later one (p.13)
 			continue
 		_place_unit_at(unit, spot)
 		occupied.append({"pos": spot, "radius": radius})
-		arrived += 1
-	ambush_reserve = still
-	return {"arrived": arrived, "still_reserved": still.size()}
+		unit.unit_properties["ambush_reserve"] = false          # on the table now → activatable this round
+		unit.unit_properties["ambush_arrived_round"] = round_no  # can't seize/contest objectives this round
+		record_decision({"kind": "deploy", "unit": unit.get_name(),
+			"rule": "GF/AoF v3.5.1 p.13 Ambush: arrive start of a round after the first, >9\" from enemies",
+			"candidates": [], "chosen": "", "why": "ambush arrival (does not consume its activation)",
+			"data": {"round": round_no, "x_m": spot.x, "z_m": spot.y}})
+		arrived = unit
+	ambush_reserve = remaining
+	return arrived
 
 
 const DEPLOY_SPACING_M := 0.04   # compact deployment grid: model-centre spacing (~1.6", coherent)

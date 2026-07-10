@@ -34,6 +34,25 @@ func _unit(pid: int, positions: Array) -> GameUnit:
 	return u
 
 
+## Field-test finding 1: a Slow unit MUST get the reduced move band even when no MovementRangeController
+## is injected (the old _act fell back to a hardcoded 6"/12" that dropped Slow). Slow = -2"/-4" (GF/AoF
+## Advanced Rules v3.5.1 p.13), so a Slow unit's Advance band is 4" and Rush 8" — from the SAME band
+## source the human's reach rings use.
+func test_move_bands_for_unit_honours_slow_without_a_controller() -> void:
+	var slow := _unit(2, [Vector3(0.2, 0, 0)])
+	slow.unit_properties["special_rules"] = ["Slow", "Tough(3)"]
+	var bands := SoloController.move_bands_for_unit(slow, null)   # no controller — must NOT hardcode 6"/12"
+	assert_int(int(bands["advance"])).is_less_equal(4)
+	assert_int(int(bands["advance"])).is_equal(4)
+	assert_int(int(bands["rush"])).is_equal(8)
+	# A plain unit (no move rule) still reads the OPR defaults, and Fast still adds +2"/+4".
+	var plain := _unit(2, [Vector3(0.2, 0, 0)])
+	assert_int(int(SoloController.move_bands_for_unit(plain, null)["advance"])).is_equal(6)
+	var fast := _unit(2, [Vector3(0.2, 0, 0)])
+	fast.unit_properties["special_rules"] = ["Fast"]
+	assert_int(int(SoloController.move_bands_for_unit(fast, null)["advance"])).is_equal(8)
+
+
 func test_ai_unit_advances_toward_nearest_human_and_activates() -> void:
 	var human := _unit(1, [Vector3(0, 0, 0)])
 	var ai := _unit(2, [Vector3(0.5, 0, 0)])   # 0.5 m east of the human, inside a 4 ft table
@@ -122,6 +141,71 @@ func test_ambush_arrival_is_noop_with_empty_reserve() -> void:
 	solo.setup(auto_free(OPRArmyManager.new()), null, null, 1, 2)
 	var res: Dictionary = solo.arrive_ambush_reserve(Rect2(0, 0, 1, 1), [])
 	assert_int(int(res["arrived"])).is_equal(0)
+
+
+## Field-test finding 5: a reserve Ambush unit is NOT activatable while held, and arriving from Ambush does
+## NOT consume its activation — it is eligible to act that same round (GF/AoF v3.5.1 p.13).
+func test_ambush_reserve_unit_is_ineligible_until_it_arrives_then_can_act() -> void:
+	var enemy := _unit(1, [Vector3(0.5, 0, 0.5)])
+	var ambusher := _unit(2, [Vector3(3, 0, 3)])
+	ambusher.unit_properties["ambush_reserve"] = true          # held off-table
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {enemy.unit_id: enemy, ambusher.unit_id: ambusher}
+	army.current_round = 2
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.ambush_reserve = [ambusher]
+	solo._deploy_objectives = [Vector2(0.3, 0.3)]
+	# Held in reserve → ineligible, and the AI has nothing to activate.
+	assert_bool(solo.is_eligible(ambusher)).is_false()
+	assert_array(solo.eligible_ai_units()).is_empty()
+	# One paced arrival >9" from the enemy → flag cleared, activation NOT spent, eligible THIS round.
+	var occupied: Array = []
+	var arrived := solo.arrive_one_ambush_unit(Rect2(Vector2(-0.61, -0.61), Vector2(1.22, 1.22)), [Vector2(0.5, 0.5)], occupied, 2)
+	assert_object(arrived).is_equal(ambusher)
+	assert_bool(ambusher.is_activated).is_false()
+	assert_bool(bool(ambusher.unit_properties.get("ambush_reserve", false))).is_false()
+	assert_bool(solo.is_eligible(ambusher)).is_true()
+	assert_int(int(ambusher.unit_properties["ambush_arrived_round"])).is_equal(2)
+
+
+## Field-test finding 5 (seize rule): a unit that arrived from Ambush this round can neither seize nor
+## contest an objective it stands on (GF/AoF v3.5.1 p.13) — but the same unit seizes normally otherwise.
+func test_seize_objectives_skips_ambush_units_on_their_arrival_round() -> void:
+	var obj: Array = [Vector3(0, 0, 0)]
+	var locked: Array = [{"player": 2, "shaken": false, "ambush_locked": true, "positions": [Vector3(0, 0, 0)]}]
+	assert_int(int((SoloController.seize_objectives(locked, obj, [0])["owners"] as Array)[0])).is_equal(0)
+	var free: Array = [{"player": 2, "shaken": false, "ambush_locked": false, "positions": [Vector3(0, 0, 0)]}]
+	assert_int(int((SoloController.seize_objectives(free, obj, [0])["owners"] as Array)[0])).is_equal(2)
+
+
+## Field-test finding 6: cover feeds the EV from REAL terrain, not a constant. majority_in_cover reads the
+## injected terrain callback and honours the strict-majority rule (GF/AoF v3.5.1 p.11).
+func test_majority_in_cover_reads_real_terrain() -> void:
+	var unit := _unit(1, [Vector3(0, 0, 0), Vector3(0.1, 0, 0), Vector3(5, 0, 5)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {unit.unit_id: unit}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	assert_bool(solo.majority_in_cover(unit)).is_false()   # no terrain wired → honest false
+	# A forest patch around the origin covers 2 of the 3 models → strict majority → in cover.
+	solo.terrain_type_at = func(p: Vector3) -> int:
+		return TerrainRules.TerrainType.FOREST if Vector2(p.x, p.z).length() < 1.0 else TerrainRules.TerrainType.NONE
+	assert_bool(solo.majority_in_cover(unit)).is_true()
+	unit.models[1].node.global_position = Vector3(5, 0, 5)   # only 1/3 left in the woods
+	assert_bool(solo.majority_in_cover(unit)).is_false()
+
+
+## Wave-4 Royal Legion (Mummified Undead army-book rule): +4" shooting range. The +2" Charge is verified
+## via move_bands_for_props in the movement-range suite.
+func test_royal_legion_shooting_range_bonus() -> void:
+	var u := _unit(2, [Vector3(0, 0, 0)])
+	assert_int(SoloController.shooting_range_bonus(u)).is_equal(0)   # plain unit
+	u.unit_properties["special_rules"] = ["Royal Legion", "Tough(3)"]
+	assert_int(SoloController.shooting_range_bonus(u)).is_equal(4)
+	assert_int(SoloController.shooting_range_bonus(null)).is_equal(0)
 
 
 func test_effective_attacks_scales_by_the_surviving_fraction() -> void:
@@ -443,6 +527,16 @@ func test_pace_holds_are_readable_and_fast_forward_shrinks_them() -> void:
 	assert_float(S.pace_seconds(S.Pace.EXECUTE, false)).is_equal(0.0)
 	assert_float(S.pace_seconds(S.Pace.ANNOUNCE, true)).is_equal_approx(S.PACE_ANNOUNCE_S * S.PACE_FAST_SCALE, 0.0001)
 	assert_float(S.pace_seconds(S.Pace.OUTCOME, true)).is_less(S.pace_seconds(S.Pace.OUTCOME, false))
+
+
+## Finding 7: the activation-choreography attention beat is the named PACE_ATTENTION_S (~2s), and Fast-AI
+## compresses it by PACE_FAST_SCALE exactly like every other fixed hold — so focus → corridors → glide →
+## attacks all shrink proportionally under Fast AI.
+func test_attention_beat_is_named_and_fast_ai_compresses_it() -> void:
+	var S := SoloController
+	assert_float(S.pace_attention_seconds(false)).is_equal(S.PACE_ATTENTION_S)
+	assert_float(S.pace_attention_seconds(true)).is_equal_approx(S.PACE_ATTENTION_S * S.PACE_FAST_SCALE, 0.0001)
+	assert_float(S.pace_attention_seconds(true)).is_less(S.pace_attention_seconds(false))
 
 
 # === Blast(X) + Reliable (GF v3.5.1) ===

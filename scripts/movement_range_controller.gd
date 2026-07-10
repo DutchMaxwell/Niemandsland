@@ -65,7 +65,10 @@ func base_radius_for_props(props: Dictionary) -> float:
 ## parsing every description here picks up indirectly-granted modifiers too (issue #79). A Fast/Slow
 ## constant fallback covers a core rule listed directly but without (parseable) description text.
 ## Returns {"advance": int, "rush": int}, clamped at 0 so a heavy Slow can't go negative.
-func move_bands_for_props(props: Dictionary) -> Dictionary:
+## STATIC + pure (reads only `props`): so callers WITHOUT a live controller instance — the Solo AI when
+## no MovementRangeController is injected — resolve Fast/Slow through this ONE band source instead of a
+## hardcoded 6"/12" fallback (field-test finding 1: a Slow unit moved the full 6").
+static func move_bands_for_props(props: Dictionary) -> Dictionary:
 	var advance := OPR_ADVANCE_INCHES
 	var rush := OPR_RUSH_CHARGE_INCHES
 	var descriptions: Dictionary = props.get("rule_descriptions", {})
@@ -99,7 +102,7 @@ func move_bands_for_props(props: Dictionary) -> Dictionary:
 ## Movement rules that are NEGATED by another rule's text — e.g. "Swift" whose description reads
 ## "This model may ignore the Slow rule" cancels Slow. Returns the set of negated rule base names.
 ## Detected by an "ignore … <RuleName>" phrase where <RuleName> is another rule with a description.
-func _negated_move_rules(descriptions: Dictionary) -> Dictionary:
+static func _negated_move_rules(descriptions: Dictionary) -> Dictionary:
 	var negated: Dictionary = {}
 	for name in descriptions:
 		var text: String = str(descriptions[name]).to_lower()
@@ -157,7 +160,7 @@ static func _first_index(haystack: String, needles: Array) -> int:
 
 
 ## A rule's base name without its rating parenthetical: "Swift(3)" -> "Swift", "Fast" -> "Fast".
-func _rule_base_name(rule: String) -> String:
+static func _rule_base_name(rule: String) -> String:
 	return rule.split("(")[0].strip_edges()
 
 

@@ -275,3 +275,13 @@ func test_clear_all_removes_every_indicator() -> void:
 	assert_int(c.active_count()).is_equal(2)
 	c.clear_all()
 	assert_int(c.active_count()).is_equal(0)
+
+
+## Wave-4 Royal Legion (Mummified Undead army-book rule): "+4" range when shooting and moves +2" when
+## using Charge actions." The move parser must apply ONLY the +2" Charge (the Rush/Charge band), never the
+## +4" range — so a Royal Legion unit reads Advance 6", Rush/Charge 14".
+func test_move_bands_royal_legion_charge_bonus_only() -> void:
+	var desc := {"Royal Legion": "This model gets +4\" range when shooting and moves +2\" when using Charge actions."}
+	var b := _controller().move_bands_for_props({"special_rules": ["Royal Legion"], "rule_descriptions": desc})
+	assert_int(b["advance"]).is_equal(6)    # +4" range is NOT a move modifier
+	assert_int(b["rush"]).is_equal(14)       # 12 + 2 (Charge shares the Rush/Charge band)
