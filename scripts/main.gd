@@ -3142,6 +3142,16 @@ func _on_load_completed(object_count: int) -> void:
 	print("Game loaded: %d objects" % object_count)
 	_update_round_button()  # restored round may differ from 1
 
+	# The unit-card dock only auto-rebuilds on `army_spawned`, which ONLY the OPR import path
+	# emits. A .nml load — a saved game, and the guided-tutorial prepared board — restores
+	# units WITHOUT that signal, so the strip stayed empty; _layout_fan() early-returns on an
+	# empty strip and never sizes/centres _strip_panel, leaving it collapsed to a zero-width
+	# sliver pinned at the left screen edge (the tutorial-W5 softlock the maintainer hit).
+	# Repopulate + re-lay-out from the freshly restored units so the dock is correct after ANY
+	# load, at any window size.
+	if unit_dock != null:
+		unit_dock.rebuild()
+
 	# Sync to multiplayer clients if hosting
 	if network_manager.is_host and network_manager.connected_peers.size() > 0:
 		_sync_loaded_state_to_clients()

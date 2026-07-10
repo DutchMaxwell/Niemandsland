@@ -147,9 +147,36 @@ func _assert_board_quality(main: Node, army_manager: Node) -> bool:
 		printerr("SMOKE-FAIL: unit '%s' shows %d placeholder peg(s) instead of real minis" % [unit.get_name(), pegs])
 		return false
 
+	# Dock geometry (regression net for the W5 softlock): the card strip must be laid out — a real
+	# width (at least one card wide) sitting HORIZONTALLY inside the viewport, NOT collapsed to a
+	# zero-width sliver pinned at the left edge (the bug when a .nml board load skipped the rebuild).
+	# The strip is centre-bottom and offscreen on the y-axis while closed, so only x is asserted.
+	if not _assert_dock_geometry(dock):
+		return false
+
 	printerr("SMOKE: board quality OK — unit '%s' (faction %s): card name/Q%d/D%d/%d weapon rows, %d models all real minis" % [
 		unit.get_name(), faction, int(card.get("quality", 0)), int(card.get("defense", 0)),
 		weapons.size(), unit.models.size()])
+	return true
+
+
+## The unit-card dock's strip must be horizontally laid out inside the viewport with a non-degenerate
+## width — the exact geometry the W5 tutorial spotlight points at. Fails loudly on the left-edge collapse.
+func _assert_dock_geometry(dock: Node) -> bool:
+	if not dock.has_method("strip_rect"):
+		printerr("SMOKE-FAIL: unit_dock has no strip_rect() — dock geometry unverifiable")
+		return false
+	var vp_w: float = dock.get_viewport_rect().size.x
+	var strip: Rect2 = dock.strip_rect()
+	var min_w: float = float(dock.CARD_W)   # at least one full card wide
+	if strip.size.x < min_w or strip.size.y <= 0.0:
+		printerr("SMOKE-FAIL: dock strip collapsed — rect=%s (size.x < one card %d or zero height)" % [str(strip), int(min_w)])
+		return false
+	if strip.position.x < 1.0 or strip.end.x > vp_w + 1.0:
+		printerr("SMOKE-FAIL: dock strip is not inside the viewport horizontally — rect=%s, viewport width=%d (left-edge collapse?)" % [str(strip), int(vp_w)])
+		return false
+	printerr("SMOKE: dock geometry OK — strip rect=%s inside viewport width %d (centred, %d px wide)" % [
+		str(strip), int(vp_w), int(strip.size.x)])
 	return true
 
 
