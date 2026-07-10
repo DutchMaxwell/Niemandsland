@@ -242,6 +242,25 @@ The last brick for "playable solo v1". A solo game now RUNS ITSELF once an army 
   real Battle Brothers list (`tools/solo_field_test.gd -- <list> <seed> autogame`) showing alternation, the AI
   opening rounds 2/4, seizes, and the final scoring.
 
+## Presentation & pacing layer (2026-07-10 — "correct but incomprehensible" field-test round)
+
+Every AI action now runs a readable four-phase flow (pure `SoloController.Pace` machine, constants not
+magic numbers; a "Fast AI" toggle in the Solo panel shrinks all holds and skips the move animation):
+
+1. **ANNOUNCE** (`PACE_ANNOUNCE_S`): pulse rings under shooter (amber) and target (red), an attack line
+   between them, a toast + battle-log line ("X fires at Y" / "X charges Y") — held BEFORE any die moves.
+2. **EXECUTE**: movement is ANIMATED — each model replays its REAL MovementPlanner route (the planner
+   grew an observation-only `trails` out-param; sim proven byte-identical under the same seed) at
+   `PACE_MOVE_SPEED_M_S`, leaving a per-model trail ribbon that fades over `PACE_TRAIL_FADE_S`. Models
+   are visibly walking AROUND walls. State is applied + MP-broadcast before the local replay, so
+   multiplayer mirrors and game logic never see intermediate positions.
+3. **RESOLVE**: the tray's `roll_finnished` already fires only after every die has been physically calm
+   for `SETTLE_HOLD` (teeterers are snapped flat on timeout), so the pacing adds a readable
+   `PACE_DICE_SETTLE_BUFFER_S` beat on top — no action ever proceeds on an unseen roll.
+4. **OUTCOME** (`PACE_OUTCOME_S`): one summary toast per volley/melee ("N hits → M wounds land — you
+   lose K models"), plus the per-step battle-log lines (modified save thresholds, Deadly/Blast
+   multiplications, regeneration results, sighted-model counts).
+
 ## Architecture
 
 An **`SoloAIController`** that owns a `player_id` **slot locally** (not a faked network peer)

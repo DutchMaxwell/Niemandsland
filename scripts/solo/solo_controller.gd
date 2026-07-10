@@ -38,6 +38,10 @@ var _deploy_blocked_flying: Callable = Callable()
 ## What the last activate_next_ai_unit did: {unit, target, action, can_shoot, dist_in} — main reads it
 ## to resolve shooting (P3) and the charge melee (P4).
 var last_report: Dictionary = {}
+## Per-model routes of the last AI move: Array of {model: ModelInstance, path: Array[Vector3]} (world
+## waypoints, start … final). The presentation layer replays them as animation + fading trail ribbons;
+## purely observational — positions are applied/broadcast before this is read.
+var last_move_paths: Array = []
 ## Injected by main: Callable(from: Vector3, to: Vector3) -> bool for terrain line of sight.
 var los_checker: Callable = Callable()
 ## Injected by main (goal 003 P3 — real terrain feeds the shared pure modules):
@@ -130,6 +134,7 @@ func activate_next_ai_unit() -> GameUnit:
 	var unit := _select_ai_unit(eligible)
 	if unit == null:
 		return null
+	last_move_paths = []   # cleared per activation — HOLD / Shaken idle replays nothing
 	if unit.is_shaken:
 		# OPR (p.10): a Shaken unit spends its activation idle, which lets it recover.
 		last_report = {"unit": unit, "target": null, "action": AiDecision.Action.HOLD,
@@ -326,9 +331,15 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	delta = _clamp_delta_to_bounds(positions, delta)
 	if delta == Vector3.ZERO:
 		return 0
-	var new_positions := _plan_positions(unit, positions, delta, allow_contact)
+	var trails: Array = []
+	var new_positions := _plan_positions(unit, positions, delta, allow_contact, trails)
 	var dang := _count_dangerous(positions, new_positions)
 	_apply_model_positions(models, new_positions)
+	# Publish the per-model routes for the presentation layer (animate + trail ribbons) — the STATE is
+	# already final (applied + broadcast above); the animation is a local visual replay.
+	last_move_paths = []
+	for i in range(mini(models.size(), trails.size())):
+		last_move_paths.append({"model": models[i], "path": trails[i]})
 	return dang
 
 
@@ -390,16 +401,18 @@ func _apply_model_positions(models: Array, new_positions: Array) -> void:
 ## Plan the per-model destination positions for a move by rigid `delta`. Fast path (no walls, a regiment, or
 ## no wall in the path) = the exact rigid slide (byte-identical to the old block move). A LOOSE unit whose
 ## rigid path crosses a wall steers each model around it in coherency via the shared MovementPlanner (run in
-## the planner's 0-origin inch frame, then mapped back to world metres).
-func _plan_positions(unit: GameUnit, positions: Array, delta: Vector3, allow_contact: bool) -> Array:
+## the planner's 0-origin inch frame, then mapped back to world metres). `world_trails` (optional out): one
+## WORLD-space waypoint list (Array[Vector3], start … final) per model — the real route each model takes,
+## for the presentation layer to animate (a rigid slide is a single straight leg).
+func _plan_positions(unit: GameUnit, positions: Array, delta: Vector3, allow_contact: bool,
+		world_trails: Array = []) -> Array:
 	var rigid: Array = []
 	for p in positions:
 		rigid.append((p as Vector3) + delta)
-	if _is_regiment(unit):
-		return rigid   # a regiment moves as its rigid tray block — no individual steering
 	var walls_world: Array = _walls_world()
-	if walls_world.is_empty():
-		return rigid
+	if _is_regiment(unit) or walls_world.is_empty():
+		_fill_straight_trails(world_trails, positions, rigid)
+		return rigid   # a regiment moves as its rigid tray block — no individual steering
 	# Map world XZ (metres, centred at 0) into the planner's non-negative inch frame: shift by the table
 	# half-extents, then divide by the inch scale. board_in is the larger table extent in inches.
 	var half := _table_half_extents()
@@ -415,9 +428,13 @@ func _plan_positions(unit: GameUnit, positions: Array, delta: Vector3, allow_con
 		var wb: Vector2 = w[1]
 		walls_in.append([(wa + off) / INCHES_TO_METERS, (wb + off) / INCHES_TO_METERS])
 	if not MovementPlanner.rigid_blocked(mpos, mdelta, walls_in):
+		_fill_straight_trails(world_trails, positions, rigid)
 		return rigid
-	var planned: Array = MovementPlanner.plan_unit_step(mpos, mdelta, walls_in, {}, allow_contact, board_in)
+	var plan_trails: Array = []
+	var planned: Array = MovementPlanner.plan_unit_step(mpos, mdelta, walls_in, {}, allow_contact, board_in, plan_trails)
 	var out: Array = []
+	if world_trails != null:
+		world_trails.clear()
 	for i in range(positions.size()):
 		var pi: Vector2 = mpos[i]
 		if i < planned.size():
@@ -425,7 +442,25 @@ func _plan_positions(unit: GameUnit, positions: Array, delta: Vector3, allow_con
 		var world := (pi * INCHES_TO_METERS) - off
 		var src: Vector3 = positions[i]
 		out.append(Vector3(world.x, src.y, world.y))
+		if world_trails != null:
+			var leg: Array = []
+			if i < plan_trails.size():
+				for wp in plan_trails[i]:
+					var wv := ((wp as Vector2) * INCHES_TO_METERS) - off
+					leg.append(Vector3(wv.x, src.y, wv.y))
+			if leg.size() < 2:
+				leg = [src, out[i]]
+			world_trails.append(leg)
 	return out
+
+
+## Straight one-leg trails for a rigid slide (start → end per model).
+static func _fill_straight_trails(world_trails: Array, from_pos: Array, to_pos: Array) -> void:
+	if world_trails == null:
+		return
+	world_trails.clear()
+	for i in range(from_pos.size()):
+		world_trails.append([from_pos[i], to_pos[i]])
 
 
 ## Count alive models whose path (old → new position) crossed Dangerous terrain (main rolls the real tests).
@@ -652,6 +687,41 @@ static func targeting_route(event: InputEvent, over_blocking_ui: bool) -> Target
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			return TargetingRoute.IGNORE if over_blocking_ui else TargetingRoute.PICK
 	return TargetingRoute.IGNORE
+
+
+## The AI-action presentation pacing (goal 003 game-feel): every AI action steps through
+## ANNOUNCE (who acts on whom — highlights + banner hold) → EXECUTE (animated movement / dice thrown) →
+## RESOLVE (event-gated: the tray's roll_finnished fires only after every die has been physically calm
+## for its SETTLE_HOLD, plus a readable buffer here) → OUTCOME (the result summary holds on screen) →
+## DONE. Pure + testable; main drives the awaits. Fast-forward scales the fixed holds down for veterans.
+enum Pace { ANNOUNCE, EXECUTE, RESOLVE, OUTCOME, DONE }
+
+const PACE_ANNOUNCE_S := 1.0            # attribution hold before anything happens
+const PACE_OUTCOME_S := 1.8             # result summary hold after a combat resolves
+const PACE_DICE_SETTLE_BUFFER_S := 0.6  # extra beat after the tray reports physical rest
+const PACE_MOVE_SPEED_M_S := 0.20       # animated model speed (~8"/s — readable, not sluggish)
+const PACE_TRAIL_FADE_S := 2.0          # movement trail ribbons fade out over this long
+const PACE_FAST_SCALE := 0.15           # fast-forward multiplier on every fixed hold
+
+
+static func pace_next(phase: int) -> Pace:
+	match phase:
+		Pace.ANNOUNCE: return Pace.EXECUTE
+		Pace.EXECUTE: return Pace.RESOLVE
+		Pace.RESOLVE: return Pace.OUTCOME
+		_: return Pace.DONE
+
+
+## The FIXED hold of a phase in seconds (0 for the event-gated phases — EXECUTE ends when the animation
+## or dice throw ends, RESOLVE when the tray settles; their buffers/durations come from their own events).
+static func pace_seconds(phase: int, fast: bool) -> float:
+	var base := 0.0
+	match phase:
+		Pace.ANNOUNCE: base = PACE_ANNOUNCE_S
+		Pace.OUTCOME: base = PACE_OUTCOME_S
+		Pace.RESOLVE: base = PACE_DICE_SETTLE_BUFFER_S
+		_: base = 0.0
+	return base * (PACE_FAST_SCALE if fast else 1.0)
 
 
 ## OPR objective control at ROUND END (Solo & Co-Op v3.5.0 p.6, mirrors SoloSim._seize_objectives): a marker

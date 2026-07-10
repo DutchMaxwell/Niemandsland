@@ -244,6 +244,9 @@ var _solo_pending_replies: int = 0           # human activations still owed one 
 var _solo_ai_busy: bool = false              # an AI activation chain is running (guards re-entry)
 var _solo_game_finished: bool = false        # summary shown after SOLO_GAME_ROUNDS — no further auto-advance
 var _solo_ai_banner: Label = null            # non-blocking "AI is taking its turn…" banner during the tail
+var _solo_fast: bool = false                 # fast-forward: shrink pacing holds + skip move animation
+var _solo_toast: Label = null                # transient AI-action attribution/outcome toast
+var _solo_unmodeled_logged: Dictionary = {}  # rule name -> true: once-per-session unmodeled-rule notes
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
@@ -697,6 +700,12 @@ func _solo_activate_one_ai() -> GameUnit:
 	if battle_log != null and target != null:
 		battle_log.log_event(BattleLog.Category.MOVEMENT, "%s %s (→ %s)" % [
 			unit.get_name(), AiDecision.action_name(int(report.get("action", 0))), target.get_name()], true)
+	_solo_log_unmodeled_rules(unit)   # once-per-session visibility of rules the automation skips
+	if target != null:
+		_solo_log_unmodeled_rules(target)
+	# EXECUTE: replay the models along their REAL planner routes (walls visibly walked around, not
+	# through) with fading trail ribbons — the state was applied + broadcast before this visual replay.
+	await _solo_animate_move(solo_controller.last_move_paths)
 	# Dangerous terrain crossed during the move (goal 003 P3): each such model rolls a real tray die, a 1 wounds.
 	var dangerous_models: int = int(report.get("dangerous_models", 0))
 	if dangerous_models > 0:
@@ -1084,35 +1093,53 @@ func _run_ai_shooting(report: Dictionary) -> void:
 ## that actually have range AND line of sight to the target — not by its whole living count.
 func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array) -> void:
 	var alive_before: int = target.get_alive_count()
-	var defense: int = _solo_cover_defense(target, target.get_defense())   # +1 Defense if majority in cover
+	var models_before: int = _solo_combined_alive(target)
+	var base_defense: int = target.get_defense()
+	var covered_defense: int = _solo_cover_defense(target, base_defense)   # +1 Defense if majority in cover
 	var dist_in: float = MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
+	# ANNOUNCE: who shoots at whom — highlights + attack line + toast, held before any die is thrown.
+	var announce := _solo_show_attack_announce(attacker, target, "fires at")
+	await _solo_pace_hold(SoloController.Pace.ANNOUNCE)
 	var regenable := 0
 	var regen_proof := 0
+	var total_hits := 0
+	var total_caused := 0
 	for s in shots:
 		var shot := s as Dictionary
 		var profile := shot["profile"] as Dictionary
 		var member := shot["member"] as GameUnit
-		var quality: int = int(shot["quality"])
+		# Reliable (GF v3.5.1): the weapon shoots at Quality 2+ regardless of the shooter's own Quality.
+		var to_hit: int = AiCombatMath.reliable_quality(int(shot["quality"]), bool(profile.get("reliable", false)))
 		var sighted: int = _solo_sighted_count(member, target, int(shot["reach"]))
 		var attacks: int = SoloController.effective_attacks(int(profile.get("attacks", 0)), sighted, int(shot["max"]))
 		if attacks <= 0:
 			continue
 		var shooter_name: String = member.get_name()
-		var faces: Array = await _solo_tray_roll(attacks, quality, "AI (%s)" % shooter_name)
-		var hits: int = _solo_hits(faces, quality, profile, dist_in)
+		var faces: Array = await _solo_tray_roll(attacks, to_hit, "AI (%s)" % shooter_name)
+		var hits: int = _solo_hits(faces, to_hit, profile, dist_in, target)
 		if battle_log != null:
 			var sight_note: String = "" if sighted >= member.get_alive_count() else " (%d/%d models sighted)" % [sighted, member.get_alive_count()]
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s%s — %d hit%s" % [
 				shooter_name, str(profile.get("name", "?")), target.get_name(), sight_note, hits, ("" if hits == 1 else "s")], true)
 		if hits <= 0:
 			continue
-		var save_faces: Array = await _solo_prompt_saves(attacker, target, str(profile.get("name", "?")), hits, defense, int(profile.get("ap", 0)))
-		var w: int = _solo_wounds(hits, save_faces, defense, profile, target)
+		total_hits += hits
+		# Blast ignores cover (GF v3.5.1) — its saves roll against the UNCOVERED Defense.
+		var save_def: int = base_defense if int(profile.get("blast", 0)) > 1 else covered_defense
+		var save_faces: Array = await _solo_prompt_saves(attacker, target, str(profile.get("name", "?")), hits, save_def, int(profile.get("ap", 0)))
+		var w: int = _solo_wounds(hits, save_faces, save_def, profile, target)
+		total_caused += w
 		if _solo_ignores_regen(member, profile):
 			regen_proof += w
 		else:
 			regenable += w
 	var landed: int = await _solo_land_wounds(target, regenable, regen_proof)
+	_solo_clear_announce(announce)
+	# OUTCOME: one readable summary line, held on screen (toast + battle log).
+	await _solo_show_outcome("%s: %d hit%s → %d wound%s land — %s loses %d model%s" % [
+		target.get_name(), total_hits, ("" if total_hits == 1 else "s"),
+		landed, ("" if landed == 1 else "s"), target.get_name(),
+		models_before - _solo_combined_alive(target), ("" if models_before - _solo_combined_alive(target) == 1 else "s")])
 	if landed > 0:
 		await _solo_shooting_morale(target, alive_before, _solo_owner_label(target))
 
@@ -1222,11 +1249,19 @@ func _solo_cover_defense(target: GameUnit, base_defense: int) -> int:
 
 
 ## Hits from a to-hit roll, plus Relentless (>9" shooting: each unmodified 6 adds a hit; `dist_in`=0 in melee
-## naturally yields no bonus). Uses the shared AiCombatMath.
-func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float) -> int:
+## naturally yields no bonus) and Blast(X) (each hit ×min(X, target models) — GF v3.5.1, with the outcome
+## logged so the multiplication is VISIBLE). Uses the shared AiCombatMath.
+func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, target: GameUnit = null) -> int:
 	var hits: int = AiCombatMath.count_hits(faces, to_hit)
 	if bool(profile.get("relentless", false)):
 		hits += AiCombatMath.relentless_bonus_hits(faces, dist_in)
+	var blast: int = int(profile.get("blast", 0))
+	if hits > 0 and blast > 1 and target != null:
+		var boosted: int = AiCombatMath.blast_hits(hits, blast, _solo_combined_alive(target))
+		if boosted != hits and battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "Blast(%d): %d hit%s ×%d → %d hits" % [
+				blast, hits, ("" if hits == 1 else "s"), boosted / hits, boosted], true)
+		hits = boosted
 	return hits
 
 
@@ -1235,7 +1270,11 @@ func _solo_wounds(hits: int, save_faces: Array, defense: int, profile: Dictionar
 	var w: int = AiCombatMath.wounds(hits, save_faces, defense, int(profile.get("ap", 0)))
 	var deadly: int = int(profile.get("deadly", 0))
 	if w > 0 and deadly > 0:
-		w *= AiCombatMath.deadly_multiplier(deadly, _solo_unit_tough(target))
+		var mult: int = AiCombatMath.deadly_multiplier(deadly, _solo_unit_tough(target))
+		if mult > 1 and battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "Deadly(%d): %d unsaved ×%d → %d wounds (Tough-capped)" % [
+				deadly, w, mult, w * mult], true)
+		w *= mult
 	return w
 
 
@@ -1383,7 +1422,11 @@ func _solo_tray_roll(count: int, success_target: int, owner: String) -> Array:
 	_update_success_controls_display()
 	_next_roll_owner = owner
 	dice_roller_control.roll()
+	# RESOLVE: roll_finnished only fires once every die has been physically calm for the tray's
+	# SETTLE_HOLD (or the timeout snaps teeterers flat first) — then hold a readable beat on top so the
+	# player sees the faces land before the flow moves on (goal 003 pacing).
 	await dice_roller_control.roll_finnished
+	await _solo_pace_hold(SoloController.Pace.RESOLVE)
 	var faces: Array = _faces_in_order(dice_roller_control.per_dice_result())
 	_dice_count = prev_count
 	_update_dice_set(prev_count)
@@ -1423,6 +1466,192 @@ func _solo_log_save_threshold(defender: GameUnit, defense: int, ap: int) -> void
 	battle_log.log_event(BattleLog.Category.COMBAT, "%s saves on %s" % [defender.get_name(), threshold], true)
 
 
+# === AI-action presentation layer (goal 003 game-feel: announce → execute → resolve → outcome) ===
+
+## Hold for a pacing phase (SoloController.Pace); fast-forward shrinks every fixed hold.
+func _solo_pace_hold(phase: int) -> void:
+	var secs: float = SoloController.pace_seconds(phase, _solo_fast)
+	if secs > 0.0:
+		await get_tree().create_timer(secs).timeout
+
+
+## Attack attribution: pulse rings under the shooter (amber) and the target (red), an attack line
+## between them, and a toast naming both. Returns the created nodes; free via _solo_clear_announce.
+func _solo_show_attack_announce(shooter: GameUnit, target: GameUnit, verb: String) -> Array:
+	var nodes: Array = []
+	if solo_controller == null:
+		return nodes
+	var from := solo_controller.unit_centre(shooter)
+	var to := solo_controller.unit_centre(target)
+	nodes.append(_solo_spawn_pulse_ring(from, Color(1.0, 0.75, 0.2)))
+	nodes.append(_solo_spawn_pulse_ring(to, Color(0.95, 0.25, 0.2)))
+	var line := MeshInstance3D.new()
+	line.mesh = ImmediateMesh.new()
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	mat.no_depth_test = true
+	line.material_override = mat
+	var im := line.mesh as ImmediateMesh
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	im.surface_set_color(Color(1.0, 0.75, 0.2))
+	im.surface_add_vertex(from + Vector3(0, 0.05, 0))
+	im.surface_set_color(Color(0.95, 0.25, 0.2))
+	im.surface_add_vertex(to + Vector3(0, 0.05, 0))
+	im.surface_end()
+	add_child(line)
+	nodes.append(line)
+	_solo_show_toast("%s %s %s" % [shooter.get_name(), verb, target.get_name()])
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s %s %s" % [shooter.get_name(), verb, target.get_name()], true)
+	return nodes
+
+
+## A flat unshaded ring that pulses (scale + alpha) until freed — the attention marker under a unit.
+func _solo_spawn_pulse_ring(at: Vector3, color: Color) -> MeshInstance3D:
+	var ring := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.05
+	torus.outer_radius = 0.06
+	ring.mesh = torus
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = color
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.no_depth_test = true
+	ring.material_override = mat
+	add_child(ring)
+	ring.global_position = at + Vector3(0, 0.01, 0)
+	var tw := ring.create_tween().set_loops()
+	tw.tween_property(ring, "scale", Vector3(1.25, 1.0, 1.25), 0.4).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(ring, "scale", Vector3.ONE, 0.4).set_trans(Tween.TRANS_SINE)
+	return ring
+
+
+func _solo_clear_announce(nodes: Array) -> void:
+	for n in nodes:
+		if n is Node and is_instance_valid(n):
+			(n as Node).queue_free()
+
+
+## Transient top-centre toast for AI-action attribution/outcomes (below the AI-turn banner).
+func _solo_show_toast(text: String) -> void:
+	if not is_instance_valid(_solo_toast):
+		_solo_toast = Label.new()
+		_solo_toast.name = "SoloActionToast"
+		_solo_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_solo_toast.add_theme_font_size_override("font_size", 16)
+		_solo_toast.add_theme_color_override("font_color", Color(0.95, 0.95, 0.9))
+		_solo_toast.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+		_solo_toast.add_theme_constant_override("outline_size", 4)
+		_solo_toast.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 40)
+		$UI.add_child(_solo_toast)
+	_solo_toast.text = text
+	_solo_toast.visible = true
+
+
+## OUTCOME phase: show the result summary as a toast + hold it readable, then hide.
+func _solo_show_outcome(text: String) -> void:
+	_solo_show_toast(text)
+	await _solo_pace_hold(SoloController.Pace.OUTCOME)
+	if is_instance_valid(_solo_toast):
+		_solo_toast.visible = false
+
+
+## EXECUTE phase for movement: replay the models along their REAL planner routes at a readable speed
+## (they were already placed at their finals + broadcast — this is a local visual replay), drawing a
+## fading trail ribbon per model so the route stays readable for a beat.
+func _solo_animate_move(move_paths: Array) -> void:
+	if move_paths.is_empty() or _solo_fast:
+		return   # fast-forward: keep the teleport
+	var longest := 0.0
+	var tweens: Array = []
+	for entry in move_paths:
+		var model := (entry as Dictionary).get("model") as ModelInstance
+		var path: Array = (entry as Dictionary).get("path", [])
+		if model == null or model.node == null or not is_instance_valid(model.node) or path.size() < 2:
+			continue
+		var node := model.node
+		var y := node.global_position.y
+		_solo_spawn_move_trail(path, y)
+		node.global_position = Vector3((path[0] as Vector3).x, y, (path[0] as Vector3).z)
+		var tw := node.create_tween()
+		var total := 0.0
+		for i in range(1, path.size()):
+			var a := path[i - 1] as Vector3
+			var b := path[i] as Vector3
+			var leg := Vector2(b.x - a.x, b.z - a.z).length()
+			if leg <= 0.0001:
+				continue
+			var dur := leg / SoloController.PACE_MOVE_SPEED_M_S
+			tw.tween_property(node, "global_position", Vector3(b.x, y, b.z), dur)
+			total += dur
+		longest = maxf(longest, total)
+		tweens.append(tw)
+	if longest > 0.0:
+		await get_tree().create_timer(longest).timeout
+	for t in tweens:
+		if (t as Tween).is_valid():
+			(t as Tween).kill()
+	# Snap every model onto its exact final (the tween end) so state and visuals agree to the millimetre.
+	for entry in move_paths:
+		var model := (entry as Dictionary).get("model") as ModelInstance
+		var path: Array = (entry as Dictionary).get("path", [])
+		if model != null and model.node != null and is_instance_valid(model.node) and not path.is_empty():
+			var fin := path.back() as Vector3
+			model.node.global_position = Vector3(fin.x, model.node.global_position.y, fin.z)
+
+
+## A thin unshaded ribbon along one model's route; fades out over PACE_TRAIL_FADE_S, then frees itself.
+func _solo_spawn_move_trail(path: Array, y: float) -> void:
+	if path.size() < 2:
+		return
+	var line := MeshInstance3D.new()
+	line.mesh = ImmediateMesh.new()
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(1.0, 0.85, 0.4, 0.7)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	line.material_override = mat
+	var im := line.mesh as ImmediateMesh
+	im.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
+	for wp in path:
+		im.surface_add_vertex(Vector3((wp as Vector3).x, y + 0.015, (wp as Vector3).z))
+	im.surface_end()
+	add_child(line)
+	var tw := line.create_tween()
+	tw.tween_property(mat, "albedo_color:a", 0.0, SoloController.PACE_TRAIL_FADE_S)
+	tw.tween_callback(line.queue_free)
+
+
+## Once-per-session battle-log note for every combat-relevant special rule the solo automation does NOT
+## model — the sim's unknown-rule visibility, surfaced in-game so gaps are apparent, not silent.
+const SOLO_MODELED_RULES: Array = ["AP", "Tough", "Deadly", "Takedown", "Relentless", "Blast", "Reliable",
+	"Regeneration", "Medical Training", "Bane", "Rending", "Lacerate", "Unstoppable", "Hero", "Fast", "Slow",
+	"Ambush", "Scout", "Strider", "Flying", "Fatigue"]
+
+
+func _solo_log_unmodeled_rules(unit: GameUnit) -> void:
+	if unit == null or battle_log == null:
+		return
+	var rules: Array = unit.get_special_rules().duplicate()
+	for w in _solo_all_weapons(unit):
+		if w is Object and (w as Object).get("special_rules") != null:
+			rules.append_array((w as Object).special_rules)
+	for r in rules:
+		var rule_name := str(r).strip_edges().get_slice("(", 0)
+		if rule_name.is_empty() or _solo_unmodeled_logged.has(rule_name):
+			continue
+		var modeled := false
+		for known in SOLO_MODELED_RULES:
+			if rule_name.begins_with(str(known)):
+				modeled = true
+				break
+		_solo_unmodeled_logged[rule_name] = true
+		if not modeled:
+			battle_log.log_event(BattleLog.Category.GENERAL, "Note: \"%s\" is not automated in solo — apply it manually" % rule_name, true)
+
+
 ## Resolve a landed AI charge (goal 001 P4): the AI strikes with its melee profiles (real tray dice,
 ## fatigued units hit only on 6s), the human saves per profile; then the human may STRIKE BACK (prompt,
 ## their attacks auto-roll, the AI saves in the tray); both sides that struck become Fatigued (OPR: first
@@ -1443,6 +1672,10 @@ func _run_ai_melee(report: Dictionary) -> void:
 	var human_caused := 0
 	var ai_regenable := 0
 	var ai_regen_proof := 0
+	var target_models_before: int = _solo_combined_alive(target)
+	# ANNOUNCE: who charges whom — highlights + line + toast, held before the first strike.
+	var announce := _solo_show_attack_announce(unit, target, "charges")
+	await _solo_pace_hold(SoloController.Pace.ANNOUNCE)
 	# — AI strikes (unit + attached heroes; only models within 2" strike; Deadly multiplies wounds) —
 	for grp in _solo_attack_groups(unit, 0.0, true, target):
 		var group := grp as Dictionary
@@ -1452,7 +1685,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 			if int(profile.get("attacks", 0)) <= 0:
 				continue
 			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "AI (%s)" % str(group.get("name", "?")))
-			var hits: int = _solo_hits(faces, to_hit, profile, 0.0)
+			var hits: int = _solo_hits(faces, to_hit, profile, 0.0, target)
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s strikes with %s — %d hit%s" % [
 					str(group.get("name", "?")), str(profile.get("name", "?")), hits, ("" if hits == 1 else "s")], true)
@@ -1466,6 +1699,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 			else:
 				ai_regenable += w
 	await _solo_land_wounds(target, ai_regenable, ai_regen_proof)
+	_solo_clear_announce(announce)
 	_solo_set_fatigued(unit)
 	# — Strike back (the human's choice; OPR lets the defender strike back — unit + attached heroes) —
 	if _solo_combined_alive(target) > 0:
@@ -1493,7 +1727,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 						if int(profile.get("attacks", 0)) <= 0:
 							continue
 						var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You")
-						var hits: int = _solo_hits(faces, to_hit, profile, 0.0)
+						var hits: int = _solo_hits(faces, to_hit, profile, 0.0, unit)
 						if hits <= 0:
 							continue
 						_solo_log_save_threshold(unit, unit.get_defense(), int(profile.get("ap", 0)))
@@ -1511,6 +1745,11 @@ func _run_ai_melee(report: Dictionary) -> void:
 		await _solo_morale_test(target, "You")
 	elif human_caused > ai_caused and _solo_combined_alive(unit) > 0:
 		await _solo_morale_test(unit, "AI (%s)" % unit.get_name())
+	# OUTCOME: one readable melee summary (toast + hold).
+	await _solo_show_outcome("Melee: %s deals %d — takes %d back — %s loses %d model%s" % [
+		unit.get_name(), ai_caused, human_caused, target.get_name(),
+		target_models_before - _solo_combined_alive(target),
+		("" if target_models_before - _solo_combined_alive(target) == 1 else "s")])
 
 
 ## One OPR morale test with a real tray die: >= Quality passes; fail → Shaken, at/below half → Routs
@@ -1800,6 +2039,8 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 	var human_regen_proof := 0
 	# Cover raises the AI's Defense against your shooting (majority-in-cover +1); melee ignores cover.
 	var defense: int = _solo_cover_defense(target, target.get_defense()) if not melee else target.get_defense()
+	_solo_log_unmodeled_rules(attacker)
+	_solo_log_unmodeled_rules(target)
 	# Per-model shooting transparency (GF v3.5.1 p.8): tell the player how many models actually fire.
 	if not melee and battle_log != null:
 		var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
@@ -1809,24 +2050,28 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 	# The target is passed for BOTH modes: ranged profiles scale by models with range+LOS, melee by 2" reach.
 	for grp in _solo_attack_groups(attacker, dist, melee, target):
 		var group := grp as Dictionary
-		var to_hit: int = int(group.get("quality", 4))
+		var base_to_hit: int = int(group.get("quality", 4))
 		if melee and bool(group.get("fatigued", false)):
-			to_hit = 6
+			base_to_hit = 6
 		for p in group.get("profiles", []):
 			var profile := p as Dictionary
 			if int(profile.get("attacks", 0)) <= 0:
 				continue
+			# Reliable (ranged): the weapon shoots at Quality 2+ regardless of the bearer's Quality.
+			var to_hit: int = base_to_hit if melee else AiCombatMath.reliable_quality(base_to_hit, bool(profile.get("reliable", false)))
 			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You")
-			var hits: int = _solo_hits(faces, to_hit, profile, (0.0 if melee else dist))
+			var hits: int = _solo_hits(faces, to_hit, profile, (0.0 if melee else dist), target)
 			if battle_log != null:
 				var verb := "strikes with" if melee else "fires"
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s %s %s at %s — %d hit%s" % [
 					str(group.get("name", "?")), verb, str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")])
 			if hits <= 0:
 				continue
-			_solo_log_save_threshold(target, defense, int(profile.get("ap", 0)))
-			var save_faces: Array = await _solo_tray_roll(hits, defense + int(profile.get("ap", 0)), "AI (%s)" % target.get_name())
-			var w: int = _solo_wounds(hits, save_faces, defense, profile, target)
+			# Blast ignores cover (GF v3.5.1) — its saves roll against the UNCOVERED Defense.
+			var save_def: int = target.get_defense() if (not melee and int(profile.get("blast", 0)) > 1) else defense
+			_solo_log_save_threshold(target, save_def, int(profile.get("ap", 0)))
+			var save_faces: Array = await _solo_tray_roll(hits, save_def + int(profile.get("ap", 0)), "AI (%s)" % target.get_name())
+			var w: int = _solo_wounds(hits, save_faces, save_def, profile, target)
 			human_caused += w
 			if _solo_ignores_regen(group.get("member"), profile):
 				human_regen_proof += w
@@ -1850,7 +2095,7 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 					if int(profile.get("attacks", 0)) <= 0:
 						continue
 					var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "AI (%s)" % str(group.get("name", "?")))
-					var hits: int = _solo_hits(faces, to_hit, profile, 0.0)
+					var hits: int = _solo_hits(faces, to_hit, profile, 0.0, attacker)
 					if hits <= 0:
 						continue
 					var save_faces: Array = await _solo_prompt_saves(target, attacker, str(profile.get("name", "?")), hits, attacker.get_defense(), int(profile.get("ap", 0)))
@@ -5372,6 +5617,14 @@ func _refresh_solo_panel() -> void:
 	label.mouse_filter = Control.MOUSE_FILTER_STOP   # labels ignore the mouse by default — needed for the tooltip
 	label.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
 	solo_panel_box.add_child(label)
+	var fast_cb := CheckButton.new()
+	fast_cb.text = "Fast AI (short pauses)"
+	fast_cb.tooltip_text = "Skips the move animation and shrinks the announce/outcome pauses of AI actions."
+	fast_cb.button_pressed = _solo_fast
+	fast_cb.focus_mode = Control.FOCUS_NONE
+	fast_cb.add_theme_font_size_override("font_size", 12)
+	fast_cb.toggled.connect(func(pressed: bool) -> void: _solo_fast = pressed)
+	solo_panel_box.add_child(fast_cb)
 	for pid in pids:
 		var army = opr_army_manager.armies[pid]
 		var cb := CheckButton.new()

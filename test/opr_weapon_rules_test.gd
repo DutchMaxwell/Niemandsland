@@ -62,3 +62,13 @@ func test_save_threshold_math_and_the_6_always_succeeds_floor() -> void:
 	# so a save can never become impossible.
 	assert_bool(DiceRules.is_success(6, 7, 0)).is_true()
 	assert_bool(DiceRules.is_success(5, 7, 0)).is_false()
+
+
+func test_deadly_label_only_rating_reaches_the_profile() -> void:
+	# The maintainer's "Deadly not multiplying" report: a label-only Deadly(3) degraded to a bare
+	# "Deadly" → multiplier 0. Same parser fix as AP — pin it end-to-end into the AiShooting profile.
+	var c := _client()
+	var w: OPRApiClient.OPRWeapon = c._parse_tts_weapon(
+		{"name": "Fist", "range": 12, "attacks": 2, "count": 1, "specialRules": [{"name": "Deadly", "label": "Deadly(3)"}]})
+	var prof := AiShooting.profiles_in_range([w], 12.0)[0] as Dictionary
+	assert_int(int(prof["deadly"])).is_equal(3)

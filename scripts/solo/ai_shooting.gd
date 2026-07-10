@@ -46,6 +46,8 @@ static func _profile(w: Variant, attacks: int, range_in: int) -> Dictionary:
 		"ap": _ap_of(w),
 		"deadly": _rating_of(w, "Deadly"),
 		"relentless": _has_rule(w, "Relentless"),
+		"blast": _rating_of(w, "Blast"),
+		"reliable": _has_rule(w, "Reliable"),
 		"range": range_in,
 		"rules": _rules_of(w),
 	}

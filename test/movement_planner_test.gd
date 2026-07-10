@@ -148,3 +148,21 @@ func _u_pocket() -> Array:
 		[Vector2(18, 20), Vector2(18, 30)],   # left wall
 		[Vector2(30, 20), Vector2(30, 30)],   # right wall
 	]
+
+
+func test_trails_record_the_route_without_changing_the_plan() -> void:
+	# The presentation layer's trail capture is pure observation: same walls, same delta — the planned
+	# positions with and without a trails out-array are identical, and each trail runs start → final.
+	var walls := [[Vector2(10.0, 6.0), Vector2(14.0, 6.0)]]
+	var pos := [Vector2(11.0, 2.0), Vector2(12.5, 2.0)]
+	var delta := Vector2(0, 8.0)
+	var plain := MovementPlanner.plan_unit_step(pos, delta, walls)
+	var trails: Array = []
+	var traced := MovementPlanner.plan_unit_step(pos, delta, walls, {}, false, 48.0, trails)
+	assert_array(traced).is_equal(plain)
+	assert_int(trails.size()).is_equal(2)
+	for i in range(2):
+		var t := trails[i] as Array
+		assert_bool(t.size() >= 2).is_true()
+		assert_that(t.front()).is_equal(pos[i])
+		assert_float((t.back() as Vector2).distance_to(traced[i])).is_less(0.001)

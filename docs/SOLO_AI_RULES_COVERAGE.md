@@ -39,8 +39,8 @@ Mount was available on 2026-07-09; every rule below was read from the PDFs/army 
 | **Relentless** (>9" shooting: unmodified 6 → +1 hit) | 🆕 | `AiCombatMath.relentless_bonus_hits` in `_resolve_volley` |
 | **Takedown** (snipe a model as a unit of [1]) | ⏳ | targeting overlay done (§B); the *damage* facet (resolve one model as unit-of-1, ignore other models' LOS/cover) needs per-model wound tracking — the pooled sim assigns to the unit. |
 | **Surge / Furious / Rending** (unmodified 6-to-hit bonuses) | ⏳ | add a per-face bonus like Relentless: Surge = +1 hit any range; Furious = +1 hit on charge; Rending = AP(+4) on 6s. Hook: `_resolve_volley`/`_strike` after `count_hits`. |
-| **Reliable** (weapon shoots at Quality 2+) | ⏳ | clamp the to-hit target to `min(quality, 2)` per profile in `_resolve_volley`. Present on the test army (Support Brothers HMG). |
-| **Blast(X)** (each hit ×X up to models in target) | ⏳ | after hits, multiply by `min(X, alive_models(target))`; ignores cover. Present on the test army (HMG). |
+| **Reliable** (weapon shoots at Quality 2+) | ⏳ sim / ✅ **real game** | `AiCombatMath.reliable_quality` — wired into both real shooting directions (2026-07-10 game-feel wave). Sim wiring: clamp per profile in `_resolve_volley` (still open). |
+| **Blast(X)** (each hit ×X up to models in target) | ⏳ sim / ✅ **real game** | `AiCombatMath.blast_hits` (rulebook example pinned by test) + cover-ignore per profile — both real directions, with a visible battle-log line. Sim wiring still open. |
 | **Impact(X)** (X auto-ish hits on charge) | ⏳ | roll X dice on charge, 2+ = a hit, before the normal strike (skip if fatigued). |
 | **Counter** (strikes first when charged; −Impact) | ⏳ | reorder `_resolve_melee` so a Counter defender strikes before the charger. |
 | **Fearless** (re-roll a failed morale on 4+) | ⏳ | in `_morale`, on a fail roll one die, 4+ = pass. Present on the whole test army. |
@@ -93,6 +93,13 @@ Runtime unknown-rule log from the 1000-game mirror (game 1) after this chunk:
 Modelled for this army: **AP** ✅, **Tough** ✅, **Relentless** 🆕 (HMG), **Medical Training → Regeneration
 Aura** 🆕 (the medic). The four rules above are the honest, visible gaps for the next chunk — none of them
 break mirror fairness (both sides field them), but they change absolute lethality.
+
+## Real-game visibility of the gaps
+
+The REAL game now mirrors the sim's unknown-rule logging (2026-07-10): the first time a unit acts in solo
+combat, every combat-relevant special rule the automation does not model is noted ONCE per session in the
+battle log ("Note: \"Fearless\" is not automated in solo — apply it manually"). The modeled list lives in
+`main.gd SOLO_MODELED_RULES`.
 
 ## Fairness (mandatory re-run — combat change)
 

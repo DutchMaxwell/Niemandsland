@@ -75,6 +75,23 @@ static func relentless_bonus_hits(faces: Array, dist_in: float) -> int:
 	return sixes
 
 
+## Blast(X) hits (GF Advanced Rules v3.5.1: "Ignores cover, and after resolving other special rules, each
+## hit is multiplied by X, where X is up to as many hits as models in the target unit." — the rulebook's
+## example: 2 hits with Blast(3) vs 2 models → each hit ×2 → 4 hits). The multiplier is min(X, target
+## models); the cover-ignore facet is the caller's side (it modifies the save target, not the hits).
+static func blast_hits(hit_count: int, blast_x: int, target_models: int) -> int:
+	if hit_count <= 0:
+		return 0
+	if blast_x <= 1:
+		return hit_count
+	return hit_count * clampi(blast_x, 1, maxi(target_models, 1))
+
+
+## Reliable to-hit quality (GF Advanced Rules v3.5.1: the weapon "shoots at Quality 2+").
+static func reliable_quality(quality: int, is_reliable: bool) -> int:
+	return mini(quality, 2) if is_reliable else quality
+
+
 ## Damage multiplier for a Deadly(X) weapon against a target (GF Advanced Rules v3.5.1, p.13 + the "Deadly
 ## Weapons" clarification, p.10): each unsaved wound is multiplied by X and assigned to one model, but a
 ## Deadly weapon "may only deal up to as many wounds as the Tough value of the majority of models in the

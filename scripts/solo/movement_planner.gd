@@ -188,8 +188,13 @@ static func rigid_blocked(model_pos: Array, delta: Vector2, walls: Array) -> boo
 ##   grid          : TerrainRules typed 3" cells (for the A* rescue; CONTAINER = impassable)
 ##   allow_contact : Charge — exempt from spacing (handled by SoloSim; here it only skips coherency easing)
 ##   board_in      : board extent in inches (A* bounds + off-board rejection)
+##   trails        : OPTIONAL out-array — when provided it is filled with one Array[Vector2] of substep
+##                   waypoints per model (start … final), so the game can ANIMATE each model along its
+##                   real steering route (goal 003 presentation layer). Pure observation: passing it
+##                   changes NOTHING about the planned positions (the sim never passes it, so the
+##                   mirror-fairness proof is untouched).
 static func plan_unit_step(model_pos: Array, delta: Vector2, walls: Array, grid: Dictionary = {},
-		allow_contact: bool = false, board_in: float = 48.0) -> Array:
+		allow_contact: bool = false, board_in: float = 48.0, trails: Array = []) -> Array:
 	var allowance := delta.length()
 	if allowance < EPS or model_pos.is_empty():
 		return model_pos.duplicate()
@@ -198,12 +203,13 @@ static func plan_unit_step(model_pos: Array, delta: Vector2, walls: Array, grid:
 		var out: Array = []
 		for m in model_pos:
 			out.append((m as Vector2) + delta)
+		_record_trail_pair(trails, model_pos, out)
 		return out
 	# Steer each model to its rigid target, sliding around walls.
 	var targets: Array = []
 	for m in model_pos:
 		targets.append((m as Vector2) + delta)
-	var result := _steer(model_pos, targets, allowance, walls, board_in)
+	var result := _steer(model_pos, targets, allowance, walls, board_in, trails)
 	# Boxed in? The anchor barely progressed and the direct route is walled → A* corridor rescue.
 	var anchor := _centroid(model_pos)
 	var goal := anchor + delta
@@ -222,8 +228,30 @@ static func plan_unit_step(model_pos: Array, delta: Vector2, walls: Array, grid:
 			var wtargets: Array = []
 			for m in model_pos:
 				wtargets.append((m as Vector2) + wdelta)
-			result = _steer(model_pos, wtargets, allowance, walls, board_in)
-	return _enforce_coherency(result, walls, board_in)
+			trails.clear()   # the rescue replaces the stuck first attempt — its trail too
+			result = _steer(model_pos, wtargets, allowance, walls, board_in, trails)
+	var eased := _enforce_coherency(result, walls, board_in)
+	_append_trail_finals(trails, eased)
+	return eased
+
+
+## Trail helper: the fast rigid slide is a single straight leg per model.
+static func _record_trail_pair(trails: Array, from_pos: Array, to_pos: Array) -> void:
+	if trails == null:
+		return
+	trails.clear()
+	for i in range(from_pos.size()):
+		trails.append([from_pos[i], to_pos[i]])
+
+
+## Trail helper: append the post-coherency final position when it differs from the last waypoint.
+static func _append_trail_finals(trails: Array, finals: Array) -> void:
+	if trails == null or trails.is_empty():
+		return
+	for i in range(mini(trails.size(), finals.size())):
+		var t := trails[i] as Array
+		if t.is_empty() or (t.back() as Vector2).distance_to(finals[i]) > EPS:
+			t.append(finals[i])
 
 
 # === Steering internals =====================================================================
@@ -262,12 +290,19 @@ static func _advance_model(p: Vector2, target: Vector2, step_cap: float, walls: 
 
 
 ## Advance every model toward its target in fixed substeps until each spends its allowance. Deterministic.
-static func _steer(model_pos: Array, targets: Array, allowance: float, walls: Array, board_in: float) -> Array:
+## `trails` (optional out): one waypoint list per model, recording each substep position — observation
+## only, never feeds back into the steering.
+static func _steer(model_pos: Array, targets: Array, allowance: float, walls: Array, board_in: float,
+		trails: Array = []) -> Array:
 	var n := model_pos.size()
 	var result := model_pos.duplicate()
 	var budget: Array = []
 	budget.resize(n)
 	budget.fill(allowance)
+	if trails != null:
+		trails.clear()
+		for i in range(n):
+			trails.append([model_pos[i]])
 	var substeps := maxi(1, int(ceil(allowance / STEP_IN)))
 	for _it in range(substeps):
 		var moved_any := false
@@ -280,6 +315,8 @@ static func _steer(model_pos: Array, targets: Array, allowance: float, walls: Ar
 				result[i] = np
 				budget[i] = float(budget[i]) - moved
 				moved_any = true
+				if trails != null and i < trails.size():
+					(trails[i] as Array).append(np)
 		if not moved_any:
 			break
 	return result

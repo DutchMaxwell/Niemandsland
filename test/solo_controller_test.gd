@@ -420,3 +420,55 @@ func test_apply_wounds_spills_back_rank_first_and_returns_leftover() -> void:
 	assert_int(unit.get_alive_count()).is_equal(0)
 	assert_int(dead.size()).is_equal(3)
 	assert_object(dead[0]).is_equal(unit.models[2])   # back rank removed first
+
+
+# === AI-action pacing machine (goal 003 game-feel — pure) ===
+
+func test_pace_phases_run_in_order_and_end() -> void:
+	var S := SoloController
+	assert_int(S.pace_next(S.Pace.ANNOUNCE)).is_equal(S.Pace.EXECUTE)
+	assert_int(S.pace_next(S.Pace.EXECUTE)).is_equal(S.Pace.RESOLVE)
+	assert_int(S.pace_next(S.Pace.RESOLVE)).is_equal(S.Pace.OUTCOME)
+	assert_int(S.pace_next(S.Pace.OUTCOME)).is_equal(S.Pace.DONE)
+	assert_int(S.pace_next(S.Pace.DONE)).is_equal(S.Pace.DONE)
+
+
+func test_pace_holds_are_readable_and_fast_forward_shrinks_them() -> void:
+	var S := SoloController
+	# ANNOUNCE and OUTCOME are fixed readable holds; EXECUTE is event-gated (animation/dice) → no hold;
+	# RESOLVE is the post-settle buffer on top of the tray's own physical-rest gate.
+	assert_float(S.pace_seconds(S.Pace.ANNOUNCE, false)).is_equal(S.PACE_ANNOUNCE_S)
+	assert_float(S.pace_seconds(S.Pace.OUTCOME, false)).is_equal(S.PACE_OUTCOME_S)
+	assert_float(S.pace_seconds(S.Pace.RESOLVE, false)).is_equal(S.PACE_DICE_SETTLE_BUFFER_S)
+	assert_float(S.pace_seconds(S.Pace.EXECUTE, false)).is_equal(0.0)
+	assert_float(S.pace_seconds(S.Pace.ANNOUNCE, true)).is_equal_approx(S.PACE_ANNOUNCE_S * S.PACE_FAST_SCALE, 0.0001)
+	assert_float(S.pace_seconds(S.Pace.OUTCOME, true)).is_less(S.pace_seconds(S.Pace.OUTCOME, false))
+
+
+# === Blast(X) + Reliable (GF v3.5.1) ===
+
+func test_blast_hits_match_the_rulebook_example() -> void:
+	# "2 Attacks and Blast(3) scores two hits against a unit with 2 models. Each hit is multiplied by 2,
+	# so the target takes a total of 4 hits."
+	assert_int(AiCombatMath.blast_hits(2, 3, 2)).is_equal(4)
+	assert_int(AiCombatMath.blast_hits(2, 3, 10)).is_equal(6)   # full ×3 against a big unit
+	assert_int(AiCombatMath.blast_hits(2, 3, 1)).is_equal(2)    # capped at 1 model → ×1
+	assert_int(AiCombatMath.blast_hits(0, 3, 5)).is_equal(0)
+	assert_int(AiCombatMath.blast_hits(4, 0, 5)).is_equal(4)    # no Blast → unchanged
+
+
+func test_reliable_shoots_at_quality_2() -> void:
+	assert_int(AiCombatMath.reliable_quality(4, true)).is_equal(2)
+	assert_int(AiCombatMath.reliable_quality(4, false)).is_equal(4)
+	assert_int(AiCombatMath.reliable_quality(2, true)).is_equal(2)
+
+
+func test_shooting_profile_threads_blast_reliable_and_deadly() -> void:
+	# The real-game adapter reads these keys off the AiShooting profile — pin them at the source.
+	var w := {"name": "Heavy Flamer", "range_value": 12, "attacks": 1, "count": 1,
+		"special_rules": ["AP(1)", "Blast(3)", "Reliable", "Deadly(3)"]}
+	var prof := AiShooting.profiles_in_range([w], 12.0)[0] as Dictionary
+	assert_int(int(prof["blast"])).is_equal(3)
+	assert_bool(bool(prof["reliable"])).is_true()
+	assert_int(int(prof["deadly"])).is_equal(3)
+	assert_int(int(prof["ap"])).is_equal(1)
