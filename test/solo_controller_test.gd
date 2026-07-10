@@ -300,3 +300,123 @@ func test_targeting_route_right_click_and_escape_cancel() -> void:
 
 func test_targeting_route_mouse_motion_tracks_the_los_line() -> void:
 	assert_int(SoloController.targeting_route(InputEventMouseMotion.new(), false)).is_equal(SoloController.TargetingRoute.TRACK)
+
+
+# === Attached-hero unity (GF v3.5.1 "Hero": a joined hero deploys/activates/moves WITH its host) ===
+
+func test_attached_hero_is_never_its_own_activation() -> void:
+	# The AI's D6 pick moved a joined hero SOLO out of his unit (maintainer field test) — an attached
+	# hero must not be eligible on its own; activating the HOST covers both (GameUnit.activate cascades).
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	var host := _unit(2, [Vector3(0.5, 0, 0), Vector3(0.53, 0, 0)])
+	host.unit_id = "host"
+	var hero := _unit(2, [Vector3(0.56, 0, 0)])
+	hero.unit_id = "hero"
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, host.unit_id: host, hero.unit_id: hero}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var eligible := solo.eligible_ai_units()
+	assert_int(eligible.size()).is_equal(1)          # the host only — the hero is not a separate activation
+	assert_object(eligible[0]).is_equal(host)
+	assert_object(solo.activate_next_ai_unit()).is_equal(host)
+	assert_bool(hero.is_activated).is_true()          # activated WITH the host (cascade)
+	assert_object(solo.activate_next_ai_unit()).is_null()   # round over — no phantom hero activation
+
+
+func test_host_move_carries_the_attached_hero() -> void:
+	# One unit, one move: the hero's model must shift with the host's models (movement cohesion).
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	var host := _unit(2, [Vector3(0.5, 0, 0)])
+	host.unit_id = "host"
+	var hero := _unit(2, [Vector3(0.53, 0, 0)])
+	hero.unit_id = "hero"
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, host.unit_id: host, hero.unit_id: hero}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var hero_before: Vector3 = hero.models[0].node.global_position
+	assert_object(solo.activate_next_ai_unit()).is_equal(host)   # weaponless MELEE → rushes the enemy
+	var hero_delta: float = hero.models[0].node.global_position.distance_to(hero_before)
+	assert_float(hero_delta).is_greater(0.1)                     # the hero moved with the block (~12" rush)
+	# The hero stays in formation next to the host (rigid slide preserves the offset).
+	assert_float(hero.models[0].node.global_position.distance_to(host.models[0].node.global_position)) \
+		.is_equal_approx(0.03, 0.005)
+
+
+# === Per-model line of sight (GF v3.5.1 p.8 "Who Can Shoot") ===
+
+func test_sighted_models_gates_per_model_behind_a_blocker() -> void:
+	# A CONTAINER strip blocks the southern half of the shooting line: only the 2 clear models fire.
+	var grid := {}
+	for x in range(0, 8):
+		grid[Vector2i(x, 1)] = TerrainRules.TerrainType.CONTAINER   # wall row at y in [3,6)"
+	# Blocker only spans x in [0,24)": shooters at x=26,29 see PAST its end, x=2,5 are blocked.
+	for x in range(8, 16):
+		grid.erase(Vector2i(x, 1))
+	var los := func(a: Vector3, b: Vector3) -> bool:
+		return TerrainRules.has_line_of_sight(grid,
+			Vector2(a.x, a.z) / 0.0254, Vector2(b.x, b.z) / 0.0254, 1, 1)
+	var m := 0.0254
+	var shooters := [Vector3(2 * m, 0, 0), Vector3(5 * m, 0, 0), Vector3(26 * m, 0, 0), Vector3(29 * m, 0, 0)]
+	var targets := [Vector3(2 * m, 0, 12 * m), Vector3(26 * m, 0, 12 * m)]
+	assert_int(SoloController.sighted_models(shooters, targets, 24.0 * m, los)).is_equal(2)
+	# Range gates too: at 6" nothing reaches the 12"-away targets even with clear LOS.
+	assert_int(SoloController.sighted_models(shooters, targets, 6.0 * m, los)).is_equal(0)
+	# Open field: everyone in range fires.
+	assert_int(SoloController.sighted_models(shooters, targets, 24.0 * m,
+		func(_a: Vector3, _b: Vector3) -> bool: return true)).is_equal(4)
+
+
+# === Auto-tail alternation state machine (goal 003 P2 — the maintainer's "how do I proceed?" gap) ===
+
+func test_alternation_next_replies_then_tails_then_ends() -> void:
+	var S := SoloController
+	assert_int(S.alternation_next(1, 3, 3)).is_equal(S.AltStep.REPLY)      # human just activated → one answer
+	assert_int(S.alternation_next(0, 3, 3)).is_equal(S.AltStep.WAIT)       # balanced → wait for the human
+	assert_int(S.alternation_next(0, 0, 3)).is_equal(S.AltStep.TAIL)       # human exhausted → AI plays on
+	assert_int(S.alternation_next(1, 0, 3)).is_equal(S.AltStep.REPLY)      # owed reply resolves before the tail
+	assert_int(S.alternation_next(0, 2, 0)).is_equal(S.AltStep.WAIT)       # AI exhausted → human finishes alone
+	assert_int(S.alternation_next(0, 0, 0)).is_equal(S.AltStep.END_ROUND)  # both done → round over
+	assert_int(S.alternation_next(3, 0, 0)).is_equal(S.AltStep.END_ROUND)  # stale replies never outlive the AI side
+
+
+# === Wound application core (maintainer field test: Tough hero soaked wounds with no visible tick) ===
+
+func test_apply_wounds_decrements_tough_and_reports_seams() -> void:
+	var unit := _unit(2, [Vector3.ZERO])
+	unit.models[0].wounds_max = 3
+	unit.models[0].wounds_current = 3   # a Tough(3) hero
+	var changed: Array = []
+	var died: Array = []
+	var on_changed := func(m: ModelInstance) -> void: changed.append(m)
+	var on_died := func(m: ModelInstance) -> void: died.append(m)
+	# 2 wounds: the hero soaks them, stays alive, and the CHANGED seam fires (wound token + broadcast).
+	assert_int(SoloController.apply_wounds_to_models(unit, 2, on_changed, on_died)).is_equal(0)
+	assert_int(unit.models[0].wounds_current).is_equal(1)
+	assert_bool(unit.models[0].is_alive).is_true()
+	assert_int(changed.size()).is_equal(1)
+	assert_int(died.size()).is_equal(0)
+	# 1 more wound kills him: the DIED seam fires instead.
+	assert_int(SoloController.apply_wounds_to_models(unit, 1, on_changed, on_died)).is_equal(0)
+	assert_bool(unit.models[0].is_alive).is_false()
+	assert_int(died.size()).is_equal(1)
+	assert_int(changed.size()).is_equal(1)
+
+
+func test_apply_wounds_spills_back_rank_first_and_returns_leftover() -> void:
+	var unit := _unit(2, [Vector3.ZERO, Vector3(0.03, 0, 0), Vector3(0.06, 0, 0)])   # 3 one-wound models
+	var dead: Array = []
+	var on_died := func(m: ModelInstance) -> void: dead.append(m)
+	# 5 wounds into 3 models: all die back-rank-first (index 2 → 0) and 2 wounds spill to the caller
+	# (attached-hero spill — GF v3.5.1 p.9 casualty removal is the defender's order choice).
+	assert_int(SoloController.apply_wounds_to_models(unit, 5, Callable(), on_died)).is_equal(2)
+	assert_int(unit.get_alive_count()).is_equal(0)
+	assert_int(dead.size()).is_equal(3)
+	assert_object(dead[0]).is_equal(unit.models[2])   # back rank removed first

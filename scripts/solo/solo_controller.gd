@@ -84,9 +84,16 @@ func slot_of(unit) -> int:
 	return int((unit as GameUnit).unit_properties.get("player_id", 0)) if unit != null else 0
 
 
+## Eligible = alive, not yet activated, and NOT an attached hero: a joined hero deploys, activates and
+## moves WITH its host unit (GF Advanced Rules v3.5.1 "Hero": "may deploy as part of one multi-model
+## unit" — one unit, one activation; GameUnit.activate() already cascades to attached heroes). Letting
+## the hero count as its own activation made the AI's D6 pick move him SOLO out of his unit
+## (maintainer field-test bug) and made the round-over check wait for a phantom second activation.
 func is_eligible(unit) -> bool:
 	var u := unit as GameUnit
-	return u != null and not u.is_activated and not u.is_destroyed()
+	if u == null or u.is_activated or u.is_destroyed():
+		return false
+	return not (u.has_method("is_attached") and u.is_attached())
 
 
 func mark_activated(unit) -> void:
@@ -197,6 +204,8 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 		var hu := h as GameUnit
 		if hu == null or hu.is_destroyed():
 			continue
+		if hu.has_method("is_attached") and hu.is_attached():
+			continue   # a joined hero is PART of its host unit — you target the unit, never the hero alone
 		var d := MoveIntent.distance_inches(from, unit_centre(hu))
 		if d < best_any_d:
 			best_any_d = d
@@ -300,9 +309,12 @@ func _move_away(unit: GameUnit, from_world: Vector3, inches: float) -> int:
 
 
 ## Shared move executor: Difficult-halve, rigid clamp, wall-aware planning (loose units), apply + broadcast,
-## and count Dangerous crossings. Returns that Dangerous-crossing model count.
+## and count Dangerous crossings. Returns that Dangerous-crossing model count. Moves the host's models AND
+## its attached heroes' as ONE formation (a joined hero moves WITH his unit — GF v3.5.1 "Hero"; leaving the
+## hero behind was the maintainer's hero-moved-solo finding, mirrored: the host moved solo too).
 func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: bool) -> int:
-	var positions := alive_positions(unit)
+	var models := _moving_models(unit)
+	var positions := _positions_of(models)
 	if positions.is_empty():
 		return 0
 	var centre := unit_centre(unit)
@@ -316,8 +328,30 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		return 0
 	var new_positions := _plan_positions(unit, positions, delta, allow_contact)
 	var dang := _count_dangerous(positions, new_positions)
-	_apply_model_positions(unit, new_positions)
+	_apply_model_positions(models, new_positions)
 	return dang
+
+
+## The models an AI move displaces: the unit's own alive models PLUS its attached heroes' (one unit,
+## one move — coherency). Filtered to models with a live node so the list aligns 1:1 with the
+## position arrays the planner produces (no index drift on a freed node).
+func _moving_models(unit: GameUnit) -> Array:
+	var raw: Array = unit.get_alive_models_with_attached() if unit.has_method("get_alive_models_with_attached") \
+		else unit.get_alive_models()
+	var out: Array = []
+	for m in raw:
+		var node := (m as ModelInstance).node
+		if node != null and is_instance_valid(node):
+			out.append(m)
+	return out
+
+
+## World positions of an already node-filtered ModelInstance list (1:1, order preserved).
+func _positions_of(models: Array) -> Array:
+	var out: Array = []
+	for m in models:
+		out.append(((m as ModelInstance).node as Node3D).global_position)
+	return out
 
 
 ## The unit's OPR weapons (empty when it has no OPR source — counts as melee-only).
@@ -334,11 +368,10 @@ func _has_los(unit: GameUnit, target_unit: GameUnit) -> bool:
 	return bool(los_checker.call(unit_centre(unit), unit_centre(target_unit)))
 
 
-## Set each alive model node to its planned world position (Y preserved) + broadcast the batch. The planned
-## array is aligned to get_alive_models() order (same order alive_positions() produced it in).
-func _apply_model_positions(unit: GameUnit, new_positions: Array) -> void:
+## Set each model node to its planned world position (Y preserved) + broadcast the batch. `models` is the
+## node-filtered list the positions were planned from (_moving_models), so indices align 1:1.
+func _apply_model_positions(models: Array, new_positions: Array) -> void:
 	var batch: Array = []
-	var models := unit.get_alive_models()
 	for i in range(mini(models.size(), new_positions.size())):
 		var node := (models[i] as ModelInstance).node
 		if node == null or not is_instance_valid(node):
@@ -517,6 +550,79 @@ static func effective_attacks(base_attacks: int, alive: int, max_models: int) ->
 	if max_models <= 0:
 		return base_attacks
 	return maxi(0, int(round(float(base_attacks) * float(alive) / float(max_models))))
+
+
+## OPR "Who Can Shoot" (GF Advanced Rules v3.5.1 p.8): "All models in a unit with line of sight to the
+## target, and that have a weapon that is within range of it, may fire at it." — shooting is PER MODEL:
+## count the shooter models that have BOTH range and LOS to at least one target model (the rulebook's
+## Dynasty Warriors example: 3 of 5 in range+LOS → 3 attacks). `los` is injected (terrain_overlay in the
+## game, a TerrainRules grid in tests) so this stays pure. Nearest-target-model first + early-out keeps
+## the check cheap; range gates before the LOS call (the expensive half).
+static func sighted_models(shooter_positions: Array, target_positions: Array, range_m: float, los: Callable) -> int:
+	if shooter_positions.is_empty() or target_positions.is_empty():
+		return 0
+	var range2 := range_m * range_m
+	var n := 0
+	for s in shooter_positions:
+		var sp := s as Vector3
+		# Nearest target model first: it is the most likely to be visible AND the cheapest to confirm.
+		var order: Array = target_positions.duplicate()
+		order.sort_custom(func(a, b) -> bool:
+			return sp.distance_squared_to(a) < sp.distance_squared_to(b))
+		for t in order:
+			var tp := t as Vector3
+			if Vector2(tp.x - sp.x, tp.z - sp.z).length_squared() > range2:
+				break   # sorted by distance — everything after is farther still
+			if not los.is_valid() or bool(los.call(sp, tp)):
+				n += 1
+				break
+	return n
+
+
+## The alternating-activation pump's next step (pure state machine — goal 003 P2 + the auto-tail fix).
+## OPR alternation: each human activation is answered by ONE AI activation (REPLY, queued in `pending`);
+## once the human side is exhausted the AI plays out its remaining units AUTOMATICALLY (TAIL — the rule's
+## "the other side keeps activating"; the maintainer previously had to press F11); both sides exhausted
+## ends the round (END_ROUND); otherwise the AI waits for the human (WAIT).
+enum AltStep { WAIT, REPLY, TAIL, END_ROUND }
+
+
+static func alternation_next(pending_replies: int, human_eligible: int, ai_eligible: int) -> AltStep:
+	if ai_eligible <= 0:
+		return AltStep.END_ROUND if human_eligible <= 0 else AltStep.WAIT
+	if pending_replies > 0:
+		return AltStep.REPLY
+	if human_eligible <= 0:
+		return AltStep.TAIL
+	return AltStep.WAIT
+
+
+## Apply `wounds` whole-wounds to a unit's models back-rank-first (Tough models absorb damage before
+## dying — GF v3.5.1 p.9 casualty removal, defender-optimal). The TESTABLE core of the solo damage
+## application (maintainer field-test: an AI Tough hero soaked wounds with no visible tick — main's seams
+## do the marker/broadcast/park work through the callbacks):
+##   on_changed : Callable(model)         — wounds_current changed and the model is STILL ALIVE
+##   on_died    : Callable(model)         — the model just died
+## Returns the wounds left over (spill into an attached hero is the caller's job).
+static func apply_wounds_to_models(unit: GameUnit, wounds: int, on_changed: Callable, on_died: Callable) -> int:
+	var remaining := wounds
+	for i in range(unit.models.size() - 1, -1, -1):
+		if remaining <= 0:
+			break
+		var m: ModelInstance = unit.models[i]
+		if m == null or not m.is_alive:
+			continue
+		var touched := false
+		var died := false
+		while remaining > 0 and m.is_alive:
+			died = m.apply_damage(1)
+			touched = true
+			remaining -= 1
+		if died and on_died.is_valid():
+			on_died.call(m)
+		elif touched and on_changed.is_valid():
+			on_changed.call(m)
+	return remaining
 
 
 ## What the P8 targeting mode does with one input event (pure, testable — the event→action resolution).

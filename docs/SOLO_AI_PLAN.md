@@ -199,6 +199,16 @@ seams). Wired:
   sim's point-fold spacing does not map cleanly to real base geometry); the in-game shooting/melee dice + human
   saves are interactive (the visual tray + save prompts), so the headless field test resolves the identical
   modules on a seeded RNG rather than the live tray.
+- **Field-test hardening wave (2026-07-10, six maintainer findings)**: AP(X) survives every Army Forge rule
+  shape (label-only ratings + int-rating crash in the file importer — `_rule_to_string`), and every save site
+  logs the MODIFIED threshold; attached heroes are one unit with their host (never a separate activation,
+  move together, targeted through the host); **per-model shooting** (p.8 "Who Can Shoot"): attacks scale by
+  the models with range + LOS both directions, the targeting line shows "7/10 sight" (throttled), valid-target
+  = any model sighted; the OPR **auto-tail** plays the AI's remaining activations automatically once the human
+  side is exhausted (paced, with a status banner; pure `alternation_next` machine); the human defender's
+  **Regeneration** (5+, AP-independent; bypassed by Bane/Rending/Lacerate/Unstoppable per the PDF, detected
+  down to model-level item rules) is rolled visibly; and solo wounds tick the REAL wound tokens + MP broadcast
+  via the manual-play seams (`apply_wounds_to_models` core, unit-tested).
 
 ## P2 — the in-game auto-game (shipped): alternating activation, auto-seize, scoring
 

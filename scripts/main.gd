@@ -235,11 +235,15 @@ var solo_ai_slots: Dictionary = {}           # player_id -> true: armies the Sol
 var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-army AI toggles)
 var _solo_target_mode: Dictionary = {}       # {unit, melee} while the player picks an attack target (P8)
 var _solo_los_line: MeshInstance3D = null    # live line to the hovered target: green = clear, red = blocked
+var _solo_los_label: Label3D = null          # floating "7/10 sight" count on the targeting line (per-model LOS)
+var _solo_los_cache: Dictionary = {}         # {target_id, count, at} — throttles the per-model LOS recompute
 # Solo P2 auto-game state (goal 003 P2): alternation queue + match end.
 const SOLO_GAME_ROUNDS := 4                  # OPR standard match length (rounds)
+const SOLO_AI_TAIL_DELAY_S := 1.2            # readable pause between the AI's unprompted tail activations
 var _solo_pending_replies: int = 0           # human activations still owed one AI answer (alternation)
 var _solo_ai_busy: bool = false              # an AI activation chain is running (guards re-entry)
 var _solo_game_finished: bool = false        # summary shown after SOLO_GAME_ROUNDS — no further auto-advance
+var _solo_ai_banner: Label = null            # non-blocking "AI is taking its turn…" banner during the tail
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
@@ -709,27 +713,68 @@ func _solo_activate_one_ai() -> GameUnit:
 # === Solo P2 — alternating activation + auto-game (goal 003 P2) ===
 
 ## OPR alternating activation: each time the HUMAN activates a unit (via the radial menu), the AI answers
-## with exactly ONE activation. When the human side is exhausted, the AI keeps activating until its side is
-## done (OPR: the other side keeps going). Re-entry-safe: activations during a running AI chain queue as
-## pending replies. Inert while no solo game is engaged (no Solo toggle and no F11 yet).
+## with exactly ONE activation (queued as a pending reply — re-entry-safe). The pump then runs the pure
+## SoloController.alternation_next state machine, which also plays the OPR TAIL automatically: once the
+## human side is exhausted the AI finishes its remaining activations on its own (maintainer field-test
+## gap — F11 was needed before). Inert while no solo game is engaged (no Solo toggle and no F11 yet).
 func _on_solo_human_activated(gu: GameUnit) -> void:
 	if not _solo_alternation_ready(gu):
 		return
 	_solo_pending_replies += 1
-	if _solo_ai_busy:
+	await _solo_pump()
+
+
+## Drive the alternation state machine until it waits for the human or the round ends. TAIL activations
+## (the AI playing out its remaining units unprompted) run with a readable pause between them and a
+## non-blocking "AI is taking its turn" banner so the player stays oriented.
+func _solo_pump() -> void:
+	if solo_controller == null or _solo_ai_busy:
 		return
 	_solo_ai_busy = true
-	while _solo_pending_replies > 0:
-		_solo_pending_replies -= 1
-		if await _solo_activate_one_ai() == null:
-			_solo_pending_replies = 0   # AI side exhausted — no more replies owed this round
-			break
-	# Human side exhausted → the AI finishes its remaining activations (OPR alternation tail).
-	if solo_controller.eligible_units_for(solo_controller.human_slot).is_empty():
-		while await _solo_activate_one_ai() != null:
-			pass
+	var tail_count := 0
+	while true:
+		var step: int = SoloController.alternation_next(_solo_pending_replies,
+			solo_controller.eligible_units_for(solo_controller.human_slot).size(),
+			solo_controller.eligible_ai_units().size())
+		if step == SoloController.AltStep.REPLY:
+			_solo_pending_replies -= 1
+			if await _solo_activate_one_ai() == null:
+				_solo_pending_replies = 0   # AI side exhausted — no more replies owed this round
+		elif step == SoloController.AltStep.TAIL:
+			_show_solo_ai_banner()
+			if tail_count > 0:
+				await get_tree().create_timer(SOLO_AI_TAIL_DELAY_S).timeout
+			tail_count += 1
+			if await _solo_activate_one_ai() == null:
+				break   # defensive: eligible flipped mid-activation
+		else:
+			break   # WAIT for the human, or END_ROUND (handled below)
+	_hide_solo_ai_banner()
 	_solo_ai_busy = false
 	await _solo_after_activation()
+
+
+## Non-blocking status banner while the AI plays out its tail activations (same widget pattern as the
+## peer-busy banner: top-centre label, never intercepts the mouse).
+func _show_solo_ai_banner() -> void:
+	if is_instance_valid(_solo_ai_banner):
+		return
+	_solo_ai_banner = Label.new()
+	_solo_ai_banner.name = "SoloAiBanner"
+	_solo_ai_banner.text = "AI is taking its turn…"
+	_solo_ai_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_solo_ai_banner.add_theme_font_size_override("font_size", 18)
+	_solo_ai_banner.add_theme_color_override("font_color", Color(1.0, 0.92, 0.6))
+	_solo_ai_banner.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	_solo_ai_banner.add_theme_constant_override("outline_size", 4)
+	_solo_ai_banner.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 12)
+	$UI.add_child(_solo_ai_banner)
+
+
+func _hide_solo_ai_banner() -> void:
+	if is_instance_valid(_solo_ai_banner):
+		_solo_ai_banner.queue_free()
+	_solo_ai_banner = null
 
 
 ## Whether a solo game is engaged (an army is marked for the AI, or F11 already built the controller).
@@ -779,14 +824,9 @@ func _solo_end_round() -> void:
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, "Round %d begins" % opr_army_manager.current_round, true)
 	if opr_army_manager.current_round % 2 == 0:
-		# The AI opens this round with one activation (and drains an already-empty human side).
-		_solo_ai_busy = true
-		await _solo_activate_one_ai()
-		if solo_controller.eligible_units_for(solo_controller.human_slot).is_empty():
-			while await _solo_activate_one_ai() != null:
-				pass
-		_solo_ai_busy = false
-		await _solo_after_activation()
+		# The AI opens this round with one activation; the pump's tail then drains an empty human side.
+		_solo_pending_replies += 1
+		await _solo_pump()
 
 
 ## Objective control at round end (goal 003 P2, official rule): every marker with exactly ONE side's
@@ -1022,11 +1062,12 @@ func _run_ai_shooting(report: Dictionary) -> void:
 	if shots.is_empty():
 		return
 	# Split fire: assign each shot the best target under its weapon overlay, then group shots by target.
+	# Target validity is PER MODEL (GF v3.5.1 p.8): the shot's MEMBER needs a model with range+LOS.
 	var groups: Dictionary = {}   # target unit_id -> {"target": GameUnit, "shots": Array}
 	var order: Array = []
 	for shot in shots:
 		var overlay: int = AiTargeting.weapon_overlay((shot["profile"] as Dictionary).get("rules", []))
-		var tgt: GameUnit = _solo_pick_overlay_target(unit, overlay, float(shot["reach"]))
+		var tgt: GameUnit = _solo_pick_overlay_target(shot["member"], overlay, float(shot["reach"]))
 		if tgt == null:
 			continue
 		if not groups.has(tgt.unit_id):
@@ -1039,36 +1080,48 @@ func _run_ai_shooting(report: Dictionary) -> void:
 
 
 ## Resolve one split-fire volley (all `shots` aimed at `target`) with real tray dice + the human's saves.
+## Per-model shooting (GF v3.5.1 p.8 "Who Can Shoot"): each shot's attacks scale by the member's models
+## that actually have range AND line of sight to the target — not by its whole living count.
 func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array) -> void:
 	var alive_before: int = target.get_alive_count()
 	var defense: int = _solo_cover_defense(target, target.get_defense())   # +1 Defense if majority in cover
 	var dist_in: float = MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
-	var caused := 0
+	var regenable := 0
+	var regen_proof := 0
 	for s in shots:
 		var shot := s as Dictionary
 		var profile := shot["profile"] as Dictionary
+		var member := shot["member"] as GameUnit
 		var quality: int = int(shot["quality"])
-		var attacks: int = SoloController.effective_attacks(int(profile.get("attacks", 0)), int(shot["alive"]), int(shot["max"]))
+		var sighted: int = _solo_sighted_count(member, target, int(shot["reach"]))
+		var attacks: int = SoloController.effective_attacks(int(profile.get("attacks", 0)), sighted, int(shot["max"]))
 		if attacks <= 0:
 			continue
-		var shooter_name: String = (shot["member"] as GameUnit).get_name()
+		var shooter_name: String = member.get_name()
 		var faces: Array = await _solo_tray_roll(attacks, quality, "AI (%s)" % shooter_name)
 		var hits: int = _solo_hits(faces, quality, profile, dist_in)
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s — %d hit%s" % [
-				shooter_name, str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")], true)
+			var sight_note: String = "" if sighted >= member.get_alive_count() else " (%d/%d models sighted)" % [sighted, member.get_alive_count()]
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s%s — %d hit%s" % [
+				shooter_name, str(profile.get("name", "?")), target.get_name(), sight_note, hits, ("" if hits == 1 else "s")], true)
 		if hits <= 0:
 			continue
 		var save_faces: Array = await _solo_prompt_saves(attacker, target, str(profile.get("name", "?")), hits, defense, int(profile.get("ap", 0)))
-		caused += _solo_wounds(hits, save_faces, defense, profile, target)
-	var landed: int = await _solo_apply_regeneration(target, caused)   # the target's medic ignores wounds on 5+
+		var w: int = _solo_wounds(hits, save_faces, defense, profile, target)
+		if _solo_ignores_regen(member, profile):
+			regen_proof += w
+		else:
+			regenable += w
+	var landed: int = await _solo_land_wounds(target, regenable, regen_proof)
 	if landed > 0:
-		_solo_apply_wounds(target, landed)
 		await _solo_shooting_morale(target, alive_before, _solo_owner_label(target))
 
 
 ## Pick the AI's shooting target for a weapon overlay (goal 003 P3): every alive HUMAN unit in range with a
-## clear line of sight, ranked by AiTargeting under `overlay`. Null when nothing is valid.
+## clear line of sight, ranked by AiTargeting under `overlay`. Validity is PER MODEL (GF v3.5.1 p.8: a
+## target is valid when at least one of the shooting member's models has range + LOS to one of its
+## models); attached heroes are never separate targets (they are part of their host unit). Null when
+## nothing is valid.
 func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: float) -> GameUnit:
 	if opr_army_manager == null or solo_controller == null:
 		return null
@@ -1079,9 +1132,11 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 		var hu := h as GameUnit
 		if hu == null or _solo_combined_alive(hu) <= 0:
 			continue
+		if hu.has_method("is_attached") and hu.is_attached():
+			continue   # a joined hero is targeted through its host unit, never alone
+		if _solo_sighted_count(attacker, hu, int(max_range)) <= 0:
+			continue   # no model of the shooter has range + LOS → not a valid target (p.8)
 		var dist := MoveIntent.distance_inches(from, solo_controller.unit_centre(hu))
-		if dist > max_range or not _solo_has_los(attacker, hu):
-			continue
 		var tough: int = _solo_unit_tough(hu)
 		cands.append({
 			"dist": dist, "activated": hu.is_activated, "in_cover": _solo_majority_in_cover(hu),
@@ -1092,6 +1147,31 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 		refs.append(hu)
 	var idx: int = AiTargeting.best_index(cands, overlay)
 	return refs[idx] if idx >= 0 else null
+
+
+## Models of `shooter` with BOTH range and line of sight to at least one model of `target` (per-model
+## shooting, GF v3.5.1 p.8) — the pure SoloController.sighted_models against the real overlay LOS. The
+## target's models include its attached heroes' (they are part of the unit).
+func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int) -> int:
+	if shooter == null or target == null or solo_controller == null:
+		return 0
+	var target_positions: Array = []
+	var target_members: Array = [target]
+	if target.has_method("get_attached_heroes"):
+		target_members = target_members + target.get_attached_heroes()
+	for tm in target_members:
+		if tm != null:
+			target_positions.append_array(solo_controller.alive_positions(tm))
+	return SoloController.sighted_models(solo_controller.alive_positions(shooter), target_positions,
+		float(range_in) * MoveIntent.INCHES_TO_METERS, _solo_los_callable())
+
+
+## Terrain line of sight as an injectable Callable (clear when no overlay exists).
+func _solo_los_callable() -> Callable:
+	return func(a: Vector3, b: Vector3) -> bool:
+		if terrain_overlay == null or not terrain_overlay.has_method("has_line_of_sight"):
+			return true
+		return terrain_overlay.has_line_of_sight(a, b, 1, 1)
 
 
 ## Weapon groups for a combat activation: the unit's own profiles at its Quality PLUS each attached hero's
@@ -1115,16 +1195,21 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 		if profiles.is_empty():
 			continue
 		var max_models: int = member.models.size()
-		var count: int = member.get_alive_count()
+		var melee_count: int = member.get_alive_count()
 		if melee and enemy != null and solo_controller != null:
-			count = SoloController.striking_models(solo_controller.alive_positions(member), enemy_positions)
+			melee_count = SoloController.striking_models(solo_controller.alive_positions(member), enemy_positions)
 		var scaled: Array = []
 		for p in profiles:
 			var prof := (p as Dictionary).duplicate()
+			# Per-model shooting (GF v3.5.1 p.8): a ranged profile fires with the member's models that
+			# have range + LOS at ITS OWN range; melee scales by the models within 2" strike reach (p.9).
+			var count: int = melee_count
+			if not melee:
+				count = _solo_sighted_count(member, enemy, int(prof.get("range", 0))) if enemy != null else member.get_alive_count()
 			prof["attacks"] = SoloController.effective_attacks(int(prof.get("attacks", 0)), count, max_models)
 			scaled.append(prof)
 		groups.append({"name": member.get_name(), "quality": member.get_quality(),
-			"fatigued": member.is_fatigued, "profiles": scaled})
+			"fatigued": member.is_fatigued, "member": member, "profiles": scaled})
 	return groups
 
 
@@ -1154,9 +1239,12 @@ func _solo_wounds(hits: int, save_faces: Array, defense: int, profile: Dictionar
 	return w
 
 
-## The target's Regeneration / medic (GF Advanced Rules v3.5.1 p.13; the Battle Brothers "Medical Training"
-## item grants Regeneration Aura): roll one REAL tray die per incoming wound, each 5+ ignores it. Returns the
-## wounds that actually land. Units without the rule take full wounds (no roll).
+## The target's Regeneration / medic (GF Advanced Rules v3.5.1: "When a unit where all models have this
+## rule takes wounds, roll one die for each. On a 5+ it is ignored."; the Battle Brothers "Medical
+## Training" item grants Regeneration Aura): roll one REAL tray die per incoming wound, each 5+ ignores
+## it. AP never affects this roll (AP only modifies Defense rolls). The battle log always states the
+## outcome ("rolls N regeneration dice — M ignored"), so a 0-ignore roll is still visible. Returns the
+## wounds that actually land; units without the rule take full wounds (no roll).
 func _solo_apply_regeneration(target: GameUnit, wounds: int) -> int:
 	if wounds <= 0 or not _solo_has_regeneration(target):
 		return maxi(wounds, 0)
@@ -1165,10 +1253,30 @@ func _solo_apply_regeneration(target: GameUnit, wounds: int) -> int:
 	for f in faces:
 		if int(f) >= 5:
 			ignored += 1
-	if ignored > 0 and battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT, "%s regenerates %d wound%s (medic)" % [
-			target.get_name(), ignored, ("" if ignored == 1 else "s")])
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s rolls %d regeneration di%s (5+) — %d wound%s ignored" % [
+			target.get_name(), wounds, ("e" if wounds == 1 else "ce"), ignored, ("" if ignored == 1 else "s")], true)
 	return maxi(wounds - ignored, 0)
+
+
+## Apply a resolved wound pair to the defender: Regeneration rolls only against the regen-able bucket
+## (Bane / Rending / Lacerate / Unstoppable wounds bypass it — GF Advanced Rules v3.5.1: those rules
+## "ignore Regeneration"), then everything lands through the normal wound machinery. Returns landed wounds.
+func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int) -> int:
+	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(target, regenable)
+	if landed > 0:
+		_solo_apply_wounds(target, landed)
+	return landed
+
+
+## Whether wounds from this attacker+profile bypass the defender's Regeneration (GF Advanced Rules
+## v3.5.1: Bane, Rending and Unstoppable "ignore Regeneration"; Lacerate is the AoF sibling).
+func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
+	for r in profile.get("rules", []):
+		var s := str(r).strip_edges()
+		if s.begins_with("Bane") or s.begins_with("Rending") or s.begins_with("Lacerate"):
+			return true
+	return attacker != null and attacker.has_special_rule("Unstoppable")
 
 
 ## The unit's per-model Tough value (majority) parsed from its special rules; 1 when it has no Tough.
@@ -1180,8 +1288,10 @@ func _solo_unit_tough(unit: GameUnit) -> int:
 	return 1
 
 
-## Whether a unit (or an attached hero) carries a Regeneration-style rule (Regeneration / Regeneration Aura /
-## the Medical Training medic item that grants it).
+## Whether a unit (or an attached hero, or any of their MODELS via a per-model item — e.g. a medic's
+## "Medical Training" pinned to one bearer) carries a Regeneration-class wound-ignore rule. The
+## maintainer's field test hit the model-level gap: the rule lived on the bearer model's equipment,
+## not in the unit's own special_rules, so the ignore roll was never offered.
 func _solo_has_regeneration(unit: GameUnit) -> bool:
 	var members: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
@@ -1191,10 +1301,18 @@ func _solo_has_regeneration(unit: GameUnit) -> bool:
 		if member == null:
 			continue
 		for r in member.get_special_rules():
-			var s := str(r).strip_edges()
-			if s.begins_with("Regeneration") or s.begins_with("Medical Training"):
+			if _solo_is_regen_rule(str(r)):
+				return true
+		for model in member.get_alive_models():
+			var mi := model as ModelInstance
+			if mi != null and (mi.has_special_rule("Regeneration") or mi.has_special_rule("Medical Training")):
 				return true
 	return false
+
+
+static func _solo_is_regen_rule(rule: String) -> bool:
+	var s := rule.strip_edges()
+	return s.begins_with("Regeneration") or s.begins_with("Medical Training")
 
 
 ## True when the majority of a unit's alive models sit in cover terrain (TerrainRules predicate on the real
@@ -1260,6 +1378,9 @@ func _solo_tray_roll(count: int, success_target: int, owner: String) -> Array:
 	_update_dice_set(count)
 	_success_target = success_target
 	_success_modifier = 0
+	# Reflect the roll's REAL threshold in the tray UI (maintainer finding: the target buttons kept
+	# highlighting the player's old manual pick while an AP-modified save rolled — reading as "AP ignored").
+	_update_success_controls_display()
 	_next_roll_owner = owner
 	dice_roller_control.roll()
 	await dice_roller_control.roll_finnished
@@ -1268,6 +1389,7 @@ func _solo_tray_roll(count: int, success_target: int, owner: String) -> Array:
 	_update_dice_set(prev_count)
 	_success_target = prev_target
 	_success_modifier = prev_modifier
+	_update_success_controls_display()
 	return faces
 
 
@@ -1285,7 +1407,20 @@ func _solo_prompt_saves(attacker: GameUnit, target: GameUnit, weapon_name: Strin
 	dlg.popup_centered()
 	await dlg.confirmed
 	dlg.queue_free()
+	# The battle log states the MODIFIED threshold (GF v3.5.1 AP(X): "targets get -X to Defense rolls"),
+	# so the AP arithmetic is auditable after the fact (maintainer field-test finding).
+	_solo_log_save_threshold(target, defense, ap)
 	return await _solo_tray_roll(hits, defense + ap, "You")
+
+
+## Battle-log line stating a defender's MODIFIED save threshold (Def + AP) before the save dice roll —
+## every save site (human prompt + both AI-save directions) calls this, per the maintainer's request
+## that the modified threshold is always visible.
+func _solo_log_save_threshold(defender: GameUnit, defense: int, ap: int) -> void:
+	if battle_log == null:
+		return
+	var threshold: String = ("%d+ (Def %d+, AP %d)" % [defense + ap, defense, ap]) if ap > 0 else "%d+" % defense
+	battle_log.log_event(BattleLog.Category.COMBAT, "%s saves on %s" % [defender.get_name(), threshold], true)
 
 
 ## Resolve a landed AI charge (goal 001 P4): the AI strikes with its melee profiles (real tray dice,
@@ -1306,6 +1441,8 @@ func _run_ai_melee(report: Dictionary) -> void:
 		return
 	var ai_caused := 0
 	var human_caused := 0
+	var ai_regenable := 0
+	var ai_regen_proof := 0
 	# — AI strikes (unit + attached heroes; only models within 2" strike; Deadly multiplies wounds) —
 	for grp in _solo_attack_groups(unit, 0.0, true, target):
 		var group := grp as Dictionary
@@ -1322,10 +1459,13 @@ func _run_ai_melee(report: Dictionary) -> void:
 			if hits <= 0:
 				continue
 			var save_faces: Array = await _solo_prompt_saves(unit, target, str(profile.get("name", "?")), hits, target.get_defense(), int(profile.get("ap", 0)))
-			ai_caused += _solo_wounds(hits, save_faces, target.get_defense(), profile, target)
-	var ai_landed: int = await _solo_apply_regeneration(target, ai_caused)   # the target's medic ignores 5+
-	if ai_landed > 0:
-		_solo_apply_wounds(target, ai_landed)
+			var w: int = _solo_wounds(hits, save_faces, target.get_defense(), profile, target)
+			ai_caused += w
+			if _solo_ignores_regen(group.get("member"), profile):
+				ai_regen_proof += w
+			else:
+				ai_regenable += w
+	await _solo_land_wounds(target, ai_regenable, ai_regen_proof)
 	_solo_set_fatigued(unit)
 	# — Strike back (the human's choice; OPR lets the defender strike back — unit + attached heroes) —
 	if _solo_combined_alive(target) > 0:
@@ -1343,6 +1483,8 @@ func _run_ai_melee(report: Dictionary) -> void:
 			await dlg.visibility_changed   # closes on either button
 			dlg.queue_free()
 			if strike:
+				var back_regenable := 0
+				var back_regen_proof := 0
 				for bgrp in back_groups:
 					var bgroup := bgrp as Dictionary
 					var to_hit: int = 6 if bool(bgroup.get("fatigued", false)) else int(bgroup.get("quality", 4))
@@ -1354,11 +1496,15 @@ func _run_ai_melee(report: Dictionary) -> void:
 						var hits: int = _solo_hits(faces, to_hit, profile, 0.0)
 						if hits <= 0:
 							continue
+						_solo_log_save_threshold(unit, unit.get_defense(), int(profile.get("ap", 0)))
 						var save_faces: Array = await _solo_tray_roll(hits, unit.get_defense() + int(profile.get("ap", 0)), "AI (%s)" % unit.get_name())
-						human_caused += _solo_wounds(hits, save_faces, unit.get_defense(), profile, unit)
-				var human_landed: int = await _solo_apply_regeneration(unit, human_caused)
-				if human_landed > 0:
-					_solo_apply_wounds(unit, human_landed)
+						var w: int = _solo_wounds(hits, save_faces, unit.get_defense(), profile, unit)
+						human_caused += w
+						if _solo_ignores_regen(bgroup.get("member"), profile):
+							back_regen_proof += w
+						else:
+							back_regenable += w
+				await _solo_land_wounds(unit, back_regenable, back_regen_proof)
 				_solo_set_fatigued(target)
 	# — Morale: the side that CAUSED more wounds wins; the loser tests (tie = nobody) —
 	if ai_caused > human_caused and _solo_combined_alive(target) > 0:
@@ -1442,6 +1588,10 @@ func _solo_end_targeting() -> void:
 	if _solo_los_line != null and is_instance_valid(_solo_los_line):
 		_solo_los_line.queue_free()
 	_solo_los_line = null
+	if _solo_los_label != null and is_instance_valid(_solo_los_label):
+		_solo_los_label.queue_free()
+	_solo_los_label = null
+	_solo_los_cache = {}
 
 
 ## Targeting-mode input, driven by the pure SoloController.targeting_route router. Mouse events reach it
@@ -1497,7 +1647,8 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-## "" when the target is attackable, else the human-readable reason.
+## "" when the target is attackable, else the human-readable reason. Shooting validity is PER MODEL
+## (GF v3.5.1 p.8): the target is valid when at least ONE of the attacker's models has range + LOS.
 func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) -> String:
 	var dist := MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
 	if melee:
@@ -1505,10 +1656,10 @@ func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) ->
 	var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
 	if rng_in <= 0:
 		return "no ranged weapons"
-	if dist > float(rng_in):
-		return "out of range (%.0f\" > %d\")" % [dist, rng_in]
-	if not _solo_has_los(attacker, target):
-		return "no line of sight"
+	if _solo_sighted_count(attacker, target, rng_in) <= 0:
+		if dist > float(rng_in):
+			return "out of range (%.0f\" > %d\")" % [dist, rng_in]
+		return "no model has line of sight"
 	return ""
 
 
@@ -1541,6 +1692,8 @@ func _solo_unit_nodes(unit: GameUnit) -> Array:
 
 
 ## Ray-pick the unit under the cursor (models carry meta "game_unit"; trays resolve via their regiment).
+## Clicking an ATTACHED hero resolves to its HOST unit — a joined hero is part of the unit and is
+## targeted through it (GF v3.5.1 "Hero"), never as its own target.
 func _solo_pick_unit_at(screen_pos: Vector2) -> GameUnit:
 	var camera := get_viewport().get_camera_3d()
 	if camera == null:
@@ -1550,22 +1703,36 @@ func _solo_pick_unit_at(screen_pos: Vector2) -> GameUnit:
 		camera.project_ray_origin(screen_pos) + camera.project_ray_normal(screen_pos) * 100.0)
 	var hit: Dictionary = get_viewport().world_3d.direct_space_state.intersect_ray(query)
 	var col: Object = hit.get("collider")
+	var picked: GameUnit = null
 	if col is Node and (col as Node).has_meta("game_unit"):
-		return (col as Node).get_meta("game_unit") as GameUnit
-	if col is RegimentTray and opr_army_manager != null:
+		picked = (col as Node).get_meta("game_unit") as GameUnit
+	elif col is RegimentTray and opr_army_manager != null:
 		for reg in opr_army_manager.regiments.values():
 			if reg != null and reg.tray == col and reg.game_unit != null:
-				return reg.game_unit as GameUnit
-	return null
+				picked = reg.game_unit as GameUnit
+				break
+	if picked != null and picked.has_method("is_attached") and picked.is_attached():
+		var host: Variant = picked.get_attached_to()
+		if host is GameUnit:
+			return host
+	return picked
 
 
-## Live line of sight to the hovered enemy: green = clear, red = blocked (goal 001 P8 lock).
+const SOLO_LOS_REFRESH_MS := 150   # throttle for the per-model sighted-count recompute during hover
+
+
+## Live line of sight to the hovered enemy (goal 001 P8 + goal 003 per-model LOS): the line is green when
+## at least one attacker model can fire, red when none can, and a floating "7/10 sight" label shows how
+## many models actually contribute attacks (GF v3.5.1 p.8). The per-model count is model×model grid walks,
+## so it is cached per hovered unit and refreshed at most every SOLO_LOS_REFRESH_MS.
 func _solo_update_los_line(screen_pos: Vector2) -> void:
 	var attacker: GameUnit = _solo_target_mode.get("unit")
 	var hovered := _solo_pick_unit_at(screen_pos)
 	if attacker == null or hovered == null or not _solo_is_ai_unit(hovered):
 		if _solo_los_line != null and is_instance_valid(_solo_los_line):
 			_solo_los_line.visible = false
+		if _solo_los_label != null and is_instance_valid(_solo_los_label):
+			_solo_los_label.visible = false
 		return
 	if _solo_los_line == null or not is_instance_valid(_solo_los_line):
 		_solo_los_line = MeshInstance3D.new()
@@ -1576,17 +1743,47 @@ func _solo_update_los_line(screen_pos: Vector2) -> void:
 		mat.no_depth_test = true
 		_solo_los_line.material_override = mat
 		add_child(_solo_los_line)
-	var clear := _solo_has_los(attacker, hovered)
-	var color := Color(0.2, 0.9, 0.3) if clear else Color(0.95, 0.25, 0.2)
+	var melee: bool = bool(_solo_target_mode.get("melee", false))
+	var sighted := 0
+	var total: int = _solo_combined_alive(attacker)
+	if melee:
+		sighted = total if _solo_has_los(attacker, hovered) else 0   # melee keeps the simple centre check
+	else:
+		# Throttled per-model count (cached per hovered unit; refreshed at most every SOLO_LOS_REFRESH_MS).
+		var now := Time.get_ticks_msec()
+		if str(_solo_los_cache.get("target_id", "")) != hovered.unit_id \
+				or now - int(_solo_los_cache.get("at", 0)) > SOLO_LOS_REFRESH_MS:
+			var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
+			_solo_los_cache = {"target_id": hovered.unit_id, "at": now,
+				"count": _solo_sighted_count(attacker, hovered, rng_in)}
+		sighted = int(_solo_los_cache.get("count", 0))
+	var color := Color(0.2, 0.9, 0.3) if sighted > 0 else Color(0.95, 0.25, 0.2)
+	var from := solo_controller.unit_centre(attacker) + Vector3(0, 0.04, 0)
+	var to := solo_controller.unit_centre(hovered) + Vector3(0, 0.04, 0)
 	var im := _solo_los_line.mesh as ImmediateMesh
 	im.clear_surfaces()
 	im.surface_begin(Mesh.PRIMITIVE_LINES)
 	im.surface_set_color(color)
-	im.surface_add_vertex(solo_controller.unit_centre(attacker) + Vector3(0, 0.04, 0))
+	im.surface_add_vertex(from)
 	im.surface_set_color(color)
-	im.surface_add_vertex(solo_controller.unit_centre(hovered) + Vector3(0, 0.04, 0))
+	im.surface_add_vertex(to)
 	im.surface_end()
 	_solo_los_line.visible = true
+	# Floating count label at the line midpoint (shooting only — melee reach is the 2" contact check).
+	if not melee:
+		if _solo_los_label == null or not is_instance_valid(_solo_los_label):
+			_solo_los_label = Label3D.new()
+			_solo_los_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			_solo_los_label.no_depth_test = true
+			_solo_los_label.pixel_size = 0.0004
+			_solo_los_label.outline_size = 8
+			add_child(_solo_los_label)
+		_solo_los_label.text = "%d/%d sight" % [sighted, total]
+		_solo_los_label.modulate = color
+		_solo_los_label.global_position = (from + to) * 0.5 + Vector3(0, 0.05, 0)
+		_solo_los_label.visible = true
+	elif _solo_los_label != null and is_instance_valid(_solo_los_label):
+		_solo_los_label.visible = false
 
 
 ## Resolve the player's declared attack — the mirror of the AI flow: your groups (unit + heroes, own
@@ -1599,9 +1796,18 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 	var target_alive_before: int = target.get_alive_count()   # post-shooting morale (goal 003 P1)
 	var human_caused := 0
 	var ai_caused := 0
+	var human_regenable := 0
+	var human_regen_proof := 0
 	# Cover raises the AI's Defense against your shooting (majority-in-cover +1); melee ignores cover.
 	var defense: int = _solo_cover_defense(target, target.get_defense()) if not melee else target.get_defense()
-	for grp in _solo_attack_groups(attacker, dist, melee, target if melee else null):
+	# Per-model shooting transparency (GF v3.5.1 p.8): tell the player how many models actually fire.
+	if not melee and battle_log != null:
+		var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
+		var total := _solo_combined_alive(attacker)
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d/%d model%s with line of sight + range" % [
+			attacker.get_name(), _solo_sighted_count(attacker, target, rng_in), total, ("" if total == 1 else "s")], true)
+	# The target is passed for BOTH modes: ranged profiles scale by models with range+LOS, melee by 2" reach.
+	for grp in _solo_attack_groups(attacker, dist, melee, target):
 		var group := grp as Dictionary
 		var to_hit: int = int(group.get("quality", 4))
 		if melee and bool(group.get("fatigued", false)):
@@ -1618,11 +1824,15 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 					str(group.get("name", "?")), verb, str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")])
 			if hits <= 0:
 				continue
+			_solo_log_save_threshold(target, defense, int(profile.get("ap", 0)))
 			var save_faces: Array = await _solo_tray_roll(hits, defense + int(profile.get("ap", 0)), "AI (%s)" % target.get_name())
-			human_caused += _solo_wounds(hits, save_faces, defense, profile, target)
-	var human_landed: int = await _solo_apply_regeneration(target, human_caused)
-	if human_landed > 0:
-		_solo_apply_wounds(target, human_landed)
+			var w: int = _solo_wounds(hits, save_faces, defense, profile, target)
+			human_caused += w
+			if _solo_ignores_regen(group.get("member"), profile):
+				human_regen_proof += w
+			else:
+				human_regenable += w
+	await _solo_land_wounds(target, human_regenable, human_regen_proof)
 	if not melee:
 		# The AI's unit tests morale if your volley dropped it to half strength or less (goal 003 P1).
 		await _solo_shooting_morale(target, target_alive_before, "AI (%s)" % target.get_name())
@@ -1630,6 +1840,8 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 		_solo_set_fatigued(attacker)
 		# The AI must always strike back (official rule) — no prompt on its side.
 		if _solo_combined_alive(target) > 0:
+			var ai_regenable := 0
+			var ai_regen_proof := 0
 			for grp in _solo_attack_groups(target, 0.0, true, attacker):
 				var group := grp as Dictionary
 				var to_hit: int = 6 if bool(group.get("fatigued", false)) else int(group.get("quality", 4))
@@ -1642,16 +1854,22 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 					if hits <= 0:
 						continue
 					var save_faces: Array = await _solo_prompt_saves(target, attacker, str(profile.get("name", "?")), hits, attacker.get_defense(), int(profile.get("ap", 0)))
-					ai_caused += _solo_wounds(hits, save_faces, attacker.get_defense(), profile, attacker)
-			var ai_landed: int = await _solo_apply_regeneration(attacker, ai_caused)
-			if ai_landed > 0:
-				_solo_apply_wounds(attacker, ai_landed)
+					var w: int = _solo_wounds(hits, save_faces, attacker.get_defense(), profile, attacker)
+					ai_caused += w
+					if _solo_ignores_regen(group.get("member"), profile):
+						ai_regen_proof += w
+					else:
+						ai_regenable += w
+			await _solo_land_wounds(attacker, ai_regenable, ai_regen_proof)
 			_solo_set_fatigued(target)
 		# Morale: the side that CAUSED more wounds wins; the loser tests.
 		if human_caused > ai_caused and _solo_combined_alive(target) > 0:
 			await _solo_morale_test(target, "AI (%s)" % target.get_name())
 		elif ai_caused > human_caused and _solo_combined_alive(attacker) > 0:
 			await _solo_morale_test(attacker, "You")
+	# The AI's strike-back can destroy the human's LAST eligible unit — re-check the alternation
+	# state so the AI's remaining activations auto-continue (goal 003 P2 auto-tail).
+	await _solo_pump()
 
 
 ## Mark a unit (and its attached heroes — they fought too) Fatigued after its first melee this round
@@ -1737,21 +1955,22 @@ func _solo_apply_wounds(target: GameUnit, wounds: int) -> void:
 
 
 ## Apply up to `wounds` to a unit's models back-rank-first (Tough absorbs before dying); returns the
-## wounds left over (spill into an attached hero handled by the caller).
+## wounds left over (spill into an attached hero handled by the caller). The damage core is the testable
+## SoloController.apply_wounds_to_models; this wires the SAME visible seams manual play uses — the wound
+## token + MP broadcast for a surviving Tough model (maintainer field-test: an AI Tough hero soaked
+## wounds with no visible tick), and tray-parking on death.
 func _solo_wound_models(unit: GameUnit, wounds: int, pid: int) -> int:
-	var remaining := wounds
-	for i in range(unit.models.size() - 1, -1, -1):
-		if remaining <= 0:
-			break
-		var m: ModelInstance = unit.models[i]
-		if m == null or not m.is_alive:
-			continue
-		while remaining > 0 and m.is_alive:
-			var died: bool = m.apply_damage(1)
-			remaining -= 1
-			if died and m.node != null and is_instance_valid(m.node):
-				opr_army_manager.set_loose_model_dead(m.node, pid, true, unit.unit_id)
-	return remaining
+	var on_changed := func(m: ModelInstance) -> void:
+		if radial_menu_controller != null:
+			radial_menu_controller._update_wound_marker(m)
+		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
+			network_manager.broadcast_model_wounds(m)
+	var on_died := func(m: ModelInstance) -> void:
+		if m.node != null and is_instance_valid(m.node):
+			opr_army_manager.set_loose_model_dead(m.node, pid, true, unit.unit_id)
+		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
+			network_manager.broadcast_model_wounds(m)
+	return SoloController.apply_wounds_to_models(unit, wounds, on_changed, on_died)
 
 
 func _capture_bug_report() -> void:
