@@ -135,11 +135,11 @@ func base_override_mm(faction: String, unit_name: String) -> Dictionary:
 
 
 ## Optional per-entry ORIENTATION marker: the manifest entry's `long_axis` ("x" or "z") declares which
-## horizontal axis the model's LENGTH/FACING runs along in blob space, overriding the AABB inference.
-## Needed where geometry cannot express intent: a coiled +Z-facing serpent (great snakes) spreads
-## WIDER in X than Z, indistinguishable by aspect from a genuinely X-composed comp (snake riders) —
-## only the producer knows the authored facing. "" when absent/invalid (→ the game infers from the
-## AABB; unknown fields are ignored by old clients by construction).
+## horizontal axis the model's LENGTH/FACING runs along in blob space — the ONLY driver of the
+## lengthwise oval rotation (geometry cannot express intent: a coiled +Z-facing serpent or a winged
+## avatar spreads WIDER in X than Z, indistinguishable by aspect from a genuinely X-composed comp —
+## only the producer knows the authored facing). "" when absent/invalid (→ legacy +Z convention: no
+## turn on the standard depth-long oval; unknown fields are ignored by old clients by construction).
 func long_axis_override(faction: String, unit_name: String) -> String:
 	var v: String = str(_entry(faction, unit_name).get("long_axis", "")).strip_edges().to_lower()
 	return v if v == "x" or v == "z" else ""

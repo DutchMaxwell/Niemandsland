@@ -1411,7 +1411,7 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
 			glb_instance.position.y = fit.y_offset
 			# Orient on an oval base: walkers crosswise (quer), vehicles AND mounts along the long axis
-			# (per-entry manifest `long_axis` marker wins over the AABB inference).
+			# (rotation is driven ONLY by the per-entry manifest `long_axis` marker; no marker = no turn).
 			var axis_override: String = model_library.long_axis_override(faction_folder, glb_name) if model_library != null else ""
 			_align_to_oval_long_axis(glb_instance, aabb, base_is_oval, base_width, base_depth, _model_faces_crosswise(unit.name, is_mount), axis_override)
 
@@ -1612,7 +1612,7 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0, glb_n
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
 			glb_instance.position.y = fit.y_offset
 			# Orient on an oval base: walkers crosswise (quer), vehicles AND mounts along the long axis
-			# (per-entry manifest `long_axis` marker wins over the AABB inference; matches the import path).
+			# (rotation is driven ONLY by the per-entry manifest `long_axis` marker; matches the import path).
 			var axis_override: String = model_library.long_axis_override(faction_folder, glb_name) if model_library != null else ""
 			_align_to_oval_long_axis(glb_instance, aabb, base_is_oval, base_width, base_depth, _model_faces_crosswise(unit_name, is_mount), axis_override)
 
@@ -2282,37 +2282,31 @@ func _hover_lift_m(rules: Array) -> float:
 	return AIRCRAFT_HOVER_M if _is_aircraft_from_rules(rules) else 0.0
 
 
-## Minimum horizontal AABB aspect ratio (long/short) at which a model's long axis is DECISIVE and
-## drives the lengthwise orientation. Below it (near-square hulls: a biped reads ~1.05) the AABB is
-## noise that rotated identical models inconsistently — those keep the legacy deterministic mapping.
-## Calibrated on the mummified pilot fleet: the flattest real long axis measured 1.22 (snake riders /
-## champion#snake, X-long) and 1.23 (flying beast, Z-long); 1.15 splits noise from signal cleanly.
-const MODEL_LONG_AXIS_MIN_ASPECT: float = 1.15
-
-
 ## Orients a GLB on an OVAL base relative to the base's long axis (depth/Z when base_depth >=
 ## base_width — the AF oval parse always puts the long side into depth, so in-game oval bases are
 ## Z-long). Y-only rotation, so it leaves the (rotation-invariant) uniform scale and y-offset
 ## intact. No-op for round/square bases.
 ##
 ## Vehicles AND mounts (cross_align=false): the MODEL's long axis runs ALONG the base's long axis (a
-## tank — or a snake / chariot — sits front-to-back down its oval). The model's long axis comes from,
-## in order: the per-entry manifest `long_axis` marker ("x"/"z", authoring truth — see below), else
-## its AABB when DECISIVE (aspect >= MODEL_LONG_AXIS_MIN_ASPECT): producers export mounts on either
-## horizontal axis (the composed serpent comps are X-long, the steed/sphinx/chariot comps Z-long), and
-## assuming Z-long put every X-long serpent across the SHORT side (the snakes-crosswise QA finding).
-## A near-square model (below the threshold) keeps the legacy Z-long assumption — its AABB is noise.
+## tank — or a snake / chariot — sits front-to-back down its oval). The model's long axis comes ONLY
+## from the per-entry manifest `long_axis` marker ("x"/"z", authoring truth); without a marker the
+## legacy +Z convention holds (model long axis = Z → no turn on the standard Z-long oval), keeping
+## every live model byte-identical.
 ##
-## The marker exists because geometry cannot express INTENT (QA r7): the bare great-snakes blob is a
-## COILED serpent facing +Z whose coil spreads wider in X (aspect 1.35) than the genuinely X-composed
-## snake-riders comp (1.22) — no threshold separates them, only the producer knows the facing.
+## The AABB is deliberately IGNORED (the `_aabb` parameter is kept so all alignment call sites and
+## suites share one signature). An earlier decisive-aspect inference (QA r4–r7) was removed: an XZ
+## footprint cannot distinguish body LENGTH from WINGSPAN — a 43-faction blob sweep found live
+## wide/winged models (avatars, greater mutated: shoulders/wings spread in X, facing +Z) that the
+## aspect gate would have turned sideways, and the coiled great-snakes blob (X-wide, +Z-facing)
+## already proved geometry cannot express intent. Only the producer knows the authored facing, so
+## rotation is opt-in per manifest entry.
 ##
 ## Walkers (cross_align=true): sit CROSSWISE ("quer") — DETERMINISTICALLY, ignoring the AABB. A
 ## biped's footprint is near-square (e.g. 0.672 x 0.642), so the AABB "long axis" is just noise
 ## that rotated identical walkers inconsistently. Instead we orient the model's default forward
 ## (+Z) ACROSS the base's long axis purely from the base geometry, so every walker is consistent.
 ## (Near-square means the exact facing barely shows; if it ever reads 90° off, flip the rotate.)
-func _align_to_oval_long_axis(glb: Node3D, aabb: AABB, base_is_oval: bool,
+func _align_to_oval_long_axis(glb: Node3D, _aabb: AABB, base_is_oval: bool,
 		base_width: float, base_depth: float, cross_align: bool = false,
 		long_axis_override: String = "") -> void:
 	if not base_is_oval or glb == null:
@@ -2323,16 +2317,9 @@ func _align_to_oval_long_axis(glb: Node3D, aabb: AABB, base_is_oval: bool,
 		if base_long_is_z:
 			glb.rotate_y(PI / 2.0)
 		return
-	# VEHICLE / MOUNT: the model's long axis onto the base's long axis. The manifest marker is
-	# authoring truth; else a decisive AABB wins; a near-square hull falls back to the legacy
-	# assumption (model long axis = Z → no turn on the standard Z-long oval), which keeps every
-	# previously-correct model byte-identical.
-	var model_long_is_x: bool
-	if long_axis_override == "x" or long_axis_override == "z":
-		model_long_is_x = long_axis_override == "x"
-	else:
-		var aspect: float = maxf(aabb.size.x, aabb.size.z) / maxf(0.001, minf(aabb.size.x, aabb.size.z))
-		model_long_is_x = aspect >= MODEL_LONG_AXIS_MIN_ASPECT and aabb.size.x > aabb.size.z
+	# VEHICLE / MOUNT: the model's long axis onto the base's long axis, driven ONLY by the manifest
+	# marker; without one the legacy Z-long assumption holds (no turn on the standard Z-long oval).
+	var model_long_is_x: bool = long_axis_override == "x"
 	if model_long_is_x == base_long_is_z:
 		glb.rotate_y(PI / 2.0)
 

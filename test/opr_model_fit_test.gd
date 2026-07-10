@@ -66,18 +66,19 @@ func test_oval_base_fits_model_within_narrow_width() -> void:
 
 func test_vehicle_aligned_along_oval_long_axis_walker_across() -> void:
 	var mgr := _mgr()
-	# An X-LONG model (decisive aspect 2.0): its LENGTH must land on the base's long axis (QA r4 —
-	# the snakes-crosswise fix; the model's own axis drives the mapping, not a Z-forward assumption).
+	# MARKER-ONLY contract: an X-LONG AABB (aspect 2.0) never turns by itself — only the per-entry
+	# `long_axis` marker ("x") declares the model's length, and then it must land on the base's
+	# long axis (geometry cannot distinguish body length from wingspan; markers are authoring truth).
 	var aabb := AABB(Vector3.ZERO, Vector3(1, 0.5, 0.5))
-	# Base long axis = Z (depth 0.120 >= width 0.092): X-long model → turn 90° so its length runs on Z.
-	var veh_z: Node3D = auto_free(Node3D.new())
-	mgr._align_to_oval_long_axis(veh_z, aabb, true, 0.092, 0.120, false)
-	assert_float(absf(veh_z.rotation.y)).is_equal_approx(PI / 2.0, 0.01)
-	# Base long axis = X (width 0.120 > depth 0.092): X-long model already aligned → no turn.
-	var veh_x: Node3D = auto_free(Node3D.new())
-	mgr._align_to_oval_long_axis(veh_x, aabb, true, 0.120, 0.092, false)
-	assert_float(veh_x.rotation.y).is_equal_approx(0.0, 0.01)
-	# Walker: deterministic crosswise, AABB ignored — long axis = Z → turn 90° (faces ACROSS it).
+	# Base long axis = Z (depth 0.120 >= width 0.092), no marker: legacy +Z convention → no turn.
+	var veh_default: Node3D = auto_free(Node3D.new())
+	mgr._align_to_oval_long_axis(veh_default, aabb, true, 0.092, 0.120, false)
+	assert_float(veh_default.rotation.y).is_equal_approx(0.0, 0.01)
+	# Same base WITH the "x" marker: the declared X length turns 90° onto the base's long Z axis.
+	var veh_marked: Node3D = auto_free(Node3D.new())
+	mgr._align_to_oval_long_axis(veh_marked, aabb, true, 0.092, 0.120, false, "x")
+	assert_float(absf(veh_marked.rotation.y)).is_equal_approx(PI / 2.0, 0.01)
+	# Walker: deterministic crosswise, markers/AABB ignored — long axis = Z → turn 90° (faces ACROSS).
 	var walker: Node3D = auto_free(Node3D.new())
 	mgr._align_to_oval_long_axis(walker, aabb, true, 0.092, 0.120, true)
 	assert_float(absf(walker.rotation.y)).is_equal_approx(PI / 2.0, 0.01)

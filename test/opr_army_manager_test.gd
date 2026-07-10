@@ -87,26 +87,27 @@ func test_align_walker_turns_crosswise_on_z_long_base() -> void:
 func test_align_vehicle_z_long_model_no_turn_on_z_long_base() -> void:
 	var m := _mgr()
 	var glb := _glb()
-	# A Z-long model (a tank / the steed comp) on the standard Z-long oval (depth 0.060 >= width
-	# 0.035): already aligned -> no turn.
+	# No marker on the standard Z-long oval (depth 0.060 >= width 0.035): the legacy +Z convention
+	# holds -> no turn (the Z-long AABB is passed but never consulted).
 	m._align_to_oval_long_axis(glb, AABB(Vector3.ZERO, Vector3(0.1, 0.1, 0.3)), true, 0.035, 0.060, false)
 	assert_float(glb.rotation.y).is_equal_approx(0.0, 0.0001)
 
 
-func test_align_vehicle_x_long_model_turns_on_z_long_base() -> void:
+func test_align_vehicle_x_long_aabb_does_not_turn_without_marker() -> void:
 	var m := _mgr()
 	var glb := _glb()
-	# QA r4 (snakes crosswise): an X-LONG model (the serpent exports) on the standard Z-long oval must
-	# TURN 90° so its length lies along the base's long axis — the old Z-forward assumption left it
-	# across the SHORT side.
+	# MARKER-ONLY contract: even a decisively X-LONG AABB must NOT turn on the standard Z-long oval
+	# without a `long_axis` marker — an XZ footprint cannot distinguish body length from wingspan
+	# (live avatars / greater mutated are X-wide but +Z-facing), so geometry never drives rotation.
 	m._align_to_oval_long_axis(glb, AABB(Vector3.ZERO, Vector3(0.3, 0.1, 0.1)), true, 0.035, 0.060, false)
-	assert_float(absf(glb.rotation.y)).is_equal_approx(PI / 2.0, 0.0001)
+	assert_float(glb.rotation.y).is_equal_approx(0.0, 0.0001)
 
 
 func test_align_vehicle_near_square_model_keeps_legacy_mapping() -> void:
 	var m := _mgr()
-	# A near-square hull (0.672 x 0.642, aspect ~1.05 — below MODEL_LONG_AXIS_MIN_ASPECT): the AABB is
-	# noise, so the legacy deterministic mapping holds — no turn on a Z-long base, turn on an X-long one.
+	# A near-square hull (0.672 x 0.642) without a marker: the legacy deterministic mapping holds —
+	# no turn on a Z-long base, turn on an X-long one (the model's assumed +Z length follows the
+	# base's long axis).
 	var hull := AABB(Vector3.ZERO, Vector3(0.672, 0.5, 0.642))
 	var on_z_long := _glb()
 	m._align_to_oval_long_axis(on_z_long, hull, true, 0.035, 0.060, false)
@@ -116,20 +117,16 @@ func test_align_vehicle_near_square_model_keeps_legacy_mapping() -> void:
 	assert_float(absf(on_x_long.rotation.y)).is_equal_approx(PI / 2.0, 0.0001)
 
 
-func test_align_snake_riders_and_champion_snake_lengthwise() -> void:
+func test_align_snake_riders_and_flying_beast_lengthwise_without_marker() -> void:
 	var m := _mgr()
-	# The REAL pilot geometries (QA r4). Snake riders / champion#greatweapon+snake: combined AABB
-	# (2.723, 2.535, 2.227), aspect 1.22, X-long — on their in-game ovals (the AF parse puts the long
-	# side into DEPTH: 90x52 -> width 0.052/depth 0.090; Royal Snake 75x46 -> 0.046/0.075) both must
-	# turn lengthwise. The flying beast comp (4.732, 4.457, 5.838; aspect 1.23, Z-LONG) must NOT turn —
-	# nearly the same aspect, opposite axis, both decisively mapped.
-	var serpent := AABB(Vector3.ZERO, Vector3(2.723, 2.535, 2.227))
+	# The REAL pilot geometries (post-snakeflip: the producer re-published serpents Z-forward).
+	# Snake riders: combined AABB (2.227, 2.535, 2.722), Z-LONG — on its in-game oval (the AF parse
+	# puts the long side into DEPTH: 90x52 -> width 0.052/depth 0.090) it lies lengthwise with NO
+	# turn and needs no marker. The flying beast comp (4.732, 4.457, 5.838; Z-LONG) likewise.
+	var serpent := AABB(Vector3.ZERO, Vector3(2.227, 2.535, 2.722))
 	var riders := _glb()
 	m._align_to_oval_long_axis(riders, serpent, true, 0.052, 0.090, false)
-	assert_float(absf(riders.rotation.y)).is_equal_approx(PI / 2.0, 0.0001)
-	var champ := _glb()  # champion #snake goes through the same lengthwise path (is_mount=true)
-	m._align_to_oval_long_axis(champ, serpent, true, 0.046, 0.075, false)
-	assert_float(absf(champ.rotation.y)).is_equal_approx(PI / 2.0, 0.0001)
+	assert_float(riders.rotation.y).is_equal_approx(0.0, 0.0001)
 	var beast := _glb()
 	m._align_to_oval_long_axis(beast, AABB(Vector3.ZERO, Vector3(4.732, 4.457, 5.838)), true, 0.122, 0.160, false)
 	assert_float(beast.rotation.y).is_equal_approx(0.0, 0.0001)
@@ -529,21 +526,23 @@ func test_find_body_node_chariot_unit_structure_missing() -> void:
 	assert_bool(m._find_body_node(root) == null).is_true()
 
 
-# ===== long_axis manifest marker: authoring truth beats AABB inference (QA r7) =====
+# ===== long_axis manifest marker: the ONLY rotation driver (QA r7 + marker-only follow-up) =====
 # Geometry cannot express INTENT: the bare great-snakes blob is a COILED +Z-facing serpent whose coil
-# spreads wider in X (aspect 1.35) than the genuinely X-composed snake-riders comp (1.22). Only the
-# producer knows the facing -> the per-entry `long_axis` marker decides; the AABB only infers when no
-# marker exists.
+# spreads wider in X (aspect 1.35) than a genuinely X-composed comp, and live wide/winged models
+# (avatars, greater mutated) are X-wide but +Z-facing. Only the producer knows the facing -> the
+# per-entry `long_axis` marker decides; without one the legacy +Z convention holds (no turn on the
+# standard depth-long oval). No AABB inference exists.
 
-func test_great_snakes_marker_keeps_facing_on_long_axis() -> void:
+func test_great_snakes_coil_needs_no_turn_marker_pins_it() -> void:
 	var m := _mgr()
-	# REAL great-snakes geometry (1.505, 1.553, 1.115 - X-long by coil) on its 90x52 oval. WITHOUT a
-	# marker the aspect inference turns it (documents why the marker exists)...
+	# REAL great-snakes geometry (1.505, 1.553, 1.115 - X-wide by coil, +Z-facing) on its 90x52 oval.
+	# WITHOUT a marker the marker-only default already keeps the +Z facing on the long axis: no turn
+	# (under the removed aspect inference this coil turned sideways - the r7 QA finding).
 	var coiled := AABB(Vector3.ZERO, Vector3(1.505, 1.553, 1.115))
-	var inferred := _glb()
-	m._align_to_oval_long_axis(inferred, coiled, true, 0.052, 0.090, false)
-	assert_float(absf(inferred.rotation.y)).is_equal_approx(PI / 2.0, 0.0001)
-	# ...WITH the producer marker `long_axis: "z"` the +Z facing stays on the base's long axis: no turn.
+	var unmarked := _glb()
+	m._align_to_oval_long_axis(unmarked, coiled, true, 0.052, 0.090, false)
+	assert_float(unmarked.rotation.y).is_equal_approx(0.0, 0.0001)
+	# The staged producer marker `long_axis: "z"` pins that facing explicitly - same result.
 	var marked := _glb()
 	m._align_to_oval_long_axis(marked, coiled, true, 0.052, 0.090, false, "z")
 	assert_float(marked.rotation.y).is_equal_approx(0.0, 0.0001)
@@ -551,8 +550,8 @@ func test_great_snakes_marker_keeps_facing_on_long_axis() -> void:
 
 func test_hunting_beasts_z_long_needs_no_marker() -> void:
 	var m := _mgr()
-	# REAL hunting-beasts geometry (0.527, 1.300, 1.790 - strongly Z-long, aspect 3.39) on its 60x35
-	# oval: the inference alone keeps it lengthwise (no turn) - no marker needed.
+	# REAL hunting-beasts geometry (0.527, 1.300, 1.790 - strongly Z-long) on its 60x35 oval: the
+	# marker-only default keeps it lengthwise (no turn) - no marker needed.
 	var beast := _glb()
 	m._align_to_oval_long_axis(beast, AABB(Vector3.ZERO, Vector3(0.527, 1.300, 1.790)), true, 0.035, 0.060, false)
 	assert_float(beast.rotation.y).is_equal_approx(0.0, 0.0001)
@@ -560,7 +559,8 @@ func test_hunting_beasts_z_long_needs_no_marker() -> void:
 
 func test_long_axis_marker_x_forces_turn_and_walker_unaffected() -> void:
 	var m := _mgr()
-	# An "x" marker forces the turn even for a near-square model the inference would leave alone.
+	# An "x" marker is the ONLY way a model turns on the standard Z-long oval - here it forces the
+	# turn for a near-square model the default would leave alone.
 	var square := AABB(Vector3.ZERO, Vector3(0.672, 0.5, 0.642))
 	var marked_x := _glb()
 	m._align_to_oval_long_axis(marked_x, square, true, 0.052, 0.090, false, "x")
