@@ -1,12 +1,16 @@
 class_name TutorialCoachMark
 extends CanvasLayer
-## Full-screen coach-mark overlay for the guided tutorial (T0): dims the screen, cuts a
+## Full-screen coach-mark overlay for the guided tutorial: dims the screen, cuts a
 ## rectangular "spotlight" hole around ONE target (a UI Control rect or a screen-projected
-## 3D position), shows one imperative instruction, and pulses the spotlight border to draw
-## the eye. A Skip button is ALWAYS visible so the player can leave the tutorial cleanly at
-## any point — never a modal trap. Clicks land normally inside the spotlight hole (soft input
-## mask: everything OUTSIDE the hole is absorbed via `_has_point`, the hole falls through to
-## the game). Purely code-drawn (bands + ring in `_draw`, HudTokens palette) — no art assets.
+## 3D box), shows one imperative instruction plus a small lesson/step progress line, and
+## pulses the spotlight border. Two escape hatches are ALWAYS visible — SKIP LESSON and
+## END TUTORIAL — so the player is never trapped.
+##
+## Input handling ("soft mask"): when a step requests masking, everything OUTSIDE the
+## spotlight hole absorbs GUI clicks via `_has_point` while the hole falls through to the
+## game. Steps that need free 3D interaction (drags, camera) run unmasked (dim ignores the
+## mouse) or in BANNER mode (no dim at all — instruction card only), so a gesture can never
+## be cut off by the overlay. Purely code-drawn (HudTokens palette) — no art assets.
 
 # ===== Constants =====
 const DIM_COLOR := Color(0.0, 0.0, 0.0, 0.60)   # soft screen dim outside the spotlight
@@ -15,11 +19,14 @@ const RING_WIDTH := 3.0
 const PULSE_PERIOD := 1.4                        # seconds per pulse cycle
 const CARD_GAP := 18.0                           # gap between spotlight and instruction card
 const CARD_MARGIN := 18.0                        # min distance of the card from screen edges
-const CARD_MAX_WIDTH := 340.0
+const CARD_MAX_WIDTH := 360.0
+const BANNER_TOP_Y := 64.0                       # banner-mode card y (below the battle-log tab)
 const OVERLAY_LAYER := 128                       # above the HUD CanvasLayer
+const BUTTON_W := 150.0
 
 # ===== Signals =====
-signal skip_pressed()
+signal skip_lesson_pressed()
+signal end_pressed()
 
 # ===== Private state =====
 var _target_rect: Rect2 = Rect2()
@@ -27,8 +34,10 @@ var _has_target: bool = false
 var _pulse_phase: float = 0.0
 var _dim: Control = null
 var _card: PanelContainer = null
+var _progress_label: Label = null
 var _label: Label = null
-var _skip_btn: Button = null
+var _skip_lesson_btn: Button = null
+var _end_btn: Button = null
 
 
 # ===== Lifecycle =====
@@ -43,19 +52,42 @@ func _process(delta: float) -> void:
 	# Cheap per-frame work only: advance the pulse phase, ask the dim layer to redraw,
 	# and keep the card glued to the (possibly moving) spotlight. No allocations.
 	_pulse_phase = fmod(_pulse_phase + delta, PULSE_PERIOD)
-	if _dim != null:
+	if _dim != null and _dim.visible:
 		_dim.queue_redraw()
 	_reposition_card()
 
 
 # ===== Public API =====
 
-## Point the spotlight at a screen rectangle and set the one-line instruction.
-func show_step(instruction: String, target_rect: Rect2) -> void:
+## Spotlight mode: point at a screen rectangle, set the instruction, choose whether
+## input outside the spotlight is soft-masked (never mask steps that involve drags).
+func show_step(instruction: String, target_rect: Rect2, mask: bool = true) -> void:
 	if _label != null:
 		_label.text = instruction
 	set_target_rect(target_rect)
+	if _dim != null:
+		_dim.visible = true
+		_dim.mouse_filter = Control.MOUSE_FILTER_STOP if mask else Control.MOUSE_FILTER_IGNORE
 	visible = true
+
+
+## Banner mode: instruction card only — no dim, no spotlight, no input interference.
+## For steps where the whole table is the stage (camera lesson, free-form steps).
+func show_banner(instruction: String) -> void:
+	if _label != null:
+		_label.text = instruction
+	_has_target = false
+	if _dim != null:
+		_dim.visible = false
+		_dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	visible = true
+
+
+## The small "LESSON 2/6 · IMPORTING ARMIES — STEP 1/3" line above the instruction.
+func set_progress_text(text: String) -> void:
+	if _progress_label != null:
+		_progress_label.text = text
+		_progress_label.visible = not text.is_empty()
 
 
 ## Update just the spotlight rect — called every frame for a moving 3D target.
@@ -82,49 +114,67 @@ func _build() -> void:
 	_card = PanelContainer.new()
 	_card.mouse_filter = Control.MOUSE_FILTER_IGNORE  # text never blocks input
 	_card.add_theme_stylebox_override("panel", HudTokens.panel_style())
-	_card.custom_minimum_size = Vector2(0, 0)
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", HudTokens.SPACE_16)
 	margin.add_theme_constant_override("margin_right", HudTokens.SPACE_16)
 	margin.add_theme_constant_override("margin_top", HudTokens.SPACE_12)
 	margin.add_theme_constant_override("margin_bottom", HudTokens.SPACE_12)
 	_card.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", HudTokens.SPACE_4)
+	margin.add_child(vbox)
+	_progress_label = Label.new()
+	_progress_label.add_theme_font_override("font", HudTokens.mono_font())
+	_progress_label.add_theme_font_size_override("font_size", 12)
+	_progress_label.add_theme_color_override("font_color", HudTokens.AMBER)
+	_progress_label.visible = false
+	vbox.add_child(_progress_label)
 	_label = Label.new()
 	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_label.custom_minimum_size = Vector2(CARD_MAX_WIDTH, 0)
 	_label.add_theme_font_override("font", HudTokens.body_font())
 	_label.add_theme_font_size_override("font_size", 16)
 	_label.add_theme_color_override("font_color", HudTokens.TEXT)
-	margin.add_child(_label)
+	vbox.add_child(_label)
 	add_child(_card)
 
-	_skip_btn = Button.new()
-	_skip_btn.text = "Skip tutorial"
-	_skip_btn.focus_mode = Control.FOCUS_NONE
-	_skip_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	# Escape hatches, top-right, stacked: SKIP LESSON above END TUTORIAL.
+	_skip_lesson_btn = _build_button("SKIP LESSON", CARD_MARGIN)
+	_skip_lesson_btn.pressed.connect(func() -> void: skip_lesson_pressed.emit())
+	add_child(_skip_lesson_btn)
+	_end_btn = _build_button("END TUTORIAL", CARD_MARGIN + HudTokens.BUTTON_HEIGHT + HudTokens.SPACE_8)
+	_end_btn.pressed.connect(func() -> void: end_pressed.emit())
+	add_child(_end_btn)
+
+
+func _build_button(text: String, top: float) -> Button:
+	var btn := Button.new()
+	btn.text = text
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	var ghost := HudTokens.ghost_button()
-	_skip_btn.add_theme_stylebox_override("normal", ghost["normal"])
-	_skip_btn.add_theme_stylebox_override("hover", ghost["hover"])
-	_skip_btn.add_theme_stylebox_override("pressed", ghost["pressed"])
-	_skip_btn.add_theme_color_override("font_color", HudTokens.TEXT)
-	_skip_btn.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	_skip_btn.offset_left = -160.0
-	_skip_btn.offset_right = -CARD_MARGIN
-	_skip_btn.offset_top = CARD_MARGIN
-	_skip_btn.offset_bottom = CARD_MARGIN + HudTokens.BUTTON_HEIGHT
-	_skip_btn.pressed.connect(func() -> void: skip_pressed.emit())
-	add_child(_skip_btn)
+	btn.add_theme_stylebox_override("normal", ghost["normal"])
+	btn.add_theme_stylebox_override("hover", ghost["hover"])
+	btn.add_theme_stylebox_override("pressed", ghost["pressed"])
+	btn.add_theme_color_override("font_color", HudTokens.TEXT)
+	btn.add_theme_font_size_override("font_size", 13)
+	btn.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	btn.offset_left = -(BUTTON_W + CARD_MARGIN)
+	btn.offset_right = -CARD_MARGIN
+	btn.offset_top = top
+	btn.offset_bottom = top + HudTokens.BUTTON_HEIGHT
+	return btn
 
 
-## Keep the instruction card just below the spotlight (or above it when there is no room
-## below), horizontally centred on the spotlight and clamped inside the screen.
+## Keep the instruction card just below the spotlight (or above it when there is no
+## room below), clamped inside the screen. Banner mode parks it top-centre instead.
 func _reposition_card() -> void:
 	if _card == null:
 		return
 	var vp := _card.get_viewport_rect().size
 	var card_size := _card.size
 	if not _has_target:
-		_card.position = ((vp - card_size) * 0.5)
+		_card.position = Vector2((vp.x - card_size.x) * 0.5, BANNER_TOP_Y)
 		return
 	var below_y := _target_rect.end.y + CARD_GAP
 	var above_y := _target_rect.position.y - CARD_GAP - card_size.y

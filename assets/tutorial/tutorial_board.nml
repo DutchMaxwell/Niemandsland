@@ -1,0 +1,1445 @@
+{
+	"army_names": {
+		"1": "Tutorial Strike Team",
+		"2": "Tutorial Opponents"
+	},
+	"game_state": {
+		"current_player": 1,
+		"current_round": 1,
+		"token_library": {
+
+		}
+	},
+	"game_units": [
+		{
+			"activation_round": 0,
+			"casts_current": 0,
+			"casts_per_round": 0,
+			"is_activated": false,
+			"is_fatigued": false,
+			"is_shaken": false,
+			"model_positions": [
+				{
+					"position": [
+						-0.0800000429153442,
+						0.0,
+						0.349999994039536
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.0400000810623169,
+						0.0,
+						0.349999994039536
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						0.0,
+						0.0,
+						0.349999994039536
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						0.0399999618530273,
+						0.0,
+						0.349999994039536
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						0.0799999237060547,
+						0.0,
+						0.349999994039536
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				}
+			],
+			"models": [
+				{
+					"import_position": [
+						-1.71720004081726,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 0,
+					"properties": {
+						"special_rules": [],
+						"tough": 1
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.67720007896423,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 1,
+					"properties": {
+						"special_rules": [],
+						"tough": 1
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.63719999790192,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 2,
+					"properties": {
+						"special_rules": [],
+						"tough": 1
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.59720003604889,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 3,
+					"properties": {
+						"special_rules": [],
+						"tough": 1
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.55720007419586,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 4,
+					"properties": {
+						"special_rules": [],
+						"tough": 1
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				}
+			],
+			"source_data": {
+				"base_depth_mm": 32,
+				"base_is_oval": false,
+				"base_size_round": 32,
+				"base_width_mm": 32,
+				"equipment": [],
+				"special_rules": [],
+				"weapons": []
+			},
+			"source_type": "opr",
+			"unit_id": "1783674571.2998_2945529167",
+			"unit_properties": {
+				"attached_heroes": [],
+				"attached_to": "",
+				"base_depth_mm": 32,
+				"base_from_tough": false,
+				"base_is_oval": false,
+				"base_is_square": false,
+				"base_size_round": 32,
+				"base_size_square": 30,
+				"base_width_mm": 32,
+				"cost": 150,
+				"custom_name": "",
+				"defense": 3,
+				"display_suffix": "",
+				"faction_folder": "",
+				"game_system": "",
+				"item_grants": {
+
+				},
+				"mount_name": "",
+				"name": "Battle Brothers",
+				"player_id": 1,
+				"quality": 3,
+				"regiment_mode": false,
+				"rule_descriptions": {
+
+				},
+				"size": 5,
+				"special_rules": []
+			}
+		},
+		{
+			"activation_round": 0,
+			"casts_current": 0,
+			"casts_per_round": 0,
+			"is_activated": false,
+			"is_fatigued": false,
+			"is_shaken": false,
+			"model_positions": [
+				{
+					"position": [
+						-0.580000042915344,
+						0.0,
+						0.349999994039536
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.540000081062317,
+						0.0,
+						0.349999994039536
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.5,
+						0.0,
+						0.349999994039536
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.460000038146973,
+						0.0,
+						0.349999994039536
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.420000076293945,
+						0.0,
+						0.349999994039536
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				}
+			],
+			"models": [
+				{
+					"import_position": [
+						-1.44520008563995,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 0,
+					"properties": {
+						"special_rules": [],
+						"tough": 1
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.40520012378693,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 1,
+					"properties": {
+						"special_rules": [],
+						"tough": 1
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.36520004272461,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 2,
+					"properties": {
+						"special_rules": [],
+						"tough": 1
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.32520008087158,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 3,
+					"properties": {
+						"special_rules": [],
+						"tough": 1
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.28520011901855,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 4,
+					"properties": {
+						"special_rules": [],
+						"tough": 1
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				}
+			],
+			"source_data": {
+				"base_depth_mm": 32,
+				"base_is_oval": false,
+				"base_size_round": 32,
+				"base_width_mm": 32,
+				"equipment": [],
+				"special_rules": [],
+				"weapons": []
+			},
+			"source_type": "opr",
+			"unit_id": "1783674571.3063_850991220",
+			"unit_properties": {
+				"attached_heroes": [],
+				"attached_to": "",
+				"base_depth_mm": 32,
+				"base_from_tough": false,
+				"base_is_oval": false,
+				"base_is_square": false,
+				"base_size_round": 32,
+				"base_size_square": 30,
+				"base_width_mm": 32,
+				"cost": 165,
+				"custom_name": "",
+				"defense": 3,
+				"display_suffix": "",
+				"faction_folder": "",
+				"game_system": "",
+				"item_grants": {
+
+				},
+				"mount_name": "",
+				"name": "Assault Brothers",
+				"player_id": 1,
+				"quality": 3,
+				"regiment_mode": false,
+				"rule_descriptions": {
+
+				},
+				"size": 5,
+				"special_rules": []
+			}
+		},
+		{
+			"activation_round": 0,
+			"casts_current": 0,
+			"casts_per_round": 0,
+			"is_activated": false,
+			"is_fatigued": false,
+			"is_shaken": false,
+			"model_positions": [
+				{
+					"position": [
+						0.460000038146973,
+						0.0,
+						0.349999994039536
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						0.5,
+						0.0,
+						0.349999994039536
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						0.540000081062317,
+						0.0,
+						0.349999994039536
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				}
+			],
+			"models": [
+				{
+					"import_position": [
+						-1.17320013046265,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 0,
+					"properties": {
+						"special_rules": [],
+						"tough": 1
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.13320016860962,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 1,
+					"properties": {
+						"special_rules": [],
+						"tough": 1
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.0932000875473,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 2,
+					"properties": {
+						"special_rules": [],
+						"tough": 1
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				}
+			],
+			"source_data": {
+				"base_depth_mm": 32,
+				"base_is_oval": false,
+				"base_size_round": 32,
+				"base_width_mm": 32,
+				"equipment": [],
+				"special_rules": [],
+				"weapons": []
+			},
+			"source_type": "opr",
+			"unit_id": "1783674571.31411_3316350432",
+			"unit_properties": {
+				"attached_heroes": [],
+				"attached_to": "",
+				"base_depth_mm": 32,
+				"base_from_tough": false,
+				"base_is_oval": false,
+				"base_is_square": false,
+				"base_size_round": 32,
+				"base_size_square": 30,
+				"base_width_mm": 32,
+				"cost": 130,
+				"custom_name": "",
+				"defense": 3,
+				"display_suffix": "",
+				"faction_folder": "",
+				"game_system": "",
+				"item_grants": {
+
+				},
+				"mount_name": "",
+				"name": "Support Brothers",
+				"player_id": 1,
+				"quality": 3,
+				"regiment_mode": false,
+				"rule_descriptions": {
+
+				},
+				"size": 3,
+				"special_rules": []
+			}
+		},
+		{
+			"activation_round": 0,
+			"casts_current": 0,
+			"casts_per_round": 0,
+			"is_activated": false,
+			"is_fatigued": false,
+			"is_shaken": false,
+			"model_positions": [
+				{
+					"position": [
+						-0.0800000429153442,
+						0.0,
+						-0.349999994039536
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.0400000810623169,
+						0.0,
+						-0.349999994039536
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						0.0,
+						0.0,
+						-0.349999994039536
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						0.0399999618530273,
+						0.0,
+						-0.349999994039536
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						0.0799999237060547,
+						0.0,
+						-0.349999994039536
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				}
+			],
+			"models": [
+				{
+					"import_position": [
+						1.02439999580383,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 0,
+					"properties": {
+						"special_rules": [],
+						"tough": 1
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.06439995765686,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 1,
+					"properties": {
+						"special_rules": [],
+						"tough": 1
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.10440003871918,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 2,
+					"properties": {
+						"special_rules": [],
+						"tough": 1
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.1444000005722,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 3,
+					"properties": {
+						"special_rules": [],
+						"tough": 1
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.18439996242523,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 4,
+					"properties": {
+						"special_rules": [],
+						"tough": 1
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				}
+			],
+			"source_data": {
+				"base_depth_mm": 32,
+				"base_is_oval": false,
+				"base_size_round": 32,
+				"base_width_mm": 32,
+				"equipment": [],
+				"special_rules": [],
+				"weapons": []
+			},
+			"source_type": "opr",
+			"unit_id": "1783674571.34163_926087075",
+			"unit_properties": {
+				"attached_heroes": [],
+				"attached_to": "",
+				"base_depth_mm": 32,
+				"base_from_tough": false,
+				"base_is_oval": false,
+				"base_is_square": false,
+				"base_size_round": 32,
+				"base_size_square": 30,
+				"base_width_mm": 32,
+				"cost": 150,
+				"custom_name": "",
+				"defense": 3,
+				"display_suffix": "",
+				"faction_folder": "",
+				"game_system": "",
+				"item_grants": {
+
+				},
+				"mount_name": "",
+				"name": "Battle Brothers",
+				"player_id": 2,
+				"quality": 3,
+				"regiment_mode": false,
+				"rule_descriptions": {
+
+				},
+				"size": 5,
+				"special_rules": []
+			}
+		}
+	],
+	"object_counter": 20,
+	"objects": [
+		{
+			"game_unit_id": "1783674571.2998_2945529167",
+			"glb_name": "Battle Brothers",
+			"model_index": 0,
+			"name": "OPR_Battle_Brothers",
+			"network_id": 1000001,
+			"position": [
+				-0.0800000429153442,
+				0.0,
+				0.349999994039536
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783674571.2998_2945529167",
+			"glb_name": "Battle Brothers",
+			"model_index": 1,
+			"name": "@StaticBody3D@1366",
+			"network_id": 1000002,
+			"position": [
+				-0.0400000810623169,
+				0.0,
+				0.349999994039536
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783674571.2998_2945529167",
+			"glb_name": "Battle Brothers",
+			"model_index": 2,
+			"name": "@StaticBody3D@1371",
+			"network_id": 1000003,
+			"position": [
+				0.0,
+				0.0,
+				0.349999994039536
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783674571.2998_2945529167",
+			"glb_name": "Battle Brothers",
+			"model_index": 3,
+			"name": "@StaticBody3D@1376",
+			"network_id": 1000004,
+			"position": [
+				0.0399999618530273,
+				0.0,
+				0.349999994039536
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783674571.2998_2945529167",
+			"glb_name": "Battle Brothers",
+			"model_index": 4,
+			"name": "@StaticBody3D@1381",
+			"network_id": 1000005,
+			"position": [
+				0.0799999237060547,
+				0.0,
+				0.349999994039536
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783674571.3063_850991220",
+			"glb_name": "Assault Brothers",
+			"model_index": 0,
+			"name": "OPR_Assault_Brothers",
+			"network_id": 1000006,
+			"position": [
+				-0.580000042915344,
+				0.0,
+				0.349999994039536
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783674571.3063_850991220",
+			"glb_name": "Assault Brothers",
+			"model_index": 1,
+			"name": "@StaticBody3D@1390",
+			"network_id": 1000007,
+			"position": [
+				-0.540000081062317,
+				0.0,
+				0.349999994039536
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783674571.3063_850991220",
+			"glb_name": "Assault Brothers",
+			"model_index": 2,
+			"name": "@StaticBody3D@1395",
+			"network_id": 1000008,
+			"position": [
+				-0.5,
+				0.0,
+				0.349999994039536
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783674571.3063_850991220",
+			"glb_name": "Assault Brothers",
+			"model_index": 3,
+			"name": "@StaticBody3D@1400",
+			"network_id": 1000009,
+			"position": [
+				-0.460000038146973,
+				0.0,
+				0.349999994039536
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783674571.3063_850991220",
+			"glb_name": "Assault Brothers",
+			"model_index": 4,
+			"name": "@StaticBody3D@1405",
+			"network_id": 1000010,
+			"position": [
+				-0.420000076293945,
+				0.0,
+				0.349999994039536
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783674571.31411_3316350432",
+			"glb_name": "Support Brothers",
+			"model_index": 0,
+			"name": "OPR_Support_Brothers",
+			"network_id": 1000011,
+			"position": [
+				0.460000038146973,
+				0.0,
+				0.349999994039536
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783674571.31411_3316350432",
+			"glb_name": "Support Brothers",
+			"model_index": 1,
+			"name": "@StaticBody3D@1414",
+			"network_id": 1000012,
+			"position": [
+				0.5,
+				0.0,
+				0.349999994039536
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783674571.31411_3316350432",
+			"glb_name": "Support Brothers",
+			"model_index": 2,
+			"name": "@StaticBody3D@1419",
+			"network_id": 1000013,
+			"position": [
+				0.540000081062317,
+				0.0,
+				0.349999994039536
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783674571.34163_926087075",
+			"glb_name": "Battle Brothers",
+			"model_index": 0,
+			"name": "@StaticBody3D@1521",
+			"network_id": 2000014,
+			"position": [
+				-0.0800000429153442,
+				0.0,
+				-0.349999994039536
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783674571.34163_926087075",
+			"glb_name": "Battle Brothers",
+			"model_index": 1,
+			"name": "@StaticBody3D@1526",
+			"network_id": 2000015,
+			"position": [
+				-0.0400000810623169,
+				0.0,
+				-0.349999994039536
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783674571.34163_926087075",
+			"glb_name": "Battle Brothers",
+			"model_index": 2,
+			"name": "@StaticBody3D@1531",
+			"network_id": 2000016,
+			"position": [
+				0.0,
+				0.0,
+				-0.349999994039536
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783674571.34163_926087075",
+			"glb_name": "Battle Brothers",
+			"model_index": 3,
+			"name": "@StaticBody3D@1536",
+			"network_id": 2000017,
+			"position": [
+				0.0399999618530273,
+				0.0,
+				-0.349999994039536
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783674571.34163_926087075",
+			"glb_name": "Battle Brothers",
+			"model_index": 4,
+			"name": "@StaticBody3D@1541",
+			"network_id": 2000018,
+			"position": [
+				0.0799999237060547,
+				0.0,
+				-0.349999994039536
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"name": "Terrain_19",
+			"network_id": 10019,
+			"position": [
+				-0.300000011920929,
+				0.0,
+				-0.0500000007450581
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "terrain",
+			"visible": true
+		},
+		{
+			"name": "Terrain_20",
+			"network_id": 10020,
+			"position": [
+				0.349999994039536,
+				0.0,
+				0.100000001490116
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "terrain",
+			"visible": true
+		}
+	],
+	"player_spells": {
+
+	},
+	"rule_descriptions": {
+		"AP": "Targets get -X to Defense rolls when blocking hits.",
+		"Agile": "Moves +1\" on advance and +2” on rush and charge.",
+		"Aircraft": "May only use Advance actions, moving in a straight line, and adding 30” to its total move (even if Shaken). Aircraft ignore all units and terrain when moving and stopping, can’t seize or contest objectives, can’t be charged, and units targeting them get -12” range.",
+		"Ambush": "May be set aside before deployment. At the start of any round after the first, may be deployed anywhere over 9” away from enemy units. Players alternate in placing Ambush units, starting with the player that activates next. Units that deploy via Ambush can’t seize or contest objectives on the round they deploy.",
+		"Arm Injury": "Gets -1 to rolls when in melee.",
+		"Artillery": "May only use Hold actions. When this model shoots at enemies over 9\" away, it gets +1 to hit rolls. When enemy units shoot at this model from over 9\" away, they get -2 to hit rolls.",
+		"Bane": "Ignores Regeneration, and when attacking the target must re-roll unmodified Defense results of 6.",
+		"Bane in Melee Aura": "This model and its unit get Bane in melee.",
+		"Bane when Shooting Aura": "This model and its unit get Bane when shooting.",
+		"Banner": "This model and its unit get +1 to morale test rolls.",
+		"Battleborn": "If a unit where all models have this rule is Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken.",
+		"Berserker": "Enemies get -1 to morale test rolls when in melee with the hero.",
+		"Bitter Rivalry": "Gets +1 to hit against enemy heroes.",
+		"Blast": "Ignores cover, and after resolving other special rules, each hit is multiplied by X, where X is up to as many hits as models in the target unit.",
+		"Blinded Eye": "Gets -1 to rolls when shooting.",
+		"Caster": "Gets X spell tokens at the start of each round, but can’t hold more than 6 tokens at once. At any point before attacking, spend as many tokens as the spell’s value to try casting one or more spells (only one try per spell). Roll one die, on 4+ resolve the effect on a target in line of sight. Models within 18” in line of sight of the caster’s unit may spend any number of spell tokens at the same time before rolling, to give the caster +1/-1 to the roll per token.",
+		"Chemist": "Friendly units within 6\" of the Hero get +1 to morale tests when in melee.",
+		"Chest Wound": "Gets -1 to rolls when blocking hits.",
+		"Climber": "The hero ignores difficult terrain effects.",
+		"Counter": "Strikes first with this weapon when charged, and the charging unit gets -1 total Impact rolls per model with Counter.",
+		"Courage Aura": "This model and its unit get +1 to morale test rolls.",
+		"Crazed": "Gets +1 attack in melee when charging.",
+		"Dead": "Remove the hero from your army sheet.",
+		"Deadly": "Assign each wound to one model, and multiply it by X. Hits from Deadly must be resolved first, and these wounds don’t carry over to other models if the original target is killed.",
+		"Defense": "This model gets +X to defense rolls.",
+		"Destroyer": "The hero gets AP(+1) when shooting.",
+		"Duellist": "Enemy units get -1 in melee against the hero.",
+		"Elite": "May re-roll one roll of any kind once per game.",
+		"Entrenched": "As long as a unit where all models have this rule hasn't moved during the round, enemy units shooting at it from over 9\" away get -2 to hit rolls.",
+		"Evasive": "Enemies get -1 to hit rolls when attacking units where all models have this rule.",
+		"Fanatic": "The hero gets +1 attack when in melee.",
+		"Fast": "Moves +2\" when using Advance, and +4” when using Rush/Charge.",
+		"Fast Learner": "May pick any other trait from the list.",
+		"Fear": "This model counts as having dealt +X wounds when checking who won melee.",
+		"Fearless": "When a unit where all models have this rule fails a morale test, roll one die. On a 4+ it counts as passed instead.",
+		"Flying": "May move through units and terrain, and ignores terrain effects whilst moving.",
+		"Furious": "When charging, unmodified results of 6 to hit in melee deal 1 extra hit (only the original hit counts as a 6 for special rules).",
+		"Headstrong": "Gets +1 to rolls when taking morale tests.",
+		"Herbalist": "Friendly units within 6\" may ignore wounds on a roll of 6+.",
+		"Hero": "Heroes with up to Tough(6) may deploy as part of one multi-model unit without another Hero. The hero may take morale tests on behalf of the unit, but must use the unit’s Defense until all other models have been killed.",
+		"Horrible Scars": "Enemy units get -1 to hit when in melee against the hero.",
+		"Hunter": "The hero may shoot even after rush actions.",
+		"Immobile": "May only use Hold actions.",
+		"Impact": "Roll X dice when attacking after charging, unless fatigued. For each 2+ the target takes one hit.",
+		"Indirect": "Gets -1 to hit rolls when shooting after moving. May target enemies that are not in line of sight as if in line of sight, and ignores cover from sight obstructions.",
+		"Instigator": "Friendly units that activate within 6\" of the Hero get +1 to hit when in melee.",
+		"Lacerate": "When attacking the target must re-roll unmodified Defense results of 6.",
+		"Leader": "Friendly units within 6\" of the Hero get +1 to morale test rolls.",
+		"Limited": "May only be used once per game.",
+		"Mastermind": "Enemy units within 6\" of the Hero get -1 Defense.",
+		"Melee Shrouding": "Enemies get -3\" movement to a min. of 6\" when trying to charge units where all models have this rule.",
+		"Melee Shrouding Aura": "This model and its unit get Melee Shrouding.",
+		"Mend": "Once per activation, before attacking, pick one friendly model within 3\" with Tough, and remove D3 wounds from it.",
+		"Morale": "Gets +X to morale test rolls.",
+		"Motivated": "Always passes the first morale test of the match.",
+		"Musician": "This model and its unit moves +1\" when using move actions.",
+		"Natural Talent": "The hero recovers and gets +1 XP.",
+		"Prowler": "Enemy units further than 12\" get -1 to hit rolls when shooting at the hero.",
+		"Rapid Rush": "This model moves +6\" when using Rush actions.",
+		"Rapid Rush Aura": "This model and its unit get Rapid Rush.",
+		"Re-Deployment": "After all other units are deployed (excluding units that were set aside), you may remove up to two friendly units from the table and deploy them again. Players alternate in placing Re-Deployment units, starting with the player that activates next.",
+		"Re-Position Artillery": "Once per activation, pick one friendly model within 6\" with Artillery, which may immediately move by up to 9\".\n\n",
+		"Regeneration": "When a unit where all models have this rule takes wounds, roll one die for each. On a 5+ it is ignored.",
+		"Regeneration Aura": "This model and its unit get Regeneration.",
+		"Relentless": "When this model shoots at enemies over 9\" away, unmodified results of 6 to hit deal 1 extra hit (only the original hit counts as a 6 for special rules).",
+		"Reliable": "Attacks at Quality 2+.",
+		"Rending": "Ignores Regeneration, and on unmodified results of 6 to hit, those hits get AP(+4).",
+		"Resilient": "Gets +1 to rolls when blocking hits.",
+		"Runner": "The hero always moves +2\" (even in terrain).",
+		"Scavenger": "Friendly units that activate within 6\" of the Hero get +6” range when shooting.",
+		"Scout": "May be set aside before deployment. After all other units are deployed, may be deployed anywhere fully within 12” of their deployment zone. Players alternate in placing Scout units, starting with the player that activates next.",
+		"Shielded": "Units where all models have this rule get +1 to defense rolls against hits that are not from spells.",
+		"Shred": "On unmodified results of 1 to block hits, this weapon deals 1 extra wound.",
+		"Slow": "Moves -2\" when using Advance, and -4” when using Rush/Charge.",
+		"Smashed Leg": "Moves -1\" on advance and -2” on rush and charge actions.",
+		"Sniper REMOVE": "Shoots at Quality 2+, and each model with Sniper may pick any model in the target unit as its individual target, which is resolved as if it was a unit of 1. Sniper shooting must be resolved before other weapons.",
+		"Specialist": "Gets +1 to hit rolls in melee or shooting (pick one).",
+		"Stealth": "When units where all models have this rule are shot from over 9\" away, enemy units get -1 to hit rolls.",
+		"Strider": "May ignore the effects of difficult terrain when moving. ",
+		"Suppressor": "Enemies that are shot at by the hero get -1 to hit when shooting until the end of the round.",
+		"Tactician": "Friendly units that activate within 6\" of the Hero get +1 to hit when shooting.",
+		"Takedown": "This model may pick any model in the target unit as its individual target, which is resolved as if it was a unit of [1]. Takedown attacks must be resolved before other weapons.",
+		"Thrust": "When charging, gets +1 to hit rolls and AP(+1) in melee.",
+		"Tough": "This model must take X wounds before being killed. If a model with tough joins a unit without it, then it is removed last when the unit takes wounds. You must continue to put wounds on the tough model with most wounds in the unit until it is killed, before starting to put them on the next tough model (heroes must be assigned wounds last, even if already wounded).",
+		"Toughened": "Gets Tough(+1).",
+		"Transport": "May transport up to X models or Heroes with up to Tough(6), and non-Heroes with up to Tough(3) which occupy 3 spaces each. Transports may deploy with units inside, and units may enter/exit by using any move action, but must stay fully within 6\" of it when exiting. Units inside/outside transports may not target other units outside/inside transports, but may target the transport itself. When a transport is destroyed, units inside must take a dangerous terrain test, are Shaken, and must be placed fully within 6” of the transport before it’s removed.",
+		"Traumatized": "Gets -1 to rolls when taking morale tests.",
+		"Unstoppable": "Ignores Regeneration, and ignores all negative modifiers to this weapon.",
+		"Unstoppable Mark": "Once per activation, before attacking, pick one enemy unit within 18\" in line of sight, which friendly units gets Unstoppable against once (next time the effect would apply).",
+		"Vanguard": "Friendly units that activate within 6\" move +4” when using Charge actions.",
+		"Versatile Attack": "When this unit is activated, pick one effect: until the end of the activation, when shooting or charging enemies over 9\" away, all models with this rule in this unit either get AP(+1) or get +1 to hit rolls.",
+		"Versatile Reach": "When this unit is activated, pick one effect: until the end of the activation all models with this rule in it either get +4\" range when shooting, or move +2\" when charging.",
+		"Versatile Reach Aura": "This model and its unit get Versatile Reach.",
+		"Warden": "When the hero is activated all friendly units within 6\" of the hero stop being shaken."
+	},
+	"saved_at": "2026-07-10T11:09:35",
+	"table": {
+		"biome": "temperate_grassland",
+		"custom_zones": {
+			"player1": [],
+			"player2": []
+		},
+		"deployment_type": 0,
+		"grid_cells": {
+
+		},
+		"grid_rotation": 0.0,
+		"mission_objectives": [],
+		"overlay_mode": 0,
+		"placed_objects": [],
+		"size_feet": [
+			6.0,
+			4.0
+		],
+		"wall_segments": []
+	},
+	"version": "1.5"
+}

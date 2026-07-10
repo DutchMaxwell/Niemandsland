@@ -1,107 +1,169 @@
 extends GdUnitTestSuite
-## Unit tests for the T0 tutorial step FSM (TutorialDirector). These exercise ONLY the pure
-## step logic and the signal-handler -> advance wiring — no scene, no coach overlay, no camera.
-## The director is created but never added to the tree (so `begin()`/`_ready` never build the
-## overlay), and every scene-touching path in `_apply_step_visuals` is null-guarded, so driving
-## the handlers here advances the FSM without any scene dependency.
+## Tests for the TutorialDirector's scene-free logic: the static payload predicates and
+## the signal-handler -> flow wiring, driven headless. The director is created but never
+## added to the tree and begin() is never called, so no coach overlay, camera or dialog
+## exists — every scene-touching path is null-guarded, which is exactly what these tests
+## also protect. Persistence goes to an isolated test cfg, never the player's file.
 
 const Director := preload("res://scripts/tutorial_director.gd")
+const Flow := preload("res://scripts/tutorial_flow.gd")
+const Progress := preload("res://scripts/tutorial_progress.gd")
+const TEST_CFG := "user://test_tutorial_director.cfg"
 
 
-func _new_director() -> TutorialDirector:
-	return auto_free(Director.new()) as TutorialDirector
+func before_test() -> void:
+	_delete_test_cfg()
 
 
-# ===== Pure transition table =====
-
-func test_next_step_progression() -> void:
-	assert_that(Director.next_step(Director.Step.SELECT)).is_equal(Director.Step.MOVE)
-	assert_that(Director.next_step(Director.Step.MOVE)).is_equal(Director.Step.ROLL)
-	assert_that(Director.next_step(Director.Step.ROLL)).is_equal(Director.Step.DONE)
-	# Terminal / inactive are fixed points.
-	assert_that(Director.next_step(Director.Step.DONE)).is_equal(Director.Step.DONE)
-	assert_that(Director.next_step(Director.Step.INACTIVE)).is_equal(Director.Step.INACTIVE)
+func after_test() -> void:
+	_delete_test_cfg()
 
 
-# ===== SELECT predicate =====
+func _delete_test_cfg() -> void:
+	if FileAccess.file_exists(TEST_CFG):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_CFG))
 
-func test_selection_completes_only_in_select_with_target() -> void:
-	var target: Node3D = auto_free(Node3D.new())
+
+## A director with a live flow + isolated progress, positioned at `lesson`. Not in the
+## tree; scene refs stay null (guarded), so only the pure wiring runs.
+func _new_director(lesson: String) -> TutorialDirector:
+	var director := auto_free(Director.new()) as TutorialDirector
+	director.flow = Flow.new(Flow.build_tool_track())
+	director.flow.start_at(lesson)
+	director.progress = Progress.new(TEST_CFG)
+	director.progress.load_from_disk()
+	return director
+
+
+## A minimal real GameUnit (player 1) whose models wrap auto-freed Node3Ds.
+func _new_unit(model_count: int) -> GameUnit:
+	var unit := GameUnit.new()
+	unit.unit_properties = {"name": "Test Unit", "player_id": 1}
+	for i in model_count:
+		var model := ModelInstance.new()
+		model.node = auto_free(Node3D.new())
+		model.unit = unit
+		model.model_index = i
+		unit.models.append(model)
+	return unit
+
+
+func _nodes_of(unit: GameUnit) -> Array[Node3D]:
+	var nodes: Array[Node3D] = []
+	for model in unit.models:
+		nodes.append(model.node)
+	return nodes
+
+
+## ===== Static payload predicates =====
+
+func test_selection_hits() -> void:
+	var unit := _new_unit(2)
+	var nodes := _nodes_of(unit)
 	var other: Node3D = auto_free(Node3D.new())
-	assert_bool(Director.selection_completes(Director.Step.SELECT, [target], target)).is_true()
-	assert_bool(Director.selection_completes(Director.Step.SELECT, [other, target], target)).is_true()
-	# Wrong object selected, empty selection, wrong step, or no target -> no completion.
-	assert_bool(Director.selection_completes(Director.Step.SELECT, [other], target)).is_false()
-	assert_bool(Director.selection_completes(Director.Step.SELECT, [], target)).is_false()
-	assert_bool(Director.selection_completes(Director.Step.MOVE, [target], target)).is_false()
-	assert_bool(Director.selection_completes(Director.Step.SELECT, [target], null)).is_false()
+	assert_bool(Director.selection_hits([nodes[0]], nodes)).is_true()
+	assert_bool(Director.selection_hits([other, nodes[1]], nodes)).is_true()
+	assert_bool(Director.selection_hits([other], nodes)).is_false()
+	assert_bool(Director.selection_hits([], nodes)).is_false()
 
 
-# ===== MOVE predicate =====
-
-func test_drop_completes_only_in_move_with_target_moved() -> void:
-	var target: Node3D = auto_free(Node3D.new())
+func test_moves_hit() -> void:
+	var unit := _new_unit(1)
+	var nodes := _nodes_of(unit)
 	var other: Node3D = auto_free(Node3D.new())
-	assert_bool(Director.drop_completes(Director.Step.MOVE, [{"node": target, "inches": 2.0}], target)).is_true()
-	# A zero-distance drop, a different node, the wrong step, or no moves -> no completion.
-	assert_bool(Director.drop_completes(Director.Step.MOVE, [{"node": target, "inches": 0.0}], target)).is_false()
-	assert_bool(Director.drop_completes(Director.Step.MOVE, [{"node": other, "inches": 5.0}], target)).is_false()
-	assert_bool(Director.drop_completes(Director.Step.ROLL, [{"node": target, "inches": 2.0}], target)).is_false()
-	assert_bool(Director.drop_completes(Director.Step.MOVE, [], target)).is_false()
+	assert_bool(Director.moves_hit([{"node": nodes[0], "inches": 2.0}], nodes)).is_true()
+	assert_bool(Director.moves_hit([{"node": nodes[0], "inches": 0.0}], nodes)).is_false()
+	assert_bool(Director.moves_hit([{"node": other, "inches": 5.0}], nodes)).is_false()
+	assert_bool(Director.moves_hit([], nodes)).is_false()
 
 
-# ===== ROLL predicate =====
+## ===== W3: target-bound select/move, generic rotate/undo =====
 
-func test_roll_completes_only_in_roll() -> void:
-	assert_bool(Director.roll_completes(Director.Step.ROLL)).is_true()
-	assert_bool(Director.roll_completes(Director.Step.SELECT)).is_false()
-	assert_bool(Director.roll_completes(Director.Step.MOVE)).is_false()
-	assert_bool(Director.roll_completes(Director.Step.DONE)).is_false()
+func test_w3_walk_via_real_signal_handlers() -> void:
+	var director := _new_director("W3")
+	var unit := _new_unit(2)
+	director._target_unit = unit
+	director._target_nodes = _nodes_of(unit)
+	var stranger: Node3D = auto_free(Node3D.new())
+
+	# Selecting something else does nothing; selecting the unit advances select -> move.
+	director._on_selection_changed([stranger])
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("select")
+	director._on_selection_changed([director._target_nodes[0]])
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("move")
+
+	# A drop that moved a unit model advances move -> rotate.
+	director._on_selection_dropped([{"node": director._target_nodes[1], "inches": 3.0}])
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("rotate")
+
+	# Any committed rotation advances rotate -> undo.
+	var rotated: Array[Node3D] = []
+	director._on_rotation_committed(rotated)
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("undo")
+
+	# Undo completes the lesson; completion is persisted and the flow moved to W4.
+	var completions: Array = []
+	director.lesson_completed.connect(func(id: String) -> void: completions.append(id))
+	director._on_action_undone("Move 2 objects")
+	assert_array(completions).is_equal(["W3"])
+	assert_bool(director.progress.is_lesson_completed("W3")).is_true()
+	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("W4")
 
 
-# ===== Full event-gated drive =====
-
-func test_real_signals_advance_select_move_roll_then_finish() -> void:
-	var director := _new_director()
-	var target: Node3D = auto_free(Node3D.new())
-	director._target_unit = target
-	director.current_step = Director.Step.SELECT
-
-	var finished := [null]
-	director.tutorial_finished.connect(func(completed: bool) -> void: finished[0] = completed)
-
-	# Step 1: selecting the target advances SELECT -> MOVE.
-	director._on_selection_changed([target])
-	assert_that(director.current_step).is_equal(Director.Step.MOVE)
-
-	# Step 2: dropping the moved target advances MOVE -> ROLL.
-	director._on_selection_dropped([{"node": target, "inches": 3.5}])
-	assert_that(director.current_step).is_equal(Director.Step.ROLL)
-
-	# Step 3: any dice roll advances ROLL -> DONE and reports a completed tutorial.
-	director._on_roll_finnished(4)
-	assert_that(director.current_step).is_equal(Director.Step.DONE)
-	assert_bool(finished[0]).is_true()
-
-
-func test_wrong_signals_do_not_advance_the_step() -> void:
-	var director := _new_director()
-	var target: Node3D = auto_free(Node3D.new())
-	director._target_unit = target
-	director.current_step = Director.Step.SELECT
-
-	# A roll or a drop while SELECT is active, and an empty selection, are all ignored.
+func test_events_out_of_step_are_ignored() -> void:
+	var director := _new_director("W3")
 	director._on_roll_finnished(6)
-	director._on_selection_dropped([{"node": target, "inches": 4.0}])
-	director._on_selection_changed([])
-	assert_that(director.current_step).is_equal(Director.Step.SELECT)
+	director._on_action_undone("whatever")
+	var rotated: Array[Node3D] = []
+	director._on_rotation_committed(rotated)
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("select")
 
 
-func test_skip_finishes_incomplete() -> void:
-	var director := _new_director()
-	director.current_step = Director.Step.SELECT
+## ===== W6: kill / revive =====
+
+func test_w6_kill_then_revive_finishes_the_track() -> void:
+	var director := _new_director("W6")
+	var casualty: Node3D = auto_free(Node3D.new())
 	var finished := [null]
 	director.tutorial_finished.connect(func(completed: bool) -> void: finished[0] = completed)
 
-	director._on_skip_pressed()
-	assert_bool(finished[0]).is_false()
+	director._on_loose_model_dead_changed(casualty, true)
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("revive")
+	assert_object(director._parked_node).is_equal(casualty)
+
+	director._on_loose_model_dead_changed(casualty, false)
+	assert_bool(director.flow.finished).is_true()
+	assert_bool(finished[0]).is_true()
+	assert_bool(director.progress.is_lesson_completed("W6")).is_true()
+
+
+## ===== Lesson jumping: resume skips completed, chapter replay does not =====
+
+func test_completed_lessons_are_skipped_after_a_boundary() -> void:
+	var director := _new_director("W1")
+	director.progress.mark_lesson_completed("W2")
+	for _i in 3:  # orbit, zoom, pan
+		director._force_complete_current_step()
+	# W1 done; W2 already completed -> the cursor lands on W3.
+	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("W3")
+
+
+func test_replay_mode_plays_completed_lessons_too() -> void:
+	var director := _new_director("W1")
+	director._replay_mode = true
+	director.progress.mark_lesson_completed("W2")
+	for _i in 3:
+		director._force_complete_current_step()
+	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("W2")
+
+
+## ===== Skip lesson (escape hatch) =====
+
+func test_skip_lesson_marks_completed_and_moves_on() -> void:
+	var director := _new_director("W4")
+	var completions: Array = []
+	director.lesson_completed.connect(func(id: String) -> void: completions.append(id))
+	director._on_skip_lesson()
+	assert_array(completions).is_equal(["W4"])
+	assert_bool(director.progress.is_lesson_completed("W4")).is_true()
+	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("W5")

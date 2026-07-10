@@ -1,0 +1,761 @@
+{
+ "id": "6GYUgLIlOv9r",
+ "armyName": "Tutorial Strike Team",
+ "gameSystem": "gf",
+ "armyId": "78qp9l5alslt6yj8",
+ "listPoints": 445,
+ "list": {
+  "name": "Tutorial Strike Team",
+  "modelCount": 13,
+  "pointsLimit": 1000,
+  "units": [
+   {
+    "id": "rsouUXt",
+    "cost": 150,
+    "name": "Battle Brothers",
+    "size": 5,
+    "bases": {
+     "round": "25",
+     "square": "25"
+    },
+    "items": [],
+    "rules": [
+     {
+      "id": "741uN_Qma5mL",
+      "name": "Battleborn",
+      "label": "Battleborn"
+     },
+     {
+      "id": "2atvlmICQSCV",
+      "name": "Fearless",
+      "label": "Fearless"
+     }
+    ],
+    "valid": false,
+    "defense": 3,
+    "quality": 3,
+    "weapons": [
+     {
+      "id": "lXOrCYv-",
+      "name": "Heavy Rifle",
+      "type": "ArmyBookWeapon",
+      "range": 24,
+      "attacks": 1,
+      "weaponId": "lXOrCYv-",
+      "specialRules": [
+       {
+        "type": "ArmyBookRule",
+        "id": "17crjK7P6_w6",
+        "name": "AP",
+        "rating": 1,
+        "label": "AP(1)"
+       }
+      ],
+      "attacksMultiplier": 1,
+      "label": "Heavy Rifle (24\", A1, AP(1))",
+      "count": 5,
+      "originalCount": 5,
+      "dependencies": [
+       {
+        "upgradeInstanceId": "QvAIlvMYE",
+        "count": 1,
+        "variant": "replace"
+       }
+      ]
+     },
+     {
+      "id": "LSkqpzPG",
+      "name": "CCW",
+      "type": "ArmyBookWeapon",
+      "range": 0,
+      "attacks": 1,
+      "weaponId": "4o5CBBZC",
+      "specialRules": [],
+      "attacksMultiplier": 1,
+      "label": "CCW (A1)",
+      "count": 5,
+      "originalCount": 5
+     }
+    ],
+    "upgrades": [
+     "D1",
+     "lBsat"
+    ],
+    "genericName": "Battle Brothers",
+    "hasCustomRule": false,
+    "disabledSections": [],
+    "hasBalanceInvalid": true,
+    "disabledUpgradeSections": [],
+    "armyId": "78qp9l5alslt6yj8",
+    "xp": 0,
+    "notes": null,
+    "traits": [],
+    "combined": true,
+    "joinToUnit": null,
+    "selectionId": "ZPm6M",
+    "selectedUpgrades": [
+     {
+      "instanceId": "QvAIlvMYE",
+      "upgrade": {
+       "id": "DzCZc-S",
+       "uid": "OwEuxMR",
+       "label": "Replace one Heavy Rifle",
+       "parentPackageUid": "D1",
+       "type": "ArmyBookUpgradeSection",
+       "variant": "replace",
+       "affects": {
+        "type": "exactly",
+        "value": 1
+       },
+       "targets": [
+        "Heavy Rifle"
+       ]
+      },
+      "option": {
+       "uid": "SIzvKwC",
+       "cost": 10,
+       "type": "ArmyBookUpgradeOption",
+       "costs": [
+        {
+         "cost": 10,
+         "unitId": "rsouUXt",
+         "exactCost": 11.86
+        }
+       ],
+       "gains": [
+        {
+         "id": "gN1LAzCn",
+         "name": "Plasma Rifle",
+         "type": "ArmyBookWeapon",
+         "range": 24,
+         "attacks": 1,
+         "weaponId": "gN1LAzCn",
+         "specialRules": [
+          {
+           "id": "17crjK7P6_w6",
+           "name": "AP",
+           "rating": 4
+          }
+         ],
+         "attacksMultiplier": 1,
+         "label": "Plasma Rifle (24\", A1, AP(4))",
+         "count": 1,
+         "dependencies": []
+        }
+       ],
+       "label": "Plasma Rifle (24\", A1, AP(4))",
+       "parentPackageUid": "D1",
+       "parentSectionUid": "OwEuxMR",
+       "parentSectionId": "OwEuxMR",
+       "id": "SIzvKwC"
+      }
+     },
+     {
+      "instanceId": "TNVYNV5Su",
+      "upgrade": {
+       "id": "uQhfFnE",
+       "uid": "VSUO3",
+       "label": "Upgrade one model with one",
+       "parentPackageUid": "lBsat",
+       "type": "ArmyBookUpgradeSection",
+       "variant": "upgrade",
+       "model": true,
+       "affects": {
+        "type": "exactly",
+        "value": 1
+       },
+       "select": {
+        "type": "exactly",
+        "value": 1
+       }
+      },
+      "option": {
+       "uid": "aaeYD",
+       "type": "ArmyBookUpgradeOption",
+       "costs": [
+        {
+         "cost": 20,
+         "unitId": "rsouUXt",
+         "exactCost": 22.23
+        },
+        {
+         "cost": 20,
+         "unitId": "nhxpRx1",
+         "exactCost": 22.23
+        },
+        {
+         "cost": 15,
+         "unitId": "QDw-E9g",
+         "exactCost": 14.82
+        },
+        {
+         "cost": 15,
+         "unitId": "L9mFDNe",
+         "exactCost": 14.82
+        },
+        {
+         "cost": 55,
+         "unitId": "71qQ2Y0",
+         "exactCost": 56.02
+        }
+       ],
+       "gains": [
+        {
+         "name": "Medical Training",
+         "type": "ArmyBookItem",
+         "bases": null,
+         "label": "Medical Training (Regeneration Aura)",
+         "content": [
+          {
+           "id": "V3YzPPkZm8at",
+           "name": "Regeneration Aura",
+           "type": "ArmyBookRule",
+           "dependencies": []
+          }
+         ],
+         "count": 1,
+         "dependencies": []
+        }
+       ],
+       "label": "Medical Training (Regeneration Aura)",
+       "parentPackageUid": "lBsat",
+       "parentSectionUid": "VSUO3",
+       "parentSectionId": "VSUO3",
+       "id": "aaeYD"
+      }
+     }
+    ],
+    "loadout": [
+     {
+      "id": "lXOrCYv-",
+      "name": "Heavy Rifle",
+      "type": "ArmyBookWeapon",
+      "range": 24,
+      "attacks": 1,
+      "weaponId": "lXOrCYv-",
+      "specialRules": [
+       {
+        "type": "ArmyBookRule",
+        "id": "17crjK7P6_w6",
+        "name": "AP",
+        "rating": 1,
+        "label": "AP(1)"
+       }
+      ],
+      "attacksMultiplier": 1,
+      "label": "Heavy Rifle (24\", A1, AP(1))",
+      "count": 4,
+      "originalCount": 5,
+      "dependencies": [
+       {
+        "upgradeInstanceId": "QvAIlvMYE",
+        "count": 1,
+        "variant": "replace"
+       }
+      ]
+     },
+     {
+      "id": "LSkqpzPG",
+      "name": "CCW",
+      "type": "ArmyBookWeapon",
+      "range": 0,
+      "attacks": 1,
+      "weaponId": "4o5CBBZC",
+      "specialRules": [],
+      "attacksMultiplier": 1,
+      "label": "CCW (A1)",
+      "count": 5,
+      "originalCount": 5
+     },
+     {
+      "id": "gN1LAzCn",
+      "name": "Plasma Rifle",
+      "type": "ArmyBookWeapon",
+      "range": 24,
+      "attacks": 1,
+      "weaponId": "gN1LAzCn",
+      "specialRules": [
+       {
+        "id": "17crjK7P6_w6",
+        "name": "AP",
+        "rating": 4
+       }
+      ],
+      "attacksMultiplier": 1,
+      "label": "Plasma Rifle (24\", A1, AP(4))",
+      "count": 1,
+      "dependencies": []
+     },
+     {
+      "name": "Medical Training",
+      "type": "ArmyBookItem",
+      "bases": null,
+      "label": "Medical Training (Regeneration Aura)",
+      "content": [
+       {
+        "id": "V3YzPPkZm8at",
+        "name": "Regeneration Aura",
+        "type": "ArmyBookRule",
+        "dependencies": [],
+        "count": 1
+       }
+      ],
+      "count": 1,
+      "dependencies": []
+     }
+    ]
+   },
+   {
+    "id": "nhxpRx1",
+    "cost": 165,
+    "name": "Assault Brothers",
+    "size": 5,
+    "bases": {
+     "round": "25",
+     "square": "25"
+    },
+    "items": [],
+    "rules": [
+     {
+      "id": "741uN_Qma5mL",
+      "name": "Battleborn",
+      "label": "Battleborn"
+     },
+     {
+      "id": "2atvlmICQSCV",
+      "name": "Fearless",
+      "label": "Fearless"
+     }
+    ],
+    "valid": false,
+    "defense": 3,
+    "quality": 3,
+    "weapons": [
+     {
+      "id": "wfEHdWKY",
+      "name": "Heavy Pistol",
+      "type": "ArmyBookWeapon",
+      "range": 12,
+      "attacks": 1,
+      "weaponId": "wfEHdWKY",
+      "specialRules": [
+       {
+        "type": "ArmyBookRule",
+        "id": "17crjK7P6_w6",
+        "name": "AP",
+        "rating": 1,
+        "label": "AP(1)"
+       }
+      ],
+      "attacksMultiplier": 1,
+      "label": "Heavy Pistol (12\", A1, AP(1))",
+      "count": 5,
+      "originalCount": 5
+     },
+     {
+      "id": "ln7wg3EY",
+      "name": "Heavy CCW",
+      "type": "ArmyBookWeapon",
+      "count": 5,
+      "range": 0,
+      "attacks": 2,
+      "weaponId": "BN7Zr4vd",
+      "specialRules": [
+       {
+        "type": "ArmyBookRule",
+        "id": "17crjK7P6_w6",
+        "name": "AP",
+        "rating": 1,
+        "label": "AP(1)"
+       }
+      ],
+      "attacksMultiplier": 1,
+      "label": "Heavy CCW (A2, AP(1))",
+      "originalCount": 5
+     }
+    ],
+    "upgrades": [
+     "E1",
+     "lBsat"
+    ],
+    "genericName": "Assault Brothers",
+    "hasCustomRule": false,
+    "disabledSections": [],
+    "hasBalanceInvalid": true,
+    "disabledUpgradeSections": [],
+    "armyId": "78qp9l5alslt6yj8",
+    "xp": 0,
+    "notes": null,
+    "traits": [],
+    "combined": false,
+    "joinToUnit": null,
+    "selectionId": "s7w3F",
+    "selectedUpgrades": [],
+    "loadout": [
+     {
+      "id": "wfEHdWKY",
+      "name": "Heavy Pistol",
+      "type": "ArmyBookWeapon",
+      "range": 12,
+      "attacks": 1,
+      "weaponId": "wfEHdWKY",
+      "specialRules": [
+       {
+        "type": "ArmyBookRule",
+        "id": "17crjK7P6_w6",
+        "name": "AP",
+        "rating": 1,
+        "label": "AP(1)"
+       }
+      ],
+      "attacksMultiplier": 1,
+      "label": "Heavy Pistol (12\", A1, AP(1))",
+      "count": 5,
+      "originalCount": 5
+     },
+     {
+      "id": "ln7wg3EY",
+      "name": "Heavy CCW",
+      "type": "ArmyBookWeapon",
+      "count": 5,
+      "range": 0,
+      "attacks": 2,
+      "weaponId": "BN7Zr4vd",
+      "specialRules": [
+       {
+        "type": "ArmyBookRule",
+        "id": "17crjK7P6_w6",
+        "name": "AP",
+        "rating": 1,
+        "label": "AP(1)"
+       }
+      ],
+      "attacksMultiplier": 1,
+      "label": "Heavy CCW (A2, AP(1))",
+      "originalCount": 5
+     }
+    ]
+   },
+   {
+    "id": "y59VWP0",
+    "cost": 130,
+    "name": "Support Brothers",
+    "size": 3,
+    "bases": {
+     "round": "25",
+     "square": "25"
+    },
+    "items": [],
+    "rules": [
+     {
+      "id": "H9E9PIWpGRdw",
+      "name": "Relentless",
+      "label": "Relentless"
+     },
+     {
+      "id": "741uN_Qma5mL",
+      "name": "Battleborn",
+      "label": "Battleborn"
+     },
+     {
+      "id": "2atvlmICQSCV",
+      "name": "Fearless",
+      "label": "Fearless"
+     }
+    ],
+    "valid": true,
+    "defense": 3,
+    "quality": 3,
+    "weapons": [
+     {
+      "id": "9KbQ3D9t",
+      "name": "Heavy Flamer",
+      "type": "ArmyBookWeapon",
+      "count": 3,
+      "range": 12,
+      "attacks": 1,
+      "weaponId": "9KbQ3D9t",
+      "specialRules": [
+       {
+        "type": "ArmyBookRule",
+        "id": "17crjK7P6_w6",
+        "name": "AP",
+        "rating": 1,
+        "label": "AP(1)"
+       },
+       {
+        "type": "ArmyBookRule",
+        "id": "w_vX0mi58KKt",
+        "name": "Blast",
+        "rating": 3,
+        "label": "Blast(3)"
+       },
+       {
+        "type": "ArmyBookRule",
+        "id": "Zx4mWN0SbmK8",
+        "name": "Reliable",
+        "label": "Reliable"
+       }
+      ],
+      "attacksMultiplier": 1,
+      "label": "Heavy Flamer (12\", A1, AP(1), Blast(3), Reliable)",
+      "originalCount": 3,
+      "dependencies": [
+       {
+        "upgradeInstanceId": "VGefelwLY",
+        "count": 1,
+        "variant": "replace"
+       },
+       {
+        "upgradeInstanceId": "Pl44cm02q",
+        "count": 1,
+        "variant": "replace"
+       }
+      ]
+     },
+     {
+      "id": "LSkqpzPG",
+      "name": "CCW",
+      "type": "ArmyBookWeapon",
+      "range": 0,
+      "attacks": 1,
+      "weaponId": "4o5CBBZC",
+      "specialRules": [],
+      "attacksMultiplier": 1,
+      "label": "CCW (A1)",
+      "count": 3,
+      "originalCount": 3
+     }
+    ],
+    "upgrades": [
+     "F1"
+    ],
+    "genericName": "Support Brothers",
+    "hasCustomRule": false,
+    "disabledSections": [
+     "9QIyR_F"
+    ],
+    "hasBalanceInvalid": false,
+    "disabledUpgradeSections": [],
+    "armyId": "78qp9l5alslt6yj8",
+    "xp": 0,
+    "notes": null,
+    "traits": [],
+    "combined": false,
+    "joinToUnit": null,
+    "selectionId": "Z3UAV",
+    "selectedUpgrades": [
+     {
+      "instanceId": "VGefelwLY",
+      "upgrade": {
+       "id": "4M5J7KZ",
+       "uid": "9QIyR_F",
+       "label": "Replace any Heavy Flamer",
+       "parentPackageUid": "F1",
+       "type": "ArmyBookUpgradeSection",
+       "variant": "replace",
+       "affects": {
+        "type": "any"
+       },
+       "targets": [
+        "Heavy Flamer"
+       ]
+      },
+      "option": {
+       "uid": "RLMFa7e",
+       "cost": 25,
+       "type": "ArmyBookUpgradeOption",
+       "costs": [
+        {
+         "cost": 25,
+         "unitId": "y59VWP0",
+         "exactCost": 25.36
+        }
+       ],
+       "gains": [
+        {
+         "id": "_OuuPXyd",
+         "name": "Heavy Machinegun",
+         "type": "ArmyBookWeapon",
+         "range": 30,
+         "attacks": 3,
+         "weaponId": "_OuuPXyd",
+         "specialRules": [
+          {
+           "id": "17crjK7P6_w6",
+           "name": "AP",
+           "rating": 1
+          }
+         ],
+         "attacksMultiplier": 1,
+         "label": "Heavy Machinegun (30\", A3, AP(1))",
+         "count": 1,
+         "dependencies": []
+        }
+       ],
+       "label": "Heavy Machinegun (30\", A3, AP(1))",
+       "parentPackageUid": "F1",
+       "parentSectionUid": "9QIyR_F",
+       "parentSectionId": "9QIyR_F",
+       "id": "RLMFa7e"
+      }
+     },
+     {
+      "instanceId": "Pl44cm02q",
+      "upgrade": {
+       "id": "4M5J7KZ",
+       "uid": "9QIyR_F",
+       "label": "Replace any Heavy Flamer",
+       "parentPackageUid": "F1",
+       "type": "ArmyBookUpgradeSection",
+       "variant": "replace",
+       "affects": {
+        "type": "any"
+       },
+       "targets": [
+        "Heavy Flamer"
+       ]
+      },
+      "option": {
+       "uid": "RLMFa7e",
+       "cost": 25,
+       "type": "ArmyBookUpgradeOption",
+       "costs": [
+        {
+         "cost": 25,
+         "unitId": "y59VWP0",
+         "exactCost": 25.36
+        }
+       ],
+       "gains": [
+        {
+         "id": "_OuuPXyd",
+         "name": "Heavy Machinegun",
+         "type": "ArmyBookWeapon",
+         "range": 30,
+         "attacks": 3,
+         "weaponId": "_OuuPXyd",
+         "specialRules": [
+          {
+           "id": "17crjK7P6_w6",
+           "name": "AP",
+           "rating": 1
+          }
+         ],
+         "attacksMultiplier": 1,
+         "label": "Heavy Machinegun (30\", A3, AP(1))",
+         "count": 1,
+         "dependencies": []
+        }
+       ],
+       "label": "Heavy Machinegun (30\", A3, AP(1))",
+       "parentPackageUid": "F1",
+       "parentSectionUid": "9QIyR_F",
+       "parentSectionId": "9QIyR_F",
+       "id": "RLMFa7e"
+      }
+     }
+    ],
+    "loadout": [
+     {
+      "id": "9KbQ3D9t",
+      "name": "Heavy Flamer",
+      "type": "ArmyBookWeapon",
+      "count": 1,
+      "range": 12,
+      "attacks": 1,
+      "weaponId": "9KbQ3D9t",
+      "specialRules": [
+       {
+        "type": "ArmyBookRule",
+        "id": "17crjK7P6_w6",
+        "name": "AP",
+        "rating": 1,
+        "label": "AP(1)"
+       },
+       {
+        "type": "ArmyBookRule",
+        "id": "w_vX0mi58KKt",
+        "name": "Blast",
+        "rating": 3,
+        "label": "Blast(3)"
+       },
+       {
+        "type": "ArmyBookRule",
+        "id": "Zx4mWN0SbmK8",
+        "name": "Reliable",
+        "label": "Reliable"
+       }
+      ],
+      "attacksMultiplier": 1,
+      "label": "Heavy Flamer (12\", A1, AP(1), Blast(3), Reliable)",
+      "originalCount": 3,
+      "dependencies": [
+       {
+        "upgradeInstanceId": "VGefelwLY",
+        "count": 1,
+        "variant": "replace"
+       },
+       {
+        "upgradeInstanceId": "Pl44cm02q",
+        "count": 1,
+        "variant": "replace"
+       }
+      ]
+     },
+     {
+      "id": "LSkqpzPG",
+      "name": "CCW",
+      "type": "ArmyBookWeapon",
+      "range": 0,
+      "attacks": 1,
+      "weaponId": "4o5CBBZC",
+      "specialRules": [],
+      "attacksMultiplier": 1,
+      "label": "CCW (A1)",
+      "count": 3,
+      "originalCount": 3
+     },
+     {
+      "id": "_OuuPXyd",
+      "name": "Heavy Machinegun",
+      "type": "ArmyBookWeapon",
+      "range": 30,
+      "attacks": 3,
+      "weaponId": "_OuuPXyd",
+      "specialRules": [
+       {
+        "id": "17crjK7P6_w6",
+        "name": "AP",
+        "rating": 1
+       }
+      ],
+      "attacksMultiplier": 1,
+      "label": "Heavy Machinegun (30\", A3, AP(1))",
+      "count": 1,
+      "dependencies": []
+     },
+     {
+      "id": "_OuuPXyd",
+      "name": "Heavy Machinegun",
+      "type": "ArmyBookWeapon",
+      "range": 30,
+      "attacks": 3,
+      "weaponId": "_OuuPXyd",
+      "specialRules": [
+       {
+        "id": "17crjK7P6_w6",
+        "name": "AP",
+        "rating": 1
+       }
+      ],
+      "attacksMultiplier": 1,
+      "label": "Heavy Machinegun (30\", A3, AP(1))",
+      "count": 1,
+      "dependencies": []
+     }
+    ]
+   }
+  ]
+ }
+}

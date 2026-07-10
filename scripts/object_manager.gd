@@ -15,6 +15,11 @@ signal selection_dropped(moves: Array)
 ## Emitted (throttled) while dragging, so listeners can refresh live feedback
 ## such as unit coherency without waiting for the drag to finish.
 signal drag_updated()
+## A rotation gesture actually TURNED something (> the undo epsilon). All rotation
+## paths — R-hold aim-at-cursor, Shift+R group spin, Ctrl+R snap — commit through
+## commit_rotation_capture, so this is the single seam (tutorial / future replay),
+## mirroring what selection_dropped is for moves.
+signal rotation_committed(objects: Array[Node3D])
 signal context_menu_requested(screen_pos: Vector2, selected_objects: Array)
 
 @export var drag_height: float = 0.5  # Drag height in meters
@@ -1395,6 +1400,7 @@ func commit_rotation_capture() -> void:
 	if rotated and not objects.is_empty():
 		var rot_peer: int = _network_manager.get_my_peer_id() if _network_manager else 0
 		undo_manager.push(UndoManager.RotateAction.new(objects, from_rot, to_rot, _network_manager, rot_peer))
+		rotation_committed.emit(objects)
 
 
 ## Create (if needed) and show the rotation label with `degrees` (cumulative this

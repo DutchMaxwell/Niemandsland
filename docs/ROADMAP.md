@@ -37,6 +37,15 @@ planned and where ideas go. For what already works see
 - **Mummified Undead modular-sockets pilot — go-live pending.** The offline producer side is **done**
   (114 pilot socket keys generated on the Model-Forge pipeline); the **game-side integration + a
   maintainer QA pass** remain before it goes live on R2. _M_
+- **Guided tutorial — T0 + T1 on `feat/tutorial` ([#121](../../pull/121)), maintainer field-test
+  pending.** Event-gated guided play on the real table (coach-mark spotlight overlay; steps advance
+  on real signals, never a "Next" button): T0 walking skeleton + T1 **tool track W1–W6** (camera ·
+  import · select/move/rotate/undo · dice & measuring · card dock & activation · wounds/park/revive)
+  with a bundled real board (`assets/tutorial/tutorial_board.nml`, offline — no Army Forge
+  dependency), the two-question self-assessment (sim-experienced may skip W1/W3), and per-lesson
+  persistence + resume/replay chapter picker (`user://tutorial.cfg`). **Remaining:** T2 rule track
+  (R1–R3) + context first-time tips + MP guest toast track; T3 relay step instrumentation
+  (design: maintainer's tutorial plan, 2026-07-09). _M_
 
 ## 📋 Next (post-Alpha — Beta + alpha-feedback driven)
 

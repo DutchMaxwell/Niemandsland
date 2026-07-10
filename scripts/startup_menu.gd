@@ -245,11 +245,75 @@ func _on_start_battle_pressed() -> void:
 	_transition_to_game()
 
 
-## Launch the guided T0 tutorial: set the runtime-only flag (read-and-cleared in main.gd,
-## never persisted to project.godot, mirroring harness_mode) and open the prepared table.
+## TUTORIAL pressed: first-timers go straight in (assessment + full track); once any
+## chapter is completed, a chapter picker offers resume / per-lesson replay / reset.
 func _on_tutorial_pressed() -> void:
+	var progress := TutorialProgress.new()
+	progress.load_from_disk()
+	var track := TutorialFlow.build_tool_track()
+	if not progress.any_completed(TutorialFlow.ids(track)):
+		_launch_tutorial("")
+		return
+	_show_tutorial_picker(progress, track)
+
+
+## Set the runtime-only tutorial flags (read-and-cleared in main.gd, never persisted to
+## project.godot, mirroring harness_mode) and open the prepared table. An empty lesson id
+## means "resume": the director runs assessment/first-incomplete logic itself.
+func _launch_tutorial(lesson_id: String) -> void:
 	ProjectSettings.set_setting("niemandsland/tutorial_mode", true)
+	ProjectSettings.set_setting("niemandsland/tutorial_lesson", lesson_id)
 	_transition_to_game()
+
+
+## The chapter picker: RESUME on top, then one button per lesson (checkmarked when
+## completed — everything stays replayable, MTG-Arena model), plus a progress reset.
+func _show_tutorial_picker(progress: TutorialProgress, track: Array) -> void:
+	var dialog := AcceptDialog.new()
+	dialog.title = "Tutorial"
+	dialog.ok_button_text = "CLOSE"
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", HudTokens.SECTION_SEP)
+
+	var lesson_ids := TutorialFlow.ids(track)
+	var next_id := progress.first_incomplete(lesson_ids)
+	var resume_btn := Button.new()
+	if next_id.is_empty():
+		resume_btn.text = "ALL CHAPTERS DONE — PICK ONE TO REPLAY"
+		resume_btn.disabled = true
+	else:
+		resume_btn.text = "RESUME — NEXT: %s · %s" % [next_id, TutorialFlow.title_of(track, next_id).to_upper()]
+		resume_btn.pressed.connect(func() -> void:
+			dialog.queue_free()
+			_launch_tutorial(""))
+	vbox.add_child(resume_btn)
+	vbox.add_child(HSeparator.new())
+
+	for lesson in track:
+		var lesson_id := String(lesson.get("id", ""))
+		var done := progress.is_lesson_completed(lesson_id)
+		var btn := Button.new()
+		btn.text = "%s  %s · %s" % [("✓" if done else "•"), lesson_id, String(lesson.get("title", "")).to_upper()]
+		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		btn.pressed.connect(func() -> void:
+			dialog.queue_free()
+			_launch_tutorial(lesson_id))
+		vbox.add_child(btn)
+
+	vbox.add_child(HSeparator.new())
+	var reset_btn := Button.new()
+	reset_btn.text = "RESET TUTORIAL PROGRESS"
+	reset_btn.add_theme_color_override("font_color", HudTokens.DANGER)
+	reset_btn.pressed.connect(func() -> void:
+		progress.reset()
+		dialog.queue_free())
+	vbox.add_child(reset_btn)
+
+	dialog.add_child(vbox)
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.canceled.connect(dialog.queue_free)
+	add_child(dialog)
+	dialog.popup_centered()
 
 
 func _on_load_battle_pressed() -> void:

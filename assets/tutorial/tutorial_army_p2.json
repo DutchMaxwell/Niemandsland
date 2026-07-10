@@ -1,0 +1,129 @@
+{
+ "id": "6GYUgLIlOv9r",
+ "armyName": "Tutorial Opponents",
+ "gameSystem": "gf",
+ "armyId": "78qp9l5alslt6yj8",
+ "listPoints": 150,
+ "list": {
+  "name": "Tutorial Opponents",
+  "modelCount": 5,
+  "pointsLimit": 1000,
+  "units": [
+   {
+    "id": "rsouUXt",
+    "cost": 150,
+    "name": "Battle Brothers",
+    "size": 5,
+    "bases": {
+     "round": "25",
+     "square": "25"
+    },
+    "items": [],
+    "rules": [
+     {
+      "id": "741uN_Qma5mL",
+      "name": "Battleborn",
+      "label": "Battleborn"
+     },
+     {
+      "id": "2atvlmICQSCV",
+      "name": "Fearless",
+      "label": "Fearless"
+     }
+    ],
+    "valid": false,
+    "defense": 3,
+    "quality": 3,
+    "weapons": [
+     {
+      "id": "lXOrCYv-",
+      "name": "Heavy Rifle",
+      "type": "ArmyBookWeapon",
+      "range": 24,
+      "attacks": 1,
+      "weaponId": "lXOrCYv-",
+      "specialRules": [
+       {
+        "type": "ArmyBookRule",
+        "id": "17crjK7P6_w6",
+        "name": "AP",
+        "rating": 1,
+        "label": "AP(1)"
+       }
+      ],
+      "attacksMultiplier": 1,
+      "label": "Heavy Rifle (24\", A1, AP(1))",
+      "count": 5,
+      "originalCount": 5
+     },
+     {
+      "id": "LSkqpzPG",
+      "name": "CCW",
+      "type": "ArmyBookWeapon",
+      "range": 0,
+      "attacks": 1,
+      "weaponId": "4o5CBBZC",
+      "specialRules": [],
+      "attacksMultiplier": 1,
+      "label": "CCW (A1)",
+      "count": 5,
+      "originalCount": 5
+     }
+    ],
+    "upgrades": [
+     "D1",
+     "lBsat"
+    ],
+    "genericName": "Battle Brothers",
+    "hasCustomRule": false,
+    "disabledSections": [],
+    "hasBalanceInvalid": true,
+    "disabledUpgradeSections": [],
+    "armyId": "78qp9l5alslt6yj8",
+    "xp": 0,
+    "notes": null,
+    "traits": [],
+    "combined": true,
+    "joinToUnit": "ZPm6M",
+    "selectionId": "ofUpA",
+    "selectedUpgrades": [],
+    "loadout": [
+     {
+      "id": "lXOrCYv-",
+      "name": "Heavy Rifle",
+      "type": "ArmyBookWeapon",
+      "range": 24,
+      "attacks": 1,
+      "weaponId": "lXOrCYv-",
+      "specialRules": [
+       {
+        "type": "ArmyBookRule",
+        "id": "17crjK7P6_w6",
+        "name": "AP",
+        "rating": 1,
+        "label": "AP(1)"
+       }
+      ],
+      "attacksMultiplier": 1,
+      "label": "Heavy Rifle (24\", A1, AP(1))",
+      "count": 5,
+      "originalCount": 5
+     },
+     {
+      "id": "LSkqpzPG",
+      "name": "CCW",
+      "type": "ArmyBookWeapon",
+      "range": 0,
+      "attacks": 1,
+      "weaponId": "4o5CBBZC",
+      "specialRules": [],
+      "attacksMultiplier": 1,
+      "label": "CCW (A1)",
+      "count": 5,
+      "originalCount": 5
+     }
+    ]
+   }
+  ]
+ }
+}
