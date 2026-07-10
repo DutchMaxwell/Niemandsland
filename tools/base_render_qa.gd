@@ -22,6 +22,9 @@ const IMAGE_SIZE := Vector2i(2560, 1440)
 const BIOMES := ["temperate_grassland", "arid_desert"]
 const SETTLE_FRAMES := 10
 const BIOME_LOAD_FRAMES := 150
+## An isolated bare base on open ground (no ring, no rubberband) for the close brightness
+## comparison: framed tight so the terrain top sits directly beside untouched board.
+const CLOSE_BASE_POS := Vector3(0.42, 0.0, 0.16)
 
 var _table: Node = null
 var _manager: OPRArmyManager = null
@@ -39,13 +42,17 @@ func _initialize() -> void:
 func _run() -> void:
 	var args := OS.get_cmdline_user_args()
 	var out_dir: String = args[0] if args.size() > 0 else "/home/andreaskesberg/basing_out"
+	# Optional filename suffix (e.g. "_v2" for a re-render). When set, only the AFTER pass runs
+	# (the BEFORE/legacy look was captured in the first round) plus a close brightness comparison.
+	var suffix: String = args[1] if args.size() > 1 else ""
 	DirAccess.make_dir_recursive_absolute(out_dir)
 
 	get_root().size = IMAGE_SIZE
 	_build_world()
 	await _frames(5)
 
-	for legacy in [true, false]:
+	var passes: Array = [false] if suffix != "" else [true, false]
+	for legacy in passes:
 		BaseDecor.legacy_solid_disc = legacy
 		_spawn_groups()
 		await _frames(5)
@@ -56,9 +63,13 @@ func _run() -> void:
 			_viz.update_all_boundaries()
 			await _frames(SETTLE_FRAMES)
 			var short := "grass" if biome == "temperate_grassland" else "desert"
-			await _capture_34("%s/%s_%s_34.png" % [out_dir, tag, short], "%s  ·  %s  ·  3/4 view" % [tag.to_upper(), short])
+			await _capture_34("%s/%s_%s_34%s.png" % [out_dir, tag, short, suffix], "%s  ·  %s  ·  3/4 view" % [tag.to_upper(), short])
 			await _frames(SETTLE_FRAMES)
-			await _capture_top("%s/%s_%s_top.png" % [out_dir, tag, short], "%s  ·  %s  ·  top-down" % [tag.to_upper(), short])
+			await _capture_top("%s/%s_%s_top%s.png" % [out_dir, tag, short, suffix], "%s  ·  %s  ·  top-down" % [tag.to_upper(), short])
+			await _frames(SETTLE_FRAMES)
+			# Close brightness comparison (AFTER only): a bare base beside untouched board.
+			if not legacy:
+				await _capture_close("%s/%s_%s_close%s.png" % [out_dir, tag, short, suffix], "%s  ·  %s  ·  base vs board (close)" % [tag.to_upper(), short])
 			await _frames(2)
 		_clear_groups()
 
@@ -154,6 +165,11 @@ func _spawn_groups() -> void:
 			reg_nodes.append(_spawn(reg_props, pos))
 	_register_unit("regiment", reg_props, reg_nodes)
 
+	# Lone base on open ground for the close brightness comparison. size 2 => no affiliation ring;
+	# deliberately NOT registered as a unit => the boundary visualizer leaves it alone, so it is a
+	# bare terrain-top base sitting directly beside untouched board (the seam the maintainer judges).
+	_spawn({"name": "Trooper", "base_size_round": 32, "size": 2, "player_id": 1}, CLOSE_BASE_POS)
+
 
 func _spawn(props: Dictionary, pos: Vector3) -> Node3D:
 	var wrapper: Node3D = _manager.create_model_from_properties(props)
@@ -199,6 +215,14 @@ func _capture_34(path: String, caption: String) -> void:
 func _capture_top(path: String, caption: String) -> void:
 	_label.text = caption
 	_camera.look_at_from_position(Vector3(0.0, 0.80, 0.02), Vector3(0.0, 0.0, 0.02), Vector3(0, 0, -1))
+	await _grab(path)
+
+
+func _capture_close(path: String, caption: String) -> void:
+	# Tight 3/4 close-up on the isolated open-ground base: base + surrounding board fill the frame so
+	# a brightness seam between the terrain top and the board would be obvious side-by-side.
+	_label.text = caption
+	_camera.look_at_from_position(CLOSE_BASE_POS + Vector3(0.035, 0.075, 0.075), CLOSE_BASE_POS, Vector3.UP)
 	await _grab(path)
 
 

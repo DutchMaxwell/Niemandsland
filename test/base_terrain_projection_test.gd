@@ -62,3 +62,26 @@ func test_base_top_material_uses_the_projection_shader_with_derived_uv_scale() -
 func test_base_top_material_is_a_single_shared_instance() -> void:
 	var table: TableScript = auto_free(TableScript.new())
 	assert_object(table.get_base_top_material()).is_same(table.get_base_top_material())
+
+
+# ===== Brightness match (maintainer field feedback) =====
+
+func test_base_top_rim_shading_is_a_subtle_contact_hint() -> void:
+	# The base-top rim shading must stay a subtle CONTACT-SHADOW HINT — a thin outer band at weak
+	# strength — so the centre reads identical to the board. Defaults owned by Table (one-line tune).
+	assert_float(TableScript.BASE_TOP_VIGNETTE_STRENGTH).is_equal_approx(0.10, 0.0001)
+	assert_float(TableScript.BASE_TOP_VIGNETTE_START).is_equal_approx(0.80, 0.0001)
+	var table: TableScript = auto_free(TableScript.new())
+	var mat := table.get_base_top_material()
+	assert_float(mat.get_shader_parameter("vignette_strength")).is_equal_approx(TableScript.BASE_TOP_VIGNETTE_STRENGTH, 0.0001)
+	assert_float(mat.get_shader_parameter("vignette_start")).is_equal_approx(TableScript.BASE_TOP_VIGNETTE_START, 0.0001)
+
+
+func test_base_top_matches_the_ground_detail_relief() -> void:
+	# Identical texture => identical brightness: the base carries the SAME detail-normal depth as
+	# table_ground.gdshader, so it answers the sun the same way as the board it sits on (the actual
+	# darkening the flat-lit base used to have was the missing normal map, not just the vignette).
+	assert_float(TableScript.DETAIL_NORMAL_STRENGTH).is_equal_approx(0.35, 0.0001)
+	var table: TableScript = auto_free(TableScript.new())
+	var mat := table.get_base_top_material()
+	assert_float(mat.get_shader_parameter("detail_normal_strength")).is_equal_approx(TableScript.DETAIL_NORMAL_STRENGTH, 0.0001)

@@ -188,21 +188,27 @@ static func _perimeter_for(is_square: bool, is_oval: bool, base_width: float, ba
 
 ## Filled top fan: centre vertex (UV.x=0) + perimeter (UV.x=1), flat at y=0, normal +Y. UV.x is
 ## the rim vignette coordinate (0 centre → 1 rim). cull_disabled on the material makes winding moot.
+## Every vertex also carries a world-aligned +X TANGENT so the terrain-top shader's detail NORMAL_MAP
+## uses the same tangent frame the table's PlaneMesh does (identical sun response — see base_terrain_top.gdshader).
 static func _top_mesh(is_square: bool, is_oval: bool, base_width: float, base_depth: float, base_radius: float, ratio: float) -> Mesh:
 	var key := "top:%s:%s:%d:%d:%d" % [str(is_square), str(is_oval), int(round(base_width * 10000)), int(round(base_depth * 10000)), int(round(base_radius * 10000))]
 	var cached: Mesh = _mesh_cache.get(key, null)
 	if cached != null:
 		return cached
 	var perimeter := _perimeter_for(is_square, is_oval, base_width, base_depth, base_radius, ratio)
+	# Tangent along +X with binormal sign +1 — matches PlaneMesh's tangent frame for a +Y face.
+	var tangent := Plane(1.0, 0.0, 0.0, 1.0)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_normal(Vector3.UP)
+	st.set_tangent(tangent)
 	st.set_uv(Vector2(0.0, 0.0))
 	st.add_vertex(Vector3.ZERO)   # index 0 = centre
 	var n := perimeter.size()
 	for i in range(n):
 		var p := perimeter[i]
 		st.set_normal(Vector3.UP)
+		st.set_tangent(tangent)
 		st.set_uv(Vector2(1.0, 0.0))
 		st.add_vertex(Vector3(p.x, 0.0, p.y))
 	for i in range(n):

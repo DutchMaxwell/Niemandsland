@@ -103,6 +103,22 @@ func test_top_mesh_bakes_the_rim_vignette_into_uv_x() -> void:
 	assert_bool(saw_rim).is_true()
 
 
+func test_top_mesh_carries_a_world_aligned_tangent_for_the_detail_normal() -> void:
+	# The terrain-top shader applies the board's detail NORMAL_MAP so the base catches the same sun
+	# glints (identical texture => identical brightness); that needs a tangent frame. Every fan
+	# vertex carries a world-aligned +X tangent (binormal sign +1) matching the table's PlaneMesh.
+	var base := _round_base(false)
+	var top := base.get_node("BaseTop") as MeshInstance3D
+	var arrays := top.mesh.surface_get_arrays(0)
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var tangents: PackedFloat32Array = arrays[Mesh.ARRAY_TANGENT]
+	assert_int(tangents.size()).is_equal(verts.size() * 4)   # (x, y, z, w) per vertex
+	assert_float(tangents[0]).is_equal_approx(1.0, 0.0001)
+	assert_float(tangents[1]).is_equal_approx(0.0, 0.0001)
+	assert_float(tangents[2]).is_equal_approx(0.0, 0.0001)
+	assert_float(tangents[3]).is_equal_approx(1.0, 0.0001)
+
+
 func test_top_disc_sits_inside_the_rim_so_a_black_border_shows() -> void:
 	# The terrain top radius (TOP_RADIUS_RATIO) is inside the rim-cap radius (RIM_TOP_RATIO), leaving
 	# the flat black rim ring the affiliation ring lands on.
