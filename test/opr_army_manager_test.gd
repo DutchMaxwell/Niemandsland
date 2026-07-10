@@ -527,3 +527,46 @@ func test_find_body_node_chariot_unit_structure_missing() -> void:
 		mesh.name = "mesh"
 		group.add_child(mesh)
 	assert_bool(m._find_body_node(root) == null).is_true()
+
+
+# ===== long_axis manifest marker: authoring truth beats AABB inference (QA r7) =====
+# Geometry cannot express INTENT: the bare great-snakes blob is a COILED +Z-facing serpent whose coil
+# spreads wider in X (aspect 1.35) than the genuinely X-composed snake-riders comp (1.22). Only the
+# producer knows the facing -> the per-entry `long_axis` marker decides; the AABB only infers when no
+# marker exists.
+
+func test_great_snakes_marker_keeps_facing_on_long_axis() -> void:
+	var m := _mgr()
+	# REAL great-snakes geometry (1.505, 1.553, 1.115 - X-long by coil) on its 90x52 oval. WITHOUT a
+	# marker the aspect inference turns it (documents why the marker exists)...
+	var coiled := AABB(Vector3.ZERO, Vector3(1.505, 1.553, 1.115))
+	var inferred := _glb()
+	m._align_to_oval_long_axis(inferred, coiled, true, 0.052, 0.090, false)
+	assert_float(absf(inferred.rotation.y)).is_equal_approx(PI / 2.0, 0.0001)
+	# ...WITH the producer marker `long_axis: "z"` the +Z facing stays on the base's long axis: no turn.
+	var marked := _glb()
+	m._align_to_oval_long_axis(marked, coiled, true, 0.052, 0.090, false, "z")
+	assert_float(marked.rotation.y).is_equal_approx(0.0, 0.0001)
+
+
+func test_hunting_beasts_z_long_needs_no_marker() -> void:
+	var m := _mgr()
+	# REAL hunting-beasts geometry (0.527, 1.300, 1.790 - strongly Z-long, aspect 3.39) on its 60x35
+	# oval: the inference alone keeps it lengthwise (no turn) - no marker needed.
+	var beast := _glb()
+	m._align_to_oval_long_axis(beast, AABB(Vector3.ZERO, Vector3(0.527, 1.300, 1.790)), true, 0.035, 0.060, false)
+	assert_float(beast.rotation.y).is_equal_approx(0.0, 0.0001)
+
+
+func test_long_axis_marker_x_forces_turn_and_walker_unaffected() -> void:
+	var m := _mgr()
+	# An "x" marker forces the turn even for a near-square model the inference would leave alone.
+	var square := AABB(Vector3.ZERO, Vector3(0.672, 0.5, 0.642))
+	var marked_x := _glb()
+	m._align_to_oval_long_axis(marked_x, square, true, 0.052, 0.090, false, "x")
+	assert_float(absf(marked_x.rotation.y)).is_equal_approx(PI / 2.0, 0.0001)
+	# Walker regression guard: cross_align stays deterministic crosswise - the marker path is the
+	# lengthwise (vehicle/mount) path only.
+	var walker := _glb()
+	m._align_to_oval_long_axis(walker, square, true, 0.052, 0.090, true, "z")
+	assert_float(absf(walker.rotation.y)).is_equal_approx(PI / 2.0, 0.0001)

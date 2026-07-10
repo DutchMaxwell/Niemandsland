@@ -193,3 +193,20 @@ func test_base_override_reads_entry_and_tolerates_malformed() -> void:
 	assert_bool(lib.base_override_mm("mummified_undead", "Skeleton Warriors").is_empty()).is_true()
 	assert_bool(lib.base_override_mm("mummified_undead", "Broken").is_empty()).is_true()
 	assert_bool(lib.base_override_mm("mummified_undead", "Nope").is_empty()).is_true()
+
+
+func test_long_axis_override_reads_valid_values_only() -> void:
+	var lib := _lib()
+	lib.apply_manifest_text(JSON.stringify({
+		"version": 1, "base_url": "",
+		"models": {
+			"mummified_undead/great snakes": {"url": "a.glb", "sha256": "a", "size": 1, "long_axis": "z"},
+			"mummified_undead/odd": {"url": "b.glb", "sha256": "b", "size": 1, "long_axis": "diagonal"},
+			"mummified_undead/plain": {"url": "c.glb", "sha256": "c", "size": 1},
+		},
+	}))
+	assert_str(lib.long_axis_override("mummified_undead", "Great Snakes")).is_equal("z")
+	# Invalid value / missing field / unknown entry -> "" (the game infers from the AABB).
+	assert_str(lib.long_axis_override("mummified_undead", "Odd")).is_equal("")
+	assert_str(lib.long_axis_override("mummified_undead", "Plain")).is_equal("")
+	assert_str(lib.long_axis_override("mummified_undead", "Nope")).is_equal("")
