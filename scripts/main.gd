@@ -3831,8 +3831,9 @@ func _on_intro_finished() -> void:
 ## ============================================================================
 
 ## How long to wait for the bundled tutorial board to produce units before running
-## the tutorial degraded (banner-only spotlights, no unit target).
-const TUTORIAL_BOARD_TIMEOUT_S := 30.0
+## the tutorial degraded (banner-only spotlights, no unit target). Generous: the very
+## first tutorial launch may download both factions' models (54 minis) from the CDN.
+const TUTORIAL_BOARD_TIMEOUT_S := 120.0
 
 ## Wait for the bundled board (queued on the pending-load path), then hand control to
 ## the TutorialDirector, which runs the event-gated W1-W6 tool track on the live table.

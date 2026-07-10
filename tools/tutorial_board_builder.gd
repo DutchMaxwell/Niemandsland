@@ -1,25 +1,33 @@
 extends SceneTree
-## One-shot generator for the bundled tutorial board (assets/tutorial/tutorial_board.nml).
-## Boots the REAL main.tscn in harness mode, imports the two bundled Army Forge JSON
-## fixtures offline (player 1: Battle Brothers ranged + Assault Brothers melee + Support
-## Brothers; player 2: one enemy Battle Brothers squad as the dummy target), deploys the
-## units onto the table (south band vs north band), adds two terrain pieces, then saves
-## via the normal SaveManager — so the board is a REAL .nml that loads through the
-## standard pending_load_path seam with real unit cards, trays and coherency.
+## One-shot generator for the bundled tutorial board (assets/tutorial/tutorial_board.nml),
+## produced by the REAL pipeline end to end — no synthesized data:
+##  · Armies: the maintainer's official tutorial lists, imported through the production
+##    TTS parser (import_from_tts_json == import_from_share_link's parser, incl. the
+##    army-book faction/rules fetch). Fixtures are the exact /api/tts bodies, fetched once:
+##      P1 Battle Brothers  https://army-forge.onepagerules.com/share?id=__FfT0jOYHtc
+##      P2 Robot Legions    https://army-forge.onepagerules.com/share?id=gLi7he9YFjEt
+##  · Models: the real spawn path (R2/ctex resolution); the build FAILS if any model
+##    falls back to a placeholder peg or a faction folder is missing.
+##  · Terrain: the game's own OPR-guideline autogen (map_layout_editor) with FRONT_LINE
+##    (12") deployment zones — prefab ruins/forests/containers/dangerous, not boxes.
+##  · Save: the normal SaveManager, so cards/trays/rules restore like any player save.
 ##
 ## Run (then copy the printed user:// file into assets/tutorial/):
 ##   flatpak run org.godotengine.Godot --path <wt> --headless -s res://tools/tutorial_board_builder.gd
 
-const P1_LIST := "res://assets/tutorial/tutorial_army_p1.json"
-const P2_LIST := "res://assets/tutorial/tutorial_army_p2.json"
+const P1_FIXTURE := "res://assets/tutorial/tutorial_army_p1.json"  # Battle Brothers (player)
+const P2_FIXTURE := "res://assets/tutorial/tutorial_army_p2.json"  # Robot Legions (enemy)
 const OUT_PATH := "user://tutorial_board.nml"
 const MAX_BOOT_FRAMES := 900
 const DROP_SETTLE_S := 4.0
-# Deployment (6x4 ft table = 1.83 x 1.22 m): player south band, enemy north band.
-const P1_Z := 0.35
-const P2_Z := -0.35
-const P1_XS: Array[float] = [-0.5, 0.0, 0.5]
-const TERRAIN_SPOTS: Array[Vector3] = [Vector3(-0.3, 0.0, -0.05), Vector3(0.35, 0.0, 0.1)]
+const LAYOUT_SEED := 20260710  # freeze the autogen result; bump to reroll the layout
+const FRONT_LINE_DEPLOYMENT := 1  # MapLayout.DeploymentType.FRONT_LINE (12" long edges)
+# Deployment rows (6x4 ft table: x within ±0.915 m, z within ±0.61 m; 12" zone starts
+# at |z| >= 0.305). Player south, enemy north, two rows each.
+const P1_ROWS: Array = [[Vector3(-0.55, 0.0, 0.40), Vector3(0.0, 0.0, 0.40), Vector3(0.55, 0.0, 0.40)],
+	[Vector3(-0.55, 0.0, 0.53), Vector3(0.0, 0.0, 0.53), Vector3(0.55, 0.0, 0.53)]]
+const P2_ROWS: Array = [[Vector3(-0.66, 0.0, -0.40), Vector3(-0.22, 0.0, -0.40), Vector3(0.22, 0.0, -0.40), Vector3(0.66, 0.0, -0.40)],
+	[Vector3(-0.66, 0.0, -0.53), Vector3(-0.22, 0.0, -0.53), Vector3(0.22, 0.0, -0.53), Vector3(0.66, 0.0, -0.53)]]
 
 
 func _initialize() -> void:
@@ -35,32 +43,55 @@ func _build() -> void:
 		quit(1)
 		return
 	var army_manager: Node = main.get("opr_army_manager")
-	var object_manager: Node = main.get("object_manager")
 	var save_manager: Node = main.get("save_manager")
-	if army_manager == null or object_manager == null or save_manager == null:
-		printerr("BOARD-FAIL: managers missing (army=%s object=%s save=%s)" % [army_manager, object_manager, save_manager])
+	var layout_editor: Control = main.get("map_layout_editor")
+	if army_manager == null or save_manager == null or layout_editor == null:
+		printerr("BOARD-FAIL: managers missing (army=%s save=%s layout=%s)" % [army_manager, save_manager, layout_editor])
 		quit(1)
 		return
 
-	# Import both fixture lists offline and spawn them (models resolve from cache/R2;
-	# uncached+offline falls back to procedural tokens — the board stays valid either way).
-	printerr("BOARD: importing player 1 list…")
-	await army_manager.import_army_for_player(P1_LIST, 1)
-	printerr("BOARD: importing player 2 list…")
-	await army_manager.import_army_for_player(P2_LIST, 2)
-	var armies: Dictionary = army_manager.get("armies")
-	if not (armies.has(1) and armies.has(2)):
-		printerr("BOARD-FAIL: army import failed (have players: %s)" % str(armies.keys()))
-		quit(1)
+	# --- Armies through the production import + spawn path ---
+	if not await _import_and_spawn(army_manager, P1_FIXTURE, 1):
 		return
-	printerr("BOARD: spawning armies…")
-	await army_manager.spawn_army(armies[1])
-	await army_manager.spawn_army(armies[2])
+	if not await _import_and_spawn(army_manager, P2_FIXTURE, 2):
+		return
 	await create_timer(DROP_SETTLE_S).timeout  # let the tray drop animation settle
 
+	# --- Validation: every model must be a REAL mini (imported mesh), never a peg ---
+	var real_models := 0
+	var peg_models := 0
+	for unit in army_manager.get("game_units").values():
+		for model in unit.models:
+			if model == null or not is_instance_valid(model.node):
+				continue
+			if _has_imported_mesh(model.node):
+				real_models += 1
+			else:
+				peg_models += 1
+				printerr("BOARD-PEG: %s model %d has no imported mesh" % [unit.get_name(), model.model_index])
+	if peg_models > 0 or real_models == 0:
+		printerr("BOARD-FAIL: %d placeholder peg(s), %d real models — model resolution broken" % [peg_models, real_models])
+		quit(1)
+		return
+
+	# --- Terrain through the game's own OPR autogen (frozen seed) + 12" zones ---
+	seed(LAYOUT_SEED)
+	layout_editor._generate_terrain_layout()
+	layout_editor.deployment_type = FRONT_LINE_DEPLOYMENT
+	layout_editor._rebuild_derived()
+	layout_editor._emit_layout_update()
+	layout_editor.deployment_type_changed.emit(FRONT_LINE_DEPLOYMENT)
+	await process_frame
+	var piece_count: int = layout_editor.placed_pieces.size()
+	var cell_count: int = layout_editor.grid_cells.size()
+	var object_count: int = layout_editor.placed_objects.size()
+	if piece_count < 5:
+		printerr("BOARD-FAIL: terrain autogen produced only %d pieces" % piece_count)
+		quit(1)
+		return
+
+	# --- Deployment: slide the spawned unit blocks into the two 12" zones ---
 	_deploy_units(army_manager)
-	for spot in TERRAIN_SPOTS:
-		object_manager.spawn_terrain(spot, false)
 	await process_frame
 
 	var err: Error = await save_manager.save_game(OUT_PATH)
@@ -69,9 +100,35 @@ func _build() -> void:
 		quit(1)
 		return
 	var unit_count: int = army_manager.get("game_units").size()
-	printerr("BOARD-OK: %d units + %d terrain saved -> %s" % [
-		unit_count, TERRAIN_SPOTS.size(), ProjectSettings.globalize_path(OUT_PATH)])
+	printerr("BOARD-OK: %d units / %d real models (0 pegs) | terrain: %d prefab pieces, %d cells, %d decorations | -> %s" % [
+		unit_count, real_models, piece_count, cell_count, object_count,
+		ProjectSettings.globalize_path(OUT_PATH)])
 	quit(0)
+
+
+## Import one fixture through the production TTS parser and spawn it. False on failure.
+func _import_and_spawn(army_manager: Node, fixture: String, player_id: int) -> bool:
+	var text := FileAccess.get_file_as_string(fixture)
+	if text.is_empty():
+		printerr("BOARD-FAIL: fixture missing/empty: %s" % fixture)
+		quit(1)
+		return false
+	printerr("BOARD: importing player %d (%s)…" % [player_id, fixture.get_file()])
+	var army = await army_manager.api_client.import_from_tts_json(text)
+	if army == null or army.units.is_empty():
+		printerr("BOARD-FAIL: player %d import produced no units" % player_id)
+		quit(1)
+		return false
+	if String(army.faction_folder).is_empty():
+		printerr("BOARD-FAIL: player %d army has no faction_folder (army-book fetch failed) — models would degrade to pegs" % player_id)
+		quit(1)
+		return false
+	printerr("BOARD: player %d = '%s' (%s), %d units, %d pts" % [
+		player_id, army.name, army.faction_folder, army.units.size(), army.points])
+	army.player_id = player_id
+	army_manager.get("armies")[player_id] = army
+	await army_manager.spawn_army(army)
+	return true
 
 
 func _await_main() -> Node:
@@ -79,14 +136,26 @@ func _await_main() -> Node:
 		await process_frame
 		var scene := current_scene
 		if scene != null and scene.get("opr_army_manager") != null \
-				and scene.get("object_manager") != null and scene.get("save_manager") != null:
+				and scene.get("save_manager") != null and scene.get("map_layout_editor") != null:
 			return scene
 	return null
 
 
-## Slide each unit's model block from its army tray onto the table: player 1 spread
-## across the south band, player 2 centred in the north band. Whole-block translation
-## (x/z only) keeps the spawned coherent formation intact.
+## True when the model wrapper carries an imported mesh (ArrayMesh) anywhere in its
+## subtree. The placeholder peg is built from primitive CylinderMeshes only.
+func _has_imported_mesh(node: Node) -> bool:
+	var stack: Array[Node] = [node]
+	while not stack.is_empty():
+		var current: Node = stack.pop_back()
+		if current is MeshInstance3D and (current as MeshInstance3D).mesh is ArrayMesh:
+			return true
+		for child in current.get_children():
+			stack.append(child)
+	return false
+
+
+## Slide each unit's model block from its army tray into its deployment zone (rows of
+## unit centroids; whole-block x/z translation keeps the spawned formation intact).
 func _deploy_units(army_manager: Node) -> void:
 	var p1_units: Array = []
 	var p2_units: Array = []
@@ -97,12 +166,19 @@ func _deploy_units(army_manager: Node) -> void:
 		elif pid == 2:
 			p2_units.append(unit)
 	p1_units.sort_custom(func(a, b) -> bool: return a.get_name() < b.get_name())
+	p2_units.sort_custom(func(a, b) -> bool: return a.get_name() < b.get_name())
+	_place_rows(p1_units, P1_ROWS)
+	_place_rows(p2_units, P2_ROWS)
 
-	for i in p1_units.size():
-		var x: float = P1_XS[i] if i < P1_XS.size() else 0.0
-		_move_unit_to(p1_units[i], Vector3(x, 0.0, P1_Z))
-	for unit in p2_units:
-		_move_unit_to(unit, Vector3(0.0, 0.0, P2_Z))
+
+func _place_rows(units: Array, rows: Array) -> void:
+	var spots: Array[Vector3] = []
+	for row in rows:
+		for spot in row:
+			spots.append(spot)
+	for i in units.size():
+		if i < spots.size():
+			_move_unit_to(units[i], spots[i])
 
 
 func _move_unit_to(unit, table_pos: Vector3) -> void:

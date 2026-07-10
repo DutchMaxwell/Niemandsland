@@ -45,8 +45,12 @@ func _drive() -> void:
 	var army_manager: Node = main.get("opr_army_manager") if main != null else null
 	var unit_count: int = army_manager.get("game_units").size() if army_manager != null else -1
 	printerr("SMOKE: director live on the loaded board — %d game units on the table" % unit_count)
-	if unit_count < 4:
-		printerr("SMOKE-WARN: expected 4 units from the bundled board, found %d" % unit_count)
+	if unit_count < 10:
+		printerr("SMOKE-WARN: expected 10 units from the bundled board (post-merge: BB 4 + Robot Legions 6), found %d" % unit_count)
+	if not _assert_board_quality(main, army_manager):
+		_restore_cfg()
+		quit(1)
+		return
 
 	var steps_walked := 0
 	var last_lesson := ""
@@ -95,6 +99,70 @@ func _drive() -> void:
 		return
 	printerr("SMOKE-OK: walked %d steps across W1-W6 on the live main.tscn; overlay + spotlight per step; cfg persisted + restored" % steps_walked)
 	quit(0)
+
+
+## Board-quality gate (T1.1): the loaded board must carry real card data, a resolved
+## faction folder and REAL minis (imported meshes, never placeholder pegs) for a
+## player-1 unit — exactly what the maintainer's field test flagged as broken.
+func _assert_board_quality(main: Node, army_manager: Node) -> bool:
+	if main == null or army_manager == null:
+		printerr("SMOKE-FAIL: no army manager — board quality unverifiable")
+		return false
+	var unit = null
+	for candidate in army_manager.get("game_units").values():
+		if int(candidate.unit_properties.get("player_id", 0)) == 1 and candidate.get_alive_count() > 0:
+			if unit == null or candidate.get_alive_count() > unit.get_alive_count():
+				unit = candidate
+	if unit == null:
+		printerr("SMOKE-FAIL: board has no living player-1 unit")
+		return false
+
+	var faction := String(unit.unit_properties.get("faction_folder", ""))
+	if faction.is_empty():
+		printerr("SMOKE-FAIL: unit '%s' has no faction_folder — models degrade to pegs" % unit.get_name())
+		return false
+
+	# Presented-card data via the dock's own seam (what the presented card renders).
+	var dock: Node = main.get("unit_dock")
+	if dock == null:
+		printerr("SMOKE-FAIL: unit_dock missing — card data unverifiable")
+		return false
+	var card: Dictionary = dock._card_data(unit)
+	var weapons: Array = card.get("weapons", [])
+	if String(card.get("name", "")).is_empty() or int(card.get("quality", 0)) <= 0 \
+			or int(card.get("defense", 0)) <= 0 or weapons.is_empty():
+		printerr("SMOKE-FAIL: card data incomplete for '%s' — name='%s' Q=%s D=%s weapons=%d" % [
+			unit.get_name(), card.get("name", ""), str(card.get("quality", 0)),
+			str(card.get("defense", 0)), weapons.size()])
+		return false
+
+	# Real minis: an imported (ArrayMesh) mesh must exist under each model wrapper —
+	# the placeholder peg is primitive CylinderMeshes only.
+	var pegs := 0
+	for model in unit.models:
+		if model != null and is_instance_valid(model.node) and not _has_imported_mesh(model.node):
+			pegs += 1
+	if pegs > 0:
+		printerr("SMOKE-FAIL: unit '%s' shows %d placeholder peg(s) instead of real minis" % [unit.get_name(), pegs])
+		return false
+
+	printerr("SMOKE: board quality OK — unit '%s' (faction %s): card name/Q%d/D%d/%d weapon rows, %d models all real minis" % [
+		unit.get_name(), faction, int(card.get("quality", 0)), int(card.get("defense", 0)),
+		weapons.size(), unit.models.size()])
+	return true
+
+
+## True when the node's subtree carries an imported mesh (ArrayMesh) — see the board
+## builder's identical check; pegs are primitive CylinderMeshes only.
+func _has_imported_mesh(node: Node) -> bool:
+	var stack: Array[Node] = [node]
+	while not stack.is_empty():
+		var current: Node = stack.pop_back()
+		if current is MeshInstance3D and (current as MeshInstance3D).mesh is ArrayMesh:
+			return true
+		for child in current.get_children():
+			stack.append(child)
+	return false
 
 
 func _await_director() -> TutorialDirector:

@@ -1,7 +1,7 @@
 {
 	"army_names": {
-		"1": "Tutorial Strike Team",
-		"2": "Tutorial Opponents"
+		"1": "Battle Brothers",
+		"2": "Robot Legions"
 	},
 	"game_state": {
 		"current_player": 1,
@@ -21,9 +21,9 @@
 			"model_positions": [
 				{
 					"position": [
-						-0.0800000429153442,
+						-0.698499917984009,
 						0.0,
-						0.349999994039536
+						0.400000005960464
 					],
 					"rotation": [
 						0.0,
@@ -34,9 +34,9 @@
 				},
 				{
 					"position": [
-						-0.0400000810623169,
+						-0.665499925613403,
 						0.0,
-						0.349999994039536
+						0.400000005960464
 					],
 					"rotation": [
 						0.0,
@@ -47,9 +47,9 @@
 				},
 				{
 					"position": [
+						-0.632499933242798,
 						0.0,
-						0.0,
-						0.349999994039536
+						0.400000005960464
 					],
 					"rotation": [
 						0.0,
@@ -60,9 +60,9 @@
 				},
 				{
 					"position": [
-						0.0399999618530273,
+						-0.599499940872192,
 						0.0,
-						0.349999994039536
+						0.400000005960464
 					],
 					"rotation": [
 						0.0,
@@ -73,9 +73,74 @@
 				},
 				{
 					"position": [
-						0.0799999237060547,
+						-0.566499948501587,
 						0.0,
-						0.349999994039536
+						0.400000005960464
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.533499956130981,
+						0.0,
+						0.400000005960464
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.500499963760376,
+						0.0,
+						0.400000005960464
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.467499971389771,
+						0.0,
+						0.400000005960464
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.434499859809875,
+						0.0,
+						0.400000005960464
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.40149986743927,
+						0.0,
+						0.400000005960464
 					],
 					"rotation": [
 						0.0,
@@ -107,15 +172,36 @@
 					"markers": [],
 					"model_index": 0,
 					"properties": {
-						"special_rules": [],
-						"tough": 1
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 9,
+								"name": "Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
 					},
 					"wounds_current": 1,
 					"wounds_max": 1
 				},
 				{
 					"import_position": [
-						-1.67720007896423,
+						-1.68420004844666,
 						0.0,
 						-0.346399992704391
 					],
@@ -134,15 +220,36 @@
 					"markers": [],
 					"model_index": 1,
 					"properties": {
-						"special_rules": [],
-						"tough": 1
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 9,
+								"name": "Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
 					},
 					"wounds_current": 1,
 					"wounds_max": 1
 				},
 				{
 					"import_position": [
-						-1.63719999790192,
+						-1.65120005607605,
 						0.0,
 						-0.346399992704391
 					],
@@ -161,15 +268,36 @@
 					"markers": [],
 					"model_index": 2,
 					"properties": {
-						"special_rules": [],
-						"tough": 1
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 9,
+								"name": "Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
 					},
 					"wounds_current": 1,
 					"wounds_max": 1
 				},
 				{
 					"import_position": [
-						-1.59720003604889,
+						-1.61820006370544,
 						0.0,
 						-0.346399992704391
 					],
@@ -188,15 +316,36 @@
 					"markers": [],
 					"model_index": 3,
 					"properties": {
-						"special_rules": [],
-						"tough": 1
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 9,
+								"name": "Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
 					},
 					"wounds_current": 1,
 					"wounds_max": 1
 				},
 				{
 					"import_position": [
-						-1.55720007419586,
+						-1.58520007133484,
 						0.0,
 						-0.346399992704391
 					],
@@ -215,40 +364,333 @@
 					"markers": [],
 					"model_index": 4,
 					"properties": {
-						"special_rules": [],
-						"tough": 1
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 9,
+								"name": "Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.55220007896423,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 5,
+					"properties": {
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 9,
+								"name": "Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.51920008659363,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 6,
+					"properties": {
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 9,
+								"name": "Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.48620009422302,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 7,
+					"properties": {
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 9,
+								"name": "Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.45319998264313,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 8,
+					"properties": {
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 9,
+								"name": "Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.42019999027252,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 9,
+					"properties": {
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 1,
+								"name": "Plasma Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(4)"
+								]
+							}
+						]
 					},
 					"wounds_current": 1,
 					"wounds_max": 1
 				}
 			],
 			"source_data": {
-				"base_depth_mm": 32,
+				"base_depth_mm": 25,
 				"base_is_oval": false,
-				"base_size_round": 32,
-				"base_width_mm": 32,
+				"base_size_round": 25,
+				"base_width_mm": 25,
 				"equipment": [],
-				"special_rules": [],
-				"weapons": []
+				"special_rules": [
+					"Battleborn",
+					"Fearless"
+				],
+				"weapons": [
+					{
+						"attacks": 1,
+						"count": 9,
+						"from_item": "",
+						"name": "Heavy Rifle",
+						"range_value": 24,
+						"special_rules": [
+							"AP(1)"
+						]
+					},
+					{
+						"attacks": 1,
+						"count": 10,
+						"from_item": "",
+						"name": "CCW",
+						"range_value": 0,
+						"special_rules": []
+					},
+					{
+						"attacks": 1,
+						"count": 1,
+						"from_item": "",
+						"name": "Plasma Rifle",
+						"range_value": 24,
+						"special_rules": [
+							"AP(4)"
+						]
+					}
+				]
 			},
 			"source_type": "opr",
-			"unit_id": "1783674571.2998_2945529167",
+			"unit_id": "1783685260.8375_4219020445",
 			"unit_properties": {
 				"attached_heroes": [],
 				"attached_to": "",
-				"base_depth_mm": 32,
+				"base_depth_mm": 25,
 				"base_from_tough": false,
 				"base_is_oval": false,
 				"base_is_square": false,
-				"base_size_round": 32,
-				"base_size_square": 30,
-				"base_width_mm": 32,
-				"cost": 150,
+				"base_size_round": 25,
+				"base_size_square": 25,
+				"base_width_mm": 25,
+				"cost": 300,
 				"custom_name": "",
 				"defense": 3,
-				"display_suffix": "",
-				"faction_folder": "",
-				"game_system": "",
+				"display_suffix": " (1)",
+				"faction_folder": "battle_brothers",
+				"game_system": "gf",
 				"item_grants": {
 
 				},
@@ -258,10 +700,14 @@
 				"quality": 3,
 				"regiment_mode": false,
 				"rule_descriptions": {
-
+					"Battleborn": "If a unit where all models have this rule is Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken.",
+					"Fearless": "When a unit where all models have this rule fails a morale test, roll one die. On a 4+ it counts as passed instead."
 				},
-				"size": 5,
-				"special_rules": []
+				"size": 10,
+				"special_rules": [
+					"Battleborn",
+					"Fearless"
+				]
 			}
 		},
 		{
@@ -274,9 +720,9 @@
 			"model_positions": [
 				{
 					"position": [
-						-0.580000042915344,
+						-0.148499846458435,
 						0.0,
-						0.349999994039536
+						0.399999976158142
 					],
 					"rotation": [
 						0.0,
@@ -287,9 +733,9 @@
 				},
 				{
 					"position": [
-						-0.540000081062317,
+						-0.11549985408783,
 						0.0,
-						0.349999994039536
+						0.399999976158142
 					],
 					"rotation": [
 						0.0,
@@ -300,9 +746,9 @@
 				},
 				{
 					"position": [
-						-0.5,
+						-0.0824998617172241,
 						0.0,
-						0.349999994039536
+						0.399999976158142
 					],
 					"rotation": [
 						0.0,
@@ -313,9 +759,9 @@
 				},
 				{
 					"position": [
-						-0.460000038146973,
+						-0.0494998693466187,
 						0.0,
-						0.349999994039536
+						0.399999976158142
 					],
 					"rotation": [
 						0.0,
@@ -326,9 +772,74 @@
 				},
 				{
 					"position": [
-						-0.420000076293945,
+						-0.0164998769760132,
 						0.0,
-						0.349999994039536
+						0.399999976158142
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						0.0165001153945923,
+						0.0,
+						0.399999976158142
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						0.0495001077651978,
+						0.0,
+						0.399999976158142
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						0.0825001001358032,
+						0.0,
+						0.399999976158142
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						0.115500211715698,
+						0.0,
+						0.399999976158142
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						0.148500204086304,
+						0.0,
+						0.399999976158142
 					],
 					"rotation": [
 						0.0,
@@ -341,9 +852,9 @@
 			"models": [
 				{
 					"import_position": [
-						-1.44520008563995,
+						-1.71720004081726,
 						0.0,
-						-0.346399992704391
+						-0.246399998664856
 					],
 					"import_rotation": [
 						0.0,
@@ -360,17 +871,38 @@
 					"markers": [],
 					"model_index": 0,
 					"properties": {
-						"special_rules": [],
-						"tough": 1
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 9,
+								"name": "Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
 					},
 					"wounds_current": 1,
 					"wounds_max": 1
 				},
 				{
 					"import_position": [
-						-1.40520012378693,
+						-1.68420004844666,
 						0.0,
-						-0.346399992704391
+						-0.246399998664856
 					],
 					"import_rotation": [
 						0.0,
@@ -387,17 +919,38 @@
 					"markers": [],
 					"model_index": 1,
 					"properties": {
-						"special_rules": [],
-						"tough": 1
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 9,
+								"name": "Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
 					},
 					"wounds_current": 1,
 					"wounds_max": 1
 				},
 				{
 					"import_position": [
-						-1.36520004272461,
+						-1.65120005607605,
 						0.0,
-						-0.346399992704391
+						-0.246399998664856
 					],
 					"import_rotation": [
 						0.0,
@@ -414,17 +967,38 @@
 					"markers": [],
 					"model_index": 2,
 					"properties": {
-						"special_rules": [],
-						"tough": 1
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 9,
+								"name": "Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
 					},
 					"wounds_current": 1,
 					"wounds_max": 1
 				},
 				{
 					"import_position": [
-						-1.32520008087158,
+						-1.61820006370544,
 						0.0,
-						-0.346399992704391
+						-0.246399998664856
 					],
 					"import_rotation": [
 						0.0,
@@ -441,17 +1015,38 @@
 					"markers": [],
 					"model_index": 3,
 					"properties": {
-						"special_rules": [],
-						"tough": 1
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 9,
+								"name": "Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
 					},
 					"wounds_current": 1,
 					"wounds_max": 1
 				},
 				{
 					"import_position": [
-						-1.28520011901855,
+						-1.58520007133484,
 						0.0,
-						-0.346399992704391
+						-0.246399998664856
 					],
 					"import_rotation": [
 						0.0,
@@ -468,53 +1063,350 @@
 					"markers": [],
 					"model_index": 4,
 					"properties": {
-						"special_rules": [],
-						"tough": 1
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 9,
+								"name": "Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.55220007896423,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 5,
+					"properties": {
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 9,
+								"name": "Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.51920008659363,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 6,
+					"properties": {
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 9,
+								"name": "Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.48620009422302,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 7,
+					"properties": {
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 9,
+								"name": "Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.45319998264313,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 8,
+					"properties": {
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 9,
+								"name": "Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						-1.42019999027252,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 9,
+					"properties": {
+						"special_rules": [
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 1,
+								"name": "Plasma Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(4)"
+								]
+							}
+						]
 					},
 					"wounds_current": 1,
 					"wounds_max": 1
 				}
 			],
 			"source_data": {
-				"base_depth_mm": 32,
+				"base_depth_mm": 25,
 				"base_is_oval": false,
-				"base_size_round": 32,
-				"base_width_mm": 32,
+				"base_size_round": 25,
+				"base_width_mm": 25,
 				"equipment": [],
-				"special_rules": [],
-				"weapons": []
+				"special_rules": [
+					"Battleborn",
+					"Fearless"
+				],
+				"weapons": [
+					{
+						"attacks": 1,
+						"count": 9,
+						"from_item": "",
+						"name": "Heavy Rifle",
+						"range_value": 24,
+						"special_rules": [
+							"AP(1)"
+						]
+					},
+					{
+						"attacks": 1,
+						"count": 10,
+						"from_item": "",
+						"name": "CCW",
+						"range_value": 0,
+						"special_rules": []
+					},
+					{
+						"attacks": 1,
+						"count": 1,
+						"from_item": "",
+						"name": "Plasma Rifle",
+						"range_value": 24,
+						"special_rules": [
+							"AP(4)"
+						]
+					}
+				]
 			},
 			"source_type": "opr",
-			"unit_id": "1783674571.3063_850991220",
+			"unit_id": "1783685260.98966_799451351",
 			"unit_properties": {
 				"attached_heroes": [],
 				"attached_to": "",
-				"base_depth_mm": 32,
+				"base_depth_mm": 25,
 				"base_from_tough": false,
 				"base_is_oval": false,
 				"base_is_square": false,
-				"base_size_round": 32,
-				"base_size_square": 30,
-				"base_width_mm": 32,
-				"cost": 165,
+				"base_size_round": 25,
+				"base_size_square": 25,
+				"base_width_mm": 25,
+				"cost": 300,
 				"custom_name": "",
 				"defense": 3,
-				"display_suffix": "",
-				"faction_folder": "",
-				"game_system": "",
+				"display_suffix": " (2)",
+				"faction_folder": "battle_brothers",
+				"game_system": "gf",
 				"item_grants": {
 
 				},
 				"mount_name": "",
-				"name": "Assault Brothers",
+				"name": "Battle Brothers",
 				"player_id": 1,
 				"quality": 3,
 				"regiment_mode": false,
 				"rule_descriptions": {
-
+					"Battleborn": "If a unit where all models have this rule is Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken.",
+					"Fearless": "When a unit where all models have this rule fails a morale test, roll one die. On a 4+ it counts as passed instead."
 				},
-				"size": 5,
-				"special_rules": []
+				"size": 10,
+				"special_rules": [
+					"Battleborn",
+					"Fearless"
+				]
 			}
 		},
 		{
@@ -527,9 +1419,9 @@
 			"model_positions": [
 				{
 					"position": [
-						0.460000038146973,
+						0.502000093460083,
 						0.0,
-						0.349999994039536
+						0.399999976158142
 					],
 					"rotation": [
 						0.0,
@@ -540,9 +1432,9 @@
 				},
 				{
 					"position": [
-						0.5,
+						0.550000071525574,
 						0.0,
-						0.349999994039536
+						0.399999976158142
 					],
 					"rotation": [
 						0.0,
@@ -553,9 +1445,9 @@
 				},
 				{
 					"position": [
-						0.540000081062317,
+						0.598000049591064,
 						0.0,
-						0.349999994039536
+						0.399999976158142
 					],
 					"rotation": [
 						0.0,
@@ -568,9 +1460,9 @@
 			"models": [
 				{
 					"import_position": [
-						-1.17320013046265,
+						-1.71720004081726,
 						0.0,
-						-0.346399992704391
+						0.195466667413712
 					],
 					"import_rotation": [
 						0.0,
@@ -587,17 +1479,40 @@
 					"markers": [],
 					"model_index": 0,
 					"properties": {
-						"special_rules": [],
-						"tough": 1
+						"special_rules": [
+							"Ambush",
+							"Tough(3)",
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 3,
+						"weapons": [
+							{
+								"attacks": 3,
+								"count": 3,
+								"name": "Storm Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							},
+							{
+								"attacks": 1,
+								"count": 3,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							}
+						]
 					},
-					"wounds_current": 1,
-					"wounds_max": 1
+					"wounds_current": 3,
+					"wounds_max": 3
 				},
 				{
 					"import_position": [
-						-1.13320016860962,
+						-1.66920006275177,
 						0.0,
-						-0.346399992704391
+						0.195466667413712
 					],
 					"import_rotation": [
 						0.0,
@@ -614,17 +1529,40 @@
 					"markers": [],
 					"model_index": 1,
 					"properties": {
-						"special_rules": [],
-						"tough": 1
+						"special_rules": [
+							"Ambush",
+							"Tough(3)",
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 3,
+						"weapons": [
+							{
+								"attacks": 3,
+								"count": 3,
+								"name": "Storm Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							},
+							{
+								"attacks": 1,
+								"count": 3,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							}
+						]
 					},
-					"wounds_current": 1,
-					"wounds_max": 1
+					"wounds_current": 3,
+					"wounds_max": 3
 				},
 				{
 					"import_position": [
-						-1.0932000875473,
+						-1.62120008468628,
 						0.0,
-						-0.346399992704391
+						0.195466667413712
 					],
 					"import_rotation": [
 						0.0,
@@ -641,53 +1579,108 @@
 					"markers": [],
 					"model_index": 2,
 					"properties": {
-						"special_rules": [],
-						"tough": 1
+						"special_rules": [
+							"Ambush",
+							"Tough(3)",
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 3,
+						"weapons": [
+							{
+								"attacks": 3,
+								"count": 3,
+								"name": "Storm Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							},
+							{
+								"attacks": 1,
+								"count": 3,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							}
+						]
 					},
-					"wounds_current": 1,
-					"wounds_max": 1
+					"wounds_current": 3,
+					"wounds_max": 3
 				}
 			],
 			"source_data": {
-				"base_depth_mm": 32,
+				"base_depth_mm": 40,
 				"base_is_oval": false,
-				"base_size_round": 32,
-				"base_width_mm": 32,
+				"base_size_round": 40,
+				"base_width_mm": 40,
 				"equipment": [],
-				"special_rules": [],
-				"weapons": []
+				"special_rules": [
+					"Ambush",
+					"Tough(3)",
+					"Battleborn",
+					"Fearless"
+				],
+				"weapons": [
+					{
+						"attacks": 3,
+						"count": 3,
+						"from_item": "",
+						"name": "Storm Rifle",
+						"range_value": 24,
+						"special_rules": [
+							"AP(1)"
+						]
+					},
+					{
+						"attacks": 1,
+						"count": 3,
+						"from_item": "",
+						"name": "CCW",
+						"range_value": 0,
+						"special_rules": []
+					}
+				]
 			},
 			"source_type": "opr",
-			"unit_id": "1783674571.31411_3316350432",
+			"unit_id": "1783685261.05019_3703488610",
 			"unit_properties": {
 				"attached_heroes": [],
 				"attached_to": "",
-				"base_depth_mm": 32,
+				"base_depth_mm": 40,
 				"base_from_tough": false,
 				"base_is_oval": false,
 				"base_is_square": false,
-				"base_size_round": 32,
-				"base_size_square": 30,
-				"base_width_mm": 32,
-				"cost": 130,
+				"base_size_round": 40,
+				"base_size_square": 40,
+				"base_width_mm": 40,
+				"cost": 225,
 				"custom_name": "",
 				"defense": 3,
 				"display_suffix": "",
-				"faction_folder": "",
-				"game_system": "",
+				"faction_folder": "battle_brothers",
+				"game_system": "gf",
 				"item_grants": {
 
 				},
 				"mount_name": "",
-				"name": "Support Brothers",
+				"name": "Destroyers",
 				"player_id": 1,
 				"quality": 3,
 				"regiment_mode": false,
 				"rule_descriptions": {
-
+					"Ambush": "May be set aside before deployment. At the start of any round after the first, may be deployed anywhere over 9” away from enemy units. Players alternate in placing Ambush units, starting with the player that activates next. Units that deploy via Ambush can’t seize or contest objectives on the round they deploy.",
+					"Battleborn": "If a unit where all models have this rule is Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken.",
+					"Fearless": "When a unit where all models have this rule fails a morale test, roll one die. On a 4+ it counts as passed instead.",
+					"Tough": "This model must take X wounds before being killed. If a model with tough joins a unit without it, then it is removed last when the unit takes wounds. You must continue to put wounds on the tough model with most wounds in the unit until it is killed, before starting to put them on the next tough model (heroes must be assigned wounds last, even if already wounded)."
 				},
 				"size": 3,
-				"special_rules": []
+				"special_rules": [
+					"Ambush",
+					"Tough(3)",
+					"Battleborn",
+					"Fearless"
+				]
 			}
 		},
 		{
@@ -700,9 +1693,158 @@
 			"model_positions": [
 				{
 					"position": [
-						-0.0800000429153442,
+						-0.550000011920929,
 						0.0,
-						-0.349999994039536
+						0.529999971389771
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				}
+			],
+			"models": [
+				{
+					"import_position": [
+						-1.31520009040833,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 0,
+					"properties": {
+						"special_rules": [
+							"Hero",
+							"Tough(3)",
+							"Battleborn",
+							"Fearless"
+						],
+						"tough": 3,
+						"weapons": [
+							{
+								"attacks": 2,
+								"count": 1,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 2,
+								"count": 1,
+								"name": "Master Heavy Rifle",
+								"range": 24,
+								"specialRules": [
+									"AP(1)"
+								]
+							}
+						]
+					},
+					"wounds_current": 3,
+					"wounds_max": 3
+				}
+			],
+			"source_data": {
+				"base_depth_mm": 32,
+				"base_is_oval": false,
+				"base_size_round": 32,
+				"base_width_mm": 32,
+				"equipment": [],
+				"special_rules": [
+					"Hero",
+					"Tough(3)",
+					"Battleborn",
+					"Fearless"
+				],
+				"weapons": [
+					{
+						"attacks": 2,
+						"count": 1,
+						"from_item": "",
+						"name": "CCW",
+						"range_value": 0,
+						"special_rules": []
+					},
+					{
+						"attacks": 2,
+						"count": 1,
+						"from_item": "",
+						"name": "Master Heavy Rifle",
+						"range_value": 24,
+						"special_rules": [
+							"AP(1)"
+						]
+					}
+				]
+			},
+			"source_type": "opr",
+			"unit_id": "1783685261.08043_3806866442",
+			"unit_properties": {
+				"attached_heroes": [],
+				"attached_to": "",
+				"base_depth_mm": 32,
+				"base_from_tough": false,
+				"base_is_oval": false,
+				"base_is_square": false,
+				"base_size_round": 32,
+				"base_size_square": 30,
+				"base_width_mm": 32,
+				"cost": 60,
+				"custom_name": "",
+				"defense": 3,
+				"display_suffix": "",
+				"faction_folder": "battle_brothers",
+				"game_system": "gf",
+				"item_grants": {
+
+				},
+				"mount_name": "",
+				"name": "Master Brother",
+				"player_id": 1,
+				"quality": 3,
+				"regiment_mode": false,
+				"rule_descriptions": {
+					"Battleborn": "If a unit where all models have this rule is Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken.",
+					"Defense": "This model gets +X to defense rolls.",
+					"Fearless": "When a unit where all models have this rule fails a morale test, roll one die. On a 4+ it counts as passed instead.",
+					"Hero": "Heroes with up to Tough(6) may deploy as part of one multi-model unit without another Hero. The hero may take morale tests on behalf of the unit, but must use the unit’s Defense until all other models have been killed.",
+					"Tough": "This model must take X wounds before being killed. If a model with tough joins a unit without it, then it is removed last when the unit takes wounds. You must continue to put wounds on the tough model with most wounds in the unit until it is killed, before starting to put them on the next tough model (heroes must be assigned wounds last, even if already wounded)."
+				},
+				"size": 1,
+				"special_rules": [
+					"Hero",
+					"Tough(3)",
+					"Battleborn",
+					"Fearless"
+				]
+			}
+		},
+		{
+			"activation_round": 0,
+			"casts_current": 0,
+			"casts_per_round": 0,
+			"is_activated": false,
+			"is_fatigued": false,
+			"is_shaken": false,
+			"model_positions": [
+				{
+					"position": [
+						-0.840000152587891,
+						0.0,
+						-0.529999971389771
 					],
 					"rotation": [
 						0.0,
@@ -713,9 +1855,9 @@
 				},
 				{
 					"position": [
-						-0.0400000810623169,
+						-0.800000190734863,
 						0.0,
-						-0.349999994039536
+						-0.529999971389771
 					],
 					"rotation": [
 						0.0,
@@ -726,9 +1868,9 @@
 				},
 				{
 					"position": [
+						-0.760000109672546,
 						0.0,
-						0.0,
-						-0.349999994039536
+						-0.529999971389771
 					],
 					"rotation": [
 						0.0,
@@ -739,9 +1881,9 @@
 				},
 				{
 					"position": [
-						0.0399999618530273,
+						-0.720000147819519,
 						0.0,
-						-0.349999994039536
+						-0.529999971389771
 					],
 					"rotation": [
 						0.0,
@@ -752,9 +1894,74 @@
 				},
 				{
 					"position": [
-						0.0799999237060547,
+						-0.680000185966492,
 						0.0,
-						-0.349999994039536
+						-0.529999971389771
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.640000104904175,
+						0.0,
+						-0.529999971389771
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.600000143051147,
+						0.0,
+						-0.529999971389771
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.56000018119812,
+						0.0,
+						-0.529999971389771
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.520000100135803,
+						0.0,
+						-0.529999971389771
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.480000138282776,
+						0.0,
+						-0.529999971389771
 					],
 					"rotation": [
 						0.0,
@@ -786,8 +1993,29 @@
 					"markers": [],
 					"model_index": 0,
 					"properties": {
-						"special_rules": [],
-						"tough": 1
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
 					},
 					"wounds_current": 1,
 					"wounds_max": 1
@@ -813,8 +2041,29 @@
 					"markers": [],
 					"model_index": 1,
 					"properties": {
-						"special_rules": [],
-						"tough": 1
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
 					},
 					"wounds_current": 1,
 					"wounds_max": 1
@@ -840,8 +2089,29 @@
 					"markers": [],
 					"model_index": 2,
 					"properties": {
-						"special_rules": [],
-						"tough": 1
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
 					},
 					"wounds_current": 1,
 					"wounds_max": 1
@@ -867,8 +2137,29 @@
 					"markers": [],
 					"model_index": 3,
 					"properties": {
-						"special_rules": [],
-						"tough": 1
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
 					},
 					"wounds_current": 1,
 					"wounds_max": 1
@@ -894,8 +2185,269 @@
 					"markers": [],
 					"model_index": 4,
 					"properties": {
-						"special_rules": [],
-						"tough": 1
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.22440004348755,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 5,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.26440000534058,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 6,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.3043999671936,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 7,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.34440004825592,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 8,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.38440001010895,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 9,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
 					},
 					"wounds_current": 1,
 					"wounds_max": 1
@@ -907,11 +2459,873 @@
 				"base_size_round": 32,
 				"base_width_mm": 32,
 				"equipment": [],
-				"special_rules": [],
-				"weapons": []
+				"special_rules": [
+					"Slow",
+					"Self-Repair"
+				],
+				"weapons": [
+					{
+						"attacks": 1,
+						"count": 10,
+						"from_item": "",
+						"name": "CCW",
+						"range_value": 0,
+						"special_rules": []
+					},
+					{
+						"attacks": 1,
+						"count": 10,
+						"from_item": "",
+						"name": "Gauss Rifle",
+						"range_value": 24,
+						"special_rules": [
+							"Destructive"
+						]
+					}
+				]
 			},
 			"source_type": "opr",
-			"unit_id": "1783674571.34163_926087075",
+			"unit_id": "1783685261.53515_3728519486",
+			"unit_properties": {
+				"attached_heroes": [
+					"1783685261.65066_584119795"
+				],
+				"attached_to": "",
+				"base_depth_mm": 32,
+				"base_from_tough": false,
+				"base_is_oval": false,
+				"base_is_square": false,
+				"base_size_round": 32,
+				"base_size_square": 30,
+				"base_width_mm": 32,
+				"cost": 200,
+				"custom_name": "",
+				"defense": 4,
+				"display_suffix": " (1)",
+				"faction_folder": "robot_legions",
+				"game_system": "gf",
+				"item_grants": {
+
+				},
+				"mount_name": "",
+				"name": "Warriors",
+				"player_id": 2,
+				"quality": 4,
+				"regiment_mode": false,
+				"rule_descriptions": {
+					"Self-Repair": "When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
+					"Slow": "Moves -2\" when using Advance, and -4” when using Rush/Charge."
+				},
+				"size": 10,
+				"special_rules": [
+					"Slow",
+					"Self-Repair"
+				]
+			}
+		},
+		{
+			"activation_round": 0,
+			"casts_current": 0,
+			"casts_per_round": 0,
+			"is_activated": false,
+			"is_fatigued": false,
+			"is_shaken": false,
+			"model_positions": [
+				{
+					"position": [
+						0.220000028610229,
+						0.0,
+						-0.400000005960464
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				}
+			],
+			"models": [
+				{
+					"import_position": [
+						1.49639999866486,
+						0.0,
+						-0.346399992704391
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 0,
+					"properties": {
+						"special_rules": [
+							"Hero",
+							"Self-Repair",
+							"Slow",
+							"Tough(3)",
+							"Combat Shield",
+							"Shielded",
+							"Re-Animator",
+							"Reanimation Aura"
+						],
+						"tough": 3,
+						"weapons": [
+							{
+								"attacks": 2,
+								"count": 1,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							}
+						]
+					},
+					"wounds_current": 3,
+					"wounds_max": 3
+				}
+			],
+			"source_data": {
+				"base_depth_mm": 32,
+				"base_is_oval": false,
+				"base_size_round": 32,
+				"base_width_mm": 32,
+				"equipment": [],
+				"special_rules": [
+					"Hero",
+					"Self-Repair",
+					"Slow",
+					"Tough(3)",
+					"Combat Shield",
+					"Shielded",
+					"Re-Animator",
+					"Reanimation Aura"
+				],
+				"weapons": [
+					{
+						"attacks": 2,
+						"count": 1,
+						"from_item": "",
+						"name": "CCW",
+						"range_value": 0,
+						"special_rules": []
+					}
+				]
+			},
+			"source_type": "opr",
+			"unit_id": "1783685261.65066_584119795",
+			"unit_properties": {
+				"attached_heroes": [],
+				"attached_to": "1783685261.53515_3728519486",
+				"base_depth_mm": 32,
+				"base_from_tough": false,
+				"base_is_oval": false,
+				"base_is_square": false,
+				"base_size_round": 32,
+				"base_size_square": 30,
+				"base_width_mm": 32,
+				"cost": 45,
+				"custom_name": "",
+				"defense": 3,
+				"display_suffix": "",
+				"faction_folder": "robot_legions",
+				"game_system": "gf",
+				"item_grants": {
+					"Combat Shield": [
+						"Shielded"
+					],
+					"Re-Animator": [
+						"Reanimation Aura"
+					]
+				},
+				"mount_name": "",
+				"name": "Robot Lord",
+				"player_id": 2,
+				"quality": 3,
+				"regiment_mode": false,
+				"rule_descriptions": {
+					"Hero": "Heroes with up to Tough(6) may deploy as part of one multi-model unit without another Hero. The hero may take morale tests on behalf of the unit, but must use the unit’s Defense until all other models have been killed.",
+					"Reanimation": "When a unit where all models have this rule is activated, roll as many dice as the max. number of models/wounds it could restore. For each 5+ you may restore one model/wound. Note that new models may only be restored if they can be placed in coherency with non-restored models.",
+					"Reanimation Aura": "This model and its unit get Reanimation.",
+					"Self-Repair": "When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
+					"Shielded": "Units where all models have this rule get +1 to defense rolls against hits that are not from spells.",
+					"Slow": "Moves -2\" when using Advance, and -4” when using Rush/Charge.",
+					"Tough": "This model must take X wounds before being killed. If a model with tough joins a unit without it, then it is removed last when the unit takes wounds. You must continue to put wounds on the tough model with most wounds in the unit until it is killed, before starting to put them on the next tough model (heroes must be assigned wounds last, even if already wounded)."
+				},
+				"size": 1,
+				"special_rules": [
+					"Hero",
+					"Self-Repair",
+					"Slow",
+					"Tough(3)",
+					"Combat Shield",
+					"Shielded",
+					"Re-Animator",
+					"Reanimation Aura"
+				]
+			}
+		},
+		{
+			"activation_round": 0,
+			"casts_current": 0,
+			"casts_per_round": 0,
+			"is_activated": false,
+			"is_fatigued": false,
+			"is_shaken": false,
+			"model_positions": [
+				{
+					"position": [
+						-0.400000214576721,
+						0.0,
+						-0.529999971389771
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.360000252723694,
+						0.0,
+						-0.529999971389771
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.320000171661377,
+						0.0,
+						-0.529999971389771
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.28000020980835,
+						0.0,
+						-0.529999971389771
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.240000247955322,
+						0.0,
+						-0.529999971389771
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.200000166893005,
+						0.0,
+						-0.529999971389771
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.160000205039978,
+						0.0,
+						-0.529999971389771
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.120000243186951,
+						0.0,
+						-0.529999971389771
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.0800001621246338,
+						0.0,
+						-0.529999971389771
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.0400002002716064,
+						0.0,
+						-0.529999971389771
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				}
+			],
+			"models": [
+				{
+					"import_position": [
+						1.02439999580383,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 0,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.06439995765686,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 1,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.10440003871918,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 2,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.1444000005722,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 3,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.18439996242523,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 4,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.22440004348755,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 5,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.26440000534058,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 6,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.3043999671936,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 7,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.34440004825592,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 8,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.38440001010895,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 9,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							},
+							{
+								"attacks": 1,
+								"count": 10,
+								"name": "Gauss Rifle",
+								"range": 24,
+								"specialRules": [
+									"Destructive"
+								]
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				}
+			],
+			"source_data": {
+				"base_depth_mm": 32,
+				"base_is_oval": false,
+				"base_size_round": 32,
+				"base_width_mm": 32,
+				"equipment": [],
+				"special_rules": [
+					"Slow",
+					"Self-Repair"
+				],
+				"weapons": [
+					{
+						"attacks": 1,
+						"count": 10,
+						"from_item": "",
+						"name": "CCW",
+						"range_value": 0,
+						"special_rules": []
+					},
+					{
+						"attacks": 1,
+						"count": 10,
+						"from_item": "",
+						"name": "Gauss Rifle",
+						"range_value": 24,
+						"special_rules": [
+							"Destructive"
+						]
+					}
+				]
+			},
+			"source_type": "opr",
+			"unit_id": "1783685261.75641_3496221980",
 			"unit_properties": {
 				"attached_heroes": [],
 				"attached_to": "",
@@ -922,40 +3336,883 @@
 				"base_size_round": 32,
 				"base_size_square": 30,
 				"base_width_mm": 32,
-				"cost": 150,
+				"cost": 200,
 				"custom_name": "",
-				"defense": 3,
-				"display_suffix": "",
-				"faction_folder": "",
-				"game_system": "",
+				"defense": 4,
+				"display_suffix": " (2)",
+				"faction_folder": "robot_legions",
+				"game_system": "gf",
 				"item_grants": {
 
 				},
 				"mount_name": "",
-				"name": "Battle Brothers",
+				"name": "Warriors",
+				"player_id": 2,
+				"quality": 4,
+				"regiment_mode": false,
+				"rule_descriptions": {
+					"Self-Repair": "When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
+					"Slow": "Moves -2\" when using Advance, and -4” when using Rush/Charge."
+				},
+				"size": 10,
+				"special_rules": [
+					"Slow",
+					"Self-Repair"
+				]
+			}
+		},
+		{
+			"activation_round": 0,
+			"casts_current": 0,
+			"casts_per_round": 0,
+			"is_activated": false,
+			"is_fatigued": false,
+			"is_shaken": false,
+			"model_positions": [
+				{
+					"position": [
+						0.620000064373016,
+						0.0,
+						-0.400000005960464
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						0.660000026226044,
+						0.0,
+						-0.400000005960464
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						0.700000107288361,
+						0.0,
+						-0.400000005960464
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				}
+			],
+			"models": [
+				{
+					"import_position": [
+						1.49639999866486,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 0,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 3,
+								"name": "D-Mark",
+								"range": 24,
+								"specialRules": [
+									"AP(1)",
+									"Reliable",
+									"Takedown"
+								]
+							},
+							{
+								"attacks": 1,
+								"count": 3,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.53639996051788,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 1,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 3,
+								"name": "D-Mark",
+								"range": 24,
+								"specialRules": [
+									"AP(1)",
+									"Reliable",
+									"Takedown"
+								]
+							},
+							{
+								"attacks": 1,
+								"count": 3,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.5764000415802,
+						0.0,
+						-0.246399998664856
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 2,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 3,
+								"name": "D-Mark",
+								"range": 24,
+								"specialRules": [
+									"AP(1)",
+									"Reliable",
+									"Takedown"
+								]
+							},
+							{
+								"attacks": 1,
+								"count": 3,
+								"name": "CCW",
+								"range": 0,
+								"specialRules": []
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				}
+			],
+			"source_data": {
+				"base_depth_mm": 32,
+				"base_is_oval": false,
+				"base_size_round": 32,
+				"base_width_mm": 32,
+				"equipment": [],
+				"special_rules": [
+					"Slow",
+					"Self-Repair"
+				],
+				"weapons": [
+					{
+						"attacks": 1,
+						"count": 3,
+						"from_item": "",
+						"name": "D-Mark",
+						"range_value": 24,
+						"special_rules": [
+							"AP(1)",
+							"Reliable",
+							"Takedown"
+						]
+					},
+					{
+						"attacks": 1,
+						"count": 3,
+						"from_item": "",
+						"name": "CCW",
+						"range_value": 0,
+						"special_rules": []
+					}
+				]
+			},
+			"source_type": "opr",
+			"unit_id": "1783685261.84313_1445270813",
+			"unit_properties": {
+				"attached_heroes": [],
+				"attached_to": "",
+				"base_depth_mm": 32,
+				"base_from_tough": false,
+				"base_is_oval": false,
+				"base_is_square": false,
+				"base_size_round": 32,
+				"base_size_square": 30,
+				"base_width_mm": 32,
+				"cost": 110,
+				"custom_name": "",
+				"defense": 4,
+				"display_suffix": "",
+				"faction_folder": "robot_legions",
+				"game_system": "gf",
+				"item_grants": {
+
+				},
+				"mount_name": "",
+				"name": "Snipers",
+				"player_id": 2,
+				"quality": 4,
+				"regiment_mode": false,
+				"rule_descriptions": {
+					"Self-Repair": "When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
+					"Slow": "Moves -2\" when using Advance, and -4” when using Rush/Charge."
+				},
+				"size": 3,
+				"special_rules": [
+					"Slow",
+					"Self-Repair"
+				]
+			}
+		},
+		{
+			"activation_round": 0,
+			"casts_current": 0,
+			"casts_per_round": 0,
+			"is_activated": false,
+			"is_fatigued": false,
+			"is_shaken": false,
+			"model_positions": [
+				{
+					"position": [
+						-0.220000028610229,
+						0.0,
+						-0.400000005960464
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				}
+			],
+			"models": [
+				{
+					"import_position": [
+						1.02439999580383,
+						0.0,
+						-0.14640000462532
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 0,
+					"properties": {
+						"special_rules": [
+							"Strider",
+							"Tough(6)",
+							"Self-Repair"
+						],
+						"tough": 6,
+						"weapons": [
+							{
+								"attacks": 2,
+								"count": 1,
+								"name": "Heavy CCW",
+								"range": 0,
+								"specialRules": [
+									"AP(1)"
+								]
+							},
+							{
+								"attacks": 2,
+								"count": 1,
+								"name": "Exterminator Cannon",
+								"range": 30,
+								"specialRules": [
+									"Blast(3)",
+									"AP(2)"
+								]
+							}
+						]
+					},
+					"wounds_current": 6,
+					"wounds_max": 6
+				}
+			],
+			"source_data": {
+				"base_depth_mm": 60,
+				"base_is_oval": false,
+				"base_size_round": 60,
+				"base_width_mm": 60,
+				"equipment": [],
+				"special_rules": [
+					"Strider",
+					"Tough(6)",
+					"Self-Repair"
+				],
+				"weapons": [
+					{
+						"attacks": 2,
+						"count": 1,
+						"from_item": "",
+						"name": "Heavy CCW",
+						"range_value": 0,
+						"special_rules": [
+							"AP(1)"
+						]
+					},
+					{
+						"attacks": 2,
+						"count": 1,
+						"from_item": "",
+						"name": "Exterminator Cannon",
+						"range_value": 30,
+						"special_rules": [
+							"Blast(3)",
+							"AP(2)"
+						]
+					}
+				]
+			},
+			"source_type": "opr",
+			"unit_id": "1783685261.96155_3405990619",
+			"unit_properties": {
+				"attached_heroes": [],
+				"attached_to": "",
+				"base_depth_mm": 60,
+				"base_from_tough": false,
+				"base_is_oval": false,
+				"base_is_square": false,
+				"base_size_round": 60,
+				"base_size_square": 50,
+				"base_width_mm": 60,
+				"cost": 195,
+				"custom_name": "",
+				"defense": 3,
+				"display_suffix": "",
+				"faction_folder": "robot_legions",
+				"game_system": "gf",
+				"item_grants": {
+
+				},
+				"mount_name": "",
+				"name": "Heavy Annihilator",
 				"player_id": 2,
 				"quality": 3,
 				"regiment_mode": false,
 				"rule_descriptions": {
+					"Self-Repair": "When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
+					"Strider": "May ignore the effects of difficult terrain when moving. ",
+					"Tough": "This model must take X wounds before being killed. If a model with tough joins a unit without it, then it is removed last when the unit takes wounds. You must continue to put wounds on the tough model with most wounds in the unit until it is killed, before starting to put them on the next tough model (heroes must be assigned wounds last, even if already wounded)."
+				},
+				"size": 1,
+				"special_rules": [
+					"Strider",
+					"Tough(6)",
+					"Self-Repair"
+				]
+			}
+		},
+		{
+			"activation_round": 0,
+			"casts_current": 0,
+			"casts_per_round": 0,
+			"is_activated": false,
+			"is_fatigued": false,
+			"is_shaken": false,
+			"model_positions": [
+				{
+					"position": [
+						-0.740000009536743,
+						0.0,
+						-0.400000005960464
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.700000047683716,
+						0.0,
+						-0.400000005960464
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.659999966621399,
+						0.0,
+						-0.400000005960464
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.620000004768372,
+						0.0,
+						-0.400000005960464
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				},
+				{
+					"position": [
+						-0.580000042915344,
+						0.0,
+						-0.400000005960464
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"visible": true
+				}
+			],
+			"models": [
+				{
+					"import_position": [
+						1.02439999580383,
+						0.0,
+						0.195466667413712
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
 
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 0,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair",
+							"Jetpacks",
+							"Ambush",
+							"Flying",
+							"Swift"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 5,
+								"name": "Atom-Caster",
+								"range": 12,
+								"specialRules": [
+									"AP(1)"
+								]
+							},
+							{
+								"attacks": 2,
+								"count": 5,
+								"name": "Void Blade",
+								"range": 0,
+								"specialRules": []
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.06439995765686,
+						0.0,
+						0.195466667413712
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 1,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair",
+							"Jetpacks",
+							"Ambush",
+							"Flying",
+							"Swift"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 5,
+								"name": "Atom-Caster",
+								"range": 12,
+								"specialRules": [
+									"AP(1)"
+								]
+							},
+							{
+								"attacks": 2,
+								"count": 5,
+								"name": "Void Blade",
+								"range": 0,
+								"specialRules": []
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.10440003871918,
+						0.0,
+						0.195466667413712
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 2,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair",
+							"Jetpacks",
+							"Ambush",
+							"Flying",
+							"Swift"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 5,
+								"name": "Atom-Caster",
+								"range": 12,
+								"specialRules": [
+									"AP(1)"
+								]
+							},
+							{
+								"attacks": 2,
+								"count": 5,
+								"name": "Void Blade",
+								"range": 0,
+								"specialRules": []
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.1444000005722,
+						0.0,
+						0.195466667413712
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 3,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair",
+							"Jetpacks",
+							"Ambush",
+							"Flying",
+							"Swift"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 5,
+								"name": "Atom-Caster",
+								"range": 12,
+								"specialRules": [
+									"AP(1)"
+								]
+							},
+							{
+								"attacks": 2,
+								"count": 5,
+								"name": "Void Blade",
+								"range": 0,
+								"specialRules": []
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				},
+				{
+					"import_position": [
+						1.18439996242523,
+						0.0,
+						0.195466667413712
+					],
+					"import_rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"is_alive": true,
+					"marker_colors": {
+
+					},
+					"marker_values": {
+
+					},
+					"markers": [],
+					"model_index": 4,
+					"properties": {
+						"special_rules": [
+							"Slow",
+							"Self-Repair",
+							"Jetpacks",
+							"Ambush",
+							"Flying",
+							"Swift"
+						],
+						"tough": 1,
+						"weapons": [
+							{
+								"attacks": 1,
+								"count": 5,
+								"name": "Atom-Caster",
+								"range": 12,
+								"specialRules": [
+									"AP(1)"
+								]
+							},
+							{
+								"attacks": 2,
+								"count": 5,
+								"name": "Void Blade",
+								"range": 0,
+								"specialRules": []
+							}
+						]
+					},
+					"wounds_current": 1,
+					"wounds_max": 1
+				}
+			],
+			"source_data": {
+				"base_depth_mm": 32,
+				"base_is_oval": false,
+				"base_size_round": 32,
+				"base_width_mm": 32,
+				"equipment": [],
+				"special_rules": [
+					"Slow",
+					"Self-Repair",
+					"Jetpacks",
+					"Ambush",
+					"Flying",
+					"Swift"
+				],
+				"weapons": [
+					{
+						"attacks": 1,
+						"count": 5,
+						"from_item": "",
+						"name": "Atom-Caster",
+						"range_value": 12,
+						"special_rules": [
+							"AP(1)"
+						]
+					},
+					{
+						"attacks": 2,
+						"count": 5,
+						"from_item": "",
+						"name": "Void Blade",
+						"range_value": 0,
+						"special_rules": []
+					}
+				]
+			},
+			"source_type": "opr",
+			"unit_id": "1783685262.03471_479234676",
+			"unit_properties": {
+				"attached_heroes": [],
+				"attached_to": "",
+				"base_depth_mm": 32,
+				"base_from_tough": false,
+				"base_is_oval": false,
+				"base_is_square": false,
+				"base_size_round": 32,
+				"base_size_square": 30,
+				"base_width_mm": 32,
+				"cost": 125,
+				"custom_name": "",
+				"defense": 3,
+				"display_suffix": "",
+				"faction_folder": "robot_legions",
+				"game_system": "gf",
+				"item_grants": {
+					"Jetpacks": [
+						"Ambush",
+						"Flying",
+						"Swift"
+					]
+				},
+				"mount_name": "",
+				"name": "Guardians",
+				"player_id": 2,
+				"quality": 3,
+				"regiment_mode": false,
+				"rule_descriptions": {
+					"Ambush": "May be set aside before deployment. At the start of any round after the first, may be deployed anywhere over 9” away from enemy units. Players alternate in placing Ambush units, starting with the player that activates next. Units that deploy via Ambush can’t seize or contest objectives on the round they deploy.",
+					"Flying": "May move through units and terrain, and ignores terrain effects whilst moving.",
+					"Self-Repair": "When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
+					"Slow": "Moves -2\" when using Advance, and -4” when using Rush/Charge.",
+					"Swift": "This model may ignore the Slow rule."
 				},
 				"size": 5,
-				"special_rules": []
+				"special_rules": [
+					"Slow",
+					"Self-Repair",
+					"Jetpacks",
+					"Ambush",
+					"Flying",
+					"Swift"
+				]
 			}
 		}
 	],
-	"object_counter": 20,
+	"object_counter": 54,
 	"objects": [
 		{
-			"game_unit_id": "1783674571.2998_2945529167",
+			"game_unit_id": "1783685260.8375_4219020445",
 			"glb_name": "Battle Brothers",
 			"model_index": 0,
-			"name": "OPR_Battle_Brothers",
+			"name": "OPR_Battle_Brothers_(1)",
 			"network_id": 1000001,
 			"position": [
-				-0.0800000429153442,
+				-0.698499917984009,
 				0.0,
-				0.349999994039536
+				0.400000005960464
 			],
 			"rotation": [
 				0.0,
@@ -966,15 +4223,15 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783674571.2998_2945529167",
+			"game_unit_id": "1783685260.8375_4219020445",
 			"glb_name": "Battle Brothers",
 			"model_index": 1,
-			"name": "@StaticBody3D@1366",
+			"name": "@StaticBody3D@1377",
 			"network_id": 1000002,
 			"position": [
-				-0.0400000810623169,
+				-0.665499925613403,
 				0.0,
-				0.349999994039536
+				0.400000005960464
 			],
 			"rotation": [
 				0.0,
@@ -985,15 +4242,15 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783674571.2998_2945529167",
+			"game_unit_id": "1783685260.8375_4219020445",
 			"glb_name": "Battle Brothers",
 			"model_index": 2,
-			"name": "@StaticBody3D@1371",
+			"name": "@StaticBody3D@1380",
 			"network_id": 1000003,
 			"position": [
+				-0.632499933242798,
 				0.0,
-				0.0,
-				0.349999994039536
+				0.400000005960464
 			],
 			"rotation": [
 				0.0,
@@ -1004,15 +4261,15 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783674571.2998_2945529167",
+			"game_unit_id": "1783685260.8375_4219020445",
 			"glb_name": "Battle Brothers",
 			"model_index": 3,
-			"name": "@StaticBody3D@1376",
+			"name": "@StaticBody3D@1383",
 			"network_id": 1000004,
 			"position": [
-				0.0399999618530273,
+				-0.599499940872192,
 				0.0,
-				0.349999994039536
+				0.400000005960464
 			],
 			"rotation": [
 				0.0,
@@ -1023,15 +4280,15 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783674571.2998_2945529167",
+			"game_unit_id": "1783685260.8375_4219020445",
 			"glb_name": "Battle Brothers",
 			"model_index": 4,
-			"name": "@StaticBody3D@1381",
+			"name": "@StaticBody3D@1386",
 			"network_id": 1000005,
 			"position": [
-				0.0799999237060547,
+				-0.566499948501587,
 				0.0,
-				0.349999994039536
+				0.400000005960464
 			],
 			"rotation": [
 				0.0,
@@ -1042,15 +4299,15 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783674571.3063_850991220",
-			"glb_name": "Assault Brothers",
-			"model_index": 0,
-			"name": "OPR_Assault_Brothers",
+			"game_unit_id": "1783685260.8375_4219020445",
+			"glb_name": "Battle Brothers",
+			"model_index": 5,
+			"name": "@StaticBody3D@1389",
 			"network_id": 1000006,
 			"position": [
-				-0.580000042915344,
+				-0.533499956130981,
 				0.0,
-				0.349999994039536
+				0.400000005960464
 			],
 			"rotation": [
 				0.0,
@@ -1061,15 +4318,15 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783674571.3063_850991220",
-			"glb_name": "Assault Brothers",
-			"model_index": 1,
-			"name": "@StaticBody3D@1390",
+			"game_unit_id": "1783685260.8375_4219020445",
+			"glb_name": "Battle Brothers",
+			"model_index": 6,
+			"name": "@StaticBody3D@1392",
 			"network_id": 1000007,
 			"position": [
-				-0.540000081062317,
+				-0.500499963760376,
 				0.0,
-				0.349999994039536
+				0.400000005960464
 			],
 			"rotation": [
 				0.0,
@@ -1080,15 +4337,15 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783674571.3063_850991220",
-			"glb_name": "Assault Brothers",
-			"model_index": 2,
+			"game_unit_id": "1783685260.8375_4219020445",
+			"glb_name": "Battle Brothers",
+			"model_index": 7,
 			"name": "@StaticBody3D@1395",
 			"network_id": 1000008,
 			"position": [
-				-0.5,
+				-0.467499971389771,
 				0.0,
-				0.349999994039536
+				0.400000005960464
 			],
 			"rotation": [
 				0.0,
@@ -1099,15 +4356,15 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783674571.3063_850991220",
-			"glb_name": "Assault Brothers",
-			"model_index": 3,
-			"name": "@StaticBody3D@1400",
+			"game_unit_id": "1783685260.8375_4219020445",
+			"glb_name": "Battle Brothers",
+			"model_index": 8,
+			"name": "@StaticBody3D@1398",
 			"network_id": 1000009,
 			"position": [
-				-0.460000038146973,
+				-0.434499859809875,
 				0.0,
-				0.349999994039536
+				0.400000005960464
 			],
 			"rotation": [
 				0.0,
@@ -1118,15 +4375,15 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783674571.3063_850991220",
-			"glb_name": "Assault Brothers",
-			"model_index": 4,
-			"name": "@StaticBody3D@1405",
+			"game_unit_id": "1783685260.8375_4219020445",
+			"glb_name": "Battle Brothers",
+			"model_index": 9,
+			"name": "@StaticBody3D@1401",
 			"network_id": 1000010,
 			"position": [
-				-0.420000076293945,
+				-0.40149986743927,
 				0.0,
-				0.349999994039536
+				0.400000005960464
 			],
 			"rotation": [
 				0.0,
@@ -1137,15 +4394,15 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783674571.31411_3316350432",
-			"glb_name": "Support Brothers",
+			"game_unit_id": "1783685260.98966_799451351",
+			"glb_name": "Battle Brothers",
 			"model_index": 0,
-			"name": "OPR_Support_Brothers",
+			"name": "OPR_Battle_Brothers_(2)",
 			"network_id": 1000011,
 			"position": [
-				0.460000038146973,
+				-0.148499846458435,
 				0.0,
-				0.349999994039536
+				0.399999976158142
 			],
 			"rotation": [
 				0.0,
@@ -1156,15 +4413,15 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783674571.31411_3316350432",
-			"glb_name": "Support Brothers",
+			"game_unit_id": "1783685260.98966_799451351",
+			"glb_name": "Battle Brothers",
 			"model_index": 1,
-			"name": "@StaticBody3D@1414",
+			"name": "@StaticBody3D@1406",
 			"network_id": 1000012,
 			"position": [
-				0.5,
+				-0.11549985408783,
 				0.0,
-				0.349999994039536
+				0.399999976158142
 			],
 			"rotation": [
 				0.0,
@@ -1175,15 +4432,15 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783674571.31411_3316350432",
-			"glb_name": "Support Brothers",
+			"game_unit_id": "1783685260.98966_799451351",
+			"glb_name": "Battle Brothers",
 			"model_index": 2,
-			"name": "@StaticBody3D@1419",
+			"name": "@StaticBody3D@1409",
 			"network_id": 1000013,
 			"position": [
-				0.540000081062317,
+				-0.0824998617172241,
 				0.0,
-				0.349999994039536
+				0.399999976158142
 			],
 			"rotation": [
 				0.0,
@@ -1194,72 +4451,15 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783674571.34163_926087075",
-			"glb_name": "Battle Brothers",
-			"model_index": 0,
-			"name": "@StaticBody3D@1521",
-			"network_id": 2000014,
-			"position": [
-				-0.0800000429153442,
-				0.0,
-				-0.349999994039536
-			],
-			"rotation": [
-				0.0,
-				0.0,
-				0.0
-			],
-			"type": "opr_unit",
-			"visible": true
-		},
-		{
-			"game_unit_id": "1783674571.34163_926087075",
-			"glb_name": "Battle Brothers",
-			"model_index": 1,
-			"name": "@StaticBody3D@1526",
-			"network_id": 2000015,
-			"position": [
-				-0.0400000810623169,
-				0.0,
-				-0.349999994039536
-			],
-			"rotation": [
-				0.0,
-				0.0,
-				0.0
-			],
-			"type": "opr_unit",
-			"visible": true
-		},
-		{
-			"game_unit_id": "1783674571.34163_926087075",
-			"glb_name": "Battle Brothers",
-			"model_index": 2,
-			"name": "@StaticBody3D@1531",
-			"network_id": 2000016,
-			"position": [
-				0.0,
-				0.0,
-				-0.349999994039536
-			],
-			"rotation": [
-				0.0,
-				0.0,
-				0.0
-			],
-			"type": "opr_unit",
-			"visible": true
-		},
-		{
-			"game_unit_id": "1783674571.34163_926087075",
+			"game_unit_id": "1783685260.98966_799451351",
 			"glb_name": "Battle Brothers",
 			"model_index": 3,
-			"name": "@StaticBody3D@1536",
-			"network_id": 2000017,
+			"name": "@StaticBody3D@1412",
+			"network_id": 1000014,
 			"position": [
-				0.0399999618530273,
+				-0.0494998693466187,
 				0.0,
-				-0.349999994039536
+				0.399999976158142
 			],
 			"rotation": [
 				0.0,
@@ -1270,15 +4470,15 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783674571.34163_926087075",
+			"game_unit_id": "1783685260.98966_799451351",
 			"glb_name": "Battle Brothers",
 			"model_index": 4,
-			"name": "@StaticBody3D@1541",
-			"network_id": 2000018,
+			"name": "@StaticBody3D@1415",
+			"network_id": 1000015,
 			"position": [
-				0.0799999237060547,
+				-0.0164998769760132,
 				0.0,
-				-0.349999994039536
+				0.399999976158142
 			],
 			"rotation": [
 				0.0,
@@ -1289,46 +4489,820 @@
 			"visible": true
 		},
 		{
-			"name": "Terrain_19",
-			"network_id": 10019,
+			"game_unit_id": "1783685260.98966_799451351",
+			"glb_name": "Battle Brothers",
+			"model_index": 5,
+			"name": "@StaticBody3D@1418",
+			"network_id": 1000016,
 			"position": [
-				-0.300000011920929,
+				0.0165001153945923,
 				0.0,
-				-0.0500000007450581
+				0.399999976158142
 			],
 			"rotation": [
 				0.0,
 				0.0,
 				0.0
 			],
-			"type": "terrain",
+			"type": "opr_unit",
 			"visible": true
 		},
 		{
-			"name": "Terrain_20",
-			"network_id": 10020,
+			"game_unit_id": "1783685260.98966_799451351",
+			"glb_name": "Battle Brothers",
+			"model_index": 6,
+			"name": "@StaticBody3D@1421",
+			"network_id": 1000017,
 			"position": [
-				0.349999994039536,
+				0.0495001077651978,
 				0.0,
-				0.100000001490116
+				0.399999976158142
 			],
 			"rotation": [
 				0.0,
 				0.0,
 				0.0
 			],
-			"type": "terrain",
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685260.98966_799451351",
+			"glb_name": "Battle Brothers",
+			"model_index": 7,
+			"name": "@StaticBody3D@1424",
+			"network_id": 1000018,
+			"position": [
+				0.0825001001358032,
+				0.0,
+				0.399999976158142
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685260.98966_799451351",
+			"glb_name": "Battle Brothers",
+			"model_index": 8,
+			"name": "@StaticBody3D@1427",
+			"network_id": 1000019,
+			"position": [
+				0.115500211715698,
+				0.0,
+				0.399999976158142
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685260.98966_799451351",
+			"glb_name": "Battle Brothers",
+			"model_index": 9,
+			"name": "@StaticBody3D@1430",
+			"network_id": 1000020,
+			"position": [
+				0.148500204086304,
+				0.0,
+				0.399999976158142
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.05019_3703488610",
+			"glb_name": "Destroyers",
+			"model_index": 0,
+			"name": "OPR_Destroyers",
+			"network_id": 1000021,
+			"position": [
+				0.502000093460083,
+				0.0,
+				0.399999976158142
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.05019_3703488610",
+			"glb_name": "Destroyers",
+			"model_index": 1,
+			"name": "@StaticBody3D@1435",
+			"network_id": 1000022,
+			"position": [
+				0.550000071525574,
+				0.0,
+				0.399999976158142
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.05019_3703488610",
+			"glb_name": "Destroyers",
+			"model_index": 2,
+			"name": "@StaticBody3D@1438",
+			"network_id": 1000023,
+			"position": [
+				0.598000049591064,
+				0.0,
+				0.399999976158142
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.08043_3806866442",
+			"glb_name": "Master Brother",
+			"model_index": 0,
+			"name": "OPR_Master_Brother",
+			"network_id": 1000024,
+			"position": [
+				-0.550000011920929,
+				0.0,
+				0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.53515_3728519486",
+			"glb_name": "Warriors",
+			"model_index": 0,
+			"name": "OPR_Warriors_(1)",
+			"network_id": 2000025,
+			"position": [
+				-0.840000152587891,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.53515_3728519486",
+			"glb_name": "Warriors",
+			"model_index": 1,
+			"name": "@StaticBody3D@1642",
+			"network_id": 2000026,
+			"position": [
+				-0.800000190734863,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.53515_3728519486",
+			"glb_name": "Warriors",
+			"model_index": 2,
+			"name": "@StaticBody3D@1645",
+			"network_id": 2000027,
+			"position": [
+				-0.760000109672546,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.53515_3728519486",
+			"glb_name": "Warriors",
+			"model_index": 3,
+			"name": "@StaticBody3D@1648",
+			"network_id": 2000028,
+			"position": [
+				-0.720000147819519,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.53515_3728519486",
+			"glb_name": "Warriors",
+			"model_index": 4,
+			"name": "@StaticBody3D@1651",
+			"network_id": 2000029,
+			"position": [
+				-0.680000185966492,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.53515_3728519486",
+			"glb_name": "Warriors",
+			"model_index": 5,
+			"name": "@StaticBody3D@1654",
+			"network_id": 2000030,
+			"position": [
+				-0.640000104904175,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.53515_3728519486",
+			"glb_name": "Warriors",
+			"model_index": 6,
+			"name": "@StaticBody3D@1657",
+			"network_id": 2000031,
+			"position": [
+				-0.600000143051147,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.53515_3728519486",
+			"glb_name": "Warriors",
+			"model_index": 7,
+			"name": "@StaticBody3D@1660",
+			"network_id": 2000032,
+			"position": [
+				-0.56000018119812,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.53515_3728519486",
+			"glb_name": "Warriors",
+			"model_index": 8,
+			"name": "@StaticBody3D@1663",
+			"network_id": 2000033,
+			"position": [
+				-0.520000100135803,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.53515_3728519486",
+			"glb_name": "Warriors",
+			"model_index": 9,
+			"name": "@StaticBody3D@1666",
+			"network_id": 2000034,
+			"position": [
+				-0.480000138282776,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.65066_584119795",
+			"glb_name": "Robot Lord",
+			"model_index": 0,
+			"name": "OPR_Robot_Lord",
+			"network_id": 2000035,
+			"position": [
+				0.220000028610229,
+				0.0,
+				-0.400000005960464
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.75641_3496221980",
+			"glb_name": "Warriors",
+			"model_index": 0,
+			"name": "OPR_Warriors_(2)",
+			"network_id": 2000036,
+			"position": [
+				-0.400000214576721,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.75641_3496221980",
+			"glb_name": "Warriors",
+			"model_index": 1,
+			"name": "@StaticBody3D@1673",
+			"network_id": 2000037,
+			"position": [
+				-0.360000252723694,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.75641_3496221980",
+			"glb_name": "Warriors",
+			"model_index": 2,
+			"name": "@StaticBody3D@1676",
+			"network_id": 2000038,
+			"position": [
+				-0.320000171661377,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.75641_3496221980",
+			"glb_name": "Warriors",
+			"model_index": 3,
+			"name": "@StaticBody3D@1679",
+			"network_id": 2000039,
+			"position": [
+				-0.28000020980835,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.75641_3496221980",
+			"glb_name": "Warriors",
+			"model_index": 4,
+			"name": "@StaticBody3D@1682",
+			"network_id": 2000040,
+			"position": [
+				-0.240000247955322,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.75641_3496221980",
+			"glb_name": "Warriors",
+			"model_index": 5,
+			"name": "@StaticBody3D@1685",
+			"network_id": 2000041,
+			"position": [
+				-0.200000166893005,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.75641_3496221980",
+			"glb_name": "Warriors",
+			"model_index": 6,
+			"name": "@StaticBody3D@1688",
+			"network_id": 2000042,
+			"position": [
+				-0.160000205039978,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.75641_3496221980",
+			"glb_name": "Warriors",
+			"model_index": 7,
+			"name": "@StaticBody3D@1691",
+			"network_id": 2000043,
+			"position": [
+				-0.120000243186951,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.75641_3496221980",
+			"glb_name": "Warriors",
+			"model_index": 8,
+			"name": "@StaticBody3D@1694",
+			"network_id": 2000044,
+			"position": [
+				-0.0800001621246338,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.75641_3496221980",
+			"glb_name": "Warriors",
+			"model_index": 9,
+			"name": "@StaticBody3D@1697",
+			"network_id": 2000045,
+			"position": [
+				-0.0400002002716064,
+				0.0,
+				-0.529999971389771
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.84313_1445270813",
+			"glb_name": "Snipers",
+			"model_index": 0,
+			"name": "OPR_Snipers",
+			"network_id": 2000046,
+			"position": [
+				0.620000064373016,
+				0.0,
+				-0.400000005960464
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.84313_1445270813",
+			"glb_name": "Snipers",
+			"model_index": 1,
+			"name": "@StaticBody3D@1702",
+			"network_id": 2000047,
+			"position": [
+				0.660000026226044,
+				0.0,
+				-0.400000005960464
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.84313_1445270813",
+			"glb_name": "Snipers",
+			"model_index": 2,
+			"name": "@StaticBody3D@1705",
+			"network_id": 2000048,
+			"position": [
+				0.700000107288361,
+				0.0,
+				-0.400000005960464
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685261.96155_3405990619",
+			"glb_name": "Heavy Annihilator",
+			"model_index": 0,
+			"name": "OPR_Heavy_Annihilator",
+			"network_id": 2000049,
+			"position": [
+				-0.220000028610229,
+				0.0,
+				-0.400000005960464
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685262.03471_479234676",
+			"glb_name": "Guardians",
+			"model_index": 0,
+			"name": "OPR_Guardians",
+			"network_id": 2000050,
+			"position": [
+				-0.740000009536743,
+				0.0,
+				-0.400000005960464
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685262.03471_479234676",
+			"glb_name": "Guardians",
+			"model_index": 1,
+			"name": "@StaticBody3D@1712",
+			"network_id": 2000051,
+			"position": [
+				-0.700000047683716,
+				0.0,
+				-0.400000005960464
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685262.03471_479234676",
+			"glb_name": "Guardians",
+			"model_index": 2,
+			"name": "@StaticBody3D@1715",
+			"network_id": 2000052,
+			"position": [
+				-0.659999966621399,
+				0.0,
+				-0.400000005960464
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685262.03471_479234676",
+			"glb_name": "Guardians",
+			"model_index": 3,
+			"name": "@StaticBody3D@1718",
+			"network_id": 2000053,
+			"position": [
+				-0.620000004768372,
+				0.0,
+				-0.400000005960464
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
+			"visible": true
+		},
+		{
+			"game_unit_id": "1783685262.03471_479234676",
+			"glb_name": "Guardians",
+			"model_index": 4,
+			"name": "@StaticBody3D@1721",
+			"network_id": 2000054,
+			"position": [
+				-0.580000042915344,
+				0.0,
+				-0.400000005960464
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"type": "opr_unit",
 			"visible": true
 		}
 	],
 	"player_spells": {
-
+		"1": [
+			{
+				"effect": "Pick one enemy unit within 18\", which friendly units gets Unstoppable when shooting against once (next time the effect would apply).",
+				"name": "Advanced Sight",
+				"threshold": 1
+			},
+			{
+				"effect": "Pick one enemy unit within 18\", which takes 1 hit with Blast(3) and Lacerate.",
+				"name": "Cerebral Trauma",
+				"threshold": 1
+			},
+			{
+				"effect": "Pick up to two friendly units within 12\", which get Shred when shooting once (next time the effect would apply).",
+				"name": "Blessed Ammo",
+				"threshold": 2
+			},
+			{
+				"effect": "Pick up to two enemy units within 9\", which take 4 hits each.",
+				"name": "Lightning Fog",
+				"threshold": 2
+			},
+			{
+				"effect": "Pick up to three friendly units within 12\", which get Evasive once (next time the effect would apply).",
+				"name": "Protective Dome",
+				"threshold": 3
+			},
+			{
+				"effect": "Pick one enemy unit within 6\", which takes 9 hits with Bane.",
+				"name": "Psychic Terror",
+				"threshold": 3
+			}
+		],
+		"2": [
+			{
+				"effect": "Pick one enemy unit within 18\", which friendly units gets Indirect when shooting against once (next time the effect would apply).",
+				"name": "Triangulation Bots",
+				"threshold": 1
+			},
+			{
+				"effect": "Pick one enemy unit within 12\", which takes 2 hits with AP(2).",
+				"name": "Piercing Bots",
+				"threshold": 1
+			},
+			{
+				"effect": "Pick up to two friendly units within 12\", which get Rapid Advance once (next time the effect would apply).",
+				"name": "Inspiring Bots",
+				"threshold": 2
+			},
+			{
+				"effect": "Pick up to two enemy units within 9\", which take 4 hits each.",
+				"name": "Flame Bots",
+				"threshold": 2
+			},
+			{
+				"effect": "Pick up to three friendly units within 12\", which get Self-Repair Boost once (next time the effect would apply).",
+				"name": "Mending Bots",
+				"threshold": 3
+			},
+			{
+				"effect": "Pick one enemy unit within 6\", which takes 9 hits with Destructive. Roll as many dice as hits to see if \"on rolls of 6\" effects trigger.",
+				"name": "Gauss Bots",
+				"threshold": 3
+			}
+		]
 	},
 	"rule_descriptions": {
 		"AP": "Targets get -X to Defense rolls when blocking hits.",
 		"Agile": "Moves +1\" on advance and +2” on rush and charge.",
 		"Aircraft": "May only use Advance actions, moving in a straight line, and adding 30” to its total move (even if Shaken). Aircraft ignore all units and terrain when moving and stopping, can’t seize or contest objectives, can’t be charged, and units targeting them get -12” range.",
 		"Ambush": "May be set aside before deployment. At the start of any round after the first, may be deployed anywhere over 9” away from enemy units. Players alternate in placing Ambush units, starting with the player that activates next. Units that deploy via Ambush can’t seize or contest objectives on the round they deploy.",
+		"Ambush Aura": "This model and its unit get Ambush.",
+		"Ambushing Piercing Shot": "Counts as having Ambush, and its weapons get AP(+1) when shooting on the round in which it deploys via this rule.",
 		"Arm Injury": "Gets -1 to rolls when in melee.",
 		"Artillery": "May only use Hold actions. When this model shoots at enemies over 9\" away, it gets +1 to hit rolls. When enemy units shoot at this model from over 9\" away, they get -2 to hit rolls.",
 		"Bane": "Ignores Regeneration, and when attacking the target must re-roll unmodified Defense results of 6.",
@@ -1341,6 +5315,7 @@
 		"Blast": "Ignores cover, and after resolving other special rules, each hit is multiplied by X, where X is up to as many hits as models in the target unit.",
 		"Blinded Eye": "Gets -1 to rolls when shooting.",
 		"Caster": "Gets X spell tokens at the start of each round, but can’t hold more than 6 tokens at once. At any point before attacking, spend as many tokens as the spell’s value to try casting one or more spells (only one try per spell). Roll one die, on 4+ resolve the effect on a target in line of sight. Models within 18” in line of sight of the caster’s unit may spend any number of spell tokens at the same time before rolling, to give the caster +1/-1 to the roll per token.",
+		"Casting Buff": "Once per activation, before attacking, pick one friendly model within 12\" with Caster, which gets +1 to casting rolls once (next time the effect would apply).",
 		"Chemist": "Friendly units within 6\" of the Hero get +1 to morale tests when in melee.",
 		"Chest Wound": "Gets -1 to rolls when blocking hits.",
 		"Climber": "The hero ignores difficult terrain effects.",
@@ -1351,6 +5326,7 @@
 		"Deadly": "Assign each wound to one model, and multiply it by X. Hits from Deadly must be resolved first, and these wounds don’t carry over to other models if the original target is killed.",
 		"Defense": "This model gets +X to defense rolls.",
 		"Destroyer": "The hero gets AP(+1) when shooting.",
+		"Destructive": "On unmodified results of 6 to hit, those hits get AP(+4).",
 		"Duellist": "Enemy units get -1 in melee against the hero.",
 		"Elite": "May re-roll one roll of any kind once per game.",
 		"Entrenched": "As long as a unit where all models have this rule hasn't moved during the round, enemy units shooting at it from over 9\" away get -2 to hit rolls.",
@@ -1370,6 +5346,8 @@
 		"Immobile": "May only use Hold actions.",
 		"Impact": "Roll X dice when attacking after charging, unless fatigued. For each 2+ the target takes one hit.",
 		"Indirect": "Gets -1 to hit rolls when shooting after moving. May target enemies that are not in line of sight as if in line of sight, and ignores cover from sight obstructions.",
+		"Indirect Mark": "Once per activation, before attacking, pick one enemy unit within 18\" in line of sight, which friendly units gets Indirect against once (next time the effect would apply).",
+		"Infiltrate": "Counts as having Ambush, but may be deployed anywhere over 3” away from enemy unit.",
 		"Instigator": "Friendly units that activate within 6\" of the Hero get +1 to hit when in melee.",
 		"Lacerate": "When attacking the target must re-roll unmodified Defense results of 6.",
 		"Leader": "Friendly units within 6\" of the Hero get +1 to morale test rolls.",
@@ -1378,33 +5356,55 @@
 		"Melee Shrouding": "Enemies get -3\" movement to a min. of 6\" when trying to charge units where all models have this rule.",
 		"Melee Shrouding Aura": "This model and its unit get Melee Shrouding.",
 		"Mend": "Once per activation, before attacking, pick one friendly model within 3\" with Tough, and remove D3 wounds from it.",
+		"Mobile Artillery": "When this model uses a Hold action and shoots at enemies over 9\" away, it gets +1 to hit rolls. As long this model hasn't moved during the round, when enemy units shoot at it from over 9\" away, they get -2 to hit rolls.",
 		"Morale": "Gets +X to morale test rolls.",
 		"Motivated": "Always passes the first morale test of the match.",
 		"Musician": "This model and its unit moves +1\" when using move actions.",
 		"Natural Talent": "The hero recovers and gets +1 XP.",
+		"No Retreat": "When a unit where most models have this rule fails a morale test that causes it to be Shaken or Routed, the test counts as passed instead. Then, roll as many dice as the number of wounds it would take to fully destroy it, and for each result of 1-3 the unit takes one wound, which can't be ignored.",
+		"No Retreat Aura": "This model and its unit get No Retreat.",
+		"Piercing Assault": "This model gets AP(+1) when charging.",
+		"Piercing Assault Aura": "This model and its unit get Piercing Assault.",
+		"Protection Feat": "Once per game, when this unit takes wounds and all its models have this rule, you may use this rule and roll one die per wound, and on a 5+ it is ignored.",
+		"Protection Feat Aura": "This model and its unit get Protection Feat.",
 		"Prowler": "Enemy units further than 12\" get -1 to hit rolls when shooting at the hero.",
+		"Rapid Advance": "This model moves +4\" when using Advance actions.",
 		"Rapid Rush": "This model moves +6\" when using Rush actions.",
 		"Rapid Rush Aura": "This model and its unit get Rapid Rush.",
+		"Ravage": "When it's this model's turn to attack in melee, roll X dice. For each 6+ the target takes one wound.",
 		"Re-Deployment": "After all other units are deployed (excluding units that were set aside), you may remove up to two friendly units from the table and deploy them again. Players alternate in placing Re-Deployment units, starting with the player that activates next.",
 		"Re-Position Artillery": "Once per activation, pick one friendly model within 6\" with Artillery, which may immediately move by up to 9\".\n\n",
+		"Reanimation": "When a unit where all models have this rule is activated, roll as many dice as the max. number of models/wounds it could restore. For each 5+ you may restore one model/wound. Note that new models may only be restored if they can be placed in coherency with non-restored models.",
+		"Reanimation Aura": "This model and its unit get Reanimation.",
 		"Regeneration": "When a unit where all models have this rule takes wounds, roll one die for each. On a 5+ it is ignored.",
 		"Regeneration Aura": "This model and its unit get Regeneration.",
 		"Relentless": "When this model shoots at enemies over 9\" away, unmodified results of 6 to hit deal 1 extra hit (only the original hit counts as a 6 for special rules).",
+		"Relentless Aura": "This model and its unit get Relentless.",
 		"Reliable": "Attacks at Quality 2+.",
 		"Rending": "Ignores Regeneration, and on unmodified results of 6 to hit, those hits get AP(+4).",
+		"Rending in Melee": "This model gets Rending in melee.",
+		"Repel Ambushers": "Enemy units using Ambush must be set up over 12\" away from this model's unit.",
 		"Resilient": "Gets +1 to rolls when blocking hits.",
 		"Runner": "The hero always moves +2\" (even in terrain).",
 		"Scavenger": "Friendly units that activate within 6\" of the Hero get +6” range when shooting.",
 		"Scout": "May be set aside before deployment. After all other units are deployed, may be deployed anywhere fully within 12” of their deployment zone. Players alternate in placing Scout units, starting with the player that activates next.",
+		"Self-Repair": "When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
+		"Self-Repair Boost": "If all models in this unit have Self-Repair, they ignore wounds on rolls of 5-6 from Self-Repair (instead of only on 6+).",
+		"Self-Repair Boost Buff": "Once per activation, before attacking, pick one friendly unit within 12\", which gets Self-Repair Boost once (next time the effect would apply).",
 		"Shielded": "Units where all models have this rule get +1 to defense rolls against hits that are not from spells.",
 		"Shred": "On unmodified results of 1 to block hits, this weapon deals 1 extra wound.",
 		"Slow": "Moves -2\" when using Advance, and -4” when using Rush/Charge.",
 		"Smashed Leg": "Moves -1\" on advance and -2” on rush and charge actions.",
 		"Sniper REMOVE": "Shoots at Quality 2+, and each model with Sniper may pick any model in the target unit as its individual target, which is resolved as if it was a unit of 1. Sniper shooting must be resolved before other weapons.",
+		"Spawn": "Once per game, when this model is activated, you may place a new unit of X fully within 6\" of it.",
 		"Specialist": "Gets +1 to hit rolls in melee or shooting (pick one).",
 		"Stealth": "When units where all models have this rule are shot from over 9\" away, enemy units get -1 to hit rolls.",
+		"Stealth Aura": "This model and its unit get Stealth.",
 		"Strider": "May ignore the effects of difficult terrain when moving. ",
 		"Suppressor": "Enemies that are shot at by the hero get -1 to hit when shooting until the end of the round.",
+		"Surge": "On unmodified results of 6 to hit, this weapon deals 1 extra hits (only the original hit counts as a 6 for special rules).",
+		"Swift": "This model may ignore the Slow rule.",
+		"Swift Buff": "Once per activation, before attacking, pick one friendly unit within 12\", which gets Swift once (next time the effect would apply).",
 		"Tactician": "Friendly units that activate within 6\" of the Hero get +1 to hit when shooting.",
 		"Takedown": "This model may pick any model in the target unit as its individual target, which is resolved as if it was a unit of [1]. Takedown attacks must be resolved before other weapons.",
 		"Thrust": "When charging, gets +1 to hit rolls and AP(+1) in melee.",
@@ -1412,34 +5412,1104 @@
 		"Toughened": "Gets Tough(+1).",
 		"Transport": "May transport up to X models or Heroes with up to Tough(6), and non-Heroes with up to Tough(3) which occupy 3 spaces each. Transports may deploy with units inside, and units may enter/exit by using any move action, but must stay fully within 6\" of it when exiting. Units inside/outside transports may not target other units outside/inside transports, but may target the transport itself. When a transport is destroyed, units inside must take a dangerous terrain test, are Shaken, and must be placed fully within 6” of the transport before it’s removed.",
 		"Traumatized": "Gets -1 to rolls when taking morale tests.",
+		"Unique": "This unit may only be taken once per army.",
 		"Unstoppable": "Ignores Regeneration, and ignores all negative modifiers to this weapon.",
 		"Unstoppable Mark": "Once per activation, before attacking, pick one enemy unit within 18\" in line of sight, which friendly units gets Unstoppable against once (next time the effect would apply).",
+		"Unstoppable when Shooting Aura": "This model and its unit get Unstoppable when shooting.",
 		"Vanguard": "Friendly units that activate within 6\" move +4” when using Charge actions.",
 		"Versatile Attack": "When this unit is activated, pick one effect: until the end of the activation, when shooting or charging enemies over 9\" away, all models with this rule in this unit either get AP(+1) or get +1 to hit rolls.",
 		"Versatile Reach": "When this unit is activated, pick one effect: until the end of the activation all models with this rule in it either get +4\" range when shooting, or move +2\" when charging.",
 		"Versatile Reach Aura": "This model and its unit get Versatile Reach.",
 		"Warden": "When the hero is activated all friendly units within 6\" of the hero stop being shaken."
 	},
-	"saved_at": "2026-07-10T11:09:35",
+	"saved_at": "2026-07-10T14:07:47",
 	"table": {
 		"biome": "temperate_grassland",
 		"custom_zones": {
 			"player1": [],
 			"player2": []
 		},
-		"deployment_type": 0,
+		"deployment_type": 1,
 		"grid_cells": {
-
+			"10,11": 2,
+			"10,12": 2,
+			"10,13": 2,
+			"10,20": 1,
+			"10,21": 1,
+			"11,11": 2,
+			"11,12": 2,
+			"11,13": 2,
+			"11,15": 3,
+			"12,15": 3,
+			"12,22": 3,
+			"13,19": 3,
+			"13,22": 3,
+			"14,19": 3,
+			"15,11": 2,
+			"15,12": 2,
+			"15,13": 2,
+			"16,11": 2,
+			"16,12": 2,
+			"16,13": 2,
+			"16,18": 1,
+			"16,19": 1,
+			"16,20": 1,
+			"17,11": 2,
+			"17,12": 2,
+			"17,13": 2,
+			"17,18": 1,
+			"17,19": 1,
+			"17,20": 1,
+			"18,18": 1,
+			"18,19": 1,
+			"18,20": 1,
+			"20,20": 4,
+			"20,21": 4,
+			"20,22": 4,
+			"21,11": 1,
+			"21,12": 1,
+			"21,20": 4,
+			"21,21": 4,
+			"21,22": 4,
+			"21,8": 1,
+			"21,9": 1,
+			"22,11": 1,
+			"22,12": 1,
+			"22,14": 1,
+			"22,15": 1,
+			"22,8": 1,
+			"22,9": 1,
+			"23,11": 1,
+			"23,12": 1,
+			"23,14": 1,
+			"23,15": 1,
+			"23,18": 2,
+			"23,19": 2,
+			"23,20": 2,
+			"23,8": 1,
+			"23,9": 1,
+			"24,14": 1,
+			"24,15": 1,
+			"24,18": 2,
+			"24,19": 2,
+			"24,20": 2,
+			"25,18": 2,
+			"25,19": 2,
+			"25,20": 2,
+			"3,15": 4,
+			"3,16": 4,
+			"3,17": 4,
+			"3,20": 2,
+			"3,21": 2,
+			"3,22": 2,
+			"4,13": 3,
+			"4,15": 4,
+			"4,16": 4,
+			"4,17": 4,
+			"4,20": 2,
+			"4,21": 2,
+			"4,22": 2,
+			"5,10": 2,
+			"5,11": 2,
+			"5,13": 3,
+			"5,20": 2,
+			"5,21": 2,
+			"5,22": 2,
+			"5,9": 2,
+			"6,10": 2,
+			"6,11": 2,
+			"6,15": 2,
+			"6,16": 2,
+			"6,17": 2,
+			"6,9": 2,
+			"7,10": 2,
+			"7,11": 2,
+			"7,15": 2,
+			"7,16": 2,
+			"7,17": 2,
+			"7,9": 2,
+			"8,15": 2,
+			"8,16": 2,
+			"8,17": 2,
+			"8,20": 1,
+			"8,21": 1,
+			"9,11": 2,
+			"9,12": 2,
+			"9,13": 2,
+			"9,20": 1,
+			"9,21": 1
 		},
 		"grid_rotation": 0.0,
 		"mission_objectives": [],
 		"overlay_mode": 0,
-		"placed_objects": [],
+		"placed_objects": [
+			{
+				"cell_x": 8,
+				"cell_y": 15,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.273007750511169,
+				"offset_y": 0.700699031352997
+			},
+			{
+				"cell_x": 7,
+				"cell_y": 17,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.645213007926941,
+				"offset_y": 0.35716113448143
+			},
+			{
+				"cell_x": 7,
+				"cell_y": 16,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.371215164661407,
+				"offset_y": 0.500387966632843
+			},
+			{
+				"cell_x": 8,
+				"cell_y": 17,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.418299227952957,
+				"offset_y": 0.425566762685776
+			},
+			{
+				"cell_x": 7,
+				"cell_y": 15,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.463469743728638,
+				"offset_y": 0.669539749622345
+			},
+			{
+				"cell_x": 6,
+				"cell_y": 16,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.707204818725586,
+				"offset_y": 0.244811415672302
+			},
+			{
+				"cell_x": 6,
+				"cell_y": 17,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.635014891624451,
+				"offset_y": 0.462298214435577
+			},
+			{
+				"cell_x": 15,
+				"cell_y": 12,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.749378800392151,
+				"offset_y": 0.213249772787094
+			},
+			{
+				"cell_x": 17,
+				"cell_y": 12,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.487546861171722,
+				"offset_y": 0.355400919914246
+			},
+			{
+				"cell_x": 16,
+				"cell_y": 11,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.526271224021912,
+				"offset_y": 0.724539518356323
+			},
+			{
+				"cell_x": 17,
+				"cell_y": 13,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.476682126522064,
+				"offset_y": 0.23183798789978
+			},
+			{
+				"cell_x": 15,
+				"cell_y": 13,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.622187435626984,
+				"offset_y": 0.387365996837616
+			},
+			{
+				"cell_x": 17,
+				"cell_y": 11,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.297372579574585,
+				"offset_y": 0.548078656196594
+			},
+			{
+				"cell_x": 15,
+				"cell_y": 11,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.543434739112854,
+				"offset_y": 0.563435137271881
+			},
+			{
+				"cell_x": 10,
+				"cell_y": 11,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.691578209400177,
+				"offset_y": 0.565496563911438
+			},
+			{
+				"cell_x": 11,
+				"cell_y": 13,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.317432016134262,
+				"offset_y": 0.345388472080231
+			},
+			{
+				"cell_x": 10,
+				"cell_y": 12,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.795210361480713,
+				"offset_y": 0.734886586666107
+			},
+			{
+				"cell_x": 10,
+				"cell_y": 13,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.314606755971909,
+				"offset_y": 0.343792319297791
+			},
+			{
+				"cell_x": 9,
+				"cell_y": 12,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.550359725952148,
+				"offset_y": 0.285228908061981
+			},
+			{
+				"cell_x": 9,
+				"cell_y": 13,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.57661771774292,
+				"offset_y": 0.278184354305267
+			},
+			{
+				"cell_x": 11,
+				"cell_y": 12,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.461852490901947,
+				"offset_y": 0.44239866733551
+			},
+			{
+				"cell_x": 4,
+				"cell_y": 20,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.790837824344635,
+				"offset_y": 0.524480521678925
+			},
+			{
+				"cell_x": 4,
+				"cell_y": 21,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.344886720180511,
+				"offset_y": 0.495509207248688
+			},
+			{
+				"cell_x": 3,
+				"cell_y": 22,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.772810459136963,
+				"offset_y": 0.204540178179741
+			},
+			{
+				"cell_x": 5,
+				"cell_y": 22,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.467538714408875,
+				"offset_y": 0.37023138999939
+			},
+			{
+				"cell_x": 3,
+				"cell_y": 20,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.752426624298096,
+				"offset_y": 0.776318371295929
+			},
+			{
+				"cell_x": 5,
+				"cell_y": 21,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.244793087244034,
+				"offset_y": 0.222755491733551
+			},
+			{
+				"cell_x": 4,
+				"cell_y": 22,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.416388988494873,
+				"offset_y": 0.451326310634613
+			},
+			{
+				"cell_x": 23,
+				"cell_y": 20,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.51409775018692,
+				"offset_y": 0.479908406734467
+			},
+			{
+				"cell_x": 25,
+				"cell_y": 20,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.49421101808548,
+				"offset_y": 0.456005811691284
+			},
+			{
+				"cell_x": 23,
+				"cell_y": 19,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.540124177932739,
+				"offset_y": 0.384372264146805
+			},
+			{
+				"cell_x": 25,
+				"cell_y": 19,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.372830629348755,
+				"offset_y": 0.555940389633179
+			},
+			{
+				"cell_x": 24,
+				"cell_y": 20,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.644620776176453,
+				"offset_y": 0.394832462072372
+			},
+			{
+				"cell_x": 25,
+				"cell_y": 18,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.395508229732513,
+				"offset_y": 0.79211413860321
+			},
+			{
+				"cell_x": 24,
+				"cell_y": 19,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.518156826496124,
+				"offset_y": 0.250405669212341
+			},
+			{
+				"cell_x": 7,
+				"cell_y": 10,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.483926653862,
+				"offset_y": 0.515017926692963
+			},
+			{
+				"cell_x": 6,
+				"cell_y": 10,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.718623995780945,
+				"offset_y": 0.4783935546875
+			},
+			{
+				"cell_x": 7,
+				"cell_y": 11,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.201156750321388,
+				"offset_y": 0.395928800106049
+			},
+			{
+				"cell_x": 7,
+				"cell_y": 9,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.326948404312134,
+				"offset_y": 0.521563947200775
+			},
+			{
+				"cell_x": 5,
+				"cell_y": 11,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.758642196655273,
+				"offset_y": 0.356301605701447
+			},
+			{
+				"cell_x": 5,
+				"cell_y": 10,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.767717003822327,
+				"offset_y": 0.504436552524567
+			},
+			{
+				"cell_x": 6,
+				"cell_y": 9,
+				"object_key": "tree",
+				"object_type": "tree",
+				"offset_x": 0.603977501392365,
+				"offset_y": 0.585058271884918
+			},
+			{
+				"cell_x": 11,
+				"cell_y": 15,
+				"object_key": "container",
+				"object_type": "container",
+				"offset_x": 1.0,
+				"offset_y": 0.5
+			},
+			{
+				"cell_x": 4,
+				"cell_y": 13,
+				"object_key": "container",
+				"object_type": "container",
+				"offset_x": 1.0,
+				"offset_y": 0.5
+			},
+			{
+				"cell_x": 12,
+				"cell_y": 22,
+				"object_key": "container",
+				"object_type": "container",
+				"offset_x": 1.0,
+				"offset_y": 0.5
+			},
+			{
+				"cell_x": 13,
+				"cell_y": 19,
+				"object_key": "container",
+				"object_type": "container",
+				"offset_x": 1.0,
+				"offset_y": 0.5
+			},
+			{
+				"cell_x": 4,
+				"cell_y": 17,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.212091416120529,
+				"offset_y": 0.705344617366791
+			},
+			{
+				"cell_x": 4,
+				"cell_y": 16,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.645358920097351,
+				"offset_y": 0.398167848587036
+			},
+			{
+				"cell_x": 3,
+				"cell_y": 15,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.710446774959564,
+				"offset_y": 0.227554276585579
+			},
+			{
+				"cell_x": 4,
+				"cell_y": 17,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.546516537666321,
+				"offset_y": 0.351624488830566
+			},
+			{
+				"cell_x": 4,
+				"cell_y": 15,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.276647686958313,
+				"offset_y": 0.330511331558228
+			},
+			{
+				"cell_x": 4,
+				"cell_y": 15,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.410250663757324,
+				"offset_y": 0.790099561214447
+			},
+			{
+				"cell_x": 3,
+				"cell_y": 16,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.486743330955505,
+				"offset_y": 0.761391282081604
+			},
+			{
+				"cell_x": 4,
+				"cell_y": 15,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.655704319477081,
+				"offset_y": 0.205635026097298
+			},
+			{
+				"cell_x": 4,
+				"cell_y": 15,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.689784228801727,
+				"offset_y": 0.612027585506439
+			},
+			{
+				"cell_x": 3,
+				"cell_y": 17,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.755737662315369,
+				"offset_y": 0.554357647895813
+			},
+			{
+				"cell_x": 3,
+				"cell_y": 15,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.319433301687241,
+				"offset_y": 0.368399739265442
+			},
+			{
+				"cell_x": 3,
+				"cell_y": 15,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.677680611610413,
+				"offset_y": 0.526322603225708
+			},
+			{
+				"cell_x": 3,
+				"cell_y": 15,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.355123221874237,
+				"offset_y": 0.732142806053162
+			},
+			{
+				"cell_x": 4,
+				"cell_y": 17,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.798346042633057,
+				"offset_y": 0.782450497150421
+			},
+			{
+				"cell_x": 3,
+				"cell_y": 17,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.313996881246567,
+				"offset_y": 0.369598507881165
+			},
+			{
+				"cell_x": 3,
+				"cell_y": 15,
+				"object_key": "warning_sign",
+				"object_type": "warning_sign",
+				"offset_x": 0.200000002980232,
+				"offset_y": 0.200000002980232
+			},
+			{
+				"cell_x": 4,
+				"cell_y": 17,
+				"object_key": "warning_sign",
+				"object_type": "warning_sign",
+				"offset_x": 0.800000011920929,
+				"offset_y": 0.800000011920929
+			},
+			{
+				"cell_x": 20,
+				"cell_y": 20,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.57708203792572,
+				"offset_y": 0.3482366502285
+			},
+			{
+				"cell_x": 21,
+				"cell_y": 20,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.724914610385895,
+				"offset_y": 0.516388833522797
+			},
+			{
+				"cell_x": 20,
+				"cell_y": 22,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.65642112493515,
+				"offset_y": 0.298702567815781
+			},
+			{
+				"cell_x": 20,
+				"cell_y": 21,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.631875157356262,
+				"offset_y": 0.57695996761322
+			},
+			{
+				"cell_x": 21,
+				"cell_y": 21,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.730149328708649,
+				"offset_y": 0.364594280719757
+			},
+			{
+				"cell_x": 21,
+				"cell_y": 22,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.333577930927277,
+				"offset_y": 0.264098703861237
+			},
+			{
+				"cell_x": 20,
+				"cell_y": 20,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.721876561641693,
+				"offset_y": 0.614973664283752
+			},
+			{
+				"cell_x": 20,
+				"cell_y": 22,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.304962813854218,
+				"offset_y": 0.726518869400024
+			},
+			{
+				"cell_x": 20,
+				"cell_y": 21,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.451485693454742,
+				"offset_y": 0.305889248847961
+			},
+			{
+				"cell_x": 21,
+				"cell_y": 20,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.254837661981583,
+				"offset_y": 0.457396566867828
+			},
+			{
+				"cell_x": 21,
+				"cell_y": 21,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.73895663022995,
+				"offset_y": 0.691425144672394
+			},
+			{
+				"cell_x": 21,
+				"cell_y": 22,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.369731664657593,
+				"offset_y": 0.658477127552032
+			},
+			{
+				"cell_x": 21,
+				"cell_y": 21,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.288056969642639,
+				"offset_y": 0.299838960170746
+			},
+			{
+				"cell_x": 21,
+				"cell_y": 21,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.202355891466141,
+				"offset_y": 0.685464024543762
+			},
+			{
+				"cell_x": 20,
+				"cell_y": 20,
+				"object_key": "mine",
+				"object_type": "mine",
+				"offset_x": 0.254086852073669,
+				"offset_y": 0.28934907913208
+			},
+			{
+				"cell_x": 20,
+				"cell_y": 20,
+				"object_key": "warning_sign",
+				"object_type": "warning_sign",
+				"offset_x": 0.200000002980232,
+				"offset_y": 0.200000002980232
+			},
+			{
+				"cell_x": 21,
+				"cell_y": 22,
+				"object_key": "warning_sign",
+				"object_type": "warning_sign",
+				"offset_x": 0.800000011920929,
+				"offset_y": 0.800000011920929
+			}
+		],
 		"size_feet": [
 			6.0,
 			4.0
 		],
-		"wall_segments": []
+		"wall_segments": [
+			{
+				"edge_cell_x": 21,
+				"edge_cell_y": 8,
+				"edge_side": 0,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 1,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 22,
+				"edge_cell_y": 8,
+				"edge_side": 0,
+				"length_inches": 3.0,
+				"role": "crumble_steep",
+				"sub_position": 0,
+				"taper_dir": 1,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 21,
+				"edge_cell_y": 8,
+				"edge_side": 3,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 2,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 22,
+				"edge_cell_y": 9,
+				"edge_side": 2,
+				"length_inches": 3.0,
+				"role": "crumble_steep",
+				"sub_position": 0,
+				"taper_dir": 3,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 23,
+				"edge_cell_y": 9,
+				"edge_side": 2,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 3,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 23,
+				"edge_cell_y": 9,
+				"edge_side": 1,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 0,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 16,
+				"edge_cell_y": 18,
+				"edge_side": 0,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 1,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 17,
+				"edge_cell_y": 18,
+				"edge_side": 0,
+				"length_inches": 3.0,
+				"role": "crumble_steep",
+				"sub_position": 0,
+				"taper_dir": 1,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 16,
+				"edge_cell_y": 18,
+				"edge_side": 3,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 2,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 16,
+				"edge_cell_y": 19,
+				"edge_side": 3,
+				"length_inches": 3.0,
+				"role": "crumble_steep",
+				"sub_position": 0,
+				"taper_dir": 2,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 17,
+				"edge_cell_y": 20,
+				"edge_side": 2,
+				"length_inches": 3.0,
+				"role": "crumble_steep",
+				"sub_position": 0,
+				"taper_dir": 3,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 18,
+				"edge_cell_y": 20,
+				"edge_side": 2,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 3,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 18,
+				"edge_cell_y": 19,
+				"edge_side": 1,
+				"length_inches": 3.0,
+				"role": "crumble_steep",
+				"sub_position": 0,
+				"taper_dir": 0,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 18,
+				"edge_cell_y": 20,
+				"edge_side": 1,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 0,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 21,
+				"edge_cell_y": 11,
+				"edge_side": 0,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 1,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 22,
+				"edge_cell_y": 11,
+				"edge_side": 0,
+				"length_inches": 3.0,
+				"role": "crumble_steep",
+				"sub_position": 0,
+				"taper_dir": 1,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 21,
+				"edge_cell_y": 11,
+				"edge_side": 3,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 2,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 22,
+				"edge_cell_y": 12,
+				"edge_side": 2,
+				"length_inches": 3.0,
+				"role": "crumble_steep",
+				"sub_position": 0,
+				"taper_dir": 3,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 23,
+				"edge_cell_y": 12,
+				"edge_side": 2,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 3,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 23,
+				"edge_cell_y": 12,
+				"edge_side": 1,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 0,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 8,
+				"edge_cell_y": 20,
+				"edge_side": 0,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 1,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 9,
+				"edge_cell_y": 20,
+				"edge_side": 0,
+				"length_inches": 3.0,
+				"role": "crumble_steep",
+				"sub_position": 0,
+				"taper_dir": 1,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 8,
+				"edge_cell_y": 20,
+				"edge_side": 3,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 2,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 9,
+				"edge_cell_y": 21,
+				"edge_side": 2,
+				"length_inches": 3.0,
+				"role": "crumble_steep",
+				"sub_position": 0,
+				"taper_dir": 3,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 10,
+				"edge_cell_y": 21,
+				"edge_side": 2,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 3,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 10,
+				"edge_cell_y": 21,
+				"edge_side": 1,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 0,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 22,
+				"edge_cell_y": 14,
+				"edge_side": 0,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 1,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 23,
+				"edge_cell_y": 14,
+				"edge_side": 0,
+				"length_inches": 3.0,
+				"role": "crumble_steep",
+				"sub_position": 0,
+				"taper_dir": 1,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 22,
+				"edge_cell_y": 14,
+				"edge_side": 3,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 2,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 23,
+				"edge_cell_y": 15,
+				"edge_side": 2,
+				"length_inches": 3.0,
+				"role": "crumble_steep",
+				"sub_position": 0,
+				"taper_dir": 3,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 24,
+				"edge_cell_y": 15,
+				"edge_side": 2,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 3,
+				"wall_key": "__proc__"
+			},
+			{
+				"edge_cell_x": 24,
+				"edge_cell_y": 15,
+				"edge_side": 1,
+				"length_inches": 3.0,
+				"role": "full",
+				"sub_position": 0,
+				"taper_dir": 0,
+				"wall_key": "__proc__"
+			}
+		]
 	},
 	"version": "1.5"
 }
