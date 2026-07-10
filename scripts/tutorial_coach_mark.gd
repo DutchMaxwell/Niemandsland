@@ -23,6 +23,8 @@ const CARD_MAX_WIDTH := 360.0
 const BANNER_TOP_Y := 64.0                       # banner-mode card y (below the battle-log tab)
 const OVERLAY_LAYER := 128                       # above the HUD CanvasLayer
 const BUTTON_W := 150.0
+const MIN_SPOTLIGHT_PX := 8.0                    # a raw target thinner than this (either axis) is degenerate
+                                                 # (well below the smallest real target — the 28 px dock tab)
 
 # ===== Signals =====
 signal skip_lesson_pressed()
@@ -33,8 +35,15 @@ signal end_pressed()
 signal continue_pressed()
 
 # ===== Private state =====
-var _target_rect: Rect2 = Rect2()
+var _target_rect: Rect2 = Rect2()       # padded (drawn) spotlight rect
+var _raw_target_rect: Rect2 = Rect2()   # unpadded rect as handed in — usability is judged on THIS
 var _has_target: bool = false
+# Softlock guard: a step may REQUEST an input mask (_mask_requested), but the mask is only
+# actually applied when the target rect is USABLE (_target_usable) — non-empty, big enough to
+# see, and on-screen. A degenerate/off-screen target dims only, never masks (see _apply_input_guard).
+var _mask_requested: bool = false
+var _target_usable: bool = false
+var _degenerate_warned: bool = false
 var _pulse_phase: float = 0.0
 var _dim: Control = null
 var _card: PanelContainer = null
@@ -50,15 +59,29 @@ var _continue_btn: Button = null
 func _ready() -> void:
 	layer = OVERLAY_LAYER
 	_build()
+	# A mid-step window resize must move/regrow the spotlight and re-decide the mask, not strand
+	# the player: re-run the guard + re-place the card the instant the viewport size changes.
+	var vp := get_viewport()
+	if vp != null:
+		vp.size_changed.connect(_on_viewport_resized)
 	set_process(true)
 
 
 func _process(delta: float) -> void:
-	# Cheap per-frame work only: advance the pulse phase, ask the dim layer to redraw,
-	# and keep the card glued to the (possibly moving) spotlight. No allocations.
+	# Cheap per-frame work only: advance the pulse phase, keep the input guard honest against a
+	# moving/animating target or a resized window, ask the dim layer to redraw, and keep the card
+	# glued to the (possibly moving) spotlight. No allocations.
 	_pulse_phase = fmod(_pulse_phase + delta, PULSE_PERIOD)
+	if _has_target:
+		_apply_input_guard()
 	if _dim != null and _dim.visible:
 		_dim.queue_redraw()
+	_reposition_card()
+
+
+func _on_viewport_resized() -> void:
+	if _has_target:
+		_apply_input_guard()
 	_reposition_card()
 
 
@@ -69,10 +92,11 @@ func _process(delta: float) -> void:
 func show_step(instruction: String, target_rect: Rect2, mask: bool = true) -> void:
 	if _label != null:
 		_label.text = instruction
-	set_target_rect(target_rect)
+	_mask_requested = mask
+	_degenerate_warned = false
 	if _dim != null:
 		_dim.visible = true
-		_dim.mouse_filter = Control.MOUSE_FILTER_STOP if mask else Control.MOUSE_FILTER_IGNORE
+	set_target_rect(target_rect)   # grows the rect AND runs the softlock guard (sets the real mouse_filter)
 	visible = true
 
 
@@ -82,6 +106,8 @@ func show_banner(instruction: String) -> void:
 	if _label != null:
 		_label.text = instruction
 	_has_target = false
+	_target_usable = false
+	_mask_requested = false
 	if _dim != null:
 		_dim.visible = false
 		_dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -97,8 +123,37 @@ func set_progress_text(text: String) -> void:
 
 ## Update just the spotlight rect — called every frame for a moving 3D target.
 func set_target_rect(target_rect: Rect2) -> void:
+	_raw_target_rect = target_rect
 	_target_rect = target_rect.grow(SPOTLIGHT_PAD)
 	_has_target = true
+	_apply_input_guard()
+
+
+## Softlock guard (the whole point of this class not trapping the player): the input mask that
+## absorbs clicks OUTSIDE the spotlight is applied ONLY when the target rect is usable — non-empty,
+## at least MIN_SPOTLIGHT_PX on each axis, and actually intersecting the visible viewport. A
+## degenerate, zero-size, off-screen or (via a Rect2() from the director) invisible target would
+## otherwise mask the ENTIRE screen with no reachable hole, so nothing is clickable and the tutorial
+## dead-ends. In that case we DIM ONLY (no mask), keep the instruction card and the always-visible
+## SKIP LESSON / END TUTORIAL buttons live, and warn once.
+func _apply_input_guard() -> void:
+	_target_usable = _has_target and _rect_is_usable(_raw_target_rect)
+	if _dim != null:
+		var mask := _mask_requested and _target_usable
+		_dim.mouse_filter = Control.MOUSE_FILTER_STOP if mask else Control.MOUSE_FILTER_IGNORE
+	if _has_target and _mask_requested and not _target_usable and not _degenerate_warned:
+		_degenerate_warned = true
+		push_warning("TutorialCoachMark: spotlight target %s is degenerate/off-screen — input mask disabled to avoid a softlock (dim only, instruction + skip stay live)." % str(_target_rect))
+
+
+## A spotlight rect can hold a real, reachable hole: non-degenerate on both axes and on-screen.
+func _rect_is_usable(rect: Rect2) -> bool:
+	if rect.size.x < MIN_SPOTLIGHT_PX or rect.size.y < MIN_SPOTLIGHT_PX:
+		return false
+	if _dim == null:
+		return true
+	var screen := Rect2(Vector2.ZERO, _dim.get_viewport_rect().size)
+	return screen.intersects(rect)
 
 
 ## Show or hide the "GOT IT" concept-card acknowledgement button. Set true only for steps
@@ -206,7 +261,9 @@ func _reposition_card() -> void:
 		return
 	var vp := _card.get_viewport_rect().size
 	var card_size := _card.size
-	if not _has_target:
+	# Banner mode OR a guarded-off (degenerate) spotlight: park the card top-centre instead of
+	# gluing it to a hole that is not really there.
+	if not _target_usable:
 		_card.position = Vector2((vp.x - card_size.x) * 0.5, BANNER_TOP_Y)
 		return
 	var below_y := _target_rect.end.y + CARD_GAP
@@ -228,14 +285,19 @@ class _DimLayer extends Control:
 	var owner_overlay: TutorialCoachMark = null
 
 	func _has_point(point: Vector2) -> bool:
-		if owner_overlay == null or not owner_overlay._has_target:
+		if owner_overlay == null:
 			return true
+		# Degenerate target: absorb NOTHING (even if the filter were STOP) so the player is never
+		# trapped; otherwise absorb everything OUTSIDE the reachable spotlight hole.
+		if not owner_overlay._target_usable:
+			return false
 		return not owner_overlay._target_rect.has_point(point)
 
 	func _draw() -> void:
 		if owner_overlay == null:
 			return
-		if not owner_overlay._has_target:
+		# No usable spotlight → plain full dim, never a misleading sliver-hole at the edge.
+		if not owner_overlay._target_usable:
 			draw_rect(Rect2(Vector2.ZERO, size), DIM_COLOR)
 			return
 		var r: Rect2 = owner_overlay._target_rect
