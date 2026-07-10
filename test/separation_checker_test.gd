@@ -1,8 +1,11 @@
 extends GdUnitTestSuite
-## Tests for SeparationChecker — OPR enemy-separation distance math and the 1"
-## "too close to an enemy" hint trigger (GF/AoF Advanced Rules v3.5.1, p.7 "General
-## Movement": models may never be within 1" of models from other units, unless
-## charging; base contact = intentional melee is exempt).
+## Tests for SeparationChecker — OPR unit-separation distance math and the 1"
+## "too close to a model of ANOTHER unit" hint trigger (GF/AoF Advanced Rules
+## v3.5.1, p.7 "General Movement": models may never be within 1" of models from
+## other units — ANY other unit, friendly included — unless charging). Exception
+## matrix: ENEMY base contact = intentional melee, exempt; FRIENDLY other-unit
+## contact has no Charge to justify it -> still a violation; SAME unit is exempt
+## (coherency governs inside a unit).
 ##
 ## Geometry cases use explicit BaseShapes (no scene needed). Distances are authored
 ## in INCHES via the _round/_oval/_rect helpers, and edge_distance() returns inches,
@@ -130,22 +133,53 @@ func test_just_under_one_inch_is_a_violation() -> void:
 	assert_bool(SeparationChecker.is_separation_violation(a, b)).is_true()
 
 
-# ===== Melee exception (base contact suppresses the warning) =====
+# ===== Melee exception (ENEMY base contact suppresses the warning) =====
 
-func test_base_contact_suppresses_warning() -> void:
-	# Touching (gap 0) = intentional melee -> contact yes, violation no.
+func test_enemy_base_contact_suppresses_warning() -> void:
+	# Touching an ENEMY (gap 0) = intentional Charge into melee -> contact yes,
+	# violation no (contact_is_melee defaults to true = enemy semantics).
 	var a := _round(0, 0, 0.5)
 	var b := _round(1.0, 0, 0.5)   # gap 0.0"
 	assert_bool(SeparationChecker.is_base_contact(a, b)).is_true()
 	assert_bool(SeparationChecker.is_separation_violation(a, b)).is_false()
+	assert_bool(SeparationChecker.is_separation_violation(a, b, true)).is_false()
 
 
 func test_sub_one_inch_no_contact_warns() -> void:
-	# Clearly within 1" but not touching -> warn.
+	# Clearly within 1" but not touching -> warn (any other unit, enemy or friend).
 	var a := _round(0, 0, 0.5)
 	var b := _round(1.5, 0, 0.5)   # gap 0.5"
 	assert_bool(SeparationChecker.is_base_contact(a, b)).is_false()
-	assert_bool(SeparationChecker.is_separation_violation(a, b)).is_true()
+	assert_bool(SeparationChecker.is_separation_violation(a, b, true)).is_true()
+	assert_bool(SeparationChecker.is_separation_violation(a, b, false)).is_true()
+
+
+# ===== Friendly other unit (no legal contact — Charge only targets enemies) =====
+
+func test_friendly_contact_is_a_violation() -> void:
+	# Touching a FRIENDLY other unit: no Charge can justify it -> warn.
+	var a := _round(0, 0, 0.5)
+	var b := _round(1.0, 0, 0.5)   # gap 0.0" (contact)
+	assert_bool(SeparationChecker.is_separation_violation(a, b, false)).is_true()
+
+
+func test_friendly_overlap_is_a_violation() -> void:
+	# Even overlapping friendly bases (negative gap) warn.
+	var a := _round(0, 0, 0.5)
+	var b := _round(0.6, 0, 0.5)   # gap -0.4"
+	assert_bool(SeparationChecker.is_separation_violation(a, b, false)).is_true()
+
+
+func test_friendly_sub_one_inch_warns() -> void:
+	var a := _round(0, 0, 0.5)
+	var b := _round(1.5, 0, 0.5)   # gap 0.5"
+	assert_bool(SeparationChecker.is_separation_violation(a, b, false)).is_true()
+
+
+func test_friendly_at_or_above_one_inch_is_compliant() -> void:
+	var a := _round(0, 0, 0.5)
+	var b := _round(2.05, 0, 0.5)   # gap 1.05"
+	assert_bool(SeparationChecker.is_separation_violation(a, b, false)).is_false()
 
 
 func test_base_contact_epsilon_parameter() -> void:
@@ -155,7 +189,9 @@ func test_base_contact_epsilon_parameter() -> void:
 	assert_bool(SeparationChecker.is_base_contact(a, b)).is_false()       # default 0.05"
 
 
-# ===== Enemy determination (mocked affiliations) =====
+# ===== Enemy vs friendly classification (mocked affiliations) =====
+# Drives the melee contact-exemption and the red/amber tint; also kept as API for
+# the solo-AI movement planner.
 
 func test_are_enemy_players_different_known_slots() -> void:
 	assert_bool(SeparationChecker.are_enemy_players(1, 2)).is_true()
@@ -175,15 +211,53 @@ func test_unknown_affiliation_never_enemy() -> void:
 	assert_bool(SeparationChecker.are_enemy_players(0, 0)).is_false()
 
 
-# ===== Combined decision (enemy AND within 1" without contact) =====
+# ===== Unit identity (the rule's scope: "models from other units") =====
 
-func test_enemy_within_band_is_flagged_but_friend_is_not() -> void:
+func test_are_different_units_two_units() -> void:
+	var a := GameUnit.new()
+	var b := GameUnit.new()
+	assert_bool(SeparationChecker.are_different_units(a, b)).is_true()
+
+
+func test_same_unit_is_not_different() -> void:
+	# Same-unit models are exempt — coherency governs INSIDE a unit.
+	var a := GameUnit.new()
+	assert_bool(SeparationChecker.are_different_units(a, a)).is_false()
+
+
+func test_null_units_are_not_comparable() -> void:
+	# Unknown affiliation -> no warning rather than a false warning.
+	var a := GameUnit.new()
+	assert_bool(SeparationChecker.are_different_units(a, null)).is_false()
+	assert_bool(SeparationChecker.are_different_units(null, a)).is_false()
+	assert_bool(SeparationChecker.are_different_units(null, null)).is_false()
+
+
+func test_attached_hero_resolves_to_host_unit() -> void:
+	# A joined Hero counts as part of its host unit (coherency requires it within
+	# 1" of the host, so the pair must never be flagged as "different units").
+	var host := GameUnit.new()
+	var hero := GameUnit.new()
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+	assert_object(SeparationChecker.effective_unit(hero)).is_same(host)
+	assert_bool(SeparationChecker.are_different_units(hero, host)).is_false()
+	# ...but the hero IS a different unit to any third unit.
+	var third := GameUnit.new()
+	assert_bool(SeparationChecker.are_different_units(hero, third)).is_true()
+
+
+# ===== Combined decision (other unit AND within 1", per exception matrix) =====
+
+func test_exception_matrix_within_band_and_contact() -> void:
+	var band := _round(1.5, 0, 0.5)     # 0.5" gap to `a` — inside the band
+	var touching := _round(1.0, 0, 0.5)  # 0.0" gap to `a` — base contact
 	var a := _round(0, 0, 0.5)
-	var b := _round(1.5, 0, 0.5)   # 0.5" gap
-	# Geometry says "within band"; only enemies are flagged by the caller.
-	assert_bool(SeparationChecker.is_separation_violation(a, b)).is_true()
-	assert_bool(SeparationChecker.are_enemy_players(1, 2)).is_true()    # enemies -> warn
-	assert_bool(SeparationChecker.are_enemy_players(1, 1)).is_false()   # same army -> no warn
+	# Sub-1" without contact warns for BOTH enemy and friendly other units.
+	assert_bool(SeparationChecker.is_separation_violation(a, band, true)).is_true()
+	assert_bool(SeparationChecker.is_separation_violation(a, band, false)).is_true()
+	# Contact: exempt vs an enemy (melee), still a violation vs a friend.
+	assert_bool(SeparationChecker.is_separation_violation(a, touching, true)).is_false()
+	assert_bool(SeparationChecker.is_separation_violation(a, touching, false)).is_true()
 
 
 # ===== Null safety =====

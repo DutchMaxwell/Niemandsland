@@ -1,23 +1,34 @@
 class_name SeparationChecker
 extends RefCounted
-## OPR enemy-separation distance math: edge-to-edge distance between two models'
-## BASES (round / oval / rectangular regiment tray), and the 1" "too close to an
-## enemy" test that drives the non-modal proximity hint.
+## OPR unit-separation distance math: edge-to-edge distance between two models'
+## BASES (round / oval / rectangular regiment tray), and the 1" "too close to a
+## model of another unit" test that drives the non-modal proximity hint.
 ##
 ## OPR RULE (authoritative wording): "Models may never be within 1” of models from
 ## other units, unless they are taking a Charge action, and may never move through
 ## other models or units (friendly or enemy), even if they are taking a Charge
 ## action." — Grimdark Future: Advanced Rules v3.5.1, p.7 ("General Movement");
 ## identical wording in Age of Fantasy: Advanced Rules v3.5.1, p.7 ("General
-## Movement"). This module MEASURES that 1" gap; it never enforces it — Niemandsland
-## is a "show, don't decide" simulator (see CODING_STANDARDS §4).
+## Movement"). NOTE the scope: "other units" means ANY other unit — FRIENDLY units
+## included, not just enemies. This module MEASURES that 1" gap; it never enforces
+## it — Niemandsland is a "show, don't decide" simulator (see CODING_STANDARDS §4).
 ##
-## MELEE EXCEPTION: base contact (edge gap <= BASE_CONTACT_EPSILON_INCHES) is an
-## intentional Charge into melee, which the rule explicitly exempts ("...unless they
-## are taking a Charge action"). A model is only flagged when it sits within 1" of an
-## enemy base WITHOUT touching it.
+## UNIT SCOPE (are_different_units): the rule binds between UNITS, so the primary
+## seam is GameUnit identity, not army affiliation. Same-unit models are exempt —
+## coherency (coherency_checker.gd) REQUIRES them within 1" of each other: coherency
+## governs INSIDE a unit, separation BETWEEN units. A joined Hero resolves to its
+## host unit (effective_unit) — coherency demands the hero stand within 1" of its
+## host, so that pair must never be flagged. Unknown units (null) are not comparable
+## -> no warning (never a false warning).
 ##
-## OWNERSHIP SEAM (enemy determination): army affiliation is read from
+## MELEE EXCEPTION (enemies only): base contact (edge gap <= epsilon) with an ENEMY
+## is an intentional Charge into melee, which the rule explicitly exempts ("...unless
+## they are taking a Charge action") — no warning. A Charge can only ever target an
+## enemy, so against a FRIENDLY other unit there is no legal contact: sub-1"
+## INCLUDING contact is a violation there. Callers pick the branch via
+## is_separation_violation's contact_is_melee flag.
+##
+## ENEMY vs FRIENDLY classification: army affiliation is read from
 ## GameUnit.unit_properties["player_id"] — the durable per-army slot stamped at OPR
 ## import (opr_army_manager.import_army_for_player / _spawn_unit). Two models are
 ## enemies iff their units carry DIFFERENT, KNOWN player_ids (are_enemy_players).
@@ -25,7 +36,8 @@ extends RefCounted
 ## hotseat/sandbox one human moves both armies, yet the 1" rule binds both sides, so
 ## the hint must fire regardless of who holds the mouse (works identically in SP,
 ## hotseat and MP; strictly local — no RPCs). Unknown affiliation (missing / <= 0
-## player_id) is treated as not-comparable -> no warning (never a false warning).
+## player_id) cannot rule out a legitimate melee, so callers should keep the contact
+## exemption (enemy-style) there rather than raise a possibly-false contact warning.
 ##
 ## PURE + STATELESS + REUSABLE: every function is static. The per-pair geometry path
 ## (edge_distance / is_base_contact / is_separation_violation for round, oval and
@@ -50,14 +62,16 @@ const INCHES_TO_METERS := 0.0254
 ## Millimetres -> metres (base sizes are authored in mm; see OPRUnit.get_base_radius_meters).
 const MM_TO_METERS := 0.001
 
-## OPR enemy-separation threshold. GF/AoF Advanced Rules v3.5.1, p.7 "General
-## Movement": models may never be within 1" of models from other units (unless
-## charging). A gap of exactly 1" or more is compliant.
+## OPR unit-separation threshold. GF/AoF Advanced Rules v3.5.1, p.7 "General
+## Movement": models may never be within 1" of models from other units — ANY other
+## unit, friendly included (unless charging, which only applies against enemies).
+## A gap of exactly 1" or more is compliant.
 const SEPARATION_DISTANCE_INCHES := 1.0
 
 ## Base-contact tolerance (inches). An edge gap at or below this counts as base-to-
-## base contact = an intentional Charge into melee, which the 1" rule exempts
-## ("...unless they are taking a Charge action"). Kept small (~1.3 mm) so a genuine
+## base contact. Against an ENEMY that is an intentional Charge into melee, which
+## the 1" rule exempts ("...unless they are taking a Charge action"); against a
+## FRIENDLY other unit contact stays a violation. Kept small (~1.3 mm) so a genuine
 ## sub-1" illegal gap still registers, while float noise, the drag-lift, and hand-
 ## placement jitter at true contact do not read as a violation.
 const BASE_CONTACT_EPSILON_INCHES := 0.05
@@ -145,23 +159,58 @@ static func is_base_contact(a: BaseShape, b: BaseShape, epsilon_inches: float = 
 	return edge_distance(a, b) <= epsilon_inches
 
 
-## True when `b` is an enemy-separation VIOLATION relative to `a`: within 1" but not
-## in base contact (the melee exception). This is exactly the proximity-hint trigger.
-## Geometry only — the caller decides enemy affiliation via are_enemy_players().
-static func is_separation_violation(a: BaseShape, b: BaseShape, epsilon_inches: float = BASE_CONTACT_EPSILON_INCHES) -> bool:
+## True when `b` is a unit-separation VIOLATION relative to `a`: within 1" of a
+## model from another unit. This is exactly the proximity-hint trigger. Geometry
+## only — the caller decides the unit/affiliation split via are_different_units()
+## and are_enemy_players().
+## @param contact_is_melee: true for ENEMY pairs — base contact is then an
+##   intentional Charge into melee and exempt ("...unless they are taking a Charge
+##   action"; also the safe choice when affiliation is unknown). Pass false for
+##   FRIENDLY other-unit pairs: a Charge can only target enemies, so there is no
+##   legal friendly contact — sub-1" INCLUDING contact violates.
+static func is_separation_violation(a: BaseShape, b: BaseShape, contact_is_melee: bool = true, epsilon_inches: float = BASE_CONTACT_EPSILON_INCHES) -> bool:
 	if a == null or b == null:
 		return false
 	var gap := edge_distance(a, b)
-	return gap > epsilon_inches and gap < SEPARATION_DISTANCE_INCHES
+	if gap >= SEPARATION_DISTANCE_INCHES:
+		return false
+	if contact_is_melee and gap <= epsilon_inches:
+		return false  # base contact with an enemy = intentional melee, exempt
+	return true
 
 
 ## Whether two army-affiliation slots are enemies: different AND both known.
 ## player_id <= 0 (or missing) is "unknown" -> not comparable -> false, so an
-## un-affiliated model never produces a false warning (deliverable requirement).
+## un-affiliated model is never CLASSIFIED as an enemy (callers then keep the
+## contact exemption, avoiding a possibly-false contact warning).
 static func are_enemy_players(player_id_a: int, player_id_b: int) -> bool:
 	if player_id_a <= 0 or player_id_b <= 0:
 		return false
 	return player_id_a != player_id_b
+
+
+## The unit a model effectively belongs to for the separation rule: a joined Hero
+## resolves to its HOST unit (coherency requires the hero within 1" of the host, so
+## hero<->host must never read as "different units"). Plain units return themselves.
+static func effective_unit(unit: GameUnit) -> GameUnit:
+	if unit == null:
+		return null
+	var host: Variant = unit.get_attached_to()
+	if host is GameUnit:
+		return host
+	return unit
+
+
+## Whether two units are DIFFERENT units under the 1" separation rule (GF/AoF
+## v3.5.1 p.7: "models from other units" — ANY other unit, friendly included).
+## Joined Heroes resolve to their host via effective_unit(). Null/unknown units are
+## not comparable -> false (no warning rather than a false warning).
+static func are_different_units(unit_a: GameUnit, unit_b: GameUnit) -> bool:
+	var a := effective_unit(unit_a)
+	var b := effective_unit(unit_b)
+	if a == null or b == null:
+		return false
+	return a != b
 
 
 ## Builds the BaseShape for a live ModelInstance from its unit's base properties,

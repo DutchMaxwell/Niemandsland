@@ -1,13 +1,15 @@
 class_name SeparationVisualizer
 extends Node3D
-## Non-modal visual warning for the OPR 1" enemy-separation rule (GF/AoF Advanced
+## Non-modal visual warning for the OPR 1" unit-separation rule (GF/AoF Advanced
 ## Rules v3.5.1, p.7 "General Movement": a model may never be within 1" of models
-## from OTHER units unless charging). While a model / regiment tray is dragged, and
-## on drop, any of its bases sitting within 1" of an ENEMY base WITHOUT touching it
-## (base contact = intentional melee, exempt) is flagged with a red pulsing ring on
-## BOTH bases plus a red base-edge-to-base-edge line and the gap in inches.
+## from OTHER units — any other unit, friendly included — unless charging). While a
+## model / regiment tray is dragged, and on drop, any of its bases violating that
+## rule is flagged with a pulsing ring on BOTH bases plus a base-edge-to-base-edge
+## line and the gap in inches. Two tints tell the player at a glance whose line the
+## conflict is with: RED = enemy unit (contact exempt — that is melee), AMBER =
+## friendly other unit (no legal contact; sub-1" including contact warns).
 ##
-## This mirrors CoherencyVisualizer: same red highlight / surface-line / flat-label
+## This mirrors CoherencyVisualizer: same highlight / surface-line / flat-label
 ## visual language, the same "show at full opacity without re-running the fade each
 ## frame" live-update model, and the same self-hiding when there is nothing to warn
 ## about. Rendering is strictly LOCAL — no network state, no RPCs. It reuses
@@ -19,8 +21,12 @@ extends Node3D
 
 # ===== Constants =====
 
-## Warning red (matches CoherencyVisualizer.COLOR_ERROR — "red = problem").
-const COLOR_WARN := Color(0.9, 0.2, 0.2, 0.9)
+## Enemy-violation red (matches CoherencyVisualizer.COLOR_ERROR — "red = problem").
+const COLOR_WARN_ENEMY := Color(0.9, 0.2, 0.2, 0.9)
+
+## Friendly-violation amber (matches the Tactical-HUD amber warning accent), so a
+## conflict with your OWN line is visually distinct from one with the enemy's.
+const COLOR_WARN_FRIENDLY := Color(0.95, 0.65, 0.1, 0.9)
 
 ## Table-surface heights (flat on the table, like the measurement tool / coherency).
 const LINE_Y := 0.005
@@ -48,18 +54,21 @@ const DEFAULT_BASE_RADIUS_M := 0.016
 
 # ===== Result Object =====
 
-## One flagged model pair: a moved model that is within 1" of an enemy model without
-## touching it, and the measured edge gap in inches. Typed object over a loose
+## One flagged model pair: a moved model violating the 1" separation against a model
+## of ANOTHER unit, the measured edge gap in inches, and whether the other unit is
+## FRIENDLY (same army -> amber; enemy/unknown -> red). Typed object over a loose
 ## dictionary per CODING_STANDARDS §5.2.
 class ViolationPair:
 	var moved: ModelInstance = null
-	var enemy: ModelInstance = null
+	var other: ModelInstance = null
 	var distance_inches: float = 0.0
+	var is_friendly: bool = false
 
-	func _init(p_moved: ModelInstance, p_enemy: ModelInstance, p_distance: float) -> void:
+	func _init(p_moved: ModelInstance, p_other: ModelInstance, p_distance: float, p_is_friendly: bool = false) -> void:
 		moved = p_moved
-		enemy = p_enemy
+		other = p_other
 		distance_inches = p_distance
+		is_friendly = p_is_friendly
 
 # ===== Private State =====
 
@@ -93,17 +102,25 @@ func show_violations(pairs: Array, animate: bool = false) -> void:
 			hide_warning()
 		return
 
-	# One ring per distinct base (a base can be flagged against several enemies).
-	var ringed: Dictionary = {}  # ModelInstance instance_id -> true
+	# Pass 1: draw the gap lines and resolve one ring colour per distinct base (a
+	# base can be flagged against several units; an ENEMY conflict outranks a
+	# friendly one, so red dominates amber on a shared ring).
+	var ring_colors: Dictionary = {}  # instance_id -> Color
+	var ring_models: Dictionary = {}  # instance_id -> ModelInstance
 	for pair in pairs:
 		var vp := pair as ViolationPair
-		if vp == null or vp.moved == null or vp.enemy == null:
+		if vp == null or vp.moved == null or vp.other == null:
 			continue
-		if not _models_drawable(vp.moved, vp.enemy):
+		if not _models_drawable(vp.moved, vp.other):
 			continue
-		_ring_once(vp.moved, ringed, animate)
-		_ring_once(vp.enemy, ringed, animate)
-		_draw_gap_line(vp.moved, vp.enemy, vp.distance_inches)
+		var color := COLOR_WARN_FRIENDLY if vp.is_friendly else COLOR_WARN_ENEMY
+		_register_ring(vp.moved, color, ring_colors, ring_models)
+		_register_ring(vp.other, color, ring_colors, ring_models)
+		_draw_gap_line(vp.moved, vp.other, vp.distance_inches, color)
+
+	# Pass 2: one ring per flagged base, in its resolved colour.
+	for key in ring_models:
+		_highlight_model(ring_models[key], ring_colors[key], animate)
 
 	visible = true
 	if animate:
@@ -127,13 +144,13 @@ func hide_warning() -> void:
 
 # ===== Private Methods =====
 
-## Adds a ring for a model once (dedup across pairs).
-func _ring_once(model: ModelInstance, ringed: Dictionary, pulse: bool) -> void:
+## Records a model's ring colour (dedup across pairs; enemy red outranks amber).
+func _register_ring(model: ModelInstance, color: Color, ring_colors: Dictionary, ring_models: Dictionary) -> void:
 	var key := model.get_instance_id()
-	if ringed.has(key):
-		return
-	ringed[key] = true
-	_highlight_model(model, pulse)
+	if ring_colors.has(key) and ring_colors[key] == COLOR_WARN_ENEMY:
+		return  # already red — an enemy conflict outranks a friendly one
+	ring_colors[key] = color
+	ring_models[key] = model
 
 
 ## Returns true if both models have valid nodes inside the scene tree.
@@ -145,22 +162,22 @@ func _models_drawable(model_a: ModelInstance, model_b: ModelInstance) -> bool:
 	return model_a.node.is_inside_tree() and model_b.node.is_inside_tree()
 
 
-## Draws a red base-edge-to-base-edge line with the gap label between two models.
-func _draw_gap_line(model_a: ModelInstance, model_b: ModelInstance, dist_inches: float) -> void:
+## Draws a tinted base-edge-to-base-edge line with the gap label between two models.
+func _draw_gap_line(model_a: ModelInstance, model_b: ModelInstance, dist_inches: float, color: Color) -> void:
 	var from_edge := CoherencyChecker.get_ground_edge_point(model_a, model_b.node.global_position, EDGE_Y)
 	var to_edge := CoherencyChecker.get_ground_edge_point(model_b, model_a.node.global_position, EDGE_Y)
 
-	var line := _create_surface_line(from_edge, to_edge)
+	var line := _create_surface_line(from_edge, to_edge, color)
 	if line:
 		add_child(line)
 		_lines.append(line)
 
 	var midpoint := (from_edge + to_edge) / 2.0
-	_create_distance_label(midpoint, from_edge, to_edge, "%.1f\"" % dist_inches)
+	_create_distance_label(midpoint, from_edge, to_edge, "%.1f\"" % dist_inches, color)
 
 
 ## A thin flat line strip lying on the table between two base-edge points.
-func _create_surface_line(from_edge: Vector3, to_edge: Vector3) -> MeshInstance3D:
+func _create_surface_line(from_edge: Vector3, to_edge: Vector3, color: Color) -> MeshInstance3D:
 	var direction := Vector3(to_edge.x - from_edge.x, 0, to_edge.z - from_edge.z)
 	var length := direction.length()
 	if length < 0.001:
@@ -177,7 +194,7 @@ func _create_surface_line(from_edge: Vector3, to_edge: Vector3) -> MeshInstance3
 	mesh_instance.rotation = Vector3(0, atan2(direction.x, direction.z) + PI / 2.0, 0)
 
 	var material := StandardMaterial3D.new()
-	material.albedo_color = COLOR_WARN
+	material.albedo_color = color
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.no_depth_test = true
@@ -186,7 +203,7 @@ func _create_surface_line(from_edge: Vector3, to_edge: Vector3) -> MeshInstance3
 
 
 ## A distance label lying flat on the table, aligned with the line (measurement-tool style).
-func _create_distance_label(midpoint: Vector3, from_edge: Vector3, to_edge: Vector3, text: String) -> void:
+func _create_distance_label(midpoint: Vector3, from_edge: Vector3, to_edge: Vector3, text: String, color: Color) -> void:
 	var label := Label3D.new()
 	label.text = text
 	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
@@ -194,7 +211,7 @@ func _create_distance_label(midpoint: Vector3, from_edge: Vector3, to_edge: Vect
 	label.render_priority = 1
 	label.pixel_size = 0.0005
 	label.font_size = 24
-	label.modulate = COLOR_WARN
+	label.modulate = color
 	label.outline_modulate = Color(0, 0, 0, 1)
 	label.outline_size = 4
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -209,7 +226,7 @@ func _create_distance_label(midpoint: Vector3, from_edge: Vector3, to_edge: Vect
 
 
 ## Draws a coloured ring around a model's base (mirrors CoherencyVisualizer._highlight_model).
-func _highlight_model(model: ModelInstance, pulse: bool) -> void:
+func _highlight_model(model: ModelInstance, color: Color, pulse: bool) -> void:
 	if not model.node or not is_instance_valid(model.node):
 		return
 	if not model.node.is_inside_tree():
@@ -234,9 +251,9 @@ func _highlight_model(model: ModelInstance, pulse: bool) -> void:
 	mesh_instance.mesh = torus
 
 	var material := StandardMaterial3D.new()
-	material.albedo_color = COLOR_WARN
+	material.albedo_color = color
 	material.emission_enabled = true
-	material.emission = COLOR_WARN
+	material.emission = color
 	material.emission_energy_multiplier = 1.5
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
