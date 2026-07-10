@@ -48,6 +48,14 @@ static func _profile(w: Variant, attacks: int, range_in: int) -> Dictionary:
 		"relentless": _has_rule(w, "Relentless"),
 		"blast": _rating_of(w, "Blast"),
 		"reliable": _has_rule(w, "Reliable"),
+		# Wave-2 weapon rules (GF/AoF Advanced Rules v3.5.1): Surge (+1 hit per unmodified 6, any range),
+		# Rending (unmodified 6-to-hit → AP(+4) on those hits), Bane (defender re-rolls unmodified Defense
+		# 6s), Thrust (charging melee → +1 to hit and AP(+1)). Pre-parsed here like the wave-1 facets so the
+		# resolution helpers read booleans, not strings.
+		"surge": _has_rule(w, "Surge"),
+		"rending": _has_rule(w, "Rending"),
+		"bane": _has_rule(w, "Bane"),
+		"thrust": _has_rule(w, "Thrust"),
 		"range": range_in,
 		"rules": _rules_of(w),
 	}

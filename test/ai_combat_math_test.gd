@@ -85,6 +85,87 @@ func test_deadly_multiplier_is_tough_capped() -> void:
 	assert_int(AiCombatMath.deadly_multiplier(3, 1)).is_equal(1)
 
 
+func test_unmodified_sixes_counts_natural_sixes() -> void:
+	assert_int(AiCombatMath.unmodified_sixes([6, 6, 5, 1, 6])).is_equal(3)
+	assert_int(AiCombatMath.unmodified_sixes([5, 4, 3])).is_equal(0)
+
+
+func test_surge_adds_a_hit_per_six_at_any_range() -> void:
+	# Surge (GF/AoF v3.5.1 p.14): +1 hit per unmodified 6, with NO range condition (unlike Relentless).
+	assert_int(AiCombatMath.surge_bonus_hits([6, 6, 3, 1])).is_equal(2)
+	assert_int(AiCombatMath.surge_bonus_hits([5, 4, 2])).is_equal(0)
+
+
+func test_furious_adds_a_hit_per_six_only_when_charging() -> void:
+	# Furious (GF/AoF v3.5.1 p.14): melee, charging only.
+	assert_int(AiCombatMath.furious_bonus_hits([6, 6, 2], true)).is_equal(2)
+	assert_int(AiCombatMath.furious_bonus_hits([6, 6, 2], false)).is_equal(0)
+
+
+func test_rending_ap_hits_is_capped_at_total_hits() -> void:
+	# Rending (GF/AoF v3.5.1 p.14): one AP(+4) hit per unmodified 6.
+	assert_int(AiCombatMath.rending_ap_hits([6, 6, 4, 1], 4)).is_equal(2)
+	# Capped at the hits actually scored (a hit-reduction can't create phantom Rending hits).
+	assert_int(AiCombatMath.rending_ap_hits([6, 6, 6], 1)).is_equal(1)
+	assert_int(AiCombatMath.rending_ap_hits([5, 4, 3], 3)).is_equal(0)
+
+
+func test_rending_ap_bonus_is_plus_four() -> void:
+	assert_int(AiCombatMath.RENDING_AP_BONUS).is_equal(4)
+
+
+func test_impact_hits_score_on_two_plus() -> void:
+	# Impact (GF/AoF v3.5.1 p.13): each of the X charge dice is a hit on 2+.
+	assert_int(AiCombatMath.impact_hits([2, 3, 6, 1, 1])).is_equal(3)
+	assert_int(AiCombatMath.impact_hits([1, 1, 1])).is_equal(0)
+
+
+func test_thrust_to_hit_improves_by_one_when_charging() -> void:
+	# Thrust (GF/AoF v3.5.1 p.14): +1 to hit on a charge (a lower needed face); unchanged otherwise.
+	assert_int(AiCombatMath.thrust_to_hit(4, true)).is_equal(3)
+	assert_int(AiCombatMath.thrust_to_hit(4, false)).is_equal(4)
+	# Clamped at the 2+ ceiling (a natural 1 always misses).
+	assert_int(AiCombatMath.thrust_to_hit(2, true)).is_equal(2)
+
+
+func test_fearless_recovers_on_four_plus() -> void:
+	# Fearless (GF/AoF v3.5.1 p.13): a re-roll of 4+ turns a failed morale test into a pass.
+	assert_bool(AiCombatMath.fearless_recovers(4)).is_true()
+	assert_bool(AiCombatMath.fearless_recovers(6)).is_true()
+	assert_bool(AiCombatMath.fearless_recovers(3)).is_false()
+	assert_bool(AiCombatMath.fearless_recovers(1)).is_false()
+
+
+func test_fear_adjusted_wounds_adds_x_for_the_winner_check() -> void:
+	# Fear (GF/AoF v3.5.1 p.13): +X to the who-won-melee tally only.
+	assert_int(AiCombatMath.fear_adjusted_wounds(2, 3)).is_equal(5)
+	assert_int(AiCombatMath.fear_adjusted_wounds(0, 2)).is_equal(2)
+	assert_int(AiCombatMath.fear_adjusted_wounds(4, 0)).is_equal(4)
+
+
+func test_bane_reroll_count_is_the_defense_sixes() -> void:
+	assert_int(AiCombatMath.bane_reroll_count([6, 6, 5, 6])).is_equal(3)
+	assert_int(AiCombatMath.bane_reroll_count([5, 4, 3])).is_equal(0)
+
+
+func test_blocks_with_bane_rerolls_defense_sixes_once() -> void:
+	# Bane (GF/AoF v3.5.1 p.13): the defender re-rolls unmodified Defense 6s once. Def 4+, no AP.
+	# Saves [6, 6, 3]: without Bane all three would-be blocks are [6,6](block) + 3(fail vs 4) = 2 blocks.
+	assert_int(AiCombatMath.count_blocks([6, 6, 3], 4, 0)).is_equal(2)
+	# Bane re-rolls the two 6s → [2, 5]: the 2 fails, the 5 blocks; plus the original 3 fails → 1 block.
+	assert_int(AiCombatMath.blocks_with_bane([6, 6, 3], [2, 5], 4, 0)).is_equal(1)
+	# A re-rolled 6 stays a block ("a die is only re-rolled once"): [6] → reroll [6] → still 1 block.
+	assert_int(AiCombatMath.blocks_with_bane([6], [6], 4, 0)).is_equal(1)
+	# No 6s → identical to a plain block count (Bane does nothing).
+	assert_int(AiCombatMath.blocks_with_bane([5, 3, 2], [], 4, 0)).is_equal(1)
+
+
+func test_blocks_with_bane_respects_ap_on_the_reroll() -> void:
+	# Def 4+, AP 1 → save target 5. Original [6, 6] both block; Bane re-rolls to [4, 5]: 4 fails vs 5+, 5
+	# blocks → 1 block. (A natural 6 in a re-roll would still block regardless of AP.)
+	assert_int(AiCombatMath.blocks_with_bane([6, 6], [4, 5], 4, 1)).is_equal(1)
+
+
 func test_expected_wounds() -> void:
 	# 6 attacks, hit on 4+ (1/2), target Def 4+ save fails on 1/2 → 6 × 0.5 × 0.5 = 1.5.
 	assert_float(AiCombatMath.expected_wounds(6, 4, 4, 0)).is_equal_approx(1.5, 0.0001)

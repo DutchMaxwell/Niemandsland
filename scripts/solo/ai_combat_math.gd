@@ -13,6 +13,36 @@ extends RefCounted
 
 enum Morale { PASSED, SHAKEN, ROUT }
 
+# ===== Constants (each cites its OPR source) =====
+
+## The unmodified maximum d6 face — the trigger for the "on a 6" weapon rules (Surge / Furious / Rending),
+## and the guaranteed-block face Bane forces the defender to re-roll (GF/AoF Advanced Rules v3.5.1: "rolls
+## of 6 always succeed"). Named so the 6-face rules read the same constant.
+const UNMODIFIED_SIX: int = 6
+
+## Impact(X) hit target (GF/AoF Advanced Rules v3.5.1, p.13): "Roll X dice when attacking after charging,
+## unless fatigued. For each 2+ the target takes one hit."
+const IMPACT_HIT_TARGET: int = 2
+
+## Fearless recovery target (GF/AoF Advanced Rules v3.5.1, p.13): "When a unit where all models have this
+## rule fails a morale test, roll one die. On a 4+ it counts as passed instead."
+const FEARLESS_RECOVER_TARGET: int = 4
+
+## Rending armour-piercing bonus (GF/AoF Advanced Rules v3.5.1, p.14): "on unmodified results of 6 to hit,
+## those hits get AP(+4)."
+const RENDING_AP_BONUS: int = 4
+
+## Thrust armour-piercing bonus (GF/AoF Advanced Rules v3.5.1, p.14): "When charging, gets +1 to hit rolls
+## and AP(+1) in melee."
+const THRUST_AP_BONUS: int = 1
+
+## Thrust to-hit bonus (GF/AoF Advanced Rules v3.5.1, p.14): the "+1 to hit" a charging Thrust weapon gets.
+const THRUST_TO_HIT_BONUS: int = 1
+
+## Best achievable to-hit target after positive modifiers: a natural 1 always misses, so 2+ is the ceiling
+## (GF/AoF Advanced Rules v3.5.1, p.1 "Modifiers": "rolls of 1 always fail").
+const BEST_HIT_TARGET: int = 2
+
 
 ## Hits from the attacker's to-hit roll: faces >= Quality (Quality is "better is lower", e.g. 3+).
 static func count_hits(faces: Array, quality: int) -> int:
@@ -73,6 +103,88 @@ static func relentless_bonus_hits(faces: Array, dist_in: float) -> int:
 		if int(f) == 6:
 			sixes += 1
 	return sixes
+
+
+## Count of unmodified 6s among a to-hit roll — the shared trigger for Surge / Furious (extra hits) and
+## Rending (AP upgrade). "Unmodified" means the raw die face, so this reads the faces as rolled.
+static func unmodified_sixes(faces: Array) -> int:
+	var n := 0
+	for f in faces:
+		if int(f) == UNMODIFIED_SIX:
+			n += 1
+	return n
+
+
+## Extra hits Surge adds (GF/AoF Advanced Rules v3.5.1, p.14: "On unmodified results of 6 to hit, this
+## weapon deals 1 extra hit."). Unlike Relentless there is NO range condition — it applies to shooting AND
+## melee — so this needs only the faces. One extra hit per unmodified 6.
+static func surge_bonus_hits(faces: Array) -> int:
+	return unmodified_sixes(faces)
+
+
+## Extra hits Furious adds (GF/AoF Advanced Rules v3.5.1, p.14: "When charging, unmodified results of 6 to
+## hit in melee deal 1 extra hit."). Melee only, and only for the CHARGING unit — 0 when not charging.
+static func furious_bonus_hits(faces: Array, is_charging: bool) -> int:
+	return unmodified_sixes(faces) if is_charging else 0
+
+
+## How many of a volley's hits Rending upgrades to AP(+4) (GF/AoF Advanced Rules v3.5.1, p.14: "on
+## unmodified results of 6 to hit, those hits get AP(+4)."). One per unmodified 6, capped at the hits
+## actually scored so a hit-reduction can never create phantom Rending hits. Every 6 is itself a hit, so
+## without Blast this equals the count of 6s.
+static func rending_ap_hits(faces: Array, total_hits: int) -> int:
+	return mini(unmodified_sixes(faces), maxi(total_hits, 0))
+
+
+## Impact hits (GF/AoF Advanced Rules v3.5.1, p.13: "Roll X dice when attacking after charging, unless
+## fatigued. For each 2+ the target takes one hit."). Takes the X pre-rolled charge dice and scores 2+.
+static func impact_hits(faces: Array) -> int:
+	return count_hits(faces, IMPACT_HIT_TARGET)
+
+
+## Charging to-hit target for a Thrust weapon (GF/AoF Advanced Rules v3.5.1, p.14: "+1 to hit rolls ... in
+## melee" when charging). +1 to hit lowers the needed face by one, clamped at the 2+ ceiling; unchanged
+## when not charging. Fatigue is handled by the caller (a fatigued unit hits only on unmodified 6s, so
+## Thrust's modifier does not apply then).
+static func thrust_to_hit(quality: int, is_charging: bool) -> int:
+	return maxi(BEST_HIT_TARGET, quality - THRUST_TO_HIT_BONUS) if is_charging else quality
+
+
+## Whether a Fearless re-roll rescues a FAILED morale test (GF/AoF Advanced Rules v3.5.1, p.13: on a failed
+## test, "roll one die. On a 4+ it counts as passed instead."). True when the single re-roll die is a 4+.
+static func fearless_recovers(reroll_face: int) -> bool:
+	return DiceRules.is_success(reroll_face, FEARLESS_RECOVER_TARGET, 0)
+
+
+## Fear(X) adjusted wound total for the who-won-melee check ONLY (GF/AoF Advanced Rules v3.5.1, p.13: "This
+## model counts as having dealt +X wounds when checking who won melee."). Never changes the wounds actually
+## applied — only the winner comparison. Returns caused + X (X floored at 0).
+static func fear_adjusted_wounds(caused: int, fear_x: int) -> int:
+	return maxi(caused, 0) + maxi(fear_x, 0)
+
+
+## Number of unmodified Defense 6s in a save roll — the dice Bane forces the defender to re-roll (GF/AoF
+## Advanced Rules v3.5.1, p.13: "the target must re-roll unmodified Defense results of 6.").
+static func bane_reroll_count(save_faces: Array) -> int:
+	return unmodified_sixes(save_faces)
+
+
+## Blocked hits after the attacker's Bane forces the defender to re-roll unmodified Defense 6s (GF/AoF
+## Advanced Rules v3.5.1, p.13). A natural 6 always blocks, so Bane strips those guaranteed saves: each save
+## face of 6 is replaced by the next `reroll_faces` value (one per 6, in order). "A die roll may only be
+## re-rolled once, so if another 6 is rolled after re-rolling Defense, then the hit is blocked." — a
+## re-rolled 6 therefore stays a block. Returns the block count of the post-re-roll faces at Defense + AP.
+## With no 6s (or no re-roll faces) this equals count_blocks(save_faces, defense, armor_piercing).
+static func blocks_with_bane(save_faces: Array, reroll_faces: Array, defense: int, armor_piercing: int) -> int:
+	var combined: Array = []
+	var ri := 0
+	for f in save_faces:
+		if int(f) == UNMODIFIED_SIX:
+			combined.append(int(reroll_faces[ri]) if ri < reroll_faces.size() else UNMODIFIED_SIX)
+			ri += 1
+		else:
+			combined.append(int(f))
+	return count_blocks(combined, defense, armor_piercing)
 
 
 ## Blast(X) hits (GF Advanced Rules v3.5.1: "Ignores cover, and after resolving other special rules, each

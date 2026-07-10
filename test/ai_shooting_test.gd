@@ -36,6 +36,28 @@ func test_profiles_carry_deadly_relentless_and_range() -> void:
 	assert_bool(bool(plain[0]["relentless"])).is_false()
 
 
+func test_profiles_carry_wave2_weapon_rules() -> void:
+	# Surge / Rending / Bane / Thrust are pre-parsed onto the profile like the wave-1 facets.
+	var profiles := AiShooting.profiles_in_range([_w("Blade", 12, 2, 1, ["Rending", "Bane", "Surge", "Thrust"])], 6.0)
+	assert_bool(bool(profiles[0]["rending"])).is_true()
+	assert_bool(bool(profiles[0]["bane"])).is_true()
+	assert_bool(bool(profiles[0]["surge"])).is_true()
+	assert_bool(bool(profiles[0]["thrust"])).is_true()
+	# A plain weapon carries the neutral (false) defaults for all four.
+	var plain := AiShooting.profiles_in_range([_w("Rifle", 24, 1, 5, [])], 10.0)
+	assert_bool(bool(plain[0]["rending"])).is_false()
+	assert_bool(bool(plain[0]["bane"])).is_false()
+	assert_bool(bool(plain[0]["surge"])).is_false()
+	assert_bool(bool(plain[0]["thrust"])).is_false()
+
+
+func test_melee_profiles_carry_wave2_weapon_rules() -> void:
+	# Thrust/Rending are melee weapon rules; they must survive onto melee profiles too.
+	var profiles := AiShooting.melee_profiles([_w("Lance", 0, 1, 3, ["Thrust", "Rending"])])
+	assert_bool(bool(profiles[0]["thrust"])).is_true()
+	assert_bool(bool(profiles[0]["rending"])).is_true()
+
+
 func test_boundary_range_counts_as_in_range() -> void:
 	assert_int(AiShooting.profiles_in_range([_w("Rifle", 24, 1, 1, [])], 24.0).size()).is_equal(1)
 	assert_int(AiShooting.profiles_in_range([_w("Rifle", 24, 1, 1, [])], 24.01).size()).is_equal(0)

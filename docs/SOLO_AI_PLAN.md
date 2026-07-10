@@ -209,6 +209,17 @@ seams). Wired:
   **Regeneration** (5+, AP-independent; bypassed by Bane/Rending/Lacerate/Unstoppable per the PDF, detected
   down to model-level item rules) is rolled visibly; and solo wounds tick the REAL wound tokens + MP broadcast
   via the manual-play seams (`apply_wounds_to_models` core, unit-tested).
+- **Wave-2 combat special rules (2026-07-10)**: the highest-frequency weapon/unit rules from the two
+  field-test army books are now automated in the real game both directions, each a pure unit-tested
+  `AiCombatMath` helper cited to the GF/AoF Advanced Rules v3.5.1 PDFs (see
+  [`SOLO_AI_RULES_COVERAGE.md`](SOLO_AI_RULES_COVERAGE.md) §Wave 2): **Fearless** (morale re-roll),
+  **Surge**/**Furious** (unmodified-6 extra hits), **Rending** (AP(+4) on 6s, a separate save batch),
+  **Bane** (defender re-rolls Defense 6s), **Impact(X)** (charge auto-hits), **Thrust** (charge +1 hit &
+  AP(+1)), **Fear(X)** (melee-winner bonus). Wired into `main.gd` only (the SIM is untouched, so the
+  mirror-fairness oracle is unchanged and needs no re-run, per the wave-1 Blast/Reliable precedent).
+  Deferred + still logged: Counter (interactive strike-first reorder), Stealth/Evasive/Shielded, Caster,
+  Mend, Indirect/Artillery deploy facets, and army-specific non-core rules. Tests: 14 new `AiCombatMath`
+  cases + 2 `AiShooting` facet cases; full solo suite green.
 
 ## P2 — the in-game auto-game (shipped): alternating activation, auto-seize, scoring
 
