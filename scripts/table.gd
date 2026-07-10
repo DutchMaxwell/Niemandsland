@@ -42,9 +42,11 @@ const DETAIL_NOISE_SIZE: int = 512
 ## Micro-relief normal-map depth — SHARED by the ground and the base top so a base answers the sun
 ## identically to the board it sits on (identical texture => identical brightness).
 const DETAIL_NORMAL_STRENGTH: float = 0.35
-## Base-top rim shading: a CONTACT-SHADOW HINT only. The centre reads identical to the board; only a
-## thin outer band is darkened. Taste-tuning the base-top look is a one-line change to these.
-const BASE_TOP_VIGNETTE_STRENGTH: float = 0.10   # max darkening at the very rim
+## Base-top rim shading: SHIPPED DEFAULT IS 0.0 — the black beveled rim alone grounds the base, and
+## the terrain top must read identical to the board (verified numerically to < 1 %, see
+## tools/base_luminance_qa.gd). The uniform is retained only for later taste-tuning: raise the
+## strength to reintroduce a thin contact-shadow band toward the rim.
+const BASE_TOP_VIGNETTE_STRENGTH: float = 0.0    # max darkening at the very rim (0 = off, shipped)
 const BASE_TOP_VIGNETTE_START: float = 0.80      # rim_t where the shading begins (thin outer band)
 
 ## Shared terrain-projected material for model base tops (BaseDecor). ONE material for the whole

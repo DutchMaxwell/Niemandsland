@@ -38,18 +38,32 @@ uniform vec3 fallback_color = vec3(0.2, 0.35, 0.2);
 // centre (which must read identical to the board) and only a thin outer band is touched.
 // vignette_strength = max darkening at the very rim; vignette_start = the rim_t where shading
 // begins (so 1.0 - vignette_start is the rim-shade band width). Tuned from Table.BASE_TOP_VIGNETTE_*.
-uniform float vignette_strength : hint_range(0.0, 1.0) = 0.10;
+// SHIPPED DEFAULT IS 0.0 — the black beveled rim alone grounds the base; the uniform is retained
+// only for later taste-tuning (see Table.BASE_TOP_VIGNETTE_STRENGTH).
+uniform float vignette_strength : hint_range(0.0, 1.0) = 0.0;
 uniform float vignette_start : hint_range(0.0, 1.0) = 0.80;
 
 varying vec2 world_xz;
-varying float rim_t;   // 0 = base centre, 1 = base rim (baked into UV.x at mesh-build time)
+// Centred shape coordinate (base centre = 0, shape boundary = length 1). Baked into UV at
+// mesh-build time. The top is a flat QUAD (like a PlaneMesh, which the sun answers identically);
+// fragments outside the base outline are discarded so the quad reads as the base's round/oval/
+// square shape. A single-apex triangle FAN here rendered markedly darker under this shader in
+// Godot 4.6 (measured); a quad + discard is the shape without that artefact — see base_decor.gd.
+varying vec2 shape_uv;
 
 void vertex() {
 	world_xz = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xz;
-	rim_t = UV.x;
+	shape_uv = UV;
 }
 
 void fragment() {
+	// Clip the bounding quad to the base outline (round/oval => length 1; square is pre-scaled so
+	// it never exceeds 1). The rim hides this edge, so a hard discard boundary is invisible.
+	float rim_t = length(shape_uv);
+	if (rim_t > 1.0) {
+		discard;
+	}
+	rim_t = clamp(rim_t, 0.0, 1.0);
 	// Reconstruct the table plane UV (0..1) from world XZ, exactly as the PlaneMesh would.
 	vec2 plane_uv = 0.5 + (world_xz - table_center_xz) * inv_table_size * uv_axis_sign;
 	// Same centre-crop as table_ground.gdshader (clamp keeps samples inside the battlemap).

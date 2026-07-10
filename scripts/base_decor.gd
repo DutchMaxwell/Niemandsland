@@ -24,9 +24,15 @@ const TOP_RADIUS_RATIO: float = 0.86
 ## Rim frustum top radius / affiliation-ring outer radius (fraction of base radius). The flat black
 ## rim ring is [TOP_RADIUS_RATIO..RIM_TOP_RATIO]; the beveled wall is [RIM_TOP_RATIO..1.0].
 const RIM_TOP_RATIO: float = 0.93
-## Vertical stack offsets (metres) so the stacked flat surfaces never z-fight with the rim cap.
+## Vertical stack offsets (metres): the terrain top and affiliation ring sit a hair above the rim's
+## annular cap plane (BASE_HEIGHT) so the abutting seam stays clean (the rim no longer has a cap
+## UNDER the terrain, so there is nothing left to z-fight across the disc interior).
 const TOP_Y: float = BASE_HEIGHT_M + 0.00020
 const RING_Y: float = BASE_HEIGHT_M + 0.00028
+## 1/sqrt(2): scales a square top's centred UVs so its corners sit at length 1, so the terrain-top
+## shader's length(UV) > 1 discard never fires for a square (round/oval quads keep corners at
+## sqrt(2), which ARE discarded to leave the inscribed circle/ellipse).
+const SQRT_HALF: float = 0.70710678118
 ## Perimeter tessellation for round/oval tops (matches CylinderMesh smoothness for a clean edge).
 const CIRCLE_SEGMENTS: int = 48
 ## Perimeter points per square edge (a smoother rim vignette than the 4 bare corners).
@@ -65,13 +71,16 @@ static func should_ring(unit_size: int) -> bool:
 
 # ===== Public: shared materials =====
 
-## The shared near-black rim material (one instance for the whole session).
+## The shared near-black rim material (one instance for the whole session). Two-sided: the rim is a
+## thin open shell (wall + annular top cap, no underside), so cull_disabled keeps it solid-looking
+## from any angle without per-vertex winding bookkeeping.
 static func rim_material() -> StandardMaterial3D:
 	if _rim_material == null:
 		var m := StandardMaterial3D.new()
 		m.albedo_color = RIM_COLOR
 		m.roughness = RIM_ROUGHNESS
 		m.metallic = 0.0
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
 		_rim_material = m
 	return _rim_material
 
@@ -109,25 +118,16 @@ static func build_base(
 		root.add_child(_legacy_disc(base_is_oval, base_is_square, base_width, base_depth, base_radius, player_color))
 		return root
 
-	# 1) Rim body: near-black beveled frustum (round/oval) or flat box (square).
+	# 1) Rim body: near-black beveled frame (wall + annular top cap) — round, oval or square.
 	var rim := MeshInstance3D.new()
 	rim.name = "BaseRim"
-	if base_is_square:
-		rim.mesh = _box_rim_mesh(base_width, base_depth)
-		rim.position.y = BASE_HEIGHT_M * 0.5
-	elif base_is_oval:
-		rim.mesh = _round_rim_mesh(0.5)   # unit frustum, scaled to the oval below
-		rim.scale = Vector3(base_width, 1.0, base_depth)
-		rim.position.y = BASE_HEIGHT_M * 0.5
-	else:
-		rim.mesh = _round_rim_mesh(base_radius)
-		rim.position.y = BASE_HEIGHT_M * 0.5
+	rim.mesh = _rim_mesh(base_is_square, base_is_oval, base_width, base_depth, base_radius)
 	rim.material_override = rim_material()
 	rim.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	rim.set_meta(SHARED_MATERIAL_META, true)
 	root.add_child(rim)
 
-	# 2) Terrain-projected top (with the rim vignette baked into UV.x).
+	# 2) Terrain-projected top (a quad clipped to the base outline via the shader's discard).
 	var top := MeshInstance3D.new()
 	top.name = "BaseTop"
 	top.mesh = _top_mesh(base_is_square, base_is_oval, base_width, base_depth, base_radius, TOP_RADIUS_RATIO)
@@ -186,35 +186,47 @@ static func _perimeter_for(is_square: bool, is_oval: bool, base_width: float, ba
 		return ellipse_perimeter(base_width * 0.5 * ratio, base_depth * 0.5 * ratio, CIRCLE_SEGMENTS)
 	return ellipse_perimeter(base_radius * ratio, base_radius * ratio, CIRCLE_SEGMENTS)
 
-## Filled top fan: centre vertex (UV.x=0) + perimeter (UV.x=1), flat at y=0, normal +Y. UV.x is
-## the rim vignette coordinate (0 centre → 1 rim). cull_disabled on the material makes winding moot.
-## Every vertex also carries a world-aligned +X TANGENT so the terrain-top shader's detail NORMAL_MAP
-## uses the same tangent frame the table's PlaneMesh does (identical sun response — see base_terrain_top.gdshader).
+## Terrain-top mesh: a flat +Y QUAD (two triangles) covering the base's top extent, carrying a
+## CENTRED shape coordinate in UV (base centre = (0,0), shape boundary at length 1). The base_terrain
+## _top shader discards fragments with length(UV) > 1, so the quad reads as the round/oval outline
+## (square is pre-scaled to never discard). This deliberately replaced a single-apex triangle FAN:
+## under the terrain-top shader in Godot 4.6 the fan rendered markedly DARKER than the board it
+## mirrors (measured ~30-40 % at the apex-heavy centre, top-down and oblique), while a plain quad —
+## which the sun answers exactly as it does the table's PlaneMesh — matches the board to < 1 %.
+## Every vertex carries the world-aligned +X TANGENT (binormal sign +1) matching PlaneMesh's frame,
+## so the shared detail NORMAL_MAP catches the sun identically to the board.
 static func _top_mesh(is_square: bool, is_oval: bool, base_width: float, base_depth: float, base_radius: float, ratio: float) -> Mesh:
 	var key := "top:%s:%s:%d:%d:%d" % [str(is_square), str(is_oval), int(round(base_width * 10000)), int(round(base_depth * 10000)), int(round(base_radius * 10000))]
 	var cached: Mesh = _mesh_cache.get(key, null)
 	if cached != null:
 		return cached
-	var perimeter := _perimeter_for(is_square, is_oval, base_width, base_depth, base_radius, ratio)
-	# Tangent along +X with binormal sign +1 — matches PlaneMesh's tangent frame for a +Y face.
+	# Half-extents of the terrain top in metres (the inset inside the black rim).
+	var half_x: float
+	var half_z: float
+	if is_square or is_oval:
+		half_x = base_width * 0.5 * ratio
+		half_z = base_depth * 0.5 * ratio
+	else:
+		half_x = base_radius * ratio
+		half_z = base_radius * ratio
+	# UV = local position normalised to the shape extent. Round/oval: quad corners land at length
+	# sqrt(2) and are discarded, leaving the inscribed circle/ellipse. Square: scaled by 1/sqrt(2)
+	# so its own corners sit exactly at length 1 and nothing is discarded (the full square shows).
+	var uv_scale := SQRT_HALF if is_square else 1.0
 	var tangent := Plane(1.0, 0.0, 0.0, 1.0)
+	var corners := [
+		Vector3(-half_x, 0.0, -half_z), Vector3(half_x, 0.0, -half_z),
+		Vector3(half_x, 0.0, half_z), Vector3(-half_x, 0.0, half_z),
+	]
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	st.set_normal(Vector3.UP)
-	st.set_tangent(tangent)
-	st.set_uv(Vector2(0.0, 0.0))
-	st.add_vertex(Vector3.ZERO)   # index 0 = centre
-	var n := perimeter.size()
-	for i in range(n):
-		var p := perimeter[i]
+	for c in corners:
 		st.set_normal(Vector3.UP)
 		st.set_tangent(tangent)
-		st.set_uv(Vector2(1.0, 0.0))
-		st.add_vertex(Vector3(p.x, 0.0, p.y))
-	for i in range(n):
-		st.add_index(0)
-		st.add_index(1 + ((i + 1) % n))
-		st.add_index(1 + i)
+		st.set_uv(Vector2(c.x / half_x, c.z / half_z) * uv_scale)
+		st.add_vertex(c)
+	for tri in [0, 1, 2, 0, 2, 3]:
+		st.add_index(tri)
 	var mesh := st.commit()
 	_mesh_cache[key] = mesh
 	return mesh
@@ -240,32 +252,51 @@ static func _ring_mesh(is_square: bool, is_oval: bool, base_width: float, base_d
 	_mesh_cache[key] = mesh
 	return mesh
 
-## Round/oval rim body: a shallow black frustum (bottom = full radius, top = RIM_TOP_RATIO) giving
-## a subtle chamfered edge plus a flat top cap the terrain top + ring sit on.
-static func _round_rim_mesh(radius: float) -> Mesh:
-	var key := "rim_round:%d" % int(round(radius * 100000))
+## Unified rim body (round / oval / square): a beveled outer WALL — the base outline at full size
+## (y=0) rising and insetting to the RIM_TOP_RATIO outline (y=BASE_HEIGHT) — plus a flat annular TOP
+## cap spanning [TOP_RADIUS_RATIO .. RIM_TOP_RATIO] at y=BASE_HEIGHT (the visible black border the
+## affiliation ring lands on). It deliberately has NO cap under TOP_RADIUS_RATIO: the previous
+## CylinderMesh/BoxMesh full top face sat a hair below the terrain quad and Z-FOUGHT it, producing a
+## non-deterministic dark shimmer ring on the base (measured with tools/base_luminance_qa.gd). The
+## terrain quad now owns everything inside TOP_RADIUS_RATIO and the rim only borders it — no overlap.
+static func _rim_mesh(is_square: bool, is_oval: bool, base_width: float, base_depth: float, base_radius: float) -> Mesh:
+	var key := "rim:%s:%s:%d:%d:%d" % [str(is_square), str(is_oval), int(round(base_width * 10000)), int(round(base_depth * 10000)), int(round(base_radius * 10000))]
 	var cached: Mesh = _mesh_cache.get(key, null)
 	if cached != null:
 		return cached
-	var m := CylinderMesh.new()
-	m.bottom_radius = radius
-	m.top_radius = radius * RIM_TOP_RATIO
-	m.height = BASE_HEIGHT_M
-	m.radial_segments = CIRCLE_SEGMENTS
-	m.rings = 1
-	_mesh_cache[key] = m
-	return m
+	var h := BASE_HEIGHT_M
+	var bottom := _perimeter_for(is_square, is_oval, base_width, base_depth, base_radius, 1.0)
+	var top := _perimeter_for(is_square, is_oval, base_width, base_depth, base_radius, RIM_TOP_RATIO)
+	var inner := _perimeter_for(is_square, is_oval, base_width, base_depth, base_radius, TOP_RADIUS_RATIO)
+	var n := bottom.size()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(n):
+		var j := (i + 1) % n
+		var b0 := Vector3(bottom[i].x, 0.0, bottom[i].y)
+		var b1 := Vector3(bottom[j].x, 0.0, bottom[j].y)
+		var t0 := Vector3(top[i].x, h, top[i].y)
+		var t1 := Vector3(top[j].x, h, top[j].y)
+		var c0 := Vector3(inner[i].x, h, inner[i].y)
+		var c1 := Vector3(inner[j].x, h, inner[j].y)
+		# Beveled wall (outward-facing normal) and the flat annular cap (+Y).
+		var wall_n := (b0 + b1) * 0.5
+		wall_n.y = 0.0
+		wall_n = wall_n.normalized() if wall_n.length() > 0.0 else Vector3.UP
+		_add_quad_n(st, b0, b1, t1, t0, wall_n)
+		_add_quad_n(st, c0, c1, t1, t0, Vector3.UP)
+	var mesh := st.commit()
+	_mesh_cache[key] = mesh
+	return mesh
 
-## Square rim body: a flat black box (regiment bases). The inset terrain top leaves the black border.
-static func _box_rim_mesh(base_width: float, base_depth: float) -> Mesh:
-	var key := "rim_box:%d:%d" % [int(round(base_width * 100000)), int(round(base_depth * 100000))]
-	var cached: Mesh = _mesh_cache.get(key, null)
-	if cached != null:
-		return cached
-	var m := BoxMesh.new()
-	m.size = Vector3(base_width, BASE_HEIGHT_M, base_depth)
-	_mesh_cache[key] = m
-	return m
+## Add a quad (two triangles a-b-c, a-c-d) with one shared normal. cull_disabled on the rim material
+## makes winding irrelevant; the world-aligned +X tangent keeps a valid tangent frame present.
+static func _add_quad_n(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, n: Vector3) -> void:
+	var tangent := Plane(1.0, 0.0, 0.0, 1.0)
+	for v in [a, b, c, a, c, d]:
+		st.set_normal(n)
+		st.set_tangent(tangent)
+		st.add_vertex(v)
 
 static func _add_quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> void:
 	# Two triangles; the ring material is cull_disabled so winding is irrelevant.

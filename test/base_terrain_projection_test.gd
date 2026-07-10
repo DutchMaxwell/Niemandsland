@@ -66,14 +66,15 @@ func test_base_top_material_is_a_single_shared_instance() -> void:
 
 # ===== Brightness match (maintainer field feedback) =====
 
-func test_base_top_rim_shading_is_a_subtle_contact_hint() -> void:
-	# The base-top rim shading must stay a subtle CONTACT-SHADOW HINT — a thin outer band at weak
-	# strength — so the centre reads identical to the board. Defaults owned by Table (one-line tune).
-	assert_float(TableScript.BASE_TOP_VIGNETTE_STRENGTH).is_equal_approx(0.10, 0.0001)
+func test_base_top_vignette_defaults_off_and_is_pushed_from_table() -> void:
+	# Shipped default is 0.0 — the black beveled rim alone grounds the base, and the terrain top must
+	# read identical to the board (verified numerically to well under 1 % — tools/base_luminance_qa.gd).
+	# The uniform is retained for later taste-tuning; a non-zero value reintroduces a thin rim band.
+	assert_float(TableScript.BASE_TOP_VIGNETTE_STRENGTH).is_equal_approx(0.0, 0.0001)
 	assert_float(TableScript.BASE_TOP_VIGNETTE_START).is_equal_approx(0.80, 0.0001)
 	var table: TableScript = auto_free(TableScript.new())
 	var mat := table.get_base_top_material()
-	assert_float(mat.get_shader_parameter("vignette_strength")).is_equal_approx(TableScript.BASE_TOP_VIGNETTE_STRENGTH, 0.0001)
+	assert_float(mat.get_shader_parameter("vignette_strength")).is_equal_approx(0.0, 0.0001)
 	assert_float(mat.get_shader_parameter("vignette_start")).is_equal_approx(TableScript.BASE_TOP_VIGNETTE_START, 0.0001)
 
 
