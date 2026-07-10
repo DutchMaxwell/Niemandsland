@@ -226,6 +226,16 @@ var atmospheric_clouds: Node3D = null
 # Radial Menu
 var radial_menu_controller: RadialMenuController = null
 var coherency_visualizer: CoherencyVisualizer = null
+## 1" enemy-separation proximity hint (OPR GF/AoF Advanced Rules v3.5.1 p.7). Renders
+## the warning; SeparationChecker does the base-edge distance math. Strictly local.
+var separation_visualizer: SeparationVisualizer = null
+## Cache of every alive OPR model's base shape for the proximity hint's enemy scan.
+## Rebuilt lazily when the selection changes (enemies stay put during the local drag,
+## so their shapes stay valid across the drag). Each entry:
+## {model: ModelInstance, shape: SeparationChecker.BaseShape, player_id: int,
+##  center: Vector2, bound: float}.
+var _separation_shape_cache: Array = []
+var _separation_cache_valid: bool = false
 var unit_boundary_visualizer: Node3D = null  # UnitBoundaryVisualizer
 var range_ring_controller: Node = null  # RangeRingController (base-anchored range auras)
 var movement_range_controller: Node = null  # MovementRangeController (Advance/Rush reach)
@@ -298,7 +308,9 @@ func _ready() -> void:
 	object_manager.measurement_finished.connect(_on_measurement_finished)
 	object_manager.drag_ended.connect(_on_drag_ended)
 	object_manager.drag_updated.connect(_check_coherency_for_selected_units)
+	object_manager.drag_updated.connect(_check_separation_for_selected_units)
 	object_manager.selection_changed.connect(_on_selection_changed_update_card)
+	object_manager.selection_changed.connect(_on_selection_changed_for_separation)
 
 	# Hide distance label initially
 	distance_label.text = ""
@@ -4109,6 +4121,8 @@ func _on_table_resized(size_feet: Vector2) -> void:
 func _on_unit_moved() -> void:
 	# Auto-check coherency for any selected units after movement
 	_check_coherency_for_selected_units()
+	# Re-evaluate the 1" enemy-separation hint on drop (fades out if now compliant).
+	_check_separation_for_selected_units()
 
 
 ## Check coherency for all currently selected units
@@ -4142,6 +4156,147 @@ func _check_coherency_for_selected_units() -> void:
 			# live (~15 Hz) while dragging, so re-running the fade/pulse each frame
 			# would make the lines flicker.
 			coherency_visualizer.show_coherency(game_unit, CoherencyChecker.is_skirmish_system(game_unit), false)
+
+
+## ============================================================================
+## 1" Enemy-Separation Proximity Hint
+## ============================================================================
+## OPR rule (GF/AoF Advanced Rules v3.5.1, p.7 "General Movement"): "Models may never
+## be within 1” of models from other units, unless they are taking a Charge action".
+## While a model / regiment tray is dragged, and on drop, warn (red pulsing ring +
+## base-edge line) when any moved base sits within 1" of an ENEMY base WITHOUT
+## touching it — base contact is intentional melee and is exempt. Strictly local
+## render (no RPCs); works identically in single-player, hotseat and multiplayer.
+##
+## Coverage: local drag (~15 Hz via drag_updated) + local drop (via _on_unit_moved),
+## matching CoherencyVisualizer's coverage exactly. Undo/redo and remote-peer moves
+## are NOT re-evaluated (neither is coherency) — the drag+drop path is the must-have.
+
+## Invalidate the enemy-shape cache on any selection change; clear the hint if the
+## selection emptied (nothing is being moved any more).
+func _on_selection_changed_for_separation(selected: Array) -> void:
+	_separation_cache_valid = false
+	if selected.is_empty() and separation_visualizer:
+		separation_visualizer.show_violations([])
+
+
+## Rebuild the cache of every alive OPR model's base shape (both armies). Enemies are
+## resolved per-pair by player_id, so one army-agnostic cache serves every selection.
+func _rebuild_separation_cache() -> void:
+	_separation_shape_cache.clear()
+	if opr_army_manager == null:
+		_separation_cache_valid = true
+		return
+	for game_unit in opr_army_manager.get_all_game_units():
+		if game_unit == null:
+			continue
+		var player_id: int = int(game_unit.unit_properties.get("player_id", 0))
+		for model in game_unit.get_alive_models():
+			if model == null or model.node == null or not is_instance_valid(model.node):
+				continue
+			var shape := SeparationChecker.shape_for_model(model)
+			if shape == null:
+				continue
+			_separation_shape_cache.append({
+				"model": model,
+				"shape": shape,
+				"player_id": player_id,
+				"center": shape.center,
+				"bound": shape.bounding_radius(),
+			})
+	_separation_cache_valid = true
+
+
+## Collects the models currently being moved (loose model nodes AND regiment-tray
+## members), each with a FRESH base shape at its current position. Returns an Array of
+## {model, shape, player_id, center, bound}.
+func _collect_moved_separation_models(selected: Array) -> Array:
+	var moved: Array = []
+	for obj in selected:
+		if obj == null or not is_instance_valid(obj):
+			continue
+		if obj is RegimentTray or obj.is_in_group(RegimentTray.GROUP):
+			for child in obj.get_children():
+				_append_moved_separation_model(child, moved)
+		else:
+			_append_moved_separation_model(obj, moved)
+	return moved
+
+
+## Appends one moved model (if the node is a live, non-parked OPR model) to `moved`.
+func _append_moved_separation_model(node: Node3D, moved: Array) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if not node.has_meta("model_instance"):
+		return
+	if node.get_meta("deleted", false):
+		return  # parked casualty — not on the battlefield
+	var model := node.get_meta("model_instance") as ModelInstance
+	if model == null or not model.is_alive:
+		return
+	var shape := SeparationChecker.shape_for_model(model)
+	if shape == null:
+		return
+	var player_id: int = 0
+	if model.unit is GameUnit:
+		player_id = int((model.unit as GameUnit).unit_properties.get("player_id", 0))
+	moved.append({
+		"model": model,
+		"shape": shape,
+		"player_id": player_id,
+		"center": shape.center,
+		"bound": shape.bounding_radius(),
+	})
+
+
+## Evaluates the 1" enemy-separation hint for the current selection and drives the
+## visualizer. Spatially pre-filtered (distance_squared) against the cached enemy
+## shapes so only nearby enemies run the exact edge-to-edge test.
+func _check_separation_for_selected_units() -> void:
+	if separation_visualizer == null or object_manager == null or opr_army_manager == null:
+		return
+
+	# object_manager is typed Node3D, so its return type isn't inferable here — use an
+	# untyped assignment (matches _check_coherency_for_selected_units).
+	var selected = object_manager.get_selected_objects()
+	if selected.is_empty():
+		separation_visualizer.show_violations([])
+		return
+
+	var moved := _collect_moved_separation_models(selected)
+	if moved.is_empty():
+		separation_visualizer.show_violations([])
+		return
+
+	if not _separation_cache_valid:
+		_rebuild_separation_cache()
+
+	var sep_m: float = SeparationChecker.SEPARATION_DISTANCE_INCHES * SeparationChecker.INCHES_TO_METERS
+	var pairs: Array = []
+	for mv in moved:
+		var mv_shape: SeparationChecker.BaseShape = mv["shape"]
+		var mv_model: ModelInstance = mv["model"]
+		var mv_player: int = mv["player_id"]
+		var mv_center: Vector2 = mv["center"]
+		var mv_bound: float = mv["bound"]
+		for cand in _separation_shape_cache:
+			if not SeparationChecker.are_enemy_players(mv_player, int(cand["player_id"])):
+				continue
+			var cand_model: ModelInstance = cand["model"]
+			if cand_model == mv_model:
+				continue
+			# O(1) spatial pre-filter: skip enemies whose enclosing circles can't be
+			# within the 1" band (distance_squared, no sqrt).
+			var reach: float = sep_m + mv_bound + float(cand["bound"])
+			if mv_center.distance_squared_to(cand["center"]) > reach * reach:
+				continue
+			var gap := SeparationChecker.edge_distance(mv_shape, cand["shape"])
+			# Warn only inside the band: touching (<= epsilon) is melee, >= 1" is compliant.
+			if gap > SeparationChecker.BASE_CONTACT_EPSILON_INCHES and gap < SeparationChecker.SEPARATION_DISTANCE_INCHES:
+				pairs.append(SeparationVisualizer.ViolationPair.new(mv_model, cand_model, gap))
+
+	# animate=false: live drag update — the ring pulse / fade must not restart each frame.
+	separation_visualizer.show_violations(pairs, false)
 
 
 ## ============================================================================
@@ -4181,6 +4336,11 @@ func _init_radial_menu() -> void:
 	coherency_visualizer.name = "CoherencyVisualizer"
 	add_child(coherency_visualizer)
 	radial_menu_controller.coherency_visualizer = coherency_visualizer
+
+	# Create the 1" enemy-separation proximity hint visualizer (local-only render).
+	separation_visualizer = SeparationVisualizer.new()
+	separation_visualizer.name = "SeparationVisualizer"
+	add_child(separation_visualizer)
 
 	# Base-anchored range rings ("auras"): per-model range circles toggled with G on the
 	# selection (local-only display aid). Owns the rings under /root/Main.
