@@ -94,6 +94,135 @@ static func path_crosses_wall(a: Vector2, b: Vector2, walls: Array) -> bool:
 	return false
 
 
+# === Base-aware obstacle checks (opt-in via `opts` — the sim passes none, so its behaviour is =========
+# === byte-identical; the REAL game inflates obstacles by the moving model's base radius) ==============
+#
+# `opts` keys (all optional; {} = legacy point-model behaviour):
+#   clearance   : float — the moving model's base radius + epsilon (inches). Walls become base-aware: a
+#                 step may not bring the base's OUTER EDGE onto a wall (GF v3.5.1 p.7: models "may never
+#                 move through" obstacles; the swept-corridor guarantee — no wall clipping, no shaving).
+#   zones       : Array of {"c": Vector2, "r": float} no-go circles — enemy models inflated by their base
+#                 radius + 1" + the mover's radius (GF v3.5.1 p.7: "Models may never be within 1” of
+#                 models from OTHER UNITS — friendly AND enemy — unless charging"). A step may neither
+#                 cross a zone nor end inside one; a model that starts inside (legacy state) may only
+#                 move OUT.
+#   avoid_cells : Dictionary(Vector2i -> true) — grid cells steering/A* must not enter (Difficult terrain
+#                 when the route should go AROUND it — GF v3.5.1 solo overlay p.57: AI units "must always
+#                 move around" difficult terrain — plus Impassable cells). A model already inside an
+#                 avoided cell may step freely (escape allowed).
+
+## Distance from point p to segment a→b.
+static func point_seg_distance(p: Vector2, a: Vector2, b: Vector2) -> float:
+	var ab := b - a
+	var len2 := ab.length_squared()
+	if len2 < EPS * EPS:
+		return p.distance_to(a)
+	var t := clampf((p - a).dot(ab) / len2, 0.0, 1.0)
+	return p.distance_to(a + ab * t)
+
+
+## Minimum distance between segments p1→p2 and q1→q2 (0 when they cross).
+static func seg_seg_distance(p1: Vector2, p2: Vector2, q1: Vector2, q2: Vector2) -> float:
+	if segments_cross(p1, p2, q1, q2):
+		return 0.0
+	return minf(minf(point_seg_distance(p1, q1, q2), point_seg_distance(p2, q1, q2)),
+		minf(point_seg_distance(q1, p1, p2), point_seg_distance(q2, p1, p2)))
+
+
+## Base-aware wall check for one step p→c: a crossing always blocks; with clearance > 0 the step may not
+## dip within `clearance` of the wall (the base edge would shave it) — unless the model STARTS inside the
+## inflated band (pre-existing state), where only distance-improving escape steps are allowed.
+static func _wall_blocks(p: Vector2, c: Vector2, wa: Vector2, wb: Vector2, clearance: float) -> bool:
+	if segments_cross(p, c, wa, wb):
+		return true
+	if clearance <= 0.0:
+		return false
+	if seg_seg_distance(p, c, wa, wb) >= clearance:
+		return false
+	var d_p := point_seg_distance(p, wa, wb)
+	if d_p >= clearance - EPS:
+		return true   # started clear of the inflated wall → any dip inside is a clip
+	return point_seg_distance(c, wa, wb) <= d_p + EPS   # inside already: only escaping steps allowed
+
+
+## No-go circle check for one step p→c: the step may not cross the circle nor end inside it; a model
+## starting inside may only move outward (escape).
+static func _zone_blocks(p: Vector2, c: Vector2, centre: Vector2, r: float) -> bool:
+	if point_seg_distance(centre, p, c) >= r:
+		return false
+	var d_p := p.distance_to(centre)
+	if d_p >= r - EPS:
+		return true   # entered / clipped the zone from outside
+	return c.distance_to(centre) <= d_p + EPS   # inside already: only escaping steps allowed
+
+
+## Combined step check: walls (base-aware), no-go zones, and avoided grid cells. `opts` = {} is exactly
+## the legacy path_crosses_wall behaviour.
+static func step_blocked(p: Vector2, c: Vector2, walls: Array, opts: Dictionary) -> bool:
+	var clearance: float = float(opts.get("clearance", 0.0))
+	if clearance > 0.0:
+		for w in walls:
+			if _wall_blocks(p, c, _wall_a(w), _wall_b(w), clearance):
+				return true
+	elif path_crosses_wall(p, c, walls):
+		return true
+	for z in opts.get("zones", []):
+		var zd := z as Dictionary
+		if _zone_blocks(p, c, zd.get("c", Vector2.ZERO), float(zd.get("r", 0.0))):
+			return true
+	var avoid: Dictionary = opts.get("avoid_cells", {})
+	if not avoid.is_empty():
+		if avoid.has(TerrainRules.cell_of(c)) and not avoid.has(TerrainRules.cell_of(p)):
+			return true
+	return false
+
+
+## Distance between two consecutive polyline points (Vector2 or Vector3 — typed branches, no dynamic call).
+static func _point_dist(a: Variant, b: Variant) -> float:
+	if a is Vector3:
+		return (a as Vector3).distance_to(b as Vector3)
+	return (a as Vector2).distance_to(b as Vector2)
+
+
+static func _point_lerp(a: Variant, b: Variant, t: float) -> Variant:
+	if a is Vector3:
+		return (a as Vector3).lerp(b as Vector3, t)
+	return (a as Vector2).lerp(b as Vector2, t)
+
+
+## Arc length of a waypoint polyline (Vector2 or Vector3 points).
+static func polyline_length(points: Array) -> float:
+	var total := 0.0
+	for i in range(1, points.size()):
+		total += _point_dist(points[i - 1], points[i])
+	return total
+
+
+## Trim a polyline so its arc length never exceeds `max_len` (GF v3.5.1 p.7: "no part of their bases move
+## further than the total movement distance") — the distance-truth clamp. Walks the legs and cuts the
+## final leg at the exact remaining budget. Works on Vector2 or Vector3 points; returns a NEW array.
+static func trim_polyline(points: Array, max_len: float) -> Array:
+	if points.size() <= 1:
+		return points.duplicate()
+	if max_len <= 0.0:
+		return [points[0]]
+	var out: Array = [points[0]]
+	var spent := 0.0
+	for i in range(1, points.size()):
+		var leg: float = _point_dist(points[i - 1], points[i])
+		if leg <= EPS:
+			continue
+		if spent + leg <= max_len + EPS:
+			out.append(points[i])
+			spent += leg
+			continue
+		var frac := (max_len - spent) / leg
+		if frac > EPS:
+			out.append(_point_lerp(points[i - 1], points[i], frac))
+		break
+	return out
+
+
 # === Public coherency predicate (mirrors CoherencyChecker, point-model form) ================
 
 static func _are_linked(a: Vector2, b: Vector2) -> bool:
@@ -165,15 +294,28 @@ static func _centroid(model_pos: Array) -> Vector2:
 	return s / float(model_pos.size())
 
 
-## True if the plain rigid translation by `delta` would drive any model's straight path through a wall.
-## When false the caller can safely apply the exact rigid move (SoloSim keeps its fast path this way, so
+## True if the plain rigid translation by `delta` would drive any model's straight path through a wall —
+## or, with `opts`, shave an inflated wall / cross a no-go zone / enter an avoided cell. When false the
+## caller can safely apply the exact rigid move (SoloSim passes no opts and keeps its fast path, so
 ## open-field play — and the mirror-fairness oracle — is byte-identical to the pre-planner behaviour).
-static func rigid_blocked(model_pos: Array, delta: Vector2, walls: Array) -> bool:
-	if walls.is_empty() or delta == Vector2.ZERO:
+static func rigid_blocked(model_pos: Array, delta: Vector2, walls: Array, opts: Dictionary = {}) -> bool:
+	if delta == Vector2.ZERO:
+		return false
+	if walls.is_empty() and opts.is_empty():
 		return false
 	for m in model_pos:
-		if path_crosses_wall(m, (m as Vector2) + delta, walls):
+		var a := m as Vector2
+		var b := a + delta
+		if step_blocked(a, b, walls, opts):
 			return true
+		# A long rigid leg can pass THROUGH an avoided cell with both endpoints outside it — sample the
+		# leg at sub-cell intervals so the fast path never silently tunnels difficult/impassable cells.
+		var avoid: Dictionary = opts.get("avoid_cells", {})
+		if not avoid.is_empty() and not avoid.has(TerrainRules.cell_of(a)):
+			var steps := maxi(1, int(ceil(delta.length() / (TerrainRules.CELL_IN * 0.5))))
+			for s in range(1, steps):
+				if avoid.has(TerrainRules.cell_of(a.lerp(b, float(s) / float(steps)))):
+					return true
 	return false
 
 
@@ -194,32 +336,32 @@ static func rigid_blocked(model_pos: Array, delta: Vector2, walls: Array) -> boo
 ##                   changes NOTHING about the planned positions (the sim never passes it, so the
 ##                   mirror-fairness proof is untouched).
 static func plan_unit_step(model_pos: Array, delta: Vector2, walls: Array, grid: Dictionary = {},
-		allow_contact: bool = false, board_in: float = 48.0, trails: Array = []) -> Array:
+		allow_contact: bool = false, board_in: float = 48.0, trails: Array = [], opts: Dictionary = {}) -> Array:
 	var allowance := delta.length()
 	if allowance < EPS or model_pos.is_empty():
 		return model_pos.duplicate()
-	# Fast path: no wall in the way → the exact rigid slide (keeps open-field play identical).
-	if not rigid_blocked(model_pos, delta, walls):
+	# Fast path: nothing in the way → the exact rigid slide (keeps open-field play identical).
+	if not rigid_blocked(model_pos, delta, walls, opts):
 		var out: Array = []
 		for m in model_pos:
 			out.append((m as Vector2) + delta)
 		_record_trail_pair(trails, model_pos, out)
 		return out
-	# Steer each model to its rigid target, sliding around walls.
+	# Steer each model to its rigid target, sliding around obstacles.
 	var targets: Array = []
 	for m in model_pos:
 		targets.append((m as Vector2) + delta)
-	var result := _steer(model_pos, targets, allowance, walls, board_in, trails)
-	# Boxed in? The anchor barely progressed and the direct route is walled → A* corridor rescue.
+	var result := _steer(model_pos, targets, allowance, walls, board_in, trails, opts)
+	# Boxed in? The anchor barely progressed and the direct route is blocked → A* corridor rescue.
 	var anchor := _centroid(model_pos)
 	var goal := anchor + delta
-	if _unit_stuck(model_pos, result, delta) and path_crosses_wall(anchor, goal, walls):
-		var corridor := astar_corridor(anchor, goal, walls, grid, board_in)
+	if _unit_stuck(model_pos, result, delta) and step_blocked(anchor, goal, walls, opts):
+		var corridor := astar_corridor(anchor, goal, walls, grid, board_in, opts)
 		if not corridor.is_empty():
-			# Aim at the farthest corridor waypoint reachable in a straight (wall-free) line — string-pulling.
+			# Aim at the farthest corridor waypoint reachable in a straight (unblocked) line — string-pulling.
 			var aim: Vector2 = corridor[0]
 			for w in corridor:
-				if path_crosses_wall(anchor, w as Vector2, walls):
+				if step_blocked(anchor, w as Vector2, walls, opts):
 					break
 				aim = w
 			var wdelta := aim - anchor
@@ -229,8 +371,8 @@ static func plan_unit_step(model_pos: Array, delta: Vector2, walls: Array, grid:
 			for m in model_pos:
 				wtargets.append((m as Vector2) + wdelta)
 			trails.clear()   # the rescue replaces the stuck first attempt — its trail too
-			result = _steer(model_pos, wtargets, allowance, walls, board_in, trails)
-	var eased := _enforce_coherency(result, walls, board_in)
+			result = _steer(model_pos, wtargets, allowance, walls, board_in, trails, opts)
+	var eased := _enforce_coherency(result, walls, board_in, opts)
 	_append_trail_finals(trails, eased)
 	return eased
 
@@ -259,7 +401,8 @@ static func _append_trail_finals(trails: Array, finals: Array) -> void:
 ## One reachable substep from `p` toward `target`: try straight, then a widening deflection fan, and take
 ## the candidate that lands closest to the target without crossing a wall or leaving the board. Returns `p`
 ## unchanged when every direction is blocked (a stuck model — feeds the A* trigger).
-static func _advance_model(p: Vector2, target: Vector2, step_cap: float, walls: Array, board_in: float) -> Vector2:
+static func _advance_model(p: Vector2, target: Vector2, step_cap: float, walls: Array, board_in: float,
+		opts: Dictionary = {}) -> Vector2:
 	var to_t := target - p
 	var d := to_t.length()
 	if d < EPS or step_cap < EPS:
@@ -273,7 +416,7 @@ static func _advance_model(p: Vector2, target: Vector2, step_cap: float, walls: 
 		var c := p + s
 		if c.x < -EPS or c.x > board_in + EPS or c.y < -EPS or c.y > board_in + EPS:
 			continue
-		if path_crosses_wall(p, c, walls):
+		if step_blocked(p, c, walls, opts):
 			continue
 		var dd := c.distance_to(target)
 		if dd < best_d - EPS:
@@ -293,7 +436,7 @@ static func _advance_model(p: Vector2, target: Vector2, step_cap: float, walls: 
 ## `trails` (optional out): one waypoint list per model, recording each substep position — observation
 ## only, never feeds back into the steering.
 static func _steer(model_pos: Array, targets: Array, allowance: float, walls: Array, board_in: float,
-		trails: Array = []) -> Array:
+		trails: Array = [], opts: Dictionary = {}) -> Array:
 	var n := model_pos.size()
 	var result := model_pos.duplicate()
 	var budget: Array = []
@@ -309,7 +452,7 @@ static func _steer(model_pos: Array, targets: Array, allowance: float, walls: Ar
 		for i in range(n):
 			if budget[i] <= EPS:
 				continue
-			var np := _advance_model(result[i], targets[i], minf(STEP_IN, budget[i]), walls, board_in)
+			var np := _advance_model(result[i], targets[i], minf(STEP_IN, budget[i]), walls, board_in, opts)
 			var moved: float = (result[i] as Vector2).distance_to(np)
 			if moved > EPS:
 				result[i] = np
@@ -335,7 +478,7 @@ static func _unit_stuck(before: Array, after: Array, delta: Vector2) -> bool:
 ## Restore coherency after sliding: pull models that fell out of the main 1"-chain (or beyond the 9" spread)
 ## toward the centroid in small wall-checked steps. Monotonic (only ever moves models closer together) so it
 ## can never cross a wall or worsen coherency. Best-effort — bounded by COH_PASSES × COH_PULL_IN.
-static func _enforce_coherency(result: Array, walls: Array, board_in: float) -> Array:
+static func _enforce_coherency(result: Array, walls: Array, board_in: float, opts: Dictionary = {}) -> Array:
 	var out := result.duplicate()
 	if out.size() <= 1:
 		return out
@@ -352,7 +495,9 @@ static func _enforce_coherency(result: Array, walls: Array, board_in: float) -> 
 			var cand: Vector2 = (out[i] as Vector2) + to_c / d * minf(COH_PULL_IN, d)
 			if cand.x < -EPS or cand.x > board_in + EPS or cand.y < -EPS or cand.y > board_in + EPS:
 				continue
-			if not path_crosses_wall(out[i], cand, walls):
+			# The pull must respect the same obstacles as the steering (a coherency correction may not
+			# clip a wall or drag a model into an enemy 1" zone).
+			if not step_blocked(out[i], cand, walls, opts):
 				out[i] = cand
 	return out
 
@@ -390,12 +535,13 @@ static func _cell_center(cell: Vector2i) -> Vector2:
 	return Vector2((float(cell.x) + 0.5) * TerrainRules.CELL_IN, (float(cell.y) + 0.5) * TerrainRules.CELL_IN)
 
 
-## A* from `start` to `goal` on the 3" grid, 4-connected. An edge between adjacent cells is blocked when the
-## centre-to-centre segment crosses a wall; a cell is blocked when it is off-board or Impassable (CONTAINER).
-## Returns the corridor as cell-CENTRE points AFTER the start cell (empty if none / already there). The wall
+## A* from `start` to `goal` on the 3" grid, 4-connected. An edge between adjacent cells is blocked when
+## the centre-to-centre segment is blocked (wall crossing; with `opts` also base-clearance shaves and
+## no-go zones); a cell is blocked when it is off-board, Impassable (CONTAINER) or in opts.avoid_cells.
+## Returns the corridor as cell-CENTRE points AFTER the start cell (empty if none / already there). The
 ## barrier the steering hit is thereby routed around. Bounded by the board so it always terminates.
 static func astar_corridor(start: Vector2, goal: Vector2, walls: Array, grid: Dictionary = {},
-		board_in: float = 48.0) -> Array:
+		board_in: float = 48.0, opts: Dictionary = {}) -> Array:
 	var start_cell := TerrainRules.cell_of(start)
 	var goal_cell := TerrainRules.cell_of(goal)
 	if start_cell == goal_cell:
@@ -428,8 +574,10 @@ static func astar_corridor(start: Vector2, goal: Vector2, walls: Array, grid: Di
 				continue
 			if TerrainRules.is_impassable(int(grid.get(nb, TerrainRules.TerrainType.NONE))):
 				continue
-			if path_crosses_wall(cc, _cell_center(nb), walls):
-				continue   # a wall sits on this cell edge → not traversable
+			if (opts.get("avoid_cells", {}) as Dictionary).has(nb):
+				continue   # a cell the route must go AROUND (difficult terrain — solo overlay p.57)
+			if step_blocked(cc, _cell_center(nb), walls, opts):
+				continue   # a wall / zone sits on this cell edge → not traversable
 			var tentative: float = float(g_score[current]) + TerrainRules.CELL_IN
 			if not g_score.has(nb) or tentative < float(g_score[nb]):
 				came_from[nb] = current

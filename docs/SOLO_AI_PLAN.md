@@ -230,6 +230,19 @@ seams). Wired:
   Aircraft, Limited, Takedown snipe damage, army-specific non-core rules. Tests: 6 new `AiCombatMath`
   cases (incl. the Counter-Impact rulebook example), an `AiShooting` counter-facet case, 2
   `SoloController` cases (forces_hold, has_counter); full suite green.
+- **Final package — rule-true, glass-clear AI movement (2026-07-10)**: the maintainer's five field
+  guarantees (see [`SOLO_AI_RULES_COVERAGE.md`](SOLO_AI_RULES_COVERAGE.md) §Final package): base-width
+  swept corridors with outer-edge lines + a distance label (`actual" / budget"`), base-inflated no-clip
+  planning (walls + difficult/impassable cells routed around; the difficult-terrain ×0.5 halving replaced
+  by the correct 6" cap off the ACTUAL route — GF v3.5.1 p.11), polyline distance-truth trimming (p.7),
+  glide-only movement (fast-forward accelerates instead of skipping), and 1" unit-spacing zones for ALL
+  other units — friendly included — with the charge exception scoped to the charge TARGET only
+  (body-contact obstacle, never pass-through) + the automatic 1" post-melee charger separation (p.7/p.9).
+  Base sizes come from the shared `SeparationChecker` module (feat/proximity-hint, taken verbatim). All
+  planner extensions are opt-in (`MovementPlanner` opts) — the SIM passes none, so the fairness oracle
+  stays byte-identical. Tests: 10 planner geometry cases (clearance/zones/avoid-cells/escape/trim/
+  arc-budget/charge-vs-friendly) + a shared-fallback radius case + the module's own 26-case suite; full
+  suite green.
 
 ## P2 — the in-game auto-game (shipped): alternating activation, auto-seize, scoring
 

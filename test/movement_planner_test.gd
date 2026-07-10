@@ -166,3 +166,115 @@ func test_trails_record_the_route_without_changing_the_plan() -> void:
 		assert_bool(t.size() >= 2).is_true()
 		assert_that(t.front()).is_equal(pos[i])
 		assert_float((t.back() as Vector2).distance_to(traced[i])).is_less(0.001)
+
+
+# === Base-aware obstacles (opts: clearance / zones / avoid_cells) + distance truth (final package) ===
+
+func test_step_blocked_clearance_inflates_walls() -> void:
+	# Wall along y=20 (x 10..20). A step ending 0.5" above it: fine for a point model, a clip for a
+	# 1"-radius base (GF v3.5.1 p.7 — the base's outer edge may not shave the wall).
+	var walls := [[Vector2(10, 20), Vector2(20, 20)]]
+	assert_bool(MovementPlanner.step_blocked(Vector2(15, 21.5), Vector2(15, 20.5), walls, {})).is_false()
+	assert_bool(MovementPlanner.step_blocked(Vector2(15, 21.5), Vector2(15, 20.5), walls, {"clearance": 1.0})).is_true()
+	# A step staying 1.5" away is legal even with the 1" clearance.
+	assert_bool(MovementPlanner.step_blocked(Vector2(15, 22.5), Vector2(15, 21.5), walls, {"clearance": 1.0})).is_false()
+
+
+func test_step_blocked_clearance_allows_escape_from_inside_band() -> void:
+	# A model already standing 0.3" from the wall (legacy state) may step AWAY but not closer.
+	var walls := [[Vector2(10, 20), Vector2(20, 20)]]
+	var opts := {"clearance": 1.0}
+	assert_bool(MovementPlanner.step_blocked(Vector2(15, 20.3), Vector2(15, 20.8), walls, opts)).is_false()
+	assert_bool(MovementPlanner.step_blocked(Vector2(15, 20.3), Vector2(15, 20.1), walls, opts)).is_true()
+
+
+func test_step_blocked_zone_end_pass_and_escape() -> void:
+	# Enemy no-go circle at (20,20), r=3 (GF v3.5.1 p.7: never within 1" of models from other units — inflated).
+	var opts := {"zones": [{"c": Vector2(20, 20), "r": 3.0}]}
+	# Ending inside the zone is blocked; staying clear is free.
+	assert_bool(MovementPlanner.step_blocked(Vector2(15, 20), Vector2(19, 20), [], opts)).is_true()
+	assert_bool(MovementPlanner.step_blocked(Vector2(15, 20), Vector2(16, 20), [], opts)).is_false()
+	# Passing THROUGH the zone (both endpoints outside) is blocked too.
+	assert_bool(MovementPlanner.step_blocked(Vector2(15, 20), Vector2(25, 20), [], opts)).is_true()
+	# A model already inside (post-melee state) may move OUT but not deeper in.
+	assert_bool(MovementPlanner.step_blocked(Vector2(19, 20), Vector2(17.5, 20), [], opts)).is_false()
+	assert_bool(MovementPlanner.step_blocked(Vector2(19, 20), Vector2(19.5, 20), [], opts)).is_true()
+
+
+func test_step_blocked_avoid_cells_with_escape() -> void:
+	# Cell (5,5) spans x/y 15..18 (3" grid). Entering it is blocked; a model already inside may leave.
+	var opts := {"avoid_cells": {Vector2i(5, 5): true}}
+	assert_bool(MovementPlanner.step_blocked(Vector2(13.0, 16.5), Vector2(16.0, 16.5), [], opts)).is_true()
+	assert_bool(MovementPlanner.step_blocked(Vector2(16.0, 16.5), Vector2(13.0, 16.5), [], opts)).is_false()
+	assert_bool(MovementPlanner.step_blocked(Vector2(13.0, 16.5), Vector2(14.0, 16.5), [], opts)).is_false()
+
+
+func test_plan_unit_step_never_ends_inside_a_zone() -> void:
+	# One model heading straight at an enemy: the planned end must stay OUTSIDE the 1"-spacing zone
+	# (r=3 here), and the recorded trail must never dip into it.
+	var opts := {"zones": [{"c": Vector2(20, 20), "r": 3.0}]}
+	var trails: Array = []
+	var out := MovementPlanner.plan_unit_step([Vector2(10, 20)], Vector2(10, 0), [], {}, false, 48.0, trails, opts)
+	assert_float((out[0] as Vector2).distance_to(Vector2(20, 20))).is_greater_equal(3.0 - 0.01)
+	for leg_i in range(1, (trails[0] as Array).size()):
+		var a: Vector2 = (trails[0] as Array)[leg_i - 1]
+		var b: Vector2 = (trails[0] as Array)[leg_i]
+		assert_float(MovementPlanner.point_seg_distance(Vector2(20, 20), a, b)).is_greater_equal(3.0 - 0.01)
+
+
+func test_plan_unit_step_no_zones_moves_straight() -> void:
+	# A board with no other units yields no zones — the pure module moves the model straight to its goal
+	# (the charge call site builds body-only target zones; with nothing around, nothing deflects).
+	var out := MovementPlanner.plan_unit_step([Vector2(10, 20)], Vector2(10, 0), [], {}, true, 48.0, [], {"clearance": 0.5})
+	assert_float((out[0] as Vector2).distance_to(Vector2(20, 20))).is_less(0.01)
+
+
+func test_plan_unit_step_charge_contacts_target_and_respects_friendly_zone() -> void:
+	# Amendment ruling (GF/AoF v3.5.1 p.7): on a Charge the TARGET's model is a body-only obstacle (both
+	# base radii, no 1" buffer) — the charge ends at base contact but never passes THROUGH — while every
+	# OTHER unit (here a friendly bystander) keeps its full 1" zone the path must route around.
+	var target_body := {"c": Vector2(20, 20), "r": 1.0}       # 0.5" + 0.5" bases, no buffer
+	var friendly_full := {"c": Vector2(15, 21.5), "r": 2.0}   # 0.5" + 1" + 0.5"
+	var opts := {"zones": [target_body, friendly_full]}
+	var trails: Array = []
+	var out := MovementPlanner.plan_unit_step([Vector2(10, 20)], Vector2(9.5, 0), [], {}, true, 48.0, trails, opts)
+	var endp := out[0] as Vector2
+	# Never inside the target's body; close enough for the 2" melee gate (base contact at ~1").
+	assert_float(endp.distance_to(Vector2(20, 20))).is_greater_equal(1.0 - 0.01)
+	assert_float(endp.distance_to(Vector2(20, 20))).is_less_equal(2.0)
+	# The friendly bystander's 1" zone was never clipped along the whole route.
+	var leg: Array = trails[0]
+	for i in range(1, leg.size()):
+		assert_float(MovementPlanner.point_seg_distance(Vector2(15, 21.5), leg[i - 1], leg[i])).is_greater_equal(2.0 - 0.01)
+
+
+func test_plan_trails_arc_length_never_exceeds_allowance() -> void:
+	# A wall forces a detour; the actual steered polyline still spends at most the 8" allowance.
+	var walls := [[Vector2(15, 15), Vector2(15, 25)]]
+	var trails: Array = []
+	MovementPlanner.plan_unit_step([Vector2(10, 20)], Vector2(8, 0), walls, {}, false, 48.0, trails)
+	assert_float(MovementPlanner.polyline_length(trails[0] as Array)).is_less_equal(8.0 + 0.05)
+
+
+func test_polyline_length_and_trim() -> void:
+	var line: Array = [Vector2(0, 0), Vector2(3, 0), Vector2(3, 4)]
+	assert_float(MovementPlanner.polyline_length(line)).is_equal_approx(7.0, 0.0001)
+	# Trim to 5": the final leg is cut exactly 2" in → (3, 2); arc becomes 5.
+	var cut := MovementPlanner.trim_polyline(line, 5.0)
+	assert_float(MovementPlanner.polyline_length(cut)).is_equal_approx(5.0, 0.0001)
+	assert_float((cut.back() as Vector2).distance_to(Vector2(3, 2))).is_less(0.0001)
+	# A polyline within budget is returned whole; Vector3 points work the same (the world-trail form).
+	assert_int(MovementPlanner.trim_polyline(line, 10.0).size()).is_equal(3)
+	var world: Array = [Vector3(0, 0.01, 0), Vector3(0.3, 0.01, 0), Vector3(0.3, 0.01, 0.4)]
+	assert_float(MovementPlanner.polyline_length(world)).is_equal_approx(0.7, 0.0001)
+	var wcut := MovementPlanner.trim_polyline(world, 0.5)
+	assert_float(MovementPlanner.polyline_length(wcut)).is_equal_approx(0.5, 0.0001)
+
+
+func test_default_opts_keep_legacy_wall_behaviour() -> void:
+	# step_blocked with {} equals path_crosses_wall — the sim's byte-identical guarantee.
+	var walls := [[Vector2(10, 20), Vector2(20, 20)]]
+	assert_bool(MovementPlanner.step_blocked(Vector2(15, 19), Vector2(15, 21), walls, {})).is_true()
+	assert_bool(MovementPlanner.step_blocked(Vector2(15, 20.2), Vector2(15, 21), walls, {})).is_false()
+	assert_bool(MovementPlanner.rigid_blocked([Vector2(15, 19)], Vector2(0, 2), walls)).is_true()
+	assert_bool(MovementPlanner.rigid_blocked([Vector2(5, 19)], Vector2(0, 2), walls)).is_false()

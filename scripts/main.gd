@@ -1915,13 +1915,19 @@ func _solo_show_outcome(text: String) -> void:
 		_solo_toast.visible = false
 
 
-## EXECUTE phase for movement: replay the models along their REAL planner routes at a readable speed
-## (they were already placed at their finals + broadcast — this is a local visual replay), drawing a
-## fading trail ribbon per model so the route stays readable for a beat.
+## EXECUTE phase for movement: the models GLIDE along their REAL planner routes (never teleport — the
+## maintainer's followability guarantee; fast-forward accelerates the glide by 1/PACE_FAST_SCALE instead
+## of skipping it). State was already applied + broadcast — this is a local visual replay. Each model
+## drags a base-width swept CORRIDOR (its outer base edges along the path), and one label states the
+## longest actual path length against the granted budget ("9.4\" / 12\"") — the distance truth made
+## visible (GF v3.5.1 p.7).
 func _solo_animate_move(move_paths: Array) -> void:
-	if move_paths.is_empty() or _solo_fast:
-		return   # fast-forward: keep the teleport
+	if move_paths.is_empty():
+		return
+	var speed: float = SoloController.PACE_MOVE_SPEED_M_S / (SoloController.PACE_FAST_SCALE if _solo_fast else 1.0)
 	var longest := 0.0
+	var longest_path: Array = []
+	var longest_len := 0.0
 	var tweens: Array = []
 	for entry in move_paths:
 		var model := (entry as Dictionary).get("model") as ModelInstance
@@ -1930,7 +1936,11 @@ func _solo_animate_move(move_paths: Array) -> void:
 			continue
 		var node := model.node
 		var y := node.global_position.y
-		_solo_spawn_move_trail(path, y)
+		_solo_spawn_move_corridor(path, y, float((entry as Dictionary).get("radius_m", 0.0125)))
+		var arc: float = MovementPlanner.polyline_length(path)
+		if arc > longest_len:
+			longest_len = arc
+			longest_path = path
 		node.global_position = Vector3((path[0] as Vector3).x, y, (path[0] as Vector3).z)
 		var tw := node.create_tween()
 		var total := 0.0
@@ -1940,11 +1950,14 @@ func _solo_animate_move(move_paths: Array) -> void:
 			var leg := Vector2(b.x - a.x, b.z - a.z).length()
 			if leg <= 0.0001:
 				continue
-			var dur := leg / SoloController.PACE_MOVE_SPEED_M_S
+			var dur := leg / speed
 			tw.tween_property(node, "global_position", Vector3(b.x, y, b.z), dur)
 			total += dur
 		longest = maxf(longest, total)
 		tweens.append(tw)
+	# Distance-truth label: longest actual arc vs the granted budget, at that corridor's midpoint.
+	if not longest_path.is_empty() and solo_controller != null:
+		_solo_spawn_move_label(longest_path, longest_len, solo_controller.last_move_budget_in)
 	if longest > 0.0:
 		await get_tree().create_timer(longest).timeout
 	for t in tweens:
@@ -1959,26 +1972,120 @@ func _solo_animate_move(move_paths: Array) -> void:
 			model.node.global_position = Vector3(fin.x, model.node.global_position.y, fin.z)
 
 
-## A thin unshaded ribbon along one model's route; fades out over PACE_TRAIL_FADE_S, then frees itself.
-func _solo_spawn_move_trail(path: Array, y: float) -> void:
-	if path.size() < 2:
+## Height offsets keeping the corridor visuals just above the table without z-fighting (metres).
+const SOLO_CORRIDOR_Y_M := 0.012
+const SOLO_CORRIDOR_EDGE_Y_M := 0.015
+## Semicircle end-cap resolution (segments per 180°).
+const SOLO_CORRIDOR_CAP_SEGS := 8
+## Corner-miter width clamp — bounds the spike a hairpin corner can produce (floor of the 1/dot widen).
+const SOLO_CORRIDOR_MITER_MIN := 0.35
+
+
+## The base-width swept corridor for one model's route (the maintainer's guarantee: the base's OUTER
+## EDGES dragged along the path — where the corridor is, the base physically travelled). One mesh, five
+## surfaces: a translucent stadium fill (band + two semicircle end caps) and two brighter edge lines at
+## ±radius. Fades out over PACE_TRAIL_FADE_S, then frees itself.
+func _solo_spawn_move_corridor(path: Array, y: float, radius_m: float) -> void:
+	# Deduplicate near-identical waypoints (zero legs break the perpendicular math).
+	var pts: Array = []
+	for wp in path:
+		var v := Vector2((wp as Vector3).x, (wp as Vector3).z)
+		if pts.is_empty() or (pts.back() as Vector2).distance_to(v) > 0.0008:
+			pts.append(v)
+	if pts.size() < 2 or radius_m <= 0.0:
 		return
-	var line := MeshInstance3D.new()
-	line.mesh = ImmediateMesh.new()
+	# Per-waypoint mitred left/right offsets: the averaged perpendicular of adjacent legs, widened by
+	# 1/dot (clamped) so the corridor keeps its base width through corners.
+	var lefts: Array = []
+	var rights: Array = []
+	for i in range(pts.size()):
+		var dir_in: Vector2 = ((pts[i] as Vector2) - (pts[i - 1] as Vector2)).normalized() if i > 0 else Vector2.ZERO
+		var dir_out: Vector2 = ((pts[i + 1] as Vector2) - (pts[i] as Vector2)).normalized() if i < pts.size() - 1 else Vector2.ZERO
+		var blend := dir_in + dir_out
+		var dir := blend.normalized() if blend.length() > 0.0001 else (dir_in if dir_in != Vector2.ZERO else dir_out)
+		var perp := Vector2(-dir.y, dir.x)
+		var seg_dir := dir_out if dir_out != Vector2.ZERO else dir_in
+		var seg_perp := Vector2(-seg_dir.y, seg_dir.x)
+		var widen: float = 1.0 / maxf(SOLO_CORRIDOR_MITER_MIN, absf(perp.dot(seg_perp)))
+		lefts.append((pts[i] as Vector2) + perp * radius_m * widen)
+		rights.append((pts[i] as Vector2) - perp * radius_m * widen)
+	var body := MeshInstance3D.new()
+	body.mesh = ImmediateMesh.new()
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = Color(1.0, 0.85, 0.4, 0.7)
+	mat.vertex_color_use_as_albedo = true
+	mat.albedo_color = Color(1, 1, 1, 1)   # tweened to 0 alpha — multiplies the vertex colours
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	line.material_override = mat
-	var im := line.mesh as ImmediateMesh
-	im.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
-	for wp in path:
-		im.surface_add_vertex(Vector3((wp as Vector3).x, y + 0.015, (wp as Vector3).z))
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	body.material_override = mat
+	var im := body.mesh as ImmediateMesh
+	var fill := Color(1.0, 0.85, 0.4, 0.22)
+	var edge := Color(1.0, 0.85, 0.4, 0.85)
+	# Surface 1: the translucent band between the base edges.
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+	for i in range(pts.size()):
+		im.surface_set_color(fill)
+		im.surface_add_vertex(Vector3((lefts[i] as Vector2).x, y + SOLO_CORRIDOR_Y_M, (lefts[i] as Vector2).y))
+		im.surface_set_color(fill)
+		im.surface_add_vertex(Vector3((rights[i] as Vector2).x, y + SOLO_CORRIDOR_Y_M, (rights[i] as Vector2).y))
 	im.surface_end()
-	add_child(line)
-	var tw := line.create_tween()
+	# Surfaces 2+3: semicircle end caps — the stadium shape of a base swept along the path.
+	_solo_corridor_cap(im, pts[0], ((pts[1] as Vector2) - (pts[0] as Vector2)).normalized() * -1.0, radius_m, y, fill)
+	_solo_corridor_cap(im, pts.back(), ((pts.back() as Vector2) - (pts[pts.size() - 2] as Vector2)).normalized(), radius_m, y, fill)
+	# Surfaces 4+5: the two OUTER BASE-EDGE lines — the drawn path the maintainer asked for.
+	for side in [lefts, rights]:
+		im.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
+		for v in side:
+			im.surface_set_color(edge)
+			im.surface_add_vertex(Vector3((v as Vector2).x, y + SOLO_CORRIDOR_EDGE_Y_M, (v as Vector2).y))
+		im.surface_end()
+	add_child(body)
+	var tw := body.create_tween()
 	tw.tween_property(mat, "albedo_color:a", 0.0, SoloController.PACE_TRAIL_FADE_S)
-	tw.tween_callback(line.queue_free)
+	tw.tween_callback(body.queue_free)
+
+
+## One semicircular corridor end cap: a triangle fan around `centre`, opening in `dir` (the outward
+## direction at that end of the path), sweeping half a turn from +perp to −perp.
+func _solo_corridor_cap(im: ImmediateMesh, centre_v: Variant, dir: Vector2, radius_m: float, y: float, fill: Color) -> void:
+	var centre := centre_v as Vector2
+	if dir.length() < 0.0001:
+		return
+	var start := Vector2(-dir.y, dir.x)
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for s in range(SOLO_CORRIDOR_CAP_SEGS):
+		var a0 := float(s) * PI / float(SOLO_CORRIDOR_CAP_SEGS)
+		var a1 := float(s + 1) * PI / float(SOLO_CORRIDOR_CAP_SEGS)
+		var p0 := centre + start.rotated(-a0) * radius_m
+		var p1 := centre + start.rotated(-a1) * radius_m
+		im.surface_set_color(fill)
+		im.surface_add_vertex(Vector3(centre.x, y + SOLO_CORRIDOR_Y_M, centre.y))
+		im.surface_set_color(fill)
+		im.surface_add_vertex(Vector3(p0.x, y + SOLO_CORRIDOR_Y_M, p0.y))
+		im.surface_set_color(fill)
+		im.surface_add_vertex(Vector3(p1.x, y + SOLO_CORRIDOR_Y_M, p1.y))
+	im.surface_end()
+
+
+## The corridor's distance-truth label ("9.4\" / 12\"") at the longest path's midpoint: the actual arc
+## length moved vs the granted budget (band, difficult-capped) — GF v3.5.1 p.7 made visible. Fades with
+## the corridor.
+func _solo_spawn_move_label(path: Array, arc_m: float, budget_in: float) -> void:
+	if path.size() < 2:
+		return
+	var label := Label3D.new()
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.pixel_size = 0.0004
+	label.outline_size = 8
+	label.text = "%.1f\" / %.0f\"" % [arc_m / SoloController.INCHES_TO_METERS, budget_in]
+	label.modulate = Color(1.0, 0.9, 0.5)
+	add_child(label)
+	var mid := path[path.size() >> 1] as Vector3
+	label.global_position = Vector3(mid.x, mid.y + 0.06, mid.z)
+	var tw := label.create_tween()
+	tw.tween_property(label, "modulate:a", 0.0, SoloController.PACE_TRAIL_FADE_S)
+	tw.tween_callback(label.queue_free)
 
 
 ## Once-per-session battle-log note for every combat-relevant special rule the solo automation does NOT
@@ -2076,11 +2183,31 @@ func _run_ai_melee(report: Dictionary) -> void:
 		await _solo_morale_test(target, "You")
 	elif human_score > ai_score and _solo_combined_alive(unit) > 0:
 		await _solo_morale_test(unit, "AI (%s)" % unit.get_name())
+	# — Consolidation (GF v3.5.1 p.9, after morale): neither destroyed → the CHARGER (the AI here) moves
+	#   back 1" to clear the separation — visibly, via the corridor + glide replay. —
+	await _solo_separate_after_melee(unit, target)
 	# OUTCOME: one readable melee summary (toast + hold).
 	await _solo_show_outcome("Melee: %s deals %d — takes %d back — %s loses %d model%s" % [
 		unit.get_name(), ai_caused, human_caused, target.get_name(),
 		target_models_before - _solo_combined_alive(target),
 		("" if target_models_before - _solo_combined_alive(target) == 1 else "s")])
+
+
+## Post-melee separation (GF Advanced Rules v3.5.1 p.9 "Consolidation Moves": "If neither of the units
+## was destroyed, then the charging unit must move back by 1” (if possible), to keep the separation
+## between units clear"). The AI charger backs off through the normal planned-move seam (state applied +
+## broadcast; the corridor + glide replay make it visible); Dangerous crossings on the back-step still
+## test (p.12). No-op when either side was destroyed (the "may move up to 3”" winner consolidation is a
+## MAY and is not automated — flagged in docs/SOLO_AI_RULES_COVERAGE.md).
+func _solo_separate_after_melee(charger: GameUnit, defender: GameUnit) -> void:
+	if solo_controller == null or _solo_combined_alive(charger) <= 0 or _solo_combined_alive(defender) <= 0:
+		return
+	var dang: int = solo_controller.separate_from_melee(charger, solo_controller.unit_centre(defender))
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s moves back 1\" (consolidation — GF v3.5.1 p.9)" % charger.get_name(), true)
+	await _solo_animate_move(solo_controller.last_move_paths)
+	if dang > 0:
+		await _run_ai_dangerous(charger, dang)
 
 
 ## One OPR morale test with a real tray die: >= Quality passes; fail → Shaken, at/below half → Routs
@@ -2475,6 +2602,11 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit) -> void:
 		await _solo_morale_test(target, "AI (%s)" % target.get_name())
 	elif ai_score > human_score and _solo_combined_alive(attacker) > 0:
 		await _solo_morale_test(attacker, "You")
+	# — Consolidation (GF v3.5.1 p.9): the CHARGER must move back 1" — that is YOUR unit here, and the
+	#   solo automation never moves the player's models, so the rule is surfaced as a reminder. —
+	if _solo_combined_alive(attacker) > 0 and _solo_combined_alive(target) > 0 and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"Consolidation: move %s back 1\" (the charger separates — GF v3.5.1 p.9)" % attacker.get_name(), true)
 
 
 ## Mark a unit (and its attached heroes — they fought too) Fatigued after its first melee this round

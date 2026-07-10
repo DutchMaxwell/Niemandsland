@@ -491,3 +491,10 @@ func test_has_counter_from_weapon_or_unit_rule() -> void:
 	assert_bool(SoloController.has_counter(plain_melee, [])).is_false()
 	assert_bool(SoloController.has_counter(plain_melee, ["Counter"])).is_true()
 	assert_bool(SoloController.has_counter([], [])).is_false()
+
+
+func test_model_base_radius_falls_back_without_a_shape() -> void:
+	# A model with no live node yields no SeparationChecker shape → the module's shared 32 mm fallback
+	# (one radius truth between the proximity hint and the AI planner).
+	var m := ModelInstance.new()
+	assert_float(SoloController.model_base_radius_m(m)).is_equal_approx(SeparationChecker.DEFAULT_BASE_RADIUS_M, 0.0001)

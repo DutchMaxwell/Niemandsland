@@ -153,6 +153,50 @@ state), Takedown's snipe-damage facet, Defense(+X) and all army-specific non-cor
 Destructive, Shred, Lacerate's re-roll, faction rules). After Wave 3 no core-PDF rule that is both common
 in the field armies and additive-implementable remains un-automated in the real game.
 
+## Final package — rule-true, glass-clear AI movement (real game, 2026-07-10)
+
+The maintainer's five field-feedback guarantees, each verified against GF Advanced Rules v3.5.1
+(General Movement p.7, difficult terrain p.11, dangerous p.12, consolidation p.9; AoF identical):
+
+1. **Base-width swept corridor** — every AI model's move draws a stadium-shaped corridor exactly one
+   base-width wide (outer base edges as bright lines, translucent fill, semicircle caps), fading after
+   the move (`main._solo_spawn_move_corridor`). Oval bases sweep their circumscribed (long-axis) circle.
+2. **Hard no-clip** — the planner inflates walls by the moving base's radius (+0.1" epsilon) and routes
+   difficult/impassable cells AROUND (solo overlay p.57: AI units "must always move around" difficult
+   terrain) via base-aware `MovementPlanner` opts (clearance / zones / avoid_cells — all opt-in; the SIM
+   passes none and stays byte-identical). **Consistency fix:** difficult terrain is a **6" CAP** on the
+   whole move (p.11: "may not move more than 6” for that movement") — the former ×0.5 halving matched
+   the rule only for a 12" band. The cap now triggers off the ACTUAL planned polyline (goes around at
+   the full band when possible; capped + re-planned through when the destination lies inside), and
+   Dangerous tests count models whose actual route crossed (p.12).
+3. **Distance truth** — budgets come from `movement_range_controller.move_bands_for_props` (single
+   source, incl. Fast/Slow); each model's polyline arc is measured and trimmed to the granted budget
+   (p.7: "no part of their bases move further than the total movement distance"), and a corridor label
+   shows `actual" / budget"`.
+4. **Followable pacing** — models GLIDE along their corridors (teleporting removed); the Fast-AI toggle
+   accelerates the glide by 1/PACE_FAST_SCALE instead of skipping it.
+5. **1" unit separation** — EVERY other unit's models (friendly AND enemy — p.7: "Models may never be
+   within 1” of models from OTHER UNITS, unless they are taking a Charge action, and may never move
+   through other models or units (friendly or enemy), even if they are taking a Charge action") become
+   no-go circles (base radius + 1" + the mover's radius); only the moving unit's own models are exempt.
+   Paths neither cross nor end inside a zone. On a Charge, the exception applies ONLY toward the charge
+   TARGET, whose models become BODY-ONLY obstacles (both radii, no 1" buffer): the charge ends at base
+   contact but can never move THROUGH a model, and all other units keep their full zones.
+   **Post-melee separation** (p.9): "the charging unit must move back by 1” (if possible)" — the AI
+   charger backs off automatically (visible corridor); when the PLAYER charged, the rule is surfaced as
+   a battle-log reminder (the automation never moves the player's models).
+
+**Shared distance module**: the zone radii derive from `scripts/separation_checker.gd`
+(feat/proximity-hint `9f1f1c1`, taken verbatim with its 26-case test suite): `shape_for_model` →
+`bounding_radius()` is the single base-size truth (round exact; oval/rect circumscribed — the planner's
+circle zones are conservative for elongated bases, flagged). API gap noted for the coordinator: none —
+bounding_radius + the constants covered the planner's needs; `edge_distance` itself would only be needed
+for a future non-circular zone shape.
+
+**Flagged, not guessed** (documented gaps): regiments keep the rigid tray slide (not obstacle-planned);
+the winner's OPTIONAL "may move by up to 3”" consolidation (p.9) is not automated; oval/rect bases sweep
+their circumscribed circle in zones and corridors (conservative, never permissive).
+
 ## Real-game visibility of the gaps
 
 The REAL game now mirrors the sim's unknown-rule logging (2026-07-10): the first time a unit acts in solo

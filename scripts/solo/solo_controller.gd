@@ -21,6 +21,24 @@ const MELEE_REACH_IN := 2.0         # OPR "Who Can Strike" (GF Advanced Rules v3
 const BASE_CONTACT_IN := 1.0        # nominal centre-to-centre gap of two standard ~25 mm bases at contact (~1")
 const IN_THE_WAY_IN := 6.0          # OPR: an enemy within 6" of the unit→objective line is "in the way" (p.58)
 const NO_OBJECTIVE := Vector3(INF, INF, INF)   # _nearest_uncontrolled_objective sentinel: no uncontrolled objective
+## Difficult-terrain move cap (GF Advanced Rules v3.5.1 p.11): "If any model in a unit moves in or
+## through difficult terrain at any point of its move, then all models in the unit may not move more
+## than 6” for that movement." — a 6" CAP on the whole move, NOT a halving.
+const DIFFICULT_MOVE_CAP_IN := 6.0
+## Unit spacing (GF/AoF Advanced Rules v3.5.1 p.7 "General Movement": "Models may never be within 1” of
+## models from OTHER UNITS, unless they are taking a Charge action, and may never move through other
+## models or units (friendly or enemy), even if they are taking a Charge action.") — applies to ALL
+## other units, FRIENDLY included; only the moving unit's own models (and its attached heroes) are
+## exempt. Edge-to-edge, so planner zones are inflated by both bases' radii
+## (== SeparationChecker.SEPARATION_DISTANCE_INCHES, the shared distance module).
+const UNIT_SPACING_IN := 1.0
+## Post-melee separation (GF Advanced Rules v3.5.1 p.9 "Consolidation Moves"): "If neither of the units
+## was destroyed, then the charging unit must move back by 1” (if possible), to keep the separation
+## between units clear."
+const MELEE_SEPARATION_IN := 1.0
+## Safety margin added to the moving base's radius when inflating obstacles (inches) — guards float
+## shaving at wall corners; not a rule value.
+const CLEARANCE_EPS_IN := 0.1
 
 var army_manager: OPRArmyManager = null
 var network_manager: Node = null
@@ -38,10 +56,14 @@ var _deploy_blocked_flying: Callable = Callable()
 ## What the last activate_next_ai_unit did: {unit, target, action, can_shoot, dist_in} — main reads it
 ## to resolve shooting (P3) and the charge melee (P4).
 var last_report: Dictionary = {}
-## Per-model routes of the last AI move: Array of {model: ModelInstance, path: Array[Vector3]} (world
-## waypoints, start … final). The presentation layer replays them as animation + fading trail ribbons;
-## purely observational — positions are applied/broadcast before this is read.
+## Per-model routes of the last AI move: Array of {model: ModelInstance, path: Array[Vector3] (world
+## waypoints, start … final), radius_m: float (the model's base radius — the swept-corridor half-width)}.
+## The presentation layer replays them as glide animation + base-width corridors; purely observational —
+## positions are applied/broadcast before this is read.
 var last_move_paths: Array = []
+## Move budget (inches) actually granted to the last AI move (band, difficult-capped when the route
+## entered difficult terrain) — the denominator of the corridor's distance label.
+var last_move_budget_in: float = 0.0
 ## Injected by main: Callable(from: Vector3, to: Vector3) -> bool for terrain line of sight.
 var los_checker: Callable = Callable()
 ## Injected by main (goal 003 P3 — real terrain feeds the shared pure modules):
@@ -292,7 +314,7 @@ func _act(unit: GameUnit) -> Dictionary:
 		AiDecision.Action.CHARGE:
 			# Close toward the enemy (lands on/near contact; the real melee gate confirms reach). Charge is
 			# the one action exempt from steering easing — allow_contact skips the coherency slack.
-			dang = _move_toward(unit, tcentre, rush, true)
+			dang = _move_toward(unit, tcentre, rush, true, target_unit)
 		AiDecision.Action.ADVANCE:
 			if to_obj:
 				dang = _move_toward(unit, goal, minf(advance, goal_dist), false)
@@ -314,10 +336,19 @@ func _act(unit: GameUnit) -> Dictionary:
 ## Rigid move toward `goal_world`, capped at `inches`, table-clamped; Difficult terrain on the straight path
 ## halves it. Loose units steer around walls via MovementPlanner (regiments keep the rigid block slide).
 ## Returns the number of alive models whose path crossed Dangerous terrain (main rolls the real tests).
-func _move_toward(unit: GameUnit, goal_world: Vector3, inches: float, allow_contact: bool) -> int:
+func _move_toward(unit: GameUnit, goal_world: Vector3, inches: float, allow_contact: bool,
+		charge_target: GameUnit = null) -> int:
 	if is_zero_approx(inches):
 		return 0
-	return _execute_move(unit, _clamp_to_bounds(goal_world), inches, allow_contact)
+	return _execute_move(unit, _clamp_to_bounds(goal_world), inches, allow_contact, charge_target)
+
+
+## Post-melee separation move (GF Advanced Rules v3.5.1 p.9 "Consolidation Moves": "If neither of the
+## units was destroyed, then the charging unit must move back by 1” (if possible)"): back the charger
+## straight away from the defender by MELEE_SEPARATION_IN. Returns the Dangerous-crossing model count;
+## publishes last_move_paths so the separation replays as a visible corridor.
+func separate_from_melee(charger: GameUnit, defender_centre: Vector3) -> int:
+	return _move_away(charger, defender_centre, MELEE_SEPARATION_IN)
 
 
 ## Rigid move directly AWAY from `from_world` by `inches` (the shooter "stay at range edge" step), clamped.
@@ -329,40 +360,196 @@ func _move_away(unit: GameUnit, from_world: Vector3, inches: float) -> int:
 	return _execute_move(unit, _clamp_to_bounds(goal), inches, false)
 
 
-## Shared move executor: Difficult-halve, rigid clamp, wall-aware planning (loose units), apply + broadcast,
-## and count Dangerous crossings. Returns that Dangerous-crossing model count. Moves the host's models AND
-## its attached heroes' as ONE formation (a joined hero moves WITH his unit — GF v3.5.1 "Hero"; leaving the
-## hero behind was the maintainer's hero-moved-solo finding, mirrored: the host moved solo too).
-func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: bool) -> int:
+## Shared move executor — rule-true, glass-clear movement:
+##   • Difficult terrain (GF Advanced Rules v3.5.1 p.11: "If any model in a unit moves in or through
+##     difficult terrain at any point of its move, then all models in the unit may not move more than 6”
+##     for that movement."): the planner first tries to go AROUND difficult terrain at the FULL band
+##     (solo overlay p.57: AI units "must always move around it" unless the destination lies inside);
+##     only when the actual planned route still crosses difficult terrain does the 6" CAP apply and the
+##     move is re-planned through it. This replaces the former ×0.5 halving, which matched the rule only
+##     for a 12" band. Strider/Flying are exempt (p.14/p.13, wave 3).
+##   • Distance truth (p.7: "no part of their bases move further than the total movement distance"):
+##     every model's ACTUAL polyline is measured and trimmed to the granted budget — the drawn corridor
+##     length always equals the distance moved.
+##   • Dangerous tests count the models whose actual route crossed dangerous cells (Flying ignores, p.13).
+## Moves the host's models AND its attached heroes' as ONE formation (GF v3.5.1 "Hero"). Publishes
+## last_move_paths ({model, path, radius_m}) + last_move_budget_in for the corridor presentation.
+## Returns the Dangerous-crossing model count (main rolls the real tests).
+func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: bool,
+		charge_target: GameUnit = null) -> int:
 	var models := _moving_models(unit)
 	var positions := _positions_of(models)
 	if positions.is_empty():
 		return 0
-	var centre := unit_centre(unit)
-	# Difficult terrain (GF Advanced Rules v3.5.1 p.11): a move whose straight path crosses it is halved —
-	# unless the unit ignores it: Strider (p.14 "may ignore the effects of difficult terrain when moving")
-	# or Flying (p.13 "ignore terrain effects whilst moving"); the solo overlay (p.57) confirms both treat
-	# difficult terrain as open when choosing where to move.
-	var reach := inches
 	var flying: bool = unit.has_special_rule("Flying")
 	var ignores_difficult: bool = flying or unit.has_special_rule("Strider")
-	if not ignores_difficult and _path_crosses_terrain(centre, goal, TerrainRules.PathCheck.DIFFICULT):
-		reach = inches * 0.5
-	var delta := MoveIntent.plan_unit_move(positions, goal, reach)
-	delta = _clamp_delta_to_bounds(positions, delta)
-	if delta == Vector3.ZERO:
-		return 0
+	var reach := inches
+	# Pass 1: full band, going AROUND difficult terrain — unless the unit ignores it or its destination
+	# lies inside difficult terrain (objective/charge into a forest — the p.57 overlay exceptions).
+	var avoid: bool = not ignores_difficult and not _targets_in_difficult(positions, goal, reach)
 	var trails: Array = []
-	var new_positions := _plan_positions(unit, positions, delta, allow_contact, trails)
+	var new_positions := _plan_move(unit, models, positions, goal, reach, allow_contact, avoid, trails, charge_target)
+	if not ignores_difficult and _trails_cross_difficult(trails):
+		# The actual route enters difficult terrain → the 6" cap applies (p.11); re-plan through it so the
+		# budget math and the drawn corridor agree.
+		reach = minf(inches, DIFFICULT_MOVE_CAP_IN)
+		trails = []
+		new_positions = _plan_move(unit, models, positions, goal, reach, allow_contact, false, trails, charge_target)
+	# Distance truth (p.7): no model's polyline may exceed the granted budget — the coherency easing is
+	# best-effort and may not stretch a route past its legal length.
+	var budget_m := reach * INCHES_TO_METERS
+	for i in range(mini(trails.size(), new_positions.size())):
+		var t := trails[i] as Array
+		if MovementPlanner.polyline_length(t) > budget_m + 0.0005:
+			var cut := MovementPlanner.trim_polyline(t, budget_m)
+			trails[i] = cut
+			if not cut.is_empty():
+				var fin := cut.back() as Vector3
+				new_positions[i] = Vector3(fin.x, (new_positions[i] as Vector3).y, fin.z)
+	# Nothing actually moved (clamped to zero) → keep the old early-out (no state write, no broadcast).
+	var moved := false
+	for i in range(mini(positions.size(), new_positions.size())):
+		if ((new_positions[i] as Vector3) - (positions[i] as Vector3)).length() > 0.0005:
+			moved = true
+			break
+	if not moved:
+		last_move_paths = []
+		return 0
 	# Flying ignores terrain effects whilst moving (p.13) — no Dangerous tests for its crossings.
-	var dang := 0 if flying else _count_dangerous(positions, new_positions)
+	var dang := 0 if flying else _count_dangerous_trails(trails)
 	_apply_model_positions(models, new_positions)
-	# Publish the per-model routes for the presentation layer (animate + trail ribbons) — the STATE is
-	# already final (applied + broadcast above); the animation is a local visual replay.
+	# Publish the per-model routes + base radii for the presentation layer (glide + swept corridor +
+	# distance label) — the STATE is already final (applied + broadcast above); the replay is local.
+	last_move_budget_in = reach
+	var radii := _model_radius_map(models)
 	last_move_paths = []
 	for i in range(mini(models.size(), trails.size())):
-		last_move_paths.append({"model": models[i], "path": trails[i]})
+		last_move_paths.append({"model": models[i], "path": trails[i],
+			"radius_m": float(radii.get(models[i], SeparationChecker.DEFAULT_BASE_RADIUS_M))})
 	return dang
+
+
+## One planning pass: rigid clamp to the table, then obstacle-aware per-model planning. Returns the new
+## positions; `trails` receives one world polyline per model.
+func _plan_move(unit: GameUnit, models: Array, positions: Array, goal: Vector3, reach_in: float,
+		allow_contact: bool, avoid_difficult: bool, trails: Array, charge_target: GameUnit) -> Array:
+	var delta := MoveIntent.plan_unit_move(positions, goal, reach_in)
+	delta = _clamp_delta_to_bounds(positions, delta)
+	if delta == Vector3.ZERO:
+		_fill_straight_trails(trails, positions, positions)
+		return positions.duplicate()
+	return _plan_positions(unit, models, positions, delta, allow_contact, trails, avoid_difficult, charge_target)
+
+
+## Would the rigid move's per-model TARGETS land inside difficult terrain? (Objective or charge target
+## inside a forest — then going around is impossible and the 6" cap path is taken directly.)
+func _targets_in_difficult(positions: Array, goal: Vector3, reach_in: float) -> bool:
+	if not terrain_type_at.is_valid():
+		return false
+	var delta := _clamp_delta_to_bounds(positions, MoveIntent.plan_unit_move(positions, goal, reach_in))
+	for p in positions:
+		if TerrainRules.is_difficult(int(terrain_type_at.call((p as Vector3) + delta))):
+			return true
+	return false
+
+
+## Whether any model's ACTUAL planned route crosses difficult terrain (the p.11 cap trigger — checked on
+## the real polyline, not the straight line, so the budget math always matches the drawn corridor).
+func _trails_cross_difficult(trails: Array) -> bool:
+	for t in trails:
+		var leg := t as Array
+		for i in range(1, leg.size()):
+			if _path_crosses_terrain(leg[i - 1], leg[i], TerrainRules.PathCheck.DIFFICULT):
+				return true
+	return false
+
+
+## A model's base bounding radius (metres) via the SHARED distance module (one radius truth:
+## SeparationChecker.shape_for_model — round exact, oval/rect circumscribed), with the module's 32 mm
+## fallback when the shape cannot be built.
+static func model_base_radius_m(model: ModelInstance) -> float:
+	var shape := SeparationChecker.shape_for_model(model)
+	if shape == null:
+		return SeparationChecker.DEFAULT_BASE_RADIUS_M
+	return shape.bounding_radius()
+
+
+## The largest base radius among the moving models (unit + attached heroes) — the planner clearance.
+func _move_base_radius_m(models: Array) -> float:
+	var r := SeparationChecker.DEFAULT_BASE_RADIUS_M
+	for m in models:
+		r = maxf(r, model_base_radius_m(m as ModelInstance))
+	return r
+
+
+## Per-model base radius (metres) keyed by ModelInstance — each corridor is exactly one base-width wide.
+func _model_radius_map(models: Array) -> Dictionary:
+	var map := {}
+	for m in models:
+		map[m] = model_base_radius_m(m as ModelInstance)
+	return map
+
+
+## Unit-spacing no-go zones for an AI move (GF/AoF v3.5.1 p.7 — see UNIT_SPACING_IN): one circle per
+## alive model of EVERY other unit, friendly or enemy (only the moving unit + its attached heroes are
+## exempt), radius = that base's bounding radius + 1" + the mover's radius (world metres; the caller
+## converts to the planner's inch frame). On a Charge, `charge_target` (and its attached heroes) instead
+## get BODY-ONLY zones (both radii, no 1" buffer): the charge may end at base contact with its target
+## but may never move THROUGH it — and every other unit keeps its full 1" zone (the amendment ruling:
+## the Charge exception applies only toward the charge target). Radii come from the shared
+## SeparationChecker shapes (circles: exact for round bases, circumscribed for oval/rect trays).
+func _spacing_zones_world(unit: GameUnit, own_radius_m: float, charge_target: GameUnit) -> Array:
+	var zones: Array = []
+	if army_manager == null:
+		return zones
+	var own := {}
+	var own_members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		own_members = own_members + unit.get_attached_heroes()
+	for m in own_members:
+		if m != null:
+			own[m] = true
+	var target_members := {}
+	if charge_target != null:
+		target_members[charge_target] = true
+		if charge_target.has_method("get_attached_heroes"):
+			for h in charge_target.get_attached_heroes():
+				if h != null:
+					target_members[h] = true
+	for g in army_manager.get_all_game_units():
+		var gu := g as GameUnit
+		if gu == null or own.has(gu):
+			continue
+		var buffer_m: float = 0.0 if target_members.has(gu) else UNIT_SPACING_IN * INCHES_TO_METERS
+		for model in gu.get_alive_models():
+			var shape := SeparationChecker.shape_for_model(model as ModelInstance)
+			if shape == null:
+				continue
+			zones.append({"c": shape.center, "r": shape.bounding_radius() + buffer_m + own_radius_m})
+	return zones
+
+
+## Sample the REAL overlay into the planner's typed 3" cell grid (inch frame). Returns
+## {"grid": {Vector2i: TerrainType}, "avoid": {Vector2i: true}} — Impassable cells are always avoided;
+## Difficult cells only when the route should go around them (solo overlay p.57).
+func _terrain_grid_in(board_in: float, off: Vector2, avoid_difficult: bool) -> Dictionary:
+	var grid := {}
+	var avoid := {}
+	if not terrain_type_at.is_valid():
+		return {"grid": grid, "avoid": avoid}
+	var n := maxi(1, int(ceil(board_in / TerrainRules.CELL_IN)))
+	for cy in range(n):
+		for cx in range(n):
+			var centre_in := Vector2((float(cx) + 0.5) * TerrainRules.CELL_IN, (float(cy) + 0.5) * TerrainRules.CELL_IN)
+			var world := centre_in * INCHES_TO_METERS - off
+			var t: int = int(terrain_type_at.call(Vector3(world.x, 0.0, world.y)))
+			if t == TerrainRules.TerrainType.NONE:
+				continue
+			var cell := Vector2i(cx, cy)
+			grid[cell] = t
+			if TerrainRules.is_impassable(t) or (avoid_difficult and TerrainRules.is_difficult(t)):
+				avoid[cell] = true
+	return {"grid": grid, "avoid": avoid}
 
 
 ## The models an AI move displaces: the unit's own alive models PLUS its attached heroes' (one unit,
@@ -420,23 +607,25 @@ func _apply_model_positions(models: Array, new_positions: Array) -> void:
 		network_manager.broadcast_move_batch(batch)
 
 
-## Plan the per-model destination positions for a move by rigid `delta`. Fast path (no walls, a regiment, or
-## no wall in the path) = the exact rigid slide (byte-identical to the old block move). A LOOSE unit whose
-## rigid path crosses a wall steers each model around it in coherency via the shared MovementPlanner (run in
-## the planner's 0-origin inch frame, then mapped back to world metres). `world_trails` (optional out): one
-## WORLD-space waypoint list (Array[Vector3], start … final) per model — the real route each model takes,
-## for the presentation layer to animate (a rigid slide is a single straight leg).
-func _plan_positions(unit: GameUnit, positions: Array, delta: Vector3, allow_contact: bool,
-		world_trails: Array = []) -> Array:
+## Plan the per-model destination positions for a move by rigid `delta`. A regiment keeps the rigid tray
+## slide (documented gap: its block is not obstacle-planned). A LOOSE unit plans base-aware: walls are
+## inflated by the moving base's radius (no clipping, no edge-shaving), every OTHER unit's models —
+## friendly or enemy — carry a 1" no-go zone (GF/AoF v3.5.1 p.7; on a Charge the target's models are
+## body-only so the charge ends at base contact but never passes through, and all other units keep the
+## full zone), and difficult/impassable cells are routed around (solo overlay p.57) via the shared
+## MovementPlanner in its 0-origin inch frame. The fast path (nothing in the way) stays the exact rigid
+## slide. `world_trails` (optional out): one WORLD-space waypoint list per model — the real route taken.
+func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vector3, allow_contact: bool,
+		world_trails: Array = [], avoid_difficult: bool = true, charge_target: GameUnit = null) -> Array:
 	var rigid: Array = []
 	for p in positions:
 		rigid.append((p as Vector3) + delta)
-	var walls_world: Array = _walls_world()
-	if _is_regiment(unit) or walls_world.is_empty():
+	if _is_regiment(unit):
 		_fill_straight_trails(world_trails, positions, rigid)
 		return rigid   # a regiment moves as its rigid tray block — no individual steering
 	# Map world XZ (metres, centred at 0) into the planner's non-negative inch frame: shift by the table
 	# half-extents, then divide by the inch scale. board_in is the larger table extent in inches.
+	var walls_world: Array = _walls_world()
 	var half := _table_half_extents()
 	var off := Vector2(half.x, half.y)
 	var board_in: float = (maxf(half.x, half.y) * 2.0) / INCHES_TO_METERS
@@ -449,11 +638,26 @@ func _plan_positions(unit: GameUnit, positions: Array, delta: Vector3, allow_con
 		var wa: Vector2 = w[0]
 		var wb: Vector2 = w[1]
 		walls_in.append([(wa + off) / INCHES_TO_METERS, (wb + off) / INCHES_TO_METERS])
-	if not MovementPlanner.rigid_blocked(mpos, mdelta, walls_in):
+	# Base-aware planner opts: wall clearance = the moving base's radius + epsilon; unit-spacing zones
+	# for EVERY other unit (p.7; on a Charge the target is body-only); difficult/impassable cells to
+	# route around (p.57 overlay).
+	var own_r_m := _move_base_radius_m(models)
+	var opts := {"clearance": own_r_m / INCHES_TO_METERS + CLEARANCE_EPS_IN}
+	var zones_in: Array = []
+	for z in _spacing_zones_world(unit, own_r_m, charge_target if allow_contact else null):
+		var zd := z as Dictionary
+		zones_in.append({"c": ((zd["c"] as Vector2) + off) / INCHES_TO_METERS,
+			"r": float(zd["r"]) / INCHES_TO_METERS})
+	if not zones_in.is_empty():
+		opts["zones"] = zones_in
+	var sampled := _terrain_grid_in(board_in, off, avoid_difficult)
+	opts["avoid_cells"] = sampled["avoid"]
+	if not MovementPlanner.rigid_blocked(mpos, mdelta, walls_in, opts):
 		_fill_straight_trails(world_trails, positions, rigid)
 		return rigid
 	var plan_trails: Array = []
-	var planned: Array = MovementPlanner.plan_unit_step(mpos, mdelta, walls_in, {}, allow_contact, board_in, plan_trails)
+	var planned: Array = MovementPlanner.plan_unit_step(mpos, mdelta, walls_in, sampled["grid"],
+		allow_contact, board_in, plan_trails, opts)
 	var out: Array = []
 	if world_trails != null:
 		world_trails.clear()
@@ -485,12 +689,16 @@ static func _fill_straight_trails(world_trails: Array, from_pos: Array, to_pos: 
 		world_trails.append([from_pos[i], to_pos[i]])
 
 
-## Count alive models whose path (old → new position) crossed Dangerous terrain (main rolls the real tests).
-func _count_dangerous(old_positions: Array, new_positions: Array) -> int:
+## Count models whose ACTUAL planned route (polyline legs, not the straight line) crossed Dangerous
+## terrain — one test per model (GF Advanced Rules v3.5.1 p.12); main rolls the real tray dice.
+func _count_dangerous_trails(trails: Array) -> int:
 	var n := 0
-	for i in range(mini(old_positions.size(), new_positions.size())):
-		if _path_crosses_terrain(old_positions[i], new_positions[i], TerrainRules.PathCheck.DANGEROUS):
-			n += 1
+	for t in trails:
+		var leg := t as Array
+		for i in range(1, leg.size()):
+			if _path_crosses_terrain(leg[i - 1], leg[i], TerrainRules.PathCheck.DANGEROUS):
+				n += 1
+				break
 	return n
 
 
