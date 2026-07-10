@@ -123,3 +123,36 @@ func test_list_import_reads_combined_fields_and_merges() -> void:
 
 	assert_int(merged.size()).is_equal(1)
 	assert_int(merged[0].size).is_equal(10)
+
+
+func test_merge_keeps_secondary_halfs_equipment_items() -> void:
+	# QA r5 (sergeant crest missing): the SECONDARY half's per-model roles/items (Sergeant, Banner,
+	# weapon-team gear) must survive the merge — they drive the base ring, per-model Tough and the
+	# `#crest` loadout-variant model. They used to be silently dropped.
+	var client := _client()
+	var anchor := OPRApiClient.OPRUnit.new()
+	anchor.selection_id = "half_a"
+	anchor.combined = true
+	anchor.size = 5
+	anchor.equipment_items = [{"name": "Banner", "count": 1, "rules": []}]
+	anchor.special_rules = ["Undead", "Banner"]
+	var secondary := OPRApiClient.OPRUnit.new()
+	secondary.combined = true
+	secondary.join_to_unit = "half_a"
+	secondary.size = 5
+	secondary.equipment_items = [{"name": "Sergeant", "count": 1, "rules": []}, {"name": "Banner", "count": 1, "rules": []}]
+	secondary.special_rules = ["Undead", "Sergeant"]
+
+	var units: Array[OPRApiClient.OPRUnit] = [anchor, secondary]
+	var merged := client._merge_combined_units(units)
+	assert_int(merged.size()).is_equal(1)
+	var u: OPRApiClient.OPRUnit = merged[0]
+	# The secondary's Sergeant arrived; same-named items sum their counts (Banner 1+1).
+	var by_name: Dictionary = {}
+	for item in u.equipment_items:
+		by_name[str(item.get("name", ""))] = int(item.get("count", 0))
+	assert_int(int(by_name.get("Sergeant", 0))).is_equal(1)
+	assert_int(int(by_name.get("Banner", 0))).is_equal(2)
+	# Rule lines only the secondary carried joined the merged card (dedup'd).
+	assert_array(u.special_rules).contains(["Sergeant", "Banner", "Undead"])
+	assert_int(u.special_rules.count("Undead")).is_equal(1)
