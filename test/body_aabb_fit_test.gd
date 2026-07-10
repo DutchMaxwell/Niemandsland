@@ -1,15 +1,15 @@
 extends GdUnitTestSuite
-## 025 (contract v1.2): model fit must measure the named `body` node for HEIGHT + GROUNDING, so attached
-## parts (a banner pole above, a downward-held bow below the feet) neither shrink the body nor float it.
-## The combined AABB still drives the horizontal footprint. Legacy single-mesh models (no body node)
-## keep the old combined-AABB behavior.
+## 025 (contract v1.2): model fit must measure the named `body` node for HEIGHT, GROUNDING **and the
+## footprint cap**, so attached parts (a banner pole above, a downward-held bow below the feet, a
+## protruding weapon) neither shrink/inflate the body nor float it — weapon VARIANTS of one unit render
+## at identical size. Legacy single-mesh models (no body node) keep the old combined-AABB behavior.
 
 
 func _mgr() -> OPRArmyManager:
 	return auto_free(OPRArmyManager.new())
 
 
-func test_body_aabb_drives_height_and_grounding_combined_drives_footprint() -> void:
+func test_body_aabb_drives_height_and_grounding() -> void:
 	var mgr := _mgr()
 	# Combined spans y in [-0.5, 2.0] (a below-feet bow to -0.5 + a banner to 2.0); body spans [0, 1.0].
 	# Small x/z footprint so the height scale wins (not footprint-capped) for both cases.
@@ -196,6 +196,58 @@ func test_oversized_mount_fits_base_and_is_grounded() -> void:
 	assert_bool(5.837 * scale <= 0.160 + 0.0005).is_true()
 	# Grounding invariant: the model's lowest point sits on the base top (y = 0.003).
 	assert_float(float(fit["y_offset"]) + aabb.position.y * scale).is_equal_approx(0.003, 0.0005)
+
+
+# QA r5 (producer forensics): weapon VARIANTS with IDENTICAL bodies must render at IDENTICAL scale.
+# The cap used to measure the COMBINED box, so a protruding weapon changed the scale: snakemen
+# #greatweapon (narrower combined X) rendered 1.15x LARGER; giant #bow/#royalbow (wider combined)
+# rendered SMALLER. Real measured pilot AABBs; the body box drives the cap now.
+func test_weapon_variants_with_same_body_get_identical_scale() -> void:
+	var mgr := _mgr()
+	# Snakemen on their 75x46 oval (Tough 3): base blob vs #greatweapon blob — same body.
+	var snake_body := AABB(Vector3.ZERO, Vector3(1.0265, 1.7284, 1.0427))
+	var snake_base: Dictionary = mgr._compute_model_fit(
+		AABB(Vector3.ZERO, Vector3(1.2774, 1.7284, 1.7293)), 75, 3, 0.0, 46, false, snake_body)
+	var snake_gw: Dictionary = mgr._compute_model_fit(
+		AABB(Vector3.ZERO, Vector3(1.1140, 1.7674, 1.7060)), 75, 3, 0.0, 46, false, snake_body)
+	assert_float(float(snake_gw["scale"])).is_equal_approx(float(snake_base["scale"]), 0.00001)
+	# Skeleton Giant on a 60mm round base (Tough 12): #bow (wide combined) vs #heavy — same body.
+	var giant_body := AABB(Vector3.ZERO, Vector3(1.0100, 1.4035, 0.7085))
+	var giant_bow: Dictionary = mgr._compute_model_fit(
+		AABB(Vector3.ZERO, Vector3(1.5079, 1.5577, 1.8720)), 60, 12, 0.0, -1, false, giant_body)
+	var giant_heavy: Dictionary = mgr._compute_model_fit(
+		AABB(Vector3.ZERO, Vector3(1.1777, 1.4035, 1.0594)), 60, 12, 0.0, -1, false, giant_body)
+	assert_float(float(giant_bow["scale"])).is_equal_approx(float(giant_heavy["scale"]), 0.00001)
+
+
+# Synthetic tall/wide-weapon-outside-body case: the weapon widens the combined box massively; the
+# scale must not move (body-driven), only legacy no-body models react to the combined box.
+func test_protruding_weapon_does_not_change_scale() -> void:
+	var mgr := _mgr()
+	var body := AABB(Vector3(-0.3, 0.0, -0.3), Vector3(0.6, 1.5, 0.6))
+	var slim := AABB(Vector3(-0.3, 0.0, -0.3), Vector3(0.6, 1.5, 0.6))          # no weapon
+	var wide := AABB(Vector3(-1.5, 0.0, -0.3), Vector3(3.0, 2.2, 0.6))          # long pike + banner
+	var fit_slim: Dictionary = mgr._compute_model_fit(slim, 25, 0, 0.0, -1, false, body)
+	var fit_wide: Dictionary = mgr._compute_model_fit(wide, 25, 0, 0.0, -1, false, body)
+	assert_float(float(fit_wide["scale"])).is_equal_approx(float(fit_slim["scale"]), 0.00001)
+
+
+# ===== fit_scale: optional per-entry manifest multiplier (scarab swarms at 0.5) =====
+
+func test_fit_scale_is_multiplicative_and_regrounds() -> void:
+	var mgr := _mgr()
+	var aabb := AABB(Vector3(-0.5, -0.2, -0.5), Vector3(1.0, 1.2, 1.0))
+	var normal: Dictionary = mgr._compute_model_fit(aabb, 40, 0, 0.0, -1, false, AABB(), false, 1.0)
+	var halved: Dictionary = mgr._compute_model_fit(aabb, 40, 0, 0.0, -1, false, AABB(), false, 0.5)
+	# Applied multiplicatively to the computed scale...
+	assert_float(float(halved["scale"])).is_equal_approx(float(normal["scale"]) * 0.5, 0.00001)
+	# ...and grounding is recomputed AFTER: the model's lowest point still sits on the base top.
+	assert_float(float(halved["y_offset"]) + aabb.position.y * float(halved["scale"])) \
+		.is_equal_approx(0.003, 0.0005)
+	# Default 1.0 (and the omitted parameter) are byte-identical to the normal fit.
+	var omitted: Dictionary = mgr._compute_model_fit(aabb, 40, 0, 0.0, -1, false, AABB(), false)
+	assert_float(float(omitted["scale"])).is_equal(float(normal["scale"]))
+	assert_float(float(omitted["y_offset"])).is_equal(float(normal["y_offset"]))
 
 
 # Pure fit math: the fit-to-base result is INVARIANT to the source GLB scale — the same model exported 3x

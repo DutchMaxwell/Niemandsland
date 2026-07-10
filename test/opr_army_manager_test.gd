@@ -84,22 +84,55 @@ func test_align_walker_turns_crosswise_on_z_long_base() -> void:
 	assert_float(glb.rotation.y).is_equal_approx(PI / 2.0, 0.0001)
 
 
-func test_align_vehicle_no_turn_on_depth_long_oval() -> void:
+func test_align_vehicle_z_long_model_no_turn_on_z_long_base() -> void:
 	var m := _mgr()
 	var glb := _glb()
-	# Deterministic: base long = Z (depth 0.060 >= width 0.035) -> vehicle +Z already runs ALONG it,
-	# no turn, EVEN with a model-long-X AABB (the AABB is ignored now).
-	m._align_to_oval_long_axis(glb, AABB(Vector3.ZERO, Vector3(0.3, 0.1, 0.1)), true, 0.035, 0.060, false)
+	# A Z-long model (a tank / the steed comp) on the standard Z-long oval (depth 0.060 >= width
+	# 0.035): already aligned -> no turn.
+	m._align_to_oval_long_axis(glb, AABB(Vector3.ZERO, Vector3(0.1, 0.1, 0.3)), true, 0.035, 0.060, false)
 	assert_float(glb.rotation.y).is_equal_approx(0.0, 0.0001)
 
 
-func test_align_vehicle_turns_on_width_long_oval() -> void:
+func test_align_vehicle_x_long_model_turns_on_z_long_base() -> void:
 	var m := _mgr()
 	var glb := _glb()
-	# Base long = X (width 0.060 > depth 0.035) -> turn 90° so the vehicle's +Z runs ALONG the long X
-	# axis (the exact opposite turn from a walker); AABB ignored.
-	m._align_to_oval_long_axis(glb, AABB(Vector3.ZERO, Vector3(0.1, 0.1, 0.3)), true, 0.060, 0.035, false)
+	# QA r4 (snakes crosswise): an X-LONG model (the serpent exports) on the standard Z-long oval must
+	# TURN 90° so its length lies along the base's long axis — the old Z-forward assumption left it
+	# across the SHORT side.
+	m._align_to_oval_long_axis(glb, AABB(Vector3.ZERO, Vector3(0.3, 0.1, 0.1)), true, 0.035, 0.060, false)
 	assert_float(absf(glb.rotation.y)).is_equal_approx(PI / 2.0, 0.0001)
+
+
+func test_align_vehicle_near_square_model_keeps_legacy_mapping() -> void:
+	var m := _mgr()
+	# A near-square hull (0.672 x 0.642, aspect ~1.05 — below MODEL_LONG_AXIS_MIN_ASPECT): the AABB is
+	# noise, so the legacy deterministic mapping holds — no turn on a Z-long base, turn on an X-long one.
+	var hull := AABB(Vector3.ZERO, Vector3(0.672, 0.5, 0.642))
+	var on_z_long := _glb()
+	m._align_to_oval_long_axis(on_z_long, hull, true, 0.035, 0.060, false)
+	assert_float(on_z_long.rotation.y).is_equal_approx(0.0, 0.0001)
+	var on_x_long := _glb()
+	m._align_to_oval_long_axis(on_x_long, hull, true, 0.060, 0.035, false)
+	assert_float(absf(on_x_long.rotation.y)).is_equal_approx(PI / 2.0, 0.0001)
+
+
+func test_align_snake_riders_and_champion_snake_lengthwise() -> void:
+	var m := _mgr()
+	# The REAL pilot geometries (QA r4). Snake riders / champion#greatweapon+snake: combined AABB
+	# (2.723, 2.535, 2.227), aspect 1.22, X-long — on their in-game ovals (the AF parse puts the long
+	# side into DEPTH: 90x52 -> width 0.052/depth 0.090; Royal Snake 75x46 -> 0.046/0.075) both must
+	# turn lengthwise. The flying beast comp (4.732, 4.457, 5.838; aspect 1.23, Z-LONG) must NOT turn —
+	# nearly the same aspect, opposite axis, both decisively mapped.
+	var serpent := AABB(Vector3.ZERO, Vector3(2.723, 2.535, 2.227))
+	var riders := _glb()
+	m._align_to_oval_long_axis(riders, serpent, true, 0.052, 0.090, false)
+	assert_float(absf(riders.rotation.y)).is_equal_approx(PI / 2.0, 0.0001)
+	var champ := _glb()  # champion #snake goes through the same lengthwise path (is_mount=true)
+	m._align_to_oval_long_axis(champ, serpent, true, 0.046, 0.075, false)
+	assert_float(absf(champ.rotation.y)).is_equal_approx(PI / 2.0, 0.0001)
+	var beast := _glb()
+	m._align_to_oval_long_axis(beast, AABB(Vector3.ZERO, Vector3(4.732, 4.457, 5.838)), true, 0.122, 0.160, false)
+	assert_float(beast.rotation.y).is_equal_approx(0.0, 0.0001)
 
 
 # ===== _get_model_aabb =====
@@ -373,3 +406,92 @@ func test_no_mount_carrier_resolution_unaffected() -> void:
 	# weapon-only variant misses → "" (base model). The mount path never touches an unmounted unit.
 	var labels: Array = OPRArmyManager._labels_with_mount([["Great Weapon"]], "")
 	assert_str(m._resolve_carrier_model("Royal Champion", labels[0], "mummified_undead", "")).is_equal("")
+
+
+# ===== _apply_manifest_base_overrides: manifest base_mm > API bases > derived (QA r5) =====
+
+const _BASE_OVERRIDE_LIB: String = """{
+	"version": 1, "base_url": "",
+	"models": {
+		"mummified_undead/skeleton giant": {"url": "a.glb", "sha256": "a", "size": 1, "base_mm": {"round": 80}},
+		"mummified_undead/royal snake idol": {"url": "b.glb", "sha256": "b", "size": 1, "base_mm": {"round": "90x52"}},
+		"mummified_undead/skeleton warriors": {"url": "c.glb", "sha256": "c", "size": 1}
+	}
+}"""
+
+
+func _override_army() -> OPRApiClient.OPRArmy:
+	var army := OPRApiClient.OPRArmy.new()
+	army.faction_folder = "mummified_undead"
+	return army
+
+
+func _unit_with_round_base(unit_name: String, mm: int, from_tough: bool) -> OPRApiClient.OPRUnit:
+	var u := OPRApiClient.OPRUnit.new()
+	u.name = unit_name
+	u.base_size_round = mm
+	u.base_width_mm = mm
+	u.base_depth_mm = mm
+	u.base_from_tough = from_tough
+	return u
+
+
+func test_manifest_base_override_wins_over_api_base() -> void:
+	var m := _mgr_with_variant_lib(_BASE_OVERRIDE_LIB)
+	var army := _override_army()
+	# AF API said 60 round (the Great-Scorpion shape); the maintainer override says 80.
+	var giant := _unit_with_round_base("Skeleton Giant", 60, false)
+	army.units = [giant]
+	m._apply_manifest_base_overrides(army)
+	assert_int(giant.base_size_round).is_equal(80)
+	assert_bool(giant.base_is_oval).is_false()
+	assert_bool(giant.base_from_tough).is_false()  # explicit choice, not derived
+
+
+func test_manifest_base_override_wins_over_derived_and_supports_oval() -> void:
+	var m := _mgr_with_variant_lib(_BASE_OVERRIDE_LIB)
+	var army := _override_army()
+	# A Tough-DERIVED base (no AF recommendation) is also overridden — and the AF "WxD" oval form works.
+	var idol := _unit_with_round_base("Royal Snake Idol", 120, true)
+	army.units = [idol]
+	m._apply_manifest_base_overrides(army)
+	assert_bool(idol.base_is_oval).is_true()
+	assert_int(idol.base_width_mm).is_equal(52)
+	assert_int(idol.base_depth_mm).is_equal(90)
+	assert_bool(idol.base_from_tough).is_false()
+
+
+func test_no_override_keeps_parsed_base() -> void:
+	var m := _mgr_with_variant_lib(_BASE_OVERRIDE_LIB)
+	var army := _override_army()
+	var grunt := _unit_with_round_base("Skeleton Warriors", 25, false)
+	army.units = [grunt]
+	m._apply_manifest_base_overrides(army)
+	assert_int(grunt.base_size_round).is_equal(25)  # entry exists but has no base_mm -> untouched
+
+
+# ===== Sergeant crest key derivation (QA r5): role-only and role+swap both resolve their bake =====
+
+const _CREST_LIB: String = """{
+	"version": 1, "base_url": "",
+	"models": {
+		"mummified_undead/royal guard": {"url": "a.glb", "sha256": "a", "size": 1},
+		"mummified_undead/royal guard#crest": {"url": "b.glb", "sha256": "b", "size": 1},
+		"mummified_undead/royal guard#crest+sword": {"url": "c.glb", "sha256": "c", "size": 1}
+	}
+}"""
+
+
+func test_sergeant_role_only_resolves_crest_variant() -> void:
+	var m := _mgr_with_variant_lib(_CREST_LIB)
+	# A default-weapon sergeant model: labels carry the role gain only (the default Hand Weapon maps
+	# to no slug) -> the `#crest` bake, NOT the base key.
+	assert_str(m._resolve_model_variant_name("Royal Guard", ["Hand Weapon", "Sergeant"], "mummified_undead")) \
+		.is_equal("Royal Guard#crest")
+
+
+func test_sergeant_with_weapon_swap_resolves_combined_variant() -> void:
+	var m := _mgr_with_variant_lib(_CREST_LIB)
+	# Role + a whole-unit weapon swap ("Heavy Great Weapon" -> slug `sword`) -> sorted combined key.
+	assert_str(m._resolve_model_variant_name("Royal Guard", ["Heavy Great Weapon", "Sergeant"], "mummified_undead")) \
+		.is_equal("Royal Guard#crest+sword")

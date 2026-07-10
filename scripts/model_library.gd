@@ -113,6 +113,27 @@ func has_model(faction: String, unit_name: String) -> bool:
 	return _models.has(make_key(faction, unit_name))
 
 
+## Optional per-entry artistic size correction: the manifest entry's `fit_scale` (float), applied
+## MULTIPLICATIVELY to the computed model scale after the normal fit (first user: scarab swarms at
+## 0.5). Missing / invalid (<= 0) → 1.0, so old manifests and old clients are unaffected by
+## construction (unknown fields are simply not read).
+func fit_scale(faction: String, unit_name: String) -> float:
+	var v: Variant = _entry(faction, unit_name).get("fit_scale", 1.0)
+	if v is float or v is int:
+		return float(v) if float(v) > 0.0 else 1.0
+	return 1.0
+
+
+## Optional per-entry BASE override: the manifest entry's `base_mm` dict, shaped like the Army Forge
+## base spec ({"round": 80} / {"round": "90x52"} / {"square": ...}). It WINS over both the AF API
+## base recommendation and the Tough-derived fallback (precedence: manifest > API > derived) — a
+## deliberate maintainer choice where the AF spec reads wrong on the actual model (first user:
+## Skeleton Giant at 80mm round vs AF's 60). {} when absent/malformed.
+func base_override_mm(faction: String, unit_name: String) -> Dictionary:
+	var v: Variant = _entry(faction, unit_name).get("base_mm", {})
+	return v if v is Dictionary else {}
+
+
 ## Returns the local path if the unit's model is already cached, else "" (sync).
 func get_cached_path(faction: String, unit_name: String) -> String:
 	var entry: Dictionary = _entry(faction, unit_name)

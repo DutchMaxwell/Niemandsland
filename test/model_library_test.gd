@@ -159,3 +159,37 @@ func test_find_faction_model_matching_legacy_no_full_name_is_shortest() -> void:
 	# Without a full name the token set is the keywords, so all "beast" hits tie on overlap and the
 	# shortest wins (documents the legacy tie-break the specificity layer builds on).
 	assert_str(lib.find_faction_model_matching("mummified_undead", ["beast"])).is_equal("beast riders")
+
+
+# ===== fit_scale + base_mm: optional per-entry corrections (unknown-field-tolerant) =====
+
+const _CORRECTIONS_MANIFEST: String = """{
+	"version": 1, "base_url": "",
+	"models": {
+		"mummified_undead/scarab swarms": {"url": "a.glb", "sha256": "a", "size": 1, "fit_scale": 0.5},
+		"mummified_undead/skeleton giant": {"url": "b.glb", "sha256": "b", "size": 1, "base_mm": {"round": 80}},
+		"mummified_undead/skeleton warriors": {"url": "c.glb", "sha256": "c", "size": 1},
+		"mummified_undead/broken": {"url": "d.glb", "sha256": "d", "size": 1, "fit_scale": -2.0, "base_mm": 60}
+	}
+}"""
+
+
+func test_fit_scale_reads_entry_default_and_invalid() -> void:
+	var lib := _lib()
+	lib.apply_manifest_text(_CORRECTIONS_MANIFEST)
+	assert_float(lib.fit_scale("mummified_undead", "Scarab Swarms")).is_equal_approx(0.5, 0.0001)
+	# Missing field -> 1.0 (old manifests / entries unaffected by construction).
+	assert_float(lib.fit_scale("mummified_undead", "Skeleton Warriors")).is_equal_approx(1.0, 0.0001)
+	# Invalid (<= 0) -> 1.0; unknown entry -> 1.0.
+	assert_float(lib.fit_scale("mummified_undead", "Broken")).is_equal_approx(1.0, 0.0001)
+	assert_float(lib.fit_scale("mummified_undead", "Nope")).is_equal_approx(1.0, 0.0001)
+
+
+func test_base_override_reads_entry_and_tolerates_malformed() -> void:
+	var lib := _lib()
+	lib.apply_manifest_text(_CORRECTIONS_MANIFEST)
+	assert_int(int(lib.base_override_mm("mummified_undead", "Skeleton Giant").get("round", 0))).is_equal(80)
+	# Missing field -> {}; malformed (non-dict) -> {}; unknown entry -> {}.
+	assert_bool(lib.base_override_mm("mummified_undead", "Skeleton Warriors").is_empty()).is_true()
+	assert_bool(lib.base_override_mm("mummified_undead", "Broken").is_empty()).is_true()
+	assert_bool(lib.base_override_mm("mummified_undead", "Nope").is_empty()).is_true()

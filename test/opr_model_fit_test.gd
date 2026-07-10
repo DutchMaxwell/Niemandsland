@@ -66,16 +66,18 @@ func test_oval_base_fits_model_within_narrow_width() -> void:
 
 func test_vehicle_aligned_along_oval_long_axis_walker_across() -> void:
 	var mgr := _mgr()
-	var aabb := AABB(Vector3.ZERO, Vector3(1, 0.5, 0.5))  # ignored — orientation is deterministic
-	# Vehicle, base long axis = Z (depth 0.120 >= width 0.092): runs ALONG it → +Z = long, no turn.
+	# An X-LONG model (decisive aspect 2.0): its LENGTH must land on the base's long axis (QA r4 —
+	# the snakes-crosswise fix; the model's own axis drives the mapping, not a Z-forward assumption).
+	var aabb := AABB(Vector3.ZERO, Vector3(1, 0.5, 0.5))
+	# Base long axis = Z (depth 0.120 >= width 0.092): X-long model → turn 90° so its length runs on Z.
 	var veh_z: Node3D = auto_free(Node3D.new())
 	mgr._align_to_oval_long_axis(veh_z, aabb, true, 0.092, 0.120, false)
-	assert_float(veh_z.rotation.y).is_equal_approx(0.0, 0.01)
-	# Vehicle, base long axis = X (width 0.120 > depth 0.092): turn 90° so +Z runs along X.
+	assert_float(absf(veh_z.rotation.y)).is_equal_approx(PI / 2.0, 0.01)
+	# Base long axis = X (width 0.120 > depth 0.092): X-long model already aligned → no turn.
 	var veh_x: Node3D = auto_free(Node3D.new())
 	mgr._align_to_oval_long_axis(veh_x, aabb, true, 0.120, 0.092, false)
-	assert_float(absf(veh_x.rotation.y)).is_equal_approx(PI / 2.0, 0.01)
-	# Walker = the exact opposite: long axis = Z → turn 90° (faces ACROSS the long axis).
+	assert_float(veh_x.rotation.y).is_equal_approx(0.0, 0.01)
+	# Walker: deterministic crosswise, AABB ignored — long axis = Z → turn 90° (faces ACROSS it).
 	var walker: Node3D = auto_free(Node3D.new())
 	mgr._align_to_oval_long_axis(walker, aabb, true, 0.092, 0.120, true)
 	assert_float(absf(walker.rotation.y)).is_equal_approx(PI / 2.0, 0.01)

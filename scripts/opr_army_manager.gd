@@ -260,6 +260,10 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 		var base_name = unit.name
 		unit_name_counts[base_name] = unit_name_counts.get(base_name, 0) + 1
 
+	# Optional per-entry manifest base overrides (`base_mm`) — applied BEFORE any spacing/spawn math
+	# so every consumer (base mesh, fit, collision, spacing, save/load, MP sync) sees the final base.
+	_apply_manifest_base_overrides(army)
+
 	# Order units so each joined Hero spawns right after its host unit (adjacent
 	# on the tray), instead of as a separate group elsewhere.
 	var ordered_units := _order_units_heroes_after_host(army.units)
@@ -1392,7 +1396,8 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 			# (the named `body` node) like infantry but grounds on the mount's own feet (see _compute_model_fit).
 			var aabb = _get_model_aabb(glb_instance)
 			var tough = _get_tough_value(unit)
-			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift, natural_base_short_mm, fit_to_base, _get_body_aabb(glb_instance), is_mount)
+			var entry_fit_scale: float = model_library.fit_scale(faction_folder, glb_name) if model_library != null else 1.0
+			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift, natural_base_short_mm, fit_to_base, _get_body_aabb(glb_instance), is_mount, entry_fit_scale)
 			var final_scale = fit.scale
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
@@ -1590,7 +1595,8 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0, glb_n
 		if glb_instance:
 			var aabb = _get_model_aabb(glb_instance)
 			var tough = _get_tough_value_from_rules(props.get("special_rules", []))
-			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift, natural_base_short_mm, fit_to_base, _get_body_aabb(glb_instance), is_mount)
+			var entry_fit_scale: float = model_library.fit_scale(faction_folder, glb_name) if model_library != null else 1.0
+			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift, natural_base_short_mm, fit_to_base, _get_body_aabb(glb_instance), is_mount, entry_fit_scale)
 			var final_scale = fit.scale
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
@@ -2264,31 +2270,47 @@ func _hover_lift_m(rules: Array) -> float:
 	return AIRCRAFT_HOVER_M if _is_aircraft_from_rules(rules) else 0.0
 
 
+## Minimum horizontal AABB aspect ratio (long/short) at which a model's long axis is DECISIVE and
+## drives the lengthwise orientation. Below it (near-square hulls: a biped reads ~1.05) the AABB is
+## noise that rotated identical models inconsistently — those keep the legacy deterministic mapping.
+## Calibrated on the mummified pilot fleet: the flattest real long axis measured 1.22 (snake riders /
+## champion#snake, X-long) and 1.23 (flying beast, Z-long); 1.15 splits noise from signal cleanly.
+const MODEL_LONG_AXIS_MIN_ASPECT: float = 1.15
+
+
 ## Orients a GLB on an OVAL base relative to the base's long axis (depth/Z when base_depth >=
-## base_width). Y-only rotation, so it leaves the (rotation-invariant) uniform scale and y-offset
+## base_width — the AF oval parse always puts the long side into depth, so in-game oval bases are
+## Z-long). Y-only rotation, so it leaves the (rotation-invariant) uniform scale and y-offset
 ## intact. No-op for round/square bases.
 ##
-## Vehicles AND mounts (cross_align=false): run ALONG the base's long axis (a tank — or a snake /
-## chariot — sits front-to-back down its oval). Deterministic from the base geometry; the AABB is
-## ignored. A mount always uses this path (see _model_faces_crosswise), never the walker turn.
+## Vehicles AND mounts (cross_align=false): the MODEL's long axis runs ALONG the base's long axis (a
+## tank — or a snake / chariot — sits front-to-back down its oval). The model's long axis comes from
+## its AABB when DECISIVE (aspect >= MODEL_LONG_AXIS_MIN_ASPECT): producers export mounts on either
+## horizontal axis (the mummified serpents are X-long, the steed/sphinx/chariot comps Z-long), and
+## assuming Z-long put every X-long serpent across the SHORT side (the snakes-crosswise QA finding).
+## A near-square model (below the threshold) keeps the legacy Z-long assumption — its AABB is noise.
 ##
 ## Walkers (cross_align=true): sit CROSSWISE ("quer") — DETERMINISTICALLY, ignoring the AABB. A
 ## biped's footprint is near-square (e.g. 0.672 x 0.642), so the AABB "long axis" is just noise
 ## that rotated identical walkers inconsistently. Instead we orient the model's default forward
 ## (+Z) ACROSS the base's long axis purely from the base geometry, so every walker is consistent.
 ## (Near-square means the exact facing barely shows; if it ever reads 90° off, flip the rotate.)
-func _align_to_oval_long_axis(glb: Node3D, _aabb: AABB, base_is_oval: bool,
+func _align_to_oval_long_axis(glb: Node3D, aabb: AABB, base_is_oval: bool,
 		base_width: float, base_depth: float, cross_align: bool = false) -> void:
 	if not base_is_oval or glb == null:
 		return
-	# Deterministic from the base geometry (model forward = +Z): a WALKER faces ACROSS the base's
-	# long axis (its +Z onto the SHORT side), a VEHICLE runs ALONG it (its +Z onto the LONG side) —
-	# exact opposites. The AABB is ignored on purpose: a near-square hull has no reliable long axis,
-	# and AABB-based turns rotated identical models inconsistently (same reason walkers are
-	# deterministic).
 	var base_long_is_z: bool = base_depth >= base_width
-	var turn: bool = base_long_is_z if cross_align else not base_long_is_z
-	if turn:
+	if cross_align:
+		# WALKER: faces ACROSS the base's long axis (its +Z onto the SHORT side), deterministic.
+		if base_long_is_z:
+			glb.rotate_y(PI / 2.0)
+		return
+	# VEHICLE / MOUNT: the model's long axis onto the base's long axis. Decisive AABB wins; a
+	# near-square hull falls back to the legacy assumption (model long axis = Z → no turn on the
+	# standard Z-long oval), which keeps every previously-correct model byte-identical.
+	var aspect: float = maxf(aabb.size.x, aabb.size.z) / maxf(0.001, minf(aabb.size.x, aabb.size.z))
+	var model_long_is_x: bool = aspect >= MODEL_LONG_AXIS_MIN_ASPECT and aabb.size.x > aabb.size.z
+	if model_long_is_x == base_long_is_z:
 		glb.rotate_y(PI / 2.0)
 
 
@@ -2303,6 +2325,39 @@ func _is_walker(unit_name: String) -> bool:
 ## vehicle (go-live) — so the mount flag overrides the walker-name heuristic.
 func _model_faces_crosswise(unit_name: String, is_mount: bool) -> bool:
 	return _is_walker(unit_name) and not is_mount
+
+
+## Applies optional per-entry manifest base overrides (`base_mm`, shaped like the AF base spec) to an
+## army's units BEFORE spawning. Precedence: MANIFEST OVERRIDE > AF API base > Tough-derived fallback —
+## the parse already resolved API-vs-derived, so a present override simply replaces that result (a
+## deliberate maintainer choice where the AF spec reads wrong on the actual model; first user: Skeleton
+## Giant at 80mm round vs AF's 60). The override lands in the unit's base fields, which save/load and
+## MP sync already carry — guests and reloads stay consistent without re-applying.
+func _apply_manifest_base_overrides(army: OPRApiClient.OPRArmy) -> void:
+	if model_library == null or army == null or army.faction_folder.is_empty():
+		return
+	for unit in army.units:
+		var spec: Dictionary = model_library.base_override_mm(army.faction_folder, unit.name)
+		if spec.is_empty():
+			continue
+		var square_val: Variant = spec.get("square", "")
+		var round_val: Variant = spec.get("round", "")
+		if unit.base_is_square and OPRApiClient._is_usable_base_value(square_val):
+			# AoF:R square/rectangular base — same WIDTHxDEPTH convention as the AF parse.
+			var pq: Array = OPRApiClient._parse_base_size(square_val, unit.base_size_round)
+			unit.base_width_mm = int(pq[1])
+			unit.base_depth_mm = int(pq[2])
+			unit.base_size_round = maxi(int(pq[1]), int(pq[2]))
+			unit.base_size_square = unit.base_size_round
+			unit.base_from_tough = false
+		elif OPRApiClient._is_usable_base_value(round_val):
+			var pr: Array = OPRApiClient._parse_base_size(round_val, unit.base_size_round)
+			unit.base_is_oval = bool(pr[0])
+			unit.base_is_square = false
+			unit.base_width_mm = int(pr[1])
+			unit.base_depth_mm = int(pr[2])
+			unit.base_size_round = maxi(int(pr[1]), int(pr[2]))
+			unit.base_from_tough = false
 
 
 ## Computes scale + vertical offset so a GLB fits its base nicely.
@@ -2321,12 +2376,17 @@ func _model_faces_crosswise(unit_name: String, is_mount: bool) -> bool:
 ## lowest point (the mount's feet, BELOW the rider) so the mount stands on its base instead of the rider
 ## being buried onto it. is_mount WITHOUT a body node (legacy fuzzy mount GLBs, e.g. GF bikes) keeps the
 ## base-driven fit unchanged.
+## fit_scale: optional per-entry manifest multiplier (default 1.0) applied MULTIPLICATIVELY to the
+## computed scale on every path (grounding recomputed after) — a deliberate artistic size correction
+## (first user: scarab swarms at 0.5, whose base-fitted mound reads too large).
 ## Returns { "scale": float, "y_offset": float, "height": float }.
-func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m: float, base_short_mm: int = -1, fit_to_base: bool = false, body_aabb: AABB = AABB(), is_mount: bool = false) -> Dictionary:
-	# Contract v1.2: when the GLB carries a named `body` node, HEIGHT measures that node's box (body_aabb)
-	# so composed parts (a banner pole, a downward-held bow, or — on a mount — the whole beast) can't
-	# shrink the body; the COMBINED aabb always drives the horizontal footprint/base-fit cap. Empty
-	# body_aabb (legacy single-mesh models) → measure everything from the combined aabb, unchanged.
+func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m: float, base_short_mm: int = -1, fit_to_base: bool = false, body_aabb: AABB = AABB(), is_mount: bool = false, fit_scale: float = 1.0) -> Dictionary:
+	# Contract v1.2: when the GLB carries a named `body` node, the BODY box drives HEIGHT **and the
+	# horizontal footprint cap** — composed parts (a banner pole, a raised great weapon, a protruding
+	# bow) can neither shrink the body nor change the model's scale. Measuring the cap on the COMBINED
+	# box made weapon VARIANTS of one unit render at different sizes (snakemen #greatweapon 1.15x larger,
+	# giant #bow/#royalbow smaller — identical bodies, different weapon overhang). Parts may overhang the
+	# base like any mini's weapon does. Empty body_aabb (legacy single-mesh models) → combined, unchanged.
 	var rider_mode: bool = is_mount and body_aabb.size.y > 0.0
 	var height_aabb: AABB = body_aabb if body_aabb.size.y > 0.0 else aabb
 	# GROUNDING: infantry ground on the body's feet (a below-feet bow must not float the model). A MOUNT
@@ -2334,7 +2394,7 @@ func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m:
 	# mount stands on the base rather than being pushed down until the rider touches it.
 	var ground_aabb: AABB = aabb if (is_mount or body_aabb.size.y <= 0.0) else body_aabb
 	var raw_height: float = height_aabb.size.y
-	var raw_footprint: float = max(aabb.size.x, aabb.size.z)
+	var raw_footprint: float = max(height_aabb.size.x, height_aabb.size.z)
 	if raw_height <= 0.0 or raw_footprint <= 0.0:
 		return {"scale": 0.001, "y_offset": 0.003, "height": 0.03}
 
@@ -2349,14 +2409,15 @@ func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m:
 		var target_height_m: float = _height_target_mm(base_long_mm) * 0.001 * _calculate_model_scale(tough)
 		height_scale = target_height_m / raw_height
 
-	# Footprint cap. Round base: cap to base_long x FOOTPRINT_MAX_RATIO (organic overhang ok).
-	# Oval/rectangular base (base_short < base_long): fit WITHIN BOTH axes at OVAL_FOOTPRINT_RATIO, so
-	# a wide/square hull can't overhang the narrow side (the vehicle scale-creep). Uniform scale, so
-	# the tighter axis wins; raw_footprint = the model's longer horizontal side, raw_short the shorter.
+	# Footprint cap (on the BODY box when present — see above). Round base: cap to base_long x
+	# FOOTPRINT_MAX_RATIO (organic overhang ok). Oval/rectangular base (base_short < base_long): fit
+	# WITHIN BOTH axes at OVAL_FOOTPRINT_RATIO, so a wide/square hull can't overhang the narrow side
+	# (the vehicle scale-creep). Uniform scale, so the tighter axis wins; raw_footprint = the measured
+	# box's longer horizontal side, raw_short the shorter.
 	var short_mm: int = base_short_mm if base_short_mm > 0 else base_long_mm
 	var footprint_scale: float
 	if short_mm < base_long_mm:
-		var raw_short: float = max(0.001, min(aabb.size.x, aabb.size.z))
+		var raw_short: float = max(0.001, min(height_aabb.size.x, height_aabb.size.z))
 		footprint_scale = min(
 			base_long_mm * OVAL_FOOTPRINT_RATIO * 0.001 / raw_footprint,
 			short_mm * OVAL_FOOTPRINT_RATIO * 0.001 / raw_short)
@@ -2370,12 +2431,16 @@ func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m:
 	# Rider mode: the rider-constant scale is EXACT — the footprint never caps it (the mount's size
 	# follows the model's own proportions); the >2.5x warning below is the only footprint guard.
 	var final_scale: float = height_scale if rider_mode else min(height_scale, footprint_scale)
+	# Optional per-entry manifest correction (default 1.0): multiplicative, AFTER the normal fit, so
+	# grounding and heights below are recomputed from the corrected scale.
+	if fit_scale > 0.0 and fit_scale != 1.0:
+		final_scale *= fit_scale
 
-	# Defensive: a composed mount is rider-normalized, so its footprint should land near its base. If the
-	# rider-constant scale still spills the combined footprint far over the base (a mis-authored /
-	# non-normalized comp), warn rather than silently ship a table-filling regression.
-	if is_mount and raw_footprint * final_scale > base_long_mm * 0.001 * 2.5:
-		push_warning("OPRArmyManager: mounted model footprint %.3fm exceeds base %dmm by >2.5x (rider-constant fit)" % [raw_footprint * final_scale, base_long_mm])
+	# Defensive: a composed mount is rider-normalized, so its footprint should land near its base. If
+	# the scale still spills the COMBINED footprint far over the base (a mis-authored / non-normalized
+	# comp), warn rather than silently ship a table-filling regression.
+	if is_mount and max(aabb.size.x, aabb.size.z) * final_scale > base_long_mm * 0.001 * 2.5:
+		push_warning("OPRArmyManager: mounted model footprint %.3fm exceeds base %dmm by >2.5x (rider-constant fit)" % [max(aabb.size.x, aabb.size.z) * final_scale, base_long_mm])
 
 	# Feet on the base top (the base is 3mm tall); Aircraft additionally sit on a flight stand (lift).
 	# Ground on ground_aabb's minimum-y: the body's feet for infantry, the mount's feet for a mount.
