@@ -66,6 +66,14 @@ const AIRCRAFT_HOVER_M: float = 0.2
 ## the unit's Tough (Tough 3–18 belongs to the mount's stats, not the rider's anatomy). The mount's size
 ## then follows from the model's own proportions.
 const RIDER_ANATOMY_BASE_MM: int = 25
+## Geometric rider detection (QA round 6): a `body` node whose bottom sits at least this fraction of its
+## own height ABOVE the model's lowest point is a RIDER/CREW (it rides ON something) → the rider-anatomy
+## fit engages regardless of the resolution path (hero-mount upgrade, variant key, or a mounted-by-default
+## UNIT like the Skeleton Chariot). A body starting at the model's feet is the model's OWN body (giant,
+## snakemen, troopers) and keeps the base-driven fit. Calibrated on the staged pilot blobs: self-bodies
+## measure 0.00–0.11 (the 0.11 = a below-feet bow tip lowering the combined min), riders 0.39–1.60;
+## 0.25 splits noise from signal with >2x margin on both sides.
+const RIDER_ELEVATION_MIN_RATIO: float = 0.25
 const TRAY_SIZE_INCHES: float = 32.0  # 32x32 inch tray
 const TRAY_MARGIN: float = 0.05  # 5cm gap from table edge
 const TRAY_DROP_HEIGHT: float = 0.5  # Start 50cm above table
@@ -2369,13 +2377,16 @@ func _apply_manifest_base_overrides(army: OPRApiClient.OPRArmy) -> void:
 ##   - the SMALLER of the two factors wins (min), so both constraints hold.
 ## Aircraft additionally sit on a caller-supplied flight-stand lift; every other model stands on its base.
 ## base_long_mm = base long side in mm (round: diameter; oval: longer axis).
-## is_mount + a rider `body` node (composed mount bake): RIDER-CONSTANT scale — the scale is exactly the
+## RIDER-CONSTANT fit: a model with a rider `body` node gets the rider-anatomy scale — exactly the
 ## standard 25mm-trooper height target applied to the rider body (RIDER_ANATOMY_BASE_MM), independent of
 ## the mount's base AND of Tough, and NOT footprint-capped (the mount's size follows the model's own
-## proportions; the >2.5x warning below guards mis-authored comps). Grounding is on the whole model's
-## lowest point (the mount's feet, BELOW the rider) so the mount stands on its base instead of the rider
-## being buried onto it. is_mount WITHOUT a body node (legacy fuzzy mount GLBs, e.g. GF bikes) keeps the
-## base-driven fit unchanged.
+## proportions; the >2.5x warning below guards mis-authored comps). It engages for is_mount (hero-mount
+## upgrades) AND — regardless of the resolution path — whenever the body is geometrically a RIDER: its
+## bottom sits >= RIDER_ELEVATION_MIN_RATIO of its height above the model's lowest point (a mounted-by-
+## default UNIT like the Skeleton Chariot has no mount_name, but its crew rides just the same). Grounding
+## is on the whole model's lowest point (the mount's feet / wheels, BELOW the rider) so the mount stands
+## on its base instead of the rider being buried onto it. is_mount WITHOUT a body node (legacy fuzzy
+## mount GLBs, e.g. GF bikes) keeps the base-driven fit unchanged.
 ## fit_scale: optional per-entry manifest multiplier (default 1.0) applied MULTIPLICATIVELY to the
 ## computed scale on every path (grounding recomputed after) — a deliberate artistic size correction
 ## (first user: scarab swarms at 0.5, whose base-fitted mound reads too large).
@@ -2387,12 +2398,19 @@ func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m:
 	# box made weapon VARIANTS of one unit render at different sizes (snakemen #greatweapon 1.15x larger,
 	# giant #bow/#royalbow smaller — identical bodies, different weapon overhang). Parts may overhang the
 	# base like any mini's weapon does. Empty body_aabb (legacy single-mesh models) → combined, unchanged.
-	var rider_mode: bool = is_mount and body_aabb.size.y > 0.0
-	var height_aabb: AABB = body_aabb if body_aabb.size.y > 0.0 else aabb
+	var has_body: bool = body_aabb.size.y > 0.0
+	# Geometric rider detection: the body floats well above the model's lowest point → it rides on
+	# something (steed / chariot deck / beast). A small offset is below-feet-part noise (a bow tip
+	# lowers the combined min by up to ~0.11 body heights on the real blobs), NOT a rider.
+	var body_elevated: bool = has_body \
+		and (body_aabb.position.y - aabb.position.y) >= body_aabb.size.y * RIDER_ELEVATION_MIN_RATIO
+	var rider_mode: bool = has_body and (is_mount or body_elevated)
+	var height_aabb: AABB = body_aabb if has_body else aabb
 	# GROUNDING: infantry ground on the body's feet (a below-feet bow must not float the model). A MOUNT
-	# grounds on the COMBINED lowest point (the mount's feet sit below the rider `body` node), so the
-	# mount stands on the base rather than being pushed down until the rider touches it.
-	var ground_aabb: AABB = aabb if (is_mount or body_aabb.size.y <= 0.0) else body_aabb
+	# (either flavour: hero-mount or geometrically detected rider) grounds on the COMBINED lowest point
+	# (the mount's feet / wheels sit below the rider `body`), so the mount stands on the base rather
+	# than being pushed down until the rider touches it.
+	var ground_aabb: AABB = aabb if (is_mount or rider_mode or not has_body) else body_aabb
 	var raw_height: float = height_aabb.size.y
 	var raw_footprint: float = max(height_aabb.size.x, height_aabb.size.z)
 	if raw_height <= 0.0 or raw_footprint <= 0.0:
@@ -2439,7 +2457,7 @@ func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m:
 	# Defensive: a composed mount is rider-normalized, so its footprint should land near its base. If
 	# the scale still spills the COMBINED footprint far over the base (a mis-authored / non-normalized
 	# comp), warn rather than silently ship a table-filling regression.
-	if is_mount and max(aabb.size.x, aabb.size.z) * final_scale > base_long_mm * 0.001 * 2.5:
+	if (is_mount or rider_mode) and max(aabb.size.x, aabb.size.z) * final_scale > base_long_mm * 0.001 * 2.5:
 		push_warning("OPRArmyManager: mounted model footprint %.3fm exceeds base %dmm by >2.5x (rider-constant fit)" % [max(aabb.size.x, aabb.size.z) * final_scale, base_long_mm])
 
 	# Feet on the base top (the base is 3mm tall); Aircraft additionally sit on a flight stand (lift).
@@ -2447,8 +2465,8 @@ func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m:
 	var lift: float = hover_lift_m
 	var y_offset: float = -ground_aabb.position.y * final_scale + 0.003 + lift
 
-	# Collision/visual height: the whole model for a mount (rider + beast), the measured body otherwise.
-	var visible_height: float = (aabb.size.y if is_mount else raw_height) * final_scale + lift
+	# Collision/visual height: the whole model for a mount (rider + beast/cart), the body otherwise.
+	var visible_height: float = (aabb.size.y if (is_mount or rider_mode) else raw_height) * final_scale + lift
 	return {
 		"scale": final_scale,
 		"y_offset": y_offset,

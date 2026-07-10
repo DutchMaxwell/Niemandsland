@@ -11,10 +11,10 @@ func _mgr() -> OPRArmyManager:
 
 func test_body_aabb_drives_height_and_grounding() -> void:
 	var mgr := _mgr()
-	# Combined spans y in [-0.5, 2.0] (a below-feet bow to -0.5 + a banner to 2.0); body spans [0, 1.0].
-	# Small x/z footprint so the height scale wins (not footprint-capped) for both cases.
-	# Tiny x/z footprint so the base-fit cap never binds and the HEIGHT scale decides both cases.
-	var combined := AABB(Vector3(-0.0005, -0.5, -0.0005), Vector3(0.001, 2.5, 0.001))
+	# Combined spans y in [-0.2, 2.3] (a below-feet bow tip to -0.2 + a banner to 2.3); body spans
+	# [0, 1.0] — the bow offset is 0.2 of the body height, BELOW the rider-elevation threshold (0.25),
+	# so this stays an infantry (self-body) fit. Tiny x/z so the base-fit cap never binds.
+	var combined := AABB(Vector3(-0.0005, -0.2, -0.0005), Vector3(0.001, 2.5, 0.001))
 	var body := AABB(Vector3(-0.0005, 0.0, -0.0005), Vector3(0.001, 1.0, 0.001))
 
 	var fit_body: Dictionary = mgr._compute_model_fit(combined, 25, 1, 0.0, -1, false, body)
@@ -26,9 +26,9 @@ func test_body_aabb_drives_height_and_grounding() -> void:
 	assert_bool(fit_body["scale"] > fit_legacy["scale"]).is_true()
 
 	# Grounding on the BODY min-y (0) → y_offset == base-top 0.003, no float. Legacy grounds on the
-	# below-feet part (-0.5) and floats (y_offset well above 0.003).
+	# below-feet part (-0.2) and floats (y_offset above 0.003).
 	assert_float(fit_body["y_offset"]).is_equal_approx(0.003, 0.0005)
-	assert_bool(fit_legacy["y_offset"] > fit_body["y_offset"] + 0.003).is_true()
+	assert_bool(fit_legacy["y_offset"] > fit_body["y_offset"]).is_true()
 
 
 func test_get_body_aabb_measures_only_the_body_node() -> void:
@@ -170,15 +170,47 @@ func test_fuzzy_mount_without_body_keeps_base_driven_fit() -> void:
 	assert_float(combined.size.y * float(fit["scale"])).is_equal_approx(0.063, 0.001)
 
 
-# Contrast: the SAME combined+rider as INFANTRY (is_mount=false) grounds on the body's feet (rider min-y),
-# so a mount flag is what flips grounding from body-feet to mount-feet.
-func test_infantry_body_grounding_differs_from_mount() -> void:
+# QA r6 (Skeleton Chariot): a clearly ELEVATED body is a RIDER/CREW geometrically — the rider-anatomy
+# fit engages WITHOUT is_mount (a mounted-by-default UNIT has no mount_name). Same geometry as the
+# is_mount case above: identical result by construction.
+func test_elevated_body_rider_fit_engages_without_is_mount() -> void:
 	var mgr := _mgr()
 	var combined := AABB(Vector3(-0.0005, -2.0, -0.0005), Vector3(0.001, 5.0, 0.001))
 	var body := AABB(Vector3(-0.0005, 1.0, -0.0005), Vector3(0.001, 1.0, 0.001))
 	var fit: Dictionary = mgr._compute_model_fit(combined, 40, 0, 0.0, -1, false, body, false)
 	var scale: float = float(fit["scale"])
-	# Infantry grounds on the BODY min-y (1.0) → the body's feet sit on the base top.
+	# Rider-anatomy scale (28mm target on the body), NOT the 40mm base target.
+	assert_float(body.size.y * scale).is_equal_approx(0.028, 0.0005)
+	# Grounds on the COMBINED min-y (the wheels/steed), not the crew's feet.
+	assert_float(float(fit["y_offset"]) + combined.position.y * scale).is_equal_approx(0.003, 0.0005)
+
+
+# QA r6: the REAL champion-chariot-comp geometry (crew `body` at elevation ratio 0.387) run through the
+# UNIT resolution path (is_mount=false, the unit's own 120x92 oval, Tough 6) — the stand-in for a
+# correctly-baked Skeleton Chariot unit blob. The crew must land at trooper height, wheels on the base.
+func test_chariot_unit_path_scales_crew_to_trooper_height() -> void:
+	var mgr := _mgr()
+	var combined := AABB(Vector3(-1.054, 0.0, -1.479), Vector3(2.098, 2.619, 3.880))
+	var crew := AABB(Vector3(-0.662, 0.685, -0.904), Vector3(1.3038, 1.7712, 0.7816))
+	var fit: Dictionary = mgr._compute_model_fit(combined, 120, 6, 0.0, 92, false, crew, false)
+	var scale: float = float(fit["scale"])
+	# Crew at the standard trooper height — independent of the 120mm base and Tough(6).
+	assert_float(crew.size.y * scale * 1000.0).is_equal_approx(28.0, 0.5)
+	# Wheels (combined min-y = 0) on the base top.
+	assert_float(float(fit["y_offset"])).is_equal_approx(0.003, 0.0005)
+
+
+# QA r6 threshold guard: a SELF-body with a below-feet part (the REAL giant#bow: bow tip 0.11 body
+# heights below the feet) must NOT flip to the rider fit — it keeps the base-driven monster scale.
+func test_self_body_with_below_feet_part_stays_base_driven() -> void:
+	var mgr := _mgr()
+	var combined := AABB(Vector3(-0.817, -0.154, -0.977), Vector3(1.508, 1.558, 1.872))
+	var body := AABB(Vector3(-0.526, 0.0, -0.332), Vector3(1.0100, 1.4035, 0.7085))
+	var fit: Dictionary = mgr._compute_model_fit(combined, 60, 12, 0.0, -1, false, body, false)
+	var scale: float = float(fit["scale"])
+	# Base-driven monster fit: 60mm x Tough(12) factor on the body → ~72.9mm, NOT the 28mm rider target.
+	assert_float(body.size.y * scale * 1000.0).is_equal_approx(72.9, 1.0)
+	# Infantry grounding: the BODY's feet (min-y 0) sit on the base top.
 	assert_float(float(fit["y_offset"]) + body.position.y * scale).is_equal_approx(0.003, 0.0005)
 
 
