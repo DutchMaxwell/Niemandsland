@@ -100,3 +100,19 @@ func test_best_spot_rejects_footprint_corner_in_blocking_terrain() -> void:
 	# The centre is clear AND no sampled footprint point (incl. the diagonal corners) lands in the wedge.
 	assert_bool(bool(blocked.call(spot))).is_false()
 	assert_bool(AiDeployment._blocked_at(spot, blocked, probe)).is_false()
+
+
+## Field-test finding 1: with an explicit per-model FOOTPRINT (the offsets each model will occupy) EVERY
+## model's base — centre plus its base-edge points — must clear blocking terrain, so a spread-formation
+## model can't land in terrain that sits between coarse footprint-circle samples.
+func test_blocked_at_checks_every_model_of_a_footprint() -> void:
+	# A blocking strip at x >= 0.09. The anchor (0.0) is clear, but a model at offset +0.10 lands in it.
+	var blocked := func(p: Vector2) -> bool: return p.x >= 0.09
+	var footprint := [Vector2(0.0, 0.0), Vector2(0.10, 0.0), Vector2(-0.10, 0.0)]
+	# Centre-only would pass (0.0 clear), but the +0.10 model is inside the strip → blocked.
+	assert_bool(AiDeployment._blocked_at(Vector2(0.0, 0.0), blocked, 0.0, footprint, 0.016)).is_true()
+	# Shift the anchor west so every model (incl. base edge at +0.016) stays clear of the strip.
+	assert_bool(AiDeployment._blocked_at(Vector2(-0.20, 0.0), blocked, 0.0, footprint, 0.016)).is_false()
+	# A model whose BASE edge (radius) just touches the strip is caught even if its centre is clear.
+	var edge_case := func(p: Vector2) -> bool: return p.x >= 0.105
+	assert_bool(AiDeployment._blocked_at(Vector2(0.0, 0.0), edge_case, 0.0, [Vector2(0.10, 0.0)], 0.016)).is_true()

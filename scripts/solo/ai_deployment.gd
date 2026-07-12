@@ -71,7 +71,7 @@ static func placement_order(units: Array, rng: RandomNumberGenerator) -> Array:
 ## possible to the nearest objective"). `occupied` = [{pos: Vector2, radius: float}] already-placed
 ## footprints; `blocked` = Callable(Vector2) -> bool for difficult/dangerous terrain (pass an invalid
 ## Callable for units with Strider/Flying, which ignore it). Returns Vector2.INF when nothing fits.
-static func best_spot(section: Rect2, objectives: Array, occupied: Array, radius: float, blocked: Callable, step: float = 0.05, probe_radius: float = 0.0) -> Vector2:
+static func best_spot(section: Rect2, objectives: Array, occupied: Array, radius: float, blocked: Callable, step: float = 0.05, probe_radius: float = 0.0, footprint: Array = [], base_r: float = 0.0) -> Vector2:
 	var best := Vector2.INF
 	var best_score := INF
 	var y := section.position.y + radius
@@ -79,7 +79,7 @@ static func best_spot(section: Rect2, objectives: Array, occupied: Array, radius
 		var x := section.position.x + radius
 		while x <= section.end.x - radius + 0.0001:
 			var p := Vector2(x, y)
-			if _spot_free(p, radius, occupied) and not _blocked_at(p, blocked, probe_radius):
+			if _spot_free(p, radius, occupied) and not _blocked_at(p, blocked, probe_radius, footprint, base_r):
 				var score := _nearest_objective_distance(p, objectives, section)
 				if score < best_score:
 					best_score = score
@@ -89,23 +89,44 @@ static func best_spot(section: Rect2, objectives: Array, occupied: Array, radius
 	return best
 
 
-## Terrain check over the unit's FOOTPRINT, not just its centre: with probe_radius > 0 the four cardinal
-## edge points are sampled too — a centre-only check let edge models land inside walls (field test).
-static func _blocked_at(p: Vector2, blocked: Callable, probe_radius: float) -> bool:
+## Terrain check over the unit's FOOTPRINT, not just its centre. When `footprint` (the model-local XZ
+## offsets each model WILL occupy at this spot) is supplied, EVERY model's base — its centre plus its
+## base-edge cardinal/diagonal points at `base_r` — is checked against blocking terrain, so no model in a
+## spread formation can land in terrain between coarse samples (field-test finding 1). Otherwise it falls
+## back to the footprint-circle sampling (8 edge points at `probe_radius`) for units without an explicit
+## model grid (e.g. regiment trays).
+static func _blocked_at(p: Vector2, blocked: Callable, probe_radius: float, footprint: Array = [], base_r: float = 0.0) -> bool:
 	if not blocked.is_valid():
 		return false
 	if bool(blocked.call(p)):
 		return true
+	if not footprint.is_empty():
+		var edges := _base_edge_offsets(base_r)
+		for off in footprint:
+			for e in edges:
+				if bool(blocked.call(p + (off as Vector2) + e)):
+					return true
+		return false
 	if probe_radius <= 0.0:
 		return false
 	# Sample the footprint's cardinal AND diagonal edge points (8): a centre-plus-cardinals check let a
 	# unit's grid CORNER overlap blocking terrain between the cardinal samples (field-test finding 3).
-	var diag := probe_radius * 0.70710678   # cos 45° — the corner offset at `probe_radius`
-	for off in [Vector2(probe_radius, 0), Vector2(-probe_radius, 0), Vector2(0, probe_radius), Vector2(0, -probe_radius),
-			Vector2(diag, diag), Vector2(diag, -diag), Vector2(-diag, diag), Vector2(-diag, -diag)]:
+	for off in _base_edge_offsets(probe_radius):
+		if off == Vector2.ZERO:
+			continue
 		if bool(blocked.call(p + off)):
 			return true
 	return false
+
+
+## The centre plus the eight base-edge sample points (cardinals + diagonals) at radius `r`. A zero radius
+## collapses to the centre alone. Shared by the per-model footprint check and the circle fallback.
+static func _base_edge_offsets(r: float) -> Array:
+	if r <= 0.0:
+		return [Vector2.ZERO]
+	var diag := r * 0.70710678   # cos 45° — the corner offset at radius r
+	return [Vector2.ZERO, Vector2(r, 0), Vector2(-r, 0), Vector2(0, r), Vector2(0, -r),
+		Vector2(diag, diag), Vector2(diag, -diag), Vector2(-diag, diag), Vector2(-diag, -diag)]
 
 
 # === Private ===
