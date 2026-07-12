@@ -4,6 +4,9 @@ A desktop tabletop simulator focused on miniature wargames, with first-class
 support for [OnePageRules](https://onepagerules.com/) (Grimdark Future / Age of
 Fantasy). Built in Godot.
 
+<!-- Version badge + the Status line below track application/config/version in project.godot (the
+     single source of truth). Bump them only at release time, together with that field — see the
+     release checklist in docs/DEVELOPMENT.md. -->
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Godot](https://img.shields.io/badge/Godot-4.6-blue.svg)](https://godotengine.org/)
 [![Status](https://img.shields.io/badge/Status-0.3.8.0--alpha-orange.svg)]()

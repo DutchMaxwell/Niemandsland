@@ -41,6 +41,18 @@ Empty output = everything compiles.
 > `.godot/` and `*.uid` are git-ignored, so imports don't dirty tracked files (verify
 > with an `md5sum project.godot` before/after if unsure).
 
+> **`git diff project.godot` before EVERY commit.** Opening the project in the GUI editor
+> silently rewrites `project.godot` and can drop keys the file needs — the `exclude_addons`
+> export filter and the `rendering/gl_compatibility` block have both been lost this way. The
+> file is tracked, so an editor session can smuggle an unrelated (and breaking) change into
+> your commit. Diff it and revert any line you didn't mean to touch.
+
+> **Purge a stale `.godot/` after a rename or a big merge.** The engine caches compiled
+> bytecode + the global class cache under `.godot/`; after renaming a `class_name`, deleting a
+> script, or merging a branch that did, a stale cache can run *old* code or fail to resolve a
+> class that plainly exists. `rm -rf .godot` then re-run the `--editor --quit` import to
+> rebuild it clean (it's git-ignored, so this only costs one re-import).
+
 ### Scene-script smoke gate (main.gd and other scene-only scripts)
 
 The `--editor --quit` import and the gdUnit4 suites both **skip** `scripts/main.gd` and
