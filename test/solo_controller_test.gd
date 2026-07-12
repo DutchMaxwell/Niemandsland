@@ -644,3 +644,95 @@ func test_target_key_compare_official_order() -> void:
 	assert_bool(SoloController._target_key_compare(fresh_far, done_near) < 0).is_true()
 	assert_bool(SoloController._target_key_compare(fresh_near, fresh_far) < 0).is_true()
 	assert_int(SoloController._target_key_compare(fresh_near, {"activated": false, "band": 2})).is_equal(0)
+
+
+## Field-test finding 3: a unit HELD in Ambush reserve is off-table — never eligible, never activated (even
+## when it is the only "unit" on its side), and skipped as a valid target. `unit_in_reserve` is the single
+## truth the game reads everywhere.
+func test_reserve_units_never_eligible_activate_or_target() -> void:
+	var enemy := _unit(1, [Vector3(0, 0, 0)])
+	enemy.unit_id = "enemy"
+	var human_reserve := _unit(1, [Vector3(0.15, 0, 0)])   # nearer to the AI, but off-table in reserve
+	human_reserve.unit_id = "human_reserve"
+	human_reserve.unit_properties["ambush_reserve"] = true
+	var reserved := _unit(2, [Vector3(3, 0, 3)])
+	reserved.unit_id = "ai_reserve"
+	reserved.unit_properties["ambush_reserve"] = true
+	var fielded := _unit(2, [Vector3(0.4, 0, 0)])
+	fielded.unit_id = "ai_fielded"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {enemy.unit_id: enemy, human_reserve.unit_id: human_reserve,
+		reserved.unit_id: reserved, fielded.unit_id: fielded}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	assert_bool(SoloController.unit_in_reserve(reserved)).is_true()
+	assert_bool(SoloController.unit_in_reserve(fielded)).is_false()
+	assert_bool(solo.is_eligible(reserved)).is_false()
+	# Only the fielded unit is eligible; activation never picks the reserve, and the second call is empty.
+	assert_array(solo.eligible_ai_units()).contains_exactly([fielded])
+	assert_object(solo.activate_next_ai_unit()).is_equal(fielded)
+	assert_object(solo.activate_next_ai_unit()).is_null()
+	# A reserved HUMAN unit is not a valid AI target even though it is nearer — nearest_human_unit skips it.
+	assert_object(solo.nearest_human_unit(fielded)).is_equal(enemy)
+
+
+## Field-test finding 4: DANGEROUS cells enter the planner's avoid set only when asked (route AROUND them
+## when a clear path exists); Impassable is always avoided, plain ground never.
+func test_terrain_grid_marks_dangerous_avoid_only_when_requested() -> void:
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(auto_free(OPRArmyManager.new()), null, null, 1, 2)
+	# Cell (0,0)'s centre (~0.038 m) is Dangerous; everything else is open ground.
+	solo.terrain_type_at = func(p: Vector3) -> int:
+		return TerrainRules.TerrainType.DANGEROUS if (p.x < 0.05 and p.z < 0.05) else TerrainRules.TerrainType.NONE
+	var with_avoid: Dictionary = solo._terrain_grid_in(6.0, Vector2.ZERO, false, true)
+	assert_bool((with_avoid["avoid"] as Dictionary).has(Vector2i(0, 0))).is_true()
+	var without: Dictionary = solo._terrain_grid_in(6.0, Vector2.ZERO, false, false)
+	assert_bool((without["avoid"] as Dictionary).has(Vector2i(0, 0))).is_false()
+	# The grid still records the cell's type regardless (so the dangerous TEST still fires when crossed).
+	assert_int(int((without["grid"] as Dictionary).get(Vector2i(0, 0), 0))).is_equal(TerrainRules.TerrainType.DANGEROUS)
+
+
+## Field-test finding 10: Difficult and Dangerous are detected INDEPENDENTLY along a route — a path that
+## crosses a difficult cell AND a dangerous cell reports BOTH, so the dangerous test still happens even when
+## the difficult-terrain (6" cap) handling applies.
+func test_route_reports_difficult_and_dangerous_independently() -> void:
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(auto_free(OPRArmyManager.new()), null, null, 1, 2)
+	# West half (x<0) is Forest (Difficult); east half (x>0.2) is Dangerous; a W→E path crosses both.
+	solo.terrain_type_at = func(p: Vector3) -> int:
+		if p.x < 0.0:
+			return TerrainRules.TerrainType.FOREST
+		if p.x > 0.2:
+			return TerrainRules.TerrainType.DANGEROUS
+		return TerrainRules.TerrainType.NONE
+	var a := Vector3(-0.1, 0, 0)
+	var b := Vector3(0.3, 0, 0)
+	assert_bool(solo._path_crosses_terrain(a, b, TerrainRules.PathCheck.DIFFICULT)).is_true()
+	assert_bool(solo._path_crosses_terrain(a, b, TerrainRules.PathCheck.DANGEROUS)).is_true()
+
+
+## Field-test finding 5: melee contact is measured base-to-base (not unit centre), and the charge snap pulls
+## the whole unit into clean base contact preserving formation (coherency).
+func test_nearest_melee_gap_and_charge_snap() -> void:
+	var att := _unit(2, [Vector3(0, 0, 0), Vector3(-0.05, 0, 0)])   # two round bases (r≈0.016 m)
+	var foe := _unit(1, [Vector3(0.05, 0, 0)])                       # ~0.018 m edge gap (~0.7") from the front model
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {att.unit_id: att, foe.unit_id: foe}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var gap := solo.nearest_melee_gap_in(att, foe)
+	assert_float(gap).is_between(0.5, 1.0)                           # within melee-engage tolerance, not touching
+	var back_before := att.models[1].node.global_position.x         # the rear model, for the coherency check
+	var snapped := solo.snap_charge(att, foe)
+	assert_float(snapped).is_greater(0.0)
+	# After the snap the nearest models are in clean contact (~0 gap) and the enemy did not move.
+	assert_float(solo.nearest_melee_gap_in(att, foe)).is_less(0.06)
+	assert_float(foe.models[0].node.global_position.x).is_equal_approx(0.05, 0.0001)
+	# The rear model translated by the SAME delta (rigid = coherency preserved).
+	var delta := att.models[0].node.global_position.x - 0.0
+	assert_float(att.models[1].node.global_position.x).is_equal_approx(back_before + delta, 0.0005)

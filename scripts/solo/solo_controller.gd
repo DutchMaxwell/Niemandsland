@@ -84,6 +84,12 @@ var decision_log: Array = []
 const DECISION_LOG_CAP := 200
 ## Injected by main: Callable(from: Vector3, to: Vector3) -> bool for terrain line of sight.
 var los_checker: Callable = Callable()
+## Injected by main: Callable(shooter: GameUnit, target: GameUnit) -> bool — the GEOMETRIC PER-MODEL line
+## of sight (terrain + walls + other units' bases, GF/AoF v3.5.1 p.5/p.8). When wired it OVERRIDES the
+## coarse unit-centre los_checker so the AI's shoot decision matches the resolution's per-model gate
+## (field-test finding 6: a shooter with a clear per-model line, but a blocked centre-to-centre line, was
+## wrongly held from firing; finding 2 is the reverse — a blocked line must never fire).
+var unit_los_checker: Callable = Callable()
 ## Injected by main (goal 003 P3 — real terrain feeds the shared pure modules):
 ##   terrain_type_at    : Callable(world: Vector3) -> int   (TerrainRules/overlay TerrainType at a point)
 ##   walls_provider     : Callable() -> Array               (world-space [Vector2 a, Vector2 b] wall segments, metres)
@@ -141,9 +147,16 @@ func is_eligible(unit) -> bool:
 	# (GF/AoF Advanced Rules v3.5.1 p.13: "May be set aside before deployment. At the start of any round
 	# after the first, may be deployed…"). Field-test finding 5: reserve units were eligible in round 1
 	# (the AI activated a not-yet-arrived unit); arrival then read as if it had already spent its turn.
-	if bool(u.unit_properties.get("ambush_reserve", false)):
+	if unit_in_reserve(u):
 		return false
 	return not (u.has_method("is_attached") and u.is_attached())
+
+
+## Whether a unit is still HELD in Ambush reserve (off-table, not yet arrived — GF/AoF v3.5.1 p.13). The
+## single truth used everywhere a reserve unit must be invisible to the game: activation eligibility,
+## movement/LOS obstacles, and target validity. Field-test finding 3: a reserve unit leaked into play.
+static func unit_in_reserve(u: GameUnit) -> bool:
+	return u != null and bool(u.unit_properties.get("ambush_reserve", false))
 
 
 func mark_activated(unit) -> void:
@@ -270,8 +283,8 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 	var cands: Array = []
 	for h in army_manager.get_game_units_for_player(human_slot):
 		var hu := h as GameUnit
-		if hu == null or hu.is_destroyed():
-			continue
+		if hu == null or hu.is_destroyed() or unit_in_reserve(hu):
+			continue   # skip destroyed units and any still off-table in Ambush reserve (findings 3/4)
 		if hu.has_method("is_attached") and hu.is_attached():
 			continue   # a joined hero is PART of its host unit — you target the unit, never the hero alone
 		var d := MoveIntent.distance_inches(from, unit_centre(hu))
@@ -474,14 +487,18 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# Pass 1: full band, going AROUND difficult terrain — unless the unit ignores it or its destination
 	# lies inside difficult terrain (objective/charge into a forest — the p.57 overlay exceptions).
 	var avoid: bool = not ignores_difficult and not _targets_in_difficult(positions, goal, reach)
+	# DANGEROUS terrain is also routed AROUND when a clear path exists (field-test finding 4). Only Flying
+	# ignores it (Strider ignores Difficult but NOT Dangerous — GF/AoF v3.5.1 p.13/p.14); if the destination
+	# itself is dangerous, going around is impossible, so the model routes in and takes its dangerous test.
+	var avoid_dangerous: bool = not flying and not _targets_in_dangerous(positions, goal, reach)
 	var trails: Array = []
-	var new_positions := _plan_move(unit, models, positions, goal, reach, allow_contact, avoid, trails, charge_target)
+	var new_positions := _plan_move(unit, models, positions, goal, reach, allow_contact, avoid, avoid_dangerous, trails, charge_target)
 	if not ignores_difficult and _trails_cross_difficult(trails):
 		# The actual route enters difficult terrain → the 6" cap applies (p.11); re-plan through it so the
-		# budget math and the drawn corridor agree.
+		# budget math and the drawn corridor agree. Dangerous is STILL routed around on this pass.
 		reach = minf(inches, DIFFICULT_MOVE_CAP_IN)
 		trails = []
-		new_positions = _plan_move(unit, models, positions, goal, reach, allow_contact, false, trails, charge_target)
+		new_positions = _plan_move(unit, models, positions, goal, reach, allow_contact, false, avoid_dangerous, trails, charge_target)
 	# Distance truth (p.7): no model's polyline may exceed the granted budget — the coherency easing is
 	# best-effort and may not stretch a route past its legal length.
 	var budget_m := reach * INCHES_TO_METERS
@@ -527,13 +544,13 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 ## One planning pass: rigid clamp to the table, then obstacle-aware per-model planning. Returns the new
 ## positions; `trails` receives one world polyline per model.
 func _plan_move(unit: GameUnit, models: Array, positions: Array, goal: Vector3, reach_in: float,
-		allow_contact: bool, avoid_difficult: bool, trails: Array, charge_target: GameUnit) -> Array:
+		allow_contact: bool, avoid_difficult: bool, avoid_dangerous: bool, trails: Array, charge_target: GameUnit) -> Array:
 	var delta := MoveIntent.plan_unit_move(positions, goal, reach_in)
 	delta = _clamp_delta_to_bounds(positions, delta)
 	if delta == Vector3.ZERO:
 		_fill_straight_trails(trails, positions, positions)
 		return positions.duplicate()
-	return _plan_positions(unit, models, positions, delta, allow_contact, trails, avoid_difficult, charge_target)
+	return _plan_positions(unit, models, positions, delta, allow_contact, trails, avoid_difficult, avoid_dangerous, charge_target)
 
 
 ## Would the rigid move's per-model TARGETS land inside difficult terrain? (Objective or charge target
@@ -544,6 +561,20 @@ func _targets_in_difficult(positions: Array, goal: Vector3, reach_in: float) -> 
 	var delta := _clamp_delta_to_bounds(positions, MoveIntent.plan_unit_move(positions, goal, reach_in))
 	for p in positions:
 		if TerrainRules.is_difficult(int(terrain_type_at.call((p as Vector3) + delta))):
+			return true
+	return false
+
+
+## Would the rigid move's per-model TARGETS land inside DANGEROUS terrain? Then going around is impossible
+## (the destination itself is dangerous — e.g. an objective sitting in a lava pool), so the planner routes
+## straight in and the model simply takes its dangerous test. Otherwise dangerous cells are routed AROUND
+## (field-test finding 4: the AI walked through dangerous terrain when a clear route existed).
+func _targets_in_dangerous(positions: Array, goal: Vector3, reach_in: float) -> bool:
+	if not terrain_type_at.is_valid():
+		return false
+	var delta := _clamp_delta_to_bounds(positions, MoveIntent.plan_unit_move(positions, goal, reach_in))
+	for p in positions:
+		if TerrainRules.is_dangerous(int(terrain_type_at.call((p as Vector3) + delta))):
 			return true
 	return false
 
@@ -613,8 +644,8 @@ func _spacing_zones_world(unit: GameUnit, own_radius_m: float, charge_target: Ga
 					target_members[h] = true
 	for g in army_manager.get_all_game_units():
 		var gu := g as GameUnit
-		if gu == null or own.has(gu):
-			continue
+		if gu == null or own.has(gu) or unit_in_reserve(gu):
+			continue   # a reserve unit is off-table — never a movement obstacle (field-test findings 3/4)
 		var buffer_m: float = 0.0 if target_members.has(gu) else UNIT_SPACING_IN * INCHES_TO_METERS
 		for model in gu.get_alive_models():
 			var shape := SeparationChecker.shape_for_model(model as ModelInstance)
@@ -627,7 +658,7 @@ func _spacing_zones_world(unit: GameUnit, own_radius_m: float, charge_target: Ga
 ## Sample the REAL overlay into the planner's typed 3" cell grid (inch frame). Returns
 ## {"grid": {Vector2i: TerrainType}, "avoid": {Vector2i: true}} — Impassable cells are always avoided;
 ## Difficult cells only when the route should go around them (solo overlay p.57).
-func _terrain_grid_in(board_in: float, off: Vector2, avoid_difficult: bool) -> Dictionary:
+func _terrain_grid_in(board_in: float, off: Vector2, avoid_difficult: bool, avoid_dangerous: bool = false) -> Dictionary:
 	var grid := {}
 	var avoid := {}
 	if not terrain_type_at.is_valid():
@@ -642,7 +673,11 @@ func _terrain_grid_in(board_in: float, off: Vector2, avoid_difficult: bool) -> D
 				continue
 			var cell := Vector2i(cx, cy)
 			grid[cell] = t
-			if TerrainRules.is_impassable(t) or (avoid_difficult and TerrainRules.is_difficult(t)):
+			# Impassable is always avoided; Difficult and Dangerous are routed AROUND when the caller asks
+			# (a clear route exists — solo overlay p.57 for Difficult, field-test finding 4 for Dangerous).
+			if TerrainRules.is_impassable(t) \
+					or (avoid_difficult and TerrainRules.is_difficult(t)) \
+					or (avoid_dangerous and TerrainRules.is_dangerous(t)):
 				avoid[cell] = true
 	return {"grid": grid, "avoid": avoid}
 
@@ -706,6 +741,10 @@ static func shooting_range_bonus(unit: GameUnit) -> int:
 
 ## Line of sight between two units via the injected checker (main wires terrain LOS); no checker = clear.
 func _has_los(unit: GameUnit, target_unit: GameUnit) -> bool:
+	# Prefer the geometric per-model check (matches the shooting resolution's per-model gate); fall back to
+	# the coarse unit-centre terrain callable only when no per-model checker is wired (headless tests).
+	if unit_los_checker.is_valid():
+		return bool(unit_los_checker.call(unit, target_unit))
 	if not los_checker.is_valid():
 		return true
 	return bool(los_checker.call(unit_centre(unit), unit_centre(target_unit)))
@@ -739,7 +778,7 @@ func _apply_model_positions(models: Array, new_positions: Array) -> void:
 ## MovementPlanner in its 0-origin inch frame. The fast path (nothing in the way) stays the exact rigid
 ## slide. `world_trails` (optional out): one WORLD-space waypoint list per model — the real route taken.
 func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vector3, allow_contact: bool,
-		world_trails: Array = [], avoid_difficult: bool = true, charge_target: GameUnit = null) -> Array:
+		world_trails: Array = [], avoid_difficult: bool = true, avoid_dangerous: bool = false, charge_target: GameUnit = null) -> Array:
 	var rigid: Array = []
 	for p in positions:
 		rigid.append((p as Vector3) + delta)
@@ -773,7 +812,7 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 			"r": float(zd["r"]) / INCHES_TO_METERS})
 	if not zones_in.is_empty():
 		opts["zones"] = zones_in
-	var sampled := _terrain_grid_in(board_in, off, avoid_difficult)
+	var sampled := _terrain_grid_in(board_in, off, avoid_difficult, avoid_dangerous)
 	opts["avoid_cells"] = sampled["avoid"]
 	if not MovementPlanner.rigid_blocked(mpos, mdelta, walls_in, opts):
 		_fill_straight_trails(world_trails, positions, rigid)
@@ -1298,6 +1337,72 @@ func unit_centre(unit: GameUnit) -> Vector3:
 	return MoveIntent.anchor_of(alive_positions(unit))
 
 
+## Smallest base-to-base EDGE gap (inches) between ANY alive model of `a` (incl. attached heroes) and ANY
+## of `b` — the TRUE melee-contact measure via the shared SeparationChecker shapes, replacing the coarse
+## unit-centre distance that missed base contact for wide/multi-model units (field-test finding 5: the
+## player could not attack an enemy his models were touching). 0 = touching/overlapping; INF when either
+## side has no live models.
+func nearest_melee_gap_in(a: GameUnit, b: GameUnit) -> float:
+	var a_models := _moving_models(a)
+	var b_models := _moving_models(b)
+	if a_models.is_empty() or b_models.is_empty():
+		return INF
+	var b_shapes: Array = []
+	for bm in b_models:
+		var bs := SeparationChecker.shape_for_model(bm as ModelInstance)
+		if bs != null:
+			b_shapes.append(bs)
+	var best := INF
+	for am in a_models:
+		var ashape := SeparationChecker.shape_for_model(am as ModelInstance)
+		if ashape == null:
+			continue
+		for bs in b_shapes:
+			best = minf(best, SeparationChecker.edge_distance(ashape, bs))
+	return best
+
+
+## Charge snap (field-test finding 5): rigidly translate the whole charging unit so its NEAREST model lands
+## in clean base contact with the nearest enemy model, PRESERVING formation and thereby bringing the rest of
+## the unit forward in coherency — GF/AoF v3.5.1 p.8: "Charging models must move … to get into base contact
+## with an enemy model … or as close as possible, whilst still maintaining unit coherency." (The defender's
+## own pull-in — "all models from the target unit that are not in base contact … must move by up to 3” to
+## get into base contact … maintaining unit coherency", p.9 — is a SEPARATE rule, surfaced as a reminder.)
+## A rigid translation keeps every relative spacing, so coherency is preserved by construction. Returns the
+## snap distance in inches (0 when already in contact, or nothing to move). Positions broadcast for MP.
+func snap_charge(charger: GameUnit, target: GameUnit) -> float:
+	var models := _moving_models(charger)
+	if models.is_empty():
+		return 0.0
+	# The closest charger-model / enemy-model pair and the gap to close along their centre line.
+	var best_gap := INF
+	var best_dir := Vector2.ZERO
+	var enemy_shapes: Array = []
+	for em in _moving_models(target):
+		var es := SeparationChecker.shape_for_model(em as ModelInstance)
+		if es != null:
+			enemy_shapes.append(es)
+	for cm in models:
+		var cs := SeparationChecker.shape_for_model(cm as ModelInstance)
+		if cs == null:
+			continue
+		for es in enemy_shapes:
+			var gap: float = SeparationChecker.edge_distance(cs, es)
+			if gap < best_gap:
+				best_gap = gap
+				best_dir = ((es as SeparationChecker.BaseShape).center - (cs as SeparationChecker.BaseShape).center)
+	if best_gap <= SeparationChecker.BASE_CONTACT_EPSILON_INCHES or best_gap == INF or best_dir.length() < 0.00001:
+		return 0.0   # already in clean contact (or degenerate) — nothing to snap
+	var delta2 := best_dir.normalized() * (best_gap * INCHES_TO_METERS)
+	var delta := Vector3(delta2.x, 0.0, delta2.y)
+	var positions := _positions_of(models)
+	var moved: Array = []
+	for p in positions:
+		moved.append((p as Vector3) + delta)
+	_apply_model_positions(models, moved)
+	return best_gap
+
+
 ## Whether the MAJORITY of a unit's alive models sit in cover terrain (GF/AoF Advanced Rules v3.5.1 p.11:
 ## "If the majority of models in a unit are fully inside a piece of cover terrain … they get +1 to Defense
 ## rolls when blocking hits from shooting attacks."). Reads the REAL overlay via the injected
@@ -1421,18 +1526,20 @@ func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, block
 		# rows made wide units never fit their section and they were skipped silently (field test:
 		# "only a few miniatures deploy"). The footprint is the grid the unit WILL take.
 		var radius := _deploy_footprint_radius(unit)
+		var footprint := _deploy_footprint_offsets(unit)   # exact per-model grid → checks every base (finding 1)
+		var base_r := _deploy_base_radius(_deploy_models(unit))
 		var ignores_terrain: bool = unit.has_special_rule("Strider") or unit.has_special_rule("Flying")
 		var blocked := blocked_flying if ignores_terrain else blocked_normal
-		var spot := AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius)
+		var spot := AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r)
 		var spot_why := "best legal spot toward nearest objective (section)"
 		if spot == Vector2.INF:
-			spot = AiDeployment.best_spot(zone, objectives, occupied, radius, blocked, 0.025, radius)
+			spot = AiDeployment.best_spot(zone, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r)
 			spot_why = "section full — whole-zone fallback"
 		if spot == Vector2.INF:
 			# Crowded out of every spaced spot: relax the 1" spacing (allow neighbours to bunch) but STILL
 			# reject blocking/impassable terrain — the army MUST deploy, yet a legal footprint always beats
 			# a spot inside a wall/forest (field-test finding 3: units deployed inside blocking terrain).
-			spot = AiDeployment.best_spot(zone, objectives, [], radius, blocked, 0.025, radius)
+			spot = AiDeployment.best_spot(zone, objectives, [], radius, blocked, 0.025, radius, footprint, base_r)
 			spot_why = "crowded — nearest legal (non-terrain) spot, spacing relaxed"
 		if spot == Vector2.INF:
 			# Truly no non-blocking cell in the whole zone (a terrain-choked table) — only now, as an
@@ -1501,7 +1608,9 @@ func arrive_one_ambush_unit(arrival_zone: Rect2, enemy_positions: Array, occupie
 		if not blocked.is_valid():
 			blocked = no_block
 		var radius := _deploy_footprint_radius(unit)
-		var spot := AiDeployment.best_spot(arrival_zone, _deploy_objectives, occupied, radius, blocked, 0.025, radius)
+		var footprint := _deploy_footprint_offsets(unit)   # per-model footprint (finding 1)
+		var base_r := _deploy_base_radius(_deploy_models(unit))
+		var spot := AiDeployment.best_spot(arrival_zone, _deploy_objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r)
 		if spot == Vector2.INF:
 			remaining.append(unit)   # no legal spot this round — hold for a later one (p.13)
 			continue
@@ -1533,14 +1642,47 @@ func _deploy_models(unit: GameUnit) -> Array:
 	return out
 
 
-## Footprint radius of the COMPACT grid the unit takes at deployment (not its staging formation).
+## Footprint radius of the COMPACT grid the unit takes at deployment (not its staging formation). Includes
+## the outer models' BASE radius so the whole footprint — bases, not just centres — is measured for clear
+## ground and spacing (field-test finding 1: a model centre cleared terrain but its base overlapped it).
 func _deploy_footprint_radius(unit: GameUnit) -> float:
-	var n: int = maxi(_deploy_models(unit).size(), 1)
+	var models: Array = _deploy_models(unit)
+	var n: int = maxi(models.size(), 1)
 	var cols: int = mini(n, DEPLOY_COLS)
 	var rows: int = int(ceil(float(n) / float(DEPLOY_COLS)))
 	var half_w: float = float(cols - 1) * DEPLOY_SPACING_M * 0.5
 	var half_d: float = float(rows - 1) * DEPLOY_SPACING_M * 0.5
-	return sqrt(half_w * half_w + half_d * half_d) + 0.03
+	return sqrt(half_w * half_w + half_d * half_d) + _deploy_base_radius(models) + 0.01
+
+
+## The largest base radius (metres) among a unit's deployment models — the per-model base extent the
+## footprint check inflates each grid cell by (SeparationChecker shape truth; 32 mm fallback).
+func _deploy_base_radius(models: Array) -> float:
+	var r: float = SeparationChecker.DEFAULT_BASE_RADIUS_M
+	for m in models:
+		r = maxf(r, model_base_radius_m(m as ModelInstance))
+	return r
+
+
+## The model-local XZ offsets (metres, relative to the drop anchor) that the unit's models WILL occupy at
+## deployment — the EXACT compact grid `_place_unit_at` builds, so the footprint check tests where each
+## model actually lands. Empty for a regiment (its rigid tray reforms — the footprint circle covers it).
+func _deploy_footprint_offsets(unit: GameUnit) -> Array:
+	if _is_regiment(unit):
+		return []
+	var n: int = _deploy_models(unit).size()
+	var offsets: Array = []
+	if n == 0:
+		return offsets
+	var cols: int = mini(n, DEPLOY_COLS)
+	var rows: int = int(ceil(float(n) / float(DEPLOY_COLS)))
+	for i in range(n):
+		var col: int = i % DEPLOY_COLS
+		var row: int = i / DEPLOY_COLS
+		offsets.append(Vector2(
+			(float(col) - float(cols - 1) * 0.5) * DEPLOY_SPACING_M,
+			(float(row) - float(rows - 1) * 0.5) * DEPLOY_SPACING_M))
+	return offsets
 
 
 ## Put the unit AT the spot: a regiment moves as its tray and reforms its block there; a loose unit's
