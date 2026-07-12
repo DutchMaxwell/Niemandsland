@@ -698,8 +698,13 @@ func _solo_activate_one_ai() -> GameUnit:
 		return unit
 	var target: GameUnit = report.get("target")
 	if battle_log != null and target != null:
+		# Narrate the TRUE move goal (field-test finding 1): an objective-seeking move used to print the enemy
+		# unit's name ("rushes → Snipers") even though it was heading for a marker, masking whether the AI ever
+		# contested the mission. When the tree routed toward an objective, say so; the enemy stays the combat
+		# target for any shooting that follows.
+		var goal_label: String = "an objective" if bool(report.get("to_objective", false)) else target.get_name()
 		battle_log.log_event(BattleLog.Category.MOVEMENT, "%s %s (→ %s)" % [
-			unit.get_name(), AiDecision.action_name(int(report.get("action", 0))), target.get_name()], true)
+			unit.get_name(), AiDecision.action_name(int(report.get("action", 0))), goal_label], true)
 	_solo_log_unmodeled_rules(unit)   # once-per-session visibility of rules the automation skips
 	if target != null:
 		_solo_log_unmodeled_rules(target)
@@ -894,6 +899,14 @@ func _solo_auto_seize() -> void:
 		var idx: int = int((c as Dictionary).get("index", -1))
 		var owner: int = int((c as Dictionary).get("owner", 0))
 		terrain_overlay.set_objective_owner(idx, owner)
+		# Emit the round-end ownership flip into the AI decision log too (field-test finding 1): the harness
+		# reads the structured records, so a seize/contest event there makes "did the AI hold anything?"
+		# measurable across a self-play run rather than only human-readable in the battle log.
+		if solo_controller != null:
+			solo_controller.record_decision({"kind": "seize", "unit": "objective %d" % (idx + 1),
+				"rule": "Solo & Co-Op v3.5.0 p.2/p.6: a marker is held by the ONE side with non-Shaken models within 3\"",
+				"candidates": [], "chosen": ("neutral (contested)" if owner == 0 else _solo_player_label(owner)),
+				"why": "round-end seize", "data": {"index": idx, "owner": owner, "round": round_no}})
 		if network_manager != null:
 			network_manager.broadcast_objective_owner(idx, owner)
 		if battle_log != null:

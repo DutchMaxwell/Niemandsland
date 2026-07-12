@@ -472,3 +472,33 @@ research-informed package and is not reworked here.)
 `deploy_army`, `MovementPlanner` game-only helpers, `AiDeployment`, `terrain_overlay` LOS, `BattleLog`);
 `SoloSim`, `TerrainRules`, and the SIM's `plan_unit_step`/`_terrain_grid_in` paths are untouched, so the
 mirror-fairness oracle is byte-identical — no re-run required (same precedent as waves 1–4 and rounds 2–3).
+
+
+## Field-test round 5 — three self-play findings (AI-vs-AI, 2026-07-12)
+
+A data-driven AI-vs-AI self-play run (build `a7e4054`) surfaced three findings. All fixes live in the
+game/solo layer (`SoloController`, `main.gd`); `SoloSim` and every shared pure module (`AiDecision`,
+`AiEv`, `MoveIntent`, `MovementPlanner`) are UNTOUCHED, so the mirror-fairness oracle is byte-identical —
+no re-run required.
+
+1. **The AI never SEIZED an objective — games stalled 0-0-3.** The decision/movement toward objectives was
+   correct (a reachable marker is reached, centre on the marker; proven by the pre-existing
+   `test_ai_rushes_toward_an_uncontrolled_objective_over_the_enemy`), but the objective-selection ignored the
+   official **"Controlling Objectives"** rule (Solo & Co-Op v3.5.0 p.2: *"objectives count as under the AI's
+   control if the AI already controls them, or if more non-shaken AI units than enemy units are within 3" of
+   it"*). `_nearest_uncontrolled_objective` checked ONLY the persistent round-end owner, so once an AI unit
+   reached the contested centre marker, no other AI unit ever treated it as held — every unit piled onto the
+   same contested marker, it went neutral (contested) at round end, and no unit peeled off to hold an open
+   flank. Fix: `_nearest_uncontrolled_objective` now (a) skips a marker the AI controls by the 3"-majority
+   rule — counted per UNIT, excluding the deciding unit so a lone holder never abandons its own marker — and
+   (b) prefers a **holdable** marker (no enemy within 3", so it can be seized and kept) over a contested one,
+   then the nearest. This makes units DISTRIBUTE across the mission instead of dog-piling one contested spot.
+   The 3"-majority skip is the letter of the rule; the holdable-first ordering is a documented refinement
+   (the letter — "nearest uncontrolled" — never distributes). Instrumentation added so the effect is
+   measurable from the decision records: the `action` record now carries `obj_dist_in`, a per-activation
+   `seize_check` record carries the unit's `obj_gap_after_in` (nearest model → nearest marker) and
+   `in_seize_range`, and the round-end flip emits a `seize` record. The move narration now says "→ an
+   objective" instead of the enemy's name when the unit heads for a marker. Tests:
+   `test_ai_moves_into_seize_range_of_open_marker_and_seizes`,
+   `test_decision_prefers_a_holdable_open_marker_over_a_contested_one`,
+   `test_ai_peels_off_a_marker_another_ai_unit_already_holds`.

@@ -772,3 +772,72 @@ func test_striking_models_is_symmetric_for_two_bases_in_contact() -> void:
 	var b := [Vector3(0.05, 0.0, 0.0)]   # ~2" apart, within the 1"+2" strike reach
 	assert_int(SoloController.striking_models(a, b)).is_equal(SoloController.striking_models(b, a))
 	assert_int(SoloController.striking_models(a, b)).is_equal(1)
+
+
+# === Field-test round-5 finding 1: the AI must contest + distribute across objectives ===
+
+func test_ai_moves_into_seize_range_of_open_marker_and_seizes() -> void:
+	# A unit within reach of an OPEN neutral marker heads for it, ends in seize range (≤3"), and the round-end
+	# seize then flips the marker to the AI (Solo & Co-Op v3.5.0 p.2/p.6).
+	var human := _unit(1, [Vector3(0.0, 0, -0.55)])   # ~21.6" south — far out of the way
+	var ai := _unit(2, [Vector3(0.0, 0, 0.0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var marker := Vector3(0.0, 0, 0.25)   # ~9.8" north — inside the 12" Rush band, open
+	solo.objectives_provider = func() -> Array: return [marker]
+	solo.objective_owner_of = func(_i: int) -> int: return 0
+
+	solo.activate_next_ai_unit()
+	assert_int(int(solo.last_report["toward"])).is_equal(AiDecision.Toward.OBJECTIVE)
+	assert_float(float(solo.last_report.get("obj_gap_after_in", 999.0))).is_less_equal(3.0)
+	var infos: Array = [{"player": 2, "shaken": false, "positions": solo.alive_positions(ai)}]
+	var res := SoloController.seize_objectives(infos, [marker], [0])
+	assert_int(int((res["owners"] as Array)[0])).is_equal(2)
+
+
+func test_decision_prefers_a_holdable_open_marker_over_a_contested_one() -> void:
+	# Round-5 finding: both armies piled onto the contested centre and never held an open flank. Among un-held
+	# markers the tree now prefers a HOLDABLE one (no enemy within 3") over a contested one — even if farther.
+	var ai := _unit(2, [Vector3(0.0, 0, 0.0)])
+	var enemy := _unit(1, [Vector3(0.20, 0, 0.0)])   # sitting ON the near marker → contests it
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {ai.unit_id: ai, enemy.unit_id: enemy}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var near_contested := Vector3(0.20, 0, 0.0)   # ~7.9", enemy within 3"
+	var far_open := Vector3(0.45, 0, 0.0)          # ~17.7", no enemy near
+	solo.objectives_provider = func() -> Array: return [near_contested, far_open]
+	solo.objective_owner_of = func(_i: int) -> int: return 0
+	# Prefers the farther OPEN marker over the near CONTESTED one.
+	assert_vector(solo._nearest_uncontrolled_objective(solo.unit_centre(ai), ai)).is_equal(far_open)
+
+
+func test_ai_peels_off_a_marker_another_ai_unit_already_holds() -> void:
+	# Official "Controlling Objectives" (Solo & Co-Op v3.5.0 p.2): a marker with an AI non-Shaken majority
+	# within 3" counts as controlled. A SECOND AI unit therefore skips it and heads for the next open marker
+	# (distribution) — but a lone holder does not read itself as controlling and wander off.
+	var mover := _unit(2, [Vector3(0.0, 0, 0.0)])
+	var holder := _unit(2, [Vector3(0.20, 0, 0.0)])   # already sitting on the near marker
+	holder.unit_id = "ai_holder"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {mover.unit_id: mover, holder.unit_id: holder}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var near_marker := Vector3(0.20, 0, 0.0)   # held by `holder`
+	var far_marker := Vector3(0.45, 0, 0.0)     # open
+	solo.objectives_provider = func() -> Array: return [near_marker, far_marker]
+	solo.objective_owner_of = func(_i: int) -> int: return 0
+	# The holder controls the near marker → the mover peels off to the far one.
+	assert_vector(solo._nearest_uncontrolled_objective(solo.unit_centre(mover), mover)).is_equal(far_marker)
+	# The holder itself, deciding, does NOT abandon the marker only it holds — it still targets the near one.
+	assert_vector(solo._nearest_uncontrolled_objective(solo.unit_centre(holder), holder)).is_equal(near_marker)
+
+

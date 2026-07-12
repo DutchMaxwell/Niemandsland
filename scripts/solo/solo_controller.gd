@@ -368,8 +368,10 @@ func _act(unit: GameUnit) -> Dictionary:
 	# game (AiEv.classify — Furious/Thrust/Impact weigh the melee side); the sim keeps the frozen
 	# AiArchetype.classify heuristic, so its fairness oracle is untouched.
 	var archetype := AiEv.classify(weapons, AiEv.ctx_for(unit, false, 0))
-	# Nearest objective NOT controlled by this AI side — the official trees pivot on it.
-	var obj_pos := _nearest_uncontrolled_objective(centre)
+	# Nearest objective NOT controlled by this AI side — the official trees pivot on it. Control follows the
+	# official "Controlling Objectives" rule (Solo & Co-Op v3.5.0 p.2), and among the un-held ones the tree
+	# prefers a HOLDABLE marker over a contested one so units peel off to open flanks (field-test finding 1).
+	var obj_pos := _nearest_uncontrolled_objective(centre, unit)
 	var has_obj: bool = obj_pos != NO_OBJECTIVE
 	var obj_dist: float = MoveIntent.distance_inches(centre, obj_pos) if has_obj else INF
 	var ctx := {
@@ -400,11 +402,13 @@ func _act(unit: GameUnit) -> Dictionary:
 		"candidates": [], "chosen": AiDecision.action_name(action), "why": action_why,
 		"data": {"arch": archetype, "objective": bool(ctx["objective"]), "in_way": bool(ctx["in_way"]),
 			"enemy_in_charge": bool(ctx["enemy_in_charge"]), "shoot_after_advance": bool(ctx["shoot_after_advance"]),
-			"enemy_dist_in": enemy_dist, "toward_objective": int(dec["toward"]) == AiDecision.Toward.OBJECTIVE}})
+			"enemy_dist_in": enemy_dist, "obj_dist_in": obj_dist,
+			"toward_objective": int(dec["toward"]) == AiDecision.Toward.OBJECTIVE}})
 	report["action"] = action
 	report["shoot"] = do_shoot
 	report["toward"] = int(dec["toward"])
 	var to_obj: bool = int(dec["toward"]) == AiDecision.Toward.OBJECTIVE and has_obj
+	report["to_objective"] = to_obj   # main narrates "→ objective" instead of the enemy name (finding 1 label)
 	var goal: Vector3 = obj_pos if to_obj else tcentre
 	var goal_dist := MoveIntent.distance_inches(centre, goal)
 	var dang := 0
@@ -426,6 +430,19 @@ func _act(unit: GameUnit) -> Dictionary:
 		_:
 			pass   # HOLD
 	report["dangerous_models"] = dang
+	# Instrument the objective outcome (field-test finding 1: the harness logged enemy distance but NEVER the
+	# model-to-marker distance, so "did the AI actually contest?" was unmeasurable). Record the post-move gap
+	# from the unit's NEAREST model to its NEAREST marker and whether it now sits in seize range (≤3", p.2).
+	if objectives_provider.is_valid():
+		var obj_gap_after := _nearest_objective_model_gap_in(unit)
+		if obj_gap_after < INF:
+			report["obj_gap_after_in"] = obj_gap_after
+			record_decision({"kind": "seize_check", "unit": unit.get_name(),
+				"rule": "Solo & Co-Op v3.5.0 p.2: a marker is held by non-Shaken models within 3\"",
+				"candidates": [], "chosen": ("in seize range" if obj_gap_after <= OBJECTIVE_CONTROL_IN else "short of marker"),
+				"why": ("toward objective" if to_obj else "toward enemy"),
+				"data": {"obj_gap_after_in": obj_gap_after, "toward_objective": to_obj,
+					"in_seize_range": obj_gap_after <= OBJECTIVE_CONTROL_IN}})
 	# Shooting eligibility is measured AFTER the move; only actions the tree marked shoot=true actually fire.
 	var d2 := MoveIntent.distance_inches(unit_centre(unit), unit_centre(target_unit))
 	report["dist_in"] = d2
@@ -923,8 +940,21 @@ func _walls_world() -> Array:
 	return []
 
 
-## Nearest objective this AI side does NOT control (owner != ai_slot). NO_OBJECTIVE when none / no provider.
-func _nearest_uncontrolled_objective(from: Vector3) -> Vector3:
+## The objective the activating unit should head for — the nearest marker this AI side does NOT control,
+## with a HOLDABLE marker (no enemy contesting it) preferred over a contested one. NO_OBJECTIVE when none.
+##
+## Control follows the official "Controlling Objectives" rule (Solo & Co-Op v3.5.0 p.2): an objective counts
+## as under the AI's control if the AI already OWNS it (persistent round-end owner) OR more non-shaken AI
+## units than enemy units are within 3" of it. Crucially we EXCLUDE the activating unit from that AI count,
+## so a lone holder does not read itself as "controlling" and wander off — but the moment a SECOND AI unit
+## is on the marker, a third treats it as held and peels off to an open one.
+##
+## Among the markers the AI does not control the tree prefers a HOLDABLE one — no enemy unit within 3", so a
+## unit sent there can seize and keep it — over a contested one, then the nearest. This is the round-5 field
+## finding: both armies piled onto the contested centre marker and no unit ever peeled off to hold an open
+## flank, so every game stalled 0-0-3. Nearest-uncontrolled alone (the letter of the tree) never distributes;
+## the holdable-first ordering is the documented refinement that makes the AI actually contest the mission.
+func _nearest_uncontrolled_objective(from: Vector3, activating_unit: GameUnit = null) -> Vector3:
 	if not objectives_provider.is_valid():
 		return NO_OBJECTIVE
 	var objs: Variant = objectives_provider.call()
@@ -932,16 +962,61 @@ func _nearest_uncontrolled_objective(from: Vector3) -> Vector3:
 		return NO_OBJECTIVE
 	var arr: Array = objs
 	var best := NO_OBJECTIVE
+	var best_holdable := false
 	var best_d := INF
 	for i in range(arr.size()):
-		var owner: int = int(objective_owner_of.call(i)) if objective_owner_of.is_valid() else 0
-		if owner == ai_slot:
-			continue   # already ours → controlled
 		var o: Vector3 = arr[i]
+		var owner: int = int(objective_owner_of.call(i)) if objective_owner_of.is_valid() else 0
+		var enemy_near: int = _units_controlling(o, human_slot, null)
+		# The AI controls it (skip) when it already owns it, or has a strict non-shaken majority within 3"
+		# (excluding the unit deciding right now, so it never abandons a marker only it is holding).
+		if owner == ai_slot or _units_controlling(o, ai_slot, activating_unit) > enemy_near:
+			continue
+		var holdable: bool = enemy_near == 0   # no enemy contesting → a unit here can seize and keep it
 		var d := MoveIntent.distance_inches(from, o)
-		if d < best_d:
-			best_d = d
+		# Holdable markers rank ahead of contested ones; within a tier the nearer marker wins.
+		if best == NO_OBJECTIVE or (holdable and not best_holdable) or (holdable == best_holdable and d < best_d):
 			best = o
+			best_holdable = holdable
+			best_d = d
+	return best
+
+
+## Count of a side's non-shaken, on-table units with at least one alive model within 3" of `obj` (the
+## official "Controlling Objectives" presence, Solo & Co-Op v3.5.0 p.2 — counted per UNIT, not per model).
+## `exclude` drops one unit from the tally (the unit currently deciding its own move). Reserve/attached
+## units never count (they are not free-standing on the table).
+func _units_controlling(obj: Vector3, slot: int, exclude: GameUnit) -> int:
+	if army_manager == null:
+		return 0
+	var n := 0
+	for u in army_manager.get_game_units_for_player(slot):
+		var gu := u as GameUnit
+		if gu == null or gu == exclude or gu.is_destroyed() or gu.is_shaken or unit_in_reserve(gu):
+			continue
+		if gu.has_method("is_attached") and gu.is_attached():
+			continue
+		for p in alive_positions(gu):
+			if MoveIntent.distance_inches(p, obj) <= OBJECTIVE_CONTROL_IN + 0.001:
+				n += 1
+				break
+	return n
+
+
+## Smallest distance (inches) from any alive model of `unit` to its nearest objective marker — the
+## measurable "did the unit reach seize range?" number for the decision log (field-test finding 1). INF
+## when there are no markers or no live models.
+func _nearest_objective_model_gap_in(unit: GameUnit) -> float:
+	if not objectives_provider.is_valid():
+		return INF
+	var objs: Variant = objectives_provider.call()
+	if not (objs is Array):
+		return INF
+	var arr: Array = objs
+	var best := INF
+	for p in alive_positions(unit):
+		for o in arr:
+			best = minf(best, MoveIntent.distance_inches(p, o as Vector3))
 	return best
 
 
