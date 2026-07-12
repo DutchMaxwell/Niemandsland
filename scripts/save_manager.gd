@@ -7,7 +7,9 @@ signal save_completed(path: String)
 signal load_completed(object_count: int)
 signal load_failed(error: String)
 
-const SAVE_VERSION = "1.5"  # Added free-placed sandbox terrain (ruins/forests/hazard clusters)
+const SAVE_VERSION = "1.6"  # Schema checkpoint (goal 002): normalises the post-1.5 no-bump additions.
+# RULE: whoever bumps SAVE_VERSION ships the matching SaveMigrations step + fixture test in the SAME
+# change — see scripts/save_migrations.gd for the chain and docs/ARCHITECTURE.md.
 const SAVE_EXTENSION = "nml"  # Niemandsland Save
 ## Yield to the main loop every N object spawns during a load/army-receive so heavy GLB
 ## instantiation never blocks the thread for seconds — a long stall starves the relay
@@ -336,10 +338,16 @@ func load_game(path: String) -> Error:
 		load_failed.emit("Invalid save file format")
 		return ERR_INVALID_DATA
 
-	# Validate version
-	var version = state.get("version", "")
-	if version != SAVE_VERSION:
-		push_warning("Save file version mismatch: %s (expected %s)" % [version, SAVE_VERSION])
+	# Versioned migration (goal 002): the current format passes through, supported older formats are
+	# lifted step by step, pre-alpha or newer-build saves fail with a CLEAR message instead of loading
+	# into silent data damage (the old code only push_warning'ed and loaded anyway).
+	var migration := SaveMigrations.migrate(state)
+	if not bool(migration["ok"]):
+		load_failed.emit(str(migration["error"]))
+		return ERR_INVALID_DATA
+	state = migration["state"]
+	if not str(migration["migrated_from"]).is_empty():
+		print("[SaveManager] migrated save from version %s to %s" % [migration["migrated_from"], SAVE_VERSION])
 
 	# Clear current state
 	if object_manager:
