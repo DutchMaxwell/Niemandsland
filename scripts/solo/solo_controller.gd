@@ -1167,6 +1167,21 @@ static func alternation_next(pending_replies: int, human_eligible: int, ai_eligi
 	return AltStep.WAIT
 
 
+## OPR round-opener rule (GF/AoF Advanced Rules v3.5.1, "Rounds, Turns & Activations": "On each new round
+## the player that finished activating first on the last round gets to activate first."). The side that
+## took the LAST activation of a round is precisely the one that finished LAST, so the OTHER side opens the
+## next round — which forbids the same side taking a round's last activation AND the next round's first
+## (field-test finding 7: the AI activated back-to-back across the round boundary). The former round-parity
+## opener ignored who actually went last. If the designated opener has been wiped, the side that still has
+## units opens instead. Returns true when the AI should take the FIRST activation of the next round.
+static func ai_opens_next_round(ai_took_last_activation: bool, human_has_units: bool, ai_has_units: bool) -> bool:
+	if ai_took_last_activation:
+		# The human finished first → the human opens; but if the human is wiped, the AI opens.
+		return (not human_has_units) and ai_has_units
+	# The AI finished first → the AI opens, provided it still has units.
+	return ai_has_units
+
+
 ## Apply `wounds` whole-wounds to a unit's models back-rank-first (Tough models absorb damage before
 ## dying — GF v3.5.1 p.9 casualty removal, defender-optimal). The TESTABLE core of the solo damage
 ## application (maintainer field-test: an AI Tough hero soaked wounds with no visible tick — main's seams

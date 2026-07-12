@@ -241,6 +241,9 @@ var _solo_los_cache: Dictionary = {}         # {target_id, count, at} — thrott
 const SOLO_GAME_ROUNDS := 4                  # OPR standard match length (rounds)
 const SOLO_AI_TAIL_DELAY_S := 1.2            # readable pause between the AI's unprompted tail activations
 var _solo_pending_replies: int = 0           # human activations still owed one AI answer (alternation)
+var _solo_ai_took_last_activation: bool = true  # who took the LAST activation of the current round (finding 7:
+                                             # drives who OPENS the next round — the OTHER side, never back-to-back).
+                                             # Init true so round 1 opens with the human (the default deployment order).
 var _solo_ai_busy: bool = false              # an AI activation chain is running (guards re-entry)
 var _solo_game_finished: bool = false        # summary shown after SOLO_GAME_ROUNDS — no further auto-advance
 var _solo_ai_banner: Label = null            # non-blocking "AI is taking its turn…" banner during the tail
@@ -679,6 +682,7 @@ func _solo_activate_one_ai() -> GameUnit:
 	var unit: GameUnit = solo_controller.activate_next_ai_unit()
 	if unit == null:
 		return null
+	_solo_ai_took_last_activation = true   # the AI just took an activation (finding 7: round-opener tracking)
 	# Camera follows the acting unit so each activation is watchable (goal 001, F1).
 	_solo_focus_on_unit(unit)
 	if radial_menu_controller != null:
@@ -742,6 +746,7 @@ func _solo_activate_one_ai() -> GameUnit:
 func _on_solo_human_activated(gu: GameUnit) -> void:
 	if not _solo_alternation_ready(gu):
 		return
+	_solo_ai_took_last_activation = false   # the human just took an activation (finding 7: round-opener tracking)
 	_solo_pending_replies += 1
 	await _solo_pump()
 
@@ -834,8 +839,11 @@ func _solo_after_activation() -> void:
 
 ## Round end in a solo game: objectives seize/contest at round end (official rule), then either the
 ## end-of-game summary (after SOLO_GAME_ROUNDS — the OPR standard match length) or the round advances
-## exactly like the manual Next-Round button (bookkeeping + visuals + MP broadcast). OPR alternates which
-## side OPENS a round: the AI opens the even rounds (round parity — stateless and save/load-proof).
+## exactly like the manual Next-Round button (bookkeeping + visuals + MP broadcast). OPR round-opener rule
+## (GF/AoF Advanced Rules v3.5.1: "On each new round the player that finished activating first on the last
+## round gets to activate first") — the side that did NOT take the last activation opens the next round, so
+## a side can never take a round's last activation AND the next round's first (field-test finding 7: the AI
+## activated back-to-back across the boundary because the old round-parity opener ignored who went last).
 func _solo_end_round() -> void:
 	_solo_auto_seize()
 	if opr_army_manager.current_round >= SOLO_GAME_ROUNDS:
@@ -849,10 +857,13 @@ func _solo_end_round() -> void:
 		network_manager.broadcast_round_advance()
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, "Round %d begins" % opr_army_manager.current_round, true)
-	if opr_army_manager.current_round % 2 == 0:
+	var human_has: bool = not solo_controller.eligible_units_for(solo_controller.human_slot).is_empty()
+	var ai_has: bool = not solo_controller.eligible_ai_units().is_empty()
+	if SoloController.ai_opens_next_round(_solo_ai_took_last_activation, human_has, ai_has):
 		# The AI opens this round with one activation; the pump's tail then drains an empty human side.
 		_solo_pending_replies += 1
 		await _solo_pump()
+	# Otherwise the human opens — the pump waits for the human's own activation (the alternation resumes there).
 
 
 ## Objective control at round end (goal 003 P2, official rule): every marker with exactly ONE side's

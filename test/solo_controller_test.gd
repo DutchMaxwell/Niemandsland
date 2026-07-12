@@ -736,3 +736,19 @@ func test_nearest_melee_gap_and_charge_snap() -> void:
 	# The rear model translated by the SAME delta (rigid = coherency preserved).
 	var delta := att.models[0].node.global_position.x - 0.0
 	assert_float(att.models[1].node.global_position.x).is_equal_approx(back_before + delta, 0.0005)
+
+
+# === Round opener: the side that finished FIRST opens the next round (finding 7) ===
+
+func test_ai_opens_next_round_never_back_to_back() -> void:
+	# GF/AoF v3.5.1: "the player that finished activating first on the last round gets to activate first" —
+	# i.e. the side that did NOT take the last activation opens next. So no side takes a round's last
+	# activation AND the next round's first (field-test finding 7).
+	assert_bool(SoloController.ai_opens_next_round(true, true, true)).is_false()    # AI went last → human opens
+	assert_bool(SoloController.ai_opens_next_round(false, true, true)).is_true()    # human went last → AI opens
+
+
+func test_ai_opens_next_round_falls_through_when_opener_is_wiped() -> void:
+	# The designated opener has no units → the other side opens instead.
+	assert_bool(SoloController.ai_opens_next_round(true, false, true)).is_true()    # human wiped → AI opens
+	assert_bool(SoloController.ai_opens_next_round(false, true, false)).is_false()  # AI wiped → human opens
