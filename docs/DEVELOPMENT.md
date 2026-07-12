@@ -26,15 +26,36 @@ the reliable way to catch errors:
 
 ```bash
 flatpak run --filesystem=home org.godotengine.Godot --headless --editor --quit \
-  --path "$PWD" 2>&1 | grep -iE "SCRIPT ERROR|Parse Error|Failed to load script"
+  --path "$PWD" 2>&1 | grep -iE "SCRIPT ERROR|Parse Error|Failed to load script|Fehler bei|nicht ableiten|Cannot infer"
 ```
 
 Empty output = everything compiles.
+
+> **The Flatpak Godot on this dev machine runs in a German locale** — headless parse
+> errors print as `Fehler bei (line, col): …` (e.g. `… nicht ableiten` for "cannot
+> infer"), not the English `Parse Error` / `SCRIPT ERROR`. Grep for **both** locales
+> (as above) or real errors are silently missed.
 
 > `--check-only --script <file>` on a single file gives false "Identifier not found"
 > errors for autoload references — use the full `--editor --quit` import instead.
 > `.godot/` and `*.uid` are git-ignored, so imports don't dirty tracked files (verify
 > with an `md5sum project.godot` before/after if unsure).
+
+### Scene-script smoke gate (main.gd and other scene-only scripts)
+
+The `--editor --quit` import and the gdUnit4 suites both **skip** `scripts/main.gd` and
+any script that is only attached to a scene (never instantiated by a test). A parse
+error there passes both gates and then hangs the startup menu's threaded load of
+`main.tscn` on the LOADING overlay. After editing scene-attached scripts, run a short
+real launch as the gate:
+
+```bash
+timeout 25 flatpak run --filesystem=home org.godotengine.Godot --path "$PWD" \
+  res://scenes/main.tscn 2>&1 | grep -iE "Failed to load script|SCRIPT ERROR|Fehler bei"
+```
+
+0 hits = pass. (Headless does not exercise the scene scripts; the launch needs a display.
+On this machine the physical display may be in use — do not seize `:0` without asking.)
 
 ## Tests
 
@@ -51,6 +72,13 @@ flatpak run --filesystem=home org.godotengine.Godot --headless --path "$PWD" \
 `--ignoreHeadlessMode` is required (otherwise exit code 103). Success = "0 failures"
 and exit code 0. Trailing "ObjectDB instances leaked" is harmless teardown noise.
 Reports are written to `reports/` (git-ignored).
+
+> **Run the compile-check import pass first.** gdUnit4 resolves `class_name` scripts and
+> test methods from `.godot/global_script_class_cache.cfg`. After pulling or merging work
+> that adds a new `class_name` or new test methods, a stale cache makes the suite either
+> abort with `Parse Error: Identifier "Foo" not declared` (exit 134) for a class that
+> plainly exists, or silently run the old method count. The `--headless --editor --quit`
+> import above regenerates the cache — run it, then the suite.
 
 **Python** — the relay's tests (the offline asset pipeline lives in a separate private repo and has no tests here):
 
@@ -94,6 +122,16 @@ relay/.venv/bin/python test/mp/run_soak.py \
 `run_soak.py` exits 0 (green) / 1 (a drop or state divergence) and starts the relay itself
 (needs `websockets`; `relay/.venv` has it). In CI pass `--godot godot`.
 
+## Sandbox & `/tmp` gotchas
+
+- **The Flatpak Godot sandbox cannot read `/tmp/claude-*`** (agent scratch paths). When a
+  headless run needs an input file (e.g. an Army Forge list JSON for the `opr`/`stress` soak
+  workloads), copy it **into the worktree** first, run, then delete it — a path under `/tmp`
+  outside the sandbox reads as missing.
+- **A full `/tmp` tmpfs makes bash exit 1/128 with no output.** On this dev machine the usual
+  culprit is an accumulated Gradio cache; `rm -rf /tmp/gradio*` frees it. If unrelated commands
+  start failing with empty output, check `df -h /tmp` first.
+
 ## CI
 
 `.github/workflows/build.yml` builds Linux + Windows exports, runs the gdUnit4 suites, and runs
@@ -115,6 +153,11 @@ Before tagging:
   version spots outside `project.godot`).
 - Update `docs/ROADMAP.md` — move shipped items to **Recently shipped** with PR links.
 - Sweep `docs/KNOWN_ISSUES.md` for entries the release fixed.
+
+> **Relay deploys are separate from the game v-tag.** `fly deploy -c relay/fly.toml`
+> (see `relay/README.md`) builds the image from your **local working tree**, not from
+> `origin/main` — `git pull` first so you don't ship stale or someone else's uncommitted
+> relay code. `flyctl` is not installed in the dev sandbox; the maintainer runs the deploy.
 
 ## Secrets
 
