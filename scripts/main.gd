@@ -260,6 +260,14 @@ var _is_reconnecting: bool = false
 ## manager has one shared HTTPRequest, so per-unit concurrent downloads collide). Keyed by
 ## player_id -> { army_name, units: Array, objects: Array }.
 var _incoming_armies: Dictionary = {}
+## Inactivity window (seconds) a guest waits between remote army-import RPCs before it gives up.
+## The host paces unit batches ~250 ms apart (ARMY_BATCH_DELAY_MS), so even a large army never
+## has a multi-second gap; this generous silence budget only trips when the host truly went away
+## (dropped / relay lost the complete). On trip we abort the wait and recover (see below).
+const IMPORT_AWAIT_TIMEOUT_SEC: float = 75.0
+## Liveness guard for the above — header + each unit bump the player's generation, and a fired
+## timer only aborts if its captured generation is still current (nothing arrived since).
+var _import_await_guard := ImportAwaitGuard.new()
 
 
 func _ready() -> void:
@@ -3520,6 +3528,9 @@ func _on_remote_army_header(player_id: int, army_name: String, unit_count: int) 
 		get_tree().root.add_child(_army_loading_overlay)
 		_army_loading_overlay.set_label("LOADING ARMY")
 		_army_loading_overlay.set_indeterminate()
+	# Arm the inactivity timeout: if the host goes silent before the complete RPC, the guest
+	# must not wait on this overlay forever — it aborts and recovers (host can re-import).
+	_arm_import_await_timeout(player_id, _import_await_guard.bump(player_id))
 
 
 ## Receive a single unit — BUFFER it. We do not download/spawn per unit: the model
@@ -3532,12 +3543,16 @@ func _on_remote_army_unit(unit_data: Dictionary, objects_data: Array, player_id:
 		_incoming_armies[player_id] = buf
 	buf["units"].append(unit_data)
 	buf["objects"].append(objects_data)
+	# Progress arrived — push the inactivity deadline out (a slow but live import must not abort).
+	_arm_import_await_timeout(player_id, _import_await_guard.bump(player_id))
 
 
 ## All units received — build the whole army in ONE pass: rebuild the units, download every
 ## model with a single ensure_models call (feeds the loading bar like a self-import), spawn
 ## all model objects, then restore markers / heroes / regiment trays.
 func _on_remote_army_complete(player_id: int, rule_descriptions: Dictionary) -> void:
+	# The stream finished — cancel the inactivity timeout so it can't abort the build below.
+	_import_await_guard.clear(player_id)
 	# Merge rule descriptions FIRST (before building units) so tooltips like "Bloodborn" resolve.
 	if opr_army_manager and opr_army_manager.has_method("merge_rule_descriptions"):
 		opr_army_manager.merge_rule_descriptions(rule_descriptions)
@@ -3616,6 +3631,45 @@ func _on_remote_army_complete(player_id: int, rule_descriptions: Dictionary) -> 
 		_army_loading_overlay = null
 	_is_army_syncing = false  # army built — resume presence broadcasts (Fix A)
 	print("[ArmySync] Army built for player_id=%d (%d units)" % [player_id, units.size()])
+
+
+## Arm (or re-arm) the guest's inactivity timeout for an in-flight remote army import. `gen` is
+## the liveness token captured at arm time; the fired timer aborts only if it is still current
+## (no header/unit/complete arrived since), so a healthy stream keeps superseding its own timers.
+func _arm_import_await_timeout(player_id: int, gen: int) -> void:
+	await get_tree().create_timer(IMPORT_AWAIT_TIMEOUT_SEC).timeout
+	# Superseded by later progress or already resolved/aborted → this timer is a no-op.
+	if not _import_await_guard.is_current(player_id, gen):
+		return
+	# Nothing arrived within the window AND the buffer is still pending → the host went silent.
+	if not _incoming_armies.has(player_id):
+		return
+	_abort_import_await(player_id)
+
+
+## Abort a stalled remote army import and return the session to a recoverable state. We undo ONLY
+## what _on_remote_army_header set — the partial buffer (a host re-import cleanly overwrites it via
+## a fresh header), the presence-suppression flag, and the shared loading overlay. We deliberately
+## do NOT build the partial army: the stream may be missing units and its network_ids would then
+## collide with the host's re-import — so a clean re-import is the recovery.
+##
+## Crucially we must NOT touch the global restore lock or the busy gate here. Both are acquired only
+## in _on_remote_army_complete (begin_restore + broadcast_peer_busy(true)), whose very first act —
+## _import_await_guard.clear() — makes this abort unreachable once it runs. So a stalled import
+## provably never held either; force-releasing them would clobber a *concurrent* legitimate restore
+## / busy state (another player's join or import), reintroducing the interleave the lock guards.
+func _abort_import_await(player_id: int) -> void:
+	push_warning("[ArmySync] Import from player_id=%d timed out after %.0fs — aborting, session recoverable" % [player_id, IMPORT_AWAIT_TIMEOUT_SEC])
+	_import_await_guard.clear(player_id)
+	_incoming_armies.erase(player_id)
+	# Only settle the shared presence flag + overlay when no OTHER remote army is still buffering,
+	# so a concurrent second import keeps its "loading" indicator and presence suppression.
+	if _incoming_armies.is_empty():
+		_is_army_syncing = false  # resume presence broadcasts (Fix A) — nothing else is loading
+		if is_instance_valid(_army_loading_overlay):
+			_army_loading_overlay.complete_and_free()
+			_army_loading_overlay = null
+	_show_toast("⚠ Army import from another player timed out — ask them to import again")
 
 
 ## Receive TTS terrain spawn from a remote peer
