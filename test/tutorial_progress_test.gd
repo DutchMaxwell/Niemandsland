@@ -116,11 +116,33 @@ func test_skip_offer_lessons_gate_the_resume_point() -> void:
 ## ===== T2: rule-axis skip offer (both self-assessment axes) =====
 
 func test_rule_skip_offer_from_both_axes() -> void:
-	# Sim axis -> tool basics; rules axis -> rule track; both -> union in track order.
+	# Sim axis -> tool basics; rules axis -> active rule track (R1, R3 — R2 archived out);
+	# both -> union in track order.
 	assert_array(Progress.skip_offer_lessons(false, false)).is_equal([])
-	assert_array(Progress.skip_offer_lessons(false, true)).is_equal(["R1", "R2", "R3"])
+	assert_array(Progress.skip_offer_lessons(false, true)).is_equal(["R1", "R3"])
 	assert_array(Progress.skip_offer_lessons(true, false)).is_equal(["W1", "W3"])
-	assert_array(Progress.skip_offer_lessons(true, true)).is_equal(["W1", "W3", "R1", "R2", "R3"])
+	assert_array(Progress.skip_offer_lessons(true, true)).is_equal(["W1", "W3", "R1", "R3"])
+
+
+## A cfg written by an older build (R2 marked done) must still resume cleanly over the new
+## track that no longer contains R2 — the stale flag is simply ignored, never a crash or a
+## wrong resume point.
+func test_stale_r2_completion_flag_is_harmless() -> void:
+	var full_ids: Array[String] = TutorialFlow.ids(TutorialFlow.build_full_track())
+	var progress := _new_progress()
+	# Simulate the legacy state: the whole old rule track was marked done, R2 included.
+	progress.mark_lesson_completed("R1")
+	progress.mark_lesson_completed("R2")
+	progress.mark_lesson_completed("R3")
+	assert_int(progress.save_to_disk()).is_equal(OK)
+
+	var reloaded := _new_progress()
+	# R2 is no longer a track member; first_incomplete over the active track only sees W1..W6.
+	assert_str(reloaded.first_incomplete(full_ids)).is_equal("W1")
+	# Marking every ACTIVE lesson done leaves nothing incomplete — the stale R2 flag never trips it.
+	for id in full_ids:
+		reloaded.mark_lesson_completed(id)
+	assert_str(reloaded.first_incomplete(full_ids)).is_equal("")
 
 
 ## ===== T2: one-time tips / guest intro (once-ever) =====

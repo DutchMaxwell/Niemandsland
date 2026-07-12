@@ -45,6 +45,19 @@ const TARGET_DOCK_TAB := "dock_tab"           # Units dock tab at the bottom
 const TARGET_DOCK_STRIP := "dock_strip"       # the open card strip
 const TARGET_PRESENTED_CARD := "presented_card"
 const TARGET_PARKED_MODEL := "parked_model"   # the casualty parked on the tray
+const TARGET_ROUND_BUTTON := "round_button"   # the Next Round button (R1: end the round)
+const TARGET_R3_MODEL := "r3_model"           # ONE designated model of the unit (R3: click this model)
+const TARGET_R3_MARKER := "r3_marker"         # the R3 world-space destination marker, projected to screen
+
+# ===== Chapter metadata keys (for the future tool-vs-rules / system-ladder split) =====
+## Each lesson carries a `track` ("tool" | "rule") and `system` tag so a later package can
+## split "Niemandsland tool tutorial" from "OPR rules tutorial" and build a GF -> AoF ->
+## Skirmish -> Regiments ladder without re-shaping the step data. `archived: true` marks a
+## lesson kept in code for a future purpose-built tutorial but NOT part of the active track.
+const TRACK_TOOL := "tool"
+const TRACK_RULE := "rule"
+const SYSTEM_GF := "gf"       # Grimdark Future (this tutorial's system)
+const SYSTEM_AOFR := "aofr"   # Age of Fantasy: Regiments (future Regiments tutorial)
 
 # ===== State =====
 var lessons: Array = []
@@ -64,15 +77,15 @@ func _init(p_lessons: Array = []) -> void:
 ## whether input outside the spotlight is soft-masked (never for 3D drag steps).
 static func build_tool_track() -> Array:
 	return [
-		{"id": "W1", "title": "Camera & table", "steps": [
+		{"id": "W1", "title": "Camera & table", "track": TRACK_TOOL, "system": SYSTEM_GF, "steps": [
 			{"id": "orbit", "text": "Hold the right mouse button and drag to orbit the camera.",
 				"event": Event.CAMERA_ORBIT, "target": TARGET_NONE, "mask": false},
-			{"id": "zoom", "text": "Zoom in and out with the mouse wheel.",
+			{"id": "zoom", "text": "Scroll the mouse wheel to zoom in and out.",
 				"event": Event.CAMERA_ZOOM, "target": TARGET_NONE, "mask": false},
 			{"id": "pan", "text": "Pan across the table with WASD or by dragging the middle mouse button.",
 				"event": Event.CAMERA_PAN, "target": TARGET_NONE, "mask": false},
 		]},
-		{"id": "W2", "title": "Importing armies", "steps": [
+		{"id": "W2", "title": "Importing armies", "track": TRACK_TOOL, "system": SYSTEM_GF, "steps": [
 			{"id": "menu", "text": "Open the game menu with the button in the top-left corner.",
 				"event": Event.MENU_OPENED, "target": TARGET_HAMBURGER, "mask": true},
 			{"id": "import_open", "text": "Click IMPORT OPR ARMY — this is where armies come from.",
@@ -80,7 +93,7 @@ static func build_tool_track() -> Array:
 			{"id": "import_close", "text": "In a real game you would paste an Army Forge share link here. Your tutorial armies are already on the table — close the dialog to continue.",
 				"event": Event.IMPORT_CLOSED, "target": TARGET_NONE, "mask": false},
 		]},
-		{"id": "W3", "title": "Select, move, rotate & undo", "steps": [
+		{"id": "W3", "title": "Select, move, rotate & undo", "track": TRACK_TOOL, "system": SYSTEM_GF, "steps": [
 			{"id": "select", "text": "Click a model of the highlighted unit to select it.",
 				"event": Event.UNIT_SELECTED, "target": TARGET_UNIT, "mask": true},
 			{"id": "move", "text": "Drag the selected models to a new spot, then release.",
@@ -90,15 +103,15 @@ static func build_tool_track() -> Array:
 			{"id": "undo", "text": "Press Ctrl+Z to undo your last action.",
 				"event": Event.UNDONE, "target": TARGET_NONE, "mask": false},
 		]},
-		{"id": "W4", "title": "Dice & measuring", "steps": [
+		{"id": "W4", "title": "Dice & measuring", "track": TRACK_TOOL, "system": SYSTEM_GF, "steps": [
 			{"id": "measure", "text": "Hold Shift and drag with the left mouse button to measure a distance.",
 				"event": Event.MEASURED, "target": TARGET_NONE, "mask": false},
-			{"id": "bands", "text": "Select a model and press M to show its movement bands (Advance / Rush).",
+			{"id": "bands", "text": "Press M on your selected model to show its movement bands (Advance / Rush).",
 				"event": Event.BANDS_SHOWN, "target": TARGET_UNIT, "mask": false},
 			{"id": "roll", "text": "Roll the dice in the dice tray.",
 				"event": Event.DICE_ROLLED, "target": TARGET_DICE_PANEL, "mask": true},
 		]},
-		{"id": "W5", "title": "Unit cards & activation", "steps": [
+		{"id": "W5", "title": "Unit cards & activation", "track": TRACK_TOOL, "system": SYSTEM_GF, "steps": [
 			{"id": "dock", "text": "Open the Units dock — click the Units tab at the bottom of the screen.",
 				"event": Event.DOCK_OPENED, "target": TARGET_DOCK_TAB, "mask": true},
 			{"id": "present", "text": "Click one of the unit cards — it selects the unit and presents its card.",
@@ -106,7 +119,7 @@ static func build_tool_track() -> Array:
 			{"id": "activate", "text": "Activate the unit with the ACTIVATE chip on its card.",
 				"event": Event.UNIT_ACTIVATED, "target": TARGET_PRESENTED_CARD, "mask": true},
 		]},
-		{"id": "W6", "title": "Wounds & casualties", "steps": [
+		{"id": "W6", "title": "Wounds & casualties", "track": TRACK_TOOL, "system": SYSTEM_GF, "steps": [
 			{"id": "kill", "text": "Right-click a model of the highlighted unit and remove it as a casualty.",
 				"event": Event.MODEL_KILLED, "target": TARGET_UNIT, "mask": false},
 			{"id": "revive", "text": "The casualty is parked on your army tray. Right-click it and revive it.",
@@ -115,42 +128,59 @@ static func build_tool_track() -> Array:
 	]
 
 
-## The T2 rule track (Tutorial_Plan lessons R1-R3), event-gated on the same real GF
-## tutorial board. Rule text verified against the OPR Advanced Rules v3.5.1 PDFs:
-##   R1 GF "Game Structure" / "Activating Units" (alternating activations; one action:
-##      Hold / Advance / Rush / Charge; round ends when every unit has activated).
-##   R2 AoF:R "Unit Facing" / "Unit Formations" (regiments are an Age of Fantasy feature —
-##      a single movement tray in ranks with a 45° front arc). The GF tutorial board has
-##      no regiments (reloading to a different board mid-tutorial is the "Scythe error"
-##      the design forbids), so R2 is a concept card acknowledged with the coach "GOT IT"
-##      button; the hands-on controls are taught in context by TutorialTips the first time
-##      the player touches a real tray in an AoF:R game.
-##   R3 GF "Unit Coherency" (every model within 1" of a neighbour, ≤ 9" across the unit,
-##      forming an uninterrupted chain).
+## The T2 rule track (rule lessons R1, R3), event-gated on the same real GF tutorial board.
+## Rule text verified against the OPR Grimdark Future Advanced Rules v3.5.1 PDF, p.6:
+##   R1 "Rounds, Turns & Activations" / "Activating Units": a turn is one activation, an
+##      activation is exactly one action — Hold (stay, can shoot) / Advance (6", can shoot) /
+##      Rush (12", no shoot) / Charge (12" into melee). "This continues until all units have
+##      activated, at which point the round ends and a new one begins." R1 is taught as three
+##      explicit imperatives: activate ONE unit -> resolve its shot on the dice -> end the round.
+##   R3 "Unit Coherency": "All models in a unit must always stay within 1" of at least one
+##      other model, and must stay within 9" of all other models ... forming an uninterrupted
+##      chain of models in 1" coherency." R3 is three micro-steps with a world-space marker:
+##      pick THIS model -> drag it onto the far marker (breaks the chain) -> drag it back.
+##
+## R2 (Regiments) is intentionally NOT in this track — see build_regiment_track().
 static func build_rule_track() -> Array:
 	return [
-		{"id": "R1", "title": "Activation rhythm", "steps": [
-			{"id": "activate", "text": "OnePageRules is played in alternating activations: activate ONE of your units and it takes its whole turn — one action (Hold, Advance, Rush or Charge). Activate a unit now.",
+		{"id": "R1", "title": "Activation rhythm", "track": TRACK_RULE, "system": SYSTEM_GF, "steps": [
+			{"id": "activate", "text": "OnePageRules uses alternating activations: on your turn you activate ONE unit and it takes exactly ONE action — Hold (stay and shoot), Advance (move 6\" and shoot), Rush (move 12\") or Charge (move 12\" into melee). Activate your highlighted unit now.",
 				"event": Event.UNIT_ACTIVATED, "target": TARGET_UNIT, "mask": false},
-			{"id": "round", "text": "Then it is your opponent's turn to activate one unit, and so on. When every unit on both sides has activated, the round ends — advance to the next round to clear all activation markers.",
-				"event": Event.ROUND_ADVANCED, "target": TARGET_NONE, "mask": false},
+			{"id": "shoot", "text": "An action is resolved with dice. Roll the unit's shooting attack now — throw the dice in the dice tray.",
+				"event": Event.DICE_ROLLED, "target": TARGET_DICE_PANEL, "mask": true},
+			{"id": "round", "text": "Your turn now ends and your opponent activates one unit — this alternates until every unit on both sides has activated, which ends the round. End the round now with the Next Round button.",
+				"event": Event.ROUND_ADVANCED, "target": TARGET_ROUND_BUTTON, "mask": true},
 		]},
-		{"id": "R2", "title": "Regiments (Age of Fantasy)", "steps": [
+		{"id": "R3", "title": "Coherency & spacing", "track": TRACK_RULE, "system": SYSTEM_GF, "steps": [
+			{"id": "pick", "text": "A unit must keep coherency: every model within 1\" of a neighbour AND within 9\" of all other models, forming an unbroken chain. Click the highlighted model to select it.",
+				"event": Event.UNIT_SELECTED, "target": TARGET_R3_MODEL, "mask": false},
+			{"id": "spread", "text": "Now drag that model onto the marker, away from the rest — watch the coherency warning appear as it breaks the 1\"/9\" chain.",
+				"event": Event.COHERENCY_BROKEN, "target": TARGET_R3_MARKER, "mask": false},
+			{"id": "restore", "text": "And now drag it back onto the marker at its old spot — the warning clears the moment every model is within 1\" of a neighbour again.",
+				"event": Event.COHERENCY_RESTORED, "target": TARGET_R3_MARKER, "mask": false},
+		]},
+	]
+
+
+## ARCHIVE (not in the active track): the Regiments concept lesson (R2), kept in code for the
+## future purpose-built "Age of Fantasy: Regiments" tutorial. It was pulled from the GF track
+## because teaching Regiments needs a full regiment miniature set and different terrain — the
+## GF tutorial board has none, and reloading to a different board mid-tutorial is the design's
+## forbidden "Scythe error". A cfg that still has R2 marked done stays valid: R2 is simply not
+## a member of the active track, so it is never visited (see TutorialProgress migration note).
+static func build_regiment_track() -> Array:
+	return [
+		{"id": "R2", "title": "Regiments (Age of Fantasy)", "track": TRACK_RULE, "system": SYSTEM_AOFR, "archived": true, "steps": [
 			{"id": "concept", "text": "In Age of Fantasy: Regiments a unit forms a single movement tray, ranked up (5 or 3 models wide) with a 45° front arc. This Grimdark Future board has no regiments — when you play an AoF:R army, press F to show a tray's arcs and Shift+F to change its frontage. We'll point these out the first time you use them.",
 				"event": Event.ACK, "target": TARGET_NONE, "mask": false, "ack": true},
-		]},
-		{"id": "R3", "title": "Coherency & spacing", "steps": [
-			{"id": "spread", "text": "Every model in a unit must stay within 1\" of a neighbour, forming an unbroken chain. Select your highlighted unit and drag one model far away — the coherency warning appears.",
-				"event": Event.COHERENCY_BROKEN, "target": TARGET_UNIT, "mask": false},
-			{"id": "restore", "text": "Now drag that model back until every model is within 1\" of a neighbour again — the warning clears once the unit is back in coherency.",
-				"event": Event.COHERENCY_RESTORED, "target": TARGET_UNIT, "mask": false},
 		]},
 	]
 
 
 ## The full guided tutorial in track order: the tool track (W1-W6) followed by the rule
-## track (R1-R3). This is what the director runs and the chapter picker lists; the two
-## sub-track builders stay separate so each can be reasoned about (and tested) on its own.
+## track (R1, R3). This is what the director runs and the chapter picker lists; the sub-track
+## builders stay separate so each can be reasoned about (and tested) on its own, and so the
+## future package can recombine them (tool-only, rules-only, per-system ladder) freely.
 static func build_full_track() -> Array:
 	var full: Array = build_tool_track()
 	full.append_array(build_rule_track())

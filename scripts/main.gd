@@ -3871,7 +3871,7 @@ func _init_tutorial_tips() -> void:
 
 
 ## Wait for the bundled board (queued on the pending-load path), then hand control to
-## the TutorialDirector, which runs the event-gated W1-W6 + R1-R3 track on the live table.
+## the TutorialDirector, which runs the event-gated W1-W6 + R1 + R3 track on the live table.
 func _start_tutorial() -> void:
 	if is_instance_valid(_tutorial_director):
 		return  # already running (guard against a double call_deferred)
@@ -3906,6 +3906,7 @@ func _start_tutorial() -> void:
 		"army_manager": opr_army_manager,
 		"undo_manager": undo_manager,
 		"coherency_visualizer": coherency_visualizer,
+		"round_button": next_round_btn,
 	})
 	# Suppress the always-on contextual tips while the guided chapter runs (they resume when it ends).
 	if is_instance_valid(_tutorial_tips):

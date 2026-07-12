@@ -27,8 +27,11 @@ const SECTION_TIPS := "tips"
 ## around a tabletop simulator: camera basics + select/move/rotate.
 const SIM_EXPERIENCED_SKIP: Array[String] = ["W1", "W3"]
 ## Lessons the assessment offers to skip for players who already know the OPR rules:
-## the whole rule track.
-const RULES_KNOWN_SKIP: Array[String] = ["R1", "R2", "R3"]
+## the whole active rule track. R2 (Regiments) was pulled from the track into an archive
+## for a future purpose-built tutorial, so it is NOT offered here. A cfg written by an older
+## build that has R2 marked done stays valid — R2 is not a track member, so it is never
+## visited; a stale [lessons] R2=true flag is simply ignored (no migration needed).
+const RULES_KNOWN_SKIP: Array[String] = ["R1", "R3"]
 
 # ===== Private state =====
 var _path: String = DEFAULT_PATH

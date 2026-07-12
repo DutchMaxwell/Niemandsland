@@ -124,20 +124,41 @@ func test_skip_on_last_lesson_finishes() -> void:
 	assert_bool(flow.finished).is_true()
 
 
-## ===== T2 rule track (R1-R3) + full track =====
+## ===== T2 rule track (R1, R3) + regiment archive + full track =====
 
-func test_rule_track_has_three_lessons_r1_to_r3() -> void:
+func test_rule_track_has_two_lessons_r1_and_r3() -> void:
+	# R2 (Regiments) was pulled from the active track into build_regiment_track().
 	var track := Flow.build_rule_track()
-	assert_int(track.size()).is_equal(3)
-	assert_array(Flow.ids(track)).is_equal(["R1", "R2", "R3"])
+	assert_int(track.size()).is_equal(2)
+	assert_array(Flow.ids(track)).is_equal(["R1", "R3"])
+
+
+func test_regiment_track_archives_r2() -> void:
+	# R2 lives on for the future purpose-built Regiments tutorial: a single ACK concept card,
+	# tagged archived + AoF:R system so the later package can pick it up without re-shaping it.
+	var archive := Flow.build_regiment_track()
+	assert_array(Flow.ids(archive)).is_equal(["R2"])
+	assert_bool(archive[0].get("archived", false)).is_true()
+	assert_str(String(archive[0].get("system", ""))).is_equal(Flow.SYSTEM_AOFR)
+	var r2_steps: Array = archive[0].get("steps", [])
+	assert_int(r2_steps.size()).is_equal(1)
+	assert_int(int(r2_steps[0].get("event", Flow.Event.NONE))).is_equal(Flow.Event.ACK)
+	assert_bool(r2_steps[0].get("ack", false)).is_true()
 
 
 func test_full_track_is_tool_plus_rule() -> void:
 	var track := Flow.build_full_track()
-	assert_array(Flow.ids(track)).is_equal(["W1", "W2", "W3", "W4", "W5", "W6", "R1", "R2", "R3"])
+	assert_array(Flow.ids(track)).is_equal(["W1", "W2", "W3", "W4", "W5", "W6", "R1", "R3"])
 	# The full track must not mutate the sub-track builders (fresh arrays each call).
 	assert_int(Flow.build_tool_track().size()).is_equal(6)
-	assert_int(Flow.build_rule_track().size()).is_equal(3)
+	assert_int(Flow.build_rule_track().size()).is_equal(2)
+
+
+func test_every_lesson_carries_track_and_system_tags() -> void:
+	# The future tool-vs-rules / system-ladder split keys off these tags.
+	for lesson in Flow.build_full_track():
+		assert_str(String(lesson.get("track", ""))).is_not_empty()
+		assert_str(String(lesson.get("system", ""))).is_not_empty()
 
 
 func test_full_track_every_step_is_fully_defined() -> void:
@@ -153,35 +174,23 @@ func test_full_track_every_step_is_fully_defined() -> void:
 			assert_bool(step.get("mask") is bool).is_true()
 
 
-func test_r2_concept_step_is_ack_gated() -> void:
-	# R2 has a single concept card advanced by the coach "GOT IT" button (Event.ACK),
-	# flagged ack:true so the director shows that button (no on-board regiment to act on).
-	var rule := Flow.build_rule_track()
-	var r2_steps: Array = rule[1].get("steps", [])
-	assert_int(r2_steps.size()).is_equal(1)
-	assert_int(int(r2_steps[0].get("event", Flow.Event.NONE))).is_equal(Flow.Event.ACK)
-	assert_bool(r2_steps[0].get("ack", false)).is_true()
-
-
 func test_rule_track_walk_via_events() -> void:
-	# R1 activate -> round, R2 ack, R3 coherency broken -> restored.
+	# R1 activate -> shoot -> round, then R3 pick -> broken -> restored.
 	var flow := Flow.new(Flow.build_full_track())
 	assert_bool(flow.start_at("R1")).is_true()
 	assert_bool(flow.consume(Flow.Event.UNIT_ACTIVATED).advanced).is_true()
+	assert_bool(flow.consume(Flow.Event.DICE_ROLLED).advanced).is_true()
 	var r1_done := flow.consume(Flow.Event.ROUND_ADVANCED)
 	assert_str(String(r1_done.lesson_completed)).is_equal("R1")
-	# R2: only ACK advances the concept card.
-	assert_bool(flow.consume(Flow.Event.DICE_ROLLED).advanced).is_false()
-	var r2_done := flow.consume(Flow.Event.ACK)
-	assert_str(String(r2_done.lesson_completed)).is_equal("R2")
-	# R3: broken then restored finishes the whole track.
+	# R3: pick the model, break coherency, then restore it — finishing the whole track.
+	assert_bool(flow.consume(Flow.Event.UNIT_SELECTED).advanced).is_true()
 	assert_bool(flow.consume(Flow.Event.COHERENCY_BROKEN).advanced).is_true()
 	var r3_done := flow.consume(Flow.Event.COHERENCY_RESTORED)
 	assert_str(String(r3_done.lesson_completed)).is_equal("R3")
 	assert_bool(flow.finished).is_true()
 
 
-func test_full_walk_finishes_all_nine_lessons() -> void:
+func test_full_walk_finishes_all_eight_lessons() -> void:
 	var flow := Flow.new(Flow.build_full_track())
 	var completed: Array[String] = []
 	var guard := 0
@@ -192,5 +201,5 @@ func test_full_walk_finishes_all_nine_lessons() -> void:
 		assert_bool(result.advanced).is_true()
 		if not String(result.lesson_completed).is_empty():
 			completed.append(String(result.lesson_completed))
-	assert_array(completed).is_equal(["W1", "W2", "W3", "W4", "W5", "W6", "R1", "R2", "R3"])
-	assert_int(guard).is_equal(23)  # 18 tool steps + R1(2) + R2(1) + R3(2)
+	assert_array(completed).is_equal(["W1", "W2", "W3", "W4", "W5", "W6", "R1", "R3"])
+	assert_int(guard).is_equal(24)  # 18 tool steps + R1(3) + R3(3)

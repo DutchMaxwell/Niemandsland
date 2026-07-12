@@ -1,6 +1,6 @@
 class_name TutorialDirector
 extends Node
-## Runs the guided tutorial (tool track W1-W6 + rule track R1-R3) on the REAL table inside main.tscn.
+## Runs the guided tutorial (tool track W1-W6 + rule track R1, R3) on the REAL table inside main.tscn.
 ## Owns the pure pieces — a TutorialFlow cursor over the lesson track and a
 ## TutorialProgress cfg — and does the scene work around them: it translates the real
 ## gameplay seams into TutorialFlow.Events, resolves each step's spotlight target
@@ -17,8 +17,9 @@ extends Node
 ##   loose_model_dead_changed / round_advanced                   (army manager)
 ##   visualization_completed                                     (coherency visualizer, R3)
 ## plus polled state edges for camera deltas, menu/import-dialog visibility, dock
-## open/presented and movement-band activity. Concept-only steps (R2 on a GF board)
-## advance via the coach "GOT IT" button, never a generic Next.
+## open/presented and movement-band activity. Concept-only steps (the archived R2 regiments
+## card, kept for a future Regiments tutorial) advance via the coach "GOT IT" button, never
+## a generic Next.
 
 # ===== Constants =====
 const BOARD_PATH := "res://assets/tutorial/tutorial_board.nml"
@@ -26,6 +27,11 @@ const ORBIT_THRESHOLD_RAD := 0.35    # ~20 degrees of accumulated orbit
 const ZOOM_THRESHOLD_RATIO := 0.18   # 18 % zoom distance change
 const PAN_THRESHOLD_M := 0.15        # 15 cm of pivot travel
 const SPOTLIGHT_MIN_PX := 90.0       # never let a projected 3D spotlight get too small
+# R3 world-marker geometry. The break marker sits this far from the mover's origin, straight
+# out from the unit centroid — far enough to break BOTH coherency rules (past 1" to any
+# neighbour AND past the 9" unit spread), so the visualizer shows both failure modes.
+const R3_BREAK_DISTANCE_M := 0.28    # ~11", clears the 9" max-spread rule with margin
+const R3_MARKER_RADIUS_M := 0.03     # flat ring radius on the table (~1.2")
 
 # ===== Signals =====
 signal step_changed(lesson_id: String, step_id: String)
@@ -51,6 +57,7 @@ var _radial_controller: Node = null
 var _army_manager: Node = null
 var _undo_manager: Node = null
 var _coherency_visualizer: Node = null
+var _round_button: Control = null
 
 # ===== Private state =====
 var _coach: TutorialCoachMark = null
@@ -76,6 +83,15 @@ var _assessment_dialog: ConfirmationDialog = null
 # R3: latch a broken-coherency edge so the follow-up "restored" step only fires after the
 # unit was actually seen out of coherency first (never on the initial coherent snapshot).
 var _coherency_broken: bool = false
+# R3 world-space guidance: ONE designated model of the unit is the "mover", its table origin is
+# captured so the restore marker can point back at it, and a simple 3D ring marks the current
+# destination (the coach-mark overlay is UI-space and can't point at a spot on the table).
+var _r3_mover_node: Node3D = null
+var _r3_mover_visuals: Array[VisualInstance3D] = []
+var _r3_origin: Vector3 = Vector3.ZERO           # the mover's table origin (restore destination)
+var _r3_break_dest: Vector3 = Vector3.ZERO       # the far spot the mover is sent to (spread destination)
+var _r3_origin_captured: bool = false
+var _world_marker: MeshInstance3D = null
 # Chapter-picker launch: play forward from the chosen lesson WITHOUT skipping lessons
 # that are already completed (replaying is the point). Resume launches skip them.
 var _replay_mode: bool = false
@@ -95,7 +111,8 @@ func _process(delta: float) -> void:
 
 ## Wire the director to the live scene. `refs` keys (all optional, null-guarded):
 ## object_manager, camera_pivot, dice_tray, dice_panel, hamburger, left_panel,
-## import_button, import_dialog, unit_dock, radial_controller, army_manager, undo_manager.
+## import_button, import_dialog, unit_dock, radial_controller, army_manager, undo_manager,
+## coherency_visualizer, round_button.
 func setup(refs: Dictionary) -> void:
 	_object_manager = refs.get("object_manager", null)
 	_camera_pivot = refs.get("camera_pivot", null)
@@ -110,6 +127,7 @@ func setup(refs: Dictionary) -> void:
 	_army_manager = refs.get("army_manager", null)
 	_undo_manager = refs.get("undo_manager", null)
 	_coherency_visualizer = refs.get("coherency_visualizer", null)
+	_round_button = refs.get("round_button", null)
 	if _camera_pivot != null:
 		_camera = _camera_pivot.get_node_or_null("Camera3D") as Camera3D
 
@@ -214,6 +232,12 @@ func _disconnect_if(source: Object, signal_name: String, callable: Callable) -> 
 # ===== Signal handlers (thin: translate to events) =====
 
 func _on_selection_changed(selected: Array) -> void:
+	# R3 "pick" step: only the ONE spotlighted model satisfies "click this model" — so the
+	# subsequent world-marker guidance lines up with the model the player actually moves.
+	if _is_r3_pick_step():
+		if is_instance_valid(_r3_mover_node) and selected.has(_r3_mover_node):
+			_on_event(TutorialFlow.Event.UNIT_SELECTED)
+		return
 	if selection_hits(selected, _target_nodes):
 		_on_event(TutorialFlow.Event.UNIT_SELECTED)
 
@@ -221,6 +245,12 @@ func _on_selection_changed(selected: Array) -> void:
 func _on_selection_dropped(moves: Array) -> void:
 	if moves_hit(moves, _target_nodes):
 		_on_event(TutorialFlow.Event.UNIT_MOVED)
+	# R3 completion fix: the live coherency visualizer only emits on a throttled ~15 Hz drag
+	# sample, so a quick drag that ENDS in a valid (or freshly-broken) state can slip between
+	# samples and the broken/restored edge is never reported — the restore step then hangs.
+	# Re-evaluate the target unit's coherency DIRECTLY on every drop that touched it, which is
+	# guaranteed to fire once per completed move regardless of the visualizer's sampling.
+	_recheck_coherency_on_drop(moves)
 
 
 func _on_rotation_committed(_objects: Array[Node3D]) -> void:
@@ -258,19 +288,49 @@ func _on_round_advanced(_round_number: int) -> void:
 
 
 ## R3: the live coherency check reported a unit's state (fires while a selected unit is
-## dragged/moved). Edge-detect broken -> restored: a unit must be seen OUT of coherency
-## before the "restored" step can fire, so the initial coherent snapshot never satisfies
-## the second step by accident. `result.valid` is the checker's in-coherency verdict.
+## dragged/moved, throttled ~15 Hz). This is the LIVE feedback path; the deterministic path
+## is _recheck_coherency_on_drop (once per completed move). Both funnel through the same
+## edge-detector so either can advance the step.
 func _on_coherency_visualized(result: CoherencyChecker.CoherencyResult) -> void:
 	if result == null:
 		return
-	var in_coherency := bool(result.valid)
+	_evaluate_coherency(bool(result.valid))
+
+
+## Edge-detect broken -> restored for R3: a unit must be seen OUT of coherency before the
+## "restored" step can fire, so the initial coherent snapshot never satisfies the restore
+## step by accident. Shared by the live visualizer path and the on-drop re-check.
+func _evaluate_coherency(in_coherency: bool) -> void:
 	if not in_coherency:
 		_coherency_broken = true
 		_on_event(TutorialFlow.Event.COHERENCY_BROKEN)
 	elif _coherency_broken:
 		_coherency_broken = false
 		_on_event(TutorialFlow.Event.COHERENCY_RESTORED)
+
+
+## Deterministic R3 coherency re-check: on any drop that moved a target-unit model while an
+## R3 coherency step is active, compute the unit's coherency straight from the checker (not
+## via the throttled visualizer) so the broken/restored edge is reported exactly once per
+## completed move — the fix for the "restore step never advances" bug.
+func _recheck_coherency_on_drop(moves: Array) -> void:
+	if flow == null or flow.finished or _target_unit == null:
+		return
+	if not moves_hit(moves, _target_nodes):
+		return
+	var event := int(flow.current_step().get("event", TutorialFlow.Event.NONE))
+	if event != TutorialFlow.Event.COHERENCY_BROKEN and event != TutorialFlow.Event.COHERENCY_RESTORED:
+		return
+	var skirmish := CoherencyChecker.is_skirmish_system(_target_unit)
+	var result := CoherencyChecker.check_unit_coherency(_target_unit, skirmish)
+	_evaluate_coherency(bool(result.valid))
+
+
+## True while the R3 "pick" step (click ONE specific model) is the current step.
+func _is_r3_pick_step() -> bool:
+	if flow == null or flow.finished:
+		return false
+	return String(flow.current_step().get("target", "")) == TutorialFlow.TARGET_R3_MODEL
 
 
 ## R2: the player acknowledged a concept card via the coach "GOT IT" button. Only ack
@@ -362,6 +422,8 @@ func _enter_step() -> void:
 			_focus_camera_on_nodes(_target_nodes)
 	elif target == TutorialFlow.TARGET_PARKED_MODEL and is_instance_valid(_parked_node):
 		_focus_camera_on_nodes([_parked_node])
+	elif target == TutorialFlow.TARGET_R3_MODEL or target == TutorialFlow.TARGET_R3_MARKER:
+		_setup_r3_step(target)
 
 	if is_instance_valid(_coach):
 		var lesson := flow.current_lesson()
@@ -393,6 +455,9 @@ func _finish(completed: bool) -> void:
 	if is_instance_valid(_assessment_dialog):
 		_assessment_dialog.queue_free()
 		_assessment_dialog = null
+	if is_instance_valid(_world_marker):
+		_world_marker.queue_free()
+		_world_marker = null
 	if is_instance_valid(_coach):
 		_coach.hide_overlay()
 	tutorial_finished.emit(completed)
@@ -646,6 +711,129 @@ func _collect_visuals(nodes: Array) -> Array[VisualInstance3D]:
 	return result
 
 
+# ===== R3 world-space guidance (pick a model -> drag to a marker -> drag back) =====
+
+## Prepare an R3 step: make sure a unit + a designated "mover" model exist, then either
+## spotlight the mover (pick step) or place and show the destination ring on the table
+## (spread/restore steps). All scene work is null-guarded so it no-ops headless.
+func _setup_r3_step(target: String) -> void:
+	_resolve_target_unit()
+	if target == TutorialFlow.TARGET_R3_MODEL:
+		# Fresh mover each time the pick step is (re)entered so a replay never points at a
+		# stale node whose position has since changed.
+		_r3_mover_node = null
+		_r3_mover_visuals = []
+		_r3_origin_captured = false
+		_resolve_r3_mover()
+		_hide_world_marker()
+		if is_instance_valid(_r3_mover_node):
+			_focus_camera_on_nodes([_r3_mover_node])
+	elif target == TutorialFlow.TARGET_R3_MARKER:
+		_resolve_r3_mover()
+		var event := int(flow.current_step().get("event", TutorialFlow.Event.NONE))
+		var dest := _r3_break_dest if event == TutorialFlow.Event.COHERENCY_BROKEN else _r3_origin
+		if _r3_origin_captured:
+			_show_world_marker(dest)
+
+
+## Designate the mover: the unit's most peripheral model (farthest from the centre), which
+## isolates cleanly when pulled out and snaps back into an obvious gap. Captures its table
+## origin (restore target) and the far break destination (spread target) up front, before any
+## move, so both markers stay put no matter where the model is dragged.
+func _resolve_r3_mover() -> void:
+	if is_instance_valid(_r3_mover_node) and _r3_origin_captured:
+		return
+	if _target_nodes.is_empty():
+		return
+	var centroid := Vector3.ZERO
+	var count := 0
+	for node in _target_nodes:
+		if is_instance_valid(node):
+			centroid += node.global_position
+			count += 1
+	if count == 0:
+		return
+	centroid /= count
+	var best: Node3D = null
+	var best_dist := -1.0
+	for node in _target_nodes:
+		if not is_instance_valid(node):
+			continue
+		var dist := node.global_position.distance_to(centroid)
+		if dist > best_dist:
+			best_dist = dist
+			best = node
+	if not is_instance_valid(best):
+		return
+	_r3_mover_node = best
+	_r3_mover_visuals = _collect_visuals([best])
+	_r3_origin = best.global_position
+	# Push straight out from the rest of the unit, on the table plane, far enough to break both
+	# the 1" adjacency and the 9" spread rule (so the visualizer shows both failure modes).
+	var rest_centroid := Vector3.ZERO
+	var rest_count := 0
+	for node in _target_nodes:
+		if is_instance_valid(node) and node != best:
+			rest_centroid += node.global_position
+			rest_count += 1
+	var away := _r3_origin - (rest_centroid / rest_count if rest_count > 0 else centroid)
+	away.y = 0.0
+	away = away.normalized() if away.length() > 0.001 else Vector3(1.0, 0.0, 0.0)
+	_r3_break_dest = _r3_origin + away * R3_BREAK_DISTANCE_M
+	_r3_origin_captured = true
+
+
+## Show the flat destination ring on the table at `pos` (creating it lazily). No-op without a
+## camera/scene, so headless tests and a degraded board just fall back to the banner spotlight.
+func _show_world_marker(pos: Vector3) -> void:
+	if _camera == null:
+		return
+	if not is_instance_valid(_world_marker):
+		_world_marker = _build_world_marker()
+		var parent := get_parent()
+		if parent == null:
+			parent = self
+		parent.add_child(_world_marker)
+	_world_marker.global_position = Vector3(pos.x, 0.02, pos.z)
+	_world_marker.visible = true
+
+
+func _hide_world_marker() -> void:
+	if is_instance_valid(_world_marker):
+		_world_marker.visible = false
+
+
+## A flat amber ring lying on the table (TorusMesh defaults to hole-up), unshaded and drawn
+## over geometry so it reads as a "drop here" target from any camera angle.
+func _build_world_marker() -> MeshInstance3D:
+	var mesh := TorusMesh.new()
+	mesh.inner_radius = R3_MARKER_RADIUS_M
+	mesh.outer_radius = R3_MARKER_RADIUS_M + 0.006
+	var marker := MeshInstance3D.new()
+	marker.name = "TutorialWorldMarker"
+	marker.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = HudTokens.AMBER
+	mat.emission_enabled = true
+	mat.emission = HudTokens.AMBER
+	mat.emission_energy_multiplier = 1.5
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.no_depth_test = true
+	marker.material_override = mat
+	return marker
+
+
+## Project a single world point to a fixed-size on-screen spotlight rect (the coach mark is
+## UI-space, so the 3D marker's screen position is what gets the hole). Empty when off-screen.
+func _project_world_point(world: Vector3) -> Rect2:
+	if _camera == null or _camera.is_position_behind(world):
+		return Rect2()
+	var screen := _camera.unproject_position(world)
+	var half := SPOTLIGHT_MIN_PX * 0.75
+	return Rect2(screen - Vector2(half, half), Vector2(half, half) * 2.0)
+
+
 func _resolve_target_rect(target: String) -> Rect2:
 	match target:
 		TutorialFlow.TARGET_UNIT:
@@ -667,6 +855,17 @@ func _resolve_target_rect(target: String) -> Rect2:
 			return _dock_rect("strip_rect")
 		TutorialFlow.TARGET_PRESENTED_CARD:
 			return _dock_rect("presented_rect")
+		TutorialFlow.TARGET_ROUND_BUTTON:
+			return _control_rect(_round_button)
+		TutorialFlow.TARGET_R3_MODEL:
+			var mover: Array[Node3D] = []
+			if is_instance_valid(_r3_mover_node):
+				mover.append(_r3_mover_node)
+			return _project_visuals(_r3_mover_visuals, mover)
+		TutorialFlow.TARGET_R3_MARKER:
+			if is_instance_valid(_world_marker) and _world_marker.visible:
+				return _project_world_point(_world_marker.global_position)
+			return Rect2()
 		_:
 			return Rect2()
 

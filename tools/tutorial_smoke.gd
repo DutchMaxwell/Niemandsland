@@ -18,7 +18,7 @@ const SHOT_DIR := "user://tutorial_shots/"
 const CFG_PATH := "user://tutorial.cfg"
 const MAX_BOOT_FRAMES := 1800
 const SETTLE_FRAMES := 8
-const MAX_STEPS := 60  # watchdog: the tool track has 18 steps; anything near this is a loop
+const MAX_STEPS := 60  # watchdog: the full track is 24 steps (18 tool + R1×3 + R3×3); near this = a loop
 
 var _cfg_backup: PackedByteArray = PackedByteArray()
 var _cfg_existed: bool = false
@@ -98,7 +98,7 @@ func _drive() -> void:
 		printerr("SMOKE-FAIL: walk ended but tutorial.cfg does not show all lessons completed")
 		quit(1)
 		return
-	printerr("SMOKE-OK: walked %d steps across W1-W6 + R1-R3 on the live main.tscn; overlay + spotlight per step; cfg persisted + restored" % steps_walked)
+	printerr("SMOKE-OK: walked %d steps across W1-W6 + R1 + R3 on the live main.tscn; overlay + spotlight per step; cfg persisted + restored" % steps_walked)
 	quit(0)
 
 

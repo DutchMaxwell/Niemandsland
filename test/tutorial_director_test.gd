@@ -179,40 +179,46 @@ func test_skip_lesson_marks_completed_and_moves_on() -> void:
 	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("W5")
 
 
-## ===== T2 rule track: R1 activation rhythm =====
+## ===== T2 rule track: R1 activation rhythm (activate -> shoot -> end round) =====
 
-func test_r1_activate_then_round_advances() -> void:
+func test_r1_activate_shoot_then_round_advances() -> void:
 	var director := _new_full_director("R1")
 	var unit := _new_unit(1)
-	# Activating a unit advances activate -> round.
+	# Activating a unit advances activate -> shoot.
 	director._on_unit_activated(unit)
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("shoot")
+	# Rolling the dice (the shot) advances shoot -> round.
+	director._on_roll_finnished(5)
 	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("round")
-	# Advancing the round completes R1 and moves to R2.
+	# Ending the round completes R1 and moves to R3 (R2 is no longer in the track).
 	var completions: Array = []
 	director.lesson_completed.connect(func(id: String) -> void: completions.append(id))
 	director._on_round_advanced(2)
 	assert_array(completions).is_equal(["R1"])
 	assert_bool(director.progress.is_lesson_completed("R1")).is_true()
-	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("R2")
-
-
-## ===== T2 rule track: R2 regiments concept card (ACK) =====
-
-func test_r2_concept_card_completes_on_continue() -> void:
-	var director := _new_full_director("R2")
-	var completions: Array = []
-	director.lesson_completed.connect(func(id: String) -> void: completions.append(id))
-	# A non-ack event must not advance the concept card.
-	director._on_roll_finnished(4)
-	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("R2")
-	# The coach "GOT IT" button (continue) completes it and moves to R3.
-	director._on_continue()
-	assert_array(completions).is_equal(["R2"])
-	assert_bool(director.progress.is_lesson_completed("R2")).is_true()
 	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("R3")
 
 
-## ===== T2 rule track: R3 coherency broken -> restored =====
+## ===== T2 rule track: R3 coherency (pick -> spread -> restore) =====
+
+## A GameUnit (player 1) whose model nodes are real, in-tree Node3Ds at the given table
+## positions, so CoherencyChecker computes true edge-to-edge distances against them.
+func _r3_unit(positions: Array) -> GameUnit:
+	var unit := GameUnit.new()
+	unit.unit_properties = {"name": "R3 Unit", "player_id": 1, "base_size_round": 32}
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)  # in the tree so global_position is well-defined
+	for i in positions.size():
+		var node := Node3D.new()
+		root.add_child(node)
+		node.position = positions[i]
+		var model := ModelInstance.new()
+		model.node = node
+		model.unit = unit
+		model.model_index = i
+		unit.models.append(model)
+	return unit
+
 
 func _coherency_result(valid: bool) -> CoherencyChecker.CoherencyResult:
 	var result := CoherencyChecker.CoherencyResult.new()
@@ -220,20 +226,92 @@ func _coherency_result(valid: bool) -> CoherencyChecker.CoherencyResult:
 	return result
 
 
-func test_r3_coherency_broken_then_restored_finishes_track() -> void:
+## The redesigned R3 opens by asking the player to click ONE designated model; only that
+## model satisfies the pick step (so the world-marker guidance lines up with what moves).
+func test_r3_pick_requires_the_designated_model() -> void:
 	var director := _new_full_director("R3")
+	var unit := _new_unit(3)
+	director._target_unit = unit
+	director._target_nodes = _nodes_of(unit)
+	director._r3_mover_node = director._target_nodes[2]
+
+	# Selecting a DIFFERENT model of the unit must not advance the pick step.
+	director._on_selection_changed([director._target_nodes[0]])
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("pick")
+	# Selecting the designated mover advances pick -> spread.
+	director._on_selection_changed([director._r3_mover_node])
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("spread")
+
+
+## _resolve_r3_mover designates the most peripheral model and captures both destinations
+## (its origin for the restore marker, a far break spot for the spread marker) up front.
+func test_r3_resolve_mover_picks_peripheral_and_captures_targets() -> void:
+	var director := _new_full_director("R3")
+	var unit := _r3_unit([Vector3(0, 0, 0), Vector3(0, 0, 0.04), Vector3(0, 0, 0.20)])
+	director._target_unit = unit
+	director._target_nodes = _nodes_of(unit)
+
+	director._setup_r3_step(TutorialFlow.TARGET_R3_MODEL)  # pick-step setup: resolve the mover
+	assert_object(director._r3_mover_node).is_equal(director._target_nodes[2])  # the outlier
+	assert_bool(director._r3_origin_captured).is_true()
+	assert_vector(director._r3_origin).is_equal(Vector3(0, 0, 0.20))
+	# The break destination is pushed R3_BREAK_DISTANCE_M further out from the unit.
+	assert_float(director._r3_break_dest.length()).is_greater(director._r3_origin.length())
+
+
+## Regression net for the R3 completion bug: after moving the model back into coherency, the
+## restore step must advance PURELY from the on-drop coherency re-check — no visualizer
+## `visualization_completed` emission is delivered here at all, mirroring a quick drag that
+## ends in a valid state without an intermediate throttled sample (the field-test failure).
+func test_r3_restore_advances_from_drop_recheck_without_visualizer() -> void:
+	var director := _new_full_director("R3")
+	var unit := _r3_unit([Vector3(0, 0, 0), Vector3(0, 0, 0.04), Vector3(0, 0, 0.08)])
+	director._target_unit = unit
+	director._target_nodes = _nodes_of(unit)
+	var mover: Node3D = director._target_nodes[2]
+	director._r3_mover_node = mover
 	var finished := [null]
 	director.tutorial_finished.connect(func(completed: bool) -> void: finished[0] = completed)
 
-	# A coherent-first report must NOT satisfy the restore step (nothing broke yet).
-	director._on_coherency_visualized(_coherency_result(true))
+	# Pick the designated model -> spread.
+	director._on_selection_changed([mover])
 	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("spread")
 
-	# Breaking coherency advances spread -> restore.
-	director._on_coherency_visualized(_coherency_result(false))
+	# Drag the model far out and DROP: the drop re-check reports the break -> restore step.
+	mover.position = Vector3(0, 0, 0.6)
+	director._on_selection_dropped([{"node": mover, "inches": 22.0}])
 	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("restore")
 
-	# Restoring coherency completes R3 and finishes the whole track.
+	# Drag it back into coherency and DROP. NO _on_coherency_visualized call — the restore
+	# must fire from the drop re-check alone (this is exactly what regressed in the field).
+	mover.position = Vector3(0, 0, 0.08)
+	director._on_selection_dropped([{"node": mover, "inches": 22.0}])
+	assert_bool(director.flow.finished).is_true()
+	assert_bool(finished[0]).is_true()
+	assert_bool(director.progress.is_lesson_completed("R3")).is_true()
+
+
+## The live visualizer path still works too: the throttled `visualization_completed` edge
+## (broken -> restored) advances R3, and a coherent-first report never pre-satisfies restore.
+func test_r3_visualizer_path_broken_then_restored_finishes_track() -> void:
+	var director := _new_full_director("R3")
+	var unit := _new_unit(3)
+	director._target_unit = unit
+	director._target_nodes = _nodes_of(unit)
+	director._r3_mover_node = director._target_nodes[0]
+	var finished := [null]
+	director.tutorial_finished.connect(func(completed: bool) -> void: finished[0] = completed)
+
+	# Pick -> spread.
+	director._on_selection_changed([director._r3_mover_node])
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("spread")
+
+	# A coherent-first report must NOT satisfy restore (nothing broke yet).
+	director._on_coherency_visualized(_coherency_result(true))
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("spread")
+	# Broken -> restore, then restored -> finish.
+	director._on_coherency_visualized(_coherency_result(false))
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("restore")
 	director._on_coherency_visualized(_coherency_result(true))
 	assert_bool(director.flow.finished).is_true()
 	assert_bool(finished[0]).is_true()
