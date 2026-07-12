@@ -33,6 +33,14 @@ server starts, join failures by reason (`room_full` / `room_not_found` / `server
 (`<10m` / `10–45m` / `45–120m` / `>120m`) and a peak-peers-per-room histogram. They persist to the
 Fly volume (`RELAY_STATS_PATH`) so they survive scale-to-zero.
 
+`games_played` is counted **live** the first time a room reaches ≥2 concurrent peers (once per room),
+so it does not depend on the room ever closing. The two close-time histograms (room-lifetime and
+peers-per-room) are recorded at **every** room-end path: a last-peer disconnect, the idle-expiry
+reaper, the host-abandon reaper, **and** graceful server shutdown — the last of which folds any
+still-open rooms into the histograms before exit, because on Fly a scale-to-zero / redeploy stop,
+not a clean disconnect, is the dominant way a room ends. The only rooms still lost are those open at
+a **hard** kill (`SIGKILL` / OOM / power loss), which runs no shutdown code.
+
 Three ways to read them, all returning the same blob:
 
 - **`GET /stats`** — public JSON over HTTPS (same listener as the WebSocket; no auth, like
