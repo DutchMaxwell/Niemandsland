@@ -323,3 +323,79 @@ the once-per-session un-automated log now only flags Caster/Unique (and truly un
 All engine-behaviour changes live in the solo layers / the planner's opt-in `opts` path; the SIM passes no
 opts and calls `plan_unit_step` only in walled scenarios (the mirror oracle is wall-free), so `SoloSim` and
 the mirror-fairness oracle are byte-identical to before — no re-run required (same precedent as waves 1–3).
+
+## Field-test round 3 — eleven fixes (real game, 2026-07-12)
+
+The maintainer's third field test surfaced eleven issues. Each is fixed in the solo layer (`SoloSim`
+untouched — the mirror-fairness oracle stays byte-identical, no re-run), verified against the PDFs, and
+pinned with a gdUnit test.
+
+1. **Deployment placed model bases in terrain** — the footprint check sampled a coarse circle of 8 points,
+   and the footprint radius reached only to model CENTRES. The check now samples the EXACT per-model grid
+   the drop builds (`SoloController._deploy_footprint_offsets`, mirroring `_place_unit_at`) and inflates each
+   model by its real base radius (`SeparationChecker` shape truth), so EVERY base — not just the centre —
+   must clear blocking terrain (`AiDeployment._blocked_at` footprint path). Test:
+   `test_blocked_at_checks_every_model_of_a_footprint`, `test_best_spot_rejects_footprint_corner_in_blocking_terrain`.
+2 & 6 & 11. **Line of sight is now GEOMETRIC and PER MODEL** (GF/AoF v3.5.1 p.5 "Models can't see through
+   solid obstacles, including the perimeter of other units (friendly or enemy), but they can always see
+   through friendly models from their own unit."; p.8 "Who Can Shoot" is per model). The AI's shooting
+   target selection AND resolution AND the human's `n/m sight` display all run one truth,
+   `main._solo_true_los_callable`, which blocks a shooter-model→target-model line on (a) blocking terrain
+   zones (grid), (b) **wall segments** (`get_wall_segments_world`, previously ignored — the cause of the AI
+   shooting through the central ruins/walls, finding 2), and (c) **any other unit's base** (`LosRules.units_block_line`,
+   the unit-as-blocker engine, previously unwired — finding 11), excluding only the shooter's and target's
+   own units. The AI *decision* now uses this same per-model check (`SoloController.unit_los_checker`),
+   replacing the coarse unit-centre line that both let it shoot with no line (finding 2) and held it from
+   firing when its models had a clear line (finding 6). Tests: the existing
+   `test_sighted_models_gates_per_model_behind_a_blocker` (per-model gate) + `unit_los_blocker_test.gd` (the
+   geometry).
+3 & 4b. **Ambush reserve units are truly OFF-TABLE** (GF/AoF v3.5.1 p.13). Round 2 made them ineligible;
+   round 3 closes the remaining leaks via one truth, `SoloController.unit_in_reserve`: a reserve unit is
+   excluded from activation eligibility (already), from movement/LOS **obstacle** sets, from AI **target**
+   selection, and from being a valid human target — and its models are **hidden** on deploy and **revealed**
+   only on arrival, so it is never seen, targeted, or perceived as "placed" until its single arrival
+   placement (no phantom pre-placement, finding 4b). Test: `test_reserve_units_never_eligible_activate_or_target`.
+4. **Planner now costs Dangerous cells** — Dangerous grid cells enter the planner's `avoid_cells` set (like
+   Difficult) so the AI routes AROUND them when a clear path of comparable length exists; only Flying ignores
+   Dangerous (Strider ignores Difficult but NOT Dangerous — GF/AoF v3.5.1 p.13/p.14), and a destination that
+   is itself Dangerous routes straight in (the model then takes its test). `SoloController._terrain_grid_in`
+   + `_targets_in_dangerous`. Test: `test_terrain_grid_marks_dangerous_avoid_only_when_requested`.
+5. **Human melee flow** (GF/AoF v3.5.1 p.8/p.9). (a) Melee contact is measured **base-to-base** via the
+   shared `SeparationChecker` (`SoloController.nearest_melee_gap_in`), replacing the unit-centre distance that
+   failed for wide/multi-model units the player had in contact. (b) **Charge snap**: on declaring a Fight
+   within `MELEE_ENGAGE_IN` (1"), the whole charging unit rigidly translates so its nearest model lands in
+   clean base contact — a rigid translation preserves every relative spacing, so the rest of the unit rides
+   forward in coherency (`SoloController.snap_charge`; both the human's Fight and the AI's charge). (c) The
+   **bring-in** is cited exactly: the CHARGER's models "move … to get into base contact … maintaining unit
+   coherency" (p.8) — handled by the snap; the DEFENDER's separate pull-in ("all models from the target unit
+   that are not in base contact … must move by up to 3” to get into base contact … maintaining unit
+   coherency", p.9) is surfaced as a battle-log reminder (the automation never moves the opponent's models on
+   the player's behalf). Who then strikes is unchanged: models within 2" (p.9). Test:
+   `test_nearest_melee_gap_and_charge_snap`. (The 1"-proximity VISUALIZER lives on `feat/proximity-hint` and
+   is intentionally NOT duplicated here.)
+7. **Dangerous-terrain damage no longer stops shooting** (GF/AoF v3.5.1 p.12: a dangerous test neither
+   consumes the activation nor prevents shooting; only a dead model is removed). The premature morale test
+   was moved OUT of the dangerous step and DEFERRED to the END of the activation (`_solo_activate_one_ai`),
+   after the unit has acted — so a surviving unit still shoots this turn. A CHARGE is excluded (units in
+   melee use the melee wound-comparison instead — p.9).
+8. **Shaken auto-fails a repeat morale test** (GF/AoF v3.5.1 p.10: "Shaken units … always fail morale
+   tests"). `_solo_morale_test` now skips the Quality roll when the unit is already Shaken and applies the
+   forced fail (`AiCombatMath.morale_result_shaken`): Rout at half or less, otherwise it stays Shaken (a
+   Fearless re-roll can still save it — p.13). Test: `test_morale_result_shaken_auto_fails`.
+9. **Reliable applied on the MELEE strike path** — the strike phase composed the to-hit from the raw
+   Quality, silently dropping a melee weapon's Reliable (2+); it now sets the base Quality via
+   `AiCombatMath.reliable_quality` first, exactly as both shooting paths do, then composes Thrust / Evasive /
+   fatigue on top ("Reliable only changes the Quality value", p.14). Test:
+   `test_reliable_sets_melee_to_hit_to_two_plus`.
+10. **Overlapping Dangerous + Difficult** — the Dangerous test and the Difficult 6"-cap are evaluated
+    **independently** on the actual planned route, so a path that enters difficult terrain (6" cap applies)
+    AND crosses dangerous terrain still counts the dangerous crossing (`_count_dangerous_trails` runs after
+    any difficult re-plan). Test: `test_route_reports_difficult_and_dangerous_independently`.
+    *Honest limitation:* the shared terrain grid stores ONE `TerrainType` per 3" cell, so a **single** cell
+    cannot be authored as both Difficult and Dangerous — overlapping effects must be authored as adjacent
+    cells (which the route logic then handles). A per-cell multi-class terrain layer is a separate
+    `terrain_overlay` change, out of scope here.
+
+**Fairness:** every change lives in the solo game layer (`main.gd`, `SoloController`, `AiCombatMath`
+additions, `AiDeployment`); `SoloSim` and the SIM's `plan_unit_step`/`_terrain_grid_in` paths are untouched,
+so the mirror-fairness oracle is byte-identical — no re-run required (same precedent as waves 1–4).

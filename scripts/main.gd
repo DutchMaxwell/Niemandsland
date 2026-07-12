@@ -713,6 +713,7 @@ func _solo_activate_one_ai() -> GameUnit:
 		await _solo_pace_attention()   # (f) before attacks resolve
 	# Dangerous terrain crossed during the move (goal 003 P3): each such model rolls a real tray die, a 1 wounds.
 	var dangerous_models: int = int(report.get("dangerous_models", 0))
+	var alive_before_dangerous: int = unit.get_alive_count()
 	if dangerous_models > 0:
 		await _run_ai_dangerous(unit, dangerous_models)
 	if unit.is_destroyed():
@@ -721,6 +722,13 @@ func _solo_activate_one_ai() -> GameUnit:
 		await _run_ai_shooting(report)
 	elif int(report.get("action", 0)) == AiDecision.Action.CHARGE:
 		await _run_ai_melee(report)
+	# END-of-activation morale from DANGEROUS-terrain wounds (GF/AoF v3.5.1 p.10/p.12 — field-test finding
+	# 7): tested only NOW, AFTER the unit has acted, so dangerous damage never stops it shooting. A CHARGE
+	# resolves through the melee comparison instead ("units in melee don't take morale tests from wounds at
+	# the end of an activation"), so it is excluded here. should_test only fires on a real casualty at ≤half.
+	if dangerous_models > 0 and not unit.is_destroyed() \
+			and int(report.get("action", 0)) != AiDecision.Action.CHARGE:
+		await _solo_shooting_morale(unit, alive_before_dangerous, _solo_owner_label(unit))
 	return unit
 
 
@@ -971,11 +979,16 @@ func _ensure_solo_controller() -> void:
 		_solo_game_finished = false
 		var human_slot: int = 1 if ai_slot != 1 else 2
 		solo_controller.setup(opr_army_manager, network_manager, movement_range_controller, human_slot, ai_slot)
-		# Terrain line of sight for the shooting decision (unit-blocking LoS is a later refinement).
+		# Terrain line of sight for the shooting decision (coarse unit-centre fallback for headless tests).
 		solo_controller.los_checker = func(from_pos: Vector3, to_pos: Vector3) -> bool:
 			if terrain_overlay == null or not terrain_overlay.has_method("has_line_of_sight"):
 				return true
 			return terrain_overlay.has_line_of_sight(from_pos, to_pos, 1, 1)
+		# GEOMETRIC PER-MODEL line of sight for the AI's shoot decision — terrain + walls + other units'
+		# bases (GF/AoF v3.5.1 p.5/p.8), the SAME truth the shooting resolution uses (findings 2/6/11). An
+		# unbounded range makes this a pure LOS test; the decision gates range separately.
+		solo_controller.unit_los_checker = func(s: GameUnit, t: GameUnit) -> bool:
+			return _solo_sighted_count(s, t, SOLO_LOS_UNBOUNDED_RANGE_IN) > 0
 		# Real terrain / walls / objectives feed the shared pure modules (decide_solo, MovementPlanner,
 		# TerrainRules) — goal 003 P3. Each is a graceful no-op when the overlay is absent.
 		solo_controller.terrain_type_at = func(p: Vector3) -> int:
@@ -1046,7 +1059,30 @@ func _on_solo_deploy_pressed() -> void:
 	if battle_log != null:
 		var reserve_note: String = (" (%d in reserve)" % int(res.reserved)) if int(res.reserved) > 0 else ""
 		battle_log.log_event(BattleLog.Category.GENERAL, "AI deploys %d units%s [seed %d]" % [int(res.deployed), reserve_note, seed_value], true)
+	# Ambush reserve units are OFF-TABLE (GF/AoF v3.5.1 p.13): hide their models so they are neither
+	# visible, targetable, nor perceived as "deployed" until they arrive (field-test finding 3). Arrival
+	# reveals them (their single placement — field-test finding 4: no earlier phantom placement).
+	for u in solo_controller.ambush_reserve:
+		_solo_set_unit_visible(u as GameUnit, false)
 	_solo_flush_dev()   # render the per-unit deployment records when the dev toggle is on
+
+
+## Show/hide every model node of a unit (incl. attached heroes). Keeps Ambush reserve units off the table
+## until they arrive; the arrival step reveals them (findings 3/4).
+func _solo_set_unit_visible(unit: GameUnit, vis: bool) -> void:
+	if unit == null:
+		return
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	for m in members:
+		var member := m as GameUnit
+		if member == null:
+			continue
+		for mi in member.models:
+			var node: Node3D = (mi as ModelInstance).node
+			if node != null and is_instance_valid(node):
+				node.visible = vis
 
 
 ## Resolve the AI's shooting (goal 003 P3 — the sim's brain, real dice). SPLIT FIRE (OPR core p.8): each
@@ -1184,8 +1220,8 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 	var dists: Array = []
 	for h in opr_army_manager.get_game_units_for_player(solo_controller.human_slot):
 		var hu := h as GameUnit
-		if hu == null or _solo_combined_alive(hu) <= 0:
-			continue
+		if hu == null or _solo_combined_alive(hu) <= 0 or SoloController.unit_in_reserve(hu):
+			continue   # skip empty units and any still off-table in Ambush reserve (findings 3/4)
 		if hu.has_method("is_attached") and hu.is_attached():
 			continue   # a joined hero is targeted through its host unit, never alone
 		if _solo_sighted_count(attacker, hu, int(max_range)) <= 0:
@@ -1244,15 +1280,84 @@ func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int) -> 
 		if tm != null:
 			target_positions.append_array(solo_controller.alive_positions(tm))
 	return SoloController.sighted_models(solo_controller.alive_positions(shooter), target_positions,
-		float(range_in) * MoveIntent.INCHES_TO_METERS, _solo_los_callable())
+		float(range_in) * MoveIntent.INCHES_TO_METERS, _solo_true_los_callable(shooter, target))
 
 
-## Terrain line of sight as an injectable Callable (clear when no overlay exists).
-func _solo_los_callable() -> Callable:
-	return func(a: Vector3, b: Vector3) -> bool:
-		if terrain_overlay == null or not terrain_overlay.has_method("has_line_of_sight"):
-			return true
-		return terrain_overlay.has_line_of_sight(a, b, 1, 1)
+## GEOMETRIC PER-MODEL line of sight for a shooter→target model pair (GF/AoF v3.5.1 p.5: "Models can't see
+## through solid obstacles, including the perimeter of other units (friendly or enemy), but they can always
+## see through friendly models from their own unit."; p.8 "Who Can Shoot" is PER MODEL). The sight line is
+## blocked by (a) blocking terrain zones (the grid "see in/out, not through" rule), (b) wall segments, and
+## (c) the base of ANY OTHER unit's model — never the shooter's or the target's own unit (you can always
+## see the target and through your own models). Heights follow the Asgard rule: a blocker only stops the
+## line when its Height ≥ BOTH endpoint units' Heights (a taller model sees over a smaller one). Walls +
+## blocker list + endpoint heights are built ONCE per pair; the returned Callable(sp, tp) is what
+## SoloController.sighted_models runs per shooter-model × target-model pair (findings 2/6/11).
+func _solo_true_los_callable(shooter: GameUnit, target: GameUnit) -> Callable:
+	var overlay := terrain_overlay
+	var walls: Array = overlay.get_wall_segments_world() if (overlay != null and overlay.has_method("get_wall_segments_world")) else []
+	var blockers: Array[LosRules.Blocker] = _solo_los_blockers(shooter, target)
+	var from_h: int = _solo_unit_los_height(shooter)
+	var to_h: int = _solo_unit_los_height(target)
+	return func(sp: Vector3, tp: Vector3) -> bool:
+		if overlay != null and overlay.has_method("has_line_of_sight") \
+				and not overlay.has_line_of_sight(sp, tp, from_h, to_h):
+			return false   # (a) blocking terrain
+		var a2 := Vector2(sp.x, sp.z)
+		var b2 := Vector2(tp.x, tp.z)
+		if not walls.is_empty() and MovementPlanner.path_crosses_wall(a2, b2, walls):
+			return false   # (b) wall segment
+		# Blockers already exclude the shooter's and target's own units, so no per-call exclude list is needed.
+		if not blockers.is_empty() and LosRules.units_block_line(a2, b2, from_h, to_h, blockers, ([] as Array[int])):
+			return false   # (c) another unit's base (perimeter of other units)
+		return true
+
+
+## Every OTHER unit's alive models as LOS blockers (LosRules.Blocker: base circle + Asgard Height + a
+## per-unit key for the <1" gap-closure). The shooter's and the target's own units — and their attached
+## heroes — are excluded (p.5: you always see through your own unit and can always see the target).
+func _solo_los_blockers(exclude_a: GameUnit, exclude_b: GameUnit) -> Array[LosRules.Blocker]:
+	var out: Array[LosRules.Blocker] = []
+	if opr_army_manager == null:
+		return out
+	var excluded := {}
+	for u in [exclude_a, exclude_b]:
+		if u == null:
+			continue
+		excluded[u.get_instance_id()] = true
+		if u.has_method("get_attached_heroes"):
+			for h in u.get_attached_heroes():
+				if h != null:
+					excluded[h.get_instance_id()] = true
+	for g in opr_army_manager.get_all_game_units():
+		var gu := g as GameUnit
+		if gu == null or excluded.has(gu.get_instance_id()) or SoloController.unit_in_reserve(gu):
+			continue   # a reserve unit is off-table — it blocks no sight lines (findings 3/4)
+		var key: int = gu.get_instance_id()
+		for m in gu.get_alive_models():
+			var node: Node3D = (m as ModelInstance).node
+			if node == null or not is_instance_valid(node):
+				continue
+			out.append(LosRules.Blocker.new(Vector2(node.global_position.x, node.global_position.z),
+				SoloController.model_base_radius_m(m), LosRules.model_height_category(m), key))
+	return out
+
+
+## Representative Asgard Height of a unit (the tallest of its alive models incl. attached heroes; H2
+## infantry default): a taller unit sees over smaller blockers, matching LosRules.units_block_line.
+func _solo_unit_los_height(unit: GameUnit) -> int:
+	var h: int = LosRules.HEIGHT_INFANTRY
+	if unit == null:
+		return h
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	for mm in members:
+		var member := mm as GameUnit
+		if member == null:
+			continue
+		for m in member.get_alive_models():
+			h = maxi(h, LosRules.model_height_category(m))
+	return h
 
 
 ## Weapon groups for a combat activation: the unit's own profiles at its Quality PLUS each attached hero's
@@ -1473,10 +1578,15 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				continue
 			if filter == SoloStrike.NON_COUNTER and bool(profile.get("counter", false)):
 				continue
-			# Thrust (+1 to hit on a charge), Evasive (−1) and Unpredictable Fighter's +1 compose on the
-			# quality; fatigue (unmodified-6-only) overrides every to-hit modifier.
+			# Reliable (GF/AoF v3.5.1 p.14: the weapon "shoots at Quality 2+") sets the base Quality FIRST —
+			# it applies to a Reliable MELEE weapon exactly as it does when shooting (field-test finding 9: the
+			# melee strike path dropped it, so a Reliable strike still rolled at the unit's Quality). Thrust
+			# (+1 to hit on a charge), Evasive (−1) and Unpredictable Fighter's +1 then compose on top ("Reliable
+			# only changes the Quality value, so the roll can still be modified", p.14); fatigue (unmodified-6-
+			# only) overrides every to-hit modifier.
+			var strike_quality: int = AiCombatMath.reliable_quality(base_quality, bool(profile.get("reliable", false)))
 			var to_hit: int = 6 if fatigued else AiCombatMath.modified_hit_target(
-				AiCombatMath.thrust_to_hit(base_quality, bool(profile.get("thrust", false))), int(mod_info.get("mod", 0)) + uf_hit)
+				AiCombatMath.thrust_to_hit(strike_quality, bool(profile.get("thrust", false))), int(mod_info.get("mod", 0)) + uf_hit)
 			if not fatigued:
 				_solo_log_hit_mod(mod_info, defender, to_hit)
 			var roll_owner: String = ("AI (%s)" % str(group.get("name", "?"))) if _solo_is_ai_unit(striker) else "You"
@@ -1791,12 +1901,14 @@ func _run_ai_dangerous(unit: GameUnit, model_count: int) -> void:
 			wounds += 1
 	if wounds <= 0:
 		return
-	var before: int = unit.get_alive_count()
 	_solo_apply_wounds(unit, wounds)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s takes %d wound%s from dangerous terrain" % [
 			unit.get_name(), wounds, ("" if wounds == 1 else "s")], true)
-	await _solo_shooting_morale(unit, before, "AI (%s)" % unit.get_name())
+	# NOTE (field-test finding 7): the morale test from these wounds is NOT rolled here — dangerous-terrain
+	# damage neither consumes the activation nor prevents shooting (GF/AoF v3.5.1 p.12). Morale is tested at
+	# the END of the activation (in _solo_activate_one_ai), after the unit has acted, so a surviving unit
+	# still shoots this turn.
 
 
 ## Alive models of the unit INCLUDING its attached heroes (a unit is destroyed only when both are gone).
@@ -2298,13 +2410,18 @@ func _run_ai_melee(report: Dictionary) -> void:
 	var target: GameUnit = report.get("target")
 	if unit == null or target == null or dice_roller_control == null:
 		return
-	# The charge must actually reach combat: within ~2" after the move counts as contact (M1 movement
-	# has no base-to-base snapping yet — documented default).
-	var dist_in: float = MoveIntent.distance_inches(solo_controller.unit_centre(unit), solo_controller.unit_centre(target))
-	if dist_in > 2.0:
+	# The charge must actually reach combat, measured base-to-base (field-test finding 5): the planner ends
+	# the charge at/near base contact, so the gap between the nearest models — not the unit centres — is the
+	# true reach test. Within MELEE_ENGAGE_IN it snaps to clean contact; beyond it the charge falls short.
+	var gap_in: float = solo_controller.nearest_melee_gap_in(unit, target)
+	if gap_in > MELEE_ENGAGE_IN:
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s's charge falls short (%.0f\")" % [unit.get_name(), dist_in], true)
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s's charge falls short (%.1f\")" % [unit.get_name(), gap_in], true)
 		return
+	var snapped_ai: float = solo_controller.snap_charge(unit, target)
+	if snapped_ai > 0.05 and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"%s charges into base contact (+%.1f\") — GF/AoF v3.5.1 p.8" % [unit.get_name(), snapped_ai], true)
 	var ai_caused := 0
 	var human_caused := 0
 	var target_models_before: int = _solo_combined_alive(target)
@@ -2394,11 +2511,21 @@ func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String) -> 
 
 
 func _solo_morale_test(unit: GameUnit, owner: String) -> void:
-	var faces: Array = await _solo_tray_roll(1, unit.get_quality(), owner)
-	if faces.is_empty():
-		return
 	var below_half := AiCombatMath.at_or_below_half(unit.get_alive_count(), unit.models.size())
-	var result: int = AiCombatMath.morale_result(int(faces[0]), unit.get_quality(), below_half)
+	var result: int
+	if unit.is_shaken:
+		# A unit that is ALREADY Shaken auto-fails any further morale test (GF/AoF v3.5.1 p.10: "Shaken
+		# units … always fail morale tests") — no Quality roll. At half or less this Routs it; otherwise it
+		# stays Shaken (field-test finding 8: a Shaken unit was rolling — and could pass — a repeat test).
+		result = AiCombatMath.morale_result_shaken(below_half)
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT,
+				"%s is already Shaken — automatically fails morale (GF/AoF v3.5.1 p.10)" % unit.get_name(), true)
+	else:
+		var faces: Array = await _solo_tray_roll(1, unit.get_quality(), owner)
+		if faces.is_empty():
+			return
+		result = AiCombatMath.morale_result(int(faces[0]), unit.get_quality(), below_half)
 	# Fearless (GF/AoF Advanced Rules v3.5.1 p.13): a unit where all models have this rule re-rolls a FAILED
 	# morale test once; on a 4+ it counts as passed instead. Rolled visibly on the real tray.
 	if result != AiCombatMath.Morale.PASSED and unit.has_special_rule("Fearless"):
@@ -2489,8 +2616,9 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 			var target := _solo_pick_unit_at(mb.position)
 			var attacker: GameUnit = _solo_target_mode.get("unit")
 			var melee: bool = bool(_solo_target_mode.get("melee", false))
-			if target == null or not _solo_is_ai_unit(target) or _solo_combined_alive(target) <= 0:
-				return true   # swallow the click; stay in targeting mode
+			if target == null or not _solo_is_ai_unit(target) or _solo_combined_alive(target) <= 0 \
+					or SoloController.unit_in_reserve(target):
+				return true   # swallow the click; stay in targeting mode (a reserve unit is off-table)
 			var verdict := _solo_validate_target(attacker, target, melee)
 			if verdict != "":
 				if battle_log != null:
@@ -2527,9 +2655,16 @@ func _input(event: InputEvent) -> void:
 ## "" when the target is attackable, else the human-readable reason. Shooting validity is PER MODEL
 ## (GF v3.5.1 p.8): the target is valid when at least ONE of the attacker's models has range + LOS.
 func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) -> String:
-	var dist := MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
 	if melee:
-		return "" if dist <= 2.0 else "not in melee contact (%.0f\")" % dist
+		# BASE-CONTACT measure (field-test finding 5): the true base-to-base gap between the nearest models,
+		# not the unit-centre distance (which failed for wide/multi-model units the player had in contact).
+		# Within MELEE_ENGAGE_IN of an enemy base counts as chargeable — the snap on confirm closes it to
+		# clean contact (GF/AoF v3.5.1 p.9 "Who Can Strike": base contact folds into the 2" strike reach).
+		var gap := solo_controller.nearest_melee_gap_in(attacker, target)
+		if gap <= MELEE_ENGAGE_IN:
+			return ""
+		return "not in melee range (%.1f\" — move into base contact)" % gap
+	var dist := MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
 	var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker)) + SoloController.shooting_range_bonus(attacker)
 	if rng_in <= 0:
 		return "no ranged weapons"
@@ -2596,6 +2731,8 @@ func _solo_pick_unit_at(screen_pos: Vector2) -> GameUnit:
 
 
 const SOLO_LOS_REFRESH_MS := 150   # throttle for the per-model sighted-count recompute during hover
+const SOLO_LOS_UNBOUNDED_RANGE_IN := 9999   # "range never gates" sentinel for a pure LOS query
+const MELEE_ENGAGE_IN := 1.0   # base-edge gap within which the player may declare a Fight (then it snaps to contact)
 
 
 ## Live line of sight to the hovered enemy (goal 001 P8 + goal 003 per-model LOS): the line is green when
@@ -2672,6 +2809,18 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 	_solo_log_unmodeled_rules(attacker)
 	_solo_log_unmodeled_rules(target)
 	if melee:
+		# CHARGE SNAP (field-test finding 5): before the strikes, snap the charging unit into clean base
+		# contact — its nearest model touches the enemy and the rest ride forward in coherency (GF/AoF
+		# v3.5.1 p.8). A small nudge (validation already required ≤ MELEE_ENGAGE_IN); logged + broadcast.
+		var snapped: float = solo_controller.snap_charge(attacker, target)
+		if snapped > 0.05 and battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT,
+				"%s charges into base contact (+%.1f\") — the unit follows in coherency (GF/AoF v3.5.1 p.8)" % [attacker.get_name(), snapped], true)
+		# The defender's pull-in is a SEPARATE rule the player applies by hand (the automation never moves
+		# the opponent's models on the player's behalf): GF/AoF v3.5.1 p.9.
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT,
+				"Bring-in: any of %s's models not in base contact may move up to 3\" into contact, keeping coherency (GF/AoF v3.5.1 p.9)" % target.get_name())
 		await _run_human_melee(attacker, target)
 	else:
 		await _run_human_shooting(attacker, target)
@@ -2852,6 +3001,7 @@ func _solo_arrive_ambush() -> void:
 		var unit: GameUnit = solo_controller.arrive_one_ambush_unit(arrival_zone, enemy_positions, occupied, round_no)
 		if unit == null:
 			break
+		_solo_set_unit_visible(unit, true)   # reveal it — this arrival is its ONE placement (finding 4)
 		# A paced, announced arrival, like every other AI action: focus the unit, name it, hold a beat.
 		_solo_focus_on_unit(unit)
 		_solo_show_toast("%s ambushes in from reserve" % unit.get_name())
