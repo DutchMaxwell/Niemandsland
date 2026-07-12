@@ -752,3 +752,23 @@ func test_ai_opens_next_round_falls_through_when_opener_is_wiped() -> void:
 	# The designated opener has no units → the other side opens instead.
 	assert_bool(SoloController.ai_opens_next_round(true, false, true)).is_true()    # human wiped → AI opens
 	assert_bool(SoloController.ai_opens_next_round(false, true, false)).is_false()  # AI wiped → human opens
+
+
+# === Melee finding 8: the charger's skipped strike was a missing melee weapon, not a reach asymmetry ===
+
+func test_melee_profiles_empty_for_shooting_only_unit() -> void:
+	# The charger's strikes never rolled because a shooting-only unit yields NO melee-weapon profile (the game
+	# now logs "no melee weapons in reach"). A range-0 weapon DOES yield one.
+	var ranged_only := [{"name": "Heavy Rifle", "range_value": 30, "attacks": 2, "count": 1, "special_rules": []}]
+	assert_array(AiShooting.melee_profiles(ranged_only)).is_empty()
+	var with_melee := [{"name": "CCW", "range_value": 0, "attacks": 3, "count": 1, "special_rules": []}]
+	assert_int(AiShooting.melee_profiles(with_melee).size()).is_equal(1)
+
+
+func test_striking_models_is_symmetric_for_two_bases_in_contact() -> void:
+	# Charger and defender share the SAME nearest-pair reach, so striking_models is symmetric — the charger's
+	# skipped strike (finding 8) was the missing melee weapon, not a reach/scaling asymmetry.
+	var a := [Vector3(0.0, 0.0, 0.0)]
+	var b := [Vector3(0.05, 0.0, 0.0)]   # ~2" apart, within the 1"+2" strike reach
+	assert_int(SoloController.striking_models(a, b)).is_equal(SoloController.striking_models(b, a))
+	assert_int(SoloController.striking_models(a, b)).is_equal(1)

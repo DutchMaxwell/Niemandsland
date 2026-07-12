@@ -1577,6 +1577,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	var caused := 0
 	var regenable := 0
 	var regen_proof := 0
+	var struck_any := false   # did ANY weapon profile actually roll? (finding 8: surface a silent no-strike)
 	for grp in _solo_attack_groups(striker, 0.0, true, defender):
 		var group := grp as Dictionary
 		var base_quality: int = int(group.get("quality", 4))
@@ -1589,6 +1590,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				continue
 			if filter == SoloStrike.NON_COUNTER and bool(profile.get("counter", false)):
 				continue
+			struck_any = true
 			# Reliable (GF/AoF v3.5.1 p.14: the weapon "shoots at Quality 2+") sets the base Quality FIRST —
 			# it applies to a Reliable MELEE weapon exactly as it does when shooting (field-test finding 9: the
 			# melee strike path dropped it, so a Reliable strike still rolled at the unit's Quality). Thrust
@@ -1620,6 +1622,14 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				regenable += w
 	if regenable + regen_proof > 0:
 		await _solo_land_wounds(defender, regenable, regen_proof)
+	# A charger (or full strike-back) that rolled NOTHING was silently skipped in the log, so a legitimate
+	# fight looked one-sided (field-test finding 8: the walker charger's strikes never appeared — it had no
+	# melee-weapon profile in reach). Surface it on the FULL strike so both combatants' resolution is shown;
+	# the Counter-only / non-Counter sub-phases legitimately roll nothing when the unit lacks those weapons.
+	if not struck_any and filter == SoloStrike.ALL and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"%s has no melee weapons in reach — no strikes (GF/AoF v3.5.1 p.9)" % striker.get_name(),
+			_solo_is_ai_unit(striker))
 	return caused
 
 
