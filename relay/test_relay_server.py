@@ -19,6 +19,7 @@ from relay_server import (
     MAX_ROOMS,
     RATE_LIMIT_MESSAGES_PER_SECOND,
     HOST_REJOIN_WINDOW_SECONDS,
+    ROOM_EXPIRY_SECONDS,
 )
 
 
@@ -984,6 +985,91 @@ class TestAggregateStats:
         assert code not in server.rooms
         assert server.stats.room_lifetime_buckets["lt_10min"] == 1  # short-lived test room
         assert server.stats.peers_per_room["2"] == 1                # peaked at 2 peers
+
+    async def test_expired_room_close_records_histogram(self, relay):
+        """The idle-expiry reaper (ROOM_EXPIRY_SECONDS) must fold the room into the histograms."""
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest_ws, _ = await join_room(url, code)  # peak peers = 2
+        await host_ws.recv()
+        await guest_ws.recv()
+        # Backdate creation so the room is past its 4h expiry, then run the reaper directly.
+        server.rooms[code].created_at = time.monotonic() - ROOM_EXPIRY_SECONDS - 1
+        closed = await server._close_expired_rooms()
+        assert code in closed
+        assert code not in server.rooms
+        assert server.stats.peers_per_room["2"] == 1
+        assert server.stats.room_lifetime_buckets["gt_120min"] == 1  # backdated >120min
+        await host_ws.close()
+        await guest_ws.close()
+
+    async def test_abandoned_room_close_records_histogram(self, relay):
+        """The host-abandon reaper (host dropped, never rejoined) must record the histograms too."""
+        server, url = relay
+        host_ws, code, _ = await create_room(url)
+        guest_ws, _ = await join_room(url, code)  # peak peers = 2
+        await host_ws.recv()
+        await guest_ws.recv()
+        await host_ws.close()
+        await asyncio.sleep(0.1)
+        await guest_ws.recv()  # drain host_paused
+        # Simulate the host having dropped longer than the rejoin window.
+        server.rooms[code].host_disconnected_at = (
+            time.monotonic() - HOST_REJOIN_WINDOW_SECONDS - 1
+        )
+        closed = await server._close_abandoned_rooms()
+        assert code in closed
+        assert code not in server.rooms
+        assert server.stats.peers_per_room["2"] == 1
+        assert server.stats.room_lifetime_buckets["lt_10min"] == 1
+        await guest_ws.close()
+
+    async def test_shutdown_flush_records_open_rooms(self, relay):
+        """Server shutdown (Fly scale-to-zero / redeploy) must fold EVERY still-open room into the
+        histograms — the room-end path that was previously uncounted, leaving peers_per_room empty
+        however many rooms had been created."""
+        server, url = relay
+        # A 2-peer room and a solo room, both left OPEN (no disconnect / timeout).
+        host_ws, code, _ = await create_room(url)
+        guest_ws, _ = await join_room(url, code)  # peak peers = 2
+        await host_ws.recv()
+        await guest_ws.recv()
+        solo_ws, solo_code, _ = await create_room(url)  # peak peers = 1
+        assert server.stats.peers_per_room["1"] == 0
+        assert server.stats.peers_per_room["2"] == 0
+
+        server.record_open_rooms_on_shutdown()
+
+        assert server.stats.peers_per_room["2"] == 1  # the 2-peer room
+        assert server.stats.peers_per_room["1"] == 1  # the solo room
+        assert sum(server.stats.room_lifetime_buckets.values()) == 2  # both counted once
+        await host_ws.close()
+        await guest_ws.close()
+        await solo_ws.close()
+
+    def test_shutdown_flush_is_idempotent(self):
+        """A second stop (or a stop racing an in-flight close) must never double-count a room."""
+        from relay_server import RelayServer, Room
+        server = RelayServer()
+        room = Room(code="ABCDEF")
+        room.peak_peers = 3
+        server.rooms["ABCDEF"] = room
+        server.record_open_rooms_on_shutdown()
+        server.record_open_rooms_on_shutdown()  # a second stop must not re-count
+        assert server.stats.peers_per_room["3"] == 1
+        assert sum(server.stats.room_lifetime_buckets.values()) == 1
+
+    def test_record_room_closed_counts_each_room_once(self):
+        """_record_room_closed is the single funnel for every end path; the guard makes it safe for
+        two paths to fire for the same room (e.g. shutdown flush after a disconnect already recorded)."""
+        from relay_server import RelayServer, Room
+        server = RelayServer()
+        room = Room(code="ZZZZ99")
+        room.peak_peers = 2
+        server._record_room_closed(room)
+        server._record_room_closed(room)  # duplicate end path — must be a no-op
+        assert server.stats.peers_per_room["2"] == 1
+        assert sum(server.stats.room_lifetime_buckets.values()) == 1
 
     async def test_get_stats_includes_new_aggregates(self, relay):
         server, url = relay
