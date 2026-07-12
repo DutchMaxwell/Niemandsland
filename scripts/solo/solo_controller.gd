@@ -820,6 +820,19 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 	var plan_trails: Array = []
 	var planned: Array = MovementPlanner.plan_unit_step(mpos, mdelta, walls_in, sampled["grid"],
 		allow_contact, board_in, plan_trails, opts)
+	# FINAL formation guarantees on the inch-frame result (real-game path only — SoloSim never calls this,
+	# so its mirror-fairness proof is untouched). First the move ENDS in coherency (field-test finding 4,
+	# GF/AoF v3.5.1 p.7): a non-charge move that fell out of the 1"/9" chain is shortened back toward the
+	# (coherent) start just enough to restore it — a Charge is exempt, it must reach base contact. Then no
+	# two of the unit's OWN bases overlap (field-test finding 6, p.7 "may never move through other models …
+	# friendly or enemy"): overlapping pairs are pushed apart, wall/zone-checked. Coherency first so the
+	# tiny anti-overlap nudge (≤ base radius, well under the 1" link) is the last word and can't be undone.
+	if not allow_contact:
+		planned = MovementPlanner.shorten_to_coherent(mpos, planned)
+	var radii_in: Array = []
+	for m in models:
+		radii_in.append(model_base_radius_m(m as ModelInstance) / INCHES_TO_METERS)
+	planned = MovementPlanner.separate_overlaps(planned, radii_in, walls_in, opts)
 	var out: Array = []
 	if world_trails != null:
 		world_trails.clear()
@@ -836,6 +849,10 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 				for wp in plan_trails[i]:
 					var wv := ((wp as Vector2) * INCHES_TO_METERS) - off
 					leg.append(Vector3(wv.x, src.y, wv.y))
+			# The coherency/overlap correction moved the endpoint off the planner's last waypoint — glide the
+			# model on to its corrected final position so the animated trail matches the applied state.
+			if leg.is_empty() or (leg.back() as Vector3).distance_to(out[i]) > 0.0005:
+				leg.append(out[i])
 			if leg.size() < 2:
 				leg = [src, out[i]]
 			world_trails.append(leg)

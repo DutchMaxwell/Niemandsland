@@ -288,6 +288,80 @@ static func is_coherent(model_pos: Array) -> bool:
 	return _spread(model_pos) <= SPREAD_IN + EPS
 
 
+# === Final formation guarantees (real-game path only — see solo_controller._plan_positions) ==========
+
+const COHERENCY_BISECT_STEPS := 14   # 2^-14 ≈ 0.006% of the move — a tight yet cheap "shorten just enough"
+
+## Push a unit's OWN models apart until no two bases overlap (GF/AoF Advanced Rules v3.5.1 p.7: models "may
+## never move through other models or units, friendly or enemy"). `model_pos` are base CENTRES and
+## `radii_in[i]` the matching base radius (same unit + index order); a pair whose centre gap is below
+## radius[i]+radius[j] is separated along its centre line, split evenly, each half wall/zone-checked via
+## `opts` (a push that would clip a wall or enter another unit's no-go zone is skipped for that model). A
+## few relaxation passes converge for the compact formations the AI moves. Pure + deterministic; returns a
+## NEW Array[Vector2]. The sim keeps dimensionless point models (no base overlap notion), so it never calls
+## this — its planned positions stay byte-identical.
+static func separate_overlaps(model_pos: Array, radii_in: Array, walls: Array, opts: Dictionary = {}, passes: int = 8) -> Array:
+	var out := model_pos.duplicate()
+	var n := out.size()
+	if n <= 1 or radii_in.size() != n:
+		return out
+	for _pass in range(passes):
+		var moved := false
+		for i in range(n):
+			for j in range(i + 1, n):
+				var pi := out[i] as Vector2
+				var pj := out[j] as Vector2
+				var min_gap: float = float(radii_in[i]) + float(radii_in[j])
+				var d := pi.distance_to(pj)
+				if d >= min_gap - EPS:
+					continue
+				var dir := pj - pi
+				# Coincident centres: separate along a deterministic axis biased by index so both move apart.
+				dir = dir.normalized() if dir.length() > EPS else Vector2(1.0, 0.0)
+				var push := (min_gap - d) * 0.5 + EPS
+				var ci := pi - dir * push
+				var cj := pj + dir * push
+				if not step_blocked(pi, ci, walls, opts):
+					out[i] = ci
+					moved = true
+				if not step_blocked(pj, cj, walls, opts):
+					out[j] = cj
+					moved = true
+		if not moved:
+			break
+	return out
+
+
+## Shorten a planned move back toward its (coherent) START just enough to end in coherency (GF/AoF Advanced
+## Rules v3.5.1 p.7 unit coherency; field-test finding 4: an AI move ended out of coherency). The unit began
+## coherent, so blend factor 0 (no move) is always coherent — the bisection therefore ALWAYS returns a
+## coherent result, moving as far as coherency allows and no further ("or as close as possible"). No-op when
+## the full move is already coherent. Pure; returns a NEW Array[Vector2]. NOT applied to Charges (they must
+## reach base contact — the caller gates on allow_contact).
+static func shorten_to_coherent(start_pos: Array, planned_pos: Array) -> Array:
+	if planned_pos.size() <= 1 or start_pos.size() != planned_pos.size():
+		return planned_pos.duplicate()
+	if is_coherent(planned_pos):
+		return planned_pos.duplicate()
+	var lo := 0.0   # known coherent (the start formation)
+	var hi := 1.0   # the full planned move (currently incoherent)
+	for _b in range(COHERENCY_BISECT_STEPS):
+		var mid := (lo + hi) * 0.5
+		if is_coherent(_blend(start_pos, planned_pos, mid)):
+			lo = mid
+		else:
+			hi = mid
+	return _blend(start_pos, planned_pos, lo)
+
+
+## Per-model linear blend of two same-length position arrays at t (0 = a, 1 = b).
+static func _blend(a: Array, b: Array, t: float) -> Array:
+	var out: Array = []
+	for i in range(a.size()):
+		out.append((a[i] as Vector2).lerp(b[i] as Vector2, t))
+	return out
+
+
 # === Public entry: plan one move step =======================================================
 
 static func _centroid(model_pos: Array) -> Vector2:

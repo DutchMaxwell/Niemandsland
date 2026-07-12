@@ -304,3 +304,43 @@ func test_plan_unit_step_leaves_no_model_behind_around_a_zone() -> void:
 		assert_float((out[i] as Vector2).distance_to(pos[i])).is_greater(1.5)
 		assert_float((out[i] as Vector2).distance_to(pos[i])).is_less_equal(8.0 + 0.01)
 	assert_bool(MovementPlanner.is_coherent(out)).is_true()
+
+
+# === Final formation guarantees: no intra-unit overlap (finding 6) + coherency shorten (finding 4) ===
+
+func test_separate_overlaps_pushes_own_bases_apart() -> void:
+	# Two 1"-radius bases only 1" apart overlap by 1"; after separation their centre gap is >= the sum of
+	# radii (edge gap >= 0) — GF/AoF v3.5.1 p.7 "may never move through other models … friendly or enemy".
+	var out := MovementPlanner.separate_overlaps([Vector2(10, 10), Vector2(11, 10)], [1.0, 1.0], [])
+	assert_float((out[0] as Vector2).distance_to(out[1] as Vector2)).is_greater_equal(2.0 - 0.02)
+
+
+func test_separate_overlaps_no_op_when_clear() -> void:
+	var out := MovementPlanner.separate_overlaps([Vector2(10, 10), Vector2(13, 10)], [1.0, 1.0], [])
+	assert_float((out[0] as Vector2).distance_to(out[1] as Vector2)).is_equal_approx(3.0, 0.001)
+
+
+func test_separate_overlaps_splits_coincident_centres() -> void:
+	# Two bases at the SAME point must still be driven apart (a deterministic axis), never left overlapping.
+	var out := MovementPlanner.separate_overlaps([Vector2(5, 5), Vector2(5, 5)], [0.5, 0.5], [])
+	assert_float((out[0] as Vector2).distance_to(out[1] as Vector2)).is_greater_equal(1.0 - 0.02)
+
+
+func test_shorten_to_coherent_restores_a_broken_chain() -> void:
+	# Start: a tight coherent pair. Planned: model 1 flung 30" out (>> SPREAD_IN) → incoherent. The shorten
+	# pulls it back toward the coherent start until the 1"/9" chain holds again (GF/AoF v3.5.1 p.7; finding 4).
+	var start := [Vector2(10, 10), Vector2(12, 10)]
+	var planned := [Vector2(10, 10), Vector2(40, 10)]
+	assert_bool(MovementPlanner.is_coherent(planned)).is_false()
+	var out := MovementPlanner.shorten_to_coherent(start, planned)
+	assert_bool(MovementPlanner.is_coherent(out)).is_true()
+	assert_float((out[1] as Vector2).x).is_less(40.0)   # the move WAS shortened
+
+
+func test_shorten_to_coherent_no_op_when_already_coherent() -> void:
+	var start := [Vector2(10, 10), Vector2(12, 10)]
+	var planned := [Vector2(14, 10), Vector2(16, 10)]   # advanced together, still linked
+	assert_bool(MovementPlanner.is_coherent(planned)).is_true()
+	var out := MovementPlanner.shorten_to_coherent(start, planned)
+	assert_float((out[0] as Vector2).distance_to(planned[0])).is_less(0.001)
+	assert_float((out[1] as Vector2).distance_to(planned[1])).is_less(0.001)
