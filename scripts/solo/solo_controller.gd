@@ -19,6 +19,10 @@ const OBJECTIVE_CONTROL_IN := 3.0   # OPR objective seize/hold radius (Solo & Co
 const CONTACT_IN := 2.0             # centre-to-centre "in melee" distance a charge closes to
 const MELEE_REACH_IN := 2.0         # OPR "Who Can Strike" (GF Advanced Rules v3.5.1 p.9): only models within 2" strike
 const BASE_CONTACT_IN := 1.0        # nominal centre-to-centre gap of two standard ~25 mm bases at contact (~1")
+## A charge closes the REAL base-to-base gap plus this hair so the nearest models land firmly in contact
+## (the target's body-only planner zone clamps them to exact contact; snap_charge clears any residual).
+## Not a rule value — a contact epsilon (field-test finding 3: a charge within band fell short of contact).
+const CHARGE_CONTACT_MARGIN_IN := 0.25
 const IN_THE_WAY_IN := 6.0          # OPR: an enemy within 6" of the unit→objective line is "in the way" (p.58)
 const NO_OBJECTIVE := Vector3(INF, INF, INF)   # _nearest_uncontrolled_objective sentinel: no uncontrolled objective
 ## Difficult-terrain move cap (GF Advanced Rules v3.5.1 p.11): "If any model in a unit moves in or
@@ -374,11 +378,15 @@ func _act(unit: GameUnit) -> Dictionary:
 	var obj_pos := _nearest_uncontrolled_objective(centre, unit)
 	var has_obj: bool = obj_pos != NO_OBJECTIVE
 	var obj_dist: float = MoveIntent.distance_inches(centre, obj_pos) if has_obj else INF
+	# The charge gate measures the REAL base-to-base gap, not the coarse centre-to-centre distance (finding
+	# 3): a wide/offset unit whose centres are >12" apart can still have bases inside the 12" charge band —
+	# and must never DECLARE a charge whose true gap exceeds the band (GF/AoF v3.5.1 p.8).
+	var charge_gap := nearest_melee_gap_in(unit, target_unit)
 	var ctx := {
 		"arch": archetype, "objective": has_obj, "in_way": has_obj and _enemy_in_way(centre, obj_pos),
 		"obj_in_advance": obj_dist <= advance + OBJECTIVE_CONTROL_IN,
 		"obj_in_rush": obj_dist <= rush + OBJECTIVE_CONTROL_IN,
-		"enemy_in_charge": enemy_dist <= rush,
+		"enemy_in_charge": charge_gap <= rush,
 		"shoot_after_advance": shoot_range > 0 and (enemy_dist - advance) <= float(shoot_range),
 	}
 	var dec := AiDecision.decide_solo(ctx)
@@ -402,7 +410,7 @@ func _act(unit: GameUnit) -> Dictionary:
 		"candidates": [], "chosen": AiDecision.action_name(action), "why": action_why,
 		"data": {"arch": archetype, "objective": bool(ctx["objective"]), "in_way": bool(ctx["in_way"]),
 			"enemy_in_charge": bool(ctx["enemy_in_charge"]), "shoot_after_advance": bool(ctx["shoot_after_advance"]),
-			"enemy_dist_in": enemy_dist, "obj_dist_in": obj_dist,
+			"enemy_dist_in": enemy_dist, "charge_gap_in": charge_gap, "obj_dist_in": obj_dist,
 			"toward_objective": int(dec["toward"]) == AiDecision.Toward.OBJECTIVE}})
 	report["action"] = action
 	report["shoot"] = do_shoot
@@ -416,9 +424,10 @@ func _act(unit: GameUnit) -> Dictionary:
 		AiDecision.Action.RUSH:
 			dang = _move_toward(unit, goal, (minf(rush, goal_dist) if to_obj else rush), false)
 		AiDecision.Action.CHARGE:
-			# Close toward the enemy (lands on/near contact; the real melee gate confirms reach). Charge is
-			# the one action exempt from steering easing — allow_contact skips the coherency slack.
-			dang = _move_toward(unit, tcentre, rush, true, target_unit)
+			# Close the REAL base-to-base gap to base contact, capped at the band (field-test finding 3): the
+			# former "move toward the enemy centre, capped at rush" under-shot for wide/offset units and the
+			# charge fell short within band. Charge is the one action exempt from steering easing.
+			dang = _charge_move(unit, target_unit, rush)
 		AiDecision.Action.ADVANCE:
 			if to_obj:
 				dang = _move_toward(unit, goal, minf(advance, goal_dist), false)
@@ -1469,6 +1478,49 @@ func nearest_melee_gap_in(a: GameUnit, b: GameUnit) -> float:
 	return best
 
 
+## The nearest charger-model / enemy-model pair, as the base-to-base gap (inches) to close and the world
+## table-plane direction (normalised Vector2 x,z) from the charger's nearest model toward the enemy's. Uses
+## the shared SeparationChecker shapes — the ONE base-contact truth behind both the charge move (finding 3)
+## and the snap. gap == INF / dir == ZERO when either side has no live shapes (degenerate).
+func nearest_charge_vector(charger: GameUnit, target: GameUnit) -> Dictionary:
+	var best_gap := INF
+	var best_dir := Vector2.ZERO
+	var enemy_shapes: Array = []
+	for em in _moving_models(target):
+		var es := SeparationChecker.shape_for_model(em as ModelInstance)
+		if es != null:
+			enemy_shapes.append(es)
+	for cm in _moving_models(charger):
+		var cs := SeparationChecker.shape_for_model(cm as ModelInstance)
+		if cs == null:
+			continue
+		for es in enemy_shapes:
+			var gap: float = SeparationChecker.edge_distance(cs, es)
+			if gap < best_gap:
+				best_gap = gap
+				best_dir = ((es as SeparationChecker.BaseShape).center - (cs as SeparationChecker.BaseShape).center)
+	if best_dir.length() < 0.00001:
+		return {"gap": best_gap, "dir": Vector2.ZERO}
+	return {"gap": best_gap, "dir": best_dir.normalized()}
+
+
+## Charge the unit into base contact (field-test finding 3): the former "move toward the enemy centre, capped
+## at the band" closed the CENTRE gap but left the nearest bases short — a wide/offset charge within the 12"
+## band ended ~2" from contact and was ruled short. Measure the REAL base-to-base gap and the nearest-pair
+## direction, then rigid-move exactly that far along that line (capped at the band, terrain/walls still
+## routed), so the nearest models land in contact (GF/AoF v3.5.1 p.8). Returns the Dangerous-crossing count.
+func _charge_move(unit: GameUnit, target: GameUnit, band_in: float) -> int:
+	var nv := nearest_charge_vector(unit, target)
+	var gap: float = float(nv.get("gap", INF))
+	var dir: Vector2 = nv.get("dir", Vector2.ZERO)
+	if gap == INF or dir == Vector2.ZERO:
+		return _move_toward(unit, unit_centre(target), band_in, true, target)   # degenerate → old aim
+	var travel := minf(band_in, gap + CHARGE_CONTACT_MARGIN_IN)
+	var centre := unit_centre(unit)
+	var goal := centre + Vector3(dir.x, 0.0, dir.y) * (travel * INCHES_TO_METERS)
+	return _move_toward(unit, goal, travel, true, target)
+
+
 ## Charge snap (field-test finding 5): rigidly translate the whole charging unit so its NEAREST model lands
 ## in clean base contact with the nearest enemy model, PRESERVING formation and thereby bringing the rest of
 ## the unit forward in coherency — GF/AoF v3.5.1 p.8: "Charging models must move … to get into base contact
@@ -1481,26 +1533,12 @@ func snap_charge(charger: GameUnit, target: GameUnit) -> float:
 	var models := _moving_models(charger)
 	if models.is_empty():
 		return 0.0
-	# The closest charger-model / enemy-model pair and the gap to close along their centre line.
-	var best_gap := INF
-	var best_dir := Vector2.ZERO
-	var enemy_shapes: Array = []
-	for em in _moving_models(target):
-		var es := SeparationChecker.shape_for_model(em as ModelInstance)
-		if es != null:
-			enemy_shapes.append(es)
-	for cm in models:
-		var cs := SeparationChecker.shape_for_model(cm as ModelInstance)
-		if cs == null:
-			continue
-		for es in enemy_shapes:
-			var gap: float = SeparationChecker.edge_distance(cs, es)
-			if gap < best_gap:
-				best_gap = gap
-				best_dir = ((es as SeparationChecker.BaseShape).center - (cs as SeparationChecker.BaseShape).center)
-	if best_gap <= SeparationChecker.BASE_CONTACT_EPSILON_INCHES or best_gap == INF or best_dir.length() < 0.00001:
+	var nv := nearest_charge_vector(charger, target)
+	var best_gap: float = float(nv.get("gap", INF))
+	var best_dir: Vector2 = nv.get("dir", Vector2.ZERO)
+	if best_gap <= SeparationChecker.BASE_CONTACT_EPSILON_INCHES or best_gap == INF or best_dir == Vector2.ZERO:
 		return 0.0   # already in clean contact (or degenerate) — nothing to snap
-	var delta2 := best_dir.normalized() * (best_gap * INCHES_TO_METERS)
+	var delta2 := best_dir * (best_gap * INCHES_TO_METERS)
 	var delta := Vector3(delta2.x, 0.0, delta2.y)
 	var positions := _positions_of(models)
 	var moved: Array = []

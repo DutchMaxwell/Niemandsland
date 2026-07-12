@@ -841,3 +841,42 @@ func test_ai_peels_off_a_marker_another_ai_unit_already_holds() -> void:
 	assert_vector(solo._nearest_uncontrolled_objective(solo.unit_centre(holder), holder)).is_equal(near_marker)
 
 
+
+
+# === Field-test round-5 finding 3: a charge within the band must REACH base contact ===
+
+func test_charge_within_band_reaches_base_contact() -> void:
+	# GF/AoF v3.5.1 p.8: a charge closes to base contact. The target's bases are ~10.6" away (well inside the
+	# 12" band); the charge must end in contact — the old "aim at the enemy centre, cap at rush" under-shot
+	# and the charge fell short within band (finding 3).
+	var human := _unit(1, [Vector3(0.0, 0, 0.30)])   # ~11.8" centre-to-centre north → ~10.6" base gap
+	var ai := _unit(2, [Vector3(0.0, 0, 0.0)])         # weaponless → MELEE archetype
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)   # no objectives → the tree targets the enemy
+
+	var moved := solo.activate_next_ai_unit()
+	assert_object(moved).is_equal(ai)
+	assert_int(int(solo.last_report["action"])).is_equal(AiDecision.Action.CHARGE)
+	# The nearest bases end within the melee-engage tolerance (1") — i.e. in (or a snap from) base contact.
+	assert_float(solo.nearest_melee_gap_in(ai, human)).is_less_equal(1.0)
+
+
+func test_target_beyond_charge_band_is_not_charged() -> void:
+	# The enemy's bases are ~18" away — beyond the 12" band. The AI must NOT declare a charge it cannot
+	# complete (finding 3): it Rushes toward the enemy instead and does not reach contact.
+	var human := _unit(1, [Vector3(0.0, 0, 0.50)])   # ~19.7" centre-to-centre → ~18.4" base gap
+	var ai := _unit(2, [Vector3(0.0, 0, 0.0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+
+	solo.activate_next_ai_unit()
+	assert_int(int(solo.last_report["action"])).is_equal(AiDecision.Action.RUSH)
+	assert_float(solo.nearest_melee_gap_in(ai, human)).is_greater(1.0)   # did not reach contact

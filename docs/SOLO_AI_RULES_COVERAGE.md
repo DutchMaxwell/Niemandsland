@@ -502,3 +502,13 @@ no re-run required.
    `test_ai_moves_into_seize_range_of_open_marker_and_seizes`,
    `test_decision_prefers_a_holdable_open_marker_over_a_contested_one`,
    `test_ai_peels_off_a_marker_another_ai_unit_already_holds`.
+3. **A charge within the band fell short of base contact** (band 12", used ~8.4", short ~2.2"). The charge
+   aimed the rigid move at the enemy CENTRE and capped it at the Rush band; for a wide/offset unit that closed
+   the centre gap but left the nearest bases short, and the melee gate (`MELEE_ENGAGE_IN` = 1") then ruled the
+   charge short. Fix (GF/AoF v3.5.1 p.8 *"Charging models must move … to get into base contact with an enemy
+   model"*): the charge decision now gates on the REAL base-to-base gap (`nearest_melee_gap_in`) rather than
+   the coarse centre-to-centre distance (never declare a charge whose true gap exceeds the band), and
+   `_charge_move` measures the gap and the nearest-pair direction (the same `SeparationChecker` geometry as
+   `snap_charge`, factored into a shared `nearest_charge_vector`) and rigid-moves exactly that far along that
+   line, capped at the band — so the nearest models land in contact. Tests:
+   `test_charge_within_band_reaches_base_contact`, `test_target_beyond_charge_band_is_not_charged`.
