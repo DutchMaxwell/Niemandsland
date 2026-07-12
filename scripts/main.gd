@@ -230,12 +230,14 @@ var coherency_visualizer: CoherencyVisualizer = null
 ## within 1" of models from OTHER units — friendly included — unless charging).
 ## Renders the warning; SeparationChecker does the base-edge distance math. Local only.
 var separation_visualizer: SeparationVisualizer = null
-## Cache of every alive OPR model's base shape for the proximity hint's other-units
-## scan. Rebuilt lazily on selection change (non-selected models stay put during the
-## local drag, so their shapes stay valid) and refreshed on drop. Each entry:
-## {model: ModelInstance, shape: SeparationChecker.BaseShape, unit: GameUnit,
-##  player_id: int, center: Vector2, bound: float}.
-var _separation_shape_cache: Array = []
+## Cache of every alive OPR unit's member base shapes for the proximity-hint scan,
+## grouped per (effective) unit so each foreign unit's WALL is built from its whole
+## footprint. Rebuilt lazily on selection change (non-selected units stay put during
+## the local drag, so their shapes stay valid) and refreshed on drop. Keyed by unit
+## instance id; each entry: {unit: GameUnit, player_id: int, shapes: Array[BaseShape],
+## centroid: Vector2, radius: float (centroid -> farthest member edge), signature:
+## float (member-position hash for the visualizer's mesh cache)}.
+var _separation_units_cache: Dictionary = {}
 var _separation_cache_valid: bool = false
 var unit_boundary_visualizer: Node3D = null  # UnitBoundaryVisualizer
 var range_ring_controller: Node = null  # RangeRingController (base-anchored range auras)
@@ -309,7 +311,8 @@ func _ready() -> void:
 	object_manager.measurement_finished.connect(_on_measurement_finished)
 	object_manager.drag_ended.connect(_on_drag_ended)
 	object_manager.drag_updated.connect(_check_coherency_for_selected_units)
-	object_manager.drag_updated.connect(_check_separation_for_selected_units)
+	# Proactive during drag: nearby foreign units fade their wall in (~3"); violations pulse.
+	object_manager.drag_updated.connect(_check_separation_for_selected_units.bind(true))
 	object_manager.selection_changed.connect(_on_selection_changed_update_card)
 	object_manager.selection_changed.connect(_on_selection_changed_for_separation)
 
@@ -4125,8 +4128,10 @@ func _on_unit_moved() -> void:
 	# Re-evaluate the 1" unit-separation hint on drop (fades out if now compliant).
 	# Refresh the shape cache first so a drop of a multi-unit selection measures
 	# every base at its final position (the drag-time cache holds pre-drag spots).
+	# proactive=false: on drop only VIOLATING units keep their wall (persist); merely
+	# nearby walls fade out.
 	_separation_cache_valid = false
-	_check_separation_for_selected_units()
+	_check_separation_for_selected_units(false)
 
 
 ## Check coherency for all currently selected units
@@ -4163,60 +4168,87 @@ func _check_coherency_for_selected_units() -> void:
 
 
 ## ============================================================================
-## 1" Unit-Separation Proximity Hint
+## 1" Unit-Separation Zone Walls
 ## ============================================================================
 ## OPR rule (GF/AoF Advanced Rules v3.5.1, p.7 "General Movement"): "Models may never
 ## be within 1” of models from other units, unless they are taking a Charge action" —
-## ANY other unit, friendly included. While a model / regiment tray is dragged, and on
-## drop, warn (pulsing ring + base-edge line) when any moved base sits within 1" of a
-## base from another unit. Exception matrix: ENEMY other unit + base contact = an
-## intentional Charge into melee -> exempt (red tint for enemy violations); FRIENDLY
-## other unit has no legal contact -> sub-1" INCLUDING contact warns (amber tint).
-## Same-unit models are exempt: coherency governs INSIDE a unit (and requires 1"
-## closeness there), separation governs BETWEEN units. Strictly local render (no
-## RPCs); works identically in single-player, hotseat and multiplayer.
+## ANY other unit, friendly included. While a model / regiment tray is dragged, every
+## nearby foreign UNIT is wrapped in a translucent ground WALL (SeparationVisualizer):
+## a 1"-wide band hugging the merged outline of that unit's bases — its no-go area.
+## RED = enemy unit (base contact is exempt — a Charge into melee), ORANGE/AMBER =
+## friendly unit (no legal contact). A wall fades IN proactively when the dragged base
+## comes within SEPARATION_PROACTIVE_INCHES of the unit; an actual sub-1" violation
+## intensifies and pulses. On a compliant drop the merely-nearby walls fade out; a
+## violating unit's wall persists. Same-unit bases are exempt (coherency governs INSIDE
+## a unit); a joined Hero folds into its host. Strictly local render (no RPCs); works
+## identically in single-player, hotseat and multiplayer.
 ##
-## Coverage: local drag (~15 Hz via drag_updated) + local drop (via _on_unit_moved),
-## matching CoherencyVisualizer's coverage exactly. Undo/redo and remote-peer moves
-## are NOT re-evaluated (neither is coherency) — the drag+drop path is the must-have.
+## Coverage: local drag (~15 Hz via drag_updated, proactive) + local drop (via
+## _on_unit_moved, violation-only). Undo/redo and remote-peer moves are NOT
+## re-evaluated (neither is coherency) — the drag+drop path is the must-have.
 
-## Invalidate the other-units shape cache on any selection change; clear the hint if
+## A dragged base's wall fades in once it comes within this of a foreign unit's edge
+## (proactive display). Beyond it the unit shows no wall.
+const SEPARATION_PROACTIVE_INCHES := 3.0
+
+## Invalidate the other-units shape cache on any selection change; clear the walls if
 ## the selection emptied (nothing is being moved any more).
 func _on_selection_changed_for_separation(selected: Array) -> void:
 	_separation_cache_valid = false
 	if selected.is_empty() and separation_visualizer:
-		separation_visualizer.show_violations([])
+		separation_visualizer.show_zones([])
 
 
-## Rebuild the cache of every alive OPR model's base shape (all units, both armies).
-## Unit identity and friendliness are resolved per-pair from the cached effective
-## unit / player_id, so one cache serves every selection.
+## Rebuild the per-unit base-shape cache (all units, both armies), grouped by effective
+## unit so each foreign unit's wall is built from its whole footprint. A joined Hero's
+## models fold into its host's entry. Each entry also carries a centroid/radius (for the
+## per-unit quick reject) and a member-position signature (the visualizer's mesh cache
+## key). Non-selected units stay put during the local drag, so the cache stays valid.
 func _rebuild_separation_cache() -> void:
-	_separation_shape_cache.clear()
+	_separation_units_cache.clear()
 	if opr_army_manager == null:
 		_separation_cache_valid = true
 		return
 	for game_unit in opr_army_manager.get_all_game_units():
 		if game_unit == null:
 			continue
-		# A joined Hero resolves to its host unit — coherency requires the hero
-		# within 1" of the host, so that pair must never read as "different units".
+		# A joined Hero resolves to its host unit — coherency requires the hero within
+		# 1" of the host, so hero and host must read as the SAME unit (one shared wall).
 		var eff_unit: GameUnit = SeparationChecker.effective_unit(game_unit)
-		var player_id: int = int(eff_unit.unit_properties.get("player_id", 0))
+		if eff_unit == null or eff_unit.unit_properties == null:
+			continue
+		var key: int = eff_unit.get_instance_id()
 		for model in game_unit.get_alive_models():
 			if model == null or model.node == null or not is_instance_valid(model.node):
 				continue
 			var shape := SeparationChecker.shape_for_model(model)
 			if shape == null:
 				continue
-			_separation_shape_cache.append({
-				"model": model,
-				"shape": shape,
-				"unit": eff_unit,
-				"player_id": player_id,
-				"center": shape.center,
-				"bound": shape.bounding_radius(),
-			})
+			var entry: Dictionary = _separation_units_cache.get(key, {})
+			if entry.is_empty():
+				entry = {
+					"unit": eff_unit,
+					"player_id": int(eff_unit.unit_properties.get("player_id", 0)),
+					"shapes": [],
+				}
+				_separation_units_cache[key] = entry
+			(entry["shapes"] as Array).append(shape)
+	# Finalise per-unit centroid / bounding radius / member signature.
+	for key in _separation_units_cache:
+		var entry: Dictionary = _separation_units_cache[key]
+		var shapes: Array = entry["shapes"]
+		var centroid := Vector2.ZERO
+		for s in shapes:
+			centroid += s.center
+		centroid /= float(shapes.size())
+		var radius := 0.0
+		var signature := 0.0
+		for s in shapes:
+			radius = maxf(radius, centroid.distance_to(s.center) + s.bounding_radius())
+			signature += s.center.x * 131.0 + s.center.y * 197.0 + s.yaw * 17.0 + s.bounding_radius() * 7.0
+		entry["centroid"] = centroid
+		entry["radius"] = radius
+		entry["signature"] = signature
 	_separation_cache_valid = true
 
 
@@ -4265,10 +4297,14 @@ func _append_moved_separation_model(node: Node3D, moved: Array) -> void:
 	})
 
 
-## Evaluates the 1" unit-separation hint for the current selection and drives the
-## visualizer. Spatially pre-filtered (distance_squared) against the cached shapes of
-## all other units' models so only nearby bases run the exact edge-to-edge test.
-func _check_separation_for_selected_units() -> void:
+## Evaluates the 1" unit-separation walls for the current selection and drives the
+## visualizer. For each foreign unit it aggregates the min edge gap to the moved bases,
+## whether any pair actually violates (per the exception matrix), and the wall colour,
+## then emits one ZoneSpec per unit to show. Pre-filtered per unit (footprint reject)
+## and per pair (distance_squared) so only nearby bases run the exact edge test.
+## @param proactive: true on drag — a unit within SEPARATION_PROACTIVE_INCHES shows its
+##   wall even without a violation; false on drop — only violating units keep a wall.
+func _check_separation_for_selected_units(proactive: bool = false) -> void:
 	if separation_visualizer == null or object_manager == null or opr_army_manager == null:
 		return
 
@@ -4276,52 +4312,81 @@ func _check_separation_for_selected_units() -> void:
 	# untyped assignment (matches _check_coherency_for_selected_units).
 	var selected = object_manager.get_selected_objects()
 	if selected.is_empty():
-		separation_visualizer.show_violations([])
+		separation_visualizer.show_zones([])
 		return
 
 	var moved := _collect_moved_separation_models(selected)
 	if moved.is_empty():
-		separation_visualizer.show_violations([])
+		separation_visualizer.show_zones([])
 		return
 
 	if not _separation_cache_valid:
 		_rebuild_separation_cache()
 
-	var sep_m: float = SeparationChecker.SEPARATION_DISTANCE_INCHES * SeparationChecker.INCHES_TO_METERS
-	var pairs: Array = []
+	# Moved aggregate (effective-unit ids + centroid/radius) for a per-unit quick reject.
+	var moved_unit_ids: Dictionary = {}
+	var moved_centroid := Vector2.ZERO
 	for mv in moved:
-		var mv_shape: SeparationChecker.BaseShape = mv["shape"]
-		var mv_model: ModelInstance = mv["model"]
-		var mv_unit: GameUnit = mv["unit"]
-		var mv_player: int = mv["player_id"]
-		var mv_center: Vector2 = mv["center"]
-		var mv_bound: float = mv["bound"]
-		for cand in _separation_shape_cache:
-			# Same (effective) unit is exempt — coherency governs inside a unit. The
-			# effective units were pre-resolved at cache/collect time (hero -> host).
-			if cand["unit"] == mv_unit:
-				continue
-			var cand_model: ModelInstance = cand["model"]
-			if cand_model == mv_model:
-				continue
-			# O(1) spatial pre-filter: skip bases whose enclosing circles can't be
-			# within the 1" band (distance_squared, no sqrt).
-			var reach: float = sep_m + mv_bound + float(cand["bound"])
-			if mv_center.distance_squared_to(cand["center"]) > reach * reach:
-				continue
-			var gap := SeparationChecker.edge_distance(mv_shape, cand["shape"])
-			if gap >= SeparationChecker.SEPARATION_DISTANCE_INCHES:
-				continue  # 1" or more apart — compliant
-			# FRIENDLY = both affiliations known and equal -> no legal contact, contact
-			# warns too. Enemy OR unknown affiliation -> contact is (possibly) melee,
-			# exempt (never a false contact warning).
-			var is_friendly: bool = mv_player > 0 and mv_player == int(cand["player_id"])
-			if not is_friendly and gap <= SeparationChecker.BASE_CONTACT_EPSILON_INCHES:
-				continue  # base contact with an enemy = intentional Charge into melee
-			pairs.append(SeparationVisualizer.ViolationPair.new(mv_model, cand_model, gap, is_friendly))
+		moved_unit_ids[(mv["unit"] as GameUnit).get_instance_id()] = true
+		moved_centroid += mv["center"]
+	moved_centroid /= float(moved.size())
+	var moved_radius := 0.0
+	for mv in moved:
+		moved_radius = maxf(moved_radius, moved_centroid.distance_to(mv["center"]) + float(mv["bound"]))
 
-	# animate=false: live drag update — the ring pulse / fade must not restart each frame.
-	separation_visualizer.show_violations(pairs, false)
+	var proactive_m: float = SEPARATION_PROACTIVE_INCHES * SeparationChecker.INCHES_TO_METERS
+	var sep_inches: float = SeparationChecker.SEPARATION_DISTANCE_INCHES
+	var contact_eps: float = SeparationChecker.BASE_CONTACT_EPSILON_INCHES
+
+	var zones: Array = []
+	for unit_id in _separation_units_cache:
+		if moved_unit_ids.has(unit_id):
+			continue  # never wall the unit(s) being moved
+		var entry: Dictionary = _separation_units_cache[unit_id]
+		# Per-unit quick reject: whole footprint beyond proactive reach of the moved set.
+		var reach_unit: float = proactive_m + float(entry["radius"]) + moved_radius
+		if moved_centroid.distance_squared_to(entry["centroid"]) > reach_unit * reach_unit:
+			continue
+
+		var unit_player: int = int(entry["player_id"])
+		var entry_shapes: Array = entry["shapes"]
+		var min_gap := INF
+		var is_violation := false
+		var color_is_friendly := true
+		for cs in entry_shapes:
+			var cs_center: Vector2 = cs.center
+			var cs_bound: float = cs.bounding_radius()
+			for mv in moved:
+				var reach: float = proactive_m + float(mv["bound"]) + cs_bound
+				if (mv["center"] as Vector2).distance_squared_to(cs_center) > reach * reach:
+					continue
+				var mv_player: int = mv["player_id"]
+				var pair_friendly: bool = mv_player > 0 and unit_player > 0 and mv_player == unit_player
+				# Any near enemy/unknown pair makes the whole wall red; amber needs all
+				# near pairs to be known same-army.
+				if not pair_friendly:
+					color_is_friendly = false
+				var gap := SeparationChecker.edge_distance(mv["shape"], cs)
+				min_gap = minf(min_gap, gap)
+				if gap < sep_inches:
+					if pair_friendly:
+						is_violation = true  # friendly: any sub-1" including contact warns
+					elif gap > contact_eps:
+						is_violation = true  # enemy/unknown: sub-1" but not base contact
+					# enemy/unknown base contact = intentional Charge into melee -> exempt
+		if min_gap == INF:
+			continue  # no member pair within even the proactive reach
+
+		if proactive:
+			if min_gap > SEPARATION_PROACTIVE_INCHES and not is_violation:
+				continue
+		elif not is_violation:
+			continue  # drop: only violating units keep their wall
+
+		zones.append(SeparationVisualizer.ZoneSpec.new(
+			unit_id, entry_shapes, color_is_friendly, is_violation, float(entry["signature"])))
+
+	separation_visualizer.show_zones(zones)
 
 
 ## ============================================================================

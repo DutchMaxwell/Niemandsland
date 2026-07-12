@@ -1,330 +1,216 @@
 class_name SeparationVisualizer
 extends Node3D
-## Non-modal visual warning for the OPR 1" unit-separation rule (GF/AoF Advanced
-## Rules v3.5.1, p.7 "General Movement": a model may never be within 1" of models
-## from OTHER units — any other unit, friendly included — unless charging). While a
-## model / regiment tray is dragged, and on drop, any of its bases violating that
-## rule is flagged with a pulsing ring on BOTH bases plus a base-edge-to-base-edge
-## line and the gap in inches. Two tints tell the player at a glance whose line the
-## conflict is with: RED = enemy unit (contact exempt — that is melee), AMBER =
-## friendly other unit (no legal contact; sub-1" including contact warns).
+## Non-modal ZONE-WALL warning for the OPR 1" unit-separation rule (GF/AoF Advanced
+## Rules v3.5.1, p.7 "General Movement": a model may never be within 1" of models from
+## OTHER units — any other unit, friendly included — unless charging). Instead of
+## per-model rings, each nearby foreign UNIT is wrapped in a translucent, ground-level
+## PROTECTIVE WALL: a band exactly 1" wide hugging the merged outline of that unit's
+## bases, showing its no-go area at a glance. RED = enemy unit (contact exempt — that
+## is a Charge into melee), ORANGE/AMBER = friendly unit (no legal contact).
 ##
-## This mirrors CoherencyVisualizer: same highlight / surface-line / flat-label
-## visual language, the same "show at full opacity without re-running the fade each
-## frame" live-update model, and the same self-hiding when there is nothing to warn
-## about. Rendering is strictly LOCAL — no network state, no RPCs. It reuses
-## CoherencyChecker.get_ground_edge_point() for base-edge endpoints so the warning
-## line matches the in-game measurement tool exactly.
+## PROACTIVE: while a model / regiment is dragged, any foreign unit the dragged base
+## could plausibly reach fades its wall IN (proximity, ~3"); an ACTUAL violation
+## intensifies and pulses. Walls fade out after a compliant drop and persist on a
+## violation. Caller (main.gd) decides which units are in range / violating and hands
+## this a ZoneSpec per unit; the band GEOMETRY is SeparationZone, the distance math is
+## SeparationChecker. Rendering is strictly LOCAL — no network state, no RPCs.
 ##
-## The 1" measurement itself lives in SeparationChecker (pure, tested); this class
-## only renders results the caller hands it.
+## PERFORMANCE: the band mesh is built once per unit and cached, keyed by a signature of
+## its member positions, so a static foreign unit's wall is not rebuilt each frame; only
+## its alpha / colour animate. Fades and the violation pulse are driven allocation-free
+## in _process (which is disabled whenever no wall is on screen).
 
 # ===== Constants =====
 
-## Enemy-violation red (matches CoherencyVisualizer.COLOR_ERROR — "red = problem").
-const COLOR_WARN_ENEMY := Color(0.9, 0.2, 0.2, 0.9)
+## Enemy red (matches CoherencyVisualizer.COLOR_ERROR — "red = problem").
+const COLOR_ENEMY := Color(0.9, 0.2, 0.2)
 
-## Friendly-violation amber (matches the Tactical-HUD amber warning accent), so a
-## conflict with your OWN line is visually distinct from one with the enemy's.
-const COLOR_WARN_FRIENDLY := Color(0.95, 0.65, 0.1, 0.9)
+## Friendly amber (Tactical-HUD warning accent) — a conflict with your OWN line reads
+## distinct from one with the enemy's.
+const COLOR_FRIENDLY := Color(0.95, 0.65, 0.1)
 
-## Table-surface heights (flat on the table, like the measurement tool / coherency).
-const LINE_Y := 0.005
-const EDGE_Y := 0.02
+## Ground height (metres) the band sits at — above the table, below the minis so their
+## bases occlude it and the wall reads as hugging the ground.
+const BAND_Y := 0.006
 
-## Flat line thickness on the XZ plane.
-const LINE_WIDTH := 0.002
+## Peak opacity of a merely-nearby (proactive) wall — a soft hint.
+const MAX_ALPHA_PROACTIVE := 0.16
 
-## Ring sizing relative to the base radius (metres): gap outside the base, then thickness.
-const RING_GAP_M := 0.003
-const RING_THICKNESS_M := 0.005
+## Peak opacity of a violating wall — brighter, and it pulses.
+const MAX_ALPHA_VIOLATION := 0.36
 
-## Height (metres) at which rings sit on the table.
-const RING_Y := 0.004
+## Fraction of peak a violating wall dims to at the bottom of its pulse.
+const PULSE_MIN_FACTOR := 0.45
 
-## Max opacity of the whole warning so it stays a hint, not a wall of red.
-const MAX_ALPHA := 0.35
+## Emissive glow multiplier at full opacity (additive-like readability on any biome).
+const EMISSION_ENERGY := 1.4
 
-## Animation timings (seconds).
-const FADE_DURATION := 0.3
-const PULSE_DURATION := 1.0
+## Fade in/out duration (seconds) — how long a wall takes to reach full / zero alpha.
+const FADE_DURATION := 0.25
 
-## Default fallback base radius (metres) — 32 mm diameter, matches CoherencyChecker.
-const DEFAULT_BASE_RADIUS_M := 0.016
+## Violation pulse angular speed (radians/second); ~1 s per breath.
+const PULSE_SPEED := TAU / 1.1
 
-# ===== Result Object =====
 
-## One flagged model pair: a moved model violating the 1" separation against a model
-## of ANOTHER unit, the measured edge gap in inches, and whether the other unit is
-## FRIENDLY (same army -> amber; enemy/unknown -> red). Typed object over a loose
-## dictionary per CODING_STANDARDS §5.2.
-class ViolationPair:
-	var moved: ModelInstance = null
-	var other: ModelInstance = null
-	var distance_inches: float = 0.0
+# ===== Zone Spec (input) =====
+
+## One foreign unit to wall off: its member base shapes (for the band geometry), whether
+## it is FRIENDLY (amber) or enemy/unknown (red), whether the current drag actually
+## VIOLATES the 1" rule against it (brighter + pulsing), and a signature of its member
+## positions so the cached mesh rebuilds only when the unit's members move.
+class ZoneSpec:
+	var unit_id: int = 0
+	var shapes: Array = []
 	var is_friendly: bool = false
+	var is_violation: bool = false
+	var signature: float = 0.0
 
-	func _init(p_moved: ModelInstance, p_other: ModelInstance, p_distance: float, p_is_friendly: bool = false) -> void:
-		moved = p_moved
-		other = p_other
-		distance_inches = p_distance
+	func _init(p_unit_id: int, p_shapes: Array, p_is_friendly: bool, p_is_violation: bool, p_signature: float) -> void:
+		unit_id = p_unit_id
+		shapes = p_shapes
 		is_friendly = p_is_friendly
+		is_violation = p_is_violation
+		signature = p_signature
+
+
+# ===== Per-Unit Wall (state) =====
+
+class Wall:
+	var node: MeshInstance3D = null
+	var material: StandardMaterial3D = null
+	var color: Color = COLOR_ENEMY
+	var is_violation: bool = false
+	var retiring: bool = false      # not in the latest zone set -> fading out to free
+	var signature: float = 0.0      # member-position hash the current mesh was built from
+	var alpha: float = 0.0          # current animated alpha (0..MAX_ALPHA_VIOLATION)
+	var target_alpha: float = 0.0   # steady-state target (pulse rides on top for violations)
+
 
 # ===== Private State =====
 
-var _lines: Array[MeshInstance3D] = []
-var _rings: Array[Node3D] = []
-var _labels: Array[Label3D] = []
-var _tween: Tween = null
-
-## Custom alpha for the 3D fade (Node3D has no modulate).
-var _alpha: float = 1.0:
-	set(value):
-		_alpha = value
-		_update_materials_alpha(value)
+var _walls: Dictionary = {}     # unit_id -> Wall
+var _pulse_phase: float = 0.0
 
 
 func _ready() -> void:
 	visible = false
+	set_process(false)
 
 
 # ===== Public Methods =====
 
-## Renders the warning for the given flagged pairs. Pass an empty array to clear /
-## fade out (a compliant drop). animate=false for live drag updates so the ring's
-## pulse and the fade don't restart every frame (mirrors CoherencyVisualizer).
-func show_violations(pairs: Array, animate: bool = false) -> void:
-	_clear()
-
-	if pairs.is_empty():
-		# Nothing to warn about: fade out if we were showing, else stay hidden.
-		if visible:
-			hide_warning()
-		return
-
-	# Pass 1: draw the gap lines and resolve one ring colour per distinct base (a
-	# base can be flagged against several units; an ENEMY conflict outranks a
-	# friendly one, so red dominates amber on a shared ring).
-	var ring_colors: Dictionary = {}  # instance_id -> Color
-	var ring_models: Dictionary = {}  # instance_id -> ModelInstance
-	for pair in pairs:
-		var vp := pair as ViolationPair
-		if vp == null or vp.moved == null or vp.other == null:
+## Show/refresh walls for the given foreign units (ZoneSpec array). Units absent from
+## the array fade out and free; present units fade in (and pulse if violating). An empty
+## array fades everything out. Cheap to call every drag frame — a static unit's mesh is
+## reused via its signature.
+func show_zones(zones: Array) -> void:
+	var present: Dictionary = {}
+	for z in zones:
+		var spec := z as ZoneSpec
+		if spec == null:
 			continue
-		if not _models_drawable(vp.moved, vp.other):
-			continue
-		var color := COLOR_WARN_FRIENDLY if vp.is_friendly else COLOR_WARN_ENEMY
-		_register_ring(vp.moved, color, ring_colors, ring_models)
-		_register_ring(vp.other, color, ring_colors, ring_models)
-		_draw_gap_line(vp.moved, vp.other, vp.distance_inches, color)
+		present[spec.unit_id] = true
+		var wall: Wall = _walls.get(spec.unit_id)
+		if wall == null:
+			wall = Wall.new()
+			_walls[spec.unit_id] = wall
+			_rebuild_mesh(wall, spec)
+		elif not is_equal_approx(wall.signature, spec.signature):
+			_rebuild_mesh(wall, spec)
+		wall.color = COLOR_FRIENDLY if spec.is_friendly else COLOR_ENEMY
+		wall.is_violation = spec.is_violation
+		wall.retiring = false
+		wall.target_alpha = MAX_ALPHA_VIOLATION if spec.is_violation else MAX_ALPHA_PROACTIVE
 
-	# Pass 2: one ring per flagged base, in its resolved colour.
-	for key in ring_models:
-		_highlight_model(ring_models[key], ring_colors[key], animate)
+	for unit_id in _walls:
+		if not present.has(unit_id):
+			var wall: Wall = _walls[unit_id]
+			wall.retiring = true
+			wall.target_alpha = 0.0
 
-	visible = true
-	if animate:
-		_animate_fade_in()
-	else:
-		# Live update: full opacity without re-running the fade each frame.
-		if _tween:
-			_tween.kill()
-			_tween = null
-		_alpha = 1.0
-
-
-## Fades the warning out and clears it (used after a compliant drop / deselection).
-func hide_warning() -> void:
-	if _tween:
-		_tween.kill()
-	_tween = create_tween()
-	_tween.tween_property(self, "_alpha", 0.0, FADE_DURATION)
-	_tween.tween_callback(_clear)
+	if not _walls.is_empty():
+		visible = true
+		set_process(true)
 
 
 # ===== Private Methods =====
 
-## Records a model's ring colour (dedup across pairs; enemy red outranks amber).
-func _register_ring(model: ModelInstance, color: Color, ring_colors: Dictionary, ring_models: Dictionary) -> void:
-	var key := model.get_instance_id()
-	if ring_colors.has(key) and ring_colors[key] == COLOR_WARN_ENEMY:
-		return  # already red — an enemy conflict outranks a friendly one
-	ring_colors[key] = color
-	ring_models[key] = model
+func _process(delta: float) -> void:
+	_pulse_phase = fmod(_pulse_phase + delta * PULSE_SPEED, TAU)
+	var pulse := 0.5 + 0.5 * sin(_pulse_phase)  # 0..1
+	var fade_step := (MAX_ALPHA_VIOLATION / FADE_DURATION) * delta
+	var to_free: Array = []
+
+	for unit_id in _walls:
+		var wall: Wall = _walls[unit_id]
+		var target := wall.target_alpha
+		if wall.is_violation and not wall.retiring:
+			# Pulse between the min factor and full violation alpha.
+			target = lerpf(MAX_ALPHA_VIOLATION * PULSE_MIN_FACTOR, MAX_ALPHA_VIOLATION, pulse)
+		wall.alpha = move_toward(wall.alpha, target, fade_step)
+		_apply(wall)
+		if wall.retiring and wall.alpha <= 0.001:
+			to_free.append(unit_id)
+
+	for unit_id in to_free:
+		var wall: Wall = _walls[unit_id]
+		if is_instance_valid(wall.node):
+			wall.node.queue_free()
+		_walls.erase(unit_id)
+
+	if _walls.is_empty():
+		visible = false
+		set_process(false)
 
 
-## Returns true if both models have valid nodes inside the scene tree.
-func _models_drawable(model_a: ModelInstance, model_b: ModelInstance) -> bool:
-	if not model_a.node or not model_b.node:
-		return false
-	if not is_instance_valid(model_a.node) or not is_instance_valid(model_b.node):
-		return false
-	return model_a.node.is_inside_tree() and model_b.node.is_inside_tree()
-
-
-## Draws a tinted base-edge-to-base-edge line with the gap label between two models.
-func _draw_gap_line(model_a: ModelInstance, model_b: ModelInstance, dist_inches: float, color: Color) -> void:
-	var from_edge := CoherencyChecker.get_ground_edge_point(model_a, model_b.node.global_position, EDGE_Y)
-	var to_edge := CoherencyChecker.get_ground_edge_point(model_b, model_a.node.global_position, EDGE_Y)
-
-	var line := _create_surface_line(from_edge, to_edge, color)
-	if line:
-		add_child(line)
-		_lines.append(line)
-
-	var midpoint := (from_edge + to_edge) / 2.0
-	_create_distance_label(midpoint, from_edge, to_edge, "%.1f\"" % dist_inches, color)
-
-
-## A thin flat line strip lying on the table between two base-edge points.
-func _create_surface_line(from_edge: Vector3, to_edge: Vector3, color: Color) -> MeshInstance3D:
-	var direction := Vector3(to_edge.x - from_edge.x, 0, to_edge.z - from_edge.z)
-	var length := direction.length()
-	if length < 0.001:
-		return null
-
-	var mesh_instance := MeshInstance3D.new()
-	var line_mesh := BoxMesh.new()
-	line_mesh.size = Vector3(length, 0.001, LINE_WIDTH)
-	mesh_instance.mesh = line_mesh
-
-	var midpoint := (from_edge + to_edge) / 2.0
-	midpoint.y = LINE_Y
-	mesh_instance.position = midpoint
-	mesh_instance.rotation = Vector3(0, atan2(direction.x, direction.z) + PI / 2.0, 0)
-
-	var material := StandardMaterial3D.new()
-	material.albedo_color = color
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.no_depth_test = true
-	mesh_instance.material_override = material
-	return mesh_instance
-
-
-## A distance label lying flat on the table, aligned with the line (measurement-tool style).
-func _create_distance_label(midpoint: Vector3, from_edge: Vector3, to_edge: Vector3, text: String, color: Color) -> void:
-	var label := Label3D.new()
-	label.text = text
-	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
-	label.no_depth_test = true
-	label.render_priority = 1
-	label.pixel_size = 0.0005
-	label.font_size = 24
-	label.modulate = color
-	label.outline_modulate = Color(0, 0, 0, 1)
-	label.outline_size = 4
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-	add_child(label)
-	label.global_position = Vector3(midpoint.x, EDGE_Y, midpoint.z)
-
-	var direction := to_edge - from_edge
-	var angle := atan2(direction.x, direction.z)
-	label.rotation = Vector3(-PI / 2.0, angle, 0)
-	_labels.append(label)
-
-
-## Draws a coloured ring around a model's base (mirrors CoherencyVisualizer._highlight_model).
-func _highlight_model(model: ModelInstance, color: Color, pulse: bool) -> void:
-	if not model.node or not is_instance_valid(model.node):
+## Applies a wall's current colour + animated alpha to its material.
+func _apply(wall: Wall) -> void:
+	if wall.material == null:
 		return
-	if not model.node.is_inside_tree():
-		return
-
-	var base_radius_m := DEFAULT_BASE_RADIUS_M
-	if model.unit:
-		var game_unit := model.unit as GameUnit
-		if game_unit and game_unit.unit_properties:
-			var model_tough: int = int(model.properties.get("tough", 0)) if model.properties else 0
-			var base_mm: int = OPRArmyManager.model_base_long_mm(int(game_unit.unit_properties.get("base_size_round", 32)), model_tough)
-			base_radius_m = (base_mm / 2.0) * 0.001
-
-	var ring := Node3D.new()
-	ring.name = "SeparationRing_%d" % model.get_instance_id()
-
-	var torus := TorusMesh.new()
-	torus.inner_radius = base_radius_m + RING_GAP_M
-	torus.outer_radius = base_radius_m + RING_GAP_M + RING_THICKNESS_M
-
-	var mesh_instance := MeshInstance3D.new()
-	mesh_instance.mesh = torus
-
-	var material := StandardMaterial3D.new()
-	material.albedo_color = color
-	material.emission_enabled = true
-	material.emission = color
-	material.emission_energy_multiplier = 1.5
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mesh_instance.material_override = material
-	ring.add_child(mesh_instance)
-
-	add_child(ring)
-	var model_pos := model.node.global_position
-	ring.global_position = Vector3(model_pos.x, RING_Y, model_pos.z)
-	_rings.append(ring)
-
-	if pulse:
-		mesh_instance.ready.connect(func(): _animate_pulse(mesh_instance), CONNECT_ONE_SHOT)
+	wall.material.albedo_color = Color(wall.color.r, wall.color.g, wall.color.b, wall.alpha)
+	wall.material.emission = wall.color
+	wall.material.emission_energy_multiplier = EMISSION_ENERGY * (wall.alpha / MAX_ALPHA_VIOLATION)
 
 
-## Pulses a ring mesh (finite loops to avoid the Godot infinite-loop tween error).
-func _animate_pulse(mesh: MeshInstance3D) -> void:
-	if not mesh or not is_instance_valid(mesh):
-		return
-	if not mesh.is_inside_tree():
-		return
-	var tween := mesh.create_tween()
-	tween.set_loops(100)
-	tween.tween_property(mesh, "scale", Vector3(1.2, 1.2, 1.2), PULSE_DURATION / 2)
-	tween.tween_property(mesh, "scale", Vector3(1.0, 1.0, 1.0), PULSE_DURATION / 2)
+## Builds (or rebuilds) a wall's band mesh from the unit's member shapes.
+func _rebuild_mesh(wall: Wall, spec: ZoneSpec) -> void:
+	var tris := SeparationZone.unit_band_triangles(spec.shapes)
+	if wall.node == null:
+		wall.node = MeshInstance3D.new()
+		wall.node.name = "SeparationWall_%d" % spec.unit_id
+		wall.material = _make_material()
+		wall.node.material_override = wall.material
+		add_child(wall.node)
+	wall.node.mesh = _mesh_from_triangles(tris)
+	wall.signature = spec.signature
 
 
-## Fades the whole warning in.
-func _animate_fade_in() -> void:
-	_alpha = 0.0
-	if _tween:
-		_tween.kill()
-	_tween = create_tween()
-	_tween.tween_property(self, "_alpha", 1.0, FADE_DURATION)
+## A flat, unshaded, emissive, double-sided translucent material for the ground band.
+func _make_material() -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.emission_enabled = true
+	mat.albedo_color = Color(1, 1, 1, 0)
+	return mat
 
 
-## Applies alpha (capped at MAX_ALPHA) to every element's material.
-func _update_materials_alpha(alpha: float) -> void:
-	var a := alpha * MAX_ALPHA
-	for line in _lines:
-		if is_instance_valid(line) and line.material_override:
-			var mat := line.material_override as StandardMaterial3D
-			if mat:
-				mat.albedo_color.a = a
-	for ring in _rings:
-		if is_instance_valid(ring):
-			for child in ring.get_children():
-				if child is MeshInstance3D and child.material_override:
-					var mat := child.material_override as StandardMaterial3D
-					if mat:
-						mat.albedo_color.a = a
-	for label in _labels:
-		if is_instance_valid(label):
-			label.modulate.a = a
-
-
-## Frees all rendered elements.
-func _clear() -> void:
-	for line in _lines:
-		if is_instance_valid(line):
-			line.queue_free()
-	_lines.clear()
-
-	for ring in _rings:
-		if is_instance_valid(ring):
-			ring.queue_free()
-	_rings.clear()
-
-	for label in _labels:
-		if is_instance_valid(label):
-			label.queue_free()
-	_labels.clear()
-
-	visible = false
+## Non-indexed ArrayMesh from a world-XZ triangle soup, laid flat at BAND_Y.
+func _mesh_from_triangles(tris: PackedVector2Array) -> ArrayMesh:
+	var mesh := ArrayMesh.new()
+	if tris.size() < 3:
+		return mesh
+	var verts := PackedVector3Array()
+	var normals := PackedVector3Array()
+	verts.resize(tris.size())
+	normals.resize(tris.size())
+	for i in range(tris.size()):
+		verts[i] = Vector3(tris[i].x, BAND_Y, tris[i].y)
+		normals[i] = Vector3.UP
+	var arr: Array = []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = verts
+	arr[Mesh.ARRAY_NORMAL] = normals
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	return mesh

@@ -1055,6 +1055,11 @@ func _start_dragging(screen_pos: Vector2) -> void:
 
 func _stop_dragging() -> void:
 	if _is_dragging and not _selected_objects.is_empty():
+		# Anti-stacking + charge-snap: nudge dropped bases out of any overlap with other
+		# units and snap a near-miss to enemy contact. Done BEFORE the batch / undo below
+		# so the resolved position flows the normal move path (undo + MP broadcast).
+		_resolve_drop_separation()
+
 		# Build batch of final positions for network broadcast
 		var drop_batch: Array = []
 
@@ -1135,6 +1140,115 @@ func _stop_dragging() -> void:
 	_drag_start_positions.clear()
 	_drag_anchor_position = Vector3.ZERO
 	_destroy_drag_line()
+
+
+## Drop-time separation resolution (SeparationResolver): slides each dropped item out of
+## any base overlap with ANOTHER unit to clean base contact (anti-stacking, enemy AND
+## friendly), and snaps a near-miss to enemy base contact (charge). Runs BEFORE the
+## drop batch / undo record in _stop_dragging so the resolved x/z flows the normal move
+## path. Local-only geometry; no RPC of its own (the standard move broadcast carries it).
+func _resolve_drop_separation() -> void:
+	var army := get_node_or_null("/root/Main/OPRArmyManager")
+	if army == null or not army.has_method("get_all_game_units"):
+		return
+	var movable := _movable_selection()
+	if movable.is_empty():
+		return
+
+	# Node ids being dragged (loose models + tray members) — excluded as obstacles so a
+	# multi-select group doesn't push against itself.
+	var dragged_ids: Dictionary = {}
+	for obj in movable:
+		if not is_instance_valid(obj):
+			continue
+		dragged_ids[obj.get_instance_id()] = true
+		if obj is RegimentTray or obj.is_in_group(RegimentTray.GROUP):
+			for child in obj.get_children():
+				if child is Node3D and child.has_meta("model_instance"):
+					dragged_ids[child.get_instance_id()] = true
+
+	var candidates := _separation_candidates(army, dragged_ids)
+	if candidates.is_empty():
+		return
+
+	var min_move: float = SeparationResolver.RESOLVE_EPSILON_INCHES * SeparationResolver.INCHES_TO_METERS
+	for obj in movable:
+		if not is_instance_valid(obj):
+			continue
+		var item := _drag_item_shapes(obj)
+		var item_shapes: Array = item["shapes"]
+		if item_shapes.is_empty():
+			continue
+		var item_unit_id: int = item["unit_id"]
+		# Only OTHER units obstruct (the rule binds between units; same-unit spacing is
+		# coherency / formation, left alone here).
+		var item_cands: Array = []
+		for c in candidates:
+			if int(c["unit_id"]) != item_unit_id:
+				item_cands.append(c)
+		if item_cands.is_empty():
+			continue
+		var delta := SeparationResolver.resolve_translation(item_shapes, item_cands, int(item["player"]))
+		if delta.length() > min_move:
+			obj.global_position.x += delta.x
+			obj.global_position.z += delta.y
+
+
+## Base shapes of a dragged node for separation resolution: a loose model yields one
+## shape, a regiment tray yields all its member shapes (the whole block translates as
+## one). Returns {shapes: Array[BaseShape], unit_id: int, player: int}.
+func _drag_item_shapes(node: Node3D) -> Dictionary:
+	var member_nodes: Array = []
+	if node is RegimentTray or node.is_in_group(RegimentTray.GROUP):
+		for child in node.get_children():
+			if child is Node3D and child.has_meta("model_instance"):
+				member_nodes.append(child)
+	elif node.has_meta("model_instance"):
+		member_nodes.append(node)
+
+	var shapes: Array = []
+	var unit_id: int = 0
+	var player: int = 0
+	for mn in member_nodes:
+		if mn.get_meta("deleted", false):
+			continue
+		var model := mn.get_meta("model_instance") as ModelInstance
+		if model == null or not model.is_alive:
+			continue
+		var shape := SeparationChecker.shape_for_model(model)
+		if shape == null:
+			continue
+		shapes.append(shape)
+		if unit_id == 0:
+			var eff := SeparationChecker.effective_unit(model.unit as GameUnit)
+			if eff != null and eff.unit_properties != null:
+				unit_id = eff.get_instance_id()
+				player = int(eff.unit_properties.get("player_id", 0))
+	return {"shapes": shapes, "unit_id": unit_id, "player": player}
+
+
+## Every alive OPR base NOT part of the current drag, as {shape, unit_id, player_id}
+## for the resolver. A joined Hero folds into its host unit.
+func _separation_candidates(army: Node, dragged_ids: Dictionary) -> Array:
+	var out: Array = []
+	for game_unit in army.get_all_game_units():
+		if game_unit == null:
+			continue
+		var eff := SeparationChecker.effective_unit(game_unit)
+		if eff == null or eff.unit_properties == null:
+			continue
+		var unit_id: int = eff.get_instance_id()
+		var player: int = int(eff.unit_properties.get("player_id", 0))
+		for model in game_unit.get_alive_models():
+			if model == null or model.node == null or not is_instance_valid(model.node):
+				continue
+			if dragged_ids.has(model.node.get_instance_id()):
+				continue
+			var shape := SeparationChecker.shape_for_model(model)
+			if shape == null:
+				continue
+			out.append({"shape": shape, "unit_id": unit_id, "player_id": player})
+	return out
 
 
 ## After a drag, snap each moved model to face its own movement direction (playtest feedback, per-model).
