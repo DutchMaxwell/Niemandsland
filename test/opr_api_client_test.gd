@@ -285,3 +285,51 @@ func test_selected_upgrade_rule_with_rating_formats() -> void:
 		{"option": {"gains": [{"name": "Tough", "type": "ArmyBookRule", "rating": 3}]}},
 	])
 	assert_array(unit.special_rules).contains(["Tough(3)"])
+
+
+# ===== Base-size precedence: explicit API base data WINS, derived sizing is the fallback (QA r5) =====
+
+func test_apply_base_recommendation_round_value_applies() -> void:
+	var unit := OPRApiClient.OPRUnit.new()
+	assert_bool(OPRApiClient._apply_base_recommendation(unit, {"round": "60", "square": "50"}, false)).is_true()
+	assert_int(unit.base_size_round).is_equal(60)
+	assert_bool(unit.base_is_oval).is_false()
+
+
+func test_apply_base_recommendation_none_is_not_a_recommendation() -> void:
+	var unit := OPRApiClient.OPRUnit.new()
+	# Army Forge sends bases:{round:"none"} for model-less entries — NOT a usable recommendation.
+	assert_bool(OPRApiClient._apply_base_recommendation(unit, {"round": "none"}, false)).is_false()
+	assert_bool(OPRApiClient._apply_base_recommendation(unit, {}, false)).is_false()
+	assert_bool(OPRApiClient._apply_base_recommendation(unit, null, false)).is_false()
+
+
+func test_parse_unit_from_list_api_base_beats_derived() -> void:
+	# The Great-Scorpion regression: the file/army-book import path used to SKIP the book's bases and
+	# always Tough-derive. The book's round '60' must WIN over any derived sizing.
+	var client := _client()
+	var book := {"units": [{
+		"id": "gs1", "name": "Great Scorpion", "size": 1, "quality": 3, "defense": 3, "cost": 100,
+		"specialRules": [{"name": "Tough", "rating": "6"}],
+		"bases": {"round": "60", "square": "50"},
+	}]}
+	var unit := client._parse_unit_from_list({"id": "gs1", "selectionId": "s1"}, book, "aof")
+	assert_str(unit.name).is_equal("Great Scorpion")
+	assert_int(unit.base_size_round).is_equal(60)   # the API base, NOT a derived one
+	assert_bool(unit.base_from_tough).is_false()
+
+
+func test_parse_unit_from_list_falls_back_to_derived_without_base() -> void:
+	var client := _client()
+	# No usable base in the book -> the Tough-derived fallback sizes it (Tough 6 single model,
+	# no type keyword -> vehicle oval, the documented ladder anchor 52x90).
+	var book := {"units": [{
+		"id": "v1", "name": "Sun Barge", "size": 1, "quality": 3, "defense": 3, "cost": 100,
+		"specialRules": [{"name": "Tough", "rating": "6"}],
+		"bases": {"round": "none"},
+	}]}
+	var unit := client._parse_unit_from_list({"id": "v1", "selectionId": "s2"}, book, "aof")
+	assert_bool(unit.base_from_tough).is_true()
+	assert_bool(unit.base_is_oval).is_true()
+	assert_int(unit.base_width_mm).is_equal(52)
+	assert_int(unit.base_depth_mm).is_equal(90)

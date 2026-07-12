@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## Tests for OPRArmyManager._compute_model_fit - scales a GLB so it fits its base:
 ## height target ~ base long side, footprint capped at 125% of the base long
-## side, the smaller factor wins; Flying units get an extra vertical lift.
+## side, the smaller factor wins; Aircraft get a caller-supplied flight-stand lift.
 
 
 func _mgr() -> OPRArmyManager:
@@ -32,16 +32,18 @@ func test_height_target_for_tall_thin_models() -> void:
 	assert_float(aabb.size.y * fit.scale).is_equal_approx(0.032, 0.0005)
 
 
-func test_flying_adds_lift() -> void:
+func test_caller_supplied_lift_adds_offset() -> void:
+	# A caller-supplied lift (Aircraft flight stand) shifts the y_offset and reported height by exactly
+	# that lift. Flying no longer produces a lift — the caller passes 0 for it (see opr_item_grants_test).
 	var mgr := _mgr()
 	var aabb := AABB(Vector3(-0.05, 0.0, -0.05), Vector3(0.1, 0.1, 0.1))
 	var base_long_mm := 40
-	var expected_lift: float = base_long_mm * OPRArmyManager.FLYING_HOVER_RATIO * 0.001
+	var expected_lift: float = OPRArmyManager.AIRCRAFT_HOVER_M
 	var grounded = mgr._compute_model_fit(aabb, base_long_mm, 0, 0.0)
-	var flying = mgr._compute_model_fit(aabb, base_long_mm, 0, expected_lift)  # caller-supplied lift
+	var lifted = mgr._compute_model_fit(aabb, base_long_mm, 0, expected_lift)  # caller-supplied lift
 
-	assert_float(flying.y_offset - grounded.y_offset).is_equal_approx(expected_lift, 0.0001)
-	assert_float(flying.height - grounded.height).is_equal_approx(expected_lift, 0.0001)
+	assert_float(lifted.y_offset - grounded.y_offset).is_equal_approx(expected_lift, 0.0001)
+	assert_float(lifted.height - grounded.height).is_equal_approx(expected_lift, 0.0001)
 
 
 func test_degenerate_aabb_returns_fallback() -> void:
@@ -64,16 +66,19 @@ func test_oval_base_fits_model_within_narrow_width() -> void:
 
 func test_vehicle_aligned_along_oval_long_axis_walker_across() -> void:
 	var mgr := _mgr()
-	var aabb := AABB(Vector3.ZERO, Vector3(1, 0.5, 0.5))  # ignored — orientation is deterministic
-	# Vehicle, base long axis = Z (depth 0.120 >= width 0.092): runs ALONG it → +Z = long, no turn.
-	var veh_z: Node3D = auto_free(Node3D.new())
-	mgr._align_to_oval_long_axis(veh_z, aabb, true, 0.092, 0.120, false)
-	assert_float(veh_z.rotation.y).is_equal_approx(0.0, 0.01)
-	# Vehicle, base long axis = X (width 0.120 > depth 0.092): turn 90° so +Z runs along X.
-	var veh_x: Node3D = auto_free(Node3D.new())
-	mgr._align_to_oval_long_axis(veh_x, aabb, true, 0.120, 0.092, false)
-	assert_float(absf(veh_x.rotation.y)).is_equal_approx(PI / 2.0, 0.01)
-	# Walker = the exact opposite: long axis = Z → turn 90° (faces ACROSS the long axis).
+	# MARKER-ONLY contract: an X-LONG AABB (aspect 2.0) never turns by itself — only the per-entry
+	# `long_axis` marker ("x") declares the model's length, and then it must land on the base's
+	# long axis (geometry cannot distinguish body length from wingspan; markers are authoring truth).
+	var aabb := AABB(Vector3.ZERO, Vector3(1, 0.5, 0.5))
+	# Base long axis = Z (depth 0.120 >= width 0.092), no marker: legacy +Z convention → no turn.
+	var veh_default: Node3D = auto_free(Node3D.new())
+	mgr._align_to_oval_long_axis(veh_default, aabb, true, 0.092, 0.120, false)
+	assert_float(veh_default.rotation.y).is_equal_approx(0.0, 0.01)
+	# Same base WITH the "x" marker: the declared X length turns 90° onto the base's long Z axis.
+	var veh_marked: Node3D = auto_free(Node3D.new())
+	mgr._align_to_oval_long_axis(veh_marked, aabb, true, 0.092, 0.120, false, "x")
+	assert_float(absf(veh_marked.rotation.y)).is_equal_approx(PI / 2.0, 0.01)
+	# Walker: deterministic crosswise, markers/AABB ignored — long axis = Z → turn 90° (faces ACROSS).
 	var walker: Node3D = auto_free(Node3D.new())
 	mgr._align_to_oval_long_axis(walker, aabb, true, 0.092, 0.120, true)
 	assert_float(absf(walker.rotation.y)).is_equal_approx(PI / 2.0, 0.01)

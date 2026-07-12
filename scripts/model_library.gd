@@ -113,6 +113,38 @@ func has_model(faction: String, unit_name: String) -> bool:
 	return _models.has(make_key(faction, unit_name))
 
 
+## Optional per-entry artistic size correction: the manifest entry's `fit_scale` (float), applied
+## MULTIPLICATIVELY to the computed model scale after the normal fit (first user: scarab swarms at
+## 0.5). Missing / invalid (<= 0) → 1.0, so old manifests and old clients are unaffected by
+## construction (unknown fields are simply not read).
+func fit_scale(faction: String, unit_name: String) -> float:
+	var v: Variant = _entry(faction, unit_name).get("fit_scale", 1.0)
+	if v is float or v is int:
+		return float(v) if float(v) > 0.0 else 1.0
+	return 1.0
+
+
+## Optional per-entry BASE override: the manifest entry's `base_mm` dict, shaped like the Army Forge
+## base spec ({"round": 80} / {"round": "90x52"} / {"square": ...}). It WINS over both the AF API
+## base recommendation and the Tough-derived fallback (precedence: manifest > API > derived) — a
+## deliberate maintainer choice where the AF spec reads wrong on the actual model (first user:
+## Skeleton Giant at 80mm round vs AF's 60). {} when absent/malformed.
+func base_override_mm(faction: String, unit_name: String) -> Dictionary:
+	var v: Variant = _entry(faction, unit_name).get("base_mm", {})
+	return v if v is Dictionary else {}
+
+
+## Optional per-entry ORIENTATION marker: the manifest entry's `long_axis` ("x" or "z") declares which
+## horizontal axis the model's LENGTH/FACING runs along in blob space — the ONLY driver of the
+## lengthwise oval rotation (geometry cannot express intent: a coiled +Z-facing serpent or a winged
+## avatar spreads WIDER in X than Z, indistinguishable by aspect from a genuinely X-composed comp —
+## only the producer knows the authored facing). "" when absent/invalid (→ legacy +Z convention: no
+## turn on the standard depth-long oval; unknown fields are ignored by old clients by construction).
+func long_axis_override(faction: String, unit_name: String) -> String:
+	var v: String = str(_entry(faction, unit_name).get("long_axis", "")).strip_edges().to_lower()
+	return v if v == "x" or v == "z" else ""
+
+
 ## Returns the local path if the unit's model is already cached, else "" (sync).
 func get_cached_path(faction: String, unit_name: String) -> String:
 	var entry: Dictionary = _entry(faction, unit_name)
@@ -122,25 +154,61 @@ func get_cached_path(faction: String, unit_name: String) -> String:
 	return _downloader.cache_path(sha) if _downloader.is_cached(sha) else ""
 
 
+## The minimum keyword length that may match a model name — shorter needles match far too loosely.
+const MIN_MATCH_KEYWORD_LEN: int = 3
+
 ## Fuzzy-find a faction model whose (normalized) name contains any of the keywords — used to pick a
-## mount/bike GLB for a hero's mount upgrade when no exact "<hero> on <mount>" model exists. Returns
-## the manifest unit-name part (resolvable via get_cached_path / ensure_model) or "" if none; prefers
-## the shortest (most specific) match.
-func find_faction_model_matching(faction: String, keywords: Array) -> String:
+## mount/bike GLB for a hero's mount upgrade when no exact "<hero> on <mount>" model exists. A model
+## QUALIFIES when its name contains at least one keyword (>= MIN_MATCH_KEYWORD_LEN, substring); among
+## the qualifiers the most SPECIFIC one wins: it shares the most WHOLE tokens with the mount's full name
+## (so "Skeleton Beast" resolves to the `skeleton beast` mount, not a single-"beast" collision with
+## `beast riders`/`hunting beasts`), then the most keyword hits, then the shortest name. An exact-name
+## match therefore always beats a single-keyword one. `full_name` is the mount's full display name that
+## drives the token scoring; when omitted the keywords themselves form the token set (legacy behaviour).
+## Returns the manifest unit-name part (resolvable via get_cached_path / ensure_model) or "" if none.
+func find_faction_model_matching(faction: String, keywords: Array, full_name: String = "") -> String:
 	var prefix: String = faction.strip_edges().to_lower() + "/"
+	var want_tokens: PackedStringArray = _name_tokens(full_name if not full_name.is_empty() else " ".join(keywords))
 	var best: String = ""
+	var best_overlap: int = -1
+	var best_hits: int = -1
 	for key in _models:
 		var k: String = str(key)
 		if not k.begins_with(prefix):
 			continue
 		var name_part: String = k.substr(prefix.length())
+		var hits: int = 0
 		for kw in keywords:
 			var needle: String = str(kw).strip_edges().to_lower()
-			if needle.length() >= 3 and name_part.contains(needle):
-				if best.is_empty() or name_part.length() < best.length():
-					best = name_part
-				break
+			if needle.length() >= MIN_MATCH_KEYWORD_LEN and name_part.contains(needle):
+				hits += 1
+		if hits == 0:
+			continue
+		var overlap: int = _token_overlap(name_part, want_tokens)
+		if best.is_empty() \
+				or overlap > best_overlap \
+				or (overlap == best_overlap and hits > best_hits) \
+				or (overlap == best_overlap and hits == best_hits and name_part.length() < best.length()):
+			best = name_part
+			best_overlap = overlap
+			best_hits = hits
 	return best
+
+
+## Whole space-separated tokens of a name, lowercased, blanks dropped — the unit of specificity scoring.
+static func _name_tokens(s: String) -> PackedStringArray:
+	return s.strip_edges().to_lower().split(" ", false)
+
+
+## How many of `want_tokens` appear as a WHOLE token in `name_part` — the specificity score that makes an
+## exact/superset name (e.g. `skeleton beast` for mount "Skeleton Beast") beat a single-keyword collision.
+static func _token_overlap(name_part: String, want_tokens: PackedStringArray) -> int:
+	var have: PackedStringArray = _name_tokens(name_part)
+	var count: int = 0
+	for t in want_tokens:
+		if t in have:
+			count += 1
+	return count
 
 
 ## Ensures the unit's model is cached (downloads if needed). Awaitable. Returns path or "".
