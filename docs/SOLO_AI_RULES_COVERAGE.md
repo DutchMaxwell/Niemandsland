@@ -502,6 +502,13 @@ no re-run required.
    `test_ai_moves_into_seize_range_of_open_marker_and_seizes`,
    `test_decision_prefers_a_holdable_open_marker_over_a_contested_one`,
    `test_ai_peels_off_a_marker_another_ai_unit_already_holds`.
+2. **A shooting-target EV rendered negative** (`Battle Brothers EV -1.11`). The target tie-break uses the
+   charge matchup score (`AiEv.charge_score`) for melee-capable units — a NET dealt-minus-taken utility that
+   can dip below zero for an unfavourable matchup. It is only ever a ranking key (the negative option is
+   correctly never chosen), but surfacing a negative "expected wounds" in the dev log is misleading. The
+   recorded/rendered candidate EV is now floored at 0 (`nearest_human_unit`'s record + `render_decision` as
+   the final display guard); the raw score still drives the ranking, so selection — and the EV rule-sensitivity
+   tests (`ai_ev_test`) — are unchanged. Test: `test_render_decision_floors_negative_target_ev`.
 3. **A charge within the band fell short of base contact** (band 12", used ~8.4", short ~2.2"). The charge
    aimed the rigid move at the enemy CENTRE and capped it at the Rush band; for a wide/offset unit that closed
    the centre gap but left the nearest bases short, and the melee gate (`MELEE_ENGAGE_IN` = 1") then ruled the

@@ -880,3 +880,16 @@ func test_target_beyond_charge_band_is_not_charged() -> void:
 	solo.activate_next_ai_unit()
 	assert_int(int(solo.last_report["action"])).is_equal(AiDecision.Action.RUSH)
 	assert_float(solo.nearest_melee_gap_in(ai, human)).is_greater(1.0)   # did not reach contact
+
+
+# === Field-test round-5 finding 2: a target EV must never render negative ===
+
+func test_render_decision_floors_negative_target_ev() -> void:
+	# The charge tie-break score is a NET utility that can dip below zero; it is only a ranking key, so the
+	# dev log must never show a negative "expected wounds" (finding 2). The positive option still shows raw.
+	var rec := {"kind": "target", "unit": "Warriors", "candidates": [
+		{"name": "Battle Brothers", "ev": -1.11}, {"name": "Master Brother", "ev": 1.11}], "chosen": "Master Brother"}
+	var line := SoloController.render_decision(rec)
+	assert_bool(line.contains("Battle Brothers EV 0.00")).is_true()
+	assert_bool(line.contains("Master Brother EV 1.11")).is_true()
+	assert_bool(line.contains("-1.11")).is_false()

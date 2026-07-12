@@ -328,7 +328,11 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 	var rec_cands: Array = []
 	for t in tied:
 		var td := t as Dictionary
-		rec_cands.append({"name": (td["unit"] as GameUnit).get_name(), "ev": float(td["ev"]),
+		# Report a NON-NEGATIVE target EV (field-test finding 2): the charge tie-break score is a NET
+		# dealt-minus-taken utility that can go below zero for an unfavourable matchup, but it is only ever a
+		# ranking key — surfacing a negative "expected wounds" in the dev log is misleading, so the recorded
+		# value is floored at 0. The raw score still drives the ranking above (selection is unchanged).
+		rec_cands.append({"name": (td["unit"] as GameUnit).get_name(), "ev": maxf(0.0, float(td["ev"])),
 			"key": [td["activated"], td["band"]]})
 	record_decision({"kind": "target", "unit": ai_unit.get_name(),
 		"rule": "Solo v3.5.0 p.2: nearest valid target, not-activated first",
@@ -1165,7 +1169,9 @@ static func render_decision(rec: Dictionary) -> String:
 		var listed: PackedStringArray = []
 		for c in cands:
 			var cd := c as Dictionary
-			listed.append("%s EV %.2f" % [str(cd.get("name", "?")), float(cd.get("ev", 0.0))])
+			# EV is expected wounds — never render it negative (finding 2): a net charge score below zero is a
+			# ranking artefact, not a real "negative expected damage". Floored here as the final display guard.
+			listed.append("%s EV %.2f" % [str(cd.get("name", "?")), maxf(0.0, float(cd.get("ev", 0.0)))])
 		parts.append("options: " + ", ".join(listed))
 	var chosen := str(rec.get("chosen", ""))
 	if not chosen.is_empty():
