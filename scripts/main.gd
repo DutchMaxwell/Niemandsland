@@ -1297,29 +1297,29 @@ func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int) -> 
 ## GEOMETRIC PER-MODEL line of sight for a shooter→target model pair (GF/AoF v3.5.1 p.5: "Models can't see
 ## through solid obstacles, including the perimeter of other units (friendly or enemy), but they can always
 ## see through friendly models from their own unit."; p.8 "Who Can Shoot" is PER MODEL). The sight line is
-## blocked by (a) blocking terrain zones (the grid "see in/out, not through" rule), (b) wall segments, and
-## (c) the base of ANY OTHER unit's model — never the shooter's or the target's own unit (you can always
-## see the target and through your own models). Heights follow the Asgard rule: a blocker only stops the
-## line when its Height ≥ BOTH endpoint units' Heights (a taller model sees over a smaller one). Walls +
-## blocker list + endpoint heights are built ONCE per pair; the returned Callable(sp, tp) is what
-## SoloController.sighted_models runs per shooter-model × target-model pair (findings 2/6/11).
+## blocked by (a) blocking terrain zones (the grid "see in/out, not through" rule — Forests + Buildings/
+## Containers only) and (b) the base of ANY OTHER unit's model — never the shooter's or the target's own
+## unit (you can always see the target and through your own models). Heights follow the Asgard rule: a
+## blocker only stops the line when its Height ≥ BOTH endpoint units' Heights (a taller model sees over a
+## smaller one). RUIN WALL SEGMENTS are deliberately NOT LOS blockers: per the v3.5.1 terrain guidelines
+## ruins are "Cover + Dangerous on rush/charge" — their low walls block MOVEMENT (the movement planner still
+## treats them as impassable) but are SEE-THROUGH for sight (field-test finding 5). Blocker list + endpoint
+## heights are built ONCE per pair; the returned Callable(sp, tp) is what SoloController.sighted_models runs
+## per shooter-model × target-model pair (findings 2/6/11).
 func _solo_true_los_callable(shooter: GameUnit, target: GameUnit) -> Callable:
 	var overlay := terrain_overlay
-	var walls: Array = overlay.get_wall_segments_world() if (overlay != null and overlay.has_method("get_wall_segments_world")) else []
 	var blockers: Array[LosRules.Blocker] = _solo_los_blockers(shooter, target)
 	var from_h: int = _solo_unit_los_height(shooter)
 	var to_h: int = _solo_unit_los_height(target)
 	return func(sp: Vector3, tp: Vector3) -> bool:
 		if overlay != null and overlay.has_method("has_line_of_sight") \
 				and not overlay.has_line_of_sight(sp, tp, from_h, to_h):
-			return false   # (a) blocking terrain
+			return false   # (a) blocking terrain (Forest / Building-Container; ruins are see-through)
 		var a2 := Vector2(sp.x, sp.z)
 		var b2 := Vector2(tp.x, tp.z)
-		if not walls.is_empty() and MovementPlanner.path_crosses_wall(a2, b2, walls):
-			return false   # (b) wall segment
 		# Blockers already exclude the shooter's and target's own units, so no per-call exclude list is needed.
 		if not blockers.is_empty() and LosRules.units_block_line(a2, b2, from_h, to_h, blockers, ([] as Array[int])):
-			return false   # (c) another unit's base (perimeter of other units)
+			return false   # (b) another unit's base (perimeter of other units)
 		return true
 
 

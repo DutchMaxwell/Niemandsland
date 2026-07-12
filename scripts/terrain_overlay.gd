@@ -1084,11 +1084,13 @@ func world_to_cell(world_pos: Vector3) -> Vector2i:
 	return Vector2i(grid_x, grid_z)
 
 
-## True if a terrain type blocks line of sight when drawn THROUGH it (ruins,
-## forests, houses). Dangerous terrain is Open and never blocks.
+## True if a terrain type blocks line of sight when drawn THROUGH it. Per the GF/AoF Advanced Rules v3.5.1
+## terrain guidelines: Buildings/Containers are "Impassable + Blocking" and Forests block sight THROUGH them
+## (you still see into/out — the own-zone rule below), but RUINS are "Cover + Dangerous when using
+## rush/charge" — their low walls confer cover yet are SEE-THROUGH (field-test finding 5: ruins wrongly
+## blocked LOS). Dangerous terrain is Open and never blocks.
 func terrain_blocks_los(terrain_type: int) -> bool:
-	return terrain_type == TerrainType.RUINS \
-		or terrain_type == TerrainType.FOREST \
+	return terrain_type == TerrainType.FOREST \
 		or terrain_type == TerrainType.CONTAINER
 
 
@@ -1149,7 +1151,7 @@ func has_line_of_sight(from_pos: Vector3, to_pos: Vector3, from_height: int, to_
 func _terrain_effect_label(terrain_type: int) -> String:
 	match terrain_type:
 		TerrainType.RUINS:
-			return "Ruins\nHeight 5\nCover, Blocks LoS"
+			return "Ruins\nGround\nCover (see-through)"
 		TerrainType.FOREST:
 			return "Forest\nHeight 5\nDifficult, Cover, Blocks LoS"
 		TerrainType.CONTAINER:

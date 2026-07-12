@@ -60,7 +60,10 @@ func test_blocking_and_height_helpers() -> void:
 	assert_bool(o.terrain_blocks_los(OverlayScript.TerrainType.FOREST)).is_true()
 	assert_bool(o.terrain_blocks_los(OverlayScript.TerrainType.CONTAINER)).is_true()
 	assert_bool(o.terrain_blocks_los(OverlayScript.TerrainType.DANGEROUS)).is_false()
-	assert_int(o.terrain_height_category(OverlayScript.TerrainType.RUINS)).is_equal(5)
+	# Ruins are Cover + SEE-THROUGH per the GF/AoF v3.5.1 terrain guidelines (field-test finding 5): they do
+	# NOT block LOS and are Ground height, not a Height-5 sight blocker.
+	assert_bool(o.terrain_blocks_los(OverlayScript.TerrainType.RUINS)).is_false()
+	assert_int(o.terrain_height_category(OverlayScript.TerrainType.RUINS)).is_equal(0)
 	assert_int(o.terrain_height_category(OverlayScript.TerrainType.DANGEROUS)).is_equal(0)
 
 
