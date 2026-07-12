@@ -1302,6 +1302,22 @@ static func effective_base_props(props: Dictionary, model_tough: int) -> Diction
 	return copy
 
 
+## Build and attach a model's "perfectly based" base: a terrain-projected top (a live window onto
+## the battlefield ground under the model), a black slightly-beveled rim, and — for SOLO models only
+## (units of one / loose single models) — a player-coloured affiliation ring (the one-model
+## equivalent of a multi-model unit's boundary rubberband). The terrain-top material is the table's
+## shared one (kept current across biome/size changes); the rim/ring materials are shared/cached in
+## BaseDecor. Shared by both the import path and the save/load restore path.
+func _build_model_base(wrapper: Node3D, base_is_oval: bool, base_is_square: bool, base_width: float,
+		base_depth: float, base_radius: float, player_color: Color, is_solo: bool) -> void:
+	var top_material: Material = null
+	if table != null and table.has_method("get_base_top_material"):
+		top_material = table.get_base_top_material()
+	var base_node := BaseDecor.build_base(base_is_oval, base_is_square, base_width, base_depth,
+		base_radius, player_color, is_solo, top_material)
+	wrapper.add_child(base_node)
+
+
 func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_suffix: String = "", faction_folder: String = "", base_long_override_mm: int = 0, model_name_override: String = "", is_mount: bool = false) -> StaticBody3D:
 	var wrapper = StaticBody3D.new()
 	wrapper.collision_layer = MINIATURE_COLLISION_LAYER
@@ -1336,43 +1352,11 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 			base_width = base_long_override_mm * 0.001
 			base_depth = base_long_override_mm * 0.001
 
-	# Create base mesh
-	var base_instance = MeshInstance3D.new()
-
-	if unit.base_is_square:
-		# Square/rectangular base (Age of Fantasy: Regiments): flat box.
-		# Long side (depth) faces north (+Z direction), matching the oval convention.
-		var base_mesh = BoxMesh.new()
-		base_mesh.size = Vector3(base_width, 0.003, base_depth)
-		base_instance.mesh = base_mesh
-		base_instance.position.y = 0.0015
-	elif base_is_oval:
-		# Oval base: use cylinder with non-uniform scale
-		# Long side (depth) faces north (+Z direction)
-		var base_mesh = CylinderMesh.new()
-		base_mesh.top_radius = 0.5  # Unit radius, will be scaled
-		base_mesh.bottom_radius = 0.5
-		base_mesh.height = 0.003
-		base_instance.mesh = base_mesh
-		# Scale: X = width, Y = height (unchanged), Z = depth
-		base_instance.scale = Vector3(base_width, 1.0, base_depth)
-		base_instance.position.y = 0.0015
-	else:
-		# Round base: normal cylinder
-		var base_mesh = CylinderMesh.new()
-		base_mesh.top_radius = base_radius
-		base_mesh.bottom_radius = base_radius
-		base_mesh.height = 0.003
-		base_instance.mesh = base_mesh
-		base_instance.position.y = 0.0015
-
-	var base_material = StandardMaterial3D.new()
-	base_material.albedo_color = player_color
-	base_material.roughness = 0.7
-	base_instance.material_override = base_material
-	base_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-
-	wrapper.add_child(base_instance)
+	# Create the base: terrain-projected top (a live window onto the battlefield ground) + a black
+	# beveled rim + — for SOLO models only — a player-coloured affiliation ring. A multi-model unit
+	# keeps a clean black rim; its affiliation is the boundary rubberband (see BaseDecor).
+	_build_model_base(wrapper, base_is_oval, unit.base_is_square, base_width, base_depth, base_radius,
+		player_color, BaseDecor.should_ring(unit.size))
 
 	# Visual hover: ONLY Aircraft (the OPR "Aircraft" rule) sit on a tall flight stand. Flying models
 	# (and their mounts) stand on their base — the Flying float was removed at go-live.
@@ -1547,32 +1531,12 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0, glb_n
 	var player_id: int = props.get("player_id", 1)
 	var player_color: Color = OPRArmyManager.army_color(player_id, Color.GRAY)
 
-	# Create base mesh
-	var base_instance = MeshInstance3D.new()
-
-	if base_is_oval:
-		var base_mesh = CylinderMesh.new()
-		base_mesh.top_radius = 0.5
-		base_mesh.bottom_radius = 0.5
-		base_mesh.height = 0.003
-		base_instance.mesh = base_mesh
-		base_instance.scale = Vector3(base_width, 1.0, base_depth)
-		base_instance.position.y = 0.0015
-	else:
-		var base_mesh = CylinderMesh.new()
-		base_mesh.top_radius = base_radius
-		base_mesh.bottom_radius = base_radius
-		base_mesh.height = 0.003
-		base_instance.mesh = base_mesh
-		base_instance.position.y = 0.0015
-
-	var base_material = StandardMaterial3D.new()
-	base_material.albedo_color = player_color
-	base_material.roughness = 0.7
-	base_instance.material_override = base_material
-	base_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-
-	wrapper.add_child(base_instance)
+	# Create the base (save/load + MP restore path): same treatment as the import path — terrain top +
+	# black beveled rim + (solo only) affiliation ring. Unit size travels in unit_properties["size"].
+	var base_is_square: bool = bool(props.get("base_is_square", false))
+	var unit_size: int = int(props.get("size", 1))
+	_build_model_base(wrapper, base_is_oval, base_is_square, base_width, base_depth, base_radius,
+		player_color, BaseDecor.should_ring(unit_size))
 
 	# Visual hover: ONLY Aircraft (the OPR "Aircraft" rule) sit on a tall flight stand; Flying models
 	# (and their mounts) stand on their base (matches the import path).

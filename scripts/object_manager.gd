@@ -3850,7 +3850,11 @@ func _set_object_dimmed(obj: Node3D, dimmed: bool) -> void:
 	for child in obj.get_children():
 		if child is MeshInstance3D:
 			var mesh_inst = child as MeshInstance3D
-			if mesh_inst.material_override:
+			# Never mutate a SHARED material (e.g. BaseDecor's rim/ring/top): dimming its albedo
+			# would darken every base in the session. Those meshes are tagged; skip them.
+			if mesh_inst.has_meta(BaseDecor.SHARED_MATERIAL_META):
+				pass
+			elif mesh_inst.material_override:
 				var mat = mesh_inst.material_override as StandardMaterial3D
 				if mat:
 					if dimmed:
