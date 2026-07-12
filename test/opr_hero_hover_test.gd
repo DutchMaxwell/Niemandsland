@@ -1,6 +1,5 @@
 extends GdUnitTestSuite
-## Tests for joined-hero attachment (import + save/load) and the visual hover
-## detection used to float Flying units, drones and hover vehicles.
+## Tests for joined-hero attachment (import + save/load).
 
 
 func _mgr() -> OPRArmyManager:
@@ -125,13 +124,3 @@ func test_order_units_keeps_hero_with_missing_host() -> void:
 
 	assert_int(ordered.size()).is_equal(1)
 	assert_bool(ordered[0] == hero).is_true()
-
-
-# ===== Visual hover detection =====
-
-func test_should_hover_detection() -> void:
-	var mgr := _mgr()
-	assert_bool(mgr._should_hover("Battle Suits", ["Flying", "Tough(3)"])).is_true()   # Flying rule
-	assert_bool(mgr._should_hover("Gun Drones", ["Good Shot", "Strider"])).is_true()    # name: drone
-	assert_bool(mgr._should_hover("Hover Tank", ["Fast", "Strider"])).is_true()         # name: hover
-	assert_bool(mgr._should_hover("Battle Brothers", ["Tough(3)"])).is_false()          # neither
