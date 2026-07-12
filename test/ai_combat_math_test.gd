@@ -251,3 +251,22 @@ func test_unpredictable_fighter_effect_split() -> void:
 		var hi := AiCombatMath.unpredictable_fighter_effect(f)
 		assert_int(int(hi["ap"])).is_equal(0)
 		assert_int(int(hi["hit"])).is_equal(1)
+
+
+## Field-test finding 8: a unit that is ALREADY Shaken auto-fails any further morale test (GF/AoF v3.5.1
+## p.10) — no roll. At half or less that fail is a Rout; above half it stays Shaken.
+func test_morale_result_shaken_auto_fails() -> void:
+	assert_int(AiCombatMath.morale_result_shaken(true)).is_equal(AiCombatMath.Morale.ROUT)
+	assert_int(AiCombatMath.morale_result_shaken(false)).is_equal(AiCombatMath.Morale.SHAKEN)
+
+
+## Field-test finding 9: Reliable (GF/AoF v3.5.1 p.14, "shoots at Quality 2+") must set the base Quality on
+## the MELEE strike path exactly as it does when shooting — a Reliable strike hits on 2+, and the roll can
+## still be modified on top (Thrust on a charge). Pins the composition the strike phase now uses.
+func test_reliable_sets_melee_to_hit_to_two_plus() -> void:
+	# A Quality-5 model with a Reliable melee weapon strikes at 2+ (not 5+).
+	var q_reliable := AiCombatMath.reliable_quality(5, true)
+	assert_int(AiCombatMath.modified_hit_target(AiCombatMath.thrust_to_hit(q_reliable, false), 0)).is_equal(2)
+	# Without Reliable the same weapon still needs 5+.
+	var q_plain := AiCombatMath.reliable_quality(5, false)
+	assert_int(AiCombatMath.modified_hit_target(AiCombatMath.thrust_to_hit(q_plain, false), 0)).is_equal(5)

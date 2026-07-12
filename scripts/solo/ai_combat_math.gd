@@ -334,3 +334,10 @@ static func morale_result(face: int, quality: int, is_at_or_below_half: bool) ->
 	if DiceRules.is_success(face, quality, 0):
 		return Morale.PASSED
 	return Morale.ROUT if is_at_or_below_half else Morale.SHAKEN
+
+
+## The forced outcome when an ALREADY-Shaken unit must take another morale test (GF/AoF v3.5.1 p.10:
+## "Shaken units … always fail morale tests"). There is no Quality roll — the test is an automatic FAIL,
+## so the standard fail branch applies: a unit at half or less Routs, otherwise it (stays) Shaken.
+static func morale_result_shaken(is_at_or_below_half: bool) -> Morale:
+	return Morale.ROUT if is_at_or_below_half else Morale.SHAKEN
