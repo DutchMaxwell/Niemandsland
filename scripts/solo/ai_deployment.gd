@@ -89,6 +89,55 @@ static func best_spot(section: Rect2, objectives: Array, occupied: Array, radius
 	return best
 
 
+## Graceful last-resort spot for a terrain-choked table where NO fully terrain-legal footprint exists
+## anywhere in `zone` (field-test finding 1: the unit must still deploy, but was dumped blindly at the
+## section CENTRE — which sat inside a ruin/blocking terrain). Instead scan the zone and return the spot
+## whose footprint has the FEWEST model-base sample points in blocking/dangerous terrain, tie-broken toward
+## the nearest objective. So a unit lands on the CLEAREST available ground (usually zero blocked points —
+## i.e. still fully legal — and only ever a wall/hazard cell when literally nothing better exists), never
+## on top of a wall when clear ground is one cell over. Always returns a finite spot.
+static func least_blocked_spot(zone: Rect2, objectives: Array, radius: float, blocked: Callable,
+		step: float, base_r: float, footprint: Array = []) -> Vector2:
+	var best := zone.get_center()
+	var best_blocked := INF
+	var best_score := INF
+	var y := zone.position.y + radius
+	while y <= zone.end.y - radius + 0.0001:
+		var x := zone.position.x + radius
+		while x <= zone.end.x - radius + 0.0001:
+			var p := Vector2(x, y)
+			var bc := _blocked_count(p, blocked, base_r, footprint)
+			var score := _nearest_objective_distance(p, objectives, zone)
+			if bc < best_blocked or (bc == best_blocked and score < best_score):
+				best_blocked = bc
+				best_score = score
+				best = p
+			x += step
+		y += step
+	return best
+
+
+## How many of the footprint's model-base sample points (each model's centre + its 8 base-edge points at
+## `base_r`, or the footprint-circle edges when no explicit grid) land in blocking/dangerous terrain. 0 = a
+## fully terrain-legal spot. Shares the exact sample set with `_blocked_at` so "0 blocked" here == "not
+## blocked" there.
+static func _blocked_count(p: Vector2, blocked: Callable, base_r: float, footprint: Array) -> int:
+	if not blocked.is_valid():
+		return 0
+	var n := 0
+	var edges := _base_edge_offsets(base_r)
+	if not footprint.is_empty():
+		for off in footprint:
+			for e in edges:
+				if bool(blocked.call(p + (off as Vector2) + e)):
+					n += 1
+		return n
+	for e in edges:
+		if bool(blocked.call(p + e)):
+			n += 1
+	return n
+
+
 ## Terrain check over the unit's FOOTPRINT, not just its centre. When `footprint` (the model-local XZ
 ## offsets each model WILL occupy at this spot) is supplied, EVERY model's base — its centre plus its
 ## base-edge cardinal/diagonal points at `base_r` — is checked against blocking terrain, so no model in a

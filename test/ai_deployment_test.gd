@@ -116,3 +116,24 @@ func test_blocked_at_checks_every_model_of_a_footprint() -> void:
 	# A model whose BASE edge (radius) just touches the strip is caught even if its centre is clear.
 	var edge_case := func(p: Vector2) -> bool: return p.x >= 0.105
 	assert_bool(AiDeployment._blocked_at(Vector2(0.0, 0.0), edge_case, 0.0, [Vector2(0.10, 0.0)], 0.016)).is_true()
+
+
+# === Terrain-choked last resort: least-blocked ground, never a blind dump into terrain (finding 1) ===
+
+func test_least_blocked_spot_prefers_clear_ground_over_blocking() -> void:
+	# The left half of the zone is blocking terrain; the least-blocked spot must land on the CLEAR right half
+	# (zero blocked footprint points), never inside the blocked strip (field-test finding 1: the old last
+	# resort dumped the unit at the section centre, which sat inside a ruin).
+	var zone := Rect2(Vector2(0.0, 0.0), Vector2(4.0, 2.0))
+	var blocked := func(p: Vector2) -> bool: return p.x < 2.0
+	var spot := AiDeployment.least_blocked_spot(zone, [], 0.2, blocked, 0.2, 0.1, [])
+	assert_float(spot.x).is_greater_equal(2.0)
+
+
+func test_least_blocked_spot_always_returns_a_finite_spot() -> void:
+	# Even when the WHOLE zone blocks (a terrain-choked table), a unit MUST still deploy — a finite spot is
+	# returned (the least-bad ground), never Vector2.INF.
+	var zone := Rect2(Vector2(0.0, 0.0), Vector2(2.0, 2.0))
+	var all_blocked := func(_p: Vector2) -> bool: return true
+	var spot := AiDeployment.least_blocked_spot(zone, [], 0.5, all_blocked, 0.5, 0.1, [])
+	assert_bool(spot.x != INF and spot.y != INF).is_true()

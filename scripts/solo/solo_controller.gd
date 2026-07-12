@@ -1557,10 +1557,11 @@ func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, block
 			spot = AiDeployment.best_spot(zone, objectives, [], radius, blocked, 0.025, radius, footprint, base_r)
 			spot_why = "crowded — nearest legal (non-terrain) spot, spacing relaxed"
 		if spot == Vector2.INF:
-			# Truly no non-blocking cell in the whole zone (a terrain-choked table) — only now, as an
-			# unavoidable last resort, place at the section centre so a unit is never silently skipped.
-			spot = sec.get_center()
-			spot_why = "no legal terrain spot anywhere — section centre (must deploy)"
+			# Truly no fully terrain-legal cell anywhere (a terrain-choked table) — must still deploy, so pick
+			# the CLEAREST ground: the spot with the fewest model bases in blocking/dangerous terrain (finding
+			# 1: the old last resort dumped the unit blindly at the section centre, which sat inside a ruin).
+			spot = AiDeployment.least_blocked_spot(zone, objectives, radius, blocked, 0.05, base_r, footprint)
+			spot_why = "terrain-choked — clearest (least-blocked) ground in the zone"
 		_place_unit_at(unit, spot)
 		record_decision({"kind": "deploy", "unit": unit.get_name(),
 			"rule": "Solo v3.5.0 AI deployment: objective-near spot in the unit's section; Scout/Ambush overlays",
