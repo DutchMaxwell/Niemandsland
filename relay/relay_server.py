@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import secrets
+import signal
 import ssl
 import struct
 import time
@@ -129,6 +130,10 @@ class Room:
     # whether it has already been counted as a "game" (reached >=2 peers). Both feed Stats at close.
     peak_peers: int = 1
     counted_as_game: bool = False
+    # Guards the lifetime + peers-per-room histograms against a double count: set the one time this
+    # room is folded into them, so a shutdown flush racing an in-flight disconnect/timeout close (or
+    # any two end paths) can never record the same room twice.
+    closed_recorded: bool = False
 
 
 def _utc_now_iso() -> str:
@@ -587,8 +592,31 @@ class RelayServer:
             self.stats.game_started()
 
     def _record_room_closed(self, room: Room) -> None:
-        """Fold a torn-down room into the lifetime + peers-per-room histograms (aggregate, no PII)."""
+        """Fold a torn-down room into the lifetime + peers-per-room histograms (aggregate, no PII).
+
+        Idempotent: a room is counted at most once. Every room-end path routes through here — a
+        guest/host disconnect that empties the room, the idle-expiry reaper, the host-abandon reaper,
+        and the shutdown flush — and the guard makes it safe for two of them to fire for the same
+        room (e.g. a stop signal arriving mid-disconnect)."""
+        if room.closed_recorded:
+            return
+        room.closed_recorded = True
         self.stats.room_closed(time.monotonic() - room.created_at, room.peak_peers)
+
+    def record_open_rooms_on_shutdown(self) -> None:
+        """Fold EVERY still-open room into the close histograms on server shutdown.
+
+        On Fly the machine is stopped while rooms may still be open — scale-to-zero when idle, or a
+        redeploy — and that stop, NOT a clean last-peer disconnect, is the dominant way a room ends
+        in production. Without this, such rooms are counted at creation (rooms_created) but never at
+        close, so the room-lifetime and peers-per-room histograms stay empty however busy the relay
+        is (the observed rooms_created>0 but peers_per_room-empty anomaly). Uses the already-configured
+        stats persistence — it adds NO storage. Idempotent via _record_room_closed.
+
+        Limitation: only a GRACEFUL stop runs this. A SIGKILL / OOM / power loss executes no Python,
+        so whatever rooms were open at that instant are still lost — an accepted, documented gap."""
+        for room in list(self.rooms.values()):
+            self._record_room_closed(room)
 
     def process_request(self, connection: ServerConnection, request: Request) -> Optional[Response]:
         """Serve GET /stats as public aggregate JSON; every other path falls through to the normal
@@ -779,27 +807,37 @@ class RelayServer:
         """Background task: remove rooms older than ROOM_EXPIRY_SECONDS."""
         while True:
             await asyncio.sleep(60)
-            now = time.monotonic()
-            expired = [
-                code for code, room in self.rooms.items()
-                if now - room.created_at > ROOM_EXPIRY_SECONDS
-            ]
-            for code in expired:
-                room = self.rooms.get(code)
-                if room:
-                    logger.info("Room %s expired, closing", code)
-                    for peer in list(room.peers.values()):
-                        self.connections.pop(peer.websocket, None)
-                        try:
-                            await peer.websocket.send(json.dumps({
-                                "type": "error",
-                                "message": "Room expired",
-                            }))
-                            await peer.websocket.close(4408, "Room expired")
-                        except websockets.exceptions.ConnectionClosed:
-                            pass
-                    self._record_room_closed(room)
-                    del self.rooms[code]
+            await self._close_expired_rooms()
+
+    async def _close_expired_rooms(self) -> list[str]:
+        """Tear down rooms older than ROOM_EXPIRY_SECONDS, recording each into the close histograms.
+
+        Returns the list of closed room codes (for tests). Peers still in an expired room are told
+        the room expired and their sockets are closed.
+        """
+        now = time.monotonic()
+        expired = [
+            code for code, room in self.rooms.items()
+            if now - room.created_at > ROOM_EXPIRY_SECONDS
+        ]
+        for code in expired:
+            room = self.rooms.get(code)
+            if not room:
+                continue
+            logger.info("Room %s expired, closing", code)
+            for peer in list(room.peers.values()):
+                self.connections.pop(peer.websocket, None)
+                try:
+                    await peer.websocket.send(json.dumps({
+                        "type": "error",
+                        "message": "Room expired",
+                    }))
+                    await peer.websocket.close(4408, "Room expired")
+                except websockets.exceptions.ConnectionClosed:
+                    pass
+            self._record_room_closed(room)
+            del self.rooms[code]
+        return expired
 
     async def check_heartbeats(self) -> None:
         """Background task: disconnect peers that missed heartbeats."""
@@ -864,6 +902,24 @@ async def main(host: str = "0.0.0.0", port: int = 8765,
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ssl_context.load_cert_chain(certfile, keyfile)
 
+    # Resolve on the first stop signal, so the shutdown below is graceful. Fly stops the machine with
+    # SIGINT (scale-to-zero when idle / on redeploy) and we must fold any still-open rooms into the
+    # close histograms before exiting. add_signal_handler is Unix + main-thread only; where it is
+    # unavailable, asyncio.run still delivers SIGINT as a KeyboardInterrupt that cancels this coroutine
+    # and runs the same finally block.
+    loop = asyncio.get_running_loop()
+    stop = loop.create_future()
+
+    def _request_stop() -> None:
+        if not stop.done():
+            stop.set_result(None)
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, _request_stop)
+        except (NotImplementedError, RuntimeError):
+            pass
+
     async with websockets.serve(
         server.handle_connection,
         host,
@@ -882,8 +938,11 @@ async def main(host: str = "0.0.0.0", port: int = 8765,
         stats_log_task = asyncio.create_task(server.log_stats_periodically())
 
         try:
-            await asyncio.Future()  # Run forever
+            await stop  # run until a stop signal (or KeyboardInterrupt) arrives
         finally:
+            # Record every room still open at shutdown FIRST, so a scale-to-zero / redeploy stop does
+            # not silently drop them from the room-lifetime / peers-per-room histograms.
+            server.record_open_rooms_on_shutdown()
             cleanup_task.cancel()
             heartbeat_task.cancel()
             stats_log_task.cancel()
