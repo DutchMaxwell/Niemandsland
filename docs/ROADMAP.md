@@ -55,8 +55,10 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 - **MP reconnect — 3+ player hardening** — **mostly shipped in `0.3.8.0-alpha`
   ([#105](../../pull/105)):** the host peer→slot-table mirror (3+-player avatar/cursor colour agreement
   after a reconnect), the shared wrapping `slot→palette` helper (army bases match presence colour at
-  slot ≥ 5), and the regiment tray's serialized `network_id` all landed. **Remaining:** an
-  import-await timeout. 2-player reconnect is shipped + soak-validated; this is feedback-driven. _S_
+  slot ≥ 5), and the regiment tray's serialized `network_id` all landed. The last piece — a
+  **guest army-import await timeout** (a stalled import aborts, releases the restore lock, toasts
+  the player, and recovers; host can re-import) — is now **code-complete ([#120](../../pull/120)),
+  pending live 2-instance verification**. 2-player reconnect is shipped + soak-validated. _S_
 - **UX polish (feedback-driven)** — Measure-on-pickup → snap-back (live ghost preview, ESC to return)
   · Coherency visualizer (sharpen — highlight models outside X″ of a neighbour) · contextual control
   hints (hover an object → its hotkeys). Deeper post-Alpha resilience / accessibility / onboarding
