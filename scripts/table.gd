@@ -39,6 +39,25 @@ const GROUND_SHADER: Shader = preload("res://shaders/table_ground.gdshader")
 const REFERENCE_TABLE_FEET: Vector2 = Vector2(6, 4)  # battlemaps are authored for 6x4 ft
 const DETAIL_TILING: float = 28.0
 const DETAIL_NOISE_SIZE: int = 512
+## Micro-relief normal-map depth — SHARED by the ground and the base top so a base answers the sun
+## identically to the board it sits on (identical texture => identical brightness).
+const DETAIL_NORMAL_STRENGTH: float = 0.35
+## Base-top rim shading: SHIPPED DEFAULT IS 0.0 — the black beveled rim alone grounds the base, and
+## the terrain top must read identical to the board (verified numerically to < 1 %, see
+## tools/base_luminance_qa.gd). The uniform is retained only for later taste-tuning: raise the
+## strength to reintroduce a thin contact-shadow band toward the rim.
+const BASE_TOP_VIGNETTE_STRENGTH: float = 0.0    # max darkening at the very rim (0 = off, shipped)
+const BASE_TOP_VIGNETTE_START: float = 0.80      # rim_t where the shading begins (thin outer band)
+
+## Shared terrain-projected material for model base tops (BaseDecor). ONE material for the whole
+## table: every base samples the SAME biome texture via world-space XZ (see base_terrain_top.gdshader),
+## so a biome/size change here updates every model's base in one place. Parameters are refreshed from
+## the SAME source the ground material uses, on the SAME rebuild seam (_build_ground_material).
+const BASE_TOP_SHADER: Shader = preload("res://shaders/base_terrain_top.gdshader")
+## PlaneMesh maps u = x/size_x + 0.5 and v = z/size_z + 0.5 (both increase with +axis; verified in
+## table_ground_projection_test.gd). The base shader reconstructs plane UV from world XZ the same way.
+const BASE_UV_AXIS_SIGN: Vector2 = Vector2(1.0, 1.0)
+var _base_top_material: ShaderMaterial = null
 
 # Biome battlemaps are delivered on demand from R2 (see docs/ASSET_DELIVERY.md) and cached
 # locally; assets/biome_manifest.json maps each key -> { url, sha256 }. This is the canonical
@@ -131,16 +150,21 @@ func setup_table(size_feet: Vector2) -> void:
 ## Build the play-surface material: macro battlefield mat + tiled procedural micro-relief
 ## (anisotropic mipmaps + a seamless detail normal/height so it stays crisp up close).
 func _build_ground_material() -> Material:
+	# Detail noise is shared with the base-top material (same relief), so generate it BEFORE the
+	# base top is refreshed below — otherwise the base would miss the normal map on the first build.
+	if _detail_normal_tex == null:
+		_detail_normal_tex = _make_detail_noise(true)
+		_detail_height_tex = _make_detail_noise(false)
+
+	# Keep the shared base-top material in lock-step with the displayed ground: same rebuild seam,
+	# same source texture / uv_scale / detail, so a biome or table-size change updates every base.
+	_update_base_top_material()
 	if not _default_texture:
 		var fallback := StandardMaterial3D.new()
 		fallback.albedo_color = default_color
 		fallback.roughness = 0.9
 		fallback.metallic = 0.0
 		return fallback
-
-	if _detail_normal_tex == null:
-		_detail_normal_tex = _make_detail_noise(true)
-		_detail_height_tex = _make_detail_noise(false)
 
 	var mat := ShaderMaterial.new()
 	mat.shader = GROUND_SHADER
@@ -149,7 +173,7 @@ func _build_ground_material() -> Material:
 	mat.set_shader_parameter("detail_normal", _detail_normal_tex)
 	mat.set_shader_parameter("detail_height", _detail_height_tex)
 	mat.set_shader_parameter("detail_tiling", DETAIL_TILING)
-	mat.set_shader_parameter("detail_normal_strength", 0.35)
+	mat.set_shader_parameter("detail_normal_strength", DETAIL_NORMAL_STRENGTH)
 	mat.set_shader_parameter("detail_albedo_strength", 0.12)
 	mat.set_shader_parameter("roughness_value", 0.9)
 	return mat
@@ -229,6 +253,65 @@ func _texture_from_file(path: String) -> Texture2D:
 ## table shows the whole image (scale 1); smaller tables show a centred crop (<1).
 func _biome_uv_scale() -> Vector2:
 	return Vector2(table_size.x / REFERENCE_TABLE_FEET.x, table_size.y / REFERENCE_TABLE_FEET.y)
+
+
+## Pure world-XZ -> plane-UV parameters for a table size (feet), shared by the ground and base
+## projections. Returns { uv_scale, inv_size_m } so a model base can reconstruct the plane UV the
+## table's PlaneMesh carries (see base_terrain_top.gdshader). Kept static + pure for testing.
+static func plane_uv_params(size_feet: Vector2) -> Dictionary:
+	var size_m := Vector2(size_feet.x * FEET_TO_METERS, size_feet.y * FEET_TO_METERS)
+	var inv_size := Vector2(
+		1.0 / size_m.x if size_m.x > 0.0 else 0.0,
+		1.0 / size_m.y if size_m.y > 0.0 else 0.0)
+	return {
+		"uv_scale": Vector2(size_feet.x / REFERENCE_TABLE_FEET.x, size_feet.y / REFERENCE_TABLE_FEET.y),
+		"inv_size_m": inv_size,
+	}
+
+
+## The shared terrain-projected material for model base tops. Created on first use; kept current by
+## _update_base_top_material() on every ground rebuild. BaseDecor bases reference this one instance.
+func get_base_top_material() -> ShaderMaterial:
+	if _base_top_material == null:
+		_base_top_material = ShaderMaterial.new()
+		_base_top_material.shader = BASE_TOP_SHADER
+		_update_base_top_material()
+	return _base_top_material
+
+
+## Refresh the shared base-top material from the CURRENT ground state (texture, uv_scale, detail).
+## Mirrors _build_ground_material's parameters so a base reads as a seamless window onto the ground.
+func _update_base_top_material() -> void:
+	if _base_top_material == null:
+		_base_top_material = ShaderMaterial.new()
+		_base_top_material.shader = BASE_TOP_SHADER
+	var params := plane_uv_params(table_size)
+	# The table is at world origin; read global_position only when in-tree (avoids a benign
+	# "!is_inside_tree()" engine error in pure-parameter tests that never add the table to the tree).
+	var center: Vector3 = global_position if is_inside_tree() else position
+	_base_top_material.set_shader_parameter("uv_scale", params["uv_scale"])
+	_base_top_material.set_shader_parameter("inv_table_size", params["inv_size_m"])
+	_base_top_material.set_shader_parameter("table_center_xz", Vector2(center.x, center.z))
+	_base_top_material.set_shader_parameter("uv_axis_sign", BASE_UV_AXIS_SIGN)
+	_base_top_material.set_shader_parameter("detail_tiling", DETAIL_TILING)
+	_base_top_material.set_shader_parameter("detail_normal_strength", DETAIL_NORMAL_STRENGTH)
+	_base_top_material.set_shader_parameter("detail_albedo_strength", 0.12)
+	_base_top_material.set_shader_parameter("roughness_value", 0.9)
+	# Contact-shadow hint only (subtle rim shading) — the centre reads identical to the board.
+	_base_top_material.set_shader_parameter("vignette_strength", BASE_TOP_VIGNETTE_STRENGTH)
+	_base_top_material.set_shader_parameter("vignette_start", BASE_TOP_VIGNETTE_START)
+	_base_top_material.set_shader_parameter("fallback_color", Vector3(default_color.r, default_color.g, default_color.b))
+	if _default_texture != null:
+		_base_top_material.set_shader_parameter("albedo_tex", _default_texture)
+		_base_top_material.set_shader_parameter("has_texture", true)
+	else:
+		_base_top_material.set_shader_parameter("has_texture", false)
+	# Match the ground's detail relief so the base catches the same sun glints (guarded so the
+	# pure-parameter tests, which never build the ground, don't force noise generation).
+	if _detail_normal_tex != null:
+		_base_top_material.set_shader_parameter("detail_normal", _detail_normal_tex)
+	if _detail_height_tex != null:
+		_base_top_material.set_shader_parameter("detail_height", _detail_height_tex)
 
 
 ## Generate a seamless tiling noise texture for ground micro-detail. As a normal map
