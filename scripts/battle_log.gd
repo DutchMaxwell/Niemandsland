@@ -66,6 +66,43 @@ static func format_entry(entry: Dictionary) -> String:
 	return "R%d  %s" % [int(entry["round"]), str(entry["text"])]
 
 
+# === Export (shareable plain text — the maintainer's field-test artefact) ===
+
+## Format the full log as shareable plain text: a header, then EVERY entry as its round-prefixed one-liner,
+## and — when the dev "AI reasoning" toggle fed us records — an AI-decision-records section beneath (the
+## diagnostic gold). Pure + dependency-free: the caller pre-renders the decision lines (via
+## SoloController.render_decision) and passes them in, so BattleLog stays free of any Solo import.
+## Directly unit-tested (records → text).
+static func export_text(all_entries: Array, decision_lines: Array = [], title: String = "Niemandsland — Battle Log") -> String:
+	var lines: PackedStringArray = [title, "=".repeat(title.length()), ""]
+	for e in all_entries:
+		lines.append(format_entry(e as Dictionary))
+	if not decision_lines.is_empty():
+		lines.append("")
+		lines.append("--- AI decision records ---")
+		for d in decision_lines:
+			lines.append(str(d))
+	lines.append("")
+	return "\n".join(lines)
+
+
+## Write the whole log (+ optional pre-rendered AI decision lines) to user://battle_log_<timestamp>.txt and
+## return the ABSOLUTE filesystem path (also printed to the console so the maintainer can find + share it).
+## No external deps; returns "" on a write failure.
+func export_to_file(decision_lines: Array = []) -> String:
+	var stamp := Time.get_datetime_string_from_system(false, true).replace(":", "-").replace(" ", "_")
+	var vpath := "user://battle_log_%s.txt" % stamp
+	var f := FileAccess.open(vpath, FileAccess.WRITE)
+	if f == null:
+		push_error("BattleLog export failed (%s): %s" % [vpath, error_string(FileAccess.get_open_error())])
+		return ""
+	f.store_string(export_text(_entries, decision_lines))
+	f.close()
+	var abs_path := ProjectSettings.globalize_path(vpath)
+	print("[BattleLog] exported %d entries → %s" % [_entries.size(), abs_path])
+	return abs_path
+
+
 func _where(pred: Callable) -> Array:
 	var out: Array = []
 	for e in _entries:

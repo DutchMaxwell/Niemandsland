@@ -3242,6 +3242,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_capture_bug_report()
 		get_viewport().set_input_as_handled()
 		return
+	# F8: export the Battle Log to a shareable user:// text file (same as the panel's Export button).
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F8:
+		_on_battle_log_export()
+		get_viewport().set_input_as_handled()
+		return
 	# Solo P8: while the player is picking an attack target, ESC cancels the mode. (KEY events only ever
 	# reach _unhandled_key_input — the mouse side of targeting is hooked in _input above.)
 	if not _solo_target_mode.is_empty() and _solo_targeting_input(event):
@@ -4038,6 +4043,7 @@ func _setup_battle_log() -> void:
 	battle_log_panel.offset_bottom = 6.0
 	battle_log_panel.grow_vertical = Control.GROW_DIRECTION_END
 	battle_log_panel.bind(battle_log)
+	battle_log_panel.export_requested.connect(_on_battle_log_export)
 	battle_log.on_game_started()
 	# Central seams (fewest hooks that cover local + remote):
 	if opr_army_manager != null:
@@ -4061,6 +4067,26 @@ func _setup_battle_log() -> void:
 		radial_menu_controller.unit_activated.connect(func(gu) -> void: _log_battle_activation(gu, false))
 		# Solo P2 alternating activation: the human's radial activation triggers ONE AI answer (goal 003 P2).
 		radial_menu_controller.unit_activated.connect(_on_solo_human_activated)
+
+
+## Export the Battle Log to a shareable user:// file (Battle Log panel Export button OR the F8 hotkey). When
+## the dev "AI reasoning" toggle is on the AI's structured decision records are ALREADY interleaved into the
+## log (via _solo_flush_dev); any still-buffered (not-yet-flushed) records are ALSO rendered into a trailing
+## AI-decision-records section so nothing diagnostic is lost. The resolved ABSOLUTE path is printed to the
+## console (findable) and echoed as a toast + a log line.
+func _on_battle_log_export() -> void:
+	if battle_log == null:
+		return
+	var decision_lines: Array = []
+	if _solo_dev and solo_controller != null:
+		for rec in solo_controller.decision_log:
+			decision_lines.append(SoloController.render_decision(rec as Dictionary))
+	var path: String = battle_log.export_to_file(decision_lines)
+	if path.is_empty():
+		_solo_show_toast("Battle Log export failed — see console")
+		return
+	battle_log.log_event(BattleLog.Category.GENERAL, "Battle Log exported → %s" % path)
+	_solo_show_toast("Battle Log exported → %s" % path)
 
 
 func _log_battle_activation(gu, _remote: bool) -> void:

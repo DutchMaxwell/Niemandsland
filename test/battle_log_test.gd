@@ -78,3 +78,36 @@ func test_event_seams_produce_expected_entries() -> void:
 	log_node.on_wounds("Knights", 2, 3, 5)
 	assert_str(str(log_node.entries()[-1]["text"])).is_equal("Knights takes 2 wounds (3/5)")
 	assert_int(int(log_node.entries()[-1]["category"])).is_equal(BattleLog.Category.COMBAT)
+
+
+# === Export (finding 3): entries → shareable text, with the dev AI decision records when supplied ===
+
+func test_export_text_formats_entries_and_decision_records() -> void:
+	var log_node: BattleLog = auto_free(BattleLog.new())
+	log_node.current_round = 1
+	log_node.log_event(BattleLog.Category.MOVEMENT, "Skeletons advance 6\"")
+	log_node.current_round = 2
+	log_node.log_event(BattleLog.Category.COMBAT, "Skeletons fire — 3 hits", true)
+	var text := BattleLog.export_text(log_node.entries(), ["AI [move] Skeletons — chose Advance"])
+	assert_str(text).contains("R1  Skeletons advance 6\"")
+	assert_str(text).contains("R2  Skeletons fire — 3 hits")
+	assert_str(text).contains("--- AI decision records ---")
+	assert_str(text).contains("AI [move] Skeletons — chose Advance")
+
+
+func test_export_text_without_records_omits_that_section() -> void:
+	var log_node: BattleLog = auto_free(BattleLog.new())
+	log_node.log_event(BattleLog.Category.GENERAL, "Battle started")
+	var text := BattleLog.export_text(log_node.entries())
+	assert_str(text).contains("Battle started")
+	assert_bool(text.contains("AI decision records")).is_false()
+
+
+func test_export_to_file_writes_and_returns_absolute_path() -> void:
+	var log_node: BattleLog = auto_free(BattleLog.new())
+	log_node.log_event(BattleLog.Category.GENERAL, "Battle started")
+	var path := log_node.export_to_file()
+	assert_str(path).is_not_empty()
+	assert_bool(FileAccess.file_exists(path)).is_true()
+	assert_str(FileAccess.get_file_as_string(path)).contains("Battle started")
+	DirAccess.remove_absolute(path)   # clean up the temp export

@@ -14,6 +14,11 @@ const AI_TINT := Color(0.96, 0.62, 0.18)      # AI lines get an amber tint so th
 const ENTRY_FONT := 12
 const MAX_VISIBLE := 200
 
+## The player pressed Export — main.gd writes the log to a user:// file (adding the AI decision records when
+## the dev "AI reasoning" toggle is on) and reports the path. A signal so the panel stays free of
+## SoloController / dev-mode knowledge.
+signal export_requested()
+
 var _log: BattleLog = null
 var _open := false   # starts collapsed to a top-centre tab; click the header to expand downward
 var _filter := BattleLog.Filter.ALL
@@ -48,14 +53,31 @@ func _ready() -> void:
 	_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(_body)
 
+	var controls := HBoxContainer.new()
+	controls.add_theme_constant_override("separation", 4)
+	_body.add_child(controls)
+
 	_filter_opt = OptionButton.new()
 	_filter_opt.focus_mode = Control.FOCUS_NONE
+	_filter_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_filter_opt.add_item("All", BattleLog.Filter.ALL)
 	_filter_opt.add_item("Combat", BattleLog.Filter.COMBAT)
 	_filter_opt.add_item("Movement", BattleLog.Filter.MOVEMENT)
 	_filter_opt.add_item("AI", BattleLog.Filter.AI)
 	_filter_opt.item_selected.connect(_on_filter_changed)
-	_body.add_child(_filter_opt)
+	controls.add_child(_filter_opt)
+
+	# Export the full log to a shareable file (the maintainer's field-test artefact). main.gd does the write.
+	var export_btn := Button.new()
+	export_btn.text = "Export"
+	export_btn.focus_mode = Control.FOCUS_NONE
+	export_btn.add_theme_font_size_override("font_size", 12)
+	export_btn.add_theme_color_override("font_color", AMBER)
+	export_btn.add_theme_stylebox_override("normal", _flat(NAVY_HI))
+	export_btn.add_theme_stylebox_override("hover", _flat(NAVY_HI))
+	export_btn.add_theme_stylebox_override("pressed", _flat(NAVY_HI))
+	export_btn.pressed.connect(func() -> void: export_requested.emit())
+	controls.add_child(export_btn)
 
 	_scroll = ScrollContainer.new()
 	_scroll.custom_minimum_size = Vector2(0, 220)   # log height when expanded
