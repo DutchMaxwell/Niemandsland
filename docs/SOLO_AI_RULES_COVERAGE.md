@@ -399,3 +399,76 @@ pinned with a gdUnit test.
 **Fairness:** every change lives in the solo game layer (`main.gd`, `SoloController`, `AiCombatMath`
 additions, `AiDeployment`); `SoloSim` and the SIM's `plan_unit_step`/`_terrain_grid_in` paths are untouched,
 so the mirror-fairness oracle is byte-identical — no re-run required (same precedent as waves 1–4).
+
+## Field-test round 4 — eight findings (real game, 2026-07-12)
+
+The maintainer's fourth field test (build `0e5fecd`) surfaced eight findings; several round-3 fixes did not
+hold. Each is fixed below in the solo/game layer (`SoloSim` untouched — the mirror-fairness oracle stays
+byte-identical, no re-run) and cited against the PDFs. (Pathfinding QUALITY, finding 2, is a separate
+research-informed package and is not reworked here.)
+
+1. **Deployment STILL placed bases in Blocking/Dangerous terrain.** Root cause: the round-3 footprint check
+   was sound, but the "must-deploy" LAST RESORT (`SoloController.deploy_army`) still dumped the unit blindly
+   at the SECTION CENTRE with no terrain check — and when a ruin sat at the section centre the whole unit
+   landed inside it. The last resort now calls `AiDeployment.least_blocked_spot`, which scans the zone and
+   returns the spot whose footprint has the FEWEST model bases in blocking/dangerous terrain (tie-broken
+   toward the nearest objective) — so a unit lands on the clearest available ground (usually still fully
+   legal), never on top of a wall when clear ground is one cell over. `blocked_normal` continues to reject
+   RUINS/CONTAINER/FOREST/DANGEROUS and the wall physics-probe for the whole footprint. Tests:
+   `test_least_blocked_spot_prefers_clear_ground_over_blocking`, `test_least_blocked_spot_always_returns_a_finite_spot`.
+4. **AI moves ended out of coherency** (GF/AoF v3.5.1 p.7 unit coherency). The planner's best-effort
+   coherency ease could leave a unit incoherent. Every non-charge AI move now ENDS coherent by construction:
+   `MovementPlanner.shorten_to_coherent` blends the planned formation back toward the (coherent) start just
+   enough to restore the 1"/9" chain (blend 0 = no move is always coherent, so the bisection always returns a
+   coherent result — "or as close as possible"). A Charge is exempt (it must reach base contact). Applied in
+   the game-only `SoloController._plan_positions`; `SoloSim` never calls it. Tests:
+   `test_shorten_to_coherent_restores_a_broken_chain`, `test_shorten_to_coherent_no_op_when_already_coherent`.
+5. **Ruins block MOVEMENT but must NOT block LINE OF SIGHT; ruins give COVER.** Per the v3.5.1 terrain
+   guidelines: *"Buildings - Impassable + Blocking"*, *"Forests - Difficult + Cover + see into/out, not
+   through"*, *"Ruins - Cover + Dangerous when using rush/charge"* — ruins are Cover and SEE-THROUGH, only
+   Buildings/Containers (and Forests, through them) block sight. Two round-3 regressions removed: (a)
+   `terrain_overlay.terrain_blocks_los` no longer lists RUINS (they are Ground height, see-through), so both
+   the AI's and the human's per-model LOS see through ruins; (b) `main._solo_true_los_callable` no longer
+   treats ruin WALL SEGMENTS as sight blockers (they remain impassable to MOVEMENT via the planner's wall
+   set). Cover was already correct in both directions and the EV (`_solo_majority_in_cover` /
+   `SoloController.majority_in_cover` → `TerrainRules.gives_cover(RUINS)`), so ruins still confer +1 Defense.
+   **Intentional divergence:** this is a `terrain_overlay` (game) change only; `TerrainRules.blocks_los` (the
+   SIM's shared classifier) still counts RUINS as a blocker — left untouched per "SIM untouched", and the sim
+   stays fair because both mirror armies use the same classifier. Tests: `terrain_overlay_test.test_ruins_do_not_block_line_of_sight`,
+   `terrain_los_test.test_blocking_and_height_helpers`.
+6. **Models moved onto each other, even within their own unit** (GF/AoF v3.5.1 p.7: "may never move through
+   other models or units, friendly or enemy"). The planner steered/eased in point space with no base-overlap
+   notion. `MovementPlanner.separate_overlaps` now pushes any two of the unit's OWN bases that overlap apart
+   along their centre line (split evenly, each half wall/zone-checked) until the edge gap is ≥ 0, using the
+   real `SeparationChecker` base radii. Applied last in the game-only `_plan_positions` (after the coherency
+   shorten, so the tiny nudge — ≤ a base radius, well under the 1" link — is the final word). `SoloSim`
+   (dimensionless points) never calls it. Tests: `test_separate_overlaps_pushes_own_bases_apart`,
+   `test_separate_overlaps_no_op_when_clear`, `test_separate_overlaps_splits_coincident_centres`.
+7. **Two AI activations back-to-back across a round boundary** (GF/AoF v3.5.1, Rounds/Turns/Activations: *"On
+   each new round the player that finished activating first on the last round gets to activate first."*). The
+   solo round opener was chosen by ROUND PARITY (`current_round % 2`), which ignored who actually took the
+   last activation — so the AI could take a round's LAST activation and then the next round's FIRST. The
+   opener is now the side that did NOT take the last activation (`SoloController.ai_opens_next_round`, tracked
+   by `main._solo_ai_took_last_activation`); if that side is wiped, the other opens. Tests:
+   `test_ai_opens_next_round_never_back_to_back`, `test_ai_opens_next_round_falls_through_when_opener_is_wiped`.
+8. **A legitimate charge resolved as one-sided — the charger's attacks never rolled** (GF/AoF v3.5.1 p.9
+   "Who Can Strike"; Solo p.57 "melee: … always strike back"). Root cause: the charger (a walker) had NO
+   melee-weapon PROFILE — a unit whose weapons are all ranged yields `AiShooting.melee_profiles == []`, so the
+   strike loop produced no lines and looked skipped (the defender, which had a melee weapon, struck back). The
+   `striking_models` 2" reach is symmetric between charger and defender, ruling out a reach/scaling
+   asymmetry — the discriminator is the missing melee weapon. `main._solo_melee_strike_phase` now logs
+   *"X has no melee weapons in reach — no strikes"* on the FULL strike phase, so a fight always shows both
+   sides' resolution (a shooting-only unit legitimately makes no melee attacks). Tests:
+   `test_melee_profiles_empty_for_shooting_only_unit`, `test_striking_models_is_symmetric_for_two_bases_in_contact`.
+3. **Battle-log EXPORT (new feature).** An `Export` button in the Battle Log panel (and the **F8** hotkey)
+   writes the full log to `user://battle_log_<timestamp>.txt` and prints/echoes the resolved ABSOLUTE path.
+   When the dev "AI reasoning" toggle is on, the AI decision records are already interleaved into the log and
+   any still-buffered records are appended as a trailing `--- AI decision records ---` section (the
+   diagnostic gold). `BattleLog.export_text` / `export_to_file`; wired via the panel's `export_requested`
+   signal to `main._on_battle_log_export`. Tests: `test_export_text_formats_entries_and_decision_records`,
+   `test_export_text_without_records_omits_that_section`, `test_export_to_file_writes_and_returns_absolute_path`.
+
+**Fairness:** every change lives in the game/solo layer (`main.gd`, `SoloController._plan_positions` +
+`deploy_army`, `MovementPlanner` game-only helpers, `AiDeployment`, `terrain_overlay` LOS, `BattleLog`);
+`SoloSim`, `TerrainRules`, and the SIM's `plan_unit_step`/`_terrain_grid_in` paths are untouched, so the
+mirror-fairness oracle is byte-identical — no re-run required (same precedent as waves 1–4 and rounds 2–3).
